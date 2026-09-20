@@ -8,12 +8,12 @@
 
 ## 内容
 
-| 文件                       | 作用                                                                                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cordis.patch.yml`         | bundle patch：禁用官方 preset、注册本包 preset 为默认、声明个人 `llm-pi-ai` route、覆盖沙箱规则、禁用官方 `office-to-pdf` 行、插入 `prompt-reminder` 行 |
-| `tool/generate-presets.ts` | 从上游生成 preset 的模块 + tsdown hooks                                                                                                                 |
-| `dist/presets/standard/`   | 构建产物：自定义 preset「标准模式」（由上游 `standard` 生成）                                                                                           |
-| `dist/presets/ptc/`        | 构建产物：自定义 preset「PTC 模式」（由上游 `ptc` 生成）                                                                                                |
+| 文件                          | 作用                                                                                                                                                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cordis.patch.yml`            | bundle patch：禁用官方 preset、注册本包 preset 为默认、声明个人 `llm-pi-ai` route、覆盖沙箱规则、禁用官方 `office-to-pdf` 与 `subagent-model-selection-settings` 行、插入 `prompt-reminder` / `reference-injection` 行 |
+| `tool/generate-presets.ts`    | 从上游生成 preset 的模块 + tsdown hooks（standard 产物末尾追加 [工具按需注入](../dsh-tool-gating/README.md) 行）                                                                                                       |
+| `dist/presets/standard/`      | 构建产物：默认 preset「标准模式」（由上游 `standard` 生成，起始只启用基础工具组）                                                                                                                                      |
+| `dist/presets/collaboration/` | 构建产物：自定义 preset「协作模式」（同一上游 `standard` 生成，起始档位含协作编排组）                                                                                                                                  |
 
 ## 装配
 
@@ -58,8 +58,9 @@ pnpm exec tsx packages/preset/dsh-preset/tool/generate-presets.ts [outDir]
 
 - 本 bundle patch 插入的每一行，其 `name` 都必须能被 **profile 的依赖树**解析：本包
   `dependencies` 已声明 `@morlay/dsh-sandbox-local` / `@morlay/dsh-prompt-reminder` /
-  `@morlay/dsh-reference-injection`，因此 app 的 **preset 相关**依赖只声明 `@morlay/dsh-preset`；
-  换工作区时要保证这些包在依赖树里可达，否则对应装配行加载失败。
+  `@morlay/dsh-reference-injection` / `@morlay/dsh-tool-gating`，因此 app 的 **preset 相关**依赖只声明
+  `@morlay/dsh-preset`；换工作区时要保证这些包在依赖树里可达，否则对应装配行加载失败。生成器写进 standard
+  产物的 `tool-gating` 行同属这一类。
 - **提示词与规则变化要重启**：profile 在启动时装载，`system-prompt` 的 section 与 `access`
   规则在插件构造时注册 / 解析。dev 模式重启 `just custom dev` / `just custom desktop`，打包形态
   需重新 `just custom bundle`（patch 随 seed 快照复制）。

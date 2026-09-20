@@ -77,7 +77,24 @@ describe("dsh-preset patch wiring", () => {
   it("disables exactly the shipped rows this deployment turns off", () => {
     const disabled = rows.filter((row) => row.disabled === true).map((row) => row.id);
 
-    expect(disabled).toEqual(["sandbox", "fs-sandbox", "office-to-pdf"]);
+    expect(disabled).toEqual([
+      "sandbox",
+      "fs-sandbox",
+      "office-to-pdf",
+      "subagent-model-selection-settings",
+    ]);
+  });
+
+  it("disables the subagent model-selection provider the shipped web-app bundle inserts", async () => {
+    const shipped = composeLayers([await loadPatchRows(UPSTREAM_WEB_APP_PATCH)]);
+
+    expect(rowById(shipped, "subagent-model-selection-settings")?.name).toBe(
+      "@deepseek-ai/dsh-tool-subagent/model-selection-settings",
+    );
+
+    const composed = composeLayers([await loadPatchRows(UPSTREAM_WEB_APP_PATCH), rows]);
+
+    expect(rowById(composed, "subagent-model-selection-settings")?.disabled).toBe(true);
   });
 
   it("disables the office-to-pdf row the shipped web-app bundle inserts", async () => {

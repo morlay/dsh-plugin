@@ -14,17 +14,21 @@ export const UPSTREAM_PRESETS = join(
 export const PRESET_SOURCES = [
   {
     source: "standard",
+    id: "standard",
     name: "标准模式",
     description:
-      "功能完整的编码 Agent，支持文件编辑、Shell、文件与网页检索、Skills、计划、目标、子代理和工作流。",
+      "功能完整的编码 Agent：初始只提供文件、Shell、检索等基础工具，其余能力组随任务按需启用。",
     order: 1,
+    initial: [] as readonly string[],
   },
   {
-    source: "ptc",
-    name: "PTC 模式",
+    source: "standard",
+    id: "collaboration",
+    name: "协作模式",
     description:
-      "功能完整的编码 Agent，但默认不提供 workflow 工具；其他工具通过 PTC 模式 SDK 呈现，让模型用一个 TypeScript 程序组合多步操作。",
+      "在标准模式之上默认启用协作编排（子代理、工作流、队友协同）；流程与联网检索等能力组仍按需启用。",
     order: 2,
+    initial: ["team"] as readonly string[],
   },
 ] as const;
 
@@ -40,23 +44,44 @@ interface CompositionRow {
   [key: string]: unknown;
 }
 
+/** 按 id 在装配行里找一行；`cordis:group` 行的 config 是嵌套行数组，需要递归。 */
+function findRow(rows: readonly CompositionRow[], id: string): CompositionRow | undefined {
+  for (const row of rows) {
+    if (row.id === id) return row;
+    const nested = row.config;
+    if (Array.isArray(nested)) {
+      const found = findRow(nested as CompositionRow[], id);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+}
+
 export const PERSONA_ROW_ID = "persona";
 
 export const INSTRUCTIONS_ROW_ID = "agent-instructions";
+
+/** 派生子代理的工具行：它的 `modelSelectionSettings` 决定工具注册在哪一层，见下方处理。 */
+export const SUBAGENT_ROW_ID = "tool-subagent";
+
+export const TOOL_GATING_ROW_ID = "tool-gating";
+
+export const TOOL_GATING_PLUGIN = "@morlay/dsh-tool-gating";
 
 export const INSTRUCTIONS_CONFIG = {
   instructionFileCandidates: ["AGENTS.md"],
   localInstructionFileCandidates: ["AGENTS.local.md"],
 } as const;
 
-export function renderComposition(upstream: string): string {
+/** 每个 preset 都装配工具按需注入；`initial` 给出该模式的起始档位（基础组之外默认解锁的组）。 */
+export function renderComposition(upstream: string, initial: readonly string[]): string {
   const rows = yaml.load(upstream, {
     schema: entryListSchema,
   }) as CompositionRow[];
 
   const persona = rows.findIndex((row) => row.id === PERSONA_ROW_ID);
   if (persona >= 0) rows.splice(persona, 1);
-  const instructions = rows.find((row) => row.id === INSTRUCTIONS_ROW_ID);
+  const instructions = findRow(rows, INSTRUCTIONS_ROW_ID);
   if (instructions === undefined) {
     throw new Error(
       `generate-presets: upstream composition has no \`${INSTRUCTIONS_ROW_ID}\` row; ` +
@@ -64,6 +89,25 @@ export function renderComposition(upstream: string): string {
     );
   }
   instructions.config = { ...instructions.config, ...INSTRUCTIONS_CONFIG };
+
+  // `modelSelectionSettings` 会让 tool-subagent 在 standing scope 下把工具注册进 agent 自己的
+  // 作用域，而 `tools.restrict()` 不过滤那一层——工具与它的说明因此绕开工具门控、永远可见。
+  // 去掉它：子代理继承父会话的模型，工具回到 preset 层可门控。配套禁用提供者行
+  // （`subagent-model-selection-settings`）见 cordis.patch.yml。
+  const subagent = findRow(rows, SUBAGENT_ROW_ID);
+  if (subagent === undefined) {
+    throw new Error(
+      `generate-presets: upstream composition has no \`${SUBAGENT_ROW_ID}\` row; ` +
+        "upstream changed — re-check which plugin registers the spawn subagent tool",
+    );
+  }
+  if (subagent.config !== undefined) delete subagent.config.modelSelectionSettings;
+
+  rows.push({
+    id: TOOL_GATING_ROW_ID,
+    name: TOOL_GATING_PLUGIN,
+    ...(initial.length === 0 ? {} : { config: { initial: [...initial] } }),
+  });
 
   const body = yaml.dump(rows, {
     schema: entryListSchema,
@@ -90,10 +134,10 @@ export async function generatePresets(
       "utf8",
     );
 
-    const dir = join(outDir, entry.source);
+    const dir = join(outDir, entry.id);
     await mkdir(dir, { recursive: true });
     const compositionPath = join(dir, "agent.cordis.yml");
-    await writeFile(compositionPath, renderComposition(upstream));
+    await writeFile(compositionPath, renderComposition(upstream, entry.initial));
     const metadataPath = join(dir, "preset.yml");
     await writeFile(metadataPath, renderMetadata(entry));
     written.push(compositionPath, metadataPath);

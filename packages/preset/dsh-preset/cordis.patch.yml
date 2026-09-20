@@ -1,6 +1,3 @@
-# persona 的中文表达部分对齐 union-alpha 的说话风格：从 openrouter-custom/stealth/union-alpha
-# 在 12 个场景（报进度 / 解释 / 评审 / 分歧 / 排期 / 拒绝 / 复盘 / 提问 …）下的输出里提炼，
-# 两轮复测稳定复现的才是要点。改这段后重启 dsh 生效（见 README）。
 - id: system-prompt
   config:
     includeHarnessIdentity: false
@@ -77,6 +74,15 @@
 # 那不是 profile 行、本层没有旋钮——桌面形态由我们的 host 变体接管，它不装载 officeSkills；
 # 结论与上游需求见 README「office 相关」。
 - id: office-to-pdf
+  disabled: true
+
+# 子代理模型选择：官方 web-app bundle 的 `subagent-model-selection-settings` 行提供
+# `subagentModelSelection` 服务（Plugins 设置页的子代理模型卡片也读它）。本部署不要它：
+# preset 生成器已从 `tool-subagent` 行去掉 `modelSelectionSettings`，子代理一律继承父会话的
+# 模型；工具因此注册回 preset 层，能被工具门控隐藏（留在 agent 自己的作用域时
+# `tools.restrict()` 过滤不到，subagent 会永远可见）。禁用本行让设置页里的子代理模型卡片
+# 随之消失，符合「不需要这个开关」的取舍。
+- id: subagent-model-selection-settings
   disabled: true
 
 # 提示词分层：系统提示词只留上面的 persona，工具说明 / Agent Teams 规则 / plan
