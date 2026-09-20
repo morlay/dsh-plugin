@@ -634,6 +634,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/fs/fs
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/llm/llm

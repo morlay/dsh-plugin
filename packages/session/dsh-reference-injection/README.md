@@ -1,23 +1,33 @@
 # @morlay/dsh-reference-injection
 
-把用户消息里的 skill 引用在 `agent/pre-step` 边界展开成 `<skill_content>` 注入消息：引用由 client 面同一份
-统一解析（`@morlay/dsh-client-ui-primitives` 的 `findReferences`）认领，消息文本本身不动。
+把用户消息里的引用在 `agent/pre-step` 边界展开成注入消息：skill 引用渲染 `<skill_content>`，`@path` 文件引用
+读取内容并渲染成 read 工具同形的内容块。引用由 client 面同一份统一解析
+（`@morlay/dsh-client-ui-primitives` 的 `findReferences`）认领，消息文本本身不动。
 
 ## 行为
 
 - 只扫描本步 claimed 的 `source.kind === 'user'` 消息（外部文本伪造不了这个手势）；
-- 认领所有引用形态：`skill:name`、`@skill:name`、`[label](skill:name)`、`@[label](skill:name)`；
-  手写的 inline code（`` `skill:name` ``）由 `parseReferenceToken` 再兜一次；
-  代码块内的同形文本不会命中（解析器保证）；
-- 名字不在 skill 注册表里、或该 skill 不允许用户调用时保持普通文本；
-- 去重按首次出现顺序；每个名字注入一条 instructions 形态的消息，追加在本步已有注入之后。
+- skill：认领所有引用形态 `skill:name`、`@skill:name`、`[label](skill:name)`、`@[label](skill:name)`；手写的
+  inline code（`` `skill:name` ``）由 `parseReferenceToken` 再兜一次；代码块内的同形文本不会命中（解析器保证）；
+  名字不在 skill 注册表里、或该 skill 不允许用户调用时保持普通文本；
+- 文件：只认 `@` 起手的路径——`@src/a.ts`、`@src/a.ts:12`、`@src/a.ts:12:5`、`@src/a.ts#L12-L40`、
+  `@[label](src/a.ts)`；行号决定窗口起点与长度，列号不参与（read 没有列语义）；
+- 文件内容经 `ctx.fs` 读取：文件不存在、不是普通文件、读不出（二进制 / 权限）、行号超出文件末尾时保持普通文本；
+- 注入的文本与 read 工具逐字同形：`<path>/<type>file</type>/<content>` 信封、行号前缀、续读提示，窗口上限
+  （2000 行 / 50 KB / 单行 2000 字符）取 read 的默认值；
+- 去重按首次出现顺序（文件按「路径 + 行窗口」去重）；每个引用注入一条消息，追加在本步已有注入之后——skill 在前，
+  文件在后。
 
 ## 装配
 
 部署侧（preset / profile bundle）插入一行即可；本部署的装配在 `@morlay/dsh-preset` 的 bundle patch 里
-（`packages/preset/dsh-preset/cordis.patch.yml`）。
+（`packages/preset/dsh-preset/cordis.patch.yml`）。插件只声明注入 `ctx.skills`；文件内容读取取可选的 `ctx.fs`
+——部署里没有文件系统时 skill 注入照常，文件引用保持普通文本。
 
 ## 范围
 
-只处理 `protocol === 'skill'` 的引用；文件引用的解析与渲染不在本插件，判定见
-[ADR-引用的统一解析与渲染转换](../../session/ui-conversation-message-actions/.agents/adrs/20260917-引用的统一解析与渲染转换.md)。
+只认用户手打的 `@` 手势与 skill 引用：`file:src/a.ts`、`[label](src/a.ts)`、以及 inline code 里的路径都不是注入
+触发器。解析与渲染转换的判定见
+[ADR-引用的统一解析与渲染转换](../../session/ui-conversation-message-actions/.agents/adrs/20260917-引用的统一解析与渲染转换.md)；
+文件内容为什么由本插件按 read 信封自行渲染、为什么只认 `@` 起手，见设计
+[文件引用内容注入](./.agents/designs/20260920-文件引用内容注入.md)。
