@@ -1,4 +1,3 @@
-import type { ObservableSnapshot } from "@deepseek-ai/dsh-client-store";
 import type { LexicalEditor, NodeKey } from "lexical";
 import {
   $addUpdateTag,
@@ -19,13 +18,10 @@ import type { Occurrence, ReferenceInsert } from "../../../../../../../vendor/de
 import { registerReferenceActivation } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/reference-activation.ts";
 import { ReferenceChipNode } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/chip-node.tsx";
 import { refreshClaimDecoration, registerClaimDecoration } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/claim-decor.ts";
-import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/text-ref.ts";
 import type { EditorProjection } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/projection.ts";
 import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from "../../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/projection.ts";
 import { $replaceDetectSpanWithText } from "./span-map.ts";
 import type { DetectSpan } from "./span-map.ts";
-
-type Lexicon = ReadonlyMap<"/" | "@", readonly string[]>;
 
 interface DraftEditorRuntimeDeps {
   readonly onUpdate: () => void;
@@ -34,8 +30,6 @@ interface DraftEditorRuntimeDeps {
     reference: Pick<ReferenceInsert, "ref" | "appearance">,
   ) => boolean;
   readonly activeClaimToken: () => string | null;
-  readonly lexicon: () => Lexicon;
-  readonly resolveLexicon: () => ObservableSnapshot<Lexicon> | undefined;
 }
 
 const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu;
@@ -55,12 +49,10 @@ export class DraftEditorRuntime {
   private readonly occurrenceIds = new Map<NodeKey, number>();
   private occurrenceSeq = 0;
 
-  private lexiconOff: (() => void) | undefined;
-
   constructor(private readonly deps: DraftEditorRuntimeDeps) {
     this.editor = createEditor({
       namespace: "dsh-composer",
-      nodes: [ReferenceChipNode, TextRefNode],
+      nodes: [ReferenceChipNode],
       onError: (error) => {
         throw error;
       },
@@ -78,14 +70,6 @@ export class DraftEditorRuntime {
         this.deps.onUpdate();
       }),
       registerClaimDecoration(this.editor, () => this.deps.activeClaimToken()),
-      registerTextRefDecoration(
-        this.editor,
-        () => this.deps.lexicon(),
-        () => this.deps.activeClaimToken(),
-      ),
-      () => {
-        this.lexiconOff?.();
-      },
     );
     return () => {
       unregister();
@@ -106,17 +90,7 @@ export class DraftEditorRuntime {
     this.editor.update(fn, { discrete: true, ...(tag === undefined ? {} : { tag }) });
   }
 
-  private ensureLexiconSubscription(): void {
-    if (this.lexiconOff !== undefined) return;
-    const lexicon = this.deps.resolveLexicon();
-    if (lexicon === undefined) return;
-    this.lexiconOff = lexicon.subscribe(() => {
-      rescanTextRefs(this.editor);
-    });
-  }
-
   refreshProjection(): EditorProjection {
-    this.ensureLexiconSubscription();
     const prev = this.projected;
     this.projected = this.editor
       .getEditorState()

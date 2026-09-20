@@ -65,14 +65,12 @@ export class InputHub implements SessionInputResolver {
   shellFor(binding: SessionBinding): SessionInputShell {
     const existing = this.shells.get(binding);
     if (existing !== undefined) return existing;
-    const { sessionId: id, session, ctx: actx } = binding;
+    const { session, ctx: actx } = binding;
     const shell = new SessionInputShell({
       actx,
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       inbox: session.projections.faceOf("inbox") as ObservableSnapshot<InboxState | undefined>,
-
-      cwd: () => this.sessions().list.getSnapshot().byId[id]?.cwd,
       defaultSink: (text, attachmentIds, mode, signal) =>
         this.sink(session, text, attachmentIds, mode, signal),
       steerQueue: () => {

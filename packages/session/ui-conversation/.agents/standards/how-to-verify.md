@@ -16,7 +16,9 @@
   `src/__tests__/input-bar.spec.tsx`。组件是 props 驱动的（`InputBarProps` 自带 `useSession` /
   `useProjection` / `renderSlot` 等注入面），传 stub props 直接渲染即可，不需要 slot 装配运行时；
   编辑器传 null 走 inert 分支，所以也不起 Lexical。
-- **剪贴板资源**（粘贴 / 拖入的资源归一）→ `src/__tests__/clipboard-resource.spec.ts`。
+- **编辑器草稿层**（输入框保留 raw markdown：草稿文本不做引用装饰）→ jsdom 测试：
+  `src/__tests__/editor-runtime.spec.tsx`（直接构造 `DraftEditorRuntime`，粘贴后断言 DOM 无
+  `data-composer-text-ref`、投影文本原样）。
 - **不单独测**：`.styles.ts` 样式表与 locale 数据表（机制由 `packages/client/ui-primitives` 的
   styling / token 测试覆盖）、纯类型与桶文件、**不再复制的上游文件**（它们就是上游实现）。
 

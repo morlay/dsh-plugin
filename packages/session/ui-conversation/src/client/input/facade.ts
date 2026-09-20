@@ -30,7 +30,6 @@ import type {
   TokenSpan,
 } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
 import type { InputSubmitMode } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
-import { clipboardUriOf } from "./clipboard-resource.ts";
 import { SubmitMachine } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/machine.ts";
 import { DraftEditorRuntime } from "./editor/runtime.ts";
 import type { EditorProjection } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/projection.ts";
@@ -48,8 +47,6 @@ export interface SessionInputDeps {
 
   /** Agent inbox 投影；next-turn 列表叠到 InputState.queue 上（缺省即空）。 */
   inbox?: ObservableSnapshot<InboxState | undefined> | undefined;
-
-  cwd?: (() => string | undefined) | undefined;
 
   steerQueue?: (() => void) | undefined;
 
@@ -173,8 +170,6 @@ export class SessionInputShell implements SessionInput {
       openReference: (source, reference) =>
         this.deps.inputTriggers?.()?.openReference(source, reference) ?? false,
       activeClaimToken: () => this.activeClaimToken(),
-      lexicon: () => this.lexicon.getSnapshot(),
-      resolveLexicon: () => this.deps.inputTriggers?.()?.lexicon,
     });
     this.unregister = this.draftEditor.register();
     this.state = createSnapshotStore<InputState>(this.compose());
@@ -250,10 +245,6 @@ export class SessionInputShell implements SessionInput {
 
   paste(text: string): void {
     this.draftEditor.paste(text);
-  }
-
-  clipboardUri(path: string): string {
-    return clipboardUriOf(path, this.deps.cwd?.());
   }
 
   submit(mode: InputSubmitMode = "queue"): void {

@@ -164,5 +164,4 @@ declare module "@deepseek-ai/cordis" {
 }
 
 export { insertTextOf, referenceTextOf } from "./input/reference-text.ts";
-export { clipboardSources, pasteTextOf, resolveClipboardData } from "./input/clipboard-resource.ts";
 export type { Occurrence } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";

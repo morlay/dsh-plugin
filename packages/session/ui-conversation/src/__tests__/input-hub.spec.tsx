@@ -47,9 +47,7 @@ function queuedRow(id: string): InboxState["next-turn"][number] {
   } as unknown as InboxState["next-turn"][number];
 }
 
-function bench(
-  options: { cwd?: string | undefined; queue?: InboxState["next-turn"] } = {},
-): Bench {
+function bench(options: { queue?: InboxState["next-turn"] } = {}): Bench {
   const session = {
     updateQueue: vi.fn(async () => ({ ok: true })),
   };
@@ -83,7 +81,7 @@ function bench(
     list: {
       getSnapshot: () => ({
         ids: [SID],
-        byId: { [SID]: { cwd: options.cwd ?? CWD } },
+        byId: { [SID]: { cwd: CWD } },
         phase: "ready",
         subagentsByParent: {},
         jobsBySession: {},
@@ -124,18 +122,6 @@ function spanOf(shell: SessionInputShell, end = shell.snapshot.draft.length) {
 
 afterEach(() => {
   for (const dispose of disposed.splice(0)) dispose();
-});
-
-describe("InputHub: cwd 注入", () => {
-  it("用会话列表里的 cwd 相对化工作区内的绝对路径", () => {
-    const { shell } = bench({ cwd: "/w/proj" });
-    expect(shell.clipboardUri("/w/proj/src/a.ts")).toBe("src/a.ts");
-  });
-
-  it("会话没有 cwd 时保持绝对路径", () => {
-    const { shell } = bench({ cwd: "" });
-    expect(shell.clipboardUri("/w/proj/src/a.ts")).toBe("/w/proj/src/a.ts");
-  });
 });
 
 describe("InputHub: scoped slash 事件归一", () => {

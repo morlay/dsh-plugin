@@ -40,7 +40,7 @@ import {
   installDraftWheel,
   keepDraftFocus,
   revealDraftSelection,
-} from "../input/editor/view-binding.ts";
+} from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/view-binding.ts";
 import { resolveSubmitMode } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/submission-policy.ts";
 import {
   attachmentErrorText,

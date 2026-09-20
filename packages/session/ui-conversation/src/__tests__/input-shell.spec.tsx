@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// fork 差异点（见本包 .agents/debts/20260917-临时接管上游对话UI的client半.md）：引用插入走纯文本、提交回上游 sink、restoreDraft 收窄、
-// cwd 注入。接缝是 SessionInputShell 的公开面（SessionInput / ComposerKeyboard）。
+// fork 差异点（见本包 .agents/debts/20260917-临时接管上游对话UI的client半.md）：引用插入走纯文本、提交回上游 sink、restoreDraft 收窄。
+// 接缝是 SessionInputShell 的公开面（SessionInput / ComposerKeyboard）。
 import { Context } from "@deepseek-ai/cordis";
 import type { ObservableSnapshot } from "@deepseek-ai/dsh-client-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -43,7 +43,6 @@ function stubTriggers(overrides: Partial<InputTriggerController> = {}): InputTri
 
 interface BenchOptions {
   sink?: (text: string, ids: readonly DraftAttachmentId[]) => SubmitOutcome;
-  cwd?: string;
   triggers?: Partial<InputTriggerController>;
 }
 
@@ -63,7 +62,6 @@ function bench(options: BenchOptions = {}) {
   const shell = new SessionInputShell({
     actx: new Context(),
     inputTriggers: () => stubTriggers(options.triggers),
-    ...(options.cwd === undefined ? {} : { cwd: () => options.cwd }),
     defaultSink: (text, ids, mode, signal) => sink(text, ids, mode, signal),
     commandAttachments: {
       serialize: async () => [],
@@ -82,19 +80,6 @@ function span(shell: SessionInputShell, start: number, end: number): TokenSpan {
 
 afterEach(() => {
   for (const shell of created.splice(0)) shell.dispose();
-});
-
-describe("SessionInputShell: 工作区相对化（deps.cwd 注入）", () => {
-  it("把工作区内的绝对路径相对化，工作区外保持原样", () => {
-    const { shell } = bench({ cwd: "/w/proj" });
-    expect(shell.clipboardUri("/w/proj/src/a.ts")).toBe("src/a.ts");
-    expect(shell.clipboardUri("/tmp/other/a.ts")).toBe("/tmp/other/a.ts");
-  });
-
-  it("没有注入 cwd 时绝对路径原样保留", () => {
-    const { shell } = bench();
-    expect(shell.clipboardUri("/w/proj/src/a.ts")).toBe("/w/proj/src/a.ts");
-  });
 });
 
 describe("SessionInputShell: 引用插入落纯文本", () => {
