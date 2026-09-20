@@ -12,7 +12,8 @@ export const eventUsage: TableDef = {
       primaryKey: true,
       references: { table: "t_events", column: "f_event_id", onDelete: "cascade" },
     },
-    f_created_at: { type: "integer", notNull: true },
+    // 毫秒时间戳：SQLite 的 integer 是 64 位，PG 的 integer 只有 int4（21 亿上限）——必须是 bigint。
+    f_created_at: { type: "bigint", notNull: true },
     f_provider: { type: "text" },
     f_model: { type: "text" },
     f_input_tokens: { type: "integer", notNull: true },

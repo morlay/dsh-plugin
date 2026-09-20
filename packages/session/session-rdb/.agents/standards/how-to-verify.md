@@ -36,3 +36,17 @@
   `coordinator-contract.ts` 的 `runCoordinatorContract` / `CoordinatorFixture`；
 - 日志 fixture：`meta` / `oneTurnLog` / `appendLog`，以及 `truncateLiveSession`；
 - 投影注册用上游 `new SessionProjectionRegistry(ctx)`（`@deepseek-ai/dsh-session-projection`）。
+
+## 用量统计（`usage.spec.ts` / `pg.spec.ts`）
+
+判据是**口径**而不是实现：只算被会话引用的事件行（fork 共享行计一次、孤儿行不计）、
+`subagent / human` 拆分、时间范围按语义键过滤；活动计数（轮次 / 步骤 / 用户输入 / 工具调用）按
+`t_events.f_type` 数、与 token 同一会话集合（有 token 用量的会话），按模型的行只带 token 用量。
+PG 侧同形，`pg.spec.ts` 里真跑一次（不能只靠 SQLite 覆盖两套 SQL）。
+
+## 活动计数（`usage.spec.ts`）
+
+`t_event_counts` 是派生表：判据是**回填可用**（表清空后重开，按事件表重算）与**旁路累加**（事件写入后
+报表里的轮次 / 步骤 / 用户输入 / 工具调用随之变化），不判实现内部的累加语句。int4 修复由 PG 侧
+`pg.spec.ts` 的用量用例守着（毫秒时间戳能落进 `t_event_usage`）。
+

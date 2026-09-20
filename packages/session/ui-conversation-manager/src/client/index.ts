@@ -43,10 +43,15 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS);
   // ctx.sessions 的类型被别的 client 半的声明占住（SessionStore），按既有做法从服务面取。
   const sessions = ctx.get("sessions") as unknown as ISessions;
+  // 列表刷新入口在运行时可能缺席（`refresh` 是类型面的方法，实测并非每个运行时都提供）：
+  // 有就调、没有就跳过——列表本身由 host 的 `api-session/*` 推送驱动，不会因此停在旧值。
+  const refreshList = (sessions as unknown as { refresh?: () => Promise<void> }).refresh;
   const controller = new ConversationManagerController({
     archiveSession: (sessionId) => ctx.uiWorkspace.archiveSession(sessionId),
     unarchiveSession: (sessionId) => ctx.uiWorkspace.unarchiveSession(sessionId),
-    refresh: () => sessions.refresh(),
+    refresh: async () => {
+      await refreshList?.call(sessions);
+    },
   });
 
   ctx.slots.inject("main", () =>

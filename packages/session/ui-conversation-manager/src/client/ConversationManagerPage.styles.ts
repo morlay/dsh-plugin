@@ -6,8 +6,9 @@ const spin = styling.keyframes({
 });
 
 /** 「对话管理」页面的样式表（官方 --dsw-* 变量 + 我们的 css-in-js 层）。
- * 页面根是纵向 flex + 整页滚动：除列表外的项都 `flex: none`，否则内容变长时
- * flex 会把这些项压到 min-content（官方 Input 的 32px 高会被压成一行文字高）。 */
+ * 页面根是纵向 flex 且**自己不滚**：页头（标题 / tab 条 / 导入 / 清理）与搜索行固定在顶部，
+ * 只有 `scroll` 那层随内容滚。除滚动层外的项都 `flex: none`，否则内容变长时 flex 会把这些项
+ * 压到 min-content（官方 Input 的 32px 高会被压成一行文字高）。 */
 export const styles = {
   page: {
     display: "flex",
@@ -17,8 +18,17 @@ export const styles = {
     width: "100%",
     height: "100%",
     padding: "24px 28px",
-    overflow: "auto",
+    overflow: "hidden",
     color: "var(--dsw-alias-label-primary)",
+  },
+  // 页面里唯一的滚动容器：提示 / 空态 / 列表 / 分页（或 usage 视图）都在它里面。
+  scroll: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    flex: "1 1 auto",
+    minHeight: "0",
+    overflowY: "auto",
   },
   header: {
     display: "flex",

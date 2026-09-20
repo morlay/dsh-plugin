@@ -10,9 +10,16 @@ export const SESSION_USAGE_PATH = "/api/session.usage";
 /** 时间范围的语义键（与 session-rdb `./usage` 的 `UsageRangeKey` 镜像）。 */
 export type UsageRangeKey = "all" | "day" | "week" | "7d" | "30d" | "90d";
 
-/** 一段用量合计（与 session-rdb `./usage` 的回报结构镜像）。 */
-export interface UsageTotals {
-  events: number;
+/** 活动计数（与 session-rdb `./usage` 的回报结构镜像）：轮次 / 步骤 / 用户输入 / 工具调用。 */
+export interface UsageActivityTotals {
+  turns: number;
+  steps: number;
+  userInputs: number;
+  toolCalls: number;
+}
+
+/** 一段用量合计：token 用量 + 活动计数。 */
+export interface UsageTotals extends UsageActivityTotals {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -20,12 +27,17 @@ export interface UsageTotals {
   totalTokens: number;
 }
 
-/** 一天 × 一个模型 × 是否子代理 的用量桶。 */
-export interface UsageBucket extends UsageTotals {
+/** 一天 × 一个模型 × 是否子代理 的用量桶：活动计数没有模型归属，只有 token 用量。 */
+export interface UsageBucket {
   day: string;
   provider: string | null;
   model: string | null;
   subagent: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
 }
 
 /** 一条会话的用量行。 */

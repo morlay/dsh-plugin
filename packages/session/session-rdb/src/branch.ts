@@ -294,6 +294,8 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     } finally {
       await handle.close();
     }
+    // 子会话继承了前缀事件：活动计数按子会话重算（派生表，best-effort）。
+    await this.persistence.rebuildEventCounts(childId);
     return childId;
   }
 
@@ -423,6 +425,9 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
         snapshotEvents: () => [],
       });
     }
+
+    // 截断后该会话的事件集合变了：活动计数跟着重算（派生表，best-effort）。
+    await this.persistence.rebuildEventCounts(id);
 
     return { header: rowToMeta(row), revision: (await internals.readStoredRevision(id))! };
   }

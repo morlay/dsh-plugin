@@ -39,7 +39,12 @@ import {
   type SurfaceEventType,
 } from "@deepseek-ai/dsh-session";
 import { sessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
-import { type Backend, type BackendTx, type EventInsert } from "./backend.ts";
+import {
+  type Backend,
+  type BackendTx,
+  type EventCountBucket,
+  type EventInsert,
+} from "./backend.ts";
 import { WriteGuard } from "./write-guard.ts";
 import { repairReadView, rowToMeta, scanRows, toJsonlArtifact } from "./log.ts";
 import {
@@ -56,7 +61,7 @@ import { registerSessionImport } from "./import.ts";
 import { registerSessionDeletion } from "./deletion.ts";
 import { registerSessionExport } from "./export.ts";
 import { registerSessionGc } from "./gc.ts";
-import { registerSessionUsage } from "./usage.ts";
+import { COUNTED_EVENT_TYPES, localDayKey, registerSessionUsage } from "./usage.ts";
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
 import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts";
@@ -745,6 +750,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     this.liveFailures.delete(id);
     this.liveDropWarned.delete(id);
     this.reuseEventIds.delete(id);
+    await this.deleteEventCounts(id);
   }
 
   /** GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。 */
@@ -768,6 +774,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       this.liveFailures.delete(id);
       this.liveDropWarned.delete(id);
       this.reuseEventIds.delete(id);
+      await this.deleteEventCounts(id);
     }
     return deleted;
   }
@@ -876,6 +883,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     this.writeGuard.confirmHead(meta.id, confirmedHead);
     this.tracker.materialized(meta.id);
+    await this.recordEventCounts(meta.id, events);
     return true;
   }
 
@@ -953,6 +961,44 @@ export class SessionPersistenceRdb extends SessionPersistence {
       migrated: false,
       ...(tornFrom !== undefined ? { tornFrom } : {}),
     };
+  }
+
+  /**
+   * 活动计数**旁路累加**：不在写事务里、失败只 warn——`t_event_counts` 是可销毁重建的派生表，
+   * 丢几次累加不影响可用性（需要时用 `rebuildEventCounts` 重算）。
+   */
+  private async recordEventCounts(id: SessionId, events: readonly SessionEvent[]): Promise<void> {
+    const buckets = eventCountBuckets(events);
+    if (buckets.length === 0) return;
+    try {
+      await this.backend.incrementEventCounts(id, buckets);
+    } catch (error: unknown) {
+      this.ctx.logger.warn(
+        `session-rdb: activity counts for "${id}" not updated (${describeError(error)})`,
+      );
+    }
+  }
+
+  /** 重算一个会话的活动计数（rewind / fork 之后；best-effort，同 `recordEventCounts`）。 */
+  async rebuildEventCounts(id: SessionId): Promise<void> {
+    try {
+      await this.backend.rebuildEventCounts(id);
+    } catch (error: unknown) {
+      this.ctx.logger.warn(
+        `session-rdb: activity counts for "${id}" not rebuilt (${describeError(error)})`,
+      );
+    }
+  }
+
+  /** 会话删除时清掉它的活动计数行（best-effort）。 */
+  private async deleteEventCounts(id: SessionId): Promise<void> {
+    try {
+      await this.backend.deleteEventCounts(id);
+    } catch (error: unknown) {
+      this.ctx.logger.warn(
+        `session-rdb: activity counts for "${id}" not deleted (${describeError(error)})`,
+      );
+    }
   }
 
   private async rewriteMigratedLog(
@@ -1292,6 +1338,24 @@ function seedCoversPrefix(seed: readonly SessionEvent[], prefix: readonly Sessio
       return seedEvent !== undefined && JSON.stringify(seedEvent) === JSON.stringify(event);
     })
   );
+}
+
+/** 一批事件折成活动计数的桶：只数四种类型，按本地日聚合。 */
+function eventCountBuckets(events: readonly SessionEvent[]): EventCountBucket[] {
+  const counted = new Map<string, EventCountBucket>();
+  for (const event of events) {
+    if (!(COUNTED_EVENT_TYPES as readonly string[]).includes(event.type)) continue;
+    const day = localDayKey(event.time);
+    const key = `${day}#${event.type}`;
+    const bucket = counted.get(key) ?? { day, type: event.type, count: 0 };
+    bucket.count += 1;
+    counted.set(key, bucket);
+  }
+  return [...counted.values()];
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : "unknown error";
 }
 
 function createBackend(config: Config): Backend {

@@ -108,7 +108,10 @@ async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Pr
 }
 
 interface UsageTotals {
-  events: number;
+  turns: number;
+  steps: number;
+  userInputs: number;
+  toolCalls: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -116,11 +119,17 @@ interface UsageTotals {
   totalTokens: number;
 }
 
-interface UsageBucket extends UsageTotals {
+/** 按天 × 模型的桶只有 token 用量：活动计数没有模型归属。 */
+interface UsageBucket {
   day: string;
   provider: string | null;
   model: string | null;
   subagent: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
 }
 
 interface UsageSessionRow extends UsageTotals {
@@ -133,6 +142,7 @@ interface UsageSessionRow extends UsageTotals {
 interface UsageReport {
   totals: UsageTotals;
   subagent: UsageTotals;
+  human: UsageTotals;
   buckets: UsageBucket[];
   sessions: UsageSessionRow[];
 }
@@ -203,6 +213,7 @@ async function report(ctx: Context, body: unknown = {}): Promise<UsageReport> {
   const response = fakeResponse();
   await handler(fakeRequest(body), response.res);
   expect(response.code).toBe(200);
+  if (process.env.USAGE_DEBUG === "1") console.warn("USAGE_DEBUG", response.body);
   return JSON.parse(response.body) as UsageReport;
 }
 
@@ -227,13 +238,38 @@ describe("用量统计口径", () => {
     const value = await report(ctx);
 
     expect(value.totals).toMatchObject({
-      events: 2,
+      turns: 2,
+      steps: 2,
+      userInputs: 2,
+      toolCalls: 0,
       inputTokens: 150,
       outputTokens: 15,
       cacheReadTokens: 1_000,
       reasoningTokens: 5,
     });
-    expect(value.subagent).toMatchObject({ events: 1, inputTokens: 50, outputTokens: 5 });
+    expect(value.subagent).toMatchObject({ turns: 1, steps: 1, toolCalls: 0, inputTokens: 50 });
+    expect(value.human).toMatchObject({ turns: 1, inputTokens: 100 });
+  });
+
+  it("活动计数按事件类型数出来（轮次 / 步骤 / 用户输入 / 工具调用）", async () => {
+    const { ctx } = await harness();
+    const first = turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2));
+    const toolCall = {
+      type: "tool/call",
+      seq: 6,
+      time: DAY_ONE,
+      data: { turn: 1, step: 1, callId: "c1", name: "read", arguments: "{}" },
+    } as unknown as SessionEvent;
+    const second = turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2)).map(
+      (event) => ({ ...event, seq: event.seq + 7, time: DAY_ONE + 1 }) as SessionEvent,
+    );
+    await createPersisted(ctx, meta("s1"), [...first, toolCall, ...second]);
+
+    const value = await report(ctx);
+
+    expect(value.totals).toMatchObject({ turns: 2, steps: 2, userInputs: 2, toolCalls: 1 });
+    expect(value.sessions[0]?.toolCalls).toBe(1);
+    expect(value.sessions[0]?.turns).toBe(2);
   });
 
   it("按天 × 模型 × subagent 分桶", async () => {
@@ -300,7 +336,7 @@ describe("用量统计口径", () => {
       const second = await harnessAt(dbPath);
       const value = await report(second.ctx);
       expect(value.totals.inputTokens).toBe(100);
-      expect(value.totals.events).toBe(1);
+      expect(value.totals.turns).toBe(1);
 
       // 幂等：再开一次不会重复累计。
       await second.dispose();
@@ -328,10 +364,10 @@ describe("用量统计口径", () => {
     );
 
     const all = await report(ctx);
-    expect(all.totals.events).toBe(2);
+    expect(all.totals.turns).toBe(2);
 
     const week = await report(ctx, { range: "7d" });
-    expect(week.totals.events).toBe(1);
+    expect(week.totals.turns).toBe(1);
     expect(week.totals.inputTokens).toBe(100);
     expect(week.sessions.map((row) => row.sessionId)).toEqual(["recent"]);
   });
@@ -375,6 +411,36 @@ describe("用量统计口径", () => {
     expect(weekIds).not.toContain("last-week");
   });
 
+  // 活动计数是派生表：可以随时清掉、启动时按事件表重建（首次/表空才回填，幂等）。
+  it("活动计数表为空时按事件表回填（可销毁重建）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "session-rdb-counts-"));
+    const path = join(dir, "sessions.sqlite");
+    const first = await harnessAt(path);
+    try {
+      await createPersisted(
+        first.ctx,
+        meta("s1"),
+        turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2)),
+      );
+    } finally {
+      await first.dispose();
+    }
+
+    const raw = new DatabaseSync(path);
+    raw.exec("DELETE FROM t_event_counts");
+    raw.close();
+
+    const second = await harnessAt(path);
+    try {
+      const value = await report(second.ctx);
+      expect(value.totals).toMatchObject({ turns: 1, steps: 1, userInputs: 1, toolCalls: 0 });
+      expect(value.sessions[0]).toMatchObject({ turns: 1 });
+    } finally {
+      await second.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("被删除会话留下的事件行（无引用）不计入统计", async () => {
     const { ctx, persistence } = await harness();
     await createPersisted(
@@ -387,7 +453,7 @@ describe("用量统计口径", () => {
 
     const value = await report(ctx);
 
-    expect(value.totals.events).toBe(0);
+    expect(value.totals.turns).toBe(0);
     expect(value.totals.inputTokens).toBe(0);
     expect(value.sessions).toEqual([]);
   });

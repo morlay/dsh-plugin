@@ -44,23 +44,6 @@
               high: high
               max: max
 
-      commandcode:
-        apiKeyEnv: COMMANDCODE_API_KEY
-        displayName: Command Code
-        api: openai-completions
-        baseURL: https://api.commandcode.ai/provider/v1
-        reasoning: high
-        models:
-          - id: deepseek/deepseek-v4.1-flash
-            name: DeepSeek V4.1 Flash @ Command Code
-            contextWindow: 1000000
-            input: [text, image]
-            reasoningEfforts:
-              off:
-              low: low
-              high: high
-              max: max
-
 # 沙箱装配（唯一真源，就地完成）：官方 `sandbox`（ctx.sandbox）与 `fs-sandbox`
 # （ctx.fs）两行在这里禁用，由 `@morlay/dsh-sandbox-local` 注册同名服务；规则随本
 # insert 行一起写死，不再依赖任何额外 bundle 层（漏装配时规则会静默失效，只剩

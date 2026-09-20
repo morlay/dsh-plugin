@@ -97,6 +97,13 @@ export interface BackendTx {
   deleteSessions(ids: SessionId[]): Promise<number>;
 }
 
+/** 活动计数的一个桶：本地日 + 事件类型 + 计数。 */
+export interface EventCountBucket {
+  day: string;
+  type: string;
+  count: number;
+}
+
 export interface Backend {
   readonly kind: "sqlite" | "postgres";
 
@@ -129,10 +136,28 @@ export interface Backend {
   listOrphanSubagentSessions(): Promise<SessionId[]>;
 
   /**
-   * 用量统计的原始聚合：按天×模型×subagent 的桶与按会话的行（事件行去重、排除孤儿）。
+   * 用量统计的原始聚合：token 用量读 `t_event_usage`、活动计数读派生表 `t_event_counts`，
+   * 加按天×模型的桶与按会话的行（事件行去重、排除孤儿）。
    * @param sinceMs - 只算该时刻（含）之后的事件行；省略即全量。
    */
   usageReport(sinceMs?: number): Promise<UsageAggregate>;
+
+  /**
+   * 活动计数**旁路累加**（派生表 `t_event_counts`，不参与写事务、失败可丢——表可销毁重建）：
+   * 每个 (会话, 本地日, 事件类型) 记一行计数。
+   * @param id - 会话 id。
+   * @param buckets - 本批要累加的 (day, type, count)。
+   */
+  incrementEventCounts(id: SessionId, buckets: readonly EventCountBucket[]): Promise<void>;
+
+  /**
+   * 按会话从事件表重算活动计数（rewind / fork 之后调用）：先删该会话的行再重算。
+   * @param id - 会话 id。
+   */
+  rebuildEventCounts(id: SessionId): Promise<void>;
+
+  /** 删掉一个会话的活动计数行（会话删除时）。 */
+  deleteEventCounts(id: SessionId): Promise<void>;
 
   /** 回收空间与统计（含 VACUUM）；不得在事务内执行。 */
   vacuum(): Promise<void>;

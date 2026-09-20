@@ -1,6 +1,6 @@
 CREATE TABLE "t_event_usage" (
 	"f_event_id" text PRIMARY KEY NOT NULL,
-	"f_created_at" integer NOT NULL,
+	"f_created_at" bigint NOT NULL,
 	"f_provider" text,
 	"f_model" text,
 	"f_input_tokens" integer DEFAULT 0 NOT NULL,

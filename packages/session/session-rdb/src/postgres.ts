@@ -10,6 +10,7 @@ import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistenc
 import {
   type Backend,
   type BackendTx,
+  type EventCountBucket,
   type EventInsert,
   type EventRow,
   type SessionRow,
@@ -19,7 +20,15 @@ import { postgresTableDefs } from "./entities/index.ts";
 import { sessionConflictRow, sessionInsertRow, titleOfEventData, usageRowOf } from "./log.ts";
 import { createStorageRepository } from "./storage-takeover/repository.ts";
 import type { StorageRepository } from "./storage-takeover/types.ts";
-import type { UsageAggregate, UsageTotals } from "./usage.ts";
+import {
+  COUNTED_EVENT_TYPES,
+  addActivityCount,
+  addTokenTotals,
+  addTotals,
+  emptyTotals,
+  localDayKey,
+} from "./usage.ts";
+import type { UsageActivityTotals, UsageAggregate, UsageTokenTotals } from "./usage.ts";
 
 const postgresMigrationsDir = fileURLToPath(new URL("../drizzle/postgres/", import.meta.url));
 
@@ -51,9 +60,8 @@ function numeric(value: unknown): number {
 }
 
 /** SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。 */
-function totalsOfRow(row: Record<string, unknown>): UsageTotals {
+function tokenTotalsOf(row: Record<string, unknown>): UsageTokenTotals {
   return {
-    events: numeric(row["events"]),
     inputTokens: numeric(row["input_tokens"]),
     outputTokens: numeric(row["output_tokens"]),
     cacheReadTokens: numeric(row["cache_read_tokens"]),
@@ -61,6 +69,13 @@ function totalsOfRow(row: Record<string, unknown>): UsageTotals {
     totalTokens: numeric(row["total_tokens"]),
   };
 }
+
+function emptyActivity(): UsageActivityTotals {
+  return { turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
+}
+
+/** `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。 */
+const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
 
 export interface PostgresBackendOptions {
   identityBase: string;
@@ -147,6 +162,8 @@ export class PostgresBackend implements Backend {
       }
     }
     await migrate(this.db, { migrationsFolder: postgresMigrationsDir });
+    await this.ensureEventCountsTable();
+    await this.backfillEventCounts();
     await this.backfillEventUsage();
     const storeId = await this.db.transaction(async (tx) => {
       await tx
@@ -582,60 +599,207 @@ export class PostgresBackend implements Backend {
 
   /** 用量聚合：与 SQLite 侧同形，读 `t_event_usage`，数值列回来是字符串。 */
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
-    const sinceClause = sinceMs === undefined ? sql`` : sql` AND u.f_created_at >= ${sinceMs}`;
+    const usageSince = sinceMs === undefined ? sql`` : sql` AND u.f_created_at >= ${sinceMs}`;
+    // 活动计数走派生表的「本地日」列（与桶的本地日口径一致）。
+    const daySince = sinceMs === undefined ? sql`` : sql` AND c.f_day >= ${localDayKey(sinceMs)}`;
     const tEventUsage = this.tables["t_event_usage"];
     const tSessionEvents = this.tables["t_session_events"];
     const tSessions = this.tables["t_sessions"];
+    const eventCountsTable = this.qualifiedTable("t_event_counts");
+    const subagentOfUsage = sql`EXISTS (SELECT 1 FROM ${tSessionEvents} sb
+                                            JOIN ${tSessions} ss ON ss.f_session_id = sb.f_session_id
+                                           WHERE sb.f_event_id = u.f_event_id AND ss.f_origin = 'subagent')`;
+    const subagentOfCounts = sql`EXISTS (SELECT 1 FROM ${tSessionEvents} sb
+                                            JOIN ${tSessions} ss ON ss.f_session_id = sb.f_session_id
+                                           WHERE sb.f_session_id = c.f_session_id AND ss.f_origin = 'subagent')`;
+    // 有 token 用量的会话：活动计数与列表都限定在这一批会话里，口径一致。
+    const hasUsageSession = (
+      column: string,
+    ): ReturnType<typeof sql> => sql`EXISTS (SELECT 1 FROM ${tSessionEvents} ub
+                                           JOIN ${tEventUsage} uu ON uu.f_event_id = ub.f_event_id
+                                          WHERE ub.f_session_id = ${sql.raw(column)})`;
+    const tokenColumns = sql.raw(`sum(u.f_input_tokens) AS input_tokens,
+                sum(u.f_output_tokens) AS output_tokens,
+                sum(u.f_cache_read_tokens) AS cache_read_tokens,
+                sum(u.f_reasoning_tokens) AS reasoning_tokens,
+                sum(u.f_total_tokens) AS total_tokens`);
+
     const buckets = (await this.db.execute(sql`
       SELECT to_char(to_timestamp(u.f_created_at / 1000.0), 'YYYY-MM-DD') AS day,
              u.f_provider AS provider,
              u.f_model AS model,
-             EXISTS (SELECT 1 FROM ${tSessionEvents} sb
-                       JOIN ${tSessions} ss ON ss.f_session_id = sb.f_session_id
-                      WHERE sb.f_event_id = u.f_event_id AND ss.f_origin = 'subagent') AS subagent,
-             count(*) AS events,
-             sum(u.f_input_tokens) AS input_tokens,
-             sum(u.f_output_tokens) AS output_tokens,
-             sum(u.f_cache_read_tokens) AS cache_read_tokens,
-             sum(u.f_reasoning_tokens) AS reasoning_tokens,
-             sum(u.f_total_tokens) AS total_tokens
+             ${subagentOfUsage} AS subagent,
+             ${tokenColumns}
         FROM ${tEventUsage} u
-       WHERE EXISTS (SELECT 1 FROM ${tSessionEvents} rb WHERE rb.f_event_id = u.f_event_id)${sinceClause}
+       WHERE EXISTS (SELECT 1 FROM ${tSessionEvents} rb WHERE rb.f_event_id = u.f_event_id)${usageSince}
        GROUP BY 1, 2, 3, 4
     `)) as unknown as { rows: Array<Record<string, unknown>> };
-    const sessions = (await this.db.execute(sql`
+    const tokenScope = (await this.db.execute(sql`
+      SELECT ${subagentOfUsage} AS subagent,
+             ${tokenColumns}
+        FROM ${tEventUsage} u
+       WHERE EXISTS (SELECT 1 FROM ${tSessionEvents} rb WHERE rb.f_event_id = u.f_event_id)${usageSince}
+       GROUP BY 1
+    `)) as unknown as { rows: Array<Record<string, unknown>> };
+    const activityScope = (await this.db.execute(sql`
+      SELECT ${subagentOfCounts} AS subagent,
+             c.f_type AS f_type,
+             sum(c.f_count) AS n
+        FROM ${sql.raw(eventCountsTable)} c
+        JOIN ${tSessions} s ON s.f_session_id = c.f_session_id
+       WHERE ${hasUsageSession("c.f_session_id")}${daySince}
+       GROUP BY 1, 2
+    `)) as unknown as { rows: Array<Record<string, unknown>> };
+    const tokenSessions = (await this.db.execute(sql`
       SELECT b.f_session_id AS session_id,
              s.f_title AS title,
              (s.f_origin = 'subagent') AS subagent,
              (s.f_archived_at IS NOT NULL) AS archived,
-             count(*) AS events,
-             sum(u.f_input_tokens) AS input_tokens,
-             sum(u.f_output_tokens) AS output_tokens,
-             sum(u.f_cache_read_tokens) AS cache_read_tokens,
-             sum(u.f_reasoning_tokens) AS reasoning_tokens,
-             sum(u.f_total_tokens) AS total_tokens
+             ${tokenColumns}
         FROM ${tSessionEvents} b
         JOIN ${tEventUsage} u ON u.f_event_id = b.f_event_id
         JOIN ${tSessions} s ON s.f_session_id = b.f_session_id
-       WHERE 1 = 1${sinceClause}
+       WHERE 1 = 1${usageSince}
        GROUP BY b.f_session_id, s.f_title, s.f_origin, s.f_archived_at
     `)) as unknown as { rows: Array<Record<string, unknown>> };
+    const activitySessions = (await this.db.execute(sql`
+      SELECT c.f_session_id AS session_id,
+             c.f_type AS f_type,
+             sum(c.f_count) AS n
+        FROM ${sql.raw(eventCountsTable)} c
+       WHERE ${hasUsageSession("c.f_session_id")}${daySince}
+       GROUP BY c.f_session_id, c.f_type
+    `)) as unknown as { rows: Array<Record<string, unknown>> };
+    const human = emptyTotals();
+    const subagent = emptyTotals();
+    for (const row of tokenScope.rows) {
+      addTokenTotals(row["subagent"] === true ? subagent : human, tokenTotalsOf(row));
+    }
+    for (const row of activityScope.rows) {
+      addActivityCount(
+        row["subagent"] === true ? subagent : human,
+        String(row["f_type"]),
+        numeric(row["n"]),
+      );
+    }
+    const totals = addTotals(addTotals(emptyTotals(), human), subagent);
+
+    const activityBySession = new Map<string, UsageActivityTotals>();
+    for (const row of activitySessions.rows) {
+      const key = String(row["session_id"]);
+      const target = activityBySession.get(key) ?? emptyActivity();
+      addActivityCount(target, String(row["f_type"]), numeric(row["n"]));
+      activityBySession.set(key, target);
+    }
     return {
+      totals,
+      subagent,
+      human,
       buckets: buckets.rows.map((row) => ({
         day: String(row["day"]),
         provider: text(row["provider"]),
         model: text(row["model"]),
         subagent: row["subagent"] === true,
-        ...totalsOfRow(row),
+        ...tokenTotalsOf(row),
       })),
-      sessions: sessions.rows.map((row) => ({
+      sessions: tokenSessions.rows.map((row) => ({
         sessionId: String(row["session_id"]),
         title: text(row["title"]),
         subagent: row["subagent"] === true,
         archived: row["archived"] === true,
-        ...totalsOfRow(row),
+        ...tokenTotalsOf(row),
+        ...(activityBySession.get(String(row["session_id"])) ?? emptyActivity()),
       })),
     };
+  }
+
+  /** 表名限定到配置的 schema（派生表不进 drizzle schema / 迁移，建表幂等）。 */
+  private qualifiedTable(name: string): string {
+    const schema = this.options.schema ?? "public";
+    return schema === "public" ? name : `"${schema}".${name}`;
+  }
+
+  private async ensureEventCountsTable(): Promise<void> {
+    const table = this.qualifiedTable("t_event_counts");
+    await this.db.execute(
+      sql.raw(`CREATE TABLE IF NOT EXISTS ${table} (
+        f_id serial PRIMARY KEY,
+        f_session_id text NOT NULL,
+        f_day text NOT NULL,
+        f_type text NOT NULL,
+        f_count integer NOT NULL DEFAULT 0
+      )`),
+    );
+    await this.db.execute(
+      sql.raw(
+        `CREATE UNIQUE INDEX IF NOT EXISTS uq_event_counts_session_day_type ON ${table}(f_session_id, f_day, f_type)`,
+      ),
+    );
+    await this.db.execute(
+      sql.raw(`CREATE INDEX IF NOT EXISTS idx_event_counts_day ON ${table}(f_day)`),
+    );
+  }
+
+  /** 一次性回填活动计数（表为空时从事件表重算；幂等）。 */
+  private async backfillEventCounts(): Promise<void> {
+    const table = this.qualifiedTable("t_event_counts");
+    const existing = (await this.db.execute(
+      sql.raw(`SELECT count(*) AS n FROM ${table}`),
+    )) as unknown as { rows: Array<Record<string, unknown>> };
+    if (Number(existing.rows[0]?.["n"] ?? 0) > 0) return;
+    const tSessionEvents = this.tables["t_session_events"];
+    const tEvents = this.tables["t_events"];
+    await this.db.execute(sql`
+      INSERT INTO ${sql.raw(table)} (f_session_id, f_day, f_type, f_count)
+      SELECT ${tSessionEvents}.f_session_id,
+             to_char(to_timestamp(${tEvents}.f_created_at / 1000.0), 'YYYY-MM-DD'),
+             ${tEvents}.f_type,
+             count(*)
+        FROM ${tSessionEvents}
+        JOIN ${tEvents} ON ${tEvents}.f_event_id = ${tSessionEvents}.f_event_id
+       WHERE ${tEvents}.f_type IN (${sql.raw(COUNTED_EVENT_TYPE_SQL)})
+       GROUP BY 1, 2, 3
+      ON CONFLICT DO NOTHING
+    `);
+  }
+
+  /** 活动计数旁路累加：派生表，不在写事务里（失败可丢，表可销毁重建）。 */
+  async incrementEventCounts(id: SessionId, buckets: readonly EventCountBucket[]): Promise<void> {
+    if (buckets.length === 0) return;
+    const table = this.qualifiedTable("t_event_counts");
+    for (const bucket of buckets) {
+      await this.db.execute(sql`
+        INSERT INTO ${sql.raw(table)} (f_session_id, f_day, f_type, f_count)
+        VALUES (${id}, ${bucket.day}, ${bucket.type}, ${bucket.count})
+        ON CONFLICT (f_session_id, f_day, f_type)
+          DO UPDATE SET f_count = ${sql.raw(`${table}.f_count`)} + EXCLUDED.f_count
+      `);
+    }
+  }
+
+  /** 按会话重算活动计数（rewind / fork 之后）：先删该会话的行，再从事件表重算。 */
+  async rebuildEventCounts(id: SessionId): Promise<void> {
+    const table = this.qualifiedTable("t_event_counts");
+    const tSessionEvents = this.tables["t_session_events"];
+    const tEvents = this.tables["t_events"];
+    await this.db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE f_session_id = ${id}`);
+    await this.db.execute(sql`
+      INSERT INTO ${sql.raw(table)} (f_session_id, f_day, f_type, f_count)
+      SELECT ${tSessionEvents}.f_session_id,
+             to_char(to_timestamp(${tEvents}.f_created_at / 1000.0), 'YYYY-MM-DD'),
+             ${tEvents}.f_type,
+             count(*)
+        FROM ${tSessionEvents}
+        JOIN ${tEvents} ON ${tEvents}.f_event_id = ${tSessionEvents}.f_event_id
+       WHERE ${tSessionEvents}.f_session_id = ${id}
+         AND ${tEvents}.f_type IN (${sql.raw(COUNTED_EVENT_TYPE_SQL)})
+       GROUP BY 1, 2, 3
+    `);
+  }
+
+  async deleteEventCounts(id: SessionId): Promise<void> {
+    const table = this.qualifiedTable("t_event_counts");
+    await this.db.execute(sql`DELETE FROM ${sql.raw(table)} WHERE f_session_id = ${id}`);
   }
 
   private async getPrevBridge(

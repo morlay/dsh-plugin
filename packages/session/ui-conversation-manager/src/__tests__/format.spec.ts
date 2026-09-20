@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPercent, formatTokens } from "../client/format.ts";
+import { formatCount, formatPercent, formatTokens } from "../client/format.ts";
 
 describe("token 数字的紧凑显示", () => {
   it("千以内原样，千/百万/十亿压缩到一位有效小数", () => {
@@ -23,5 +23,15 @@ describe("token 数字的紧凑显示", () => {
     expect(formatPercent(98.4)).toBe("98.4%");
     expect(formatPercent(100)).toBe("100%");
     expect(formatPercent(Number.NaN)).toBe("0%");
+  });
+});
+
+describe("formatCount", () => {
+  it("千分位显示计数，0 与非法值回落为 0", () => {
+    expect(formatCount(0)).toBe("0");
+    expect(formatCount(-1)).toBe("0");
+    expect(formatCount(Number.NaN)).toBe("0");
+    expect(formatCount(7)).toBe("7");
+    expect(formatCount(1_024)).toBe("1,024");
   });
 });

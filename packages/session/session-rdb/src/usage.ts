@@ -48,9 +48,8 @@ function parseUsageRange(value: unknown): UsageRangeKey {
     : "all";
 }
 
-/** 一段用量合计（token 字段直接取事件里模型报的 usage）。 */
-export interface UsageTotals {
-  events: number;
+/** 一段 token 用量（字段直接取事件里模型报的 usage）。 */
+export interface UsageTokenTotals {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -58,8 +57,25 @@ export interface UsageTotals {
   totalTokens: number;
 }
 
-/** 一天 × 一个模型 × 是否子代理 的用量桶：总览、按天、按模型都由它折叠。 */
-export interface UsageBucket extends UsageTotals {
+/**
+ * 活动计数：与 token 用量同一时间范围、同一去重口径（只算被会话引用的事件行），
+ * 按事件类型数出来——「轮次 / 步骤 / 用户输入 / 工具调用」比「事件行数」有信息量。
+ */
+export interface UsageActivityTotals {
+  turns: number;
+  steps: number;
+  userInputs: number;
+  toolCalls: number;
+}
+
+/** 总量与按会话行用的一整套指标（token + 活动）。 */
+export interface UsageTotals extends UsageTokenTotals, UsageActivityTotals {}
+
+/**
+ * 一天 × 一个模型 × 是否子代理 的用量桶：总览、按天、按模型都由它折叠。
+ * 只有 token 用量——活动计数没有模型归属（一个轮次可能跨模型），挂在总量与按会话行上。
+ */
+export interface UsageBucket extends UsageTokenTotals {
   day: string;
   provider: string | null;
   model: string | null;
@@ -74,25 +90,63 @@ export interface UsageSessionRow extends UsageTotals {
   archived: boolean;
 }
 
-/** 后端的原始聚合结果。 */
+/** 后端的原始聚合结果（总量 / 其中子代理 / 人类、按天×模型的桶、按会话的行）。 */
 export interface UsageAggregate {
-  buckets: UsageBucket[];
-  sessions: UsageSessionRow[];
-}
-
-/** 一次统计请求的完整回报。 */
-export interface SessionUsageReport {
   totals: UsageTotals;
   subagent: UsageTotals;
-  /** 只被人类会话引用的部分（`totals − subagent`）。 */
   human: UsageTotals;
   buckets: UsageBucket[];
   sessions: UsageSessionRow[];
 }
 
-function emptyTotals(): UsageTotals {
+/** 一次统计请求的完整回报。 */
+export type SessionUsageReport = UsageAggregate;
+
+/** 计入活动计数的事件类型（轮次 / 步骤 / 用户输入 / 工具调用）。 */
+export const COUNTED_EVENT_TYPES = [
+  "turn/start",
+  "step/start",
+  "user/message",
+  "tool/call",
+] as const;
+
+/** 按事件类型把计数累加到活动指标上（表里按类型存，读的时候折成四项）。 */
+export function addActivityCount(
+  target: UsageActivityTotals,
+  type: string,
+  count: number,
+): UsageActivityTotals {
+  switch (type) {
+    case "turn/start":
+      target.turns += count;
+      return target;
+    case "step/start":
+      target.steps += count;
+      return target;
+    case "user/message":
+      target.userInputs += count;
+      return target;
+    case "tool/call":
+      target.toolCalls += count;
+      return target;
+    default:
+      return target;
+  }
+}
+
+/** 毫秒时间戳 → host 本地日（`YYYY-MM-DD`，与 SQL 的 localtime 口径一致）。 */
+export function localDayKey(ms: number): string {
+  const date = new Date(ms);
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function emptyTotals(): UsageTotals {
   return {
-    events: 0,
+    turns: 0,
+    steps: 0,
+    userInputs: 0,
+    toolCalls: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,
@@ -101,18 +155,31 @@ function emptyTotals(): UsageTotals {
   };
 }
 
-/** 折叠一组行（桶或会话行）的用量。 */
-export function sumUsage(rows: readonly UsageTotals[]): UsageTotals {
-  const totals = emptyTotals();
-  for (const row of rows) {
-    totals.events += row.events;
-    totals.inputTokens += row.inputTokens;
-    totals.outputTokens += row.outputTokens;
-    totals.cacheReadTokens += row.cacheReadTokens;
-    totals.reasoningTokens += row.reasoningTokens;
-    totals.totalTokens += row.totalTokens;
-  }
-  return totals;
+export function addTokenTotals(target: UsageTokenTotals, row: UsageTokenTotals): UsageTokenTotals {
+  target.inputTokens += row.inputTokens;
+  target.outputTokens += row.outputTokens;
+  target.cacheReadTokens += row.cacheReadTokens;
+  target.reasoningTokens += row.reasoningTokens;
+  target.totalTokens += row.totalTokens;
+  return target;
+}
+
+export function addActivityTotals(
+  target: UsageActivityTotals,
+  row: UsageActivityTotals,
+): UsageActivityTotals {
+  target.turns += row.turns;
+  target.steps += row.steps;
+  target.userInputs += row.userInputs;
+  target.toolCalls += row.toolCalls;
+  return target;
+}
+
+/** 把一行的整套指标累加进目标（后端合并「是否子代理」两组时用）。 */
+export function addTotals(target: UsageTotals, row: UsageTotals): UsageTotals {
+  addActivityTotals(target, row);
+  addTokenTotals(target, row);
+  return target;
 }
 
 /**
@@ -167,14 +234,11 @@ export function registerSessionUsage(ctx: Context, persistence: SessionPersisten
               }
             }
             try {
-              const aggregate = await persistence.usageReport(
+              const report = await persistence.usageReport(
                 resolveUsageSince(parseUsageRange(envelope.range), Date.now()),
               );
-              const totals = sumUsage(aggregate.buckets);
-              const subagent = sumUsage(aggregate.buckets.filter((bucket) => bucket.subagent));
-              const human = sumUsage(aggregate.buckets.filter((bucket) => !bucket.subagent));
               res.writeHead(200, { "content-type": "application/json" });
-              res.end(JSON.stringify({ totals, subagent, human, ...aggregate }));
+              res.end(JSON.stringify(report));
             } catch (error: unknown) {
               res.writeHead(500, { "content-type": "application/json" });
               res.end(

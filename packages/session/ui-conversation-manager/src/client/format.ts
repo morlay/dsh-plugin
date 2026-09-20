@@ -14,6 +14,12 @@ export function formatTokens(value: number): string {
   return `${trim(value / 1_000_000_000)}B`;
 }
 
+/** @param value - 计数（轮次 / 步骤 / 用户输入 / 工具调用）。 @returns 千分位原文，例如 `1,024`。 */
+export function formatCount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return Math.round(value).toLocaleString("en-US");
+}
+
 /** @param value - 百分点（0~100）。 @returns 紧凑百分比，例如 `98.4%`、`100%`。 */
 export function formatPercent(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0%";

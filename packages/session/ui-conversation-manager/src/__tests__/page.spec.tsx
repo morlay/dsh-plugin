@@ -412,7 +412,10 @@ describe("对话管理页面：分页、导出与 GC", () => {
 });
 
 const TOTALS_165 = {
-  events: 2,
+  turns: 2,
+  steps: 2,
+  userInputs: 2,
+  toolCalls: 1,
   inputTokens: 100,
   outputTokens: 65,
   cacheReadTokens: 0,
@@ -420,7 +423,10 @@ const TOTALS_165 = {
   totalTokens: 165,
 };
 const TOTALS_55 = {
-  events: 1,
+  turns: 1,
+  steps: 1,
+  userInputs: 1,
+  toolCalls: 0,
   inputTokens: 0,
   outputTokens: 55,
   cacheReadTokens: 0,
@@ -432,7 +438,10 @@ const REPORT = {
   totals: TOTALS_165,
   subagent: TOTALS_55,
   human: {
-    events: 1,
+    turns: 1,
+    steps: 1,
+    userInputs: 1,
+    toolCalls: 1,
     inputTokens: 100,
     outputTokens: 10,
     cacheReadTokens: 0,
@@ -568,6 +577,9 @@ describe("对话管理页面：token 用量统计", () => {
       container.querySelector('[data-usage-cell="output"]')?.getAttribute("data-usage-value"),
     ).toBe("65");
     expect(container.querySelector('[data-usage-key="subagent"]')).toBeTruthy();
+    expect(
+      container.querySelector('[data-usage-cell="toolCalls"]')?.getAttribute("data-usage-value"),
+    ).toBe("1");
 
     fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
     expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
@@ -575,6 +587,43 @@ describe("对话管理页面：token 用量统计", () => {
     expect(container.querySelector("[data-usage-range]")?.getAttribute("data-usage-range")).toBe(
       "day",
     );
+  });
+
+  it("活动计数替换「事件」：总览与会话行显示轮次 / 步骤 / 用户输入 / 工具调用", async () => {
+    const { container } = renderPage({
+      archived: [],
+      faces: { loadUsage: vi.fn(async () => REPORT) },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    await screen.findByText("总览");
+
+    const cell = (key: string): string | null | undefined =>
+      container.querySelector(`[data-usage-cell="${key}"]`)?.getAttribute("data-usage-value");
+    expect(cell("turns")).toBe("2");
+    expect(cell("steps")).toBe("2");
+    expect(cell("userInputs")).toBe("2");
+    expect(cell("toolCalls")).toBe("1");
+    // 「事件」这一项已经没有了。
+    expect(container.querySelector('[data-usage-cell="events"]')).toBeNull();
+    expect(screen.getAllByText("轮次").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("工具调用").length).toBe(2);
+
+    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    expect(cell("turns")).toBe("2");
+  });
+
+  it("按模型的行不显示活动计数（事件没有模型归属）", async () => {
+    const { container } = renderPage({
+      archived: [],
+      faces: { loadUsage: vi.fn(async () => REPORT) },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    await screen.findByText("总览");
+
+    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
+    expect(container.querySelector('[data-usage-cell="turns"]')).toBeNull();
+    expect(container.querySelector('[data-usage-cell="output"]')).toBeTruthy();
   });
 
   it("统计失败时给出原因", async () => {
@@ -590,5 +639,38 @@ describe("对话管理页面：token 用量统计", () => {
     await waitFor(() => {
       expect(screen.getByText("操作失败：boom")).toBeTruthy();
     });
+  });
+});
+
+describe("对话管理页面：滚动分区", () => {
+  // 滚动只发生在内容层：页头（标题 / tab 条 / 动作）与搜索行固定在顶部不动。
+  it("列表与分页在滚动层内，页头与搜索在滚动层外", () => {
+    const { container } = renderPage({ archived: [B.id, C.id] });
+
+    const scroll = container.querySelector('[data-scroll="page"]');
+    expect(scroll).not.toBeNull();
+    expect(scroll!.querySelector("li[data-session-id]")).not.toBeNull();
+    expect(scroll!.querySelector("[data-pagination]")).not.toBeNull();
+    expect(scroll!.contains(container.querySelector('[data-filter="search"]'))).toBe(false);
+    expect(scroll!.contains(screen.getByRole("heading"))).toBe(false);
+    expect(scroll!.contains(container.querySelector('[data-tab="usage"]'))).toBe(false);
+
+    // 页根自己不滚，滚动只发生在那层。
+    expect(styles.page.overflow).toBe("hidden");
+    expect(styles.scroll.overflowY).toBe("auto");
+  });
+
+  it("统计视图同样把内容放进滚动层（页头固定）", async () => {
+    const { container } = renderPage({ archived: [] });
+    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    await waitFor(() => {
+      expect(container.querySelector("[data-usage-range]")).not.toBeNull();
+    });
+
+    const scroll = container.querySelector('[data-scroll="page"]');
+    expect(scroll).not.toBeNull();
+    expect(scroll!.contains(container.querySelector("[data-usage-range]"))).toBe(true);
+    expect(scroll!.contains(container.querySelector('[data-filter="search"]'))).toBe(false);
+    expect(scroll!.contains(screen.getByRole("heading"))).toBe(false);
   });
 });

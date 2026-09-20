@@ -21,7 +21,7 @@ import {
   type UsageRangeKey,
   type UsageTotals,
 } from "./controller.ts";
-import { formatPercent, formatTokens } from "./format.ts";
+import { formatCount, formatPercent, formatTokens } from "./format.ts";
 import { styles } from "./ConversationManagerPage.styles.ts";
 
 /** 一页的行数（会话列表）。 */
@@ -286,16 +286,18 @@ export function ConversationManagerPage({
         />
       </div>
       {view === "usage" ? (
-        <UsageView
-          report={usage}
-          loading={usageLoading}
-          error={usageError}
-          tab={usageTab}
-          onTab={setUsageTab}
-          range={usageRange}
-          onRange={requestUsage}
-          t={t}
-        />
+        <div {...styling.props(styles.scroll)} data-scroll="page">
+          <UsageView
+            report={usage}
+            loading={usageLoading}
+            error={usageError}
+            tab={usageTab}
+            onTab={setUsageTab}
+            range={usageRange}
+            onRange={requestUsage}
+            t={t}
+          />
+        </div>
       ) : (
         <>
           <div {...styling.props(styles.filters)}>
@@ -323,134 +325,136 @@ export function ConversationManagerPage({
               />
             </span>
           </div>
-          {notice === null ? null : (
-            <p {...styling.props(styles.status)} data-notice="result">
-              {notice}
-            </p>
-          )}
-          {failure === null ? null : (
-            <p {...styling.props(styles.failure)} data-failure="result" role="alert">
-              {failure}
-            </p>
-          )}
-          {listed.length === 0 ? (
-            <p {...styling.props(styles.status)} data-status="empty">
-              {t("empty")}
-            </p>
-          ) : null}
-          {listed.length > 0 && matched.length === 0 ? (
-            <p {...styling.props(styles.status)} data-status="empty-search">
-              {t("emptySearch")}
-            </p>
-          ) : null}
-          {visible.length > 0 ? (
-            <ul {...styling.props(styles.list)}>
-              {visible.map((row) => (
-                <li
-                  key={row.id}
-                  {...styling.props(styles.row)}
-                  data-session-id={String(row.id)}
-                  data-archived={row.archived ? "true" : "false"}
-                  data-subagent={row.subagent ? "true" : "false"}
+          <div {...styling.props(styles.scroll)} data-scroll="page">
+            {notice === null ? null : (
+              <p {...styling.props(styles.status)} data-notice="result">
+                {notice}
+              </p>
+            )}
+            {failure === null ? null : (
+              <p {...styling.props(styles.failure)} data-failure="result" role="alert">
+                {failure}
+              </p>
+            )}
+            {listed.length === 0 ? (
+              <p {...styling.props(styles.status)} data-status="empty">
+                {t("empty")}
+              </p>
+            ) : null}
+            {listed.length > 0 && matched.length === 0 ? (
+              <p {...styling.props(styles.status)} data-status="empty-search">
+                {t("emptySearch")}
+              </p>
+            ) : null}
+            {visible.length > 0 ? (
+              <ul {...styling.props(styles.list)}>
+                {visible.map((row) => (
+                  <li
+                    key={row.id}
+                    {...styling.props(styles.row)}
+                    data-session-id={String(row.id)}
+                    data-archived={row.archived ? "true" : "false"}
+                    data-subagent={row.subagent ? "true" : "false"}
+                  >
+                    <span {...styling.props(styles.identity)}>
+                      <span {...styling.props(styles.titleLine)}>
+                        <span {...styling.props(styles.rowTitle)}>{row.title}</span>
+                        {row.archived ? <Tag tone="neutral">{t("archived")}</Tag> : null}
+                        {row.subagent ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
+                      </span>
+                      <span {...styling.props(styles.meta)}>
+                        {[row.workspace, timeLabel(row.updatedAt, now, t)].join(" · ")}
+                      </span>
+                    </span>
+                    <span {...styling.props(styles.actions)}>
+                      {row.archived ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-action="unarchive"
+                          aria-label={t("unarchiveNamed", { title: row.title })}
+                          onClick={() => {
+                            run(unarchive(row.id));
+                          }}
+                        >
+                          {t("unarchive")}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-action="archive"
+                          aria-label={t("archiveNamed", { title: row.title })}
+                          onClick={() => {
+                            run(archive(row.id));
+                          }}
+                        >
+                          {t("archive")}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-action="export"
+                        aria-label={t("exportNamed", { title: row.title })}
+                        onClick={() => {
+                          run(exportZip(row.id));
+                        }}
+                      >
+                        {t("export")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!row.archived}
+                        data-action="remove"
+                        aria-label={t("removeNamed", { title: row.title })}
+                        onClick={() => {
+                          setFailure(null);
+                          setNotice(null);
+                          setConfirming(row);
+                        }}
+                      >
+                        {t("remove")}
+                      </Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {matched.length > 0 ? (
+              <div
+                {...styling.props(styles.pagination)}
+                data-pagination=""
+                data-page-current={currentPage}
+                data-page-total={pageCount}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => {
+                    setPage(currentPage - 1);
+                  }}
                 >
-                  <span {...styling.props(styles.identity)}>
-                    <span {...styling.props(styles.titleLine)}>
-                      <span {...styling.props(styles.rowTitle)}>{row.title}</span>
-                      {row.archived ? <Tag tone="neutral">{t("archived")}</Tag> : null}
-                      {row.subagent ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
-                    </span>
-                    <span {...styling.props(styles.meta)}>
-                      {[row.workspace, timeLabel(row.updatedAt, now, t)].join(" · ")}
-                    </span>
-                  </span>
-                  <span {...styling.props(styles.actions)}>
-                    {row.archived ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-action="unarchive"
-                        aria-label={t("unarchiveNamed", { title: row.title })}
-                        onClick={() => {
-                          run(unarchive(row.id));
-                        }}
-                      >
-                        {t("unarchive")}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-action="archive"
-                        aria-label={t("archiveNamed", { title: row.title })}
-                        onClick={() => {
-                          run(archive(row.id));
-                        }}
-                      >
-                        {t("archive")}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-action="export"
-                      aria-label={t("exportNamed", { title: row.title })}
-                      onClick={() => {
-                        run(exportZip(row.id));
-                      }}
-                    >
-                      {t("export")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!row.archived}
-                      data-action="remove"
-                      aria-label={t("removeNamed", { title: row.title })}
-                      onClick={() => {
-                        setFailure(null);
-                        setNotice(null);
-                        setConfirming(row);
-                      }}
-                    >
-                      {t("remove")}
-                    </Button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {matched.length > 0 ? (
-            <div
-              {...styling.props(styles.pagination)}
-              data-pagination=""
-              data-page-current={currentPage}
-              data-page-total={pageCount}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => {
-                  setPage(currentPage - 1);
-                }}
-              >
-                {t("page.previous")}
-              </Button>
-              <span {...styling.props(styles.paginationLabel)}>
-                {t("page.label", { page: currentPage, total: pageCount })}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={currentPage >= pageCount}
-                onClick={() => {
-                  setPage(currentPage + 1);
-                }}
-              >
-                {t("page.next")}
-              </Button>
-            </div>
-          ) : null}
+                  {t("page.previous")}
+                </Button>
+                <span {...styling.props(styles.paginationLabel)}>
+                  {t("page.label", { page: currentPage, total: pageCount })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={currentPage >= pageCount}
+                  onClick={() => {
+                    setPage(currentPage + 1);
+                  }}
+                >
+                  {t("page.next")}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </>
       )}
       <Modal
@@ -553,9 +557,9 @@ function rangeLabel(range: UsageRange, t: Translate): string {
 interface UsageMetric {
   key: string;
   label: string;
-  /** 原始值：token 数，或百分点（`percent` 项）。 */
+  /** 原始值：token 数、计数，或百分点（`percent` 项）。 */
   value: number;
-  kind: "tokens" | "percent";
+  kind: "tokens" | "count" | "percent";
 }
 
 /** 缓存命中率（百分点）：缓存输入占总输入（含缓存）的比例。 */
@@ -565,8 +569,16 @@ function cacheHitPercent(totals: UsageTotals): number {
   return (totals.cacheReadTokens / total) * 100;
 }
 
-/** 显示口径的单项：输入（含缓存输入）、缓存输入、缓存命中率、输出、推理、事件——没有合计项。 */
-function usageMetrics(totals: UsageTotals, t: Translate): UsageMetric[] {
+/**
+ * 显示口径的单项：输入（含缓存输入）、缓存输入、缓存命中率、输出、推理，
+ * 以及活动计数（轮次 / 步骤 / 用户输入 / 工具调用）——没有合计项。
+ * 活动计数在按模型的行上不显示（事件没有模型归属，见 `withActivity`）。
+ */
+function usageMetrics(
+  totals: UsageTotals,
+  t: Translate,
+  options: { withActivity?: boolean } = {},
+): UsageMetric[] {
   return [
     {
       key: "input",
@@ -593,7 +605,24 @@ function usageMetrics(totals: UsageTotals, t: Translate): UsageMetric[] {
       value: totals.reasoningTokens,
       kind: "tokens",
     },
-    { key: "events", label: t("usage.events"), value: totals.events, kind: "tokens" },
+    ...(options.withActivity === false
+      ? []
+      : [
+          { key: "turns", label: t("usage.turns"), value: totals.turns, kind: "count" as const },
+          { key: "steps", label: t("usage.steps"), value: totals.steps, kind: "count" as const },
+          {
+            key: "userInputs",
+            label: t("usage.userInputs"),
+            value: totals.userInputs,
+            kind: "count" as const,
+          },
+          {
+            key: "toolCalls",
+            label: t("usage.toolCalls"),
+            value: totals.toolCalls,
+            kind: "count" as const,
+          },
+        ]),
   ];
 }
 
@@ -610,7 +639,10 @@ interface UsageListRow {
 
 function emptyTotals(): UsageTotals {
   return {
-    events: 0,
+    turns: 0,
+    steps: 0,
+    userInputs: 0,
+    toolCalls: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,
@@ -628,7 +660,6 @@ function foldBuckets(
   for (const bucket of buckets) {
     const key = keyOf(bucket);
     const row = folded.get(key) ?? { key, label: key, totals: emptyTotals() };
-    row.totals.events += bucket.events;
     row.totals.inputTokens += bucket.inputTokens;
     row.totals.outputTokens += bucket.outputTokens;
     row.totals.cacheReadTokens += bucket.cacheReadTokens;
@@ -647,17 +678,19 @@ function UsageRow({
   label,
   totals,
   t,
+  withActivity = true,
 }: {
   rowKey: string;
   label: string;
   totals: UsageTotals;
   t: Translate;
+  withActivity?: boolean;
 }): ReactNode {
   return (
     <li {...styling.props(styles.usageRow)} data-usage-key={rowKey}>
       <span {...styling.props(styles.usageRowLabel)}>{label}</span>
       <span {...styling.props(styles.usageMetrics)}>
-        {usageMetrics(totals, t).map((metric) => (
+        {usageMetrics(totals, t, { withActivity }).map((metric) => (
           <span
             key={metric.key}
             {...styling.props(styles.usageMetric)}
@@ -666,7 +699,11 @@ function UsageRow({
           >
             <span {...styling.props(styles.usageMetricLabel)}>{metric.label}</span>
             <span {...styling.props(styles.usageMetricValue)}>
-              {metric.kind === "percent" ? formatPercent(metric.value) : formatTokens(metric.value)}
+              {metric.kind === "percent"
+                ? formatPercent(metric.value)
+                : metric.kind === "count"
+                  ? formatCount(metric.value)
+                  : formatTokens(metric.value)}
             </span>
           </span>
         ))}
@@ -675,7 +712,15 @@ function UsageRow({
   );
 }
 
-function UsageList({ rows, t }: { rows: readonly UsageListRow[]; t: Translate }): ReactNode {
+function UsageList({
+  rows,
+  t,
+  withActivity = true,
+}: {
+  rows: readonly UsageListRow[];
+  t: Translate;
+  withActivity?: boolean;
+}): ReactNode {
   if (rows.length === 0) {
     return (
       <p {...styling.props(styles.status)} data-usage-status="empty">
@@ -686,7 +731,14 @@ function UsageList({ rows, t }: { rows: readonly UsageListRow[]; t: Translate })
   return (
     <ul {...styling.props(styles.usageList)}>
       {rows.map((row) => (
-        <UsageRow key={row.key} rowKey={row.key} label={row.label} totals={row.totals} t={t} />
+        <UsageRow
+          key={row.key}
+          rowKey={row.key}
+          label={row.label}
+          totals={row.totals}
+          t={t}
+          withActivity={withActivity}
+        />
       ))}
     </ul>
   );
@@ -794,7 +846,7 @@ function UsageView({
       {report === null ? null : tab === "overview" ? (
         <UsageOverview report={report} t={t} />
       ) : (
-        <UsageList rows={rows} t={t} />
+        <UsageList rows={rows} t={t} withActivity={tab === "sessions"} />
       )}
     </div>
   );
