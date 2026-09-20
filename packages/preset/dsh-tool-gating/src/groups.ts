@@ -63,11 +63,14 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   {
     key: "flow",
     title: "流程",
-    summary: "多步任务的待办清单与计划模式、会话目标、交付物声明",
+    summary: "多步任务的待办清单、会话目标、交付物声明",
     guidance:
-      "多步任务先用 todo_write 建清单并逐步更新；动手前用 exit_plan_mode 提交计划（计划模式下只读，" +
-      "按 plan 规则约束）；长任务用 create_goal/get_goal/update_goal 跟踪目标进展；" +
+      "多步任务先用 todo_write 建清单并逐步更新；长任务用 create_goal/get_goal/update_goal 跟踪目标进展；" +
       "要给用户看的产物用 present 声明。",
+    // 计划模式可选：本部署禁用了 `planning` 行，`exit_plan_mode` 不存在时这句自动不提。
+    guidanceByTool: [
+      ["exit_plan_mode", "动手前用 exit_plan_mode 提交计划（计划模式下只读，按 plan 规则约束）。"],
+    ],
     tools: ["todo_write", "exit_plan_mode", "get_goal", "create_goal", "update_goal", "present"],
   },
   {

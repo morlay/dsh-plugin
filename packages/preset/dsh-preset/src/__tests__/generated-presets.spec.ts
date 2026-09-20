@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import {
   PRESET_SOURCES,
   PERSONA_ROW_ID,
+  DISABLED_PRESET_ROW_IDS,
   SUBAGENT_ROW_ID,
   TOOL_GATING_PLUGIN,
   TOOL_GATING_ROW_ID,
@@ -77,6 +78,9 @@ function findRow(rows: readonly CompositionRow[], id: string): CompositionRow | 
 
 /** 逐行算期望值：子代理行去掉 `modelSelectionSettings`，group 行递归。 */
 function expectedRow(row: CompositionRow): CompositionRow {
+  if (row.id !== undefined && (DISABLED_PRESET_ROW_IDS as readonly string[]).includes(row.id)) {
+    return { ...row, disabled: true };
+  }
   if (row.id === SUBAGENT_ROW_ID) {
     const config = { ...row.config };
     delete config.modelSelectionSettings;
@@ -216,4 +220,18 @@ describe("generated presets", () => {
     await generatePresets(OUT_DIR);
     expect(await readdir(OUT_DIR)).not.toContain("stale");
   });
+
+  it.each(PRESET_SOURCES)(
+    "$id disables the plan-mode group this deployment does not use",
+    async (entry) => {
+      const { upstream, product } = await readPair(entry);
+      const upstreamRow = findRow(upstream, "planning");
+      const productRow = findRow(product, "planning");
+
+      expect(upstreamRow?.disabled).not.toBe(true);
+      expect(productRow?.disabled).toBe(true);
+      // 组内那行仍然指向上游插件，只是整组不装载。
+      expect(findRow(product, "plan-mode")?.name).toBe("@deepseek-ai/dsh-plan-mode");
+    },
+  );
 });

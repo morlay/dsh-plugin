@@ -40,8 +40,11 @@
 | `web`  | 联网检索 | web_search                                                                                                                                                                                                                      |
 | `team` | 协作编排 | 委派与编排：subagent / subagent_fork / list_subagent_models / spawn_teammate / workflow；队友协同：list_agents / send_message / wait_agent / interrupt_agent / team_task_*（按本部署实际装配渲染，见「与 Agent Teams 的关系」） |
 
-组的唯一 home 是 [`src/groups.ts`](./src/groups.ts)：工具名、中文描述、按组提示、工具的短描述、
-被忽略的上游说明清单都在那里。
+- **成员按实际装配渲染**：本部署禁用了 preset 的 `planning` 组（不用 plan 模式），所以 `flow` 组的
+  `exit_plan_mode` 不存在、提示里也不提它；装了 Agent Teams 时同理只讲 `spawn_teammate` 那套。
+
+组的唯一 home 是 [`src/groups.ts`](./src/groups.ts)：工具名、中文描述、按组提示（`guidanceByTool` 按工具存在拼）、
+工具的短描述、被忽略的上游说明清单都在那里。
 
 ## 提示词怎么给
 

@@ -64,6 +64,12 @@ export const INSTRUCTIONS_ROW_ID = "agent-instructions";
 /** 派生子代理的工具行：它的 `modelSelectionSettings` 决定工具注册在哪一层，见下方处理。 */
 export const SUBAGENT_ROW_ID = "tool-subagent";
 
+/**
+ * 本部署在 preset 层禁用的行：`planning` 组只装 `plan-mode`（`/plan` 命令、`exit_plan_mode` 工具、
+ * `plan:policy` section 都由它提供）。本部署不用 plan 模式——计划编排走自己的 skill，整组禁用。
+ */
+export const DISABLED_PRESET_ROW_IDS = ["planning"] as const;
+
 export const TOOL_GATING_ROW_ID = "tool-gating";
 
 export const TOOL_GATING_PLUGIN = "@morlay/dsh-tool-gating";
@@ -102,6 +108,17 @@ export function renderComposition(upstream: string, initial: readonly string[]):
     );
   }
   if (subagent.config !== undefined) delete subagent.config.modelSelectionSettings;
+
+  for (const id of DISABLED_PRESET_ROW_IDS) {
+    const row = findRow(rows, id);
+    if (row === undefined) {
+      throw new Error(
+        `generate-presets: upstream composition has no \`${id}\` row; ` +
+          "upstream changed — re-check which row carries the capability this deployment disables",
+      );
+    }
+    row.disabled = true;
+  }
 
   rows.push({
     id: TOOL_GATING_ROW_ID,
