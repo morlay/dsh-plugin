@@ -20,10 +20,11 @@ const EDITOR_API_PATH = SESSION_EDITOR_PATH;
  * 会话窗口交给上游的事件流收敛（不重建窗口、不整页重载）。
  */
 export interface SessionEditorFace {
-  retry(turn: number, cascade: "truncate" | "preserve"): Promise<boolean>;
+  // 属性式函数类型而非方法签名：这两动作要被渲染面解构后直接调用，没有 `this` 可言。
+  retry: (turn: number, cascade: "truncate" | "preserve") => Promise<boolean>;
 
   // 撤回回填：文本由调用方（消息渲染面）给出**该消息的全部文本块**——不再靠 timeline 反查。
-  recall(message: EditableMessageBlock, texts: readonly string[]): Promise<boolean>;
+  recall: (message: EditableMessageBlock, texts: readonly string[]) => Promise<boolean>;
 }
 
 export class SessionEditorController {
