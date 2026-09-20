@@ -24,10 +24,6 @@ export function apply(ctx: Context): void {
     return controller;
   };
 
-  ctx.on("connection/reset", () => {
-    for (const controller of controllers.values()) void controller.load();
-  });
-
   registerChatNodeRenderers(ctx, controllerFor);
 
   ctx.slots.inject("conversation.composer.dock", () => registerComposerStats(ctx.slots));

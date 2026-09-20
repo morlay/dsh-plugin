@@ -1,282 +1,119 @@
 import type { Context as ClientContext } from "@deepseek-ai/cordis";
-import type {
-  ISessions,
-  SessionFace,
-  SessionSnapshot,
-} from "@deepseek-ai/dsh-api-session-controller/client";
-import type { ObservableSnapshot, SnapshotStore } from "@deepseek-ai/dsh-client-store";
-import type { UiWorkspace } from "@deepseek-ai/dsh-client-ui-workspace/client";
-import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
+import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import {
   SESSION_EDITOR_PATH,
   type EditableMessageBlock,
   type SessionEditorOperation,
-  type SessionEditorOperationResult,
-  type SessionEditorTimeline,
   type VersionOperation,
 } from "../shared.ts";
 
-function editorApiPath(): string {
-  const transport = (globalThis as { __DSH_TRANSPORT__?: { ownsHost?: boolean } })
-    .__DSH_TRANSPORT__;
-  return transport?.ownsHost === true ? `/api${SESSION_EDITOR_PATH}` : SESSION_EDITOR_PATH;
-}
+/** 编辑器的 HTTP 路径：宿主（web 与桌面）在同一张路由表上服务它，页面不再按 ownsHost 加前缀。 */
+const EDITOR_API_PATH = SESSION_EDITOR_PATH;
 
-export interface SessionEditorState {
-  status: "idle" | "loading" | "ready" | "error";
-  error: string | null;
-  pending: VersionOperation | "recall" | null;
-  timeline: SessionEditorTimeline | null;
-}
-
+/**
+ * 会话编辑的浏览器半门面：只保留消息渲染面真正用到的两个动作。
+ *
+ * 曾经这里还有一条「订阅会话列表 / 快照 → 拉全量 timeline → 装进 store」的刷新管路，
+ * 它没有任何 UI 消费方，却把重放 / 流式期间的每一次快照抖动都换成一次全量 GET
+ * （编辑 / 重试 / 撤回后尤甚），订阅本身也从不释放。现在动作成功后只刷新会话列表元数据，
+ * 会话窗口交给上游的事件流收敛（不重建窗口、不整页重载）。
+ */
 export interface SessionEditorFace {
-  hooks: { sessionEditor: ObservableSnapshot<SessionEditorState> };
-  acquire(): () => void;
-  load(): void;
-  edit(
-    message: EditableMessageBlock,
-    text: string,
-    cascade: "truncate" | "preserve",
-  ): Promise<boolean>;
   retry(turn: number, cascade: "truncate" | "preserve"): Promise<boolean>;
-  reroll(): Promise<boolean>;
-  rewind(toBoundary: number): Promise<boolean>;
-  recall(message: EditableMessageBlock): Promise<boolean>;
-  openVersion(sessionId: string): Promise<void>;
-}
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function conversationRevision(snapshot: SessionSnapshot): string {
-  return [snapshot.openState, snapshot.removed, snapshot.hasMore].join("|");
+  // 撤回回填：文本由调用方（消息渲染面）给出**该消息的全部文本块**——不再靠 timeline 反查。
+  recall(message: EditableMessageBlock, texts: readonly string[]): Promise<boolean>;
 }
 
 export class SessionEditorController {
-  readonly store: SnapshotStore<SessionEditorState> = createSnapshotStore<SessionEditorState>({
-    status: "idle",
-    error: null,
-    pending: null,
-    timeline: null,
-  });
-
   readonly face: SessionEditorFace;
-  private readonly ctx: ClientContext;
+
   private readonly sessions: ISessions;
-  private readonly uiWorkspace: UiWorkspace;
-  private sessionSource: SessionFace | undefined;
-  private sessionSourceDispose: (() => void) | undefined;
-  private sessionRevision: string | undefined;
-  private disposed = false;
-  private users = 0;
+  private pending: VersionOperation | "recall" | null = null;
 
   constructor(
     ctx: ClientContext,
     private readonly sessionId: SessionId,
   ) {
-    this.ctx = ctx;
     this.sessions = ctx.get("sessions") as unknown as ISessions;
-    this.uiWorkspace = ctx.get("uiWorkspace") as unknown as UiWorkspace;
     this.face = {
-      hooks: { sessionEditor: this.store },
-      acquire: () => {
-        this.users += 1;
-        if (this.users === 1 && this.disposed) this.revive();
-        return () => this.release();
-      },
-      load: () => {
-        void this.load();
-      },
-      edit: (message, text, cascade) =>
-        this.mutate({
-          action: "edit",
-          sessionId: this.sessionId,
-          eventSeq: message.eventSeq,
-          blockIndex: message.blockIndex,
-          text,
-          cascade,
-        }),
       retry: (turn, cascade) =>
         this.mutate({ action: "retry", sessionId: this.sessionId, turn, cascade }),
-      reroll: () => this.mutate({ action: "reroll", sessionId: this.sessionId }),
-      rewind: (toBoundary) =>
-        this.mutate({ action: "rewind", sessionId: this.sessionId, toBoundary }),
-      recall: (message) =>
+      recall: (message, texts) =>
         this.mutate(
           { action: "recall", sessionId: this.sessionId, eventSeq: message.eventSeq },
-          () => this.setComposerDraft(this.messageTexts(message)),
+          () => this.setComposerDraft(texts.join("\n\n")),
         ),
-      openVersion: (sessionId) => {
-        this.uiWorkspace.openSession(sessionId as SessionId);
-        return Promise.resolve();
-      },
     };
-    this.observe();
-  }
-
-  private observe(): void {
-    this.sessionSource = undefined;
-    this.sessionSourceDispose?.();
-    this.bindSessionSource();
-    this.sessions.list.subscribe(() => this.invalidate());
-  }
-
-  private bindSessionSource(): void {
-    const source = this.sessions.binding(this.sessionId)?.session;
-    if (source === this.sessionSource) return;
-    this.sessionSourceDispose?.();
-    this.sessionSource = source;
-    this.sessionRevision =
-      source === undefined ? undefined : conversationRevision(source.getSnapshot());
-    this.sessionSourceDispose = source?.subscribe(() => {
-      this.invalidate();
-    });
-  }
-
-  private invalidate(): void {
-    if (this.disposed || this.store.getSnapshot().status === "idle") return;
-
-    void this.load();
-  }
-
-  private release(): void {
-    this.users -= 1;
-    if (this.users <= 0) this.dispose();
-  }
-
-  private dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.sessionSourceDispose?.();
-    this.sessionSourceDispose = undefined;
-    this.sessionSource = undefined;
-    this.sessionRevision = undefined;
-  }
-
-  private revive(): void {
-    this.disposed = false;
-    this.observe();
-    void this.load();
-  }
-
-  async load(): Promise<void> {
-    if (this.disposed) return;
-    this.store.update((state) => {
-      state.status = "loading";
-      state.error = null;
-    });
-    try {
-      const response = await fetch(
-        `${editorApiPath()}?sessionId=${encodeURIComponent(this.sessionId)}`,
-        {
-          method: "GET",
-          headers: { accept: "application/json" },
-          cache: "no-store",
-        },
-      );
-      const value = (await response.json()) as unknown;
-      if (this.disposed) return;
-      if (response.ok) {
-        this.store.update((state) => {
-          state.status = "ready";
-          state.error = null;
-          state.timeline = value as SessionEditorTimeline;
-        });
-      } else {
-        const error = (value as { error?: unknown })["error"];
-        this.store.update((state) => {
-          state.status = "error";
-          state.error =
-            typeof error === "string" ? error : `请求失败：HTTP ${String(response.status)}`;
-        });
-      }
-    } catch (error) {
-      if (this.disposed) return;
-      this.store.update((state) => {
-        state.status = "error";
-        state.error = messageOf(error);
-      });
-    }
   }
 
   private async mutate(
     operation: SessionEditorOperation,
     onApplied?: () => void,
   ): Promise<boolean> {
-    const current = this.store.getSnapshot();
-    if (current.pending !== null) return false;
-    this.store.update((state) => {
-      state.pending = operation.action;
-      state.error = null;
-    });
+    if (this.pending !== null) return false;
+    this.pending = operation.action;
     try {
-      const response = await fetch(editorApiPath(), {
+      const response = await fetch(EDITOR_API_PATH, {
         method: "POST",
         headers: { accept: "application/json", "content-type": "application/json" },
         body: JSON.stringify(operation),
       });
       const value = (await response.json()) as unknown;
-      if (this.disposed) return true;
       if (!response.ok) {
         const error = (value as { error?: unknown })["error"];
         throw new Error(
           typeof error === "string" ? error : `请求失败：HTTP ${String(response.status)}`,
         );
       }
-      this.store.update((state) => {
-        state.pending = null;
-      });
 
       onApplied?.();
-      const result = value as SessionEditorOperationResult;
 
-      if (String(result.sessionId) !== String(this.sessionId)) {
-        this.uiWorkspace.openSession(result.sessionId as SessionId);
-        return true;
+      // 会话窗口必须重建：rewind 把日志 seq 回退了，窗口里已渲染的旧节点不会自己消失
+      // （实测：被裁剪的消息残留、新消息也追加不进去）。重建入口只在**运行时**对象上
+      // （ClientSession 的 `resync()`；类型面 `SessionFace` 并未暴露它），所以逐个探测；
+      // 都拿不到时记一条 warn 便于诊断，且不回退整页重载（刷新会打断用户）。
+      try {
+        await this.rebuildWindow();
+      } catch (error: unknown) {
+        console.warn("[session-editor] 操作已生效，但会话窗口重建失败：", error);
       }
-
-      const face = this.sessions.binding(this.sessionId)?.session;
-      const resync = (face as unknown as { resync?: () => Promise<void> }).resync;
-      if (resync !== undefined) {
-        try {
-          await resync.call(face);
-
-          const projections = (
-            face as unknown as { projections?: { truncate?(lastSeq: number): void } }
-          ).projections;
-          if (typeof projections?.truncate !== "function") {
-            location.reload();
-            return true;
-          }
-          projections.truncate(-1);
-          void this.load();
-          return true;
-        } catch {}
-      }
-      location.reload();
       return true;
-    } catch (error) {
-      if (this.disposed) return false;
-      this.store.update((state) => {
-        state.pending = null;
-        state.error = messageOf(error);
-      });
+    } catch {
       return false;
+    } finally {
+      this.pending = null;
     }
   }
 
-  private messageTexts(message: EditableMessageBlock): readonly string[] {
-    const prefix = `${String(message.eventSeq)}:`;
-    const blocks = (this.store.getSnapshot().timeline?.messages ?? [])
-      .filter((row) => row.kind === "user" && row.key.startsWith(prefix))
-      .sort((left, right) => left.blockIndex - right.blockIndex)
-      .map((row) => row.text);
-    return blocks.length === 0 ? [message.text] : blocks;
+  /**
+   * 让上游重开该会话的历史窗口（rewind 之后客户端窗口的 seq 基线已经失效）。
+   *
+   * 探测顺序：`binding(id).session.resync()`（上游 ClientSession 的重建入口，类型面没暴露）
+   * → `sessions.refresh()`（只刷列表元数据，聊胜于无）→ 都没有就记一条 warn。
+   */
+  private async rebuildWindow(): Promise<void> {
+    const sessions = this.sessions as unknown as {
+      binding?: (id: SessionId) => { session?: { resync?: () => Promise<void> } } | undefined;
+      refresh?: () => Promise<void>;
+    };
+    const face = sessions.binding?.(this.sessionId)?.session;
+    const resync = face?.resync;
+    if (typeof resync === "function") {
+      await resync.call(face);
+      return;
+    }
+    if (typeof sessions.refresh === "function") {
+      await sessions.refresh();
+      return;
+    }
+    console.warn(
+      "[session-editor] 未找到会话窗口重建入口（binding.resync / refresh 都不可用），窗口可能停留在 rewind 之前的状态",
+    );
   }
 
-  private setComposerDraft(texts: readonly string[]): void {
+  private setComposerDraft(text: string): void {
     if (this.sessions.binding(this.sessionId) === undefined) return;
     const scoped = this.sessions.scope(this.sessionId);
     if (scoped === undefined) return;
@@ -287,6 +124,6 @@ export class SessionEditorController {
           };
         }
       | undefined;
-    conversation?.input?.for(scoped).restoreDraft(texts.join("\n\n"));
+    conversation?.input?.for(scoped).restoreDraft(text);
   }
 }

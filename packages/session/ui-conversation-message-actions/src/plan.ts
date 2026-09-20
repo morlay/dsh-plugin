@@ -1,14 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { AssistantMessage, ContentBlock, UserMessage } from "@deepseek-ai/dsh-llm";
 import { SessionSeq } from "@deepseek-ai/dsh-session";
-import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
-import {
-  SESSION_BRANCH_VERSION_SCHEMA,
-  SessionBranchError,
-  type EditableBlockKind,
-  type SessionBranchEffect,
-  type SessionBranchVersionEvent,
-} from "@morlay/session-branch";
+import type { SessionEvent } from "@deepseek-ai/dsh-session";
+import { SessionBranchError } from "@morlay/session-branch";
 import type {
   EditOperation,
   EditableMessageBlock,
@@ -34,7 +28,6 @@ export interface OperationPlan {
   anchorSeq: number;
 
   rewindBoundary?: number;
-  version: SessionBranchVersionEvent;
 
   manualTurn?: { turn: number; user: UserMessage; assistant: AssistantMessage };
 
@@ -220,17 +213,6 @@ function assistantReplacement(
   }) as AssistantMessage;
 }
 
-function pairVersionEffect(
-  sourceSessionId: SessionId,
-  effect: Omit<SessionBranchEffect, "id">,
-): SessionBranchVersionEvent {
-  return {
-    schemaVersion: SESSION_BRANCH_VERSION_SCHEMA,
-    effect: { ...effect, id: randomUUID() },
-    inverse: { kind: "restore-version", sessionId: sourceSessionId },
-  };
-}
-
 export function editPlan(operation: EditOperation, turns: readonly ClosedTurn[]): OperationPlan {
   const turnIndex = turns.findIndex(
     (turn) =>
@@ -262,16 +244,6 @@ export function editPlan(operation: EditOperation, turns: readonly ClosedTurn[])
       anchorSeq: turn.startSeq,
 
       ...(userIndex === 0 ? {} : { rewindBoundary: event.seq }),
-      version: pairVersionEffect(operation.sessionId, {
-        operation: "edit",
-        cascade: operation.cascade,
-        targetTurn: turn.turn,
-        targetEventSeq: event.seq,
-        targetBlockIndex: operation.blockIndex,
-        blockKind: "user",
-        before: before.text,
-        after: operation.text,
-      }),
       queuedUsers: [edited, ...sameTurnFollowups, ...later],
       targetSeq: event.seq,
     };
@@ -282,22 +254,10 @@ export function editPlan(operation: EditOperation, turns: readonly ClosedTurn[])
   const before = event.data.message.content[operation.blockIndex];
   if (!isTextualBlock(before))
     throw new SessionBranchError("所选助手消息块不是文本或思考。", "INVALID_BOUNDARY");
-  const blockKind: EditableBlockKind =
-    before.type === "reasoning" ? "assistant.reasoning" : "assistant.response";
   if (turn.user === undefined)
     throw new SessionBranchError("所选助手消息没有可重建的用户输入。", "INVALID_BOUNDARY");
   return {
     anchorSeq: turn.startSeq,
-    version: pairVersionEffect(operation.sessionId, {
-      operation: "edit",
-      cascade: operation.cascade,
-      targetTurn: turn.turn,
-      targetEventSeq: event.seq,
-      targetBlockIndex: operation.blockIndex,
-      blockKind,
-      before: before.text,
-      after: operation.text,
-    }),
     manualTurn: {
       turn: turn.turn,
       user: cloneUser(turn.user.data),
@@ -315,12 +275,6 @@ export function retryPlan(operation: RetryOperation, turns: readonly ClosedTurn[
     throw new SessionBranchError("所选回合没有可重放的用户输入。", "INVALID_BOUNDARY");
   return {
     anchorSeq: turn.startSeq,
-    version: pairVersionEffect(operation.sessionId, {
-      operation: "retry",
-      cascade: operation.cascade,
-      targetTurn: turn.turn,
-      targetEventSeq: turn.user.seq,
-    }),
     queuedUsers:
       operation.cascade === "preserve"
         ? downstreamUsers(turns, turnIndex)
@@ -343,12 +297,6 @@ export function rerollPlan(
     if (target === undefined) continue;
     return {
       anchorSeq: turn.startSeq,
-      version: pairVersionEffect(operation.sessionId, {
-        operation: "reroll",
-        cascade: "truncate",
-        targetTurn: turn.turn,
-        targetEventSeq: target.seq,
-      }),
       queuedUsers: turn.users.map((user) => cloneUser(user.data)),
       targetSeq: target.seq,
     };

@@ -1,7 +1,7 @@
 # 会话编辑（跨包词汇）
 
 这份术语表只管**跨包共享**的词——契约层 / 编排层 / 实现层 / 聚合层与对话 UI 接管包共用的语言：
-在不修改上游 `@deepseek-ai/*` 的前提下，重写同一会话或从闭合边界派生新会话，并投影版本树。
+在不修改上游 `@deepseek-ai/*` 的前提下，重写同一会话或从闭合边界派生新会话。
 上下文边界见 [`CONTEXT-MAP.md`](./CONTEXT-MAP.md)，分层与设计背景见 [`系统设计`](./designs/20260917-系统设计.md)。
 
 ## 装配
@@ -25,7 +25,7 @@ _避免使用_：对话、聊天记录
 
 **就地编辑**：
 edit / retry / reroll 的语义：rewind 截断到闭合边界后重写**同一会话**，
-session id 不变、版本树保持单根。
+session id 不变。
 _避免使用_：原地修改、in-place
 
 **撤回（recall）**：
@@ -68,24 +68,21 @@ _避免使用_：消息块、content block
 
 **版本效果（version effect）**：
 `session-branch/version` 事件，记录一次分支操作（edit / reroll / retry /
-fork / rewind）的目标轮次、变更前后文本与逆操作。
+fork / rewind）的目标轮次、变更前后文本与逆操作。**已停止落库**：类型定义只作
+历史形状保留（识别旧会话里的事件），写侧与读侧都已删除
+（[ADR-删除版本树投影并停止写版本效果](../packages/session/session-branch/.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)）。
 _避免使用_：版本事件、变更记录
 
 **ignorable 事件**：
-携带 `ignorable: true` 信封、非 branch 读者可安全跳过的事件——**原样落库**、
-读侧凭信封决定是否参与投影
-（[ADR-20260917-版本效果以ignorable事件原样落库](../packages/session/session-branch/.agents/adrs/20260917-版本效果以ignorable事件原样落库.md)）。
+携带 `ignorable: true` 信封、可被读者安全跳过的事件——**原样落库**、读侧凭信封
+决定是否参与投影。当前写路径不再产出这类事件（版本效果已停止落库），定义与
+读侧豁免仍服务旧数据。
 _避免使用_：瞬时事件（瞬时事件是另一概念）
 
 **canonical log**：
 会话的持久化事件日志（与存储内容一致，ignorable 事件同样在其中）；核心
 读者凭信封跳过 ignorable 事件。
 _避免使用_：主日志、持久化日志
-
-**版本树（timeline）**：
-由 lineage（`parentSession` + `seedLength`）投影的会话版本树：根为原始
-会话，节点为派生 / 编辑后的会话。
-_避免使用_：分支图、版本历史
 
 **lineage（血统）**：
 会话的祖先链：`parentSession` 指向父会话；继承前缀长度在 v0/v1 header 为
@@ -94,7 +91,7 @@ _避免使用_：分支图、版本历史
 _避免使用_：家谱、祖先链
 
 **seed（种子）**：
-派生会话的初始事件前缀：边界前缀 + 可选 `seedSuffix`（版本效果、手工回合）。
+派生会话的初始事件前缀：边界前缀 + 可选 `seedSuffix`（手工回合）。
 _避免使用_：初始状态、initial state
 
 ## 会话状态

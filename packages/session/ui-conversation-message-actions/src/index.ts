@@ -13,35 +13,28 @@ import {
   SessionBranchError,
   balanceRewindPrefix,
   type BranchBoundary,
-  type BranchTimeline,
 } from "@morlay/session-branch";
 import type {
   EditOperation,
-  EditableMessageBlock,
   RecallOperation,
   RerollOperation,
   RetryOperation,
-  RetryableTurn,
   SessionEditorResult,
 } from "./types.ts";
 import {
   SESSION_EDITOR_PATH,
   type SessionEditorOperation,
   type SessionEditorOperationResult,
-  type SessionEditorTimeline,
-  toTimelinePayload,
 } from "./shared.ts";
 import {
   closedTurns,
   droppedCompactions,
-  editableMessages,
   editPlan,
   precedingContentIndex,
   recallBoundary,
   restoreCompactions,
   retryPlan,
   rerollPlan,
-  retryableTurns,
 } from "./plan.ts";
 
 export type { CascadePolicy, EditableBlockKind } from "@morlay/session-branch";
@@ -57,10 +50,7 @@ export type {
   SessionEditorResult,
 } from "./types.ts";
 
-export { closedTurns, editableMessages, retryableTurns };
-export { SESSION_BRANCH_VERSION_SCHEMA } from "@morlay/session-branch";
-
-export type { BranchTimeline, SessionBranchVersionEvent } from "@morlay/session-branch";
+export { closedTurns, editableMessages, retryableTurns } from "./plan.ts";
 
 declare module "@deepseek-ai/cordis" {
   interface Context {
@@ -102,18 +92,12 @@ export interface EditorAgentRegistry {
   }): Promise<EditorAgentHandle>;
 }
 
-function appendLogSeedEvent(
-  events: SessionEvent[],
-  type: string,
-  data: unknown,
-  ignorable = false,
-): void {
+function appendLogSeedEvent(events: SessionEvent[], type: string, data: unknown): void {
   events.push({
     type: type as SessionEvent["type"],
     seq: events.length,
     time: Date.now(),
     data: data as SessionEvent["data"],
-    ...(ignorable ? { ignorable: true as const } : {}),
   } as SessionEvent);
 }
 
@@ -165,22 +149,8 @@ function keepFromOf(events: readonly SessionEvent[], boundary: number): number {
 async function appendSeedSuffixLive(
   session: Session,
   seedSuffix: readonly SessionEvent[],
-  appendDirect: (events: readonly SessionEvent[]) => Promise<void>,
 ): Promise<void> {
   for (const event of seedSuffix) {
-    const ignorable = (event as { ignorable?: boolean }).ignorable === true;
-    if (ignorable) {
-      const s = session as unknown as {
-        log: SessionEvent[];
-        eventsSnapshot?: unknown;
-      };
-
-      const seq = s.log.length;
-      await appendDirect([{ ...event, seq } as SessionEvent]);
-      s.log.push({ ...event, seq } as SessionEvent);
-      s.eventsSnapshot = undefined;
-      continue;
-    }
     const s = session as unknown as {
       append(
         type: string,
@@ -244,10 +214,6 @@ export class SessionEditor extends Service {
     return this.ctx.sessionBranch.rewind(id, toBoundary, signal);
   }
 
-  timeline(sessionId: SessionId, signal?: AbortSignal): Promise<BranchTimeline> {
-    return this.ctx.sessionBranch.timeline(sessionId, signal);
-  }
-
   edit(operation: EditOperation, signal?: AbortSignal): Promise<SessionEditorResult> {
     return this.branchOperation(operation, signal);
   }
@@ -262,19 +228,6 @@ export class SessionEditor extends Service {
 
   recall(operation: RecallOperation, signal?: AbortSignal): Promise<SessionEditorResult> {
     return this.recallOperation(operation, signal);
-  }
-
-  async editableMessages(
-    sessionId: SessionId,
-    signal?: AbortSignal,
-  ): Promise<EditableMessageBlock[]> {
-    const events = await this.readEvents(sessionId, signal);
-    return editableMessages(closedTurns(events));
-  }
-
-  async retryableTurns(sessionId: SessionId, signal?: AbortSignal): Promise<RetryableTurn[]> {
-    const events = await this.readEvents(sessionId, signal);
-    return retryableTurns(closedTurns(events));
   }
 
   private async branchOperation(
@@ -309,8 +262,6 @@ export class SessionEditor extends Service {
 
     const replayTurn = preceding < 0 ? 1 : turns[preceding]!.turn + 1;
 
-    const versionSeed: SessionEvent[] = [];
-    appendLogSeedEvent(versionSeed, "session-branch/version", plan.version, true);
     const manualSeed: SessionEvent[] = [];
     if (plan.manualTurn !== undefined) {
       appendManualTurn(manualSeed, { ...plan.manualTurn, turn: replayTurn });
@@ -326,11 +277,10 @@ export class SessionEditor extends Service {
     await this.stopLoop(operation.sessionId, signal);
     const live = this.ctx.sessions.get(operation.sessionId);
     await this.ctx.sessionBranch.rewind(operation.sessionId, boundary, signal);
-    // 补回的压缩落在版本效果之后、重放的输入之前
+    // 补回的压缩落在重放的输入之前
     const seedStart = this.seedStart(live, events, keepFrom);
     const seedSuffix: SessionEvent[] = [
-      ...versionSeed,
-      ...restoreCompactions(compactions, keepFrom, seedStart + versionSeed.length),
+      ...restoreCompactions(compactions, keepFrom, seedStart),
       ...manualSeed,
     ];
     await this.appendSeedSuffix(operation.sessionId, live, seedSuffix, events, keepFrom);
@@ -402,22 +352,8 @@ export class SessionEditor extends Service {
   ): Promise<void> {
     if (seedSuffix.length === 0) return;
     if (live !== undefined) {
-      const persistence = this.ctx.sessionPersistence as unknown as {
-        tracker: {
-          writerOf(id: SessionId):
-            | {
-                append(events: readonly SessionEvent[]): Promise<void>;
-              }
-            | undefined;
-        };
-      };
-      const handle = persistence.tracker.writerOf(sessionId);
-      if (handle === undefined) {
-        throw new Error(`session "${sessionId}" has no live write handle for the version effect`);
-      }
-
       await this.ctx.sessions.flush(live);
-      await appendSeedSuffixLive(live, seedSuffix, (batch) => handle.append(batch));
+      await appendSeedSuffixLive(live, seedSuffix);
       await this.ctx.sessions.flush(live);
       return;
     }
@@ -631,16 +567,6 @@ function respondJson(response: HttpResponseLike, status: number, value: unknown)
   response.end(JSON.stringify(value));
 }
 
-async function readTimeline(
-  editor: SessionEditor,
-  sessionId: SessionId,
-): Promise<SessionEditorTimeline> {
-  const timeline = await editor.timeline(sessionId);
-  const messages = await editor.editableMessages(sessionId);
-  const retryable = await editor.retryableTurns(sessionId);
-  return toTimelinePayload(sessionId, timeline, messages, retryable);
-}
-
 async function runOperation(
   editor: SessionEditor,
   operation: SessionEditorOperation,
@@ -699,12 +625,6 @@ async function handleRoute(
   response: HttpResponseLike,
 ): Promise<void> {
   try {
-    if (request.method === "GET") {
-      const url = new URL(request.url ?? SESSION_EDITOR_PATH, "http://session-editor.local");
-      const sessionId = sessionIdOf(url.searchParams.get("sessionId"));
-      respondJson(response, 200, await readTimeline(editor, sessionId));
-      return;
-    }
     if (request.method === "POST") {
       respondJson(
         response,
@@ -736,62 +656,4 @@ function registerHttpRoutes(ctx: Context): void {
       handler: (request, response) => handleRoute(editor, request, response),
     });
   }, "session-editor: HTTP route");
-
-  const registerConnectionRoute = (): void => {
-    const connection = ctx.get("connection", false) as
-      | {
-          fetch: {
-            register(route: {
-              path: string;
-              methods: readonly ("GET" | "HEAD" | "POST")[];
-              requestBody: "buffered" | "streaming";
-              fetch: (request: Request) => Promise<Response>;
-            }): () => Promise<void>;
-          };
-        }
-      | undefined;
-    if (connection === undefined) return;
-    const editor = ctx.sessionEditor;
-    ctx.effect(
-      () =>
-        connection.fetch.register({
-          path: `/api${SESSION_EDITOR_PATH}`,
-          methods: ["GET", "POST"],
-          requestBody: "buffered",
-          fetch: (request) => handleFetchRoute(editor, request),
-        }),
-      "session-editor: connection fetch route",
-    );
-  };
-  ctx.on("internal/service", (name) => {
-    if (name === "connection") registerConnectionRoute();
-  });
-  registerConnectionRoute();
-}
-
-async function handleFetchRoute(editor: SessionEditor, request: Request): Promise<Response> {
-  try {
-    if (request.method === "GET") {
-      const url = new URL(request.url);
-      const sessionId = sessionIdOf(url.searchParams.get("sessionId"));
-      return jsonResponse(200, await readTimeline(editor, sessionId));
-    }
-    if (request.method === "POST") {
-      return jsonResponse(200, await runOperation(editor, decodeOperation(await request.json())));
-    }
-    return new Response(null, { status: 405 });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    return jsonResponse(error instanceof TypeError ? 400 : 409, { error: message });
-  }
-}
-
-function jsonResponse(status: number, value: unknown): Response {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
 }

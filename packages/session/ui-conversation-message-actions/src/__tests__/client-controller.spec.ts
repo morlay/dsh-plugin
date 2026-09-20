@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// 浏览器半的门控闭环：编辑器动作经 `/session-editor` 打到 host，
-// recall 把文本回填 composer；就地编辑后刷新走 resync + 投影截断；
-// timeline 打开版本时导航到目标会话。
+// 浏览器半的门控闭环：编辑器动作经 `/session-editor` 打到 host；动作成功后走
+// resync + 投影截断（rewind 的删除无法经 append-only 事件流表达）；
+// 撤回把该消息的全部文本块回填 composer；刷新只由动作驱动——会话列表 / 快照变化不发请求。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "../client/controller.ts";
@@ -49,62 +49,76 @@ interface FakeSessions {
   list: { subscribe: (listener: () => void) => () => void; getSnapshot: () => unknown };
   binding: (id: string) => unknown;
   scope: (id: string) => unknown;
+  refresh?: () => Promise<void>;
 }
 
-function fakeSessions(ids: readonly string[] = ["s1"]): {
+function fakeSessions(
+  ids: readonly string[] = ["s1"],
+  capabilities: { resync?: boolean; refresh?: boolean } = {},
+): {
   sessions: FakeSessions;
   drafts: string[];
-  resyncs: string[];
+  counts: { refreshes: number; resyncs: number };
+  emitList: () => void;
+  emitSession: () => void;
 } {
+  const withResync = capabilities.resync ?? true;
+  const withRefresh = capabilities.refresh ?? true;
   const drafts: string[] = [];
-  const resyncs: string[] = [];
+  const state = { refreshes: 0, resyncs: 0 };
+  const listListeners: Array<() => void> = [];
+  const sessionListeners: Array<() => void> = [];
   const byId: Record<string, unknown> = {};
   for (const id of ids) byId[id] = {};
   const sessions: FakeSessions = {
-    list: { subscribe: () => () => {}, getSnapshot: () => ({ byId }) },
+    list: {
+      subscribe: (listener: () => void) => {
+        listListeners.push(listener);
+        return () => {};
+      },
+      getSnapshot: () => ({ byId }),
+    },
     binding: () => ({
       session: {
-        subscribe: () => () => {},
-        getSnapshot: () => ({ openState: "open", removed: false, hasMore: false }),
-        resync: async () => {
-          resyncs.push("resync");
+        subscribe: (listener: () => void) => {
+          sessionListeners.push(listener);
+          return () => {};
         },
-        projections: {
-          truncate: (lastSeq: number) => resyncs.push(`truncate(${lastSeq})`),
-        },
+        ...(withResync
+          ? {
+              resync: async () => {
+                state.resyncs += 1;
+              },
+            }
+          : {}),
       },
     }),
     scope: () => ({
       get: () => ({ input: { for: () => ({ restoreDraft: (d: string) => drafts.push(d) }) } }),
     }),
+    ...(withRefresh
+      ? {
+          refresh: async () => {
+            state.refreshes += 1;
+          },
+        }
+      : {}),
   };
-  return { sessions, drafts, resyncs };
-}
-
-/** 导航归 ui-workspace：controller 只把目标交给 ctx.uiWorkspace.openSession。 */
-const opened: string[] = [];
-const fakeWorkspace = {
-  openSession: (sessionId: string) => {
-    opened.push(sessionId);
-  },
-};
-
-function timelinePayload(
-  id: string,
-  messages: Array<Record<string, unknown>> = [],
-): Record<string, unknown> {
   return {
-    sessionId: id,
-    messages,
-    retryableTurns: [],
-    versions: [],
-    undoStack: [],
-    redoSessionIds: [],
+    sessions,
+    drafts,
+    counts: state,
+    emitList: () => {
+      for (const listener of listListeners) listener();
+    },
+    emitSession: () => {
+      for (const listener of sessionListeners) listener();
+    },
   };
 }
 
 function controllerWith(sessions: FakeSessions, id = "s1"): SessionEditorController {
-  const ctx = { get: (name: string) => (name === "uiWorkspace" ? fakeWorkspace : sessions) };
+  const ctx = { get: () => sessions };
   return new SessionEditorController(ctx as never, id as SessionId);
 }
 
@@ -124,44 +138,68 @@ function mutateCalls(calls: readonly FetchCall[]): FetchCall[] {
 
 beforeEach(() => {
   delete (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__;
-  opened.length = 0;
 });
 
 describe("SessionEditorController（浏览器半）", () => {
-  it("load 把 timeline 装进状态；宿主内嵌时走 /api 前缀的连接路由", async () => {
-    (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__ = { ownsHost: true };
-    const { sessions } = fakeSessions();
+  // 动作成功后重建会话窗口（rewind 让客户端窗口的 seq 基线失效），且绝不整页重载。
+  it("retry 成功后重建会话窗口，不整页重载", async () => {
+    const { sessions, counts } = fakeSessions();
     const controller = controllerWith(sessions);
-    const calls = stubFetch([timelinePayload("s1", [{ ...(userBlock as object) }])]);
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    const calls = stubFetch([{ sessionId: "s1", queuedTurns: 1, live: true }]);
 
-    await controller.load();
+    const applied = await controller.face.retry(2, "truncate");
 
-    expect(calls[0]?.url).toBe(`/api${SESSION_EDITOR_PATH}?sessionId=s1`);
-    expect(controller.store.getSnapshot()).toMatchObject({
-      status: "ready",
-      error: null,
-      timeline: { sessionId: "s1" },
+    expect(applied).toBe(true);
+    expect(JSON.parse(mutateCalls(calls)[0]!.body!)).toEqual({
+      action: "retry",
+      sessionId: "s1",
+      turn: 2,
+      cascade: "truncate",
     });
+    expect(counts.resyncs).toBe(1);
+    expect(counts.refreshes).toBe(0);
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("load 失败把错误留在状态里（不抛）", async () => {
-    const { sessions } = fakeSessions();
+  it("没有 resync 时退化为刷列表，仍然不整页重载", async () => {
+    const { sessions, counts } = fakeSessions(["s1"], { resync: false });
     const controller = controllerWith(sessions);
-    stubFailure(409, { error: "会话不存在" });
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
 
-    await controller.load();
+    expect(await controller.face.recall(userBlock, ["hello"])).toBe(true);
 
-    expect(controller.store.getSnapshot()).toMatchObject({ status: "error", error: "会话不存在" });
+    expect(counts.resyncs).toBe(0);
+    expect(counts.refreshes).toBe(1);
+    expect(reload).not.toHaveBeenCalled();
   });
 
-  it("recall 把撤回的文本回填到 composer，并只发一次 recall 请求", async () => {
+  it("两条重建入口都没有时不抛错、不整页重载，只记一条 warn", async () => {
+    const { sessions, counts } = fakeSessions(["s1"], { resync: false, refresh: false });
+    const controller = controllerWith(sessions);
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
+
+    expect(await controller.face.recall(userBlock, ["hello"])).toBe(true);
+
+    expect(counts.resyncs).toBe(0);
+    expect(counts.refreshes).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("recall 回填该消息的全部文本块，且只发一次 recall 请求", async () => {
     const { sessions, drafts } = fakeSessions();
     const controller = controllerWith(sessions);
-    stubFetch([timelinePayload("s1", [{ ...(userBlock as object) }])]);
-    await controller.load();
+    const calls = stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
 
-    const calls = stubFetch([{ sessionId: "s1", queuedTurns: 0 }, timelinePayload("s1")]);
-    const applied = await controller.face.recall(userBlock);
+    const applied = await controller.face.recall(userBlock, ["第一块", "第二块"]);
 
     expect(applied).toBe(true);
     const posts = mutateCalls(calls);
@@ -172,55 +210,32 @@ describe("SessionEditorController（浏览器半）", () => {
       sessionId: "s1",
       eventSeq: 4,
     });
-    expect(drafts).toEqual(["hello"]);
+    expect(drafts).toEqual(["第一块\n\n第二块"]);
   });
 
-  it("就地编辑成功后走 resync 并丢弃投影行（旧 seq 不得残留）", async () => {
-    const { sessions, resyncs } = fakeSessions();
-    const controller = controllerWith(sessions);
-    const calls = stubFetch([
-      { sessionId: "s1", queuedTurns: 1, live: true },
-      timelinePayload("s1"),
-    ]);
-
-    const applied = await controller.face.edit(userBlock, "edited", "truncate");
-
-    expect(applied).toBe(true);
-    expect(JSON.parse(mutateCalls(calls)[0]!.body!)).toEqual({
-      action: "edit",
-      sessionId: "s1",
-      eventSeq: 4,
-      blockIndex: 0,
-      text: "edited",
-      cascade: "truncate",
-    });
-    expect(resyncs).toEqual(["resync", "truncate(-1)"]);
-  });
-
-  it("timeline 打开另一版本经 ui-workspace 导航过去", async () => {
-    const { sessions } = fakeSessions(["s1", "child"]);
-    const controller = controllerWith(sessions);
-
-    await controller.face.openVersion("child");
-
-    expect(opened).toEqual(["child"]);
-  });
-
-  it("失败响应把错误留在状态里且不阻塞下一次操作", async () => {
+  it("失败响应返回 false 且不阻塞下一次操作", async () => {
     const { sessions } = fakeSessions();
     const controller = controllerWith(sessions);
-    stubFetch([timelinePayload("s1")]);
-    await controller.load();
     stubFailure(409, { error: "rewind 目标不是闭合边界" });
 
-    const applied = await controller.face.retry(2, "truncate");
+    expect(await controller.face.retry(2, "truncate")).toBe(false);
 
-    expect(applied).toBe(false);
-    expect(controller.store.getSnapshot()).toMatchObject({
-      status: "ready",
-      pending: null,
-      error: "rewind 目标不是闭合边界",
-    });
+    const calls = stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
+    expect(await controller.face.retry(2, "truncate")).toBe(true);
+    expect(mutateCalls(calls)).toHaveLength(1);
+  });
+
+  it("会话列表或快照变化不发任何请求（刷新只由动作驱动）", async () => {
+    const { sessions, emitList, emitSession } = fakeSessions();
+    controllerWith(sessions);
+    const calls = stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
+
+    emitList();
+    emitSession();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(calls).toHaveLength(0);
   });
 
   it("上一次操作未落定时不重复提交", async () => {
@@ -234,8 +249,8 @@ describe("SessionEditorController（浏览器半）", () => {
       return responseFor({ sessionId: "s1", queuedTurns: 0 });
     });
 
-    const first = controller.face.recall(userBlock);
-    const second = await controller.face.recall(userBlock);
+    const first = controller.face.recall(userBlock, ["hello"]);
+    const second = await controller.face.recall(userBlock, ["hello"]);
 
     expect(second).toBe(false);
     release?.();

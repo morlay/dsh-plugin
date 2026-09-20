@@ -23,6 +23,22 @@ import type { UsageAggregate, UsageTotals } from "./usage.ts";
 
 const postgresMigrationsDir = fileURLToPath(new URL("../drizzle/postgres/", import.meta.url));
 
+const pgWriteQueues = new Map<string, Promise<void>>();
+
+/** 按介质（连接串 + schema）串行化写事务，与 SQLite 侧的 `enqueueSqliteTx` 同形。 */
+function enqueuePgWrite<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const tail = pgWriteQueues.get(key) ?? Promise.resolve();
+  const run = tail.then(fn);
+  pgWriteQueues.set(
+    key,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
 /** pg 的 text 列窄化：非字符串（含 null）都不当作文本。 */
 function text(value: unknown): string | null {
   return typeof value === "string" ? value : null;
@@ -79,21 +95,28 @@ export class PostgresBackend implements Backend {
     });
 
     this.opened.catch(() => {});
+    // 写事务按介质串行（与 SQLite 侧的 enqueueSqliteTx 同形）：并发 `writeAtomically`
+    // 会互相覆盖实例级的 `txOverride`，让先开始的事务的语句落到别人的事务（一次失败
+    // 会把另一个成功事务一起拖垮），或退化成 autocommit。介质身份用 `identityBase`
+    // （宿主 + 库 + schema）——同一进程内多实例连同一库时也共用同一条队列。
+    const writeQueueKey = options.identityBase;
     this.storage = createStorageRepository({
       db: () => this.opened.then(() => this.txOverride ?? this.db),
 
       writeAtomically: (fn) =>
-        this.db.transaction(
-          async (tx) => {
-            const previous = this.txOverride;
-            this.txOverride = tx;
-            try {
-              return await fn();
-            } finally {
-              this.txOverride = previous;
-            }
-          },
-          { isolationLevel: "serializable" },
+        enqueuePgWrite(writeQueueKey, () =>
+          this.db.transaction(
+            async (tx) => {
+              const previous = this.txOverride;
+              this.txOverride = tx;
+              try {
+                return await fn();
+              } finally {
+                this.txOverride = previous;
+              }
+            },
+            { isolationLevel: "serializable" },
+          ),
         ),
       tables: this.tables,
     });
@@ -194,9 +217,13 @@ export class PostgresBackend implements Backend {
       .execute() as unknown as EventRow[];
   }
 
+  // 只取类型：rewind 的边界 / 窗口探测不该把整个事件 JSON（f_data）拖回来。
   async getEventTypeAt(id: SessionId, sequence: number): Promise<string | undefined> {
     const table = this.tables["t_session_events"];
-    const rows = (await this.eventRows(this.db)
+    const rows = (await this.db
+      .select({ fType: this.tables["t_events"].fType })
+      .from(table)
+      .innerJoin(this.tables["t_events"], eq(table.fEventId, this.tables["t_events"].fEventId))
       .where(and(eq(table.fSessionId, id), eq(table.fSequence, sequence)))
       .limit(1)
       .execute()) as Array<{ fType?: string }>;
@@ -209,7 +236,10 @@ export class PostgresBackend implements Backend {
     limit: number,
   ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>> {
     const table = this.tables["t_session_events"];
-    return (await this.eventRows(this.db)
+    return (await this.db
+      .select({ fSequence: table.fSequence, fType: this.tables["t_events"].fType })
+      .from(table)
+      .innerJoin(this.tables["t_events"], eq(table.fEventId, this.tables["t_events"].fEventId))
       .where(and(eq(table.fSessionId, id), lt(table.fSequence, beforeSequence)))
       .orderBy(desc(table.fSequence))
       .limit(limit)

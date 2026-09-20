@@ -21,7 +21,7 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
-describe("SessionEditor rewind / fork / timeline", () => {
+describe("SessionEditor rewind / fork", () => {
   it("rewind truncates the original session and allows continuation", async () => {
     const { ctx, editor, dispose } = await harness();
     try {

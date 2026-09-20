@@ -1,6 +1,6 @@
 # 版本效果以 ignorable 事件原样落库
 
-状态：已采纳
+状态：已废弃（被 [ADR-20260920-删除版本树投影并停止写版本效果](20260920-删除版本树投影并停止写版本效果.md) 取代：写侧不再产出该事件，读侧投影已删除）
 
 分支操作（edit / reroll / retry / fork / rewind）的版本效果记录为
 `session-branch/version` 事件，携带 `ignorable: true`：live 会话与 canonical

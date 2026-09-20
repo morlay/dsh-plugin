@@ -358,8 +358,12 @@ export class SqliteBackend implements Backend {
     return scoped.orderBy(tSessionEvents.fSequence).all() as unknown as EventRow[];
   }
 
+  // 只取类型：rewind 的边界 / 窗口探测不该把整个事件 JSON（f_data）拖回来。
   async getEventTypeAt(id: SessionId, sequence: number): Promise<string | undefined> {
-    const row = this.eventRows()
+    const row = this.db
+      .select({ fType: tEvents.fType })
+      .from(tSessionEvents)
+      .innerJoin(tEvents, eq(tSessionEvents.fEventId, tEvents.fEventId))
       .where(and(eq(tSessionEvents.fSessionId, id), eq(tSessionEvents.fSequence, sequence)))
       .get() as { fType?: string } | undefined;
     return row?.fType;
@@ -370,7 +374,10 @@ export class SqliteBackend implements Backend {
     beforeSequence: number,
     limit: number,
   ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>> {
-    return this.eventRows()
+    return this.db
+      .select({ fSequence: tSessionEvents.fSequence, fType: tEvents.fType })
+      .from(tSessionEvents)
+      .innerJoin(tEvents, eq(tSessionEvents.fEventId, tEvents.fEventId))
       .where(and(eq(tSessionEvents.fSessionId, id), lt(tSessionEvents.fSequence, beforeSequence)))
       .orderBy(desc(tSessionEvents.fSequence))
       .limit(limit)

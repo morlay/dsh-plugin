@@ -1,9 +1,8 @@
 import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
-import type { SessionEventMap } from "@deepseek-ai/dsh-session";
 
-type _BranchKeyCheck = "session-branch/version" extends keyof SessionEventMap ? true : false;
-export const _branchKeyVisible: _BranchKeyCheck = true as const;
-
+// `session-branch/version` 的**历史形状**：写侧（就地编辑产出）与读侧（版本树投影）都已删除
+// （见 ADR 版本效果停止落库 / 版本树投影删除）。这里的定义只用于识别旧数据里已落库的
+// ignorable 事件，不再有新事件产生、也没有读者。
 export const SESSION_BRANCH_VERSION_SCHEMA = 1;
 
 export type CascadePolicy = "truncate" | "preserve";
@@ -69,23 +68,6 @@ export interface ForkFromOptions {
   childSessionId?: SessionId;
 
   meta?: BranchForkMeta;
-}
-
-export interface BranchVersionNode {
-  sessionId: SessionId;
-  parentSessionId?: SessionId;
-
-  seedLength: number;
-  createdAt: number;
-
-  effect?: SessionBranchEffect;
-
-  inverseSessionId?: SessionId;
-}
-
-export interface BranchTimeline {
-  root: BranchVersionNode;
-  nodes: BranchVersionNode[];
 }
 
 export type SessionBranchErrorCode =

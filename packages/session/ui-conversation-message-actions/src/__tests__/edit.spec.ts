@@ -104,20 +104,20 @@ describe("SessionEditor edit", () => {
       expect(result.queuedTurns).toBe(0);
 
       expect(live.snapshotEvents().map((e) => e.seq)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
       ]);
-      expect(live.snapshotEvents()[6]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents().some((e) => e.type === "session-branch/version")).toBe(false);
       expect(live.snapshotEvents().at(-1)?.type).toBe("turn/end");
 
-      expect((await backend.getHead(SessionIdBrand("live"))).fHeadSequence).toBe(12);
+      expect((await backend.getHead(SessionIdBrand("live"))).fHeadSequence).toBe(11);
 
       const liveAppend = live as unknown as { append(type: string, data: unknown): SessionEvent };
       liveAppend.append("turn/start", { turn: 4 });
       await ctx.sessions.flush(live);
       expect(live.snapshotEvents().map((e) => e.seq)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
       ]);
-      expect((await backend.getHead(SessionIdBrand("live"))).fHeadSequence).toBe(13);
+      expect((await backend.getHead(SessionIdBrand("live"))).fHeadSequence).toBe(12);
     } finally {
       await dispose();
     }
@@ -162,9 +162,9 @@ describe("SessionEditor edit", () => {
       expect(result.sessionId).toBe(SessionIdBrand("live"));
 
       expect(live.snapshotEvents().map((e) => e.seq)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
       ]);
-      expect(live.snapshotEvents()[7]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents().some((e) => e.type === "session-branch/version")).toBe(false);
       expect(live.snapshotEvents().at(-1)?.type).toBe("turn/end");
 
       const editedAssistant = live
@@ -227,8 +227,7 @@ describe("SessionEditor edit", () => {
       expect(result.sessionId).toBe(SessionIdBrand("live"));
       expect(followups).toHaveLength(1);
 
-      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0]);
-      expect(live.snapshotEvents()[0]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents()).toEqual([]);
       disposeAgents();
     } finally {
       await dispose();
@@ -314,9 +313,9 @@ describe("SessionEditor edit", () => {
         }
       ).internals().backend;
       const rows = await backend.getEventRows(SessionIdBrand("src"));
-      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
       expect(rows[11]?.fType).toBe("turn/end");
-      expect(rows[12]?.fType).toBe("session-branch/version");
+      expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
 
       expect(rows.some((r) => r.fType === "user/message" && r.fSequence === 13)).toBe(false);
       expect(rows.some((r) => r.fType === "assistant/message" && r.fSequence === 15)).toBe(false);
@@ -326,7 +325,7 @@ describe("SessionEditor edit", () => {
         (event) =>
           ({
             ...event,
-            seq: event.seq + 13,
+            seq: event.seq + 12,
             time: event.time + 300,
             data: { ...event.data, turn: 3 },
           }) as SessionEvent,
@@ -334,7 +333,7 @@ describe("SessionEditor edit", () => {
       await rdb(ctx).append(SessionIdBrand("src"), continuation);
       const continued = await rdb(ctx).load(SessionIdBrand("src"));
       expect(continued.events.at(-1)?.type).toBe("turn/end");
-      expect(continued.events).toHaveLength(19);
+      expect(continued.events).toHaveLength(18);
     } finally {
       await dispose();
     }
@@ -449,10 +448,10 @@ describe("SessionEditor edit", () => {
       expect(result.queuedTurns).toBe(0);
 
       expect(live.snapshotEvents().map((e) => e.seq)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
       ]);
       expect(live.snapshotEvents()[11]?.type).toBe("turn/end");
-      expect(live.snapshotEvents()[12]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents().some((e) => e.type === "session-branch/version")).toBe(false);
       expect(live.snapshotEvents().some((e) => e.type === "step/start" && e.data.turn === 3)).toBe(
         false,
       );
@@ -632,16 +631,16 @@ describe("SessionEditor edit", () => {
         }
       ).internals().backend;
       const rows = await backend.getEventRows(SessionIdBrand("src"));
-      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
       expect(rows[11]?.fType).toBe("turn/end");
-      expect(rows[12]?.fType).toBe("session-branch/version");
+      expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
       expect(rows.some((r) => r.fType === "step/start" && r.fSequence === 13)).toBe(false);
 
       const continuation: SessionEvent[] = oneTurnLog().map(
         (event) =>
           ({
             ...event,
-            seq: event.seq + 13,
+            seq: event.seq + 12,
             time: event.time + 300,
             data: { ...event.data, turn: 3 },
           }) as SessionEvent,
@@ -735,9 +734,9 @@ describe("SessionEditor edit", () => {
       ).internals().backend;
       const rows = await backend.getEventRows(SessionIdBrand("src"));
       expect(rows.map((r) => r.fSequence)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
       ]);
-      expect(rows[17]?.fType).toBe("session-branch/version");
+      expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
       expect(rows.some((r) => r.fType === "step/start" && r.fSequence === 17)).toBe(false);
       expect(rows.some((r) => r.fType === "user/message" && r.fSequence === 18)).toBe(false);
       expect(rows.some((r) => r.fType === "step/end" && r.fSequence === 19)).toBe(false);

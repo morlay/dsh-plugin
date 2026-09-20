@@ -174,17 +174,16 @@ describe("压缩后第一条用户数据的 rewind / retry / edit", () => {
       const after = await afterOperation(ctx, SessionIdBrand("src"));
       expect(outline(after)).toEqual([
         ...BEFORE_COMPACTION,
-        "12:session-branch/version",
-        "13:compaction/start",
-        "14:compaction/summary",
-        "15:user/message",
-        "16:compaction/end",
+        "12:compaction/start",
+        "13:compaction/summary",
+        "14:user/message",
+        "15:compaction/end",
       ]);
-      expect(surfaceNodes(after)).toEqual([15]);
+      expect(surfaceNodes(after)).toEqual([14]);
       expect(() =>
         new TokenMeter(ctx).measure(Session.create(SessionIdBrand("src"), after)),
       ).not.toThrow();
-      // 版本效果记在同一个会话上（ADR-就地编辑重写同一会话而非新建会话），重放的输入交给 agent（ADR-重放经agent驱动而非直接append回复）
+      // 就地操作重写同一个会话（ADR-就地编辑重写同一会话而非新建会话），重放的输入交给 agent（ADR-重放经agent驱动而非直接append回复）；版本效果事件已停止落库
       expect(result).toMatchObject({ sessionId: "src", queuedTurns: 0 });
     } finally {
       await dispose();
@@ -209,13 +208,12 @@ describe("压缩后第一条用户数据的 rewind / retry / edit", () => {
       const after = await afterOperation(ctx, SessionIdBrand("src"));
       expect(outline(after)).toEqual([
         ...BEFORE_COMPACTION,
-        "12:session-branch/version",
-        "13:compaction/start",
-        "14:compaction/summary",
-        "15:user/message",
-        "16:compaction/end",
+        "12:compaction/start",
+        "13:compaction/summary",
+        "14:user/message",
+        "15:compaction/end",
       ]);
-      expect(surfaceNodes(after)).toEqual([15]);
+      expect(surfaceNodes(after)).toEqual([14]);
 
       const turns = closedTurns(after);
       expect(turns.map((turn) => turn.turn)).toEqual([1, 2]);

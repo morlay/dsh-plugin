@@ -15,14 +15,15 @@
 ```ts
 // host：装配后直接调服务
 await ctx.sessionEditor.retry({ action: "retry", sessionId, turn: 2, cascade: "truncate" });
-const timeline = await ctx.sessionEditor.timeline({ sessionId });
+const result = await ctx.sessionEditor.retry({ sessionId, turn, cascade: "truncate" });
 ```
 
-HTTP 面：web 模式 `POST` / `GET /session-editor`；宿主内嵌客户端走 `connection.fetch` 的 `/api/session-editor`。
+HTTP 面：`POST /session-editor`（注册面与页面侧路径口径见
+[设计 20260917-编排层操作语义](./.agents/designs/20260917-编排层操作语义.md)）。
 
 ## 结论
 
-edit / retry / reroll 就地重写**同一会话**（session id 不变、版本树单根），只有 `fork` 派生新 id；`recall` 只截断并把文本
+edit / retry / reroll 就地重写**同一会话**（session id 不变），只有 `fork` 派生新 id；`recall` 只截断并把文本
 交回 composer，由用户改后自己发
 （[ADR 就地编辑重写同一会话而非新建会话](./.agents/adrs/20260917-就地编辑重写同一会话而非新建会话.md)）。
 

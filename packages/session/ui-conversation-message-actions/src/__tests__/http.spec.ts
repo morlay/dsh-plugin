@@ -115,7 +115,7 @@ describe("session-editor HTTP 面", () => {
     }
   });
 
-  it("GET 取 timeline，参数非法是 400（web 模式下浏览器半的入口）", async () => {
+  it("GET 不再服务（读面已删），未知 action 仍是 400", async () => {
     const routes = new Map<string, RouteHandler>();
     const { ctx, dispose } = await harness((scope) => {
       scope.provide("webServer", {
@@ -139,11 +139,7 @@ describe("session-editor HTTP 面", () => {
         },
       };
       await handler(request, listed.response);
-      expect(listed.code).toBe(200);
-      expect(JSON.parse(listed.body)).toMatchObject({
-        sessionId: "s1",
-        retryableTurns: [{ turn: 1 }, { turn: 2 }],
-      });
+      expect(listed.code).toBe(405);
 
       const rejected = fakeResponse();
       await handler(fakeJsonRequest({ action: "explode", sessionId: "s1" }), rejected.response);

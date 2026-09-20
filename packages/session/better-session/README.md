@@ -19,7 +19,7 @@ dsh plugin --profile web add "@morlay/better-session"
 - `ctx.sessionPersistence` ← RDB（SQLite / PostgreSQL）持久化后端
 - `ctx.sessionBranch` ← rewind / fork 数据层
 - `ctx.sessionEditor` ← edit / retry / recall / fork 编排
-  （HTTP：`/session-editor`；宿主内嵌客户端走 `connection.fetch` 的 `/api/session-editor`）
+  （HTTP：`POST /session-editor`，web 与桌面共用宿主的那一张 `webServer` 路由表）
 - `conversation.chat.node` ← 渲染替换（user 消息行内编辑 / 重试按钮）
 - `conversation.composer.dock` 的 `stats` 行 ← 覆盖注册（priority −1；承载修好的 token 口径）
 - 官方对话 UI 行里只有 `ui-conversation` 换成本仓库的 fork 行；`ui-chat` 与 `ui-input-trigger` 保持官方行

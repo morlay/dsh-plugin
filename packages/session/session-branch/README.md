@@ -1,8 +1,8 @@
 # @morlay/session-branch
 
 分支式会话编辑的**契约层**：定义数据层分支原语 `SessionBranchProvider`
-（rewind / forkFrom / readBranchPrefix）、高层服务 `SessionBranch`
-（`ctx.sessionBranch`）与共享的版本树投影 `buildTimeline`。
+（rewind / forkFrom / readBranchPrefix）与高层服务 `SessionBranch`
+（`ctx.sessionBranch`）。
 
 跨包术语见根 [`.agents/CONTEXT.md`](../../../.agents/CONTEXT.md)，本包的决策见 [`.agents/adrs/`](./.agents/adrs)。
 
@@ -38,11 +38,8 @@ interface SessionBranchProvider {
   （内存 log 截断 + 派生缓存复位 + handle cursor / 继承前缀对齐，详见
   `@morlay/session-rdb` 的 [分支能力](../session-rdb/.agents/designs/20260917-分支能力.md)）。
 
-## 版本树
+## 版本效果（历史形状）
 
-`buildTimeline(snapshots, readOwnEvents, sessionId)` 从会话快照（header
-lineage）+ 每会话自有后缀（`seq >= seedLength` 的 `session-branch/version`
-事件）投影完整版本树。
-
-版本效果事件携带 `ignorable: true` 并**原样落库**，因此 cold 会话也能恢复效果详情
-（见 [ADR-版本效果以ignorable事件原样落库](./.agents/adrs/20260917-版本效果以ignorable事件原样落库.md)）。
+`session-branch/version` 事件的类型定义仍在本包（`types.ts`），用于识别旧会话里
+已落库的历史事件；**写侧与读侧都已删除**（不再产出新事件、没有读者），理由见
+[ADR-删除版本树投影并停止写版本效果](./.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)。

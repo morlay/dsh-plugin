@@ -13,12 +13,21 @@
 - 其余面各自成 spec：`write-guard`、`busy-timeout`、`multi-instance`、`multi-session`、
   `projection-cache`、`session-query`、`session-title`、`storage-takeover`、`migrate`、`inbox-repair`、
   `vendor-spec-alignment`。
+- **读放大（`read-path.spec.ts`）**：`load` 只走一条读取路径（以注入后端的 `getEventRows` 调用计数为证）、
+  rewind 的类型查询只取 `fSequence` / `fType` 两列（行键集为证）、读视图修复一次扫描建好溯源索引
+  （replace 的 `sourceEventSeqs` 与 metering 的 `shadowedSeqs` 形状为证）。判的是**每条读取路径付的代价**，
+  不是实现细节；性能类改动没有行为红，靠这三条接缝观测 + 既有读视图用例兜回归。
+- **live 失败态（`live-failure.spec.ts`）**：初始化失败（同名会话 cwd 冲突）后记账一条 `error`、
+  后续事件被丢弃（每会话一条 `warn`）、`flush` 把失败抛回上游——判据是**日志面 + flush 的拒绝**，
+  不查私有缓冲。
 
 ## 环境门控
 
 - 默认后端是 SQLite `:memory:`，无需外部服务。
 - **PostgreSQL 契约测试**（`pg.spec.ts`）需要 `TEST_PG_URL`：本地用 `just pg test`（docker compose 起库
   并注入连接串），CI 由 postgres service 提供；未设置时 `describe.skipIf` 自动跳过。
+  除持久化 / coordinator 契约外，这里还有**写事务串行**的用例（「并发写事务不交错（失败的那个不留痕迹）」）：
+  并发 `putWorkspace`，失败的那个必须整体回滚不留痕迹——判据是介质层的原子性，不是实现细节。
 
 ## 测试辅助（`./testing`）
 

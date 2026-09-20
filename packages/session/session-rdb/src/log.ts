@@ -127,7 +127,40 @@ const SURFACE_EVENT_TYPES = new Set([
 
 const METERING_EVENT_TYPES = new Set(["compaction/summary", "compaction/prune"]);
 
+/**
+ * 升序的 surface 事件 seq 索引：读视图修复里的溯源（replace 的 `sourceEventSeqs` 与
+ * metering 的 `shadowedSeqs`）共用这一份，避免每个 replace 各扫一遍全量事件。
+ * 前提是输入按 seq 有序（`readLog` 与 live snapshot 都如此）。
+ */
+function surfaceSeqIndex(events: readonly SessionEvent[]): number[] {
+  const seqs: number[] = [];
+  for (const event of events) {
+    if (SURFACE_EVENT_TYPES.has(event.type)) seqs.push(event.seq);
+  }
+  return seqs;
+}
+
+/** `[startSeq, endSeq]` 内的 surface seq（含端点），二分定位后切片。 */
+function surfaceSeqsInRange(seqs: readonly number[], startSeq: number, endSeq: number): number[] {
+  let low = 0;
+  let high = seqs.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (seqs[mid]! < startSeq) low = mid + 1;
+    else high = mid;
+  }
+  const from = low;
+  high = seqs.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (seqs[mid]! <= endSeq) low = mid + 1;
+    else high = mid;
+  }
+  return seqs.slice(from, low);
+}
+
 export function recomputeReplaceProvenance(events: SessionEvent[]): void {
+  const seqs = surfaceSeqIndex(events);
   for (let i = 0; i < events.length; i++) {
     const event = events[i]!;
     const raw = event as unknown as { surfaceOp?: unknown; sourceEventSeqs?: number[] };
@@ -145,17 +178,7 @@ export function recomputeReplaceProvenance(events: SessionEvent[]): void {
       raw.sourceEventSeqs = meteringData.shadowedSeqs;
       continue;
     }
-    const refs: number[] = [];
-    for (const candidate of events) {
-      if (
-        candidate.seq >= startSeq &&
-        candidate.seq <= endSeq &&
-        SURFACE_EVENT_TYPES.has(candidate.type)
-      ) {
-        refs.push(candidate.seq);
-      }
-    }
-    raw.sourceEventSeqs = refs;
+    raw.sourceEventSeqs = surfaceSeqsInRange(seqs, startSeq, endSeq);
   }
 }
 
@@ -359,6 +382,7 @@ export function repairRequestHeaders(events: SessionEvent[]): void {
 }
 
 export function syncMeteringRanges(events: SessionEvent[]): void {
+  const seqs = surfaceSeqIndex(events);
   for (let i = 1; i < events.length; i++) {
     const metering = events[i - 1]!;
     if (!METERING_EVENT_TYPES.has(metering.type)) continue;
@@ -372,14 +396,7 @@ export function syncMeteringRanges(events: SessionEvent[]): void {
     };
     if (data.shadowedRange?.start === startSeq && data.shadowedRange.end === endSeq) continue;
     data.shadowedRange = { start: startSeq, end: endSeq };
-    data.shadowedSeqs = events
-      .filter(
-        (candidate) =>
-          candidate.seq >= startSeq &&
-          candidate.seq <= endSeq &&
-          SURFACE_EVENT_TYPES.has(candidate.type),
-      )
-      .map((candidate) => candidate.seq);
+    data.shadowedSeqs = surfaceSeqsInRange(seqs, startSeq, endSeq);
   }
 }
 

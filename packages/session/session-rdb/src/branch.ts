@@ -11,7 +11,6 @@ import {
   SessionBranch,
   SessionBranchError,
   balanceRewindPrefix,
-  buildTimeline,
   rewindKeepLength,
   type BranchAnchorMode,
   type BranchBoundary,
@@ -595,18 +594,6 @@ export class SessionBranchRdb extends SessionBranch {
     signal?: AbortSignal,
   ): Promise<SessionPersistenceSnapshot> {
     return this.provider.rewind(id, toBoundary, signal);
-  }
-
-  async timeline(sessionId: SessionId, signal?: AbortSignal) {
-    const persistence = this.ctx.sessionPersistence as SessionPersistenceRdb;
-    const snapshots = await persistence.listSnapshots(signal);
-
-    const readOwnEvents = async (id: SessionId, fromSeq: number, s?: AbortSignal) => {
-      const live = this.ctx.sessions.get(id);
-      if (live !== undefined) return live.snapshotEvents().slice(fromSeq);
-      return (await persistence.internals().readFrom(id, fromSeq, s)).events;
-    };
-    return buildTimeline(snapshots, readOwnEvents, sessionId, signal);
   }
 }
 

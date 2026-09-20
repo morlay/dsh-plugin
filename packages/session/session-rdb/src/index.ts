@@ -742,6 +742,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     });
     this.liveBuffers.delete(id);
     this.liveReady.delete(id);
+    this.liveFailures.delete(id);
+    this.liveDropWarned.delete(id);
     this.reuseEventIds.delete(id);
   }
 
@@ -763,6 +765,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     for (const id of deletable) {
       this.liveBuffers.delete(id);
       this.liveReady.delete(id);
+      this.liveFailures.delete(id);
+      this.liveDropWarned.delete(id);
       this.reuseEventIds.delete(id);
     }
     return deleted;
@@ -1033,31 +1037,31 @@ export class SessionPersistenceRdb extends SessionPersistence {
     id: SessionId,
     signal?: AbortSignal,
   ): Promise<import("@deepseek-ai/dsh-session-persistence").SessionInspection> {
-    const handle = await this.open(id, "read", signal === undefined ? undefined : { signal });
-    try {
-      const { events } = await handle.read(
-        0,
-        undefined,
-        signal === undefined ? undefined : { signal },
-      );
-      const row = await this.backend.getSession(id);
-      if (row === undefined) throw new SessionPersistenceNotFoundError(id);
-
-      if (isLegacyVersion(row.fVersion)) {
+    signal?.throwIfAborted();
+    await this.ready;
+    signal?.throwIfAborted();
+    // 一条读取路径：load 的语义就是「读一次完整快照」，不再经 handle 面再读一遍
+    // （原先 open(read) 读一次 + handle.read 又读一次，等于把最贵的读付两遍）。
+    const log = await this.readLog(id, {}, signal);
+    if (log === undefined) {
+      // 未落库的 live 会话没有磁盘视图：与 handle.read 的 detached 口径一致，返回空日志。
+      const pending = this.tracker.pendingOf(id);
+      if (pending !== undefined) {
         return {
-          meta: handle.header,
-          inheritedEventCount: handle.inheritedEventCount,
-          events,
+          meta: pending.header,
+          inheritedEventCount: SessionLogOffset(pending.inheritedEventCount),
+          events: [],
         };
       }
-      return {
-        meta: rowToMeta(row),
-        inheritedEventCount: SessionLogOffset(row.fSeedLength ?? 0),
-        events,
-      };
-    } finally {
-      await handle.close();
+      throw new SessionPersistenceNotFoundError(id);
     }
+    repairReadView(log.events);
+    validateStoredEvents(log.meta, log.events);
+    return {
+      meta: log.meta,
+      inheritedEventCount: SessionLogOffset(log.inheritedEventCount),
+      events: log.events,
+    };
   }
 
   async append(id: SessionId, events: readonly SessionEvent[]): Promise<void> {
@@ -1123,27 +1127,41 @@ export class SessionPersistenceRdb extends SessionPersistence {
     );
   }
 
+  private readonly liveFailures = new Map<SessionId, Error>();
+  private readonly liveDropWarned = new Set<SessionId>();
+
+  // live 会话的持久化初始化失败是**终态**（cwd / 继承前缀冲突、id 碰撞、后端打不开都不自愈）：
+  // 记账一条 error、丢掉已缓冲的事件，之后该会话的事件不再进内存缓冲（否则表现为
+  // 「聊了一整轮、重启后全丢，内存里还留一份无界副本」），flush 把失败抛回上游。
+  private watchLiveReady(ctx: Context, session: Session, ready: Promise<void>): void {
+    void ready.catch((error: unknown) => {
+      const failure =
+        error instanceof Error
+          ? error
+          : new Error(
+              typeof error === "string" ? error : `live session "${session.id}" persistence failed`,
+            );
+      this.liveFailures.set(session.id, failure);
+      this.liveBuffers.delete(session.id);
+      ctx.logger.error(
+        `session-rdb: live session "${session.id}" persistence unavailable (${failure.message}); its events will not be persisted`,
+      );
+    });
+  }
+
   private installLiveRouting(ctx: Context): void {
     ctx.on("session/created", (session: Session) => {
       this.liveBuffers.set(session.id, []);
       const ready = this.ensureLiveHandle(session);
       this.liveReady.set(session.id, ready);
-      void ready.catch((error: unknown) => {
-        ctx.logger.warn(
-          `session-rdb: live session "${session.id}" persistence init failed: ${String(error)}`,
-        );
-      });
+      this.watchLiveReady(ctx, session, ready);
     });
 
     for (const session of ctx.sessions.list()) {
       this.liveBuffers.set(session.id, []);
       const ready = this.ensureLiveHandle(session);
       this.liveReady.set(session.id, ready);
-      void ready.catch((error: unknown) => {
-        ctx.logger.warn(
-          `session-rdb: live session "${session.id}" persistence init failed: ${String(error)}`,
-        );
-      });
+      this.watchLiveReady(ctx, session, ready);
     }
     ctx.on("session/event", (session: Session, event: SessionEvent) => {
       const handle = this.tracker.writerOf(session.id);
@@ -1155,9 +1173,20 @@ export class SessionPersistenceRdb extends SessionPersistence {
         });
         return;
       }
+      if (this.liveFailures.has(session.id)) {
+        if (!this.liveDropWarned.has(session.id)) {
+          this.liveDropWarned.add(session.id);
+          ctx.logger.warn(
+            `session-rdb: dropping events for live session "${session.id}" because persistence failed earlier`,
+          );
+        }
+        return;
+      }
       this.liveBuffers.get(session.id)?.push(structuredClone(event));
     });
     ctx.on("session/flush", (session: Session) => {
+      const failure = this.liveFailures.get(session.id);
+      if (failure !== undefined) return Promise.reject(failure);
       const handle = this.tracker.writerOf(session.id);
       if (handle === undefined) {
         const ready = this.liveReady.get(session.id);
@@ -1174,6 +1203,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
       const ready = this.liveReady.get(session.id);
       this.liveBuffers.delete(session.id);
       this.liveReady.delete(session.id);
+      this.liveFailures.delete(session.id);
+      this.liveDropWarned.delete(session.id);
       const closeHandle = (): void => {
         const handle = this.tracker.writerOf(session.id);
         if (handle === undefined) return;
@@ -1193,6 +1224,10 @@ export class SessionPersistenceRdb extends SessionPersistence {
     ctx.effect(
       () => async () => {
         await Promise.allSettled(this.liveReady.values());
+        this.liveBuffers.clear();
+        this.liveReady.clear();
+        this.liveFailures.clear();
+        this.liveDropWarned.clear();
         await this.tracker.closeAll();
 
         await this.close();

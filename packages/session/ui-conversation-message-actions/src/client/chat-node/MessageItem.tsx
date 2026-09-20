@@ -26,6 +26,7 @@ type UserImage = Extract<UserMessageNode["content"][number], { type: "image" }>;
 
 function contentParts(content: readonly unknown[]): {
   text: string;
+  texts: string[];
   images: { attachment: UserImage["attachment"] }[];
   rest: unknown[];
 } {
@@ -39,8 +40,8 @@ function contentParts(content: readonly unknown[]): {
       images.push({ attachment: (b as UserImage).attachment });
     } else rest.push(block);
   }
-  // 多块消息按空行拼回 raw markdown（新式提交就是单块原文）。
-  return { text: texts.join("\n\n"), images, rest };
+  // 多块消息按空行拼回 raw markdown（新式提交就是单块原文）；撤回回填用的是 texts（全部块）。
+  return { text: texts.join("\n\n"), texts, images, rest };
 }
 
 function UserStyleBubble({
@@ -100,6 +101,8 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   openSkill: (name: string) => void;
 } & InjectFace<SessionEditorFace>) {
   const data = node.data;
+  // 撤回回填的文本：该消息的全部文本块（撤回截断整条消息，只回填首块会丢内容）。
+  const recallTexts = contentParts(data.content).texts;
   const [confirmingRecall, setConfirmingRecall] = useState<EditableMessageBlock | null>(null);
   const [confirmingRetry, setConfirmingRetry] = useState(false);
   const turnLocation =
@@ -155,7 +158,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
                 onClick={() => {
                   const target = confirmingRecall;
                   setConfirmingRecall(null);
-                  void recall(target);
+                  void recall(target, recallTexts);
                 }}
               >
                 撤回并编辑

@@ -9,7 +9,6 @@ import {
   twoTurnLog,
   SessionIdBrand,
   SessionSeq,
-  type BranchTimeline,
   type SessionEvent,
 } from "@morlay/ui-conversation-message-actions/testing";
 
@@ -38,14 +37,14 @@ describe("SessionEditor retry", () => {
 
       const after = await rdb(ctx).load(SessionIdBrand("src"));
 
-      expect(after.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-      expect(after.events[6]?.type).toBe("session-branch/version");
+      expect(after.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(after.events.some((e) => e.type === "session-branch/version")).toBe(false);
     } finally {
       await dispose();
     }
   });
 
-  it("retry on a live session persists the version effect (same session id)", async () => {
+  it("retry on a live session stays in place (same session id)", async () => {
     const { ctx, editor, dispose } = await harness();
     try {
       ctx.sessions.create(SessionIdBrand("live"), { meta: meta("live"), seed: [...twoTurnLog()] });
@@ -60,8 +59,8 @@ describe("SessionEditor retry", () => {
       });
       expect(result.sessionId).toBe(SessionIdBrand("live"));
 
-      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-      expect(live.snapshotEvents()[6]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(live.snapshotEvents().some((e) => e.type === "session-branch/version")).toBe(false);
 
       const backend = (
         ctx.sessionPersistence as unknown as {
@@ -71,7 +70,7 @@ describe("SessionEditor retry", () => {
         }
       ).internals().backend;
       const head = await backend.getHead(SessionIdBrand("live"));
-      expect(head.fHeadSequence).toBe(6);
+      expect(head.fHeadSequence).toBe(5);
     } finally {
       await dispose();
     }
@@ -139,15 +138,17 @@ describe("SessionEditor retry", () => {
       expect(result.sessionId).toBe(SessionIdBrand("live"));
       expect(followups).toHaveLength(1);
 
-      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
-      expect(live.snapshotEvents()[7]?.type).toBe("session-branch/version");
+      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+      expect(live.snapshotEvents().some((e) => e.type === "session-branch/version")).toBe(false);
       disposeAgents();
     } finally {
       await dispose();
     }
   });
 
-  it("timeline keeps a single root after in-place retry", async () => {
+  // 就地重试仍是同一会话（session id 不变，不派生新会话）——读侧版本树已删除，
+  // 判据改为「会话记录里仍然只有这一个会话」。
+  it("in-place retry keeps a single session (no derived session)", async () => {
     const { ctx, editor, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -157,10 +158,10 @@ describe("SessionEditor retry", () => {
         turn: 2,
         cascade: "truncate",
       });
-      const timeline: BranchTimeline = await editor.timeline(SessionIdBrand("src"));
-      expect(timeline.root.sessionId).toBe(SessionIdBrand("src"));
 
-      expect(timeline.nodes).toHaveLength(1);
+      const persisted = ctx.sessionPersistence as SessionPersistenceSqlite;
+      const snapshots = await persisted.listSnapshots();
+      expect(snapshots.map((snapshot) => snapshot.header.id)).toEqual([SessionIdBrand("src")]);
     } finally {
       await dispose();
     }

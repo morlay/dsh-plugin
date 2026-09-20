@@ -7,6 +7,12 @@
 
 - **`balanceRewindPrefix`**（`balance.ts`）——含 step 配平自愈与 `keepOpenTail` 口径：
   `balance.spec.ts`。
-- **`buildTimeline`**（`timeline.ts`）——版本树投影与日志不变量：`timeline.spec.ts`。
 
-判据是**投影不变量**（版本树 / 时间线在 rewind、未闭合轮次、配平修复下的形状），不是实现细节。
+判据是**投影不变量**（保留前缀在 rewind、未闭合轮次、配平修复下的形状），不是实现细节。
+
+## 已删除的面
+
+版本树投影（`buildTimeline` / `timeline.spec.ts`）与版本效果事件一起删除，理由见
+[ADR-删除版本树投影并停止写版本效果](../adrs/20260920-删除版本树投影并停止写版本效果.md)：
+`session-branch/version` 的历史形状仍留在 `types.ts`（识别旧数据），但没有新事件、也没有读者。
+将来重建版本导航时按那条 ADR 的后果段走。

@@ -1,5 +1,5 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
-import type { BranchTimeline, CascadePolicy } from "@morlay/session-branch";
+import type { CascadePolicy } from "@morlay/session-branch";
 
 export interface EditOperation {
   action: "edit";
@@ -60,8 +60,6 @@ export interface SessionEditorResult {
 
   live?: boolean;
 }
-
-export type SessionEditorTimeline = BranchTimeline;
 
 export interface EditableMessageBlock {
   key: string;

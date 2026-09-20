@@ -9,7 +9,6 @@ import {
   type SessionHeader,
 } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import { type BranchTimeline } from "@morlay/session-branch";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { parseJsonlArtifact } from "@morlay/session-rdb/artifact";
 import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
@@ -17,7 +16,6 @@ import { SESSION_EDITOR_PATH } from "./shared.ts";
 import { SessionEditor } from "@morlay/ui-conversation-message-actions";
 
 export {
-  BranchTimeline,
   SESSION_EDITOR_PATH,
   Session,
   SessionIdBrand,

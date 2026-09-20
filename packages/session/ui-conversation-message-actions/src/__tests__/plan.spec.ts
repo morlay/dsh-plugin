@@ -301,7 +301,8 @@ describe("retryPlan", () => {
     );
     expect(plan.anchorSeq).toBe(0);
     expect(plan.queuedUsers).toHaveLength(2);
-    expect(plan.version.effect).toMatchObject({ operation: "retry", targetTurn: 1 });
+    // 版本效果事件已停止落库：plan 不再携带它
+    expect("version" in plan).toBe(false);
   });
 
   it("rejects retry of a turn without a user message", () => {
@@ -330,7 +331,7 @@ describe("rerollPlan", () => {
     const log = [...twoTurnLog(), ...turnLog(12, 3, { users: [{ id: "u1", text: "third" }] })];
     const plan = rerollPlan({ action: "reroll", sessionId }, closedTurns(log));
     expect(plan.anchorSeq).toBe(12);
-    expect(plan.version.effect).toMatchObject({ operation: "reroll", targetTurn: 3 });
+    expect("version" in plan).toBe(false);
     expect(plan.queuedUsers).toHaveLength(1);
   });
 

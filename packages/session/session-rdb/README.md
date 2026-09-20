@@ -60,7 +60,7 @@ type Config =
 除 `ctx.sessionPersistence` 外，本包还实现 `@morlay/session-branch` 的 provider
 抽象并**随插件自动注册 `ctx.sessionBranch`**（`SessionBranchRdb`），在不修改上游
 代码的前提下提供 `rewind / retry / fork` 的持久化闭环（原语：`forkFrom` 纯 append
-派生、`rewind` 后端事务截断、`timeline` 版本树投影）——语义、坐标论证与已知限制见
+派生、`rewind` 后端事务截断）——语义、坐标论证与已知限制见
 [分支能力](.agents/designs/20260917-分支能力.md)。
 
 上层编排（edit / reroll / retry / rewind / fork 完整功能）由
