@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-desktop-host",
   "version": "0.0.1-alpha.3",
-  "description": "Desktop host process for dsh-desktopify: boots the Web application as the desktop profile and reports its URL to the Electron shell over IPC — upstream apps/desktop-host with the Office skill mount removed.",
+  "description": "Desktop host process for dsh-desktopify: boots the desktop profile and serves it through an in-process, portless webServer over byte pipes — upstream apps/desktop-host with the web carrier taken over and the Office skill mount removed.",
   "keywords": [
     "desktop",
     "dsh",
@@ -16,12 +16,24 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
-    "lib"
+    "lib",
+    "config/desktop.cordis.patch.yml"
   ],
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
-    ".": "./lib/index.js",
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./webserver": {
+      "types": "./src/webserver.ts",
+      "default": "./lib/webserver.js"
+    },
+    "./wire": {
+      "types": "./src/wire.ts",
+      "default": "./lib/wire.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -31,12 +43,14 @@
   "dependencies": {
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*"
+    "@deepseek-ai/dsh-home-paths": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
-    "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {

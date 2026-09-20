@@ -1,9 +1,14 @@
 import type { IpcMainInvokeEvent } from "electron";
 
 export const DESKTOP_IPC = {
-  boot: "dsh-desktop:boot",
-  bootFailed: "dsh-desktop:boot-failed",
   directoryPick: "dsh-desktop:directory-pick",
+  nativeThemeSet: "dsh-desktop:native-theme-set",
+  /** 桌面流载体：页面把 Gateway 的流请求交给主进程，主进程用标准 Request 喂宿主。 */
+  streamOpen: "dsh-desktop:stream-open",
+  streamCancel: "dsh-desktop:stream-cancel",
+  streamChunk: "dsh-desktop:stream-chunk",
+  streamEnd: "dsh-desktop:stream-end",
+  streamError: "dsh-desktop:stream-error",
 } as const;
 
 export const SCHEME = "dsh-app";

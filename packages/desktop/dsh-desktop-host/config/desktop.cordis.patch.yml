@@ -1,0 +1,23 @@
+# 桌面形态的传输接管：上游 `webserver` 行在激活时 listen，桌面没有网络入口，
+# 这里禁用它并插入宿主内的无端口替身（同服务名 `webServer`、同一份路由面，
+# 请求由字节管道经 dispatch 喂进来）。其余行沿用 web-app bundle。
+#
+# `web-runtime` 的四项一并写全：patch 整块替换 config，没有端口可打印、也没有
+# 浏览器可交接；`surfaceContext` 关掉，免得提示段带一个并不存在的 URL。
+
+- id: webserver
+  disabled: true
+
+- insert:
+    - id: portless-webserver
+      name: '../lib/webserver.js'
+      config:
+        host: '127.0.0.1'
+        port: 0
+
+- id: web-runtime
+  config:
+    openBrowser: false
+    printUrl: false
+    surfaceContext: false
+    trustedHosts: []

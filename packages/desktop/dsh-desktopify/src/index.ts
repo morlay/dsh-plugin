@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain, protocol, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "electron";
 import type { BrowserWindowConstructorOptions } from "electron";
 import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
@@ -15,8 +15,8 @@ import {
   workspaceWithOverrides,
 } from "./profile-project.ts";
 import { SEED_RUNTIME_DIR_NAME, ensureSeedProfile } from "./seed.ts";
+import { DESKTOP_STREAM_PATH } from "@morlay/dsh-desktop-host/wire";
 import { shellWrappedSpawn } from "./shell-env.ts";
-import { authenticateWebHost, forwardWebRequest, serveWebDocument } from "./web-document.ts";
 
 let focusPrimaryWindow = (): void => {};
 
@@ -38,7 +38,8 @@ const WEB_FRONTEND_PACKAGE = "@deepseek-ai/dsh-web-frontend";
 
 const APPLICATION_URL = `${SCHEME}://app/`;
 
-const LOCAL_DOCUMENT_PATHS = ["/favicon.svg", "/manifest.webmanifest"];
+/** Windows 自绘标题栏高度（DIP），与 preload 写入的 CSS 变量一致。 */
+const WINDOWS_TITLEBAR_HEIGHT = 40;
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -47,15 +48,6 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function isLocalDocumentPath(pathname: string): boolean {
-  return (
-    pathname === "/" ||
-    pathname === "/index.html" ||
-    pathname.startsWith("/assets/") ||
-    LOCAL_DOCUMENT_PATHS.includes(pathname)
-  );
 }
 
 interface RuntimeResources {
@@ -96,7 +88,6 @@ function runtimeResources(): RuntimeResources {
   };
 }
 
-/** Install a freshly planted profile offline: link its runtime packages, then run bundled pnpm. */
 async function installPlantedProfile(
   profileDir: string,
   resources: RuntimeResources,
@@ -124,15 +115,29 @@ function developmentProject(): string | undefined {
   return resolve(configured);
 }
 
+/** 窗口形态：macOS 走 sidebar vibrancy + hiddenInset（交通灯落在侧边栏内），Windows 自绘 caption。 */
 function windowFrame(): Pick<
   BrowserWindowConstructorOptions,
-  "titleBarStyle" | "frame" | "titleBarOverlay"
+  "titleBarStyle" | "frame" | "titleBarOverlay" | "trafficLightPosition" | "vibrancy" | "visualEffectState" | "backgroundColor"
 > {
-  if (process.platform === "darwin") return { titleBarStyle: "hidden" };
+  if (process.platform === "darwin") {
+    return {
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 16, y: 18 },
+      vibrancy: "sidebar",
+      // 'active' 让失焦时的材质稳定；'followWindow' 会把侧边栏洗白。
+      visualEffectState: "active",
+      backgroundColor: "#00000000",
+    };
+  }
   if (process.platform === "win32") {
     return {
       titleBarStyle: "hidden",
-      titleBarOverlay: { color: "#00000000", symbolColor: "#888888" },
+      titleBarOverlay: {
+        height: WINDOWS_TITLEBAR_HEIGHT,
+        color: nativeTheme.shouldUseDarkColors ? "#1b1b1c" : "#f9fafb",
+        symbolColor: nativeTheme.shouldUseDarkColors ? "#f9fafb" : "#0f1115",
+      },
     };
   }
   return { frame: false };
@@ -160,12 +165,7 @@ function createWindow(
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
     const destination = new URL(url);
-    const current = new URL(window.webContents.getURL());
-    if (
-      destination.protocol !== `${SCHEME}:` &&
-      !(destination.protocol === "http:" && destination.origin === current.origin)
-    )
-      event.preventDefault();
+    if (destination.protocol !== `${SCHEME}:`) event.preventDefault();
   });
   return window;
 }
@@ -221,14 +221,12 @@ async function main(): Promise<void> {
   }
 
   let host: DesktopHostProcess | undefined;
-  let hostUrl: string | undefined;
-  let hostCookie: string | undefined;
-  let injections: readonly unknown[] = [];
   let mainWindow: BrowserWindow | undefined;
   let quitConfirmed = false;
   let quitPrompting = false;
   const appPreload = fileURLToPath(new URL("./preload-app.cjs", import.meta.url));
 
+  // 只有打包形态拦一次确认（开发形态关窗即退出）。
   const confirmQuit = async (window?: BrowserWindow): Promise<void> => {
     if (quitPrompting) return;
     quitPrompting = true;
@@ -255,6 +253,17 @@ async function main(): Promise<void> {
     }
   };
 
+  let hostFailureHandled = false;
+  // 底层服务挂掉后请求只会拿到 503；这里直接拦截：报出原因并退出，不让页面停在半死状态。
+  const handleHostFailure = (error: Error): void => {
+    if (hostFailureHandled) return;
+    hostFailureHandled = true;
+    console.error(`[dsh-shell] backend stopped: ${error.message}`);
+    dialog.showErrorBox("dsh desktop backend stopped", error.message);
+    quitConfirmed = true;
+    app.exit(1);
+  };
+
   const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
     const next = new DesktopHostProcess(
       resources.node,
@@ -275,77 +284,85 @@ async function main(): Promise<void> {
           ? { packageManager: { pnpm: resources.pnpm, nodeBin: resources.nodeBin } }
           : {}),
         spawn: shellWrappedSpawn,
+        onFailure: handleHostFailure,
       },
     );
-    const ready = await next.start();
-    hostCookie = await authenticateWebHost(ready.url);
-    hostUrl = ready.url;
-    if (ready.injections === undefined)
-      throw new Error("dsh desktop: Host did not provide boot injections");
-    injections = ready.injections;
+    await next.start();
     return next;
   };
 
-  protocol.handle(SCHEME, (request) => {
+  // 应用页面的全部请求（文档、资源、插件 bundle、API、流）都经字节管道交给宿主进程内的 webServer。
+  protocol.handle(SCHEME, async (request) => {
     const url = new URL(request.url);
-    if (url.hostname !== "app") return Promise.resolve(new Response(null, { status: 404 }));
-    if (isLocalDocumentPath(url.pathname)) return serveWebDocument(request, webDocumentRoot);
-    if (host === undefined || hostUrl === undefined || hostCookie === undefined)
-      return Promise.resolve(new Response(null, { status: 503 }));
-    return forwardWebRequest(request, hostUrl, hostCookie);
+    if (url.hostname !== "app") return new Response(null, { status: 404 });
+    const active = host;
+    if (active === undefined) return new Response("backend unavailable", { status: 503 });
+    if (!app.isPackaged) console.error(`[dsh-shell] recv ${request.method} ${url.pathname}`);
+    const response = await active.fetch(request);
+    // dev 形态打印每个应用请求：排查「页面 → 壳 → 宿主」断在哪一段。
+    if (!app.isPackaged)
+      console.error(`[dsh-shell] ${request.method} ${url.pathname} → ${String(response.status)}`);
+    return response;
   });
 
   installDesktopDirectoryPicker(() => mainWindow);
 
-  ipcMain.handle(DESKTOP_IPC.boot, (event) => {
+  // 桌面流载体：主进程自己构造 Request（body 是普通字符串流，宿主能正常读完），
+  // 把响应体逐块推回页面——页面 fetch 到自定义协议的 POST body 在 Chromium 上不可靠。
+  let nextStreamId = 1;
+  const activeStreams = new Map<number, AbortController>();
+  ipcMain.handle(DESKTOP_IPC.streamOpen, async (event, endpoint: unknown, payload: unknown) => {
     assertDesktopSender(event, ["app"]);
-    if (host === undefined || hostUrl === undefined)
-      throw new Error("dsh desktop: Host is unavailable");
-    return { injections, streamBaseUrl: new URL(hostUrl).origin };
+    if (typeof endpoint !== "string") throw new Error("dsh desktop: stream endpoint must be text");
+    const active = host;
+    if (active === undefined) throw new Error("dsh desktop: Host is unavailable");
+    if (!app.isPackaged) console.error(`[dsh-shell] stream open ${endpoint}`);
+    const id = nextStreamId++;
+    const abort = new AbortController();
+    activeStreams.set(id, abort);
+    const request = new Request(`http://127.0.0.1${DESKTOP_STREAM_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint, payload }),
+      signal: abort.signal,
+    });
+    void (async () => {
+      try {
+        const response = await active.fetch(request);
+        if (!app.isPackaged)
+          console.error(`[dsh-shell] stream ${endpoint} → ${String(response.status)}`);
+        event.sender.send(DESKTOP_IPC.streamChunk, { id, status: response.status });
+        if (response.body === null) {
+          event.sender.send(DESKTOP_IPC.streamEnd, { id });
+          return;
+        }
+        const decoder = new TextDecoder();
+        for await (const chunk of response.body) {
+          event.sender.send(DESKTOP_IPC.streamChunk, { id, data: decoder.decode(chunk) });
+        }
+        event.sender.send(DESKTOP_IPC.streamEnd, { id });
+      } catch (error) {
+        event.sender.send(DESKTOP_IPC.streamError, {
+          id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        activeStreams.delete(id);
+      }
+    })();
+    return id;
+  });
+  ipcMain.on(DESKTOP_IPC.streamCancel, (event, id: unknown) => {
+    if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
+    if (typeof id !== "number") return;
+    activeStreams.get(id)?.abort();
   });
 
-  ipcMain.handle(DESKTOP_IPC.bootFailed, (event, message: unknown) => {
-    assertDesktopSender(event, ["app"]);
-    if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame)
-      throw new Error("dsh desktop: rejected startup failure from a non-primary frame");
-    if (typeof message !== "string") throw new Error("dsh desktop: startup failure must be text");
-    console.error(new Error(message));
+  // 只有主窗口可以把自己的配色同步给原生材质。
+  ipcMain.on(DESKTOP_IPC.nativeThemeSet, (event, source: unknown) => {
+    if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
+    if (source === "light" || source === "dark" || source === "system") nativeTheme.themeSource = source;
   });
-
-  session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ["ws://127.0.0.1/*"] },
-    (details, callback) => {
-      if (
-        hostUrl === undefined ||
-        hostCookie === undefined ||
-        details.webContentsId !== mainWindow?.webContents.id
-      ) {
-        callback({});
-        return;
-      }
-      const target = new URL(hostUrl);
-      const requested = new URL(details.url);
-      if (requested.host !== target.host) {
-        callback({});
-        return;
-      }
-      const headers = Object.fromEntries(
-        Object.entries(details.requestHeaders).map(([name, value]) => [name.toLowerCase(), value]),
-      );
-      if (headers.origin !== `${SCHEME}://app`) {
-        callback({ cancel: true });
-        return;
-      }
-      callback({
-        requestHeaders: {
-          ...headers,
-          origin: target.origin,
-          cookie: hostCookie,
-          "sec-fetch-site": "same-origin",
-        },
-      });
-    },
-  );
 
   const createMainWindow = (): BrowserWindow => {
     const window = createWindow(appPreload, config.window);
@@ -354,7 +371,7 @@ async function main(): Promise<void> {
       if (!window.isDestroyed()) window.show();
     });
     window.on("close", (event) => {
-      if (quitConfirmed) return;
+      if (!app.isPackaged || quitConfirmed) return;
       event.preventDefault();
       void confirmQuit(window);
     });
@@ -390,7 +407,7 @@ async function main(): Promise<void> {
     app.quit();
   });
   app.on("before-quit", (event) => {
-    if (!quitConfirmed) {
+    if (app.isPackaged && !quitConfirmed) {
       event.preventDefault();
       void confirmQuit();
       return;

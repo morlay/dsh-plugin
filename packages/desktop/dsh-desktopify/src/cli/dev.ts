@@ -33,6 +33,7 @@ import {
   buildRoot,
   desktopAgentPresets,
   desktopConfig,
+  devStoreHome,
   devWebConfig,
   dshVersion as readDshVersion,
   findWorkspaceRoot,
@@ -293,6 +294,7 @@ async function launchElectron(
   projectDir: string,
   buildRootDir: string,
   tsxImport: boolean,
+  home: string,
 ): Promise<void> {
   const require = createRequire(import.meta.url);
   const electron: unknown = require("electron");
@@ -302,7 +304,7 @@ async function launchElectron(
   const rendererPort = debugPort("DSH_DESKTOP_RENDERER_DEBUG_PORT", 9222);
   const hostPort = debugPort("DSH_DESKTOP_HOST_INSPECT_PORT", 9230);
   const developmentRoot = join(buildRootDir, "development");
-  const home = resolve(join(developmentRoot, "home"));
+  // 数据面与 `dev --web` 共用工作区 store；只有浏览器数据留在构建目录里。
   const userData = join(developmentRoot, "electron-user-data");
 
   const systemNode = process.env.DSH_DESKTOP_NODE_BINARY ?? process.env.npm_node_execpath ?? "node";
@@ -349,7 +351,7 @@ export async function runDev(options: DevOptions): Promise<void> {
   const buildRootDir = buildRoot(workspace);
   await buildShell();
   if (options.web) {
-    const home = join(workspace, ".dsh-store");
+    const home = devStoreHome(workspace);
     const profileDir = await prepareWebProfile(workspace, input);
     const port = process.env.PORT ?? "3080";
     const entry = await cliEntry(input);
@@ -403,5 +405,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(projectDir, buildRootDir, hasTsx(projectDir, projectDir));
+  await launchElectron(projectDir, buildRootDir, hasTsx(projectDir, projectDir), devStoreHome(workspace));
 }

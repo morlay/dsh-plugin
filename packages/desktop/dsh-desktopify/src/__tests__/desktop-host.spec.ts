@@ -41,17 +41,35 @@ function payloadDir(): string {
   return PAYLOAD.dir;
 }
 
+/** 部署里 host 的四样载荷：入口、无端口 webServer（patch 行按相对路径加载）、wire 协议与桌面 patch。
+ *
+ * host 启动时读 `../config/desktop.cordis.patch.yml`（`patchFiles`），patch 行再加载 `../lib/webserver.js`，
+ * 所以缺任一样 host 都起不来——落位时必须齐全。
+ */
+const DEPLOYED_HOST_FILES: readonly (readonly string[])[] = [
+  ["lib", "index.js"],
+  ["lib", "webserver.js"],
+  ["lib", "wire.js"],
+  ["config", "desktop.cordis.patch.yml"],
+];
+
+async function expectDeployedHostFiles(root: string): Promise<void> {
+  for (const segments of DEPLOYED_HOST_FILES) {
+    expect((await lstat(join(root, ...segments))).isFile()).toBe(true);
+  }
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
 describe("desktop host 载荷", () => {
-  it("载荷来自工具的依赖包，入口按 lib/index.js 落位", async () => {
+  it("载荷来自工具的依赖包，启动要用的四样文件都随包", async () => {
     const dir = payloadDir();
 
     expect(PAYLOAD?.version).not.toBe("9.9.9");
     expect(dir).toContain("dsh-desktop-host");
-    expect((await lstat(join(dir, "lib", "index.js"))).isFile()).toBe(true);
+    await expectDeployedHostFiles(dir);
   });
 
   it("把闭包里已有的旧副本换成工具自己的载荷", async () => {
@@ -65,6 +83,9 @@ describe("desktop host 载荷", () => {
       version?: string;
     };
     expect(manifest.version).not.toBe("9.9.9");
+    // 落位的是按 manifest `files` 复制的那一份：`lib/` 全部产物与 `config/` 都要在，
+    // 否则部署里的 host 读不到桌面 patch。
+    await expectDeployedHostFiles(stale);
   });
 
   it("把指向别处的载荷链接换成自己的副本", async () => {

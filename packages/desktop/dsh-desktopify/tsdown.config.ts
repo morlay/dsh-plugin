@@ -23,9 +23,10 @@ export default defineConfig([
     clean: true,
     // 内联进来的 @local/devkit 客户端打包面要 rolldown / lightningcss：两者都是公开包，
     // 按既有边界留在产物外（并在清单里声明），否则它们自己的原生二进制解析不到。
+    // host 变体只在部署里以整包落位（壳从磁盘按名解析它），它的 wire 入口因此内联进壳产物。
     deps: {
       neverBundle: ["electron", "lightningcss", "rolldown"],
-      alwaysBundle: isLocalPackage,
+      alwaysBundle: (id: string) => isLocalPackage(id) || id.startsWith("@morlay/dsh-desktop-host"),
     },
     exports: {
       packageJson: true,

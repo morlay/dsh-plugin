@@ -6,6 +6,7 @@ import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
 import {
   appProfileBundles,
   buildRoot,
+  devStoreHome,
   desktopConfig,
   dshVersion,
   findWorkspaceRoot,
@@ -107,6 +108,8 @@ describe("workspace layout", () => {
 
     expect(buildRoot(workspace)).toBe(join(workspace, "node_modules", ".dsh-desktopify"));
     expect(buildRoot(workspace).startsWith(workspace + sep)).toBe(true);
+    // dev（Electron）与 dev --web 共用工作区 store。
+    expect(devStoreHome(workspace)).toBe(join(workspace, ".dsh-store"));
   });
 
   it("finds the nearest pnpm workspace root above the app", async () => {

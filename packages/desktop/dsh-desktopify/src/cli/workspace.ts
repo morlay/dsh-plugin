@@ -169,6 +169,11 @@ export function buildRoot(workspace: string): string {
   return join(workspace, "node_modules", ".dsh-desktopify");
 }
 
+/** dev 形态的数据面：`dev`（Electron）与 `dev --web` 共用工作区的同一个 store（profile 名不同，互不冲突）。 */
+export function devStoreHome(workspace: string): string {
+  return join(workspace, ".dsh-store");
+}
+
 export function cleanDeployedSpec(spec: string): string {
   const suffix = spec.indexOf("(");
   return suffix === -1 ? spec : spec.slice(0, suffix);

@@ -77,4 +77,38 @@ describe("official package copy", () => {
     expect((await readdir(target)).sort()).toEqual(["dist", "package.json"]);
     expect(await exists(join(target, "src"))).toBe(false);
   });
+
+  it("keeps a whitelisted plain file that sits outside a whitelisted directory", async () => {
+    const root = await workDir();
+    // 桌面 host 的载荷形状：`lib/` 是产物目录，桌面 patch 在 `lib/` 之外的单文件条目上。
+    // 部署里的 host 启动时读 `../config/desktop.cordis.patch.yml`，两个条目缺一就起不来。
+    const source = join(root, "packages", "desktop", "dsh-desktop-host");
+    await manifest(source, {
+      name: "@morlay/dsh-desktop-host",
+      version: "0.0.1",
+      files: ["lib", "config/desktop.cordis.patch.yml"],
+    });
+    await touch(
+      source,
+      "lib/index.js",
+      "lib/webserver.js",
+      "lib/wire.js",
+      "config/desktop.cordis.patch.yml",
+      "src/index.ts",
+    );
+
+    const target = join(root, "closure", "@morlay", "dsh-desktop-host");
+    await copyPackageTree(source, target);
+
+    expect((await readdir(target)).sort()).toEqual(["config", "lib", "package.json"]);
+    for (const path of [
+      "lib/index.js",
+      "lib/webserver.js",
+      "lib/wire.js",
+      "config/desktop.cordis.patch.yml",
+    ]) {
+      expect(await exists(join(target, ...path.split("/")))).toBe(true);
+    }
+    expect(await exists(join(target, "src"))).toBe(false);
+  });
 });

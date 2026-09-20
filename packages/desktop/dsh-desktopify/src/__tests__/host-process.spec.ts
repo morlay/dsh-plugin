@@ -3,6 +3,13 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import {
+  DESKTOP_HOST_PROTOCOL_VERSION,
+  DesktopHostRequestDecoder,
+  encodeDesktopResponseData,
+  encodeDesktopResponseEnd,
+  encodeDesktopResponseStart,
+} from "@morlay/dsh-desktop-host/wire";
 import { DesktopHostProcess, type DesktopHostOptions } from "../host-process.ts";
 
 interface SpawnCall {
@@ -14,12 +21,18 @@ interface SpawnCall {
 
 interface FakeChild extends ChildProcess {
   readonly sent: unknown[];
+  readonly requestPipe: PassThrough;
+  readonly responsePipe: PassThrough;
 }
 
 function fakeChild(): FakeChild {
   const child = new EventEmitter() as FakeChild;
+  const requestPipe = new PassThrough();
+  const responsePipe = new PassThrough();
   Object.assign(child, {
     sent: [] as unknown[],
+    requestPipe,
+    responsePipe,
     stderr: new PassThrough(),
     stdout: new PassThrough(),
     connected: true,
@@ -30,6 +43,9 @@ function fakeChild(): FakeChild {
       return true;
     },
   });
+  Object.assign(child, {
+    stdio: [null, null, null, requestPipe, responsePipe, null],
+  });
   return child;
 }
 
@@ -38,7 +54,7 @@ function harness(options: DesktopHostOptions = {}, inspectPort?: number) {
   const child = fakeChild();
   const host = new DesktopHostProcess(
     "/runtime/node/node",
-    "/app/seed/profiles/desktop",
+    "/app/seed",
     "/home/profiles/desktop",
     inspectPort,
     {
@@ -57,167 +73,141 @@ function harness(options: DesktopHostOptions = {}, inspectPort?: number) {
   return { calls, child, host };
 }
 
-const ENTRY = join(
-  "/app/seed/profiles/desktop",
-  "node_modules",
-  "@morlay",
-  "dsh-desktop-host",
-  "lib",
-  "index.js",
-);
+const ENTRY = join("/app/seed", "node_modules", "@morlay", "dsh-desktop-host", "lib", "index.js");
 
-describe("DesktopHostProcess launch contract", () => {
-  it("runs the bundled host entry in Node mode with the runtime profile argv", async () => {
-    const { calls, child, host } = harness({
-      primaryRuntime: "/app/runtime/primary-runtime",
-      profileResolution: "runtime",
-      packageManager: { pnpm: "/app/runtime/pnpm/bin/pnpm.mjs", nodeBin: "/app/runtime/bin" },
-    });
-    const ready = host.start();
-    child.emit("message", {
-      type: "ready",
-      url: "http://127.0.0.1:19387/?token=abc",
-      injections: [{ name: "boot" }],
-    });
+function ready(child: FakeChild): void {
+  child.emit("message", { type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION });
+}
 
-    await expect(ready).resolves.toEqual({
-      url: "http://127.0.0.1:19387/?token=abc",
-      injections: [{ name: "boot" }],
-    });
+/** 从请求管道读到至少 count 条完整帧（帧写入跨 tick）。 */
+async function readFrames(
+  child: FakeChild,
+  decoder: DesktopHostRequestDecoder,
+  count: number,
+): Promise<ReturnType<DesktopHostRequestDecoder["push"]>> {
+  const frames: ReturnType<DesktopHostRequestDecoder["push"]> = [];
+  for (let attempt = 0; attempt < 100 && frames.length < count; attempt += 1) {
+    const chunk = child.requestPipe.read() as Buffer | null;
+    if (chunk !== null) frames.push(...decoder.push(chunk));
+    else await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+  return frames;
+}
+
+describe("桌面 host 子进程", () => {
+  it("按管道形态启动：入口路径、argv 顺序与五元组 stdio", async () => {
+    const { calls, child, host } = harness(
+      {
+        primaryRuntime: "/app/runtime/primary-runtime",
+        profileResolution: "runtime",
+        packageManager: { pnpm: "/app/runtime/pnpm/bin/pnpm.mjs", nodeBin: "/app/runtime/bin" },
+        nodeArgs: ["--import=tsx/esm"],
+      },
+      9230,
+    );
+    const started = host.start();
+    expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call?.command).toBe("/runtime/node/node");
-    expect(call?.args).toEqual([
+    expect(call?.stdio).toEqual(["ignore", "pipe", "pipe", "pipe", "pipe", "ipc"]);
+    expect(call?.cwd).toBe("/home/profiles/desktop");
+    expect(call?.args.slice(0, 3)).toEqual([
       "--expose-internals",
+      "--inspect=127.0.0.1:9230",
+      "--import=tsx/esm",
+    ]);
+    expect(call?.args.slice(3)).toEqual([
       ENTRY,
-      "/app/seed/profiles/desktop",
+      "/app/seed",
       "/home/profiles/desktop",
       "/app/runtime/primary-runtime",
       "runtime",
       "/app/runtime/pnpm/bin/pnpm.mjs",
       "/app/runtime/bin",
     ]);
-    expect(call?.cwd).toBe("/home/profiles/desktop");
-    expect(call?.stdio).toEqual(["ignore", "pipe", "pipe", "ipc"]);
+    ready(child);
+    await expect(started).resolves.toEqual({ protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION });
+    const stopped = host.stop();
+    child.emit("close", 0);
+    await stopped;
   });
 
-  it("keeps the inspect flag and loader arguments before the entry and links by default", async () => {
-    const { calls, child, host } = harness({ nodeArgs: ["--import=tsx/esm"] }, 9230);
-    const ready = host.start();
-    child.emit("message", { type: "ready", url: "http://127.0.0.1:19387/" });
-    await ready;
-
-    const call = calls[0];
-    expect(call?.args).toEqual([
-      "--expose-internals",
-      "--inspect=127.0.0.1:9230",
-      "--import=tsx/esm",
-      ENTRY,
-      "/app/seed/profiles/desktop",
-      "/home/profiles/desktop",
-      join("/app/seed/profiles/desktop", "..", "runtime", "primary-runtime"),
-      "link",
-    ]);
-  });
-
-  it("passes the caller environment with private launcher variables removed", async () => {
-    const previous = process.env.DSH_DESKTOP_SEED_DIR;
-    process.env.DSH_DESKTOP_SEED_DIR = "/app/seed";
-    try {
-      let env: unknown;
-      const child = fakeChild();
-      const host = new DesktopHostProcess(
-        "/runtime/node/node",
-        "/app/seed/profiles/desktop",
-        "/home/profiles/desktop",
-        undefined,
-        {
-          extraEnv: { DSH_HOME: "/home" },
-          spawn: ((_command: string, _args: readonly string[], options: { env?: unknown }) => {
-            env = options.env;
-            return child;
-          }) as never,
-        },
-      );
-      const ready = host.start();
-      child.emit("message", { type: "ready", url: "http://127.0.0.1:19387/" });
-      await ready;
-
-      const record = env as Record<string, string>;
-      expect(record.DSH_HOME).toBe("/home");
-      expect(record.DSH_DESKTOP_SEED_DIR).toBeUndefined();
-    } finally {
-      if (previous === undefined) delete process.env.DSH_DESKTOP_SEED_DIR;
-      else process.env.DSH_DESKTOP_SEED_DIR = previous;
-    }
-  });
-
-  it("surfaces a fatal IPC event as a start failure", async () => {
+  it("ready 之前报 fatal 时启动失败", async () => {
     const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "fatal", message: "profile bundle missing" });
-    await expect(ready).rejects.toThrow(/profile bundle missing/u);
+    const started = host.start();
+    child.emit("message", { type: "fatal", message: "composition exploded" });
+    await expect(started).rejects.toThrow("composition exploded");
   });
 
-  it("rejects an invalid IPC event", async () => {
+  it("GET 请求写出 start 帧并把响应解码成 Response", async () => {
     const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "ready" });
-    await expect(ready).rejects.toThrow(/invalid IPC event/u);
-  });
+    const started = host.start();
+    ready(child);
+    await started;
 
-  it("rejects a shutdown acknowledgement nobody requested", async () => {
-    const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "shutdown-complete" });
-    await expect(ready).rejects.toThrow(/unrequested shutdown/u);
-  });
-});
-
-describe("DesktopHostProcess control", () => {
-  it("answers update task control requests with the Host result", async () => {
-    const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "ready", url: "http://127.0.0.1:19387/" });
-    await ready;
-
-    const inspecting = host.updateTasks("inspect");
-    const request = child.sent.at(-1) as { type: string; requestId: number; action: string };
-    expect(request.type).toBe("update-tasks");
-    expect(request.action).toBe("inspect");
-    child.emit("message", { type: "update-tasks", requestId: request.requestId, active: true });
-
-    await expect(inspecting).resolves.toBe(true);
-  });
-
-  it("reports a failed control request as an error", async () => {
-    const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "ready", url: "http://127.0.0.1:19387/" });
-    await ready;
-
-    const inspecting = host.updateTasks("lock");
-    const request = child.sent.at(-1) as { requestId: number };
-    child.emit("message", {
-      type: "update-tasks",
-      requestId: request.requestId,
-      active: true,
-      error: "Host is stopping",
+    const pending = host.fetch(new Request("dsh-app://app/api/list"));
+    const frames = await readFrames(child, new DesktopHostRequestDecoder(), 1);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({
+      type: "start",
+      streamId: 1,
+      url: "dsh-app://app/api/list",
+      method: "GET",
+      hasBody: false,
     });
 
-    await expect(inspecting).rejects.toThrow(/Host is stopping/u);
+    child.responsePipe.write(
+      encodeDesktopResponseStart(1, {
+        status: 200,
+        headers: [["content-type", "application/json"]],
+        hasBody: true,
+      }),
+    );
+    child.responsePipe.write(encodeDesktopResponseData(1, Buffer.from("[1]")));
+    child.responsePipe.write(encodeDesktopResponseEnd(1));
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json");
+    await expect(response.text()).resolves.toBe("[1]");
+    const stopped = host.stop();
+    child.emit("close", 0);
+    await stopped;
   });
 
-  it("requests shutdown and waits for the child to close", async () => {
+  it("带 body 的请求写出 data 与 end 帧", async () => {
     const { child, host } = harness();
-    const ready = host.start();
-    child.emit("message", { type: "ready", url: "http://127.0.0.1:19387/" });
-    await ready;
+    const started = host.start();
+    ready(child);
+    await started;
 
-    const stopping = host.stop();
-    expect(child.sent).toContainEqual({ type: "shutdown" });
-    child.emit("message", { type: "shutdown-complete" });
+    const pending = host.fetch(
+      new Request("dsh-app://app/api/save", { method: "POST", body: "payload" }),
+    );
+    const frames = await readFrames(child, new DesktopHostRequestDecoder(), 3);
+    expect(frames.map((frame) => frame.type)).toEqual(["start", "data", "end"]);
+    expect(frames[0]).toMatchObject({ method: "POST", hasBody: true });
+    expect((frames[1] as { data: Buffer }).data.toString()).toBe("payload");
+
+    child.responsePipe.write(
+      encodeDesktopResponseStart(1, { status: 204, headers: [], hasBody: false }),
+    );
+    child.responsePipe.write(encodeDesktopResponseEnd(1));
+    expect((await pending).status).toBe(204);
+    const stopped = host.stop();
     child.emit("close", 0);
+    await stopped;
+  });
 
-    await expect(stopping).resolves.toBeUndefined();
+  it("stop 通过 IPC 请求收尾并关掉请求管道写端", async () => {
+    const { child, host } = harness();
+    const started = host.start();
+    ready(child);
+    await started;
+    const stopped = host.stop();
+    child.emit("close", 0);
+    await stopped;
+    expect(child.sent).toEqual([{ type: "shutdown" }]);
+    expect(child.requestPipe.destroyed).toBe(true);
   });
 });
