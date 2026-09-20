@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-tool-gating",
-  "version": "0.0.1-alpha.1",
+  "version": "0.0.1-alpha.2",
   "description": "Gates the standard preset's model-visible tool catalog: a small always-on base group plus an enable_tools tool that unlocks further groups on request, so unused tool schemas and guidance never enter the prompt.",
   "keywords": [
     "context-budget",

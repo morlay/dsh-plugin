@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-reference-injection",
-  "version": "0.0.2-alpha.4",
+  "version": "0.0.2-alpha.5",
   "description": "Expands a referenced skill (`skill:name`) into an injected <skill_content> instructions message and a referenced `@path` into a read-shaped file content block at the pre-step boundary.",
   "keywords": [
     "context",
