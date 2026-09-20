@@ -588,4 +588,27 @@ describe("档位重建", () => {
 
     expect(unlockedFromSession(session, [])).toEqual([]);
   });
+
+  it("Agent Teams 规则按档位给：team 组未启用时不注入，启用后给中文版", async () => {
+    const { ctx, agent } = await mount({ reminder: true });
+    // `tool-agent-team` 在 agent 作用域注册它，所以只能改投影（遮蔽会撞同层重名）。
+    await agent.ctx.inject(["systemPrompt"], (scope) => {
+      scope.systemPrompt.section({
+        name: "team:policy",
+        order: scope.systemPrompt.getSectionOrder("TEAM_POLICY"),
+        text: "TEAM_POLICY_MARKER",
+      });
+    });
+
+    const before = reminderText(await preStep(ctx, agent, [prompt("任务")]));
+    expect(before).not.toContain("TEAM_POLICY_MARKER");
+    expect(before).not.toContain("Agent Teams 规则");
+
+    await enable(ctx, agent, ["team"]);
+
+    const after = reminderText(await preStep(ctx, agent, [prompt("继续")]));
+    expect(after).toContain("Agent Teams 规则");
+    expect(after).toContain("只在用户明确要求时才招募队友");
+    expect(after).not.toContain("TEAM_POLICY_MARKER");
+  });
 });

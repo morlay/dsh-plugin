@@ -69,6 +69,43 @@ export const REPLACED_SECTION_TEXTS: Readonly<Record<string, string>> = {
     "默认只用文件名，需要精确位置时在标签后接 `:24` 或 `:24–30`（不带 `#` 或 `L`）。",
 };
 
+/** Agent Teams 协作规则的 section 名：`tool-agent-team` 注册在 agent 作用域，只能改投影。 */
+export const TEAM_POLICY_SECTION = "team:policy";
+
+/**
+ * 那段规则的中文版（要点不变：只在明确要求时招募、写范围互不重叠、任务板工作流、Lead 等齐队友）。
+ * 只在 team 组启用时给；未启用时置空，等于不注入。
+ */
+export const TEAM_POLICY_TEXT = [
+  "【Agent Teams 规则】只在用户明确要求时才招募队友。",
+  "Lead 与队友共享同一工作目录与文件系统，改动彼此立即可见：把写工作按互不重叠的范围分给各成员，",
+  "并在共享任务里记下预期写范围；范围重叠只是提示、不是锁。",
+  "改文件优先用 read/edit/write；遇到 FS_STALE_VERSION 时先读回当前内容、把改动重贴到新内容上再重试。",
+  "bash、格式化器、代码生成器与脚本不受文件版本守卫保护：要显式协调，并由 Lead 复核最终 diff 再跑测试。",
+  "send_message 会在目标的最近一步边界插入消息，投递成功即持久，不必重发。",
+  "共享任务的工作流是 list → get → 用当前 revision claim → 做事 → complete；任务就绪不会自动唤醒负责人。",
+  "wait_agent 只观察调用之后的变更、不唤醒成员，没有其他成员能产生变更时立即返回 noProgress；",
+  "唤醒或超时后重新 list。用 wait_agent 前先 list_agents 确认目标在跑，不在跑就先 send_message。",
+  "Lead 必须等齐所需队友后才能给出最终答复。",
+].join("\n");
+
+/**
+ * 投影里要替换成的文本；未列出的 section 原样保留。
+ *
+ * - 固定映射的两段（`@` 引用语义、输出链接规范）永远替换，文本不随会话变；
+ * - `team:policy` 跟档位走：team 组启用给中文规则，未启用给空串（等于不注入那段规则）。
+ */
+export function replacementText(
+  name: string,
+  unlocked: readonly GroupKey[] | undefined,
+): string | undefined {
+  if (name === TEAM_POLICY_SECTION) {
+    if (unlocked === undefined) return undefined;
+    return unlocked.includes("team") ? TEAM_POLICY_TEXT : "";
+  }
+  return REPLACED_SECTION_TEXTS[name];
+}
+
 export const ENABLE_TOOLS_DESCRIPTION = [
   "启用尚未启用的能力组。",
   "工具目录已列出全部工具，但未启用的组会被拒绝执行；先看能力目录判断本任务需要哪些组，一次性全部传入。",

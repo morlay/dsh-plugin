@@ -8,10 +8,10 @@ import type { Session } from "@deepseek-ai/dsh-session";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import {
   ENABLE_TOOLS_DESCRIPTION,
-  REPLACED_SECTION_TEXTS,
   renderCatalog,
   renderEnableResult,
   renderLevel,
+  replacementText,
 } from "./catalog.ts";
 import {
   BASE_GROUP_KEY,
@@ -213,13 +213,15 @@ export function apply(ctx: Context, config: Config): void {
     },
   });
 
-  ctx.on("system-prompt/assemble", async (_assembly, _context, next) => {
+  ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
     const result = await next();
+    const agent = context.agent;
+    const unlocked = agent === undefined ? undefined : states.get(agent)?.unlocked;
     return {
       ...result,
       tools: shortenTools(result.tools),
       sections: result.sections.map((section) => {
-        const text = REPLACED_SECTION_TEXTS[section.name];
+        const text = replacementText(section.name, unlocked);
         return text === undefined ? section : { ...section, text };
       }),
     };
