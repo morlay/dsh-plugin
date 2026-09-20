@@ -167,13 +167,24 @@ describe("fileReferencesIn", () => {
 
 const TWO_LINES = "import a\nconst b = 1\n";
 
-function injectedText(decision: PreStepDecision, index: number): string {
+// 注入消息的两块：先说这是什么（模型面文案逐字锁在这里），再是 read 同形信封。
+const REMINDER =
+  "<system-reminder>下面是本步刚读取的最新文件内容，可直接使用；同一范围不必再用 read 工具重复读取，需要窗口之外的行时才续读。</system-reminder>";
+
+function injectedBlocks(decision: PreStepDecision, index: number): readonly string[] {
   if (decision.kind !== "enter") throw new Error("expected enter");
   const message = decision.messages[index];
   if (message === undefined) throw new Error(`no message at ${index}`);
-  const block = message.content[0];
-  if (block === undefined || block.type !== "text") throw new Error("expected one text block");
-  return block.text;
+  return message.content.map((block) => {
+    if (block.type !== "text") throw new Error("expected text blocks only");
+    return block.text;
+  });
+}
+
+function injectedEnvelope(decision: PreStepDecision, index: number): string {
+  const blocks = injectedBlocks(decision, index);
+  if (blocks.length !== 2) throw new Error(`expected two blocks at ${index}`);
+  return blocks[1]!;
 }
 
 function envelope(path: string, body: readonly string[]): string {
@@ -195,6 +206,7 @@ describe("file content injection", () => {
     expect(decision.messages).toHaveLength(2);
     const injected = decision.messages[1]!;
     expect(injected.content).toEqual([
+      { type: "text", text: REMINDER },
       {
         type: "text",
         text: envelope("src/a.ts", [
@@ -210,47 +222,47 @@ describe("file content injection", () => {
 
   it("honors the referenced line window", async () => {
     const listener = mount({}, { "src/a.ts": { content: TWO_LINES } });
-    expect(injectedText(await step(listener, [userMessage("@src/a.ts#L1-L1")]), 1)).toBe(
+    expect(injectedEnvelope(await step(listener, [userMessage("@src/a.ts#L1-L1")]), 1)).toBe(
       envelope("src/a.ts", [
         "1: import a",
         "",
         "(Showing lines 1-1 of 2. Use offset=2 to continue.)",
       ]),
     );
-    expect(injectedText(await step(listener, [userMessage("@src/a.ts:2")]), 1)).toBe(
+    expect(injectedEnvelope(await step(listener, [userMessage("@src/a.ts:2")]), 1)).toBe(
       envelope("src/a.ts", ["2: const b = 1", "", "(End of file - total 2 lines)"]),
     );
   });
 
   it("caps one long line and the whole window the way the read tool does", async () => {
     const long = mount({}, { "src/long.ts": { content: `${"x".repeat(3000)}\n` } });
-    expect(injectedText(await step(long, [userMessage("@src/long.ts")]), 1)).toContain(
+    expect(injectedEnvelope(await step(long, [userMessage("@src/long.ts")]), 1)).toContain(
       "... (line truncated to 2000 chars)",
     );
 
     const many = mount({}, { "src/many.ts": { content: `${"y".repeat(1000)}\n`.repeat(60) } });
-    expect(injectedText(await step(many, [userMessage("@src/many.ts")]), 1)).toContain(
+    expect(injectedEnvelope(await step(many, [userMessage("@src/many.ts")]), 1)).toContain(
       "(Output capped. Showing lines 1-",
     );
   });
 
   it("reads a size-less file through the streaming path", async () => {
     const listener = mount({}, { "src/a.ts": { content: TWO_LINES, unknownSize: true } });
-    expect(injectedText(await step(listener, [userMessage("@src/a.ts")]), 1)).toContain(
+    expect(injectedEnvelope(await step(listener, [userMessage("@src/a.ts")]), 1)).toContain(
       "1: import a",
     );
   });
 
   it("injects the envelope of an empty file", async () => {
     const listener = mount({}, { "src/empty.ts": { content: "" } });
-    expect(injectedText(await step(listener, [userMessage("@src/empty.ts")]), 1)).toBe(
+    expect(injectedEnvelope(await step(listener, [userMessage("@src/empty.ts")]), 1)).toBe(
       envelope("src/empty.ts", ["(End of file - total 0 lines)"]),
     );
   });
 
   it("injects a file the picker quoted", async () => {
     const listener = mount({}, { "my file.ts": { content: TWO_LINES } });
-    expect(injectedText(await step(listener, [userMessage('看 @"my file.ts"')]), 1)).toBe(
+    expect(injectedEnvelope(await step(listener, [userMessage('看 @"my file.ts"')]), 1)).toBe(
       envelope("my file.ts", [
         "1: import a",
         "2: const b = 1",
