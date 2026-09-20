@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { PreStepDecision } from "@deepseek-ai/dsh-agent";
 import type {} from "@deepseek-ai/dsh-fs";
-import { createUserMessage } from "@deepseek-ai/dsh-llm";
+import { createUserMessage, type ContentBlock } from "@deepseek-ai/dsh-llm";
 import type { UserMessage } from "@deepseek-ai/dsh-session";
 import {
   isUserInvocable,
@@ -9,18 +9,16 @@ import {
   type SkillInvocationSource,
 } from "@deepseek-ai/dsh-skill";
 import { readFileContent } from "./file-content.ts";
-import { fileReferencesIn, skillNamesIn } from "./links.ts";
+import { fileReferencesIn, skillNamesIn, type FileReference } from "./links.ts";
 
 export const name = "reference-injection";
 
 export const inject = ["skills"];
 
-// 用户显式引用的文件内容注入：`path` 指出引用的是哪个文件，行号窗口照引用原样记录。
+// 用户显式引用的文件内容注入：`references` 按注入顺序列出这条消息里实际装了的引用（含行窗口）。
 export interface FileReferenceSource {
   readonly kind: "file-reference";
-  readonly path: string;
-  readonly lineStart?: number;
-  readonly lineEnd?: number;
+  readonly references: readonly FileReference[];
 }
 
 declare module "@deepseek-ai/dsh-llm" {
@@ -63,24 +61,21 @@ export function apply(ctx: Context): void {
     }
     // `ctx.fs` 是可选能力：没有文件系统的部署里 skill 注入照常，文件引用保持普通文本。
     const fs = ctx.get("fs");
+    const read: FileReference[] = [];
+    const envelopes: ContentBlock[] = [];
     for (const reference of files) {
       const envelope =
         fs === undefined ? undefined : await readFileContent(fs, reference, { cwd, signal });
       signal.throwIfAborted();
       if (envelope === undefined) continue;
-      const source: FileReferenceSource = {
-        kind: "file-reference",
-        path: reference.path,
-        ...(reference.lineStart === undefined ? {} : { lineStart: reference.lineStart }),
-        ...(reference.lineEnd === undefined ? {} : { lineEnd: reference.lineEnd }),
-      };
+      read.push(reference);
+      envelopes.push({ type: "text", text: envelope });
+    }
+    if (read.length > 0) {
       injections.push(
         createUserMessage({
-          content: [
-            { type: "text", text: FILE_CONTENT_REMINDER },
-            { type: "text", text: envelope },
-          ],
-          source,
+          content: [{ type: "text", text: FILE_CONTENT_REMINDER }, ...envelopes],
+          source: { kind: "file-reference", references: read },
         }),
       );
     }

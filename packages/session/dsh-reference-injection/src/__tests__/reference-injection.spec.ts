@@ -183,7 +183,7 @@ function injectedBlocks(decision: PreStepDecision, index: number): readonly stri
 
 function injectedEnvelope(decision: PreStepDecision, index: number): string {
   const blocks = injectedBlocks(decision, index);
-  if (blocks.length !== 2) throw new Error(`expected two blocks at ${index}`);
+  if (blocks.length < 2) throw new Error(`expected an envelope block at ${index}`);
   return blocks[1]!;
 }
 
@@ -217,7 +217,54 @@ describe("file content injection", () => {
         ]),
       },
     ]);
-    expect(injected.source).toMatchObject({ kind: "file-reference", path: "src/a.ts" });
+    expect(injected.source).toMatchObject({
+      kind: "file-reference",
+      references: [{ path: "src/a.ts" }],
+    });
+  });
+
+  // 同一步的多个文件合成一条注入：说明只说一次，每个文件一个信封块。
+  it("injects every referenced file as one message, one envelope block each", async () => {
+    const listener = mount(
+      {},
+      { "src/a.ts": { content: TWO_LINES }, "src/b.ts": { content: "const b = 2\n" } },
+    );
+    const decision = await step(listener, [userMessage("@src/a.ts 与 @src/b.ts")]);
+    if (decision.kind !== "enter") throw new Error("expected enter");
+    expect(decision.messages).toHaveLength(2);
+    const injected = decision.messages[1]!;
+    expect(injected.content).toEqual([
+      { type: "text", text: REMINDER },
+      {
+        type: "text",
+        text: envelope("src/a.ts", [
+          "1: import a",
+          "2: const b = 1",
+          "",
+          "(End of file - total 2 lines)",
+        ]),
+      },
+      {
+        type: "text",
+        text: envelope("src/b.ts", ["1: const b = 2", "", "(End of file - total 1 lines)"]),
+      },
+    ]);
+    expect(injected.source).toMatchObject({
+      kind: "file-reference",
+      references: [{ path: "src/a.ts" }, { path: "src/b.ts" }],
+    });
+  });
+
+  it("records only the references whose content it injected", async () => {
+    const listener = mount({}, { "src/a.ts": { content: TWO_LINES } });
+    const decision = await step(listener, [userMessage("@src/a.ts 与 @src/missing.ts")]);
+    if (decision.kind !== "enter") throw new Error("expected enter");
+    expect(decision.messages).toHaveLength(2);
+    expect(injectedBlocks(decision, 1)).toHaveLength(2);
+    expect(decision.messages[1]!.source).toMatchObject({
+      kind: "file-reference",
+      references: [{ path: "src/a.ts" }],
+    });
   });
 
   it("honors the referenced line window", async () => {
