@@ -405,5 +405,10 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(projectDir, buildRootDir, hasTsx(projectDir, projectDir), devStoreHome(workspace));
+  await launchElectron(
+    projectDir,
+    buildRootDir,
+    hasTsx(projectDir, projectDir),
+    devStoreHome(workspace),
+  );
 }

@@ -20,8 +20,14 @@ import type {
   DraftFileUploads,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/slots.ts";
 import type { InputNotice } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/input.ts";
-import { createConversationStore, readConversationViewPreference } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/stores.ts";
-import { ConversationController, UnsupportedImageMediaTypeError } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
+import {
+  createConversationStore,
+  readConversationViewPreference,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/stores.ts";
+import {
+  ConversationController,
+  UnsupportedImageMediaTypeError,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
 import type { IConversation } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
 import { ComposerBlockRegistry } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/blocks.ts";
 import type { ComposerBlock } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-blocks.ts";
@@ -33,11 +39,19 @@ import type { EnterBehaviorRowInjected } from "../../../../../vendor/deepseek-ha
 import { ConversationRoot } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx";
 import { ConversationContent } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx";
 import { ConversationPanel } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationPanel.tsx";
-import { ConversationSession, ConversationSessionHeader } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx";
+import {
+  ConversationSession,
+  ConversationSessionHeader,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx";
 import { InputBar } from "./skeleton/InputBar.tsx";
 import { todoDockEntry } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx";
 import { resolveActiveView } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/view-selection.ts";
-import { en, NS, zh, type ConversationKey } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/locales.ts";
+import {
+  en,
+  NS,
+  zh,
+  type ConversationKey,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/locales.ts";
 import {
   CONVERSATION_SETTINGS_NAMESPACE,
   type ConversationSettings,

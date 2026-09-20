@@ -2,7 +2,10 @@ export { apply, Config, inject } from "./apply.ts";
 export type { Config as ConversationConfig } from "./apply.ts";
 export { UiConversation } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/conversation/assembly.ts";
 export type { ConversationBinding } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/conversation/assembly.ts";
-export { ConversationController, UnsupportedImageMediaTypeError } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
+export {
+  ConversationController,
+  UnsupportedImageMediaTypeError,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
 export type { IConversation } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts";
 export type {
   ConversationContextReader,
@@ -29,8 +32,14 @@ export type {
   StepLocation,
   TurnLocation,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/conversation.ts";
-export { EMPTY_CONVERSATION_SNAPSHOT, conversationPhase } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/snapshot.ts";
-export type { ConversationPhase, ConversationSnapshot } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/snapshot.ts";
+export {
+  EMPTY_CONVERSATION_SNAPSHOT,
+  conversationPhase,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/snapshot.ts";
+export type {
+  ConversationPhase,
+  ConversationSnapshot,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/snapshot.ts";
 export type {
   AssistantBlock,
   AssistantMessageNode,
@@ -68,8 +77,15 @@ export type {
   SystemPromptNode,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/request-inspection.ts";
 export { inspectRequestPrompt } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/request-inspection.ts";
-export type { SystemPromptState, SystemPromptInspector } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/system-prompt.ts";
-export type { ConversationStoreState, ConversationViewRequest, ViewTab } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/views.ts";
+export type {
+  SystemPromptState,
+  SystemPromptInspector,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/system-prompt.ts";
+export type {
+  ConversationStoreState,
+  ConversationViewRequest,
+  ViewTab,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/views.ts";
 
 export { ConversationNodeAssembler } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/conversation/assembler.ts";
 export type {
@@ -146,7 +162,10 @@ export type {
   ReferenceInsert,
   TokenSpan,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
-export type { ComposerBlock, ComposerBlocks } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-blocks.ts";
+export type {
+  ComposerBlock,
+  ComposerBlocks,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-blocks.ts";
 
 declare module "@deepseek-ai/cordis" {
   interface Context {

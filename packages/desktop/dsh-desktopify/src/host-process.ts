@@ -232,9 +232,11 @@ export class DesktopHostProcess {
         const error = errorOf(request.signal.reason, "request aborted");
         pending.uploadOpen = false;
         void pending.requestReader?.cancel(error).catch(() => undefined);
-        this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch((pipeError: unknown) => {
-          this.fail(errorOf(pipeError, "dsh desktop request pipe failed"));
-        });
+        this.enqueueRequestFrame(encodeDesktopRequestCancel(streamId)).catch(
+          (pipeError: unknown) => {
+            this.fail(errorOf(pipeError, "dsh desktop request pipe failed"));
+          },
+        );
         if (pending.controller === undefined) pending.reject(error);
         else pending.controller.error(error);
         this.finishPending(streamId, false);
@@ -276,11 +278,7 @@ export class DesktopHostProcess {
     this.responsePipe = undefined;
   }
 
-  private async pumpRequest(
-    streamId: number,
-    request: Request,
-    hasBody: boolean,
-  ): Promise<void> {
+  private async pumpRequest(streamId: number, request: Request, hasBody: boolean): Promise<void> {
     await this.enqueueRequestFrame(
       encodeDesktopRequestStart(streamId, {
         url: request.url,

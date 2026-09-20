@@ -17,7 +17,11 @@ import type {} from "@deepseek-ai/dsh-client-connection";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 import * as desktopOffice from "./office.ts";
-import { DESKTOP_STREAM_PATH, installDesktopTransport, takeOverDesktopAuthentication } from "./transport.ts";
+import {
+  DESKTOP_STREAM_PATH,
+  installDesktopTransport,
+  takeOverDesktopAuthentication,
+} from "./transport.ts";
 import { PortlessWebServer } from "./webserver.ts";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
@@ -49,7 +53,9 @@ async function main(): Promise<void> {
   const runtimeDir = process.argv[2];
   const projectDir = process.argv[3];
   if (runtimeDir === undefined || projectDir === undefined || process.send === undefined)
-    throw new Error("dsh desktop: expected runtime and profile directories, byte pipes, and a Node IPC channel");
+    throw new Error(
+      "dsh desktop: expected runtime and profile directories, byte pipes, and a Node IPC channel",
+    );
   const primaryRuntime = process.argv[4] ?? join(runtimeDir, "..", "runtime", "primary-runtime");
   const profileResolution = process.argv[5] === "runtime" ? "runtime" : "link";
   const pnpmEntry = process.argv[6];
@@ -130,7 +136,11 @@ async function main(): Promise<void> {
   let lastStreamId = 0;
   let stopping: Promise<void> | undefined;
 
-  const dispatch = async (streamId: number, request: Request, entry: PendingRequest): Promise<void> => {
+  const dispatch = async (
+    streamId: number,
+    request: Request,
+    entry: PendingRequest,
+  ): Promise<void> => {
     try {
       const response = await webServer.dispatch(request);
       await writeResponse(
@@ -157,7 +167,9 @@ async function main(): Promise<void> {
       await writeResponse(encodeDesktopResponseEnd(streamId));
     } catch (error) {
       if (!entry.abort.signal.aborted) {
-        await writeResponse(encodeDesktopResponseError(streamId, errorMessage(error))).catch(() => {});
+        await writeResponse(encodeDesktopResponseError(streamId, errorMessage(error))).catch(
+          () => {},
+        );
       }
     } finally {
       pending.delete(streamId);

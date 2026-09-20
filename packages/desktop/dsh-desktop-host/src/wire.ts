@@ -142,7 +142,13 @@ export function encodeDesktopRequestStart(
 
 /** 编码一个受限的请求体原始分片（壳侧）。 */
 export function encodeDesktopRequestData(streamId: number, data: Uint8Array): Buffer {
-  return encodeFrame(REQUEST_FRAME_DATA, streamId, Buffer.from(data), REQUEST_FRAME_DATA, "request");
+  return encodeFrame(
+    REQUEST_FRAME_DATA,
+    streamId,
+    Buffer.from(data),
+    REQUEST_FRAME_DATA,
+    "request",
+  );
 }
 
 /** 编码请求体正常结束（壳侧）。 */
@@ -152,7 +158,13 @@ export function encodeDesktopRequestEnd(streamId: number): Buffer {
 
 /** 编码取消一个请求及其响应（壳侧）。 */
 export function encodeDesktopRequestCancel(streamId: number): Buffer {
-  return encodeFrame(REQUEST_FRAME_CANCEL, streamId, Buffer.alloc(0), REQUEST_FRAME_DATA, "request");
+  return encodeFrame(
+    REQUEST_FRAME_CANCEL,
+    streamId,
+    Buffer.alloc(0),
+    REQUEST_FRAME_DATA,
+    "request",
+  );
 }
 
 /** 编码响应元数据帧（host 侧）。 */
@@ -180,18 +192,18 @@ export function encodeDesktopResponseData(streamId: number, data: Uint8Array): B
 
 /** 编码响应正常结束（host 侧）。 */
 export function encodeDesktopResponseEnd(streamId: number): Buffer {
-  return encodeFrame(RESPONSE_FRAME_END, streamId, Buffer.alloc(0), RESPONSE_FRAME_DATA, "response");
+  return encodeFrame(
+    RESPONSE_FRAME_END,
+    streamId,
+    Buffer.alloc(0),
+    RESPONSE_FRAME_DATA,
+    "response",
+  );
 }
 
 /** 编码一次响应失败，不把 Error 对象跨进程传递（host 侧）。 */
 export function encodeDesktopResponseError(streamId: number, message: string): Buffer {
-  return jsonPayload(
-    RESPONSE_FRAME_ERROR,
-    streamId,
-    { message },
-    RESPONSE_FRAME_DATA,
-    "response",
-  );
+  return jsonPayload(RESPONSE_FRAME_ERROR, streamId, { message }, RESPONSE_FRAME_DATA, "response");
 }
 
 function frameLength(buffer: Buffer, dataType: FrameType, direction: string): number | undefined {
@@ -221,8 +233,7 @@ function parseJson(payload: Buffer, subject: string): unknown {
 }
 
 function assertEmpty(payload: Buffer, subject: string): void {
-  if (payload.byteLength !== 0)
-    throw new Error(`dsh desktop: ${subject} frame carried a payload`);
+  if (payload.byteLength !== 0) throw new Error(`dsh desktop: ${subject} frame carried a payload`);
 }
 
 /** 增量解码 host 侧从请求管道收到的请求帧。 */

@@ -99,12 +99,14 @@ describe("请求帧", () => {
 
   it("EOF 落在帧中间时报错", () => {
     const decoder = new DesktopHostRequestDecoder();
-    decoder.push(encodeDesktopRequestStart(1, {
-      url: "dsh-app://app/",
-      method: "GET",
-      headers: [],
-      hasBody: false,
-    }).subarray(0, 8));
+    decoder.push(
+      encodeDesktopRequestStart(1, {
+        url: "dsh-app://app/",
+        method: "GET",
+        headers: [],
+        hasBody: false,
+      }).subarray(0, 8),
+    );
     expect(() => decoder.finish()).toThrow(/inside a frame/);
   });
 

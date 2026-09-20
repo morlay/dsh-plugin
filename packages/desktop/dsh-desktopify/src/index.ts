@@ -118,7 +118,13 @@ function developmentProject(): string | undefined {
 /** 窗口形态：macOS 走 sidebar vibrancy + hiddenInset（交通灯落在侧边栏内），Windows 自绘 caption。 */
 function windowFrame(): Pick<
   BrowserWindowConstructorOptions,
-  "titleBarStyle" | "frame" | "titleBarOverlay" | "trafficLightPosition" | "vibrancy" | "visualEffectState" | "backgroundColor"
+  | "titleBarStyle"
+  | "frame"
+  | "titleBarOverlay"
+  | "trafficLightPosition"
+  | "vibrancy"
+  | "visualEffectState"
+  | "backgroundColor"
 > {
   if (process.platform === "darwin") {
     return {
@@ -361,7 +367,8 @@ async function main(): Promise<void> {
   // 只有主窗口可以把自己的配色同步给原生材质。
   ipcMain.on(DESKTOP_IPC.nativeThemeSet, (event, source: unknown) => {
     if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
-    if (source === "light" || source === "dark" || source === "system") nativeTheme.themeSource = source;
+    if (source === "light" || source === "dark" || source === "system")
+      nativeTheme.themeSource = source;
   });
 
   const createMainWindow = (): BrowserWindow => {

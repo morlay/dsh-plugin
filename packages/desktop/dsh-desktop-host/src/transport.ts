@@ -63,7 +63,7 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
     }
   }
 }
-console.info('[dsh-desktop] transport installed',Object.keys(globalThis.__DSH_TRANSPORT__))`
+console.info('[dsh-desktop] transport installed',Object.keys(globalThis.__DSH_TRANSPORT__))`;
 interface BrowserAuthSurface {
   requestRejection(request: unknown): number | undefined;
   authorizeIndex(request: unknown, response: unknown): boolean;
@@ -71,11 +71,7 @@ interface BrowserAuthSurface {
 
 interface GatewaySurface {
   readonly wireStream: {
-    open(
-      endpoint: string,
-      payload: unknown,
-      signal: AbortSignal,
-    ): Promise<AsyncIterable<unknown>>;
+    open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
   };
 }
 
@@ -121,7 +117,9 @@ async function readJsonBody(request: IncomingMessage, timeoutMs = 500): Promise<
   await done;
   if (timer !== undefined) clearTimeout(timer);
   request.destroy?.();
-  return chunks.length === 0 ? undefined : (JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown);
+  return chunks.length === 0
+    ? undefined
+    : (JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown);
 }
 
 // 诊断行：桌面流是连接就绪的唯一来源，出问题时先看宿主 stderr 的这几行。
@@ -156,7 +154,9 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
       response.end("body is not JSON");
       return;
     }
-    const endpointFromQuery = new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get("endpoint");
+    const endpointFromQuery = new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get(
+      "endpoint",
+    );
     if (!isRecord(body) && endpointFromQuery === null) {
       reportStreamFailure("empty stream request", String(request.url));
       response.writeHead(400);
@@ -180,7 +180,10 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
       console.error(`[dsh-desktop] stream opening ${body.endpoint}`);
       const values = await gateway.wireStream.open(body.endpoint, body.payload, abort.signal);
       console.error(`[dsh-desktop] stream opened ${body.endpoint}`);
-      response.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-store" });
+      response.writeHead(200, {
+        "content-type": "application/x-ndjson",
+        "cache-control": "no-store",
+      });
       for await (const value of values) response.write(`${JSON.stringify(value)}\n`);
       response.end();
     } catch (error) {

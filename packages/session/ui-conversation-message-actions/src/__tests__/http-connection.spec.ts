@@ -9,10 +9,7 @@ import {
   SESSION_EDITOR_PATH,
   twoTurnLog,
 } from "@morlay/ui-conversation-message-actions/testing";
-import {
-  closedTurns,
-  editableMessages,
-} from "@morlay/ui-conversation-message-actions/plan";
+import { closedTurns, editableMessages } from "@morlay/ui-conversation-message-actions/plan";
 
 interface FakeRequest {
   method?: string;

@@ -101,7 +101,9 @@ describe("读路径", () => {
     const events = replaceHeavyLog();
     repairReadView(events);
 
-    expect((events[3] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([1, 2]);
+    expect((events[3] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
+      1, 2,
+    ]);
     expect(
       (events[4] as unknown as { data: { shadowedSeqs?: number[] } }).data.shadowedSeqs,
     ).toEqual([3]);

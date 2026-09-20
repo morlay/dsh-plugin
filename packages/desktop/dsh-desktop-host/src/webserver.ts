@@ -12,10 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { Service, type Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import {
-  renderIndexInjections,
-  type IndexInjection,
-} from "@deepseek-ai/dsh-host-webserver";
+import { renderIndexInjections, type IndexInjection } from "@deepseek-ai/dsh-host-webserver";
 
 export interface WebRoute {
   readonly kind: "exact" | "prefix";
@@ -220,7 +217,10 @@ export class PortlessWebServer extends Service {
   private readonly indexTaps: ((html: string) => string)[] = [];
   private fallback: WebRoute["handler"] | undefined;
 
-  constructor(ctx: Context, private readonly config: PortlessWebServerConfig) {
+  constructor(
+    ctx: Context,
+    private readonly config: PortlessWebServerConfig,
+  ) {
     super(ctx, "webServer");
   }
 
@@ -295,7 +295,9 @@ export class PortlessWebServer extends Service {
     }
     const handler = this.match(pathname)?.handler ?? this.fallback;
     if (process.env.DSH_DESKTOP_DEBUG === "1")
-      console.error(`[dsh-desktop] dispatch ${request.method} ${pathname} → ${handler === undefined ? "404" : "handler"}`);
+      console.error(
+        `[dsh-desktop] dispatch ${request.method} ${pathname} → ${handler === undefined ? "404" : "handler"}`,
+      );
     if (handler === undefined) return new Response("not found", { status: 404 });
     const response = new SyntheticResponse();
     const req = createRequest(request, url);

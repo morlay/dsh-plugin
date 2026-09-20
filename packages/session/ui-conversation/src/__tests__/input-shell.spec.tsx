@@ -4,7 +4,10 @@
 import { Context } from "@deepseek-ai/cordis";
 import type { ObservableSnapshot } from "@deepseek-ai/dsh-client-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReferenceInsert, TokenSpan } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
+import type {
+  ReferenceInsert,
+  TokenSpan,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
 import type { InputSubmitMode } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
 import type {
   DraftAttachmentId,

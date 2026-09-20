@@ -138,7 +138,7 @@ describe("无端口 webServer", () => {
     ]);
     const html = webServer.renderIndex("<html><head></head><body></body></html>");
     expect(seen).toHaveLength(2);
-    expect(html).toContain("globalThis[\"__DSH_PROBE__\"] = 1");
+    expect(html).toContain('globalThis["__DSH_PROBE__"] = 1');
     expect(html).toContain("__DSH_BOOT_READY__");
     expect(html.endsWith("<!-- tapped -->")).toBe(true);
   });
