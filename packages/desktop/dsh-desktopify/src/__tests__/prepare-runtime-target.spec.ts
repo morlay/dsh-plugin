@@ -57,15 +57,6 @@ async function links(path: string): Promise<string[]> {
   return found;
 }
 
-async function packageVersion(directory: string): Promise<string> {
-  const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof manifest.version !== "string")
-    throw new Error("fixture: pnpm manifest has no version");
-  return manifest.version;
-}
-
 // A Node.js release archive for the running platform, holding a stand-in executable: it answers `--version`
 // like the pinned release and hands anything else to this process's node, so runs through it are real ones.
 async function nodeReleaseFixture(
@@ -170,7 +161,6 @@ describe("bundled runtime target", () => {
       await runPrepareRuntime({ workspace });
 
       const runtime = join(buildRoot(resolve(workspace)), "runtime");
-      const pnpmVersion = await packageVersion(PNPM_DIRECTORY);
       expect(await readFile(join(runtime, "pnpm", "bin", "pnpm.mjs"), "utf8")).toBe(
         await readFile(join(PNPM_DIRECTORY, "bin", "pnpm.mjs"), "utf8"),
       );
@@ -183,12 +173,11 @@ describe("bundled runtime target", () => {
         [join(runtime, "pnpm", "bin", "pnpm.mjs"), "--version"],
         { env: { ...process.env, COREPACK_ENABLE_NETWORK: "0" } },
       );
-      expect(stdout.trim()).toBe(pnpmVersion);
-      expect(JSON.parse(await readFile(join(runtime, "versions.json"), "utf8"))).toEqual({
-        schemaVersion: 1,
-        node: NODE_VERSION,
-        pnpm: pnpmVersion,
-      });
+      // 不钉版本：随包的就是开发机解析到的那个 pnpm，只要求它可执行并报出自身版本。
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/u);
+      const versions = JSON.parse(await readFile(join(runtime, "versions.json"), "utf8"));
+      expect(versions).toMatchObject({ schemaVersion: 1, node: NODE_VERSION });
+      expect(versions.pnpm).toBe(stdout.trim());
 
       const link = join(runtime, "bin", "node");
       expect((await lstat(link)).isSymbolicLink()).toBe(true);

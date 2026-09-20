@@ -245,8 +245,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/preset/dsh-preset
       dsh-context:
-        specifier: 0.52.2
-        version: 0.52.2(@deepseek-ai/cordis@vendor+deepseek-harness+vendor+cordis)(@deepseek-ai/dsh-session@vendor+deepseek-harness+packages+core+session)(@deepseek-ai/dsh-settings@vendor+deepseek-harness+packages+settings+settings)(@deepseek-ai/schemastery@vendor+deepseek-harness+vendor+schemastery)(react@18.3.1)
+        specifier: 0.54.0
+        version: 0.54.0(@deepseek-ai/cordis@vendor+deepseek-harness+vendor+cordis)(@deepseek-ai/dsh-session@vendor+deepseek-harness+packages+core+session)(@deepseek-ai/dsh-settings@vendor+deepseek-harness+packages+settings+settings)(@deepseek-ai/schemastery@vendor+deepseek-harness+vendor+schemastery)(react@18.3.1)
       tsx:
         specifier: '*'
         version: 4.23.13
@@ -16544,8 +16544,8 @@ packages:
       zod:
         optional: true
 
-  dsh-context@0.52.2:
-    resolution: {integrity: sha512-65345RjT1tJXxqmSocHDCLwJS096ZNjdcN5doQ61C+dZKADeoARmp9QedCBMNF5RZqxBBNl4+TrQRCN6HSQwSA==}
+  dsh-context@0.54.0:
+    resolution: {integrity: sha512-F4tNyT6WqPrQtKkLE6n4iQovAZzmIC4+4B7KFF0SrgY9vhZR+jZ9aLo46y7Sp45Vtpg63NUXJHqYS5gTuck44g==}
     engines: {node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
@@ -22077,7 +22077,7 @@ snapshots:
       typebox: 1.3.7
       zod: 4.6.5
 
-  dsh-context@0.52.2(@deepseek-ai/cordis@vendor+deepseek-harness+vendor+cordis)(@deepseek-ai/dsh-session@vendor+deepseek-harness+packages+core+session)(@deepseek-ai/dsh-settings@vendor+deepseek-harness+packages+settings+settings)(@deepseek-ai/schemastery@vendor+deepseek-harness+vendor+schemastery)(react@18.3.1):
+  dsh-context@0.54.0(@deepseek-ai/cordis@vendor+deepseek-harness+vendor+cordis)(@deepseek-ai/dsh-session@vendor+deepseek-harness+packages+core+session)(@deepseek-ai/dsh-settings@vendor+deepseek-harness+packages+settings+settings)(@deepseek-ai/schemastery@vendor+deepseek-harness+vendor+schemastery)(react@18.3.1):
     dependencies:
       '@deepseek-ai/cordis': link:vendor/deepseek-harness/vendor/cordis
       '@deepseek-ai/dsh-session': link:vendor/deepseek-harness/packages/core/session

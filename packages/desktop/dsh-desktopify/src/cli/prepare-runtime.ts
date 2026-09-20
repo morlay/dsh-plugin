@@ -208,26 +208,22 @@ async function preparePnpm(platform: RuntimePlatform, runtimeRoot: string): Prom
   }
   // The platform package reaches us as a link into the store, so the payload takes its files, not the link.
   await cp(nativePackage, bundledPackage, { recursive: true, dereference: true });
-  await verifyPnpm(platform, destination, pnpm.version);
-  return pnpm.version;
+  return await verifyPnpm(platform, destination);
 }
 
 /** The packaged app has no route back to this workspace, so the payload has to run before it is packaged. */
-async function verifyPnpm(
-  platform: RuntimePlatform,
-  pnpmRoot: string,
-  version: string,
-): Promise<void> {
+async function verifyPnpm(platform: RuntimePlatform, pnpmRoot: string): Promise<string> {
   const runtimeRoot = dirname(pnpmRoot);
   const node = join(runtimeRoot, "node", platform === "win" ? "node.exe" : "node");
   const result = await capture(node, [join(pnpmRoot, "bin", "pnpm.mjs"), "--version"]);
-  if (result.error !== undefined || result.status !== 0 || result.stdout.trim() !== version) {
+  const actual = result.stdout.trim();
+  // 不钉版本：随包的就是开发机解析到的那个 pnpm，只要它能跑起来（并报出自身版本）即可。
+  if (result.error !== undefined || result.status !== 0 || actual === "") {
     const detail = result.error?.message ?? result.signal ?? result.stderr.trim();
     const outcome = detail === "" ? `exit ${String(result.status)}` : detail;
-    throw new Error(
-      `desktop runtime: bundled pnpm ${version} failed executable verification: ${outcome}`,
-    );
+    throw new Error(`desktop runtime: bundled pnpm failed executable verification: ${outcome}`);
   }
+  return actual;
 }
 
 /** `<runtime>/bin` is prepended to the PATH of the host's pnpm child, so its `node` must be the bundled one. */

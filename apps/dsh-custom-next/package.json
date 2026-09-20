@@ -15,7 +15,7 @@
     "@morlay/dsh-desktopify": "workspace:*",
     "@morlay/better-session": "workspace:*",
     "@morlay/dsh-preset": "workspace:*",
-    "dsh-context": "0.52.2"
+    "dsh-context": "0.54.0"
   },
   "peerDependencies": {
     "tsx": "*"
