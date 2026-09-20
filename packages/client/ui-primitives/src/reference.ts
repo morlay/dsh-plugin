@@ -10,6 +10,7 @@ import {
   asciiAlpha,
   asciiAlphanumeric,
   asciiDigit,
+  markdownLineEnding,
   markdownLineEndingOrSpace,
   unicodePunctuation,
   unicodeWhitespace,
@@ -61,6 +62,8 @@ const LINE_FRAGMENT = /^L(\d+)(?:C(\d+))?(?:-L(\d+))?$/u;
 const SCHEME = /^([A-Za-z][A-Za-z0-9+.-]*):/u;
 
 const BARE_PATH = /^([^:]+):(\d+)(?::(\d+))?$/u;
+
+const MENTION_WHITESPACE = /\s/u;
 
 const URI_UNSAFE = /[%#()\s<>"`]/gu;
 
@@ -125,6 +128,13 @@ export function formatReference(reference: Reference): string {
 
 export function isLocalReference(reference: Reference): boolean {
   return !EXTERNAL_PROTOCOLS.includes(reference.protocol);
+}
+
+// 引用在提示文本里的 mention 形态：`@` 接路径，路径含空白时用引号包住。
+// 谁产出的都走这一个函数归一——消息里是这一形态与「产生方是谁」无关。
+export function formatReferenceMention(reference: Reference): string {
+  const path = reference.path ?? "";
+  return MENTION_WHITESPACE.test(path) ? `@"${path}"` : `@${path}`;
 }
 
 export function findReferences(text: string): readonly ReferenceSpan[] {
@@ -210,7 +220,32 @@ const tokenizeReference: Tokenizer = function (effects, ok, nok) {
   }
 
   function afterAt(code: Code): State | undefined {
+    if (code === codes.quotationMark) {
+      effects.consume(code);
+      return quotedPath;
+    }
     return asciiAlpha(code) ? headStart(code) : pathStart(code);
+  }
+
+  // `@"path with spaces"`：引号内的空格是路径的一部分，换行与未闭合都让整个形态退回普通文本。
+  function quotedPath(code: Code): State | undefined {
+    if (code === null || markdownLineEnding(code)) return nok(code);
+    effects.consume(code);
+    return code === codes.quotationMark ? afterQuotedPath : quotedPath;
+  }
+
+  function afterQuotedPath(code: Code): State | undefined {
+    if (code !== codes.numberSign) return finish(code);
+    effects.consume(code);
+    return fragmentInside;
+  }
+
+  function fragmentInside(code: Code): State | undefined {
+    if (isPathCode(code) || code === codes.numberSign) {
+      effects.consume(code);
+      return fragmentInside;
+    }
+    return finish(code);
   }
 
   function headStart(code: Code): State | undefined {
@@ -469,6 +504,7 @@ function textOf(node: MarkdownNode): string {
 function parseBareReference(raw: string): Reference | undefined {
   const body = raw.startsWith("@") ? raw.slice(1) : raw;
   if (body === "") return undefined;
+  if (body.startsWith(QUOTED_PATH)) return parseQuotedReference(body);
   const scheme = SCHEME.exec(body);
   if (scheme !== null && isKnownScheme(scheme[1] as string)) return parseReference(body);
   const matched = BARE_PATH.exec(body);
@@ -484,6 +520,20 @@ function parseBareReference(raw: string): Reference | undefined {
     lineStart: Number(line),
     ...(column === undefined ? {} : { column: Number(column) }),
   };
+}
+
+/** 引号 mention 的起手字符：`@"path with spaces"`。 */
+const QUOTED_PATH = '"';
+
+function parseQuotedReference(body: string): Reference | undefined {
+  const end = body.indexOf(QUOTED_PATH, 1);
+  if (end === -1) return undefined;
+  const path = body.slice(1, end);
+  if (path === "") return undefined;
+  // 闭合引号之后只允许行号 fragment（`@"a b.ts"#L12-L40`）；其它尾巴说明这不是一个引号引用。
+  const fragment = splitLineFragment(body.slice(end + 1));
+  if (fragment.head !== "") return undefined;
+  return { protocol: DEFAULT_PROTOCOL, path, ...fragment.lines };
 }
 
 export function referenceFromMarkdown(): MdastExtension {

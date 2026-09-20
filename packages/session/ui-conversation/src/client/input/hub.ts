@@ -102,6 +102,8 @@ export class InputHub implements SessionInputResolver {
           shell.beginCommand(req.claim, req.span) ? true : undefined,
         ),
         actx.on("slash/input-insert-reference", (req) =>
+          // 引用按预定形态（`@` 前缀 mention）归一后落草稿，与手打同形——解析、chip 渲染与
+          // host 注入认的都是这一形态，与产生方是谁无关。
           shell.insertReference(referenceTextOf(req.reference), req.span) ? true : undefined,
         ),
         actx.on("slash/input-consume-token", (req) =>

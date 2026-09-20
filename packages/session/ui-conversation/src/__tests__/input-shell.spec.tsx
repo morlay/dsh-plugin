@@ -21,7 +21,7 @@ const FILE_INSERT: ReferenceInsert = {
   ref: "@src/a.ts",
   label: "a.ts",
   appearance: "file",
-  clipboardText: "file:src/a.ts",
+  clipboardText: "@src/a.ts",
 };
 
 const EMPTY_LEXICON: ObservableSnapshot<ReadonlyMap<"/" | "@", readonly string[]>> = {
@@ -86,12 +86,12 @@ afterEach(() => {
 });
 
 describe("SessionInputShell: 引用插入落纯文本", () => {
-  it("insertReference 把裸 URI 写进草稿并补一个尾随空格，不产生引用出现项", () => {
+  it("insertReference 把引用原文写进草稿并补一个尾随空格，不产生引用出现项", () => {
     const { shell } = bench();
     shell.setDraft("@src/");
     expect(shell.insertReference(FILE_INSERT, span(shell, 0, 5))).toBe(true);
 
-    expect(shell.snapshot.draft).toBe("file:src/a.ts ");
+    expect(shell.snapshot.draft).toBe("@src/a.ts ");
     expect(shell.snapshot.occurrences).toEqual([]);
   });
 
@@ -100,14 +100,14 @@ describe("SessionInputShell: 引用插入落纯文本", () => {
     shell.setDraft("@src/ 继续");
     expect(shell.insertReference(FILE_INSERT, span(shell, 0, 5))).toBe(true);
 
-    expect(shell.snapshot.draft).toBe("file:src/a.ts 继续");
+    expect(shell.snapshot.draft).toBe("@src/a.ts 继续");
   });
 
   it("空草稿的插入落在末尾", () => {
     const { shell } = bench();
     expect(shell.insertReference(FILE_INSERT, span(shell, 0, 0))).toBe(true);
 
-    expect(shell.snapshot.draft).toBe("file:src/a.ts ");
+    expect(shell.snapshot.draft).toBe("@src/a.ts ");
   });
 
   it("草稿修订号不匹配的插入被拒绝", () => {
@@ -187,10 +187,10 @@ describe("SessionInputShell: 提交路径", () => {
     const { shell, sink } = bench({ triggers: { serializeReference } });
     shell.setDraft("看这个");
     shell.insertReference(FILE_INSERT, span(shell, 3, 3));
-    expect(shell.snapshot.draft).toBe("看这个file:src/a.ts ");
+    expect(shell.snapshot.draft).toBe("看这个@src/a.ts ");
     shell.submit("queue");
 
-    expect(sink.mock.calls[0]?.[0]).toBe("看这个file:src/a.ts");
+    expect(sink.mock.calls[0]?.[0]).toBe("看这个@src/a.ts");
     expect(serializeReference).not.toHaveBeenCalled();
   });
 

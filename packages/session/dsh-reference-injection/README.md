@@ -11,7 +11,8 @@
   inline code（`` `skill:name` ``）由 `parseReferenceToken` 再兜一次；代码块内的同形文本不会命中（解析器保证）；
   名字不在 skill 注册表里、或该 skill 不允许用户调用时保持普通文本；
 - 文件：只认 `@` 起手的路径——`@src/a.ts`、`@src/a.ts:12`、`@src/a.ts:12:5`、`@src/a.ts#L12-L40`、
-  `@[label](src/a.ts)`；行号决定窗口起点与长度，列号不参与（read 没有列语义）；
+  `@[label](src/a.ts)`、含空格路径的引号 mention `@"my file.ts"`（`@file` 选择器对这类路径就落这一形态）；
+  行号决定窗口起点与长度，列号不参与（read 没有列语义）；
 - 文件内容经 `ctx.fs` 读取：文件不存在、不是普通文件、读不出（二进制 / 权限）、行号超出文件末尾时保持普通文本；
 - 注入的文本与 read 工具逐字同形：`<path>/<type>file</type>/<content>` 信封、行号前缀、续读提示，窗口上限
   （2000 行 / 50 KB / 单行 2000 字符）取 read 的默认值；
@@ -26,8 +27,9 @@
 
 ## 范围
 
-只认用户手打的 `@` 手势与 skill 引用：`file:src/a.ts`、`[label](src/a.ts)`、以及 inline code 里的路径都不是注入
-触发器。解析与渲染转换的判定见
+只认 `@` 前缀这一形态——手打的与选择器 pick 归一后落进草稿的都一样，注入不看产生方；skill 同理认
+`protocol === 'skill'`。`file:src/a.ts`、`[label](src/a.ts)`、以及 inline code 里的路径都不是注入触发器。解析与
+渲染转换的判定见
 [ADR-引用的统一解析与渲染转换](../../session/ui-conversation-message-actions/.agents/adrs/20260917-引用的统一解析与渲染转换.md)；
 文件内容为什么由本插件按 read 信封自行渲染、为什么只认 `@` 起手，见设计
 [文件引用内容注入](./.agents/designs/20260920-文件引用内容注入.md)。

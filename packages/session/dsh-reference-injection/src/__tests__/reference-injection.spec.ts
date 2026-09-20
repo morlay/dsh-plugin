@@ -132,6 +132,14 @@ describe("fileReferencesIn", () => {
     ]);
   });
 
+  // 选择器对含空格的路径落引号 mention（`formatFileMention`），注入必须认同一形态。
+  it("reads a quoted mention as one path", () => {
+    expect(fileReferencesIn([userMessage('看 @"my file.ts" 与 @"dir/my file.ts"#L2-L3')])).toEqual([
+      { path: "my file.ts" },
+      { path: "dir/my file.ts", lineStart: 2, lineEnd: 3 },
+    ]);
+  });
+
   it("keeps the line window and drops the column", () => {
     expect(fileReferencesIn([userMessage("@src/a.ts:12")])).toEqual([
       { path: "src/a.ts", lineStart: 12 },
@@ -237,6 +245,18 @@ describe("file content injection", () => {
     const listener = mount({}, { "src/empty.ts": { content: "" } });
     expect(injectedText(await step(listener, [userMessage("@src/empty.ts")]), 1)).toBe(
       envelope("src/empty.ts", ["(End of file - total 0 lines)"]),
+    );
+  });
+
+  it("injects a file the picker quoted", async () => {
+    const listener = mount({}, { "my file.ts": { content: TWO_LINES } });
+    expect(injectedText(await step(listener, [userMessage('看 @"my file.ts"')]), 1)).toBe(
+      envelope("my file.ts", [
+        "1: import a",
+        "2: const b = 1",
+        "",
+        "(End of file - total 2 lines)",
+      ]),
     );
   });
 

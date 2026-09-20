@@ -87,6 +87,19 @@ describe("ReferenceMarkdown", () => {
     expect(owner.openSkill).not.toHaveBeenCalled();
   });
 
+  it("turns a quoted @path mention into a chip without the quotes", () => {
+    const owner = actions();
+    const { container } = render(
+      <ReferenceMarkdown text='看 @"my file.ts" 的配置' labels={labels} actions={owner} />,
+    );
+    const chip = screen.getByRole("button", { name: "my file.ts" });
+    // hover 的完整引用按 URI 规则编码，点击拿到的是引号内的路径原文。
+    expect(chip.getAttribute("title")).toBe("file:my%20file.ts");
+    fireEvent.click(chip);
+    expect(owner.openFile).toHaveBeenCalledWith("my file.ts");
+    expect(container.textContent).toBe("看 my file.ts 的配置");
+  });
+
   it("still renders the chip without owner actions", () => {
     render(<ReferenceMarkdown text="file:mise.toml" labels={labels} />);
     const chip = screen.getByRole("button", { name: "mise.toml" });

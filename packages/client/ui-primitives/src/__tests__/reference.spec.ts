@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findReferences,
   formatReference,
+  formatReferenceMention,
   isLocalReference,
   parseReference,
   parseReferenceToken,
@@ -131,6 +132,31 @@ describe("@path 的裸路径形态", () => {
     expect(referencesOf("@")).toEqual([]);
     expect(referencesOf("@ 你好")).toEqual([]);
     expect(referencesOf("x@y")).toEqual([]);
+  });
+});
+
+// 输入框的 @file 选择器对含空格的路径落引号 mention（见 @deepseek-ai/dsh-file-reference 的
+// formatFileMention），所以引号形态是解析器必须认领的书写。
+describe('@"..." 引号形态', () => {
+  it("reads a quoted path, spaces included", () => {
+    expect(referencesOf('看 @"my file.ts" 的实现')).toEqual([
+      { slice: '@"my file.ts"', protocol: "file", path: "my file.ts" },
+    ]);
+  });
+
+  it("keeps the line fragment that follows the closing quote", () => {
+    expect(onlyReference('@"my file.ts"#L12-L40')).toEqual({
+      protocol: "file",
+      path: "my file.ts",
+      lineStart: 12,
+      lineEnd: 40,
+    });
+  });
+
+  it("rejects an unclosed or empty quoted path", () => {
+    expect(referencesOf('@"my file.ts')).toEqual([]);
+    expect(referencesOf('@""')).toEqual([]);
+    expect(referencesOf('看@"my file.ts"')).toEqual([]);
   });
 });
 
@@ -284,6 +310,24 @@ describe("parseReference / formatReference", () => {
     ];
     for (const token of tokens) {
       expect(formatReference(parseReference(token) as Reference)).toBe(token);
+    }
+  });
+
+  it("spells the mention form, quoting only the paths that need it", () => {
+    expect(formatReferenceMention({ protocol: "file", path: "src/a.ts" })).toBe("@src/a.ts");
+    expect(formatReferenceMention({ protocol: "file", path: "/abs/a.ts" })).toBe("@/abs/a.ts");
+    expect(formatReferenceMention({ protocol: "file", path: "src/dir/" })).toBe("@src/dir/");
+    expect(formatReferenceMention({ protocol: "file", path: "my file.ts" })).toBe('@"my file.ts"');
+    expect(formatReferenceMention({ protocol: "file", path: "my dir/" })).toBe('@"my dir/"');
+  });
+
+  // 产出与认领必须是同一份规则：mention 写出去后解析回来还是同一个引用。
+  it("round-trips its own mention form through the parser", () => {
+    for (const path of ["src/a.ts", "src/dir/", "my file.ts", "my dir/"]) {
+      expect(onlyReference(formatReferenceMention({ protocol: "file", path }))).toEqual({
+        protocol: "file",
+        path,
+      });
     }
   });
 

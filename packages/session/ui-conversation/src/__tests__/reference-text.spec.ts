@@ -11,27 +11,32 @@ const fileInsert: ReferenceInsert = {
 };
 
 describe("referenceTextOf", () => {
-  it("lands a file pick as a scheme URI", () => {
-    expect(referenceTextOf(fileInsert)).toEqual({
-      source: "reference",
-      ref: "@src/a.ts",
-      label: "a.ts",
-      appearance: "file",
-      clipboardText: "file:src/a.ts",
-    });
+  it("lands a file pick as the @ mention form", () => {
+    expect(referenceTextOf(fileInsert)).toEqual({ ...fileInsert, clipboardText: "@src/a.ts" });
   });
 
-  it("lands a quoted path and a directory pick", () => {
+  // 产生方给什么写法都在这里归一：草稿里只有预定的 `@` 形态一种写法。
+  it("normalizes whatever spelling the producer handed over", () => {
+    expect(referenceTextOf({ ...fileInsert, ref: "file:src/a.ts" }).clipboardText).toBe(
+      "@src/a.ts",
+    );
     expect(
       referenceTextOf({ ...fileInsert, ref: '@"my file.ts"', label: "my file.ts" }).clipboardText,
-    ).toBe("file:my%20file.ts");
+    ).toBe('@"my file.ts"');
     expect(
       referenceTextOf({ ...fileInsert, ref: "@src/dir/", label: "dir/", appearance: "folder" })
         .clipboardText,
-    ).toBe("file:src/dir/");
+    ).toBe("@src/dir/");
+    expect(
+      referenceTextOf({ ...fileInsert, ref: '@"my dir/', label: "my dir/", appearance: "folder" })
+        .clipboardText,
+    ).toBe('@"my dir/"');
   });
 
-  it("keeps a session pick as its own mention", () => {
+  it("keeps an insert it cannot read as a file reference", () => {
+    const plain = { ...fileInsert, ref: "no-at-prefix", clipboardText: "no-at-prefix" };
+    expect(referenceTextOf(plain)).toEqual(plain);
+
     const session: ReferenceInsert = {
       source: "reference",
       ref: "@[Research](dsh-session:InNvdXJjZSI)",
@@ -40,10 +45,6 @@ describe("referenceTextOf", () => {
       clipboardText: "@[Research](dsh-session:InNvdXJjZSI)",
     };
     expect(referenceTextOf(session)).toEqual(session);
-  });
-
-  it("keeps an insert it cannot read as a file mention", () => {
-    expect(referenceTextOf({ ...fileInsert, ref: "no-at-prefix" }).clipboardText).toBe("@src/a.ts");
   });
 });
 

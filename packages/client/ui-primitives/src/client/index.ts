@@ -7,6 +7,7 @@ export * from "./markdown-labels.ts";
 export {
   findReferences,
   formatReference,
+  formatReferenceMention,
   isLocalReference,
   parseReference,
   parseReferenceToken,

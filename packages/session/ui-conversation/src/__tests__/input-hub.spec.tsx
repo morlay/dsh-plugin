@@ -23,7 +23,7 @@ const FILE_INSERT: ReferenceInsert = {
   ref: "@src/a.ts",
   label: "a.ts",
   appearance: "file",
-  clipboardText: "file:src/a.ts",
+  clipboardText: "@src/a.ts",
 };
 
 const t = ((key: string) => key) as unknown as TranslateNS<"conversation">;
@@ -125,12 +125,12 @@ afterEach(() => {
 });
 
 describe("InputHub: scoped slash 事件归一", () => {
-  it("插入引用事件把引用落成裸 URI 纯文本", () => {
+  it("插入引用事件把 pick 的引用原文落成纯文本", () => {
     const { shell, emit } = bench();
     shell.setDraft("@src/");
     emit("slash/input-insert-reference", { reference: FILE_INSERT, span: spanOf(shell, 5) });
 
-    expect(shell.snapshot.draft).toBe("file:src/a.ts ");
+    expect(shell.snapshot.draft).toBe("@src/a.ts ");
     expect(shell.snapshot.occurrences).toEqual([]);
   });
 
