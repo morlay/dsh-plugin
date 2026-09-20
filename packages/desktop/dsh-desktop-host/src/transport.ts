@@ -145,9 +145,9 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
       response.end("gateway unavailable");
       return;
     }
-    let body: unknown;
+    let parsed: unknown;
     try {
-      body = await readJsonBody(request);
+      parsed = await readJsonBody(request);
     } catch (error) {
       reportStreamFailure("stream body is not JSON", error);
       response.writeHead(400);
@@ -157,14 +157,18 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
     const endpointFromQuery = new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get(
       "endpoint",
     );
-    if (!isRecord(body) && endpointFromQuery === null) {
+    if (!isRecord(parsed) && endpointFromQuery === null) {
       reportStreamFailure("empty stream request", String(request.url));
       response.writeHead(400);
       response.end("invalid stream request");
       return;
     }
-    if (!isRecord(body)) body = { endpoint: endpointFromQuery, payload: { args: {} } };
-    if (typeof body.endpoint !== "string") {
+    // 请求体与查询参数补出的 body 在这里归一成同一类型，后面的读写不必再猜 unknown。
+    const body: Record<string, unknown> = isRecord(parsed)
+      ? parsed
+      : { endpoint: endpointFromQuery, payload: { args: {} } };
+    const endpoint = body.endpoint;
+    if (typeof endpoint !== "string") {
       reportStreamFailure("invalid stream request", JSON.stringify(body).slice(0, 200));
       response.writeHead(400);
       response.end("invalid stream request");
@@ -177,9 +181,9 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
     request.once("aborted", cancel);
     response.once("close", cancel);
     try {
-      console.error(`[dsh-desktop] stream opening ${body.endpoint}`);
-      const values = await gateway.wireStream.open(body.endpoint, body.payload, abort.signal);
-      console.error(`[dsh-desktop] stream opened ${body.endpoint}`);
+      console.error(`[dsh-desktop] stream opening ${endpoint}`);
+      const values = await gateway.wireStream.open(endpoint, body.payload, abort.signal);
+      console.error(`[dsh-desktop] stream opened ${endpoint}`);
       response.writeHead(200, {
         "content-type": "application/x-ndjson",
         "cache-control": "no-store",
@@ -187,7 +191,7 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
       for await (const value of values) response.write(`${JSON.stringify(value)}\n`);
       response.end();
     } catch (error) {
-      reportStreamFailure(`stream ${body.endpoint} failed`, error);
+      reportStreamFailure(`stream ${endpoint} failed`, error);
       if (response.headersSent) {
         response.destroy(error instanceof Error ? error : new Error(String(error)));
         return;
