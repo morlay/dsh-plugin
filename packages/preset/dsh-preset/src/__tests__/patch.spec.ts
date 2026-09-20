@@ -80,9 +80,22 @@ describe("dsh-preset patch wiring", () => {
     expect(disabled).toEqual([
       "sandbox",
       "fs-sandbox",
+      "fs-observation-policy",
       "office-to-pdf",
       "subagent-model-selection-settings",
     ]);
+  });
+
+  it("disables the read-before-edit policy the shipped base bundle mounts", async () => {
+    const shipped = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH)]);
+    const shippedRow = rowById(shipped, "fs-observation-policy");
+
+    expect(shippedRow?.name).toBe("@deepseek-ai/dsh-fs-observation-policy");
+    expect(shippedRow?.disabled).not.toBe(true);
+
+    const composed = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH), rows]);
+
+    expect(rowById(composed, "fs-observation-policy")?.disabled).toBe(true);
   });
 
   it("disables the subagent model-selection provider the shipped web-app bundle inserts", async () => {

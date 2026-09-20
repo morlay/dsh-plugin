@@ -51,6 +51,15 @@
 - id: fs-sandbox
   disabled: true
 
+# read-before-edit：官方 base bundle 的 `fs-observation-policy` 行要求覆盖 / 编辑目标前先 read 过它
+# （未读报 `FS_NOT_OBSERVED`，工具归一成「file has not been read — read the file, then retry」），
+# 并在 read 之后目标变了时报 stale。本部署去掉这一层：工作区在 git 下，改动可 diff、可回滚，这层策略
+# 换来的只是每次改动前的一次 read 往返。禁用后 write / edit 回到工具自身的语义——write 覆盖或创建
+# 不再要求先读，edit 靠精确匹配定位；代价是失去「读后目标被外部改动就拒绝写入」的陈旧保护（并发写
+# 同一文件时后写者覆盖前者）。
+- id: fs-observation-policy
+  disabled: true
+
 # 沙箱规则：`rw <path>` 追加工作区之外的可写根，`-- <pattern>` 拒绝访问（读 + 写）。
 - insert:
     - id: sandbox-local
