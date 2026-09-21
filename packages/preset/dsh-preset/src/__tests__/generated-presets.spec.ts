@@ -102,7 +102,11 @@ describe("generated presets", () => {
     );
 
     // 平台开关是唯一的例外：shell 工具装哪一半由运行期决定（`!!js`）。
-    expect(disabled.map((row) => row.id).sort()).toEqual(["tool-bash", "tool-pwsh"]);
+    const ids = disabled.map((row) => row.id ?? "");
+    expect(ids.sort((left, right) => left.localeCompare(right))).toEqual([
+      "tool-bash",
+      "tool-pwsh",
+    ]);
   });
 
   it("only writes the declared presets", async () => {

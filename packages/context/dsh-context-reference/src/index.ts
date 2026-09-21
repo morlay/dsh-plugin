@@ -33,7 +33,6 @@ export function apply(ctx: Context): void {
     if (decision.kind === "reject") return decision;
     // 依赖关系：没有对应工具时，注入也没有意义（模型拿到了内容也用不上那条路径）——
     // 文件引用要有 read 能力，skill 引用要有 skill 工具。是否注入跟着工具走。
-    // 依赖关系：没有对应工具时注入也没有意义——文件引用要 read 能力，skill 引用要 skill 工具。
     // 工具服务是可选的（`ctx.get` 在未声明 inject 的 ctx 上会抛，所以这里自己兜住）：
     // 没有它时不参与判断，按解析结果照常展开。
     const tools = ((): unknown => {
