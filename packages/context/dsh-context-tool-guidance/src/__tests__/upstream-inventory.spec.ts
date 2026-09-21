@@ -39,17 +39,9 @@ function droppedSections(): Set<string> {
 }
 
 /**
- * 部署会在装配时禁用的行 id。这是两处禁用的镜像：`dsh-preset` 的 `cordis.patch.yml`
- * （host 侧的 sandbox / office / 委派四行）与生成器的 `DELEGATION_ROW_IDS`（preset 层同一批委派行）。
- * 覆盖性扫描读的是**上游** composition，所以要在这里把它们排除，否则会要求为不存在的工具归组。
+ * 委派那批行（`tool-subagent*` / `tool-workflow`）在这里**不算禁用**：上游把它们留在 host 层禁用、
+ * 由 preset 层接管，我们的 standard 与上游 standard 都装它们，所以照常为它们的工具归组。
  */
-const DEPLOYMENT_DISABLED_ROWS: readonly string[] = [
-  "tool-subagent-control",
-  "tool-subagent-list-agents",
-  "tool-subagent",
-  "tool-subagent-fork",
-];
-
 interface CompositionRow {
   name?: unknown;
   disabled?: unknown;
@@ -72,9 +64,8 @@ function collectRows(value: unknown, rows: Row[]): void {
     return;
   }
   if (typeof value !== "object" || value === null) return;
-  const row = value as CompositionRow & { id?: unknown };
-  const declared = typeof row.id === "string" && DEPLOYMENT_DISABLED_ROWS.includes(row.id);
-  const enabled = row.disabled !== true && !declared;
+  const row = value as CompositionRow;
+  const enabled = row.disabled !== true;
   const config = row.config;
   const inline =
     typeof config === "object" && config !== null && !Array.isArray(config) ? config : undefined;
