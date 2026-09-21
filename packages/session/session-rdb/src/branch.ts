@@ -278,21 +278,38 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     const seed = [...renumber(prefix, 0), ...renumber(seedSuffix, prefix.length)];
 
     const internals = this.persistence.internals();
-    const sourceRows = await internals.backend.getEventRows(sourceId);
-    const sourceEventIds = new Map(sourceRows.map((row) => [row.fSequence, row.fEventId]));
+    // 复用父会话的事件行有个前提：**读取视图的 seq 与存储行的 f_sequence 一一对应**。legacy 会话的读视图
+    // 由迁移链重建（可能重新编号、增删事件），按 seq 复用会把桥接行挂到语义不符的行上——读取时按 `f_data`
+    // 解析，子会话前缀读到的内容就会和它自己的 seed 事件对不上。那种情况下复制事件行（多几行存储，正确优先）。
+    const reusable = !source.migrated && source.events.length === source.storedCount;
     const reuse = new Map<number, string>();
-    for (const event of prefix) {
-      const eventId = sourceEventIds.get(event.seq);
-      if (eventId !== undefined) reuse.set(event.seq, eventId);
+    if (reusable) {
+      const sourceRows = await internals.backend.getEventRows(sourceId);
+      const sourceEventIds = new Map(sourceRows.map((row) => [row.fSequence, row.fEventId]));
+      for (const event of prefix) {
+        const eventId = sourceEventIds.get(event.seq);
+        if (eventId !== undefined) reuse.set(event.seq, eventId);
+      }
+    } else if (prefix.length > 0) {
+      this.live.warn?.(
+        `session-rdb: fork "${sourceId}" copies event rows instead of reusing them — its read view comes from a migration, so stored seqs need not line up`,
+      );
     }
     internals.registerReuseEventIds(childId, reuse);
-    const handle = await this.persistence.create(childMeta, {
-      inheritedEventCount: SessionLogOffset(prefix.length),
-    });
     try {
-      if (seed.length > 0) await handle.append(seed);
-    } finally {
-      await handle.close();
+      const handle = await this.persistence.create(childMeta, {
+        inheritedEventCount: SessionLogOffset(prefix.length),
+      });
+      try {
+        if (seed.length > 0) await handle.append(seed);
+      } finally {
+        await handle.close();
+      }
+    } catch (error) {
+      // fork 没成（id 已存在、append 失败等）：别把复用映射留在进程里——同一个 childId 之后的落写会按它
+      // 去复用父会话的事件行，而那条会话可能完全无关。
+      internals.dropReuseEventIds(childId);
+      throw error;
     }
     // 子会话继承了前缀事件：活动计数按子会话重算（派生表，best-effort）。
     await this.persistence.rebuildEventCounts(childId);

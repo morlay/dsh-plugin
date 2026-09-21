@@ -4,6 +4,7 @@ import { Context } from "@deepseek-ai/cordis";
 import {
   Session,
   SessionId,
+  SessionLogOffset,
   SessionSeq,
   SessionStore,
   type SessionEvent,
@@ -240,6 +241,82 @@ describe("forkFrom", () => {
 
       const childBridges = await backend.getEventRows(SessionId("child"));
       expect(childBridges.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("fork 失败时不留下复用映射：同一个 childId 之后落写不会挂到父会话的事件行", async () => {
+    const { ctx, persistence, provider, dispose } = await harness();
+    try {
+      await createPersisted(ctx, "src", twoTurnLog());
+      // 已有会话占住 childId：fork 的 create 会抛，而复用映射在那之前就注册了（一条事件让它真的落库）。
+      await createPersisted(ctx, "taken", [
+        { type: "turn/start", seq: SessionSeq(0), time: 1, data: { turn: 1 } } as SessionEvent,
+      ]);
+
+      await expect(
+        provider.forkFrom(SessionId("src"), {
+          atSeq: 6,
+          anchorMode: "before",
+          childSessionId: SessionId("taken"),
+        }),
+      ).rejects.toThrow();
+
+      // 该 id 之后从 seq 1 落写一条全新事件：映射残留时 appendBatch 会按它去复用父会话的事件行，
+      // 桥接行挂到语义不符的父行上（读出来是父会话 seq 1 的内容，而不是这条 end-seed）。
+      await persistence.internals().append(SessionId("taken"), [
+        {
+          type: "session/end-seed",
+          seq: SessionSeq(1),
+          time: 2,
+          data: {},
+        } as SessionEvent,
+      ]);
+
+      const stored = await persistence.load(SessionId("taken"));
+      expect(stored.events.map((event) => event.type)).toEqual(["turn/start", "session/end-seed"]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("append 失败后复用映射还在：重试仍复用父会话的事件行，不会多插一份", async () => {
+    const { ctx, persistence, dispose } = await harness();
+    try {
+      await createPersisted(ctx, "src", twoTurnLog());
+      const backend = persistence.internals().backend as unknown as {
+        getEventRows(id: SessionId): Promise<Array<{ fEventId: string; fSequence: number }>>;
+      };
+      const parentRows = await backend.getEventRows(SessionId("src"));
+
+      // 手工造出 fork 的中间态：子会话已建、复用映射已注册（等价于 forkFrom 走到 append 之前）。
+      const child = SessionId("child");
+      const handle = await persistence.create(
+        { ...meta("child"), isSeeded: true },
+        { inheritedEventCount: SessionLogOffset(6) },
+      );
+      const seed = twoTurnLog().slice(0, 6);
+      persistence
+        .internals()
+        .registerReuseEventIds(
+          child,
+          new Map(parentRows.slice(0, 6).map((row) => [row.fSequence, row.fEventId])),
+        );
+
+      // 第一次 append 被并发写者校验拦下（本实例"已确认"的 head 与磁盘不符）。
+      persistence.internals().writeGuard.confirmHead(child, 999);
+      await expect(handle.append(seed)).rejects.toThrow();
+      persistence.internals().writeGuard.confirmHead(child, -1);
+
+      // 重试：映射还在（没被提前删掉），所以桥接行直接指向父会话的事件行，而不是再插一份。
+      await handle.append(seed);
+      await handle.close();
+
+      const childRows = await backend.getEventRows(child);
+      expect(childRows.map((row) => row.fEventId)).toEqual(
+        parentRows.slice(0, 6).map((row) => row.fEventId),
+      );
     } finally {
       await dispose();
     }

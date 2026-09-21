@@ -13,7 +13,7 @@ import {
   SessionStore,
   SESSION_FORMAT_VERSION,
 } from "@deepseek-ai/dsh-session";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
+import SessionPersistenceSqlite, { SessionBranchRdbProvider } from "@morlay/session-rdb";
 
 function rdb(ctx: Context): SessionPersistenceSqlite {
   return ctx.sessionPersistence as SessionPersistenceSqlite;
@@ -681,6 +681,64 @@ describe("migrate v2 → v3", () => {
       const loaded = await rdb(ctx).load(SessionId("v0-session"));
       expect(loaded.meta.version).toBe(SESSION_FORMAT_VERSION);
       expect(loaded.events).toHaveLength(9);
+    } finally {
+      await fiber.dispose();
+    }
+  });
+
+  it("fork 一个 legacy 会话时复制事件行：读视图与存储行的 seq 本就不对齐", async () => {
+    const path = await freshDbPath();
+    createV0SessionDatabase(
+      path,
+      [
+        { id: "evt-0", type: "turn/start", data: '{"turn":1}', surfaceOp: null },
+        { id: "evt-1", type: "step/start", data: '{"turn":1,"step":1}', surfaceOp: null },
+        {
+          id: "evt-2",
+          type: "user/message",
+          data: '{"content":[{"type":"text","text":"hi"}],"source":{"kind":"user"}}',
+          surfaceOp: '"append"',
+        },
+        {
+          id: "evt-3",
+          type: "assistant/message",
+          data: '{"turn":1,"step":1,"content":[{"type":"text","text":"hello"}],"provenance":{"provider":"mock","model":"mock"}}',
+          surfaceOp: '"append"',
+        },
+        { id: "evt-4", type: "step/end", data: '{"turn":1,"step":1}', surfaceOp: null },
+        {
+          id: "evt-5",
+          type: "turn/end",
+          data: '{"turn":1,"reason":{"kind":"completed"}}',
+          surfaceOp: null,
+        },
+      ],
+      { seedLength: 0 },
+    );
+
+    const ctx = new Context();
+    await ctx.plugin(EmptySettings);
+    await ctx.plugin(SessionStore);
+    const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
+    try {
+      const persistence = rdb(ctx);
+      const source = await persistence.readLog(SessionId("v0-session"));
+      if (source === undefined) throw new Error("expected the legacy session");
+      // 用例前提：迁移链重建出来的读视图比存储行多（seq 与 f_sequence 不是一回事）。
+      expect(source.events.length).toBeGreaterThan(source.storedCount);
+
+      const provider = new SessionBranchRdbProvider(persistence);
+      const lastSeq = source.events.at(-1)?.seq;
+      if (lastSeq === undefined) throw new Error("expected a non-empty legacy view");
+      const childId = await provider.forkFrom(SessionId("v0-session"), { atSeq: lastSeq });
+      const child = await persistence.readLog(childId);
+      if (child === undefined) throw new Error("expected the forked session");
+
+      // 子会话读出来的前缀必须与父会话视图的前缀同形——按 seq 复用事件行会在这里错位
+      // （桥接行挂到语义不符的父行上，读出的类型序列与 seed 对不上）。
+      expect(child.events.map((event) => event.type)).toEqual(
+        source.events.slice(0, child.events.length).map((event) => event.type),
+      );
     } finally {
       await fiber.dispose();
     }

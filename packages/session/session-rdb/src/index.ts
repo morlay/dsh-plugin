@@ -95,6 +95,8 @@ export interface SessionPersistenceRdbInternals {
   ): Promise<import("@deepseek-ai/dsh-session-persistence").SessionPersistenceRevision | undefined>;
 
   registerReuseEventIds(childId: SessionId, map: ReadonlyMap<number, string>): void;
+  /** fork 失败时丢弃还没被消费的映射。 */
+  dropReuseEventIds(childId: SessionId): void;
 }
 
 export interface ProjectionCacheOptions {
@@ -853,7 +855,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
     validateStoredEvents(meta, [...events]);
 
     const reuse = this.reuseEventIds.get(meta.id);
-    if (reuse !== undefined) this.reuseEventIds.delete(meta.id);
     let confirmedHead = -1;
     await this.backend.transaction(async (tx) => {
       if (tornTruncateTo !== undefined) {
@@ -880,6 +881,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
       await tx.bumpRevision(meta.id);
       confirmedHead = headSequence;
     });
+    // 事务**成功之后**才丢掉复用映射：失败（并发写者校验、唯一键冲突等）时这份映射还没被消费，
+    // 重试同一个 append 还要靠它复用父会话的事件行——提前删掉会让前缀事件行被重新插入一遍。
+    if (reuse !== undefined) this.reuseEventIds.delete(meta.id);
 
     this.writeGuard.confirmHead(meta.id, confirmedHead);
     this.tracker.materialized(meta.id);
@@ -1006,6 +1010,13 @@ export class SessionPersistenceRdb extends SessionPersistence {
     log: { meta: SessionHeader; inheritedEventCount: number; events: SessionEvent[] },
   ): Promise<void> {
     await this.backend.transaction(async (tx) => {
+      // 这段重写会删光该会话的桥接行、再按迁移视图重建——与 `appendBatch` 同一个理由，先做并发写者校验：
+      // 否则另一实例在 open 之前 / 期间提交的事件会被这段重写静默丢掉。调用方刚读过这份日志（重写只发生在
+      // write open 的读路径之后），所以 guard 里没有该会话时就把当前磁盘 head 记成本实例已确认的值；
+      // 有记录时严格比较——那能抓住"读完之后另一个实例又写了"。
+      const head = await tx.getHead(id);
+      if (!this.writeGuard.has(id)) this.writeGuard.confirmHead(id, head.fHeadSequence);
+      this.writeGuard.assertNoConcurrentWriter(id, head.fHeadSequence);
       await tx.deleteBridgeTail(id, 0);
       await tx.upsertSession(
         { meta: log.meta, inheritedEventCount: SessionLogOffset(log.inheritedEventCount) },
@@ -1146,6 +1157,11 @@ export class SessionPersistenceRdb extends SessionPersistence {
     this.reuseEventIds.set(childId, new Map(map));
   }
 
+  /** 丢弃一个还没被消费的复用映射（fork 失败时）：留着会让同一个 childId 之后的落写复用父会话的事件行。 */
+  dropReuseEventIds(childId: SessionId): void {
+    this.reuseEventIds.delete(childId);
+  }
+
   internals(): SessionPersistenceRdbInternals {
     return {
       backend: this.backend,
@@ -1164,6 +1180,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       listSnapshots: (signal) => this.listSnapshots(signal),
       readStoredRevision: (id, signal) => this.readStoredRevision(id, signal),
       registerReuseEventIds: (childId, map) => this.registerReuseEventIds(childId, map),
+      dropReuseEventIds: (childId) => this.dropReuseEventIds(childId),
     };
   }
 
