@@ -26,7 +26,13 @@ export function apply(ctx: Context): void {
       // 依赖关系：没有 `skill` 工具（被白名单挡掉或被别的 composition 拿掉）时，目录没有意义——
       // 模型拿到了名字也加载不了。是否注入跟着工具走，而不是靠每个模式去列"不要哪些"。
       if (ctx.tools.get("skill", agent) === undefined) return "";
-      const snapshot = await ctx.skills.snapshot();
+      // 必须带上会话的 cwd 与作用域：本地 skill 发现（`~/.agents/skills`、`{cwd}/.agents/skills`、
+      // 项目根）由 preset 层的 `skill-filesystem` 行提供，host 层的同名行在 web 组合里是禁用的——
+      // 不传作用域只看得见全局层（本仓库注册的运行时 skill），不传 cwd 连项目根都不扫。
+      const snapshot = await ctx.skills.snapshot({
+        cwd: agent.session.header.cwd,
+        scope: agent,
+      });
       if (!snapshot.complete) return "";
       // 技能也跟着工具走：依赖的工具一个都不可见的 skill 不进目录（模型看到名字也用不上）。
       const hidden = ctx.contextAssembler.hiddenSkills(
