@@ -1,6 +1,5 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
-import type {} from "@deepseek-ai/dsh-llm";
-import { createUserMessage } from "@deepseek-ai/dsh-llm";
+import { createUserMessage, type MessageSource } from "@deepseek-ai/dsh-llm";
 import type { UserMessage } from "@deepseek-ai/dsh-session";
 
 const REMINDER_OPEN = "<system-reminder";
@@ -12,6 +11,7 @@ const REMINDER_CLOSE = "</system-reminder>";
  */
 export const RULES_SECTION = "assembler:rules";
 
+/** 通道自己的条目形态（注入方没声明 source 时的默认）：规则块，幂等键是 id。 */
 export interface PromptReminderSource {
   kind: "context-assembler";
   form: "instructions";
@@ -23,6 +23,15 @@ declare module "@deepseek-ai/dsh-llm" {
   interface MessageSourceMap {
     "context-assembler": PromptReminderSource;
   }
+}
+
+/**
+ * 这条消息是不是通道注入的条目——判据是 source 里的幂等键，而不是 kind：接管上游那两面的条目
+ * 用上游 kind（`agent-instructions` / `skill-catalog`），幂等必须照样认。
+ */
+export function promptEntryIdOf(source: MessageSource): string | undefined {
+  const id = (source as { readonly id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
 }
 
 function escapeFrameBody(body: string): string {
@@ -51,28 +60,33 @@ export function renderVirtualSkill(name: string, content: string): string {
   ].join("\n");
 }
 
-export function isPromptReminder(
-  message: UserMessage,
-): message is UserMessage & { source: PromptReminderSource } {
-  return message.source.kind === "context-assembler";
+/** 这条消息是不是通道注入的条目（判据是 source 里的幂等键，见 `promptEntryIdOf`）。 */
+export function isPromptReminder(message: UserMessage): boolean {
+  return promptEntryIdOf(message.source) !== undefined;
 }
 
 /** surface 上最近一条该 id 的 reminder 原文（含信封）；没有则 undefined。 */
 export function latestReminderText(agent: Agent, id: string): string | undefined {
   for (const seq of agent.session.surface.nodes.toReversed()) {
     const event = agent.session.eventAt(seq);
-    if (event?.type !== "user/message" || !isPromptReminder(event.data)) continue;
-    if (event.data.source.id !== id) continue;
+    if (event?.type !== "user/message") continue;
+    if (promptEntryIdOf(event.data.source) !== id) continue;
     const [block] = event.data.content;
     return event.data.content.length === 1 && block?.type === "text" ? block.text : "";
   }
   return undefined;
 }
 
-/** 注入一条提醒：`text` 是已渲染好的完整正文（规则块或内容块），`key` 是它的幂等键。 */
-export function reminderMessage(key: string, text: string): UserMessage {
+/**
+ * 注入一条提醒：`text` 是已渲染好的完整正文（规则块或内容块），`key` 是它的幂等键。
+ * `source` 声明这条消息对外的身份——接管上游那两面用上游 kind，我们自己的条目留默认。
+ */
+export function reminderMessage(key: string, text: string, source?: MessageSource): UserMessage {
   return createUserMessage({
     content: [{ type: "text", text }],
-    source: { kind: "context-assembler", form: "instructions", id: key },
+    source: {
+      ...(source ?? { kind: "context-assembler", form: "instructions" }),
+      id: key,
+    } as MessageSource,
   });
 }

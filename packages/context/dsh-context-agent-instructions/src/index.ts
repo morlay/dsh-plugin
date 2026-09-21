@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
+import type {} from "@deepseek-ai/dsh-agent-instructions";
 import z from "@deepseek-ai/schemastery";
 import type {} from "@morlay/dsh-context-assembler";
 import { instructionChain, readInstruction, type InstructionFile } from "./files.ts";
@@ -55,6 +56,9 @@ export function apply(ctx: Context, config: Config): void {
     for (const file of chain.files) {
       ctx.contextAssembler.registerRule({
         id: `agent-instructions:${rootTag(file.root)}:${file.display}`,
+        // 对外身份沿用上游 kind：客户端标签与按 kind 认领的消费方（上游的实验性约束收集）才认得这是
+        // 工作区指令。`changes` 留空——上游那套按文件做 reconciliation 的记录我们不做（一条文件一条 id）。
+        source: () => ({ kind: "agent-instructions", form: "instructions", changes: [] }),
         text: (target) => {
           const current = chains.get(target);
           if (current === undefined || !current.files.some((entry) => entry.path === file.path))

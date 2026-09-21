@@ -1,5 +1,6 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import { Service, type Context } from "@deepseek-ai/cordis";
+import type { MessageSource } from "@deepseek-ai/dsh-llm";
 import { renderReminder, renderVirtualSkill } from "./reminder.ts";
 
 /** 正文到达模型的方式：自动注入，或等模型按需加载。 */
@@ -50,6 +51,18 @@ interface AgentState {
 export interface PromptRuleDeclaration {
   readonly id: string;
   readonly text: (agent: Agent) => string | Promise<string>;
+  /**
+   * 这条规则的对外身份。接管上游那两面（工作区指令 / skill 目录）按上游 kind 发消息，好让按 kind 认领的
+   * 消费方（客户端标签、上游的实验性约束收集）认得出来；不声明就是通道自己的 `context-assembler`。
+   * 幂等键仍是 `id`（`reminderMessage` 会把它塞进 source）。
+   */
+  readonly source?: (agent: Agent) => MessageSource;
+}
+
+/** 一条待注入的条目：正文已渲染好，`source` 是它声明给外部的身份。 */
+export interface PromptEntry {
+  readonly text: string;
+  readonly source?: MessageSource;
 }
 
 /**
@@ -150,14 +163,14 @@ export class ContextAssembler extends Service {
     return this.declarations.get(name)?.content(agent);
   }
 
-  async collect(agent: Agent): Promise<Map<string, string>> {
-    const entries = new Map<string, string>();
+  async collect(agent: Agent): Promise<Map<string, PromptEntry>> {
+    const entries = new Map<string, PromptEntry>();
     for (const declaration of this.declarations.values()) {
       if ((declaration.injection ?? "on-demand") !== "auto") continue;
       const body = declaration.content(agent);
       // 常驻送达的 skill 正文与按需加载同一形态：内容块，不是规则块。
       if (body.length > 0)
-        entries.set(declaration.name, renderVirtualSkill(declaration.name, body));
+        entries.set(declaration.name, { text: renderVirtualSkill(declaration.name, body) });
     }
     const instructionsOff = this.withoutInstructions.has(agent);
     for (const declaration of this.rules.values()) {
@@ -165,11 +178,16 @@ export class ContextAssembler extends Service {
       // 注入路径不能被任何一个内容提供者拖死：文本是异步算的（技能目录要读注册表、工作区指令要读文件），
       // 谁卡住都不该让人等在这里——超时或抛错都按"这条没有内容"处理。
       const text = await withTimeout(declaration.text(agent), CONTENT_TIMEOUT_MS);
-      if (text.length > 0) entries.set(declaration.id, renderReminder(declaration.id, text));
+      if (text.length > 0) {
+        entries.set(declaration.id, {
+          text: renderReminder(declaration.id, text),
+          ...(declaration.source === undefined ? {} : { source: declaration.source(agent) }),
+        });
+      }
     }
     if (!instructionsOff) {
       for (const [id, text] of this.sectionsOf(agent)) {
-        entries.set(id, renderReminder(id, text));
+        entries.set(id, { text: renderReminder(id, text) });
       }
     }
     return entries;

@@ -1,13 +1,18 @@
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import type { AssembledSection } from "@deepseek-ai/dsh-system-prompt";
-import { ContextAssembler } from "./channel.ts";
+import { ContextAssembler, type PromptEntry } from "./channel.ts";
 import { DEFAULT_KEEP, DEFAULT_REPLACE, DEFAULT_SUPPRESS } from "./defaults.ts";
 import { RULES_SECTION, latestReminderText, reminderMessage } from "./reminder.ts";
 import { RULES_TEXT } from "./rules.ts";
 
 export { DEFAULT_KEEP, DEFAULT_REPLACE, DEFAULT_SUPPRESS } from "./defaults.ts";
-export type { InjectionMode, PromptRuleDeclaration, PromptSkillDeclaration } from "./channel.ts";
+export type {
+  InjectionMode,
+  PromptEntry,
+  PromptRuleDeclaration,
+  PromptSkillDeclaration,
+} from "./channel.ts";
 export { ContextAssembler } from "./channel.ts";
 export { renderVirtualSkill } from "./reminder.ts";
 
@@ -86,7 +91,7 @@ export function apply(ctx: Context, config: Config): void {
       messages: decision.messages.toSpliced(
         claimedEnd + 1,
         0,
-        ...pending.map(([key, text]) => reminderMessage(key, text)),
+        ...pending.map(([key, entry]) => reminderMessage(key, entry.text, entry.source)),
       ),
     };
   });
@@ -96,8 +101,10 @@ export function apply(ctx: Context, config: Config): void {
     async ({ agent, signal }, next) => {
       const action = await next();
       if (action?.kind !== "retry" || signal.aborted) return action;
-      for (const [key, text] of await pendingEntries(agent, channel)) {
-        agent.session.append("user/message", reminderMessage(key, text), { surfaceOp: "append" });
+      for (const [key, entry] of await pendingEntries(agent, channel)) {
+        agent.session.append("user/message", reminderMessage(key, entry.text, entry.source), {
+          surfaceOp: "append",
+        });
       }
       return action;
     },
@@ -114,9 +121,9 @@ function sectionId(name: string): string {
 async function pendingEntries(
   agent: Parameters<typeof latestReminderText>[0],
   channel: ContextAssembler,
-): Promise<[string, string][]> {
+): Promise<[string, PromptEntry][]> {
   const entries = await channel.collect(agent);
   return [...entries]
-    .filter(([key, text]) => latestReminderText(agent, key) !== text)
+    .filter(([key, entry]) => latestReminderText(agent, key) !== entry.text)
     .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 }

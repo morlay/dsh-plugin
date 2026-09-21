@@ -1,5 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
+import type { Agent } from "@deepseek-ai/dsh-agent";
 import { isModelInvocable, isSkillName } from "@deepseek-ai/dsh-skill";
+import type {} from "@deepseek-ai/dsh-tool-skill";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type {} from "@morlay/dsh-context-assembler";
 import { renderVirtualSkill } from "@morlay/dsh-context-assembler";
@@ -20,12 +22,30 @@ const DESCRIPTION_MAX_LENGTH = 500;
  * （它的正文已经随提示送达）。工具的渲染用通道的虚拟 skill 形态，不带 `<skill_resources>`。
  */
 export function apply(ctx: Context): void {
+  /**
+   * 本会话上次算出的目录条目：`source` 是同步的、正文是异步的，两者共用这一次计算的结果
+   * （`collect` 里先算正文再取 source）。
+   */
+  const catalogEntries = new WeakMap<Agent, readonly { name: string; description: string }[]>();
+
   ctx.contextAssembler.registerRule({
     id: CATALOG_ID,
+    // 对外身份沿用上游 kind：客户端标签与按 kind 认领的消费方认得这是技能目录，`entries` 就是
+    // 目录行里发布的那份清单（非模型消费者照它列条目）。
+    source: (agent) => ({
+      kind: "skill-catalog",
+      form: "catalog",
+      entries: catalogEntries.get(agent) ?? [],
+    }),
     text: async (agent) => {
+      // 目录没了（工具不在、快照不全、一个 skill 都不可见）就把上次的条目也清掉：`source` 与正文同源。
+      const noCatalog = (): string => {
+        catalogEntries.delete(agent);
+        return "";
+      };
       // 依赖关系：没有 `skill` 工具（被白名单挡掉或被别的 composition 拿掉）时，目录没有意义——
       // 模型拿到了名字也加载不了。是否注入跟着工具走，而不是靠每个模式去列"不要哪些"。
-      if (ctx.tools.get("skill", agent) === undefined) return "";
+      if (ctx.tools.get("skill", agent) === undefined) return noCatalog();
       // 必须带上会话的 cwd 与作用域：本地 skill 发现（`~/.agents/skills`、`{cwd}/.agents/skills`、
       // 项目根）由 preset 层的 `skill-filesystem` 行提供，host 层的同名行在 web 组合里是禁用的——
       // 不传作用域只看得见全局层（本仓库注册的运行时 skill），不传 cwd 连项目根都不扫。
@@ -33,7 +53,7 @@ export function apply(ctx: Context): void {
         cwd: agent.session.header.cwd,
         scope: agent,
       });
-      if (!snapshot.complete) return "";
+      if (!snapshot.complete) return noCatalog();
       // 技能也跟着工具走：依赖的工具一个都不可见的 skill 不进目录（模型看到名字也用不上）。
       const hidden = ctx.contextAssembler.hiddenSkills(
         (tool) => ctx.tools.get(tool, agent) !== undefined,
@@ -41,12 +61,15 @@ export function apply(ctx: Context): void {
       const skills = snapshot.skills
         .filter(isModelInvocable)
         .filter((skill) => !hidden.has(skill.name));
-      if (skills.length === 0) return "";
+      if (skills.length === 0) return noCatalog();
+      const entries = skills.map((skill) => ({
+        name: skill.name,
+        description: clamp(skill.description, DESCRIPTION_MAX_LENGTH),
+      }));
+      catalogEntries.set(agent, entries);
       return [
         "<available_skills>",
-        ...skills.map(
-          (skill) => `- ${skill.name}: ${clamp(skill.description, DESCRIPTION_MAX_LENGTH)}`,
-        ),
+        ...entries.map((entry) => `- ${entry.name}: ${entry.description}`),
         "</available_skills>",
         "",
         "任务与某个 skill 说明匹配时，先加载它再行事。",

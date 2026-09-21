@@ -15,6 +15,12 @@ import * as ContextAssembler from "@morlay/dsh-context-assembler";
 import { afterEach, describe, expect, it } from "vitest";
 import * as plugin from "../index.ts";
 
+/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+function entryIdOf(message: { readonly source: unknown }): string | undefined {
+  const id = (message.source as { readonly id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
+}
+
 const contexts: Context[] = [];
 afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
@@ -55,7 +61,7 @@ function textOf(message: UserMessage): string {
 }
 
 function idOf(message: UserMessage): string | undefined {
-  return message.source.kind === "context-assembler" ? message.source.id : undefined;
+  return entryIdOf(message);
 }
 
 /** 按 display 找正文：id 带根标识，测试只关心"哪个文件的哪一份"。 */
@@ -115,6 +121,13 @@ describe("工作区指令", () => {
       /^<system-reminder id="agent-instructions:[0-9a-f]{8}:AGENTS\.md">/u,
     );
     expect(bodyByDisplay(messages, join(root, "home", "AGENTS.md"))).toContain("只对全局生效");
+    // 对外身份沿用上游 kind：客户端标签与按 kind 认领的消费方认得这是工作区指令。
+    const sources = messages
+      .filter((message) => entryIdOf(message) !== undefined)
+      .map((m) => m.source);
+    expect(
+      sources.some((source) => (source as { kind?: string }).kind === "agent-instructions"),
+    ).toBe(true);
 
     await rm(root, { recursive: true, force: true });
   });
@@ -127,9 +140,7 @@ describe("工作区指令", () => {
     const { ctx, agent } = await mount(root);
 
     const first = await injectedMessages(ctx, agent);
-    for (const message of first.filter(
-      (candidate) => candidate.source.kind === "context-assembler",
-    )) {
+    for (const message of first.filter((candidate) => entryIdOf(candidate) !== undefined)) {
       agent.session.append("user/message", message, { surfaceOp: "append" });
     }
 
@@ -175,11 +186,11 @@ describe("多项目根", () => {
     const secondAgent = await create(second);
 
     const firstBodies = (await injectedMessages(ctx, firstAgent))
-      .filter((message) => message.source.kind === "context-assembler")
+      .filter((message) => entryIdOf(message) !== undefined)
       .map(textOf)
       .join("\n");
     const secondBodies = (await injectedMessages(ctx, secondAgent))
-      .filter((message) => message.source.kind === "context-assembler")
+      .filter((message) => entryIdOf(message) !== undefined)
       .map(textOf)
       .join("\n");
 

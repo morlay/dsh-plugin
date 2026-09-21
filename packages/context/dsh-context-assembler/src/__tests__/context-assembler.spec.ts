@@ -29,6 +29,12 @@ import * as plugin from "../index.ts";
 import { latestReminderText, renderReminder } from "../reminder.ts";
 import { RULES_TEXT } from "../rules.ts";
 
+/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+function entryIdOf(message: { readonly source: unknown }): string | undefined {
+  const id = (message.source as { readonly id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
+}
+
 const contexts: Context[] = [];
 afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
@@ -86,7 +92,7 @@ function textOf(message: UserMessage): string {
 }
 
 function idOf(message: UserMessage): string | undefined {
-  return message.source.kind === "context-assembler" ? message.source.id : undefined;
+  return entryIdOf(message);
 }
 
 /** 本步注入里某个 id 的正文；没有该条目则空串。 */
@@ -96,7 +102,7 @@ function bodyOf(messages: readonly UserMessage[], id: string): string {
 }
 
 function reminderIds(messages: readonly UserMessage[]): (string | undefined)[] {
-  return messages.filter((message) => message.source.kind === "context-assembler").map(idOf);
+  return messages.filter((message) => entryIdOf(message) !== undefined).map(idOf);
 }
 
 async function assemble(ctx: Context, agent: Parameters<typeof assembleContextFor>[0]) {
@@ -272,7 +278,7 @@ describe("reminder 注入", () => {
 
     const first = await preStep(ctx, agent, [prompt("任务")]);
     expect(reminderIds(first)).toEqual(["section:tool:bash"]);
-    for (const reminder of first.filter((message) => message.source.kind === "context-assembler")) {
+    for (const reminder of first.filter((message) => entryIdOf(message) !== undefined)) {
       agent.session.append("user/message", reminder, { surfaceOp: "append" });
     }
 

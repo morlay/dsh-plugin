@@ -319,6 +319,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-instructions':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/context/agent-instructions
       '@deepseek-ai/dsh-agent-loop':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
@@ -497,6 +500,9 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tool-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/tool-skill
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/tools

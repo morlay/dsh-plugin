@@ -17,6 +17,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, skillNameOf } from "../groups.ts";
 import * as plugin from "../index.ts";
 
+/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+function entryIdOf(message: { readonly source: unknown }): string | undefined {
+  const id = (message.source as { readonly id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
+}
+
 const contexts: Context[] = [];
 
 afterEach(async () => {
@@ -155,7 +161,7 @@ function textOf(message: UserMessage): string {
 }
 
 function idOf(message: UserMessage): string | undefined {
-  return message.source.kind === "context-assembler" ? message.source.id : undefined;
+  return entryIdOf(message);
 }
 
 function bodyOf(messages: readonly UserMessage[], id: string): string {

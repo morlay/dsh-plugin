@@ -16,6 +16,12 @@ import * as ContextAssembler from "@morlay/dsh-context-assembler";
 import { afterEach, describe, expect, it } from "vitest";
 import * as plugin from "../index.ts";
 
+/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+function entryIdOf(message: { readonly source: unknown }): string | undefined {
+  const id = (message.source as { readonly id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
+}
+
 const contexts: Context[] = [];
 
 afterEach(async () => {
@@ -61,7 +67,8 @@ async function mount(root: string) {
   return { ctx, agent };
 }
 
-async function catalogBody(ctx: Context, agent: Agent): Promise<string> {
+/** 走真实 pre-step 通道注入一次目录，返回那条消息（`source` 的 kind / entries 也在它上面）。 */
+async function catalogInjection(ctx: Context, agent: Agent): Promise<UserMessage | undefined> {
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const messages: UserMessage[] = [
     createUserMessage({ content: [{ type: "text", text: "任务" }], source: { kind: "user" } }),
@@ -72,11 +79,11 @@ async function catalogBody(ctx: Context, agent: Agent): Promise<string> {
     async () => ({ kind: "enter" as const, messages }),
   );
   const injected = decision.kind === "enter" ? decision.messages : [];
-  const catalog = injected.find(
-    (message) =>
-      message.source.kind === "context-assembler" && message.source.id === "skill-catalog",
-  );
-  const [block] = catalog?.content ?? [];
+  return injected.find((message) => entryIdOf(message) === "skill-catalog");
+}
+
+function messageText(message: UserMessage | undefined): string {
+  const [block] = message?.content ?? [];
   return block?.type === "text" ? block.text : "";
 }
 
@@ -101,9 +108,15 @@ describe("技能目录", () => {
     );
 
     const { ctx, agent } = await mount(root);
-    const body = await catalogBody(ctx, agent);
+    const catalog = await catalogInjection(ctx, agent);
+    if (catalog === undefined) throw new Error("expected a catalog message");
+    const body = messageText(catalog);
 
     expect(body).toMatch(/^<system-reminder id="skill-catalog">/);
+    // 对外身份沿用上游 kind：客户端标签与非模型消费者按它认领这条目录，`entries` 就是发布的那份清单。
+    expect(catalog.source.kind).toBe("skill-catalog");
+    const entries = (catalog.source as { entries?: readonly { name: string }[] }).entries ?? [];
+    expect(entries.map((entry) => entry.name)).toEqual(["project-skill", "user-skill"]);
     expect(body).toContain("project-skill");
     expect(body).toContain("user-skill");
     expect(body).not.toContain("project-hidden");

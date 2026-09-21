@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*"
   },

@@ -41,6 +41,7 @@
 
 ```ts
 ctx.contextAssembler.registerSkill({ name, title, description, content, requires?, injection? });
+ctx.contextAssembler.registerRule({ id, text, source? }); // source 声明对外身份（接管上游那两面用上游 kind）
 ctx.contextAssembler.contentFor(name, agent); // 按需加载路径按这个会话重算正文
 ctx.contextAssembler.replaceSection(sectionName, (agent) => text);
 ctx.contextAssembler.suppressSection(sectionName);
