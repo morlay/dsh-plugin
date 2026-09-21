@@ -52,9 +52,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
     key: "base",
     title: "基础",
     skillDescription:
-      "每轮都可能用到的基础工具：read / write / edit / glob / grep / bash / ask_user_question / " +
-      "job_* / read_image / web_fetch / web_search / skill。开始任何读写、搜索、命令、联网、抓取类" +
-      "动作前加载它，里面是各工具的用法与边界。",
+      "读写文件、找文件找内容、执行命令、联网查资料这些日常动作的用法与边界；开始动手前加载它。",
     lines: [
       {
         when: "read",
@@ -130,9 +128,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   {
     key: "flow",
     title: "流程",
-    skillDescription:
-      "多步任务的流程工具：todo_write / goal 三件套 / present。要在会话里跟踪待办、目标或声明" +
-      "交付物时加载它。",
+    skillDescription: "要在会话里跟踪待办与目标、或声明交付物时加载它。",
     lines: [
       { when: "todo_write", text: "todo_write：多步任务先建清单，并随着进展更新状态。" },
       {
@@ -153,9 +149,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   {
     key: "team",
     title: "协作编排",
-    skillDescription:
-      "派发与协同工具：subagent / spawn_teammate / workflow，以及 list_agents / send_message / " +
-      "wait_agent / team_task_*。需要把工作分给子代理或队友时加载它。",
+    skillDescription: "要把工作分给子代理或队友、或与队友协同完成任务时加载它。",
     lines: [
       {
         when: ["subagent", "spawn_teammate"],
