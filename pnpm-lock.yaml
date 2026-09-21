@@ -543,6 +543,12 @@ importers:
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../dsh-context-assembler
+      '@morlay/dsh-context-scope':
+        specifier: workspace:*
+        version: link:../dsh-context-scope
+      '@morlay/dsh-context-skill-catalog':
+        specifier: workspace:*
+        version: link:../dsh-context-skill-catalog
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9

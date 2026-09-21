@@ -51,6 +51,8 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",
+    "@morlay/dsh-context-scope": "workspace:*",
+    "@morlay/dsh-context-skill-catalog": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0"
   },

@@ -28,7 +28,13 @@ export function apply(ctx: Context): void {
       if (ctx.tools.get("skill", agent) === undefined) return "";
       const snapshot = await ctx.skills.snapshot();
       if (!snapshot.complete) return "";
-      const skills = snapshot.skills.filter(isModelInvocable);
+      // 技能也跟着工具走：依赖的工具一个都不可见的 skill 不进目录（模型看到名字也用不上）。
+      const hidden = ctx.contextAssembler.hiddenSkills(
+        (tool) => ctx.tools.get(tool, agent) !== undefined,
+      );
+      const skills = snapshot.skills
+        .filter(isModelInvocable)
+        .filter((skill) => !hidden.has(skill.name));
       if (skills.length === 0) return "";
       return [
         "<available_skills>",

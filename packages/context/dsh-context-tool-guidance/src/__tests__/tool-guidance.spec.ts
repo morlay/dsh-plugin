@@ -11,6 +11,8 @@ import SkillRegistry from "@deepseek-ai/dsh-skill";
 import { renderPrompt } from "@deepseek-ai/dsh-system-prompt";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import * as ContextAssembler from "@morlay/dsh-context-assembler";
+import * as SkillCatalog from "@morlay/dsh-context-skill-catalog";
+import * as ContextScope from "@morlay/dsh-context-scope";
 import { afterEach, describe, expect, it } from "vitest";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, skillNameOf } from "../groups.ts";
 import * as plugin from "../index.ts";
@@ -336,5 +338,41 @@ describe("模式只给一部分工具时（chat 形态）", () => {
     expect(body).not.toContain("read：");
     expect(body).not.toContain("bash：");
     expect(body).not.toContain("后台任务");
+  });
+});
+
+describe("技能也跟着工具走", () => {
+  it("依赖的工具都没装时，该组的 skill 不进技能目录", async () => {
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, {
+      systemPrompt: { includeHarnessIdentity: false, personaPrefix: "你是一个助手。" },
+    });
+    await mountAgentLoopTestHarness(ctx);
+    await ctx.plugin(SkillRegistry);
+    await ctx.plugin(ContextAssembler);
+    await ctx.plugin(SkillCatalog);
+
+    const key = { preset: "chat" };
+    const standing = createScope(ctx, key);
+    // 装三个对话工具 + 一个 team 工具；flow 组（todo_write / goal / present）一个都没装。
+    const tools = ["ask_user_question", "web_search", "web_fetch", "send_message"];
+    await mountToolRows(standing.ctx, tools);
+    await standing.ctx.plugin(ContextScope, { allowTools: tools });
+    await standing.ctx.plugin(plugin, { groups: true });
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`tool-guidance-requires-${Date.now()}`),
+      setup: async (agentCtx: Context) => {
+        bindScopeParent(scopeOf(agentCtx)!, key);
+      },
+    });
+
+    const body = bodyOf(await preStep(ctx, handle.agent, [prompt("任务")]), "skill-catalog");
+
+    // team 的 send_message 在 → team 组在；flow 组一个工具都没装 → 它不在；
+    // base 是 auto（正文随提示常驻），本来就不进技能目录。
+    expect(body).toContain("tool-group-team");
+    expect(body).not.toContain("tool-group-flow");
+    expect(body).not.toContain("tool-group-base");
   });
 });

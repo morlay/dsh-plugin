@@ -21,6 +21,11 @@ export interface PromptSkillDeclaration {
    * 不传 agent（装配期注册 skill 时）返回不过滤的完整版。
    */
   readonly content: (agent?: Agent) => string;
+  /**
+   * 这个 skill 依赖的工具（任一存在即可）。都不可见时它不该出现在该会话的技能目录里——
+   * "不能用 skill 工具就没有技能目录"是同一个道理：技能也跟着工具走。
+   */
+  readonly requires?: readonly string[];
   /** 缺省 `on-demand`：只有正文确有必要常驻时才写 `auto`。 */
   readonly injection?: InjectionMode;
 }
@@ -117,6 +122,21 @@ export class ContextAssembler extends Service {
   setInstructions(agent: Agent, on: boolean): void {
     if (on) this.withoutInstructions.delete(agent);
     else this.withoutInstructions.add(agent);
+  }
+
+  /**
+   * 该会话看不到的 skill 名：声明了 `requires` 而依赖的工具一个都不可见。
+   *
+   * 目录由 `context-skill-catalog` 渲染，它把工具可见性作为谓词传进来（通道不碰 tools 服务）。
+   */
+  hiddenSkills(visible: (tool: string) => boolean): ReadonlySet<string> {
+    const hidden = new Set<string>();
+    for (const [name, declaration] of this.declarations) {
+      const requires = declaration.requires;
+      if (requires === undefined || requires.length === 0) continue;
+      if (!requires.some(visible)) hidden.add(name);
+    }
+    return hidden;
   }
 
   async collect(agent: Agent): Promise<Map<string, string>> {
