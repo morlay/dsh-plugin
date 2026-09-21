@@ -198,7 +198,7 @@ export class ContextAssembler extends Service {
   }
 
   /**
-   * 每步装配调一次：记下回收到的文本（正文随之更新），并算出本步要注入的条目。
+   * 每步装配调一次：记下本步降级出来的 section 文本，供下一步注入。
    */
   sync(agent: Agent, input: { readonly sections: ReadonlyMap<string, string> }): void {
     this.stateOf(agent).sections = input.sections;

@@ -1,7 +1,7 @@
 # @morlay/dsh-context-assembler
 
 提示词注入的唯一通道：system prompt 里只留部署 persona 与覆盖规则，其余内容按调用方的声明决定怎么到达模型
-——降级为规则块（`<system-reminder id="…">`）、回收进按需加载的 skill 正文、或直接丢弃。
+——降级为规则块（`<system-reminder id="…">`）、或直接丢弃（要进按需 skill 正文的话，由调用方自己写进那份正文）。
 
 规则、id 表与分层的 home 在 [上下文注入规则](../.agents/designs/20260921-上下文注入规则.md)；
 术语见 [context 层的 CONTEXT.md](../.agents/CONTEXT.md)。
@@ -17,7 +17,7 @@
 | `suppress` | 配置默认值（平台说明等）+ `suppressSection`  | 不进提示词                             |
 | `replace`  | 配置默认值（两段中文文案）+ `replaceSection` | 换成给定文本；空串等于不注入           |
 
-（**回收**不在这里：谁想把自己的内容收进 skill 正文，就自己写进那份正文——`tool-guidance` 的组正文与
+（**把上游说明的要点搬进正文不在这里**：谁想把自己的内容收进 skill 正文，就自己写进那份正文——`tool-guidance` 的组正文与
 `drops` 清单就是这么做的，通道不提供把 section 文本搬进正文的能力。）
 
 ### 注入
@@ -69,6 +69,6 @@ skill 在装配期注册一次、对所有会话可见，所以**注册表里那
 
 - **reminder 仍是模型输入**：总 token 不减，只是不再占系统提示词的位置；真正省 token 的是「按需加载」
   那一半（正文不进上下文，直到模型加载）。
-- **回收是注入方的事**：通道不把 section 文本搬进 skill 正文（`tool-guidance` 的组正文就是各组自己
+- **要点搬进正文是注入方的事**：通道不把 section 文本搬进 skill 正文（`tool-guidance` 的组正文就是各组自己
   写好的要点，配套 `drops` 清单决定哪些上游说明不再进提示词），所以 `auto` 正文在注册时即完整。
 - **顺序**：reminder 与工作区指令都是 pre-step 注入的 user 消息，两者先后由 listener 注册顺序决定。

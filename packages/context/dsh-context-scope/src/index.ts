@@ -15,6 +15,8 @@ export interface Config {
    * 是否要 instruction 类的注入（工作区指令、技能目录、用法正文那类规则块）。缺省要；
    * `false` 表示这个模式不要任何 instructions——对话模式就是它。
    *
+   * 关的是**规则块与降级 section**（通道的 `setInstructions`）；内容块（`auto` 组正文、引用材料）
+   * 不受这个开关管，要靠对应的注入方自己不注册（chat 同时给了 `groups: false`）。
    * 注意这与工具白名单是两件事：工具没给，跟着它的注入本来就该自己关（见各注入包对 requires 的判断）；
    * 这里是"连与工具无关的 instruction 也不要"的总开关。
    */

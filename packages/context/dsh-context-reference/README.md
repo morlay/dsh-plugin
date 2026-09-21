@@ -1,7 +1,7 @@
 # @morlay/dsh-context-reference
 
 把用户消息里的引用在 `agent/pre-step` 边界展开成注入消息：skill 引用渲染 `<skill_content>`，`@path` 文件引用
-读取内容并渲染成 read 工具同形的内容块。引用由 client 面同一份统一解析
+读取内容并渲染成 `<file_content path="…">` 内容块（窗口语义照 read 的，信封是本部署自己的形态）。引用由 client 面同一份统一解析
 （`@morlay/dsh-client-ui-primitives` 的 `findReferences`）认领，消息文本本身不动。
 
 ## 行为

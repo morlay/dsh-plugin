@@ -13,8 +13,8 @@ export const DEFAULT_KEEP: readonly string[] = [
 
 /**
  * 不进提示词的 section。两类：平台运维说明（讲 dev server / HMR / 本地 checkout 位置，
- * 与本部署的模型任务无关），以及本部署不装配的工具的用法说明。其余工具说明由各组自己回收进
- * skill 正文（`context-tool-guidance` 的组正文 + `drops` 清单），不在这一份里。
+ * 与本部署的模型任务无关），以及本部署不装配的工具的用法说明。其余工具说明由各组的 `drops` 摘掉、
+ * 要点由 `context-tool-guidance` 写进组正文，不在这一份里。
  */
 export const DEFAULT_SUPPRESS: readonly string[] = [
   "harness:source",

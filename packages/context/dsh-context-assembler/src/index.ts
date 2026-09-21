@@ -24,7 +24,7 @@ const RULES_ORDER = 1;
 export const inject = ["systemPrompt", "skills"];
 
 export interface Config {
-  /** 留在系统提示词里的 section 名；其余非空 section 降级为 reminder 或被回收。 */
+  /** 留在系统提示词里的 section 名；其余非空 section 降级为 reminder。 */
   keep?: string[];
   /** 不进提示词的 section 名（部署级噪音）。 */
   suppress?: string[];
@@ -40,7 +40,7 @@ export const Config: z<Config> = z.object({
 
 /**
  * 提示词注入的唯一通道：system prompt 里只留 `keep`，其余内容按声明的方式到达模型——
- * 降级为紧随用户消息的 reminder、回收进按需加载的 skill 正文、或直接丢弃。
+ * 降级为紧随用户消息的 reminder、或直接丢弃（写进按需 skill 正文是调用方自己的事）。
  */
 export function apply(ctx: Context, config: Config): void {
   const channel = new ContextAssembler(ctx);
