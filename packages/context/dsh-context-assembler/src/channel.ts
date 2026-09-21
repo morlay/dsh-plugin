@@ -22,8 +22,11 @@ export interface PromptSkillDeclaration {
    */
   readonly content: (agent?: Agent) => string;
   /**
-   * 这个 skill 依赖的工具（任一存在即可）。都不可见时它不该出现在该会话的技能目录里——
-   * "不能用 skill 工具就没有技能目录"是同一个道理：技能也跟着工具走。
+   * 这个 skill 赖以成立的**入口工具**（任一存在即可，不是全部）。都不可见时它不该出现在该会话的技能
+   * 目录里——"不能用 skill 工具就没有技能目录"是同一个道理：技能也跟着工具走。
+   *
+   * 缺省语义就是"一个都不在就藏起来"；声明方要自己挑入口，别把组内所有可能的工具都倒进来
+   * （子代理控制行与团队插件会提供同名工具，全集当判据会把不该出现的 skill 留下）。
    */
   readonly requires?: readonly string[];
   /** 缺省 `on-demand`：只有正文确有必要常驻时才写 `auto`。 */

@@ -10,7 +10,7 @@ import {
 } from "../groups.ts";
 
 describe("组表", () => {
-  it("每个组都带中文名、skill 摘要与正文，且三组齐备", () => {
+  it("每个组都带中文名、skill 摘要与正文，且四组齐备", () => {
     expect(groupByKey(BASE_GROUP_KEY).title).toBe("基础");
     for (const key of GROUP_KEYS) {
       const group = groupByKey(key);
@@ -27,7 +27,7 @@ describe("组表", () => {
     expect(groupByKey("base").injection).toBe("auto");
     expect(
       TOOL_GROUPS.filter((group) => group.key !== "base").map((group) => group.injection),
-    ).toEqual(["on-demand", "on-demand"]);
+    ).toEqual(["on-demand", "on-demand", "on-demand"]);
   });
 
   it("联网工具在 base 组：搜索与抓取是同一件事的两半", () => {
@@ -50,6 +50,26 @@ describe("组表", () => {
   it("协作规则随 team 组一起丢弃：要点已写进它的正文", () => {
     expect(groupByKey("team").drops).toContain("team:policy");
     expect(groupSkillBody(groupByKey("team"))).toContain("只在用户明确要求时才招募队友");
+  });
+
+  it("team 组的入口只认团队插件独有的工具（同名工具由派发组提供）", () => {
+    const team = groupByKey("team");
+    const delegation = groupByKey("delegation");
+
+    expect(team.requires).toContain("spawn_teammate");
+    // 子代理控制行也提供这三个同名工具：它们不能当作 team 组的成立判据。
+    for (const shared of ["send_message", "list_agents", "interrupt_agent"]) {
+      expect(delegation.tools).toContain(shared);
+      expect(team.requires ?? team.tools).not.toContain(shared);
+    }
+  });
+
+  it("派发组讲子代理（不是队友）：同名工具的说明归它", () => {
+    const body = groupSkillBody(groupByKey("delegation"));
+
+    expect(body).toContain("- subagent：派发子代理");
+    expect(body).toContain("send_message：给子代理发消息");
+    expect(body).not.toContain("队友");
   });
 
   it("每个归组的工具都有中文短描述", () => {

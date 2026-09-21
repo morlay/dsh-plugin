@@ -264,19 +264,25 @@ describe("用法说明的分发", () => {
     expect(injected).not.toContain("【基础】");
   });
 
-  it("flow / team 进 skill 目录按需加载，base 不进目录", async () => {
+  it("flow / delegation / team 进 skill 目录按需加载，base 不进目录", async () => {
     const { ctx, agent } = await mount();
 
-    // eslint-disable-next-line no-console
-    expect(await modelSkills(ctx, agent)).toEqual([skillNameOf("flow"), skillNameOf("team")]);
+    expect(await modelSkills(ctx, agent)).toEqual([
+      skillNameOf("delegation"),
+      skillNameOf("flow"),
+      skillNameOf("team"),
+    ]);
 
     const flow = await skillContent(ctx, agent, skillNameOf("flow"));
     expect(flow).toContain("- todo_write：多步任务");
     expect(flow).not.toContain("GOAL_GUIDE");
 
+    const delegation = await skillContent(ctx, agent, skillNameOf("delegation"));
+    expect(delegation).toContain("- subagent：派发子代理");
+    expect(delegation).not.toContain("SUBAGENT_GUIDE");
+
     const teams = await skillContent(ctx, agent, skillNameOf("team"));
-    expect(teams).toContain("- subagent：派发子代理");
-    expect(teams).not.toContain("SUBAGENT_GUIDE");
+    expect(teams).toContain("- spawn_teammate：派发队友");
   });
 
   it("上游逐工具说明不进系统提示词", async () => {
@@ -303,7 +309,11 @@ describe("用法说明的分发", () => {
       expect(bodyOf(await preStep(ctx, agent, [prompt("任务")]), skillNameOf("base"))).toContain(
         "- read：读文本文件",
       );
-      expect(await modelSkills(ctx, agent)).toEqual([skillNameOf("flow"), skillNameOf("team")]);
+      expect(await modelSkills(ctx, agent)).toEqual([
+        skillNameOf("delegation"),
+        skillNameOf("flow"),
+        skillNameOf("team"),
+      ]);
     }
   });
 });
@@ -342,7 +352,11 @@ describe("模式只给一部分工具时（chat 形态）", () => {
 });
 
 describe("技能也跟着工具走", () => {
-  it("依赖的工具都没装时，该组的 skill 不进技能目录", async () => {
+  /**
+   * 只装这几个工具（preset 作用域）并把白名单收在同一作用域，返回该会话的技能目录正文：
+   * 目录本身就是注入通道的一条规则块（id `skill-catalog`）。
+   */
+  async function catalogFor(tools: string[]): Promise<string> {
     const ctx = new Context();
     contexts.push(ctx);
     await mountAgentLoopTestDependencies(ctx, {
@@ -355,24 +369,43 @@ describe("技能也跟着工具走", () => {
 
     const key = { preset: "chat" };
     const standing = createScope(ctx, key);
-    // 装三个对话工具 + 一个 team 工具；flow 组（todo_write / goal / present）一个都没装。
-    const tools = ["ask_user_question", "web_search", "web_fetch", "send_message"];
     await mountToolRows(standing.ctx, tools);
     await standing.ctx.plugin(ContextScope, { allowTools: tools });
     await standing.ctx.plugin(plugin, { groups: true });
     const handle = await ctx.agents.create({
-      sessionId: SessionId(`tool-guidance-requires-${Date.now()}`),
+      sessionId: SessionId(`tool-guidance-requires-${Date.now()}-${Math.random()}`),
       setup: async (agentCtx: Context) => {
         bindScopeParent(scopeOf(agentCtx)!, key);
       },
     });
 
-    const body = bodyOf(await preStep(ctx, handle.agent, [prompt("任务")]), "skill-catalog");
+    return bodyOf(await preStep(ctx, handle.agent, [prompt("任务")]), "skill-catalog");
+  }
 
-    // team 的 send_message 在 → team 组在；flow 组一个工具都没装 → 它不在；
-    // base 是 auto（正文随提示常驻），本来就不进技能目录。
-    expect(body).toContain("tool-group-team");
+  const CHAT_TOOLS = ["ask_user_question", "web_search", "web_fetch"];
+
+  it("依赖的工具都没装时，该组的 skill 不进技能目录", async () => {
+    // 三个对话工具 + 一个子代理控制工具：flow 组（todo_write / goal / present）一个都没装，
+    // Agent Teams 也没装——`send_message` 是子代理控制行提供的同名工具，不是 team 组的入口。
+    const body = await catalogFor([...CHAT_TOOLS, "send_message"]);
+
+    expect(body).toContain("tool-group-delegation");
+    expect(body).not.toContain("tool-group-team");
     expect(body).not.toContain("tool-group-flow");
+    // base 是 auto（正文随提示常驻），本来就不进技能目录。
     expect(body).not.toContain("tool-group-base");
+  });
+
+  it("装了团队插件独有的入口工具，team 组才进技能目录", async () => {
+    const body = await catalogFor([
+      ...CHAT_TOOLS,
+      "send_message",
+      "spawn_teammate",
+      "team_task_create",
+      "wait_agent",
+    ]);
+
+    expect(body).toContain("tool-group-team");
+    expect(body).toContain("tool-group-delegation");
   });
 });

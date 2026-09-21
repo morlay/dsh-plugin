@@ -46,8 +46,9 @@ export function apply(ctx: Context, config: Config): void {
           agent === undefined ? () => true : (tool) => ctx.tools.get(tool, agent) !== undefined,
         ),
       injection: group.injection,
-      // 该组的工具一个都不可见时，这个 skill 也不该出现在技能目录里。
-      requires: group.tools,
+      // 该组的入口工具一个都不可见时，这个 skill 也不该出现在技能目录里（组内混了两套来源时由组自己
+      // 声明入口，见 `ToolGroup.requires`）。
+      requires: group.requires ?? group.tools,
     });
   }
 
