@@ -70,6 +70,9 @@ export interface DesktopHostOptions {
 
   readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string };
 
+  /** 子进程在 `ps` 里的名字（`node --title`），由壳给成 `<app name>-server`。 */
+  readonly processTitle?: string;
+
   readonly spawn?: DesktopHostSpawn;
 
   /** host 非预期退出/管道断开时通知壳一次（壳据此拦截，别让页面停在半死状态）。 */
@@ -121,6 +124,7 @@ export class DesktopHostProcess {
     const packageManager = this.options.packageManager;
     const args = [
       "--expose-internals",
+      ...(this.options.processTitle === undefined ? [] : [`--title=${this.options.processTitle}`]),
       ...(this.inspectPort === undefined
         ? []
         : [`--inspect=127.0.0.1:${String(this.inspectPort)}`]),
@@ -209,7 +213,7 @@ export class DesktopHostProcess {
     return this.readyPromise;
   }
 
-  /** 把一个 `dsh-app://` 请求交给子进程，响应体边收边出。 */
+  /** 把一个应用协议请求（`<scheme>://app/*`）交给子进程，响应体边收边出。 */
   async fetch(request: Request): Promise<Response> {
     await this.start();
     const child = this.child;

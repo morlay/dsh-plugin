@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { markDocumentPlatform, markWindowsTitlebar, syncNativeTheme } from "./document-marks.ts";
-import { DESKTOP_IPC, SCHEME } from "./ipc.ts";
+import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT } from "./ipc.ts";
 
 interface StreamChunk {
   readonly id: number;
@@ -9,7 +9,17 @@ interface StreamChunk {
   readonly message?: string;
 }
 
-if (location.protocol === `${SCHEME}:` && location.hostname === "app") {
+/** scheme 取自 app 名，只有主进程知道；sandboxed preload 里只能从 argv 读回。 */
+const scheme = process.argv
+  .find((argument) => argument.startsWith(`${DESKTOP_SCHEME_ARGUMENT}=`))
+  ?.slice(DESKTOP_SCHEME_ARGUMENT.length + 1);
+
+if (
+  scheme !== undefined &&
+  scheme !== "" &&
+  location.protocol === `${scheme}:` &&
+  location.hostname === "app"
+) {
   contextBridge.exposeInMainWorld("__DSH_DIRECTORY_PICKER__", {
     pick: () => ipcRenderer.invoke(DESKTOP_IPC.directoryPick) as Promise<string | null>,
   });

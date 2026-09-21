@@ -7,7 +7,7 @@ import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
 import { resolveDshHome } from "./dshhome.ts";
 import { DesktopHostProcess } from "./host-process.ts";
-import { DESKTOP_IPC, SCHEME, assertDesktopSender } from "./ipc.ts";
+import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT, assertDesktopSender, desktopScheme } from "./ipc.ts";
 import {
   PROFILE_WORKSPACE_NAME,
   installProfile,
@@ -19,6 +19,37 @@ import { DESKTOP_STREAM_PATH } from "@morlay/dsh-desktop-host/wire";
 import { shellWrappedSpawn } from "./shell-env.ts";
 
 let focusPrimaryWindow = (): void => {};
+
+/** appconfig.json 的位置：打包形态只看 resources，dev 形态由 CLI 指到构建目录。 */
+function appConfigDir(): string {
+  const configured = process.env.DSH_DESKTOP_APPCONFIG_DIR;
+  return app.isPackaged || configured === undefined || configured === ""
+    ? process.resourcesPath
+    : configured;
+}
+
+function startupFailure(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(error);
+  dialog.showErrorBox("dsh desktop startup failed", message);
+  app.exit(1);
+  throw error instanceof Error ? error : new Error(message);
+}
+
+// 配置与协议必须在 `ready` 之前定下（`registerSchemesAsPrivileged` 只有这一个窗口期）：
+// Electron 会等入口模块的顶层 await 跑完才 emit `ready`，所以这里用 await 而不是同步 IO。
+const appConfig: AppConfig = await loadAppConfig(appConfigDir()).catch((error: unknown) =>
+  startupFailure(error),
+);
+
+/** 自定义协议取自 app 名：与官方桌面应用（`dsh-app`）错开。 */
+const SCHEME = ((): string => {
+  try {
+    return desktopScheme(appConfig.name);
+  } catch (error) {
+    startupFailure(error);
+  }
+})();
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -166,6 +197,8 @@ function createWindow(
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
+      // preload 是 sandboxed 的（读不到文件），scheme 只能这样递进去。
+      additionalArguments: [`${DESKTOP_SCHEME_ARGUMENT}=${SCHEME}`],
     },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -195,13 +228,10 @@ function developmentNodeArgs(): string[] {
 
 async function main(): Promise<void> {
   const development = developmentProject();
-  const config: AppConfig =
-    development === undefined
-      ? await loadAppConfig(process.resourcesPath)
-      : await loadAppConfig(process.env.DSH_DESKTOP_APPCONFIG_DIR ?? process.resourcesPath);
   const resources = runtimeResources();
   const hostInspectPort = developmentHostInspectPort(development !== undefined);
-  const activeProject = development ?? join(resolveDshHome(config) ?? "", "profiles", PROFILE_NAME);
+  const activeProject =
+    development ?? join(resolveDshHome(appConfig) ?? "", "profiles", PROFILE_NAME);
 
   const runtimeProject = development ?? resources.runtime;
   const webDocumentRoot = join(
@@ -210,7 +240,7 @@ async function main(): Promise<void> {
     ...WEB_FRONTEND_PACKAGE.split("/"),
     "dist",
   );
-  const dshHome = resolveDshHome(config);
+  const dshHome = resolveDshHome(appConfig);
 
   if (development === undefined) {
     if (dshHome === undefined)
@@ -243,7 +273,7 @@ async function main(): Promise<void> {
         defaultId: 0,
         cancelId: 0,
         noLink: true,
-        message: `Quit ${config.name}?`,
+        message: `Quit ${appConfig.name}?`,
         detail: "The desktop backend and its running sessions will stop.",
       };
       const parent = window ?? mainWindow;
@@ -285,6 +315,8 @@ async function main(): Promise<void> {
         },
         primaryRuntime: resources.primaryRuntime,
         profileResolution: development === undefined ? "runtime" : "link",
+        // `ps` 里能把后端与别的 node 进程区分开。
+        processTitle: `${appConfig.name}-server`,
         // 打包形态的包操作使用随包 pnpm；dev 形态回退到 PATH 上的 pnpm。
         ...(development === undefined
           ? { packageManager: { pnpm: resources.pnpm, nodeBin: resources.nodeBin } }
@@ -311,14 +343,14 @@ async function main(): Promise<void> {
     return response;
   });
 
-  installDesktopDirectoryPicker(() => mainWindow);
+  installDesktopDirectoryPicker(() => mainWindow, SCHEME);
 
   // 桌面流载体：主进程自己构造 Request（body 是普通字符串流，宿主能正常读完），
   // 把响应体逐块推回页面——页面 fetch 到自定义协议的 POST body 在 Chromium 上不可靠。
   let nextStreamId = 1;
   const activeStreams = new Map<number, AbortController>();
   ipcMain.handle(DESKTOP_IPC.streamOpen, async (event, endpoint: unknown, payload: unknown) => {
-    assertDesktopSender(event, ["app"]);
+    assertDesktopSender(event, SCHEME, ["app"]);
     if (typeof endpoint !== "string") throw new Error("dsh desktop: stream endpoint must be text");
     const active = host;
     if (active === undefined) throw new Error("dsh desktop: Host is unavailable");
@@ -372,7 +404,7 @@ async function main(): Promise<void> {
   });
 
   const createMainWindow = (): BrowserWindow => {
-    const window = createWindow(appPreload, config.window);
+    const window = createWindow(appPreload, appConfig.window);
     mainWindow = window;
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) window.show();
@@ -436,9 +468,8 @@ async function main(): Promise<void> {
 
 if (app.isPackaged) {
   try {
-    // 打包应用必须在 whenReady 之前把 userData 指到 appconfig.json 的 id 目录；
-    // 这里用顶层 await 完成读配置与建目录，模块其余部分随后继续同步执行。
-    const profile = join(app.getPath("appData"), (await loadAppConfig(process.resourcesPath)).id);
+    // 打包应用必须在 whenReady 之前把 userData 指到 appconfig.json 的 id 目录。
+    const profile = join(app.getPath("appData"), appConfig.id);
     await mkdir(profile, { recursive: true });
     app.setPath("userData", profile);
   } catch (error) {

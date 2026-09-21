@@ -1,7 +1,7 @@
 # @morlay/dsh-desktop-host
 
 桌面部署里那个 **host 进程**：按 `desktop` profile 把 Web 应用启起来，然后**在进程内接管 `webServer`**——
-不监听任何端口，Electron 壳把 `dsh-app://app/*` 的请求经字节管道（FD 3/4）喂进来。
+不监听任何端口，Electron 壳把该应用自己的协议（`<app name>://app/*`）的请求经字节管道（FD 3/4）喂进来。
 
 上游 `apps/desktop-host`（`@deepseek-ai/dsh-desktop-host`）是 `private: true` 的应用，外部装不到，所以这里
 是它的**变体包**：argv / IPC 契约、`lib/index.js` 入口路径照旧，两处本地差别——Office 组合不再挂

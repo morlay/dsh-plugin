@@ -10,7 +10,8 @@
 - **协议 / 宿主**：`host-protocol.spec.ts`（协议常量与编解码）、`host-process.spec.ts`；
 - **文档 / 认证 / 转发**：`web-document.spec.ts`；
 - **命令面与配置**：`cli-surface.spec.ts`、`workspace-config.spec.ts`、`appconfig.spec.ts`、
-  `dshhome.spec.ts`、`shell-env.spec.ts`、`shell-app-directory.spec.ts`、`dev-*.spec.ts`；
+  `ipc.spec.ts`（app 名 → scheme 的派生与发送者校验）、`dshhome.spec.ts`、`shell-env.spec.ts`、
+  `shell-app-directory.spec.ts`、`dev-*.spec.ts`；
 - **种子 / 部署 / 运行时闭包**：`seed-*.spec.ts`、`profile-seed.spec.ts`、`deploy-*.spec.ts`、
   `official-*.spec.ts`、`runtime-packages.spec.ts`、`prepare-runtime-target.spec.ts`、
   `agent-presets.spec.ts`、`office-assets.spec.ts`；

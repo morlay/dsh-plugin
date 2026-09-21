@@ -132,6 +132,20 @@ describe("桌面 host 子进程", () => {
     await stopped;
   });
 
+  it("processTitle 转成 node --title，进程在 ps 里可区分", async () => {
+    const { calls, child, host } = harness({ processTitle: "dsh-custom-next-server" });
+    const started = host.start();
+    expect(calls[0]?.args.slice(0, 2)).toEqual([
+      "--expose-internals",
+      "--title=dsh-custom-next-server",
+    ]);
+    ready(child);
+    await started;
+    const stopped = host.stop();
+    child.emit("close", 0);
+    await stopped;
+  });
+
   it("ready 之前报 fatal 时启动失败", async () => {
     const { child, host } = harness();
     const started = host.start();

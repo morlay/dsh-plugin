@@ -11,13 +11,34 @@ export const DESKTOP_IPC = {
   streamError: "dsh-desktop:stream-error",
 } as const;
 
-export const SCHEME = "dsh-app";
+/** preload 从渲染进程 argv 里读回 scheme 的参数名（主进程与 preload 共用一份）。 */
+export const DESKTOP_SCHEME_ARGUMENT = "--dsh-desktop-scheme";
 
-export function assertDesktopSender(event: IpcMainInvokeEvent, hostnames: readonly string[]): void {
+/**
+ * 应用页面的自定义协议：取 app 工作区 package.json 的 name 派生，避免与官方桌面应用
+ * 共用同一个 scheme。去 scope 前缀、转小写、非法字符换成 `-`；派生不出合法 scheme 就报错。
+ */
+export function desktopScheme(name: string): string {
+  const bare = name
+    .slice(name.lastIndexOf("/") + 1)
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9+.-]/gu, "-");
+  if (!/^[a-z][a-z0-9+.-]*$/u.test(bare))
+    throw new Error(
+      `dsh desktop: application name "${name}" does not yield a usable URL scheme (${bare})`,
+    );
+  return bare;
+}
+
+export function assertDesktopSender(
+  event: IpcMainInvokeEvent,
+  scheme: string,
+  hostnames: readonly string[],
+): void {
   const senderFrame = event.senderFrame;
   if (senderFrame === null) throw new Error("dsh desktop: rejected IPC without a sender frame");
   const url = new URL(senderFrame.url);
-  if (url.protocol !== `${SCHEME}:` || !hostnames.includes(url.hostname)) {
+  if (url.protocol !== `${scheme}:` || !hostnames.includes(url.hostname)) {
     throw new Error("dsh desktop: rejected IPC from an unowned renderer");
   }
 }

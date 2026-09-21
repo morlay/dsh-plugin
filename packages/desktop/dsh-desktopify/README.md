@@ -40,6 +40,10 @@
 }
 ```
 
+`name` 除作为 electron-builder 的 productName，还决定壳对外自称的两处标识：页面的自定义协议
+（`<name>://app/`，去 scope 前缀、非法字符换成 `-`）与后端 host 子进程在 `ps` 里的名字
+（`<name>-server`），见[设计 桌面标识取自 app 名](./.agents/designs/20260921-桌面标识取自app名.md)。
+
 `dsh.version` 是 `@deepseek-ai/dsh` 的依赖 spec：仓库内项目可配 `workspace:*`（从 vendor 源码解析），
 仓库外项目配具体版本（从 registry 安装）；缺省时回退到工作区已解析的 dsh 版本。配 `workspace:` 时工具不把它落成
 版本号（本地源码可能尚未发布），而是指向解析到的包目录。打包时工作区没有的官方包（实验包这类）按这个版本钉住

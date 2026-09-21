@@ -120,13 +120,15 @@ describe("shell configuration handoff", () => {
     ];
 
     for (const value of invalid) {
-      await expect(async () => await loadAppConfig(await write(value))).rejects.toThrow(
+      const dir = await write(value);
+      await expect(async () => await loadAppConfig(dir)).rejects.toThrow(
         /invalid shell configuration/u,
       );
     }
   });
 
   it("fails when the shell configuration is absent", async () => {
-    await expect(async () => await loadAppConfig(await tempDir())).rejects.toThrow(/ENOENT/u);
+    const dir = await tempDir();
+    await expect(async () => await loadAppConfig(dir)).rejects.toThrow(/ENOENT/u);
   });
 });
