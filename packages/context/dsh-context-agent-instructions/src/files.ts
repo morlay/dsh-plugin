@@ -2,8 +2,10 @@ import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-/** 一条要注入的指令文件：`display` 进 id 与正文，`path` 用来读。 */
+/** 一条要注入的指令文件：`display` 进 id 与正文，`path` 用来读，`root` 区分同名文件。 */
 export interface InstructionFile {
+  /** 该文件所属的根（项目根或 `$DSH_HOME`）：规则块 id 靠它区分不同根下的同名文件。 */
+  readonly root: string;
   readonly display: string;
   readonly path: string;
 }
@@ -44,7 +46,8 @@ export async function instructionChain(
 ): Promise<InstructionFile[]> {
   const files: InstructionFile[] = [];
   const global = join(options.dshHome, "AGENTS.md");
-  if (await isFile(global)) files.push({ display: abbreviateHome(global), path: global });
+  if (await isFile(global))
+    files.push({ root: options.dshHome, display: abbreviateHome(global), path: global });
 
   const root = (await projectRoot(cwd)) ?? resolve(cwd);
   const levels: string[] = [];
@@ -62,7 +65,7 @@ export async function instructionChain(
       ...options.localInstructionFileCandidates,
     ]) {
       const path = join(level, name);
-      if (await isFile(path)) files.push({ display: relativeDisplay(root, path), path });
+      if (await isFile(path)) files.push({ root, display: relativeDisplay(root, path), path });
     }
   }
   return files;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
@@ -31,7 +32,7 @@ export const Config: z<Config> = z.object({
 const chains = new WeakMap<Agent, { cwd: string; files: InstructionFile[] }>();
 
 /**
- * 工作区指令：一条文件一个规则块（id 为 `agent-instructions:<文件>`），文件变化时正文变、按 id 覆盖。
+ * 工作区指令：一条文件一个规则块（id 为 `agent-instructions:<根标识>:<文件>`），文件变化时正文变、按 id 覆盖。
  *
  * 与上游 `agent-instructions` 的差别：不做 read/write/edit 的 touch 跟踪（本部署的 `AGENTS.md`
  * 几乎不变），只在每步按 `mtime:size` 对账；一份文件一条 id，于是变化只重发变了的那一份。
@@ -53,7 +54,7 @@ export function apply(ctx: Context, config: Config): void {
     chains.set(agent, chain);
     for (const file of chain.files) {
       ctx.contextAssembler.registerRule({
-        id: `agent-instructions:${file.display}`,
+        id: `agent-instructions:${rootTag(file.root)}:${file.display}`,
         text: (target) => {
           const current = chains.get(target);
           if (current === undefined || !current.files.some((entry) => entry.path === file.path))
@@ -79,4 +80,13 @@ export function apply(ctx: Context, config: Config): void {
 function defaultDshHome(): string {
   const home = process.env["HOME"] ?? "~";
   return resolve(process.env["DSH_HOME"] ?? `${home}/.dsh`);
+}
+
+/**
+ * 规则块 id 里的根标识：规则声明是**全局按 id 覆盖**的，而 `display` 只是根内相对路径——
+ * 同进程里两个项目根都有 `AGENTS.md` 时，不带根标识的 id 会互相顶掉（后注册者覆盖前者，
+ * 前者此后读到空正文）。8 位摘要够唯一，又不把绝对路径塞进提示词 id。
+ */
+function rootTag(root: string): string {
+  return createHash("sha256").update(root).digest("hex").slice(0, 8);
 }
