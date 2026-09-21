@@ -307,6 +307,249 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
 
+  packages/context/dsh-context-agent-instructions:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../dsh-context-assembler
+
+  packages/context/dsh-context-assembler:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-compaction-basic':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/compaction/compaction-basic
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-token-meter':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/token-meter
+      '@morlay/session-rdb':
+        specifier: workspace:*
+        version: link:../../session/session-rdb
+
+  packages/context/dsh-context-reference:
+    dependencies:
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.0.3(supports-color@9.4.0)
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/fs/fs
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
+
+  packages/context/dsh-context-scope:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../dsh-context-assembler
+
+  packages/context/dsh-context-skill-catalog:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../dsh-context-assembler
+
+  packages/context/dsh-context-tool-guidance:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/include
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/interaction/commands
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../dsh-context-assembler
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
+
   packages/desktop/dsh-desktop-host:
     dependencies:
       '@deepseek-ai/dsh':
@@ -452,18 +695,27 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-prompt-reminder':
+      '@morlay/dsh-context-agent-instructions':
         specifier: workspace:*
-        version: link:../dsh-prompt-reminder
-      '@morlay/dsh-reference-injection':
+        version: link:../../context/dsh-context-agent-instructions
+      '@morlay/dsh-context-assembler':
         specifier: workspace:*
-        version: link:../../session/dsh-reference-injection
+        version: link:../../context/dsh-context-assembler
+      '@morlay/dsh-context-reference':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-reference
+      '@morlay/dsh-context-scope':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-scope
+      '@morlay/dsh-context-skill-catalog':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-skill-catalog
+      '@morlay/dsh-context-tool-guidance':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-tool-guidance
       '@morlay/dsh-sandbox-local':
         specifier: workspace:*
         version: link:../../sandbox/dsh-sandbox-local
-      '@morlay/dsh-tool-gating':
-        specifier: workspace:*
-        version: link:../dsh-tool-gating
     devDependencies:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:*
@@ -471,95 +723,66 @@ importers:
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/preset/agent-presets
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.3.2
-
-  packages/preset/dsh-prompt-reminder:
-    dependencies:
-      '@deepseek-ai/schemastery':
+      '@deepseek-ai/dsh-command-compact':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
+        version: link:../../../vendor/deepseek-harness/packages/compaction/command-compact
+      '@deepseek-ai/dsh-command-goal':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent
-      '@deepseek-ai/dsh-agent-loop':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
-      '@deepseek-ai/dsh-agent-loop-testkit':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+        version: link:../../../vendor/deepseek-harness/packages/goal/command-goal
       '@deepseek-ai/dsh-compaction-basic':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/compaction/compaction-basic
-      '@deepseek-ai/dsh-llm':
+      '@deepseek-ai/dsh-compaction-tool-result-pruner':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/llm
-      '@deepseek-ai/dsh-scope':
+        version: link:../../../vendor/deepseek-harness/packages/compaction/compaction-tool-result-pruner
+      '@deepseek-ai/dsh-persona':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/scope
-      '@deepseek-ai/dsh-session':
+        version: link:../../../vendor/deepseek-harness/packages/preset/persona
+      '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/session
-      '@deepseek-ai/dsh-system-prompt':
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill-filesystem
+      '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
-      '@deepseek-ai/dsh-token-meter':
+        version: link:../../../vendor/deepseek-harness/packages/interaction/tool-ask-user
+      '@deepseek-ai/dsh-tool-bash':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/token-meter
-      '@morlay/session-rdb':
+        version: link:../../../vendor/deepseek-harness/packages/shell/tool-bash
+      '@deepseek-ai/dsh-tool-fs':
         specifier: workspace:*
-        version: link:../../session/session-rdb
-
-  packages/preset/dsh-tool-gating:
-    dependencies:
-      '@deepseek-ai/schemastery':
+        version: link:../../../vendor/deepseek-harness/packages/fs/tool-fs
+      '@deepseek-ai/dsh-tool-fs-search':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
+        version: link:../../../vendor/deepseek-harness/packages/fs/tool-fs-search
+      '@deepseek-ai/dsh-tool-goal':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@deepseek-ai/cordis-plugin-include':
+        version: link:../../../vendor/deepseek-harness/packages/goal/tool-goal
+      '@deepseek-ai/dsh-tool-jobs':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/include
-      '@deepseek-ai/dsh-agent':
+        version: link:../../../vendor/deepseek-harness/packages/jobs/tool-jobs
+      '@deepseek-ai/dsh-tool-present':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent
-      '@deepseek-ai/dsh-agent-loop':
+        version: link:../../../vendor/deepseek-harness/packages/deliverables/tool-present
+      '@deepseek-ai/dsh-tool-pwsh':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
-      '@deepseek-ai/dsh-agent-loop-testkit':
+        version: link:../../../vendor/deepseek-harness/packages/shell/tool-pwsh
+      '@deepseek-ai/dsh-tool-subagent':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
-      '@deepseek-ai/dsh-commands':
+        version: link:../../../vendor/deepseek-harness/packages/subagent/tool-subagent
+      '@deepseek-ai/dsh-tool-subagent-control':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/interaction/commands
-      '@deepseek-ai/dsh-llm':
+        version: link:../../../vendor/deepseek-harness/packages/subagent/tool-subagent-control
+      '@deepseek-ai/dsh-tool-todo':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/llm
-      '@deepseek-ai/dsh-scope':
+        version: link:../../../vendor/deepseek-harness/packages/todo/tool-todo
+      '@deepseek-ai/dsh-tool-web':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/scope
-      '@deepseek-ai/dsh-session':
+        version: link:../../../vendor/deepseek-harness/packages/web/tool-web
+      '@deepseek-ai/dsh-tool-workflow':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/session
-      '@deepseek-ai/dsh-system-prompt':
+        version: link:../../../vendor/deepseek-harness/packages/workflow/tool-workflow
+      '@deepseek-ai/dsh-workflow-ptc':
         specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
-      '@deepseek-ai/dsh-tools':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/tools
-      '@morlay/dsh-prompt-reminder':
-        specifier: workspace:*
-        version: link:../dsh-prompt-reminder
+        version: link:../../../vendor/deepseek-harness/packages/workflow/workflow-ptc
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -618,37 +841,6 @@ importers:
       '@morlay/ui-conversation-message-actions':
         specifier: workspace:*
         version: link:../ui-conversation-message-actions
-
-  packages/session/dsh-reference-injection:
-    dependencies:
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
-      mdast-util-from-markdown:
-        specifier: ^2.0.3
-        version: 2.0.3(supports-color@9.4.0)
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent
-      '@deepseek-ai/dsh-fs':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/fs/fs
-      '@deepseek-ai/dsh-llm':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/llm
-      '@deepseek-ai/dsh-session':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/session
-      '@deepseek-ai/dsh-skill':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/skill/skill
-      '@types/mdast':
-        specifier: ^4.0.4
-        version: 4.0.4
 
   packages/session/session-branch:
     dependencies:

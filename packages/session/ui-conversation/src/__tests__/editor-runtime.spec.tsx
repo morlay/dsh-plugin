@@ -30,7 +30,7 @@ function bench(): { runtime: DraftEditorRuntime; root: HTMLDivElement } {
 describe("DraftEditorRuntime: 输入框保留 raw markdown", () => {
   it("粘贴 @scope/name 形态的 prose 不产生引用装饰，文本原样保留", () => {
     const { runtime, root } = bench();
-    const text = "看看 @morlay/dsh-reference-injection 这个包";
+    const text = "看看 @morlay/dsh-context-reference 这个包";
 
     runtime.paste(text);
     runtime.refreshProjection();
