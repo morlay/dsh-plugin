@@ -14,6 +14,7 @@ export const sessions: TableDef = {
     f_seed_length: { type: "integer" },
     f_origin: { type: "text" },
     f_delegation_depth: { type: "integer" },
+    f_agent_preset: { type: "text" },
     f_incarnation: { type: "text", notNull: true },
     f_revision: { type: "integer", notNull: true },
 

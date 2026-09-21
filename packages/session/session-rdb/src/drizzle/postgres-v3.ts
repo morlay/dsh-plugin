@@ -13,3 +13,4 @@ export const tWorkspaces = tables["t_workspaces"]!;
 export const tWorkspaceSessions = tables["t_workspace_sessions"]!;
 export const tWorkspaceState = tables["t_workspace_state"]!;
 export const tSessionProjcacheRows = tables["t_session_projcache_row"]!;
+export const tEventUsage = tables["t_event_usage"]!;

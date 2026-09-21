@@ -30,6 +30,7 @@ export function rowToMeta(row: SessionRow): SessionHeader {
     isSeeded: row.fSeedLength !== null,
     ...(row.fOrigin !== null ? { origin: row.fOrigin as "subagent" } : {}),
     ...(row.fDelegationDepth === null ? {} : { delegationDepth: row.fDelegationDepth }),
+    ...(row.fAgentPreset === null ? {} : { agentPreset: row.fAgentPreset }),
   };
 }
 
@@ -47,6 +48,7 @@ export function sessionInsertRow(
   fSeedLength: number | null;
   fOrigin: string | null;
   fDelegationDepth: number | null;
+  fAgentPreset: string | null;
   fIncarnation: string;
   fRevision: number;
 } {
@@ -62,6 +64,7 @@ export function sessionInsertRow(
     fSeedLength: meta.isSeeded ? storage.inheritedEventCount : null,
     fOrigin: meta.origin ?? null,
     fDelegationDepth: meta.delegationDepth ?? null,
+    fAgentPreset: meta.agentPreset ?? null,
     fIncarnation: incarnation,
     fRevision: 0,
   };
@@ -75,6 +78,7 @@ export function sessionConflictRow(storage: SessionStorageMetadata): {
   fSeedLength: number | null;
   fOrigin: string | null;
   fDelegationDepth: number | null;
+  fAgentPreset: string | null;
 } {
   const meta = storage.meta;
   return {
@@ -85,6 +89,7 @@ export function sessionConflictRow(storage: SessionStorageMetadata): {
     fSeedLength: meta.isSeeded ? storage.inheritedEventCount : null,
     fOrigin: meta.origin ?? null,
     fDelegationDepth: meta.delegationDepth ?? null,
+    fAgentPreset: meta.agentPreset ?? null,
   };
 }
 

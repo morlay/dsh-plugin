@@ -15,6 +15,7 @@ export interface SessionRow {
   fSeedLength: number | null;
   fOrigin: string | null;
   fDelegationDepth: number | null;
+  fAgentPreset: string | null;
 
   fIncarnation: string;
 

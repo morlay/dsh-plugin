@@ -18,6 +18,7 @@ function physicalHeader(row: SessionRow): Record<string, unknown> {
     ...(row.fParentSession !== null ? { parentSession: row.fParentSession } : {}),
     ...(row.fOrigin !== null ? { origin: row.fOrigin } : {}),
     delegationDepth: row.fDelegationDepth ?? 0,
+    ...(row.fAgentPreset !== null ? { agentPreset: row.fAgentPreset } : {}),
   };
 
   return row.fVersion < 2

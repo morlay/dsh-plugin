@@ -176,4 +176,22 @@ describe("multi-instance repro", () => {
     expect(final.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
     await b3.dispose();
   });
+
+  it("keeps the whole stored header across instances: the agent preset survives a restart", async () => {
+    // 列式 header 只存显式列出的字段，少一列字段就静默消失。`agentPreset` 有消费方：
+    // 会话投影 `agentPreset` 的 `init` 只读 header（缺了就被算成 null 并缓存下来）。
+    const path = await freshDbPath();
+    const id = SessionId("preset-header");
+    const b1 = await mount(path);
+    await createAndAppend(b1.ctx, { ...header(id, "/work"), agentPreset: "standard" }, oneTurn(0));
+    await b1.dispose();
+
+    const b2 = await mount(path);
+    const stored = await rdb(b2.ctx).stat(id);
+    expect(stored?.header).toMatchObject({ agentPreset: "standard", cwd: "/work" });
+    const reader = await rdb(b2.ctx).open(id, "read");
+    expect(reader.header.agentPreset).toBe("standard");
+    await reader.close();
+    await b2.dispose();
+  });
 });

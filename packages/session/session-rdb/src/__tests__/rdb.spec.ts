@@ -412,6 +412,7 @@ describe("rowToMeta", () => {
         fSeedLength: null,
         fOrigin: null,
         fDelegationDepth: null,
+        fAgentPreset: null,
         fIncarnation: "fractional",
         fRevision: 1,
         fArchivedAt: null,
