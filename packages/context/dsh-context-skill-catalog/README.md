@@ -1,7 +1,7 @@
 # @morlay/dsh-context-skill-catalog
 
 把 skill 目录注入成规则块、并注册模型侧 `skill` 工具的 cordis 插件。取代上游
-`@deepseek-ai/dsh-tool-skill`（该行在 preset 产物里已禁用；`skill-filesystem` 保留，它提供 skill 发现）。
+`@deepseek-ai/dsh-tool-skill`（该行在 bundle patch 里被禁用；`skill-filesystem` 保留，它提供 skill 发现）。
 
 规则与 id 形态见[上下文注入规则](../.agents/designs/20260921-上下文注入规则.md)；术语见
 [`CONTEXT.md`](./.agents/CONTEXT.md)。

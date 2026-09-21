@@ -8,13 +8,14 @@
 
 ## 能力
 
-| 导出                      | 用途                                                                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `styled('div')(style, …)` | 生成带 `data-css-*` 的组件；多个样式对象深合并（变体叠基样式）                                                                                                               |
-| `styling`                 | `props(style)` 取 `data-css-*` 属性、`keyframes`、`injectGlobals`、`sheets()`                                                                                                |
-| `Token`                   | 变量引用代理（`vars`）、局部变量赋值（`assignVars`）、变体选择器（`variants`）、组合子（`calc` / `min` / `max` / `url` / `colorMix` / `colorScale` / `fallbackVar` / `val`） |
-| `dsw`                     | 官方主题变量引用：`dsw.alias.bg.base` → `var(--dsw-alias-bg-base)`                                                                                                           |
-| `designTokens`            | 生成的 token 树，叶子是官方默认值（可作 fallback 与类型推导来源）                                                                                                            |
+| 导出                                     | 用途                                                                                                                                                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `styled('div')(style, …)`                | 生成带 `data-css-*` 的组件；多个样式对象深合并（变体叠基样式）                                                                                                               |
+| `styling`                                | `props(style)` 取 `data-css-*` 属性、`keyframes`、`injectGlobals`、`sheets()`                                                                                                |
+| `Token`                                  | 变量引用代理（`vars`）、局部变量赋值（`assignVars`）、变体选择器（`variants`）、组合子（`calc` / `min` / `max` / `url` / `colorMix` / `colorScale` / `fallbackVar` / `val`） |
+| `dsw`                                    | 官方主题变量引用：`dsw.alias.bg.base` → `var(--dsw-alias-bg-base)`                                                                                                           |
+| `findReferences` / `parseReferenceToken` | host 面：`@` 引用的统一解析与形态归一（`@path` / `@"path"` / `skill:name` → 结构化引用与 span），`Reference` / `ReferenceSpan` 类型                                          |
+| `designTokens`                           | 生成的 token 树，叶子是官方默认值（可作 fallback 与类型推导来源）                                                                                                            |
 
 样式注入是**惰性立即注入**（某条规则第一次生成时就 append `<style data-css="…">`，
 按 id 去重），不提供 Provider。

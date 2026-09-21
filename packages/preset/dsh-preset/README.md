@@ -8,11 +8,11 @@
 
 ## 内容
 
-| 文件                       | 作用                                                                                                                                                                                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cordis.patch.yml`         | bundle patch：禁用官方 preset、注册本包 preset 为默认、声明个人 `llm-pi-ai` route、覆盖沙箱规则、禁用官方 `fs-observation-policy` / `office-to-pdf` / `subagent-model-selection-settings` 行、插入 `context-assembler` / `reference-injection` 行 |
-| `tool/generate-presets.ts` | 从上游生成 preset 的模块 + tsdown hooks（末尾追加 [工具用法分组](../../context/dsh-context-tool-guidance/README.md) 行；禁用 `planning`、`agent-instructions`、`tool-skill` 三行——后两者由 `context/` 的两个包接管）                              |
-| `dist/presets/standard/`   | 构建产物：唯一产物「标准模式」（由上游 `standard` 生成，去掉 persona 行、禁用被接管的三行、追加工具用法分组行）                                                                                                                                   |
+| 文件                       | 作用                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cordis.patch.yml`         | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：注册本包 preset 为默认、声明个人 `llm-pi-ai` route、覆盖沙箱规则、按 id 禁用官方 `agent-instructions` / `tool-skill` / `sandbox` / `fs-sandbox` / `fs-observation-policy` / `office-to-pdf` / `subagent-model-selection-settings` 行、插入 `sandbox-local` 与 `context-assembler` 行 |
+| `tool/generate-presets.ts` | 生成真源：从上游模块与 `tool/presets/*.ts` 清单渲染出 `dist/presets`，并由 tsdown `build:done` 一并重写 `cordis.patch.yml`（两者都不要手改）                                                                                                                                                                                                          |
+| `dist/presets/`            | 构建产物：`standard` 与 `chat` 两个模式（由各自的清单渲染：工具行、注入行、persona 都在产物里；`chat` 用 `context-scope` 把工具收成三个并关掉全部 instruction）                                                                                                                                                                                       |
 
 ## 装配
 
@@ -44,12 +44,16 @@
 
 ## 生成与升级
 
-产物由 tsdown 的 `build:done` hook 在每次 `pnpm build` 时生成。单独重生成（默认输出
-`dist/presets`，可传目录）——生成器没有单独的 npm script，直接跑脚本：
+产物由 tsdown 的 `build:done` hook 在每次 `pnpm build` 时生成（同时按 `tool/patch.ts` 重写包根的
+`cordis.patch.yml`）。只想看清单渲染出来的产物时手跑脚本（默认输出 `dist/presets`，可传目录）：
 
 ```sh
 pnpm exec tsx packages/preset/dsh-preset/tool/generate-presets.ts [outDir]
 ```
+
+该入口会**清空** `outDir`（只接受不存在 / 空 / 只含生成产物的目录，其余直接拒绝），并且**只写产物**——
+要落 `cordis.patch.yml` 就跑 `pnpm build`。产物与清单的一致性由 `generated-presets.spec.ts` 守护
+（CI 在 `just build` 之后跑 `just test`，所以它在那里真的会比对 `dist/presets`）。
 
 上游升级与适配流程见 [`dsh-plugin-upstream-sync` 技能](../../../.agents/skills/dsh-plugin-upstream-sync/SKILL.md)。
 

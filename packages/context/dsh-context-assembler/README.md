@@ -3,20 +3,22 @@
 提示词注入的唯一通道：system prompt 里只留部署 persona 与覆盖规则，其余内容按调用方的声明决定怎么到达模型
 ——降级为规则块（`<system-reminder id="…">`）、回收进按需加载的 skill 正文、或直接丢弃。
 
-规则、id 表与分层的 home 在 [上下文注入规则](../../.agents/designs/20260921-上下文注入规则.md)；
+规则、id 表与分层的 home 在 [上下文注入规则](../.agents/designs/20260921-上下文注入规则.md)；
 术语见 [context 层的 CONTEXT.md](../.agents/CONTEXT.md)。
 
 ## 行为
 
-### 装配结果上的四种处置
+### 装配结果上的三种处置
 
-| 处置       | 谁决定                                       | 结果                                    |
-| ---------- | -------------------------------------------- | --------------------------------------- |
-| `keep`     | 配置（部署 persona + 覆盖规则声明）          | 留在系统提示词                          |
-| `demote`   | 其余非空 section 的默认去处                  | 文本进规则块，**一条 section 一个 id**  |
-| `suppress` | 配置默认值（平台说明等）+ `suppressSection`  | 不进提示词                              |
-| `replace`  | 配置默认值（两段中文文案）+ `replaceSection` | 换成给定文本；空串等于不注入            |
-| `absorb`   | 注入方的 `absorbs` 声明                      | 文本收进该 skill 的正文，自身不进提示词 |
+| 处置       | 谁决定                                       | 结果                                   |
+| ---------- | -------------------------------------------- | -------------------------------------- |
+| `keep`     | 配置（部署 persona + 覆盖规则声明）          | 留在系统提示词                         |
+| `demote`   | 其余非空 section 的默认去处                  | 文本进规则块，**一条 section 一个 id** |
+| `suppress` | 配置默认值（平台说明等）+ `suppressSection`  | 不进提示词                             |
+| `replace`  | 配置默认值（两段中文文案）+ `replaceSection` | 换成给定文本；空串等于不注入           |
+
+（**回收**不在这里：谁想把自己的内容收进 skill 正文，就自己写进那份正文——`tool-guidance` 的组正文与
+`drops` 清单就是这么做的，通道不提供把 section 文本搬进正文的能力。）
 
 ### 注入
 
@@ -38,7 +40,7 @@
 ## 调用面
 
 ```ts
-ctx.contextAssembler.registerSkill({ name, title, description, content, absorbs?, injection? });
+ctx.contextAssembler.registerSkill({ name, title, description, content, requires?, injection? });
 ctx.contextAssembler.replaceSection(sectionName, (agent) => text);
 ctx.contextAssembler.suppressSection(sectionName);
 ```
@@ -64,5 +66,6 @@ skill 在装配期注册一次（正文与 agent 无关），对所有会话可�
 
 - **reminder 仍是模型输入**：总 token 不减，只是不再占系统提示词的位置；真正省 token 的是「按需加载」
   那一半（正文不进上下文，直到模型加载）。
-- **`auto` 正文含回收文本**：它在首次装配时才完整（回收文本来自装配结果）；`base` 组的正文随后按 id 幂等注入。
+- **回收是注入方的事**：通道不把 section 文本搬进 skill 正文（`tool-guidance` 的组正文就是各组自己
+  写好的要点，配套 `drops` 清单决定哪些上游说明不再进提示词），所以 `auto` 正文在注册时即完整。
 - **顺序**：reminder 与工作区指令都是 pre-step 注入的 user 消息，两者先后由 listener 注册顺序决定。

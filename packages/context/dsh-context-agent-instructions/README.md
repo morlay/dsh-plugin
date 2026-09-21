@@ -1,8 +1,9 @@
 # @morlay/dsh-context-agent-instructions
 
 把工作区指令链注入成规则块的 cordis 插件：`$DSH_HOME/AGENTS.md`，加上项目根到 cwd 的逐级
-`AGENTS.md` / `AGENTS.local.md`，**一条文件一个 id**（`agent-instructions:<文件>`），文件变化时只重发
-变了的那一份。取代上游 `@deepseek-ai/dsh-agent-instructions`（该行在 preset 产物里已禁用）。
+`AGENTS.md` / `AGENTS.local.md`，**一条文件一个 id**（`agent-instructions:<根标识>:<文件>`——根标识是
+项目根 / `$DSH_HOME` 的 8 位摘要，所以同进程里两个项目根的同名文件不会互相顶掉），文件变化时只重发
+变了的那一份。取代上游 `@deepseek-ai/dsh-agent-instructions`（该行在 bundle patch 里被禁用）。
 
 规则与 id 形态见[上下文注入规则](../.agents/designs/20260921-上下文注入规则.md)。
 
