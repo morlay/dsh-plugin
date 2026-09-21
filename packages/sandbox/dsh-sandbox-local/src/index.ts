@@ -1,6 +1,5 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { Config } from "./config.ts";
-import { DIALECT_CAPABILITIES } from "./dialects.ts";
 import { ConfigurableFileSystem } from "./fs.ts";
 import { ruleSourceOf } from "./rules.ts";
 import { ConfigurableSandboxProvider } from "./sandbox.ts";
@@ -19,12 +18,10 @@ function warnAboutDegradedRules(ctx: Context, config: Config): void {
   if (!grants && !readOnly && !denials) return;
   if (process.platform === "darwin") return;
   if (readOnly || denials) {
-    const seatbelt = DIALECT_CAPABILITIES.seatbelt.denyReadWrite;
-    const bwrap = DIALECT_CAPABILITIES.bwrap.denyWriteOnly;
     ctx.logger.warn(
       `sandbox-local: "r-" / "--" entries cannot be fully enforced for confined subprocesses on ${process.platform} ` +
-        `(Seatbelt enforces both; bwrap binds the path read-only, so "--" degrades to write-only: ${bwrap}; ` +
-        `Landlock and the Windows ACL runner cannot express a subpath rule at all: ${seatbelt} applies to Seatbelt only) ` +
+        '(Seatbelt enforces both; bwrap binds the path read-only, so "--" degrades to write-only; ' +
+        "Landlock and the Windows ACL runner cannot express a subpath rule at all) " +
         "— tools that read through ctx.fs stay covered",
     );
   }

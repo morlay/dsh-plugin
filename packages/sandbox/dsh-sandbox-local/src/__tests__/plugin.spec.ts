@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import type { FsTarget } from "@deepseek-ai/dsh-fs";
 import type { SandboxExecutionPolicy } from "@deepseek-ai/dsh-sandbox";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as plugin from "../index.ts";
 import type { ConfigurableSandboxProvider } from "../sandbox.ts";
 
@@ -148,5 +148,30 @@ describe("进程沙箱侧规则", () => {
     ).argv[2] as string;
     expect(profile).not.toContain("(deny file-read*");
     expect(profile).not.toContain('(allow file-write* (subpath "/cache"))');
+  });
+});
+
+describe("降级告警", () => {
+  it("非 macOS 上的 r- / -- 规则：文案说明降级，不把能力布尔当解释打印", async () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    const ctx = new Context();
+    contexts.push(ctx);
+    ctx.provide("sandboxPolicy", {
+      defaultMode: "workspace-write",
+      workspaceRoot: workspace,
+      resolve: (): SandboxExecutionPolicy => ({
+        mode: "workspace-write",
+        workspaceRoot: workspace,
+      }),
+      overrideOf: () => undefined,
+    } as never);
+    const warn = vi.spyOn(ctx.logger, "warn").mockImplementation(() => undefined);
+    await ctx.plugin(plugin, { cwd: workspace, access: ["-- secrets", "r- notes.md"] });
+    platform.mockRestore();
+
+    const text = warn.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(text).toContain("cannot be fully enforced");
+    expect(text).toContain('"--" degrades to write-only');
+    expect(text).not.toMatch(/\b(true|false)\b/u);
   });
 });
