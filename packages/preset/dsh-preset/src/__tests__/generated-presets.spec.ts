@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -118,5 +118,51 @@ describe("generated presets", () => {
         .map((entry) => entry.name)
         .sort(),
     ).toEqual(PRESET_SOURCES.map((entry) => entry.id).sort());
+  });
+});
+
+describe("产物目录守卫", () => {
+  it("拒绝清空不像产物目录的目录，原内容不动", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dsh-preset-guard-"));
+    await writeFile(join(dir, "keep.txt"), "important");
+
+    await expect(generatePresets(dir)).rejects.toThrow(/refusing to clear/u);
+    expect(await readFile(join(dir, "keep.txt"), "utf8")).toBe("important");
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("允许重复生成到同一个产物目录", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dsh-preset-again-"));
+
+    await generatePresets(dir);
+    const second = await generatePresets(dir);
+
+    expect(second).toHaveLength(PRESET_SOURCES.length * 2);
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+/** profile 真正读取的目录：构建产物（不入库），所以本地没构建过时这条测试跳过。 */
+const DIST_PRESETS = fileURLToPath(new URL("../../dist/presets/", import.meta.url));
+
+describe("构建产物与清单一致", () => {
+  it("dist/presets 与清单一致（忽略格式化空白）", async ({ skip }) => {
+    const entries = await readdir(DIST_PRESETS, { withFileTypes: true }).catch(() => undefined);
+    // CI 在 `just build` 之后跑 `just test`，所以那里一定会比对；本地没构建过就跳过。
+    if (entries === undefined) return skip();
+
+    const ids = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(ids).toEqual(PRESET_SOURCES.map((entry) => entry.id).sort());
+
+    // 产物构建后会被 `oxfmt` 重写（`!!js` 表达式补空格），所以比对时忽略空白。
+    const squeeze = (text: string): string => text.replaceAll(/\s+/gu, " ");
+    for (const entry of PRESET_SOURCES) {
+      const actual = await readFile(join(DIST_PRESETS, entry.id, "agent.cordis.yml"), "utf8");
+      expect(squeeze(actual)).toBe(squeeze(renderComposition(entry.rows)));
+    }
   });
 });
