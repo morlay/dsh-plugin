@@ -42,15 +42,17 @@ disable-model-invocation: true
 产出落在**改动所属那一层**的 `.agents/`（仓库根，或 `packages/<family>/<pkg>/`）；上下文按 family 分组，
 边界见 [`.agents/CONTEXT-MAP.md`](../../CONTEXT-MAP.md)，各层现状与布局见 [`.agents/README.md`](../../README.md)。
 
-| 你要表达的东西        | 写进                               | 判据                                               | 格式                                             |
-| --------------------- | ---------------------------------- | -------------------------------------------------- | ------------------------------------------------ |
-| 词是什么意思          | 该层 `.agents/CONTEXT.md`          | 两个以上包要用 → 根；否则归所属上下文              | [`templates/context.md`](./templates/context.md) |
-| 设计与取舍            | 该层 `.agents/designs/`            | 跨包跨层，或改动现有边界                           | [`templates/design.md`](./templates/design.md)   |
-| 难逆的决策与理由      | 该层 `.agents/adrs/`               | 难逆 + 脱离上下文会困惑 + 真有取舍，三条同时成立   | [`templates/adr.md`](./templates/adr.md)         |
-| 已知且被接受的债      | 该层 `.agents/debts/`              | 明知不好先这样 + 有可判定的销账条件 + 有不修的理由 | [`templates/debt.md`](./templates/debt.md)       |
-| 代码与包怎么写        | 该层 `.agents/standards/`          | —                                                  | 两处：如何写 / 如何验证                          |
-| 包 / 应用的门面与用法 | 该包的 `README.md`                 | —                                                  | GitHub 惯例：一句话定位 + 用法 + 链接            |
-| 怎么做（流程）        | 仓库根 `.agents/skills/*/SKILL.md` | —                                                  | frontmatter `name` + `description`（写清何时用） |
+写到哪里见仓库根 [`AGENTS.md`](../../../AGENTS.md) 的 home 表；这里只放**判据与格式**：
+
+| 你要表达的东西        | 判据                                                       | 格式                                             |
+| --------------------- | ---------------------------------------------------------- | ------------------------------------------------ |
+| 词是什么意思          | 归属见 [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md) 的边界规则 | [`templates/context.md`](./templates/context.md) |
+| 设计与取舍            | 跨包跨层，或改动现有边界                                   | [`templates/design.md`](./templates/design.md)   |
+| 难逆的决策与理由      | 难逆 + 脱离上下文会困惑 + 真有取舍，三条同时成立           | [`templates/adr.md`](./templates/adr.md)         |
+| 已知且被接受的债      | 明知不好先这样 + 有可判定的销账条件 + 有不修的理由         | [`templates/debt.md`](./templates/debt.md)       |
+| 代码与包怎么写        | 接缝、依赖方向与验证方式在该层规范里判                     | 两处：如何写 / 如何验证                          |
+| 包 / 应用的门面与用法 | 超重就记债，不就地扩写                                     | GitHub 惯例：一句话定位 + 用法 + 链接            |
+| 怎么做（流程）        | 只放流程，不放判据                                         | frontmatter `name` + `description`（写清何时用） |
 
 命名：三类记录都用 `<YYYYMMDD>-标题.md`（日期是采纳 / 创建日期；同一天多篇靠标题区分，没有序号）。H1 就是标题
 本身，不带日期或序号。designs 标题写主题、adr 标题写结论句、debts 标题写现象。小节名、段落名照模板，不另创。

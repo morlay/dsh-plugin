@@ -25,17 +25,11 @@
 
 ## 命名与引用
 
-- **三类记录统一用日期前缀**：`designs|adrs|debts/<YYYYMMDD>-<slug>.md`。日期是该记录的采纳 / 创建日，
-  slug 就是标题（不翻译、不改写、不缩写）；同一天多篇靠 slug 区分，因此没有序号。日期与 slug 在**各层内**
-  独立——根 `.agents/debts/20260917-…` 与某包 `.agents/debts/20260917-…` 是两份不同的债。
-- **同层**引用：写 `ADR-<slug>` / `设计 <slug>` / `债务 <slug>`（同层日期相同，省掉日期）——都能解析到层内
-  唯一文件。
-- **跨层**引用一律给相对链接：链接目标用完整文件名 `<YYYYMMDD>-<slug>.md`，链接文本写
-  `ADR-<YYYYMMDD>-<slug>` / `设计 <YYYYMMDD>-<slug>` / `债务 <YYYYMMDD>-<slug>`，或一句能认出指向哪份记录的
-  简短描述：
-  `[ADR-20260917-版本效果以ignorable事件原样落库](../packages/session/session-branch/.agents/adrs/20260917-版本效果以ignorable事件原样落库.md)`。
+命名（`<YYYYMMDD>-<slug>.md`，无序号）与同层 / 跨层引用的**写法只有一个 home**：
+[`dsh-plugin-design`](./skills/dsh-plugin-design/SKILL.md) 技能的「产出记到哪个 home」一节（`templates/`
+只给格式骨架）。这里不复述，需要时链接过去。
 
 ## 规矩
 
-- 判据、命名与格式只在 `dsh-plugin-design` 技能的 `templates/` 定义一次；这里和别处都不复述。
+- 判据、命名与格式的 home 是 `dsh-plugin-design` 技能（`templates/` 给骨架、SKILL.md 给判据与命名）；这里和别处都不复述。
 - 「什么事实写哪个 home」的表在仓库根 [`AGENTS.md`](../AGENTS.md)。
