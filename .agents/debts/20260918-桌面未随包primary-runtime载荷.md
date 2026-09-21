@@ -5,9 +5,9 @@
 **现象**
 
 alpha.2 的 desktop-host 把 argv[4] 当 bundled 依赖载荷源交给
-`apps/desktop-host/src/workspace-dependencies.ts`：`installPrimaryRuntime(source, root)` 读
+`vendor/deepseek-harness/apps/desktop-host/src/workspace-dependencies.ts`：`installPrimaryRuntime(source, root)` 读
 `<source>/runtime.json`，并把 `<root>=<DSH_HOME>/dsh-runtimes/dsh-primary-runtime` 装成
-Python / numpy / pandas / Node / pnpm 的绝对路径（`apps/desktop-host/src/primary-runtime.ts`
+Python / numpy / pandas / Node / pnpm 的绝对路径（`vendor/deepseek-harness/apps/desktop-host/src/primary-runtime.ts`
 的 `readPrimaryRuntime` / `installPrimaryRuntime`）。
 
 我们的壳按上游约定把 argv[4] 指到 `<runtime 根>/primary-runtime`
@@ -16,17 +16,17 @@ Python / numpy / pandas / Node / pnpm 的绝对路径（`apps/desktop-host/src/p
 
 ```
 $ ls apps/dsh-custom-next/node_modules/.dsh-desktopify/runtime
-appconfig.json  node  versions.json
+appconfig.json  bin  node  pnpm  versions.json
 ```
 
-上游自己的 `apps/desktop/scripts/prepare-primary-runtime.ts` 要下载平台 Python（含 numpy /
+上游自己的 `vendor/deepseek-harness/apps/desktop/scripts/prepare-primary-runtime.ts` 要下载平台 Python（含 numpy /
 pandas / python-docx 等 wheel）与 pnpm，并做 smoke 执行；我们没走这一步。
 
 **现状（`dsh-v0.1.6-alpha.2`）**
 
-`office-skills` 资源已随包：`dev` 与 `bundle` 都会把 `@deepseek-ai/dsh-skill-office/assets`
-拷到 `primary-runtime` 的同级 `office-skills`（`packages/desktop/dsh-desktopify/src/cli/office-assets.ts`，
-缺 `scripts/check_office.py` 即失败）。宿主自己的包操作用 pnpm 也已随包
+`office-skills` 资源**不随包**：本变体不挂 `officeSkills`（见
+[设计 桌面化工具](../../packages/desktop/dsh-desktopify/.agents/designs/20260917-桌面化工具.md) 的「后端」与「随包运行时载荷」），
+原先负责拷贝它的 `cli/office-assets.ts` 已随 `487fd15` 删除。宿主自己的包操作用 pnpm 也已随包
 （`<resources>/runtime/pnpm/bin/pnpm.mjs` + `<resources>/runtime/bin`，由 shell 经 host argv[6]/[7] 交给
 `profileContext.packageManager`），但那是宿主包操作的入口，与本 payload 的
 `dependencies/{python,node,pnpm}` 不是同一份。剩余缺口只有 `primary-runtime` payload 本体

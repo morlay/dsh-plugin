@@ -65,7 +65,7 @@ function runInherited(command: string, args: string[]): Promise<number | null> {
 
 const REGISTRY = resolveRegistry();
 
-// turbo 在每个包自己的目录下运行本脚本，只处理当前包
+// 每个包在自己的目录下被 `pnpm -r exec` 唤起（justfile 的 publish 目标），只处理当前包
 const { name, version } = JSON.parse(await readFile("package.json", "utf8")) as {
   name: string;
   version: string;

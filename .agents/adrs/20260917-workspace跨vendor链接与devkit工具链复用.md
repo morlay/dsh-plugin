@@ -39,7 +39,7 @@ autoInstallPeers: true
 
   ```ts
   // host-only 包
-  import { defineCordisPluginConfig } from "devkit";
+  import { defineCordisPluginConfig } from "@local/devkit";
   export default defineCordisPluginConfig();
 
   // host + client bundle 包（client 作为补充产物，exports 单声明）
