@@ -374,6 +374,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/session/session-persistence-jsonl
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/skill/skill
