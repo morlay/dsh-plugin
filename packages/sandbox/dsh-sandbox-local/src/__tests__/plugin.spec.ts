@@ -63,6 +63,23 @@ describe("deny 规则", () => {
     expect(await ctx.fs.readText(notes)).toBe("hi");
   });
 
+  it("规则里的相对路径相对会话工作区解析，不跟着目标路径的 cwd 走", async () => {
+    const ctx = await mount({ access: ["-- notes.md"] });
+    const sub = join(workspace, "sub");
+    await mkdir(sub, { recursive: true });
+    await writeFile(join(workspace, "notes.md"), "root");
+    await writeFile(join(sub, "notes.md"), "sub");
+
+    // 会话工作区根下的 notes.md 被拒。
+    await expect(ctx.fs.resolve("notes.md", { cwd: workspace })).rejects.toMatchObject({
+      code: "FS_SANDBOX_DENIED",
+    });
+    // 子目录里的同名文件不在规则范围内：`cwd` 只是目标路径的解析基准，不是规则基准
+    // （读写两侧同一个基准，读被拒的文件才不会在写路径上被放行）。
+    const nested = await ctx.fs.resolve("notes.md", { cwd: sub });
+    expect(await ctx.fs.readText(nested)).toBe("sub");
+  });
+
   it("命中时写入也被拒（调用方绕过 resolve 直接给 target 也一样）", async () => {
     const ctx = await mount({ access: ["-- mise.*.toml"] });
     const target = {

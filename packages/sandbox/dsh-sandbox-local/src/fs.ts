@@ -10,7 +10,6 @@ import type {
 } from "@deepseek-ai/dsh-fs";
 import { LocalFileSystem } from "@deepseek-ai/dsh-fs-local";
 import type { Config } from "./config.ts";
-import { writableRoots } from "@deepseek-ai/dsh-sandbox";
 import type { SandboxExecutionPolicy, SandboxMode } from "@deepseek-ai/dsh-sandbox";
 import type {} from "@deepseek-ai/dsh-sandbox-policy";
 import { isPathUnder } from "./containment.ts";
@@ -19,6 +18,7 @@ import {
   isDenied,
   isReadOnly,
   ruleSourceOf,
+  writableRootsWith,
   type CompiledRules,
   type RuleSource,
 } from "./rules.ts";
@@ -46,8 +46,10 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     opts?: { cwd?: string; signal?: AbortSignal },
   ): Promise<FsTarget> {
     const target = await super.resolve(path, opts);
+    // 规则里的相对路径相对**会话工作区**解析（`opts.cwd` 只是目标路径的解析基准，见包 README 的条目语法）：
+    // 读写两侧同一个基准，读被拒的文件才不会在写路径上被放行。
     this.assertNotDenied(
-      this.rulesFor(opts?.cwd ?? this.ctx.sandboxPolicy.workspaceRoot),
+      this.rulesFor(this.ctx.sandboxPolicy.resolve().workspaceRoot),
       target.targetKey,
       target.displayPath,
     );
@@ -118,7 +120,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
 
     const fresh = await super.resolve(target.displayPath);
     this.assertWritable(rules, fresh.targetKey, fresh.displayPath);
-    for (const root of [...writableRoots(policy), ...rules.allowRoots]) {
+    for (const root of writableRootsWith(rules, policy)) {
       if (await isPathUnder(fresh.targetKey, root)) return fresh;
     }
     throw new FsError(
