@@ -61,15 +61,14 @@ GC 是唯一会**停止所有运行中 agent** 的动作：确认后进入不可
 | `data-tab`                                                  | 一层 tab 按钮      | 该按钮切到的视图                                                |
 | `data-action`                                               | 按钮               | `import` / `gc` / `archive` / `unarchive` / `export` / `remove` |
 | `data-filter`                                               | 过滤器             | `search` / `subagents`                                          |
-| `data-session-list` / `data-session-row`                    | 列表与行           | 会话列表、一条会话行                                            |
+| `data-scroll`                                               | 滚动容器           | `page`（会话列表与统计各一处）                                  |
 | `data-session-id` / `data-archived` / `data-subagent`       | 会话行             | 该行的会话 id 与状态（`true` / `false`）                        |
-| `data-session-title` / `data-session-meta`                  | 行内字段           | 标题、`工作区 · 时间`                                           |
 | `data-pagination` / `data-page-current` / `data-page-total` | 分页条             | 当前页与总页数                                                  |
 | `data-notice` / `data-failure` / `data-status`              | 顶部提示与空态     | 结果、错误、`empty` / `empty-search`                            |
-| `data-usage-view` / `data-usage-tab`                        | 统计视图与二层 tab | 当前维度（`overview` / `daily` / `models` / `sessions`）        |
+| `data-usage-view` / `data-usage-tab` / `data-usage-range`   | 统计视图与二级 tab | 当前维度（`overview` / `models` / `sessions`）与时间范围        |
+| `data-range`                                                | 时间范围选项       | 该选项对应的 range 值                                           |
 | `data-usage-cell` / `data-usage-value`                      | 总览格子           | 维度键与原始数值（未格式化）                                    |
-| `data-usage-row` / `data-usage-key`                         | 统计划表行         | 维度键（日期 / `provider / model` / 会话 id / `subagent`）      |
-| `data-usage-label` / `data-usage-total` / `data-usage-meta` | 统计行内字段       | 名称、合计、明细                                                |
+| `data-usage-key`                                            | 统计划表行         | 维度键（日期 / `provider / model` / 会话 id / `subagent`）      |
 | `data-usage-status`                                         | 统计状态行         | `loading` / `error` / `empty`                                   |
 
 ## 已知限制

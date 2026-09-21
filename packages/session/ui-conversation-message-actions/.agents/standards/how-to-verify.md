@@ -13,8 +13,8 @@
   400 / 405 / 409：`http-connection.spec.ts`。
 - **水位与失效**：rewind / 覆盖导入后 token meter 折叠与投影单元缓存必须失效（同一 meter 实例 +
   预热水位）：`meter-watermark.spec.ts`、`compaction-rewind.spec.ts`。
-- **浏览器半（编排）**：`SessionEditorController.face`——动作 POST、成功后只刷会话列表元数据
-  （**不重建窗口、不整页重载**）、recall 回填**该消息的全部文本块**、失败不阻塞下一次操作、
+- **浏览器半（编排）**：`SessionEditorController.face`——动作 POST、成功后重建会话窗口
+  （探测顺序 `binding.resync()` → `sessions.refresh()` → warn；**不整页重载**）、recall 回填**该消息的全部文本块**、失败不阻塞下一次操作、
   会话列表 / 快照变化不发任何请求：`client-controller.spec.ts`（刷新方式见
   [ADR 浏览器半只保留动作面](../adrs/20260920-浏览器半只保留动作面不挂常驻刷新.md) 的「后续变化」注记）。
 - **浏览器半（入口门控）**：`conversation.chat.node` 的 `user` / `steering` 覆盖——编辑只要存在可编辑

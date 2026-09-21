@@ -45,6 +45,8 @@ type Config =
       journalMode?: "wal" | "delete" | "truncate" | "persist";
       /** 写锁竞争等待毫秒数（默认 5000）。 */
       busyTimeout?: number;
+      /** 投影 checkpoint 的写入节奏（`writeEveryEvents` / `writeIntervalMs`）。 */
+      projectionCache?: ProjectionCacheOptions;
     }
   | {
       type: "postgres";
@@ -52,6 +54,8 @@ type Config =
       connectionString: string;
       /** 目标 schema（默认 public，必须已存在）。 */
       schema?: string;
+      /** 投影 checkpoint 的写入节奏（`writeEveryEvents` / `writeIntervalMs`）。 */
+      projectionCache?: ProjectionCacheOptions;
     };
 ```
 
@@ -108,6 +112,13 @@ subagent 会话**（`origin = 'subagent'`、父不在表里；有 open handle / 
 约 2.2s / 1.99 万行），两种 `f_data` 结构都认。口径不变：只算被会话引用的事件行（fork 共享行计一次、
 孤儿行不计），GC 顺带回收不再有事件行的用量行。口径与取舍见
 [ADR-用量统计走专用用量日志表](.agents/adrs/20260918-用量统计走专用用量日志表.md)。
+
+## 查询接管（`ctx.sessionQuery`）
+
+官方 `session-query-sqlite` 由 `@morlay/better-session` 的 patch 禁用，本包注册 `ctx.sessionQuery`：
+精确读 / 过滤 / 血缘复用上游 `SessionQueryEngine` 基类，**全文检索恒 disabled**
+（抛 `SESSION_QUERY_SEARCH_DISABLED`，不引入派生索引库）。决策见
+[ADR-接管会话查询服务所有权](.agents/adrs/20260917-接管会话查询服务所有权.md)。
 
 ## storages 接管（workspace 与投影缓存）
 

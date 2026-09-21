@@ -25,6 +25,6 @@ primitives）与 `@deepseek-ai/*` client 插件行 external（由模块表提供
 
 ## 后果
 
-- 操作后刷新（`resync()` + 投影截断）与单文件约束的现状细节见
+- 操作后重建窗口（探测 `binding.resync()` → `sessions.refresh()`）与单文件约束的现状细节见
   [设计 编排层操作语义](../designs/20260917-编排层操作语义.md) 的「浏览器半」。
 - CSS Modules 经 lightningcss 内联 + `<style data-plugin>` 注入。

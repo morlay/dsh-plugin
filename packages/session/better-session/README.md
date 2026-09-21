@@ -12,8 +12,8 @@ dsh plugin --profile web add "@morlay/better-session"
 ```
 
 安装自动带上全部子包（`@morlay/session-branch`、`@morlay/session-rdb`、
-`@morlay/ui-conversation-message-actions`、`@morlay/dsh-client-ui-conversation`、
-`@morlay/dsh-client-ui-primitives`），并由 bundle 的 patch
+`@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、
+`@morlay/dsh-client-ui-conversation`、`@morlay/dsh-client-ui-primitives`），并由 bundle 的 patch
 （`cordis.patch.yml`）自动装配：
 
 - `ctx.sessionPersistence` ← RDB（SQLite / PostgreSQL）持久化后端
@@ -30,7 +30,9 @@ dsh plugin --profile web add "@morlay/better-session"
 - storage hub 的 `rdb` KV 后端 ← workspace 域落 rdb 语义表
 
 同时禁用官方 `session-persistence-jsonl`、`storage-json`、
-`session-projection-cache`、`session-query-sqlite` 与两条官方外发通路
+`session-projection-cache`、`session-query-sqlite`、`ui-conversation` 与设置里的
+`ui-settings-unarchive-sessions`（「已归档会话」入口收敛到 `ui-conversation-manager` 的
+「对话管理」页），以及两条官方外发通路
 （`session-telemetry-otel`、`session-log-deepseek`，默认部署零官方外发，需要时
 删行恢复），并把 `storage-domain` 的 backend 路由为 `rdb`：`$DSH_HOME/storages`
 不再产生文件，storages 数据与事件日志同库
