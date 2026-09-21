@@ -51,6 +51,11 @@ Done when：上游满足任一项，我们侧的 duck-type 失效被删除：
   meter 保险」的那部分说明同步改写；
 - 结算本记录。
 
+**核查（2026-09-21）**：销账条件未达成。上游仍按**位置**折叠——水位是 `consumedEvents`（`SessionLogOffset` 递增），
+`logRevision` 也直接取它；全包没有 `invalidate` / 回滚 API。证据：
+`vendor/deepseek-harness/packages/llm/token-meter/src/index.ts:63,184,232-237`（该包 `src/` grep `invalidate` 0 命中）。
+我们侧的 duck-type 失效与能力探测继续有效，守护测试不变。
+
 **不修的理由**
 
 修不了上游（红线：`@deepseek-ai/*` 不可修改），只能在我们侧规避；而规避本身已经带了能力探测与

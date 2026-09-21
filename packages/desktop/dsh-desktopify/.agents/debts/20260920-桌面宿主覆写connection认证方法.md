@@ -30,6 +30,9 @@
 
 Done when：上游提供官方开关（配置项或服务面）表达「页面自持宿主、无需浏览器认证」，我们删除这两处覆写。
 
+**核查（2026-09-21）**：销账条件未达成。上游 `packages/client/connection/src/` 里没有「页面自持宿主、无需浏览器认证」
+的开关（`ownsHost` / `selfHosted` / `skipAuth` 三个词在该目录 0 命中），两处方法覆写仍是唯一做法。
+
 **不修的理由**
 
 上游没有这个开关；替代方案是在宿主里自铸 cookie（`connection.authenticatedUrl` + 合成 index 请求拿

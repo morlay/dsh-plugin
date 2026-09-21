@@ -48,6 +48,11 @@ Done when：`dev` 与 `bundle` 产物里都有可用的 `primary-runtime` payloa
 `dependencies/{python,node,pnpm}`），且 `load_workspace_dependencies` 返回的路径可执行通过
 上游 `smokePrimaryRuntime` 同等的检查。
 
+**核查（2026-09-21）**：销账条件未达成。产物仍是
+`apps/dsh-custom-next/node_modules/.dsh-desktopify/runtime` = `appconfig.json bin node pnpm versions.json`
+（无 `primary-runtime/`）；上游那条下载 + smoke 线（`vendor/deepseek-harness/apps/desktop/scripts/prepare-primary-runtime.ts`）
+我们仍未走。
+
 **不修的理由**
 
 payload 是几十到上百 MB 的平台资产（上游单独跑下载 + 校验 + smoke），当前桌面化目标是「能跑
