@@ -1,26 +1,28 @@
+# 本文件由 packages/preset/dsh-preset/tool/patch.ts 生成，请勿手工编辑
 - id: system-prompt
   config:
     includeHarnessIdentity: false
     includeRuntimeContext: false
-    personaSuffix: |-
-      你的工作目录在 `{{cwd}}`，工作目录内的  AGENTS.md 的规则非常重要，必须严格遵守
-    personaPrefix: |-
-      你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范
-
-      ## 语言和行为
-
-      - 所有思考、分析、推理过程、工具调用描述等必须使用中文，专有名词除外
-      - 思考不要陷入重复循环，一旦循环，立即退出
-      - 思考聚焦需求理解与方案设计（要点、流程、验证策略），不预演具体代码实现；代码在 Do 阶段基于实际文件状态输出，正确性由 Check 验证
-
 - id: agent-presets
   config:
     default: standard
     includeShippedRoot: false
     roots:
-      - path: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(ctx.baseUrl).resolve('@morlay/dsh-preset/package.json')), 'dist/presets')
+      - path: !!js |-
+          process
+                        .getBuiltinModule("node:path")
+                        .join(
+                          process
+                            .getBuiltinModule("node:path")
+                            .dirname(
+                              process
+                                .getBuiltinModule("node:module")
+                                .createRequire(ctx.baseUrl)
+                                .resolve("@morlay/dsh-preset/package.json"),
+                            ),
+                          "dist/presets",
+                        )
         trust: system
-
 - id: llm-pi-ai
   config:
     providers:
@@ -32,35 +34,30 @@
         reasoning: high
         models:
           - id: deepseek-v4.1-flash
-            name: "DeepSeek V4.1 Flash @ Ollama Cloud"
+            name: DeepSeek V4.1 Flash @ Ollama Cloud
             contextWindow: 1000000
-            input: [text, image]
+            input:
+              - text
+              - image
             reasoningEfforts:
-              off:
+              "off": null
               low: low
               high: high
               max: max
-
-# 沙箱装配（唯一真源，就地完成）：官方 `sandbox`（ctx.sandbox）与 `fs-sandbox`
-# （ctx.fs）两行在这里禁用，由 `@morlay/dsh-sandbox-local` 注册同名服务；规则随本
-# insert 行一起写死，不再依赖任何额外 bundle 层（漏装配时规则会静默失效，只剩
-# workspace + /tmp 可写）。
+- id: agent-instructions
+  disabled: true
+- id: tool-skill
+  disabled: true
 - id: sandbox
   disabled: true
-
 - id: fs-sandbox
   disabled: true
-
-# read-before-edit：官方 base bundle 的 `fs-observation-policy` 行要求覆盖 / 编辑目标前先 read 过它
-# （未读报 `FS_NOT_OBSERVED`，工具归一成「file has not been read — read the file, then retry」），
-# 并在 read 之后目标变了时报 stale。本部署去掉这一层：工作区在 git 下，改动可 diff、可回滚，这层策略
-# 换来的只是每次改动前的一次 read 往返。禁用后 write / edit 回到工具自身的语义——write 覆盖或创建
-# 不再要求先读，edit 靠精确匹配定位；代价是失去「读后目标被外部改动就拒绝写入」的陈旧保护（并发写
-# 同一文件时后写者覆盖前者）。
 - id: fs-observation-policy
   disabled: true
-
-# 沙箱规则：`rw <path>` 追加工作区之外的可写根，`-- <pattern>` 拒绝访问（读 + 写）。
+- id: office-to-pdf
+  disabled: true
+- id: subagent-model-selection-settings
+  disabled: true
 - insert:
     - id: sandbox-local
       name: "@morlay/dsh-sandbox-local"
@@ -73,36 +70,6 @@
           r- {{ env.XDG_CONFIG_HOME }}
           -- mise.*.toml
           -- **/*.pem
-
-# office 转档：官方 web-app bundle 的 `office-to-pdf` 行（Office→PDF 转换器，Sidebar
-# 文档预览里 docx / xlsx / pptx 的渲染后端）在这里禁用——本部署不启用 office 转档。
-# 行 id 来自 `vendor/deepseek-harness/packages/bundle/web-app/cordis.patch.yml`，该 bundle
-# 在本 bundle 之前装配，因此这条覆盖生效；与上面两条官方行同款：禁用行写在本 bundle 的
-# patch（dev web / desktop 与打包形态都生效），不写 app patch（只在打包时作 seed patch 生效）。
-# 上游桌面宿主还会命令式装载 `@deepseek-ai/dsh-skill-office`（docx / pptx / xlsx 三个 skill），
-# 那不是 profile 行、本层没有旋钮——桌面形态由我们的 host 变体接管，它不装载 officeSkills；
-# 结论与上游需求见 README「office 相关」。
-- id: office-to-pdf
-  disabled: true
-
-# 子代理模型选择：官方 web-app bundle 的 `subagent-model-selection-settings` 行提供
-# `subagentModelSelection` 服务（Plugins 设置页的子代理模型卡片也读它）。本部署不要它：
-# preset 生成器已从 `tool-subagent` 行去掉 `modelSelectionSettings`，子代理一律继承父会话的
-# 模型；工具因此注册回 preset 层，能被工具门控隐藏（留在 agent 自己的作用域时
-# `tools.restrict()` 过滤不到，subagent 会永远可见）。禁用本行让设置页里的子代理模型卡片
-# 随之消失，符合「不需要这个开关」的取舍。
-- id: subagent-model-selection-settings
-  disabled: true
-
-# 提示词分层：系统提示词只留上面的 persona，工具说明 / Agent Teams 规则 / plan
-# 规则等由该插件降级为 <system-reminder> user 消息。部署级策略，在这里定义一次
-# 即覆盖全部 preset（含子 agent），preset composition 不再各自带这一行。
 - insert:
-    - id: prompt-reminder
-      name: "@morlay/dsh-prompt-reminder"
-
-# 引用后注入：用户消息里的 `skill:name` 在 pre-step 展开成
-# `<skill_content>` 注入消息，消息文本保持 link 原文（模型文本不膨胀）。
-- insert:
-    - id: reference-injection
-      name: "@morlay/dsh-reference-injection"
+    - id: context-assembler
+      name: "@morlay/dsh-context-assembler"

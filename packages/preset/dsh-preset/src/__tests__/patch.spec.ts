@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { applyEntryPatches, entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { renderPatch } from "../../tool/patch.ts";
 
 const PATCH_PATH = join(process.cwd(), "packages/preset/dsh-preset/cordis.patch.yml");
 const UPSTREAM_BASE_PATCH = join(
@@ -52,18 +53,50 @@ const inserted = rows.flatMap((row) => row.insert ?? []);
 const sandboxRow = inserted.find((row) => row.id === "sandbox-local");
 
 describe("dsh-preset patch wiring", () => {
-  it("declares the prompt-reminder row exactly once, on the local plugin", () => {
-    const reminders = inserted.filter((row) => row.id === "prompt-reminder");
+  it("仓库里那份带上了该有的装配（它是运行期各形态都要的文件，不能只靠 build 产出）", async () => {
+    const rows = yaml.load(await readFile(PATCH_PATH, "utf8"), {
+      schema: entryListSchema,
+    }) as PatchRow[];
+    const generated = yaml.load(renderPatch(), { schema: entryListSchema }) as PatchRow[];
+    const shape = (list: PatchRow[]) => ({
+      ids: list.map((row) => row.id ?? "(insert)"),
+      disabled: list.filter((row) => row.disabled === true).map((row) => row.id),
+      inserted: list.flatMap((row) => row.insert ?? []).map((row) => row.id),
+    });
 
-    expect(reminders).toHaveLength(1);
-    expect(reminders[0]?.name).toBe("@morlay/dsh-prompt-reminder");
+    // 与生成结果同一形状：改了 tool/patch.ts 忘了重新生成、或手改了这个文件，这里会红。
+    expect(shape(rows)).toEqual(shape(generated));
+    expect(shape(rows).inserted).toEqual(["sandbox-local", "context-assembler"]);
+    expect(shape(rows).disabled).toEqual([
+      "agent-instructions",
+      "tool-skill",
+      "sandbox",
+      "fs-sandbox",
+      "fs-observation-policy",
+      "office-to-pdf",
+      "subagent-model-selection-settings",
+    ]);
   });
+  it("生成的 patch 带上了该有的装配（改装配请改 tool/patch.ts）", () => {
+    const rows = yaml.load(renderPatch(), { schema: entryListSchema }) as PatchRow[];
+    const disabled = rows.filter((row) => row.disabled === true).map((row) => row.id);
+    const inserted = rows.flatMap((row) => row.insert ?? []);
 
-  it("keeps the deployment persona the reminder keeps in the system prompt", () => {
-    const config = rows.find((row) => row.id === "system-prompt")?.config;
-
-    expect(config?.personaPrefix).toBeTruthy();
-    expect(config?.personaSuffix).toBeTruthy();
+    // persona 按模式给（persona 行注册同名 section 遮蔽），patch 只关掉 harness identity 与运行时上下文。
+    expect(rows.find((row) => row.id === "system-prompt")?.config?.personaPrefix).toBeUndefined();
+    expect(disabled).toEqual([
+      "agent-instructions",
+      "tool-skill",
+      "sandbox",
+      "fs-sandbox",
+      "fs-observation-policy",
+      "office-to-pdf",
+      "subagent-model-selection-settings",
+    ]);
+    expect(inserted.map((row) => row.id)).toEqual(["sandbox-local", "context-assembler"]);
+    expect(
+      renderPatch().startsWith("# 本文件由 packages/preset/dsh-preset/tool/patch.ts 生成"),
+    ).toBe(true);
   });
 
   it("disables the shipped sandbox rows and mounts the replacement in one layer", () => {
@@ -78,6 +111,8 @@ describe("dsh-preset patch wiring", () => {
     const disabled = rows.filter((row) => row.disabled === true).map((row) => row.id);
 
     expect(disabled).toEqual([
+      "agent-instructions",
+      "tool-skill",
       "sandbox",
       "fs-sandbox",
       "fs-observation-policy",
