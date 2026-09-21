@@ -21,6 +21,7 @@ afterEach(async () => {
 });
 
 const AGENTS = "# 规则\n\n先读 AGENTS.md。";
+const GLOBAL_AGENTS = "# 全局规则\n\n只对全局生效。";
 
 async function mount(root: string) {
   const ctx = new Context();
@@ -95,21 +96,25 @@ async function injectedMessages(
 }
 
 describe("工作区指令", () => {
-  it("把项目根的 AGENTS.md 与用户全局 AGENTS.md 各注入一条，id 到文件", async () => {
+  it("项目根的 AGENTS.md 与用户全局 AGENTS.md 各注入一条，id 到文件", async () => {
     const root = await mkdtemp(join(tmpdir(), "workspace-"));
     await writeFile(join(root, ".git"), "");
     await writeFile(join(root, "AGENTS.md"), AGENTS);
-    await writeFile(join(root, "home", "AGENTS.md"), "").catch(() => undefined);
+    // 全局那一份在 `$DSH_HOME/AGENTS.md`（`mount` 把 dshHome 指到 root/home）。
+    await mkdir(join(root, "home"), { recursive: true });
+    await writeFile(join(root, "home", "AGENTS.md"), GLOBAL_AGENTS);
 
     const { ctx, agent } = await mount(root);
 
     const messages = await injectedMessages(ctx, agent);
     const ids = messages.map(idOf).filter((id): id is string => id !== undefined);
     expect(ids.some((id) => /^agent-instructions:[0-9a-f]{8}:AGENTS\.md$/u.test(id))).toBe(true);
+    expect(ids.some((id) => id.endsWith(`:${join(root, "home", "AGENTS.md")}`))).toBe(true);
     expect(bodyByDisplay(messages, "AGENTS.md")).toContain("先读 AGENTS.md");
     expect(bodyByDisplay(messages, "AGENTS.md")).toMatch(
       /^<system-reminder id="agent-instructions:[0-9a-f]{8}:AGENTS\.md">/u,
     );
+    expect(bodyByDisplay(messages, join(root, "home", "AGENTS.md"))).toContain("只对全局生效");
 
     await rm(root, { recursive: true, force: true });
   });

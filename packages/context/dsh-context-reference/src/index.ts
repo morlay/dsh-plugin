@@ -27,6 +27,16 @@ declare module "@deepseek-ai/dsh-llm" {
   }
 }
 
+/**
+ * 内容之外的一条说明（见层级设计「内容之外的说明」）：不说来源，模型会再 read 一遍同一段内容。
+ * 与内容同处一条消息，所以同一步有多个引用时它也只说一次。
+ */
+const NOTE = [
+  "<system-reminder>",
+  "这些文件内容是按你消息里的 @ 引用刚读取的，直接用它即可，不必再 read 一遍。",
+  "</system-reminder>",
+].join("\n");
+
 export function apply(ctx: Context): void {
   ctx.on("agent/pre-step", async ({ agent, messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next();
@@ -84,7 +94,7 @@ export function apply(ctx: Context): void {
     if (read.length > 0) {
       injections.push(
         createUserMessage({
-          content: [...envelopes],
+          content: [{ type: "text", text: NOTE }, ...envelopes],
           source: { kind: "file-reference", references: read },
         }),
       );

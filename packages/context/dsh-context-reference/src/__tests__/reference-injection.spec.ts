@@ -177,8 +177,13 @@ function injectedBlocks(decision: PreStepDecision, index: number): readonly stri
   });
 }
 
+/** 注入消息里的信封块：跳过内容之外的那条说明（`NOTE`，它在所有信封之前）。 */
+function envelopeBlocks(decision: PreStepDecision, index: number): readonly string[] {
+  return injectedBlocks(decision, index).slice(1);
+}
+
 function injectedEnvelope(decision: PreStepDecision, index: number): string {
-  const blocks = injectedBlocks(decision, index);
+  const blocks = envelopeBlocks(decision, index);
   if (blocks.length === 0) throw new Error(`expected a content block at ${index}`);
   return blocks[0]!;
 }
@@ -187,6 +192,13 @@ function injectedEnvelope(decision: PreStepDecision, index: number): string {
 function envelope(path: string, body: readonly string[]): string {
   return [`<file_content path="${path}">`, ...body, "</file_content>"].join("\n");
 }
+
+/** 内容之外的那条说明：与内容同处一条消息，只说一次（见层级设计「内容之外的说明」）。 */
+const NOTE = [
+  "<system-reminder>",
+  "这些文件内容是按你消息里的 @ 引用刚读取的，直接用它即可，不必再 read 一遍。",
+  "</system-reminder>",
+].join("\n");
 
 describe("file content injection", () => {
   it("injects a file_content block for an existing @path", async () => {
@@ -197,6 +209,7 @@ describe("file content injection", () => {
     expect(decision.messages).toHaveLength(2);
     const injected = decision.messages[1]!;
     expect(injected.content).toEqual([
+      { type: "text", text: NOTE },
       {
         type: "text",
         text: envelope("src/a.ts", [
@@ -224,6 +237,7 @@ describe("file content injection", () => {
     expect(decision.messages).toHaveLength(2);
     const injected = decision.messages[1]!;
     expect(injected.content).toEqual([
+      { type: "text", text: NOTE },
       {
         type: "text",
         text: envelope("src/a.ts", [
@@ -249,7 +263,7 @@ describe("file content injection", () => {
     const decision = await step(listener, [userMessage("@src/a.ts 与 @src/missing.ts")]);
     if (decision.kind !== "enter") throw new Error("expected enter");
     expect(decision.messages).toHaveLength(2);
-    expect(injectedBlocks(decision, 1)).toHaveLength(1);
+    expect(envelopeBlocks(decision, 1)).toHaveLength(1);
     expect(decision.messages[1]!.source).toMatchObject({
       kind: "file-reference",
       references: [{ path: "src/a.ts" }],

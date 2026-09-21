@@ -41,11 +41,13 @@
 
 ```ts
 ctx.contextAssembler.registerSkill({ name, title, description, content, requires?, injection? });
+ctx.contextAssembler.contentFor(name, agent); // 按需加载路径按这个会话重算正文
 ctx.contextAssembler.replaceSection(sectionName, (agent) => text);
 ctx.contextAssembler.suppressSection(sectionName);
 ```
 
-skill 在装配期注册一次（正文与 agent 无关），对所有会话可见；注入（`auto` 正文与降级 section）按会话进行。
+skill 在装配期注册一次、对所有会话可见，所以**注册表里那份正文是不按会话过滤的全量**；`auto` 正文与
+降级 section 按会话生成，按需加载（接管的 `skill` 工具）则用 `contentFor(name, agent)` 重新算一份。
 
 ## 配置
 

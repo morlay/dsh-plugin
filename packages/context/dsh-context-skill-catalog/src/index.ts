@@ -129,7 +129,10 @@ function registerSkillTool(ctx: Context): void {
         throw new Error(`skill "${args.name}" is unknown or no longer available`);
       if (!isModelInvocable(skill))
         throw new Error(`skill "${args.name}" is not available for model invocation`);
-      return { name: skill.name, provider: skill.provider, content: skill.content };
+      // 注册表里那份是不过滤的全量（技能注册是装配期一次），按需加载时按这个会话重算一份：
+      // 组正文不该讲这个会话没装的工具。
+      const content = ctx.contextAssembler.contentFor(skill.name, exec.agent) ?? skill.content;
+      return { name: skill.name, provider: skill.provider, content };
     },
     presentCall(args) {
       return {

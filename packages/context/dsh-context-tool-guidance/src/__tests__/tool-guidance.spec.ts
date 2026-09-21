@@ -189,6 +189,21 @@ async function skillContent(ctx: Context, agent: Agent, skillName: string): Prom
   return skill?.content ?? "";
 }
 
+/** 走 `skill` 工具按需加载（用户可见的接缝），而不是直读注册表。 */
+async function loadSkill(ctx: Context, agent: Agent, skillName: string): Promise<string> {
+  const result = await ctx.tools.execute({
+    callId: ToolCallId(`call-${skillName}`),
+    name: "skill",
+    arguments: { name: skillName },
+    agent,
+    signal: new AbortController().signal,
+  });
+  const value = (result as { value?: { content?: unknown } }).value;
+  if (typeof value?.content !== "string")
+    throw new Error(`skill tool returned no content: ${skillName}`);
+  return value.content;
+}
+
 describe("工具目录", () => {
   it("全部工具都在目录里，分组不裁剪 schema", async () => {
     const { ctx, agent } = await mount();
@@ -348,6 +363,36 @@ describe("模式只给一部分工具时（chat 形态）", () => {
     expect(body).not.toContain("read：");
     expect(body).not.toContain("bash：");
     expect(body).not.toContain("后台任务");
+  });
+
+  it("按需加载的组正文也按会话修剪（注册表里只有一份全量）", async () => {
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, {
+      systemPrompt: { includeHarnessIdentity: false, personaPrefix: "你是一个助手。" },
+    });
+    await mountAgentLoopTestHarness(ctx);
+    await ctx.plugin(SkillRegistry);
+    await ctx.plugin(ContextAssembler);
+    await ctx.plugin(SkillCatalog);
+
+    const key = { preset: "chat" };
+    const standing = createScope(ctx, key);
+    // 只装派发组里的两个控制工具：组仍在目录里（入口工具可见），但正文不该讲没装的那些。
+    await mountToolRows(standing.ctx, ["send_message", "list_agents"]);
+    await standing.ctx.plugin(plugin, { groups: true });
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`tool-guidance-on-demand-${Date.now()}`),
+      setup: async (agentCtx: Context) => {
+        bindScopeParent(scopeOf(agentCtx)!, key);
+      },
+    });
+
+    const loaded = await loadSkill(ctx, handle.agent, skillNameOf("delegation"));
+
+    expect(loaded).toContain("send_message：");
+    expect(loaded).not.toContain("subagent：");
+    expect(loaded).not.toContain("workflow：");
   });
 });
 

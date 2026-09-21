@@ -142,6 +142,14 @@ export class ContextAssembler extends Service {
     return hidden;
   }
 
+  /**
+   * 该 skill 按会话修剪后的正文：注册表只能存一份（技能注册是装配期一次、全局可见），所以按需加载
+   * 路径（接管的 `skill` 工具）要用这里重新算一次，才和 `auto` 正文一样跟着工具走。
+   */
+  contentFor(name: string, agent: Agent | undefined): string | undefined {
+    return this.declarations.get(name)?.content(agent);
+  }
+
   async collect(agent: Agent): Promise<Map<string, string>> {
     const entries = new Map<string, string>();
     for (const declaration of this.declarations.values()) {
