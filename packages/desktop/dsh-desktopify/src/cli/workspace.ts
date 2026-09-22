@@ -30,8 +30,6 @@ export interface WorkspaceManifest {
       readonly dshHome?: string;
       readonly icon?: string;
       readonly window?: Record<string, number>;
-
-      readonly agentPresets?: unknown;
     };
 
     readonly dev?: {
@@ -97,18 +95,6 @@ export function desktopConfig(manifest: WorkspaceManifest): DesktopConfig {
     },
     ...(desktop.icon === undefined ? {} : { icon: desktop.icon }),
   };
-}
-
-export function desktopAgentPresets(manifest: WorkspaceManifest): string[] {
-  const value = manifest.dsh?.desktop?.agentPresets;
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || !value.every((spec) => typeof spec === "string" && spec !== "")) {
-    throw new Error(
-      `dsh-desktopify: workspace ${String(manifest.name)} has an invalid ` +
-        `dsh.desktop.agentPresets (expected package specs such as "@scope/pkg/presets")`,
-    );
-  }
-  return value as string[];
 }
 
 export function appProfileBundles(manifest: WorkspaceManifest): string[] {

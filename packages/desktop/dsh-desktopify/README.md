@@ -2,7 +2,7 @@
 
 把任意 dsh 工作区打包 / 运行为桌面应用的工具：`dev` 链接工作区直接跑，`bundle` 产出静态、无签名的应用目录。
 
-实现机制（壳与 host 协议、依赖闭包与种子指纹、profile 安装、桌面 preset 物化、XDG 路径与 shell 注入）见
+实现机制（壳与 host 协议、依赖闭包与种子指纹、profile 安装、XDG 路径与 shell 注入）见
 [设计 桌面化工具](./.agents/designs/20260917-桌面化工具.md)；自研离线打包器（而非直接用上游桌面应用）的决策见
 [ADR-20260917-自研离线桌面打包器而非直接用上游桌面应用](../../../.agents/adrs/20260917-自研离线桌面打包器而非直接用上游桌面应用.md)。
 
@@ -33,8 +33,6 @@
       "id": "ai.deepseek.dsh.custom",
       "icon": "icon.svg",
       "dshHome": "xdg",
-      // 可选：包自己用 dsh.configTrees 声明时不用写
-      "agentPresets": ["@morlay/dsh-preset/dist/presets"],
     },
   },
 }
@@ -88,7 +86,7 @@
   argv[6] 交给 `profileContext.packageManager`；该 npm 包只是 wrapper，入口会 spawn 同平台
   `@pnpm/exe.<platform>-<arch>` 的原生二进制，所以载荷带上那个平台包）、`bin/`（pnpm 子进程的 `PATH`
   前置目录，Unix 下是指向 `../node/node` 的相对链接）、`appconfig.json`、`versions.json`；
-- `seed/`：`runtime/`（不可变闭包 = host 的 dsh 安装锚点、前端静态资源与 preset 物化目标）+
+- `seed/`：`runtime/`（不可变闭包 = host 的 dsh 安装锚点与前端静态资源）+
   `profiles/desktop/`（初始 profile：app 自己的 bundle 以 `file:` 指向 `vendor/` 副本、`pnpm-workspace.yaml`、
   `desktop-runtime-packages.json`、`.seed-hash`）。
 

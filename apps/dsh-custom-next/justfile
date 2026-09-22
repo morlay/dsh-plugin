@@ -1,7 +1,7 @@
 # dsh-custom-next 示例工作区：web 模式（浏览器）与 desktop 模式（Electron 壳）。
 
-# 构建 @morlay/dsh-preset：它的 dist/presets 是运行期被 profile 读取的 preset
-# 来源（由 tsdown build:done 生成），源码树里没有；dev 直载源码也必须有它。
+# 构建 @morlay/dsh-preset：它按 tool/patch.ts 重写包根的 cordis.patch.yml
+# （模式定义就在那份 patch 里，由 tsdown build:done 生成）。
 preset-build:
     pnpm --filter @morlay/dsh-preset run build
 

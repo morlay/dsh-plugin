@@ -314,7 +314,6 @@ async function main(): Promise<void> {
           ...(development === undefined ? {} : { ELECTRON_RUN_AS_NODE: "1" }),
         },
         primaryRuntime: resources.primaryRuntime,
-        profileResolution: development === undefined ? "runtime" : "link",
         // `ps` 里能把后端与别的 node 进程区分开。
         processTitle: `${appConfig.name}-server`,
         // 打包形态的包操作使用随包 pnpm；dev 形态回退到 PATH 上的 pnpm。

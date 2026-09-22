@@ -2,15 +2,16 @@
  * Desktop-profile composition of the bundled authoring dependencies.
  *
  * The only divergence from upstream `apps/desktop-host/src/office.ts` is the missing
- * `@deepseek-ai/dsh-skill-office` mount: the profile still gets the bundled payload installer
- * (`workspace-dependencies`, imported from upstream below) but registers no docx / pptx / xlsx
- * skills. Name, config fields, and the argv contract stay upstream's, so the host entry sees no
- * difference. `tsdown` inlines the upstream module into `dist`, so the published package carries this
+ * `@deepseek-ai/dsh-skill-office` mount: the profile still gets the bundled payload tool
+ * (`@deepseek-ai/dsh-tool-workspace-dependencies`, upstream's successor to the host-local
+ * `src/workspace-dependencies.ts` of 0.1.6) but registers no docx / pptx / xlsx skills. Name,
+ * config fields, and the argv contract stay upstream's, so the host entry sees no difference.
+ * `tsdown` inlines the upstream module into `dist`, so the published package carries this
  * composition instead of resolving a source path at run time.
  */
 
 import type { Context } from "@deepseek-ai/cordis";
-import * as workspaceDependencies from "../../../../vendor/deepseek-harness/apps/desktop-host/src/workspace-dependencies.ts";
+import * as workspaceDependencies from "@deepseek-ai/dsh-tool-workspace-dependencies";
 
 /** Loader identity for the application-owned workspace dependency composition. */
 export const name = "desktop-office";

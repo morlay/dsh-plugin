@@ -15,7 +15,6 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { writeAppConfig } from "../appconfig.ts";
-import { discoverPresetMounts, materializeAgentPresets } from "./agent-presets.ts";
 import { ensureClientBundlePlaceholders, installProfilePatch } from "./dev-web.ts";
 import {
   DSH_PACKAGE,
@@ -31,7 +30,6 @@ import { buildShell, SHELL_ENTRY } from "./shell.ts";
 import {
   PROFILE_NAME,
   buildRoot,
-  desktopAgentPresets,
   desktopConfig,
   devStoreHome,
   devWebConfig,
@@ -237,10 +235,6 @@ async function prepareDevelopmentProject(
   const hostLink = join(destinationModules, ...DESKTOP_HOST_PACKAGE.split("/"));
   await removeOwnedPath(hostLink);
   await copyPackage(host.dir, hostLink);
-  await materializeAgentPresets(
-    projectDir,
-    await discoverPresetMounts(manifest, destinationModules, desktopAgentPresets(manifest)),
-  );
   return projectDir;
 }
 

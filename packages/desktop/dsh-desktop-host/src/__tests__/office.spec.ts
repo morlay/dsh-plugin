@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as office from "../office.ts";
-import * as workspaceDependencies from "../../../../../vendor/deepseek-harness/apps/desktop-host/src/workspace-dependencies.ts";
+import * as workspaceDependencies from "@deepseek-ai/dsh-tool-workspace-dependencies";
 
 interface MountCall {
   readonly plugin: unknown;
@@ -26,7 +26,7 @@ describe("desktop host office 组合", () => {
     await office.apply(recordingContext(calls), config);
 
     expect(calls.map((call) => (call.plugin as { name?: string }).name)).toEqual([
-      "desktop-workspace-dependencies",
+      "tool-workspace-dependencies",
     ]);
     expect(calls[0]?.plugin).toBe(workspaceDependencies);
     expect(calls[0]?.config).toBe(config);

@@ -99,7 +99,6 @@ describe("桌面 host 子进程", () => {
     const { calls, child, host } = harness(
       {
         primaryRuntime: "/app/runtime/primary-runtime",
-        profileResolution: "runtime",
         packageManager: { pnpm: "/app/runtime/pnpm/bin/pnpm.mjs", nodeBin: "/app/runtime/bin" },
         nodeArgs: ["--import=tsx/esm"],
       },
@@ -121,7 +120,6 @@ describe("桌面 host 子进程", () => {
       "/app/seed",
       "/home/profiles/desktop",
       "/app/runtime/primary-runtime",
-      "runtime",
       "/app/runtime/pnpm/bin/pnpm.mjs",
       "/app/runtime/bin",
     ]);

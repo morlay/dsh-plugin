@@ -22,7 +22,6 @@ import {
   PROFILE_WORKSPACE_NAME,
 } from "../profile-project.ts";
 import { SEED_HASH_NAME, SEED_RUNTIME_DIR_NAME } from "../seed.ts";
-import { discoverPresetMounts, materializeAgentPresets } from "./agent-presets.ts";
 import {
   DSH_PACKAGE,
   closurePackageDirs,
@@ -36,7 +35,6 @@ import {
   PROFILE_NAME,
   buildRoot,
   cleanDeployedSpec,
-  desktopAgentPresets,
   dshVersion as readDshVersion,
   findWorkspaceRoot,
   mergedDeploySettings,
@@ -414,11 +412,6 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
   await writeFile(
     join(profileDir, PROFILE_RUNTIME_REPORT_NAME),
     `${JSON.stringify({ schemaVersion: 1, runtimePackages: runtimeLinks }, undefined, 2)}\n`,
-  );
-
-  await materializeAgentPresets(
-    runtimeDir,
-    await discoverPresetMounts(manifest, runtimeModulesDir, desktopAgentPresets(manifest)),
   );
 
   const fingerprint = await seedFingerprint({

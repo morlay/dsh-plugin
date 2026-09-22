@@ -2,7 +2,7 @@
  * 桌面部署里的 host 进程入口：按 `desktop` profile 装配 Web 应用，并把请求经字节管道
  * （FD 3/4）交给宿主内的无端口 `webServer`。
  *
- * argv：`[runtimeDir, projectDir, primaryRuntime, profileResolution, pnpmEntry?, nodeBin?]`；
+ * argv：`[runtimeDir, projectDir, primaryRuntime, pnpmEntry?, nodeBin?]`；
  * IPC：`ready` / `fatal`，另收 `shutdown`。
  */
 
@@ -57,9 +57,8 @@ async function main(): Promise<void> {
       "dsh desktop: expected runtime and profile directories, byte pipes, and a Node IPC channel",
     );
   const primaryRuntime = process.argv[4] ?? join(runtimeDir, "..", "runtime", "primary-runtime");
-  const profileResolution = process.argv[5] === "runtime" ? "runtime" : "link";
-  const pnpmEntry = process.argv[6];
-  const nodeBin = process.argv[7];
+  const pnpmEntry = process.argv[5];
+  const nodeBin = process.argv[6];
 
   const requestPipe: ReadStream = createReadStream("", {
     fd: DESKTOP_REQUEST_PIPE_FD,
@@ -102,7 +101,6 @@ async function main(): Promise<void> {
   const application = runProfile({
     environment: loadLayeredEnv("dsh"),
     profile: "desktop",
-    resolutionMode: profileResolution,
     resolvedProfile: { profile, installAnchor },
     patchFiles: [DESKTOP_PATCH],
     args: ["--no-open"],

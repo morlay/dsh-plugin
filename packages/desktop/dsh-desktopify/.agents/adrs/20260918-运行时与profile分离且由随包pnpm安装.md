@@ -15,13 +15,14 @@
 
 把打包种子拆成两棵树，并让 profile 由随包 pnpm 离线安装：
 
-- `seed/runtime`：不可变的 deploy 闭包，随包留在应用只读 resources 里，充当 host 的 dsh 安装锚点、前端静态
-  资源与 preset 物化目标；
+- `seed/runtime`：不可变的 deploy 闭包，随包留在应用只读 resources 里，充当 host 的 dsh 安装锚点与前端静态
+  资源（preset 物化目标在 0.1.7 随上游一起消失：模式定义现在是 profile patch 里的行）；
 - `seed/profiles/desktop`：初始 profile，只声明 app 自己的 bundle（`file:./vendor/<name>`，`vendor/` 是从
   runtime 闭包 deref 复制出来的源）；
 - 壳在种出 profile 后写入 `overrides`（`"@deepseek-ai/x": "link:<runtime>/node_modules/@deepseek-ai/x"`），
   再用随包 node 跑随包 pnpm 的 `install --prod --ignore-scripts --offline`；
-- 壳把随包 pnpm 与 node bin 目录经 host argv[6]/[7] 交给 host，成为 `profileContext.packageManager`。
+- 壳把随包 pnpm 与 node bin 目录经 host argv[5]/[6] 交给 host，成为 `profileContext.packageManager`
+  （上游 0.1.7 删掉了 `runProfile` 的 `resolutionMode`，argv 少一格）。
 
 ## 理由
 

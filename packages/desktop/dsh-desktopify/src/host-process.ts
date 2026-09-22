@@ -66,8 +66,6 @@ export interface DesktopHostOptions {
 
   readonly primaryRuntime?: string;
 
-  readonly profileResolution?: "link" | "runtime";
-
   readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string };
 
   /** 子进程在 `ps` 里的名字（`node --title`），由壳给成 `<app name>-server`。 */
@@ -133,7 +131,7 @@ export class DesktopHostProcess {
       this.runtimeDir,
       this.projectDir,
       primaryRuntime,
-      this.options.profileResolution ?? "link",
+      // 上游 0.1.7 删掉了 `runProfile` 的 `resolutionMode`，argv 里那一格随之消失。
       ...(packageManager === undefined ? [] : [packageManager.pnpm, packageManager.nodeBin]),
     ];
     const env = {
