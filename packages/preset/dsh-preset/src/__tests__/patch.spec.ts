@@ -69,16 +69,7 @@ const inserted = rows.flatMap((row) => row.insert ?? []);
 
 const sandboxRow = inserted.find((row) => row.id === "sandbox-local");
 
-/** 我们禁用的官方 preset 行 id（patch 里那批，去掉非 preset 的行）。 */
-function SHIPPED_PRESET_DISABLED_IDS(): string[] {
-  return DISABLED_IDS.filter((id) => id.startsWith("preset-")).sort();
-}
-
 const DISABLED_IDS = [
-  "preset-standard",
-  "preset-ptc",
-  "preset-minimal",
-  "preset-cordis",
   "agent-instructions",
   "tool-skill",
   "sandbox",
@@ -155,23 +146,6 @@ describe("dsh-preset patch wiring", () => {
     });
   });
 
-  it("禁用的官方 preset 行 id 与 web-app bundle 实际插入的那批一致", async () => {
-    // 上游把 shipped preset 拆成了预设 patch 文件（`packages/bundle/web-app/presets/*.patch.yml`），
-    // 行 id 或文件名漂移时这里会红——不然官方那批会静默出现在选择器里，跟我们的模式并列。
-    const shippedIds: string[] = [];
-    for (const layer of await webAppLayers()) {
-      for (const row of layer) {
-        for (const entry of row.insert ?? []) {
-          if (entry.name === "@deepseek-ai/dsh-agent-preset" && entry.id !== undefined) {
-            shippedIds.push(entry.id);
-          }
-        }
-      }
-    }
-
-    expect(shippedIds.sort()).toEqual(SHIPPED_PRESET_DISABLED_IDS());
-  });
-
   it("disables the shipped sandbox rows and mounts the replacement in one layer", () => {
     expect(rows.filter((row) => row.disabled === true).map((row) => row.id)).toEqual(
       expect.arrayContaining(["sandbox", "fs-sandbox"]),
@@ -214,14 +188,6 @@ describe("dsh-preset patch wiring", () => {
     const composed = composeLayers([...(await webAppLayers()), rows]);
 
     expect(rowById(composed, "office-to-pdf")?.disabled).toBe(true);
-  });
-
-  it("disables every shipped agent-preset row the web-app bundle inserts", async () => {
-    const composed = composeLayers([...(await webAppLayers()), rows]);
-
-    for (const id of DISABLED_IDS.filter((candidate) => candidate.startsWith("preset-"))) {
-      expect(rowById(composed, id)?.disabled, `not disabled: ${id}`).toBe(true);
-    }
   });
 
   it("names rows that still exist in the shipped base bundle", async () => {

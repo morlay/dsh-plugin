@@ -6,14 +6,6 @@
 - id: agent-preset-registry
   config:
     default: coding
-- id: preset-standard
-  disabled: true
-- id: preset-ptc
-  disabled: true
-- id: preset-minimal
-  disabled: true
-- id: preset-cordis
-  disabled: true
 - insert:
     - id: preset-coding
       name: "@deepseek-ai/dsh-agent-preset"

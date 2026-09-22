@@ -17,8 +17,9 @@ profile 组合器经该字段解析）：两种模式在这里各是一行 `@dee
 ## 装配
 
 装配全在本包的 patch 里，没有目录这一层：`agent-preset-registry` 行的 `default` 指向 `coding`，
-`preset-coding` / `preset-chat` 两行（`@deepseek-ai/dsh-agent-preset`）给出各模式的 `config.plugins`，
-官方 shipped 那四行（`preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis`）按 id 禁用。
+`preset-coding` / `preset-chat` 两行（`@deepseek-ai/dsh-agent-preset`）给出各模式的 `config.plugins`。
+官方那四个 shipped preset（`preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis`）**不动**：
+它们留在选择器里，选到就是官方原味（官方工具与提示词，不装我们的注入行），默认不是它们。
 
 **三种形态一致**：dev / web / 桌面读的是同一份 patch——上游 0.1.7 起 registry 不扫目录、不收路径，
 桌面专属的目录物化（`dsh.configTrees` + app 的 `dsh.desktop.agentPresets`）随之删除。

@@ -45,13 +45,6 @@ function presetRow(source: PresetSource): Record<string, unknown> {
   };
 }
 
-/**
- * 官方 shipped preset 的行 id（`@deepseek-ai/dsh-agent-preset`，来自 dsh-web-app bundle 的
- * `presets/*.patch.yml`）。注册表不再有 `includeShippedRoot` 之类的旋钮，只有按 id 禁用——
- * 不禁用它们就会与我们的模式一起出现在选择器里。
- */
-const SHIPPED_PRESET_ROWS = ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"];
-
 export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   {
     id: "system-prompt",
@@ -60,10 +53,11 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   },
   {
     // 注册表只认 `default`：模式定义是别处的行（下面那批 preset 行），它自己既不扫描也不收路径。
+    // 官方那四个 shipped preset 行（standard / ptc / minimal / cordis）**不动**：它们是各自 scope 里的
+    // 完整 composition，与我们的模式并存、可选；default 仍指向我们的第一个模式。
     id: "agent-preset-registry",
     config: { default: PRESET_SOURCES[0]!.id },
   },
-  ...SHIPPED_PRESET_ROWS.map((id) => ({ id, disabled: true })),
   {
     insert: PRESET_SOURCES.map(presetRow),
   },
