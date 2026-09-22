@@ -1,0 +1,89 @@
+{
+  "name": "@morlay/dsh-context",
+  "version": "0.0.1-alpha.0",
+  "description": "Prompt-injection capability set for dsh: the single channel (context assembler) plus the injectors it carries — workspace instructions, skill catalog, file references, tool-usage guidance, and the per-mode scope gate. One package, one subpath per capability row.",
+  "keywords": [
+    "context",
+    "dsh",
+    "dsh-plugin",
+    "injection",
+    "system-prompt"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    "./assembler": "./src/assembler/index.ts",
+    "./agent-instructions": "./src/agent-instructions/index.ts",
+    "./skill-catalog": "./src/skill-catalog/index.ts",
+    "./reference": "./src/reference/index.ts",
+    "./tool-guidance": "./src/tool-guidance/index.ts",
+    "./scope": "./src/scope/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      "./assembler": "./dist/assembler.mjs",
+      "./agent-instructions": "./dist/agent-instructions.mjs",
+      "./skill-catalog": "./dist/skill-catalog.mjs",
+      "./reference": "./dist/reference.mjs",
+      "./tool-guidance": "./dist/tool-guidance.mjs",
+      "./scope": "./dist/scope.mjs",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:*",
+    "@morlay/dsh-client-ui-primitives": "workspace:*",
+    "mdast-util-from-markdown": "^2.0.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-commands": "workspace:*",
+    "@deepseek-ai/dsh-compaction-basic": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-token-meter": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@morlay/session-rdb": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mdast": "^4.0.4",
+    "js-yaml": "^4.1.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
+    "@deepseek-ai/dsh-commands": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*"
+  }
+}

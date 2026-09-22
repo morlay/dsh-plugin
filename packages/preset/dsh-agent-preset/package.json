@@ -3,9 +3,9 @@
   "version": "0.0.1-alpha.0",
   "description": "Personal dsh profile bundle: registers the coding / chat agent presets — each with its own isolated injection channel (context assembler) and injection rows, so no other preset is touched.",
   "keywords": [
+    "agent-preset",
     "dsh",
     "dsh-bundle",
-    "agent-preset",
     "preset"
   ],
   "license": "MIT",
@@ -39,22 +39,17 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@morlay/dsh-context-agent-instructions": "workspace:*",
-    "@morlay/dsh-context-assembler": "workspace:*",
-    "@morlay/dsh-context-reference": "workspace:*",
-    "@morlay/dsh-context-scope": "workspace:*",
-    "@morlay/dsh-context-skill-catalog": "workspace:*",
-    "@morlay/dsh-context-tool-guidance": "workspace:*"
+    "@morlay/dsh-context": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
-    "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-command-compact": "workspace:*",
     "@deepseek-ai/dsh-command-goal": "workspace:*",
     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-persona": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-tool-ask-user": "workspace:*",
     "@deepseek-ai/dsh-tool-bash": "workspace:*",

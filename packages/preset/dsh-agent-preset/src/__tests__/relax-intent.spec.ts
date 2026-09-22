@@ -53,7 +53,9 @@ describe("fs-intent-relax", () => {
     await own.ctx.plugin(relaxPlugin);
 
     await expect(dispatch(ctx, { agent: { ctx: ours.ctx } })).resolves.toBeUndefined();
-    await expect(dispatch(ctx, { agent: { ctx: stranger.ctx } })).rejects.toThrow("FS_NOT_OBSERVED");
+    await expect(dispatch(ctx, { agent: { ctx: stranger.ctx } })).rejects.toThrow(
+      "FS_NOT_OBSERVED",
+    );
   });
 
   it("没有 agent 的 actor（直接工具调用）不吃放宽：归属判不出来就照上游办", async () => {

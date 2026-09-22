@@ -11,16 +11,16 @@
 
 ## 内容
 
-| 文件                | 作用                                                                                                                                                                                      |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cordis.patch.yml`  | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：`agent-preset-registry` 的 `default: coding`，加 `preset-coding` / `preset-chat` 两行                          |
-| `tool/patch.ts`     | patch 真源与生成入口：`renderPatch()` 渲染行清单，tsdown 的 `build:done` 钩子（`patchHooks()`）写回 `cordis.patch.yml`——那个文件不要手改                                          |
-| `tool/presets/*.ts` | 两个模式的装配行清单（工具行、注入行、persona、`relax-intent`），由 `tool/patch.ts` 渲染进对应 preset 行的 `config.plugins`                                                       |
-| `src/relax-intent.ts` | `coding` 专用的一个插件行（出口 `./relax-intent`）：抢在 host 层 `fs-observation-policy` 的 waterfall 前面，对本模式的会话丢弃「先读后改」要求                                |
+| 文件                  | 作用                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cordis.patch.yml`    | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：`agent-preset-registry` 的 `default: coding`，加 `preset-coding` / `preset-chat` 两行 |
+| `tool/patch.ts`       | patch 真源与生成入口：`renderPatch()` 渲染行清单，tsdown 的 `build:done` 钩子（`patchHooks()`）写回 `cordis.patch.yml`——那个文件不要手改               |
+| `tool/presets/*.ts`   | 两个模式的装配行清单（工具行、注入行、persona、`relax-intent`），由 `tool/patch.ts` 渲染进对应 preset 行的 `config.plugins`                            |
+| `src/relax-intent.ts` | `coding` 专用的一个插件行（出口 `./relax-intent`）：抢在 host 层 `fs-observation-policy` 的 waterfall 前面，对本模式的会话丢弃「先读后改」要求         |
 
 ## 每个模式自带一份注入通道
 
-通道（`@morlay/dsh-context-assembler`）发布进程全局服务，preset 子树里的服务**要么声明 `isolate`、要么被上游
+通道（`@morlay/dsh-context/assembler`）发布进程全局服务，preset 子树里的服务**要么声明 `isolate`、要么被上游
 拒绝装载**。我们把它与全部注入行关进同一个
 `group("context-channel", …, { isolate: { contextAssembler: true } })`，`coding` / `chat` 各一份：
 

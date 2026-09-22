@@ -20,7 +20,9 @@ export interface RowExtra {
 }
 
 const UPSTREAM_SCOPE = "@deepseek-ai/dsh-";
-const LOCAL_SCOPE = "@morlay/dsh-";
+
+/** context 组那个包：能力走子出口，所以包名前缀在这里、能力名在各行（见 {@link context}）。 */
+const CONTEXT_PACKAGE = "@morlay/dsh-context";
 
 /** 行 id 默认取短名（可被 extra.id 覆盖）。 */
 function named(short: string, name: string, extra: RowExtra): PresetRow {
@@ -39,9 +41,15 @@ export function row(short: string, extra: RowExtra = {}): PresetRow {
   return named(short, `${UPSTREAM_SCOPE}${short}`, extra);
 }
 
-/** 本仓库的一行：`ours("context-assembler")` → 包 `@morlay/dsh-context-assembler`、行 id `context-assembler`。 */
-export function ours(short: string, extra: RowExtra = {}): PresetRow {
-  return named(short, `${LOCAL_SCOPE}${short}`, extra);
+/**
+ * context 组的一行：**包名与行 id 都由「前缀 + 能力名」派生**——
+ * `context("assembler")` → 包 `@morlay/dsh-context/assembler`、行 id `context-assembler`。
+ *
+ * 这一组（通道与它的注入方）合成一个包、各占一个子出口，所以装配面上只有"前缀 + 能力名"一个说法：
+ * 加一个能力就是加一个子出口 + 这里一行，不必再造包名与 id 的拼法。
+ */
+export function context(capability: string, extra: RowExtra = {}): PresetRow {
+  return named(`context-${capability}`, `${CONTEXT_PACKAGE}/${capability}`, extra);
 }
 
 /** `cordis:group` 行：id 必须显式给（包名位置是组标记，推不出短名）。 */
@@ -66,7 +74,7 @@ export const SHELL_ROWS: readonly PresetRow[] = [
  * 于是漏进了官方 standard / ptc / cordis 的会话。改成每个模式自带一份、关在 `isolate` 组里以后，
  * 通道与它的消费者只在这棵子树可见：上游 `leakedServices` 不再把它算作全局泄漏，别的 preset 也拿不到它。
  */
-export const ASSEMBLER_ROW: PresetRow = ours("context-assembler");
+export const ASSEMBLER_ROW: PresetRow = context("assembler");
 
 /** 通道组的 id：`isolate` 的 label 按服务名给，与组 id 无关。 */
 export const CHANNEL_GROUP_ID = "context-channel";
@@ -81,10 +89,10 @@ export function channelGroup(rows: readonly PresetRow[]): PresetRow {
 
 /** 注入相关的行：**按模式给**，且都住在通道组里（见 {@link channelGroup}）。 */
 export const INJECTION_ROWS: readonly PresetRow[] = [
-  ours("context-agent-instructions"),
-  ours("context-skill-catalog"),
-  ours("context-reference"),
+  context("agent-instructions"),
+  context("skill-catalog"),
+  context("reference"),
 ];
 
 /** 工具用法分组：组表在包里，这里只是把它挂上。 */
-export const TOOL_GUIDANCE_ROW: PresetRow = ours("context-tool-guidance");
+export const TOOL_GUIDANCE_ROW: PresetRow = context("tool-guidance");

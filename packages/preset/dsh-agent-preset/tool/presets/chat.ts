@@ -1,5 +1,5 @@
 import { CHAT_PERSONA } from "./persona.ts";
-import { ASSEMBLER_ROW, channelGroup, ours, row, type PresetRow } from "./rows.ts";
+import { ASSEMBLER_ROW, channelGroup, context, row, type PresetRow } from "./rows.ts";
 
 /**
  * 对话模式的装配行：**一行提示词都不注入**——没有 system-prompt、工作区指令、skill 目录、引用注入与
@@ -17,7 +17,7 @@ export const CHAT_ROWS: readonly PresetRow[] = [
   row("tool-web"),
   channelGroup([
     ASSEMBLER_ROW,
-    ours("context-scope", {
+    context("scope", {
       config: {
         allowTools: ["ask_user_question", "web_search", "web_fetch"],
         instructions: false,
@@ -26,6 +26,6 @@ export const CHAT_ROWS: readonly PresetRow[] = [
       },
     }),
     // 复用工具预处理（描述汉化 + 剥掉参数说明）：这是所有模式都要的，与用法分组无关。
-    ours("context-tool-guidance", { config: { groups: false } }),
+    context("tool-guidance", { config: { groups: false } }),
   ]),
 ];

@@ -49,9 +49,9 @@ describe("dsh-agent-preset patch wiring", () => {
       shape(yaml.load(renderPatch(), { schema: entryListSchema }) as PatchRow[]),
     );
     expect(shape(rows).inserted).toEqual(PRESET_SOURCES.map((source) => `preset-${source.id}`));
-    expect(renderPatch().startsWith("# 本文件由 packages/preset/dsh-agent-preset/tool/patch.ts")).toBe(
-      true,
-    );
+    expect(
+      renderPatch().startsWith("# 本文件由 packages/preset/dsh-agent-preset/tool/patch.ts"),
+    ).toBe(true);
   });
 
   it("preset 就是一行 `@deepseek-ai/dsh-agent-preset`，config 逐项等于清单", () => {
@@ -109,7 +109,7 @@ describe("dsh-agent-preset patch wiring", () => {
         (row) =>
           row !== channel &&
           typeof row.name === "string" &&
-          row.name.startsWith("@morlay/dsh-context-"),
+          row.name.startsWith("@morlay/dsh-context/"),
       );
 
       expect(outside, `${source.id}: 组外的注入行`).toEqual([]);
