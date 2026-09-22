@@ -68,6 +68,17 @@ import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts
 import { hasLegacyShape } from "./log.ts";
 import { installStorageTakeover } from "./storage-takeover/index.ts";
 
+/** 一批事件里的最大时间：写路径据此推进会话行的「最后活动时间」。 */
+function maxEventTime(events: readonly { readonly time?: number }[]): number | undefined {
+  let max: number | undefined;
+  for (const event of events) {
+    const time = event.time;
+    if (typeof time !== "number") continue;
+    if (max === undefined || time > max) max = time;
+  }
+  return max;
+}
+
 const DEFAULT_PROJECTION_WRITE_EVERY_EVENTS = 200;
 const DEFAULT_PROJECTION_WRITE_INTERVAL_MS = 5000;
 
@@ -869,7 +880,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
         reuse,
       );
       await tx.updateHead(meta.id, headEventId, headSequence);
-      await tx.bumpRevision(meta.id);
+      await tx.bumpRevision(meta.id, maxEventTime(events));
       confirmedHead = headSequence;
     });
     // 事务**成功之后**才丢掉复用映射：失败（并发写者校验、唯一键冲突等）时这份映射还没被消费，
@@ -1033,7 +1044,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
         nextSeq: 0,
       });
       await tx.updateHead(id, headEventId, headSequence);
-      await tx.bumpRevision(id);
+      await tx.bumpRevision(id, maxEventTime(log.events));
     });
   }
 

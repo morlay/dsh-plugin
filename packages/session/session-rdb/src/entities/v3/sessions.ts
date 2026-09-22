@@ -22,6 +22,8 @@ export const sessions: TableDef = {
 
     f_pinned_seq: { type: "integer" },
 
+    f_last_event_at: { type: "bigint" },
+
     f_title: { type: "text" },
 
     f_title_seq: { type: "integer" },

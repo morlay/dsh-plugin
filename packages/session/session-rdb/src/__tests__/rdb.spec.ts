@@ -415,6 +415,7 @@ describe("rowToMeta", () => {
         fRevision: 1,
         fArchivedAt: null,
         fPinnedSeq: null,
+        fLastEventAt: null,
       } satisfies SessionRow),
     ).toThrow("stored session createdAt must be a non-negative safe integer");
   });

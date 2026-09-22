@@ -37,12 +37,12 @@ function fakeResponse(): FakeResponse {
   return state;
 }
 
-function fakeRequest(method = "POST"): import("node:http").IncomingMessage {
+function fakeRequest(method = "POST", body: unknown = {}): import("node:http").IncomingMessage {
   return {
     method,
     headers: {},
     async *[Symbol.asyncIterator]() {
-      yield Buffer.from("{}");
+      yield Buffer.from(JSON.stringify(body));
     },
   } as unknown as import("node:http").IncomingMessage;
 }
@@ -62,7 +62,10 @@ function titled(log: readonly SessionEvent[], title: string, time = log.length +
 
 async function harness(): Promise<{
   ctx: Context;
-  call: (method?: string) => Promise<{ code: number; items: Array<Record<string, unknown>> }>;
+  call: (
+    method?: string,
+    body?: Record<string, unknown>,
+  ) => Promise<{ code: number; items: Array<Record<string, unknown>>; total?: number }>;
   dispose: () => Promise<void>;
 }> {
   const ctx = new Context();
@@ -85,16 +88,14 @@ async function harness(): Promise<{
   if (handler === undefined) throw new Error("session rows route was not registered");
   return {
     ctx,
-    call: async (method = "POST") => {
+    call: async (method = "POST", body = {}) => {
       const response = fakeResponse();
-      await handler(fakeRequest(method), response.res);
-      return {
-        code: response.code,
-        items:
-          response.body === ""
-            ? []
-            : ((JSON.parse(response.body) as { items?: [] }).items ?? []),
-      };
+      await handler(fakeRequest(method, body), response.res);
+      const parsed =
+        response.body === ""
+          ? {}
+          : (JSON.parse(response.body) as { items?: []; total?: number });
+      return { code: response.code, items: parsed.items ?? [], ...(parsed.total === undefined ? {} : { total: parsed.total }) };
     },
     dispose: () => fiber.dispose(),
   };
@@ -136,9 +137,11 @@ describe("session-rdb session rows route", () => {
       pinnedSessionIds: [],
     });
 
-    const value = await call();
+    // 完整语料：连子代理派生会话一起要（默认不含，见分页/搜索那条用例）。
+    const value = await call("POST", { includeSubagents: true });
 
     expect(value.code).toBe(200);
+    expect(value.total).toBe(2);
     const byId = new Map(value.items.map((item) => [String(item["sessionId"]), item]));
     // 两条都在：管理面要的就是完整集合（官方那条会把 archived 过滤掉）。
     expect([...byId.keys()].sort()).toEqual(["archived", "kept"]);
@@ -169,6 +172,34 @@ describe("session-rdb session rows route", () => {
       expect(typeof item["updatedAt"]).toBe("number");
       expect(item["updatedAt"] as number).toBeGreaterThanOrEqual(item["createdAt"] as number);
     }
+  });
+
+  it("pages and searches on the backend", async () => {
+    const { ctx, call, dispose } = await harness();
+    disposals.push(dispose);
+    const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
+    await persistence.createAndAppend(meta("alpha"), titled(oneTurnLog(), "配置 Ollama", 1100));
+    await persistence.createAndAppend(meta("beta"), titled(oneTurnLog(), "整理文档", 1200));
+    await persistence.createAndAppend(
+      { ...meta("child"), origin: "subagent" },
+      titled(oneTurnLog(), "子代理的活", 1300),
+    );
+
+    // 默认分页 20、默认不含子代理：总数是过滤后的，前端据此算页数。
+    const first = await call("POST", { page: 1, pageSize: 1 });
+    expect(first.code).toBe(200);
+    expect(first.items.map((item) => String(item["sessionId"]))).toEqual(["beta"]);
+    expect(first.total).toBe(2);
+
+    const second = await call("POST", { page: 2, pageSize: 1 });
+    expect(second.items.map((item) => String(item["sessionId"]))).toEqual(["alpha"]);
+
+    const searched = await call("POST", { query: "文档" });
+    expect(searched.items.map((item) => String(item["sessionId"]))).toEqual(["beta"]);
+    expect(searched.total).toBe(1);
+
+    const withSubagents = await call("POST", { includeSubagents: true });
+    expect(withSubagents.total).toBe(3);
   });
 
   it("rejects non-POST methods with 405", async () => {

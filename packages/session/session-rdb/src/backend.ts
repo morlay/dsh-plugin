@@ -24,6 +24,8 @@ export interface SessionRow {
   fArchivedAt: number | null;
 
   fPinnedSeq: number | null;
+
+  fLastEventAt: number | null;
 }
 
 export interface EventInsert {
@@ -85,7 +87,8 @@ export interface BackendTx {
 
   updateHead(id: SessionId, headEventId: string, headSequence: number): Promise<void>;
 
-  bumpRevision(id: SessionId): Promise<void>;
+  /** 写批次提交时递增 revision；给了 `lastEventAt` 就一并把「最后活动时间」往前推（只增不减）。 */
+  bumpRevision(id: SessionId, lastEventAt?: number): Promise<void>;
 
   deleteBridgeTail(id: SessionId, fromSequence: number): Promise<void>;
 
@@ -116,6 +119,24 @@ export interface SessionListRowRecord {
   updatedAt: number;
   archived: boolean;
   subagent: boolean;
+  /** 所属工作区标题；不属于任何工作区时为 null。 */
+  workspace: string | null;
+}
+
+/** 会话行列表的查询条件：搜索、子代理过滤与分页都在后端做（前端分页等于每次拉全量）。 */
+export interface SessionListRowsQuery {
+  /** 匹配标题或所属工作区标题（大小写不敏感）；空串即不过滤。 */
+  query?: string;
+  /** 是否连子代理派生会话一起返回（默认不含）。 */
+  includeSubagents?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SessionListRowsPage {
+  items: SessionListRowRecord[];
+  /** 过滤后的总数（分页前的），前端据此算页数。 */
+  total: number;
 }
 
 /** 活动计数的一个桶：本地日 + 事件类型 + 计数。 */
@@ -163,8 +184,8 @@ export interface Backend {
    */
   usageReport(sinceMs?: number): Promise<UsageAggregate>;
 
-  /** 管理面的会话行列表：完整语料（含归档）+ 标题 + 最后活动时间，按活动倒序。 */
-  listSessionRows(): Promise<SessionListRowRecord[]>;
+  /** 管理面的会话行列表：完整语料（含归档）+ 标题 + 最后活动时间，按活动倒序分页。 */
+  listSessionRows(query?: SessionListRowsQuery): Promise<SessionListRowsPage>;
 
   /**
    * 活动计数**旁路累加**（派生表 `t_event_counts`，不参与写事务、失败可丢——表可销毁重建）：

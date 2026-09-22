@@ -15,6 +15,8 @@ import {
   type EventInsert,
   type EventRow,
   type SessionListRowRecord,
+  type SessionListRowsPage,
+  type SessionListRowsQuery,
   type SessionRow,
 } from "./backend.ts";
 import { sessionConflictRow, sessionInsertRow, titleOfEventData, usageRowOf } from "./log.ts";
@@ -138,6 +140,20 @@ function backfillEventUsage(db: DatabaseSync): void {
      WHERE e.f_type = 'assistant/message'
        AND (json_extract(e.f_data, '$.data.usage') IS NOT NULL
             OR json_extract(e.f_data, '$.usage') IS NOT NULL)`);
+}
+
+function sessionListRowOf(row: Record<string, unknown>): SessionListRowRecord {
+  return {
+    sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
+    title: typeof row["title"] === "string" ? row["title"] : null,
+    origin: typeof row["origin"] === "string" ? row["origin"] : null,
+    cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
+    createdAt: Number(row["created_at"]),
+    updatedAt: Number(row["updated_at"]),
+    archived: row["archived"] === 1 || row["archived"] === true,
+    subagent: row["origin"] === "subagent",
+    workspace: typeof row["workspace"] === "string" ? row["workspace"] : null,
+  };
 }
 
 /** SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。 */
@@ -496,7 +512,7 @@ export class SqliteBackend implements Backend {
     insertEvents: (events) => this.insertEvents(events),
     insertBridges: (rows) => this.insertBridges(rows),
     updateHead: (id, headEventId, headSequence) => this.updateHead(id, headEventId, headSequence),
-    bumpRevision: (id) => this.bumpRevision(id),
+    bumpRevision: (id, lastEventAt) => this.bumpRevision(id, lastEventAt),
     refreshTitle: (id) => this.refreshTitle(id),
     deleteBridgeTail: (id, fromSequence) => this.deleteBridgeTail(id, fromSequence),
     getPrevBridge: (id, sequence) => this.getPrevBridge(id, sequence),
@@ -596,10 +612,15 @@ export class SqliteBackend implements Backend {
       .run();
   }
 
-  private async bumpRevision(id: SessionId): Promise<void> {
+  private async bumpRevision(id: SessionId, lastEventAt?: number): Promise<void> {
     this.db
       .update(tSessions)
-      .set({ fRevision: sql`${tSessions.fRevision} + 1` })
+      .set({
+        fRevision: sql`${tSessions.fRevision} + 1`,
+        ...(lastEventAt === undefined
+          ? {}
+          : { fLastEventAt: sql`MAX(COALESCE(${tSessions.fLastEventAt}, 0), ${lastEventAt})` }),
+      })
       .where(eq(tSessions.fSessionId, id))
       .run();
   }
@@ -693,7 +714,17 @@ export class SqliteBackend implements Backend {
    * 沿 `t_events` 的事件类型数——两者限定在**有 token 用量的会话**里，时间范围各自按自己的
    * `f_created_at`（同一时刻写入，口径一致）。
    */
-  async listSessionRows(): Promise<SessionListRowRecord[]> {
+  async listSessionRows(query: SessionListRowsQuery = {}): Promise<SessionListRowsPage> {
+    const needle = query.query?.trim().toLowerCase() ?? "";
+    const like = `%${needle}%`;
+    // 排序键用物化列：`f_last_event_at` 由写路径维护、老数据由迁移回填，没有事件的会话回落 createdAt。
+    // 早先这里对每行算一次「该会话最后事件时间」的相关子查询——243 行要 4.2s，分页也救不了（排序要求
+    // 全表先算出来）。
+    const where = `WHERE (? = '' OR lower(COALESCE(s.f_title, '')) LIKE ? OR lower(COALESCE(w.f_title, '')) LIKE ?)
+                     AND (? = 1 OR s.f_origin IS NOT 'subagent')`;
+    const filterParams = [needle, like, like, query.includeSubagents === true ? 1 : 0];
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
     const rows = this.db.$client
       .prepare(
         `SELECT s.f_session_id AS session_id,
@@ -702,30 +733,31 @@ export class SqliteBackend implements Backend {
                 s.f_cwd AS cwd,
                 s.f_created_at AS created_at,
                 (s.f_archived_at IS NOT NULL) AS archived,
-                MAX(
-                  s.f_created_at,
-                  COALESCE(
-                    (SELECT MAX(e.f_created_at)
-                       FROM t_session_events se
-                       JOIN t_events e ON e.f_event_id = se.f_event_id
-                      WHERE se.f_session_id = s.f_session_id),
-                    s.f_created_at
-                  )
-                ) AS updated_at
+                COALESCE(s.f_last_event_at, s.f_created_at) AS updated_at,
+                w.f_title AS workspace
            FROM t_sessions s
-          ORDER BY updated_at DESC`,
+           LEFT JOIN t_workspaces w ON w.f_workspace_id = (
+                 SELECT b.f_workspace_id FROM t_workspace_sessions b
+                  WHERE b.f_session_id = s.f_session_id ORDER BY b.f_position LIMIT 1)
+          ${where}
+          ORDER BY updated_at DESC, s.f_session_id
+          LIMIT ? OFFSET ?`,
       )
-      .all() as unknown as Array<Record<string, unknown>>;
-    return rows.map((row) => ({
-      sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
-      title: typeof row["title"] === "string" ? row["title"] : null,
-      origin: typeof row["origin"] === "string" ? row["origin"] : null,
-      cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
-      createdAt: Number(row["created_at"]),
-      updatedAt: Number(row["updated_at"]),
-      archived: row["archived"] === 1 || row["archived"] === true,
-      subagent: row["origin"] === "subagent",
-    }));
+      .all(...filterParams, limit, offset) as unknown as Array<Record<string, unknown>>;
+    const counted = this.db.$client
+      .prepare(
+        `SELECT count(*) AS n
+           FROM t_sessions s
+           LEFT JOIN t_workspaces w ON w.f_workspace_id = (
+                 SELECT b.f_workspace_id FROM t_workspace_sessions b
+                  WHERE b.f_session_id = s.f_session_id ORDER BY b.f_position LIMIT 1)
+          ${where}`,
+      )
+      .get(...filterParams) as { n: number };
+    return {
+      items: rows.map((row) => sessionListRowOf(row)),
+      total: Number(counted.n),
+    };
   }
 
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {

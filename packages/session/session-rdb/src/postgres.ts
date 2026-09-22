@@ -13,7 +13,8 @@ import {
   type EventCountBucket,
   type EventInsert,
   type EventRow,
-  type SessionListRowRecord,
+  type SessionListRowsPage,
+  type SessionListRowsQuery,
   type SessionRow,
 } from "./backend.ts";
 import { toPostgresSchema } from "./adapters/index.ts";
@@ -284,7 +285,7 @@ export class PostgresBackend implements Backend {
       insertBridges: (rows) => this.insertBridges(tx, rows),
       updateHead: (id, headEventId, headSequence) =>
         this.updateHead(tx, id, headEventId, headSequence),
-      bumpRevision: (id) => this.bumpRevision(tx, id),
+      bumpRevision: (id, lastEventAt) => this.bumpRevision(tx, id, lastEventAt),
       refreshTitle: (id) => this.refreshTitle(tx, id),
       deleteBridgeTail: (id, fromSequence) => this.deleteBridgeTail(tx, id, fromSequence),
       getPrevBridge: (id, sequence) => this.getPrevBridge(tx, id, sequence),
@@ -426,11 +427,18 @@ export class PostgresBackend implements Backend {
   private async bumpRevision(
     exec: PgAsyncDatabase<NodePgQueryResultHKT>,
     id: SessionId,
+    lastEventAt?: number,
   ): Promise<void> {
+    const sessions = this.tables["t_sessions"];
     await exec
-      .update(this.tables["t_sessions"])
-      .set({ fRevision: sql`${this.tables["t_sessions"].fRevision} + 1` })
-      .where(eq(this.tables["t_sessions"].fSessionId, id))
+      .update(sessions)
+      .set({
+        fRevision: sql`${sessions.fRevision} + 1`,
+        ...(lastEventAt === undefined
+          ? {}
+          : { fLastEventAt: sql`GREATEST(COALESCE(${sessions.fLastEventAt}, 0), ${lastEventAt})` }),
+      })
+      .where(eq(sessions.fSessionId, id))
       .execute();
   }
 
@@ -599,40 +607,55 @@ export class PostgresBackend implements Backend {
   }
 
   /** 用量聚合：与 SQLite 侧同形，读 `t_event_usage`，数值列回来是字符串。 */
-  async listSessionRows(): Promise<SessionListRowRecord[]> {
+  async listSessionRows(query: SessionListRowsQuery = {}): Promise<SessionListRowsPage> {
+    const needle = query.query?.trim().toLowerCase() ?? "";
+    const like = `%${needle}%`;
+    const includeSubagents = query.includeSubagents === true;
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
     const tSessions = this.tables["t_sessions"];
-    const tSessionEvents = this.tables["t_session_events"];
-    const tEvents = this.tables["t_events"];
-    const result = (await this.db.execute(sql`
+    const tWorkspaces = this.tables["t_workspaces"];
+    const tWorkspaceSessions = this.tables["t_workspace_sessions"];
+    // 归属可能有多行（一个会话可在多个工作区）：取 position 最小的那条，避免放大结果行数。
+    const workspaceTitle = sql`(SELECT w.f_title FROM ${tWorkspaceSessions} b
+                                     JOIN ${tWorkspaces} w ON w.f_workspace_id = b.f_workspace_id
+                                    WHERE b.f_session_id = s.f_session_id
+                                    ORDER BY b.f_position LIMIT 1)`;
+    const where = sql`WHERE (${needle} = ''
+                          OR lower(COALESCE(s.f_title, '')) LIKE ${like}
+                          OR lower(COALESCE(${workspaceTitle}, '')) LIKE ${like})
+                        AND (${includeSubagents} OR s.f_origin IS DISTINCT FROM 'subagent')`;
+    const rows = (await this.db.execute(sql`
       SELECT s.f_session_id AS session_id,
              s.f_title AS title,
              s.f_origin AS origin,
              s.f_cwd AS cwd,
              s.f_created_at AS created_at,
              (s.f_archived_at IS NOT NULL) AS archived,
-             GREATEST(
-               s.f_created_at,
-               COALESCE(
-                 (SELECT MAX(e.f_created_at)
-                    FROM ${tSessionEvents} se
-                    JOIN ${tEvents} e ON e.f_event_id = se.f_event_id
-                   WHERE se.f_session_id = s.f_session_id),
-                 s.f_created_at
-               )
-             ) AS updated_at
+             COALESCE(s.f_last_event_at, s.f_created_at) AS updated_at,
+             ${workspaceTitle} AS workspace
         FROM ${tSessions} s
-       ORDER BY updated_at DESC
+        ${where}
+       ORDER BY updated_at DESC, s.f_session_id
+       LIMIT ${limit} OFFSET ${offset}
     `)) as unknown as { rows: Array<Record<string, unknown>> };
-    return result.rows.map((row) => ({
-      sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
-      title: typeof row["title"] === "string" ? row["title"] : null,
-      origin: typeof row["origin"] === "string" ? row["origin"] : null,
-      cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
-      createdAt: numeric(row["created_at"]),
-      updatedAt: numeric(row["updated_at"]),
-      archived: row["archived"] === true,
-      subagent: row["origin"] === "subagent",
-    }));
+    const counted = (await this.db.execute(sql`
+      SELECT count(*) AS n FROM ${tSessions} s ${where}
+    `)) as unknown as { rows: Array<Record<string, unknown>> };
+    return {
+      items: rows.rows.map((row) => ({
+        sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
+        title: typeof row["title"] === "string" ? row["title"] : null,
+        origin: typeof row["origin"] === "string" ? row["origin"] : null,
+        cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
+        createdAt: numeric(row["created_at"]),
+        updatedAt: numeric(row["updated_at"]),
+        archived: row["archived"] === true,
+        subagent: row["origin"] === "subagent",
+        workspace: typeof row["workspace"] === "string" ? row["workspace"] : null,
+      })),
+      total: numeric(counted.rows[0]?.["n"] ?? 0),
+    };
   }
 
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
