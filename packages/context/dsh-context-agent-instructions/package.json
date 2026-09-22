@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-instructions": "workspace:*",
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
@@ -48,11 +49,14 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@morlay/dsh-context-assembler": "workspace:*"
+    "@morlay/dsh-context-assembler": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*"
   }

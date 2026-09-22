@@ -6,6 +6,7 @@ import type {} from "@deepseek-ai/dsh-agent-instructions";
 import z from "@deepseek-ai/schemastery";
 import type {} from "@morlay/dsh-context-assembler";
 import { instructionChain, readInstruction, type InstructionFile } from "./files.ts";
+import { baselineIdentity } from "./baseline.ts";
 
 export const name = "context-agent-instructions";
 
@@ -53,12 +54,22 @@ export function apply(ctx: Context, config: Config): void {
     const cwd = agent.session.header.cwd === undefined ? process.cwd() : agent.session.header.cwd;
     const chain = { cwd, files: await instructionChain(cwd, options) };
     chains.set(agent, chain);
+    // 上游认领判据要的身份：缺它，上游（官方 preset 自己装的那行）会以为基线不存在，再注入一条自己的模板。
+    const identity = await baselineIdentity(cwd);
     for (const file of chain.files) {
       ctx.contextAssembler.registerRule({
         id: `agent-instructions:${rootTag(file.root)}:${file.display}`,
-        // 对外身份沿用上游 kind：客户端标签与按 kind 认领的消费方（上游的实验性约束收集）才认得这是
-        // 工作区指令。`changes` 留空——上游那套按文件做 reconciliation 的记录我们不做（一条文件一条 id）。
-        source: () => ({ kind: "agent-instructions", form: "instructions", changes: [] }),
+        // 对外身份沿用上游那两样：kind 让客户端标签与按 kind 认领的消费方（上游的实验性约束收集）认得这是
+        // 工作区指令；`baseline` 与 `baselineIdentity` 让上游的认领判据（kind + baseline===true + 身份相等）
+        // 认这份条目就是基线，于是它不再注入自己那条模板。`changes` 留空——上游那套按文件做 reconciliation
+        // 的记录我们不做（一条文件一条 id）。
+        source: () => ({
+          kind: "agent-instructions",
+          form: "instructions",
+          baseline: true,
+          baselineIdentity: identity,
+          changes: [],
+        }),
         text: (target) => {
           const current = chains.get(target);
           if (current === undefined || !current.files.some((entry) => entry.path === file.path))
