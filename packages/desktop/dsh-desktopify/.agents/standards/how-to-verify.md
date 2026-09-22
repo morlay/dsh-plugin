@@ -18,6 +18,11 @@
 - **profile 项目与安装**：`profile-project.spec.ts` 用注入的 spawn 断言安装命令行与失败诊断（不真跑 pnpm），
   并覆盖 `overrides` 的写入 / 替换 / 空列表保留手写内容。
 
+宿主包（`packages/desktop/dsh-desktop-host/src/__tests__/`）的流面也按接缝测：`wire.spec.ts`（管道编解码）、
+`webserver.spec.ts`（无端口替身的路由与派发）、`transport.spec.ts`（认证接管、`/.dsh/remote-stream` 路由，
+以及注入脚本 `openStream` 的取消语义——signal abort 后迭代必须立即结束，见
+[设计 后续变化（2026-09-22）](../designs/20260920-桌面无端口传输与窗口对齐.md#后续变化2026-09-22)）。
+
 ## 未覆盖（有明确原因）
 
 - **Electron 主进程 / preload / `cli/{bundle,dev}.ts` 私有逻辑**：导入即触发 `app.whenReady()` 等

@@ -49,8 +49,12 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
       },
       fail(message){failure=new Error(message);ended=true;notify()},
     })
-    const onAbort=()=>{cancel()}
+    // 取消必须结束迭代：abort 只解除 IPC 监听，挂在这一句等待上的消费方再也收不到
+    // end 帧；不叫醒它就等于 dispose（RemoteStream 会 await iterator.return）永不落定——
+    // 撤回 / 重试后的窗口重建正是卡在这里，页面既收不到新窗口也没有报错。
+    const onAbort=()=>{cancel();ended=true;notify()}
     signal.addEventListener('abort',onAbort,{once:true})
+    if(signal.aborted)onAbort()
     try{
       for(;;){
         while(queue.length>0)yield queue.shift()

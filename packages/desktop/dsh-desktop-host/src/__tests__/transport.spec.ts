@@ -1,5 +1,6 @@
+import { runInThisContext } from "node:vm";
 import { Context } from "@deepseek-ai/cordis";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PortlessWebServer } from "../webserver.ts";
 import {
   DESKTOP_STREAM_PATH,
@@ -138,5 +139,117 @@ describe("桌面 transport 装配", () => {
     );
     expect(response.status).toBe(502);
     expect(await response.text()).toBe("no such endpoint");
+  });
+});
+
+interface StreamCarrierHandlers {
+  chunk(text: string): void;
+  end(): void;
+  fail(message: string): void;
+}
+
+interface FakeCarrier {
+  handlers: StreamCarrierHandlers | undefined;
+  cancels: number;
+}
+
+interface PageTransport {
+  openStream(endpoint: string, payload: unknown, signal: AbortSignal): AsyncIterable<unknown>;
+}
+
+/** 执行注入脚本并取回页面侧 transport：脚本只写 globalThis，node 环境下可直接跑。 */
+function pageTransport(): { transport: PageTransport; carrier: FakeCarrier } {
+  const carrier: FakeCarrier = { handlers: undefined, cancels: 0 };
+  (globalThis as { __DSH_DESKTOP_STREAM__?: unknown }).__DSH_DESKTOP_STREAM__ = {
+    open: (_endpoint: string, _payload: unknown, handlers: StreamCarrierHandlers) => {
+      carrier.handlers = handlers;
+      return () => {
+        carrier.cancels += 1;
+      };
+    },
+  };
+  // 脚本与迭代期都会 console.info：spy 一直留到用例结束（afterEach 里 restore）。
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  runInThisContext(DESKTOP_TRANSPORT_SCRIPT);
+  const transport = (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__ as
+    | PageTransport
+    | undefined;
+  if (transport === undefined) throw new Error("injected transport script did not install");
+  return { transport, carrier };
+}
+
+const UNRESOLVED = Symbol("unresolved");
+
+/** 限时等待一次迭代：挂住时给出 UNRESOLVED，而不是让用例挂死。 */
+async function settled<T>(promise: Promise<T>, ms = 200): Promise<T | typeof UNRESOLVED> {
+  return Promise.race([
+    promise,
+    new Promise<typeof UNRESOLVED>((resolve) => {
+      setTimeout(() => {
+        resolve(UNRESOLVED);
+      }, ms);
+    }),
+  ]);
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  delete (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__;
+  delete (globalThis as { __DSH_DESKTOP_STREAM__?: unknown }).__DSH_DESKTOP_STREAM__;
+});
+
+describe("页面侧流载体的取消语义", () => {
+  it("signal abort 后立即结束迭代——窗口重建（resync）在 await 它的 dispose", async () => {
+    const { transport, carrier } = pageTransport();
+    const abort = new AbortController();
+    const iterator = transport
+      .openStream("/session.follow", {}, abort.signal)
+      [Symbol.asyncIterator]();
+
+    const pending = iterator.next();
+    abort.abort(new Error("disposed"));
+
+    expect(await settled(pending)).toEqual({ done: true, value: undefined });
+    expect(carrier.cancels).toBe(1);
+  });
+
+  it("signal abort 后 iterator.return() 立即落定——上游 RemoteStream.dispose 等的是它", async () => {
+    const { transport } = pageTransport();
+    const abort = new AbortController();
+    const iterator = transport
+      .openStream("/session.follow", {}, abort.signal)
+      [Symbol.asyncIterator]();
+
+    const pending = iterator.next();
+    abort.abort(new Error("disposed"));
+
+    expect(await settled(iterator.return!(undefined))).toEqual({ done: true, value: undefined });
+    await settled(pending);
+  });
+
+  it("signal 已经 abort 时消费即结束", async () => {
+    const { transport } = pageTransport();
+    const abort = new AbortController();
+    abort.abort(new Error("disposed"));
+    const iterator = transport
+      .openStream("/session.follow", {}, abort.signal)
+      [Symbol.asyncIterator]();
+
+    expect(await settled(iterator.next())).toEqual({ done: true, value: undefined });
+  });
+
+  it("end 帧交付已收数据后结束迭代", async () => {
+    const { transport, carrier } = pageTransport();
+    const iterator = transport
+      .openStream("/session.follow", {}, new AbortController().signal)
+      [Symbol.asyncIterator]();
+
+    const first = iterator.next();
+    carrier.handlers?.chunk('{"frame":1}\n');
+    expect(await settled(first)).toEqual({ done: false, value: { frame: 1 } });
+
+    const second = iterator.next();
+    carrier.handlers?.end();
+    expect(await settled(second)).toEqual({ done: true, value: undefined });
   });
 });
