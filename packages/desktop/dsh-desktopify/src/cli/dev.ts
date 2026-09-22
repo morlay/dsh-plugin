@@ -15,8 +15,7 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { writeAppConfig } from "../appconfig.ts";
-import { devWebArgs, ensureClientBundlePlaceholders } from "./dev-web.ts";
-import { installAppPatch } from "./prepare-seed.ts";
+import { ensureClientBundlePlaceholders, installProfilePatch } from "./dev-web.ts";
 import {
   DSH_PACKAGE,
   desktopHost,
@@ -358,12 +357,11 @@ export async function runDev(options: DevOptions): Promise<void> {
     );
 
     const devWeb = devWebConfig(manifest);
-    // app 层装配随开发资源走、以 `--patch` overlay 传给 `dsh web`：profile 的用户层归用户。
-    const appPatch = await installAppPatch(workspace, join(buildRootDir, "development"));
     if (devWeb !== undefined) {
+      const patchFile = await installProfilePatch(profileDir, workspace);
       const placeholders = await ensureClientBundlePlaceholders(profileDir, devWeb);
       console.log(
-        `desktop development: dev client bundles patch=${appPatch ?? "none"} ` +
+        `desktop development: dev client bundles patch=${patchFile} ` +
           `placeholders=${placeholders.length === 0 ? "none" : placeholders.join(", ")}`,
       );
     }
@@ -372,7 +370,7 @@ export async function runDev(options: DevOptions): Promise<void> {
     const nodeOptions = tsx
       ? [process.env.NODE_OPTIONS, "--import=tsx/esm"].filter(Boolean).join(" ")
       : process.env.NODE_OPTIONS;
-    await run(process.execPath, [entry, ...devWebArgs(port, appPatch)], repositoryRoot, {
+    await run(process.execPath, [entry, "web", "--port", port], repositoryRoot, {
       ...process.env,
       DSH_HOME: home,
 
@@ -389,8 +387,6 @@ export async function runDev(options: DevOptions): Promise<void> {
     workspace,
     input,
   );
-  // host 从这个目录读 app 层 patch（overlay 层），profile 用户层不写。
-  await installAppPatch(workspace, projectDir);
   const desktop = desktopConfig(manifest);
   const runtimeRoot = join(buildRootDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });

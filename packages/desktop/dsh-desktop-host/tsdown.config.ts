@@ -6,12 +6,7 @@ import { defineConfig } from "tsdown";
 // 加载的独立入口（`@deepseek-ai/dsh-host-webserver` 保持 external，部署 runtime 里有）。
 export default defineConfig({
   name: "@morlay/dsh-desktop-host",
-  entry: {
-    index: "./src/index.ts",
-    webserver: "./src/webserver.ts",
-    wire: "./src/wire.ts",
-    patch: "./src/patch.ts",
-  },
+  entry: { index: "./src/index.ts", webserver: "./src/webserver.ts", wire: "./src/wire.ts" },
   outDir: "lib",
   format: ["esm"],
   platform: "node",

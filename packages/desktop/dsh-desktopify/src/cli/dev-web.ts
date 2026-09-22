@@ -6,6 +6,8 @@ export const DEV_WEB_OVERLAY = "dev-web.cordis.patch.yml";
 
 const CLIENT_ENTRY = ["src", "client", "index.ts"];
 
+const PROFILE_PATCH = "cordis.patch.yml";
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -15,17 +17,16 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-/**
- * `dsh web` 的启动参数：app 层装配以 `--patch` overlay 传入。
- *
- * 不写 profile 的用户层（`cordis.patch.yml`）——那份归用户，settings 面板写在那里；
- * app 装配随开发资源走，和打包形态由 host 加载 app 层是同一个层。
- * @param port - 监听端口。
- * @param appPatch - 开发资源里的 app 层 patch 路径；app 没声明时是 `undefined`。
- * @returns `dsh` 的子命令与参数。
- */
-export function devWebArgs(port: string, appPatch: string | undefined): string[] {
-  return ["web", "--port", port, ...(appPatch === undefined ? [] : ["--patch", appPatch])];
+export async function installProfilePatch(
+  profileDir: string,
+  workspace: string,
+): Promise<string | undefined> {
+  const source = join(workspace, PROFILE_PATCH);
+  if (!(await pathExists(source))) return undefined;
+  const target = join(profileDir, PROFILE_PATCH);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, await readFile(source, "utf8"));
+  return target;
 }
 
 function placeholderBundle(name: string): string {

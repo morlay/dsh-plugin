@@ -1,6 +1,6 @@
-# dsh-custom-next 的 app 层装配：打包形态随 runtime 分发（`seed/runtime/app.cordis.patch.yml`）由 host
-# 作为 overlay 层加载，`dev --web` 以 `--patch` 传同一份——**不要**把它写进 profile 的 `cordis.patch.yml`，
-# 那份归用户（settings 写在里面，重种时会被保留）。
+# dsh-custom-next 的 profile 层装配（打包时种进 profile 的 `cordis.patch.yml`，`dev --web` 也会写进 web
+# profile）。种进去的那份重种时不被替换——profile 的 `cordis.patch.yml` 同时是用户数据（settings 写在那里），
+# 所以本文件的改动只对新装机器生效。
 #
 # 开发态 client bundle 路由：本地 client 半由源码现场打包。该行按
 # DSH_DEV_CLIENT_BUNDLES 启用——启动器置 1，其余启动方式下保持禁用，生产装配不受影响。

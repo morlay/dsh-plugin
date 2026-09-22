@@ -86,13 +86,13 @@
   argv[6] 交给 `profileContext.packageManager`；该 npm 包只是 wrapper，入口会 spawn 同平台
   `@pnpm/exe.<platform>-<arch>` 的原生二进制，所以载荷带上那个平台包）、`bin/`（pnpm 子进程的 `PATH`
   前置目录，Unix 下是指向 `../node/node` 的相对链接）、`appconfig.json`、`versions.json`；
-- `seed/`：`runtime/`（不可变闭包 = host 的 dsh 安装锚点与前端静态资源，另带 app 自己的装配层
-  `app.cordis.patch.yml`）+ `profiles/desktop/`（初始 profile：app 自己的 bundle 以 `file:` 指向 `vendor/`
-  副本、`pnpm-workspace.yaml`、`desktop-runtime-packages.json`、`.seed-hash`）。
+- `seed/`：`runtime/`（不可变闭包 = host 的 dsh 安装锚点与前端静态资源）+
+  `profiles/desktop/`（初始 profile：app 自己的 bundle 以 `file:` 指向 `vendor/` 副本、`pnpm-workspace.yaml`、
+  `desktop-runtime-packages.json`、`.seed-hash`）。
 
 用户的 `DSH_HOME` 只放 profile（`profiles/<name>`）：种出 / 替换后由壳用随包 pnpm 离线安装它，官方包与 dsh
-始终取自 `seed/runtime`。profile 的 `cordis.patch.yml` 归用户（settings 写在那里）：种子不带它，重种时用户
-那份原样保留，app 的装配行走 runtime 里的 `app.cordis.patch.yml`（host 的 overlay 层）。
+始终取自 `seed/runtime`。替换逻辑只对 profile 的 `cordis.patch.yml` 豁免——它是用户数据（settings 面板写在那里），
+重种时把用户那份读出来、种完放回去。
 
 ## 已知行为
 

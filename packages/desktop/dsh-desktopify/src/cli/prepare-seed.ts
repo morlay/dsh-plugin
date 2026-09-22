@@ -15,8 +15,6 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
-import { PROFILE_PATCH_FILENAME } from "@deepseek-ai/dsh-app-boot";
-import { DESKTOP_APP_PATCH_FILENAME } from "@morlay/dsh-desktop-host/patch";
 import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
 import {
   PROFILE_RUNTIME_REPORT_NAME,
@@ -170,41 +168,15 @@ async function linkClosureTopLevel(modulesDir: string): Promise<void> {
   }
 }
 
-/**
- * 种给 profile 的文件：profile 自己的东西（装配清单 + app 声明的资源）**不含** profile 的
- * patch 文档——那份归用户（settings 写在那里），app 的装配行改走 runtime 里的
- * {@link DESKTOP_APP_PATCH_FILENAME} overlay 层（见 {@link installAppPatch}）。
- */
-export function seedEntries(workspace: string, manifest: { files?: string[] }): string[] {
-  const entries = new Set(["package.json"]);
+function seedEntries(workspace: string, manifest: { files?: string[] }): string[] {
+  const entries = new Set(["package.json", "cordis.patch.yml"]);
   for (const file of manifest.files ?? []) {
     const cleaned = file.replaceAll("\\", "/").replace(/^\.\//u, "");
     if (cleaned === "" || cleaned === "." || cleaned.startsWith("/") || cleaned.startsWith("../"))
       continue;
-    if (cleaned === PROFILE_PATCH_FILENAME) continue;
     entries.add(cleaned);
   }
   return [...entries].sort();
-}
-
-/**
- * 把 app 自己的装配行放进 runtime 资源（`app.cordis.patch.yml`），由 host 作为 overlay 层加载。
- * 它随 app 的只读资源分发，所以重种 profile 不会碰到它；workspace 没有这份文件时不写，
- * host 就只带自己那层。
- * @param workspace - app workspace 目录。
- * @param runtimeDir - 部署 runtime 根（种子的 `runtime/`）。
- * @returns 写入的 app 层 patch 路径；workspace 没有这份文件时是 `undefined`。
- */
-export async function installAppPatch(
-  workspace: string,
-  runtimeDir: string,
-): Promise<string | undefined> {
-  const source = join(workspace, PROFILE_PATCH_FILENAME);
-  if (!(await pathExists(source))) return undefined;
-  await mkdir(runtimeDir, { recursive: true });
-  const target = join(runtimeDir, DESKTOP_APP_PATCH_FILENAME);
-  await cp(source, target);
-  return target;
 }
 
 const TREE_SKIP_DIRS = new Set([
@@ -422,7 +394,6 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
     verbatimSymlinks: true,
   });
   await switchToPublishedExports(runtimeModulesDir);
-  await installAppPatch(workspace, runtimeDir);
 
   // profile 只持有 app 自带的（非官方 bundle）插件：官方包与 dsh 由 runtime 提供，
   // 这些包以 `file:` 指向随包 vendor 副本，由启动器用随包 pnpm 在用户 profile 里装出来。
