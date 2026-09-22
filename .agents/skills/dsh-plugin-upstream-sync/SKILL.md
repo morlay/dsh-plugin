@@ -125,8 +125,12 @@ tsx <skill 路径>/scripts/build.ts   # 3. 干净构建
 
 ### build.ts：干净构建
 
-上游目录内 `pnpm install --no-frozen-lockfile && pnpm run build`，默认清理
-其 node_modules（`DEEPSEEK_HARNESS_NO_CLEAN=1` 保留）。
+上游目录内 `pnpm install --no-frozen-lockfile && pnpm run clean && pnpm run build`，
+默认清理其 node_modules（`DEEPSEEK_HARNESS_NO_CLEAN=1` 保留）。
+
+`pnpm run clean`（上游自带脚本）不是可选项：`lib/` 产物不在 git 里、sync 的 reset 清不掉，
+残留的上一版产物会被并行构建的包当作解析目标（rolldown 按 package.json exports 读 lib），
+于是上游「新增导出」这类改动在本机表现为 `MISSING_EXPORT`，干净 clone 的 CI 却正常。
 
 > 仓库可封装为命令（如 just：`vendor sync` / `vendor patch` / `vendor
 build`），直接 `tsx` 调用脚本，语义与流程一致。
