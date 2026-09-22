@@ -178,7 +178,8 @@ function workspaceStateOf(value: unknown): WorkspaceDomainState {
     state === null ||
     typeof state.initialized !== "boolean" ||
     !Array.isArray(state.workspaceIds) ||
-    !Array.isArray(state.archivedSessionIds)
+    !Array.isArray(state.archivedSessionIds) ||
+    !Array.isArray(state.pinnedSessionIds)
   ) {
     throw new TypeError("workspace registry state does not match the stored shape");
   }
@@ -186,6 +187,7 @@ function workspaceStateOf(value: unknown): WorkspaceDomainState {
     initialized: state.initialized,
     workspaceIds: state.workspaceIds.map((id) => id as WorkspaceId),
     archivedSessionIds: state.archivedSessionIds.map((id) => id as SessionId),
+    pinnedSessionIds: state.pinnedSessionIds.map((id) => id as SessionId),
     ...(state.pendingMutation === undefined ? {} : { pendingMutation: state.pendingMutation }),
   };
 }

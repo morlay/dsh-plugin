@@ -12,7 +12,7 @@ import SessionPersistenceRdb, {
   SessionDeletionError,
 } from "@morlay/session-rdb";
 import { SESSION_DELETE_PATH } from "@morlay/session-rdb/deletion";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -24,7 +24,6 @@ async function harness(): Promise<{
   persistence: SessionPersistenceRdb;
 }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceRdb, { type: "sqlite", path: ":memory:" });
@@ -50,6 +49,7 @@ async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Pr
   await persistence.internals().backend.storage.writeWorkspaceState({
     initialized: true,
     workspaceIds: [],
+    pinnedSessionIds: [],
     archivedSessionIds: ids.map((id) => SessionId(id)),
   });
 }

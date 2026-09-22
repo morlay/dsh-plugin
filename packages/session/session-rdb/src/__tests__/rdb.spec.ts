@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { ToolCallId, createMessage, createUserMessage } from "@deepseek-ai/dsh-llm";
+import { CompactionId, compactCheckpointSource } from "@deepseek-ai/dsh-compaction";
+import {
+  ToolCallId,
+  createMessage,
+  createToolResultMessage,
+  createUserMessage,
+} from "@deepseek-ai/dsh-llm";
 import { afterEach, describe, expect, it } from "vitest";
-import { EmptySettings } from "@morlay/session-rdb/testing";
 import { Context } from "@deepseek-ai/cordis";
 import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -86,7 +91,6 @@ function rdb(ctx: Context): SessionPersistenceSqlite {
 
 async function backend(path = ":memory:"): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
   return { ctx, dispose: () => fiber.dispose() };
@@ -94,7 +98,6 @@ async function backend(path = ":memory:"): Promise<{ ctx: Context; dispose: () =
 
 runPersistenceContract("sqlite", async () => {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
   return {
@@ -111,7 +114,6 @@ runCoordinatorContract("sqlite", async (): Promise<CoordinatorFixture> => {
   return {
     mount: async (ctx) => {
       if (ctx.reflect.get("settings") === undefined) {
-        await ctx.plugin(EmptySettings);
       }
       return await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     },
@@ -237,11 +239,7 @@ describe("eventDimensions", () => {
       data: {
         turn: 1,
         step: 1,
-        message: createMessage({
-          role: "user",
-          content: [{ type: "tool-result", toolCallId: callId, content: [], isError: false }],
-          source: { kind: "tool", callId },
-        }),
+        message: createToolResultMessage({ callId, content: [], isError: false }),
       },
       surfaceOp: "append",
     });
@@ -416,6 +414,7 @@ describe("rowToMeta", () => {
         fIncarnation: "fractional",
         fRevision: 1,
         fArchivedAt: null,
+        fPinnedSeq: null,
       } satisfies SessionRow),
     ).toThrow("stored session createdAt must be a non-negative safe integer");
   });
@@ -473,18 +472,11 @@ describe("findSurfaceRepairs", () => {
     extra: Partial<SessionEvent> = {},
     messageId?: string,
   ): SessionEvent {
-    const message = createMessage({
-      role: "user",
-      content: [
-        {
-          type: "tool-result",
-          toolCallId: ToolCallId("call-1"),
-          content: [{ type: "text", text }],
-          isError: false,
-        },
-      ],
-      source: { kind: "tool", callId: ToolCallId("call-1") },
-    });
+    const message = createToolResultMessage({
+            callId: ToolCallId("call-1"),
+            content: [{ type: "text", text }],
+            isError: false,
+          });
     return {
       type: "tool/result",
       seq: SessionSeq(seq),
@@ -732,7 +724,7 @@ describe("findSurfaceRepairs", () => {
         time: 8,
         data: createUserMessage({
           content: [{ type: "text", text: "compacted" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
         surfaceOp: { op: "replace", startSeq: 1, endSeq: 999 },
       } as unknown as SessionEvent,
@@ -764,7 +756,7 @@ describe("findSurfaceRepairs", () => {
         time: 2,
         data: createUserMessage({
           content: [{ type: "text", text: "compacted" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
         surfaceOp: { op: "replace", startSeq: 40, endSeq: 999 },
       } as unknown as SessionEvent,
@@ -832,7 +824,7 @@ describe("read-view repair", () => {
         time: 2,
         data: createUserMessage({
           content: [{ type: "text", text: "compacted" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
         surfaceOp: { op: "replace", startSeq: 1, endSeq: 3 },
       },
@@ -853,17 +845,10 @@ describe("read-view repair", () => {
         data: {
           turn: 1,
           step: 1,
-          message: createMessage({
-            role: "user",
-            content: [
-              {
-                type: "tool-result",
-                toolCallId: ToolCallId("call-1"),
-                content: [{ type: "text", text: "result" }],
-                isError: false,
-              },
-            ],
-            source: { kind: "tool", callId: ToolCallId("call-1") },
+          message: createToolResultMessage({
+            callId: ToolCallId("call-1"),
+            content: [{ type: "text", text: "result" }],
+            isError: false,
           }),
         },
         surfaceOp: "append",
@@ -903,7 +888,7 @@ describe("read-view repair", () => {
         time: 2,
         data: createUserMessage({
           content: [{ type: "text", text: "compacted" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
         surfaceOp: { op: "replace", startSeq: 1, endSeq: 1 },
       },
@@ -1133,17 +1118,10 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 1,
-          message: createMessage({
-            role: "user",
-            content: [
-              {
-                type: "tool-result",
-                toolCallId: ToolCallId("c"),
-                content: [],
-                isError: false,
-              },
-            ],
-            source: { kind: "tool", callId: ToolCallId("c") },
+          message: createToolResultMessage({
+            callId: ToolCallId("c"),
+            content: [],
+            isError: false,
           }),
         },
         surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(2) },
@@ -1215,7 +1193,7 @@ describe("recomputeReplaceProvenance", () => {
         time: 6,
         data: {
           content: [{ type: "text", text: "checkpoint" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         },
         surfaceOp: { op: "replace", startSeq: 0, endSeq: 1 },
       } as unknown as SessionEvent,
@@ -1244,7 +1222,7 @@ describe("recomputeReplaceProvenance", () => {
         time: 10,
         data: {
           content: [{ type: "text", text: "checkpoint" }],
-          source: { kind: "plugin", plugin: "compact" },
+          source: compactCheckpointSource(CompactionId("compaction-1")),
         },
         surfaceOp: { op: "replace", startSeq: 4, endSeq: 5 },
       } as unknown as SessionEvent,
@@ -1305,7 +1283,6 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const m = meta("crash");
 
     const ctx1 = new Context();
-    await ctx1.plugin(EmptySettings);
     await ctx1.plugin(SessionStore);
     const fiber1 = await ctx1.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     await rdb(ctx1).createAndAppend(m, oneTurnLog());
@@ -1321,7 +1298,6 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await fiber1.dispose();
 
     const ctx2 = new Context();
-    await ctx2.plugin(EmptySettings);
     await ctx2.plugin(SessionStore);
     const fiber2 = await ctx2.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     const loaded = await rdb(ctx2).load(m.id);
@@ -1580,7 +1556,6 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
 
   it("append rolls back the whole batch on a mid-batch seq collision (transaction)", async () => {
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
     const m = meta("rollback");
@@ -1596,14 +1571,12 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const path = await freshDbPath();
     const m = meta("persist", "/proj");
     const ctx1 = new Context();
-    await ctx1.plugin(EmptySettings);
     await ctx1.plugin(SessionStore);
     const fiber1 = await ctx1.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     await rdb(ctx1).createAndAppend(m, oneTurnLog());
     await fiber1.dispose();
 
     const ctx2 = new Context();
-    await ctx2.plugin(EmptySettings);
     await ctx2.plugin(SessionStore);
     const fiber2 = await ctx2.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     expect((await rdb(ctx2).list()).map((x) => x.header.id)).toContain(m.id);
@@ -1707,7 +1680,6 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const path = await freshDbPath();
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, {
       type: "sqlite",
@@ -1762,17 +1734,12 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
         data: {
           turn: 1,
           step: 1,
-          message: createMessage({
-            role: "user",
-            content: [
-              {
-                type: "tool-result",
-                toolCallId: callId,
-                content: [{ type: "text", text: "pruned" }],
-                isError: false,
-              },
-            ],
-            source: { kind: "tool", callId },
+          // v4 的 tool/result 消息是 tool 角色的平铺形状：`toolCallId` 在消息顶层，
+          // 结果块不再是包在 `content` 里的一个 `tool-result` 块。
+          message: createToolResultMessage({
+            callId,
+            content: [{ type: "text", text: "pruned" }],
+            isError: false,
           }),
         },
 
@@ -1912,7 +1879,6 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     }
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, {
       type: "sqlite",
@@ -1935,7 +1901,6 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await chmod(path, 0o644);
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, {
       type: "sqlite",
@@ -1961,7 +1926,6 @@ describe("SessionPersistenceSqlite: edge cases", () => {
 
     const deletePath = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, {
       type: "sqlite",
@@ -1988,7 +1952,6 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await b1.dispose();
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     let session!: Session;
     await ctx.plugin(
@@ -2052,7 +2015,6 @@ describe("surface field round-trip", () => {
 
   it("append and load round-trips surface fields through SQLite", async () => {
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
     const session = ctx.sessions.create(SessionId("roundtrip-surface"));

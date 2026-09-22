@@ -1,6 +1,13 @@
 # 配置经 settings 服务覆盖而非直接改 cordis 配置
 
-状态：已采纳
+状态：已被 ADR-跟随上游session-format-v4 取代（上游 0.1.7 取消了 settings namespace 覆盖插件 config 的能力：
+settings 现在只投影 volatile 字段做表单编辑，改动持久化回 profile patch 的 entry config）
+
+> **2026-09-22 更新**：本篇描述的机制在上游 0.1.7 已不存在（`SettingsProvider` /
+> `installSection` / namespace section 全被移除），`session-rdb` 与
+> `llm-openai-compatible` 都不再注入 `settings` 服务。新的配置来源是行 config
+> （bundle patch / profile patch / 设置页），旧 `settings.yaml` 由上游启动时一次性导入到同 id 的行。
+> 决策见 [ADR-跟随上游session-format-v4](../../../session-rdb/.agents/adrs/20260922-跟随上游session-format-v4.md)。
 
 `session-rdb` 的配置（SQLite / PostgreSQL 选择、路径、连接串等）经
 `$DSH_HOME/settings.yaml` 的 `session-rdb` namespace 覆盖 cordis 层 entry

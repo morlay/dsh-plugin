@@ -20,7 +20,7 @@ function turnEnd(seq: number, turn: number): SessionEvent {
     seq,
     time: seq,
     data: { turn, reason: { kind: "completed" } },
-  } as SessionEvent;
+  } as unknown as SessionEvent;
 }
 
 describe("balanceRewindPrefix", () => {
@@ -39,7 +39,7 @@ describe("balanceRewindPrefix", () => {
           source: { kind: "user" },
         },
         surfaceOp: "append",
-      } as SessionEvent,
+      } as unknown as SessionEvent,
       stepEnd(3, 1, 1),
       turnEnd(4, 1),
       turnStart(5, 2),
@@ -173,7 +173,7 @@ describe("balanceRewindPrefix", () => {
           source: { kind: "user" },
         },
         surfaceOp: "append",
-      } as SessionEvent,
+      } as unknown as SessionEvent,
     ];
     expect(balanceRewindPrefix(prefix, { keepOpenTail: true }).map((e) => e.seq)).toEqual([
       0, 1, 2,

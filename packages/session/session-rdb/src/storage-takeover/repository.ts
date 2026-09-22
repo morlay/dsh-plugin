@@ -219,11 +219,19 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
           .where(isNotNull(tSessions.fArchivedAt))
           .orderBy(tSessions.fArchivedAt),
       );
+      const pinned = await allRows<{ fSessionId: string; fPinnedSeq: number | null }>(
+        db
+          .select({ fSessionId: tSessions.fSessionId, fPinnedSeq: tSessions.fPinnedSeq })
+          .from(tSessions)
+          .where(isNotNull(tSessions.fPinnedSeq))
+          .orderBy(tSessions.fPinnedSeq),
+      );
       const pendingMutation = pendingMutationOf(row);
       return {
         initialized: row.fInitialized !== 0,
         workspaceIds: ordered.map((entry) => entry.fWorkspaceId as WorkspaceId),
         archivedSessionIds: archives.map((entry) => entry.fSessionId as SessionId),
+        pinnedSessionIds: pinned.map((entry) => entry.fSessionId as SessionId),
         ...(pendingMutation === undefined ? {} : { pendingMutation }),
       };
     },
@@ -260,6 +268,32 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
               .update(tWorkspaces)
               .set({ fPosition: position })
               .where(eq(tWorkspaces.fWorkspaceId, workspaceId)),
+          );
+        }
+
+        // 钉住：未在集合里的清掉，集合里的按数组位置写序号（读回即按它排序）。
+        // 找不到会话行的 id 跳过：pin 只作用于已存在的会话（与归档不同，不凭空造行）。
+        // 旧 storages 文档（0.1.6 时代）没有这个集合，导入路径按空处理。
+        const pinned = state.pinnedSessionIds ?? [];
+        await runQuery(
+          pinned.length === 0
+            ? db
+                .update(tSessions)
+                .set({ fPinnedSeq: null })
+                .where(isNotNull(tSessions.fPinnedSeq))
+            : db
+                .update(tSessions)
+                .set({ fPinnedSeq: null })
+                .where(
+                  and(isNotNull(tSessions.fPinnedSeq), notInArray(tSessions.fSessionId, pinned)),
+                ),
+        );
+        for (const [position, sessionId] of pinned.entries()) {
+          await runQuery(
+            db
+              .update(tSessions)
+              .set({ fPinnedSeq: position })
+              .where(eq(tSessions.fSessionId, sessionId)),
           );
         }
 

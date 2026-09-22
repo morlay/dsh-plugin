@@ -3,12 +3,11 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import { SessionQueryRdb } from "../session-query.ts";
 
 async function harness(): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });

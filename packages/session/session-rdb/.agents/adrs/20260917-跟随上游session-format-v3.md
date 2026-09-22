@@ -1,6 +1,6 @@
 # 跟随上游 session-format-v3
 
-状态：已采纳
+状态：已采纳（v4 起见 [ADR-跟随上游session-format-v4](20260922-跟随上游session-format-v4.md)；本篇的 v0–v3 链与读路径修复仍然有效）
 
 上游把 `SESSION_FORMAT_VERSION` 从 2 升到 3，并改了会话日志的
 surface 表达：`seq` 与 `SurfaceOp` 的 range 端点是 branded `SessionSeq`；

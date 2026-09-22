@@ -18,7 +18,6 @@ import SessionPersistenceSqlite, { SessionBranchRdbProvider } from "@morlay/sess
 function rdb(ctx: Context): SessionPersistenceSqlite {
   return ctx.sessionPersistence as SessionPersistenceSqlite;
 }
-import { EmptySettings } from "@morlay/session-rdb/testing";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -101,7 +100,6 @@ describe("migrate v2 → v3", () => {
     createV2Database(path);
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -136,13 +134,11 @@ describe("migrate v2 → v3", () => {
     createV2Database(path);
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     await fiber.dispose();
 
     const ctx2 = new Context();
-    await ctx2.plugin(EmptySettings);
     await ctx2.plugin(SessionStore);
     const fiber2 = await ctx2.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     const loaded = await rdb(ctx2).load(SessionId("s1"));
@@ -232,7 +228,6 @@ describe("migrate v2 → v3", () => {
     db.close();
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -295,7 +290,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -359,7 +353,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -426,7 +419,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -497,7 +489,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -564,7 +555,6 @@ describe("migrate v2 → v3", () => {
     ]);
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -611,7 +601,6 @@ describe("migrate v2 → v3", () => {
     ]);
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -655,7 +644,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -717,7 +705,6 @@ describe("migrate v2 → v3", () => {
     );
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {

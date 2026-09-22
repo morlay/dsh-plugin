@@ -160,8 +160,9 @@ export function eventDimensions(event: SessionEvent): {
     case "assistant/message":
       return { kind, role: "assistant", name: "", actionId: "" };
     case "tool/result": {
-      const message = data["message"] as { content?: Array<{ toolCallId?: string }> } | undefined;
-      return { kind, role: "tool", name: "", actionId: message?.content?.[0]?.toolCallId ?? "" };
+      // V4 起结果消息自己带 `toolCallId`（不再包在 content 的一个 `tool-result` 块里）。
+      const message = data["message"] as { toolCallId?: string } | undefined;
+      return { kind, role: "tool", name: "", actionId: message?.toolCallId ?? "" };
     }
     case "tool/call":
       return {

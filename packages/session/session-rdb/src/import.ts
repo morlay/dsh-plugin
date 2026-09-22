@@ -3,11 +3,11 @@ import type { Context } from "@deepseek-ai/cordis";
 import { SESSION_FORMAT_VERSION, SessionLogOffset } from "@deepseek-ai/dsh-session";
 import type { Session, SessionEvent, SessionId, SessionHeader } from "@deepseek-ai/dsh-session";
 import { parseSessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
-import { sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
 import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistence";
 import { balanceRewindPrefix } from "@morlay/session-branch";
 import { unzip } from "fflate";
 import { replaceLiveSessionLog } from "./branch.ts";
+import { restoreCatalog } from "./legacy.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 
 export const SESSION_LOG_ARTIFACT_FILENAME = "session.jsonl";
@@ -30,9 +30,9 @@ export function parseJsonlArtifact(content: string): SessionStorageMetadata & {
     throw new Error("imported session log has an unparsable header line");
   }
 
-  let restore: ReturnType<typeof sessionFormatCatalog.createRestore>;
+  let restore: ReturnType<typeof restoreCatalog.createRestore>;
   try {
-    restore = sessionFormatCatalog.createRestore(header, {
+    restore = restoreCatalog.createRestore(header, {
       recovery: "strict",
       validation: "transformed",
     });

@@ -14,7 +14,7 @@ import {
 } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import { titleOfEventData } from "../log.ts";
 import { SqliteBackend } from "../sqlite.ts";
 
@@ -53,7 +53,6 @@ describe("session title as session data", () => {
     const root = await tempDir("session-title-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: dbPath });
     try {
@@ -96,7 +95,6 @@ describe("session title as session data", () => {
     const root = await tempDir("session-title-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     new SessionProjectionRegistry(ctx);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: dbPath });

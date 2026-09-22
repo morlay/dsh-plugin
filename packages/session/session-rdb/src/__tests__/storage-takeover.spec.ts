@@ -10,7 +10,7 @@ import type { StorageBackend } from "@deepseek-ai/dsh-storage";
 import * as StorageDomain from "@deepseek-ai/dsh-storage-domain";
 import Workspace from "@deepseek-ai/dsh-workspace";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta } from "@morlay/session-rdb/testing";
+import { meta } from "@morlay/session-rdb/testing";
 import { importStorages } from "../import-storages.ts";
 import { SqliteBackend } from "../sqlite.ts";
 
@@ -43,7 +43,6 @@ describe("workspace domain on the rdb storage backend", () => {
     await mkdir(project, { recursive: true });
 
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(Storage);
     await ctx.plugin(StorageDomain, { backend: "rdb" });
     await ctx.plugin(SessionStore);
@@ -125,7 +124,6 @@ describe("rdb KV backend contract", () => {
     const root = await tempDir("kv-backend-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(Storage);
     await ctx.plugin(StorageDomain, { backend: "rdb" });
     await ctx.plugin(SessionStore);

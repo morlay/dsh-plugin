@@ -7,31 +7,26 @@ SQLite 或 PostgreSQL 后端。表结构、原样存储与各条流程的设计�
 
 ## 配置
 
-配置写在 `${DSH_HOME}/settings.yaml`，settings namespace 为插件短名
-`session-rdb`（与 cordis 插件 `name` 一致）：
+配置**就是这一行的 config**（`cordis.patch.yml` 的 `session-rdb` 行，或 profile patch /
+设置页改的那份 entry config）：
 
 ```yaml
-session-rdb:
-  type: sqlite
-  # path 省略时回落 cordis.patch.yml 的默认（$DSH_HOME/sessions/sessions.sqlite，
-  # 由 bundle patch 的 !!js 表达式求值）；自定义路径请用绝对路径字符串。
-  path: /absolute/path/to/sessions.sqlite
-  journalMode: wal
-  busyTimeout: 5000
+- id: session-rdb
+  name: "@morlay/session-rdb"
+  config:
+    type: sqlite
+    # path 省略时回落 bundle patch 的默认（$DSH_HOME/sessions/sessions.sqlite，
+    # 由 patch 的 !!js 表达式求值）；自定义路径请用绝对路径字符串。
+    path: /absolute/path/to/sessions.sqlite
+    journalMode: wal
+    busyTimeout: 5000
 ```
 
-> settings.yaml 是纯 YAML（settings-local 用 `yaml` 库解析），**不支持 `!!js`
-> JS 表达式**——`!!js dshHomePath(...)` 会被当作字面字符串。`!!js` 只在
-> `cordis.patch.yml`（bundle patch 层，loader 求值）有效。
+PostgreSQL 同理：`type: postgres` + `connectionString`。
 
-字段即 Config 判别联合（见下）；未写出的字段回落到 bundle patch / cordis.yml 的
-config 默认值。PostgreSQL：
-
-```yaml
-session-rdb:
-  type: postgres
-  connectionString: postgres://user:pass@localhost:5432/sessions
-```
+> 上游 0.1.7 取消了「settings namespace 覆盖插件 config」那套机制（settings 现在只做
+> volatile 字段的表单编辑，持久化落回 profile patch）。老库的 `settings.yaml` 由上游在
+> 启动时**一次性导入**到同 id 的行 config，内容不丢；此后要改就改行 config 或设置页。
 
 Config 类型：
 
@@ -129,15 +124,17 @@ subagent 会话**（`origin = 'subagent'`、父不在表里；有 open handle / 
 [表结构](.agents/designs/20260917-表结构.md)，决策见
 [ADR-接管storages到rdb语义表](.agents/adrs/20260917-接管storages到rdb语义表.md)。
 
-写节流参数（默认 200 / 5000，与官方 base 装配一致）可经 settings 覆盖：
+写节流参数（默认 200 / 5000，与官方 base 装配一致）同样写在行 config 里：
 
 ```yaml
-session-rdb:
-  type: sqlite
-  path: /absolute/path/to/sessions.sqlite
-  projectionCache:
-    writeEveryEvents: 200
-    writeIntervalMs: 5000
+- id: session-rdb
+  name: "@morlay/session-rdb"
+  config:
+    type: sqlite
+    path: /absolute/path/to/sessions.sqlite
+    projectionCache:
+      writeEveryEvents: 200
+      writeIntervalMs: 5000
 ```
 
 旧 `storages` JSON 的导入是**包内 API**（先停掉 dsh，旧文件保留不删）——没有 CLI

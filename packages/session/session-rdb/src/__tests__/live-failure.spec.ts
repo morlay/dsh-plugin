@@ -2,11 +2,10 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import { describe, expect, it } from "vitest";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 
 async function mount(): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
   return { ctx, dispose: () => fiber.dispose() };

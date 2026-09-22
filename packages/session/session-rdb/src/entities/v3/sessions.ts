@@ -20,6 +20,8 @@ export const sessions: TableDef = {
 
     f_archived_at: { type: "bigint" },
 
+    f_pinned_seq: { type: "integer" },
+
     f_title: { type: "text" },
 
     f_title_seq: { type: "integer" },

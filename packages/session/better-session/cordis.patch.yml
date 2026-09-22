@@ -27,10 +27,9 @@
 - id: ui-conversation
   disabled: true
 
-# 设置里的「已归档会话」入口由 `ui-conversation-manager` 的「对话管理」页面接管：
-# 同一个归档集连同搜索、取消归档，再加删除与导入为新会话，都收敛到那一页。
-- id: ui-settings-unarchive-sessions
-  disabled: true
+# 「对话管理」全局面板页（`ui-conversation-manager`）：已归档会话的搜索 / 取消归档 /
+# 删除 / 导入为新会话。上游 0.1.7 已自己删掉设置页那份归档入口（改由侧边栏视图过滤
+# 承载），这里不再需要按 id 禁用。
 
 - insert:
     - id: session-branch

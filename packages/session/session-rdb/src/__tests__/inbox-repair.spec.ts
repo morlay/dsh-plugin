@@ -4,7 +4,6 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionSeq, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings } from "@morlay/session-rdb/testing";
 import { meta } from "@morlay/session-rdb/testing";
 import { orphanInboxSpliceSeqs, repairOrphanInboxSplices } from "@morlay/session-rdb/artifact";
 
@@ -92,7 +91,6 @@ afterEach(async () => {
 
 async function harness() {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
@@ -117,7 +115,7 @@ describe("loadStored repairs orphan inbox splices", () => {
             source: { kind: "user" },
           },
           surfaceOp: "append",
-        } as SessionEvent,
+        } as unknown as SessionEvent,
         { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
         {
           type: "assistant/message",
@@ -134,7 +132,7 @@ describe("loadStored repairs orphan inbox splices", () => {
             },
           },
           surfaceOp: "append",
-        } as SessionEvent,
+        } as unknown as SessionEvent,
         { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
         {
           type: "turn/end",
@@ -159,7 +157,7 @@ describe("loadStored repairs orphan inbox splices", () => {
             source: { kind: "user" },
           },
           surfaceOp: "append",
-        } as SessionEvent,
+        } as unknown as SessionEvent,
         { type: "step/start", seq: SessionSeq(11), time: 11, data: { turn: 2, step: 1 } },
       ];
       const m = meta("bad");

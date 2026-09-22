@@ -211,32 +211,23 @@ function isDeepEqualJson(a: unknown, b: unknown): boolean {
 }
 
 function toolResultRewriteContentOnly(original: SessionEvent, replacement: SessionEvent): boolean {
+  // V4 起 `content` 就是结果内容本身（工具身份在消息顶层的 `toolCallId`），所以「只改结果」的
+  // 重写等于「除了 `content` 之外逐字相同」。
   const originalData = original.data as Record<string, unknown>;
   const replacementData = replacement.data as Record<string, unknown>;
   const originalMessage = originalData["message"] as { content?: unknown } | undefined;
   const replacementMessage = replacementData["message"] as { content?: unknown } | undefined;
-  const originalContent = Array.isArray(originalMessage?.content)
-    ? originalMessage.content
-    : undefined;
-  const replacementContent = Array.isArray(replacementMessage?.content)
-    ? replacementMessage.content
-    : undefined;
-  if (originalContent === undefined || replacementContent === undefined) return false;
-  const originalRest = {
-    ...originalData,
-    message: {
-      ...originalMessage,
-      content: [{ ...(originalContent[0] as Record<string, unknown>), content: null }],
-    },
-  };
-  const replacementRest = {
-    ...replacementData,
-    message: {
-      ...replacementMessage,
-      content: [{ ...(replacementContent[0] as Record<string, unknown>), content: null }],
-    },
-  };
-  return isDeepEqualJson(originalRest, replacementRest);
+  if (!Array.isArray(originalMessage?.content) || !Array.isArray(replacementMessage?.content)) {
+    return false;
+  }
+  const rest = (data: Record<string, unknown>, message: Record<string, unknown>): unknown => ({
+    ...data,
+    message: { ...message, content: null },
+  });
+  return isDeepEqualJson(
+    rest(originalData, originalMessage as Record<string, unknown>),
+    rest(replacementData, replacementMessage as Record<string, unknown>),
+  );
 }
 
 export function findSurfaceRepairs(events: readonly SessionEvent[]): {

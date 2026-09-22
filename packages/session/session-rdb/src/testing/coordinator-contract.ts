@@ -143,7 +143,8 @@ export function runCoordinatorContract(
           { surfaceOp: "append" },
         );
         expect(() => {
-          (ev.data as { content: { type: "text"; text: string }[] }).content[0]!.text = "HACKED";
+          (ev.data as unknown as { content: { type: "text"; text: string }[] }).content[0]!.text =
+            "HACKED";
         }).toThrow(TypeError);
         session.append("turn/end", { turn: 1, reason: { kind: "completed" } });
         await ctx.sessions.flush(session);

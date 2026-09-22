@@ -4,7 +4,7 @@ import {
   type SessionHeader,
   type SessionId,
 } from "@deepseek-ai/dsh-session";
-import { sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
+import { createSessionFormatCatalogWithChildren } from "@deepseek-ai/dsh-session-format-catalog";
 import type { EventRow, SessionRow } from "./backend.ts";
 import { repairRequestHeaders, rowToMeta, scanRows } from "./log.ts";
 
@@ -44,11 +44,18 @@ function physicalEvent(row: EventRow): Record<string, unknown> {
   };
 }
 
+/**
+ * 读旧格式用的 catalog：v3→v4 这条边要求显式子会话证据（上游 0.1.7 起），本仓库声明
+ * **无子会话证据**——v3 的目录事实由父会话自己在成功路径上写成 `subagent/catalog` 事件，
+ * 迁移的 child evidence 只是补偿入口；我们没有更权威的子集合来源可给（见 ADR-跟随上游session-format-v4）。
+ */
+export const restoreCatalog = createSessionFormatCatalogWithChildren([]);
+
 export function convertLegacyRows(
   row: SessionRow,
   eventRows: readonly EventRow[],
 ): { meta: SessionHeader; inheritedEventCount: number; events: SessionEvent[] } {
-  const restore = sessionFormatCatalog.createRestore(physicalHeader(row), {
+  const restore = restoreCatalog.createRestore(physicalHeader(row), {
     recovery: "strict",
     validation: "transformed",
   });

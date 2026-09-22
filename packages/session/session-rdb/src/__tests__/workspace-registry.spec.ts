@@ -9,7 +9,7 @@ import Storage from "@deepseek-ai/dsh-storage";
 import * as StorageDomain from "@deepseek-ai/dsh-storage-domain";
 import Workspace from "@deepseek-ai/dsh-workspace";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta } from "@morlay/session-rdb/testing";
+import { meta } from "@morlay/session-rdb/testing";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -52,7 +52,6 @@ async function harness(
 }> {
   const canonical = await realpath(project);
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(Storage);
   await ctx.plugin(StorageDomain, { backend: "rdb" });
   await ctx.plugin(SessionStore);

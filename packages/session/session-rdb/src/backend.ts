@@ -22,6 +22,8 @@ export interface SessionRow {
   fRevision: number;
 
   fArchivedAt: number | null;
+
+  fPinnedSeq: number | null;
 }
 
 export interface EventInsert {

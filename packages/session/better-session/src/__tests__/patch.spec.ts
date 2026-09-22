@@ -48,7 +48,6 @@ describe("better-session patch wiring", () => {
       "session-telemetry-otel",
       "storage-json",
       "ui-conversation",
-      "ui-settings-unarchive-sessions",
     ]);
   });
 

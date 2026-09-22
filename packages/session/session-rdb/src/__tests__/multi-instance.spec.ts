@@ -11,7 +11,6 @@ import {
 } from "@deepseek-ai/dsh-session";
 import type { SessionEvent, SessionHeader } from "@deepseek-ai/dsh-session";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
-import { EmptySettings } from "@morlay/session-rdb/testing";
 import SessionPersistenceRdb from "@morlay/session-rdb";
 
 function rdb(ctx: import("@deepseek-ai/cordis").Context): SessionPersistenceRdb {
@@ -31,7 +30,6 @@ async function freshDbPath(): Promise<string> {
 
 async function mount(path: string): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   const fiber = await ctx.plugin(SessionPersistenceRdb, { type: "sqlite", path });
   return { ctx, dispose: () => fiber.dispose() };

@@ -19,7 +19,6 @@ import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import { strToU8, zip } from "fflate";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { toJsonlArtifact } from "@morlay/session-rdb/artifact";
-import { EmptySettings } from "@morlay/session-rdb/testing";
 import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import {
   SESSION_IMPORT_PATH,
@@ -319,7 +318,7 @@ describe("parseImportZip", () => {
 
   it("accepts the generation-addressed artifact name used by upstream export", async () => {
     const artifact = toJsonlArtifact(meta("v3", "/work"), 0, oneTurnLog());
-    const zip = await zipAsync({ "session.v3.jsonl": strToU8(artifact) });
+    const zip = await zipAsync({ "session.v4.jsonl": strToU8(artifact) });
     const parsed = await parseImportZip(zip);
     expect(parsed.meta.id).toBe("v3");
     expect(parsed.events).toEqual(oneTurnLog());
@@ -341,7 +340,6 @@ describe("import round-trip through the backend", () => {
   it("imports a large batch beyond the single-INSERT binding limit", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -382,7 +380,6 @@ describe("import round-trip through the backend", () => {
   it("exports a session, imports it under a new id, and reloads identical events", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -393,7 +390,7 @@ describe("import round-trip through the backend", () => {
       const raw = await p.readRaw(m.id);
       expect(raw).toBeDefined();
 
-      expect(raw!.filename).toBe("session.v3.jsonl");
+      expect(raw!.filename).toBe("session.v4.jsonl");
       const zip = await zipAsync({ [raw!.filename]: strToU8(raw!.content) });
       const parsed = await parseImportZip(zip);
 
@@ -429,7 +426,6 @@ describe("import round-trip through the backend", () => {
   it("round-trips a seeded (forked) session's inherited boundary", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -469,7 +465,6 @@ describe("import round-trip through the backend", () => {
   it("overwrites a target session's content when sessionId is supplied", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -524,7 +519,6 @@ describe("import round-trip through the backend", () => {
   it("keeps a pre-warmed token meter valid after an overwrite import (in-place log replacement)", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     new SessionProjectionRegistry(ctx);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
@@ -581,7 +575,6 @@ describe("import round-trip through the backend", () => {
   it("keeps a legitimate unclosed step tail when exporting and importing a whole log", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -612,7 +605,6 @@ describe("import round-trip through the backend", () => {
   it("drops the tail from an orphan step/end when exporting and importing a whole log", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -649,7 +641,6 @@ describe("import round-trip through the backend", () => {
   it("stops the target session's running loop before the overwrite rewind", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {
@@ -731,7 +722,6 @@ describe("import round-trip through the backend", () => {
   it("mints a new id when sessionId is omitted", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     try {

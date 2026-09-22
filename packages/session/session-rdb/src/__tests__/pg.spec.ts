@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Context } from "@deepseek-ai/cordis";
 import { SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import SessionPersistenceRdb from "@morlay/session-rdb";
 import { runPersistenceContract } from "@morlay/session-rdb/testing";
 import { runCoordinatorContract, type CoordinatorFixture } from "@morlay/session-rdb/testing";
@@ -34,7 +34,6 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
   runPersistenceContract("postgres", async () => {
     const { connectionString, drop } = await createTestDatabase();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceRdb, {
       type: "postgres",
@@ -54,7 +53,6 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
     return {
       mount: async (ctx: Context) => {
         if (ctx.reflect.get("settings") === undefined) {
-          await ctx.plugin(EmptySettings);
         }
         return await ctx.plugin(SessionPersistenceRdb, { type: "postgres", connectionString });
       },
@@ -70,7 +68,6 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
   it("并发写事务不交错（失败的那个不留痕迹）", async () => {
     const { connectionString, drop } = await createTestDatabase();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceRdb, {
       type: "postgres",
@@ -108,7 +105,6 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
   it("用量聚合在 PG 上也数出活动计数（轮次 / 步骤 / 用户输入 / 工具调用）", async () => {
     const { connectionString, drop } = await createTestDatabase();
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const fiber = await ctx.plugin(SessionPersistenceRdb, {
       type: "postgres",

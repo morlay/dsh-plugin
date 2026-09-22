@@ -15,7 +15,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import * as SessionTurnOutline from "@deepseek-ai/dsh-session-turn-outline";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { EmptySettings, meta } from "@morlay/session-rdb/testing";
+import { meta } from "@morlay/session-rdb/testing";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -107,7 +107,6 @@ async function harness(root?: string): Promise<Harness> {
   const dir = root ?? (await mkdtemp(join(tmpdir(), "projection-cache-")));
   if (root === undefined) dirs.push(dir);
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   await ctx.plugin(SessionTurnOutline);

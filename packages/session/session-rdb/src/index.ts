@@ -1,6 +1,5 @@
 import { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import type { SettingsProvider } from "@deepseek-ai/dsh-settings";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
@@ -471,7 +470,7 @@ class RdbSessionHandle implements SessionHandle {
 }
 
 export class SessionPersistenceRdb extends SessionPersistence {
-  static inject = ["sessions", "settings"];
+  static inject = ["sessions"];
 
   static Config: z<Config> = z.union([
     z.object({
@@ -505,8 +504,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }),
   ]);
 
-  static readonly settingsNs = "session-rdb";
-
   override readonly name = "session-rdb";
 
   readonly tracker = new RdbBackendTracker(this.name);
@@ -528,23 +525,11 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     injectedBackend?: Backend,
   ) {
-    let resolved: Config = config;
-    const settings = ctx.reflect.get("settings") as unknown as SettingsProvider | undefined;
-    if (settings !== undefined) {
-      const scope = settings.register(
-        SessionPersistenceRdb.settingsNs,
-        SessionPersistenceRdb.Config,
-        { base: config },
-      );
-      resolved = scope.get();
-      scope.watch(() => {
-        ctx.logger.warn("session-rdb: settings changed; restart to apply the new configuration");
-      });
-    }
     super(ctx);
 
-    this.config = resolved;
-    this.backend = injectedBackend ?? createBackend(resolved);
+    // 配置就是这一行的 config（cordis.patch.yml / profile patch，或设置页改它）；上游 0.1.7 的 settings
+    // 不再提供 namespace section 覆盖，旧 `settings.yaml` 的 `session-rdb` 段由上游一次性导进同 id 的行。
+    this.backend = injectedBackend ?? createBackend(config);
     this.ready = this.init();
     this.installLiveRouting(ctx);
 

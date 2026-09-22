@@ -8,7 +8,7 @@ import { unzip } from "fflate";
 import { parseSessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
 import SessionPersistenceRdb from "@morlay/session-rdb";
 import { SESSION_EXPORT_PATH } from "@morlay/session-rdb/export";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import { parseJsonlArtifact } from "../import.ts";
 
 /** fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。 */
@@ -28,7 +28,6 @@ afterEach(async () => {
 
 async function harness(): Promise<{ ctx: Context; persistence: SessionPersistenceRdb }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceRdb, { type: "sqlite", path: ":memory:" });

@@ -15,7 +15,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceRdb from "@morlay/session-rdb";
 import { SESSION_USAGE_PATH } from "@morlay/session-rdb/usage";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -68,7 +68,6 @@ function turnWithUsage(
 
 async function harness(): Promise<{ ctx: Context; persistence: SessionPersistenceRdb }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceRdb, { type: "sqlite", path: ":memory:" });
@@ -79,7 +78,6 @@ async function harness(): Promise<{ ctx: Context; persistence: SessionPersistenc
 /** 文件库 harness：回填只在"表为空"时发生，需要在同一文件上重开。 */
 async function harnessAt(path: string): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceRdb, { type: "sqlite", path });
@@ -103,6 +101,7 @@ async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Pr
   await persistence.internals().backend.storage.writeWorkspaceState({
     initialized: true,
     workspaceIds: [],
+    pinnedSessionIds: [],
     archivedSessionIds: ids.map((id) => SessionId(id)),
   });
 }

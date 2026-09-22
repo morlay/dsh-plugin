@@ -18,7 +18,6 @@ import SessionPersistenceSqlite, {
   SessionBranchRdbProvider,
   locateTurnEnd,
 } from "@morlay/session-rdb";
-import { EmptySettings } from "@morlay/session-rdb/testing";
 import { appendLog, meta, oneTurnLog } from "@morlay/session-rdb/testing";
 
 const dirs: string[] = [];
@@ -33,7 +32,6 @@ async function harness(): Promise<{
   dispose: () => Promise<void>;
 }> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
@@ -1256,7 +1254,6 @@ describe("rewind derived-state invalidation", () => {
 
   it("warns once when the token meter and projection registry shapes change", async () => {
     const ctx = new Context();
-    await ctx.plugin(EmptySettings);
     await ctx.plugin(SessionStore);
     const provide = (name: string, value: unknown): (() => void) => ctx.provide(name, value);
     provide("sessionProjections", { registrations: null });

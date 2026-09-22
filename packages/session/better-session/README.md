@@ -30,9 +30,9 @@ dsh plugin --profile web add "@morlay/better-session"
 - storage hub 的 `rdb` KV 后端 ← workspace 域落 rdb 语义表
 
 同时禁用官方 `session-persistence-jsonl`、`storage-json`、
-`session-projection-cache`、`session-query-sqlite`、`ui-conversation` 与设置里的
-`ui-settings-unarchive-sessions`（「已归档会话」入口收敛到 `ui-conversation-manager` 的
-「对话管理」页），以及两条官方外发通路
+`session-projection-cache`、`session-query-sqlite` 与 `ui-conversation`（「已归档会话」的管理动作收敛到
+`ui-conversation-manager` 的「对话管理」页；上游 0.1.7 自己删掉了设置页那份归档入口，不需要我们再按 id 禁用），
+以及两条官方外发通路
 （`session-telemetry-otel`、`session-log-deepseek`，默认部署零官方外发，需要时
 删行恢复），并把 `storage-domain` 的 backend 路由为 `rdb`：`$DSH_HOME/storages`
 不再产生文件，storages 数据与事件日志同库
@@ -61,14 +61,19 @@ await ctx.sessionBranch.forkFrom(sourceId, { atSeq: 6, childSessionId });
 
 ## 配置（rdb）
 
-默认配置为 SQLite（`$DSH_HOME/sessions/sessions.sqlite`）。在
-`$DSH_HOME/settings.yaml` 覆盖 `session-rdb` namespace：
+默认配置为 SQLite（`$DSH_HOME/sessions/sessions.sqlite`）。改配置就是改这一行的 config
+（bundle patch / profile patch / 设置页都可）：
 
 ```yaml
-session-rdb:
-  type: sqlite # 或 postgres + connectionString
-  path: /abs/path/to/sessions.sqlite
+- id: session-rdb
+  name: "@morlay/session-rdb"
+  config:
+    type: sqlite # 或 postgres + connectionString
+    path: /abs/path/to/sessions.sqlite
 ```
+
+> 上游 0.1.7 起 settings 不再覆盖插件 config（见
+> [ADR-配置经settings服务覆盖而非直接改cordis配置](.agents/adrs/20260917-配置经settings服务覆盖而非直接改cordis配置.md) 的状态说明）。
 
 ## 本地开发
 
