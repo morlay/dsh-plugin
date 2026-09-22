@@ -62,8 +62,14 @@ skill 在装配期注册一次、对所有会话可见，所以**注册表里那
 
 ## 装配
 
-作为 **host plane** 的部署级行装配一次：本部署在 [dsh-preset](../../preset/dsh-preset/cordis.patch.yml)
-的 patch 里插入这一行（一行覆盖全部 preset）。
+**按模式各一份**：本包发布进程全局服务 `ctx.contextAssembler`，preset 子树里的服务要么声明 `isolate`、要么被
+上游拒（`Preset services require isolate realms`），所以每个用它的模式在自己的清单里带一行，并与全部注入方
+**同住一个 `isolate` 组**（`@morlay/dsh-agent-preset` 的 `channelGroup`）。落一个注入方在组外，它的 `inject`
+会永远等不到服务——行停在 waiting，不报错。
+
+通道曾经作为 host 层的部署级行装配一次（"一行覆盖全部 preset"），代价是它的注册表不分 scope：我们的注入因此
+漏进官方 preset 的会话（工作区指令、skill 目录、中文替换全都作用到它们身上）。机制与证据见
+[ADR 通道与注入行按模式 isolate 装配](../../preset/dsh-agent-preset/.agents/adrs/20260922-通道与注入行按模式isolate装配.md)。
 
 ## 已知限制
 

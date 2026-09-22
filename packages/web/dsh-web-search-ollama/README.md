@@ -97,4 +97,4 @@ mock 全绿替代它——这个包的第一版就是"配置指到 Ollama 的 me
 - **一次只选一个后端**：`ctx.web` 的 `searchProvider` 是单选，默认 `ollama`；
   `deepseek-official` 后端仍由基础 bundle 注册着，改写那一行即可切回（但它需要 `DEEPSEEK_API_KEY`）。
 - **不做设置页 section**：配置面就是那一行 patch（见
-  [dsh-preset 的设计记录](../../preset/dsh-preset/.agents/designs/20260917-预设生成与装配.md)）。
+  [dsh-preset 的设计记录](../../preset/dsh-preset/.agents/designs/20260917-host层部署配置.md)）。

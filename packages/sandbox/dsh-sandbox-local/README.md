@@ -97,7 +97,7 @@
 `sandbox-local` 行）与 `access` 规则一起维护在 preset 的 bundle patch 里，因此示例 app 的
 `dsh.profile.bundles` 不需要列出本包，只需要 profile 的依赖树能解析模块名
 （`@morlay/dsh-preset` 已在 `dependencies` 声明本包）。patch 层级的合并顺序与放置理由见
-[设计 预设生成与装配](../../preset/dsh-preset/.agents/designs/20260917-预设生成与装配.md)。
+[设计 host 层部署配置](../../preset/dsh-preset/.agents/designs/20260917-host层部署配置.md)。
 两种采用方式互斥：同时上线会重复插入同一行。
 
 ## 前提

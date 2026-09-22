@@ -33,3 +33,4 @@ _避免使用_：条目名（旧说法，与 skill 名混用）
 **通道**：
 `ctx.contextAssembler`（`dsh-context-assembler`）：唯一渲染者与唯一的覆盖判定处。注入方只声明
 `{ name, title, description, content, injection? }`、`registerRule({ id, text })` 或 `replaceSection` / `suppressSection`。
+**按模式各一份**：通道与它的注入方同住该模式的 `isolate` 组，注册表因此不越界（别的 preset 收不到我们的注入）。
