@@ -14,7 +14,8 @@
   "dependencies": {
     "@morlay/better-session": "workspace:*",
     "@morlay/dsh-desktopify": "workspace:*",
-    "@morlay/dsh-preset": "workspace:*"
+    "@morlay/dsh-preset": "workspace:*",
+    "@morlay/dsh-agent-preset": "workspace:*"
   },
   "peerDependencies": {
     "tsx": "*"
@@ -24,7 +25,8 @@
     "profile": {
       "bundles": [
         "@morlay/better-session",
-        "@morlay/dsh-preset"
+        "@morlay/dsh-preset",
+        "@morlay/dsh-agent-preset"
       ]
     },
     "dev": {

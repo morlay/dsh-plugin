@@ -3,14 +3,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
-import { PRESET_SOURCES, type PresetSource } from "./presets/index.ts";
 
 /**
- * bundle patch 的行清单：**只放全局通用的装配**（与具体模式无关的东西）。
+ * bundle patch 的行清单：**只放部署级的 host 配置**。
  *
- * 与模式相关的行（工具、注入、用法分组、persona）在 [presets/](./presets/index.ts) 里，由
- * `@deepseek-ai/dsh-agent-preset` 行的 `config.plugins` 承载——patch 作用于全部 preset，
- * 放进去就等于强迫 chat 也装。
+ * 自定义模式（coding / chat）不在这里——它们由 `@morlay/dsh-agent-preset` 注册（一个 preset 一行的
+ * `@deepseek-ai/dsh-agent-preset`，默认模式也在那边）。这份 patch 只管模式管不了的三件事：LLM 路由、
+ * 搜索后端、进程沙箱。
  *
  * 这里是生成物的真源：`cordis.patch.yml` 由 `renderPatch()` 写出，改动请改这份 TS，
  * 一致性由 `patch.spec.ts` 的断言兜住。
@@ -27,40 +26,7 @@ const SANDBOX_ACCESS = [
   "-- **/*.pem",
 ].join("\n");
 
-/**
- * 一个 preset 就是一行的 `config.plugins`（上游 `@deepseek-ai/dsh-agent-preset` 的声明式形态）：
- * 注册表不扫目录、不收路径，所以我们的模式只能以行出现在这份 patch 里。
- */
-function presetRow(source: PresetSource): Record<string, unknown> {
-  return {
-    id: `preset-${source.id}`,
-    name: "@deepseek-ai/dsh-agent-preset",
-    config: {
-      id: source.id,
-      name: source.name,
-      description: source.description,
-      order: source.order,
-      plugins: [...source.rows],
-    },
-  };
-}
-
 export const PATCH_ROWS: readonly Record<string, unknown>[] = [
-  {
-    id: "system-prompt",
-    // persona 不在这里：它按模式给（presets/persona.ts 的 `persona` 行注册同名 section 遮蔽）。
-    config: { includeHarnessIdentity: false, includeRuntimeContext: false },
-  },
-  {
-    // 注册表只认 `default`：模式定义是别处的行（下面那批 preset 行），它自己既不扫描也不收路径。
-    // 官方那四个 shipped preset 行（standard / ptc / minimal / cordis）**不动**：它们是各自 scope 里的
-    // 完整 composition，与我们的模式并存、可选；default 仍指向我们的第一个模式。
-    id: "agent-preset-registry",
-    config: { default: PRESET_SOURCES[0]!.id },
-  },
-  {
-    insert: PRESET_SOURCES.map(presetRow),
-  },
   {
     id: "llm-pi-ai",
     config: {
@@ -80,12 +46,34 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
               name: "DeepSeek V4.1 Flash @ Ollama Cloud",
               contextWindow: 1000000,
               input: ["text", "image"],
-              reasoningEfforts: { off: null, low: "low", high: "high", max: "max" },
+              reasoningEfforts: {
+                off: null,
+                low: "low",
+                high: "high",
+                max: "max",
+              },
             },
           ],
         },
       },
     },
+  },
+  // 沙箱替换**必须住 host**：`sandbox-local` 要覆盖 root realm 的 `ctx.fs` / `ctx.sandbox`，而 agent 的
+  // ctx 解析不到 preset 里 isolate realm 的实现（上游为此专门提供 `serviceForAgent` 给 realm 外的读）。
+  // 所以官方两行在这里按 id 禁用，替换行插在 host 层。
+  { id: "sandbox", disabled: true },
+  { id: "fs-sandbox", disabled: true },
+  // `fs-observation-policy`（先读后改）**不在这里禁用**：它是模式取舍，不是部署事实——官方 preset 该
+  // 照旧吃上游那层策略。想按模式关掉，只能由那个模式自己抢在它的 waterfall 前面丢弃结果（preset 里的
+  // 行动不了 host 行），那一行在 `@morlay/dsh-agent-preset` 的 coding 清单里。
+  {
+    insert: [
+      {
+        id: "sandbox-local",
+        name: "@morlay/dsh-sandbox-local",
+        config: { access: SANDBOX_ACCESS },
+      },
+    ],
   },
   {
     id: "web",
@@ -98,37 +86,8 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
     // config 是整体替换、不是深合并——`fetchProvider` 必须跟着写全。
     config: { searchProvider: "ollama", fetchProvider: "http" },
   },
-  // 这两行由 base bundle 插在 host 层，而 preset 只能覆盖 config、删不掉 host 行——接管它们必须在这里
-  // 按 id 禁用：否则 host 的 `tool-skill` 会跟 context-skill-catalog 抢同一个 `skill` 工具，
-  // 而 `agent-instructions` 会跟 context-agent-instructions 一起注入工作区指令。
-  { id: "agent-instructions", disabled: true },
-  { id: "tool-skill", disabled: true },
-  { id: "sandbox", disabled: true },
-  { id: "fs-sandbox", disabled: true },
-  { id: "fs-observation-policy", disabled: true },
-  { id: "office-to-pdf", disabled: true },
-  // `subagent-model-selection-settings`（provide `subagentModelSelection`）**不禁用**：官方 standard / ptc /
-  // cordis preset 的 `tool-subagent` 行带 `modelSelectionSettings: true`，它要求 host scope 有这个服务，
-  // 禁用会把那三个官方 preset 直接打成 broken（`requires ... in the Host scope`）。我们不用这个能力是
-  // 靠自己的 preset 行不带该开关（`tool/presets/standard.ts`），与 host 这份服务在不在无关。
   {
-    insert: [
-      {
-        id: "sandbox-local",
-        name: "@morlay/dsh-sandbox-local",
-        config: { access: SANDBOX_ACCESS },
-      },
-    ],
-  },
-  {
-    // 注入通道：它发布进程全局服务 `ctx.contextAssembler`，未隔离就放进 preset 会被上游拒绝
-    // （`Preset services require isolate realms`）。进 preset 的唯一一条路是把它关进 `isolate` 组，
-    // 那样服务只在 preset/agent scope 可见——与它「注入的唯一通道、部署级一份」的定位相反，
-    // 所以住 host 层：preset 里的注入方沿 scope 链向上解析即可拿到。
-    insert: [{ id: "context-assembler", name: "@morlay/dsh-context-assembler" }],
-  },
-  {
-    // 搜索后端：preset 是每个 agent 各挂一份，同一个 provider id 注册两次会撞
+    // 搜索后端：preset 是每个模式各挂一份 composition，同一个 provider id 在多个模式里注册会撞
     // `WEB_DUPLICATE_PROVIDER`，所以注册行住 host 层（选哪个由 `web` 行的 searchProvider 决定）。
     insert: [
       {
@@ -139,6 +98,12 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
     ],
   },
 ];
+// 这里**不再**按 id 禁用 `agent-instructions` / `tool-skill` / `skill-filesystem` / `office-to-pdf` 之类：
+// 上游 web-app bundle 自己把前两面设在 preset 平面（`disabled: true`，注释写明「工具与目录由 preset 自己
+// 挂」），我们的模式与官方 preset 都在各自的行里挂，host 这份再禁一次是重复动作；`office-to-pdf` 则回到
+// 上游原味（Sidebar 的 Office 预览标签页因此可用）。同理不再覆盖 `system-prompt` 的
+// `includeHarnessIdentity` / `includeRuntimeContext`：那是所有 preset 共享的部署偏好，按模式改提示词走
+// 各模式自己的 `persona` 行（注册 agent 作用域的同名 section）。
 
 export const PATCH_FILE = "cordis.patch.yml";
 
@@ -156,7 +121,10 @@ export function renderPatch(): string {
 
 /** 把 bundle patch 落到包根：它是发布产物的一部分（`files` 里有它，装配按出口解析）。 */
 export async function generatePatch(): Promise<string> {
-  const path = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), PATCH_FILE);
+  const path = join(
+    resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+    PATCH_FILE,
+  );
   await writeFile(path, renderPatch());
   return path;
 }

@@ -41,3 +41,4 @@ test:
 
 profile:
     @pnpm --filter @morlay/dsh-desktop-host exec tsx tool/verify-profile.mts
+    @pnpm --filter @morlay/dsh-desktop-host exec tsx tool/verify-preset-isolation.mts

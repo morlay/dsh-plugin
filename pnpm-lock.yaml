@@ -238,6 +238,9 @@ importers:
       '@morlay/better-session':
         specifier: workspace:*
         version: link:../../packages/session/better-session
+      '@morlay/dsh-agent-preset':
+        specifier: workspace:*
+        version: link:../../packages/preset/dsh-agent-preset
       '@morlay/dsh-desktopify':
         specifier: workspace:*
         version: link:../../packages/desktop/dsh-desktopify
@@ -316,6 +319,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/include
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent
@@ -346,6 +352,12 @@ importers:
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../dsh-context-assembler
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
 
   packages/context/dsh-context-assembler:
     dependencies:
@@ -711,7 +723,7 @@ importers:
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
 
-  packages/preset/dsh-preset:
+  packages/preset/dsh-agent-preset:
     dependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:*
@@ -734,12 +746,6 @@ importers:
       '@morlay/dsh-context-tool-guidance':
         specifier: workspace:*
         version: link:../../context/dsh-context-tool-guidance
-      '@morlay/dsh-sandbox-local':
-        specifier: workspace:*
-        version: link:../../sandbox/dsh-sandbox-local
-      '@morlay/dsh-web-search-ollama':
-        specifier: workspace:*
-        version: link:../../web/dsh-web-search-ollama
     devDependencies:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:*
@@ -756,9 +762,15 @@ importers:
       '@deepseek-ai/dsh-compaction-tool-result-pruner':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/compaction/compaction-tool-result-pruner
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/fs/fs
       '@deepseek-ai/dsh-persona':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/preset/persona
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/skill/skill-filesystem
@@ -804,6 +816,28 @@ importers:
       '@deepseek-ai/dsh-workflow-ptc':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/workflow/workflow-ptc
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
+
+  packages/preset/dsh-preset:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@morlay/dsh-sandbox-local':
+        specifier: workspace:*
+        version: link:../../sandbox/dsh-sandbox-local
+      '@morlay/dsh-web-search-ollama':
+        specifier: workspace:*
+        version: link:../../web/dsh-web-search-ollama
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/include
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9

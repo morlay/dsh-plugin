@@ -60,12 +60,26 @@ export const SHELL_ROWS: readonly PresetRow[] = [
 ];
 
 /**
- * 注入相关的行：**按模式给**。
+ * 注入通道：发布服务 `ctx.contextAssembler`，所以它自己也在组里（组声明 `isolate`）。
  *
- * 通道（`context-assembler`）不在其中：它发布进程全局服务 `ctx.contextAssembler`，而 preset 里的行
- * 不允许发布全局服务（上游 `agent-presets` 会以 "row(s) published process-global service(s)" 拒绝
- * 装载），所以它住在 host 层的 patch 里。其余几个只监听事件、注册工具与规则，不发布服务，可以按模式给。
+ * 通道曾经住 host 层（「部署级一份、一行覆盖全部 preset」），代价是它的注册表不分 scope——我们的注入
+ * 于是漏进了官方 standard / ptc / cordis 的会话。改成每个模式自带一份、关在 `isolate` 组里以后，
+ * 通道与它的消费者只在这棵子树可见：上游 `leakedServices` 不再把它算作全局泄漏，别的 preset 也拿不到它。
  */
+export const ASSEMBLER_ROW: PresetRow = ours("context-assembler");
+
+/** 通道组的 id：`isolate` 的 label 按服务名给，与组 id 无关。 */
+export const CHANNEL_GROUP_ID = "context-channel";
+
+/**
+ * 通道与它的消费者**必须同子树**：`isolate` 生成的隔离 realm 只对组内 ctx 生效，组外的行解析
+ * `ctx.contextAssembler` 会拿到 root realm 的实现（不存在，或别人的）。
+ */
+export function channelGroup(rows: readonly PresetRow[]): PresetRow {
+  return group(CHANNEL_GROUP_ID, rows, { isolate: { contextAssembler: true } });
+}
+
+/** 注入相关的行：**按模式给**，且都住在通道组里（见 {@link channelGroup}）。 */
 export const INJECTION_ROWS: readonly PresetRow[] = [
   ours("context-agent-instructions"),
   ours("context-skill-catalog"),

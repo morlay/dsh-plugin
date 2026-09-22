@@ -1,12 +1,12 @@
 {
   "name": "@morlay/dsh-preset",
   "version": "0.0.6-alpha.5",
-  "description": "Personal dsh profile bundle: disables the shipped agent presets and declares the coding / chat presets, personal llm-pi-ai provider routes, and the deployment sandbox access rules.",
+  "description": "Personal dsh profile bundle: deployment-level host configuration — personal llm-pi-ai provider routes, the ollama web-search backend, and the sandbox access rules.",
   "keywords": [
     "dsh",
     "dsh-bundle",
     "llm-pi-ai",
-    "preset"
+    "sandbox"
   ],
   "license": "MIT",
   "repository": {
@@ -37,37 +37,11 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@morlay/dsh-context-agent-instructions": "workspace:*",
-    "@morlay/dsh-context-assembler": "workspace:*",
-    "@morlay/dsh-context-reference": "workspace:*",
-    "@morlay/dsh-context-scope": "workspace:*",
-    "@morlay/dsh-context-skill-catalog": "workspace:*",
-    "@morlay/dsh-context-tool-guidance": "workspace:*",
     "@morlay/dsh-sandbox-local": "workspace:*",
     "@morlay/dsh-web-search-ollama": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
-    "@deepseek-ai/dsh-command-compact": "workspace:*",
-    "@deepseek-ai/dsh-command-goal": "workspace:*",
-    "@deepseek-ai/dsh-compaction-basic": "workspace:*",
-    "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
-    "@deepseek-ai/dsh-persona": "workspace:*",
-    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
-    "@deepseek-ai/dsh-tool-ask-user": "workspace:*",
-    "@deepseek-ai/dsh-tool-bash": "workspace:*",
-    "@deepseek-ai/dsh-tool-fs": "workspace:*",
-    "@deepseek-ai/dsh-tool-fs-search": "workspace:*",
-    "@deepseek-ai/dsh-tool-goal": "workspace:*",
-    "@deepseek-ai/dsh-tool-jobs": "workspace:*",
-    "@deepseek-ai/dsh-tool-present": "workspace:*",
-    "@deepseek-ai/dsh-tool-pwsh": "workspace:*",
-    "@deepseek-ai/dsh-tool-subagent": "workspace:*",
-    "@deepseek-ai/dsh-tool-subagent-control": "workspace:*",
-    "@deepseek-ai/dsh-tool-todo": "workspace:*",
-    "@deepseek-ai/dsh-tool-web": "workspace:*",
-    "@deepseek-ai/dsh-tool-workflow": "workspace:*",
-    "@deepseek-ai/dsh-workflow-ptc": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0"
   },

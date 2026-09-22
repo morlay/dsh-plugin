@@ -4,7 +4,6 @@ import { applyEntryPatches, entryListSchema } from "@deepseek-ai/cordis-plugin-i
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { renderPatch } from "../../tool/patch.ts";
-import { PRESET_SOURCES } from "../../tool/presets/index.ts";
 
 const PATCH_PATH = join(process.cwd(), "packages/preset/dsh-preset/cordis.patch.yml");
 const UPSTREAM_BASE_PATCH = join(
@@ -69,22 +68,9 @@ const inserted = rows.flatMap((row) => row.insert ?? []);
 
 const sandboxRow = inserted.find((row) => row.id === "sandbox-local");
 
-const DISABLED_IDS = [
-  "agent-instructions",
-  "tool-skill",
-  "sandbox",
-  "fs-sandbox",
-  "fs-observation-policy",
-  "office-to-pdf",
-];
+const DISABLED_IDS = ["sandbox", "fs-sandbox"];
 
-const INSERTED_IDS = [
-  "preset-coding",
-  "preset-chat",
-  "sandbox-local",
-  "context-assembler",
-  "web-search-ollama",
-];
+const INSERTED_IDS = ["sandbox-local", "web-search-ollama"];
 
 describe("dsh-preset patch wiring", () => {
   it("仓库里那份带上了该有的装配（它是运行期各形态都要的文件，不能只靠 build 产出）", async () => {
@@ -104,13 +90,11 @@ describe("dsh-preset patch wiring", () => {
     expect(shape(rows).disabled).toEqual(DISABLED_IDS);
   });
 
-  it("生成的 patch 带上了该有的装配（改装配请改 tool/patch.ts）", () => {
-    const rows = yaml.load(renderPatch(), { schema: entryListSchema }) as PatchRow[];
-    const disabled = rows.filter((row) => row.disabled === true).map((row) => row.id);
-    const inserted = rows.flatMap((row) => row.insert ?? []);
+  it("生成的 patch 只留 host 层的部署配置", () => {
+    const generated = yaml.load(renderPatch(), { schema: entryListSchema }) as PatchRow[];
+    const disabled = generated.filter((row) => row.disabled === true).map((row) => row.id);
+    const inserted = generated.flatMap((row) => row.insert ?? []);
 
-    // persona 按模式给（persona 行注册同名 section 遮蔽），patch 只关掉 harness identity 与运行时上下文。
-    expect(rows.find((row) => row.id === "system-prompt")?.config?.personaPrefix).toBeUndefined();
     expect(disabled).toEqual(DISABLED_IDS);
     expect(inserted.map((row) => row.id)).toEqual(INSERTED_IDS);
     expect(
@@ -118,31 +102,16 @@ describe("dsh-preset patch wiring", () => {
     ).toBe(true);
   });
 
-  it("preset 就是一行 `@deepseek-ai/dsh-agent-preset`，config 逐项等于清单", () => {
-    // 注册表不扫目录、不收路径：我们的模式只能以行的形态出现在这份 patch 里。
-    for (const source of PRESET_SOURCES) {
-      const row = inserted.find((candidate) => candidate.id === `preset-${source.id}`);
+  it("不碰 modes 的那些行：模式注册与 host 行开关都不在这里", () => {
+    // 模式（coding / chat）由 `@morlay/dsh-agent-preset` 注册；上游 web-app bundle 自己把
+    // `agent-instructions` / `tool-skill` / `skill-filesystem` 设在 preset 平面，host 这份再禁一次是
+    // 重复动作——我们的模式与官方 preset 都在各自的行里挂。
+    const ids = rows.flatMap((row) => [row.id, ...(row.insert ?? []).map((entry) => entry.id)]);
 
-      expect(row?.name).toBe("@deepseek-ai/dsh-agent-preset");
-      expect(row?.config).toEqual({
-        id: source.id,
-        name: source.name,
-        description: source.description,
-        order: source.order,
-        // `!!js` 往返后仍是表达式节点，所以清单与产物逐字对得上。
-        plugins: JSON.parse(JSON.stringify(source.rows)) as unknown,
-      });
-    }
-    // 没有第三个模式被顺手带上：清单就是全部。
-    expect(inserted.filter((row) => row.name === "@deepseek-ai/dsh-agent-preset")).toHaveLength(
-      PRESET_SOURCES.length,
-    );
-  });
-
-  it("注册表的默认模式取自清单的首项", () => {
-    expect(rowById(rows, "agent-preset-registry")?.config).toEqual({
-      default: PRESET_SOURCES[0]!.id,
-    });
+    expect(ids).not.toContain("preset-coding");
+    expect(ids).not.toContain("preset-chat");
+    expect(ids).not.toContain("agent-preset-registry");
+    expect(rows.filter((row) => row.id === "system-prompt")).toEqual([]);
   });
 
   it("disables the shipped sandbox rows and mounts the replacement in one layer", () => {
@@ -153,16 +122,17 @@ describe("dsh-preset patch wiring", () => {
     expect(sandboxRow?.name).toBe("@morlay/dsh-sandbox-local");
   });
 
-  it("disables the read-before-edit policy the shipped base bundle mounts", async () => {
+  it("不碰 read-before-edit 策略：官方 preset 照旧吃上游那层，coding 由自己的行抵消", async () => {
     const shipped = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH)]);
-    const shippedRow = rowById(shipped, "fs-observation-policy");
 
-    expect(shippedRow?.name).toBe("@deepseek-ai/dsh-fs-observation-policy");
-    expect(shippedRow?.disabled).not.toBe(true);
+    expect(rowById(shipped, "fs-observation-policy")?.name).toBe(
+      "@deepseek-ai/dsh-fs-observation-policy",
+    );
 
     const composed = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH), rows]);
 
-    expect(rowById(composed, "fs-observation-policy")?.disabled).toBe(true);
+    // 这是模式取舍、不是部署事实：禁用它是全局动作，会连官方 preset 一起关掉。
+    expect(rowById(composed, "fs-observation-policy")?.disabled).not.toBe(true);
   });
 
   it("leaves the shipped subagent model-selection provider enabled for the official presets", async () => {
@@ -181,16 +151,33 @@ describe("dsh-preset patch wiring", () => {
     expect(row?.name).toBe("@deepseek-ai/dsh-tool-subagent/model-selection-settings");
   });
 
-  it("disables the office-to-pdf row the shipped web-app bundle inserts", async () => {
-    const shipped = composeLayers(await webAppLayers());
-    const shippedRow = rowById(shipped, "office-to-pdf");
+  it("只动自己声明的行：compose 前后的禁用集合只差这三条", async () => {
+    // 上游两层都要在：base 插 `sandbox` / `fs-sandbox` / `fs-observation-policy`，web-app 覆盖其余。
+    const shipped = [await loadPatchRows(UPSTREAM_BASE_PATCH), ...(await webAppLayers())];
+    const before = new Set(
+      composeLayers(shipped)
+        .filter((row) => row.disabled === true)
+        .map((row) => row.id),
+    );
+    const after = composeLayers([...shipped, rows]);
+    const introduced = after
+      .filter((row) => row.disabled === true && !before.has(row.id))
+      .map((row) => row.id)
+      .filter((id): id is string => id !== undefined);
 
-    expect(shippedRow?.name).toBe("@deepseek-ai/dsh-office-to-pdf");
-    expect(shippedRow?.disabled).not.toBe(true);
+    // 我们只关沙箱那两行；上游自己已禁的行（工作区指令 / skill 工具）、回到上游原味的行
+    // （office 转档后端）与交给模式自己抵消的策略行（read-before-edit）一个都不该因为我们多出来。
+    const byName = (left: string, right: string): number => left.localeCompare(right);
 
-    const composed = composeLayers([...(await webAppLayers()), rows]);
+    expect(introduced.toSorted(byName)).toEqual([...DISABLED_IDS].toSorted(byName));
 
-    expect(rowById(composed, "office-to-pdf")?.disabled).toBe(true);
+    const disabled = new Set(after.filter((row) => row.disabled === true).map((row) => row.id));
+
+    // 上游 web-app bundle 自己把这两面设在 preset 平面，host 这份不再重复禁一次。
+    expect(disabled.has("agent-instructions")).toBe(true);
+    expect(disabled.has("tool-skill")).toBe(true);
+    // 转档后端回到上游原味（Sidebar 的 Office 预览标签页因此可用）。
+    expect(disabled.has("office-to-pdf")).toBe(false);
   });
 
   it("names rows that still exist in the shipped base bundle", async () => {
