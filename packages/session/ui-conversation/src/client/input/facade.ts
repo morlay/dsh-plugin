@@ -110,6 +110,17 @@ export class SessionInputShell implements SessionInput {
   }
 
   readonly actions: InputActions = {
+    captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
+    insertText: (text, span) => {
+      if (
+        this.snapshot.phase === "adjudicating" ||
+        this.snapshot.phase === "submitting" ||
+        this.disposed
+      )
+        return false;
+      if (span.draftRev !== this.rev) return false;
+      return this.insertText(text, span);
+    },
     setDraft: (text) => {
       this.setDraft(text);
     },

@@ -8,7 +8,7 @@
 
 import { memo, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconDatabaseOutline16, IconGaugeOutline16 } from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { UseProjection } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { SnapshotSelectorHook } from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
@@ -172,7 +172,7 @@ function TimePill({
     return (
       <span {...styling.props(styles.anchor)}>
         <span {...styling.props(styles.pill)}>
-          <IconGaugeOutline16 />
+          <IconGaugeOutlineRegular />
           {label}
         </span>
       </span>
@@ -190,7 +190,7 @@ function TimePill({
           setOpen(!open);
         }}
       >
-        <IconGaugeOutline16 />
+        <IconGaugeOutlineRegular />
         {label}
       </button>
       {open &&
@@ -204,7 +204,7 @@ function TimePill({
           >
             <div {...styling.props(dialogStyles.title)}>
               <span {...styling.props(dialogStyles.titleLabel)}>
-                <IconGaugeOutline16 />
+                <IconGaugeOutlineRegular />
                 {t("stats.dialog.title")}
               </span>
             </div>
@@ -273,7 +273,7 @@ function UsagePill({
           setOpen(!open);
         }}
       >
-        <IconDatabaseOutline16 />
+        <IconDatabaseOutlineRegular />
         <span {...styling.props(styles.label)}>
           {totalText}
           {cacheHitText !== null && (
@@ -297,7 +297,7 @@ function UsagePill({
           >
             <div {...styling.props(dialogStyles.title)}>
               <span {...styling.props(dialogStyles.titleLabel)}>
-                <IconDatabaseOutline16 />
+                <IconDatabaseOutlineRegular />
                 {t("stats.dialog.usageTitle")}
               </span>
               <span {...styling.props(dialogStyles.titleValue)}>{exactCount(total, t)}</span>

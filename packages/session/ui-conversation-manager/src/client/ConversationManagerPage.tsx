@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Checkbox,
-  IconSearchOutline16,
+  IconSearchOutlineRegular,
   Input,
   Modal,
   Tag,
@@ -305,7 +305,7 @@ export function ConversationManagerPage({
               className={styling.className(styles.search)}
               data-filter="search"
               type="search"
-              icon={<IconSearchOutline16 />}
+              icon={<IconSearchOutlineRegular />}
               value={query}
               placeholder={t("search")}
               aria-label={t("search")}

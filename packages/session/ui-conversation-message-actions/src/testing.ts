@@ -11,7 +11,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { parseJsonlArtifact } from "@morlay/session-rdb/artifact";
-import { EmptySettings, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import { SESSION_EDITOR_PATH } from "./shared.ts";
 import { SessionEditor } from "@morlay/ui-conversation-message-actions";
 
@@ -22,7 +22,6 @@ export {
   SessionSeq,
   SessionStore,
   TokenMeter,
-  EmptySettings,
   meta,
   oneTurnLog,
   parseJsonlArtifact,
@@ -37,7 +36,6 @@ export interface Harness {
 
 export async function harness(provide?: (ctx: Context) => void): Promise<Harness> {
   const ctx = new Context();
-  await ctx.plugin(EmptySettings);
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
@@ -87,7 +85,7 @@ export function userMessage(seq: number, id: string, text: string, time = seq): 
       source: { kind: "user" },
     },
     surfaceOp: "append",
-  } as SessionEvent;
+  } as unknown as SessionEvent;
 }
 
 export function assistantMessage(

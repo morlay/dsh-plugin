@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import type { ISessions, SessionBinding } from "@deepseek-ai/dsh-api-session-controller/client";
-import { IconPaperclipOutline16 } from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconPaperclipOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
 import { createSnapshotStore, type BoundActions } from "@deepseek-ai/dsh-client-store";
 import { resolveSlotLabel } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SessionId } from "@deepseek-ai/dsh-session/types";
@@ -36,6 +36,7 @@ import { ComposerSubmissionPolicy } from "../../../../../vendor/deepseek-harness
 import { queueDockEntry } from "./queue/QueueDock.tsx";
 import { EnterBehaviorRow } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/settings/EnterBehaviorRow.tsx";
 import type { EnterBehaviorRowInjected } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/settings/EnterBehaviorRow.tsx";
+import { ConversationHeader } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationHeader.tsx";
 import { ConversationRoot } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx";
 import { ConversationContent } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx";
 import { ConversationPanel } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationPanel.tsx";
@@ -45,7 +46,10 @@ import {
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx";
 import { InputBar } from "./skeleton/InputBar.tsx";
 import { todoDockEntry } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx";
-import { resolveActiveView } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/view-selection.ts";
+import {
+  DEVELOPER_TOOLS_VIEW_ID,
+  resolveActiveView,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/view-selection.ts";
 import {
   en,
   NS,
@@ -70,7 +74,7 @@ export const inject = [
   "uiSession",
   "uiWorkspace",
   "locale",
-  "settingsScope",
+  "configForms",
 ];
 
 export interface Config {
@@ -116,7 +120,7 @@ interface FileCommandRegistry {
   register(contribution: {
     name: string;
     label(): string;
-    icon: typeof IconPaperclipOutline16;
+    icon: typeof IconPaperclipOutlineRegular;
     available(session: { sessionId: SessionId }): boolean;
     ui: { kind: "action"; run(session: { sessionId: SessionId }): void };
   }): () => void;
@@ -151,7 +155,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const t = ctx.locale.bind(NS);
   const conversationStore = createConversationStore();
   const submissionPolicy = new ComposerSubmissionPolicy(
-    ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
+    ctx.configForms.get<ConversationSettings>(CONVERSATION_SETTINGS_NAMESPACE),
   );
 
   ctx.slots.inject("settings.general.item", () =>
@@ -176,6 +180,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     const tabs: ViewTab[] = [];
     for (const entry of slots.entries("conversation.view")) {
       if (entry.options.id === undefined) continue;
+      // 开发者工具视图由设置项决定是否出现（上游 0.1.7 起的 `configForms.developerTools`）。
+      if (
+        !ctx.configForms.developerTools.enabled.getSnapshot() &&
+        entry.options.id === DEVELOPER_TOOLS_VIEW_ID
+      )
+        continue;
       tabs.push({
         id: entry.options.id,
         label: resolveSlotLabel(entry.options.label) ?? entry.options.id,
@@ -237,7 +247,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         commands.register({
           name: "file",
           label: () => t("input.file"),
-          icon: IconPaperclipOutline16,
+          icon: IconPaperclipOutlineRegular,
           available: (session) => inputHub.canPickFiles(session.sessionId),
           ui: {
             kind: "action",
@@ -273,10 +283,24 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       {
         name: "main.conversation",
         children: {
-          "conversation.session.header": { kind: "single", scope: "session" },
+          "conversation.header": { kind: "single", scope: "session-maybe" },
         },
       },
       ConversationRoot,
+    );
+
+  // 外层头部（上游 0.1.7 拆出）：`conversation.header.leading` 是 root 作用域的席位，
+  // 会话头 `conversation.session.header` 挂在它下面——两者不再是同一格。
+  const registerHeader = () =>
+    slots.register(
+      {
+        name: "conversation.header",
+        children: {
+          "conversation.header.leading": { kind: "single", scope: "root" },
+          "conversation.session.header": { kind: "single", scope: "session" },
+        },
+      },
+      ConversationHeader,
     );
 
   const registerConversationContent = () =>
@@ -341,14 +365,45 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         inject: (
           sessionId: SessionId,
           actions: BoundActions<typeof conversationStore>,
-        ): ConversationSessionInjected => ({
-          hooks: { conversationViews },
-          bindDraftMirror: (write) => inputHub.shell(sessionId).bindMirror(write),
-          openView: (view, focus) => {
+        ): ConversationSessionInjected => {
+          const openView = (view: string, focus: string): void => {
+            if (!viewTabs().some((tab) => tab.id === view)) return;
             activateView(sessionId, view);
             actions.openView(view, focus);
-          },
-        }),
+          };
+          // 工具调用要跳到某个 View 的对应位置：只有「已注册且当前可见」的 View 才接得住这次定位。
+          const inspectionTarget = () =>
+            uiConversation.views
+              .entries()
+              .find(
+                (definition) =>
+                  definition.toolCallFocus !== undefined &&
+                  conversationViews.getSnapshot().some((view) => view.id === definition.target),
+              );
+          const inspectCall = (callId: string): void => {
+            const target = inspectionTarget();
+            if (target?.toolCallFocus !== undefined)
+              openView(target.target, target.toolCallFocus(callId));
+          };
+          return {
+            hooks: {
+              conversationViews,
+              inspectCall: {
+                getSnapshot: () => (inspectionTarget() === undefined ? undefined : inspectCall),
+                subscribe: (listener) => {
+                  const disposeViews = conversationViews.subscribe(listener);
+                  const disposeDefinitions = uiConversation.views.subscribe(listener);
+                  return () => {
+                    disposeViews();
+                    disposeDefinitions();
+                  };
+                },
+              },
+            },
+            bindDraftMirror: (write) => inputHub.shell(sessionId).bindMirror(write),
+            openView,
+          };
+        },
       },
       ConversationSession,
     );
@@ -360,7 +415,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         locale: NS,
         children: {
           "conversation.session.header.lineage": { kind: "single", scope: "session" },
-          "conversation.session.header.leading": { kind: "single", scope: "session" },
           "conversation.session.header.actions": { kind: "list", scope: "session" },
           "conversation.session.header.utilities": { kind: "list", scope: "session" },
           "conversation.session.header.corner": { kind: "single", scope: "session" },
@@ -396,6 +450,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           "conversation.input.plan": { kind: "single", scope: "session" },
           "conversation.input.right": { kind: "list", scope: "session" },
           "conversation.input.model": { kind: "single", scope: "session" },
+          "conversation.input.activity": { kind: "single", scope: "session" },
           "conversation.composer.dock": { kind: "list", scope: "session" },
         },
         inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
@@ -489,6 +544,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       ConversationPanel,
     );
     yield registerConversationRoot();
+    yield registerHeader();
     yield registerConversationContent();
     yield registerConversationSession();
     yield registerConversationHeader();

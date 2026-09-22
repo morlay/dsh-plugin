@@ -2,7 +2,6 @@ import type { Translate } from "@deepseek-ai/dsh-client-ui-slots";
 
 export type ClockTranslate = Translate<"clock.md" | "clock.ymd">;
 
-export type RunDurationTranslate = Translate<"duration.seconds" | "duration.minutes">;
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -17,20 +16,6 @@ export function msUntilNextLocalMidnight(ms: number): number {
   const next = new Date(ms);
   next.setHours(24, 0, 0, 0);
   return Math.max(next.getTime() - ms, 1);
-}
-
-export function formatRunDuration(ms: number, t: RunDurationTranslate): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return minutes > 0
-    ? t("duration.minutes", { minutes, seconds: String(seconds).padStart(2, "0") })
-    : t("duration.seconds", { seconds });
-}
-
-export function formatLatencySeconds(ms: number): string {
-  const s = Math.max(0, ms) / 1000;
-  return s < 10 ? String(Math.round(s * 10) / 10) : String(Math.round(s));
 }
 
 export function formatTokensPerSecond(tps: number): string {

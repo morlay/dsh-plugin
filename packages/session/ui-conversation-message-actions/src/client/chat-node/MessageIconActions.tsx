@@ -4,21 +4,16 @@
 import { styling } from "@morlay/dsh-client-ui-primitives/client";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
-  IconBranchOutline16,
-  IconCheckOutline16,
-  IconCopyOutline16,
-  IconEditOutline16,
-  IconRefreshOutline16,
+  IconBranchOutlineRegular,
+  IconCheckOutlineRegular,
+  IconCopyOutlineRegular,
+  IconEditOutlineRegular,
+  IconRefreshOutlineRegular,
   Tooltip,
   writeClipboard,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
-import {
-  formatLatencySeconds,
-  formatMessageClock,
-  formatRunDuration,
-  formatTokensPerSecond,
-} from "./message-chrome.ts";
+import { formatMessageClock } from "./message-chrome.ts";
 import { useCalendarDay } from "./use-calendar-day.ts";
 import { styles } from "./MessageIconActions.styles.ts";
 
@@ -26,12 +21,6 @@ export interface MessageIconActionsProps {
   text: string;
 
   time?: number | undefined;
-
-  runMs?: number | undefined;
-
-  ttftMs?: number | undefined;
-
-  tokensPerSecond?: number | undefined;
 
   clock: "start" | "end";
 
@@ -53,9 +42,6 @@ export interface MessageIconActionsProps {
 export function MessageIconActions({
   text,
   time,
-  runMs,
-  ttftMs,
-  tokensPerSecond,
   clock,
   onBranch,
   branchUnavailable = false,
@@ -96,10 +82,8 @@ export function MessageIconActions({
       }, 1000);
     });
   }, [copied, text]);
-  // The dot is decorative and stays hidden, but its margins separate the
-  // readings only on screen: without the flanking spaces a reader hears one
-  // run-on string ("Ran for 13sTime to first token (TTFT) 0.2s12 tok/s")
-  // instead of three facts.
+  // 只剩时钟：耗时 / TTFT / tok-s 的读数在 0.1.7 已不属于消息 chrome（上游把它们收进
+  // 会话统计弹窗与轮次过程节点），上游那套聊天文案表也不再提供这三个 key。
   const clockEl =
     time === undefined ? null : (
       <span
@@ -107,34 +91,6 @@ export function MessageIconActions({
         {...styling.props(clock === "start" ? styles.timeStart : styles.timeEnd)}
       >
         {formatMessageClock(time, t, day)}
-        {runMs !== undefined && (
-          <>
-            {" "}
-            <span {...styling.props(styles.runTimeDot)} aria-hidden>
-              ·
-            </span>{" "}
-            {t("message.ranFor", { duration: formatRunDuration(runMs, t) })}
-          </>
-        )}
-        {ttftMs !== undefined && (
-          <>
-            {" "}
-            <span {...styling.props(styles.runTimeDot)} aria-hidden>
-              ·
-            </span>{" "}
-            {t("message.turnTime.ttft")}{" "}
-            {t("duration.seconds", { seconds: formatLatencySeconds(ttftMs) })}
-          </>
-        )}
-        {tokensPerSecond !== undefined && (
-          <>
-            {" "}
-            <span {...styling.props(styles.runTimeDot)} aria-hidden>
-              ·
-            </span>{" "}
-            {t("message.tokensPerSecond", { tps: formatTokensPerSecond(tokensPerSecond) })}
-          </>
-        )}
       </span>
     );
   // 外部 className 需要拼接：给 actions 一个真实类名（而不是 data-css 属性）。
@@ -152,7 +108,7 @@ export function MessageIconActions({
           aria-label={copied ? t("copied" as never) : t("copy" as never)}
           onClick={onCopy}
         >
-          {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
+          {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
         </button>
       </Tooltip>
       {extraActions}
@@ -164,7 +120,7 @@ export function MessageIconActions({
             aria-label="编辑"
             onClick={onEdit}
           >
-            <IconEditOutline16 />
+            <IconEditOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -176,7 +132,7 @@ export function MessageIconActions({
             aria-label="重试此回合"
             onClick={onRetry}
           >
-            <IconRefreshOutline16 />
+            <IconRefreshOutlineRegular />
           </button>
         </Tooltip>
       )}
@@ -195,7 +151,7 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onBranch}
           >
-            <IconBranchOutline16 />
+            <IconBranchOutlineRegular />
           </button>
         </Tooltip>
       )}

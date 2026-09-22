@@ -52,7 +52,7 @@ function userText(message: UserMessage): string {
 
 function cloneUser(
   message: UserMessage,
-  content: ContentBlock[] = structuredClone(message.content),
+  content: readonly ContentBlock[] = structuredClone(message.content) as ContentBlock[],
 ): UserMessage {
   return Object.freeze({
     id: randomUUID(),

@@ -150,7 +150,7 @@ describe("editPlan", () => {
     expect(plan.anchorSeq).toBe(0);
     expect(plan.rewindBoundary).toBeUndefined();
     expect(plan.queuedUsers).toHaveLength(1);
-    expect((plan.queuedUsers[0] as { content: Array<{ text: string }> }).content[0]?.text).toBe(
+    expect((plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]?.text).toBe(
       "edited q",
     );
   });
@@ -179,7 +179,7 @@ describe("editPlan", () => {
     );
     expect(plan.rewindBoundary).toBe(followupSeq);
     expect(plan.queuedUsers).toHaveLength(1);
-    expect((plan.queuedUsers[0] as { content: Array<{ text: string }> }).content[0]?.text).toBe(
+    expect((plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]?.text).toBe(
       "edited f",
     );
   });

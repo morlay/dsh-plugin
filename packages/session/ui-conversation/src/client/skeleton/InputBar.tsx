@@ -17,8 +17,8 @@ import { styling } from "@morlay/dsh-client-ui-primitives/client";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
 import {
-  IconPlusOutline16,
-  IconWarningOutline16,
+  IconPlusOutlineRegular,
+  IconWarningOutlineRegular,
   Toast,
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
@@ -425,7 +425,7 @@ export const InputBar = memo(function InputBar({
         <Toast
           key={toast.seq}
           text={toast.text}
-          icon={<IconWarningOutline16 />}
+          icon={<IconWarningOutlineRegular />}
           anchor={cardRef.current}
           onDone={dismissToast}
         />
@@ -517,7 +517,7 @@ export const InputBar = memo(function InputBar({
                 onMouseDown={keepFocus}
                 onClick={onToggleCommandMenu}
               >
-                <IconPlusOutline16 size={14} />
+                <IconPlusOutlineRegular size={14} />
               </button>
             </Tooltip>
             <input

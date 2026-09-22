@@ -10,14 +10,14 @@ import type { FileAttachmentRef, ImageAttachmentRef } from "@deepseek-ai/dsh-att
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SessionId } from "@deepseek-ai/dsh-session/types";
 import {
-  IconChevronDownOutline14,
-  IconChevronUpOutline14,
+  IconChevronDownOutlineRegular,
+  IconChevronUpOutlineRegular,
   FileTypeIcon,
   fileSizeText,
-  IconEditOutline16,
-  IconQueueOutline14,
-  IconSendOutline14,
-  IconTrashOutline16,
+  IconEditOutlineRegular,
+  IconQueueOutlineRegular,
+  IconSendOutlineRegular,
+  IconTrashOutlineRegular,
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InboxState } from "@deepseek-ai/dsh-agent/types";
@@ -209,7 +209,7 @@ export function QueueDock({
             }}
           >
             <span {...styling.props(styles.lead)} aria-hidden>
-              <IconQueueOutline14 />
+              <IconQueueOutlineRegular />
             </span>
             <span {...styling.props(styles.count)}>{t("queue.count", { n: rowCount })}</span>
             {!listVisible && pendingQueue.length > 0 && (
@@ -218,7 +218,7 @@ export function QueueDock({
               </span>
             )}
             <span {...styling.props(styles.chevron)} aria-hidden>
-              {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
+              {expanded ? <IconChevronDownOutlineRegular /> : <IconChevronUpOutlineRegular />}
             </span>
           </button>
         )}
@@ -232,7 +232,7 @@ export function QueueDock({
                   {/* Single-item strip has no count header, so the row itself carries the queue glyph. */}
                   {rowCount === 1 && (
                     <span {...styling.props(styles.lead)} aria-hidden>
-                      <IconQueueOutline14 />
+                      <IconQueueOutlineRegular />
                     </span>
                   )}
                   {attachments.length > 0 && (
@@ -278,7 +278,7 @@ export function QueueDock({
                             if (rowText.text !== null) void recall(row.id, rowText.text);
                           }}
                         >
-                          <IconEditOutline16 size={14} />
+                          <IconEditOutlineRegular size={14} />
                         </button>
                       </Tooltip>
                       <Tooltip label={t("queue.remove")} side="bottom" delayMs={500}>
@@ -291,7 +291,7 @@ export function QueueDock({
                             void applyAction(row.id, { kind: "remove" }, t("queue.removeFailed"));
                           }}
                         >
-                          <IconTrashOutline16 size={14} />
+                          <IconTrashOutlineRegular size={14} />
                         </button>
                       </Tooltip>
                       <Tooltip
@@ -310,7 +310,7 @@ export function QueueDock({
                             void applyAction(row.id, { kind: "steer" }, t("queue.steerFailed"));
                           }}
                         >
-                          <IconSendOutline14 />
+                          <IconSendOutlineRegular />
                         </button>
                       </Tooltip>
                     </div>
@@ -329,7 +329,7 @@ export function QueueDock({
                 >
                   {rowCount === 1 && (
                     <span {...styling.props(styles.lead)} aria-hidden>
-                      <IconQueueOutline14 />
+                      <IconQueueOutlineRegular />
                     </span>
                   )}
                   {submission.attachments.length > 0 && (
@@ -367,7 +367,7 @@ export function QueueDock({
                         title={t("queue.sending")}
                         disabled
                       >
-                        <IconEditOutline16 size={14} />
+                        <IconEditOutlineRegular size={14} />
                       </button>
                       <button
                         type="button"
@@ -376,7 +376,7 @@ export function QueueDock({
                         title={t("queue.sending")}
                         disabled
                       >
-                        <IconTrashOutline16 size={14} />
+                        <IconTrashOutlineRegular size={14} />
                       </button>
                       <button
                         type="button"
@@ -385,7 +385,7 @@ export function QueueDock({
                         title={t("queue.sending")}
                         disabled
                       >
-                        <IconSendOutline14 />
+                        <IconSendOutlineRegular />
                       </button>
                     </div>
                   )}

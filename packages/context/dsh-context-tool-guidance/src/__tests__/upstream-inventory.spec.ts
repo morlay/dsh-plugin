@@ -9,10 +9,25 @@ import { TOOL_GROUPS } from "../groups.ts";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const PACKAGES = join(REPO, "vendor/deepseek-harness/packages");
-const STANDARD_COMPOSITION = join(
-  PACKAGES,
-  "preset/agent-presets/presets/standard/agent.cordis.yml",
-);
+/**
+ * 上游 shipped standard preset 的装配行：0.1.7 起 preset 是 `@deepseek-ai/dsh-agent-preset` 行
+ * （`config.plugins` 就是装配），住在 web-app bundle 的 patch 文件里，不再是目录里的
+ * `agent.cordis.yml`。
+ */
+const STANDARD_PRESET_PATCH = join(PACKAGES, "bundle/web-app/presets/standard.patch.yml");
+
+/** 取 shipped standard preset 的 `config.plugins`（装配行数组）。 */
+async function standardPlugins(): Promise<unknown> {
+  const layers = yaml.load(await readFile(STANDARD_PRESET_PATCH, "utf8"), {
+    schema: entryListSchema,
+  }) as { insert?: { id?: string; config?: { plugins?: unknown } }[] }[];
+  for (const layer of layers) {
+    for (const row of layer.insert ?? []) {
+      if (row.id === "preset-standard") return row.config?.plugins;
+    }
+  }
+  throw new Error(`shipped standard preset row is missing in ${STANDARD_PRESET_PATCH}`);
+}
 
 /**
  * 不在分组表里的工具：这些行在 standard 装配里被禁用，或不是标准模式的模型可见工具。
@@ -170,10 +185,7 @@ async function inventory(directories: readonly string[]): Promise<{
 /** standard 装配引用的包目录（跳过禁用的行）。 */
 async function enabledDirectories(): Promise<string[]> {
   const rows: Row[] = [];
-  collectRows(
-    yaml.load(await readFile(STANDARD_COMPOSITION, "utf8"), { schema: entryListSchema }),
-    rows,
-  );
+  collectRows(await standardPlugins(), rows);
   const wanted = new Set(
     rows.filter((row) => row.enabled).map((row) => directoryName(row.packageName)),
   );
@@ -185,10 +197,7 @@ async function enabledDirectories(): Promise<string[]> {
 /** standard 装配里显式给出的动态工具名：源码扫描看不到这些字面量。 */
 async function declaredToolNames(): Promise<string[]> {
   const rows: Row[] = [];
-  collectRows(
-    yaml.load(await readFile(STANDARD_COMPOSITION, "utf8"), { schema: entryListSchema }),
-    rows,
-  );
+  collectRows(await standardPlugins(), rows);
   return rows.flatMap((row) => (row.toolName === undefined || !row.enabled ? [] : [row.toolName]));
 }
 
