@@ -42,7 +42,7 @@ async function fixture(): Promise<Fixture> {
   const home = join(root, "home");
   const seedProfile = join(seed, "profiles", "desktop");
   await write(join(seedProfile, SEED_HASH_NAME), "abc123");
-  await write(join(seedProfile, "cordis.patch.yml"), "- insert: []\n");
+  await write(join(seedProfile, "justfile"), "seed:\n");
   return { seed, home, seedProfile, homeProfile: join(home, "profiles", "desktop") };
 }
 
@@ -51,12 +51,14 @@ afterEach(async () => {
 });
 
 describe("seed profile planting", () => {
-  it("plants the profile into an empty app home", async () => {
+  it("plants the profile into an empty app home, without a patch of its own", async () => {
     const { seed, home, homeProfile } = await fixture();
 
     expect(await ensureSeedProfile(seed, home)).toBe(true);
-    expect(await readFile(join(homeProfile, "cordis.patch.yml"), "utf8")).toBe("- insert: []\n");
+    expect(await readFile(join(homeProfile, "justfile"), "utf8")).toBe("seed:\n");
     expect(await readFile(join(homeProfile, SEED_HASH_NAME), "utf8")).toBe("abc123");
+    // profile 的 patch 文档归用户：种子里没有它，种完也不凭空生成（上游首次打开时写模板）。
+    expect(await exists(join(homeProfile, "cordis.patch.yml"))).toBe(false);
   });
 
   it("leaves a matching profile alone on the next launch", async () => {
@@ -79,6 +81,19 @@ describe("seed profile planting", () => {
     expect(await ensureSeedProfile(seed, home)).toBe(true);
     expect(await exists(join(homeProfile, "stale.json"))).toBe(false);
     expect(await exists(join(homeProfile, "extra.json"))).toBe(true);
+    expect(await readFile(join(homeProfile, SEED_HASH_NAME), "utf8")).toBe("def456");
+  });
+
+  it("keeps the user's own patch document through a re-plant", async () => {
+    const { seed, home, homeProfile, seedProfile } = await fixture();
+    await ensureSeedProfile(seed, home);
+    const settings = "- id: locale\n  config:\n    preference: zh\n";
+    await write(join(homeProfile, "cordis.patch.yml"), settings);
+
+    await write(join(seedProfile, SEED_HASH_NAME), "def456");
+    expect(await ensureSeedProfile(seed, home)).toBe(true);
+
+    expect(await readFile(join(homeProfile, "cordis.patch.yml"), "utf8")).toBe(settings);
     expect(await readFile(join(homeProfile, SEED_HASH_NAME), "utf8")).toBe("def456");
   });
 

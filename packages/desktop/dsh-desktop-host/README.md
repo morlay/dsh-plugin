@@ -15,21 +15,24 @@
 
 - `dev` / `bundle` 把本包落位到部署的 `<runtime>/node_modules/@morlay/dsh-desktop-host`：`dev` 整份复制源码树，
   `bundle` 按 manifest `files` 复制。两条路都要带上这四样——`lib/index.js`（启动入口）、
-  `lib/webserver.js`（桌面 patch 行按 `../lib/webserver.js` 加载）、`lib/wire.js`、
-  `config/desktop.cordis.patch.yml`（入口按 `../config/desktop.cordis.patch.yml` 作为 `patchFiles` 读），
-  缺任一样 host 都起不来；
+  `lib/webserver.js`（桌面 patch 行按 `../lib/webserver.js` 加载）、`lib/wire.js`、`lib/patch.js`（入口的
+  overlay 层清单），外加 `config/desktop.cordis.patch.yml`（入口按 `../config/desktop.cordis.patch.yml`
+  作为宿主层读），缺任一样 host 都起不来；
 - 壳按 `<runtime>/node_modules/@morlay/dsh-desktop-host/lib/index.js` 启动它（stdio 五元组：
   FD 3/4 是管道，FD 5 是 Node IPC），argv 为
   `[runtimeDir, projectDir, primaryRuntime, pnpmEntry, nodeBin]`（上游 0.1.7 删掉 `runProfile` 的 `resolutionMode` 后少一格）；
 - IPC：`ready { protocolVersion }` / `fatal { message }`，另外收 `shutdown`。
 
 出口：`.`（启动入口）、`./webserver`（无端口 `webServer` 服务，供 patch 行加载）、`./wire`
-（管道分帧，壳构建时内联，部署里不需要单独解析它）。
+（管道分帧，壳构建时内联，部署里不需要单独解析它）、`./patch`（overlay 层清单与 app 层文件名，
+`@morlay/dsh-desktopify` 打包时复用同一常量）。
 
 ## 运行时做的事
 
-1. `runProfile` 装配 `desktop` profile（保住 profileContext / proxy / fail-loud / appReady / shutdown 语义）；
-2. 桌面 patch 禁用上游 `webserver` 行，插入本包的 `webServer` 替身——同一份路由面
+1. `runProfile` 装配 `desktop` profile（保住 profileContext / proxy / fail-loud / appReady / shutdown 语义），
+   overlay 层按 `desktopPatchFiles(runtimeDir)` 的顺序给：runtime 里的 `app.cordis.patch.yml`（app 自己的装配
+   行，缺了就不放这层）在前、宿主层在后——后应用的层覆盖先应用的，宿主对传输的接管必须赢；
+2. 宿主层 patch 禁用上游 `webserver` 行，插入本包的 `webServer` 替身——同一份路由面
    （`register` / `registerFallback` / `registerUpgrade` / `tapIndex` / `renderIndex` / `collectIndexInjections` /
    `port` / `host`），请求由 `dispatch(Request)` 从管道喂进来；
 3. 接管浏览器认证：页面由壳独占、没有网络入口，`connection` 的 `requestRejection` 与 `authorizeIndex`

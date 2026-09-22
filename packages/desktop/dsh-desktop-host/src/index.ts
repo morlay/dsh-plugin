@@ -9,7 +9,6 @@
 import { once } from "node:events";
 import { createReadStream, createWriteStream, type ReadStream, type WriteStream } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { loadLayeredEnv, loadProfileDirectory } from "@deepseek-ai/dsh-app-boot";
 import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 import type {} from "@deepseek-ai/dsh-api-gateway";
@@ -17,6 +16,7 @@ import type {} from "@deepseek-ai/dsh-client-connection";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 import * as desktopOffice from "./office.ts";
+import { desktopPatchFiles } from "./patch.ts";
 import {
   DESKTOP_STREAM_PATH,
   installDesktopTransport,
@@ -37,8 +37,6 @@ import {
   type DesktopHostEvent,
   type DesktopHostRequestFrame,
 } from "./wire.ts";
-
-const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml", import.meta.url));
 
 interface PendingRequest {
   readonly abort: AbortController;
@@ -102,7 +100,7 @@ async function main(): Promise<void> {
     environment: loadLayeredEnv("dsh"),
     profile: "desktop",
     resolvedProfile: { profile, installAnchor },
-    patchFiles: [DESKTOP_PATCH],
+    patchFiles: await desktopPatchFiles(runtimeDir),
     args: ["--no-open"],
     ...(pnpmEntry === undefined
       ? {}

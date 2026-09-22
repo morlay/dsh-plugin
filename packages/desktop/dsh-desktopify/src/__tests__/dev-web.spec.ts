@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ensureClientBundlePlaceholders, installProfilePatch } from "../cli/dev-web.ts";
+import { devWebArgs, ensureClientBundlePlaceholders } from "../cli/dev-web.ts";
 import type { DevWebConfig } from "../cli/workspace.ts";
 
 const CONFIG: DevWebConfig = {
@@ -31,21 +31,19 @@ async function profile(): Promise<string> {
   return join(await mkdtemp(join(tmpdir(), "dev-web-")), "profile");
 }
 
-describe("installProfilePatch", () => {
-  it("copies the app patch into the profile user layer", async () => {
-    const directory = await profile();
-    const workspace = await mkdtemp(join(tmpdir(), "dev-web-app-"));
-    const patch = "- insert:\n    - id: dev-client-bundles\n";
-    await writeFile(join(workspace, "cordis.patch.yml"), patch);
-    expect(await installProfilePatch(directory, workspace)).toBe(
-      join(directory, "cordis.patch.yml"),
-    );
-    expect(await readFile(join(directory, "cordis.patch.yml"), "utf8")).toBe(patch);
+describe("dev web launch args", () => {
+  it("hands the app layer in as a --patch overlay instead of writing the profile user layer", () => {
+    expect(devWebArgs("3080", "/build/development/app.cordis.patch.yml")).toEqual([
+      "web",
+      "--port",
+      "3080",
+      "--patch",
+      "/build/development/app.cordis.patch.yml",
+    ]);
   });
 
-  it("is a no-op when the app declares no patch", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "dev-web-app-"));
-    expect(await installProfilePatch(await profile(), workspace)).toBeUndefined();
+  it("boots the profile alone when the app declares no patch", () => {
+    expect(devWebArgs("3080", undefined)).toEqual(["web", "--port", "3080"]);
   });
 });
 

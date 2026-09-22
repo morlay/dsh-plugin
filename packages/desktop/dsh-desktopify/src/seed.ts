@@ -11,8 +11,10 @@ import {
   rm,
   symlink,
   unlink,
+  writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { PROFILE_PATCH_FILENAME } from "@deepseek-ai/dsh-app-boot";
 import { PROFILE_NAME } from "./appconfig.ts";
 
 export const SEED_DIR_NAME = "dsh-home";
@@ -65,6 +67,11 @@ export async function ensureSeedProfile(seedDir: string, home: string): Promise<
       }
     } catch {}
   }
+  // profile 的 patch 文档是用户数据（settings 面板写在那里）：重种换的是装配面，
+  // 这一份先读出来、种完再放回去，升级不会把用户的设置带走。
+  const patchPath = join(profileDir, PROFILE_PATCH_FILENAME);
+  const userPatch = await readFile(patchPath, "utf8").catch(() => undefined);
+
   try {
     const stat = await lstat(profileDir);
     if (stat.isSymbolicLink()) await unlink(profileDir);
@@ -74,6 +81,10 @@ export async function ensureSeedProfile(seedDir: string, home: string): Promise<
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
   await copySeed(seedProfile, profileDir);
+  if (userPatch !== undefined) {
+    await mkdir(dirname(patchPath), { recursive: true });
+    await writeFile(patchPath, userPatch);
+  }
   return true;
 }
 

@@ -34,6 +34,10 @@
       "types": "./src/wire.ts",
       "default": "./lib/wire.js"
     },
+    "./patch": {
+      "types": "./src/patch.ts",
+      "default": "./lib/patch.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
