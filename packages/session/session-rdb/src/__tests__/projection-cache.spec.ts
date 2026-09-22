@@ -80,7 +80,6 @@ interface Harness {
     }): Promise<void>;
     cachedSnapshot(
       header: SessionHeader,
-      inheritedEventCount: SessionLogOffset,
       keys?: readonly string[],
     ): { asOfSeq: number; values: Record<string, unknown> } | undefined;
     coldSnapshot(
@@ -130,8 +129,7 @@ async function harness(root?: string): Promise<Harness> {
 function cachedTurns(harness: Harness, id: string): number[] | undefined {
   const live = harness.ctx.sessions.get(SessionId(id));
   const header = live?.header ?? meta(id);
-  const inherited = live?.inheritedEventCount ?? SessionLogOffset(0);
-  const outline = harness.cache.cachedSnapshot(header, inherited)?.values["turnOutline"];
+  const outline = harness.cache.cachedSnapshot(header)?.values["turnOutline"];
   return Array.isArray(outline)
     ? outline.map((entry) => (entry as { turn: number }).turn)
     : undefined;
@@ -157,7 +155,7 @@ describe("session-rdb projection cache replacement", () => {
       });
       const live = ctx.sessions.get(id)!;
       const snapshot = await waitFor(() =>
-        cache.cachedSnapshot(live.header, live.inheritedEventCount),
+        cache.cachedSnapshot(live.header),
       );
       expect(snapshot.values).toHaveProperty("turnOutline");
     } finally {
@@ -216,13 +214,13 @@ describe("session-rdb projection cache replacement", () => {
       });
 
       const blankOf = (): boolean => {
-        const snapshot = cache.cachedSnapshot(live.header, live.inheritedEventCount);
+        const snapshot = cache.cachedSnapshot(live.header);
         const metadata = snapshot?.values["sessionListMetadata"] as { blank?: boolean } | undefined;
         return metadata?.blank ?? false;
       };
       await waitFor(
         () =>
-          cache.cachedSnapshot(live.header, live.inheritedEventCount)?.values[
+          cache.cachedSnapshot(live.header)?.values[
             "sessionListMetadata"
           ],
       );
@@ -257,12 +255,12 @@ describe("session-rdb projection cache replacement", () => {
       });
       const live = ctx.sessions.get(id)!;
       await ctx.sessions.flush(live);
-      await waitFor(() => cache.cachedSnapshot(live.header, live.inheritedEventCount));
+      await waitFor(() => cache.cachedSnapshot(live.header));
 
-      const withTitle = cache.cachedSnapshot(live.header, live.inheritedEventCount, ["title"]);
+      const withTitle = cache.cachedSnapshot(live.header, ["title"]);
       expect(withTitle?.values["title"]).toBe("直取标题");
 
-      const withoutTitle = cache.cachedSnapshot(live.header, live.inheritedEventCount, [
+      const withoutTitle = cache.cachedSnapshot(live.header, [
         "turnOutline",
       ]);
       expect(withoutTitle?.values["title"]).toBeUndefined();
@@ -292,7 +290,7 @@ describe("session-rdb projection cache replacement", () => {
       first.ctx.sessions.create(id, { meta: meta("stale"), seed: threeTurnLog() });
       const live = first.ctx.sessions.get(id)!;
       await first.ctx.sessions.flush(live);
-      await waitFor(() => first.cache.cachedSnapshot(live.header, live.inheritedEventCount));
+      await waitFor(() => first.cache.cachedSnapshot(live.header));
       expect(staleCount(first.dbPath!)).toBeGreaterThan(0);
 
       const db = new DatabaseSync(first.dbPath!);
@@ -308,7 +306,7 @@ describe("session-rdb projection cache replacement", () => {
     const second = await harness(root);
     try {
       await waitFor(() => (staleCount(second.dbPath!) === 0 ? true : undefined));
-      expect(second.cache.cachedSnapshot(meta("stale"), SessionLogOffset(0))).toBeUndefined();
+      expect(second.cache.cachedSnapshot(meta("stale"))).toBeUndefined();
     } finally {
       await second.dispose();
     }
@@ -340,7 +338,7 @@ describe("session-rdb projection cache replacement", () => {
 
       await ctx.sessionBranch.rewind(id, 5);
 
-      const cached = cache.cachedSnapshot(live.header, live.inheritedEventCount);
+      const cached = cache.cachedSnapshot(live.header);
       expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1]);
 
       expect(cached?.asOfSeq).toBeLessThanOrEqual(live.seq - 1);
@@ -403,11 +401,11 @@ describe("session-rdb projection cache replacement", () => {
       expect(turnsOf(restored.values["turnOutline"])).toEqual([1]);
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(turnsOf(cache.cachedSnapshot(child.header, inherited)?.values["turnOutline"])).toEqual(
+      // 0.1.7 起 header-only 读只比对**生命周期**身份（formatVersion / createdAt / cwd / isSeeded）：
+      // 这里查询没有给 inherited cut，照样读到那份 checkpoint（旧口径要求 cut 相等，会读空）。
+      expect(turnsOf(cache.cachedSnapshot(child.header)?.values["turnOutline"])).toEqual(
         [1],
       );
-
-      expect(cache.cachedSnapshot(child.header, SessionLogOffset(0))).toBeUndefined();
 
       const db = new DatabaseSync(dbPath!);
       try {

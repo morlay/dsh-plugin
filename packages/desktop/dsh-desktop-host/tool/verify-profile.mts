@@ -7,7 +7,10 @@
  *    动作——官方 standard / ptc / cordis 的 preset 行也吃这一刀。2026-09-22 禁用
  *    `subagent-model-selection-settings` 就把那三个官方 preset 打成了 `broken`
  *    （`requires ... in the Host scope`）。
- * 2. **`/session-editor` 路由是否真的注册上了**：`SessionEditor` 构造时 `webServer` 可能还没激活，
+ * 2. **`session/list` 是否带出会话标题**：标题走投影缓存（`projections.values.title`）——2026-09-22 就是
+ *    这里漏跟了上游契约（0.1.7 把 `cachedSnapshot` / `cachedPredecessorTitle` 的 `inheritedEventCount`
+ *    参数去掉了，我们还按旧签名匹配），结果列表里所有投影值（title / blank / tokenUsage）全空。
+ * 3. **`/session-editor` 路由是否真的注册上了**：`SessionEditor` 构造时 `webServer` 可能还没激活，
  *    而一次性 `ctx.get` 不会重试 → 路由缺失 → 请求落到 `frontend-static` 的 fallback，非 GET/HEAD
  *    一律 405（编辑撤回 / 重试的症状）。单测用假装配直接 provide `webServer`，所以永远注册成功，
  *    掩盖了这个顺序问题。
@@ -73,6 +76,24 @@ for (const row of rows) {
   const state = row.broken === undefined ? "ok" : `broken: ${row.broken}`;
   console.log(`verify-profile: preset ${row.id} — ${state}`);
   if (row.broken !== undefined) failures.push(`preset ${row.id} is broken: ${row.broken}`);
+}
+
+const controller = (
+  ctx as unknown as {
+    sessionController?: {
+      list(req: unknown, signal: AbortSignal): Promise<{ items: { projections?: { values?: { title?: string } } }[] }>;
+    };
+  }
+).sessionController;
+const list = await controller?.list({}, new AbortController().signal);
+const titled = (list?.items ?? []).filter((item) => item.projections?.values?.title !== undefined);
+console.log(
+  `verify-profile: session/list — items=${String(list?.items.length ?? 0)} withTitle=${String(titled.length)}`,
+);
+if ((list?.items.length ?? 0) > 0 && titled.length === 0) {
+  failures.push(
+    "session/list returned no title projection for any row; the projection-cache read contract is probably stale",
+  );
 }
 
 const connection = (ctx as unknown as { connection?: { authenticatedUrl(base: string): string } })

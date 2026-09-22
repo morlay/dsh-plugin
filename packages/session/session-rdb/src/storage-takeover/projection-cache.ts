@@ -27,6 +27,12 @@ type CurrentCheckpointIdentity = CheckpointIdentity & {
   inheritedEventCount: number;
 };
 
+/** header 能证明的生命周期身份（上游 0.1.7 的 header-only 匹配口径）。 */
+type LifecycleIdentity = CheckpointIdentity & {
+  formatVersion: number;
+  isSeeded: boolean;
+};
+
 export interface ProjectionCacheConfig {
   writeEveryEvents: number;
 
@@ -95,14 +101,24 @@ export class SessionProjectionCacheRdb extends Service {
     return identityMatches(record.identity, expected) ? record : undefined;
   }
 
+  /**
+   * header-only 读（会话列表这类）：上游 0.1.7 起只给 header 与 keys——它要求的是**生命周期**身份，
+   * 不再要求调用方提供 inherited cut（那个 cut 只有写路径与 hydration 用得上）。
+   */
   cachedSnapshot(
     meta: SessionHeader,
-    inheritedEventCount: SessionLogOffset,
     keys?: readonly Extract<keyof SessionProjectionMap, string>[],
   ): ProjectionSnapshot | undefined {
-    const record = this.recordFor(meta.id, identityOf(meta, inheritedEventCount));
+    const record = this.recordForLifecycle(meta);
     const snapshot = record === undefined ? undefined : this.viewRecord(record, keys);
     return this.withDirectTitle(meta.id, keys, snapshot);
+  }
+
+  private recordForLifecycle(meta: SessionHeader): StoredProjcacheEntry | undefined {
+    const record = this.lookup(meta.id);
+    return record === undefined || !identityMatches(record.identity, lifecycleIdentityOf(meta))
+      ? undefined
+      : record;
   }
 
   private withDirectTitle(
@@ -123,17 +139,15 @@ export class SessionProjectionCacheRdb extends Service {
     return { asOfSeq: asOfSeq as SessionSeqCursor, values };
   }
 
-  cachedPredecessorTitle(
-    meta: SessionHeader,
-    inheritedEventCount: SessionLogOffset,
-  ): ProjectionSnapshot | undefined {
-    const expected = identityOf(meta, inheritedEventCount);
+  cachedPredecessorTitle(meta: SessionHeader): ProjectionSnapshot | undefined {
     const record = this.lookup(meta.id);
-    if (record === undefined || !predecessorIdentityMatches(record.identity, expected)) {
+    if (
+      record === undefined ||
+      !predecessorIdentityMatches(record.identity, lifecycleIdentityOf(meta))
+    ) {
       return undefined;
     }
-    const title = this.viewRecord(record, [PREDECESSOR_TITLE_KEY]);
-    return title === undefined ? undefined : { ...title, asOfSeq: -1 };
+    return this.viewRecord(record, [PREDECESSOR_TITLE_KEY]);
   }
 
   private viewRecord(
@@ -322,6 +336,16 @@ function detachJson(
   return JSON.parse(text) as Record<string, ProjectionCheckpointRow>;
 }
 
+/** header 能证明的生命周期身份（不含 inherited cut）：header-only 读只比对它。 */
+function lifecycleIdentityOf(header: SessionHeader): LifecycleIdentity {
+  return {
+    formatVersion: header.version,
+    createdAt: header.createdAt,
+    ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+    isSeeded: header.isSeeded,
+  };
+}
+
 function identityOf(
   header: SessionHeader,
   inheritedEventCount: SessionLogOffset,
@@ -339,7 +363,7 @@ function identityOf(
   };
 }
 
-function identityMatches(stored: CheckpointIdentity, expected: CurrentCheckpointIdentity): boolean {
+function identityMatches(stored: CheckpointIdentity, expected: LifecycleIdentity): boolean {
   return (
     stored.formatVersion === expected.formatVersion && lifecycleIdentityMatches(stored, expected)
   );
@@ -347,7 +371,7 @@ function identityMatches(stored: CheckpointIdentity, expected: CurrentCheckpoint
 
 function predecessorIdentityMatches(
   stored: CheckpointIdentity,
-  expected: CurrentCheckpointIdentity,
+  expected: LifecycleIdentity,
 ): boolean {
   const predecessor =
     stored.formatVersion === undefined || stored.formatVersion < expected.formatVersion;
@@ -356,12 +380,13 @@ function predecessorIdentityMatches(
 
 function lifecycleIdentityMatches(
   stored: CheckpointIdentity,
-  expected: CurrentCheckpointIdentity,
+  expected: LifecycleIdentity,
 ): boolean {
+  // header-only 读的匹配口径（上游 0.1.7）：只看 formatVersion 与生命周期字段，**不比对 inherited cut**
+  // ——那个 cut 只有写路径与 hydration 用得上。
   return (
     stored.createdAt === expected.createdAt &&
     stored.cwd === expected.cwd &&
-    (stored.isSeeded ?? false) === expected.isSeeded &&
-    (stored.inheritedEventCount ?? 0) === expected.inheritedEventCount
+    (stored.isSeeded ?? false) === expected.isSeeded
   );
 }

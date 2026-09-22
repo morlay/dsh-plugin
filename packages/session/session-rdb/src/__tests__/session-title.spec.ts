@@ -6,7 +6,6 @@ import { DatabaseSync } from "node:sqlite";
 import { Context } from "@deepseek-ai/cordis";
 import {
   SessionId,
-  SessionLogOffset,
   SessionSeq,
   SessionStore,
   type SessionEvent,
@@ -105,7 +104,6 @@ describe("session title as session data", () => {
             | {
                 cachedSnapshot(
                   header: SessionHeader,
-                  inherited: SessionLogOffset,
                   keys?: readonly string[],
                 ): { asOfSeq: number; values: Record<string, unknown> } | undefined;
               }
@@ -119,7 +117,7 @@ describe("session title as session data", () => {
       const live = ctx.sessions.get(id)!;
       await ctx.sessions.flush(live);
 
-      const snapshot = cache.cachedSnapshot(live.header, live.inheritedEventCount, ["title"]);
+      const snapshot = cache.cachedSnapshot(live.header, ["title"]);
       expect(snapshot?.values["title"]).toBe("直取标题");
       expect(snapshot?.asOfSeq).toBe(6);
     } finally {
