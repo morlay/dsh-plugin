@@ -11,6 +11,7 @@
   （`packages/desktop/dsh-desktop-host/src/__tests__/wire.spec.ts`）；
 - **命令面与配置**：`cli-surface.spec.ts`、`workspace-config.spec.ts`、`appconfig.spec.ts`、
   `ipc.spec.ts`（app 名 → scheme 的派生与发送者校验）、`dshhome.spec.ts`、`shell-env.spec.ts`、
+  `shell-import-boundary.spec.ts`（壳产物的依赖边界：壳可达模块不得裸引用 asar 里解析不到的包），
   `shell-app-directory.spec.ts`、`dev-*.spec.ts`；
 - **种子 / 部署 / 运行时闭包**：`seed-*.spec.ts`、`profile-seed.spec.ts`、`deploy-*.spec.ts`、
   `official-*.spec.ts`、`runtime-packages.spec.ts`、`prepare-runtime-target.spec.ts`、

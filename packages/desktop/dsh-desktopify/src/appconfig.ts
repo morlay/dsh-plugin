@@ -3,6 +3,13 @@ import { join } from "node:path";
 
 export const PROFILE_NAME = "desktop";
 
+/**
+ * profile 自己的 patch 文档名（上游 `PROFILE_PATCH_FILENAME` 的同值）。
+ * 常量放在这里而不是 import 上游：`seed.ts` 会被打进壳产物（`app.asar`），
+ * 那里解析不到 `@deepseek-ai/*`——上游裸引用会让应用启动即 `ERR_MODULE_NOT_FOUND`。
+ */
+export const PROFILE_PATCH_NAME = "cordis.patch.yml";
+
 export interface AppWindowConfig {
   readonly width: number;
   readonly height: number;

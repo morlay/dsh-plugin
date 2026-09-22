@@ -14,8 +14,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { PROFILE_PATCH_FILENAME } from "@deepseek-ai/dsh-app-boot";
-import { PROFILE_NAME } from "./appconfig.ts";
+import { PROFILE_NAME, PROFILE_PATCH_NAME } from "./appconfig.ts";
 
 export const SEED_DIR_NAME = "dsh-home";
 
@@ -69,7 +68,7 @@ export async function ensureSeedProfile(seedDir: string, home: string): Promise<
   }
   // profile 的 patch 文档是用户数据（settings 面板写在那里）：重种换的是装配面，
   // 这一份先读出来、种完再放回去，升级不会把用户的设置带走。
-  const patchPath = join(profileDir, PROFILE_PATCH_FILENAME);
+  const patchPath = join(profileDir, PROFILE_PATCH_NAME);
   const userPatch = await readFile(patchPath, "utf8").catch(() => undefined);
 
   try {

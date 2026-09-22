@@ -1,12 +1,11 @@
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { PROFILE_PATCH_NAME } from "../appconfig.ts";
 import type { DevWebConfig } from "./workspace.ts";
 
 export const DEV_WEB_OVERLAY = "dev-web.cordis.patch.yml";
 
 const CLIENT_ENTRY = ["src", "client", "index.ts"];
-
-const PROFILE_PATCH = "cordis.patch.yml";
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -21,9 +20,9 @@ export async function installProfilePatch(
   profileDir: string,
   workspace: string,
 ): Promise<string | undefined> {
-  const source = join(workspace, PROFILE_PATCH);
+  const source = join(workspace, PROFILE_PATCH_NAME);
   if (!(await pathExists(source))) return undefined;
-  const target = join(profileDir, PROFILE_PATCH);
+  const target = join(profileDir, PROFILE_PATCH_NAME);
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, await readFile(source, "utf8"));
   return target;

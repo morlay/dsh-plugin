@@ -15,6 +15,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
+import { PROFILE_PATCH_NAME } from "../appconfig.ts";
 import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
 import {
   PROFILE_RUNTIME_REPORT_NAME,
@@ -169,7 +170,7 @@ async function linkClosureTopLevel(modulesDir: string): Promise<void> {
 }
 
 function seedEntries(workspace: string, manifest: { files?: string[] }): string[] {
-  const entries = new Set(["package.json", "cordis.patch.yml"]);
+  const entries = new Set(["package.json", PROFILE_PATCH_NAME]);
   for (const file of manifest.files ?? []) {
     const cleaned = file.replaceAll("\\", "/").replace(/^\.\//u, "");
     if (cleaned === "" || cleaned === "." || cleaned.startsWith("/") || cleaned.startsWith("../"))
