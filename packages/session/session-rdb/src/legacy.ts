@@ -6,7 +6,7 @@ import {
 } from "@deepseek-ai/dsh-session";
 import { createSessionFormatCatalogWithChildren } from "@deepseek-ai/dsh-session-format-catalog";
 import type { EventRow, SessionRow } from "./backend.ts";
-import { repairRequestHeaders, rowToMeta, scanRows } from "./log.ts";
+import { normalizeToCurrentShape, repairRequestHeaders, rowToMeta, scanRows } from "./log.ts";
 
 function physicalHeader(row: SessionRow): Record<string, unknown> {
   const common = {
@@ -85,7 +85,10 @@ export function adoptLegacyRows(
 } {
   const { preserved, tornFrom } = scanRows(eventRows, 0);
 
+  // 回退视图要独立扛住 v4 的校验：迁移链（严格）拒绝的那些旧形状在这里按字段归一
+  // （system 消息的 source、tool/result 的消息形状、自造事件类型的 ignorable 信封）。
   repairRequestHeaders(preserved);
+  normalizeToCurrentShape(preserved);
   return {
     meta: { ...rowToMeta(row), version: SESSION_FORMAT_VERSION },
 

@@ -29,6 +29,25 @@
 - **钉住集合单独建表**：归档已经用会话行的 `f_archived_at` 表达，钉住用同类的一列更省一层 join；
   单独的关联表会多一张只有几十行的表与一套级联清理。
 
+**回退视图要独立扛住 v4 的校验（2026-09-22 现场事故）**
+
+迁移链是**严格**的：它拒绝我们当年写过、后来被上游退役的形状——`request/header.header.system`、
+自造事件类型（`session-branch/version`）、`agent/inbox/spliced` 的旧拼接形状。这些会话因此落到回退视图
+（`adoptLegacyRows`），而回退视图当时只做字段级归一（剥 `header.system`、PTC 改名），产物过不了 v4 的
+`adoptSessionEvent` 校验：`session event at seq 7 message must have system-prompt source`。实测 243 个
+会话里 **26 个打不开**。
+
+修法：回退视图补上 v4 形状归一（`normalizeToCurrentShape`）——`system/message` 的 source 归一为
+`system-prompt`、`tool/result` 的消息从 v3 形状（user 角色 + 结果块包在 `content[0]`）抬成 v4 形状
+（`role: 'tool'` + 顶层 `toolCallId`）、`LEGACY_OWN_EVENT_TYPES` 白名单里的事件标 `ignorable: true`。
+白名单只认我们自己写过、上游已删除的类型——**其它未知类型保持 fail loud**（那是「数据来自更新版本的
+harness」的信号，不能用 ignorable 吞掉）。
+
+另一类是**版本号不可信**：写路径曾把回退视图的结果以当前版本号落库，于是库里存在「v4 标记 + 旧代形状」
+的行（本次 7 个）。读路径因此在当前格式分支里、`scanRows` 之后按内容再判一次（`hasLegacyShape`），
+命中就走同一条归一。检测必须在扫干净的边界之内做——撕裂尾部与坏行由 `scanRows` 先丢掉，否则检测本身
+会撞上坏 JSON。
+
 **后果**
 
 - v3 会话在读取时走完整迁移链（v0→v1→v2→v3→v4）；首次写打开仍按既有机制整体重写落库。

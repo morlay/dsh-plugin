@@ -65,6 +65,7 @@ import { COUNTED_EVENT_TYPES, localDayKey, registerSessionUsage } from "./usage.
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
 import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts";
+import { hasLegacyShape } from "./log.ts";
 import { installStorageTakeover } from "./storage-takeover/index.ts";
 
 const DEFAULT_PROJECTION_WRITE_EVERY_EVENTS = 200;
@@ -945,6 +946,21 @@ export class SessionPersistenceRdb extends SessionPersistence {
       }
     }
     const { preserved, tornFrom } = scanRows(eventRows, options.fromSeq ?? 0);
+    // 版本号不完全可信：写路径曾把回退视图的结果以当前版本号落库，于是库里存在「v4 标记 + 旧代形状」
+    // 的行——在扫干净的边界之内再按内容判一次（撕裂尾部与坏行已经被 `scanRows` 丢掉了）。
+    if (hasLegacyShape(preserved)) {
+      const adopted = adoptLegacyRows(row, eventRows);
+      return {
+        meta: adopted.meta,
+        inheritedEventCount: adopted.inheritedEventCount,
+        events: adopted.events,
+        incarnation: row.fIncarnation,
+        revision: row.fRevision,
+        storedCount: eventRows.length,
+        migrated: false,
+        ...(adopted.tornFrom !== undefined ? { tornFrom: adopted.tornFrom } : {}),
+      };
+    }
     return {
       meta,
       inheritedEventCount: row.fSeedLength ?? 0,

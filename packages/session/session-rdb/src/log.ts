@@ -460,6 +460,95 @@ export function renameLegacyPtcEvents(events: SessionEvent[]): void {
   }
 }
 
+/**
+ * 把**旧代（v3 及更早）的消息形状**归一到当前格式（v4）：迁移链（严格）拒绝那些形状时，读路径仍要
+ * 能把它们读出来——只动字段与标记，不改坐标、不改内容。
+ *
+ * 三件事：
+ * - `system/message` 的 source：`{ kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }` → `{ kind: 'system-prompt' }`
+ *   （v4 起 system 消息只认这个 kind）；
+ * - `tool/result` 的消息：v3 是 user 角色、结果块包在 `content[0]`；v4 是 `role: 'tool'` + 顶层
+ *   `toolCallId` + `content` 就是结果块；
+ * - 本仓库自己写过、上游已删除的事件类型（见 `LEGACY_OWN_EVENT_TYPES`）标 `ignorable: true`——v4 的
+ *   校验对未知类型只接受可忽略信封。
+ *
+ * 只认这张白名单：**其它未知类型保持 fail loud**（那是「数据来自更新的 harness」的信号，不能吞掉）。
+ */
+export function normalizeToCurrentShape(events: SessionEvent[]): void {
+  for (const event of events) {
+    const type = (event as { type: string }).type;
+    if (LEGACY_OWN_EVENT_TYPES.has(type)) {
+      (event as { ignorable?: true }).ignorable = true;
+      continue;
+    }
+    if (type === "system/message") {
+      const message = (event.data as unknown as Record<string, unknown>)["message"];
+      liftSystemMessageSource(message);
+      continue;
+    }
+    if (type === "tool/result") {
+      const message = (event.data as unknown as Record<string, unknown>)["message"];
+      liftToolResultMessage(message);
+    }
+  }
+}
+
+function liftSystemMessageSource(message: unknown): void {
+  if (typeof message !== "object" || message === null) return;
+  const record = message as Record<string, unknown>;
+  const source = record["source"];
+  if (typeof source !== "object" || source === null) return;
+  if ((source as Record<string, unknown>)["kind"] !== "plugin") return;
+  record["source"] = { kind: "system-prompt" };
+}
+
+function liftToolResultMessage(message: unknown): void {
+  if (typeof message !== "object" || message === null) return;
+  const record = message as Record<string, unknown>;
+  if (record["role"] === "tool" && typeof record["toolCallId"] === "string") return;
+  const source = record["source"] as Record<string, unknown> | undefined;
+  const block = Array.isArray(record["content"]) ? record["content"][0] : undefined;
+  if (typeof block !== "object" || block === null) return;
+  const lifted = block as Record<string, unknown>;
+  const callId = lifted["toolCallId"] ?? source?.["callId"];
+  if (typeof callId !== "string") return;
+  record["role"] = "tool";
+  record["toolCallId"] = callId;
+  record["content"] = Array.isArray(lifted["content"]) ? lifted["content"] : [];
+  if (typeof lifted["isError"] === "boolean") record["isError"] = lifted["isError"];
+  record["source"] = { kind: "tool", callId };
+}
+
+/**
+ * 本仓库写过、后来连同机制一起删除的事件类型：读的时候标 `ignorable: true` 让校验跳过它们。
+ * 新增历史类型时登记到这里——**不要**用「所有未知类型」代替（那会掩盖更新版本的未知事件）。
+ */
+export const LEGACY_OWN_EVENT_TYPES: ReadonlySet<string> = new Set(["session-branch/version"]);
+
+/** 行里是否还带着旧代消息形状（`session-branch/version` 这类自造事件也算）——写路径曾把回退视图的结果
+ * 以当前版本号落库，所以**版本号不可信**，读之前要按内容判一次。 */
+export function hasLegacyShape(events: readonly SessionEvent[]): boolean {
+  for (const event of events) {
+    const type = (event as { type: string }).type;
+    if (LEGACY_OWN_EVENT_TYPES.has(type)) return true;
+    if (type === "system/message") {
+      const message = (event.data as unknown as Record<string, unknown>)["message"] as
+        | Record<string, unknown>
+        | undefined;
+      const source = message?.["source"] as Record<string, unknown> | undefined;
+      if (source?.["kind"] === "plugin") return true;
+      continue;
+    }
+    if (type === "tool/result") {
+      const message = (event.data as unknown as Record<string, unknown>)["message"] as
+        | Record<string, unknown>
+        | undefined;
+      if (message !== undefined && message["role"] !== "tool") return true;
+    }
+  }
+  return false;
+}
+
 export function repairReadView(events: SessionEvent[]): void {
   repairAssistantSettlement(events);
   repairRequestHeaders(events);
