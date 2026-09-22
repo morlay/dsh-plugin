@@ -4,6 +4,7 @@ import {
   DESKTOP_PIPE_CHUNK_BYTES,
   DesktopHostRequestDecoder,
   DesktopHostResponseDecoder,
+  DesktopStreamBodyDecoder,
   encodeDesktopRequestCancel,
   encodeDesktopRequestData,
   encodeDesktopRequestEnd,
@@ -12,6 +13,8 @@ import {
   encodeDesktopResponseEnd,
   encodeDesktopResponseError,
   encodeDesktopResponseStart,
+  encodeDesktopStreamItem,
+  encodeDesktopStreamOpen,
   isDesktopHostCommand,
   isDesktopHostEvent,
 } from "../wire.ts";
@@ -153,6 +156,44 @@ describe("响应帧", () => {
     const bad = Buffer.from(encodeDesktopResponseEnd(1));
     bad.writeUInt32BE(0xdead_beef, 0);
     expect(() => decodeResponses(bad)).toThrow(/frame marker/);
+  });
+});
+
+describe("桌面流请求体", () => {
+  it("首行定 endpoint 与 payload，后续行是上行项", () => {
+    const decoder = new DesktopStreamBodyDecoder();
+    const text =
+      encodeDesktopStreamOpen("/session.follow", { args: { sessionId: "s1" } }) +
+      encodeDesktopStreamItem({ typed: "hi" }) +
+      encodeDesktopStreamItem(7);
+    expect(decoder.push(Buffer.from(text, "utf8"))).toEqual([
+      { endpoint: "/session.follow", payload: { args: { sessionId: "s1" } } },
+      { typed: "hi" },
+      7,
+    ]);
+    expect(decoder.finish()).toEqual([]);
+  });
+
+  it("行被切进不同字节块、多字节字符被切开也能还原", () => {
+    const decoder = new DesktopStreamBodyDecoder();
+    const bytes = Buffer.from(encodeDesktopStreamItem({ text: "撤回并重试" }), "utf8");
+    // 每 3 字节一块：中文的三字节序列正好被切开。
+    const values: unknown[] = [];
+    for (let offset = 0; offset < bytes.length; offset += 3)
+      values.push(...decoder.push(bytes.subarray(offset, offset + 3)));
+    values.push(...decoder.finish());
+    expect(values).toEqual([{ text: "撤回并重试" }]);
+  });
+
+  it("末行没有换行收尾时在 finish 里交付，空行忽略", () => {
+    const decoder = new DesktopStreamBodyDecoder();
+    expect(decoder.push(Buffer.from('\n{"endpoint":"/x"}', "utf8"))).toEqual([]);
+    expect(decoder.finish()).toEqual([{ endpoint: "/x" }]);
+  });
+
+  it("非法 JSON 报错（宿主据此回 400）", () => {
+    const decoder = new DesktopStreamBodyDecoder();
+    expect(() => decoder.push(Buffer.from("not json\n", "utf8"))).toThrow();
   });
 });
 

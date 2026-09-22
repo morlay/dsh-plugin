@@ -4,11 +4,25 @@
  * 帧头 13 字节：magic(4) | type(1) | streamId(4) | payloadLength(4)。data 帧是原始字节，
  * 其余帧是 JSON 或空载荷。两侧共用这一份实现，避免编解码各写一遍。
  */
+import { StringDecoder } from "node:string_decoder";
 
 export const DESKTOP_HOST_PROTOCOL_VERSION = 1 as const;
 
 /** 桌面流的宿主路径：页面/主进程都用它（两侧共享一份，避免路径写两处）。 */
 export const DESKTOP_STREAM_PATH = "/.dsh/remote-stream";
+
+/**
+ * 桌面流请求体的首行：定下这条逻辑流的 endpoint 与 payload，后续行都是上行项
+ * （客户端 → 宿主；`$events` 这类宿主自己的流被上游释放，不会读到它们）。
+ */
+export function encodeDesktopStreamOpen(endpoint: string, payload: unknown): string {
+  return `${JSON.stringify({ endpoint, payload })}\n`;
+}
+
+/** 桌面流请求体里的一道上行项。 */
+export function encodeDesktopStreamItem(item: unknown): string {
+  return `${JSON.stringify(item)}\n`;
+}
 
 /** 壳写请求帧的管道描述符。 */
 export const DESKTOP_REQUEST_PIPE_FD = 3;
@@ -234,6 +248,54 @@ function parseJson(payload: Buffer, subject: string): unknown {
 
 function assertEmpty(payload: Buffer, subject: string): void {
   if (payload.byteLength !== 0) throw new Error(`dsh desktop: ${subject} frame carried a payload`);
+}
+
+/**
+ * 增量解码桌面流请求体：按行取 JSON，首行是 `open`（endpoint / payload），后续每行是一道上行项。
+ * 字节边界可能切开多字节字符，所以先过 `StringDecoder` 再切行。
+ */
+export class DesktopStreamBodyDecoder {
+  private readonly text = new StringDecoder("utf8");
+  private buffer = "";
+
+  /** 追加字节并返回所有已完整的行的解析值（空行忽略）。 */
+  push(chunk: Uint8Array): unknown[] {
+    this.buffer += this.text.write(Buffer.from(chunk));
+    return this.take(false);
+  }
+
+  /** 请求体结束：交付末行（没有换行收尾时也存在）。 */
+  finish(): unknown[] {
+    this.buffer += this.text.end();
+    return this.take(true);
+  }
+
+  private take(last: boolean): unknown[] {
+    const values: unknown[] = [];
+    for (;;) {
+      const at = this.buffer.indexOf("\n");
+      if (at === -1) {
+        if (!last) return values;
+        const tail = this.buffer;
+        this.buffer = "";
+        if (tail.trim() !== "") values.push(parseStreamLine(tail));
+        return values;
+      }
+      const line = this.buffer.slice(0, at);
+      this.buffer = this.buffer.slice(at + 1);
+      if (line.trim() !== "") values.push(parseStreamLine(line));
+    }
+  }
+}
+
+function parseStreamLine(line: string): unknown {
+  try {
+    return JSON.parse(line) as unknown;
+  } catch (error) {
+    throw new Error(
+      `dsh desktop: stream body line is not JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /** 增量解码 host 侧从请求管道收到的请求帧。 */

@@ -6,6 +6,10 @@ export const DESKTOP_IPC = {
   /** 桌面流载体：页面把 Gateway 的流请求交给主进程，主进程用标准 Request 喂宿主。 */
   streamOpen: "dsh-desktop:stream-open",
   streamCancel: "dsh-desktop:stream-cancel",
+  /** 逻辑流的上行项（客户端 → 宿主），主进程把它们写成宿主请求体的后续行。 */
+  streamUplink: "dsh-desktop:stream-uplink",
+  /** 上行结束：主进程据此结束宿主请求体。 */
+  streamUplinkEnd: "dsh-desktop:stream-uplink-end",
   streamChunk: "dsh-desktop:stream-chunk",
   streamEnd: "dsh-desktop:stream-end",
   streamError: "dsh-desktop:stream-error",

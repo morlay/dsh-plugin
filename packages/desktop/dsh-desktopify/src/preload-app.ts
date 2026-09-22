@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { markDocumentPlatform, markWindowsTitlebar, syncNativeTheme } from "./document-marks.ts";
 import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT } from "./ipc.ts";
+import { createStreamUplink } from "./stream-uplink.ts";
 
 interface StreamChunk {
   readonly id: number;
@@ -23,7 +24,8 @@ if (
   contextBridge.exposeInMainWorld("__DSH_DIRECTORY_PICKER__", {
     pick: () => ipcRenderer.invoke(DESKTOP_IPC.directoryPick) as Promise<string | null>,
   });
-  // 页面 fetch 到自定义协议时请求体不可靠（POST 场景会挂住），桌面流改走主进程。
+  // 页面 fetch 到自定义协议时请求体不可靠（POST 场景会挂住），桌面流改走主进程；
+  // 返回的 send / end 是逻辑流的上行（页面侧 uplink）：主进程把它们写成宿主请求体的后续行。
   contextBridge.exposeInMainWorld("__DSH_DESKTOP_STREAM__", {
     open(
       endpoint: string,
@@ -33,9 +35,21 @@ if (
         end(): void;
         fail(message: string): void;
       },
-    ): () => void {
+    ): {
+      cancel(): void;
+      send(item: unknown): void;
+      end(): void;
+    } {
       let id: number | undefined;
       let cancelled = false;
+      const uplink = createStreamUplink(
+        (streamId, item) => {
+          ipcRenderer.send(DESKTOP_IPC.streamUplink, streamId, item);
+        },
+        (streamId) => {
+          ipcRenderer.send(DESKTOP_IPC.streamUplinkEnd, streamId);
+        },
+      );
       const onChunk = (_event: unknown, value: StreamChunk): void => {
         if (value.id !== id || value.data === undefined) return;
         handlers.chunk(value.data);
@@ -53,17 +67,30 @@ if (
         .invoke(DESKTOP_IPC.streamOpen, endpoint, payload)
         .then((opened: unknown) => {
           id = opened as number;
-          if (cancelled) ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+          if (cancelled) {
+            ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+            return;
+          }
+          uplink.bind(id);
         })
         .catch((error: unknown) => {
           handlers.fail(error instanceof Error ? error.message : String(error));
         });
-      return () => {
-        cancelled = true;
-        ipcRenderer.off(DESKTOP_IPC.streamChunk, onChunk);
-        ipcRenderer.off(DESKTOP_IPC.streamEnd, onEnd);
-        ipcRenderer.off(DESKTOP_IPC.streamError, onError);
-        if (id !== undefined) ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+      return {
+        cancel() {
+          if (cancelled) return;
+          cancelled = true;
+          ipcRenderer.off(DESKTOP_IPC.streamChunk, onChunk);
+          ipcRenderer.off(DESKTOP_IPC.streamEnd, onEnd);
+          ipcRenderer.off(DESKTOP_IPC.streamError, onError);
+          if (id !== undefined) ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+        },
+        send(item) {
+          if (!cancelled) uplink.push(item);
+        },
+        end() {
+          if (!cancelled) uplink.close();
+        },
       };
     },
   });

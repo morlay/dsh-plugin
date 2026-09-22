@@ -2,22 +2,22 @@
  * 桌面形态的传输接管：把 Web 应用的浏览器装配换成「宿主内直连」。
  *
  * 两件事：一是让 `connection` 的浏览器认证在桌面下直接放行（页面由壳独占，没有网络入口）；
- * 二是把客户端的 transport 行注入 index，并注册它访问的 `/.dsh/remote-stream`（NDJSON）。
+ * 二是把客户端的 transport 行注入 index，并注册它访问的 `/.dsh/remote-stream`（请求体首行定
+ * endpoint/payload、后续行是逻辑流的上行项，响应体是下行 NDJSON）。
  */
 
-import { Buffer } from "node:buffer";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { TypertGatewayWireStream } from "@deepseek-ai/dsh-api-gateway";
 import type { Context } from "@deepseek-ai/cordis";
-import { DESKTOP_LAYOUT_FALLBACK_SCRIPT } from "./layout-fallback.ts";
-import { DESKTOP_STREAM_PATH } from "./wire.ts";
+import { DESKTOP_STREAM_PATH, DesktopStreamBodyDecoder } from "./wire.ts";
 
 export { DESKTOP_STREAM_PATH } from "./wire.ts";
 
-/** 注入 index 的 transport 行：声明页面拥有 Host，并给出 Gateway 流载体。 */
+/** 注入 index 的 transport 行：声明页面拥有 Host，并给出 Gateway 流载体（下行流 + 上行项）。 */
 export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
   _desktop:true,
   ownsHost:true,
-  async *openStream(endpoint,payload,signal){
+  async *openStream(endpoint,payload,signal,uplink){
     console.info('[dsh-desktop] openStream',endpoint)
     const carrier=globalThis.__DSH_DESKTOP_STREAM__
     if(carrier===undefined){
@@ -40,7 +40,7 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
       }
       notify()
     }
-    const cancel=carrier.open(endpoint,payload,{
+    const stream=carrier.open(endpoint,payload,{
       chunk(text){append(text)},
       end(){
         if(buffer!==''){queue.push(JSON.parse(buffer));buffer=''}
@@ -52,9 +52,25 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
     // 取消必须结束迭代：abort 只解除 IPC 监听，挂在这一句等待上的消费方再也收不到
     // end 帧；不叫醒它就等于 dispose（RemoteStream 会 await iterator.return）永不落定——
     // 撤回 / 重试后的窗口重建正是卡在这里，页面既收不到新窗口也没有报错。
-    const onAbort=()=>{cancel();ended=true;notify()}
+    const onAbort=()=>{stream.cancel();ended=true;notify()}
     signal.addEventListener('abort',onAbort,{once:true})
     if(signal.aborted)onAbort()
+    // 上行（客户端 → 宿主）是逻辑流的输入项：逐条交给主进程，收尾时结束请求体；
+    // 没有 uplink 的流（如 $events）立刻结束请求体，宿主侧不用等一个永不来的 end。
+    if(uplink===undefined)stream.end()
+    else void (async()=>{
+      try{
+        for await(const item of uplink){
+          // 取消后不再上行：宿主那边这条逻辑流已经作废。
+          if(signal.aborted)break
+          stream.send(item)
+        }
+      }catch(error){
+        console.error('[dsh-desktop] stream uplink failed for',endpoint,error)
+      }finally{
+        stream.end()
+      }
+    })()
     try{
       for(;;){
         while(queue.length>0)yield queue.shift()
@@ -74,9 +90,9 @@ interface BrowserAuthSurface {
 }
 
 interface GatewaySurface {
-  readonly wireStream: {
-    open(endpoint: string, payload: unknown, signal: AbortSignal): Promise<AsyncIterable<unknown>>;
-  };
+  // 直接用上游导出的签名（而不是抄一份）：它变参数时我们编译即报错——0.1.7 把 uplink 加进
+  // `open` 时，抄下来的三参版本正是这样静默失效成运行时 TypeError 的。
+  readonly wireStream: Pick<TypertGatewayWireStream, "open">;
 }
 
 /**
@@ -105,25 +121,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** 读请求体；管道上若迟迟不结束就放弃剩余体（桌面流只有 `$events` 一种，payload 固定）。 */
-async function readJsonBody(request: IncomingMessage, timeoutMs = 500): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const done = Promise.race([
-    (async () => {
-      for await (const chunk of request) chunks.push(Buffer.from(chunk as Buffer));
-    })(),
-    new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs);
-      timer.unref();
-    }),
-  ]);
-  await done;
-  if (timer !== undefined) clearTimeout(timer);
-  request.destroy?.();
-  return chunks.length === 0
-    ? undefined
-    : (JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown);
+/** 桌面流请求体：首行是 open（endpoint / payload），后续每行是一道上行项。 */
+async function* readStreamFrames(request: IncomingMessage): AsyncGenerator<unknown> {
+  const decoder = new DesktopStreamBodyDecoder();
+  for await (const chunk of request) {
+    for (const frame of decoder.push(chunk as Uint8Array)) yield frame;
+  }
+  for (const frame of decoder.finish()) yield frame;
+}
+
+interface StreamOpening {
+  readonly endpoint: string;
+  readonly payload: unknown;
+}
+
+/** 校验首行：它决定这条流开在哪个 endpoint 上。 */
+function parseStreamOpening(value: unknown, subject: string): StreamOpening {
+  if (!isRecord(value) || typeof value.endpoint !== "string")
+    throw new Error(`dsh desktop: invalid stream request ${subject}`);
+  return { endpoint: value.endpoint, payload: value.payload ?? { args: {} } };
 }
 
 // 诊断行：桌面流是连接就绪的唯一来源，出问题时先看宿主 stderr 的这几行。
@@ -149,35 +165,27 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
       response.end("gateway unavailable");
       return;
     }
-    let parsed: unknown;
-    try {
-      parsed = await readJsonBody(request);
-    } catch (error) {
-      reportStreamFailure("stream body is not JSON", error);
-      response.writeHead(400);
-      response.end("body is not JSON");
-      return;
-    }
     const endpointFromQuery = new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get(
       "endpoint",
     );
-    if (!isRecord(parsed) && endpointFromQuery === null) {
-      reportStreamFailure("empty stream request", String(request.url));
+    // 首行定流，其余行是上行项：`frames` 剩下的部分就是交给 Gateway 的 uplink。
+    const frames = readStreamFrames(request);
+    let opening: StreamOpening;
+    try {
+      const first = await frames.next();
+      opening = first.done
+        ? parseStreamOpening(
+            endpointFromQuery === null ? undefined : { endpoint: endpointFromQuery },
+            String(request.url),
+          )
+        : parseStreamOpening(first.value, String(request.url));
+    } catch (error) {
+      reportStreamFailure("stream body is not a valid opener", error);
       response.writeHead(400);
       response.end("invalid stream request");
       return;
     }
-    // 请求体与查询参数补出的 body 在这里归一成同一类型，后面的读写不必再猜 unknown。
-    const body: Record<string, unknown> = isRecord(parsed)
-      ? parsed
-      : { endpoint: endpointFromQuery, payload: { args: {} } };
-    const endpoint = body.endpoint;
-    if (typeof endpoint !== "string") {
-      reportStreamFailure("invalid stream request", JSON.stringify(body).slice(0, 200));
-      response.writeHead(400);
-      response.end("invalid stream request");
-      return;
-    }
+    const endpoint = opening.endpoint;
     const abort = new AbortController();
     const cancel = (): void => {
       abort.abort();
@@ -186,7 +194,15 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
     response.once("close", cancel);
     try {
       console.error(`[dsh-desktop] stream opening ${endpoint}`);
-      const values = await gateway.wireStream.open(endpoint, body.payload, abort.signal);
+      // 上游 0.1.7 的契约是五参：uplink 是「客户端 → 宿主」的逻辑流输入，$events 那类
+      // Gateway 自己的流会被上游立刻释放（releaseUplink），不读这里的项。
+      const values = await gateway.wireStream.open(
+        endpoint,
+        opening.payload,
+        frames,
+        undefined,
+        abort.signal,
+      );
       console.error(`[dsh-desktop] stream opened ${endpoint}`);
       response.writeHead(200, {
         "content-type": "application/x-ndjson",
@@ -210,7 +226,6 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
 export function installDesktopTransport(ctx: Context): void {
   ctx.on("webserver/index-inject", (table) => {
     table.push({ kind: "script", placement: "head", text: DESKTOP_TRANSPORT_SCRIPT });
-    table.push({ kind: "script", placement: "head", text: DESKTOP_LAYOUT_FALLBACK_SCRIPT });
   });
   ctx.effect(
     () =>

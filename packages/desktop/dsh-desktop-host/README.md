@@ -35,7 +35,8 @@
 3. 接管浏览器认证：页面由壳独占、没有网络入口，`connection` 的 `requestRejection` 与 `authorizeIndex`
    被改写为放行（理由与代价见[债务 桌面宿主覆写 connection 认证方法](../dsh-desktopify/.agents/debts/20260920-桌面宿主覆写connection认证方法.md)）；
 4. 注入客户端 transport（`__DSH_TRANSPORT__ = { ownsHost, openStream }`）并注册 `/.dsh/remote-stream`
-   （POST NDJSON → `typertGateway.wireStream.open`）。
+   （双向 NDJSON：请求体首行定 endpoint/payload、后续行是上行项，响应体是下行帧 →
+   `typertGateway.wireStream.open`）。
 
 ## 依赖边界
 

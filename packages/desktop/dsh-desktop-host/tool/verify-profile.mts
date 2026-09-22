@@ -141,19 +141,22 @@ const withPath = (path: string): string => {
 const rowsResponse = await fetch(withPath("/api/session.rows"), {
   method: "POST",
   headers: { "content-type": "application/json", ...cookieHeader },
-  body: "{}",
+  body: JSON.stringify({ page: 1, pageSize: 200, includeSubagents: true }),
 });
 const rowsBody = (await rowsResponse.json().catch(() => ({}))) as {
   items?: { sessionId?: string; title?: string | null; archived?: boolean }[];
+  total?: number;
 };
 const sessionRows = rowsBody.items ?? [];
 const rowsArchived = sessionRows.filter((row) => row.archived === true);
 console.log(
-  `verify-profile: session/rows — ${String(rowsResponse.status)} items=${String(sessionRows.length)} archived=${String(rowsArchived.length)}`,
+  `verify-profile: session/rows — ${String(rowsResponse.status)} items=${String(sessionRows.length)} total=${String(rowsBody.total ?? -1)} archivedOnPage=${String(rowsArchived.length)}`,
 );
 if (rowsResponse.status !== 200) {
   failures.push(`POST /api/session.rows failed with ${String(rowsResponse.status)}`);
-} else if (archived.size > 0 && rowsArchived.length !== archived.size) {
+} else if ((rowsBody.total ?? 0) < sessionRows.length) {
+  failures.push("session/rows reported a total smaller than the page it returned");
+} else if (sessionRows.length === Number(rowsBody.total) && archived.size > 0 && rowsArchived.length !== archived.size) {
   failures.push(
     `session/rows archived rows ${String(rowsArchived.length)} do not match the registry's ${String(archived.size)}`,
   );

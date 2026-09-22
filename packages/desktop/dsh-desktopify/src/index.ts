@@ -15,7 +15,11 @@ import {
   workspaceWithOverrides,
 } from "./profile-project.ts";
 import { SEED_RUNTIME_DIR_NAME, ensureSeedProfile } from "./seed.ts";
-import { DESKTOP_STREAM_PATH } from "@morlay/dsh-desktop-host/wire";
+import {
+  DESKTOP_STREAM_PATH,
+  encodeDesktopStreamItem,
+  encodeDesktopStreamOpen,
+} from "@morlay/dsh-desktop-host/wire";
 import { shellWrappedSpawn } from "./shell-env.ts";
 
 let focusPrimaryWindow = (): void => {};
@@ -344,10 +348,27 @@ async function main(): Promise<void> {
 
   installDesktopDirectoryPicker(() => mainWindow, SCHEME);
 
-  // 桌面流载体：主进程自己构造 Request（body 是普通字符串流，宿主能正常读完），
+  // 桌面流载体：主进程自己构造 Request（body 是流——首行定 endpoint/payload，后续行是上行项），
   // 把响应体逐块推回页面——页面 fetch 到自定义协议的 POST body 在 Chromium 上不可靠。
   let nextStreamId = 1;
-  const activeStreams = new Map<number, AbortController>();
+  const streamEncoder = new TextEncoder();
+  interface ActiveStream {
+    readonly abort: AbortController;
+    /** 宿主请求体的写端；上行结束或取消后置空。 */
+    uplink: ReadableStreamDefaultController<Uint8Array> | undefined;
+  }
+  const activeStreams = new Map<number, ActiveStream>();
+  /** 结束宿主请求体：已取消/已结束的流上 close 会抛，这里只当收尾。 */
+  const closeStreamUplink = (stream: ActiveStream): void => {
+    const uplink = stream.uplink;
+    if (uplink === undefined) return;
+    stream.uplink = undefined;
+    try {
+      uplink.close();
+    } catch (error) {
+      if (!app.isPackaged) console.error("[dsh-shell] stream uplink close failed", error);
+    }
+  };
   ipcMain.handle(DESKTOP_IPC.streamOpen, async (event, endpoint: unknown, payload: unknown) => {
     assertDesktopSender(event, SCHEME, ["app"]);
     if (typeof endpoint !== "string") throw new Error("dsh desktop: stream endpoint must be text");
@@ -356,13 +377,24 @@ async function main(): Promise<void> {
     if (!app.isPackaged) console.error(`[dsh-shell] stream open ${endpoint}`);
     const id = nextStreamId++;
     const abort = new AbortController();
-    activeStreams.set(id, abort);
+    const stream: ActiveStream = { abort, uplink: undefined };
+    const body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        stream.uplink = controller;
+        controller.enqueue(streamEncoder.encode(encodeDesktopStreamOpen(endpoint, payload)));
+      },
+      cancel: () => {
+        stream.uplink = undefined;
+      },
+    });
+    activeStreams.set(id, stream);
     const request = new Request(`http://127.0.0.1${DESKTOP_STREAM_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ endpoint, payload }),
+      body,
       signal: abort.signal,
-    });
+      duplex: "half",
+    } as RequestInit);
     void (async () => {
       try {
         const response = await active.fetch(request);
@@ -384,6 +416,8 @@ async function main(): Promise<void> {
           message: error instanceof Error ? error.message : String(error),
         });
       } finally {
+        // 流结束（或出错）时上行若还开着就收尾：宿主那边不必等一个不会再来的 end。
+        closeStreamUplink(stream);
         activeStreams.delete(id);
       }
     })();
@@ -392,7 +426,26 @@ async function main(): Promise<void> {
   ipcMain.on(DESKTOP_IPC.streamCancel, (event, id: unknown) => {
     if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
     if (typeof id !== "number") return;
-    activeStreams.get(id)?.abort();
+    activeStreams.get(id)?.abort.abort();
+  });
+  // 上行项与上行结束都写成宿主请求体的行：请求体的 end 让宿主侧的 uplink 迭代结束。
+  ipcMain.on(DESKTOP_IPC.streamUplink, (event, id: unknown, item: unknown) => {
+    if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
+    if (typeof id !== "number") return;
+    const uplink = activeStreams.get(id)?.uplink;
+    if (uplink === undefined) return;
+    try {
+      uplink.enqueue(streamEncoder.encode(encodeDesktopStreamItem(item)));
+    } catch (error) {
+      if (!app.isPackaged) console.error("[dsh-shell] stream uplink rejected", error);
+    }
+  });
+  ipcMain.on(DESKTOP_IPC.streamUplinkEnd, (event, id: unknown) => {
+    if (mainWindow === undefined || event.sender !== mainWindow.webContents) return;
+    if (typeof id !== "number") return;
+    const stream = activeStreams.get(id);
+    if (stream === undefined) return;
+    closeStreamUplink(stream);
   });
 
   // 只有主窗口可以把自己的配色同步给原生材质。
