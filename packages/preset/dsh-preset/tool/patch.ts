@@ -118,8 +118,10 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
     ],
   },
   {
-    // 注入通道：它发布 `ctx.contextAssembler`，而 preset 里的行不允许发布进程全局服务
-    // （上游 agent-presets 会拒绝装载），所以它必须住 host 层。
+    // 注入通道：它发布进程全局服务 `ctx.contextAssembler`，未隔离就放进 preset 会被上游拒绝
+    // （`Preset services require isolate realms`）。进 preset 的唯一一条路是把它关进 `isolate` 组，
+    // 那样服务只在 preset/agent scope 可见——与它「注入的唯一通道、部署级一份」的定位相反，
+    // 所以住 host 层：preset 里的注入方沿 scope 链向上解析即可拿到。
     insert: [{ id: "context-assembler", name: "@morlay/dsh-context-assembler" }],
   },
   {
