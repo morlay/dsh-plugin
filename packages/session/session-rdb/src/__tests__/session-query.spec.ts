@@ -53,6 +53,22 @@ describe("session-rdb session query replacement", () => {
     expect(byId.get("persisted")).toMatchObject({ live: false, persisted: true });
   });
 
+  it("excludes archived sessions from the official list", async () => {
+    const { ctx, dispose } = await harness();
+    disposals.push(dispose);
+    const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
+    await persistence.createAndAppend(meta("kept"), oneTurnLog());
+    await persistence.createAndAppend(meta("archived"), oneTurnLog());
+    // 归档集合来自 workspace registry（这里最小替身：服务面只有 archivedSessionIds）。
+    ctx.provide("workspaceRegistry", {
+      archivedSessionIds: [SessionId("archived")],
+    } as never);
+
+    const ids = (await ctx.sessionQuery.listSessions()).map((record) => String(record.header.id));
+
+    expect(ids).toEqual(["kept"]);
+  });
+
   it("reads exact events and titles through the shared base engine", async () => {
     const { ctx, dispose } = await harness();
     disposals.push(dispose);

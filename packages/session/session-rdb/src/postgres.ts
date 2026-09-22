@@ -13,6 +13,7 @@ import {
   type EventCountBucket,
   type EventInsert,
   type EventRow,
+  type SessionListRowRecord,
   type SessionRow,
 } from "./backend.ts";
 import { toPostgresSchema } from "./adapters/index.ts";
@@ -598,6 +599,42 @@ export class PostgresBackend implements Backend {
   }
 
   /** 用量聚合：与 SQLite 侧同形，读 `t_event_usage`，数值列回来是字符串。 */
+  async listSessionRows(): Promise<SessionListRowRecord[]> {
+    const tSessions = this.tables["t_sessions"];
+    const tSessionEvents = this.tables["t_session_events"];
+    const tEvents = this.tables["t_events"];
+    const result = (await this.db.execute(sql`
+      SELECT s.f_session_id AS session_id,
+             s.f_title AS title,
+             s.f_origin AS origin,
+             s.f_cwd AS cwd,
+             s.f_created_at AS created_at,
+             (s.f_archived_at IS NOT NULL) AS archived,
+             GREATEST(
+               s.f_created_at,
+               COALESCE(
+                 (SELECT MAX(e.f_created_at)
+                    FROM ${tSessionEvents} se
+                    JOIN ${tEvents} e ON e.f_event_id = se.f_event_id
+                   WHERE se.f_session_id = s.f_session_id),
+                 s.f_created_at
+               )
+             ) AS updated_at
+        FROM ${tSessions} s
+       ORDER BY updated_at DESC
+    `)) as unknown as { rows: Array<Record<string, unknown>> };
+    return result.rows.map((row) => ({
+      sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
+      title: typeof row["title"] === "string" ? row["title"] : null,
+      origin: typeof row["origin"] === "string" ? row["origin"] : null,
+      cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
+      createdAt: numeric(row["created_at"]),
+      updatedAt: numeric(row["updated_at"]),
+      archived: row["archived"] === true,
+      subagent: row["origin"] === "subagent",
+    }));
+  }
+
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
     const usageSince = sinceMs === undefined ? sql`` : sql` AND u.f_created_at >= ${sinceMs}`;
     // 活动计数走派生表的「本地日」列（与桶的本地日口径一致）。
@@ -703,7 +740,7 @@ export class PostgresBackend implements Backend {
         ...tokenTotalsOf(row),
       })),
       sessions: tokenSessions.rows.map((row) => ({
-        sessionId: String(row["session_id"]),
+        sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
         title: text(row["title"]),
         subagent: row["subagent"] === true,
         archived: row["archived"] === true,

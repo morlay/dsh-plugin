@@ -60,6 +60,7 @@ import { registerSessionImport } from "./import.ts";
 import { registerSessionDeletion } from "./deletion.ts";
 import { registerSessionExport } from "./export.ts";
 import { registerSessionGc } from "./gc.ts";
+import { registerSessionRows } from "./rows.ts";
 import { COUNTED_EVENT_TYPES, localDayKey, registerSessionUsage } from "./usage.ts";
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
@@ -70,6 +71,8 @@ const DEFAULT_PROJECTION_WRITE_EVERY_EVENTS = 200;
 const DEFAULT_PROJECTION_WRITE_INTERVAL_MS = 5000;
 
 export { SCHEMA_VERSION } from "./schema.ts";
+export { SESSION_ROWS_PATH } from "./rows.ts";
+export type { SessionRowsItem, SessionRowsValue } from "./rows.ts";
 export { SessionBranchRdb, SessionBranchRdbProvider, locateTurnEnd } from "./branch.ts";
 
 export interface SessionPersistenceRdbInternals {
@@ -546,6 +549,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     registerSessionGc(this.ctx, this);
 
     registerSessionUsage(this.ctx, this);
+
+    registerSessionRows(this.ctx, this.backend);
 
     installStorageTakeover(this.ctx, {
       repository: this.backend.storage,

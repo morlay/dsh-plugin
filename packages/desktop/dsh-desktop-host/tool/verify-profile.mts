@@ -10,7 +10,9 @@
  * 2. **`session/list` 是否带出会话标题**：标题走投影缓存（`projections.values.title`）——2026-09-22 就是
  *    这里漏跟了上游契约（0.1.7 把 `cachedSnapshot` / `cachedPredecessorTitle` 的 `inheritedEventCount`
  *    参数去掉了，我们还按旧签名匹配），结果列表里所有投影值（title / blank / tokenUsage）全空。
- * 3. **`/session-editor` 路由是否真的注册上了**：`SessionEditor` 构造时 `webServer` 可能还没激活，
+ * 3. **两条会话列表的路是否分开了**：官方 `session/list` 按部署策略排除已归档；管理面自己的
+ *    `/api/session.rows` 给完整语料（含归档、带标题）。
+ * 4. **`/session-editor` 路由是否真的注册上了**：`SessionEditor` 构造时 `webServer` 可能还没激活，
  *    而一次性 `ctx.get` 不会重试 → 路由缺失 → 请求落到 `frontend-static` 的 fallback，非 GET/HEAD
  *    一律 405（编辑撤回 / 重试的症状）。单测用假装配直接 provide `webServer`，所以永远注册成功，
  *    掩盖了这个顺序问题。
@@ -81,7 +83,12 @@ for (const row of rows) {
 const controller = (
   ctx as unknown as {
     sessionController?: {
-      list(req: unknown, signal: AbortSignal): Promise<{ items: { projections?: { values?: { title?: string } } }[] }>;
+      list(
+        req: unknown,
+        signal: AbortSignal,
+      ): Promise<{
+        items: { sessionId?: string; projections?: { values?: { title?: string } } }[];
+      }>;
     };
   }
 ).sessionController;
@@ -96,10 +103,63 @@ if ((list?.items.length ?? 0) > 0 && titled.length === 0) {
   );
 }
 
+const workspaceRegistry = (
+  ctx as unknown as { workspaceRegistry?: { archivedSessionIds?: readonly string[] } }
+).workspaceRegistry;
+const archived = new Set<string>(workspaceRegistry?.archivedSessionIds ?? []);
+const listedIds = new Set((list?.items ?? []).map((item) => String(item.sessionId)));
+const leakedArchived = [...archived].filter((id) => listedIds.has(id));
+console.log(
+  `verify-profile: session/list 归档 — registry=${String(archived.size)} leaked=${String(leakedArchived.length)}`,
+);
+if (leakedArchived.length > 0) {
+  failures.push(
+    `session/list returned ${String(leakedArchived.length)} archived session(s); the official list must exclude them`,
+  );
+}
+
 const connection = (ctx as unknown as { connection?: { authenticatedUrl(base: string): string } })
   .connection;
 const base = connection?.authenticatedUrl(`http://127.0.0.1:${String(PORT)}`) ?? `http://127.0.0.1:${String(PORT)}`;
-const response = await fetch(new URL("/session-editor", base), {
+function withTokenPath(path: string): string {
+  const url = new URL(base);
+  url.pathname = path;
+  return url.toString();
+}
+// `/api/*` 的认证是 authority-bound 浏览器 cookie：先用 token URL 换一次 cookie，再带着它发请求。
+const cookie = await fetch(withTokenPath("/"), { redirect: "manual" })
+  .then((res) => res.headers.get("set-cookie"))
+  .catch(() => null);
+const cookieHeader: Record<string, string> = cookie === null || cookie === undefined ? {} : { cookie: cookie.split(";")[0]! };
+
+/** 保留 `authenticatedUrl` 带来的 token query，只换 pathname（`new URL(path, base)` 会把 query 丢掉）。 */
+const withPath = (path: string): string => {
+  const url = new URL(base);
+  url.pathname = path;
+  return url.toString();
+};
+const rowsResponse = await fetch(withPath("/api/session.rows"), {
+  method: "POST",
+  headers: { "content-type": "application/json", ...cookieHeader },
+  body: "{}",
+});
+const rowsBody = (await rowsResponse.json().catch(() => ({}))) as {
+  items?: { sessionId?: string; title?: string | null; archived?: boolean }[];
+};
+const sessionRows = rowsBody.items ?? [];
+const rowsArchived = sessionRows.filter((row) => row.archived === true);
+console.log(
+  `verify-profile: session/rows — ${String(rowsResponse.status)} items=${String(sessionRows.length)} archived=${String(rowsArchived.length)}`,
+);
+if (rowsResponse.status !== 200) {
+  failures.push(`POST /api/session.rows failed with ${String(rowsResponse.status)}`);
+} else if (archived.size > 0 && rowsArchived.length !== archived.size) {
+  failures.push(
+    `session/rows archived rows ${String(rowsArchived.length)} do not match the registry's ${String(archived.size)}`,
+  );
+}
+
+const response = await fetch(withPath("/session-editor"), {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ operation: "not-a-real-op", sessionId: "x" }),

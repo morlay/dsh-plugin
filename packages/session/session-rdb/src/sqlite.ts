@@ -14,6 +14,7 @@ import {
   type EventCountBucket,
   type EventInsert,
   type EventRow,
+  type SessionListRowRecord,
   type SessionRow,
 } from "./backend.ts";
 import { sessionConflictRow, sessionInsertRow, titleOfEventData, usageRowOf } from "./log.ts";
@@ -692,6 +693,41 @@ export class SqliteBackend implements Backend {
    * 沿 `t_events` 的事件类型数——两者限定在**有 token 用量的会话**里，时间范围各自按自己的
    * `f_created_at`（同一时刻写入，口径一致）。
    */
+  async listSessionRows(): Promise<SessionListRowRecord[]> {
+    const rows = this.db.$client
+      .prepare(
+        `SELECT s.f_session_id AS session_id,
+                s.f_title AS title,
+                s.f_origin AS origin,
+                s.f_cwd AS cwd,
+                s.f_created_at AS created_at,
+                (s.f_archived_at IS NOT NULL) AS archived,
+                MAX(
+                  s.f_created_at,
+                  COALESCE(
+                    (SELECT MAX(e.f_created_at)
+                       FROM t_session_events se
+                       JOIN t_events e ON e.f_event_id = se.f_event_id
+                      WHERE se.f_session_id = s.f_session_id),
+                    s.f_created_at
+                  )
+                ) AS updated_at
+           FROM t_sessions s
+          ORDER BY updated_at DESC`,
+      )
+      .all() as unknown as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
+      title: typeof row["title"] === "string" ? row["title"] : null,
+      origin: typeof row["origin"] === "string" ? row["origin"] : null,
+      cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
+      createdAt: Number(row["created_at"]),
+      updatedAt: Number(row["updated_at"]),
+      archived: row["archived"] === 1 || row["archived"] === true,
+      subagent: row["origin"] === "subagent",
+    }));
+  }
+
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
     const usageSince = sinceMs === undefined ? "" : " AND u.f_created_at >= ?";
     const params = sinceMs === undefined ? [] : [sinceMs];

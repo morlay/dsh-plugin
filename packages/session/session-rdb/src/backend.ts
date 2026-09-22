@@ -100,6 +100,24 @@ export interface BackendTx {
   deleteSessions(ids: SessionId[]): Promise<number>;
 }
 
+/**
+ * 「会话行」列表项：管理面自己的列表用（完整语料，含归档）+ 标题 + 最后活动时间。
+ *
+ * 与官方列表（`session/list` → `ctx.sessionQuery.listSessions`）的区别：那条按部署策略**默认排除归档**，
+ * 这里给的是完整集合，标题也直接带出来（官方那条的标题走投影缓存）。
+ */
+export interface SessionListRowRecord {
+  sessionId: string;
+  title: string | null;
+  origin: string | null;
+  cwd: string | null;
+  createdAt: number;
+  /** 该会话最后一个事件的时间（没有事件时回落 `createdAt`）。 */
+  updatedAt: number;
+  archived: boolean;
+  subagent: boolean;
+}
+
 /** 活动计数的一个桶：本地日 + 事件类型 + 计数。 */
 export interface EventCountBucket {
   day: string;
@@ -144,6 +162,9 @@ export interface Backend {
    * @param sinceMs - 只算该时刻（含）之后的事件行；省略即全量。
    */
   usageReport(sinceMs?: number): Promise<UsageAggregate>;
+
+  /** 管理面的会话行列表：完整语料（含归档）+ 标题 + 最后活动时间，按活动倒序。 */
+  listSessionRows(): Promise<SessionListRowRecord[]>;
 
   /**
    * 活动计数**旁路累加**（派生表 `t_event_counts`，不参与写事务、失败可丢——表可销毁重建）：
