@@ -12,8 +12,8 @@ export interface PresetSource {
 
 export const PRESET_SOURCES: readonly PresetSource[] = [
   {
-    id: "standard",
-    name: "标准模式",
+    id: "coding",
+    name: "编码模式",
     description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     order: 1,
     rows: STANDARD_ROWS,

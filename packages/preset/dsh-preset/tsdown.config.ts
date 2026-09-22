@@ -1,8 +1,8 @@
 import { defineCordisPluginConfig } from "@local/devkit";
 import { defineConfig } from "tsdown";
-import { presetHooks } from "./tool/generate-presets.ts";
+import { patchHooks } from "./tool/patch.ts";
 
 export default defineConfig(async () => ({
   ...(await defineCordisPluginConfig()),
-  hooks: presetHooks(),
+  hooks: patchHooks(),
 }));

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PRESET_SOURCES } from "../../tool/generate-presets.ts";
+import { PRESET_SOURCES } from "../../tool/presets/index.ts";
 import { PATCH_ROWS } from "../../tool/patch.ts";
 
 interface Row {
@@ -30,7 +30,7 @@ async function sourceOf(pkg: string): Promise<string> {
   );
 }
 
-describe("装配有效性（上游 agent-presets 会拒绝装载的那几类）", () => {
+describe("装配有效性（上游 agent-preset-registry 会拒绝装载的那几类）", () => {
   it("preset 里的行不发布进程全局服务：发布服务的行只能在 host 层", async () => {
     // 上游的判据是 leakedServices(agentCtx, fiber)：preset 子树里新出现的全局服务一律拒绝，
     // 报 "row(s) published process-global service(s) […]"。这里做它的静态等价物——

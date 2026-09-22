@@ -1,19 +1,20 @@
+import { writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
-import { jsExpr } from "./presets/js-expr.ts";
+import { PRESET_SOURCES, type PresetSource } from "./presets/index.ts";
 
 /**
  * bundle patch 的行清单：**只放全局通用的装配**（与具体模式无关的东西）。
  *
- * 与模式相关的行（工具、注入、用法分组、persona）在 [presets/](./presets/index.ts) 里，由产物给出——
- * patch 作用于全部 preset，放进去就等于强迫 chat 也装。
+ * 与模式相关的行（工具、注入、用法分组、persona）在 [presets/](./presets/index.ts) 里，由
+ * `@deepseek-ai/dsh-agent-preset` 行的 `config.plugins` 承载——patch 作用于全部 preset，
+ * 放进去就等于强迫 chat 也装。
  *
  * 这里是生成物的真源：`cordis.patch.yml` 由 `renderPatch()` 写出，改动请改这份 TS，
  * 一致性由 `patch.spec.ts` 的断言兜住。
  */
-
-/** 产物里的 `!!js` 表达式在 `with (ctx) { eval(expr) }` 里求值（`ctx.baseUrl` = profile 根）。 */
-declare const ctx: { readonly baseUrl: string };
 
 /** 沙箱规则：`rw <path>` 追加工作区之外的可写根，`-- <pattern>` 拒绝访问（读 + 写）。 */
 const SANDBOX_ACCESS = [
@@ -26,6 +27,31 @@ const SANDBOX_ACCESS = [
   "-- **/*.pem",
 ].join("\n");
 
+/**
+ * 一个 preset 就是一行的 `config.plugins`（上游 `@deepseek-ai/dsh-agent-preset` 的声明式形态）：
+ * 注册表不扫目录、不收路径，所以我们的模式只能以行出现在这份 patch 里。
+ */
+function presetRow(source: PresetSource): Record<string, unknown> {
+  return {
+    id: `preset-${source.id}`,
+    name: "@deepseek-ai/dsh-agent-preset",
+    config: {
+      id: source.id,
+      name: source.name,
+      description: source.description,
+      order: source.order,
+      plugins: [...source.rows],
+    },
+  };
+}
+
+/**
+ * 官方 shipped preset 的行 id（`@deepseek-ai/dsh-agent-preset`，来自 dsh-web-app bundle 的
+ * `presets/*.patch.yml`）。注册表不再有 `includeShippedRoot` 之类的旋钮，只有按 id 禁用——
+ * 不禁用它们就会与我们的模式一起出现在选择器里。
+ */
+const SHIPPED_PRESET_ROWS = ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"];
+
 export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   {
     id: "system-prompt",
@@ -33,32 +59,13 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
     config: { includeHarnessIdentity: false, includeRuntimeContext: false },
   },
   {
-    id: "agent-presets",
-    config: {
-      default: "standard",
-      includeShippedRoot: false,
-      roots: [
-        {
-          // 产物随包分发，位置只能在运行期解析（`with (ctx) { eval(expr) }` 里只有全局对象稳定可用）。
-          path: jsExpr(() =>
-            process
-              .getBuiltinModule("node:path")
-              .join(
-                process
-                  .getBuiltinModule("node:path")
-                  .dirname(
-                    process
-                      .getBuiltinModule("node:module")
-                      .createRequire(ctx.baseUrl)
-                      .resolve("@morlay/dsh-preset/package.json"),
-                  ),
-                "dist/presets",
-              ),
-          ),
-          trust: "system",
-        },
-      ],
-    },
+    // 注册表只认 `default`：模式定义是别处的行（下面那批 preset 行），它自己既不扫描也不收路径。
+    id: "agent-preset-registry",
+    config: { default: PRESET_SOURCES[0]!.id },
+  },
+  ...SHIPPED_PRESET_ROWS.map((id) => ({ id, disabled: true })),
+  {
+    insert: PRESET_SOURCES.map(presetRow),
   },
   {
     id: "llm-pi-ai",
@@ -146,4 +153,23 @@ export function renderPatch(): string {
     quotingType: '"',
   });
   return `${HEADER}${body}`;
+}
+
+/** 把 bundle patch 落到包根：它是发布产物的一部分（`files` 里有它，装配按出口解析）。 */
+export async function generatePatch(): Promise<string> {
+  const path = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), PATCH_FILE);
+  await writeFile(path, renderPatch());
+  return path;
+}
+
+/**
+ * tsdown 的 `build:done` 钩子：每次构建重写 `cordis.patch.yml`，入库的那份因此永远等于
+ * `PATCH_ROWS`（`patch.spec.ts` 比对文件与 `renderPatch()`）。
+ */
+export function patchHooks(): { "build:done": () => Promise<void> } {
+  return {
+    "build:done": async () => {
+      process.stdout.write(`generated ${await generatePatch()}\n`);
+    },
+  };
 }

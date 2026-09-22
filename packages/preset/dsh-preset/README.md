@@ -1,7 +1,7 @@
 # @morlay/dsh-preset
 
-个人用 dsh profile bundle。包的实体是 `cordis.patch.yml` 与构建产出的 `dist/presets/`（bundle patch 由
-`dsh.bundle.patch` 声明、profile 组合器经该字段解析）。
+个人用 dsh profile bundle。包的实体就是 `cordis.patch.yml`（bundle patch 由 `dsh.bundle.patch` 声明、
+profile 组合器经该字段解析）：两种模式在这里各是一行 `@deepseek-ai/dsh-agent-preset`。
 
 设计与取舍（禁用官方 roster 的理由、persona / reminder 的提示词分层、生成器机制、patch 层级与放置）见
 [设计 预设生成与装配](./.agents/designs/20260917-预设生成与装配.md)。
@@ -11,22 +11,19 @@
 | 文件                       | 作用                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cordis.patch.yml`         | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：注册本包 preset 为默认、声明个人 `llm-pi-ai` route（ollama 路由的图片上限按 llm-deepseek 默认对齐）、覆盖沙箱规则、按 id 禁用官方 `agent-instructions` / `tool-skill` / `sandbox` / `fs-sandbox` / `fs-observation-policy` / `office-to-pdf` / `subagent-model-selection-settings` 行、插入 `sandbox-local` / `context-assembler` / `web-search-ollama` 行、把 `web` 行的 `searchProvider` 切到 `ollama` |
-| `tool/generate-presets.ts` | 生成真源：从上游模块与 `tool/presets/*.ts` 清单渲染出 `dist/presets`，并由 tsdown `build:done` 一并重写 `cordis.patch.yml`（两者都不要手改）                                                                                                                                                                                                                                                                                                                              |
-| `dist/presets/`            | 构建产物：`standard` 与 `chat` 两个模式（由各自的清单渲染：工具行、注入行、persona 都在产物里；`chat` 用 `context-scope` 把工具收成三个并关掉全部 instruction）                                                                                                                                                                                                                                                                                                           |
+| `tool/patch.ts`            | patch 真源，同时是生成入口：`renderPatch()` 渲染行清单，tsdown 的 `build:done` 钩子（`patchHooks()`）把它写回 `cordis.patch.yml`——那个文件不要手改                                                                                                                                                                                                                                                                                                                         |
+| `tool/presets/*.ts`        | 两个模式的装配行清单（工具行、注入行、persona；`chat` 用 `context-scope` 把工具收成三个并关掉全部 instruction），由 `tool/patch.ts` 渲染进对应 preset 行的 `config.plugins`                                                                                                                                                                                                                                                                                                 |
 
 ## 装配
 
-`agent-presets` 行把 `roots` 指向本包的 `dist/presets/`（`default: standard`、
-`includeShippedRoot: false`、`trust: system`）。该目录随包分发，位置只能在运行期解析，
-因此用 `!!js` 表达式从 profile 的 `baseUrl` 起 `createRequire` 解析包路径——表达式本体
-与行内容见 `cordis.patch.yml`，机制与理由见
-[设计 预设生成与装配](./.agents/designs/20260917-预设生成与装配.md)。
+装配全在本包的 patch 里，没有目录这一层：`agent-preset-registry` 行的 `default` 指向 `coding`，
+`preset-coding` / `preset-chat` 两行（`@deepseek-ai/dsh-agent-preset`）给出各模式的 `config.plugins`，
+官方 shipped 那四行（`preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis`）按 id 禁用。
 
-**桌面形态**：桌面宿主把 `agent-presets.roots` 固定为 dsh 包内的 `config/agent-presets`
-挂载点（`system` root），上面的 `!!js` roots 在桌面 profile 里被覆盖。app 工作区改用
-`dsh.desktop.agentPresets` 声明本包的 `dist/presets`，由
-[dsh-desktopify](../../desktop/dsh-desktopify/README.md) 在 dev 项目与种子 profile 里把内容
-物化到该挂载点。
+**三种形态一致**：dev / web / 桌面读的是同一份 patch——上游 0.1.7 起 registry 不扫目录、不收路径，
+桌面专属的目录物化（`dsh.configTrees` + app 的 `dsh.desktop.agentPresets`）随之删除。
+决策与代价（含改名对旧会话 preset id 的影响）见
+[ADR preset 改用上游声明式行](./.agents/adrs/20260922-preset改用上游声明式行.md)。
 
 ## office 相关
 
@@ -44,16 +41,11 @@
 
 ## 生成与升级
 
-产物由 tsdown 的 `build:done` hook 在每次 `pnpm build` 时生成（同时按 `tool/patch.ts` 重写包根的
-`cordis.patch.yml`）。只想看清单渲染出来的产物时手跑脚本（默认输出 `dist/presets`，可传目录）：
+`cordis.patch.yml` 由 tsdown 的 `build:done` 钩子在每次 `pnpm build` 时按 `tool/patch.ts` 重写；
+文件与真源的一致性由 `patch.spec.ts` 守护（它比对入库文件与 `renderPatch()`，并逐项比对 preset 行的
+`config` 与 `tool/presets/*.ts` 清单）。
 
-```sh
-pnpm exec tsx packages/preset/dsh-preset/tool/generate-presets.ts [outDir]
-```
-
-该入口会**清空** `outDir`（只接受不存在 / 空 / 只含生成产物的目录，其余直接拒绝），并且**只写产物**——
-要落 `cordis.patch.yml` 就跑 `pnpm build`。产物与清单的一致性由 `generated-presets.spec.ts` 守护
-（CI 在 `just build` 之后跑 `just test`，所以它在那里真的会比对 `dist/presets`）。
+> 旧 `tool/generate-presets.ts` 与 `dist/presets` 产物在上游 0.1.7 的声明式 preset 下已无用，随之删除。
 
 上游升级与适配流程见 [`dsh-plugin-upstream-sync` 技能](../../../.agents/skills/dsh-plugin-upstream-sync/SKILL.md)。
 
@@ -63,13 +55,12 @@ pnpm exec tsx packages/preset/dsh-preset/tool/generate-presets.ts [outDir]
   `dependencies` 已声明 `@morlay/dsh-sandbox-local` / `@morlay/dsh-context-assembler` /
   `@morlay/dsh-context-reference` / `@morlay/dsh-context-tool-guidance` / `@morlay/dsh-web-search-ollama`，
   因此 app 的 **preset 相关**依赖只声明
-  `@morlay/dsh-preset`；换工作区时要保证这些包在依赖树里可达，否则对应装配行加载失败。生成器写进 standard
-  产物的 `tool-gating` 行同属这一类。
+  `@morlay/dsh-preset`；换工作区时要保证这些包在依赖树里可达，否则对应装配行加载失败。清单里的
+  `tool-gating` 行同属这一类。
 - **提示词与规则变化要重启**：profile 在启动时装载，`system-prompt` 的 section 与 `access`
   规则在插件构造时注册 / 解析。dev 模式重启 `just custom dev` / `just custom desktop`，打包形态
   需重新 `just custom bundle`（patch 随 seed 快照复制）。
 - **dev 模式需要先构建**：`just custom dev` / `just custom desktop` / `just custom bundle` 都先跑
-  `preset-build`（`pnpm --filter @morlay/dsh-preset run build`）。`dist/presets` 只在 build 时生成，
-  源码树里没有，新克隆下直接起 profile 会找不到 preset。
-- **发布产物**：`package.json` 的 `files` 必须含 `dist`（preset 在其中）与 `tool`，判据见
-  [设计 预设生成与装配](./.agents/designs/20260917-预设生成与装配.md)。
+  `preset-build`（`pnpm --filter @morlay/dsh-preset run build`）——它重写 `cordis.patch.yml`
+  （入库那份就是生成物，改清单后要 build 才生效）。
+- **发布产物**：`package.json` 的 `files` 含 `dist` 与 `tool`；模式定义的发布形态就是 `cordis.patch.yml`。

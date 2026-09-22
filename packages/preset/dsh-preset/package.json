@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-preset",
   "version": "0.0.6-alpha.5",
-  "description": "Personal dsh profile bundle: disables the shipped agent presets, builds generated standard / collaboration presets into dist, declares personal llm-pi-ai provider routes, and carries the deployment sandbox access rules.",
+  "description": "Personal dsh profile bundle: disables the shipped agent presets and declares the coding / chat presets, personal llm-pi-ai provider routes, and the deployment sandbox access rules.",
   "keywords": [
     "dsh",
     "dsh-bundle",
@@ -48,7 +48,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
-    "@deepseek-ai/dsh-agent-presets": "workspace:*",
     "@deepseek-ai/dsh-command-compact": "workspace:*",
     "@deepseek-ai/dsh-command-goal": "workspace:*",
     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
@@ -78,13 +77,6 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
-    },
-    "configTrees": [
-      {
-        "mount": "config/agent-presets",
-        "path": "dist/presets",
-        "scanRoster": true
-      }
-    ]
+    }
   }
 }
