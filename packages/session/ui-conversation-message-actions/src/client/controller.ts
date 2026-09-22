@@ -41,12 +41,20 @@ export class SessionEditorController {
     this.face = {
       retry: (turn, cascade) =>
         this.mutate({ action: "retry", sessionId: this.sessionId, turn, cascade }),
-      recall: (message, texts) =>
-        this.mutate(
-          { action: "recall", sessionId: this.sessionId, eventSeq: message.eventSeq },
-          () => this.setComposerDraft(texts.join("\n\n")),
-        ),
+      recall: (message, texts) => this.recallAndEdit(message, texts),
     };
+  }
+
+  private async recallAndEdit(
+    message: EditableMessageBlock,
+    texts: readonly string[],
+  ): Promise<boolean> {
+    const applied = await this.mutate(
+      { action: "recall", sessionId: this.sessionId, eventSeq: message.eventSeq },
+      () => this.setComposerDraft(texts.join("\n\n")),
+    );
+    if (applied) this.returnViewportToEnd();
+    return applied;
   }
 
   private async mutate(
@@ -112,6 +120,24 @@ export class SessionEditorController {
     console.warn(
       "[session-editor] 未找到会话窗口重建入口（binding.resync / refresh 都不可用），窗口可能停留在 rewind 之前的状态",
     );
+  }
+
+  /**
+   * 撤回后把会话视口送回底部：rewind 把窗口换短，而上游 ChatView 只在读者已经贴底时
+   * 才跟随（`tipMoved && atBottom`），停在中途的视口会悬在被截断的位置上；撤回的下一步
+   * 是改完再发，所以这里无条件送到底。容器用上游既有契约 `[data-conversation-scroll]`
+   * （ChatView / ConversationWidthControls / StatsPills 同用）。
+   *
+   * 窗口替换的渲染落在 resync 之后：写早了会被下一轮布局覆盖，因此等两帧再写。
+   */
+  private returnViewportToEnd(): void {
+    const scrollport = document.querySelector<HTMLElement>("[data-conversation-scroll]");
+    if (scrollport === null) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollport.scrollTop = scrollport.scrollHeight;
+      });
+    });
   }
 
   private setComposerDraft(text: string): void {

@@ -2,7 +2,7 @@
 // 浏览器半的门控闭环：编辑器动作经 `/session-editor` 打到 host；动作成功后走
 // resync + 投影截断（rewind 的删除无法经 append-only 事件流表达）；
 // 撤回把该消息的全部文本块回填 composer；刷新只由动作驱动——会话列表 / 快照变化不发请求。
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "../client/controller.ts";
 import { SESSION_EDITOR_PATH } from "../shared.ts";
@@ -54,7 +54,7 @@ interface FakeSessions {
 
 function fakeSessions(
   ids: readonly string[] = ["s1"],
-  capabilities: { resync?: boolean; refresh?: boolean } = {},
+  capabilities: { resync?: boolean; refresh?: boolean; resyncGate?: Promise<void> } = {},
 ): {
   sessions: FakeSessions;
   drafts: string[];
@@ -87,6 +87,7 @@ function fakeSessions(
         ...(withResync
           ? {
               resync: async () => {
+                await capabilities.resyncGate;
                 state.resyncs += 1;
               },
             }
@@ -139,6 +140,19 @@ function mutateCalls(calls: readonly FetchCall[]): FetchCall[] {
 beforeEach(() => {
   delete (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__;
 });
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+/** 上游 ConversationContent 的滚动容器：jsdom 不做布局，scrollHeight 由替身给出。 */
+function scrollPort(height = 640): HTMLElement {
+  const element = document.createElement("div");
+  element.setAttribute("data-conversation-scroll", "");
+  Object.defineProperty(element, "scrollHeight", { value: height, configurable: true });
+  document.body.append(element);
+  return element;
+}
 
 describe("SessionEditorController（浏览器半）", () => {
   // 动作成功后重建会话窗口（rewind 让客户端窗口的 seq 基线失效），且绝不整页重载。
@@ -255,5 +269,50 @@ describe("SessionEditorController（浏览器半）", () => {
     expect(second).toBe(false);
     release?.();
     await first;
+  });
+
+  // 撤回把窗口换短（rewind 截断），而上游 ChatView 只在「已贴底」时自动跟随，
+  // 所以动作面在窗口重建落定后把视口送回底部。
+  it("撤回成功后把会话滚动容器送回底部", async () => {
+    const { sessions } = fakeSessions();
+    const controller = controllerWith(sessions);
+    const port = scrollPort();
+    stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
+
+    expect(await controller.face.recall(userBlock, ["hello"])).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(port.scrollTop).toBe(640);
+    });
+  });
+
+  it("窗口重建没落定前不动视口", async () => {
+    const gate = Promise.withResolvers<void>();
+    const { sessions } = fakeSessions(["s1"], { resyncGate: gate.promise });
+    const controller = controllerWith(sessions);
+    const port = scrollPort();
+    stubFetch([{ sessionId: "s1", queuedTurns: 0 }]);
+
+    const applied = controller.face.recall(userBlock, ["hello"]);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(port.scrollTop).toBe(0);
+
+    gate.resolve();
+    expect(await applied).toBe(true);
+    await vi.waitFor(() => {
+      expect(port.scrollTop).toBe(640);
+    });
+  });
+
+  it("撤回失败不动视口", async () => {
+    const { sessions } = fakeSessions();
+    const controller = controllerWith(sessions);
+    const port = scrollPort();
+    stubFailure(409, { error: "rewind 目标不是闭合边界" });
+
+    expect(await controller.face.recall(userBlock, ["hello"])).toBe(false);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(port.scrollTop).toBe(0);
   });
 });
