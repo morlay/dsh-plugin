@@ -107,7 +107,10 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   { id: "fs-sandbox", disabled: true },
   { id: "fs-observation-policy", disabled: true },
   { id: "office-to-pdf", disabled: true },
-  { id: "subagent-model-selection-settings", disabled: true },
+  // `subagent-model-selection-settings`（provide `subagentModelSelection`）**不禁用**：官方 standard / ptc /
+  // cordis preset 的 `tool-subagent` 行带 `modelSelectionSettings: true`，它要求 host scope 有这个服务，
+  // 禁用会把那三个官方 preset 直接打成 broken（`requires ... in the Host scope`）。我们不用这个能力是
+  // 靠自己的 preset 行不带该开关（`tool/presets/standard.ts`），与 host 这份服务在不在无关。
   {
     insert: [
       {

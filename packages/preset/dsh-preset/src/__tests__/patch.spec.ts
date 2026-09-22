@@ -76,7 +76,6 @@ const DISABLED_IDS = [
   "fs-sandbox",
   "fs-observation-policy",
   "office-to-pdf",
-  "subagent-model-selection-settings",
 ];
 
 const INSERTED_IDS = [
@@ -166,7 +165,9 @@ describe("dsh-preset patch wiring", () => {
     expect(rowById(composed, "fs-observation-policy")?.disabled).toBe(true);
   });
 
-  it("disables the subagent model-selection provider the shipped web-app bundle inserts", async () => {
+  it("leaves the shipped subagent model-selection provider enabled for the official presets", async () => {
+    // 官方 standard / ptc / cordis preset 的 `tool-subagent` 行带 `modelSelectionSettings: true`，它要求 host
+    // scope 有这个服务；禁用它会把那三个官方 preset 打成 broken。我们不用该能力靠自己的行不带开关。
     const shipped = composeLayers(await webAppLayers());
 
     expect(rowById(shipped, "subagent-model-selection-settings")?.name).toBe(
@@ -174,8 +175,10 @@ describe("dsh-preset patch wiring", () => {
     );
 
     const composed = composeLayers([...(await webAppLayers()), rows]);
+    const row = rowById(composed, "subagent-model-selection-settings");
 
-    expect(rowById(composed, "subagent-model-selection-settings")?.disabled).toBe(true);
+    expect(row?.disabled).not.toBe(true);
+    expect(row?.name).toBe("@deepseek-ai/dsh-tool-subagent/model-selection-settings");
   });
 
   it("disables the office-to-pdf row the shipped web-app bundle inserts", async () => {

@@ -65,3 +65,6 @@ profile 组合器经该字段解析）：两种模式在这里各是一行 `@dee
   `preset-build`（`pnpm --filter @morlay/dsh-preset run build`）——它重写 `cordis.patch.yml`
   （入库那份就是生成物，改清单后要 build 才生效）。
 - **发布产物**：`package.json` 的 `files` 含 `dist` 与 `tool`；模式定义的发布形态就是 `cordis.patch.yml`。
+- **按 id 禁用 host 行之前先想官方 preset**：那是全局动作，官方 standard / ptc / cordis 的行也会受影响
+  （实例：`subagent-model-selection-settings` 一禁，三个官方 preset 直接 broken）。改完跑 `just roster`
+  实测，判据见[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)。
