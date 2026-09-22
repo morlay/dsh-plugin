@@ -25,6 +25,15 @@
   priority −1）+ `formatCacheHitPercent` 越界输入口径：`composer-stats.spec.ts`（真实 `SlotCore`
   断言赢家 id / priority / locale / 组件）与承载组件的可见契约 `composer-stats-view.spec.tsx`。
 
+## 真装配的检查（单测覆盖不到的）
+
+- **`/session-editor` 路由真的注册上了**：单测的 `harness()` 直接 provide `webServer`，所以注册永远成功——
+  它看不见「本行构造时 `webServer` 还没激活」这种顺序问题（一次性 `ctx.get` 取到 undefined 后不再重试，
+  路由永不注册；请求于是落到 `frontend-static` 的 fallback，非 GET/HEAD 一律 405——编辑撤回与重试就是这个症状）。
+  改动装配或升级上游后跑 `just profile`（`@morlay/dsh-desktop-host/tool/verify-profile.mts`）：它装配一次
+  真 web profile，检查 preset roster 无 broken，且 `POST /session-editor` 命中我们自己的 handler
+  （判据是非 405/404：非法 body 拿到我们自己的 400 文案）。
+
 ## 测试装配辅助（`./testing`）
 
 - `harness()`：一次性装配 `EmptySettings` + `SessionStore` + 投影注册 + 真实 SQLite rdb +

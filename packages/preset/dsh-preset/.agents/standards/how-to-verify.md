@@ -4,11 +4,12 @@
 shipped preset 相关的判断——除了包内测试，还要跑一次真装配：
 
 ```sh
-just roster
+just profile
 ```
 
 它装配一次真实 web profile（`apps/dsh-custom-next/.dsh-store/profiles/web`，由 `just custom dev --web`
-或 `just custom desktop` 准备），读 `ctx.agentPresets` 的 roster，逐个打印 preset 的装载结果。
+或 `just custom desktop` 准备），读 `ctx.agentPresets` 的 roster 逐个打印装载结果，并顺带检查
+`POST /session-editor` 是否命中我们自己的 handler（那是另一个只有真装配才看得见的顺序问题）。
 
 **判据**：六个 preset（`coding` / `chat` / 官方 `standard` / `ptc` / `minimal` / `cordis`）都是 `ok`。
 任何一个 `broken` 都要先修——静态断言（`patch.spec.ts` 的行 id 与 config 比对）看不见装载结果，

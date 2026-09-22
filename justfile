@@ -39,5 +39,5 @@ version *args:
 test:
     pnpm exec vitest run
 
-roster:
-    @pnpm --filter @morlay/dsh-desktop-host exec tsx tool/verify-preset-roster.mts
+profile:
+    @pnpm --filter @morlay/dsh-desktop-host exec tsx tool/verify-profile.mts

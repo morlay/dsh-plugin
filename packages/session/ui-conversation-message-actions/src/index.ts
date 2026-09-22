@@ -179,7 +179,7 @@ export class SessionEditor extends Service {
   constructor(ctx: Context) {
     super(ctx, "sessionEditor");
 
-    registerHttpRoutes(ctx);
+    registerHttpRoutes(ctx, this);
   }
 
   readBranchPrefix(
@@ -643,17 +643,22 @@ async function handleRoute(
   }
 }
 
-function registerHttpRoutes(ctx: Context): void {
-  ctx.effect(() => {
+function registerHttpRoutes(ctx: Context, editor: SessionEditor): void {
+  // webServer **必须等**：它可能比本行晚激活，而 `ctx.get` 取到 undefined 之后不会再试一次——路由没注册的
+  // 后果是请求落到 frontend-static 的 fallback，非 GET/HEAD 一律 405（编辑撤回 / 重试就是这个症状）。
+  ctx.inject(["webServer"], (scope) => {
     // webServer 的类型由上游 @deepseek-ai/dsh-host-webserver 声明（`Context.webServer: WebServer`）；
     // 这里只按用到的 register 面做结构转换，不再 declare module 覆盖，否则两处声明冲突（TS2717）。
-    const webServer = ctx.get("webServer") as unknown as HttpServerLike | undefined;
-    if (webServer === undefined) return () => {};
-    const editor = ctx.sessionEditor;
-    return webServer.register({
-      kind: "exact",
-      path: SESSION_EDITOR_PATH,
-      handler: (request, response) => handleRoute(editor, request, response),
-    });
-  }, "session-editor: HTTP route");
+    const webServer = scope.get("webServer") as unknown as HttpServerLike | undefined;
+    if (webServer === undefined) return;
+    scope.effect(
+      () =>
+        webServer.register({
+          kind: "exact",
+          path: SESSION_EDITOR_PATH,
+          handler: (request, response) => handleRoute(editor, request, response),
+        }),
+      "session-editor: HTTP route",
+    );
+  });
 }
