@@ -58,6 +58,15 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
       },
     },
   },
+  // 首次引导（欢迎提示）在本部署里预置成"已确认"：桌面形态的 client 加载的是自定义 scheme、不是 loopback，
+  // 而上游 `ui-settings/src/client/index.ts` 按 `ctx.remote.$host.isLoopback` 决定 settings 的持久化模式——
+  // 非 loopback 一律 `memory`，于是"确认过"只存在当前页面进程里，**每次打开都弹**。在 host 侧把该值预置成
+  // 当前版本，client 一读就是已确认，与持久化模式无关；上游 bump 版本时值不再相等，会照常再弹一次（符合语义）。
+  // 值与上游 `WELCOME_NOTICE_VERSION` 必须一致，`patch.spec.ts` 直接读那个常量比对，bump 后会红。
+  {
+    id: "ui-settings-general",
+    config: { welcomeNoticeVersion: "2026-08-13.1" },
+  },
   // 沙箱替换**必须住 host**：`sandbox-local` 要覆盖 root realm 的 `ctx.fs` / `ctx.sandbox`，而 agent 的
   // ctx 解析不到 preset 里 isolate realm 的实现（上游为此专门提供 `serviceForAgent` 给 realm 外的读）。
   // 所以官方两行在这里按 id 禁用，替换行插在 host 层。
@@ -121,10 +130,7 @@ export function renderPatch(): string {
 
 /** 把 bundle patch 落到包根：它是发布产物的一部分（`files` 里有它，装配按出口解析）。 */
 export async function generatePatch(): Promise<string> {
-  const path = join(
-    resolve(dirname(fileURLToPath(import.meta.url)), ".."),
-    PATCH_FILE,
-  );
+  const path = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), PATCH_FILE);
   await writeFile(path, renderPatch());
   return path;
 }

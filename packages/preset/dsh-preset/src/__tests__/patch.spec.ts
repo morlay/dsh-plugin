@@ -10,10 +10,7 @@ const UPSTREAM_BASE_PATCH = join(
   process.cwd(),
   "vendor/deepseek-harness/packages/bundle/base/cordis.patch.yml",
 );
-const UPSTREAM_WEB_APP_DIR = join(
-  process.cwd(),
-  "vendor/deepseek-harness/packages/bundle/web-app",
-);
+const UPSTREAM_WEB_APP_DIR = join(process.cwd(), "vendor/deepseek-harness/packages/bundle/web-app");
 const UPSTREAM_WEB_APP_MANIFEST = join(UPSTREAM_WEB_APP_DIR, "package.json");
 
 /**
@@ -151,7 +148,7 @@ describe("dsh-preset patch wiring", () => {
     expect(row?.name).toBe("@deepseek-ai/dsh-tool-subagent/model-selection-settings");
   });
 
-  it("只动自己声明的行：compose 前后的禁用集合只差这三条", async () => {
+  it("只动自己声明的行：compose 前后的禁用集合只差这两条", async () => {
     // 上游两层都要在：base 插 `sandbox` / `fs-sandbox` / `fs-observation-policy`，web-app 覆盖其余。
     const shipped = [await loadPatchRows(UPSTREAM_BASE_PATCH), ...(await webAppLayers())];
     const before = new Set(
@@ -221,7 +218,28 @@ describe("dsh-preset patch wiring", () => {
     const composed = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH), rows]);
 
     // config 是整体替换：只写 searchProvider 会把 fetchProvider 抹掉，所以两个字段都要在。
-    expect(rowById(composed, "web")?.config).toEqual({ searchProvider: "ollama", fetchProvider: "http" });
+    expect(rowById(composed, "web")?.config).toEqual({
+      searchProvider: "ollama",
+      fetchProvider: "http",
+    });
+  });
+
+  it("首次引导预置成已确认，且与上游的版本常量一致", async () => {
+    // 桌面形态的 client 不是 loopback → 上游把 settings 的持久化降级成 memory → 「确认过」写不回 host →
+    // 每次打开页面都弹。host 侧预置当前版本即可绕过（上游 bump 后会再弹一次，符合它的语义）。
+    const copy = await readFile(
+      join(
+        process.cwd(),
+        "vendor/deepseek-harness/packages/client/ui-settings-models/src/onboarding-copy.ts",
+      ),
+      "utf8",
+    );
+    const version = /WELCOME_NOTICE_VERSION = '([^']+)'/u.exec(copy)?.[1];
+
+    expect(version).toBeTruthy();
+    expect(rowById(rows, "ui-settings-general")?.config).toEqual({
+      welcomeNoticeVersion: version,
+    });
   });
 
   it("装上 ollama 搜索后端行，并声明它的包依赖", async () => {

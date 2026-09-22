@@ -21,6 +21,9 @@
               low: low
               high: high
               max: max
+- id: ui-settings-general
+  config:
+    welcomeNoticeVersion: 2026-08-13.1
 - id: sandbox
   disabled: true
 - id: fs-sandbox
