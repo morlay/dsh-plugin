@@ -32,6 +32,7 @@
         api: openai-completions
         baseURL: https://ollama.com/v1
         reasoning: high
+        requestImageMaxBytes: 2097152
         models:
           - id: deepseek-v4.1-flash
             name: DeepSeek V4.1 Flash @ Ollama Cloud
@@ -44,6 +45,10 @@
               low: low
               high: high
               max: max
+- id: web
+  config:
+    searchProvider: ollama
+    fetchProvider: http
 - id: agent-instructions
   disabled: true
 - id: tool-skill
@@ -73,3 +78,8 @@
 - insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"
+- insert:
+    - id: web-search-ollama
+      name: "@morlay/dsh-web-search-ollama"
+      config:
+        apiKeyEnv: OLLAMA_API_KEY

@@ -8,11 +8,11 @@
 
 ## 内容
 
-| 文件                       | 作用                                                                                                                                                                                                                                                                                                                                                  |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cordis.patch.yml`         | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：注册本包 preset 为默认、声明个人 `llm-pi-ai` route、覆盖沙箱规则、按 id 禁用官方 `agent-instructions` / `tool-skill` / `sandbox` / `fs-sandbox` / `fs-observation-policy` / `office-to-pdf` / `subagent-model-selection-settings` 行、插入 `sandbox-local` 与 `context-assembler` 行 |
-| `tool/generate-presets.ts` | 生成真源：从上游模块与 `tool/presets/*.ts` 清单渲染出 `dist/presets`，并由 tsdown `build:done` 一并重写 `cordis.patch.yml`（两者都不要手改）                                                                                                                                                                                                          |
-| `dist/presets/`            | 构建产物：`standard` 与 `chat` 两个模式（由各自的清单渲染：工具行、注入行、persona 都在产物里；`chat` 用 `context-scope` 把工具收成三个并关掉全部 instruction）                                                                                                                                                                                       |
+| 文件                       | 作用                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cordis.patch.yml`         | bundle patch（生成物，真源 [`tool/patch.ts`](./tool/patch.ts)）：注册本包 preset 为默认、声明个人 `llm-pi-ai` route（ollama 路由的图片上限按 llm-deepseek 默认对齐）、覆盖沙箱规则、按 id 禁用官方 `agent-instructions` / `tool-skill` / `sandbox` / `fs-sandbox` / `fs-observation-policy` / `office-to-pdf` / `subagent-model-selection-settings` 行、插入 `sandbox-local` / `context-assembler` / `web-search-ollama` 行、把 `web` 行的 `searchProvider` 切到 `ollama` |
+| `tool/generate-presets.ts` | 生成真源：从上游模块与 `tool/presets/*.ts` 清单渲染出 `dist/presets`，并由 tsdown `build:done` 一并重写 `cordis.patch.yml`（两者都不要手改）                                                                                                                                                                                                                                                                                                                              |
+| `dist/presets/`            | 构建产物：`standard` 与 `chat` 两个模式（由各自的清单渲染：工具行、注入行、persona 都在产物里；`chat` 用 `context-scope` 把工具收成三个并关掉全部 instruction）                                                                                                                                                                                                                                                                                                           |
 
 ## 装配
 
@@ -61,7 +61,8 @@ pnpm exec tsx packages/preset/dsh-preset/tool/generate-presets.ts [outDir]
 
 - 本 bundle patch 插入的每一行，其 `name` 都必须能被 **profile 的依赖树**解析：本包
   `dependencies` 已声明 `@morlay/dsh-sandbox-local` / `@morlay/dsh-context-assembler` /
-  `@morlay/dsh-context-reference` / `@morlay/dsh-context-tool-guidance`，因此 app 的 **preset 相关**依赖只声明
+  `@morlay/dsh-context-reference` / `@morlay/dsh-context-tool-guidance` / `@morlay/dsh-web-search-ollama`，
+  因此 app 的 **preset 相关**依赖只声明
   `@morlay/dsh-preset`；换工作区时要保证这些包在依赖树里可达，否则对应装配行加载失败。生成器写进 standard
   产物的 `tool-gating` 行同属这一类。
 - **提示词与规则变化要重启**：profile 在启动时装载，`system-prompt` 的 section 与 `access`

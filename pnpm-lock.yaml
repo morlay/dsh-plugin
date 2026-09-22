@@ -734,6 +734,9 @@ importers:
       '@morlay/dsh-sandbox-local':
         specifier: workspace:*
         version: link:../../sandbox/dsh-sandbox-local
+      '@morlay/dsh-web-search-ollama':
+        specifier: workspace:*
+        version: link:../../web/dsh-web-search-ollama
     devDependencies:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:*
@@ -1211,6 +1214,24 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+
+  packages/web/dsh-web-search-ollama:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/credentials/credentials
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/launch-environment
+      '@deepseek-ai/dsh-web':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/web/web
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
 
   vendor/deepseek-harness/apps/cli:
     dependencies:

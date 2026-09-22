@@ -66,7 +66,7 @@ describe("dsh-preset patch wiring", () => {
 
     // 与生成结果同一形状：改了 tool/patch.ts 忘了重新生成、或手改了这个文件，这里会红。
     expect(shape(rows)).toEqual(shape(generated));
-    expect(shape(rows).inserted).toEqual(["sandbox-local", "context-assembler"]);
+    expect(shape(rows).inserted).toEqual(["sandbox-local", "context-assembler", "web-search-ollama"]);
     expect(shape(rows).disabled).toEqual([
       "agent-instructions",
       "tool-skill",
@@ -93,7 +93,7 @@ describe("dsh-preset patch wiring", () => {
       "office-to-pdf",
       "subagent-model-selection-settings",
     ]);
-    expect(inserted.map((row) => row.id)).toEqual(["sandbox-local", "context-assembler"]);
+    expect(inserted.map((row) => row.id)).toEqual(["sandbox-local", "context-assembler", "web-search-ollama"]);
     expect(
       renderPatch().startsWith("# 本文件由 packages/preset/dsh-preset/tool/patch.ts 生成"),
     ).toBe(true);
@@ -185,5 +185,42 @@ describe("dsh-preset patch wiring", () => {
     ) as { dependencies?: Record<string, string> };
 
     expect(manifest.dependencies?.["@morlay/dsh-sandbox-local"]).toBeTruthy();
+  });
+
+  it("把 web 行的 searchProvider 切到本仓库的 ollama 后端，并保住 fetch 后端", async () => {
+    const shipped = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH)]);
+
+    expect(rowById(shipped, "web")?.config).toEqual({
+      searchProvider: "deepseek-official",
+      fetchProvider: "http",
+    });
+
+    const composed = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH), rows]);
+
+    // config 是整体替换：只写 searchProvider 会把 fetchProvider 抹掉，所以两个字段都要在。
+    expect(rowById(composed, "web")?.config).toEqual({ searchProvider: "ollama", fetchProvider: "http" });
+  });
+
+  it("装上 ollama 搜索后端行，并声明它的包依赖", async () => {
+    const ollamaRow = inserted.find((row) => row.id === "web-search-ollama");
+
+    expect(ollamaRow?.name).toBe("@morlay/dsh-web-search-ollama");
+    expect(ollamaRow?.config).toEqual({ apiKeyEnv: "OLLAMA_API_KEY" });
+
+    const manifest = JSON.parse(
+      await readFile(join(process.cwd(), "packages/preset/dsh-preset/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+
+    expect(manifest.dependencies?.["@morlay/dsh-web-search-ollama"]).toBeTruthy();
+  });
+
+  it("ollama route 的图片上限对齐 llm-deepseek 的默认", () => {
+    const providers = rowById(rows, "llm-pi-ai")?.config?.providers as
+      | Record<string, Record<string, unknown>>
+      | undefined;
+
+    // 内联预算（20 MiB）与像素预算（2048²）两边默认本来就同值，只有每张请求版本的原始字节目标不同：
+    // llm-deepseek 是 2 MiB，pi-ai 默认 1 MiB。
+    expect(providers?.["ollama"]?.["requestImageMaxBytes"]).toBe(2 * 1024 * 1024);
   });
 });
