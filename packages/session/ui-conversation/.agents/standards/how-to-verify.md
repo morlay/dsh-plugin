@@ -19,15 +19,23 @@
 - **编辑器草稿层**（输入框保留 raw markdown：草稿文本不做引用装饰）→ jsdom 测试：
   `src/__tests__/editor-runtime.spec.tsx`（直接构造 `DraftEditorRuntime`，粘贴后断言 DOM 无
   `data-composer-text-ref`、投影文本原样）。
+- **`apply` 的接线**（对 slots / locale / configForms 这些外部面的订阅）→ node 测试：
+  `src/__tests__/upstream-wiring.spec.ts`，比对上游 `apply.ts` 与 fork 那份的订阅面（上游挂的订阅 fork 一条
+  不少）。它守的是**同步纪律**：漏跟随上游接线不会报错、只会静默少刷新（0.1.7 漏
+  `ctx.configForms.developerTools.enabled.subscribe` 就是这类）。语义对不对仍要人读上游那份，不替代行为
+  用例。
 - **不单独测**：`.styles.ts` 样式表与 locale 数据表（机制由 `packages/client/ui-primitives` 的
   styling / token 测试覆盖）、纯类型与桶文件、**不再复制的上游文件**（它们就是上游实现）。
 
 ## 未覆盖（有明确原因）
 
-- `client/apply.ts`（插件装配 + slots 注册）、`client/skeleton/*`（`ConversationRoot` /
+- `client/apply.ts`（插件装配 + slots 注册）的**行为**、`client/skeleton/*`（`ConversationRoot` /
   `ConversationSession` / `InputBar` 等）、`client/service.ts`（`ConversationController`）的
   **slot 装配面**需要 cordis client 运行时（slots 声明者 / 注册表、locale、renderer、sessions 面），
-  而上游 client 半是浏览器模块工厂，node / jsdom 不可加载 →
+  而上游 client 半是浏览器模块工厂，node / jsdom 不可加载。上游 0.1.7 起有可用的 client harness
+  （`@deepseek-ai/dsh-client-test-runtime` 的 `SlotTestRuntime`，本包已试通），但它会把官方 ui-conversation
+  的类型拉进同一个 program、与 fork 的收窄声明撞 TS2717——见[债务 临时接管上游对话UI的client半](../debts/20260917-临时接管上游对话UI的client半.md)
+  的「已知冲突」，以及
   [债务 对话UI客户端半的装配面缺测试辅助](../../../ui-conversation-message-actions/.agents/debts/20260917-对话UI客户端半的装配面缺测试辅助.md)。
-  动这些 `apply` / 装配面之前先看该债务的触发条件。（组件的**呈现面**不在这个空白里：见上面的
-  `InputBar` 一条——只有「插进哪个槽、注册什么优先级」这类装配行为才需要 harness。）
+  动这些 `apply` / 装配面之前先看后者的触发条件。（组件的**呈现面**不在这个空白里：见上面的
+  `InputBar` 一条——只有「插进哪个槽、注册什么优先级、跟着哪个外部面重算」这类装配行为才需要 harness。）

@@ -231,7 +231,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   ctx.effect(() => {
     const disposeViews = slots.subscribe("conversation.view", refreshViews);
     const disposeLocale = ctx.locale.subscribe(refreshViews);
+    // 开发者工具开关是 host 侧的配置（`configForms.developerTools`）：它的快照晚于本装配到达，
+    // 且到达后还会被用户改，所以名单必须跟着它重算——否则轨迹 view 一旦在初始 false 时被滤掉，
+    // 就再也不出现（上游同款订阅见 vendor 包 apply.ts）。
+    const disposeDeveloperTools = ctx.configForms.developerTools.enabled.subscribe(refreshViews);
     return () => {
+      disposeDeveloperTools();
       disposeLocale();
       disposeViews();
     };
