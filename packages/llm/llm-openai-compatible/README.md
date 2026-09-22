@@ -15,45 +15,53 @@ DeepSeek Harness 的 **OpenAI 兼容 LLM 适配器**插件。与内置 `llm-pi-a
 ## 配置
 
 `providers` 是 dict：**key 就是 provider 路由键**（选择器与
-`GenerateOptions.provider` 使用），值是 profile。
+`GenerateOptions.provider` 使用），值是 profile。它标了 `.volatile()`——**运行期可改**：
+值经 Loader 的引用读取，设置页（Models 页）改的就是它，不需要重挂这行插件（见
+[ADR-运行期改配置走volatile引用](./.agents/adrs/20260922-运行期改配置走volatile引用.md)）。
+
+配置写在**这行的 config** 里（bundle patch / profile patch / 设置页都落到这里）：
 
 ```yaml
-llm-openai-compatible:
-  providers:
-    ollama:
-      apiKeyEnv: OLLAMA_API_KEY
-      baseURL: https://ollama.com/v1
-      displayName: Ollama Gateway
-      # === 采样默认参数（请求级 temperature 优先）===
-      temperature: 1 # 0..2
-      topP: 0.95 # 0..1 → wire top_p
-      topK: 40 # 正整数 → wire top_k（非标准，仅网关支持时发送）
-      presencePenalty: 0 # -2..2 → wire presence_penalty
-      frequencyPenalty: 0 # -2..2 → wire frequency_penalty
-      seed: 42 # 正整数 → wire seed
-      # === 推理 ===
-      reasoning: high # 部署默认档位（省略 = 提供方默认）
-      # === 模型目录 ===
-      defaultContextWindow: 262144
-      defaultMaxTokens: 32768
-      models:
-        - id: deepseek-v4-flash:0731
-          name: DeepSeek V4 Flash
-          contextWindow: 1000000
-          maxTokens: 65535
-          inputModalities: [text, image]
-          reasoningEfforts:
-            off: # off 空值 = 不发送 reasoning_effort
-            high: high # 档位 → wire reasoning_effort 拼写
-            max: max
-      # === 传输 ===
-      maxRequestImageBytes: 20971520
-      streamIdleTimeoutMs: 300000
-      timeoutMs: 600000 # 整体请求超时；缺省不设
-      retryPolicy:
-        mode: normal
-        maxRetries: 5
+- id: llm-openai-compatible
+  name: "@morlay/dsh-llm-openai-compatible"
+  config:
+    providers:
+      ollama:
+        apiKeyEnv: OLLAMA_API_KEY
+        baseURL: https://ollama.com/v1
+        displayName: Ollama Gateway
+        # === 采样默认参数（请求级 temperature 优先）===
+        temperature: 1 # 0..2
+        topP: 0.95 # 0..1 → wire top_p
+        topK: 40 # 正整数 → wire top_k（非标准，仅网关支持时发送）
+        presencePenalty: 0 # -2..2 → wire presence_penalty
+        frequencyPenalty: 0 # -2..2 → wire frequency_penalty
+        seed: 42 # 正整数 → wire seed
+        # === 推理 ===
+        reasoning: high # 部署默认档位（省略 = 提供方默认）
+        # === 模型目录 ===
+        defaultContextWindow: 262144
+        defaultMaxTokens: 32768
+        models:
+          - id: deepseek-v4-flash:0731
+            name: DeepSeek V4 Flash
+            contextWindow: 1000000
+            maxTokens: 65535
+            inputModalities: [text, image]
+            reasoningEfforts:
+              off: # off 空值 = 不发送 reasoning_effort
+              high: high # 档位 → wire reasoning_effort 拼写
+              max: max
+        # === 传输 ===
+        maxRequestImageBytes: 20971520
+        streamIdleTimeoutMs: 300000
+        timeoutMs: 600000 # 整体请求超时；缺省不设
+        retryPolicy:
+          mode: normal
+          maxRetries: 5
 ```
+
+> 旧 `$DSH_HOME/settings.yaml` 的 `llm-openai-compatible` 段由上游启动时一次性导入到同 id 的行 config。
 
 ## 规则与取舍
 

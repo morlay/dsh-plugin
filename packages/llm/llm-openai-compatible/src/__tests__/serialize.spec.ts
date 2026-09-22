@@ -4,6 +4,7 @@ import {
   ToolCallId,
   ReasoningEffortId,
   createAssistantMessage,
+  createToolResultMessage,
   createUserMessage,
   LlmError,
   resolveRetryPolicy,
@@ -235,11 +236,10 @@ describe("serializeCallOptions prompt", () => {
   it("expands tool results into standalone tool messages", async () => {
     const callId = ToolCallId("call_1");
     const messages = [
-      createUserMessage({
-        content: [
-          { type: "tool-result", toolCallId: callId, content: [{ type: "text", text: "42" }] },
-        ],
-        source: { kind: "tool", callId },
+      createToolResultMessage({
+        callId,
+        content: [{ type: "text", text: "42" }],
+        isError: false,
       }),
     ];
     const callOptions = await serializeCallOptions(options({ messages }), profile(), undefined);
@@ -268,11 +268,10 @@ describe("serializeCallOptions prompt", () => {
       ],
       source: { provider: "test", model: "m1" },
     });
-    const result = createUserMessage({
-      content: [
-        { type: "tool-result", toolCallId: callId, content: [{ type: "text", text: "ok" }] },
-      ],
-      source: { kind: "tool", callId },
+    const result = createToolResultMessage({
+      callId,
+      content: [{ type: "text", text: "ok" }],
+      isError: false,
     });
     const callOptions = await serializeCallOptions(
       options({ messages: [assistant, result] }),

@@ -6,7 +6,7 @@ import {
   projectOffloadedImages,
   requiredImageOffload,
 } from "@deepseek-ai/dsh-llm";
-import type { ContentBlock, GenerateOptions, Message } from "@deepseek-ai/dsh-llm";
+import type { ContentBlock, GenerateOptions, RequestMessage } from "@deepseek-ai/dsh-llm";
 import { AttachmentError } from "@deepseek-ai/dsh-attachment";
 import type { AttachmentStore } from "@deepseek-ai/dsh-attachment";
 import type {
@@ -83,9 +83,14 @@ function assertTextOnly(blocks: readonly ContentBlock[]): void {
   }
 }
 
-function assertSupportedImageRoles(messages: readonly Message[]): void {
+function assertSupportedImageRoles(messages: readonly RequestMessage[]): void {
   for (const message of messages) {
-    if (message.role !== "user" && contentHasImage(message.content)) {
+    // 图片只出现在 user 与 tool 消息里；tool 结果的图片由 serializePrompt 聚成一条 user 消息发出。
+    if (
+      message.role !== "user" &&
+      message.role !== "tool" &&
+      contentHasImage(message.content)
+    ) {
       throw new LlmError(
         `The OpenAI-compatible chat-completions adapter cannot represent image content in a ${message.role} message.`,
         "UNSUPPORTED_CONTENT",
@@ -94,7 +99,10 @@ function assertSupportedImageRoles(messages: readonly Message[]): void {
   }
 }
 
-function assertRetainedImagesFit(messages: readonly Message[], maxRequestImageBytes: number): void {
+function assertRetainedImagesFit(
+  messages: readonly RequestMessage[],
+  maxRequestImageBytes: number,
+): void {
   const offloadImages = requiredImageOffload(
     messages,
     { representation: "base64", maxBytes: maxRequestImageBytes },
@@ -133,7 +141,7 @@ async function imagePart(
 }
 
 function assistantParts(
-  message: Message,
+  message: Extract<RequestMessage, { role: "assistant" }>,
   toolNames: Map<string, string>,
 ): Extract<LanguageModelV4Prompt[number], { role: "assistant" }>["content"] {
   const parts: Extract<LanguageModelV4Prompt[number], { role: "assistant" }>["content"] = [];
@@ -190,9 +198,6 @@ async function userParts(
           );
         parts.push(await resolveImage(block, signal));
         break;
-      case "tool-result":
-        parts.push(...(await userParts(block.content, resolveImage, signal)));
-        break;
       default:
         break;
     }
@@ -201,7 +206,7 @@ async function userParts(
 }
 
 async function serializePrompt(
-  messages: readonly Message[],
+  messages: readonly RequestMessage[],
   resolveImage:
     | ((
         block: Extract<ContentBlock, { type: "image" }>,
@@ -227,6 +232,20 @@ async function serializePrompt(
     pendingToolImages = [];
   };
   for (const message of messages) {
+    // V4 把 developer 消息与 tool-change 块持久化下来，但 provider 侧序列化明确不支持它们
+    // （与上游 `llm-deepseek` 同口径：先失败，等生产者与消费方一起实现）。
+    if (message.role === "developer") {
+      throw new LlmError(
+        "The OpenAI-compatible chat-completions adapter cannot serialize developer messages.",
+        "UNSUPPORTED_CONTENT",
+      );
+    }
+    if (message.content.some((block) => block.type === "tool-addition" || block.type === "tool-removal")) {
+      throw new LlmError(
+        "The OpenAI-compatible chat-completions adapter cannot serialize tool-change blocks outside developer messages.",
+        "UNSUPPORTED_CONTENT",
+      );
+    }
     if (message.role === "system") {
       flushToolImages();
       prompt.push({ role: "system", content: flattenText(message.content) });
@@ -238,37 +257,38 @@ async function serializePrompt(
       if (parts.length > 0) prompt.push({ role: "assistant", content: parts });
       continue;
     }
-    const regular = message.content.filter((block) => block.type !== "tool-result");
-    const toolResults = message.content.filter((block) => block.type === "tool-result");
-    const content = await userParts(regular, resolveImage, signal);
-    if (content.length > 0 || toolResults.length === 0) {
-      flushToolImages();
-      prompt.push({ role: "user", content });
-    }
-    for (const result of toolResults) {
+    if (message.role === "tool") {
+      // 结果消息自己带 `toolCallId` 与结果块（V4 起结果不再是 user 消息里的一个块）。
       const images: UserContentPart[] = [];
       if (resolveImage !== void 0) {
-        for (const block of result.content) {
+        for (const block of message.content) {
           if (block.type === "image") images.push(await resolveImage(block, signal));
         }
       }
+      flushToolImages();
       prompt.push({
         role: "tool",
         content: [
           {
             type: "tool-result",
-            toolCallId: result.toolCallId,
-            toolName: toolNames.get(result.toolCallId) ?? "",
+            toolCallId: message.toolCallId,
+            toolName: toolNames.get(message.toolCallId) ?? "",
             output: {
               type: "text",
               value:
-                flattenText(result.content) ||
+                flattenText(message.content) ||
                 (images.length > 0 ? "(see attached image)" : "(no output)"),
             },
           },
         ],
       });
       pendingToolImages.push(...images);
+      continue;
+    }
+    const content = await userParts(message.content, resolveImage, signal);
+    if (content.length > 0) {
+      flushToolImages();
+      prompt.push({ role: "user", content });
     }
   }
   flushToolImages();

@@ -1,4 +1,4 @@
-import type { Context } from "@deepseek-ai/cordis";
+import type { Context, Volatile } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import {
   LlmError,
@@ -82,8 +82,16 @@ export interface ProviderProfileSource {
 }
 
 export interface Config {
-  providers?: Record<string, ProviderProfileSource>;
+  /**
+   * provider 路由，key 是路由键。**volatile**：值经 Loader 的引用读取
+   * （`config.providers.get()`），设置页改它时不需要重挂这行插件——上游 0.1.7 起
+   * 「运行期可改」只有这一条路（旧的 settings namespace section 覆盖已取消）。
+   */
+  providers: Volatile<Record<string, ProviderProfileSource>>;
 }
+
+/** 解析成普通值之后的配置形状（校验与解析只认它）。 */
+export type Options = { [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : never };
 
 const modelSchema = z.object({
   id: z.string().required(),
@@ -95,7 +103,7 @@ const modelSchema = z.object({
   reasoningEfforts: z.union([z.const(false), z.dict(z.union([z.string(), z.const(null)]))]),
 });
 
-const providerSchema = z.object({
+const providerSchema: z<ProviderProfileSource> = z.object({
   apiKeyEnv: z.string().role("credential-ref"),
   displayName: z.string(),
   baseURL: z.string().required(),
@@ -120,8 +128,8 @@ const providerSchema = z.object({
   retryPolicy: RetryPolicySchema,
 });
 
-export const Config: z<Config> = z.object({
-  providers: z.dict(providerSchema).default({}),
+export const Config = z.object({
+  providers: z.dict(providerSchema).default({}).volatile(),
 });
 
 function isReasoningEffort(value: string): value is ReasoningEffort {
@@ -355,7 +363,7 @@ export function resolveProfiles(
   return resolved;
 }
 
-export function assertServiceable(config: Config): void {
+export function assertServiceable(config: Options): void {
   resolveProfiles(config.providers);
 }
 
@@ -369,10 +377,13 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedProviderProfile
     .sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
-function directoryEntries(profiles: ReadonlyMap<string, ResolvedProviderProfile>): {
+function directoryEntries(
+  profiles: ReadonlyMap<string, ResolvedProviderProfile>,
+  settingsNs: string,
+): {
   provider: string;
   displayName: string;
-  settingsNs: typeof NS;
+  settingsNs: string;
   settingsPath: readonly string[];
   declared: boolean;
 }[] {
@@ -381,7 +392,7 @@ function directoryEntries(profiles: ReadonlyMap<string, ResolvedProviderProfile>
     {
       provider: string;
       displayName: string;
-      settingsNs: typeof NS;
+      settingsNs: string;
       settingsPath: readonly string[];
       declared: boolean;
     }
@@ -390,7 +401,7 @@ function directoryEntries(profiles: ReadonlyMap<string, ResolvedProviderProfile>
     entries.set(provider, {
       provider,
       displayName: profile.displayName,
-      settingsNs: NS,
+      settingsNs,
       settingsPath: ["providers", provider],
       declared: true,
     });
@@ -399,14 +410,18 @@ function directoryEntries(profiles: ReadonlyMap<string, ResolvedProviderProfile>
 }
 
 export function apply(ctx: Context, config: Config): void {
-  let current = () => config;
-  let lastRaw: Config | undefined;
+  // `settingsNs` 是**行 id**（不是包短名）：设置页按 entry 定位这份配置。
+  const settingsNs = ctx.fiber.entry?.options.id ?? NS;
+  // 引用读回的是 schema 解析后的形状（只读、可选），不是手写的 `Options`。
+  let lastRaw: ReturnType<Config["providers"]["get"]> | undefined;
   let memoized: Map<string, ResolvedProviderProfile> | undefined;
 
   const profiles = (): ReadonlyMap<string, ResolvedProviderProfile> => {
-    const raw = current();
+    const raw = config.providers.get();
     if (raw === lastRaw && memoized !== void 0) return memoized;
-    const next = resolveProfiles(raw.providers);
+    // 引用读回的是 schema 解析后的只读形状（`exactOptionalPropertyTypes` 下与手写的可选字段形态不同），
+    // 这里按上游 llm-pi-ai 的做法转换一次再解析。
+    const next = resolveProfiles(raw as Record<string, ProviderProfileSource> | undefined);
     lastRaw = raw;
     memoized = next;
     return next;
@@ -443,7 +458,7 @@ export function apply(ctx: Context, config: Config): void {
   let directory: ReturnType<typeof ctx.llm.registerConfigurableProviders> | undefined;
   let directoryFacts: unknown[] | undefined;
   const ensureDirectory = () => {
-    const entries = directoryEntries(profiles());
+    const entries = directoryEntries(profiles(), settingsNs);
     if (deepEqualJson(entries, directoryFacts)) return;
     if (directory === void 0) directory = ctx.llm.registerConfigurableProviders(entries);
     else directory.replace(entries);
@@ -468,30 +483,35 @@ export function apply(ctx: Context, config: Config): void {
     registeredFacts = facts;
   };
   ensureRegistrationFacts();
-  ctx.inject(["settings"], (settingsCtx) => {
-    settingsCtx.settings.installSection(ctx, NS, Config, config, {
-      validate: assertServiceable,
-      setSource: (source) => {
-        current = source;
-      },
-      onChange: () => {
-        try {
-          ensureRegistrationFacts();
-        } catch (error) {
-          ctx.logger.error(
-            "llm-openai-compatible: keeping the previously registered routes after a refused update",
-          );
-          ctx.logger.error(error);
-        }
-        try {
-          ensureDirectory();
-        } catch (error) {
-          ctx.logger.error(
-            "llm-openai-compatible: keeping the previous configurable-provider directory after a refused update",
-          );
-          ctx.logger.error(error);
-        }
-      },
+  const refresh = (): void => {
+    try {
+      ensureRegistrationFacts();
+    } catch (error) {
+      ctx.logger.error(
+        "llm-openai-compatible: keeping the previously registered routes after a refused update",
+      );
+      ctx.logger.error(error);
+    }
+    try {
+      ensureDirectory();
+    } catch (error) {
+      ctx.logger.error(
+        "llm-openai-compatible: keeping the previous configurable-provider directory after a refused update",
+      );
+      ctx.logger.error(error);
+    }
+  };
+  // volatile 更新（设置页保存）只把新值提交进运行引用并广播，不重挂这一行：这里重算路由注册与
+  // 可配置 provider 目录（上游 0.1.7 的运行期改配置机制；`profiles()` 读的就是引用里的新值）。
+  ctx.on("loader/volatile-update", refresh);
+  // 候选配置在提交前先校验：无效更新被拒绝，运行引用保持原值（loader 只记录这次拒绝）。
+  ctx.on("internal/config", function (this: Context["fiber"], _raw, next) {
+    const raw: unknown = next();
+    if (this !== ctx.fiber) return raw;
+    const candidate = Config(raw as Options);
+    assertServiceable({
+      providers: structuredClone(candidate.providers.get()) as Record<string, ProviderProfileSource>,
     });
+    return raw;
   });
 }
