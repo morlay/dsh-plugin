@@ -5,7 +5,8 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 会话视图给出全量会话的搜索、分页与归档 / 取消归档 / 导出 / 删除（确认弹窗），并带导入为新会话与
 孤儿数据 GC；统计视图给出全部对话的 token 用量。
 
-会话列表取会话目录 ∪ 归档集，按最近活动在前；**已归档**的行带标记，也只有这些行的「删除」可用
+会话列表取 `POST /api/session.rows` 的完整语料（含归档），按最近活动在前；**已归档**的行带标记，
+也只有这些行的「删除」可用
 （未归档行提供「归档」，两者互斥）。子代理派生会话（`origin: 'subagent'`）默认不列（它们既不可删
 也多数无意义，实测在真实库里占七成），勾选「显示子代理会话」即真全量。
 
@@ -21,11 +22,14 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 ## 用法
 
 页面是 profile 的一行（由 `@morlay/better-session` 的 patch 插入），装好即在侧栏出现「对话管理」。
-它不新增 host 面，只读既有服务与路由：
+它不新增 host 面，只读既有服务与路由。**会话行走我们自己的列表路由**（`POST /api/session.rows`，
+`@morlay/session-rdb`）：完整语料（含归档）+ 标题 + 最后活动时间随行给出——官方 `session/list` 按部署策略
+**默认排除已归档**（给上游 UI 用），归档集的管理动作要完整集合，两条路不混（决策见
+[session-rdb 的 ADR](../session-rdb/.agents/adrs/20260922-会话列表两条路.md)）：
 
 | 动作         | 接缝                                                                                                        |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
-| 列表与标题   | 框架标准座位 `useSessions`（会话目录、标题、时间）+ `useWorkspaces`（工作区归属、归档集）                   |
+| 列表与标题   | `POST /api/session.rows`（`@morlay/session-rdb`：完整语料 + 标题 + 最后活动时间）+ `useWorkspaces`（工作区归属） |
 | 归档         | `ctx.uiWorkspace.archiveSession`（上游 ui-workspace，未归档行提供）                                         |
 | 取消归档     | `ctx.uiWorkspace.unarchiveSession`（上游 ui-workspace，已归档行提供）                                       |
 | 导出         | `POST /api/session.export`（`@morlay/session-rdb`，直接下载 zip）                                           |
@@ -34,7 +38,7 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 | 清理孤儿数据 | `POST /api/session.gc`（停 agent → 回收孤儿 subagent 会话 → 回收孤儿事件行 → VACUUM；执行期间阻塞界面）     |
 | 用量统计     | `POST /api/session.usage`（`@morlay/session-rdb` 读专用用量表聚合；进入统计视图时拉一次，维度切换本地折叠） |
 
-删除、导入与 GC 成功后刷新会话列表（`ctx.sessions.refresh`）；host 拒绝（未归档 / 正在使用 / 不存在）
+归档 / 取消归档 / 删除 / 导入 / GC 成功后重拉会话行；host 拒绝（未归档 / 正在使用 / 不存在）
 时按错误码给出可读文案。列表每页 20 条，搜索框复用官方 `Input`（连同官方图标与焦点样式）。
 
 GC 是唯一会**停止所有运行中 agent** 的动作：确认后进入不可关闭的等待弹窗，避免用户在 VACUUM 期间

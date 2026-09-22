@@ -212,6 +212,44 @@ describe("对话管理注入面", () => {
     expect(b.ports.refreshes).toBe(1);
   });
 
+  it("列表打我们自己那条 rows 路由（完整语料，含归档）", async () => {
+    const b = bench();
+    const calls = stubFetch(200, {
+      items: [
+        {
+          sessionId: "s1",
+          title: "留下的会话",
+          origin: null,
+          cwd: "/w",
+          createdAt: 1,
+          updatedAt: 2,
+          archived: false,
+        },
+        {
+          sessionId: "s2",
+          title: null,
+          origin: "subagent",
+          cwd: null,
+          createdAt: 1,
+          updatedAt: 3,
+          archived: true,
+        },
+      ],
+    });
+
+    const rows = await b.controller.face.listRows();
+
+    expect(calls[0]?.url).toBe("/api/session.rows");
+    expect(rows.map((row) => row.sessionId)).toEqual(["s1", "s2"]);
+    expect(rows[1]).toMatchObject({ archived: true, title: null, origin: "subagent" });
+  });
+
+  it("列表响应不可用时给出失败原因", async () => {
+    const b = bench();
+    stubFetch(200, { notItems: true });
+    await expect(b.controller.face.listRows()).rejects.toThrow("会话列表响应不可用");
+  });
+
   it("用量统计打 usage 路由并回传三份数据", async () => {
     const b = bench();
     const calls = stubFetch(200, REPORT_PAYLOAD);

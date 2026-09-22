@@ -35,6 +35,7 @@ interface Row {
 }
 
 interface Faces {
+  listRows: ReturnType<typeof vi.fn>;
   archive: ReturnType<typeof vi.fn>;
   unarchive: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
@@ -65,18 +66,36 @@ const A: Row = { id: "s1", title: "会话 A", updatedAt: 3_000 };
 const B: Row = { id: "s2", title: "会话 B", updatedAt: 2_000 };
 const C: Row = { id: "s3", title: "会话 C", updatedAt: 1_000 };
 
-function renderPage(options: {
+async function renderPage(options: {
   archived: readonly string[];
   sessions?: readonly Row[];
   workspaces?: readonly { id: string; title: string; sessionIds: readonly string[] }[];
-  phase?: "ready" | "loading";
+  /** 列表路由的替身：给了就覆盖默认的「会话行快照」实现（用于失败态 / 未就绪用例）。 */
+  listRows?: () => Promise<unknown>;
+  /** 未就绪用例要自己断言 loading 文案：跳过「等列表就绪」这一步。 */
+  skipReady?: boolean;
   faces?: Partial<Faces>;
-}): { faces: Faces; container: HTMLElement } {
+}): Promise<{ faces: Faces; container: HTMLElement }> {
   const rows = options.sessions ?? [A, B, C];
   const workspaces = options.workspaces ?? [
     { id: "w1", title: "工作区一", sessionIds: [A.id, B.id] },
   ];
+  const archivedIds = new Set(options.archived);
   const faces: Faces = {
+    // 数据面是我们自己的列表路由（完整语料，含归档）：替身按行快照回答。
+    listRows: vi.fn(
+      options.listRows ??
+        (async () =>
+          rows.map((row) => ({
+            sessionId: row.id,
+            title: row.title,
+            origin: row.origin ?? null,
+            cwd: null,
+            createdAt: 0,
+            updatedAt: row.updatedAt ?? Date.now(),
+            archived: archivedIds.has(row.id),
+          }))),
+    ),
     archive: vi.fn(async () => {}),
     unarchive: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
@@ -91,26 +110,18 @@ function renderPage(options: {
   const view = render(
     <Page
       t={t}
-      useSessions={hook({
-        phase: options.phase ?? "ready",
-        ids: rows.map((row) => row.id),
-        byId: Object.fromEntries(
-          rows.map((row) => [
-            row.id,
-            {
-              displayTitle: row.title,
-              updatedAt: row.updatedAt ?? Date.now(),
-              ...(row.origin === undefined ? {} : { origin: row.origin }),
-            },
-          ]),
-        ),
-      })}
       useWorkspaces={hook({ items: workspaces, archivedSessionIds: options.archived })}
       usePanelInfo={hook({ activePanelId: "conversations" })}
       renderSlot={() => null}
       {...faces}
     />,
   );
+  // 列表是异步拉的：等 loading 文案消失再交回控制权（空列表同样适用）。
+  if (options.skipReady !== true) {
+    await waitFor(() => {
+      expect(screen.queryByText(zh.loading)).toBeNull();
+    });
+  }
   return { faces, container: view.container };
 }
 
@@ -125,50 +136,50 @@ function fileInput(container: HTMLElement): HTMLInputElement {
 }
 
 describe("对话管理页面：列表与搜索", () => {
-  it("列出全部会话，按最近活动在前", () => {
-    renderPage({ archived: [B.id, C.id] });
+  it("列出全部会话，按最近活动在前", async () => {
+    await renderPage({ archived: [B.id, C.id] });
     expect(rowTexts()).toHaveLength(3);
     expect(rowTexts()[0]).toContain("会话 A");
     expect(rowTexts()[1]).toContain("会话 B");
     expect(rowTexts()[2]).toContain("会话 C");
   });
 
-  it("行显示所属工作区，归档会话按未分组显示", () => {
-    renderPage({ archived: [B.id, C.id] });
+  it("行显示所属工作区，归档会话按未分组显示", async () => {
+    await renderPage({ archived: [B.id, C.id] });
     expect(rowTexts()[0]).toContain("工作区一");
     expect(rowTexts()[1]).toContain("工作区一");
     expect(rowTexts()[2]).toContain("未分组");
   });
 
-  it("搜索按标题过滤", () => {
-    renderPage({ archived: [B.id, C.id] });
+  it("搜索按标题过滤", async () => {
+    await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "B" } });
     expect(rowTexts()).toHaveLength(1);
     expect(rowTexts()[0]).toContain("会话 B");
   });
 
-  it("搜索按所属工作区名过滤", () => {
-    renderPage({ archived: [B.id, C.id] });
+  it("搜索按所属工作区名过滤", async () => {
+    await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "工作区" } });
     expect(rowTexts()).toHaveLength(2);
     expect(rowTexts()[0]).toContain("会话 A");
     expect(rowTexts()[1]).toContain("会话 B");
   });
 
-  it("搜索无结果时给出空搜索文案", () => {
-    renderPage({ archived: [B.id, C.id] });
+  it("搜索无结果时给出空搜索文案", async () => {
+    await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
     expect(rowTexts()).toHaveLength(0);
     expect(screen.getByText("没有匹配的会话。")).toBeTruthy();
   });
 
-  it("没有任何会话时给出空态", () => {
-    renderPage({ archived: [], sessions: [], workspaces: [] });
+  it("没有任何会话时给出空态", async () => {
+    await renderPage({ archived: [], sessions: [], workspaces: [] });
     expect(screen.getByText("暂无会话。")).toBeTruthy();
   });
 
   it("归档与取消归档互斥，删除只对已归档可用", async () => {
-    const { faces } = renderPage({ archived: [C.id] });
+    const { faces } = await renderPage({ archived: [C.id] });
     expect(screen.getAllByText("已归档")).toHaveLength(1);
 
     const disabled = (name: string): boolean =>
@@ -189,9 +200,9 @@ describe("对话管理页面：列表与搜索", () => {
     expect(disabled("删除 会话 C")).toBe(false);
   });
 
-  it("默认不显示子代理会话，勾选后显示并带标记", () => {
+  it("默认不显示子代理会话，勾选后显示并带标记", async () => {
     const sub: Row = { id: "s4", title: "子代理会话", updatedAt: 4_000, origin: "subagent" };
-    renderPage({ archived: [C.id], sessions: [A, B, C, sub] });
+    await renderPage({ archived: [C.id], sessions: [A, B, C, sub] });
 
     // 全量数据在手，但默认隐藏子代理派生会话：它们既不可删除也不可取消归档。
     expect(rowTexts()).toHaveLength(3);
@@ -203,15 +214,19 @@ describe("对话管理页面：列表与搜索", () => {
     expect(screen.getByText("子代理")).toBeTruthy();
   });
 
-  it("会话列表未就绪时给出读取文案", () => {
-    renderPage({ archived: [B.id], phase: "loading" });
+  it("会话列表未就绪时给出读取文案", async () => {
+    await renderPage({
+      archived: [B.id],
+      listRows: () => new Promise(() => {}),
+      skipReady: true,
+    });
     expect(screen.getByText("正在读取会话…")).toBeTruthy();
   });
 });
 
 describe("对话管理页面：动作", () => {
   it("取消归档调用注入面", async () => {
-    const { faces } = renderPage({ archived: [B.id, C.id] });
+    const { faces } = await renderPage({ archived: [B.id, C.id] });
     fireEvent.click(screen.getByRole("button", { name: "取消归档 会话 C" }));
     await waitFor(() => {
       expect(faces.unarchive).toHaveBeenCalledWith("s3");
@@ -219,7 +234,7 @@ describe("对话管理页面：动作", () => {
   });
 
   it("删除先弹确认，未确认前不请求", async () => {
-    const { faces } = renderPage({ archived: [C.id] });
+    const { faces } = await renderPage({ archived: [C.id] });
     fireEvent.click(screen.getByRole("button", { name: "删除 会话 C" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("删除会话");
@@ -232,7 +247,7 @@ describe("对话管理页面：动作", () => {
   });
 
   it("确认弹窗可以取消", async () => {
-    const { faces } = renderPage({ archived: [C.id] });
+    const { faces } = await renderPage({ archived: [C.id] });
     fireEvent.click(screen.getByRole("button", { name: "删除 会话 C" }));
     fireEvent.click(await screen.findByRole("button", { name: "取消" }));
     await waitFor(() => {
@@ -242,7 +257,7 @@ describe("对话管理页面：动作", () => {
   });
 
   it("删除被 host 拒绝时给出可读原因", async () => {
-    renderPage({
+    await renderPage({
       archived: [C.id],
       faces: {
         remove: vi.fn(async () => {
@@ -262,7 +277,7 @@ describe("对话管理页面：动作", () => {
   });
 
   it("导入 zip 为新会话并提示结果", async () => {
-    const { faces, container } = renderPage({ archived: [] });
+    const { faces, container } = await renderPage({ archived: [] });
     const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
     fireEvent.change(fileInput(container), { target: { files: [file] } });
     await waitFor(() => {
@@ -274,7 +289,7 @@ describe("对话管理页面：动作", () => {
   });
 
   it("导入失败时给出原因", async () => {
-    const { container } = renderPage({
+    const { container } = await renderPage({
       archived: [],
       faces: {
         importZip: vi.fn(async () => {
@@ -303,8 +318,8 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe("对话管理页面：分页、导出与 GC", () => {
-  it("搜索框复用官方 Input（官方包裹层 + 官方图标），不自造输入外观", () => {
-    renderPage({ archived: [C.id] });
+  it("搜索框复用官方 Input（官方包裹层 + 官方图标），不自造输入外观", async () => {
+    await renderPage({ archived: [C.id] });
     const input = screen.getByRole("searchbox");
     const wrap = input.parentElement;
     // 官方 Input 的 DOM 是 wrap(span) > icon(span>svg) + input：手写 <input> 会被这条断言拦住。
@@ -313,19 +328,19 @@ describe("对话管理页面：分页、导出与 GC", () => {
     expect(input.getAttribute("style")).toBeNull();
   });
 
-  it("页面项不参与 flex 压缩：搜索框与列表行不被长列表压扁", () => {
+  it("页面项不参与 flex 压缩：搜索框与列表行不被长列表压扁", async () => {
     // 页面根是纵向 flex + 整页滚动；这些项一旦可压缩，官方 Input 的 32px 高会塌成一行文字高。
     expect(styles.search.flex).toBe("none");
     expect(styles.list.flex).toBe("none");
     expect(styles.row.flex).toBe("none");
   });
 
-  it("每页 20 条，翻页生效，搜索回到第一页", () => {
+  it("每页 20 条，翻页生效，搜索回到第一页", async () => {
     const many: Row[] = Array.from({ length: 25 }, (_unused, index) => ({
       id: `s${index}`,
       title: `会话 ${index}`,
     }));
-    renderPage({ archived: many.map((row) => row.id), sessions: many });
+    await renderPage({ archived: many.map((row) => row.id), sessions: many });
 
     expect(rowTexts()).toHaveLength(20);
     expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
@@ -340,7 +355,7 @@ describe("对话管理页面：分页、导出与 GC", () => {
   });
 
   it("行内导出调用注入面", async () => {
-    const { faces } = renderPage({ archived: [C.id] });
+    const { faces } = await renderPage({ archived: [C.id] });
     fireEvent.click(screen.getByRole("button", { name: "导出 会话 C" }));
     await waitFor(() => {
       expect(faces.exportZip).toHaveBeenCalledWith("s3");
@@ -348,7 +363,7 @@ describe("对话管理页面：分页、导出与 GC", () => {
   });
 
   it("导出失败时给出原因", async () => {
-    const { faces } = renderPage({
+    const { faces } = await renderPage({
       archived: [C.id],
       faces: {
         exportZip: vi.fn(async () => {
@@ -369,7 +384,7 @@ describe("对话管理页面：分页、导出与 GC", () => {
       orphanEvents: number;
       stoppedAgents: number;
     }>();
-    const { faces } = renderPage({
+    const { faces } = await renderPage({
       archived: [],
       faces: { collectGarbage: vi.fn(() => pending.promise) },
     });
@@ -394,7 +409,7 @@ describe("对话管理页面：分页、导出与 GC", () => {
   });
 
   it("清理失败时给出原因", async () => {
-    renderPage({
+    await renderPage({
       archived: [],
       faces: {
         collectGarbage: vi.fn(async () => {
@@ -466,7 +481,7 @@ const REPORT = {
 
 describe("对话管理页面：token 用量统计", () => {
   it("第一层切到统计：拉一次数据，默认总览含子代理拆分", async () => {
-    const { faces, container } = renderPage({
+    const { faces, container } = await renderPage({
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
@@ -488,7 +503,7 @@ describe("对话管理页面：token 用量统计", () => {
 
   it("二层切维度（按模型 / 按会话），时间范围切换会带参数重新请求", async () => {
     const loadUsage = vi.fn(async () => REPORT);
-    renderPage({ archived: [], faces: { loadUsage } });
+    await renderPage({ archived: [], faces: { loadUsage } });
     fireEvent.click(screen.getByRole("tab", { name: "统计" }));
     await screen.findByText("总览");
     expect(loadUsage).toHaveBeenCalledWith("day");
@@ -524,7 +539,7 @@ describe("对话管理页面：token 用量统计", () => {
       totals: { ...TOTALS_165, cacheReadTokens: 1_000 },
       subagent: { ...TOTALS_55, cacheReadTokens: 0 },
     };
-    const { container } = renderPage({
+    const { container } = await renderPage({
       archived: [],
       faces: { loadUsage: vi.fn(async () => withCache) },
     });
@@ -542,7 +557,7 @@ describe("对话管理页面：token 用量统计", () => {
     expect(screen.getByText("90.9%")).toBeTruthy();
   });
 
-  it("统计行：label 在上，单项内部上下、单项之间横向，且没有 total 项", () => {
+  it("统计行：label 在上，单项内部上下、单项之间横向，且没有 total 项", async () => {
     expect(styles.usageRow.flexDirection).toBe("column");
     expect(styles.usageMetric.flexDirection).toBe("column");
     expect(styles.usageMetrics.flexDirection).toBe("row");
@@ -551,7 +566,7 @@ describe("对话管理页面：token 用量统计", () => {
   });
 
   it("数据位都带 data-* 标注，便于按标注沟通定位", async () => {
-    const { container } = renderPage({
+    const { container } = await renderPage({
       archived: [C.id],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
@@ -590,7 +605,7 @@ describe("对话管理页面：token 用量统计", () => {
   });
 
   it("活动计数替换「事件」：总览与会话行显示轮次 / 步骤 / 用户输入 / 工具调用", async () => {
-    const { container } = renderPage({
+    const { container } = await renderPage({
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
@@ -613,7 +628,7 @@ describe("对话管理页面：token 用量统计", () => {
   });
 
   it("按模型的行不显示活动计数（事件没有模型归属）", async () => {
-    const { container } = renderPage({
+    const { container } = await renderPage({
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
@@ -627,7 +642,7 @@ describe("对话管理页面：token 用量统计", () => {
   });
 
   it("统计失败时给出原因", async () => {
-    renderPage({
+    await renderPage({
       archived: [],
       faces: {
         loadUsage: vi.fn(async () => {
@@ -644,8 +659,8 @@ describe("对话管理页面：token 用量统计", () => {
 
 describe("对话管理页面：滚动分区", () => {
   // 滚动只发生在内容层：页头（标题 / tab 条 / 动作）与搜索行固定在顶部不动。
-  it("列表与分页在滚动层内，页头与搜索在滚动层外", () => {
-    const { container } = renderPage({ archived: [B.id, C.id] });
+  it("列表与分页在滚动层内，页头与搜索在滚动层外", async () => {
+    const { container } = await renderPage({ archived: [B.id, C.id] });
 
     const scroll = container.querySelector('[data-scroll="page"]');
     expect(scroll).not.toBeNull();
@@ -661,7 +676,7 @@ describe("对话管理页面：滚动分区", () => {
   });
 
   it("统计视图同样把内容放进滚动层（页头固定）", async () => {
-    const { container } = renderPage({ archived: [] });
+    const { container } = await renderPage({ archived: [] });
     fireEvent.click(screen.getByRole("tab", { name: "统计" }));
     await waitFor(() => {
       expect(container.querySelector("[data-usage-range]")).not.toBeNull();

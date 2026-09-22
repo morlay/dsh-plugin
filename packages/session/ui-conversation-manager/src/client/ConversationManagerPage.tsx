@@ -1,6 +1,7 @@
 // 「对话管理」页面：已归档会话的搜索、取消归档、导出、删除，以及导入为新会话与孤儿数据 GC。
-// 数据面只读框架标准座位（useSessions / useWorkspaces），动作面只读注入面。
-import { useMemo, useRef, useState, type ReactNode } from "react";
+// 数据面：会话行读**我们自己的**列表路由（注入面 listRows，含归档），工作区归属读框架座位
+// useWorkspaces；动作面只读注入面。
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Checkbox,
@@ -16,6 +17,7 @@ import type { SessionId } from "@deepseek-ai/dsh-session";
 import {
   ConversationManagerRequestError,
   type ConversationManagerFace,
+  type SessionRowRecord,
   type SessionUsageReport,
   type UsageBucket,
   type UsageRangeKey,
@@ -78,7 +80,7 @@ function failureText(error: unknown, t: Translate): string {
 
 export function ConversationManagerPage({
   t,
-  useSessions,
+  listRows,
   useWorkspaces,
   archive,
   unarchive,
@@ -88,8 +90,11 @@ export function ConversationManagerPage({
   collectGarbage,
   loadUsage,
 }: ConversationManagerPageProps): ReactNode {
-  const sessions = useSessions((state) => state);
   const workspaces = useWorkspaces((state) => state);
+  // 数据面是**我们自己的**列表路由（完整语料，含归档）：官方 `session/list` 按部署策略排除归档，
+  // 归档集的管理动作要完整集合，两条路不混。
+  const [sessionRows, setSessionRows] = useState<readonly SessionRowRecord[] | null>(null);
+  const [rowsFailure, setRowsFailure] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [showSubagents, setShowSubagents] = useState(false);
@@ -105,41 +110,49 @@ export function ConversationManagerPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const reloadRows = useCallback(async () => {
+    try {
+      setSessionRows(await listRows());
+      setRowsFailure(null);
+    } catch (error: unknown) {
+      setRowsFailure(failureText(error, t));
+    }
+  }, [listRows, t]);
+
+  useEffect(() => {
+    void reloadRows();
+  }, [reloadRows]);
+
   const ungrouped = t("ungrouped");
 
-  // 全量会话：会话目录（ids）∪ 归档集，按最近活动在前；没有加载到 summary 的成员不产生行。
+  // 全量会话：host 的自己那条列表路由给出（含归档），工作区归属用 registry 的 items 映射；
+  // 标题、归档标记与最后活动时间都随行给出。
   const rows = useMemo<ConversationRow[]>(() => {
     const owners = new Map<string, string>();
     for (const workspace of workspaces.items) {
       for (const id of workspace.sessionIds) owners.set(id, workspace.title);
     }
-    const archivedIds = new Set<SessionId>(workspaces.archivedSessionIds);
-    const ids = new Set<SessionId>([...sessions.ids, ...workspaces.archivedSessionIds]);
-    return [...ids]
-      .flatMap((id) => {
-        const summary = sessions.byId[id];
-        if (summary === undefined) return [];
-        return [
-          {
-            id,
-            title: summary.displayTitle,
-            workspace: owners.get(id) ?? ungrouped,
-            archived: archivedIds.has(id),
-            subagent: summary.origin === "subagent",
-            updatedAt: summary.updatedAt,
-          },
-        ];
-      })
+    return (sessionRows ?? [])
+      .map((record) => ({
+        id: record.sessionId as SessionId,
+        title: record.title ?? record.sessionId,
+        workspace: owners.get(record.sessionId) ?? ungrouped,
+        archived: record.archived,
+        subagent: record.origin === "subagent",
+        updatedAt: record.updatedAt,
+      }))
       .sort((left, right) => right.updatedAt - left.updatedAt);
-  }, [workspaces, sessions.ids, sessions.byId, ungrouped]);
+  }, [sessionRows, workspaces, ungrouped]);
 
   // 一个动作的收尾：成败都收掉弹窗，失败把原因落到页面上的提示行。
+  // 动作成功即重拉我们自己的列表（归档状态与标题都可能变）；失败只报错、不动列表。
   const run = (action: Promise<unknown>, settle?: () => void): void => {
     setFailure(null);
     setNotice(null);
     void action.then(
       () => {
         settle?.();
+        void reloadRows();
       },
       (error: unknown) => {
         settle?.();
@@ -156,6 +169,7 @@ export function ConversationManagerPage({
       (result) => {
         setGcPhase("idle");
         setNotice(t("gc.done", { sessions: result.orphanSessions, events: result.orphanEvents }));
+        void reloadRows();
       },
       (error: unknown) => {
         setGcPhase("idle");
@@ -188,8 +202,8 @@ export function ConversationManagerPage({
     if (usage === null && !usageLoading) requestUsage(usageRange);
   };
 
-  if (sessions.phase !== "ready") {
-    return <p {...styling.props(styles.status)}>{t("loading")}</p>;
+  if (sessionRows === null) {
+    return <p {...styling.props(styles.status)}>{rowsFailure ?? t("loading")}</p>;
   }
 
   const now = Date.now();

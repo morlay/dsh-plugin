@@ -7,6 +7,23 @@ export const SESSION_EXPORT_PATH = "/api/session.export";
 export const SESSION_GC_PATH = "/api/session.gc";
 export const SESSION_USAGE_PATH = "/api/session.usage";
 
+/**
+ * 管理面的会话行（**完整语料，含归档**）：我们自己的路由，与官方 `session/list` 分开——那条按部署策略
+ * 默认排除归档（给上游 UI 用），归档集的管理动作需要完整集合。
+ */
+export const SESSION_ROWS_PATH = "/api/session.rows";
+
+/** 一行会话：标题、origin、最后活动时间与归档标记都由 host 给出。 */
+export interface SessionRowRecord {
+  sessionId: string;
+  title: string | null;
+  origin: string | null;
+  cwd: string | null;
+  createdAt: number;
+  updatedAt: number;
+  archived: boolean;
+}
+
 /** 时间范围的语义键（与 session-rdb `./usage` 的 `UsageRangeKey` 镜像）。 */
 export type UsageRangeKey = "all" | "day" | "week" | "7d" | "30d" | "90d";
 
@@ -74,6 +91,8 @@ export interface ConversationManagerGcResult {
 
 /** 页面从注入面拿到的动作（属性语法：页面解构后直接调用，不绑 this）。 */
 export interface ConversationManagerFace {
+  /** 管理面自己的列表：完整语料（含归档），标题与最后活动时间随行给出。 */
+  listRows: () => Promise<SessionRowRecord[]>;
   archive: (sessionId: SessionId) => Promise<void>;
   unarchive: (sessionId: SessionId) => Promise<void>;
   remove: (sessionId: SessionId) => Promise<void>;
@@ -134,6 +153,7 @@ export class ConversationManagerController {
 
   constructor(private readonly ports: ConversationManagerPorts) {
     this.face = {
+      listRows: () => this.loadRows(),
       archive: (sessionId) => this.ports.archiveSession(sessionId),
       unarchive: (sessionId) => this.ports.unarchiveSession(sessionId),
       remove: (sessionId) => this.remove(sessionId),
@@ -142,6 +162,15 @@ export class ConversationManagerController {
       collectGarbage: () => this.collectGarbage(),
       loadUsage: (range) => this.loadUsage(range),
     };
+  }
+
+  private async loadRows(): Promise<SessionRowRecord[]> {
+    const value = await postJson(SESSION_ROWS_PATH, {});
+    const items = value["items"];
+    if (!Array.isArray(items)) {
+      throw new ConversationManagerRequestError("会话列表响应不可用", undefined);
+    }
+    return items as SessionRowRecord[];
   }
 
   private async remove(sessionId: SessionId): Promise<void> {
