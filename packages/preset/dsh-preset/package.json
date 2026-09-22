@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-preset",
-  "version": "0.0.6-alpha.5",
+  "version": "0.0.6-alpha.6",
   "description": "Personal dsh profile bundle: deployment-level host configuration — personal llm-pi-ai provider routes, the ollama web-search backend, and the sandbox access rules.",
   "keywords": [
     "dsh",

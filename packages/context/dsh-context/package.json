@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-context",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1-alpha.1",
   "description": "Prompt-injection capability set for dsh: the single channel (context assembler) plus the injectors it carries — workspace instructions, skill catalog, file references, tool-usage guidance, and the per-mode scope gate. One package, one subpath per capability row.",
   "keywords": [
     "context",
