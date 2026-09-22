@@ -13,7 +13,7 @@ export const SESSION_USAGE_PATH = "/api/session.usage";
  */
 export const SESSION_ROWS_PATH = "/api/session.rows";
 
-/** 一行会话：标题、origin、最后活动时间与归档标记都由 host 给出。 */
+/** 一行会话：标题、origin、最后活动时间、归档标记与工作区归属都由 host 给出。 */
 export interface SessionRowRecord {
   sessionId: string;
   title: string | null;
@@ -22,6 +22,23 @@ export interface SessionRowRecord {
   createdAt: number;
   updatedAt: number;
   archived: boolean;
+  workspace: string | null;
+}
+
+/** 列表请求：搜索、子代理过滤与分页都在后端做（前端分页等于每次拉全量）。 */
+export interface SessionRowsQuery {
+  query?: string;
+  includeSubagents?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SessionRowsPage {
+  items: SessionRowRecord[];
+  /** 过滤后的总数（分页前），页面据此算页数。 */
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** 时间范围的语义键（与 session-rdb `./usage` 的 `UsageRangeKey` 镜像）。 */
@@ -91,8 +108,8 @@ export interface ConversationManagerGcResult {
 
 /** 页面从注入面拿到的动作（属性语法：页面解构后直接调用，不绑 this）。 */
 export interface ConversationManagerFace {
-  /** 管理面自己的列表：完整语料（含归档），标题与最后活动时间随行给出。 */
-  listRows: () => Promise<SessionRowRecord[]>;
+  /** 管理面自己的列表：完整语料（含归档），标题与最后活动时间随行给出；搜索与分页都在后端。 */
+  listRows: (query?: SessionRowsQuery) => Promise<SessionRowsPage>;
   archive: (sessionId: SessionId) => Promise<void>;
   unarchive: (sessionId: SessionId) => Promise<void>;
   remove: (sessionId: SessionId) => Promise<void>;
@@ -153,7 +170,7 @@ export class ConversationManagerController {
 
   constructor(private readonly ports: ConversationManagerPorts) {
     this.face = {
-      listRows: () => this.loadRows(),
+      listRows: (query) => this.loadRows(query),
       archive: (sessionId) => this.ports.archiveSession(sessionId),
       unarchive: (sessionId) => this.ports.unarchiveSession(sessionId),
       remove: (sessionId) => this.remove(sessionId),
@@ -164,13 +181,18 @@ export class ConversationManagerController {
     };
   }
 
-  private async loadRows(): Promise<SessionRowRecord[]> {
-    const value = await postJson(SESSION_ROWS_PATH, {});
+  private async loadRows(query: SessionRowsQuery = {}): Promise<SessionRowsPage> {
+    const value = await postJson(SESSION_ROWS_PATH, query);
     const items = value["items"];
-    if (!Array.isArray(items)) {
+    if (!Array.isArray(items) || typeof value["total"] !== "number") {
       throw new ConversationManagerRequestError("会话列表响应不可用", undefined);
     }
-    return items as SessionRowRecord[];
+    return {
+      items: items as SessionRowRecord[],
+      total: value["total"],
+      page: typeof value["page"] === "number" ? value["page"] : (query.page ?? 1),
+      pageSize: typeof value["pageSize"] === "number" ? value["pageSize"] : (query.pageSize ?? 20),
+    };
   }
 
   private async remove(sessionId: SessionId): Promise<void> {

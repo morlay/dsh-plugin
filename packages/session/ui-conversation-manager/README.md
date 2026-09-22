@@ -5,7 +5,8 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 会话视图给出全量会话的搜索、分页与归档 / 取消归档 / 导出 / 删除（确认弹窗），并带导入为新会话与
 孤儿数据 GC；统计视图给出全部对话的 token 用量。
 
-会话列表取 `POST /api/session.rows` 的完整语料（含归档），按最近活动在前；**已归档**的行带标记，
+会话列表取 `POST /api/session.rows` 的完整语料（含归档），按最近活动在前；搜索（标题或工作区名）、
+子代理开关与翻页都是**后端**请求（前端只渲染当前页，输入停 250ms 再发）；**已归档**的行带标记，
 也只有这些行的「删除」可用
 （未归档行提供「归档」，两者互斥）。子代理派生会话（`origin: 'subagent'`）默认不列（它们既不可删
 也多数无意义，实测在真实库里占七成），勾选「显示子代理会话」即真全量。
@@ -29,7 +30,7 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 
 | 动作         | 接缝                                                                                                        |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
-| 列表与标题   | `POST /api/session.rows`（`@morlay/session-rdb`：完整语料 + 标题 + 最后活动时间）+ `useWorkspaces`（工作区归属） |
+| 列表与标题   | `POST /api/session.rows`（`@morlay/session-rdb`：完整语料 + 标题 + 最后活动时间 + 工作区归属；搜索 / 子代理过滤 / 分页都在后端） |
 | 归档         | `ctx.uiWorkspace.archiveSession`（上游 ui-workspace，未归档行提供）                                         |
 | 取消归档     | `ctx.uiWorkspace.unarchiveSession`（上游 ui-workspace，已归档行提供）                                       |
 | 导出         | `POST /api/session.export`（`@morlay/session-rdb`，直接下载 zip）                                           |

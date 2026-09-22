@@ -1,6 +1,6 @@
 // 「对话管理」页面：已归档会话的搜索、取消归档、导出、删除，以及导入为新会话与孤儿数据 GC。
-// 数据面：会话行读**我们自己的**列表路由（注入面 listRows，含归档），工作区归属读框架座位
-// useWorkspaces；动作面只读注入面。
+// 数据面：会话行读**我们自己的**列表路由（注入面 listRows，含归档；搜索 / 子代理过滤 / 分页都在后端），
+// 动作面只读注入面。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
@@ -17,7 +17,7 @@ import type { SessionId } from "@deepseek-ai/dsh-session";
 import {
   ConversationManagerRequestError,
   type ConversationManagerFace,
-  type SessionRowRecord,
+  type SessionRowsPage,
   type SessionUsageReport,
   type UsageBucket,
   type UsageRangeKey,
@@ -60,15 +60,6 @@ function timeLabel(updatedAt: number, now: number, t: Translate): string {
   return unit === "now" ? t("time.now") : t(`time.${unit}`, { n });
 }
 
-/** 标题或工作区名命中归一化后的查询。 */
-function matches(row: ConversationRow, normalizedQuery: string): boolean {
-  return (
-    normalizedQuery.length === 0 ||
-    row.title.toLowerCase().includes(normalizedQuery) ||
-    row.workspace.toLowerCase().includes(normalizedQuery)
-  );
-}
-
 /** host 错误码 → 可读文案；没有码时保留原文。 */
 function failureText(error: unknown, t: Translate): string {
   const code = error instanceof ConversationManagerRequestError ? error.code : undefined;
@@ -81,7 +72,6 @@ function failureText(error: unknown, t: Translate): string {
 export function ConversationManagerPage({
   t,
   listRows,
-  useWorkspaces,
   archive,
   unarchive,
   remove,
@@ -90,12 +80,12 @@ export function ConversationManagerPage({
   collectGarbage,
   loadUsage,
 }: ConversationManagerPageProps): ReactNode {
-  const workspaces = useWorkspaces((state) => state);
   // 数据面是**我们自己的**列表路由（完整语料，含归档）：官方 `session/list` 按部署策略排除归档，
-  // 归档集的管理动作要完整集合，两条路不混。
-  const [sessionRows, setSessionRows] = useState<readonly SessionRowRecord[] | null>(null);
+  // 归档集的管理动作要完整集合，两条路不混。搜索、子代理过滤与分页都在后端做（前端分页等于每次拉全量）。
+  const [rowsPage, setRowsPage] = useState<SessionRowsPage | null>(null);
   const [rowsFailure, setRowsFailure] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [settledQuery, setSettledQuery] = useState("");
   const [page, setPage] = useState(1);
   const [showSubagents, setShowSubagents] = useState(false);
   const [view, setView] = useState<PageView>("sessions");
@@ -112,37 +102,52 @@ export function ConversationManagerPage({
   const fileRef = useRef<HTMLInputElement>(null);
   const reloadRows = useCallback(async () => {
     try {
-      setSessionRows(await listRows());
+      // 后端分页：每次只拉当前页（PAGE_SIZE 条），翻页与搜索都重新请求。
+      setRowsPage(
+        await listRows({
+          ...(settledQuery === "" ? {} : { query: settledQuery }),
+          ...(showSubagents ? { includeSubagents: true } : {}),
+          page,
+          pageSize: PAGE_SIZE,
+        }),
+      );
       setRowsFailure(null);
     } catch (error: unknown) {
       setRowsFailure(failureText(error, t));
     }
-  }, [listRows, t]);
+  }, [listRows, t, settledQuery, showSubagents, page]);
 
   useEffect(() => {
     void reloadRows();
   }, [reloadRows]);
 
+  // 搜索下推到后端：输入停一下再请求（每次按键都打 host 没必要）。
+  useEffect(() => {
+    if (query === settledQuery) return;
+    const timer = window.setTimeout(() => {
+      setSettledQuery(query);
+      setPage(1);
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [query, settledQuery]);
+
   const ungrouped = t("ungrouped");
 
-  // 全量会话：host 的自己那条列表路由给出（含归档），工作区归属用 registry 的 items 映射；
-  // 标题、归档标记与最后活动时间都随行给出。
-  const rows = useMemo<ConversationRow[]>(() => {
-    const owners = new Map<string, string>();
-    for (const workspace of workspaces.items) {
-      for (const id of workspace.sessionIds) owners.set(id, workspace.title);
-    }
-    return (sessionRows ?? [])
-      .map((record) => ({
+  // 当前页的行：标题、工作区归属、归档标记与最后活动时间都随行给出（归属由 host 算，页面不再自己映射）。
+  const rows = useMemo<ConversationRow[]>(
+    () =>
+      (rowsPage?.items ?? []).map((record) => ({
         id: record.sessionId as SessionId,
         title: record.title ?? record.sessionId,
-        workspace: owners.get(record.sessionId) ?? ungrouped,
+        workspace: record.workspace ?? ungrouped,
         archived: record.archived,
         subagent: record.origin === "subagent",
         updatedAt: record.updatedAt,
-      }))
-      .sort((left, right) => right.updatedAt - left.updatedAt);
-  }, [sessionRows, workspaces, ungrouped]);
+      })),
+    [rowsPage, ungrouped],
+  );
 
   // 一个动作的收尾：成败都收掉弹窗，失败把原因落到页面上的提示行。
   // 动作成功即重拉我们自己的列表（归档状态与标题都可能变）；失败只报错、不动列表。
@@ -202,17 +207,17 @@ export function ConversationManagerPage({
     if (usage === null && !usageLoading) requestUsage(usageRange);
   };
 
-  if (sessionRows === null) {
+  if (rowsPage === null) {
     return <p {...styling.props(styles.status)}>{rowsFailure ?? t("loading")}</p>;
   }
 
   const now = Date.now();
-  // 子代理派生会话默认不列：它们不可删也不可取消归档，只会淹没真实对话。
-  const listed = showSubagents ? rows : rows.filter((row) => !row.subagent);
-  const matched = listed.filter((row) => matches(row, query.trim().toLowerCase()));
-  const pageCount = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+  // 这一页就是后端给的那一页：搜索、子代理过滤与排序都在 host 做过，页面只渲染。
+  const visible = rows;
+  const total = rowsPage.total;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const visible = matched.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const matched = rows;
   const confirmed = confirming;
 
   return (
@@ -350,14 +355,9 @@ export function ConversationManagerPage({
                 {failure}
               </p>
             )}
-            {listed.length === 0 ? (
+            {total === 0 ? (
               <p {...styling.props(styles.status)} data-status="empty">
-                {t("empty")}
-              </p>
-            ) : null}
-            {listed.length > 0 && matched.length === 0 ? (
-              <p {...styling.props(styles.status)} data-status="empty-search">
-                {t("emptySearch")}
+                {t(settledQuery === "" ? "empty" : "emptySearch")}
               </p>
             ) : null}
             {visible.length > 0 ? (

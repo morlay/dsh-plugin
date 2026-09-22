@@ -81,20 +81,45 @@ async function renderPage(options: {
     { id: "w1", title: "工作区一", sessionIds: [A.id, B.id] },
   ];
   const archivedIds = new Set(options.archived);
+  const ownerOf = new Map<string, string>();
+  for (const workspace of workspaces) {
+    for (const id of workspace.sessionIds) ownerOf.set(id, workspace.title);
+  }
+  const allRows = rows.map((row) => ({
+    sessionId: row.id,
+    title: row.title,
+    origin: row.origin ?? null,
+    cwd: null,
+    createdAt: 0,
+    updatedAt: row.updatedAt ?? Date.now(),
+    archived: archivedIds.has(row.id),
+    workspace: ownerOf.get(row.id) ?? null,
+  }));
   const faces: Faces = {
-    // 数据面是我们自己的列表路由（完整语料，含归档）：替身按行快照回答。
+    // 数据面是我们自己的列表路由：替身按后端语义办事（搜索 / 子代理过滤 / 分页都在「后端」）。
     listRows: vi.fn(
       options.listRows ??
-        (async () =>
-          rows.map((row) => ({
-            sessionId: row.id,
-            title: row.title,
-            origin: row.origin ?? null,
-            cwd: null,
-            createdAt: 0,
-            updatedAt: row.updatedAt ?? Date.now(),
-            archived: archivedIds.has(row.id),
-          }))),
+        (async (query: Record<string, unknown> = {}) => {
+          const needle = typeof query["query"] === "string" ? query["query"].toLowerCase() : "";
+          const filtered = allRows
+            .filter((row) => (query["includeSubagents"] === true ? true : row.origin !== "subagent"))
+            .filter(
+              (row) =>
+                needle === "" ||
+                row.title.toLowerCase().includes(needle) ||
+                (row.workspace ?? "").toLowerCase().includes(needle),
+            );
+          filtered.sort((left, right) => right.updatedAt - left.updatedAt);
+          const page = typeof query["page"] === "number" ? query["page"] : 1;
+          const pageSize = typeof query["pageSize"] === "number" ? query["pageSize"] : 20;
+          const start = (page - 1) * pageSize;
+          return {
+            items: filtered.slice(start, start + pageSize),
+            total: filtered.length,
+            page,
+            pageSize,
+          };
+        }),
     ),
     archive: vi.fn(async () => {}),
     unarchive: vi.fn(async () => {}),
@@ -154,14 +179,19 @@ describe("对话管理页面：列表与搜索", () => {
   it("搜索按标题过滤", async () => {
     await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "B" } });
-    expect(rowTexts()).toHaveLength(1);
+    // 搜索下推给 host：输入停 250ms 才请求，等结果回来再断言。
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(1);
+    });
     expect(rowTexts()[0]).toContain("会话 B");
   });
 
   it("搜索按所属工作区名过滤", async () => {
     await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "工作区" } });
-    expect(rowTexts()).toHaveLength(2);
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(2);
+    });
     expect(rowTexts()[0]).toContain("会话 A");
     expect(rowTexts()[1]).toContain("会话 B");
   });
@@ -169,7 +199,9 @@ describe("对话管理页面：列表与搜索", () => {
   it("搜索无结果时给出空搜索文案", async () => {
     await renderPage({ archived: [B.id, C.id] });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
-    expect(rowTexts()).toHaveLength(0);
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(0);
+    });
     expect(screen.getByText("没有匹配的会话。")).toBeTruthy();
   });
 
@@ -209,7 +241,9 @@ describe("对话管理页面：列表与搜索", () => {
     expect(screen.queryByText("子代理会话")).toBeNull();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "显示子代理会话" }));
-    expect(rowTexts()).toHaveLength(4);
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(4);
+    });
     expect(rowTexts()[0]).toContain("子代理会话");
     expect(screen.getByText("子代理")).toBeTruthy();
   });
@@ -346,11 +380,15 @@ describe("对话管理页面：分页、导出与 GC", () => {
     expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    await waitFor(() => {
+      expect(screen.getByText("第 2 / 2 页")).toBeTruthy();
+    });
     expect(rowTexts()).toHaveLength(5);
-    expect(screen.getByText("第 2 / 2 页")).toBeTruthy();
 
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "会话 1" } });
-    expect(screen.getByText("第 1 / 1 页")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("第 1 / 1 页")).toBeTruthy();
+    });
     expect(rowTexts()).toHaveLength(11);
   });
 
