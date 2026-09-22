@@ -119,3 +119,65 @@ describe("工具白名单", () => {
     await expect(ctx.plugin(plugin, { allowTools: [] })).rejects.toThrow(/allow/u);
   });
 });
+
+describe("runtime context 开关", () => {
+  /** 上游 `sandbox-policy` / `user-approval` 的形状：host 层注册一条动态快照。 */
+  async function mountSnapshot(ctx: Context, text: string): Promise<void> {
+    await ctx.plugin(
+      Object.assign(
+        (inner: Context) => {
+          inner.systemPrompt.context({ name: "sandbox:policy", order: 1, text });
+        },
+        { inject: ["systemPrompt"] },
+      ),
+    );
+  }
+
+  async function agentIn(ctx: Context, preset: string, config: Record<string, unknown>) {
+    const key = { preset };
+    const standing = createScope(ctx, key);
+    await mountTools(standing.ctx, ["ask_user_question", "web_search", "web_fetch"]);
+    await standing.ctx.plugin(plugin, { allowTools: ["ask_user_question"], ...config });
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`runtime-context-${preset}-${Date.now()}-${Math.random()}`),
+      setup: async (agentCtx: Context) => {
+        bindScopeParent(scopeOf(agentCtx)!, key);
+      },
+    });
+    return handle.agent;
+  }
+
+  async function contextNames(ctx: Context, agent: Agent): Promise<string[]> {
+    return (await ctx.systemPrompt.assemble(assembleContextFor(agent))).contexts.map(
+      (entry) => entry.name,
+    );
+  }
+
+  it("关掉时只挡本 scope 的动态快照，别的 scope 照旧收到", async () => {
+    // 抑制必须按 scope：它清的是装配结果里的**全部**动态 context（沙箱策略、审批策略都在其中），
+    // 一旦变成全局动作，官方 preset 与 coding 也一起失明。
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, {
+      systemPrompt: { includeHarnessIdentity: false, personaPrefix: "你是一个助手。" },
+    });
+    await mountAgentLoopTestHarness(ctx);
+    await mountSnapshot(ctx, "Current DSH file policy: workspace-write.");
+
+    const silenced = await agentIn(ctx, "chat", { runtimeContext: false });
+    const kept = await agentIn(ctx, "coding", {});
+
+    expect(await contextNames(ctx, silenced)).toEqual([]);
+    expect(await contextNames(ctx, kept)).toEqual(["sandbox:policy"]);
+  });
+
+  it("缺省要 runtime context：模式不声明就是照收", async () => {
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, {});
+    await mountAgentLoopTestHarness(ctx);
+    await mountSnapshot(ctx, "Approval policy: ask.");
+
+    expect(await contextNames(ctx, await agentIn(ctx, "coding", {}))).toEqual(["sandbox:policy"]);
+  });
+});

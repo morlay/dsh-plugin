@@ -21,11 +21,20 @@ export interface Config {
    * 这里是"连与工具无关的 instruction 也不要"的总开关。
    */
   instructions?: boolean;
+  /**
+   * 是否要 runtime context（动态快照：文件沙箱策略、审批策略）。缺省要；`false` 表示这个模式不要它们
+   * ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
+   *
+   * 抑制是**按 scope** 的（上游按装配的 scope 链查抑制器），所以本行装在 preset 子树里就只作用于这个
+   * 模式的会话；它只挡注入，不改任何提供方的行为（沙箱该怎么判还怎么判）。
+   */
+  runtimeContext?: boolean;
 }
 
 export const Config: z<Config> = z.object({
   allowTools: z.array(z.string()).default([]),
   instructions: z.boolean().default(true),
+  runtimeContext: z.boolean().default(true),
 });
 
 const OUT_OF_SCOPE = (toolName: string): string =>
@@ -51,6 +60,11 @@ export function apply(ctx: Context, config: Config): void {
   }
   const presetKey = scopeOf(ctx);
   const scoped = new WeakSet<Agent>();
+
+  if (config.runtimeContext === false) {
+    // service 在 scoped ctx 上是 shadow：注册落在本行的 scope（preset 子树），抑制因此只覆盖这个模式。
+    ctx.systemPrompt.suppressRuntimeContext();
+  }
 
   const belongs = (agent: Agent): boolean => {
     if (presetKey === undefined) return true;
