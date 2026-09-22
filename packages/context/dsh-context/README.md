@@ -1,17 +1,18 @@
 # @morlay/dsh-context
 
-提示词注入能力组：**一个包，每个能力一个子出口**。装配行写 `@morlay/dsh-context/<capability>`，行 id 是
-`context-<capability>`（包名与行 id 由同一个「前缀 + 能力名」派生，见
-[`rows.ts` 的 `context()`](../../preset/dsh-agent-preset/tool/presets/rows.ts)）。
+提示词注入能力组：**一个包**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
+能力名就是子出口名。装配行是 `@morlay/dsh-context`（组装）或 `@morlay/dsh-context/<capability>`（单个），
+见 [`rows.ts` 的 `contextChannel()`](../../preset/dsh-agent-preset/tool/presets/rows.ts)。
 
-| 出口                   | 行 id                        | 做什么                                                            |
-| ---------------------- | ---------------------------- | ----------------------------------------------------------------- |
-| `./assembler`          | `context-assembler`          | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler` |
-| `./agent-instructions` | `context-agent-instructions` | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）         |
-| `./skill-catalog`      | `context-skill-catalog`      | skill 目录规则块 + 模型侧 `skill` 工具                            |
-| `./reference`          | `context-reference`          | 用户消息里的 `@path` / `skill:name` 引用展开                      |
-| `./tool-guidance`      | `context-tool-guidance`      | 工具用法按组切分、短描述投影、上游说明丢弃                        |
-| `./scope`              | `context-scope`              | 模式收口：工具白名单、instruction 总开关、动态快照开关            |
+| 出口                   | 行 id                        | 做什么                                                                 |
+| ---------------------- | ---------------------------- | ---------------------------------------------------------------------- |
+| `.`                    | `context`                    | **组装出口**：按 config 决定装哪些能力、各带什么参数（缺省即完整一套） |
+| `./assembler`          | `context-assembler`          | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`      |
+| `./agent-instructions` | `context-agent-instructions` | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）              |
+| `./skill-catalog`      | `context-skill-catalog`      | skill 目录规则块 + 模型侧 `skill` 工具                                 |
+| `./reference`          | `context-reference`          | 用户消息里的 `@path` / `skill:name` 引用展开                           |
+| `./tool-guidance`      | `context-tool-guidance`      | 工具用法按组切分、短描述投影、上游说明丢弃                             |
+| `./scope`              | `context-scope`              | 模式收口：工具白名单、instruction 总开关、动态快照开关                 |
 
 规则、id 表与分层的 home 在 [上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；术语见
 [本包 CONTEXT](./.agents/CONTEXT.md)。
@@ -20,7 +21,7 @@
 
 这 6 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），5 个注入方**全都只用通道的
 类型与服务面**，`reference` 与 `agent-instructions` 还各写了一份「读文件 + 字节预算」。包边界在这里只是
-演进留下的：合成一个包之后，加一个能力 = 加一个子出口 + 装配面一行。
+演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动（组装出口按 config 装它）。
 
 **每个出口仍是独立的 cordis 插件**（各自的 `apply` 与 `inject`）——这一点是硬要求：合成单入口会让 `inject`
 变成并集（`agents, contextAssembler, skills, systemPrompt, tools`），任何一个可选搭档缺席都拖垮整包。
@@ -93,7 +94,7 @@ section）、`runtimeContext`（关掉沙箱 / 审批那两条动态快照，按
 
 ## 装配
 
-preset 的通道组里逐行引用（`coding` 装 5 个、`chat` 装 3 个）：
+preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，覆盖整棵子树）：
 
 ```yaml
 - id: context-channel
@@ -102,19 +103,30 @@ preset 的通道组里逐行引用（`coding` 装 5 个、`chat` 装 3 个）：
   isolate:
     contextAssembler: true
   config:
-    - id: context-assembler
-      name: "@morlay/dsh-context/assembler"
-    - id: context-agent-instructions
-      name: "@morlay/dsh-context/agent-instructions"
-    # …
+    - id: context # 标准模式：不带 config，完整一套
+      name: "@morlay/dsh-context"
+    # 对话模式：裁掉不要的能力，并给留下的传参
+    # - id: context
+    #   name: "@morlay/dsh-context"
+    #   config:
+    #     capabilities: [assembler, scope, tool-guidance]
+    #     options:
+    #       scope: { allowTools: [ask_user_question, web_search, web_fetch], instructions: false, runtimeContext: false }
+    #       tool-guidance: { groups: false }
 ```
 
-**通道与它的全部消费者必须在同一个组里**：`isolate` 是"该名字只在这棵子树内解析成独立 label"，落一个消费
-者在组外，它的 `inject` 会永远等不到服务（行停在 waiting，不报错）。`patch.spec.ts` 把这条钉住。
+几点硬要求：
+
+- **每个能力仍是独立的 cordis 插件**（组装出口只是 `ctx.plugin()` 装它们），各自带自己的 `inject`；合成单入口会让
+  `inject` 变并集，一个可选搭档缺席就拖垮整包。
+- **组装行必须住在声明了 `isolate` 的组里**：`isolate` 是"该名字只在这棵子树内解析成独立 label"，落组外通道服务
+  会发到 root realm（上游拒装整块 preset）。`patch.spec.ts` 把"每个模式只有一行组装行、且住在声明了 isolate 的组里"
+  钉住；真装配的判据是 `just profile` 的隔离探针。
+- **子出口仍可单独装配**（`@morlay/dsh-context/assembler` 等）：同一些插件，只是默认走组装出口。
 
 ## 维护注意
 
 - 测试落点在 `src/__tests__/<capability>/`（根 vitest 的 include 是 `packages/**/src/__tests__/**`，所以不能
   按能力就近放 `src/<capability>/__tests__/`）。
 - 读上游文件的覆盖性测试用 `process.cwd()`（vitest 从仓库根跑），不要按文件深度算相对路径。
-- 新增一个能力：加 `src/<capability>/`、`package.json` 与 `tsdown.config.ts` 的出口、装配面的 `context()` 一行。
+- 新增一个能力：加 `src/<capability>/`，再把它登记进 `src/index.ts` 的 `CAPABILITIES`（子出口与 tsdown 入口一起加）；装配面不动。

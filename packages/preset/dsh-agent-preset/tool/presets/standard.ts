@@ -1,14 +1,5 @@
 import { STANDARD_PERSONA } from "./persona.ts";
-import {
-  ASSEMBLER_ROW,
-  channelGroup,
-  group,
-  INJECTION_ROWS,
-  row,
-  SHELL_ROWS,
-  TOOL_GUIDANCE_ROW,
-  type PresetRow,
-} from "./rows.ts";
+import { channelGroup, contextChannel, group, row, SHELL_ROWS, type PresetRow } from "./rows.ts";
 
 /**
  * 标准模式的装配行：**我们按需列出**，不再从上游 `standard` 派生。
@@ -71,5 +62,6 @@ export const STANDARD_ROWS: readonly PresetRow[] = [
   { id: "fs-intent-relax", name: "@morlay/dsh-agent-preset/relax-intent" },
   // 注入通道与它的消费者一起关进 isolate 组：通道服务只在这棵子树可见，别的 preset 拿不到它，
   // 我们的注入也就不会出现在官方 standard / ptc / cordis 的会话里。
-  channelGroup([ASSEMBLER_ROW, ...INJECTION_ROWS, TOOL_GUIDANCE_ROW]),
+  // 完整一套：不带 config，组成由包的主出口（组装插件）自己决定。
+  channelGroup([contextChannel()]),
 ];

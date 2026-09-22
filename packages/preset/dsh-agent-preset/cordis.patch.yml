@@ -102,17 +102,8 @@
             name: cordis:group
             group: true
             config:
-              - &ref_0
-                id: context-assembler
-                name: "@morlay/dsh-context/assembler"
-              - id: context-agent-instructions
-                name: "@morlay/dsh-context/agent-instructions"
-              - id: context-skill-catalog
-                name: "@morlay/dsh-context/skill-catalog"
-              - id: context-reference
-                name: "@morlay/dsh-context/reference"
-              - id: context-tool-guidance
-                name: "@morlay/dsh-context/tool-guidance"
+              - id: context
+                name: "@morlay/dsh-context"
             isolate:
               contextAssembler: true
     - id: preset-chat
@@ -135,19 +126,22 @@
             name: cordis:group
             group: true
             config:
-              - *ref_0
-              - id: context-scope
-                name: "@morlay/dsh-context/scope"
+              - id: context
+                name: "@morlay/dsh-context"
                 config:
-                  allowTools:
-                    - ask_user_question
-                    - web_search
-                    - web_fetch
-                  instructions: false
-                  runtimeContext: false
-              - id: context-tool-guidance
-                name: "@morlay/dsh-context/tool-guidance"
-                config:
-                  groups: false
+                  capabilities:
+                    - assembler
+                    - scope
+                    - tool-guidance
+                  options:
+                    scope:
+                      allowTools:
+                        - ask_user_question
+                        - web_search
+                        - web_fetch
+                      instructions: false
+                      runtimeContext: false
+                    tool-guidance:
+                      groups: false
             isolate:
               contextAssembler: true

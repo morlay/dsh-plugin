@@ -91,9 +91,9 @@ describe("dsh-agent-preset patch wiring", () => {
     expect(names("chat")).not.toContain("@morlay/dsh-agent-preset/relax-intent");
   });
 
-  it("每个模式里的注入行都在同一个 isolate 组里，与通道同子树", () => {
-    // 这是本轮的核心契约：通道发布 `ctx.contextAssembler`，只有组内的行解析得到它；反过来，
-    // 任何留在组外的 @morlay/dsh-context-* 行都会在 root realm 里找不到通道，或拿到别人的实现。
+  it("每个模式只有一行组装行，且住在声明了 isolate 的组里", () => {
+    // 组装行的包出口是组装插件（按 config 装能力），所以装配面只有一行：成员与各能力的参数都归包内。
+    // 这条判据守的是"它必须在 isolate 组里"——落组外，通道服务会发到 root realm（上游拒装）。
     for (const source of PRESET_SOURCES) {
       const plugins = pluginsOf(source.id);
       const groups = plugins.filter((row) => row.isolate?.["contextAssembler"] !== undefined);
@@ -103,16 +103,41 @@ describe("dsh-agent-preset patch wiring", () => {
       expect(channel?.name).toBe("cordis:group");
 
       const members = (channel?.config ?? []) as PluginRow[];
-      expect(members.map((row) => row.id)).toContain("context-assembler");
+      expect(
+        members.map((row) => row.id),
+        `${source.id}: 组内成员`,
+      ).toEqual(["context"]);
+      expect(members[0]?.name).toBe("@morlay/dsh-context");
 
       const outside = plugins.filter(
         (row) =>
           row !== channel &&
           typeof row.name === "string" &&
-          row.name.startsWith("@morlay/dsh-context/"),
+          row.name.startsWith("@morlay/dsh-context"),
       );
 
-      expect(outside, `${source.id}: 组外的注入行`).toEqual([]);
+      expect(outside, `${source.id}: 组外的 context 行`).toEqual([]);
     }
+  });
+
+  it("标准模式要完整的一套；对话模式用 capabilities 裁掉不要的能力", () => {
+    const membersOf = (id: string): PluginRow[] => {
+      const channel = pluginsOf(id).find((row) => row.isolate?.["contextAssembler"] !== undefined);
+      return (channel?.config ?? []) as PluginRow[];
+    };
+    const coding = membersOf("coding")[0]?.config as Record<string, unknown> | undefined;
+    const chat = membersOf("chat")[0]?.config as Record<string, unknown> | undefined;
+
+    // 缺省即全部：coding 不写 config，组成由包的主出口决定。
+    expect(coding).toBeUndefined();
+    expect(chat?.["capabilities"]).toEqual(["assembler", "scope", "tool-guidance"]);
+    expect(chat?.["options"]).toEqual({
+      scope: {
+        allowTools: ["ask_user_question", "web_search", "web_fetch"],
+        instructions: false,
+        runtimeContext: false,
+      },
+      "tool-guidance": { groups: false },
+    });
   });
 });

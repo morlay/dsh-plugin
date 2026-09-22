@@ -21,6 +21,7 @@
   ],
   "type": "module",
   "exports": {
+    ".": "./src/index.ts",
     "./assembler": "./src/assembler/index.ts",
     "./agent-instructions": "./src/agent-instructions/index.ts",
     "./skill-catalog": "./src/skill-catalog/index.ts",
@@ -31,6 +32,7 @@
   },
   "publishConfig": {
     "exports": {
+      ".": "./dist/index.mjs",
       "./assembler": "./dist/assembler.mjs",
       "./agent-instructions": "./dist/agent-instructions.mjs",
       "./skill-catalog": "./dist/skill-catalog.mjs",
