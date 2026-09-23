@@ -75,9 +75,9 @@ describe("profile bundles", () => {
     expect(
       mergedProfileBundles({
         name: "app",
-        dsh: { profile: { bundles: ["@morlay/better-session", "@morlay/dsh-preset"] } },
+        dsh: { profile: { bundles: ["@morlay/better-session", "@morlay/dsh-profile"] } },
       }),
-    ).toEqual([...OFFICIAL_PROFILE_BUNDLES, "@morlay/better-session", "@morlay/dsh-preset"]);
+    ).toEqual([...OFFICIAL_PROFILE_BUNDLES, "@morlay/better-session", "@morlay/dsh-profile"]);
   });
 
   it("refuses a manifest without a usable bundle list", () => {

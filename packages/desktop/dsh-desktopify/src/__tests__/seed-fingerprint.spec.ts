@@ -103,10 +103,10 @@ describe("seed fingerprint", () => {
         "desktop",
         "vendor",
         "@morlay",
-        "dsh-preset",
+        "dsh-profile",
         "package.json",
       ),
-      '{ "name": "@morlay/dsh-preset" }\n',
+      '{ "name": "@morlay/dsh-profile" }\n',
     );
 
     expect(await fingerprint(workspace)).not.toBe(before);

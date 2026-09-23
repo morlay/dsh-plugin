@@ -8,8 +8,10 @@
 #   拦住读与写、`r-` / `rw` 条目参与写判定）。
 #
 # 这组 patch 供把本包作为独立 bundle 采用的部署使用：行不带 config，schema 默认是空规则。
-# 本部署（`@morlay/dsh-preset`）不走这条路径——它的 patch 自己禁用官方两行、插入本行
-# 并写上规则，因此不会加载本 bundle；两种采用方式同时上线会重复插入同一行。
+# 行不带 config（schema 默认是空规则）：规则的**值**由配置层给——本部署由 `@morlay/dsh-profile`
+# 按 id 做 config 覆盖。两层都住 app 的 `dsh.profile.bundles`，本包排在前面（配置层要能找到这一行）。
+#
+# 若别处再自行"禁官方两行 + 插入本行"，就会与本 bundle 重复插入同一行——采用方式二选一。
 
 - id: sandbox
   disabled: true

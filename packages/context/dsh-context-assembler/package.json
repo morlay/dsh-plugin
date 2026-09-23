@@ -17,6 +17,8 @@
   "files": [
     "dist",
     "src",
+    "tool",
+    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
@@ -27,7 +29,9 @@
     "./skill-catalog": "./src/skill-catalog/index.ts",
     "./tool-guidance": "./src/tool-guidance/index.ts",
     "./scope": "./src/scope/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./rows": "./src/rows.ts",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "publishConfig": {
     "exports": {
@@ -37,7 +41,9 @@
       "./skill-catalog": "./dist/skill-catalog.mjs",
       "./tool-guidance": "./dist/tool-guidance.mjs",
       "./scope": "./dist/scope.mjs",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./rows": "./dist/rows.mjs",
+      "./cordis.patch.yml": "./cordis.patch.yml"
     }
   },
   "scripts": {
@@ -83,5 +89,10 @@
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   }
 }

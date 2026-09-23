@@ -2,7 +2,7 @@
 
 提示词注入能力组：**一个包五个能力**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
 能力名就是子出口名。装配行是 `@morlay/dsh-context-assembler`（组装）或 `@morlay/dsh-context-assembler/<capability>`（单个），
-见 [`rows.ts` 的 `contextChannel()`](../../preset/dsh-agent-preset/tool/presets/rows.ts)。引用展开原先也在这个包里，
+见 [`rows.ts` 的 `contextChannel()`](../../profile/dsh-agent-preset/tool/presets/rows.ts)。引用展开原先也在这个包里，
 现在独立成 [`@morlay/dsh-reference`](../dsh-reference/README.md)（它只挂 `agent/pre-step`、不依赖通道）。
 
 | 出口                   | 行 id                        | 做什么                                                                 |
@@ -16,6 +16,18 @@
 
 规则、id 表与分层的 home 在 [上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；术语见
 [本包 CONTEXT](./.agents/CONTEXT.md)。
+
+## 两种采用方式（同一份真源）
+
+本包同时是 bundle：`cordis.patch.yml` 由 [`tool/patch.ts`](./tool/patch.ts) 从
+[`src/rows.ts`](./src/rows.ts) 渲染，`rows` 出口导出同一份清单。
+
+- **profile 直接列出本包**（`dsh.profile.bundles`）→ 行装在 host 平面，整份部署共享一套注入（官方 preset 的会话
+  也吃这套）；
+- **preset 引用 `rows`**（[`@morlay/dsh-agent-preset`](../../profile/dsh-agent-preset/README.md) 的两个模式就是这么做的）
+  → 同一批行住进那个 preset 的 `isolate` 组，只有那个模式吃这套注入。
+
+同一部署只能选一种：两种都用会把同一行插两次。
 
 ## 为什么合成一个包
 
@@ -45,7 +57,7 @@ user 消息注入（每条按文本幂等，只有变化的那条重发）。
 
 配置（`keep` / `suppress` / `replace`）的默认值在 [`src/assembler/defaults.ts`](./src/assembler/defaults.ts)。
 **按模式各一份**：它发布进程全局服务，只有关在 `isolate` 组里才装得进 preset，也才不会把我们的注入漏给别的
-preset（见 [ADR](../../preset/dsh-agent-preset/.agents/adrs/20260922-通道与注入行按模式isolate装配.md)）。
+preset（见 [ADR](../../profile/dsh-agent-preset/.agents/adrs/20260922-通道与注入行按模式isolate装配.md)）。
 
 ## agent-instructions
 

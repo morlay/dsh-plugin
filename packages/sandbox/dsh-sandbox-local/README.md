@@ -93,11 +93,11 @@
 把本包作为**独立 bundle** 采用的部署直接列进 `dsh.profile.bundles` 即可；行不带 config
 （schema 默认是空规则），patch 内容见该文件。
 
-**本部署（`@morlay/dsh-preset`）不走这条路径**：装配（禁用官方两行 + 插入
-`sandbox-local` 行）与 `access` 规则一起维护在 preset 的 bundle patch 里，因此示例 app 的
-`dsh.profile.bundles` 不需要列出本包，只需要 profile 的依赖树能解析模块名
-（`@morlay/dsh-preset` 已在 `dependencies` 声明本包）。patch 层级的合并顺序与放置理由见
-[设计 host 层部署配置](../../preset/dsh-preset/.agents/designs/20260917-host层部署配置.md)。
+**本部署走的就是这条路径**：示例 app 的 `dsh.profile.bundles` 列出了本包（排在
+[`@morlay/dsh-profile`](../../profile/dsh-profile/README.md) 之前），因此"禁用官方两行 + 插入本行"由这份
+patch 负责；`access` 规则的值由 `dsh-profile` 按 id 做 config 覆盖——装配与配置各归一处
+（`@morlay/dsh-profile` 已在 `dependencies` 声明本包）。patch 层级的合并顺序与放置理由见
+[设计 host 层部署配置](../../profile/dsh-profile/.agents/designs/20260917-host层部署配置.md)。
 两种采用方式互斥：同时上线会重复插入同一行。
 
 ## 前提
@@ -106,7 +106,7 @@
   （`service "sandbox" has been registered at …`），而不是覆盖。
 - 启用规则的层必须同时做三件事——禁用官方两行、插入本包行、写规则：只做后两件时官方
   实现仍在提供 `ctx.sandbox` / `ctx.fs`，规则没有生效点，沙箱静默退回「只有工作区 +
-  `/tmp` 可写」（命令照常跑，没有报错）。装配守卫见 `@morlay/dsh-preset` 的
+  `/tmp` 可写」（命令照常跑，没有报错）。装配守卫见 `@morlay/dsh-profile` 的
   `patch.spec.ts`。
 - 规则与 `runnerCommand` 互斥：自定义 runner 的 argv 方言无法识别，此时配了规则会在
   `confine` 抛错（宁可失败也不让规则静默失效）。

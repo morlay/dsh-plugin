@@ -13,11 +13,13 @@
   },
   "dependencies": {
     "@morlay/better-session": "workspace:*",
-    "@morlay/dsh-desktopify": "workspace:*",
-    "@morlay/dsh-preset": "workspace:*",
-    "@morlay/dsh-agent-preset": "workspace:*"
+    "@morlay/dsh-agent-preset": "workspace:*",
+    "@morlay/dsh-profile": "workspace:*",
+    "@morlay/dsh-sandbox-local": "workspace:*",
+    "@morlay/dsh-web-search-ollama": "workspace:*"
   },
   "peerDependencies": {
+    "@morlay/dsh-desktopify": "workspace:*",
     "tsx": "*"
   },
   "dsh": {
@@ -25,8 +27,10 @@
     "profile": {
       "bundles": [
         "@morlay/better-session",
-        "@morlay/dsh-preset",
-        "@morlay/dsh-agent-preset"
+        "@morlay/dsh-sandbox-local",
+        "@morlay/dsh-web-search-ollama",
+        "@morlay/dsh-agent-preset",
+        "@morlay/dsh-profile"
       ]
     },
     "dev": {
