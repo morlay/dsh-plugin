@@ -28,16 +28,16 @@ ui-plugin-manager 同一种注册方式）。页面分两层 Tabs（官方 `Pill
 **默认排除已归档**（给上游 UI 用），归档集的管理动作要完整集合，两条路不混（决策见
 [session-rdb 的 ADR](../session-rdb/.agents/adrs/20260922-会话列表两条路.md)）：
 
-| 动作         | 接缝                                                                                                        |
-| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| 动作         | 接缝                                                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | 列表与标题   | `POST /api/session.rows`（`@morlay/session-rdb`：完整语料 + 标题 + 最后活动时间 + 工作区归属；搜索 / 子代理过滤 / 分页都在后端） |
-| 归档         | `ctx.uiWorkspace.archiveSession`（上游 ui-workspace，未归档行提供）                                         |
-| 取消归档     | `ctx.uiWorkspace.unarchiveSession`（上游 ui-workspace，已归档行提供）                                       |
-| 导出         | `POST /api/session.export`（`@morlay/session-rdb`，直接下载 zip）                                           |
-| 删除         | `POST /api/session.delete`（`@morlay/session-rdb`，仅已归档行可用）                                         |
-| 导入为新会话 | `POST /api/session.import`（`@morlay/session-rdb`，不带 `sessionId` = 新建会话）                            |
-| 清理孤儿数据 | `POST /api/session.gc`（停 agent → 回收孤儿 subagent 会话 → 回收孤儿事件行 → VACUUM；执行期间阻塞界面）     |
-| 用量统计     | `POST /api/session.usage`（`@morlay/session-rdb` 读专用用量表聚合；进入统计视图时拉一次，维度切换本地折叠） |
+| 归档         | `ctx.uiWorkspace.archiveSession`（上游 ui-workspace，未归档行提供）                                                              |
+| 取消归档     | `ctx.uiWorkspace.unarchiveSession`（上游 ui-workspace，已归档行提供）                                                            |
+| 导出         | `POST /api/session.export`（`@morlay/session-rdb`，直接下载 zip）                                                                |
+| 删除         | `POST /api/session.delete`（`@morlay/session-rdb`，仅已归档行可用）                                                              |
+| 导入为新会话 | `POST /api/session.import`（`@morlay/session-rdb`，不带 `sessionId` = 新建会话）                                                 |
+| 清理孤儿数据 | `POST /api/session.gc`（停 agent → 回收孤儿 subagent 会话 → 回收孤儿事件行 → VACUUM；执行期间阻塞界面）                          |
+| 用量统计     | `POST /api/session.usage`（`@morlay/session-rdb` 读专用用量表聚合；进入统计视图时拉一次，维度切换本地折叠）                      |
 
 归档 / 取消归档 / 删除 / 导入 / GC 成功后重拉会话行；host 拒绝（未归档 / 正在使用 / 不存在）
 时按错误码给出可读文案。列表每页 20 条，搜索框复用官方 `Input`（连同官方图标与焦点样式）。

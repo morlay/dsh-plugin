@@ -959,7 +959,8 @@ describe("SessionEditor edit", () => {
         after.events.some(
           (e) =>
             e.type === "user/message" &&
-            (e.data as { readonly content?: readonly { readonly text?: string }[] }).content?.[0]?.text === "q1",
+            (e.data as { readonly content?: readonly { readonly text?: string }[] }).content?.[0]
+              ?.text === "q1",
         ),
       ).toBe(true);
 
@@ -967,7 +968,8 @@ describe("SessionEditor edit", () => {
         after.events.some(
           (e) =>
             e.type === "user/message" &&
-            (e.data as { readonly content?: readonly { readonly text?: string }[] }).content?.[0]?.text === "followup",
+            (e.data as { readonly content?: readonly { readonly text?: string }[] }).content?.[0]
+              ?.text === "followup",
         ),
       ).toBe(false);
 

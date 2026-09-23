@@ -154,9 +154,7 @@ describe("session-rdb projection cache replacement", () => {
         ] as never,
       });
       const live = ctx.sessions.get(id)!;
-      const snapshot = await waitFor(() =>
-        cache.cachedSnapshot(live.header),
-      );
+      const snapshot = await waitFor(() => cache.cachedSnapshot(live.header));
       expect(snapshot.values).toHaveProperty("turnOutline");
     } finally {
       await dispose();
@@ -218,12 +216,7 @@ describe("session-rdb projection cache replacement", () => {
         const metadata = snapshot?.values["sessionListMetadata"] as { blank?: boolean } | undefined;
         return metadata?.blank ?? false;
       };
-      await waitFor(
-        () =>
-          cache.cachedSnapshot(live.header)?.values[
-            "sessionListMetadata"
-          ],
-      );
+      await waitFor(() => cache.cachedSnapshot(live.header)?.values["sessionListMetadata"]);
       expect(blankOf()).toBe(true);
 
       live.append("turn/start", { turn: 1 });
@@ -260,9 +253,7 @@ describe("session-rdb projection cache replacement", () => {
       const withTitle = cache.cachedSnapshot(live.header, ["title"]);
       expect(withTitle?.values["title"]).toBe("直取标题");
 
-      const withoutTitle = cache.cachedSnapshot(live.header, [
-        "turnOutline",
-      ]);
+      const withoutTitle = cache.cachedSnapshot(live.header, ["turnOutline"]);
       expect(withoutTitle?.values["title"]).toBeUndefined();
     } finally {
       await dispose();
@@ -403,9 +394,7 @@ describe("session-rdb projection cache replacement", () => {
 
       // 0.1.7 起 header-only 读只比对**生命周期**身份（formatVersion / createdAt / cwd / isSeeded）：
       // 这里查询没有给 inherited cut，照样读到那份 checkpoint（旧口径要求 cut 相等，会读空）。
-      expect(turnsOf(cache.cachedSnapshot(child.header)?.values["turnOutline"])).toEqual(
-        [1],
-      );
+      expect(turnsOf(cache.cachedSnapshot(child.header)?.values["turnOutline"])).toEqual([1]);
 
       const db = new DatabaseSync(dbPath!);
       try {

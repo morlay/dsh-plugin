@@ -48,7 +48,11 @@ function fakeRequest(method = "POST", body: unknown = {}): import("node:http").I
 }
 
 /** 标题事件必须紧接在已有日志之后（seq 连续）；`time` 决定「最后活动时间」的先后。 */
-function titled(log: readonly SessionEvent[], title: string, time = log.length + 1): SessionEvent[] {
+function titled(
+  log: readonly SessionEvent[],
+  title: string,
+  time = log.length + 1,
+): SessionEvent[] {
   return [
     ...log,
     {
@@ -92,10 +96,12 @@ async function harness(): Promise<{
       const response = fakeResponse();
       await handler(fakeRequest(method, body), response.res);
       const parsed =
-        response.body === ""
-          ? {}
-          : (JSON.parse(response.body) as { items?: []; total?: number });
-      return { code: response.code, items: parsed.items ?? [], ...(parsed.total === undefined ? {} : { total: parsed.total }) };
+        response.body === "" ? {} : (JSON.parse(response.body) as { items?: []; total?: number });
+      return {
+        code: response.code,
+        items: parsed.items ?? [],
+        ...(parsed.total === undefined ? {} : { total: parsed.total }),
+      };
     },
     dispose: () => fiber.dispose(),
   };

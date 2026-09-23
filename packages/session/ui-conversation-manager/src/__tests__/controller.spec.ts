@@ -251,8 +251,18 @@ describe("对话管理注入面", () => {
   it("列表带上分页与搜索参数，响应不可用时给出失败原因", async () => {
     const b = bench();
     const calls = stubFetch(200, { total: 0, page: 2, pageSize: 20, items: [] });
-    await b.controller.face.listRows({ query: "文档", page: 2, pageSize: 20, includeSubagents: true });
-    expect(calls[0]?.body).toEqual({ query: "文档", page: 2, pageSize: 20, includeSubagents: true });
+    await b.controller.face.listRows({
+      query: "文档",
+      page: 2,
+      pageSize: 20,
+      includeSubagents: true,
+    });
+    expect(calls[0]?.body).toEqual({
+      query: "文档",
+      page: 2,
+      pageSize: 20,
+      includeSubagents: true,
+    });
 
     stubFetch(200, { notItems: true });
     await expect(b.controller.face.listRows()).rejects.toThrow("会话列表响应不可用");

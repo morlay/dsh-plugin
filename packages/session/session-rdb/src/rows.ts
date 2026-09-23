@@ -92,7 +92,8 @@ export function registerSessionRows(ctx: Context, backend: Backend): void {
                 return;
               }
             }
-            const page = Number.isSafeInteger(envelope.page) && (envelope.page ?? 0) > 0 ? envelope.page! : 1;
+            const page =
+              Number.isSafeInteger(envelope.page) && (envelope.page ?? 0) > 0 ? envelope.page! : 1;
             const requested = envelope.pageSize;
             const pageSize =
               Number.isSafeInteger(requested) && (requested ?? 0) > 0

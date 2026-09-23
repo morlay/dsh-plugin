@@ -277,10 +277,7 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
         const pinned = state.pinnedSessionIds ?? [];
         await runQuery(
           pinned.length === 0
-            ? db
-                .update(tSessions)
-                .set({ fPinnedSeq: null })
-                .where(isNotNull(tSessions.fPinnedSeq))
+            ? db.update(tSessions).set({ fPinnedSeq: null }).where(isNotNull(tSessions.fPinnedSeq))
             : db
                 .update(tSessions)
                 .set({ fPinnedSeq: null })

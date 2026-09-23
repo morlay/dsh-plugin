@@ -150,9 +150,10 @@ describe("editPlan", () => {
     expect(plan.anchorSeq).toBe(0);
     expect(plan.rewindBoundary).toBeUndefined();
     expect(plan.queuedUsers).toHaveLength(1);
-    expect((plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]?.text).toBe(
-      "edited q",
-    );
+    expect(
+      (plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]
+        ?.text,
+    ).toBe("edited q");
   });
 
   it("edits a mid-turn followup of a closed turn → message-level rewind, earlier inputs kept", () => {
@@ -179,9 +180,10 @@ describe("editPlan", () => {
     );
     expect(plan.rewindBoundary).toBe(followupSeq);
     expect(plan.queuedUsers).toHaveLength(1);
-    expect((plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]?.text).toBe(
-      "edited f",
-    );
+    expect(
+      (plan.queuedUsers[0] as { readonly content: readonly { readonly text: string }[] }).content[0]
+        ?.text,
+    ).toBe("edited f");
   });
 
   it("edits the first user of an open turn → whole-turn rewind (no rewindBoundary)", () => {

@@ -474,10 +474,10 @@ describe("findSurfaceRepairs", () => {
     messageId?: string,
   ): SessionEvent {
     const message = createToolResultMessage({
-            callId: ToolCallId("call-1"),
-            content: [{ type: "text", text }],
-            isError: false,
-          });
+      callId: ToolCallId("call-1"),
+      content: [{ type: "text", text }],
+      isError: false,
+    });
     return {
       type: "tool/result",
       seq: SessionSeq(seq),

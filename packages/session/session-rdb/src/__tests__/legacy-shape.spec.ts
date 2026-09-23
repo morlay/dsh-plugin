@@ -38,7 +38,11 @@ async function freshDbPath(): Promise<string> {
 }
 
 interface LoadedLog {
-  events: readonly { type: string; ignorable?: true; data: { message?: { role?: string; source?: { kind?: string } } } }[];
+  events: readonly {
+    type: string;
+    ignorable?: true;
+    data: { message?: { role?: string; source?: { kind?: string } } };
+  }[];
 }
 
 async function openHarness(path: string): Promise<{
@@ -53,9 +57,11 @@ async function openHarness(path: string): Promise<{
   // 表在 init 里建：先让 ready 落定，再允许直接 SQL 插入旧形状的行。
   const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
   await persistence.list();
-  const internals = (persistence as unknown as {
-    internals(): { load(id: string): Promise<LoadedLog> };
-  }).internals();
+  const internals = (
+    persistence as unknown as {
+      internals(): { load(id: string): Promise<LoadedLog> };
+    }
+  ).internals();
   return { persistence, load: (id) => internals.load(id), dispose: () => fiber.dispose() };
 }
 

@@ -102,7 +102,9 @@ async function renderPage(options: {
         (async (query: Record<string, unknown> = {}) => {
           const needle = typeof query["query"] === "string" ? query["query"].toLowerCase() : "";
           const filtered = allRows
-            .filter((row) => (query["includeSubagents"] === true ? true : row.origin !== "subagent"))
+            .filter((row) =>
+              query["includeSubagents"] === true ? true : row.origin !== "subagent",
+            )
             .filter(
               (row) =>
                 needle === "" ||
