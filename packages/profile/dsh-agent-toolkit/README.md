@@ -10,16 +10,16 @@
 | `./agent-team`            | Agent Teams 那一组行，**默认关闭**（`DSH_AGENT_TEAM=1` 才装）                                |
 | `./cordis.patch.yml`      | 把整套功能行插到 host 平面（给 profile 直接装配用）                                          |
 
-## 两种采用方式
+## 装配
 
-- **preset 引用它**（[`@morlay/dsh-agent-preset`](../dsh-agent-preset/README.md) 的 coding / chat 就是这么做的）：
-  行住进那个 preset 的子树，只有那个模式才有这些能力；`guidance` 行 `inject` 注入通道，所以与组装行同住
-  那个 `isolate` 组。
-- **profile 列出它**（`dsh.profile.bundles`）：`cordis.patch.yml` 把整套功能行插到 host 平面，整份部署
-  （含官方 preset）都能看到这些工具。
+`dsh.profile.bundles` 列出本包即完成装配（示例 app 就是这么做的，排在
+[`@morlay/dsh-context-assembler`](../../context/dsh-context-assembler/README.md) 之后、配置层之前）：
 
-两种方式共用 `src/rows.ts` 这一份真源，别同时用。`guidance` 的 `groups: false` 表示只要工具预处理、
-不注册用法分组（chat 用它）。
+- `cordis.patch.yml` 把**整套工具行**插到 host 平面（含它们各自的 config 与默认关闭的 Agent Teams 组）；
+- 同一层装一行工具说明（`@morlay/dsh-agent-toolkit/guidance`）：描述汉化 + schema 精简 + 用法分组注册给通道。
+
+**模式不在这里装行**：[`@morlay/dsh-agent-preset`](../dsh-agent-preset/README.md) 只声明开关（`allowTools`
+白名单，名单由 `TOOLKIT_TOOL_NAMES` 从汉化数据派生），工具集的差别完全由开关表达。
 
 ## 汉化精简：族索引
 

@@ -71,6 +71,25 @@ export function shortDescriptionsOf(
 }
 
 /**
+ * 工具名的并集：**工具集与汉化同源**——需要"这套工具有哪些"的地方（例如模式的 `allowTools` 白名单）读它，
+ * 而不是另写一份名单。
+ * @param packs - 待合并的族，缺省全部。
+ * @returns 去重后的工具名（按族出现顺序）。
+ */
+export function toolNamesOf(packs: readonly ToolPack[] = TOOL_PACKS): readonly string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const pack of packs) {
+    for (const guidance of pack.tools) {
+      if (seen.has(guidance.tool)) continue;
+      seen.add(guidance.tool);
+      names.push(guidance.tool);
+    }
+  }
+  return names;
+}
+
+/**
  * 汇总用法组。
  * @param packs - 待合并的组 pack，缺省全部。
  * @returns 组表；两个 pack 声明同一个 key 时抛错。

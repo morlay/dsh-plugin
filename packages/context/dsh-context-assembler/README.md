@@ -16,6 +16,16 @@
 规则、id 表与分层的 home 在 [上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；术语见
 [本包 CONTEXT](./.agents/CONTEXT.md)。
 
+## 装配
+
+`dsh.profile.bundles` 列出本包即装**一次**：`cordis.patch.yml` 把通道与两个注入方
+（`agent-instructions` / `skill-catalog`）装在一个 `isolate` 组里。`scope` **不在这份 patch 里**——它是模式
+的开关，由 [`@morlay/dsh-agent-preset`](../../profile/dsh-agent-preset/README.md) 用 `scopeRow()` 按模式装
+（它 `inject` 通道，`ctx.get("contextAssembler")` 在 agent 子树里可达）。
+
+工具说明（汉化 / 精简 / 用法分组）也不在这里：它归
+[`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)，同样在 profile 平面装一次。
+
 ## 两种采用方式（同一份真源）
 
 本包同时是 bundle：`cordis.patch.yml` 由 [`tool/patch.ts`](./tool/patch.ts) 从

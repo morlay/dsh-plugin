@@ -1,3 +1,4 @@
+import { toolNamesOf } from "./guidance/packs/index.ts";
 import { jsExpr, type JsExpr } from "./js-expr.ts";
 
 /**
@@ -46,6 +47,13 @@ export function row(short: string, extra: RowExtra = {}): PresetRow {
 }
 
 /** `cordis:group` 行：id 必须显式给（包名位置是组标记，推不出短名）。 */
+/**
+ * 这套工具集的工具名（从汉化数据派生：**工具集与汉化同源**）。
+ *
+ * 谁需要它：模式的 `allowTools` 白名单——模式只声明"我要哪些"，工具行本身在 profile 平面装一次。
+ */
+export const TOOLKIT_TOOL_NAMES: readonly string[] = toolNamesOf();
+
 /**
  * Agent Teams 的开关：`DSH_AGENT_TEAM=1` 时启用（装配期求值，见 {@link agentTeamRows}）。
  * 团队装上来时它与直接派发（`subagent` / `subagent_fork` / 控制行）互斥，上游 `agent-team-profile`

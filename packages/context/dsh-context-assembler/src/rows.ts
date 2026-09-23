@@ -42,6 +42,24 @@ export function contextChannel(config?: Readonly<Record<string, unknown>>): Cont
   return { id: "context-assembler", name: CONTEXT_PACKAGE, ...(config === undefined ? {} : { config }) };
 }
 
+/**
+ * 模式开关那一行：`scope` 出口按 preset 配（工具白名单、instruction 总开关、动态快照开关）。
+ *
+ * 它不住在通道的隔离组里——通道与注入方都在 profile 平面装一次，这一行只按模式收口（它 `inject`
+ * `contextAssembler`，`ctx.get("contextAssembler")` 在 agent 子树里可达）。
+ */
+export function scopeRow(config?: Readonly<Record<string, unknown>>): {
+  readonly id: string;
+  readonly name: string;
+  readonly config?: Readonly<Record<string, unknown>>;
+} {
+  return {
+    id: "context-scope",
+    name: "@morlay/dsh-context-assembler/scope",
+    ...(config === undefined ? {} : { config }),
+  };
+}
+
 /** 关住 context 那一行：通道服务因此留在引用方的 realm 里，别的 preset 拿不到它。 */
 export function channelGroup(rows: readonly ContextRow[]): ContextGroupRow {
   return {
@@ -59,4 +77,7 @@ export function channelGroup(rows: readonly ContextRow[]): ContextGroupRow {
  * 与 preset 引用不同的是 realm：这里装出来的是**整份部署共享**的一份通道，官方 preset 的会话同样
  * 会拿到这套注入。要"只有我们的模式吃"，就用第二种采用方式（让 preset 引用这份清单），别同时用两种。
  */
-export const PATCH_ROWS: readonly ContextGroupRow[] = [channelGroup([contextChannel()])];
+export const PATCH_ROWS: readonly ContextGroupRow[] = [
+  // profile 平面装一次：通道 + 两个注入方；`scope` 不在这里——它是模式的开关，由 preset 装 `scopeRow()`。
+  channelGroup([contextChannel({ capabilities: ["assembler", "agent-instructions", "skill-catalog"] })]),
+];

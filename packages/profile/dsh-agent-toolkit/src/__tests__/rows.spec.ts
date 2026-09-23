@@ -1,6 +1,8 @@
 // 本包的实体就是清单：preset 引用它、profile 可以装配它，两边同一份真源。
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { CHAT_TOOLKIT_ROWS, TOOLKIT_ROWS } from "../rows.ts";
 import { renderPatch } from "../../tool/patch.ts";
@@ -50,6 +52,36 @@ describe("功能行清单", () => {
 
     for (const row of CHAT_TOOLKIT_ROWS) expect(all).toContain(row.id);
     expect(CHAT_TOOLKIT_ROWS.map((row) => row.id)).toEqual(["tool-ask-user", "tool-web"]);
+  });
+
+  it("bundle patch 里还有工具说明行与默认关闭的 Agent Teams 组", async () => {
+    interface Row {
+      id?: string;
+      name?: string;
+      disabled?: boolean | { __jsExpr: string };
+      /** `cordis:group` 的子行。 */
+      config?: Row[];
+      insert?: Row[];
+    }
+    const layers = yaml.load(
+      await readFile(join(process.cwd(), "packages/profile/dsh-agent-toolkit/cordis.patch.yml"), "utf8"),
+      { schema: entryListSchema },
+    ) as Row[];
+    const inserted = layers.flatMap((row) => row.insert ?? []);
+
+    // 工具说明：profile 平面装一次（它 inject 通道，通道也在这一层）。
+    expect(inserted.find((row) => row.id === "tool-guidance")?.name).toBe(
+      "@morlay/dsh-agent-toolkit/guidance",
+    );
+
+    // Agent Teams：默认关闭的组（`DSH_AGENT_TEAM=1` 才装），直接派发那几行在团队开启时让位。
+    const team = inserted.find((row) => row.id === "agent-team");
+    expect(team?.name).toBe("cordis:group");
+    expect(team?.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM !== "1"' });
+    const delegation = inserted.find((row) => row.id === "delegation");
+    expect(
+      delegation?.config?.find((row) => row.id === "tool-subagent")?.disabled,
+    ).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM === "1"' });
   });
 
   it("bundle patch 把整套行插到 host 平面", async () => {

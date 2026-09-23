@@ -2,7 +2,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { channelGroup, CONTEXT_CHANNEL_GROUP_ID, contextChannel, PATCH_ROWS } from "../rows.ts";
+import {
+  channelGroup,
+  CONTEXT_CHANNEL_GROUP_ID,
+  contextChannel,
+  PATCH_ROWS,
+  scopeRow,
+} from "../rows.ts";
 import { renderPatch } from "../../tool/patch.ts";
 
 describe("context 行清单", () => {
@@ -25,6 +31,14 @@ describe("context 行清单", () => {
     expect(row.name).toBe("@morlay/dsh-context-assembler");
   });
 
+  it("开关行：id 与 scope 出口对齐，config 原样透传", () => {
+    const row = scopeRow({ allowTools: ["read"], instructions: false });
+
+    expect(row.id).toBe("context-scope");
+    expect(row.name).toBe("@morlay/dsh-context-assembler/scope");
+    expect(row.config).toEqual({ allowTools: ["read"], instructions: false });
+  });
+
   it("bundle patch 是这份清单渲染出来的", async () => {
     const stored = await readFile(
       join(process.cwd(), "packages/context/dsh-context-assembler/cordis.patch.yml"),
@@ -34,6 +48,11 @@ describe("context 行清单", () => {
     expect(stored).toBe(renderPatch());
     expect(renderPatch().startsWith("# 本文件由 packages/context/dsh-context-assembler/tool/patch.ts 生成"))
       .toBe(true);
-    expect(PATCH_ROWS).toEqual([channelGroup([contextChannel()])]);
+    // profile 平面装一次：通道 + 两个注入方；`scope` 是模式的开关，由 preset 装 `scopeRow()`。
+    expect(PATCH_ROWS).toEqual([
+      channelGroup([
+        contextChannel({ capabilities: ["assembler", "agent-instructions", "skill-catalog"] }),
+      ]),
+    ]);
   });
 });

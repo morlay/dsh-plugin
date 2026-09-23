@@ -14,6 +14,8 @@
   "dependencies": {
     "@morlay/better-session": "workspace:*",
     "@morlay/dsh-agent-preset": "workspace:*",
+    "@morlay/dsh-agent-toolkit": "workspace:*",
+    "@morlay/dsh-context-assembler": "workspace:*",
     "@morlay/dsh-profile": "workspace:*",
     "@morlay/dsh-sandbox-local": "workspace:*",
     "@morlay/dsh-web-search-ollama": "workspace:*"
@@ -27,10 +29,12 @@
     "profile": {
       "bundles": [
         "@morlay/better-session",
+        "@morlay/dsh-context-assembler",
+        "@morlay/dsh-agent-toolkit",
         "@morlay/dsh-sandbox-local",
         "@morlay/dsh-web-search-ollama",
-        "@morlay/dsh-agent-preset",
-        "@morlay/dsh-profile"
+        "@morlay/dsh-profile",
+        "@morlay/dsh-agent-preset"
       ]
     },
     "dev": {

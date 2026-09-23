@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
+import { agentTeamRows } from "../src/agent-team.ts";
 import { TOOLKIT_ROWS } from "../src/rows.ts";
 
 /**
@@ -13,7 +14,18 @@ import { TOOLKIT_ROWS } from "../src/rows.ts";
  * `rows` 出口里的清单，别同时用两种。
  */
 
-export const PATCH_ROWS: readonly Record<string, unknown>[] = [{ insert: [...TOOLKIT_ROWS] }];
+export const PATCH_ROWS: readonly Record<string, unknown>[] = [
+  {
+    insert: [
+      // 工具行：整套（chat 也装着，靠模式的 `allowTools` 收口）。
+      ...TOOLKIT_ROWS,
+      // 工具说明：描述汉化 + schema 精简 + 用法分组（注册给通道，通道也在 profile 平面）。
+      { id: "tool-guidance", name: "@morlay/dsh-agent-toolkit/guidance" },
+      // Agent Teams：默认关闭的组（`DSH_AGENT_TEAM=1` 才装），与直接派发行互斥。
+      ...agentTeamRows(),
+    ],
+  },
+];
 
 export const PATCH_FILE = "cordis.patch.yml";
 

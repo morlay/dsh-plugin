@@ -84,7 +84,7 @@ describe("dsh-agent-preset patch wiring", () => {
   });
 
   it("「先读后改」的放宽行只装在 coding 模式里", () => {
-    // 上游那层策略对所有 preset 生效（它住 host 层），按模式关掉只能由该模式自己抢在它的 waterfall
+    // 上游那层策略对所有会话生效（它住 host 层），按模式关掉只能由该模式自己抢在它的 waterfall
     // 前面——所以这一行是模式装配的一部分，不是 host 开关（preset 里的行动不了 host 行）。
     const names = (id: string): (string | undefined)[] =>
       pluginsOf(id).map((row) => (typeof row.name === "string" ? row.name : undefined));
@@ -93,75 +93,61 @@ describe("dsh-agent-preset patch wiring", () => {
     expect(names("chat")).not.toContain("@morlay/dsh-agent-preset/relax-intent");
   });
 
-  it("每个模式只有一行组装行，且住在声明了 isolate 的组里", () => {
-    // 组装行的包出口是组装插件（按 config 装能力），所以装配面只有一行：成员与各能力的参数都归包内。
-    // 这条判据守的是"它必须在 isolate 组里"——落组外，通道服务会发到 root realm（上游拒装）。
+  it("每个模式只有提示词与开关：工具行与注入通道都不在这里", () => {
+    // 工具行（含 Agent Teams 那组）与通道都在 profile 平面装一次（`dsh.profile.bundles` 里的
+    // `@morlay/dsh-agent-toolkit` / `@morlay/dsh-context-assembler`）；模式只声明"我要哪些"。
     for (const source of PRESET_SOURCES) {
       const plugins = pluginsOf(source.id);
-      const groups = plugins.filter((row) => row.isolate?.["contextAssembler"] !== undefined);
+      const ids = plugins.map((row) => row.id);
 
-      expect(groups, `${source.id}: 通道组`).toHaveLength(1);
-      const [channel] = groups;
-      expect(channel?.name).toBe("cordis:group");
-
-      const members = (channel?.config ?? []) as PluginRow[];
-      // 组内两行：组装行（通道 + 它承载的能力）与工具说明行（它 inject 通道，所以必须同 realm）。
+      expect(ids, `${source.id}: 提示词`).toContain("persona");
+      expect(ids, `${source.id}: 开关`).toContain("context-scope");
+      // 工具 / 命令 / 压缩 / 委派 / 技能这些行都来自 toolkit（profile 平面），模式里一行都没有。
+      for (const toolRow of [
+        "tool-bash",
+        "tool-pwsh",
+        "tool-fs",
+        "skill-filesystem",
+        "command-goal",
+        "compaction",
+        "delegation",
+        "tool-subagent",
+        "tool-web",
+      ]) {
+        expect(ids, `${source.id}: ${toolRow}`).not.toContain(toolRow);
+      }
+      expect(ids, `${source.id}: 通道组`).not.toContain("context-assembler-channel");
+      expect(ids, `${source.id}: 工具说明行`).not.toContain("tool-guidance");
       expect(
-        members.map((row) => row.id),
-        `${source.id}: 组内成员`,
-      ).toEqual(["context-assembler", "tool-guidance"]);
-      expect(members[0]?.name).toBe("@morlay/dsh-context-assembler");
-
-      const outside = plugins.filter(
-        (row) =>
-          row !== channel &&
-          typeof row.name === "string" &&
-          row.name.startsWith("@morlay/dsh-context-assembler"),
-      );
-
-      expect(outside, `${source.id}: 组外的 context 行`).toEqual([]);
+        plugins.filter((row) => row.isolate?.["contextAssembler"] !== undefined),
+        `${source.id}: isolate 组`,
+      ).toEqual([]);
     }
   });
 
-  it("Agent Teams 是可选能力：那一组默认关闭，团队开启时直接派发让位", () => {
-    const plugins = pluginsOf("coding");
+  it("开关按模式给：coding 列全套工具，chat 收成三件并关掉 instruction 与动态快照", () => {
+    const scopeConfig = (id: string): Record<string, unknown> | undefined =>
+      pluginsOf(id).find((row) => row.id === "context-scope")?.config as
+        | Record<string, unknown>
+        | undefined;
 
-    // 组默认关闭：`DSH_AGENT_TEAM=1` 才装（`!!js` 在装配期求值，于是同一个产物可按需打开）。
-    const team = plugins.find((row) => row.id === "agent-team");
-    expect(team?.name).toBe("cordis:group");
-    expect(team?.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM !== "1"' });
+    const allowTools = scopeConfig("coding")?.["allowTools"] as string[] | undefined;
 
-    // 同一个开关的另一半：团队装上来时，直接派发那几行让位（两者不同时装）。
-    const delegation = plugins.find((row) => row.id === "delegation");
-    const subagent = (delegation?.config as PluginRow[] | undefined)?.find(
-      (row) => row.id === "tool-subagent",
-    );
-    expect(subagent?.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM === "1"' });
+    // 名单与工具集同源（从 toolkit 的汉化数据派生），这里挑几个代表性工具核对。
+    expect(allowTools).toContain("read");
+    expect(allowTools).toContain("bash");
+    expect(allowTools).toContain("subagent");
+    expect(allowTools).toContain("present");
+
+    const chat = scopeConfig("chat");
+    expect(chat?.["allowTools"]).toEqual(["ask_user_question", "web_search", "web_fetch"]);
+    expect(chat?.["instructions"]).toBe(false);
+    expect(chat?.["runtimeContext"]).toBe(false);
   });
 
-  it("标准模式要完整的一套；对话模式用 capabilities 裁掉不要的能力", () => {
-    const membersOf = (id: string): PluginRow[] => {
-      const channel = pluginsOf(id).find((row) => row.isolate?.["contextAssembler"] !== undefined);
-      return (channel?.config ?? []) as PluginRow[];
-    };
-    const coding = membersOf("coding")[0]?.config as Record<string, unknown> | undefined;
-    const chat = membersOf("chat")[0]?.config as Record<string, unknown> | undefined;
-
-    // 缺省即全部：coding 不写 config，组成由包的主出口决定。
-    expect(coding).toBeUndefined();
-    // 工具说明不再是组装出口的能力：它是组内独立一行（`guidanceRow`），chat 用 `groups: false` 复用它的
-    // 工具预处理而不要用法分组。
-    expect(chat?.["capabilities"]).toEqual(["assembler", "scope"]);
-    expect(chat?.["options"]).toEqual({
-      scope: {
-        allowTools: ["ask_user_question", "web_search", "web_fetch"],
-        instructions: false,
-        runtimeContext: false,
-      },
-    });
-    // 工具说明那行的 config 走它自己（组内另一行），不再挂在组装出口的 options 上。
-    const guidance = membersOf("chat").find((row) => row.id === "tool-guidance");
-    expect(guidance?.name).toBe("@morlay/dsh-agent-toolkit/guidance");
-    expect(guidance?.config).toEqual({ groups: false });
+  it("Agent Teams 由 toolkit 的 bundle 管（模式里没有它）", () => {
+    for (const source of PRESET_SOURCES) {
+      expect(pluginsOf(source.id).map((row) => row.id)).not.toContain("agent-team");
+    }
   });
 });
