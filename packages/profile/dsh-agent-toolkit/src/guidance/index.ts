@@ -4,7 +4,7 @@ import z from "@deepseek-ai/schemastery";
 import type {} from "@morlay/dsh-context-assembler/assembler";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, groupSkillBody, skillNameOf } from "./groups.ts";
 
-export const name = "context-tool-guidance";
+export const name = "toolkit-guidance";
 
 export const inject = ["tools", "systemPrompt", "contextAssembler"];
 

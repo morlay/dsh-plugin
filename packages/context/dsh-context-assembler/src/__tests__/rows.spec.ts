@@ -14,7 +14,7 @@ describe("context 行清单", () => {
     expect(group.group).toBe(true);
     // 通道服务由 isolate 隔离：组内 ctx 才解析得到它，组外（别的 preset / 根 realm）拿不到。
     expect(group.isolate).toEqual({ contextAssembler: true });
-    expect(group.config).toEqual([{ id: "context", name: "@morlay/dsh-context-assembler" }]);
+    expect(group.config).toEqual([{ id: "context-assembler", name: "@morlay/dsh-context-assembler" }]);
   });
 
   it("config 原样透传（chat 用它裁剪能力清单与参数）", () => {

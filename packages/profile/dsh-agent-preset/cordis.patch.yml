@@ -122,13 +122,13 @@
             disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
           - id: fs-intent-relax
             name: "@morlay/dsh-agent-preset/relax-intent"
-          - id: context-channel
+          - id: context-assembler-channel
             name: cordis:group
             group: true
             isolate:
               contextAssembler: true
             config:
-              - id: context
+              - id: context-assembler
                 name: "@morlay/dsh-context-assembler"
               - id: tool-guidance
                 name: "@morlay/dsh-agent-toolkit/guidance"
@@ -148,13 +148,13 @@
             name: "@deepseek-ai/dsh-tool-ask-user"
           - id: tool-web
             name: "@deepseek-ai/dsh-tool-web"
-          - id: context-channel
+          - id: context-assembler-channel
             name: cordis:group
             group: true
             isolate:
               contextAssembler: true
             config:
-              - id: context
+              - id: context-assembler
                 name: "@morlay/dsh-context-assembler"
                 config:
                   capabilities:

@@ -29,7 +29,7 @@
 
 通道（`@morlay/dsh-context-assembler/assembler`）发布进程全局服务，preset 子树里的服务**要么声明 `isolate`、要么被上游
 拒绝装载**。我们把它与全部注入行关进同一个
-`group("context-channel", …, { isolate: { contextAssembler: true } })`，`coding` / `chat` 各一份：
+`group("context-assembler-channel", …, { isolate: { contextAssembler: true } })`，`coding` / `chat` 各一份：
 
 - 通道的注册表（规则块 / 虚拟 skill / 装配改写）因此只作用在这棵子树里，别的 preset 拿不到它；
 - 走这条路的前提是**通道与它的全部消费者同组**（落一个在组外，它的 `inject` 会永远等不到服务，行停在

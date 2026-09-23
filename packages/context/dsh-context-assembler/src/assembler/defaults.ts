@@ -21,7 +21,7 @@ export const DEFAULT_KEEP: readonly string[] = [
  *    `tool:ralph`；
  * 3. `app:web-surface`（平台外壳说明）。
  *
- * 其余工具说明由各组的 `drops` 摘掉、要点由 `context-tool-guidance` 写进组正文，不在这一份里。
+ * 其余工具说明由各组的 `drops` 摘掉、要点由 toolkit 的 `guidance` 出口写进组正文，不在这一份里。
  */
 export const DEFAULT_SUPPRESS: readonly string[] = [
   "harness:identity",

@@ -103,7 +103,7 @@ section）、`runtimeContext`（关掉沙箱 / 审批那两条动态快照，按
 preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，覆盖整棵子树）：
 
 ```yaml
-- id: context-channel
+- id: context-assembler-channel
   name: cordis:group
   group: true
   isolate:

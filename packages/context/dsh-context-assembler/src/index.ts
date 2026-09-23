@@ -16,7 +16,7 @@ import * as assembler from "./assembler/index.ts";
 import * as scope from "./scope/index.ts";
 import * as skillCatalog from "./skill-catalog/index.ts";
 
-export const name = "context";
+export const name = "context-assembler-tree";
 
 const CAPABILITIES = {
   assembler,

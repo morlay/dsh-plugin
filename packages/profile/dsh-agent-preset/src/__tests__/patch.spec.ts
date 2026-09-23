@@ -109,7 +109,7 @@ describe("dsh-agent-preset patch wiring", () => {
       expect(
         members.map((row) => row.id),
         `${source.id}: 组内成员`,
-      ).toEqual(["context", "tool-guidance"]);
+      ).toEqual(["context-assembler", "tool-guidance"]);
       expect(members[0]?.name).toBe("@morlay/dsh-context-assembler");
 
       const outside = plugins.filter(

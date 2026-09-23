@@ -16,7 +16,7 @@
 export const CONTEXT_PACKAGE = "@morlay/dsh-context-assembler";
 
 /** 通道组的 id：`isolate` 的 label 按服务名给，与组 id 无关。 */
-export const CONTEXT_CHANNEL_GROUP_ID = "context-channel";
+export const CONTEXT_CHANNEL_GROUP_ID = "context-assembler-channel";
 
 /** 一行 plugin entry（本模块只描述形状，类型由消费方自己那份行类型决定）。 */
 export interface ContextRow {
@@ -39,7 +39,7 @@ export interface ContextGroupRow {
  * 只有这一行，组成与各能力的 config 都归包内（缺省即完整的一套；`chat` 用它裁剪）。
  */
 export function contextChannel(config?: Readonly<Record<string, unknown>>): ContextRow {
-  return { id: "context", name: CONTEXT_PACKAGE, ...(config === undefined ? {} : { config }) };
+  return { id: "context-assembler", name: CONTEXT_PACKAGE, ...(config === undefined ? {} : { config }) };
 }
 
 /** 关住 context 那一行：通道服务因此留在引用方的 realm 里，别的 preset 拿不到它。 */
