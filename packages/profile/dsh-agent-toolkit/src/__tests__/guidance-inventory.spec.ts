@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SUPPRESS } from "../../assembler/index.ts";
-import { TOOL_GROUPS } from "../../tool-guidance/groups.ts";
+import { DEFAULT_SUPPRESS } from "@morlay/dsh-context-assembler/assembler";
+import { TOOL_GROUPS } from "../guidance/groups.ts";
 
 // vitest 从仓库根跑（与其它读上游文件的 spec 同一约定），不用相对文件深度算。
 const REPO = process.cwd();

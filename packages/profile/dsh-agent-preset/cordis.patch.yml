@@ -61,20 +61,24 @@
             config:
               - id: tool-subagent-control
                 name: "@deepseek-ai/dsh-tool-subagent-control"
+                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
               - id: tool-subagent-list-agents
                 name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
+                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
               - id: tool-subagent
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: spawn
                   toolName: subagent
                   backgroundMode: continuable
+                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
               - id: tool-subagent-fork
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: fork
                   toolName: subagent_fork
                   backgroundMode: continuable
+                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
               - id: workflow-ptc
                 name: "@deepseek-ai/dsh-workflow-ptc"
                 config:
@@ -96,6 +100,26 @@
               searchTimeoutMs: 60000
           - id: present
             name: "@deepseek-ai/dsh-tool-present"
+          - id: agent-team
+            name: cordis:group
+            group: true
+            config:
+              - id: agent-team
+                name: "@deepseek-ai/dsh-experimental-agent-team"
+                config:
+                  maxMembers: 8
+                  maxTasks: 256
+                  maxPendingMessagesPerMember: 64
+                  maxMessageBytes: 65536
+                  disposalTimeoutMs: 5000
+              - id: tool-agent-team
+                name: "@deepseek-ai/dsh-experimental-tool-agent-team"
+                config:
+                  freshProvider: spawn
+                  forkProvider: fork
+              - id: ui-agent-team
+                name: "@deepseek-ai/dsh-experimental-client-ui-agent-team"
+            disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
           - id: fs-intent-relax
             name: "@morlay/dsh-agent-preset/relax-intent"
           - id: context-channel
@@ -106,6 +130,8 @@
             config:
               - id: context
                 name: "@morlay/dsh-context-assembler"
+              - id: tool-guidance
+                name: "@morlay/dsh-agent-toolkit/guidance"
     - id: preset-chat
       name: "@deepseek-ai/dsh-agent-preset"
       config:
@@ -134,7 +160,6 @@
                   capabilities:
                     - assembler
                     - scope
-                    - tool-guidance
                   options:
                     scope:
                       allowTools:
@@ -143,5 +168,7 @@
                         - web_fetch
                       instructions: false
                       runtimeContext: false
-                    tool-guidance:
-                      groups: false
+              - id: tool-guidance
+                name: "@morlay/dsh-agent-toolkit/guidance"
+                config:
+                  groups: false

@@ -27,7 +27,9 @@
     "./rows": "./src/rows.ts",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./guidance": "./src/guidance/index.ts",
+    "./agent-team": "./src/agent-team.ts"
   },
   "publishConfig": {
     "exports": {
@@ -35,7 +37,9 @@
       "./rows": "./dist/rows.mjs",
       "./package.json": "./package.json",
       "./cordis.patch.yml": "./cordis.patch.yml",
-      "./locale/*.json": "./locale/*.json"
+      "./locale/*.json": "./locale/*.json",
+      "./guidance": "./dist/guidance.mjs",
+      "./agent-team": "./dist/agent-team.mjs"
     }
   },
   "scripts": {
@@ -44,11 +48,21 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-command-compact": "workspace:*",
     "@deepseek-ai/dsh-command-goal": "workspace:*",
     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
+    "@deepseek-ai/dsh-experimental-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-experimental-client-ui-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-ask-user": "workspace:*",
     "@deepseek-ai/dsh-tool-bash": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
@@ -62,12 +76,20 @@
     "@deepseek-ai/dsh-tool-todo": "workspace:*",
     "@deepseek-ai/dsh-tool-web": "workspace:*",
     "@deepseek-ai/dsh-tool-workflow": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-workflow-ptc": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:*",
+    "@morlay/dsh-context-assembler": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:*",
+    "@morlay/dsh-context-assembler": "workspace:*"
   },
   "dsh": {
     "bundle": {

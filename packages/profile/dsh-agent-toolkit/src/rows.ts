@@ -1,4 +1,4 @@
-import { jsExpr } from "./js-expr.ts";
+import { jsExpr, type JsExpr } from "./js-expr.ts";
 
 /**
  * 行工具与**功能行清单**的真源。
@@ -46,6 +46,23 @@ export function row(short: string, extra: RowExtra = {}): PresetRow {
 }
 
 /** `cordis:group` 行：id 必须显式给（包名位置是组标记，推不出短名）。 */
+/**
+ * Agent Teams 的开关：`DSH_AGENT_TEAM=1` 时启用（装配期求值，见 {@link agentTeamRows}）。
+ * 团队装上来时它与直接派发（`subagent` / `subagent_fork` / 控制行）互斥，上游 `agent-team-profile`
+ * 的做法也是把直接派发那几行禁掉。
+ */
+export const AGENT_TEAM_ENV = "DSH_AGENT_TEAM";
+
+/** 团队开启时，直接派发那几行让位（`!!js`，装配期求值）。 */
+export function directDelegationDisabled(): JsExpr {
+  return jsExpr(() => process.env.DSH_AGENT_TEAM === "1");
+}
+
+/** agent-team 组默认关闭：不是 `DSH_AGENT_TEAM=1` 就不装。 */
+export function agentTeamDisabled(): JsExpr {
+  return jsExpr(() => process.env.DSH_AGENT_TEAM !== "1");
+}
+
 export function group(
   id: string,
   config: readonly PresetRow[],
@@ -89,16 +106,22 @@ export const TOOLKIT_ROWS: readonly PresetRow[] = [
   group(
     "delegation",
     [
-      row("tool-subagent-control"),
-      row("tool-subagent-control/list-agents", { id: "tool-subagent-list-agents" }),
+      // 团队开启时（DSH_AGENT_TEAM=1）直接派发让位给 Agent Teams：上游 agent-team-profile 同款换法。
+      row("tool-subagent-control", { disabled: directDelegationDisabled() }),
+      row("tool-subagent-control/list-agents", {
+        id: "tool-subagent-list-agents",
+        disabled: directDelegationDisabled(),
+      }),
       // 不带 `modelSelectionSettings`：子代理一律继承父会话的模型（见 dsh-preset 的 patch 说明）。
       row("tool-subagent", {
         config: { provider: "spawn", toolName: "subagent", backgroundMode: "continuable" },
+        disabled: directDelegationDisabled(),
       }),
       // 同一个包的第二个实例：换 provider 就是 fork 那一支。
       row("tool-subagent", {
         id: "tool-subagent-fork",
         config: { provider: "fork", toolName: "subagent_fork", backgroundMode: "continuable" },
+        disabled: directDelegationDisabled(),
       }),
       row("workflow-ptc", { config: { provider: "spawn" } }),
       row("tool-workflow"),
@@ -110,6 +133,24 @@ export const TOOLKIT_ROWS: readonly PresetRow[] = [
   row("tool-web", { config: { fetch: true, searchTimeoutMs: 60000 } }),
   row("tool-present", { id: "present" }),
 ];
+
+/**
+ * 工具说明那一行（汉化精简 + 用法分组）：实现与数据在 `./guidance` 出口，行本身也归本包。
+ *
+ * 它 `inject` 注入通道，所以必须与通道住同一个 realm——preset 把它放进 `channelGroup` 的成员里
+ * （和组装行并列）。`config.groups: false` 表示只要工具投影预处理、不注册用法分组（chat 用它）。
+ */
+export function guidanceRow(config?: Readonly<Record<string, unknown>>): {
+  readonly id: string;
+  readonly name: string;
+  readonly config?: Readonly<Record<string, unknown>>;
+} {
+  return {
+    id: "tool-guidance",
+    name: "@morlay/dsh-agent-toolkit/guidance",
+    ...(config === undefined ? {} : { config }),
+  };
+}
 
 /** 对话模式要的那两件：问答与联网。 */
 export const CHAT_TOOLKIT_ROWS: readonly PresetRow[] = [

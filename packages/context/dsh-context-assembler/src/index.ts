@@ -15,7 +15,6 @@ import * as agentInstructions from "./agent-instructions/index.ts";
 import * as assembler from "./assembler/index.ts";
 import * as scope from "./scope/index.ts";
 import * as skillCatalog from "./skill-catalog/index.ts";
-import * as toolGuidance from "./tool-guidance/index.ts";
 
 export const name = "context";
 
@@ -23,7 +22,6 @@ const CAPABILITIES = {
   assembler,
   "agent-instructions": agentInstructions,
   "skill-catalog": skillCatalog,
-  "tool-guidance": toolGuidance,
   scope,
 } as const;
 

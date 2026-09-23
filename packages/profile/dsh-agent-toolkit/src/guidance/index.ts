@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { ToolSchema } from "@deepseek-ai/dsh-llm";
 import z from "@deepseek-ai/schemastery";
-import type {} from "../assembler/index.ts";
+import type {} from "@morlay/dsh-context-assembler/assembler";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, groupSkillBody, skillNameOf } from "./groups.ts";
 
 export const name = "context-tool-guidance";

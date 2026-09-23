@@ -94,6 +94,15 @@ describe("published command surface", () => {
     expect(/--install\b/u.test(stdout)).toBe(false);
   });
 
+  it("gives dev a home flag naming the dshHome modes", async () => {
+    const { status, stdout } = await cli(["dev", "--help"]);
+
+    expect(status).toBe(0);
+    expect(/--home\b/u.test(stdout)).toBe(true);
+    expect(/xdg/u.test(stdout)).toBe(true);
+    expect(/absolute path/u.test(stdout)).toBe(true);
+  });
+
   it("gives bundle the dir and install flags and an optional workspace argument", async () => {
     const { status, stdout } = await cli(["bundle", "--help"]);
 

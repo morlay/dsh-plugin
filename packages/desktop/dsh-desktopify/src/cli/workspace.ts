@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { resolveConfiguredHome } from "../dshhome.ts";
 import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
 
 export const PROFILE_NAME = "desktop";
@@ -158,6 +159,24 @@ export function buildRoot(workspace: string): string {
 /** dev 形态的数据面：`dev`（Electron）与 `dev --web` 共用工作区的同一个 store（profile 名不同，互不冲突）。 */
 export function devStoreHome(workspace: string): string {
   return join(workspace, ".dsh-store");
+}
+
+/**
+ * dev 形态的数据面根：缺省是工作区内的 `.dsh-store`，`--home` 给出时按 `dshHome` 的三态解析
+ * （`xdg` / `env` / 绝对路径，规则与打包形态共用一份，见 `dshhome.ts`）——`--home=xdg` 因此与
+ * 打包形态落到同一个目录，排查时可以拿真实数据跑 dev 形态。
+ */
+export function resolveDevHome(workspace: string, name: string, spec?: string): string {
+  if (spec === undefined) return devStoreHome(workspace);
+  const configured = resolveConfiguredHome(name, spec);
+  if (configured !== undefined) return configured;
+  const ambient = process.env.DSH_HOME;
+  if (ambient === undefined || ambient.trim() === "")
+    throw new Error(
+      "dsh-desktopify: --home=env needs DSH_HOME in the environment " +
+        "(pass xdg or an absolute path instead)",
+    );
+  return resolve(ambient);
 }
 
 export function cleanDeployedSpec(spec: string): string {

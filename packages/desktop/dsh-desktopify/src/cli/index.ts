@@ -23,6 +23,7 @@ function resolveWorkspaceArg(workspace: string | undefined): string {
 
 interface DevFlags {
   readonly web?: boolean;
+  readonly home?: string;
 }
 
 interface BundleFlags {
@@ -41,11 +42,17 @@ program
   .command("dev")
   .description("launch the Electron shell against the workspace (or `dsh web` with --web)")
   .option("--web", "boot `dsh web` in the browser instead of the Electron shell")
+  .option(
+    "--home <spec>",
+    "dev data plane: xdg (the packaged home), env (ambient DSH_HOME), or an absolute path " +
+      "(default: <workspace>/.dsh-store)",
+  )
   .argument("[workspace]", "app workspace directory (default: current directory)")
   .action(async (workspace: string | undefined, options: DevFlags) => {
     await runDev({
       workspace: resolveWorkspaceArg(workspace),
       web: options.web === true,
+      ...(options.home === undefined ? {} : { home: options.home }),
     });
   });
 

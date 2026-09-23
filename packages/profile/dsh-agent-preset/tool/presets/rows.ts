@@ -6,8 +6,11 @@
  * 两个包都同时是 bundle：直接列进 `dsh.profile.bundles` 时行装在 host 平面（对所有 preset 生效），
  * 由 preset 引用时行住进该 preset 的 `isolate` 组。本包走的是后者。
  */
+export { agentTeamRows } from "@morlay/dsh-agent-toolkit/agent-team";
 export {
+  AGENT_TEAM_ENV,
   group,
+  guidanceRow,
   row,
   SHELL_ROWS,
   TOOLKIT_ROWS,

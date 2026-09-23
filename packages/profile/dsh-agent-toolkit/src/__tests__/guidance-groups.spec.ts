@@ -7,7 +7,7 @@ import {
   groupByKey,
   groupSkillBody,
   skillNameOf,
-} from "../../tool-guidance/groups.ts";
+} from "../guidance/groups.ts";
 
 describe("组表", () => {
   it("每个组都带中文名、skill 摘要与正文，且四组齐备", () => {

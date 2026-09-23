@@ -617,6 +617,12 @@ importers:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/include
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
       '@deepseek-ai/dsh-command-compact':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/compaction/command-compact
@@ -629,9 +635,33 @@ importers:
       '@deepseek-ai/dsh-compaction-tool-result-pruner':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/compaction/compaction-tool-result-pruner
+      '@deepseek-ai/dsh-experimental-agent-team':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/experimental/agent-team
+      '@deepseek-ai/dsh-experimental-client-ui-agent-team':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/experimental/client-ui-agent-team
+      '@deepseek-ai/dsh-experimental-tool-agent-team':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/experimental/tool-agent-team
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/skill
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/skill/skill-filesystem
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/interaction/tool-ask-user
@@ -671,9 +701,18 @@ importers:
       '@deepseek-ai/dsh-tool-workflow':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/workflow/tool-workflow
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
       '@deepseek-ai/dsh-workflow-ptc':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/workflow/workflow-ptc
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-assembler
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9

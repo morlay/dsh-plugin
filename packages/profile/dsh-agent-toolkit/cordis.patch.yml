@@ -43,20 +43,24 @@
       config:
         - id: tool-subagent-control
           name: "@deepseek-ai/dsh-tool-subagent-control"
+          disabled: !!js process.env.DSH_AGENT_TEAM === "1"
         - id: tool-subagent-list-agents
           name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
+          disabled: !!js process.env.DSH_AGENT_TEAM === "1"
         - id: tool-subagent
           name: "@deepseek-ai/dsh-tool-subagent"
           config:
             provider: spawn
             toolName: subagent
             backgroundMode: continuable
+          disabled: !!js process.env.DSH_AGENT_TEAM === "1"
         - id: tool-subagent-fork
           name: "@deepseek-ai/dsh-tool-subagent"
           config:
             provider: fork
             toolName: subagent_fork
             backgroundMode: continuable
+          disabled: !!js process.env.DSH_AGENT_TEAM === "1"
         - id: workflow-ptc
           name: "@deepseek-ai/dsh-workflow-ptc"
           config:

@@ -8,12 +8,23 @@
 
 ## 命令
 
-| 命令                                                    | 作用                                                           |
-| ------------------------------------------------------- | -------------------------------------------------------------- |
-| `dsh-desktopify dev [--web] [workspace]`                | 启动 Electron 壳（不打包）；`--web` 改为在浏览器里跑 `dsh web` |
-| `dsh-desktopify bundle [--dir] [--install] [workspace]` | 构建当前平台的静态、无签名桌面应用                             |
+| 命令                                                     | 作用                                                                              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `dsh-desktopify dev [--web] [--home <spec>] [workspace]` | 启动 Electron 壳（不打包）；`--web` 改为在浏览器里跑 `dsh web`；`--home` 换数据面 |
+| `dsh-desktopify bundle [--dir] [--install] [workspace]`  | 构建当前平台的静态、无签名桌面应用                                                |
 
 工作区取首个位置参数（缺省当前目录），CLI 会把它写进 `DSH_DESKTOP_WORKSPACE`；工具内不写死任何 app 路径或名字。dev 两种形态的数据面共用工作区的 `.dsh-store`（`DSH_HOME`；profile 名 `desktop` / `web` 互不冲突），只有 Electron 的浏览器数据落在构建目录 `<workspace>/node_modules/.dsh-desktopify/development/electron-user-data`。
+
+`--home <spec>` 把数据面换到别处，取值与工作区的 `dshHome` 配置同构（解析只有一份，见 [`src/dshhome.ts`](./src/dshhome.ts)）：
+
+| `--home` | 数据面                                               |
+| -------- | ---------------------------------------------------- |
+| 缺省     | `<workspace>/.dsh-store`（工作区内，与打包形态隔离） |
+| `xdg`    | 打包形态那同一个目录（`<平台数据目录>/<app 名>`）    |
+| `env`    | 环境里的 `DSH_HOME`（没设就 fail loud）              |
+| 绝对路径 | 原样使用                                             |
+
+「打包形态才复现」的问题（如内存增长）用 `just custom dev --home=xdg` 就能让 dev 跑真实数据；`DSH_APP_DSH_HOME` 仍是壳里的最高优先覆盖。
 壳产物由 `pnpm build` 生成，dev / bundle 只校验它在，不重建——源码形态下产物比源码旧会打印警告（改了壳没重建的话，
 打包出来的 app 跑的还是旧壳）。随包 Node / pnpm 载荷的准备与校验、profile 种子生成是 `bundle` 的内部步骤，
 不单独暴露命令。本仓库示例工作区：`just custom desktop`（dev）/ `just custom bundle`（打包）。

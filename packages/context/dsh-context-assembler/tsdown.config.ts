@@ -16,7 +16,6 @@ export default defineConfig(async () => ({
       assembler: "./src/assembler/index.ts",
       "agent-instructions": "./src/agent-instructions/index.ts",
       "skill-catalog": "./src/skill-catalog/index.ts",
-      "tool-guidance": "./src/tool-guidance/index.ts",
       scope: "./src/scope/index.ts",
     },
   })),

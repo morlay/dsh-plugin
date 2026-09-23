@@ -1,6 +1,6 @@
 # @morlay/dsh-context-assembler
 
-提示词注入能力组：**一个包五个能力**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
+提示词注入能力组：**一个包四个能力**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
 能力名就是子出口名。装配行是 `@morlay/dsh-context-assembler`（组装）或 `@morlay/dsh-context-assembler/<capability>`（单个），
 见 [`rows.ts` 的 `contextChannel()`](../../profile/dsh-agent-preset/tool/presets/rows.ts)。引用展开原先也在这个包里，
 现在独立成 [`@morlay/dsh-reference`](../dsh-reference/README.md)（它只挂 `agent/pre-step`、不依赖通道）。
@@ -11,7 +11,6 @@
 | `./assembler`          | `context-assembler`          | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`      |
 | `./agent-instructions` | `context-agent-instructions` | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）              |
 | `./skill-catalog`      | `context-skill-catalog`      | skill 目录规则块 + 模型侧 `skill` 工具                                 |
-| `./tool-guidance`      | `context-tool-guidance`      | 工具用法按组切分、短描述投影、上游说明丢弃                             |
 | `./scope`              | `context-scope`              | 模式收口：工具白名单、instruction 总开关、动态快照开关                 |
 
 规则、id 表与分层的 home 在 [上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；术语见
@@ -31,9 +30,13 @@
 
 ## 为什么合成一个包
 
-这 5 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），注入方**全都只用通道的
+这 4 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），注入方**全都只用通道的
 类型与服务面**。包边界在这里只是演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动
 （组装出口按 config 装它）。
+
+工具说明（汉化精简 + 用法分组）也不住在这里：它管的是"工具怎么被讲清楚"，与工具的清单同源，
+现在归 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)（但它 `inject` 通道，所以装配时与
+组装行同住一个 `isolate` 组）。本包只做上下文重排。
 
 引用展开不住在这里：它不依赖 `ctx.contextAssembler`（`inject` 只有 `skills`），也没有「读文件 + 字节预算」
 以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../session/better-session/cordis.patch.yml)
@@ -82,16 +85,11 @@ web-app bundle 自己设在 preset 平面）。
 工具。取代上游 `@deepseek-ai/dsh-tool-skill`（`skill-filesystem` 保留——它提供 skill 发现）。目录变更走
 同 id 覆盖；`auto` 的 skill 不进目录（正文已随提示送达）。
 
-## tool-guidance
+## 工具说明（不在这个包里）
 
-**工具不设门控**：全部工具始终可见可调用；组只决定用法说明怎么分批送达——`base` 组正文常驻，`flow` /
-`delegation` / `team` 注册成按需加载的 skill。三件事：登记组 skill；用一行中文短描述覆盖模型看到的工具
-`description`（改装配投影而不写注册表——后者会触发 `tools/change`，与上游 `tool-subagent` 的 composition
-reconcile 互相激成装配风暴）；丢弃上游工具说明与规则 section（`drops`，要点已写进各组的正文列表）。
-
-组的唯一 home 是 [`src/tool-guidance/groups.ts`](./src/tool-guidance/groups.ts)：工具名、摘要与正文、注入
-方式、丢弃清单、短描述都在那一份；覆盖性测试保证 standard 装配的每个工具与每个 section 都有归属。
-Config 只有一个开关 `groups`（默认 `true`；chat 给 `false`）。
+工具的汉化精简与用法分组归 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md) 的 `guidance` 出口：
+族索引（加一个工具改一族）、组 skill、短描述投影、丢弃清单都在那边。它 `inject` 通道，所以装配时与组装行
+同住一个 `isolate` 组——本包只提供它们要用的通道，不碰工具怎么讲。
 
 ## scope
 
@@ -113,14 +111,19 @@ preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，�
   config:
     - id: context # 标准模式：不带 config，完整一套
       name: "@morlay/dsh-context-assembler"
+    # 工具说明行也与通道同组（它 inject 通道）：标准模式不带 config，对话模式只要预处理
+    # - id: tool-guidance
+    #   name: "@morlay/dsh-agent-toolkit/guidance"
     # 对话模式：裁掉不要的能力，并给留下的传参
     # - id: context
     #   name: "@morlay/dsh-context-assembler"
     #   config:
-    #     capabilities: [assembler, scope, tool-guidance]
+    #     capabilities: [assembler, scope]
     #     options:
     #       scope: { allowTools: [ask_user_question, web_search, web_fetch], instructions: false, runtimeContext: false }
-    #       tool-guidance: { groups: false }
+    # - id: tool-guidance
+    #   name: "@morlay/dsh-agent-toolkit/guidance"
+    #   config: { groups: false }
 ```
 
 几点硬要求：

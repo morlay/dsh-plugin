@@ -31,11 +31,11 @@ import {
   PROFILE_NAME,
   buildRoot,
   desktopConfig,
-  devStoreHome,
   devWebConfig,
   dshVersion as readDshVersion,
   findWorkspaceRoot,
   mergedProfileBundles,
+  resolveDevHome,
   resolveWorkspace,
   workspaceManifest,
   type ResolvedWorkspaceManifest,
@@ -253,9 +253,9 @@ async function copyPackage(source: string, destination: string): Promise<void> {
 async function prepareWebProfile(
   workspace: string,
   input: OfficialResolutionInput,
+  home: string,
 ): Promise<string> {
   const manifest = await workspaceManifest(workspace);
-  const home = join(workspace, ".dsh-store");
   const entry = await cliEntry(input);
   if (!(await pathExists(entry))) {
     throw new Error(`desktop development: missing built artifact ${entry}`);
@@ -335,6 +335,8 @@ async function launchElectron(
 export interface DevOptions {
   readonly workspace?: string;
   readonly web: boolean;
+  /** 数据面根；缺省是工作区内的 `.dsh-store`，取值语义见 `resolveDevHome`。 */
+  readonly home?: string;
 }
 
 export async function runDev(options: DevOptions): Promise<void> {
@@ -343,10 +345,11 @@ export async function runDev(options: DevOptions): Promise<void> {
   const manifest = await workspaceManifest(workspace);
   const input = officialInput(workspace, repositoryRoot, manifest);
   const buildRootDir = buildRoot(workspace);
+  // 两种 dev 形态共用同一个数据面根；`--home=xdg` 时与打包形态落到同一个目录。
+  const home = resolveDevHome(workspace, manifest.name, options.home);
   await buildShell();
   if (options.web) {
-    const home = devStoreHome(workspace);
-    const profileDir = await prepareWebProfile(workspace, input);
+    const profileDir = await prepareWebProfile(workspace, input, home);
     const port = process.env.PORT ?? "3080";
     const entry = await cliEntry(input);
     if (!(await pathExists(entry))) {
@@ -394,15 +397,10 @@ export async function runDev(options: DevOptions): Promise<void> {
     name: manifest.name,
     id: desktop.id,
     version: desktop.version,
-    dshHome: "env",
+    dshHome: home,
     window: desktop.window,
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(
-    projectDir,
-    buildRootDir,
-    hasTsx(projectDir, projectDir),
-    devStoreHome(workspace),
-  );
+  await launchElectron(projectDir, buildRootDir, hasTsx(projectDir, projectDir), home);
 }

@@ -1,5 +1,12 @@
 import { CHAT_PERSONA } from "./persona.ts";
-import { channelGroup, CHAT_TOOLKIT_ROWS, contextChannel, row, type PresetRow } from "./rows.ts";
+import {
+  channelGroup,
+  CHAT_TOOLKIT_ROWS,
+  contextChannel,
+  guidanceRow,
+  row,
+  type PresetRow,
+} from "./rows.ts";
 
 /**
  * 对话模式的装配行：**一行提示词都不注入**——没有 system-prompt、工作区指令、skill 目录、引用注入与
@@ -15,10 +22,10 @@ export const CHAT_ROWS: readonly PresetRow[] = [
   row("persona", { config: { ...CHAT_PERSONA } }),
   // 功能行只有这两件，清单同样归 `@morlay/dsh-agent-toolkit`。
   ...CHAT_TOOLKIT_ROWS,
-  // 对话模式只要通道本身、工具收口与工具预处理三件：能力清单与各自的参数都写在这一行里。
+  // 对话模式只要通道本身、工具收口与工具预处理三件。
   channelGroup([
     contextChannel({
-      capabilities: ["assembler", "scope", "tool-guidance"],
+      capabilities: ["assembler", "scope"],
       options: {
         scope: {
           allowTools: ["ask_user_question", "web_search", "web_fetch"],
@@ -26,9 +33,9 @@ export const CHAT_ROWS: readonly PresetRow[] = [
           // 没有文件与 shell 工具，就不该收到"能改工作区哪些文件、要不要走审批"那两条 runtime context。
           runtimeContext: false,
         },
-        // 复用工具预处理（描述汉化 + 剥掉参数说明）：这是所有模式都要的，与用法分组无关。
-        "tool-guidance": { groups: false },
       },
     }),
+    // 只要工具预处理（描述汉化 + 剥掉参数说明），不要用法分组：它连 skill 工具都没有。
+    guidanceRow({ groups: false }),
   ]),
 ];

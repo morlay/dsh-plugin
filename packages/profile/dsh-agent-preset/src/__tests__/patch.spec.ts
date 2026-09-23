@@ -12,6 +12,8 @@ interface PluginRow {
   id?: string;
   name?: string;
   isolate?: Record<string, unknown>;
+  /** `!!js` 表达式（Loader 激活时求值）：这里是运行期开关的判据。 */
+  disabled?: boolean | { __jsExpr: string };
   config?: Record<string, unknown> | PluginRow[];
 }
 
@@ -103,10 +105,11 @@ describe("dsh-agent-preset patch wiring", () => {
       expect(channel?.name).toBe("cordis:group");
 
       const members = (channel?.config ?? []) as PluginRow[];
+      // 组内两行：组装行（通道 + 它承载的能力）与工具说明行（它 inject 通道，所以必须同 realm）。
       expect(
         members.map((row) => row.id),
         `${source.id}: 组内成员`,
-      ).toEqual(["context"]);
+      ).toEqual(["context", "tool-guidance"]);
       expect(members[0]?.name).toBe("@morlay/dsh-context-assembler");
 
       const outside = plugins.filter(
@@ -120,6 +123,22 @@ describe("dsh-agent-preset patch wiring", () => {
     }
   });
 
+  it("Agent Teams 是可选能力：那一组默认关闭，团队开启时直接派发让位", () => {
+    const plugins = pluginsOf("coding");
+
+    // 组默认关闭：`DSH_AGENT_TEAM=1` 才装（`!!js` 在装配期求值，于是同一个产物可按需打开）。
+    const team = plugins.find((row) => row.id === "agent-team");
+    expect(team?.name).toBe("cordis:group");
+    expect(team?.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM !== "1"' });
+
+    // 同一个开关的另一半：团队装上来时，直接派发那几行让位（两者不同时装）。
+    const delegation = plugins.find((row) => row.id === "delegation");
+    const subagent = (delegation?.config as PluginRow[] | undefined)?.find(
+      (row) => row.id === "tool-subagent",
+    );
+    expect(subagent?.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM === "1"' });
+  });
+
   it("标准模式要完整的一套；对话模式用 capabilities 裁掉不要的能力", () => {
     const membersOf = (id: string): PluginRow[] => {
       const channel = pluginsOf(id).find((row) => row.isolate?.["contextAssembler"] !== undefined);
@@ -130,14 +149,19 @@ describe("dsh-agent-preset patch wiring", () => {
 
     // 缺省即全部：coding 不写 config，组成由包的主出口决定。
     expect(coding).toBeUndefined();
-    expect(chat?.["capabilities"]).toEqual(["assembler", "scope", "tool-guidance"]);
+    // 工具说明不再是组装出口的能力：它是组内独立一行（`guidanceRow`），chat 用 `groups: false` 复用它的
+    // 工具预处理而不要用法分组。
+    expect(chat?.["capabilities"]).toEqual(["assembler", "scope"]);
     expect(chat?.["options"]).toEqual({
       scope: {
         allowTools: ["ask_user_question", "web_search", "web_fetch"],
         instructions: false,
         runtimeContext: false,
       },
-      "tool-guidance": { groups: false },
     });
+    // 工具说明那行的 config 走它自己（组内另一行），不再挂在组装出口的 options 上。
+    const guidance = membersOf("chat").find((row) => row.id === "tool-guidance");
+    expect(guidance?.name).toBe("@morlay/dsh-agent-toolkit/guidance");
+    expect(guidance?.config).toEqual({ groups: false });
   });
 });

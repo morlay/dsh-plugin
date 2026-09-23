@@ -10,12 +10,12 @@ import { SessionId } from "@deepseek-ai/dsh-session";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
 import { renderPrompt } from "@deepseek-ai/dsh-system-prompt";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import * as ContextAssembler from "../../assembler/index.ts";
-import * as SkillCatalog from "../../skill-catalog/index.ts";
-import * as ContextScope from "../../scope/index.ts";
+import * as ContextAssembler from "@morlay/dsh-context-assembler/assembler";
+import * as SkillCatalog from "@morlay/dsh-context-assembler/skill-catalog";
+import * as ContextScope from "@morlay/dsh-context-assembler/scope";
 import { afterEach, describe, expect, it } from "vitest";
-import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, skillNameOf } from "../../tool-guidance/groups.ts";
-import * as plugin from "../../tool-guidance/index.ts";
+import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, skillNameOf } from "../guidance/groups.ts";
+import * as plugin from "../guidance/index.ts";
 
 /** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
