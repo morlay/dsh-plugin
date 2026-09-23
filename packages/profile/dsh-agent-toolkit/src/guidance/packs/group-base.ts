@@ -11,7 +11,7 @@ export const BASE_GROUP: GroupPack = {
     lines: [
       {
         when: "read",
-        text: "read：读文本文件（不要用 cat 之类的 shell 命令）；大文件用 offset/limit 续读。",
+        text: "read：读文本文件（严禁使用 sed/cat 之类的 shell 命令）；大文件用 offset/limit 续读。",
       },
       {
         when: "write",
@@ -31,7 +31,7 @@ export const BASE_GROUP: GroupPack = {
       },
       {
         when: "bash",
-        text: "bash：执行命令（可给 timeout、cwd、env）；非零退出会标 [exit code: N]，先查清失败原因再继续。",
+        text: "bash：执行命令。使用参数 workdir，默认是你的工作目录，请勿使用 cd；非零退出会标 [exit code: N]，先查清失败原因再继续。",
       },
       {
         when: ["job_output", "job_list", "job_kill"],
@@ -47,7 +47,10 @@ export const BASE_GROUP: GroupPack = {
       },
       { when: "read_image", text: "read_image：看图。" },
       { when: "skill", text: "skill：按需加载技能说明，再按它行事。" },
-      { when: "ask_user_question", text: "ask_user_question：需要用户定夺时问，不要自己猜。" },
+      {
+        when: "ask_user_question",
+        text: "ask_user_question：需要用户定夺时必须通过该工具询问，不要自己猜。",
+      },
     ],
     injection: "auto",
     drops: [

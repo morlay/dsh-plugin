@@ -204,9 +204,9 @@ describe("IPC 契约", () => {
     ).toBe(true);
     expect(isDesktopHostEvent({ type: "ready", protocolVersion: 99 })).toBe(false);
     expect(isDesktopHostEvent({ type: "fatal", message: "x" })).toBe(true);
-    expect(isDesktopHostEvent({ type: "fatal", message: "x", diagnostic: "Error: x\n    at a" })).toBe(
-      true,
-    );
+    expect(
+      isDesktopHostEvent({ type: "fatal", message: "x", diagnostic: "Error: x\n    at a" }),
+    ).toBe(true);
     expect(isDesktopHostEvent({ type: "fatal", message: "x", diagnostic: 7 })).toBe(false);
     expect(isDesktopHostEvent({ type: "fatal" })).toBe(false);
     expect(isDesktopHostEvent("ready")).toBe(false);

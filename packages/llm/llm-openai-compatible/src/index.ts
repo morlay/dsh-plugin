@@ -510,7 +510,10 @@ export function apply(ctx: Context, config: Config): void {
     if (this !== ctx.fiber) return raw;
     const candidate = Config(raw as Options);
     assertServiceable({
-      providers: structuredClone(candidate.providers.get()) as Record<string, ProviderProfileSource>,
+      providers: structuredClone(candidate.providers.get()) as Record<
+        string,
+        ProviderProfileSource
+      >,
     });
     return raw;
   });

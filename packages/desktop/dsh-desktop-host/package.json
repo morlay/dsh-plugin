@@ -38,6 +38,11 @@
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
+  "publishConfig": {
+    "exports": {
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
   "scripts": {
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
@@ -61,10 +66,5 @@
   },
   "engines": {
     "node": ">=24.11.0"
-  },
-  "publishConfig": {
-    "exports": {
-      "./locale/*.json": "./locale/*.json"
-    }
   }
 }

@@ -86,11 +86,7 @@ function assertTextOnly(blocks: readonly ContentBlock[]): void {
 function assertSupportedImageRoles(messages: readonly RequestMessage[]): void {
   for (const message of messages) {
     // 图片只出现在 user 与 tool 消息里；tool 结果的图片由 serializePrompt 聚成一条 user 消息发出。
-    if (
-      message.role !== "user" &&
-      message.role !== "tool" &&
-      contentHasImage(message.content)
-    ) {
+    if (message.role !== "user" && message.role !== "tool" && contentHasImage(message.content)) {
       throw new LlmError(
         `The OpenAI-compatible chat-completions adapter cannot represent image content in a ${message.role} message.`,
         "UNSUPPORTED_CONTENT",
@@ -240,7 +236,11 @@ async function serializePrompt(
         "UNSUPPORTED_CONTENT",
       );
     }
-    if (message.content.some((block) => block.type === "tool-addition" || block.type === "tool-removal")) {
+    if (
+      message.content.some(
+        (block) => block.type === "tool-addition" || block.type === "tool-removal",
+      )
+    ) {
       throw new LlmError(
         "The OpenAI-compatible chat-completions adapter cannot serialize tool-change blocks outside developer messages.",
         "UNSUPPORTED_CONTENT",

@@ -5,17 +5,25 @@ import { isInlinedPackage } from "../cordis-host.ts";
 
 describe("isInlinedPackage", () => {
   it("包名与子路径都命中", () => {
-    expect(isInlinedPackage("@morlay/dsh-client-ui-primitives", ["@morlay/dsh-client-ui-primitives"]))
-      .toBe(true);
-    expect(isInlinedPackage("@morlay/dsh-client-ui-primitives/client", ["@morlay/dsh-client-ui-primitives"]))
-      .toBe(true);
+    expect(
+      isInlinedPackage("@morlay/dsh-client-ui-primitives", ["@morlay/dsh-client-ui-primitives"]),
+    ).toBe(true);
+    expect(
+      isInlinedPackage("@morlay/dsh-client-ui-primitives/client", [
+        "@morlay/dsh-client-ui-primitives",
+      ]),
+    ).toBe(true);
   });
 
   it("前缀相近但不是前缀的 id 不命中", () => {
-    expect(isInlinedPackage("@morlay/dsh-client-ui-primitives-extra", ["@morlay/dsh-client-ui-primitives"]))
-      .toBe(false);
-    expect(isInlinedPackage("@morlay/dsh-client-ui-conversation", ["@morlay/dsh-client-ui-primitives"]))
-      .toBe(false);
+    expect(
+      isInlinedPackage("@morlay/dsh-client-ui-primitives-extra", [
+        "@morlay/dsh-client-ui-primitives",
+      ]),
+    ).toBe(false);
+    expect(
+      isInlinedPackage("@morlay/dsh-client-ui-conversation", ["@morlay/dsh-client-ui-primitives"]),
+    ).toBe(false);
   });
 
   it("没给 inline 时一律不命中（默认行为不变）", () => {

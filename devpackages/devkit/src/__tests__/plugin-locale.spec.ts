@@ -20,7 +20,9 @@ async function publishablePackages(): Promise<Publishable[]> {
   const found: Publishable[] = [];
   for await (const file of glob("packages/*/*/package.json", { cwd: process.cwd() })) {
     const dir = join(process.cwd(), file, "..");
-    const manifest = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as { name: string };
+    const manifest = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
+      name: string;
+    };
     found.push({ name: manifest.name, dir });
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));

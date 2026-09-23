@@ -17,12 +17,7 @@ const ROOT = resolve(import.meta.dirname, "..", "..");
 const SHELL_ENTRIES = ["src/index.ts", "src/preload-app.ts"];
 
 /** 壳产物里能解析到的裸说明符：node 内建、Electron 自带、内联进来的本地包。 */
-const ALLOWED = [
-  /^node:/u,
-  /^electron$/u,
-  /^@local\//u,
-  /^@morlay\/dsh-desktop-host(?:\/|$)/u,
-];
+const ALLOWED = [/^node:/u, /^electron$/u, /^@local\//u, /^@morlay\/dsh-desktop-host(?:\/|$)/u];
 
 /** Type-only import 不留运行时字节，不在这条边界里。 */
 function withoutTypeImports(text: string): string {

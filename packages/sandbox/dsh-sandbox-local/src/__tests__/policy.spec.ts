@@ -50,7 +50,9 @@ describe("sandbox:policy 的文本", () => {
   it("三种模式各有官方语义，规则非空时追加在末尾", () => {
     const empty = { allowWrite: [], readOnly: [], deny: [] };
 
-    expect(renderPolicyContext({ mode: "read-only", workspaceRoot: "/w" }, empty)).toContain("只读");
+    expect(renderPolicyContext({ mode: "read-only", workspaceRoot: "/w" }, empty)).toContain(
+      "只读",
+    );
     expect(renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, empty)).toContain(
       "workspace-write（工作区可写）",
     );
@@ -63,16 +65,18 @@ describe("sandbox:policy 的文本", () => {
     expect(withRules).toContain("/ro");
     expect(withRules).toContain("**/*.pem");
     // 规则为空时不追加任何一句。
-    expect(renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, empty)).not.toContain(
-      "本部署额外授权",
-    );
+    expect(
+      renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, empty),
+    ).not.toContain("本部署额外授权");
   });
 
   it("注册在 agent 作用域：装配看到的是我们的文本，全局那条不受影响", async () => {
     const { root, scope } = await mount();
     registerPolicyContext(scope, RULES, () => ({ mode: "workspace-write", workspaceRoot: "/w" }));
     // inject 的回调在依赖就绪后执行；注册本身是同步落在 scope layer 上的，等一个 tick 再装配。
-    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
 
     // 读装配：服务在 root 上，作用域用 scope key 指定（agent 自己的 ctx 就是这么取它的）。
     const scoped = await root.systemPrompt.assemble({
