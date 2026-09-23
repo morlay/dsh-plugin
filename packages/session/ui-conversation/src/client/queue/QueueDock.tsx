@@ -284,6 +284,7 @@ export function QueueDock({
                   {queueMutable && (
                     <div className={css.actions}>
                       <Tooltip
+                        portal
                         label={t("queue.edit")}
                         side="bottom"
                         delayMs={500}
@@ -304,7 +305,7 @@ export function QueueDock({
                           <IconEditOutlineRegular size={14} />
                         </button>
                       </Tooltip>
-                      <Tooltip label={t("queue.remove")} side="bottom" delayMs={500}>
+                      <Tooltip portal label={t("queue.remove")} side="bottom" delayMs={500}>
                         <button
                           type="button"
                           className={css.action}
@@ -318,6 +319,7 @@ export function QueueDock({
                         </button>
                       </Tooltip>
                       <Tooltip
+                        portal
                         label={t("queue.steer")}
                         side="bottom"
                         delayMs={500}

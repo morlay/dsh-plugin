@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "子代理服务",
-    "description": "上游 @deepseek-ai/dsh-subagent 的薄壳 fork：只接管 `subagent` 行，把连续子代理的回报指引换成中文。"
+    "title": "子智能体服务",
+    "description": "上游 @deepseek-ai/dsh-subagent 的薄壳 fork：只接管 `subagent` 行，把连续子智能体的回报指引换成中文。"
   }
 }

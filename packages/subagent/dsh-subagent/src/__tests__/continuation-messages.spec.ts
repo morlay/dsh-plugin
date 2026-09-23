@@ -22,7 +22,7 @@ describe("withContinuableReturnGuidance", () => {
 
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).toEqual(task[0]);
-    expect(guidance).toContain('你的父代理 id 是 "session-parent"');
+    expect(guidance).toContain('你的父智能体 id 是 "session-parent"');
     expect(guidance).toContain('send_message({ agent_id: "session-parent"');
     expect(guidance).toContain("不会自动收到你的对话、工具输出与推理过程");
     expect(guidance).toContain("发消息不会结束你的回合");

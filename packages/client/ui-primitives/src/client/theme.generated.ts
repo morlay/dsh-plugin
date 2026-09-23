@@ -1,5 +1,5 @@
 /**
- * 官方主题的 `--dsw-*` token 全集（367 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
+ * 官方主题的 `--dsw-*` token 全集（373 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
  *
  * 叶子是该变量的**默认值**（官方 light 主题里首次出现的定义）：既是类型推导的来源，也可作 fallback。
  * `"$"` 键出现在「自身也是 token 的分支」上（命名体系里有 40 个短名同时是长名前缀的 token）。
@@ -101,6 +101,20 @@ export const designTokens = {
       diff: {
         added: "var(--dsw-static-green-500-a08)",
         deleted: "var(--dsw-static-red-600-a08)",
+      },
+    },
+    file: {
+      diff: {
+        added: {
+          bg: "rgb(230, 244, 231)",
+          gutter: "rgb(237, 247, 237)",
+          marker: "rgb(1, 162, 65)",
+        },
+        deleted: {
+          bg: "rgb(252, 230, 226)",
+          gutter: "rgb(253, 236, 233)",
+          marker: "rgb(186, 39, 35)",
+        },
       },
     },
     interactive: {

@@ -74,7 +74,7 @@ describe("continuable 子代理的回报指引", () => {
     const texts = visibleTexts(adapter);
 
     expect(started.childId).toBeDefined();
-    expect(texts.some((text) => text.includes("你的父代理 id 是"))).toBe(true);
+    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(true);
     expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
   });
 });

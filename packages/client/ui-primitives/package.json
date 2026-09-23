@@ -47,7 +47,7 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "gen:tokens": "pnpm exec tsx scripts/gen-design-tokens.mts",
+    "gen:tokens": "pnpm exec tsx scripts/gen-design-tokens.mts && pnpm exec oxfmt src/client/theme.generated.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {

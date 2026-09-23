@@ -87,9 +87,9 @@ export function withContinuableReturnGuidance(
     ...prompt,
     {
       type: 'text',
-      text: `你的父代理 id 是 ${encodedParentId}。完成前用 send_message({ agent_id: ${encodedParentId}, `
-        + 'message: "<自包含的结论>" }) 把结果发给它。父代理与你共享工作区，但不会自动收到你的对话、'
-        + '工具输出与推理过程。发现会改变父代理下一步行动的事情时也尽早再发一条；发消息不会结束你的回合。',
+      text: `你的父智能体 id 是 ${encodedParentId}。完成前用 send_message({ agent_id: ${encodedParentId}, `
+        + 'message: "<自包含的结论>" }) 把结果发给它。父智能体与你共享工作区，但不会自动收到你的对话、'
+        + '工具输出与推理过程。发现会改变父智能体下一步行动的事情时也尽早再发一条；发消息不会结束你的回合。',
     },
   ]
 }
