@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-desktop-host",
-  "version": "0.0.1-alpha.7",
+  "version": "0.0.1-alpha.8",
   "description": "Desktop host process for dsh-desktopify: boots the desktop profile and serves it through an in-process, portless webServer over byte pipes — upstream apps/desktop-host with the web carrier taken over and the Office skill mount removed.",
   "keywords": [
     "desktop",

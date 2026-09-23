@@ -1,6 +1,6 @@
 {
   "name": "@morlay/ui-conversation-message-actions",
-  "version": "0.0.19-alpha.7",
+  "version": "0.0.19-alpha.8",
   "description": "Rewind / retry / recall / fork orchestration (host) plus the browser half — replaces the conversation.chat.node user / steering rendering and overrides the conversation.composer.dock stats row.",
   "keywords": [
     "conversation-chat-node",

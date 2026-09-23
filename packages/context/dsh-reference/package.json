@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-reference",
-  "version": "0.0.1-alpha.2",
+  "version": "0.0.1-alpha.3",
   "description": "Reference expansion for dsh: `@path` / `skill:name` in a user message expand into injected content at pre-step. Independent of the injection channel; the reference parser it reuses is inlined into the artifact, so this package ships without a client-side dependency.",
   "keywords": [
     "context",

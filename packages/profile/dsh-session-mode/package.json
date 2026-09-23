@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-session-mode",
-  "version": "0.0.1-alpha.3",
+  "version": "0.0.1-alpha.4",
   "description": "Personal dsh bundle: session modes (coding / chat) as data — a mode is a persona plus the tools it may use. The host applies the current mode to each session, and the new-session chip plus the session-header label replace the official agent-preset surface.",
   "keywords": [
     "dsh",

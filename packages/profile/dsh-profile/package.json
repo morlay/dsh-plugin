@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-profile",
-  "version": "0.0.6-alpha.7",
+  "version": "0.0.6-alpha.8",
   "description": "Personal dsh profile: 配置初始化层——给 llm route、welcome notice、搜索后端选择与沙箱访问规则这类 config 值，并关掉部署不要的行（官方 agent preset 整套与「先读后改」）；插行归各能力包自己的 bundle。",
   "keywords": [
     "dsh",
