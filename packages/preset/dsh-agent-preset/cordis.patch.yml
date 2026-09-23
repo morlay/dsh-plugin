@@ -103,7 +103,7 @@
             group: true
             config:
               - id: context
-                name: "@morlay/dsh-context"
+                name: "@morlay/dsh-context-assembler"
             isolate:
               contextAssembler: true
     - id: preset-chat
@@ -127,7 +127,7 @@
             group: true
             config:
               - id: context
-                name: "@morlay/dsh-context"
+                name: "@morlay/dsh-context-assembler"
                 config:
                   capabilities:
                     - assembler

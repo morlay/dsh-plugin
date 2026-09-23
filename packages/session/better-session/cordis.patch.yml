@@ -55,3 +55,8 @@
     # 删除 / 导入为新会话）。
     - id: ui-conversation-manager
       name: "@morlay/ui-conversation-manager"
+
+    # 引用展开（`@path` / `skill:name` 在 pre-step 注入内容）：独立于上下文组装出口，
+    # 所以装在这里——它只挂 `agent/pre-step`、`inject` 只有 `skills`，不需要通道服务。
+    - id: reference
+      name: "@morlay/dsh-reference"

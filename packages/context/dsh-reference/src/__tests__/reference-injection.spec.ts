@@ -3,8 +3,8 @@ import type { Context } from "@deepseek-ai/cordis";
 import type { PreStepDecision } from "@deepseek-ai/dsh-agent";
 import type { UserMessage } from "@deepseek-ai/dsh-session";
 import type { SkillDefinition } from "@deepseek-ai/dsh-skill";
-import { apply } from "../../reference/index.ts";
-import { fileReferencesIn, skillNamesIn } from "../../reference/links.ts";
+import { apply } from "../index.ts";
+import { fileReferencesIn, skillNamesIn } from "../links.ts";
 
 type Listener = (
   payload: {

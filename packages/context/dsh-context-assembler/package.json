@@ -1,7 +1,7 @@
 {
-  "name": "@morlay/dsh-context",
+  "name": "@morlay/dsh-context-assembler",
   "version": "0.0.1-alpha.1",
-  "description": "Prompt-injection capability set for dsh: the single channel (context assembler) plus the injectors it carries — workspace instructions, skill catalog, file references, tool-usage guidance, and the per-mode scope gate. One package, one subpath per capability row.",
+  "description": "Prompt-injection capability set for dsh: the single channel (context assembler) plus the injectors it carries — workspace instructions, skill catalog, tool-usage guidance, and the per-mode scope gate. Reference expansion is its own package (@morlay/dsh-reference).",
   "keywords": [
     "context",
     "dsh",
@@ -25,7 +25,6 @@
     "./assembler": "./src/assembler/index.ts",
     "./agent-instructions": "./src/agent-instructions/index.ts",
     "./skill-catalog": "./src/skill-catalog/index.ts",
-    "./reference": "./src/reference/index.ts",
     "./tool-guidance": "./src/tool-guidance/index.ts",
     "./scope": "./src/scope/index.ts",
     "./package.json": "./package.json"
@@ -36,7 +35,6 @@
       "./assembler": "./dist/assembler.mjs",
       "./agent-instructions": "./dist/agent-instructions.mjs",
       "./skill-catalog": "./dist/skill-catalog.mjs",
-      "./reference": "./dist/reference.mjs",
       "./tool-guidance": "./dist/tool-guidance.mjs",
       "./scope": "./dist/scope.mjs",
       "./package.json": "./package.json"
@@ -47,9 +45,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:*",
-    "@morlay/dsh-client-ui-primitives": "workspace:*",
-    "mdast-util-from-markdown": "^2.0.2"
+    "@deepseek-ai/schemastery": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",

@@ -20,13 +20,13 @@
 
 ## 每个模式自带一份注入通道
 
-通道（`@morlay/dsh-context/assembler`）发布进程全局服务，preset 子树里的服务**要么声明 `isolate`、要么被上游
+通道（`@morlay/dsh-context-assembler/assembler`）发布进程全局服务，preset 子树里的服务**要么声明 `isolate`、要么被上游
 拒绝装载**。我们把它与全部注入行关进同一个
 `group("context-channel", …, { isolate: { contextAssembler: true } })`，`coding` / `chat` 各一份：
 
 - 通道的注册表（规则块 / 虚拟 skill / 装配改写）因此只作用在这棵子树里，别的 preset 拿不到它；
 - 走这条路的前提是**通道与它的全部消费者同组**（落一个在组外，它的 `inject` 会永远等不到服务，行停在
-  waiting 而不报错）——`patch.spec.ts` 把"所有 `@morlay/dsh-context-*` 行都在组内"钉住；
+  waiting 而不报错）——`patch.spec.ts` 把"所有 `@morlay/dsh-context-assembler*` 行都在组内"钉住；
 - 判据在真装配里：`just profile` 的隔离探针要求"root realm 读不到通道，且只有我们的模式有它"。
 
 ## 装配
@@ -50,7 +50,8 @@
 ## 维护注意
 
 - 清单里每一行的 `name` 都必须能被 **profile 的依赖树**解析：本包 `dependencies` 已声明
-  `@morlay/dsh-context-*` 六个包；app 的 **preset 相关**依赖只声明 `@morlay/dsh-agent-preset`。
+  `@morlay/dsh-context-assembler`（组装行，五个能力都在它里面）；引用展开 `@morlay/dsh-reference` 由
+  `@morlay/better-session` 装配，不经过 preset。app 的 **preset 相关**依赖只声明 `@morlay/dsh-agent-preset`。
 - **dev 模式需要先构建**：`just custom dev` / `just custom desktop` / `just custom bundle` 都先跑
   `preset-build`（`pnpm --filter @morlay/dsh-preset run build` 与
   `pnpm --filter @morlay/dsh-agent-preset run build`）。

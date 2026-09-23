@@ -1,7 +1,9 @@
 # 注入能力组
 
-一个包（`packages/context/dsh-context/`）承载注入通道与它的注入方，每个能力一个子出口：门面与各出口见
+一个包（`packages/context/dsh-context-assembler/`）承载注入通道与它的注入方，每个能力一个子出口：门面与各出口见
 [README](../README.md)，规则与 id 表见[设计 上下文注入规则](./designs/20260921-上下文注入规则.md)。
+引用展开已独立成 [`@morlay/dsh-reference`](../../dsh-reference/README.md)（术语见[那边](../../dsh-reference/.agents/CONTEXT.md)），
+这里的「内容块」定义它也用。
 
 ## 共用术语
 

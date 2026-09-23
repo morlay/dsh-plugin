@@ -11,7 +11,7 @@ import {
 import { readFileContent } from "./file-content.ts";
 import { fileReferencesIn, skillNamesIn, type FileReference } from "./links.ts";
 
-export const name = "context-reference";
+export const name = "reference";
 
 export const inject = ["skills"];
 

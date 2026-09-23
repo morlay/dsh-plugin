@@ -107,13 +107,13 @@ describe("dsh-agent-preset patch wiring", () => {
         members.map((row) => row.id),
         `${source.id}: 组内成员`,
       ).toEqual(["context"]);
-      expect(members[0]?.name).toBe("@morlay/dsh-context");
+      expect(members[0]?.name).toBe("@morlay/dsh-context-assembler");
 
       const outside = plugins.filter(
         (row) =>
           row !== channel &&
           typeof row.name === "string" &&
-          row.name.startsWith("@morlay/dsh-context"),
+          row.name.startsWith("@morlay/dsh-context-assembler"),
       );
 
       expect(outside, `${source.id}: 组外的 context 行`).toEqual([]);

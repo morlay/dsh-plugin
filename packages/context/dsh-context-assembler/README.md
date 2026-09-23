@@ -1,8 +1,9 @@
-# @morlay/dsh-context
+# @morlay/dsh-context-assembler
 
-提示词注入能力组：**一个包**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
-能力名就是子出口名。装配行是 `@morlay/dsh-context`（组装）或 `@morlay/dsh-context/<capability>`（单个），
-见 [`rows.ts` 的 `contextChannel()`](../../preset/dsh-agent-preset/tool/presets/rows.ts)。
+提示词注入能力组：**一个包五个能力**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
+能力名就是子出口名。装配行是 `@morlay/dsh-context-assembler`（组装）或 `@morlay/dsh-context-assembler/<capability>`（单个），
+见 [`rows.ts` 的 `contextChannel()`](../../preset/dsh-agent-preset/tool/presets/rows.ts)。引用展开原先也在这个包里，
+现在独立成 [`@morlay/dsh-reference`](../dsh-reference/README.md)（它只挂 `agent/pre-step`、不依赖通道）。
 
 | 出口                   | 行 id                        | 做什么                                                                 |
 | ---------------------- | ---------------------------- | ---------------------------------------------------------------------- |
@@ -10,7 +11,6 @@
 | `./assembler`          | `context-assembler`          | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`      |
 | `./agent-instructions` | `context-agent-instructions` | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）              |
 | `./skill-catalog`      | `context-skill-catalog`      | skill 目录规则块 + 模型侧 `skill` 工具                                 |
-| `./reference`          | `context-reference`          | 用户消息里的 `@path` / `skill:name` 引用展开                           |
 | `./tool-guidance`      | `context-tool-guidance`      | 工具用法按组切分、短描述投影、上游说明丢弃                             |
 | `./scope`              | `context-scope`              | 模式收口：工具白名单、instruction 总开关、动态快照开关                 |
 
@@ -19,9 +19,13 @@
 
 ## 为什么合成一个包
 
-这 6 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），5 个注入方**全都只用通道的
-类型与服务面**，`reference` 与 `agent-instructions` 还各写了一份「读文件 + 字节预算」。包边界在这里只是
-演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动（组装出口按 config 装它）。
+这 5 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），注入方**全都只用通道的
+类型与服务面**。包边界在这里只是演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动
+（组装出口按 config 装它）。
+
+引用展开不住在这里：它不依赖 `ctx.contextAssembler`（`inject` 只有 `skills`），也没有「读文件 + 字节预算」
+以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../session/better-session/cordis.patch.yml)
+装配（见 [ADR-引用展开拆成独立包](../../../.agents/adrs/20260923-引用展开拆成独立包并按profile装配.md)）。
 
 **每个出口仍是独立的 cordis 插件**（各自的 `apply` 与 `inject`）——这一点是硬要求：合成单入口会让 `inject`
 变成并集（`agents, contextAssembler, skills, systemPrompt, tools`），任何一个可选搭档缺席都拖垮整包。
@@ -66,14 +70,6 @@ web-app bundle 自己设在 preset 平面）。
 工具。取代上游 `@deepseek-ai/dsh-tool-skill`（`skill-filesystem` 保留——它提供 skill 发现）。目录变更走
 同 id 覆盖；`auto` 的 skill 不进目录（正文已随提示送达）。
 
-## reference
-
-把用户消息里的引用在 `agent/pre-step` 边界展开成注入消息：skill 引用渲染 `<skill_content>`，`@path` 读取
-内容并渲染成 `<file_content path="…">` 内容块。只扫描本步 claimed 的 `source.kind === 'user'` 消息，
-解析与 client 面同源（`@morlay/dsh-client-ui-primitives` 的 `findReferences`）。只认 `@` 起手这一形态；
-文件经 `ctx.fs` 读取（读不出就保持普通文本）；本步所有文件合成一条注入消息、每个文件一个内容块，
-去重按「路径 + 行窗口」。不写 `source.kind === 'user'` 的手势伪造不了。
-
 ## tool-guidance
 
 **工具不设门控**：全部工具始终可见可调用；组只决定用法说明怎么分批送达——`base` 组正文常驻，`flow` /
@@ -104,10 +100,10 @@ preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，�
     contextAssembler: true
   config:
     - id: context # 标准模式：不带 config，完整一套
-      name: "@morlay/dsh-context"
+      name: "@morlay/dsh-context-assembler"
     # 对话模式：裁掉不要的能力，并给留下的传参
     # - id: context
-    #   name: "@morlay/dsh-context"
+    #   name: "@morlay/dsh-context-assembler"
     #   config:
     #     capabilities: [assembler, scope, tool-guidance]
     #     options:
@@ -122,7 +118,7 @@ preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，�
 - **组装行必须住在声明了 `isolate` 的组里**：`isolate` 是"该名字只在这棵子树内解析成独立 label"，落组外通道服务
   会发到 root realm（上游拒装整块 preset）。`patch.spec.ts` 把"每个模式只有一行组装行、且住在声明了 isolate 的组里"
   钉住；真装配的判据是 `just profile` 的隔离探针。
-- **子出口仍可单独装配**（`@morlay/dsh-context/assembler` 等）：同一些插件，只是默认走组装出口。
+- **子出口仍可单独装配**（`@morlay/dsh-context-assembler/assembler` 等）：同一些插件，只是默认走组装出口。
 
 ## 维护注意
 

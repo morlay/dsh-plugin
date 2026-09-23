@@ -54,6 +54,7 @@ describe("better-session patch wiring", () => {
   it("inserts morlay rows without colliding with upstream ids", () => {
     const inserted = insertedIds(patch);
     expect(inserted.sort()).toEqual([
+      "reference",
       "session-branch",
       "session-rdb",
       "ui-conversation-fork",

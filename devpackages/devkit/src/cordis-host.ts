@@ -21,6 +21,14 @@ export function isLocalPackage(id: string): boolean {
   return id.startsWith(LOCAL_PACKAGE_PREFIX);
 }
 
+/**
+ * 依赖 id 是否被 `inline` 选项点名（含子路径）：命中的包打进产物，`package.json` 里就不必声明它，
+ * 消费方也不会因为一条 host 能力被拖上一个本来只为 client 半存在的包。
+ */
+export function isInlinedPackage(id: string, inline: readonly string[] | undefined): boolean {
+  return inline?.some((name) => id === name || id.startsWith(`${name}/`)) ?? false;
+}
+
 /** `existsSync` 的异步等价物：任何 stat 失败都算条目不存在。 */
 async function entryExists(path: string): Promise<boolean> {
   try {
@@ -44,6 +52,11 @@ async function entryExists(path: string): Promise<boolean> {
 export async function defineCordisPluginConfig(options?: {
   client?: CordisClientOptions | false;
   entries?: Record<string, string>;
+  /**
+   * 打进产物、不进 `package.json` 依赖清单的包（含子路径）。用于「复用某个包的代码，但不想把它变成
+   * 运行期依赖」的情形：源码上仍是那一份（唯一 home），产物里内联一份。
+   */
+  inline?: readonly string[];
 }): Promise<UserConfig> {
   const hasClientSource = await entryExists(join(process.cwd(), "src", "client", "index.ts"));
   const client =
@@ -87,7 +100,9 @@ export async function defineCordisPluginConfig(options?: {
       neverBundle: (id: string, importer: string | null | undefined) =>
         fromClient(importer) && isClientExternal(id, spec.externals),
       alwaysBundle: (id: string, importer: string | null | undefined) =>
-        isLocalPackage(id) || (fromClient(importer) && !isClientExternal(id, spec.externals)),
+        isLocalPackage(id) ||
+        isInlinedPackage(id, options?.inline) ||
+        (fromClient(importer) && !isClientExternal(id, spec.externals)),
     },
     plugins:
       client === undefined

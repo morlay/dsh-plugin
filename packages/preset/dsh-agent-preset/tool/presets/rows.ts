@@ -21,8 +21,8 @@ export interface RowExtra {
 
 const UPSTREAM_SCOPE = "@deepseek-ai/dsh-";
 
-/** context 组那个包：能力走子出口，所以包名前缀在这里、能力名在各行（见 {@link context}）。 */
-const CONTEXT_PACKAGE = "@morlay/dsh-context";
+/** context 组那个包（组装出口）：能力走子出口，所以包名前缀在这里、能力名在各行（见 {@link contextChannel}）。 */
+const CONTEXT_PACKAGE = "@morlay/dsh-context-assembler";
 
 /** 行 id 默认取短名（可被 extra.id 覆盖）。 */
 function named(short: string, name: string, extra: RowExtra): PresetRow {
