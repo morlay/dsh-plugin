@@ -1,15 +1,22 @@
 import { Context } from "@deepseek-ai/cordis";
-import { assembleContextFor, type Agent } from "@deepseek-ai/dsh-agent";
+import { assembleContextFor, installModelSelection, type Agent } from "@deepseek-ai/dsh-agent";
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from "@deepseek-ai/dsh-agent-loop-testkit";
 import { SessionId } from "@deepseek-ai/dsh-session";
+import type {
+  ModelSelectionProjection,
+  ModelSelectionProjectionState,
+} from "@deepseek-ai/dsh-api-session-controller";
+import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
+import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import * as scope from "@morlay/dsh-context-assembler/scope";
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import * as plugin from "../index.ts";
-import type { Config } from "../modes.ts";
+import type { Config, SessionMode, SessionModeRole } from "../modes.ts";
 
 const contexts: Context[] = [];
 
@@ -24,6 +31,7 @@ const CONFIG: Config = {
     coding: {
       name: "编码模式",
       description: "编码",
+      role: ["main"],
       persona: { prefix: "编码模式的提示词。", suffix: "最后一句。" },
       allowTools: ["read", "web_search"],
       instructions: true,
@@ -32,6 +40,7 @@ const CONFIG: Config = {
     chat: {
       name: "对话模式",
       description: "对话",
+      role: ["main"],
       persona: { prefix: "对话模式的提示词。", suffix: "" },
       allowTools: ["web_search"],
       instructions: false,
@@ -39,6 +48,24 @@ const CONFIG: Config = {
     },
   },
 };
+
+/** 只为本包用例服务的最小 `modelSelection` 投影：真实那份由上游 session-controller 注册。 */
+function mountModelSelectionProjection(ctx: Context): void {
+  ctx.sessionProjections.register({
+    key: "modelSelection",
+    // 与上游那份同样用 `unknown` 校验：这里只关心"有没有 pending"。
+    stateSchema: z.unknown() as unknown as z.ZodType<ModelSelectionProjectionState>,
+    stateVersion: 1,
+    init: () => ({ lastUsed: null, pending: null }),
+    apply: (state, event) =>
+      event.type === "model/selection" ? { lastUsed: state.lastUsed, pending: event.data } : state,
+    // `modelSelection` 在 session-controller 的 SessionProjectionMap 里是带 wire 的，注册必须同形。
+    wire: {
+      viewSchema: z.unknown() as unknown as z.ZodType<ModelSelectionProjection>,
+      view: (state) => ({ lastUsed: state.lastUsed, next: state.pending ?? state.lastUsed }),
+    },
+  } satisfies ProjectionDefinition<"modelSelection", ModelSelectionProjectionState>);
+}
 
 function fixtureTool(toolName: string) {
   return defineTool({
@@ -186,5 +213,178 @@ describe("模式的读取与切换", () => {
     await expect(
       ctx.plugin(plugin, { default: "absent", modes: CONFIG.modes }).then(() => ctx.fiber.await()),
     ).rejects.toThrow("default");
+  });
+});
+
+/** 带角色与默认模型的 fixture：coding 配模型、chat 只给角色、reviewer 只给 subagent 角色。 */
+const EXTENDED: Config = {
+  default: "coding",
+  modes: {
+    coding: {
+      ...CONFIG.modes["coding"]!,
+      defaultModel: { provider: "ollama", model: "coding-model", reasoningEffort: "high" },
+    },
+    chat: { ...CONFIG.modes["chat"]!, role: ["main"] },
+    reviewer: {
+      name: "评审模式",
+      description: "只读评审",
+      role: ["subagent"],
+      persona: { prefix: "评审模式的提示词。", suffix: "" },
+      allowTools: ["read"],
+      instructions: true,
+      runtimeContext: true,
+    },
+  },
+};
+
+/** 请求路由的初值：谁都没配就是它，兜底生效时被换掉。 */
+const SEED: LlmCallConfig = { provider: "global", model: "global-model" };
+
+async function requestRoute(agent: Agent): Promise<LlmCallConfig> {
+  return await agent.ctx.waterfall(
+    "agent/request",
+    { agent, turn: 1, step: 0, signal: new AbortController().signal },
+    () => Promise.resolve(SEED),
+  );
+}
+
+describe("模式的角色与默认模型", () => {
+  it("选择器只列 main 的角色，subagent 角色单独取", async () => {
+    const { ctx } = await mount(EXTENDED);
+
+    expect(ctx.sessionModes.idsFor("main")).toEqual(["coding", "chat"]);
+    expect(ctx.sessionModes.idsFor("subagent")).toEqual(["reviewer"]);
+    expect(ctx.sessionModes.roster().modes.map((mode) => mode.id)).toEqual(["coding", "chat"]);
+    expect(ctx.sessionModes.modesFor("subagent").map((entry) => entry.mode.name)).toEqual([
+      "评审模式",
+    ]);
+  });
+
+  it("不是 main 角色的模式不能当会话模式选", async () => {
+    const { ctx, agent } = await mount(EXTENDED);
+
+    await expect(ctx.sessionModes.select(agent.id, "reviewer")).rejects.toThrow("不是用户可选的");
+  });
+
+  it("新会话用模式的 defaultModel 兜底请求路由", async () => {
+    const { ctx, agent } = await mount(EXTENDED);
+
+    const route = await requestRoute(agent);
+
+    expect({
+      provider: route.provider,
+      model: route.model,
+      reasoningEffort: route.reasoningEffort,
+    }).toEqual({ provider: "ollama", model: "coding-model", reasoningEffort: "high" });
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
+  });
+
+  it("没配 defaultModel 的模式不插手请求路由", async () => {
+    const { ctx, agent } = await mount(EXTENDED);
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    expect(await requestRoute(agent)).toEqual(SEED);
+  });
+
+  it("会话落过请求头之后不再兜底（历史模型优先）", async () => {
+    const { agent } = await mount(EXTENDED);
+    agent.session.append("request/header", {
+      header: { config: { provider: "global", model: "global-model" } },
+      reason: "initial",
+    });
+
+    expect(await requestRoute(agent)).toEqual(SEED);
+  });
+
+  it("上游会话级选择在场时（无用户选择）模式兜底仍然生效", async () => {
+    const { agent } = await mount(EXTENDED);
+    // 上游 session-controller 的懒安装：没有 pending、没有 header 时它给全局默认。
+    // 真实部署里这两个 listener 同时挂在 `agent/request` 上，谁最后写 route 就是这个用例的判据。
+    installModelSelection(agent.ctx, {
+      current: { provider: "global", model: "global-model" },
+      assembled: undefined,
+    });
+
+    expect((await requestRoute(agent)).model).toBe("coding-model");
+  });
+
+  it("用户选过模型（投影 pending）时不覆盖", async () => {
+    const { ctx, agent } = await mount(EXTENDED);
+    mountModelSelectionProjection(ctx);
+    agent.session.append("model/selection", { provider: "vendor", model: "vendor-model" });
+
+    expect(await requestRoute(agent)).toEqual(SEED);
+  });
+
+  it("applyTo 是预留的指定接缝：按 id 应用并记账（不看空白会话）", async () => {
+    const { ctx, agent } = await mount(EXTENDED);
+
+    ctx.sessionModes.applyTo(agent, "reviewer");
+
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("reviewer");
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("reviewer");
+    expect(sectionText(await assembled(ctx, agent), "deployment:persona-prefix")).toBe(
+      "评审模式的提示词。",
+    );
+  });
+
+  it("装配期校验：role 为空、default 不是 main、defaultModel 缺字段都拒绝装载", async () => {
+    const cases: readonly (readonly [Record<string, SessionMode>, string])[] = [
+      [
+        { ...EXTENDED.modes, chat: { ...EXTENDED.modes["chat"]!, role: [] as SessionModeRole[] } },
+        "role",
+      ],
+      [{ ...EXTENDED.modes, coding: { ...CONFIG.modes["coding"]!, role: ["subagent"] } }, "main"],
+      [
+        {
+          ...EXTENDED.modes,
+          coding: {
+            ...EXTENDED.modes["coding"]!,
+            defaultModel: { provider: "ollama", model: "" },
+          },
+        },
+        "defaultModel",
+      ],
+    ];
+    for (const [modes, reason] of cases) {
+      const ctx = new Context();
+      contexts.push(ctx);
+      await mountAgentLoopTestDependencies(ctx);
+      await mountAgentLoopTestHarness(ctx);
+
+      await expect(
+        ctx.plugin(plugin, { default: "coding", modes }).then(() => ctx.fiber.await()),
+      ).rejects.toThrow(reason);
+    }
+  });
+});
+
+describe("子代理继承父模式", () => {
+  it("继承父当前模式，并把继承写进子会话（恢复与 fork 能重建）", async () => {
+    const { ctx, agent: parent } = await mount(EXTENDED);
+    await ctx.sessionModes.select(parent.id, "chat");
+
+    const child = await ctx.agents.create({
+      sessionId: SessionId(`session-mode-child-${String(Date.now())}-${String(Math.random())}`),
+      parentAgent: parent,
+      meta: { parentSession: parent.id, origin: "subagent" },
+    });
+
+    expect(ctx.sessionProjections.stateOf(child.agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(child.agent.session)).toBe("chat");
+    expect(sectionText(await assembled(ctx, child.agent), "deployment:persona-prefix")).toBe(
+      "对话模式的提示词。",
+    );
+  });
+
+  it("父不在场时不继承，回落部署默认", async () => {
+    const { ctx } = await mount(EXTENDED);
+
+    const orphan = await ctx.agents.create({
+      sessionId: SessionId(`session-mode-orphan-${String(Date.now())}-${String(Math.random())}`),
+      meta: { parentSession: SessionId("no-such-parent"), origin: "subagent" },
+    });
+
+    expect(ctx.sessionModes.modeOf(orphan.agent.session)).toBe("coding");
   });
 });

@@ -8,6 +8,9 @@
           coding:
             name: 编码模式
             description: 功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。
+            role:
+              - main
+              - subagent
             persona:
               prefix: |-
                 你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。
@@ -51,6 +54,8 @@
           chat:
             name: 对话模式
             description: 只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。
+            role:
+              - main
             persona:
               prefix: 你是一个助手。全程用中文（专有名词除外），包括但不限于思考，回答，工具描述；思考不要陷入重复循环，一旦循环立即退出。
             allowTools:

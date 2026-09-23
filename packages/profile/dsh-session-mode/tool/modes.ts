@@ -16,6 +16,14 @@ export interface ModeSource {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  /** 归谁用：`main`（用户选择器，缺省）、`subagent`（可作子代理 mode 的候选）。 */
+  readonly role?: readonly ("main" | "subagent")[];
+  /** 这个模式的默认模型；不写就跟全局 `agent-default-model`。 */
+  readonly defaultModel?: {
+    readonly provider: string;
+    readonly model: string;
+    readonly reasoningEffort?: string;
+  };
   readonly persona?: { readonly prefix?: string; readonly suffix?: string };
   readonly allowTools: readonly string[];
   readonly instructions?: boolean;
@@ -47,6 +55,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     name: "编码模式",
     description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
+    // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
+    role: ["main", "subagent"],
     allowTools: [...TOOLKIT_TOOL_NAMES],
   },
   {
@@ -55,6 +65,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     description:
       "只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。",
     persona: CHAT_PERSONA,
+    // 只做用户侧对话：不做子代理的候选（父在 chat 里派发的子代理仍继承 chat，见 README 的"角色"一节）。
+    role: ["main"],
     // 提问与联网三件：工具行由 toolkit 的 bundle 装，这里只收口。
     allowTools: ["ask_user_question", "web_search", "web_fetch"],
     // 没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。

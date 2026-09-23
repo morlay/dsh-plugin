@@ -55,6 +55,8 @@ describe("session-mode patch wiring", () => {
       expect(mode?.name).toBe(source.name);
       expect(mode?.description).toBe(source.description);
       expect(mode?.persona).toEqual(source.persona);
+      expect(mode?.role ?? ["main"]).toEqual(source.role ?? ["main"]);
+      expect(mode?.defaultModel).toEqual(source.defaultModel);
       expect(mode?.allowTools).toEqual(source.allowTools);
       expect(mode?.instructions ?? true).toBe(source.instructions ?? true);
       expect(mode?.runtimeContext ?? true).toBe(source.runtimeContext ?? true);

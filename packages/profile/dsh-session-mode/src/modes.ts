@@ -20,6 +20,21 @@ export interface SessionModePersona {
 }
 
 /**
+ * 一个模式对谁可见：`main` 进用户选择器（会话级选择），`subagent` 表示它**可以**作为子代理的 mode。
+ * 两个角色可以同时声明；不写默认 `["main"]`——没写角色的模式不该悄悄变成子代理候选。
+ *
+ * `subagent` 目前只是候选集的声明：子代理默认继承父 mode（不看角色），"按角色指派 mode" 还没做。
+ */
+export type SessionModeRole = "main" | "subagent";
+
+/** 一个模式的默认模型；省略的字段跟着 provider 默认走（与全局 `agent-default-model` 同形状）。 */
+export interface SessionModeModel {
+  readonly provider: string;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+}
+
+/**
  * 一个模式：提示词 + 能力开关。
  *
  * 这份形状是 **schema 归一化之后**的：每个字段都有值（写配置时可以不写，schema 用默认补上——`description`
@@ -31,6 +46,13 @@ export interface SessionMode {
   readonly name: string;
   /** 一句话说明这个模式干什么；空串表示没写。 */
   readonly description: string;
+  /** 这个模式归谁用：`main`（用户选择器）/ `subagent`（可作子代理 mode）。至少一个。 */
+  readonly role: SessionModeRole[];
+  /**
+   * 这个模式的默认模型。只在会话**尚无任何模型事实**（没选过模型、也还没跑过请求）时兜底；
+   * 省略就跟着全局 `agent-default-model` 走。
+   */
+  readonly defaultModel?: SessionModeModel;
   /** 该模式的提示词。 */
   readonly persona: SessionModePersona;
   /**
@@ -57,6 +79,16 @@ const personaSchema = z.object({
   suffix: z.string().default(""),
 });
 
+/** 角色是个封闭集合：写错的 role 在装配期就拒绝，而不是静默变成"谁都不用"。 */
+const roleSchema = z.union([z.const("main"), z.const("subagent")]);
+
+/** 默认模型的形状与全局 `agent-default-model` 一致；省略 effort 就跟 provider 默认。 */
+const modelSchema = z.object({
+  provider: z.string().required(),
+  model: z.string().required(),
+  reasoningEffort: z.string(),
+});
+
 /** 本包的 config：默认模式 + 模式清单。 */
 export interface Config {
   /** 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。 */
@@ -68,6 +100,9 @@ export interface Config {
 const modeSchema: z<SessionMode> = z.object({
   name: z.string().required(),
   description: z.string().default(""),
+  role: z.array(roleSchema).default(["main"]),
+  // 保留"缺省"：不写 defaultModel 时要跟着全局默认走，物化成 `{}` 会变成半个模型配置。
+  defaultModel: modelSchema.default(undefined as unknown as SessionModeModel),
   persona: personaSchema.default({}),
   allowTools: z.array(z.string()).default([]),
   instructions: z.boolean().default(true),
@@ -79,22 +114,53 @@ export const Config: z<Config> = z.object({
   modes: z.dict(modeSchema).required(),
 });
 
-/** 校验只需要看的两件事：默认模式与每个模式的工具名单。 */
+/** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、配了的默认模型。 */
 interface Validated {
   readonly default: string;
-  readonly modes: Readonly<Record<string, { readonly allowTools?: readonly string[] }>>;
+  readonly modes: Readonly<
+    Record<
+      string,
+      {
+        readonly allowTools?: readonly string[];
+        readonly role?: readonly string[];
+        readonly defaultModel?: { readonly provider?: string; readonly model?: string } | undefined;
+      }
+    >
+  >;
 }
 
 /** 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。 */
 export function configProblem(config: Validated): string | undefined {
+  /** 没写 `role` 等于默认 `["main"]`（与 schema 的默认一致）——字面量与归一化后的形状都能校验。 */
+  const roles = (id: string): readonly string[] => config.modes[id]?.role ?? ["main"];
   const ids = Object.keys(config.modes);
   if (ids.length === 0) return "session-mode: `modes` must declare at least one mode";
   if (!ids.includes(config.default)) {
     return `session-mode: \`default\` names ${JSON.stringify(config.default)}, which is not in modes (${ids.join(", ")})`;
   }
+  const roleless = ids.filter((id) => roles(id).length === 0);
+  if (roleless.length > 0) {
+    return `session-mode: mode(s) ${roleless.join(", ")} declare no \`role\`; declare main and/or subagent instead of leaving it empty`;
+  }
+  if (!roles(config.default).includes("main")) {
+    return `session-mode: \`default\` names ${JSON.stringify(config.default)}, which does not declare role "main"; a session that can never be re-selected is a contradiction`;
+  }
   const empty = ids.filter((id) => (config.modes[id]?.allowTools ?? []).length === 0);
   if (empty.length > 0) {
     return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
+  }
+  const partial = ids.filter((id) => {
+    const model = config.modes[id]?.defaultModel;
+    return (
+      model !== undefined &&
+      (model.provider === undefined ||
+        model.model === undefined ||
+        model.provider.length === 0 ||
+        model.model.length === 0)
+    );
+  });
+  if (partial.length > 0) {
+    return `session-mode: mode(s) ${partial.join(", ")} declare \`defaultModel\` without both \`provider\` and \`model\``;
   }
   return undefined;
 }

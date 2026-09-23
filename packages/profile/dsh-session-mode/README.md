@@ -1,7 +1,8 @@
 # @morlay/dsh-session-mode
 
-会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）加一组能力开关。本包把它按会话应用到
-会话自己的作用域上，并提供页面上的选择面。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
+会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）、一组能力开关、一个**角色**
+（`role`：谁可以用它）与可选的**默认模型**（`defaultModel`）。本包把它按会话应用到会话自己的作用域上，
+并提供页面上的选择面。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
 关掉，禁哪些行归 [`@morlay/dsh-profile`](../dsh-profile/README.md)（真源 `tool/patch.ts` 的 `PATCH_ROWS`），
 本包不复述清单。
 
@@ -27,6 +28,7 @@
       chat:
         name: 对话模式
         description: 只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。
+        role: [main]
         persona:
           prefix: 你是一个助手。……
         allowTools: [ask_user_question, web_search, web_fetch]
@@ -37,6 +39,8 @@
 | 字段                   | 落到哪                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
 | `name` / `description` | 选择器与头部标签的文案（HTTP 清单里给页面）                                                  |
+| `role`                 | 归谁用：`main` 进用户选择器，`subagent` 表示可作为子代理的 mode（候选集）；缺省 `["main"]`   |
+| `defaultModel`         | 这个模式的默认模型（`provider` / `model` / `reasoningEffort?`）；不写就跟全局默认            |
 | `persona`              | 装配前注册到**该 agent 的 scope**（`deployment:persona-prefix` / `-suffix`，遮蔽部署级那层） |
 | `allowTools`           | `context-assembler-scope` 收口：模型目录、`tool:<名字>` 说明、执行层 guard                   |
 | `instructions`         | 同上：`false` 表示这个会话不要任何 instruction 类注入（工作区指令、技能目录、用法正文）      |
@@ -55,6 +59,18 @@
   跑过 turn 之后拒绝——那段历史是在旧模式的工具与提示词下产生的，改了它，日志与实际装配就对不上。
 - 当前模式读的是 session 投影 `sessionMode`（`null` 表示没选过）：恢复与 fork 都据此重建，页面也从会话列表
   里直接读到它。
+- **子代理继承父的模式**：子代理是新会话，创建时（`agent/created`）取父当前模式并写进子会话日志——继承也是
+  一条会话事实，恢复与 fork 照样能重建。父不在场时回落部署默认。继承**不看 `role`**：`subagent` 角色声明的
+  是"可被指定"的候选，不是继承白名单。
+
+## 角色与默认模型
+
+- **角色**：`main` = 用户侧可选（选择器与 `select` 只认它）；`subagent` = 可作为子代理 mode 的候选。
+  「按角色指派 mode」还没做——子代理现在只有"继承父"与预留的服务接缝
+  （`ctx.sessionModes.applyTo(agent, mode)` / `modesFor("subagent")`）。
+- **默认模型**：模式的 `defaultModel` 只在会话**尚无模型事实**时接管请求路由（投影 `modelSelection` 没有
+  `pending`、`requestHeader()` 还没落）；一旦用户选过模型或会话跑过请求，就不再插手。它是**配置事实**，
+  不写会话事件——重启后仍由 config 决定，与用户在设置里做的那条会话级选择（`model/selection`）是两件事。
 
 ## 页面上的两个位置
 
@@ -70,6 +86,7 @@
 ## 文档
 
 - 设计与取舍：[设计 会话模式](./.agents/designs/20260924-会话模式.md)、
+  [ADR 模式的角色与默认模型](./.agents/adrs/20260923-模式角色与默认模型.md)、
   [ADR 模式不再是 Cordis 子树](./.agents/adrs/20260924-模式不再是cordis子树.md)
 - 验证判据：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)
 - 形态沿革（已作废）：[ADR preset 改用上游声明式行](./.agents/adrs/20260922-preset改用上游声明式行.md)、

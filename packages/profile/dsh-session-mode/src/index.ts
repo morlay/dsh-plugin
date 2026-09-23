@@ -23,13 +23,17 @@
 
 import { Service, type Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
+// 会话级模型事实（投影 `modelSelection` 与事件 `model/selection`）由上游 session-controller 声明；
+// 那一行可能没装（headless 部署），所以读它时按"可能为空"处理。
+import type {} from "@deepseek-ai/dsh-api-session-controller";
+import { ReasoningEffortId, type LlmCallConfig } from "@deepseek-ai/dsh-llm";
 import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 import type {} from "@deepseek-ai/dsh-session";
 import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import type {} from "@deepseek-ai/dsh-session-projection";
 import type { SessionToolScope } from "@morlay/dsh-context-assembler/scope";
 import { z } from "zod";
-import { Config, configProblem, type SessionMode } from "./modes.ts";
+import { Config, configProblem, type SessionMode, type SessionModeRole } from "./modes.ts";
 import { installPersona } from "./persona.ts";
 import {
   SESSION_MODE_PATH,
@@ -51,7 +55,12 @@ export const name = "session-mode";
 export const inject = ["agents", "sessions", "sessionProjections", "systemPrompt"];
 
 export { Config } from "./modes.ts";
-export type { SessionMode, SessionModePersona } from "./modes.ts";
+export type {
+  SessionMode,
+  SessionModeModel,
+  SessionModePersona,
+  SessionModeRole,
+} from "./modes.ts";
 export { SESSION_MODE_PATH } from "./shared.ts";
 export type { SessionModeRoster, SessionModeRow } from "./shared.ts";
 
@@ -96,8 +105,8 @@ export const sessionModeProjection = {
 
 /** 模式清单、默认模式、按会话读取与切换。 */
 export class SessionModes extends Service {
-  /** 每个 agent 已经装上的 persona（模式变了就换一份）。 */
-  private readonly personas = new WeakMap<Agent, { mode: string; dispose: () => void }>();
+  /** 每个 agent 已经装上的那一份（persona + 默认模型兜底；模式变了就换一份）。 */
+  private readonly installs = new WeakMap<Agent, { mode: string; dispose: () => void }>();
 
   constructor(
     ctx: Context,
@@ -118,15 +127,36 @@ export class SessionModes extends Service {
     return this.config.default;
   }
 
-  /** 选择器要的清单：id、展示名、说明（顺序即 config 里 `modes` 的插入序）。 */
+  /** 选择器要的清单：只列 `main` 角色的模式（id、展示名、说明，顺序即 config 里 `modes` 的插入序）。 */
   list(): SessionModeRow[] {
-    return Object.entries(this.config.modes).map(([id, mode]) => ({
-      id,
-      name: mode.name,
-      ...(mode.description === undefined || mode.description === ""
-        ? {}
-        : { description: mode.description }),
-    }));
+    return this.idsFor("main").map((id) => {
+      const mode = this.definition(id);
+      return {
+        id,
+        name: mode.name,
+        ...(mode.description === "" ? {} : { description: mode.description }),
+      };
+    });
+  }
+
+  /**
+   * 声明了某个角色的模式 id（顺序即 config 的插入序）：`main` 给用户选择器，`subagent` 给子代理候选。
+   * @param role - 目标角色。
+   * @returns 该角色下的模式 id。
+   */
+  idsFor(role: SessionModeRole): string[] {
+    return Object.entries(this.config.modes)
+      .filter(([, mode]) => mode.role.includes(role))
+      .map(([id]) => id);
+  }
+
+  /**
+   * 同 {@link idsFor}，给的是定义——"指定 mode" 那条接缝要拿候选集。
+   * @param role - 目标角色。
+   * @returns 该角色下的模式与其定义。
+   */
+  modesFor(role: SessionModeRole): { id: string; mode: SessionMode }[] {
+    return this.idsFor(role).map((id) => ({ id, mode: this.definition(id) }));
   }
 
   /** 页面用的清单 + 默认模式。 */
@@ -164,7 +194,10 @@ export class SessionModes extends Service {
    * @returns 提交后的模式 id。
    */
   async select(sessionId: SessionId, mode: string): Promise<string> {
-    this.definition(mode);
+    const definition = this.definition(mode);
+    if (!definition.role.includes("main")) {
+      throw new Error(`模式 ${JSON.stringify(mode)} 不是用户可选的（它的 role 里没有 main）。`);
+    }
     const session = this.ctx.sessions.get(sessionId);
     if (session === undefined) throw new Error(`未知的会话 ${sessionId}`);
     const boundary = this.ctx.sessionProjections.stateOf(session, "turnBoundary");
@@ -178,15 +211,87 @@ export class SessionModes extends Service {
     return mode;
   }
 
+  /**
+   * 把某个活着的 agent 切到某个模式。与 {@link select} 的差别：它不要求空白会话——子代理创建时的继承
+   * 走这里，**未来的"指定 mode"入口（模型侧或配置侧）也走这里**（那条接缝还没做）。
+   * @param agent - 目标 agent。
+   * @param mode - 目标模式 id。
+   * @param options.record - 是否把这次切换写进会话日志（缺省写；只想改当前进程时给 `false`）。
+   */
+  applyTo(agent: Agent, mode: string, options: { record?: boolean } = {}): void {
+    this.definition(mode);
+    if (options.record !== false) {
+      agent.session.append("session-mode/selected", { sessionMode: mode });
+    }
+    this.installFor(agent, mode);
+  }
+
+  /**
+   * 该 agent 用哪个模式：会话选过（投影上有）优先，子代理继承父，其余用部署默认。
+   *
+   * 继承要**写进子会话日志**：它是一条会话事实，冷恢复与 fork 都要靠它重建（{@link modeOf} 只读投影）。
+   */
+  private resolveModeId(agent: Agent): string {
+    // `undefined` = 这个投影没注册（或还没初始化），与"没选过"（`null`）一样落到默认。
+    const selected = this.ctx.sessionProjections.stateOf(agent.session, "sessionMode");
+    if (typeof selected === "string") return selected;
+    const inherited = this.inheritedModeId(agent);
+    if (inherited === undefined) return this.defaultId;
+    agent.session.append("session-mode/selected", { sessionMode: inherited });
+    return inherited;
+  }
+
+  /** 子代理（有 durable 父会话）继承父当前模式；父不在场、或不是子代理时没有可继承的。 */
+  private inheritedModeId(agent: Agent): string | undefined {
+    const parentId = agent.session.header.parentSession;
+    if (parentId === undefined) return undefined;
+    const parent = this.ctx.agents.get(parentId);
+    return parent === undefined ? undefined : this.modeOf(parent.session);
+  }
+
   /** 装或换该 agent 的那一份（幂等：同一模式不重复注册）。 */
-  private installFor(agent: Agent): void {
-    const modeId = this.modeOf(agent.session);
-    const installed = this.personas.get(agent);
+  private installFor(agent: Agent, modeId: string = this.resolveModeId(agent)): void {
+    const installed = this.installs.get(agent);
     if (installed?.mode === modeId) return;
     installed?.dispose();
     const mode = this.definition(modeId);
-    this.personas.set(agent, { mode: modeId, dispose: installPersona(agent, mode.persona) });
+    const disposers = [
+      installPersona(agent, mode.persona),
+      this.installDefaultModel(agent, modeId),
+    ];
+    this.installs.set(agent, {
+      mode: modeId,
+      dispose: () => {
+        for (const dispose of disposers) dispose();
+      },
+    });
     this.toolScope()?.apply(agent, mode);
+  }
+
+  /**
+   * 模式的 `defaultModel` 兜底：只在会话**尚无任何模型事实**（没选过模型、也还没跑过请求）时接管这一
+   * 请求的路由；一旦用户选过（投影 `pending`）或会话已经落过 header，就不再插手。
+   *
+   * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。
+   */
+  private installDefaultModel(agent: Agent, modeId: string): () => void {
+    return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
+      const resolved = await next();
+      const model = this.config.modes[modeId]?.defaultModel;
+      if (model === undefined) return resolved;
+      // 上游 session-controller 没装（headless）时这个投影不存在，按"没有选择"处理。
+      const pending = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection")?.pending;
+      if (pending !== undefined && pending !== null) return resolved;
+      if (agent.session.requestHeader() !== undefined) return resolved;
+      return {
+        ...resolved,
+        provider: model.provider,
+        model: model.model,
+        ...(model.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: ReasoningEffortId(model.reasoningEffort) }),
+      };
+    });
   }
 
   /** 收口服务由 `@morlay/dsh-context-assembler/scope` 那一行发布；没装它就只有 persona。 */

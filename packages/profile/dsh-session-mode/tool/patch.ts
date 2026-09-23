@@ -26,6 +26,8 @@ function modeConfig(source: ModeSource): Record<string, unknown> {
   return {
     name: source.name,
     description: source.description,
+    ...(source.role === undefined ? {} : { role: [...source.role] }),
+    ...(source.defaultModel === undefined ? {} : { defaultModel: { ...source.defaultModel } }),
     ...(source.persona === undefined ? {} : { persona: { ...source.persona } }),
     allowTools: [...source.allowTools],
     ...(source.instructions === undefined ? {} : { instructions: source.instructions }),
