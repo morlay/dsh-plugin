@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Agent Toolkit",
-    "description": "The agent capability rows themselves: shell, files, jobs, skill discovery, goal, compaction, delegation, workflow, web and more."
+    "description": "The agent capability rows themselves: shell, files, jobs, skill discovery, goal, compaction, delegation, workflow, ask-user, todo, web and deliverables."
   }
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Context Assembler",
-    "description": "Prompt-injection capability set: the single injection channel plus workspace instructions, skill catalog, tool-usage guidance and the per-mode scope gate."
+    "description": "Prompt-injection capability set: the single injection channel plus workspace instructions, skill catalog and the scope gate that narrows tools per session mode."
   }
 }

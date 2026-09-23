@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Message Actions",
-    "description": "Rewind / retry / fork orchestration on the host side, plus the user-bubble renderer replacement in the browser."
+    "description": "Rewind / retry / recall / fork orchestration on the host side, plus the browser half: the conversation.chat.node user / steering renderer replacement and the conversation.composer.dock stats row override."
   }
 }

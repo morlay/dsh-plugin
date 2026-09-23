@@ -1,7 +1,7 @@
 # @morlay/dsh-web-search-ollama bundle patch：把搜索后端注册到 host 层。
 #
-# 为什么住 host：preset 是每个模式各挂一份 composition，同一个 provider id 在多个模式里注册会撞
-# `WEB_DUPLICATE_PROVIDER`，所以注册行只能有一份；至于选它还是别的后端，由 `web` 行的
+# 为什么住 host：注册行在 profile 平面只装一次——同一个 provider id 注册两份会撞
+# `WEB_DUPLICATE_PROVIDER`；至于选它还是别的后端，由 `web` 行的
 # `searchProvider` 决定——那是配置，归 `@morlay/dsh-profile`。两者分工：这里插行，那边配值。
 #
 # 行不带 config：`apiKeyEnv` 这类值同样由 `@morlay/dsh-profile` 做 config 覆盖。

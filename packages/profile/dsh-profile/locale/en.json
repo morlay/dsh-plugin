@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Profile Config",
-    "description": "Configuration layer of the profile: llm route, default model, locale, search backend and sandbox rules as config values, plus the shipped presets it turns off."
+    "description": "Configuration layer of the profile: llm route, default model, locale, search backend and sandbox rules as config values, plus the rows it turns off — the whole official agent-preset set (registry, the four shipped preset rows, the client entry) and the read-before-edit policy."
   }
 }

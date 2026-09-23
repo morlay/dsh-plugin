@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Conversation Manager",
-    "description": "Full-page panel for archived sessions: search, unarchive, delete, and import as a new session."
+    "description": "Full-page conversation management panel (browser half): search across sessions, unarchive, delete and import as a new session."
   }
 }

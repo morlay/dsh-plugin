@@ -1,9 +1,12 @@
 {
   "name": "@morlay/dsh-client-ui-conversation",
   "version": "0.0.2-alpha.7",
-  "description": "Thin-shell fork of @deepseek-ai/dsh-client-ui-conversation: keeps only the files we changed, the rest is imported from the vendored upstream source and inlined at build time",
+  "description": "Thin-shell fork of @deepseek-ai/dsh-client-ui-conversation: keeps only the files we changed, the rest is imported from the vendored upstream source and inlined at build time.",
   "keywords": [
-    "fork"
+    "dsh",
+    "dsh-plugin",
+    "fork",
+    "ui-conversation"
   ],
   "license": "MIT",
   "repository": {

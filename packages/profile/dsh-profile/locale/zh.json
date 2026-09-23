@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "profile 配置层",
-    "description": "profile 的配置初始化层：llm 路由、默认模型、界面语言、搜索后端与沙箱规则的值，并关闭官方内置的四个 preset。"
+    "description": "profile 的配置初始化层：llm 路由、默认模型、界面语言、搜索后端与沙箱规则的值，并关掉部署不要的行——官方 agent preset 整套（注册表、四个 preset 行、客户端入口）与「先读后改」。"
   }
 }

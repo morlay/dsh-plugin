@@ -1,7 +1,7 @@
 {
   "name": "@morlay/better-session",
   "version": "0.0.21-alpha.7",
-  "description": "Example dsh profile bundle: assembles @morlay/session-rdb and @morlay/ui-conversation-message-actions into a web profile — rewind / retry / fork closed loop on RDB persistence.",
+  "description": "dsh profile bundle: assembles @morlay/session-branch, @morlay/session-rdb, @morlay/ui-conversation-message-actions and the thin-shell fork of the conversation shell (only the files we changed, the rest imported from upstream source) into a DeepSeek Harness web profile — the rewind / retry / recall / fork closed loop on RDB persistence.",
   "keywords": [
     "dsh",
     "dsh-bundle",

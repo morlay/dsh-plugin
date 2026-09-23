@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "功能行清单",
-    "description": "agent 的功能行清单：shell、文件、任务、skill 发现、goal、压缩、委派、工作流、联网等。"
+    "description": "agent 的功能行清单：shell、文件、任务、skill 发现、goal、压缩、委派、工作流、问答、todo、联网、交付物。"
   }
 }

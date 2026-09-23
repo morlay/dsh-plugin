@@ -9,9 +9,9 @@ import { TOOLKIT_EXTRA_ROWS, TOOLKIT_ROWS } from "../src/rows.ts";
  * bundle patch 的真源：把 {@link TOOLKIT_ROWS}（`src/rows.ts` 那一份清单，按工具族分组）与
  * {@link TOOLKIT_EXTRA_ROWS}（压缩与工具说明那两行，不属于任何族）插到 host 平面。
  *
- * 这是"直接装配"那种采用方式：`dsh.profile.bundles` 列出本包时，功能行对所有 preset 生效（官方
- * standard / ptc / minimal / cordis 一样看得见这些工具）。要"只有某个模式才有"，就让那个 preset 引用
- * `rows` 出口里的清单，别同时用两种。
+ * `dsh.profile.bundles` 列出本包时，功能行在 profile 平面**装一次**——模式之间用什么工具，由
+ * [`@morlay/dsh-session-mode`](../../dsh-session-mode/README.md) 的 `allowTools` 收口（名单由
+ * `TOOLKIT_TOOL_NAMES` 从汉化的族数据派生），所以这里不按模式分叉。
  */
 
 export const PATCH_ROWS: readonly Record<string, unknown>[] = [

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Configurable Sandbox",
-    "description": "Replaces the shipped process sandbox and filesystem fence with implementations that add extra writable roots and access denials."
+    "description": "Replaces the shipped process sandbox and filesystem fence with implementations that add extra writable roots, read-only roots and access denials."
   }
 }

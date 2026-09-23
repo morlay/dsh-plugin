@@ -2,12 +2,12 @@
  * 组装出口：按 config 把各能力装成一个 cordis 插件树。
  *
  * 装配面因此只有**一行**（`@morlay/dsh-context-assembler`）：`isolate` 是行级选项，一行声明就覆盖它整棵子树，
- * 而这里 `ctx.plugin()` 出来的子插件都继承行 ctx 的 isolate map 与 scope——通道服务仍在 preset 的
- * realm 里、`scope` 的归属判据仍按 preset scope 成立。**每个子插件各有自己的 `inject`**（合成单入口会
- * 让 inject 变并集，一个可选搭档缺席就拖垮整包），这是这层组装唯一必须守住的东西。
+ * 而这里 `ctx.plugin()` 出来的子插件都继承行 ctx 的 isolate map 与 scope——**通道服务由这一行装一次**。
+ * **每个子插件各有自己的 `inject`**（合成单入口会让 inject 变并集，一个可选搭档缺席就拖垮整包），这是这层
+ * 组装唯一必须守住的东西。
  *
- * `coding` 不带 config（完整一套）；`chat` 用 `capabilities` 裁掉不要的能力、用 `options` 给留下的
- * 那些传参（能力名就是子出口名）。
+ * 模式之间的差异（哪个模式要哪些能力、工具收到什么程度）不在这里用 config 裁：由
+ * `context-assembler-scope` 那一行把模式定义登记给通道（`options` 只用来给留下的能力传参，能力名就是子出口名）。
  */
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";

@@ -79,7 +79,7 @@ user 消息注入（每条按文本幂等，只有变化的那条重发）。
 `$DSH_HOME/AGENTS.md` 加项目根到 cwd 的逐级 `AGENTS.md` / `AGENTS.local.md`，**一条文件一条 id**
 （`agent-instructions:<根标识>:<文件>`，根标识是根目录的 8 位摘要——同进程两个项目根的同名文件因此不会互相
 顶掉），文件变化时只重发变了的那一份。取代上游 `@deepseek-ai/dsh-agent-instructions`（host 那行由上游
-web-app bundle 自己设在 preset 平面；我们那份由本包的组装出口在 profile 平面装）。
+web-app bundle 自己设在装配层；我们那份由本包的组装出口在 profile 平面装）。
 
 - **不跟踪 `read`/`write`/`edit`**：上游靠 touch 上浮触发刷新；本部署的 `AGENTS.md` 几乎不变，按
   `mtime:size` 对账足够。

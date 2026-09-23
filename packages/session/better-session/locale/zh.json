@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "会话编辑装配",
-    "description": "把 rdb 持久化与对话 UI 接管装进 web profile：rewind / retry / fork 闭环。"
+    "description": "profile 聚合 bundle：把 @morlay/session-branch、@morlay/session-rdb、@morlay/ui-conversation-message-actions 与对话外壳的薄壳 fork 行装进 web profile，提供就地编辑 / 重试 / 撤回 / 分支（rewind / retry / recall / fork）闭环。"
   }
 }

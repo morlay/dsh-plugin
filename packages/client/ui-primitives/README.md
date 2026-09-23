@@ -1,7 +1,9 @@
 # @morlay/dsh-client-ui-primitives
 
-对话 UI 的 **css-in-js 样式层**：`styled` / `Token` / `Styling`，消费官方主题已注入的
-`--dsw-*` 变量，因此不需要 CSS Modules 那一步预编译（源码可直接加载）。
+对话 UI 的 **css-in-js 样式层**（`styled` / `Token` / `Styling`，消费官方主题已注入的 `--dsw-*` 变量，
+因此不需要 CSS Modules 那一步预编译，源码可直接加载），以及被 fork 的对话 UI 共用的
+**引用解析与渲染转换**（`findReferences` / `parseReferenceToken`，源码上唯一一份，
+[`@morlay/dsh-reference`](../../context/dsh-reference/README.md) 的引用展开也复用它）。
 
 设计取舍（为什么 css-in-js、为什么生成 token 树、与上游 `ui-primitives` 的关系）见
 [ADR-css-in-js样式层与官方token消费](./.agents/adrs/20260917-css-in-js样式层与官方token消费.md)。

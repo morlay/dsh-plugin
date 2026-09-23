@@ -6,9 +6,9 @@
     "branch",
     "dsh",
     "dsh-plugin",
-    "dsh-session-rdb",
     "rdb",
     "rewind",
+    "session-persistence",
     "session-rdb"
   ],
   "license": "MIT",

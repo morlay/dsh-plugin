@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-agent-toolkit",
   "version": "0.0.1-alpha.2",
-  "description": "Personal dsh bundle: the agent capability rows themselves — shell, files, jobs, skill discovery, goal, compaction, delegation and workflow, ask-user, todo, web, deliverables. A preset references this list to keep only the prompt and the switches; a profile may list the package to mount the rows at host scope.",
+  "description": "Personal dsh bundle: the agent capability rows themselves — shell, files, jobs, skill discovery, goal, compaction, delegation and workflow, ask-user, todo, web, deliverables. A profile lists the package to mount the rows once at the profile plane; session modes narrow the tool set with `allowTools`, whose allow-list derives from this package's localized data.",
   "keywords": [
     "agent",
     "dsh",
