@@ -1,5 +1,5 @@
 /**
- * 官方主题的 `--dsw-*` token 全集（361 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
+ * 官方主题的 `--dsw-*` token 全集（367 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
  *
  * 叶子是该变量的**默认值**（官方 light 主题里首次出现的定义）：既是类型推导的来源，也可作 fallback。
  * `"$"` 键出现在「自身也是 token 的分支」上（命名体系里有 40 个短名同时是长名前缀的 token）。
@@ -95,6 +95,12 @@ export const designTokens = {
                   },
                   "hover": "rgba(84, 85, 87, 0.6)",
               },
+          },
+      },
+      "code": {
+          "diff": {
+              "added": "var(--dsw-static-green-500-a08)",
+              "deleted": "var(--dsw-static-red-600-a08)",
           },
       },
       "interactive": {
@@ -678,7 +684,11 @@ export const designTokens = {
       "green": {
           "100": "rgb(230, 250, 237)",
           "400": "rgb(78, 209, 126)",
-          "500": "rgb(34, 197, 94)",
+          "500": {
+              "$": "rgb(34, 197, 94)",
+              "a08": "rgb(34 197 94 / 8%)",
+              "a12": "rgb(34 197 94 / 12%)",
+          },
           "900": "rgb(35, 60, 44)",
       },
       "neutral": {
@@ -723,9 +733,15 @@ export const designTokens = {
       "red": {
           "50": "rgb(254, 242, 242)",
           "100": "rgb(254, 226, 226)",
-          "400": "rgb(242, 90, 90)",
+          "400": {
+              "$": "rgb(242, 90, 90)",
+              "a12": "rgb(242 90 90 / 12%)",
+          },
           "500": "rgb(239, 68, 68)",
-          "600": "rgb(236, 19, 19)",
+          "600": {
+              "$": "rgb(236, 19, 19)",
+              "a08": "rgb(236 19 19 / 8%)",
+          },
           "900": "rgb(87, 12, 12)",
       },
   },

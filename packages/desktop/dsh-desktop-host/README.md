@@ -21,7 +21,8 @@
 - 壳按 `<runtime>/node_modules/@morlay/dsh-desktop-host/lib/index.js` 启动它（stdio 五元组：
   FD 3/4 是管道，FD 5 是 Node IPC），argv 为
   `[runtimeDir, projectDir, primaryRuntime, pnpmEntry, nodeBin]`（上游 0.1.7 删掉 `runProfile` 的 `resolutionMode` 后少一格）；
-- IPC：`ready { protocolVersion }` / `fatal { message }`，另外收 `shutdown`。
+- IPC：`ready { protocolVersion }` / `fatal { message, diagnostic }`（`diagnostic` 是完整 `util.inspect` 的错误，
+  与上游 0.1.7-alpha.2 同形；壳的 dialog 用 `message`，完整诊断走 stderr），另外收 `shutdown`。
 
 出口：`.`（启动入口）、`./webserver`（无端口 `webServer` 服务，供 patch 行加载）、`./wire`
 （管道分帧，壳构建时内联，部署里不需要单独解析它）。

@@ -27,3 +27,13 @@ allowBuilds:
   protobufjs: true
 
 minimumReleaseAge: 0
+
+# 上游对第三方依赖的补丁（文件在 vendor 内，随 DEEPSEEK_HARNESS_VERSION 一起换版）：
+# 同一个依赖我们与上游只应有一份实现，所以照抄上游的补丁清单，而不是各自绕行。
+patchedDependencies:
+  "@earendil-works/pi-ai@0.85.1": vendor/deepseek-harness/patches/@earendil-works__pi-ai@0.85.1.patch
+  "@electron/osx-sign@1.3.3": vendor/deepseek-harness/patches/@electron__osx-sign@1.3.3.patch
+  "@fortune-sheet/core@1.0.4": vendor/deepseek-harness/patches/@fortune-sheet__core@1.0.4.patch
+  "@fortune-sheet/react@1.0.4": vendor/deepseek-harness/patches/@fortune-sheet__react@1.0.4.patch
+  exceljs@4.4.0: vendor/deepseek-harness/patches/exceljs@4.4.0.patch
+  node-pty@1.2.0-beta.15: vendor/deepseek-harness/patches/node-pty@1.2.0-beta.15.patch

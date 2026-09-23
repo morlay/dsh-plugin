@@ -10,6 +10,7 @@ import { once } from "node:events";
 import { createReadStream, createWriteStream, type ReadStream, type WriteStream } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { loadLayeredEnv, loadProfileDirectory } from "@deepseek-ai/dsh-app-boot";
 import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 import type {} from "@deepseek-ai/dsh-api-gateway";
@@ -47,6 +48,25 @@ interface PendingRequest {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 诊断上限：壳把它写进日志，再长也没有额外价值。 */
+const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024;
+
+/**
+ * fatal 事件：`message` 给壳的 dialog 用，`diagnostic` 是完整 `inspect`（`code` / `syscall` /
+ * `path` / `cause` 链，stack 行里没有）——stderr 字节与这条 IPC 谁先到不确定，壳报告的是它
+ * 先看到的那一条，所以诊断得跟 IPC 一起走。
+ */
+function fatalEvent(error: unknown): DesktopHostEvent {
+  return {
+    type: "fatal",
+    message: errorMessage(error),
+    diagnostic: inspect(error, { depth: 4, maxArrayLength: 50 }).slice(
+      0,
+      MAX_FATAL_DIAGNOSTIC_CHARS,
+    ),
+  };
 }
 
 async function main(): Promise<void> {
@@ -249,19 +269,19 @@ async function main(): Promise<void> {
       frames = decoder.push(chunk);
       for (const frame of frames) handleFrame(frame);
     } catch (error) {
-      send({ type: "fatal", message: errorMessage(error) });
+      send(fatalEvent(error));
       void stop(1);
     }
   });
   requestPipe.once("error", (error) => {
-    send({ type: "fatal", message: errorMessage(error) });
+    send(fatalEvent(error));
     void stop(1);
   });
   requestPipe.once("end", () => {
     try {
       decoder.finish();
     } catch (error) {
-      send({ type: "fatal", message: errorMessage(error) });
+      send(fatalEvent(error));
       void stop(1);
     }
   });
@@ -283,9 +303,8 @@ async function main(): Promise<void> {
 
 if (import.meta.main) {
   main().catch((error: unknown) => {
-    const message = errorMessage(error);
     if (process.send !== undefined && process.connected)
-      process.send({ type: "fatal", message } satisfies DesktopHostEvent, (sendError) => {
+      process.send(fatalEvent(error) satisfies DesktopHostEvent, (sendError) => {
         if (sendError !== null) console.error(sendError);
       });
     console.error(error);

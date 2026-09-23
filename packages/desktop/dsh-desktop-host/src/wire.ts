@@ -86,7 +86,13 @@ export type DesktopHostCommand = { readonly type: "shutdown" };
 /** 仍留在 Node IPC 上的生命周期事件。 */
 export type DesktopHostEvent =
   | { readonly type: "ready"; readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION }
-  | { readonly type: "fatal"; readonly message: string };
+  | {
+      readonly type: "fatal";
+      /** 给人看的一句失败原因（壳的 dialog 用它）。 */
+      readonly message: string;
+      /** 完整诊断（`util.inspect` 的错误，含 code/syscall/path/cause）；缺省时壳只有 message。 */
+      readonly diagnostic?: string;
+    };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -436,7 +442,11 @@ export class DesktopHostResponseDecoder {
 export function isDesktopHostEvent(value: unknown): value is DesktopHostEvent {
   if (!isRecord(value)) return false;
   if (value.type === "ready") return value.protocolVersion === DESKTOP_HOST_PROTOCOL_VERSION;
-  if (value.type === "fatal") return typeof value.message === "string";
+  if (value.type === "fatal")
+    return (
+      typeof value.message === "string" &&
+      (value.diagnostic === undefined || typeof value.diagnostic === "string")
+    );
   return false;
 }
 

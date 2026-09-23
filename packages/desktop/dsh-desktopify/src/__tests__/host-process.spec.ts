@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import type { ChildProcess } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
   DesktopHostRequestDecoder,
@@ -149,6 +149,27 @@ describe("桌面 host 子进程", () => {
     const started = host.start();
     child.emit("message", { type: "fatal", message: "composition exploded" });
     await expect(started).rejects.toThrow("composition exploded");
+  });
+
+  // 上游 0.1.7-alpha.2 起：fatal 另带完整诊断（util.inspect 的错误，含 code/syscall/path/cause）。
+  // 壳的 dialog 只显示 message，完整诊断走 stderr——IPC 与 stderr 谁先到不确定，诊断不能只挂在一边。
+  it("fatal 带完整诊断时写进 stderr，失败信息仍是 message", async () => {
+    const written = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      const { child, host } = harness();
+      const started = host.start();
+      child.emit("message", {
+        type: "fatal",
+        message: "composition exploded",
+        diagnostic: "Error: composition exploded\n    at boot (/app/seed/index.mjs:12:3)",
+      });
+      await expect(started).rejects.toThrow("composition exploded");
+      expect(written.mock.calls.map((call) => String(call[0])).join("")).toContain(
+        "at boot (/app/seed/index.mjs:12:3)",
+      );
+    } finally {
+      written.mockRestore();
+    }
   });
 
   it("GET 请求写出 start 帧并把响应解码成 Response", async () => {

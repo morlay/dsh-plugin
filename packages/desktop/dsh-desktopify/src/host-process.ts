@@ -191,6 +191,10 @@ export class DesktopHostProcess {
         return;
       }
       if (message.type === "fatal") {
+        // dialog 只显示 message；完整诊断（code / syscall / path / cause）写 stderr——
+        // 上游 0.1.7-alpha.2 起 fatal 带上它，这里不接收就等于丢掉启动失败的根因。
+        if (message.diagnostic !== undefined)
+          process.stderr.write(`[dsh-host] ${message.diagnostic}\n`);
         this.fail(new Error(message.message));
         return;
       }
