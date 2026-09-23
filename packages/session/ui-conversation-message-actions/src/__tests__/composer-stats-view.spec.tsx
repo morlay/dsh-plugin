@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 承载组件的可见契约：统计行仍然输出 `data-composer-stats`（与 fork 的 ui-conversation
-// 的 InputBar `:has([data-composer-stats])` 底部留白收窄配对），缓存命中读数走我们带的 token 口径。
+// 承载组件的可见契约：统计行仍然输出 `data-composer-stats`（这一行的稳定锚点），
+// 缓存命中读数走我们带的 token 口径。
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,7 +35,7 @@ function renderStats(usage: unknown): HTMLElement {
 }
 
 describe("StatsPills（composer 统计行）", () => {
-  it("渲染统计行时带上 data-composer-stats（InputBar 的 :has() 配对靠它）", () => {
+  it("渲染统计行时带上 data-composer-stats（这一行的锚点）", () => {
     const container = renderStats({
       uncachedInputTokens: 1_000,
       outputTokens: 5,

@@ -8,14 +8,10 @@
 
 ## 保留文件的接缝
 
-- **核心纯逻辑**（引用文本与 scoped slash 归一、队列文本）→ node 环境单测：
-  `src/__tests__/reference-text.spec.ts`、`queue-text.spec.ts`。
+- **核心纯逻辑**（引用文本与 scoped slash 归一）→ node 环境单测：`src/__tests__/reference-text.spec.ts`。
 - **输入 / 队列的组装面**（hub、输入外壳、队列行——依赖 DOM 事件与渲染）→ jsdom 组件测试：
-  `src/__tests__/input-hub.spec.tsx`、`input-shell.spec.tsx`、`queue-dock.spec.tsx`。
-- **`InputBar` 的呈现面**（哪个席落在哪块 DOM——跟随上游的位置契约）→ jsdom 组件测试：
-  `src/__tests__/input-bar.spec.tsx`。组件是 props 驱动的（`InputBarProps` 自带 `useSession` /
-  `useProjection` / `renderSlot` 等注入面），传 stub props 直接渲染即可，不需要 slot 装配运行时；
-  编辑器传 null 走 inert 分支，所以也不起 Lexical。
+  `src/__tests__/input-hub.spec.tsx`、`input-shell.spec.tsx`、`queue-dock.spec.tsx`。队列行的呈现面已回上游，
+  这里守的是上游口径 + 本包唯一偏离「编辑 = 撤回」。
 - **编辑器草稿层**（输入框保留 raw markdown：草稿文本不做引用装饰）→ jsdom 测试：
   `src/__tests__/editor-runtime.spec.tsx`（直接构造 `DraftEditorRuntime`，粘贴后断言 DOM 无
   `data-composer-text-ref`、投影文本原样）。
@@ -24,8 +20,9 @@
   不少）。它守的是**同步纪律**：漏跟随上游接线不会报错、只会静默少刷新（0.1.7 漏
   `ctx.configForms.developerTools.enabled.subscribe` 就是这类）。语义对不对仍要人读上游那份，不替代行为
   用例。
-- **不单独测**：`.styles.ts` 样式表与 locale 数据表（机制由 `packages/client/ui-primitives` 的
-  styling / token 测试覆盖）、纯类型与桶文件、**不再复制的上游文件**（它们就是上游实现）。
+- **不单独测**：locale 数据表、纯类型与桶文件、**不再复制的上游文件**（它们就是上游实现）——上游 `InputBar`、
+  `QueueDock` 的呈现与样式都属这一类（上游自己的 client 测试覆盖），本包的 `.styles.ts` 也已全部回退，只剩
+  `client/apply.ts` 的注册接线。
 
 ## 未覆盖（有明确原因）
 
@@ -37,5 +34,5 @@
   的类型拉进同一个 program、与 fork 的收窄声明撞 TS2717——见[债务 临时接管上游对话UI的client半](../debts/20260917-临时接管上游对话UI的client半.md)
   的「已知冲突」，以及
   [债务 对话UI客户端半的装配面缺测试辅助](../../../ui-conversation-message-actions/.agents/debts/20260917-对话UI客户端半的装配面缺测试辅助.md)。
-  动这些 `apply` / 装配面之前先看后者的触发条件。（组件的**呈现面**不在这个空白里：见上面的
-  `InputBar` 一条——只有「插进哪个槽、注册什么优先级、跟着哪个外部面重算」这类装配行为才需要 harness。）
+  动这些 `apply` / 装配面之前先看后者的触发条件。（只有「插进哪个槽、注册什么优先级、跟着哪个外部面重算」这类
+  装配行为才需要 harness；组件的呈现面已回上游，不再需要本地用例。）

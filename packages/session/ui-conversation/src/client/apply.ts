@@ -44,7 +44,7 @@ import {
   ConversationSession,
   ConversationSessionHeader,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx";
-import { InputBar } from "./skeleton/InputBar.tsx";
+import { InputBar } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx";
 import { todoDockEntry } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx";
 import {
   DEVELOPER_TOOLS_VIEW_ID,

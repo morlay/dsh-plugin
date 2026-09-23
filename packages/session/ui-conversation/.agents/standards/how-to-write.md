@@ -25,4 +25,4 @@
 - **合并接口（`SlotMap` / `Context` / `Events` / `LocaleNamespaceMap`）只能有一份实例**：不在我们这边重复
   声明（结构相同也算不同实例 → `TS2717`）——`contract/slots.ts` 因此不保留，上游那份即唯一实例。
 - **扩宽用「本地接口 extends 上游那份」**（`client/contract/input.ts` 的 `restoreDraft`）；确需断言时按
-  运行期事实收窄一次并注明理由（`client/input/editor/view-binding.ts` 的 `clipboardUri`）。
+  运行期事实收窄一次并注明理由（本包现在没有这类断言：编辑器粘贴已回退为直接引用上游 `view-binding.ts`）。

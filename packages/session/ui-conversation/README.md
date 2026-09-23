@@ -4,7 +4,8 @@
 `ui-conversation` 行：官方该行在装配里被禁用，槽声明、locale 与设置命名空间与我们保持同形；装配由
 `@morlay/better-session` 的 bundle patch 完成。
 
-**薄壳**：只保留我们**有意改过**的文件，其余上游文件不复制——保留文件里指向它们的 import 走相对路径指向
+**薄壳**：只保留我们**有意改过**的文件（现已收敛到逻辑与一处交互偏离——输入框保留 raw markdown、队列行的
+「编辑 = 撤回」；UI 与样式一律走上游），其余上游文件不复制——保留文件里指向它们的 import 走相对路径指向
 `vendor/deepseek-harness/packages/client/ui-conversation/src/...`，构建时由 tsdown 内联进 `dist/client.cjs`
 （发布物自包含，`files: ["dist"]`），开发态由 `dsh-desktopify` 的 `dev-client-bundles` 现场打包（上游组件的
 `.module.css` 一并内联）。

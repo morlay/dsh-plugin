@@ -3,8 +3,9 @@
 // database pill (total tokens + cache hit) opening the token-usage dialog.
 // Settled-node identity prevents stream-delta updates from rerendering the row.
 // Carried from upstream ui-chat (composer.dock id 'stats', priority -1 shadows it)
-// so the fixed token-format (out-of-range cacheRead no longer hangs) stays wired;
-// data-composer-stats pairs with ui-conversation's InputBar `:has()` bottom clearance.
+// so the fixed token-format (out-of-range cacheRead no longer hangs) stays wired.
+// `data-composer-stats` stays as this row's stable anchor (style/test hooks) — the InputBar it once
+// paired with is upstream's again, so nothing tightens the composer clearance off it any more.
 
 import { memo, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -351,8 +352,7 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, t }
   // billing (e.g. every request failed) shows its counts without a usage pill.
   const hasTokens = usage !== undefined && (billedInputTokens(usage) > 0 || usage.outputTokens > 0);
   if (stats.steps === 0 && !hasTokens) return null;
-  // data-composer-stats: InputBar's `.root:has([data-composer-stats])` rule
-  // tightens the composer's bottom clearance only while this row renders.
+  // data-composer-stats: 这一行的稳定锚点（样式 / 测试定位用）。
   return (
     <div {...styling.props(styles.root)} data-composer-stats>
       {stats.steps > 0 && (

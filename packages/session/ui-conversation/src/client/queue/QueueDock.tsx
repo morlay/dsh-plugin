@@ -1,10 +1,5 @@
-import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
-import {
-  markdownLabels,
-  ReferenceMarkdown,
-  styling,
-} from "@morlay/dsh-client-ui-primitives/client";
 import type { Context } from "@deepseek-ai/cordis";
+import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
 import { useEffect, useId, useMemo, useState } from "react";
 import type { FileAttachmentRef, ImageAttachmentRef } from "@deepseek-ai/dsh-attachment";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
@@ -18,29 +13,52 @@ import {
   IconQueueOutlineRegular,
   IconSendOutlineRegular,
   IconTrashOutlineRegular,
+  projectUserText,
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InboxState } from "@deepseek-ai/dsh-agent/types";
 import type { QueueAction } from "@deepseek-ai/dsh-api-session-controller/types";
 import type { MessageId } from "@deepseek-ai/dsh-llm/brand";
 import { NS } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/locales.ts";
-import { queueRowTextOf, queueTextOf } from "./queue-text.ts";
-import { styles } from "./QueueDock.styles.ts";
+// 样式直接吃上游的 module.css：这一行的呈现面回归上游，只留「编辑 = 撤回」一处行为差异。
+import css from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/queue/QueueDock.module.css";
+
+// 本文件是上游 QueueDock 的薄壳复制：唯一差异是「编辑 = 撤回该条到输入框」（上游是 inline edit）。
+// 呈现（行文本 `projectUserText(previewOf(...))`、折叠头、发送中行、动作门控）与样式都照上游。
 
 const EMPTY_QUEUE = [] as const;
+const QUEUE_PREVIEW_CHARS = 200;
+
+function previewOf(content: InboxState["next-turn"][number]["content"]): string {
+  const flat = content
+    .filter((block) => block.type !== "image" && block.type !== "file")
+    .map((block) => (block.type === "text" ? block.text : `[${block.type}]`))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const chars = Array.from(flat);
+  return chars.length > QUEUE_PREVIEW_CHARS
+    ? `${chars.slice(0, QUEUE_PREVIEW_CHARS).join("")}…`
+    : flat;
+}
+
+function textOf(content: InboxState["next-turn"][number]["content"]): string | null {
+  if (!content.every((block) => block.type === "text")) return null;
+  return content.map((block) => block.text).join("");
+}
 
 /** Queue operations injected by the session-scoped registration. */
 export interface QueueDockInjected {
   updateQueue: (itemId: MessageId, action: QueueAction) => Promise<void>;
   notify: (level: "info" | "error", text: string) => void;
-  /** Replace the composer draft with one row's raw text (the recall target). */
-  restoreDraft: (text: string) => void;
   /** Resolve one durable queued image into a session-scoped browser URL. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>;
+  /** Replace the composer draft with one row's raw text (the recall target). */
+  restoreDraft: (text: string) => void;
 }
 
 /**
- * Durable references carried by one queued row. Queue frames are wire data
+ * Durable references carried by one queued row. Inbox projections are wire data
  * despite their typed face, so an image block without a reference is skipped
  * rather than trusted.
  * @param content - the row's wire content blocks.
@@ -72,12 +90,12 @@ function queueAttachments(
 /** Compact file identity used beside queue thumbnails. */
 function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label: string }) {
   return (
-    <span {...styling.props(styles.file)} aria-label={label} title={attachment.name}>
-      <span {...styling.props(styles.fileIcon)} aria-hidden>
+    <span className={css.file} aria-label={label} title={attachment.name}>
+      <span className={css.fileIcon} aria-hidden>
         <FileTypeIcon path={attachment.name} size={16} />
       </span>
-      <span {...styling.props(styles.fileName)}>{attachment.name}</span>
-      <span {...styling.props(styles.fileSize)}>{fileSizeText(attachment.bytes)}</span>
+      <span className={css.fileName}>{attachment.name}</span>
+      <span className={css.fileSize}>{fileSizeText(attachment.bytes)}</span>
     </span>
   );
 }
@@ -108,9 +126,9 @@ function QueueThumb({
     };
   }, [attachment, loadImage]);
   return url === null ? (
-    <span {...styling.props(styles.thumb)} aria-hidden />
+    <span className={css.thumb} aria-hidden />
   ) : (
-    <img {...styling.props(styles.thumb)} src={url} alt={label} />
+    <img className={css.thumb} src={url} alt={label} />
   );
 }
 
@@ -121,24 +139,34 @@ export type QueueDockProps = PropsRuntime<"conversation.input.dock"> &
 
 /**
  * Queue strip: one item renders directly; multiple items default to a
- * collapsible count header; an empty queue renders nothing. Local submissions
+ * collapsible count header; an empty queue renders nothing. Local queued submissions
  * show sending status and disabled actions until their Host queue rows arrive.
- * Editing a row recalls it: unlike the transcript's recall it asks for no
- * confirmation — the row leaves the queue and its raw text returns to the
- * composer draft.
  */
 export function QueueDock({
   useSession,
   useProjection,
   updateQueue,
   notify,
-  restoreDraft,
   loadImage,
+  restoreDraft,
   t,
 }: QueueDockProps) {
   const inbox = useProjection("inbox") as unknown as InboxState | undefined;
-  const queue = inbox?.["next-turn"] ?? EMPTY_QUEUE;
   const pendingSubmissions = useSession((s) => s.pendingSubmissions);
+  const queue = useMemo(() => {
+    const rows = inbox?.["next-turn"] ?? EMPTY_QUEUE;
+    const inChat = new Set(
+      pendingSubmissions
+        .filter((item) => item.placement === "transcript")
+        .map((item) => item.requestId),
+    );
+    return inChat.size === 0
+      ? rows
+      : rows.filter(
+          ({ source }) =>
+            source.kind !== "user" || !("rpcId" in source) || !inChat.has(source.rpcId),
+        );
+  }, [inbox, pendingSubmissions]);
   const pendingQueue = useMemo(() => {
     const admitted = new Set(
       queue.flatMap(({ source }) =>
@@ -157,9 +185,6 @@ export function QueueDock({
   const [busy, setBusy] = useState<MessageId | null>(null);
   const [collapsed, setCollapsed] = useState(true);
   const listId = useId();
-  // labels 按 locale revision 稳定（官方 MarkdownText 在它上面 memo 渲染缓存）。
-  // 队列行的 chip 不可点（没有 owner 动作），但仍渲染成 chip。
-  const labels = useMemo(() => markdownLabels(t), [t]);
 
   useEffect(() => {
     if (rowCount === 0 && !collapsed) setCollapsed(true);
@@ -188,19 +213,19 @@ export function QueueDock({
     }
   };
 
-  // Recall: leave the queue first, and only then hand the raw text back to the
-  // draft — a failed removal must not leave the text in both places.
+  // 本包唯一偏离：编辑 = 撤回。先离开队列、成功后才把原文交回草稿——删除失败时
+  // 文本不能同时留在两处。
   const recall = async (itemId: MessageId, text: string): Promise<void> => {
-    if (await applyAction(itemId, { kind: "remove" }, t("queue.editFailed"))) restoreDraft(text);
+    if (await applyAction(itemId, { kind: "remove" }, t("queue.removeFailed"))) restoreDraft(text);
   };
 
   return (
-    <div {...styling.props(styles.dock)} data-queue-dock="">
-      <div {...styling.props(styles.panel)}>
+    <div className={css.dock} data-queue-dock="">
+      <div className={css.panel}>
         {rowCount > 1 && (
           <button
             type="button"
-            {...styling.props(styles.header)}
+            className={css.header}
             aria-controls={listId}
             aria-expanded={expanded}
             disabled={interactionActive}
@@ -208,35 +233,35 @@ export function QueueDock({
               setCollapsed((value) => !value);
             }}
           >
-            <span {...styling.props(styles.lead)} aria-hidden>
+            <span className={css.lead} aria-hidden>
               <IconQueueOutlineRegular />
             </span>
-            <span {...styling.props(styles.count)}>{t("queue.count", { n: rowCount })}</span>
+            <span className={css.count}>{t("queue.count", { n: rowCount })}</span>
             {!listVisible && pendingQueue.length > 0 && (
-              <span {...styling.props(styles.status)} role="status">
+              <span className={css.status} role="status">
                 {t("queue.sending")}
               </span>
             )}
-            <span {...styling.props(styles.chevron)} aria-hidden>
+            <span className={css.chevron} aria-hidden>
               {expanded ? <IconChevronDownOutlineRegular /> : <IconChevronUpOutlineRegular />}
             </span>
           </button>
         )}
-        <ul id={listId} {...styling.props(styles.list)} hidden={!listVisible}>
+        <ul id={listId} className={css.list} hidden={!listVisible}>
           {listVisible &&
             queue.map((row) => {
               const attachments = queueAttachments(row.content);
-              const rowText = queueRowTextOf(row.content);
+              const text = textOf(row.content);
               return (
-                <li key={row.id} {...styling.props(styles.row)} data-queue-row="">
+                <li key={row.id} className={css.row}>
                   {/* Single-item strip has no count header, so the row itself carries the queue glyph. */}
                   {rowCount === 1 && (
-                    <span {...styling.props(styles.lead)} aria-hidden>
+                    <span className={css.lead} aria-hidden>
                       <IconQueueOutlineRegular />
                     </span>
                   )}
                   {attachments.length > 0 && (
-                    <span {...styling.props(styles.attachments)} data-queue-attachments="">
+                    <span className={css.attachments}>
                       {attachments.map((item, index) =>
                         item.type === "image" ? (
                           <QueueThumb
@@ -255,27 +280,25 @@ export function QueueDock({
                       )}
                     </span>
                   )}
-                  <span {...styling.props(styles.preview)} data-queue-preview="">
-                    <ReferenceMarkdown text={queueTextOf(rowText)} labels={labels} />
-                  </span>
+                  <span className={css.preview}>{projectUserText(previewOf(row.content), [])}</span>
                   {queueMutable && (
-                    <div {...styling.props(styles.actions)}>
+                    <div className={css.actions}>
                       <Tooltip
                         label={t("queue.edit")}
                         side="bottom"
                         delayMs={500}
-                        disabled={rowText.text === null}
+                        disabled={text === null}
                       >
                         <button
                           type="button"
-                          {...styling.props(styles.action)}
+                          className={css.action}
                           aria-label={t("queue.edit")}
                           // Disabled buttons fire no hover events, so the
                           // unsupported hint stays a native title.
-                          title={rowText.text === null ? t("queue.edit.unsupported") : undefined}
-                          disabled={busy !== null || rowText.text === null}
+                          title={text === null ? t("queue.edit.unsupported") : undefined}
+                          disabled={busy !== null || text === null}
                           onClick={() => {
-                            if (rowText.text !== null) void recall(row.id, rowText.text);
+                            if (text !== null) void recall(row.id, text);
                           }}
                         >
                           <IconEditOutlineRegular size={14} />
@@ -284,7 +307,7 @@ export function QueueDock({
                       <Tooltip label={t("queue.remove")} side="bottom" delayMs={500}>
                         <button
                           type="button"
-                          {...styling.props(styles.action)}
+                          className={css.action}
                           aria-label={t("queue.remove")}
                           disabled={busy !== null}
                           onClick={() => {
@@ -302,7 +325,7 @@ export function QueueDock({
                       >
                         <button
                           type="button"
-                          {...styling.props(styles.action)}
+                          className={css.action}
                           aria-label={t("queue.steer")}
                           title={running ? undefined : t("queue.steer.unavailable")}
                           disabled={busy !== null || !running}
@@ -323,22 +346,21 @@ export function QueueDock({
               return (
                 <li
                   key={submission.requestId}
-                  className={styling.className(styles.row, styles.pendingRow)}
-                  data-queue-row=""
+                  className={`${css.row} ${css.pendingRow}`}
                   data-submission-echo=""
                 >
                   {rowCount === 1 && (
-                    <span {...styling.props(styles.lead)} aria-hidden>
+                    <span className={css.lead} aria-hidden>
                       <IconQueueOutlineRegular />
                     </span>
                   )}
                   {submission.attachments.length > 0 && (
-                    <span {...styling.props(styles.attachments)} data-queue-attachments="">
+                    <span className={css.attachments}>
                       {submission.attachments.map((attachment, index) =>
                         attachment.type === "image" ? (
                           <img
                             key={`${attachment.value.previewUrl}:${index}`}
-                            {...styling.props(styles.thumb)}
+                            className={css.thumb}
                             src={attachment.value.previewUrl}
                             alt={t("queue.image")}
                           />
@@ -352,17 +374,15 @@ export function QueueDock({
                       )}
                     </span>
                   )}
-                  <span {...styling.props(styles.preview)}>
-                    <ReferenceMarkdown text={submission.text} labels={labels} />
-                  </span>
-                  <span {...styling.props(styles.status)} role="status">
+                  <span className={css.preview}>{projectUserText(submission.text, [])}</span>
+                  <span className={css.status} role="status">
                     {t("queue.sending")}
                   </span>
                   {queueMutable && (
-                    <div {...styling.props(styles.actions)}>
+                    <div className={css.actions}>
                       <button
                         type="button"
-                        {...styling.props(styles.action)}
+                        className={css.action}
                         aria-label={t("queue.edit")}
                         title={t("queue.sending")}
                         disabled
@@ -371,7 +391,7 @@ export function QueueDock({
                       </button>
                       <button
                         type="button"
-                        {...styling.props(styles.action)}
+                        className={css.action}
                         aria-label={t("queue.remove")}
                         title={t("queue.sending")}
                         disabled
@@ -380,7 +400,7 @@ export function QueueDock({
                       </button>
                       <button
                         type="button"
-                        {...styling.props(styles.action)}
+                        className={css.action}
                         aria-label={t("queue.steer")}
                         title={t("queue.sending")}
                         disabled
@@ -411,6 +431,8 @@ export const queueDockEntry = {
           order: 20,
           locale: NS,
           inject: (sessionId: SessionId): QueueDockInjected => {
+            // 上游这份直接 `ctx.sessions.scope(...)`；本仓库的 `SessionStore` 类型面没有 `scope`（client 契约里
+            // 由 `ISessions` 提供），按运行期事实收窄一次——上游文件进同一 program 才需要。
             const actx = (ctx.sessions as unknown as ISessions).scope(sessionId);
             if (actx === undefined)
               throw new Error(`queue dock: session "${sessionId}" resolved no scope`);

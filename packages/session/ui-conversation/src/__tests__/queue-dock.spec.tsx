@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// fork 差异点（见本包 .agents/debts/20260917-临时接管上游对话UI的client半.md）：队列行渲染 ReferenceMarkdown（裸 URI 成为引用 chip），
-// 文本由 queueRowTextOf 从 content 块派生（未截断文本优先于截断预览）。
+// fork 差异点（见本包 .agents/debts/20260917-临时接管上游对话UI的client半.md）：QueueDock 是上游那一版的薄壳复制，
+// 唯一行为差异是「编辑 = 撤回该条到输入框」（上游走 inline edit）；呈现与样式（含 0.1.7-alpha.2 的 chat echo 去重）
+// 都照上游，所以这里断言的是上游口径 + 那一条偏离。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InboxState } from "@deepseek-ai/dsh-agent/types";
@@ -64,7 +65,6 @@ function renderDock(
   faces: {
     updateQueue?: () => Promise<void>;
     inbox?: InboxState["next-turn"];
-    projectionsUnavailable?: boolean;
   } = {},
 ): {
   notify: ReturnType<typeof vi.fn>;
@@ -93,7 +93,11 @@ function renderDock(
   return { notify, updateQueue, restoreDraft };
 }
 
-describe("QueueDock: 队列行的文本", () => {
+function dockText(): string {
+  return document.querySelector("[data-queue-dock]")?.textContent ?? "";
+}
+
+describe("QueueDock: 队列行的文本（上游口径）", () => {
   it("空队列不渲染 dock", () => {
     renderDock(sessionOf());
     expect(document.querySelector("[data-queue-dock]")).toBeNull();
@@ -106,24 +110,54 @@ describe("QueueDock: 队列行的文本", () => {
     expect(screen.queryByText("1 条排队消息")).toBeNull();
   });
 
-  it("行内的裸引用渲染成引用 chip 的显示文本，而不是截断后的预览文本", () => {
-    const filler = "凑长度".repeat(70);
-    renderDock(sessionOf(), { inbox: [textRow("q1", `${filler}看 file:src/a.ts#L3-L5`)] });
-    const dock = document.querySelector("[data-queue-dock]");
-    expect(dock?.textContent).toContain("看 src/a.ts#L3-L5");
-    expect(dock?.textContent).not.toContain("…");
+  it("展示文本超过 200 字符按上游口径截断", () => {
+    renderDock(sessionOf(), { inbox: [textRow("q1", "凑长度".repeat(70))] });
+    expect(dockText().endsWith("…")).toBe(true);
   });
 
-  it("没有未截断文本时回退到预览文本（混有非文本块）", () => {
+  it("图片 / 文件块不占展示文本的位", () => {
     renderDock(sessionOf(), {
       inbox: [row("q1", [{ type: "text", text: "看这个" }, { type: "image" } as ContentBlock])],
     });
-    expect(document.querySelector("[data-queue-dock]")?.textContent).toContain("看这个");
+    expect(dockText()).toContain("看这个");
+    expect(dockText()).not.toContain("[image]");
   });
 
-  it("多段文本只落在同一个单行预览宿主上（单行展示靠它上面的 CSS 压平）", () => {
+  it("多段文本压成一行展示（块间一个空格）", () => {
     renderDock(sessionOf(), { inbox: [textRow("q1", "第一段\n\n第二段")] });
-    expect(document.querySelectorAll("[data-queue-preview]")).toHaveLength(1);
+    const rows = document.querySelectorAll("[data-queue-dock] li");
+    expect(rows).toHaveLength(1);
+    expect(dockText()).toContain("第一段 第二段");
+  });
+});
+
+describe("QueueDock: 与 chat echo 去重", () => {
+  // 上游 0.1.7-alpha.2 起：提交落点（placement）在提交时固定，Inbox 收下这条 claim 不会把 chat echo
+  // 挪进 dock。所以 dock 自己要把 placement 为 transcript 的提交对应的队列行滤掉，否则同一条消息
+  // 既在对话里 echo、又在队列里出现一遍。
+  it("placement 为 transcript 的提交对应的队列行不显示", () => {
+    renderDock(
+      sessionOf({
+        pendingSubmissions: [
+          { requestId: "r1", placement: "transcript", time: 1 },
+        ] as unknown as SessionSnapshot["pendingSubmissions"],
+      }),
+      { inbox: [textRow("q1", "排队中", "r1")] },
+    );
+    expect(document.querySelector("[data-queue-dock]")).toBeNull();
+  });
+
+  it("同一队列里别的行照常显示", () => {
+    renderDock(
+      sessionOf({
+        pendingSubmissions: [
+          { requestId: "r1", placement: "transcript", time: 1 },
+        ] as unknown as SessionSnapshot["pendingSubmissions"],
+      }),
+      { inbox: [textRow("q1", "排队中", "r1"), textRow("q2", "另一条")] },
+    );
+    expect(dockText()).toContain("另一条");
+    expect(dockText()).not.toContain("排队中");
   });
 });
 
@@ -195,7 +229,7 @@ describe("QueueDock: 行操作门控", () => {
   });
 });
 
-describe("QueueDock: 队列行撤回", () => {
+describe("QueueDock: 队列行撤回（本包唯一偏离）", () => {
   it("点编辑按钮直接撤回：移除队列项并把文本回填输入框，不进入行内编辑", async () => {
     const { updateQueue, restoreDraft } = renderDock(sessionOf(), {
       inbox: [textRow("q1", "先跑测试")],
@@ -206,10 +240,11 @@ describe("QueueDock: 队列行撤回", () => {
       expect(updateQueue).toHaveBeenCalledWith("q1", { kind: "remove" });
       expect(restoreDraft).toHaveBeenCalledWith("先跑测试");
     });
-    expect(document.querySelector("input")).toBeNull();
+    // 上游在这条路径上会渲染一个行内 textarea；我们不做行内编辑。
+    expect(document.querySelector("[data-queue-dock] textarea")).toBeNull();
   });
 
-  it("撤回的是未截断的原始文本，而不是预览用的截断文本", async () => {
+  it("撤回的是未截断的原文，而不是展示用的截断文本", async () => {
     const filler = "凑长度".repeat(70);
     const { restoreDraft } = renderDock(sessionOf(), {
       inbox: [
@@ -234,7 +269,7 @@ describe("QueueDock: 队列行撤回", () => {
     fireEvent.click(screen.getByLabelText("编辑排队消息"));
 
     await waitFor(() => {
-      expect(notify).toHaveBeenCalledWith("error", "编辑失败：这条消息可能已经开始发送。");
+      expect(notify).toHaveBeenCalledWith("error", "删除失败：这条消息可能已经开始发送。");
     });
     expect(restoreDraft).not.toHaveBeenCalled();
   });
