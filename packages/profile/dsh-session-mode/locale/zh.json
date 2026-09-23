@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "会话模式",
+    "description": "coding / chat 两个模式：一行数据（提示词 + 工具白名单），host 按会话应用；新会话的顶部 chip 与会话头部标签替代官方的 agent preset 面。"
+  }
+}

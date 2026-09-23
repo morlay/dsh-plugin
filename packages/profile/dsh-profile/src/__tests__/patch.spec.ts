@@ -83,13 +83,16 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     ).toBe(true);
   });
 
-  it("只按 id 动别人插的行：一行都不插，禁的只有官方四个 preset", () => {
+  it("只按 id 动别人插的行：一行都不插，禁的是官方 agent preset 那一套与先读后改", () => {
     expect(rows.flatMap((row) => row.insert ?? [])).toEqual([]);
     expect(rows.filter((row) => row.disabled === true).map((row) => row.id)).toEqual([
+      "agent-preset-registry",
+      "ui-agent-preset",
       "preset-standard",
       "preset-ptc",
       "preset-minimal",
       "preset-cordis",
+      "fs-observation-policy",
     ]);
     for (const row of rows.filter((row) => row.disabled !== true)) expect(row.config).toBeTruthy();
   });
@@ -121,7 +124,7 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     expect(rowById(composed, "ui-chat")?.config).toEqual({ transcriptView: "expanded" });
   });
 
-  it("禁用官方四个 preset：它们确实由上游 presets 层插入，且组合后真的被关掉", async () => {
+  it("禁用官方 agent preset 那一套：行确实由上游插入，且组合后真的被关掉", async () => {
     const shipped = composeLayers(await webAppLayers());
     const shippedIds = new Set(
       shipped.flatMap((row) => [
@@ -130,26 +133,41 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
       ]),
     );
 
-    for (const id of ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"]) {
-      expect(shippedIds.has(id), `上游 presets 层没有 ${id}`).toBe(true);
+    for (const id of [
+      "agent-preset-registry",
+      "ui-agent-preset",
+      "preset-standard",
+      "preset-ptc",
+      "preset-minimal",
+      "preset-cordis",
+    ]) {
+      expect(shippedIds.has(id), `上游 web-app 层没有 ${id}`).toBe(true);
     }
 
     const composed = composeLayers([...(await webAppLayers()), rows]);
 
-    for (const id of ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"]) {
+    for (const id of [
+      "agent-preset-registry",
+      "ui-agent-preset",
+      "preset-standard",
+      "preset-ptc",
+      "preset-minimal",
+      "preset-cordis",
+    ]) {
       expect(rowById(composed, id)?.disabled, id).toBe(true);
     }
-    // 我们自己的模式仍是启用的（禁的是官方四个，不是"关掉全部"）。
-    expect(rowById(composed, "preset-coding")?.disabled).not.toBe(true);
-    expect(rowById(composed, "preset-chat")?.disabled).not.toBe(true);
+    // 我们的模式行不在这里（它由 `@morlay/dsh-session-mode` 的 patch 插）。
+    expect(rowById(composed, "session-mode")?.disabled).not.toBe(true);
   });
 
   it("配置覆盖的目标行都存在：上游行（llm-pi-ai / ui-settings-general / web）或能力 bundle 的行", async () => {
     const upstream = new Set(
-      (await webAppLayers()).flat().flatMap((row) => [
-        ...(row.id === undefined ? [] : [row.id]),
-        ...(row.insert ?? []).flatMap((entry) => (entry.id === undefined ? [] : [entry.id])),
-      ]),
+      (await webAppLayers())
+        .flat()
+        .flatMap((row) => [
+          ...(row.id === undefined ? [] : [row.id]),
+          ...(row.insert ?? []).flatMap((entry) => (entry.id === undefined ? [] : [entry.id])),
+        ]),
     );
     const composed = composeLayers([
       await loadPatchRows(UPSTREAM_BASE_PATCH),
@@ -165,12 +183,13 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     }
   });
 
-  it("模式注册不在这里：本层只关官方四个 preset，不碰我们自己的注册行", () => {
+  it("模式定义不在这里：本层只关官方那一套，不插任何模式行", () => {
     const ids = rows.flatMap((row) => [row.id, ...(row.insert ?? []).map((entry) => entry.id)]);
 
+    expect(ids).not.toContain("session-mode");
+    expect(ids).not.toContain("context-assembler-scope");
     expect(ids).not.toContain("preset-coding");
     expect(ids).not.toContain("preset-chat");
-    expect(ids).not.toContain("agent-preset-registry");
     expect(rows.filter((row) => row.id === "system-prompt")).toEqual([]);
   });
 
@@ -217,17 +236,17 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     expect(registered?.config).toEqual({ apiKeyEnv: "OLLAMA_API_KEY" });
   });
 
-  it("不碰 read-before-edit 策略：官方 preset 照旧吃上游那层，coding 由自己的行抵消", async () => {
+  it("先读后改是部署级取舍：上游那一行被本层禁掉", async () => {
     const shipped = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH)]);
 
     expect(rowById(shipped, "fs-observation-policy")?.name).toBe(
       "@deepseek-ai/dsh-fs-observation-policy",
     );
+    expect(rowById(shipped, "fs-observation-policy")?.disabled).not.toBe(true);
 
     const composed = composeLayers([await loadPatchRows(UPSTREAM_BASE_PATCH), rows]);
 
-    // 这是模式取舍、不是部署事实：禁用它是全局动作，会连官方 preset 一起关掉。
-    expect(rowById(composed, "fs-observation-policy")?.disabled).not.toBe(true);
+    expect(rowById(composed, "fs-observation-policy")?.disabled).toBe(true);
   });
 
   it("leaves the shipped subagent model-selection provider enabled for the official presets", async () => {

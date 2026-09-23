@@ -3,12 +3,12 @@
 **agent 的工具清单与工具说明**：一个编码 Agent 该有哪些工具（`rows` 出口），以及这些工具怎么被讲清楚
 （`guidance` 出口）。另有 Agent Teams 那套可选能力（`agent-team` 出口）。
 
-| 出口                      | 是什么                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------ |
-| `./rows`                  | 功能行清单：shell、文件、任务、skill 发现、goal、压缩、委派与工作流、问答、todo、联网、交付物 |
-| `./guidance`              | 工具说明：短描述汉化、schema 精简、用法分组（组 skill）、丢弃上游说明                        |
-| `./agent-team`            | Agent Teams 那一组行，**默认关闭**（`DSH_AGENT_TEAM=1` 才装）                                |
-| `./cordis.patch.yml`      | 把整套功能行插到 host 平面（给 profile 直接装配用）                                          |
+| 出口                 | 是什么                                                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `./rows`             | 功能行清单：shell、文件、任务、skill 发现、goal、压缩、委派与工作流、问答、todo、联网、交付物 |
+| `./guidance`         | 工具说明：短描述汉化、schema 精简、用法分组（组 skill）、丢弃上游说明                         |
+| `./agent-team`       | Agent Teams 那一组行，**默认关闭**（`DSH_AGENT_TEAM=1` 才装）                                 |
+| `./cordis.patch.yml` | 把整套功能行插到 host 平面（给 profile 直接装配用）                                           |
 
 ## 装配
 
@@ -20,8 +20,9 @@
   （见 [`src/rows.ts`](./src/rows.ts)）；
 - 同一层装一行工具说明（`@morlay/dsh-agent-toolkit/guidance`）：描述汉化 + schema 精简 + 用法分组注册给通道。
 
-**模式不在这里装行**：[`@morlay/dsh-agent-preset`](../dsh-agent-preset/README.md) 只声明开关（`allowTools`
-白名单，名单由 `TOOLKIT_TOOL_NAMES` 从汉化数据派生），工具集的差别完全由开关表达。
+**模式不在这里装行**：本包的 bundle 把工具行在 profile 平面装一次；
+[`@morlay/dsh-session-mode`](../dsh-session-mode/README.md) 只声明开关（`allowTools` 白名单，名单由
+`TOOLKIT_TOOL_NAMES` 从汉化数据派生），模式之间的差别完全由开关表达。
 
 ## 汉化精简：族索引
 
@@ -50,11 +51,11 @@
 
 ## 边界
 
-| 归这里                                   | 不归这里                                                                     |
-| ---------------------------------------- | ---------------------------------------------------------------------------- |
-| 工具行清单、工具短描述、用法分组正文     | 提示词（persona）与能力开关 → [dsh-agent-preset](../dsh-agent-preset/README.md) |
-| 工具投影的预处理（描述 / schema）        | 注入通道本身 → [dsh-context-assembler](../../context/dsh-context-assembler/README.md) |
-| Agent Teams 那套可选行                   | 部署级配置值（llm route、搜索后端、沙箱规则）→ [dsh-profile](../dsh-profile/README.md) |
+| 归这里                               | 不归这里                                                                               |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| 工具行清单、工具短描述、用法分组正文 | 提示词（persona）与能力开关 → [dsh-session-mode](../dsh-session-mode/README.md)        |
+| 工具投影的预处理（描述 / schema）    | 注入通道本身 → [dsh-context-assembler](../../context/dsh-context-assembler/README.md)  |
+| Agent Teams 那套可选行               | 部署级配置值（llm route、搜索后端、沙箱规则）→ [dsh-profile](../dsh-profile/README.md) |
 
 引用的都是上游 `@deepseek-ai/dsh-*` 能力包（本包只发布"清单 + 说明 + 行 id"，不发布它们的实现）。
 

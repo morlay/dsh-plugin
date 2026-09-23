@@ -470,15 +470,15 @@ export function renameLegacyPtcEvents(events: SessionEvent[]): void {
  *   （v4 起 system 消息只认这个 kind）；
  * - `tool/result` 的消息：v3 是 user 角色、结果块包在 `content[0]`；v4 是 `role: 'tool'` + 顶层
  *   `toolCallId` + `content` 就是结果块；
- * - 本仓库自己写过、上游已删除的事件类型（见 `LEGACY_OWN_EVENT_TYPES`）标 `ignorable: true`——v4 的
- *   校验对未知类型只接受可忽略信封。
+ * - **本仓库自造、上游不认识的事件类型**（见 `OWN_EVENT_TYPES`：历史遗留的与我们当前在写的）标
+ *   `ignorable: true`——v4 的校验对未知类型只接受可忽略信封。
  *
  * 只认这张白名单：**其它未知类型保持 fail loud**（那是「数据来自更新的 harness」的信号，不能吞掉）。
  */
 export function normalizeToCurrentShape(events: SessionEvent[]): void {
   for (const event of events) {
     const type = (event as { type: string }).type;
-    if (LEGACY_OWN_EVENT_TYPES.has(type)) {
+    if (OWN_EVENT_TYPES.has(type)) {
       (event as { ignorable?: true }).ignorable = true;
       continue;
     }
@@ -521,17 +521,45 @@ function liftToolResultMessage(message: unknown): void {
 }
 
 /**
- * 本仓库写过、后来连同机制一起删除的事件类型：读的时候标 `ignorable: true` 让校验跳过它们。
- * 新增历史类型时登记到这里——**不要**用「所有未知类型」代替（那会掩盖更新版本的未知事件）。
+ * 落库前给**本仓库自造的事件类型**补上 `ignorable: true` 信封。
+ *
+ * 上游的持久化校验（`validateStoredEvents`）只放行「已知类型」或「带可忽略信封的未知类型」，我们的类型
+ * 按构造就在已知表之外——不补的话连**写入**都会被拒（`appendBatch` 里那道校验）。上游 `Session.append`
+ * 没有承载这个信封的口子（第三个参数只服务 surface 事件），所以这一笔由持久化层补：canonical log 里的
+ * 形状不变，落库的那一份带上信封。
+ * @param events - 即将落库的批次（`materializeAppendBatch` 的 JSON 快照副本，可写）。
  */
-export const LEGACY_OWN_EVENT_TYPES: ReadonlySet<string> = new Set(["session-branch/version"]);
+export function sealOwnEvents(events: readonly SessionEvent[]): void {
+  for (const event of events) {
+    if (OWN_EVENT_TYPES.has((event as { type: string }).type)) {
+      (event as { ignorable?: true }).ignorable = true;
+    }
+  }
+}
 
-/** 行里是否还带着旧代消息形状（`session-branch/version` 这类自造事件也算）——写路径曾把回退视图的结果
- * 以当前版本号落库，所以**版本号不可信**，读之前要按内容判一次。 */
-export function hasLegacyShape(events: readonly SessionEvent[]): boolean {
+/**
+ * 本仓库自造、上游不认识的事件类型：读的时候标 `ignorable: true`，v4 的持久化校验才肯跳过它们
+ * （`validateStoredEvents` 只放行「已知类型」或「带可忽略信封的未知类型」）。
+ *
+ * 两类都在这张表里：
+ * - **历史遗留**：写过、后来连同机制一起删除的（`session-branch/version`）；
+ * - **当前在写**：本仓库的插件自己声明的事件类型（`session-mode/selected`）——上游的
+ *   `KNOWN_SESSION_EVENT_TYPES` 由上游仓库的声明生成，外部插件的事件按构造就在它之外。
+ *
+ * 新增自造事件类型时**必须**登记到这里，否则读路径 fail loud（真回归：`session-mode/selected` 漏登记，
+ * 会话打不开）。**不要**用「所有未知类型」代替（那会掩盖更新版本的未知事件——那种必须拒读）。
+ */
+export const OWN_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "session-branch/version",
+  "session-mode/selected",
+]);
+
+/** 这批事件是否需要按当前形状归一（旧代消息形状，或尚未标 `ignorable` 的自造事件类型）——写路径曾把回退
+ * 视图的结果以当前版本号落库，所以**版本号不可信**，读之前要按内容判一次。 */
+export function needsShapeAdoption(events: readonly SessionEvent[]): boolean {
   for (const event of events) {
     const type = (event as { type: string }).type;
-    if (LEGACY_OWN_EVENT_TYPES.has(type)) return true;
+    if (OWN_EVENT_TYPES.has(type)) return true;
     if (type === "system/message") {
       const message = (event.data as unknown as Record<string, unknown>)["message"] as
         | Record<string, unknown>

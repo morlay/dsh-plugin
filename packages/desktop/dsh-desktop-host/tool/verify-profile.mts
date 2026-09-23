@@ -3,10 +3,9 @@
  *
  * 为什么需要它（两条真实回归，都是静态断言与单测抓不到的）：
  *
- * 1. **preset roster 的装载结果**：`dsh-preset` 的 patch 里有若干按 id 禁用 host 行的装配，那是全局
- *    动作——官方 standard / ptc / cordis 的 preset 行也吃这一刀。2026-09-22 禁用
- *    `subagent-model-selection-settings` 就把那三个官方 preset 打成了 `broken`
- *    （`requires ... in the Host scope`）。
+ * 1. **模式那一行装上没有**：`session-mode` 行的 config 由构建期生成，装配面能否读到
+ *    `ctx.sessionModes`（以及官方 registry 是否真的退场）只有真装配看得见。装配面的四条事实由
+ *    [verify-session-mode.mts](./verify-session-mode.mts) 专测，这里只顺带确认模式清单在。
  * 2. **`session/list` 是否带出会话标题**：标题走投影缓存（`projections.values.title`）——2026-09-22 就是
  *    这里漏跟了上游契约（0.1.7 把 `cachedSnapshot` / `cachedPredecessorTitle` 的 `inheritedEventCount`
  *    参数去掉了，我们还按旧签名匹配），结果列表里所有投影值（title / blank / tokenUsage）全空。
@@ -37,11 +36,6 @@ import { fileURLToPath } from "node:url";
 import { loadLayeredEnv, loadProfileDirectory } from "@deepseek-ai/dsh-app-boot";
 import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 
-interface PresetRow {
-  readonly id: string;
-  readonly broken?: string;
-}
-
 const PORT = 3099;
 const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const store = join(repoRoot, "apps/dsh-custom-next/.dsh-store");
@@ -65,19 +59,28 @@ process.env.DSH_HOME = store;
 const { ctx, shutdown } = await runProfile({
   environment: loadLayeredEnv("dsh"),
   profile: "web",
-  resolvedProfile: { profile: loadProfileDirectory("dsh", profileDir, installAnchor), installAnchor },
+  resolvedProfile: {
+    profile: loadProfileDirectory("dsh", profileDir, installAnchor),
+    installAnchor,
+  },
   patchFiles: [],
   args: ["--no-open", "--port", String(PORT)],
 });
 
 const failures: string[] = [];
 
-const registry = (ctx as unknown as { agentPresets?: { list(): Promise<PresetRow[]> } }).agentPresets;
-const rows = (await registry?.list()) ?? [];
-for (const row of rows) {
-  const state = row.broken === undefined ? "ok" : `broken: ${row.broken}`;
-  console.log(`verify-profile: preset ${row.id} — ${state}`);
-  if (row.broken !== undefined) failures.push(`preset ${row.id} is broken: ${row.broken}`);
+const sessionModes = (
+  ctx as unknown as {
+    sessionModes?: { roster(): { default: string; modes: readonly { id: string }[] } };
+  }
+).sessionModes?.roster();
+console.log(
+  `verify-profile: 会话模式 — default=${sessionModes?.default ?? "(缺失)"} modes=${(sessionModes?.modes ?? []).map((mode) => mode.id).join(", ") || "(缺失)"}`,
+);
+if (sessionModes === undefined) {
+  failures.push(
+    "ctx.sessionModes is missing; the session-mode row did not load in this deployment",
+  );
 }
 
 const controller = (
@@ -120,7 +123,9 @@ if (leakedArchived.length > 0) {
 
 const connection = (ctx as unknown as { connection?: { authenticatedUrl(base: string): string } })
   .connection;
-const base = connection?.authenticatedUrl(`http://127.0.0.1:${String(PORT)}`) ?? `http://127.0.0.1:${String(PORT)}`;
+const base =
+  connection?.authenticatedUrl(`http://127.0.0.1:${String(PORT)}`) ??
+  `http://127.0.0.1:${String(PORT)}`;
 function withTokenPath(path: string): string {
   const url = new URL(base);
   url.pathname = path;
@@ -130,7 +135,8 @@ function withTokenPath(path: string): string {
 const cookie = await fetch(withTokenPath("/"), { redirect: "manual" })
   .then((res) => res.headers.get("set-cookie"))
   .catch(() => null);
-const cookieHeader: Record<string, string> = cookie === null || cookie === undefined ? {} : { cookie: cookie.split(";")[0]! };
+const cookieHeader: Record<string, string> =
+  cookie === null || cookie === undefined ? {} : { cookie: cookie.split(";")[0]! };
 
 /** 保留 `authenticatedUrl` 带来的 token query，只换 pathname（`new URL(path, base)` 会把 query 丢掉）。 */
 const withPath = (path: string): string => {
@@ -156,7 +162,11 @@ if (rowsResponse.status !== 200) {
   failures.push(`POST /api/session.rows failed with ${String(rowsResponse.status)}`);
 } else if ((rowsBody.total ?? 0) < sessionRows.length) {
   failures.push("session/rows reported a total smaller than the page it returned");
-} else if (sessionRows.length === Number(rowsBody.total) && archived.size > 0 && rowsArchived.length !== archived.size) {
+} else if (
+  sessionRows.length === Number(rowsBody.total) &&
+  archived.size > 0 &&
+  rowsArchived.length !== archived.size
+) {
   failures.push(
     `session/rows archived rows ${String(rowsArchived.length)} do not match the registry's ${String(archived.size)}`,
   );
@@ -168,7 +178,9 @@ const response = await fetch(withPath("/session-editor"), {
   body: JSON.stringify({ operation: "not-a-real-op", sessionId: "x" }),
 });
 const body = await response.text();
-console.log(`verify-profile: POST /session-editor — ${String(response.status)} ${body.slice(0, 80)}`);
+console.log(
+  `verify-profile: POST /session-editor — ${String(response.status)} ${body.slice(0, 80)}`,
+);
 if (response.status !== 400 || !body.includes("action")) {
   failures.push(
     `POST /session-editor did not reach the session-editor handler (status ${String(response.status)}); ` +

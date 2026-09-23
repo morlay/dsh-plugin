@@ -39,11 +39,6 @@
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
   },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@types/js-yaml": "^4.0.9",
@@ -51,5 +46,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   }
 }

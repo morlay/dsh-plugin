@@ -15,7 +15,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { meta } from "@morlay/session-rdb/testing";
-import { hasLegacyShape, normalizeToCurrentShape } from "../log.ts";
+import { needsShapeAdoption, normalizeToCurrentShape } from "../log.ts";
 
 /**
  * 旧代消息形状的读取（2026-09-22 的现场问题）：迁移链是**严格**的——它拒绝我们当年写过、后来被
@@ -204,14 +204,34 @@ describe("旧代消息形状的读取", () => {
     expect((events[3] as unknown as { ignorable?: true }).ignorable).toBeUndefined();
   });
 
+  it("marks our own event types ignorable, whoever wrote them (retired or current)", () => {
+    // 上游的已知类型表由上游仓库的声明生成，我们自造的类型按构造就在它之外——读路径因此统一补
+    // `ignorable: true`（真回归：`session-mode/selected` 漏登记时整个会话打不开）。
+    const events = [
+      { type: "session-mode/selected", seq: SessionSeq(0), time: 0, data: { sessionMode: "chat" } },
+      { type: "agent-preset/selected", seq: SessionSeq(1), time: 1, data: { agentPreset: "chat" } },
+    ] as unknown as SessionEvent[];
+
+    normalizeToCurrentShape(events);
+
+    expect((events[0] as unknown as { ignorable?: true }).ignorable).toBe(true);
+    // 上游已知的类型不动：它是必需事件，不该被当作可忽略的。
+    expect((events[1] as unknown as { ignorable?: true }).ignorable).toBeUndefined();
+    expect(
+      needsShapeAdoption([
+        { type: "session-mode/selected", seq: SessionSeq(0), time: 0, data: {} },
+      ] as unknown as SessionEvent[]),
+    ).toBe(true);
+  });
+
   it("flags only the retired own event types and the old message shapes", () => {
     expect(
-      hasLegacyShape([
+      needsShapeAdoption([
         { type: "session-branch/version", seq: SessionSeq(0), time: 0, data: {} },
       ] as unknown as SessionEvent[]),
     ).toBe(true);
     expect(
-      hasLegacyShape([
+      needsShapeAdoption([
         {
           type: "system/message",
           seq: SessionSeq(0),
@@ -222,7 +242,7 @@ describe("旧代消息形状的读取", () => {
     ).toBe(false);
     // 未知的**别家**类型不是「旧形状」：它们保持 fail loud（那可能是更新版本的 harness 写的）。
     expect(
-      hasLegacyShape([
+      needsShapeAdoption([
         { type: "some-future/event", seq: SessionSeq(0), time: 0, data: {} },
       ] as unknown as SessionEvent[]),
     ).toBe(false);
@@ -240,6 +260,32 @@ describe("旧代消息形状的读取", () => {
       expect(system?.data.message?.source?.kind).toBe("system-prompt");
       const tool = events.find((event) => event.type === "tool/result");
       expect(tool?.data.message?.role).toBe("tool");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("loads a session carrying our own current event type (session-mode/selected)", async () => {
+    // 上游的持久化校验只放行「已知类型」或「带可忽略信封的未知类型」，而我们自造的类型按构造就在已知表之外：
+    // 会话里一旦有它，读路径必须先把信封补上（真回归：漏登记时整个会话打不开）。
+    const path = await freshDbPath();
+    const { persistence, load, dispose } = await openHarness(path);
+    try {
+      await persistence.createAndAppend(meta("own-current-event"), [
+        ...currentShapeLog(),
+        {
+          type: "session-mode/selected",
+          seq: SessionSeq(4),
+          time: 5,
+          data: { sessionMode: "chat" },
+        },
+      ] as unknown as SessionEvent[]);
+
+      const { events } = await load("own-current-event");
+
+      const selected = events.find((event) => event.type === "session-mode/selected");
+      expect(selected).toBeDefined();
+      expect((selected as unknown as { ignorable?: true }).ignorable).toBe(true);
     } finally {
       await dispose();
     }

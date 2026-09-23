@@ -52,6 +52,10 @@
 - id: ui-chat
   config:
     transcriptView: expanded
+- id: agent-preset-registry
+  disabled: true
+- id: ui-agent-preset
+  disabled: true
 - id: preset-standard
   disabled: true
 - id: preset-ptc
@@ -59,4 +63,6 @@
 - id: preset-minimal
   disabled: true
 - id: preset-cordis
+  disabled: true
+- id: fs-observation-policy
   disabled: true

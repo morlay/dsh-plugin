@@ -418,16 +418,16 @@ describe("技能也跟着工具走", () => {
     await ctx.plugin(ContextAssembler);
     await ctx.plugin(SkillCatalog);
 
-    const key = { preset: "chat" };
-    const standing = createScope(ctx, key);
-    await mountToolRows(standing.ctx, installed);
-    await standing.ctx.plugin(ContextScope, { allowTools: [...allowed] });
-    await standing.ctx.plugin(plugin, { groups: true });
+    // 工具行装在 host 平面（`dsh.profile.bundles` 列出 toolkit 的形状），收口按会话推给 scope 出口。
+    await mountToolRows(ctx, installed);
+    await ctx.plugin(plugin, { groups: true });
+    await ctx.plugin(ContextScope);
     const handle = await ctx.agents.create({
       sessionId: SessionId(`tool-guidance-scope-${Date.now()}-${Math.random()}`),
-      setup: async (agentCtx: Context) => {
-        bindScopeParent(scopeOf(agentCtx)!, key);
-      },
+    });
+    ctx.sessionToolScope.apply(handle.agent, {
+      name: "测试模式",
+      allowTools: [...allowed],
     });
 
     return { ctx, agent: handle.agent };

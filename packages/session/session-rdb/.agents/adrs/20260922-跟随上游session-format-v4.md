@@ -39,12 +39,13 @@
 
 修法：回退视图补上 v4 形状归一（`normalizeToCurrentShape`）——`system/message` 的 source 归一为
 `system-prompt`、`tool/result` 的消息从 v3 形状（user 角色 + 结果块包在 `content[0]`）抬成 v4 形状
-（`role: 'tool'` + 顶层 `toolCallId`）、`LEGACY_OWN_EVENT_TYPES` 白名单里的事件标 `ignorable: true`。
+（`role: 'tool'` + 顶层 `toolCallId`）、白名单里的事件标 `ignorable: true`（当时的名字是 `LEGACY_OWN_EVENT_TYPES`，现名 `OWN_EVENT_TYPES`：
+除历史遗留外还含我们当前在写的自造类型，如 `session-mode/selected`）。
 白名单只认我们自己写过、上游已删除的类型——**其它未知类型保持 fail loud**（那是「数据来自更新版本的
 harness」的信号，不能用 ignorable 吞掉）。
 
 另一类是**版本号不可信**：写路径曾把回退视图的结果以当前版本号落库，于是库里存在「v4 标记 + 旧代形状」
-的行（本次 7 个）。读路径因此在当前格式分支里、`scanRows` 之后按内容再判一次（`hasLegacyShape`），
+的行（本次 7 个）。读路径因此在当前格式分支里、`scanRows` 之后按内容再判一次（`hasLegacyShape`，现名 `needsShapeAdoption`），
 命中就走同一条归一。检测必须在扫干净的边界之内做——撕裂尾部与坏行由 `scanRows` 先丢掉，否则检测本身
 会撞上坏 JSON。
 

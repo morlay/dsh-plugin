@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session modes",
+    "description": "The coding / chat modes as one row of data (persona plus the allowed tools); the host applies the current one per session, and the new-session chip plus the header label replace the official agent-preset surface."
+  }
+}

@@ -5,8 +5,9 @@
  * （`@morlay/dsh-agent-toolkit/guidance`，在别的包里）与 skill 目录这类消费者都在别的行上
  * `inject` 它，隔离会把它们挡在组外（行停在 waiting，不报错）。
  *
- * preset 只装 `scopeRow()`（模式的开关）：它 `inject` 通道，`ctx.get("contextAssembler")` 在 agent
- * 子树里可达，不需要另装一份通道。
+ * 本包自己的 bundle 只装通道（`PATCH_ROWS`）。模式的收口是另一行（`scopeRow()`），它由
+ * [`@morlay/dsh-session-mode`](../../../profile/dsh-session-mode/README.md) 的 patch 与模式定义一起装——
+ * 那一行的 config 就是模式清单。
  */
 
 /** 组装出口（包根）就是那个"按 config 装能力"的插件。 */
@@ -32,25 +33,25 @@ export function contextChannel(config?: Readonly<Record<string, unknown>>): Cont
 }
 
 /**
- * 模式开关那一行：`scope` 出口按 preset 配（工具白名单、instruction 总开关、动态快照开关）。
+ * 模式收口那一行：`scope` 出口按 `ctx.sessionModes` 的模式定义收口（工具白名单、instruction 总开关、
+ * 动态快照开关）。
  *
- * 通道在 profile 平面装一次，这一行只按模式收口（它 `inject` `contextAssembler`，
- * `ctx.get("contextAssembler")` 在 agent 子树里可达）。
+ * 行 id 用全名 `context-assembler-scope`：它的搭档是同一份装配里的 `context-assembler`（通道），两个 id 放在
+ * 一起才看得出这一行属于哪个包、做什么——`context-scope` 那种短名会被误当成 `ctx.contextScope` 之类的服务。
+ *
+ * 行本身**不带 config**：装哪些模式、每个模式收什么，都由 `session-mode` 行的 `config.modes` 决定，
+ * 这一行只把它落到会话上（`inject` `sessionModes`，由
+ * [`@morlay/dsh-session-mode`](../../../profile/dsh-session-mode/README.md) 的 patch 插一行）。
  */
-export function scopeRow(config?: Readonly<Record<string, unknown>>): {
-  readonly id: string;
-  readonly name: string;
-  readonly config?: Readonly<Record<string, unknown>>;
-} {
+export function scopeRow(): ContextRow {
   return {
-    id: "context-scope",
+    id: "context-assembler-scope",
     name: "@morlay/dsh-context-assembler/scope",
-    ...(config === undefined ? {} : { config }),
   };
 }
 
 /**
- * bundle patch 的行清单：通道一行（`scope` 是模式的开关，由 preset 装 `scopeRow()`）。
+ * bundle patch 的行清单：只有通道一行（模式收口那一行归 `session-mode` 的 patch 装）。
  *
  * 形态是 `insert`：这些行由本包提供给 host 平面。写成 `- id: x` 那种"改已有行"的形态时，装配期找不到
  * 目标行（只 warn 后跳过），通道根本没装上，引用它的行停在 waiting。

@@ -24,12 +24,12 @@ describe("context 行清单", () => {
     expect(row.name).toBe("@morlay/dsh-context-assembler");
   });
 
-  it("开关行：id 与 scope 出口对齐，config 原样透传", () => {
-    const row = scopeRow({ allowTools: ["read"], instructions: false });
+  it("模式收口行：id 用全名，且不带 config（模式是 session-mode 的事实）", () => {
+    const row = scopeRow();
 
-    expect(row.id).toBe("context-scope");
+    expect(row.id).toBe("context-assembler-scope");
     expect(row.name).toBe("@morlay/dsh-context-assembler/scope");
-    expect(row.config).toEqual({ allowTools: ["read"], instructions: false });
+    expect(row).not.toHaveProperty("config");
   });
 
   it("bundle patch 是这份清单渲染出来的", async () => {

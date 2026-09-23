@@ -8,9 +8,9 @@ import yaml from "js-yaml";
  * bundle patch 的内容：**配置初始化**——按 id 给行配值（`config` 覆盖）或按 id 关掉部署不要的行，**一行都不插**。
  *
  * 这里放的都是"所有模式理应一致"的部署事实：llm 路由、默认模型、界面语言与对话视图、欢迎提示版本、
- * 搜索后端的选择与 key 引用、沙箱规则的**值**，以及**关掉官方内置的四个 preset**
- * （`preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis`：本部署的模式只有
- * `@morlay/dsh-agent-preset` 注册的那两个，官方四个留着只会在选择器里多出四条没人用的组合）。
+ * 搜索后端的选择与 key 引用、沙箱规则的**值**，以及**关掉官方 agent preset 那一整套**
+ * （`agent-preset-registry`、`ui-agent-preset`、四个 shipped preset 行）与**先读后改**
+ * （`fs-observation-policy`：本部署不要这个前置检查）。
  *
  * 装配（插行 / 禁官方行）是各能力包自己的 bundle 的事：官方 `sandbox` / `fs-sandbox` 两行由
  * `@morlay/dsh-sandbox-local` 的 patch 禁用并插入自己，搜索后端的注册行由
@@ -20,7 +20,7 @@ import yaml from "js-yaml";
  * `profiles/<name>/cordis.patch.yml`（profile 的用户层）在**每个 bundle 层之后**应用，所以用户改设置
  * 仍然压得住这里：本层给的是默认值，不是锁。
  *
- * 自定义模式（coding / chat）也不在这里：它们由 `@morlay/dsh-agent-preset` 注册。
+ * 会话模式（coding / chat）也不在这里：它们由 `@morlay/dsh-session-mode` 的 `config.modes` 声明。
  *
  * 这里是生成物的真源：`cordis.patch.yml` 由 `renderPatch()` 写出，改动请改这份 TS，
  * 一致性由 `patch.spec.ts` 的断言兜住。
@@ -103,19 +103,27 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
     config: { provider: "ollama", model: "deepseek-v4.1-flash", reasoningEffort: "high" },
   },
   { id: "ui-chat", config: { transcriptView: "expanded" } },
-  // 关掉官方内置的四个 preset：行由上游 web-app bundle 的 presets 层插入，我们这一层在它之后。
-  // 留着它们，模式选择器里就有四条没人用的组合（且它们的通道面与我们的注入无关）。
+  // 关掉官方 agent preset 这一整套：host 侧的选择注册表、官方四个 shipped preset 行、客户端那三个面
+  // （选择器 / 头部标签 / 设置页 roster）。我们的模式与它的选择面在 `@morlay/dsh-session-mode`：模式是一行
+  // 数据，按会话应用。两套并行的模式机制留着只会互相打架——官方的每 revision 一棵 Loader 子树、还要
+  // isolate realm。
+  { id: "agent-preset-registry", disabled: true },
+  { id: "ui-agent-preset", disabled: true },
   { id: "preset-standard", disabled: true },
   { id: "preset-ptc", disabled: true },
   { id: "preset-minimal", disabled: true },
   { id: "preset-cordis", disabled: true },
+  // 先读后改（`fs-observation-policy`）直接禁掉：这是**部署级**取舍，本部署不做这个前置检查。原先那行
+  // 按模式抵消的 `relax-intent` 随之退出（它只能抢 waterfall，代价是一条顺序敏感的行与一份归属判据）。
+  { id: "fs-observation-policy", disabled: true },
 ];
 // 这里**不再**按 id 禁用 `agent-instructions` / `tool-skill` / `skill-filesystem` / `office-to-pdf` 之类：
 // 上游 web-app bundle 自己把前两面设在 preset 平面（`disabled: true`，注释写明「工具与目录由 preset 自己
-// 挂」），我们的模式与官方 preset 都在各自的行里挂，host 这份再禁一次是重复动作；`office-to-pdf` 则回到
-// 上游原味（Sidebar 的 Office 预览标签页因此可用）。同理不再覆盖 `system-prompt` 的
-// `includeHarnessIdentity` / `includeRuntimeContext`：那是所有 preset 共享的部署偏好，按模式改提示词走
-// 各模式自己的 `persona` 行（注册 agent 作用域的同名 section）。
+// 挂」）；我们的那两面由 `@morlay/dsh-context-assembler`（工作区指令与 skill 目录）与
+// `@morlay/dsh-agent-toolkit`（技能发现 provider）的 bundle 在 profile 平面挂，host 这份再禁一次是重复
+// 动作；`office-to-pdf` 则回到上游原味（Sidebar 的 Office 预览标签页因此可用）。同理不再覆盖
+// `system-prompt` 的 `includeHarnessIdentity` / `includeRuntimeContext`：那是所有会话共享的部署偏好，
+// 按会话改提示词走模式自己的 persona（注册到该 agent 的 scope 上）。
 
 export const PATCH_FILE = "cordis.patch.yml";
 

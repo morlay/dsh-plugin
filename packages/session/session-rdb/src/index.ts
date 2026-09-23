@@ -72,7 +72,7 @@ import {
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
 import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts";
-import { hasLegacyShape } from "./log.ts";
+import { needsShapeAdoption, sealOwnEvents } from "./log.ts";
 import { installStorageTakeover } from "./storage-takeover/index.ts";
 
 /** 一批事件里的最大时间：写路径据此推进会话行的「最后活动时间」。 */
@@ -861,6 +861,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     await this.ready;
     if (events.length === 0) return false;
 
+    // 本仓库自造的事件类型落库前补上 `ignorable` 信封：不补的话上游那道校验连写入都拒。
+    sealOwnEvents(events);
     validateStoredEvents(meta, [...events]);
 
     const reuse = this.reuseEventIds.get(meta.id);
@@ -969,7 +971,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     const { preserved, tornFrom } = scanRows(eventRows, options.fromSeq ?? 0);
     // 版本号不完全可信：写路径曾把回退视图的结果以当前版本号落库，于是库里存在「v4 标记 + 旧代形状」
     // 的行——在扫干净的边界之内再按内容判一次（撕裂尾部与坏行已经被 `scanRows` 丢掉了）。
-    if (hasLegacyShape(preserved)) {
+    if (needsShapeAdoption(preserved)) {
       const adopted = adoptLegacyRows(row, eventRows);
       return {
         meta: adopted.meta,

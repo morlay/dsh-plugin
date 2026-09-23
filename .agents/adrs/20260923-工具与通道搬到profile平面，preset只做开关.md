@@ -1,6 +1,8 @@
 # 工具与通道搬到 profile 平面，preset 只做开关
 
-状态：已采纳（取代 [ADR-20260922-通道与注入行按模式isolate装配](../../packages/profile/dsh-agent-preset/.agents/adrs/20260922-通道与注入行按模式isolate装配.md) 的装配平面部分）
+状态：已采纳（取代 [ADR-20260922-通道与注入行按模式isolate装配](../../packages/profile/dsh-session-mode/.agents/adrs/20260922-通道与注入行按模式isolate装配.md) 的装配平面部分）（其中「preset 只剩提示词与开关」这半自 2026-09-24 起被
+[ADR 模式不再是 Cordis 子树](../../packages/profile/dsh-session-mode/.agents/adrs/20260924-模式不再是cordis子树.md) 取代：
+模式不再是 Cordis 子树，也不再走官方 agent preset；下面「preset 只剩…」读作「模式只剩…」）
 
 背景：`@morlay/dsh-agent-preset` 的两个模式原先**内联展开**工具行（`...TOOLKIT_ROWS`）并把注入通道关进各自的
 `isolate` 组——同一份工具清单在 toolkit 与 preset 两处装配，通道与注入方（含工具说明）也每个模式各一份。
@@ -44,6 +46,6 @@
 - 两个模式共享同一套通道注册表：`chat` 靠 `allowTools` 三件 + `instructions: false` + `runtimeContext: false`
   收口（它不再有 `groups: false` 这条——组正文按会话可见工具过滤，且它的 skill 目录被 instruction 开关关掉）。
 - `dsh.profile.bundles` 变成七个：`better-session` → `context-assembler` → `agent-toolkit` → `sandbox-local` →
-  `web-search-ollama` → `dsh-profile` → `agent-preset`（能力在前、配置与模式在后）。
+  `web-search-ollama` → `dsh-profile` → `session-mode`（能力在前、配置与模式在后）。
 - 老部署里若按 id 覆盖过通道组（`context-assembler-channel`）或模式内的工具行，需要跟着清掉：那些行现在由
   bundle 提供，模式里已不存在。

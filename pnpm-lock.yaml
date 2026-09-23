@@ -246,9 +246,6 @@ importers:
       '@morlay/better-session':
         specifier: workspace:*
         version: link:../../packages/session/better-session
-      '@morlay/dsh-agent-preset':
-        specifier: workspace:*
-        version: link:../../packages/profile/dsh-agent-preset
       '@morlay/dsh-agent-toolkit':
         specifier: workspace:*
         version: link:../../packages/profile/dsh-agent-toolkit
@@ -264,6 +261,9 @@ importers:
       '@morlay/dsh-sandbox-local':
         specifier: workspace:*
         version: link:../../packages/sandbox/dsh-sandbox-local
+      '@morlay/dsh-session-mode':
+        specifier: workspace:*
+        version: link:../../packages/profile/dsh-session-mode
       '@morlay/dsh-web-search-ollama':
         specifier: workspace:*
         version: link:../../packages/web/dsh-web-search-ollama
@@ -583,37 +583,6 @@ importers:
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
 
-  packages/profile/dsh-agent-preset:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-agent-toolkit':
-        specifier: workspace:*
-        version: link:../dsh-agent-toolkit
-      '@morlay/dsh-context-assembler':
-        specifier: workspace:*
-        version: link:../../context/dsh-context-assembler
-    devDependencies:
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/include
-      '@deepseek-ai/dsh-fs':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/fs/fs
-      '@deepseek-ai/dsh-persona':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/preset/persona
-      '@deepseek-ai/dsh-scope':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/scope
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.3.2
-
   packages/profile/dsh-agent-toolkit:
     dependencies:
       '@deepseek-ai/cordis':
@@ -741,6 +710,76 @@ importers:
       js-yaml:
         specifier: ^4.1.0
         version: 4.3.2
+
+  packages/profile/dsh-session-mode:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/include
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/api/session-controller
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/session/session-projection
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@morlay/dsh-agent-toolkit':
+        specifier: workspace:*
+        version: link:../dsh-agent-toolkit
+      '@morlay/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../session/ui-conversation
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-assembler
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.1
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
 
   packages/sandbox/dsh-sandbox-local:
     dependencies:
@@ -1773,7 +1812,7 @@ importers:
         version: 8.18.1
       '@vitejs/plugin-react':
         specifier: ^4.0.0
-        version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
       fflate:
         specifier: ^0.8.2
         version: 0.8.3
@@ -1797,7 +1836,7 @@ importers:
         version: 6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
       ws:
         specifier: 8.21.0
         version: 8.21.0
@@ -22792,7 +22831,7 @@ snapshots:
 
   '@ungap/structured-clone@1.4.0': {}
 
-  '@vitejs/plugin-react@4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitejs/plugin-react@4.7.0(supports-color@9.4.0)(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@9.4.0)
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7(supports-color@9.4.0))
@@ -22813,7 +22852,7 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.11(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitest/mocker@4.1.11(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
@@ -26528,10 +26567,10 @@ snapshots:
       tsx: 4.23.15
       yaml: 2.9.1
 
-  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@2.4.0))(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
       '@vitest/pretty-format': 4.1.11
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
