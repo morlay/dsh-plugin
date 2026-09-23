@@ -5,12 +5,20 @@ import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
 
 /**
- * bundle patch 的内容：**只做配置初始化**——按 id 给行配值（`config` 覆盖），一行都不插、一条都不禁。
+ * bundle patch 的内容：**配置初始化**——按 id 给行配值（`config` 覆盖）或按 id 关掉部署不要的行，**一行都不插**。
  *
- * 装配是各能力包自己的 bundle 的事：官方 `sandbox` / `fs-sandbox` 两行由
+ * 这里放的都是"所有模式理应一致"的部署事实：llm 路由、默认模型、界面语言与对话视图、欢迎提示版本、
+ * 搜索后端的选择与 key 引用、沙箱规则的**值**，以及**关掉官方内置的四个 preset**
+ * （`preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis`：本部署的模式只有
+ * `@morlay/dsh-agent-preset` 注册的那两个，官方四个留着只会在选择器里多出四条没人用的组合）。
+ *
+ * 装配（插行 / 禁官方行）是各能力包自己的 bundle 的事：官方 `sandbox` / `fs-sandbox` 两行由
  * `@morlay/dsh-sandbox-local` 的 patch 禁用并插入自己，搜索后端的注册行由
  * `@morlay/dsh-web-search-ollama` 的 patch 插入。patch 层按 `dsh.profile.bundles` 顺序叠加，所以 app 的
  * bundles 列表把这两个包排在本包**之前**——本包的 config 覆盖才找得到它们插的行。
+ *
+ * `profiles/<name>/cordis.patch.yml`（profile 的用户层）在**每个 bundle 层之后**应用，所以用户改设置
+ * 仍然压得住这里：本层给的是默认值，不是锁。
  *
  * 自定义模式（coding / chat）也不在这里：它们由 `@morlay/dsh-agent-preset` 注册。
  *
@@ -87,6 +95,20 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   },
   // 搜索后端的 key 引用：注册行由 `@morlay/dsh-web-search-ollama` 的 bundle 插，这里只配值。
   { id: "web-search-ollama", config: { apiKeyEnv: "OLLAMA_API_KEY" } },
+  // 界面语言、默认模型与对话视图：部署默认值（原先只活在 profile 的用户 patch 层里，新装机器拿不到，
+  // 换机器也要手工抄）。用户层后应用，改设置仍然覆盖得住。
+  { id: "locale", config: { preference: "zh" } },
+  {
+    id: "agent-default-model",
+    config: { provider: "ollama", model: "deepseek-v4.1-flash", reasoningEffort: "high" },
+  },
+  { id: "ui-chat", config: { transcriptView: "expanded" } },
+  // 关掉官方内置的四个 preset：行由上游 web-app bundle 的 presets 层插入，我们这一层在它之后。
+  // 留着它们，模式选择器里就有四条没人用的组合（且它们的通道面与我们的注入无关）。
+  { id: "preset-standard", disabled: true },
+  { id: "preset-ptc", disabled: true },
+  { id: "preset-minimal", disabled: true },
+  { id: "preset-cordis", disabled: true },
 ];
 // 这里**不再**按 id 禁用 `agent-instructions` / `tool-skill` / `skill-filesystem` / `office-to-pdf` 之类：
 // 上游 web-app bundle 自己把前两面设在 preset 平面（`disabled: true`，注释写明「工具与目录由 preset 自己

@@ -83,10 +83,65 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     ).toBe(true);
   });
 
-  it("一行都不插、一条都不禁：本层只有按 id 的 config 覆盖", () => {
+  it("只按 id 动别人插的行：一行都不插，禁的只有官方四个 preset", () => {
     expect(rows.flatMap((row) => row.insert ?? [])).toEqual([]);
-    expect(rows.filter((row) => row.disabled === true)).toEqual([]);
-    for (const row of rows) expect(row.config).toBeTruthy();
+    expect(rows.filter((row) => row.disabled === true).map((row) => row.id)).toEqual([
+      "preset-standard",
+      "preset-ptc",
+      "preset-minimal",
+      "preset-cordis",
+    ]);
+    for (const row of rows.filter((row) => row.disabled !== true)) expect(row.config).toBeTruthy();
+  });
+
+  it("三项默认值：界面语言、默认模型、对话视图", () => {
+    expect(rowById(rows, "locale")?.config).toEqual({ preference: "zh" });
+    expect(rowById(rows, "agent-default-model")?.config).toEqual({
+      provider: "ollama",
+      model: "deepseek-v4.1-flash",
+      reasoningEffort: "high",
+    });
+    expect(rowById(rows, "ui-chat")?.config).toEqual({ transcriptView: "expanded" });
+  });
+
+  it("组合上游 web-app 层后：三项默认值确实落在对应行上", async () => {
+    // `locale` / `ui-chat` 由 web-app 层设置，`agent-default-model` 由 base 层设置。
+    const composed = composeLayers([
+      await loadPatchRows(UPSTREAM_BASE_PATCH),
+      ...(await webAppLayers()),
+      rows,
+    ]);
+
+    expect(rowById(composed, "locale")?.config).toEqual({ preference: "zh" });
+    expect(rowById(composed, "agent-default-model")?.config).toEqual({
+      provider: "ollama",
+      model: "deepseek-v4.1-flash",
+      reasoningEffort: "high",
+    });
+    expect(rowById(composed, "ui-chat")?.config).toEqual({ transcriptView: "expanded" });
+  });
+
+  it("禁用官方四个 preset：它们确实由上游 presets 层插入，且组合后真的被关掉", async () => {
+    const shipped = composeLayers(await webAppLayers());
+    const shippedIds = new Set(
+      shipped.flatMap((row) => [
+        ...(row.id === undefined ? [] : [row.id]),
+        ...(row.insert ?? []).flatMap((entry) => (entry.id === undefined ? [] : [entry.id])),
+      ]),
+    );
+
+    for (const id of ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"]) {
+      expect(shippedIds.has(id), `上游 presets 层没有 ${id}`).toBe(true);
+    }
+
+    const composed = composeLayers([...(await webAppLayers()), rows]);
+
+    for (const id of ["preset-standard", "preset-ptc", "preset-minimal", "preset-cordis"]) {
+      expect(rowById(composed, id)?.disabled, id).toBe(true);
+    }
+    // 我们自己的模式仍是启用的（禁的是官方四个，不是"关掉全部"）。
+    expect(rowById(composed, "preset-coding")?.disabled).not.toBe(true);
+    expect(rowById(composed, "preset-chat")?.disabled).not.toBe(true);
   });
 
   it("配置覆盖的目标行都存在：上游行（llm-pi-ai / ui-settings-general / web）或能力 bundle 的行", async () => {
@@ -110,7 +165,7 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     }
   });
 
-  it("不碰 modes 的那些行：模式注册与 host 行开关都不在这里", () => {
+  it("模式注册不在这里：本层只关官方四个 preset，不碰我们自己的注册行", () => {
     const ids = rows.flatMap((row) => [row.id, ...(row.insert ?? []).map((entry) => entry.id)]);
 
     expect(ids).not.toContain("preset-coding");

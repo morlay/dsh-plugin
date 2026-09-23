@@ -41,3 +41,22 @@
 - id: web-search-ollama
   config:
     apiKeyEnv: OLLAMA_API_KEY
+- id: locale
+  config:
+    preference: zh
+- id: agent-default-model
+  config:
+    provider: ollama
+    model: deepseek-v4.1-flash
+    reasoningEffort: high
+- id: ui-chat
+  config:
+    transcriptView: expanded
+- id: preset-standard
+  disabled: true
+- id: preset-ptc
+  disabled: true
+- id: preset-minimal
+  disabled: true
+- id: preset-cordis
+  disabled: true
