@@ -13,8 +13,8 @@ dsh plugin --profile web add "@morlay/better-session"
 
 安装自动带上全部子包（`@morlay/session-branch`、`@morlay/session-rdb`、
 `@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、
-`@morlay/dsh-client-ui-conversation`、`@morlay/dsh-client-ui-primitives`），并由 bundle 的 patch
-（`cordis.patch.yml`）自动装配：
+`@morlay/dsh-client-ui-conversation`、`@morlay/dsh-client-ui-primitives`、`@morlay/dsh-reference`），
+并由 bundle 的 patch（`cordis.patch.yml`）自动装配：
 
 - `ctx.sessionPersistence` ← RDB（SQLite / PostgreSQL）持久化后端
 - `ctx.sessionBranch` ← rewind / fork 数据层

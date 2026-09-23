@@ -1,8 +1,9 @@
 # @morlay/dsh-session-mode
 
 会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）加一组能力开关。本包把它按会话应用到
-会话自己的作用域上，并提供页面上的选择面。**模式不是 Cordis 子树**，官方 agent preset 那一整套
-（`agent-preset-registry` / `agent-preset` 行 / `dsh-client-ui-agent-preset`）在部署里被禁用。
+会话自己的作用域上，并提供页面上的选择面。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
+关掉，禁哪些行归 [`@morlay/dsh-profile`](../dsh-profile/README.md)（真源 `tool/patch.ts` 的 `PATCH_ROWS`），
+本包不复述清单。
 
 `cordis.patch.yml` 是这里唯一装配的东西：两行。
 
@@ -40,6 +41,8 @@
 | `allowTools`           | `context-assembler-scope` 收口：模型目录、`tool:<名字>` 说明、执行层 guard                   |
 | `instructions`         | 同上：`false` 表示这个会话不要任何 instruction 类注入（工作区指令、技能目录、用法正文）      |
 | `runtimeContext`       | 同上：`false` 表示不要动态快照（文件沙箱策略、审批策略）                                     |
+
+模式名与说明是数据、不做语言翻译（`tool/modes.ts` 里只有中文）——取舍如此，不是漂移。
 
 **自定义就是改这份 config**：profile 的用户 patch 层可以整体改写 `config.modes`，也可以只给某个模式换提示词或
 白名单——不需要任何插件行。默认模式（`default`）也在这里：它与模式清单是同一个事实的两半。装配期的判据

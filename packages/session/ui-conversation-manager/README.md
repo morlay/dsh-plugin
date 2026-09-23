@@ -54,8 +54,9 @@ GC 是唯一会**停止所有运行中 agent** 的动作：确认后进入不可
 
 时间范围的按钮与维度 tab 共用**同一套官方 tab 条视觉**（文字 13/16 wt500、选中态品牌蓝 + 2px 下划线，
 取自会话头部的 `ConversationRoot.module.css`），只在其语义上用 `radiogroup`（单选筛选）区别于维度的 `tab`；
-**不用 `Pill`**——官方 `ui-primitives` README 写明它的选中态是按钮填充风格（`button-ghost-active-fill` + 内描边），
-且视图切换应使用消费方自有的 tab 条组合，`Pill` 在官方代码里只用于只读状态（`TerminalBlock`）。
+**不用 `Pill`**——官方 `ui-primitives` README 里 `Pill` 是「视图切换与筛选用法的可选中胶囊」（只读 capsule 是
+`Tag`），官方那件互斥择一的选择件是 `SegmentedControl`（受控 tab 形态 `SegmentedTabs`）；我们这里是**单选筛选**：
+视觉取 tab 条、语义用 `radiogroup`。
 
 统计的每一行（总览与列表）是同一形态：行 label + 横向排布的单项，所以读法一致——
 「`data-usage-key=2026-09-14` 行里 `data-usage-cell=input` 的 `data-usage-value`」。

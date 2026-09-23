@@ -26,9 +26,9 @@
 
 ## 未覆盖（有明确原因）
 
-- `client/apply.ts`（插件装配 + slots 注册）的**行为**、`client/skeleton/*`（`ConversationRoot` /
-  `ConversationSession` / `InputBar` 等）、`client/service.ts`（`ConversationController`）的
-  **slot 装配面**需要 cordis client 运行时（slots 声明者 / 注册表、locale、renderer、sessions 面），
+- `client/apply.ts`（插件装配 + slots 注册）的**行为**、`client/index.ts` 与
+  `client/contract/input.ts`（`Context.input` 收窄）的 **slot 装配面**
+  需要 cordis client 运行时（slots 声明者 / 注册表、locale、renderer、sessions 面），
   而上游 client 半是浏览器模块工厂，node / jsdom 不可加载。上游 0.1.7 起有可用的 client harness
   （`@deepseek-ai/dsh-client-test-runtime` 的 `SlotTestRuntime`，本包已试通），但它会把官方 ui-conversation
   的类型拉进同一个 program、与 fork 的收窄声明撞 TS2717——见[债务 临时接管上游对话UI的client半](../debts/20260917-临时接管上游对话UI的client半.md)

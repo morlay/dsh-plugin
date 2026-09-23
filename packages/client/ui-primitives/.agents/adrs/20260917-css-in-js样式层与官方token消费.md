@@ -31,7 +31,7 @@ token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上
 | 选项                                                     | 代价                                                                                              |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | 继续用上游 CSS Modules                                   | 需要预编译；样式与组件分离；与「源码直接加载」的目标相悖                                          |
-| 手写一份常用 token 清单                                  | 359 个变量里跟不住上游增删，漂移无人守                                                            |
+| 手写一份常用 token 清单                                  | 367 个变量里跟不住上游增删，漂移无人守                                                            |
 | 移植参考实现的原样（`@tspkg/runtime` + `@ark-ui/react`） | 多两个运行时依赖；其 `signal`/`produce`/`effect` 只为 Provider 响应式服务，`ark` 只为 polymorphic |
 | **生成 token 树 + 轻量 styled（选定）**                  | 每次上游主题变化重跑生成器；换来类型化访问与零预编译                                              |
 
@@ -42,4 +42,5 @@ token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上
 - 不提供 Provider：我们的组件由上游 `ChatView` 渲染，没有自己的渲染根；注入因此做成惰性立即注入。
 - `styled` 不做 polymorphic（无 `as` / `asChild`）：需要换元素时 `styled('a')` 或包一层组件。
 - 值只在生成物里（默认值），运行时不重新定义官方变量——主题切换仍由官方 `--dsw-*` 覆盖完成。
-- 后续：fork 包逐个把 CSS Modules 换成 `styled` + `dsw`。
+- 反转：fork 包的 `.styles.ts` 已全部回退上游 CSS Modules——`styled` / `dsw` 现在只被本仓库自有的 client
+  组件消费（`session/ui-conversation-manager`、`session/ui-conversation-message-actions`）。

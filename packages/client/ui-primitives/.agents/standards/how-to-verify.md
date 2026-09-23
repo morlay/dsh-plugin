@@ -16,5 +16,5 @@
 
 ## 判据
 
-- 样式 / token 的**机制**在这一层测；别的包只消费——薄壳 fork 的 `.styles.ts` / locale 数据表**不重复测**，
+- 样式 / token 的**机制**在这一层测；别的包只消费——locale 数据表**不重复测**，
   口径见 [ui-conversation 的验证规范](../../../../../packages/session/ui-conversation/.agents/standards/how-to-verify.md)。
