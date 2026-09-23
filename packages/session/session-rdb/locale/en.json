@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "RDB Session Backend",
+    "description": "Durable session backend on a relational database: implements both the persistence and the branch providers."
+  }
+}

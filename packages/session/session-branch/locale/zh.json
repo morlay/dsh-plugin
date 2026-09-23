@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "会话分支契约",
+    "description": "会话分支的契约层：rewind / retry / fork 的 provider 抽象与服务。"
+  }
+}

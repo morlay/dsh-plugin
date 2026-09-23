@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenAI 兼容 LLM 适配",
+    "description": "OpenAI 兼容端点的 LLM 适配器：可在 providers 上配置默认采样参数。"
+  }
+}

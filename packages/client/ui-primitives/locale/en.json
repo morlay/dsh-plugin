@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "UI Primitives",
+    "description": "css-in-js styling layer plus the shared reference parser and renderer for the forked conversation UI."
+  }
+}

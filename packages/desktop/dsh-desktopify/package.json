@@ -19,6 +19,7 @@
     "dsh-desktopify": "./src/cli/index.ts"
   },
   "files": [
+    "locale/*.json",
     "dist"
   ],
   "type": "module",
@@ -27,7 +28,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./dev-client-bundles": "./src/dev-client/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "bin": {
@@ -36,7 +38,8 @@
     "exports": {
       ".": "./dist/index.mjs",
       "./dev-client-bundles": "./dist/dev-client-bundles.mjs",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {

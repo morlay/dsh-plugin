@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "引用展开",
+    "description": "把用户消息里的 `@path` / `skill:name` 引用在 pre-step 展开成注入内容。"
+  }
+}

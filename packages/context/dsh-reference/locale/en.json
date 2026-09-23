@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Reference Expansion",
+    "description": "Expands `@path` / `skill:name` references in a user message into injected content at pre-step."
+  }
+}

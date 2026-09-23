@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Branch",
+    "description": "Provider abstraction and service for rewind / retry / fork over event-sourced sessions."
+  }
+}

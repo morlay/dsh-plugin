@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktopify",
+    "description": "Packages a dsh workspace as a desktop app: dev and static bundle modes over an Electron shell."
+  }
+}

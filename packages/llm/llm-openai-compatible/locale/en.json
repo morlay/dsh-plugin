@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenAI-Compatible LLM",
+    "description": "OpenAI-compatible LLM adapter with configurable default sampling parameters over a providers dict."
+  }
+}

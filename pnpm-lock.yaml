@@ -274,6 +274,9 @@ importers:
         specifier: 7.x
         version: 7.0.2
     devDependencies:
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/boot/app-boot
       lightningcss:
         specifier: ^1.32.0
         version: 1.33.0

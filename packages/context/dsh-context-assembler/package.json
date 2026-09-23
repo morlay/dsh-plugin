@@ -15,6 +15,7 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
+    "locale/*.json",
     "dist",
     "src",
     "tool",
@@ -31,7 +32,8 @@
     "./scope": "./src/scope/index.ts",
     "./package.json": "./package.json",
     "./rows": "./src/rows.ts",
-    "./cordis.patch.yml": "./cordis.patch.yml"
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
@@ -43,7 +45,8 @@
       "./scope": "./dist/scope.mjs",
       "./package.json": "./package.json",
       "./rows": "./dist/rows.mjs",
-      "./cordis.patch.yml": "./cordis.patch.yml"
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {

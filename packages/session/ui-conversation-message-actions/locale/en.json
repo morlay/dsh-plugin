@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Message Actions",
+    "description": "Rewind / retry / fork orchestration on the host side, plus the user-bubble renderer replacement in the browser."
+  }
+}

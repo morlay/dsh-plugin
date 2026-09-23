@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "消息动作",
+    "description": "host 侧的 rewind / retry / fork 编排，以及浏览器侧 user 消息气泡的渲染替换。"
+  }
+}

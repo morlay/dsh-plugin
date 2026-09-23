@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "会话编辑装配",
+    "description": "把 rdb 持久化与对话 UI 接管装进 web profile：rewind / retry / fork 闭环。"
+  }
+}

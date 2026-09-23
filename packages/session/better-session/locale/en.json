@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Editing",
+    "description": "Assembles the RDB session backend and the conversation UI takeover into a web profile: rewind / retry / fork closed loop."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "UI 基础层",
+    "description": "css-in-js 样式层，以及被 fork 的对话 UI 共用的引用解析与渲染转换。"
+  }
+}

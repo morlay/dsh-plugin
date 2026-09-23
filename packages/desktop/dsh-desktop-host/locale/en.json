@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop Host",
+    "description": "Desktop host process: boots the desktop profile and serves it through an in-process, portless webServer over byte pipes."
+  }
+}

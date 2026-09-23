@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "桌面宿主进程",
+    "description": "桌面部署的 host 进程：按 desktop profile 装配，经字节管道交给宿主内无端口的 webServer。"
+  }
+}

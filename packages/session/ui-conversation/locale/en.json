@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conversation Shell",
+    "description": "Thin-shell fork of the upstream conversation UI: only the files we changed are kept, the rest is inlined from vendored upstream source."
+  }
+}

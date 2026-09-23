@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Profile Config",
+    "description": "Configuration layer of the profile: llm route, default model, locale, search backend and sandbox rules as config values, plus the shipped presets it turns off."
+  }
+}

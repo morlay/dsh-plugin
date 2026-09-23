@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "桌面化工具",
+    "description": "把 dsh 工作区打包 / 运行为桌面应用：dev 与静态 bundle 两种形态，Electron 壳。"
+  }
+}

@@ -33,6 +33,11 @@
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
+- **插件清单的文案走 `./locale/*.json`**：每个发布包带 `locale/en.json`（基准，缺它别的语言不会被扫）与
+  `locale/zh.json`，内容形如 `{ "meta": { "title": …, "description": … } }`；`exports`、`publishConfig.exports`
+  都要暴露 `./locale/*.json`，`files` 里也带上。上游 `app-boot` 的 `readPluginMeta` 按包名 + 该出口读插件
+  清单页的标题与描述，漏一处就退化成 package.json 的英文 name/description。跨包守卫见
+  `devpackages/devkit/src/__tests__/plugin-locale.spec.ts`（直接用上游读取器实测每个发布包）。
 
 ## 代码约定
 

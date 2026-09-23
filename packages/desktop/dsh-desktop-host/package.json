@@ -16,6 +16,7 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
+    "locale/*.json",
     "lib",
     "config/desktop.cordis.patch.yml"
   ],
@@ -34,7 +35,8 @@
       "types": "./src/wire.ts",
       "default": "./lib/wire.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "scripts": {
     "build": "pnpm exec tsdown",
@@ -59,5 +61,10 @@
   },
   "engines": {
     "node": ">=24.11.0"
+  },
+  "publishConfig": {
+    "exports": {
+      "./locale/*.json": "./locale/*.json"
+    }
   }
 }

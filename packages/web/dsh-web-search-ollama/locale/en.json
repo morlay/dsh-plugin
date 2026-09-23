@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ollama Web Search",
+    "description": "Ollama-backed search provider for the web seam: web_search calls POST /api/web_search."
+  }
+}

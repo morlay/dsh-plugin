@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "对话外壳（薄壳 fork）",
+    "description": "上游对话外壳的薄壳 fork：只保留我们改过的文件，其余构建时从 vendor 上游源码内联。"
+  }
+}

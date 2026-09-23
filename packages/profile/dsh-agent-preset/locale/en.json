@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent Presets",
+    "description": "Registers the coding / chat agent presets: prompt and capability switches only, everything else is referenced."
+  }
+}
