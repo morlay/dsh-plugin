@@ -1,10 +1,5 @@
 # 本文件由 packages/context/dsh-context-assembler/tool/patch.ts 生成，请勿手工编辑
-- id: context-assembler-channel
-  name: cordis:group
-  group: true
-  isolate:
-    contextAssembler: true
-  config:
+- insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"
       config:

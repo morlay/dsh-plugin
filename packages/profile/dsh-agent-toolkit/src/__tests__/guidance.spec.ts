@@ -404,10 +404,10 @@ describe("模式只给一部分工具时（chat 形态）", () => {
 
 describe("技能也跟着工具走", () => {
   /**
-   * 只装这几个工具（preset 作用域）并把白名单收在同一作用域，返回该会话的技能目录正文：
-   * 目录本身就是注入通道的一条规则块（id `skill-catalog`）。
+   * 装 `installed` 的工具行、把模式白名单设成 `allowed`（缺省同一份），返回该会话的 ctx 与 agent。
+   * 收口判据必须分开给：注册表里"装着"不等于模式里"可以用"。
    */
-  async function catalogFor(tools: string[]): Promise<string> {
+  async function sessionFor(installed: readonly string[], allowed: readonly string[] = installed) {
     const ctx = new Context();
     contexts.push(ctx);
     await mountAgentLoopTestDependencies(ctx, {
@@ -420,17 +420,26 @@ describe("技能也跟着工具走", () => {
 
     const key = { preset: "chat" };
     const standing = createScope(ctx, key);
-    await mountToolRows(standing.ctx, tools);
-    await standing.ctx.plugin(ContextScope, { allowTools: tools });
+    await mountToolRows(standing.ctx, installed);
+    await standing.ctx.plugin(ContextScope, { allowTools: [...allowed] });
     await standing.ctx.plugin(plugin, { groups: true });
     const handle = await ctx.agents.create({
-      sessionId: SessionId(`tool-guidance-requires-${Date.now()}-${Math.random()}`),
+      sessionId: SessionId(`tool-guidance-scope-${Date.now()}-${Math.random()}`),
       setup: async (agentCtx: Context) => {
         bindScopeParent(scopeOf(agentCtx)!, key);
       },
     });
 
-    return bodyOf(await preStep(ctx, handle.agent, [prompt("任务")]), "skill-catalog");
+    return { ctx, agent: handle.agent };
+  }
+
+  /** 该会话的技能目录正文：目录本身就是注入通道的一条规则块（id `skill-catalog`）。 */
+  async function catalogFor(
+    installed: readonly string[],
+    allowed: readonly string[] = installed,
+  ): Promise<string> {
+    const { ctx, agent } = await sessionFor(installed, allowed);
+    return bodyOf(await preStep(ctx, agent, [prompt("任务")]), "skill-catalog");
   }
 
   const CHAT_TOOLS = ["ask_user_question", "web_search", "web_fetch"];
@@ -438,7 +447,11 @@ describe("技能也跟着工具走", () => {
   it("依赖的工具都没装时，该组的 skill 不进技能目录", async () => {
     // 三个对话工具 + 一个子代理控制工具：flow 组（todo_write / goal / present）一个都没装，
     // Agent Teams 也没装——`send_message` 是子代理控制行提供的同名工具，不是 team 组的入口。
-    const body = await catalogFor([...CHAT_TOOLS, "send_message"]);
+    // 白名单里带上 `skill`：目录自己注册的那个工具也得模式允许，才谈得上列条目。
+    const body = await catalogFor(
+      [...CHAT_TOOLS, "send_message"],
+      [...CHAT_TOOLS, "send_message", "skill"],
+    );
 
     expect(body).toContain("tool-group-delegation");
     expect(body).not.toContain("tool-group-team");
@@ -447,14 +460,40 @@ describe("技能也跟着工具走", () => {
     expect(body).not.toContain("tool-group-base");
   });
 
-  it("装了团队插件独有的入口工具，team 组才进技能目录", async () => {
-    const body = await catalogFor([
+  it("工具装着但不在白名单里：组不进目录，常驻正文也不讲它", async () => {
+    // 注册表里装了一整套（流程、派发、团队入口都在），白名单只留对话那三件。
+    const installed = [
       ...CHAT_TOOLS,
-      "send_message",
+      "todo_write",
+      "get_goal",
+      "present",
+      "subagent",
+      "subagent_fork",
+      "workflow",
       "spawn_teammate",
+      "send_message",
       "team_task_create",
       "wait_agent",
-    ]);
+    ];
+    // 白名单允许目录自己那个 `skill` 工具，但别的工具一律收窄。
+    const { ctx, agent } = await sessionFor(installed, [...CHAT_TOOLS, "skill"]);
+    const messages = await preStep(ctx, agent, [prompt("任务")]);
+
+    // 组 skill 的入口工具都在白名单外：一个组都不该进目录。
+    expect(bodyOf(messages, "skill-catalog")).not.toContain("tool-group-");
+
+    // 常驻的 base 正文也只讲白名单里的工具（"装着"不等于"能用"）。
+    const base = bodyOf(messages, "tool-group-base");
+    expect(base.length).toBeGreaterThan(0);
+    expect(base).not.toContain("todo_write：");
+    expect(base).not.toContain("subagent：");
+  });
+
+  it("装了团队插件独有的入口工具，team 组才进技能目录", async () => {
+    const body = await catalogFor(
+      [...CHAT_TOOLS, "send_message", "spawn_teammate", "team_task_create", "wait_agent"],
+      [...CHAT_TOOLS, "send_message", "spawn_teammate", "team_task_create", "wait_agent", "skill"],
+    );
 
     expect(body).toContain("tool-group-team");
     expect(body).toContain("tool-group-delegation");

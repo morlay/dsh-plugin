@@ -37,4 +37,4 @@ _避免使用_：工具描述
 
 **直接派发 / 团队**：
 两种"把活派出去"的形态：`subagent` / `subagent_fork`（直接派发）与 Agent Teams（`spawn_teammate` 那套）。
-它们互斥，由 `DSH_AGENT_TEAM=1` 选一套（见 [`agent-team` 出口](../src/agent-team.ts)）。
+它们互斥，由 `DSH_AGENT_TEAM=1` 选一套（行清单见 [`TEAM_ROWS`](../src/rows.ts)，`agent-team` 出口转发）。

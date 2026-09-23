@@ -15,7 +15,11 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { writeAppConfig } from "../appconfig.ts";
-import { ensureClientBundlePlaceholders, installProfilePatch } from "./dev-web.ts";
+import {
+  ensureClientBundlePlaceholders,
+  installProfilePatch,
+  syncProfileBundles,
+} from "./dev-web.ts";
 import {
   DSH_PACKAGE,
   desktopHost,
@@ -272,7 +276,10 @@ async function prepareWebProfile(
       },
     );
   }
-  return join(home, "profiles", "web");
+  const profileDir = join(home, "profiles", "web");
+  // 装配清单归 app 定义：profile 里那份是种子时写的，不跟随后来的改动，而 patch 层顺序按它排。
+  await syncProfileBundles(profileDir, mergedProfileBundles(manifest));
+  return profileDir;
 }
 
 function resolveLinkTarget(workspace: string, packageName: string): string {

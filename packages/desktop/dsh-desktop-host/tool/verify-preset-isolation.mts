@@ -1,22 +1,24 @@
 /**
- * 探针：装配一次真实 web profile，检查**每个 preset 的 isolate realm 里有没有我们的注入通道**。
+ * 探针：装配一次真实 web profile，检查**注入通道的装配平面**与模式差异的落点。
  *
- * 为什么需要它：`ctx.contextAssembler` 曾经住 host 层（「部署级一份、一行覆盖全部 preset」），
- * 于是我们 preset 里那些注入行的注册漏进了官方 standard / ptc / minimal / cordis 的会话——工作区
- * 指令、skill 目录、工具用法分组、引用材料全都照注入，静态断言与单测都看不见（它们只看行清单）。
- * 改成每个模式自带一份、关进 `isolate` 组以后，判据变成"只有我们自己的 preset 有这份服务"。
+ * 判据（2026-09-23）：通道是**全局一份**——装配层可见 `contextAssembler`，而没有任何 preset mount 里
+ * 再发布一份。模式之间的差异由 `context-scope` 行表达（工具白名单 / instruction / 动态快照开关），
+ * 不在通道上。
+ *
+ * 历史：2026-09-22 的判据相反（"root realm 读不到通道、只有我们把通道关在模式子树里"），那是为了挡住
+ * 注入漏进官方 preset 的会话。官方四个 preset 被禁用之后（`preset-standard` / `ptc` / `minimal` /
+ * `cordis` 行 disabled），这个前提不再成立；隔离反而把**跨包的消费者**挡在服务之外——
+ * `@morlay/dsh-agent-toolkit` 的工具说明行住在别的包，`inject` 不到被关住的通道（行停在 waiting）。
+ * 见 [ADR 通道作为全局服务装配不隔离](../../context/dsh-context-assembler/.agents/adrs/20260923-通道作为全局服务装配不隔离.md)。
  *
  * 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
  *
  * ```sh
- * just profile
+ * pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-preset-isolation.mts
  * ```
  *
  * 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
  * `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不会改，也不建会话。
- *
- * 判据：root realm 里读不到 `contextAssembler`；每个 preset mount 的子树里，只有我们自己的模式
- * （`OWN_PRESETS`）有它。
  */
 
 import { access } from "node:fs/promises";
@@ -95,10 +97,12 @@ function servicesOf(mount: { fiber: unknown }): Set<string> {
 
 const rootChannel = (ctx as unknown as { contextAssembler?: unknown }).contextAssembler;
 console.log(
-  `verify-preset-isolation: root realm 的 contextAssembler — ${rootChannel === undefined ? "不可见" : "可见（泄漏！）"}`,
+  `verify-preset-isolation: 装配层的 contextAssembler — ${rootChannel === undefined ? "不可见（通道没装上？）" : "可见（全局一份）"}`,
 );
-if (rootChannel !== undefined) {
-  failures.push("contextAssembler is visible in the root realm; it must live inside the preset isolate realm");
+if (rootChannel === undefined) {
+  failures.push(
+    "contextAssembler is missing from the assembly plane; the channel row must publish one global instance",
+  );
 }
 
 const mounts = livePresetMounts();
@@ -107,14 +111,11 @@ for (const mount of mounts) {
   const own = OWN_PRESETS.includes(mount.presetId);
   const hasChannel = services.has("contextAssembler");
   console.log(
-    `verify-preset-isolation: preset ${mount.presetId} — ${own ? "自有" : "官方"}，通道 ${hasChannel ? "有" : "无"}`,
+    `verify-preset-isolation: preset ${mount.presetId} — ${own ? "自有" : "官方"}，通道 ${hasChannel ? "又一份（回归！）" : "无"}`,
   );
-  if (own && !hasChannel) {
-    failures.push(`preset ${mount.presetId} has no contextAssembler in its own isolate realm`);
-  }
-  if (!own && hasChannel) {
+  if (hasChannel) {
     failures.push(
-      `preset ${mount.presetId} publishes contextAssembler; our injection rows must not reach official presets`,
+      `preset ${mount.presetId} publishes a second contextAssembler; the channel belongs to the assembly plane`,
     );
   }
 }

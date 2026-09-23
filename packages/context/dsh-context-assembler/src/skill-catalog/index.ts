@@ -43,9 +43,14 @@ export function apply(ctx: Context): void {
         catalogEntries.delete(agent);
         return "";
       };
+      // "谁能用"要连模式的白名单一起算（注册表里有不等于这个会话能用），否则被收窄的工具还会留下技能目录。
+      const visible = ctx.contextAssembler.visibleTools(
+        agent,
+        (tool) => ctx.tools.get(tool, agent) !== undefined,
+      );
       // 依赖关系：没有 `skill` 工具（被白名单挡掉或被别的 composition 拿掉）时，目录没有意义——
       // 模型拿到了名字也加载不了。是否注入跟着工具走，而不是靠每个模式去列"不要哪些"。
-      if (ctx.tools.get("skill", agent) === undefined) return noCatalog();
+      if (!visible("skill")) return noCatalog();
       // 必须带上会话的 cwd 与作用域：本地 skill 发现（`~/.agents/skills`、`{cwd}/.agents/skills`、
       // 项目根）由 preset 层的 `skill-filesystem` 行提供，host 层的同名行在 web 组合里是禁用的——
       // 不传作用域只看得见全局层（本仓库注册的运行时 skill），不传 cwd 连项目根都不扫。
@@ -55,9 +60,7 @@ export function apply(ctx: Context): void {
       });
       if (!snapshot.complete) return noCatalog();
       // 技能也跟着工具走：依赖的工具一个都不可见的 skill 不进目录（模型看到名字也用不上）。
-      const hidden = ctx.contextAssembler.hiddenSkills(
-        (tool) => ctx.tools.get(tool, agent) !== undefined,
-      );
+      const hidden = ctx.contextAssembler.hiddenSkills(visible);
       const skills = snapshot.skills
         .filter(isModelInvocable)
         .filter((skill) => !hidden.has(skill.name));

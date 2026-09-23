@@ -43,7 +43,12 @@ export function apply(ctx: Context, config: Config): void {
       content: (agent) =>
         groupSkillBody(
           group,
-          agent === undefined ? () => true : (tool) => ctx.tools.get(tool, agent) !== undefined,
+          agent === undefined
+            ? () => true
+            : ctx.contextAssembler.visibleTools(
+                agent,
+                (tool) => ctx.tools.get(tool, agent) !== undefined,
+              ),
         ),
       injection: group.injection,
       // 该组的入口工具一个都不可见时，这个 skill 也不该出现在技能目录里（组内混了两套来源时由组自己

@@ -1,43 +1,12 @@
 # 本文件由 packages/profile/dsh-agent-toolkit/tool/patch.ts 生成，请勿手工编辑
 - insert:
-    - id: tool-bash
-      name: "@deepseek-ai/dsh-tool-bash"
-      disabled: !!js process.platform === "win32"
-    - id: tool-pwsh
-      name: "@deepseek-ai/dsh-tool-pwsh"
-      disabled: !!js process.platform !== "win32"
-    - id: tool-fs
-      name: "@deepseek-ai/dsh-tool-fs"
-    - id: tool-fs-search
-      name: "@deepseek-ai/dsh-tool-fs-search"
-      config:
-        sampleOverCapGlobResults: false
-    - id: tool-jobs
-      name: "@deepseek-ai/dsh-tool-jobs"
-    - id: skill-filesystem
-      name: "@deepseek-ai/dsh-skill-filesystem"
-    - id: command-goal
-      name: "@deepseek-ai/dsh-command-goal"
-    - id: tool-goal
-      name: "@deepseek-ai/dsh-tool-goal"
-    - id: compaction
+    - id: toolkit-ask
       name: cordis:group
       group: true
       config:
-        - id: compaction-basic
-          name: "@deepseek-ai/dsh-compaction-basic"
-        - id: command-compact
-          name: "@deepseek-ai/dsh-command-compact"
-        - id: tool-result-pruner
-          name: "@deepseek-ai/dsh-compaction-tool-result-pruner"
-          config:
-            thresholdChars: 8192
-            headChars: 4096
-            tailChars: 1024
-      isolate:
-        compaction: true
-        toolResultPruner: true
-    - id: delegation
+        - id: tool-ask-user
+          name: "@deepseek-ai/dsh-tool-ask-user"
+    - id: toolkit-delegation
       name: cordis:group
       group: true
       config:
@@ -69,27 +38,55 @@
           name: "@deepseek-ai/dsh-tool-workflow"
       isolate:
         workflowEngine: true
-    - id: tool-ask-user
-      name: "@deepseek-ai/dsh-tool-ask-user"
-    - id: tool-todo
-      name: "@deepseek-ai/dsh-tool-todo"
+    - id: toolkit-flow
+      name: cordis:group
+      group: true
       config:
-        allowParallelInProgress: true
-    - id: tool-web
-      name: "@deepseek-ai/dsh-tool-web"
+        - id: tool-todo
+          name: "@deepseek-ai/dsh-tool-todo"
+          config:
+            allowParallelInProgress: true
+        - id: command-goal
+          name: "@deepseek-ai/dsh-command-goal"
+        - id: tool-goal
+          name: "@deepseek-ai/dsh-tool-goal"
+        - id: present
+          name: "@deepseek-ai/dsh-tool-present"
+    - id: toolkit-fs
+      name: cordis:group
+      group: true
       config:
-        fetch: true
-        searchTimeoutMs: 60000
-    - id: present
-      name: "@deepseek-ai/dsh-tool-present"
-    - id: tool-guidance
-      name: "@morlay/dsh-agent-toolkit/guidance"
-    - id: agent-team
+        - id: tool-fs
+          name: "@deepseek-ai/dsh-tool-fs"
+        - id: tool-fs-search
+          name: "@deepseek-ai/dsh-tool-fs-search"
+          config:
+            sampleOverCapGlobResults: false
+    - id: toolkit-shell
+      name: cordis:group
+      group: true
+      config:
+        - id: tool-bash
+          name: "@deepseek-ai/dsh-tool-bash"
+          disabled: !!js process.platform === "win32"
+        - id: tool-pwsh
+          name: "@deepseek-ai/dsh-tool-pwsh"
+          disabled: !!js process.platform !== "win32"
+        - id: tool-jobs
+          name: "@deepseek-ai/dsh-tool-jobs"
+    - id: toolkit-skill
+      name: cordis:group
+      group: true
+      config:
+        - id: skill-filesystem
+          name: "@deepseek-ai/dsh-skill-filesystem"
+    - id: toolkit-team
       name: cordis:group
       group: true
       config:
         - id: agent-team
           name: "@deepseek-ai/dsh-experimental-agent-team"
+          disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
           config:
             maxMembers: 8
             maxTasks: 256
@@ -98,9 +95,38 @@
             disposalTimeoutMs: 5000
         - id: tool-agent-team
           name: "@deepseek-ai/dsh-experimental-tool-agent-team"
+          disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
           config:
             freshProvider: spawn
             forkProvider: fork
         - id: ui-agent-team
           name: "@deepseek-ai/dsh-experimental-client-ui-agent-team"
-      disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
+          disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
+    - id: toolkit-web
+      name: cordis:group
+      group: true
+      config:
+        - id: tool-web
+          name: "@deepseek-ai/dsh-tool-web"
+          config:
+            fetch: true
+            searchTimeoutMs: 60000
+    - id: compaction
+      name: cordis:group
+      group: true
+      config:
+        - id: compaction-basic
+          name: "@deepseek-ai/dsh-compaction-basic"
+        - id: command-compact
+          name: "@deepseek-ai/dsh-command-compact"
+        - id: tool-result-pruner
+          name: "@deepseek-ai/dsh-compaction-tool-result-pruner"
+          config:
+            thresholdChars: 8192
+            headChars: 4096
+            tailChars: 1024
+      isolate:
+        compaction: true
+        toolResultPruner: true
+    - id: tool-guidance
+      name: "@morlay/dsh-agent-toolkit/guidance"

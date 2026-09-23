@@ -3,11 +3,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
-import { agentTeamRows } from "../src/agent-team.ts";
-import { TOOLKIT_ROWS } from "../src/rows.ts";
+import { TOOLKIT_EXTRA_ROWS, TOOLKIT_ROWS } from "../src/rows.ts";
 
 /**
- * bundle patch 的真源：把 {@link TOOLKIT_ROWS}（`src/rows.ts` 那一份清单）插到 host 平面。
+ * bundle patch 的真源：把 {@link TOOLKIT_ROWS}（`src/rows.ts` 那一份清单，按工具族分组）与
+ * {@link TOOLKIT_EXTRA_ROWS}（压缩与工具说明那两行，不属于任何族）插到 host 平面。
  *
  * 这是"直接装配"那种采用方式：`dsh.profile.bundles` 列出本包时，功能行对所有 preset 生效（官方
  * standard / ptc / minimal / cordis 一样看得见这些工具）。要"只有某个模式才有"，就让那个 preset 引用
@@ -17,12 +17,10 @@ import { TOOLKIT_ROWS } from "../src/rows.ts";
 export const PATCH_ROWS: readonly Record<string, unknown>[] = [
   {
     insert: [
-      // 工具行：整套（chat 也装着，靠模式的 `allowTools` 收口）。
+      // 工具行：整套按族分组（chat 也装着，靠模式的 `allowTools` 收口）。
       ...TOOLKIT_ROWS,
-      // 工具说明：描述汉化 + schema 精简 + 用法分组（注册给通道，通道也在 profile 平面）。
-      { id: "tool-guidance", name: "@morlay/dsh-agent-toolkit/guidance" },
-      // Agent Teams：默认关闭的组（`DSH_AGENT_TEAM=1` 才装），与直接派发行互斥。
-      ...agentTeamRows(),
+      // 工具说明（描述汉化 + schema 精简 + 用法分组）与压缩引擎行。
+      ...TOOLKIT_EXTRA_ROWS,
     ],
   },
 ];

@@ -42,6 +42,18 @@ async function mountTools(scope: Context, toolNames: readonly string[]): Promise
   );
 }
 
+/** 上游工具说明 section 的形状：工具行自己注册一条 `tool:<name>`（`tools:` 那类是聚合块）。 */
+async function mountSection(scope: Context, name: string, text: string): Promise<void> {
+  await scope.plugin(
+    Object.assign(
+      (inner: Context) => {
+        inner.systemPrompt.section({ name, order: 1, text });
+      },
+      { inject: ["systemPrompt"] },
+    ),
+  );
+}
+
 async function mount(allowTools: readonly string[]) {
   const ctx = new Context();
   contexts.push(ctx);
@@ -82,6 +94,23 @@ describe("工具白名单", () => {
       "web_fetch",
       "web_search",
     ]);
+  });
+
+  it("白名单之外的工具说明 section 不留在提示词里，聚合 section 照旧", async () => {
+    const { ctx, agent } = await mount(["ask_user_question"]);
+    await mountTools(ctx, ["send_message"]);
+    await mountSection(ctx, "tool:ask_user_question", "问答说明");
+    await mountSection(ctx, "tool:send_message", "发消息说明");
+    // 聚合 section（`tools:` 前缀）不是单个工具的说明，不受白名单管。
+    await mountSection(ctx, "tools:sdk", "工具集说明");
+
+    const names = (await ctx.systemPrompt.assemble(assembleContextFor(agent))).sections.map(
+      (section) => section.name,
+    );
+
+    expect(names).toContain("tool:ask_user_question");
+    expect(names).toContain("tools:sdk");
+    expect(names).not.toContain("tool:send_message");
   });
 
   it("白名单之外的工具调用不了", async () => {

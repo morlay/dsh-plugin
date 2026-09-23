@@ -15,7 +15,9 @@
 `dsh.profile.bundles` 列出本包即完成装配（示例 app 就是这么做的，排在
 [`@morlay/dsh-context-assembler`](../../context/dsh-context-assembler/README.md) 之后、配置层之前）：
 
-- `cordis.patch.yml` 把**整套工具行**插到 host 平面（含它们各自的 config 与默认关闭的 Agent Teams 组）；
+- `cordis.patch.yml` 把**整套工具行按工具族分组**插到 host 平面：组 id 是 `toolkit-<族名>`（前缀避开上游同名行，
+  `web` / `skill` 这类短名已被上游占用），顺序与 `guidance` 的族数据一致；含各行的 config 与默认关闭的 Agent Teams 族
+  （见 [`src/rows.ts`](./src/rows.ts)）；
 - 同一层装一行工具说明（`@morlay/dsh-agent-toolkit/guidance`）：描述汉化 + schema 精简 + 用法分组注册给通道。
 
 **模式不在这里装行**：[`@morlay/dsh-agent-preset`](../dsh-agent-preset/README.md) 只声明开关（`allowTools`

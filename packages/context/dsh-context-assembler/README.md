@@ -18,25 +18,23 @@
 
 ## 装配
 
-`dsh.profile.bundles` 列出本包即装**一次**：`cordis.patch.yml` 把通道与两个注入方
-（`agent-instructions` / `skill-catalog`）装在一个 `isolate` 组里。`scope` **不在这份 patch 里**——它是模式
-的开关，由 [`@morlay/dsh-agent-preset`](../../profile/dsh-agent-preset/README.md) 用 `scopeRow()` 按模式装
+`dsh.profile.bundles` 列出本包即装**一次**：`cordis.patch.yml` 是一行组装出口（`capabilities` 缺省即完整一套：
+通道本体、`agent-instructions`、`skill-catalog`）。**不做隔离**——工具说明
+（[`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md) 的 `guidance`）这类消费者住在别的包里，
+隔离会把它们挡在组外（行停在 waiting，不报错）；理由见
+[ADR 通道作为全局服务装配不隔离](./.agents/adrs/20260923-通道作为全局服务装配不隔离.md)。`scope` **不在这份 patch 里**
+——它是模式的开关，由 [`@morlay/dsh-agent-preset`](../../profile/dsh-agent-preset/README.md) 用 `scopeRow()` 按模式装
 （它 `inject` 通道，`ctx.get("contextAssembler")` 在 agent 子树里可达）。
 
 工具说明（汉化 / 精简 / 用法分组）也不在这里：它归
 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)，同样在 profile 平面装一次。
 
-## 两种采用方式（同一份真源）
+## 装配形态
 
-本包同时是 bundle：`cordis.patch.yml` 由 [`tool/patch.ts`](./tool/patch.ts) 从
-[`src/rows.ts`](./src/rows.ts) 渲染，`rows` 出口导出同一份清单。
-
-- **profile 直接列出本包**（`dsh.profile.bundles`）→ 行装在 host 平面，整份部署共享一套注入（官方 preset 的会话
-  也吃这套）；
-- **preset 引用 `rows`**（[`@morlay/dsh-agent-preset`](../../profile/dsh-agent-preset/README.md) 的两个模式就是这么做的）
-  → 同一批行住进那个 preset 的 `isolate` 组，只有那个模式吃这套注入。
-
-同一部署只能选一种：两种都用会把同一行插两次。
+本包是 bundle：`cordis.patch.yml` 由 [`tool/patch.ts`](./tool/patch.ts) 从 [`src/rows.ts`](./src/rows.ts) 渲染，
+`rows` 出口导出同一份清单。`dsh.profile.bundles` 列出本包即装一次，**服务全局共享、不隔离**；preset 只用
+`scopeRow()` 按模式收口（工具白名单 / instruction / 动态快照），别的包的行（工具说明、skill 目录）直接 `inject`
+同一份通道。
 
 ## 为什么合成一个包
 
@@ -61,16 +59,20 @@
 （平台说明）、改写（两段中文文案）、或降级成规则块；pre-step 时把要送的内容逐条以 `<system-reminder>`
 user 消息注入（每条按文本幂等，只有变化的那条重发）。
 
-| 声明                                  | 到达方式                                                                         |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| `registerSkill` + `on-demand`         | 注册成模型可用 skill：目录常驻一行摘要，正文由 `skill` 工具加载                  |
-| `registerSkill` + `auto`              | 正文随 reminder 常驻；skill 标 `modelInvocable: false`（用户仍可 `skill:` 引用） |
-| `registerRule({ id, text, source? })` | 规则块，幂等键是 `id`；`source` 声明对外身份                                     |
-| `replaceSection` / `suppressSection`  | 装配结果上的文本改写 / 丢弃                                                      |
+| 声明                                      | 到达方式                                                                         |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `registerSkill` + `on-demand`             | 注册成模型可用 skill：目录常驻一行摘要，正文由 `skill` 工具加载                  |
+| `registerSkill` + `auto`                  | 正文随 reminder 常驻；skill 标 `modelInvocable: false`（用户仍可 `skill:` 引用） |
+| `registerRule({ id, text, source? })`     | 规则块，幂等键是 `id`；`source` 声明对外身份                                     |
+| `replaceSection` / `suppressSection`      | 装配结果上的文本改写 / 丢弃                                                      |
+| `setInstructions` / `restrictTools`       | 按会话登记模式的两处收口（不要 instruction / 工具白名单）                        |
+| `visibleTools(agent, registered)`         | 合成该会话的工具可见性：注册表可见 × 已登记的白名单（目录与组正文共用）          |
+| `hiddenSkills(visible)`                   | 声明了 `requires` 而入口工具一个都不可见的 skill 名                             |
 
 配置（`keep` / `suppress` / `replace`）的默认值在 [`src/assembler/defaults.ts`](./src/assembler/defaults.ts)。
-**按模式各一份**：它发布进程全局服务，只有关在 `isolate` 组里才装得进 preset，也才不会把我们的注入漏给别的
-preset（见 [ADR](../../profile/dsh-agent-preset/.agents/adrs/20260922-通道与注入行按模式isolate装配.md)）。
+**全局一份、不隔离**：模式差异由 `context-scope` 登记（`setInstructions` / `restrictTools`）收口，跨包的
+消费者（工具说明、技能目录）直接 `inject` 同一份通道（见
+[ADR 通道作为全局服务装配不隔离](./.agents/adrs/20260923-通道作为全局服务装配不隔离.md)）。
 
 ## agent-instructions
 
@@ -103,46 +105,45 @@ web-app bundle 自己设在 preset 平面）。
 
 ## scope
 
-预设模式的收口行：工具白名单（装配期投影 + 执行层 guard，两侧同判据）、`instructions`（关掉规则块与降级
-section）、`runtimeContext`（关掉沙箱 / 审批那两条动态快照，按 scope 抑制）。它解决的是"preset 只能决定加
-什么、管不了 host 层"——模式要表达"我只有这几个工具、一条提示词都不要"时，唯一与来源无关的做法是在会话
-语义上收口。`allowTools` 为空即装配失败（该省掉整行）。
+预设模式的收口行：工具白名单（装配期投影 + 执行层 guard + 与工具同源的 `tool:<工具名>` 说明 section，三侧
+同判据）、`instructions`（关掉规则块与降级 section）、`runtimeContext`（关掉沙箱 / 审批那两条动态快照，按
+scope 抑制）。它解决的是"preset 只能决定加什么、管不了 host 层"——模式要表达"我只有这几个工具、一条提示词
+都不要"时，唯一与来源无关的做法是在会话语义上收口。`allowTools` 为空即装配失败（该省掉整行）。
+
+白名单同时登记给通道（`restrictTools`）：技能目录与用法组正文按 `visibleTools` 收口，所以被收窄的工具既不在
+目录、也不会被讲——注册表里"装着"不等于这个会话"能用"。
 
 ## 装配
 
-preset 里**只有一行**，`isolate` 声明在这一行上（行级选项，覆盖整棵子树）：
+**profile 平面**：`dsh.profile.bundles` 列出本包即装一次，`cordis.patch.yml` 就是一行组装出口：
 
 ```yaml
-- id: context-assembler-channel
-  name: cordis:group
-  group: true
-  isolate:
-    contextAssembler: true
-  config:
-    - id: context # 标准模式：不带 config，完整一套
+- insert:
+    - id: context-assembler
       name: "@morlay/dsh-context-assembler"
-    # 工具说明行也与通道同组（它 inject 通道）：标准模式不带 config，对话模式只要预处理
-    # - id: tool-guidance
-    #   name: "@morlay/dsh-agent-toolkit/guidance"
-    # 对话模式：裁掉不要的能力，并给留下的传参
-    # - id: context
-    #   name: "@morlay/dsh-context-assembler"
-    #   config:
-    #     capabilities: [assembler, scope]
-    #     options:
-    #       scope: { allowTools: [ask_user_question, web_search, web_fetch], instructions: false, runtimeContext: false }
-    # - id: tool-guidance
-    #   name: "@morlay/dsh-agent-toolkit/guidance"
-    #   config: { groups: false }
+      config:
+        capabilities: [assembler, agent-instructions, skill-catalog]
+```
+
+**preset 平面**：模式只装一行开关（工具白名单 / instruction / 动态快照），通道由 profile 那份共享：
+
+```yaml
+- id: context-scope
+  name: "@morlay/dsh-context-assembler/scope"
+  config:
+    allowTools: [ask_user_question, web_search, web_fetch]
+    instructions: false
+    runtimeContext: false
 ```
 
 几点硬要求：
 
 - **每个能力仍是独立的 cordis 插件**（组装出口只是 `ctx.plugin()` 装它们），各自带自己的 `inject`；合成单入口会让
   `inject` 变并集，一个可选搭档缺席就拖垮整包。
-- **组装行必须住在声明了 `isolate` 的组里**：`isolate` 是"该名字只在这棵子树内解析成独立 label"，落组外通道服务
-  会发到 root realm（上游拒装整块 preset）。`patch.spec.ts` 把"每个模式只有一行组装行、且住在声明了 isolate 的组里"
-  钉住；真装配的判据是 `just profile` 的隔离探针。
+- **通道不做隔离**：消费者跨包（`@morlay/dsh-agent-toolkit` 的工具说明、本包的技能目录），隔离会把它们挡在组外
+  （行停在 waiting）；模式差异改由 `context-scope` 登记给通道，见
+  [ADR 通道作为全局服务装配不隔离](./.agents/adrs/20260923-通道作为全局服务装配不隔离.md)。真装配的判据是
+  `pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-preset-isolation.mts`（装配层可见一份、模式里没有第二份）。
 - **子出口仍可单独装配**（`@morlay/dsh-context-assembler/assembler` 等）：同一些插件，只是默认走组装出口。
 
 ## 维护注意

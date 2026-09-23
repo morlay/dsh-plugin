@@ -100,7 +100,9 @@ export function groupsOf(packs: readonly GroupPack[] = GROUP_PACKS): readonly To
   for (const pack of packs) {
     const dupe = seen.get(pack.group.key);
     if (dupe !== undefined) {
-      throw new Error(`tool-guidance: 组 "${pack.group.key}" 同时出现在 "${dupe}" 与 "${pack.family}" 里`);
+      throw new Error(
+        `tool-guidance: 组 "${pack.group.key}" 同时出现在 "${dupe}" 与 "${pack.family}" 里`,
+      );
     }
     seen.set(pack.group.key, pack.family);
     groups.push(pack.group);

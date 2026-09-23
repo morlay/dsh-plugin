@@ -13,7 +13,7 @@
 | `dsh-desktopify dev [--web] [--home <spec>] [workspace]` | 启动 Electron 壳（不打包）；`--web` 改为在浏览器里跑 `dsh web`；`--home` 换数据面 |
 | `dsh-desktopify bundle [--dir] [--install] [workspace]`  | 构建当前平台的静态、无签名桌面应用                                                |
 
-工作区取首个位置参数（缺省当前目录），CLI 会把它写进 `DSH_DESKTOP_WORKSPACE`；工具内不写死任何 app 路径或名字。dev 两种形态的数据面共用工作区的 `.dsh-store`（`DSH_HOME`；profile 名 `desktop` / `web` 互不冲突），只有 Electron 的浏览器数据落在构建目录 `<workspace>/node_modules/.dsh-desktopify/development/electron-user-data`。
+工作区取首个位置参数（缺省当前目录），CLI 会把它写进 `DSH_DESKTOP_WORKSPACE`；工具内不写死任何 app 路径或名字。dev 两种形态的数据面共用工作区的 `.dsh-store`（`DSH_HOME`；profile 名 `desktop` / `web` 互不冲突），只有 Electron 的浏览器数据落在构建目录 `<workspace>/node_modules/.dsh-desktopify/development/electron-user-data`。`--web` 会把 web profile 的装配清单（`dsh.profile.bundles`）刷成工作区定义的那份：清单决定 patch 层的顺序，profile 里种子留下的旧清单会让后装 bundle 插的行打不到前面层的配置（只 warn 后跳过）。
 
 `--home <spec>` 把数据面换到别处，取值与工作区的 `dshHome` 配置同构（解析只有一份，见 [`src/dshhome.ts`](./src/dshhome.ts)）：
 

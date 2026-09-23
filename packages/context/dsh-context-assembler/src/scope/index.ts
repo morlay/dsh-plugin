@@ -9,7 +9,10 @@ export const name = "context-scope";
 export const inject = ["tools", "systemPrompt"];
 
 export interface Config {
-  /** 只保留这些工具；其余（含 host 层 bundle 加进来的）既不进模型目录，也调用不了。 */
+  /**
+   * 只保留这些工具；其余（含 host 层 bundle 加进来的）既不进模型目录，调用不了，它们自己注册的说明
+   * section（`tool:<工具名>`）也不留在提示词里。
+   */
   allowTools?: string[];
   /**
    * 是否要 instruction 类的注入（工作区指令、技能目录、用法正文那类规则块）。缺省要；
@@ -39,6 +42,9 @@ export const Config: z<Config> = z.object({
 
 const OUT_OF_SCOPE = (toolName: string): string =>
   `${toolName} 不在本模式的工具范围内，用它不会有结果；按当前模式提供的工具完成任务，或让用户切到别的模式。`;
+
+/** 单个工具的说明 section 名前缀：`tool:<工具名>`（`tools:` 那类是聚合块，不归白名单管）。 */
+const TOOL_SECTION_PREFIX = "tool:";
 
 /**
  * 把某个 preset 的工具收成"只有这些"。
@@ -76,14 +82,15 @@ export function apply(ctx: Context, config: Config): void {
   const scopeOnce = (agent: Agent): void => {
     if (scoped.has(agent) || !belongs(agent)) return;
     scoped.add(agent);
-    if (config.instructions === false) {
-      // 通道是可选的（`ctx.get` 在未声明 inject 的 ctx 上会抛，所以自己兜住）：没有它就没有
-      // instruction 可关，工具白名单照常生效——不该因为一个可选搭档缺席就让整个插件不激活。
-      try {
-        ctx.get("contextAssembler")?.setInstructions(agent, false);
-      } catch {
-        void 0;
-      }
+    // 通道是可选的（`ctx.get` 在未声明 inject 的 ctx 上会抛，所以自己兜住）：没有它就没有 instruction
+    // 可关、也没人收窄技能目录，但工具目录与执行 guard 照常生效——不该因为一个可选搭档缺席就让整个插件
+    // 不激活。工具收窄必须交给它：投影层的过滤不碰注册表，注册表上看不出"谁能用"。
+    try {
+      const channel = ctx.get("contextAssembler");
+      if (config.instructions === false) channel?.setInstructions(agent, false);
+      channel?.restrictTools(agent, (tool) => allow.has(tool));
+    } catch {
+      void 0;
     }
     // inject 回调只是在该 ctx 上解锁 `tools`；调用必须落在 `agent.ctx` 上才是这个会话的作用域。
     agent.ctx.inject(["tools"], () => {
@@ -97,6 +104,15 @@ export function apply(ctx: Context, config: Config): void {
     const agent = context.agent;
     if (agent !== undefined) scopeOnce(agent);
     const result = await next();
-    return { ...result, tools: result.tools.filter((tool) => allow.has(tool.name)) };
+    return {
+      ...result,
+      // 工具自己的说明 section 与工具目录同源：目录里没有的工具，它的说明也不该留在提示词里。
+      sections: result.sections.filter((section) =>
+        section.name.startsWith(TOOL_SECTION_PREFIX)
+          ? allow.has(section.name.slice(TOOL_SECTION_PREFIX.length))
+          : true,
+      ),
+      tools: result.tools.filter((tool) => allow.has(tool.name)),
+    };
   });
 }

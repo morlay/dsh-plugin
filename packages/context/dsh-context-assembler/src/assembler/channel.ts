@@ -84,6 +84,9 @@ export class ContextAssembler extends Service {
   /** 不要 instruction 类注入（规则块）的会话；内容块（技能正文、引用材料）不受它管。 */
   private readonly withoutInstructions = new WeakSet<Agent>();
 
+  /** 本会话的模式收窄（白名单）：投影层的过滤不碰注册表，注册表上看不出"谁能用"。 */
+  private readonly toolScopes = new WeakMap<Agent, (tool: string) => boolean>();
+
   /** `host` 是构造期那个根 ctx：`skills` 的访问权限挂在插件的 inject 声明上，不能依赖访问者 ctx。 */
   constructor(private readonly host: Context) {
     super(host, "contextAssembler");
@@ -138,6 +141,24 @@ export class ContextAssembler extends Service {
   setInstructions(agent: Agent, on: boolean): void {
     if (on) this.withoutInstructions.delete(agent);
     else this.withoutInstructions.add(agent);
+  }
+
+  /**
+   * 本会话的**工具收窄**（模式白名单）：投影层只过滤装配结果、不碰工具注册表，所以"谁能用"这件事
+   * 必须在通道上登记，技能目录与组正文才收得住。与 {@link setInstructions} 同形——谓词由模式那一行给
+   * （`context-scope`），通道自己不碰 `tools` 服务。
+   */
+  restrictTools(agent: Agent, allowed: (tool: string) => boolean): void {
+    this.toolScopes.set(agent, allowed);
+  }
+
+  /**
+   * 本会话的工具可见性：调用方给出的注册表可见性 × 已登记的模式收窄。技能目录与组正文共用它，
+   * 免得同一套判据在几处各写一遍。
+   */
+  visibleTools(agent: Agent, registered: (tool: string) => boolean): (tool: string) => boolean {
+    const allowed = this.toolScopes.get(agent);
+    return allowed === undefined ? registered : (tool) => registered(tool) && allowed(tool);
   }
 
   /**
