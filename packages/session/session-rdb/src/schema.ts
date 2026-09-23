@@ -32,6 +32,10 @@ export const tSessionProjcacheRows = sqliteTables["t_session_projcache_row"]!;
 
 export const tEventUsage = sqliteTables["t_event_usage"]!;
 
+export const tSessionUsage = sqliteTables["t_session_usage"]!;
+
+export const tSessionCounts = sqliteTables["t_session_counts"]!;
+
 export type { SessionRow } from "./backend.ts";
 
 export type { EventRow } from "./backend.ts";

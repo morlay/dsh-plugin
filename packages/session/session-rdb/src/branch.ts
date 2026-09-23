@@ -311,8 +311,8 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       internals.dropReuseEventIds(childId);
       throw error;
     }
-    // 子会话继承了前缀事件：活动计数按子会话重算（派生表，best-effort）。
-    await this.persistence.rebuildEventCounts(childId);
+    // 子会话继承了前缀事件：统计按子会话重算（派生表，best-effort）。
+    await this.persistence.rebuildSessionStats(childId);
     return childId;
   }
 
@@ -443,8 +443,8 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       });
     }
 
-    // 截断后该会话的事件集合变了：活动计数跟着重算（派生表，best-effort）。
-    await this.persistence.rebuildEventCounts(id);
+    // 截断后该会话的事件集合变了：统计跟着重算（派生表，best-effort）。
+    await this.persistence.rebuildSessionStats(id);
 
     return { header: rowToMeta(row), revision: (await internals.readStoredRevision(id))! };
   }

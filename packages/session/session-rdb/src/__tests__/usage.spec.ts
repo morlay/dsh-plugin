@@ -410,8 +410,8 @@ describe("用量统计口径", () => {
     expect(weekIds).not.toContain("last-week");
   });
 
-  // 活动计数是派生表：可以随时清掉、启动时按事件表重建（首次/表空才回填，幂等）。
-  it("活动计数表为空时按事件表回填（可销毁重建）", async () => {
+  // 派生统计表：可以随时清掉、启动时按事件表重建（首次/表空才回填，幂等）。
+  it("统计表被清空后按事件表全量回填（可销毁重建）", async () => {
     const dir = await mkdtemp(join(tmpdir(), "session-rdb-counts-"));
     const path = join(dir, "sessions.sqlite");
     const first = await harnessAt(path);
@@ -426,18 +426,154 @@ describe("用量统计口径", () => {
     }
 
     const raw = new DatabaseSync(path);
-    raw.exec("DELETE FROM t_event_counts");
+    raw.exec(
+      "DELETE FROM t_event_usage; DELETE FROM t_session_usage; DELETE FROM t_session_counts",
+    );
     raw.close();
 
     const second = await harnessAt(path);
     try {
       const value = await report(second.ctx);
-      expect(value.totals).toMatchObject({ turns: 1, steps: 1, userInputs: 1, toolCalls: 0 });
-      expect(value.sessions[0]).toMatchObject({ turns: 1 });
+      expect(value.totals).toMatchObject({
+        turns: 1,
+        steps: 1,
+        userInputs: 1,
+        toolCalls: 0,
+        inputTokens: 10,
+        outputTokens: 2,
+      });
+      expect(value.sessions[0]).toMatchObject({ turns: 1, inputTokens: 10 });
     } finally {
       await second.dispose();
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  // fork 复用的事件行已经在表里（写路径不会重插），归属标记与子会话汇总靠 fork 之后的重算补齐。
+  it("fork 复用的事件行按子会话补归属标记，子会话行含继承前缀", async () => {
+    const { ctx } = await harness();
+    await createPersisted(
+      ctx,
+      meta("src"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    const branch = ctx.sessionBranch as unknown as {
+      forkFrom(
+        id: SessionId,
+        options: {
+          atSeq: number;
+          anchorMode: "before" | "after";
+          childSessionId: SessionId;
+          meta?: { origin?: string };
+        },
+      ): Promise<SessionId>;
+    };
+    await branch.forkFrom(SessionId("src"), {
+      atSeq: 6,
+      anchorMode: "before",
+      childSessionId: SessionId("child"),
+      meta: { origin: "subagent" },
+    });
+
+    const value = await report(ctx);
+
+    // 总量按事件行去重：共享前缀只算一次；但这次共享行被 subagent 会话引用了 → 归到 subagent 组。
+    expect(value.totals.inputTokens).toBe(100);
+    expect(value.subagent.inputTokens).toBe(100);
+    expect(value.human.inputTokens).toBe(0);
+    // 按会话的行是各自的日志口径：子会话含继承前缀，所以两行都是 100。
+    const byId = new Map(value.sessions.map((row) => [row.sessionId, row]));
+    expect(byId.get("src")).toMatchObject({ subagent: false, inputTokens: 100, turns: 1 });
+    expect(byId.get("child")).toMatchObject({ subagent: true, inputTokens: 100, turns: 1 });
+  });
+
+  // 迁移对统计表先删后建：旧结构（没有物化列 / 按类型存的计数表）升级后必须被重建并回填。
+  it("旧结构的统计表在迁移里删表重建，并按事件表回填", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "session-rdb-migrate-"));
+    const path = join(dir, "sessions.sqlite");
+    const first = await harnessAt(path);
+    try {
+      await createPersisted(
+        first.ctx,
+        meta("old"),
+        turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+      );
+    } finally {
+      await first.dispose();
+    }
+
+    // 模拟旧库：统计表回到迁移之前的结构，并抹掉这条迁移的应用记录。
+    const raw = new DatabaseSync(path);
+    raw.exec(`
+      DROP TABLE t_event_usage;
+      DROP TABLE t_session_usage;
+      DROP TABLE t_session_counts;
+      CREATE TABLE t_event_usage (
+        f_event_id text PRIMARY KEY NOT NULL,
+        f_created_at bigint NOT NULL,
+        f_provider text,
+        f_model text,
+        f_input_tokens integer DEFAULT 0 NOT NULL,
+        f_output_tokens integer DEFAULT 0 NOT NULL,
+        f_cache_read_tokens integer DEFAULT 0 NOT NULL,
+        f_reasoning_tokens integer DEFAULT 0 NOT NULL,
+        f_total_tokens integer DEFAULT 0 NOT NULL
+      );
+      CREATE TABLE t_event_counts (
+        f_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        f_session_id TEXT NOT NULL,
+        f_day TEXT NOT NULL,
+        f_type TEXT NOT NULL,
+        f_count INTEGER NOT NULL DEFAULT 0
+      );
+      DELETE FROM __drizzle_migrations WHERE name = '20260923120000_v3_usage_materialized';
+    `);
+    raw.close();
+
+    const second = await harnessAt(path);
+    try {
+      // 先查一次报表（触发后端打开与迁移 + 回填），再验表结构。
+      const value = await report(second.ctx);
+      expect(value.totals).toMatchObject({ turns: 1, inputTokens: 100, outputTokens: 10 });
+      expect(value.sessions[0]).toMatchObject({ sessionId: "old", turns: 1, inputTokens: 100 });
+
+      const inspect = new DatabaseSync(path);
+      const columns = inspect
+        .prepare("SELECT name FROM pragma_table_info('t_event_usage')")
+        .all() as Array<{ name: string }>;
+      inspect.close();
+      const names = columns.map((column) => column.name);
+      expect(names).toContain("f_day");
+      expect(names).toContain("f_referenced");
+      expect(names).toContain("f_subagent");
+    } finally {
+      await second.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // 「近 N 天」的起点按本地时区对齐到零点：含今天共 N 个自然日，与 `day` / `week` 同一套边界。
+  it("滚动范围（近 N 天）的起点对齐本地零点", async () => {
+    const { ctx } = await harness();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const cutoff = new Date(dayStart);
+    cutoff.setDate(cutoff.getDate() - 6);
+    await createPersisted(
+      ctx,
+      meta("inside"),
+      turnWithUsage(cutoff.getTime() + 1_000, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      ctx,
+      meta("outside"),
+      turnWithUsage(cutoff.getTime() - 1_000, { provider: "p", model: "m" }, usageOf(7, 3)),
+    );
+
+    const value = await report(ctx, { range: "7d" });
+
+    expect(value.sessions.map((row) => row.sessionId)).toEqual(["inside"]);
+    expect(value.totals.inputTokens).toBe(100);
   });
 
   it("被删除会话留下的事件行（无引用）不计入统计", async () => {

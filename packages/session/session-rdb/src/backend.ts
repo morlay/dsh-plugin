@@ -1,7 +1,8 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistence";
+import type { EventUsageRow } from "./log.ts";
 import type { StorageRepository } from "./storage-takeover/types.ts";
-import type { UsageAggregate } from "./usage.ts";
+import type { UsageActivityTotals, UsageAggregate, UsageTokenTotals } from "./usage.ts";
 
 export interface SessionRow {
   fSessionId: string;
@@ -74,7 +75,11 @@ export interface BackendTx {
 
   refreshTitle(id: SessionId): Promise<void>;
 
-  insertEvents(events: EventInsert[]): Promise<void>;
+  /**
+   * 插入事件行与它们的用量行（`usageRows` 由写路径一次折好，读侧维度已物化在行上）。
+   * 这一批事件与桥接行同事务，提交即「被引用」。
+   */
+  insertEvents(events: EventInsert[], usageRows: readonly EventUsageRow[]): Promise<void>;
 
   insertBridges(
     rows: Array<{
@@ -139,11 +144,16 @@ export interface SessionListRowsPage {
   total: number;
 }
 
-/** 活动计数的一个桶：本地日 + 事件类型 + 计数。 */
-export interface EventCountBucket {
+/** 活动计数的一个桶：本地日 + 四项计数（轮次 / 步骤 / 用户输入 / 工具调用）。 */
+export interface SessionCountBucket extends UsageActivityTotals {
   day: string;
-  type: string;
-  count: number;
+}
+
+/** 用量累加的一个桶：本地日 + 模型归属 + 五个 token 列。 */
+export interface SessionUsageBucket extends UsageTokenTotals {
+  day: string;
+  provider: string | null;
+  model: string | null;
 }
 
 export interface Backend {
@@ -178,9 +188,10 @@ export interface Backend {
   listOrphanSubagentSessions(): Promise<SessionId[]>;
 
   /**
-   * 用量统计的原始聚合：token 用量读 `t_event_usage`、活动计数读派生表 `t_event_counts`，
-   * 加按天×模型的桶与按会话的行（事件行去重、排除孤儿）。
-   * @param sinceMs - 只算该时刻（含）之后的事件行；省略即全量。
+   * 用量统计的原始聚合：读三张派生统计表（`t_event_usage` + 两张会话汇总表），
+   * 给出总量 / subagent 拆分、按天×模型的桶与按会话的行（事件行去重、排除孤儿）。
+   * @param sinceMs - 只算该时刻（含）之后的用量；省略即全量。会话汇总表按本地日过滤，
+   * 与毫秒过滤等价的前提是调用方把起点对齐到本地零点（见 `resolveUsageSince`）。
    */
   usageReport(sinceMs?: number): Promise<UsageAggregate>;
 
@@ -188,21 +199,34 @@ export interface Backend {
   listSessionRows(query?: SessionListRowsQuery): Promise<SessionListRowsPage>;
 
   /**
-   * 活动计数**旁路累加**（派生表 `t_event_counts`，不参与写事务、失败可丢——表可销毁重建）：
-   * 每个 (会话, 本地日, 事件类型) 记一行计数。
+   * token 用量**旁路累加**（派生表 `t_session_usage`，不参与写事务、失败可丢——表可销毁重建）：
+   * 每个 (会话, 本地日, 模型) 记一行累加。
    * @param id - 会话 id。
-   * @param buckets - 本批要累加的 (day, type, count)。
+   * @param buckets - 本批要累加的 (day, provider, model, tokens)。
    */
-  incrementEventCounts(id: SessionId, buckets: readonly EventCountBucket[]): Promise<void>;
+  incrementSessionUsage(id: SessionId, buckets: readonly SessionUsageBucket[]): Promise<void>;
 
   /**
-   * 按会话从事件表重算活动计数（rewind / fork 之后调用）：先删该会话的行再重算。
+   * 活动计数**旁路累加**（派生表 `t_session_counts`，同上）：每个 (会话, 本地日) 累加四项计数。
+   * @param id - 会话 id。
+   * @param buckets - 本批要累加的 (day, turns, steps, userInputs, toolCalls)。
+   */
+  incrementSessionCounts(id: SessionId, buckets: readonly SessionCountBucket[]): Promise<void>;
+
+  /**
+   * 按会话从事件表重算两张会话汇总表（rewind / fork 之后调用）：先删该会话的行再重算。
    * @param id - 会话 id。
    */
-  rebuildEventCounts(id: SessionId): Promise<void>;
+  rebuildSessionStats(id: SessionId): Promise<void>;
 
-  /** 删掉一个会话的活动计数行（会话删除时）。 */
-  deleteEventCounts(id: SessionId): Promise<void>;
+  /**
+   * 全量重算 `t_event_usage` 的引用标记（`f_referenced` / `f_subagent`）：rewind / fork / 会话删除之后调用。
+   * 引用可能跨会话消失（截断、删除），只按本会话判定不够，故这里是全量。
+   */
+  refreshEventUsageFlags(): Promise<void>;
+
+  /** 删掉一个会话的汇总行（会话删除时；外键 CASCADE 之外再显式清一次）。 */
+  deleteSessionStats(id: SessionId): Promise<void>;
 
   /** 回收空间与统计（含 VACUUM）；不得在事务内执行。 */
   vacuum(): Promise<void>;

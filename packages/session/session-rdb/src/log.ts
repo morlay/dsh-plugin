@@ -4,6 +4,7 @@ import type { SessionFormatEvent, SessionFormatHeader } from "@deepseek-ai/dsh-s
 import { sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
 import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistence";
 import type { EventRow, SessionRow } from "./backend.ts";
+import { localDayKey } from "./usage.ts";
 
 function normalizeSurfaceOp(value: unknown): SurfaceOp {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -716,12 +717,15 @@ export function titleOfEventData(data: string): string | undefined {
   }
 }
 
-/** 用量行的列（`t_event_usage`）。 */
+/** 用量行的列（`t_event_usage`）：读侧维度（本地日与两个归属标记）在写入时一起物化。 */
 export interface EventUsageRow {
   fEventId: string;
   fCreatedAt: number;
+  fDay: string;
   fProvider: string | null;
   fModel: string | null;
+  fReferenced: number;
+  fSubagent: number;
   fInputTokens: number;
   fOutputTokens: number;
   fCacheReadTokens: number;
@@ -740,15 +744,21 @@ function textField(value: unknown): string | null {
 /**
  * 一条事件行的用量（只有带 `usage` 的 `assistant/message` 才有）：写路径据此记录
  * `t_event_usage`，统计因此不必逐行解析 JSON。两种 `f_data` 结构（带信封 / 老格式）都认。
+ * 读侧维度一起物化：本地日由事件时间算，`f_referenced` 直接 1（这一批事件行与桥接行同事务，
+ * 提交即被引用），`f_subagent` 取写入它的会话是否子代理。
  * @param event - 待写入的事件行。
+ * @param subagent - 写入它的会话是否 `origin === 'subagent'`。
  * @returns 用量行，或该事件没有用量时的 undefined。
  */
-export function usageRowOf(event: {
-  fEventId: string;
-  fCreatedAt: number;
-  fType: string;
-  fData: string;
-}): EventUsageRow | undefined {
+export function usageRowOf(
+  event: {
+    fEventId: string;
+    fCreatedAt: number;
+    fType: string;
+    fData: string;
+  },
+  subagent: boolean,
+): EventUsageRow | undefined {
   if (event.fType !== "assistant/message") return undefined;
   let parsed: Record<string, unknown>;
   try {
@@ -763,8 +773,11 @@ export function usageRowOf(event: {
   const row: EventUsageRow = {
     fEventId: event.fEventId,
     fCreatedAt: event.fCreatedAt,
+    fDay: localDayKey(event.fCreatedAt),
     fProvider: textField(source?.["provider"]),
     fModel: textField(source?.["model"]),
+    fReferenced: 1,
+    fSubagent: subagent ? 1 : 0,
     fInputTokens: numericField((usage as Record<string, unknown>)["inputTokens"]),
     fOutputTokens: numericField((usage as Record<string, unknown>)["outputTokens"]),
     fCacheReadTokens: numericField((usage as Record<string, unknown>)["cacheReadTokens"]),

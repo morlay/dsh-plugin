@@ -41,7 +41,10 @@ export interface SessionRowsPage {
   pageSize: number;
 }
 
-/** 时间范围的语义键（与 session-rdb `./usage` 的 `UsageRangeKey` 镜像）。 */
+/**
+ * 时间范围的语义键（与 session-rdb `./usage` 的 `UsageRangeKey` 镜像）：`day` / `week` 是本地自然日 /
+ * 自然周，`7d` / `30d` / `90d` 是最近 N 个自然日（含今天）——边界由 host 按本地时区算，客户端只传语义。
+ */
 export type UsageRangeKey = "all" | "day" | "week" | "7d" | "30d" | "90d";
 
 /** 活动计数（与 session-rdb `./usage` 的回报结构镜像）：轮次 / 步骤 / 用户输入 / 工具调用。 */

@@ -39,12 +39,20 @@
 ## 用量统计（`usage.spec.ts` / `pg.spec.ts`）
 
 判据是**口径**而不是实现：只算被会话引用的事件行（fork 共享行计一次、孤儿行不计）、
-`subagent / human` 拆分、时间范围按语义键过滤；活动计数（轮次 / 步骤 / 用户输入 / 工具调用）按派生表
-`t_event_counts` 读（不在 `t_events` 上现数）、与 token 同一会话集合（有 token 用量的会话），按模型的行只带 token 用量。
-PG 侧同形，`pg.spec.ts` 里真跑一次（不能只靠 SQLite 覆盖两套 SQL）。
+`subagent / human` 拆分、时间范围按语义键过滤（起点对齐本地零点）；活动计数（轮次 / 步骤 / 用户输入 /
+工具调用）读派生表 `t_session_counts`（不在 `t_events` 上现数）、与 token 同一会话集合（有 token 用量的会话），
+按模型的行只带 token 用量、按会话的行含 fork 继承前缀。PG 侧同形，`pg.spec.ts` 里真跑一次
+（不能只靠 SQLite 覆盖两套 SQL）。
 
-## 活动计数（`usage.spec.ts`）
+## 派生统计表（`usage.spec.ts`）
 
-`t_event_counts` 是派生表：判据是**回填可用**（表清空后重开，按事件表重算）与**旁路累加**（事件写入后
-报表里的轮次 / 步骤 / 用户输入 / 工具调用随之变化），不判实现内部的累加语句。int4 修复由 PG 侧
-`pg.spec.ts` 的用量用例守着（毫秒时间戳能落进 `t_event_usage`）。
+三张表（`t_event_usage` / `t_session_usage` / `t_session_counts`）都是可销毁重建的派生数据，判据是：
+
+- **回填可用**：表清空后重开，报表数值按事件表恢复（幂等，再开一次不翻倍）；
+- **迁移重建**：旧结构的库（缺物化列的 `t_event_usage` + 按类型存的 `t_event_counts`）过一遍
+  `20260923120000_v3_usage_materialized` 后是新结构，且数值由回填补齐；
+- **旁路累加**：事件写入后报表里的 token 与四项计数随之变化；
+- **变更后重算**：fork 复用的事件行归到子会话（`f_subagent` 由全量重算补齐）、子会话行含继承前缀，
+  删除会话后其用量立刻退出统计（在 GC 之前）。
+
+不判实现内部的累加语句。int4 修复由 PG 侧 `pg.spec.ts` 的用量用例守着（毫秒时间戳能落进 `t_event_usage`）。

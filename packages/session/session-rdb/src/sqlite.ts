@@ -11,18 +11,20 @@ import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistenc
 import {
   type Backend,
   type BackendTx,
-  type EventCountBucket,
   type EventInsert,
   type EventRow,
+  type SessionCountBucket,
   type SessionListRowRecord,
   type SessionListRowsPage,
   type SessionListRowsQuery,
   type SessionRow,
+  type SessionUsageBucket,
 } from "./backend.ts";
-import { sessionConflictRow, sessionInsertRow, titleOfEventData, usageRowOf } from "./log.ts";
+import { sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
+import type { EventUsageRow } from "./log.ts";
 import {
   COUNTED_EVENT_TYPES,
-  addActivityCount,
+  addActivityTotals,
   addTokenTotals,
   addTotals,
   emptyTotals,
@@ -63,12 +65,6 @@ interface RawBucketRow {
   total_tokens: number | null;
 }
 
-/** 活动计数行（派生表按事件类型存，读的时候折成四项）。 */
-interface RawCountRow {
-  f_type: string;
-  n: number | null;
-}
-
 /** 「是否子代理」两组的 token 合计行。 */
 interface RawScopeRow extends RawBucketRow {}
 
@@ -79,53 +75,69 @@ interface RawSessionTokenRow extends RawBucketRow {
   archived: number;
 }
 
+/** `t_session_counts` 的原始行（四项计数，列名是 SQL 别名）。 */
+interface RawCountRow {
+  turns: number | null;
+  steps: number | null;
+  user_inputs: number | null;
+  tool_calls: number | null;
+}
+
+/** 按会话的活动计数行。 */
 interface RawSessionCountRow extends RawCountRow {
   session_id: string;
 }
 
-/** 活动计数的派生表：可销毁重建（不在 drizzle schema / 迁移里，建表幂等）。 */
-function ensureEventCountsTable(db: DatabaseSync): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS t_event_counts (
-      f_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      f_session_id TEXT NOT NULL,
-      f_day TEXT NOT NULL,
-      f_type TEXT NOT NULL,
-      f_count INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_event_counts_session_day_type
-      ON t_event_counts(f_session_id, f_day, f_type);
-    CREATE INDEX IF NOT EXISTS idx_event_counts_day ON t_event_counts(f_day);`);
+/** 活动总览行：是否子代理 + 四项计数。 */
+interface RawActivityScopeRow extends RawCountRow {
+  subagent: number | null;
 }
 
-/** 一次性回填活动计数（表为空时从事件表重算；幂等）。 */
-function backfillEventCounts(db: DatabaseSync): void {
-  const pending = db.prepare("SELECT count(*) AS n FROM t_event_counts").get() as { n: number };
-  if (pending.n > 0) return;
-  db.exec(`INSERT OR IGNORE INTO t_event_counts (f_session_id, f_day, f_type, f_count)
-    SELECT b.f_session_id,
-           date(e.f_created_at / 1000, 'unixepoch', 'localtime'),
-           e.f_type,
-           count(*)
-      FROM t_session_events b
-      JOIN t_events e ON e.f_event_id = b.f_event_id
-     WHERE e.f_type IN (${COUNTED_EVENT_TYPE_SQL})
-     GROUP BY 1, 2, 3`);
+/** 用量行的「被引用」物化表达式（`%EVENT%` 换成事件 id 列）。 */
+const EVENT_REFERENCED_SQL = `EXISTS (SELECT 1 FROM t_session_events rb
+                                       WHERE rb.f_event_id = %EVENT%)`;
+
+/** 用量行的「被 subagent 会话引用」物化表达式（`%EVENT%` 换成事件 id 列）。 */
+const EVENT_SUBAGENT_SQL = `EXISTS (SELECT 1 FROM t_session_events sb
+                                     JOIN t_sessions ss ON ss.f_session_id = sb.f_session_id
+                                    WHERE sb.f_event_id = %EVENT% AND ss.f_origin = 'subagent')`;
+
+/** `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。 */
+const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
+
+function withEvent(expression: string, column: string): string {
+  return expression.replace("%EVENT%", column);
 }
 
 /**
- * 一次性回填：旧库的用量从未写过 `t_event_usage`，建表后按事件行补一次（幂等：表非空即跳过）。
+ * 派生统计表的回填：任一表为空即按事件表全量重算（幂等；迁移删表重建后、手动清空后都靠它自愈）。
+ * 顺序有依赖：用量行（带物化列）先落，两张会话汇总表再从它 / 事件表重算。
  */
+function backfillUsageTables(db: DatabaseSync): void {
+  backfillEventUsage(db);
+  backfillSessionUsage(db);
+  backfillSessionCounts(db);
+}
+
+function tableIsEmpty(db: DatabaseSync, table: string): boolean {
+  const row = db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+  return row.n === 0;
+}
+
+/** 用量行：一条 `assistant/message` 事件行一行，物化本地日与两个归属标记。 */
 function backfillEventUsage(db: DatabaseSync): void {
-  const pending = db.prepare("SELECT count(*) AS n FROM t_event_usage").get() as { n: number };
-  if (pending.n > 0) return;
+  if (!tableIsEmpty(db, "t_event_usage")) return;
   db.exec(`INSERT OR IGNORE INTO t_event_usage (
-      f_event_id, f_created_at, f_provider, f_model,
+      f_event_id, f_created_at, f_day, f_provider, f_model, f_referenced, f_subagent,
       f_input_tokens, f_output_tokens, f_cache_read_tokens, f_reasoning_tokens, f_total_tokens)
     SELECT e.f_event_id, e.f_created_at,
+           date(e.f_created_at / 1000, 'unixepoch', 'localtime'),
            coalesce(json_extract(e.f_data, '$.data.message.source.provider'),
                     json_extract(e.f_data, '$.message.source.provider')),
            coalesce(json_extract(e.f_data, '$.data.message.source.model'),
                     json_extract(e.f_data, '$.message.source.model')),
+           ${withEvent(EVENT_REFERENCED_SQL, "e.f_event_id")},
+           ${withEvent(EVENT_SUBAGENT_SQL, "e.f_event_id")},
            coalesce(json_extract(e.f_data, '$.data.usage.inputTokens'),
                     json_extract(e.f_data, '$.usage.inputTokens'), 0),
            coalesce(json_extract(e.f_data, '$.data.usage.outputTokens'),
@@ -142,9 +154,41 @@ function backfillEventUsage(db: DatabaseSync): void {
             OR json_extract(e.f_data, '$.usage') IS NOT NULL)`);
 }
 
+/** 会话 × 本地日 × 模型的 token 汇总：从桥接行 × 用量行重算（含 fork 继承前缀）。 */
+function backfillSessionUsage(db: DatabaseSync): void {
+  if (!tableIsEmpty(db, "t_session_usage")) return;
+  db.exec(`INSERT OR IGNORE INTO t_session_usage (
+      f_session_id, f_day, f_provider, f_model,
+      f_input_tokens, f_output_tokens, f_cache_read_tokens, f_reasoning_tokens, f_total_tokens)
+    SELECT b.f_session_id, u.f_day, coalesce(u.f_provider, ''), coalesce(u.f_model, ''),
+           sum(u.f_input_tokens), sum(u.f_output_tokens), sum(u.f_cache_read_tokens),
+           sum(u.f_reasoning_tokens), sum(u.f_total_tokens)
+      FROM t_session_events b
+      JOIN t_event_usage u ON u.f_event_id = b.f_event_id
+     GROUP BY b.f_session_id, u.f_day, coalesce(u.f_provider, ''), coalesce(u.f_model, '')`);
+}
+
+/** 会话 × 本地日的活动计数：从桥接行 × 事件类型重算。 */
+function backfillSessionCounts(db: DatabaseSync): void {
+  if (!tableIsEmpty(db, "t_session_counts")) return;
+  db.exec(`INSERT OR IGNORE INTO t_session_counts (
+      f_session_id, f_day, f_turns, f_steps, f_user_inputs, f_tool_calls)
+    SELECT b.f_session_id,
+           date(e.f_created_at / 1000, 'unixepoch', 'localtime'),
+           sum(CASE WHEN e.f_type = 'turn/start' THEN 1 ELSE 0 END),
+           sum(CASE WHEN e.f_type = 'step/start' THEN 1 ELSE 0 END),
+           sum(CASE WHEN e.f_type = 'user/message' THEN 1 ELSE 0 END),
+           sum(CASE WHEN e.f_type = 'tool/call' THEN 1 ELSE 0 END)
+      FROM t_session_events b
+      JOIN t_events e ON e.f_event_id = b.f_event_id
+     WHERE e.f_type IN (${COUNTED_EVENT_TYPE_SQL})
+     GROUP BY b.f_session_id, 2`);
+}
+
 function sessionListRowOf(row: Record<string, unknown>): SessionListRowRecord {
   return {
-    sessionId: typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
+    sessionId:
+      typeof row["session_id"] === "string" ? row["session_id"] : String(row["session_id"]),
     title: typeof row["title"] === "string" ? row["title"] : null,
     origin: typeof row["origin"] === "string" ? row["origin"] : null,
     cwd: typeof row["cwd"] === "string" ? row["cwd"] : null,
@@ -173,24 +217,30 @@ function tokenTotalsOf(row: {
   };
 }
 
+/** `t_session_counts` 的原始行（列名是 SQL 别名）折成四项活动计数。 */
+function activityTotalsOf(row: {
+  turns: number | null;
+  steps: number | null;
+  user_inputs: number | null;
+  tool_calls: number | null;
+}): UsageActivityTotals {
+  return {
+    turns: row.turns ?? 0,
+    steps: row.steps ?? 0,
+    userInputs: row.user_inputs ?? 0,
+    toolCalls: row.tool_calls ?? 0,
+  };
+}
+
 /** 一行的整套指标：token 用量 + 活动计数（轮次 / 步骤 / 用户输入 / 工具调用）。 */
 function emptyActivity(): UsageActivityTotals {
   return { turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
 }
 
-/** 有 token 用量的会话：活动计数与列表都限定在这一批会话里，口径一致。 */
+/** 有 token 用量的会话：活动计数与列表都限定在这一批会话里，口径一致（读汇总表，几百行）。 */
 function hasUsageSession(column: string): string {
-  return `EXISTS (SELECT 1 FROM t_session_events ub
-                    JOIN t_event_usage uu ON uu.f_event_id = ub.f_event_id
-                   WHERE ub.f_session_id = ${column})`;
+  return `EXISTS (SELECT 1 FROM t_session_usage ub WHERE ub.f_session_id = ${column})`;
 }
-
-const SUBAGENT_OF_EVENT = `EXISTS (SELECT 1 FROM t_session_events sb
-                                     JOIN t_sessions ss ON ss.f_session_id = sb.f_session_id
-                                    WHERE sb.f_event_id = %EVENT% AND ss.f_origin = 'subagent')`;
-
-/** `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。 */
-const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
 
 const sqliteMigrationsDir = fileURLToPath(new URL("../drizzle/sqlite/", import.meta.url));
 
@@ -236,9 +286,7 @@ export async function openDatabase(
       await baselineV2(db);
     }
     migrate(dbx, { migrationsFolder: sqliteMigrationsDir });
-    ensureEventCountsTable(db);
-    backfillEventCounts(db);
-    backfillEventUsage(db);
+    backfillUsageTables(db);
 
     dbx
       .insert(tPersistenceState)
@@ -509,7 +557,7 @@ export class SqliteBackend implements Backend {
     getHead: (id) => this.getHead(id),
     getSeedLength: (id) => this.getSeedLength(id),
     updateSeedLength: (id, seedLength) => this.updateSeedLength(id, seedLength),
-    insertEvents: (events) => this.insertEvents(events),
+    insertEvents: (events, usageRows) => this.insertEvents(events, usageRows),
     insertBridges: (rows) => this.insertBridges(rows),
     updateHead: (id, headEventId, headSequence) => this.updateHead(id, headEventId, headSequence),
     bumpRevision: (id, lastEventAt) => this.bumpRevision(id, lastEventAt),
@@ -565,7 +613,10 @@ export class SqliteBackend implements Backend {
 
   private static readonly INSERT_BATCH_ROWS = 1000;
 
-  private async insertEvents(events: EventInsert[]): Promise<void> {
+  private async insertEvents(
+    events: EventInsert[],
+    usageRows: readonly EventUsageRow[],
+  ): Promise<void> {
     if (events.length === 0) return;
     for (let i = 0; i < events.length; i += SqliteBackend.INSERT_BATCH_ROWS) {
       this.db
@@ -573,13 +624,14 @@ export class SqliteBackend implements Backend {
         .values(events.slice(i, i + SqliteBackend.INSERT_BATCH_ROWS).map((event) => ({ ...event })))
         .run();
     }
-    // 用量顺带落 t_event_usage：统计不再逐行解析事件 JSON（重复事件行忽略，fork 复用不重复记）。
-    const usage = events.flatMap((event) => {
-      const row = usageRowOf(event);
-      return row === undefined ? [] : [row];
-    });
-    if (usage.length > 0) {
-      this.db.insert(tEventUsage).values(usage).onConflictDoNothing().run();
+    // 用量行顺带落 t_event_usage（本地日与引用标记已由写路径物化）：统计不再解析事件 JSON、
+    // 也不回连事件表（重复事件行忽略，fork 复用不重复记）。
+    if (usageRows.length > 0) {
+      this.db
+        .insert(tEventUsage)
+        .values(usageRows.map((row) => ({ ...row })))
+        .onConflictDoNothing()
+        .run();
     }
   }
 
@@ -760,57 +812,64 @@ export class SqliteBackend implements Backend {
     };
   }
 
+  /**
+   * 用量聚合：只读三张派生统计表——事件级用量行给去重口径的总量与「天 × 模型」桶，
+   * `t_session_usage` / `t_session_counts` 给按会话的行（含 fork 继承前缀）。
+   * 归属、本地日与「是否被引用」都是物化列，这里不再现算、也不回连事件表。
+   * 事件级按毫秒时间戳过滤、汇总表按本地日过滤——`sinceMs` 对齐到本地零点时两者等价。
+   */
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
-    const usageSince = sinceMs === undefined ? "" : " AND u.f_created_at >= ?";
+    const usageSince = sinceMs === undefined ? "" : " AND f_created_at >= ?";
     const params = sinceMs === undefined ? [] : [sinceMs];
-    // 活动计数走派生表的「本地日」列（与桶的 localtime 口径一致）。
-    const daySince = sinceMs === undefined ? "" : " AND c.f_day >= ?";
+    const daySince = sinceMs === undefined ? "" : " AND %COL% >= ?";
     const dayParams = sinceMs === undefined ? [] : [localDayKey(sinceMs)];
-    const subagentOfUsage = SUBAGENT_OF_EVENT.replace("%EVENT%", "u.f_event_id");
+    const dayFilter = (column: string): string => daySince.replace("%COL%", column);
 
     const buckets = this.db.$client
       .prepare(
-        `SELECT date(u.f_created_at / 1000, 'unixepoch', 'localtime') AS day,
-                u.f_provider AS provider,
-                u.f_model AS model,
-                ${subagentOfUsage} AS subagent,
-                sum(u.f_input_tokens) AS input_tokens,
-                sum(u.f_output_tokens) AS output_tokens,
-                sum(u.f_cache_read_tokens) AS cache_read_tokens,
-                sum(u.f_reasoning_tokens) AS reasoning_tokens,
-                sum(u.f_total_tokens) AS total_tokens
-           FROM t_event_usage u
-          WHERE EXISTS (SELECT 1 FROM t_session_events rb WHERE rb.f_event_id = u.f_event_id)${usageSince}
-          GROUP BY day, provider, model, subagent`,
+        `SELECT f_day AS day,
+                f_provider AS provider,
+                f_model AS model,
+                f_subagent AS subagent,
+                sum(f_input_tokens) AS input_tokens,
+                sum(f_output_tokens) AS output_tokens,
+                sum(f_cache_read_tokens) AS cache_read_tokens,
+                sum(f_reasoning_tokens) AS reasoning_tokens,
+                sum(f_total_tokens) AS total_tokens
+           FROM t_event_usage
+          WHERE f_referenced = 1${usageSince}
+          GROUP BY f_day, f_provider, f_model, f_subagent`,
       )
       .all(...params) as unknown as RawBucketRow[];
     const tokenScope = this.db.$client
       .prepare(
-        `SELECT ${subagentOfUsage} AS subagent,
-                sum(u.f_input_tokens) AS input_tokens,
-                sum(u.f_output_tokens) AS output_tokens,
-                sum(u.f_cache_read_tokens) AS cache_read_tokens,
-                sum(u.f_reasoning_tokens) AS reasoning_tokens,
-                sum(u.f_total_tokens) AS total_tokens
-           FROM t_event_usage u
-          WHERE EXISTS (SELECT 1 FROM t_session_events rb WHERE rb.f_event_id = u.f_event_id)${usageSince}
-          GROUP BY subagent`,
+        `SELECT f_subagent AS subagent,
+                sum(f_input_tokens) AS input_tokens,
+                sum(f_output_tokens) AS output_tokens,
+                sum(f_cache_read_tokens) AS cache_read_tokens,
+                sum(f_reasoning_tokens) AS reasoning_tokens,
+                sum(f_total_tokens) AS total_tokens
+           FROM t_event_usage
+          WHERE f_referenced = 1${usageSince}
+          GROUP BY f_subagent`,
       )
       .all(...params) as unknown as RawScopeRow[];
     const activityScope = this.db.$client
       .prepare(
         `SELECT (s.f_origin = 'subagent') AS subagent,
-                c.f_type AS f_type,
-                sum(c.f_count) AS n
-           FROM t_event_counts c
+                sum(c.f_turns) AS turns,
+                sum(c.f_steps) AS steps,
+                sum(c.f_user_inputs) AS user_inputs,
+                sum(c.f_tool_calls) AS tool_calls
+           FROM t_session_counts c
            JOIN t_sessions s ON s.f_session_id = c.f_session_id
-          WHERE ${hasUsageSession("c.f_session_id")}${daySince}
-          GROUP BY subagent, c.f_type`,
+          WHERE ${hasUsageSession("c.f_session_id")}${dayFilter("c.f_day")}
+          GROUP BY subagent`,
       )
-      .all(...dayParams) as unknown as Array<RawCountRow & { subagent: number }>;
+      .all(...dayParams) as unknown as RawActivityScopeRow[];
     const tokenSessions = this.db.$client
       .prepare(
-        `SELECT b.f_session_id AS session_id,
+        `SELECT u.f_session_id AS session_id,
                 s.f_title AS title,
                 (s.f_origin = 'subagent') AS subagent,
                 (s.f_archived_at IS NOT NULL) AS archived,
@@ -819,21 +878,22 @@ export class SqliteBackend implements Backend {
                 sum(u.f_cache_read_tokens) AS cache_read_tokens,
                 sum(u.f_reasoning_tokens) AS reasoning_tokens,
                 sum(u.f_total_tokens) AS total_tokens
-           FROM t_session_events b
-           JOIN t_event_usage u ON u.f_event_id = b.f_event_id
-           JOIN t_sessions s ON s.f_session_id = b.f_session_id
-          WHERE 1 = 1${usageSince}
-          GROUP BY b.f_session_id, s.f_title, s.f_origin, s.f_archived_at`,
+           FROM t_session_usage u
+           JOIN t_sessions s ON s.f_session_id = u.f_session_id
+          WHERE 1 = 1${dayFilter("u.f_day")}
+          GROUP BY u.f_session_id, s.f_title, s.f_origin, s.f_archived_at`,
       )
-      .all(...params) as unknown as RawSessionTokenRow[];
+      .all(...dayParams) as unknown as RawSessionTokenRow[];
     const activitySessions = this.db.$client
       .prepare(
-        `SELECT c.f_session_id AS session_id,
-                c.f_type AS f_type,
-                sum(c.f_count) AS n
-           FROM t_event_counts c
-          WHERE ${hasUsageSession("c.f_session_id")}${daySince}
-          GROUP BY c.f_session_id, c.f_type`,
+        `SELECT f_session_id AS session_id,
+                sum(f_turns) AS turns,
+                sum(f_steps) AS steps,
+                sum(f_user_inputs) AS user_inputs,
+                sum(f_tool_calls) AS tool_calls
+           FROM t_session_counts
+          WHERE 1 = 1${dayFilter("f_day")}
+          GROUP BY f_session_id`,
       )
       .all(...dayParams) as unknown as RawSessionCountRow[];
     const human = emptyTotals();
@@ -842,15 +902,13 @@ export class SqliteBackend implements Backend {
       addTokenTotals(row.subagent === 1 ? subagent : human, tokenTotalsOf(row));
     }
     for (const row of activityScope) {
-      addActivityCount(row.subagent === 1 ? subagent : human, row.f_type, row.n ?? 0);
+      addActivityTotals(row.subagent === 1 ? subagent : human, activityTotalsOf(row));
     }
     const totals = addTotals(addTotals(emptyTotals(), human), subagent);
 
     const activityBySession = new Map<string, UsageActivityTotals>();
     for (const row of activitySessions) {
-      const target = activityBySession.get(row.session_id) ?? emptyActivity();
-      addActivityCount(target, row.f_type, row.n ?? 0);
-      activityBySession.set(row.session_id, target);
+      activityBySession.set(row.session_id, activityTotalsOf(row));
     }
     return {
       totals,
@@ -874,36 +932,117 @@ export class SqliteBackend implements Backend {
     };
   }
 
-  /** 活动计数旁路累加：派生表 `t_event_counts`，不在写事务里（失败可丢，表可销毁重建）。 */
-  async incrementEventCounts(id: SessionId, buckets: readonly EventCountBucket[]): Promise<void> {
+  /** token 用量旁路累加：派生表 `t_session_usage`，不在写事务里（失败可丢，表可销毁重建）。 */
+  async incrementSessionUsage(
+    id: SessionId,
+    buckets: readonly SessionUsageBucket[],
+  ): Promise<void> {
     if (buckets.length === 0) return;
     const statement = this.db.$client.prepare(
-      `INSERT INTO t_event_counts (f_session_id, f_day, f_type, f_count) VALUES (?, ?, ?, ?)
-       ON CONFLICT(f_session_id, f_day, f_type) DO UPDATE SET f_count = f_count + excluded.f_count`,
+      `INSERT INTO t_session_usage (f_session_id, f_day, f_provider, f_model,
+          f_input_tokens, f_output_tokens, f_cache_read_tokens, f_reasoning_tokens, f_total_tokens)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(f_session_id, f_day, f_provider, f_model) DO UPDATE SET
+         f_input_tokens = f_input_tokens + excluded.f_input_tokens,
+         f_output_tokens = f_output_tokens + excluded.f_output_tokens,
+         f_cache_read_tokens = f_cache_read_tokens + excluded.f_cache_read_tokens,
+         f_reasoning_tokens = f_reasoning_tokens + excluded.f_reasoning_tokens,
+         f_total_tokens = f_total_tokens + excluded.f_total_tokens`,
     );
-    for (const bucket of buckets) statement.run(id, bucket.day, bucket.type, bucket.count);
+    for (const bucket of buckets) {
+      statement.run(
+        id,
+        bucket.day,
+        bucket.provider ?? "",
+        bucket.model ?? "",
+        bucket.inputTokens,
+        bucket.outputTokens,
+        bucket.cacheReadTokens,
+        bucket.reasoningTokens,
+        bucket.totalTokens,
+      );
+    }
   }
 
-  /** 按会话重算活动计数（rewind / fork 之后）：先删该会话的行，再从事件表重算。 */
-  async rebuildEventCounts(id: SessionId): Promise<void> {
-    this.db.$client.prepare("DELETE FROM t_event_counts WHERE f_session_id = ?").run(id);
+  /** 活动计数旁路累加：派生表 `t_session_counts`，同上（四项计数一次落）。 */
+  async incrementSessionCounts(
+    id: SessionId,
+    buckets: readonly SessionCountBucket[],
+  ): Promise<void> {
+    if (buckets.length === 0) return;
+    const statement = this.db.$client.prepare(
+      `INSERT INTO t_session_counts (f_session_id, f_day, f_turns, f_steps, f_user_inputs, f_tool_calls)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(f_session_id, f_day) DO UPDATE SET
+         f_turns = f_turns + excluded.f_turns,
+         f_steps = f_steps + excluded.f_steps,
+         f_user_inputs = f_user_inputs + excluded.f_user_inputs,
+         f_tool_calls = f_tool_calls + excluded.f_tool_calls`,
+    );
+    for (const bucket of buckets) {
+      statement.run(
+        id,
+        bucket.day,
+        bucket.turns,
+        bucket.steps,
+        bucket.userInputs,
+        bucket.toolCalls,
+      );
+    }
+  }
+
+  /** 按会话重算两张汇总表（rewind / fork 之后）：先删该会话的行，再从事件表重算。 */
+  async rebuildSessionStats(id: SessionId): Promise<void> {
+    this.db.$client.prepare("DELETE FROM t_session_usage WHERE f_session_id = ?").run(id);
     this.db.$client
       .prepare(
-        `INSERT INTO t_event_counts (f_session_id, f_day, f_type, f_count)
+        `INSERT INTO t_session_usage (
+             f_session_id, f_day, f_provider, f_model,
+             f_input_tokens, f_output_tokens, f_cache_read_tokens, f_reasoning_tokens, f_total_tokens)
+         SELECT b.f_session_id, u.f_day, coalesce(u.f_provider, ''), coalesce(u.f_model, ''),
+                sum(u.f_input_tokens), sum(u.f_output_tokens), sum(u.f_cache_read_tokens),
+                sum(u.f_reasoning_tokens), sum(u.f_total_tokens)
+           FROM t_session_events b
+           JOIN t_event_usage u ON u.f_event_id = b.f_event_id
+          WHERE b.f_session_id = ?
+          GROUP BY b.f_session_id, u.f_day, coalesce(u.f_provider, ''), coalesce(u.f_model, '')`,
+      )
+      .run(id);
+    this.db.$client.prepare("DELETE FROM t_session_counts WHERE f_session_id = ?").run(id);
+    this.db.$client
+      .prepare(
+        `INSERT INTO t_session_counts (
+             f_session_id, f_day, f_turns, f_steps, f_user_inputs, f_tool_calls)
          SELECT b.f_session_id,
                 date(e.f_created_at / 1000, 'unixepoch', 'localtime'),
-                e.f_type,
-                count(*)
+                sum(CASE WHEN e.f_type = 'turn/start' THEN 1 ELSE 0 END),
+                sum(CASE WHEN e.f_type = 'step/start' THEN 1 ELSE 0 END),
+                sum(CASE WHEN e.f_type = 'user/message' THEN 1 ELSE 0 END),
+                sum(CASE WHEN e.f_type = 'tool/call' THEN 1 ELSE 0 END)
            FROM t_session_events b
            JOIN t_events e ON e.f_event_id = b.f_event_id
           WHERE b.f_session_id = ? AND e.f_type IN (${COUNTED_EVENT_TYPE_SQL})
-          GROUP BY 1, 2, 3`,
+          GROUP BY b.f_session_id, 2`,
       )
       .run(id);
   }
 
-  async deleteEventCounts(id: SessionId): Promise<void> {
-    this.db.$client.prepare("DELETE FROM t_event_counts WHERE f_session_id = ?").run(id);
+  /**
+   * 全量重算用量行的引用标记：rewind 截断 / fork 复用 / 会话删除都会让「引用」跨会话变化，
+   * 只按本会话判定不够。低频路径，一次全表 UPDATE（3 万行量级）。
+   */
+  async refreshEventUsageFlags(): Promise<void> {
+    const eventId = "t_event_usage.f_event_id";
+    this.db.$client.exec(
+      `UPDATE t_event_usage SET
+         f_referenced = ${withEvent(EVENT_REFERENCED_SQL, eventId)},
+         f_subagent = ${withEvent(EVENT_SUBAGENT_SQL, eventId)}`,
+    );
+  }
+
+  async deleteSessionStats(id: SessionId): Promise<void> {
+    this.db.$client.prepare("DELETE FROM t_session_usage WHERE f_session_id = ?").run(id);
+    this.db.$client.prepare("DELETE FROM t_session_counts WHERE f_session_id = ?").run(id);
   }
 
   async vacuum(): Promise<void> {

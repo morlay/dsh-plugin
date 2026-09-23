@@ -3,11 +3,9 @@ import type { SessionPersistenceRdb } from "./index.ts";
 
 export const SESSION_USAGE_PATH = "/api/session.usage";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /**
  * 时间范围的语义键：`all` 不限；`day` / `week` 是**本地自然日 / 自然周**（周一起算）；
- * `7d` / `30d` / `90d` 是最近 N 天（滚动窗口）。
+ * `7d` / `30d` / `90d` 是**最近 N 个自然日**（含今天）。
  */
 export type UsageRangeKey = "all" | "day" | "week" | "7d" | "30d" | "90d";
 
@@ -20,7 +18,9 @@ function localDayStart(now: number): Date {
 }
 
 /**
- * 范围起点（含），不限时为 undefined。自然日 / 自然周按 host 的本地时区算，周边界是周一 00:00。
+ * 范围起点（含），不限时为 undefined。**所有起点都对齐到 host 本地时区的零点**——`day` / `week` 是
+ * 今天 / 本周一的零点，`7d` / `30d` / `90d` 是「今天零点往前 N-1 天」（含今天共 N 个自然日）。
+ * 对齐的意义：事件级表按毫秒过滤、会话汇总表按本地日过滤，两者因此严格等价。
  * @param range - 语义键。
  * @param now - 当前时刻。
  * @returns 起点毫秒时间戳，或 undefined。
@@ -37,8 +37,12 @@ export function resolveUsageSince(range: UsageRangeKey, now: number): number | u
       start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
       return start.getTime();
     }
-    default:
-      return now - ROLLING_DAYS[range] * DAY_MS;
+    default: {
+      // 用日历日期减（不是减 N × 24h）：跨夏令时切换时「N-1 天前的零点」才是本地零点。
+      const start = localDayStart(now);
+      start.setDate(start.getDate() - (ROLLING_DAYS[range] - 1));
+      return start.getTime();
+    }
   }
 }
 

@@ -9,6 +9,8 @@ import { workspaceSessions } from "./workspace-sessions.ts";
 import { workspaceState } from "./workspace-state.ts";
 import { sessionProjcacheRows } from "./session-projcache-rows.ts";
 import { eventUsage } from "./event-usage.ts";
+import { sessionUsage } from "./session-usage.ts";
+import { sessionCounts } from "./session-counts.ts";
 
 export { persistenceState };
 export { schemaMeta };
@@ -21,6 +23,8 @@ export { workspaceSessions };
 export { workspaceState };
 export { sessionProjcacheRows };
 export { eventUsage };
+export { sessionUsage };
+export { sessionCounts };
 
 export const sqliteTableDefs = [
   persistenceState,
@@ -34,6 +38,8 @@ export const sqliteTableDefs = [
   workspaceState,
   sessionProjcacheRows,
   eventUsage,
+  sessionUsage,
+  sessionCounts,
 ] as const;
 
 export const postgresTableDefs = [
@@ -48,4 +54,6 @@ export const postgresTableDefs = [
   workspaceState,
   sessionProjcacheRows,
   eventUsage,
+  sessionUsage,
+  sessionCounts,
 ] as const;

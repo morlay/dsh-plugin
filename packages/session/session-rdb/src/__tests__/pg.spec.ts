@@ -145,6 +145,8 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
       });
       expect(report.sessions[0]).toMatchObject({ sessionId: "s1", turns: 1, inputTokens: 100 });
       expect(report.subagent).toMatchObject({ turns: 0, inputTokens: 0 });
+      // 汇总表的时间范围走本地日比较：事件时间戳在 1970 年，落在任何范围之外。
+      expect((await persistence.usageReport(Date.now())).totals.inputTokens).toBe(0);
     } finally {
       await fiber.dispose();
       await drop();

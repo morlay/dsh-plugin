@@ -41,11 +41,13 @@ import { sessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
 import {
   type Backend,
   type BackendTx,
-  type EventCountBucket,
   type EventInsert,
+  type SessionCountBucket,
+  type SessionUsageBucket,
 } from "./backend.ts";
 import { WriteGuard } from "./write-guard.ts";
-import { repairReadView, rowToMeta, scanRows, toJsonlArtifact } from "./log.ts";
+import { repairReadView, rowToMeta, scanRows, toJsonlArtifact, usageRowOf } from "./log.ts";
+import type { EventUsageRow } from "./log.ts";
 import {
   DEFAULT_BUSY_TIMEOUT_MS,
   eventDimensions,
@@ -61,7 +63,12 @@ import { registerSessionDeletion } from "./deletion.ts";
 import { registerSessionExport } from "./export.ts";
 import { registerSessionGc } from "./gc.ts";
 import { registerSessionRows } from "./rows.ts";
-import { COUNTED_EVENT_TYPES, localDayKey, registerSessionUsage } from "./usage.ts";
+import {
+  COUNTED_EVENT_TYPES,
+  addActivityCount,
+  localDayKey,
+  registerSessionUsage,
+} from "./usage.ts";
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
 import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts";
@@ -754,7 +761,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     this.liveFailures.delete(id);
     this.liveDropWarned.delete(id);
     this.reuseEventIds.delete(id);
-    await this.deleteEventCounts(id);
+    await this.dropSessionStats(id);
   }
 
   /** GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。 */
@@ -778,7 +785,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       this.liveFailures.delete(id);
       this.liveDropWarned.delete(id);
       this.reuseEventIds.delete(id);
-      await this.deleteEventCounts(id);
+      await this.dropSessionStats(id);
     }
     return deleted;
   }
@@ -858,6 +865,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     const reuse = this.reuseEventIds.get(meta.id);
     let confirmedHead = -1;
+    // 本批用量行由 `appendEventTail` 折好；事务成功后旁路据此累加 token 汇总表。
+    let usageRows: EventUsageRow[] = [];
     await this.backend.transaction(async (tx) => {
       if (tornTruncateTo !== undefined) {
         await tx.deleteBridgeTail(meta.id, tornTruncateTo);
@@ -872,16 +881,17 @@ export class SessionPersistenceRdb extends SessionPersistence {
       const head = await tx.getHead(meta.id);
 
       this.writeGuard.assertNoConcurrentWriter(meta.id, head.fHeadSequence);
-      const { headEventId, headSequence } = await appendEventTail(
+      const appended = await appendEventTail(
         tx,
         meta,
         events,
         { parentId: head.fHeadEventId, nextSeq: head.fHeadSequence + 1 },
         reuse,
       );
-      await tx.updateHead(meta.id, headEventId, headSequence);
+      usageRows = appended.usageRows;
+      await tx.updateHead(meta.id, appended.headEventId, appended.headSequence);
       await tx.bumpRevision(meta.id, maxEventTime(events));
-      confirmedHead = headSequence;
+      confirmedHead = appended.headSequence;
     });
     // 事务**成功之后**才丢掉复用映射：失败（并发写者校验、唯一键冲突等）时这份映射还没被消费，
     // 重试同一个 append 还要靠它复用父会话的事件行——提前删掉会让前缀事件行被重新插入一遍。
@@ -889,7 +899,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     this.writeGuard.confirmHead(meta.id, confirmedHead);
     this.tracker.materialized(meta.id);
-    await this.recordEventCounts(meta.id, events);
+    await this.recordSessionStats(meta.id, events, usageRows);
     return true;
   }
 
@@ -985,39 +995,60 @@ export class SessionPersistenceRdb extends SessionPersistence {
   }
 
   /**
-   * 活动计数**旁路累加**：不在写事务里、失败只 warn——`t_event_counts` 是可销毁重建的派生表，
-   * 丢几次累加不影响可用性（需要时用 `rebuildEventCounts` 重算）。
+   * 统计衍生表的**旁路累加**：不在写事务里、失败只 warn——两张会话汇总表都是可销毁重建的
+   * 派生表，丢几次累加不影响可用性（需要时用 `rebuildSessionStats` 重算）。
+   * token 走写路径已折好的用量行，活动计数走本批事件类型。
    */
-  private async recordEventCounts(id: SessionId, events: readonly SessionEvent[]): Promise<void> {
-    const buckets = eventCountBuckets(events);
-    if (buckets.length === 0) return;
+  private async recordSessionStats(
+    id: SessionId,
+    events: readonly SessionEvent[],
+    usageRows: readonly EventUsageRow[],
+  ): Promise<void> {
+    const usageBuckets = sessionUsageBuckets(usageRows);
+    if (usageBuckets.length > 0) {
+      try {
+        await this.backend.incrementSessionUsage(id, usageBuckets);
+      } catch (error: unknown) {
+        this.ctx.logger.warn(
+          `session-rdb: token usage for "${id}" not updated (${describeError(error)})`,
+        );
+      }
+    }
+    const countBuckets = sessionCountBuckets(events);
+    if (countBuckets.length > 0) {
+      try {
+        await this.backend.incrementSessionCounts(id, countBuckets);
+      } catch (error: unknown) {
+        this.ctx.logger.warn(
+          `session-rdb: activity counts for "${id}" not updated (${describeError(error)})`,
+        );
+      }
+    }
+  }
+
+  /**
+   * 重算一个会话的统计（rewind / fork 之后；best-effort，同 `recordSessionStats`）：
+   * 两张汇总表按会话重算，用量行的引用标记全量重算（引用可能跨会话消失）。
+   */
+  async rebuildSessionStats(id: SessionId): Promise<void> {
     try {
-      await this.backend.incrementEventCounts(id, buckets);
+      await this.backend.rebuildSessionStats(id);
+      await this.backend.refreshEventUsageFlags();
     } catch (error: unknown) {
       this.ctx.logger.warn(
-        `session-rdb: activity counts for "${id}" not updated (${describeError(error)})`,
+        `session-rdb: session stats for "${id}" not rebuilt (${describeError(error)})`,
       );
     }
   }
 
-  /** 重算一个会话的活动计数（rewind / fork 之后；best-effort，同 `recordEventCounts`）。 */
-  async rebuildEventCounts(id: SessionId): Promise<void> {
+  /** 会话删除时清掉它的汇总行，并重算用量行的引用标记（被删会话引用的行要立刻退出统计）。 */
+  private async dropSessionStats(id: SessionId): Promise<void> {
     try {
-      await this.backend.rebuildEventCounts(id);
+      await this.backend.deleteSessionStats(id);
+      await this.backend.refreshEventUsageFlags();
     } catch (error: unknown) {
       this.ctx.logger.warn(
-        `session-rdb: activity counts for "${id}" not rebuilt (${describeError(error)})`,
-      );
-    }
-  }
-
-  /** 会话删除时清掉它的活动计数行（best-effort）。 */
-  private async deleteEventCounts(id: SessionId): Promise<void> {
-    try {
-      await this.backend.deleteEventCounts(id);
-    } catch (error: unknown) {
-      this.ctx.logger.warn(
-        `session-rdb: activity counts for "${id}" not deleted (${describeError(error)})`,
+        `session-rdb: session stats for "${id}" not deleted (${describeError(error)})`,
       );
     }
   }
@@ -1039,13 +1070,15 @@ export class SessionPersistenceRdb extends SessionPersistence {
         { meta: log.meta, inheritedEventCount: SessionLogOffset(log.inheritedEventCount) },
         randomUUID(),
       );
-      const { headEventId, headSequence } = await appendEventTail(tx, log.meta, log.events, {
+      const appended = await appendEventTail(tx, log.meta, log.events, {
         parentId: "",
         nextSeq: 0,
       });
-      await tx.updateHead(id, headEventId, headSequence);
+      await tx.updateHead(id, appended.headEventId, appended.headSequence);
       await tx.bumpRevision(id, maxEventTime(log.events));
     });
+    // 重写换了事件行：被删掉的那批成了孤儿（引用标记要落回 0），本会话汇总按新事件重算。
+    await this.rebuildSessionStats(id);
   }
 
   async listSnapshots(
@@ -1374,15 +1407,41 @@ function seedCoversPrefix(seed: readonly SessionEvent[], prefix: readonly Sessio
   );
 }
 
-/** 一批事件折成活动计数的桶：只数四种类型，按本地日聚合。 */
-function eventCountBuckets(events: readonly SessionEvent[]): EventCountBucket[] {
-  const counted = new Map<string, EventCountBucket>();
+/** 一批事件折成活动计数的桶：只数四种类型，按本地日聚合成四项。 */
+function sessionCountBuckets(events: readonly SessionEvent[]): SessionCountBucket[] {
+  const counted = new Map<string, SessionCountBucket>();
   for (const event of events) {
     if (!(COUNTED_EVENT_TYPES as readonly string[]).includes(event.type)) continue;
     const day = localDayKey(event.time);
-    const key = `${day}#${event.type}`;
-    const bucket = counted.get(key) ?? { day, type: event.type, count: 0 };
-    bucket.count += 1;
+    const bucket = counted.get(day) ?? { day, turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
+    addActivityCount(bucket, event.type, 1);
+    counted.set(day, bucket);
+  }
+  return [...counted.values()];
+}
+
+/** 一批用量行折成 token 桶：按「本地日 × 模型」聚合（模型未知落空串，与表口径一致）。 */
+function sessionUsageBuckets(usageRows: readonly EventUsageRow[]): SessionUsageBucket[] {
+  const counted = new Map<string, SessionUsageBucket>();
+  for (const row of usageRows) {
+    const provider = row.fProvider ?? "";
+    const model = row.fModel ?? "";
+    const key = `${row.fDay}#${provider}#${model}`;
+    const bucket = counted.get(key) ?? {
+      day: row.fDay,
+      provider,
+      model,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      reasoningTokens: 0,
+      totalTokens: 0,
+    };
+    bucket.inputTokens += row.fInputTokens;
+    bucket.outputTokens += row.fOutputTokens;
+    bucket.cacheReadTokens += row.fCacheReadTokens;
+    bucket.reasoningTokens += row.fReasoningTokens;
+    bucket.totalTokens += row.fTotalTokens;
     counted.set(key, bucket);
   }
   return [...counted.values()];
@@ -1424,11 +1483,12 @@ async function appendEventTail(
   events: readonly SessionEvent[],
   anchor: { parentId: string; nextSeq: number },
   reuse?: ReadonlyMap<number, string>,
-): Promise<{ headEventId: string; headSequence: number }> {
+): Promise<{ headEventId: string; headSequence: number; usageRows: EventUsageRow[] }> {
   let parentId = anchor.parentId;
   let nextSeq = anchor.nextSeq;
 
   const eventRows: EventInsert[] = [];
+  const usageRows: EventUsageRow[] = [];
   const bridgeRows: Array<{
     fSessionId: SessionId;
     fEventId: string;
@@ -1447,7 +1507,7 @@ async function appendEventTail(
         sourceEventSeqs?: unknown;
       };
       const { data, surfaceOp: _surfaceOp, sourceEventSeqs: _sourceEventSeqs, ...envelope } = raw;
-      eventRows.push({
+      const row: EventInsert = {
         fEventId: eventId,
         fParentId: parentId,
         fType: event.type,
@@ -1458,7 +1518,11 @@ async function appendEventTail(
         fEncoding: EVENT_ENCODING,
         fData: JSON.stringify({ ...envelope, data }),
         fCreatedAt: event.time,
-      });
+      };
+      eventRows.push(row);
+      // 用量行在这里一次折好（读侧维度一起物化），后端只负责插入，事务后旁路再据此累加汇总表。
+      const usageRow = usageRowOf(row, meta.origin === "subagent");
+      if (usageRow !== undefined) usageRows.push(usageRow);
     }
     const surfaceOp =
       (event as SessionEvent<SurfaceEventType>).surfaceOp === undefined
@@ -1473,13 +1537,13 @@ async function appendEventTail(
     parentId = eventId;
     nextSeq++;
   }
-  if (eventRows.length > 0) await tx.insertEvents(eventRows);
+  if (eventRows.length > 0) await tx.insertEvents(eventRows, usageRows);
   await tx.insertBridges(bridgeRows);
 
   if (events.some((event) => (event.type as string) === "session/title")) {
     await tx.refreshTitle(meta.id);
   }
-  return { headEventId: parentId, headSequence: nextSeq - 1 };
+  return { headEventId: parentId, headSequence: nextSeq - 1, usageRows };
 }
 
 export default SessionPersistenceRdb;
