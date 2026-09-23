@@ -3,6 +3,7 @@ import type { Context } from "@deepseek-ai/cordis";
 export * from "./styling/index.ts";
 export * from "./theme.ts";
 export * from "./markdown-labels.ts";
+export * from "./settings-form/index.ts";
 
 export {
   findReferences,

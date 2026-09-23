@@ -59,6 +59,7 @@
     "micromark-util-types": "^2.0.2"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@types/mdast": "^4.0.4",
     "@types/react": "~18.3.1",

@@ -317,6 +317,9 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
     devDependencies:
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/store
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
@@ -735,18 +738,30 @@ importers:
       '@deepseek-ai/dsh-agent-loop-testkit':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/api/remotes
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/api/session-controller
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/store
+      '@deepseek-ai/dsh-client-ui-plugin-manager':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-plugin-manager
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
@@ -771,6 +786,9 @@ importers:
       '@morlay/dsh-client-ui-conversation':
         specifier: workspace:*
         version: link:../../session/ui-conversation
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
@@ -1260,6 +1278,24 @@ importers:
       '@deepseek-ai/dsh-chunked-list':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/chunked-list
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/store
+      '@deepseek-ai/dsh-client-ui-plugin-manager':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-plugin-manager
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/runtime-diagnostics/invariants
@@ -1278,6 +1314,15 @@ importers:
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/values
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
       zod:
         specifier: ^4.4.3
         version: 4.6.5
