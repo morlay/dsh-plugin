@@ -264,6 +264,9 @@ importers:
       '@morlay/dsh-session-mode':
         specifier: workspace:*
         version: link:../../packages/profile/dsh-session-mode
+      '@morlay/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../packages/subagent/dsh-subagent
       '@morlay/dsh-web-search-ollama':
         specifier: workspace:*
         version: link:../../packages/web/dsh-web-search-ollama
@@ -747,6 +750,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/session
@@ -1199,6 +1205,82 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+
+  packages/subagent/dsh-subagent:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-attachment':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/attachment/attachment
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/brand
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/session/session-persistence
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/session-query/session-query
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/subagent/subagent
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/typert/protocol
+      '@deepseek-ai/dsh-util-time':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/time
+      '@deepseek-ai/schemastery':
+        specifier: workspace:~
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-chunked-list':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/chunked-list
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/session/session-persistence-jsonl
+      '@deepseek-ai/dsh-subagent-fork-in-process':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-spawn-in-process':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/subagent/subagent-spawn-in-process
+      '@deepseek-ai/dsh-tool-subagent-control':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/subagent/tool-subagent-control
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/values
+      zod:
+        specifier: ^4.4.3
+        version: 4.6.5
 
   packages/web/dsh-web-search-ollama:
     dependencies:

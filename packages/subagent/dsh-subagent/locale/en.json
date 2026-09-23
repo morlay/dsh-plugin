@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent Service",
+    "description": "Thin-shell fork of @deepseek-ai/dsh-subagent: takes over the `subagent` row only to replace the continuable child's return guidance with Chinese wording."
+  }
+}

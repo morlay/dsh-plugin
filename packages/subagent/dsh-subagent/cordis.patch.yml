@@ -1,0 +1,8 @@
+# 上游 base bundle 的 `subagent` 行（`ctx.subagents` 服务定义）由本包接管：薄壳 fork 只改 continuable
+# 子代理的回报文案，服务名、providers、其余子路径（./internal 等）与装配位置都不变。
+- id: subagent
+  disabled: true
+
+- insert:
+    - id: subagent-fork
+      name: "@morlay/dsh-subagent"

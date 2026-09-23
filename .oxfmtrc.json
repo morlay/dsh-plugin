@@ -1,4 +1,8 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["target/**", "**/dist/**"]
+  "ignorePatterns": [
+    "target/**",
+    "**/dist/**",
+    "packages/subagent/dsh-subagent/src/*.ts"
+  ]
 }

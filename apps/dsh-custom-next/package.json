@@ -18,6 +18,7 @@
     "@morlay/dsh-profile": "workspace:*",
     "@morlay/dsh-sandbox-local": "workspace:*",
     "@morlay/dsh-session-mode": "workspace:*",
+    "@morlay/dsh-subagent": "workspace:*",
     "@morlay/dsh-web-search-ollama": "workspace:*"
   },
   "peerDependencies": {
@@ -31,6 +32,7 @@
         "@morlay/better-session",
         "@morlay/dsh-context-assembler",
         "@morlay/dsh-agent-toolkit",
+        "@morlay/dsh-subagent",
         "@morlay/dsh-sandbox-local",
         "@morlay/dsh-web-search-ollama",
         "@morlay/dsh-profile",
