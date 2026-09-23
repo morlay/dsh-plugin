@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-agent-preset",
-  "version": "0.0.1-alpha.1",
+  "version": "0.0.1-alpha.2",
   "description": "Personal dsh profile bundle: registers the coding / chat agent presets — each with its own isolated injection channel (context assembler) and injection rows, so no other preset is touched.",
   "keywords": [
     "agent-preset",

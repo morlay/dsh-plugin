@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-profile",
-  "version": "0.0.6-alpha.6",
+  "version": "0.0.6-alpha.7",
   "description": "Personal dsh profile: 配置初始化层——只给 llm route、welcome notice、搜索后端选择与沙箱访问规则这类 config 值；行的装配（禁官方行 / 插能力行）归各能力包自己的 bundle。",
   "keywords": [
     "dsh",
@@ -39,7 +39,11 @@
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
   },
-  "dependencies": {},
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@types/js-yaml": "^4.0.9",
@@ -47,10 +51,5 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
   }
 }
