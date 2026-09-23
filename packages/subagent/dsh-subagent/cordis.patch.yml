@@ -3,6 +3,15 @@
 - id: subagent
   disabled: true
 
+# 设置页那张「Subagent」卡片换成本包自己的 client 半（`src/client/` 读 `subagent-fork` 这个 namespace），
+# 所以官方卡片行与它带的「模型白名单」服务行一起停掉：官方卡片读的是官方 `subagent` 行 id，本部署已没有
+# 那个 namespace；模型白名单那套也不要——子代理模型统一由 session mode 的顶层 `models`（各模式的默认模型）决定。
+- id: ui-settings-subagent
+  disabled: true
+
+- id: subagent-model-selection-settings
+  disabled: true
+
 - insert:
     - id: subagent-fork
       name: "@morlay/dsh-subagent"

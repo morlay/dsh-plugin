@@ -249,19 +249,25 @@ describe("dsh-profile patch wiring（只做配置初始化）", () => {
     expect(rowById(composed, "fs-observation-policy")?.disabled).toBe(true);
   });
 
-  it("leaves the shipped subagent model-selection provider enabled for the official presets", async () => {
-    // 官方 standard / ptc / cordis preset 的 `tool-subagent` 行带 `modelSelectionSettings: true`，它要求 host
-    // scope 有这个服务；禁用它会把那三个官方 preset 打成 broken。我们不用该能力靠自己的行不带开关。
+  it("官方子代理模型白名单行现在被禁：留它的理由随官方 preset 一起没了", async () => {
+    // 原来留它是为了官方 standard / ptc / cordis preset 的 `tool-subagent` 行（带 `modelSelectionSettings: true`）
+    // 不被打成 broken；那三个 preset 已由本层整体禁用（见上一条），留着它就没有理由了——子代理模型统一由
+    // session mode 的 defaultModel 决定。禁它的是 `@morlay/dsh-subagent` 的 bundle patch（app 的 bundles
+    // 把它排在本包之前）。
     const shipped = composeLayers(await webAppLayers());
 
     expect(rowById(shipped, "subagent-model-selection-settings")?.name).toBe(
       "@deepseek-ai/dsh-tool-subagent/model-selection-settings",
     );
+    expect(rowById(shipped, "subagent-model-selection-settings")?.disabled).not.toBe(true);
 
-    const composed = composeLayers([...(await webAppLayers()), rows]);
+    const composed = composeLayers([
+      ...(await webAppLayers()),
+      await loadPatchRows(join(process.cwd(), "packages/subagent/dsh-subagent/cordis.patch.yml")),
+    ]);
     const row = rowById(composed, "subagent-model-selection-settings");
 
-    expect(row?.disabled).not.toBe(true);
+    expect(row?.disabled).toBe(true);
     expect(row?.name).toBe("@deepseek-ai/dsh-tool-subagent/model-selection-settings");
   });
 
