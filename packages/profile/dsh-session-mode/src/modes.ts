@@ -7,8 +7,14 @@
  *
  * "支持自定义"就是指这份 config：装配层（`cordis.patch.yml` / profile 的用户层）能整体改写 `modes`，
  * 也可以只给某几个模式换提示词或白名单——不需要任何插件行。
+ *
+ * "某个模式默认用哪个模型"**不在**模式里，而是 config 的顶层 `models`（模式 id → 模型）：它是 settings
+ * 的设置面要编辑的东西，而设置面只认 volatile 字段、且只认**固定路径**（dict 内部的字段一律 blocked，见
+ * `@deepseek-ai/schemastery` 的 `validateVolatileSchema`）。取舍与理由见
+ * [ADR 模式默认模型搬到顶层 volatile](../.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)。
  */
 
+import type { Volatile } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 
 /** 一个模式的提示词：两段文本，注册成 agent 作用域的 `deployment:persona-prefix` / `-suffix` section。 */
@@ -34,6 +40,9 @@ export interface SessionModeModel {
   readonly reasoningEffort?: string;
 }
 
+/** 各模式的默认模型：模式 id → 模型；键必须在 `modes` 里（装配期校验）。 */
+export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
+
 /**
  * 一个模式：提示词 + 能力开关。
  *
@@ -48,11 +57,6 @@ export interface SessionMode {
   readonly description: string;
   /** 这个模式归谁用：`main`（用户选择器）/ `subagent`（可作子代理 mode）。至少一个。 */
   readonly role: SessionModeRole[];
-  /**
-   * 这个模式的默认模型。只在会话**尚无任何模型事实**（没选过模型、也还没跑过请求）时兜底；
-   * 省略就跟着全局 `agent-default-model` 走。
-   */
-  readonly defaultModel?: SessionModeModel;
   /** 该模式的提示词。 */
   readonly persona: SessionModePersona;
   /**
@@ -89,29 +93,44 @@ const modelSchema = z.object({
   reasoningEffort: z.string(),
 });
 
-/** 本包的 config：默认模式 + 模式清单。 */
+/** 本包 config 的**源码形状**：装配层与设置页写的那个形状（`models` 是普通对象，可以整块省略）。 */
 export interface Config {
   /** 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。 */
   readonly default: string;
   /** 模式清单：id → 定义。顺序即选择器里的顺序（`Object.entries` 的插入序）。 */
   readonly modes: Record<string, SessionMode>;
+  /**
+   * 各模式的默认模型：模式 id → 模型。省略的模式跟着全局 `agent-default-model` 走。
+   *
+   * 它是 config 的**顶层 volatile 字段**：设置面（`ctx.configForms` → 我们那张卡片）编辑的就是它。挪进
+   * `modes.<id>` 会让设置面看不见它——`schemastery` 的 `validateVolatileSchema` 把 dict 内部一律当成
+   * blocked，而 settings 只挑得出固定路径上的 volatile 字段。
+   */
+  readonly models?: SessionModeModels;
+}
+
+/** schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。 */
+export interface ResolvedConfig {
+  readonly default: string;
+  readonly modes: Record<string, SessionMode>;
+  /** 各模式的默认模型；一个都没配时是空对象（schema 的 default）。 */
+  readonly models: Volatile<SessionModeModels>;
 }
 
 const modeSchema: z<SessionMode> = z.object({
   name: z.string().required(),
   description: z.string().default(""),
   role: z.array(roleSchema).default(["main"]),
-  // 保留"缺省"：不写 defaultModel 时要跟着全局默认走，物化成 `{}` 会变成半个模型配置。
-  defaultModel: modelSchema.default(undefined as unknown as SessionModeModel),
   persona: personaSchema.default({}),
   allowTools: z.array(z.string()).default([]),
   instructions: z.boolean().default(true),
   runtimeContext: z.boolean().default(true),
 });
 
-export const Config: z<Config> = z.object({
+export const Config: z<Config, ResolvedConfig> = z.object({
   default: z.string().required(),
   modes: z.dict(modeSchema).required(),
+  models: z.dict(modelSchema).default({}).volatile(),
 });
 
 /** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、配了的默认模型。 */
@@ -123,10 +142,11 @@ interface Validated {
       {
         readonly allowTools?: readonly string[];
         readonly role?: readonly string[];
-        readonly defaultModel?: { readonly provider?: string; readonly model?: string } | undefined;
       }
     >
   >;
+  /** 配了的默认模型；省略等于"一个都没配"（源码形状与解析后的形状都能校验）。 */
+  readonly models?: Readonly<Record<string, { readonly provider?: string; readonly model?: string }>>;
 }
 
 /** 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。 */
@@ -149,18 +169,16 @@ export function configProblem(config: Validated): string | undefined {
   if (empty.length > 0) {
     return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
   }
-  const partial = ids.filter((id) => {
-    const model = config.modes[id]?.defaultModel;
-    return (
-      model !== undefined &&
-      (model.provider === undefined ||
-        model.model === undefined ||
-        model.provider.length === 0 ||
-        model.model.length === 0)
-    );
-  });
+  // `models` 的键是模式 id：写错一个就成了"配了但永远不会生效"的孤儿，装配期就得看见。
+  const unknown = Object.keys(config.models ?? {}).filter((id) => !ids.includes(id));
+  if (unknown.length > 0) {
+    return `session-mode: \`models\` names unknown mode(s) ${unknown.join(", ")}; available are ${ids.join(", ")}`;
+  }
+  const partial = Object.entries(config.models ?? {})
+    .filter(([, model]) => model.provider === undefined || model.model === undefined || model.provider.length === 0 || model.model.length === 0)
+    .map(([id]) => id);
   if (partial.length > 0) {
-    return `session-mode: mode(s) ${partial.join(", ")} declare \`defaultModel\` without both \`provider\` and \`model\``;
+    return `session-mode: mode(s) ${partial.join(", ")} declare \`models\` without both \`provider\` and \`model\``;
   }
   return undefined;
 }

@@ -1,8 +1,8 @@
 # @morlay/dsh-session-mode
 
-会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）、一组能力开关、一个**角色**
-（`role`：谁可以用它）与可选的**默认模型**（`defaultModel`）。本包把它按会话应用到会话自己的作用域上，
-并提供页面上的选择面。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
+会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）、一组能力开关与一个**角色**
+（`role`：谁可以用它）；各模式的**默认模型**是同一份 config 顶层的 `models`。本包把它按会话应用到会话自己的
+作用域上，并提供页面上的选择面（会话里的切换 chip 与设置页那张卡片）。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
 关掉，禁哪些行归 [`@morlay/dsh-profile`](../dsh-profile/README.md)（真源 `tool/patch.ts` 的 `PATCH_ROWS`），
 本包不复述清单。
 
@@ -10,7 +10,7 @@
 
 | 行                        | 是什么                                                                                             |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `session-mode`            | 模式清单与默认值（`config.modes` / `config.default`）+ 按会话应用 persona + 清单与切换的 HTTP 路由 |
+| `session-mode`            | 模式清单、默认模式与各模式的默认模型（`config.modes` / `config.default` / `config.models`）+ 按会话应用 persona + 清单与切换的 HTTP 路由 |
 | `context-assembler-scope` | [`@morlay/dsh-context-assembler/scope`](../../context/dsh-context-assembler/README.md)：按会话收口 |
 
 工具行、注入通道与压缩都不在这里——它们由各自的 bundle 在 profile 平面装一次（`dsh.profile.bundles` 里的
@@ -24,6 +24,8 @@
   name: "@morlay/dsh-session-mode"
   config:
     default: coding
+    models:            # 各模式的默认模型（顶层；键必须是 modes 里的 id）
+      chat: { provider: ollama, model: deepseek-v4.1-flash, reasoningEffort: high }
     modes:
       chat:
         name: 对话模式
@@ -40,13 +42,19 @@
 | ---------------------- | -------------------------------------------------------------------------------------------- |
 | `name` / `description` | 选择器与头部标签的文案（HTTP 清单里给页面）                                                  |
 | `role`                 | 归谁用：`main` 进用户选择器，`subagent` 表示可作为子代理的 mode（候选集）；缺省 `["main"]`   |
-| `defaultModel`         | 这个模式的默认模型（`provider` / `model` / `reasoningEffort?`）；不写就跟全局默认            |
 | `persona`              | 装配前注册到**该 agent 的 scope**（`deployment:persona-prefix` / `-suffix`，遮蔽部署级那层） |
 | `allowTools`           | `context-assembler-scope` 收口：模型目录、`tool:<名字>` 说明、执行层 guard                   |
 | `instructions`         | 同上：`false` 表示这个会话不要任何 instruction 类注入（工作区指令、技能目录、用法正文）      |
 | `runtimeContext`       | 同上：`false` 表示不要动态快照（文件沙箱策略、审批策略）                                     |
 
+顶层还有个 `models`（**不在模式里**）：键是模式 id，值是那个模式的默认模型——`provider` / `model` /
+`reasoningEffort?`，不写就跟全局 `agent-default-model`。它是 config 的 **volatile** 字段，设置页那张卡片
+编辑的就是它；用户在卡片里写的值叠在装配层这份之上（清空 = 回到装配层）。
+
 模式名与说明是数据、不做语言翻译（`tool/modes.ts` 里只有中文）——取舍如此，不是漂移。
+
+`models` 为什么在顶层、不在模式里：设置面只编辑 volatile 字段、且只认固定路径（dict 内部一律 blocked）。
+判据与取舍见 [ADR 模式默认模型搬到顶层 volatile](./.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)。
 
 **自定义就是改这份 config**：profile 的用户 patch 层可以整体改写 `config.modes`，也可以只给某个模式换提示词或
 白名单——不需要任何插件行。默认模式（`default`）也在这里：它与模式清单是同一个事实的两半。装配期的判据
@@ -68,9 +76,10 @@
 - **角色**：`main` = 用户侧可选（选择器与 `select` 只认它）；`subagent` = 可作为子代理 mode 的候选。
   「按角色指派 mode」还没做——子代理现在只有"继承父"与预留的服务接缝
   （`ctx.sessionModes.applyTo(agent, mode)` / `modesFor("subagent")`）。
-- **默认模型**：模式的 `defaultModel` 只在会话**尚无模型事实**时接管请求路由（投影 `modelSelection` 没有
-  `pending`、`requestHeader()` 还没落）；一旦用户选过模型或会话跑过请求，就不再插手。它是**配置事实**，
+- **默认模型**：`config.models[<模式 id>]` 只在会话**尚无模型事实**时接管请求路由（投影 `modelSelection`
+  没有 `pending`、`requestHeader()` 还没落）；一旦用户选过模型或会话跑过请求，就不再插手。它是**配置事实**，
   不写会话事件——重启后仍由 config 决定，与用户在设置里做的那条会话级选择（`model/selection`）是两件事。
+  读的是 volatile **引用**（`config.models.get()`）：设置页保存只换引用里的值，这行不重挂。
 
 ## 页面上的两个位置
 
@@ -79,13 +88,26 @@
 | `conversation.hero.agentPreset`       | 新会话屏幕的顶部占位：chip 点开就是切换列表 |
 | `conversation.session.header.actions` | 会话头部的只读模式标签                      |
 
-两块都由本包的 `./client` 出口提供（与 host 半同包、同一次构建）；清单与切换走 HTTP 路由
-`GET/POST /session-mode`，当前值走上面那条投影。官方 `@deepseek-ai/dsh-client-ui-agent-preset` 带来的第三个面
-（设置页的 roster 面板）不做——模式清单是装配配置，改它不需要页面。
+这两块都由本包的 `./client` 出口提供（与 host 半同包、同一次构建）；清单与切换走 HTTP 路由
+`GET/POST /session-mode`，当前值走上面那条投影。
+
+设置页还有一个面：**本行**的配置入口 `plugins.row.config`（key `@morlay/dsh-session-mode#session-mode`），每个模式一行
+「默认模型」——provider / model / 思考档位，外加"恢复默认"。它编辑的是 `config.models`（配置事实），不是
+模式清单（装配数据）。两条读取从外面注入：清单走 `GET /session-mode`，模型目录走
+`ctx.remote.session.modelCatalog()`。保存是 staged 的一次 `mutate`：
+
+| 手势             | 写                                                              |
+| ---------------- | --------------------------------------------------------------- |
+| 给某个模式选模型 | `{ op: 'set', path: ['models', <模式 id>], value: {…} }`         |
+| 恢复默认         | `{ op: 'unset', path: ['models', <模式 id>] }`（回到装配层那份） |
+
+官方 `@deepseek-ai/dsh-client-ui-agent-preset` 带来的第三个面（设置页那份 roster 面板）不做——模式清单是装配
+配置，改它不需要页面。
 
 ## 文档
 
 - 设计与取舍：[设计 会话模式](./.agents/designs/20260924-会话模式.md)、
+  [ADR 模式默认模型搬到顶层 volatile](./.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)、
   [ADR 模式的角色与默认模型](./.agents/adrs/20260923-模式角色与默认模型.md)、
   [ADR 模式不再是 Cordis 子树](./.agents/adrs/20260924-模式不再是cordis子树.md)
 - 验证判据：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)

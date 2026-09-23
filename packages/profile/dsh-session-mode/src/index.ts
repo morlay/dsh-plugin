@@ -9,6 +9,7 @@
  * | 事实             | 落在哪                                                                                     |
  * | ---------------- | ------------------------------------------------------------------------------------------ |
  * | 模式清单与默认值 | 本行的 `config`（装配层可整体改写；`modes.ts` 给形状与校验）                                |
+ * | 各模式的默认模型 | 同一份 config 的顶层 `models`（**volatile**：设置页那张卡片改的就是它）                      |
  * | 会话当前模式     | session 事件 `session-mode/selected` + 投影 `sessionMode`（log-only，重建读投影）           |
  * | 提示词           | `persona`：把模式的 persona 注册到该 agent 的 scope（`persona.ts`）                         |
  * | 工具与注入开关   | 推给 `ctx.sessionToolScope`（`@morlay/dsh-context-assembler/scope`，行 id `context-assembler-scope`） |
@@ -33,7 +34,12 @@ import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import type {} from "@deepseek-ai/dsh-session-projection";
 import type { SessionToolScope } from "@morlay/dsh-context-assembler/scope";
 import { z } from "zod";
-import { Config, configProblem, type SessionMode, type SessionModeRole } from "./modes.ts";
+import {
+  configProblem,
+  type ResolvedConfig,
+  type SessionMode,
+  type SessionModeRole,
+} from "./modes.ts";
 import { installPersona } from "./persona.ts";
 import {
   SESSION_MODE_PATH,
@@ -56,8 +62,10 @@ export const inject = ["agents", "sessions", "sessionProjections", "systemPrompt
 
 export { Config } from "./modes.ts";
 export type {
+  ResolvedConfig,
   SessionMode,
   SessionModeModel,
+  SessionModeModels,
   SessionModePersona,
   SessionModeRole,
 } from "./modes.ts";
@@ -110,10 +118,11 @@ export class SessionModes extends Service {
 
   constructor(
     ctx: Context,
-    public config: Config,
+    public config: ResolvedConfig,
   ) {
     super(ctx, "sessionModes");
-    const problem = configProblem(config);
+    // 校验看的是**值**：`models` 在解析后是个稳定引用，`configProblem` 只认普通对象。
+    const problem = configProblem({ ...config, models: config.models.get() });
     if (problem !== undefined) throw new Error(problem);
     ctx.sessionProjections.register(sessionModeProjection);
     // 会话一建立就装上：这早于它的第一次装配，persona 因此一定在装配之前注册好。
@@ -269,15 +278,18 @@ export class SessionModes extends Service {
   }
 
   /**
-   * 模式的 `defaultModel` 兜底：只在会话**尚无任何模型事实**（没选过模型、也还没跑过请求）时接管这一
-   * 请求的路由；一旦用户选过（投影 `pending`）或会话已经落过 header，就不再插手。
+   * 模式的默认模型（config 顶层 `models.<模式 id>`）兜底：只在会话**尚无任何模型事实**（没选过模型、也
+   * 还没跑过请求）时接管这一请求的路由；一旦用户选过（投影 `pending`）或会话已经落过 header，就不再插手。
    *
    * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。
+   *
+   * 模型取自 `config.models`：那是个 volatile 引用，设置页保存时只有**引用里的值**变，这一行不重挂，
+   * 所以每次请求都现场 `.get()`（与 `llm-openai-compatible` 读 `config.providers` 同一种读法）。
    */
   private installDefaultModel(agent: Agent, modeId: string): () => void {
     return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next();
-      const model = this.config.modes[modeId]?.defaultModel;
+      const model = this.config.models.get()[modeId];
       if (model === undefined) return resolved;
       // 上游 session-controller 没装（headless）时这个投影不存在，按"没有选择"处理。
       const pending = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection")?.pending;
@@ -304,7 +316,7 @@ export class SessionModes extends Service {
   }
 }
 
-export function apply(ctx: Context, config: Config): void {
+export function apply(ctx: Context, config: ResolvedConfig): void {
   const modes = new SessionModes(ctx, config);
   registerHttpRoutes(ctx, modes);
 }
