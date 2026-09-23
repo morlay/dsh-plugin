@@ -1,7 +1,7 @@
 # 上游 gateway 长寿命流上的 `Promise.race` 反应累积（本地 patch 接管）
 
-状态：未销账（等上游修掉后删除本地 patch；上游 issue 待补 URL，报告草稿在
-[`.scratch/20260923-gateway-stream-promise-race-leak.md`](../../../.scratch/20260923-gateway-stream-promise-race-leak.md)）
+状态：未销账（等上游修掉后删除本地 patch；上游 issue 待补 URL，报告草稿是本地临时产物
+`.scratch/20260923-gateway-stream-promise-race-leak.md`，不进仓库、故这里不给链接）
 
 **现象**
 
@@ -32,20 +32,38 @@ promise 自身 settle 时才摘掉败方分支的 reaction，于是**每读一�
 
 **处置：本地 patch，不改上游包**
 
-- [`patches/gateway-stream-race-leak.patch`](../../../patches/gateway-stream-race-leak.patch)：
+- [`patches/gateway-stream-race-leak.patch`](../../patches/gateway-stream-race-leak.patch)：
   把取消分支改成**每轮迭代一个** promise（`new Promise` + `abort` 监听，迭代结束在 `finally` 里
   `removeEventListener`），因此迭代一结束该 promise 连同其 reaction 就不可达；abort 语义不变
   （`signal.aborted` 时立即 reject，并加一句 `void x.catch(...)` 防「race 尚未订阅就 abort」的
   unhandled rejection）。
-- [`patches/steps.json`](../../../patches/steps.json) 第三条登记该步骤（`patch.ts` 的 `git apply`）。
+- [`patches/steps.json`](../../patches/steps.json) 第三条登记该步骤（`patch.ts` 的 `git apply`）。
+- patch 改的是上游内部实现（局部变量与私有字段），语义按「同一时刻只有一个 `next()` 在飞」保持。
+
+**影响**
+
+- 撞上的是桌面宿主的长会话：内存随时间攀升且回落不了（数字见**现象**），最终只能重启宿主；
+  跑一整天就是一路涨上去。
+- 影响面不限于桌面形态：泄漏由**读取次数**驱动，任何「一条流活很久 + 项很多」的调用方都同样中招，
+  桌面形态只是眼下唯一这种调用方。
+
+**触发条件**
+
+- **升级即信号**：`git apply` 失败就说明上游动过这两处（`cancellableStream` / `UplinkDecoder.next()`），
+  必须先重新评估本 patch。
+- **生效前提**：改的是 `src/`，运行期加载的是 `lib/`——必须重建（`just vendor build`）**并重启宿主**，
+  否则看到的还是旧行为。
+- 动桌面 host 的流处理（`/.dsh/remote-stream` 的 `streamHandler`）之前。
+
+**销账条件**
+
+Done when：升级上游后不再需要这个 patch——上游已把取消分支的生命周期压到一轮迭代内（或换掉这处
+`Promise.race`）；届时删除 [`patches/gateway-stream-race-leak.patch`](../../patches/gateway-stream-race-leak.patch)、
+`patches/steps.json` 第三条与本记录。
+
+**不修的理由**
+
+- 上游包不可修改（红线），只能以本地 patch 形式接管。
 - 这是**上游缺陷的临时接管**，不是我们的扩展面选择：能走插件层的都不该打 patch，此处上游代码
   内部没有可插入的接缝（问题在它自己的读取循环里）。
-
-**影响 / 风险**
-
-- **升级即信号**：`git apply` 失败就说明上游动过这两处，必须重新评估（上游修掉则删除本 patch 与
-  steps.json 那一条）。
-- patch 改的是上游内部实现（局部变量与私有字段），语义按「同一时刻只有一个 `next()` 在飞」保持；
-  上游 stream 契约测试是它的活文档（`vendor/deepseek-harness/packages/api/gateway/tests/*stream*.spec.ts`）。
-- **生效前提**：改的是 `src/`，运行期加载的是 `lib/`。必须重建（`just vendor build`）才生效，
-  且宿主需重启。
+- patch 的语义正确性有上游活文档兜底（`vendor/deepseek-harness/packages/api/gateway/tests/*stream*.spec.ts`）。

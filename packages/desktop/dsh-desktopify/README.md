@@ -94,7 +94,7 @@
 `Resources/` 下两棵互不覆盖的树：
 
 - `runtime/`：随包运行时——`node/`（随包 Node）、`pnpm/bin/pnpm.mjs`（随包 pnpm 的入口，壳把它作为 host
-  argv[6] 交给 `profileContext.packageManager`；该 npm 包只是 wrapper，入口会 spawn 同平台
+  argv[5] 交给 `profileContext.packageManager`；该 npm 包只是 wrapper，入口会 spawn 同平台
   `@pnpm/exe.<platform>-<arch>` 的原生二进制，所以载荷带上那个平台包）、`bin/`（pnpm 子进程的 `PATH`
   前置目录，Unix 下是指向 `../node/node` 的相对链接）、`appconfig.json`、`versions.json`；
 - `seed/`：`runtime/`（不可变闭包 = host 的 dsh 安装锚点与前端静态资源）+

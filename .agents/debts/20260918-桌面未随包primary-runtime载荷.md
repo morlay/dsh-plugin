@@ -27,7 +27,7 @@ pandas / python-docx 等 wheel）与 pnpm，并做 smoke 执行；我们没走�
 `office-skills` 资源**不随包**：本变体不挂 `officeSkills`（见
 [设计 桌面化工具](../../packages/desktop/dsh-desktopify/.agents/designs/20260917-桌面化工具.md) 的「后端」与「随包运行时载荷」），
 原先负责拷贝它的 `cli/office-assets.ts` 已随 `487fd15` 删除。宿主自己的包操作用 pnpm 也已随包
-（`<resources>/runtime/pnpm/bin/pnpm.mjs` + `<resources>/runtime/bin`，由 shell 经 host argv[6]/[7] 交给
+（`<resources>/runtime/pnpm/bin/pnpm.mjs` + `<resources>/runtime/bin`，由 shell 经 host argv[5]/[6] 交给
 `profileContext.packageManager`），但那是宿主包操作的入口，与本 payload 的
 `dependencies/{python,node,pnpm}` 不是同一份。剩余缺口只有 `primary-runtime` payload 本体
 （`runtime.json` + python / node / pnpm）。

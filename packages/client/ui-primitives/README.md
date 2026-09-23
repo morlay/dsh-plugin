@@ -23,7 +23,7 @@
 ## token 树
 
 `designTokens`（`src/client/theme.generated.ts`）由 `scripts/gen-design-tokens.mts` 从
-上游主题源码生成，共 **359 个 `--dsw-*`**：叶子是该变量在 light 主题里的默认值。
+上游主题源码生成，共 **367 个 `--dsw-*`**：叶子是该变量在 light 主题里的默认值。
 生成机制、`"$"` 键语义与守卫判据见
 [ADR-css-in-js样式层与官方token消费](./.agents/adrs/20260917-css-in-js样式层与官方token消费.md)。
 

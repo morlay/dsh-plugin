@@ -21,7 +21,7 @@ preset 的行一样吃。2026-09-22 禁用 `subagent-model-selection-settings` �
 模式的取舍？** 后者该由那个模式自己解决（`persona` 行、`isolate` 组、抢 waterfall），不该在这里做全局开关
 ——实例：`fs-observation-policy` 不禁用，改由 `coding` 自带 `relax-intent` 抵消。
 
-包内测试（`pnpm exec vitest run packages/profile/dsh-preset`）覆盖 patch 与上游层的组合结果（用上游自己的
+包内测试（`pnpm exec vitest run packages/profile/dsh-profile`）覆盖 patch 与上游层的组合结果（用上游自己的
 `applyEntryPatches` 组合 base + web-app + 本 patch，断言"只多出我们声明的那几条禁用"）；和真装配两者都要跑。
 
 模式侧（行清单、`isolate` 组、`registry.default`）的判据见

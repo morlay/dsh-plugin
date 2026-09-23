@@ -22,7 +22,7 @@ fork 过来的对话 UI（`packages/session/ui-conversation`）沿用上游的 C
 - `designTokens`：由上游 CSS **生成**的 token 树，叶子是该变量的默认值。
 
 token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上游主题源码
-生成（359 个 `--dsw-*`），`pnpm --filter @morlay/dsh-client-ui-primitives run gen:tokens`
+生成（367 个 `--dsw-*`），`pnpm --filter @morlay/dsh-client-ui-primitives run gen:tokens`
 重新生成；`design-tokens.spec.ts` 守卫漂移（树与上游定义集合逐一相等）、往返（叶子能
 还原变量名）与默认值完整性。
 

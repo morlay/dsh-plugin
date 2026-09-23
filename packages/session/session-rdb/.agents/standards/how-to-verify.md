@@ -31,7 +31,6 @@
 
 ## 测试辅助（`./testing`）
 
-- `EmptySettings`：空 settings provider，满足插件的 `static inject: ['settings']`；
 - **契约 fixture**：`contract.ts` 的 `runPersistenceContract` / `ContractBackend`、
   `coordinator-contract.ts` 的 `runCoordinatorContract` / `CoordinatorFixture`；
 - 日志 fixture：`meta` / `oneTurnLog` / `appendLog`，以及 `truncateLiveSession`；

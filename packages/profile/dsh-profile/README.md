@@ -45,9 +45,10 @@ profile 的**配置初始化层**：按 id 给行配值（`config` 覆盖），�
 
 **按 id 禁用 host 行是全局动作**：官方那几个 preset 的行一样吃——这正是"关掉四个官方 preset"能在这里做的原因
 （它们是 host 平面的注册行，不是某个模式的取舍）。反过来，禁用 `subagent-model-selection-settings` 是反例
-（会把仍启用的官方 preset 打成 broken）。**关掉整个 preset** 与**关掉某个 host 能力**是两件事：
+（会把仍启用的 preset 打成 broken）。**关掉整个 preset** 与**关掉某个 host 能力**是两件事：
 前者是"部署不要这个组合"，后者是"我们不用某能力"，后者应该靠自己的模式行不带那个开关来实现。
-`just profile` 是本层改动的实测判据。
+两支真装配探针（`pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-profile.mts` 与
+`…/verify-preset-isolation.mts`）是本层改动的实测判据。
 
 ## 生成与升级
 

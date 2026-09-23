@@ -43,10 +43,11 @@
 - **严禁本地私自 `pnpm publish`**（包括用 `--registry` 指向 GitHub Packages 的发布）。版本 bump
   提交后由 CI 发布；本地只构建验证。
 - 改动收尾时 `just lint` 只要不引入**新**错误即可，必要时 `just fmt`。
-- **日常验证不要跑 `just profile` / `just pg test` 这类起真实服务的探针**：它们绑端口、装依赖，会被机器上
-  别的进程（残留的 dev server、另一个探针）阻塞住，卡住的是验证本身而不是被测代码。装配链的回归用不起服务
-  的证据覆盖——生成物断言、`composeLayers` 式的层组合断言、以及各包的行为用例；`just profile` 只在人工排查
-  "真装配下才看得见的事实"时手动跑。
+- **日常验证不要跑 `verify-profile.mts` / `verify-preset-isolation.mts` / `just pg test` 这类起真实服务的探针**：
+  它们绑端口、装依赖，会被机器上别的进程（残留的 dev server、另一个探针）阻塞住，卡住的是验证本身而不是被测
+  代码。装配链的回归用不起服务的证据覆盖——生成物断言、`composeLayers` 式的层组合断言、以及各包的行为用例；
+  那两支探针（`pnpm exec tsx packages/desktop/dsh-desktop-host/tool/<探针>.mts`）只在人工排查"真装配下才看得见
+  的事实"时手动跑。
 
 ## 失败怎么处理
 

@@ -2,24 +2,24 @@
 
 提示词注入能力组：**一个包四个能力**——主出口是组装插件（所以装配面只有一行），各能力另有子出口可单独装；
 能力名就是子出口名。装配行是 `@morlay/dsh-context-assembler`（组装）或 `@morlay/dsh-context-assembler/<capability>`（单个），
-见 [`rows.ts` 的 `contextChannel()`](../../profile/dsh-agent-preset/tool/presets/rows.ts)。引用展开原先也在这个包里，
+见 [`src/rows.ts` 的 `contextChannel()`](./src/rows.ts)。引用展开原先也在这个包里，
 现在独立成 [`@morlay/dsh-reference`](../dsh-reference/README.md)（它只挂 `agent/pre-step`、不依赖通道）。
 
-| 出口                   | 行 id                        | 做什么                                                                 |
-| ---------------------- | ---------------------------- | ---------------------------------------------------------------------- |
-| `.`                    | `context`                    | **组装出口**：按 config 决定装哪些能力、各带什么参数（缺省即完整一套） |
-| `./assembler`          | `context-assembler`          | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`      |
-| `./agent-instructions` | `context-agent-instructions` | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）              |
-| `./skill-catalog`      | `context-skill-catalog`      | skill 目录规则块 + 模型侧 `skill` 工具                                 |
-| `./scope`              | `context-scope`              | 模式收口：工具白名单、instruction 总开关、动态快照开关                 |
+| 出口                   | 行 id / 插件 name                                         | 做什么                                                                 |
+| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `.`                    | `context-assembler`（插件 name `context-assembler-tree`） | **组装出口**：按 config 决定装哪些能力、各带什么参数（缺省即四套能力） |
+| `./assembler`          | `context-assembler`                                       | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`      |
+| `./agent-instructions` | `context-agent-instructions`                              | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）              |
+| `./skill-catalog`      | `context-skill-catalog`                                   | skill 目录规则块 + 模型侧 `skill` 工具                                 |
+| `./scope`              | `context-scope`                                           | 模式收口：工具白名单、instruction 总开关、动态快照开关                 |
 
 规则、id 表与分层的 home 在 [上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；术语见
 [本包 CONTEXT](./.agents/CONTEXT.md)。
 
 ## 装配
 
-`dsh.profile.bundles` 列出本包即装**一次**：`cordis.patch.yml` 是一行组装出口（`capabilities` 缺省即完整一套：
-通道本体、`agent-instructions`、`skill-catalog`）。**不做隔离**——工具说明
+`dsh.profile.bundles` 列出本包即装**一次**：`cordis.patch.yml` 是一行组装出口（显式给三项能力：通道本体、
+`agent-instructions`、`skill-catalog`；config 的 `capabilities` 缺省是全部四项）。**不做隔离**——工具说明
 （[`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md) 的 `guidance`）这类消费者住在别的包里，
 隔离会把它们挡在组外（行停在 waiting，不报错）；理由见
 [ADR 通道作为全局服务装配不隔离](./.agents/adrs/20260923-通道作为全局服务装配不隔离.md)。`scope` **不在这份 patch 里**
@@ -38,13 +38,13 @@
 
 ## 为什么合成一个包
 
-这 4 个能力**总是一起装配**（同一个 `isolate` 组：通道与它的消费者必须同子树），注入方**全都只用通道的
-类型与服务面**。包边界在这里只是演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动
+这 4 个能力**总是一起装配**（通道在装配平面装一份、不隔离：注入方住在别的包里，隔离会把它们挡在组外），
+注入方**全都只用通道的类型与服务面**。包边界在这里只是演进留下的：合成一个包之后，加一个能力 = 加一个子出口，装配面不动
 （组装出口按 config 装它）。
 
 工具说明（汉化精简 + 用法分组）也不住在这里：它管的是"工具怎么被讲清楚"，与工具的清单同源，
-现在归 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)（但它 `inject` 通道，所以装配时与
-组装行同住一个 `isolate` 组）。本包只做上下文重排。
+现在归 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)（它也 `inject` 通道，装的是同一份
+全局通道）。本包只做上下文重排。
 
 引用展开不住在这里：它不依赖 `ctx.contextAssembler`（`inject` 只有 `skills`），也没有「读文件 + 字节预算」
 以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../session/better-session/cordis.patch.yml)
@@ -59,15 +59,15 @@
 （平台说明）、改写（两段中文文案）、或降级成规则块；pre-step 时把要送的内容逐条以 `<system-reminder>`
 user 消息注入（每条按文本幂等，只有变化的那条重发）。
 
-| 声明                                      | 到达方式                                                                         |
-| ----------------------------------------- | -------------------------------------------------------------------------------- |
-| `registerSkill` + `on-demand`             | 注册成模型可用 skill：目录常驻一行摘要，正文由 `skill` 工具加载                  |
-| `registerSkill` + `auto`                  | 正文随 reminder 常驻；skill 标 `modelInvocable: false`（用户仍可 `skill:` 引用） |
-| `registerRule({ id, text, source? })`     | 规则块，幂等键是 `id`；`source` 声明对外身份                                     |
-| `replaceSection` / `suppressSection`      | 装配结果上的文本改写 / 丢弃                                                      |
-| `setInstructions` / `restrictTools`       | 按会话登记模式的两处收口（不要 instruction / 工具白名单）                        |
-| `visibleTools(agent, registered)`         | 合成该会话的工具可见性：注册表可见 × 已登记的白名单（目录与组正文共用）          |
-| `hiddenSkills(visible)`                   | 声明了 `requires` 而入口工具一个都不可见的 skill 名                             |
+| 声明                                  | 到达方式                                                                         |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| `registerSkill` + `on-demand`         | 注册成模型可用 skill：目录常驻一行摘要，正文由 `skill` 工具加载                  |
+| `registerSkill` + `auto`              | 正文随 reminder 常驻；skill 标 `modelInvocable: false`（用户仍可 `skill:` 引用） |
+| `registerRule({ id, text, source? })` | 规则块，幂等键是 `id`；`source` 声明对外身份                                     |
+| `replaceSection` / `suppressSection`  | 装配结果上的文本改写 / 丢弃                                                      |
+| `setInstructions` / `restrictTools`   | 按会话登记模式的两处收口（不要 instruction / 工具白名单）                        |
+| `visibleTools(agent, registered)`     | 合成该会话的工具可见性：注册表可见 × 已登记的白名单（目录与组正文共用）          |
+| `hiddenSkills(visible)`               | 声明了 `requires` 而入口工具一个都不可见的 skill 名                              |
 
 配置（`keep` / `suppress` / `replace`）的默认值在 [`src/assembler/defaults.ts`](./src/assembler/defaults.ts)。
 **全局一份、不隔离**：模式差异由 `context-scope` 登记（`setInstructions` / `restrictTools`）收口，跨包的
@@ -100,8 +100,8 @@ web-app bundle 自己设在 preset 平面）。
 ## 工具说明（不在这个包里）
 
 工具的汉化精简与用法分组归 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md) 的 `guidance` 出口：
-族索引（加一个工具改一族）、组 skill、短描述投影、丢弃清单都在那边。它 `inject` 通道，所以装配时与组装行
-同住一个 `isolate` 组——本包只提供它们要用的通道，不碰工具怎么讲。
+族索引（加一个工具改一族）、组 skill、短描述投影、丢弃清单都在那边。它 `inject` 通道，装的是同一份全局通道
+——本包只提供它们要用的通道，不碰工具怎么讲。
 
 ## scope
 
