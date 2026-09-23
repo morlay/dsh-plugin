@@ -100,6 +100,21 @@ patch 负责；`access` 规则的值由 `dsh-profile` 按 id 做 config 覆盖�
 [设计 host 层部署配置](../../profile/dsh-profile/.agents/designs/20260917-host层部署配置.md)。
 两种采用方式互斥：同时上线会重复插入同一行。
 
+## 接管 `sandbox:policy`
+
+换了 `ctx.sandbox` / `ctx.fs`，模型看到的那段运行时策略文本也得跟着换：上游
+`@deepseek-ai/dsh-sandbox-policy` 在**全局层**注册 `sandbox:policy`，文本只描述官方策略（只读 /
+workspace-write / 全权 + workspace root），不知道本部署追加的 `rw` / `r-` / `--` 规则。
+
+全局层同名注册会抛错（`NamedEntries.insert`），上游给的官方路径是**按 agent 作用域覆盖**：本包在
+`system-prompt/assemble` 时为每个 agent 在它的 `ctx` 上注册同名 context，装配时近的作用域遮蔽全局那条
+（[`src/policy.ts`](./src/policy.ts)）。文本保留官方三种 mode 的语义（重写中文），并在规则非空时追加
+本部署的额外可写根 / 只读项 / 拒绝项；没有 agent 的装配（agentless 调用）保持官方那条。
+
+**升级注意**：这段文本是照上游 `renderPolicyContext` 的语义重写的——上游改了模式集合或措辞时测试不会自动
+发现，同步上游时要读一眼
+`vendor/deepseek-harness/packages/sandbox/sandbox-policy/src/index.ts`。
+
 ## 前提
 
 - 官方 `sandbox` 与 `fs-sandbox` 行必须禁用：同一 scope 内重复注册同名服务会 fail loud

@@ -12,11 +12,19 @@ export const DEFAULT_KEEP: readonly string[] = [
 ];
 
 /**
- * 不进提示词的 section。两类：平台运维说明（讲 dev server / HMR / 本地 checkout 位置，
- * 与本部署的模型任务无关），以及本部署不装配的工具的用法说明。其余工具说明由各组的 `drops` 摘掉、
- * 要点由 `context-tool-guidance` 写进组正文，不在这一份里。
+ * 不进提示词的 section。三类：
+ *
+ * 1. **harness 自带的开场白与平台运维说明**：`harness:identity`（"You are an AI agent powered by
+ *    DeepSeek Harness."——身份由各模式的 persona 给，这句话在本部署里是噪音，且是英文）、
+ *    `harness:source`（讲 dev server / HMR / 本地 checkout 位置）；
+ * 2. 本部署不装配的工具的用法说明：`tool:lsp` / `tool:pty` / `tool:session-query` / `tool:cordis` /
+ *    `tool:ralph`；
+ * 3. `app:web-surface`（平台外壳说明）。
+ *
+ * 其余工具说明由各组的 `drops` 摘掉、要点由 `context-tool-guidance` 写进组正文，不在这一份里。
  */
 export const DEFAULT_SUPPRESS: readonly string[] = [
+  "harness:identity",
   "harness:source",
   "app:web-surface",
   "tool:lsp",

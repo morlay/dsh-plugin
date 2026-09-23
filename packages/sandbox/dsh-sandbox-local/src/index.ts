@@ -1,7 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { Config } from "./config.ts";
 import { ConfigurableFileSystem } from "./fs.ts";
-import { ruleSourceOf } from "./rules.ts";
+import { installPolicyContext } from "./policy.ts";
+import { ruleSourceOf, type RuleSource } from "./rules.ts";
 import { ConfigurableSandboxProvider } from "./sandbox.ts";
 
 export { Config } from "./config.ts";
@@ -10,8 +11,7 @@ export const name = "sandbox-local";
 
 export const inject = ["sandboxPolicy"];
 
-function warnAboutDegradedRules(ctx: Context, config: Config): void {
-  const rules = ruleSourceOf(config, process.env);
+function warnAboutDegradedRules(ctx: Context, rules: RuleSource): void {
   const grants = rules.allowWrite.length > 0;
   const readOnly = rules.readOnly.length > 0;
   const denials = rules.deny.length > 0;
@@ -34,7 +34,10 @@ function warnAboutDegradedRules(ctx: Context, config: Config): void {
 }
 
 export function apply(ctx: Context, config: Config): void {
-  warnAboutDegradedRules(ctx, config);
+  const rules = ruleSourceOf(config, process.env);
+  warnAboutDegradedRules(ctx, rules);
   new ConfigurableSandboxProvider(ctx, config);
   new ConfigurableFileSystem(ctx, config);
+  // 替换了 ctx.sandbox / ctx.fs，`sandbox:policy` 那段运行时文本也要跟着换（见 policy.ts）。
+  installPolicyContext(ctx, rules, (session) => ctx.sandboxPolicy.resolve({ session }));
 }

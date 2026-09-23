@@ -38,6 +38,10 @@
   都要暴露 `./locale/*.json`，`files` 里也带上。上游 `app-boot` 的 `readPluginMeta` 按包名 + 该出口读插件
   清单页的标题与描述，漏一处就退化成 package.json 的英文 name/description。跨包守卫见
   `devpackages/devkit/src/__tests__/plugin-locale.spec.ts`（直接用上游读取器实测每个发布包）。
+- **出口要么手写，要么用 `customExports` 补齐**：devkit 的默认配置 `exports: false`——清单由我们手写；
+  个别包用 tsdown 的 `exports.packageJson` 生成（如 `@morlay/dsh-desktopify`，因为它的 bin 与内联入口），
+  生成按 **entry** 来，任何手写出口（`./locale/*.json` 之类）都必须放进 `customExports`，
+  否则每次 `just build` 都会把它抹掉（源码清单跟着变，`just test` 的 locale 守卫随后报红）。
 
 ## 代码约定
 

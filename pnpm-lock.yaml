@@ -706,6 +706,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/agent
       '@deepseek-ai/dsh-fs':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/fs/fs
@@ -724,6 +727,15 @@ importers:
       '@deepseek-ai/dsh-sandbox-policy':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/sandbox/sandbox-policy
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/session
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
 
   packages/session/better-session:
     dependencies:

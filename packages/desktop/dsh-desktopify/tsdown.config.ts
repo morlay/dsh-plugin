@@ -34,6 +34,12 @@ export default defineConfig([
       legacy: true,
       exclude: ["cli/index"],
       bin: { [BIN_NAME]: CLI_ENTRY },
+      // exports 按 entry 生成：手写的出口不在这里就会在每次 build 被抹掉——`./locale/*.json`
+      // 是插件清单页的多语言入口（见根规范「包出口」），必须显式加回。
+      customExports: (generated: Record<string, unknown>) => ({
+        ...generated,
+        "./locale/*.json": "./locale/*.json",
+      }),
     },
   },
   {
