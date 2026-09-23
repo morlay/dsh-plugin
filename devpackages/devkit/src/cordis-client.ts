@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { rolldown } from "rolldown";
 import type { Plugin } from "rolldown";
 import { cssInlinePlugins } from "./css.ts";
@@ -29,16 +32,22 @@ export interface ClientBundleSpec {
   define: Record<string, string>;
 }
 
-/** @param options - 追加 external 与模块 id（用于 dev 态现场打包）。 */
-export function clientBundleSpec(
+/** @param options - 追加 external、模块 id（用于 dev 态现场打包）与被构建包的目录。 */
+export async function clientBundleSpec(
   options: {
     externals?: (string | RegExp)[];
     mode?: string;
+    /** 被构建包的目录；缺省 `process.cwd()`（tsdown 在包目录跑，现场打包传被打包包的目录）。 */
+    cwd?: string;
   } = {},
-): ClientBundleSpec {
+): Promise<ClientBundleSpec> {
   const mode = options.mode ?? process.env.NODE_ENV ?? "production";
   return {
-    externals: [...BASELINE, ...(options.externals ?? [])],
+    externals: [
+      ...BASELINE,
+      ...(await clientRowExternals(options.cwd)),
+      ...(options.externals ?? []),
+    ],
     conditionNames: [
       mode === "development" ? "development" : "production",
       "browser",
@@ -52,6 +61,49 @@ export function clientBundleSpec(
       "import.meta.env": JSON.stringify({ MODE: mode }),
     },
   };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
+}
+
+/**
+ * 本包依赖里**client 行**的 external 面。
+ *
+ * 判据是「这个包在模块表里有一行」——上游 host 半用同一个判据（包清单有 `exports["./client"]`）。
+ * 只按 `@deepseek-ai/*` 前缀判断时，我们自己的 `@morlay/*` client 行落进内联分支：同一份
+ * `window.__ModuleLoader__.load` 复制两份，页面先执行内联那份、再执行该行自己的 bundle，
+ * 第二次注册即抛 `client-modules: duplicate factory registration`。
+ * @param cwd - 被构建包的目录；缺省 `process.cwd()`。
+ * @returns 每个 client 行依赖一条 `^包名(?:/|$)` 正则；没有的返回空数组。
+ */
+export async function clientRowExternals(cwd = process.cwd()): Promise<RegExp[]> {
+  const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  };
+  const names = [
+    ...new Set([
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...Object.keys(manifest.peerDependencies ?? {}),
+    ]),
+  ].sort();
+  const require = createRequire(join(cwd, "package.json"));
+  const rows: RegExp[] = [];
+  for (const name of names) {
+    let target: string;
+    try {
+      target = require.resolve(`${name}/package.json`);
+    } catch {
+      continue; // 装不上（可选依赖 / 测试面）——按内联处理，不猜。
+    }
+    const dependency = JSON.parse(await readFile(target, "utf8")) as {
+      exports?: Record<string, unknown>;
+    };
+    if (dependency.exports?.["./client"] === undefined) continue;
+    rows.push(new RegExp(`^${escapeRegExp(name)}(?:/|$)`));
+  }
+  return rows;
 }
 
 /** client 入口的 entry 名（同一个 tsdown config 里与 host 入口并存）。 */
@@ -129,9 +181,10 @@ export interface ClientFactoryOptions {
  * @throws {Error} 打包未产出 chunk 时。
  */
 export async function bundleClientFactory(options: ClientFactoryOptions): Promise<string> {
-  const spec = clientBundleSpec(
-    options.externals === undefined ? {} : { externals: options.externals },
-  );
+  const spec = await clientBundleSpec({
+    ...(options.externals === undefined ? {} : { externals: options.externals }),
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+  });
   const build = await rolldown({
     input: options.entry,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),

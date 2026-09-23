@@ -3,6 +3,7 @@ export {
   bundleClientFactory,
   clientBundleSpec,
   clientEntryPlugin,
+  clientRowExternals,
   CLIENT_ENTRY,
   isClientExternal,
 } from "./cordis-client.ts";

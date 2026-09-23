@@ -44,11 +44,11 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function clientEntryOf(clientPath: string): Promise<string> {
+async function clientEntryOf(clientPath: string): Promise<{ root: string; entry: string }> {
   let directory = dirname(clientPath);
   while (directory !== dirname(directory)) {
     if (await pathExists(join(directory, "package.json")))
-      return join(directory, "src", "client", "index.ts");
+      return { root: directory, entry: join(directory, "src", "client", "index.ts") };
     directory = dirname(directory);
   }
   throw new Error(`dev-client-bundles: no package root above ${clientPath}`);
@@ -79,10 +79,12 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   const bundleSource = async (id: string, externals: (string | RegExp)[]): Promise<string> => {
-    const entry = await clientEntryOf(builtPathOf(id));
+    const { root, entry } = await clientEntryOf(builtPathOf(id));
     if (!(await pathExists(entry)))
       throw new Error(`dev-client-bundles: ${id} has no client source at ${entry}`);
-    return await bundleClientFactory({ name: id, entry, externals });
+    // cwd 是**被打包的那个包**：external 判据读它自己的依赖清单（谁有 `exports["./client"]`），
+    // 用 dev 进程的 cwd（工作区根）会漏掉我们的 client 行，把它们内联成第二份 factory。
+    return await bundleClientFactory({ name: id, entry, externals, cwd: root });
   };
 
   const readBuilt = async (id: string): Promise<string> =>

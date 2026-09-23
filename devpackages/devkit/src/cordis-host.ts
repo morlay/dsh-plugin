@@ -70,7 +70,7 @@ export async function defineCordisPluginConfig(options?: {
   }
   if (client !== undefined) entry[CLIENT_ENTRY] = client.entry ?? "./src/client/index.ts";
 
-  const spec = clientBundleSpec(
+  const spec = await clientBundleSpec(
     client?.externals === undefined ? {} : { externals: client.externals },
   );
   const clientRoot = `${sep}src${sep}${CLIENT_ENTRY}${sep}`;
