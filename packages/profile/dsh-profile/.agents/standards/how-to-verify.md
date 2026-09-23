@@ -4,17 +4,14 @@
 测试，**必须**跑一次真装配：
 
 ```sh
-just profile
+pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
 ```
 
-两支探针各管一半：
+它装配一次真实 web profile，判装配面的四条事实：注入通道全局一份（`ctx.contextAssembler`）、模式收口那一行
+装上了（`ctx.sessionToolScope`）、**`ctx.agentPresets` 不存在**（官方 agent preset 那一套确实被本层关掉）、
+`ctx.sessionModes.roster()` 等于 `session-mode` 行的 config。
 
-- `verify-session-mode.mts`：装配面的四条事实——注入通道全局一份（`ctx.contextAssembler`）、模式收口那一行
-  装上了（`ctx.sessionToolScope`）、**`ctx.agentPresets` 不存在**（官方 agent preset 那一套确实被本层关掉）、
-  `ctx.sessionModes.roster()` 等于 `session-mode` 行的 config。
-- `verify-profile.mts`：模式清单在，外加会话列表 / 归档 / `/session-editor` 路由那几条与模式无关的判据。
-
-**判据**：两支探针都没有 `failures`。最要紧的一条是 `ctx.agentPresets` **必须缺席**——它还在就说明官方那套
+**判据**：探针没有 `failures`。最要紧的一条是 `ctx.agentPresets` **必须缺席**——它还在就说明官方那套
 又回来了（两套并行机制、每 revision 一棵 Loader 子树）。
 
 为什么这条对本包尤其重要：**本层的动作是全局的**——按 id 禁用一行、整体替换一行的 `config`，活在同一份装配

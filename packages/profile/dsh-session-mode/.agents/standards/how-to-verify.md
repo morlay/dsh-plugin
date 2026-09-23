@@ -25,11 +25,10 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 
 ```sh
 pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
-pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-profile.mts
 ```
 
 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
-`just custom dev --web` 或 `just custom desktop`）；两支脚本只读它，不建会话。`just profile` 会跑这两支。
+`just custom dev --web` 或 `just custom desktop`）；脚本只读它，不建会话。
 
 **判据**：
 
@@ -40,10 +39,8 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-profile.mts
   `ctx.sessions` / `ctx.agents`，而 cordis 的**属性访问**要求 fiber 在 `inject` 里点过名，漏一个就成了真回归
   （2026-09-24：`cannot get property "sessions" without inject`，只跑 GET 与包内测试都看不见——包内测试从
   root ctx 调服务，绕开了 inject 白名单）。
-- `verify-profile.mts`：读得到模式清单，外加会话列表 / 归档 / `/session-editor` 路由那几条与模式无关的判据。
-
-模式之间的**行为**差异（chat 没有动态快照、目录被收口）不在探针里判——那要建会话、跑装配，代价大于收益；
-第 1 层已经在真依赖下测过同一件事。
+  模式之间的**行为**差异（chat 没有动态快照、目录被收口）不在探针里判——那要建会话、跑装配，代价大于收益；
+  第 1 层已经在真依赖下测过同一件事。
 
 ## 3. lint（类型是它的一部分）
 

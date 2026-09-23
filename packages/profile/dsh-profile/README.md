@@ -49,8 +49,7 @@ profile 的**配置初始化层**：按 id 给行配值（`config` 覆盖），�
 （它会把当时仍在的 preset 行打成 broken，见[设计](./.agents/designs/20260917-host层部署配置.md) 里那条实测）。
 **关掉一整块机制**与**关掉某个 host 能力**是两件事：前者是"部署不要这个组合"，后者是"我们不用某能力"，
 后者应该靠自己的模式声明不带那个开关来实现。
-两支真装配探针（`pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts` 与
-`…/verify-profile.mts`）是本层改动的实测判据。
+真装配探针（`pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts`）是本层改动的实测判据。
 
 ## 生成与升级
 

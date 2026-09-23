@@ -30,9 +30,10 @@
 - **`/session-editor` 路由真的注册上了**：单测的 `harness()` 直接 provide `webServer`，所以注册永远成功——
   它看不见「本行构造时 `webServer` 还没激活」这种顺序问题（一次性 `ctx.get` 取到 undefined 后不再重试，
   路由永不注册；请求于是落到 `frontend-static` 的 fallback，非 GET/HEAD 一律 405——编辑撤回与重试就是这个症状）。
-  改动装配或升级上游后跑 `pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-profile.mts`：它装配一次
-  真 web profile，检查 preset roster 无 broken，且 `POST /session-editor` 命中我们自己的 handler
-  （判据是非 405/404：非法 body 拿到我们自己的 400 文案）。
+  这条判据原先由真装配探针 `verify-profile.mts` 承担（装配一次真 web profile，看 `POST /session-editor` 是否
+  命中我们自己的 handler，非 405/404 才算过）；该探针已于 2026-09-24 删除，**真装配面目前没有判据**——包内的
+  `http.spec.ts` 覆盖注册逻辑本身，但它的 `harness()` 直接 provide `webServer`，看不见上面那个顺序问题。
+  再遇到撤回 / 重试整片 405 的症状，按这段的顺序问题排查（`webServer` 激活晚于本行构造）。
 
 ## 测试装配辅助（`./testing`）
 
