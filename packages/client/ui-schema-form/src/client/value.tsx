@@ -48,6 +48,7 @@ export function tokenTone(value: unknown): "string" | "number" | "boolean" | "em
 export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactNode {
   if (owner.options !== undefined) return <OptionSelect owner={owner} options={owner.options} />;
   if (owner.node.meta.secret) {
+    // secret 不回显值：截断时不给全文，只给说明。
     return (
       <LineValue data-tone="empty" title={owner.hint}>
         {owner.secretConfigured ? "••••••" : ""}
@@ -57,7 +58,8 @@ export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactN
   return (
     <LineValue
       data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}
-      title={owner.hint}
+      // 值长了会截断：整份内容挂在 title 上，hover 就能看全。
+      title={tokenText(owner.value)}
     >
       {tokenText(owner.value)}
     </LineValue>

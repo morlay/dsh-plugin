@@ -218,21 +218,23 @@ export const CompactTextField = styled("span")({
   },
 });
 
-/** 行内注释（schema 说明与业务文案）。 */
+/** 行内注释（schema 说明与业务文案）：比配置值小一档，占满这一行剩下的宽度，长了就截断（hover 看全文）。 */
 export const LineComment = styled("span")({
-  flex: "none",
-  maxWidth: "52%",
+  flex: "1 1 auto",
+  minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   color: dsw.alias.label.tertiary,
   fontFamily: "inherit",
+  fontSize: "12px",
 });
 
-/** 行内的校验消息。 */
+/** 行内的校验消息（与注释放同一档字号）。 */
 export const LineInvalid = styled("span")({
   flex: "none",
   color: dsw.alias.state.error.primary,
   fontFamily: "inherit",
+  fontSize: "12px",
 });
 
 /** 行尾的动作组：方形图标键（默认透明，悬停时显形）。 */

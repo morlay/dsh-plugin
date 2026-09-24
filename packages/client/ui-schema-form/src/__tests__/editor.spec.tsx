@@ -835,4 +835,16 @@ describe("与真控制器一起跑", () => {
 
     expect(calls.addKey).toHaveBeenCalledWith([], "note");
   });
+
+  it("截断的地方 hover 出全文：注释与值都挂 title", () => {
+    const localized = { zh: "很长的一段说明", en: "long" } as unknown as string;
+    const schema = z.object({ note: z.string().description(localized) });
+    const { props } = bench(schema, { note: "一个很长的值" });
+    const { container } = render(<SchemaForm {...props} />);
+
+    const comment = container.querySelector('[data-line="comment"] [title]') as HTMLElement;
+    expect(comment.getAttribute("title")).toBe("很长的一段说明");
+    const value = container.querySelector('[data-tone="string"]') as HTMLElement;
+    expect(value.getAttribute("title")).toBe('"一个很长的值"');
+  });
 });

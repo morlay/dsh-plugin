@@ -209,7 +209,7 @@ function Row({
     line.kind === "comment" ? (
       <>
         <LineFoldSpacer data-role="fold" />
-        <LineComment>{`// ${line.text}`}</LineComment>
+        <LineComment title={line.text}>{`// ${line.text}`}</LineComment>
       </>
     ) : line.kind === "open" ? (
       <>
@@ -364,7 +364,10 @@ function FieldLine({
   return (
     <>
       <LineFoldSpacer data-role="fold" />
-      <LineKey data-index={member?.index === undefined ? undefined : "true"}>
+      <LineKey
+        data-index={member?.index === undefined ? undefined : "true"}
+        title={member?.key ?? line.node.key}
+      >
         {member?.key ?? line.node.key}
       </LineKey>
       <LineToken>{member?.index === undefined ? ": " : "  "}</LineToken>
@@ -583,7 +586,9 @@ function LinePrefix({ line }: { line: Extract<EditorLine, { kind: "open" }> }): 
   const indexed = member !== undefined && member.index !== undefined;
   return (
     <>
-      <LineKey data-index={indexed ? "true" : undefined}>{key}</LineKey>
+      <LineKey data-index={indexed ? "true" : undefined} title={key}>
+        {key}
+      </LineKey>
       <LineToken>{indexed ? "  " : ": "}</LineToken>
     </>
   );
@@ -710,7 +715,9 @@ function AddLine({
       {invalid ? <LineInvalid>{t("unknownProperty")}</LineInvalid> : null}
       {/* 候选的说明：选中之前先看清"要加的是什么"。 */}
       {!invalid && matched.length === 1 && matched[0]?.description !== undefined ? (
-        <LineComment>{resolveText(matched[0].description)}</LineComment>
+        <LineComment title={resolveText(matched[0].description)}>
+          {resolveText(matched[0].description)}
+        </LineComment>
       ) : null}
     </AddWrap>
   );
