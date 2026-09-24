@@ -946,4 +946,29 @@ describe("与真控制器一起跑", () => {
     expect(state().walked.map((item) => item.path.join("."))).not.toContain("models.chat");
     expect(scope.writes).toEqual([]);
   });
+
+  it("加成对象后它的字段直接摆出来：每个字段都是能填的位子", () => {
+    const { state, props } = live(
+      z.object({
+        host: z.string().required(),
+        cfg: z.object({
+          provider: z.string().role("select", { source: "llm-providers" }),
+          model: z.string(),
+        }),
+      }),
+      { host: "h" },
+    );
+    const { container } = render(<SchemaForm {...props} />);
+
+    fireEvent.focus(screen.getByPlaceholderText(zh.addProperty));
+    fireEvent.click(screen.getByRole("menuitem", { name: "cfg" }));
+
+    const paths = state().walked.map((item) => item.path.join("."));
+    expect(paths).toContain("cfg");
+    expect(paths).toContain("cfg.provider");
+    expect(paths).toContain("cfg.model");
+    // provider 没有注册那个具名源时退回文本输入，但位子必须在。
+    expect(container.querySelector('[data-field-path="cfg.provider"] input')).toBeTruthy();
+    expect(container.querySelector('[data-field-path="cfg.model"] input')).toBeTruthy();
+  });
 });

@@ -299,3 +299,24 @@ describe("给一层加项", () => {
     ]);
   });
 });
+
+it("加成对象：它的字段一次摆出来（有默认值给默认值、标量给 null、容器给空的容器）", async () => {
+  const scope = new FakeScope({ value: {} });
+  const { instance } = model(
+    scope,
+    z.object({
+      cfg: z.object({
+        host: z.string().default("h"),
+        port: z.number(),
+        tags: z.array(z.string()),
+      }),
+    }),
+  );
+
+  instance.addKey([], "cfg");
+  await instance.save();
+
+  expect(scope.writes).toEqual([
+    [{ op: "set", path: ["cfg"], value: { host: "h", port: null, tags: [] } }],
+  ]);
+});

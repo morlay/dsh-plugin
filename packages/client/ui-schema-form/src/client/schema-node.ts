@@ -735,7 +735,23 @@ export function readPath(root: unknown, path: readonly string[]): unknown {
 }
 
 /**
- * 一个新子节点的初值：声明的默认值优先；容器给空的容器；其余标量给 **`null`**。
+ * schemastery 给容器类型自动塞的空壳默认（`{}`）——它不是"用户声明的默认值"，别拿它当初值用。
+ * @param node - 字段节点。
+ * @returns 是不是那种空壳。
+ */
+function isImplicitEmptyDefault(node: FieldNode): boolean {
+  if (node.type !== "object" && node.type !== "intersect") return false;
+  const value = node.meta.defaultValue;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 0
+  );
+}
+
+/**
+ * 一个新子节点的初值：声明的默认值优先；对象把字段摆出来（见下）；字典/数组给空的容器；其余标量给 **`null`**。
  *
  * `null` 在这里是"还没有值"的判断位（`null` / `undefined` 都算），页面据此把它画成一个等着输入的位子——
  * 而不是 `""`、`0` 这种看着像已经填过的值。host 侧也认这个语义：非必填字段拿到 `null` 回退到默认值，
@@ -744,15 +760,21 @@ export function readPath(root: unknown, path: readonly string[]): unknown {
  * @returns 初值。
  */
 export function emptyValueOf(node: FieldNode): unknown {
-  if (node.meta.hasDefault) return structuredClone(node.meta.defaultValue);
+  if (node.meta.hasDefault && !isImplicitEmptyDefault(node)) {
+    return structuredClone(node.meta.defaultValue);
+  }
   switch (node.type) {
     case "array":
       return [];
     case "tuple":
       return node.items.map((item) => emptyValueOf(item));
     case "dict":
-    case "object":
       return {};
+    case "object":
+    case "intersect":
+      // 新加进来的对象：把它的字段都摆出来（标量给 `null` = "还没填"，容器给空的容器）。加成之后直接看到要填
+      // 什么——否则是一个空对象，用户还得逐个从"添加属性"候选里再挑一遍。
+      return Object.fromEntries(fieldsOf(node).map((field) => [field.key, emptyValueOf(field)]));
     case "const":
       return node.value;
     case "bitset":
