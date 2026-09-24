@@ -95,7 +95,7 @@ export const LineNumber = styled("span")({
   cursor: "pointer",
 });
 
-/** 折叠 chevron。 */
+/** 折叠 chevron（官方箭头图标，尺寸与别的行内图标同源）。 */
 export const LineFold = styled("button")({
   display: "inline-flex",
   alignItems: "center",
@@ -108,6 +108,7 @@ export const LineFold = styled("button")({
   background: "none",
   color: dsw.alias.label.caption,
   cursor: "pointer",
+  "&:hover": { color: dsw.alias.label.secondary },
 });
 
 /** 叶子行的折叠占位（保持列对齐）。 */
@@ -155,12 +156,8 @@ export const ValueTrigger = styled("button")({
   font: "inherit",
   textAlign: "left",
   cursor: "pointer",
-  "&::after": {
-    content: '"▾"',
-    flex: "none",
-    color: dsw.alias.label.caption,
-  },
-  "&:disabled": { cursor: "default", "&::after": { content: '""' } },
+  color: dsw.alias.label.caption,
+  "&:disabled": { cursor: "default" },
   "&:focus-visible": { outline: "none" },
 });
 

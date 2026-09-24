@@ -6,10 +6,10 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { Menu } from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconChevronDownOutlineRegular, Menu } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SelectOption } from "./hints.ts";
 import type { SchemaFieldOwnerProps } from "./slot-contract.ts";
-import { LineValue, ValueTrigger } from "./styles.ts";
+import { ICON_SIZE, LineValue, ValueTrigger } from "./styles.ts";
 
 /** 编辑态文本：字符串就是原文（换行照旧），其余按 JSON 写。 */
 export function valueText(value: unknown): string {
@@ -121,6 +121,7 @@ function OptionSelect({
           >
             {label}
           </LineValue>
+          <IconChevronDownOutlineRegular size={ICON_SIZE} />
         </ValueTrigger>
       }
     />

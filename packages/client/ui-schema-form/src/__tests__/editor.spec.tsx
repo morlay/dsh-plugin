@@ -385,8 +385,9 @@ describe("选择器与只读字段", () => {
     );
     const { container } = render(<SchemaForm {...props} />);
 
-    // 触发元素自己就是值：同一个值不画两遍。
+    // 触发元素自己就是值：同一个值不画两遍；箭头是图标（不是文本字符）。
     expect(rowText(container)).toEqual(["{", 'journal: "wal"', "}"]);
+    expect(screen.getByRole("button", { name: "journal" }).querySelector("svg")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "journal" }));
     fireEvent.click(screen.getByRole("menuitem", { name: '"delete"' }));
 

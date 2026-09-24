@@ -11,9 +11,12 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   IconCheckOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
   IconCloseOutlineRegular,
   IconCopyOutlineRegular,
   IconRefreshOutlineRegular,
+  IconTrashOutlineRegular,
   Input,
   Menu,
 } from "@deepseek-ai/dsh-client-ui-primitives";
@@ -222,7 +225,11 @@ function Row({
             fold.toggle(line.path);
           }}
         >
-          {line.collapsed ? "▸" : "▾"}
+          {line.collapsed ? (
+            <IconChevronRightOutlineRegular size={ICON_SIZE} />
+          ) : (
+            <IconChevronDownOutlineRegular size={ICON_SIZE} />
+          )}
         </LineFold>
         <LinePrefix line={line} />
         <LineToken>
@@ -510,7 +517,7 @@ function FieldLine({
               else face.removeItem(member.parent, member.index);
             }}
           >
-            <IconCloseOutlineRegular size={ICON_SIZE} />
+            <IconTrashOutlineRegular size={ICON_SIZE} />
           </button>
         )}
       </HoverActions>
@@ -571,6 +578,7 @@ function VariantSelect({
           }}
         >
           <LineValue data-tone="empty">{current?.label ?? ""}</LineValue>
+          <IconChevronDownOutlineRegular size={ICON_SIZE} />
         </ValueTrigger>
       }
     />
