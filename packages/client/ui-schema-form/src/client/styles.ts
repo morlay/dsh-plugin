@@ -43,6 +43,9 @@ const LINE = dsw.elevation.stroke.color;
 /** 行左侧那道「改过」的标记宽度。 */
 const EDGE = "2px";
 
+/** 出错那一行的底色：theme 的红掺进透明里（半透明红），比整行实红轻、又比只有一道条明显。 */
+const ERROR_WASH = `color-mix(in srgb, ${String(dsw.alias.state.error.secondary)} 12%, transparent)`;
+
 /** 编辑器的根：纵向排列的行。 */
 export const EditorRoot = styled("div")({
   display: "flex",
@@ -69,8 +72,9 @@ export const LineRow = styled("div")({
   // 本页改过还没保存：左边一道强调色，和「已经存进用户层」的浅灰区分开。
   "&[data-dirty='true']": { boxShadow: `inset ${EDGE} 0 0 ${String(dsw.alias.brand.primary)}` },
   "&[data-overridden='true']": { boxShadow: `inset ${EDGE} 0 0 ${String(LINE)}` },
-  // 有问题的行只留一道红条 + 注释位的红字：整行铺红太吵。
+  // 有问题的行：半透明红底 + 左侧一道实红条，注释位那句是红字。
   "&[data-invalid='true']": {
+    background: ERROR_WASH,
     boxShadow: `inset ${EDGE} 0 0 ${String(dsw.alias.state.error.primary)}`,
   },
   // 行内的行为按钮（撤回 / 恢复默认 / 复制 / 移除）：平时透明，悬停这一行才显形。
