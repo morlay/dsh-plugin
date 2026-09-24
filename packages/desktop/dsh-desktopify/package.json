@@ -23,8 +23,6 @@
     "dist"
   ],
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "exports": {
     ".": "./src/index.ts",
     "./dev-client-bundles": "./src/dev-client/index.ts",

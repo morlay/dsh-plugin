@@ -9,6 +9,7 @@ import {
   type CordisClientOptions,
 } from "./cordis-client.ts";
 import { cssInlinePlugins } from "./css.ts";
+import { packageExportsHook } from "./package-exports.ts";
 
 /**
  * 本地私有包前缀：`@local/*` 只活在本 workspace、从不发布。留在产物里消费方就会去
@@ -57,6 +58,21 @@ export async function defineCordisPluginConfig(options?: {
    * 运行期依赖」的情形：源码上仍是那一份（唯一 home），产物里内联一份。
    */
   inline?: readonly string[];
+  /**
+   * 无条件留在产物外的包（原生模块、自带二进制的构建器）：client 面的 external 由
+   * {@link CordisClientOptions.externals} 管，这里管的是那些「谁 import 都不能打进来」的包。
+   */
+  neverBundle?: readonly string[];
+  /** 产物目录，默认 `dist`。 */
+  outDir?: string;
+  /** 固定产物扩展名（`.mjs` / `.cjs`）；关闭时按 `package.json` 的 `type` 落 `.js`，默认开。 */
+  fixedExtension?: boolean;
+  /** 产出声明文件，默认开。 */
+  dts?: boolean;
+  /** 只构建、不导出的入口（产物要落位，但不该成为包的门面）。 */
+  hidden?: readonly string[];
+  /** 命令名 → 入口名：`bin` 两侧一起写（顶层指源码，发布态指产物）。 */
+  bin?: Record<string, string>;
 }): Promise<UserConfig> {
   const hasClientSource = await entryExists(join(process.cwd(), "src", "client", "index.ts"));
   const client =
@@ -80,16 +96,26 @@ export async function defineCordisPluginConfig(options?: {
   return {
     name: client?.name ?? (await packageName()),
     entry,
+    outDir: options?.outDir ?? "dist",
     // client 产物是 CJS（模块系统的工厂契约），host 产物是 ESM；没有 client
     // 入口的包只产 ESM。
     format: client === undefined ? ["esm"] : ["esm", "cjs"],
     platform: "node",
-    dts: true,
+    dts: options?.dts ?? true,
+    fixedExtension: options?.fixedExtension ?? true,
     sourcemap: false,
     clean: true,
-    // 包的 exports 手写在 package.json（dev 指向源码、发布走 publishConfig），
-    // tsdown 只负责产物，不去重写清单。
+    // 清单由构建写回（`exports` 指源码、`publishConfig.exports` 指产物）：出口按入口推导，
+    // client 半固定成 CJS 单文件形态，手写的面（locale、cordis.patch.yml）在生成器里按文件存在性补。
     exports: false,
+    hooks: {
+      "build:done": packageExportsHook({
+        entries: entry,
+        ...(client === undefined ? {} : { clientEntry: CLIENT_ENTRY }),
+        ...(options?.hidden === undefined ? {} : { hidden: options.hidden }),
+        ...(options?.bin === undefined ? {} : { bin: options.bin }),
+      }),
+    },
     // 双模式库（如 lexical 的 exports 带 development / production / node 条件，
     // node 变体用 CJS 承载不了的 top-level await）必须解析到与下面 defines 一致
     // 的静态变体：条件名按 NODE_ENV 选 production / development，且不含 node。
@@ -98,7 +124,8 @@ export async function defineCordisPluginConfig(options?: {
     deps: {
       // external 只对 client 入口的模块图生效：host 半照常打自己的依赖闭包。
       neverBundle: (id: string, importer: string | null | undefined) =>
-        fromClient(importer) && isClientExternal(id, spec.externals),
+        (options?.neverBundle?.includes(id) ?? false) ||
+        (fromClient(importer) && isClientExternal(id, spec.externals)),
       alwaysBundle: (id: string, importer: string | null | undefined) =>
         isLocalPackage(id) ||
         isInlinedPackage(id, options?.inline) ||

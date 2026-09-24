@@ -28,9 +28,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./invariant": "./src/invariant.ts",
     "./plan": "./src/plan.ts",
     "./testing": "./src/testing.ts",
+    "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./client": {
@@ -42,9 +42,9 @@
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
-      "./invariant": "./dist/invariant.mjs",
       "./plan": "./dist/plan.mjs",
       "./testing": "./dist/testing.mjs",
+      "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
       "./cordis.patch.yml": "./cordis.patch.yml",
       "./client": {

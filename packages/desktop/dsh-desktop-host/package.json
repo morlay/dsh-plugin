@@ -23,23 +23,18 @@
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./lib/index.js"
-    },
-    "./webserver": {
-      "types": "./src/webserver.ts",
-      "default": "./lib/webserver.js"
-    },
-    "./wire": {
-      "types": "./src/wire.ts",
-      "default": "./lib/wire.js"
-    },
+    ".": "./src/index.ts",
+    "./webserver": "./src/webserver.ts",
+    "./wire": "./src/wire.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
+      ".": "./lib/index.js",
+      "./webserver": "./lib/webserver.js",
+      "./wire": "./lib/wire.js",
+      "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -59,6 +54,7 @@
     "@deepseek-ai/cordis": "workspace:*",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@local/devkit": "workspace:*",
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {
