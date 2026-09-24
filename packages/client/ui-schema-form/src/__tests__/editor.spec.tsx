@@ -915,4 +915,35 @@ describe("与真控制器一起跑", () => {
       container.querySelector('[data-field-path="busyTimeout"] [data-role="body"]')?.textContent,
     ).toContain("只接受 2000");
   });
+
+  it("成员的值本身是容器时也能移除（字典键删掉一整项、数组项同理）", () => {
+    const map = bench(z.object({ models: z.dict(z.object({ provider: z.string() })) }), {
+      models: { chat: { provider: "m" } },
+    });
+    const first = render(<SchemaForm {...map.props} />);
+    // 那一项开在 `chat: {` 这一行上：移除按钮必须跟着它，而不是只挂在叶子字段行。
+    fireEvent.click(screen.getAllByRole("button", { name: zh.removeItem })[0]!);
+    expect(map.calls.removeKey).toHaveBeenCalledWith(["models"], "chat");
+    first.unmount();
+
+    const list = bench(z.object({ items: z.array(z.object({ id: z.string() })) }), {
+      items: [{ id: "a" }],
+    });
+    render(<SchemaForm {...list.props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: zh.removeItem })[0]!);
+    expect(list.calls.removeItem).toHaveBeenCalledWith(["items"], 0);
+  });
+
+  it("移除字典的一整项：值从读数里消失，退回可添加项", () => {
+    const { state, props, scope } = live(
+      z.object({ models: z.dict(z.object({ provider: z.string() })) }),
+      { models: { chat: { provider: "m" } } },
+    );
+    render(<SchemaForm {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: zh.removeItem }));
+
+    expect(state().walked.map((item) => item.path.join("."))).not.toContain("models.chat");
+    expect(scope.writes).toEqual([]);
+  });
 });

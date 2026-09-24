@@ -237,7 +237,7 @@ function Row({
             <IconChevronDownOutlineRegular size={ICON_SIZE} />
           )}
         </LineFold>
-        <LinePrefix line={line} />
+        <LinePrefix line={line} face={face} t={t} disabled={disabled} />
         <LineToken>
           {line.shape === "object" ? (line.collapsed ? "{…}" : "{") : line.collapsed ? "[…]" : "["}
         </LineToken>
@@ -519,18 +519,7 @@ function FieldLine({
           <IconCopyOutlineRegular size={ICON_SIZE} />
         </button>
         {member === undefined ? null : (
-          <button
-            type="button"
-            aria-label={t("removeItem")}
-            title={t("removeItem")}
-            disabled={disabled}
-            onClick={() => {
-              if (member.index === undefined) face.removeKey(member.parent, member.key);
-              else face.removeItem(member.parent, member.index);
-            }}
-          >
-            <IconTrashOutlineRegular size={ICON_SIZE} />
-          </button>
+          <RemoveLineButton member={member} face={face} t={t} disabled={disabled} />
         )}
       </HoverActions>
     </>
@@ -597,8 +586,18 @@ function VariantSelect({
   );
 }
 
-/** 开启行的前缀：字段键名（对象里的一层）或数组成员的下标。 */
-function LinePrefix({ line }: { line: Extract<EditorLine, { kind: "open" }> }): ReactNode {
+/** 开启行的前缀：字段键名（对象里的一层）或数组成员的下标；成员行另外带移除。 */
+function LinePrefix({
+  line,
+  face,
+  t,
+  disabled,
+}: {
+  line: Extract<EditorLine, { kind: "open" }>;
+  face: SchemaFormFace;
+  t: SchemaFormTranslate;
+  disabled: boolean;
+}): ReactNode {
   const member = line.member;
   const key = member?.key ?? line.node.key;
   // 根层的开启行没有键名，只有结构符。
@@ -610,7 +609,41 @@ function LinePrefix({ line }: { line: Extract<EditorLine, { kind: "open" }> }): 
         {key}
       </LineKey>
       <LineToken>{indexed ? "  " : ": "}</LineToken>
+      {/* 值本身是容器（对象/数组）的成员：它也要能移除，否则这一项删不掉。 */}
+      {member === undefined ? null : (
+        <HoverActions data-role="actions">
+          <RemoveLineButton member={member} face={face} t={t} disabled={disabled} />
+        </HoverActions>
+      )}
     </>
+  );
+}
+
+/** 成员行的移除（悬停时出现）：数组项按索引、字典键按键名。 */
+function RemoveLineButton({
+  member,
+  face,
+  t,
+  disabled,
+}: {
+  member: NonNullable<Extract<EditorLine, { kind: "field" }>["member"]>;
+  face: SchemaFormFace;
+  t: SchemaFormTranslate;
+  disabled: boolean;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      aria-label={t("removeItem")}
+      title={t("removeItem")}
+      disabled={disabled}
+      onClick={() => {
+        if (member.index === undefined) face.removeKey(member.parent, member.key);
+        else face.removeItem(member.parent, member.index);
+      }}
+    >
+      <IconTrashOutlineRegular size={ICON_SIZE} />
+    </button>
   );
 }
 
