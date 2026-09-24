@@ -133,4 +133,17 @@ describe("会话模式的行配置页", () => {
       snapshot.addable.get(JSON.stringify(["modes", "coding"]))?.map((option) => option.key),
     ).toEqual(["defaultModel"]);
   });
+
+  it("给某个模式配默认模型：加成 `defaultModel` 后里面就是能填的位子", () => {
+    const controller = mounted();
+    const state = () => controller.face().hooks.schemaForm.getSnapshot();
+    controller.face().addKey(["modes", "coding"], "defaultModel");
+
+    const paths = state().walked.map((item) => item.path.join("."));
+    expect(paths).toContain("modes.coding.defaultModel");
+    // 三个字段都在页面上：它们就是用户接下来要填的位子（选择器 / 输入位）。
+    expect(paths).toContain("modes.coding.defaultModel.provider");
+    expect(paths).toContain("modes.coding.defaultModel.model");
+    expect(paths).toContain("modes.coding.defaultModel.reasoningEffort");
+  });
 });

@@ -735,19 +735,18 @@ export function readPath(root: unknown, path: readonly string[]): unknown {
 }
 
 /**
- * schemastery 给容器类型自动塞的空壳默认（`{}`）——它不是"用户声明的默认值"，别拿它当初值用。
+ * 这个"默认值"其实不是值——它不该用来当新加进来的那一项的初值。
+ *
+ * 两种：`null`（"没有值"的判断位，例如 `defaultModel` 用 `.default(null)` 表达"没配就没有这个键"），以及
+ * schemastery 给容器类型自动塞的空壳（`{}`）。两种都该让容器把字段摆出来。
  * @param node - 字段节点。
- * @returns 是不是那种空壳。
+ * @returns 是不是空壳。
  */
-function isImplicitEmptyDefault(node: FieldNode): boolean {
-  if (node.type !== "object" && node.type !== "intersect") return false;
+function isBlankDefault(node: FieldNode): boolean {
   const value = node.meta.defaultValue;
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 0
-  );
+  if (value === null) return true;
+  if (node.type !== "object" && node.type !== "intersect") return false;
+  return typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
 }
 
 /**
@@ -760,7 +759,7 @@ function isImplicitEmptyDefault(node: FieldNode): boolean {
  * @returns 初值。
  */
 export function emptyValueOf(node: FieldNode): unknown {
-  if (node.meta.hasDefault && !isImplicitEmptyDefault(node)) {
+  if (node.meta.hasDefault && !isBlankDefault(node)) {
     return structuredClone(node.meta.defaultValue);
   }
   switch (node.type) {
