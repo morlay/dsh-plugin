@@ -72,11 +72,15 @@ export const LineRow = styled("div")({
   // 本页改过还没保存：左边一道强调色，和「已经存进用户层」的浅灰区分开。
   "&[data-dirty='true']": { boxShadow: `inset ${EDGE} 0 0 ${String(dsw.alias.brand.primary)}` },
   "&[data-overridden='true']": { boxShadow: `inset ${EDGE} 0 0 ${String(LINE)}` },
-  // 有问题的行：半透明红底 + 左侧一道实红条，注释位那句是红字。
+  // 改过的字段名用强调色（存没存看左边那道条）；出错时红优先。
+  "&[data-dirty='true'] [data-role='key']": { color: dsw.alias.brand.primary },
+  "&[data-overridden='true'] [data-role='key']": { color: dsw.alias.brand.primary },
+  // 有问题的行：半透明红底 + 左侧一道实红条，字段名与注释位那句都是红字。
   "&[data-invalid='true']": {
     background: ERROR_WASH,
     boxShadow: `inset ${EDGE} 0 0 ${String(dsw.alias.state.error.primary)}`,
   },
+  "&[data-invalid='true'] [data-role='key']": { color: dsw.alias.state.error.primary },
   // 行内的行为按钮（撤回 / 恢复默认 / 复制 / 移除）：平时透明，悬停这一行才显形。
   "&:hover [data-role='actions']": { opacity: 1 },
 });

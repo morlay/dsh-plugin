@@ -622,9 +622,13 @@ describe("union 与布局", () => {
     );
     const { container } = render(<SchemaForm {...props} />);
 
-    const row = container.querySelector('[data-field-path="retry"]') as HTMLElement;
+    const row = container.querySelector(
+      '[data-line="field"][data-field-path="retry"]',
+    ) as HTMLElement;
     expect(row.getAttribute("data-dirty")).toBe("true");
     expect(row.getAttribute("data-overridden")).toBeNull();
+    // 改过的字段名带标记：样式据此上强调色。
+    expect(row.querySelector('[data-role="key"]')?.textContent).toBe("retry");
     fireEvent.click(screen.getByRole("button", { name: zh.revert }));
 
     expect(calls.revert).toHaveBeenCalledWith(["retry"]);

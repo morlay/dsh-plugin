@@ -384,6 +384,7 @@ function FieldLine({
     <>
       <LineFoldSpacer data-role="fold" />
       <LineKey
+        data-role="key"
         data-index={member?.index === undefined ? undefined : "true"}
         title={member?.key ?? line.node.key}
       >
@@ -605,7 +606,7 @@ function LinePrefix({ line }: { line: Extract<EditorLine, { kind: "open" }> }): 
   const indexed = member !== undefined && member.index !== undefined;
   return (
     <>
-      <LineKey data-index={indexed ? "true" : undefined} title={key}>
+      <LineKey data-role="key" data-index={indexed ? "true" : undefined} title={key}>
         {key}
       </LineKey>
       <LineToken>{indexed ? "  " : ": "}</LineToken>
