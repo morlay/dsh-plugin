@@ -332,9 +332,15 @@ describe("行式编辑器", () => {
       renderSlotChain: (_k: string, _o: unknown, opts?: { fallback?: unknown }) =>
         opts?.fallback ?? null,
     } as unknown as SchemaFormComponentProps;
-    render(<SchemaForm {...props} />);
+    const { container } = render(<SchemaForm {...props} />);
 
-    expect(screen.getByText(zh.invalidNumber)).toBeTruthy();
+    // 消息占的是注释位（红字），不再挤在值后面。
+    expect(screen.getByText(`// ${zh.invalidNumber}`)).toBeTruthy();
+    expect(
+      container
+        .querySelector('[data-line="field"][data-field-path="retry"]')
+        ?.getAttribute("data-invalid"),
+    ).toBe("true");
   });
 
   it("字段槽命中时值位置换成注册方的节点", () => {

@@ -49,6 +49,7 @@ function linesOf(schema: unknown, value: unknown): EditorLine[] {
     secrets: new Map(),
     options: new Map(),
     addable,
+    invalidAt: new Map(),
   } as unknown as SchemaFormState;
   return editorLines(state, { collapsed: () => false, toggle: () => {} }, resolveText, t);
 }

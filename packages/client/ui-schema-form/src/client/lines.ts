@@ -81,12 +81,14 @@ export type EditorLine =
        */
       variantsStandIn: boolean;
     }
-  /** 注释行：schema 的说明与业务给的文案，画在字段行上方。 */
+  /** 注释行：schema 的说明与业务给的文案，画在字段行上方；这一行有问题时它装的是那条消息。 */
   | {
       kind: "comment";
       path: readonly string[];
       depth: number;
       text: string;
+      /** 这一行有校验消息（草稿解析失败或整段校验落下来）：画成错误，而不是普通说明。 */
+      invalid: boolean;
     };
 
 /**
@@ -208,7 +210,13 @@ export function editorLines(
     const depth = item.path.length;
     const comment = commentFor(state, item, resolveText, t);
     if (comment !== undefined) {
-      lines.push({ kind: "comment", path: item.path, depth, text: comment });
+      lines.push({
+        kind: "comment",
+        path: item.path,
+        depth,
+        text: comment.text,
+        invalid: comment.invalid,
+      });
     }
     const variants = variantsOf(node, value);
     const shape = containerShape(node, value);
@@ -289,13 +297,21 @@ function moveVariantControlToTag(lines: EditorLine[]): EditorLine[] {
   return lines;
 }
 
-/** 一行的注释：业务给的文案（字段槽的 label/hint）优先，其次 schema 的说明。 */
+/**
+ * 一行的注释：业务给的文案（字段槽的 label/hint）优先，其次 schema 的说明。
+ *
+ * 这一行有问题时**注释位让给那条消息**（参考实现也是把错误画在行尾那一段的位置上）——说明换成"哪里不对"，
+ * 错误因此不必挤在值后面。
+ */
 function commentFor(
   state: SchemaFormState,
   item: WalkedField,
   resolveText: ResolveText,
   t: SchemaFormTranslate,
-): string | undefined {
+): { text: string; invalid: boolean } | undefined {
+  const key = fieldKey(item.path);
+  const failure = state.fields.get(key)?.invalid ?? state.invalidAt.get(key);
+  if (failure !== undefined) return { text: failure, invalid: true };
   const node = unwrapLazy(item.node) ?? item.node;
   const parts: string[] = [];
   // 注释放"这是什么"（说明）与只读、徽标这类一眼看不出的状态，不放"必填"这类结构信息——那是 schema 的常规。
@@ -308,7 +324,7 @@ function commentFor(
   // 只读的字段（装配事实这类）要说清楚为什么改不了，否则看起来只是"点不开"。
   if (node.meta.disabled) parts.push(t("readOnlyField"));
   if (node.meta.badges.length > 0) parts.push(node.meta.badges.join(" / "));
-  return parts.length === 0 ? undefined : parts.join(" · ");
+  return parts.length === 0 ? undefined : { text: parts.join(" · "), invalid: false };
 }
 
 /** `path` 是不是 `prefix` 的后代（含自身）。 */
