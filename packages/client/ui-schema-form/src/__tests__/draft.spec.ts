@@ -320,3 +320,22 @@ it("加成对象：它的字段一次摆出来（有默认值给默认值、标�
     [{ op: "set", path: ["cfg"], value: { host: "h", port: null, tags: [] } }],
   ]);
 });
+
+it("字段的默认值是 `null`（会话模式的 `defaultModel` 那种写法）时，加成仍把它的字段摆出来", async () => {
+  const scope = new FakeScope({ value: {} });
+  const { instance } = model(
+    scope,
+    z.object({
+      defaultModel: z
+        .object({ provider: z.string(), model: z.string() })
+        .default(null as unknown as never),
+    }),
+  );
+
+  instance.addKey([], "defaultModel");
+  await instance.save();
+
+  expect(scope.writes).toEqual([
+    [{ op: "set", path: ["defaultModel"], value: { provider: null, model: null } }],
+  ]);
+});

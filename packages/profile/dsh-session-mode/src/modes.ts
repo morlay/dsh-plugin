@@ -218,11 +218,11 @@ const modeSchema: z<SessionMode> = z.object({
     // 类型上放行一次：`null` 在这里只是"没有这个键"的写法，schema 的输入形状不接受它。
     .default(null as unknown as SessionModeModel)
     .description(
-    localized({
-      zh: "这个模式的默认模型；省略就跟全局默认模型。只在会话还没有模型事实时接管。",
-      en: "Default model for this mode; unset follows the global default. Applies only while a session has no model fact yet.",
-    }),
-  ),
+      localized({
+        zh: "这个模式的默认模型；省略就跟全局默认模型。只在会话还没有模型事实时接管。",
+        en: "Default model for this mode; unset follows the global default. Applies only while a session has no model fact yet.",
+      }),
+    ),
 });
 
 export const Config: z<Config, ResolvedConfig> = z.object({
