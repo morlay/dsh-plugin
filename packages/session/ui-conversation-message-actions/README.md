@@ -34,4 +34,4 @@ edit / retry / reroll 就地重写**同一会话**（session id 不变），只�
 - 决策：[`.agents/adrs/`](./.agents/adrs)（接管官方 `ui-conversation` 行、client bundle 单文件与 shadow 渲染、引用解析、
   编辑入口门控…）
 - 接缝、测试落点与未覆盖：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)
-- 整体设计：[设计 20260917-系统设计](../../../.agents/designs/20260917-系统设计.md)
+- 整体设计：[设计 20260917-会话编辑闭环装配](../better-session/.agents/designs/20260917-会话编辑闭环装配.md)

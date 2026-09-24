@@ -80,4 +80,4 @@ await ctx.sessionBranch.forkFrom(sourceId, { atSeq: 6, childSessionId });
 本包是 monorepo（pnpm workspaces）的一员：命令入口见根
 [justfile](../../../justfile)，约定见
 [`.agents/standards/`](../../../.agents/standards/README.md)，架构见
-[设计 20260917-系统设计](../../../.agents/designs/20260917-系统设计.md)。
+[设计 20260917-会话编辑闭环装配](./.agents/designs/20260917-会话编辑闭环装配.md)。
