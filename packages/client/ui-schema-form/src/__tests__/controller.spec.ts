@@ -10,6 +10,7 @@ import type { SchemaNode } from "@deepseek-ai/dsh-client-ui-settings/client";
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { SchemaFormController, fieldKey } from "../client/controller.ts";
+import { failureOf } from "../client/draft.ts";
 import { SessionPersistenceRdb } from "../../../../session/session-rdb/src/index.ts";
 import type { SelectSpec } from "../client/hints.ts";
 import { zh } from "../client/locales.ts";
@@ -67,7 +68,7 @@ function mounted(
         (schema as unknown as (input: unknown) => unknown)(value);
         return undefined;
       } catch (error) {
-        return error instanceof Error ? error.message : String(error);
+        return failureOf(error);
       }
     },
   });
@@ -177,7 +178,10 @@ describe("行配置控制器", () => {
     await Promise.resolve();
     expect(scope.writes).toEqual([]);
     expect(state()).toMatchObject({ invalid: true });
-    expect(state().violation).toContain("a");
+    expect(state().violation?.message).toContain("a");
+    // 项身份的冲突落在那一项上：行内报错与底部提示同源。
+    expect(state().violation?.path).toEqual(["providers", "1"]);
+    expect(state().invalidAt.get(fieldKey(["providers", "1"]))).toContain("a");
   });
 
   it("数组的项身份不重复时照常保存", async () => {

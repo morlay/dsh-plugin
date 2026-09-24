@@ -81,6 +81,7 @@ function bench(schema: z, value: unknown, overrides: Partial<SchemaFormState> = 
     secrets: new Map(),
     texts: new Map(),
     options: new Map(),
+    invalidAt: new Map(),
     // 可添加项按控制器同一算法：值里没有的声明字段就是这一层的候选。
     addable: new Map(
       walked.flatMap((item) => {
@@ -315,6 +316,7 @@ describe("行式编辑器", () => {
       texts: new Map(),
       options: new Map(),
       addable: new Map(),
+      invalidAt: new Map(),
       violation: undefined,
     };
     const store = createSnapshotStore(state);
@@ -663,7 +665,9 @@ describe("与真控制器一起跑", () => {
   function live(
     schema: z,
     value: unknown,
-    validate: (value: Record<string, unknown>) => string | undefined = () => undefined,
+    validate: (
+      value: Record<string, unknown>,
+    ) => { message: string; path: readonly string[] } | undefined = () => undefined,
   ) {
     const describeFace = fakeDescribe([
       {
@@ -874,7 +878,10 @@ describe("与真控制器一起跑", () => {
     const { state, props, scope } = live(
       z.object({ busyTimeout: z.number().default(5000) }),
       { busyTimeout: 5000 },
-      (section) => (section["busyTimeout"] === 2000 ? undefined : "busyTimeout 只接受 2000"),
+      (section) =>
+        section["busyTimeout"] === 2000
+          ? undefined
+          : { message: "busyTimeout 只接受 2000", path: ["busyTimeout"] },
     );
     const { container } = render(<SchemaForm {...props} />);
 
@@ -891,6 +898,11 @@ describe("与真控制器一起跑", () => {
 
     expect(scope.writes).toEqual([]);
     expect(screen.getByRole("alert").textContent).toContain("没有保存");
-    expect(state().violation).toContain("只接受 2000");
+    expect(state().violation?.message).toContain("只接受 2000");
+    // 消息落在出错的那一行上，而不是只在底部。
+    expect(state().invalidAt.get(fieldKey(["busyTimeout"]))).toContain("只接受 2000");
+    expect(
+      container.querySelector('[data-field-path="busyTimeout"] [data-role="body"]')?.textContent,
+    ).toContain("只接受 2000");
   });
 });

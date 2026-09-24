@@ -15,6 +15,7 @@ import {
   type DraftScope,
   type Section,
   type TextParse,
+  type ValidationFailure,
 } from "./draft.ts";
 import {
   emptyMeta,
@@ -111,8 +112,8 @@ export interface SchemaFormDeps {
   describe: SettingsDescribeFace;
   /** rehydrate host 发来的 `schema.toJSON()`。 */
   rehydrate: (serialized: unknown) => SchemaNode;
-  /** 整段校验。 */
-  validate: (schema: SchemaNode, value: unknown) => string | undefined;
+  /** 整段校验；失败时连路径一起给（页面把消息画在那一行）。 */
+  validate: (schema: SchemaNode, value: unknown) => ValidationFailure | undefined;
   /** 本包字典（项身份冲突这类本地校验的消息）。 */
   t: SchemaFormTranslate;
   /**
@@ -197,8 +198,10 @@ export interface SchemaFormState extends SettingsFormShell {
    * 因此只在还有声明字段没配时出现。
    */
   addable: ReadonlyMap<string, readonly AddableProperty[]>;
-  /** 保存被 schema 挡下时的消息。 */
-  violation: string | undefined;
+  /** 保存被 schema 挡下时的消息与它的位置。 */
+  violation: ValidationFailure | undefined;
+  /** 每行的校验消息（键见 {@link fieldKey}）：行内报错，与底部的整段提示同源。 */
+  invalidAt: ReadonlyMap<string, string>;
 }
 
 /** 控件的写动作：全部落在草稿上，`save` 是唯一的写盘点。 */
@@ -369,7 +372,7 @@ export class SchemaFormController {
   }
 
   /** 整段校验：schema 先说话，再看数组的项身份有没有冲突。 */
-  #validate(deps: SchemaFormDeps, value: Section): string | undefined {
+  #validate(deps: SchemaFormDeps, value: Section): ValidationFailure | undefined {
     if (this.#schema !== undefined) {
       const failure = deps.validate(this.#schema, value);
       if (failure !== undefined) return failure;
@@ -377,9 +380,13 @@ export class SchemaFormController {
     if (this.#root === undefined) return undefined;
     const conflict = mergeKeyConflict(this.#root, value);
     if (conflict === undefined) return undefined;
-    return conflict.kind === "duplicate"
-      ? deps.t("duplicateItem", { key: conflict.mergeKey, value: conflict.value })
-      : deps.t("missingItem", { key: conflict.mergeKey });
+    return {
+      message:
+        conflict.kind === "duplicate"
+          ? deps.t("duplicateItem", { key: conflict.mergeKey, value: conflict.value })
+          : deps.t("missingItem", { key: conflict.mergeKey }),
+      path: conflict.path,
+    };
   }
 
   /** 渲染层读的一份完整投影。 */
@@ -410,6 +417,12 @@ export class SchemaFormController {
       );
       if (addableHere.length > 0) addable.set(fieldKey(item.path), addableHere);
     }
+    // 整段校验失败落在哪一行，就在哪一行说（底部只留整段级的那份）。
+    const violation = this.#model.violation();
+    const invalidAt = new Map<string, string>();
+    if (violation !== undefined && violation.path.length > 0) {
+      invalidAt.set(fieldKey(violation.path), violation.message);
+    }
     return {
       ...this.#model.shell(),
       configured: root !== undefined,
@@ -420,7 +433,8 @@ export class SchemaFormController {
       texts,
       options,
       addable,
-      violation: this.#model.violation(),
+      violation,
+      invalidAt,
     };
   }
 }

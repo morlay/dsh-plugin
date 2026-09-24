@@ -29,6 +29,35 @@ export type TextParseResult =
 /** 控件给文本草稿的解析规则。 */
 export type TextParse = (text: string) => TextParseResult;
 
+/** 整段校验失败：消息 + 它落在哪一层（页面把消息画在**出错的那一行**上）。 */
+export interface ValidationFailure {
+  /** 面向用户的消息（已去掉 schemastery 拼的 `$…` 位置前缀）。 */
+  message: string;
+  /** 具体路径（段根起）；空数组表示错误在整段上。 */
+  path: readonly string[];
+}
+
+/**
+ * 把校验器抛出的错误收成一条失败。
+ *
+ * schemastery 的 `ValidationError` 把路径留在 `options.path` 上（消息里的 `$…` 前缀是给命令行看的），所以这里
+ * 取路径、去前缀——行内报错据此知道挂在哪一行。
+ * @param error - 校验器抛出的错误。
+ * @returns 消息与路径。
+ */
+export function failureOf(error: unknown): ValidationFailure {
+  const raw = error instanceof Error ? error.message : String(error);
+  const options = (error as { options?: { path?: readonly (string | number | symbol)[] } }).options;
+  const path = (options?.path ?? [])
+    .filter(
+      (segment): segment is string | number =>
+        typeof segment === "string" || typeof segment === "number",
+    )
+    .map(String);
+  const message = raw.replace(/^\$\S*\s/, "").trim();
+  return { message: message === "" ? raw : message, path };
+}
+
 /** 一字段的草稿。 */
 type DraftEdit =
   /** 控件已经给出合法值（开关、选择器、数字步进、增删项）。 */
@@ -62,8 +91,8 @@ export interface SchemaDraftOptions {
   scope: DraftScope;
   /** 段根的字段树（`projectNode` 的结果）：增删项要按它取节点默认值。 */
   root: FieldNode;
-  /** 整段校验：返回失败消息，或 `undefined`。 */
-  validate: (value: Section) => string | undefined;
+  /** 整段校验：返回失败（消息 + 位置），或 `undefined`。 */
+  validate: (value: Section) => ValidationFailure | undefined;
 }
 
 /** 一条草稿编辑要写的 op（`undefined` 表示这条草稿不该产生写）。 */
@@ -77,14 +106,14 @@ interface PlannedWrite {
 export class SchemaDraftModel {
   readonly #scope: DraftScope;
   #root: FieldNode;
-  readonly #validate: (value: Section) => string | undefined;
+  readonly #validate: (value: Section) => ValidationFailure | undefined;
   readonly #staged = new Map<string, { path: readonly string[]; edit: DraftEdit }>();
   readonly #listeners = new Set<() => void>();
   readonly #unsubscribe: () => void;
   #baseline: ConfigFormSnapshot<Section> | undefined;
   #saving = false;
   #failed = false;
-  #violation: string | undefined;
+  #violation: ValidationFailure | undefined;
 
   /**
    * @param options - 本页的共享配置表单、字段树与整段校验。
@@ -151,10 +180,10 @@ export class SchemaDraftModel {
   }
 
   /**
-   * 保存前的整段校验消息（保存被 schema 挡下时非空）。
-   * @returns 失败消息，或 `undefined`。
+   * 保存前的整段校验（保存被 schema 挡下时非空）。
+   * @returns 失败消息与它的位置，或 `undefined`。
    */
-  violation(): string | undefined {
+  violation(): ValidationFailure | undefined {
     return this.#violation;
   }
 

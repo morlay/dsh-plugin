@@ -22,6 +22,7 @@ import type {} from "@deepseek-ai/dsh-client-ui-settings/client";
 import type { PropsRenderFactories, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { ReactNode } from "react";
 import { SchemaFormController, canRender, type SchemaFormFace } from "./controller.ts";
+import { failureOf, type ValidationFailure } from "./draft.ts";
 import { SchemaFormHints } from "./hints.ts";
 import { en, zh } from "./locales.ts";
 import { RowRegistration } from "./rows.ts";
@@ -58,6 +59,8 @@ export { parseFor } from "./fields.tsx";
 export { containerShape, editorLines, visibleFields } from "./lines.ts";
 export type { EditorLine, FoldState } from "./lines.ts";
 export { SchemaFormController, canRender, optionsFor, projectRoot } from "./controller.ts";
+export { failureOf } from "./draft.ts";
+export type { ValidationFailure } from "./draft.ts";
 export { walkFields, projectNode } from "./schema-node.ts";
 export { SchemaFormHints } from "./hints.ts";
 export type {
@@ -95,8 +98,18 @@ export function apply(ctx: Context): void {
   );
 
   const rehydrate = (serialized: unknown) => ctx.settingsSchema.rehydrate(serialized);
-  const validate = (schema: Parameters<typeof ctx.settingsSchema.validate>[0], value: unknown) =>
-    ctx.settingsSchema.validate(schema, value);
+  // `ctx.settingsSchema.validate` 只给消息（丢了路径），这里自己接住错误：行内报错要知道挂在哪一行。
+  const validate = (
+    schema: Parameters<typeof ctx.settingsSchema.validate>[0],
+    value: unknown,
+  ): ValidationFailure | undefined => {
+    try {
+      (schema as unknown as (input: unknown) => unknown)(value);
+      return undefined;
+    } catch (error) {
+      return failureOf(error);
+    }
+  };
   const resolveText = (text: string | Readonly<Record<string, string>>): string =>
     typeof text === "string" ? text : ctx.locale.resolveText(text as never);
 

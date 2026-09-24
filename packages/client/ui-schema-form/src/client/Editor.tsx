@@ -444,6 +444,10 @@ function FieldLine({
         t={t}
       />
       {line.field.invalid === undefined ? null : <LineInvalid>{line.field.invalid}</LineInvalid>}
+      {/* 整段校验落到这一行的消息：与草稿自己的报错同一处显示。 */}
+      {line.field.invalid !== undefined ? null : (
+        <LineInvalidText text={state.invalidAt.get(key)} />
+      )}
       {isEditing ? (
         // 编辑态：确认收起这一格的编辑、取消把值退回去——都在输入框旁边，不用记快捷键。
         <HoverActions data-role="actions" data-editing="true">
@@ -526,6 +530,11 @@ function FieldLine({
       </HoverActions>
     </>
   );
+}
+
+/** 一行的校验消息（整段校验落下来的那条）。 */
+function LineInvalidText({ text }: { text: string | undefined }): ReactNode {
+  return text === undefined ? null : <LineInvalid>{text}</LineInvalid>;
 }
 
 /** 复制用的文本（字符串带引号，粘到哪里都是合法片段）。 */

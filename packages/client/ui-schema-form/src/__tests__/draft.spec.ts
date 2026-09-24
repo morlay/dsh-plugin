@@ -8,14 +8,18 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
-import { SchemaDraftModel } from "../client/draft.ts";
+import { SchemaDraftModel, type ValidationFailure } from "../client/draft.ts";
 import { projectNode } from "../client/schema-node.ts";
 import { FakeScope } from "../testing/fake-scope.ts";
 
 type Section = Record<string, unknown>;
 
 /** 造一个模型：字段树来自真 schema 的投影，校验用真 schema（整段跑一次）。 */
-function model(scope: FakeScope, schema: z, validate?: (value: Section) => string | undefined) {
+function model(
+  scope: FakeScope,
+  schema: z,
+  validate?: (value: Section) => ValidationFailure | undefined,
+) {
   const instance = new SchemaDraftModel({
     scope,
     root: projectNode(new z(schema.toJSON())),
@@ -120,7 +124,7 @@ describe("草稿模型", () => {
   it("整段校验失败时不发写，并把消息报到 invalid", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance } = model(scope, z.object({ retry: z.number() }), (value) =>
-      value["retry"] === 99 ? "retry 不接受 99" : undefined,
+      value["retry"] === 99 ? { message: "retry 不接受 99", path: ["retry"] } : undefined,
     );
 
     instance.set(["retry"], 99);
@@ -129,7 +133,7 @@ describe("草稿模型", () => {
     await Promise.resolve();
     expect(scope.writes).toEqual([]);
     expect(instance.shell().invalid).toBe(true);
-    expect(instance.violation()).toBe("retry 不接受 99");
+    expect(instance.violation()).toEqual({ message: "retry 不接受 99", path: ["retry"] });
   });
 
   it("host 拒绝时保留草稿并报失败", async () => {
