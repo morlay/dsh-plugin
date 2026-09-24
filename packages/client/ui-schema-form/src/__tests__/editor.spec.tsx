@@ -660,7 +660,11 @@ describe("union 与布局", () => {
  * 真控制器 + 真渲染：编辑器那边的替身 face 断不出「加成之后行没出现」这类问题，所以这里两侧都用真的。
  */
 describe("与真控制器一起跑", () => {
-  function live(schema: z, value: unknown) {
+  function live(
+    schema: z,
+    value: unknown,
+    validate: (value: Record<string, unknown>) => string | undefined = () => undefined,
+  ) {
     const describeFace = fakeDescribe([
       {
         ns: "row",
@@ -678,7 +682,7 @@ describe("与真控制器一起跑", () => {
       describe: describeFace,
       rehydrate: (serialized) => new z(serialized as never) as never,
       t,
-      validate: () => undefined,
+      validate: (_schema, section) => validate(section as Record<string, unknown>),
     });
     const state = () => controller.face().hooks.schemaForm.getSnapshot();
     const props = {
@@ -692,7 +696,7 @@ describe("与真控制器一起跑", () => {
         opts?: { fallback?: unknown },
       ) => opts?.fallback ?? null,
     } as unknown as SchemaFormComponentProps;
-    return { state, props };
+    return { state, props, scope };
   }
 
   it("从候选加成：新行出现，而且直接是一个能打字的输入位", () => {
@@ -847,5 +851,46 @@ describe("与真控制器一起跑", () => {
     expect(comment.getAttribute("title")).toBe("很长的一段说明");
     const value = container.querySelector('[data-tone="string"]') as HTMLElement;
     expect(value.getAttribute("title")).toBe('"一个很长的值"');
+  });
+
+  it("行内编辑按 schema 的类型解析：number 存下去是数字，不是字符串", () => {
+    const { state, props } = live(z.object({ busyTimeout: z.natural().default(5000) }), {
+      busyTimeout: 5000,
+    });
+    const { container } = render(<SchemaForm {...props} />);
+
+    fireEvent.click(
+      container.querySelector('[data-field-path="busyTimeout"] [data-tone]') as HTMLElement,
+    );
+    const input = container.querySelector(
+      '[data-field-path="busyTimeout"] input',
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "3000" } });
+
+    expect(state().fields.get(fieldKey(["busyTimeout"]))?.value).toBe(3000);
+  });
+
+  it("整段校验挡下的保存：不发写，并在页面上说清楚", async () => {
+    const { state, props, scope } = live(
+      z.object({ busyTimeout: z.number().default(5000) }),
+      { busyTimeout: 5000 },
+      (section) => (section["busyTimeout"] === 2000 ? undefined : "busyTimeout 只接受 2000"),
+    );
+    const { container } = render(<SchemaForm {...props} />);
+
+    fireEvent.click(
+      container.querySelector('[data-field-path="busyTimeout"] [data-tone]') as HTMLElement,
+    );
+    const input = container.querySelector(
+      '[data-field-path="busyTimeout"] input',
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "3000" } });
+    fireEvent.click(screen.getByRole("button", { name: zh.save }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(scope.writes).toEqual([]);
+    expect(screen.getByRole("alert").textContent).toContain("没有保存");
+    expect(state().violation).toContain("只接受 2000");
   });
 });

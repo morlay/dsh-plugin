@@ -56,6 +56,12 @@ export function SchemaForm(props: SchemaFormComponentProps): ReactNode {
           })
         }
       />
+      {/* 本地整段校验挡下的保存要说出来：否则点保存"没有反应"看起来像按钮坏了。 */}
+      {state.violation === undefined ? null : (
+        <Hint role="alert" data-violation="true">
+          {t("notSaved", { message: state.violation })}
+        </Hint>
+      )}
     </SettingsForm>
   );
 }

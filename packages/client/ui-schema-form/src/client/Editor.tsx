@@ -29,6 +29,7 @@ import {
   type FoldState,
   type VariantControl,
 } from "./lines.ts";
+import { parseFor } from "./fields.tsx";
 import type { ResolveText } from "./labels.ts";
 import { isMultiline, valueText } from "./value.tsx";
 import type { SchemaFieldOwnerProps, SchemaFormTranslate } from "./slot-contract.ts";
@@ -348,7 +349,9 @@ function FieldLine({
       face.set(line.path, value);
     },
     onEditText: (text, parse) => {
-      face.setText(line.path, text, parse ?? ((input) => ({ kind: "value", value: input })));
+      // 文本按**这一行 schema 的类型**解析（number 就是数字、boolean 认 true/false、any 走 JSON）——
+      // 行内编辑与字段槽走的必须是同一条规则，否则 `busyTimeout` 会被存成 `"3000"`。
+      face.setText(line.path, text, parse ?? parseFor(line.node, t));
     },
     onReset: () => {
       face.clear(line.path);

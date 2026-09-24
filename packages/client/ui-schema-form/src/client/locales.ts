@@ -13,6 +13,7 @@ export const zh = {
   cancelEdit: "取消",
   saving: "保存中…",
   saveFailed: "本部署没有接受这些值，已保留供你修改。",
+  notSaved: "没有保存：{message}",
   noSchema: "这一行没有可自动生成的配置项。",
 
   reset: "恢复默认",
@@ -67,6 +68,7 @@ export const en = {
   cancelEdit: "Cancel",
   saving: "Saving…",
   saveFailed: "This deployment did not accept these values; they are kept for you to fix.",
+  notSaved: "Not saved: {message}",
   noSchema: "This row has no configuration to generate.",
 
   reset: "Reset",
