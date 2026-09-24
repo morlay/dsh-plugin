@@ -1,7 +1,7 @@
 /**
  * 行式编辑器的样式：等宽、行号、语法色、悬停行为——全部消费官方 `--dsw-*` token。
  *
- * 尺度与官方设置页的输入框对齐（`14px/22px`）：行内容、行内输入、下拉触发的文字基线因此都在同一行高上。
+ * 几何只有一套：行高、行内间距、动作按钮尺寸都由下面几个常量给，行与行之间不各自决定。
  */
 
 import { styled } from "@morlay/dsh-client-ui-primitives/client";
@@ -9,6 +9,30 @@ import { dsw } from "@morlay/dsh-client-ui-primitives/client";
 
 /** 等宽字体栈：配置值的观感与代码一致。 */
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
+
+/** 行高：行内容、行内输入、折叠箭头、按钮排都在这一档上对齐。 */
+const ROW = "22px";
+
+/** 行内元素之间的间距。 */
+const GAP = "6px";
+
+/** 动作按钮：方形图标键，尺寸与行高同一档的紧凑版。 */
+const ACTION = "20px";
+
+/** 动作按钮之间的间距（比行内间距紧一档）。 */
+const ACTION_GAP = "4px";
+
+/** 图标边长（行内图标与动作键同一档）。 */
+export const ICON_SIZE = 14;
+
+/** 折叠列（chevron 与它的占位）宽度。 */
+const FOLD = "14px";
+
+/** 行号列宽度。 */
+const NUMBER = "32px";
+
+/** 行尾留白。 */
+const PAD = "8px";
 
 /** 细线：theme 给的 0.5px 描边（`0 0 0 0.5px var(--dsw-elevation-stroke-color)`）。 */
 const HAIRLINE = dsw.elevation.stroke;
@@ -26,7 +50,7 @@ export const EditorRoot = styled("div")({
   width: "100%",
   fontFamily: MONO,
   fontSize: "14px",
-  lineHeight: "22px",
+  lineHeight: ROW,
   color: dsw.alias.label.primary,
 });
 
@@ -35,9 +59,9 @@ export const LineRow = styled("div")({
   display: "flex",
   // 顶部对齐：行里出现输入框或多行值时，内容不跟着上下跳。
   alignItems: "flex-start",
-  gap: "6px",
-  minHeight: "22px",
-  paddingRight: "8px",
+  gap: GAP,
+  minHeight: ROW,
+  paddingRight: PAD,
   whiteSpace: "nowrap",
   "&:hover": { background: dsw.alias.bg.layer["2"] },
   // 选中一行（点行号）：整行留一层底色，便于对着行号找内容。
@@ -54,16 +78,17 @@ export const LineRow = styled("div")({
 export const LineBody = styled("div")({
   display: "flex",
   alignItems: "center",
-  gap: "6px",
+  gap: GAP,
   flex: 1,
   minWidth: 0,
-  minHeight: "22px",
+  minHeight: ROW,
 });
 
 /** 行号列：右对齐、不可选、淡色。 */
 export const LineNumber = styled("span")({
   flex: "none",
-  width: "32px",
+  width: NUMBER,
+  lineHeight: ROW,
   textAlign: "right",
   color: dsw.alias.label.caption,
   userSelect: "none",
@@ -76,8 +101,8 @@ export const LineFold = styled("button")({
   alignItems: "center",
   justifyContent: "center",
   flex: "none",
-  width: "14px",
-  height: "22px",
+  width: FOLD,
+  height: ROW,
   padding: 0,
   border: 0,
   background: "none",
@@ -88,7 +113,7 @@ export const LineFold = styled("button")({
 /** 叶子行的折叠占位（保持列对齐）。 */
 export const LineFoldSpacer = styled("span")({
   flex: "none",
-  width: "14px",
+  width: FOLD,
 });
 
 /** 键名（配置键原样；数组下标淡一些）。 */
@@ -140,34 +165,34 @@ export const ValueTrigger = styled("button")({
 });
 
 /**
- * 行内输入的外壳：官方 `Input` 压到与值同一行高。
+ * 行内输入的外壳：官方 `Input` 压到与值同一行高，并**吃掉剩下的宽度**。
  *
  * 行内编辑与容器闭合行的添加输入共用它——两处的输入框因此长得一模一样。
  */
 export const CompactInput = styled("span")({
   display: "inline-flex",
-  flex: 1,
-  minWidth: "80px",
+  flex: "1 1 auto",
+  minWidth: 0,
   "& > span": {
     width: "100%",
-    height: "22px",
+    height: ROW,
     padding: "0 6px",
     borderRadius: "4px",
   },
   "& input": {
     fontSize: "14px",
-    lineHeight: "22px",
+    lineHeight: ROW,
   },
 });
 
 /**
  * 多行值的行内输入：官方没有多行原子，所以这里用同一套观感的字段壳（同边框、同圆角、同焦点色），
- * 高度跟着内容长——带换行的提示词因此能在行内直接编辑。
+ * 高度跟着内容长、宽度同样撑满剩下的位置。
  */
 export const CompactTextField = styled("span")({
   display: "inline-flex",
-  flex: 1,
-  minWidth: "120px",
+  flex: "1 1 auto",
+  minWidth: 0,
   padding: "0 6px",
   borderRadius: "4px",
   background: dsw.alias.bg.layer["1"],
@@ -178,7 +203,7 @@ export const CompactTextField = styled("span")({
   "& > textarea": {
     flex: 1,
     width: "100%",
-    minHeight: "20px",
+    minHeight: ACTION,
     maxHeight: "240px",
     padding: 0,
     border: 0,
@@ -188,7 +213,7 @@ export const CompactTextField = styled("span")({
     fieldSizing: "content",
     fontFamily: "inherit",
     fontSize: "14px",
-    lineHeight: "22px",
+    lineHeight: ROW,
     color: dsw.alias.label.primary,
   },
 });
@@ -210,34 +235,32 @@ export const LineInvalid = styled("span")({
   fontFamily: "inherit",
 });
 
-/** 行尾的行为按钮组（默认透明，悬停时显形）。 */
+/** 行尾的动作组：方形图标键（默认透明，悬停时显形）。 */
 export const LineActions = styled("span")({
   display: "inline-flex",
   alignItems: "center",
-  gap: "4px",
+  gap: ACTION_GAP,
   flex: "none",
   opacity: 0,
   "& > button": {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    height: "20px",
-    minWidth: "20px",
-    padding: "0 6px",
+    width: ACTION,
+    height: ACTION,
+    padding: 0,
     border: 0,
     borderRadius: "4px",
     background: "none",
     color: dsw.alias.label.secondary,
-    fontFamily: "inherit",
-    fontSize: "12px",
-    lineHeight: "20px",
     cursor: "pointer",
     "&:hover": { background: dsw.alias.bg.layer["3"], color: dsw.alias.label.primary },
+    "&:disabled": { cursor: "not-allowed", color: dsw.alias.label.dimmed },
   },
 });
 
 /**
- * 悬停行时才显示这一行的行为按钮：显形规则写在行上（`[data-line-actions]`），组件只需要带这个属性。
+ * 悬停行时才显示这一行的动作按钮：显形规则写在行上（`[data-role='actions']`），组件只需要带这个属性。
  */
 export const HoverActions = styled(LineActions)({
   /**
@@ -246,7 +269,7 @@ export const HoverActions = styled(LineActions)({
    */
   "&[data-editing='true']": {
     opacity: 1,
-    gap: "6px",
+    gap: GAP,
     "& > button": {
       boxShadow: HAIRLINE,
       background: dsw.alias.bg.layer["1"],
@@ -256,15 +279,15 @@ export const HoverActions = styled(LineActions)({
   },
 });
 
-/** 添加输入：**跟在容器的闭合括号同一行**（菜单锚在它上面）。 */
+/** 添加输入：**跟在容器的闭合括号同一行**（菜单锚在它上面），宽度吃掉剩下的位置。 */
 export const AddWrap = styled("span")({
   position: "relative",
   display: "inline-flex",
   alignItems: "center",
-  gap: "6px",
-  flex: 1,
-  minWidth: "140px",
-  marginLeft: "6px",
+  gap: GAP,
+  flex: "1 1 auto",
+  minWidth: 0,
+  marginLeft: GAP,
   "&[data-invalid='true'] input": { borderColor: dsw.alias.state.error.primary },
 });
 

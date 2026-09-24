@@ -12,6 +12,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   IconCheckOutlineRegular,
   IconCloseOutlineRegular,
+  IconCopyOutlineRegular,
+  IconRefreshOutlineRegular,
   Input,
   Menu,
 } from "@deepseek-ai/dsh-client-ui-primitives";
@@ -33,6 +35,7 @@ import {
   CompactTextField,
   EditorRoot,
   HoverActions,
+  ICON_SIZE,
   LineBody,
   LineComment,
   LineFold,
@@ -434,15 +437,17 @@ function FieldLine({
           <button
             type="button"
             aria-label={t("confirmEdit")}
+            title={t("confirmEdit")}
             onClick={() => {
               onEdit(undefined);
             }}
           >
-            <IconCheckOutlineRegular size={14} />
+            <IconCheckOutlineRegular size={ICON_SIZE} />
           </button>
           <button
             type="button"
             aria-label={t("cancelEdit")}
+            title={t("cancelEdit")}
             onClick={() => {
               face.revert(line.path);
               onEdit(undefined);
@@ -450,7 +455,7 @@ function FieldLine({
               onDismiss(key);
             }}
           >
-            <IconCloseOutlineRegular size={14} />
+            <IconCloseOutlineRegular size={ICON_SIZE} />
           </button>
         </HoverActions>
       ) : null}
@@ -458,43 +463,51 @@ function FieldLine({
         {line.field.staged && !disabled ? (
           <button
             type="button"
+            aria-label={t("revert")}
+            title={t("revert")}
             onClick={() => {
               face.revert(line.path);
             }}
           >
-            {t("revert")}
+            <IconRefreshOutlineRegular size={ICON_SIZE} />
           </button>
         ) : null}
         {line.field.overridden && !line.field.staged && !disabled ? (
           <button
             type="button"
+            aria-label={t("reset")}
+            title={t("reset")}
             onClick={() => {
               face.clear(line.path);
             }}
           >
-            {t("reset")}
+            <IconRefreshOutlineRegular size={ICON_SIZE} />
           </button>
         ) : null}
         <button
           type="button"
+          aria-label={t("copyValue")}
+          title={t("copyValue")}
           onClick={() => {
             void navigator.clipboard
               ?.writeText(line.field.text ?? tokenFor(line.field.value))
               .catch(() => {});
           }}
         >
-          {t("copyValue")}
+          <IconCopyOutlineRegular size={ICON_SIZE} />
         </button>
         {member === undefined ? null : (
           <button
             type="button"
+            aria-label={t("removeItem")}
+            title={t("removeItem")}
             disabled={disabled}
             onClick={() => {
               if (member.index === undefined) face.removeKey(member.parent, member.key);
               else face.removeItem(member.parent, member.index);
             }}
           >
-            {t("removeItem")}
+            <IconCloseOutlineRegular size={ICON_SIZE} />
           </button>
         )}
       </HoverActions>
