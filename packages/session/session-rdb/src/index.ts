@@ -1,4 +1,5 @@
 import { Context } from "@deepseek-ai/cordis";
+import type { Volatile } from "@deepseek-ai/cosmokit";
 import z from "@deepseek-ai/schemastery";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -129,24 +130,20 @@ export interface ProjectionCacheOptions {
 export type Config =
   | {
       type: "sqlite";
-
       path: string;
-
-      journalMode?: JournalMode;
-
-      busyTimeout?: number;
-
-      projectionCache?: ProjectionCacheOptions;
+      journalMode?: JournalMode | undefined;
+      busyTimeout?: number | undefined;
+      projectionCache?: ProjectionCacheOptions | undefined;
     }
   | {
       type: "postgres";
-
       connectionString: string;
-
-      schema?: string;
-
-      projectionCache?: ProjectionCacheOptions;
+      schema?: string | undefined;
+      projectionCache?: ProjectionCacheOptions | undefined;
     };
+
+/** schema 解析之后的形状：整段 Config 是 **volatile 稳定引用**（页面可编辑），读它要过 `.get()`。 */
+export type ResolvedConfig = Volatile<Config>;
 
 export type SessionDeletionErrorCode =
   | "SESSION_NOT_FOUND"
@@ -491,40 +488,111 @@ class RdbSessionHandle implements SessionHandle {
   static readonly LIVE_WRITE_BATCH_MAX_DELAY_MS = 200;
 }
 
+/**
+ * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+ * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
+ */
+const localized = (text: { zh: string; en: string }): string => text as unknown as string;
+
+/** 投影 checkpoint 的写回节流：两个分支共用。 */
+const projectionCacheSchema = z
+  .object({
+    writeEveryEvents: z
+      .natural()
+      .min(1)
+      .default(DEFAULT_PROJECTION_WRITE_EVERY_EVENTS)
+      .description(
+        localized({
+          zh: "每累计这么多事件写回一次投影 checkpoint。",
+          en: "Write the projection checkpoint back after this many events.",
+        }),
+      ),
+    writeIntervalMs: z
+      .natural()
+      .min(1)
+      .default(DEFAULT_PROJECTION_WRITE_INTERVAL_MS)
+      .description(
+        localized({
+          zh: "距离上次写回超过这个间隔（毫秒）时也写一次。",
+          en: "Also write back when this many ms passed since the last one.",
+        }),
+      ),
+  })
+  .default({
+    writeEveryEvents: DEFAULT_PROJECTION_WRITE_EVERY_EVENTS,
+    writeIntervalMs: DEFAULT_PROJECTION_WRITE_INTERVAL_MS,
+  });
+
 export class SessionPersistenceRdb extends SessionPersistence {
   static inject = ["sessions"];
 
-  static Config: z<Config> = z.union([
-    z.object({
-      type: z.const("sqlite"),
-      path: z.string().required(),
-      journalMode: z.union(["wal", "delete", "truncate", "persist"] as const).default("wal"),
-      busyTimeout: z.number().step(1).min(0).default(DEFAULT_BUSY_TIMEOUT_MS),
-      projectionCache: z
-        .object({
-          writeEveryEvents: z.natural().min(1).default(DEFAULT_PROJECTION_WRITE_EVERY_EVENTS),
-          writeIntervalMs: z.natural().min(1).default(DEFAULT_PROJECTION_WRITE_INTERVAL_MS),
-        })
-        .default({
-          writeEveryEvents: DEFAULT_PROJECTION_WRITE_EVERY_EVENTS,
-          writeIntervalMs: DEFAULT_PROJECTION_WRITE_INTERVAL_MS,
-        }),
-    }),
-    z.object({
-      type: z.const("postgres"),
-      connectionString: z.string().required(),
-      schema: z.string().default("public"),
-      projectionCache: z
-        .object({
-          writeEveryEvents: z.natural().min(1).default(DEFAULT_PROJECTION_WRITE_EVERY_EVENTS),
-          writeIntervalMs: z.natural().min(1).default(DEFAULT_PROJECTION_WRITE_INTERVAL_MS),
-        })
-        .default({
-          writeEveryEvents: DEFAULT_PROJECTION_WRITE_EVERY_EVENTS,
-          writeIntervalMs: DEFAULT_PROJECTION_WRITE_INTERVAL_MS,
-        }),
-    }),
-  ]);
+  // 显式声明「输入 → 解析后」的形状：整段是 volatile，读它要过 `.get()`。union + volatile 的推断形状与手写类型
+  // 在可选性 / 索引签名上不完全对齐，所以这里断言一次，类型面由此固定。
+  static Config = z
+    .union([
+      z.object({
+        type: z.const("sqlite"),
+        path: z
+          .string()
+          .required()
+          .description(
+            localized({
+              zh: "SQLite 数据库文件路径；`:memory:` 是内存库（进程结束即丢）。",
+              en: "SQLite database file path; `:memory:` keeps it in memory and loses it with the process.",
+            }),
+          ),
+        journalMode: z
+          .union(["wal", "delete", "truncate", "persist"] as const)
+          .default("wal")
+          .description(
+            localized({
+              zh: "SQLite 日志模式；默认 wal（并发读最好）。",
+              en: "SQLite journal mode; `wal` by default (best concurrent reads).",
+            }),
+          ),
+        busyTimeout: z
+          .number()
+          .step(1)
+          .min(0)
+          .default(DEFAULT_BUSY_TIMEOUT_MS)
+          .description(
+            localized({
+              zh: "写锁冲突时的忙等超时（毫秒）。",
+              en: "Busy timeout in ms while a write lock is contended.",
+            }),
+          ),
+        projectionCache: projectionCacheSchema,
+      }),
+      z.object({
+        type: z.const("postgres"),
+        connectionString: z
+          .string()
+          .required()
+          .description(
+            localized({
+              zh: "PostgreSQL 连接串（含库名与凭证）。",
+              en: "PostgreSQL connection string (database and credentials).",
+            }),
+          ),
+        schema: z
+          .string()
+          .default("public")
+          .description(
+            localized({
+              zh: "库内的 schema 名；默认 public。",
+              en: "Schema name inside the database; `public` by default.",
+            }),
+          ),
+        projectionCache: projectionCacheSchema,
+      }),
+    ])
+    .description(
+      localized({
+        zh: "会话持久化后端：改这里的连接参数会在这一行重挂时生效（Loader 会重装被改的行）。",
+        en: "Session persistence backend: edits apply when this row is remounted (the Loader re-installs changed rows).",
+      }),
+    )
+    .volatile() as unknown as z<Config, ResolvedConfig>;
 
   override readonly name = "session-rdb";
 
@@ -541,9 +609,12 @@ export class SessionPersistenceRdb extends SessionPersistence {
   private readonly liveBuffers = new Map<SessionId, SessionEvent[]>();
   private readonly liveReady = new Map<SessionId, Promise<void>>();
 
+  /** 本次装配用的配置快照（整段 Config 是 volatile，重挂会给新的）。 */
+  readonly config: Config;
+
   constructor(
     ctx: Context,
-    public config: Config,
+    config: ResolvedConfig,
 
     injectedBackend?: Backend,
   ) {
@@ -551,7 +622,12 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     // 配置就是这一行的 config（cordis.patch.yml / profile patch，或设置页改它）；上游 0.1.7 的 settings
     // 不再提供 namespace section 覆盖，旧 `settings.yaml` 的 `session-rdb` 段由上游一次性导进同 id 的行。
-    this.backend = injectedBackend ?? createBackend(config);
+    //
+    // 整段 Config 标了 volatile（页面可编辑），而生效靠 **Loader 重挂这一行**（settings 写完经
+    // `reconcileProfilePatches` 让 Loader 重装受影响的 entry）：重挂会构造新实例、拿到新快照，所以这里取一次
+    // 就够，运行期不必反复读引用。
+    this.config = config.get();
+    this.backend = injectedBackend ?? createBackend(this.config);
     this.ready = this.init();
     this.installLiveRouting(ctx);
 

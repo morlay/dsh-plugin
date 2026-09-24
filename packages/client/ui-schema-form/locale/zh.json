@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "插件配置表单",
+    "description": "把各插件 Config 的 volatile 字段按 schema 自动渲染成该行的配置页，并把字段级自定义输入开放成一个 chain 槽。"
+  }
+}

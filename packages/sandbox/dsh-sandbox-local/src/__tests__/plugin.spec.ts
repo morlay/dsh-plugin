@@ -63,6 +63,40 @@ describe("deny 规则", () => {
     expect(await ctx.fs.readText(notes)).toBe("hi");
   });
 
+  it("access 是稳定引用：页面改完下一次判定就用新规则（不重挂这一行）", async () => {
+    await writeFile(join(workspace, "notes.md"), "hi");
+    const ctx = new Context();
+    contexts.push(ctx);
+    ctx.provide("sandboxPolicy", {
+      defaultMode: "workspace-write",
+      workspaceRoot: workspace,
+      resolve: (): SandboxExecutionPolicy => ({
+        mode: "workspace-write",
+        workspaceRoot: workspace,
+      }),
+      overrideOf: () => undefined,
+    } as never);
+    let entries: readonly string[] = ["-- notes.md"];
+    // schema 解析后的形状：每个字段都是 volatile 引用（页面读的那个）。
+    const volatile = <T>(value: T): { get: () => T } => ({ get: () => value });
+    plugin.apply(ctx, {
+      access: { get: () => entries },
+      cwd: volatile(workspace),
+      runnerCommand: volatile([]),
+      runnerFailureSignatures: volatile([]),
+      probeTimeoutMs: volatile(5_000),
+      diffBasisMaxBytes: volatile(10 * 1024 * 1024),
+    } as never);
+
+    await expect(ctx.fs.resolve("notes.md", { cwd: workspace })).rejects.toMatchObject({
+      code: "FS_SANDBOX_DENIED",
+    });
+
+    entries = [];
+
+    await expect(ctx.fs.resolve("notes.md", { cwd: workspace })).resolves.toBeDefined();
+  });
+
   it("规则里的相对路径相对会话工作区解析，不跟着目标路径的 cwd 走", async () => {
     const ctx = await mount({ access: ["-- notes.md"] });
     const sub = join(workspace, "sub");

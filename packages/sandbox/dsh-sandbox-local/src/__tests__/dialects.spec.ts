@@ -5,7 +5,7 @@ import { compileRules, ruleSourceOf } from "../rules.ts";
 const WORKSPACE = "/ws";
 
 function rules(config: { access?: string[] }) {
-  return compileRules(ruleSourceOf(config, {}), WORKSPACE);
+  return compileRules(ruleSourceOf(config.access, {}), WORKSPACE);
 }
 
 const SEATBELT_ARGV = [

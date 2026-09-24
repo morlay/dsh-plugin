@@ -2,16 +2,17 @@
 
 会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）、一组能力开关与一个**角色**
 （`role`：谁可以用它）；各模式的**默认模型**是同一份 config 顶层的 `models`。本包把它按会话应用到会话自己的
-作用域上，并提供页面上的选择面（会话里的切换 chip 与设置页那张卡片）。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
+作用域上，并提供会话里的选择面（切换 chip 与头部标签）；各模式的默认模型落在**行配置页**上——那是通用
+schema 表单按 volatile 字段自动生成的，本包只给它补字段文案。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
 关掉，禁哪些行归 [`@morlay/dsh-profile`](../dsh-profile/README.md)（真源 `tool/patch.ts` 的 `PATCH_ROWS`），
 本包不复述清单。
 
 `cordis.patch.yml` 是这里唯一装配的东西：两行。
 
-| 行                        | 是什么                                                                                             |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| 行                        | 是什么                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `session-mode`            | 模式清单、默认模式与各模式的默认模型（`config.modes` / `config.default` / `config.models`）+ 按会话应用 persona + 清单与切换的 HTTP 路由 |
-| `context-assembler-scope` | [`@morlay/dsh-context-assembler/scope`](../../context/dsh-context-assembler/README.md)：按会话收口 |
+| `context-assembler-scope` | [`@morlay/dsh-context-assembler/scope`](../../context/dsh-context-assembler/README.md)：按会话收口                                       |
 
 工具行、注入通道与压缩都不在这里——它们由各自的 bundle 在 profile 平面装一次（`dsh.profile.bundles` 里的
 [`@morlay/dsh-agent-toolkit`](../dsh-agent-toolkit/README.md) 与
@@ -24,7 +25,7 @@
   name: "@morlay/dsh-session-mode"
   config:
     default: coding
-    models:            # 各模式的默认模型（顶层；键必须是 modes 里的 id）
+    models: # 各模式的默认模型（顶层；键必须是 modes 里的 id）
       chat: { provider: ollama, model: deepseek-v4.1-flash, reasoningEffort: high }
     modes:
       chat:
@@ -47,9 +48,17 @@
 | `instructions`         | 同上：`false` 表示这个会话不要任何 instruction 类注入（工作区指令、技能目录、用法正文）      |
 | `runtimeContext`       | 同上：`false` 表示不要动态快照（文件沙箱策略、审批策略）                                     |
 
-顶层还有个 `models`（**不在模式里**）：键是模式 id，值是那个模式的默认模型——`provider` / `model` /
-`reasoningEffort?`，不写就跟全局 `agent-default-model`。它是 config 的 **volatile** 字段，设置页那张卡片
-编辑的就是它；用户在卡片里写的值叠在装配层这份之上（清空 = 回到装配层）。
+顶层还有 `default` 与 `models`（**都不在模式里**）：`default` 是新会话的起始模式，`models` 是各模式的默认模型
+（`provider` / `model` / `reasoningEffort?`，不写就跟全局 `agent-default-model`）。这三个字段都是 config 的
+**volatile** 字段，`@morlay/dsh-client-ui-schema-form` 为这一行（`session-mode`）生成的行配置页编辑的就是它们：
+模式清单（每个模式的 persona / 允许工具 / 角色）、默认模式、以及各模式的默认模型（按模式清单列出行）。
+
+两类字段的生效方式不同：
+
+| 字段                | 改了之后                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `models`            | **当场生效**（volatile 引用，每次请求现场读）——只影响还没有模型事实的会话                                                       |
+| `default` / `modes` | 等 Loader 重挂这一行（settings 写完会重装被改的行）；**已运行会话不自动换定义**，重挂后新建的会话或重新应用模式的会话才用新定义 |
 
 模式名与说明是数据、不做语言翻译（`tool/modes.ts` 里只有中文）——取舍如此，不是漂移。
 
@@ -91,18 +100,27 @@
 这两块都由本包的 `./client` 出口提供（与 host 半同包、同一次构建）；清单与切换走 HTTP 路由
 `GET/POST /session-mode`，当前值走上面那条投影。
 
-设置页还有一个面：**本行**的配置入口 `plugins.row.config`（key `@morlay/dsh-session-mode#session-mode`），每个模式一行
-「默认模型」——provider / model / 思考档位，外加"恢复默认"。它编辑的是 `config.models`（配置事实），不是
-模式清单（装配数据）。两条读取从外面注入：清单走 `GET /session-mode`，模型目录走
-`ctx.remote.session.modelCatalog()`。保存是 staged 的一次 `mutate`：
+本行的配置入口（`plugins.row.config`，key `@morlay/dsh-session-mode#session-mode`）由通用 schema 表单注册并渲染：
+`models` 是 dict，页面按值展开出每个模式的 `provider` / `model` / `reasoningEffort` 三行，加键即加一个模式的
+默认模型、删键即回到装配层那份。它编辑的是 `config.models`（配置事实），不是模式清单（装配数据）：
 
-| 手势             | 写                                                              |
-| ---------------- | --------------------------------------------------------------- |
-| 给某个模式选模型 | `{ op: 'set', path: ['models', <模式 id>], value: {…} }`         |
-| 恢复默认         | `{ op: 'unset', path: ['models', <模式 id>] }`（回到装配层那份） |
+| 手势                 | 写                                                               |
+| -------------------- | ---------------------------------------------------------------- |
+| 给某个模式填默认模型 | `{ op: 'set', path: ['models', <模式 id>], value: {…} }`         |
+| 删掉某个模式那一条   | `{ op: 'unset', path: ['models', <模式 id>] }`（回到装配层那份） |
 
-官方 `@deepseek-ai/dsh-client-ui-agent-preset` 带来的第三个面（设置页那份 roster 面板）不做——模式清单是装配
-配置，改它不需要页面。
+字段文案（服务商 / 模型 / 思考档位）与 `provider` / `model` 两个**选择器**都由本包 client 半注册到提示面
+（路径写模板 `['models', '*', 'provider']`，一次覆盖每个模式）：
+
+| 注册            | 候选来自                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `provider` 候选 | 部署里的 LLM 目录：活着的路由（`llm/listProviders`）与可配置声明（`llm/listConfigurableProviders`）合并去重，显示名取目录给的        |
+| `model` 候选    | 该 provider 声明指向的那份配置（`settingsNs` / `settingsPath`）里的 `models` 清单；`dependsOn: [['provider']]`，所以换服务商就换候选 |
+
+schema 上两个字段都标了 `.role('select')`（「这里是选一个，不是随手打一段」），候选为空时页面退回文本输入。
+`models.<模式>` 这一层只影响**还没有模型事实**的会话（投影 `modelSelection` 之后就不再被读）。
+
+官方 `@deepseek-ai/dsh-client-ui-agent-preset` 带来的那个 roster 面板不做——模式清单是装配配置，改它不需要页面。
 
 ## 文档
 

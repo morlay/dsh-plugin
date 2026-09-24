@@ -54,6 +54,18 @@ type Config =
     };
 ```
 
+### 设置页上的这一行
+
+`Config` **整段标了 `.volatile()`**（判别式 union 只能整段标：schemastery 不许在 union 分支内部标 volatile），
+所以 host 会描述这一行，插件管理页里按 `type` 展开当前后端的字段——与上面 YAML 里的字段一一对应。
+
+- **切后端**：`type` 是各分支的判别标签，页面上那一行给的是一个**切换控件**（`"sqlite"` ↔ `"postgres"`）；选另一支
+  就换成那一套字段（`path` ↔ `connectionString` / `schema`），页面结构与 host 侧校验的选支依据同一份。
+- **生效方式**：settings 写完 → Loader 重装这一行（`reconcileProfilePatches`）→ 用新 config 重新建连接。所以这里
+  装配时取一次快照（`this.config = config.get()`），没有运行期重连逻辑；换后端 = 换库，旧数据留在旧后端。
+- 默认值都在 schema 上（`journalMode: wal`、`busyTimeout`、`schema: public`、`projectionCache` 的节流），页面上
+  清空即回到这些默认。
+
 ## 分支能力（session-branch 闭环）
 
 除 `ctx.sessionPersistence` 外，本包还实现 `@morlay/session-branch` 的 provider

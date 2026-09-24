@@ -32,10 +32,10 @@
     "./export": "./src/export.ts",
     "./gc": "./src/gc.ts",
     "./import": "./src/import.ts",
-    "./invariant": "./src/invariant.ts",
     "./storage": "./src/storage.ts",
     "./testing": "./src/testing.ts",
     "./usage": "./src/usage.ts",
+    "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
@@ -48,10 +48,10 @@
       "./export": "./dist/export.mjs",
       "./gc": "./dist/gc.mjs",
       "./import": "./dist/import.mjs",
-      "./invariant": "./dist/invariant.mjs",
       "./storage": "./dist/storage.mjs",
       "./testing": "./dist/testing.mjs",
       "./usage": "./dist/usage.mjs",
+      "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
       "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json"
@@ -69,6 +69,7 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cosmokit": "workspace:*",
     "@deepseek-ai/dsh-compaction": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
@@ -82,6 +83,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cosmokit": "workspace:*",
     "@deepseek-ai/dsh-invariants": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",

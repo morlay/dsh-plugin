@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin Config Forms",
+    "description": "Turns each plugin's Config schema (its volatile fields) into that row's configuration page, and opens field-level custom inputs through a chain slot."
+  }
+}

@@ -61,6 +61,7 @@ describe("better-session patch wiring", () => {
       "ui-conversation-manager",
       "ui-conversation-message-actions",
       "ui-primitives-fork",
+      "ui-schema-form",
     ]);
     for (const id of inserted) expect(upstreamIds.has(id)).toBe(false);
   });

@@ -19,14 +19,20 @@ const WORKSPACE = "/ws";
 
 function denyRules(entries: string[], workspace = WORKSPACE) {
   return compileRules(
-    ruleSourceOf({ access: entries.map((entry) => `-- ${entry}`) }, {}),
+    ruleSourceOf(
+      entries.map((entry) => `-- ${entry}`),
+      {},
+    ),
     workspace,
   );
 }
 
 function readOnlyRules(entries: string[], workspace = WORKSPACE) {
   return compileRules(
-    ruleSourceOf({ access: entries.map((entry) => `r- ${entry}`) }, {}),
+    ruleSourceOf(
+      entries.map((entry) => `r- ${entry}`),
+      {},
+    ),
     workspace,
   );
 }
@@ -129,21 +135,18 @@ describe("compileRules", () => {
   });
 
   it("rw 条目支持模板与相对路径，但必须是具体路径", () => {
-    const source = ruleSourceOf(
-      { access: ["rw {{ env.CACHE }}", "rw build"] },
-      { CACHE: "/cache" },
-    );
+    const source = ruleSourceOf(["rw {{ env.CACHE }}", "rw build"], { CACHE: "/cache" });
     const rules = compileRules(source, WORKSPACE);
     expect(rules.allowRoots).toEqual(["/cache", join(WORKSPACE, "build")]);
-    expect(() => compileRules(ruleSourceOf({ access: ["rw build/*"] }, {}), WORKSPACE)).toThrow(
+    expect(() => compileRules(ruleSourceOf(["rw build/*"], {}), WORKSPACE)).toThrow(
       /must name a concrete path/,
     );
   });
 
   it("空规则与 withoutAllowRoots", () => {
-    const empty = compileRules(ruleSourceOf({}, {}), WORKSPACE);
+    const empty = compileRules(ruleSourceOf(undefined, {}), WORKSPACE);
     expect(isEmptyRules(empty)).toBe(true);
-    const rules = compileRules(ruleSourceOf({ access: ["rw /cache", "-- x"] }, {}), WORKSPACE);
+    const rules = compileRules(ruleSourceOf(["rw /cache", "-- x"], {}), WORKSPACE);
     expect(isEmptyRules(rules)).toBe(false);
     expect(withoutAllowRoots(rules).allowRoots).toEqual([]);
     expect(isEmptyRules(withoutAllowRoots(rules))).toBe(false);
@@ -161,7 +164,7 @@ describe("compileRules", () => {
 
   it("命中优先级：-- 拒绝覆盖 r-，r- 覆盖可写根", () => {
     const rules = compileRules(
-      ruleSourceOf({ access: ["rw .", "r- guarded", "-- guarded/secret"] }, {}),
+      ruleSourceOf(["rw .", "r- guarded", "-- guarded/secret"], {}),
       WORKSPACE,
     );
     expect(blocksWrite(rules, join(WORKSPACE, "guarded", "note.md"))).toBe(true);
@@ -171,7 +174,7 @@ describe("compileRules", () => {
   });
 
   it("writableRootsWith 把 rw 条目计入可写根，read-only 不追加", () => {
-    const rules = compileRules(ruleSourceOf({ access: ["rw /cache"] }, {}), WORKSPACE);
+    const rules = compileRules(ruleSourceOf(["rw /cache"], {}), WORKSPACE);
     const writable: SandboxExecutionPolicy = { mode: "workspace-write", workspaceRoot: WORKSPACE };
     expect(writableRootsWith(rules, writable)).toContain("/cache");
     const readOnly: SandboxExecutionPolicy = { mode: "read-only", workspaceRoot: WORKSPACE };

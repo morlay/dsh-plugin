@@ -26,12 +26,12 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - **它是顶层 volatile**：schema 上只有 `models` 带 volatile meta（`modes` 不是）——设置面能编辑的正是它；
     解析之后它是个稳定引用，用例直接对着引用提交一次新值，下一次请求就该读到新值（"设置页保存不重挂这行"
     的判据；引用符号的 home 是 cosmokit 的 `volatile.ts`）。
-- `src/__tests__/model-defaults-card.spec.ts`：设置页那张卡片的控制器，用假的 `SettingsFormScope` + 假的模式
-  清单 / 模型目录——每个模式一行（名字、说明、当前值、"已覆盖"）；选 provider + model 保存成一条
-  `{ op: 'set', path: ['models', <模式 id>], value }`（带 revision 栅栏）、半成品挡保存、"恢复默认"与把
-  provider 选回「跟全局默认」都是 `{ op: 'unset', path: ['models', <模式 id>] }`、没改的行不写、host 拒绝时
-  保留草稿、只读文档一个都不发；清单 / 目录读不到时的状态（目录读不到仍看得见当前值、仍能恢复默认；部分失败
-  报出那几个 provider）。渲染（`ModelDefaultsCard.tsx`）不在这一层测——它只是把这份状态画出来。
+- `src/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有模式清单
+  （`modes.<id>.<字段>`，模式是成员行）与按清单列出的 `models` 候选行（`pending`）——用真 `volatileForm` 与真
+  `Config`，只把 settings 的读写面换成替身。
+- 配置页的**渲染**在通用面测（`client/ui-schema-form`：dict → 每个模式一组字段，保存成
+  `{ op: 'set', path: ['models', <模式 id>], value }`）；本包测两件事：schema 上那一处 volatile 标注仍在
+  （上一条判据），以及 client 半的字段文案只认领 `models` 下那三个字段（`field-wording.spec.ts`）。
 - `../dsh-context-assembler/src/__tests__/scope/context-assembler-scope.spec.ts`：按会话收口的四条——
   目录只留白名单、`tool:<名字>` section 同源过滤、白名单外调用被拒（文案带定义名）、**再 apply 一次就是换
   一份**（旧 guard 收回，换回去的工具重新可用）；没登记过的会话一律放行。

@@ -33,15 +33,25 @@
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
+- **清单由构建写回，不手写**：`exports` 与 `publishConfig.exports` 由 devkit 的 `packageExportsHook`
+  在 `build:done` 里按**入口**推导后写回 `package.json`——顶层指源码（workspace 内直连 `src`），发布态
+  指产物；手改这两段会在下次 `just build` 被覆盖。要加一个面就加一个入口（`src/<面>.ts` +
+  `tsdown.config.ts` 的 `entries`）。入口约定、生成规则与理由都在
+  [`devpackages/devkit/src/package-exports.ts`](../../devpackages/devkit/src/package-exports.ts)。
+- **client 半只有一个形态**：它是 CJS 单文件 bundle，出口固定写成 `{ types, default }`，**不参与
+  ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的 require 变体，包根出口就指到了
+  client 半。
+- **固定面按文件存在性补**：`./package.json` 一律在；`./cordis.patch.yml` 有该文件才有；`./locale/*.json`
+  有 `locale/en.json` 才有。守卫见
+  `devpackages/devkit/src/__tests__/publish-exports.spec.ts`（发布态的键集合必须覆盖顶层的键集合——
+  `publishConfig.exports` 是**整体替换**顶层 `exports`，漏一个键就是发布包少一个面，
+  `@morlay/dsh-desktop-host` 的 `./package.json` 就这样丢过：
+  `import.meta.resolve("<包名>/package.json")` 抛 `ERR_PACKAGE_PATH_NOT_EXPORTED`，桌面打包整个起不来）。
 - **插件清单的文案走 `./locale/*.json`**：每个发布包带 `locale/en.json`（基准，缺它别的语言不会被扫）与
-  `locale/zh.json`，内容形如 `{ "meta": { "title": …, "description": … } }`；`exports`、`publishConfig.exports`
-  都要暴露 `./locale/*.json`，`files` 里也带上。上游 `app-boot` 的 `readPluginMeta` 按包名 + 该出口读插件
-  清单页的标题与描述，漏一处就退化成 package.json 的英文 name/description。跨包守卫见
+  `locale/zh.json`，内容形如 `{ "meta": { "title": …, "description": … } }`；`files` 里要带上，出口由上面
+  的生成器按 `locale/en.json` 是否存在补。上游 `app-boot` 的 `readPluginMeta` 按包名 + 该出口读插件
+  清单页的标题与描述，缺了它就退化成 package.json 的英文 name/description。跨包守卫见
   `devpackages/devkit/src/__tests__/plugin-locale.spec.ts`（直接用上游读取器实测每个发布包）。
-- **出口要么手写，要么用 `customExports` 补齐**：devkit 的默认配置 `exports: false`——清单由我们手写；
-  个别包用 tsdown 的 `exports.packageJson` 生成（如 `@morlay/dsh-desktopify`，因为它的 bin 与内联入口），
-  生成按 **entry** 来，任何手写出口（`./locale/*.json` 之类）都必须放进 `customExports`，
-  否则每次 `just build` 都会把它抹掉（源码清单跟着变，`just test` 的 locale 守卫随后报红）。
 
 ## 代码约定
 

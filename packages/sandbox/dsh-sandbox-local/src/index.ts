@@ -1,11 +1,12 @@
 import type { Context } from "@deepseek-ai/cordis";
-import type { Config } from "./config.ts";
+import type { ResolvedConfig } from "./config.ts";
 import { ConfigurableFileSystem } from "./fs.ts";
 import { installPolicyContext } from "./policy.ts";
 import { ruleSourceOf, type RuleSource } from "./rules.ts";
 import { ConfigurableSandboxProvider } from "./sandbox.ts";
 
 export { Config } from "./config.ts";
+export type { ResolvedConfig } from "./config.ts";
 
 export const name = "sandbox-local";
 
@@ -33,8 +34,8 @@ function warnAboutDegradedRules(ctx: Context, rules: RuleSource): void {
   }
 }
 
-export function apply(ctx: Context, config: Config): void {
-  const rules = ruleSourceOf(config, process.env);
+export function apply(ctx: Context, config: ResolvedConfig): void {
+  const rules = ruleSourceOf(config.access.get(), process.env);
   warnAboutDegradedRules(ctx, rules);
   new ConfigurableSandboxProvider(ctx, config);
   new ConfigurableFileSystem(ctx, config);

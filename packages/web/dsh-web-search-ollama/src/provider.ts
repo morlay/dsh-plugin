@@ -24,14 +24,14 @@ const USER_AGENT = "morlay-dsh-plugin/0.0.1";
 
 export interface OllamaSearchProviderOptions {
   /** 字面 key；给了就压过 {@link resolveApiKey}。 */
-  apiKey?: string;
+  apiKey?: string | undefined;
   /** 运行期取 key 的入口（凭证服务 / 环境）；返回空表示取不到。 */
   resolveApiKey?: () => Promise<string | undefined>;
   /** 取不到 key 时报出来的引用名，便于用户知道去哪配。 */
   apiKeyEnv: string;
   baseURL: string;
   /** 请求没给 `maxResults` 时用的默认值；省略表示让 Ollama 用它自己的默认。 */
-  maxResults?: number;
+  maxResults?: number | undefined;
 }
 
 /** 一条 Ollama 结果 → 一个 source；没有 url 就丢掉（seam 的 source 必须有 url）。 */

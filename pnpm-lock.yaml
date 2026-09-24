@@ -339,6 +339,61 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
 
+  packages/client/ui-schema-form:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+    devDependencies:
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/api/remotes
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/store
+      '@deepseek-ai/dsh-client-ui-plugin-manager':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-plugin-manager
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/values
+      '@deepseek-ai/schemastery':
+        specifier: workspace:~
+        version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../ui-primitives
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.1
+      '@types/react-dom':
+        specifier: ~18.3.0
+        version: 18.3.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+
   packages/context/dsh-context-assembler:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -476,6 +531,9 @@ importers:
       '@deepseek-ai/dsh-client-connection':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/connection
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.2
@@ -732,6 +790,9 @@ importers:
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/include
+      '@deepseek-ai/cosmokit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cosmokit
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent
@@ -747,21 +808,12 @@ importers:
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/locale
-      '@deepseek-ai/dsh-client-store':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/store
-      '@deepseek-ai/dsh-client-ui-plugin-manager':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-plugin-manager
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
-      '@deepseek-ai/dsh-client-ui-settings':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
@@ -786,9 +838,9 @@ importers:
       '@morlay/dsh-client-ui-conversation':
         specifier: workspace:*
         version: link:../../session/ui-conversation
-      '@morlay/dsh-client-ui-primitives':
+      '@morlay/dsh-client-ui-schema-form':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/ui-schema-form
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
@@ -814,9 +866,18 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/cosmokit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cosmokit
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
       '@deepseek-ai/dsh-fs':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/fs/fs
@@ -844,6 +905,9 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@morlay/dsh-client-ui-schema-form':
+        specifier: workspace:*
+        version: link:../../client/ui-schema-form
 
   packages/session/better-session:
     dependencies:
@@ -856,6 +920,9 @@ importers:
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../client/ui-primitives
+      '@morlay/dsh-client-ui-schema-form':
+        specifier: workspace:*
+        version: link:../../client/ui-schema-form
       '@morlay/dsh-reference':
         specifier: workspace:*
         version: link:../../context/dsh-reference
@@ -932,6 +999,9 @@ importers:
         specifier: ^8.23.0
         version: 8.23.0
     devDependencies:
+      '@deepseek-ai/cosmokit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cosmokit
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/compaction/compaction
@@ -1281,18 +1351,6 @@ importers:
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/locale
-      '@deepseek-ai/dsh-client-store':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/store
-      '@deepseek-ai/dsh-client-ui-plugin-manager':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-plugin-manager
-      '@deepseek-ai/dsh-client-ui-renderer':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
-      '@deepseek-ai/dsh-client-ui-settings':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
@@ -1314,15 +1372,9 @@ importers:
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/values
-      '@morlay/dsh-client-ui-primitives':
+      '@morlay/dsh-client-ui-schema-form':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
-      '@types/react':
-        specifier: ~18.3.1
-        version: 18.3.1
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
+        version: link:../../client/ui-schema-form
       zod:
         specifier: ^4.4.3
         version: 4.6.5
@@ -1344,6 +1396,19 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cosmokit':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cosmokit
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
+      '@morlay/dsh-client-ui-schema-form':
+        specifier: workspace:*
+        version: link:../../client/ui-schema-form
 
   vendor/deepseek-harness/apps/cli:
     dependencies:

@@ -9,7 +9,7 @@ import type {
   FsWriteOutcome,
 } from "@deepseek-ai/dsh-fs";
 import { LocalFileSystem } from "@deepseek-ai/dsh-fs-local";
-import type { Config } from "./config.ts";
+import { upstreamConfigOf, type ResolvedConfig } from "./config.ts";
 import type { SandboxExecutionPolicy, SandboxMode } from "@deepseek-ai/dsh-sandbox";
 import type {} from "@deepseek-ai/dsh-sandbox-policy";
 import { isPathUnder } from "./containment.ts";
@@ -27,14 +27,19 @@ export class ConfigurableFileSystem extends LocalFileSystem {
   static inject = ["sandboxPolicy"];
 
   private readonly defaultMode: SandboxMode;
-  private readonly source: RuleSource;
+  private readonly access: ResolvedConfig["access"];
 
   private readonly compiled = new Map<string, CompiledRules>();
 
-  constructor(ctx: Context, config: Config) {
-    super(ctx, config);
+  constructor(ctx: Context, config: ResolvedConfig) {
+    super(ctx, upstreamConfigOf(config));
     this.defaultMode = ctx.sandboxPolicy.defaultMode;
-    this.source = ruleSourceOf(config, process.env);
+    this.access = config.access;
+  }
+
+  /** 规则源现场重算：`access` 是 volatile 引用，页面改完下一次编译就是新规则。 */
+  private get source(): RuleSource {
+    return ruleSourceOf(this.access.get(), process.env);
   }
 
   override get sandboxMode(): SandboxMode {
@@ -129,11 +134,14 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     );
   }
 
+  /** 编译结果按「工作区 + 当前 access」缓存：access 是页面可改的引用，改了就是另一份规则。 */
   private rulesFor(workspaceRoot: string): CompiledRules {
-    const cached = this.compiled.get(workspaceRoot);
+    const access = this.access.get();
+    const key = `${workspaceRoot}\u0000${JSON.stringify(access ?? null)}`;
+    const cached = this.compiled.get(key);
     if (cached !== undefined) return cached;
-    const compiled = compileRules(this.source, workspaceRoot);
-    this.compiled.set(workspaceRoot, compiled);
+    const compiled = compileRules(ruleSourceOf(access, process.env), workspaceRoot);
+    this.compiled.set(key, compiled);
     return compiled;
   }
 }

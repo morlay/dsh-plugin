@@ -93,39 +93,237 @@ export interface Config {
 /** 解析成普通值之后的配置形状（校验与解析只认它）。 */
 export type Options = { [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : never };
 
+/**
+ * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+ * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
+ */
+const localized = (text: { zh: string; en: string }): string => text as unknown as string;
+
 const modelSchema = z.object({
-  id: z.string().required(),
-  name: z.string(),
-  description: z.string(),
-  contextWindow: z.number().step(1).min(1),
-  maxTokens: z.number().step(1).min(1),
-  inputModalities: z.array(z.union(MODEL_MODALITIES)).min(1).default(["text"]),
-  reasoningEfforts: z.union([z.const(false), z.dict(z.union([z.string(), z.const(null)]))]),
+  id: z
+    .string()
+    .required()
+    .description(
+      localized({
+        zh: "模型 id：请求里发出去的那个名字。",
+        en: "Model id: the name sent in requests.",
+      }),
+    ),
+  name: z.string().description(
+    localized({
+      zh: "显示名；省略就用 id。",
+      en: "Display name; the id is used when omitted.",
+    }),
+  ),
+  description: z.string().description(
+    localized({
+      zh: "模型选择器里的一句话说明。",
+      en: "One-line description shown in model pickers.",
+    }),
+  ),
+  contextWindow: z
+    .number()
+    .step(1)
+    .min(1)
+    .description(
+      localized({
+        zh: "上下文窗口（token 数）；省略就用服务商的 defaultContextWindow。",
+        en: "Context window in tokens; unset falls back to the provider's defaultContextWindow.",
+      }),
+    ),
+  maxTokens: z
+    .number()
+    .step(1)
+    .min(1)
+    .description(
+      localized({
+        zh: "单次回复的输出上限；省略就用服务商的 defaultMaxTokens。",
+        en: "Output cap per reply; unset falls back to the provider's defaultMaxTokens.",
+      }),
+    ),
+  inputModalities: z
+    .array(z.union(MODEL_MODALITIES))
+    .min(1)
+    .default(["text"])
+    .description(
+      localized({
+        zh: "这个模型接受的输入模态。",
+        en: "Input modalities this model accepts.",
+      }),
+    ),
+  reasoningEfforts: z
+    .union([z.const(false), z.dict(z.union([z.string(), z.const(null)]))])
+    .description(
+      localized({
+        zh: "思考档位：`false` 表示不支持；给一份档位表（档位名 → 可选的模型侧取值）表示支持。",
+        en: "Reasoning efforts: `false` when unsupported; a level table (level name to optional model-side value) when supported.",
+      }),
+    ),
 });
 
 const providerSchema: z<ProviderProfileSource> = z.object({
-  apiKeyEnv: z.string().role("credential-ref"),
-  displayName: z.string(),
-  baseURL: z.string().required(),
-  headers: z.dict(z.string()),
-  temperature: z.number().min(0).max(2),
-  topP: z.number().min(0).max(1),
-  topK: z.number().step(1).min(1),
-  presencePenalty: z.number().min(-2).max(2),
-  frequencyPenalty: z.number().min(-2).max(2),
-  seed: z.number().step(1).min(1),
-  reasoning: z.union(REASONING_LEVELS),
-  models: z.array(modelSchema),
-  defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
-  defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
-  maxRequestImageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REQUEST_IMAGE_BYTES),
+  apiKeyEnv: z
+    .string()
+    .role("credential-ref")
+    .description(
+      localized({
+        zh: "凭证引用名：每次请求经凭证服务解析一次，别把密钥写在配置里。",
+        en: "Credential reference resolved through the credentials service per request; never inline secrets.",
+      }),
+    ),
+  displayName: z.string().description(
+    localized({
+      zh: "显示名；省略就用 provider 的键名。",
+      en: "Display name; the provider key is used when omitted.",
+    }),
+  ),
+  baseURL: z
+    .string()
+    .required()
+    .description(
+      localized({
+        zh: "OpenAI 兼容端点根（不含 `/chat/completions`）。",
+        en: "OpenAI-compatible endpoint root (without `/chat/completions`).",
+      }),
+    ),
+  headers: z.dict(z.string()).description(
+    localized({
+      zh: "额外请求头，逐项发给端点。",
+      en: "Extra request headers sent to the endpoint.",
+    }),
+  ),
+  temperature: z
+    .number()
+    .min(0)
+    .max(2)
+    .description(
+      localized({
+        zh: "采样温度（0–2）。",
+        en: "Sampling temperature (0-2).",
+      }),
+    ),
+  topP: z
+    .number()
+    .min(0)
+    .max(1)
+    .description(
+      localized({
+        zh: "核采样（0–1）。",
+        en: "Nucleus sampling (0-1).",
+      }),
+    ),
+  topK: z
+    .number()
+    .step(1)
+    .min(1)
+    .description(
+      localized({
+        zh: "top-k 采样。",
+        en: "top-k sampling.",
+      }),
+    ),
+  presencePenalty: z
+    .number()
+    .min(-2)
+    .max(2)
+    .description(
+      localized({
+        zh: "存在惩罚（−2–2）。",
+        en: "Presence penalty (-2 to 2).",
+      }),
+    ),
+  frequencyPenalty: z
+    .number()
+    .min(-2)
+    .max(2)
+    .description(
+      localized({
+        zh: "频率惩罚（−2–2）。",
+        en: "Frequency penalty (-2 to 2).",
+      }),
+    ),
+  seed: z
+    .number()
+    .step(1)
+    .min(1)
+    .description(
+      localized({
+        zh: "随机种子：固定它让采样尽量可复现（端点支持时）。",
+        en: "Random seed: pins sampling where the endpoint supports it.",
+      }),
+    ),
+  reasoning: z.union(REASONING_LEVELS).description(
+    localized({
+      zh: "思考档位：这一端支持哪些（与模型自己的档位表对齐）。",
+      en: "Which reasoning levels this endpoint accepts (paired with each model's own table).",
+    }),
+  ),
+  models: z.array(modelSchema).description(
+    localized({
+      zh: "这个端点提供的模型；每项一个模型。",
+      en: "Models this endpoint serves, one entry each.",
+    }),
+  ),
+  defaultContextWindow: z
+    .number()
+    .step(1)
+    .min(1)
+    .default(DEFAULT_CONTEXT_WINDOW)
+    .description(
+      localized({
+        zh: "没写 contextWindow 的模型用这个上下文窗口。",
+        en: "Context window used by models that declare none.",
+      }),
+    ),
+  defaultMaxTokens: z
+    .number()
+    .step(1)
+    .min(1)
+    .default(DEFAULT_MAX_TOKENS)
+    .description(
+      localized({
+        zh: "没写 maxTokens 的模型用这个输出上限。",
+        en: "Output cap used by models that declare none.",
+      }),
+    ),
+  maxRequestImageBytes: z
+    .number()
+    .step(1)
+    .min(1)
+    .default(DEFAULT_MAX_REQUEST_IMAGE_BYTES)
+    .description(
+      localized({
+        zh: "单次请求里图片的总字节上限；超过的图片会被拒绝。",
+        en: "Total image bytes allowed per request; larger payloads are refused.",
+      }),
+    ),
   streamIdleTimeoutMs: z
     .number()
     .min(Number.MIN_VALUE)
     .max(MAX_TIMER_DELAY_MS)
-    .default(DEFAULT_STREAM_IDLE_TIMEOUT_MS),
-  timeoutMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS),
-  retryPolicy: RetryPolicySchema,
+    .default(DEFAULT_STREAM_IDLE_TIMEOUT_MS)
+    .description(
+      localized({
+        zh: "流式响应两次数据之间的最长空闲（毫秒）：超时按可重试的断流处理。",
+        en: "Longest idle gap between stream chunks in ms; a longer gap counts as a retryable drop.",
+      }),
+    ),
+  timeoutMs: z
+    .number()
+    .min(Number.MIN_VALUE)
+    .max(MAX_TIMER_DELAY_MS)
+    .description(
+      localized({
+        zh: "单次请求的总超时（毫秒）；省略就只受流式空闲限制。",
+        en: "Overall per-request timeout in ms; unset leaves only the stream idle guard.",
+      }),
+    ),
+  retryPolicy: RetryPolicySchema.description(
+    localized({
+      zh: "重试策略：哪些失败重试、退避与上限。",
+      en: "Retry policy: which failures retry, backoff, and caps.",
+    }),
+  ),
 });
 
 export const Config = z.object({

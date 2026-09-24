@@ -110,7 +110,11 @@ describe("session-mode patch wiring", () => {
       "unknown mode(s) absent",
     );
     expect(
-      configProblem({ default: "coding", modes, models: { coding: { provider: "ollama", model: "" } } }),
+      configProblem({
+        default: "coding",
+        modes,
+        models: { coding: { provider: "ollama", model: "" } },
+      }),
     ).toContain("without both `provider` and `model`");
   });
 

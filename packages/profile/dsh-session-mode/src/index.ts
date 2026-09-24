@@ -23,6 +23,7 @@
  */
 
 import { Service, type Context } from "@deepseek-ai/cordis";
+import type { Volatile } from "@deepseek-ai/cosmokit";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 // 会话级模型事实（投影 `modelSelection` 与事件 `model/selection`）由上游 session-controller 声明；
 // 那一行可能没装（headless 部署），所以读它时按"可能为空"处理。
@@ -38,6 +39,7 @@ import {
   configProblem,
   type ResolvedConfig,
   type SessionMode,
+  type SessionModeModels,
   type SessionModeRole,
 } from "./modes.ts";
 import { installPersona } from "./persona.ts";
@@ -116,13 +118,25 @@ export class SessionModes extends Service {
   /** 每个 agent 已经装上的那一份（persona + 默认模型兜底；模式变了就换一份）。 */
   private readonly installs = new WeakMap<Agent, { mode: string; dispose: () => void }>();
 
-  constructor(
-    ctx: Context,
-    public config: ResolvedConfig,
-  ) {
+  /** 装配时的配置快照：`default` / `modes` 读它，改这两项靠 Loader 重挂这一行（已运行会话不自动换定义）。 */
+  readonly config: {
+    default: string;
+    modes: Record<string, SessionMode>;
+  };
+
+  /** 各模式的默认模型：volatile 引用**现场读**，改它不必重挂这一行（只影响还没有模型事实的会话）。 */
+  readonly models: Volatile<SessionModeModels>;
+
+  constructor(ctx: Context, config: ResolvedConfig) {
     super(ctx, "sessionModes");
-    // 校验看的是**值**：`models` 在解析后是个稳定引用，`configProblem` 只认普通对象。
-    const problem = configProblem({ ...config, models: config.models.get() });
+    // 校验看的是**值**：字段解析后都是稳定引用，`configProblem` 只认普通对象。
+    // 快照取一份**可变**副本：volatile 的快照是深度只读，而内部按普通配置对象用（写回不走这里，改配置靠重挂）。
+    this.config = {
+      default: config.default.get(),
+      modes: structuredClone(config.modes.get()) as Record<string, SessionMode>,
+    };
+    this.models = config.models;
+    const problem = configProblem({ ...this.config, models: this.models.get() });
     if (problem !== undefined) throw new Error(problem);
     ctx.sessionProjections.register(sessionModeProjection);
     // 会话一建立就装上：这早于它的第一次装配，persona 因此一定在装配之前注册好。
@@ -283,13 +297,14 @@ export class SessionModes extends Service {
    *
    * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。
    *
-   * 模型取自 `config.models`：那是个 volatile 引用，设置页保存时只有**引用里的值**变，这一行不重挂，
-   * 所以每次请求都现场 `.get()`（与 `llm-openai-compatible` 读 `config.providers` 同一种读法）。
+   * 模型取自 `models`：那是个 volatile 引用，设置页保存时只有**引用里的值**变，这一行不重挂，所以每次请求都现场
+   * `.get()`（与 `llm-openai-compatible` 读 `config.providers` 同一种读法）。`default` / `modes` 相反——它们是
+   * 装配期快照，改了要等 Loader 重挂这一行。
    */
   private installDefaultModel(agent: Agent, modeId: string): () => void {
     return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next();
-      const model = this.config.models.get()[modeId];
+      const model = this.models.get()[modeId];
       if (model === undefined) return resolved;
       // 上游 session-controller 没装（headless）时这个投影不存在，按"没有选择"处理。
       const pending = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection")?.pending;

@@ -132,10 +132,10 @@ export function parseAccess(input: string | readonly string[] | undefined): Rule
 }
 
 export function ruleSourceOf(
-  config: { access?: string | readonly string[] },
+  access: string | readonly string[] | undefined,
   env: NodeJS.ProcessEnv,
 ): RuleSource {
-  const parsed = parseAccess(config.access);
+  const parsed = parseAccess(access);
   const expand = (values: readonly string[]): string[] =>
     values.map((value) => expandEnvTemplates(value, env));
   return {

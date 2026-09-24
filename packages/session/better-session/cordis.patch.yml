@@ -56,6 +56,11 @@
     - id: ui-conversation-manager
       name: "@morlay/ui-conversation-manager"
 
+    # 各插件 Config 的 volatile 字段按 schema 自动生成的配置页：凡是被 host 描述出来的行（`autoGenerate`）都长出
+    # 自己的配置入口，业务方只标 `.volatile()`；手写卡片用默认 priority 0 注册，自然遮住这一层兜底。
+    - id: ui-schema-form
+      name: "@morlay/dsh-client-ui-schema-form"
+
     # 引用展开（`@path` / `skill:name` 在 pre-step 注入内容）：独立于上下文组装出口，
     # 所以装在这里——它只挂 `agent/pre-step`、`inject` 只有 `skills`，不需要通道服务。
     - id: reference

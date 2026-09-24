@@ -78,6 +78,12 @@ export interface SessionMode {
 
 // 每个字段都带 default：schema 的产物因此没有 `undefined` 键（`exactOptionalPropertyTypes` 下"缺省的键"
 // 会与可选属性对不上），而默认值就是"不遮蔽"的那个语义——persona 的默认是两段空文本。
+/**
+ * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+ * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
+ */
+const localized = (text: { zh: string; en: string }): string => text as unknown as string;
+
 const personaSchema = z.object({
   prefix: z.string().default(""),
   suffix: z.string().default(""),
@@ -88,9 +94,32 @@ const roleSchema = z.union([z.const("main"), z.const("subagent")]);
 
 /** 默认模型的形状与全局 `agent-default-model` 一致；省略 effort 就跟 provider 默认。 */
 const modelSchema = z.object({
-  provider: z.string().required(),
-  model: z.string().required(),
-  reasoningEffort: z.string(),
+  provider: z
+    .string()
+    .required()
+    .role("select")
+    .description(
+      localized({
+        zh: "服务商 id（`llm-openai-compatible` 的 providers 里的键，或内置服务商名）。",
+        en: "Provider id: a key in `llm-openai-compatible`'s providers, or a built-in provider name.",
+      }),
+    ),
+  model: z
+    .string()
+    .required()
+    .role("select")
+    .description(
+      localized({
+        zh: "模型 id。",
+        en: "Model id.",
+      }),
+    ),
+  reasoningEffort: z.string().description(
+    localized({
+      zh: "思考档位；省略就跟服务商自己的默认。",
+      en: "Reasoning effort; unset keeps the provider's own default.",
+    }),
+  ),
 });
 
 /** 本包 config 的**源码形状**：装配层与设置页写的那个形状（`models` 是普通对象，可以整块省略）。 */
@@ -109,28 +138,111 @@ export interface Config {
   readonly models?: SessionModeModels;
 }
 
-/** schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。 */
+/**
+ * schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。
+ *
+ * 三个字段都是 volatile：模式清单、默认模式与各模式默认模型都在行配置页上（见 `Config`）。
+ */
 export interface ResolvedConfig {
-  readonly default: string;
-  readonly modes: Record<string, SessionMode>;
+  readonly default: Volatile<string>;
+  readonly modes: Volatile<Record<string, SessionMode>>;
   /** 各模式的默认模型；一个都没配时是空对象（schema 的 default）。 */
   readonly models: Volatile<SessionModeModels>;
 }
 
 const modeSchema: z<SessionMode> = z.object({
-  name: z.string().required(),
-  description: z.string().default(""),
-  role: z.array(roleSchema).default(["main"]),
+  name: z
+    .string()
+    .required()
+    .description(
+      localized({
+        zh: "展示名（模式选择器里显示的）。",
+        en: "Display name shown in the mode picker.",
+      }),
+    ),
+  description: z
+    .string()
+    .default("")
+    .description(
+      localized({
+        zh: "一句话说明。",
+        en: "One-line description.",
+      }),
+    ),
+  role: z
+    .array(roleSchema)
+    .default(["main"])
+    .description(
+      localized({
+        zh: "谁可以用这个模式：`main`（会话选择器里可选）或 `subagent`（子代理继承）。",
+        en: "Who may use this mode: `main` (selectable in sessions) or `subagent` (inherited by subagents).",
+      }),
+    ),
   persona: personaSchema.default({}),
-  allowTools: z.array(z.string()).default([]),
-  instructions: z.boolean().default(true),
-  runtimeContext: z.boolean().default(true),
+  allowTools: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "这个会话能用的工具；其余既不进目录，调用也被拒。",
+        en: "Tools this session may use; everything else leaves the catalog and calls are refused.",
+      }),
+    ),
+  instructions: z
+    .boolean()
+    .default(true)
+    .description(
+      localized({
+        zh: "是否要 instruction 类注入（工作区指令、技能目录、用法正文）。",
+        en: "Whether instruction-class injections apply (workspace instructions, skill catalog, guidance).",
+      }),
+    ),
+  runtimeContext: z
+    .boolean()
+    .default(true)
+    .description(
+      localized({
+        zh: "是否要动态快照（文件沙箱策略、审批策略）。",
+        en: "Whether the runtime snapshot applies (sandbox and approval policy).",
+      }),
+    ),
 });
 
 export const Config: z<Config, ResolvedConfig> = z.object({
-  default: z.string().required(),
-  modes: z.dict(modeSchema).required(),
-  models: z.dict(modelSchema).default({}).volatile(),
+  default: z
+    .string()
+    .required()
+    .description(
+      localized({
+        zh: "新会话（还没选过模式的会话）用哪个模式；必须是下面 `modes` 里的一个 id。",
+        en: "Mode a session starts in before anyone picks one; must be an id in `modes`.",
+      }),
+    )
+    .volatile(),
+  modes: z
+    .dict(modeSchema)
+    .required()
+    .description(
+      localized({
+        zh:
+          "模式清单：id → 定义（persona / 允许的工具 / 角色）。改它对**已运行会话**不自动生效——重挂后新建的会话、" +
+          "或重新应用模式的会话才用新定义。",
+        en:
+          "Mode roster: id to definition (persona, allowed tools, role). Edits do not follow into already-running " +
+          "sessions; sessions created after the row is remounted use the new definition.",
+      }),
+    )
+    .volatile(),
+  models: z
+    .dict(modelSchema)
+    .default({})
+    .description(
+      localized({
+        zh: "各模式的默认模型；留空就跟全局默认模型。",
+        en: "Default model per mode; unset follows the global default model.",
+      }),
+    )
+    .volatile(),
 });
 
 /** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、配了的默认模型。 */
@@ -146,7 +258,9 @@ interface Validated {
     >
   >;
   /** 配了的默认模型；省略等于"一个都没配"（源码形状与解析后的形状都能校验）。 */
-  readonly models?: Readonly<Record<string, { readonly provider?: string; readonly model?: string }>>;
+  readonly models?: Readonly<
+    Record<string, { readonly provider?: string; readonly model?: string }>
+  >;
 }
 
 /** 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。 */
@@ -175,7 +289,13 @@ export function configProblem(config: Validated): string | undefined {
     return `session-mode: \`models\` names unknown mode(s) ${unknown.join(", ")}; available are ${ids.join(", ")}`;
   }
   const partial = Object.entries(config.models ?? {})
-    .filter(([, model]) => model.provider === undefined || model.model === undefined || model.provider.length === 0 || model.model.length === 0)
+    .filter(
+      ([, model]) =>
+        model.provider === undefined ||
+        model.model === undefined ||
+        model.provider.length === 0 ||
+        model.model.length === 0,
+    )
     .map(([id]) => id);
   if (partial.length > 0) {
     return `session-mode: mode(s) ${partial.join(", ")} declare \`models\` without both \`provider\` and \`model\``;

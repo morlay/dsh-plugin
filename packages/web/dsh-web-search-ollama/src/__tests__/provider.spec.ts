@@ -27,6 +27,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** 一个配置引用（host 写它、插件读它），与 `volatile` 字段的运行期形状同形。 */
+function reference<T>(initial: T): { get: () => T; set: (next: T) => void } {
+  let current = initial;
+  return {
+    get: () => current,
+    set: (next) => {
+      current = next;
+    },
+  };
+}
+
 describe("Ollama 结果映射", () => {
   it("映射一条完整结果", () => {
     expect(
@@ -304,6 +315,35 @@ describe("web-search-ollama 插件装配", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://ollama.proxy.test/api/web_search");
     expect(JSON.parse(init.body as string)).toMatchObject({ max_results: 2 });
+  });
+
+  it("配置是稳定引用：页面改了之后，下一次搜索就用新值（不重挂这一行）", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ results: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = new Context();
+    await ctx.plugin(WebRuntime, { searchProvider: OLLAMA_PROVIDER_ID });
+    const config = {
+      apiKey: reference("ollama-key"),
+      apiKeyEnv: reference(undefined),
+      baseURL: reference("https://ollama.proxy.test"),
+      maxResults: reference(2),
+    };
+    plugin.apply(ctx, config as never);
+
+    await ctx.web.search({ query: "q" });
+    config.baseURL.set("https://ollama.other.test");
+    config.maxResults.set(3);
+    await ctx.web.search({ query: "q" });
+
+    const urls = fetchMock.mock.calls.map((call) => (call as unknown as [string])[0]);
+    expect(urls).toEqual([
+      "https://ollama.proxy.test/api/web_search",
+      "https://ollama.other.test/api/web_search",
+    ]);
+    const bodies = fetchMock.mock.calls.map((call) =>
+      JSON.parse((call as unknown as [string, RequestInit])[1].body as string),
+    );
+    expect(bodies.map((body: { max_results?: number }) => body.max_results)).toEqual([2, 3]);
   });
 
   it("是命名空间插件（没有 default 导出）", () => {

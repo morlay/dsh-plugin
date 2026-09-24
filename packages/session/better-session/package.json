@@ -45,6 +45,7 @@
   "dependencies": {
     "@morlay/dsh-client-ui-conversation": "workspace:*",
     "@morlay/dsh-client-ui-primitives": "workspace:*",
+    "@morlay/dsh-client-ui-schema-form": "workspace:*",
     "@morlay/dsh-reference": "workspace:*",
     "@morlay/session-branch": "workspace:*",
     "@morlay/session-rdb": "workspace:*",

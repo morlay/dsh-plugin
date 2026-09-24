@@ -13,7 +13,8 @@ dsh plugin --profile web add "@morlay/better-session"
 
 安装自动带上全部子包（`@morlay/session-branch`、`@morlay/session-rdb`、
 `@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、
-`@morlay/dsh-client-ui-conversation`、`@morlay/dsh-client-ui-primitives`、`@morlay/dsh-reference`），
+`@morlay/dsh-client-ui-conversation`、`@morlay/dsh-client-ui-primitives`、`@morlay/dsh-client-ui-schema-form`、
+`@morlay/dsh-reference`），
 并由 bundle 的 patch（`cordis.patch.yml`）自动装配：
 
 - `ctx.sessionPersistence` ← RDB（SQLite / PostgreSQL）持久化后端
@@ -24,6 +25,8 @@ dsh plugin --profile web add "@morlay/better-session"
 - `conversation.composer.dock` 的 `stats` 行 ← 覆盖注册（priority −1；承载修好的 token 口径）
 - 官方对话 UI 行里只有 `ui-conversation` 换成本仓库的 fork 行；`ui-chat` 与 `ui-input-trigger` 保持官方行
 - `ui-primitives-fork` ← css-in-js 样式层（styled / Token / 官方 token 消费），fork 外壳的样式基础
+- `ui-schema-form` ← 各插件 `Config` 的 volatile 字段按 schema 自动生成的**行配置页**（行级兜底：手写卡片用默认
+  priority 遮住它），字段级自定义输入经 chain 槽 `settings.schema-form.field`
 - `ctx.sessionProjectionCache` ← 投影 checkpoint（替换官方插件，落 rdb 语义表）
 - `ctx.sessionQuery` ← 会话查询（替换官方 `session-query-sqlite`：精确读 / 过滤 /
   血缘复用上游基类，全文检索维持 disabled，不引入派生索引库）

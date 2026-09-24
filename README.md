@@ -22,6 +22,7 @@ DeepSeek Harness Plugin 自用开发插件集合。
 | `context/dsh-context-assembler/`           | 注入能力组（一个包四个出口）：通道 `assembler`、工作区指令 `agent-instructions`、skill 目录 `skill-catalog`、模式收口 `scope`（工具说明归 toolkit）      | [README](packages/context/dsh-context-assembler/README.md)           |
 | `context/dsh-reference/`                   | 引用展开：`@path` / `skill:name` 在 `agent/pre-step` 注入内容（引用解析复用 `client/ui-primitives`、构建内联）                                           | [README](packages/context/dsh-reference/README.md)                   |
 | **client**（浏览器半基础）                 |                                                                                                                                                          |                                                                      |
+| `client/ui-schema-form/`                   | 各行 `Config` 的 volatile schema → 该行的配置页（覆盖 schemastery 全部类型）+ 字段级自定义输入槽                                                         | [README](packages/client/ui-schema-form/README.md)                   |
 | `client/ui-primitives/`                    | CSS-in-JS 样式层 + 引用统一解析 / 渲染转换                                                                                                               | [README](packages/client/ui-primitives/README.md)                    |
 | **llm**（LLM 适配）                        |                                                                                                                                                          |                                                                      |
 | `llm/llm-openai-compatible/`               | OpenAI-compatible 多 provider 路由（可选组件）                                                                                                           | [README](packages/llm/llm-openai-compatible/README.md)               |
@@ -49,7 +50,7 @@ DeepSeek Harness Plugin 自用开发插件集合。
 | ---------------------------------------------------------------------- | -------------------------------------------- |
 | [`.agents/`](.agents)                                                  | 记录树（布局 / 词汇 / 边界）                 |
 | [`.agents/standards/`](.agents/standards)                              | 规范（如何写 / 如何验证）                    |
-| [`.agents/designs/`](.agents/designs)                                  | 整体设计                                     |
+| [`.agents/designs/`](.agents/designs)                                  | 整体设计（布局 / 装配）                      |
 | [`.agents/adrs/`](.agents/adrs) · [`.agents/debts/`](.agents/debts)    | 仓库级决策 · 技术债                          |
 | [`.agents/skills/`](.agents/skills)                                    | 流程（设计 / 实现 / 审查 / 改进 / 上游同步） |
 | [AGENTS.md](AGENTS.md) · [justfile](justfile) · [mise.toml](mise.toml) | agent 工作指引 · 命令 · 技术栈与上游版本     |

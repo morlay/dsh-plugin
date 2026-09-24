@@ -14,6 +14,7 @@ import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import * as scope from "@morlay/dsh-context-assembler/scope";
 import { afterEach, describe, expect, it } from "vitest";
+import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { z } from "zod";
 import * as plugin from "../index.ts";
 import type { Config, SessionMode, SessionModeRole } from "../modes.ts";
@@ -354,7 +355,11 @@ describe("模式的角色与默认模型", () => {
 
   it("装配期校验：`models` 的键写错、或 provider / model 缺一半都拒绝装载", async () => {
     await expectRefused(
-      { default: "coding", modes: EXTENDED.modes, models: { absent: { provider: "ollama", model: "m" } } },
+      {
+        default: "coding",
+        modes: EXTENDED.modes,
+        models: { absent: { provider: "ollama", model: "m" } },
+      },
       "unknown mode(s) absent",
     );
     await expectRefused(
@@ -369,11 +374,14 @@ describe("模式的角色与默认模型", () => {
 });
 
 describe("各模式的默认模型是顶层 volatile 字段", () => {
-  it("schema 上 `models` 是 volatile，`modes` 不是——设置面只挑得出前者", () => {
+  it("三个字段都是 volatile——模式清单、默认模式与各模式默认模型都在行配置页上", () => {
     // settings 的 describe 用 `volatileForm(schema)` 挑可编辑字段：volatile 节点本身、且路径必须固定。
     // dict 内部的字段一律 blocked，所以"某个模式的默认模型"只能挂在顶层（见 ADR）。
+    expect(plugin.Config.dict?.["default"]?.meta.volatile).toBe(true);
+    expect(plugin.Config.dict?.["modes"]?.meta.volatile).toBe(true);
     expect(plugin.Config.dict?.["models"]?.meta.volatile).toBe(true);
-    expect(plugin.Config.dict?.["modes"]?.meta.volatile).not.toBe(true);
+    // host 的投影因此会带上整段（页面据此出现），而不是只有 models。
+    expect(volatileForm(plugin.Config as never)).toBeDefined();
   });
 
   it("解析之后它是个稳定引用：写进引用的新值立刻被下一次请求读到（这行不重挂）", async () => {
@@ -385,10 +393,7 @@ describe("各模式的默认模型是顶层 volatile 字段", () => {
 
     // 模拟 settings 的 volatile 提交：它写的就是这个引用（符号的 home 在 cosmokit 的 volatile.ts）。
     const write = Symbol.for("cosmokit.volatile.write");
-    const ref = ctx.sessionModes.config.models as unknown as Record<
-      symbol,
-      (value: unknown) => void
-    >;
+    const ref = ctx.sessionModes.models as unknown as Record<symbol, (value: unknown) => void>;
     ref[write]!({ coding: { provider: "vendor", model: "vendor-model" } });
 
     expect(await requestRoute(agent)).toMatchObject({

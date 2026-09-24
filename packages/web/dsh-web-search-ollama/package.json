@@ -25,6 +25,10 @@
     ".": "./src/index.ts",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./dist/client.cjs"
+    },
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
@@ -32,6 +36,10 @@
       ".": "./dist/index.mjs",
       "./package.json": "./package.json",
       "./cordis.patch.yml": "./cordis.patch.yml",
+      "./client": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      },
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -43,15 +51,33 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:*"
   },
+  "devDependencies": {
+    "@deepseek-ai/cosmokit": "workspace:*",
+    "@deepseek-ai/dsh-client-locale": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@morlay/dsh-client-ui-schema-form": "workspace:*"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cosmokit": "workspace:*",
+    "@deepseek-ai/dsh-client-locale": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
     "@deepseek-ai/dsh-launch-environment": "workspace:*",
-    "@deepseek-ai/dsh-web": "workspace:*"
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@morlay/dsh-client-ui-schema-form": "workspace:*"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@morlay/dsh-client-ui-schema-form"
+      ]
     }
   }
 }
