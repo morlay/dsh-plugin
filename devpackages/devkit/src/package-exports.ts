@@ -23,6 +23,14 @@ export interface PackageExportsOptions {
   readonly hidden?: readonly string[];
   /** 命令名 → 入口名：`bin` 两侧一起写（顶层指源码、发布态指产物）。 */
   readonly bin?: Record<string, string>;
+  /**
+   * 额外写 Node / Electron 的传统入口 `main` / `module`（都指包根出口的产物）。
+   *
+   * 这类消费方不看 `exports`：Electron 以**包目录**为 app 启动时按 `main` 找主进程入口
+   * （`dsh-desktopify dev` 就是这么起壳的），缺了它 Electron 会退回 `index.js` 并报
+   * 「Unable to find Electron app … Cannot find module <包目录>」。
+   */
+  readonly legacy?: boolean;
 }
 
 const PACKAGE_JSON_EXPORT = "./package.json";
@@ -182,6 +190,11 @@ async function writeManifest(
     }
     manifest["bin"] = bins;
     publishConfig["bin"] = publishedBins;
+  }
+  const rootEntry = published["."];
+  if (options.legacy === true && typeof rootEntry === "string") {
+    manifest["main"] = rootEntry;
+    manifest["module"] = rootEntry;
   }
   manifest["exports"] = dev;
   publishConfig["exports"] = published;

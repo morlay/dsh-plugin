@@ -73,6 +73,8 @@ export async function defineCordisPluginConfig(options?: {
   hidden?: readonly string[];
   /** 命令名 → 入口名：`bin` 两侧一起写（顶层指源码，发布态指产物）。 */
   bin?: Record<string, string>;
+  /** 额外写 Node / Electron 的传统入口 `main` / `module`（理由见 {@link PackageExportsOptions}）。 */
+  legacy?: boolean;
 }): Promise<UserConfig> {
   const hasClientSource = await entryExists(join(process.cwd(), "src", "client", "index.ts"));
   const client =
@@ -114,6 +116,7 @@ export async function defineCordisPluginConfig(options?: {
         ...(client === undefined ? {} : { clientEntry: CLIENT_ENTRY }),
         ...(options?.hidden === undefined ? {} : { hidden: options.hidden }),
         ...(options?.bin === undefined ? {} : { bin: options.bin }),
+        ...(options?.legacy === undefined ? {} : { legacy: options.legacy }),
       }),
     },
     // 双模式库（如 lexical 的 exports 带 development / production / node 条件，

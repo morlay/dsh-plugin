@@ -19,6 +19,9 @@ export default [
     // host 变体只在部署里以整包落位（壳从磁盘按名解析它），它的 wire 入口因此内联进壳产物。
     neverBundle: ["electron", "lightningcss", "rolldown"],
     inline: ["@morlay/dsh-desktop-host"],
+    // `dsh-desktopify dev` 以本包目录为 Electron app 启动，壳按 `main` 找主进程入口，
+    // 所以这个包还要传统入口（值由构建写回，指包根出口的产物 `dist/index.mjs`）。
+    legacy: true,
     dts: false,
   }),
   {
