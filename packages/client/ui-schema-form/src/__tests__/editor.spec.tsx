@@ -21,6 +21,7 @@ import {
 import { zh } from "../client/locales.ts";
 import { SchemaForm } from "../client/SchemaForm.tsx";
 import { projectNode, walkFields, type FieldNode } from "../client/schema-node.ts";
+import { Config as SessionModeConfig } from "../../../../profile/dsh-session-mode/src/modes.ts";
 import { fakeDescribe } from "../testing/fake-describe.ts";
 import { FakeScope } from "../testing/fake-scope.ts";
 import type {
@@ -970,5 +971,34 @@ describe("与真控制器一起跑", () => {
     // provider 没有注册那个具名源时退回文本输入，但位子必须在。
     expect(container.querySelector('[data-field-path="cfg.provider"] input')).toBeTruthy();
     expect(container.querySelector('[data-field-path="cfg.model"] input')).toBeTruthy();
+  });
+
+  it("session-mode：加成 defaultModel 后容器里就是能填的位子（真 schema）", () => {
+    const { state, props } = live(SessionModeConfig, {
+      default: "coding",
+      modes: {
+        coding: {
+          name: "编码模式",
+          description: "",
+          role: ["main"],
+          persona: { prefix: "", suffix: "" },
+          allowTools: ["read"],
+          instructions: true,
+          runtimeContext: true,
+        },
+      },
+    });
+    const { container } = render(<SchemaForm {...props} />);
+
+    // coding 那一层的添加入口：`defaultModel` 是可选的，没配就不占行。
+    fireEvent.focus(screen.getAllByPlaceholderText(zh.addProperty)[0]!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "defaultModel" }));
+
+    const paths = state().walked.map((item) => item.path.join("."));
+    expect(paths).toContain("modes.coding.defaultModel");
+    expect(paths).toContain("modes.coding.defaultModel.provider");
+    expect(
+      container.querySelector('[data-field-path="modes.coding.defaultModel.provider"] input'),
+    ).toBeTruthy();
   });
 });
