@@ -80,115 +80,121 @@ export function apply(ctx: Context): void {
 
   // `models` 的候选键是模式清单的 id：清单就在**同一行**的 config 值里（`modes`），直接读它即可——同步、不依赖
   // HTTP，值一变就让表单重算候选行。
-  ctx.effect(() => {
-    const hints = ctx.get("schemaFormHints");
-    const forms = ctx.get("configForms")?.get<Record<string, unknown>>(SESSION_MODE_NS);
-    let offKeys: (() => void) | undefined;
-    let offForms: (() => void) | undefined;
-    if (hints !== undefined && forms !== undefined) {
-      offKeys = hints.suggestKeys(SESSION_MODE_NS, ["models"], () => {
-        const modes = forms.getSnapshot().value?.["modes"];
-        return modes !== null && typeof modes === "object" ? Object.keys(modes) : [];
-      });
-      offForms = forms.subscribe(() => {
-        hints.refresh();
-      });
-    }
-    return () => {
-      offKeys?.();
-      offForms?.();
-    };
-  }, "session-mode: model key hints");
+  // 提示面是行配置表单提供的服务：等它可用再注册（`ctx.get` 在它还没提供时拿不到，注册会被静静跳过）。
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = scope.schemaFormHints;
+      const forms = scope.get("configForms")?.get<Record<string, unknown>>(SESSION_MODE_NS);
+      let offKeys: (() => void) | undefined;
+      let offForms: (() => void) | undefined;
+      if (forms !== undefined) {
+        offKeys = hints.suggestKeys(SESSION_MODE_NS, ["models"], () => {
+          const modes = forms.getSnapshot().value?.["modes"];
+          return modes !== null && typeof modes === "object" ? Object.keys(modes) : [];
+        });
+        offForms = forms.subscribe(() => {
+          hints.refresh();
+        });
+      }
+      return () => {
+        offKeys?.();
+        offForms?.();
+      };
+    }, "session-mode: model key hints"),
+  );
 
   // 本行的配置页由通用 schema 表单按 volatile 字段生成；这里给 `models` 里的三个字段补中文标签与说明。
-  ctx.effect(() => {
-    const hints = ctx.get("schemaFormHints");
-    if (hints === undefined) return () => {};
-    const offs = FIELDS.map((key) =>
-      hints.describe(SESSION_MODE_NS, ["models", DYNAMIC, key], () => ({
-        label: t(key),
-        hint: t(`${key}Hint` as "providerHint"),
-      })),
-    );
-    return () => {
-      for (const off of offs) off();
-    };
-  }, "session-mode: field wording");
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = scope.schemaFormHints;
+      const offs = FIELDS.map((key) =>
+        hints.describe(SESSION_MODE_NS, ["models", DYNAMIC, key], () => ({
+          label: t(key),
+          hint: t(`${key}Hint` as "providerHint"),
+        })),
+      );
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "session-mode: field wording"),
+  );
 
   // 选模型的候选不在本行的 schema 里：provider 是部署里的 LLM 目录（活着的路由 + 可配置声明），模型清单读那份声明
   // 指向的配置（`settingsNs` / `settingsPath`）。目录异步取到后注册——注册本身就是一次变更通知。
-  ctx.effect(() => {
-    const hints = ctx.get("schemaFormHints");
-    const remote = ctx.get("remote");
-    const forms = ctx.get("configForms");
-    if (hints === undefined || remote === undefined || forms === undefined) return () => {};
-    let providers: ProviderEntry[] = [];
-    const load = async (): Promise<void> => {
-      const [routes, directory] = await Promise.all([
-        remote.llm.listProviders(),
-        remote.llm.listConfigurableProviders(),
-      ]);
-      if (!routes.ok || !directory.ok) return;
-      const merged = new Map<string, ProviderEntry>();
-      for (const entry of directory.value) {
-        merged.set(entry.provider, {
-          value: entry.provider,
-          label: entry.displayName,
-          settingsNs: entry.settingsNs,
-          settingsPath: [...entry.settingsPath],
-        });
-      }
-      for (const route of routes.value) {
-        if (!merged.has(route.id)) {
-          merged.set(route.id, {
-            value: route.id,
-            label: route.name,
-            settingsNs: "",
-            settingsPath: [],
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = scope.schemaFormHints;
+      const remote = scope.get("remote");
+      const forms = scope.get("configForms");
+      if (remote === undefined || forms === undefined) return () => {};
+      let providers: ProviderEntry[] = [];
+      const load = async (): Promise<void> => {
+        const [routes, directory] = await Promise.all([
+          remote.llm.listProviders(),
+          remote.llm.listConfigurableProviders(),
+        ]);
+        if (!routes.ok || !directory.ok) return;
+        const merged = new Map<string, ProviderEntry>();
+        for (const entry of directory.value) {
+          merged.set(entry.provider, {
+            value: entry.provider,
+            label: entry.displayName,
+            settingsNs: entry.settingsNs,
+            settingsPath: [...entry.settingsPath],
           });
         }
-      }
-      providers = [...merged.values()];
-      hints.refresh();
-    };
-    const modelsOf = (provider: unknown): readonly { value: string }[] => {
-      if (typeof provider !== "string") return [];
-      const entry = providers.find((candidate) => candidate.value === provider);
-      if (entry === undefined || entry.settingsNs === "") return [];
-      const profile = readAt(forms.get(entry.settingsNs).getSnapshot().value, entry.settingsPath);
-      const models =
-        typeof profile === "object" && profile !== null
-          ? Reflect.get(profile, "models")
-          : undefined;
-      if (!Array.isArray(models)) return [];
-      return models.flatMap((model) => {
-        const id =
-          typeof model === "object" && model !== null ? Reflect.get(model, "id") : undefined;
-        return typeof id === "string" ? [{ value: id }] : [];
-      });
-    };
-    const offs = [
-      // 两个具名源：schema 上 `role('select', { source })` 认领它们，本包因此不必知道行 id 与字段路径。
-      hints.source("llm-providers", {
-        options: () => providers.map((entry) => ({ value: entry.value, label: entry.label })),
-      }),
-      // 换服务商就换模型清单：依赖声明让表单在投影时按当前 provider 重算候选。
-      hints.source("llm-models", {
-        dependsOn: [["provider"]],
-        options: (read) => modelsOf(read(["provider"])),
-      }),
-      remote.$on("llm/adapters-updated", () => {
-        void load();
-      }),
-      remote.$on("settings/document-updated", () => {
+        for (const route of routes.value) {
+          if (!merged.has(route.id)) {
+            merged.set(route.id, {
+              value: route.id,
+              label: route.name,
+              settingsNs: "",
+              settingsPath: [],
+            });
+          }
+        }
+        providers = [...merged.values()];
         hints.refresh();
-      }),
-    ];
-    void load();
-    return () => {
-      for (const off of offs) off();
-    };
-  }, "session-mode: model candidates");
+      };
+      const modelsOf = (provider: unknown): readonly { value: string }[] => {
+        if (typeof provider !== "string") return [];
+        const entry = providers.find((candidate) => candidate.value === provider);
+        if (entry === undefined || entry.settingsNs === "") return [];
+        const profile = readAt(forms.get(entry.settingsNs).getSnapshot().value, entry.settingsPath);
+        const models =
+          typeof profile === "object" && profile !== null
+            ? Reflect.get(profile, "models")
+            : undefined;
+        if (!Array.isArray(models)) return [];
+        return models.flatMap((model) => {
+          const id =
+            typeof model === "object" && model !== null ? Reflect.get(model, "id") : undefined;
+          return typeof id === "string" ? [{ value: id }] : [];
+        });
+      };
+      const offs = [
+        // 两个具名源：schema 上 `role('select', { source })` 认领它们，本包因此不必知道行 id 与字段路径。
+        hints.source("llm-providers", {
+          options: () => providers.map((entry) => ({ value: entry.value, label: entry.label })),
+        }),
+        // 换服务商就换模型清单：依赖声明让表单在投影时按当前 provider 重算候选。
+        hints.source("llm-models", {
+          dependsOn: [["provider"]],
+          options: (read) => modelsOf(read(["provider"])),
+        }),
+        remote.$on("llm/adapters-updated", () => {
+          void load();
+        }),
+        remote.$on("settings/document-updated", () => {
+          hints.refresh();
+        }),
+      ];
+      void load();
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "session-mode: model candidates"),
+  );
 
   // 会话里的两个面都要求会话流的上下文（hero 的座位与头部动作行挂在 conversation 上）。
   ctx.inject(["slots", "conversation"], (scope) => {

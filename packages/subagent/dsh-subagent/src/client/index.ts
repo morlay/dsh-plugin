@@ -37,17 +37,19 @@ export const inject = ["locale"];
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-subagent: field locale");
-  ctx.effect(() => {
-    const hints = ctx.get("schemaFormHints");
-    if (hints === undefined) return () => {};
-    const offs = FIELDS.map((key) =>
-      hints.describe(SUBAGENT_NS, [key], () => ({
-        label: t(key),
-        hint: t(`${key}Hint` as SubagentFieldLocaleKey),
-      })),
-    );
-    return () => {
-      for (const off of offs) off();
-    };
-  }, "dsh-subagent: field wording");
+  // 提示面由行配置表单提供：等它可用再注册（`ctx.get` 在它还没提供时拿不到，注册会被静静跳过）。
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = scope.schemaFormHints;
+      const offs = FIELDS.map((key) =>
+        hints.describe(SUBAGENT_NS, [key], () => ({
+          label: t(key),
+          hint: t(`${key}Hint` as SubagentFieldLocaleKey),
+        })),
+      );
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "dsh-subagent: field wording"),
+  );
 }

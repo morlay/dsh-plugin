@@ -62,7 +62,11 @@ function bench() {
   const ctx = {
     get: (name: string) => services[name],
     effect: (effect: () => unknown) => effect(),
-    inject: (_services: string[], factory: (scope: unknown) => unknown) => factory(ctx),
+    // 与 cordis 一致：inject 的服务缺席时不执行工厂；在时把服务挂在 scope 上。
+    inject: (names: string[], factory: (scope: unknown) => unknown) => {
+      if (names.some((name) => services[name] === undefined)) return;
+      factory({ ...ctx, ...services });
+    },
     slots: { register: () => () => {} },
     locale: { bind: () => (key: string) => key, register: () => {} },
   };

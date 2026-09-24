@@ -34,17 +34,19 @@ export const inject = ["locale"];
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "web-search-ollama: field locale");
-  ctx.effect(() => {
-    const hints = ctx.get("schemaFormHints");
-    if (hints === undefined) return () => {};
-    const offs = FIELDS.map((key) =>
-      hints.describe(WEB_SEARCH_NS, [key], () => ({
-        label: t(key),
-        hint: t(`${key}Hint` as WebSearchFieldLocaleKey),
-      })),
-    );
-    return () => {
-      for (const off of offs) off();
-    };
-  }, "web-search-ollama: field wording");
+  // 提示面由行配置表单提供：等它可用再注册（`ctx.get` 在它还没提供时拿不到，注册会被静静跳过）。
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = scope.schemaFormHints;
+      const offs = FIELDS.map((key) =>
+        hints.describe(WEB_SEARCH_NS, [key], () => ({
+          label: t(key),
+          hint: t(`${key}Hint` as WebSearchFieldLocaleKey),
+        })),
+      );
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "web-search-ollama: field wording"),
+  );
 }

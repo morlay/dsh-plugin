@@ -11,6 +11,7 @@ import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { SchemaFormController, fieldKey } from "../client/controller.ts";
 import { failureOf } from "../client/draft.ts";
+import { SchemaFormHints } from "../client/hints.ts";
 import { SessionPersistenceRdb } from "../../../../session/session-rdb/src/index.ts";
 import type { SelectSpec } from "../client/hints.ts";
 import { zh } from "../client/locales.ts";
@@ -478,5 +479,30 @@ describe("按 role 认领的候选源", () => {
     const { state } = mounted("row", scope, describeFace, { sourceFor: () => undefined });
 
     expect(state().options.get(fieldKey(["provider"]))).toBeUndefined();
+  });
+});
+
+describe("role 的 extra 一路到候选（真提示面）", () => {
+  it("`role('select', { source })` 认领真实注册的源", () => {
+    const hints = new SchemaFormHints({ reflect: { provide: () => {} } } as never);
+    hints.source("llm-providers", {
+      options: () => [
+        { value: "mine", label: "自建" },
+        { value: "openai", label: "OpenAI" },
+      ],
+    });
+    const describeFace = fakeDescribe([
+      view("row", z.object({ provider: z.string().role("select", { source: "llm-providers" }) })),
+    ]);
+    const scope = new FakeScope({ value: { provider: "mine" } });
+    const { state } = mounted("row", scope, describeFace, {
+      sourceFor: (name) => hints.sourceFor(name),
+    });
+
+    // 走完 toJSON → rehydrate → 投影 → extra：这一环断了就只剩文本输入。
+    expect(state().options.get(fieldKey(["provider"]))).toEqual([
+      { value: "mine", label: "自建" },
+      { value: "openai", label: "OpenAI" },
+    ]);
   });
 });
