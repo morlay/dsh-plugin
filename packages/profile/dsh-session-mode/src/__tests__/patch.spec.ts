@@ -5,7 +5,7 @@ import { scopeRow } from "@morlay/dsh-context-assembler/rows";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { configProblem, type SessionMode } from "../modes.ts";
-import { DEFAULT_MODE, MODE_MODELS, MODE_SOURCES, type ModeModelSource } from "../../tool/modes.ts";
+import { DEFAULT_MODE, MODE_SOURCES } from "../../tool/modes.ts";
 import { PATCH_ROWS, renderPatch } from "../../tool/patch.ts";
 
 const PATCH_PATH = join(process.cwd(), "packages/profile/dsh-session-mode/cordis.patch.yml");
@@ -59,19 +59,20 @@ describe("session-mode patch wiring", () => {
       expect(mode?.allowTools).toEqual(source.allowTools);
       expect(mode?.instructions ?? true).toBe(source.instructions ?? true);
       expect(mode?.runtimeContext ?? true).toBe(source.runtimeContext ?? true);
-      // 默认模型的 home 是 config 顶层的 `models`（见下一条），模式定义里不再有它。
+      // 默认模型的 home 在模式自己身上（源数据没写就不渲染这个键）。
       expect(mode).not.toHaveProperty("defaultModel");
     }
   });
 
-  it("各模式的默认模型逐项等于 `tool/modes.ts` 的 `MODE_MODELS`", () => {
+  it("每个模式的默认模型写在它自己的 `defaultModel` 里（省略就是不写）", () => {
     const config = inserted[0]?.config as {
-      models?: Record<string, ModeModelSource>;
-    };
+      modes: Record<string, Record<string, unknown>>;
+    } & Record<string, unknown>;
 
-    expect(config.models).toEqual(
-      Object.fromEntries(Object.entries(MODE_MODELS).map(([id, model]) => [id, { ...model }])),
-    );
+    expect(config.modes["coding"]).not.toHaveProperty("defaultModel");
+    expect(config.modes["chat"]).not.toHaveProperty("defaultModel");
+    // 顶层不再有那份映射。
+    expect(config).not.toHaveProperty("models");
   });
 
   it("chat 只要三件工具并关掉两类注入；coding 拿整套工具集", () => {
@@ -101,21 +102,29 @@ describe("session-mode patch wiring", () => {
     );
   });
 
-  it("装配期校验：`models` 的键必须是清单里的模式，且 provider 与 model 都要给全", () => {
-    const modes = { coding: { name: "编码", allowTools: ["read"] } };
-    const model = { provider: "ollama", model: "coding-model" };
-
-    expect(configProblem({ default: "coding", modes, models: { coding: model } })).toBeUndefined();
-    expect(configProblem({ default: "coding", modes, models: { absent: model } })).toContain(
-      "unknown mode(s) absent",
+  it("装配期校验：退役的顶层 `models` 还配着值就报错（提醒挪进模式）", () => {
+    const modes = Object.fromEntries(
+      MODE_SOURCES.map((source) => [
+        source.id,
+        {
+          name: source.name,
+          description: source.description,
+          role: source.role ?? ["main"],
+          persona: source.persona ?? { prefix: "", suffix: "" },
+          allowTools: [...source.allowTools],
+          instructions: source.instructions ?? true,
+          runtimeContext: source.runtimeContext ?? true,
+        },
+      ]),
     );
+
     expect(
       configProblem({
-        default: "coding",
+        default: DEFAULT_MODE,
         modes,
-        models: { coding: { provider: "ollama", model: "" } },
+        models: { coding: { provider: "a", model: "b" } },
       }),
-    ).toContain("without both `provider` and `model`");
+    ).toContain("has moved into each mode's `defaultModel`");
   });
 
   it("patch 里没有遗留的 preset 行或 relax-intent：模式不再是 Cordis 子树", () => {

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import { scopeRow } from "@morlay/dsh-context-assembler/rows";
 import yaml from "js-yaml";
-import { DEFAULT_MODE, MODE_MODELS, MODE_SOURCES, type ModeSource } from "./modes.ts";
+import { DEFAULT_MODE, MODE_SOURCES, type ModeSource } from "./modes.ts";
 
 /**
  * bundle patch 的行清单：**两行**——模式本身，与模式的工具收口。
@@ -31,6 +31,7 @@ function modeConfig(source: ModeSource): Record<string, unknown> {
     allowTools: [...source.allowTools],
     ...(source.instructions === undefined ? {} : { instructions: source.instructions }),
     ...(source.runtimeContext === undefined ? {} : { runtimeContext: source.runtimeContext }),
+    ...(source.defaultModel === undefined ? {} : { defaultModel: { ...source.defaultModel } }),
   };
 }
 
@@ -43,11 +44,6 @@ export const PATCH_ROWS: readonly Record<string, unknown>[] = [
         config: {
           default: DEFAULT_MODE,
           modes: Object.fromEntries(MODE_SOURCES.map((source) => [source.id, modeConfig(source)])),
-          // 各模式的默认模型（volatile：设置页那张卡片写的就是这个路径）。当前没有配任何一条，
-          // 仍显式渲染成空对象——这份 patch 是装配层的真源，字段在不在要看得见。
-          models: Object.fromEntries(
-            Object.entries(MODE_MODELS).map(([id, model]) => [id, { ...model }]),
-          ),
         },
       },
       // 行 id 与 name 的真源在 `@morlay/dsh-context-assembler/rows` 的 `scopeRow()`：模式的收口是那个包的

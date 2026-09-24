@@ -40,7 +40,7 @@ export interface SessionModeModel {
   readonly reasoningEffort?: string;
 }
 
-/** 各模式的默认模型：模式 id → 模型；键必须在 `modes` 里（装配期校验）。 */
+/** 退役的顶层形状：模式 id → 模型（默认模型现在住在各自的模式里）。 */
 export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
 
 /**
@@ -74,6 +74,11 @@ export interface SessionMode {
    * ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
    */
   readonly runtimeContext: boolean;
+  /**
+   * 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
+   * （`defaultModel` 是它所在模式的一个可加字段）。
+   */
+  readonly defaultModel?: SessionModeModel;
 }
 
 // 每个字段都带 default：schema 的产物因此没有 `undefined` 键（`exactOptionalPropertyTypes` 下"缺省的键"
@@ -96,7 +101,6 @@ const roleSchema = z.union([z.const("main"), z.const("subagent")]);
 const modelSchema = z.object({
   provider: z
     .string()
-    .required()
     // 候选来自客户端注册的具名源 `llm-providers`：字段只说"这是选一个"，不关心行 id 与路径。
     .role("select", { source: "llm-providers" })
     .description(
@@ -107,9 +111,8 @@ const modelSchema = z.object({
     ),
   model: z
     .string()
-    .required()
-    // 候选来自客户端注册的具名源 `llm-providers`：字段只说"这是选一个"，不关心行 id 与路径。
-    .role("select", { source: "llm-providers" })
+    // 具名源 `llm-models` 自己声明依赖 `provider`（换服务商就换清单）。
+    .role("select", { source: "llm-models" })
     .description(
       localized({
         zh: "模型 id。",
@@ -124,18 +127,15 @@ const modelSchema = z.object({
   ),
 });
 
-/** 本包 config 的**源码形状**：装配层与设置页写的那个形状（`models` 是普通对象，可以整块省略）。 */
+/** 本包 config 的**源码形状**：装配层与设置页写的那个形状。 */
 export interface Config {
   /** 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。 */
   readonly default: string;
-  /** 模式清单：id → 定义。顺序即选择器里的顺序（`Object.entries` 的插入序）。 */
+  /** 模式清单：id → 定义（含各自的 `defaultModel`）。顺序即选择器里的顺序（`Object.entries` 的插入序）。 */
   readonly modes: Record<string, SessionMode>;
   /**
-   * 各模式的默认模型：模式 id → 模型。省略的模式跟着全局 `agent-default-model` 走。
-   *
-   * 它是 config 的**顶层 volatile 字段**：设置面（`ctx.configForms` → 我们那张卡片）编辑的就是它。挪进
-   * `modes.<id>` 会让设置面看不见它——`schemastery` 的 `validateVolatileSchema` 把 dict 内部一律当成
-   * blocked，而 settings 只挑得出固定路径上的 volatile 字段。
+   * 各模式默认模型曾经住在这里（模式 id → 模型）。现在住在**每个模式自己的 `defaultModel`** 里，这个字段
+   * 只剩一件事：装配期看见它还配着值就报错，提醒把它挪进对应的模式——否则它会静静地失效。
    */
   readonly models?: SessionModeModels;
 }
@@ -143,13 +143,13 @@ export interface Config {
 /**
  * schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。
  *
- * 三个字段都是 volatile：模式清单、默认模式与各模式默认模型都在行配置页上（见 `Config`）。
+ * `default` 与 `modes` 都是 volatile：默认模式与整份模式清单（含各自的 `defaultModel`）都在行配置页上。
  */
 export interface ResolvedConfig {
   readonly default: Volatile<string>;
   readonly modes: Volatile<Record<string, SessionMode>>;
-  /** 各模式的默认模型；一个都没配时是空对象（schema 的 default）。 */
-  readonly models: Volatile<SessionModeModels>;
+  /** 退役的顶层字段：解析后仍在这儿（普通值，不 volatile），装配期据此发现"还配着值"并报错。 */
+  readonly models: SessionModeModels;
 }
 
 const modeSchema: z<SessionMode> = z.object({
@@ -208,6 +208,21 @@ const modeSchema: z<SessionMode> = z.object({
         en: "Whether the runtime snapshot applies (sandbox and approval policy).",
       }),
     ),
+  /**
+   * 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
+   * schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
+   */
+  defaultModel: modelSchema
+    // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
+    // 凭空多出一行；给了 null 反而让它保持缺失（页面按非必填处理，从候选加成）。
+    // 类型上放行一次：`null` 在这里只是"没有这个键"的写法，schema 的输入形状不接受它。
+    .default(null as unknown as SessionModeModel)
+    .description(
+    localized({
+      zh: "这个模式的默认模型；省略就跟全局默认模型。只在会话还没有模型事实时接管。",
+      en: "Default model for this mode; unset follows the global default. Applies only while a session has no model fact yet.",
+    }),
+  ),
 });
 
 export const Config: z<Config, ResolvedConfig> = z.object({
@@ -235,19 +250,14 @@ export const Config: z<Config, ResolvedConfig> = z.object({
       }),
     )
     .volatile(),
-  models: z
-    .dict(modelSchema)
-    .default({})
-    .description(
-      localized({
-        zh: "各模式的默认模型；留空就跟全局默认模型。",
-        en: "Default model per mode; unset follows the global default model.",
-      }),
-    )
-    .volatile(),
+  /**
+   * 退役字段：默认模型住在每个模式自己的 `defaultModel` 里。这里留着是为了**报错**（见 `configProblem`），
+   * 页面上不出现（`hidden()`）。
+   */
+  models: z.dict(modelSchema).default({}).hidden(),
 });
 
-/** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、配了的默认模型。 */
+/** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、每个模式自己的默认模型。 */
 interface Validated {
   readonly default: string;
   readonly modes: Readonly<
@@ -256,13 +266,12 @@ interface Validated {
       {
         readonly allowTools?: readonly string[];
         readonly role?: readonly string[];
+        readonly defaultModel?: { readonly provider?: string; readonly model?: string };
       }
     >
   >;
-  /** 配了的默认模型；省略等于"一个都没配"（源码形状与解析后的形状都能校验）。 */
-  readonly models?: Readonly<
-    Record<string, { readonly provider?: string; readonly model?: string }>
-  >;
+  /** 退役的顶层字段：还配着值就报错（它已经不再生效）。 */
+  readonly models?: Readonly<Record<string, unknown>>;
 }
 
 /** 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。 */
@@ -285,22 +294,25 @@ export function configProblem(config: Validated): string | undefined {
   if (empty.length > 0) {
     return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
   }
-  // `models` 的键是模式 id：写错一个就成了"配了但永远不会生效"的孤儿，装配期就得看见。
-  const unknown = Object.keys(config.models ?? {}).filter((id) => !ids.includes(id));
-  if (unknown.length > 0) {
-    return `session-mode: \`models\` names unknown mode(s) ${unknown.join(", ")}; available are ${ids.join(", ")}`;
+  // 退役的顶层字段还配着值：它已经不再生效，别让一份"看着像配过"的配置静静地失效。
+  if (Object.keys(config.models ?? {}).length > 0) {
+    return "session-mode: `models` has moved into each mode's `defaultModel`; move the entries there and drop the top-level `models`";
   }
-  const partial = Object.entries(config.models ?? {})
-    .filter(
-      ([, model]) =>
+  // 每个模式自己的默认模型：成对给全（`provider` 与 `model` 都要）。
+  const partial = Object.entries(config.modes)
+    .filter(([, mode]) => {
+      const model = mode.defaultModel;
+      if (model === undefined) return false;
+      return (
         model.provider === undefined ||
         model.model === undefined ||
         model.provider.length === 0 ||
-        model.model.length === 0,
-    )
+        model.model.length === 0
+      );
+    })
     .map(([id]) => id);
   if (partial.length > 0) {
-    return `session-mode: mode(s) ${partial.join(", ")} declare \`models\` without both \`provider\` and \`model\``;
+    return `session-mode: mode(s) ${partial.join(", ")} declare \`defaultModel\` without both \`provider\` and \`model\``;
   }
   return undefined;
 }

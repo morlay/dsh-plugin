@@ -12,7 +12,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 - `src/__tests__/patch.spec.ts`：`cordis.patch.yml` 逐字节等于 `renderPatch()`；两行（`session-mode` 与
   `context-assembler-scope`）的行 id 与名字正确，第二行**就是** `@morlay/dsh-context-assembler/rows` 的
   `scopeRow()`（单一 home）；模式清单逐项等于 `tool/modes.ts` 的源数据（含 `role`，且模式里**没有**
-  `defaultModel`）、顶层 `models` 逐项等于 `MODE_MODELS`；装配期校验（默认模式在清单里且是 `main` 角色、每个
+  `defaultModel`）；装配期校验（默认模式在清单里且是 `main` 角色、每个
   模式有白名单、`role` 非空、`models` 的键必须在清单里且每条给全 provider + model）按预期拒绝。
 - `src/__tests__/session-mode.spec.ts`：在真依赖（agent-loop testkit + scope 出口）下装一次——
   新会话读到的 persona 是默认模式的、**遮蔽部署级那层**；切到 `chat` 后 persona 换掉、工具目录只剩它那几件、
@@ -20,7 +20,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   已开始的会话拒绝切换；未知模式 / 未知会话拒绝；装配期校验直接拒绝装载。同文件还守着两块新面：
   - **角色**：`idsFor` / `roster()` 只列 `main`；`select` 拒绝非 `main` 的模式；`applyTo`（预留的指定接缝）
     能应用 `subagent` 角色的模式。
-  - **默认模型**：新会话的 `agent/request` waterfall 结果是模式配的那份（顶层 `models`）；没配的模式不插手；
+  - **默认模型**：新会话的 `agent/request` waterfall 结果是这个模式配的 `defaultModel`；没配的模式不插手；
     会话落过 `request/header`、或用户选过模型（投影 `modelSelection.pending`，用例里注册最小同 key 投影）之后
     不再兜底；子代理继承父模式（投影与 persona 都换过去），父不在场时回落默认。
   - **它是顶层 volatile**：schema 上只有 `models` 带 volatile meta（`modes` 不是）——设置面能编辑的正是它；
@@ -56,9 +56,9 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
   root ctx 调服务，绕开了 inject 白名单）。
   模式之间的**行为**差异（chat 没有动态快照、目录被收口）不在探针里判——那要建会话、跑装配，代价大于收益；
   第 1 层已经在真依赖下测过同一件事。
-- **还没进探针的**（改这条装配形状时值得加）：装配层的 `ctx.sessionModes.config.models` 是个带 `.get()` 的
-  引用、且 `ctx.settings.describe()` 里能看见 `session-mode` 这个命名空间（设置面能编辑它的前提）。两者在
-  包内已经钉住（第 1 层的 volatile 用例与 schema 断言），探针里加一条只是多一层"真装配也如此"。
+- **还没进探针的**（改这条装配形状时值得加）：`ctx.settings.describe()` 里能看见 `session-mode` 这个命名空间
+  （设置面能编辑 `default` / `modes` 的前提）。它在包内已经钉住（第 1 层的 volatile 用例与 schema 断言），
+  探针里加一条只是多一层"真装配也如此"。
 
 ## 3. lint（类型是它的一部分）
 

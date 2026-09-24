@@ -36,7 +36,7 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
 /** 浏览器半插件的字典命名空间。 */
 const NS = "session-mode";
 
-/** 这一行里需要中文文案的字段（都在 `models.<模式>` 里，所以按模板路径注册一次）。 */
+/** 这一行里需要中文文案的字段（都在 `modes.<模式>.defaultModel` 里，所以按模板路径注册一次）。 */
 const FIELDS = ["provider", "model", "reasoningEffort"] as const;
 
 /** 动态键的占位段（与通用表单的字段树同一约定）。 */
@@ -78,37 +78,13 @@ export function apply(ctx: Context): void {
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "session-mode: dictionaries");
 
-  // `models` 的候选键是模式清单的 id：清单就在**同一行**的 config 值里（`modes`），直接读它即可——同步、不依赖
-  // HTTP，值一变就让表单重算候选行。
-  // 提示面是行配置表单提供的服务：等它可用再注册（`ctx.get` 在它还没提供时拿不到，注册会被静静跳过）。
-  ctx.inject(["schemaFormHints"], (scope) =>
-    scope.effect(() => {
-      const hints = scope.schemaFormHints;
-      const forms = scope.get("configForms")?.get<Record<string, unknown>>(SESSION_MODE_NS);
-      let offKeys: (() => void) | undefined;
-      let offForms: (() => void) | undefined;
-      if (forms !== undefined) {
-        offKeys = hints.suggestKeys(SESSION_MODE_NS, ["models"], () => {
-          const modes = forms.getSnapshot().value?.["modes"];
-          return modes !== null && typeof modes === "object" ? Object.keys(modes) : [];
-        });
-        offForms = forms.subscribe(() => {
-          hints.refresh();
-        });
-      }
-      return () => {
-        offKeys?.();
-        offForms?.();
-      };
-    }, "session-mode: model key hints"),
-  );
-
-  // 本行的配置页由通用 schema 表单按 volatile 字段生成；这里给 `models` 里的三个字段补中文标签与说明。
+  // 本行的配置页由通用 schema 表单按 volatile 字段生成；这里给 `modes.<模式>.defaultModel` 里的三个字段补
+  // 中文标签与说明。
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
       const hints = scope.schemaFormHints;
       const offs = FIELDS.map((key) =>
-        hints.describe(SESSION_MODE_NS, ["models", DYNAMIC, key], () => ({
+        hints.describe(SESSION_MODE_NS, ["modes", DYNAMIC, "defaultModel", key], () => ({
           label: t(key),
           hint: t(`${key}Hint` as "providerHint"),
         })),

@@ -61,9 +61,9 @@ describe("会话模式 的字段文案", () => {
 
     expect(b.dictionaries).toEqual(["session-mode"]);
     expect(b.described.map((entry) => ({ ns: entry.ns, path: entry.path }))).toEqual([
-      { ns: "session-mode", path: ["models", "*", "provider"] },
-      { ns: "session-mode", path: ["models", "*", "model"] },
-      { ns: "session-mode", path: ["models", "*", "reasoningEffort"] },
+      { ns: "session-mode", path: ["modes", "*", "defaultModel", "provider"] },
+      { ns: "session-mode", path: ["modes", "*", "defaultModel", "model"] },
+      { ns: "session-mode", path: ["modes", "*", "defaultModel", "reasoningEffort"] },
     ]);
   });
 

@@ -22,9 +22,11 @@ export interface ModeSource {
   readonly allowTools: readonly string[];
   readonly instructions?: boolean;
   readonly runtimeContext?: boolean;
+  /** 这个模式的默认模型（省略就跟全局 `agent-default-model`）。 */
+  readonly defaultModel?: ModeModelSource;
 }
 
-/** 一个模式的默认模型源定义：就是 `session-mode` 行 `config.models[<模式 id>]`。 */
+/** 一个模式的默认模型源定义：`modes.<模式 id>.defaultModel`。 */
 export interface ModeModelSource {
   readonly provider: string;
   readonly model: string;
@@ -48,14 +50,6 @@ const CHAT_PERSONA = {
 
 /** 新会话用哪个模式（`session-mode` 行的 `config.default`）。 */
 export const DEFAULT_MODE = "coding";
-
-/**
- * 各模式的默认模型（`session-mode` 行 `config.models`：模式 id → 模型）。
- *
- * 当前为空——两个模式都跟着全局 `agent-default-model`。要改某个模式的默认模型就写在这里（键必须是
- * `MODE_SOURCES` 里的 id，装配期校验会拒绝孤儿键）；用户在设置页写的那份由 settings 的用户层叠在它上面。
- */
-export const MODE_MODELS: Readonly<Record<string, ModeModelSource>> = {};
 
 /** 两个模式：编码与对话。 */
 export const MODE_SOURCES: readonly ModeSource[] = [

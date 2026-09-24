@@ -227,14 +227,14 @@ describe("模式的读取与切换", () => {
   });
 });
 
-/** 带角色与默认模型的 fixture：coding 配模型、chat 只给角色、reviewer 只给 subagent 角色。 */
+/** 带角色与默认模型的 fixture：coding 自带模型、chat 只给角色、reviewer 只给 subagent 角色。 */
 const EXTENDED: Config = {
   default: "coding",
-  // 默认模型的 home 是 config 的**顶层 volatile 字段**（不在模式定义里）：设置页编辑的就是这个路径。
-  models: { coding: { provider: "ollama", model: "coding-model", reasoningEffort: "high" } },
   modes: {
     coding: {
       ...CONFIG.modes["coding"]!,
+      // 默认模型的 home 是**模式自己**：装配层写在这里，设置页编辑的也是这个路径。
+      defaultModel: { provider: "ollama", model: "coding-model", reasoningEffort: "high" },
     },
     chat: { ...CONFIG.modes["chat"]!, role: ["main"] },
     reviewer: {
@@ -278,7 +278,7 @@ describe("模式的角色与默认模型", () => {
     await expect(ctx.sessionModes.select(agent.id, "reviewer")).rejects.toThrow("不是用户可选的");
   });
 
-  it("新会话用模式的默认模型（顶层 `models`）兜底请求路由", async () => {
+  it("新会话用模式自己的默认模型兜底请求路由", async () => {
     const { ctx, agent } = await mount(EXTENDED);
 
     const route = await requestRoute(agent);
@@ -353,53 +353,38 @@ describe("模式的角色与默认模型", () => {
     }
   });
 
-  it("装配期校验：`models` 的键写错、或 provider / model 缺一半都拒绝装载", async () => {
+  it("装配期校验：`defaultModel` 的 provider / model 缺一半就拒绝装载", async () => {
     await expectRefused(
       {
         default: "coding",
-        modes: EXTENDED.modes,
-        models: { absent: { provider: "ollama", model: "m" } },
-      },
-      "unknown mode(s) absent",
-    );
-    await expectRefused(
-      {
-        default: "coding",
-        modes: EXTENDED.modes,
-        models: { coding: { provider: "ollama", model: "" } },
+        modes: {
+          ...EXTENDED.modes,
+          coding: { ...EXTENDED.modes["coding"]!, defaultModel: { provider: "ollama", model: "" } },
+        },
       },
       "without both `provider` and `model`",
     );
   });
+
+  it("装配期校验：退役的顶层 `models` 还配着值就拒绝装载（提醒挪进模式）", async () => {
+    await expectRefused(
+      {
+        default: "coding",
+        modes: EXTENDED.modes,
+        models: { coding: { provider: "ollama", model: "m" } },
+      },
+      "has moved into each mode's `defaultModel`",
+    );
+  });
 });
 
-describe("各模式的默认模型是顶层 volatile 字段", () => {
-  it("三个字段都是 volatile——模式清单、默认模式与各模式默认模型都在行配置页上", () => {
-    // settings 的 describe 用 `volatileForm(schema)` 挑可编辑字段：volatile 节点本身、且路径必须固定。
-    // dict 内部的字段一律 blocked，所以"某个模式的默认模型"只能挂在顶层（见 ADR）。
+describe("默认模型住在模式定义里", () => {
+  it("模式清单与默认模式是 volatile，默认模型跟着模式一起上页面", () => {
     expect(plugin.Config.dict?.["default"]?.meta.volatile).toBe(true);
     expect(plugin.Config.dict?.["modes"]?.meta.volatile).toBe(true);
-    expect(plugin.Config.dict?.["models"]?.meta.volatile).toBe(true);
-    // host 的投影因此会带上整段（页面据此出现），而不是只有 models。
+    // 顶层不再有那份映射；`defaultModel` 不单独标 volatile（外层 modes 已经是）。
+    expect(plugin.Config.dict?.["models"]?.meta.volatile).not.toBe(true);
     expect(volatileForm(plugin.Config as never)).toBeDefined();
-  });
-
-  it("解析之后它是个稳定引用：写进引用的新值立刻被下一次请求读到（这行不重挂）", async () => {
-    const { ctx, agent } = await mount(EXTENDED);
-    expect(await requestRoute(agent)).toMatchObject({
-      provider: "ollama",
-      model: "coding-model",
-    });
-
-    // 模拟 settings 的 volatile 提交：它写的就是这个引用（符号的 home 在 cosmokit 的 volatile.ts）。
-    const write = Symbol.for("cosmokit.volatile.write");
-    const ref = ctx.sessionModes.models as unknown as Record<symbol, (value: unknown) => void>;
-    ref[write]!({ coding: { provider: "vendor", model: "vendor-model" } });
-
-    expect(await requestRoute(agent)).toMatchObject({
-      provider: "vendor",
-      model: "vendor-model",
-    });
   });
 });
 

@@ -23,7 +23,6 @@
  */
 
 import { Service, type Context } from "@deepseek-ai/cordis";
-import type { Volatile } from "@deepseek-ai/cosmokit";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 // 会话级模型事实（投影 `modelSelection` 与事件 `model/selection`）由上游 session-controller 声明；
 // 那一行可能没装（headless 部署），所以读它时按"可能为空"处理。
@@ -39,7 +38,6 @@ import {
   configProblem,
   type ResolvedConfig,
   type SessionMode,
-  type SessionModeModels,
   type SessionModeRole,
 } from "./modes.ts";
 import { installPersona } from "./persona.ts";
@@ -67,7 +65,6 @@ export type {
   ResolvedConfig,
   SessionMode,
   SessionModeModel,
-  SessionModeModels,
   SessionModePersona,
   SessionModeRole,
 } from "./modes.ts";
@@ -124,9 +121,6 @@ export class SessionModes extends Service {
     modes: Record<string, SessionMode>;
   };
 
-  /** 各模式的默认模型：volatile 引用**现场读**，改它不必重挂这一行（只影响还没有模型事实的会话）。 */
-  readonly models: Volatile<SessionModeModels>;
-
   constructor(ctx: Context, config: ResolvedConfig) {
     super(ctx, "sessionModes");
     // 校验看的是**值**：字段解析后都是稳定引用，`configProblem` 只认普通对象。
@@ -135,8 +129,8 @@ export class SessionModes extends Service {
       default: config.default.get(),
       modes: structuredClone(config.modes.get()) as Record<string, SessionMode>,
     };
-    this.models = config.models;
-    const problem = configProblem({ ...this.config, models: this.models.get() });
+    // 退役的顶层 `models` 还配着值就让装配期报错。
+    const problem = configProblem({ ...this.config, models: config.models });
     if (problem !== undefined) throw new Error(problem);
     ctx.sessionProjections.register(sessionModeProjection);
     // 会话一建立就装上：这早于它的第一次装配，persona 因此一定在装配之前注册好。
@@ -292,19 +286,16 @@ export class SessionModes extends Service {
   }
 
   /**
-   * 模式的默认模型（config 顶层 `models.<模式 id>`）兜底：只在会话**尚无任何模型事实**（没选过模型、也
+   * 模式的默认模型（`modes.<模式 id>.defaultModel`）兜底：只在会话**尚无任何模型事实**（没选过模型、也
    * 还没跑过请求）时接管这一请求的路由；一旦用户选过（投影 `pending`）或会话已经落过 header，就不再插手。
    *
-   * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。
-   *
-   * 模型取自 `models`：那是个 volatile 引用，设置页保存时只有**引用里的值**变，这一行不重挂，所以每次请求都现场
-   * `.get()`（与 `llm-openai-compatible` 读 `config.providers` 同一种读法）。`default` / `modes` 相反——它们是
-   * 装配期快照，改了要等 Loader 重挂这一行。
+   * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。读的是构造
+   * 时那份模式清单快照：设置页保存会让这一行重挂（`reconcileProfilePatches`），新定义随重挂生效。
    */
   private installDefaultModel(agent: Agent, modeId: string): () => void {
     return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next();
-      const model = this.models.get()[modeId];
+      const model = this.config.modes[modeId]?.defaultModel;
       if (model === undefined) return resolved;
       // 上游 session-controller 没装（headless）时这个投影不存在，按"没有选择"处理。
       const pending = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection")?.pending;

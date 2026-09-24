@@ -64,6 +64,5 @@
               - web_fetch
             instructions: false
             runtimeContext: false
-        models: {}
     - id: context-assembler-scope
       name: "@morlay/dsh-context-assembler/scope"

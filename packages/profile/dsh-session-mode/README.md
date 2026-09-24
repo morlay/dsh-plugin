@@ -1,7 +1,7 @@
 # @morlay/dsh-session-mode
 
 会话模式：`coding` 与 `chat` 各是**一份数据**——一段提示词（persona）、一组能力开关与一个**角色**
-（`role`：谁可以用它）；各模式的**默认模型**是同一份 config 顶层的 `models`。本包把它按会话应用到会话自己的
+（`role`：谁可以用它）；各模式的**默认模型**是模式自己的 `defaultModel`。本包把它按会话应用到会话自己的
 作用域上，并提供会话里的选择面（切换 chip 与头部标签）；各模式的默认模型落在**行配置页**上——那是通用
 schema 表单按 volatile 字段自动生成的，本包只给它补字段文案。**模式不是 Cordis 子树**：官方 agent preset 那一整套在装配层被
 关掉，禁哪些行归 [`@morlay/dsh-profile`](../dsh-profile/README.md)（真源 `tool/patch.ts` 的 `PATCH_ROWS`），
@@ -11,7 +11,7 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
 
 | 行                        | 是什么                                                                                                                                   |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `session-mode`            | 模式清单、默认模式与各模式的默认模型（`config.modes` / `config.default` / `config.models`）+ 按会话应用 persona + 清单与切换的 HTTP 路由 |
+| `session-mode`            | 模式清单、默认模式与各模式自己的默认模型（`config.modes` / `config.default`）+ 按会话应用 persona + 清单与切换的 HTTP 路由 |
 | `context-assembler-scope` | [`@morlay/dsh-context-assembler/scope`](../../context/dsh-context-assembler/README.md)：按会话收口                                       |
 
 工具行、注入通道与压缩都不在这里——它们由各自的 bundle 在 profile 平面装一次（`dsh.profile.bundles` 里的
@@ -25,8 +25,6 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
   name: "@morlay/dsh-session-mode"
   config:
     default: coding
-    models: # 各模式的默认模型（顶层；键必须是 modes 里的 id）
-      chat: { provider: ollama, model: deepseek-v4.1-flash, reasoningEffort: high }
     modes:
       chat:
         name: 对话模式
@@ -37,6 +35,8 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
         allowTools: [ask_user_question, web_search, web_fetch]
         instructions: false
         runtimeContext: false
+        # 这个模式的默认模型（可选；省略就跟全局 agent-default-model）：
+        defaultModel: { provider: ollama, model: deepseek-v4.1-flash, reasoningEffort: high }
 ```
 
 | 字段                   | 落到哪                                                                                       |
@@ -47,8 +47,9 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
 | `allowTools`           | `context-assembler-scope` 收口：模型目录、`tool:<名字>` 说明、执行层 guard                   |
 | `instructions`         | 同上：`false` 表示这个会话不要任何 instruction 类注入（工作区指令、技能目录、用法正文）      |
 | `runtimeContext`       | 同上：`false` 表示不要动态快照（文件沙箱策略、审批策略）                                     |
+| `defaultModel`         | 这个模式的默认模型（可选）：会话还没有模型事实时接管请求路由，不写会话事件                   |
 
-顶层还有 `default` 与 `models`（**都不在模式里**）：`default` 是新会话的起始模式，`models` 是各模式的默认模型
+顶层还有 `default`（不在模式里）：它是新会话的起始模式；各模式的默认模型在模式自己的 `defaultModel` 里
 （`provider` / `model` / `reasoningEffort?`，不写就跟全局 `agent-default-model`）。这三个字段都是 config 的
 **volatile** 字段，`@morlay/dsh-client-ui-schema-form` 为这一行（`session-mode`）生成的行配置页编辑的就是它们：
 模式清单（每个模式的 persona / 允许工具 / 角色）、默认模式、以及各模式的默认模型（按模式清单列出行）。
@@ -57,13 +58,13 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
 
 | 字段                | 改了之后                                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models`            | **当场生效**（volatile 引用，每次请求现场读）——只影响还没有模型事实的会话                                                       |
-| `default` / `modes` | 等 Loader 重挂这一行（settings 写完会重装被改的行）；**已运行会话不自动换定义**，重挂后新建的会话或重新应用模式的会话才用新定义 |
+| `default` / `modes` | 等 Loader 重挂这一行（settings 写完会重装被改的行）；**已运行会话不自动换定义**，重挂后新建的会话或重新应用模式的会话才用新定义（各模式的 `defaultModel` 在 `modes` 里，同一条） |
 
 模式名与说明是数据、不做语言翻译（`tool/modes.ts` 里只有中文）——取舍如此，不是漂移。
 
-`models` 为什么在顶层、不在模式里：设置面只编辑 volatile 字段、且只认固定路径（dict 内部一律 blocked）。
-判据与取舍见 [ADR 模式默认模型搬到顶层 volatile](./.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)。
+默认模型为什么能住在模式里：`modes` 整段 volatile，整棵子树都在设置面的投影里，`defaultModel` 作为它下面的普通
+字段跟着上页面（自己不必、也不许再标一层 volatile）。判据见
+[ADR 默认模型住在模式定义里](./.agents/adrs/20260925-默认模型住在模式定义里.md)。
 
 **自定义就是改这份 config**：profile 的用户 patch 层可以整体改写 `config.modes`，也可以只给某个模式换提示词或
 白名单——不需要任何插件行。默认模式（`default`）也在这里：它与模式清单是同一个事实的两半。装配期的判据
@@ -85,10 +86,10 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
 - **角色**：`main` = 用户侧可选（选择器与 `select` 只认它）；`subagent` = 可作为子代理 mode 的候选。
   「按角色指派 mode」还没做——子代理现在只有"继承父"与预留的服务接缝
   （`ctx.sessionModes.applyTo(agent, mode)` / `modesFor("subagent")`）。
-- **默认模型**：`config.models[<模式 id>]` 只在会话**尚无模型事实**时接管请求路由（投影 `modelSelection`
-  没有 `pending`、`requestHeader()` 还没落）；一旦用户选过模型或会话跑过请求，就不再插手。它是**配置事实**，
-  不写会话事件——重启后仍由 config 决定，与用户在设置里做的那条会话级选择（`model/selection`）是两件事。
-  读的是 volatile **引用**（`config.models.get()`）：设置页保存只换引用里的值，这行不重挂。
+- **默认模型**：`config.modes[<模式 id>].defaultModel` 只在会话**尚无模型事实**时接管请求路由（投影
+  `modelSelection` 没有 `pending`、`requestHeader()` 还没落）；一旦用户选过模型或会话跑过请求，就不再插手。
+  它是**配置事实**，不写会话事件——重启后仍由 config 决定，与用户在设置里做的那条会话级选择
+  （`model/selection`）是两件事。读的是构造时那份模式清单快照：设置页保存会让这一行重挂，新定义随重挂生效。
 
 ## 页面上的两个位置
 
@@ -101,16 +102,16 @@ schema 表单按 volatile 字段自动生成的，本包只给它补字段文案
 `GET/POST /session-mode`，当前值走上面那条投影。
 
 本行的配置入口（`plugins.row.config`，key `@morlay/dsh-session-mode#session-mode`）由通用 schema 表单注册并渲染：
-`models` 是 dict，页面按值展开出每个模式的 `provider` / `model` / `reasoningEffort` 三行，加键即加一个模式的
-默认模型、删键即回到装配层那份。它编辑的是 `config.models`（配置事实），不是模式清单（装配数据）：
+`modes` 是 dict，页面按值展开出每个模式的定义，模式的 `defaultModel` 是它里面的一个**可加字段**（非必填：没配就
+不占行，从这一行的添加入口加成）——加出来再填 `provider` / `model` / `reasoningEffort` 三行：
 
-| 手势                 | 写                                                               |
-| -------------------- | ---------------------------------------------------------------- |
-| 给某个模式填默认模型 | `{ op: 'set', path: ['models', <模式 id>], value: {…} }`         |
-| 删掉某个模式那一条   | `{ op: 'unset', path: ['models', <模式 id>] }`（回到装配层那份） |
+| 手势                 | 写                                                                     |
+| -------------------- | ---------------------------------------------------------------------- |
+| 给某个模式填默认模型 | `{ op: 'set', path: ['modes', <模式 id>, 'defaultModel'], value: {…} }` |
+| 删掉某个模式那一条   | `{ op: 'unset', path: ['modes', <模式 id>, 'defaultModel'] }`（回到"没配"，跟全局默认走） |
 
-字段文案（服务商 / 模型 / 思考档位）由本包 client 半按**模板路径**注册到提示面（`['models', '*', …]`，一次覆盖
-每个模式）；`provider` / `model` 两个选择器走**具名候选源**——schema 在字段上写 `role('select', { source })`，
+字段文案（服务商 / 模型 / 思考档位）由本包 client 半按**模板路径**注册到提示面
+（`['modes', '*', 'defaultModel', …]`，一次覆盖每个模式）；`provider` / `model` 两个选择器走**具名候选源**——schema 在字段上写 `role('select', { source })`，
 字段因此不必知道行 id 与路径：
 
 | 注册            | 候选来自                                                                                                                             |
@@ -126,7 +127,7 @@ schema 上两个字段都标了 `.role('select')`（「这里是选一个，不�
 ## 文档
 
 - 设计与取舍：[设计 会话模式](./.agents/designs/20260924-会话模式.md)、
-  [ADR 模式默认模型搬到顶层 volatile](./.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)、
+  [ADR 默认模型住在模式定义里](./.agents/adrs/20260925-默认模型住在模式定义里.md)、
   [ADR 模式的角色与默认模型](./.agents/adrs/20260923-模式角色与默认模型.md)、
   [ADR 模式不再是 Cordis 子树](./.agents/adrs/20260924-模式不再是cordis子树.md)
 - 验证判据：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)

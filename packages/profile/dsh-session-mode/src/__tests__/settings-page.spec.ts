@@ -123,14 +123,14 @@ describe("会话模式的行配置页", () => {
     expect(coding?.member).toMatchObject({ parent: ["modes"], key: "coding" });
   });
 
-  it("值里还没有默认模型的模式：不占行，而是 `models` 那一层的可添加键", () => {
+  it("还没配默认模型的模式：`defaultModel` 是它自己那一层的可添加项", () => {
     const snapshot = mounted().face().hooks.schemaForm.getSnapshot();
-    const members = snapshot.walked.filter((item) => item.member?.parent.join(".") === "models");
+    const paths = snapshot.walked.map((item) => item.path.join("."));
 
-    expect(members).toEqual([]);
-    expect(snapshot.addable.get(JSON.stringify(["models"]))?.map((option) => option.key)).toEqual([
-      "coding",
-      "chat",
-    ]);
+    // `defaultModel` 没配就没有这一行（`default(null)` 让它保持缺失）。
+    expect(paths).not.toContain("modes.coding.defaultModel");
+    expect(
+      snapshot.addable.get(JSON.stringify(["modes", "coding"]))?.map((option) => option.key),
+    ).toEqual(["defaultModel"]);
   });
 });
