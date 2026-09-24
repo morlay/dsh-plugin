@@ -1,9 +1,16 @@
 import { access, readdir, stat } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const APP_ROOT = resolve(import.meta.dirname, "..", "..");
+/**
+ * 壳包根：dev 以它作为 Electron app 目录（Electron 按壳包清单的 `main` 起主进程），
+ * bundle 从它拷 `dist/`。壳与工具拆成两个包之后，这条路径一律由 node 解析，工具里不写死包名。
+ */
+export const SHELL_PACKAGE_ROOT = dirname(
+  fileURLToPath(import.meta.resolve("@morlay/dsh-desktop-shell/package.json")),
+);
 
-export const SHELL_ENTRY = join(APP_ROOT, "dist", "index.mjs");
+export const SHELL_ENTRY = join(SHELL_PACKAGE_ROOT, "dist", "index.mjs");
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -32,20 +39,20 @@ async function checkShellBuild(): Promise<void> {
   }
   const built = (await stat(SHELL_ENTRY)).mtimeMs;
   const stale: string[] = [];
-  for (const file of await filesUnder(join(APP_ROOT, "src"))) {
+  for (const file of await filesUnder(join(SHELL_PACKAGE_ROOT, "src"))) {
     if ((await stat(file)).mtimeMs > built) stale.push(file);
   }
   if (stale.length > 0) {
     console.warn(
       `dsh-desktopify: shell build is older than ${String(stale.length)} source file(s) ` +
-        `(first: ${relative(APP_ROOT, stale[0] ?? "")}); run pnpm build — dev and bundle load ` +
-        "the built shell, not the sources",
+        `(first: ${relative(SHELL_PACKAGE_ROOT, stale[0] ?? "")}); run pnpm build — dev and bundle ` +
+        "load the built shell, not the sources",
     );
   }
 }
 
 export async function buildShell(): Promise<void> {
-  if (!(await pathExists(join(APP_ROOT, "src", "index.ts")))) {
+  if (!(await pathExists(join(SHELL_PACKAGE_ROOT, "src", "index.ts")))) {
     if (!(await pathExists(SHELL_ENTRY))) {
       throw new Error(`dsh-desktopify: packaged shell build is missing ${SHELL_ENTRY}`);
     }

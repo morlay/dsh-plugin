@@ -1,12 +1,12 @@
 import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { writeAppConfig, type AppConfig } from "../appconfig.ts";
+import { writeAppConfig, type AppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { buildDesktopApp } from "./electron-builder.ts";
 import { prepareIcons } from "./icon.ts";
 import { runPrepareRuntime } from "./prepare-runtime.ts";
 import { runPrepareSeed } from "./prepare-seed.ts";
-import { buildShell } from "./shell.ts";
+import { buildShell, SHELL_PACKAGE_ROOT } from "./shell.ts";
 import {
   PROFILE_NAME,
   buildRoot,
@@ -14,8 +14,6 @@ import {
   resolveWorkspace,
   workspaceManifest,
 } from "./workspace.ts";
-
-const APP_ROOT = resolve(import.meta.dirname, "..", "..");
 
 export interface BundleOptions {
   readonly workspace?: string;
@@ -108,7 +106,7 @@ export async function runBundle(options: BundleOptions): Promise<void> {
   await writeAppConfig(join(buildRootDir, "runtime"), appConfig);
 
   await buildDesktopApp({
-    appRoot: APP_ROOT,
+    appRoot: SHELL_PACKAGE_ROOT,
     buildRoot: buildRootDir,
     appConfig,
     icons,

@@ -538,6 +538,28 @@ importers:
         specifier: ^26.5.0
         version: 26.6.2
 
+  packages/desktop/dsh-desktop-shell:
+    dependencies:
+      electron:
+        specifier: ^44.3.0
+        version: 44.4.4(supports-color@9.4.0)
+    devDependencies:
+      '@deepseek-ai/dsh':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/apps/cli
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/boot/app-boot
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+      '@morlay/dsh-desktop-host':
+        specifier: workspace:*
+        version: link:../dsh-desktop-host
+      '@types/node':
+        specifier: ^26.5.0
+        version: 26.6.2
+
   packages/desktop/dsh-desktopify:
     dependencies:
       '@deepseek-ai/cordis':
@@ -555,6 +577,9 @@ importers:
       '@morlay/dsh-desktop-host':
         specifier: workspace:*
         version: link:../dsh-desktop-host
+      '@morlay/dsh-desktop-shell':
+        specifier: workspace:*
+        version: link:../dsh-desktop-shell
       commander:
         specifier: ^15.0.0
         version: 15.0.0

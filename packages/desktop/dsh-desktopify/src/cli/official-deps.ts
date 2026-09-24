@@ -3,7 +3,10 @@ import { access, cp, glob, mkdir, readFile, readdir, realpath, rm } from "node:f
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DESKTOP_HOST_PACKAGE, OFFICIAL_RUNTIME_PACKAGES } from "../official.ts";
+import {
+  DESKTOP_HOST_PACKAGE,
+  OFFICIAL_RUNTIME_PACKAGES,
+} from "@morlay/dsh-desktop-shell/official";
 
 export const DSH_PACKAGE = "@deepseek-ai/dsh";
 

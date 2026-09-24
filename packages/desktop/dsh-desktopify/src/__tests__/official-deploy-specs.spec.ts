@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { officialDeploySpecs } from "../cli/official-deps.ts";
-import { OFFICIAL_PROFILE_PACKAGES } from "../official-packages.generated.ts";
+import { OFFICIAL_PROFILE_PACKAGES } from "@morlay/dsh-desktop-shell/official";
 
 const roots: string[] = [];
 

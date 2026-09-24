@@ -15,14 +15,14 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
-import { PROFILE_PATCH_NAME } from "../appconfig.ts";
-import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
+import { PROFILE_PATCH_NAME } from "@morlay/dsh-desktop-shell/appconfig";
+import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 import {
   PROFILE_RUNTIME_REPORT_NAME,
   PROFILE_VENDOR_DIR_NAME,
   PROFILE_WORKSPACE_NAME,
-} from "../profile-project.ts";
-import { SEED_HASH_NAME, SEED_RUNTIME_DIR_NAME } from "../seed.ts";
+} from "@morlay/dsh-desktop-shell/profile-project";
+import { SEED_HASH_NAME, SEED_RUNTIME_DIR_NAME } from "@morlay/dsh-desktop-shell/seed";
 import {
   DSH_PACKAGE,
   closurePackageDirs,

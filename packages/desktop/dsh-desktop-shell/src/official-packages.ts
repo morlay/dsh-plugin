@@ -4,10 +4,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const OFFICIAL_BUNDLES = ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"] as const;
 
-export const DESKTOPIFY_PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+export const SHELL_PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export async function collectOfficialProfilePackages(): Promise<string[]> {
-  const require = createRequire(join(DESKTOPIFY_PACKAGE_ROOT, "package.json"));
+  const require = createRequire(join(SHELL_PACKAGE_ROOT, "package.json"));
   const dshRequire = createRequire(
     join(dirname(require.resolve("@deepseek-ai/dsh/package.json")), "package.json"),
   );
@@ -17,7 +17,7 @@ export async function collectOfficialProfilePackages(): Promise<string[]> {
 
   const layers = OFFICIAL_BUNDLES.map((name) =>
     appBoot.loadOverlayPatches(
-      "dsh-desktopify",
+      "dsh-desktop-shell",
       join(dirname(dshRequire.resolve(`${name}/package.json`)), "cordis.patch.yml"),
     ),
   );

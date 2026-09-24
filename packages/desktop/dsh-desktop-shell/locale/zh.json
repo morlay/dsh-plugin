@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "桌面壳",
+    "description": "dsh 桌面应用的 Electron 壳：服务应用自己的协议，经字节管道把 desktop profile 交给 host 子进程启动，并在首次启动时种入 profile。"
+  }
+}

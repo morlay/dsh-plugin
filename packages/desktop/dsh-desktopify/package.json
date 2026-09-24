@@ -23,10 +23,7 @@
     "dist"
   ],
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "exports": {
-    ".": "./src/index.ts",
     "./dev-client-bundles": "./src/dev-client/index.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
@@ -36,7 +33,6 @@
       "dsh-desktopify": "./dist/cli/index.mjs"
     },
     "exports": {
-      ".": "./dist/index.mjs",
       "./dev-client-bundles": "./dist/dev-client-bundles.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
@@ -50,6 +46,7 @@
   "dependencies": {
     "@deepseek-ai/dsh": "workspace:*",
     "@morlay/dsh-desktop-host": "workspace:*",
+    "@morlay/dsh-desktop-shell": "workspace:*",
     "commander": "^15.0.0",
     "electron": "^44.3.0",
     "electron-builder": "^26.16.1",

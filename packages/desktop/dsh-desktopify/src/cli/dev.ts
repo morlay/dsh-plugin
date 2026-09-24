@@ -14,7 +14,7 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { writeAppConfig } from "../appconfig.ts";
+import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import {
   ensureClientBundlePlaceholders,
   installProfilePatch,
@@ -29,8 +29,8 @@ import {
   toolModulesDir,
   type OfficialResolutionInput,
 } from "./official-deps.ts";
-import { DESKTOP_HOST_PACKAGE } from "../official.ts";
-import { buildShell, SHELL_ENTRY } from "./shell.ts";
+import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
+import { buildShell, SHELL_ENTRY, SHELL_PACKAGE_ROOT } from "./shell.ts";
 import {
   PROFILE_NAME,
   buildRoot,
@@ -332,9 +332,9 @@ async function launchElectron(
       `--inspect=127.0.0.1:${String(mainPort)}`,
       `--remote-debugging-port=${String(rendererPort)}`,
       `--user-data-dir=${userData}`,
-      APP_ROOT,
+      SHELL_PACKAGE_ROOT,
     ],
-    APP_ROOT,
+    SHELL_PACKAGE_ROOT,
     environment,
   );
 }

@@ -5,7 +5,7 @@
 **现象**
 
 重种 profile 时，除 `cordis.patch.yml` 之外的一切都按原样替换（整目录替换 + 种子覆盖），只有这一份例外：重种
-前读出用户那份、种完放回去（[`seed.ts` 的 `ensureSeedProfile`](../../src/seed.ts)）。原因是 settings 面板把配置写在
+前读出用户那份、种完放回去（[`seed.ts` 的 `ensureSeedProfile`](../../../dsh-desktop-shell/src/seed.ts)）。原因是 settings 面板把配置写在
 这份文件里，替换它等于每次重打包 / 升级都清掉用户设置。
 
 **代价**

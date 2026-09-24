@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { AppConfig } from "../appconfig.ts";
+import type { AppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { prepareShellAppDirectory } from "../cli/electron-builder.ts";
 
 const roots: string[] = [];

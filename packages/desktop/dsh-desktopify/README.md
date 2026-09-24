@@ -2,6 +2,10 @@
 
 把任意 dsh 工作区打包 / 运行为桌面应用的工具：`dev` 链接工作区直接跑，`bundle` 产出静态、无签名的应用目录。
 
+本包只做**工具**（CLI）：壳本身是独立的 [`@morlay/dsh-desktop-shell`](../dsh-desktop-shell/README.md)——`dev` 以
+它的包目录为 Electron app 启动，`bundle` 把它的 `dist/` 复制成最小壳目录。拆包的理由与边界见
+[设计 壳独立成包](../dsh-desktop-shell/.agents/designs/20260924-壳独立成包.md)。
+
 实现机制（壳与 host 协议、依赖闭包与种子指纹、profile 安装、XDG 路径与 shell 注入）见
 [设计 桌面化工具](./.agents/designs/20260917-桌面化工具.md)；自研离线打包器（而非直接用上游桌面应用）的决策见
 [ADR-20260917-自研离线桌面打包器而非直接用上游桌面应用](../../../.agents/adrs/20260917-自研离线桌面打包器而非直接用上游桌面应用.md)。
@@ -15,7 +19,7 @@
 
 工作区取首个位置参数（缺省当前目录），CLI 会把它写进 `DSH_DESKTOP_WORKSPACE`；工具内不写死任何 app 路径或名字。dev 两种形态的数据面共用工作区的 `.dsh-store`（`DSH_HOME`；profile 名 `desktop` / `web` 互不冲突），只有 Electron 的浏览器数据落在构建目录 `<workspace>/node_modules/.dsh-desktopify/development/electron-user-data`。`--web` 会把 web profile 的装配清单（`dsh.profile.bundles`）刷成工作区定义的那份：清单决定 patch 层的顺序，profile 里种子留下的旧清单会让后装 bundle 插的行打不到前面层的配置（只 warn 后跳过）。
 
-`--home <spec>` 把数据面换到别处，取值与工作区的 `dshHome` 配置同构（解析只有一份，见 [`src/dshhome.ts`](./src/dshhome.ts)）：
+`--home <spec>` 把数据面换到别处，取值与工作区的 `dshHome` 配置同构（解析只有一份，见 [`src/dshhome.ts`](../dsh-desktop-shell/src/dshhome.ts)）：
 
 | `--home` | 数据面                                               |
 | -------- | ---------------------------------------------------- |
@@ -25,8 +29,8 @@
 | 绝对路径 | 原样使用                                             |
 
 「打包形态才复现」的问题（如内存增长）用 `just custom dev --home=xdg` 就能让 dev 跑真实数据；`DSH_APP_DSH_HOME` 仍是壳里的最高优先覆盖。
-壳产物由 `pnpm build` 生成，dev / bundle 只校验它在，不重建——源码形态下产物比源码旧会打印警告（改了壳没重建的话，
-打包出来的 app 跑的还是旧壳）。随包 Node / pnpm 载荷的准备与校验、profile 种子生成是 `bundle` 的内部步骤，
+壳产物（[`@morlay/dsh-desktop-shell`](../dsh-desktop-shell/README.md) 的 `dist/`）由 `pnpm build` 生成，dev / bundle
+只校验它在，不重建——源码形态下产物比源码旧会打印警告（改了壳没重建的话，打包出来的 app 跑的还是旧壳）。随包 Node / pnpm 载荷的准备与校验、profile 种子生成是 `bundle` 的内部步骤，
 不单独暴露命令。本仓库示例工作区：`just custom desktop`（dev）/ `just custom bundle`（打包）。
 
 ## 工作区契约（package.json）
@@ -85,7 +89,8 @@
 - `vendor/deepseek-harness` 已构建（`just vendor prepare`：dev 需要 dsh CLI；后端变体
   [`@morlay/dsh-desktop-host`](../dsh-desktop-host/README.md) 运行期从部署载荷的 `node_modules` 解析上游
   `@deepseek-ai/*` 包）。
-- 工具与后端变体都已构建（`pnpm build`）：dev / bundle 用 `@morlay/dsh-desktop-host` 的 `lib/index.js`。
+- 工具、壳包与后端变体都已构建（`pnpm build`）：dev / bundle 用壳包的 `dist/index.mjs`（`dev` 起的 Electron
+  按它的 `main` 加载）与 `@morlay/dsh-desktop-host` 的 `lib/index.js`。
 - 前端静态资源来自闭包内 `@deepseek-ai/dsh-web-frontend/dist`（`dsh` → `dsh-web-app` 的传递依赖），
   壳按 `<runtimeDir>/node_modules/@deepseek-ai/dsh-web-frontend/dist` 读取。
 

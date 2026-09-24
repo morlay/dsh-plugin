@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, normalize, resolve, sep } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { xdgDataHome } from "../dshhome.ts";
+import { xdgDataHome } from "@morlay/dsh-desktop-shell/dshhome";
 import { devStoreHome, resolveDevHome } from "../cli/workspace.ts";
 
 const ORIGINAL = {

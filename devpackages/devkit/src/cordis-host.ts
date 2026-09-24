@@ -82,7 +82,12 @@ export async function defineCordisPluginConfig(options?: {
       ? undefined
       : (options?.client ?? { name: await packageName(), entry: "./src/client/index.ts" });
 
-  const entry: Record<string, string> = { index: "./src/index.ts", ...options?.entries };
+  // 入口按存在性探测：`index` 是包的门面（工具类包没有它，例如只发 bin 的 CLI）。
+  const entry: Record<string, string> = {};
+  if (await entryExists(join(process.cwd(), "src", "index.ts"))) {
+    entry["index"] = "./src/index.ts";
+  }
+  Object.assign(entry, options?.entries);
   if (await entryExists(join(process.cwd(), "src", "invariant.ts"))) {
     entry["invariant"] = "./src/invariant.ts";
   }

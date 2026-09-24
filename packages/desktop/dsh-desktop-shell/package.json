@@ -1,0 +1,64 @@
+{
+  "name": "@morlay/dsh-desktop-shell",
+  "version": "0.0.1-alpha.1",
+  "description": "Electron shell for dsh desktop apps: serves the app's own <name>:// scheme, boots the desktop profile through the @morlay/dsh-desktop-host child over byte pipes, and installs the profile seed on first launch. The CLI that packages a workspace around it is @morlay/dsh-desktopify.",
+  "keywords": [
+    "desktop",
+    "dsh",
+    "electron",
+    "shell"
+  ],
+  "license": "MIT",
+  "author": "morlay",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "locale/*.json",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": "./src/index.ts",
+    "./appconfig": "./src/appconfig.ts",
+    "./dshhome": "./src/dshhome.ts",
+    "./official": "./src/official.ts",
+    "./profile-project": "./src/profile-project.ts",
+    "./seed": "./src/seed.ts",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./appconfig": "./dist/appconfig.mjs",
+      "./dshhome": "./dist/dshhome.mjs",
+      "./official": "./dist/official.mjs",
+      "./profile-project": "./dist/profile-project.mjs",
+      "./seed": "./dist/seed.mjs",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "gen:official-packages": "tsx scripts/gen-official-packages.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "electron": "^44.3.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@local/devkit": "workspace:*",
+    "@morlay/dsh-desktop-host": "workspace:*",
+    "@types/node": "^26.5.0"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  }
+}

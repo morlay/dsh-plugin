@@ -9,7 +9,7 @@ import {
   officialClosure,
   officialDependencySpecs,
 } from "../cli/official-deps.ts";
-import { DESKTOP_HOST_PACKAGE } from "../official.ts";
+import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
 
 const TOOL_ROOT = dirname(
   fileURLToPath(import.meta.resolve("@morlay/dsh-desktopify/package.json")),

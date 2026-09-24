@@ -1,6 +1,6 @@
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { PROFILE_PATCH_NAME } from "../appconfig.ts";
+import { PROFILE_PATCH_NAME } from "@morlay/dsh-desktop-shell/appconfig";
 import type { DevWebConfig } from "./workspace.ts";
 
 export const DEV_WEB_OVERLAY = "dev-web.cordis.patch.yml";

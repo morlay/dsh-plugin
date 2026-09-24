@@ -2,7 +2,7 @@ import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { build, type CliOptions } from "electron-builder";
-import type { AppConfig } from "../appconfig.ts";
+import type { AppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import type { PreparedIcons } from "./icon.ts";
 
 type DesktopConfiguration = Exclude<NonNullable<CliOptions["config"]>, string>;

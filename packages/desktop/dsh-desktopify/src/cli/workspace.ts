@@ -1,7 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { resolveConfiguredHome } from "../dshhome.ts";
-import { OFFICIAL_PROFILE_BUNDLES } from "../official.ts";
+import { resolveConfiguredHome } from "@morlay/dsh-desktop-shell/dshhome";
+import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 
 export const PROFILE_NAME = "desktop";
 
