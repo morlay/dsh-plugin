@@ -160,6 +160,27 @@ hints?.select("session-mode", ["models", "*", "model"], {
 主动调一次 `hints.refresh()`。选模型那一套（provider 目录 + 模型清单）的落点见
 [`dsh-session-mode`](../../profile/dsh-session-mode/README.md)。
 
+### 按 role 认领的候选源
+
+字段自己说清"这是什么选择"，业务不去记行 id 与路径：schema 上写 `role('select', { source })`，客户端注册那个
+**具名源**（源可以被多行、多个字段复用）：
+
+```ts
+// schema 侧
+provider: z.string().role("select", { source: "llm-providers" }),
+model: z.string().role("select", { source: "llm-models" }),
+
+// client 侧（一次注册，两个源各管一件事）
+hints?.source("llm-providers", { options: () => providers.map((p) => ({ value: p.id })) });
+hints?.source("llm-models", {
+  dependsOn: [["provider"]],
+  options: (read) => modelsOf(read(["provider"])),
+});
+```
+
+`kind` 是 `unknown` 的值、字段名换了行，源照样对得上——**认领靠 role，不靠 `ns + path`**。没写 `source`、或那个源
+没注册时，退回按路径登记的那份（`hints.select(ns, path, …)` 仍然有效）；两者都没有就还是文本编辑。
+
 ## 声明自定义属性
 
 schemastery 的自定义属性位是 **`meta.extra`**（`any`），公开设置方法是 `.role(名字, extra)`——上游自己也这么用

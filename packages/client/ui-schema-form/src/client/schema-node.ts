@@ -148,7 +148,8 @@ function metaOf(schema: SchemaNode): FieldMeta {
     disabled: meta.disabled === true,
     collapse: meta.collapse === true,
     badges: badgesOf(meta),
-    pattern: meta.pattern?.source,
+    // `toJSON()` 之后 pattern 已经是字符串（source），只有直接传 schema 时才是 RegExp。
+    pattern: typeof meta.pattern === "string" ? meta.pattern : (meta.pattern?.source ?? undefined),
     min: meta.min,
     max: meta.max,
     step: meta.step,

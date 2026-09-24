@@ -97,6 +97,22 @@ export interface SchemaFormHintsFace {
   select(ns: string, path: readonly string[], spec: SelectSpec): () => void;
 
   /**
+   * 注册一个**具名候选源**：schema 上用 `role('select', { source })` 认领它，字段因此不必在客户端按 ns/path
+   * 登记——同一个源可以被多行、多个字段复用（「服务商」「模型」就是这种）。
+   * @param name - 源的名字（schema 的 `role` extra 里写的那一个）。
+   * @param spec - 候选取法与它依赖的兄弟字段。
+   * @returns 注销函数。
+   */
+  source(name: string, spec: SelectSpec): () => void;
+
+  /**
+   * 读一个具名候选源。
+   * @param name - 源的名字。
+   * @returns 该源的读数；没注册过就是 `undefined`。
+   */
+  sourceFor(name: string): SelectSpec | undefined;
+
+  /**
    * 读某处当前声明的候选值读数。
    * @param ns - settings 命名空间。
    * @param path - 该字段的路径。
@@ -110,6 +126,7 @@ export class SchemaFormHints extends Service implements SchemaFormHintsFace {
   readonly #readers = new Map<string, SuggestedKeysReader>();
   readonly #texts = new Map<string, FieldTextReader>();
   readonly #selects = new Map<string, SelectSpec>();
+  readonly #sources = new Map<string, SelectSpec>();
   readonly #listeners = new Set<() => void>();
 
   /** @param ctx - 提供本服务的插件上下文。 */
@@ -147,6 +164,26 @@ export class SchemaFormHints extends Service implements SchemaFormHintsFace {
   /** @param ns - settings 命名空间。 @param path - 字段路径。 @returns 该处注册的候选读数。 */
   selectFor(ns: string, path: readonly string[]): SelectSpec | undefined {
     return lookup(this.#selects, ns, path);
+  }
+
+  /**
+   * @param name - 源的名字。
+   * @param spec - 候选取法与依赖。
+   * @returns 注销函数。
+   */
+  source(name: string, spec: SelectSpec): () => void {
+    this.#sources.set(name, spec);
+    this.#publish();
+    return () => {
+      if (this.#sources.get(name) !== spec) return;
+      this.#sources.delete(name);
+      this.#publish();
+    };
+  }
+
+  /** @param name - 源的名字。 @returns 该源注册的候选读数。 */
+  sourceFor(name: string): SelectSpec | undefined {
+    return this.#sources.get(name);
   }
 
   /**

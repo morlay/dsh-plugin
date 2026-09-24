@@ -25,8 +25,15 @@ import {
 
 afterEach(cleanup);
 
-const t = ((key: string) =>
-  (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
+const t = ((key: string, params?: Record<string, unknown>) => {
+  const template = (zh as unknown as Record<string, string>)[key] ?? key;
+  return params === undefined
+    ? template
+    : template.replace(/\{(\w+)\}/g, (_match, name: string) => {
+        const value = params[name];
+        return typeof value === "string" || typeof value === "number" ? String(value) : "";
+      });
+}) as unknown as SchemaFormTranslate;
 
 function actions(): SchemaFormActions {
   return {
@@ -156,3 +163,32 @@ describe("文本解析规则", () => {
 });
 
 void ({} as FieldNode);
+
+describe("声明了界限的字段", () => {
+  it("min / max / pattern / 字面量集合都当场说话", () => {
+    const ranged = parseFor(projectNode(new z(z.number().min(1).max(9).toJSON())), t);
+    expect(ranged("5")).toEqual({ kind: "value", value: 5 });
+    expect(ranged("0")).toEqual({
+      kind: "invalid",
+      message: zh.invalidRange.replace("{min}", "1").replace("{max}", "9"),
+    });
+    expect(ranged("99")).toMatchObject({ kind: "invalid" });
+
+    const lowerOnly = parseFor(projectNode(new z(z.number().min(1).toJSON())), t);
+    expect(lowerOnly("0")).toEqual({
+      kind: "invalid",
+      message: zh.invalidMin.replace("{min}", "1"),
+    });
+
+    const patterned = parseFor(projectNode(new z(z.string().pattern(/^sk-/).toJSON())), t);
+    expect(patterned("sk-abc")).toEqual({ kind: "value", value: "sk-abc" });
+    expect(patterned("abc")).toMatchObject({ kind: "invalid" });
+
+    const enumerated = parseFor(projectNode(new z(z.union(["wal", "delete"]).toJSON())), t);
+    expect(enumerated("wal")).toEqual({ kind: "value", value: "wal" });
+    expect(enumerated("nope")).toEqual({
+      kind: "invalid",
+      message: zh.invalidChoice.replace("{choices}", "wal / delete"),
+    });
+  });
+});

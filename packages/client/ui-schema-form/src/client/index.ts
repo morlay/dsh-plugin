@@ -133,6 +133,7 @@ export function apply(ctx: Context): void {
         keysFor: (path) => hints.keysFor(ns, path),
         textFor: (path) => hints.textFor(ns, path),
         selectFor: (path) => hints.selectFor(ns, path),
+        sourceFor: (name) => hints.sourceFor(name),
       },
     });
     const face = controller.face();

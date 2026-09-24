@@ -174,3 +174,17 @@ describe("模板路径", () => {
     off();
   });
 });
+
+describe("具名候选源", () => {
+  it("注册后能按名字读到，注销只认自己那一次", () => {
+    const hints = service();
+    const first = hints.source("llm-providers", { options: () => [{ value: "a" }] });
+    const second = hints.source("llm-providers", { options: () => [{ value: "b" }] });
+
+    expect(hints.sourceFor("llm-providers")?.options(() => undefined)).toEqual([{ value: "b" }]);
+    first();
+    expect(hints.sourceFor("llm-providers")?.options(() => undefined)).toEqual([{ value: "b" }]);
+    second();
+    expect(hints.sourceFor("llm-providers")).toBeUndefined();
+  });
+});

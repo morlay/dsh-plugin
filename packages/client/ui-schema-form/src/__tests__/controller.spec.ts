@@ -52,7 +52,8 @@ function mounted(
   scope: FakeScope,
   describeFace = fakeDescribe([]),
   hints?: {
-    selectFor: (path: readonly string[]) => SelectSpec | undefined;
+    selectFor?: (path: readonly string[]) => SelectSpec | undefined;
+    sourceFor?: (name: string) => SelectSpec | undefined;
   },
 ) {
   const controller = new SchemaFormController(ns, {
@@ -60,7 +61,14 @@ function mounted(
     describe: describeFace,
     ...(hints === undefined
       ? {}
-      : { hints: { keysFor: () => [], textFor: () => ({}), selectFor: hints.selectFor } }),
+      : {
+          hints: {
+            keysFor: () => [],
+            textFor: () => ({}),
+            ...(hints.selectFor === undefined ? {} : { selectFor: hints.selectFor }),
+            ...(hints.sourceFor === undefined ? {} : { sourceFor: hints.sourceFor }),
+          },
+        }),
     rehydrate: (serialized) => new z(serialized as never) as unknown as SchemaNode,
     t,
     validate: (schema, value) => {
@@ -425,5 +433,50 @@ describe("判别式行 Config 的切换与补字段", () => {
         .addable.get(fieldKey([]))
         ?.map((option) => option.key),
     ).toEqual(["projectionCache"]);
+  });
+});
+
+describe("按 role 认领的候选源", () => {
+  it("`role('select', { source })` 用那个具名源，并随依赖的兄弟字段重算", () => {
+    const schema = z.object({
+      models: z.dict(
+        z.object({
+          provider: z.string().role("select", { source: "llm-providers" }),
+          model: z.string().role("select", { source: "llm-models" }),
+        }),
+      ),
+    });
+    const describeFace = fakeDescribe([view("session-mode", schema)]);
+    const scope = new FakeScope({ value: { models: { coding: { provider: "a", model: "m1" } } } });
+    // 具名源是业务注册的：这里给两个，第二个声明依赖 provider。
+    const sources: Record<string, SelectSpec> = {
+      "llm-providers": { options: () => [{ value: "a" }, { value: "b" }] },
+      "llm-models": {
+        dependsOn: [["provider"]],
+        options: (read) => (read(["provider"]) === "b" ? [{ value: "m2" }] : [{ value: "m1" }]),
+      },
+    };
+    const { controller, state } = mounted("session-mode", scope, describeFace, {
+      sourceFor: (name) => sources[name],
+    });
+
+    expect(state().options.get(fieldKey(["models", "coding", "provider"]))).toEqual([
+      { value: "a" },
+      { value: "b" },
+    ]);
+    expect(state().options.get(fieldKey(["models", "coding", "model"]))).toEqual([{ value: "m1" }]);
+
+    controller.face().set(["models", "coding", "provider"], "b");
+
+    expect(state().options.get(fieldKey(["models", "coding", "model"]))).toEqual([{ value: "m2" }]);
+  });
+
+  it("没注册那个源：字段退回文本编辑", () => {
+    const schema = z.object({ provider: z.string().role("select", { source: "missing" }) });
+    const describeFace = fakeDescribe([view("row", schema)]);
+    const scope = new FakeScope({ value: { provider: "a" } });
+    const { state } = mounted("row", scope, describeFace, { sourceFor: () => undefined });
+
+    expect(state().options.get(fieldKey(["provider"]))).toBeUndefined();
   });
 });

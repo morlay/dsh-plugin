@@ -10,19 +10,20 @@ import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-schema-form
 import { apply } from "../client/index.ts";
 
 interface Registered {
-  path: readonly string[];
+  name: string;
   spec: SelectSpec;
 }
 
 /** 一套最小的 client 面：提示面记账、LLM 目录与配置读数是替身。 */
 function bench() {
-  const selects: Registered[] = [];
+  const sources: Registered[] = [];
   let refreshes = 0;
   const services: Record<string, unknown> = {
     schemaFormHints: {
       describe: () => () => {},
-      select: (_ns: string, path: readonly string[], spec: SelectSpec) => {
-        selects.push({ path, spec });
+      // 现在注册的是**具名源**（schema 上 `role('select', { source })` 认领）。
+      source: (name: string, spec: SelectSpec) => {
+        sources.push({ name, spec });
         return () => {};
       },
       suggestKeys: () => () => {},
@@ -65,7 +66,7 @@ function bench() {
     slots: { register: () => () => {} },
     locale: { bind: () => (key: string) => key, register: () => {} },
   };
-  return { ctx, selects, refreshes: () => refreshes };
+  return { ctx, sources, refreshes: () => refreshes };
 }
 
 /** 等到目录取回并注册（`load` 是异步的）。 */
@@ -79,7 +80,7 @@ describe("选模型的候选", () => {
     apply(b.ctx as never);
     await settled();
 
-    const provider = b.selects.find((entry) => entry.path.join(".") === "models.*.provider");
+    const provider = b.sources.find((entry) => entry.name === "llm-providers");
     expect(provider).toBeDefined();
     expect(provider?.spec.options(() => undefined)).toEqual([
       { value: "mine", label: "自建" },
@@ -93,7 +94,7 @@ describe("选模型的候选", () => {
     apply(b.ctx as never);
     await settled();
 
-    const model = b.selects.find((entry) => entry.path.join(".") === "models.*.model");
+    const model = b.sources.find((entry) => entry.name === "llm-models");
     expect(model?.spec.dependsOn).toEqual([["provider"]]);
     const options = (provider: unknown): readonly SelectOption[] =>
       model?.spec.options((path) => (path.join(".") === "provider" ? provider : undefined)) ?? [];

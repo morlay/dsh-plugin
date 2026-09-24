@@ -24,6 +24,11 @@ export const zh = {
   invalidJson: "需要一段合法的 JSON。",
   invalidBoolean: "需要 true 或 false。",
   invalidConst: "这个字段只接受固定值。",
+  invalidPattern: "要匹配 {pattern}。",
+  invalidRange: "要在 {min} 与 {max} 之间。",
+  invalidMin: "不能小于 {min}。",
+  invalidMax: "不能大于 {max}。",
+  invalidChoice: "只能是 {choices} 之一。",
   unknownProperty: "这一层没有这个字段：从上面的候选里选，或换个键名。",
   empty: "（空）",
 
@@ -79,6 +84,11 @@ export const en = {
   invalidJson: "Enter valid JSON.",
   invalidBoolean: "Enter true or false.",
   invalidConst: "This field only accepts its fixed value.",
+  invalidPattern: "Must match {pattern}.",
+  invalidRange: "Must be between {min} and {max}.",
+  invalidMin: "Must not be less than {min}.",
+  invalidMax: "Must not be greater than {max}.",
+  invalidChoice: "Must be one of {choices}.",
   unknownProperty: "No such field at this level: pick one of the candidates above.",
   empty: "(empty)",
 

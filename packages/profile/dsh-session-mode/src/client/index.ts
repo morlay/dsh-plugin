@@ -168,11 +168,12 @@ export function apply(ctx: Context): void {
       });
     };
     const offs = [
-      hints.select(SESSION_MODE_NS, ["models", DYNAMIC, "provider"], {
+      // 两个具名源：schema 上 `role('select', { source })` 认领它们，本包因此不必知道行 id 与字段路径。
+      hints.source("llm-providers", {
         options: () => providers.map((entry) => ({ value: entry.value, label: entry.label })),
       }),
       // 换服务商就换模型清单：依赖声明让表单在投影时按当前 provider 重算候选。
-      hints.select(SESSION_MODE_NS, ["models", DYNAMIC, "model"], {
+      hints.source("llm-models", {
         dependsOn: [["provider"]],
         options: (read) => modelsOf(read(["provider"])),
       }),

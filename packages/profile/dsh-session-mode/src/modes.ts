@@ -97,7 +97,8 @@ const modelSchema = z.object({
   provider: z
     .string()
     .required()
-    .role("select")
+    // 候选来自客户端注册的具名源 `llm-providers`：字段只说"这是选一个"，不关心行 id 与路径。
+    .role("select", { source: "llm-providers" })
     .description(
       localized({
         zh: "服务商 id（`llm-openai-compatible` 的 providers 里的键，或内置服务商名）。",
@@ -107,7 +108,8 @@ const modelSchema = z.object({
   model: z
     .string()
     .required()
-    .role("select")
+    // 候选来自客户端注册的具名源 `llm-providers`：字段只说"这是选一个"，不关心行 id 与路径。
+    .role("select", { source: "llm-providers" })
     .description(
       localized({
         zh: "模型 id。",

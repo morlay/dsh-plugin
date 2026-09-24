@@ -33,6 +33,14 @@ import {
 import type { FieldText, SelectOption, SelectSpec } from "./hints.ts";
 import type { SchemaFormTranslate } from "./slot-contract.ts";
 
+/** `role('select', { source })` 里声明的候选源名字。 */
+function declaredSource(node: FieldNode | undefined): string | undefined {
+  const extra = node?.meta.extra;
+  if (typeof extra !== "object" || extra === null) return undefined;
+  const name: unknown = Reflect.get(extra, "source");
+  return typeof name === "string" && name.length > 0 ? name : undefined;
+}
+
 /** 字段在状态表里的键（具体路径的 JSON）。 */
 export function fieldKey(path: readonly string[]): string {
   return JSON.stringify(path);
@@ -102,6 +110,12 @@ export interface HintSources extends SuggestedKeys {
    * @returns 业务注册的候选读数；没有就是 `undefined`。
    */
   selectFor?: ((path: readonly string[]) => SelectSpec | undefined) | undefined;
+  /**
+   * 读一个**具名候选源**（schema 的 `role('select', { source })` 认领它）。
+   * @param name - 源的名字。
+   * @returns 该源的读数；没注册过就是 `undefined`。
+   */
+  sourceFor?: ((name: string) => SelectSpec | undefined) | undefined;
 }
 
 /** 控制器要的外部面（`apply` 里从 cordis ctx 组装；测试直接给替身）。 */
@@ -256,7 +270,10 @@ export function optionsFor(
   if (current?.type === "union" && current.choices !== undefined) {
     return current.choices.map((choice) => ({ value: choice }));
   }
-  const spec = hints?.selectFor?.(path);
+  // schema 上写了 `role('select', { source })` 就用那个具名源（业务不必知道 ns/path）；
+  // 否则退回按路径登记的那一份。
+  const source = declaredSource(current);
+  const spec = source === undefined ? hints?.selectFor?.(path) : hints?.sourceFor?.(source);
   if (spec === undefined) return undefined;
   const parent = path.slice(0, -1);
   const options = spec.options((relative) => readPath(value, [...parent, ...relative]));
