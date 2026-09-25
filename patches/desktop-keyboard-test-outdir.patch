@@ -1,0 +1,13 @@
+diff --git a/tsconfig.desktop-keyboard-tests.json b/tsconfig.desktop-keyboard-tests.json
+index 28cdd1bf9c..57e2397909 100644
+--- a/tsconfig.desktop-keyboard-tests.json
++++ b/tsconfig.desktop-keyboard-tests.json
+@@ -3,7 +3,7 @@
+   "extends": "./tsconfig.base.client.json",
+   "compilerOptions": {
+     "rootDir": ".",
+-    "outDir": "lib/desktop-keyboard-test-types",
++    "outDir": "lib/desktop-keyboard-test-types/types",
+     "emitDeclarationOnly": true,
+     "types": ["node"]
+   },
