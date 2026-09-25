@@ -6,6 +6,7 @@ export {
   clientEntryPlugin,
   clientRowExternals,
   CLIENT_ENTRY,
+  INLINE_SAFE,
   isClientExternal,
 } from "./cordis-client.ts";
 export type { ClientBundleSpec, ClientFactoryOptions } from "./cordis-client.ts";
