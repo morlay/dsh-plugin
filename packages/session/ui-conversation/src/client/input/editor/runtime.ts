@@ -6,10 +6,15 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  BLUR_COMMAND,
   CLEAR_HISTORY_COMMAND,
+  COMMAND_PRIORITY_CRITICAL,
   createEditor,
   HISTORY_MERGE_TAG,
   PASTE_TAG,
+  RootNode,
+  SELECTION_CHANGE_COMMAND,
+  SKIP_DOM_SELECTION_TAG,
 } from "lexical";
 import { registerPlainText } from "@lexical/plain-text";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
@@ -70,8 +75,31 @@ export class DraftEditorRuntime {
   }
 
   register(): () => void {
+    // 保留草稿选区：焦点在别的控件上时，后台协调不得把 DOM 选区（连同焦点）拉回输入框。
+    const preserveExternalSelection = (): false => {
+      const root = this.editor.getRootElement();
+      if (root !== null && !root.contains(root.ownerDocument.activeElement)) {
+        $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+      }
+      return false;
+    };
     const unregister = mergeRegister(
       registerPlainText(this.editor),
+      this.editor.registerCommand(
+        BLUR_COMMAND,
+        () => {
+          // 先结束这一批更新，显式聚焦才恢复得到它自己更新后的选区。
+          this.editor.update(preserveExternalSelection, { discrete: true });
+          return false;
+        },
+        COMMAND_PRIORITY_CRITICAL,
+      ),
+      this.editor.registerCommand(
+        SELECTION_CHANGE_COMMAND,
+        preserveExternalSelection,
+        COMMAND_PRIORITY_CRITICAL,
+      ),
+      this.editor.registerNodeTransform(RootNode, preserveExternalSelection),
       registerReferenceActivation(this.editor, (source, reference) =>
         this.deps.openReference(source, reference),
       ),
