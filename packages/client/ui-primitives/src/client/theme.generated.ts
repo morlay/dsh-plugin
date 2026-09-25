@@ -1,5 +1,5 @@
 /**
- * 官方主题的 `--dsw-*` token 全集（373 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
+ * 官方主题的 `--dsw-*` token 全集（395 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
  *
  * 叶子是该变量的**默认值**（官方 light 主题里首次出现的定义）：既是类型推导的来源，也可作 fallback。
  * `"$"` 键出现在「自身也是 token 的分支」上（命名体系里有 40 个短名同时是长名前缀的 token）。
@@ -10,7 +10,7 @@ export const designTokens = {
     bg: {
       base: "var(--dsw-static-neutral-bluish-00)",
       document: {
-        preview: "var(--dsw-static-neutral-bluish-750)",
+        preview: "var(--dsw-static-neutral-bluish-100)",
       },
       layer: {
         "1": "var(--dsw-static-neutral-bluish-00)",
@@ -132,7 +132,7 @@ export const designTokens = {
       caption: "var(--dsw-static-neutral-bluish-400)",
       dimmed: "var(--dsw-static-neutral-bluish-200)",
       document: {
-        preview: "var(--dsw-static-neutral-bluish-200)",
+        preview: "var(--dsw-static-neutral-bluish-700)",
       },
       primary: {
         $: "var(--dsw-static-neutral-bluish-1000)",
@@ -163,6 +163,21 @@ export const designTokens = {
       placeholder: "var(--dsw-static-neutral-bluish-60)",
       tag: "var(--dsw-static-neutral-bluish-75)",
     },
+    menu: {
+      icon: "var(--dsw-static-neutral-bluish-800)",
+    },
+    onboarding: {
+      accent: "rgb(57, 100, 254)",
+      card: {
+        fill: "color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 80%, transparent)",
+      },
+      checkbox: {
+        border: "color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 20%, transparent)",
+      },
+      secondary: {
+        fill: "var(--dsw-static-neutral-bluish-00)",
+      },
+    },
     scrollbar: {
       bg: {
         l1: "var(--dsw-static-neutral-200)",
@@ -171,6 +186,12 @@ export const designTokens = {
       hover: {
         l1: "var(--dsw-static-neutral-300)",
         l2: "var(--dsw-static-neutral-300)",
+      },
+    },
+    settings: {
+      card: {
+        fill: "var(--dsw-alias-bg-layer-2)",
+        stroke: "var(--dsw-alias-border-l4)",
       },
     },
     state: {
@@ -199,9 +220,13 @@ export const designTokens = {
     },
     toast: {
       bg: "var(--dsw-static-neutral-bluish-800)",
+      label: "var(--dsw-static-neutral-bluish-00)",
     },
     tooltip: {
       bg: "var(--dsw-static-neutral-bluish-850)",
+      key: {
+        bg: "color-mix(in srgb, var(--dsw-alias-tooltip-bg), white 18%)",
+      },
     },
   },
   corner: {
@@ -216,6 +241,12 @@ export const designTokens = {
     stroke: {
       $: "0 0 0 0.5px var(--dsw-elevation-stroke-color)",
       color: "var(--dsw-alias-border-l4)",
+    },
+  },
+  focus: {
+    ring: {
+      color: "transparent",
+      width: "2px",
     },
   },
   font: {
@@ -247,8 +278,10 @@ export const designTokens = {
         },
       },
     },
-    family:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',\n    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+    family: {
+      $: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',\n    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      brand: "'Montserrat', var(--dsw-font-family)",
+    },
     l: {
       "20": {
         $: "500 20px/28px var(--dsw-font-family)",
@@ -610,6 +643,19 @@ export const designTokens = {
       },
     },
   },
+  gradient: {
+    onboarding: {
+      blue: {
+        stops: "#3964fe 18.75%, #398efe 51.78%, #6dccff 86.252%, #3964fe",
+      },
+      cyan: {
+        stops: "#0293b4 21.154%, #2dc8eb 50.954%, #aff0ff 85.326%, #0293b4",
+      },
+      violet: {
+        stops: "#2a2fb6 33.102%, #8b76f6 50.954%, #c5c0ff 85.326%, #2a2fb6",
+      },
+    },
+  },
   linear: {
     gradient: {
       think: "linear-gradient(180deg, #fff 20.19%, rgba(255, 255, 255, 0) 100%)",
@@ -619,12 +665,23 @@ export const designTokens = {
     },
   },
   mask: {
-    blur: "blur(2px)",
+    blur: "none",
   },
   menu: {
     backdrop: {
       filter: "blur(40px) saturate(150%)",
     },
+    surface: {
+      fill: "rgba(248, 249, 250, 0.58)",
+    },
+  },
+  radius: {
+    lg: "16px",
+    md: "12px",
+    panel: "28px",
+    sm: "8px",
+    xl: "20px",
+    xs: "4px",
   },
   shadow: {
     lv1: {
@@ -645,7 +702,7 @@ export const designTokens = {
     login: {
       input: "var(--dsw-static-neutral-bluish-50)",
     },
-    menu: "rgba(248, 249, 250, 0.58)",
+    menu: "var(--dsw-menu-surface-fill)",
     selector: "var(--dsw-static-neutral-bluish-60)",
     sidebar: {
       fill: "var(--dsw-static-neutral-bluish-50)",
