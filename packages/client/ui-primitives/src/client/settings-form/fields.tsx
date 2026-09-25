@@ -157,6 +157,7 @@ export function SettingsValueField(
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.
+ * 控件要求浏览器不要把已存的登录密码自动填进来（上游 11c0511271）。
  * @param props - the field's copy, its staged text, and the configured state.
  * @returns the labelled control.
  */
@@ -180,7 +181,7 @@ export function SettingsSecretField(
       <Input
         id={props.id}
         type="password"
-        autoComplete="off"
+        autoComplete="new-password"
         value={props.text}
         disabled={props.disabled}
         onChange={(event) => {

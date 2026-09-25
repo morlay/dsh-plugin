@@ -164,7 +164,8 @@ export const styles = {
       color: "var(--dsw-alias-label-secondary)",
     },
     "&:focus-visible": {
-      outline: "1.5px solid var(--dsw-alias-button-info-fill)",
+      // 上游 ui-chat 的 MessageItem 这轮把焦点环改成读官方焦点变量（`focus.css` 口径）。
+      outline: "1.5px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary))",
       outlineOffset: "2px",
     },
   },

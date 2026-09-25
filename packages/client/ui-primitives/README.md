@@ -21,7 +21,7 @@
 | `dsw`                                        | 官方主题变量引用：`dsw.alias.bg.base` → `var(--dsw-alias-bg-base)`                                                                                                                              |
 | `SettingsFormModel`                          | 暂存式表单模型：草稿（`edit` / `resetField` / `save` / `discard`）、字段状态（`field`）、表单状态（`shell`）、快照投影（`bind`）；`settingsNumberField` / `settingsTextField` 给字段的转换 spec |
 | `SettingsForm`                               | 设置表单框：不可用 / 只读 / 保存中 / 保存失败各状态，离开页面时丢弃草稿                                                                                                                         |
-| `SettingsValueField` / `SettingsSecretField` | 字段控件：标签、草稿文本、覆盖徽标与重置、非法提示、可选说明面板；控件只上报用户输入，不写盘                                                                                                    |
+| `SettingsValueField` / `SettingsSecretField` | 字段控件：标签、草稿文本、覆盖徽标与重置、非法提示、可选说明面板；控件只上报用户输入，不写盘；口令框要求浏览器不做已存登录密码的自动填充                                                        |
 | `findReferences` / `parseReferenceToken`     | host 面：`@` 引用的统一解析与形态归一（`@path` / `@"path"` / `skill:name` → 结构化引用与 span），`Reference` / `ReferenceSpan` 类型                                                             |
 | `designTokens`                               | 生成的 token 树，叶子是官方默认值（可作 fallback 与类型推导来源）                                                                                                                               |
 

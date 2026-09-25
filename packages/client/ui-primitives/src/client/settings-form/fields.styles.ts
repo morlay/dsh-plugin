@@ -2,6 +2,7 @@
 // 换成包内 css-in-js（CSSProps + dsw）；上游那份是 CSS Modules，本包不做预编译。
 
 import type { CSSProps } from "../styling/css.ts";
+import { focusRing } from "../styling/focus.ts";
 import { dsw } from "../theme.ts";
 
 // 上游引用的 --dsw-alias-bg-layer-4 不在官方主题定义集内（token 树里没有这个变量），
@@ -64,7 +65,7 @@ export const styles = {
       color: dsw.alias.label.secondary,
     },
     "&:focus-visible": {
-      outline: `2px solid ${String(dsw.alias.brand.primary)}`,
+      outline: focusRing,
       outlineOffset: "1px",
     },
   },
@@ -132,7 +133,7 @@ export const styles = {
     color: dsw.alias.label.primary,
     "&:focus-visible": {
       outline: "none",
-      borderColor: dsw.alias.brand.primary,
+      borderColor: dsw.alias.state.business.primary,
     },
     "&:disabled": {
       color: dsw.alias.label.tertiary,
