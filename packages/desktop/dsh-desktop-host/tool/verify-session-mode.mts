@@ -30,7 +30,11 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadLayeredEnv, loadProfileDirectory } from "@deepseek-ai/dsh-app-boot";
+import {
+  loadLayeredEnv,
+  loadProfileDirectory,
+  reportSkippedBundles,
+} from "@deepseek-ai/dsh-app-boot";
 import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 
 const PORT = 3098;
@@ -57,11 +61,15 @@ if (!profileReady) {
 
 process.env.DSH_HOME = store;
 
+// 上游 0.1.7-rc.2 起加载不再自己打印跳过原因，改由启动方上报。
+const profile = loadProfileDirectory("dsh", profileDir, installAnchor);
+reportSkippedBundles("dsh", profile);
+
 const { ctx, shutdown } = await runProfile({
   environment: loadLayeredEnv("dsh"),
   profile: "web",
   resolvedProfile: {
-    profile: loadProfileDirectory("dsh", profileDir, installAnchor),
+    profile,
     installAnchor,
   },
   patchFiles: [],

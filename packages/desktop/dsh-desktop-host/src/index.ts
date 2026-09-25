@@ -11,7 +11,11 @@ import { createReadStream, createWriteStream, type ReadStream, type WriteStream 
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
-import { loadLayeredEnv, loadProfileDirectory } from "@deepseek-ai/dsh-app-boot";
+import {
+  loadLayeredEnv,
+  loadProfileDirectory,
+  reportSkippedBundles,
+} from "@deepseek-ai/dsh-app-boot";
 import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 import type {} from "@deepseek-ai/dsh-api-gateway";
 import type {} from "@deepseek-ai/dsh-client-connection";
@@ -118,6 +122,8 @@ async function main(): Promise<void> {
 
   const installAnchor = join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json");
   const profile = loadProfileDirectory("dsh", projectDir, installAnchor);
+  // 上游 0.1.7-rc.2 起加载不再自己打印跳过原因，改由启动方上报（与上游 desktop-host 同一口径）。
+  reportSkippedBundles("dsh", profile);
   const application = runProfile({
     environment: loadLayeredEnv("dsh"),
     profile: "desktop",
