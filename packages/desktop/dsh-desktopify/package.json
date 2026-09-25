@@ -40,7 +40,6 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "gen:official-packages": "tsx scripts/gen-official-packages.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {

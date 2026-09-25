@@ -118,6 +118,22 @@ async function installOfficialSurface(
   );
 }
 
+/**
+ * 注入面（壳包的 `official-packages.generated.ts`）由壳包自己的脚本生成，提示只能指向那里：
+ * 本包无 `tsx` 依赖，也不为它留转发入口。
+ */
+export function missingOfficialPackagesError(
+  missing: ReadonlyMap<string, readonly string[]>,
+): Error {
+  const detail = [...missing]
+    .map(([packageName, requiredBy]) => `${packageName} (required by ${requiredBy.join(", ")})`)
+    .join("; ");
+  return new Error(
+    `desktop seed: deployed closure is missing official packages: ${detail}; ` +
+      "regenerate the injected surface with `pnpm --filter @morlay/dsh-desktop-shell run gen:official-packages`",
+  );
+}
+
 async function deployClosure(
   workspace: string,
   name: string,
@@ -143,13 +159,7 @@ async function deployClosure(
 
   const missing = await missingOfficialPackages(modulesDir);
   if (missing.size > 0) {
-    const detail = [...missing]
-      .map(([packageName, requiredBy]) => `${packageName} (required by ${requiredBy.join(", ")})`)
-      .join("; ");
-    throw new Error(
-      `desktop seed: deployed closure is missing official packages: ${detail}; ` +
-        "regenerate the injected surface with `pnpm --filter @morlay/dsh-desktopify run gen:official-packages`",
-    );
+    throw missingOfficialPackagesError(missing);
   }
 }
 
