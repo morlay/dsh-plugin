@@ -6,6 +6,10 @@ import { createSnapshotStore, type BoundActions } from "@deepseek-ai/dsh-client-
 import { resolveSlotLabel } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SessionId } from "@deepseek-ai/dsh-session/types";
 
+import type {
+  ShortcutCommandId,
+  ShortcutFixedCommand,
+} from "@deepseek-ai/dsh-client-shortcuts/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import type {} from "@deepseek-ai/dsh-client-ui-session/client";
@@ -46,8 +50,9 @@ import {
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx";
 import { InputBar } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx";
 import { todoDockEntry } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx";
+import { installStopShortcut } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/stop-shortcut.ts";
 import {
-  DEVELOPER_TOOLS_VIEW_ID,
+  TRAJECTORY_VIEW_ID,
   resolveActiveView,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/view-selection.ts";
 import {
@@ -157,6 +162,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.configForms.get<ConversationSettings>(CONVERSATION_SETTINGS_NAMESPACE),
   );
+  ctx.effect(
+    () => () => {
+      submissionPolicy.dispose();
+    },
+    "ui-conversation: submission policy",
+  );
 
   ctx.slots.inject("settings.general.item", () =>
     ctx.slots.register(
@@ -183,7 +194,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       // 开发者工具视图由设置项决定是否出现（上游 0.1.7 起的 `configForms.developerTools`）。
       if (
         !ctx.configForms.developerTools.enabled.getSnapshot() &&
-        entry.options.id === DEVELOPER_TOOLS_VIEW_ID
+        entry.options.id === TRAJECTORY_VIEW_ID
       )
         continue;
       tabs.push({
@@ -241,6 +252,87 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       disposeViews();
     };
   }, "ui-conversation: View selection");
+
+  const stop = (sessionId: SessionId): void => {
+    scopedConversation(sessions, sessionId)
+      .cancel()
+      .catch((_error: unknown) => {
+        // 停止失败由 Session 的 promptError 发布，这里不吞别的东西。
+      });
+  };
+  // 输入栏（上游 InputBar）读它显示停止快捷键序列：本装配注册 fixed Stop 命令后才有值。
+  const stopShortcut = createSnapshotStore<readonly string[]>([]);
+  ctx.inject(["shortcuts"], (scope) => {
+    const fixedInputs: readonly ShortcutFixedCommand[] = [
+      {
+        id: "fixed.send" as ShortcutCommandId,
+        label: () => t("input.send"),
+        keys: ["Enter"],
+        bindings: [{ code: "Enter", modifiers: [] }],
+        group: "input",
+      },
+      {
+        id: "fixed.newline" as ShortcutCommandId,
+        label: () => t("shortcut.newline"),
+        keys: scope.shortcuts.describeBinding({ code: "Enter", modifiers: ["shift"] }).keys,
+        bindings: [{ code: "Enter", modifiers: ["shift"] }],
+        group: "input",
+      },
+      {
+        id: "fixed.complementary" as ShortcutCommandId,
+        label: () => t("shortcut.complementary"),
+        keys: scope.shortcuts.describeBinding({ code: "Enter", modifiers: ["primary"] }).keys,
+        bindings: [
+          { code: "Enter", modifiers: ["control"] },
+          { code: "Enter", modifiers: ["meta"] },
+        ],
+        group: "input",
+      },
+      {
+        id: "fixed.slash" as ShortcutCommandId,
+        label: () => t("shortcut.slash"),
+        keys: ["/"],
+        bindings: [{ code: "Slash", modifiers: [] }],
+        group: "input",
+      },
+      {
+        id: "fixed.mention" as ShortcutCommandId,
+        label: () => t("shortcut.mention"),
+        keys: ["@"],
+        bindings: [{ code: "Digit2", modifiers: ["shift"] }],
+        group: "input",
+      },
+    ];
+    for (const command of fixedInputs) {
+      scope.effect(() => scope.shortcuts.registerFixed(command), `ui-conversation: ${command.id}`);
+    }
+    scope.effect(
+      () =>
+        installStopShortcut(
+          scope.shortcuts,
+          sessions,
+          (binding) => uiConversation.binding(binding).openTurn,
+          ctx.uiSession,
+          stop,
+        ),
+      "ui-conversation: fixed stop input",
+    );
+    scope.effect(() => {
+      const command: ShortcutFixedCommand = {
+        id: "response.stop" as ShortcutCommandId,
+        label: () => t("input.stop"),
+        keys: ["Esc", "Esc"],
+        bindings: [{ code: "Escape", modifiers: [] }],
+        group: "input",
+      };
+      const dispose = scope.shortcuts.registerFixed(command);
+      stopShortcut.set(command.keys);
+      return () => {
+        stopShortcut.set([]);
+        dispose();
+      };
+    }, "ui-conversation: fixed stop reference");
+  });
 
   const inputHub = new InputHub(ctx, t);
   const composerBlocks = new ComposerBlockRegistry();
@@ -469,6 +561,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
               toggleCommandMenu: undefined,
               stop: undefined,
               hooks: {
+                stopShortcut,
                 busyEnter: submissionPolicy.busyEnter,
                 fileUploads: ABSENT_FILE_UPLOADS,
                 notices: ABSENT_NOTICES,
@@ -522,11 +615,10 @@ export function apply(ctx: Context, config: Config = Config({})): void {
                     });
                   },
             stop: () => {
-              scopedConversation(sessions, sessionId)
-                .cancel()
-                .catch(() => {});
+              stop(sessionId);
             },
             hooks: {
+              stopShortcut,
               busyEnter: submissionPolicy.busyEnter,
               fileUploads: conversation.fileUploads,
               notices: shell.notices,
