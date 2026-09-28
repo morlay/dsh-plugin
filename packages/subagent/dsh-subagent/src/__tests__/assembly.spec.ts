@@ -21,7 +21,7 @@ describe("装配面", () => {
   it("装配入口是 session-mode-profile：app 列的是它，它依赖本包", async () => {
     const dsh = app.dsh as { profile: { bundles: string[] } };
     const bundle = JSON.parse(
-      await readFile(join(ROOT, "bundles/session-mode-profile/package.json"), "utf8"),
+      await readFile(join(ROOT, "packages/bundles/session-mode-profile/package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
 
     expect(dsh.profile.bundles).toContain("@morlay/session-mode-profile");

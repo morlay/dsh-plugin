@@ -245,128 +245,25 @@ importers:
     dependencies:
       '@morlay/better-session':
         specifier: workspace:*
-        version: link:../../bundles/better-session
+        version: link:../../packages/bundles/better-session
       '@morlay/dsh-desktopify':
         specifier: workspace:*
         version: link:../../packages/desktop/dsh-desktopify
       '@morlay/mydsh-profile':
         specifier: workspace:*
-        version: link:../../bundles/mydsh-profile
+        version: link:../../packages/bundles/mydsh-profile
       '@morlay/ollama-provider-profile':
         specifier: workspace:*
-        version: link:../../bundles/ollama-provider-profile
+        version: link:../../packages/bundles/ollama-provider-profile
       '@morlay/sandbox-profile':
         specifier: workspace:*
-        version: link:../../bundles/sandbox-profile
+        version: link:../../packages/bundles/sandbox-profile
       '@morlay/session-mode-profile':
         specifier: workspace:*
-        version: link:../../bundles/session-mode-profile
+        version: link:../../packages/bundles/session-mode-profile
       tsx:
         specifier: '*'
         version: 4.23.15
-
-  bundles/better-session:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-conversation':
-        specifier: workspace:*
-        version: link:../../packages/session/ui-conversation
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../packages/client/ui-primitives
-      '@morlay/dsh-reference':
-        specifier: workspace:*
-        version: link:../../packages/context/dsh-reference
-      '@morlay/session-branch':
-        specifier: workspace:*
-        version: link:../../packages/session/session-branch
-      '@morlay/session-rdb':
-        specifier: workspace:*
-        version: link:../../packages/session/session-rdb
-      '@morlay/ui-conversation-manager':
-        specifier: workspace:*
-        version: link:../../packages/session/ui-conversation-manager
-      '@morlay/ui-conversation-message-actions':
-        specifier: workspace:*
-        version: link:../../packages/session/ui-conversation-message-actions
-
-  bundles/mydsh-profile:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/vendor/cordis
-    devDependencies:
-      '@local/devkit':
-        specifier: workspace:*
-        version: link:../../devpackages/devkit
-
-  bundles/ollama-provider-profile:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../packages/client/ui-primitives
-      '@morlay/dsh-web-search-ollama':
-        specifier: workspace:*
-        version: link:../../packages/web/dsh-web-search-ollama
-    devDependencies:
-      '@local/devkit':
-        specifier: workspace:*
-        version: link:../../devpackages/devkit
-
-  bundles/sandbox-profile:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../packages/client/ui-primitives
-      '@morlay/dsh-sandbox-local':
-        specifier: workspace:*
-        version: link:../../packages/sandbox/dsh-sandbox-local
-    devDependencies:
-      '@local/devkit':
-        specifier: workspace:*
-        version: link:../../devpackages/devkit
-
-  bundles/session-mode-profile:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-agent-toolkit':
-        specifier: workspace:*
-        version: link:../../packages/profile/dsh-agent-toolkit
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../packages/client/ui-primitives
-      '@morlay/dsh-context-assembler':
-        specifier: workspace:*
-        version: link:../../packages/context/dsh-context-assembler
-      '@morlay/dsh-session-mode':
-        specifier: workspace:*
-        version: link:../../packages/profile/dsh-session-mode
-      '@morlay/dsh-subagent':
-        specifier: workspace:*
-        version: link:../../packages/subagent/dsh-subagent
-    devDependencies:
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:*
-        version: link:../../vendor/deepseek-harness/vendor/include
-      '@local/devkit':
-        specifier: workspace:*
-        version: link:../../devpackages/devkit
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.3.2
 
   devpackages/devkit:
     dependencies:
@@ -395,6 +292,109 @@ importers:
       rolldown:
         specifier: ^1.2.8
         version: 1.2.11
+
+  packages/bundles/better-session:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@morlay/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../session/ui-conversation
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@morlay/dsh-reference':
+        specifier: workspace:*
+        version: link:../../context/dsh-reference
+      '@morlay/session-branch':
+        specifier: workspace:*
+        version: link:../../session/session-branch
+      '@morlay/session-rdb':
+        specifier: workspace:*
+        version: link:../../session/session-rdb
+      '@morlay/ui-conversation-manager':
+        specifier: workspace:*
+        version: link:../../session/ui-conversation-manager
+      '@morlay/ui-conversation-message-actions':
+        specifier: workspace:*
+        version: link:../../session/ui-conversation-message-actions
+
+  packages/bundles/mydsh-profile:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+    devDependencies:
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+
+  packages/bundles/ollama-provider-profile:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@morlay/dsh-web-search-ollama':
+        specifier: workspace:*
+        version: link:../../web/dsh-web-search-ollama
+    devDependencies:
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+
+  packages/bundles/sandbox-profile:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@morlay/dsh-sandbox-local':
+        specifier: workspace:*
+        version: link:../../sandbox/dsh-sandbox-local
+    devDependencies:
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+
+  packages/bundles/session-mode-profile:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@morlay/dsh-agent-toolkit':
+        specifier: workspace:*
+        version: link:../../profile/dsh-agent-toolkit
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../../client/ui-primitives
+      '@morlay/dsh-context-assembler':
+        specifier: workspace:*
+        version: link:../../context/dsh-context-assembler
+      '@morlay/dsh-session-mode':
+        specifier: workspace:*
+        version: link:../../profile/dsh-session-mode
+      '@morlay/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../subagent/dsh-subagent
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/include
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
 
   packages/client/ui-primitives:
     dependencies:

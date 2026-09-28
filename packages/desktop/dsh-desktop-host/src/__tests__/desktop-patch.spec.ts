@@ -62,8 +62,8 @@ const KEPT_ROWS = {
 /** 除桌面 overlay 之外的装配层：账号面不该在这些地方被停（决定只影响桌面档）。 */
 async function otherPatchFiles(): Promise<string[]> {
   const files: string[] = [join(repoRoot, "apps/dsh-custom-next/cordis.patch.yml")];
-  for (const entry of await readdir(join(repoRoot, "bundles"), { withFileTypes: true })) {
-    if (entry.isDirectory()) files.push(join(repoRoot, "bundles", entry.name, "cordis.patch.yml"));
+  for (const entry of await readdir(join(repoRoot, "packages/bundles"), { withFileTypes: true })) {
+    if (entry.isDirectory()) files.push(join(repoRoot, "packages/bundles", entry.name, "cordis.patch.yml"));
   }
   return files;
 }
