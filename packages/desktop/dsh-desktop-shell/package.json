@@ -61,8 +61,8 @@
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-client-shortcuts": "workspace:*"
+    "@deepseek-ai/dsh-atomic-write": "workspace:^",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:^"
   },
   "engines": {
     "node": ">=24.11.0"

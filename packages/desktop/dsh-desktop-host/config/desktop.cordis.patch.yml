@@ -21,3 +21,33 @@
     printUrl: false
     surfaceContext: false
     trustedHosts: []
+
+# 桌面档不含登录，账号面整条停掉。DeepSeek 账号登录是「系统浏览器授权 + 回环地址回调」：
+# 上游 `dsh-deepseek-account-platform` 在 webServer 上注册 `/oauth/callback`，授权页要回到
+# `http://localhost:<端口>/oauth/callback`——而本部署的 webServer 没有端口（上面的
+# portless-webserver），回调没有入口；client 半算出的回调来源是页面的自定义协议来源，
+# 连协议校验都过不了。装着的那几个面点进去只会撞死路，于是按 id 停掉：
+#
+# - `deepseek-account`：登录实现（凭据记录、事务面与浏览器流程的宿主一半）；
+# - `account-controller`：账号事务的 Remote 名册，硬注入 `deepseekAccount`，登录实现停了
+#   它只会等一个不会出现的服务；
+# - `llm-deepseek-account`：账号 token 独占的模型路由，token 只可能来自上面那条登录，
+#   留着则是一条永远 `ACCOUNT_SIGN_IN_REQUIRED` 的死路由；
+# - `ui-settings-account`：账号的 client 面（设置页的账号页、侧栏账号菜单、桌面首次引导
+#   覆盖层、充值页宿主），并且是 `ui-settings-account` 这个 settings namespace 的 owner。
+#
+# 留下的仍是本部署的模型路径：`credentials`（通用凭据服务）与 `llm-deepseek`（官方 API key
+# 路由，不是登录）都不动——模型走 ollama provider，key 由 `credentials` 解析
+# `apiKeyEnv: OLLAMA_API_KEY`（profile 层给的）。
+
+- id: deepseek-account
+  disabled: true
+
+- id: llm-deepseek-account
+  disabled: true
+
+- id: account-controller
+  disabled: true
+
+- id: ui-settings-account
+  disabled: true

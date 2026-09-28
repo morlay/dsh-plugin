@@ -37,7 +37,12 @@
    被改写为放行（理由与代价见[债务 桌面宿主覆写 connection 认证方法](../dsh-desktopify/.agents/debts/20260920-桌面宿主覆写connection认证方法.md)）；
 4. 注入客户端 transport（`__DSH_TRANSPORT__ = { ownsHost, openStream }`）并注册 `/.dsh/remote-stream`
    （双向 NDJSON：请求体首行定 endpoint/payload、后续行是上行项，响应体是下行帧 →
-   `typertGateway.wireStream.open`）。
+   `typertGateway.wireStream.open`）；
+5. 桌面 patch 还按 id 停掉整条**账号/登录面**（`deepseek-account`、`account-controller`、
+   `llm-deepseek-account`、`ui-settings-account`）：登录要的回环地址回调在无端口下没有入口，
+   装着只会撞死路——理由与代价见 [ADR 桌面档不含登录与账号面](./.agents/adrs/20260928-桌面档不含登录与账号面.md)。
+   模型路径不受影响（`credentials` + `llm-pi-ai` 的 `ollama` 路由），探针
+   [`tool/verify-desktop-account-plane.mts`](./tool/verify-desktop-account-plane.mts) 判这两件事。
 
 ## 依赖边界
 

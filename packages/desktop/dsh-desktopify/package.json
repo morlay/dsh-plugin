@@ -43,7 +43,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@deepseek-ai/dsh": "workspace:*",
+    "@deepseek-ai/dsh": "workspace:^",
     "@morlay/dsh-desktop-host": "workspace:*",
     "@morlay/dsh-desktop-shell": "workspace:*",
     "commander": "^15.0.0",
@@ -66,9 +66,9 @@
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/dsh-client-modules": "workspace:*",
-    "@deepseek-ai/dsh-host-webserver": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-client-modules": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   },
   "engines": {
     "node": ">=24.11.0"
