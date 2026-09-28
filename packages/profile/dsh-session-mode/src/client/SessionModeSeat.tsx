@@ -1,10 +1,13 @@
 /**
  * composer 里的模式 chip：**本包在会话里唯一的面**（点开是 coding / chat 两项）。
  *
- * 选择只在会话开始**之前**有效——一旦跑过 turn，那段历史是在某个模式的工具与提示词下产生的，host 会拒绝
- * 换（与上游 `agentPresets.select` 同一条判据）。所以它挂在 composer 上：新会话屏也是一个 blank session 的
- * composer，选择正好发生在那里；会话头部则没有它的位置——头部只在"跑起来之后"值得看，而那时的 chip 已经把
- * 当前模式写在脸上，再挂一个只读标签就是同一句话的复读。
+ * 选择只在会话开始**之前**有效——一旦跑过 turn，那段历史是在某个模式的工具与提示词下产生的。所以 chip 在
+ * 会话里有两个形态：空白期是选择器，开过 turn 之后**只读**（只写当前模式，点不动）。判据是 host 的投影
+ * `sessionModeEditable`（`turn/start` 一落库就为 `false`），与服务端拒绝切换读的是同一份事实。
+ *
+ * 它挂在 composer 上：新会话屏也是一个 blank session 的 composer，选择正好发生在那里；会话头部则没有它的
+ * 位置——头部只在"跑起来之后"值得看，而那时的 chip 已经把当前模式写在脸上，再挂一个只读标签就是同一句话的
+ * 复读。
  */
 
 import { useState } from "react";
@@ -43,6 +46,13 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
       sessionId === undefined ? undefined : state.byId[sessionId]?.projectionValues?.sessionMode;
     return typeof value === "string" ? value : undefined;
   });
+  const editable = useSessions((state) => {
+    const value =
+      sessionId === undefined
+        ? undefined
+        : state.byId[sessionId]?.projectionValues?.sessionModeEditable;
+    return typeof value === "boolean" ? value : undefined;
+  });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +62,17 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
   const current = selected ?? roster.default;
   const chosen = roster.modes.find((mode) => mode.id === current);
   const label = chosen?.name ?? current;
+
+  // 开过 turn 的会话**只读**：chip 只写当前模式，点不动也不给清单。判据与 host 拒绝切换读的是同一个投影
+  // （`sessionModeEditable`），所以不会出现"看起来能选、点了报错"。
+  if (editable === false) {
+    return (
+      <button type="button" className={css.seat} disabled title={t("lockedHint")}>
+        <IconAgentPresetOutlineRegular className={css.seatIcon} />
+        <span className={css.seatLabel}>{label}</span>
+      </button>
+    );
+  }
 
   return (
     <Menu

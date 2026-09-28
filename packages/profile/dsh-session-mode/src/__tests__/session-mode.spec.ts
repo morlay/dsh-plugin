@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { z } from "zod";
 import * as plugin from "../index.ts";
+import { sessionModeEditableProjection } from "../index.ts";
 import type { Config, SessionMode, SessionModeRole } from "../modes.ts";
 
 const contexts: Context[] = [];
@@ -227,6 +228,18 @@ describe("模式的读取与切换", () => {
 
     await expect(ctx.sessionModes.select(agent.id, "chat")).rejects.toThrow("已经开始");
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
+  });
+
+  it("可改与否是**客户端可见**的投影：空白会话为可改，开过 turn 之后为不可改", async () => {
+    const { ctx, agent } = await mount();
+
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionModeEditable")).toBe(true);
+
+    agent.session.append("turn/start", { turn: 1 });
+
+    // 与服务端拒绝切换读同一份事实：client 的只读形态据此而定。
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionModeEditable")).toBe(false);
+    expect(sessionModeEditableProjection.wire?.view(false)).toBe(false);
   });
 
   it("未知模式与未知会话都拒绝", async () => {

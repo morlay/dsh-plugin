@@ -104,10 +104,12 @@
 ## 页面上的选择面
 
 选择面是**本包的 client 半**：一个模式 chip 挂在 composer 工具行左侧（`conversation.input.left`，list + session
-scope），点开就是清单，清单与切换走 HTTP 路由 `GET/POST /session-mode`。
+scope），点开就是清单，清单与切换走 HTTP 路由 `GET/POST /session-mode`。它有两个形态：**空白期是选择器**；
+会话开过 turn 之后**只读**（只写当前模式，点不动、没有下拉面，悬停说明"换模式请新开一个会话"）——判据是 host 的
+投影 `sessionModeEditable`，与服务端拒绝切换读的是同一份事实，所以不会出现"看起来能选、点了报错"。
 
 挂 composer 而不是会话头部：一个会话的模式只在它跑第一轮**之前**能改（host 会拒绝给已在跑的会话换模式），而
-新会话屏也是一个 blank session 的 composer——头部槽位在那里根本不存在。头部的只读标签**已去掉**：chip 本来就把
+新会话屏也是一个 blank session 的 composer——头部槽位在那里根本不存在。头部的标签**已去掉**：chip 本来就把
 当前模式写在脸上，右上角再写一遍是同一句话的复读。
 
 官方 `ui-agent-preset` 那套**保留**（它的 roster 座位在 `conversation.hero.agentPreset`，是单注册槽位）——两套入口

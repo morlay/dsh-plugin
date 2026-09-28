@@ -7,6 +7,7 @@
 
 export const zh = {
   seatHint: "选择这个会话的模式",
+  lockedHint: "这个会话已经开始：换模式请新开一个会话",
   noDescription: "（无说明）",
   provider: "服务商",
   providerHint:
@@ -19,6 +20,7 @@ export const zh = {
 
 export const en: Record<keyof typeof zh, string> = {
   seatHint: "Pick the mode for this session",
+  lockedHint: "This session has started: start a new one to pick a mode",
   noDescription: "(no description)",
   provider: "Provider",
   providerHint:

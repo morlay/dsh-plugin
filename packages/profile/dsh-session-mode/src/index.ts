@@ -93,10 +93,13 @@ declare module "@deepseek-ai/dsh-session/types" {
 declare module "@deepseek-ai/dsh-session-projection/types" {
   interface SessionProjectionStateMap {
     sessionMode: string | null;
+    sessionModeEditable: boolean;
   }
   interface SessionProjectionMap {
     /** 会话当前模式；`null` 表示没选过（用部署默认）。 */
     sessionMode: string | null;
+    /** 会话还能不能换模式：`true` 是选择器，`false` 是只读标签（client 那个 chip 据此变形）。 */
+    sessionModeEditable: boolean;
   }
 }
 
@@ -112,6 +115,24 @@ export const sessionModeProjection = {
   wire: { viewSchema: sessionModeSchema, view: (state: string | null) => state },
   stateVersion: 1,
 } satisfies ProjectionDefinition<"sessionMode", string | null>;
+
+const sessionModeEditableSchema: z.ZodType<boolean> = z.boolean();
+
+/**
+ * 这个会话能不能换模式的投影：空白会话为 `true`，一旦 `turn/start` 落库就永远 `false`（换模式要的是**整段
+ * 历史**的模式一致，所以"开过 turn"之后连正在跑的那个 turn 也算）。
+ *
+ * **判据只有这一处**：服务端 {@link SessionModes.select} 的拒绝与 client chip 的只读形态都读它——以前
+ * client 只能等服务端报错，现在连入口都不给，而两边的结论来自同一份会话事实。
+ */
+export const sessionModeEditableProjection = {
+  key: "sessionModeEditable",
+  stateSchema: sessionModeEditableSchema,
+  init: () => true,
+  apply: (state: boolean, event: SessionEvent) => state && event.type !== "turn/start",
+  wire: { viewSchema: sessionModeEditableSchema, view: (state: boolean) => state },
+  stateVersion: 1,
+} satisfies ProjectionDefinition<"sessionModeEditable", boolean>;
 
 /** 模式清单、默认模式、按会话读取与切换。 */
 export class SessionModes extends Service {
@@ -136,6 +157,7 @@ export class SessionModes extends Service {
     const problem = configProblem({ ...this.config, models: config.models });
     if (problem !== undefined) throw new Error(problem);
     ctx.sessionProjections.register(sessionModeProjection);
+    ctx.sessionProjections.register(sessionModeEditableProjection);
     // 会话一建立就装上：这早于它的第一次装配，persona 因此一定在装配之前注册好。
     ctx.on("agent/created", ({ agent }) => {
       this.installFor(agent);
@@ -240,8 +262,9 @@ export class SessionModes extends Service {
     }
     const session = this.ctx.sessions.get(sessionId);
     if (session === undefined) throw new Error(`未知的会话 ${sessionId}`);
-    const boundary = this.ctx.sessionProjections.stateOf(session, "turnBoundary");
-    if (boundary !== undefined && (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0)) {
+    // 空白窗口的判据只有一处：{@link sessionModeEditableProjection}。client 那个 chip 读的是同一个投影，
+    // 所以"看起来能选"与"服务端接受"不会脱节。
+    if (this.ctx.sessionProjections.stateOf(session, "sessionModeEditable") === false) {
       throw new Error("这个会话已经开始，模式不能再改；要换模式请新开一个会话。");
     }
     const agent = this.ctx.agents.get(sessionId);
