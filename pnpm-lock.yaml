@@ -804,6 +804,9 @@ importers:
       '@deepseek-ai/dsh-experimental-tool-agent-team':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/experimental/tool-agent-team
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/fs/fs
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/llm/llm
@@ -964,6 +967,9 @@ importers:
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
+      '@testing-library/react':
+        specifier: ^16.3.0
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -976,6 +982,9 @@ importers:
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
 
   packages/sandbox/dsh-sandbox-local:
     dependencies:

@@ -233,17 +233,29 @@ export const TOOLKIT_EXTRA_ROWS: readonly PresetRow[] = [
 ];
 
 /**
+ * 策略行（不属于工具族）：放宽 fs 的写 / 改 intent——**挂本 preset 的会话不吃上游「先读后改」**。
+ *
+ * 为什么是"抢 waterfall 抵消"而不是"禁用上游那一行"：`fs-observation-policy` 住在 host 平面、对所有 preset
+ * 生效；preset realm 里禁用同 id 的行禁不掉它，而在 host 平面禁用又会连官方 shipped preset 的会话一起失去
+ * 策略。判据与实现见 [`./relax-intent.ts`](./relax-intent.ts)。
+ */
+export const TOOLKIT_POLICY_ROWS: readonly PresetRow[] = [
+  { id: "fs-intent-relax", name: "@morlay/dsh-agent-toolkit/relax-intent" },
+];
+
+/**
  * preset 平面那一套功能行：**preset 声明的 `config.plugins` 就是它**。
  *
  * 与 {@link TOOLKIT_EXTRA_ROWS} 的差别只在 `tool-guidance` 那一行：它往通道这个 host 单例注册用法正文
  * （skill 与 section 抑制），属于 host 平面——两个平面各装一份会互相顶掉（上游判据：一行只属于一个平面，
  * `vendor/deepseek-harness/scripts/verify-cordis-config.ts` 的 `validatePresetPlaneSeparation`）。
- * 其余行都是**每会话的能力行**：工具、命令、压缩、计划模式与 skill 发现 provider。
+ * 其余行都是**每会话的能力行**：工具、命令、压缩、计划模式、skill 发现 provider 与那条 fs 策略豁免。
  */
 export const TOOLKIT_PRESET_ROWS: readonly PresetRow[] = [
   ...TOOLKIT_ROWS,
   ...TOOLKIT_COMPACTION_ROWS,
   ...TOOLKIT_PLAN_ROWS,
+  ...TOOLKIT_POLICY_ROWS,
 ];
 
 /** 工具说明那一行（汉化精简 + 用法分组）：实现与数据在 `./guidance` 出口，行本身也归本包。 */

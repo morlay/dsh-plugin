@@ -23,20 +23,22 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./rows": "./src/rows.ts",
-    "./guidance": "./src/guidance/index.ts",
     "./agent-team": "./src/agent-team.ts",
+    "./guidance": "./src/guidance/index.ts",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./relax-intent": "./src/relax-intent.ts",
+    "./rows": "./src/rows.ts"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
-      "./rows": "./dist/rows.mjs",
-      "./guidance": "./dist/guidance.mjs",
       "./agent-team": "./dist/agent-team.mjs",
+      "./guidance": "./dist/guidance.mjs",
+      "./locale/*.json": "./locale/*.json",
       "./package.json": "./package.json",
-      "./locale/*.json": "./locale/*.json"
+      "./relax-intent": "./dist/relax-intent.mjs",
+      "./rows": "./dist/rows.mjs"
     }
   },
   "scripts": {
@@ -54,6 +56,7 @@
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:*",
     "@deepseek-ai/dsh-experimental-client-ui-agent-team": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:*",
+    "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -82,7 +85,9 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",

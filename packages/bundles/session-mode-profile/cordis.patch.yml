@@ -136,6 +136,8 @@
                     就绪时调 exit_plan_mode，正文是完整的计划 markdown（以 # 标题开头），并让它成为那一条回复里唯一且最后的工具调用：它把计划交出去等批准，实施只在批准之后的步骤里开始。不要把最终计划当普通回复贴出来，也不要用散文或 ask_user_question 问“要不要继续”。评审驳回就吸收反馈重新提交；评审通道不可用或被中断时留在计划模式、让用户手动切模式，不要自己往下做。
             isolate:
               planMode: true
+          - id: fs-intent-relax
+            name: "@morlay/dsh-agent-toolkit/relax-intent"
 - insert:
     - id: session-mode
       name: "@morlay/dsh-session-mode"
