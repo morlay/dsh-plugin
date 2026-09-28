@@ -8,7 +8,7 @@ import { renderVirtualSkill } from "../assembler/index.ts";
 
 export const name = "context-skill-catalog";
 
-export const inject = ["skills", "tools", "contextAssembler"];
+export const inject = ["agents", "skills", "tools", "contextAssembler"];
 
 export const CATALOG_ID = "skill-catalog";
 
@@ -20,6 +20,13 @@ const DESCRIPTION_MAX_LENGTH = 500;
  *
  * 目录只列模型可调用的 skill；`auto` 的 skill 标 `modelInvocable: false`，所以它不出现在目录里
  * （它的正文已经随提示送达）。工具的渲染用通道的虚拟 skill 形态，不带 `<skill_resources>`。
+ *
+ * **这一面归通道**（工作区指令那一面相反，是让位给 preset）：官方 preset 自己装了上游 `tool-skill`，那份
+ * 注册在 preset 的 scope 层；我们把 `skill` 工具按会话注册进 **agent 自己那一层**——它最靠里，同名注册遮蔽
+ * 继承来的那一份（[`core/tools/src/index.ts:1185-1207`](../../../vendor/deepseek-harness/packages/core/tools/src/index.ts)），
+ * 于是模型看到的是我们的工具（中文描述 + 按会话修剪的正文）。上游的目录发布判据是"它自己注册的那个工具是
+ * 本会话可见的那个"（[`skill/tool-skill/src/index.ts:213-236`](../../../vendor/deepseek-harness/packages/skill/tool-skill/src/index.ts)），
+ * 被遮蔽之后它闭嘴，目录由我们发布；`minimal`（`chat`）那种没有上游行的会话里也只有我们这一份。
  */
 export function apply(ctx: Context): void {
   /**
@@ -28,12 +35,42 @@ export function apply(ctx: Context): void {
    */
   const catalogEntries = new WeakMap<Agent, readonly { name: string; description: string }[]>();
 
+  // 同名工具只能有一个所有者：host 平面已经有人注册了 `skill`（装上游 `tool-skill` 的部署）就让给它，
+  // 我们只发布目录。我们的部署里 host 平面那一行是禁用的（preset 才装），所以走的是下面这条。
+  const skillTool = ctx.tools.get("skill") === undefined ? defineSkillTool(ctx) : undefined;
+  if (skillTool === undefined) {
+    ctx.logger.warn(
+      "context-skill-catalog: a `skill` tool is already registered; keeping the existing one and only publishing the catalog",
+    );
+  } else {
+    // 按会话注册：`register` 落到**调用它的那个 ctx** 的 scope 层（agent 自己那一层），随 agent 收回。
+    const install = (agent: Agent): void => {
+      // 本行重装（HMR / 设置面）时上次那份注册还在 agent 自己那一层（它随 agent 而不是随本行收回）：
+      // 同一份定义就不要再注册一次——同一层重复注册会抛（`dsh-scope` 的 `NamedEntries.insert`）。
+      if (ctx.tools.get("skill", agent) === skillTool) return;
+      try {
+        agent.ctx.tools.register(skillTool);
+      } catch (error) {
+        // agent 自己那一层被更具体的注册占了：让开（它自己会发目录），我们这一份注册不上。
+        ctx.logger.warn(`context-skill-catalog: ${String(error)}`);
+      }
+    };
+    ctx.on("agent/created", ({ agent }) => {
+      install(agent);
+    });
+    for (const agent of ctx.agents.list()) install(agent);
+  }
+
   ctx.contextAssembler.registerRule({
     id: CATALOG_ID,
-    // 对外身份沿用上游 kind：客户端标签与按 kind 认领的消费方认得这是技能目录，`entries` 就是
-    // 目录行里发布的那份清单（非模型消费者照它列条目）。
+    // 对外身份**用我们自己的 kind**（不是上游那个 `skill-catalog`）：目录的正文与条目都由我们发布，而上游
+    // `tool-skill` 的目录监听器把任何 `kind: 'skill-catalog'` 且条目可读的消息都当成**它自己的**账本
+    // （`catalogMessage` / `catalogHistory`），于是它会删掉我们这一条（首步：`!history.published &&
+    // skills.length === 0` 那条分支）或者补一条"没有可用 skill"的空目录把它顶掉（它有可见目录之后）。
+    // 形态仍是它认得的 `catalog`（`entries` 是客户端列条目的那份清单），只是 kind 归我们——
+    // 它的两个扫法都只看 kind，于是本会话里它彻底闭嘴。
     source: (agent) => ({
-      kind: "skill-catalog",
+      kind: "context-assembler",
       form: "catalog",
       entries: catalogEntries.get(agent) ?? [],
     }),
@@ -79,21 +116,11 @@ export function apply(ctx: Context): void {
       ].join("\n");
     },
   });
-
-  // 同名工具只能有一个所有者：host 层的 `tool-skill` 行由 patch 禁用，但万一没禁掉（上游改了行 id、
-  // 或别的 bundle 又插了一份），重复注册会让 tools/change 抖动甚至让 session 创建失败——所以先看清
-  // 注册表里有没有，有就让给对方，我们只负责目录。
-  if (ctx.tools.get("skill") !== undefined) {
-    ctx.logger.warn(
-      "context-skill-catalog: a `skill` tool is already registered; keeping the existing one and only publishing the catalog",
-    );
-  } else {
-    registerSkillTool(ctx);
-  }
 }
 
-function registerSkillTool(ctx: Context): void {
-  const skillTool = defineTool({
+/** 一份工具定义，按会话注册进每个 agent 的自己那一层（同一个定义对象，判据里的同一性靠它）。 */
+function defineSkillTool(ctx: Context): ReturnType<typeof defineTool> {
+  return defineTool({
     name: "skill",
     description: "按需加载 skill 的完整说明。",
     parameters: {
@@ -169,7 +196,6 @@ function registerSkillTool(ctx: Context): void {
       };
     },
   });
-  ctx.tools.register(skillTool);
 }
 
 function clamp(text: string, max: number): string {

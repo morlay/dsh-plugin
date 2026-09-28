@@ -1,13 +1,12 @@
 import { defineCordisPluginConfig } from "@local/devkit";
 import { defineConfig } from "tsdown";
-import { patchHooks } from "./tool/patch.ts";
 
 /**
  * 每个能力一个子出口（各自是独立的 cordis 插件，`inject` 互不牵连），所以入口是显式列出的：
  * 装配行写 `@morlay/dsh-context-assembler/<capability>`。包根的 `src/index.ts` 是组装出口。
  *
- * `rows` 出口是给"由 preset 引用"那种采用方式的：它导出同一份行清单（`src/rows.ts`），preset 的生成器
- * 直接 import 它，于是 preset 里那批行与本包 bundle patch 永远同源。
+ * `rows` 出口发布这个能力需要的行清单（`src/rows.ts`）：装配入口在部署那一层
+ * （`bundles/session-mode-profile`），bundle 直接 import 它渲染 patch，于是行清单只有一份真源。
  */
 export default defineConfig(async () => ({
   ...(await defineCordisPluginConfig({
@@ -19,5 +18,4 @@ export default defineConfig(async () => ({
       scope: "./src/scope/index.ts",
     },
   })),
-  hooks: patchHooks(),
 }));

@@ -52,7 +52,7 @@ export interface PromptRuleDeclaration {
   readonly id: string;
   readonly text: (agent: Agent) => string | Promise<string>;
   /**
-   * 这条规则的对外身份。接管上游那两面（工作区指令 / skill 目录）按上游 kind 发消息，好让按 kind 认领的
+   * 这条规则的对外身份。工作区指令那一面按上游 kind 发消息（skill 面相反，用我们自己的 kind），好让按 kind 认领的
    * 消费方（客户端标签、上游的实验性约束收集）认得出来；不声明就是通道自己的 `context-assembler`。
    * 幂等键仍是 `id`（`reminderMessage` 会把它塞进 source）。
    */
@@ -81,7 +81,10 @@ export class ContextAssembler extends Service {
   private readonly suppressed = new Set<string>();
   private readonly skills = new Map<string, RegisteredSkill>();
   private readonly states = new WeakMap<Agent, AgentState>();
-  /** 不要 instruction 类注入（规则块）的会话；内容块（技能正文、引用材料）不受它管。 */
+  /**
+   * 不要 instruction 类注入的会话（模式说了 `instructions: false`）：常驻正文、规则块与降级 section 都不进。
+   * 按需 skill 不受它管（那是模型自己加载），引用材料也不经通道。
+   */
   private readonly withoutInstructions = new WeakSet<Agent>();
 
   /** 本会话的模式收窄（白名单）：投影层的过滤不碰注册表，注册表上看不出"谁能用"。 */
@@ -137,7 +140,7 @@ export class ContextAssembler extends Service {
    * 本步要注入的条目：键 → 已渲染好的正文（规则块或内容块）。
    * `sections` 来自本步装配，`rules` 与 `auto` skill 正文在这里现算。
    */
-  /** 这个会话不要 instruction 类的规则块（模式说了 `instructions: false`）。 */
+  /** 这个会话要不要 instruction 类注入（模式说了 `instructions: false` 就是不要，见 {@link withoutInstructions}）。 */
   setInstructions(agent: Agent, on: boolean): void {
     if (on) this.withoutInstructions.delete(agent);
     else this.withoutInstructions.add(agent);
@@ -184,16 +187,37 @@ export class ContextAssembler extends Service {
     return this.declarations.get(name)?.content(agent);
   }
 
+  /** 一个 skill 在这个会话能不能被用到：声明了 `requires` 时至少一个工具在模式收窄内。 */
+  private reachable(
+    declaration: PromptSkillDeclaration,
+    scope: ((tool: string) => boolean) | undefined,
+  ): boolean {
+    const requires = declaration.requires;
+    if (requires === undefined || requires.length === 0) return true;
+    // 没有收窄（没装模式的部署）就是全可见。
+    if (scope === undefined) return true;
+    return requires.some((tool) => scope(tool));
+  }
+
   async collect(agent: Agent): Promise<Map<string, PromptEntry>> {
     const entries = new Map<string, PromptEntry>();
-    for (const declaration of this.declarations.values()) {
-      if ((declaration.injection ?? "on-demand") !== "auto") continue;
-      const body = declaration.content(agent);
-      // 常驻送达的 skill 正文与按需加载同一形态：内容块，不是规则块。
-      if (body.length > 0)
-        entries.set(declaration.name, { text: renderVirtualSkill(declaration.name, body) });
-    }
+    const scope = this.toolScopes.get(agent);
+    // 这一档开关管**一切 instruction 类送达**：常驻正文（内容块）、规则块、降级 section。按需 skill 照常注册
+    // （模型自己调 `skill` 才拿到正文，那已不是"注入"）；用户手打 `@` 引用带进来的材料走
+    // `@morlay/dsh-reference` 的 pre-step，不经这里。
     const instructionsOff = this.withoutInstructions.has(agent);
+    if (!instructionsOff) {
+      for (const declaration of this.declarations.values()) {
+        if ((declaration.injection ?? "on-demand") !== "auto") continue;
+        // 常驻正文也跟随工具可见性：它声明的 `requires` 工具在这个会话一个都不可用，正文就不该注入
+        // （与 skill 目录那侧的 `hiddenSkills` 同一判据；通道不碰 tools 注册表，只用模式收窄那一份）。
+        if (!this.reachable(declaration, scope)) continue;
+        const body = declaration.content(agent);
+        // 常驻送达的 skill 正文与按需加载同一形态：内容块，不是规则块。
+        if (body.length > 0)
+          entries.set(declaration.name, { text: renderVirtualSkill(declaration.name, body) });
+      }
+    }
     for (const declaration of this.rules.values()) {
       if (instructionsOff) break;
       // 注入路径不能被任何一个内容提供者拖死：文本是异步算的（技能目录要读注册表、工作区指令要读文件），

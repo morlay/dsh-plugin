@@ -222,6 +222,47 @@ describe("注入通道", () => {
     expect(skills[0]?.invocation.modelInvocable).toBe(false);
   });
 
+  it("auto skill 的正文跟随工具可见性：requires 全不可见时不再注入", async () => {
+    const { ctx, agent } = await mount();
+    ctx.contextAssembler.registerSkill({
+      name: "tool-group-fs",
+      title: "文件",
+      description: "文件类任务开始前加载。",
+      requires: ["read", "grep"],
+      content: () => "FS_BODY",
+      injection: "auto",
+    });
+
+    // 没登记收窄（没装模式的部署）：照常注入。
+    expect(bodyOf(await preStep(ctx, agent, [prompt("任务")]), "tool-group-fs")).toContain(
+      "FS_BODY",
+    );
+
+    // 会话收窄到白名单里没有 read / grep（`chat` 那种）：这份正文不再注入。
+    ctx.contextAssembler.restrictTools(agent, (tool) => tool === "web_search");
+    expect(reminderIds(await preStep(ctx, agent, [prompt("再来")]))).not.toContain("tool-group-fs");
+  });
+
+  it("instructions: false 的会话连 auto 正文都不注入，按需 skill 仍加载得到", async () => {
+    const { ctx, agent } = await mount();
+    ctx.contextAssembler.registerSkill({
+      name: "tool-group-base",
+      title: "基础",
+      description: "文件与命令类任务开始前加载。",
+      content: () => "BASE_BODY",
+      injection: "auto",
+    });
+    // 模式说了 `instructions: false`（`chat` 那种）：常驻用法正文也算 instruction 类，不进这一步的注入。
+    ctx.contextAssembler.setInstructions(agent, false);
+
+    const messages = await preStep(ctx, agent, [prompt("任务")]);
+    expect(reminderIds(messages)).not.toContain("tool-group-base");
+
+    // 按需那条路不受影响：正文仍在注册表里，模型自己调 `skill` 时拿得到（chat 里它被白名单挡在工具目录外）。
+    const loaded = await ctx.skills.get("tool-group-base", { scope: agent });
+    expect(loaded?.content).toContain("BASE_BODY");
+  });
+
   it("on-demand skill 进模型目录、正文不注入，加载时拿到正文", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:web_search", 1000, "WEB_SEARCH_GUIDE");

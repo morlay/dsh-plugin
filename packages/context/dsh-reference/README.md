@@ -5,7 +5,7 @@
 
 它不依赖注入通道（[`@morlay/dsh-context-assembler`](../dsh-context-assembler/README.md) 的
 `ctx.contextAssembler`）：自己挂 `agent/pre-step`、`inject` 只有 `skills`，不依赖通道服务，所以装在哪一层
-装配面上都成立。装配落在 [`@morlay/better-session`](../../session/better-session/cordis.patch.yml)（一行
+装配面上都成立。装配落在 [`@morlay/better-session`](../../../bundles/better-session/cordis.patch.yml)（一行
 `@morlay/dsh-reference`）。
 
 ## 用法

@@ -26,12 +26,16 @@
 ——它是模式那一层的收口行，由 [`@morlay/dsh-session-mode`](../../profile/dsh-session-mode/README.md) 的 patch 与模式定义
 一起装（行 id 与 name 归本包的 `scopeRow()`，单一 home）。
 
+装一次不等于每次都注入：这两条面各自按**会话**判归谁——`agent-instructions` 在预设自带那一行时**让位**，
+`skill-catalog` 反过来把同名工具注册进 agent 自己那一层**抢面**（见下面两节）。所以 `capabilities` 不在装配期
+按模式裁。
+
 工具说明（汉化 / 精简 / 用法分组）也不在这里：它归
 [`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md)，同样在 profile 平面装一次。
 
 ## 装配形态
 
-本包是 bundle：`cordis.patch.yml` 由 [`tool/patch.ts`](./tool/patch.ts) 从 [`src/rows.ts`](./src/rows.ts) 渲染，
+本包是 bundle：`cordis.patch.yml` 由 [`src/rows.ts`](./src/rows.ts) 从 [`src/rows.ts`](./src/rows.ts) 渲染，
 `rows` 出口导出同一份清单。`dsh.profile.bundles` 列出本包即装一次，**服务全局共享、不隔离**；模式的收口是
 另一行（`scopeRow()`：工具白名单 / instruction / 动态快照），别的包的行（工具说明、skill 目录）直接 `inject`
 同一份通道。
@@ -47,7 +51,7 @@
 全局通道）。本包只做上下文重排。
 
 引用展开不住在这里：它不依赖 `ctx.contextAssembler`（`inject` 只有 `skills`），也没有「读文件 + 字节预算」
-以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../session/better-session/cordis.patch.yml)
+以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../../bundles/better-session/cordis.patch.yml)
 装配（见 [ADR-引用展开拆成独立包](../../../.agents/adrs/20260923-引用展开拆成独立包并按profile装配.md)）。
 
 **每个出口仍是独立的 cordis 插件**（各自的 `apply` 与 `inject`）——这一点是硬要求：合成单入口会让 `inject`
@@ -79,23 +83,42 @@ user 消息注入（每条按文本幂等，只有变化的那条重发）。
 `$DSH_HOME/AGENTS.md` 加项目根到 cwd 的逐级 `AGENTS.md` / `AGENTS.local.md`，**一条文件一条 id**
 （`agent-instructions:<根标识>:<文件>`，根标识是根目录的 8 位摘要——同进程两个项目根的同名文件因此不会互相
 顶掉），文件变化时只重发变了的那一份。取代上游 `@deepseek-ai/dsh-agent-instructions`（host 那行由上游
-web-app bundle 自己设在装配层；我们那份由本包的组装出口在 profile 平面装）。
+web-app bundle 自己设在装配层；我们那份由本包的组装出口在 profile 平面装）——**在该会话的 preset 行清单没有
+上游那一行时**。
 
+- **preset 自带那一行时让位**：官方 `standard` / `ptc` / `cordis` 的 preset 行清单里有
+  `@deepseek-ai/dsh-agent-instructions`（`minimal` 没有），装上的会话由 preset 侧注入，这一条一条都不注入；
+  `chat` 挂的 `minimal` 会话仍由我们提供。判据与理由见
+  [ADR-工作区指令让位skill面由通道抢面](./.agents/adrs/20260929-工作区指令让位skill面由通道抢面.md)。
 - **不跟踪 `read`/`write`/`edit`**：上游靠 touch 上浮触发刷新；本部署的 `AGENTS.md` 几乎不变，按
   `mtime:size` 对账足够。
 - **超预算可见**：单文件超过 `maxBytes` 时截断并留一行提示，不静默丢内容。
 - **与上游的 baseline 认领对齐**：`source` 带 `kind: "agent-instructions"` + `baseline: true` +
-  `baselineIdentity`（身份与上游 `workspaceBaselineIdentity` 逐字相等）。少了后两样会出一个只在真会话里
-  看得见的毛病：**同会话切到另一套装配后出现两条 AGENTS.md**——上游认为基线不存在，再注入一条自己的模板
-  （"Use them as guidance…"），两条口径矛盾且模型无法理解为覆盖。
+  `baselineIdentity`（身份与上游 `workspaceBaselineIdentity` 逐字相等）。上游的认领判据只看本步 claimed 的
+  消息与会话 surface，所以它救不了首步两侧同时注入（那由让位管），但管得住另一件事：**我们注入过基线的历史
+  会话在 preset 会话里恢复时**，上游认得出那条、不再补一份自己的模板（"Use them as guidance…"）。
 - 配置：`instructionFileCandidates` / `localInstructionFileCandidates`（覆盖成只读 `AGENTS*`，不含 CLAUDE
   系列）、`maxBytes`（65536）、`dshHome`。
 
 ## skill-catalog
 
 `skill-catalog` 规则块（`<available_skills>`，一行 `名字: 摘要`，只列模型可调用的 skill）加模型侧 `skill`
-工具。取代上游 `@deepseek-ai/dsh-tool-skill`（`skill-filesystem` 保留——它提供 skill 发现）。目录变更走
-同 id 覆盖；`auto` 的 skill 不进目录（正文已随提示送达）。
+工具。取代上游 `@deepseek-ai/dsh-tool-skill`（`skill-filesystem` 保留——它提供 skill 发现）。目录变更走同 id
+覆盖；`auto` 的 skill 不进目录（正文已随提示送达）。
+
+**这一面归通道**（工作区指令那一面相反，是让位）：`skill` 工具按**会话**注册进 agent 自己那一层，最近的一层
+赢，遮蔽 preset 那份；上游的目录发布判据是"它自己注册的那个工具是本会话可见的那个"，被遮蔽之后它不发目录，
+目录由我们发布。要点：
+
+- 目录那条注入消息的 **kind 是我们自己的**（`context-assembler` + `form: "catalog"` + `entries`）。上游把任何
+  `kind: "skill-catalog"` 且条目可读的消息当成它自己的账本：kind 用它的，它会在首步删掉我们这条、在有可见
+  目录之后补一条"没有可用 skill"把目录顶掉（它文档里的 visibility-loss 语义）。`form` 与 `entries` 照旧，
+  客户端那张条目表不受影响；注入行的标签变成 `context-assembler`。
+- 按会话注册随 agent 收回；这一行重挂（HMR / 设置面）时不再重复注册同一份定义。
+- `chat`（挂 `minimal`，没有上游那一行）：工具与目录同样是我们提供的，但它的模式定义不收这两样
+  （`instructions: false`、白名单里没有 `skill`）——白名单把它挡在模型目录外，执行层 guard 拒绝调用。
+
+取舍与上游判据见 [ADR-工作区指令让位skill面由通道抢面](./.agents/adrs/20260929-工作区指令让位skill面由通道抢面.md)。
 
 ## 工具说明（不在这个包里）
 
@@ -106,7 +129,8 @@ web-app bundle 自己设在装配层；我们那份由本包的组装出口在 p
 ## scope
 
 按会话收口的出口（行 id `context-assembler-scope`）：工具白名单（装配期投影 + 执行层 guard + 与工具同源的
-`tool:<工具名>` 说明 section，三侧同判据）、`instructions`（关掉规则块与降级 section）、`runtimeContext`
+`tool:<工具名>` 说明 section，三侧同判据）、`instructions`（关掉一切 instruction 类送达：常驻组正文、规则块
+与降级 section；按需 skill 与 `@` 引用材料不受它管）、`runtimeContext`
 （关掉沙箱 / 审批那两条动态快照，按 scope 抑制）。
 
 **定义由消费方推给它**，它自己不认识"模式"：`ctx.sessionToolScope.apply(agent, mode)` 是唯一入口，落在该

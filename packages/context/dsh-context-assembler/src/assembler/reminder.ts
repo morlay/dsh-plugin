@@ -14,7 +14,16 @@ export const RULES_SECTION = "assembler:rules";
 /** 通道自己的条目形态（注入方没声明 source 时的默认）：规则块，幂等键是 id。 */
 export interface PromptReminderSource {
   kind: "context-assembler";
-  form: "instructions";
+  /**
+   * 条目形态：`instructions` 是规则块；`catalog` 是"带清单的目录"（客户端按 `entries` 列条目，
+   * 而不是读正文）。
+   */
+  form: "instructions" | "catalog";
+  /**
+   * `catalog` 形态发布的那份清单。**只有我们自己发布的目录**用它：上游 `tool-skill` 的账本扫法
+   * 只认它自己的 `kind`，所以这里的 kind 必须是我们自己的（见 [`skill-catalog`](../skill-catalog/index.ts)）。
+   */
+  entries?: readonly { readonly name: string; readonly description: string }[];
   /** 条目 id：同 id 的最新一条取代更早的同 id 条目。本插件早先落库的消息没有它。 */
   id?: string;
 }
@@ -27,7 +36,7 @@ declare module "@deepseek-ai/dsh-llm" {
 
 /**
  * 这条消息是不是通道注入的条目——判据是 source 里的幂等键，而不是 kind：接管上游那两面的条目
- * 用上游 kind（`agent-instructions` / `skill-catalog`），幂等必须照样认。
+ * 接管工作区指令那一面的条目用上游 kind（`agent-instructions`），幂等必须照样认。
  */
 export function promptEntryIdOf(source: MessageSource): string | undefined {
   const id = (source as { readonly id?: unknown }).id;
@@ -79,7 +88,7 @@ export function latestReminderText(agent: Agent, id: string): string | undefined
 
 /**
  * 注入一条提醒：`text` 是已渲染好的完整正文（规则块或内容块），`key` 是它的幂等键。
- * `source` 声明这条消息对外的身份——接管上游那两面用上游 kind，我们自己的条目留默认。
+ * `source` 声明这条消息对外的身份——工作区指令那一面用上游 kind，我们自己的条目留默认。
  */
 export function reminderMessage(key: string, text: string, source?: MessageSource): UserMessage {
   return createUserMessage({

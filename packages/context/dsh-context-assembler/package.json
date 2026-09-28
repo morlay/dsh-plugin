@@ -19,31 +19,28 @@
     "dist",
     "src",
     "tool",
-    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./rows": "./src/rows.ts",
     "./assembler": "./src/assembler/index.ts",
     "./agent-instructions": "./src/agent-instructions/index.ts",
     "./skill-catalog": "./src/skill-catalog/index.ts",
     "./scope": "./src/scope/index.ts",
     "./package.json": "./package.json",
-    "./rows": "./src/rows.ts",
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
+      "./rows": "./dist/rows.mjs",
       "./assembler": "./dist/assembler.mjs",
       "./agent-instructions": "./dist/agent-instructions.mjs",
       "./skill-catalog": "./dist/skill-catalog.mjs",
       "./scope": "./dist/scope.mjs",
       "./package.json": "./package.json",
-      "./rows": "./dist/rows.mjs",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -52,18 +49,22 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:*"
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
+    "@deepseek-ai/cordis-plugin-group": "workspace:*",
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-instructions": "workspace:*",
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -74,26 +75,23 @@
     "@deepseek-ai/dsh-token-meter": "workspace:*",
     "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
+    "@morlay/dsh-session-mode": "workspace:*",
     "@morlay/session-rdb": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "@types/mdast": "^4.0.4",
     "js-yaml": "^4.1.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
-    "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-skill": "workspace:*",
-    "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:^",
+    "@deepseek-ai/dsh-agent-preset-registry": "workspace:^",
+    "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-skill": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^"
   }
 }
