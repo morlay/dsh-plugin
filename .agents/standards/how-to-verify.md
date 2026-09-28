@@ -42,6 +42,10 @@
   `dependencies`，否则消费方解析不到它们的原生二进制。
 - **严禁本地私自 `pnpm publish`**（包括用 `--registry` 指向 GitHub Packages 的发布）。版本 bump
   提交后由 CI 发布；本地只构建验证。
+- **bump 前确认该版本号没被占用**：CI 的 `publish-if-need` 见到版本已存在就**静默 skip**，撞上旧仓库
+  （`better-session`）或历史预发布占用的号，表现是「bump 提交了，新构建却永远发不出去」，而消费方
+  按新 API 构建就会 `failed to import`。改版本前先 `pnpm view <pkg>@<新版本> version` 确认，或直接
+  跳到未被占用的号段。
 - 改动收尾时 `just lint` 只要不引入**新**错误即可，必要时 `just fmt`。
 - **日常验证不要跑 `verify-session-mode.mts` / `just pg test` 这类起真实服务的探针**：
   它们绑端口、装依赖，会被机器上别的进程（残留的 dev server、另一个探针）阻塞住，卡住的是验证本身而不是被测
