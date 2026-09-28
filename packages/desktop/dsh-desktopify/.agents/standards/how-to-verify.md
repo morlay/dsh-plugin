@@ -12,7 +12,8 @@
 - **命令面与配置**：`cli-surface.spec.ts`、`workspace-config.spec.ts`、`appconfig.spec.ts`、
   `ipc.spec.ts`（app 名 → scheme 的派生与发送者校验）、`dshhome.spec.ts`、`shell-env.spec.ts`、
   `shell-import-boundary.spec.ts`（壳产物的依赖边界：壳可达模块不得裸引用 asar 里解析不到的包），
-  `shell-app-directory.spec.ts`、`dev-*.spec.ts`；
+  `shell-app-directory.spec.ts`、`dev-*.spec.ts`、`tsx-import.spec.ts`（给 host 的 tsx specifier 必须是
+  绝对 `file:` 地址——子进程的 cwd 是部署目录，裸名 `tsx/esm` 在那儿解析不到）；
 - **种子 / 部署 / 运行时闭包**：`seed-*.spec.ts`、`profile-seed.spec.ts`、`deploy-*.spec.ts`、
   `official-*.spec.ts`、`runtime-packages.spec.ts`、`prepare-runtime-target.spec.ts`、
   `agent-presets.spec.ts`；
@@ -28,6 +29,14 @@
 `stream-uplink.spec.ts`（本包）覆盖页面侧的排队纯逻辑：`open` 的 IPC 往返回来之前先排队、绑定后按序发。
 
 ## 未覆盖（有明确原因）
+
+- **两种 dev 形态的真机启动**：`dev --web` 用 curl 取 `/plugins/??<包名>/client.js`；桌面形态没有端口，
+  改用壳的 renderer 调试口（`--remote-debugging-port=9222`，`curl /json/list` 拿页面 target 后在页面里
+  `fetch` 同一路径）。两者都应拿到现场转换的字节（与 `dist/client.cjs` 不同、也不是
+  `src/client/index.ts` 的原文），且改一处 client 源码再取一次能看到字节随之变化。无 GUI 的环境
+  （CI /受限沙箱：`sandbox initialization failed` + GPU 进程退出）起不来 Electron，那里退一步只验证准备物：
+  `<projectDir>/cordis.patch.yml` 含 `dev-client-bundles` 行、`<projectDir>/node_modules/@morlay/dsh-desktopify`
+  可达、以 projectDir 为 cwd 能 `import("@morlay/dsh-desktopify/dev-client-bundles")`（三样齐了那行才会激活）。
 
 - **Electron 主进程 / preload / `cli/{bundle,dev}.ts` 私有逻辑**：导入即触发 `app.whenReady()` 等
   副作用，需要整套 Electron mock 面——真实启动见该包[设计 桌面化工具](../designs/20260917-桌面化工具.md)

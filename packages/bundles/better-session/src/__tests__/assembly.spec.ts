@@ -16,7 +16,7 @@ function insertedPackageNames(text: string): string[] {
 
 interface WorkspaceManifest {
   name?: string;
-  exports?: Record<string, { types?: string; default?: string }>;
+  exports?: Record<string, { types?: string; default?: string } | string>;
   dsh?: { client?: { platform?: string; inject?: readonly string[] } };
 }
 
@@ -66,8 +66,10 @@ describe("better-session 装配面", () => {
     expect(clientPackages.length).toBeGreaterThan(0);
     for (const name of clientPackages) {
       const entry = manifestOf(name).exports?.["./client"];
-      expect(entry?.types, `${name} client types`).toBeDefined();
-      expect(entry?.default, `${name} client bundle`).toBeDefined();
+      // 开发态是一条指源码的字符串（现场转换），发布态才是 `{ types, default }` 产物对。
+      const entries =
+        typeof entry === "string" ? [entry] : [entry?.types, entry?.default].filter(Boolean);
+      expect(entries.length, `${name} client 入口`).toBeGreaterThan(0);
       expect(manifestOf(name).dsh?.client?.platform).toBe("web");
     }
   });

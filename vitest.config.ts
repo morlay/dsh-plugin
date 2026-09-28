@@ -7,7 +7,7 @@ import { defineConfig } from "vitest/config";
 const root = dirname(fileURLToPath(import.meta.url));
 
 // 工作区内包的 client 半运行期是浏览器模块工厂（window.__ModuleLoader__），
-// node 侧不可加载；按 exports 的 types 解析回 TS 源码。
+// node 侧不可加载；按 exports 里指源码的那个出口解析回 TS（开发态就是一条字符串）。
 async function clientSourceAliases(): Promise<{ find: string; replacement: string }[]> {
   const aliases: { find: string; replacement: string }[] = [];
   const packagesDir = join(root, "packages");
@@ -30,9 +30,14 @@ async function clientSourceAliases(): Promise<{ find: string; replacement: strin
         exports?: Record<string, { types?: unknown } | string>;
       };
       const client = parsed.exports?.["./client"];
-      const types = typeof client === "object" ? client.types : undefined;
-      if (typeof parsed.name !== "string" || typeof types !== "string") continue;
-      aliases.push({ find: `${parsed.name}/client`, replacement: join(directory, types) });
+      const source =
+        typeof client === "string"
+          ? client
+          : typeof client === "object" && client !== null
+            ? client.types
+            : undefined;
+      if (typeof parsed.name !== "string" || typeof source !== "string") continue;
+      aliases.push({ find: `${parsed.name}/client`, replacement: join(directory, source) });
     }
   }
   return aliases;

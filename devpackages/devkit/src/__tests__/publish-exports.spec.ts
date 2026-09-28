@@ -45,4 +45,23 @@ describe("发布态的包出口", () => {
     }
     expect(dropped).toEqual([]);
   });
+
+  it("client 半的开发态出口回源，发布态才指产物", () => {
+    const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
+    expect(clients.length).toBeGreaterThan(0);
+
+    const wrong: string[] = [];
+    for (const { name, manifest } of clients) {
+      const dev = manifest.exports?.["./client"];
+      const published = (manifest.publishConfig?.exports ?? {})["./client"] as
+        | { types?: unknown; default?: unknown }
+        | undefined;
+      // 开发态的出口就是一个指源码的字符串（上游按它读字节，那份 TS 由 dev-client-bundles 现场转换）：
+      // 与 host 面同一条规则，不写成 `{ types, default }` 那种两份同值的形态。
+      if (dev !== "./src/client/index.ts") wrong.push(`${name}: dev=${String(dev)}`);
+      if (published?.default !== "./dist/client.cjs")
+        wrong.push(`${name}: published=${String(published?.default)}`);
+    }
+    expect(wrong).toEqual([]);
+  });
 });

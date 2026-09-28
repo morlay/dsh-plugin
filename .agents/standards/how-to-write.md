@@ -27,9 +27,11 @@
 - **谁引到什么由 `exports` 决定**，新面先加出口再引。出口分五类：**host 面**（`.`）、
   **子能力出口**（按域拆分）、**测试辅助**（`./testing`）、**浏览器半**（`./client`）、
   **装配声明**（`./cordis.patch.yml`）。
-- **client 半是单文件 bundle**：`./client` 的 `default` 指向 `dist/client.cjs`（`types` 回源
-  `src/client/index.ts`，便于 vitest 解析）——上游 client 半以浏览器模块工厂加载，多文件产物会破坏
-  ModuleLoader 手递，约束与理由见
+- **client 半的开发态出口回源**：`./client` 就是一条指 `src/client/index.ts` 的字符串（不是
+  `{ types, default }` 那种两份同值的形态）——与 host 面同一条规则。上游把这个路径拼成绝对路径后
+  **直接读字节**（浏览器模块工厂执行的就是那份字节），那份 TS 由 `dev-client-bundles`
+  （`dsh-desktopify dev` 装进 profile 的那一行）现场转换；**发布态**才写成 `{ types, default }` 取
+  `dist/client.cjs`——CJS 单文件：多文件产物会破坏 ModuleLoader 手递，约束与理由见
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
@@ -38,7 +40,7 @@
   指产物；手改这两段会在下次 `just build` 被覆盖。要加一个面就加一个入口（`src/<面>.ts` +
   `tsdown.config.ts` 的 `entries`）。入口约定、生成规则与理由都在
   [`devpackages/devkit/src/package-exports.ts`](../../devpackages/devkit/src/package-exports.ts)。
-- **client 半只有一个形态**：它是 CJS 单文件 bundle，出口固定写成 `{ types, default }`，**不参与
+- **client 半只有一个形态（发布态）**：它是 CJS 单文件 bundle，出口固定写成 `{ types, default }`，**不参与
   ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的 require 变体，包根出口就指到了
   client 半。
 - **固定面按文件存在性补**：`./package.json` 一律在；`./cordis.patch.yml` 有该文件才有；`./locale/*.json`

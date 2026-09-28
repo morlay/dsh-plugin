@@ -15,18 +15,14 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
-import {
-  ensureClientBundlePlaceholders,
-  installProfilePatch,
-  syncProfileBundles,
-} from "./dev-web.ts";
+import { installProfilePatch, syncProfileBundles } from "./dev-web.ts";
 import {
   DSH_PACKAGE,
   desktopHost,
-  hasTsx,
   officialDependencySpecs,
   resolveOfficialPackage,
   toolModulesDir,
+  tsxImportSpecifier,
   type OfficialResolutionInput,
 } from "./official-deps.ts";
 import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
@@ -46,6 +42,8 @@ import {
 } from "./workspace.ts";
 
 const APP_ROOT = resolve(import.meta.dirname, "..", "..");
+/** 本包名：app 的 `cordis.patch.yml` 用它拼 `dev-client-bundles` 行，profile 里也得装它。 */
+export const DESKTOPIFY_PACKAGE = "@morlay/dsh-desktopify";
 
 function debugPort(name: string, fallback: number): number {
   const value = process.env[name];
@@ -258,17 +256,34 @@ async function prepareWebProfile(
   workspace: string,
   input: OfficialResolutionInput,
   home: string,
+  clientBundles: boolean,
 ): Promise<string> {
   const manifest = await workspaceManifest(workspace);
   const entry = await cliEntry(input);
   if (!(await pathExists(entry))) {
     throw new Error(`desktop development: missing built artifact ${entry}`);
   }
-  for (const packageName of Object.keys(manifest.dependencies ?? {})) {
+  const dependencies = Object.keys(manifest.dependencies ?? {});
+  for (const packageName of dependencies) {
     const link = resolveLinkTarget(workspace, packageName);
     await run(
       process.execPath,
       [entry, "plugin", "--profile", "web", "add", `${packageName}@link:${link}`],
+      workspace,
+      {
+        ...process.env,
+        DSH_HOME: home,
+      },
+    );
+  }
+  // 现场打包的实现（`dev-client-bundles` 出口）在本包：app 只把 desktopify 声明成 peer，
+  // 上面的循环不会带上它，而 app 的 `cordis.patch.yml` 按 `@morlay/dsh-desktopify/dev-client-bundles`
+  // 写那一行——profile 里缺这个包，dev 的 client bundle 路由就 `failed to import`（只剩上游读清单
+  // 里那份源码的降级路径，页面直接报语法错误）。
+  if (clientBundles && !dependencies.includes(DESKTOPIFY_PACKAGE)) {
+    await run(
+      process.execPath,
+      [entry, "plugin", "--profile", "web", "add", `${DESKTOPIFY_PACKAGE}@link:${APP_ROOT}`],
       workspace,
       {
         ...process.env,
@@ -294,7 +309,8 @@ function resolveLinkTarget(workspace: string, packageName: string): string {
 async function launchElectron(
   projectDir: string,
   buildRootDir: string,
-  tsxImport: boolean,
+  tsxImport: string | undefined,
+  clientBundles: boolean,
   home: string,
 ): Promise<void> {
   const require = createRequire(import.meta.url);
@@ -318,7 +334,10 @@ async function launchElectron(
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
 
-    DSH_DESKTOP_TSX_IMPORT: tsxImport ? "tsx/esm" : "",
+    DSH_DESKTOP_TSX_IMPORT: tsxImport ?? "",
+    // host 进程按这个开关启用 profile 里那条 `dev-client-bundles` 行（它继承 Electron 的环境，
+    // 而 host 会滤掉 `DSH_DESKTOP_*`）。桌面与 web 两条 dev 路径都要它：清单里 client 半指源码。
+    ...(clientBundles ? { DSH_DEV_CLIENT_BUNDLES: "1" } : {}),
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS ?? "1",
     ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? "1",
   };
@@ -355,8 +374,11 @@ export async function runDev(options: DevOptions): Promise<void> {
   // 两种 dev 形态共用同一个数据面根；`--home=xdg` 时与打包形态落到同一个目录。
   const home = resolveDevHome(workspace, manifest.name, options.home);
   await buildShell();
+  // client 半的现场转换（清单里 `./client` 指源码）：两条 dev 形态都要挂。
+  const devWeb = devWebConfig(manifest);
+  const tsxImport = tsxImportSpecifier(workspace, repositoryRoot);
   if (options.web) {
-    const profileDir = await prepareWebProfile(workspace, input, home);
+    const profileDir = await prepareWebProfile(workspace, input, home, devWeb !== undefined);
     const port = process.env.PORT ?? "3080";
     const entry = await cliEntry(input);
     if (!(await pathExists(entry))) {
@@ -366,20 +388,15 @@ export async function runDev(options: DevOptions): Promise<void> {
       `desktop development: web mode DSH_HOME=${home} profile=${profileDir} port=${port}`,
     );
 
-    const devWeb = devWebConfig(manifest);
     if (devWeb !== undefined) {
       const patchFile = await installProfilePatch(profileDir, workspace);
-      const placeholders = await ensureClientBundlePlaceholders(profileDir, devWeb);
-      console.log(
-        `desktop development: dev client bundles patch=${patchFile} ` +
-          `placeholders=${placeholders.length === 0 ? "none" : placeholders.join(", ")}`,
-      );
+      console.log(`desktop development: dev client bundles patch=${patchFile}`);
     }
 
-    const tsx = hasTsx(workspace, repositoryRoot);
-    const nodeOptions = tsx
-      ? [process.env.NODE_OPTIONS, "--import=tsx/esm"].filter(Boolean).join(" ")
-      : process.env.NODE_OPTIONS;
+    const nodeOptions =
+      tsxImport === undefined
+        ? process.env.NODE_OPTIONS
+        : [process.env.NODE_OPTIONS, `--import=${tsxImport}`].filter(Boolean).join(" ");
     await run(process.execPath, [entry, "web", "--port", port], repositoryRoot, {
       ...process.env,
       DSH_HOME: home,
@@ -397,6 +414,11 @@ export async function runDev(options: DevOptions): Promise<void> {
     workspace,
     input,
   );
+  // 桌面 dev 的 profile 就是 projectDir（壳把它当 profile 目录用），patch 因此写在这里。
+  if (devWeb !== undefined) {
+    const patchFile = await installProfilePatch(projectDir, workspace);
+    console.log(`desktop development: dev client bundles patch=${patchFile}`);
+  }
   const desktop = desktopConfig(manifest);
   const runtimeRoot = join(buildRootDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });
@@ -409,5 +431,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(projectDir, buildRootDir, hasTsx(projectDir, projectDir), home);
+  await launchElectron(projectDir, buildRootDir, tsxImport, devWeb !== undefined, home);
 }

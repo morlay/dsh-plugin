@@ -4,9 +4,10 @@
 //
 // 两条规则就够：
 // - **host 面**：一个入口一个出口，顶层出口指源码（workspace 内直连 `src`），发布态指产物；
-// - **client 半**：它只能是 CJS 单文件 bundle（模块系统的工厂契约），出口固定写成
-//   `{ types, default }`——顶层 `types` 回源、发布态取 `.d.cts` 与 `.cjs`，**不参与 ESM / CJS 的格式推导**
-//   （让推导去猜，它会把 `client.cjs` 当成 `.` 的 require 变体，清单就错了）。
+// - **client 半**：开发态与 host 面一样，就是一条指源码的字符串（那份 TS 由 `dev-client-bundles`
+//   现场转换）；发布态只能是 CJS 单文件 bundle（模块系统的工厂契约），出口写成 `{ types, default }`
+//   取 `.d.cts` 与 `.cjs`，**不参与 ESM / CJS 的格式推导**（让推导去猜，它会把 `client.cjs` 当成 `.`
+//   的 require 变体，清单就错了）。
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { TsdownHooks } from "tsdown";
@@ -142,11 +143,13 @@ async function writeManifest(
     if (found === undefined) continue;
 
     if (entry === options.clientEntry) {
-      // client 半只有 CJS 单文件这一种形态，按约定直接写，不做格式推导。
+      // client 半只有 CJS 单文件这一种形态，**发布态**按约定直接写产物，不做格式推导；
+      // 开发态就是一个出口指源码（与 host 面同一条规则，写字符串而不是 `{ types, default }`）——
+      // 上游把这个路径拼成绝对路径后读字节，那份 TS 由 `dev-client-bundles` 现场转换。
       const runtime = pick(found.runtime, true);
       if (runtime === undefined) continue;
       const declarations = found.declarations.find((file) => file.endsWith(".d.cts"));
-      clientDev = { types: entrySource, default: artifact(runtime) };
+      clientDev = entrySource;
       clientPublished =
         declarations === undefined
           ? { default: artifact(runtime) }

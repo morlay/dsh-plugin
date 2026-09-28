@@ -21,10 +21,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
-    "./client": {
-      "types": "./src/client/index.ts",
-      "default": "./dist/client.cjs"
-    },
+    "./client": "./src/client/index.ts",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
