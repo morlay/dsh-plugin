@@ -1,8 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { standardDecoratorsPlugin } from "@local/devkit";
 import { defineConfig } from "vitest/config";
-import { transformWithEsbuild } from "vite";
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -40,35 +40,14 @@ async function clientSourceAliases(): Promise<{ find: string; replacement: strin
 
 // 上游 typert 用**标准（TC39）装饰器**标记远程面（如 `@Remote('prompt')`）。上游包在测试里走已构建的
 // lib，本仓库的 fork 包走源码入口，而 Vite 8 的默认转换器（oxc）不降级装饰器——原样执行时
-// `node:vm` 编译报 SyntaxError。这里用 esbuild 预降级（实测可行；oxc 支持装饰器降级后可回退）。
-// 范围限定 subagent 子树：只有那批源码带装饰器（YAGNI，需要时再扩）。
-const DECORATOR_SYNTAX = /^\s*@[A-Za-z_$][\w$]*/m;
+// `node:vm` 编译报 SyntaxError。预转换的实现在 devkit（产物那边的 tsdown 用同一份）。
+// 范围限定 subagent 子树：只有那批源码带装饰器（YAGNI，需要时再扩）；`pre` 是必需的时机（默认时机太晚）。
 const DECORATOR_SOURCES = /\/packages\/subagent\//;
 
-function subagentStandardDecorators() {
-  return {
-    name: "dsh-subagent-standard-decorators",
-    enforce: "pre" as const,
-    async transform(code: string, id: string) {
-      const file = id.split("?", 1)[0]!;
-      if (
-        !DECORATOR_SOURCES.test(file) ||
-        !/\.[cm]?tsx?$/.test(file) ||
-        !DECORATOR_SYNTAX.test(code)
-      )
-        return;
-      const result = await transformWithEsbuild(code, file, {
-        loader: file.endsWith("x") ? "tsx" : "ts",
-        sourcemap: true,
-        target: "es2024",
-      });
-      return { code: result.code, map: result.map };
-    },
-  };
-}
-
 export default defineConfig(async () => ({
-  plugins: [subagentStandardDecorators()],
+  plugins: [
+    standardDecoratorsPlugin({ scope: DECORATOR_SOURCES, sourcemap: true, enforce: "pre" }),
+  ],
   resolve: { alias: await clientSourceAliases() },
   test: {
     include: [

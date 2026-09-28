@@ -7,7 +7,7 @@
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `./rows`             | 功能行清单与工具名：shell、文件、任务、skill 发现、goal、压缩、计划模式、委派与工作流、问答、todo、联网；preset 平面那一套（`TOOLKIT_PRESET_ROWS`）也在这一份数据里 |
 | `./guidance`         | 工具说明：短描述汉化、schema 精简、用法分组（组 skill）、丢弃上游说明                                                                                               |
-| `./agent-team`       | Agent Teams 那一组行，**默认关闭**（`DSH_AGENT_TEAM=1` 才装）                                                                                                       |
+| `./agent-team`       | Agent Teams 那一组行（**本部署 preset 不放它**；要用的人加上游 `dsh-experimental-agent-team-profile`）                                                              |
 | `./cordis.patch.yml` | 只插工具说明那一行（给 profile 直接装配用）                                                                                                                         |
 
 ## 装配
@@ -46,9 +46,9 @@
 ## Agent Teams：可选
 
 [`./agent-team`](./src/agent-team.ts) 给一组默认关闭的行（上游实验能力：roster / 消息 / 共享任务 + 模型侧
-工具 + Web UI），上游自带 `dsh-experimental-agent-team-profile` bundle 做同样的事。开关是运行期
-（`!!js process.env.DSH_AGENT_TEAM !== '1'`），所以同一个产物在需要时打开即可；团队装上来时，上面清单里
-"直接派发"那几行（`subagent` / `subagent_fork` / 控制行）自动让位——两者不会同时装。
+工具 + Web UI）。**本部署的 preset 清单不放它**——要用团队的人加上游
+`@deepseek-ai/dsh-experimental-agent-team-profile` bundle：那份自带"禁直接派发 + 插这三行"的整套换法
+（`DSH_AGENT_TEAM` 那个运行期开关只服务于这个可选出口，装配期求值）。
 
 ## 边界
 

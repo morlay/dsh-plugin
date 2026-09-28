@@ -35,8 +35,11 @@ import {
 import type { Activation } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/continuation-activation.ts'
 import {
   createAgentMessage,
+  localizedReturnGuidance,
   withContinuableReturnGuidance,
 } from './continuation-messages.ts'
+// 会话不在本部署名单里时用上游那一份（英文）：文案跟着 preset 走，不是整进程只有一份。
+import { withContinuableReturnGuidance as upstreamWithContinuableReturnGuidance } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/continuation-messages.ts'
 import { assertSubagentMaxDepth } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/descriptor.ts'
 import { establishCatalogChild } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/catalog.ts'
@@ -86,6 +89,7 @@ export class SubagentContinuationManager {
     private readonly ctx: Context,
     private readonly host: ContinuationHost,
     maxActiveSubagents: () => number,
+    private readonly localizedGuidancePresets: () => readonly string[],
   ) {
     this.activations = new ContinuableActivationRegistry(
       ctx,
@@ -177,7 +181,7 @@ export class SubagentContinuationManager {
         return await this.submitMaterialized(
           activation,
           isAdjacentAgentSendMessageTool(this.ctx.get('tools')?.get('send_message', activation.handle.agent))
-            ? withContinuableReturnGuidance(parent.id, request.prompt)
+            ? this.continuableReturnGuidance(parent, request.prompt)
             : request.prompt,
           { source: { kind: 'user' }, signal: spec.signal, delivery: 'queue' },
           parent,
@@ -189,6 +193,24 @@ export class SubagentContinuationManager {
       releaseHold()
       throw error
     }
+  }
+
+  /**
+   * Return guidance for a continuable child's initial task, per session.
+   *
+   * 会话挂着本部署名单里的 preset 时用本包的中文文案，其余（官方 shipped preset、还没绑 preset 的会话、
+   * 不装 registry 的部署）保持上游英文。文案是模型可见的东西，跟着 preset 走；但 `subagents` 是**进程单例**
+   * （跨会话查询面由 host 的 api-proxy 服务、provider 名全局唯一），realm 内的服务 realm 外读不到，所以这一行
+   * 不能搬进 preset realm——只能在 host 平面按会话判。
+   * @param parent - the exact live parent whose session owns the child.
+   * @param prompt - initial model-visible task blocks.
+   * @returns task blocks followed by the guidance this session asked for.
+   */
+  private continuableReturnGuidance(parent: Agent, prompt: ContentBlock[]): ContentBlock[] {
+    const composed = this.ctx.get('agentPresets')?.composedPreset(parent.ctx)
+    return localizedReturnGuidance(composed, this.localizedGuidancePresets())
+      ? withContinuableReturnGuidance(parent.id, prompt)
+      : upstreamWithContinuableReturnGuidance(parent.id, prompt)
   }
 
   /**

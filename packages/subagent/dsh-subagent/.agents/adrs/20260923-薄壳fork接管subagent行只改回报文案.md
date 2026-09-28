@@ -34,3 +34,18 @@
 - **provider 与依赖方不受影响**：服务名、`./internal` 等子路径、`subagent-spawn-in-process` /
   `subagent-fork-in-process` / `tool-subagent-control` 都仍走上游包；只有 `ctx.subagents` 的实例实现来自
   本包。
+
+## 更新（2026-09-28）：文案按会话选，接管改按官方行 id 复用
+
+两处调整（偏离面因此从"1 处实质改动"变成下面这份清单，[守护测试](../../src/__tests__/upstream-wiring.spec.ts)
+的偏离表逐条登记，漏登记就红）：
+
+- **文案按会话选**：`withContinuableReturnGuidance` 的中文只在"会话挂着本部署那份 preset"时用，其余（官方
+  shipped preset、没挂 preset 的会话、不装 registry 的部署）走上游英文。名单走 `Config` 的装配面字段
+  `localizedReturnGuidancePresets`（`.hidden()`，不进设置页），判定在 `continuation.ts` 里读
+  `ctx.agentPresets` 的 `composedPreset(parent.ctx)`。
+  为什么不在 preset realm 里做：`subagents` 是**进程单例**（跨会话查询面由 host 的 api-proxy 服务、provider
+  名全局唯一），realm 内的服务 realm 外读不到，搬进去会让 host 那一行饿死（实测：搬进 preset 后会话
+  `realm 内 subagents = missing`，工具读的还是 host 那份，等于白装）。
+- **接管方式**：装配从"禁官方行 + 插 `subagent-fork`"改成"按官方行 id 复用"（`id: subagent` + 本包 `name`），
+  官方设置卡因此不必再停——理由与事实基线见 [ADR 接管官方行按 id 复用](./20260928-接管官方行按id复用而非换id.md)。

@@ -67,16 +67,13 @@ export function group(
 export const TOOLKIT_TOOL_NAMES: readonly string[] = toolNamesOf();
 
 /**
- * Agent Teams 的开关：`DSH_AGENT_TEAM=1` 时启用（装配期求值，见 {@link TEAM_ROWS}）。
- * 团队装上来时它与直接派发（`subagent` / `subagent_fork` / 控制行）互斥，上游 `agent-team-profile`
- * 的做法也是把直接派发那几行禁掉。
+ * Agent Teams 那一族的开关名：`DSH_AGENT_TEAM=1` 时启用（装配期求值，见 {@link TEAM_ROWS}）。
+ *
+ * 本部署的 preset 行清单**不含**这一族：要用团队的人加上游
+ * `@deepseek-ai/dsh-experimental-agent-team-profile` bundle——那份自带"禁直接派发 + 插 team 行"的整套换法，
+ * 我们既不单独配、也不替它让位（直接派发那几行因此常装）。
  */
 export const AGENT_TEAM_ENV = "DSH_AGENT_TEAM";
-
-/** 团队开启时，直接派发那几行让位（`!!js`，装配期求值）。 */
-export function directDelegationDisabled(): JsExpr {
-  return jsExpr(() => process.env.DSH_AGENT_TEAM === "1");
-}
 
 /** agent-team 那几行默认关闭：不是 `DSH_AGENT_TEAM=1` 就不装。 */
 export function agentTeamDisabled(): JsExpr {
@@ -93,6 +90,9 @@ export const SHELL_ROWS: readonly PresetRow[] = [
  * Agent Teams 那一族（上游实验能力：roster / 消息 / 共享任务 + 模型侧工具 + Web UI），默认关闭。
  *
  * 关闭写在**行**上：Loader 对 `group: true` 的条目恒为启用，组级 `disabled` 不生效，整组会照装。
+ *
+ * 这一族**不在** {@link TOOLKIT_ROWS} 里，也就不在本部署的 preset 声明里（见 {@link AGENT_TEAM_ENV}）：
+ * 它是本包给"想要团队"的部署留的可选数据（`./agent-team` 出口），装配换法由上游那份 bundle 负责。
  */
 export const TEAM_ROWS: readonly PresetRow[] = [
   row("experimental-agent-team", {
@@ -123,28 +123,24 @@ export const TEAM_ROWS: readonly PresetRow[] = [
  *
  * 组 id 是 `toolkit-<族名>`（不是裸族名）：装配按 id 全局对应，上游已有行占用 `web` / `skill` 这类短名，
  * 撞上会让两行被当作同一行（后者覆盖前者的 config，组行拿到非数组 config 直接装配失败）。
+ *
+ * 不含 Agent Teams 那一族（{@link TEAM_ROWS}）：团队归上游 `agent-team-profile`，我们不单独配。
  */
 export const TOOLKIT_ROWS: readonly PresetRow[] = [
   group("toolkit-ask", [row("tool-ask-user")]),
   group(
     "toolkit-delegation",
     [
-      // 团队开启时（DSH_AGENT_TEAM=1）直接派发让位给 Agent Teams：上游 agent-team-profile 同款换法。
-      row("tool-subagent-control", { disabled: directDelegationDisabled() }),
-      row("tool-subagent-control/list-agents", {
-        id: "tool-subagent-list-agents",
-        disabled: directDelegationDisabled(),
-      }),
+      row("tool-subagent-control"),
+      row("tool-subagent-control/list-agents", { id: "tool-subagent-list-agents" }),
       // 不带 `modelSelectionSettings`：子代理一律继承父会话的模型（见 dsh-preset 的 patch 说明）。
       row("tool-subagent", {
         config: { provider: "spawn", toolName: "subagent", backgroundMode: "continuable" },
-        disabled: directDelegationDisabled(),
       }),
       // 同一个包的第二个实例：换 provider 就是 fork 那一支。
       row("tool-subagent", {
         id: "tool-subagent-fork",
         config: { provider: "fork", toolName: "subagent_fork", backgroundMode: "continuable" },
-        disabled: directDelegationDisabled(),
       }),
       row("workflow-ptc", { config: { provider: "spawn" } }),
       row("tool-workflow"),
@@ -164,7 +160,6 @@ export const TOOLKIT_ROWS: readonly PresetRow[] = [
   group("toolkit-shell", [...SHELL_ROWS, row("tool-jobs")]),
   // skill 发现：目录与 `skill` 工具由 context-skill-catalog 接管，但 provider 仍是它。
   group("toolkit-skill", [row("skill-filesystem")]),
-  group("toolkit-team", TEAM_ROWS),
   group("toolkit-web", [row("tool-web", { config: { fetch: true, searchTimeoutMs: 60000 } })]),
 ];
 

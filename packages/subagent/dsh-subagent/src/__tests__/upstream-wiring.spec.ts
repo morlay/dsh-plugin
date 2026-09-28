@@ -9,6 +9,8 @@ const CORDIS_DECLARATION = "declare module '@deepseek-ai/cordis' {";
 const RETURN_GUIDANCE = "export function withContinuableReturnGuidance(";
 const RETAINED = ["index.ts", "continuation.ts", "continuation-messages.ts"] as const;
 
+type Retained = (typeof RETAINED)[number];
+
 let vendor: Record<string, string>;
 let fork: Record<string, string>;
 
@@ -29,15 +31,128 @@ function wiringNormalized(text: string): string {
 }
 
 /**
- * 剔除从 `marker` 起的那段（到下一个行首 `}` 的块结束），折叠空行后按行给出；
- * `marker` 不存在时按现状折叠空行——本包有意不复述的块（cordis 声明）走这条路径。
+ * 剔除从 `marker` 起、到 `until` 那一段的块（缺省到顶格的 `}`：模块级声明与函数）；`marker` 不存在时按现状
+ * 返回——本包有意不复述的块（cordis 声明）走这条路径。
  */
-function withoutBlock(text: string, marker: string): string[] {
+function withoutBlock(text: string, marker: string, until = "\n}\n"): string {
   const start = text.indexOf(marker);
-  if (start < 0) return text.replace(/\n{3,}/g, "\n\n").split("\n");
-  const end = text.indexOf("\n}\n", start);
+  if (start < 0) return text;
+  const rest = text.slice(start);
+  const end = rest.indexOf(until);
   if (end < 0) throw new Error(`${marker} 的块没有终止`);
-  return `${text.slice(0, start)}${text.slice(end + 3)}`.replace(/\n{3,}/g, "\n\n").split("\n");
+  return text.slice(0, start) + rest.slice(end + until.length);
+}
+
+/** 折叠连续空行：块被剔除后留下的空行不该算差异。 */
+function collapsed(text: string): string {
+  return text.replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * 本包有意的偏离：把本地文本还原成上游形状的替换表。`from` 必须命中（本地改回来了、上游又变了，
+ * 都会在这里红），`drop` 是从 marker 起的整块（新增的函数 / 方法）。
+ *
+ * 一处偏离一条，写清楚它是什么；新加偏离请同时更新 `README.md` 的「保留文件」与对应 ADR。
+ */
+type Delta =
+  | { readonly from: string; readonly to: string }
+  | { readonly drop: string; readonly until?: string };
+
+const DELTAS: Record<Retained, readonly Delta[]> = {
+  "continuation.ts": [
+    {
+      // 判定函数的接线：多一条上游英文版的 import，并多引一个判定函数。
+      from: [
+        "import {",
+        "  createAgentMessage,",
+        "  localizedReturnGuidance,",
+        "  withContinuableReturnGuidance,",
+        "} from './continuation-messages.ts'",
+        "// 会话不在本部署名单里时用上游那一份（英文）：文案跟着 preset 走，不是整进程只有一份。",
+        "import { withContinuableReturnGuidance as upstreamWithContinuableReturnGuidance } from './continuation-messages.ts'",
+        "",
+      ].join("\n"),
+      to: [
+        "import {",
+        "  createAgentMessage,",
+        "  withContinuableReturnGuidance,",
+        "} from './continuation-messages.ts'",
+        "",
+      ].join("\n"),
+    },
+    {
+      // 管理器多收一个读取器：本行配置里的 preset 名单。
+      from: "    maxActiveSubagents: () => number,\n    private readonly localizedGuidancePresets: () => readonly string[],\n",
+      to: "    maxActiveSubagents: () => number,\n",
+    },
+    {
+      // 调用点从"永远是本包的中文"改成"按会话选"。
+      from: "            ? this.continuableReturnGuidance(parent, request.prompt)\n",
+      to: "            ? withContinuableReturnGuidance(parent.id, request.prompt)\n",
+    },
+    // 判定方法本身（含它的文档注释；类里的方法以两空格缩进收尾）。
+    {
+      drop: "  /**\n   * Return guidance for a continuable child's initial task, per session.",
+      until: "\n  }\n",
+    },
+  ],
+  "continuation-messages.ts": [
+    // 判定函数（含它的文档注释）：本包新增的纯函数。
+    {
+      drop: "/**\n * Whether this session's return guidance takes this package's Chinese wording.",
+    },
+    // 中文文案本身：本包唯一改过语义的那一段（见 README 的「保留文件」）。
+    { drop: RETURN_GUIDANCE },
+  ],
+  "index.ts": [
+    {
+      // 服务面类型声明：判定要读 `ctx.agentPresets`。
+      from: "// 服务面声明（`ctx.agentPresets`）由它给：回报指引按会话挂的 preset 选文案。\nimport type {} from '@deepseek-ai/dsh-agent-preset-registry'\n",
+      to: "",
+    },
+    {
+      // Config 的那个装配面字段（hidden，不进设置页）。
+      from: [
+        "  /**",
+        "   * Preset ids whose sessions get this package's Chinese return guidance; default empty.",
+        "   *",
+        "   * 名单由**装配**给（这一行的 `config`）：文案是模型可见的东西，跟着 preset 走，其余会话走上游英文那套。",
+        "   * 装配面，不是用户面——所以不进设置页（`.hidden()`）。",
+        "   */",
+        "  localizedReturnGuidancePresets: string[]",
+        "",
+      ].join("\n"),
+      to: "",
+    },
+    {
+      from: "    localizedReturnGuidancePresets: z.array(z.string()).default([]).hidden(),\n",
+      to: "",
+    },
+    {
+      from: "      }, () => this.config.maxActiveSubagents.get(), () => this.config.localizedReturnGuidancePresets)",
+      to: "      }, () => this.config.maxActiveSubagents.get())",
+    },
+  ],
+};
+
+/** 把 fork 文件按偏离表还原成上游形状；`from` / `drop` 没命中就是同步纪律失效，直接抛。 */
+function restored(file: Retained): string {
+  let text = wiringNormalized(fork[file]!);
+  for (const delta of DELTAS[file]) {
+    if ("drop" in delta) {
+      if (!text.includes(delta.drop))
+        throw new Error(`${file}: 偏离表里的块不在文件里（${delta.drop}）`);
+      text =
+        delta.until === undefined
+          ? withoutBlock(text, delta.drop)
+          : withoutBlock(text, delta.drop, delta.until);
+      continue;
+    }
+    if (!text.includes(delta.from))
+      throw new Error(`${file}: 偏离表里的片段不在文件里（${delta.from}）`);
+    text = text.replaceAll(delta.from, delta.to);
+  }
+  return collapsed(text);
 }
 
 /**
@@ -52,6 +167,20 @@ function withoutTypeBridge(lines: string[]): string[] {
     "  SubagentRunInfo,",
   ]);
   return lines.filter((line) => !replaced.has(line));
+}
+
+/** 上游侧要与本地比对的形状：本包不复述的声明块，以及本包整段替换过的实现（本地那份不一样）。 */
+const UPSTREAM_BLOCKS: Record<Retained, readonly string[]> = {
+  "index.ts": [CORDIS_DECLARATION],
+  "continuation.ts": [],
+  "continuation-messages.ts": [RETURN_GUIDANCE],
+};
+
+/** 上游那一份的同一形状。 */
+function upstreamOf(file: Retained): string {
+  let text = wiringNormalized(vendor[file]!);
+  for (const marker of UPSTREAM_BLOCKS[file]) text = withoutBlock(text, marker);
+  return collapsed(text);
 }
 
 /**
@@ -70,38 +199,22 @@ describe("薄壳 fork 的接线", () => {
     }
   });
 
-  it("continuation.ts 除 import 接线外与上游逐行一致", () => {
-    expect(wiringNormalized(fork["continuation.ts"]!)).toBe(
-      wiringNormalized(vendor["continuation.ts"]!),
-    );
+  it("continuation-messages.ts 除判定函数与中文文案外与上游逐行一致", () => {
+    expect(restored("continuation-messages.ts")).toBe(upstreamOf("continuation-messages.ts"));
   });
 
-  it("index.ts 除 import 接线与 cordis 声明块外与上游逐行一致", () => {
-    const upstream = withoutTypeBridge(
-      withoutBlock(wiringNormalized(vendor["index.ts"]!), CORDIS_DECLARATION),
-    );
-    const local = withoutTypeBridge(
-      withoutBlock(wiringNormalized(fork["index.ts"]!), CORDIS_DECLARATION),
-    );
+  it("continuation.ts 除接线与按会话选文案的偏离外与上游逐行一致", () => {
+    expect(restored("continuation.ts")).toBe(upstreamOf("continuation.ts"));
+  });
 
-    expect(local).toEqual(upstream);
+  it("index.ts 除接线、类型桥与装配面配置外与上游逐行一致", () => {
+    expect(withoutTypeBridge(restored("index.ts").split("\n"))).toEqual(
+      withoutTypeBridge(collapsed(upstreamOf("index.ts")).split("\n")),
+    );
   });
 
   it("index.ts 不复述 cordis 合并接口，改为引用上游那一份", () => {
     expect(fork["index.ts"]).not.toContain(CORDIS_DECLARATION);
     expect(fork["index.ts"]).toContain("import type {} from '@deepseek-ai/dsh-subagent'");
-  });
-
-  it("continuation-messages.ts 除 withContinuableReturnGuidance 外与上游逐行一致", () => {
-    const upstream = withoutBlock(
-      wiringNormalized(vendor["continuation-messages.ts"]!),
-      RETURN_GUIDANCE,
-    );
-    const local = withoutBlock(
-      wiringNormalized(fork["continuation-messages.ts"]!),
-      RETURN_GUIDANCE,
-    );
-
-    expect(local).toEqual(upstream);
   });
 });

@@ -26,10 +26,16 @@ afterEach(async () => {
 });
 
 /**
- * 运行期证据：`send_message` 打上相邻 agent 标记时（上游 control 行在场），
- * continuable 子代理首条任务后面的回报指引来自本包——模型可见的请求里是中文，没有上游英文那句。
+ * 运行期证据：`send_message` 打上相邻 agent 标记时（上游 control 行在场），continuable 子代理首条任务后面的
+ * 回报指引**按会话的 preset 选**——挂在本包配置的那份名单里就是中文，其余（含官方 shipped preset、以及没有
+ * preset 的会话）是上游英文那套。
+ *
+ * 名单与 preset 身份是两个输入：名单走本行配置，身份走 `agentPresets` 服务（这里用替身，registry 自己的行为
+ * 由它自己的包负责）。
  */
-async function boot() {
+async function boot(
+  options: { readonly presets?: readonly string[]; readonly composedPreset?: string } = {},
+) {
   const ctx = new Context();
   contexts.add(ctx);
   await mountAgentLoopTestDependencies(ctx);
@@ -37,7 +43,19 @@ async function boot() {
   roots.push(root);
   await ctx.plugin(JsonlSessionPersistence, { root });
   await ctx.plugin(AgentLoop, { agents: [] });
-  await ctx.plugin(SubagentRuntime);
+  if (options.composedPreset !== undefined) {
+    ctx.provide("agentPresets", {
+      composedPreset: () => options.composedPreset,
+      // 子代理继承父 preset 那条路（registry 的另一半接口）；本用例只关心文案，给个"父没挂 preset"的回答。
+      composeFrom: () => undefined,
+    } as never);
+  }
+  await ctx.plugin(
+    SubagentRuntime,
+    (options.presets === undefined
+      ? {}
+      : { localizedReturnGuidancePresets: [...options.presets] }) as never,
+  );
   await ctx.plugin(SubagentSpawn, { providerName: "spawn" });
   await ctx.plugin(toolSubagentControl);
   const adapter = new MockAdapter([textResponse("子代理完成")]);
@@ -57,24 +75,45 @@ function visibleTexts(adapter: MockAdapter): string[] {
   );
 }
 
+/** 一次 continuable 派发之后，模型侧看到的所有文本。 */
+async function textsAfterDelegation(booted: Awaited<ReturnType<typeof boot>>): Promise<string[]> {
+  const { ctx, parent, adapter } = booted;
+  const started = await ctx.subagents.startContinuable({
+    provider: "spawn",
+    label: "写简报",
+    request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
+    signal: new AbortController().signal,
+  });
+  await vi.waitFor(() => {
+    expect(visibleTexts(adapter).length).toBeGreaterThan(0);
+  });
+  expect(started.childId).toBeDefined();
+  return visibleTexts(adapter);
+}
+
 describe("continuable 子代理的回报指引", () => {
-  it("模型看到的是中文指引，不是上游英文", async () => {
-    const { ctx, parent, adapter } = await boot();
+  it("会话挂着名单里的 preset 时，模型看到的是中文指引", async () => {
+    const texts = await textsAfterDelegation(
+      await boot({ presets: ["mode-switch"], composedPreset: "mode-switch" }),
+    );
 
-    const started = await ctx.subagents.startContinuable({
-      provider: "spawn",
-      label: "写简报",
-      request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
-      signal: new AbortController().signal,
-    });
-
-    await vi.waitFor(() => {
-      expect(visibleTexts(adapter).length).toBeGreaterThan(0);
-    });
-    const texts = visibleTexts(adapter);
-
-    expect(started.childId).toBeDefined();
     expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(true);
     expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
+  });
+
+  it("名单外的 preset 用上游英文指引（官方 shipped preset 的会话不被换文案）", async () => {
+    const texts = await textsAfterDelegation(
+      await boot({ presets: ["mode-switch"], composedPreset: "standard" }),
+    );
+
+    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(true);
+    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(false);
+  });
+
+  it("没配名单时一律上游英文（默认不换）", async () => {
+    const texts = await textsAfterDelegation(await boot());
+
+    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(true);
+    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(false);
   });
 });

@@ -30,33 +30,27 @@ describe("装配面", () => {
 });
 
 /**
- * 配置页：页面由 `@morlay/dsh-client-ui-primitives` 按 volatile 字段自动生成（本包 host 的 Config 与上游逐行
- * 一致，说明写不进 schema），本包自己的 client 半只给那两个字段补文案——经字段槽
- * `settings.schema-form.field` 认领，host 一行都不动。
+ * 配置页：**官方那张卡片**承担（接管按官方行 id 复用，`subagent` namespace 与卡片行都在），本包不再有 client 半
+ * ——曾用来替代卡片的字段文案槽随之退场（两套都注册 `settings.subagent` 字典会撞：
+ * `locale.register` 对同 namespace 同 locale 直接抛错）。
  */
 describe("配置页", () => {
-  it("client 半声明 web 面与它要的行，出口与 publishConfig 都对上", () => {
+  it("本包不再发布 client 面：出口、注入声明与那条依赖都清掉了", () => {
     const exports = manifest.exports as Record<string, unknown>;
     const publishConfig = manifest.publishConfig as { exports: Record<string, unknown> };
-    const dsh = manifest.dsh as { client?: { platform?: string; inject?: string[] } };
 
-    expect(exports["./client"]).toEqual({
-      types: "./src/client/index.ts",
-      default: "./dist/client.cjs",
-    });
-    expect(publishConfig.exports["./client"]).toEqual({
-      types: "./dist/client.d.cts",
-      default: "./dist/client.cjs",
-    });
-    expect(dsh.client?.platform).toBe("web");
-    expect(dsh.client?.inject).toEqual([
-      "@deepseek-ai/dsh-client-locale",
-      "@deepseek-ai/dsh-client-ui-slots",
-      "@morlay/dsh-client-ui-primitives",
-    ]);
+    expect(exports["./client"]).toBeUndefined();
+    expect(publishConfig.exports["./client"]).toBeUndefined();
+    expect(manifest.dsh).toBeUndefined();
+    for (const section of ["devDependencies", "peerDependencies"] as const) {
+      const dependencies = manifest[section] as Record<string, string>;
+      expect(dependencies["@deepseek-ai/dsh-client-locale"]).toBeUndefined();
+      expect(dependencies["@deepseek-ai/dsh-client-ui-slots"]).toBeUndefined();
+      expect(dependencies["@morlay/dsh-client-ui-primitives"]).toBeUndefined();
+    }
   });
 
-  it("限额字段声明为 volatile：这是自动生成配置页的前提", async () => {
+  it("限额字段声明为 volatile：官方卡片可编辑它们的前提", async () => {
     const source = await readFile(
       join(ROOT, "packages/subagent/dsh-subagent/src/index.ts"),
       "utf8",

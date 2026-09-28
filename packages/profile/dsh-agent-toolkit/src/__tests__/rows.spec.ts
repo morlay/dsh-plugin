@@ -24,11 +24,16 @@ function idsOf(rows: readonly PresetRow[]): string[] {
 /** 整套清单：按族分组的工具行 + 不属于任何族的行（压缩与工具说明）。 */
 const ALL_ROWS: readonly PresetRow[] = [...TOOLKIT_ROWS, ...TOOLKIT_EXTRA_ROWS];
 
+/** 只有说明、没有装配行的族：团队那一族（`TEAM_ROWS` 是可选出口，preset 里不放它）。 */
+const UNASSEMBLED_FAMILIES = new Set(["team"]);
+
 describe("功能行清单", () => {
-  it("按工具族分组：组 id 与汉化数据的族同名同序，且行 id 唯一", () => {
+  it("按工具族分组：组 id 与汉化数据的族同名同序（除可选族），且行 id 唯一", () => {
     // 带上 `toolkit-` 前缀：装配按 id 全局对应，裸族名（`web` / `skill`）会被上游同名行占用。
     expect(TOOLKIT_ROWS.map((row) => row.id)).toEqual(
-      TOOL_PACKS.map((pack) => `toolkit-${pack.family}`),
+      TOOL_PACKS.filter((pack) => !UNASSEMBLED_FAMILIES.has(pack.family)).map(
+        (pack) => `toolkit-${pack.family}`,
+      ),
     );
 
     const ids = idsOf(TOOLKIT_ROWS);

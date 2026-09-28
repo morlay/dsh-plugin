@@ -1,14 +1,18 @@
 # @morlay/dsh-subagent
 
-上游 `@deepseek-ai/dsh-subagent` 的**薄壳 fork**：host 半只改一件事——continuable 子代理首条任务后面的
-**回报指引换成中文**（上游是英文）。服务名（`ctx.subagents`）、providers、其余子路径（`./internal` 等）
-与装配位置都不变。配置页不在本包：限额两个字段在 `Config` 上（与上游逐行一致）标了 `.volatile()`，页面由
-`@morlay/dsh-client-ui-primitives` 按 schema 自动生成；本包自己的 client 半只给这两个字段补中文文案（见下）。
+上游 `@deepseek-ai/dsh-subagent` 的**薄壳 fork**：host 半只改两件事——continuable 子代理首条任务后面的
+**回报指引**换成中文（上游是英文，且只在"会话挂着本部署那份 preset"时用，其余会话保持上游那套），以及
+**接管官方那一行**（行 id 仍是 `subagent`，见下）。服务名（`ctx.subagents`）、providers、其余子路径
+（`./internal` 等）与装配位置都不变。配置页由**官方**那张卡片承担（行 id 没换，`subagent` namespace 照旧）。
 
-装配由本包的 bundle patch 完成（`cordis.patch.yml`）：官方 `subagent` 行 `disabled: true` + insert
-`subagent-fork`（`@morlay/dsh-subagent`），并停掉官方设置卡那两条行（`ui-settings-subagent` 与
-`subagent-model-selection-settings`，理由见 [ADR](./.agents/adrs/20260923-停掉官方设置卡的两条入口行.md)）；
-app 的 `dsh.profile.bundles` 里引用本包。
+装配由本包的装配数据完成（`cordis.patch.yml` / `rows` 出口）：**按官方行 id 复用**——插一条
+`{ id: "subagent", name: "@morlay/dsh-subagent" }`，Loader 对同 id 复用同一个 Entry、后者替换入口 options，
+所以行 id 与 settings namespace 都还是 `subagent`，官方设置卡（`ui-settings-subagent`）与它的服务行
+（`subagent-model-selection-settings`）都不动；顺序前提是本包排在 `@deepseek-ai/dsh-base` 之后。理由与被否的
+路线见 [ADR 接管官方行按 id 复用](./.agents/adrs/20260928-接管官方行按id复用而非换id.md)。
+
+回报指引的名单走这一行的 `config.localizedReturnGuidancePresets`（装配给，`.hidden()` 不进设置页）；app 的
+`dsh.profile.bundles` 里引用本包。
 
 ## 保留文件（3 个）
 
@@ -16,15 +20,19 @@ app 的 `dsh.profile.bundles` 里引用本包。
 `vendor/deepseek-harness/packages/subagent/subagent/src/...`，构建时内联进 `dist/index.mjs`
 （发布物自包含）。
 
-| 保留文件（`src/`）         | 保留什么                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `continuation-messages.ts` | **唯一实质改动**：`withContinuableReturnGuidance` 的中文文案（保留父 id 插值） |
-| `continuation.ts`          | 只有一行接线不同：`continuation-messages.ts` 指向本包那一份                    |
-| `index.ts`                 | 接线 + 两处结构性偏离（见下）                                                  |
+| 保留文件（`src/`）         | 保留什么                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `continuation-messages.ts` | 中文文案 + 判定函数 `localizedReturnGuidance`（"这个会话要不要本包那份文案"）              |
+| `continuation.ts`          | 接线 + 调用点从"永远是本包文案"改成"按会话选"（读 `ctx.agentPresets` 的 `composedPreset`） |
+| `index.ts`                 | 接线 + 装配面配置字段（`localizedReturnGuidancePresets`）+ 两处结构性偏离（见下）          |
 
 静态 import 链决定了复制面：`continuation-messages` ← `continuation` ← `index`，要替换中间那一份就得
 连同引用它的两个文件一起接管。原因、被否掉的路线与后果见
 [ADR 薄壳 fork 接管 subagent 行只改回报文案](./.agents/adrs/20260923-薄壳fork接管subagent行只改回报文案.md)。
+
+**偏离清单是可执行的**：`src/__tests__/upstream-wiring.spec.ts` 的 `DELTAS` 表逐条登记上面每处偏离（新增
+块、改过的行、装配面字段），偏离表里的片段没命中就红——加偏离必须同时登记，否则测试报"偏离表里的片段不在
+文件里"。
 
 ## 两处结构性偏离
 
@@ -39,24 +47,24 @@ app 的 `dsh.profile.bundles` 里引用本包。
 
 ## 配置页
 
-**子代理用哪个模型不在这一行**：它跟着**父会话的模式**走（`@morlay/dsh-session-mode` 顶层 `models` 里
-「模式 → 服务商 / 模型」那两个选择器）。官方那张「Subagent 模型选择」卡片与它的服务行在本部署被停掉，模型选择统一
-收在一处。
+**子代理用哪个模型不在这张卡上**：它跟着**父会话的模式**走（`@morlay/dsh-session-mode` 顶层 `models` 里
+「模式 → 服务商 / 模型」那两个选择器）。
 
-页面由通用 schema 表单生成：`Config` 的两个限额字段（`maxDepth` / `maxActiveSubagents`）标了 `.volatile()`，
-`@morlay/dsh-client-ui-primitives` 为这一行（`subagent-fork`）注册配置入口，渲染成数字输入（staged 编辑 +
-保存/丢弃，与上游设置页同形）。边界与下限由 schema 的 `min` / `step` 表达，保存时整段校验。
+限额两个字段（`maxDepth` / `maxActiveSubagents`，标了 `.volatile()`）由**官方**那张设置卡承担：接管没换行 id，
+`subagent` namespace 照旧，`ui-settings-subagent` 与 `subagent-model-selection-settings` 都不动。
 
-本包 client 半（`./client`）只做一件事：把两个字段的中文文案注册到**提示面**
-（`ctx.schemaFormHints.describe('subagent-fork', ['maxDepth'], …)`，行式配置页把它画成注释行）——
-**host 的 `Config` 一行都不动**，那是[薄壳 fork 的同步纪律](./.agents/standards/how-to-verify.md)要求的
-（`index.ts` 与上游逐行一致）。
+本包**不再有 client 半**（`./client` 出口、字典与字段文案槽都删了）：卡片回来之后它是重复面——两套都注册
+`settings.subagent` 字典时，`locale.register` 对同 namespace 同 locale 直接抛错
+（`locale namespace "settings.subagent" already has locale "zh"`），官方卡片那一行会加载失败。
+
+`Config` 的 `localizedReturnGuidancePresets` 是**装配面**字段（`.hidden()`）：它不进设置页，由装配那一行给。
 
 ## 文档
 
 - 决策与理由：
   [ADR 薄壳 fork 接管 subagent 行只改回报文案](./.agents/adrs/20260923-薄壳fork接管subagent行只改回报文案.md)、
-  [ADR 停掉官方设置卡的两条入口行](./.agents/adrs/20260923-停掉官方设置卡的两条入口行.md)
+  [ADR 接管官方行按 id 复用](./.agents/adrs/20260928-接管官方行按id复用而非换id.md)、
+  （已作废）[ADR 停掉官方设置卡的两条入口行](./.agents/adrs/20260923-停掉官方设置卡的两条入口行.md)
 - 已知的债（两处 `continuation-messages` 实例、保留文件跟随方式）：
   [债务 continuation-messages 两份实例与保留文件跟随](./.agents/debts/20260923-continuation-messages两份实例与保留文件跟随.md)
 - 测试落点与判据：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)；薄壳 fork 的通用写法约束见

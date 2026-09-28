@@ -35,6 +35,8 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-attachment'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-subagent'
+// 服务面声明（`ctx.agentPresets`）由它给：回报指引按会话挂的 preset 选文案。
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -152,6 +154,13 @@ export interface Config {
   maxActiveSubagents: Volatile<number>
   /** Default delegation depth for tools without an explicit limit; defaults to 1. */
   maxDepth: Volatile<number>
+  /**
+   * Preset ids whose sessions get this package's Chinese return guidance; default empty.
+   *
+   * 名单由**装配**给（这一行的 `config`）：文案是模型可见的东西，跟着 preset 走，其余会话走上游英文那套。
+   * 装配面，不是用户面——所以不进设置页（`.hidden()`）。
+   */
+  localizedReturnGuidancePresets: string[]
 }
 
 /** Named provider registry with one-shot runs, durable discovery, and continuable-child operations. */
@@ -159,6 +168,7 @@ export class SubagentRuntime extends TypertRemoteService {
   static Config = z.object({
     maxDepth: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(1).volatile(),
     maxActiveSubagents: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(8).volatile(),
+    localizedReturnGuidancePresets: z.array(z.string()).default([]).hidden(),
   })
   private providers = new Map<string, SubagentProvider>()
   private continuations: SubagentContinuationManager | undefined
@@ -176,7 +186,7 @@ export class SubagentRuntime extends TypertRemoteService {
       const manager = new SubagentContinuationManager(childCtx, {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
-      }, () => this.config.maxActiveSubagents.get())
+      }, () => this.config.maxActiveSubagents.get(), () => this.config.localizedReturnGuidancePresets)
       this.continuations = manager
       childCtx.effect(() => () => {
         /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */

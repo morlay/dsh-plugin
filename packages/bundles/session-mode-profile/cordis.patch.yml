@@ -7,7 +7,7 @@
       name: "@deepseek-ai/dsh-agent-preset"
       config:
         id: mode-switch
-        name: 模式切换
+        name: 手动切换模式
         description: 本部署的行清单：两个会话模式共享它，差异由会话级收口（提示词 / 工具白名单 / 注入开关）决定。
         order: 5
         plugins:
@@ -23,24 +23,20 @@
             config:
               - id: tool-subagent-control
                 name: "@deepseek-ai/dsh-tool-subagent-control"
-                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent-list-agents
                 name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
-                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: spawn
                   toolName: subagent
                   backgroundMode: continuable
-                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent-fork
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: fork
                   toolName: subagent_fork
                   backgroundMode: continuable
-                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: workflow-ptc
                 name: "@deepseek-ai/dsh-workflow-ptc"
                 config:
@@ -91,28 +87,6 @@
             config:
               - id: skill-filesystem
                 name: "@deepseek-ai/dsh-skill-filesystem"
-          - id: toolkit-team
-            name: cordis:group
-            group: true
-            config:
-              - id: agent-team
-                name: "@deepseek-ai/dsh-experimental-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
-                config:
-                  maxMembers: 8
-                  maxTasks: 256
-                  maxPendingMessagesPerMember: 64
-                  maxMessageBytes: 65536
-                  disposalTimeoutMs: 5000
-              - id: tool-agent-team
-                name: "@deepseek-ai/dsh-experimental-tool-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
-                config:
-                  freshProvider: spawn
-                  forkProvider: fork
-              - id: ui-agent-team
-                name: "@deepseek-ai/dsh-experimental-client-ui-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
           - id: toolkit-web
             name: cordis:group
             group: true
@@ -229,13 +203,12 @@
               - web_fetch
             instructions: false
             runtimeContext: false
-- id: subagent
-  disabled: true
-- id: ui-settings-subagent
-  disabled: true
 - insert:
-    - id: subagent-fork
+    - id: subagent
       name: "@morlay/dsh-subagent"
+      config:
+        localizedReturnGuidancePresets:
+          - mode-switch
 - insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"

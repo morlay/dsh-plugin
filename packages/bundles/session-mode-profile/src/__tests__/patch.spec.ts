@@ -104,7 +104,7 @@ describe("自己注册的 preset（preset-mode-switch）", () => {
 
     expect(presetRow().name).toBe("@deepseek-ai/dsh-agent-preset");
     expect(config["id"]).toBe(MODE_PRESET_ID);
-    expect(config["name"]).toBe("模式切换");
+    expect(config["name"]).toBe("手动切换模式");
     expect(typeof config["description"]).toBe("string");
     expect(config["order"]).toBe(5);
   });
@@ -155,6 +155,18 @@ describe("自己注册的 preset（preset-mode-switch）", () => {
     // 工具说明往通道这个 host 单例注册正文：它只由本 bundle 的 host 平面插一行。
     expect(ids.has("tool-guidance")).toBe(false);
     expect(rowById(inserted(), "tool-guidance").name).toBe("@morlay/dsh-agent-toolkit/guidance");
+  });
+
+  it("不装 Agent Teams 那一族：团队归上游 agent-team-profile，我们既不放行也不让位", () => {
+    const ids = new Set(idsOf(presetPlugins()));
+
+    // 上游 `@deepseek-ai/dsh-experimental-agent-team-profile` 自带「禁直接派发 + 插 team 三行」，
+    // 要用的人把它加进 profile 的 bundles 就行——我们这边不单独配，也不为它留让位门控。
+    expect(ids.has("toolkit-team")).toBe(false);
+    expect(ids.has("agent-team")).toBe(false);
+    expect(ids.has("tool-agent-team")).toBe(false);
+    expect(ids.has("ui-agent-team")).toBe(false);
+    expect(rendered).not.toContain("DSH_AGENT_TEAM");
   });
 
   it("两个模式都挂这一份 preset（差异由会话级收口表达）", () => {

@@ -73,6 +73,24 @@ export function createAgentMessage(
 }
 
 /**
+ * Whether this session's return guidance takes this package's Chinese wording.
+ *
+ * 判据是**会话挂着的 preset**：文案是模型可见的东西，跟着 preset 走；名单由装配给（本行的
+ * `config.localizedReturnGuidancePresets`），默认空——没配、或会话没挂 preset（不装 registry 的部署、还没绑的
+ * agent）一律走上游英文，官方 shipped preset 的会话因此不会被换文案。
+ *
+ * @param composedPreset - the preset id the session is mounted on, if any.
+ * @param configured - preset ids this deployment asked to localize.
+ * @returns whether the Chinese guidance applies to this session.
+ */
+export function localizedReturnGuidance(
+  composedPreset: string | undefined,
+  configured: readonly string[],
+): boolean {
+  return composedPreset !== undefined && configured.includes(composedPreset)
+}
+
+/**
  * Append adjacent-Agent return guidance to a continuable child's initial task.
  * @param parentId - durable parent session id named in the guidance.
  * @param prompt - initial model-visible task blocks.

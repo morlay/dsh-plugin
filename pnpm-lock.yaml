@@ -292,6 +292,9 @@ importers:
       rolldown:
         specifier: ^1.2.8
         version: 1.2.11
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
   packages/bundles/better-session:
     dependencies:
@@ -1392,6 +1395,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-agent-preset-registry':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/preset/agent-preset-registry
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/attachment/attachment
@@ -1438,12 +1444,6 @@ importers:
       '@deepseek-ai/dsh-chunked-list':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/chunked-list
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/locale
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/runtime-diagnostics/invariants
@@ -1462,9 +1462,6 @@ importers:
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/values
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
       zod:
         specifier: ^4.4.3
         version: 4.6.5
