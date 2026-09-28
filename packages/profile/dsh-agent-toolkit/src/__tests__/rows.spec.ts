@@ -1,12 +1,15 @@
 // 本包的实体就是清单：preset 引用它、profile 可以装配它，两边同一份真源。
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
-import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
-import { CHAT_TOOLKIT_ROWS, TOOLKIT_EXTRA_ROWS, TOOLKIT_ROWS, type PresetRow } from "../rows.ts";
+import {
+  CHAT_TOOLKIT_ROWS,
+  PLAN_MODE_SECTION,
+  TOOLKIT_EXTRA_ROWS,
+  TOOLKIT_PLAN_ROWS,
+  TOOLKIT_PRESET_ROWS,
+  TOOLKIT_ROWS,
+  type PresetRow,
+} from "../rows.ts";
 import { TOOL_PACKS } from "../guidance/packs/index.ts";
-import { renderPatch } from "../../tool/patch.ts";
 
 /** 组内的子行；`config` 不是数组时没有子行。 */
 function children(row: PresetRow): readonly PresetRow[] {
@@ -69,68 +72,66 @@ describe("功能行清单", () => {
     expect(CHAT_TOOLKIT_ROWS.map((row) => row.id)).toEqual(["tool-ask-user", "tool-web"]);
   });
 
-  it("bundle patch 里还有工具说明行与默认关闭的 Agent Teams 族", async () => {
-    interface Row {
-      id?: string;
-      name?: string;
-      disabled?: boolean | { __jsExpr: string };
-      /** `cordis:group` 的子行。 */
-      config?: Row[];
-      insert?: Row[];
+  it("preset 平面那一套：每会话的能力行齐、host 平面的工具说明行不在", () => {
+    const presetIds = new Set(idsOf(TOOLKIT_PRESET_ROWS));
+
+    for (const id of [
+      "tool-fs",
+      "tool-fs-search",
+      "tool-bash",
+      "tool-pwsh",
+      "tool-subagent",
+      "tool-subagent-fork",
+      "tool-workflow",
+      "workflow-ptc",
+      "tool-todo",
+      "tool-goal",
+      "command-goal",
+      "tool-ask-user",
+      "tool-web",
+      "skill-filesystem",
+      "compaction-basic",
+      "command-compact",
+      "tool-result-pruner",
+      "plan-mode",
+    ]) {
+      expect(presetIds.has(id), `preset 平面少了 ${id}`).toBe(true);
     }
-    const layers = yaml.load(
-      await readFile(
-        join(process.cwd(), "packages/profile/dsh-agent-toolkit/cordis.patch.yml"),
-        "utf8",
-      ),
-      { schema: entryListSchema },
-    ) as Row[];
-    const inserted = layers.flatMap((row) => row.insert ?? []);
-
-    // 工具说明：profile 平面装一次（它 inject 通道，通道也在这一层且不隔离）。
-    expect(inserted.find((row) => row.id === "tool-guidance")?.name).toBe(
-      "@morlay/dsh-agent-toolkit/guidance",
-    );
-
-    // Agent Teams 族：默认关闭写在行上（组级 `disabled` 被 Loader 忽略），组 id 就是族名。
-    const team = inserted.find((row) => row.id === "toolkit-team");
-    expect(team?.name).toBe("cordis:group");
-    expect(team?.disabled).toBeUndefined();
-    expect(team?.config?.map((row) => row.id)).toEqual([
-      "agent-team",
-      "tool-agent-team",
-      "ui-agent-team",
-    ]);
-    for (const row of team?.config ?? [])
-      expect(row.disabled).toEqual({ __jsExpr: 'process.env.DSH_AGENT_TEAM !== "1"' });
-
-    const delegation = inserted.find((row) => row.id === "toolkit-delegation");
-    expect(delegation?.config?.find((row) => row.id === "tool-subagent")?.disabled).toEqual({
-      __jsExpr: 'process.env.DSH_AGENT_TEAM === "1"',
-    });
-
-    // 装配按 id 全局对应：组行与子行同 id 时，后者会覆盖前者的 id 映射，patch 只打得到子行。
-    const ids: string[] = [];
-    const collect = (rows: readonly Row[]): void => {
-      for (const row of rows) {
-        if (row.id !== undefined) ids.push(row.id);
-        if (Array.isArray(row.config)) collect(row.config);
-      }
-    };
-    collect(inserted);
-    const duplicated = ids.filter((id, index) => ids.indexOf(id) !== index);
-    expect(duplicated, `重复 id: ${duplicated.join(", ")}`).toEqual([]);
+    // 工具说明往通道这个 host 单例注册正文：两个平面各一份会互相顶掉。
+    expect(presetIds.has("tool-guidance")).toBe(false);
+    expect(idsOf(TOOLKIT_EXTRA_ROWS)).toContain("tool-guidance");
   });
 
-  it("bundle patch 把整套行插到 host 平面", async () => {
-    const stored = await readFile(
-      join(process.cwd(), "packages/profile/dsh-agent-toolkit/cordis.patch.yml"),
-      "utf8",
+  it("带 isolate realm 的组：委派 / 压缩 / 计划模式（preset realm 要求服务隔离）", () => {
+    const isolated = TOOLKIT_PRESET_ROWS.filter((entry) => entry.isolate !== undefined).map(
+      (entry) => entry.id,
     );
 
-    expect(stored).toBe(renderPatch());
-    expect(
-      renderPatch().startsWith("# 本文件由 packages/profile/dsh-agent-toolkit/tool/patch.ts 生成"),
-    ).toBe(true);
+    expect(isolated).toEqual(["toolkit-delegation", "compaction", "planning"]);
+  });
+
+  it("计划模式那一组：组形照上游，规则正文我们自己的中文契约", () => {
+    const [planning] = TOOLKIT_PLAN_ROWS;
+    const inner = children(planning!);
+
+    expect(planning?.id).toBe("planning");
+    expect(planning?.isolate).toEqual({ planMode: true });
+    expect(inner.map((entry) => entry.id)).toEqual(["plan-mode"]);
+    // `plan-mode` 的 `section` 是必填项（缺 / 空都会在装载时抛），所以这一行必须带上它。
+    expect((inner[0]?.config as Record<string, unknown> | undefined)?.["section"]).toBe(
+      PLAN_MODE_SECTION,
+    );
+    // 契约六件事的锚点：进入 / 只读 / 规则优先 / 自己查 / 提交与驳回。
+    for (const anchor of [
+      "exit_plan_mode",
+      "一直留在计划模式",
+      "不要做任何写操作",
+      "压过任何后续工具说明",
+      "ask_user_question",
+      "todo_write",
+      "唯一且最后的工具调用",
+    ]) {
+      expect(PLAN_MODE_SECTION, `规则正文少了 ${anchor}`).toContain(anchor);
+    }
   });
 });

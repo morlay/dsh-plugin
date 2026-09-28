@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-schema-form/client";
+import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-primitives/client";
 import { apply } from "../client/index.ts";
 
 interface Registered {

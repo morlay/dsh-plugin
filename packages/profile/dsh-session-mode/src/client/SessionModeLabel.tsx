@@ -15,8 +15,8 @@ import type {} from "@morlay/dsh-client-ui-conversation/client";
 import { useRoster } from "./use-roster.ts";
 import css from "./SessionModeLabel.module.css";
 
-/** 完整 props：头部动作槽位的运行时 props + 本包的字典。 */
-export type SessionModeLabelProps = PropsRuntime<"conversation.session.header.actions"> &
+/** 完整 props：头部工具槽位的运行时 props + 本包的字典。 */
+export type SessionModeLabelProps = PropsRuntime<"conversation.session.header.utilities"> &
   PropsLocale<"session-mode">;
 
 /**

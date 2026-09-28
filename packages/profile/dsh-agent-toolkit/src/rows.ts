@@ -169,12 +169,9 @@ export const TOOLKIT_ROWS: readonly PresetRow[] = [
 ];
 
 /**
- * 不属于任何工具族的行：上下文压缩（引擎，不是模型侧工具）与工具说明那一行。
- *
- * 说明行 `inject` 注入通道（`contextAssembler`）——通道在 profile 平面装一次且不做隔离，所以它作为
- * 普通行装在同一个平面就能解析到。`config.groups: false` 表示只要工具投影预处理、不注册用法分组。
+ * 不属于任何工具族、但归 preset 平面的行：上下文压缩（引擎，不是模型侧工具）与计划模式。
  */
-export const TOOLKIT_EXTRA_ROWS: readonly PresetRow[] = [
+export const TOOLKIT_COMPACTION_ROWS: readonly PresetRow[] = [
   group(
     "compaction",
     [
@@ -187,7 +184,71 @@ export const TOOLKIT_EXTRA_ROWS: readonly PresetRow[] = [
     ],
     { isolate: { compaction: true, toolResultPruner: true } },
   ),
+];
+
+/**
+ * 计划模式的规则段（`plan:policy`，只在计划模式激活时进提示词）：中文，与 persona、工具说明同一语言。
+ *
+ * 六件事与上游那份一一对应，一条不多：何时进入与何时退出、只读探索、这些规则压过工具说明、自己能查的事实
+ * 自己查、计划要决策完备、以及 `exit_plan_mode` 的提交与驳回。改它请同时核对
+ * `vendor/deepseek-harness/packages/plan/plan-mode/src/index.ts` 的 `exit_plan_mode` 契约（工具描述、
+ * `plan-review` 的批准语义）。
+ */
+export const PLAN_MODE_SECTION = [
+  "你处于计划模式。在 exit_plan_mode 成功、或用户切换会话模式之前，一直留在计划模式。",
+  "",
+  "先探索：用非破坏性的读、搜索、静态分析与检查，把计划落到真实仓库上。不要做任何写操作——不改文件、不改配置、不跑会重写被跟踪文件的格式化或代码生成、不提交，也不要把计划执行掉。优先用仓库里已有的函数与写法，不要新造机制。",
+  "",
+  "用户的对话式同意（包括对你自己提问的肯定回答）不构成批准，也不结束计划模式；把确认到的决定并进计划里。",
+  "",
+  "工具目录在模式之间保持一致（请求缓存稳定），所以这些规则压过任何后续工具说明或用法正文里“去改文件”的建议；那些工具仍列在目录里，只是这一步不能用。不要用 todo_write 跟踪规划阶段：它跟的是批准之后的实施，计划本身归 exit_plan_mode。",
+  "",
+  "能自己查清的事实自己查。只有用户拥有的选择、或检查无法回答的实质歧义才用 ask_user_question；不要问代码在哪、现在怎么跑这类自己能查明的问题。",
+  "",
+  "计划要决策完备：目标与成功判据；按子系统分组的改动；公共 API、schema 与数据流的变化；边界情况与失败模式；测试与验收判据；显式假设。可审即可，不必长到别人照它实现还要自己做设计决定。",
+  "",
+  "就绪时调 exit_plan_mode，正文是完整的计划 markdown（以 # 标题开头），并让它成为那一条回复里唯一且最后的工具调用：它把计划交出去等批准，实施只在批准之后的步骤里开始。不要把最终计划当普通回复贴出来，也不要用散文或 ask_user_question 问“要不要继续”。评审驳回就吸收反馈重新提交；评审通道不可用或被中断时留在计划模式、让用户手动切模式，不要自己往下做。",
+].join("\n");
+
+/**
+ * 计划模式（`plan-mode` 行 + 它的 `exit_plan_mode` 工具）：组形照上游
+ * （`bundle/web-app/presets/standard.patch.yml` 的 `planning` 组：`isolate: { planMode: true }`——preset realm
+ * 里的服务必须隔离，否则 mount 直接失败）。
+ *
+ * **规则正文由我们自己维护**（{@link PLAN_MODE_SECTION}，中文）：`@deepseek-ai/dsh-plan-mode` 的 `section` 是
+ * 部署自有的必填项（`vendor/deepseek-harness/packages/plan/plan-mode/src/index.ts` 的 `resolveConfig`：缺 / 空 /
+ * 多键都抛），**没有默认文案**，所以这一行必须带上它。代价是上游改 `plan-mode` 的契约（`section` 的形状、
+ * `exit_plan_mode` 的行为）时要人工核对这段中文的语义。
+ */
+export const TOOLKIT_PLAN_ROWS: readonly PresetRow[] = [
+  group("planning", [row("plan-mode", { config: { section: PLAN_MODE_SECTION } })], {
+    isolate: { planMode: true },
+  }),
+];
+
+/**
+ * 不属于任何工具族的行：上下文压缩与计划模式（preset 平面）、工具说明那一行（host 平面）。
+ *
+ * 说明行 `inject` 注入通道（`contextAssembler`）——通道在 profile 平面装一次且不做隔离，所以它作为
+ * 普通行装在同一个平面就能解析到。`config.groups: false` 表示只要工具投影预处理、不注册用法分组。
+ */
+export const TOOLKIT_EXTRA_ROWS: readonly PresetRow[] = [
+  ...TOOLKIT_COMPACTION_ROWS,
   toolGuidanceRow(),
+];
+
+/**
+ * preset 平面那一套功能行：**preset 声明的 `config.plugins` 就是它**。
+ *
+ * 与 {@link TOOLKIT_EXTRA_ROWS} 的差别只在 `tool-guidance` 那一行：它往通道这个 host 单例注册用法正文
+ * （skill 与 section 抑制），属于 host 平面——两个平面各装一份会互相顶掉（上游判据：一行只属于一个平面，
+ * `vendor/deepseek-harness/scripts/verify-cordis-config.ts` 的 `validatePresetPlaneSeparation`）。
+ * 其余行都是**每会话的能力行**：工具、命令、压缩、计划模式与 skill 发现 provider。
+ */
+export const TOOLKIT_PRESET_ROWS: readonly PresetRow[] = [
+  ...TOOLKIT_ROWS,
+  ...TOOLKIT_COMPACTION_ROWS,
+  ...TOOLKIT_PLAN_ROWS,
 ];
 
 /** 工具说明那一行（汉化精简 + 用法分组）：实现与数据在 `./guidance` 出口，行本身也归本包。 */

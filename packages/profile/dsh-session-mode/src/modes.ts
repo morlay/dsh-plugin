@@ -5,6 +5,9 @@
  * 模式不再是 Cordis 子树，而是这份纯数据——本包的插件行只在 `config.modes` 里声明它们，运行期按会话读取
  * 并应用（persona 注册到该 agent 的 scope，工具收口交给 `@morlay/dsh-context-assembler/scope`）。
  *
+ * 行清单（工具 / 命令 / 压缩 / 委派…）来自 `preset` 指的那份 agent preset：本部署自己注册了一份
+ * （`bundles/session-mode-profile` 的 `preset-mode-switch`），两个模式共享它，差异全在会话级收口。
+ *
  * "支持自定义"就是指这份 config：装配层（`cordis.patch.yml` / profile 的用户层）能整体改写 `modes`，
  * 也可以只给某几个模式换提示词或白名单——不需要任何插件行。
  *
@@ -51,7 +54,17 @@ export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
  * 不看这里。
  */
 export interface SessionMode {
-  /** 选择器里的展示名。 */
+  /**
+   * 这个模式挂在哪个 **agent preset** 上（官方 `standard` / `ptc` / `minimal` / `cordis`，或本部署自己
+   * 注册的那一份的 `id`，见 `mode-sources.ts` 的 `MODE_PRESET_ID`）。
+   *
+   * preset 决定这个 agent 有哪些行（工具 / 命令 / 压缩 / 委派…），模式只决定"这些行怎么被用"：
+   * `allowTools` 里 preset 没有的工具自动跳过，其余扩展（persona / 注入开关 / 默认模型）照常应用。
+   * **可以共享**（本部署就是两个模式挂同一份 preset，差异全在会话级收口）；共享时 preset → 模式的反查无从下手，
+   * 见 `SessionModes.modeForPreset`。空串表示不挂（只能由 applyTo / 继承使用）。
+   */
+  readonly preset: string;
+  /** 模式的展示名（选择面归官方 roster；这里留着做事实文案）。 */
   readonly name: string;
   /** 一句话说明这个模式干什么；空串表示没写。 */
   readonly description: string;
@@ -105,8 +118,8 @@ const modelSchema = z.object({
     .role("select", { source: "llm-providers" })
     .description(
       localized({
-        zh: "服务商 id（`llm-openai-compatible` 的 providers 里的键，或内置服务商名）。",
-        en: "Provider id: a key in `llm-openai-compatible`'s providers, or a built-in provider name.",
+        zh: "服务商 id（部署里注册的任意路由，不论哪个适配器插件注册的）。",
+        en: "Provider id (any route registered in this deployment, whichever adapter plugin supplies it).",
       }),
     ),
   model: z
@@ -153,13 +166,22 @@ export interface ResolvedConfig {
 }
 
 const modeSchema: z<SessionMode> = z.object({
+  preset: z
+    .string()
+    .default("")
+    .description(
+      localized({
+        zh: "这个模式挂哪个 agent preset（它的 id，官方或本部署自建的）：行清单由那个 preset 提供，几个模式可以共享同一个；空串表示不挂（只能由 applyTo / 继承使用）。",
+        en: "Which agent preset this mode rides on (its id, shipped or deployment-owned): that preset supplies the row list and several modes may share it; empty means none (usable only through applyTo / inheritance).",
+      }),
+    ),
   name: z
     .string()
     .required()
     .description(
       localized({
-        zh: "展示名（模式选择器里显示的）。",
-        en: "Display name shown in the mode picker.",
+        zh: "模式名（事实文案；选择面归官方 roster）。",
+        en: "Mode name (fact copy; the picker belongs to the official roster).",
       }),
     ),
   description: z
@@ -264,6 +286,8 @@ interface Validated {
     Record<
       string,
       {
+        /** 空串合法的"不挂"；共享合法（差异由会话级收口表达），所以这里不做任何映射唯一性校验。 */
+        readonly preset?: string;
         readonly allowTools?: readonly string[];
         readonly role?: readonly string[];
         readonly defaultModel?: { readonly provider?: string; readonly model?: string };
@@ -294,6 +318,9 @@ export function configProblem(config: Validated): string | undefined {
   if (empty.length > 0) {
     return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
   }
+  // `preset` **允许共享**（本部署两个模式挂同一份 preset，差异由会话级收口表达）：共享时 preset → 模式
+  // 的反查无从下手，那件事交给 `SessionModes.modeForPreset` 处理（共享时它返回 `undefined`，不反查）。
+  // 空串是"不挂"，合法；除此之外没有可校验的东西——preset 是否存在由 registry 自己回答。
   // 退役的顶层字段还配着值：它已经不再生效，别让一份"看着像配过"的配置静静地失效。
   if (Object.keys(config.models ?? {}).length > 0) {
     return "session-mode: `models` has moved into each mode's `defaultModel`; move the entries there and drop the top-level `models`";

@@ -8,7 +8,7 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { SchemaFormController } from "@morlay/dsh-client-ui-schema-form/client";
+import { SchemaFormController } from "@morlay/dsh-client-ui-primitives/client";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { Config } from "../modes.ts";
 
@@ -129,9 +129,10 @@ describe("会话模式的行配置页", () => {
 
     // `defaultModel` 没配就没有这一行（`default(null)` 让它保持缺失）。
     expect(paths).not.toContain("modes.coding.defaultModel");
+    // `preset`(空串默认) 与 `defaultModel`(null 默认) 都是这一层可添加的字段。
     expect(
       snapshot.addable.get(JSON.stringify(["modes", "coding"]))?.map((option) => option.key),
-    ).toEqual(["defaultModel"]);
+    ).toEqual(["preset", "defaultModel"]);
   });
 
   it("给某个模式配默认模型：加成 `defaultModel` 后里面就是能填的位子", () => {

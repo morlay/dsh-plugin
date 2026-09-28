@@ -32,6 +32,9 @@ import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session"
 import type {} from "@deepseek-ai/dsh-session";
 import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import type {} from "@deepseek-ai/dsh-session-projection";
+// Type-only：官方 roster 的会话投影（`agentPreset`）与它的选择事件——选择面归官方 preset，
+// 我们读它的选择、落成自己的会话事实。
+import type {} from "@deepseek-ai/dsh-agent-preset-registry";
 import type { SessionToolScope } from "@morlay/dsh-context-assembler/scope";
 import { z } from "zod";
 import {
@@ -137,6 +140,19 @@ export class SessionModes extends Service {
     ctx.on("agent/created", ({ agent }) => {
       this.installFor(agent);
     });
+    // 官方 roster 在空白窗口换 preset 时，把该会话的扩展换成新 preset 那一份：先把它写成我们的会话事实
+    // （`installFor` 读的就是这份事实），再按新模式装一遍。
+    // 只在 preset → 模式的映射唯一时动手：本部署两个模式共享同一份 preset，反查无意义（`modeForPreset`
+    // 返回 `undefined`），选模式不会经过这条监听，模式事实由 `select` 自己落。
+    ctx.on("agent-preset/selected", (sessionId: SessionId, preset: string) => {
+      const mapped = this.modeForPreset(preset);
+      const agent = ctx.agents.get(sessionId);
+      if (mapped === undefined || agent === undefined) return;
+      if (this.ctx.sessionProjections.stateOf(agent.session, "sessionMode") !== mapped) {
+        agent.session.append("session-mode/selected", { sessionMode: mapped });
+      }
+      this.installFor(agent, mapped);
+    });
   }
 
   /** 新会话用它：config 里的 `default`。 */
@@ -206,6 +222,13 @@ export class SessionModes extends Service {
 
   /**
    * 把某个空白会话切到某个模式。
+   *
+   * 模式带着它的 preset（`preset` 决定行清单），所以这里**先把 agent preset 换成模式声明的那个**，再落我们的
+   * 会话事实：否则 preset realm 还是旧那一套的行，而它的注入在我们的开关之外（旧形态 `chat` 挂 `minimal`、
+   * 会话的 preset 却还是 `standard` 时，上游 `agent-instructions` 会照旧把工作区指令注进这个"不要注入"的会话）。
+   *
+   * 目标 preset 与当前挂着的**相同时不切**（本部署两个模式共享同一份 preset，所以切模式通常走不到这一步）：
+   * 换 preset 是一次重挂（卸旧行、装新行），没有变化就没有理由付出这个代价。
    * @param sessionId - 目标会话（必须还没有开过 turn）。
    * @param mode - 目标模式 id。
    * @returns 提交后的模式 id。
@@ -221,11 +244,50 @@ export class SessionModes extends Service {
     if (boundary !== undefined && (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0)) {
       throw new Error("这个会话已经开始，模式不能再改；要换模式请新开一个会话。");
     }
-    session.append("session-mode/selected", { sessionMode: mode });
-    // 会话可能已经建好了 agent（空白会话也有）：立刻按新模式重新应用一遍。
     const agent = this.ctx.agents.get(sessionId);
+    const registry = this.presetRegistry();
+    if (agent !== undefined && registry !== undefined && definition.preset.length > 0) {
+      // 官方那条路自己也会查空白窗口（`agent-preset/locked`）。它切完会 emit `agent-preset/selected`，
+      // 下面那个监听据此把模式落成会话事实并装一遍——所以写事实前先比一次投影，同一个值不写第二条。
+      if (this.presetOfAgent(registry, agent) !== definition.preset) {
+        await registry.select(agent, definition.preset);
+      }
+    }
+    if (this.ctx.sessionProjections.stateOf(session, "sessionMode") !== mode) {
+      session.append("session-mode/selected", { sessionMode: mode });
+    }
+    // 会话可能已经建好了 agent（空白会话也有）：立刻按新模式重新应用一遍（与监听那次重复也无妨，幂等）。
     if (agent !== undefined) this.installFor(agent);
     return mode;
+  }
+
+  /**
+   * 某个 agent 当前挂着的 preset（registry 的 `composedPreset`）。
+   *
+   * 读不到时返回 `undefined`（按"未知"处理 → 该切就切）：`composedPreset` 是 registry 较新的读面，替身与老
+   * 版本可能没有它；而"没挂任何 preset"（返回值 `undefined`）与"读不到"在这里是同一个结论。
+   */
+  private presetOfAgent(registry: Context["agentPresets"], agent: Agent): string | undefined {
+    const read = (registry as { composedPreset?: (ctx: Context) => string | undefined })
+      .composedPreset;
+    if (typeof read !== "function") return undefined;
+    try {
+      return read.call(registry, agent.ctx);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 官方 preset registry：行清单与它的选择面住在那一行。不在 `inject` 里点名（headless 部署没有它，
+   * 点名会让本行永不激活），所以按"可能拿不到"读——`ctx.get` 在当前 ctx 没声明那个服务时会抛。
+   */
+  private presetRegistry(): Context["agentPresets"] | undefined {
+    try {
+      return this.ctx.get("agentPresets");
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -249,13 +311,49 @@ export class SessionModes extends Service {
    * 继承要**写进子会话日志**：它是一条会话事实，冷恢复与 fork 都要靠它重建（{@link modeOf} 只读投影）。
    */
   private resolveModeId(agent: Agent): string {
-    // `undefined` = 这个投影没注册（或还没初始化），与"没选过"（`null`）一样落到默认。
+    // `undefined` = 这个投影没注册（或还没初始化），与"没选过"（`null`）一样落到下一层。
     const selected = this.ctx.sessionProjections.stateOf(agent.session, "sessionMode");
     if (typeof selected === "string") return selected;
+    // 会话级选择归官方 roster：它的 preset 决定这个会话用哪份扩展，我们把结论落成自己的会话事实
+    // （`sessionMode` 是会话级事实的 home：恢复、子代理继承、服务端读取都读它）。
+    const mapped = this.modeForPreset(this.presetOf(agent.session));
+    if (mapped !== undefined) {
+      agent.session.append("session-mode/selected", { sessionMode: mapped });
+      return mapped;
+    }
     const inherited = this.inheritedModeId(agent);
     if (inherited === undefined) return this.defaultId;
     agent.session.append("session-mode/selected", { sessionMode: inherited });
     return inherited;
+  }
+
+  /** 官方 roster 选定的 preset（没选过、或 registry 没装时为 `undefined`）。 */
+  private presetOf(session: Session): string | undefined {
+    try {
+      const state = this.ctx.sessionProjections.stateOf(session, "agentPreset");
+      return typeof state === "string" ? state : undefined;
+    } catch {
+      // registry 没装（headless 部署）时这个投影不存在：按"没有选择"处理。
+      return undefined;
+    }
+  }
+
+  /**
+   * 某个 agent preset 对应的模式 id——**只在映射唯一时**回答（几个模式挂同一份 preset 时返回
+   * `undefined`，不反查）。
+   *
+   * 本部署的两个模式共享同一个 preset（`MODE_PRESET_ID`），差异全在会话级收口，所以 preset → 模式的反查在
+   * 这里无意义：模式由**会话事实**决定（`session-mode/selected` 投影 → 子代理继承 → 部署默认），
+   * 官方 roster 选了什么 preset 不改变这个会话是哪个模式。这条反查留给"一对一映射"的部署形态。
+   * @param preset - preset id（`undefined` 表示没选过、或 registry 没装）。
+   * @returns 该 preset 唯一对应的模式 id；没配扩展、或由多个模式共享时 `undefined`。
+   */
+  modeForPreset(preset: string | undefined): string | undefined {
+    if (preset === undefined) return undefined;
+    const owners = Object.keys(this.config.modes).filter(
+      (id) => this.config.modes[id]?.preset === preset,
+    );
+    return owners.length === 1 ? owners[0] : undefined;
   }
 
   /** 子代理（有 durable 父会话）继承父当前模式；父不在场、或不是子代理时没有可继承的。 */

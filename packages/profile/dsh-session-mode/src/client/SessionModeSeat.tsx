@@ -21,35 +21,31 @@ import { selectMode } from "./api.ts";
 import { useRoster } from "./use-roster.ts";
 import css from "./SessionModeSeat.module.css";
 
-/** 完整 props：hero 槽位的运行时 props + 本包的字典。 */
-export type SessionModeSeatProps = PropsRuntime<"conversation.hero.agentPreset"> &
+/** 完整 props：composer 工具行左侧槽位的运行时 props + 本包的字典。 */
+export type SessionModeSeatProps = PropsRuntime<"conversation.input.left"> &
   PropsLocale<"session-mode">;
 
 /**
- * 渲染新会话的模式 chip。
+ * 渲染 composer 里的模式切换 chip。
+ *
+ * 为什么在 composer 侧栏（`conversation.input.left`）：**新会话屏也是一个 blank session 的 composer**，
+ * 那里没有会话头部，挂头部槽位就选不到模式；官方 roster 那个座位（`conversation.hero.agentPreset`）是
+ * 单注册槽位、已被官方占了，所以用自己的 list 槽位并存。
  * @param props - 槽位合成的 props。
- * @returns chip；清单没读到、或不是主视图的会话时返回 null。
+ * @returns chip；清单没读到、或会话未知时返回 null。
  */
-export function SessionModeSeat({
-  sessionId,
-  useSessions,
-  useSessionRetainInfo,
-  t,
-}: SessionModeSeatProps) {
+export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatProps) {
   const roster = useRoster();
   const selected = useSessions((state) => {
     const value =
       sessionId === undefined ? undefined : state.byId[sessionId]?.projectionValues?.sessionMode;
     return typeof value === "string" ? value : undefined;
   });
-  const main = useSessionRetainInfo(
-    (info) => sessionId === undefined || (info?.retainedBy.mainView ?? 0) > 0,
-  );
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!main || roster === undefined) return null;
+  if (roster === undefined) return null;
 
   const current = selected ?? roster.default;
   const chosen = roster.modes.find((mode) => mode.id === current);

@@ -1,16 +1,16 @@
 /**
  * client 半：会话里的两个面（模式 chip 与头部标签）+ 设置页里那张「会话模式」卡片。
  *
- * | 槽位                                     | 呈现                                          |
- * | ---------------------------------------- | --------------------------------------------- |
- * | `conversation.hero.agentPreset`          | 新会话屏幕的顶部占位——chip 点开就是切换列表   |
- * | `conversation.session.header.actions`    | 会话头部的只读模式标签（`order: -10`，贴标题） |
+ * | 槽位                                        | 呈现                                           |
+ * | ------------------------------------------- | ---------------------------------------------- |
+ * | `conversation.session.header.utilities`     | chip（`order: -10`）——点开就是切换列表          |
+ * | `conversation.session.header.utilities`     | 只读模式标签（`order: -9`，紧挨 chip）          |
  *
- * 官方的 `@deepseek-ai/dsh-client-ui-agent-preset` 在装配里被禁用（它同时带来设置页那块 roster 面板），
- * 所以这两个面归我们。
+ * 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（它提供 preset 的选择面与设置页 roster）；我们的模式入口
+ * 放在**它的旁边**：同一 scope 的 list 槽位（会话头部工具区），两套入口并存、互不遮挡。
  *
  * 本行的配置页（各模式的默认模型 `config.models`）不再由本包画：那个字段是 volatile 的，页面由
- * `@morlay/dsh-client-ui-schema-form` 按 schema 自动生成（它注册到本行的配置入口 `plugins.row.config`，
+ * `@morlay/dsh-client-ui-primitives` 按 schema 自动生成（它注册到本行的配置入口 `plugins.row.config`，
  * key = `<bundle 包名>#<行 id>`）。本包只管会话里的两个面。
  */
 
@@ -172,18 +172,24 @@ export function apply(ctx: Context): void {
     }, "session-mode: model candidates"),
   );
 
-  // 会话里的两个面都要求会话流的上下文（hero 的座位与头部动作行挂在 conversation 上）。
+  // chip 挂 **composer 工具行左侧**（`conversation.input.left`，list + session scope）：新会话屏也是一个
+  // blank session 的 composer，所以那里也能选模式——头部槽位在新会话屏不存在。
+  // 只读标签仍挂会话头部（有会话才有头部，标签本来也只在那里有意义）。
   ctx.inject(["slots", "conversation"], (scope) => {
     scope.effect(() => {
       const seat = scope.slots.register(
-        { name: "conversation.hero.agentPreset", locale: NS },
+        {
+          name: "conversation.input.left",
+          id: "session-mode",
+          order: 0,
+          locale: NS,
+        },
         SessionModeSeat,
       );
       const label = scope.slots.register(
         {
-          name: "conversation.session.header.actions",
-          id: "session-mode",
-          // 静态会话上下文占头部前导的负序位（与官方那一行同位）。
+          name: "conversation.session.header.utilities",
+          id: "session-mode-label",
           order: -10,
           locale: NS,
         },
@@ -193,6 +199,6 @@ export function apply(ctx: Context): void {
         seat();
         label();
       };
-    }, "session-mode: hero chip and header label");
+    }, "session-mode: composer chip and header label");
   });
 }

@@ -10,7 +10,8 @@ export const zh = {
   headerHint: "这个会话运行的模式",
   noDescription: "（无说明）",
   provider: "服务商",
-  providerHint: "服务商 id：`llm-openai-compatible` 的 providers 里的键，或内置服务商名。",
+  providerHint:
+    "服务商 id：部署里注册的任意路由——不论哪个适配器插件注册的（官方的、我们自己的都算）。",
   model: "模型",
   modelHint: "模型 id。",
   reasoningEffort: "思考档位",
@@ -23,7 +24,7 @@ export const en: Record<keyof typeof zh, string> = {
   noDescription: "(no description)",
   provider: "Provider",
   providerHint:
-    "Provider id: a key in `llm-openai-compatible`'s providers, or a built-in provider name.",
+    "Provider id: any route registered in this deployment, whichever adapter plugin supplies it.",
   model: "Model",
   modelHint: "Model id.",
   reasoningEffort: "Reasoning effort",

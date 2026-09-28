@@ -30,6 +30,7 @@ const CONFIG: Config = {
   default: "coding",
   modes: {
     coding: {
+      preset: "standard",
       name: "编码模式",
       description: "编码",
       role: ["main"],
@@ -39,6 +40,7 @@ const CONFIG: Config = {
       runtimeContext: true,
     },
     chat: {
+      preset: "minimal",
       name: "对话模式",
       description: "对话",
       role: ["main"],
@@ -113,6 +115,27 @@ async function mount(config: Config = CONFIG) {
     sessionId: SessionId(`session-mode-${String(Date.now())}-${String(Math.random())}`),
   });
   return { ctx, agent: handle.agent };
+}
+
+/**
+ * 官方 preset registry 的替身：只做 `select` 与 `composedPreset` 两件事——按请求换行清单、写
+ * `agent-preset/selected` 会话事件，并按真 registry 的转发（`session/event` → ctx 事件）把它广播出去。
+ * 返回它收到的 preset 序列（切了几次、切到哪）。
+ * @param ctx - 宿主 ctx。
+ * @param options.composedPreset - 替身的"当前挂着哪个 preset"（真 registry 读 agent 的 scope 父链）。
+ */
+function installFakeRegistry(ctx: Context, options: { composedPreset?: string } = {}): string[] {
+  const picked: string[] = [];
+  ctx.provide("agentPresets", {
+    async select(agent: Agent, preset: string) {
+      picked.push(preset);
+      agent.session.append("agent-preset/selected", { agentPreset: preset });
+      ctx.emit("agent-preset/selected", agent.id, preset);
+      return preset;
+    },
+    composedPreset: () => options.composedPreset,
+  } as unknown as Context["agentPresets"]);
+  return picked;
 }
 
 /** 一个 config 想装载就必须被拒绝：装配期校验（`configProblem`）在构造函数里抛。 */
@@ -215,6 +238,43 @@ describe("模式的读取与切换", () => {
     );
   });
 
+  it("选模式时把官方 preset 一起切，且只写一条 session-mode/selected", async () => {
+    const { ctx, agent } = await mount();
+    const picked = installFakeRegistry(ctx);
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    // preset 跟着模式走：行清单归官方 registry，模式只决定"用哪一份行 + 怎么收口"。
+    expect(picked).toEqual(["minimal"]);
+    // 官方那条路会 emit `agent-preset/selected`（监听里再落一次事实）：同一个值不写第二条。
+    const selected = agent.session
+      .ownEvents()
+      .filter((event) => event.type === "session-mode/selected");
+    expect(selected.map((event) => event.data.sessionMode)).toEqual(["chat"]);
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+  });
+
+  it("模式没声明 preset（空串）时不碰官方 registry", async () => {
+    const { ctx, agent } = await mount({
+      default: CONFIG.default,
+      modes: { ...CONFIG.modes, chat: { ...CONFIG.modes["chat"]!, preset: "" } },
+    });
+    const picked = installFakeRegistry(ctx);
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    expect(picked).toEqual([]);
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+  });
+
+  it("registry 没装（headless）时只落我们的会话事实", async () => {
+    const { ctx, agent } = await mount();
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+  });
+
   it("装配期校验：默认模式不在清单里直接拒绝装载", async () => {
     const ctx = new Context();
     contexts.push(ctx);
@@ -224,6 +284,89 @@ describe("模式的读取与切换", () => {
     await expect(
       ctx.plugin(plugin, { default: "absent", modes: CONFIG.modes }).then(() => ctx.fiber.await()),
     ).rejects.toThrow("default");
+  });
+});
+
+/**
+ * 本部署的形状：两个模式挂**同一份** preset（`mode-switch`），差异全在会话级收口（persona / 白名单 /
+ * 两个开关）。preset 是行清单的 home，模式是它的会话级扩展。
+ */
+const SHARED: Config = {
+  default: "coding",
+  modes: {
+    coding: { ...CONFIG.modes["coding"]!, preset: "mode-switch" },
+    chat: { ...CONFIG.modes["chat"]!, preset: "mode-switch" },
+  },
+};
+
+describe("两个模式共享一份 preset", () => {
+  it("共享是合法的：装配期校验不再要求 preset 一对一", async () => {
+    const { ctx } = await mount(SHARED);
+
+    expect(ctx.sessionModes.defaultId).toBe("coding");
+    expect(ctx.sessionModes.roster().modes.map((mode) => mode.id)).toEqual(["coding", "chat"]);
+    expect(SHARED.modes["coding"]?.preset).toBe(SHARED.modes["chat"]?.preset);
+  });
+
+  it("共享时 preset → 模式的反查不回答；一对一映射照旧回答", async () => {
+    const { ctx } = await mount(SHARED);
+    expect(ctx.sessionModes.modeForPreset("mode-switch")).toBeUndefined();
+    expect(ctx.sessionModes.modeForPreset(undefined)).toBeUndefined();
+
+    const unique = await mount(CONFIG);
+    expect(unique.ctx.sessionModes.modeForPreset("minimal")).toBe("chat");
+    expect(unique.ctx.sessionModes.modeForPreset("nope")).toBeUndefined();
+  });
+
+  it("目标 preset 已经挂着就不换：切模式只换会话收口（不重挂行清单）", async () => {
+    const { ctx, agent } = await mount(SHARED);
+    const picked = installFakeRegistry(ctx, { composedPreset: "mode-switch" });
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    // 一次 recompose 都没发生，但模式事实照落、persona 与收口换成 chat 那一份。
+    expect(picked).toEqual([]);
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(sectionText(await assembled(ctx, agent), "deployment:persona-prefix")).toBe(
+      "对话模式的提示词。",
+    );
+  });
+
+  it("同一个模式重复选是幂等的：事实不重复写、preset 不重挂", async () => {
+    const { ctx, agent } = await mount(SHARED);
+    const picked = installFakeRegistry(ctx, { composedPreset: "mode-switch" });
+
+    await ctx.sessionModes.select(agent.id, "coding");
+    await ctx.sessionModes.select(agent.id, "coding");
+
+    expect(picked).toEqual([]);
+    // 第一次把"这个会话是 coding"落成事实（投影原本是空的），第二次同一个值不写第二条。
+    expect(
+      agent.session
+        .ownEvents()
+        .filter((event) => event.type === "session-mode/selected")
+        .map((event) => event.data.sessionMode),
+    ).toEqual(["coding"]);
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
+  });
+
+  it("挂在别的 preset 上时照旧切过去（模式声明的 preset 与当前不同）", async () => {
+    const { ctx, agent } = await mount(SHARED);
+    const picked = installFakeRegistry(ctx, { composedPreset: "standard" });
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    expect(picked).toEqual(["mode-switch"]);
+    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+  });
+
+  it("registry 没有 `composedPreset` 读面时按未知处理：该切就切", async () => {
+    const { ctx, agent } = await mount(SHARED);
+    const picked = installFakeRegistry(ctx);
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    expect(picked).toEqual(["mode-switch"]);
   });
 });
 
@@ -238,6 +381,7 @@ const EXTENDED: Config = {
     },
     chat: { ...CONFIG.modes["chat"]!, role: ["main"] },
     reviewer: {
+      preset: "",
       name: "评审模式",
       description: "只读评审",
       role: ["subagent"],
