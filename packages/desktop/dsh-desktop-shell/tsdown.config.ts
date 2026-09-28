@@ -15,7 +15,16 @@ export default [
       "profile-project": "./src/profile-project.ts",
       seed: "./src/seed.ts",
     },
-    inline: ["@morlay/dsh-desktop-host"],
+    inline: [
+      "@morlay/dsh-desktop-host",
+      // 快捷键桥的原生侧（`src/shortcuts.ts` / `src/keybindings.ts`）要用上游的
+      // 「设备偏好单写者」与原子写：它们进不了 app.asar 的解析面，所以内联进壳产物
+      // （连同这两个包的值依赖；`dsh-brand` 只做类型，擦除后不留字节）。
+      "@deepseek-ai/dsh-client-shortcuts",
+      "@deepseek-ai/dsh-atomic-write",
+      "@deepseek-ai/dsh-util-values",
+      "@deepseek-ai/dsh-util-crypto",
+    ],
     // dev 与 bundle 都以**本包目录**为 Electron app：Electron 按包清单的 `main` 找壳入口，
     // 所以壳包必须有传统入口（值由构建写回，指 `dist/index.mjs`）。
     legacy: true,

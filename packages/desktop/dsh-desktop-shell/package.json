@@ -54,9 +54,15 @@
   "devDependencies": {
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@local/devkit": "workspace:*",
     "@morlay/dsh-desktop-host": "workspace:*",
     "@types/node": "^26.5.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:*"
   },
   "engines": {
     "node": ">=24.11.0"

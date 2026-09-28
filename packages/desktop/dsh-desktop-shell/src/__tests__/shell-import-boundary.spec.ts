@@ -1,10 +1,11 @@
 /**
- * 壳产物的依赖边界：`app.asar` 里只有壳自己的字节（`@local/*` 与 `@morlay/dsh-desktop-host` 内联进来），
- * 上游包一律留在产物外。所以壳入口可达的模块图里**不允许**出现上游裸引用——它们能通过类型检查、能被
+ * 壳产物的依赖边界：`app.asar` 里只有壳自己的字节（`@local/*`、`@morlay/dsh-desktop-host`
+ * 与配置里 `inline` 的那几个上游包内联进来），其余上游包一律留在产物外。所以壳入口可达的
+ * 模块图里**不允许**出现「既不在内联列表、又解析不到」的裸引用——它们能通过类型检查、能被
  * tsdown 打出裸 `import`，但装进 `app.asar` 后解析不到，只在真机启动时炸
  * （2026-09-22：`seed.ts` 里 import 一个上游常量 → 启动即 `ERR_MODULE_NOT_FOUND`）。
  *
- * 这条边界是构建配置（`tsdown.config.ts` 的 `deps`）与源码的共同事实，因此在这里守：
+ * 这条边界是构建配置（`tsdown.config.ts` 的 `deps` / `inline`）与源码的共同事实，因此在这里守：
  * 从壳入口出发沿相对 import 遍历，收集每个裸说明符，逐个核对白名单。
  */
 import { readFile } from "node:fs/promises";
@@ -16,8 +17,20 @@ const ROOT = resolve(import.meta.dirname, "..", "..");
 /** 装进 `app.asar` 的入口：壳主进程与 preload。 */
 const SHELL_ENTRIES = ["src/index.ts", "src/preload-app.ts"];
 
-/** 壳产物里能解析到的裸说明符：node 内建、Electron 自带、内联进来的本地包。 */
-const ALLOWED = [/^node:/u, /^electron$/u, /^@local\//u, /^@morlay\/dsh-desktop-host(?:\/|$)/u];
+/**
+ * 壳产物里能解析到的裸说明符：node 内建、Electron 自带、内联进来的本地包，
+ * 以及 tsdown 配置里 `inline` 的那几个上游包（快捷键桥的设备偏好与原子写）。
+ */
+const ALLOWED = [
+  /^node:/u,
+  /^electron$/u,
+  /^@local\//u,
+  /^@morlay\/dsh-desktop-host(?:\/|$)/u,
+  /^@deepseek-ai\/dsh-client-shortcuts(?:\/|$)/u,
+  /^@deepseek-ai\/dsh-atomic-write(?:\/|$)/u,
+  /^@deepseek-ai\/dsh-util-values(?:\/|$)/u,
+  /^@deepseek-ai\/dsh-util-crypto(?:\/|$)/u,
+];
 
 /** Type-only import 不留运行时字节，不在这条边界里。 */
 function withoutTypeImports(text: string): string {

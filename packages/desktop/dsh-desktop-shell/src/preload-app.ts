@@ -98,6 +98,42 @@ if (
 
 markDocumentPlatform(process.platform, document);
 markWindowsTitlebar(process.platform, document);
+
+// 上游 client 半按 `data-platform` 判定 desktop 运行时，并在那时**要求**这份桥存在
+// （`@deepseek-ai/dsh-client-shortcuts` 的 client 半缺它就直接构造失败）。
+contextBridge.exposeInMainWorld("dshDesktop", {
+  protocolVersion: 1,
+  keyboard: {
+    subscribe(listener: (input: unknown) => void): () => void {
+      const handle = (_event: unknown, input: unknown): void => {
+        listener(input);
+      };
+      ipcRenderer.on(DESKTOP_IPC.shortcutsInput, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.shortcutsInput, handle);
+      };
+    },
+    closeWindow: (revision: string) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsCloseWindow, revision) as Promise<void>,
+  },
+  shortcuts: {
+    get: (definitions: unknown) => ipcRenderer.invoke(DESKTOP_IPC.shortcutsGet, definitions),
+    edit: (edit: unknown, revision: string) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsEdit, edit, revision),
+    subscribe(listener: (snapshot: unknown) => void): () => void {
+      const handle = (_event: unknown, snapshot: unknown): void => {
+        listener(snapshot);
+      };
+      ipcRenderer.on(DESKTOP_IPC.shortcutsChanged, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.shortcutsChanged, handle);
+      };
+    },
+    recording: (active: boolean) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsRecording, active) as Promise<void>,
+  },
+});
+
 syncNativeTheme(process.platform, document, (source) => {
   ipcRenderer.send(DESKTOP_IPC.nativeThemeSet, source);
 });

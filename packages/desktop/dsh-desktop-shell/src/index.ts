@@ -15,6 +15,7 @@ import {
   workspaceWithOverrides,
 } from "./profile-project.ts";
 import { SEED_RUNTIME_DIR_NAME, ensureSeedProfile } from "./seed.ts";
+import { installDesktopShortcuts } from "./shortcuts.ts";
 import {
   DESKTOP_STREAM_PATH,
   encodeDesktopStreamItem,
@@ -455,9 +456,22 @@ async function main(): Promise<void> {
       nativeTheme.themeSource = source;
   });
 
+  // 上游 @deepseek-ai/dsh-client-shortcuts 在桌面运行时要求 window.dshDesktop.keyboard：
+  // 这里装上原生侧（设备偏好 + 按键转发），preload 负责按那份契约暴露给页面。
+  const shortcuts = installDesktopShortcuts(
+    () => mainWindow,
+    app.getPath("userData"),
+    process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : "linux",
+    SCHEME,
+  );
+  app.on("will-quit", () => {
+    shortcuts.dispose();
+  });
+
   const createMainWindow = (): BrowserWindow => {
     const window = createWindow(appPreload, appConfig.window);
     mainWindow = window;
+    shortcuts.attach(window);
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) window.show();
     });

@@ -13,6 +13,15 @@ export const DESKTOP_IPC = {
   streamChunk: "dsh-desktop:stream-chunk",
   streamEnd: "dsh-desktop:stream-end",
   streamError: "dsh-desktop:stream-error",
+  /** 桌面快捷键：设备偏好的读写 / 录制状态（渲染进程 → 主进程）。 */
+  shortcutsGet: "dsh-desktop:shortcuts-get",
+  shortcutsEdit: "dsh-desktop:shortcuts-edit",
+  shortcutsRecording: "dsh-desktop:shortcuts-recording",
+  shortcutsCloseWindow: "dsh-desktop:shortcuts-close-window",
+  /** 命中的原生按键手势（主进程 → 渲染进程）；渲染侧的 native keyboard 适配器消费。 */
+  shortcutsInput: "dsh-desktop:shortcuts-input",
+  /** 配置快照变化（主进程 → 渲染进程）。 */
+  shortcutsChanged: "dsh-desktop:shortcuts-changed",
 } as const;
 
 /** preload 从渲染进程 argv 里读回 scheme 的参数名（主进程与 preload 共用一份）。 */
