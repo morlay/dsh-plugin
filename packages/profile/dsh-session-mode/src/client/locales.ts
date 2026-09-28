@@ -1,13 +1,12 @@
 /**
  * client 半的文案：命名空间 `session-mode`（与 locale 注册时用的 key 一致）。
  *
- * 只有会话里的两个面（模式 chip 与头部标签）用这份字典：模式的名字与说明由 host 的清单给（那是数据，不是
- * 文案）。本行的配置页（各模式的默认模型）由通用 schema 表单渲染，文案在它自己的字典里。
+ * 只有会话里那个模式 chip 用这份字典：模式的名字与说明由 host 的清单给（那是数据，不是文案）。本行的配置页
+ * （各模式的默认模型）由通用 schema 表单渲染，文案在它自己的字典里。
  */
 
 export const zh = {
   seatHint: "选择这个会话的模式",
-  headerHint: "这个会话运行的模式",
   noDescription: "（无说明）",
   provider: "服务商",
   providerHint:
@@ -20,7 +19,6 @@ export const zh = {
 
 export const en: Record<keyof typeof zh, string> = {
   seatHint: "Pick the mode for this session",
-  headerHint: "The mode this session runs",
   noDescription: "(no description)",
   provider: "Provider",
   providerHint:

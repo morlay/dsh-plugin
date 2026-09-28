@@ -1,17 +1,19 @@
 /**
- * client 半：会话里的两个面（模式 chip 与头部标签）+ 设置页里那张「会话模式」卡片。
+ * client 半：会话里那一个面（模式 chip）+ 设置页里那张「会话模式」卡片。
  *
- * | 槽位                                        | 呈现                                           |
- * | ------------------------------------------- | ---------------------------------------------- |
- * | `conversation.session.header.utilities`     | chip（`order: -10`）——点开就是切换列表          |
- * | `conversation.session.header.utilities`     | 只读模式标签（`order: -9`，紧挨 chip）          |
+ * | 槽位                      | 呈现                                                |
+ * | ------------------------- | --------------------------------------------------- |
+ * | `conversation.input.left` | chip——点开就是切换列表（新会话屏也是一个 composer）  |
  *
- * 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（它提供 preset 的选择面与设置页 roster）；我们的模式入口
- * 放在**它的旁边**：同一 scope 的 list 槽位（会话头部工具区），两套入口并存、互不遮挡。
+ * 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（它提供 preset 的选择面与设置页 roster）：官方管"挂哪套
+ * 行"，我们管"会话级扩展"，两套入口并存、互不遮挡。
+ *
+ * 头部的只读标签**没有**：chip 本来就把当前模式写在脸上（会话与新会话屏都有 composer），右上角再写一遍是
+ * 同一句话的复读。
  *
  * 本行的配置页（各模式的默认模型 `config.models`）不再由本包画：那个字段是 volatile 的，页面由
  * `@morlay/dsh-client-ui-primitives` 按 schema 自动生成（它注册到本行的配置入口 `plugins.row.config`，
- * key = `<bundle 包名>#<行 id>`）。本包只管会话里的两个面。
+ * key = `<bundle 包名>#<行 id>`）。本包只管会话里那一个面。
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -22,7 +24,6 @@ import type {} from "@deepseek-ai/dsh-client-ui-slots";
 
 // Type-only：槽位声明与 standard props（session / session-maybe / global）。
 import type {} from "@morlay/dsh-client-ui-conversation/client";
-import { SessionModeLabel } from "./SessionModeLabel.tsx";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
@@ -50,7 +51,6 @@ interface ProviderEntry {
   settingsPath: readonly string[];
 }
 
-export type { SessionModeLabelProps } from "./SessionModeLabel.tsx";
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
 export type { SessionModeLocaleKey } from "./locales.ts";
 
@@ -174,7 +174,6 @@ export function apply(ctx: Context): void {
 
   // chip 挂 **composer 工具行左侧**（`conversation.input.left`，list + session scope）：新会话屏也是一个
   // blank session 的 composer，所以那里也能选模式——头部槽位在新会话屏不存在。
-  // 只读标签仍挂会话头部（有会话才有头部，标签本来也只在那里有意义）。
   ctx.inject(["slots", "conversation"], (scope) => {
     scope.effect(() => {
       const seat = scope.slots.register(
@@ -186,19 +185,9 @@ export function apply(ctx: Context): void {
         },
         SessionModeSeat,
       );
-      const label = scope.slots.register(
-        {
-          name: "conversation.session.header.utilities",
-          id: "session-mode-label",
-          order: -10,
-          locale: NS,
-        },
-        SessionModeLabel,
-      );
       return () => {
         seat();
-        label();
       };
-    }, "session-mode: composer chip and header label");
+    }, "session-mode: composer chip");
   });
 }

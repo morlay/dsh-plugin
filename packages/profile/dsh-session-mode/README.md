@@ -3,14 +3,14 @@
 **模式 = agent preset 的会话级扩展**：每个模式声明它挂在哪份 preset 上（`preset`，行清单由那份 preset 提供），
 再给这个会话加四样东西——一段 persona、一组工具白名单（收口）、instruction / 动态快照开关、可选默认模型。
 本部署的 preset 是**我们自己注册的那一份**（`mode-switch`，见
-[`@morlay/session-mode-profile`](../../../bundles/session-mode-profile/README.md) 与
-[ADR-自己注册preset](../../../bundles/session-mode-profile/.agents/adrs/20260929-自己注册preset.md)），
-两个模式共享它——**差异全由会话级收口表达**。选择面由我们提供（新对话顶部的模式 chip、会话头部标签与
+[`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md) 与
+[ADR-自己注册preset](../../bundles/session-mode-profile/.agents/adrs/20260929-自己注册preset.md)），
+两个模式共享它——**差异全由会话级收口表达**。选择面由我们提供（composer 里的模式 chip 与
 `GET/POST /session-mode`）；模式的选择落成**会话事实**（`session-mode/selected` 事件 + `sessionMode` 投影）。
 **模式不是 Cordis 子树**。
 
 本包不装配任何行：行 config 由 `src/rows.ts` 渲染，装配入口在
-[`@morlay/session-mode-profile`](../../../bundles/session-mode-profile/README.md)（那里插两行）。
+[`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)（那里插两行）。
 
 | 行                        | 是什么                                                                                                                                  |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@
 | `context-assembler-scope` | [`@morlay/dsh-context-assembler/scope`](../../context/dsh-context-assembler/README.md)：按会话收口                                      |
 
 工具行、注入通道与压缩都不在这里：行清单由 preset 的 `config.plugins` 提供（本部署那份由
-[`@morlay/session-mode-profile`](../../../bundles/session-mode-profile/README.md) 声明，官方四个 shipped preset
+[`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md) 声明，官方四个 shipped preset
 照旧可选），注入通道与工具说明由各自的 bundle 在 host 平面装一次。
 
 ## 一个模式是什么
@@ -103,8 +103,12 @@
 
 ## 页面上的选择面
 
-选择面是**本包的 client 半**，挂在会话头部工具区（`conversation.session.header.utilities`，list + session scope）：
-一个模式 chip（点开就是清单）与一个只读标签，清单与切换走 HTTP 路由 `GET/POST /session-mode`。
+选择面是**本包的 client 半**：一个模式 chip 挂在 composer 工具行左侧（`conversation.input.left`，list + session
+scope），点开就是清单，清单与切换走 HTTP 路由 `GET/POST /session-mode`。
+
+挂 composer 而不是会话头部：一个会话的模式只在它跑第一轮**之前**能改（host 会拒绝给已在跑的会话换模式），而
+新会话屏也是一个 blank session 的 composer——头部槽位在那里根本不存在。头部的只读标签**已去掉**：chip 本来就把
+当前模式写在脸上，右上角再写一遍是同一句话的复读。
 
 官方 `ui-agent-preset` 那套**保留**（它的 roster 座位在 `conversation.hero.agentPreset`，是单注册槽位）——两套入口
 并存：官方管"挂哪套行"的选择面，我们管"会话级扩展"的选择面。`modeForPreset` 只在 preset → 模式的映射**唯一**

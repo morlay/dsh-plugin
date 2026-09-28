@@ -33,7 +33,7 @@ function bench(options: { withHints?: boolean } = {}) {
   const ctx = {
     get: (name: string) => services[name],
     effect: (effect: () => unknown) => effect(),
-    // 会话里的两个面（chip / 头部标签）挂在这些服务上：这里只需它们存在。
+    // 会话里的模式 chip 挂在这些服务上：这里只需它们存在。
     // 与 cordis 一致：inject 的服务缺席时不执行工厂；在时把服务挂在 scope 上。
     inject: (names: string[], factory: (scope: unknown) => unknown) => {
       if (names.some((name) => services[name] === undefined)) return;

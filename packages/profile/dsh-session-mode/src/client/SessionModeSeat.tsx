@@ -1,9 +1,10 @@
 /**
- * 新会话屏幕上的模式 chip：**切换列表**就在这里（点开是 coding / chat 两项）。
+ * composer 里的模式 chip：**本包在会话里唯一的面**（点开是 coding / chat 两项）。
  *
- * 为什么住在新会话屏幕而不是输入框上方：选择只在会话开始**之前**有效——一旦跑过 turn，那段历史是在某个
- * 模式的工具与提示词下产生的，host 会拒绝换（与上游 `agentPresets.select` 同一条判据）。一个大半辈子都
- * 该禁用的控件，放在它仍然可用的那块屏幕上更诚实。
+ * 选择只在会话开始**之前**有效——一旦跑过 turn，那段历史是在某个模式的工具与提示词下产生的，host 会拒绝
+ * 换（与上游 `agentPresets.select` 同一条判据）。所以它挂在 composer 上：新会话屏也是一个 blank session 的
+ * composer，选择正好发生在那里；会话头部则没有它的位置——头部只在"跑起来之后"值得看，而那时的 chip 已经把
+ * 当前模式写在脸上，再挂一个只读标签就是同一句话的复读。
  */
 
 import { useState } from "react";
@@ -15,7 +16,7 @@ import {
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only：拉入本包 host 半的 Context / 投影声明（`sessionMode`），让 `projectionValues` 有类型。
 import type {} from "../index.ts";
-// Type-only：拉入 ui-conversation 的 SlotMap 合并（hero 的座位）。
+// Type-only：拉入 ui-conversation 的 SlotMap 合并（composer 工具行的座位）。
 import type {} from "@morlay/dsh-client-ui-conversation/client";
 import { selectMode } from "./api.ts";
 import { useRoster } from "./use-roster.ts";
@@ -28,9 +29,10 @@ export type SessionModeSeatProps = PropsRuntime<"conversation.input.left"> &
 /**
  * 渲染 composer 里的模式切换 chip。
  *
- * 为什么在 composer 侧栏（`conversation.input.left`）：**新会话屏也是一个 blank session 的 composer**，
- * 那里没有会话头部，挂头部槽位就选不到模式；官方 roster 那个座位（`conversation.hero.agentPreset`）是
- * 单注册槽位、已被官方占了，所以用自己的 list 槽位并存。
+ * 为什么在 composer（`conversation.input.left`）：**新会话屏也是一个 blank session 的 composer**，选择正好
+ * 发生在那里；会话头部槽位在新会话屏根本不存在，而会话跑起来之后头部也不该重复说一遍 chip 已经写着的事。
+ * 官方 roster 那个座位（`conversation.hero.agentPreset`）是单注册槽位、已被官方占了，所以用自己的 list 槽位
+ * 并存。
  * @param props - 槽位合成的 props。
  * @returns chip；清单没读到、或会话未知时返回 null。
  */
