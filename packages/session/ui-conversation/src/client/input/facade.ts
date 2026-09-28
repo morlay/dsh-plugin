@@ -29,7 +29,11 @@ import type {
   ReferenceInsert,
   TokenSpan,
 } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
-import type { InputSubmitMode } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
+import type {
+  InputSubmitMode,
+  MessageSubmission,
+  MessageSubmissionState,
+} from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
 import { SubmitMachine } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/machine.ts";
 import { DraftEditorRuntime } from "./editor/runtime.ts";
 import type { EditorProjection } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/editor/projection.ts";
@@ -49,6 +53,12 @@ export interface SessionInputDeps {
   inbox?: ObservableSnapshot<InboxState | undefined> | undefined;
 
   steerQueue?: (() => void) | undefined;
+
+  /** 提交前快照会话事实：拿的是提交那一刻的取值，不读此后更新的状态。 */
+  submissionState?: (() => MessageSubmissionState) | undefined;
+
+  /** 每条真正落 sink 的普通消息尝试通知一次（埋点在 hub 侧接到 product-analytics）。 */
+  messageSubmitted?: ((submission: MessageSubmission) => void) | undefined;
 
   defaultSink(
     text: string,
@@ -258,7 +268,26 @@ export class SessionInputShell implements SessionInput {
     this.draftEditor.paste(text);
   }
 
-  submit(mode: InputSubmitMode = "queue"): void {
+  submit(mode: InputSubmitMode = "queue", source?: "click" | "enter"): void {
+    if (this.disposed) return;
+    const timestamp = Date.now();
+    let state: MessageSubmissionState | undefined;
+    if (
+      this.snapshot.phase === "plain" &&
+      (this.snapshot.draft.trim() !== "" || this.attachmentIds.length > 0)
+    ) {
+      try {
+        state = this.deps.submissionState?.();
+      } catch {
+        // 可选会话观测不得中断提交。
+      }
+    }
+    const submission: MessageSubmission = Object.freeze({
+      timestamp,
+      mode,
+      ...(source === undefined ? {} : { source }),
+      ...(state === undefined ? {} : { state }),
+    });
     if (this.snapshot.draft.trim() === "" && this.attachmentIds.length > 0) {
       if (this.snapshot.phase === "plain") {
         const attachmentIds = [...this.attachmentIds];
@@ -267,6 +296,7 @@ export class SessionInputShell implements SessionInput {
         const flight = this.attachmentFlightSeq;
         this.attachmentFlights.set(flight, { controller, attachmentIds });
         this.commitSend(attachmentIds);
+        this.notifySubmission(submission);
         void this.deps.defaultSink("", attachmentIds, mode, controller.signal).then(
           (outcome) => {
             if (this.disposed || !this.attachmentFlights.delete(flight)) return;
@@ -296,7 +326,7 @@ export class SessionInputShell implements SessionInput {
       );
       return;
     }
-    this.dispatchRun({ type: "enter", mode, draft: this.projection.clipboardText });
+    this.dispatchRun({ type: "enter", mode, draft: this.projection.clipboardText, submission });
     const phase = this.snapshot.phase;
     if (phase === "adjudicating" || phase === "submitting") {
       this.deps.popup?.()?.dismiss();
@@ -485,7 +515,17 @@ export class SessionInputShell implements SessionInput {
     this.draftEditor.clearHistory();
   }
 
+  private notifySubmission(submission: MessageSubmission | undefined): void {
+    if (submission === undefined) return;
+    try {
+      this.deps.messageSubmitted?.(submission);
+    } catch {
+      // 埋点消费者不得中断提交。
+    }
+  }
+
   private sinkSerialized(attempt: SubmitAttempt, draft: string, mode: InputSubmitMode): void {
+    this.notifySubmission(attempt.submission);
     const attachmentIds = [...this.attachmentIds];
     this.attachmentIds = [];
     const occurrences = this.projection.occurrences;

@@ -2,6 +2,11 @@
 DEEPSEEK_HARNESS_DIR = "vendor/deepseek-harness"
 DEEPSEEK_HARNESS_EXCLUDE = "packages/subagent/subagent-claude-code,packages/subagent/subagent-codex"
 DEEPSEEK_HARNESS_VERSION = "0.1.7-rc.2"
+# 版本线仍是 0.1.7-rc.2（上游 master 尚未 bump），REVISION 把它钉在这条线上的具体提交：
+# 跟 master 的修复流只能走 REVISION——VERSION 的 tag 回退会退回 dsh-v0.1.7-rc.2 那个旧点。
+# 该提交上游尚未发布：本地形态照常可用（本仓库对 @deepseek-ai/* 一律 workspace:*，解析 vendor 源码，
+# 与上游是否发布无关）；要按 registry 解析上游包的部署形态时，得等上游发布或另行改基线。
+DEEPSEEK_HARNESS_REVISION = "21638c5631"
 
 [tools]
 node = "26"

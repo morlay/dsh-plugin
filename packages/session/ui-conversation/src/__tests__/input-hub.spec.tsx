@@ -47,17 +47,26 @@ function queuedRow(id: string): InboxState["next-turn"][number] {
   } as unknown as InboxState["next-turn"][number];
 }
 
-function bench(options: { queue?: InboxState["next-turn"] } = {}): Bench {
+function bench(
+  options: {
+    queue?: InboxState["next-turn"];
+    sessionState?: Record<string, unknown>;
+    projections?: Record<string, unknown>;
+    analytics?: { track: ReturnType<typeof vi.fn> };
+  } = {},
+): Bench {
   const session = {
     updateQueue: vi.fn(async () => ({ ok: true })),
   };
   const inbox: InboxState = { "next-turn": options.queue ?? [], "next-step": [] };
   const face = {
-    getSnapshot: () => ({}),
+    getSnapshot: () => options.sessionState ?? {},
     subscribe: () => () => {},
     projections: {
       faceOf: (key: string) =>
-        key === "inbox" ? { getSnapshot: () => inbox, subscribe: () => () => {} } : undefined,
+        key === "inbox"
+          ? { getSnapshot: () => inbox, subscribe: () => () => {} }
+          : { getSnapshot: () => options.projections?.[key], subscribe: () => () => {} },
     },
     updateQueue: session.updateQueue,
     readAttachment: async () => ({ ok: false }),
@@ -98,6 +107,7 @@ function bench(options: { queue?: InboxState["next-turn"] } = {}): Bench {
     releaseDraftAttachment: () => {},
     sendSession: async () => ({ kind: "success" }),
   });
+  if (options.analytics !== undefined) rootCtx.provide("productAnalytics", options.analytics);
   const hub = new InputHub(rootCtx, t);
   const shell = hub.shellFor(binding);
   disposed.push(() => {
@@ -161,6 +171,86 @@ describe("InputHub: 会话 shell 复用与寻址", () => {
   it("未知会话寻址失败", () => {
     const { hub } = bench();
     expect(() => hub.shell("nope" as SessionId)).toThrow(/nope/u);
+  });
+});
+
+describe("InputHub: 消息提交埋点", () => {
+  const SESSION_STATE = { blank: false, sessionId: SID, running: false };
+
+  function benchWithAnalytics(
+    overrides: {
+      sessionState?: Record<string, unknown>;
+      planActive?: boolean;
+      goalActive?: boolean;
+    } = {},
+  ) {
+    const track = vi.fn();
+    const created = bench({
+      sessionState: overrides.sessionState ?? SESSION_STATE,
+      projections: {
+        modelSelection: {
+          next: { provider: "deepseek", model: "chat", reasoningEffort: "high" },
+        },
+        plan: { active: overrides.planActive ?? false },
+        goal: { goal: { phase: overrides.goalActive === true ? "active" : "done" } },
+      },
+      analytics: { track },
+    });
+    return { ...created, track };
+  }
+
+  it("提交把会话快照投成 send_button_click 事件", async () => {
+    const { shell, track } = benchWithAnalytics({ planActive: true });
+    shell.setDraft("hello");
+    shell.submit("queue", "enter");
+
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+    });
+    const [name, attributes, timestamp] = track.mock.calls[0] ?? [];
+    expect(name).toBe("send_button_click");
+    expect(attributes).toEqual({
+      session_id: SID,
+      model_name: "deepseek/chat",
+      thinking_effort: "high",
+      run_mode: "plan",
+      msg_type: "default",
+    });
+    expect(typeof timestamp).toBe("number");
+  });
+
+  it("运行中的提交按 mode 标记 msg_type，plan 未激活时回落 default", async () => {
+    const { shell, track } = benchWithAnalytics({
+      sessionState: { ...SESSION_STATE, running: true },
+    });
+    shell.setDraft("插一句");
+    shell.submit("steer", "click");
+
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+    });
+    expect(track.mock.calls[0]?.[1]).toMatchObject({ run_mode: "default", msg_type: "steer" });
+  });
+
+  it("goal 投影激活时 run_mode 记 goal", async () => {
+    const { shell, track } = benchWithAnalytics({ goalActive: true });
+    shell.setDraft("hello");
+    shell.submit("queue");
+
+    await vi.waitFor(() => {
+      expect(track).toHaveBeenCalledTimes(1);
+    });
+    expect(track.mock.calls[0]?.[1]).toMatchObject({ run_mode: "goal" });
+  });
+
+  it("没有 productAnalytics 服务时提交照常", async () => {
+    const { shell } = bench();
+    shell.setDraft("hello");
+    shell.submit("queue");
+
+    await vi.waitFor(() => {
+      expect(shell.snapshot.draft).toBe("");
+    });
   });
 });
 

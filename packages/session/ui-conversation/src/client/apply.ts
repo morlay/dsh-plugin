@@ -12,6 +12,7 @@ import type {
 } from "@deepseek-ai/dsh-client-shortcuts/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
+import type {} from "@deepseek-ai/dsh-client-product-analytics/client";
 import type {} from "@deepseek-ai/dsh-client-ui-session/client";
 import type {} from "@deepseek-ai/dsh-client-ui-settings/client";
 import { UiConversation } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/conversation/assembly.ts";

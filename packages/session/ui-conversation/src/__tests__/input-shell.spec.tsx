@@ -8,7 +8,12 @@ import type {
   ReferenceInsert,
   TokenSpan,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/draft-editor.ts";
-import type { InputSubmitMode } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
+import type {
+  InputSubmitMode,
+  MessageSubmission,
+  MessageSubmissionState,
+} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/contract/composer-submission.ts";
+import type { SessionId } from "@deepseek-ai/dsh-session/types";
 import type {
   DraftAttachmentId,
   InputTriggerController,
@@ -47,6 +52,8 @@ function stubTriggers(overrides: Partial<InputTriggerController> = {}): InputTri
 interface BenchOptions {
   sink?: (text: string, ids: readonly DraftAttachmentId[]) => SubmitOutcome;
   triggers?: Partial<InputTriggerController>;
+  submissionState?: () => MessageSubmissionState;
+  messageSubmitted?: (submission: MessageSubmission) => void;
 }
 
 const created: SessionInputShell[] = [];
@@ -66,6 +73,8 @@ function bench(options: BenchOptions = {}) {
     actx: new Context(),
     inputTriggers: () => stubTriggers(options.triggers),
     defaultSink: (text, ids, mode, signal) => sink(text, ids, mode, signal),
+    submissionState: options.submissionState,
+    messageSubmitted: options.messageSubmitted,
     commandAttachments: {
       serialize: async () => [],
       release: () => {},
@@ -224,6 +233,93 @@ describe("SessionInputShell: 提交路径", () => {
     });
     expect(shell.snapshot.attachmentIds).toEqual(["a1"]);
     expect(shell.notices.getSnapshot()).toMatchObject({ level: "error", text: "网络错误" });
+  });
+});
+
+describe("SessionInputShell: 消息提交埋点", () => {
+  const STATE: MessageSubmissionState = {
+    sessionId: "s1" as SessionId,
+    model: { provider: "deepseek", name: "chat", effort: "high" },
+    runMode: "plan",
+    running: false,
+  };
+
+  it("提交把不可变的 submission（mode 与 source）交给 messageSubmitted", async () => {
+    const messageSubmitted = vi.fn();
+    const { shell, sink } = bench({ messageSubmitted, submissionState: () => STATE });
+    shell.setDraft("hello");
+    shell.submit("steer", "click");
+
+    await vi.waitFor(() => {
+      expect(messageSubmitted).toHaveBeenCalledTimes(1);
+    });
+    const submission = messageSubmitted.mock.calls[0]?.[0];
+    expect(submission).toMatchObject({ mode: "steer", source: "click", state: STATE });
+    expect(typeof submission.timestamp).toBe("number");
+    expect(Object.isFrozen(submission)).toBe(true);
+    expect(sink).toHaveBeenCalledTimes(1);
+  });
+
+  it("空白草稿且无附件的提交既不取会话快照也不通知", () => {
+    const messageSubmitted = vi.fn();
+    const submissionState = vi.fn(() => STATE);
+    const { shell, sink } = bench({ messageSubmitted, submissionState });
+    shell.setDraft("   ");
+    shell.submit("queue");
+
+    expect(submissionState).not.toHaveBeenCalled();
+    expect(messageSubmitted).not.toHaveBeenCalled();
+    expect(sink).not.toHaveBeenCalled();
+  });
+
+  it("只有附件没有文本时也通知，并带上快照", async () => {
+    const messageSubmitted = vi.fn();
+    const { shell } = bench({ messageSubmitted, submissionState: () => STATE });
+    shell.addAttachments(["a1" as DraftAttachmentId]);
+    shell.submit("queue", "enter");
+
+    await vi.waitFor(() => {
+      expect(messageSubmitted).toHaveBeenCalledTimes(1);
+    });
+    expect(messageSubmitted.mock.calls[0]?.[0]).toMatchObject({
+      mode: "queue",
+      source: "enter",
+      state: STATE,
+    });
+  });
+
+  it("会话快照取不到时不中断提交，submission 不带 state", async () => {
+    const messageSubmitted = vi.fn();
+    const { shell, sink } = bench({
+      messageSubmitted,
+      submissionState: () => {
+        throw new Error("snapshot unavailable");
+      },
+    });
+    shell.setDraft("hello");
+    shell.submit("queue");
+
+    await vi.waitFor(() => {
+      expect(messageSubmitted).toHaveBeenCalledTimes(1);
+    });
+    expect(messageSubmitted.mock.calls[0]?.[0]).not.toHaveProperty("state");
+    expect(sink).toHaveBeenCalledTimes(1);
+  });
+
+  it("埋点消费者抛错时不中断提交", async () => {
+    const { shell, sink } = bench({
+      submissionState: () => STATE,
+      messageSubmitted: () => {
+        throw new Error("analytics consumer exploded");
+      },
+    });
+    shell.setDraft("hello");
+    shell.submit("queue");
+
+    await vi.waitFor(() => {
+      expect(sink).toHaveBeenCalledTimes(1);
+    });
+    expect(shell.snapshot.draft).toBe("");
   });
 });
 

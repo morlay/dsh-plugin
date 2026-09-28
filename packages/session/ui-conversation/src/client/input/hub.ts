@@ -1,4 +1,9 @@
 import type { Context } from "@deepseek-ai/cordis";
+// 提交埋点的类型面：product-analytics 的 client 半声明了 `ctx.productAnalytics`。
+import type {} from "@deepseek-ai/dsh-client-product-analytics/client";
+import type { ModelSelectionProjection } from "@deepseek-ai/dsh-api-session-controller/types";
+import type { PlanProjection } from "@deepseek-ai/dsh-plan-mode/types";
+import type { GoalProjection } from "@deepseek-ai/dsh-goal/types";
 import type {
   ISessions,
   SessionBinding,
@@ -21,6 +26,7 @@ import type { InputSubmitMode } from "../../../../../../vendor/deepseek-harness/
 import type { PopupDismissFace } from "./facade.ts";
 import { SessionInputShell } from "./facade.ts";
 import { insertTextOf, referenceTextOf } from "./reference-text.ts";
+import { reportMessageSubmission } from "../../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/input/submission-analytics.ts";
 
 interface CommandFace {
   popupFor(actx: Context): PopupDismissFace;
@@ -68,6 +74,38 @@ export class InputHub implements SessionInputResolver {
     const { session, ctx: actx } = binding;
     const shell = new SessionInputShell({
       actx,
+      // 埋点要在**提交那一刻**取会话事实：此后到达的事件（模型切换、plan 开关）不算这次提交的。
+      submissionState: () => {
+        const state = session.getSnapshot();
+        const model = session.projections.faceOf("modelSelection").getSnapshot() as
+          | ModelSelectionProjection
+          | undefined;
+        const plan = session.projections.faceOf("plan").getSnapshot() as PlanProjection | undefined;
+        const goal = session.projections.faceOf("goal").getSnapshot() as
+          | GoalProjection
+          | null
+          | undefined;
+        const selection = model?.next ?? model?.lastUsed;
+        return Object.freeze({
+          ...(state.blank ? {} : { sessionId: state.sessionId }),
+          ...(selection == null
+            ? {}
+            : {
+                model: Object.freeze({
+                  provider: selection.provider,
+                  name: selection.model,
+                  ...(selection.reasoningEffort === undefined
+                    ? {}
+                    : { effort: selection.reasoningEffort }),
+                }),
+              }),
+          runMode: plan?.active ? "plan" : goal?.goal.phase === "active" ? "goal" : "default",
+          running: state.running,
+        });
+      },
+      messageSubmitted: (submission) => {
+        reportMessageSubmission(this.rootCtx, submission);
+      },
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       inbox: session.projections.faceOf("inbox") as ObservableSnapshot<InboxState | undefined>,
