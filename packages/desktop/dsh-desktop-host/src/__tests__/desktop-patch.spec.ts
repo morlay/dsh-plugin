@@ -63,7 +63,8 @@ const KEPT_ROWS = {
 async function otherPatchFiles(): Promise<string[]> {
   const files: string[] = [join(repoRoot, "apps/dsh-custom-next/cordis.patch.yml")];
   for (const entry of await readdir(join(repoRoot, "packages/bundles"), { withFileTypes: true })) {
-    if (entry.isDirectory()) files.push(join(repoRoot, "packages/bundles", entry.name, "cordis.patch.yml"));
+    if (entry.isDirectory())
+      files.push(join(repoRoot, "packages/bundles", entry.name, "cordis.patch.yml"));
   }
   return files;
 }

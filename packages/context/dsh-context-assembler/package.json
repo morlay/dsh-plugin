@@ -75,7 +75,6 @@
     "@deepseek-ai/dsh-token-meter": "workspace:*",
     "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@morlay/dsh-session-mode": "workspace:*",
     "@morlay/session-rdb": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "@types/mdast": "^4.0.4",

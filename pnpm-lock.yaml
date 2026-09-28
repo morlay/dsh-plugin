@@ -544,9 +544,6 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/tools
-      '@morlay/dsh-session-mode':
-        specifier: workspace:*
-        version: link:../../profile/dsh-session-mode
       '@morlay/session-rdb':
         specifier: workspace:*
         version: link:../../session/session-rdb

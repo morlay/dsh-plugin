@@ -59,7 +59,7 @@ const store = form.bind(() => ({ ...form.shell(), timeoutMs: form.field("timeout
 ## 装配
 
 本包没有自己的 bundle patch（不作为独立 bundle 安装）：装配入口是聚合层
-[`@morlay/better-session`](../../../bundles/better-session/README.md) 的一行 insert（行 id `ui-primitives-fork`），
+[`@morlay/better-session`](../../bundles/better-session/README.md) 的一行 insert（行 id `ui-primitives-fork`），
 client 半按本包 `dsh.client` 声明加载。
 
 两处 `inject` 不是一回事：包清单里的 `dsh.client.inject` 列的是**装配行 id**（谁先到，模块系统据此排 arrival

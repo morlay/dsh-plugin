@@ -1,6 +1,6 @@
 /**
  * 本包作为能力包发布的**装配数据**：`session-mode` 行的 config（各模式的会话级扩展）由这里渲染，
- * 装配入口在 `bundles/session-mode-profile`（它同时装注入通道、工具说明与 subagent 那几行）。
+ * 装配入口在 `packages/bundles/session-mode-profile`（它同时装注入通道、工具说明与 subagent 那几行）。
  */
 
 import { DEFAULT_MODE, MODE_SOURCES, type ModeSource } from "./mode-sources.ts";

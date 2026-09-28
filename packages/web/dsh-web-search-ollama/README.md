@@ -74,7 +74,7 @@ mock 全绿替代它——这个包的第一版就是"配置指到 Ollama 的 me
 ## 装配
 
 注册行由**本包的 bundle patch**（[`src/rows.ts`](./src/rows.ts)）插在 **host 层**；
-基础 bundle 的 `web` 行由 [`@morlay/dsh-profile`](../../../bundles/sandbox-profile/README.md) 的配置层切到
+基础 bundle 的 `web` 行由 [`@morlay/dsh-profile`](../../bundles/sandbox-profile/README.md) 的配置层切到
 `ollama`——装配归本包、配置归 profile：
 
 ```yaml
@@ -98,4 +98,4 @@ mock 全绿替代它——这个包的第一版就是"配置指到 Ollama 的 me
 - **一次只选一个后端**：`ctx.web` 的 `searchProvider` 是单选，默认 `ollama`；
   `deepseek-official` 后端仍由基础 bundle 注册着，改写那一行即可切回（但它需要 `DEEPSEEK_API_KEY`）。
 - **不做设置页 section**：配置面就是那一行 patch（见
-  [dsh-profile 的设计记录](../../../bundles/ollama-provider-profile/README.md)）。
+  [dsh-profile 的设计记录](../../bundles/ollama-provider-profile/README.md)）。

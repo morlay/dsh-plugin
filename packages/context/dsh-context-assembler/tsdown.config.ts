@@ -6,7 +6,7 @@ import { defineConfig } from "tsdown";
  * 装配行写 `@morlay/dsh-context-assembler/<capability>`。包根的 `src/index.ts` 是组装出口。
  *
  * `rows` 出口发布这个能力需要的行清单（`src/rows.ts`）：装配入口在部署那一层
- * （`bundles/session-mode-profile`），bundle 直接 import 它渲染 patch，于是行清单只有一份真源。
+ * （`packages/bundles/session-mode-profile`），bundle 直接 import 它渲染 patch，于是行清单只有一份真源。
  */
 export default defineConfig(async () => ({
   ...(await defineCordisPluginConfig({

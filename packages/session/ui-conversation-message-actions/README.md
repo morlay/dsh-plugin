@@ -7,7 +7,7 @@
 
 ## 用法
 
-装配入口是聚合层 [`@morlay/better-session`](../../../bundles/better-session/README.md)：由它的 bundle patch 插入本包的行并注册
+装配入口是聚合层 [`@morlay/better-session`](../../bundles/better-session/README.md)：由它的 bundle patch 插入本包的行并注册
 `ctx.sessionEditor`（本包自己没有 bundle patch，不作为独立 bundle 安装）。依赖 `ctx.sessionBranch` /
 `ctx.sessionPersistence`（provider 由同一聚合层装配，如 `@morlay/session-rdb`）与 `ctx.sessions`；`agents` 可选，
 缺失时重放退化为「已 durable 的就地版本」。
@@ -34,4 +34,4 @@ edit / retry / reroll 就地重写**同一会话**（session id 不变），只�
 - 决策：[`.agents/adrs/`](./.agents/adrs)（接管官方 `ui-conversation` 行、client bundle 单文件与 shadow 渲染、引用解析、
   编辑入口门控…）
 - 接缝、测试落点与未覆盖：[本包规范 how-to-verify](./.agents/standards/how-to-verify.md)
-- 整体设计：[设计 20260917-会话编辑闭环装配](../../../bundles/better-session/.agents/designs/20260917-会话编辑闭环装配.md)
+- 整体设计：[设计 20260917-会话编辑闭环装配](../../bundles/better-session/.agents/designs/20260917-会话编辑闭环装配.md)

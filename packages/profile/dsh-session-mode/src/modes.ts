@@ -6,7 +6,7 @@
  * 并应用（persona 注册到该 agent 的 scope，工具收口交给 `@morlay/dsh-context-assembler/scope`）。
  *
  * 行清单（工具 / 命令 / 压缩 / 委派…）来自 `preset` 指的那份 agent preset：本部署自己注册了一份
- * （`bundles/session-mode-profile` 的 `preset-mode-switch`），两个模式共享它，差异全在会话级收口。
+ * （`packages/bundles/session-mode-profile` 的 `preset-mode-switch`），两个模式共享它，差异全在会话级收口。
  *
  * "支持自定义"就是指这份 config：装配层（`cordis.patch.yml` / profile 的用户层）能整体改写 `modes`，
  * 也可以只给某几个模式换提示词或白名单——不需要任何插件行。

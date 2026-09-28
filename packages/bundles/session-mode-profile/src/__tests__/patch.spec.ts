@@ -15,9 +15,12 @@ interface Row {
   config?: Record<string, unknown>;
 }
 
+/** 生成物文本：顶层取一次（`render()` 要向上找仓库根给头注释，是异步的）。 */
+const rendered = await render();
+
 /** 本 bundle 的 patch（生成物 = 真源渲染结果）。 */
 function patch(): Row[] {
-  return yaml.load(render(), { schema: entryListSchema }) as Row[];
+  return yaml.load(rendered, { schema: entryListSchema }) as Row[];
 }
 
 /** 顶层 `insert` 里的所有行（生成物只由 insert 段构成）。 */
@@ -41,7 +44,7 @@ const compose = applyEntryPatches as unknown as (
 async function layers(): Promise<Row[]> {
   const mine = patch();
   const theirs = yaml.load(
-    await readFile(join(process.cwd(), "bundles/better-session/cordis.patch.yml"), "utf8"),
+    await readFile(join(process.cwd(), "packages/bundles/better-session/cordis.patch.yml"), "utf8"),
     { schema: entryListSchema },
   ) as Row[];
   return compose([], [...mine, ...theirs], () => {});
@@ -50,13 +53,13 @@ async function layers(): Promise<Row[]> {
 describe("session-mode-profile 的 bundle patch", () => {
   it("仓库里那份与生成结果同形", async () => {
     const stored = await readFile(
-      join(process.cwd(), "bundles/session-mode-profile/cordis.patch.yml"),
+      join(process.cwd(), "packages/bundles/session-mode-profile/cordis.patch.yml"),
       "utf8",
     );
 
-    expect(stored).toBe(render());
+    expect(stored).toBe(rendered);
     expect(
-      render().startsWith("# 本文件由 bundles/session-mode-profile/tsdown.config.ts 生成"),
+      rendered.startsWith("# 本文件由 packages/bundles/session-mode-profile/tsdown.config.ts 生成"),
     ).toBe(true);
   });
 
@@ -169,7 +172,10 @@ describe("自己注册的 preset（preset-mode-switch）", () => {
 describe("新会话的默认 preset", () => {
   it("配置层把 registry 的默认指向我们那份（行由 web-app 提供）", async () => {
     const theirs = yaml.load(
-      await readFile(join(process.cwd(), "bundles/mydsh-profile/cordis.patch.yml"), "utf8"),
+      await readFile(
+        join(process.cwd(), "packages/bundles/mydsh-profile/cordis.patch.yml"),
+        "utf8",
+      ),
       { schema: entryListSchema },
     ) as Row[];
     const row = theirs.find((entry) => entry.id === "agent-preset-registry");

@@ -29,10 +29,7 @@ import LocalFileSystem from "@deepseek-ai/dsh-fs-local";
 import { createUserMessage, type UserMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId } from "@deepseek-ai/dsh-session";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
-import type { Config as SessionModeConfig } from "@morlay/dsh-session-mode";
 import { afterEach, describe, expect, it } from "vitest";
-import * as sessionMode from "@morlay/dsh-session-mode";
-import * as contextScope from "../scope/index.ts";
 import * as plugin from "../index.ts";
 
 const contexts: Context[] = [];
@@ -58,36 +55,6 @@ const STANDARD_ROWS = [
 ] as const;
 
 const PRESETS = { standard: STANDARD_ROWS, minimal: [] } as const;
-
-/**
- * 模式定义（会话级扩展）：`standard` ↔ coding、`minimal` ↔ chat。只有需要验"选模式 = 换 preset realm"的用例
- * 才挂这一行——其余用例验的是 preset 平面本身，不掺会话收口。
- */
-const MODES: SessionModeConfig = {
-  default: "coding",
-  modes: {
-    coding: {
-      preset: "standard",
-      name: "编码模式",
-      description: "编码",
-      role: ["main"],
-      persona: { prefix: "编码模式的提示词。", suffix: "" },
-      allowTools: ["read", "web_search", "ask_user_question", "skill"],
-      instructions: true,
-      runtimeContext: true,
-    },
-    chat: {
-      preset: "minimal",
-      name: "对话模式",
-      description: "对话",
-      role: ["main"],
-      persona: { prefix: "对话模式的提示词。", suffix: "" },
-      allowTools: ["ask_user_question", "web_search", "web_fetch"],
-      instructions: false,
-      runtimeContext: false,
-    },
-  },
-};
 
 /** 通道注入的条目：幂等键在 source 的 `id` 上；上游那几条没有它——这正是分辨两侧的判据。 */
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
@@ -173,8 +140,6 @@ function watchRules(ctx: Context): {
 async function mount(options: {
   readonly presets: Record<string, readonly unknown[]>;
   readonly hostFirst: boolean;
-  /** 给了就再挂会话模式那一套（收口行 + `session-mode`）：验"选模式 = 换 preset realm"。 */
-  readonly modes?: SessionModeConfig;
 }) {
   const workspace = await mkdtemp(join(tmpdir(), "preset-plane-"));
   const home = join(workspace, "home");
@@ -207,10 +172,6 @@ async function mount(options: {
       // `dshHome` 指到空目录：免得读进跑测试这台机器的 `~/.dsh`（上游那行的 `maxBytes` 与它同源）。
       options: { "agent-instructions": { dshHome: home } },
     });
-    if (options.modes !== undefined) {
-      await ctx.plugin(contextScope);
-      await ctx.plugin(sessionMode, options.modes);
-    }
   };
   const presetPlane = async (): Promise<void> => {
     await ctx.plugin(Loader);
@@ -316,25 +277,6 @@ describe.each([
     // 我们的 kind 是自己的，它两个扫法都看不见，于是彻底闭嘴。
     expect(catalogKinds(second)).toEqual([]);
     expect(second.map(textOf).join("\n")).not.toContain("No skills are currently available");
-  });
-
-  it("选 chat 把官方 preset 一起换成 minimal：上游那条工作区指令不再注入", async () => {
-    const { ctx, create, watch } = await mount({ presets: PRESETS, hostFirst, modes: MODES });
-    const agent = await create("standard");
-    await watch.until("agent-instructions:");
-
-    // 模式收口挂在会话上，preset realm 归官方：`select` 之前标准那一套的行还在，上游照旧注入它那条。
-    expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe("standard");
-    expect(kindsOf(await preStep(ctx, agent), "agent-instructions")).toEqual(["upstream"]);
-
-    await ctx.sessionModes.select(agent.id, "chat");
-
-    // 选模式 = 换 preset realm：`minimal` 没有上游 `agent-instructions` 那一行，它那条（没有幂等键的）
-    // 注入随之消失——`instructions: false` 只收得到我们这一侧，preset 里的行得靠 preset 换掉。
-    expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe("minimal");
-    const messages = await preStep(ctx, agent);
-    expect(kindsOf(messages, "agent-instructions")).toEqual([]);
-    expect(messages.map(textOf).join("\n")).not.toContain(AGENTS_BODY);
   });
 
   it("让位按会话判：空白窗口里从 minimal 换到 standard 之后，工作区指令交给上游", async () => {

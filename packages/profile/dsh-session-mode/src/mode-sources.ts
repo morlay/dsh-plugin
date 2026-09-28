@@ -1,5 +1,5 @@
 /**
- * 模式定义的真源：`session-mode` 行的 `config` 由 `./rows.ts` 渲染（装配入口在 `bundles/session-mode-profile`）。
+ * 模式定义的真源：`session-mode` 行的 `config` 由 `./rows.ts` 渲染（装配入口在 `packages/bundles/session-mode-profile`）。
  *
  * "自定义"就落在这份数据上——装配层（profile 的用户 patch 层）可以整体改写 `config.modes`，也可以只给
  * 某个模式换提示词或工具白名单，不需要任何插件行。
@@ -14,7 +14,7 @@ import { TOOLKIT_TOOL_NAMES } from "@morlay/dsh-agent-toolkit/rows";
 
 /**
  * 本部署自己注册的那份 agent preset 的 id：两个模式共享它（行清单见
- * `bundles/session-mode-profile`，`config.plugins` 引用 `@morlay/dsh-agent-toolkit/rows` 的
+ * `packages/bundles/session-mode-profile`，`config.plugins` 引用 `@morlay/dsh-agent-toolkit/rows` 的
  * `TOOLKIT_PRESET_ROWS`）。
  *
  * 为什么自己注册而不是复用官方 preset：官方 `minimal` 没有 `tool-web`，`chat` 的白名单（提问 + 联网三件）

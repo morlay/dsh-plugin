@@ -7,13 +7,15 @@ import { render } from "../../tsdown.config.ts";
 describe("ollama-provider-profile 的 bundle patch", () => {
   it("仓库里那份与生成结果同形", async () => {
     const stored = await readFile(
-      join(process.cwd(), "bundles/ollama-provider-profile/cordis.patch.yml"),
+      join(process.cwd(), "packages/bundles/ollama-provider-profile/cordis.patch.yml"),
       "utf8",
     );
 
-    expect(stored).toBe(render());
+    expect(stored).toBe(await render());
     expect(
-      render().startsWith("# 本文件由 bundles/ollama-provider-profile/tsdown.config.ts 生成"),
+      (await render()).startsWith(
+        "# 本文件由 packages/bundles/ollama-provider-profile/tsdown.config.ts 生成",
+      ),
     ).toBe(true);
   });
 });

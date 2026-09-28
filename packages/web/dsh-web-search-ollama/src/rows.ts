@@ -1,6 +1,6 @@
 /**
  * 本包作为能力包发布的**装配数据**：行本身在部署那一层装
- * （`bundles/ollama-provider-profile` 引用它渲染 patch；那里同时给 `web.searchProvider` 与 key 引用）。
+ * （`packages/bundles/ollama-provider-profile` 引用它渲染 patch；那里同时给 `web.searchProvider` 与 key 引用）。
  *
  * 注册行必须在 host 平面只装一次——同一个 provider id 注册两份会撞 `WEB_DUPLICATE_PROVIDER`。
  */

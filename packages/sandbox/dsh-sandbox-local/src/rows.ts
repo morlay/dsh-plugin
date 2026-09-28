@@ -1,5 +1,5 @@
 /**
- * 本包作为能力包发布的**装配数据**：行本身在部署那一层装（`bundles/sandbox-profile` 引用它渲染 patch）。
+ * 本包作为能力包发布的**装配数据**：行本身在部署那一层装（`packages/bundles/sandbox-profile` 引用它渲染 patch）。
  *
  * 官方 `sandbox`（进程沙箱）与 `fs-sandbox`（文件围栏）两个服务只能有一份实现，所以那两行禁掉、换成
  * 本包那一行；`config.access` 的值由部署那层给（schema 默认是空规则）。

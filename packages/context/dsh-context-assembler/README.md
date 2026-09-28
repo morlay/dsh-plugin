@@ -51,7 +51,7 @@
 全局通道）。本包只做上下文重排。
 
 引用展开不住在这里：它不依赖 `ctx.contextAssembler`（`inject` 只有 `skills`），也没有「读文件 + 字节预算」
-以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../../bundles/better-session/cordis.patch.yml)
+以外与组装出口共享的东西，所以独立成包、由 [`@morlay/better-session`](../../bundles/better-session/cordis.patch.yml)
 装配（见 [ADR-引用展开拆成独立包](../../../.agents/adrs/20260923-引用展开拆成独立包并按profile装配.md)）。
 
 **每个出口仍是独立的 cordis 插件**（各自的 `apply` 与 `inject`）——这一点是硬要求：合成单入口会让 `inject`

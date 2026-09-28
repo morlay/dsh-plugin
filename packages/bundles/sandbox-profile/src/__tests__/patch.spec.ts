@@ -7,13 +7,15 @@ import { render } from "../../tsdown.config.ts";
 describe("sandbox-profile 的 bundle patch", () => {
   it("仓库里那份与生成结果同形", async () => {
     const stored = await readFile(
-      join(process.cwd(), "bundles/sandbox-profile/cordis.patch.yml"),
+      join(process.cwd(), "packages/bundles/sandbox-profile/cordis.patch.yml"),
       "utf8",
     );
 
-    expect(stored).toBe(render());
-    expect(render().startsWith("# 本文件由 bundles/sandbox-profile/tsdown.config.ts 生成")).toBe(
-      true,
-    );
+    expect(stored).toBe(await render());
+    expect(
+      (await render()).startsWith(
+        "# 本文件由 packages/bundles/sandbox-profile/tsdown.config.ts 生成",
+      ),
+    ).toBe(true);
   });
 });

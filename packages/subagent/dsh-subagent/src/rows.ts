@@ -1,6 +1,6 @@
 /**
  * 本包作为能力包发布的**装配数据**：行本身在部署那一层装
- * （`bundles/session-mode-profile` 引用它渲染 patch）。
+ * （`packages/bundles/session-mode-profile` 引用它渲染 patch）。
  *
  * 上游 `subagent` 行（`ctx.subagents` 服务定义）由本包接管；官方设置页那张卡片读的是官方那一行的
  * namespace，本部署没有，所以一并停掉。模型白名单服务行**留着**：官方 preset 的 `tool-subagent` 行带

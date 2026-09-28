@@ -26,13 +26,12 @@ const ROWS: readonly unknown[] = [
 
 /** patch 真源：生成物是包根那份 `cordis.patch.yml`，build 时由插件重写。 */
 export const patch: PatchBundleOptions = {
-  source: "bundles/sandbox-profile/tsdown.config.ts",
   from: import.meta.url,
   rows: () => ROWS,
 };
 
 /** 渲染生成物文本（测试拿它与入库那份比对）。 */
-export const render = (): string => renderPatch(patch);
+export const render = (): Promise<string> => renderPatch(patch);
 
 export default defineConfig(async () => {
   const base = await defineCordisPluginConfig();

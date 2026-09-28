@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
-const patchPath = join(repoRoot, "bundles/better-session/cordis.patch.yml");
+const patchPath = join(repoRoot, "packages/bundles/better-session/cordis.patch.yml");
 const patch = await readFile(patchPath, "utf8");
 const manifest = JSON.parse(
-  await readFile(join(repoRoot, "bundles/better-session/package.json"), "utf8"),
+  await readFile(join(repoRoot, "packages/bundles/better-session/package.json"), "utf8"),
 ) as { dependencies: Record<string, string> };
 
 function insertedPackageNames(text: string): string[] {

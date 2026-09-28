@@ -19,7 +19,7 @@
 
 **功能行谁装**：行清单由 agent preset 的 `config.plugins` 提供——官方 web-app 正是把这些行的 host 份设成
 `disabled: true` 交给 preset 平面挂。本部署自己注册的那份 preset（`mode-switch`，见
-[`@morlay/session-mode-profile`](../../../bundles/session-mode-profile/README.md)）直接引用本包的
+[`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)）直接引用本包的
 `TOOLKIT_PRESET_ROWS`；`tool-guidance` 那一行不在其中，它是 host 平面行（往通道这个 host 单例注册正文，
 两个平面各一份会互相顶掉）。[`@morlay/dsh-session-mode`](../dsh-session-mode/README.md) 只按会话收口：
 `allowTools` 白名单的名单由 `TOOLKIT_TOOL_NAMES` 从汉化数据派生，白名单里 preset 没有的工具自动跳过。
@@ -52,11 +52,11 @@
 
 ## 边界
 
-| 归这里                               | 不归这里                                                                                               |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| 工具行清单、工具短描述、用法分组正文 | 提示词（persona）与能力开关 → [dsh-session-mode](../dsh-session-mode/README.md)                        |
-| 工具投影的预处理（描述 / schema）    | 注入通道本身 → [dsh-context-assembler](../../context/dsh-context-assembler/README.md)                  |
-| Agent Teams 那套可选行               | 部署级配置值（llm route、搜索后端、沙箱规则）→ [dsh-profile](../../../bundles/mydsh-profile/README.md) |
+| 归这里                               | 不归这里                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| 工具行清单、工具短描述、用法分组正文 | 提示词（persona）与能力开关 → [dsh-session-mode](../dsh-session-mode/README.md)                     |
+| 工具投影的预处理（描述 / schema）    | 注入通道本身 → [dsh-context-assembler](../../context/dsh-context-assembler/README.md)               |
+| Agent Teams 那套可选行               | 部署级配置值（llm route、搜索后端、沙箱规则）→ [dsh-profile](../../bundles/mydsh-profile/README.md) |
 
 引用的都是上游 `@deepseek-ai/dsh-*` 能力包（本包只发布"清单 + 说明 + 行 id"，不发布它们的实现）。
 

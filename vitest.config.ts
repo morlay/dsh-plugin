@@ -72,10 +72,9 @@ export default defineConfig(async () => ({
   resolve: { alias: await clientSourceAliases() },
   test: {
     include: [
+      // `packages/**` 含装配入口（`packages/bundles/*`，patch 与生成物同形、共享行内容一致的守护测试）。
       "packages/**/src/__tests__/**/*.spec.ts",
       "packages/**/src/__tests__/**/*.spec.tsx",
-      // 装配入口（bundles/*）的守护测试：patch 与生成物同形、共享行的内容一致。
-      "bundles/**/src/__tests__/**/*.spec.ts",
       // 共享工具链（@local/devkit）的测试与被它服务的包同形：src/__tests__/*.spec.ts。
       "devpackages/**/src/__tests__/**/*.spec.ts",
     ],

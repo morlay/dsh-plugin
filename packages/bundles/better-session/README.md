@@ -40,7 +40,7 @@ dsh plugin --profile web add "@morlay/better-session"
 `ui-conversation-manager` 的「对话管理」页；上游 0.1.7 自己删掉了设置页那份归档入口，不需要我们再按 id 禁用），
 并把 `storage-domain` 的 backend 路由为 `rdb`：`$DSH_HOME/storages`
 不再产生文件，storages 数据与事件日志同库
-（[ADR-20260917-接管storages到rdb语义表](../../packages/session/session-rdb/.agents/adrs/20260917-接管storages到rdb语义表.md)）。
+（[ADR-20260917-接管storages到rdb语义表](../../session/session-rdb/.agents/adrs/20260917-接管storages到rdb语义表.md)）。
 
 官方两条外发通路（`session-telemetry-otel`、`session-log-deepseek`）**不在本 bundle 的范围内**：它们仍在装配里，
 要不要关是部署层的取舍，不由会话编辑这一层替它决定。
@@ -85,6 +85,6 @@ await ctx.sessionBranch.forkFrom(sourceId, { atSeq: 6, childSessionId });
 ## 本地开发
 
 本包是 monorepo（pnpm workspaces）的一员：命令入口见根
-[justfile](../../justfile)，约定见
-[`.agents/standards/`](../../.agents/standards/README.md)，架构见
+[justfile](../../../justfile)，约定见
+[`.agents/standards/`](../../../.agents/standards/README.md)，架构见
 [设计 20260917-会话编辑闭环装配](./.agents/designs/20260917-会话编辑闭环装配.md)。

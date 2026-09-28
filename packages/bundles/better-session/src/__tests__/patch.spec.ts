@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = process.cwd();
-const PATCH_PATH = join(repoRoot, "bundles/better-session/cordis.patch.yml");
+const PATCH_PATH = join(repoRoot, "packages/bundles/better-session/cordis.patch.yml");
 const BUNDLE_ROOT = join(repoRoot, "vendor/deepseek-harness/packages/bundle");
 
 const patch = await readFile(PATCH_PATH, "utf8");

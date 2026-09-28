@@ -8,13 +8,13 @@
 
 **装配（assembly）**：
 把契约 / 编排 / 实现三层一次性装进 DeepSeek Harness web profile 的动作——归聚合层
-`@morlay/better-session`（装了什么见其 [`cordis.patch.yml`](../bundles/better-session/cordis.patch.yml)）。
+`@morlay/better-session`（装了什么见其 [`cordis.patch.yml`](../packages/bundles/better-session/cordis.patch.yml)）。
 _避免使用_：接线、wiring
 
 **rdb 替换（rdb replacement）**：
 用 `@morlay/session-rdb` 实现 `ctx.sessionPersistence`、禁用官方
 `session-persistence-jsonl`（理由见
-[ADR-20260917-rdb替换官方jsonl持久化](../bundles/better-session/.agents/adrs/20260917-rdb替换官方jsonl持久化.md)）。
+[ADR-20260917-rdb替换官方jsonl持久化](../packages/bundles/better-session/.agents/adrs/20260917-rdb替换官方jsonl持久化.md)）。
 _避免使用_：持久化迁移、storage swap
 
 ## 会话与编辑

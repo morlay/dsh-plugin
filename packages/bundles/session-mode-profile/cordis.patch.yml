@@ -1,4 +1,4 @@
-# 本文件由 bundles/session-mode-profile/tsdown.config.ts 生成，请勿手工编辑
+# 本文件由 packages/bundles/session-mode-profile/tsdown.config.ts 生成，请勿手工编辑
 - insert:
     - id: ui-primitives-fork
       name: "@morlay/dsh-client-ui-primitives"
@@ -23,24 +23,24 @@
             config:
               - id: tool-subagent-control
                 name: "@deepseek-ai/dsh-tool-subagent-control"
-                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent-list-agents
                 name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
-                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: spawn
                   toolName: subagent
                   backgroundMode: continuable
-                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: tool-subagent-fork
                 name: "@deepseek-ai/dsh-tool-subagent"
                 config:
                   provider: fork
                   toolName: subagent_fork
                   backgroundMode: continuable
-                disabled: !!js process.env.DSH_AGENT_TEAM === "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM==="1"
               - id: workflow-ptc
                 name: "@deepseek-ai/dsh-workflow-ptc"
                 config:
@@ -79,10 +79,10 @@
             config:
               - id: tool-bash
                 name: "@deepseek-ai/dsh-tool-bash"
-                disabled: !!js process.platform === "win32"
+                disabled: !!js process.platform==="win32"
               - id: tool-pwsh
                 name: "@deepseek-ai/dsh-tool-pwsh"
-                disabled: !!js process.platform !== "win32"
+                disabled: !!js process.platform!=="win32"
               - id: tool-jobs
                 name: "@deepseek-ai/dsh-tool-jobs"
           - id: toolkit-skill
@@ -97,7 +97,7 @@
             config:
               - id: agent-team
                 name: "@deepseek-ai/dsh-experimental-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
                 config:
                   maxMembers: 8
                   maxTasks: 256
@@ -106,13 +106,13 @@
                   disposalTimeoutMs: 5000
               - id: tool-agent-team
                 name: "@deepseek-ai/dsh-experimental-tool-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
                 config:
                   freshProvider: spawn
                   forkProvider: fork
               - id: ui-agent-team
                 name: "@deepseek-ai/dsh-experimental-client-ui-agent-team"
-                disabled: !!js process.env.DSH_AGENT_TEAM !== "1"
+                disabled: !!js process.env.DSH_AGENT_TEAM!=="1"
           - id: toolkit-web
             name: cordis:group
             group: true

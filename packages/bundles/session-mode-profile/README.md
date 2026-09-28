@@ -3,14 +3,14 @@
 会话模式与注入面：**一次装齐五块**——本部署自己的 agent preset 声明、会话模式行（各模式的会话级扩展定义）、
 subagent 服务接管行、注入通道与它的收口行、工具说明（汉化 + 用法分组）。
 
-| 装什么                                          | 数据从哪来                                                                                                        |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `preset-mode-switch`（本部署的 agent preset）   | [`@morlay/dsh-agent-toolkit/rows`](../../packages/profile/dsh-agent-toolkit/src/rows.ts) 的 `TOOLKIT_PRESET_ROWS` |
-| `session-mode`（模式定义 + `preset` 映射）      | [`@morlay/dsh-session-mode/rows`](../../packages/profile/dsh-session-mode/src/rows.ts)                            |
-| subagent 行（禁官方行 + 插 `subagent-fork`）    | [`@morlay/dsh-subagent/rows`](../../packages/subagent/dsh-subagent/src/rows.ts)                                   |
-| `context-assembler` + `context-assembler-scope` | [`@morlay/dsh-context-assembler/rows`](../../packages/context/dsh-context-assembler/src/rows.ts)                  |
-| 官方 roster 保留（不再禁 `ui-agent-preset`）    | 我们的模式入口挂在会话头部工具槽位（list），两套并存                                                              |
-| `tool-guidance`（汉化 + 用法分组）              | [`@morlay/dsh-agent-toolkit/rows`](../../packages/profile/dsh-agent-toolkit/src/rows.ts)                          |
+| 装什么                                          | 数据从哪来                                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `preset-mode-switch`（本部署的 agent preset）   | [`@morlay/dsh-agent-toolkit/rows`](../../profile/dsh-agent-toolkit/src/rows.ts) 的 `TOOLKIT_PRESET_ROWS` |
+| `session-mode`（模式定义 + `preset` 映射）      | [`@morlay/dsh-session-mode/rows`](../../profile/dsh-session-mode/src/rows.ts)                            |
+| subagent 行（禁官方行 + 插 `subagent-fork`）    | [`@morlay/dsh-subagent/rows`](../../subagent/dsh-subagent/src/rows.ts)                                   |
+| `context-assembler` + `context-assembler-scope` | [`@morlay/dsh-context-assembler/rows`](../../context/dsh-context-assembler/src/rows.ts)                  |
+| 官方 roster 保留（不再禁 `ui-agent-preset`）    | 我们的模式入口挂在会话头部工具槽位（list），两套并存                                                     |
+| `tool-guidance`（汉化 + 用法分组）              | [`@morlay/dsh-agent-toolkit/rows`](../../profile/dsh-agent-toolkit/src/rows.ts)                          |
 
 行清单只有一份真源：数据住在能力包里，本包只把它们的 `rows` 出口按装配顺序展开（`tsdown.config.ts`）。
 
@@ -31,4 +31,4 @@ subagent 服务接管行、注入通道与它的收口行、工具说明（汉�
 
 模式开关（`instructions: false`）只收得住这一行这一侧；官方 preset 自带的注入在它之外，所以切模式时官方
 preset 该换还是要换（`SessionModes.select` 只在目标与当前不同时才换）。理由与上游判据见
-[ADR-工作区指令让位skill面由通道抢面](../../packages/context/dsh-context-assembler/.agents/adrs/20260929-工作区指令让位skill面由通道抢面.md)。
+[ADR-工作区指令让位skill面由通道抢面](../../context/dsh-context-assembler/.agents/adrs/20260929-工作区指令让位skill面由通道抢面.md)。

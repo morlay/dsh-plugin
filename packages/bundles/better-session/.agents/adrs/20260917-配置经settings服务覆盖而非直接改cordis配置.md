@@ -7,13 +7,13 @@ settings 现在只投影 volatile 字段做表单编辑，改动持久化回 pro
 > `installSection` / namespace section 全被移除），`session-rdb` 与
 > `llm-openai-compatible` 都不再注入 `settings` 服务。新的配置来源是行 config
 > （bundle patch / profile patch / 设置页），旧 `settings.yaml` 由上游启动时一次性导入到同 id 的行。
-> 决策见 [ADR-跟随上游session-format-v4](../../../../packages/session/session-rdb/.agents/adrs/20260922-跟随上游session-format-v4.md)。
+> 决策见 [ADR-跟随上游session-format-v4](../../../../session/session-rdb/.agents/adrs/20260922-跟随上游session-format-v4.md)。
 
 `session-rdb` 的配置（SQLite / PostgreSQL 选择、路径、连接串等）经
 `$DSH_HOME/settings.yaml` 的 `session-rdb` namespace 覆盖 cordis 层 entry
 config（注册于 `ctx.settings`，见 `SessionPersistenceRdb.settingsNs`），
 未写出的字段回落到 bundle patch / cordis.yml 的 config 默认值。字段清单、
-默认路径与示例见 [README](../../../../README.md)。
+默认路径与示例见 [README](../../../../../README.md)。
 
 ## 考虑过的选项
 

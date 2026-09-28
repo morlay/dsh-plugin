@@ -30,11 +30,25 @@ interface Run {
   readonly stderr: string;
 }
 
+/**
+ * 子进程的环境：丢掉继承来的 `NODE_OPTIONS`。
+ *
+ * 宿主的 shell 常挂着 `--import=tsx/esm` 这类 loader（本仓库的 mise 工具链就装了一份全局 tsx），而它按
+ * **子进程的 cwd** 解析——本文件有两个用例特意把 cwd 设成临时目录去验"不在工作区里报什么错"，那里自然没有
+ * tsx，于是 CLI 还没跑起来就先报 ERR_MODULE_NOT_FOUND。CLI 是 `.ts`，node 原生能跑，这层 loader 不是被测对象。
+ */
+function childEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env["NODE_OPTIONS"];
+  return env;
+}
+
 async function cli(args: readonly string[], cwd?: string): Promise<Run> {
   try {
     const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...args], {
       encoding: "utf8",
       timeout: 30_000,
+      env: childEnv(),
       ...(cwd === undefined ? {} : { cwd }),
     });
     return { status: 0, stdout, stderr };

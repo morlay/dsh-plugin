@@ -9,7 +9,7 @@
  * 3. 官方 preset 的会话照旧：工作区指令让位给上游那一行，skill 面仍是我们抢到的那份。
  *
  * 真装配：真 `Loader` + 真 registry + 真上游行（行按**app 安装锚点**解析，与真部署同一处）＋ 真 fs 与 skill
- * 注册表。行清单从 `TOOLKIT_PRESET_ROWS` 派生（与 `bundles/session-mode-profile` 声明的那份同源），这里只取
+ * 注册表。行清单从 `TOOLKIT_PRESET_ROWS` 派生（与 `packages/bundles/session-mode-profile` 声明的那份同源），这里只取
  * 本用例要验的族——整条清单的形状由那个 bundle 的 `patch.spec.ts` 逐行钉住。
  *
  * 两个 provider 面用替身（`web` / `userQuestions`）：本用例回答的是"这些工具由 preset 的行注册出来、并在
