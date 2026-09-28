@@ -1,0 +1,32 @@
+# 本文件由 bundles/better-session/tsdown.config.ts 生成，请勿手工编辑
+- id: session-persistence-jsonl
+  disabled: true
+- id: session-projection-cache
+  disabled: true
+- id: session-query-sqlite
+  disabled: true
+- id: storage-json
+  disabled: true
+- id: storage-domain
+  config:
+    backend: rdb
+- id: ui-conversation
+  disabled: true
+- insert:
+    - id: session-branch
+      name: "@morlay/session-branch"
+    - id: session-rdb
+      name: "@morlay/session-rdb"
+      config:
+        type: sqlite
+        path: !!js dshHomePath('sessions', 'sessions.sqlite')
+    - id: ui-conversation-message-actions
+      name: "@morlay/ui-conversation-message-actions"
+    - id: ui-conversation-fork
+      name: "@morlay/dsh-client-ui-conversation"
+    - id: ui-primitives-fork
+      name: "@morlay/dsh-client-ui-primitives"
+    - id: ui-conversation-manager
+      name: "@morlay/ui-conversation-manager"
+    - id: reference
+      name: "@morlay/dsh-reference"

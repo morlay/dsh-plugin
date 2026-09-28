@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Editing",
+    "description": "dsh profile bundle: assembles @morlay/session-branch, @morlay/session-rdb, @morlay/ui-conversation-message-actions and the thin-shell fork of the conversation shell into a web profile — the rewind / retry / recall / fork closed loop."
+  }
+}

@@ -5,10 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./patch": "./src/patch.ts",
     "./tsconfig.json": "./tsconfig.json"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0",
     "lightningcss": "^1.32.0",
     "rolldown": "^1.2.8"
   },

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configurable Sandbox",
+    "description": "Disables the official sandbox / fs-sandbox rows for a configurable implementation, with the access rules (rw / r- / --) as values."
+  }
+}
