@@ -1,7 +1,7 @@
 # 工具与通道搬到 profile 平面，preset 只做开关
 
 状态：已采纳（取代 [ADR-20260922-通道与注入行按模式isolate装配](../../packages/profile/dsh-session-mode/.agents/adrs/20260922-通道与注入行按模式isolate装配.md) 的装配平面部分）（其中「preset 只剩提示词与开关」这半自 2026-09-24 起被
-[ADR 模式不再是 Cordis 子树](../../packages/profile/dsh-session-mode/.agents/adrs/20260924-模式不再是cordis子树.md) 取代：
+[ADR 模式不再是 Cordis 子树](../../packages/profile/dsh-session-mode/.agents/adrs/20260928-模式是preset的会话级扩展.md) 取代：
 模式不再是 Cordis 子树，也不再走官方 agent preset；下面「preset 只剩…」读作「模式只剩…」）
 
 背景：`@morlay/dsh-agent-preset` 的两个模式原先**内联展开**工具行（`...TOOLKIT_ROWS`）并把注入通道关进各自的
