@@ -9,19 +9,22 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SchemaFormActions } from "../client/controller.ts";
-import { parseFor } from "../client/fields.tsx";
-import { isMultiline } from "../client/value.tsx";
-import { zh } from "../client/locales.ts";
-import { projectNode, type FieldNode } from "../client/schema-node.ts";
-import type { SchemaFieldOwnerProps, SchemaFormTranslate } from "../client/slot-contract.ts";
+import type { SchemaFormActions } from "../client/schema-form/controller.ts";
+import { parseFor } from "../client/schema-form/fields.tsx";
+import { isMultiline } from "../client/schema-form/value.tsx";
+import { zh } from "../client/schema-form/locales.ts";
+import { projectNode, type FieldNode } from "../client/schema-form/schema-node.ts";
+import type {
+  SchemaFieldOwnerProps,
+  SchemaFormTranslate,
+} from "../client/schema-form/slot-contract.ts";
 import {
   InlineValue,
   SchemaFieldDefault,
   tokenText,
   tokenTone,
   valueText,
-} from "../client/value.tsx";
+} from "../client/schema-form/value.tsx";
 
 afterEach(cleanup);
 

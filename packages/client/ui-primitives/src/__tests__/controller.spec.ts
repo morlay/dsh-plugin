@@ -9,15 +9,15 @@ import type { SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client"
 import type { SchemaNode } from "@deepseek-ai/dsh-client-ui-settings/client";
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { SchemaFormController, fieldKey } from "../client/controller.ts";
-import { failureOf } from "../client/draft.ts";
-import { SchemaFormHints } from "../client/hints.ts";
+import { SchemaFormController, fieldKey } from "../client/schema-form/controller.ts";
+import { failureOf } from "../client/schema-form/draft.ts";
+import { SchemaFormHints } from "../client/schema-form/hints.ts";
 import { SessionPersistenceRdb } from "../../../../session/session-rdb/src/index.ts";
-import type { SelectSpec } from "../client/hints.ts";
-import { zh } from "../client/locales.ts";
-import type { SchemaFormTranslate } from "../client/slot-contract.ts";
-import { fakeDescribe } from "../testing/fake-describe.ts";
-import { FakeScope } from "../testing/fake-scope.ts";
+import type { SelectSpec } from "../client/schema-form/hints.ts";
+import { zh } from "../client/schema-form/locales.ts";
+import type { SchemaFormTranslate } from "../client/schema-form/slot-contract.ts";
+import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
+import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 
 /** host 发来的命名空间视图：schema 走一遍 `toJSON()`（与真实流一致）。 */
 function view(

@@ -7,9 +7,9 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
-import { addableAt } from "../client/controller.ts";
-import { SchemaFormHints } from "../client/hints.ts";
-import { projectNode, type FieldNode } from "../client/schema-node.ts";
+import { addableAt } from "../client/schema-form/controller.ts";
+import { SchemaFormHints } from "../client/schema-form/hints.ts";
+import { projectNode, type FieldNode } from "../client/schema-form/schema-node.ts";
 
 /** 服务只要一个能 provide 自己的 ctx。 */
 function service() {

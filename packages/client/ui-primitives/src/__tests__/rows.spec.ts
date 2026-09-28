@@ -8,8 +8,8 @@
 
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import { describe, expect, it, vi } from "vitest";
-import { RowRegistration, rowRegistrations } from "../client/rows.ts";
-import { fakeDescribe } from "../testing/fake-describe.ts";
+import { RowRegistration, rowRegistrations } from "../client/schema-form/rows.ts";
+import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
 
 function view(ns: string, overrides: Partial<SettingsNamespaceView> = {}): SettingsNamespaceView {
   return {

@@ -8,9 +8,9 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
-import { SchemaDraftModel, type ValidationFailure } from "../client/draft.ts";
-import { projectNode } from "../client/schema-node.ts";
-import { FakeScope } from "../testing/fake-scope.ts";
+import { SchemaDraftModel, type ValidationFailure } from "../client/schema-form/draft.ts";
+import { projectNode } from "../client/schema-form/schema-node.ts";
+import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 
 type Section = Record<string, unknown>;
 

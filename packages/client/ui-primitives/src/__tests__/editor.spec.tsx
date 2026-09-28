@@ -17,18 +17,18 @@ import {
   type SchemaFormActions,
   type SchemaFormFace,
   type SchemaFormState,
-} from "../client/controller.ts";
-import { zh } from "../client/locales.ts";
-import { SchemaForm } from "../client/SchemaForm.tsx";
-import { projectNode, walkFields, type FieldNode } from "../client/schema-node.ts";
+} from "../client/schema-form/controller.ts";
+import { zh } from "../client/schema-form/locales.ts";
+import { SchemaForm } from "../client/schema-form/SchemaForm.tsx";
+import { projectNode, walkFields, type FieldNode } from "../client/schema-form/schema-node.ts";
 import { Config as SessionModeConfig } from "../../../../profile/dsh-session-mode/src/modes.ts";
-import { fakeDescribe } from "../testing/fake-describe.ts";
-import { FakeScope } from "../testing/fake-scope.ts";
+import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
+import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 import type {
   SchemaFieldOwnerProps,
   SchemaFormComponentProps,
   SchemaFormTranslate,
-} from "../client/slot-contract.ts";
+} from "../client/schema-form/slot-contract.ts";
 
 afterEach(cleanup);
 

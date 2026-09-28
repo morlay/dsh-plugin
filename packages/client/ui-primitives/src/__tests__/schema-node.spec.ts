@@ -14,7 +14,7 @@ import {
   variantChoices,
   variantOf,
   walkFields,
-} from "../client/schema-node.ts";
+} from "../client/schema-form/schema-node.ts";
 
 /** 走一遍设置流的往返：host 发 `schema.toJSON()`，客户端 rehydrate 后再投影。 */
 function projected(schema: z, path: readonly string[] = []) {

@@ -8,9 +8,9 @@
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
-import { NS, apply, inject } from "../client/index.ts";
-import { fakeDescribe } from "../testing/fake-describe.ts";
-import { FakeScope } from "../testing/fake-scope.ts";
+import { NS, apply, inject } from "../client/schema-form/index.ts";
+import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
+import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 
 function view(
   ns: string,

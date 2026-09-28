@@ -4,8 +4,8 @@
  * 几何只有一套：行高、行内间距、动作按钮尺寸都由下面几个常量给，行与行之间不各自决定。
  */
 
-import { styled } from "@morlay/dsh-client-ui-primitives/client";
-import { dsw } from "@morlay/dsh-client-ui-primitives/client";
+import { styled } from "../styling/index.ts";
+import { dsw } from "../theme.ts";
 
 /** 等宽字体栈：配置值的观感与代码一致。 */
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';

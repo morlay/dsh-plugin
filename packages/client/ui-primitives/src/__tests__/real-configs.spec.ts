@@ -9,12 +9,17 @@ import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { Config as SandboxConfig } from "../../../../sandbox/dsh-sandbox-local/src/config.ts";
 import { SessionPersistenceRdb } from "../../../../session/session-rdb/src/index.ts";
-import { addableAt, fieldKey } from "../client/controller.ts";
-import type { SchemaFormState } from "../client/controller.ts";
-import { editorLines, type EditorLine } from "../client/lines.ts";
-import { zh } from "../client/locales.ts";
-import { projectNode, readPath, walkFields, type FieldNode } from "../client/schema-node.ts";
-import type { SchemaFormTranslate } from "../client/slot-contract.ts";
+import { addableAt, fieldKey } from "../client/schema-form/controller.ts";
+import type { SchemaFormState } from "../client/schema-form/controller.ts";
+import { editorLines, type EditorLine } from "../client/schema-form/lines.ts";
+import { zh } from "../client/schema-form/locales.ts";
+import {
+  projectNode,
+  readPath,
+  walkFields,
+  type FieldNode,
+} from "../client/schema-form/schema-node.ts";
+import type { SchemaFormTranslate } from "../client/schema-form/slot-contract.ts";
 
 const t = ((key: string) =>
   (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
