@@ -1,0 +1,20 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M9 11.5v13.2a4.2 4.2 0 0 0 4.2 4.2h9.6a4.2 4.2 0 0 0 4.2-4.2V11.5" stroke="url(#shell)" stroke-width="3" stroke-linecap="round" />
+  <path d="M6.4 11.5h6.6" stroke="url(#lid)" stroke-width="3" stroke-linecap="round" />
+  <path d="M23 11.5h6.6" stroke="url(#lid)" stroke-width="3" stroke-linecap="round" />
+  <path d="M13.4 19.4 16.6 22.6 22.6 16.6" stroke="url(#tick)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <defs>
+    <linearGradient id="shell" x1="9" y1="11.5" x2="27" y2="28.9" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7FE6C0" />
+      <stop offset="1" stop-color="#2C9068" />
+    </linearGradient>
+    <linearGradient id="lid" x1="6.4" y1="11.5" x2="29.6" y2="11.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A6F0D4" />
+      <stop offset="1" stop-color="#4CB68C" />
+    </linearGradient>
+    <linearGradient id="tick" x1="13.4" y1="16.6" x2="22.6" y2="22.6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9FBE6" />
+      <stop offset="1" stop-color="#3FAE82" />
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,19 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4.9 11.6a4.6 4.6 0 0 1 4.6-4.6h17a4.6 4.6 0 0 1 4.6 4.6v6.8a4.6 4.6 0 0 1-4.6 4.6H15.6l-5.1 5.2a1.1 1.1 0 0 1-1.9-.8v-4.4h-.5a4.6 4.6 0 0 1-4.6-4.6Z" stroke="url(#bubble)" stroke-width="3" stroke-linejoin="round" />
+  <path d="M10.4 14.9h15.2" stroke="url(#rail)" stroke-width="2.6" stroke-linecap="round" />
+  <circle cx="21.6" cy="14.9" r="2.9" fill="url(#knob)" />
+  <defs>
+    <linearGradient id="bubble" x1="4.9" y1="7" x2="31.1" y2="23.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9A6FF" />
+      <stop offset="1" stop-color="#6C4AE8" />
+    </linearGradient>
+    <linearGradient id="rail" x1="10.4" y1="14.9" x2="25.6" y2="14.9" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D6CBFF" />
+      <stop offset="1" stop-color="#8E75EE" />
+    </linearGradient>
+    <linearGradient id="knob" x1="18.7" y1="12" x2="24.5" y2="17.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DCD3FF" />
+      <stop offset="1" stop-color="#7A5AEC" />
+    </linearGradient>
+  </defs>
+</svg>

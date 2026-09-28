@@ -2,6 +2,7 @@
   "name": "@morlay/mydsh-profile",
   "version": "0.0.1",
   "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图——只按行 id 配值，不插行、不禁行。",
+  "icon": "./icon.svg",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -15,6 +16,7 @@
   "files": [
     "locale/*.json",
     "dist",
+    "icon.svg",
     "src",
     "cordis.patch.yml",
     "!**/__tests__"

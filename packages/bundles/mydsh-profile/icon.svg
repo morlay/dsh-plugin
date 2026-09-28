@@ -1,0 +1,26 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8.5 12h19" stroke="url(#rail-a)" stroke-width="2.6" stroke-linecap="round" />
+  <path d="M8.5 18h19" stroke="url(#rail-b)" stroke-width="2.6" stroke-linecap="round" />
+  <path d="M8.5 24h19" stroke="url(#rail-c)" stroke-width="2.6" stroke-linecap="round" />
+  <circle cx="21.4" cy="12" r="2.9" fill="url(#knob)" />
+  <circle cx="13.6" cy="18" r="2.9" fill="url(#knob)" />
+  <circle cx="23.6" cy="24" r="2.9" fill="url(#knob)" />
+  <defs>
+    <linearGradient id="rail-a" x1="8.5" y1="12" x2="27.5" y2="12" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEE3FF" />
+      <stop offset="1" stop-color="#7FA8F0" />
+    </linearGradient>
+    <linearGradient id="rail-b" x1="8.5" y1="18" x2="27.5" y2="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEE3FF" />
+      <stop offset="1" stop-color="#7FA8F0" />
+    </linearGradient>
+    <linearGradient id="rail-c" x1="8.5" y1="24" x2="27.5" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BEE3FF" />
+      <stop offset="1" stop-color="#7FA8F0" />
+    </linearGradient>
+    <linearGradient id="knob" x1="10.7" y1="9.1" x2="26.5" y2="26.9" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FD4FF" />
+      <stop offset="1" stop-color="#3F77D8" />
+    </linearGradient>
+  </defs>
+</svg>
