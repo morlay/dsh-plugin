@@ -8,6 +8,7 @@ export default defineConfig(async () => ({
   ...(await defineCordisPluginConfig({
     entries: {
       rows: "./src/rows.ts",
+      "relax-intent": "./src/relax-intent.ts",
       guidance: "./src/guidance/index.ts",
       "agent-team": "./src/agent-team.ts",
     },

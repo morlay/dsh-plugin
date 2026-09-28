@@ -1,6 +1,6 @@
 {
   "name": "@morlay/sandbox-profile",
-  "version": "0.0.1-alpha.1",
+  "version": "0.0.1-alpha.2",
   "description": "可配置沙箱：禁用官方 sandbox / fs-sandbox 两行、插入替换行，并给出访问规则的值。",
   "keywords": [
     "bundle-entry",

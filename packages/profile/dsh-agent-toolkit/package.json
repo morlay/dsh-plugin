@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-agent-toolkit",
-  "version": "0.0.1-alpha.3",
+  "version": "0.0.1-alpha.4",
   "description": "Personal dsh bundle: the agent capability rows themselves — shell, files, jobs, skill discovery, goal, compaction, delegation and workflow, ask-user, todo, web, deliverables. A profile lists the package to mount the rows once at the profile plane; session modes narrow the tool set with `allowTools`, whose allow-list derives from this package's localized data.",
   "keywords": [
     "agent",
@@ -23,22 +23,22 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./agent-team": "./src/agent-team.ts",
-    "./guidance": "./src/guidance/index.ts",
-    "./locale/*.json": "./locale/*.json",
-    "./package.json": "./package.json",
+    "./rows": "./src/rows.ts",
     "./relax-intent": "./src/relax-intent.ts",
-    "./rows": "./src/rows.ts"
+    "./guidance": "./src/guidance/index.ts",
+    "./agent-team": "./src/agent-team.ts",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
-      "./agent-team": "./dist/agent-team.mjs",
-      "./guidance": "./dist/guidance.mjs",
-      "./locale/*.json": "./locale/*.json",
-      "./package.json": "./package.json",
+      "./rows": "./dist/rows.mjs",
       "./relax-intent": "./dist/relax-intent.mjs",
-      "./rows": "./dist/rows.mjs"
+      "./guidance": "./dist/guidance.mjs",
+      "./agent-team": "./dist/agent-team.mjs",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {
