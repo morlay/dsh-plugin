@@ -43,7 +43,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:*"
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
@@ -88,8 +88,8 @@
     "react-dom": "^18.2.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:^",
     "@morlay/dsh-client-ui-primitives": "workspace:*"
   },
   "dsh": {

@@ -21,7 +21,6 @@
     "dist",
     "src",
     "drizzle",
-    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
@@ -37,7 +36,6 @@
     "./usage": "./src/usage.ts",
     "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
@@ -53,7 +51,6 @@
       "./usage": "./dist/usage.mjs",
       "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -82,23 +79,18 @@
     "drizzle-kit": "1.0.0-rc.5-ab785fc"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/cosmokit": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
-    "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-format": "workspace:*",
-    "@deepseek-ai/dsh-session-format-catalog": "workspace:*",
-    "@deepseek-ai/dsh-session-persistence": "workspace:*",
-    "@deepseek-ai/dsh-session-query": "workspace:*",
-    "@deepseek-ai/dsh-storage": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cosmokit": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-scope": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-session-format-catalog": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-session-query": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "inlinedDependencies": {
     "@jridgewell/sourcemap-codec": "1.6.0",

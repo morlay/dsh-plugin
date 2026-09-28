@@ -99,10 +99,10 @@
 （schema 默认是空规则），patch 内容见该文件。
 
 **本部署走的就是这条路径**：示例 app 的 `dsh.profile.bundles` 列出了本包（排在
-[`@morlay/dsh-profile`](../../profile/dsh-profile/README.md) 之前），因此"禁用官方两行 + 插入本行"由这份
+[`@morlay/dsh-profile`](../../../bundles/sandbox-profile/README.md) 之前），因此"禁用官方两行 + 插入本行"由这份
 patch 负责；`access` 规则的值由 `dsh-profile` 按 id 做 config 覆盖——装配与配置各归一处
 （`@morlay/dsh-profile` 已在 `dependencies` 声明本包）。patch 层级的合并顺序与放置理由见
-[设计 host 层部署配置](../../profile/dsh-profile/.agents/designs/20260917-host层部署配置.md)。
+[设计 host 层部署配置](../../../bundles/sandbox-profile/README.md)。
 两种采用方式互斥：同时上线会重复插入同一行。
 
 ## 接管 `sandbox:policy`

@@ -4,12 +4,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 
-let patch: string;
 let app: Record<string, unknown>;
 let manifest: Record<string, unknown>;
 
 beforeAll(async () => {
-  patch = await readFile(join(ROOT, "packages/subagent/dsh-subagent/cordis.patch.yml"), "utf8");
   app = JSON.parse(
     await readFile(join(ROOT, "apps/dsh-custom-next/package.json"), "utf8"),
   ) as Record<string, unknown>;
@@ -20,31 +18,19 @@ beforeAll(async () => {
 
 /** 装配面守护：上游那一行确实被我们停掉，替代行确实被插上，app 的 bundle 列表确实引用本包。 */
 describe("装配面", () => {
-  it("禁用上游 subagent 行", () => {
-    expect(patch).toContain("- id: subagent\n  disabled: true");
-  });
-
-  it("禁用官方设置卡与它带的模型白名单服务行", () => {
-    expect(patch).toContain("- id: ui-settings-subagent\n  disabled: true");
-    expect(patch).toContain("- id: subagent-model-selection-settings\n  disabled: true");
-  });
-
-  it("按上游同形的要求插入本包行（无 config）", () => {
-    expect(patch).toContain("- insert:");
-    expect(patch).toContain('name: "@morlay/dsh-subagent"');
-  });
-
-  it("app 的 profile bundles 引用本包，且声明了依赖", () => {
+  it("装配入口是 session-mode-profile：app 列的是它，它依赖本包", async () => {
     const dsh = app.dsh as { profile: { bundles: string[] } };
-    const dependencies = app.dependencies as Record<string, string>;
+    const bundle = JSON.parse(
+      await readFile(join(ROOT, "bundles/session-mode-profile/package.json"), "utf8"),
+    ) as { dependencies: Record<string, string> };
 
-    expect(dsh.profile.bundles).toContain("@morlay/dsh-subagent");
-    expect(dependencies["@morlay/dsh-subagent"]).toBe("workspace:*");
+    expect(dsh.profile.bundles).toContain("@morlay/session-mode-profile");
+    expect(bundle.dependencies["@morlay/dsh-subagent"]).toBe("workspace:*");
   });
 });
 
 /**
- * 配置页：页面由 `@morlay/dsh-client-ui-schema-form` 按 volatile 字段自动生成（本包 host 的 Config 与上游逐行
+ * 配置页：页面由 `@morlay/dsh-client-ui-primitives` 按 volatile 字段自动生成（本包 host 的 Config 与上游逐行
  * 一致，说明写不进 schema），本包自己的 client 半只给那两个字段补文案——经字段槽
  * `settings.schema-form.field` 认领，host 一行都不动。
  */
@@ -66,7 +52,7 @@ describe("配置页", () => {
     expect(dsh.client?.inject).toEqual([
       "@deepseek-ai/dsh-client-locale",
       "@deepseek-ai/dsh-client-ui-slots",
-      "@morlay/dsh-client-ui-schema-form",
+      "@morlay/dsh-client-ui-primitives",
     ]);
   });
 

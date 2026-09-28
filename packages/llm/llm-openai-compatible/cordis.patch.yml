@@ -1,3 +1,0 @@
-- insert:
-    - id: llm-openai-compatible
-      name: "@morlay/dsh-llm-openai-compatible"

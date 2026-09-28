@@ -18,14 +18,13 @@
     "locale/*.json",
     "dist",
     "src",
-    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./rows": "./src/rows.ts",
     "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./client": {
       "types": "./src/client/index.ts",
       "default": "./dist/client.cjs"
@@ -35,8 +34,8 @@
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
+      "./rows": "./dist/rows.mjs",
       "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./client": {
         "types": "./dist/client.d.cts",
         "default": "./dist/client.cjs"
@@ -63,35 +62,32 @@
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@morlay/dsh-client-ui-schema-form": "workspace:*"
+    "@morlay/dsh-client-ui-primitives": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/cosmokit": "workspace:*",
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-client-locale": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
-    "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-fs-local": "workspace:*",
-    "@deepseek-ai/dsh-fs-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-local": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:*",
-    "@morlay/dsh-client-ui-schema-form": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cosmokit": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/dsh-fs": "workspace:^",
+    "@deepseek-ai/dsh-fs-local": "workspace:^",
+    "@deepseek-ai/dsh-fs-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-local": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@morlay/dsh-client-ui-primitives": "workspace:*"
   },
   "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
     "client": {
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-slots",
-        "@morlay/dsh-client-ui-schema-form"
+        "@morlay/dsh-client-ui-primitives"
       ]
     }
   }

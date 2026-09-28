@@ -3,7 +3,7 @@
 上游 `@deepseek-ai/dsh-subagent` 的**薄壳 fork**：host 半只改一件事——continuable 子代理首条任务后面的
 **回报指引换成中文**（上游是英文）。服务名（`ctx.subagents`）、providers、其余子路径（`./internal` 等）
 与装配位置都不变。配置页不在本包：限额两个字段在 `Config` 上（与上游逐行一致）标了 `.volatile()`，页面由
-`@morlay/dsh-client-ui-schema-form` 按 schema 自动生成；本包自己的 client 半只给这两个字段补中文文案（见下）。
+`@morlay/dsh-client-ui-primitives` 按 schema 自动生成；本包自己的 client 半只给这两个字段补中文文案（见下）。
 
 装配由本包的 bundle patch 完成（`cordis.patch.yml`）：官方 `subagent` 行 `disabled: true` + insert
 `subagent-fork`（`@morlay/dsh-subagent`），并停掉官方设置卡那两条行（`ui-settings-subagent` 与
@@ -44,7 +44,7 @@ app 的 `dsh.profile.bundles` 里引用本包。
 收在一处。
 
 页面由通用 schema 表单生成：`Config` 的两个限额字段（`maxDepth` / `maxActiveSubagents`）标了 `.volatile()`，
-`@morlay/dsh-client-ui-schema-form` 为这一行（`subagent-fork`）注册配置入口，渲染成数字输入（staged 编辑 +
+`@morlay/dsh-client-ui-primitives` 为这一行（`subagent-fork`）注册配置入口，渲染成数字输入（staged 编辑 +
 保存/丢弃，与上游设置页同形）。边界与下限由 schema 的 `min` / `step` 表达，保存时整段校验。
 
 本包 client 半（`./client`）只做一件事：把两个字段的中文文案注册到**提示面**

@@ -6,6 +6,12 @@ DeepSeek Harness 的 **OpenAI 兼容 LLM 适配器**插件。与内置 `llm-pi-a
 `seed`），请求级 `GenerateOptions.temperature` 优先于 profile 默认值；`providers`
 用 dict 多路由结构（与 `llm-pi-ai` 一致）。
 
+## 可选：与官方 `llm-pi-ai` 二选一
+
+本包是**可选 bundle**，与官方 `llm-pi-ai` 覆盖同一块领域：两者都提供 openai-compatible 的 `providers` dict 与
+同名的 provider 路由。**同装会出现两套适配器抢同一批路由**，所以一个部署只装一个——本部署装的是官方那行
+（`@morlay/dsh-profile` 配它的 `ollama` route）；只有需要 profile 级采样默认值时才换成这一行。
+
 传输层复用 **[@ai-sdk/openai-compatible](https://www.npmjs.com/package/@ai-sdk/openai-compatible)**
 （wire 序列化与 SSE 解析由 SDK 负责）；本插件负责 harness 消息 → AI SDK prompt
 转换、采样默认合并、stream part → `StreamChunk` 翻译、错误归一化与凭据策略。

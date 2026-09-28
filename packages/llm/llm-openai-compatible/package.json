@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-llm-openai-compatible",
   "version": "0.0.9-alpha.8",
-  "description": "OpenAI-compatible LLM adapter plugin for DeepSeek Harness with configurable default sampling parameters (temperature / topP / topK / penalties / seed) over a providers dict.",
+  "description": "Optional OpenAI-compatible LLM adapter plugin for DeepSeek Harness with configurable default sampling parameters (temperature / topP / topK / penalties / seed) over a providers dict. Pick either this bundle or the built-in llm-pi-ai, never both.",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -19,7 +19,6 @@
     "locale/*.json",
     "dist",
     "src",
-    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
@@ -28,7 +27,6 @@
     "./wire": "./src/wire.ts",
     "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
@@ -37,7 +35,6 @@
       "./wire": "./dist/wire.mjs",
       "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -48,23 +45,18 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.32",
     "@ai-sdk/provider": "^4.0.7",
-    "@deepseek-ai/dsh-util-values": "workspace:*"
+    "@deepseek-ai/dsh-util-values": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/dsh-anonymous-user-id": "workspace:*",
-    "@deepseek-ai/dsh-attachment": "workspace:*",
-    "@deepseek-ai/dsh-credentials": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
-    "@deepseek-ai/dsh-launch-environment": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:*",
-    "@deepseek-ai/dsh-settings": "workspace:*",
-    "@deepseek-ai/dsh-timeout": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "@deepseek-ai/dsh-credentials": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-launch-environment": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
   }
 }

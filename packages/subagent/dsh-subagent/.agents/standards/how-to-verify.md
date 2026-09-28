@@ -31,7 +31,7 @@
 ## 未覆盖（有明确原因）
 
 - **自动生成的页面本身**（渲染出什么控件、能不能存）由通用面
-  [`client/ui-schema-form`](../../../../client/ui-schema-form/.agents/standards/how-to-verify.md)的用例覆盖；
+  [`client/ui-schema-form`](../../../../client/ui-primitives/.agents/standards/how-to-verify.md)的用例覆盖；
   本包只保证「字段是 volatile + 行被插上 + 文案被认领」这三条前提。
 - **上游文件的行为**（`child-agent.ts` / `continuation-activation.ts` 等未复制的那部分）由上游自己的测试覆盖，
   本包只在接线层面保证它们仍是同一份实现。

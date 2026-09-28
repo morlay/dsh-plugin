@@ -6,6 +6,11 @@
 
 跨包术语见根 [`.agents/CONTEXT.md`](../../../.agents/CONTEXT.md)，本包的决策见 [`.agents/adrs/`](./.agents/adrs)。
 
+## 装配
+
+本包没有自己的 bundle patch（不作为独立 bundle 安装）：装配入口是聚合层
+[`@morlay/better-session`](../../../bundles/better-session/README.md)，`session-branch` 行由它的 patch 插入。
+
 ## 与上游 `SessionHandle` 的关系
 
 上游持久化模型是 `SessionHandle`（append-only：`create` / `open` / `append` /

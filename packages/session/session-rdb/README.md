@@ -7,8 +7,8 @@ SQLite 或 PostgreSQL 后端。表结构、原样存储与各条流程的设计�
 
 ## 配置
 
-配置**就是这一行的 config**（`cordis.patch.yml` 的 `session-rdb` 行，或 profile patch /
-设置页改的那份 entry config）：
+配置**就是这一行的 config**（聚合层 `@morlay/better-session` 的 `session-rdb` 行、profile patch，
+或设置页改的那份 entry config）：
 
 ```yaml
 - id: session-rdb

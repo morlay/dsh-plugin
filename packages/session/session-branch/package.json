@@ -19,7 +19,6 @@
     "locale/*.json",
     "dist",
     "src",
-    "cordis.patch.yml",
     "!**/__tests__"
   ],
   "type": "module",
@@ -27,7 +26,6 @@
     ".": "./src/index.ts",
     "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
@@ -35,7 +33,6 @@
       ".": "./dist/index.mjs",
       "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -44,14 +41,9 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-persistence": "workspace:*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^"
   }
 }
