@@ -22,7 +22,8 @@ import type {
   SessionEditorResult,
 } from "./types.ts";
 import {
-  SESSION_EDITOR_PATH,
+  SESSION_EDITOR_PATHS,
+  type SessionEditorAction,
   type SessionEditorOperation,
   type SessionEditorOperationResult,
 } from "./shared.ts";
@@ -30,6 +31,7 @@ import {
   closedTurns,
   droppedCompactions,
   editPlan,
+  keptConfigEvents,
   precedingContentIndex,
   recallBoundary,
   restoreCompactions,
@@ -259,6 +261,8 @@ export class SessionEditor extends Service {
     // 补回被截断丢掉、但在重放目标之前的压缩
     const keepFrom = keepFromOf(events, boundary);
     const compactions = droppedCompactions(events, keepFrom, plan.targetSeq);
+    // 同理保留这之前的配置事件（它们表达的是当前生效的配置）
+    const configs = keptConfigEvents(events, keepFrom, plan.targetSeq);
 
     const replayTurn = preceding < 0 ? 1 : turns[preceding]!.turn + 1;
 
@@ -281,6 +285,7 @@ export class SessionEditor extends Service {
     const seedStart = this.seedStart(live, events, keepFrom);
     const seedSuffix: SessionEvent[] = [
       ...restoreCompactions(compactions, keepFrom, seedStart),
+      ...configs,
       ...manualSeed,
     ];
     await this.appendSeedSuffix(operation.sessionId, live, seedSuffix, events, keepFrom);
@@ -311,9 +316,10 @@ export class SessionEditor extends Service {
     signal?.throwIfAborted();
     const events = await this.readEvents(operation.sessionId, signal);
     const boundary = recallBoundary(events, closedTurns(events), operation.eventSeq);
-    // 撤回同样要补回被丢掉、但在撤回目标之前的压缩
+    // 撤回同样要补回被丢掉、但在撤回目标之前的压缩与配置事件
     const keepFrom = keepFromOf(events, boundary);
     const compactions = droppedCompactions(events, keepFrom, operation.eventSeq);
+    const configs = keptConfigEvents(events, keepFrom, operation.eventSeq);
 
     await this.stopLoop(operation.sessionId, signal);
     const live = this.ctx.sessions.get(operation.sessionId);
@@ -321,7 +327,10 @@ export class SessionEditor extends Service {
     await this.appendSeedSuffix(
       operation.sessionId,
       live,
-      restoreCompactions(compactions, keepFrom, this.seedStart(live, events, keepFrom)),
+      [
+        ...restoreCompactions(compactions, keepFrom, this.seedStart(live, events, keepFrom)),
+        ...configs,
+      ],
       events,
       keepFrom,
     );
@@ -491,10 +500,10 @@ function cascadeOf(value: unknown): import("@morlay/session-branch").CascadePoli
   return value;
 }
 
-function decodeOperation(value: unknown): SessionEditorOperation {
+function decodeOperation(value: unknown, action: SessionEditorAction): SessionEditorOperation {
   const record = objectValue(value);
   const sessionId = sessionIdOf(record["sessionId"]);
-  switch (record["action"]) {
+  switch (action) {
     case "edit":
       if (typeof record["text"] !== "string") throw new TypeError("text 必须是字符串。");
       return {
@@ -621,6 +630,7 @@ async function runOperation(
 
 async function handleRoute(
   editor: SessionEditor,
+  action: SessionEditorAction,
   request: HttpRequestLike,
   response: HttpResponseLike,
 ): Promise<void> {
@@ -629,7 +639,7 @@ async function handleRoute(
       respondJson(
         response,
         200,
-        await runOperation(editor, decodeOperation(await requestJson(request))),
+        await runOperation(editor, decodeOperation(await requestJson(request), action)),
       );
       return;
     }
@@ -651,14 +661,18 @@ function registerHttpRoutes(ctx: Context, editor: SessionEditor): void {
     // 这里只按用到的 register 面做结构转换，不再 declare module 覆盖，否则两处声明冲突（TS2717）。
     const webServer = scope.get("webServer") as unknown as HttpServerLike | undefined;
     if (webServer === undefined) return;
-    scope.effect(
-      () =>
-        webServer.register({
-          kind: "exact",
-          path: SESSION_EDITOR_PATH,
-          handler: (request, response) => handleRoute(editor, request, response),
-        }),
-      "session-editor: HTTP route",
-    );
+    // 一条动作一条 exact 路由：动作由路径定，body 里不带 `action`（见 shared.ts 的 SESSION_EDITOR_PATHS）。
+    for (const [action, path] of Object.entries(SESSION_EDITOR_PATHS)) {
+      const verb = action as SessionEditorAction;
+      scope.effect(
+        () =>
+          webServer.register({
+            kind: "exact",
+            path,
+            handler: (request, response) => handleRoute(editor, verb, request, response),
+          }),
+        `session-editor: HTTP route ${path}`,
+      );
+    }
   });
 }

@@ -4,7 +4,7 @@ import {
   harness,
   meta,
   SessionIdBrand,
-  SESSION_EDITOR_PATH,
+  SESSION_EDITOR_PATHS,
   twoTurnLog,
 } from "@morlay/ui-conversation-message-actions/testing";
 
@@ -25,7 +25,7 @@ function fakeJsonRequest(body: unknown): FakeRequest {
   const chunk = Buffer.from(JSON.stringify(body));
   const request: FakeRequest = {
     method: "POST",
-    url: SESSION_EDITOR_PATH,
+    url: SESSION_EDITOR_PATHS.edit,
     on(event, listener) {
       if (event === "data") queueMicrotask(() => listener(chunk));
       if (event === "end") queueMicrotask(() => listener());
@@ -65,8 +65,9 @@ describe("session-editor HTTP 面", () => {
       });
     });
     try {
-      for (let i = 0; i < 1000 && !routes.has(SESSION_EDITOR_PATH); i += 1) await Promise.resolve();
-      expect(routes.has(SESSION_EDITOR_PATH)).toBe(true);
+      for (let i = 0; i < 1000 && !routes.has(SESSION_EDITOR_PATHS.edit); i += 1)
+        await Promise.resolve();
+      expect(Object.values(SESSION_EDITOR_PATHS).every((path) => routes.has(path))).toBe(true);
 
       ctx.sessions.create(SessionIdBrand("busy"), {
         meta: meta("busy"),
@@ -98,8 +99,8 @@ describe("session-editor HTTP 面", () => {
       });
 
       const response = fakeResponse();
-      await routes.get(SESSION_EDITOR_PATH)!(
-        fakeJsonRequest({ action: "rewind", sessionId: "busy", toBoundary: 5 }),
+      await routes.get(SESSION_EDITOR_PATHS.rewind)!(
+        fakeJsonRequest({ sessionId: "busy", toBoundary: 5 }),
         response.response,
       );
 
@@ -115,7 +116,7 @@ describe("session-editor HTTP 面", () => {
     }
   });
 
-  it("GET 不再服务（读面已删），未知 action 仍是 400", async () => {
+  it("GET 不服务（405），缺参数 400", async () => {
     const routes = new Map<string, RouteHandler>();
     const { ctx, dispose } = await harness((scope) => {
       scope.provide("webServer", {
@@ -126,14 +127,15 @@ describe("session-editor HTTP 面", () => {
       });
     });
     try {
-      for (let i = 0; i < 1000 && !routes.has(SESSION_EDITOR_PATH); i += 1) await Promise.resolve();
-      const handler = routes.get(SESSION_EDITOR_PATH)!;
+      for (let i = 0; i < 1000 && !routes.has(SESSION_EDITOR_PATHS.recall); i += 1)
+        await Promise.resolve();
+      const handler = routes.get(SESSION_EDITOR_PATHS.recall)!;
       await createPersisted(ctx, "s1", twoTurnLog());
 
       const listed = fakeResponse();
       const request: FakeRequest = {
         method: "GET",
-        url: `${SESSION_EDITOR_PATH}?sessionId=s1`,
+        url: `${SESSION_EDITOR_PATHS.recall}?sessionId=s1`,
         on() {
           return request;
         },
@@ -142,7 +144,7 @@ describe("session-editor HTTP 面", () => {
       expect(listed.code).toBe(405);
 
       const rejected = fakeResponse();
-      await handler(fakeJsonRequest({ action: "explode", sessionId: "s1" }), rejected.response);
+      await handler(fakeJsonRequest({}), rejected.response);
       expect(rejected.code).toBe(400);
     } finally {
       await dispose();

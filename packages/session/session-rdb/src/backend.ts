@@ -93,17 +93,19 @@ export interface BackendTx {
   // 写批次提交时递增 revision；给了 `lastEventAt` 就一并把「最后活动时间」往前推（只增不减）。
   bumpRevision(id: SessionId, lastEventAt?: number): Promise<void>;
 
-  deleteBridgeTail(id: SessionId, fromSequence: number): Promise<void>;
+  // 删掉 fromSequence 起的桥接行，返回被删行引用的 event id（调用方据此重算这些用量行的引用标记）。
+  deleteBridgeTail(id: SessionId, fromSequence: number): Promise<readonly string[]>;
 
   getPrevBridge(
     id: SessionId,
     sequence: number,
   ): Promise<{ fEventId: string; fSequence: number } | undefined>;
 
-  deleteSession(id: SessionId): Promise<void>;
+  // 删除整条会话；返回被删桥接行引用的 event id（引用标记要跟着重算）。
+  deleteSession(id: SessionId): Promise<readonly string[]>;
 
-  // 批量删除整条会话：桥接行、workspace 归属行、投影行与会话行。
-  deleteSessions(ids: SessionId[]): Promise<number>;
+  // 批量删除整条会话：桥接行、workspace 归属行、投影行与会话行；返回删除行数与被删桥接行引用的 event id。
+  deleteSessions(ids: SessionId[]): Promise<{ deleted: number; eventIds: readonly string[] }>;
 }
 
 // 「会话行」列表项：管理面自己的列表（完整语料含归档 + 标题 + 最后活动时间）；为何与官方 `session/list`
@@ -196,12 +198,13 @@ export interface Backend {
   // `buckets` 是本批要累加的 (day, turns, steps, userInputs, toolCalls)。
   incrementSessionCounts(id: SessionId, buckets: readonly SessionCountBucket[]): Promise<void>;
 
-  // 按会话从事件表重算两张会话汇总表（rewind / fork 之后调用）：先删该会话的行再重算。
+  // 按会话从事件表重算两张汇总表（旧日志重写之后调用：迁移进来的会话没有旁路累加的历史，得补算）。
   rebuildSessionStats(id: SessionId): Promise<void>;
 
-  // 全量重算 `t_event_usage` 的引用标记（`f_referenced` / `f_subagent`）：rewind / fork / 会话删除之后调用。
-  // 引用可能跨会话消失（截断、删除），只按本会话判定不够，故这里是全量。
-  refreshEventUsageFlags(): Promise<void>;
+  // 重算这些用量行的引用标记（`f_referenced` / `f_subagent`）：会话删除 / 日志重写之后调用，
+  // `eventIds` 是被删掉的那批桥接行引用的事件（只有它们的引用可能消失）。
+  // fork 与撤回（rewind）都**不**走这里——它们不改变已发生过的消耗（见 ADR-fork不继承统计、ADR-撤回不回退统计）。
+  refreshEventUsageFlags(eventIds: readonly string[]): Promise<void>;
 
   // 删掉一个会话的汇总行（会话删除时；外键 CASCADE 之外再显式清一次）。
   deleteSessionStats(id: SessionId): Promise<void>;

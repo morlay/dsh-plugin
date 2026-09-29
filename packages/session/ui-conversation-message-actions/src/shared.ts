@@ -1,7 +1,18 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import type { CascadePolicy } from "@morlay/session-branch";
 
-export const SESSION_EDITOR_PATH = "/api/morlay/v1/session/editor";
+// 会话编辑面的六条 POST 路径：一条动作一条路径（路径定动作，body 只带该动作的参数）。
+// 与上游官方路由分开的理由见 ADR-管理面HTTP路由前缀与上游分家。
+export const SESSION_EDITOR_PATHS = {
+  edit: "/api/morlay/v1/session/edit",
+  reroll: "/api/morlay/v1/session/reroll",
+  retry: "/api/morlay/v1/session/retry",
+  rewind: "/api/morlay/v1/session/rewind",
+  recall: "/api/morlay/v1/session/recall",
+  fork: "/api/morlay/v1/session/fork",
+} as const;
+
+export type SessionEditorAction = keyof typeof SESSION_EDITOR_PATHS;
 
 export type { VersionOperation } from "@morlay/session-branch";
 

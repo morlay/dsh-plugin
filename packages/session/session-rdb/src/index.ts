@@ -824,15 +824,14 @@ export class SessionPersistenceRdb extends SessionPersistence {
       );
     }
     await this.unarchiveBeforeDeletion(id);
-    await this.backend.transaction(async (tx) => {
-      await tx.deleteSession(id);
-    });
+    const referenced = await this.backend.transaction((tx) => tx.deleteSession(id));
     this.liveBuffers.delete(id);
     this.liveReady.delete(id);
     this.liveFailures.delete(id);
     this.liveDropWarned.delete(id);
     this.reuseEventIds.delete(id);
     await this.dropSessionStats(id);
+    await this.refreshEventUsageFlags(referenced);
   }
 
   // GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。
@@ -849,7 +848,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
       (id) => !this.tracker.hasPending(id) && !this.tracker.hasOpenHandle(id),
     );
     if (deletable.length === 0) return 0;
-    const deleted = await this.backend.transaction((tx) => tx.deleteSessions(deletable));
+    const { deleted, eventIds } = await this.backend.transaction((tx) =>
+      tx.deleteSessions(deletable),
+    );
     for (const id of deletable) {
       this.liveBuffers.delete(id);
       this.liveReady.delete(id);
@@ -858,6 +859,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       this.reuseEventIds.delete(id);
       await this.dropSessionStats(id);
     }
+    await this.refreshEventUsageFlags(eventIds);
     return deleted;
   }
 
@@ -1097,12 +1099,10 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }
   }
 
-  // 重算一个会话的统计（rewind / fork 之后；best-effort，同 `recordSessionStats`）：
-  // 两张汇总表按会话重算，用量行的引用标记全量重算（引用可能跨会话消失）。
+  // 重算一个会话的两张汇总表（fork 之后；best-effort，同 `recordSessionStats`）。
   async rebuildSessionStats(id: SessionId): Promise<void> {
     try {
       await this.backend.rebuildSessionStats(id);
-      await this.backend.refreshEventUsageFlags();
     } catch (error: unknown) {
       this.ctx.logger.warn(
         `session-rdb: session stats for "${id}" not rebuilt (${describeError(error)})`,
@@ -1110,11 +1110,23 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }
   }
 
-  // 会话删除时清掉它的汇总行，并重算用量行的引用标记（被删会话引用的行要立刻退出统计）。
+  // 重算这些用量行的引用标记（会话删除 / 日志重写之后：消失的引用要让孤儿行退出统计）。
+  private async refreshEventUsageFlags(eventIds: readonly string[]): Promise<void> {
+    const unique = [...new Set(eventIds)];
+    if (unique.length === 0) return;
+    try {
+      await this.backend.refreshEventUsageFlags(unique);
+    } catch (error: unknown) {
+      this.ctx.logger.warn(
+        `session-rdb: usage reference flags not refreshed (${describeError(error)})`,
+      );
+    }
+  }
+
+  // 会话删除时清掉它的汇总行（引用标记由调用方在拿到被删事件后一并重算）。
   private async dropSessionStats(id: SessionId): Promise<void> {
     try {
       await this.backend.deleteSessionStats(id);
-      await this.backend.refreshEventUsageFlags();
     } catch (error: unknown) {
       this.ctx.logger.warn(
         `session-rdb: session stats for "${id}" not deleted (${describeError(error)})`,
@@ -1126,13 +1138,14 @@ export class SessionPersistenceRdb extends SessionPersistence {
     id: SessionId,
     log: { meta: SessionHeader; inheritedEventCount: number; events: SessionEvent[] },
   ): Promise<void> {
+    let removed: readonly string[] = [];
     await this.backend.transaction(async (tx) => {
       // 重写会删光该会话的桥接行再重建，先做并发写者校验（与 `appendBatch` 同一个理由）：否则另一实例在
       // open 前 / 期间提交的事件会被静默丢掉；调用方刚读过这份日志，guard 没有该会话时记下当前磁盘 head。
       const head = await tx.getHead(id);
       if (!this.writeGuard.has(id)) this.writeGuard.confirmHead(id, head.fHeadSequence);
       this.writeGuard.assertNoConcurrentWriter(id, head.fHeadSequence);
-      await tx.deleteBridgeTail(id, 0);
+      removed = await tx.deleteBridgeTail(id, 0);
       await tx.upsertSession(
         { meta: log.meta, inheritedEventCount: SessionLogOffset(log.inheritedEventCount) },
         randomUUID(),
@@ -1146,6 +1159,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     });
     // 重写换了事件行：被删掉的那批成了孤儿（引用标记要落回 0），本会话汇总按新事件重算。
     await this.rebuildSessionStats(id);
+    await this.refreshEventUsageFlags(removed);
   }
 
   async listSnapshots(

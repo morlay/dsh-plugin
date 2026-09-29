@@ -449,8 +449,8 @@ describe("用量统计口径", () => {
     }
   });
 
-  // fork 复用的事件行已经在表里（写路径不会重插），归属标记与子会话汇总靠 fork 之后的重算补齐。
-  it("fork 复用的事件行按子会话补归属标记，子会话行含继承前缀", async () => {
+  // fork 不参与统计：继承前缀那一次消耗是父会话真实发生的，子会话只记自己新产生的（写路径旁路累加）。
+  it("fork 不把继承前缀算进统计：归属与按会话行都留给父会话", async () => {
     const { ctx } = await harness();
     await createPersisted(
       ctx,
@@ -477,14 +477,14 @@ describe("用量统计口径", () => {
 
     const value = await report(ctx);
 
-    // 总量按事件行去重：共享前缀只算一次；但这次共享行被 subagent 会话引用了 → 归到 subagent 组。
+    // 总量是父会话那一次真实消耗；共享的事件行不会被 fork 改成 subagent 归属。
     expect(value.totals.inputTokens).toBe(100);
-    expect(value.subagent.inputTokens).toBe(100);
-    expect(value.human.inputTokens).toBe(0);
-    // 按会话的行是各自的日志口径：子会话含继承前缀，所以两行都是 100。
+    expect(value.human.inputTokens).toBe(100);
+    expect(value.subagent.inputTokens).toBe(0);
+    // 子会话自己没有产生的用量 → 按会话行里只有父会话。
     const byId = new Map(value.sessions.map((row) => [row.sessionId, row]));
+    expect([...byId.keys()]).toEqual(["src"]);
     expect(byId.get("src")).toMatchObject({ subagent: false, inputTokens: 100, turns: 1 });
-    expect(byId.get("child")).toMatchObject({ subagent: true, inputTokens: 100, turns: 1 });
   });
 
   // 迁移对统计表先删后建：旧结构（没有物化列 / 按类型存的计数表）升级后必须被重建并回填。
@@ -591,5 +591,21 @@ describe("用量统计口径", () => {
     expect(value.totals.turns).toBe(0);
     expect(value.totals.inputTokens).toBe(0);
     expect(value.sessions).toEqual([]);
+  });
+
+  it("撤回（rewind）不回退统计：请求已发起就已消耗", async () => {
+    const { ctx } = await harness();
+    await createPersisted(
+      ctx,
+      meta("rewind-me"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    expect((await report(ctx)).totals.inputTokens).toBe(100);
+
+    await ctx.sessionBranch.rewind(SessionId("rewind-me"), -1);
+
+    const value = await report(ctx);
+    expect(value.totals.inputTokens).toBe(100);
+    expect(value.sessions.map((row) => row.sessionId)).toEqual(["rewind-me"]);
   });
 });

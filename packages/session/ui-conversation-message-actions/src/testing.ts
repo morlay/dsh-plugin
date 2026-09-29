@@ -12,11 +12,11 @@ import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { parseJsonlArtifact } from "@morlay/session-rdb/artifact";
 import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
-import { SESSION_EDITOR_PATH } from "./shared.ts";
+import { SESSION_EDITOR_PATHS } from "./shared.ts";
 import { SessionEditor } from "@morlay/ui-conversation-message-actions";
 
 export {
-  SESSION_EDITOR_PATH,
+  SESSION_EDITOR_PATHS,
   Session,
   SessionIdBrand,
   SessionSeq,
@@ -26,6 +26,7 @@ export {
   oneTurnLog,
   parseJsonlArtifact,
 };
+export type { SessionEditorAction } from "./shared.ts";
 export type { SessionEvent, SessionHeader };
 
 export interface Harness {

@@ -171,6 +171,8 @@ export function downstreamUsers(turns: readonly ClosedTurn[], start: number): Us
     .flatMap((turn): UserMessage[] => turn.users.map((user) => cloneUser(user.data)));
 }
 
+// 同轮内第一条 user 退到前一轮的 turn/end（撤回整轮）：留着本轮的 turn/start，之后的重放会按
+// `phase.turn + 1` 再开一轮、本轮成空轮。该轮里这条消息之前写下的配置事件由 recallOperation 重写保留。
 export function recallBoundary(
   events: readonly SessionEvent[],
   turns: readonly ClosedTurn[],
@@ -243,6 +245,9 @@ export function editPlan(operation: EditOperation, turns: readonly ClosedTurn[])
     return {
       anchorSeq: turn.startSeq,
 
+      // 轮内第一条 user 退到前一轮的 turn/end（整轮重放）：留着本轮的 turn/start，上游重放会按
+      // `phase.turn + 1` 再开一轮，本轮就成了空轮（agent-loop 的 turn 推进不看未闭合轮）。
+      // 该轮里这条消息之前写下的配置事件由 branchOperation 重写保留。
       ...(userIndex === 0 ? {} : { rewindBoundary: event.seq }),
       queuedUsers: [edited, ...sameTurnFollowups, ...later],
       targetSeq: event.seq,
@@ -370,6 +375,29 @@ export function droppedCompactions(
 ): CompactionBracket[] {
   return compactionBrackets(events).filter(
     (bracket) => bracket.start.seq >= keepFrom && bracket.end.seq < targetSeq,
+  );
+}
+
+// 会话级配置事件：写入即「最后一条生效」，与某一轮的正文无关（分类同 session-rdb 的事件 schema）。
+const CONFIG_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "model/selection",
+  "permission/preset",
+  "approval/policy",
+  "sandbox/mode",
+  "plan/mode",
+  "agent-preset/selected",
+  "session-mode/selected",
+]);
+
+// 截断丢掉、但位于目标消息之前的配置事件：撤回整轮时它们要重写回保留前缀之后——否则当前生效的配置
+// 跟着撤回了。轮内后续 user 消息的边界不退整轮，这个区间自然为空（那些事件本来就在保留前缀里）。
+export function keptConfigEvents(
+  events: readonly SessionEvent[],
+  keepFrom: number,
+  targetSeq: number,
+): SessionEvent[] {
+  return events.filter(
+    (event) => event.seq >= keepFrom && event.seq < targetSeq && CONFIG_EVENT_TYPES.has(event.type),
   );
 }
 

@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "../client/controller.ts";
-import { SESSION_EDITOR_PATH } from "../shared.ts";
+import { SESSION_EDITOR_PATHS } from "../shared.ts";
 
 interface FetchCall {
   url: string;
@@ -167,7 +167,6 @@ describe("SessionEditorController（浏览器半）", () => {
 
     expect(applied).toBe(true);
     expect(JSON.parse(mutateCalls(calls)[0]!.body!)).toEqual({
-      action: "retry",
       sessionId: "s1",
       turn: 2,
       cascade: "truncate",
@@ -218,9 +217,8 @@ describe("SessionEditorController（浏览器半）", () => {
     expect(applied).toBe(true);
     const posts = mutateCalls(calls);
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.url).toBe(SESSION_EDITOR_PATH);
+    expect(posts[0]?.url).toBe(SESSION_EDITOR_PATHS.recall);
     expect(JSON.parse(posts[0]!.body!)).toEqual({
-      action: "recall",
       sessionId: "s1",
       eventSeq: 4,
     });

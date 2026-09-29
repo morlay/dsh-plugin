@@ -6,7 +6,8 @@ import {
   createPersisted,
   harness,
   SessionIdBrand,
-  SESSION_EDITOR_PATH,
+  SESSION_EDITOR_PATHS,
+  type SessionEditorAction,
   twoTurnLog,
 } from "@morlay/ui-conversation-message-actions/testing";
 import { closedTurns, editableMessages } from "@morlay/ui-conversation-message-actions/plan";
@@ -35,7 +36,7 @@ async function harnessWithRoutes(): Promise<{
   connectionRegistrations: string[];
   ctx: Awaited<ReturnType<typeof harness>>["ctx"];
   editor: Awaited<ReturnType<typeof harness>>["editor"];
-  handler: () => RouteHandler;
+  handler: (action?: SessionEditorAction) => RouteHandler;
   dispose: () => Promise<void>;
 }> {
   const registered: RegisteredRoute[] = [];
@@ -63,9 +64,9 @@ async function harnessWithRoutes(): Promise<{
     connectionRegistrations,
     ctx,
     editor,
-    handler: () => {
-      const route = registered.find((item) => item.path === SESSION_EDITOR_PATH);
-      if (route === undefined) throw new Error("webServer 上没有注册 session-editor 路由");
+    handler: (action: SessionEditorAction = "edit") => {
+      const route = registered.find((item) => item.path === SESSION_EDITOR_PATHS[action]);
+      if (route === undefined) throw new Error(`webServer 上没有注册 ${action} 路由`);
       return route.handler;
     },
     dispose,
@@ -87,7 +88,7 @@ function postRequest(body: unknown): FakeRequest {
   const chunk = Buffer.from(JSON.stringify(body));
   const request: FakeRequest = {
     method: "POST",
-    url: SESSION_EDITOR_PATH,
+    url: SESSION_EDITOR_PATHS.edit,
     on(event, listener) {
       if (event === "data") queueMicrotask(() => listener(chunk));
       if (event === "end") queueMicrotask(() => listener());
@@ -120,11 +121,13 @@ describe("session-editor 的 webServer 路由", () => {
     const { registered, connectionRegistrations, dispose } = await harnessWithRoutes();
     try {
       // 别的插件（session-rdb）也会往 webServer 注册，这里只看 session-editor 自己那条
-      const ours = registered.filter((route) => route.path === SESSION_EDITOR_PATH);
-      expect(ours).toHaveLength(1);
-      expect(ours[0]).toMatchObject({ kind: "exact", path: SESSION_EDITOR_PATH });
-      // 被删掉的 /api 前缀面：`/api/session-editor` 不该再出现在任何注册面上
-      expect(registered.map((route) => route.path)).not.toContain(`/api${SESSION_EDITOR_PATH}`);
+      const ours = registered.filter((route) =>
+        Object.values(SESSION_EDITOR_PATHS).some((path) => path === route.path),
+      );
+      expect(ours.map((route) => route.path).sort()).toEqual(
+        Object.values(SESSION_EDITOR_PATHS).sort(),
+      );
+      for (const route of ours) expect(route.kind).toBe("exact");
       expect(connectionRegistrations).toEqual([]);
     } finally {
       await dispose();
@@ -136,9 +139,8 @@ describe("session-editor 的 webServer 路由", () => {
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
       const edited = fakeResponse();
-      await handler()(
+      await handler("edit")(
         postRequest({
-          action: "edit",
           sessionId: "s1",
           eventSeq: 1,
           blockIndex: 0,
@@ -165,10 +167,7 @@ describe("session-editor 的 webServer 路由", () => {
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
       const recalled = fakeResponse();
-      await handler()(
-        postRequest({ action: "recall", sessionId: "s1", eventSeq: 7 }),
-        recalled.response,
-      );
+      await handler("recall")(postRequest({ sessionId: "s1", eventSeq: 7 }), recalled.response);
 
       expect(recalled.code).toBe(200);
       expect(JSON.parse(recalled.body)).toEqual({ sessionId: "s1", queuedTurns: 0, live: false });
@@ -183,19 +182,16 @@ describe("session-editor 的 webServer 路由", () => {
     }
   });
 
-  it("未知 action 与缺参数都是 400", async () => {
+  it("缺参数是 400", async () => {
     const { handler, dispose } = await harnessWithRoutes();
     try {
-      const unknown = fakeResponse();
-      await handler()(postRequest({ action: "explode", sessionId: "s1" }), unknown.response);
-      expect(unknown.code).toBe(400);
-      expect(JSON.parse(unknown.body)).toMatchObject({
-        error: expect.stringContaining("action"),
-      });
+      const missingSession = fakeResponse();
+      await handler("reroll")(postRequest({}), missingSession.response);
+      expect(missingSession.code).toBe(400);
 
-      const missing = fakeResponse();
-      await handler()(postRequest({ action: "reroll" }), missing.response);
-      expect(missing.code).toBe(400);
+      const missingSeq = fakeResponse();
+      await handler("recall")(postRequest({ sessionId: "s1" }), missingSeq.response);
+      expect(missingSeq.code).toBe(400);
     } finally {
       await dispose();
     }
@@ -206,9 +202,8 @@ describe("session-editor 的 webServer 路由", () => {
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
       const conflicted = fakeResponse();
-      await handler()(
+      await handler("edit")(
         postRequest({
-          action: "edit",
           sessionId: "s1",
           eventSeq: 9_999,
           blockIndex: 0,
@@ -228,7 +223,7 @@ describe("session-editor 的 webServer 路由", () => {
     const { handler, dispose } = await harnessWithRoutes();
     try {
       const rejected = fakeResponse();
-      await handler()(withoutBody("DELETE", SESSION_EDITOR_PATH), rejected.response);
+      await handler("edit")(withoutBody("DELETE", SESSION_EDITOR_PATHS.edit), rejected.response);
       expect(rejected.code).toBe(405);
     } finally {
       await dispose();

@@ -105,6 +105,9 @@ const EVENT_SUBAGENT_SQL = `EXISTS (SELECT 1 FROM t_session_events sb
 // `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。
 const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
 
+// 引用标记的分批重算：一次绑定的参数有上限，按块走。
+const REFRESH_FLAG_CHUNK = 400;
+
 function withEvent(expression: string, column: string): string {
   return expression.replace("%EVENT%", column);
 }
@@ -692,11 +695,13 @@ export class SqliteBackend implements Backend {
       .run();
   }
 
-  private async deleteBridgeTail(id: SessionId, fromSequence: number): Promise<void> {
-    this.db
-      .delete(tSessionEvents)
-      .where(and(eq(tSessionEvents.fSessionId, id), gte(tSessionEvents.fSequence, fromSequence)))
-      .run();
+  private async deleteBridgeTail(id: SessionId, fromSequence: number): Promise<readonly string[]> {
+    const rows = this.db.$client
+      .prepare(
+        "DELETE FROM t_session_events WHERE f_session_id = ? AND f_sequence >= ? RETURNING f_event_id",
+      )
+      .all(id, fromSequence) as Array<{ f_event_id: string }>;
+    return rows.map((row) => row.f_event_id);
   }
 
   private async getPrevBridge(
@@ -710,11 +715,14 @@ export class SqliteBackend implements Backend {
       .get() as { fEventId: string; fSequence: number } | undefined;
   }
 
-  private async deleteSession(id: SessionId): Promise<void> {
-    this.db.delete(tSessionEvents).where(eq(tSessionEvents.fSessionId, id)).run();
+  private async deleteSession(id: SessionId): Promise<readonly string[]> {
+    const rows = this.db.$client
+      .prepare("DELETE FROM t_session_events WHERE f_session_id = ? RETURNING f_event_id")
+      .all(id) as Array<{ f_event_id: string }>;
     this.db.delete(tWorkspaceSessions).where(eq(tWorkspaceSessions.fSessionId, id)).run();
     this.db.delete(tSessionProjcacheRows).where(eq(tSessionProjcacheRows.fSessionId, id)).run();
     this.db.delete(tSessions).where(eq(tSessions.fSessionId, id)).run();
+    return rows.map((row) => row.f_event_id);
   }
 
   // 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。
@@ -747,16 +755,23 @@ export class SqliteBackend implements Backend {
     return rows.map((row) => row.id as SessionId);
   }
 
-  private async deleteSessions(ids: SessionId[]): Promise<number> {
-    if (ids.length === 0) return 0;
-    this.db.delete(tSessionEvents).where(inArray(tSessionEvents.fSessionId, ids)).run();
+  private async deleteSessions(
+    ids: SessionId[],
+  ): Promise<{ deleted: number; eventIds: readonly string[] }> {
+    if (ids.length === 0) return { deleted: 0, eventIds: [] };
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = this.db.$client
+      .prepare(
+        `DELETE FROM t_session_events WHERE f_session_id IN (${placeholders}) RETURNING f_event_id`,
+      )
+      .all(...ids) as Array<{ f_event_id: string }>;
     this.db.delete(tWorkspaceSessions).where(inArray(tWorkspaceSessions.fSessionId, ids)).run();
     this.db
       .delete(tSessionProjcacheRows)
       .where(inArray(tSessionProjcacheRows.fSessionId, ids))
       .run();
     const info = this.db.delete(tSessions).where(inArray(tSessions.fSessionId, ids)).run();
-    return Number(info.changes);
+    return { deleted: Number(info.changes), eventIds: rows.map((row) => row.f_event_id) };
   }
 
   // 用量聚合：token 用量沿 `t_event_usage` 的用量行，活动计数（轮次 / 步骤 / 用户输入 / 工具调用）
@@ -1020,15 +1035,21 @@ export class SqliteBackend implements Backend {
       .run(id);
   }
 
-  // 全量重算用量行的引用标记：rewind 截断 / fork 复用 / 会话删除都会让「引用」跨会话变化，
-  // 只按本会话判定不够。低频路径，一次全表 UPDATE（3 万行量级）。
-  async refreshEventUsageFlags(): Promise<void> {
-    const eventId = "t_event_usage.f_event_id";
-    this.db.$client.exec(
-      `UPDATE t_event_usage SET
-         f_referenced = ${withEvent(EVENT_REFERENCED_SQL, eventId)},
-         f_subagent = ${withEvent(EVENT_SUBAGENT_SQL, eventId)}`,
-    );
+  // 重算这些用量行的引用标记：引用只会在「这些事件行的桥接行集合变化」时才变，所以按事件 id 收口。
+  // 全表 UPDATE（3 万行量级、秒级）没有调用点了：撤回与 fork 都不该动统计。
+  async refreshEventUsageFlags(eventIds: readonly string[]): Promise<void> {
+    for (let at = 0; at < eventIds.length; at += REFRESH_FLAG_CHUNK) {
+      const chunk = eventIds.slice(at, at + REFRESH_FLAG_CHUNK);
+      const placeholders = chunk.map(() => "?").join(", ");
+      this.db.$client
+        .prepare(
+          `UPDATE t_event_usage SET
+             f_referenced = ${withEvent(EVENT_REFERENCED_SQL, "f_event_id")},
+             f_subagent = ${withEvent(EVENT_SUBAGENT_SQL, "f_event_id")}
+           WHERE f_event_id IN (${placeholders})`,
+        )
+        .run(...chunk);
+    }
   }
 
   async deleteSessionStats(id: SessionId): Promise<void> {

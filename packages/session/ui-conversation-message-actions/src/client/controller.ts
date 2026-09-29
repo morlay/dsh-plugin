@@ -2,14 +2,11 @@ import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import {
-  SESSION_EDITOR_PATH,
+  SESSION_EDITOR_PATHS,
   type EditableMessageBlock,
   type SessionEditorOperation,
   type VersionOperation,
 } from "../shared.ts";
-
-// 编辑器的 HTTP 路径：宿主（web 与桌面）在同一张路由表上服务它，页面不再按 ownsHost 加前缀。
-const EDITOR_API_PATH = SESSION_EDITOR_PATH;
 
 // 会话编辑的浏览器半门面：只保留消息渲染面真正用到的两个动作；动作成功后只刷新会话列表元数据，
 // 会话窗口交给上游的事件流收敛（不重建窗口、不整页重载）。
@@ -58,10 +55,11 @@ export class SessionEditorController {
     if (this.pending !== null) return false;
     this.pending = operation.action;
     try {
-      const response = await fetch(EDITOR_API_PATH, {
+      const { action, ...payload } = operation;
+      const response = await fetch(SESSION_EDITOR_PATHS[action], {
         method: "POST",
         headers: { accept: "application/json", "content-type": "application/json" },
-        body: JSON.stringify(operation),
+        body: JSON.stringify(payload),
       });
       const value = (await response.json()) as unknown;
       if (!response.ok) {

@@ -227,3 +227,81 @@ describe("压缩后第一条用户数据的 rewind / retry / edit", () => {
     }
   });
 });
+
+// 会话级配置事件（`sandbox/mode` 这类「最后一条生效」）落在 turn/start 之后、目标 user 消息之前：
+// 撤回整轮时它们要被重写保留（与压缩补回同一套机制），否则当前生效的配置随撤回一起没了。
+function configuredSession(): { events: SessionEvent[]; targetSeq: number } {
+  const events = [
+    ...turnLog(0, 1, { users: [{ id: "t1-u1", text: "第一轮问题" }], time: 0 }),
+    { type: "turn/start", seq: SessionSeq(6), time: 6, data: { turn: 2 } },
+    { type: "sandbox/mode", seq: SessionSeq(7), time: 7, data: { mode: "workspace-write" } },
+    { type: "step/start", seq: SessionSeq(8), time: 8, data: { turn: 2, step: 1 } },
+    userMessage(9, "t2-u1", "第二轮问题", 9),
+    assistantMessage(10, 2, 1, "t2-a1", "第二轮回答", 10),
+    { type: "step/end", seq: SessionSeq(11), time: 11, data: { turn: 2, step: 1 } },
+    {
+      type: "turn/end",
+      seq: SessionSeq(12),
+      time: 12,
+      data: { turn: 2, reason: { kind: "completed" } },
+    },
+  ] as unknown as SessionEvent[];
+  return { events, targetSeq: 9 };
+}
+
+// 第一轮完整保留（撤回边界落在它的 turn/end），配置事件重写在其后。
+const KEPT_WITH_CONFIG = [
+  "0:turn/start",
+  "1:step/start",
+  "2:user/message",
+  "3:assistant/message",
+  "4:step/end",
+  "5:turn/end",
+  "6:sandbox/mode",
+];
+
+describe("目标消息之前的配置事件", () => {
+  it("recall 整轮：配置事件重写保留在保留前缀之后", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = configuredSession();
+      await createPersisted(ctx, "src", events);
+
+      await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+      });
+
+      const after = (await rdb(ctx).load(SessionIdBrand("src"))).events;
+      expect(outline(after)).toEqual(KEPT_WITH_CONFIG);
+      const restored = after.at(-1)?.data as { mode?: string } | undefined;
+      expect(restored?.mode).toBe("workspace-write");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit 整轮：配置事件重写保留，不重复写", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = configuredSession();
+      await createPersisted(ctx, "src", events);
+
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+        blockIndex: 0,
+        text: "第二轮问题（改）",
+        cascade: "truncate",
+      });
+
+      const after = (await rdb(ctx).load(SessionIdBrand("src"))).events;
+      expect(outline(after)).toEqual(KEPT_WITH_CONFIG);
+      expect(after.filter((event) => event.type === "sandbox/mode")).toHaveLength(1);
+    } finally {
+      await dispose();
+    }
+  });
+});

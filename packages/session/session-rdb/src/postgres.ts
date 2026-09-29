@@ -38,6 +38,9 @@ const postgresMigrationsDir = fileURLToPath(new URL("../drizzle/postgres/", impo
 
 const pgWriteQueues = new Map<string, Promise<void>>();
 
+// 引用标记的分批重算：一次绑定的参数有上限，按块走（与 sqlite 侧同值）。
+const REFRESH_FLAG_CHUNK = 400;
+
 // 按介质（连接串 + schema）串行化写事务，与 SQLite 侧的 `enqueueSqliteTx` 同形。
 function enqueuePgWrite<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const tail = pgWriteQueues.get(key) ?? Promise.resolve();
@@ -485,26 +488,22 @@ export class PostgresBackend implements Backend {
     exec: PgAsyncDatabase<NodePgQueryResultHKT>,
     id: SessionId,
     fromSequence: number,
-  ): Promise<void> {
-    await exec
-      .delete(this.tables["t_session_events"])
-      .where(
-        and(
-          eq(this.tables["t_session_events"].fSessionId, id),
-          gte(this.tables["t_session_events"].fSequence, fromSequence),
-        ),
-      )
-      .execute();
+  ): Promise<readonly string[]> {
+    const table = this.tables["t_session_events"];
+    const result = (await exec.execute(sql`
+      DELETE FROM ${table} WHERE f_session_id = ${id} AND f_sequence >= ${fromSequence}
+      RETURNING f_event_id
+    `)) as unknown as { rows: Array<{ f_event_id: string }> };
+    return result.rows.map((row) => row.f_event_id);
   }
 
   private async deleteSession(
     exec: PgAsyncDatabase<NodePgQueryResultHKT>,
     id: SessionId,
-  ): Promise<void> {
-    await exec
-      .delete(this.tables["t_session_events"])
-      .where(eq(this.tables["t_session_events"].fSessionId, id))
-      .execute();
+  ): Promise<readonly string[]> {
+    const result = (await exec.execute(sql`
+      DELETE FROM ${this.tables["t_session_events"]} WHERE f_session_id = ${id} RETURNING f_event_id
+    `)) as unknown as { rows: Array<{ f_event_id: string }> };
     await exec
       .delete(this.tables["t_workspace_sessions"])
       .where(eq(this.tables["t_workspace_sessions"].fSessionId, id))
@@ -517,6 +516,7 @@ export class PostgresBackend implements Backend {
       .delete(this.tables["t_sessions"])
       .where(eq(this.tables["t_sessions"].fSessionId, id))
       .execute();
+    return result.rows.map((row) => row.f_event_id);
   }
 
   // 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。
@@ -561,12 +561,16 @@ export class PostgresBackend implements Backend {
   private async deleteSessions(
     exec: PgAsyncDatabase<NodePgQueryResultHKT>,
     ids: SessionId[],
-  ): Promise<number> {
-    if (ids.length === 0) return 0;
-    await exec
-      .delete(this.tables["t_session_events"])
-      .where(inArray(this.tables["t_session_events"].fSessionId, ids))
-      .execute();
+  ): Promise<{ deleted: number; eventIds: readonly string[] }> {
+    if (ids.length === 0) return { deleted: 0, eventIds: [] };
+    const removed = (await exec.execute(sql`
+      DELETE FROM ${this.tables["t_session_events"]}
+       WHERE f_session_id IN (${sql.join(
+         ids.map((id) => sql`${id}`),
+         sql`, `,
+       )})
+      RETURNING f_event_id
+    `)) as unknown as { rows: Array<{ f_event_id: string }> };
     await exec
       .delete(this.tables["t_workspace_sessions"])
       .where(inArray(this.tables["t_workspace_sessions"].fSessionId, ids))
@@ -579,7 +583,10 @@ export class PostgresBackend implements Backend {
       .delete(this.tables["t_sessions"])
       .where(inArray(this.tables["t_sessions"].fSessionId, ids))
       .execute()) as unknown as { rowCount?: number | null };
-    return result.rowCount ?? 0;
+    return {
+      deleted: Number(result.rowCount ?? 0),
+      eventIds: removed.rows.map((row) => row.f_event_id),
+    };
   }
 
   async vacuum(): Promise<void> {
@@ -931,20 +938,27 @@ export class PostgresBackend implements Backend {
     `);
   }
 
-  // 全量重算用量行的引用标记（rewind / fork / 会话删除之后）。
-  async refreshEventUsageFlags(): Promise<void> {
+  // 重算这些用量行的引用标记（会话删除 / 日志重写之后；撤回与 fork 都不该动统计）。
+  async refreshEventUsageFlags(eventIds: readonly string[]): Promise<void> {
     const tEventUsage = this.tables["t_event_usage"];
     const tSessionEvents = this.tables["t_session_events"];
     const tSessions = this.tables["t_sessions"];
-    await this.db.execute(sql`
-      UPDATE ${tEventUsage} SET
-        f_referenced = (EXISTS (SELECT 1 FROM ${tSessionEvents} rb
-                                 WHERE rb.f_event_id = ${tEventUsage}.f_event_id))::int,
-        f_subagent = (EXISTS (SELECT 1 FROM ${tSessionEvents} sb
-                                JOIN ${tSessions} ss ON ss.f_session_id = sb.f_session_id
-                               WHERE sb.f_event_id = ${tEventUsage}.f_event_id
-                                 AND ss.f_origin = 'subagent'))::int
-    `);
+    for (let at = 0; at < eventIds.length; at += REFRESH_FLAG_CHUNK) {
+      const chunk = eventIds.slice(at, at + REFRESH_FLAG_CHUNK);
+      await this.db.execute(sql`
+        UPDATE ${tEventUsage} SET
+          f_referenced = (EXISTS (SELECT 1 FROM ${tSessionEvents} rb
+                                   WHERE rb.f_event_id = ${tEventUsage}.f_event_id))::int,
+          f_subagent = (EXISTS (SELECT 1 FROM ${tSessionEvents} sb
+                                  JOIN ${tSessions} ss ON ss.f_session_id = sb.f_session_id
+                                 WHERE sb.f_event_id = ${tEventUsage}.f_event_id
+                                   AND ss.f_origin = 'subagent'))::int
+         WHERE f_event_id IN (${sql.join(
+           chunk.map((id) => sql`${id}`),
+           sql`, `,
+         )})
+      `);
+    }
   }
 
   async deleteSessionStats(id: SessionId): Promise<void> {
