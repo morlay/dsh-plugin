@@ -1,8 +1,9 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionDeletionError, type SessionPersistenceRdb } from "./index.ts";
+import { SESSION_DELETE_PATH } from "./routes.ts";
 
-export const SESSION_DELETE_PATH = "/api/session.delete";
+export { SESSION_DELETE_PATH };
 
 const STATUS_OF_DELETION_ERROR: Record<SessionDeletionError["code"], number> = {
   SESSION_NOT_FOUND: 404,

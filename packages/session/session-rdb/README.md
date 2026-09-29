@@ -26,7 +26,8 @@ PostgreSQL 同理：`type: postgres` + `connectionString`（可加 `schema`，�
 这一行生效（换后端 = 换库，旧数据留在旧后端）；字段、默认值与设置页行为见
 [设计总览](.agents/designs/20260917-设计总览.md) 的「配置门面」。
 
-管理面的 HTTP 通道（均为 `POST`，body `{ sessionId }` 或列表请求 `{ query?, includeSubagents?, page?, pageSize? }`）：
-`/api/session.rows`（完整语料，含归档）、`/api/session.export`、`/api/session.delete`、`/api/session.gc`、
-`/api/session.usage`。旧 `$DSH_HOME/storages` JSON 的导入是包内 API `importStorages`（`src/import-storages.ts`，
-不在包出口里）。
+管理面的 HTTP 通道统一挂在 `/api/morlay/v1/session` 前缀下（均为 `POST`，body `{ sessionId }` 或列表请求
+`{ query?, includeSubagents?, page?, pageSize? }`）：`/rows`（完整语料，含归档）、`/export`、`/import`、
+`/delete`、`/gc`、`/usage`（前缀与上游分家的理由见
+[ADR-管理面HTTP路由前缀与上游分家](.agents/adrs/20260929-管理面HTTP路由前缀与上游分家.md)）。旧
+`$DSH_HOME/storages` JSON 的导入是包内 API `importStorages`（`src/import-storages.ts`，不在包出口里）。

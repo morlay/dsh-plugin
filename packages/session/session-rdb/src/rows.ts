@@ -1,9 +1,10 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { Backend } from "./backend.ts";
+import { SESSION_ROWS_PATH } from "./routes.ts";
 
 // 管理面的会话列表路由：完整语料（含归档）+ 标题 + 最后活动时间，与官方 `session/list` 分开
 // （见 ADR-会话列表两条路）。
-export const SESSION_ROWS_PATH = "/api/session.rows";
+export { SESSION_ROWS_PATH };
 
 export interface SessionRowsItem {
   sessionId: string;

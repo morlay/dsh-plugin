@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 注入面闭环：页面拿到的三个动作都打在已确认的接缝上——取消归档委托 uiWorkspace，
-// 删除打 POST /api/session.delete，导入打 POST /api/session.import（不带 sessionId = 新建会话）；
+// 删除打 POST /api/morlay/v1/session/delete，导入打 POST /api/morlay/v1/session/import（不带 sessionId = 新建会话）；
 // 成功路径刷新会话列表，失败路径把 host 的错误码带出来且不刷新。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionId } from "@deepseek-ai/dsh-session";
@@ -145,7 +145,7 @@ describe("对话管理注入面", () => {
     const b = bench();
     const calls = stubFetch(200, { deleted: "s1" });
     await b.controller.face.remove("s1" as SessionId);
-    expect(calls).toEqual([{ url: "/api/session.delete", body: { sessionId: "s1" } }]);
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/delete", body: { sessionId: "s1" } }]);
     expect(b.ports.refreshes).toBe(1);
   });
 
@@ -166,7 +166,7 @@ describe("对话管理注入面", () => {
     );
     expect(String(id)).toBe("session-imported");
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe("/api/session.import");
+    expect(calls[0]?.url).toBe("/api/morlay/v1/session/import");
     expect(Object.keys(calls[0]?.body as object)).toEqual(["zip"]);
     expect(b.ports.refreshes).toBe(1);
   });
@@ -187,7 +187,7 @@ describe("对话管理注入面", () => {
 
     await b.controller.face.exportZip("s1" as SessionId);
 
-    expect(calls).toEqual([{ url: "/api/session.export", body: { sessionId: "s1" } }]);
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/export", body: { sessionId: "s1" } }]);
     expect(download.created).toHaveLength(1);
     expect(download.downloaded).toEqual(["s1.zip"]);
     expect(b.ports.refreshes).toBe(0);
@@ -207,7 +207,7 @@ describe("对话管理注入面", () => {
 
     const result = await b.controller.face.collectGarbage();
 
-    expect(calls).toEqual([{ url: "/api/session.gc", body: {} }]);
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/gc", body: {} }]);
     expect(result).toEqual({ orphanSessions: 3, orphanEvents: 12, stoppedAgents: 2 });
     expect(b.ports.refreshes).toBe(1);
   });
@@ -242,7 +242,7 @@ describe("对话管理注入面", () => {
 
     const page = await b.controller.face.listRows({ page: 1, pageSize: 20 });
 
-    expect(calls[0]?.url).toBe("/api/session.rows");
+    expect(calls[0]?.url).toBe("/api/morlay/v1/session/rows");
     expect(page.total).toBe(2);
     expect(page.items.map((row) => row.sessionId)).toEqual(["s1", "s2"]);
     expect(page.items[1]).toMatchObject({ archived: true, title: null, origin: "subagent" });
@@ -274,7 +274,7 @@ describe("对话管理注入面", () => {
 
     const report = await b.controller.face.loadUsage("all");
 
-    expect(calls).toEqual([{ url: "/api/session.usage", body: { range: "all" } }]);
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/usage", body: { range: "all" } }]);
     expect(report.totals.totalTokens).toBe(165);
     expect(report.subagent.inputTokens).toBe(50);
     expect(b.ports.refreshes).toBe(0);
@@ -290,6 +290,6 @@ describe("对话管理注入面", () => {
     const b = bench();
     const calls = stubFetch(200, REPORT_PAYLOAD);
     await b.controller.face.loadUsage("week");
-    expect(calls).toEqual([{ url: "/api/session.usage", body: { range: "week" } }]);
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/usage", body: { range: "week" } }]);
   });
 });

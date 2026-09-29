@@ -1,15 +1,15 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
 
-// host 侧已存在的会话路由。
-export const SESSION_DELETE_PATH = "/api/session.delete";
-export const SESSION_IMPORT_PATH = "/api/session.import";
-export const SESSION_EXPORT_PATH = "/api/session.export";
-export const SESSION_GC_PATH = "/api/session.gc";
-export const SESSION_USAGE_PATH = "/api/session.usage";
+// host 侧的会话管理面路由：路径的 home 是 `@morlay/session-rdb` 的 `src/routes.ts`，改前缀要两边同步。
+export const SESSION_DELETE_PATH = "/api/morlay/v1/session/delete";
+export const SESSION_IMPORT_PATH = "/api/morlay/v1/session/import";
+export const SESSION_EXPORT_PATH = "/api/morlay/v1/session/export";
+export const SESSION_GC_PATH = "/api/morlay/v1/session/gc";
+export const SESSION_USAGE_PATH = "/api/morlay/v1/session/usage";
 
 // 管理面的会话行（**完整语料，含归档**）：我们自己的路由，与官方 `session/list` 分开——那条按部署策略
 // 默认排除归档（给上游 UI 用），归档集的管理动作需要完整集合。
-export const SESSION_ROWS_PATH = "/api/session.rows";
+export const SESSION_ROWS_PATH = "/api/morlay/v1/session/rows";
 
 // 一行会话：标题、origin、最后活动时间、归档标记与工作区归属都由 host 给出。
 export interface SessionRowRecord {

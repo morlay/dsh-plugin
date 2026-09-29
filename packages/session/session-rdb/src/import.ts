@@ -9,10 +9,11 @@ import { unzip } from "fflate";
 import { replaceLiveSessionLog } from "./branch.ts";
 import { restoreCatalog } from "./legacy.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
+import { SESSION_IMPORT_PATH } from "./routes.ts";
 
 export const SESSION_LOG_ARTIFACT_FILENAME = "session.jsonl";
 
-export const SESSION_IMPORT_PATH = "/api/session.import";
+export { SESSION_IMPORT_PATH };
 
 const MAX_IMPORT_ZIP_BYTES = 64 * 1024 * 1024;
 

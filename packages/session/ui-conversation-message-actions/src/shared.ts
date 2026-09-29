@@ -1,7 +1,7 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import type { CascadePolicy } from "@morlay/session-branch";
 
-export const SESSION_EDITOR_PATH = "/session-editor";
+export const SESSION_EDITOR_PATH = "/api/morlay/v1/session/editor";
 
 export type { VersionOperation } from "@morlay/session-branch";
 

@@ -2,8 +2,9 @@ import { strToU8, zip } from "fflate";
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import type { SessionPersistenceRdb } from "./index.ts";
+import { SESSION_EXPORT_PATH } from "./routes.ts";
 
-export const SESSION_EXPORT_PATH = "/api/session.export";
+export { SESSION_EXPORT_PATH };
 
 // 文件名只保留安全字符：会话 id 来自请求体，会写进 Content-Disposition。
 function safeFilename(sessionId: string): string {

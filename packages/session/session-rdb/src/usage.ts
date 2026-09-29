@@ -1,7 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
+import { SESSION_USAGE_PATH } from "./routes.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 
-export const SESSION_USAGE_PATH = "/api/session.usage";
+export { SESSION_USAGE_PATH };
 
 // 时间范围的语义键：`all` 不限；`day` / `week` 是**本地自然日 / 自然周**（周一起算）；
 // `7d` / `30d` / `90d` 是**最近 N 个自然日**（含今天）。

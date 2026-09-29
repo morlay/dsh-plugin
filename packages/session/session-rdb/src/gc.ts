@@ -1,7 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
+import { SESSION_GC_PATH } from "./routes.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 
-export const SESSION_GC_PATH = "/api/session.gc";
+export { SESSION_GC_PATH };
 
 interface GcAgentLike {
   cancel?(cause: { kind: "user" }, options?: { keepInbox?: boolean }): void;
