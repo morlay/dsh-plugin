@@ -1,6 +1,6 @@
 {
   "name": "@morlay/ui-conversation-manager",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "「对话管理」全局面板页（浏览器半）：会话与统计两层 Tabs——会话视图给出全量会话（含已归档）的搜索、分页、归档 / 取消归档 / 导出 / 删除、导入为新会话与孤儿数据 GC，统计视图给出全部对话的 token 用量。",
   "keywords": [
     "archived-sessions",

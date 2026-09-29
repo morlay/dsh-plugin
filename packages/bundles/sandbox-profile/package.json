@@ -1,6 +1,6 @@
 {
   "name": "@morlay/sandbox-profile",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "可配置沙箱与审批的运行时策略面：禁用官方 sandbox / fs-sandbox 两行、插入替换行、给出访问规则的值，由替换行接管运行时快照（sandbox:policy / approval:policy）。",
   "keywords": [
     "bundle-entry",
