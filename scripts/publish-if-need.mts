@@ -63,14 +63,18 @@ function runInherited(command: string, args: string[]): Promise<number | null> {
 const REGISTRY = resolveRegistry();
 
 // 每个包在自己的目录下被 `pnpm -r exec` 唤起（justfile 的 publish 目标），只处理当前包
-const { name, version } = JSON.parse(await readFile("package.json", "utf8")) as {
+const { name, version } = JSON.parse(
+  await readFile("package.json", "utf8"),
+) as {
   name: string;
   version: string;
 };
 
 // 只发布 `@morlay/*` 下的包：上游 `@deepseek-ai/*` 由 deepseek-harness 自己发布，apps/* 等其余成员不发布。
 if (!name.startsWith("@morlay/")) {
-  console.log(`skip ${name}: only @morlay/* packages are published from this repo`);
+  console.log(
+    `skip ${name}: only @morlay/* packages are published from this repo`,
+  );
   process.exit(0);
 }
 
@@ -85,7 +89,10 @@ if (view.status === 0) {
   console.log(`skip ${name}: ${version} already published`);
   process.exit(0);
 }
-if (!view.stderr.includes("ERR_PNPM_PACKAGE_NOT_FOUND")) {
+if (!(
+  view.stderr.includes("ERR_PNPM_PACKAGE_NOT_FOUND") ||
+  view.stderr.includes("ERR_PNPM_FETCH_404")
+)) {
   process.stderr.write(view.stderr);
   process.exit(1);
 }
@@ -101,4 +108,6 @@ const status = await runInherited("pnpm", [
   "--registry",
   REGISTRY,
 ]);
-if (status !== 0) process.exit(status ?? 1);
+if (status !== 0 && status != 409) {
+  process.exit(status ?? 1);
+}
