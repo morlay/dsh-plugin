@@ -4,6 +4,7 @@
 
 import type { Volatile } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
+import { POLICY_NAMES } from "./shared.ts";
 
 // 一个模式的提示词：两段文本，注册成 agent 作用域的 `deployment:persona-prefix` / `-suffix` section。
 export interface SessionModePersona {
@@ -30,9 +31,10 @@ export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
 // 一个模式：提示词 + 能力开关。这份形状是 **schema 归一化之后**的（每个字段都有值，schema 用默认补上），
 // 配置里能省略哪些字段看 `modeSchema` 的 default。
 export interface SessionMode {
-  // 这个模式挂在哪个 **agent preset** 上（官方四个，或本部署自己注册的那一份，见 `mode-sources.ts` 的
-  // `MODE_PRESET_ID`）。preset 决定这个 agent 有哪些行，模式只决定"这些行怎么被用"（`allowTools` 里 preset 没有的
-  // 工具自动跳过）；**可以共享**（共享时反查无从下手，见 `SessionModes.modeForPreset`），空串表示不挂。
+  // 这个模式挂在哪个 **agent preset** 上（官方四个，或本部署自己注册的那一份）。**可选**：不写（schema 里是空串）
+  // 就是不绑——选这个模式不换 preset，会话保持它当前挂着的那份，行清单由那份 preset 提供；模式自己的那几项扩展
+  // （persona / 工具名单 / policy 名单 / 三个开关 / `defaultModel`）在任意 preset 上都照常生效。
+  // 写了才在切模式时切过去；**可以共享**（共享时反查无从下手，见 `SessionModes.modeForPreset`）。
   readonly preset: string;
   // 模式的展示名（选择面归官方 roster；这里留着做事实文案）。
   readonly name: string;
@@ -43,17 +45,38 @@ export interface SessionMode {
   // 该模式的提示词。
   readonly persona: SessionModePersona;
   // 这个模式能用哪些工具；其余工具既不进模型目录、调用也被执行层拒绝，它们自己的说明 section
-  // （`tool:<工具名>`）也不留在提示词里。**至少给一个**——想要"全都要"就列出全部，别留空。
+  // （`tool:<工具名>`）也不留在提示词里。**留空表示不设收窄**：这个会话用它挂着的 preset 装着的全部工具
+  // （想收窄就列名单——"全都要"不需要抄一份清单）。
   readonly allowTools: string[];
-  // 是否要 instruction 类注入（工作区指令、技能目录、用法正文）。缺省要；`false` 表示这个模式一条都不要
-  // ——对话模式就是它。开关由 `@morlay/dsh-context-assembler/scope` 落到通道上。
+  // 这个模式**不用**哪些工具（黑名单）：从 `allowTools` 定下的那份里减掉（`allowTools` 留空时就是从全部里减）。
+  // 留空表示不禁任何工具。同时命中两份名单时以这里为准（deny 优先）。
+  readonly denyTools: string[];
+  // 上游 policy 规则的**生效白名单**：留空（或不写）表示全部规则照旧生效；有值表示只有列出的那些生效，
+  // 其余的按 `denyPolicies` 那一套被绕过。名单见 `POLICY_NAMES`。空数组与不写同义。
+  readonly allowPolicies: string[];
+  // 上游 policy 规则的黑名单：列出的规则**禁用**——上游在那条 waterfall 上的裁决（连它抛出的拒绝）被丢掉，
+  // 调用按"没有这条规则"继续。留空表示一条都不禁；同时命中两份名单时以这里为准（deny 优先）。
+  readonly denyPolicies: string[];
+  // 是否要 instruction 类注入。缺省要；`false` 表示这个模式一条都不要——对话模式就是它。落到两处：丢掉官方
+  // `agent-instructions` 的注入（`agent/pre-step` 上过滤），以及关掉通道自己的降级注入。
   readonly instructions: boolean;
+  // 是否要技能目录。**可选**：不写就由这个模式自己的工具名单推导——`(allowTools 留空 ? 全部 : allowTools) −
+  // denyTools` 里含 `skill` 就要（`allowTools` 留空即"全部"，所以只有 `denyTools` 能把它推成 `false`）。
+  // `false` 表示这个模式不要技能目录：丢掉官方 `skill-catalog` 的注入（`skill` 工具的收窄仍归 `allowTools`）。
+  readonly skills?: boolean;
   // 是否要 runtime context（文件沙箱策略、审批策略那两条动态快照）。缺省要；`false` 表示这个模式不要它们
   // ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
   readonly runtimeContext: boolean;
   // 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
   // （`defaultModel` 是它所在模式的一个可加字段）。
   readonly defaultModel?: SessionModeModel;
+}
+
+// `skills` 不写时的推导：起点是白名单（留空 = 起点是全部工具，含 `skill`），减去黑名单，还留着 `skill` 就要技能
+// 目录。名单留空等于"全部工具"，所以只有 `denyTools` 能把它推成 `false`。
+export function derivedSkills(mode: Pick<SessionMode, "allowTools" | "denyTools">): boolean {
+  const allowed = mode.allowTools.length === 0 || mode.allowTools.includes("skill");
+  return allowed && !mode.denyTools.includes("skill");
 }
 
 // 每个字段都带 default：schema 的产物因此没有 `undefined` 键（`exactOptionalPropertyTypes` 下"缺省的键"
@@ -125,8 +148,8 @@ const modeSchema: z<SessionMode> = z.object({
     .default("")
     .description(
       localized({
-        zh: "这个模式挂哪个 agent preset（它的 id，官方或本部署自建的）：行清单由那个 preset 提供，几个模式可以共享同一个；空串表示不挂（只能由 applyTo / 继承使用）。",
-        en: "Which agent preset this mode rides on (its id, shipped or deployment-owned): that preset supplies the row list and several modes may share it; empty means none (usable only through applyTo / inheritance).",
+        zh: "这个模式挂哪个 agent preset（它的 id，官方或本部署自建的）：行清单由那份 preset 提供，几个模式可以共享同一个。留空就是不绑——选这个模式不换 preset，会话保持当前挂着的那份，模式自己的提示词、工具收口与开关照常生效。",
+        en: "Which agent preset this mode rides on (its id, shipped or deployment-owned): that preset supplies the row list, and several modes may share it. Leave it empty to bind none — selecting the mode then keeps whatever preset the session already has, while the mode's persona, tool narrowing, and switches still apply.",
       }),
     ),
   name: z
@@ -162,8 +185,35 @@ const modeSchema: z<SessionMode> = z.object({
     .default([])
     .description(
       localized({
-        zh: "这个会话能用的工具；其余既不进目录，调用也被拒。",
-        en: "Tools this session may use; everything else leaves the catalog and calls are refused.",
+        zh: "这个会话能用的工具；其余既不进目录，调用也被拒。**留空就是不设收窄**：用这个会话挂着的 preset 提供的全部工具。",
+        en: "Tools this session may use; everything else leaves the catalog and calls are refused. Leave it empty to narrow nothing: the session then uses every tool its preset provides.",
+      }),
+    ),
+  denyTools: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "这个模式不用的工具（黑名单）：从 `allowTools` 定下的那份里减掉（`allowTools` 留空就是从全部里减）。留空 = 一条都不禁；同时命中两份名单时以这里为准。",
+        en: "Tools this mode must not use (deny list): subtracted from whatever `allowTools` settled on (with an empty `allowTools`, from everything). Empty denies nothing; a name in both lists is denied.",
+      }),
+    ),
+  allowPolicies: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "上游 policy 规则的生效白名单（`fs/write-intent` / `fs/edit-intent`）：留空 = 全部规则照旧生效；有值 = 只有列出的生效，其余的被绕过。",
+        en: "Allow list of upstream policy rules that stay in force (`fs/write-intent` / `fs/edit-intent`): empty keeps every rule; when set, only the listed ones stay, and the others are bypassed.",
+      }),
+    ),
+  denyPolicies: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "上游 policy 规则的黑名单：列出的规则禁用（它的裁决连拒绝一起丢掉，调用按没有这条规则继续）。留空 = 一条都不禁；同时命中两份名单时以这里为准。",
+        en: "Deny list of upstream policy rules: the listed ones are disabled — their verdict (rejection included) is dropped and the call proceeds as if the rule were absent. Empty denies nothing; a name in both lists is denied.",
       }),
     ),
   instructions: z
@@ -171,10 +221,16 @@ const modeSchema: z<SessionMode> = z.object({
     .default(true)
     .description(
       localized({
-        zh: "是否要 instruction 类注入（工作区指令、技能目录、用法正文）。",
-        en: "Whether instruction-class injections apply (workspace instructions, skill catalog, guidance).",
+        zh: "是否要 instruction 类注入（工作区指令、用法正文）：`false` 时丢掉官方 `agent-instructions` 的注入，并关掉通道自己的降级注入。",
+        en: "Whether instruction-class injections apply (workspace instructions, guidance): `false` drops the official `agent-instructions` injection and turns off the channel's own demoted delivery.",
       }),
     ),
+  skills: z.boolean().description(
+    localized({
+      zh: "是否要技能目录（官方 `skill-catalog` 的注入）。**不写就按这个模式自己的工具名单推导**：`(allowTools 留空 ? 全部 : allowTools) − denyTools` 里含 `skill` 就要；写 `false` 就丢掉官方 `skill-catalog` 的注入（`skill` 工具的可见性仍归 `allowTools`）。",
+      en: "Whether the skill catalog applies (the official `skill-catalog` injection). Unset derives it from this mode's own tool lists: it applies when `(empty allowTools ? every tool : allowTools) − denyTools` contains `skill`; `false` drops the official `skill-catalog` injection (`skill` tool visibility still belongs to `allowTools`).",
+    }),
+  ),
   runtimeContext: z
     .boolean()
     .default(true)
@@ -216,11 +272,11 @@ export const Config: z<Config, ResolvedConfig> = z.object({
     .description(
       localized({
         zh:
-          "模式清单：id → 定义（persona / 允许的工具 / 角色）。改它对**已运行会话**不自动生效——重挂后新建的会话、" +
-          "或重新应用模式的会话才用新定义。",
+          "模式清单：id → 定义（persona / 工具名单 / 生效的 policy 规则 / 角色）。改它对**已运行会话**不自动生效" +
+          "——重挂后新建的会话、或重新应用模式的会话才用新定义。",
         en:
-          "Mode roster: id to definition (persona, allowed tools, role). Edits do not follow into already-running " +
-          "sessions; sessions created after the row is remounted use the new definition.",
+          "Mode roster: id to definition (persona, tool lists, effective policy rules, role). Edits do not follow " +
+          "into already-running sessions; sessions created after the row is remounted use the new definition.",
       }),
     )
     .volatile(),
@@ -229,7 +285,7 @@ export const Config: z<Config, ResolvedConfig> = z.object({
   models: z.dict(modelSchema).default({}).hidden(),
 });
 
-// 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、每个模式自己的默认模型。
+// 校验只需要看的那几件事：默认模式、每个模式的角色、工具名单、policy 名单与默认模型。
 interface Validated {
   readonly default: string;
   readonly modes: Readonly<
@@ -238,7 +294,14 @@ interface Validated {
       {
         // 空串合法的"不挂"；共享合法（差异由会话级收口表达），所以这里不做任何映射唯一性校验。
         readonly preset?: string;
+        // 留空合法：不设收窄（用 preset 的全部工具）。
         readonly allowTools?: readonly string[];
+        // 留空合法：不禁任何工具；与 `allowTools` 同时命中合法（deny 优先）。
+        readonly denyTools?: readonly string[];
+        // 留空合法：全部规则生效。
+        readonly allowPolicies?: readonly string[];
+        // 留空合法：一条都不禁；与 `allowPolicies` 同时命中合法（deny 优先）。
+        readonly denyPolicies?: readonly string[];
         readonly role?: readonly string[];
         readonly defaultModel?: { readonly provider?: string; readonly model?: string };
       }
@@ -247,6 +310,9 @@ interface Validated {
   // 退役的顶层字段：还配着值就报错（它已经不再生效）。
   readonly models?: Readonly<Record<string, unknown>>;
 }
+
+// 已知的 policy 名（上游 waterfall 名）：写错的名字静默变成"没配"是这份配置最坏的失效方式，所以装配期拒绝。
+const POLICY_NAME_SET: ReadonlySet<string> = new Set(POLICY_NAMES);
 
 // 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。
 export function configProblem(config: Validated): string | undefined {
@@ -264,10 +330,17 @@ export function configProblem(config: Validated): string | undefined {
   if (!roles(config.default).includes("main")) {
     return `session-mode: \`default\` names ${JSON.stringify(config.default)}, which does not declare role "main"; a session that can never be re-selected is a contradiction`;
   }
-  const empty = ids.filter((id) => (config.modes[id]?.allowTools ?? []).length === 0);
-  if (empty.length > 0) {
-    return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
+  // 每个模式列出的 policy 名都必须在已知名单里（名单见 `shared.ts` 的 `POLICY_NAMES`）。`denyTools` 与
+  // `allowTools` 同时命中是**合法**的（deny 优先）：这里不报错，只拒绝认不出的名字。
+  const unknownPolicies = Object.entries(config.modes).flatMap(([id, mode]) =>
+    [...(mode.allowPolicies ?? []), ...(mode.denyPolicies ?? [])]
+      .filter((policy) => !POLICY_NAME_SET.has(policy))
+      .map((policy) => `${id}: ${policy}`),
+  );
+  if (unknownPolicies.length > 0) {
+    return `session-mode: mode(s) ${unknownPolicies.join(", ")} name unknown policies; the known ones are ${POLICY_NAMES.join(", ")}`;
   }
+  // `allowTools` **留空是合法的**：不设收窄，用这个会话挂着的 preset 的全部工具。
   // `preset` **允许共享**（共享时 preset → 模式的反查交给 `SessionModes.modeForPreset`），空串是"不挂"；
   // 退役的顶层 `models` 还配着值就报错——别让一份"看着像配过"的配置静静地失效。
   if (Object.keys(config.models ?? {}).length > 0) {

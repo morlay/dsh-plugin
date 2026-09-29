@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-subagent",
   "version": "0.0.2",
-  "description": "Thin-shell fork of @deepseek-ai/dsh-subagent: takes over the official `subagent` row for two changes only — the continuable child's return guidance in Chinese wording and the row-id reuse (same `subagent` id, so the official settings card stays); everything not intentionally changed is imported from the vendored upstream source.",
+  "description": "Thin-shell fork of @deepseek-ai/dsh-subagent: takes over the official `subagent` row for two wording changes — the continuable child's return guidance in Chinese wording and the child's Chinese delegation-scope runtime context (`subagent:delegation`) — plus the row-id reuse (same `subagent` id, so the official settings card stays); everything not intentionally changed is imported from the vendored upstream source.",
   "keywords": [
     "dsh",
     "dsh-bundle",
@@ -49,6 +49,7 @@
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
     "@deepseek-ai/dsh-subagent-fork-in-process": "workspace:*",
     "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-subagent-control": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",

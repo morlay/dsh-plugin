@@ -1,50 +1,126 @@
-// 组装出口：按 config 把各能力装成一个 cordis 插件树。
+// 包根就是通道本体：装配行写包名（`@morlay/dsh-context-assembler`）装到的就是这一份。
 //
-// 装配面因此只有**一行**（`@morlay/dsh-context-assembler`）：通道服务由这一行装一次，子插件继承行 ctx 的
-// isolate map 与 scope；**每个子插件各有自己的 `inject`**（合成单入口会让 inject 变并集，一个可选搭档缺席就
-// 拖垮整包）。模式之间的差异不在这里用 config 裁：由 `context-assembler-scope` 那一行把模式定义登记给通道。
+// 工作区指令与技能目录**不在这里**：那两面用官方行（`@deepseek-ai/dsh-agent-instructions` /
+// `@deepseek-ai/dsh-tool-skill`）自己的注入方式，本包只做装配结果上的文本转换（`replace` / `suppress`）与降级
+// section 的按步送达。按会话收口（工具名单、instruction / 技能目录 / 动态快照三个开关）归 `@morlay/dsh-session-mode`
+// ——收口的输入是模式定义、唯一消费者也是模式。
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import * as agentInstructions from "./agent-instructions/index.ts";
-import * as assembler from "./assembler/index.ts";
-import * as scope from "./scope/index.ts";
-import * as skillCatalog from "./skill-catalog/index.ts";
+import type { AssembledSection } from "@deepseek-ai/dsh-system-prompt";
+import { ContextAssembler } from "./channel.ts";
+import { DEFAULT_KEEP, DEFAULT_REPLACE, DEFAULT_SUPPRESS } from "./defaults.ts";
+import { RULES_SECTION, latestReminderText, reminderMessage } from "./reminder.ts";
+import { RULES_TEXT } from "./rules.ts";
 
-export const name = "context-assembler-tree";
+export { DEFAULT_KEEP, DEFAULT_REPLACE, DEFAULT_SUPPRESS } from "./defaults.ts";
+export { ContextAssembler } from "./channel.ts";
 
-const CAPABILITIES = {
-  assembler,
-  "agent-instructions": agentInstructions,
-  "skill-catalog": skillCatalog,
-  scope,
-} as const;
+export const name = "context-assembler";
 
-export type Capability = keyof typeof CAPABILITIES;
+// 规则声明的位置：紧跟部署 persona（order 0），在任何降级内容之前。
+const RULES_ORDER = 1;
 
-const CAPABILITY_NAMES = Object.keys(CAPABILITIES) as Capability[];
+export const inject = ["systemPrompt"];
 
 export interface Config {
-  // 装哪些能力（名字即子出口名）；缺省全部——标准模式要完整的一套。未知名字在装载时报错。
-  capabilities?: string[];
-  // 各能力自己的 config，按能力名给（例如 `{ scope: { allowTools: [...] } }`）。
-  options?: Record<string, Record<string, unknown>>;
+  // 留在系统提示词里的 section 名；其余非空 section 降级为 reminder。
+  keep?: string[];
+  // 不进提示词的 section 名（部署级噪音）。
+  suppress?: string[];
+  // 装配结果上改写的 section 文本（section 名 → 中文文案）。
+  replace?: Record<string, string>;
 }
 
 export const Config: z<Config> = z.object({
-  capabilities: z.array(z.string()).default([...CAPABILITY_NAMES]),
-  options: z.any().default({}),
+  keep: z.array(z.string()).default([...DEFAULT_KEEP]),
+  suppress: z.array(z.string()).default([...DEFAULT_SUPPRESS]),
+  replace: z.dict(z.string()).default({ ...DEFAULT_REPLACE }),
 });
 
+// 提示词注入的通道：system prompt 里只留 `keep`，其余 section 降级为紧随用户消息的 reminder，或直接丢弃
+// （`suppress`）；`replace` 在装配结果上把这些 section 的文本换成我们的文案。工作区指令与技能目录走官方行，
+// 不经这里。
 export function apply(ctx: Context, config: Config): void {
-  const wanted = config.capabilities ?? CAPABILITY_NAMES;
-  const options = config.options ?? {};
-  for (const name of wanted) {
-    const capability = CAPABILITIES[name as Capability];
-    if (capability === undefined) {
-      throw new Error(
-        `context: unknown capability "${name}"（可选：${CAPABILITY_NAMES.join(" / ")}）`,
-      );
-    }
-    ctx.plugin(capability, options[name] ?? {});
+  const channel = new ContextAssembler(ctx);
+  const keep = new Set(config.keep ?? DEFAULT_KEEP);
+  for (const name of config.suppress ?? DEFAULT_SUPPRESS) channel.suppressSection(name);
+  for (const [name, text] of Object.entries(config.replace ?? DEFAULT_REPLACE)) {
+    channel.replaceSection(name, text);
   }
+
+  ctx.systemPrompt.section({ name: RULES_SECTION, order: RULES_ORDER, text: RULES_TEXT });
+
+  ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
+    const result = await next();
+    const agent = context.agent;
+    const demoted = new Map<string, string>();
+    const sections: AssembledSection[] = [];
+    let changed = false;
+
+    for (const section of result.sections) {
+      if (channel.isSuppressed(section.name)) {
+        changed = true;
+        continue;
+      }
+      const text = channel.replacement(section.name) ?? section.text;
+      if (text !== section.text) changed = true;
+      if (keep.has(section.name) || text.length === 0) {
+        sections.push(text === section.text ? section : { ...section, text });
+        continue;
+      }
+      changed = true;
+      demoted.set(sectionId(section.name), text);
+    }
+
+    if (agent !== undefined) channel.sync(agent, { sections: demoted });
+    return changed ? { ...result, sections } : result;
+  });
+
+  ctx.on("agent/pre-step", async ({ agent, messages }, next) => {
+    const decision = await next();
+
+    if (decision.kind === "reject" || decision.messages.length === 0) return decision;
+    const pending = pendingEntries(agent, channel);
+    if (pending.length === 0) return decision;
+
+    const claimedEnd = decision.messages.findLastIndex((message) => messages.includes(message));
+    return {
+      ...decision,
+      messages: decision.messages.toSpliced(
+        claimedEnd + 1,
+        0,
+        ...pending.map(([key, text]) => reminderMessage(key, text)),
+      ),
+    };
+  });
+
+  ctx.on(
+    "agent/request-error",
+    async ({ agent, signal }, next) => {
+      const action = await next();
+      if (action?.kind !== "retry" || signal.aborted) return action;
+      for (const [key, text] of pendingEntries(agent, channel)) {
+        agent.session.append("user/message", reminderMessage(key, text), {
+          surfaceOp: "append",
+        });
+      }
+      return action;
+    },
+    { prepend: true },
+  );
+}
+
+// 降级 section 的条目 id：一条 section 一个 id，于是同一次变化只重发那一条。
+function sectionId(name: string): string {
+  return `section:${name}`;
+}
+
+// 本步要注入的条目（id → 已渲染正文）：同 id 文本未变就不注入，按 id 字典序（顺序不随注册顺序抖动）。
+function pendingEntries(
+  agent: Parameters<typeof latestReminderText>[0],
+  channel: ContextAssembler,
+): [string, string][] {
+  return [...channel.collect(agent)]
+    .filter(([key, text]) => latestReminderText(agent, key) !== text)
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
 }

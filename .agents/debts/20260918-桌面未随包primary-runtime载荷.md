@@ -4,15 +4,18 @@
 
 **现象**
 
-desktop-host 把 argv[4] 当 bundled 依赖载荷源交给
-`vendor/deepseek-harness/apps/desktop-host/src/workspace-dependencies.ts`：`installPrimaryRuntime(source, root)` 读
-`<source>/runtime.json`，并把 `<root>=<DSH_HOME>/dsh-runtimes/dsh-primary-runtime` 装成
-Python / numpy / pandas / Node / pnpm 的绝对路径（`vendor/deepseek-harness/apps/desktop-host/src/primary-runtime.ts`
-的 `readPrimaryRuntime` / `installPrimaryRuntime`）。
+desktop-host 把 argv[4] 当 bundled 依赖载荷源交给本变体的 Office 组合
+（`packages/desktop/dsh-desktop-host/src/office.ts`），后者把 `{source, root}` 传给官方
+`@deepseek-ai/dsh-tool-workspace-dependencies`（`packages/skill/tool-workspace-dependencies/src/index.ts`）：
+`load_workspace_dependencies` 首次被调用时 `installPrimaryRuntime(source, root)` 读 `<source>/runtime.json`
+（`readPrimaryRuntime` / `compatibleManifest`），把 payload 装到
+`<root>=<DSH_HOME>/dsh-runtimes/dsh-primary-runtime`，并返回 Python / numpy / pandas / Node / pnpm 的绝对路径。
 
-我们的壳按上游约定把 argv[4] 指到 `<runtime 根>/primary-runtime`
-（`packages/desktop/dsh-desktopify/src/index.ts` 的 `runtimeResources()`；dev 经
-`DSH_DESKTOP_PRIMARY_RUNTIME_DIR`），但 `dev` / `bundle` 都不生成这个目录：
+我们的壳把 argv[4] 指到 `<resources>/runtime/primary-runtime`
+（`packages/desktop/dsh-desktop-shell/src/index.ts` 的 `runtimeResources()`；dev 由
+`DSH_DESKTOP_PRIMARY_RUNTIME_DIR` 覆盖，见 `packages/desktop/dsh-desktopify/src/cli/dev.ts`；host 侧的缺省是
+`<runtimeDir>/../runtime/primary-runtime`，见 `packages/desktop/dsh-desktop-host/src/index.ts`），
+但 `dev` / `bundle` 都不生成这个目录：
 
 ```
 $ ls apps/dsh-custom-next/node_modules/.dsh-desktopify/runtime
@@ -23,7 +26,7 @@ appconfig.json  bin  node  pnpm  versions.json
 pandas / python-docx 等 wheel）与 pnpm，并做 smoke 执行；我们没走这一步。
 
 `office-skills` 资源同样**不随包**：本变体不挂 `officeSkills`（见
-[设计 桌面化工具](../../packages/desktop/dsh-desktopify/.agents/designs/20260917-桌面化工具.md) 的「后端」与「随包运行时载荷」）。
+[设计 桌面化工具](../../packages/desktop/dsh-desktopify/.agents/designs/20260917-桌面化工具.md) 的「随包运行时载荷」）。
 宿主自己的包操作用 pnpm 已随包（`<resources>/runtime/pnpm/bin/pnpm.mjs` + `<resources>/runtime/bin`，由 shell 经
 host argv[5]/[6] 交给 `profileContext.packageManager`），但那是宿主包操作的入口，与本 payload 的
 `dependencies/{python,node,pnpm}` 不是同一份。剩余缺口只有 `primary-runtime` payload 本体

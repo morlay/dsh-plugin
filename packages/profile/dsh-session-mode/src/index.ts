@@ -1,6 +1,6 @@
-// 会话模式的 host 半：模式清单（config 里的纯数据）、会话 ↔ 模式的选择、按会话应用 persona 与收口。模式是一份
-// 数据，应用落在会话自己的 scope 上（persona + `ctx.sessionToolScope`），默认模型住在 `modes.<id>.defaultModel`；
-// 换模式只允许在空白窗口。取舍见 `.agents/designs/20260924-会话模式.md`。
+// 会话模式的 host 半：模式清单（config 里的纯数据）、会话 ↔ 模式的选择、按会话应用 persona 与**收口**。模式是一份
+// 数据，应用落在会话自己的 scope 上（persona + 工具收口与三个注入开关，见 `./scope.ts`），默认模型住在
+// `modes.<id>.defaultModel`；换模式只允许在空白窗口。取舍见 `.agents/designs/20260924-会话模式.md`。
 
 import { Service, type Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
@@ -15,17 +15,21 @@ import type {} from "@deepseek-ai/dsh-session-projection";
 // Type-only：官方 roster 的会话投影（`agentPreset`）与它的选择事件——选择面归官方 preset，
 // 我们读它的选择、落成自己的会话事实。
 import type {} from "@deepseek-ai/dsh-agent-preset-registry";
-import type { SessionToolScope } from "@morlay/dsh-context-assembler/scope";
+// Type-only：上游 fs 的 policy 事件词汇（`fs/write-intent` / `fs/edit-intent` 的签名与 `FsWriteIntent`）。
+import type {} from "@deepseek-ai/dsh-fs";
 import { z } from "zod";
 import {
   configProblem,
+  derivedSkills,
   type ResolvedConfig,
   type SessionMode,
   type SessionModeRole,
 } from "./modes.ts";
 import { installPersona } from "./persona.ts";
+import { SessionScope } from "./scope.ts";
 import {
   SESSION_MODE_PATH,
+  type PolicyName,
   type SessionModeRoster,
   type SessionModeRow,
   type SessionModeSelectResult,
@@ -47,7 +51,8 @@ export type {
   SessionModeRole,
 } from "./modes.ts";
 export { SESSION_MODE_PATH } from "./shared.ts";
-export type { SessionModeRoster, SessionModeRow } from "./shared.ts";
+export { POLICY_NAMES } from "./shared.ts";
+export type { PolicyName, SessionModeRoster, SessionModeRow } from "./shared.ts";
 
 declare module "@deepseek-ai/cordis" {
   interface Context {
@@ -106,6 +111,10 @@ export class SessionModes extends Service {
   // 每个 agent 已经装上的那一份（persona + 默认模型兜底；模式变了就换一份）。
   private readonly installs = new WeakMap<Agent, { mode: string; dispose: () => void }>();
 
+  // 按会话收口：工具名单、instruction / 技能目录 / 动态快照三个开关。它由本行**内部持有**（不发布服务）——收口的
+  // 输入就是模式定义、唯一消费者也是模式。
+  private readonly scope: SessionScope;
+
   // 装配时的配置快照：`default` / `modes` 读它，改这两项靠 Loader 重挂这一行（已运行会话不自动换定义）。
   readonly config: {
     default: string;
@@ -123,8 +132,32 @@ export class SessionModes extends Service {
     // 退役的顶层 `models` 还配着值就让装配期报错。
     const problem = configProblem({ ...this.config, models: config.models });
     if (problem !== undefined) throw new Error(problem);
+    this.scope = new SessionScope(ctx);
     ctx.sessionProjections.register(sessionModeProjection);
     ctx.sessionProjections.register(sessionModeEditableProjection);
+    // 按模式的 policy 拦截：两条上游 waterfall 各 `prepend` **一次**，注册在行 ctx 上、随行卸载一起撤。
+    //
+    // 接缝为什么只有这一种：fs 的调用是 `ctx.waterfall('fs/write-intent', target, actor, next)`——事件名在第一个
+    // 参数上，而 cordis 只在"第一个参数是对象 / 函数"时才取接收者并按 scope 过滤，所以这两条 waterfall 上
+    // **没有 scope 过滤**：注册在该 agent 的 ctx 上买不到隔离，只会多 N 份判断。归属只能从 `actor.agent` 认
+    // （工具把自己的 exec 当 actor 传进来），模式的判据每次调用**现算**——于是切模式 / `applyTo` / 子代理继承
+    // 都不需要换监听器，"重复应用不重复注册"是结构上的事，不靠判等维持。
+    //
+    // 位置：上游 `fs-observation-policy` 在这两条 waterfall 上**独占决策槽**（它不调 `next()`），所以链首只能靠
+    // `prepend` 抢——站在它后面就没有决策权。这份实现的前提就是这条契约（见
+    // `.agents/designs/20260929-按模式的policy拦截.md`）。
+    ctx.on(
+      // `satisfies PolicyName`：注册的事件名与 `POLICY_NAMES`（装配期校验与页面候选键读的同一份名单）必须在类型面
+      // 对得上——名单里删掉一个名字，这里就编不过，而不是静默拦不住。
+      "fs/write-intent" satisfies PolicyName,
+      (_target, actor, next) => this.decidePolicy("fs/write-intent", actor, next),
+      { prepend: true },
+    );
+    ctx.on(
+      "fs/edit-intent" satisfies PolicyName,
+      (_target, actor, next) => this.decidePolicy("fs/edit-intent", actor, next),
+      { prepend: true },
+    );
     // 会话一建立就装上：这早于它的第一次装配，persona 因此一定在装配之前注册好。
     ctx.on("agent/created", ({ agent }) => {
       this.installFor(agent);
@@ -197,6 +230,37 @@ export class SessionModes extends Service {
   // 会话当前模式的定义。
   modeOfSession(session: Session): SessionMode {
     return this.definition(this.modeOf(session));
+  }
+
+  // 这条 policy 规则在**这次调用**里还生效吗（`true` = 交给上游，`false` = 被这个模式禁用）。
+  // 判据只有一处：`actor.agent` → `agent.session` → `modeOf`。认不出 agent（没有 agent 的直接调用）、或模式 id 在
+  // config 里找不到（重挂前后的瞬间）时一律按"没配"读——拦截路径绝不抛错。
+  private policyInForce(policy: PolicyName, actor: object | undefined): boolean {
+    const agent = (actor as { readonly agent?: Agent } | undefined)?.agent;
+    if (agent === undefined) return true;
+    const mode = this.config.modes[this.modeOf(agent.session)];
+    if (mode === undefined) return true;
+    // 合成规则（deny 优先）：生效集合 =（`allowPolicies` 空 ? 全部 : `allowPolicies`）− `denyPolicies`。
+    if (mode.denyPolicies.includes(policy)) return false;
+    return mode.allowPolicies.length === 0 || mode.allowPolicies.includes(policy);
+  }
+
+  // 一条 policy 规则的裁决：规则生效就原样交给上游（`next()` 的返回值或拒绝照旧出去）；被禁用就**先让上游算完
+  // 再丢掉结论**——上游在链首之后独占决策槽，"放过"唯一可能的形态就是无条件裁决（`fs/edit-intent` 上它是免
+  // "先读后改"，`fs/write-intent` 上是连陈旧版本 / CAS 那层安全网一起丢）。上游抛出的拒绝也属于这条裁决：
+  // 接住它，返回 `undefined`（= 这次调用按"没有这条规则"继续）。
+  private async decidePolicy<T>(
+    policy: PolicyName,
+    actor: object | undefined,
+    next: () => T | Promise<T>,
+  ): Promise<T | undefined> {
+    if (this.policyInForce(policy, actor)) return await next();
+    try {
+      await next();
+    } catch {
+      // 上游的拒绝是这次裁决的一部分：禁用就是连它一起不要。
+    }
+    return undefined;
   }
 
   // 把某个空白会话（必须还没开过 turn）切到某个模式：先把 agent preset 换成模式声明的那个
@@ -325,7 +389,16 @@ export class SessionModes extends Service {
         for (const dispose of disposers) dispose();
       },
     });
-    this.toolScope()?.apply(agent, mode);
+    // 收口要的那几项按模式定义整份推过去：`name` / `allowTools` / `denyTools` / 三个开关。`skills` 缺省时在这里
+    // 按这份定义自己的工具名单推导（见 `derivedSkills`）——收口那一侧只认解析后的布尔。
+    this.scope.apply(agent, {
+      name: mode.name,
+      allowTools: mode.allowTools,
+      denyTools: mode.denyTools,
+      instructions: mode.instructions,
+      skills: mode.skills ?? derivedSkills(mode),
+      runtimeContext: mode.runtimeContext,
+    });
   }
 
   // 模式的默认模型兜底：只在会话尚无任何模型事实（没选过模型、也没落过 request header）时接管这一请求的
@@ -348,15 +421,6 @@ export class SessionModes extends Service {
           : { reasoningEffort: ReasoningEffortId(model.reasoningEffort) }),
       };
     });
-  }
-
-  // 收口服务由 `@morlay/dsh-context-assembler/scope` 那一行发布；没装它就只有 persona。
-  private toolScope(): SessionToolScope | undefined {
-    try {
-      return this.ctx.get("sessionToolScope");
-    } catch {
-      return undefined;
-    }
   }
 }
 

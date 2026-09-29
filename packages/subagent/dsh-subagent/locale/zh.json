@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "子智能体服务",
-    "description": "上游 @deepseek-ai/dsh-subagent 的薄壳 fork：只接管官方 `subagent` 行，改两件事——把连续子智能体的回报指引换成中文、并按官方行 id 复用（设置卡照旧）；其余未有意改动的都从 vendor 上游源码内联。"
+    "description": "上游 @deepseek-ai/dsh-subagent 的薄壳 fork：接管官方 `subagent` 行，改两处文案——连续子智能体的回报指引与子代理的委派范围说明都换成中文；并按官方行 id 复用（设置卡照旧）。其余未有意改动的都从 vendor 上游源码内联。"
   }
 }

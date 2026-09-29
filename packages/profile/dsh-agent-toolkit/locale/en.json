@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Agent Toolkit",
-    "description": "Tool guidance (localized short descriptions, trimmed schema, usage groups) and the agent row-list data (`rows`) that this deployment's preset (`mode-switch`) references: shell, files, jobs, skill discovery, goal, compaction, plan mode, delegation, workflow, ask-user, todo, web — plus the optional Agent Teams rows and the `relax-intent` policy row."
-  }
-}

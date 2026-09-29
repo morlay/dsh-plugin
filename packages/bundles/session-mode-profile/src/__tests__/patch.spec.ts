@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { applyEntryPatches, entryListSchema } from "@deepseek-ai/cordis-plugin-include";
-import { TOOLKIT_PRESET_ROWS } from "@morlay/dsh-agent-toolkit/rows";
-import { MODE_PRESET_ID, sessionModeRows } from "@morlay/dsh-session-mode/rows";
+import { sessionModeRows } from "@morlay/dsh-session-mode/rows";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { render } from "../../tsdown.config.ts";
@@ -79,119 +78,62 @@ describe("session-mode-profile 的 bundle patch", () => {
   });
 });
 
-describe("自己注册的 preset（preset-mode-switch）", () => {
-  // preset 声明的行：`config.id` 是会话里记的身份，行 id 是 `preset-<id>`。
-  function presetRow(): Row {
-    return rowById(inserted(), `preset-${MODE_PRESET_ID}`);
-  }
+describe("host 平面的那几行", () => {
+  it("装的是模式行、通道与工具说明；**不再声明自己的 agent preset**、也没有单独一行收口", () => {
+    const ids = inserted().map((row) => row.id ?? "");
 
-  function presetPlugins(): readonly Row[] {
-    const plugins = presetRow().config?.["plugins"];
-    if (!Array.isArray(plugins)) throw new Error("preset 的 config.plugins 必须是行数组");
-    return plugins as readonly Row[];
-  }
-
-  // 深挖所有嵌套行 id（组行把子行放在 `config` 数组里）。
-  function idsOf(rows: readonly Row[]): string[] {
-    return rows.flatMap((row) => [
-      row.id ?? "",
-      ...idsOf(Array.isArray(row.config) ? (row.config as unknown as Row[]) : []),
-    ]);
-  }
-
-  it("声明了可读的展示元数据与不撞官方 1..4 的 order", () => {
-    const config = presetRow().config ?? {};
-
-    expect(presetRow().name).toBe("@deepseek-ai/dsh-agent-preset");
-    expect(config["id"]).toBe(MODE_PRESET_ID);
-    expect(config["name"]).toBe("手动切换模式");
-    expect(typeof config["description"]).toBe("string");
-    expect(config["order"]).toBe(5);
-  });
-
-  it("行清单就是工具包的 preset 平面那一套（同一份真源，逐行同形）", () => {
-    const declared = presetPlugins();
-    const expected = TOOLKIT_PRESET_ROWS;
-
-    // 逐行比 id 与 name：上游改包名 / 我们改族名都会在这里显形。
-    const label = (value: unknown): string => (typeof value === "string" ? value : "(缺失)");
-    const shapeOf = (
-      rows: readonly { readonly id?: unknown; readonly name?: unknown }[],
-    ): string[] => rows.map((row) => `${label(row.id)} ${label(row.name)}`);
-    expect(shapeOf(declared)).toEqual(shapeOf(expected));
-  });
-
-  it("要的能力面都在：联网、文件、Shell、委派、压缩、skill 发现 provider", () => {
-    const ids = new Set(idsOf(presetPlugins()));
-
-    for (const id of [
-      "tool-web",
-      "tool-ask-user",
-      "tool-fs",
-      "tool-fs-search",
-      "tool-bash",
-      "tool-pwsh",
-      "tool-jobs",
-      "tool-subagent",
-      "tool-subagent-fork",
-      "tool-todo",
-      "tool-goal",
-      "tool-workflow",
-      "skill-filesystem",
-      "compaction-basic",
-      "tool-result-pruner",
-      "plan-mode",
-    ]) {
-      expect(ids.has(id), `preset 少了 ${id}`).toBe(true);
+    for (const id of ["session-mode", "context-assembler"]) {
+      expect(ids, id).toContain(id);
+    }
+    // 收口归 `session-mode` 行内部（模式定义就是它的输入），装配里不再有这一行。
+    expect(ids).not.toContain("context-assembler-scope");
+    expect(rowById(inserted(), "tool-guidance").name).toBe("@morlay/dsh-tool-guidance");
+    expect(rowById(inserted(), "subagent").name).toBe("@morlay/dsh-subagent");
+    // 行清单归会话挂着的 shipped preset：我们自己那份（`preset-mode-switch`）已删除，装配里不再有 preset 行。
+    expect(inserted().some((row) => row.name === "@deepseek-ai/dsh-agent-preset")).toBe(false);
+    for (const id of ["tool-web", "tool-fs", "tool-bash", "plan-mode", "compaction-basic"]) {
+      expect(ids, id).not.toContain(id);
     }
   });
 
-  it("注入面不在 preset 里：agent-instructions / tool-skill 归上游行，tool-guidance 归 host 平面", () => {
-    const ids = new Set(idsOf(presetPlugins()));
-
-    // 上游那两行是官方 preset 自带的；我们不放（让位 / 抢面逻辑照旧兜官方 preset 会话）。
-    expect(ids.has("agent-instructions")).toBe(false);
-    expect(ids.has("tool-skill")).toBe(false);
-    // 工具说明往通道这个 host 单例注册正文：它只由本 bundle 的 host 平面插一行。
-    expect(ids.has("tool-guidance")).toBe(false);
-    expect(rowById(inserted(), "tool-guidance").name).toBe("@morlay/dsh-agent-toolkit/guidance");
+  it("子代理行不限制 preset：中文回报指引对任意会话生效（不传名单）", () => {
+    // 不传 `localizedReturnGuidancePresets`：不配名单 = 不限 preset（官方四个 shipped 也覆盖）。
+    expect(rowById(inserted(), "subagent").config).toBeUndefined();
   });
+});
 
-  it("不装 Agent Teams 那一族：团队归上游 agent-team-profile，我们既不放行也不让位", () => {
-    const ids = new Set(idsOf(presetPlugins()));
-
-    // 上游 `@deepseek-ai/dsh-experimental-agent-team-profile` 自带「禁直接派发 + 插 team 三行」，
-    // 要用的人把它加进 profile 的 bundles 就行——我们这边不单独配，也不为它留让位门控。
-    expect(ids.has("toolkit-team")).toBe(false);
-    expect(ids.has("agent-team")).toBe(false);
-    expect(ids.has("tool-agent-team")).toBe(false);
-    expect(ids.has("ui-agent-team")).toBe(false);
-    expect(rendered).not.toContain("DSH_AGENT_TEAM");
-  });
-
-  it("两个模式都挂这一份 preset（差异由会话级收口表达）", () => {
+describe("模式定义", () => {
+  it("两个模式都不写 `preset` 与 `denyTools`：`chat` 写着 `allowTools` 收窄到三件，`coding` 留空（不设收窄）", () => {
     const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
-      | Record<string, { preset?: string }>
+      | Record<
+          string,
+          { preset?: string; allowTools?: readonly string[]; denyTools?: readonly string[] }
+        >
       | undefined;
 
     expect(Object.keys(modes ?? {}).sort()).toEqual(["chat", "coding"]);
     for (const [id, mode] of Object.entries(modes ?? {})) {
-      expect(mode.preset, id).toBe(MODE_PRESET_ID);
+      // 不写 `preset`：选模式不换行清单（用户选的 shipped preset 不被模式覆盖）。
+      expect(mode.preset, id).toBeUndefined();
+      // 一个模式都不写 `denyTools`：没有要禁的工具。
+      expect(mode.denyTools, id).toBeUndefined();
     }
+    // `coding` 不设收窄（用 preset 的全部工具）；`chat` 收成提问 + 联网三件。
+    expect(modes?.["coding"]?.allowTools).toBeUndefined();
+    expect(modes?.["chat"]?.allowTools).toEqual(["ask_user_question", "web_search", "web_fetch"]);
   });
-});
 
-describe("新会话的默认 preset", () => {
-  it("配置层把 registry 的默认指向我们那份（行由 web-app 提供）", async () => {
-    const theirs = yaml.load(
-      await readFile(
-        join(process.cwd(), "packages/bundles/mydsh-profile/cordis.patch.yml"),
-        "utf8",
-      ),
-      { schema: entryListSchema },
-    ) as Row[];
-    const row = theirs.find((entry) => entry.id === "agent-preset-registry");
+  it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」，写路径的规则留着", () => {
+    const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
+      | Record<string, { allowPolicies?: readonly string[]; denyPolicies?: readonly string[] }>
+      | undefined;
 
-    expect(row?.config?.["default"]).toBe(MODE_PRESET_ID);
+    // 改路径上的上游规则（`fs/edit-intent`）禁用：免"先读后改"。
+    expect(modes?.["coding"]?.denyPolicies).toEqual(["fs/edit-intent"]);
+    // 写路径上的（`fs/write-intent`）不在黑名单里，也没写白名单：照旧生效（陈旧版本 CAS 那层安全网）。
+    expect(modes?.["coding"]?.allowPolicies).toBeUndefined();
+    // `chat` 一条 policy 都不配：没有文件工具，两条都碰不到。
+    expect(modes?.["chat"]?.denyPolicies).toBeUndefined();
+    expect(modes?.["chat"]?.allowPolicies).toBeUndefined();
   });
 });

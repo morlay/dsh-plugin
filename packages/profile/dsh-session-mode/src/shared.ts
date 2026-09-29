@@ -5,6 +5,16 @@
 // 模式清单与切换的路由路径：宿主（web 与桌面）在同一张路由表上服务它。
 export const SESSION_MODE_PATH = "/session-mode";
 
+// 模式可以改写的上游 **policy 规则**名，即上游 waterfall 的事件名（是事件名、不是路径，所以**不带**前导斜杠）：
+// `fs/write-intent`（写意图）与 `fs/edit-intent`（改意图）。home 在这里而不是 `modes.ts`：host 半的装配期校验
+// 与 client 半的页面候选键都要它，而 client 半不 import `modes.ts`（免得把 schemastery 拖进浏览器包）。
+// 「能拦什么」取决于上游是否在那条 waterfall 上独占决策槽——它不是配置能自己长出来的东西，所以这份名单是封闭的，
+// 写进来的名字不在名单里就在装配期拒绝（见 `configProblem`）。
+export const POLICY_NAMES = ["fs/write-intent", "fs/edit-intent"] as const;
+
+// 一条 policy 规则的名字。
+export type PolicyName = (typeof POLICY_NAMES)[number];
+
 // 一个模式对外的那部分：选择器要的名字与说明。
 export interface SessionModeRow {
   readonly id: string;

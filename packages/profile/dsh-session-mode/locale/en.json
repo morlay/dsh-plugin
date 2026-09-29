@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session Modes",
-    "description": "The coding / chat modes as one row of data (persona plus the allowed tools, instruction / runtime-context switches and an optional default model); the host applies the current one per session, and the chip in the composer sits beside the official agent-preset entry, which stays."
+    "description": "The coding / chat modes as one row of data (persona, tool lists, upstream policy lists, instruction / skill-catalog / runtime-context switches and an optional default model); the host applies the current one per session, and the chip in the composer sits beside the official agent-preset entry, which stays."
   }
 }

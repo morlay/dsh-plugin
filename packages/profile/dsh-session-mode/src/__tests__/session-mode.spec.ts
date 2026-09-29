@@ -10,9 +10,10 @@ import type {
   ModelSelectionProjectionState,
 } from "@deepseek-ai/dsh-api-session-controller";
 import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
+import { ToolCallId } from "@deepseek-ai/dsh-llm";
+import { FsVersion, type FsWriteIntent } from "@deepseek-ai/dsh-fs";
 import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import * as scope from "@morlay/dsh-context-assembler/scope";
 import { afterEach, describe, expect, it } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { z } from "zod";
@@ -37,6 +38,9 @@ const CONFIG: Config = {
       role: ["main"],
       persona: { prefix: "编码模式的提示词。", suffix: "最后一句。" },
       allowTools: ["read", "web_search"],
+      denyTools: [],
+      allowPolicies: [],
+      denyPolicies: [],
       instructions: true,
       runtimeContext: true,
     },
@@ -47,6 +51,9 @@ const CONFIG: Config = {
       role: ["main"],
       persona: { prefix: "对话模式的提示词。", suffix: "" },
       allowTools: ["web_search"],
+      denyTools: [],
+      allowPolicies: [],
+      denyPolicies: [],
       instructions: false,
       runtimeContext: false,
     },
@@ -84,7 +91,7 @@ function fixtureTool(toolName: string) {
   });
 }
 
-// host 平面装工具行（`dsh.profile.bundles` 列出 toolkit 的形状）与一条动态快照。
+// host 平面装工具行（`dsh.profile.bundles` 列出 `tool-guidance` 的形状）与一条动态快照。
 async function mountHostPlane(ctx: Context, toolNames: readonly string[]): Promise<void> {
   await ctx.plugin(
     Object.assign(
@@ -109,8 +116,7 @@ async function mount(config: Config = CONFIG) {
   });
   await mountAgentLoopTestHarness(ctx);
   await mountHostPlane(ctx, ["read", "web_search", "send_message"]);
-  // 收口那一行（`context-assembler-scope`）：模式把它推给这个服务。
-  await ctx.plugin(scope);
+  // 按会话收口由本行内部持有（收口的输入就是模式定义），所以这里只装模式行。
   await ctx.plugin(plugin, config);
   const handle = await ctx.agents.create({
     sessionId: SessionId(`session-mode-${String(Date.now())}-${String(Math.random())}`),
@@ -183,6 +189,20 @@ describe("会话模式的 persona", () => {
     // runtimeContext: false → 这个会话看不到动态快照。
     expect(prompt.contexts).toEqual([]);
     expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+  });
+
+  it("allowTools 留空：这个会话用宿主平面的全部工具（不设收窄）", async () => {
+    const { ctx, agent } = await mount({
+      default: CONFIG.default,
+      modes: { ...CONFIG.modes, coding: { ...CONFIG.modes["coding"]!, allowTools: [] } },
+    });
+
+    // 宿主平面装了三件（`read` / `web_search` / `send_message`）：留空就是一件都不砍。
+    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name).toSorted()).toEqual([
+      "read",
+      "send_message",
+      "web_search",
+    ]);
   });
 
   it("装配是幂等的：同一个模式反复装配不会重复注册", async () => {
@@ -296,8 +316,8 @@ describe("模式的读取与切换", () => {
   });
 });
 
-// 本部署的形状：两个模式挂**同一份** preset（`mode-switch`），差异全在会话级收口（persona / 白名单 /
-// 两个开关）。preset 是行清单的 home，模式是它的会话级扩展。
+// 机制：两个模式可以共享**同一份** preset 声明（差异全在会话级收口：persona / 名单 / 三个开关）。preset 是
+// 行清单的 home，模式是它的会话级扩展；本部署两个模式都不声明它，这条路径留给"声明了才换"的部署形态。
 const SHARED: Config = {
   default: "coding",
   modes: {
@@ -394,6 +414,9 @@ const EXTENDED: Config = {
       role: ["subagent"],
       persona: { prefix: "评审模式的提示词。", suffix: "" },
       allowTools: ["read"],
+      denyTools: [],
+      allowPolicies: [],
+      denyPolicies: [],
       instructions: true,
       runtimeContext: true,
     },
@@ -536,6 +559,207 @@ describe("默认模型住在模式定义里", () => {
     // 顶层不再有那份映射；`defaultModel` 不单独标 volatile（外层 modes 已经是）。
     expect(plugin.Config.dict?.["models"]?.meta.volatile).not.toBe(true);
     expect(volatileForm(plugin.Config as never)).toBeDefined();
+  });
+});
+
+// 按模式的 policy 拦截的 fixture：只换 `coding` 的两份 policy 名单（`chat` 一条都不配，用作成对判据）。
+function withPolicies(policies: Pick<SessionMode, "allowPolicies" | "denyPolicies">): Config {
+  return {
+    default: CONFIG.default,
+    modes: {
+      coding: { ...CONFIG.modes["coding"]!, ...policies },
+      chat: { ...CONFIG.modes["chat"]! },
+    },
+  };
+}
+
+// `fs-observation-policy` 的同形替身：在这两条 waterfall 上**独占决策槽**——它不调 `next()`，写给一个写意图、
+// 改在"没观察过"时抛 `FS_NOT_OBSERVED`（上游就是用 throw 表达这条拒绝）。它把自己被问过几次记下来。
+function installPolicyStub(ctx: Context): { asked: string[] } {
+  const asked: string[] = [];
+  ctx.on("fs/write-intent", () => {
+    asked.push("write");
+    return Promise.resolve<FsWriteIntent>({ kind: "replaceIfVersion", version: FsVersion("v1") });
+  });
+  ctx.on("fs/edit-intent", () => {
+    asked.push("edit");
+    throw new Error("FS_NOT_OBSERVED");
+  });
+  return { asked };
+}
+
+// 一次真的 waterfall 调用：`actor` 用工具那副形状——工具把自己的 exec 传进来（这里只关心它上面挂着的 `agent`）。
+async function editIntent(ctx: Context, actor: object): Promise<unknown> {
+  return await ctx.waterfall("fs/edit-intent", {} as never, actor, () => undefined);
+}
+
+async function writeIntent(ctx: Context, actor: object): Promise<unknown> {
+  return await ctx.waterfall("fs/write-intent", {} as never, actor, () => undefined);
+}
+
+const UPSTREAM_WRITE_INTENT = { kind: "replaceIfVersion", version: "v1" };
+
+describe("按模式的 policy 拦截", () => {
+  // 本部署那条配置的形状：`coding` 禁 `fs/edit-intent`（免"先读后改"），写路径上的 CAS 安全网留着。
+  const CODING_EDITS_FREE = withPolicies({ allowPolicies: [], denyPolicies: ["fs/edit-intent"] });
+
+  it("被禁的规则：上游的拒绝被绕过（这次调用按没有这条规则继续）", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    const stub = installPolicyStub(ctx);
+
+    // 上游那句 `FS_NOT_OBSERVED` 被接住，调用拿到 `undefined`（= 无版本前提的编辑）。
+    await expect(editIntent(ctx, { agent })).resolves.toBeUndefined();
+    // 上游还是被问了：先让它算完，再丢掉结论。
+    expect(stub.asked).toEqual(["edit"]);
+  });
+
+  it("只禁一条时另一条照旧：写路径上的上游裁决原样出去", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    installPolicyStub(ctx);
+
+    await expect(writeIntent(ctx, { agent })).resolves.toEqual(UPSTREAM_WRITE_INTENT);
+  });
+
+  it("没配 policy 名单的模式照旧吃上游的拒绝（成对判据）", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    installPolicyStub(ctx);
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    await expect(editIntent(ctx, { agent })).rejects.toThrow("FS_NOT_OBSERVED");
+  });
+
+  it("只给某个模式配：同一个 ctx 上另一个模式的会话不受影响", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    installPolicyStub(ctx);
+    const other = await ctx.agents.create({
+      sessionId: SessionId(`session-mode-chat-${String(Date.now())}-${String(Math.random())}`),
+    });
+    await ctx.sessionModes.select(other.agent.id, "chat");
+
+    // 一份监听器、一个判据函数：结论按各自的会话现算。
+    await expect(editIntent(ctx, { agent })).resolves.toBeUndefined();
+    await expect(editIntent(ctx, { agent: other.agent })).rejects.toThrow("FS_NOT_OBSERVED");
+  });
+
+  it("模式切换后换一份判定（判据每次调用现算，监听器不换）", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    const stub = installPolicyStub(ctx);
+
+    await expect(editIntent(ctx, { agent })).resolves.toBeUndefined();
+
+    await ctx.sessionModes.select(agent.id, "chat");
+
+    await expect(editIntent(ctx, { agent })).rejects.toThrow("FS_NOT_OBSERVED");
+    expect(stub.asked).toEqual(["edit", "edit"]);
+  });
+
+  it("认不出 agent 的调用照旧问上游（判据只认 `actor.agent`）", async () => {
+    const { ctx } = await mount(CODING_EDITS_FREE);
+    installPolicyStub(ctx);
+
+    await expect(editIntent(ctx, {})).rejects.toThrow("FS_NOT_OBSERVED");
+  });
+
+  it("重复应用同一个模式：一次监听器注册都不发生", async () => {
+    const { ctx, agent } = await mount(CODING_EDITS_FREE);
+    installPolicyStub(ctx);
+    // 数装配期的注册：那两条监听器是构造时注册的，`applyTo` / `select` / 子代理继承都不该再加一份。
+    const registrations: string[] = [];
+    const on = ctx.on.bind(ctx) as (name: string, ...rest: unknown[]) => unknown;
+    ctx.on = ((name: string, ...rest: unknown[]) => {
+      if (name.startsWith("fs/")) registrations.push(name);
+      return on(name, ...rest);
+    }) as typeof ctx.on;
+
+    ctx.sessionModes.applyTo(agent, "chat");
+    ctx.sessionModes.applyTo(agent, "coding");
+    ctx.sessionModes.applyTo(agent, "coding");
+    await ctx.sessionModes.select(agent.id, "coding");
+
+    expect(registrations).toEqual([]);
+    // 拦截照旧按现算的判据生效（重复应用没有把它变成两份判断）。
+    await expect(editIntent(ctx, { agent })).resolves.toBeUndefined();
+  });
+
+  it("生效集合 =（白名单留空 ? 全部 : 白名单）− 黑名单：deny 优先", async () => {
+    // 白名单只留写规则：改规则不在生效集合里，照样被绕过。
+    const onlyWrite = await mount(
+      withPolicies({ allowPolicies: ["fs/write-intent"], denyPolicies: [] }),
+    );
+    installPolicyStub(onlyWrite.ctx);
+    await expect(editIntent(onlyWrite.ctx, { agent: onlyWrite.agent })).resolves.toBeUndefined();
+    await expect(writeIntent(onlyWrite.ctx, { agent: onlyWrite.agent })).resolves.toEqual(
+      UPSTREAM_WRITE_INTENT,
+    );
+
+    // 两份名单同时命中同一条：deny 优先（这条规则被绕过）。
+    const both = await mount(
+      withPolicies({ allowPolicies: ["fs/edit-intent"], denyPolicies: ["fs/edit-intent"] }),
+    );
+    installPolicyStub(both.ctx);
+    await expect(editIntent(both.ctx, { agent: both.agent })).resolves.toBeUndefined();
+  });
+
+  it("装配期校验：policy 名字不在已知名单里就拒绝装载", async () => {
+    for (const policies of [
+      { allowPolicies: ["fs/read-intent"], denyPolicies: [] },
+      { allowPolicies: [], denyPolicies: ["fs/read-intent"] },
+    ]) {
+      await expectRefused(withPolicies(policies), "unknown policies");
+    }
+  });
+});
+
+// 一次真的工具调用：执行层守卫挂在 `agent` 的 scope 上（被拒时错误里带模式名与拒因）。
+async function executeTool(ctx: Context, agent: Agent, name: string) {
+  return await ctx.tools.execute({
+    callId: ToolCallId(`call-${name}-${String(Math.random())}`),
+    name,
+    arguments: {},
+    agent,
+    signal: new AbortController().signal,
+  });
+}
+
+describe("模式与收口（工具名单）", () => {
+  it("换模式就是换一份收口：各自的名单（白名单 − 黑名单）生效", async () => {
+    const { ctx, agent } = await mount({
+      default: CONFIG.default,
+      modes: {
+        coding: { ...CONFIG.modes["coding"]!, denyTools: ["web_search"] },
+        chat: { ...CONFIG.modes["chat"]! },
+      },
+    });
+    await assembled(ctx, agent);
+
+    // 收口要的几项按模式定义整份推过去：`chat` 的白名单只剩 web_search。
+    ctx.sessionModes.applyTo(agent, "chat");
+    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["web_search"]);
+
+    // 换到 `coding`：白名单是 read / web_search，黑名单减掉 web_search（同一份里 deny 优先）。
+    ctx.sessionModes.applyTo(agent, "coding");
+    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["read"]);
+  });
+
+  it("`denyTools` 的收窄：黑名单里的工具进不了目录、调用被拒（文案说黑名单）", async () => {
+    const { ctx, agent } = await mount({
+      default: CONFIG.default,
+      modes: {
+        // 白名单留着 read / web_search，另外把 web_search 禁掉：同一份里 deny 优先。
+        coding: { ...CONFIG.modes["coding"]!, denyTools: ["web_search"] },
+        chat: { ...CONFIG.modes["chat"]! },
+      },
+    });
+    await assembled(ctx, agent);
+
+    // 目录：白名单那两件减掉黑名单那一件。
+    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["read"]);
+
+    const denied = await executeTool(ctx, agent, "web_search");
+    // 成对判据：留下的那件照旧能调，被拒那件说的是黑名单（与"不在白名单里"分开）。
+    expect((await executeTool(ctx, agent, "read")).error).toBeUndefined();
+    expect(denied.error).toBeDefined();
+    expect(JSON.stringify(denied)).toContain("黑名单");
   });
 });
 

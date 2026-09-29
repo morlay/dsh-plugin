@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Subagent Service",
-    "description": "Thin-shell fork of @deepseek-ai/dsh-subagent: takes over the official `subagent` row for two changes only — the continuable child's return guidance in Chinese wording and the row-id reuse; everything not intentionally changed is imported from the vendored upstream source."
+    "description": "Thin-shell fork of @deepseek-ai/dsh-subagent: takes over the official `subagent` row for two wording changes — the continuable child's return guidance and the child's delegation-scope statement, both in Chinese — plus row-id reuse; everything not intentionally changed is imported from the vendored upstream source."
   }
 }

@@ -87,7 +87,29 @@ async function textsAfterDelegation(booted: Awaited<ReturnType<typeof boot>>): P
 }
 
 describe("continuable 子代理的回报指引", () => {
-  it("会话挂着名单里的 preset 时，模型看到的是中文指引", async () => {
+  it("没配名单（默认）：任意 preset 的会话都用中文指引——官方四个 shipped preset 也覆盖", async () => {
+    for (const preset of ["standard", "ptc", "minimal", "cordis"]) {
+      const texts = await textsAfterDelegation(await boot({ composedPreset: preset }));
+
+      expect(
+        texts.some((text) => text.includes("你的父智能体 id 是")),
+        preset,
+      ).toBe(true);
+      expect(
+        texts.some((text) => text.includes("Your parent agent id is")),
+        preset,
+      ).toBe(false);
+    }
+  });
+
+  it("没配名单、会话还没绑 preset（headless / 没装 registry）也用中文", async () => {
+    const texts = await textsAfterDelegation(await boot());
+
+    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(true);
+    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
+  });
+
+  it("配了名单才限制：名单里的 preset 用中文指引", async () => {
     const texts = await textsAfterDelegation(
       await boot({ presets: ["mode-switch"], composedPreset: "mode-switch" }),
     );
@@ -96,17 +118,10 @@ describe("continuable 子代理的回报指引", () => {
     expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
   });
 
-  it("名单外的 preset 用上游英文指引（官方 shipped preset 的会话不被换文案）", async () => {
+  it("配了名单时名单外的 preset 用上游英文（限制是显式选择）", async () => {
     const texts = await textsAfterDelegation(
       await boot({ presets: ["mode-switch"], composedPreset: "standard" }),
     );
-
-    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(true);
-    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(false);
-  });
-
-  it("没配名单时一律上游英文（默认不换）", async () => {
-    const texts = await textsAfterDelegation(await boot());
 
     expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(true);
     expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(false);

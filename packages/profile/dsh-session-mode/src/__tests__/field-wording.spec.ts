@@ -1,9 +1,11 @@
 // 字段文案面的行为：client 半把这一行的字段文案注册到**提示面**（`ctx.schemaFormHints.describe`），
-// 行式配置页据此画注释行；提示面缺席时（老组合）安静跳过，不影响会话面。
+// 行式配置页据此画注释行；两份 policy 名单的候选值也走提示面（`select`，登记在数组项的路径上）。提示面缺席时
+// （老组合）安静跳过，不影响会话面。
 
 import { describe, expect, it } from "vitest";
 import { apply, inject } from "../client/index.ts";
 import { zh } from "../client/locales.ts";
+import { POLICY_NAMES } from "../shared.ts";
 
 interface Described {
   ns: string;
@@ -11,9 +13,16 @@ interface Described {
   read: () => { label?: string | undefined; hint?: string | undefined };
 }
 
+interface Selected {
+  ns: string;
+  path: readonly string[];
+  options: () => readonly { value: unknown }[];
+}
+
 // 最小替身：记录提示面的注册事实。
 function bench(options: { withHints?: boolean } = {}) {
   const described: Described[] = [];
+  const selected: Selected[] = [];
   const dictionaries: string[] = [];
   const services: Record<string, unknown> = {};
   if (options.withHints !== false) {
@@ -24,6 +33,10 @@ function bench(options: { withHints?: boolean } = {}) {
         read: () => { label?: string; hint?: string },
       ) => {
         described.push({ ns, path, read });
+        return () => {};
+      },
+      select: (ns: string, path: readonly string[], spec: Selected) => {
+        selected.push({ ns, path, options: spec.options });
         return () => {};
       },
     };
@@ -45,7 +58,7 @@ function bench(options: { withHints?: boolean } = {}) {
       },
     },
   };
-  return { ctx, described, dictionaries };
+  return { ctx, described, selected, dictionaries };
 }
 
 describe("会话模式 的字段文案", () => {
@@ -76,6 +89,20 @@ describe("会话模式 的字段文案", () => {
     ]);
   });
 
+  it("两份 policy 名单的候选就是封闭名单：登记在数组项那一路径上", () => {
+    const b = bench();
+    apply(b.ctx as never);
+
+    // 名单是**字符串数组**，所以候选登记在数组项的路径（`…Policies.*`）上，页面把每一项画成选择器。
+    expect(b.selected.map((entry) => ({ ns: entry.ns, path: entry.path }))).toEqual([
+      { ns: "session-mode", path: ["modes", "*", "allowPolicies", "*"] },
+      { ns: "session-mode", path: ["modes", "*", "denyPolicies", "*"] },
+    ]);
+    for (const entry of b.selected) {
+      expect(entry.options().map((option) => option.value)).toEqual([...POLICY_NAMES]);
+    }
+  });
+
   it("没有提示面时安静跳过（老组合）", () => {
     const b = bench({ withHints: false });
 
@@ -83,5 +110,6 @@ describe("会话模式 的字段文案", () => {
       apply(b.ctx as never);
     }).not.toThrow();
     expect(b.described).toEqual([]);
+    expect(b.selected).toEqual([]);
   });
 });

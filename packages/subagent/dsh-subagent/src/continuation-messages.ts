@@ -75,18 +75,20 @@ export function createAgentMessage(
 /**
  * Whether this session's return guidance takes this package's Chinese wording.
  *
- * 判据是**会话挂着的 preset**：文案是模型可见的东西，跟着 preset 走；名单由装配给（本行的
- * `config.localizedReturnGuidancePresets`），默认空——没配、或会话没挂 preset（不装 registry 的部署、还没绑的
- * agent）一律走上游英文，官方 shipped preset 的会话因此不会被换文案。
+ * **默认对任意 preset 生效**：名单（本行的 `config.localizedReturnGuidancePresets`）不配就是不限制——官方四个
+ * shipped preset、部署自建的、以及还没绑 preset 的会话（不装 registry 的部署、还没 join 的 agent）都拿中文。
+ * 配了名单才反过来收窄成"只有这些 preset 的会话用中文"。文案是模型可见的东西，判据留在 host 平面
+ * （`subagents` 是进程单例，这一行不能搬进 preset realm）。
  *
  * @param composedPreset - the preset id the session is mounted on, if any.
- * @param configured - preset ids this deployment asked to localize.
+ * @param configured - preset ids this deployment restricts the Chinese wording to; empty means every session.
  * @returns whether the Chinese guidance applies to this session.
  */
 export function localizedReturnGuidance(
   composedPreset: string | undefined,
   configured: readonly string[],
 ): boolean {
+  if (configured.length === 0) return true
   return composedPreset !== undefined && configured.includes(composedPreset)
 }
 

@@ -1,41 +1,36 @@
 # @morlay/dsh-context-assembler
 
-提示词注入能力组：**一个包四个能力**，能力名就是子出口名。主出口是**组装插件**（按 config 决定装哪些能力、
-各带什么参数，缺省四套），各能力另有子出口可单独装；每个能力都是独立的 cordis 插件（各自的 `apply` 与
-`inject`）——合成单入口会让 `inject` 变并集，一个可选搭档缺席就拖垮整包。
+提示词通道：**装配结果上的文本转换**（`replace` / `suppress`）与**降级 section 的按步送达**（本步没留在系统提示词
+里的 section 改以 reminder 紧随用户消息送达，压缩后的重试再补投一次）。**不给扩展点**：没有注册面，也不接管任何
+"面"——工作区指令与技能目录用官方行（`@deepseek-ai/dsh-agent-instructions` / `@deepseek-ai/dsh-tool-skill`）自己的
+注入方式。按会话的工具收口与三个注入开关（`instructions` / 技能目录 / 动态快照）**不在本包**：收口的输入是模式定义、
+唯一消费者也是模式，所以它住在 [`@morlay/dsh-session-mode`](../../profile/dsh-session-mode/README.md)。
 
 ## 用法
 
-行清单的真源是 [`src/rows.ts`](./src/rows.ts)（`contextChannel()` / `scopeRow()`，经 `./rows` 出口供装配层
-引用），本部署把它渲染进
-[`@morlay/session-mode-profile`](../../bundles/session-mode-profile/cordis.patch.yml) 的 patch：
+装配面只有一行：包根（`@morlay/dsh-context-assembler`）就是通道本体，config 是 `keep` / `suppress` / `replace` 的
+缺省。行清单的真源是 [`src/rows.ts`](./src/rows.ts)（`contextChannel()`，经 `./rows` 出口供装配层引用），本部署把它
+渲染进 [`@morlay/session-mode-profile`](../../bundles/session-mode-profile/cordis.patch.yml) 的 patch：
 
 ```yaml
 - insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"
-      config:
-        capabilities: [assembler, agent-instructions, skill-catalog]
-
-- insert:
-    - id: context-assembler-scope
-      name: "@morlay/dsh-context-assembler/scope"
 ```
 
-| 出口                   | 行 id / 插件 name                                         | 做什么                                                                       |
-| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `.`                    | `context-assembler`（插件 name `context-assembler-tree`） | **组装出口**：按 config 装哪些能力、各带什么参数（缺省即四套能力）           |
-| `./assembler`          | `context-assembler`                                       | 注入通道：唯一渲染者与唯一覆盖判定处，发布 `ctx.contextAssembler`            |
-| `./agent-instructions` | `context-agent-instructions`                              | 工作区指令链（`$DSH_HOME/AGENTS.md` + 项目根到 cwd 逐级）                    |
-| `./skill-catalog`      | `context-skill-catalog`                                   | skill 目录规则块 + 模型侧 `skill` 工具                                       |
-| `./scope`              | `context-assembler-scope`                                 | 按会话收口：工具白名单、instruction 总开关、动态快照开关（定义由模式推给它） |
-| `./rows`               | —（不是插件，只出行清单）                                 | `contextChannel()` / `scopeRow()`，装配层据此渲染 patch                      |
+| 出口     | 行 id / 插件 name         | 做什么                                                                                                                           |
+| -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `.`      | `context-assembler`       | 通道本体：装配结果上的文本转换 + 降级 section 的按步送达，发布 `ctx.contextAssembler`；config 是 `keep` / `suppress` / `replace` |
+| `./rows` | —（不是插件，只出那一行） | `contextChannel()`，装配层据此渲染 patch                                                                                         |
 
-两条硬要求：**通道全局一份、不隔离**——消费者（工具说明、skill 目录）住在别的包里，隔离会让它们解析不到服务
-（行停在 waiting，不报错）；**装配期不按模式裁**——「这一面归谁」是会话级事实（工作区指令在 preset 自带上游
-行时让位，skill 面由通道抢面）。
+**通道全局一份、不隔离**：消费者（[`@morlay/dsh-tool-guidance` 的包根](../../profile/dsh-tool-guidance/README.md)，
+以及把 `instructions` 开关拨过来的 `dsh-session-mode` 收口）住在别的包里，隔离会让它们解析不到服务（行停在 waiting，
+不报错）。模式差异不在通道上表达：通道只认按 agent 推来的那一个开关（`setInstructions`），收口与模式定义都在
+`@morlay/dsh-session-mode` 里。
 
-工具说明（汉化精简 + 用法分组）不在这个包里：它归
-[`@morlay/dsh-agent-toolkit`](../../profile/dsh-agent-toolkit/README.md) 的 `guidance` 出口，`inject` 的是同一份
-全局通道；本包只做上下文重排。引用展开也是独立包
+工具说明（汉化精简 + 用法分组）不在这个包里：它归 [`@morlay/dsh-tool-guidance`](../../profile/dsh-tool-guidance/README.md)
+（包根即运行时），对通道的依赖只剩 `suppressSection` 一处；引用展开也是独立包
 [`@morlay/dsh-reference`](../dsh-reference/README.md)（它不依赖通道服务）。
+
+规则与 id 见[设计 上下文注入规则](./.agents/designs/20260921-上下文注入规则.md)；本包留什么、三份默认清单的归属见
+[设计 通道只做转换](./.agents/designs/20260929-通道只做转换.md)。

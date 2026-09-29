@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Context Assembler",
-    "description": "Prompt-injection capability set: the single injection channel plus workspace instructions, skill catalog and the scope gate that narrows tools per session mode."
+    "description": "The prompt channel: text conversion on the assembly result (replace / suppress) plus per-step delivery of demoted sections. The per-session scope gate (tool allow / deny lists, injection switches) lives in @morlay/dsh-session-mode."
   }
 }

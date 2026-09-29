@@ -20,8 +20,8 @@ export interface RowEntry {
 }
 
 export interface SubagentRowsOptions {
-  // 哪些 preset 的会话用本包的中文回报指引（本行 `config.localizedReturnGuidancePresets`）。
-  // 由装配给：它才知道自己注册的那份 preset 叫什么；不传即一律上游英文。
+  // 把中文回报指引**限制**到这些 preset（本行 `config.localizedReturnGuidancePresets`）。
+  // 不传就是不限：任意 preset（含官方四个 shipped）与还没绑 preset 的会话都用我们的中文文案。
   readonly localizedReturnGuidancePresets?: readonly string[];
 }
 

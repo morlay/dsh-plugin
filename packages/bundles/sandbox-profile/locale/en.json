@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Configurable Sandbox",
-    "description": "Disables the official sandbox / fs-sandbox rows for a configurable implementation, with the access rules (rw / r- / --) as values."
+    "title": "Configurable Sandbox & Approval",
+    "description": "Disables the official sandbox / fs-sandbox rows for a configurable implementation, with the access rules (rw / r- / --) as values; the replacement row also owns the runtime-context snapshot (sandbox:policy / approval:policy)."
   }
 }

@@ -2,17 +2,17 @@
 //
 // 判据：
 //
-// 1. `ctx.contextAssembler` 在装配层可见：注入通道全局一份（模式收口挂在它上面，工具说明在别的包里
-// `inject` 它）；
-// 2. `ctx.sessionToolScope` 存在：模式收口那一行（`context-assembler-scope`）真的装上了；
-// 3. `ctx.agentPresets` **存在**：registry 是行清单与选择面的 home；本部署的行清单归自己注册的
-// `mode-switch`（默认预设指它），官方四个仍保留可选；
-// 4. `ctx.sessionModes` 的清单等于 `session-mode` 行的 config（`coding` / `chat`，默认 `coding`），且
-// `modeForPreset` 只在**唯一映射**时回答——两个模式共享的 `mode-switch` 与官方 preset 都返回 `undefined`
+// 1. `ctx.contextAssembler` 在装配层可见：注入通道全局一份（工具说明在别的包里 `inject` 它，模式收口把
+// `instructions` 开关拨给它）；
+// 2. `ctx.sessionToolScope` **不存在**：收口由 `session-mode` 行内部持有——它不再是服务，也没有自己的行；
+// 3. `ctx.agentPresets` **存在**：registry 是行清单与选择面的 home；本部署不声明自己的 preset，
+// registry 的默认是官方 shipped `standard`；
+// 4. `ctx.sessionModes` **存在**，清单等于 `session-mode` 行的 config（`coding` / `chat`，默认 `coding`），且
+// `modeForPreset` 只在**唯一映射**时回答——本部署两个模式都不声明 `preset`，任何 preset 都返回 `undefined`
 // （不反查；模式由会话事实决定）。
 //
-// 模式之间的**行为**差异（chat 没有动态快照、工具目录被收口）在包内真依赖装配里测
-// （`session-mode.spec.ts` 与 `context-assembler-scope.spec.ts`），这里只回答"装配面装上了什么"。
+// 模式之间的**行为**差异（chat 没有动态快照、工具目录被收口、官方两条注入面被丢）在包内真依赖装配里测
+// （`session-mode.spec.ts`、`scope.spec.ts` 与 `preset-plane.spec.ts`），这里只回答"装配面装上了什么"。
 //
 // 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
 //
@@ -91,12 +91,14 @@ if (services.contextAssembler === undefined) {
   failures.push("contextAssembler is missing from the assembly plane");
 }
 
+// 收口在 `session-mode` 行**内部**（工具名单与三个开关）：它不该再作为服务出现在装配面上——出现就说明有人把
+// 那一行又装回来了（收口会因此变成两份真源）。
 console.log(
-  `verify-session-mode: sessionToolScope — ${services.sessionToolScope === undefined ? "不可见（收口行没装上？）" : "可见"}`,
+  `verify-session-mode: sessionToolScope — ${services.sessionToolScope === undefined ? "不存在（收口由 session-mode 内部承担）" : "可见（收口又变成服务了？）"}`,
 );
-if (services.sessionToolScope === undefined) {
+if (services.sessionToolScope !== undefined) {
   failures.push(
-    "sessionToolScope is missing; the context-assembler-scope row did not activate in this deployment",
+    "sessionToolScope should not exist; the per-session scope lives inside the session-mode row",
   );
 }
 
@@ -124,21 +126,17 @@ if (roster === undefined) {
   if (missing.length > 0) failures.push(`session-mode roster is missing: ${missing.join(", ")}`);
 }
 
-// 反查（preset → 模式）只在**唯一映射**时回答：本部署两个模式共享自己的 `mode-switch`，
-// 而没有任何模式声明官方那几个 preset，所以这两次都该是 `undefined`。
-const shared = services.sessionModes?.modeForPreset("mode-switch");
-console.log(`verify-session-mode: preset→模式 — mode-switch → ${shared ?? "(不反查)"}`);
-if (shared !== undefined) {
-  failures.push(
-    `modeForPreset("mode-switch") should be undefined (two modes share it), got ${String(shared)}`,
-  );
-}
-const official = services.sessionModes?.modeForPreset("standard");
-console.log(`verify-session-mode: preset→模式 — standard → ${official ?? "(不反查)"}`);
-if (official !== undefined) {
-  failures.push(
-    `modeForPreset("standard") should be undefined (no mode rides an official preset), got ${String(official)}`,
-  );
+// 反查（preset → 模式）只在**唯一映射**时回答：本部署两个模式都不声明 `preset`，所以**任何** preset 都不该
+// 反查出模式——抽两条官方 shipped preset 覆盖这条判据（两条都复用同一条失败文案）。
+const SAMPLE_PRESETS: readonly string[] = ["standard", "minimal"];
+for (const preset of SAMPLE_PRESETS) {
+  const mode = services.sessionModes?.modeForPreset(preset);
+  console.log(`verify-session-mode: preset→模式 — ${preset} → ${mode ?? "(不反查)"}`);
+  if (mode !== undefined) {
+    failures.push(
+      `modeForPreset(${JSON.stringify(preset)}) should be undefined (no mode binds a preset here), got ${String(mode)}`,
+    );
+  }
 }
 
 // 抽读几个已存在的会话（只读）：顺带验证读路径对我们自造事件类型（`session-mode/selected`，带

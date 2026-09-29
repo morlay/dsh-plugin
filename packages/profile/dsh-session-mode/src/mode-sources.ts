@@ -1,27 +1,33 @@
 // 模式定义的真源：`session-mode` 行的 `config` 由 `./rows.ts` 渲染（装配入口在 `packages/bundles/session-mode-profile`）。
-// `allowTools` 从 `@morlay/dsh-agent-toolkit/rows` 的 `TOOLKIT_TOOL_NAMES` 派生（工具名与汉化同源）；
-// 白名单里 preset 没有的工具自动跳过。改某个模式的名单就改这条源数据。
+// **行清单不由本包持有**：谁挂在这份定义上的会话用什么工具，取决于它挂着的 agent preset（官方 shipped preset），
+// `allowTools` 只是在这之上收窄——留空就是不收窄。改某个模式的名单就改这条源数据。
 
-import { TOOLKIT_TOOL_NAMES } from "@morlay/dsh-agent-toolkit/rows";
-
-// 本部署自己注册的那份 agent preset 的 id：两个模式共享它（行清单见 `packages/bundles/session-mode-profile`，
-// 它引用 `TOOLKIT_PRESET_ROWS`）。取舍见
-// `packages/bundles/session-mode-profile/.agents/adrs/20260929-自己注册preset.md`。
-export const MODE_PRESET_ID = "mode-switch";
+import type { PolicyName } from "./shared.ts";
 
 // 一个模式的源定义：就是 `session-mode` 行 `config.modes` 里的一项。
 export interface ModeSource {
   readonly id: string;
-  // 挂哪个 agent preset（它的 `id`）：行清单由那个 preset 提供，这里只写扩展。官方四个 shipped preset 照旧可选，
-  // 但我们的模式都挂 `MODE_PRESET_ID`；共享是有意的（差异靠会话级收口表达，见 `SessionModes.modeForPreset`）。
-  readonly preset: string;
+  // 挂哪个 agent preset（它的 `id`）：**可选**，不写就是不绑——选这个模式不换 preset，会话保持它当前挂着的那份，
+  // 行清单由那份 preset 提供（官方四个 shipped preset 照旧可选）。写了才在切模式时把 preset 切过去；
+  // 模式定义里可以整体改写它（用户 patch 层）。
+  readonly preset?: string;
   readonly name: string;
   readonly description: string;
   // 归谁用：`main`（用户选择器，缺省）、`subagent`（可作子代理 mode 的候选）。
   readonly role?: readonly ("main" | "subagent")[];
   readonly persona?: { readonly prefix?: string; readonly suffix?: string };
-  readonly allowTools: readonly string[];
+  // 这个模式能用的工具；**可选**，不写（留空）就是不设收窄——用会话挂着的 preset 的全部工具。
+  readonly allowTools?: readonly string[];
+  // 这个模式不用的工具（黑名单）：从 `allowTools` 定的那份里减掉（deny 优先）。
+  readonly denyTools?: readonly string[];
+  // 上游 policy 规则的生效白名单：**可选**，不写（留空）= 全部规则生效。
+  readonly allowPolicies?: readonly PolicyName[];
+  // 上游 policy 规则的黑名单：列出的规则禁用（它在上游那条 waterfall 上的裁决被绕过）。
+  readonly denyPolicies?: readonly PolicyName[];
   readonly instructions?: boolean;
+  // 是否要技能目录（官方 `skill-catalog` 的注入）：**可选**，不写就按这个模式自己的工具名单推导（名单里含 `skill`
+  // 就要，见 `modes.ts` 的 `derivedSkills`）。`coding` 留空名单 = 要；`chat` 的三件里没有 `skill` = 不要。
+  readonly skills?: boolean;
   readonly runtimeContext?: boolean;
   // 这个模式的默认模型（省略就跟全局 `agent-default-model`）。
   readonly defaultModel?: ModeModelSource;
@@ -52,32 +58,41 @@ const CHAT_PERSONA = {
 // 新会话用哪个模式（`session-mode` 行的 `config.default`）。
 export const DEFAULT_MODE = "coding";
 
-// 两个模式：编码与对话。**同一个 preset，差异全在会话级收口**。
+// 两个模式：编码与对话。**都不绑定 preset**（差异全在会话级收口），行清单由会话挂着的 preset 提供：`coding`
+// 不收窄（用全部），`chat` 收成提问 + 联网三件。
 export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
-    // 完整工具集由我们自己的 preset（`TOOLKIT_PRESET_ROWS`）提供。
-    preset: MODE_PRESET_ID,
     name: "编码模式",
     description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
-    allowTools: [...TOOLKIT_TOOL_NAMES],
+    // 不写 `allowTools`：不设收窄——这个会话用它挂着的 preset 提供的全部工具（抄一份清单只会与行清单漂移）。
+    // 不写 `denyTools`：一件工具都不禁。
+    //
+    // `denyPolicies` 只禁 `fs/edit-intent`（上游那条"先读后改"）：改文件不再要求先读过——写路径上的
+    // `fs/write-intent`（陈旧版本 CAS 那层安全网）照旧生效，那正是这条配置不写成"两条都禁"的理由。
+    denyPolicies: ["fs/edit-intent"],
   },
   {
     id: "chat",
-    // 同一个 preset：行清单里有联网工具，收口才收得成"提问 + 联网"。
-    preset: MODE_PRESET_ID,
+    // 行清单同样跟着会话：白名单里 preset 没有的工具自动跳过，所以这个模式在缺联网行的 preset 上收不出三件。
     name: "对话模式",
     description:
       "只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。",
     persona: CHAT_PERSONA,
     // 只做用户侧对话：不做子代理的候选（父在 chat 里派发的子代理仍继承 chat，见 README 的"角色"一节）。
     role: ["main"],
-    // 提问与联网三件：行由 preset 提供，这里只收口（preset 没有的自动跳过）。
+    // 提问与联网三件：行由会话挂着的 preset 提供，这里只收口（preset 没有的自动跳过）。
     allowTools: ["ask_user_question", "web_search", "web_fetch"],
+    // 不写任何 policy 名单：上游两条规则都照旧生效。这个模式没有文件工具，两条都碰不到——
+    // 配了只是噪音，所以留空。
     // 没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
+    //
+    // 两个抑制面都关：`instructions: false` 丢掉官方 `agent-instructions`（工作区指令）的注入；这个模式不写
+    // `skills`，而白名单三件里没有 `skill`、`denyTools` 也留空 → 推导成 `false`，官方 `skill-catalog` 的注入
+    // 同样丢掉。取舍见 `.agents/designs/20260929-抑制官方注入面.md`。
     instructions: false,
     runtimeContext: false,
   },

@@ -7,9 +7,9 @@ import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-api-remotes/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
-
 // Type-only：槽位声明与 standard props（session / session-maybe / global）。
 import type {} from "@morlay/dsh-client-ui-conversation/client";
+import { POLICY_NAMES } from "../shared.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
@@ -25,6 +25,11 @@ const NS = "session-mode";
 
 // 这一行里需要中文文案的字段（都在 `modes.<模式>.defaultModel` 里，所以按模板路径注册一次）。
 const FIELDS = ["provider", "model", "reasoningEffort"] as const;
+
+// 两份 policy 名单的字段名（`modes.<模式>.<字段>`）：它们在 schema 上是**字符串数组**（`z.array(z.string())`，没有
+// enum），候选值由本文件登记的封闭名单 `POLICY_NAMES` 给（见下面 `hints.select` 那一段）——所以两条已知 policy
+// 都以"未配置"的形态各占一项可选，页面把每一项画成选择器。
+const POLICY_FIELDS = ["allowPolicies", "denyPolicies"] as const;
 
 // 动态键的占位段（与通用表单的字段树同一约定）。
 const DYNAMIC = "*";
@@ -75,6 +80,22 @@ export function apply(ctx: Context): void {
         for (const off of offs) off();
       };
     }, "session-mode: field wording"),
+  );
+
+  // 两份 policy 名单是**字符串数组**，键的候选是一份封闭名单（上游 waterfall 名，见 `shared.ts` 的
+  // `POLICY_NAMES`）：在数组**项**那一路径上登记候选值，页面因此把每一项画成选择器，两条已知 policy 直接可选
+  // （不必手写名字）。名单住在 `shared.ts`——client 半不 import `modes.ts`（免得把 schemastery 拖进浏览器包）。
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const offs = POLICY_FIELDS.map((key) =>
+        scope.schemaFormHints.select(SESSION_MODE_NS, ["modes", DYNAMIC, key, DYNAMIC], {
+          options: () => POLICY_NAMES.map((value) => ({ value })),
+        }),
+      );
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "session-mode: policy candidates"),
   );
 
   // 选模型的候选不在本行的 schema 里：provider 是部署里的 LLM 目录（活着的路由 + 可配置声明），模型清单读那份声明

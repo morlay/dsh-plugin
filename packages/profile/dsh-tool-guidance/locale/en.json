@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Tool Guidance",
+    "description": "Tool guidance (localized short descriptions, trimmed schema, usage groups) as one host-plane row; the agent row list belongs to the agent presets, not to this package."
+  }
+}

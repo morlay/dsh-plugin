@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { ResolvedConfig } from "./config.ts";
 import { ConfigurableFileSystem } from "./fs.ts";
-import { installPolicyContext } from "./policy.ts";
+import { installRuntimeContexts } from "./policy.ts";
 import { ruleSourceOf, type RuleSource } from "./rules.ts";
 import { ConfigurableSandboxProvider } from "./sandbox.ts";
 
@@ -39,6 +39,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
   warnAboutDegradedRules(ctx, rules);
   new ConfigurableSandboxProvider(ctx, config);
   new ConfigurableFileSystem(ctx, config);
-  // 替换了 ctx.sandbox / ctx.fs，`sandbox:policy` 那段运行时文本也要跟着换（见 policy.ts）。
-  installPolicyContext(ctx, rules, (session) => ctx.sandboxPolicy.resolve({ session }));
+  // 替换了 ctx.sandbox / ctx.fs，`sandbox:policy` 那段运行时文本也要跟着换，`approval:policy` 换成中文
+  // （见 policy.ts）。
+  installRuntimeContexts(ctx, rules, (session) => ctx.sandboxPolicy.resolve({ session }));
 }

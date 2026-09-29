@@ -9,8 +9,8 @@
   插件装配——纯 node，任何平台可跑。
 - `config-surface.spec.ts` / `field-wording.spec.ts`：六个字段的 schema 形状（`access` 可改、其余
   `.volatile().disabled()`）与字段文案。
-- `policy.spec.ts`：`sandbox:policy` 文本的接管（按 agent 作用域覆盖、规则非空时追加本部署条目、agentless 保持
-  官方那条）。
+- `policy.spec.ts`：两条运行时文本的接管（真 agent + 真 `systemPrompt.assemble`：**第一次**装配就是中文、两次一致；
+  `approval:policy` 按有效策略选段；agentless 保持官方那条）。
 - 装配行（禁官方 `sandbox` / `fs-sandbox` + 插本包行）的守卫在采用方的
   `packages/bundles/sandbox-profile/src/__tests__/patch.spec.ts`。
 

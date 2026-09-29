@@ -1,7 +1,7 @@
 {
   "name": "@morlay/session-mode-profile",
   "version": "0.0.2",
-  "description": "会话模式与注入面：本部署自己的 agent preset 声明 + 会话模式行 + subagent 服务接管行 + 注入通道与它的收口行 + 工具说明（汉化 / 用法分组），一次装齐。",
+  "description": "会话模式与注入面：会话模式行（各模式的 persona、工具与 policy 名单、开关；按会话收口也由它内部持有）+ subagent 服务接管行 + 注入通道 + 工具说明（汉化 / 用法分组），一次装齐；行清单归会话挂着的 shipped preset，本包不自建 preset。",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -40,11 +40,11 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@morlay/dsh-agent-toolkit": "workspace:*",
     "@morlay/dsh-client-ui-primitives": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",
     "@morlay/dsh-session-mode": "workspace:*",
-    "@morlay/dsh-subagent": "workspace:*"
+    "@morlay/dsh-subagent": "workspace:*",
+    "@morlay/dsh-tool-guidance": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",

@@ -2,9 +2,6 @@
 - id: locale
   config:
     preference: zh
-- id: agent-preset-registry
-  config:
-    default: mode-switch
 - id: ui-settings-general
   config:
     welcomeNoticeVersion: 2026-08-13.1

@@ -3,149 +3,12 @@
     - id: ui-primitives-fork
       name: "@morlay/dsh-client-ui-primitives"
 - insert:
-    - id: preset-mode-switch
-      name: "@deepseek-ai/dsh-agent-preset"
-      config:
-        id: mode-switch
-        name: 手动切换模式
-        description: 本部署的行清单：两个会话模式共享它，差异由会话级收口（提示词 / 工具白名单 / 注入开关）决定。
-        order: 5
-        plugins:
-          - id: toolkit-ask
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-ask-user
-                name: "@deepseek-ai/dsh-tool-ask-user"
-          - id: toolkit-delegation
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-subagent-control
-                name: "@deepseek-ai/dsh-tool-subagent-control"
-              - id: tool-subagent-list-agents
-                name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
-              - id: tool-subagent
-                name: "@deepseek-ai/dsh-tool-subagent"
-                config:
-                  provider: spawn
-                  toolName: subagent
-                  backgroundMode: continuable
-              - id: tool-subagent-fork
-                name: "@deepseek-ai/dsh-tool-subagent"
-                config:
-                  provider: fork
-                  toolName: subagent_fork
-                  backgroundMode: continuable
-              - id: workflow-ptc
-                name: "@deepseek-ai/dsh-workflow-ptc"
-                config:
-                  provider: spawn
-              - id: tool-workflow
-                name: "@deepseek-ai/dsh-tool-workflow"
-            isolate:
-              workflowEngine: true
-          - id: toolkit-flow
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-todo
-                name: "@deepseek-ai/dsh-tool-todo"
-                config:
-                  allowParallelInProgress: true
-              - id: command-goal
-                name: "@deepseek-ai/dsh-command-goal"
-              - id: tool-goal
-                name: "@deepseek-ai/dsh-tool-goal"
-              - id: present
-                name: "@deepseek-ai/dsh-tool-present"
-          - id: toolkit-fs
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-fs
-                name: "@deepseek-ai/dsh-tool-fs"
-              - id: tool-fs-search
-                name: "@deepseek-ai/dsh-tool-fs-search"
-                config:
-                  sampleOverCapGlobResults: false
-          - id: toolkit-shell
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-bash
-                name: "@deepseek-ai/dsh-tool-bash"
-                disabled: !!js process.platform==="win32"
-              - id: tool-pwsh
-                name: "@deepseek-ai/dsh-tool-pwsh"
-                disabled: !!js process.platform!=="win32"
-              - id: tool-jobs
-                name: "@deepseek-ai/dsh-tool-jobs"
-          - id: toolkit-skill
-            name: cordis:group
-            group: true
-            config:
-              - id: skill-filesystem
-                name: "@deepseek-ai/dsh-skill-filesystem"
-          - id: toolkit-web
-            name: cordis:group
-            group: true
-            config:
-              - id: tool-web
-                name: "@deepseek-ai/dsh-tool-web"
-                config:
-                  fetch: true
-                  searchTimeoutMs: 60000
-          - id: compaction
-            name: cordis:group
-            group: true
-            config:
-              - id: compaction-basic
-                name: "@deepseek-ai/dsh-compaction-basic"
-              - id: command-compact
-                name: "@deepseek-ai/dsh-command-compact"
-              - id: tool-result-pruner
-                name: "@deepseek-ai/dsh-compaction-tool-result-pruner"
-                config:
-                  thresholdChars: 8192
-                  headChars: 4096
-                  tailChars: 1024
-            isolate:
-              compaction: true
-              toolResultPruner: true
-          - id: planning
-            name: cordis:group
-            group: true
-            config:
-              - id: plan-mode
-                name: "@deepseek-ai/dsh-plan-mode"
-                config:
-                  section: |-
-                    你处于计划模式。在 exit_plan_mode 成功、或用户切换会话模式之前，一直留在计划模式。
-
-                    先探索：用非破坏性的读、搜索、静态分析与检查，把计划落到真实仓库上。不要做任何写操作——不改文件、不改配置、不跑会重写被跟踪文件的格式化或代码生成、不提交，也不要把计划执行掉。优先用仓库里已有的函数与写法，不要新造机制。
-
-                    用户的对话式同意（包括对你自己提问的肯定回答）不构成批准，也不结束计划模式；把确认到的决定并进计划里。
-
-                    工具目录在模式之间保持一致（请求缓存稳定），所以这些规则压过任何后续工具说明或用法正文里“去改文件”的建议；那些工具仍列在目录里，只是这一步不能用。不要用 todo_write 跟踪规划阶段：它跟的是批准之后的实施，计划本身归 exit_plan_mode。
-
-                    能自己查清的事实自己查。只有用户拥有的选择、或检查无法回答的实质歧义才用 ask_user_question；不要问代码在哪、现在怎么跑这类自己能查明的问题。
-
-                    计划要决策完备：目标与成功判据；按子系统分组的改动；公共 API、schema 与数据流的变化；边界情况与失败模式；测试与验收判据；显式假设。可审即可，不必长到别人照它实现还要自己做设计决定。
-
-                    就绪时调 exit_plan_mode，正文是完整的计划 markdown（以 # 标题开头），并让它成为那一条回复里唯一且最后的工具调用：它把计划交出去等批准，实施只在批准之后的步骤里开始。不要把最终计划当普通回复贴出来，也不要用散文或 ask_user_question 问“要不要继续”。评审驳回就吸收反馈重新提交；评审通道不可用或被中断时留在计划模式、让用户手动切模式，不要自己往下做。
-            isolate:
-              planMode: true
-          - id: fs-intent-relax
-            name: "@morlay/dsh-agent-toolkit/relax-intent"
-- insert:
     - id: session-mode
       name: "@morlay/dsh-session-mode"
       config:
         default: coding
         modes:
           coding:
-            preset: mode-switch
             name: 编码模式
             description: 功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。
             role:
@@ -156,43 +19,9 @@
                 你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。
                 全程用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考不要陷入重复循环，一旦循环立即退出；思考聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。
               suffix: 你的工作目录在 `{{cwd}}`
-            allowTools:
-              - ask_user_question
-              - subagent
-              - subagent_fork
-              - list_subagent_models
-              - workflow
-              - todo_write
-              - exit_plan_mode
-              - get_goal
-              - create_goal
-              - update_goal
-              - present
-              - read
-              - write
-              - edit
-              - glob
-              - grep
-              - read_image
-              - bash
-              - pwsh
-              - job_output
-              - job_list
-              - job_kill
-              - skill
-              - spawn_teammate
-              - send_message
-              - list_agents
-              - wait_agent
-              - interrupt_agent
-              - team_task_create
-              - team_task_list
-              - team_task_get
-              - team_task_update
-              - web_fetch
-              - web_search
+            denyPolicies:
+              - fs/edit-intent
           chat:
-            preset: mode-switch
             name: 对话模式
             description: 只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。
             role:
@@ -208,20 +37,9 @@
 - insert:
     - id: subagent
       name: "@morlay/dsh-subagent"
-      config:
-        localizedReturnGuidancePresets:
-          - mode-switch
 - insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"
-      config:
-        capabilities:
-          - assembler
-          - agent-instructions
-          - skill-catalog
-- insert:
-    - id: context-assembler-scope
-      name: "@morlay/dsh-context-assembler/scope"
 - insert:
     - id: tool-guidance
-      name: "@morlay/dsh-agent-toolkit/guidance"
+      name: "@morlay/dsh-tool-guidance"

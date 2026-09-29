@@ -109,10 +109,10 @@ const DELTAS: Record<Retained, readonly Delta[]> = {
       // Config 的那个装配面字段（hidden，不进设置页）。
       from: [
         "  /**",
-        "   * Preset ids whose sessions get this package's Chinese return guidance; default empty.",
+        "   * Preset ids the Chinese return guidance is restricted to; empty (default) means no restriction.",
         "   *",
-        "   * 名单由**装配**给（这一行的 `config`）：文案是模型可见的东西，跟着 preset 走，其余会话走上游英文那套。",
-        "   * 装配面，不是用户面——所以不进设置页（`.hidden()`）。",
+        "   * 不配 = 任意 preset 的会话都用本包的中文回报指引（官方四个 shipped preset 也在内，还有还没绑 preset 的会话）。",
+        "   * 要反过来只让某几份 preset 用中文，就在这里列出来。装配面，不是用户面——所以不进设置页（`.hidden()`）。",
         "   */",
         "  localizedReturnGuidancePresets: string[]",
         "",
@@ -126,6 +126,30 @@ const DELTAS: Record<Retained, readonly Delta[]> = {
     {
       from: "      }, () => this.config.maxActiveSubagents.get(), () => this.config.localizedReturnGuidancePresets)",
       to: "      }, () => this.config.maxActiveSubagents.get())",
+    },
+    {
+      // 中文委派说明的接线：多一个本包文件的 import（见 `./delegation-context.ts`）。
+      from: [
+        "import SubagentContinuationManager from './continuation.ts'",
+        "import { installDelegationContext } from './delegation-context.ts'",
+        "",
+      ].join("\n"),
+      to: "import SubagentContinuationManager from './continuation.ts'\n",
+    },
+    {
+      // 同上，构造器里那一行挂载调用。
+      from: [
+        "    super(ctx, 'subagents')",
+        "    // 模型看到的委派范围说明换成中文（见 `./delegation-context.ts`）。",
+        "    installDelegationContext(ctx)",
+        "    this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))",
+        "",
+      ].join("\n"),
+      to: [
+        "    super(ctx, 'subagents')",
+        "    this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))",
+        "",
+      ].join("\n"),
     },
   ],
 };

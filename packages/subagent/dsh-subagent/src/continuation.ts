@@ -198,8 +198,8 @@ export class SubagentContinuationManager {
   /**
    * Return guidance for a continuable child's initial task, per session.
    *
-   * 会话挂着本部署名单里的 preset 时用本包的中文文案，其余（官方 shipped preset、还没绑 preset 的会话、
-   * 不装 registry 的部署）保持上游英文。文案是模型可见的东西，跟着 preset 走；但 `subagents` 是**进程单例**
+   * 默认（没配名单）对**任意**会话用本包的中文文案，官方四个 shipped preset 与还没绑 preset 的会话都覆盖；
+   * 配了名单才收窄成"只有这些 preset 的会话用中文"。文案是模型可见的东西；但 `subagents` 是**进程单例**
    * （跨会话查询面由 host 的 api-proxy 服务、provider 名全局唯一），realm 内的服务 realm 外读不到，所以这一行
    * 不能搬进 preset realm——只能在 host 平面按会话判。
    * @param parent - the exact live parent whose session owns the child.

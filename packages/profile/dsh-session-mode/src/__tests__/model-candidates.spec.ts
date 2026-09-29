@@ -23,6 +23,8 @@ function bench() {
         return () => {};
       },
       suggestKeys: () => () => {},
+      // 两份 policy 名单是字符串数组：候选登记在数组项那一路径上（本用例只验模型候选，这里只求它在场）。
+      select: () => () => {},
       refresh: () => {
         refreshes += 1;
       },

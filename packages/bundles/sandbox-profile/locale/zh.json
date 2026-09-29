@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "可配置沙箱",
-    "description": "禁用官方 sandbox / fs-sandbox 两行并换成可配置实现，附访问规则（rw / r- / --）的值。"
+    "title": "可配置沙箱与审批",
+    "description": "禁用官方 sandbox / fs-sandbox 两行并换成可配置实现，附访问规则（rw / r- / --）的值，并让替换行接管运行时快照（sandbox:policy / approval:policy）。"
   }
 }

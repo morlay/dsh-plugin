@@ -1,111 +1,167 @@
-// 接管 `sandbox:policy`：本部署换了沙箱实现，那段策略文本必须跟着换，否则模型看到的是官方规则。
+// 接管两条运行时上下文：本部署换了沙箱实现、也要中文的审批措辞，`sandbox:policy` 与 `approval:policy` 都必须在
+// agent 的**第一次**装配里就是我们的文本（挂在装配瀑布里注册只能从第二次起生效——会话里表现为"先英文后中文"）。
 import { Context } from "@deepseek-ai/cordis";
-import type { Agent } from "@deepseek-ai/dsh-agent";
-import { createScope, scopeOf, type ScopeKey } from "@deepseek-ai/dsh-scope";
-import SystemPrompt from "@deepseek-ai/dsh-system-prompt";
+import { assembleContextFor, type Agent } from "@deepseek-ai/dsh-agent";
+import {
+  mountAgentLoopTestDependencies,
+  mountAgentLoopTestHarness,
+} from "@deepseek-ai/dsh-agent-loop-testkit";
+import { SessionId } from "@deepseek-ai/dsh-session";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  installPolicyContext,
-  registerPolicyContext,
+  APPROVAL_POLICY_CONTEXT,
+  installRuntimeContexts,
+  renderApprovalContext,
   renderPolicyContext,
   SANDBOX_POLICY_CONTEXT,
 } from "../policy.ts";
 
-const OFFICIAL_TEXT = "Current DSH file policy: workspace-write. …";
+const OFFICIAL_SANDBOX_TEXT = "Current DSH file policy: workspace-write. …";
+const OFFICIAL_APPROVAL_TEXT = "Approval policy: ask. Operations that require approval …";
 
 const RULES = { allowWrite: ["/tmp"], readOnly: ["/ro"], deny: ["**/*.pem"] };
+
+const EMPTY_RULES = { allowWrite: [], readOnly: [], deny: [] };
 
 const contexts: Context[] = [];
 afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-// 拿一个一定会有的 scope key（`createScope` 建的 scope 必有）。
-function keyOf(ctx: Context): ScopeKey {
-  const key = scopeOf(ctx);
-  if (key === undefined) throw new Error("测试的 scope 必须有 key");
-  return key;
-}
-
-// 一个假的 agent：策略文本只读它的 session（这里用不到内容，resolve 是 stub）。
-function fakeAgent(agentCtx: Context): Agent {
-  return { ctx: agentCtx, session: { header: { cwd: "/w" } } } as unknown as Agent;
-}
-
-async function mount(): Promise<{ root: Context; scope: Context }> {
-  const root = new Context();
-  contexts.push(root);
-  await root.plugin(SystemPrompt, { includeHarnessIdentity: false });
-  // 模拟上游 sandbox-policy：在全局层注册同名的策略文本。
-  root.systemPrompt.context({
+// 真装配的底座：真 systemPrompt + 真 agents（AgentLoop），另加"上游那两条全局层注册"与 approval 服务替身
+// （替身只实现本包读的公开面：`overrideOf` + `config.policy`）。
+async function mount(
+  options: { readonly defaultPolicy?: "ask" | "never"; readonly override?: "ask" | "never" } = {},
+) {
+  const ctx = new Context();
+  contexts.push(ctx);
+  await mountAgentLoopTestDependencies(ctx, { systemPrompt: { includeHarnessIdentity: false } });
+  const harness = await mountAgentLoopTestHarness(ctx);
+  ctx.systemPrompt.context({
     name: SANDBOX_POLICY_CONTEXT,
-    order: root.systemPrompt.getContextOrder("SANDBOX_POLICY"),
-    text: () => OFFICIAL_TEXT,
+    order: ctx.systemPrompt.getContextOrder("SANDBOX_POLICY"),
+    text: () => OFFICIAL_SANDBOX_TEXT,
   });
-  const scope = createScope(root, { preset: "coding" });
-  return { root, scope: scope.ctx };
+  ctx.systemPrompt.context({
+    name: APPROVAL_POLICY_CONTEXT,
+    order: ctx.systemPrompt.getContextOrder("APPROVAL_POLICY"),
+    text: () => OFFICIAL_APPROVAL_TEXT,
+  });
+  ctx.provide("approval", {
+    overrideOf: () => options.override,
+    config: { policy: options.defaultPolicy ?? "ask" },
+  } as never);
+  return { ctx, harness };
+}
+
+function install(ctx: Context): void {
+  installRuntimeContexts(ctx, RULES, () => ({ mode: "workspace-write", workspaceRoot: "/w" }));
+}
+
+async function contextsOf(ctx: Context, agent: Agent): Promise<Map<string, string>> {
+  const assembled = await ctx.systemPrompt.assemble(assembleContextFor(agent));
+  return new Map(assembled.contexts.map((entry) => [entry.name, entry.text]));
 }
 
 describe("sandbox:policy 的文本", () => {
-  it("三种模式各有官方语义，规则非空时追加在末尾", () => {
-    const empty = { allowWrite: [], readOnly: [], deny: [] };
-
-    expect(renderPolicyContext({ mode: "read-only", workspaceRoot: "/w" }, empty)).toContain(
-      "只读",
-    );
-    expect(renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, empty)).toContain(
-      "workspace-write（工作区可写）",
+  it("三种模式的语义 + 规则行简写", () => {
+    expect(renderPolicyContext({ mode: "read-only", workspaceRoot: "/w" }, EMPTY_RULES)).toContain(
+      "文件策略：只读——不能修改任何文件",
     );
     expect(
-      renderPolicyContext({ mode: "danger-full-access", workspaceRoot: "/w" }, empty),
-    ).toContain("danger-full-access（全权）");
+      renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, EMPTY_RULES),
+    ).toContain('文件策略：workspace-write——可改会话工作区 "/w" 下的文件');
+    expect(
+      renderPolicyContext({ mode: "danger-full-access", workspaceRoot: "/w" }, EMPTY_RULES),
+    ).toContain("文件策略：全权——文件改动不再受限");
 
     const withRules = renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, RULES);
-    expect(withRules).toContain("/tmp");
-    expect(withRules).toContain("/ro");
-    expect(withRules).toContain("**/*.pem");
-    // 规则为空时不追加任何一句。
+    expect(withRules).toContain("额外可写：/tmp。");
+    expect(withRules).toContain("只读（不可写）：/ro。");
+    expect(withRules).toContain("拒绝（读写都拒）：**/*.pem。");
     expect(
-      renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, empty),
-    ).not.toContain("本部署额外授权");
+      renderPolicyContext({ mode: "workspace-write", workspaceRoot: "/w" }, EMPTY_RULES),
+    ).not.toContain("额外可写");
+  });
+});
+
+describe("agent 的第一次装配", () => {
+  it("agent 创建时装的那份：第一次装配就是中文，两次一致（不再先英文后中文）", async () => {
+    const { ctx, harness } = await mount();
+    install(ctx);
+    const agent = await harness.create(SessionId("policy-first"));
+
+    const first = (await contextsOf(ctx, agent)).get(SANDBOX_POLICY_CONTEXT);
+    const second = (await contextsOf(ctx, agent)).get(SANDBOX_POLICY_CONTEXT);
+
+    expect(first).toContain("额外可写：/tmp。");
+    expect(first).not.toBe(OFFICIAL_SANDBOX_TEXT);
+    expect(second).toBe(first);
   });
 
-  it("注册在 agent 作用域：装配看到的是我们的文本，全局那条不受影响", async () => {
-    const { root, scope } = await mount();
-    registerPolicyContext(scope, RULES, () => ({ mode: "workspace-write", workspaceRoot: "/w" }));
-    // inject 的回调在依赖就绪后执行；注册本身是同步落在 scope layer 上的，等一个 tick 再装配。
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+  it("本行晚于 agent 挂载（行重挂）时也覆盖已经存在的 agent", async () => {
+    const { ctx, harness } = await mount();
+    const agent = await harness.create(SessionId("policy-existing"));
+    install(ctx);
 
-    // 读装配：服务在 root 上，作用域用 scope key 指定（agent 自己的 ctx 就是这么取它的）。
-    const scoped = await root.systemPrompt.assemble({
-      agent: fakeAgent(scope),
-      scope: keyOf(scope),
-    });
-    const policy = scoped.contexts.find((entry) => entry.name === SANDBOX_POLICY_CONTEXT);
+    expect((await contextsOf(ctx, agent)).get(SANDBOX_POLICY_CONTEXT)).toContain("/tmp");
+  });
 
-    expect(policy?.text).toContain("本部署额外授权的可写根：/tmp");
-    expect(policy?.text).not.toBe(OFFICIAL_TEXT);
+  it("agentless 装配保持上游那条（我们的注册只在 agent 作用域）", async () => {
+    const { ctx } = await mount();
+    install(ctx);
 
-    // 官方那条还在全局层：没有我们的作用域注册时（例如 agentless 装配）照旧是它。
-    const global = await root.systemPrompt.assemble({});
-    expect(global.contexts.find((entry) => entry.name === SANDBOX_POLICY_CONTEXT)?.text).toBe(
-      OFFICIAL_TEXT,
+    const assembled = await ctx.systemPrompt.assemble({});
+    expect(assembled.contexts.find((entry) => entry.name === SANDBOX_POLICY_CONTEXT)?.text).toBe(
+      OFFICIAL_SANDBOX_TEXT,
+    );
+  });
+});
+
+describe("approval:policy 的文本", () => {
+  it("两种策略各一段（照抄用户确认的措辞）", () => {
+    expect(renderApprovalContext("ask")).toBe(
+      "审批策略：ask——需要审批的操作会询问用户；没有可用的应答者时直接失败。",
+    );
+    expect(renderApprovalContext("never")).toBe(
+      "审批提示已禁用：需要审批的操作一律自动拒绝——不要请求沙箱升级（不要设 sandbox_permissions）。",
     );
   });
 
-  it("installPolicyContext 在装配时给每个 agent 注册一次", async () => {
-    const { root, scope } = await mount();
-    installPolicyContext(root, RULES, () => ({ mode: "workspace-write", workspaceRoot: "/w" }));
+  it("部署默认是 ask：第一次装配就是中文那条", async () => {
+    const { ctx, harness } = await mount();
+    install(ctx);
+    const agent = await harness.create(SessionId("approval-ask"));
 
-    const agent = fakeAgent(scope);
-    // `systemPrompt.assemble()` 自己就会走 `system-prompt/assemble` 瀑布——第一次装配即触发监听。
-    await root.systemPrompt.assemble({ agent, scope: keyOf(scope) });
+    const text = (await contextsOf(ctx, agent)).get(APPROVAL_POLICY_CONTEXT);
+    expect(text).toBe("审批策略：ask——需要审批的操作会询问用户；没有可用的应答者时直接失败。");
+    expect(text).not.toBe(OFFICIAL_APPROVAL_TEXT);
+  });
 
-    const assembled = await root.systemPrompt.assemble({ agent, scope: keyOf(scope) });
-    expect(
-      assembled.contexts.find((entry) => entry.name === SANDBOX_POLICY_CONTEXT)?.text,
-    ).toContain("本部署额外授权的可写根：/tmp");
+  it("会话覆盖 never：读的是覆盖后的有效策略", async () => {
+    const { ctx, harness } = await mount({ defaultPolicy: "ask", override: "never" });
+    install(ctx);
+    const agent = await harness.create(SessionId("approval-never"));
+
+    expect((await contextsOf(ctx, agent)).get(APPROVAL_POLICY_CONTEXT)).toContain("审批提示已禁用");
+  });
+
+  it("部署默认就是 never（没有会话覆盖）：也是那条", async () => {
+    const { ctx, harness } = await mount({ defaultPolicy: "never" });
+    install(ctx);
+    const agent = await harness.create(SessionId("approval-default-never"));
+
+    expect((await contextsOf(ctx, agent)).get(APPROVAL_POLICY_CONTEXT)).toContain("审批提示已禁用");
+  });
+
+  it("没装审批服务时这条是空的（遮蔽不了不存在的上游那条）", async () => {
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, { systemPrompt: { includeHarnessIdentity: false } });
+    const harness = await mountAgentLoopTestHarness(ctx);
+    install(ctx);
+    const agent = await harness.create(SessionId("approval-absent"));
+
+    expect((await contextsOf(ctx, agent)).get(APPROVAL_POLICY_CONTEXT)).toBe("");
   });
 });

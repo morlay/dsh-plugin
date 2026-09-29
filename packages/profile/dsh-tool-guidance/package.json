@@ -1,0 +1,64 @@
+{
+  "name": "@morlay/dsh-tool-guidance",
+  "version": "0.0.2",
+  "description": "Tool guidance for dsh: localized short tool descriptions, trimmed schema and usage groups as one host-plane row. The agent row list lives in the agent presets themselves (shipped or deployment-owned).",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "guidance",
+    "tool-guidance"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "locale/*.json",
+    "dist",
+    "src",
+    "tool",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rows": "./src/rows.ts",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./rows": "./dist/rows.mjs",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:*",
+    "@morlay/dsh-context-assembler": "workspace:*",
+    "@morlay/dsh-session-mode": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@morlay/dsh-context-assembler": "workspace:*"
+  }
+}

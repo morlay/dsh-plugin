@@ -9,7 +9,8 @@ import { Config } from "../modes.ts";
 
 const t = ((key: string) => key) as never;
 
-// 一段真实的 config 值：两个模式 + 没配过默认模型。
+// 一段真实的 config 值：两个模式 + 没配过默认模型。名单类字段都带上（schema 归一化后它们总在，
+// 空数组就是"没配"）。
 const section = {
   default: "coding",
   modes: {
@@ -19,6 +20,9 @@ const section = {
       role: ["main"],
       persona: { prefix: "", suffix: "" },
       allowTools: ["read"],
+      denyTools: [],
+      allowPolicies: [],
+      denyPolicies: ["fs/edit-intent"],
       instructions: true,
       runtimeContext: true,
     },
@@ -28,6 +32,9 @@ const section = {
       role: ["main"],
       persona: { prefix: "", suffix: "" },
       allowTools: ["web_search"],
+      denyTools: [],
+      allowPolicies: [],
+      denyPolicies: [],
       instructions: false,
       runtimeContext: true,
     },
@@ -107,27 +114,33 @@ describe("会话模式的行配置页", () => {
       "description",
       "role",
       "allowTools",
+      "denyTools",
+      "allowPolicies",
+      "denyPolicies",
       "instructions",
       "runtimeContext",
     ]) {
       expect(paths).toContain(`modes.coding.${key}`);
       expect(paths).toContain(`modes.chat.${key}`);
     }
+    // 名单类字段是数组：配过的值各占一项（`coding` 的 `denyPolicies` 就是本部署那条）。
+    expect(paths).toContain("modes.coding.denyPolicies.0");
     // 模式是成员行：名字可见、能移除。
     const coding = walked.find((item) => item.path.join(".") === "modes.coding");
     expect(coding?.member).toMatchObject({ parent: ["modes"], key: "coding" });
   });
 
-  it("还没配默认模型的模式：`defaultModel` 是它自己那一层的可添加项", () => {
+  it("还没配默认模型的模式：`defaultModel` 与 `skills` 是它自己那一层的可添加项", () => {
     const snapshot = mounted().face().hooks.schemaForm.getSnapshot();
     const paths = snapshot.walked.map((item) => item.path.join("."));
 
-    // `defaultModel` 没配就没有这一行（`default(null)` 让它保持缺失）。
+    // 两个可选字段没配就没有这一行：`defaultModel`（`default(null)` 让它保持缺失）与 `skills`
+    // （不写即按工具名单推导，页面上是"显式覆盖"的开关）。
     expect(paths).not.toContain("modes.coding.defaultModel");
-    // `preset`(空串默认) 与 `defaultModel`(null 默认) 都是这一层可添加的字段。
+    expect(paths).not.toContain("modes.coding.skills");
     expect(
       snapshot.addable.get(JSON.stringify(["modes", "coding"]))?.map((option) => option.key),
-    ).toEqual(["preset", "defaultModel"]);
+    ).toEqual(["preset", "skills", "defaultModel"]);
   });
 
   it("给某个模式配默认模型：加成 `defaultModel` 后里面就是能填的位子", () => {

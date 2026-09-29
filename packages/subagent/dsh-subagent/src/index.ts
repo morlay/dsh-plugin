@@ -70,6 +70,7 @@ import { assertSubagentMaxDepth } from '../../../../vendor/deepseek-harness/pack
 import { createActivationObserver, createLifecycleEmitter, observeRun } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/lifecycle.ts'
 import type { ActivationObserver, LifecycleEmitter } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/lifecycle.ts'
 import SubagentContinuationManager from './continuation.ts'
+import { installDelegationContext } from './delegation-context.ts'
 import type { SubagentDelivery } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/inbox.ts'
 import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/list-children.ts'
 import type { SubagentDescendantListEntry } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/list-children.ts'
@@ -155,10 +156,10 @@ export interface Config {
   /** Default delegation depth for tools without an explicit limit; defaults to 1. */
   maxDepth: Volatile<number>
   /**
-   * Preset ids whose sessions get this package's Chinese return guidance; default empty.
+   * Preset ids the Chinese return guidance is restricted to; empty (default) means no restriction.
    *
-   * 名单由**装配**给（这一行的 `config`）：文案是模型可见的东西，跟着 preset 走，其余会话走上游英文那套。
-   * 装配面，不是用户面——所以不进设置页（`.hidden()`）。
+   * 不配 = 任意 preset 的会话都用本包的中文回报指引（官方四个 shipped preset 也在内，还有还没绑 preset 的会话）。
+   * 要反过来只让某几份 preset 用中文，就在这里列出来。装配面，不是用户面——所以不进设置页（`.hidden()`）。
    */
   localizedReturnGuidancePresets: string[]
 }
@@ -181,6 +182,8 @@ export class SubagentRuntime extends TypertRemoteService {
 
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'subagents')
+    // 模型看到的委派范围说明换成中文（见 `./delegation-context.ts`）。
+    installDelegationContext(ctx)
     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentContinuationManager(childCtx, {
