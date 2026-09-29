@@ -1,5 +1,5 @@
 // 桌面部署里的 host 进程入口：按 `desktop` profile 装配 Web 应用，并把请求经字节管道（FD 3/4）
-// 交给宿主内的无端口 `webServer`。argv：`[runtimeDir, projectDir, primaryRuntime, pnpmEntry?, nodeBin?]`；
+// 交给宿主内的无端口 `webServer`。argv：`[runtimeDir, projectDir, pnpmEntry?, nodeBin?]`；
 // IPC：`ready` / `fatal`，另收 `shutdown`。
 
 import { once } from "node:events";
@@ -16,8 +16,6 @@ import { runProfile } from "@deepseek-ai/dsh/profile-boot";
 import type {} from "@deepseek-ai/dsh-api-gateway";
 import type {} from "@deepseek-ai/dsh-client-connection";
 import type {} from "@deepseek-ai/dsh-host-webserver";
-import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
-import * as desktopOffice from "./office.ts";
 import {
   DESKTOP_STREAM_PATH,
   installDesktopTransport,
@@ -73,9 +71,8 @@ async function main(): Promise<void> {
     throw new Error(
       "dsh desktop: expected runtime and profile directories, byte pipes, and a Node IPC channel",
     );
-  const primaryRuntime = process.argv[4] ?? join(runtimeDir, "..", "runtime", "primary-runtime");
-  const pnpmEntry = process.argv[5];
-  const nodeBin = process.argv[6];
+  const pnpmEntry = process.argv[4];
+  const nodeBin = process.argv[5];
 
   const requestPipe: ReadStream = createReadStream("", {
     fd: DESKTOP_REQUEST_PIPE_FD,
@@ -141,10 +138,6 @@ async function main(): Promise<void> {
   const { ctx } = await application;
   takeOverDesktopAuthentication(ctx);
   installDesktopTransport(ctx);
-  await ctx.plugin(desktopOffice, {
-    source: primaryRuntime,
-    root: join(resolveDshHome(), "dsh-runtimes", "dsh-primary-runtime"),
-  });
   const webServer = ctx.get("webServer") as unknown as PortlessWebServer;
 
   const pending = new Map<number, PendingRequest>();

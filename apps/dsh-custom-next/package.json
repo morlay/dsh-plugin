@@ -44,13 +44,14 @@
     },
     "desktop": {
       "id": "ai.deepseek.dsh.custom-next",
+      "name": "DSH Custom Next",
+      "icon": "icon.svg",
       "window": {
         "width": 1280,
         "height": 800,
         "minWidth": 800,
         "minHeight": 600
       },
-      "icon": "icon.svg",
       "dshHome": "xdg"
     }
   }

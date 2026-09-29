@@ -21,6 +21,7 @@ async function tempDir(): Promise<string> {
 function config(dshHome: string, name = "dsh-custom"): AppConfig {
   return {
     name,
+    displayName: name,
     id: "ai.deepseek.dsh.custom",
     version: "0.1.5",
     profile: "desktop",

@@ -16,6 +16,7 @@ export interface AppWindowConfig {
 
 export interface AppConfig {
   readonly name: string;
+  readonly displayName: string;
   readonly id: string;
   readonly version: string;
   readonly profile: typeof PROFILE_NAME;
@@ -49,6 +50,8 @@ export async function loadAppConfig(exeDir: string): Promise<AppConfig> {
     !isRecord(value) ||
     typeof value.name !== "string" ||
     value.name === "" ||
+    typeof value.displayName !== "string" ||
+    value.displayName === "" ||
     typeof value.id !== "string" ||
     value.id === "" ||
     typeof value.version !== "string" ||
@@ -60,6 +63,7 @@ export async function loadAppConfig(exeDir: string): Promise<AppConfig> {
   }
   return {
     name: value.name,
+    displayName: value.displayName,
     id: value.id,
     version: value.version,
     profile: PROFILE_NAME,

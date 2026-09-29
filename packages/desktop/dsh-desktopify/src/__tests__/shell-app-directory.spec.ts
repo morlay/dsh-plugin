@@ -26,6 +26,7 @@ async function exists(path: string): Promise<boolean> {
 function appConfig(): AppConfig {
   return {
     name: "dsh-custom-next",
+    displayName: "DSH Custom Next",
     id: "ai.deepseek.dsh.custom-next",
     version: "0.1.5",
     profile: "desktop",

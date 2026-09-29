@@ -64,8 +64,6 @@ export interface DesktopHostOptions {
 
   readonly extraEnv?: Readonly<Record<string, string>>;
 
-  readonly primaryRuntime?: string;
-
   readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string };
 
   // 子进程在 `ps` 里的名字（`node --title`），由壳给成 `<app name>-server`。
@@ -117,8 +115,6 @@ export class DesktopHostProcess {
       "lib",
       "index.js",
     );
-    const primaryRuntime =
-      this.options.primaryRuntime ?? join(this.runtimeDir, "..", "runtime", "primary-runtime");
     const packageManager = this.options.packageManager;
     const args = [
       "--expose-internals",
@@ -130,8 +126,7 @@ export class DesktopHostProcess {
       entry,
       this.runtimeDir,
       this.projectDir,
-      primaryRuntime,
-      // argv 的格子按上游现行契约排：没有 `resolutionMode` 那一格。
+      // 桌面档不挂 Office 组合，argv 因此比上游少 `primaryRuntime` 那一格：projectDir 之后直接是 pnpm 与 node bin。
       ...(packageManager === undefined ? [] : [packageManager.pnpm, packageManager.nodeBin]),
     ];
     const env = {

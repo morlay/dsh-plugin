@@ -98,7 +98,6 @@ describe("桌面 host 子进程", () => {
   it("按管道形态启动：入口路径、argv 顺序与五元组 stdio", async () => {
     const { calls, child, host } = harness(
       {
-        primaryRuntime: "/app/runtime/primary-runtime",
         packageManager: { pnpm: "/app/runtime/pnpm/bin/pnpm.mjs", nodeBin: "/app/runtime/bin" },
         nodeArgs: ["--import=tsx/esm"],
       },
@@ -119,7 +118,6 @@ describe("桌面 host 子进程", () => {
       ENTRY,
       "/app/seed",
       "/home/profiles/desktop",
-      "/app/runtime/primary-runtime",
       "/app/runtime/pnpm/bin/pnpm.mjs",
       "/app/runtime/bin",
     ]);

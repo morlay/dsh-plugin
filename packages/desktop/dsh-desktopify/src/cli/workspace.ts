@@ -15,6 +15,7 @@ export interface DesktopConfig {
     readonly minWidth: number;
     readonly minHeight: number;
   };
+  readonly displayName: string;
   readonly icon?: string;
 }
 
@@ -28,6 +29,7 @@ export interface WorkspaceManifest {
     readonly profile?: { readonly bundles?: unknown };
     readonly desktop?: {
       readonly id?: string;
+      readonly name?: string;
       readonly dshHome?: string;
       readonly icon?: string;
       readonly window?: Record<string, number>;
@@ -81,13 +83,16 @@ export function dshVersion(manifest: WorkspaceManifest): string | undefined {
   return version;
 }
 
-export function desktopConfig(manifest: WorkspaceManifest): DesktopConfig {
+// `displayName` 是桌面应用的对外名字（electron-builder 的 `productName`、安装后的启动器名）；壳的身份标识
+// （自定义协议 scheme、`dshHome` 目录名）仍取包名 `name`——见 [设计 桌面标识取自 app 名](../.agents/designs/20260921-桌面标识取自app名.md)。
+export function desktopConfig(manifest: ResolvedWorkspaceManifest): DesktopConfig {
   const desktop = manifest.dsh?.desktop ?? {};
   const window = desktop.window ?? {};
   return {
     id: desktop.id ?? "ai.deepseek.dsh.custom",
     version: manifest.version ?? "0.0.1",
     dshHome: desktop.dshHome ?? "xdg",
+    displayName: desktop.name === undefined || desktop.name === "" ? manifest.name : desktop.name,
     window: {
       width: window.width ?? 1280,
       height: window.height ?? 800,

@@ -554,15 +554,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/boot/app-boot
-      '@deepseek-ai/dsh-home-paths':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/host/webserver
-      '@deepseek-ai/dsh-tool-workspace-dependencies':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/skill/tool-workspace-dependencies
       '@deepseek-ai/schemastery':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/schemastery

@@ -25,6 +25,16 @@ export interface DesktopBuildOptions {
   readonly dir: boolean;
 }
 
+export interface DesktopBuildConfigInput {
+  readonly appConfig: AppConfig;
+
+  readonly icons: PreparedIcons;
+
+  readonly electron: { readonly version: string; readonly dist?: string };
+
+  readonly buildRoot: string;
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -70,16 +80,14 @@ export async function prepareShellAppDirectory(options: DesktopBuildOptions): Pr
   return appDir;
 }
 
-export async function buildDesktopApp(options: DesktopBuildOptions): Promise<string[]> {
-  const { buildRoot, appConfig, icons, dir } = options;
-  const appDir = await prepareShellAppDirectory(options);
-  const electron = await installedElectron();
-  console.log(
-    `desktop bundle: electron-builder appId=${appConfig.id} productName=${appConfig.name} version=${appConfig.version} electron=${electron.version}`,
-  );
-  const config: DesktopConfiguration = {
+// electron-builder 的产物配置：对外名字取 `displayName`（mac 的 `.app`、Windows 的 exe、artifact 名），
+// Linux 的可执行名取工作区包名 `name`——electron-builder 的 Linux 可执行名本就读壳 app 目录 `package.json`
+// 的 `name`，显式钉住它，安装脚本拼的 `Exec` 才与产物一致。
+export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfiguration {
+  const { buildRoot, appConfig, icons, electron } = input;
+  return {
     appId: appConfig.id,
-    productName: appConfig.name,
+    productName: appConfig.displayName,
     artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
     electronVersion: electron.version,
     ...(electron.dist === undefined ? {} : { electronDist: electron.dist }),
@@ -100,6 +108,7 @@ export async function buildDesktopApp(options: DesktopBuildOptions): Promise<str
     linux: {
       category: "Development",
       target: ["dir"],
+      executableName: appConfig.name,
       ...(icons.linux === undefined ? {} : { icon: icons.linux }),
     },
     win: {
@@ -107,5 +116,19 @@ export async function buildDesktopApp(options: DesktopBuildOptions): Promise<str
       ...(icons.win === undefined ? {} : { icon: icons.win }),
     },
   };
-  return build({ projectDir: appDir, config, publish: "never", dir });
+}
+
+export async function buildDesktopApp(options: DesktopBuildOptions): Promise<string[]> {
+  const { buildRoot, appConfig, icons, dir } = options;
+  const appDir = await prepareShellAppDirectory(options);
+  const electron = await installedElectron();
+  console.log(
+    `desktop bundle: electron-builder appId=${appConfig.id} productName=${appConfig.displayName} version=${appConfig.version} electron=${electron.version}`,
+  );
+  return build({
+    projectDir: appDir,
+    config: desktopBuildConfig({ buildRoot, appConfig, icons, electron }),
+    publish: "never",
+    dir,
+  });
 }

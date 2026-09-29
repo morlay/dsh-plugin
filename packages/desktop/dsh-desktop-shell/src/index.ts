@@ -92,7 +92,6 @@ interface RuntimeResources {
   readonly pnpm: string;
   readonly nodeBin: string;
   readonly seed: string;
-  readonly primaryRuntime: string;
 }
 
 function runtimeResources(): RuntimeResources {
@@ -108,15 +107,9 @@ function runtimeResources(): RuntimeResources {
   const seed =
     (development ? process.env.DSH_DESKTOP_SEED_DIR : undefined) ??
     join(process.resourcesPath, "seed");
-  const configured = process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR;
-  const primaryRuntime =
-    configured !== undefined && configured !== ""
-      ? resolve(configured)
-      : join(process.resourcesPath, "runtime", "primary-runtime");
   return {
     node,
     seed,
-    primaryRuntime,
     // 随包运行时与 pnpm 只在打包产物里存在；dev 形态从工作区解析依赖。
     runtime: join(seed, SEED_RUNTIME_DIR_NAME),
     pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
@@ -278,7 +271,7 @@ async function main(): Promise<void> {
         defaultId: 0,
         cancelId: 0,
         noLink: true,
-        message: `Quit ${appConfig.name}?`,
+        message: `Quit ${appConfig.displayName}?`,
         detail: "The desktop backend and its running sessions will stop.",
       };
       const parent = window ?? mainWindow;
@@ -318,7 +311,6 @@ async function main(): Promise<void> {
           ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
           ...(development === undefined ? {} : { ELECTRON_RUN_AS_NODE: "1" }),
         },
-        primaryRuntime: resources.primaryRuntime,
         // `ps` 里能把后端与别的 node 进程区分开。
         processTitle: `${appConfig.name}-server`,
         // 打包形态的包操作使用随包 pnpm；dev 形态回退到 PATH 上的 pnpm。

@@ -16,8 +16,8 @@ profile 用会让任何 `install` / `add` 把那些包 prune 掉，随后启停�
   runtime 闭包 deref 复制出来的源）；
 - 壳在种出 profile 后写入 `overrides`（`"@deepseek-ai/x": "link:<runtime>/node_modules/@deepseek-ai/x"`），
   再用随包 node 跑随包 pnpm 的 `install --prod --ignore-scripts --offline`；
-- 壳把随包 pnpm 与 node bin 目录经 Host `argv[5]` / `argv[6]` 交给 host，成为
-  `profileContext.packageManager`（`packages/desktop/dsh-desktop-host/src/index.ts:84-85` 读这两格）。
+- 壳把随包 pnpm 与 node bin 目录经 Host `argv[4]` / `argv[5]` 交给 host，成为
+  `profileContext.packageManager`（`packages/desktop/dsh-desktop-host/src/index.ts:123-132` 读这两格）。
 
 **考虑过的选项**
 

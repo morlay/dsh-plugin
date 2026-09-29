@@ -37,14 +37,15 @@ async function builtImports(): Promise<Set<string>> {
 }
 
 describe("desktop host 发布清单", () => {
-  it("不声明上游 app 的组合依赖（office 已移除）", async () => {
+  it("不声明上游 app 的组合依赖（office 组合整个不挂）", async () => {
     const manifest = JSON.parse(
       await readFile(join(PACKAGE_ROOT, "package.json"), "utf8"),
     ) as Manifest;
 
-    // 变体不挂 docx / pptx / xlsx 技能：从上游 app manifest 抄来的依赖会让部署去装它。
-    expect(manifest.dependencies?.["@deepseek-ai/dsh-skill-office"]).toBeUndefined();
+    // 变体不挂 Office 组合：docx / pptx / xlsx 技能与它那份载荷工具都由上游 app manifest 声明，抄来会让部署照装。
     for (const name of [
+      "@deepseek-ai/dsh-skill-office",
+      "@deepseek-ai/dsh-tool-workspace-dependencies",
       "@deepseek-ai/dsh-agent",
       "@deepseek-ai/dsh-jobs",
       "@deepseek-ai/dsh-tools",

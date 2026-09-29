@@ -14,7 +14,8 @@
 | `dsh-desktopify bundle [--dir] [--install] [workspace]`  | 构建当前平台的静态、无签名桌面应用                                                |
 
 工作区取首个位置参数（缺省当前目录）。装配输入是工作区 `package.json` 的 `dsh` 段：`version`（`@deepseek-ai/dsh`
-的依赖 spec）、`profile.bundles`（必填）、`desktop.{id,icon,dshHome,window}`——字段语义与实例见
+的依赖 spec）、`profile.bundles`（必填）、`desktop.{id,name,icon,dshHome,window}`——`desktop.name` 是桌面应用的
+对外名字（缺省用工作区包名），产物名、macOS 的 `.app`、Linux 启动器条目与退出确认都用它；字段语义与实例见
 [设计 桌面化工具](./.agents/designs/20260917-桌面化工具.md)与
 [`apps/dsh-custom-next/package.json`](../../../apps/dsh-custom-next/package.json)。
 

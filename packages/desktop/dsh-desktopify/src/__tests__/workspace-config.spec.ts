@@ -41,6 +41,7 @@ describe("desktopConfig", () => {
       id: "ai.deepseek.dsh.custom",
       version: "0.0.1",
       dshHome: "xdg",
+      displayName: "dsh-custom",
       window: { width: 1280, height: 800, minWidth: 800, minHeight: 600 },
     });
     expect(config.version).toMatch(/^\d+\.\d+\.\d+$/u);
@@ -65,8 +66,20 @@ describe("desktopConfig", () => {
       version: "0.1.5",
       dshHome: "env",
       icon: "icon.svg",
+      displayName: "dsh-custom",
       window: { width: 1024, height: 800, minWidth: 800, minHeight: 480 },
     });
+  });
+
+  // 显示名是桌面应用的对外名字（electron-builder 的 productName 等），与壳的身份标识（scheme、数据目录）
+  // 分开：`name` 仍是包名。
+  it("takes dsh.desktop.name as the display name", () => {
+    expect(
+      desktopConfig({ name: "dsh-custom", dsh: { desktop: { name: "DSH Custom" } } }).displayName,
+    ).toBe("DSH Custom");
+    expect(desktopConfig({ name: "dsh-custom", dsh: { desktop: { name: "" } } }).displayName).toBe(
+      "dsh-custom",
+    );
   });
 });
 

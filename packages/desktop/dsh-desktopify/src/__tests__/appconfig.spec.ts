@@ -27,6 +27,7 @@ async function write(value: unknown): Promise<string> {
 function fullConfig(): AppConfig {
   return {
     name: "dsh-custom-next",
+    displayName: "DSH Custom Next",
     id: "ai.deepseek.dsh.custom-next",
     version: "0.1.5",
     profile: PROFILE_NAME,
@@ -54,7 +55,7 @@ describe("shell configuration handoff", () => {
     const derived = desktopConfig({
       name: "dsh-custom",
       version: "0.1.5",
-      dsh: { desktop: { id: "ai.deepseek.dsh.custom", dshHome: "xdg" } },
+      dsh: { desktop: { id: "ai.deepseek.dsh.custom", name: "DSH Custom", dshHome: "xdg" } },
     });
 
     await writeAppConfig(dir, { name: "dsh-custom", ...derived, profile: PROFILE_NAME });
@@ -74,6 +75,7 @@ describe("shell configuration handoff", () => {
         await loadAppConfig(
           await write({
             name: "a",
+            displayName: "A",
             id: "b",
             version: "1.0.0",
             profile: PROFILE_NAME,
@@ -87,6 +89,7 @@ describe("shell configuration handoff", () => {
         await loadAppConfig(
           await write({
             name: "a",
+            displayName: "A",
             id: "b",
             version: "1.0.0",
             profile: PROFILE_NAME,
@@ -102,6 +105,7 @@ describe("shell configuration handoff", () => {
     const loaded = await loadAppConfig(
       await write({
         name: "a",
+        displayName: "A",
         id: "b",
         version: "1.0.0",
         profile: PROFILE_NAME,
@@ -115,12 +119,35 @@ describe("shell configuration handoff", () => {
 
   it("refuses a configuration the desktop shell cannot honour", async () => {
     const invalid: unknown[] = [
-      { name: "", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: "xdg" },
-      { name: "a", id: "", version: "1.0.0", profile: PROFILE_NAME, dshHome: "xdg" },
-      { name: "a", id: "b", version: "", profile: PROFILE_NAME, dshHome: "xdg" },
-      { name: "a", id: "b", version: "1.0.0", profile: "web", dshHome: "xdg" },
-      { name: "a", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: 7 },
-      { name: "a", id: "b", version: "1.0.0", profile: PROFILE_NAME },
+      {
+        name: "",
+        displayName: "A",
+        id: "b",
+        version: "1.0.0",
+        profile: PROFILE_NAME,
+        dshHome: "xdg",
+      },
+      { name: "a", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: "xdg" },
+      {
+        name: "a",
+        displayName: "",
+        id: "b",
+        version: "1.0.0",
+        profile: PROFILE_NAME,
+        dshHome: "xdg",
+      },
+      {
+        name: "a",
+        displayName: "A",
+        id: "",
+        version: "1.0.0",
+        profile: PROFILE_NAME,
+        dshHome: "xdg",
+      },
+      { name: "a", displayName: "A", id: "b", version: "", profile: PROFILE_NAME, dshHome: "xdg" },
+      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: "web", dshHome: "xdg" },
+      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: 7 },
+      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: PROFILE_NAME },
       [],
     ];
 

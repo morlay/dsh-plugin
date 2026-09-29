@@ -328,7 +328,6 @@ async function launchElectron(
     DSH_HOME: home,
     DSH_DESKTOP_APPCONFIG_DIR: join(buildRootDir, "runtime"),
     DSH_DESKTOP_DEV_PROJECT_DIR: projectDir,
-    DSH_DESKTOP_PRIMARY_RUNTIME_DIR: join(buildRootDir, "runtime", "primary-runtime"),
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
 
@@ -422,6 +421,7 @@ export async function runDev(options: DevOptions): Promise<void> {
   await mkdir(runtimeRoot, { recursive: true });
   await writeAppConfig(runtimeRoot, {
     name: manifest.name,
+    displayName: desktop.displayName,
     id: desktop.id,
     version: desktop.version,
     dshHome: home,

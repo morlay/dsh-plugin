@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-desktop-host",
   "version": "0.2.2",
-  "description": "Desktop host process for dsh-desktopify: boots the desktop profile and serves it through an in-process, portless webServer over byte pipes — upstream apps/desktop-host with the web carrier taken over and the Office skill mount removed.",
+  "description": "Desktop host process for dsh-desktopify: boots the desktop profile and serves it through an in-process, portless webServer over byte pipes — upstream apps/desktop-host with the web carrier taken over and the Office composition dropped.",
   "keywords": [
     "desktop",
     "dsh",
@@ -45,9 +45,7 @@
   "dependencies": {
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-app-boot": "workspace:^",
-    "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
