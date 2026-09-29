@@ -62,10 +62,8 @@ import {
   zh,
   type ConversationKey,
 } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/locales.ts";
-import {
-  CONVERSATION_SETTINGS_NAMESPACE,
-  type ConversationSettings,
-} from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/submission-settings.ts";
+import type { ConversationSettings } from "../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/submission-settings.ts";
+import { FORK_SETTINGS_NAMESPACE } from "../settings-namespace.ts";
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
@@ -161,7 +159,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const t = ctx.locale.bind(NS);
   const conversationStore = createConversationStore();
   const submissionPolicy = new ComposerSubmissionPolicy(
-    ctx.configForms.get<ConversationSettings>(CONVERSATION_SETTINGS_NAMESPACE),
+    ctx.configForms.get<ConversationSettings>(FORK_SETTINGS_NAMESPACE),
   );
   ctx.effect(
     () => () => {

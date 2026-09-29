@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { FORK_SETTINGS_NAMESPACE } from "../../../../session/ui-conversation/src/settings-namespace.ts";
 
 const repoRoot = process.cwd();
 const PATCH_PATH = join(repoRoot, "packages/bundles/better-session/cordis.patch.yml");
@@ -61,5 +62,15 @@ describe("better-session patch wiring", () => {
       "ui-primitives-fork",
     ]);
     for (const id of inserted) expect(upstreamIds.has(id)).toBe(false);
+  });
+
+  // fork 客户端按自己的行 id 读写设置；行 id 与命名空间脱节时设置只改内存、重启即丢。
+  it("inserts the conversation fork under its settings namespace", () => {
+    expect(patch).toMatch(
+      new RegExp(
+        `^ {4}- id: ${FORK_SETTINGS_NAMESPACE}\n {6}name: "@morlay/dsh-client-ui-conversation"$`,
+        "m",
+      ),
+    );
   });
 });
