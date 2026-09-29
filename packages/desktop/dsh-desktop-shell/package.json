@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-desktop-shell",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Electron shell for dsh desktop apps: serves the app's own <name>:// scheme, boots the desktop profile through the @morlay/dsh-desktop-host child over byte pipes, and installs the profile seed on first launch. The CLI that packages a workspace around it is @morlay/dsh-desktopify.",
   "keywords": [
     "desktop",

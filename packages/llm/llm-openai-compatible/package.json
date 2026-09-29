@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-llm-openai-compatible",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Optional OpenAI-compatible LLM adapter plugin for DeepSeek Harness with configurable default sampling parameters (temperature / topP / topK / penalties / seed) over a providers dict. Pick either this bundle or the built-in llm-pi-ai, never both.",
   "keywords": [
     "dsh",

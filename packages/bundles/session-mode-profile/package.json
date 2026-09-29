@@ -1,6 +1,6 @@
 {
   "name": "@morlay/session-mode-profile",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "会话模式与注入面：会话模式行 + 注入通道 + 工具说明（汉化）+ subagent 服务接管行，一次装齐。",
   "icon": "./icon.svg",
   "keywords": [
