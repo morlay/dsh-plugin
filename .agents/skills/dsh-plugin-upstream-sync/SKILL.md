@@ -139,9 +139,20 @@ build`），直接 `tsx` 调用脚本，语义与流程一致。
 
 1. 改 `DEEPSEEK_HARNESS_VERSION`（或 `DEEPSEEK_HARNESS_REVISION`）。
 2. 记旧 HEAD。
-3. sync → patch（失效即信号）→ build。
-4. 门禁：test / lint / build，与 CI 一致。
-5. **适配评估（必做）**：对照「cordis 扩展面清单」逐面核对变化；结论记录
+3. **先清 vendor 顶层 `node_modules`**（本地）：里面有上一版的副本，会被上游
+   `tsc -b` 解析到，表现为双副本类型错误（playwright / zod 版本对不上），
+   干净 clone 的 CI 无此问题。build 结束时本就会清掉它，日常恢复姿势是
+   `just clean && just dep`。
+4. sync → patch（失效即信号）→ build。
+5. **重跑生成物与 lockfile**（上游包与主题一变就漂移，门禁只在重跑后才可信）：
+   - 根 lockfile：`pnpm install --lockfile-only`（上游新包、上游钉住的依赖版本
+     如 koffi 都靠它对齐）；
+   - 主题 token 树：`pnpm --filter @morlay/dsh-client-ui-primitives run gen:tokens`
+     （上游 `--dsw-*` 增删有 `design-tokens.spec.ts` 漂移守卫）；
+   - 官方包清单：`pnpm --filter @morlay/dsh-desktop-shell run gen:official-packages`
+     （读上游 bundle 的 `cordis.patch.yml`，需上游 lib 产物在）。
+6. 门禁：test / lint / build，与 CI 一致。
+7. **适配评估（必做）**：对照「cordis 扩展面清单」逐面核对变化；结论记录
    为决策文档或变更日志；行为变更连同测试一起改。
 
 ## 插件开发：cordis 扩展面清单

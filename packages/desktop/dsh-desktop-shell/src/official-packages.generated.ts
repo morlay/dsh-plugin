@@ -59,6 +59,7 @@ export const OFFICIAL_PROFILE_PACKAGES: readonly string[] = [
   "@deepseek-ai/dsh-client-ui-settings-models",
   "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
   "@deepseek-ai/dsh-client-ui-settings-plugins",
+  "@deepseek-ai/dsh-client-ui-settings-session-log",
   "@deepseek-ai/dsh-client-ui-settings-shell",
   "@deepseek-ai/dsh-client-ui-settings-subagent",
   "@deepseek-ai/dsh-client-ui-settings-web-search",
