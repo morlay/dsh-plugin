@@ -1,20 +1,6 @@
-/**
- * 本部署的 preset 平面：**两个模式共享一份自己注册的 preset** 时，会话各自拿到什么。
- *
- * 复用官方 preset 的两处耦合（`chat` 挂的 `minimal` 没有 `tool-web`，联网三件收口后一件都不剩；preset 自带
- * 的上游注入要在我们的开关之外让位）在这里验：行清单归我们之后，两个模式的差异只由会话级收口表达——
- *
- * 1. `chat`：`web_search` / `web_fetch` / `ask_user_question` 三件在目录里，别的都被白名单收掉，注入 0 条；
- * 2. `coding`：文件工具与联网都在；注入只有**我们那一份**技能目录（kind 是 `context-assembler`）；
- * 3. 官方 preset 的会话照旧：工作区指令让位给上游那一行，skill 面仍是我们抢到的那份。
- *
- * 真装配：真 `Loader` + 真 registry + 真上游行（行按**app 安装锚点**解析，与真部署同一处）＋ 真 fs 与 skill
- * 注册表。行清单从 `TOOLKIT_PRESET_ROWS` 派生（与 `packages/bundles/session-mode-profile` 声明的那份同源），这里只取
- * 本用例要验的族——整条清单的形状由那个 bundle 的 `patch.spec.ts` 逐行钉住。
- *
- * 两个 provider 面用替身（`web` / `userQuestions`）：本用例回答的是"这些工具由 preset 的行注册出来、并在
- * 这个会话的目录里"，不是 provider 自己的行为（那由各自包与真 profile 探针负责）。
- */
+// 本部署的 preset 平面：两个模式共享一份自己注册的 preset 时各会话拿到什么——`chat` 只剩提问与联网三件、
+// 注入 0 条；`coding` 文件与联网都在、注入只有我们那份技能目录；官方 preset 的会话照旧让位 / 抢面。
+// 真装配（真 `Loader` + registry + 上游行 + fs 与 skill 注册表），行清单从 `TOOLKIT_PRESET_ROWS` 派生。
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -50,21 +36,19 @@ afterEach(async () => {
 
 const AGENTS_BODY = "先读 AGENTS.md。";
 const SKILL = "repo-skill";
-/** 通道注册的那份 `skill` 工具的描述（上游那份是英文的，用它分辨谁赢了）。 */
+// 通道注册的那份 `skill` 工具的描述（上游那份是英文的，用它分辨谁赢了）。
 const OUR_TOOL_DESCRIPTION = "按需加载 skill 的完整说明。";
 
-/** 行按 Node 的解析基准从 **app 安装锚点**解析：与真部署 `loadProfileDirectory` 的 installAnchor 同一处。 */
+// 行按 Node 的解析基准从 **app 安装锚点**解析：与真部署 `loadProfileDirectory` 的 installAnchor 同一处。
 function installAnchor(): string {
   return pathToFileURL(join(process.cwd(), "vendor/deepseek-harness/apps/cli/")).href;
 }
 
-/**
- * 本用例要的那几行：问答、文件、skill 发现、联网——**从真清单里按 id 取**（族归属不影响装配，扁平摆进
- * preset 即可）。上游改行 id / 我们改族名都会在这里显形。
- */
+// 本用例要的那几行：问答、文件、skill 发现、联网——**从真清单里按 id 取**（族归属不影响装配，扁平摆进
+// preset 即可）。上游改行 id / 我们改族名都会在这里显形。
 const WANTED_ROWS: readonly string[] = ["tool-ask-user", "tool-fs", "skill-filesystem", "tool-web"];
 
-/** 清单里出现的全部行（含族组的子行）。 */
+// 清单里出现的全部行（含族组的子行）。
 function flatRows(rows: readonly PresetRow[]): readonly PresetRow[] {
   return rows.flatMap((row) => [
     row,
@@ -81,7 +65,7 @@ function fixturePresetRows(): readonly PresetRow[] {
   });
 }
 
-/** 官方 preset 的那两行（让位 / 抢面的对照）：模块名与 `web-app/presets/*.patch.yml` 一字不差。 */
+// 官方 preset 的那两行（让位 / 抢面的对照）：模块名与 `web-app/presets/*.patch.yml` 一字不差。
 const STANDARD_ROWS = [
   {
     id: "agent-instructions",
@@ -91,7 +75,7 @@ const STANDARD_ROWS = [
   { id: "tool-skill", name: "@deepseek-ai/dsh-tool-skill" },
 ] as const;
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上；上游那几条没有它——这正是分辨两侧的判据。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上；上游那几条没有它——这正是分辨两侧的判据。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -113,14 +97,14 @@ function kindsOf(messages: readonly UserMessage[], kind: string): string[] {
     .map((message) => entryIdOf(message) ?? "upstream");
 }
 
-/** 技能目录那一条：我们那份带 `id: skill-catalog`，上游那份没有 id（只有 kind）。 */
+// 技能目录那一条：我们那份带 `id: skill-catalog`，上游那份没有 id（只有 kind）。
 function catalogs(messages: readonly UserMessage[]): UserMessage[] {
   return messages.filter(
     (message) => entryIdOf(message) === "skill-catalog" || kindOf(message) === "skill-catalog",
   );
 }
 
-/** 一条 preset 声明：`register` 的返回值要 `yield` 出去，声明方才有生命期。 */
+// 一条 preset 声明：`register` 的返回值要 `yield` 出去，声明方才有生命期。
 async function declare(ctx: Context, definition: PresetDefinition): Promise<void> {
   await ctx.plugin({
     inject: ["agentPresets"],
@@ -130,7 +114,7 @@ async function declare(ctx: Context, definition: PresetDefinition): Promise<void
   });
 }
 
-/** 真装配：preset 平面（Loader + registry + 声明的行）与 host 平面（通道 + 收口行 + 工具说明 + 模式行）。 */
+// 真装配：preset 平面（Loader + registry + 声明的行）与 host 平面（通道 + 收口行 + 工具说明 + 模式行）。
 async function mount(options: { hostFirst: boolean }) {
   const workspace = await mkdtemp(join(tmpdir(), "mode-preset-plane-"));
   const home = join(workspace, "home");
@@ -205,7 +189,7 @@ async function mount(options: { hostFirst: boolean }) {
   return { ctx, create };
 }
 
-/** 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。 */
+// 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。
 async function preStep(ctx: Context, agent: Agent): Promise<UserMessage[]> {
   const input = [
     createUserMessage({ content: [{ type: "text", text: "任务" }], source: { kind: "user" } }),

@@ -1,10 +1,8 @@
-/**
- * 自动注册面的行为：哪些行会在自己的配置页上长出表单，行消失时会不会一起收掉。
- *
- * 盯的接缝是**清单 → 槽位注册**：只挑 `autoGenerate` 且在某个 bundle 的行清单里对得上的命名空间；注册用
- * `<bundle 包名>#<行 id>` 这个 key 与兜底 priority（手写项默认 priority 0 会遮住它）；describe 或 bundle
- * 清单变了就差分注册与注销。
- */
+// 自动注册面的行为：哪些行会在自己的配置页上长出表单，行消失时会不会一起收掉。
+//
+// 盯的接缝是**清单 → 槽位注册**：只挑 `autoGenerate` 且在某个 bundle 的行清单里对得上的命名空间；注册用
+// `<bundle 包名>#<行 id>` 这个 key 与兜底 priority（手写项默认 priority 0 会遮住它）；describe 或 bundle
+// 清单变了就差分注册与注销。
 
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import { describe, expect, it, vi } from "vitest";
@@ -41,7 +39,7 @@ interface Registered {
   options: Record<string, unknown>;
 }
 
-/** 注册器替身：记录槽位注册与注销，并按行给一个可渲染的槽项。 */
+// 注册器替身：记录槽位注册与注销，并按行给一个可渲染的槽项。
 function bench(options: {
   namespaces: readonly SettingsNamespaceView[];
   bundles: readonly BundleInfo[];

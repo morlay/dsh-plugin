@@ -1,26 +1,6 @@
-/**
- * 会话模式的 host 半：模式清单（config 里的纯数据）、会话 ↔ 模式的选择、按会话应用 persona 与收口。
- *
- * **模式不是 Cordis 子树**。旧的 `@morlay/dsh-agent-preset` 每个模式都是一行
- * `@deepseek-ai/dsh-agent-preset`，`config.plugins` 里装 persona 与 scope 行，靠 preset scope 的父链
- * 对会话生效——代价是整个官方 registry（声明式行、每 revision 一棵 Loader 子树、`isolate` realm）都在
- * 部署里。这里只留两件事：模式是一份数据，应用落在会话自己的 scope 上：
- *
- * | 事实             | 落在哪                                                                                     |
- * | ---------------- | ------------------------------------------------------------------------------------------ |
- * | 模式清单与默认值 | 本行的 `config`（装配层可整体改写；`modes.ts` 给形状与校验）                                |
- * | 各模式的默认模型 | 同一份 config 的顶层 `models`（**volatile**：设置页那张卡片改的就是它）                      |
- * | 会话当前模式     | session 事件 `session-mode/selected` + 投影 `sessionMode`（log-only，重建读投影）           |
- * | 提示词           | `persona`：把模式的 persona 注册到该 agent 的 scope（`persona.ts`）                         |
- * | 工具与注入开关   | 推给 `ctx.sessionToolScope`（`@morlay/dsh-context-assembler/scope`，行 id `context-assembler-scope`） |
- * | 页面上的选择面   | HTTP 路由 `GET/POST /session-mode`（清单与切换）+ 会话投影（当前值）                        |
- *
- * 应用时机是 `agent/created`：它早于任何一次提示词装配（装配发生在 turn 里），所以 persona 一定在该会话
- * 第一次装配之前就注册好了。模式在**空白会话**里可以切换，切换时对着已有的 agent 重新应用一遍。
- *
- * 切换只允许在空白窗口（还没开过 turn）：会话的历史是在某个模式的工具集与提示词下产生的，换了模式，那段
- * 历史就与实际装配对不上——与上游 `agentPresets.select` 的判据一致，也用同一个投影（`turnBoundary`）。
- */
+// 会话模式的 host 半：模式清单（config 里的纯数据）、会话 ↔ 模式的选择、按会话应用 persona 与收口。模式是一份
+// 数据，应用落在会话自己的 scope 上（persona + `ctx.sessionToolScope`），默认模型住在 `modes.<id>.defaultModel`；
+// 换模式只允许在空白窗口。取舍见 `.agents/designs/20260924-会话模式.md`。
 
 import { Service, type Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
@@ -51,16 +31,11 @@ import {
   type SessionModeSelectResult,
 } from "./shared.ts";
 
-/** Cordis 插件名：与行 id 一致。 */
+// Cordis 插件名：与行 id 一致。
 export const name = "session-mode";
 
-/**
- * 依赖：投影服务（登记 `sessionMode`、读 `turnBoundary`）、读会话与 agent 的两个注册表，以及提示词注册表
- * （persona 的 section 注册在它上面）。
- *
- * 这些名字必须在 `inject` 里点名：cordis 的**属性访问**（`this.ctx.sessions`）要求本 fiber 声明过那个服务，
- * 未声明会抛 `cannot get property "sessions" without inject`（`ctx.get(name)` 才不需要声明）。
- */
+// 这些名字必须在 `inject` 里点名：cordis 的属性访问（`this.ctx.sessions`）要求本 fiber 声明过那个服务，
+// 未声明会抛 `cannot get property "sessions" without inject`（`ctx.get(name)` 才不需要声明）。
 export const inject = ["agents", "sessions", "sessionProjections", "systemPrompt"];
 
 export { Config } from "./modes.ts";
@@ -82,10 +57,7 @@ declare module "@deepseek-ai/cordis" {
 
 declare module "@deepseek-ai/dsh-session/types" {
   interface SessionEventMap {
-    /**
-     * 会话在空白窗口里换了模式。**log-only**：它记录此后每一步实际运行的模式，恢复与 fork 时据此重建
-     * （模式决定模型看到的工具与提示词，所以它必须进日志）。
-     */
+    // 会话在空白窗口里换了模式；**log-only**，恢复与 fork 据此重建（模式决定模型看到的工具与提示词）。
     "session-mode/selected": { sessionMode: string };
   }
 }
@@ -96,16 +68,16 @@ declare module "@deepseek-ai/dsh-session-projection/types" {
     sessionModeEditable: boolean;
   }
   interface SessionProjectionMap {
-    /** 会话当前模式；`null` 表示没选过（用部署默认）。 */
+    // 会话当前模式；`null` 表示没选过（用部署默认）。
     sessionMode: string | null;
-    /** 会话还能不能换模式：`true` 是选择器，`false` 是只读标签（client 那个 chip 据此变形）。 */
+    // 会话还能不能换模式：`true` 是选择器，`false` 是只读标签（client 那个 chip 据此变形）。
     sessionModeEditable: boolean;
   }
 }
 
 const sessionModeSchema: z.ZodType<string | null> = z.union([z.string(), z.null()]);
 
-/** 会话模式的投影：初值来自空日志（没选过就是 `null`），只被选择事件推进。 */
+// 会话模式的投影：初值来自空日志（没选过就是 `null`），只被选择事件推进。
 export const sessionModeProjection = {
   key: "sessionMode",
   stateSchema: sessionModeSchema,
@@ -118,13 +90,8 @@ export const sessionModeProjection = {
 
 const sessionModeEditableSchema: z.ZodType<boolean> = z.boolean();
 
-/**
- * 这个会话能不能换模式的投影：空白会话为 `true`，一旦 `turn/start` 落库就永远 `false`（换模式要的是**整段
- * 历史**的模式一致，所以"开过 turn"之后连正在跑的那个 turn 也算）。
- *
- * **判据只有这一处**：服务端 {@link SessionModes.select} 的拒绝与 client chip 的只读形态都读它——以前
- * client 只能等服务端报错，现在连入口都不给，而两边的结论来自同一份会话事实。
- */
+// 这个会话能不能换模式的投影：空白会话为 `true`，`turn/start` 一落库就永远 `false`（换模式要的是整段历史的
+// 模式一致）。判据只有这一处——服务端拒绝与 client chip 的只读形态都读它。
 export const sessionModeEditableProjection = {
   key: "sessionModeEditable",
   stateSchema: sessionModeEditableSchema,
@@ -134,12 +101,12 @@ export const sessionModeEditableProjection = {
   stateVersion: 1,
 } satisfies ProjectionDefinition<"sessionModeEditable", boolean>;
 
-/** 模式清单、默认模式、按会话读取与切换。 */
+// 模式清单、默认模式、按会话读取与切换。
 export class SessionModes extends Service {
-  /** 每个 agent 已经装上的那一份（persona + 默认模型兜底；模式变了就换一份）。 */
+  // 每个 agent 已经装上的那一份（persona + 默认模型兜底；模式变了就换一份）。
   private readonly installs = new WeakMap<Agent, { mode: string; dispose: () => void }>();
 
-  /** 装配时的配置快照：`default` / `modes` 读它，改这两项靠 Loader 重挂这一行（已运行会话不自动换定义）。 */
+  // 装配时的配置快照：`default` / `modes` 读它，改这两项靠 Loader 重挂这一行（已运行会话不自动换定义）。
   readonly config: {
     default: string;
     modes: Record<string, SessionMode>;
@@ -162,10 +129,8 @@ export class SessionModes extends Service {
     ctx.on("agent/created", ({ agent }) => {
       this.installFor(agent);
     });
-    // 官方 roster 在空白窗口换 preset 时，把该会话的扩展换成新 preset 那一份：先把它写成我们的会话事实
-    // （`installFor` 读的就是这份事实），再按新模式装一遍。
-    // 只在 preset → 模式的映射唯一时动手：本部署两个模式共享同一份 preset，反查无意义（`modeForPreset`
-    // 返回 `undefined`），选模式不会经过这条监听，模式事实由 `select` 自己落。
+    // 官方 roster 换 preset 时把该会话的扩展换成新 preset 那一份（先落成会话事实再重装）；
+    // 只在 preset → 模式的映射唯一时动手（共享同一份 preset 时反查无意义）。
     ctx.on("agent-preset/selected", (sessionId: SessionId, preset: string) => {
       const mapped = this.modeForPreset(preset);
       const agent = ctx.agents.get(sessionId);
@@ -177,12 +142,12 @@ export class SessionModes extends Service {
     });
   }
 
-  /** 新会话用它：config 里的 `default`。 */
+  // 新会话用它：config 里的 `default`。
   get defaultId(): string {
     return this.config.default;
   }
 
-  /** 选择器要的清单：只列 `main` 角色的模式（id、展示名、说明，顺序即 config 里 `modes` 的插入序）。 */
+  // 选择器要的清单：只列 `main` 角色的模式（id、展示名、说明，顺序即 config 里 `modes` 的插入序）。
   list(): SessionModeRow[] {
     return this.idsFor("main").map((id) => {
       const mode = this.definition(id);
@@ -194,32 +159,24 @@ export class SessionModes extends Service {
     });
   }
 
-  /**
-   * 声明了某个角色的模式 id（顺序即 config 的插入序）：`main` 给用户选择器，`subagent` 给子代理候选。
-   * @param role - 目标角色。
-   * @returns 该角色下的模式 id。
-   */
+  // 声明了某个角色的模式 id（顺序即 config 的插入序）：`main` 给用户选择器，`subagent` 给子代理候选。
   idsFor(role: SessionModeRole): string[] {
     return Object.entries(this.config.modes)
       .filter(([, mode]) => mode.role.includes(role))
       .map(([id]) => id);
   }
 
-  /**
-   * 同 {@link idsFor}，给的是定义——"指定 mode" 那条接缝要拿候选集。
-   * @param role - 目标角色。
-   * @returns 该角色下的模式与其定义。
-   */
+  // 同 `idsFor`，给的是定义——"指定 mode" 那条接缝要拿候选集。
   modesFor(role: SessionModeRole): { id: string; mode: SessionMode }[] {
     return this.idsFor(role).map((id) => ({ id, mode: this.definition(id) }));
   }
 
-  /** 页面用的清单 + 默认模式。 */
+  // 页面用的清单 + 默认模式。
   roster(): SessionModeRoster {
     return { default: this.defaultId, modes: this.list() };
   }
 
-  /** 按 id 取定义；未知 id 直接抛（切换路径上它就是用户的错）。 */
+  // 按 id 取定义；未知 id 直接抛（切换路径上它就是用户的错）。
   definition(id?: string): SessionMode {
     const wanted = id ?? this.defaultId;
     const mode = this.config.modes[wanted];
@@ -231,30 +188,19 @@ export class SessionModes extends Service {
     return mode;
   }
 
-  /** 会话当前模式：投影上有就用它，否则是部署默认。 */
+  // 会话当前模式：投影上有就用它，否则是部署默认。
   modeOf(session: Session): string {
     const selected = this.ctx.sessionProjections.stateOf(session, "sessionMode");
     return selected ?? this.defaultId;
   }
 
-  /** 会话当前模式的定义。 */
+  // 会话当前模式的定义。
   modeOfSession(session: Session): SessionMode {
     return this.definition(this.modeOf(session));
   }
 
-  /**
-   * 把某个空白会话切到某个模式。
-   *
-   * 模式带着它的 preset（`preset` 决定行清单），所以这里**先把 agent preset 换成模式声明的那个**，再落我们的
-   * 会话事实：否则 preset realm 还是旧那一套的行，而它的注入在我们的开关之外（旧形态 `chat` 挂 `minimal`、
-   * 会话的 preset 却还是 `standard` 时，上游 `agent-instructions` 会照旧把工作区指令注进这个"不要注入"的会话）。
-   *
-   * 目标 preset 与当前挂着的**相同时不切**（本部署两个模式共享同一份 preset，所以切模式通常走不到这一步）：
-   * 换 preset 是一次重挂（卸旧行、装新行），没有变化就没有理由付出这个代价。
-   * @param sessionId - 目标会话（必须还没有开过 turn）。
-   * @param mode - 目标模式 id。
-   * @returns 提交后的模式 id。
-   */
+  // 把某个空白会话（必须还没开过 turn）切到某个模式：先把 agent preset 换成模式声明的那个
+  // （目标与当前相同时不切——换 preset 是一次重挂），再落会话事实并重装该 agent 的扩展。
   async select(sessionId: SessionId, mode: string): Promise<string> {
     const definition = this.definition(mode);
     if (!definition.role.includes("main")) {
@@ -262,16 +208,15 @@ export class SessionModes extends Service {
     }
     const session = this.ctx.sessions.get(sessionId);
     if (session === undefined) throw new Error(`未知的会话 ${sessionId}`);
-    // 空白窗口的判据只有一处：{@link sessionModeEditableProjection}。client 那个 chip 读的是同一个投影，
-    // 所以"看起来能选"与"服务端接受"不会脱节。
+    // 空白窗口的判据只有一处：`sessionModeEditableProjection`（client chip 读同一个投影）。
     if (this.ctx.sessionProjections.stateOf(session, "sessionModeEditable") === false) {
       throw new Error("这个会话已经开始，模式不能再改；要换模式请新开一个会话。");
     }
     const agent = this.ctx.agents.get(sessionId);
     const registry = this.presetRegistry();
     if (agent !== undefined && registry !== undefined && definition.preset.length > 0) {
-      // 官方那条路自己也会查空白窗口（`agent-preset/locked`）。它切完会 emit `agent-preset/selected`，
-      // 下面那个监听据此把模式落成会话事实并装一遍——所以写事实前先比一次投影，同一个值不写第二条。
+      // 官方那条路自己也会查空白窗口（`agent-preset/locked`）；它切完会 emit `agent-preset/selected`，
+      // 监听据此落事实并重装——所以这里先比一次投影，同一个值不写第二条。
       if (this.presetOfAgent(registry, agent) !== definition.preset) {
         await registry.select(agent, definition.preset);
       }
@@ -284,12 +229,7 @@ export class SessionModes extends Service {
     return mode;
   }
 
-  /**
-   * 某个 agent 当前挂着的 preset（registry 的 `composedPreset`）。
-   *
-   * 读不到时返回 `undefined`（按"未知"处理 → 该切就切）：`composedPreset` 是 registry 较新的读面，替身与老
-   * 版本可能没有它；而"没挂任何 preset"（返回值 `undefined`）与"读不到"在这里是同一个结论。
-   */
+  // 某个 agent 当前挂着的 preset（registry 的 `composedPreset`）；读不到时按"未知"处理（该切就切）。
   private presetOfAgent(registry: Context["agentPresets"], agent: Agent): string | undefined {
     const read = (registry as { composedPreset?: (ctx: Context) => string | undefined })
       .composedPreset;
@@ -301,10 +241,8 @@ export class SessionModes extends Service {
     }
   }
 
-  /**
-   * 官方 preset registry：行清单与它的选择面住在那一行。不在 `inject` 里点名（headless 部署没有它，
-   * 点名会让本行永不激活），所以按"可能拿不到"读——`ctx.get` 在当前 ctx 没声明那个服务时会抛。
-   */
+  // 官方 preset registry；不在 `inject` 里点名（headless 部署没有它，点名会让本行永不激活），
+  // 所以按"可能拿不到"读——`ctx.get` 在当前 ctx 没声明那个服务时会抛。
   private presetRegistry(): Context["agentPresets"] | undefined {
     try {
       return this.ctx.get("agentPresets");
@@ -313,13 +251,8 @@ export class SessionModes extends Service {
     }
   }
 
-  /**
-   * 把某个活着的 agent 切到某个模式。与 {@link select} 的差别：它不要求空白会话——子代理创建时的继承
-   * 走这里，**未来的"指定 mode"入口（模型侧或配置侧）也走这里**（那条接缝还没做）。
-   * @param agent - 目标 agent。
-   * @param mode - 目标模式 id。
-   * @param options.record - 是否把这次切换写进会话日志（缺省写；只想改当前进程时给 `false`）。
-   */
+  // 把某个活着的 agent 切到某个模式（不要求空白会话：子代理创建时的继承走这里）；
+  // `options.record: false` 时不写会话日志（只改当前进程）。
   applyTo(agent: Agent, mode: string, options: { record?: boolean } = {}): void {
     this.definition(mode);
     if (options.record !== false) {
@@ -328,17 +261,14 @@ export class SessionModes extends Service {
     this.installFor(agent, mode);
   }
 
-  /**
-   * 该 agent 用哪个模式：会话选过（投影上有）优先，子代理继承父，其余用部署默认。
-   *
-   * 继承要**写进子会话日志**：它是一条会话事实，冷恢复与 fork 都要靠它重建（{@link modeOf} 只读投影）。
-   */
+  // 该 agent 用哪个模式：会话选过（投影上有）优先，子代理继承父，其余用部署默认。
+  // 继承要写进子会话日志——它是一条会话事实，冷恢复与 fork 靠它重建（`modeOf` 只读投影）。
   private resolveModeId(agent: Agent): string {
     // `undefined` = 这个投影没注册（或还没初始化），与"没选过"（`null`）一样落到下一层。
     const selected = this.ctx.sessionProjections.stateOf(agent.session, "sessionMode");
     if (typeof selected === "string") return selected;
-    // 会话级选择归官方 roster：它的 preset 决定这个会话用哪份扩展，我们把结论落成自己的会话事实
-    // （`sessionMode` 是会话级事实的 home：恢复、子代理继承、服务端读取都读它）。
+    // 会话级选择归官方 roster；结论落成我们自己的会话事实（`sessionMode`：恢复、子代理继承、
+    // 服务端读取都读它）。
     const mapped = this.modeForPreset(this.presetOf(agent.session));
     if (mapped !== undefined) {
       agent.session.append("session-mode/selected", { sessionMode: mapped });
@@ -350,7 +280,7 @@ export class SessionModes extends Service {
     return inherited;
   }
 
-  /** 官方 roster 选定的 preset（没选过、或 registry 没装时为 `undefined`）。 */
+  // 官方 roster 选定的 preset（没选过、或 registry 没装时为 `undefined`）。
   private presetOf(session: Session): string | undefined {
     try {
       const state = this.ctx.sessionProjections.stateOf(session, "agentPreset");
@@ -361,16 +291,8 @@ export class SessionModes extends Service {
     }
   }
 
-  /**
-   * 某个 agent preset 对应的模式 id——**只在映射唯一时**回答（几个模式挂同一份 preset 时返回
-   * `undefined`，不反查）。
-   *
-   * 本部署的两个模式共享同一个 preset（`MODE_PRESET_ID`），差异全在会话级收口，所以 preset → 模式的反查在
-   * 这里无意义：模式由**会话事实**决定（`session-mode/selected` 投影 → 子代理继承 → 部署默认），
-   * 官方 roster 选了什么 preset 不改变这个会话是哪个模式。这条反查留给"一对一映射"的部署形态。
-   * @param preset - preset id（`undefined` 表示没选过、或 registry 没装）。
-   * @returns 该 preset 唯一对应的模式 id；没配扩展、或由多个模式共享时 `undefined`。
-   */
+  // 某个 preset 对应的模式 id——只在映射唯一时回答（共享同一份 preset、或没有模式挂它时 `undefined`）；
+  // 本部署的模式由会话事实决定，这条反查留给"一对一映射"的部署形态。
   modeForPreset(preset: string | undefined): string | undefined {
     if (preset === undefined) return undefined;
     const owners = Object.keys(this.config.modes).filter(
@@ -379,7 +301,7 @@ export class SessionModes extends Service {
     return owners.length === 1 ? owners[0] : undefined;
   }
 
-  /** 子代理（有 durable 父会话）继承父当前模式；父不在场、或不是子代理时没有可继承的。 */
+  // 子代理（有 durable 父会话）继承父当前模式；父不在场、或不是子代理时没有可继承的。
   private inheritedModeId(agent: Agent): string | undefined {
     const parentId = agent.session.header.parentSession;
     if (parentId === undefined) return undefined;
@@ -387,7 +309,7 @@ export class SessionModes extends Service {
     return parent === undefined ? undefined : this.modeOf(parent.session);
   }
 
-  /** 装或换该 agent 的那一份（幂等：同一模式不重复注册）。 */
+  // 装或换该 agent 的那一份（幂等：同一模式不重复注册）。
   private installFor(agent: Agent, modeId: string = this.resolveModeId(agent)): void {
     const installed = this.installs.get(agent);
     if (installed?.mode === modeId) return;
@@ -406,13 +328,8 @@ export class SessionModes extends Service {
     this.toolScope()?.apply(agent, mode);
   }
 
-  /**
-   * 模式的默认模型（`modes.<模式 id>.defaultModel`）兜底：只在会话**尚无任何模型事实**（没选过模型、也
-   * 还没跑过请求）时接管这一请求的路由；一旦用户选过（投影 `pending`）或会话已经落过 header，就不再插手。
-   *
-   * 它是**配置事实**，不写会话事件——重启后仍由 config 决定；设置页里那条会话级选择才是会话事实。读的是构造
-   * 时那份模式清单快照：设置页保存会让这一行重挂（`reconcileProfilePatches`），新定义随重挂生效。
-   */
+  // 模式的默认模型兜底：只在会话尚无任何模型事实（没选过模型、也没落过 request header）时接管这一请求的
+  // 路由。它是配置事实、不写会话事件，读构造时的模式快照（设置页保存会让这一行重挂）。
   private installDefaultModel(agent: Agent, modeId: string): () => void {
     return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next();
@@ -433,7 +350,7 @@ export class SessionModes extends Service {
     });
   }
 
-  /** 收口服务由 `@morlay/dsh-context-assembler/scope` 那一行发布；没装它就只有 persona。 */
+  // 收口服务由 `@morlay/dsh-context-assembler/scope` 那一行发布；没装它就只有 persona。
   private toolScope(): SessionToolScope | undefined {
     try {
       return this.ctx.get("sessionToolScope");
@@ -528,12 +445,8 @@ async function handleRoute(
   }
 }
 
-/**
- * 把清单与切换挂到同一张宿主路由表上。
- *
- * `webServer` **必须等**：它可能比本行晚激活，而一次性 `ctx.get` 取到 `undefined` 之后不会再试一次——
- * 路由没注册的后果是请求落到静态资源 fallback，非 GET/HEAD 一律 405。
- */
+// 把清单与切换挂到宿主路由表上。`webServer` 必须等：它可能比本行晚激活，一次性 `ctx.get` 取不到就不会
+// 再试（后果是请求落到静态资源 fallback）。
 function registerHttpRoutes(ctx: Context, modes: SessionModes): void {
   ctx.inject(["webServer"], (scope) => {
     // webServer 的类型由上游 `@deepseek-ai/dsh-host-webserver` 声明；这里只按用到的 register 面做结构转换。

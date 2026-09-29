@@ -3,34 +3,24 @@ import { Service, type Context } from "@deepseek-ai/cordis";
 import type { MessageSource } from "@deepseek-ai/dsh-llm";
 import { renderReminder, renderVirtualSkill } from "./reminder.ts";
 
-/** 正文到达模型的方式：自动注入，或等模型按需加载。 */
+// 正文到达模型的方式：自动注入，或等模型按需加载。
 export type InjectionMode = "auto" | "on-demand";
 
-/**
- * 一条按 skill 形态声明的注入：正文是本仓库维护的文案。
- *
- * 正文与 agent 无关（工具集在装配期就定了），所以 skill 在装配期注册一次、全局可见。
- */
+// 一条按 skill 形态声明的注入：正文是本仓库维护的文案，与 agent 无关（工具集在装配期就定了），所以 skill
+// 在装配期注册一次、全局可见。
 export interface PromptSkillDeclaration {
-  /** kebab-case：skill 名，也是注入条目的 id。 */
+  // kebab-case：skill 名，也是注入条目的 id。
   readonly name: string;
   readonly title: string;
-  /** 目录行摘要：讲清什么时候该加载它。 */
+  // 目录行摘要：讲清什么时候该加载它。
   readonly description: string;
-  /**
-   * 正文按**会话**生成：模式可能只给一部分工具，正文要跟着修剪（不该讲用不到的工具）。
-   * 不传 agent（装配期注册 skill 时）返回不过滤的完整版。
-   */
+  // 正文按**会话**生成：模式可能只给一部分工具，正文要跟着修剪（不该讲用不到的工具）。
+  // 不传 agent（装配期注册 skill 时）返回不过滤的完整版。
   readonly content: (agent?: Agent) => string;
-  /**
-   * 这个 skill 赖以成立的**入口工具**（任一存在即可，不是全部）。都不可见时它不该出现在该会话的技能
-   * 目录里——"不能用 skill 工具就没有技能目录"是同一个道理：技能也跟着工具走。
-   *
-   * 缺省语义就是"一个都不在就藏起来"；声明方要自己挑入口，别把组内所有可能的工具都倒进来
-   * （子代理控制行与团队插件会提供同名工具，全集当判据会把不该出现的 skill 留下）。
-   */
+  // 这个 skill 赖以成立的**入口工具**（任一存在即可，不是全部）：都不可见时它不出现在该会话的技能目录里。
+  // 声明方自己挑入口，别把组内所有可能的工具都倒进来（子代理控制行与团队插件会提供同名工具）。
   readonly requires?: readonly string[];
-  /** 缺省 `on-demand`：只有正文确有必要常驻时才写 `auto`。 */
+  // 缺省 `on-demand`：只有正文确有必要常驻时才写 `auto`。
   readonly injection?: InjectionMode;
 }
 
@@ -40,40 +30,33 @@ interface RegisteredSkill {
 }
 
 interface AgentState {
-  /** 本步装配降级出来的 section 条目：id → 正文（未渲染信封）。 */
+  // 本步装配降级出来的 section 条目：id → 正文（未渲染信封）。
   sections: ReadonlyMap<string, string>;
 }
 
-/**
- * 一条规则块声明：系统级信息（工作区指令、skill 目录），文本按 id 幂等注入、同 id 覆盖。
- * 文本可以是异步的（skill 目录要读 skill 注册表）。
- */
+// 一条规则块声明：系统级信息（工作区指令、skill 目录），文本按 id 幂等注入、同 id 覆盖。
+// 文本可以是异步的（skill 目录要读 skill 注册表）。
 export interface PromptRuleDeclaration {
   readonly id: string;
   readonly text: (agent: Agent) => string | Promise<string>;
-  /**
-   * 这条规则的对外身份。工作区指令那一面按上游 kind 发消息（skill 面相反，用我们自己的 kind），好让按 kind 认领的
-   * 消费方（客户端标签、上游的实验性约束收集）认得出来；不声明就是通道自己的 `context-assembler`。
-   * 幂等键仍是 `id`（`reminderMessage` 会把它塞进 source）。
-   */
+  // 这条规则的对外身份：工作区指令那一面按上游 kind 发消息（skill 面相反，用我们自己的 kind），让按 kind 认领
+  // 的消费方（客户端标签、上游的实验性约束收集）认得出来；不声明就是通道自己的 `context-assembler`。幂等键仍是 `id`。
   readonly source?: (agent: Agent) => MessageSource;
 }
 
-/** 一条待注入的条目：正文已渲染好，`source` 是它声明给外部的身份。 */
+// 一条待注入的条目：正文已渲染好，`source` 是它声明给外部的身份。
 export interface PromptEntry {
   readonly text: string;
   readonly source?: MessageSource;
 }
 
-/**
- * 注入通道：调用方声明「什么内容、怎么到达模型」，这里负责到达方式。
- *
- * - `on-demand`：注册成模型可用 skill（进 skill 目录，正文按需加载）；
- * - `auto`：正文自动注入 reminder（注册成 skill 但标 `modelInvocable: false`，因为已经常驻）；
- * - `replaceSection` / `suppressSection`：装配结果上的文本改写与丢弃。
- *
- * 覆盖语义（同 id 最新取代更早）由系统提示词里的声明说明一次，见 [`rules.ts`](./rules.ts)。
- */
+// 注入通道：调用方声明「什么内容、怎么到达模型」，这里负责到达方式。
+//
+// - `on-demand`：注册成模型可用 skill（进 skill 目录，正文按需加载）；
+// - `auto`：正文自动注入 reminder（注册成 skill 但标 `modelInvocable: false`）；
+// - `replaceSection` / `suppressSection`：装配结果上的文本改写与丢弃。
+//
+// 覆盖语义（同 id 最新取代更早）由系统提示词里的声明说明一次，见 [`rules.ts`](./rules.ts)。
 export class ContextAssembler extends Service {
   private readonly declarations = new Map<string, PromptSkillDeclaration>();
   private readonly rules = new Map<string, PromptRuleDeclaration>();
@@ -81,16 +64,14 @@ export class ContextAssembler extends Service {
   private readonly suppressed = new Set<string>();
   private readonly skills = new Map<string, RegisteredSkill>();
   private readonly states = new WeakMap<Agent, AgentState>();
-  /**
-   * 不要 instruction 类注入的会话（模式说了 `instructions: false`）：常驻正文、规则块与降级 section 都不进。
-   * 按需 skill 不受它管（那是模型自己加载），引用材料也不经通道。
-   */
+  // 不要 instruction 类注入的会话（模式说了 `instructions: false`）：常驻正文、规则块与降级 section 都不进。
+  // 按需 skill 不受它管（那是模型自己加载），引用材料也不经通道。
   private readonly withoutInstructions = new WeakSet<Agent>();
 
-  /** 本会话的模式收窄（白名单）：投影层的过滤不碰注册表，注册表上看不出"谁能用"。 */
+  // 本会话的模式收窄（白名单）：投影层的过滤不碰注册表，注册表上看不出"谁能用"。
   private readonly toolScopes = new WeakMap<Agent, (tool: string) => boolean>();
 
-  /** `host` 是构造期那个根 ctx：`skills` 的访问权限挂在插件的 inject 声明上，不能依赖访问者 ctx。 */
+  // `host` 是构造期那个根 ctx：`skills` 的访问权限挂在插件的 inject 声明上，不能依赖访问者 ctx。
   constructor(private readonly host: Context) {
     super(host, "contextAssembler");
   }
@@ -130,45 +111,33 @@ export class ContextAssembler extends Service {
     return this.suppressed.has(name);
   }
 
-  /** 装配结果上该 section 要换成的文本；undefined 表示原样保留。 */
+  // 装配结果上该 section 要换成的文本；undefined 表示原样保留。
   replacement(name: string, agent: Agent | undefined): string | undefined {
     const override = this.overrides.get(name);
     return override === undefined || agent === undefined ? undefined : override(agent);
   }
 
-  /**
-   * 本步要注入的条目：键 → 已渲染好的正文（规则块或内容块）。
-   * `sections` 来自本步装配，`rules` 与 `auto` skill 正文在这里现算。
-   */
-  /** 这个会话要不要 instruction 类注入（模式说了 `instructions: false` 就是不要，见 {@link withoutInstructions}）。 */
+  // 这个会话要不要 instruction 类注入（模式说了 `instructions: false` 就是不要，见 `withoutInstructions`）。
   setInstructions(agent: Agent, on: boolean): void {
     if (on) this.withoutInstructions.delete(agent);
     else this.withoutInstructions.add(agent);
   }
 
-  /**
-   * 本会话的**工具收窄**（模式白名单）：投影层只过滤装配结果、不碰工具注册表，所以"谁能用"这件事
-   * 必须在通道上登记，技能目录与组正文才收得住。与 {@link setInstructions} 同形——谓词由模式那一行给
-   * （`context-scope`），通道自己不碰 `tools` 服务。
-   */
+  // 本会话的**工具收窄**（模式白名单）：投影层只过滤装配结果、不碰工具注册表，所以"谁能用"要在通道上登记，
+  // 技能目录与组正文才收得住（谓词由 `context-scope` 那一行给，通道自己不碰 `tools` 服务）。
   restrictTools(agent: Agent, allowed: (tool: string) => boolean): void {
     this.toolScopes.set(agent, allowed);
   }
 
-  /**
-   * 本会话的工具可见性：调用方给出的注册表可见性 × 已登记的模式收窄。技能目录与组正文共用它，
-   * 免得同一套判据在几处各写一遍。
-   */
+  // 本会话的工具可见性：调用方给出的注册表可见性 × 已登记的模式收窄。技能目录与组正文共用它，
+  // 免得同一套判据在几处各写一遍。
   visibleTools(agent: Agent, registered: (tool: string) => boolean): (tool: string) => boolean {
     const allowed = this.toolScopes.get(agent);
     return allowed === undefined ? registered : (tool) => registered(tool) && allowed(tool);
   }
 
-  /**
-   * 该会话看不到的 skill 名：声明了 `requires` 而依赖的工具一个都不可见。
-   *
-   * 目录由 `context-skill-catalog` 渲染，它把工具可见性作为谓词传进来（通道不碰 tools 服务）。
-   */
+  // 该会话看不到的 skill 名：声明了 `requires` 而依赖的工具一个都不可见。目录由 `context-skill-catalog` 渲染，
+  // 它把工具可见性作为谓词传进来（通道不碰 `tools` 服务）。
   hiddenSkills(visible: (tool: string) => boolean): ReadonlySet<string> {
     const hidden = new Set<string>();
     for (const [name, declaration] of this.declarations) {
@@ -179,15 +148,13 @@ export class ContextAssembler extends Service {
     return hidden;
   }
 
-  /**
-   * 该 skill 按会话修剪后的正文：注册表只能存一份（技能注册是装配期一次、全局可见），所以按需加载
-   * 路径（接管的 `skill` 工具）要用这里重新算一次，才和 `auto` 正文一样跟着工具走。
-   */
+  // 该 skill 按会话修剪后的正文：注册表只能存一份（技能注册是装配期一次、全局可见），所以按需加载
+  // 路径（接管的 `skill` 工具）要用这里重新算一次，才和 `auto` 正文一样跟着工具走。
   contentFor(name: string, agent: Agent | undefined): string | undefined {
     return this.declarations.get(name)?.content(agent);
   }
 
-  /** 一个 skill 在这个会话能不能被用到：声明了 `requires` 时至少一个工具在模式收窄内。 */
+  // 一个 skill 在这个会话能不能被用到：声明了 `requires` 时至少一个工具在模式收窄内。
   private reachable(
     declaration: PromptSkillDeclaration,
     scope: ((tool: string) => boolean) | undefined,
@@ -199,12 +166,13 @@ export class ContextAssembler extends Service {
     return requires.some((tool) => scope(tool));
   }
 
+  // 本步要注入的条目：键 → 已渲染好的正文（规则块或内容块）。
+  // `sections` 来自本步装配，`rules` 与 `auto` skill 正文在这里现算。
   async collect(agent: Agent): Promise<Map<string, PromptEntry>> {
     const entries = new Map<string, PromptEntry>();
     const scope = this.toolScopes.get(agent);
     // 这一档开关管**一切 instruction 类送达**：常驻正文（内容块）、规则块、降级 section。按需 skill 照常注册
-    // （模型自己调 `skill` 才拿到正文，那已不是"注入"）；用户手打 `@` 引用带进来的材料走
-    // `@morlay/dsh-reference` 的 pre-step，不经这里。
+    // （模型自己调 `skill` 才拿到正文）；用户手打 `@` 引用带进来的材料走 `@morlay/dsh-reference`，不经这里。
     const instructionsOff = this.withoutInstructions.has(agent);
     if (!instructionsOff) {
       for (const declaration of this.declarations.values()) {
@@ -242,14 +210,12 @@ export class ContextAssembler extends Service {
     return this.states.get(agent)?.sections ?? new Map();
   }
 
-  /**
-   * 每步装配调一次：记下本步降级出来的 section 文本，供下一步注入。
-   */
+  // 每步装配调一次：记下本步降级出来的 section 文本，供下一步注入。
   sync(agent: Agent, input: { readonly sections: ReadonlyMap<string, string> }): void {
     this.stateOf(agent).sections = input.sections;
   }
 
-  /** skill 注册（装配期一次，全局可见）：正文没变的不重注册。 */
+  // skill 注册（装配期一次，全局可见）：正文没变的不重注册。
   private refreshSkills(agent?: Agent): void {
     for (const [name, declaration] of this.declarations) {
       const content = declaration.content(agent);
@@ -289,7 +255,7 @@ declare module "@deepseek-ai/cordis" {
   }
 }
 
-/** 一条注入内容的取用上限：超过就按"没有内容"处理，不阻塞这一轮请求。 */
+// 一条注入内容的取用上限：超过就按"没有内容"处理，不阻塞这一轮请求。
 const CONTENT_TIMEOUT_MS = 2000;
 
 async function withTimeout(work: string | Promise<string>, ms: number): Promise<string> {

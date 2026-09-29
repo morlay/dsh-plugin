@@ -75,4 +75,10 @@
   不用 `*Sync` 变体。`node:sqlite` 的 `DatabaseSync` 与 better-sqlite3 的同步用法是该驱动的语义、
   不是本规则目标。
 - 文件以单个换行结尾。
-- **注释不做设计说明**；**不用 JSDoc**。
+- **注释不做设计说明**（判据）：只写「这段在做什么 / 有什么约束」，不写为什么这样设计、不写取舍与沿革（那是
+  `.agents/` 记录的 home，注释里最多一行指过去）。
+- **不用 JSDoc**：注释一律 `//`，不写 `/** … */`，也不用 `@param` / `@returns` / `@throws` / `{@link}` 这类标签
+  （签名自解释的参数说明直接不要；有信息量的并进首行）。
+  **例外——薄壳 fork 的保留文件随上游**：`packages/subagent/dsh-subagent/src/{index,continuation,continuation-messages}.ts`
+  与 `vendor/` 逐行比对（`src/__tests__/upstream-wiring.spec.ts`），注释保持上游形态，不按本条清理。
+- 生成物的注释由生成器给出（`gen-design-tokens.mts`、`gen-official-packages.ts`）：要改注释就改那里的模板。

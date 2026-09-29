@@ -76,7 +76,7 @@ import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts
 import { needsShapeAdoption, sealOwnEvents } from "./log.ts";
 import { installStorageTakeover } from "./storage-takeover/index.ts";
 
-/** 一批事件里的最大时间：写路径据此推进会话行的「最后活动时间」。 */
+// 一批事件里的最大时间：写路径据此推进会话行的「最后活动时间」。
 function maxEventTime(events: readonly { readonly time?: number }[]): number | undefined {
   let max: number | undefined;
   for (const event of events) {
@@ -117,7 +117,7 @@ export interface SessionPersistenceRdbInternals {
   ): Promise<import("@deepseek-ai/dsh-session-persistence").SessionPersistenceRevision | undefined>;
 
   registerReuseEventIds(childId: SessionId, map: ReadonlyMap<number, string>): void;
-  /** fork 失败时丢弃还没被消费的映射。 */
+  // fork 失败时丢弃还没被消费的映射。
   dropReuseEventIds(childId: SessionId): void;
 }
 
@@ -142,7 +142,7 @@ export type Config =
       projectionCache?: ProjectionCacheOptions | undefined;
     };
 
-/** schema 解析之后的形状：整段 Config 是 **volatile 稳定引用**（页面可编辑），读它要过 `.get()`。 */
+// schema 解析之后的形状：整段 Config 是 **volatile 稳定引用**（页面可编辑），读它要过 `.get()`。
 export type ResolvedConfig = Volatile<Config>;
 
 export type SessionDeletionErrorCode =
@@ -488,13 +488,11 @@ class RdbSessionHandle implements SessionHandle {
   static readonly LIVE_WRITE_BATCH_MAX_DELAY_MS = 200;
 }
 
-/**
- * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
- * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
- */
+// 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+// （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
-/** 投影 checkpoint 的写回节流：两个分支共用。 */
+// 投影 checkpoint 的写回节流：两个分支共用。
 const projectionCacheSchema = z
   .object({
     writeEveryEvents: z
@@ -609,7 +607,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
   private readonly liveBuffers = new Map<SessionId, SessionEvent[]>();
   private readonly liveReady = new Map<SessionId, Promise<void>>();
 
-  /** 本次装配用的配置快照（整段 Config 是 volatile，重挂会给新的）。 */
+  // 本次装配用的配置快照（整段 Config 是 volatile，重挂会给新的）。
   readonly config: Config;
 
   constructor(
@@ -620,12 +618,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
   ) {
     super(ctx);
 
-    // 配置就是这一行的 config（cordis.patch.yml / profile patch，或设置页改它）；上游 0.1.7 的 settings
-    // 不再提供 namespace section 覆盖，旧 `settings.yaml` 的 `session-rdb` 段由上游一次性导进同 id 的行。
-    //
-    // 整段 Config 标了 volatile（页面可编辑），而生效靠 **Loader 重挂这一行**（settings 写完经
-    // `reconcileProfilePatches` 让 Loader 重装受影响的 entry）：重挂会构造新实例、拿到新快照，所以这里取一次
-    // 就够，运行期不必反复读引用。
+    // 配置就是这一行的 config（cordis.patch.yml / profile patch，或设置页改它）；整段 Config 标了 volatile，
+    // 生效靠 **Loader 重挂这一行**（settings 写完经 `reconcileProfilePatches` 重装受影响的 entry）——重挂构造
+    // 新实例、拿到新快照，所以这里取一次就够，运行期不必反复读引用。
     this.config = config.get();
     this.backend = injectedBackend ?? createBackend(this.config);
     this.ready = this.init();
@@ -840,13 +835,13 @@ export class SessionPersistenceRdb extends SessionPersistence {
     await this.dropSessionStats(id);
   }
 
-  /** GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。 */
+  // GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。
   async collectOrphans(): Promise<number> {
     await this.ready;
     return this.backend.collectOrphans();
   }
 
-  /** GC 通道：回收父已不存在的 subagent 会话（live 的跳过），返回删除的会话数。 */
+  // GC 通道：回收父已不存在的 subagent 会话（live 的跳过），返回删除的会话数。
   async collectOrphanSessions(): Promise<number> {
     await this.ready;
     const orphans = await this.backend.listOrphanSubagentSessions();
@@ -866,13 +861,13 @@ export class SessionPersistenceRdb extends SessionPersistence {
     return deleted;
   }
 
-  /** 用量统计：SQL 聚合的按天 × 模型桶与按会话行（事件行去重、排除孤儿行）。 */
+  // 用量统计：SQL 聚合的按天 × 模型桶与按会话行（事件行去重、排除孤儿行）。
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
     await this.ready;
     return this.backend.usageReport(sinceMs);
   }
 
-  /** GC 通道：VACUUM；调用方需先停止运行中的写路径（见 `registerSessionGc`）。 */
+  // GC 通道：VACUUM；调用方需先停止运行中的写路径（见 `registerSessionGc`）。
   async vacuum(): Promise<void> {
     await this.ready;
     await this.backend.vacuum();
@@ -1072,11 +1067,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
     };
   }
 
-  /**
-   * 统计衍生表的**旁路累加**：不在写事务里、失败只 warn——两张会话汇总表都是可销毁重建的
-   * 派生表，丢几次累加不影响可用性（需要时用 `rebuildSessionStats` 重算）。
-   * token 走写路径已折好的用量行，活动计数走本批事件类型。
-   */
+  // 统计衍生表的**旁路累加**：不在写事务里、失败只 warn——两张会话汇总表都是可销毁重建的
+  // 派生表，丢几次累加不影响可用性（需要时用 `rebuildSessionStats` 重算）。
+  // token 走写路径已折好的用量行，活动计数走本批事件类型。
   private async recordSessionStats(
     id: SessionId,
     events: readonly SessionEvent[],
@@ -1104,10 +1097,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }
   }
 
-  /**
-   * 重算一个会话的统计（rewind / fork 之后；best-effort，同 `recordSessionStats`）：
-   * 两张汇总表按会话重算，用量行的引用标记全量重算（引用可能跨会话消失）。
-   */
+  // 重算一个会话的统计（rewind / fork 之后；best-effort，同 `recordSessionStats`）：
+  // 两张汇总表按会话重算，用量行的引用标记全量重算（引用可能跨会话消失）。
   async rebuildSessionStats(id: SessionId): Promise<void> {
     try {
       await this.backend.rebuildSessionStats(id);
@@ -1119,7 +1110,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }
   }
 
-  /** 会话删除时清掉它的汇总行，并重算用量行的引用标记（被删会话引用的行要立刻退出统计）。 */
+  // 会话删除时清掉它的汇总行，并重算用量行的引用标记（被删会话引用的行要立刻退出统计）。
   private async dropSessionStats(id: SessionId): Promise<void> {
     try {
       await this.backend.deleteSessionStats(id);
@@ -1136,10 +1127,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     log: { meta: SessionHeader; inheritedEventCount: number; events: SessionEvent[] },
   ): Promise<void> {
     await this.backend.transaction(async (tx) => {
-      // 这段重写会删光该会话的桥接行、再按迁移视图重建——与 `appendBatch` 同一个理由，先做并发写者校验：
-      // 否则另一实例在 open 之前 / 期间提交的事件会被这段重写静默丢掉。调用方刚读过这份日志（重写只发生在
-      // write open 的读路径之后），所以 guard 里没有该会话时就把当前磁盘 head 记成本实例已确认的值；
-      // 有记录时严格比较——那能抓住"读完之后另一个实例又写了"。
+      // 重写会删光该会话的桥接行再重建，先做并发写者校验（与 `appendBatch` 同一个理由）：否则另一实例在
+      // open 前 / 期间提交的事件会被静默丢掉；调用方刚读过这份日志，guard 没有该会话时记下当前磁盘 head。
       const head = await tx.getHead(id);
       if (!this.writeGuard.has(id)) this.writeGuard.confirmHead(id, head.fHeadSequence);
       this.writeGuard.assertNoConcurrentWriter(id, head.fHeadSequence);
@@ -1225,8 +1214,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     signal?.throwIfAborted();
     await this.ready;
     signal?.throwIfAborted();
-    // 一条读取路径：load 的语义就是「读一次完整快照」，不再经 handle 面再读一遍
-    // （原先 open(read) 读一次 + handle.read 又读一次，等于把最贵的读付两遍）。
+    // 一条读取路径：load 的语义是「读一次完整快照」，不经 handle 面再读一遍。
     const log = await this.readLog(id, {}, signal);
     if (log === undefined) {
       // 未落库的 live 会话没有磁盘视图：与 handle.read 的 detached 口径一致，返回空日志。
@@ -1285,7 +1273,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     this.reuseEventIds.set(childId, new Map(map));
   }
 
-  /** 丢弃一个还没被消费的复用映射（fork 失败时）：留着会让同一个 childId 之后的落写复用父会话的事件行。 */
+  // 丢弃一个还没被消费的复用映射（fork 失败时）：留着会让同一个 childId 之后的落写复用父会话的事件行。
   dropReuseEventIds(childId: SessionId): void {
     this.reuseEventIds.delete(childId);
   }
@@ -1485,7 +1473,7 @@ function seedCoversPrefix(seed: readonly SessionEvent[], prefix: readonly Sessio
   );
 }
 
-/** 一批事件折成活动计数的桶：只数四种类型，按本地日聚合成四项。 */
+// 一批事件折成活动计数的桶：只数四种类型，按本地日聚合成四项。
 function sessionCountBuckets(events: readonly SessionEvent[]): SessionCountBucket[] {
   const counted = new Map<string, SessionCountBucket>();
   for (const event of events) {
@@ -1498,7 +1486,7 @@ function sessionCountBuckets(events: readonly SessionEvent[]): SessionCountBucke
   return [...counted.values()];
 }
 
-/** 一批用量行折成 token 桶：按「本地日 × 模型」聚合（模型未知落空串，与表口径一致）。 */
+// 一批用量行折成 token 桶：按「本地日 × 模型」聚合（模型未知落空串，与表口径一致）。
 function sessionUsageBuckets(usageRows: readonly EventUsageRow[]): SessionUsageBucket[] {
   const counted = new Map<string, SessionUsageBucket>();
   for (const row of usageRows) {

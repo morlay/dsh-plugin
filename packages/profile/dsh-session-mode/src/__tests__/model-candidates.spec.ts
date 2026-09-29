@@ -1,9 +1,5 @@
-/**
- * 「选模型」的候选：本行的 schema 里没有 provider / 模型清单，它们来自部署里的 LLM 目录。
- *
- * 盯的接缝是**目录 → 候选**：provider 候选是目录（活着的路由 + 可配置声明）合并后的清单；模型清单读那份声明指向的
- * 配置（`settingsNs` / `settingsPath`），并跟着 provider 字段的当前值变。
- */
+// 「选模型」的候选：provider 与模型清单来自部署里的 LLM 目录。接缝是目录 → 候选——provider 候选是活着的路由
+// 与可配置声明合并后的清单，模型清单读那份声明指向的配置并跟着 provider 当前值变。
 
 import { describe, expect, it } from "vitest";
 import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-primitives/client";
@@ -14,7 +10,7 @@ interface Registered {
   spec: SelectSpec;
 }
 
-/** 一套最小的 client 面：提示面记账、LLM 目录与配置读数是替身。 */
+// 一套最小的 client 面：提示面记账、LLM 目录与配置读数是替身。
 function bench() {
   const sources: Registered[] = [];
   let refreshes = 0;
@@ -73,7 +69,7 @@ function bench() {
   return { ctx, sources, refreshes: () => refreshes };
 }
 
-/** 等到目录取回并注册（`load` 是异步的）。 */
+// 等到目录取回并注册（`load` 是异步的）。
 async function settled(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }

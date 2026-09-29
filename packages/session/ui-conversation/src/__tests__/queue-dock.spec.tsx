@@ -21,7 +21,7 @@ const COPY_KEYS: Readonly<Record<string, string>> = {
   "markdown.footnotes": "脚注",
 };
 
-/** 只做 {name} 占位替换的翻译桩；文案模板取自本包 locale。 */
+// 只做 {name} 占位替换的翻译桩；文案模板取自本包 locale。
 function translate(key: string, params?: Record<string, unknown>): string {
   const template = COPY_KEYS[key] ?? TEMPLATES[key] ?? key;
   if (params === undefined) return template;

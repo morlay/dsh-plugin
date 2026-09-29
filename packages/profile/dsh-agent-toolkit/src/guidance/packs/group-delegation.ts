@@ -1,4 +1,4 @@
-/** 派发：子代理与脚本编排。 */
+// 派发：子代理与脚本编排。
 import type { GroupPack } from "../types.ts";
 
 export const DELEGATION_GROUP: GroupPack = {

@@ -6,7 +6,7 @@ const execFileAsync = promisify(execFile);
 
 const DEFAULT_REGISTRY = "https://npm.pkg.github.com/";
 
-/** 解析 registry：`--registry <url>` 或 `--registry=<url>`，缺省用默认。 */
+// 解析 registry：`--registry <url>` 或 `--registry=<url>`，缺省用默认。
 function resolveRegistry(): string {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
@@ -25,10 +25,7 @@ function resolveRegistry(): string {
   return DEFAULT_REGISTRY;
 }
 
-/**
- * 解析 dist-tag：预发布版本不占用 latest，避免 `npm i <pkg>` 装到未稳定的版本。
- * `1.2.3` → latest；`1.2.3-alpha.1` → alpha；其余预发布（rc / beta / …）→ next。
- */
+// dist-tag：稳定版 → latest；`-alpha.*` → alpha；其余预发布（rc / beta / …）→ next。
 function resolveTag(version: string): string {
   const dash = version.indexOf("-");
   if (dash < 0) return "latest";
@@ -37,7 +34,7 @@ function resolveTag(version: string): string {
   return identifier === "alpha" ? "alpha" : "next";
 }
 
-/** 捕获 stdout/stderr 地跑子进程：非零退出不抛，交给调用方按退出码判断。 */
+// 捕获 stdout/stderr 地跑子进程：非零退出不抛，交给调用方按退出码判断。
 async function capture(
   command: string,
   args: string[],
@@ -54,7 +51,7 @@ async function capture(
   }
 }
 
-/** 继承 stdio 地跑子进程（发布日志直接进当前终端），返回退出码。 */
+// 继承 stdio 地跑子进程（发布日志直接进当前终端），返回退出码。
 function runInherited(command: string, args: string[]): Promise<number | null> {
   return new Promise((resolve) => {
     const child = spawn(command, args, { stdio: "inherit" });
@@ -71,8 +68,7 @@ const { name, version } = JSON.parse(await readFile("package.json", "utf8")) as 
   version: string;
 };
 
-// 只发布 @morlay/* 下的包：上游 @deepseek-ai/* 由 deepseek-harness 自己
-// 发布，apps/* 等其余 workspace 成员不发布。
+// 只发布 `@morlay/*` 下的包：上游 `@deepseek-ai/*` 由 deepseek-harness 自己发布，apps/* 等其余成员不发布。
 if (!name.startsWith("@morlay/")) {
   console.log(`skip ${name}: only @morlay/* packages are published from this repo`);
   process.exit(0);

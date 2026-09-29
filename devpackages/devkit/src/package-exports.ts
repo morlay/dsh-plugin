@@ -1,36 +1,24 @@
-// 包清单（`exports` / `publishConfig.exports`）由构建生成，不再手写：手写的两份清单要么漏键、
-// 要么与产物脱节，`@morlay/dsh-desktop-host` 的 `./package.json` 出口就因此丢过（见
-// `.agents/standards/how-to-write.md` 的「包出口」一节）。
-//
-// 两条规则就够：
-// - **host 面**：一个入口一个出口，顶层出口指源码（workspace 内直连 `src`），发布态指产物；
-// - **client 半**：开发态与 host 面一样，就是一条指源码的字符串（那份 TS 由 `dev-client-bundles`
-//   现场转换）；发布态只能是 CJS 单文件 bundle（模块系统的工厂契约），出口写成 `{ types, default }`
-//   取 `.d.cts` 与 `.cjs`，**不参与 ESM / CJS 的格式推导**（让推导去猜，它会把 `client.cjs` 当成 `.`
-//   的 require 变体，清单就错了）。
+// 包清单（`exports` / `publishConfig.exports`）由构建从产物推导并写回 `package.json`，不手写：
+// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态是 CJS 单文件 bundle。
+// 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { TsdownHooks } from "tsdown";
 
-/** tsdown `build:done` 钩子；上下文与产物块类型都从 tsdown 自己的定义取，不手抄一份。 */
+// tsdown `build:done` 钩子；上下文与产物块类型都从 tsdown 自己的定义取，不手抄一份。
 type BuildDoneHook = TsdownHooks["build:done"];
 
 export interface PackageExportsOptions {
-  /** 入口名 → 源码路径（`index` 是包根出口 `.`）。 */
+  // 入口名 → 源码路径（`index` 是包根出口 `.`）。
   readonly entries: Record<string, string>;
-  /** client 半的入口名；有它时该出口按 CJS 单文件写。 */
+  // client 半的入口名；有它时该出口按 CJS 单文件写。
   readonly clientEntry?: string;
-  /** 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。 */
+  // 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。
   readonly hidden?: readonly string[];
-  /** 命令名 → 入口名：`bin` 两侧一起写（顶层指源码、发布态指产物）。 */
+  // 命令名 → 入口名：`bin` 两侧一起写（顶层指源码、发布态指产物）。
   readonly bin?: Record<string, string>;
-  /**
-   * 额外写 Node / Electron 的传统入口 `main` / `module`（都指包根出口的产物）。
-   *
-   * 这类消费方不看 `exports`：Electron 以**包目录**为 app 启动时按 `main` 找主进程入口
-   * （`dsh-desktopify dev` 就是这么起壳的），缺了它 Electron 会退回 `index.js` 并报
-   * 「Unable to find Electron app … Cannot find module <包目录>」。
-   */
+  // 额外写 Node / Electron 的传统入口 `main` / `module`（都指包根出口的产物）：这类消费方不看
+  // `exports`——Electron 以包目录为 app 启动时按 `main` 找主进程入口，缺了它退回 `index.js` 并报错。
   readonly legacy?: boolean;
 }
 
@@ -46,11 +34,11 @@ interface EntryArtifacts {
 interface BuildRun {
   readonly entries: Map<string, EntryArtifacts>;
   outDir: string;
-  /** 清单只落一次：判定「齐了」之后的写入不能再被后来的回调重复触发。 */
+  // 清单只落一次：判定「齐了」之后的写入不能再被后来的回调重复触发。
   write?: Promise<void>;
 }
 
-/** 同一个包的多格式构建分多轮进 `build:done`，产物要攒齐再落清单。 */
+// 同一个包的多格式构建分多轮进 `build:done`，产物要攒齐再落清单。
 const runs = new Map<string, BuildRun>();
 
 async function exists(path: string): Promise<boolean> {
@@ -62,22 +50,20 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** client 半取 CJS 产物，host 面取 ESM 产物——扩展名按产物实际落点，不猜。 */
+// client 半取 CJS 产物，host 面取 ESM 产物——扩展名按产物实际落点，不猜。
 function pick(files: readonly string[], cjs: boolean): string | undefined {
   return files.find((file) =>
     cjs ? file.endsWith(".cjs") : file.endsWith(".mjs") || file.endsWith(".js"),
   );
 }
 
-/** 出口键：`index` 是包根，其余按入口名。 */
+// 出口键：`index` 是包根，其余按入口名。
 function exportKey(entry: string): string {
   return entry === "index" ? "." : `./${entry}`;
 }
 
-/**
- * 每个要导出的入口都拿到自己那一份产物了吗？——host 面等 ESM 产物，client 半等 CJS 产物。
- * 多格式构建分多轮进 `build:done`，用「产物齐」而不是「轮次齐」判断，才不必猜哪一轮是最后一轮。
- */
+// 每个要导出的入口都拿到自己那份产物了吗（host 面等 ESM、client 半等 CJS）——按「产物齐」判断，
+// 多格式构建分多轮进 `build:done`，不必猜哪一轮是最后一轮。
 function complete(run: BuildRun, options: PackageExportsOptions): boolean {
   const hidden = new Set(options.hidden ?? []);
   return Object.keys(options.entries).every((entry) => {
@@ -87,10 +73,8 @@ function complete(run: BuildRun, options: PackageExportsOptions): boolean {
   });
 }
 
-/**
- * 挂到 tsdown 的 `build:done`：从产物块推导每个入口的落点，产物攒齐后写回 `package.json`。
- * @param options - 入口约定，与构建配置同一份事实。
- */
+// 挂到 tsdown 的 `build:done`：从产物块推导每个入口的落点，产物攒齐后写回 `package.json`
+// （入口约定与构建配置同一份事实）。
 export function packageExportsHook(options: PackageExportsOptions): BuildDoneHook {
   return async (ctx) => {
     const cwd = process.cwd();
@@ -125,7 +109,7 @@ async function writeManifest(
   const manifest = JSON.parse(source) as Record<string, unknown>;
   const hidden = new Set(options.hidden ?? []);
   const { outDir } = run;
-  /** 清单里的产物路径一律带 `./` 前缀（`exports` 的写法约定）。 */
+  // 清单里的产物路径一律带 `./` 前缀（`exports` 的写法约定）。
   const artifact = (file: string): string => `./${outDir}/${file}`;
 
   // `index` 是包根，先写它，其余 host 面按入口声明顺序跟上。
@@ -143,9 +127,7 @@ async function writeManifest(
     if (found === undefined) continue;
 
     if (entry === options.clientEntry) {
-      // client 半只有 CJS 单文件这一种形态，**发布态**按约定直接写产物，不做格式推导；
-      // 开发态就是一个出口指源码（与 host 面同一条规则，写字符串而不是 `{ types, default }`）——
-      // 上游把这个路径拼成绝对路径后读字节，那份 TS 由 `dev-client-bundles` 现场转换。
+      // client 半只有 CJS 单文件这一种形态：发布态直接写产物、不做格式推导，开发态写一条指源码的字符串出口。
       const runtime = pick(found.runtime, true);
       if (runtime === undefined) continue;
       const declarations = found.declarations.find((file) => file.endsWith(".d.cts"));

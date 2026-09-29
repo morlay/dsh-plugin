@@ -1,19 +1,14 @@
 import { defineCordisPluginConfig, standardDecoratorsPlugin } from "@local/devkit";
 
-/**
- * 能力包：`rows` 出口发布装配数据（行清单），行本身由部署那层装（`packages/bundles/*` 里引用它渲染 patch）。
- *
- * **必须显式注解**：直接导出推断类型会让 `default` 的类型引用 tsdown / hookable 的内部声明文件
- * （`Arrayable` / `HookKeys` / `Hookable`），其它包构建时（同一个 TS program）会报
- * `TS2883: The inferred type of 'default' cannot be named without a reference to ...`。
- */
+// 能力包：`rows` 出口发布装配数据（行清单），行本身由部署那层装（`packages/bundles/*` 引用它渲染 patch）。
+//
+// **必须显式注解**：直接导出推断类型会让 `default` 的类型引用 tsdown / hookable 的内部声明文件，其它包
+// 构建时（同一个 TS program）报 `TS2883`。
 type CordisPluginConfig = Awaited<ReturnType<typeof defineCordisPluginConfig>>;
 
-// 本包接管的上游源码带**标准（TC39）装饰器**（`@Remote('prompt')`），而 oxc / rolldown 不降级，
-// 产物会带着 `@Remote(...)` 出厂、部署形态加载 `dist` 时直接语法错——`subagents` 服务因此没人注册，
-// 每个 preset 的 delegation 行都停在 `waiting for subagents`。预转换的实现在 devkit，dev 那边
-// （`vitest.config.ts`）用同一份，范围与理由见根债务
-// `.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md`。
+// 本包接管的上游源码带**标准（TC39）装饰器**（`@Remote('prompt')`），而 oxc / rolldown 不降级——产物会
+// 带着 `@Remote(...)` 出厂，部署形态加载 `dist` 时直接语法错（`subagents` 服务因此没人注册）。预转换的
+// 实现在 devkit，范围与理由见 `../../../.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md`。
 export default (async (): Promise<CordisPluginConfig> => {
   const config = await defineCordisPluginConfig({
     entries: { rows: "./src/rows.ts" },

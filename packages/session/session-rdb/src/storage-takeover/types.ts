@@ -37,7 +37,7 @@ export interface StorageRepository {
 
   loadProjcache(): Promise<StoredProjcacheEntry[]>;
 
-  /** 不经 await、直接读的路径（供同步的 `cachedSnapshot` 消费）；宿主提供不了则缺省。 */
+  // 不经 await、直接读的路径（供同步的 `cachedSnapshot` 消费）；宿主提供不了则缺省。
   readProjcacheDirect?(sessionId: string): StoredProjcacheEntry | undefined;
 
   readSessionTitleDirect?(sessionId: string): { title: string; seq: number } | undefined;

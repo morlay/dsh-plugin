@@ -1,10 +1,8 @@
-/**
- * 桌面快捷键的原生侧：设备偏好持久化 + 原生按键转发 + 关闭窗口动作。
- *
- * 上游 `@deepseek-ai/dsh-client-shortcuts` 在 `data-platform` 存在时按 desktop 运行时起服务，
- * 并**强制要求** `window.dshDesktop.keyboard`（缺了就构造失败）——这里就是那份契约的实现：
- * 主进程按已绑定键过滤物理按键，把命中的手势经 IPC 交给渲染进程派发。
- */
+// 桌面快捷键的原生侧：设备偏好持久化 + 原生按键转发 + 关闭窗口动作。
+//
+// 上游 `@deepseek-ai/dsh-client-shortcuts` 在 desktop 运行时**要求** `window.dshDesktop.keyboard`
+// 存在（缺了就构造失败）；这里就是那份契约的实现——主进程按已绑定键过滤物理按键，把命中的手势经
+// IPC 交给渲染进程派发。
 import { ipcMain, type BrowserWindow, type Input } from "electron";
 import {
   bindingKey,
@@ -23,20 +21,13 @@ import { DESKTOP_IPC, assertDesktopSender } from "./ipc.ts";
 import { desktopKeybindings } from "./keybindings.ts";
 
 export interface DesktopShortcuts {
-  /** 把一个窗口接进原生按键转发（每个新建的窗口都要接一次）。 */
+  // 把一个窗口接进原生按键转发（每个新建的窗口都要接一次）。
   attach(window: BrowserWindow): void;
-  /** 释放 IPC 与持久化（退出时调用）。 */
+  // 释放 IPC 与持久化（退出时调用）。
   dispose(): void;
 }
 
-/**
- * 装上桌面快捷键的原生侧。
- * @param getWindow - 当前主窗口。
- * @param userData - Electron 的 userData 目录。
- * @param platform - 本机输入平台。
- * @param scheme - 产品页面的自定义协议（校验 IPC 来源）。
- * @returns 窗口接入与释放操作。
- */
+// 装上桌面快捷键的原生侧，返回窗口接入与释放操作；`scheme` 用于校验 IPC 来源。
 export function installDesktopShortcuts(
   getWindow: () => BrowserWindow | undefined,
   userData: string,

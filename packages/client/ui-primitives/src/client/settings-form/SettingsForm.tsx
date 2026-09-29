@@ -12,39 +12,35 @@ const Footer = styled("div")(styles.footer);
 const Failed = styled("p")(styles.failed);
 const Save = styled("button")(styles.save);
 
-/** The copy the form frame renders, from the owning plugin's dictionary. */
+// The copy the form frame renders, from the owning plugin's dictionary.
 export interface SettingsFormLabels {
-  /** Shown in place of the controls while the namespace is not served. */
+  // Shown in place of the controls while the namespace is not served.
   unavailable: string;
-  /** Shown over the controls while the document is read-only. */
+  // Shown over the controls while the document is read-only.
   readOnly: string;
-  /** Shown beside the save after a save the Host did not accept. */
+  // Shown beside the save after a save the Host did not accept.
   saveFailed: string;
-  /** The save control. */
+  // The save control.
   save: string;
-  /** The save control while a save is crossing the wire. */
+  // The save control while a save is crossing the wire.
   saving: string;
 }
 
-/** Form chrome shared by every settings page. */
+// Form chrome shared by every settings page.
 export interface SettingsFormProps {
-  /** The frame's copy. */
+  // The frame's copy.
   labels: SettingsFormLabels;
-  /** The form state: availability, writability, and what a save would do. */
+  // The form state: availability, writability, and what a save would do.
   state: SettingsFormShell;
-  /** Write every staged edit. */
+  // Write every staged edit.
   onSave: () => void;
-  /** Drop every staged edit; the form calls it when it leaves the page. */
+  // Drop every staged edit; the form calls it when it leaves the page.
   onDiscard: () => void;
-  /** The plugin's controls. */
+  // The plugin's controls.
   children: ReactNode;
 }
 
-/**
- * Render one plugin's settings form.
- * @param props - the form's copy and state, its controls, and the save and discard actions.
- * @returns the form, or the unavailable line while the namespace is not served.
- */
+// Render one plugin's settings form.
 export function SettingsForm(props: SettingsFormProps) {
   const { state, labels } = props;
   const discard = useRef(props.onDiscard);

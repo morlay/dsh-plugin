@@ -192,7 +192,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     const tabs: ViewTab[] = [];
     for (const entry of slots.entries("conversation.view")) {
       if (entry.options.id === undefined) continue;
-      // 开发者工具视图由设置项决定是否出现（上游 0.1.7 起的 `configForms.developerTools`）。
+      // 开发者工具视图由设置项决定是否出现（`configForms.developerTools`）。
       if (
         !ctx.configForms.developerTools.enabled.getSnapshot() &&
         entry.options.id === TRAJECTORY_VIEW_ID
@@ -387,8 +387,8 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       ConversationRoot,
     );
 
-  // 外层头部（上游 0.1.7 拆出）：`conversation.header.leading` 是 root 作用域的席位，
-  // 会话头 `conversation.session.header` 挂在它下面——两者不再是同一格。
+  // 外层头部：`conversation.header.leading` 是 root 作用域的席位，会话头
+  // `conversation.session.header` 挂在它下面，两者不是同一格。
   const registerHeader = () =>
     slots.register(
       {

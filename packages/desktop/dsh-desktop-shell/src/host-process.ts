@@ -68,16 +68,16 @@ export interface DesktopHostOptions {
 
   readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string };
 
-  /** 子进程在 `ps` 里的名字（`node --title`），由壳给成 `<app name>-server`。 */
+  // 子进程在 `ps` 里的名字（`node --title`），由壳给成 `<app name>-server`。
   readonly processTitle?: string;
 
   readonly spawn?: DesktopHostSpawn;
 
-  /** host 非预期退出/管道断开时通知壳一次（壳据此拦截，别让页面停在半死状态）。 */
+  // host 非预期退出/管道断开时通知壳一次（壳据此拦截，别让页面停在半死状态）。
   readonly onFailure?: (error: Error) => void;
 }
 
-/** 桌面 host 子进程：字节管道上的请求/响应载体（FD 3/4）+ Node IPC 生命周期。 */
+// 桌面 host 子进程：字节管道上的请求/响应载体（FD 3/4）+ Node IPC 生命周期。
 export class DesktopHostProcess {
   private child: ChildProcess | undefined;
   private requestPipe: Writable | undefined;
@@ -106,7 +106,7 @@ export class DesktopHostProcess {
     private readonly options: DesktopHostOptions = {},
   ) {}
 
-  /** 启动子进程一次；`ready` 之后才解析。 */
+  // 启动子进程一次；`ready` 之后才解析。
   async start(): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise;
     // 部署里的 host 是工具自己的变体包（@morlay/dsh-desktop-host），落位名字与入口路径都要对上。
@@ -131,7 +131,7 @@ export class DesktopHostProcess {
       this.runtimeDir,
       this.projectDir,
       primaryRuntime,
-      // 上游 0.1.7 删掉了 `runProfile` 的 `resolutionMode`，argv 里那一格随之消失。
+      // argv 的格子按上游现行契约排：没有 `resolutionMode` 那一格。
       ...(packageManager === undefined ? [] : [packageManager.pnpm, packageManager.nodeBin]),
     ];
     const env = {
@@ -192,7 +192,7 @@ export class DesktopHostProcess {
       }
       if (message.type === "fatal") {
         // dialog 只显示 message；完整诊断（code / syscall / path / cause）写 stderr——
-        // 上游 0.1.7-alpha.2 起 fatal 带上它，这里不接收就等于丢掉启动失败的根因。
+        // fatal 带可选 `diagnostic`；不接收就等于丢掉启动失败的根因。
         if (message.diagnostic !== undefined)
           process.stderr.write(`[dsh-host] ${message.diagnostic}\n`);
         this.fail(new Error(message.message));
@@ -215,7 +215,7 @@ export class DesktopHostProcess {
     return this.readyPromise;
   }
 
-  /** 把一个应用协议请求（`<scheme>://app/*`）交给子进程，响应体边收边出。 */
+  // 把一个应用协议请求（`<scheme>://app/*`）交给子进程，响应体边收边出。
   async fetch(request: Request): Promise<Response> {
     await this.start();
     const child = this.child;
@@ -262,7 +262,7 @@ export class DesktopHostProcess {
     });
   }
 
-  /** 请求优雅退出，再等子进程收尾。 */
+  // 请求优雅退出，再等子进程收尾。
   async stop(): Promise<void> {
     const child = this.child;
     if (child === undefined) return;

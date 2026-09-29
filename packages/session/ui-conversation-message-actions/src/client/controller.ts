@@ -8,17 +8,11 @@ import {
   type VersionOperation,
 } from "../shared.ts";
 
-/** 编辑器的 HTTP 路径：宿主（web 与桌面）在同一张路由表上服务它，页面不再按 ownsHost 加前缀。 */
+// 编辑器的 HTTP 路径：宿主（web 与桌面）在同一张路由表上服务它，页面不再按 ownsHost 加前缀。
 const EDITOR_API_PATH = SESSION_EDITOR_PATH;
 
-/**
- * 会话编辑的浏览器半门面：只保留消息渲染面真正用到的两个动作。
- *
- * 曾经这里还有一条「订阅会话列表 / 快照 → 拉全量 timeline → 装进 store」的刷新管路，
- * 它没有任何 UI 消费方，却把重放 / 流式期间的每一次快照抖动都换成一次全量 GET
- * （编辑 / 重试 / 撤回后尤甚），订阅本身也从不释放。现在动作成功后只刷新会话列表元数据，
- * 会话窗口交给上游的事件流收敛（不重建窗口、不整页重载）。
- */
+// 会话编辑的浏览器半门面：只保留消息渲染面真正用到的两个动作；动作成功后只刷新会话列表元数据，
+// 会话窗口交给上游的事件流收敛（不重建窗口、不整页重载）。
 export interface SessionEditorFace {
   // 属性式函数类型而非方法签名：这两动作要被渲染面解构后直接调用，没有 `this` 可言。
   retry: (turn: number, cascade: "truncate" | "preserve") => Promise<boolean>;
@@ -79,10 +73,9 @@ export class SessionEditorController {
 
       onApplied?.();
 
-      // 会话窗口必须重建：rewind 把日志 seq 回退了，窗口里已渲染的旧节点不会自己消失
-      // （实测：被裁剪的消息残留、新消息也追加不进去）。重建入口只在**运行时**对象上
-      // （ClientSession 的 `resync()`；类型面 `SessionFace` 并未暴露它），所以逐个探测；
-      // 都拿不到时记一条 warn 便于诊断，且不回退整页重载（刷新会打断用户）。
+      // 会话窗口必须重建：rewind 把日志 seq 回退了，窗口里已渲染的旧节点不会自己消失（被裁剪的消息残留、
+      // 新消息也追加不进去）。重建入口只在**运行时**对象上（`resync()`，类型面 `SessionFace` 未暴露），所以
+      // 逐个探测；都拿不到时记一条 warn 便于诊断，不回退整页重载。
       try {
         await this.rebuildWindow();
       } catch (error: unknown) {
@@ -96,12 +89,9 @@ export class SessionEditorController {
     }
   }
 
-  /**
-   * 让上游重开该会话的历史窗口（rewind 之后客户端窗口的 seq 基线已经失效）。
-   *
-   * 探测顺序：`binding(id).session.resync()`（上游 ClientSession 的重建入口，类型面没暴露）
-   * → `sessions.refresh()`（只刷列表元数据，聊胜于无）→ 都没有就记一条 warn。
-   */
+  // 让上游重开该会话的历史窗口（rewind 之后客户端窗口的 seq 基线已经失效）：探测顺序
+  // `binding(id).session.resync()`（上游 ClientSession 的重建入口，类型面没暴露）→ `sessions.refresh()`
+  // （只刷列表元数据）→ 都没有就记一条 warn。
   private async rebuildWindow(): Promise<void> {
     const sessions = this.sessions as unknown as {
       binding?: (id: SessionId) => { session?: { resync?: () => Promise<void> } } | undefined;
@@ -122,14 +112,9 @@ export class SessionEditorController {
     );
   }
 
-  /**
-   * 撤回后把会话视口送回底部：rewind 把窗口换短，而上游 ChatView 只在读者已经贴底时
-   * 才跟随（`tipMoved && atBottom`），停在中途的视口会悬在被截断的位置上；撤回的下一步
-   * 是改完再发，所以这里无条件送到底。容器用上游既有契约 `[data-conversation-scroll]`
-   * （ChatView / ConversationWidthControls / StatsPills 同用）。
-   *
-   * 窗口替换的渲染落在 resync 之后：写早了会被下一轮布局覆盖，因此等两帧再写。
-   */
+  // 撤回后把会话视口送回底部：rewind 把窗口换短，而上游 ChatView 只在读者已经贴底时才跟随
+  // （`tipMoved && atBottom`），停在中途的视口会悬在被截断的位置上；撤回的下一步是改完再发，所以这里无条件
+  // 送到底。容器用上游既有契约 `[data-conversation-scroll]`；窗口替换的渲染落在 resync 之后，因此等两帧再写。
   private returnViewportToEnd(): void {
     const scrollport = document.querySelector<HTMLElement>("[data-conversation-scroll]");
     if (scrollport === null) return;

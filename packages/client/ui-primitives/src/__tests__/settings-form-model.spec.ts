@@ -1,5 +1,5 @@
-// 搬自 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form-model.client.spec.ts
-// （上游判据逐条照搬，导入面换成我们的 client 出口）；末尾两条 revision 栅栏 / 版本冲突重试是本仓库补的。
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form-model.client.spec.ts 的用例逐条对应
+// （导入面换成我们的 client 出口），另加两条 revision 栅栏 / 版本冲突重试的用例；改这里之前先看上游。
 
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -17,7 +17,7 @@ interface StubScope<T> {
   publish: (next: Partial<SettingsFormScopeSnapshot<T>>) => void;
 }
 
-/** An in-memory scope: starts loading, records mutations, and lets the test publish Host acceptances. */
+// An in-memory scope: starts loading, records mutations, and lets the test publish Host acceptances.
 function stubScope<T>(): StubScope<T> {
   let snapshot: SettingsFormScopeSnapshot<T> = {
     status: "loading",
@@ -49,7 +49,7 @@ function stubScope<T>(): StubScope<T> {
   };
 }
 
-/** Make the stub behave like a Host that accepts every write. */
+// Make the stub behave like a Host that accepts every write.
 function acceptWrites<T>(host: StubScope<T>): void {
   const section = (): Record<string, unknown> => ({
     ...(host.scope.getSnapshot().value as object),

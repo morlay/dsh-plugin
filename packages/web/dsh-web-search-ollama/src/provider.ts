@@ -7,34 +7,34 @@ import type {
 } from "@deepseek-ai/dsh-web";
 import type { OllamaError, OllamaSearchResponse, OllamaSearchResult } from "./types.ts";
 
-/** 注册进 `ctx.web` 的 id；与 llm route 同名，配置里看到的就是同一个"ollama"。 */
+// 注册进 `ctx.web` 的 id；与 llm route 同名，配置里看到的就是同一个"ollama"。
 export const OLLAMA_PROVIDER_ID = "ollama";
 
-/** 默认端点；`/api/web_search` 是操作。 */
+// 默认端点；`/api/web_search` 是操作。
 export const OLLAMA_DEFAULT_BASE_URL = "https://ollama.com";
 
-/** Ollama 服务端自己的默认结果数。 */
+// Ollama 服务端自己的默认结果数。
 export const OLLAMA_DEFAULT_MAX_RESULTS = 5;
 
-/** Ollama `max_results` 的硬上限；超过它的值不发给服务端。 */
+// Ollama `max_results` 的硬上限；超过它的值不发给服务端。
 export const OLLAMA_MAX_RESULTS_LIMIT = 10;
 
-/** 每次请求带的归属头。 */
+// 每次请求带的归属头。
 const USER_AGENT = "morlay-dsh-plugin/0.0.1";
 
 export interface OllamaSearchProviderOptions {
-  /** 字面 key；给了就压过 {@link resolveApiKey}。 */
+  // 字面 key；给了就压过 `resolveApiKey`。
   apiKey?: string | undefined;
-  /** 运行期取 key 的入口（凭证服务 / 环境）；返回空表示取不到。 */
+  // 运行期取 key 的入口（凭证服务 / 环境）；返回空表示取不到。
   resolveApiKey?: () => Promise<string | undefined>;
-  /** 取不到 key 时报出来的引用名，便于用户知道去哪配。 */
+  // 取不到 key 时报出来的引用名，便于用户知道去哪配。
   apiKeyEnv: string;
   baseURL: string;
-  /** 请求没给 `maxResults` 时用的默认值；省略表示让 Ollama 用它自己的默认。 */
+  // 请求没给 `maxResults` 时用的默认值；省略表示让 Ollama 用它自己的默认。
   maxResults?: number | undefined;
 }
 
-/** 一条 Ollama 结果 → 一个 source；没有 url 就丢掉（seam 的 source 必须有 url）。 */
+// 一条 Ollama 结果 → 一个 source；没有 url 就丢掉（seam 的 source 必须有 url）。
 export function mapOllamaResult(result: OllamaSearchResult): WebSearchSource | undefined {
   const url = result.url;
   if (typeof url !== "string" || url.length === 0) return undefined;
@@ -49,7 +49,7 @@ export function mapOllamaResult(result: OllamaSearchResult): WebSearchSource | u
   };
 }
 
-/** 响应信封 → 归一化结果；形状不对就抛（由调用方包成 `WEB_PROVIDER_ERROR`）。 */
+// 响应信封 → 归一化结果；形状不对就抛（由调用方包成 `WEB_PROVIDER_ERROR`）。
 export function mapOllamaResponse(response: OllamaSearchResponse): WebSearchResult {
   const results = response.results;
   if (results !== undefined && !Array.isArray(results)) {
@@ -63,7 +63,7 @@ export function mapOllamaResponse(response: OllamaSearchResponse): WebSearchResu
   return { sources, truncated: false };
 }
 
-/** Ollama 的搜索后端；HTTP 重定向按 `WEB_PROVIDER_ERROR` 失败。 */
+// Ollama 的搜索后端；HTTP 重定向按 `WEB_PROVIDER_ERROR` 失败。
 export class OllamaSearchProvider implements WebSearchProvider {
   readonly id = OLLAMA_PROVIDER_ID;
 
@@ -133,7 +133,7 @@ export class OllamaSearchProvider implements WebSearchProvider {
     }
   }
 
-  /** 一次操作一份 key，不留在 provider 上；没有可用的 key 就点名引用，而不是发无授权请求。 */
+  // 一次操作一份 key，不留在 provider 上；没有可用的 key 就点名引用，而不是发无授权请求。
   private async apiKey(): Promise<string> {
     const literal = this.options.apiKey;
     if (literal !== undefined && literal.length > 0) return literal;

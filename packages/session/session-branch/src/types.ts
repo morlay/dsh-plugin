@@ -1,8 +1,7 @@
 import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 
-// `session-branch/version` 的**历史形状**：写侧（就地编辑产出）与读侧（版本树投影）都已删除
-// （见 ADR 版本效果停止落库 / 版本树投影删除）。这里的定义只用于识别旧数据里已落库的
-// ignorable 事件，不再有新事件产生、也没有读者。
+// `session-branch/version` 的形状定义：只用于识别既有日志里已落库的该事件，本仓库不产出它、读侧也不参与投影
+// （见 ADR-删除版本树投影并停止写版本效果）。
 export const SESSION_BRANCH_VERSION_SCHEMA = 1;
 
 export type CascadePolicy = "truncate" | "preserve";
@@ -84,21 +83,4 @@ export class SessionBranchError extends Error {
     this.name = "SessionBranchError";
     this.code = code;
   }
-}
-
-export interface SessionBranchVersionEventEnvelope {
-  type: "session-branch/version";
-  seq: number;
-  time: number;
-  ignorable?: true;
-  data: SessionBranchVersionEvent;
-}
-
-export function isSessionBranchVersionEvent(
-  event: SessionEvent | { type: string; data: unknown },
-): event is SessionBranchVersionEventEnvelope {
-  return (
-    event.type === "session-branch/version" &&
-    (event.data as { schemaVersion?: unknown }).schemaVersion === SESSION_BRANCH_VERSION_SCHEMA
-  );
 }

@@ -1,20 +1,14 @@
-/**
- * 测试用的 describe 读面替身：可推动命名空间清单变化，形状与上游 mirror 的读面一致。
- */
+// 测试用的 describe 读面替身：可推动命名空间清单变化，形状与上游 mirror 的读面一致。
 
 import type { SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import type { SettingsDescribeFace } from "@deepseek-ai/dsh-client-ui-settings/client";
 
-/** 一个可以推动变更的 describe 读面。 */
+// 一个可以推动变更的 describe 读面。
 export interface FakeDescribe extends SettingsDescribeFace {
-  /** 换掉命名空间清单并通知订阅者。 */
+  // 换掉命名空间清单并通知订阅者。
   publish(namespaces: readonly SettingsNamespaceView[]): void;
 }
 
-/**
- * @param initial - 初始命名空间清单。
- * @returns 可读可推的 describe 替身。
- */
 export function fakeDescribe(initial: readonly SettingsNamespaceView[] = []): FakeDescribe {
   const listeners = new Set<() => void>();
   let namespaces = initial;

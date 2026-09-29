@@ -20,7 +20,7 @@ async function seatbeltUsable(): Promise<boolean> {
   return probe.status === 0;
 }
 
-/** 跑子进程并把非零退出折算成 status，便于与 spawnSync 的结果形状保持一致。 */
+// 跑子进程并把非零退出折算成 status，便于与 spawnSync 的结果形状保持一致。
 async function capture(
   command: string,
   args: string[],

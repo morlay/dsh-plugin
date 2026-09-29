@@ -1,9 +1,7 @@
-/**
- * 装上本包时的注册面：字典、Factory（字段槽的声明者）与按行自动注册的入口。
- *
- * slots / locale / remote 是外部框架面，这里用最小替身记录**注册事实**——Factory 的 children 声明、行入口的 key 与
- * 兜底 priority、不可渲染的行不占入口。真实槽位声明校验在上游包内完成。
- */
+// 装上本包时的注册面：字典、Factory（字段槽的声明者）与按行自动注册的入口。
+//
+// slots / locale / remote 是外部框架面，这里用最小替身记录**注册事实**——Factory 的 children 声明、行入口的 key 与
+// 兜底 priority、不可渲染的行不占入口。真实槽位声明校验在上游包内完成。
 
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import z from "@deepseek-ai/schemastery";
@@ -47,7 +45,7 @@ interface Registered {
   component: unknown;
 }
 
-/** 最小替身：记录槽位注册、字典与 Factory，并给出 describe / bundle 读面。 */
+// 最小替身：记录槽位注册、字典与 Factory，并给出 describe / bundle 读面。
 function bench(options: {
   namespaces: readonly SettingsNamespaceView[];
   bundles: readonly BundleInfo[];

@@ -1,21 +1,19 @@
-/**
- * 测试用的共享配置表单：内存里模拟 host 的读写两层（快照 / 订阅 / 一次带 revision 栅栏的写）。
- *
- * 它让控制器与草稿模型的用例不碰远程面、不碰装配，只盯「草稿怎么变成写」与「状态怎么投影」。
- */
+// 测试用的共享配置表单：内存里模拟 host 的读写两层（快照 / 订阅 / 一次带 revision 栅栏的写）。
+//
+// 它让控制器与草稿模型的用例不碰远程面、不碰装配，只盯「草稿怎么变成写」与「状态怎么投影」。
 
 import type { SettingsPathOpView } from "@deepseek-ai/dsh-api-remotes/client";
 import type { ConfigForm, ConfigFormSnapshot } from "@deepseek-ai/dsh-client-ui-settings/client";
 
-/** 命名空间段的值。 */
+// 命名空间段的值。
 export type Section = Record<string, unknown>;
 
 export class FakeScope implements ConfigForm<Section> {
-  /** 每次保存发出的 path op（按保存顺序）。 */
+  // 每次保存发出的 path op（按保存顺序）。
   readonly writes: (readonly SettingsPathOpView[])[] = [];
-  /** 每次保存带的 revision 栅栏。 */
+  // 每次保存带的 revision 栅栏。
   readonly fences: (number | undefined)[] = [];
-  /** 让 host 拒绝下一次写。 */
+  // 让 host 拒绝下一次写。
   accepted = true;
 
   #snapshot: ConfigFormSnapshot<Section>;
@@ -85,7 +83,7 @@ export class FakeScope implements ConfigForm<Section> {
     return Promise.resolve(true);
   }
 
-  /** 从外部改一次读数（模拟另一个界面或 host 的改动）。 */
+  // 从外部改一次读数（模拟另一个界面或 host 的改动）。
   publish(overrides: Partial<ConfigFormSnapshot<Section>> = {}): void {
     this.#snapshot = { ...this.#snapshot, ...overrides };
     this.#publish();

@@ -18,7 +18,7 @@ import * as SessionToolScope from "../../scope/index.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import * as plugin from "../../skill-catalog/index.ts";
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -30,7 +30,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 一份 SKILL.md：`extra` 用来加 frontmatter 字段（例如 `disable-model-invocation`）。 */
+// 一份 SKILL.md：`extra` 用来加 frontmatter 字段（例如 `disable-model-invocation`）。
 function skillFile(name: string, description: string, extra = ""): string {
   return `---\nname: ${name}\ndescription: ${description}\n${extra}---\n\n${name} 的正文。\n`;
 }
@@ -48,13 +48,11 @@ function fixtureTool(toolName: string) {
   });
 }
 
-/**
- * 项目根 + 用户目录各放几个 skill，然后由 **preset 层** 的 `skill-filesystem` 行发现它们。
- *
- * 这正是部署的形状：host 层的同名行被 web app 的 bundle patch 禁用了（本地发现归 preset），
- * 所以读目录时带不带作用域、带不带 cwd 决定了看不看得见它们。收口那一行（`scope`）也在，
- * 用来验"白名单把 `skill` 挡在模型目录外"。
- */
+// 项目根 + 用户目录各放几个 skill，然后由 **preset 层** 的 `skill-filesystem` 行发现它们。
+//
+// 这正是部署的形状：host 层的同名行被 web app 的 bundle patch 禁用了（本地发现归 preset），
+// 所以读目录时带不带作用域、带不带 cwd 决定了看不看得见它们。收口那一行（`scope`）也在，
+// 用来验"白名单把 `skill` 挡在模型目录外"。
 async function mount(root: string) {
   const ctx = new Context();
   contexts.push(ctx);
@@ -93,7 +91,7 @@ async function mount(root: string) {
   return { ctx, agent, fiber };
 }
 
-/** 走真实 pre-step 通道注入一次目录，返回那条消息（`source` 的 kind / entries 也在它上面）。 */
+// 走真实 pre-step 通道注入一次目录，返回那条消息（`source` 的 kind / entries 也在它上面）。
 async function catalogInjection(ctx: Context, agent: Agent): Promise<UserMessage | undefined> {
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const messages: UserMessage[] = [
@@ -129,7 +127,7 @@ async function callTool(ctx: Context, agent: Agent, name: string, args: Record<s
   });
 }
 
-/** 一个带项目 skill 的工作区（`.git` 让它成为项目根）。 */
+// 一个带项目 skill 的工作区（`.git` 让它成为项目根）。
 async function workspace(withProjectSkill: boolean): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "skill-catalog-"));
   await writeFile(join(root, ".git"), "");
@@ -224,7 +222,7 @@ describe("技能目录", () => {
   });
 });
 
-/** 再装一行 `skill-catalog`（同一个 ctx，模拟这一行的重挂）。 */
+// 再装一行 `skill-catalog`（同一个 ctx，模拟这一行的重挂）。
 async function mountPluginAgain(ctx: Context): Promise<{ dispose(): Promise<void> }> {
   return await ctx.plugin(plugin);
 }

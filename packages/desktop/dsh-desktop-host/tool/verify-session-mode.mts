@@ -1,29 +1,27 @@
-/**
- * 探针：装配一次真实 web profile，检查**装配面的四条事实**——这几条静态断言与包内测试都看不见。
- *
- * 判据（2026-09-28）：
- *
- * 1. `ctx.contextAssembler` 在装配层可见：注入通道全局一份（模式收口挂在它上面，工具说明在别的包里
- *    `inject` 它）；
- * 2. `ctx.sessionToolScope` 存在：模式收口那一行（`context-assembler-scope`）真的装上了；
- * 3. `ctx.agentPresets` **存在**：registry 是行清单与选择面的 home；本部署的行清单归自己注册的
- *    `mode-switch`（默认预设指它），官方四个仍保留可选；
- * 4. `ctx.sessionModes` 的清单等于 `session-mode` 行的 config（`coding` / `chat`，默认 `coding`），且
- *    `modeForPreset` 只在**唯一映射**时回答——两个模式共享的 `mode-switch` 与官方 preset 都返回 `undefined`
- *    （不反查；模式由会话事实决定）。
- *
- * 模式之间的**行为**差异（chat 没有动态快照、工具目录被收口）在包内真依赖装配里测
- * （`session-mode.spec.ts` 与 `context-assembler-scope.spec.ts`），这里只回答"装配面装上了什么"。
- *
- * 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
- *
- * ```sh
- * pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
- * ```
- *
- * 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
- * `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不会改，也不建会话。
- */
+// 探针：装配一次真实 web profile，检查**装配面的四条事实**——这几条静态断言与包内测试都看不见。
+//
+// 判据：
+//
+// 1. `ctx.contextAssembler` 在装配层可见：注入通道全局一份（模式收口挂在它上面，工具说明在别的包里
+// `inject` 它）；
+// 2. `ctx.sessionToolScope` 存在：模式收口那一行（`context-assembler-scope`）真的装上了；
+// 3. `ctx.agentPresets` **存在**：registry 是行清单与选择面的 home；本部署的行清单归自己注册的
+// `mode-switch`（默认预设指它），官方四个仍保留可选；
+// 4. `ctx.sessionModes` 的清单等于 `session-mode` 行的 config（`coding` / `chat`，默认 `coding`），且
+// `modeForPreset` 只在**唯一映射**时回答——两个模式共享的 `mode-switch` 与官方 preset 都返回 `undefined`
+// （不反查；模式由会话事实决定）。
+//
+// 模式之间的**行为**差异（chat 没有动态快照、工具目录被收口）在包内真依赖装配里测
+// （`session-mode.spec.ts` 与 `context-assembler-scope.spec.ts`），这里只回答"装配面装上了什么"。
+//
+// 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
+//
+// ```sh
+// pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
+// ```
+//
+// 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
+// `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不会改，也不建会话。
 
 import { access } from "node:fs/promises";
 import { join } from "node:path";
@@ -41,7 +39,7 @@ const store = join(repoRoot, "apps/dsh-custom-next/.dsh-store");
 const profileDir = join(store, "profiles", "web");
 const installAnchor = join(repoRoot, "vendor/deepseek-harness/apps/cli/package.json");
 
-/** 部署里应当存在的那两个模式。 */
+// 部署里应当存在的那两个模式。
 const EXPECTED_MODES: readonly string[] = ["coding", "chat"];
 const EXPECTED_DEFAULT = "coding";
 
@@ -59,7 +57,7 @@ if (!profileReady) {
 
 process.env.DSH_HOME = store;
 
-// 上游 0.1.7-rc.2 起加载不再自己打印跳过原因，改由启动方上报。
+// 加载跳过原因由启动方上报。
 const profile = loadProfileDirectory("dsh", profileDir, installAnchor);
 reportSkippedBundles("dsh", profile);
 
@@ -143,9 +141,8 @@ if (official !== undefined) {
   );
 }
 
-// 抽读几个已存在的会话（只读）：`read` 会跑上游的持久化校验，而我们自造的事件类型（`session-mode/selected`）
-// 必须先带上 `ignorable` 信封，否则整个会话打不开。抽读历史数据顺带验证读路径的兜底——补信封之前写下的会话
-// 靠 adopt 分支补回来（真回归：切换模式后会话读不出来）。
+// 抽读几个已存在的会话（只读）：顺带验证读路径对我们自造事件类型（`session-mode/selected`，带
+// `ignorable` 信封）的兜底。
 const persistence = (
   ctx as unknown as {
     sessionPersistence?: {

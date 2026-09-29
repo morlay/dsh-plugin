@@ -1,12 +1,6 @@
-// 清单（`exports` / `publishConfig.exports`）由构建写回，规则见
-// `devpackages/devkit/src/package-exports.ts`。这条守卫盯的是「发布态不能比开发态少面」：
-// `publishConfig.exports` 在发布时**整体替换**顶层 `exports`，漏一个键就是发布包少一个面，而按
-// 「包名 + 出口」解析的消费方会直接失败——`@morlay/dsh-desktop-host` 的 `./package.json` 就这样丢过：
-// desktopify 的 `import.meta.resolve("@morlay/dsh-desktop-host/package.json")` 抛
-// ERR_PACKAGE_PATH_NOT_EXPORTED，`mise run install`（桌面打包）整个起不来。
-//
-// 判据：发布态出口的键集合必须覆盖顶层出口的键集合。顶层出口的 `types` 回源 `src`（不发布），
-// 发布态换成构建产物是允许的，但不许整个键消失。
+// 守卫「发布态不能比开发态少面」（判据：发布态出口的键集合覆盖顶层出口的键集合；顶层的 `types`
+// 回源 `src`，发布态换成产物是允许的，但不许整个键消失）：`publishConfig.exports` 发布时整体替换顶层
+// `exports`，漏一个键就是发布包少一个面（`@morlay/dsh-desktop-host` 的 `./package.json` 就这样丢过）。
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,7 +11,7 @@ interface Manifest {
   readonly publishConfig?: { exports?: Record<string, unknown> };
 }
 
-/** 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。 */
+// 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。
 async function publishablePackages(): Promise<{ name: string; manifest: Manifest }[]> {
   const { glob } = await import("node:fs/promises");
   const found: { name: string; manifest: Manifest }[] = [];
@@ -56,8 +50,7 @@ describe("发布态的包出口", () => {
       const published = (manifest.publishConfig?.exports ?? {})["./client"] as
         | { types?: unknown; default?: unknown }
         | undefined;
-      // 开发态的出口就是一个指源码的字符串（上游按它读字节，那份 TS 由 dev-client-bundles 现场转换）：
-      // 与 host 面同一条规则，不写成 `{ types, default }` 那种两份同值的形态。
+      // 开发态的出口就是一个指源码的字符串（上游按它读字节），与 host 面同一条规则。
       if (dev !== "./src/client/index.ts") wrong.push(`${name}: dev=${String(dev)}`);
       if (published?.default !== "./dist/client.cjs")
         wrong.push(`${name}: published=${String(published?.default)}`);

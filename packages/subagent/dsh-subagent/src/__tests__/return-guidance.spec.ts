@@ -25,14 +25,9 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
-/**
- * 运行期证据：`send_message` 打上相邻 agent 标记时（上游 control 行在场），continuable 子代理首条任务后面的
- * 回报指引**按会话的 preset 选**——挂在本包配置的那份名单里就是中文，其余（含官方 shipped preset、以及没有
- * preset 的会话）是上游英文那套。
- *
- * 名单与 preset 身份是两个输入：名单走本行配置，身份走 `agentPresets` 服务（这里用替身，registry 自己的行为
- * 由它自己的包负责）。
- */
+// 运行期证据：continuable 子代理首条任务后面的回报指引**按会话的 preset 选**——名单（本行配置）命中就是
+// 中文，其余（含官方 shipped preset、没有 preset 的会话）是上游英文那套。名单与 preset 身份是两个输入：
+// 名单走本行配置，身份走 `agentPresets` 服务（这里用替身）。
 async function boot(
   options: { readonly presets?: readonly string[]; readonly composedPreset?: string } = {},
 ) {
@@ -75,7 +70,7 @@ function visibleTexts(adapter: MockAdapter): string[] {
   );
 }
 
-/** 一次 continuable 派发之后，模型侧看到的所有文本。 */
+// 一次 continuable 派发之后，模型侧看到的所有文本。
 async function textsAfterDelegation(booted: Awaited<ReturnType<typeof boot>>): Promise<string[]> {
   const { ctx, parent, adapter } = booted;
   const started = await ctx.subagents.startContinuable({

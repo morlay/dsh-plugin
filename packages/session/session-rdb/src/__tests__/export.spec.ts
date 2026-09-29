@@ -11,7 +11,7 @@ import { SESSION_EXPORT_PATH } from "@morlay/session-rdb/export";
 import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import { parseJsonlArtifact } from "../import.ts";
 
-/** fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。 */
+// fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。
 function unzipBytes(bytes: Uint8Array): Promise<Record<string, Uint8Array>> {
   return new Promise((resolve, reject) => {
     unzip(bytes, (error, data) => {

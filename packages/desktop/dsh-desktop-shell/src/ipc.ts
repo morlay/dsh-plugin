@@ -3,34 +3,32 @@ import type { IpcMainInvokeEvent } from "electron";
 export const DESKTOP_IPC = {
   directoryPick: "dsh-desktop:directory-pick",
   nativeThemeSet: "dsh-desktop:native-theme-set",
-  /** 桌面流载体：页面把 Gateway 的流请求交给主进程，主进程用标准 Request 喂宿主。 */
+  // 桌面流载体：页面把 Gateway 的流请求交给主进程，主进程用标准 Request 喂宿主。
   streamOpen: "dsh-desktop:stream-open",
   streamCancel: "dsh-desktop:stream-cancel",
-  /** 逻辑流的上行项（客户端 → 宿主），主进程把它们写成宿主请求体的后续行。 */
+  // 逻辑流的上行项（客户端 → 宿主），主进程把它们写成宿主请求体的后续行。
   streamUplink: "dsh-desktop:stream-uplink",
-  /** 上行结束：主进程据此结束宿主请求体。 */
+  // 上行结束：主进程据此结束宿主请求体。
   streamUplinkEnd: "dsh-desktop:stream-uplink-end",
   streamChunk: "dsh-desktop:stream-chunk",
   streamEnd: "dsh-desktop:stream-end",
   streamError: "dsh-desktop:stream-error",
-  /** 桌面快捷键：设备偏好的读写 / 录制状态（渲染进程 → 主进程）。 */
+  // 桌面快捷键：设备偏好的读写 / 录制状态（渲染进程 → 主进程）。
   shortcutsGet: "dsh-desktop:shortcuts-get",
   shortcutsEdit: "dsh-desktop:shortcuts-edit",
   shortcutsRecording: "dsh-desktop:shortcuts-recording",
   shortcutsCloseWindow: "dsh-desktop:shortcuts-close-window",
-  /** 命中的原生按键手势（主进程 → 渲染进程）；渲染侧的 native keyboard 适配器消费。 */
+  // 命中的原生按键手势（主进程 → 渲染进程）；渲染侧的 native keyboard 适配器消费。
   shortcutsInput: "dsh-desktop:shortcuts-input",
-  /** 配置快照变化（主进程 → 渲染进程）。 */
+  // 配置快照变化（主进程 → 渲染进程）。
   shortcutsChanged: "dsh-desktop:shortcuts-changed",
 } as const;
 
-/** preload 从渲染进程 argv 里读回 scheme 的参数名（主进程与 preload 共用一份）。 */
+// preload 从渲染进程 argv 里读回 scheme 的参数名（主进程与 preload 共用一份）。
 export const DESKTOP_SCHEME_ARGUMENT = "--dsh-desktop-scheme";
 
-/**
- * 应用页面的自定义协议：取 app 工作区 package.json 的 name 派生，避免与官方桌面应用
- * 共用同一个 scheme。去 scope 前缀、转小写、非法字符换成 `-`；派生不出合法 scheme 就报错。
- */
+// 应用页面的自定义协议：取 app 工作区 package.json 的 name 派生，避免与官方桌面应用
+// 共用同一个 scheme。去 scope 前缀、转小写、非法字符换成 `-`；派生不出合法 scheme 就报错。
 export function desktopScheme(name: string): string {
   const bare = name
     .slice(name.lastIndexOf("/") + 1)

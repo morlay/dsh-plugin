@@ -14,8 +14,7 @@ const INLINE_QUERY = "?inline";
 
 // 样式内联插件（CSS Modules / 全局 CSS / `?inline`）：`.module.css` 交 lightningcss 编译出 class
 // 映射并在模块执行时注入样式，其余 `.css` 只注入，`.css?inline` 只导出编译后的文本。
-// `options.name` 是插件 id（模块表键），写入注入 style tag 的 `data-plugin*` 属性；返回的插件
-// 数组直接放进 `plugins`，两条链（tsdown 的 client 入口构建、bundleClientFactory 的现场打包）共用。
+// `options.name` 是插件 id（模块表键），写入注入 style tag 的 `data-plugin*` 属性；两条链共用这份实现。
 export function cssInlinePlugins(options: { name: string }): Plugin[] {
   const styleModule = (
     file: string,
@@ -116,12 +115,12 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
   ];
 }
 
-/** 样式文件的物理路径：相对 specifier 相对 importer 解析，绝对 specifier 原样使用。 */
+// 样式文件的物理路径：相对 specifier 相对 importer 解析，绝对 specifier 原样使用。
 function stylesheetPath(source: string, importer: string | undefined): string {
   return importer === undefined ? source : resolvePath(dirname(importer), source);
 }
 
-/** 还原虚拟 id 里的物理路径。 */
+// 还原虚拟 id 里的物理路径。
 function unwrap(virtualId: string, prefix: string): string {
   return virtualId.slice(prefix.length, -VIRTUAL_SUFFIX.length);
 }

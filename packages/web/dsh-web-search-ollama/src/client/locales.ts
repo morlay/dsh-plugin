@@ -1,4 +1,4 @@
-/** 本包在配置页上的字段文案（命名空间 `settings.web-search-ollama`）。 */
+// 本包在配置页上的字段文案（命名空间 `settings.web-search-ollama`）。
 
 export const zh = {
   apiKey: "API key",

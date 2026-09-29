@@ -1,4 +1,4 @@
-/** 设备本地的快捷键偏好（Electron userData 下）：原子替换、单写者协调。 */
+// 设备本地的快捷键偏好（Electron userData 下）：原子替换、单写者协调。
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { writeFileAtomic } from "@deepseek-ai/dsh-atomic-write";
@@ -8,13 +8,7 @@ import type {
   ShortcutPlatform,
 } from "@deepseek-ai/dsh-client-shortcuts/protocol";
 
-/**
- * 打开设备配置（原子替换）。
- * @param userData - Electron 的 userData 目录，不接受渲染进程给的路径。
- * @param platform - 本机输入平台。
- * @param publish - 提交后更新原生绑定索引与受信页面。
- * @returns 单写者事务协调器。
- */
+// 打开设备配置（原子替换），返回单写者事务协调器；`userData` 不接受渲染进程给的路径。
 export function desktopKeybindings(
   userData: string,
   platform: ShortcutPlatform,

@@ -1,15 +1,12 @@
-// client 打包的 external 判据：**模块表里的行**才是 external（上游 host 半也用同一判据——
-// 包清单有 `exports["./client"]`）。只有 `@deepseek-ai/*` 命中这条时，我们自己的 `@morlay/*`
-// client 行会被内联：同一份 factory 复制两份，页面注册两次即抛
-// `client-modules: duplicate factory registration`（现象：subagent 的 dist/client.cjs 里有两次
-// `window.__ModuleLoader__.load`，其中一次是 `@morlay/dsh-client-ui-primitives`）。
+// external 判据：**模块表里的行**才是 external（包清单有 `exports["./client"]`）。
+// 漏判会让自己的 `@morlay/*` client 行被内联，页面注册两次即抛 `duplicate factory registration`。
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { clientBundleSpec, clientRowExternals, isClientExternal } from "../cordis-client.ts";
 
-/** 一个「本包声明了两种依赖」的最小工作区：一种有 client 行、一种没有、一种装不上。 */
+// 一个「本包声明了两种依赖」的最小工作区：一种有 client 行、一种没有、一种装不上。
 async function fixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "devkit-client-externals-"));
   const pkg = (name: string, exportsField: Record<string, string>): Promise<void> =>

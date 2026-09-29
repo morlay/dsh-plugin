@@ -3,10 +3,8 @@ import type { SessionPersistenceRdb } from "./index.ts";
 
 export const SESSION_USAGE_PATH = "/api/session.usage";
 
-/**
- * 时间范围的语义键：`all` 不限；`day` / `week` 是**本地自然日 / 自然周**（周一起算）；
- * `7d` / `30d` / `90d` 是**最近 N 个自然日**（含今天）。
- */
+// 时间范围的语义键：`all` 不限；`day` / `week` 是**本地自然日 / 自然周**（周一起算）；
+// `7d` / `30d` / `90d` 是**最近 N 个自然日**（含今天）。
 export type UsageRangeKey = "all" | "day" | "week" | "7d" | "30d" | "90d";
 
 const ROLLING_DAYS: Record<"7d" | "30d" | "90d", number> = { "7d": 7, "30d": 30, "90d": 90 };
@@ -17,14 +15,9 @@ function localDayStart(now: number): Date {
   return start;
 }
 
-/**
- * 范围起点（含），不限时为 undefined。**所有起点都对齐到 host 本地时区的零点**——`day` / `week` 是
- * 今天 / 本周一的零点，`7d` / `30d` / `90d` 是「今天零点往前 N-1 天」（含今天共 N 个自然日）。
- * 对齐的意义：事件级表按毫秒过滤、会话汇总表按本地日过滤，两者因此严格等价。
- * @param range - 语义键。
- * @param now - 当前时刻。
- * @returns 起点毫秒时间戳，或 undefined。
- */
+// 范围起点（含），`all` 时 undefined。**所有起点都对齐到 host 本地时区的零点**——`day` / `week` 是今天 / 本周一
+// 的零点，`7d` / `30d` / `90d` 是「今天零点往前 N-1 天」（含今天共 N 个自然日）：事件级表按毫秒过滤、会话汇总表
+// 按本地日过滤，两者因此严格等价。
 export function resolveUsageSince(range: UsageRangeKey, now: number): number | undefined {
   switch (range) {
     case "all":
@@ -52,7 +45,7 @@ function parseUsageRange(value: unknown): UsageRangeKey {
     : "all";
 }
 
-/** 一段 token 用量（字段直接取事件里模型报的 usage）。 */
+// 一段 token 用量（字段直接取事件里模型报的 usage）。
 export interface UsageTokenTotals {
   inputTokens: number;
   outputTokens: number;
@@ -61,10 +54,8 @@ export interface UsageTokenTotals {
   totalTokens: number;
 }
 
-/**
- * 活动计数：与 token 用量同一时间范围、同一去重口径（只算被会话引用的事件行），
- * 按事件类型数出来——「轮次 / 步骤 / 用户输入 / 工具调用」比「事件行数」有信息量。
- */
+// 活动计数：与 token 用量同一时间范围、同一去重口径（只算被会话引用的事件行），
+// 按事件类型数出来——「轮次 / 步骤 / 用户输入 / 工具调用」比「事件行数」有信息量。
 export interface UsageActivityTotals {
   turns: number;
   steps: number;
@@ -72,13 +63,11 @@ export interface UsageActivityTotals {
   toolCalls: number;
 }
 
-/** 总量与按会话行用的一整套指标（token + 活动）。 */
+// 总量与按会话行用的一整套指标（token + 活动）。
 export interface UsageTotals extends UsageTokenTotals, UsageActivityTotals {}
 
-/**
- * 一天 × 一个模型 × 是否子代理 的用量桶：总览、按天、按模型都由它折叠。
- * 只有 token 用量——活动计数没有模型归属（一个轮次可能跨模型），挂在总量与按会话行上。
- */
+// 一天 × 一个模型 × 是否子代理 的用量桶：总览、按天、按模型都由它折叠。
+// 只有 token 用量——活动计数没有模型归属（一个轮次可能跨模型），挂在总量与按会话行上。
 export interface UsageBucket extends UsageTokenTotals {
   day: string;
   provider: string | null;
@@ -86,7 +75,7 @@ export interface UsageBucket extends UsageTokenTotals {
   subagent: boolean;
 }
 
-/** 一条会话的用量行。 */
+// 一条会话的用量行。
 export interface UsageSessionRow extends UsageTotals {
   sessionId: string;
   title: string | null;
@@ -94,7 +83,7 @@ export interface UsageSessionRow extends UsageTotals {
   archived: boolean;
 }
 
-/** 后端的原始聚合结果（总量 / 其中子代理 / 人类、按天×模型的桶、按会话的行）。 */
+// 后端的原始聚合结果（总量 / 其中子代理 / 人类、按天×模型的桶、按会话的行）。
 export interface UsageAggregate {
   totals: UsageTotals;
   subagent: UsageTotals;
@@ -103,10 +92,10 @@ export interface UsageAggregate {
   sessions: UsageSessionRow[];
 }
 
-/** 一次统计请求的完整回报。 */
+// 一次统计请求的完整回报。
 export type SessionUsageReport = UsageAggregate;
 
-/** 计入活动计数的事件类型（轮次 / 步骤 / 用户输入 / 工具调用）。 */
+// 计入活动计数的事件类型（轮次 / 步骤 / 用户输入 / 工具调用）。
 export const COUNTED_EVENT_TYPES = [
   "turn/start",
   "step/start",
@@ -114,7 +103,7 @@ export const COUNTED_EVENT_TYPES = [
   "tool/call",
 ] as const;
 
-/** 按事件类型把计数累加到活动指标上（表里按类型存，读的时候折成四项）。 */
+// 按事件类型把计数累加到活动指标上（表里按类型存，读的时候折成四项）。
 export function addActivityCount(
   target: UsageActivityTotals,
   type: string,
@@ -138,7 +127,7 @@ export function addActivityCount(
   }
 }
 
-/** 毫秒时间戳 → host 本地日（`YYYY-MM-DD`，与 SQL 的 localtime 口径一致）。 */
+// 毫秒时间戳 → host 本地日（`YYYY-MM-DD`，与 SQL 的 localtime 口径一致）。
 export function localDayKey(ms: number): string {
   const date = new Date(ms);
   const pad = (value: number): string => String(value).padStart(2, "0");
@@ -179,17 +168,15 @@ export function addActivityTotals(
   return target;
 }
 
-/** 把一行的整套指标累加进目标（后端合并「是否子代理」两组时用）。 */
+// 把一行的整套指标累加进目标（后端合并「是否子代理」两组时用）。
 export function addTotals(target: UsageTotals, row: UsageTotals): UsageTotals {
   addActivityTotals(target, row);
   addTokenTotals(target, row);
   return target;
 }
 
-/**
- * 用量统计通道：一次请求回报总览（含 subagent 拆分）、按天 × 模型的桶与按会话的行。
- * 聚合只算被会话引用的事件行——fork 共享行因此只计一次，已删会话留下的孤儿行不计。
- */
+// 用量统计通道：一次请求回报总览（含 subagent 拆分）、按天 × 模型的桶与按会话的行。
+// 聚合只算被会话引用的事件行——fork 共享行因此只计一次，已删会话留下的孤儿行不计。
 export function registerSessionUsage(ctx: Context, persistence: SessionPersistenceRdb): void {
   ctx.inject(["webServer", "connection"] as const, (webCtx) => {
     const webServer = webCtx.webServer as unknown as {

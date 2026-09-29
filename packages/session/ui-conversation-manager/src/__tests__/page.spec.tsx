@@ -20,7 +20,7 @@ const t = ((key: string, args?: Record<string, unknown>) => {
     : template.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(args[name]));
 }) as never;
 
-/** 框架 hook 的替身：一个固定快照的 selector 座位。 */
+// 框架 hook 的替身：一个固定快照的 selector 座位。
 function hook<T>(value: T): never {
   return ((selector: (state: T) => unknown) => selector(value)) as never;
 }
@@ -28,9 +28,9 @@ function hook<T>(value: T): never {
 interface Row {
   id: string;
   title: string;
-  /** 最近活动时间：列表按它降序。 */
+  // 最近活动时间：列表按它降序。
   updatedAt?: number;
-  /** 子代理派生会话：默认不显示，勾选后显示并带标记。 */
+  // 子代理派生会话：默认不显示，勾选后显示并带标记。
   origin?: "subagent";
 }
 
@@ -70,9 +70,9 @@ async function renderPage(options: {
   archived: readonly string[];
   sessions?: readonly Row[];
   workspaces?: readonly { id: string; title: string; sessionIds: readonly string[] }[];
-  /** 列表路由的替身：给了就覆盖默认的「会话行快照」实现（用于失败态 / 未就绪用例）。 */
+  // 列表路由的替身：给了就覆盖默认的「会话行快照」实现（用于失败态 / 未就绪用例）。
   listRows?: () => Promise<unknown>;
-  /** 未就绪用例要自己断言 loading 文案：跳过「等列表就绪」这一步。 */
+  // 未就绪用例要自己断言 loading 文案：跳过「等列表就绪」这一步。
   skipReady?: boolean;
   faces?: Partial<Faces>;
 }): Promise<{ faces: Faces; container: HTMLElement }> {

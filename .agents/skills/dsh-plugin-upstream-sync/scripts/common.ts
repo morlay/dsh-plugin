@@ -3,10 +3,8 @@ import { stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-// 公共：workspace 根解析 + 异步进程 / 文件系统小工具。
-// DEEPSEEK_HARNESS_DIR 等路径约定为「相对 pnpm-workspace.yaml（workspace
-// 根）」——pnpm 解析 workspace 成员以此为基准。脚本从任意 cwd 执行都应
-// 先找到该根，再 resolve 环境变量路径，而不是相对 process.cwd()。
+// 公共：workspace 根解析 + 异步进程 / 文件系统小工具。`DEEPSEEK_HARNESS_DIR` 等路径相对
+// pnpm-workspace.yaml（workspace 根）解析，不相对 `process.cwd()`。
 
 const execFileAsync = promisify(execFile);
 
@@ -45,9 +43,7 @@ function commandFailed(
   });
 }
 
-// execFileSync(..., { stdio: "inherit" }) 的异步等价物：子进程 stdio 直连
-// 终端（流式输出不变），仍以 Promise reject 表达非零退出 / 信号 / 启动失败，
-// 使「命令失败即失败」的语义不变。
+// execFileSync(..., { stdio: "inherit" }) 的异步等价物：stdio 直连终端，非零退出 / 信号 / 启动失败都以 reject 表达。
 export async function runInherited(
   command: string,
   args: readonly string[],

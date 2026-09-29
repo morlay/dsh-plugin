@@ -1,14 +1,6 @@
-/**
- * composer 里的模式 chip：**本包在会话里唯一的面**（点开是 coding / chat 两项）。
- *
- * 选择只在会话开始**之前**有效——一旦跑过 turn，那段历史是在某个模式的工具与提示词下产生的。所以 chip 在
- * 会话里有两个形态：空白期是选择器，开过 turn 之后**只读**（只写当前模式，点不动）。判据是 host 的投影
- * `sessionModeEditable`（`turn/start` 一落库就为 `false`），与服务端拒绝切换读的是同一份事实。
- *
- * 它挂在 composer 上：新会话屏也是一个 blank session 的 composer，选择正好发生在那里；会话头部则没有它的
- * 位置——头部只在"跑起来之后"值得看，而那时的 chip 已经把当前模式写在脸上，再挂一个只读标签就是同一句话的
- * 复读。
- */
+// composer 里的模式 chip：本包在会话里唯一的面（点开是 coding / chat 两项）。
+// 选择只在会话开始**之前**有效（那段历史属于某个模式的工具与提示词），所以 chip 有两个形态：空白期是选择器，
+// 开过 turn 之后只读。判据是 host 的投影 `sessionModeEditable`，与服务端拒绝切换读的是同一份事实。
 
 import { useState } from "react";
 import {
@@ -25,20 +17,12 @@ import { selectMode } from "./api.ts";
 import { useRoster } from "./use-roster.ts";
 import css from "./SessionModeSeat.module.css";
 
-/** 完整 props：composer 工具行左侧槽位的运行时 props + 本包的字典。 */
+// 完整 props：composer 工具行左侧槽位的运行时 props + 本包的字典。
 export type SessionModeSeatProps = PropsRuntime<"conversation.input.left"> &
   PropsLocale<"session-mode">;
 
-/**
- * 渲染 composer 里的模式切换 chip。
- *
- * 为什么在 composer（`conversation.input.left`）：**新会话屏也是一个 blank session 的 composer**，选择正好
- * 发生在那里；会话头部槽位在新会话屏根本不存在，而会话跑起来之后头部也不该重复说一遍 chip 已经写着的事。
- * 官方 roster 那个座位（`conversation.hero.agentPreset`）是单注册槽位、已被官方占了，所以用自己的 list 槽位
- * 并存。
- * @param props - 槽位合成的 props。
- * @returns chip；清单没读到、或会话未知时返回 null。
- */
+// 渲染 composer 里的模式切换 chip：新会话屏也是 blank session 的 composer，选择正好发生在那里；官方 roster 占了
+// 单注册槽位 `conversation.hero.agentPreset`，所以这里用自己的 list 槽位并存。清单没读到时会话未知时返回 null。
 export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatProps) {
   const roster = useRoster();
   const selected = useSessions((state) => {
@@ -63,8 +47,7 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
   const chosen = roster.modes.find((mode) => mode.id === current);
   const label = chosen?.name ?? current;
 
-  // 开过 turn 的会话**只读**：chip 只写当前模式，点不动也不给清单。判据与 host 拒绝切换读的是同一个投影
-  // （`sessionModeEditable`），所以不会出现"看起来能选、点了报错"。
+  // 开过 turn 的会话只读：chip 只写当前模式、点不动（判据与 host 拒绝切换读的是同一个投影）。
   if (editable === false) {
     return (
       <button type="button" className={css.seat} disabled title={t("lockedHint")}>

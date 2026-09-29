@@ -1,4 +1,4 @@
-/** 流程与交付：todo / 计划 / goal / 交付物。 */
+// 流程与交付：todo / 计划 / goal / 交付物。
 import type { GroupPack } from "../types.ts";
 
 export const FLOW_GROUP: GroupPack = {
@@ -19,7 +19,7 @@ export const FLOW_GROUP: GroupPack = {
         text: "exit_plan_mode：动手前提交计划（计划模式下只读）；本部署装了计划模式才有这一行。",
       },
     ],
-    // 计划模式可选：本部署禁用了 `planning` 行，工具不存在时忽略这一行。
+    // 计划模式可选：`planning` 组在本部署的 preset 行清单里（`TOOLKIT_PLAN_ROWS`），工具不存在时忽略这一行。
     injection: "on-demand",
     drops: ["tool:goal"],
     tools: ["todo_write", "exit_plan_mode", "get_goal", "create_goal", "update_goal", "present"],

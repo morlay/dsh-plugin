@@ -41,9 +41,8 @@ export function balanceRewindPrefix(
   return events.slice(0, keep);
 }
 
-// rewind 只按 seq 读尾部窗口（`types` 是窗口内升序的事件类型），在窗口上做同样的配对修剪：
-// 从尾部往回扫，遇到 turn/end 即停（它之前的内容与保留前缀的尾部无关）；尾部未闭合的
-// step/start 一并丢弃，避免它之后的追加（重放的新 step）撞上未闭合的旧 step。
+// rewind 只按 seq 读尾部窗口（`types` 是窗口内升序的事件类型），在窗口上做同样的配对修剪：从尾部往回扫，
+// 遇到 turn/end 即停；尾部未闭合的 step/start 一并丢弃，避免它之后的追加撞上未闭合的旧 step。
 // 调用方必须保证窗口覆盖到「最近一个 turn/end」或前缀开头，否则结果不完整。
 export function rewindKeepLength(types: readonly string[], rawKeepLength: number): number {
   let relativeKeep = types.length;

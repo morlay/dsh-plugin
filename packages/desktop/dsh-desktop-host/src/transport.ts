@@ -1,10 +1,6 @@
-/**
- * 桌面形态的传输接管：把 Web 应用的浏览器装配换成「宿主内直连」。
- *
- * 两件事：一是让 `connection` 的浏览器认证在桌面下直接放行（页面由壳独占，没有网络入口）；
- * 二是把客户端的 transport 行注入 index，并注册它访问的 `/.dsh/remote-stream`（请求体首行定
- * endpoint/payload、后续行是逻辑流的上行项，响应体是下行 NDJSON）。
- */
+// 桌面形态的传输接管：把 Web 应用的浏览器装配换成「宿主内直连」——放行 `connection` 的浏览器认证，
+// 并把客户端的 transport 行注入 index、注册它访问的 `/.dsh/remote-stream`（请求体首行定
+// endpoint/payload、后续行是逻辑流的上行项，响应体是下行 NDJSON）。
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { TypertGatewayWireStream } from "@deepseek-ai/dsh-api-gateway";
@@ -13,7 +9,7 @@ import { DESKTOP_STREAM_PATH, DesktopStreamBodyDecoder } from "./wire.ts";
 
 export { DESKTOP_STREAM_PATH } from "./wire.ts";
 
-/** 注入 index 的 transport 行：声明页面拥有 Host，并给出 Gateway 流载体（下行流 + 上行项）。 */
+// 注入 index 的 transport 行：声明页面拥有 Host，并给出 Gateway 流载体（下行流 + 上行项）。
 export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
   _desktop:true,
   ownsHost:true,
@@ -49,9 +45,8 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
       },
       fail(message){failure=new Error(message);ended=true;notify()},
     })
-    // 取消必须结束迭代：abort 只解除 IPC 监听，挂在这一句等待上的消费方再也收不到
-    // end 帧；不叫醒它就等于 dispose（RemoteStream 会 await iterator.return）永不落定——
-    // 撤回 / 重试后的窗口重建正是卡在这里，页面既收不到新窗口也没有报错。
+    // 取消必须结束迭代：不叫醒它，等在这一句上的消费方收不到 end 帧，dispose（await iterator.return）
+    // 也永不落定——窗口重建会卡在这里。
     const onAbort=()=>{stream.cancel();ended=true;notify()}
     signal.addEventListener('abort',onAbort,{once:true})
     if(signal.aborted)onAbort()
@@ -90,17 +85,12 @@ interface BrowserAuthSurface {
 }
 
 interface GatewaySurface {
-  // 直接用上游导出的签名（而不是抄一份）：它变参数时我们编译即报错——0.1.7 把 uplink 加进
-  // `open` 时，抄下来的三参版本正是这样静默失效成运行时 TypeError 的。
+  // 直接用上游导出的签名：它变参数时我们编译即报错，抄一份会静默失效成运行时 TypeError。
   readonly wireStream: Pick<TypertGatewayWireStream, "open">;
 }
 
-/**
- * 桌面形态下放行 `connection` 的两处浏览器认证：`requestRejection`（`/api` 路由与
- * 各插件 handler 的自查）与 `authorizeIndex`（`frontend-static` 的 index 渲染）。
- *
- * 页面由壳独占、没有网络入口，认证没有对象；这里直接改写服务实例的方法。
- */
+// 桌面形态下放行 `connection` 的两处浏览器认证：`requestRejection`（`/api` 路由与各插件 handler
+// 的自查）与 `authorizeIndex`（`frontend-static` 的 index 渲染）——页面由壳独占，认证没有对象。
 export function takeOverDesktopAuthentication(ctx: Context): void {
   const connection = ctx.get("connection") as unknown as BrowserAuthSurface | undefined;
   if (connection === undefined)
@@ -121,7 +111,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** 桌面流请求体：首行是 open（endpoint / payload），后续每行是一道上行项。 */
+// 桌面流请求体：首行是 open（endpoint / payload），后续每行是一道上行项。
 async function* readStreamFrames(request: IncomingMessage): AsyncGenerator<unknown> {
   const decoder = new DesktopStreamBodyDecoder();
   for await (const chunk of request) {
@@ -135,7 +125,7 @@ interface StreamOpening {
   readonly payload: unknown;
 }
 
-/** 校验首行：它决定这条流开在哪个 endpoint 上。 */
+// 校验首行：它决定这条流开在哪个 endpoint 上。
 function parseStreamOpening(value: unknown, subject: string): StreamOpening {
   if (!isRecord(value) || typeof value.endpoint !== "string")
     throw new Error(`dsh desktop: invalid stream request ${subject}`);
@@ -194,8 +184,8 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
     response.once("close", cancel);
     try {
       console.error(`[dsh-desktop] stream opening ${endpoint}`);
-      // 上游 0.1.7 的契约是五参：uplink 是「客户端 → 宿主」的逻辑流输入，$events 那类
-      // Gateway 自己的流会被上游立刻释放（releaseUplink），不读这里的项。
+      // 上游契约是五参：`uplink` 是「客户端 → 宿主」的逻辑流输入，`$events` 那类 Gateway 自己的流
+      // 会被上游立刻释放（`releaseUplink`）。
       const values = await gateway.wireStream.open(
         endpoint,
         opening.payload,
@@ -222,7 +212,7 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
   };
 }
 
-/** 注入 transport 行并注册 Gateway 流路由；随插件 fiber 一起撤销。 */
+// 注入 transport 行并注册 Gateway 流路由；随插件 fiber 一起撤销。
 export function installDesktopTransport(ctx: Context): void {
   ctx.on("webserver/index-inject", (table) => {
     table.push({ kind: "script", placement: "head", text: DESKTOP_TRANSPORT_SCRIPT });

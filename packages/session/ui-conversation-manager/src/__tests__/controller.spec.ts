@@ -25,7 +25,7 @@ function stubFetch(status: number, payload: unknown): FetchCall[] {
   return calls;
 }
 
-/** 一份最小的用量回报（与 host 的 ./usage 结构一致）。 */
+// 一份最小的用量回报（与 host 的 ./usage 结构一致）。
 const REPORT_PAYLOAD = {
   totals: {
     events: 2,
@@ -85,7 +85,7 @@ function bench(): {
   return { ports, controller: new ConversationManagerController(ports) };
 }
 
-/** 导出返回 zip 响应体（非 JSON），文件名来自 Content-Disposition。 */
+// 导出返回 zip 响应体（非 JSON），文件名来自 Content-Disposition。
 function stubZipFetch(status: number, headers: Record<string, string>): FetchCall[] {
   const calls: FetchCall[] = [];
   vi.stubGlobal("fetch", async (url: string, init?: { body?: string }) => {
@@ -101,7 +101,7 @@ function stubZipFetch(status: number, headers: Record<string, string>): FetchCal
   return calls;
 }
 
-/** 下载落点：一次 createObjectURL + 一次带 download 名的 anchor 点击。 */
+// 下载落点：一次 createObjectURL + 一次带 download 名的 anchor 点击。
 function stubDownload(): { created: string[]; downloaded: string[] } {
   const created: string[] = [];
   const downloaded: string[] = [];

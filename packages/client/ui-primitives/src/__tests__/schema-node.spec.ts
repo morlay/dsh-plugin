@@ -1,9 +1,7 @@
-/**
- * schema 投影的行为：host 发来的 `schema.toJSON()` 往返一次（rehydrate）后，投影成渲染层要的字段树。
- *
- * 盯的接缝是**结构**：哪些字段/子节点出现、路径怎么拼、meta 怎么归一化、哪些类型只读、递归与共享
- * 引用怎么收口。这里不含任何渲染和值——值在草稿模型（`draft.spec.ts`）与渲染（`fields.spec.tsx`）。
- */
+// schema 投影的行为：host 发来的 `schema.toJSON()` 往返一次（rehydrate）后，投影成渲染层要的字段树。
+//
+// 盯的接缝是**结构**：哪些字段/子节点出现、路径怎么拼、meta 怎么归一化、哪些类型只读、递归与共享
+// 引用怎么收口。这里不含任何渲染和值——值在草稿模型（`draft.spec.ts`）与渲染（`fields.spec.tsx`）。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
@@ -16,7 +14,7 @@ import {
   walkFields,
 } from "../client/schema-form/schema-node.ts";
 
-/** 走一遍设置流的往返：host 发 `schema.toJSON()`，客户端 rehydrate 后再投影。 */
+// 走一遍设置流的往返：host 发 `schema.toJSON()`，客户端 rehydrate 后再投影。
 function projected(schema: z, path: readonly string[] = []) {
   return projectNode(new z(schema.toJSON()), path);
 }

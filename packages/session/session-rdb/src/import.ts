@@ -99,11 +99,9 @@ export function parseJsonlArtifact(content: string): SessionStorageMetadata & {
   };
 }
 
-/**
- * fflate 的 `unzip` 是回调式异步 API（node 侧内部走 worker_threads，浏览器侧走 Web Worker），
- * 这里桥成 Promise。它与 `unzipSync` 的差异只在同步/异步：非法 zip 走的是同一段校验代码，
- * 拒绝的错误对象与同步版一致，因此上层文案无需区分。
- */
+// fflate 的 `unzip` 是回调式异步 API（node 侧内部走 worker_threads，浏览器侧走 Web Worker），
+// 这里桥成 Promise。它与 `unzipSync` 的差异只在同步/异步：非法 zip 走的是同一段校验代码，
+// 拒绝的错误对象与同步版一致，因此上层文案无需区分。
 function unzipAsync(data: Uint8Array): Promise<Record<string, Uint8Array>> {
   return new Promise((resolve, reject) => {
     unzip(data, (error, entries) => {

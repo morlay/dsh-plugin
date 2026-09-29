@@ -1,9 +1,7 @@
-/**
- * 真包的配置在页面上排成什么行：跨包契约的验收（schema 投影 → 行视图）。
- *
- * 这些形状是用户在页面上第一眼看到的东西，所以拿真包的真 schema 断言：`access` 是「一段文本或一组文本」的 union、
- * `session-rdb` 的 `type` 是判别式 union 的标签、装配事实只读可见。
- */
+// 真包的配置在页面上排成什么行：跨包契约的验收（schema 投影 → 行视图）。
+//
+// 这些形状是用户在页面上第一眼看到的东西，所以拿真包的真 schema 断言：`access` 是「一段文本或一组文本」的 union、
+// `session-rdb` 的 `type` 是判别式 union 的标签、装配事实只读可见。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
@@ -26,7 +24,7 @@ const t = ((key: string) =>
 const resolveText = (text: string | Readonly<Record<string, string>>): string =>
   typeof text === "string" ? text : (text["zh"] ?? "");
 
-/** 一段配置排出的行：值按路径喂给字段行，与页面读数同一形状。 */
+// 一段配置排出的行：值按路径喂给字段行，与页面读数同一形状。
 function linesOf(schema: unknown, value: unknown): EditorLine[] {
   const root: FieldNode = projectNode(new z(schema as never));
   const walked = walkFields(root, value);
@@ -59,26 +57,26 @@ function linesOf(schema: unknown, value: unknown): EditorLine[] {
   return editorLines(state, { collapsed: () => false, toggle: () => {} }, resolveText, t);
 }
 
-/** 某一层的闭合行上的可添加项。 */
+// 某一层的闭合行上的可添加项。
 function addableAtLine(lines: readonly EditorLine[], path: string) {
   const close = lines.find((line) => line.kind === "close" && line.path.join(".") === path);
   if (close?.kind !== "close") throw new Error(`no close line at ${path}`);
   return close.add;
 }
 
-/** 某条路径上的那一行。 */
+// 某条路径上的那一行。
 function lineAt(lines: readonly EditorLine[], path: string): EditorLine | undefined {
   return lines.find(
     (line) => line.kind !== "comment" && line.kind !== "close" && line.path.join(".") === path,
   );
 }
 
-/** 字段行的路径（按页面顺序）。 */
+// 字段行的路径（按页面顺序）。
 function fieldPaths(lines: readonly EditorLine[]): string[] {
   return lines.filter((line) => line.kind === "field").map((line) => line.path.join("."));
 }
 
-/** 顶层字段在页面上出现的顺序（容器行与值行都算）。 */
+// 顶层字段在页面上出现的顺序（容器行与值行都算）。
 function topPaths(lines: readonly EditorLine[]): string[] {
   return lines
     .filter((line) => (line.kind === "open" || line.kind === "field") && line.path.length === 1)

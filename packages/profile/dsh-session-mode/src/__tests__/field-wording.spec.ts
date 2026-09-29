@@ -1,7 +1,5 @@
-/**
- * 字段文案面的行为：client 半把这一行的字段文案注册到**提示面**（`ctx.schemaFormHints.describe`），
- * 行式配置页据此画注释行；提示面缺席时（老组合）安静跳过，不影响会话面。
- */
+// 字段文案面的行为：client 半把这一行的字段文案注册到**提示面**（`ctx.schemaFormHints.describe`），
+// 行式配置页据此画注释行；提示面缺席时（老组合）安静跳过，不影响会话面。
 
 import { describe, expect, it } from "vitest";
 import { apply, inject } from "../client/index.ts";
@@ -13,7 +11,7 @@ interface Described {
   read: () => { label?: string | undefined; hint?: string | undefined };
 }
 
-/** 最小替身：记录提示面的注册事实。 */
+// 最小替身：记录提示面的注册事实。
 function bench(options: { withHints?: boolean } = {}) {
   const described: Described[] = [];
   const dictionaries: string[] = [];

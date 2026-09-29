@@ -21,7 +21,7 @@ import type {
 export interface StorageRepositoryHost {
   db: () => Promise<unknown>;
 
-  /** 不经 await、直接拿到的数据库句柄；未开放时只走异步的 `db`。 */
+  // 不经 await、直接拿到的数据库句柄；未开放时只走异步的 `db`。
   dbDirect?: () => unknown;
 
   tables: Record<string, unknown>;
@@ -273,7 +273,7 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
 
         // 钉住：未在集合里的清掉，集合里的按数组位置写序号（读回即按它排序）。
         // 找不到会话行的 id 跳过：pin 只作用于已存在的会话（与归档不同，不凭空造行）。
-        // 旧 storages 文档（0.1.6 时代）没有这个集合，导入路径按空处理。
+        // 既有 storages 文档里可能没有这个集合，导入路径按空处理。
         const pinned = state.pinnedSessionIds ?? [];
         await runQuery(
           pinned.length === 0

@@ -51,7 +51,7 @@ describe("DraftEditorRuntime: 输入框保留 raw markdown", () => {
   });
 });
 
-/** jsdom 里 `focus()` 会清空 Selection、Range 也没有几何：保住 Chromium 的「选区跟随焦点」行为。 */
+// jsdom 里 `focus()` 会清空 Selection、Range 也没有几何：保住 Chromium 的「选区跟随焦点」行为。
 function keepRangeOnFocus(element: HTMLElement): () => void {
   const focus = element.focus.bind(element);
   const spy = vi.spyOn(element, "focus").mockImplementation((options) => {

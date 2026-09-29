@@ -66,13 +66,12 @@ function render(node: Tree, depth: number): string {
   return lines.join("\n");
 }
 
-const body = `/**
- * 官方主题的 \`--dsw-*\` token 全集（${names.size} 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
- *
- * 叶子是该变量的**默认值**（官方 light 主题里首次出现的定义）：既是类型推导的来源，也可作 fallback。
- * \`"$"\` 键出现在「自身也是 token 的分支」上（命名体系里有 40 个短名同时是长名前缀的 token）。
- * 消费时只需树形状——\`Token.vars()\` 生成 \`var(--dsw-…)\`，不重新定义变量。
- * 漂移、往返与默认值完整性由 src/__tests__/design-tokens.spec.ts 守卫。 */
+const body = `// 官方主题的 \`--dsw-*\` token 全集（${names.size} 个），由 packages/client/ui-primitives/scripts/gen-design-tokens.mts 生成，勿手改。
+//
+// 叶子是该变量的**默认值**（官方 light 主题里首次出现的定义）：既是类型推导的来源，也可作 fallback。
+// \`"$"\` 键出现在「自身也是 token 的分支」上（命名体系里有 40 个短名同时是长名前缀的 token）。
+// 消费时只需树形状——\`Token.vars()\` 生成 \`var(--dsw-…)\`，不重新定义变量。
+// 漂移、往返与默认值完整性由 src/__tests__/design-tokens.spec.ts 守卫。
 export const designTokens = {
 ${render(tree, 0)}
 } as const

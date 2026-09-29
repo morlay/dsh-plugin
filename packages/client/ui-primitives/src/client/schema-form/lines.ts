@@ -1,9 +1,7 @@
-/**
- * 行模型：把字段树（`walkFields` 的结果）排成**编辑器的行**——结构行（`{` / `[` / `}` / `]`）、字段行、注释行、
- * 以及容器尾部的添加行。
- *
- * 渲染层因此只按行画，不必自己递归：行序 = 视觉顺序，行号连续。折叠在这里生效（折叠的容器只留开启行）。
- */
+// 行模型：把字段树（`walkFields` 的结果）排成**编辑器的行**——结构行（`{` / `[` / `}` / `]`）、字段行、注释行、
+// 以及容器尾部的添加行。
+//
+// 渲染层因此只按行画，不必自己递归：行序 = 视觉顺序，行号连续。折叠在这里生效（折叠的容器只留开启行）。
 
 import { fieldKey, type AddableProperty, type SchemaFormState } from "./controller.ts";
 import type { DraftFieldState } from "./draft.ts";
@@ -20,29 +18,29 @@ import {
   type WalkedField,
 } from "./schema-node.ts";
 
-/** 一个容器的闭合行后面能加什么。 */
+// 一个容器的闭合行后面能加什么。
 export type AddLineSpec =
-  /** 数组：追加一个空项。 */
+  // 数组：追加一个空项。
   | { kind: "item" }
-  /** 字典：敲键名，或从候选键里选（业务注册的读数）。 */
+  // 字典：敲键名，或从候选键里选（业务注册的读数）。
   | { kind: "key"; options: readonly AddableProperty[] }
-  /** 对象：从「schema 声明了、值里还没有」的字段里选（没有候选项时不给输入框）。 */
+  // 对象：从「schema 声明了、值里还没有」的字段里选（没有候选项时不给输入框）。
   | { kind: "prop"; options: readonly AddableProperty[] };
 
-/** 一行上的变体切换控件。 */
+// 一行上的变体切换控件。
 export interface VariantControl {
-  /** 可以切到哪几支；顺序即声明顺序。 */
+  // 可以切到哪几支；顺序即声明顺序。
   choices: readonly VariantChoice[];
-  /** 当前落在第几支。 */
+  // 当前落在第几支。
   selected: number;
 }
 
-/** 容器类型：结构行用 `{` 还是 `[`。 */
+// 容器类型：结构行用 `{` 还是 `[`。
 export type ContainerShape = "object" | "array";
 
-/** 一行。 */
+// 一行。
 export type EditorLine =
-  /** 容器的开启行：`key: {` 或 `[`。 */
+  // 容器的开启行：`key: {` 或 `[`。
   | {
       kind: "open";
       path: readonly string[];
@@ -51,21 +49,21 @@ export type EditorLine =
       depth: number;
       collapsed: boolean;
       member: WalkedField["member"];
-      /** 这一层是 union 时，可以在哪几支之间切（写哪个值）。 */
+      // 这一层是 union 时，可以在哪几支之间切（写哪个值）。
       variants: VariantControl | undefined;
     }
-  /** 容器的关闭行：`}` / `]`（添加行挂在它后面同一行）。 */
+  // 容器的关闭行：`}` / `]`（添加行挂在它后面同一行）。
   | {
       kind: "close";
       path: readonly string[];
       node: FieldNode;
       shape: ContainerShape;
       depth: number;
-      /** 这一层能加什么；`undefined` 表示加不了（对象的声明字段都配齐了）。 */
+      // 这一层能加什么；`undefined` 表示加不了（对象的声明字段都配齐了）。
       add: AddLineSpec | undefined;
       member: WalkedField["member"];
     }
-  /** 字段行：`key: value`。 */
+  // 字段行：`key: value`。
   | {
       kind: "field";
       path: readonly string[];
@@ -73,33 +71,24 @@ export type EditorLine =
       depth: number;
       field: DraftFieldState;
       member: WalkedField["member"];
-      /** 这个字段是 union 时，可以在哪几支之间切。 */
+      // 这个字段是 union 时，可以在哪几支之间切。
       variants: VariantControl | undefined;
-      /**
-       * 变体触发**代替这一行的值**：判别式 union 的标签行就是这样——`type: "sqlite" ▾` 里的值就是那个触发，
-       * 不再另画一份值。
-       */
+      // 变体触发**代替这一行的值**：判别式 union 的标签行就是这样——`type: "sqlite" ▾` 里的值就是那个触发，
+      // 不再另画一份值。
       variantsStandIn: boolean;
     }
-  /** 注释行：schema 的说明与业务给的文案，画在字段行上方；这一行有问题时它装的是那条消息。 */
+  // 注释行：schema 的说明与业务给的文案，画在字段行上方；这一行有问题时它装的是那条消息。
   | {
       kind: "comment";
       path: readonly string[];
       depth: number;
       text: string;
-      /** 这一行有校验消息（草稿解析失败或整段校验落下来）：画成错误，而不是普通说明。 */
+      // 这一行有校验消息（草稿解析失败或整段校验落下来）：画成错误，而不是普通说明。
       invalid: boolean;
     };
 
-/**
- * 容器的形状：对象类用 `{}`，序列类用 `[]`。
- *
- * union 没有自己的形状——它跟着**当前选中那一支**走（`access` 是数组就在页面上画 `[`），这也是
- * `access: string | string[]` 这类字段以前被画成对象容器的原因。
- * @param node - 字段节点。
- * @param value - 这一层的值（选支判据）。
- * @returns 形状；叶子节点是 `undefined`。
- */
+// 容器的形状：对象类用 `{}`，序列类用 `[]`；union 没有自己的形状——它跟着**当前选中那一支**走
+// （`access: string | string[]` 选到数组就画 `[`）。
 export function containerShape(node: FieldNode, value?: unknown): ContainerShape | undefined {
   switch (variantOf(node, value).type) {
     case "object":
@@ -114,13 +103,13 @@ export function containerShape(node: FieldNode, value?: unknown): ContainerShape
   }
 }
 
-/** 折叠状态与可见性：记「用户切换过的路径」，开合 = 切换过就反转 schema 的默认值。 */
+// 折叠状态与可见性：记「用户切换过的路径」，开合 = 切换过就反转 schema 的默认值。
 export interface FoldState {
   collapsed(path: readonly string[]): boolean;
   toggle(path: readonly string[]): void;
 }
 
-/** 渲染顺序里可见的字段：折叠的容器把整棵子树滤掉，只留它自己的开启行。 */
+// 渲染顺序里可见的字段：折叠的容器把整棵子树滤掉，只留它自己的开启行。
 export function visibleFields(state: SchemaFormState, fold: FoldState): readonly WalkedField[] {
   const containers = new Set(
     state.walked
@@ -136,12 +125,12 @@ export function visibleFields(state: SchemaFormState, fold: FoldState): readonly
   });
 }
 
-/** 这一层的当前值：与字段行显示的是同一份读数（草稿优先）。 */
+// 这一层的当前值：与字段行显示的是同一份读数（草稿优先）。
 function valueAt(state: SchemaFormState, path: readonly string[]): unknown {
   return state.fields.get(fieldKey(path))?.value;
 }
 
-/** 这一层能加什么：数组追加空项，字典敲键名（可来自候选），对象从还没配的声明字段里选。 */
+// 这一层能加什么：数组追加空项，字典敲键名（可来自候选），对象从还没配的声明字段里选。
 function addOf(
   node: FieldNode,
   shape: ContainerShape,
@@ -152,7 +141,7 @@ function addOf(
   return options.length === 0 ? undefined : { kind: "prop", options };
 }
 
-/** 一个节点上的变体切换控件：不是 union、或只有一支、或成员全是常量（字面量集合是选择器）时没有。 */
+// 一个节点上的变体切换控件：不是 union、或只有一支、或成员全是常量（字面量集合是选择器）时没有。
 function variantsOf(node: FieldNode, value: unknown): VariantControl | undefined {
   const union = unionOf(node);
   if (union === undefined || union.choices !== undefined || union.variants.length < 2)
@@ -163,14 +152,7 @@ function variantsOf(node: FieldNode, value: unknown): VariantControl | undefined
   };
 }
 
-/**
- * 排成行序列。
- * @param state - 页面读数。
- * @param fold - 折叠状态。
- * @param resolveText - `description` 的本地化。
- * @param t - 本包字典。
- * @returns 行序列（行号即下标）。
- */
+// 排成行序列（行号即下标）。
 export function editorLines(
   state: SchemaFormState,
   fold: FoldState,
@@ -271,10 +253,8 @@ export function editorLines(
   return moveVariantControlToTag(lines);
 }
 
-/**
- * 判别式 union 的切换控件挪到**标签字段那一行**上：`session-rdb` 的页面上用户改的就是 `type`，把它放在容器
- * 行上等于让人在两处看同一件事。没有标签字段（`access` 这种按值形状选的）就留在 union 自己那一行。
- */
+// 判别式 union 的切换控件挪到**标签字段那一行**上：`session-rdb` 的页面上用户改的就是 `type`，把它放在容器
+// 行上等于让人在两处看同一件事。没有标签字段（`access` 这种按值形状选的）就留在 union 自己那一行。
 function moveVariantControlToTag(lines: EditorLine[]): EditorLine[] {
   for (const line of lines) {
     if (line.kind === "comment" || line.kind === "close") continue;
@@ -297,12 +277,8 @@ function moveVariantControlToTag(lines: EditorLine[]): EditorLine[] {
   return lines;
 }
 
-/**
- * 一行的注释：业务给的文案（字段槽的 label/hint）优先，其次 schema 的说明。
- *
- * 这一行有问题时**注释位让给那条消息**（参考实现也是把错误画在行尾那一段的位置上）——说明换成"哪里不对"，
- * 错误因此不必挤在值后面。
- */
+// 一行的注释：业务经提示面给的文案优先，schema 的 `description` / `comment` 兜底；这一行有问题时
+// **注释位让给那条消息**（错误因此不必挤在值后面）。
 function commentFor(
   state: SchemaFormState,
   item: WalkedField,
@@ -327,7 +303,7 @@ function commentFor(
   return parts.length === 0 ? undefined : { text: parts.join(" · "), invalid: false };
 }
 
-/** `path` 是不是 `prefix` 的后代（含自身）。 */
+// `path` 是不是 `prefix` 的后代（含自身）。
 function isPrefix(prefix: readonly string[], path: readonly string[]): boolean {
   if (prefix.length > path.length) return false;
   return prefix.every((segment, index) => path[index] === segment);

@@ -16,7 +16,7 @@ beforeAll(async () => {
   ) as Record<string, unknown>;
 });
 
-/** 装配面守护：上游那一行确实被我们停掉，替代行确实被插上，app 的 bundle 列表确实引用本包。 */
+// 装配面守护：上游那一行确实被我们停掉，替代行确实被插上，app 的 bundle 列表确实引用本包。
 describe("装配面", () => {
   it("装配入口是 session-mode-profile：app 列的是它，它依赖本包", async () => {
     const dsh = app.dsh as { profile: { bundles: string[] } };
@@ -29,11 +29,8 @@ describe("装配面", () => {
   });
 });
 
-/**
- * 配置页：**官方那张卡片**承担（接管按官方行 id 复用，`subagent` namespace 与卡片行都在），本包不再有 client 半
- * ——曾用来替代卡片的字段文案槽随之退场（两套都注册 `settings.subagent` 字典会撞：
- * `locale.register` 对同 namespace 同 locale 直接抛错）。
- */
+// 配置页由**官方那张卡片**承担（接管按官方行 id 复用，`subagent` namespace 与卡片行都在），本包没有
+// client 半——两套都注册 `settings.subagent` 字典会撞（`locale.register` 同 namespace 同 locale 抛错）。
 describe("配置页", () => {
   it("本包不再发布 client 面：出口、注入声明与那条依赖都清掉了", () => {
     const exports = manifest.exports as Record<string, unknown>;

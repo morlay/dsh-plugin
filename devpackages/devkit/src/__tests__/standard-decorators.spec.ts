@@ -24,7 +24,7 @@ const DECORATED_TSX_SOURCE = `class View {
 }
 `;
 
-/** 插件契约：命中时返回降级后的代码，其余情形原样放过（`undefined`）。 */
+// 插件契约：命中时返回降级后的代码，其余情形原样放过（`undefined`）。
 async function transform(
   plugin: ReturnType<typeof standardDecoratorsPlugin>,
   code: string,

@@ -25,7 +25,7 @@ import { shellWrappedSpawn } from "./shell-env.ts";
 
 let focusPrimaryWindow = (): void => {};
 
-/** appconfig.json 的位置：打包形态只看 resources，dev 形态由 CLI 指到构建目录。 */
+// appconfig.json 的位置：打包形态只看 resources，dev 形态由 CLI 指到构建目录。
 function appConfigDir(): string {
   const configured = process.env.DSH_DESKTOP_APPCONFIG_DIR;
   return app.isPackaged || configured === undefined || configured === ""
@@ -47,7 +47,7 @@ const appConfig: AppConfig = await loadAppConfig(appConfigDir()).catch((error: u
   startupFailure(error),
 );
 
-/** 自定义协议取自 app 名：与官方桌面应用（`dsh-app`）错开。 */
+// 自定义协议取自 app 名：与官方桌面应用（`dsh-app`）错开。
 const SCHEME = ((): string => {
   try {
     return desktopScheme(appConfig.name);
@@ -74,7 +74,7 @@ const WEB_FRONTEND_PACKAGE = "@deepseek-ai/dsh-web-frontend";
 
 const APPLICATION_URL = `${SCHEME}://app/`;
 
-/** Windows 自绘标题栏高度（DIP），与 preload 写入的 CSS 变量一致。 */
+// Windows 自绘标题栏高度（DIP），与 preload 写入的 CSS 变量一致。
 const WINDOWS_TITLEBAR_HEIGHT = 40;
 
 async function pathExists(path: string): Promise<boolean> {
@@ -151,7 +151,7 @@ function developmentProject(): string | undefined {
   return resolve(configured);
 }
 
-/** 窗口形态：macOS 走 sidebar vibrancy + hiddenInset（交通灯落在侧边栏内），Windows 自绘 caption。 */
+// 窗口形态：macOS 走 sidebar vibrancy + hiddenInset（交通灯落在侧边栏内），Windows 自绘 caption。
 function windowFrame(): Pick<
   BrowserWindowConstructorOptions,
   | "titleBarStyle"
@@ -355,11 +355,11 @@ async function main(): Promise<void> {
   const streamEncoder = new TextEncoder();
   interface ActiveStream {
     readonly abort: AbortController;
-    /** 宿主请求体的写端；上行结束或取消后置空。 */
+    // 宿主请求体的写端；上行结束或取消后置空。
     uplink: ReadableStreamDefaultController<Uint8Array> | undefined;
   }
   const activeStreams = new Map<number, ActiveStream>();
-  /** 结束宿主请求体：已取消/已结束的流上 close 会抛，这里只当收尾。 */
+  // 结束宿主请求体：已取消/已结束的流上 close 会抛，这里只当收尾。
   const closeStreamUplink = (stream: ActiveStream): void => {
     const uplink = stream.uplink;
     if (uplink === undefined) return;

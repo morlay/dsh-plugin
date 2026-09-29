@@ -1,19 +1,17 @@
-/**
- * preset 平面的两条边界——**工作区指令让位、skill 面抢面**。
- *
- * 两条都只能在**真装配**里验：preset 的行清单住在 `agent-presets` 注册表持有的 scope 里
- * （[`mount.ts`](../../../vendor/deepseek-harness/packages/preset/agent-preset-registry/src/mount.ts)），
- * 静态测试看不见。所以这里挂真注册表、真上游行（`@deepseek-ai/dsh-agent-instructions` /
- * `@deepseek-ai/dsh-tool-skill`）与真 fs，再数一步里到底注入了几条：
- *
- * - 工作区指令：`standard` 那种行清单（上游那一行在）→ 上游那份是唯一一份；`minimal` 没有 → 我们提供；
- * - skill 面：`standard` 会话里 `skill` 工具是**我们**的（按会话注册进 agent 自己那一层，遮蔽 preset 那份），
- *   目录因此只有我们一份；`minimal` 会话里也是我们；
- * - 空白窗口里换 preset → 两条边界的结论都跟着换。
- *
- * 装配顺序两个方向都跑（host 平面先装 / preset 先装）：抢面靠的是 tools 注册表的分层（最近的一层赢），
- * 与事件监听器的注册顺序无关——上游 `tool-skill` 的目录判据是"它的工具是否本会话可见"，而我们那份在最里层。
- */
+// preset 平面的两条边界——**工作区指令让位、skill 面抢面**。
+//
+// 两条都只能在**真装配**里验：preset 的行清单住在 `agent-presets` 注册表持有的 scope 里
+// （[`mount.ts`](../../../vendor/deepseek-harness/packages/preset/agent-preset-registry/src/mount.ts)），
+// 静态测试看不见。所以这里挂真注册表、真上游行（`@deepseek-ai/dsh-agent-instructions` /
+// `@deepseek-ai/dsh-tool-skill`）与真 fs，再数一步里到底注入了几条：
+//
+// - 工作区指令：`standard` 那种行清单（上游那一行在）→ 上游那份是唯一一份；`minimal` 没有 → 我们提供；
+// - skill 面：`standard` 会话里 `skill` 工具是**我们**的（按会话注册进 agent 自己那一层，遮蔽 preset 那份），
+// 目录因此只有我们一份；`minimal` 会话里也是我们；
+// - 空白窗口里换 preset → 两条边界的结论都跟着换。
+//
+// 装配顺序两个方向都跑（host 平面先装 / preset 先装）：抢面靠的是 tools 注册表的分层（最近的一层赢），
+// 与事件监听器的注册顺序无关——上游 `tool-skill` 的目录判据是"它的工具是否本会话可见"，而我们那份在最里层。
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,7 +42,7 @@ const AGENTS_BODY = "先读 AGENTS.md。";
 const SKILL = "repo-skill";
 const OUR_TOOL_DESCRIPTION = "按需加载 skill 的完整说明。";
 
-/** 官方 preset 的那两行：模块名与 `web-app/presets/*.patch.yml` 里的一字不差。 */
+// 官方 preset 的那两行：模块名与 `web-app/presets/*.patch.yml` 里的一字不差。
 const STANDARD_ROWS = [
   {
     id: "agent-instructions",
@@ -56,7 +54,7 @@ const STANDARD_ROWS = [
 
 const PRESETS = { standard: STANDARD_ROWS, minimal: [] } as const;
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上；上游那几条没有它——这正是分辨两侧的判据。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上；上游那几条没有它——这正是分辨两侧的判据。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -71,7 +69,7 @@ function prompt(text: string): UserMessage {
   return createUserMessage({ content: [{ type: "text", text }], source: { kind: "user" } });
 }
 
-/** 一侧一个标记：`upstream` 是上游那条（没有幂等键），其余是我们那条（带 id）。 */
+// 一侧一个标记：`upstream` 是上游那条（没有幂等键），其余是我们那条（带 id）。
 function kindsOf(messages: readonly UserMessage[], kind: string): string[] {
   return messages
     .filter((message) => message.source.kind === kind)
@@ -83,10 +81,8 @@ function bodyOf(messages: readonly UserMessage[], kind: string): string {
   return message === undefined ? "" : textOf(message);
 }
 
-/**
- * 目录那一条：我们那份的 kind 是自己的（`context-assembler`，见 `skill-catalog/index.ts`），上游那份是
- * `skill-catalog` —— 所以按"id 或 kind"两路都收，再按有没有上游那个 id 分辨两侧。
- */
+// 目录那一条：我们那份的 kind 是自己的（`context-assembler`，见 `skill-catalog/index.ts`），上游那份是
+// `skill-catalog` —— 所以按"id 或 kind"两路都收，再按有没有上游那个 id 分辨两侧。
 function catalogs(messages: readonly UserMessage[]): UserMessage[] {
   return messages.filter(
     (message) => entryIdOf(message) === "skill-catalog" || message.source.kind === "skill-catalog",
@@ -97,7 +93,7 @@ function catalogKinds(messages: readonly UserMessage[]): string[] {
   return catalogs(messages).map((message) => entryIdOf(message) ?? "upstream");
 }
 
-/** 一条 preset 声明：`register` 的返回值要 `yield` 出去，声明方才有生命期。 */
+// 一条 preset 声明：`register` 的返回值要 `yield` 出去，声明方才有生命期。
 async function declare(ctx: Context, definition: PresetDefinition): Promise<void> {
   await ctx.plugin({
     inject: ["agentPresets"],
@@ -107,10 +103,8 @@ async function declare(ctx: Context, definition: PresetDefinition): Promise<void
   });
 }
 
-/**
- * 规则的安装是 `agent/created` 里的异步动作（要读指令链），没有可 await 的承诺。挂一个观察点，
- * 等规则真的注册上再断言——否则"没有注入"可能只是"还没装上"。
- */
+// 规则的安装是 `agent/created` 里的异步动作（要读指令链），没有可 await 的承诺。挂一个观察点，
+// 等规则真的注册上再断言——否则"没有注入"可能只是"还没装上"。
 function watchRules(ctx: Context): {
   readonly registered: readonly string[];
   until(prefix: string): Promise<void>;
@@ -136,7 +130,7 @@ function watchRules(ctx: Context): {
   };
 }
 
-/** 真装配：preset 平面（`Loader` + 注册表 + 声明的行）与 host 平面（通道 + 三项能力）。 */
+// 真装配：preset 平面（`Loader` + 注册表 + 声明的行）与 host 平面（通道 + 三项能力）。
 async function mount(options: {
   readonly presets: Record<string, readonly unknown[]>;
   readonly hostFirst: boolean;
@@ -204,7 +198,7 @@ async function mount(options: {
   return { ctx, create, watch };
 }
 
-/** 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。 */
+// 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。
 async function preStep(ctx: Context, agent: Agent): Promise<UserMessage[]> {
   const input = [prompt("任务")];
   await ctx.systemPrompt.assemble(assembleContextFor(agent));

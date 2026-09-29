@@ -14,7 +14,7 @@ import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
 const TOOL_ROOT = dirname(
   fileURLToPath(import.meta.resolve("@morlay/dsh-desktopify/package.json")),
 );
-/** 工具自己的依赖副本：部署里落位的载荷只能是它（不是工作区 / vendor 的同名包）。 */
+// 工具自己的依赖副本：部署里落位的载荷只能是它（不是工作区 / vendor 的同名包）。
 const PAYLOAD = await desktopHost();
 
 const roots: string[] = [];
@@ -41,11 +41,8 @@ function payloadDir(): string {
   return PAYLOAD.dir;
 }
 
-/** 部署里 host 的四样载荷：入口、无端口 webServer（patch 行按相对路径加载）、wire 协议与桌面 patch。
- *
- * host 启动时读 `../config/desktop.cordis.patch.yml`（`patchFiles`），patch 行再加载 `../lib/webserver.js`，
- * 所以缺任一样 host 都起不来——落位时必须齐全。
- */
+// 部署里 host 的四样载荷：入口、无端口 webServer、wire 协议与桌面 patch——host 启动时按
+// 相对路径读后两者，缺任一样都起不来。
 const DEPLOYED_HOST_FILES: readonly (readonly string[])[] = [
   ["lib", "index.js"],
   ["lib", "webserver.js"],

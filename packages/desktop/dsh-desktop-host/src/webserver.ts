@@ -1,11 +1,6 @@
-/**
- * 桌面形态的 `webServer` 服务：与上游同名的路由载体，但不监听任何端口。
- *
- * 上游 `@deepseek-ai/dsh-host-webserver` 在激活时 `listen`。桌面宿主自己拥有页面，
- * 没有网络入口，于是这里保留同一份服务面（register / registerFallback / registerUpgrade /
- * tapIndex / renderIndex / collectIndexInjections / port / host），把请求由 `dispatch`
- * 从字节管道直接喂进来。
- */
+// 桌面形态的 `webServer` 服务：与上游同名的路由载体，但不监听端口——同一份服务面
+// （register / registerFallback / registerUpgrade / tapIndex / renderIndex / collectIndexInjections /
+// port / host），请求由 `dispatch` 从字节管道喂进来。
 
 import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -48,14 +43,14 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
-/** 由 handler 写出的 node 风格响应：写出头部即对外可见，`end` 收尾响应体流。 */
+// 由 handler 写出的 node 风格响应：写出头部即对外可见，`end` 收尾响应体流。
 class SyntheticResponse extends EventEmitter {
   statusCode = 200;
   statusMessage = "";
   headersSent = false;
   writableEnded = false;
   destroyed = false;
-  /** 上游中间件按 `res.socket === undefined` 识别「没有真实连接」。 */
+  // 上游中间件按 `res.socket === undefined` 识别「没有真实连接」。
   readonly socket = undefined;
   readonly body: ReadableStream<Uint8Array>;
   readonly started: Promise<StartedResponse>;
@@ -143,7 +138,7 @@ class SyntheticResponse extends EventEmitter {
     return this;
   }
 
-  /** handler 抛错：未写头时以 500 收场，已写头则中断响应体。 */
+  // handler 抛错：未写头时以 500 收场，已写头则中断响应体。
   fail(error: unknown): void {
     if (this.destroyed) return;
     if (!this.headersSent) {
@@ -175,7 +170,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 把一条 Fetch 请求合成 node 风格的 req/res，供注册在这些表上的 handler 使用。 */
+// 把一条 Fetch 请求合成 node 风格的 req/res，供注册在这些表上的 handler 使用。
 function createRequest(request: Request, url: URL): IncomingMessage {
   const stream = Readable.from(request.body === null ? [] : consume(request.body));
   const headers: Record<string, string> = {};
@@ -224,7 +219,7 @@ export class PortlessWebServer extends Service {
     super(ctx, "webServer");
   }
 
-  /** 没有真实监听：报配置值（缺省 0），只用于拼展示用 URL。 */
+  // 没有真实监听：报配置值（缺省 0），只用于拼展示用 URL。
   get port(): number {
     return this.config.port ?? 0;
   }
@@ -284,7 +279,7 @@ export class PortlessWebServer extends Service {
     return this.applyIndexTaps(renderIndexInjections(html, this.collectIndexInjections()));
   }
 
-  /** 把一条管道请求分派给注册表；没有匹配也没有 fallback 时回 404。 */
+  // 把一条管道请求分派给注册表；没有匹配也没有 fallback 时回 404。
   async dispatch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     let pathname: string;

@@ -258,7 +258,7 @@ async function serializePrompt(
       continue;
     }
     if (message.role === "tool") {
-      // 结果消息自己带 `toolCallId` 与结果块（V4 起结果不再是 user 消息里的一个块）。
+      // 结果消息自己带 `toolCallId` 与结果块（结果不是 user 消息里的一个块）。
       const images: UserContentPart[] = [];
       if (resolveImage !== void 0) {
         for (const block of message.content) {

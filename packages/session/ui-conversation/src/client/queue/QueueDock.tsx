@@ -47,23 +47,19 @@ function textOf(content: InboxState["next-turn"][number]["content"]): string | n
   return content.map((block) => block.text).join("");
 }
 
-/** Queue operations injected by the session-scoped registration. */
+// Queue operations injected by the session-scoped registration.
 export interface QueueDockInjected {
   updateQueue: (itemId: MessageId, action: QueueAction) => Promise<void>;
   notify: (level: "info" | "error", text: string) => void;
-  /** Resolve one durable queued image into a session-scoped browser URL. */
+  // Resolve one durable queued image into a session-scoped browser URL.
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>;
-  /** Replace the composer draft with one row's raw text (the recall target). */
+  // Replace the composer draft with one row's raw text (the recall target).
   restoreDraft: (text: string) => void;
 }
 
-/**
- * Durable references carried by one queued row. Inbox projections are wire data
- * despite their typed face, so an image block without a reference is skipped
- * rather than trusted.
- * @param content - the row's wire content blocks.
- * @returns the row's durable image references in block order.
- */
+// Durable references carried by one queued row: inbox projections are wire data despite their typed face,
+// so an image block without a reference is skipped rather than trusted. Returns the row's durable image
+// references in block order.
 function queueAttachments(
   content: InboxState["next-turn"][number]["content"],
 ): Array<
@@ -87,7 +83,7 @@ function queueAttachments(
   return attachments;
 }
 
-/** Compact file identity used beside queue thumbnails. */
+// Compact file identity used beside queue thumbnails.
 function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label: string }) {
   return (
     <span className={css.file} aria-label={label} title={attachment.name}>
@@ -100,7 +96,7 @@ function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label
   );
 }
 
-/** One durable queued image as a fixed-size thumbnail; a load failure keeps the empty placeholder. */
+// One durable queued image as a fixed-size thumbnail; a load failure keeps the empty placeholder.
 function QueueThumb({
   attachment,
   loadImage,
@@ -132,16 +128,14 @@ function QueueThumb({
   );
 }
 
-/** Full props of a dock entry: InputZone owner share + session standard kit + global seat + the locale seat. */
+// Full props of a dock entry: InputZone owner share + session standard kit + global seat + the locale seat.
 export type QueueDockProps = PropsRuntime<"conversation.input.dock"> &
   QueueDockInjected &
   PropsLocale<"conversation">;
 
-/**
- * Queue strip: one item renders directly; multiple items default to a
- * collapsible count header; an empty queue renders nothing. Local queued submissions
- * show sending status and disabled actions until their Host queue rows arrive.
- */
+// Queue strip: one item renders directly; multiple items default to a
+// collapsible count header; an empty queue renders nothing. Local queued submissions
+// show sending status and disabled actions until their Host queue rows arrive.
 export function QueueDock({
   useSession,
   useProjection,
@@ -420,7 +414,7 @@ export function QueueDock({
   );
 }
 
-/** Registers queue actions backed by the session-scoped conversation service. */
+// Registers queue actions backed by the session-scoped conversation service.
 export const queueDockEntry = {
   name: "conversation-queue-dock",
   inject: ["slots", "conversation", "sessions", "uiConversation"],

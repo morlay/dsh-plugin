@@ -1,28 +1,26 @@
-/**
- * 探针：装配一次真实 desktop profile（用宿主同一份 overlay），回答**桌面档的三条事实**——
- * 静态断言与包内测试都看不见的那几条。
- *
- * 判据（2026-09-28）：
- *
- * 1. **装配健康**：启用行里没有停在 `pending`（waiting / did not activate）或 `failed`（broken）的；
- * 2. **账号/登录面不在**：账号那几个模块（DeepSeek 登录、它的事务面、它的模型路由、它的 client 面）
- *    既不激活、也不在页面拿到的 client 名册里；`ui-settings-account` 这个 settings namespace 也不在；
- * 3. **模型路径还在**：`credentials` 在场，`llm-pi-ai` 的 `ollama` provider 用 `apiKeyEnv: OLLAMA_API_KEY`
- *    引用凭据，且该引用真能解析出启动环境里的值（不真发请求）；`ollama` 路由已注册且有模型。
- *
- * 页面名册那一项走**生产同一条路**：`takeOverDesktopAuthentication` + `installDesktopTransport` 之后
- * 用 `webServer.dispatch()` 取 index HTML（桌面宿主把字节管道的请求原样喂给同一个 `dispatch`）。
- *
- * 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
- *
- * ```sh
- * pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-desktop-account-plane.mts
- * ```
- *
- * 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
- * `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不建会话。
- * 环境里会临时放一个 `OLLAMA_API_KEY`（**进程内**，不落盘），用来证明凭据解析路径通了。
- */
+// 探针：装配一次真实 desktop profile（用宿主同一份 overlay），回答**桌面档的三条事实**——
+// 静态断言与包内测试都看不见的那几条。
+//
+// 判据：
+//
+// 1. **装配健康**：启用行里没有停在 `pending`（waiting / did not activate）或 `failed`（broken）的；
+// 2. **账号/登录面不在**：账号那几个模块（DeepSeek 登录、它的事务面、它的模型路由、它的 client 面）
+// 既不激活、也不在页面拿到的 client 名册里；`ui-settings-account` 这个 settings namespace 也不在；
+// 3. **模型路径还在**：`credentials` 在场，`llm-pi-ai` 的 `ollama` provider 用 `apiKeyEnv: OLLAMA_API_KEY`
+// 引用凭据，且该引用真能解析出启动环境里的值（不真发请求）；`ollama` 路由已注册且有模型。
+//
+// 页面名册那一项走**生产同一条路**：`takeOverDesktopAuthentication` + `installDesktopTransport` 之后
+// 用 `webServer.dispatch()` 取 index HTML（桌面宿主把字节管道的请求原样喂给同一个 `dispatch`）。
+//
+// 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
+//
+// ```sh
+// pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-desktop-account-plane.mts
+// ```
+//
+// 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
+// `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不建会话。
+// 环境里会临时放一个 `OLLAMA_API_KEY`（**进程内**，不落盘），用来证明凭据解析路径通了。
 
 import { access } from "node:fs/promises";
 import { join } from "node:path";
@@ -40,10 +38,10 @@ const profileDir = join(store, "profiles", "web");
 const installAnchor = join(repoRoot, "vendor/deepseek-harness/apps/cli/package.json");
 const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml", import.meta.url));
 
-/** 凭据解析探针用的临时值（只进进程环境，不写任何 store）。 */
+// 凭据解析探针用的临时值（只进进程环境，不写任何 store）。
 const PROBE_API_KEY = "probe-ollama-api-key";
 
-/** 桌面档不该有的账号/登录面：登录实现、它的事务面、它的模型路由、它的 client 面。 */
+// 桌面档不该有的账号/登录面：登录实现、它的事务面、它的模型路由、它的 client 面。
 const ACCOUNT_MODULES = [
   "@deepseek-ai/dsh-deepseek-account-platform",
   "@deepseek-ai/dsh-api-account-controller",
@@ -51,13 +49,13 @@ const ACCOUNT_MODULES = [
   "@deepseek-ai/dsh-client-ui-settings-account",
 ];
 
-/** 桌面档必须还在的：设置面（模型页承载 API key 路径）与我们的模型路由。 */
+// 桌面档必须还在的：设置面（模型页承载 API key 路径）与我们的模型路由。
 const REQUIRED_CLIENT_MODULES = [
   "@deepseek-ai/dsh-client-ui-settings",
   "@deepseek-ai/dsh-client-ui-settings-models",
 ];
 
-/** cordis `FiberState` 是跨包 const enum，运行期被擦除——按数值镜像（与上游 plugin-inventory 同口径）。 */
+// cordis `FiberState` 是跨包 const enum，运行期被擦除——按数值镜像（与上游 plugin-inventory 同口径）。
 const FIBER_PHASE: Record<number, string> = {
   0: "pending",
   1: "loading",
@@ -67,7 +65,7 @@ const FIBER_PHASE: Record<number, string> = {
   5: "unloading",
 };
 
-/** 账号面的行 id 与 settings namespace（登录进度就存在后者里）。 */
+// 账号面的行 id 与 settings namespace（登录进度就存在后者里）。
 const ACCOUNT_SETTINGS_NAMESPACE = "ui-settings-account";
 
 interface LoaderEntryLike {

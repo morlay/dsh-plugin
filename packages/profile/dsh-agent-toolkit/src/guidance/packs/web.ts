@@ -1,4 +1,4 @@
-/** 联网。 */
+// 联网。
 import type { ToolPack } from "../types.ts";
 
 export const WEB_PACK: ToolPack = {

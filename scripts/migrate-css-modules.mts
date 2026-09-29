@@ -1,19 +1,6 @@
-/**
- * CSS Modules → css-in-js 样式对象迁移器。
- *
- * 为什么要迁移：样式的目标形态是 css-in-js（`@morlay/dsh-client-ui-primitives`），
- * 源码不需要经过 lightningcss 预编译即可加载。转换是机械的：
- *
- *   .userRow { display: flex }               → { userRow: { display: "flex" } }
- *   .userRow:hover { ... }                   → { userRow: { "&:hover": { ... } } }
- *   .row .child { ... }                      → { row: { "& .child": { ... } } }
- *   @media (...) { .a { ... } }              → { a: { "@media (...)": { ... } } }
- *   @keyframes spin { from {...} }           → { animations: { spin: { from: {...} } } }
- *   :global(.x) / :root { ... }              → { globals: { ".x": { ... } } }
- *
- * 用法：pnpm exec tsx scripts/migrate-css-modules.mts <packageDir> [--write]
- * 不带 --write 只报告计划（dry run）。
- */
+// CSS Modules → css-in-js 样式对象迁移器：把 `.module.css` 机械转成 `*.styles.ts`（类选择器 → 样式对象、
+// `:hover` → `"&:hover"`、`@media` / `@keyframes` / `:global` 各有归并位置）。
+// 用法：pnpm exec tsx scripts/migrate-css-modules.mts <packageDir> [--write]（不带 `--write` 只报告计划）。
 
 import { glob, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
@@ -28,7 +15,7 @@ const write = flags.includes("--write");
 const files = (await Array.fromAsync(glob("src/**/*.module.css", { cwd: packageDir }))).sort();
 if (files.length === 0) console.log("没有 .module.css 文件");
 
-/** CSS 属性名 → csstype 键法（`pointer-events` → `pointerEvents`，`-webkit-x` → `WebkitX`）。 */
+// CSS 属性名 → csstype 键法（`pointer-events` → `pointerEvents`，`-webkit-x` → `WebkitX`）。
 function toCamelCase(property: string): string {
   if (property.startsWith("--")) return property;
   return property.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
@@ -42,12 +29,8 @@ function declarations(rule: postcss.Rule): StyleObject {
   return result;
 }
 
-/**
- * 折成一个类选择器：
- * - `.foo` / `.foo:hover` / `.foo .bar` → (name, `&…`)
- * - `.foo.modifier` → 变体：直接声明归到 `fooModifier`（供 styling.props 合并），
- *   带后代部分时改成 `&[data-modifier] …` 并提示调用方给元素加该属性。
- */
+// 折成一个类选择器：`.foo` / `.foo:hover` / `.foo .bar` → (name, `&…`)；`.foo.modifier` → 变体（直接
+// 声明归到 `fooModifier` 供 styling.props 合并，带后代部分时改成 `&[data-modifier] …`）。
 function fold(selector: string): { name: string; nested?: string; variant?: string } | undefined {
   const trimmed = selector.trim();
   if (!trimmed.startsWith(".")) return undefined; // 非类选择器（:root 等）走 globals
@@ -97,7 +80,7 @@ for (const file of files) {
   const animations: StyleObject = {};
   const globals: StyleObject = {};
 
-  /** 归并一条规则：`atRule` 是外层 at-rule（如 @media）时，嵌套进对应类。 */
+  // 归并一条规则：`atRule` 是外层 at-rule（如 @media）时，嵌套进对应类。
   const addRule = (rule: postcss.Rule, atRule?: string): void => {
     for (const selector of rule.selector.split(",")) {
       const folded = fold(selector);

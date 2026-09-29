@@ -1,4 +1,4 @@
-/** 基础用法：随提示常驻的那批（读、写、shell、联网、问答）。 */
+// 基础用法：随提示常驻的那批（读、写、shell、联网、问答）。
 import type { GroupPack } from "../types.ts";
 
 export const BASE_GROUP: GroupPack = {

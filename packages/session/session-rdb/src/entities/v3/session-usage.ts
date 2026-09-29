@@ -1,10 +1,8 @@
 import type { TableDef } from "../../adapters/types.ts";
 
-/**
- * 会话 × 本地日 × 模型的 token 汇总（派生统计表）：**按会话的行**读它，因此保住
- * 「fork 子会话含继承前缀」的口径（各会话行之和 ≥ 总量）而不回连事件表。
- * 旁路累加、可按会话重建，读侧只读；取舍见 ADR-统计衍生表物化归属与汇总。
- */
+// 会话 × 本地日 × 模型的 token 汇总（派生统计表）：**按会话的行**读它，因此保住
+// 「fork 子会话含继承前缀」的口径（各会话行之和 ≥ 总量）而不回连事件表。
+// 旁路累加、可按会话重建，读侧只读；取舍见 ADR-统计衍生表物化归属与汇总。
 export const sessionUsage: TableDef = {
   name: "t_session_usage",
   columns: {

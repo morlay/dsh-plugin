@@ -42,7 +42,6 @@ function runFactory(code: string): Record<string, unknown> {
       registered.push(options);
     },
   });
-  // 产物的字节只在执行时才产生样式注入与 class 映射，文本断言看不到。
   runInThisContext(code);
   const host = registered[0];
   if (registered.length !== 1 || host === undefined)
@@ -147,8 +146,7 @@ describe("client bundle CSS", () => {
     });
   });
 
-  // tsdown 那一次解析也必须认得样式 import：clientEntryPlugin 之后还要用现场打包的字节把
-  // chunk 换掉，换之前 tsdown 自己的这次构建不能先断。
+  // tsdown 那一次解析也必须认得样式 import：clientEntryPlugin 之后要用现场打包的字节换掉 chunk。
   describe("defineCordisPluginConfig", () => {
     it("hands the client entry pipeline a working CSS inliner", async () => {
       const cwd = process.cwd();

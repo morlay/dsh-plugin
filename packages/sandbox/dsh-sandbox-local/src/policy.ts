@@ -5,27 +5,16 @@ import type { Session } from "@deepseek-ai/dsh-session";
 import type {} from "@deepseek-ai/dsh-system-prompt";
 import type { RuleSource } from "./rules.ts";
 
-/**
- * 接管 `sandbox:policy` 那条运行时上下文。
- *
- * 上游 [`@deepseek-ai/dsh-sandbox-policy`] 在**全局层**注册它，文本只描述官方策略（只读 /
- * workspace-write / 全权 + workspace root）——它不知道本部署追加的 `rw` / `r-` / `--` 规则，
- * 模型因此拿不到"哪些额外路径可写、哪些被拒"。本包替换了 `ctx.sandbox` / `ctx.fs`，这条文本也得跟着换。
- *
- * 全局层同名注册会抛错（`NamedEntries.insert`），上游给的官方路径是**按 agent 作用域覆盖**：
- * `systemPrompt.context()` 在 scope 上注册同名项，装配时近的作用域遮蔽全局那条
- * （`ScopedLayers.merge`）。所以这里在每个 agent 的 `ctx` 上注册一次。
- */
+// 接管 `sandbox:policy` 那条运行时上下文：上游在**全局层**注册的文本只描述官方策略（只读 /
+// workspace-write / 全权 + workspace root），不知道本部署追加的 `rw` / `r-` / `--` 规则。
+//
+// 全局层同名注册会抛错（`NamedEntries.insert`），官方给的路径是**按 agent 作用域覆盖**：scope 上注册
+// 同名项，装配时近的作用域遮蔽全局那条（`ScopedLayers.merge`）。
 
-/** 上游注册的运行时上下文名：同名才叫接管。 */
+// 上游注册的运行时上下文名：同名才叫接管。
 export const SANDBOX_POLICY_CONTEXT = "sandbox:policy";
 
-/**
- * 策略文本：官方三种 mode 的语义（重写中文，与其它注入文案一致）+ 本部署追加的规则。
- * @param policy - 该会话解析出来的策略（模式与 workspace root）。
- * @param rules - 本部署解析后的访问规则（已展开环境变量模板）。
- * @returns 给模型看的一段文本。
- */
+// 策略文本：官方三种 mode 的中文语义 + 本部署追加的规则；返回给模型看的一段文本。
 export function renderPolicyContext(policy: SandboxExecutionPolicy, rules: RuleSource): string {
   const base = ((): string => {
     switch (policy.mode) {
@@ -51,12 +40,7 @@ export function renderPolicyContext(policy: SandboxExecutionPolicy, rules: RuleS
   return extras.length === 0 ? base : `${base} ${extras.join("")}`;
 }
 
-/**
- * 在给定作用域注册同名策略文本（agent 的 `ctx`，或 preset 子树）。
- * @param scope - 拥有这次注册的 ctx；它的 scope 因此遮蔽全局那条。
- * @param rules - 本部署的访问规则。
- * @param resolve - 按会话解析策略（生产传 `ctx.sandboxPolicy.resolve`）。
- */
+// 在给定作用域注册同名策略文本（agent 的 `ctx`，或 preset 子树）——该 scope 因此遮蔽全局那条。
 export function registerPolicyContext(
   scope: Context,
   rules: RuleSource,
@@ -75,12 +59,7 @@ export function registerPolicyContext(
   });
 }
 
-/**
- * 每个 agent 注册一次（装配期做，与 scope 出口同一时机与理由：创建期服务可用性还在变）。
- * @param ctx - 本插件的 ctx（host 平面）。
- * @param rules - 本部署的访问规则。
- * @param resolve - 按会话解析策略。
- */
+// 每个 agent 注册一次（装配期做，与 scope 出口同一时机与理由：创建期服务可用性还在变）。
 export function installPolicyContext(
   ctx: Context,
   rules: RuleSource,

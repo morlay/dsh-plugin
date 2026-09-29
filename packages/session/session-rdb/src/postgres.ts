@@ -38,7 +38,7 @@ const postgresMigrationsDir = fileURLToPath(new URL("../drizzle/postgres/", impo
 
 const pgWriteQueues = new Map<string, Promise<void>>();
 
-/** 按介质（连接串 + schema）串行化写事务，与 SQLite 侧的 `enqueueSqliteTx` 同形。 */
+// 按介质（连接串 + schema）串行化写事务，与 SQLite 侧的 `enqueueSqliteTx` 同形。
 function enqueuePgWrite<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const tail = pgWriteQueues.get(key) ?? Promise.resolve();
   const run = tail.then(fn);
@@ -52,18 +52,18 @@ function enqueuePgWrite<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/** pg 的 text 列窄化：非字符串（含 null）都不当作文本。 */
+// pg 的 text 列窄化：非字符串（含 null）都不当作文本。
 function text(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** pg 的 count/sum 回落成字符串：统一转成有限数。 */
+// pg 的 count/sum 回落成字符串：统一转成有限数。
 function numeric(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/** SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。 */
+// SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。
 function tokenTotalsOf(row: Record<string, unknown>): UsageTokenTotals {
   return {
     inputTokens: numeric(row["input_tokens"]),
@@ -78,7 +78,7 @@ function emptyActivity(): UsageActivityTotals {
   return { turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
 }
 
-/** `t_session_counts` 的四项计数折成活动计数（pg 的 sum 回落成字符串）。 */
+// `t_session_counts` 的四项计数折成活动计数（pg 的 sum 回落成字符串）。
 function activityTotalsOf(row: Record<string, unknown>): UsageActivityTotals {
   return {
     turns: numeric(row["turns"]),
@@ -88,7 +88,7 @@ function activityTotalsOf(row: Record<string, unknown>): UsageActivityTotals {
   };
 }
 
-/** `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。 */
+// `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。
 const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
 
 export interface PostgresBackendOptions {
@@ -124,10 +124,9 @@ export class PostgresBackend implements Backend {
     });
 
     this.opened.catch(() => {});
-    // 写事务按介质串行（与 SQLite 侧的 enqueueSqliteTx 同形）：并发 `writeAtomically`
-    // 会互相覆盖实例级的 `txOverride`，让先开始的事务的语句落到别人的事务（一次失败
-    // 会把另一个成功事务一起拖垮），或退化成 autocommit。介质身份用 `identityBase`
-    // （宿主 + 库 + schema）——同一进程内多实例连同一库时也共用同一条队列。
+    // 写事务按介质串行（与 SQLite 侧 `enqueueSqliteTx` 同形）：并发 `writeAtomically` 会互相覆盖实例级的
+    // `txOverride`，让语句落进别人的事务或退化成 autocommit；介质身份用 `identityBase`（宿主 + 库 + schema），
+    // 同一进程内多实例连同一库时共用同一条队列。
     const writeQueueKey = options.identityBase;
     this.storage = createStorageRepository({
       db: () => this.opened.then(() => this.txOverride ?? this.db),
@@ -520,7 +519,7 @@ export class PostgresBackend implements Backend {
       .execute();
   }
 
-  /** 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。 */
+  // 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。
   async collectOrphans(): Promise<number> {
     const tEvents = this.tables["t_events"];
     const tEventUsage = this.tables["t_event_usage"];
@@ -547,7 +546,7 @@ export class PostgresBackend implements Backend {
     return result.rowCount ?? 0;
   }
 
-  /** 父会话被删后留下的 subagent 会话：父已不在表里，或本来就没有父。 */
+  // 父会话被删后留下的 subagent 会话：父已不在表里，或本来就没有父。
   async listOrphanSubagentSessions(): Promise<SessionId[]> {
     const tSessions = this.tables["t_sessions"];
     const result = (await this.db.execute(sql`
@@ -587,7 +586,7 @@ export class PostgresBackend implements Backend {
     await this.db.execute(sql`VACUUM ANALYZE`);
   }
 
-  /** 派生统计表的回填：任一表为空即按事件表全量重算（幂等，迁移删表重建后自愈）。 */
+  // 派生统计表的回填：任一表为空即按事件表全量重算（幂等，迁移删表重建后自愈）。
   private async backfillUsageTables(): Promise<void> {
     // 顺序有依赖：用量行（带物化列）先落，两张会话汇总表再从它 / 事件表重算。
     await this.backfillEventUsage();
@@ -602,10 +601,8 @@ export class PostgresBackend implements Backend {
     return Number(existing.rows[0]?.["n"] ?? 0) === 0;
   }
 
-  /**
-   * 用量行：一条 `assistant/message` 事件行一行，物化本地日与两个归属标记。
-   * 本地日按数据库会话时区渲染（部署前提是它与 host 时区一致，`localDayKey` 同口径）。
-   */
+  // 用量行：一条 `assistant/message` 事件行一行，物化本地日与两个归属标记。
+  // 本地日按数据库会话时区渲染（部署前提是它与 host 时区一致，`localDayKey` 同口径）。
   private async backfillEventUsage(): Promise<void> {
     if (!(await this.tableIsEmpty(this.qualifiedTable("t_event_usage")))) return;
     const tEventUsage = this.tables["t_event_usage"];
@@ -645,7 +642,7 @@ export class PostgresBackend implements Backend {
     `);
   }
 
-  /** 会话 × 本地日 × 模型的 token 汇总：从桥接行 × 用量行重算（含 fork 继承前缀）。 */
+  // 会话 × 本地日 × 模型的 token 汇总：从桥接行 × 用量行重算（含 fork 继承前缀）。
   private async backfillSessionUsage(): Promise<void> {
     if (!(await this.tableIsEmpty(this.qualifiedTable("t_session_usage")))) return;
     const tSessionUsage = this.tables["t_session_usage"];
@@ -665,7 +662,7 @@ export class PostgresBackend implements Backend {
     `);
   }
 
-  /** 会话 × 本地日的活动计数：从桥接行 × 事件类型重算。 */
+  // 会话 × 本地日的活动计数：从桥接行 × 事件类型重算。
   private async backfillSessionCounts(): Promise<void> {
     if (!(await this.tableIsEmpty(this.qualifiedTable("t_session_counts")))) return;
     const tSessionCounts = this.tables["t_session_counts"];
@@ -688,7 +685,7 @@ export class PostgresBackend implements Backend {
     `);
   }
 
-  /** 用量聚合：与 SQLite 侧同形，读 `t_event_usage`，数值列回来是字符串。 */
+  // 用量聚合：与 SQLite 侧同形，读 `t_event_usage`，数值列回来是字符串。
   async listSessionRows(query: SessionListRowsQuery = {}): Promise<SessionListRowsPage> {
     const needle = query.query?.trim().toLowerCase() ?? "";
     const like = `%${needle}%`;
@@ -741,10 +738,8 @@ export class PostgresBackend implements Backend {
     };
   }
 
-  /**
-   * 用量聚合：与 SQLite 侧同形——只读三张派生统计表（用量行给去重口径的总量与「天 × 模型」桶，
-   * 两张会话汇总表给按会话的行），数值列回来是字符串。物化列让这里不做 `EXISTS`、不回连事件表。
-   */
+  // 用量聚合：与 SQLite 侧同形——只读三张派生统计表（用量行给去重口径的总量与「天 × 模型」桶，
+  // 两张会话汇总表给按会话的行），数值列回来是字符串。物化列让这里不做 `EXISTS`、不回连事件表。
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
     const usageSince = sinceMs === undefined ? sql`` : sql` AND f_created_at >= ${sinceMs}`;
     const dayFilter = (column: string): ReturnType<typeof sql> =>
@@ -846,13 +841,13 @@ export class PostgresBackend implements Backend {
     };
   }
 
-  /** 表名限定到配置的 schema。 */
+  // 表名限定到配置的 schema。
   private qualifiedTable(name: string): string {
     const schema = this.options.schema ?? "public";
     return schema === "public" ? name : `"${schema}".${name}`;
   }
 
-  /** token 用量旁路累加：派生表 `t_session_usage`，不在写事务里（失败可丢，表可销毁重建）。 */
+  // token 用量旁路累加：派生表 `t_session_usage`，不在写事务里（失败可丢，表可销毁重建）。
   async incrementSessionUsage(
     id: SessionId,
     buckets: readonly SessionUsageBucket[],
@@ -877,7 +872,7 @@ export class PostgresBackend implements Backend {
     }
   }
 
-  /** 活动计数旁路累加：派生表 `t_session_counts`，同上（四项计数一次落）。 */
+  // 活动计数旁路累加：派生表 `t_session_counts`，同上（四项计数一次落）。
   async incrementSessionCounts(
     id: SessionId,
     buckets: readonly SessionCountBucket[],
@@ -899,7 +894,7 @@ export class PostgresBackend implements Backend {
     }
   }
 
-  /** 按会话重算两张汇总表（rewind / fork 之后）：先删该会话的行，再从事件表重算。 */
+  // 按会话重算两张汇总表（rewind / fork 之后）：先删该会话的行，再从事件表重算。
   async rebuildSessionStats(id: SessionId): Promise<void> {
     const tSessionUsage = this.tables["t_session_usage"];
     const tSessionCounts = this.tables["t_session_counts"];
@@ -936,7 +931,7 @@ export class PostgresBackend implements Backend {
     `);
   }
 
-  /** 全量重算用量行的引用标记（rewind / fork / 会话删除之后）。 */
+  // 全量重算用量行的引用标记（rewind / fork / 会话删除之后）。
   async refreshEventUsageFlags(): Promise<void> {
     const tEventUsage = this.tables["t_event_usage"];
     const tSessionEvents = this.tables["t_session_events"];

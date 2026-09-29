@@ -80,14 +80,9 @@ export async function resolveOfficialPackage(
   return undefined;
 }
 
-/**
- * The tool's own dependency on the desktop host variant — never a copy the workspace or vendor tree
- * happens to carry under another name.
- *
- * `import.meta.resolve` runs from this module, so it can only reach the tool's own dependency; the
- * payload directory therefore needs no path invariant to prove it is ours.
- * @returns The payload directory and its manifest version, or `undefined` before the variant is built.
- */
+// The tool's own dependency on the desktop host variant (`import.meta.resolve` runs from this
+// module, so it can only reach the tool's own dependency). Returns the payload directory and its
+// manifest version, or `undefined` before the variant is built.
 export async function desktopHost(): Promise<OfficialPackage | undefined> {
   let manifestPath: string;
   try {
@@ -102,13 +97,8 @@ export async function desktopHost(): Promise<OfficialPackage | undefined> {
     : undefined;
 }
 
-/**
- * Install the tool's host payload into a closure, replacing whatever payload is already there: a
- * deployment must boot this tool's composition, so a copy a previous run, the workspace, or the
- * vendor tree left behind may never satisfy the closure.
- * @param modulesDir - Closure `node_modules` directory.
- * @returns The installed payload directory.
- */
+// Install the tool's host payload into a closure, replacing any payload already there. Returns the
+// installed payload directory.
 export async function materializeDesktopHost(modulesDir: string): Promise<string> {
   const host = await desktopHost();
   if (host === undefined) {
@@ -418,14 +408,9 @@ export async function officialDeploySpecs(
   return specs;
 }
 
-/**
- * tsx 的导入 specifier（`file:` URL），找不到时 undefined。
- *
- * 给绝对地址而不是 `tsx/esm`：子进程（Electron 里的 host）的 cwd 是**部署目录**，`tsx` 不在它的
- * 解析链上，按裸名加载会 `ERR_MODULE_NOT_FOUND`——而它要加载的正是 dev 态那些 TS 源。
- * @param workspace - app 工作区目录。
- * @param workspaceRoot - 仓库根（tsx 通常作为开发依赖装在这里）。
- */
+// tsx 的导入 specifier（绝对 `file:` URL），找不到时 undefined。
+//
+// 子进程的 cwd 是部署目录，`tsx` 不在它的解析链上——裸名加载会 `ERR_MODULE_NOT_FOUND`。
 export function tsxImportSpecifier(workspace: string, workspaceRoot: string): string | undefined {
   for (const dir of [workspace, workspaceRoot]) {
     try {

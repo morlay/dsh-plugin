@@ -52,7 +52,7 @@ import type { StorageRepository } from "./storage-takeover/types.ts";
 
 type SqliteDb = NodeSQLiteDatabase & { $client: DatabaseSync };
 
-/** 用量聚合的原始行（列名是 SQL 别名）。 */
+// 用量聚合的原始行（列名是 SQL 别名）。
 interface RawBucketRow {
   day: string;
   provider: string | null;
@@ -65,17 +65,17 @@ interface RawBucketRow {
   total_tokens: number | null;
 }
 
-/** 「是否子代理」两组的 token 合计行。 */
+// 「是否子代理」两组的 token 合计行。
 interface RawScopeRow extends RawBucketRow {}
 
-/** 按会话的行：token 一条查询、活动一条查询，按 session_id 合并。 */
+// 按会话的行：token 一条查询、活动一条查询，按 session_id 合并。
 interface RawSessionTokenRow extends RawBucketRow {
   session_id: string;
   title: string | null;
   archived: number;
 }
 
-/** `t_session_counts` 的原始行（四项计数，列名是 SQL 别名）。 */
+// `t_session_counts` 的原始行（四项计数，列名是 SQL 别名）。
 interface RawCountRow {
   turns: number | null;
   steps: number | null;
@@ -83,36 +83,34 @@ interface RawCountRow {
   tool_calls: number | null;
 }
 
-/** 按会话的活动计数行。 */
+// 按会话的活动计数行。
 interface RawSessionCountRow extends RawCountRow {
   session_id: string;
 }
 
-/** 活动总览行：是否子代理 + 四项计数。 */
+// 活动总览行：是否子代理 + 四项计数。
 interface RawActivityScopeRow extends RawCountRow {
   subagent: number | null;
 }
 
-/** 用量行的「被引用」物化表达式（`%EVENT%` 换成事件 id 列）。 */
+// 用量行的「被引用」物化表达式（`%EVENT%` 换成事件 id 列）。
 const EVENT_REFERENCED_SQL = `EXISTS (SELECT 1 FROM t_session_events rb
                                        WHERE rb.f_event_id = %EVENT%)`;
 
-/** 用量行的「被 subagent 会话引用」物化表达式（`%EVENT%` 换成事件 id 列）。 */
+// 用量行的「被 subagent 会话引用」物化表达式（`%EVENT%` 换成事件 id 列）。
 const EVENT_SUBAGENT_SQL = `EXISTS (SELECT 1 FROM t_session_events sb
                                      JOIN t_sessions ss ON ss.f_session_id = sb.f_session_id
                                     WHERE sb.f_event_id = %EVENT% AND ss.f_origin = 'subagent')`;
 
-/** `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。 */
+// `IN (...)` 用的类型字面量（与 `COUNTED_EVENT_TYPES` 同源）。
 const COUNTED_EVENT_TYPE_SQL = COUNTED_EVENT_TYPES.map((type) => `'${type}'`).join(", ");
 
 function withEvent(expression: string, column: string): string {
   return expression.replace("%EVENT%", column);
 }
 
-/**
- * 派生统计表的回填：任一表为空即按事件表全量重算（幂等；迁移删表重建后、手动清空后都靠它自愈）。
- * 顺序有依赖：用量行（带物化列）先落，两张会话汇总表再从它 / 事件表重算。
- */
+// 派生统计表的回填：任一表为空即按事件表全量重算（幂等；迁移删表重建后、手动清空后都靠它自愈）。
+// 顺序有依赖：用量行（带物化列）先落，两张会话汇总表再从它 / 事件表重算。
 function backfillUsageTables(db: DatabaseSync): void {
   backfillEventUsage(db);
   backfillSessionUsage(db);
@@ -124,7 +122,7 @@ function tableIsEmpty(db: DatabaseSync, table: string): boolean {
   return row.n === 0;
 }
 
-/** 用量行：一条 `assistant/message` 事件行一行，物化本地日与两个归属标记。 */
+// 用量行：一条 `assistant/message` 事件行一行，物化本地日与两个归属标记。
 function backfillEventUsage(db: DatabaseSync): void {
   if (!tableIsEmpty(db, "t_event_usage")) return;
   db.exec(`INSERT OR IGNORE INTO t_event_usage (
@@ -154,7 +152,7 @@ function backfillEventUsage(db: DatabaseSync): void {
             OR json_extract(e.f_data, '$.usage') IS NOT NULL)`);
 }
 
-/** 会话 × 本地日 × 模型的 token 汇总：从桥接行 × 用量行重算（含 fork 继承前缀）。 */
+// 会话 × 本地日 × 模型的 token 汇总：从桥接行 × 用量行重算（含 fork 继承前缀）。
 function backfillSessionUsage(db: DatabaseSync): void {
   if (!tableIsEmpty(db, "t_session_usage")) return;
   db.exec(`INSERT OR IGNORE INTO t_session_usage (
@@ -168,7 +166,7 @@ function backfillSessionUsage(db: DatabaseSync): void {
      GROUP BY b.f_session_id, u.f_day, coalesce(u.f_provider, ''), coalesce(u.f_model, '')`);
 }
 
-/** 会话 × 本地日的活动计数：从桥接行 × 事件类型重算。 */
+// 会话 × 本地日的活动计数：从桥接行 × 事件类型重算。
 function backfillSessionCounts(db: DatabaseSync): void {
   if (!tableIsEmpty(db, "t_session_counts")) return;
   db.exec(`INSERT OR IGNORE INTO t_session_counts (
@@ -200,7 +198,7 @@ function sessionListRowOf(row: Record<string, unknown>): SessionListRowRecord {
   };
 }
 
-/** SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。 */
+// SQL 的缺失求和是 NULL：没有 usage 字段的行使该字段计 0。
 function tokenTotalsOf(row: {
   input_tokens: number | null;
   output_tokens: number | null;
@@ -217,7 +215,7 @@ function tokenTotalsOf(row: {
   };
 }
 
-/** `t_session_counts` 的原始行（列名是 SQL 别名）折成四项活动计数。 */
+// `t_session_counts` 的原始行（列名是 SQL 别名）折成四项活动计数。
 function activityTotalsOf(row: {
   turns: number | null;
   steps: number | null;
@@ -232,12 +230,12 @@ function activityTotalsOf(row: {
   };
 }
 
-/** 一行的整套指标：token 用量 + 活动计数（轮次 / 步骤 / 用户输入 / 工具调用）。 */
+// 一行的整套指标：token 用量 + 活动计数（轮次 / 步骤 / 用户输入 / 工具调用）。
 function emptyActivity(): UsageActivityTotals {
   return { turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
 }
 
-/** 有 token 用量的会话：活动计数与列表都限定在这一批会话里，口径一致（读汇总表，几百行）。 */
+// 有 token 用量的会话：活动计数与列表都限定在这一批会话里，口径一致（读汇总表，几百行）。
 function hasUsageSession(column: string): string {
   return `EXISTS (SELECT 1 FROM t_session_usage ub WHERE ub.f_session_id = ${column})`;
 }
@@ -719,7 +717,7 @@ export class SqliteBackend implements Backend {
     this.db.delete(tSessions).where(eq(tSessions.fSessionId, id)).run();
   }
 
-  /** 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。 */
+  // 事件行可能被多个会话共享（fork 派生），所以孤儿只能在全库范围内判定。
   async collectOrphans(): Promise<number> {
     const referenced = this.db.select({ fEventId: tSessionEvents.fEventId }).from(tSessionEvents);
     const info = this.db.delete(tEvents).where(notInArray(tEvents.fEventId, referenced)).run();
@@ -736,7 +734,7 @@ export class SqliteBackend implements Backend {
     return Number(info.changes);
   }
 
-  /** 父会话被删后留下的 subagent 会话：父已不在表里，或本来就没有父。 */
+  // 父会话被删后留下的 subagent 会话：父已不在表里，或本来就没有父。
   async listOrphanSubagentSessions(): Promise<SessionId[]> {
     const rows = this.db.$client
       .prepare(
@@ -761,11 +759,9 @@ export class SqliteBackend implements Backend {
     return Number(info.changes);
   }
 
-  /**
-   * 用量聚合：token 用量沿 `t_event_usage` 的用量行，活动计数（轮次 / 步骤 / 用户输入 / 工具调用）
-   * 沿 `t_events` 的事件类型数——两者限定在**有 token 用量的会话**里，时间范围各自按自己的
-   * `f_created_at`（同一时刻写入，口径一致）。
-   */
+  // 用量聚合：token 用量沿 `t_event_usage` 的用量行，活动计数（轮次 / 步骤 / 用户输入 / 工具调用）
+  // 沿 `t_events` 的事件类型数——两者限定在**有 token 用量的会话**里，时间范围各自按自己的
+  // `f_created_at`（同一时刻写入，口径一致）。
   async listSessionRows(query: SessionListRowsQuery = {}): Promise<SessionListRowsPage> {
     const needle = query.query?.trim().toLowerCase() ?? "";
     const like = `%${needle}%`;
@@ -812,12 +808,9 @@ export class SqliteBackend implements Backend {
     };
   }
 
-  /**
-   * 用量聚合：只读三张派生统计表——事件级用量行给去重口径的总量与「天 × 模型」桶，
-   * `t_session_usage` / `t_session_counts` 给按会话的行（含 fork 继承前缀）。
-   * 归属、本地日与「是否被引用」都是物化列，这里不再现算、也不回连事件表。
-   * 事件级按毫秒时间戳过滤、汇总表按本地日过滤——`sinceMs` 对齐到本地零点时两者等价。
-   */
+  // 用量聚合：只读三张派生统计表——事件级用量行给去重口径的总量与「天 × 模型」桶，`t_session_usage` /
+  // `t_session_counts` 给按会话的行（含 fork 继承前缀）；归属、本地日与「是否被引用」都是物化列，不再现算、也不
+  // 回连事件表。事件级按毫秒过滤、汇总表按本地日过滤，`sinceMs` 对齐本地零点时两者等价。
   async usageReport(sinceMs?: number): Promise<UsageAggregate> {
     const usageSince = sinceMs === undefined ? "" : " AND f_created_at >= ?";
     const params = sinceMs === undefined ? [] : [sinceMs];
@@ -932,7 +925,7 @@ export class SqliteBackend implements Backend {
     };
   }
 
-  /** token 用量旁路累加：派生表 `t_session_usage`，不在写事务里（失败可丢，表可销毁重建）。 */
+  // token 用量旁路累加：派生表 `t_session_usage`，不在写事务里（失败可丢，表可销毁重建）。
   async incrementSessionUsage(
     id: SessionId,
     buckets: readonly SessionUsageBucket[],
@@ -964,7 +957,7 @@ export class SqliteBackend implements Backend {
     }
   }
 
-  /** 活动计数旁路累加：派生表 `t_session_counts`，同上（四项计数一次落）。 */
+  // 活动计数旁路累加：派生表 `t_session_counts`，同上（四项计数一次落）。
   async incrementSessionCounts(
     id: SessionId,
     buckets: readonly SessionCountBucket[],
@@ -991,7 +984,7 @@ export class SqliteBackend implements Backend {
     }
   }
 
-  /** 按会话重算两张汇总表（rewind / fork 之后）：先删该会话的行，再从事件表重算。 */
+  // 按会话重算两张汇总表（rewind / fork 之后）：先删该会话的行，再从事件表重算。
   async rebuildSessionStats(id: SessionId): Promise<void> {
     this.db.$client.prepare("DELETE FROM t_session_usage WHERE f_session_id = ?").run(id);
     this.db.$client
@@ -1027,10 +1020,8 @@ export class SqliteBackend implements Backend {
       .run(id);
   }
 
-  /**
-   * 全量重算用量行的引用标记：rewind 截断 / fork 复用 / 会话删除都会让「引用」跨会话变化，
-   * 只按本会话判定不够。低频路径，一次全表 UPDATE（3 万行量级）。
-   */
+  // 全量重算用量行的引用标记：rewind 截断 / fork 复用 / 会话删除都会让「引用」跨会话变化，
+  // 只按本会话判定不够。低频路径，一次全表 UPDATE（3 万行量级）。
   async refreshEventUsageFlags(): Promise<void> {
     const eventId = "t_event_usage.f_event_id";
     this.db.$client.exec(

@@ -1,21 +1,9 @@
 import { join, resolve } from "node:path";
 import { execFileCapture, pathExists, requireWorkspaceEnv, runInherited } from "./common.ts";
 
-// 同步上游到指定提交（git 增量，不删目录）。约定：
-//   env DEEPSEEK_HARNESS_DIR   上游目录，相对 pnpm-workspace.yaml 所在根
-//   env DEEPSEEK_HARNESS_VERSION 目标版本（tag dsh-v{version} 优先，回退同名
-//                              branch）——未设 REVISION 时使用
-//   env DEEPSEEK_HARNESS_REVISION 可选，特定 git commit / 短 sha ——设置后
-//                              优先于 VERSION（可指向任意上游提交，如 tag、
-//                              branch 未覆盖的 commit）
-//   env DEEPSEEK_HARNESS_REPO  可选，上游 remote（默认 deepseek-harness）
-// 语义：
-//   - 目录缺失 → 首次完整 clone（保留 .git）；
-//   - 目录存在 → fetch（增量）+ reset --hard（清本地残留与旧 patch 修改，
-//     版本/提交相同也要 reset——保证 repatch 干净基线）；
-//   - 检出目标：REVISION（若有）> VERSION（tag → branch）。
-// 同步后工作树是「目标提交未打补丁」状态——必须运行 patch 脚本再 build。
-// 可从任意目录执行（workspace 根自动向上查找）。
+// 同步上游到指定提交（git 增量）：目录缺失 → 首次 clone，存在 → fetch + reset --hard（目标相同也 reset，
+// 保证 repatch 干净基线）；检出优先级 REVISION > VERSION（tag → branch）。env 名与含义见 `SKILL.md` 的表；
+// 同步后工作树是「目标提交未打补丁」，必须再跑 patch 与 build；可从任意目录执行。
 
 async function main(): Promise<void> {
   const { value: dirValue, root } = await requireWorkspaceEnv("DEEPSEEK_HARNESS_DIR");

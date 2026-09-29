@@ -15,7 +15,7 @@ import * as ContextAssembler from "../../assembler/index.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import * as plugin from "../../agent-instructions/index.ts";
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -64,13 +64,13 @@ function idOf(message: UserMessage): string | undefined {
   return entryIdOf(message);
 }
 
-/** 按 display 找正文：id 带根标识，测试只关心"哪个文件的哪一份"。 */
+// 按 display 找正文：id 带根标识，测试只关心"哪个文件的哪一份"。
 function bodyByDisplay(messages: readonly UserMessage[], display: string): string {
   const message = messages.find((candidate) => idOf(candidate)?.endsWith(`:${display}`) === true);
   return message === undefined ? "" : textOf(message);
 }
 
-/** 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。 */
+// 走真实通道：先 assemble（通道在那里收降级 section），再让 pre-step 注入。
 async function preStep(ctx: Context, agent: Parameters<typeof assembleContextFor>[0]) {
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
@@ -86,7 +86,7 @@ async function preStep(ctx: Context, agent: Parameters<typeof assembleContextFor
   return decision.kind === "enter" ? decision.messages : [];
 }
 
-/** 安装是异步的（要读文件）：轮询到注入出现为止。 */
+// 安装是异步的（要读文件）：轮询到注入出现为止。
 async function injectedMessages(
   ctx: Context,
   agent: Parameters<typeof assembleContextFor>[0],

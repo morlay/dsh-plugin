@@ -19,29 +19,25 @@ export type { OllamaSearchProviderOptions } from "./provider.ts";
 
 export const name = "web-search-ollama";
 
-/** 只往 `ctx.web` 注册后端，不发布服务。 */
+// 只往 `ctx.web` 注册后端，不发布服务。
 export const inject = ["web"];
 
-/** 与 `llm-pi-ai` 的 ollama route 共用同一个 key 引用。 */
+// 与 `llm-pi-ai` 的 ollama route 共用同一个 key 引用。
 const DEFAULT_API_KEY_ENV = "OLLAMA_API_KEY";
 
 export interface Config {
-  /** 字面 key；优先用 `apiKeyEnv` 走凭证服务，别把密钥写进配置文件。 */
+  // 字面 key；优先用 `apiKeyEnv` 走凭证服务，别把密钥写进配置文件。
   apiKey?: string;
-  /** 每次搜索解析一次的凭证引用；缺省 `OLLAMA_API_KEY`。 */
+  // 每次搜索解析一次的凭证引用；缺省 `OLLAMA_API_KEY`。
   apiKeyEnv?: string;
-  /** 端点根；`/api/web_search` 由 provider 拼。缺省 ollama.com。 */
+  // 端点根；`/api/web_search` 由 provider 拼。缺省 ollama.com。
   baseURL?: string;
-  /** 请求没带 `maxResults` 时的默认结果数；省略表示让 Ollama 用自己的默认。 */
+  // 请求没带 `maxResults` 时的默认结果数；省略表示让 Ollama 用自己的默认。
   maxResults?: number;
 }
 
-/**
- * schema 解析之后的形状：四个字段都是 **volatile 稳定引用**，读它要过 `.get()`。
- *
- * 它们都标了 `.volatile()`（插件行里唯一可实时改的字段），所以设置页改完不用重挂这一行：provider 的每一次
- * 请求、每一次取 key 都现场读引用。
- */
+// schema 解析之后的形状：四个字段都是 **volatile 稳定引用**（插件行里唯一可实时改的字段），读它要过 `.get()`。
+// 设置页改完不用重挂这一行：provider 的每次请求、每次取 key 都现场读引用。
 export interface ResolvedConfig {
   readonly apiKey: Volatile<string | undefined>;
   readonly apiKeyEnv: Volatile<string | undefined>;
@@ -49,10 +45,8 @@ export interface ResolvedConfig {
   readonly maxResults: Volatile<number | undefined>;
 }
 
-/**
- * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
- * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
- */
+// 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+// （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
 export const Config: z<Config, ResolvedConfig> = z.object({

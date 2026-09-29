@@ -10,7 +10,7 @@ interface StreamChunk {
   readonly message?: string;
 }
 
-/** scheme 取自 app 名，只有主进程知道；sandboxed preload 里只能从 argv 读回。 */
+// scheme 取自 app 名，只有主进程知道；sandboxed preload 里只能从 argv 读回。
 const scheme = process.argv
   .find((argument) => argument.startsWith(`${DESKTOP_SCHEME_ARGUMENT}=`))
   ?.slice(DESKTOP_SCHEME_ARGUMENT.length + 1);

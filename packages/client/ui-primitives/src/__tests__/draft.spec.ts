@@ -1,10 +1,8 @@
-/**
- * 草稿模型的行为：暂存的编辑怎么变成 path op、什么时候挡住保存、host 拒绝后草稿还在不在。
- *
- * 盯的接缝是**草稿 → 写**这一条：编辑只落在草稿（host 一个写都没收到）、保存按 staged 顺序发一次
- * `mutate` 并带基准 revision、非法草稿挡保存、整段校验失败不发写、host 拒绝保留草稿、丢弃不发写。
- * 值从生效层读（用户层 presence 决定「已覆盖」），与渲染无关。
- */
+// 草稿模型的行为：暂存的编辑怎么变成 path op、什么时候挡住保存、host 拒绝后草稿还在不在。
+//
+// 盯的接缝是**草稿 → 写**这一条：编辑只落在草稿（host 一个写都没收到）、保存按 staged 顺序发一次
+// `mutate` 并带基准 revision、非法草稿挡保存、整段校验失败不发写、host 拒绝保留草稿、丢弃不发写。
+// 值从生效层读（用户层 presence 决定「已覆盖」），与渲染无关。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
@@ -14,7 +12,7 @@ import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 
 type Section = Record<string, unknown>;
 
-/** 造一个模型：字段树来自真 schema 的投影，校验用真 schema（整段跑一次）。 */
+// 造一个模型：字段树来自真 schema 的投影，校验用真 schema（整段跑一次）。
 function model(
   scope: FakeScope,
   schema: z,

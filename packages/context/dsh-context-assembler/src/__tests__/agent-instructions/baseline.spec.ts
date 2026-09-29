@@ -26,7 +26,7 @@ interface PatchRow {
   readonly insert?: readonly PatchRow[];
 }
 
-/** base bundle 给 `agent-instructions` 那行的 config：我们算身份时用的同一份基线。 */
+// base bundle 给 `agent-instructions` 那行的 config：我们算身份时用的同一份基线。
 async function baseRowConfig(): Promise<Record<string, unknown>> {
   const rows = yaml.load(await readFile(BASE_PATCH, "utf8"), {
     schema: entryListSchema,
@@ -38,7 +38,7 @@ async function baseRowConfig(): Promise<Record<string, unknown>> {
   return row?.config ?? {};
 }
 
-/** 上游自己的算法在同一份 config 与 cwd 下算出的身份。 */
+// 上游自己的算法在同一份 config 与 cwd 下算出的身份。
 async function upstreamIdentity(cwd: string, config: Record<string, unknown>): Promise<string> {
   const resolved = resolveConfig(UpstreamConfig(config as { maxBytes: number }));
   const projectRoot = await findProjectRoot(cwd, resolved.projectRootMarkers);

@@ -18,7 +18,7 @@ async function manifest(root: string): Promise<Manifest> {
 const desktopify = await manifest(PACKAGE_ROOT);
 const shell = await manifest(SHELL_ROOT);
 
-/** 提示里的可执行入口写法：`pnpm --filter <包名> run <脚本名>`。 */
+// 提示里的可执行入口写法：`pnpm --filter <包名> run <脚本名>`。
 const REMEDIATION_COMMAND = /`pnpm --filter (\S+) run (\S+)`/u;
 
 function message(): string {

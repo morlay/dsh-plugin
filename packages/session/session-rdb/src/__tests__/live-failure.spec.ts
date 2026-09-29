@@ -34,7 +34,7 @@ async function waitFor(condition: () => boolean): Promise<void> {
   }
 }
 
-/** 先落库一个 cwd=/a 的会话，再用同名不同 cwd 的 live 会话触发 id 冲突（ensureLiveHandle 失败）。 */
+// 先落库一个 cwd=/a 的会话，再用同名不同 cwd 的 live 会话触发 id 冲突（ensureLiveHandle 失败）。
 async function failingLiveSession(ctx: Context) {
   const handle = await ctx.sessionPersistence.create(meta("s1", "/a"));
   await handle.append(oneTurnLog());

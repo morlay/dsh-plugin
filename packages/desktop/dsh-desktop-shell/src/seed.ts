@@ -20,7 +20,7 @@ export const SEED_DIR_NAME = "dsh-home";
 
 export const SEED_HASH_NAME = ".seed-hash";
 
-/** Seed-relative directory holding the immutable runtime: the host's dsh installation and the Web frontend. */
+// Seed-relative directory holding the immutable runtime: the host's dsh installation and the Web frontend.
 export const SEED_RUNTIME_DIR_NAME = "runtime";
 
 const SEED_SKIP_DIRS = new Set([".nub-store", ".store", ".nub"]);
@@ -87,10 +87,8 @@ export async function ensureSeedProfile(seedDir: string, home: string): Promise<
   return true;
 }
 
-/**
- * Plant one profile subtree. The seed's runtime lives beside the profile and stays in the
- * application's read-only resources, so only `profiles/<name>` is copied into the home.
- */
+// Plant one profile subtree. The seed's runtime lives beside the profile and stays in the
+// application's read-only resources, so only `profiles/<name>` is copied into the home.
 async function copySeed(source: string, target: string): Promise<void> {
   await mkdir(target, { recursive: true });
   const visit = async (directory: string, prefix: string): Promise<void> => {

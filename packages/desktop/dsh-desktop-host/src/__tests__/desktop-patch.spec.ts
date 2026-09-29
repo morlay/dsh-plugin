@@ -12,7 +12,7 @@ const UPSTREAM_PATCHES = ["base/cordis.patch.yml", "web-app/cordis.patch.yml"];
 
 const patch = await readFile(PATCH_PATH, "utf8");
 
-/** 停用/配置的目标行 id（顶层 `- id:`，不含 insert 出来的行）。 */
+// 停用/配置的目标行 id（顶层 `- id:`，不含 insert 出来的行）。
 function targetedIds(text: string): string[] {
   return [...text.matchAll(/^- id: (\S+)$/gm)].map((match) => match[1]!);
 }
@@ -31,7 +31,7 @@ function insertedNames(text: string): string[] {
   return [...block.matchAll(/^ {4}- id: (\S+)\n {6}name: "([^"]+)"$/gm)].map((match) => match[2]!);
 }
 
-/** 上游 patch 里的 `行 id → 模块名`（本 overlay 只按 id 瞄准，名字留在上游那一份）。 */
+// 上游 patch 里的 `行 id → 模块名`（本 overlay 只按 id 瞄准，名字留在上游那一份）。
 async function upstreamModules(): Promise<Map<string, string>> {
   const modules = new Map<string, string>();
   for (const file of UPSTREAM_PATCHES) {
@@ -44,7 +44,7 @@ async function upstreamModules(): Promise<Map<string, string>> {
 
 const upstream = await upstreamModules();
 
-/** 桌面档**必须**停的登录/账号面，以及它停的到底是哪个模块。 */
+// 桌面档**必须**停的登录/账号面，以及它停的到底是哪个模块。
 const ACCOUNT_ROWS = {
   "deepseek-account": "@deepseek-ai/dsh-deepseek-account-platform",
   "account-controller": "@deepseek-ai/dsh-api-account-controller",
@@ -52,14 +52,14 @@ const ACCOUNT_ROWS = {
   "ui-settings-account": "@deepseek-ai/dsh-client-ui-settings-account",
 } as const;
 
-/** 桌面档**故意不动**的行：它们不是登录面，模型路径靠它们。 */
+// 桌面档**故意不动**的行：它们不是登录面，模型路径靠它们。
 const KEPT_ROWS = {
   credentials: "@deepseek-ai/dsh-credentials-local",
   authorization: "@deepseek-ai/dsh-authorization",
   "llm-deepseek": "@deepseek-ai/dsh-llm-deepseek-api-key",
 } as const;
 
-/** 除桌面 overlay 之外的装配层：账号面不该在这些地方被停（决定只影响桌面档）。 */
+// 除桌面 overlay 之外的装配层：账号面不该在这些地方被停（决定只影响桌面档）。
 async function otherPatchFiles(): Promise<string[]> {
   const files: string[] = [join(repoRoot, "apps/dsh-custom-next/cordis.patch.yml")];
   for (const entry of await readdir(join(repoRoot, "packages/bundles"), { withFileTypes: true })) {

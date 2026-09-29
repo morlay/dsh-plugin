@@ -17,7 +17,7 @@ interface Manifest {
   readonly peerDependencies?: Record<string, string>;
 }
 
-/** 产物里的裸 import 说明运行期依赖；相对路径与 node: 内建除外。 */
+// 产物里的裸 import 说明运行期依赖；相对路径与 node: 内建除外。
 async function builtImports(): Promise<Set<string>> {
   const names = new Set<string>();
   for (const entry of await readdir(BUILD_DIR)) {

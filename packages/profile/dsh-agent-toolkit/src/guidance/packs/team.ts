@@ -1,4 +1,4 @@
-/** Agent Teams（可选能力，见 agent-team 出口）。 */
+// Agent Teams（可选能力，见 agent-team 出口）。
 import type { ToolPack } from "../types.ts";
 
 export const TEAM_PACK: ToolPack = {

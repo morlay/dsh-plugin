@@ -12,27 +12,18 @@ export const inject = ["agents", "skills", "tools", "contextAssembler"];
 
 export const CATALOG_ID = "skill-catalog";
 
-/** 目录行里的描述长度上限（上游默认同值）。 */
+// 目录行里的描述长度上限（上游默认同值）。
 const DESCRIPTION_MAX_LENGTH = 500;
 
-/**
- * skill 目录 + `skill` 工具：目录是规则块（一行名字 + 摘要），正文按需加载。
- *
- * 目录只列模型可调用的 skill；`auto` 的 skill 标 `modelInvocable: false`，所以它不出现在目录里
- * （它的正文已经随提示送达）。工具的渲染用通道的虚拟 skill 形态，不带 `<skill_resources>`。
- *
- * **这一面归通道**（工作区指令那一面相反，是让位给 preset）：官方 preset 自己装了上游 `tool-skill`，那份
- * 注册在 preset 的 scope 层；我们把 `skill` 工具按会话注册进 **agent 自己那一层**——它最靠里，同名注册遮蔽
- * 继承来的那一份（[`core/tools/src/index.ts:1185-1207`](../../../vendor/deepseek-harness/packages/core/tools/src/index.ts)），
- * 于是模型看到的是我们的工具（中文描述 + 按会话修剪的正文）。上游的目录发布判据是"它自己注册的那个工具是
- * 本会话可见的那个"（[`skill/tool-skill/src/index.ts:213-236`](../../../vendor/deepseek-harness/packages/skill/tool-skill/src/index.ts)），
- * 被遮蔽之后它闭嘴，目录由我们发布；`minimal`（`chat`）那种没有上游行的会话里也只有我们这一份。
- */
+// skill 目录 + `skill` 工具：目录是规则块（一行名字 + 摘要），正文按需加载；`auto` 的 skill 标
+// `modelInvocable: false`，所以它不进目录（正文已随提示送达）。工具的渲染用通道的虚拟 skill 形态，不带
+// `<skill_resources>`。
+//
+// **这一面归通道**（工作区指令那一面相反，让位给 preset）：`skill` 工具按会话注册进 **agent 自己那一层**，
+// 同名遮蔽 preset 里那份上游 `tool-skill`，于是模型看到的是我们的工具、目录也由我们发布。
 export function apply(ctx: Context): void {
-  /**
-   * 本会话上次算出的目录条目：`source` 是同步的、正文是异步的，两者共用这一次计算的结果
-   * （`collect` 里先算正文再取 source）。
-   */
+  // 本会话上次算出的目录条目：`source` 是同步的、正文是异步的，两者共用这一次计算的结果
+  // （`collect` 里先算正文再取 source）。
   const catalogEntries = new WeakMap<Agent, readonly { name: string; description: string }[]>();
 
   // 同名工具只能有一个所有者：host 平面已经有人注册了 `skill`（装上游 `tool-skill` 的部署）就让给它，
@@ -63,12 +54,9 @@ export function apply(ctx: Context): void {
 
   ctx.contextAssembler.registerRule({
     id: CATALOG_ID,
-    // 对外身份**用我们自己的 kind**（不是上游那个 `skill-catalog`）：目录的正文与条目都由我们发布，而上游
-    // `tool-skill` 的目录监听器把任何 `kind: 'skill-catalog'` 且条目可读的消息都当成**它自己的**账本
-    // （`catalogMessage` / `catalogHistory`），于是它会删掉我们这一条（首步：`!history.published &&
-    // skills.length === 0` 那条分支）或者补一条"没有可用 skill"的空目录把它顶掉（它有可见目录之后）。
-    // 形态仍是它认得的 `catalog`（`entries` 是客户端列条目的那份清单），只是 kind 归我们——
-    // 它的两个扫法都只看 kind，于是本会话里它彻底闭嘴。
+    // 对外身份**用我们自己的 kind**（不是上游那个 `skill-catalog`）：上游 `tool-skill` 的目录监听器把任何
+    // `kind: 'skill-catalog'` 的消息当成**它自己的**账本，会删掉我们这一条或补一条空目录把它顶掉。形态仍是
+    // 它认得的 `catalog`（`entries` 是客户端列条目的那份清单），只是 kind 归我们。
     source: (agent) => ({
       kind: "context-assembler",
       form: "catalog",
@@ -88,9 +76,8 @@ export function apply(ctx: Context): void {
       // 依赖关系：没有 `skill` 工具（被白名单挡掉或被别的 composition 拿掉）时，目录没有意义——
       // 模型拿到了名字也加载不了。是否注入跟着工具走，而不是靠每个模式去列"不要哪些"。
       if (!visible("skill")) return noCatalog();
-      // 必须带上会话的 cwd 与作用域：本地 skill 发现（`~/.agents/skills`、`{cwd}/.agents/skills`、
-      // 项目根）由 preset 层的 `skill-filesystem` 行提供，host 层的同名行在 web 组合里是禁用的——
-      // 不传作用域只看得见全局层（本仓库注册的运行时 skill），不传 cwd 连项目根都不扫。
+      // 必须带上会话的 cwd 与作用域：本地 skill 发现（`~/.agents/skills`、`{cwd}/.agents/skills`、项目根）由
+      // preset 层的 `skill-filesystem` 行提供；不传作用域只看得见全局层，不传 cwd 连项目根都不扫。
       const snapshot = await ctx.skills.snapshot({
         cwd: agent.session.header.cwd,
         scope: agent,
@@ -118,7 +105,7 @@ export function apply(ctx: Context): void {
   });
 }
 
-/** 一份工具定义，按会话注册进每个 agent 的自己那一层（同一个定义对象，判据里的同一性靠它）。 */
+// 一份工具定义，按会话注册进每个 agent 的自己那一层（同一个定义对象，判据里的同一性靠它）。
 function defineSkillTool(ctx: Context): ReturnType<typeof defineTool> {
   return defineTool({
     name: "skill",

@@ -171,10 +171,8 @@ export type {
 
 declare module "@deepseek-ai/cordis" {
   interface Context {
-    /**
-     * 上游的会话面，但 `input` 收窄成 fork 的解析器：它的 `for(...)` 返回带
-     * `restoreDraft` 的 facade（`ui-conversation-message-actions` 靠它改写草稿）。
-     */
+    // 上游的会话面，但 `input` 收窄成 fork 的解析器：它的 `for(...)` 返回带
+    // `restoreDraft` 的 facade（`ui-conversation-message-actions` 靠它改写草稿）。
     conversation: Omit<
       import("../../../../../vendor/deepseek-harness/packages/client/ui-conversation/src/client/service.ts").IConversation,
       "input"

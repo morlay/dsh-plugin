@@ -1,10 +1,5 @@
-/**
- * 行配置页的门面：这一行的 volatile 字段经 host 投影后，页面上应该看到**模式清单**（每个模式的字段）、默认模式，
- * 以及每个已有模式的默认模型行。
- *
- * 盯的接缝是 host 的 schema 投影 → 通用表单的字段树：用真的 `volatileForm` 与真的 `Config`，只把 settings 的
- * 读写面换成替身。
- */
+// 行配置页的门面：这一行的 volatile 字段经 host 投影后，页面上应看到模式清单、默认模式与每个模式的默认模型行。
+// 接缝是 host 的 schema 投影 → 通用表单的字段树（真 `volatileForm` 与真 `Config`，只把 settings 读写面换成替身）。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
@@ -14,7 +9,7 @@ import { Config } from "../modes.ts";
 
 const t = ((key: string) => key) as never;
 
-/** 一段真实的 config 值：两个模式 + 没配过默认模型。 */
+// 一段真实的 config 值：两个模式 + 没配过默认模型。
 const section = {
   default: "coding",
   modes: {

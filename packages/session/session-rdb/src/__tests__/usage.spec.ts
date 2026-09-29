@@ -22,7 +22,7 @@ afterEach(async () => {
   for (const dispose of disposers.splice(0)) await dispose();
 });
 
-/** 一天：便于造出两个不同的日期桶（具体日期由本地时区决定，断言只比结构）。 */
+// 一天：便于造出两个不同的日期桶（具体日期由本地时区决定，断言只比结构）。
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAY_ONE = 1_788_852_417_912;
 const DAY_TWO = DAY_ONE + DAY_MS;
@@ -45,7 +45,7 @@ function usageOf(input: number, output: number, cacheRead = 0, reasoning = 0): U
   };
 }
 
-/** 一轮对话，assistant 消息带用量与模型来源，事件时间落在指定时刻。 */
+// 一轮对话，assistant 消息带用量与模型来源，事件时间落在指定时刻。
 function turnWithUsage(
   time: number,
   model: { provider: string; model: string },
@@ -75,7 +75,7 @@ async function harness(): Promise<{ ctx: Context; persistence: SessionPersistenc
   return { ctx, persistence: ctx.sessionPersistence as SessionPersistenceRdb };
 }
 
-/** 文件库 harness：回填只在"表为空"时发生，需要在同一文件上重开。 */
+// 文件库 harness：回填只在"表为空"时发生，需要在同一文件上重开。
 async function harnessAt(path: string): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
   await ctx.plugin(SessionStore);
@@ -118,7 +118,7 @@ interface UsageTotals {
   totalTokens: number;
 }
 
-/** 按天 × 模型的桶只有 token 用量：活动计数没有模型归属。 */
+// 按天 × 模型的桶只有 token 用量：活动计数没有模型归属。
 interface UsageBucket {
   day: string;
   provider: string | null;
@@ -181,7 +181,7 @@ function fakeRequest(body: unknown = {}): import("node:http").IncomingMessage {
   } as unknown as import("node:http").IncomingMessage;
 }
 
-/** 一个 ctx 只 provide 一次：同一用例可能查两次（不同时间范围）。 */
+// 一个 ctx 只 provide 一次：同一用例可能查两次（不同时间范围）。
 const routeCache = new WeakMap<Context, (req: unknown, res: unknown) => void | Promise<void>>();
 
 async function usageRoute(

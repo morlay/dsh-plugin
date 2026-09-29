@@ -1,10 +1,8 @@
-/**
- * 本包字典（命名空间 `settings.schema-form`）：表单壳、字段控件与只读呈现的文案。
- *
- * 字段自身的人话标签不在这里（那是业务方经字段槽或 schema `description` 给的），这里只放**机制**文案。
- */
+// 本包字典（命名空间 `settings.schema-form`）：表单壳、字段控件与只读呈现的文案。
+//
+// 字段自身的人话标签不在这里（那是业务方经字段槽或 schema `description` 给的），这里只放**机制**文案。
 
-/** 中文文案（部署语言偏好是 zh）。 */
+// 中文文案（部署语言偏好是 zh）。
 export const zh = {
   unavailable: "该插件当前未加载，暂时无法配置。",
   readOnly: "本部署的设置为只读。",
@@ -64,7 +62,7 @@ export const zh = {
   missingItem: "每一项都需要一个 {key}",
 } as const;
 
-/** 英文文案。 */
+// 英文文案。
 export const en = {
   unavailable: "This plugin is not loaded, so it cannot be configured right now.",
   readOnly: "This deployment stores settings read-only.",
@@ -124,5 +122,5 @@ export const en = {
   missingItem: "Every item needs a {key}",
 } as const;
 
-/** 本命名空间的字典键。 */
+// 本命名空间的字典键。
 export type SchemaFormLocaleKey = keyof typeof zh;

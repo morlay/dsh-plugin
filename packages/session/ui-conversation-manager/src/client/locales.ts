@@ -1,6 +1,6 @@
-/** 「对话管理」页面的文案字典。 */
+// 「对话管理」页面的文案字典。
 
-/** 简体中文是 key 真源。 */
+// 简体中文是 key 真源。
 export const zh = {
   panel: "对话管理",
   title: "对话管理",
@@ -77,10 +77,10 @@ export const zh = {
   "time.years": "{n}年",
 } satisfies Record<string, string>;
 
-/** 「对话管理」页面字典的 key 集合。 */
+// 「对话管理」页面字典的 key 集合。
 export type ConversationManagerKey = keyof typeof zh;
 
-/** 英文对照表。 */
+// 英文对照表。
 export const en = {
   panel: "Conversations",
   title: "Conversations",

@@ -25,15 +25,13 @@ beforeAll(async () => {
   fork = await read(FORK);
 });
 
-/** fork 保留文件的接线改写：指向上游源码的 import 指回同目录。归一后应能与上游逐行对齐。 */
+// fork 保留文件的接线改写：指向上游源码的 import 指回同目录。归一后应能与上游逐行对齐。
 function wiringNormalized(text: string): string {
   return text.replaceAll(VENDOR_PREFIX, "./");
 }
 
-/**
- * 剔除从 `marker` 起、到 `until` 那一段的块（缺省到顶格的 `}`：模块级声明与函数）；`marker` 不存在时按现状
- * 返回——本包有意不复述的块（cordis 声明）走这条路径。
- */
+// 剔除从 `marker` 起、到 `until` 那一段的块（缺省到顶格的 `}`：模块级声明与函数）；`marker` 不存在时按现状
+// 返回——本包有意不复述的块（cordis 声明）走这条路径。
 function withoutBlock(text: string, marker: string, until = "\n}\n"): string {
   const start = text.indexOf(marker);
   if (start < 0) return text;
@@ -43,17 +41,14 @@ function withoutBlock(text: string, marker: string, until = "\n}\n"): string {
   return text.slice(0, start) + rest.slice(end + until.length);
 }
 
-/** 折叠连续空行：块被剔除后留下的空行不该算差异。 */
+// 折叠连续空行：块被剔除后留下的空行不该算差异。
 function collapsed(text: string): string {
   return text.replace(/\n{3,}/g, "\n\n");
 }
 
-/**
- * 本包有意的偏离：把本地文本还原成上游形状的替换表。`from` 必须命中（本地改回来了、上游又变了，
- * 都会在这里红），`drop` 是从 marker 起的整块（新增的函数 / 方法）。
- *
- * 一处偏离一条，写清楚它是什么；新加偏离请同时更新 `README.md` 的「保留文件」与对应 ADR。
- */
+// 本包有意的偏离：把本地文本还原成上游形状的替换表。`from` 必须命中（本地改回来了、上游又变了，都会在
+// 这里红），`drop` 是从 marker 起的整块（新增的函数 / 方法）。一处偏离一条；新加偏离请同时更新
+// `../../.agents/designs/20260929-薄壳fork的接管面与保留文件.md` 与对应 ADR。
 type Delta =
   | { readonly from: string; readonly to: string }
   | { readonly drop: string; readonly until?: string };
@@ -135,7 +130,7 @@ const DELTAS: Record<Retained, readonly Delta[]> = {
   ],
 };
 
-/** 把 fork 文件按偏离表还原成上游形状；`from` / `drop` 没命中就是同步纪律失效，直接抛。 */
+// 把 fork 文件按偏离表还原成上游形状；`from` / `drop` 没命中就是同步纪律失效，直接抛。
 function restored(file: Retained): string {
   let text = wiringNormalized(fork[file]!);
   for (const delta of DELTAS[file]) {
@@ -155,10 +150,8 @@ function restored(file: Retained): string {
   return collapsed(text);
 }
 
-/**
- * 本包有意替换的四行接线：删掉只为 cordis 声明块服务的 `Scoped` / 生命周期类型导入，
- * 改为引入上游包的类型（合并接口只留存一份实例）。
- */
+// 本包有意替换的四行接线：删掉只为 cordis 声明块服务的 `Scoped` / 生命周期类型导入，
+// 改为引入上游包的类型（合并接口只留存一份实例）。
 function withoutTypeBridge(lines: string[]): string[] {
   const replaced = new Set([
     "import type {} from '@deepseek-ai/dsh-subagent'",
@@ -169,24 +162,22 @@ function withoutTypeBridge(lines: string[]): string[] {
   return lines.filter((line) => !replaced.has(line));
 }
 
-/** 上游侧要与本地比对的形状：本包不复述的声明块，以及本包整段替换过的实现（本地那份不一样）。 */
+// 上游侧要与本地比对的形状：本包不复述的声明块，以及本包整段替换过的实现（本地那份不一样）。
 const UPSTREAM_BLOCKS: Record<Retained, readonly string[]> = {
   "index.ts": [CORDIS_DECLARATION],
   "continuation.ts": [],
   "continuation-messages.ts": [RETURN_GUIDANCE],
 };
 
-/** 上游那一份的同一形状。 */
+// 上游那一份的同一形状。
 function upstreamOf(file: Retained): string {
   let text = wiringNormalized(vendor[file]!);
   for (const marker of UPSTREAM_BLOCKS[file]) text = withoutBlock(text, marker);
   return collapsed(text);
 }
 
-/**
- * 同步纪律的可执行守护：保留文件漏跟随上游（少一行接线、多一处本地改动）在这里就红。
- * 语义对不对仍要人读上游那份，但「有没有跟随」不用靠眼睛。
- */
+// 同步纪律的可执行守护：保留文件漏跟随上游（少一行接线、多一处本地改动）在这里就红。
+// 语义对不对仍要人读上游那份，但「有没有跟随」不用靠眼睛。
 describe("薄壳 fork 的接线", () => {
   it("保留文件里的每个相对 import 都指向真实文件", async () => {
     for (const file of RETAINED) {

@@ -2,20 +2,9 @@ import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathExists, requireWorkspaceEnv, runInherited } from "./common.ts";
 
-// 对上游应用本地 patch（构建前置；必须在 sync 的干净基线上运行）。约定：
-//   env DEEPSEEK_HARNESS_DIR  上游目录，相对 pnpm-workspace.yaml 所在根
-//   env DEEPSEEK_HARNESS_EXCLUDE 可选，逗号分隔的「待裁剪包目录」完整相对
-//      路径（相对上游根），如
-//        packages/subagent/subagent-codex,packages/subagent/subagent-claude-code
-//      对每个：删整个目录 + 从上游全部 tsconfig*.json 移除其 path 引用行。
-//      用于裁剪不需要的上游包（构建依赖 / 体积 / 许可）。
-//   步骤清单默认 <workspace 根>/patches/steps.json（EXCLUDE 之后执行；
-//   env DEEPSEEK_HARNESS_STEPS 可覆盖清单路径）
-// 清单每项：
-//   - {"type":"rm","path":"apps/cli/tests/profiles/acp/cordis.yml"}
-//   - {"type":"text","file":"tsconfig.host.json","pattern":正则,"flags":"gm","to":""}
-//   - {"type":"git","patch":"css-inline-query.patch"}  相对 <workspace 根>/patches/
-// 任一失败即失败（不跳过）。可从任意目录执行。
+// 对上游应用本地 patch（前置：在 sync 的干净基线上运行）：先按 `DEEPSEEK_HARNESS_EXCLUDE` 裁剪包目录
+// （删目录 + 从全部 tsconfig*.json 移除其 path 行），再执行 `<workspace 根>/patches/steps.json` 的步骤
+// （`rm` / `text` / `git`；env 名与路径约定见 `SKILL.md` 的表）。任一失败即失败，不跳过；可从任意目录执行。
 
 type Step =
   | { type: "rm"; path: string }

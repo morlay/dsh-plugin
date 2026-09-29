@@ -1,28 +1,26 @@
-/**
- * 探针：装配一次真实 web profile，检查**我们自己注册的那份 agent preset** 在真部署里给了两个模式什么。
- *
- * 包内测试（`packages/profile/dsh-session-mode/src/__tests__/preset-plane.spec.ts`）用真 registry + 真上游行
- * 验了同一件事，但它只取要验的那几行；**整条行清单**能不能在真部署里装起来（每个 host 服务都在场：压缩要
- * tokenMeter、委派要 subagents、shell 要 jobs…）只有真装配回答得了。这里回答的五件事：
- *
- * 1. 新会话默认挂 `mode-switch`（`agent-preset-registry` 的默认值由配置层给），模式事实是 `coding`；
- * 2. `coding` 的模型目录是**全套**：文件 / Shell / 委派 / workflow / todo / goal / present / 联网 / skill /
- *    计划模式（`exit_plan_mode`，进计划模式后 `plan:policy` 规则段是我们的中文契约）；
- * 3. `chat` 的目录被收口到三件：`ask_user_question` / `web_search` / `web_fetch`（复用时一个都不在的那个问题）；
- * 4. 注入面：`chat` 0 条；`coding` 只有**我们那一份**技能目录（kind `context-assembler`）与工作区指令；
- * 5. 切模式（chip 在 `coding` ↔ `chat` 间来回）**不重挂 preset**；显式去官方 roster 选 `standard` 时才重挂，
- *    且工作区指令让位给上游那一行、skill 面仍是我们抢到的那份。
- *
- * 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
- *
- * ```sh
- * pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-preset-plane.mts
- * ```
- *
- * 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次 `just custom dev --web`
- * 或 `just custom desktop`）。脚本会**建一个空白会话**（用来切模式）——它们落在那个 dev store 里
- * （`.dsh-store/` 已被 gitignore），不碰别的会话。
- */
+// 探针：装配一次真实 web profile，检查**我们自己注册的那份 agent preset** 在真部署里给了两个模式什么。
+//
+// 包内测试（`packages/profile/dsh-session-mode/src/__tests__/preset-plane.spec.ts`）用真 registry + 真上游行
+// 验了同一件事，但它只取要验的那几行；**整条行清单**能不能在真部署里装起来（每个 host 服务都在场：压缩要
+// tokenMeter、委派要 subagents、shell 要 jobs…）只有真装配回答得了。这里回答的五件事：
+//
+// 1. 新会话默认挂 `mode-switch`（`agent-preset-registry` 的默认值由配置层给），模式事实是 `coding`；
+// 2. `coding` 的模型目录是**全套**：文件 / Shell / 委派 / workflow / todo / goal / present / 联网 / skill /
+// 计划模式（`exit_plan_mode`，进计划模式后 `plan:policy` 规则段是我们的中文契约）；
+// 3. `chat` 的目录被收口到三件：`ask_user_question` / `web_search` / `web_fetch`（复用时一个都不在的那个问题）；
+// 4. 注入面：`chat` 0 条；`coding` 只有**我们那一份**技能目录（kind `context-assembler`）与工作区指令；
+// 5. 切模式（chip 在 `coding` ↔ `chat` 间来回）**不重挂 preset**；显式去官方 roster 选 `standard` 时才重挂，
+// 且工作区指令让位给上游那一行、skill 面仍是我们抢到的那份。
+//
+// 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
+//
+// ```sh
+// pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-preset-plane.mts
+// ```
+//
+// 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次 `just custom dev --web`
+// 或 `just custom desktop`）。脚本会**建一个空白会话**（用来切模式）——它们落在那个 dev store 里
+// （`.dsh-store/` 已被 gitignore），不碰别的会话。
 
 import { access } from "node:fs/promises";
 import { join } from "node:path";
@@ -42,9 +40,9 @@ const installAnchor = join(repoRoot, "vendor/deepseek-harness/apps/cli/package.j
 
 const MODE_PRESET = "mode-switch";
 const UPSTREAM_INSTRUCTIONS_MODULE = "@deepseek-ai/dsh-agent-instructions";
-/** `chat` 的三件：白名单收口之后目录里应当只剩它们。 */
+// `chat` 的三件：白名单收口之后目录里应当只剩它们。
 const CHAT_TOOLS = ["ask_user_question", "web_fetch", "web_search"];
-/** `coding` 的目录里应当有的代表：文件、Shell、委派、workflow、flow、联网、skill。 */
+// `coding` 的目录里应当有的代表：文件、Shell、委派、workflow、flow、联网、skill。
 const CODING_TOOLS = [
   "read",
   "write",
@@ -67,7 +65,7 @@ const CODING_TOOLS = [
   "exit_plan_mode",
 ];
 
-/** `contextAssembler.collect()` 的一条注入：正文 + 对外身份（`source`）。 */
+// `contextAssembler.collect()` 的一条注入：正文 + 对外身份（`source`）。
 interface AssistantMessage {
   readonly text?: string;
   readonly source?: { readonly id?: unknown; readonly kind?: unknown };
@@ -88,7 +86,7 @@ interface ProbeServices {
         >;
         select(agent: unknown, id: string): Promise<string>;
         recompose(ctx: unknown, id: string): Promise<unknown>;
-        /** 读 preset realm 里的服务（`isolate` 之后的 `planMode` 只有这条路读得到）。 */
+        // 读 preset realm 里的服务（`isolate` 之后的 `planMode` 只有这条路读得到）。
         serviceFor(agent: { ctx: unknown }, name: string): unknown;
       }
     | undefined;
@@ -163,10 +161,8 @@ const { ctx, shutdown } = await runProfile({
   args: ["--no-open", "--port", String(PORT)],
 });
 
-/**
- * 服务读面：cordis 的属性访问要求当前 fiber 声明过注入，所以这里先试 `ctx.get(name)`（它不需要声明），
- * 拿不到再退回属性（服务就在根 store 上的情形）。
- */
+// 服务读面：cordis 的属性访问要求当前 fiber 声明过注入，所以这里先试 `ctx.get(name)`（它不需要声明），
+// 拿不到再退回属性（服务就在根 store 上的情形）。
 function serviceOf<K extends keyof ProbeServices>(name: K): ProbeServices[K] | undefined {
   try {
     const got = (ctx as unknown as { get(name: string): unknown }).get(name);
@@ -207,13 +203,13 @@ function check(ok: boolean, message: string): void {
   if (!ok) failures.push(message);
 }
 
-/** 模型目录：装配一次（收口挂在 `system-prompt/assemble` 上），取工具名。 */
+// 模型目录：装配一次（收口挂在 `system-prompt/assemble` 上），取工具名。
 async function catalogOf(agent: AgentLike): Promise<string[]> {
   const assembly = await services.systemPrompt?.assemble({ agent, scope: agent });
   return (assembly?.tools ?? []).map((tool) => tool.name).toSorted();
 }
 
-/** 本步要注入的条目 id（`source.id` 是通道的幂等键；上游那几条没有它）。 */
+// 本步要注入的条目 id（`source.id` 是通道的幂等键；上游那几条没有它）。
 async function injectionsOf(agent: AgentLike): Promise<Map<string, AssistantMessage>> {
   return (await services.contextAssembler?.collect(agent)) ?? new Map();
 }
@@ -227,7 +223,7 @@ function textOf(entry: AssistantMessage | undefined): string {
   return entry?.text ?? "";
 }
 
-/** 通道的规则是 `agent/created` 里的异步安装：等到那条工作区指令的规则真的出现在注入里。 */
+// 通道的规则是 `agent/created` 里的异步安装：等到那条工作区指令的规则真的出现在注入里。
 async function untilInstructions(agent: AgentLike): Promise<Map<string, AssistantMessage>> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const entries = await injectionsOf(agent);
@@ -237,11 +233,7 @@ async function untilInstructions(agent: AgentLike): Promise<Map<string, Assistan
   return await injectionsOf(agent);
 }
 
-/**
- * 建一个空白会话：走 `sessionController.create`（真路径——它按 registry 的默认 preset 解析并挂上）。
- * @param label - 会话 id 里的标记，便于在 dev store 里认出探针建的会话。
- * @returns agent 与这次创建的 preset。
- */
+// 建一个空白会话：走 `sessionController.create`（真路径——它按 registry 的默认 preset 解析并挂上）。
 async function createSession(label: string): Promise<{ agent: AgentLike; agentPreset?: string }> {
   const controller = services.sessionController;
   if (controller === undefined) throw new Error("session-controller 没装上");
@@ -257,7 +249,7 @@ async function createSession(label: string): Promise<{ agent: AgentLike; agentPr
   };
 }
 
-/** registry：默认 preset、行清单、`serviceFor`（读 preset realm 里的服务）与 `recompose` 计数都经它。 */
+// registry：默认 preset、行清单、`serviceFor`（读 preset realm 里的服务）与 `recompose` 计数都经它。
 const registry = services.agentPresets;
 
 // ── 1. 默认挂我们那份 ────────────────────────────────────────────────────────────────────────────

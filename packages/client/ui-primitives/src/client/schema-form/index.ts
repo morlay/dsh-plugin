@@ -1,16 +1,14 @@
-/**
- * client 半：为每个可由 schema 生成配置页的行注册本行的配置入口，并给出字段级自定义输入的槽契约。
- *
- * | 面                                   | 呈现                                                             |
- * | ------------------------------------ | ---------------------------------------------------------------- |
- * | `plugins.row.config`（key 见 `rows.ts`） | `view: 'page'` 渲染该行 schema 生成的表单；`summary` 不画东西     |
- * | Factory `settings.schema-form.form`  | 行注册项经它渲染同一份表单体，字段槽因此只声明一次               |
- * | `settings.schema-form.field`         | chain 槽：业务方按 `role` 或 `ns + path` 认领字段的控件与文案    |
- *
- * 数据面是 host 的 settings 投影与共享配置表单（`ctx.configForms` / `ctx.settingsSchema`）；bundle 与行的对应关系
- * 来自 `remote.pluginManager.listBundles()`。手写卡片用默认 priority 0 注册，按 slots 的 cell winner 规则自然遮住
- * 这里的自动项，因此两种页面可以并存、迁移不必一次做完。
- */
+// client 半：为每个可由 schema 生成配置页的行注册本行的配置入口，并给出字段级自定义输入的槽契约。
+//
+// | 面                                   | 呈现                                                             |
+// | ------------------------------------ | ---------------------------------------------------------------- |
+// | `plugins.row.config`（key 见 `rows.ts`） | `view: 'page'` 渲染该行 schema 生成的表单；`summary` 不画东西     |
+// | Factory `settings.schema-form.form`  | 行注册项经它渲染同一份表单体，字段槽因此只声明一次               |
+// | `settings.schema-form.field`         | chain 槽：业务方按 `role` 或 `ns + path` 认领字段的控件与文案    |
+//
+// 数据面是 host 的 settings 投影与共享配置表单（`ctx.configForms` / `ctx.settingsSchema`）；bundle 与行的对应关系
+// 来自 `remote.pluginManager.listBundles()`。手写卡片用默认 priority 0 注册，按 slots 的 cell winner 规则自然遮住
+// 这里的自动项，因此两种页面可以并存。
 
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-api-remotes/client";
@@ -29,10 +27,10 @@ import { RowRegistration } from "./rows.ts";
 import { SchemaForm } from "./SchemaForm.tsx";
 import type { SchemaFormProps } from "./slot-contract.ts";
 
-/** 本包字典与槽位文案的命名空间。 */
+// 本包字典与槽位文案的命名空间。
 export const NS = "settings.schema-form";
 
-/** 需要的服务：槽位、字典、共享配置表单、schema 服务与插件管理（bundle 行清单）。 */
+// 需要的服务：槽位、字典、共享配置表单、schema 服务与插件管理（bundle 行清单）。
 export const inject = [
   "slots",
   "locale",
@@ -72,13 +70,10 @@ export type {
 } from "./hints.ts";
 export type { SuggestedKeys } from "./schema-node.ts";
 
-/** 行配置入口的注册项：`page` 画表单，`summary` 不画（行的描述来自包自己的 locale）。 */
+// 行配置入口的注册项：`page` 画表单，`summary` 不画（行的描述来自包自己的 locale）。
 type RowConfigEntryProps = PropsRuntime<"plugins.row.config"> & PropsRenderFactories;
 
-/**
- * 装上本包：字典、Factory（字段槽的声明者）与按行自动注册。
- * @param ctx - 浏览器插件上下文。
- */
+// 装上本包：字典、Factory（字段槽的声明者）与按行自动注册。
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "ui-schema-form: dictionaries");
   // 提示面（dict 的候选键）：同一次 apply 里提供，业务插件注册读数，本包的行投影读它。

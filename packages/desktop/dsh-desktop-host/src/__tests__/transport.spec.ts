@@ -197,7 +197,7 @@ interface StreamCarrierHandlers {
 interface FakeCarrier {
   handlers: StreamCarrierHandlers | undefined;
   cancels: number;
-  /** 经载体发出的上行项。 */
+  // 经载体发出的上行项。
   sent: unknown[];
   ends: number;
 }
@@ -211,7 +211,7 @@ interface PageTransport {
   ): AsyncIterable<unknown>;
 }
 
-/** 执行注入脚本并取回页面侧 transport：脚本只写 globalThis，node 环境下可直接跑。 */
+// 执行注入脚本并取回页面侧 transport：脚本只写 globalThis，node 环境下可直接跑。
 function pageTransport(): { transport: PageTransport; carrier: FakeCarrier } {
   const carrier: FakeCarrier = { handlers: undefined, cancels: 0, sent: [], ends: 0 };
   (globalThis as { __DSH_DESKTOP_STREAM__?: unknown }).__DSH_DESKTOP_STREAM__ = {
@@ -242,7 +242,7 @@ function pageTransport(): { transport: PageTransport; carrier: FakeCarrier } {
 
 const UNRESOLVED = Symbol("unresolved");
 
-/** 限时等待一次迭代：挂住时给出 UNRESOLVED，而不是让用例挂死。 */
+// 限时等待一次迭代：挂住时给出 UNRESOLVED，而不是让用例挂死。
 async function settled<T>(promise: Promise<T>, ms = 200): Promise<T | typeof UNRESOLVED> {
   return Promise.race([
     promise,

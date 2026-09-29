@@ -15,15 +15,15 @@ interface Row {
   config?: Record<string, unknown>;
 }
 
-/** 生成物文本：顶层取一次（`render()` 要向上找仓库根给头注释，是异步的）。 */
+// 生成物文本：顶层取一次（`render()` 要向上找仓库根给头注释，是异步的）。
 const rendered = await render();
 
-/** 本 bundle 的 patch（生成物 = 真源渲染结果）。 */
+// 本 bundle 的 patch（生成物 = 真源渲染结果）。
 function patch(): Row[] {
   return yaml.load(rendered, { schema: entryListSchema }) as Row[];
 }
 
-/** 顶层 `insert` 里的所有行（生成物只由 insert 段构成）。 */
+// 顶层 `insert` 里的所有行（生成物只由 insert 段构成）。
 function inserted(): Row[] {
   return patch().flatMap((layer) => layer.insert ?? []);
 }
@@ -40,7 +40,7 @@ const compose = applyEntryPatches as unknown as (
   warn: (...args: unknown[]) => void,
 ) => Row[];
 
-/** 本 bundle 的 patch + better-session 的 patch（两者都插了共享 client 行）。 */
+// 本 bundle 的 patch + better-session 的 patch（两者都插了共享 client 行）。
 async function layers(): Promise<Row[]> {
   const mine = patch();
   const theirs = yaml.load(
@@ -80,7 +80,7 @@ describe("session-mode-profile 的 bundle patch", () => {
 });
 
 describe("自己注册的 preset（preset-mode-switch）", () => {
-  /** preset 声明的行：`config.id` 是会话里记的身份，行 id 是 `preset-<id>`。 */
+  // preset 声明的行：`config.id` 是会话里记的身份，行 id 是 `preset-<id>`。
   function presetRow(): Row {
     return rowById(inserted(), `preset-${MODE_PRESET_ID}`);
   }
@@ -91,7 +91,7 @@ describe("自己注册的 preset（preset-mode-switch）", () => {
     return plugins as readonly Row[];
   }
 
-  /** 深挖所有嵌套行 id（组行把子行放在 `config` 数组里）。 */
+  // 深挖所有嵌套行 id（组行把子行放在 `config` 数组里）。
   function idsOf(rows: readonly Row[]): string[] {
     return rows.flatMap((row) => [
       row.id ?? "",

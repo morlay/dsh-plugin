@@ -11,10 +11,8 @@ function guidanceOf(blocks: ContentBlock[]): string {
   return last.text;
 }
 
-/**
- * 本包唯一的行为契约：continuable 子代理的首条任务后面追加的回报指引是中文，
- * 且父代理 id、回报方式（send_message）、「回报不结束回合」这些要点一个不少。
- */
+// 本包唯一的行为契约：continuable 子代理的首条任务后面追加的回报指引是中文，
+// 且父代理 id、回报方式（send_message）、「回报不结束回合」这些要点一个不少。
 describe("withContinuableReturnGuidance", () => {
   it("在任务块之后追加中文回报指引", () => {
     const blocks = withContinuableReturnGuidance(SessionId("session-parent"), task);

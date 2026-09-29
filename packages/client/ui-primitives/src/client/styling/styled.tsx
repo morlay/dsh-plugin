@@ -24,10 +24,8 @@ export type StyledComponent<T extends ElementType> = ForwardRefExoticComponent<
   StyledProps<T> & RefAttributes<StyledRef<T>>
 > & { readonly [sxSymbol]: CSSProps };
 
-/**
- * `styled('div')({ padding: '4px' }, { '&:hover': { … } })` → 带 `data-css-*` 的组件。
- * 多个样式对象按顺序深合并（后者覆盖前者），便于把变体叠在基样式上。
- */
+// `styled('div')({ padding: '4px' }, { '&:hover': { … } })` → 带 `data-css-*` 的组件。
+// 多个样式对象按顺序深合并（后者覆盖前者），便于把变体叠在基样式上。
 export function styled<T extends ElementType>(
   Component: T,
   defaultProps: Partial<ComponentProps<T>> = {},
@@ -50,7 +48,7 @@ export function styled<T extends ElementType>(
   };
 }
 
-/** 取回 styled 组件携带的样式对象（需要在其之上继续组合时用）。 */
+// 取回 styled 组件携带的样式对象（需要在其之上继续组合时用）。
 export function styleOf(component: StyledComponent<ElementType>): CSSProps {
   return component[sxSymbol];
 }

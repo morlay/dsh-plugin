@@ -1,11 +1,8 @@
-// Session stats under the composer, split into two icon pills: a gauge pill
-// (turn/step counts + output speed) opening the time-and-speed dialog, and a
-// database pill (total tokens + cache hit) opening the token-usage dialog.
-// Settled-node identity prevents stream-delta updates from rerendering the row.
-// Carried from upstream ui-chat (composer.dock id 'stats', priority -1 shadows it)
-// so the fixed token-format (out-of-range cacheRead no longer hangs) stays wired.
-// `data-composer-stats` stays as this row's stable anchor (style/test hooks) — the InputBar it once
-// paired with is upstream's again, so nothing tightens the composer clearance off it any more.
+// Session stats under the composer, split into two icon pills: a gauge pill (turn/step counts + output speed)
+// opening the time-and-speed dialog, and a database pill (total tokens + cache hit) opening the token-usage
+// dialog. Settled-node identity prevents stream-delta updates from rerendering the row; this row shadows
+// upstream ui-chat's `composer.dock` id `stats`（priority −1），`data-composer-stats` is its stable anchor
+// (style / test hooks)。
 
 import { memo, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -30,32 +27,24 @@ import { styles as dialogStyles } from "./stat-dialog.styles.ts";
 interface WindowStats {
   turns: number;
   steps: number;
-  /** Summed request wall time (step/start → assistant/message); 0 when no node carries timing. */
+  // Summed request wall time (step/start → assistant/message); 0 when no node carries timing.
   llmMs: number;
-  /** Summed tool wall time (tool/call → tool/result); 0 when no pair is in-window. */
+  // Summed tool wall time (tool/call → tool/result); 0 when no pair is in-window.
   toolMs: number;
-  /** Summed first-token latency over `ttftSteps`; 0 when no step records it. */
+  // Summed first-token latency over `ttftSteps`; 0 when no step records it.
   ttftMs: number;
-  /** Steps carrying a recorded TTFT. */
+  // Steps carrying a recorded TTFT.
   ttftSteps: number;
-  /** Summed decode wall time over steps that also report output tokens. */
+  // Summed decode wall time over steps that also report output tokens.
   decodeMs: number;
-  /** Summed output tokens over the same decode-timed steps. */
+  // Summed output tokens over the same decode-timed steps.
   decodeTokens: number;
 }
 
-/**
- * Fold assistant and tool-result nodes into window-scoped display totals —
- * the FALLBACK for assemblies without the `sessionStats` projection.
- *
- * Every displayed figure rides that durable whole-log projection (and token
- * accounting rides `tokenUsage`) because the window is paged and compaction
- * rewrites it; this fold answers "what is on screen" only when no projection
- * value is served. Its field names deliberately mirror the projection's so
- * the two swap wholesale.
- * @param nodes - snapshot nodes.
- * @returns fallback counts and summed wall times.
- */
+// Fold assistant and tool-result nodes into window-scoped display totals — the fallback for assemblies
+// without the `sessionStats` projection. Every displayed figure otherwise rides that durable whole-log
+// projection (token accounting rides `tokenUsage`), because the window is paged and compaction rewrites it;
+// field names deliberately mirror the projection's so the two swap wholesale.
 export function deriveStats(nodes: ChatSnapshot["legacy"]["nodes"]): WindowStats {
   const turns = new Set<number>();
   let steps = 0;
@@ -89,11 +78,7 @@ export function deriveStats(nodes: ChatSnapshot["legacy"]["nodes"]): WindowStats
   return { turns: turns.size, steps, llmMs, toolMs, ttftMs, ttftSteps, decodeMs, decodeTokens };
 }
 
-/**
- * Compact duration: 45.2s under a minute, 2m42s from there on.
- * @param ms - duration in milliseconds.
- * @returns display string.
- */
+// Compact duration: 45.2s under a minute, 2m42s from there on.
 export function formatDuration(ms: number, t: ChatViewSlotProps["t"]): string {
   const s = ms / 1_000;
   if (s < 60) return t("duration.compactSeconds", { seconds: Math.round(s * 10) / 10 });
@@ -104,32 +89,24 @@ export function formatDuration(ms: number, t: ChatViewSlotProps["t"]): string {
   });
 }
 
-/**
- * Display-ready cache-hit share of prompt-side input over the whole durable log.
- * @param usage - the session's token-usage projection value.
- * @returns integer text when integer rounding stays below 100, otherwise the
- * minimum decimal precision that still rounds below 100; a full hit returns
- * 100, and no billed input returns null.
- */
+// Display-ready cache-hit share of prompt-side input over the whole durable log: integer text while integer
+// rounding stays below 100, otherwise the minimum decimal precision that still rounds below 100; a full hit
+// returns 100, and no billed input returns null.
 export function cacheHitPercent(usage: TokenUsageProjection): string | null {
   const denominator = billedInputTokens(usage);
   return formatCacheHitPercent(usage.cacheReadTokens, denominator);
 }
 
-/**
- * Sum the three disjoint prompt-side billing buckets.
- * @param usage - the session's token-usage projection value.
- * @returns billed input tokens.
- */
+// Sum the three disjoint prompt-side billing buckets.
 export function billedInputTokens(usage: TokenUsageProjection): number {
   return usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 }
 
-/** Props: the conversation-snapshot selector plus the projection read seat. */
+// Props: the conversation-snapshot selector plus the projection read seat.
 export interface StatsPillsProps {
   useChat: SnapshotSelectorHook<ChatSnapshot>;
   useProjection: UseProjection;
-  /** The owning dock's locale seat. */
+  // The owning dock's locale seat.
   t: ChatViewSlotProps["t"];
 }
 
@@ -137,7 +114,7 @@ function exactCount(value: number, t: ChatViewSlotProps["t"]): string {
   return t("message.turnUsage.count", { count: formatExactTokens(value, t) });
 }
 
-/** External open state one pill's dialog reads and writes (the row's exclusive slot). */
+// External open state one pill's dialog reads and writes (the row's exclusive slot).
 type PillDialog = Pick<ReturnType<typeof useStatDialog>, "open" | "setOpen">;
 
 function TimePill({
@@ -345,10 +322,8 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, t }
   const usage = useProjection("tokenUsage");
   // One exclusive slot for both dialogs: opening either pill closes the other.
   const [openPill, setOpenPill] = useState<"time" | "usage" | null>(null);
-  // Every figure rides the durable sessionStats projection, so paging and
-  // compaction cannot change any of them; an assembly without the unit falls
-  // back to the window-scoped fold wholesale (same field names), paid only
-  // while no projection value is served.
+  // Every figure rides the durable sessionStats projection, so paging and compaction cannot change any of
+  // them; an assembly without the unit falls back to the window-scoped fold wholesale (same field names).
   const projected = useProjection("sessionStats");
   const stats = useMemo(() => projected ?? deriveStats(settledNodes), [projected, settledNodes]);
   // Gated on actual token activity: a session whose steps all settled without

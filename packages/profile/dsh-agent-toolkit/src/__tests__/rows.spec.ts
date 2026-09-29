@@ -11,20 +11,20 @@ import {
 } from "../rows.ts";
 import { TOOL_PACKS } from "../guidance/packs/index.ts";
 
-/** 组内的子行；`config` 不是数组时没有子行。 */
+// 组内的子行；`config` 不是数组时没有子行。
 function children(row: PresetRow): readonly PresetRow[] {
   return Array.isArray(row.config) ? (row.config as readonly PresetRow[]) : [];
 }
 
-/** 清单里出现的全部行 id（含族组的子行）。 */
+// 清单里出现的全部行 id（含族组的子行）。
 function idsOf(rows: readonly PresetRow[]): string[] {
   return rows.flatMap((row) => [row.id, ...idsOf(children(row))]);
 }
 
-/** 整套清单：按族分组的工具行 + 不属于任何族的行（压缩与工具说明）。 */
+// 整套清单：按族分组的工具行 + 不属于任何族的行（压缩与工具说明）。
 const ALL_ROWS: readonly PresetRow[] = [...TOOLKIT_ROWS, ...TOOLKIT_EXTRA_ROWS];
 
-/** 只有说明、没有装配行的族：团队那一族（`TEAM_ROWS` 是可选出口，preset 里不放它）。 */
+// 只有说明、没有装配行的族：团队那一族（`TEAM_ROWS` 是可选出口，preset 里不放它）。
 const UNASSEMBLED_FAMILIES = new Set(["team"]);
 
 describe("功能行清单", () => {

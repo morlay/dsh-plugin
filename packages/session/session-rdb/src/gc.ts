@@ -8,7 +8,7 @@ interface GcAgentLike {
   whenIdle(): Promise<void>;
 }
 
-/** 让所有运行中的 agent 先退场：GC 要重写事件表，运行中的写路径必须停下来。 */
+// 让所有运行中的 agent 先退场：GC 要重写事件表，运行中的写路径必须停下来。
 async function stopRunningAgents(ctx: Context): Promise<number> {
   const agents = ctx.get("agents") as { list(): GcAgentLike[] } | undefined;
   const running = agents?.list() ?? [];
@@ -17,7 +17,7 @@ async function stopRunningAgents(ctx: Context): Promise<number> {
   return running.length;
 }
 
-/** GC 通道：停 agent → 回收孤儿事件行 → VACUUM，一次请求完成。 */
+// GC 通道：停 agent → 回收孤儿事件行 → VACUUM，一次请求完成。
 export function registerSessionGc(ctx: Context, persistence: SessionPersistenceRdb): void {
   ctx.inject(["webServer", "connection"] as const, (webCtx) => {
     const webServer = webCtx.webServer as unknown as {

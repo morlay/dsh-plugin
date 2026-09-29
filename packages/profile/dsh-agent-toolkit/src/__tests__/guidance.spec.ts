@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS, skillNameOf } from "../guidance/groups.ts";
 import * as plugin from "../guidance/index.ts";
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -29,7 +29,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 上游工具行的替身：描述刻意写长，用来验证本插件把它换成了短描述。 */
+// 上游工具行的替身：描述刻意写长，用来验证本插件把它换成了短描述。
 function fixtureTool(toolName: string) {
   return defineTool({
     name: toolName,
@@ -54,7 +54,7 @@ function fixtureTool(toolName: string) {
   });
 }
 
-/** 标准模式装配里会出现的工具集合。 */
+// 标准模式装配里会出现的工具集合。
 const PRESET_TOOLS = [
   "read",
   "write",
@@ -87,14 +87,14 @@ const PRESET_TOOLS = [
   "team_task_update",
 ];
 
-/** 上游注册在 preset 作用域的工具说明：由各组回收清单收进 skill 正文。 */
+// 上游注册在 preset 作用域的工具说明：由各组回收清单收进 skill 正文。
 const EXPLANATIONS: readonly (readonly [string, string])[] = [
   ["tool:read", "READ_GUIDE"],
   ["tool:goal", "GOAL_GUIDE"],
   ["tool:subagent", "SUBAGENT_GUIDE"],
 ];
 
-/** 在某个 scope 上装载「工具行 + 工具说明 section」，形状与上游 preset 装配一致。 */
+// 在某个 scope 上装载「工具行 + 工具说明 section」，形状与上游 preset 装配一致。
 async function mountToolRows(scope: Context, toolNames: readonly string[]): Promise<void> {
   await scope.plugin(
     Object.assign(
@@ -169,7 +169,7 @@ function bodyOf(messages: readonly UserMessage[], id: string): string {
   return message === undefined ? "" : textOf(message);
 }
 
-/** 走真实的 pre-step 通道：先 assemble（reminder 在那里捕获），再让瀑布注入。 */
+// 走真实的 pre-step 通道：先 assemble（reminder 在那里捕获），再让瀑布注入。
 async function preStep(
   ctx: Context,
   agent: Agent,
@@ -184,7 +184,7 @@ async function preStep(
   return decision.kind === "enter" ? decision.messages : [];
 }
 
-/** 进模型目录的 skill 名：模型可以按需加载它们。 */
+// 进模型目录的 skill 名：模型可以按需加载它们。
 async function modelSkills(ctx: Context, agent: Agent): Promise<string[]> {
   const skills = await ctx.skills.list({ scope: agent });
   return skills.filter((skill) => skill.invocation.modelInvocable).map((skill) => skill.name);
@@ -195,7 +195,7 @@ async function skillContent(ctx: Context, agent: Agent, skillName: string): Prom
   return skill?.content ?? "";
 }
 
-/** 走 `skill` 工具按需加载（用户可见的接缝），而不是直读注册表。 */
+// 走 `skill` 工具按需加载（用户可见的接缝），而不是直读注册表。
 async function loadSkill(ctx: Context, agent: Agent, skillName: string): Promise<string> {
   const result = await ctx.tools.execute({
     callId: ToolCallId(`call-${skillName}`),
@@ -403,10 +403,8 @@ describe("模式只给一部分工具时（chat 形态）", () => {
 });
 
 describe("技能也跟着工具走", () => {
-  /**
-   * 装 `installed` 的工具行、把模式白名单设成 `allowed`（缺省同一份），返回该会话的 ctx 与 agent。
-   * 收口判据必须分开给：注册表里"装着"不等于模式里"可以用"。
-   */
+  // 装 `installed` 的工具行、把模式白名单设成 `allowed`（缺省同一份），返回该会话的 ctx 与 agent。
+  // 收口判据必须分开给：注册表里"装着"不等于模式里"可以用"。
   async function sessionFor(installed: readonly string[], allowed: readonly string[] = installed) {
     const ctx = new Context();
     contexts.push(ctx);
@@ -433,7 +431,7 @@ describe("技能也跟着工具走", () => {
     return { ctx, agent: handle.agent };
   }
 
-  /** 该会话的技能目录正文：目录本身就是注入通道的一条规则块（id `skill-catalog`）。 */
+  // 该会话的技能目录正文：目录本身就是注入通道的一条规则块（id `skill-catalog`）。
   async function catalogFor(
     installed: readonly string[],
     allowed: readonly string[] = installed,

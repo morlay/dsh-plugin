@@ -4,13 +4,11 @@ import { describe, expect, it } from "vitest";
 import * as plugin from "../src/index.ts";
 import { OLLAMA_PROVIDER_ID, OllamaSearchProvider } from "../src/provider.ts";
 
-/**
- * 真打 `https://ollama.com/api/web_search` 的 e2e。**刻意放在 `src/__tests__/` 之外**：
- * 根 `vitest.config.ts` 的 include 只收 `packages/**\/src/__tests__/`，所以默认的 `just test` 不会收集它——
- * 免得环境里恰好有 `OLLAMA_API_KEY` 时，全量测试静悄悄打外网、花额度、还看运气。
- *
- * 触发方式与跳过条件见包层规范 [`.agents/standards/how-to-verify.md`](../.agents/standards/how-to-verify.md)。
- */
+// 真打 `https://ollama.com/api/web_search` 的 e2e。**刻意放在 `src/__tests__/` 之外**：
+// 根 `vitest.config.ts` 的 include 只收 `packages/**\/src/__tests__/`，所以默认的 `just test` 不会收集它——
+// 免得环境里恰好有 `OLLAMA_API_KEY` 时，全量测试静悄悄打外网、花额度、还看运气。
+//
+// 触发方式与跳过条件见包层规范 [`.agents/standards/how-to-verify.md`](../.agents/standards/how-to-verify.md)。
 const API_KEY = process.env["OLLAMA_API_KEY"] ?? "";
 
 describe.skipIf(API_KEY.length === 0)("Ollama /api/web_search（真实端点）", () => {

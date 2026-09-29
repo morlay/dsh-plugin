@@ -1,8 +1,5 @@
-// 插件清单页（设置 → 插件）里每个 bundle 的卡片与行图标来自 bundle 包自己的 `icon` 字段：
-// host 按包内**相对路径**读那个文件、编码成 data URI 交给页面（上游 `app-boot` 的 package-meta）。
-//
-// 这里用上游读取器（`readPluginMeta`）实测每个 bundle——漏了文件、路径写错、或没进发布清单，
-// 图标就静默退化成默认 artwork（页面上看不出来是配置错了），所以守卫盯的是"真的读得出来"。
+// bundle 的清单图标来自包自己的 `icon` 字段（host 按包内相对路径读成 data URI）：这里用上游
+// `readPluginMeta` 实测每个 bundle——漏了文件、路径写错或没进发布清单，图标就静默退化成默认 artwork。
 import { glob, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,7 +13,7 @@ interface Bundle {
   readonly files: readonly string[];
 }
 
-/** 本仓库自己的 bundle：`packages/bundles/*`（装配清单在 `apps/dsh-custom-next/package.json` 的 `dsh.profile.bundles`）。 */
+// 本仓库自己的 bundle：`packages/bundles/*`（装配清单在 `apps/dsh-custom-next/package.json` 的 `dsh.profile.bundles`）。
 async function bundles(): Promise<Bundle[]> {
   const found: Bundle[] = [];
   for await (const file of glob("packages/bundles/*/package.json", { cwd: process.cwd() })) {

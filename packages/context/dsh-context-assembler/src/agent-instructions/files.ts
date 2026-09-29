@@ -2,9 +2,9 @@ import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-/** 一条要注入的指令文件：`display` 进 id 与正文，`path` 用来读，`root` 区分同名文件。 */
+// 一条要注入的指令文件：`display` 进 id 与正文，`path` 用来读，`root` 区分同名文件。
 export interface InstructionFile {
-  /** 该文件所属的根（项目根或 `$DSH_HOME`）：规则块 id 靠它区分不同根下的同名文件。 */
+  // 该文件所属的根（项目根或 `$DSH_HOME`）：规则块 id 靠它区分不同根下的同名文件。
   readonly root: string;
   readonly display: string;
   readonly path: string;
@@ -16,7 +16,7 @@ export interface WorkspaceOptions {
   readonly dshHome: string;
 }
 
-/** 从 cwd 逐级向上找项目根（含标记目录的那一级）。 */
+// 从 cwd 逐级向上找项目根（含标记目录的那一级）。
 async function projectRoot(cwd: string, marker = ".git"): Promise<string | undefined> {
   let current = resolve(cwd);
   for (;;) {
@@ -36,10 +36,8 @@ function abbreviateHome(path: string): string {
   return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
-/**
- * 工作区指令链：用户全局 `$DSH_HOME/AGENTS.md`，再从项目根到 cwd 的每一级目录取
- * 基础文件与本地 overlay。顺序由宽泛到具体——具体的在后面，与"更具体的优先"一致。
- */
+// 工作区指令链：用户全局 `$DSH_HOME/AGENTS.md`，再从项目根到 cwd 的每一级目录取
+// 基础文件与本地 overlay。顺序由宽泛到具体——具体的在后面，与"更具体的优先"一致。
 export async function instructionChain(
   cwd: string,
   options: WorkspaceOptions,
@@ -84,7 +82,7 @@ async function isFile(path: string): Promise<boolean> {
   return info?.isFile() === true;
 }
 
-/** 读一个指令文件；按 `mtimeMs:size` 缓存，未变就不重读。 */
+// 读一个指令文件；按 `mtimeMs:size` 缓存，未变就不重读。
 export async function readInstruction(
   file: InstructionFile,
   cache: Map<string, { stamp: string; text: string }>,
@@ -107,7 +105,7 @@ export async function readInstruction(
   return text;
 }
 
-/** 单文件超出预算时截断并留一行可见提示（不静默丢内容）。 */
+// 单文件超出预算时截断并留一行可见提示（不静默丢内容）。
 function budget(text: string, display: string, maxBytes: number): string {
   if (Buffer.byteLength(text, "utf8") <= maxBytes) return text.trimEnd();
   const kept = Buffer.from(text, "utf8").subarray(0, maxBytes).toString("utf8");

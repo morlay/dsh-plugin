@@ -1,9 +1,7 @@
-/**
- * 提示面的行为：业务注册同步读数（dict 的候选键、字段的候选值与文案），页面的可添加项与选择器都从它来。
- *
- * 盯的接缝是**注册 → 读数**：读数是同步的（投影发生在渲染帧里），注册与注销都要通知订阅者（页面据此重投影）；
- * 路径可以写模板（`*` 段），一次注册覆盖每个动态键。
- */
+// 提示面的行为：业务注册同步读数（dict 的候选键、字段的候选值与文案），页面的可添加项与选择器都从它来。
+//
+// 盯的接缝是**注册 → 读数**：读数是同步的（投影发生在渲染帧里），注册与注销都要通知订阅者（页面据此重投影）；
+// 路径可以写模板（`*` 段），一次注册覆盖每个动态键。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
@@ -11,7 +9,7 @@ import { addableAt } from "../client/schema-form/controller.ts";
 import { SchemaFormHints } from "../client/schema-form/hints.ts";
 import { projectNode, type FieldNode } from "../client/schema-form/schema-node.ts";
 
-/** 服务只要一个能 provide 自己的 ctx。 */
+// 服务只要一个能 provide 自己的 ctx。
 function service() {
   return new SchemaFormHints({ reflect: { provide: () => {} } } as never);
 }
@@ -51,7 +49,7 @@ describe("候选键的注册面", () => {
 });
 
 describe("这一层能加什么", () => {
-  /** 字段树里某个路径上的节点。 */
+  // 字段树里某个路径上的节点。
   const nodeAt = (root: FieldNode, key: string): FieldNode => {
     if (root.type !== "object") throw new Error("expected object");
     const field = root.fields.find((candidate) => candidate.key === key);

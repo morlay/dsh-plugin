@@ -1,11 +1,10 @@
 import { defineCordisPluginConfig, isLocalPackage } from "@local/devkit";
 
-// 壳与工具分家的边界：`app.asar` 里只有壳自己的字节（`@local/*` 与 `@morlay/dsh-desktop-host`
-// 内联进来），上游包一律留在产物外——所以壳可达的模块不许出现上游裸引用，守
-// `src/__tests__/shell-import-boundary.spec.ts`。
+// 壳产物只含壳自己的字节（`@local/*` 与 `@morlay/dsh-desktop-host` 内联进来），上游包一律留在产物外——
+// 壳可达的模块不许出现上游裸引用，守 `src/__tests__/shell-import-boundary.spec.ts`。
 //
 // 子出口（appconfig / dshhome / official / profile-project / seed）是 `@morlay/dsh-desktopify`
-// 复用同一份事实的入口：种子、官方包清单、home 解析都只有这一份实现，壳与 CLI 都引它。
+// 复用同一份事实的入口。
 export default [
   await defineCordisPluginConfig({
     entries: {
@@ -17,9 +16,8 @@ export default [
     },
     inline: [
       "@morlay/dsh-desktop-host",
-      // 快捷键桥的原生侧（`src/shortcuts.ts` / `src/keybindings.ts`）要用上游的
-      // 「设备偏好单写者」与原子写：它们进不了 app.asar 的解析面，所以内联进壳产物
-      // （连同这两个包的值依赖；`dsh-brand` 只做类型，擦除后不留字节）。
+      // 快捷键桥的原生侧（`src/shortcuts.ts` / `src/keybindings.ts`）要用上游的「设备偏好单写者」与原子写：
+      // 它们进不了 app.asar 的解析面，所以内联进壳产物（`dsh-brand` 只做类型，擦除后不留字节）。
       "@deepseek-ai/dsh-client-shortcuts",
       "@deepseek-ai/dsh-atomic-write",
       "@deepseek-ai/dsh-util-values",

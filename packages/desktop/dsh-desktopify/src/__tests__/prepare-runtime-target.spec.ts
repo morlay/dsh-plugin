@@ -46,7 +46,7 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-/** Every link the payload carries, at any depth. */
+// Every link the payload carries, at any depth.
 async function links(path: string): Promise<string[]> {
   const found: string[] = [];
   for (const entry of await readdir(path, { withFileTypes: true })) {

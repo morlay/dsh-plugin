@@ -145,7 +145,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** 上游 ConversationContent 的滚动容器：jsdom 不做布局，scrollHeight 由替身给出。 */
+// 上游 ConversationContent 的滚动容器：jsdom 不做布局，scrollHeight 由替身给出。
 function scrollPort(height = 640): HTMLElement {
   const element = document.createElement("div");
   element.setAttribute("data-conversation-scroll", "");

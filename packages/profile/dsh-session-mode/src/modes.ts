@@ -1,105 +1,63 @@
-/**
- * 模式的**定义形状**与它的装配期校验：一个模式就是"一段提示词 + 一组能力开关"。
- *
- * 与旧形态（每个模式一行 `@deepseek-ai/dsh-agent-preset`，`config.plugins` 里塞 persona / scope 行）的区别：
- * 模式不再是 Cordis 子树，而是这份纯数据——本包的插件行只在 `config.modes` 里声明它们，运行期按会话读取
- * 并应用（persona 注册到该 agent 的 scope，工具收口交给 `@morlay/dsh-context-assembler/scope`）。
- *
- * 行清单（工具 / 命令 / 压缩 / 委派…）来自 `preset` 指的那份 agent preset：本部署自己注册了一份
- * （`packages/bundles/session-mode-profile` 的 `preset-mode-switch`），两个模式共享它，差异全在会话级收口。
- *
- * "支持自定义"就是指这份 config：装配层（`cordis.patch.yml` / profile 的用户层）能整体改写 `modes`，
- * 也可以只给某几个模式换提示词或白名单——不需要任何插件行。
- *
- * "某个模式默认用哪个模型"**不在**模式里，而是 config 的顶层 `models`（模式 id → 模型）：它是 settings
- * 的设置面要编辑的东西，而设置面只认 volatile 字段、且只认**固定路径**（dict 内部的字段一律 blocked，见
- * `@deepseek-ai/schemastery` 的 `validateVolatileSchema`）。取舍与理由见
- * [ADR 模式默认模型搬到顶层 volatile](../.agents/adrs/20260925-模式默认模型搬到顶层volatile.md)。
- */
+// 模式的定义形状与它的装配期校验：一个模式就是"一段提示词 + 一组能力开关"，本行的 `config.modes` 声明它们。
+// 行清单来自 `preset` 指的那份 agent preset；装配层能整体改写 `modes`，也可以只给某几个模式换提示词或白名单。
+// 取舍见 `.agents/adrs/20260925-默认模型住在模式定义里.md`、`.agents/designs/20260924-会话模式.md`。
 
 import type { Volatile } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 
-/** 一个模式的提示词：两段文本，注册成 agent 作用域的 `deployment:persona-prefix` / `-suffix` section。 */
+// 一个模式的提示词：两段文本，注册成 agent 作用域的 `deployment:persona-prefix` / `-suffix` section。
 export interface SessionModePersona {
-  /** 系统提示词最前的一段；空串表示不遮蔽部署级那层。 */
+  // 系统提示词最前的一段；空串表示不遮蔽部署级那层。
   readonly prefix: string;
-  /** 系统提示词最后的一段；空串表示不写。 */
+  // 系统提示词最后的一段；空串表示不写。
   readonly suffix: string;
 }
 
-/**
- * 一个模式对谁可见：`main` 进用户选择器（会话级选择），`subagent` 表示它**可以**作为子代理的 mode。
- * 两个角色可以同时声明；不写默认 `["main"]`——没写角色的模式不该悄悄变成子代理候选。
- *
- * `subagent` 目前只是候选集的声明：子代理默认继承父 mode（不看角色），"按角色指派 mode" 还没做。
- */
+// 一个模式对谁可见：`main` 进用户选择器（会话级选择），`subagent` 表示它**可以**作为子代理的 mode。
+// 两个角色可以同时声明；不写默认 `["main"]`。`subagent` 现在只是候选集的声明——子代理默认继承父 mode。
 export type SessionModeRole = "main" | "subagent";
 
-/** 一个模式的默认模型；省略的字段跟着 provider 默认走（与全局 `agent-default-model` 同形状）。 */
+// 一个模式的默认模型；省略的字段跟着 provider 默认走（与全局 `agent-default-model` 同形状）。
 export interface SessionModeModel {
   readonly provider: string;
   readonly model: string;
   readonly reasoningEffort?: string;
 }
 
-/** 退役的顶层形状：模式 id → 模型（默认模型现在住在各自的模式里）。 */
+// 退役的顶层形状：模式 id → 模型（默认模型现在住在各自的模式里）。
 export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
 
-/**
- * 一个模式：提示词 + 能力开关。
- *
- * 这份形状是 **schema 归一化之后**的：每个字段都有值（写配置时可以不写，schema 用默认补上——`description`
- * 补空串、`persona` 补两段空文本、两个布尔开关补 `true`）。配置里能省略哪些字段看 `modeSchema` 的 default，
- * 不看这里。
- */
+// 一个模式：提示词 + 能力开关。这份形状是 **schema 归一化之后**的（每个字段都有值，schema 用默认补上），
+// 配置里能省略哪些字段看 `modeSchema` 的 default。
 export interface SessionMode {
-  /**
-   * 这个模式挂在哪个 **agent preset** 上（官方 `standard` / `ptc` / `minimal` / `cordis`，或本部署自己
-   * 注册的那一份的 `id`，见 `mode-sources.ts` 的 `MODE_PRESET_ID`）。
-   *
-   * preset 决定这个 agent 有哪些行（工具 / 命令 / 压缩 / 委派…），模式只决定"这些行怎么被用"：
-   * `allowTools` 里 preset 没有的工具自动跳过，其余扩展（persona / 注入开关 / 默认模型）照常应用。
-   * **可以共享**（本部署就是两个模式挂同一份 preset，差异全在会话级收口）；共享时 preset → 模式的反查无从下手，
-   * 见 `SessionModes.modeForPreset`。空串表示不挂（只能由 applyTo / 继承使用）。
-   */
+  // 这个模式挂在哪个 **agent preset** 上（官方四个，或本部署自己注册的那一份，见 `mode-sources.ts` 的
+  // `MODE_PRESET_ID`）。preset 决定这个 agent 有哪些行，模式只决定"这些行怎么被用"（`allowTools` 里 preset 没有的
+  // 工具自动跳过）；**可以共享**（共享时反查无从下手，见 `SessionModes.modeForPreset`），空串表示不挂。
   readonly preset: string;
-  /** 模式的展示名（选择面归官方 roster；这里留着做事实文案）。 */
+  // 模式的展示名（选择面归官方 roster；这里留着做事实文案）。
   readonly name: string;
-  /** 一句话说明这个模式干什么；空串表示没写。 */
+  // 一句话说明这个模式干什么；空串表示没写。
   readonly description: string;
-  /** 这个模式归谁用：`main`（用户选择器）/ `subagent`（可作子代理 mode）。至少一个。 */
+  // 这个模式归谁用：`main`（用户选择器）/ `subagent`（可作子代理 mode）。至少一个。
   readonly role: SessionModeRole[];
-  /** 该模式的提示词。 */
+  // 该模式的提示词。
   readonly persona: SessionModePersona;
-  /**
-   * 这个模式能用哪些工具；其余工具既不进模型目录、调用也被执行层拒绝，它们自己的说明 section
-   * （`tool:<工具名>`）也不留在提示词里。**至少给一个**——想要"全都要"就列出全部，别留空。
-   */
+  // 这个模式能用哪些工具；其余工具既不进模型目录、调用也被执行层拒绝，它们自己的说明 section
+  // （`tool:<工具名>`）也不留在提示词里。**至少给一个**——想要"全都要"就列出全部，别留空。
   readonly allowTools: string[];
-  /**
-   * 是否要 instruction 类注入（工作区指令、技能目录、用法正文）。缺省要；`false` 表示这个模式一条都不要
-   * ——对话模式就是它。开关由 `@morlay/dsh-context-assembler/scope` 落到通道上。
-   */
+  // 是否要 instruction 类注入（工作区指令、技能目录、用法正文）。缺省要；`false` 表示这个模式一条都不要
+  // ——对话模式就是它。开关由 `@morlay/dsh-context-assembler/scope` 落到通道上。
   readonly instructions: boolean;
-  /**
-   * 是否要 runtime context（文件沙箱策略、审批策略那两条动态快照）。缺省要；`false` 表示这个模式不要它们
-   * ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
-   */
+  // 是否要 runtime context（文件沙箱策略、审批策略那两条动态快照）。缺省要；`false` 表示这个模式不要它们
+  // ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
   readonly runtimeContext: boolean;
-  /**
-   * 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
-   * （`defaultModel` 是它所在模式的一个可加字段）。
-   */
+  // 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
+  // （`defaultModel` 是它所在模式的一个可加字段）。
   readonly defaultModel?: SessionModeModel;
 }
 
 // 每个字段都带 default：schema 的产物因此没有 `undefined` 键（`exactOptionalPropertyTypes` 下"缺省的键"
-// 会与可选属性对不上），而默认值就是"不遮蔽"的那个语义——persona 的默认是两段空文本。
-/**
- * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
- * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
- */
+// 会与可选属性对不上）。`description()` 的类型签名只声明 `string`，这里做一次类型放行。
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
 const personaSchema = z.object({
@@ -107,10 +65,10 @@ const personaSchema = z.object({
   suffix: z.string().default(""),
 });
 
-/** 角色是个封闭集合：写错的 role 在装配期就拒绝，而不是静默变成"谁都不用"。 */
+// 角色是个封闭集合：写错的 role 在装配期就拒绝，而不是静默变成"谁都不用"。
 const roleSchema = z.union([z.const("main"), z.const("subagent")]);
 
-/** 默认模型的形状与全局 `agent-default-model` 一致；省略 effort 就跟 provider 默认。 */
+// 默认模型的形状与全局 `agent-default-model` 一致；省略 effort 就跟 provider 默认。
 const modelSchema = z.object({
   provider: z
     .string()
@@ -140,28 +98,24 @@ const modelSchema = z.object({
   ),
 });
 
-/** 本包 config 的**源码形状**：装配层与设置页写的那个形状。 */
+// 本包 config 的**源码形状**：装配层与设置页写的那个形状。
 export interface Config {
-  /** 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。 */
+  // 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。
   readonly default: string;
-  /** 模式清单：id → 定义（含各自的 `defaultModel`）。顺序即选择器里的顺序（`Object.entries` 的插入序）。 */
+  // 模式清单：id → 定义（含各自的 `defaultModel`）。顺序即选择器里的顺序（`Object.entries` 的插入序）。
   readonly modes: Record<string, SessionMode>;
-  /**
-   * 各模式默认模型曾经住在这里（模式 id → 模型）。现在住在**每个模式自己的 `defaultModel`** 里，这个字段
-   * 只剩一件事：装配期看见它还配着值就报错，提醒把它挪进对应的模式——否则它会静静地失效。
-   */
+  // 退役字段：各模式的默认模型住在每个模式自己的 `defaultModel` 里；这里留着只为装配期报错
+  // （见 `configProblem`）。
   readonly models?: SessionModeModels;
 }
 
-/**
- * schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。
- *
- * `default` 与 `modes` 都是 volatile：默认模式与整份模式清单（含各自的 `defaultModel`）都在行配置页上。
- */
+// schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。
+//
+// `default` 与 `modes` 都是 volatile：默认模式与整份模式清单（含各自的 `defaultModel`）都在行配置页上。
 export interface ResolvedConfig {
   readonly default: Volatile<string>;
   readonly modes: Volatile<Record<string, SessionMode>>;
-  /** 退役的顶层字段：解析后仍在这儿（普通值，不 volatile），装配期据此发现"还配着值"并报错。 */
+  // 退役的顶层字段：解析后仍在这儿（普通值，不 volatile），装配期据此发现"还配着值"并报错。
   readonly models: SessionModeModels;
 }
 
@@ -230,10 +184,8 @@ const modeSchema: z<SessionMode> = z.object({
         en: "Whether the runtime snapshot applies (sandbox and approval policy).",
       }),
     ),
-  /**
-   * 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
-   * schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
-   */
+  // 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
+  // schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
   defaultModel: modelSchema
     // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
     // 凭空多出一行；给了 null 反而让它保持缺失（页面按非必填处理，从候选加成）。
@@ -272,21 +224,19 @@ export const Config: z<Config, ResolvedConfig> = z.object({
       }),
     )
     .volatile(),
-  /**
-   * 退役字段：默认模型住在每个模式自己的 `defaultModel` 里。这里留着是为了**报错**（见 `configProblem`），
-   * 页面上不出现（`hidden()`）。
-   */
+  // 退役字段：默认模型住在每个模式自己的 `defaultModel` 里。这里留着是为了**报错**（见 `configProblem`），
+  // 页面上不出现（`hidden()`）。
   models: z.dict(modelSchema).default({}).hidden(),
 });
 
-/** 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、每个模式自己的默认模型。 */
+// 校验只需要看的那几件事：默认模式、每个模式的工具名单与角色、每个模式自己的默认模型。
 interface Validated {
   readonly default: string;
   readonly modes: Readonly<
     Record<
       string,
       {
-        /** 空串合法的"不挂"；共享合法（差异由会话级收口表达），所以这里不做任何映射唯一性校验。 */
+        // 空串合法的"不挂"；共享合法（差异由会话级收口表达），所以这里不做任何映射唯一性校验。
         readonly preset?: string;
         readonly allowTools?: readonly string[];
         readonly role?: readonly string[];
@@ -294,13 +244,13 @@ interface Validated {
       }
     >
   >;
-  /** 退役的顶层字段：还配着值就报错（它已经不再生效）。 */
+  // 退役的顶层字段：还配着值就报错（它已经不再生效）。
   readonly models?: Readonly<Record<string, unknown>>;
 }
 
-/** 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。 */
+// 模式定义里不合法的地方（装配期 fail loud，而不是等到某个会话装配提示词时才发现）。
 export function configProblem(config: Validated): string | undefined {
-  /** 没写 `role` 等于默认 `["main"]`（与 schema 的默认一致）——字面量与归一化后的形状都能校验。 */
+  // 没写 `role` 等于默认 `["main"]`（与 schema 的默认一致）——字面量与归一化后的形状都能校验。
   const roles = (id: string): readonly string[] => config.modes[id]?.role ?? ["main"];
   const ids = Object.keys(config.modes);
   if (ids.length === 0) return "session-mode: `modes` must declare at least one mode";
@@ -318,10 +268,8 @@ export function configProblem(config: Validated): string | undefined {
   if (empty.length > 0) {
     return `session-mode: mode(s) ${empty.join(", ")} declare no \`allowTools\`; list the tools instead of leaving it empty`;
   }
-  // `preset` **允许共享**（本部署两个模式挂同一份 preset，差异由会话级收口表达）：共享时 preset → 模式
-  // 的反查无从下手，那件事交给 `SessionModes.modeForPreset` 处理（共享时它返回 `undefined`，不反查）。
-  // 空串是"不挂"，合法；除此之外没有可校验的东西——preset 是否存在由 registry 自己回答。
-  // 退役的顶层字段还配着值：它已经不再生效，别让一份"看着像配过"的配置静静地失效。
+  // `preset` **允许共享**（共享时 preset → 模式的反查交给 `SessionModes.modeForPreset`），空串是"不挂"；
+  // 退役的顶层 `models` 还配着值就报错——别让一份"看着像配过"的配置静静地失效。
   if (Object.keys(config.models ?? {}).length > 0) {
     return "session-mode: `models` has moved into each mode's `defaultModel`; move the entries there and drop the top-level `models`";
   }

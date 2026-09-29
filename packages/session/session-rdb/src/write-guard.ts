@@ -7,7 +7,7 @@ export class WriteGuard {
     this.headSeqs.set(id, head);
   }
 
-  /** 本实例有没有这条会话的 head 记录（迁移重写用它决定是"登记基准"还是"严格比较"）。 */
+  // 本实例有没有这条会话的 head 记录（迁移重写用它决定是"登记基准"还是"严格比较"）。
   has(id: SessionId): boolean {
     return this.headSeqs.has(id);
   }

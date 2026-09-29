@@ -1,16 +1,12 @@
-/**
- * 这一行在设置页上的字段面：**六个字段都上页面**——`access` 可改（改完规则当场重算），其余五个是装配事实
- * （runner 命令、进程 cwd、上游基类读一次的超时与差额上限），页面上只读可见。
- *
- * 盯的接缝是 schema 的 meta 事实：`volatile`（host 的 `volatileForm` 据此投影）与 `disabled`（页面据此只读）。
- */
+// 这一行在设置页上的字段面：`access` 可改（改完规则当场重算），其余五个是装配事实、页面上只读可见。
+// 盯的接缝是 schema 的 meta 事实：`volatile`（host 的 `volatileForm` 据此投影）与 `disabled`（页面据此只读）。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { Config, upstreamConfigOf } from "../config.ts";
 
-/** 装配事实：页面上只读可见的那五个。 */
+// 装配事实：页面上只读可见的那五个。
 const FACTS = [
   "runnerCommand",
   "runnerFailureSignatures",
@@ -23,13 +19,13 @@ interface Node {
   meta?: { volatile?: boolean; disabled?: boolean };
 }
 
-/** 一段 schema 的字段表（`toJSON` 是引用表形式，重建之后才好读）。 */
+// 一段 schema 的字段表（`toJSON` 是引用表形式，重建之后才好读）。
 function dictOf(schema: z): Record<string, Node> {
   const rehydrated = new z(schema.toJSON()) as unknown as { dict?: Record<string, Node> };
   return rehydrated.dict ?? {};
 }
 
-/** host 投影后的表单 schema：只留带 volatile 的字段。 */
+// host 投影后的表单 schema：只留带 volatile 的字段。
 function form(): Record<string, Node> {
   return dictOf(volatileForm(Config as never) as z);
 }

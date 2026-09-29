@@ -1,12 +1,10 @@
-/**
- * 行式编辑器：按 `editorLines` 排出的行画 JSON 结构视图——行号、折进、`key: value`、结构行、注释行、容器闭合行
- * 后面的添加入口；值在行内点开编辑（Enter 提交 / Esc 撤销）。
- *
- * 缩进只作用在**行内容**上（行号列固定），添加输入与闭合括号同一行；行内控件用官方的 `Input` / `Menu` / `Button`，
- * 与设置页其余部分同一套视觉与键盘行为。
- *
- * 字段槽仍然生效：命中时该字段**值**的位置换成注册方的组件，键名、注释、行号与行为按钮仍由这里画。
- */
+// 行式编辑器：按 `editorLines` 排出的行画 JSON 结构视图——行号、折进、`key: value`、结构行、注释行、容器闭合行
+// 后面的添加入口；值在行内点开编辑（Enter 提交 / Esc 撤销）。
+//
+// 缩进只作用在**行内容**上（行号列固定），添加输入与闭合括号同一行；行内控件用官方的 `Input` / `Menu` / `Button`，
+// 与设置页其余部分同一套视觉与键盘行为。
+//
+// 字段槽仍然生效：命中时该字段**值**的位置换成注册方的组件，键名、注释、行号与行为按钮仍由这里画。
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
@@ -53,31 +51,22 @@ import {
   ValueTrigger,
 } from "./styles.ts";
 
-/** 编辑器要的一切。 */
+// 编辑器要的一切。
 export interface EditorProps {
-  /** settings 命名空间（行 id）。 */
+  // settings 命名空间（行 id）。
   ns: string;
-  /** 页面读数。 */
+  // 页面读数。
   state: SchemaFormState;
-  /** 动作面（写草稿、保存、丢弃）。 */
+  // 动作面（写草稿、保存、丢弃）。
   face: SchemaFormFace;
-  /** 本包字典。 */
+  // 本包字典。
   t: SchemaFormTranslate;
-  /** `description` 的本地化。 */
+  // `description` 的本地化。
   resolveText: ResolveText;
-  /**
-   * 一个字段的值位置怎么画（字段槽入口：命中用注册方的组件，否则用本包的行内值）。
-   * @param owner - 字段上下文与动作。
-   * @returns 行内值的节点。
-   */
+  // 一个字段的值位置怎么画（字段槽入口：命中用注册方的组件，否则用本包的行内值）。
   renderField: (owner: SchemaFieldOwnerProps) => ReactNode;
 }
 
-/**
- * 画一行的配置。
- * @param props - 读数、动作、字典与字段槽入口。
- * @returns 行式编辑器。
- */
 export function Editor(props: EditorProps): ReactNode {
   const { ns, state, face, t, resolveText, renderField } = props;
   const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
@@ -135,7 +124,7 @@ export function Editor(props: EditorProps): ReactNode {
   );
 }
 
-/** 折叠状态：记「用户切换过的路径」，开合 = 切换过就反转 schema 的默认值。 */
+// 折叠状态：记「用户切换过的路径」，开合 = 切换过就反转 schema 的默认值。
 function useFold(
   state: SchemaFormState,
   toggled: ReadonlySet<string>,
@@ -169,7 +158,7 @@ function useFold(
   );
 }
 
-/** 一行的渲染分派。 */
+// 一行的渲染分派。
 function Row({
   line,
   n,
@@ -308,7 +297,7 @@ function Row({
   );
 }
 
-/** 字段行：`key: value`（数组成员的键名是下标，淡一些）。 */
+// 字段行：`key: value`（数组成员的键名是下标，淡一些）。
 function FieldLine({
   line,
   ns,
@@ -526,12 +515,12 @@ function FieldLine({
   );
 }
 
-/** 复制用的文本（字符串带引号，粘到哪里都是合法片段）。 */
+// 复制用的文本（字符串带引号，粘到哪里都是合法片段）。
 function tokenFor(value: unknown): string {
   return typeof value === "string" ? JSON.stringify(value) : JSON.stringify(value ?? null);
 }
 
-/** 变体切换：判别式 union 挂在标签行上，按形状选的挂在字段行上。触发元素就是当前那一支。 */
+// 变体切换：判别式 union 挂在标签行上，按形状选的挂在字段行上。触发元素就是当前那一支。
 function VariantSelect({
   control,
   path,
@@ -586,7 +575,7 @@ function VariantSelect({
   );
 }
 
-/** 开启行的前缀：字段键名（对象里的一层）或数组成员的下标；成员行另外带移除。 */
+// 开启行的前缀：字段键名（对象里的一层）或数组成员的下标；成员行另外带移除。
 function LinePrefix({
   line,
   face,
@@ -619,7 +608,7 @@ function LinePrefix({
   );
 }
 
-/** 成员行的移除（悬停时出现）：数组项按索引、字典键按键名。 */
+// 成员行的移除（悬停时出现）：数组项按索引、字典键按键名。
 function RemoveLineButton({
   member,
   face,
@@ -647,12 +636,10 @@ function RemoveLineButton({
   );
 }
 
-/**
- * 容器闭合行后面的添加入口。
- *
- * 数组是「追加一个空项」；对象/字典给出**候选**——对象列的是 schema 声明了、值里还没有的字段（带说明），
- * 字典列的是业务注册的候选键（还能自己敲键名）。粘一整段 `{…}` / `[…]` 则整层覆盖。
- */
+// 容器闭合行后面的添加入口。
+//
+// 数组是「追加一个空项」；对象/字典给出**候选**——对象列的是 schema 声明了、值里还没有的字段（带说明），
+// 字典列的是业务注册的候选键（还能自己敲键名）。粘一整段 `{…}` / `[…]` 则整层覆盖。
 function AddLine({
   line,
   state,

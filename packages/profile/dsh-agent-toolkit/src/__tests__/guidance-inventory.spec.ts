@@ -9,14 +9,12 @@ import { TOOL_GROUPS } from "../guidance/groups.ts";
 // vitest 从仓库根跑（与其它读上游文件的 spec 同一约定），不用相对文件深度算。
 const REPO = process.cwd();
 const PACKAGES = join(REPO, "vendor/deepseek-harness/packages");
-/**
- * 上游 shipped standard preset 的装配行：0.1.7 起 preset 是 `@deepseek-ai/dsh-agent-preset` 行
- * （`config.plugins` 就是装配），住在 web-app bundle 的 patch 文件里，不再是目录里的
- * `agent.cordis.yml`。
- */
+// 上游 shipped standard preset 的装配行：0.1.7 起 preset 是 `@deepseek-ai/dsh-agent-preset` 行
+// （`config.plugins` 就是装配），住在 web-app bundle 的 patch 文件里，不再是目录里的
+// `agent.cordis.yml`。
 const STANDARD_PRESET_PATCH = join(PACKAGES, "bundle/web-app/presets/standard.patch.yml");
 
-/** 取 shipped standard preset 的 `config.plugins`（装配行数组）。 */
+// 取 shipped standard preset 的 `config.plugins`（装配行数组）。
 async function standardPlugins(): Promise<unknown> {
   const layers = yaml.load(await readFile(STANDARD_PRESET_PATCH, "utf8"), {
     schema: entryListSchema,
@@ -29,17 +27,13 @@ async function standardPlugins(): Promise<unknown> {
   throw new Error(`shipped standard preset row is missing in ${STANDARD_PRESET_PATCH}`);
 }
 
-/**
- * 不在分组表里的工具：这些行在 standard 装配里被禁用，或不是标准模式的模型可见工具。
- * 新增项必须写清理由，否则覆盖性断言会失败。
- */
+// 不在分组表里的工具：这些行在 standard 装配里被禁用，或不是标准模式的模型可见工具。
+// 新增项必须写清理由，否则覆盖性断言会失败。
 const OUT_OF_SCOPE_TOOLS: readonly string[] = [];
 
-/**
- * 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
- * （plan 规则、文件引用语义、MCP 资源清单、Agent Teams 协作规则）。新增项必须写清理由，
- * 否则覆盖性断言会失败。
- */
+// 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
+// （plan 规则、文件引用语义、MCP 资源清单、Agent Teams 协作规则）。新增项必须写清理由，
+// 否则覆盖性断言会失败。
 const UNGATED_SECTIONS: readonly string[] = [
   "plan:policy",
   "context:file-reference",
@@ -48,15 +42,13 @@ const UNGATED_SECTIONS: readonly string[] = [
   "team:policy",
 ];
 
-/** 每个组声明丢弃自己那批上游说明；平台噪音与未装配工具的说明由通道的默认清单丢弃。 */
+// 每个组声明丢弃自己那批上游说明；平台噪音与未装配工具的说明由通道的默认清单丢弃。
 function droppedSections(): Set<string> {
   return new Set(TOOL_GROUPS.flatMap((group) => group.drops));
 }
 
-/**
- * 委派那批行（`tool-subagent*` / `tool-workflow`）在这里**不算禁用**：上游把它们留在 host 层禁用、
- * 由 preset 层接管，我们的 standard 与上游 standard 都装它们，所以照常为它们的工具归组。
- */
+// 委派那批行（`tool-subagent*` / `tool-workflow`）在这里**不算禁用**：上游把它们留在 host 层禁用、
+// 由 preset 层接管，我们的 standard 与上游 standard 都装它们，所以照常为它们的工具归组。
 interface CompositionRow {
   name?: unknown;
   disabled?: unknown;
@@ -66,13 +58,13 @@ interface CompositionRow {
 interface Row {
   readonly packageName: string;
   readonly enabled: boolean;
-  /** 装配行给出的动态工具名（`toolName:`），源码里没有这个字面量。 */
+  // 装配行给出的动态工具名（`toolName:`），源码里没有这个字面量。
   readonly toolName?: string;
-  /** 装配行是否要求「按会话限制子代理可用模型」——它决定工具注册在哪一层。 */
+  // 装配行是否要求「按会话限制子代理可用模型」——它决定工具注册在哪一层。
   readonly modelSelection: boolean;
 }
 
-/** 递归收集装配行；group 行的 config 是嵌套行数组。 */
+// 递归收集装配行；group 行的 config 是嵌套行数组。
 function collectRows(value: unknown, rows: Row[]): void {
   if (Array.isArray(value)) {
     for (const entry of value) collectRows(entry, rows);
@@ -98,7 +90,7 @@ function collectRows(value: unknown, rows: Row[]): void {
   collectRows(config, rows);
 }
 
-/** 从装配行取出源码目录名：`@deepseek-ai/dsh-tool-fs-search` → `tool-fs-search`。 */
+// 从装配行取出源码目录名：`@deepseek-ai/dsh-tool-fs-search` → `tool-fs-search`。
 function directoryName(packageName: string): string {
   const withoutSubpath = packageName.split("/").slice(0, 2).join("/");
   return withoutSubpath.replace(/^@deepseek-ai\/dsh-/, "").replace(/^@deepseek-ai\//, "");
@@ -125,7 +117,7 @@ async function sourceFiles(root: string): Promise<string[]> {
   return files;
 }
 
-/** 取 `marker` 之后的第一个对象字面量，按花括号配平。 */
+// 取 `marker` 之后的第一个对象字面量，按花括号配平。
 function objectBlocks(text: string, marker: string): string[] {
   const blocks: string[] = [];
   let cursor = text.indexOf(marker);
@@ -182,7 +174,7 @@ async function inventory(directories: readonly string[]): Promise<{
   return { tools, sections };
 }
 
-/** standard 装配引用的包目录（跳过禁用的行）。 */
+// standard 装配引用的包目录（跳过禁用的行）。
 async function enabledDirectories(): Promise<string[]> {
   const rows: Row[] = [];
   collectRows(await standardPlugins(), rows);
@@ -194,7 +186,7 @@ async function enabledDirectories(): Promise<string[]> {
   );
 }
 
-/** standard 装配里显式给出的动态工具名：源码扫描看不到这些字面量。 */
+// standard 装配里显式给出的动态工具名：源码扫描看不到这些字面量。
 async function declaredToolNames(): Promise<string[]> {
   const rows: Row[] = [];
   collectRows(await standardPlugins(), rows);

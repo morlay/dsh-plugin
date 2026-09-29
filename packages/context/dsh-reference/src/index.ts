@@ -27,10 +27,8 @@ declare module "@deepseek-ai/dsh-llm" {
   }
 }
 
-/**
- * 内容之外的一条说明（见层级设计「内容之外的说明」）：不说来源，模型会再 read 一遍同一段内容。
- * 与内容同处一条消息，所以同一步有多个引用时它也只说一次。
- */
+// 内容之外的一条说明（见层级设计「内容之外的说明」）：不说来源，模型会再 read 一遍同一段内容。
+// 与内容同处一条消息，所以同一步有多个引用时它也只说一次。
 const NOTE = [
   "<system-reminder>",
   "这些文件内容是按你消息里的 @ 引用刚读取的，直接用它即可，不必再 read 一遍。",
@@ -41,10 +39,8 @@ export function apply(ctx: Context): void {
   ctx.on("agent/pre-step", async ({ agent, messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next();
     if (decision.kind === "reject") return decision;
-    // 依赖关系：没有对应工具时，注入也没有意义（模型拿到了内容也用不上那条路径）——
-    // 文件引用要有 read 能力，skill 引用要有 skill 工具。是否注入跟着工具走。
-    // 工具服务是可选的（`ctx.get` 在未声明 inject 的 ctx 上会抛，所以这里自己兜住）：
-    // 没有它时不参与判断，按解析结果照常展开。
+    // 注入跟着工具走：文件引用要有 `read` 能力、skill 引用要有 `skill` 工具，没有对应工具时注入也没有意义。
+    // 工具服务是可选的（没声明 `inject` 时 `ctx.get` 会抛，这里自己兜住）：取不到就按解析结果照常展开。
     const tools = ((): unknown => {
       try {
         return ctx.get("tools");

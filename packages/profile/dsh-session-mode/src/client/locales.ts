@@ -1,9 +1,5 @@
-/**
- * client 半的文案：命名空间 `session-mode`（与 locale 注册时用的 key 一致）。
- *
- * 只有会话里那个模式 chip 用这份字典：模式的名字与说明由 host 的清单给（那是数据，不是文案）。本行的配置页
- * （各模式的默认模型）由通用 schema 表单渲染，文案在它自己的字典里。
- */
+// client 半的文案：命名空间 `session-mode`（与 locale 注册时用的 key 一致）。模式的名字与说明由 host 的清单给
+// （那是数据，不是文案）；本行配置页的文案在通用 schema 表单自己的字典里。
 
 export const zh = {
   seatHint: "选择这个会话的模式",

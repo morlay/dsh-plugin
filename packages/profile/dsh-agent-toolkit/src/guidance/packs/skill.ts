@@ -1,4 +1,4 @@
-/** 技能加载。 */
+// 技能加载。
 import type { ToolPack } from "../types.ts";
 
 export const SKILL_PACK: ToolPack = {

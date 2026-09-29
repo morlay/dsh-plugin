@@ -2,10 +2,8 @@ import { access, readdir, stat } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/**
- * 壳包根：dev 以它作为 Electron app 目录（Electron 按壳包清单的 `main` 起主进程），
- * bundle 从它拷 `dist/`。壳与工具拆成两个包之后，这条路径一律由 node 解析，工具里不写死包名。
- */
+// 壳包根：dev 以它作为 Electron app 目录（Electron 按壳包清单的 `main` 起主进程），
+// bundle 从它拷 `dist/`。壳与工具拆成两个包之后，这条路径一律由 node 解析，工具里不写死包名。
 export const SHELL_PACKAGE_ROOT = dirname(
   fileURLToPath(import.meta.resolve("@morlay/dsh-desktop-shell/package.json")),
 );

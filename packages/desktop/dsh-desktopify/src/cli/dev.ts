@@ -42,7 +42,7 @@ import {
 } from "./workspace.ts";
 
 const APP_ROOT = resolve(import.meta.dirname, "..", "..");
-/** 本包名：app 的 `cordis.patch.yml` 用它拼 `dev-client-bundles` 行，profile 里也得装它。 */
+// 本包名：app 的 `cordis.patch.yml` 用它拼 `dev-client-bundles` 行，profile 里也得装它。
 export const DESKTOPIFY_PACKAGE = "@morlay/dsh-desktopify";
 
 function debugPort(name: string, fallback: number): number {
@@ -276,10 +276,8 @@ async function prepareWebProfile(
       },
     );
   }
-  // 现场打包的实现（`dev-client-bundles` 出口）在本包：app 只把 desktopify 声明成 peer，
-  // 上面的循环不会带上它，而 app 的 `cordis.patch.yml` 按 `@morlay/dsh-desktopify/dev-client-bundles`
-  // 写那一行——profile 里缺这个包，dev 的 client bundle 路由就 `failed to import`（只剩上游读清单
-  // 里那份源码的降级路径，页面直接报语法错误）。
+  // 把本包 link 进 profile：app 只把 desktopify 声明成 peer，而那一行按包名 + 出口写，
+  // 缺它 dev 的 client bundle 路由就 `failed to import`。
   if (clientBundles && !dependencies.includes(DESKTOPIFY_PACKAGE)) {
     await run(
       process.execPath,
@@ -361,7 +359,7 @@ async function launchElectron(
 export interface DevOptions {
   readonly workspace?: string;
   readonly web: boolean;
-  /** 数据面根；缺省是工作区内的 `.dsh-store`，取值语义见 `resolveDevHome`。 */
+  // 数据面根；缺省是工作区内的 `.dsh-store`，取值语义见 `resolveDevHome`。
   readonly home?: string;
 }
 

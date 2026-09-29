@@ -1,4 +1,4 @@
-/** 流程与交付。 */
+// 流程与交付。
 import type { ToolPack } from "../types.ts";
 
 export const FLOW_PACK: ToolPack = {

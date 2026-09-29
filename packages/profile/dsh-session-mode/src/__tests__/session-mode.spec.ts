@@ -26,7 +26,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 归一化之后的形状（schema 填好了每个字段）——`apply` 收到的就是它。 */
+// 归一化之后的形状（schema 填好了每个字段）——`apply` 收到的就是它。
 const CONFIG: Config = {
   default: "coding",
   modes: {
@@ -53,7 +53,7 @@ const CONFIG: Config = {
   },
 };
 
-/** 只为本包用例服务的最小 `modelSelection` 投影：真实那份由上游 session-controller 注册。 */
+// 只为本包用例服务的最小 `modelSelection` 投影：真实那份由上游 session-controller 注册。
 function mountModelSelectionProjection(ctx: Context): void {
   ctx.sessionProjections.register({
     key: "modelSelection",
@@ -84,7 +84,7 @@ function fixtureTool(toolName: string) {
   });
 }
 
-/** host 平面装工具行（`dsh.profile.bundles` 列出 toolkit 的形状）与一条动态快照。 */
+// host 平面装工具行（`dsh.profile.bundles` 列出 toolkit 的形状）与一条动态快照。
 async function mountHostPlane(ctx: Context, toolNames: readonly string[]): Promise<void> {
   await ctx.plugin(
     Object.assign(
@@ -118,13 +118,9 @@ async function mount(config: Config = CONFIG) {
   return { ctx, agent: handle.agent };
 }
 
-/**
- * 官方 preset registry 的替身：只做 `select` 与 `composedPreset` 两件事——按请求换行清单、写
- * `agent-preset/selected` 会话事件，并按真 registry 的转发（`session/event` → ctx 事件）把它广播出去。
- * 返回它收到的 preset 序列（切了几次、切到哪）。
- * @param ctx - 宿主 ctx。
- * @param options.composedPreset - 替身的"当前挂着哪个 preset"（真 registry 读 agent 的 scope 父链）。
- */
+// 官方 preset registry 的替身：只做 `select` 与 `composedPreset` 两件事——按请求换行清单、写
+// `agent-preset/selected` 会话事件并按真 registry 的方式转发；返回它收到的 preset 序列（切了几次、切到哪）。
+// `options.composedPreset` 是替身的"当前挂着哪个 preset"（真 registry 读 agent 的 scope 父链）。
 function installFakeRegistry(ctx: Context, options: { composedPreset?: string } = {}): string[] {
   const picked: string[] = [];
   ctx.provide("agentPresets", {
@@ -139,7 +135,7 @@ function installFakeRegistry(ctx: Context, options: { composedPreset?: string } 
   return picked;
 }
 
-/** 一个 config 想装载就必须被拒绝：装配期校验（`configProblem`）在构造函数里抛。 */
+// 一个 config 想装载就必须被拒绝：装配期校验（`configProblem`）在构造函数里抛。
 async function expectRefused(config: Config, reason: string): Promise<void> {
   const ctx = new Context();
   contexts.push(ctx);
@@ -300,10 +296,8 @@ describe("模式的读取与切换", () => {
   });
 });
 
-/**
- * 本部署的形状：两个模式挂**同一份** preset（`mode-switch`），差异全在会话级收口（persona / 白名单 /
- * 两个开关）。preset 是行清单的 home，模式是它的会话级扩展。
- */
+// 本部署的形状：两个模式挂**同一份** preset（`mode-switch`），差异全在会话级收口（persona / 白名单 /
+// 两个开关）。preset 是行清单的 home，模式是它的会话级扩展。
 const SHARED: Config = {
   default: "coding",
   modes: {
@@ -383,7 +377,7 @@ describe("两个模式共享一份 preset", () => {
   });
 });
 
-/** 带角色与默认模型的 fixture：coding 自带模型、chat 只给角色、reviewer 只给 subagent 角色。 */
+// 带角色与默认模型的 fixture：coding 自带模型、chat 只给角色、reviewer 只给 subagent 角色。
 const EXTENDED: Config = {
   default: "coding",
   modes: {
@@ -406,7 +400,7 @@ const EXTENDED: Config = {
   },
 };
 
-/** 请求路由的初值：谁都没配就是它，兜底生效时被换掉。 */
+// 请求路由的初值：谁都没配就是它，兜底生效时被换掉。
 const SEED: LlmCallConfig = { provider: "global", model: "global-model" };
 
 async function requestRoute(agent: Agent): Promise<LlmCallConfig> {

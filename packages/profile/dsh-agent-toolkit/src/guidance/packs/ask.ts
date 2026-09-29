@@ -1,4 +1,4 @@
-/** 与用户交互。 */
+// 与用户交互。
 import type { ToolPack } from "../types.ts";
 
 export const ASK_PACK: ToolPack = {

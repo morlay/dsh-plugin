@@ -133,11 +133,9 @@ const SURFACE_EVENT_TYPES = new Set([
 
 const METERING_EVENT_TYPES = new Set(["compaction/summary", "compaction/prune"]);
 
-/**
- * 升序的 surface 事件 seq 索引：读视图修复里的溯源（replace 的 `sourceEventSeqs` 与
- * metering 的 `shadowedSeqs`）共用这一份，避免每个 replace 各扫一遍全量事件。
- * 前提是输入按 seq 有序（`readLog` 与 live snapshot 都如此）。
- */
+// 升序的 surface 事件 seq 索引：读视图修复里的溯源（replace 的 `sourceEventSeqs` 与
+// metering 的 `shadowedSeqs`）共用这一份，避免每个 replace 各扫一遍全量事件。
+// 前提是输入按 seq 有序（`readLog` 与 live snapshot 都如此）。
 function surfaceSeqIndex(events: readonly SessionEvent[]): number[] {
   const seqs: number[] = [];
   for (const event of events) {
@@ -146,7 +144,7 @@ function surfaceSeqIndex(events: readonly SessionEvent[]): number[] {
   return seqs;
 }
 
-/** `[startSeq, endSeq]` 内的 surface seq（含端点），二分定位后切片。 */
+// `[startSeq, endSeq]` 内的 surface seq（含端点），二分定位后切片。
 function surfaceSeqsInRange(seqs: readonly number[], startSeq: number, endSeq: number): number[] {
   let low = 0;
   let high = seqs.length;
@@ -461,20 +459,11 @@ export function renameLegacyPtcEvents(events: SessionEvent[]): void {
   }
 }
 
-/**
- * 把**旧代（v3 及更早）的消息形状**归一到当前格式（v4）：迁移链（严格）拒绝那些形状时，读路径仍要
- * 能把它们读出来——只动字段与标记，不改坐标、不改内容。
- *
- * 三件事：
- * - `system/message` 的 source：`{ kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }` → `{ kind: 'system-prompt' }`
- *   （v4 起 system 消息只认这个 kind）；
- * - `tool/result` 的消息：v3 是 user 角色、结果块包在 `content[0]`；v4 是 `role: 'tool'` + 顶层
- *   `toolCallId` + `content` 就是结果块；
- * - **本仓库自造、上游不认识的事件类型**（见 `OWN_EVENT_TYPES`：历史遗留的与我们当前在写的）标
- *   `ignorable: true`——v4 的校验对未知类型只接受可忽略信封。
- *
- * 只认这张白名单：**其它未知类型保持 fail loud**（那是「数据来自更新的 harness」的信号，不能吞掉）。
- */
+// 把**旧代（v3 及更早）的消息形状**归一到当前格式（v4）：迁移链（严格）拒绝那些形状时，读路径仍要能把它们
+// 读出来——只动字段与标记，不改坐标、不改内容。三件事：`system/message` 的 source 去掉 plugin 形状（v4 只认
+// `{ kind: 'system-prompt' }`）、`tool/result` 改成 `role: 'tool'` + 顶层 `toolCallId`、`OWN_EVENT_TYPES` 里的
+// 事件补 `ignorable: true` 信封。
+// 只认这张白名单：**其它未知类型保持 fail loud**（那是「数据来自更新的 harness」的信号，不能吞掉）。
 export function normalizeToCurrentShape(events: SessionEvent[]): void {
   for (const event of events) {
     const type = (event as { type: string }).type;
@@ -520,15 +509,9 @@ function liftToolResultMessage(message: unknown): void {
   record["source"] = { kind: "tool", callId };
 }
 
-/**
- * 落库前给**本仓库自造的事件类型**补上 `ignorable: true` 信封。
- *
- * 上游的持久化校验（`validateStoredEvents`）只放行「已知类型」或「带可忽略信封的未知类型」，我们的类型
- * 按构造就在已知表之外——不补的话连**写入**都会被拒（`appendBatch` 里那道校验）。上游 `Session.append`
- * 没有承载这个信封的口子（第三个参数只服务 surface 事件），所以这一笔由持久化层补：canonical log 里的
- * 形状不变，落库的那一份带上信封。
- * @param events - 即将落库的批次（`materializeAppendBatch` 的 JSON 快照副本，可写）。
- */
+// 落库前给**本仓库自造的事件类型**补上 `ignorable: true` 信封：上游持久化校验（`validateStoredEvents`）只放行
+// 「已知类型」或「带可忽略信封的未知类型」，不补连写入都会被拒。`Session.append` 没有承载信封的口子，所以这一笔
+// 由持久化层补——canonical log 的形状不变，落库的那一份带上信封；`events` 是即将落库的批次（可写）。
 export function sealOwnEvents(events: readonly SessionEvent[]): void {
   for (const event of events) {
     if (OWN_EVENT_TYPES.has((event as { type: string }).type)) {
@@ -537,25 +520,19 @@ export function sealOwnEvents(events: readonly SessionEvent[]): void {
   }
 }
 
-/**
- * 本仓库自造、上游不认识的事件类型：读的时候标 `ignorable: true`，v4 的持久化校验才肯跳过它们
- * （`validateStoredEvents` 只放行「已知类型」或「带可忽略信封的未知类型」）。
- *
- * 两类都在这张表里：
- * - **历史遗留**：写过、后来连同机制一起删除的（`session-branch/version`）；
- * - **当前在写**：本仓库的插件自己声明的事件类型（`session-mode/selected`）——上游的
- *   `KNOWN_SESSION_EVENT_TYPES` 由上游仓库的声明生成，外部插件的事件按构造就在它之外。
- *
- * 新增自造事件类型时**必须**登记到这里，否则读路径 fail loud（真回归：`session-mode/selected` 漏登记，
- * 会话打不开）。**不要**用「所有未知类型」代替（那会掩盖更新版本的未知事件——那种必须拒读）。
- */
+// 本仓库自造、上游不认识的事件类型：读的时候标 `ignorable: true`，v4 的持久化校验才肯跳过它们
+// （`validateStoredEvents` 只放行「已知类型」或「带可忽略信封的未知类型」）。两类都在表里：既有日志里会出现、
+// 但本仓库不再产出的 `session-branch/version`，与当前在写的 `session-mode/selected`（上游已知类型表由上游仓库
+// 的声明生成，外部插件的事件按构造就在它之外）。
+// 新增自造事件类型时**必须**登记到这里，否则读路径 fail loud。**不要**用「所有未知类型」代替（那会掩盖更新
+// 版本的未知事件——那种必须拒读）。
 export const OWN_EVENT_TYPES: ReadonlySet<string> = new Set([
   "session-branch/version",
   "session-mode/selected",
 ]);
 
-/** 这批事件是否需要按当前形状归一（旧代消息形状，或尚未标 `ignorable` 的自造事件类型）——写路径曾把回退
- * 视图的结果以当前版本号落库，所以**版本号不可信**，读之前要按内容判一次。 */
+// 这批事件是否需要按当前形状归一（旧代消息形状，或尚未标 `ignorable` 的自造事件类型）——既有日志里可能有以
+// 当前版本号落库的回退视图结果，所以**版本号不可信**，读之前要按内容判一次。
 export function needsShapeAdoption(events: readonly SessionEvent[]): boolean {
   for (const event of events) {
     const type = (event as { type: string }).type;
@@ -745,7 +722,7 @@ export function titleOfEventData(data: string): string | undefined {
   }
 }
 
-/** 用量行的列（`t_event_usage`）：读侧维度（本地日与两个归属标记）在写入时一起物化。 */
+// 用量行的列（`t_event_usage`）：读侧维度（本地日与两个归属标记）在写入时一起物化。
 export interface EventUsageRow {
   fEventId: string;
   fCreatedAt: number;
@@ -769,15 +746,9 @@ function textField(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-/**
- * 一条事件行的用量（只有带 `usage` 的 `assistant/message` 才有）：写路径据此记录
- * `t_event_usage`，统计因此不必逐行解析 JSON。两种 `f_data` 结构（带信封 / 老格式）都认。
- * 读侧维度一起物化：本地日由事件时间算，`f_referenced` 直接 1（这一批事件行与桥接行同事务，
- * 提交即被引用），`f_subagent` 取写入它的会话是否子代理。
- * @param event - 待写入的事件行。
- * @param subagent - 写入它的会话是否 `origin === 'subagent'`。
- * @returns 用量行，或该事件没有用量时的 undefined。
- */
+// 一条事件行的用量（只有带 `usage` 的 `assistant/message` 才有；没有用量时为 undefined）：写路径据此记录
+// `t_event_usage`，统计因此不必逐行解析 JSON，两种 `f_data` 结构（带信封 / 老格式）都认。读侧维度一起物化：
+// 本地日由事件时间算，`f_referenced` 直接 1（这一批事件行与桥接行同事务），`f_subagent` 取写入它的会话是否子代理。
 export function usageRowOf(
   event: {
     fEventId: string;

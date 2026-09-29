@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-/**
- * 行内值与文本解析：显示态是语法色的 token，编辑态的文本按字段类型解析。
- *
- * 盯的接缝是**值 → 显示 / 文本 → 值**：字符串带引号显示但编辑的是原文；secret 不回显值；数字、布尔、JSON 各有
- * 自己的解析规则与失败消息。
- */
+// 行内值与文本解析：显示态是语法色的 token，编辑态的文本按字段类型解析。
+//
+// 盯的接缝是**值 → 显示 / 文本 → 值**：字符串带引号显示但编辑的是原文；secret 不回显值；数字、布尔、JSON 各有
+// 自己的解析规则与失败消息。
 
 import { cleanup, render, screen } from "@testing-library/react";
 import z from "@deepseek-ai/schemastery";
@@ -53,7 +51,7 @@ function actions(): SchemaFormActions {
   };
 }
 
-/** 一个字段的 owner：节点来自真 schema 的投影。 */
+// 一个字段的 owner：节点来自真 schema 的投影。
 function ownerOf(
   schema: z,
   path: readonly string[] = ["field"],

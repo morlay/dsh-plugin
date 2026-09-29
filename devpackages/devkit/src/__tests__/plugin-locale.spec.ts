@@ -1,8 +1,5 @@
-// 插件清单页（设置 → 插件）的标题与描述来自插件包自己的 `locale/<lang>.json`：`en.json` 是基准，
-// 同目录的其它语言文件提供各自语言，且两者都要在 package.json 的 exports 里暴露——否则解析不到。
-//
-// 这里用上游的读取器（`readPluginMeta`）实测每个发布包：漏了文件、少写了 meta 字段、或没暴露出口，
-// 清单页上就会退化成英文 name/description（甚至报错），所以这条守卫盯的是"真的读得出来"。
+// 插件清单页的标题与描述来自插件包自己的 `locale/<lang>.json`（`en.json` 是基准，两者都要在
+// exports 里暴露）：这里用上游 `readPluginMeta` 实测每个发布包，漏了文件或出口就退化成英文 name。
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,7 +11,7 @@ interface Publishable {
   readonly dir: string;
 }
 
-/** 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。 */
+// 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。
 async function publishablePackages(): Promise<Publishable[]> {
   const { glob } = await import("node:fs/promises");
   const found: Publishable[] = [];
@@ -54,7 +51,7 @@ describe("插件清单的多语言声明", () => {
   });
 
   it("上游读取器能读出中英文标题与描述", async () => {
-    /** 读出来的本地化文本是 `{ en, <lang>: … }` 的语言表。 */
+    // 读出来的本地化文本是 `{ en, <lang>: … }` 的语言表。
     const languages = (value: unknown): Record<string, string> =>
       (value ?? {}) as Record<string, string>;
 

@@ -1,9 +1,7 @@
-/**
- * 控制器的行为：一行的 schema 怎么变成字段表、编辑怎么反映到投影、行消失或 schema 变化时页面怎么变。
- *
- * 盯的接缝是**describe + 共享表单 → 页面读数**：字段表按真实键与索引展开、secret 槽单独标记、schema 变了只
- * 换字段树（草稿不丢）、行不在时 `configured=false`。
- */
+// 控制器的行为：一行的 schema 怎么变成字段表、编辑怎么反映到投影、行消失或 schema 变化时页面怎么变。
+//
+// 盯的接缝是**describe + 共享表单 → 页面读数**：字段表按真实键与索引展开、secret 槽单独标记、schema 变了只
+// 换字段树（草稿不丢）、行不在时 `configured=false`。
 
 import type { SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import type { SchemaNode } from "@deepseek-ai/dsh-client-ui-settings/client";
@@ -19,7 +17,7 @@ import type { SchemaFormTranslate } from "../client/schema-form/slot-contract.ts
 import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
 import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
 
-/** host 发来的命名空间视图：schema 走一遍 `toJSON()`（与真实流一致）。 */
+// host 发来的命名空间视图：schema 走一遍 `toJSON()`（与真实流一致）。
 function view(
   ns: string,
   schema: z,
@@ -47,7 +45,7 @@ const t = ((key: string, params?: Record<string, unknown>) => {
       });
 }) as unknown as SchemaFormTranslate;
 
-/** 控制器：rehydrate 与校验都用真 schema（与 `ctx.settingsSchema` 同语义）。 */
+// 控制器：rehydrate 与校验都用真 schema（与 `ctx.settingsSchema` 同语义）。
 function mounted(
   ns: string,
   scope: FakeScope,
@@ -397,7 +395,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
   });
 });
 
-/** 判别式行 Config（`session-rdb`）的两个真场景：切换另一支、从候选补一个字段。 */
+// 判别式行 Config（`session-rdb`）的两个真场景：切换另一支、从候选补一个字段。
 describe("判别式行 Config 的切换与补字段", () => {
   const value = { type: "sqlite", path: "/tmp/a.db" };
 

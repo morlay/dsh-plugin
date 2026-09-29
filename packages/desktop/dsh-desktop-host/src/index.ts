@@ -1,10 +1,6 @@
-/**
- * 桌面部署里的 host 进程入口：按 `desktop` profile 装配 Web 应用，并把请求经字节管道
- * （FD 3/4）交给宿主内的无端口 `webServer`。
- *
- * argv：`[runtimeDir, projectDir, primaryRuntime, pnpmEntry?, nodeBin?]`；
- * IPC：`ready` / `fatal`，另收 `shutdown`。
- */
+// 桌面部署里的 host 进程入口：按 `desktop` profile 装配 Web 应用，并把请求经字节管道（FD 3/4）
+// 交给宿主内的无端口 `webServer`。argv：`[runtimeDir, projectDir, primaryRuntime, pnpmEntry?, nodeBin?]`；
+// IPC：`ready` / `fatal`，另收 `shutdown`。
 
 import { once } from "node:events";
 import { createReadStream, createWriteStream, type ReadStream, type WriteStream } from "node:fs";
@@ -54,14 +50,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 诊断上限：壳把它写进日志，再长也没有额外价值。 */
+// 诊断上限：壳把它写进日志，再长也没有额外价值。
 const MAX_FATAL_DIAGNOSTIC_CHARS = 64 * 1024;
 
-/**
- * fatal 事件：`message` 给壳的 dialog 用，`diagnostic` 是完整 `inspect`（`code` / `syscall` /
- * `path` / `cause` 链，stack 行里没有）——stderr 字节与这条 IPC 谁先到不确定，壳报告的是它
- * 先看到的那一条，所以诊断得跟 IPC 一起走。
- */
+// fatal 事件：`message` 给壳的 dialog 用；`diagnostic` 是完整 `inspect`——stderr 字节与这条 IPC
+// 谁先到不确定，所以诊断跟 IPC 一起走。
 function fatalEvent(error: unknown): DesktopHostEvent {
   return {
     type: "fatal",
@@ -122,7 +115,7 @@ async function main(): Promise<void> {
 
   const installAnchor = join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json");
   const profile = loadProfileDirectory("dsh", projectDir, installAnchor);
-  // 上游 0.1.7-rc.2 起加载不再自己打印跳过原因，改由启动方上报（与上游 desktop-host 同一口径）。
+  // 加载跳过原因由启动方上报（与上游 desktop-host 同一口径）。
   reportSkippedBundles("dsh", profile);
   const application = runProfile({
     environment: loadLayeredEnv("dsh"),

@@ -1,4 +1,4 @@
-/** 文件与图片：读写搜。 */
+// 文件与图片：读写搜。
 import type { ToolPack } from "../types.ts";
 
 export const FS_PACK: ToolPack = {

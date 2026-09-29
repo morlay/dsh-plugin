@@ -1,8 +1,6 @@
-/**
- * 字段默认值与文本解析：默认值就是行内值（`value.tsx`），这里只剩"什么文本算这个字段接受的值"的规则。
- *
- * 行式视图里值在行内点开编辑，编辑的文本交给草稿模型、保存那一刻才按这里的规则解析。
- */
+// 字段默认值与文本解析：默认值就是行内值（`value.tsx`），这里只剩"什么文本算这个字段接受的值"的规则。
+//
+// 行式视图里值在行内点开编辑，编辑的文本交给草稿模型、保存那一刻才按这里的规则解析。
 
 export {
   InlineValue,
@@ -16,15 +14,8 @@ import type { TextParse } from "./draft.ts";
 import type { FieldNode } from "./schema-node.ts";
 import type { SchemaFormTranslate } from "./slot-contract.ts";
 
-/**
- * 各类型的文本解析规则（消息来自本包字典）。
- *
- * 解析不只看类型：schema 上声明的界限（`pattern` / `min` / `max` / `step`）与字面量集合都在这里说话——
- * 用户敲完当场就知道对不对，而不是等保存时被整段校验退回。
- * @param node - 字段节点（`meta` 是约束的来源）。
- * @param t - 本包字典。
- * @returns 这段文本的解析规则。
- */
+// 各类型的文本解析规则（消息来自本包字典）：schema 上声明的界限（`pattern` / `min` / `max` / `step`）与字面量集合
+// 也在这里判，用户敲完当场就知道对不对，而不是等保存时被整段校验退回。
 export function parseFor(node: FieldNode, t: SchemaFormTranslate): TextParse {
   switch (node.type) {
     case "number":

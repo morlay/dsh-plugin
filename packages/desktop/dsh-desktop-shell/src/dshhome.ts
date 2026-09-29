@@ -9,10 +9,8 @@ export function xdgDataHome(): string {
   return join(homedir(), ".local", "share");
 }
 
-/**
- * 解析 `dshHome` 的三态：`xdg`（平台数据目录 + app 名）、`env`（交给环境，这里没有具体路径）、
- * 绝对路径。打包壳与 dev CLI（`--home`）共用这一份，措辞与校验只写在这里。
- */
+// 解析 `dshHome` 的三态：`xdg`（平台数据目录 + app 名）、`env`（交给环境，这里没有具体路径）、
+// 绝对路径。打包壳与 dev CLI（`--home`）共用这一份，措辞与校验只写在这里。
 export function resolveConfiguredHome(name: string, spec: string): string | undefined {
   if (spec === "env") return undefined;
   if (spec === "xdg") return join(xdgDataHome(), name);

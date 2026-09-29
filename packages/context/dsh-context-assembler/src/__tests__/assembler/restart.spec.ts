@@ -40,12 +40,10 @@ interface Runtime {
   readonly adapter: RecordingAdapter;
 }
 
-/**
- * 一份进程：内存状态全新，只有落盘的东西留下——与重启同形。
- *
- * 存储用 JSONL 而不是 rdb，是因为幂等只看会话日志本身：恢复路径（seed + surface 折叠）
- * 两边一样，结论对部署用的 rdb 恢复同样成立（现场日志也已印证，见设计文档"幂等的判据"）。
- */
+// 一份进程：内存状态全新，只有落盘的东西留下——与重启同形。
+//
+// 存储用 JSONL 而不是 rdb，是因为幂等只看会话日志本身：恢复路径（seed + surface 折叠）
+// 两边一样，结论对部署用的 rdb 恢复同样成立（现场日志也已印证，见设计文档"幂等的判据"）。
 async function mountRuntime(root: string): Promise<Runtime> {
   const adapter = new RecordingAdapter();
   const ctx = new Context();
@@ -86,7 +84,7 @@ interface FollowupCapable {
   whenIdle(): Promise<void>;
 }
 
-/** 每个请求里 `<system-reminder id="…">` 的条数：模型实际看到几条。 */
+// 每个请求里 `<system-reminder id="…">` 的条数：模型实际看到几条。
 function remindersPerRequest(adapter: RecordingAdapter): number[] {
   return adapter.requests.map(
     (request) =>
@@ -96,7 +94,7 @@ function remindersPerRequest(adapter: RecordingAdapter): number[] {
   );
 }
 
-/** 落盘的规则块条数：会话日志里这类 append 事件有几个。 */
+// 落盘的规则块条数：会话日志里这类 append 事件有几个。
 function appendedReminders(session: Session): number {
   return session
     .snapshotEvents()

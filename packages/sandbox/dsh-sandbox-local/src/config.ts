@@ -7,13 +7,9 @@ export interface Config extends UpstreamSandboxConfig, UpstreamFsConfig {
   access?: string | string[];
 }
 
-/**
- * schema 解析之后的形状：`access` 是 **volatile 稳定引用**（页面可改的那一项），读它要过 `.get()`。
- *
- * 其余字段也是 volatile，但页面把它们画成**只读**（schema 上的 `disabled()`）：它们是装配事实——runner 命令、
- * 进程 cwd、上游基类读一次的超时与差额上限——放在页面上是为了看清「这一行现在装配成什么样」，改它们要重挂
- * 这一行。所以给上游基类的那份配置是**解包后的值**（{@link upstreamConfigOf}）：基类读的是值，不是引用。
- */
+// schema 解析之后的形状：`access` 是 volatile 稳定引用（读它要过 `.get()`）；其余字段也是 volatile，
+// 但 schema 上标了 `disabled()`，页面把它们画成**只读**的装配事实。所以给上游基类的那份配置是
+// **解包后的值**（`upstreamConfigOf`）——基类读的是值，不是引用。
 export interface ResolvedConfig extends Omit<
   Config,
   | "access"
@@ -31,10 +27,8 @@ export interface ResolvedConfig extends Omit<
   readonly diffBasisMaxBytes: Volatile<number>;
 }
 
-/**
- * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
- * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
- */
+// 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+// （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
 export const Config: z<Config, ResolvedConfig> = z.object({
@@ -111,14 +105,8 @@ export const Config: z<Config, ResolvedConfig> = z.object({
     .volatile(),
 });
 
-/**
- * 交给上游基类的那份配置：装配事实取当前值。
- *
- * 上游 `LocalSandboxProvider` / `LocalFileSystem` 在构造时读一次这些字段并做装配期校验，所以它们要的是值；
- * 设置页改它们走的是「写盘 → Loader 重挂这一行 → 重新解析」这条路。
- * @param config - 本行解析后的配置。
- * @returns 上游两个基类认的普通配置对象。
- */
+// 交给上游基类的配置：装配事实取当前值——基类在构造时读一次这些字段并做装配期校验，所以它们要的是值；
+// 设置页改它们走「写盘 → Loader 重挂这一行 → 重新解析」。返回上游两个基类认的普通配置对象。
 export function upstreamConfigOf(config: ResolvedConfig): UpstreamSandboxConfig & UpstreamFsConfig {
   return {
     runnerCommand: [...config.runnerCommand.get()],

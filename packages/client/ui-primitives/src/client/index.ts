@@ -44,15 +44,13 @@ export type { Reference, ReferenceSpan } from "../reference.ts";
 export { ReferenceMarkdown, referenceMentions } from "../reference-markdown.tsx";
 export type { ReferenceActions, ReferenceMarkdownProps } from "../reference-markdown.tsx";
 
-/**
- * 需要的**服务名**：样式与引用那半不要服务，schema 表单那半要槽位、字典与配置表单。
- *
- * 与包清单里的 `dsh.client.inject` 不是一回事：那份是**装配行 id**（谁先到），交给模块系统排 arrival 顺序；
- * 这里读的是 cordis 服务名（谁已 provide），Loader 拿它决定这一行何时才算 active。写错成包名，这一行就永远
- * pending（`web boot: ... waiting for services`）。
- *
- * 值直接取自 schema 表单那一面，不另抄一份清单。
- */
+// 需要的**服务名**：样式与引用那半不要服务，schema 表单那半要槽位、字典与配置表单。
+//
+// 与包清单里的 `dsh.client.inject` 不是一回事：那份是**装配行 id**（谁先到），交给模块系统排 arrival 顺序；
+// 这里读的是 cordis 服务名（谁已 provide），Loader 拿它决定这一行何时才算 active。写错成包名，这一行就永远
+// pending（`web boot: ... waiting for services`）。
+//
+// 值直接取自 schema 表单那一面，不另抄一份清单。
 export const inject: readonly string[] = [...schemaForm.inject];
 
 export function apply(ctx: Context): void {

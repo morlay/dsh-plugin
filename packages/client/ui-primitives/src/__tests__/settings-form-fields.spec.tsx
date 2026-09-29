@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 搬自 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-fields.client.spec.tsx
-// （上游判据逐条照搬，导入面换成我们的 client 出口）；末尾一条 help 折叠是本仓库补的。
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
+// （导入面换成我们的 client 出口），另加一条 help 折叠的用例；改这里之前先看上游。
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

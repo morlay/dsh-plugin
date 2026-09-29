@@ -82,21 +82,16 @@ export interface ProviderProfileSource {
 }
 
 export interface Config {
-  /**
-   * provider 路由，key 是路由键。**volatile**：值经 Loader 的引用读取
-   * （`config.providers.get()`），设置页改它时不需要重挂这行插件——上游 0.1.7 起
-   * 「运行期可改」只有这一条路（旧的 settings namespace section 覆盖已取消）。
-   */
+  // provider 路由，key 是路由键。**volatile**：值经 Loader 的引用读取（`config.providers.get()`），
+  // 设置页改它不必重挂这行插件——运行期可改只有这一条路。
   providers: Volatile<Record<string, ProviderProfileSource>>;
 }
 
-/** 解析成普通值之后的配置形状（校验与解析只认它）。 */
+// 解析成普通值之后的配置形状（校验与解析只认它）。
 export type Options = { [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : never };
 
-/**
- * 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
- * （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
- */
+// 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
+// （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
 const modelSchema = z.object({
@@ -700,7 +695,7 @@ export function apply(ctx: Context, config: Config): void {
     }
   };
   // volatile 更新（设置页保存）只把新值提交进运行引用并广播，不重挂这一行：这里重算路由注册与
-  // 可配置 provider 目录（上游 0.1.7 的运行期改配置机制；`profiles()` 读的就是引用里的新值）。
+  // 可配置 provider 目录（`profiles()` 读的就是引用里的新值）。
   ctx.on("loader/volatile-update", refresh);
   // 候选配置在提交前先校验：无效更新被拒绝，运行引用保持原值（loader 只记录这次拒绝）。
   ctx.on("internal/config", function (this: Context["fiber"], _raw, next) {

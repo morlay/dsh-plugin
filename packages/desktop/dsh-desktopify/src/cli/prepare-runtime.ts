@@ -12,9 +12,8 @@ import { buildRoot, resolveWorkspace } from "./workspace.ts";
 const NODE_VERSION = "24.17.0";
 const PNPM_MANIFEST = "pnpm/package.json";
 const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
-// What the runtime entry loads: its wrapper, the node-gyp payload the native binary runs builds with, and what
-// redistribution owes. pnpm's install script relinks the package's own `pnpm` shim to the platform binary, so
-// copying the package wholesale would ship that 36 MB binary twice.
+// What the runtime entry loads: its wrapper and the node-gyp payload; pnpm's install script
+// relinks the platform binary, so the package must not be copied wholesale.
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
 
 type RuntimePlatform = "darwin" | "linux" | "win";
@@ -146,11 +145,8 @@ export interface PrepareRuntimeOptions {
   readonly workspace?: string;
 }
 
-/**
- * pnpm 12 publishes the npm package as a wrapper whose `bin/pnpm.mjs` spawns the CLI, which itself ships as a
- * per-platform native binary in a package of its own. A bundle needs both halves, and only the build host's
- * platform package is installable here, so the payload cannot serve another target.
- */
+// pnpm ships as a wrapper package plus a per-platform native binary package; a bundle needs both
+// halves, and only the build host's platform package is installable here.
 function requireBundledPnpmTarget(platform: RuntimePlatform, arch: RuntimeArch): void {
   const host = `${hostPlatform()}-${process.arch}`;
   if (host === `${platform}-${arch}`) return;
@@ -160,14 +156,14 @@ function requireBundledPnpmTarget(platform: RuntimePlatform, arch: RuntimeArch):
 }
 
 interface PnpmPayload {
-  /** Directory of the published wrapper; the runtime entry is its `bin/pnpm.mjs`. */
+  // Directory of the published wrapper; the runtime entry is its `bin/pnpm.mjs`.
   readonly directory: string;
   readonly version: string;
-  /** Native binary the wrapper spawns. */
+  // Native binary the wrapper spawns.
   readonly nativeBinary: string;
 }
 
-/** Resolve the wrapper and the platform package this install carries; pnpm's own lookup is the only source. */
+// Resolve the wrapper and the platform package this install carries; pnpm's own lookup is the only source.
 async function resolvePnpm(): Promise<PnpmPayload> {
   const manifest = fileURLToPath(import.meta.resolve(PNPM_MANIFEST));
   const { version } = JSON.parse(await readFile(manifest, "utf8")) as { version?: unknown };
@@ -185,7 +181,7 @@ async function resolvePnpm(): Promise<PnpmPayload> {
   return { directory: dirname(manifest), version, nativeBinary };
 }
 
-/** Copy the wrapper's closure and its platform package to `<runtime>/pnpm`, where the host gets the entry. */
+// Copy the wrapper's closure and its platform package to `<runtime>/pnpm`, where the host gets the entry.
 async function preparePnpm(platform: RuntimePlatform, runtimeRoot: string): Promise<string> {
   const pnpm = await resolvePnpm();
   const destination = join(runtimeRoot, "pnpm");
@@ -211,7 +207,7 @@ async function preparePnpm(platform: RuntimePlatform, runtimeRoot: string): Prom
   return await verifyPnpm(platform, destination);
 }
 
-/** The packaged app has no route back to this workspace, so the payload has to run before it is packaged. */
+// The packaged app has no route back to this workspace, so the payload has to run before it is packaged.
 async function verifyPnpm(platform: RuntimePlatform, pnpmRoot: string): Promise<string> {
   const runtimeRoot = dirname(pnpmRoot);
   const node = join(runtimeRoot, "node", platform === "win" ? "node.exe" : "node");
@@ -226,7 +222,7 @@ async function verifyPnpm(platform: RuntimePlatform, pnpmRoot: string): Promise<
   return actual;
 }
 
-/** `<runtime>/bin` is prepended to the PATH of the host's pnpm child, so its `node` must be the bundled one. */
+// `<runtime>/bin` is prepended to the PATH of the host's pnpm child, so its `node` must be the bundled one.
 async function prepareBin(platform: RuntimePlatform, runtimeRoot: string): Promise<void> {
   const binRoot = join(runtimeRoot, "bin");
   await rm(binRoot, { recursive: true, force: true });

@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { tsxImportSpecifier } from "../cli/official-deps.ts";
 
-/** 一个最小 tsx 包：只在根目录装（workspace 里没有），复现「工具装在工作区根」的形态。 */
+// 一个最小 tsx 包：只在根目录装（workspace 里没有），复现「工具装在工作区根」的形态。
 async function fixture(options: { tsxAtRoot: boolean }): Promise<{
   workspace: string;
   root: string;

@@ -5,10 +5,9 @@ const spin = styling.keyframes({
   to: { transform: "rotate(360deg)" },
 });
 
-/** 「对话管理」页面的样式表（官方 --dsw-* 变量 + 我们的 css-in-js 层）。
- * 页面根是纵向 flex 且**自己不滚**：页头（标题 / tab 条 / 导入 / 清理）与搜索行固定在顶部，
- * 只有 `scroll` 那层随内容滚。除滚动层外的项都 `flex: none`，否则内容变长时 flex 会把这些项
- * 压到 min-content（官方 Input 的 32px 高会被压成一行文字高）。 */
+// 「对话管理」页面的样式表（官方 --dsw-* 变量 + 我们的 css-in-js 层）：页面根是纵向 flex 且**自己不滚**，
+// 页头（标题 / tab 条 / 导入 / 清理）与搜索行固定在顶部，只有 `scroll` 那层随内容滚；除滚动层外的项都
+// `flex: none`，否则内容变长时会被压到 min-content（官方 Input 的 32px 高会被压成一行文字高）。
 export const styles = {
   page: {
     display: "flex",

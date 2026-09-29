@@ -18,17 +18,17 @@ export { renderVirtualSkill } from "./reminder.ts";
 
 export const name = "context-assembler";
 
-/** 规则声明的位置：紧跟部署 persona（order 0），在任何降级内容之前。 */
+// 规则声明的位置：紧跟部署 persona（order 0），在任何降级内容之前。
 const RULES_ORDER = 1;
 
 export const inject = ["systemPrompt", "skills"];
 
 export interface Config {
-  /** 留在系统提示词里的 section 名；其余非空 section 降级为 reminder。 */
+  // 留在系统提示词里的 section 名；其余非空 section 降级为 reminder。
   keep?: string[];
-  /** 不进提示词的 section 名（部署级噪音）。 */
+  // 不进提示词的 section 名（部署级噪音）。
   suppress?: string[];
-  /** 装配结果上改写的 section 文本（section 名 → 中文文案）。 */
+  // 装配结果上改写的 section 文本（section 名 → 中文文案）。
   replace?: Record<string, string>;
 }
 
@@ -38,10 +38,8 @@ export const Config: z<Config> = z.object({
   replace: z.dict(z.string()).default({ ...DEFAULT_REPLACE }),
 });
 
-/**
- * 提示词注入的唯一通道：system prompt 里只留 `keep`，其余内容按声明的方式到达模型——
- * 降级为紧随用户消息的 reminder、或直接丢弃（写进按需 skill 正文是调用方自己的事）。
- */
+// 提示词注入的唯一通道：system prompt 里只留 `keep`，其余内容按声明的方式到达模型——
+// 降级为紧随用户消息的 reminder、或直接丢弃（写进按需 skill 正文是调用方自己的事）。
 export function apply(ctx: Context, config: Config): void {
   const channel = new ContextAssembler(ctx);
   const keep = new Set(config.keep ?? DEFAULT_KEEP);
@@ -112,12 +110,12 @@ export function apply(ctx: Context, config: Config): void {
   );
 }
 
-/** 降级 section 的条目 id：一条 section 一个 id，于是同一次变化只重发那一条。 */
+// 降级 section 的条目 id：一条 section 一个 id，于是同一次变化只重发那一条。
 function sectionId(name: string): string {
   return `section:${name}`;
 }
 
-/** 本步要注入的条目：键相同且文本未变就不注入，按键字典序（顺序不随注册顺序抖动）。 */
+// 本步要注入的条目：键相同且文本未变就不注入，按键字典序（顺序不随注册顺序抖动）。
 async function pendingEntries(
   agent: Parameters<typeof latestReminderText>[0],
   channel: ContextAssembler,

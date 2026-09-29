@@ -49,15 +49,15 @@ export interface SessionInputDeps {
 
   popup?: (() => PopupDismissFace | undefined) | undefined;
 
-  /** Agent inbox 投影；next-turn 列表叠到 InputState.queue 上（缺省即空）。 */
+  // Agent inbox 投影；next-turn 列表叠到 InputState.queue 上（缺省即空）。
   inbox?: ObservableSnapshot<InboxState | undefined> | undefined;
 
   steerQueue?: (() => void) | undefined;
 
-  /** 提交前快照会话事实：拿的是提交那一刻的取值，不读此后更新的状态。 */
+  // 提交前快照会话事实：拿的是提交那一刻的取值，不读此后更新的状态。
   submissionState?: (() => MessageSubmissionState) | undefined;
 
-  /** 每条真正落 sink 的普通消息尝试通知一次（埋点在 hub 侧接到 product-analytics）。 */
+  // 每条真正落 sink 的普通消息尝试通知一次（埋点在 hub 侧接到 product-analytics）。
   messageSubmitted?: ((submission: MessageSubmission) => void) | undefined;
 
   defaultSink(
@@ -404,10 +404,8 @@ export class SessionInputShell implements SessionInput {
     this.notices.set({ level, text, seq: this.noticeSeq });
   }
 
-  /**
-   * 把键盘交回 composer，并复原它上次的插入点：Lexical 自己的 focus 会还原它记住的
-   * 选区，而直接给 contenteditable 做 DOM focus 会把插入点落到开头。
-   */
+  // 把键盘交回 composer，并复原它上次的插入点：Lexical 自己的 focus 会还原它记住的
+  // 选区，而直接给 contenteditable 做 DOM focus 会把插入点落到开头。
   focus(): void {
     this.editor.getRootElement()?.focus({ preventScroll: true });
     this.editor.focus();

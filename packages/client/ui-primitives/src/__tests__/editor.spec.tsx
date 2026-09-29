@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-/**
- * 行式编辑器的行为：行结构（行号 / `key: value` / 结构行 / 注释）、折叠、行内编辑（点开、提交、撤销）、
- * 容器尾部的添加行（敲键名或粘贴 JSON）、成员行的移除、以及字段槽的命中与兜底。
- *
- * 盯的接缝是**读数 → 行 → 动作**：一行画什么由字段树与草稿状态决定，一次交互只产生一个动作。
- */
+// 行式编辑器的行为：行结构（行号 / `key: value` / 结构行 / 注释）、折叠、行内编辑（点开、提交、撤销）、
+// 容器尾部的添加行（敲键名或粘贴 JSON）、成员行的移除、以及字段槽的命中与兜底。
+//
+// 盯的接缝是**读数 → 行 → 动作**：一行画什么由字段树与草稿状态决定，一次交互只产生一个动作。
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
@@ -52,7 +50,7 @@ function actions(): SchemaFormActions {
   };
 }
 
-/** 一段配置的读数：字段树来自真 schema，值决定排出的行。 */
+// 一段配置的读数：字段树来自真 schema，值决定排出的行。
 function bench(schema: z, value: unknown, overrides: Partial<SchemaFormState> = {}) {
   const root: FieldNode = projectNode(new z(schema.toJSON()));
   const walked = walkFields(root, value);
@@ -122,7 +120,7 @@ function pick(value: unknown, path: readonly string[]): unknown {
   }, value);
 }
 
-/** 一行的渲染文本（去掉行号列、折叠按钮、行为按钮与空白）。 */
+// 一行的渲染文本（去掉行号列、折叠按钮、行为按钮与空白）。
 function rowText(container: HTMLElement): string[] {
   return [...container.querySelectorAll("[data-line]")].map((row) => {
     const body = row.querySelector('[data-role="body"]') ?? row;
@@ -136,7 +134,7 @@ function rowText(container: HTMLElement): string[] {
   });
 }
 
-/** 一行字段的值节点（避开行号等文本）。 */
+// 一行字段的值节点（避开行号等文本）。
 function valueOf(container: HTMLElement, path: string): HTMLElement {
   const row = container.querySelector(`[data-field-path="${path}"][data-line="field"]`);
   if (row === null) throw new Error(`no field row ${path}`);
@@ -473,7 +471,7 @@ describe("union 与布局", () => {
     for (const row of rows) {
       expect(row.children[0]?.getAttribute("data-role")).toBe("number");
     }
-    /** 一行的内容区缩进（行号列不在里面）。 */
+    // 一行的内容区缩进（行号列不在里面）。
     const indentOf = (row: Element | undefined): string =>
       (row?.querySelector('[data-role="body"]') as HTMLElement | null)?.style.paddingLeft ?? "";
     // 第一层就缩进一格，第二层再一格；根的 `{` 不缩进。
@@ -669,9 +667,7 @@ describe("union 与布局", () => {
   });
 });
 
-/**
- * 真控制器 + 真渲染：编辑器那边的替身 face 断不出「加成之后行没出现」这类问题，所以这里两侧都用真的。
- */
+// 真控制器 + 真渲染：编辑器那边的替身 face 断不出「加成之后行没出现」这类问题，所以这里两侧都用真的。
 describe("与真控制器一起跑", () => {
   function live(
     schema: z,

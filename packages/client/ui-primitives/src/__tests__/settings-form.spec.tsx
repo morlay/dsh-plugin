@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// 搬自 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form.client.spec.tsx
-// （上游判据逐条照搬，导入面换成我们的 client 出口）。
-/** The settings form frame: what it says in each state, and that leaving it discards. */
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form.client.spec.tsx 的用例逐条对应
+// （导入面换成我们的 client 出口）；改这里之前先看上游是否也改了同一处。
+// The settings form frame: what it says in each state, and that leaving it discards.
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";

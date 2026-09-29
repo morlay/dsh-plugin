@@ -177,7 +177,7 @@ function injectedBlocks(decision: PreStepDecision, index: number): readonly stri
   });
 }
 
-/** 注入消息里的信封块：跳过内容之外的那条说明（`NOTE`，它在所有信封之前）。 */
+// 注入消息里的信封块：跳过内容之外的那条说明（`NOTE`，它在所有信封之前）。
 function envelopeBlocks(decision: PreStepDecision, index: number): readonly string[] {
   return injectedBlocks(decision, index).slice(1);
 }
@@ -188,12 +188,12 @@ function injectedEnvelope(decision: PreStepDecision, index: number): string {
   return blocks[0]!;
 }
 
-/** 文件内容块：`<file_content path="…">` + 行号内容 + 续读提示（见上下文注入规则）。 */
+// 文件内容块：`<file_content path="…">` + 行号内容 + 续读提示（见上下文注入规则）。
 function envelope(path: string, body: readonly string[]): string {
   return [`<file_content path="${path}">`, ...body, "</file_content>"].join("\n");
 }
 
-/** 内容之外的那条说明：与内容同处一条消息，只说一次（见层级设计「内容之外的说明」）。 */
+// 内容之外的那条说明：与内容同处一条消息，只说一次（见层级设计「内容之外的说明」）。
 const NOTE = [
   "<system-reminder>",
   "这些文件内容是按你消息里的 @ 引用刚读取的，直接用它即可，不必再 read 一遍。",

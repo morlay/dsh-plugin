@@ -522,7 +522,7 @@ function parseBareReference(raw: string): Reference | undefined {
   };
 }
 
-/** 引号 mention 的起手字符：`@"path with spaces"`。 */
+// 引号 mention 的起手字符：`@"path with spaces"`。
 const QUOTED_PATH = '"';
 
 function parseQuotedReference(body: string): Reference | undefined {

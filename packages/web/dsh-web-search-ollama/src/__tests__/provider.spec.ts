@@ -27,7 +27,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** 一个配置引用（host 写它、插件读它），与 `volatile` 字段的运行期形状同形。 */
+// 一个配置引用（host 写它、插件读它），与 `volatile` 字段的运行期形状同形。
 function reference<T>(initial: T): { get: () => T; set: (next: T) => void } {
   let current = initial;
   return {

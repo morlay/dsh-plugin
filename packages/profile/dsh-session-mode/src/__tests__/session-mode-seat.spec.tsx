@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
-/**
- * composer 里那个模式 chip 的两种形态：**空白会话**是选择器（点开有清单），**开过 turn 之后只读**
- * （只显示当前模式，点不动、也没有下拉箭头）——判据来自 host 的投影 `sessionModeEditable`，与服务端拒绝
- * 切换用的是同一份事实。
- */
+// composer 里那个模式 chip 的两种形态：空白会话是选择器（点开有清单），开过 turn 之后只读（只显示当前模式）。
+// 判据来自 host 的投影 `sessionModeEditable`，与服务端拒绝切换用的是同一份事实。
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +15,7 @@ const ROSTER: SessionModeRoster = {
   ],
 };
 
-/** 槽位 props 里本组件真正用到的三个：会话 id、会话状态读面、字典。 */
+// 槽位 props 里本组件真正用到的三个：会话 id、会话状态读面、字典。
 function propsFor(projectionValues: Readonly<Record<string, unknown>>): SessionModeSeatProps {
   return {
     sessionId: "session-1",
@@ -47,7 +44,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** 清单是异步读来的：等到 chip 的按钮出现再断言。 */
+// 清单是异步读来的：等到 chip 的按钮出现再断言。
 async function chip(): Promise<HTMLElement> {
   return await screen.findByRole("button");
 }

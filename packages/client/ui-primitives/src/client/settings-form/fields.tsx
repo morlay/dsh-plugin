@@ -21,7 +21,7 @@ const Input = styled("input")(styles.input);
 const Invalid = styled("p")(styles.invalid);
 const Hint = styled("p")(styles.hint);
 
-/** 上游 icons 里的 IconInfoOutlineRegular（fill-only 几何，整份图标表不搬）。 */
+// 上游 icons 里的 IconInfoOutlineRegular（fill-only 几何，整份图标表不搬）。
 function InfoGlyph({ size }: { size: number }) {
   return (
     <svg
@@ -42,50 +42,45 @@ function InfoGlyph({ size }: { size: number }) {
   );
 }
 
-/** What every settings field control needs regardless of its value type. */
+// What every settings field control needs regardless of its value type.
 export interface SettingsFieldProps {
-  /** Stable id associating the label with its control. */
+  // Stable id associating the label with its control.
   id: string;
-  /** Visible label. */
+  // Visible label.
   label: string;
-  /** One-line explanation rendered under the control. */
+  // One-line explanation rendered under the control.
   hint: string;
-  /** Draft text this control renders. */
+  // Draft text this control renders.
   text: string;
-  /** True when saving would leave a user-layer entry for this field. */
+  // True when saving would leave a user-layer entry for this field.
   overridden: boolean;
-  /** True when the draft is not a value this field accepts. */
+  // True when the draft is not a value this field accepts.
   invalid: boolean;
-  /** Copy for the overridden badge. */
+  // Copy for the overridden badge.
   overriddenLabel: string;
-  /** Copy for the reset control. */
+  // Copy for the reset control.
   resetLabel: string;
-  /** Copy shown in place of the hint while the draft is invalid. */
+  // Copy shown in place of the hint while the draft is invalid.
   invalidLabel: string;
-  /** Disables every control (read-only document, or an unavailable namespace). */
+  // Disables every control (read-only document, or an unavailable namespace).
   disabled: boolean;
-  /** Stage draft text. */
+  // Stage draft text.
   onEdit: (text: string) => void;
-  /** Stage a clear so the field re-inherits the composition layer. */
+  // Stage a clear so the field re-inherits the composition layer.
   onReset: () => void;
 }
 
-/**
- * A staged value field. `numeric` only hints the keypad: which drafts a field
- * accepts is decided by its spec, so the control never silently rewrites what
- * the user typed.
- * @param props - the field's copy, its staged text, and the edit actions.
- * @returns the labelled control.
- */
+// A staged value field. `numeric` only hints the keypad: which drafts a field accepts is decided by its spec, so the
+// control never silently rewrites what the user typed.
 export function SettingsValueField(
   props: Omit<SettingsFieldProps, "hint"> & {
-    /** Optional explanation shown below the input. */
+    // Optional explanation shown below the input.
     hint?: string;
-    /** Rules disclosed by the information button beside the label. */
+    // Rules disclosed by the information button beside the label.
     help?: { label: string; content: ReactNode };
-    /** Hints a numeric keypad without narrowing what the control accepts. */
+    // Hints a numeric keypad without narrowing what the control accepts.
     numeric?: boolean;
-    /** Placeholder shown while the draft is empty. */
+    // Placeholder shown while the draft is empty.
     placeholder?: string;
   },
 ) {
@@ -153,19 +148,14 @@ export function SettingsValueField(
   );
 }
 
-/**
- * A write-only credential control. The value never rides a response, so the
- * control reports only whether one is configured and starts blank; a blank
- * draft writes nothing, which keeps the stored key rather than clearing it.
- * 控件要求浏览器不要把已存的登录密码自动填进来（上游 11c0511271）。
- * @param props - the field's copy, its staged text, and the configured state.
- * @returns the labelled control.
- */
+// A write-only credential control. The value never rides a response, so the control reports only whether one is
+// configured and starts blank; a blank draft writes nothing, which keeps the stored key rather than clearing it.
+// 控件要求浏览器不要把已存的登录密码自动填进来（上游 11c0511271）。
 export function SettingsSecretField(
   props: Pick<SettingsFieldProps, "id" | "label" | "hint" | "text" | "disabled" | "onEdit"> & {
-    /** Whether the Host reports a configured credential for this reference. */
+    // Whether the Host reports a configured credential for this reference.
     configured: boolean;
-    /** Copy describing the configured state. */
+    // Copy describing the configured state.
     stateLabel: string;
   },
 ) {

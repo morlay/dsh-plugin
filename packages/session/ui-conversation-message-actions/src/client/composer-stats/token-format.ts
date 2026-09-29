@@ -1,6 +1,5 @@
-// Token 展示口径，随 composer 统计行从上游 ui-chat 搬来：`formatCacheHitPercent`
-// 的越界分支是**主动修的缺陷**（上游只在未命中侧为 0 时返回 "100"，
-// cacheRead 超出 prompt 时展开循环的缩放间隙恒为负 → 同步死循环冻结主线程）。
+// Token 展示口径：`formatCacheHitPercent` 的越界分支是**主动修的缺陷**（上游只在未命中侧为 0 时返回 "100"，
+// cacheRead 超出 prompt 时展开循环的缩放间隙恒为负 → 同步死循环冻结主线程），这里保持修好的口径。
 import type { ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 
 export function formatTokens(value: number, t: ChatViewSlotProps["t"]): string {

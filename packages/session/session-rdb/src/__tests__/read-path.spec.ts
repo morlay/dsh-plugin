@@ -21,7 +21,7 @@ function backendOf(ctx: Context): Backend {
   return persistenceOf(ctx).internals().backend;
 }
 
-/** 记录后端事件行查询的次数：接缝观测，用来证明读取路径没有重复拉全量。 */
+// 记录后端事件行查询的次数：接缝观测，用来证明读取路径没有重复拉全量。
 function countEventRows(ctx: Context): { rows: number } {
   const backend = backendOf(ctx);
   const counts = { rows: 0 };
@@ -57,10 +57,8 @@ function surfaceEvent(seq: number, text: string, surfaceOp?: unknown): SessionEv
   } as unknown as SessionEvent;
 }
 
-/**
- * 一段含 replace 与 metering 的日志：seq 1/2 被 seq 3（replace 1..2）折叠，
- * seq 3 又被 metering 之后的 seq 5（replace 3..3）折叠。
- */
+// 一段含 replace 与 metering 的日志：seq 1/2 被 seq 3（replace 1..2）折叠，
+// seq 3 又被 metering 之后的 seq 5（replace 3..3）折叠。
 function replaceHeavyLog(): SessionEvent[] {
   return [
     surfaceEvent(0, "a", "append"),

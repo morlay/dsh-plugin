@@ -11,7 +11,7 @@ const VENDOR =
 const UPSTREAM = new URL(VENDOR, import.meta.url);
 const FORK = new URL("../client/apply.ts", import.meta.url);
 
-/** 源码里所有 `a.b.c.subscribe(` 的接收者链：键是「谁被订阅」，正是接线的身份。 */
+// 源码里所有 `a.b.c.subscribe(` 的接收者链：键是「谁被订阅」，正是接线的身份。
 function subscriptions(source: string): Set<string> {
   const found = new Set<string>();
   for (const [, receiver] of source.matchAll(

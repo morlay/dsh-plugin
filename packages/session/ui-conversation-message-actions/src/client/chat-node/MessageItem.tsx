@@ -1,7 +1,5 @@
-// MessageItem: the user / admitted-steering chat node renderer.
-// 官方 `@deepseek-ai/dsh-client-ui-chat` 内置全部 chat-node 渲染器；本项目仅**替换**
-// `user`/`steering` 两个 key（keyed slot reuse 即替换），在消息动作行上提供
-// edit / retry（上游无此能力）。其余 key 由官方内置渲染器处理。
+// MessageItem: 替换官方内置的 `user` / `steering` 两个 chat-node 渲染器（keyed slot reuse 即替换），
+// 在消息动作行上提供 edit / retry；其余 key 由官方内置渲染器处理。
 
 import {
   markdownLabels,

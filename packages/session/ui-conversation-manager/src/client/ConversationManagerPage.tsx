@@ -26,41 +26,41 @@ import {
 import { formatCount, formatPercent, formatTokens } from "./format.ts";
 import { styles } from "./ConversationManagerPage.styles.ts";
 
-/** 一页的行数（会话列表）。 */
+// 一页的行数（会话列表）。
 const PAGE_SIZE = 20;
 
-/** 统计视图按会话列出时的行数上限。 */
+// 统计视图按会话列出时的行数上限。
 const USAGE_SESSION_ROWS = 20;
 
-/** 页面 props：main 座位的运行时份额 + 本包字典 + 注入的动作。 */
+// 页面 props：main 座位的运行时份额 + 本包字典 + 注入的动作。
 export type ConversationManagerPageProps = PropsRuntime<"main"> &
   PropsLocale<"conversationManager"> &
   InjectFace<ConversationManagerFace>;
 
 type Translate = ConversationManagerPageProps["t"];
 
-/** GC 的三段状态：确认 → 运行（阻塞界面）→ 收尾。 */
+// GC 的三段状态：确认 → 运行（阻塞界面）→ 收尾。
 type GcPhase = "idle" | "confirm" | "running";
 
 interface ConversationRow {
   id: SessionId;
   title: string;
-  /** 所属工作区标题；不在任何工作区里的会话用未分组文案。 */
+  // 所属工作区标题；不在任何工作区里的会话用未分组文案。
   workspace: string;
-  /** 只有已归档的行允许取消归档与删除（host 侧同样守卫）。 */
+  // 只有已归档的行允许取消归档与删除（host 侧同样守卫）。
   archived: boolean;
-  /** 子代理派生会话：默认不显示（既不可删也不可取消归档）。 */
+  // 子代理派生会话：默认不显示（既不可删也不可取消归档）。
   subagent: boolean;
   updatedAt: number;
 }
 
-/** 行上显示的紧凑相对时间。 */
+// 行上显示的紧凑相对时间。
 function timeLabel(updatedAt: number, now: number, t: Translate): string {
   const { unit, n } = relativeTime(updatedAt, now);
   return unit === "now" ? t("time.now") : t(`time.${unit}`, { n });
 }
 
-/** host 错误码 → 可读文案；没有码时保留原文。 */
+// host 错误码 → 可读文案；没有码时保留原文。
 function failureText(error: unknown, t: Translate): string {
   const code = error instanceof ConversationManagerRequestError ? error.code : undefined;
   if (code === "SESSION_NOT_ARCHIVED") return t("failure.notArchived");
@@ -538,18 +538,18 @@ export function ConversationManagerPage({
   );
 }
 
-/** 一层视图：会话列表 / 用量统计。 */
+// 一层视图：会话列表 / 用量统计。
 type PageView = "sessions" | "usage";
 
-/** 统计视图的二层维度（时间范围取代了原来的「按天」）。 */
+// 统计视图的二层维度。
 type UsageTab = "overview" | "models" | "sessions";
 
-/** 时间范围选项：默认本日，其后是本周（周一起算）与最近 N 天，「全部」放在最后。 */
+// 时间范围选项：默认本日，其后是本周（周一起算）与最近 N 天，「全部」放在最后。
 const USAGE_RANGES: readonly UsageRange[] = ["day", "week", "7d", "30d", "90d", "all"];
 
 type UsageRange = UsageRangeKey;
 
-/** 范围按钮的文案。 */
+// 范围按钮的文案。
 function rangeLabel(range: UsageRange, t: Translate): string {
   switch (range) {
     case "all":
@@ -567,27 +567,25 @@ function rangeLabel(range: UsageRange, t: Translate): string {
   }
 }
 
-/** 一个用量单项：标签在上、值在下；单项之间横向排布。 */
+// 一个用量单项：标签在上、值在下；单项之间横向排布。
 interface UsageMetric {
   key: string;
   label: string;
-  /** 原始值：token 数、计数，或百分点（`percent` 项）。 */
+  // 原始值：token 数、计数，或百分点（`percent` 项）。
   value: number;
   kind: "tokens" | "count" | "percent";
 }
 
-/** 缓存命中率（百分点）：缓存输入占总输入（含缓存）的比例。 */
+// 缓存命中率（百分点）：缓存输入占总输入（含缓存）的比例。
 function cacheHitPercent(totals: UsageTotals): number {
   const total = totals.inputTokens + totals.cacheReadTokens;
   if (total <= 0) return 0;
   return (totals.cacheReadTokens / total) * 100;
 }
 
-/**
- * 显示口径的单项：输入（含缓存输入）、缓存输入、缓存命中率、输出、推理，
- * 以及活动计数（轮次 / 步骤 / 用户输入 / 工具调用）——没有合计项。
- * 活动计数在按模型的行上不显示（事件没有模型归属，见 `withActivity`）。
- */
+// 显示口径的单项：输入（含缓存输入）、缓存输入、缓存命中率、输出、推理，
+// 以及活动计数（轮次 / 步骤 / 用户输入 / 工具调用）——没有合计项。
+// 活动计数在按模型的行上不显示（事件没有模型归属，见 `withActivity`）。
 function usageMetrics(
   totals: UsageTotals,
   t: Translate,
@@ -640,7 +638,7 @@ function usageMetrics(
   ];
 }
 
-/** 折叠行的排序口径（不显示）：输入（含缓存）+ 输出。 */
+// 折叠行的排序口径（不显示）：输入（含缓存）+ 输出。
 function sortWeight(totals: UsageTotals): number {
   return totals.inputTokens + totals.cacheReadTokens + totals.outputTokens;
 }
@@ -665,7 +663,7 @@ function emptyTotals(): UsageTotals {
   };
 }
 
-/** 把桶按一个键折叠成行并按用量降序（按天 / 按模型都用它）。 */
+// 把桶按一个键折叠成行并按用量降序（按天 / 按模型都用它）。
 function foldBuckets(
   buckets: readonly UsageBucket[],
   keyOf: (bucket: UsageBucket) => string,
@@ -686,7 +684,7 @@ function foldBuckets(
   );
 }
 
-/** 一行用量：label 在上，下面是横向排布的单项。 */
+// 一行用量：label 在上，下面是横向排布的单项。
 function UsageRow({
   rowKey,
   label,
@@ -758,7 +756,7 @@ function UsageList({
   );
 }
 
-/** 总览：全部与「其中子代理」两行，与列表行同形。 */
+// 总览：全部与「其中子代理」两行，与列表行同形。
 function UsageOverview({ report, t }: { report: SessionUsageReport; t: Translate }): ReactNode {
   return (
     <ul {...styling.props(styles.usageList)}>
@@ -768,7 +766,7 @@ function UsageOverview({ report, t }: { report: SessionUsageReport; t: Translate
   );
 }
 
-/** 统计视图：时间范围过滤 + 二层维度切换（总览 / 按模型 / 按会话）。 */
+// 统计视图：时间范围过滤 + 二层维度切换（总览 / 按模型 / 按会话）。
 function UsageView({
   report,
   loading,

@@ -26,16 +26,16 @@ declare module "@deepseek-ai/dsh-client-ui-slots" {
   }
 }
 
-/** 本包字典的 namespace。 */
+// 本包字典的 namespace。
 export const NS = "conversationManager";
 
-/** nav 行与主面板共用的 id。 */
+// nav 行与主面板共用的 id。
 export const PANEL_ID = "conversations" as MainPanelId;
 
-/** nav 行的位置：紧邻官方 Plugins 行（order 0）。 */
+// nav 行的位置：紧邻官方 Plugins 行（order 0）。
 export const PANEL_ORDER = 1;
 
-/** 页面用到的服务。 */
+// 页面用到的服务。
 export const inject = ["slots", "locale", "uiWorkspace", "sessions"];
 
 export function apply(ctx: ClientContext): void {

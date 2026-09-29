@@ -6,12 +6,10 @@ import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite, { SESSION_ROWS_PATH } from "@morlay/session-rdb";
 import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 
-/**
- * 管理面的会话行路由（`/api/session.rows`）：**完整语料（含归档）** + 标题 + 最后活动时间。
- *
- * 它与官方 `session/list` 是两条路：后者按部署策略默认排除归档（见 `session-query.spec.ts` 的
- * 「excludes archived sessions from the official list」），这里给的是管理动作需要的完整集合。
- */
+// 管理面的会话行路由（`/api/session.rows`）：**完整语料（含归档）** + 标题 + 最后活动时间。
+//
+// 它与官方 `session/list` 是两条路：后者按部署策略默认排除归档（见 `session-query.spec.ts` 的
+// 「excludes archived sessions from the official list」），这里给的是管理动作需要的完整集合。
 
 interface FakeResponse {
   res: import("node:http").ServerResponse;
@@ -47,7 +45,7 @@ function fakeRequest(method = "POST", body: unknown = {}): import("node:http").I
   } as unknown as import("node:http").IncomingMessage;
 }
 
-/** 标题事件必须紧接在已有日志之后（seq 连续）；`time` 决定「最后活动时间」的先后。 */
+// 标题事件必须紧接在已有日志之后（seq 连续）；`time` 决定「最后活动时间」的先后。
 function titled(
   log: readonly SessionEvent[],
   title: string,

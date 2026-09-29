@@ -17,7 +17,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 三份收口定义：宽、窄、以及关掉两类注入的那份。 */
+// 三份收口定义：宽、窄、以及关掉两类注入的那份。
 const WIDE: SessionToolScopeMode = {
   name: "标准模式",
   allowTools: ["ask_user_question", "web_search", "web_fetch"],
@@ -30,7 +30,7 @@ const SILENT: SessionToolScopeMode = {
   runtimeContext: false,
 };
 
-/** 通道被调用的记录：本行与通道之间是 duck-typed 的服务契约。 */
+// 通道被调用的记录：本行与通道之间是 duck-typed 的服务契约。
 interface ChannelCall {
   readonly kind: "instructions" | "restrict";
   readonly agent: Agent;
@@ -50,7 +50,7 @@ function fixtureTool(toolName: string) {
   });
 }
 
-/** 在 host 平面装工具行：与 `dsh.profile.bundles` 列出 toolkit 时的形状一致。 */
+// 在 host 平面装工具行：与 `dsh.profile.bundles` 列出 toolkit 时的形状一致。
 async function mountTools(scope: Context, toolNames: readonly string[]): Promise<void> {
   await scope.plugin(
     Object.assign(
@@ -62,7 +62,7 @@ async function mountTools(scope: Context, toolNames: readonly string[]): Promise
   );
 }
 
-/** 上游工具说明 section 的形状：工具行自己注册一条 `tool:<name>`（`tools:` 那类是聚合块）。 */
+// 上游工具说明 section 的形状：工具行自己注册一条 `tool:<name>`（`tools:` 那类是聚合块）。
 async function mountSection(scope: Context, name: string, text: string): Promise<void> {
   await scope.plugin(
     Object.assign(
@@ -74,7 +74,7 @@ async function mountSection(scope: Context, name: string, text: string): Promise
   );
 }
 
-/** 上游 `sandbox-policy` / `user-approval` 的形状：host 层注册一条动态快照。 */
+// 上游 `sandbox-policy` / `user-approval` 的形状：host 层注册一条动态快照。
 async function mountSnapshot(scope: Context, text: string): Promise<void> {
   await scope.plugin(
     Object.assign(
@@ -87,7 +87,7 @@ async function mountSnapshot(scope: Context, text: string): Promise<void> {
 }
 
 interface MountOptions {
-  /** host 平面装了哪些工具（默认：白名单之外的几件，用来验证收口）。 */
+  // host 平面装了哪些工具（默认：白名单之外的几件，用来验证收口）。
   readonly tools?: readonly string[];
   readonly snapshot?: boolean;
 }

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DESKTOPIFY_PACKAGE } from "../cli/dev.ts";
 import { installProfilePatch, syncProfileBundles } from "../cli/dev-web.ts";
 
-/** 示例工作区：dev 的 client bundle patch 行写在那里。 */
+// 示例工作区：dev 的 client bundle patch 行写在那里。
 const APP_WORKSPACE = resolve(
   import.meta.dirname,
   "..",

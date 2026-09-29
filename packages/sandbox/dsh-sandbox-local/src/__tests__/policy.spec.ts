@@ -20,14 +20,14 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 拿一个一定会有的 scope key（`createScope` 建的 scope 必有）。 */
+// 拿一个一定会有的 scope key（`createScope` 建的 scope 必有）。
 function keyOf(ctx: Context): ScopeKey {
   const key = scopeOf(ctx);
   if (key === undefined) throw new Error("测试的 scope 必须有 key");
   return key;
 }
 
-/** 一个假的 agent：策略文本只读它的 session（这里用不到内容，resolve 是 stub）。 */
+// 一个假的 agent：策略文本只读它的 session（这里用不到内容，resolve 是 stub）。
 function fakeAgent(agentCtx: Context): Agent {
   return { ctx: agentCtx, session: { header: { cwd: "/w" } } } as unknown as Agent;
 }

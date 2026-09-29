@@ -1,20 +1,6 @@
-/**
- * client 半：会话里那一个面（模式 chip）+ 设置页里那张「会话模式」卡片。
- *
- * | 槽位                      | 呈现                                                |
- * | ------------------------- | --------------------------------------------------- |
- * | `conversation.input.left` | chip——点开就是切换列表（新会话屏也是一个 composer）  |
- *
- * 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（它提供 preset 的选择面与设置页 roster）：官方管"挂哪套
- * 行"，我们管"会话级扩展"，两套入口并存、互不遮挡。
- *
- * 头部的只读标签**没有**：chip 本来就把当前模式写在脸上（会话与新会话屏都有 composer），右上角再写一遍是
- * 同一句话的复读。
- *
- * 本行的配置页（各模式的默认模型 `config.models`）不再由本包画：那个字段是 volatile 的，页面由
- * `@morlay/dsh-client-ui-primitives` 按 schema 自动生成（它注册到本行的配置入口 `plugins.row.config`，
- * key = `<bundle 包名>#<行 id>`）。本包只管会话里那一个面。
- */
+// client 半：会话里那一个面（模式 chip，槽位 `conversation.input.left`，list + session scope）+ 配置页字段文案。
+// 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（官方管"挂哪套行"，我们管"会话级扩展"，两套入口并存）；
+// 本行的配置页由 `@morlay/dsh-client-ui-primitives` 按 schema 自动生成，key = `<bundle 包名>#<行 id>`。
 
 import type { Context } from "@deepseek-ai/cordis";
 // Type-only：`ctx.remote` 的合并面（选模型的候选来自 LLM 目录）。
@@ -29,21 +15,21 @@ import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
-    /** 会话里两个面的文案（配置页文案在通用 schema 表单的字典里）。 */
+    // 会话里两个面的文案（配置页文案在通用 schema 表单的字典里）。
     "session-mode": SessionModeLocaleKey;
   }
 }
 
-/** 浏览器半插件的字典命名空间。 */
+// 浏览器半插件的字典命名空间。
 const NS = "session-mode";
 
-/** 这一行里需要中文文案的字段（都在 `modes.<模式>.defaultModel` 里，所以按模板路径注册一次）。 */
+// 这一行里需要中文文案的字段（都在 `modes.<模式>.defaultModel` 里，所以按模板路径注册一次）。
 const FIELDS = ["provider", "model", "reasoningEffort"] as const;
 
-/** 动态键的占位段（与通用表单的字段树同一约定）。 */
+// 动态键的占位段（与通用表单的字段树同一约定）。
 const DYNAMIC = "*";
 
-/** 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。 */
+// 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。
 interface ProviderEntry {
   value: string;
   label: string;
@@ -54,13 +40,13 @@ interface ProviderEntry {
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
 export type { SessionModeLocaleKey } from "./locales.ts";
 
-/** 需要的服务：槽位与字典（会话列表经槽位的标准 props 到达组件，不必自己 inject）。 */
+// 需要的服务：槽位与字典（会话列表经槽位的标准 props 到达组件，不必自己 inject）。
 export const inject = ["slots", "locale"];
 
-/** 本包 host 行 id：行配置页读的就是这个命名空间。 */
+// 本包 host 行 id：行配置页读的就是这个命名空间。
 export const SESSION_MODE_NS = "session-mode";
 
-/** 按路径读一段配置里的值（本包只读 provider 档案里的模型清单）。 */
+// 按路径读一段配置里的值（本包只读 provider 档案里的模型清单）。
 function readAt(root: unknown, path: readonly string[]): unknown {
   return path.reduce<unknown>((node, segment) => {
     if (Array.isArray(node)) return node[Number(segment)];
@@ -69,11 +55,7 @@ function readAt(root: unknown, path: readonly string[]): unknown {
   }, root);
 }
 
-/**
- * 装上会话里的两个面，以及本行配置页的字段文案。
- *
- * @param ctx - 浏览器插件上下文。
- */
+// 装上会话里的那一个面，以及本行配置页的字段文案。
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "session-mode: dictionaries");

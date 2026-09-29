@@ -10,7 +10,7 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
 });
 
-/** 上游 `fs-observation-policy` 的形状：占住决策槽（不调用 `next()`），给出它算出的 intent。 */
+// 上游 `fs-observation-policy` 的形状：占住决策槽（不调用 `next()`），给出它算出的 intent。
 function mountObservationPolicy(ctx: Context, behaviour: () => unknown): void {
   ctx.on("fs/edit-intent", behaviour as never);
   ctx.on("fs/write-intent", behaviour as never);

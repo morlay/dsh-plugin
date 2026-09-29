@@ -106,7 +106,7 @@ function rangeOf(reference: Reference): string {
 // 本地引用的原文切片 → inline code；外部地址原样留下。引用不会嵌套（解析器保证），
 // 这里仍按 offset 顺序跳过被前一个切片覆盖的引用。
 // 边界：引用紧贴相邻 inline code 的反引号（`` `x`file:y ``）时两个 code span 会并成一个，
-// 这种写法退化成普通 code——与上一版包反引号的行为一致。
+// 这种写法退化成普通 code。
 function tokenizeReferences(text: string): {
   readonly source: string;
   readonly tokens: Map<string, Reference>;

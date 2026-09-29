@@ -79,7 +79,7 @@ function ready(child: FakeChild): void {
   child.emit("message", { type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION });
 }
 
-/** 从请求管道读到至少 count 条完整帧（帧写入跨 tick）。 */
+// 从请求管道读到至少 count 条完整帧（帧写入跨 tick）。
 async function readFrames(
   child: FakeChild,
   decoder: DesktopHostRequestDecoder,
@@ -151,8 +151,8 @@ describe("桌面 host 子进程", () => {
     await expect(started).rejects.toThrow("composition exploded");
   });
 
-  // 上游 0.1.7-alpha.2 起：fatal 另带完整诊断（util.inspect 的错误，含 code/syscall/path/cause）。
-  // 壳的 dialog 只显示 message，完整诊断走 stderr——IPC 与 stderr 谁先到不确定，诊断不能只挂在一边。
+  // fatal 可另带完整诊断（util.inspect 的错误，含 code/syscall/path/cause）。壳的 dialog 只显示
+  // message，完整诊断走 stderr——IPC 与 stderr 谁先到不确定，诊断不能只挂在一边。
   it("fatal 带完整诊断时写进 stderr，失败信息仍是 message", async () => {
     const written = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     try {

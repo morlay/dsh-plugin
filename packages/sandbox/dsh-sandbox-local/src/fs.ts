@@ -37,7 +37,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     this.access = config.access;
   }
 
-  /** 规则源现场重算：`access` 是 volatile 引用，页面改完下一次编译就是新规则。 */
+  // 规则源现场重算：`access` 是 volatile 引用，页面改完下一次编译就是新规则。
   private get source(): RuleSource {
     return ruleSourceOf(this.access.get(), process.env);
   }
@@ -134,7 +134,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     );
   }
 
-  /** 编译结果按「工作区 + 当前 access」缓存：access 是页面可改的引用，改了就是另一份规则。 */
+  // 编译结果按「工作区 + 当前 access」缓存：access 是页面可改的引用，改了就是另一份规则。
   private rulesFor(workspaceRoot: string): CompiledRules {
     const access = this.access.get();
     const key = `${workspaceRoot}\u0000${JSON.stringify(access ?? null)}`;

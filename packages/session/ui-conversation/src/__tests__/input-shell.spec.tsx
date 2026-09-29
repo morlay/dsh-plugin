@@ -85,7 +85,7 @@ function bench(options: BenchOptions = {}) {
   return { shell, sink };
 }
 
-/** 草稿偏移区间上的令牌 span（草稿修订号取当前值）。 */
+// 草稿偏移区间上的令牌 span（草稿修订号取当前值）。
 function span(shell: SessionInputShell, start: number, end: number): TokenSpan {
   return { start, end, draftRev: shell.snapshot.draftRev };
 }

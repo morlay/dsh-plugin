@@ -1,4 +1,4 @@
-/** 协作编排：Agent Teams（可选能力，见 `agent-team` 出口）。 */
+// 协作编排：Agent Teams（可选能力，见 `agent-team` 出口）。
 import type { GroupPack } from "../types.ts";
 
 export const TEAM_GROUP: GroupPack = {

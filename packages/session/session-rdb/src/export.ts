@@ -5,12 +5,12 @@ import type { SessionPersistenceRdb } from "./index.ts";
 
 export const SESSION_EXPORT_PATH = "/api/session.export";
 
-/** 文件名只保留安全字符：会话 id 来自请求体，会写进 Content-Disposition。 */
+// 文件名只保留安全字符：会话 id 来自请求体，会写进 Content-Disposition。
 function safeFilename(sessionId: string): string {
   return sessionId.replace(/[^A-Za-z0-9._-]/gu, "_");
 }
 
-/** fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。 */
+// fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。
 function zipBytes(files: Record<string, Uint8Array>): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     zip(files, (error, data) => {
@@ -20,7 +20,7 @@ function zipBytes(files: Record<string, Uint8Array>): Promise<Uint8Array> {
   });
 }
 
-/** 导出通道：直接把会话日志打成 zip 响应体，与导入通道读同一份 artifact。 */
+// 导出通道：直接把会话日志打成 zip 响应体，与导入通道读同一份 artifact。
 export function registerSessionExport(ctx: Context, persistence: SessionPersistenceRdb): void {
   ctx.inject(["webServer", "connection"] as const, (webCtx) => {
     const webServer = webCtx.webServer as unknown as {

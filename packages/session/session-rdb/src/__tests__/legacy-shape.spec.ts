@@ -17,14 +17,11 @@ import SessionPersistenceSqlite from "@morlay/session-rdb";
 import { meta } from "@morlay/session-rdb/testing";
 import { needsShapeAdoption, normalizeToCurrentShape } from "../log.ts";
 
-/**
- * 旧代消息形状的读取（2026-09-22 的现场问题）：迁移链是**严格**的——它拒绝我们当年写过、后来被
- * 上游退役的形状（`request/header.header.system`、自造事件类型、inbox 的旧拼接形状），于是这些会话
- * 落到回退视图（adopt）。回退视图因此必须自己把形状归一到当前格式，否则它们全部打不开。
- *
- * 另一类更隐蔽：写路径曾把回退视图的结果以**当前版本号**落库（「v4 标记 + 旧代形状」），所以版本号
- * 不足以决定走哪条路——读之前要按内容再判一次。
- */
+// 旧代消息形状的读取：迁移链是**严格**的——它拒绝既有库里那批退役形状
+// （`request/header.header.system`、自造事件类型、inbox 的旧拼接形状），于是这些会话落到回退视图
+// （adopt）。回退视图因此必须自己把形状归一到当前格式，否则它们全部打不开。
+//
+// 另一类更隐蔽：版本号不足以决定走哪条路——库里存在「v4 标记 + 旧代形状」的会话，读之前要按内容再判一次。
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -65,7 +62,7 @@ async function openHarness(path: string): Promise<{
   return { persistence, load: (id) => internals.load(id), dispose: () => fiber.dispose() };
 }
 
-/** 一条当前形状的日志：写路径正常落库，随后用 SQL 把两处消息形状改回旧代。 */
+// 一条当前形状的日志：写路径正常落库，随后用 SQL 把两处消息形状改回旧代。
 function currentShapeLog(): SessionEvent[] {
   const callId = ToolCallId("call-1");
   return [
@@ -113,7 +110,7 @@ function currentShapeLog(): SessionEvent[] {
   ] as unknown as SessionEvent[];
 }
 
-/** 把已落库的两条消息改回旧代形状（`source: plugin` 的 system、user 角色的 tool-result）。 */
+// 把已落库的两条消息改回旧代形状（`source: plugin` 的 system、user 角色的 tool-result）。
 function rewriteToLegacyShapes(path: string, id: string): void {
   const db = new DatabaseSync(path);
   try {

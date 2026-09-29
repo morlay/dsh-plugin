@@ -118,10 +118,8 @@ async function installOfficialSurface(
   );
 }
 
-/**
- * 注入面（壳包的 `official-packages.generated.ts`）由壳包自己的脚本生成，提示只能指向那里：
- * 本包无 `tsx` 依赖，也不为它留转发入口。
- */
+// 注入面（壳包的 `official-packages.generated.ts`）由壳包自己的脚本生成，提示只能指向那里：
+// 本包无 `tsx` 依赖，也不为它留转发入口。
 export function missingOfficialPackagesError(
   missing: ReadonlyMap<string, readonly string[]>,
 ): Error {
@@ -315,11 +313,8 @@ export async function seedFingerprint(input: {
   return hash.digest("hex");
 }
 
-/**
- * Hash the seed's own layout: generated manifests and settings decide the planted profile,
- * while closure contents are already covered by the closure inputs above. `vendor/` is only
- * enumerated because its payload is a closure copy.
- */
+// Hash the seed's own layout (generated manifests and settings); closure contents are covered by
+// the closure inputs above, and `vendor/` is enumerated because its payload is a closure copy.
 async function hashSeedLayout(hash: Hash, seedRoot: string): Promise<void> {
   hash.update("seed-layout\0");
   const visit = async (directory: string, prefix: string): Promise<void> => {
@@ -351,7 +346,7 @@ async function hashSeedLayout(hash: Hash, seedRoot: string): Promise<void> {
   await visit(seedRoot, "");
 }
 
-/** Enumerate the `file:` sources by package path; their payload is a closure copy already hashed. */
+// Enumerate the `file:` sources by package path; their payload is a closure copy already hashed.
 async function hashVendorPackages(hash: Hash, directory: string, prefix: string): Promise<void> {
   if (await pathExists(join(directory, "package.json"))) {
     hash.update(`${prefix}\0`);
@@ -439,12 +434,12 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
   );
 }
 
-/** Bundles the profile itself owns; shipped bundles come from the runtime installation instead. */
+// Bundles the profile itself owns; shipped bundles come from the runtime installation instead.
 export function profileLocalBundles(manifest: WorkspaceManifest): string[] {
   return mergedProfileBundles(manifest).filter((name) => !OFFICIAL_PROFILE_BUNDLES.includes(name));
 }
 
-/** Generate the profile manifest: app identity plus its own bundles as `file:` dependencies. */
+// Generate the profile manifest: app identity plus its own bundles as `file:` dependencies.
 export function profileManifest(
   manifest: WorkspaceManifest,
   localBundles: readonly string[],
@@ -463,12 +458,12 @@ export function profileManifest(
   };
 }
 
-/** Profile pnpm settings shared by the seed and every later package operation. */
+// Profile pnpm settings shared by the seed and every later package operation.
 export function profileWorkspace(allowBuilds: string): string {
   return `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n${allowBuilds}`;
 }
 
-/** Copy the app's whitelisted files into the profile; the manifest is generated, never copied. */
+// Copy the app's whitelisted files into the profile; the manifest is generated, never copied.
 async function copyProfileEntries(
   workspace: string,
   profileDir: string,
@@ -484,7 +479,7 @@ async function copyProfileEntries(
   }
 }
 
-/** Copy each profile-owned bundle out of the closure as an installable `file:` source. */
+// Copy each profile-owned bundle out of the closure as an installable `file:` source.
 async function copyVendorSources(
   runtimeModulesDir: string,
   profileDir: string,
@@ -503,14 +498,11 @@ async function copyVendorSources(
   }
 }
 
-/** Runtime packages the profile's own dependencies resolve through `overrides`, with runtime-relative paths.
- *
- * profile 自己的包来自工作区（`file:` 源），它们的依赖在 profile 里都无法解析：`workspace:` 协议没有工作区，
- * 普通范围则要回 registry（离线安装拿不到 metadata）。所以打包时把每个能在闭包里找到的依赖都定位到 runtime
- * 的副本，由壳写成 `link:` 覆盖——安装因此不需要 registry，profile 里这些包也与 runtime 共享同一份实例。
- * peer / optional 依赖找不到就跳过（profile 安装不装 peer：`autoInstallPeers: false`）；普通依赖找不到即打包
- * 失败：那不是"装不上"，而是 host 运行时也解析不到。
- */
+// runtime 包：profile 自己的依赖经 `overrides` 指回 runtime 副本，写成 runtime-relative 的 `link:`。
+//
+// profile 里的包来自工作区（`file:`），依赖在 profile 内解析不到（无工作区、离线无 registry）；
+// peer / optional 找不到就跳过（profile 安装不装 peer），普通依赖找不到即打包失败。取舍见
+// `../../.agents/designs/20260917-桌面化工具.md`。
 export async function profileRuntimeLinks(
   runtimeRoot: string,
   runtimeModulesDir: string,
@@ -557,7 +549,7 @@ export async function profileRuntimeLinks(
   return links;
 }
 
-/** The workspace `allowBuilds` block pnpm wrote into the deploy project, carried into the profile. */
+// The workspace `allowBuilds` block pnpm wrote into the deploy project, carried into the profile.
 async function allowedBuilds(deployRoot: string): Promise<string> {
   const path = join(deployRoot, PROFILE_WORKSPACE_NAME);
   if (!(await pathExists(path))) return "";

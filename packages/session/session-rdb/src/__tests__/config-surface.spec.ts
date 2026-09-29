@@ -1,9 +1,7 @@
-/**
- * 这一行配置在页面上的门面：整段 Config 标了 volatile（host 的 `volatileForm` 才会投影它），解析后是稳定引用
- * （装配时取一次快照；生效靠 Loader 重挂这一行）。
- *
- * 盯的接缝是**schema 与设置面之间的约定**：能被描述出来、能当页面根、且值解析成 `.get()` 引用。
- */
+// 这一行配置在页面上的门面：整段 Config 标了 volatile（host 的 `volatileForm` 才会投影它），解析后是稳定引用
+// （装配时取一次快照；生效靠 Loader 重挂这一行）。
+//
+// 盯的接缝是**schema 与设置面之间的约定**：能被描述出来、能当页面根、且值解析成 `.get()` 引用。
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";

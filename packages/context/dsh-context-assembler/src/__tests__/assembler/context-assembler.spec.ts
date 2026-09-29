@@ -29,7 +29,7 @@ import * as plugin from "../../assembler/index.ts";
 import { latestReminderText, renderReminder } from "../../assembler/reminder.ts";
 import { RULES_TEXT } from "../../assembler/rules.ts";
 
-/** 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。 */
+// 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
@@ -95,7 +95,7 @@ function idOf(message: UserMessage): string | undefined {
   return entryIdOf(message);
 }
 
-/** 本步注入里某个 id 的正文；没有该条目则空串。 */
+// 本步注入里某个 id 的正文；没有该条目则空串。
 function bodyOf(messages: readonly UserMessage[], id: string): string {
   const message = messages.find((candidate) => idOf(candidate) === id);
   return message === undefined ? "" : textOf(message);

@@ -1,4 +1,4 @@
-/** 本包在配置页上的字段文案（命名空间 `settings.sandbox-local`）。 */
+// 本包在配置页上的字段文案（命名空间 `settings.sandbox-local`）。
 
 export const zh = {
   access: "额外可写根与拒绝项",

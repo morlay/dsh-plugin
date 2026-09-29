@@ -1,4 +1,4 @@
-/** shell 与后台任务。 */
+// shell 与后台任务。
 import type { ToolPack } from "../types.ts";
 
 export const SHELL_PACK: ToolPack = {

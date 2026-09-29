@@ -2,15 +2,9 @@ import { defineCordisPluginConfig } from "@local/devkit";
 import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { defineConfig } from "tsdown";
 
-/**
- * 会话面接管的装配行：
- *
- * - 持久化换 RDB：官方 `session-persistence-jsonl` / `session-projection-cache` / `session-query-sqlite` /
- *   `storage-json` 四行停用，`storage-domain` 的 backend 路由到 `rdb`（storages 数据与事件日志同库）；
- * - 对话外壳换 fork：官方 `ui-conversation` 停用，插 `ui-conversation-fork` 与它依赖的 `ui-primitives-fork`；
- * - 会话编辑四行：`session-branch` / `session-rdb` / `ui-conversation-message-actions` / `ui-conversation-manager`；
- * - 基础面（样式 / 引用解析 / 设置表单 / 按 schema 生成的行配置页，都在 `@morlay/dsh-client-ui-primitives`）与引用展开（`reference`）。
- */
+// 会话面接管的装配行：持久化换 RDB（停官方 `session-persistence-jsonl` / `session-projection-cache` /
+// `session-query-sqlite` / `storage-json` 四行，`storage-domain` 的 backend 路由到 `rdb`）、对话外壳换 fork
+// （停 `ui-conversation`，插 `ui-conversation-fork` 与 `ui-primitives-fork`）、会话编辑四行、基础面与引用展开（`reference`）。
 const ROWS: readonly unknown[] = [
   {
     id: "session-persistence-jsonl",
@@ -78,13 +72,13 @@ const ROWS: readonly unknown[] = [
   },
 ];
 
-/** patch 真源：生成物是包根那份 `cordis.patch.yml`，build 时由插件重写。 */
+// patch 真源：生成物是包根那份 `cordis.patch.yml`，build 时由插件重写。
 export const patch: PatchBundleOptions = {
   from: import.meta.url,
   rows: () => ROWS,
 };
 
-/** 渲染生成物文本（测试拿它与入库那份比对）。 */
+// 渲染生成物文本（测试拿它与入库那份比对）。
 export const render = (): Promise<string> => renderPatch(patch);
 
 export default defineConfig(async () => {
