@@ -10,5 +10,6 @@ export const FS_PACK: ToolPack = {
     { tool: "glob", short: "按模式查找文件路径" },
     { tool: "grep", short: "按正则搜索文件内容" },
     { tool: "read_image", short: "读取图片内容" },
+    { tool: "str_replace_editor", short: "查看 / 创建 / 精确替换文件" },
   ],
 };

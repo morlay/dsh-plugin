@@ -2,6 +2,7 @@
 // 工具族汇总成"工具 → 一行中文"表，用法组汇总成组表；两处都做重名检查——同名工具跨族、同 key 跨 pack 时 fail loud。
 import type { GroupPack, ToolGroup, ToolPack } from "../types.ts";
 import { ASK_PACK } from "./ask.ts";
+import { CODE_PACK } from "./code.ts";
 import { DELEGATION_PACK } from "./delegation.ts";
 import { FLOW_PACK } from "./flow.ts";
 import { FS_PACK } from "./fs.ts";
@@ -19,6 +20,7 @@ export type { GroupPack, ToolGuidance, ToolPack } from "../types.ts";
 // 全部工具族（顺序只影响报错信息里的排列）。
 export const TOOL_PACKS: readonly ToolPack[] = [
   ASK_PACK,
+  CODE_PACK,
   DELEGATION_PACK,
   FLOW_PACK,
   FS_PACK,
