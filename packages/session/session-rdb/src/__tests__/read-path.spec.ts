@@ -1,4 +1,5 @@
 import { Context } from "@deepseek-ai/cordis";
+import { createDeveloperMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId, SessionSeq, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import { describe, expect, it } from "vitest";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
@@ -57,6 +58,24 @@ function surfaceEvent(seq: number, text: string, surfaceOp?: unknown): SessionEv
   } as unknown as SessionEvent;
 }
 
+// 上游 agent-loop 在工具集增删时写的 surface 事件（此处只有移除，故不带 `headerSeq`）。
+function developerRemoval(seq: number, surfaceOp?: unknown): SessionEvent {
+  return {
+    type: "developer/message",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      turn: 1,
+      step: 1,
+      message: createDeveloperMessage({
+        source: { kind: "tool-registry" },
+        content: [{ type: "tool-removal", toolName: "load_workspace_dependencies" }],
+      }),
+    },
+    ...(surfaceOp === undefined ? {} : { surfaceOp }),
+  } as unknown as SessionEvent;
+}
+
 // 一段含 replace 与 metering 的日志：seq 1/2 被 seq 3（replace 1..2）折叠，
 // seq 3 又被 metering 之后的 seq 5（replace 3..3）折叠。
 function replaceHeavyLog(): SessionEvent[] {
@@ -107,6 +126,27 @@ describe("读路径", () => {
     expect((events[5] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([3]);
   });
 
+  // replace 的溯源按当前 surface 节点算，而 `developer/message` 也是 surface 节点：漏掉它，覆盖到它的
+  // replace 会被当成非法区间降级成 append，模型可见历史随之错位。
+  it("replace 的溯源包含 developer/message 节点", () => {
+    const events = [
+      developerRemoval(0, "append"),
+      surfaceEvent(1, "hi", "append"),
+      surfaceEvent(2, "replaced", { op: "replace", startSeq: 0, endSeq: 1 }),
+    ];
+
+    repairReadView(events);
+
+    expect((events[2] as unknown as { surfaceOp?: unknown }).surfaceOp).toEqual({
+      op: "replace",
+      startSeq: 0,
+      endSeq: 1,
+    });
+    expect((events[2] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
+      0, 1,
+    ]);
+  });
+
   // rewind 的边界 / 窗口探测只要类型：查询不能连带把整个事件 JSON（f_data）拖回来。
   it("rewind 的类型查询只取 fSequence / fType 两列", async () => {
     const { ctx, dispose } = await mount();
@@ -122,6 +162,28 @@ describe("读路径", () => {
       for (const row of before) {
         expect(Object.keys(row).sort()).toEqual(["fSequence", "fType"]);
       }
+    } finally {
+      await dispose();
+    }
+  });
+
+  // 工具清单变化的会话必须能读回：上游 agent-loop 在工具增删时写 `developer/message`（surface 事件），
+  // 读视图曾按「非 surface 事件」清掉它的 `surfaceOp`，随后的 `validateStoredEvents` fail loud——
+  // 一次 resume 后的工具变化就足以让整条历史会话打不开。
+  it("含工具清单变更事件的会话可加载", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      const base = oneTurnLog();
+      const handle = await ctx.sessionPersistence.create(meta("s-tools-changed"));
+      await handle.append(base);
+      await handle.append([developerRemoval(base.length, "append")]);
+      await handle.close();
+
+      const inspected = await persistenceOf(ctx).load(SessionId("s-tools-changed"));
+
+      expect(inspected.events.find((event) => event.type === "developer/message")?.surfaceOp).toBe(
+        "append",
+      );
     } finally {
       await dispose();
     }

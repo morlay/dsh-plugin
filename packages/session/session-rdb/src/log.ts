@@ -124,8 +124,12 @@ export function rowToEvent(row: EventRow): SessionEvent {
   } as SessionEvent;
 }
 
+// 与上游 `SURFACE_EVENT_TYPES`（`…/core/session/src/surface.ts`）同一集合：`developer/message` 承载
+// 工具清单的增删通知，同样是模型可见的 surface 事件，漏掉它会把它的 `surfaceOp` 当「非 surface 事件带的
+// 标记」清掉，随后的持久化校验直接拒绝整条会话（agent-loop 在工具集变化时会写这种事件）。
 const SURFACE_EVENT_TYPES = new Set([
   "system/message",
+  "developer/message",
   "user/message",
   "assistant/message",
   "tool/result",
