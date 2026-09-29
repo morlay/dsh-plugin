@@ -17,7 +17,7 @@
 | 注入通道        | `@morlay/dsh-context-assembler` 保持 **host 全局一份、不隔离**                                                                                        | preset realm 挂 `skill-filesystem` / `tool-skill`，通道检测到 `skill` 已注册就不再注册，两者本来就按这个前提写成                                                                                            |
 | 工具行清单      | 归 preset 平面：toolkit 的 `rows` 发布 `TOOLKIT_PRESET_ROWS` 供本部署那份 preset 引用（另有工具名数据），host 平面只留**一行 `guidance`**             | host 平面不再重复装 preset 的行（一行只属于一个平面，官方 web-app 已把那些行 `disabled` 让给 preset）                                                                                                       |
 | 先读后改        | 上游 `fs-observation-policy` 留在 host 平面；我们那份 preset 里放**抵消行** `fs-intent-relax`（toolkit 的 `TOOLKIT_POLICY_ROWS`），只让挂它的会话免除 | preset realm 里禁用同 id 的行禁不掉 host 平面那一行，host 平面禁用又会连官方 shipped preset 的会话一起关——只能抢 waterfall 链首抵消（[实现](../../packages/profile/dsh-agent-toolkit/src/relax-intent.ts)） |
-| 部署默认 preset | `agent-preset-registry` 的 `default` 在 `@morlay/mydsh-profile` 里配，指向 `mode-switch`                                                              | registry 的 `default` / `selectedDefault` 就是"选哪个"的配置面（[preset.ts:12-18]）；新会话因此直接是我们的行清单                                                                                           |
+| 部署默认 preset | `agent-preset-registry` 的 `default` 在 `@morlay/mydsh-profile` 里配，指向 `mode-switch`                                                              | registry 的 `default` / `selectedDefault` 就是"选哪个"的配置面（`vendor/deepseek-harness/packages/preset/agent-preset-registry/src/index.ts:54-55,74`）；新会话因此直接是我们的行清单                       |
 
 ## 事实基线
 
@@ -27,7 +27,7 @@
 - 挂载：Agent setup 时 `mount(agentCtx, id)`，把 agent 的 scope key 绑到 registry 持有的代际 standing key 上；一个 agent 同时只有一个 preset，子 agent 绑父的**确切代际**：`packages/api/session-controller/src/agent.ts:381-397`、`packages/preset/agent-preset-registry/src/index.ts:226-250,273-284`。
 - 服务必须处在 `isolate` realm，否则 mount 直接失败：`packages/preset/agent-preset-registry/src/mount.ts:265-267`；cordis preset 的三组键是 `planMode` / `compaction`+`toolResultPruner` / `workflowEngine`：`packages/bundle/web-app/presets/cordis.patch.yml:44-45,65-67,82-83`。
 - 会话只**记录身份**（header + 空白期的选择事件 + projection），换 preset 限会话空白期，否则 `agent-preset/locked`：`packages/preset/agent-preset-registry/src/session.ts:1-13,20-30,35-44`、`src/index.ts:318-334`。
-- 没有声明写入口：新 preset 与覆盖内置 preset 都是 bundle patch（整段替换 `config.plugins`，不合并后续内置变更）：`packages/preset/agent-preset-registry/README.md:48`、[note 2026-09-18](../skills/dsh-plugin-upstream-sync/SKILL.md)。
+- 没有声明写入口：新 preset 与覆盖内置 preset 都是 bundle patch（整段替换 `config.plugins`，不合并后续内置变更）：`packages/preset/agent-preset-registry/README.md:48`、`dsh-plugin-upstream-sync` 技能。
 - 平面分工：面向模型的行归 preset 平面，其余留在 host 平面；官方 web-app 自己把 `tool-bash` / `tool-fs` / `tool-fs-search` / `tool-skill` / `skill-filesystem` / `compaction-basic` / `tool-subagent*` 等一整批 host 行标 `disabled: true`，理由写在行上方：`packages/bundle/web-app/cordis.patch.yml:444-530`，架构说明见 `vendor/deepseek-harness/.agents/notes/implemented/architecture/2026-08-10-host-plane-ownership-after-presets.zh.md`。
 - 槽位注册是**单注册**：`single slot "X" already has a registration` 直接抛错：`packages/client/ui-slots/src/index.ts:1203-1233`。官方 seat 占 `conversation.hero.agentPreset`（名单面）：`packages/client/ui-agent-preset/src/client/index.ts:177-183`；我们的模式 chip 放在同 scope 的 **list** 槽位 `conversation.input.left`（composer 工具行左侧——新会话屏也是 blank session 的 composer，头部槽位在那里不存在）：`packages/profile/dsh-session-mode/src/client/index.ts`。
 

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Conversation Manager",
-    "description": "Full-page conversation management panel (browser half): search across sessions, unarchive, delete and import as a new session."
+    "description": "Full-page conversation management panel (browser half): two tab levels over sessions and usage — search, paging, archive / unarchive / export / delete, import as a new session and orphan-data GC in the session view, token usage across all conversations in the usage view."
   }
 }

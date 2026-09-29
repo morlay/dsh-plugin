@@ -2,7 +2,6 @@
   "name": "@morlay/sandbox-profile",
   "version": "0.0.2",
   "description": "可配置沙箱：禁用官方 sandbox / fs-sandbox 两行、插入替换行，并给出访问规则的值。",
-  "icon": "./icon.svg",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -50,6 +49,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
   },
+  "icon": "./icon.svg",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

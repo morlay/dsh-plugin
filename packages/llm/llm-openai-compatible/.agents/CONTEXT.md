@@ -7,7 +7,7 @@
 边界：只覆盖 `llm/llm-openai-compatible` 一个包（不碰 LLM 路由的消费方与其它 provider 适配器）；
 边界表在仓库根 [`.agents/CONTEXT-MAP.md`](../../../../.agents/CONTEXT-MAP.md)。
 
-## 配置与路由
+### 配置与路由
 
 **provider 路由（provider route）**：
 `providers` dict 的 key——选择器与 `GenerateOptions.provider` 使用的路由键，
@@ -37,7 +37,7 @@ _避免使用_：模型列表、模型注册表
 `reasoning_effort`。
 _避免使用_：推理级别、思考档位
 
-## 请求与传输
+### 请求与传输
 
 **wire 字段**：
 发送到 OpenAI 兼容端点的请求体字段（`temperature` / `max_tokens` /

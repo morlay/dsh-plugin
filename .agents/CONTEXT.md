@@ -4,7 +4,9 @@
 在不修改上游 `@deepseek-ai/*` 的前提下，重写同一会话或从闭合边界派生新会话。
 上下文边界见 [`CONTEXT-MAP.md`](./CONTEXT-MAP.md)，分层与设计背景见 [`系统设计`](./designs/20260917-系统设计.md)。
 
-## 装配
+## 术语
+
+### 装配
 
 **装配（assembly）**：
 把契约 / 编排 / 实现三层一次性装进 DeepSeek Harness web profile 的动作——归聚合层
@@ -17,7 +19,7 @@ _避免使用_：接线、wiring
 [ADR-20260917-rdb替换官方jsonl持久化](../packages/bundles/better-session/.agents/adrs/20260917-rdb替换官方jsonl持久化.md)）。
 _避免使用_：持久化迁移、storage swap
 
-## 会话与编辑
+### 会话与编辑
 
 **会话（Session）**：
 DeepSeek Harness 中由事件日志 + surface 构成的对话实体，以 session id 标识。
@@ -46,7 +48,7 @@ _避免使用_：回合、round
 
 **空轮（empty turn）**：
 已闭合但既无用户输入也无助手回复的轮次（`turn/start` 后直接 `turn/end`）
-——可能存在于历史数据中的形状；就地编辑与重放怎么处理它见
+——既有数据里可能出现的形状；就地编辑与重放怎么处理它见
 [设计 编排层操作语义](../packages/session/ui-conversation-message-actions/.agents/designs/20260917-编排层操作语义.md) 的「就地编辑语义」。
 _避免使用_：空回合、幽灵轮次
 
@@ -64,12 +66,12 @@ _避免使用_：级联、cascade mode
 `assistant.response`。
 _避免使用_：消息块、content block
 
-## 版本与血统
+### 版本与血统
 
 **版本效果（version effect）**：
-`session-branch/version` 事件，记录一次分支操作（edit / reroll / retry /
-fork / rewind）的目标轮次、变更前后文本与逆操作。**已停止落库**：类型定义只作
-历史形状保留（识别旧会话里的事件），写侧与读侧都已删除
+`session-branch/version` 事件记录一次分支操作（edit / reroll / retry /
+fork / rewind）的目标轮次、变更前后文本与逆操作；它的类型定义只用来识别既有会话里
+这一类事件，写侧不产出、读侧不参与投影
 （[ADR-删除版本树投影并停止写版本效果](../packages/session/session-branch/.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)）。
 _避免使用_：版本事件、变更记录
 
@@ -85,16 +87,15 @@ _避免使用_：瞬时事件（瞬时事件是另一概念）
 _避免使用_：主日志、持久化日志
 
 **lineage（血统）**：
-会话的祖先链：`parentSession` 指向父会话；继承前缀长度在 v0/v1 header 为
-`seedLength`，v2 起为 `isSeeded`（长度由 log 内 `session/end-seed` 推导），
-存储列为 `f_seed_length`、写路径参数名为 `inheritedEventCount`。
+会话的祖先链：`parentSession` 指向父会话，继承的前缀长度记在会话头里
+（v0 / v1 header 是显式长度，v2 起由 log 内的 `session/end-seed` 推导）。
 _避免使用_：家谱、祖先链
 
 **seed（种子）**：
 派生会话的初始事件前缀：边界前缀 + 可选 `seedSuffix`（手工回合）。
 _避免使用_：初始状态、initial state
 
-## 会话状态
+### 会话状态
 
 **live 会话**：
 驻留内存（`ctx.sessions` 有 owner）的会话——rewind 就地截断内存 log，并
@@ -110,7 +111,7 @@ _避免使用_：离线会话、已关闭会话
 resume）。
 _避免使用_：重生成、regenerate
 
-## 坐标模型
+### 坐标模型
 
 **稠密 seq（dense seq）**：
 持久化坐标（`f_sequence`）：写路径零转换，事件按落库顺序连续编号、无空洞。
@@ -118,11 +119,11 @@ _避免使用_：持久化 seq
 
 **上游 seq（original seq）**：
 事件产生时的 seq（含不入库事件留下的空洞）——持久化坐标即稠密 seq，v3 起
-不再存映射列。
+不存映射列。
 _避免使用_：原始 seq、逻辑 seq
 
 **瞬时事件（transient event）**：
-上游 seq 中不落库的事件留下的空洞来源；当前写路径不按类型过滤（落库事件
+上游 seq 中不落库的事件留下的空洞来源；写路径不按类型过滤（落库事件
 与内存事件一致），坐标由稠密 seq 承担。
 _避免使用_：流式事件、chunk 事件
 

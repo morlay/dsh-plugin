@@ -8,8 +8,9 @@ disable-model-invocation: true
 
 以 side workspace 形态基于上游 deepseek-harness（dsh）开发 cordis 插件集合：
 上游以完整 git 仓库 vendor 到 `vendor/<name>/`（保留 `.git`），经 git 同步锁定到
-指定提交，构建完整上游；插件包以 `workspace:*` 引用其源码。背景与取舍见
-[RATIONALE.md](./RATIONALE.md)。
+指定提交，构建完整上游；插件包以 `workspace:*` 引用其源码。为什么这样做、否掉了哪些路线，见
+`ADR-上游以side-workspace版本锁定完整代码而非发布版本`（根 `.agents/adrs/`）与
+`ADR-workspace跨vendor链接与devkit工具链复用`。
 
 上游是**锁版本的只读源码副本**——版本常量与 vendor 路径在 `mise.toml`，只读红线与
 发布纪律见 [`AGENTS.md`](../../../AGENTS.md)；插件只在自己的包里适配它。

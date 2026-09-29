@@ -2,7 +2,6 @@
   "name": "@morlay/ollama-provider-profile",
   "version": "0.0.2",
   "description": "Ollama 一家：llm-pi-ai 的 ollama provider、web_search 走 ollama 后端（含 web 行的 provider 选择）一次配齐。",
-  "icon": "./icon.svg",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -50,6 +49,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
   },
+  "icon": "./icon.svg",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

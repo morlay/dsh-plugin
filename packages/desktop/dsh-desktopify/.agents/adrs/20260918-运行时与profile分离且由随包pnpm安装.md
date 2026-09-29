@@ -1,41 +1,36 @@
-# ADR-20260918-运行时与profile分离且由随包pnpm安装
+# 运行时与 profile 分离且由随包 pnpm 安装
 
 状态：已采纳
-范围：`packages/desktop/dsh-desktopify/` 的打包种子布局与 profile 安装方式。
 
-## 背景
+背景：桌面打包产物要支持 Web 插件页（`@deepseek-ai/dsh-plugin-manager`）的安装 / 卸载 / 启停，所以 profile
+必须是 **pnpm 能接管的真项目**。deploy 闭包不是：它里面的包由工具手工复制补齐，不在 pnpm 的依赖图里，直接当
+profile 用会让任何 `install` / `add` 把那些包 prune 掉，随后启停触发的 Loader 解析就报模块解析错误。
 
-桌面打包产物要支持 Web 插件页（`@deepseek-ai/dsh-plugin-manager`）的安装 / 卸载 / 启停。原先的种子只有一个
-`dsh-home/profiles/desktop`：它是 `pnpm deploy` 闭包的复制品，而 `package.json` 却是 app 自己的 manifest
-（依赖里带 `workspace:*`）。在打包产物里用插件页做包操作时，pnpm 拿到的是一份与磁盘不一致的依赖图
-（手工复制进闭包的包不在图里），任何 `install` / `add` 都会把那些包 prune 掉；随后启停触发的 Loader 解析就
-报模块解析错误。同时，壳当时也没有把 pnpm 交给 host（缺 `profileContext.packageManager`）。
+**决定**
 
-## 决策
+打包种子拆成两棵树，profile 由随包 pnpm 离线安装：
 
-把打包种子拆成两棵树，并让 profile 由随包 pnpm 离线安装：
-
-- `seed/runtime`：不可变的 deploy 闭包，随包留在应用只读 resources 里，充当 host 的 dsh 安装锚点与前端静态
-  资源（preset 物化目标在 0.1.7 随上游一起消失：模式定义现在是 profile patch 里的行）；
+- `seed/runtime`：不可变的 deploy 闭包，随包留在应用只读 resources 里，充当 host 的 dsh 安装锚点（Host
+  `argv[2]` 的 runtimeDir）、前端静态资源来源，以及 profile `overrides` 指向的包源；
 - `seed/profiles/desktop`：初始 profile，只声明 app 自己的 bundle（`file:./vendor/<name>`，`vendor/` 是从
   runtime 闭包 deref 复制出来的源）；
 - 壳在种出 profile 后写入 `overrides`（`"@deepseek-ai/x": "link:<runtime>/node_modules/@deepseek-ai/x"`），
   再用随包 node 跑随包 pnpm 的 `install --prod --ignore-scripts --offline`；
-- 壳把随包 pnpm 与 node bin 目录经 host argv[5]/[6] 交给 host，成为 `profileContext.packageManager`
-  （上游 0.1.7 删掉了 `runProfile` 的 `resolutionMode`，argv 少一格）。
+- 壳把随包 pnpm 与 node bin 目录经 Host `argv[5]` / `argv[6]` 交给 host，成为
+  `profileContext.packageManager`（`packages/desktop/dsh-desktop-host/src/index.ts:84-85` 读这两格）。
 
-## 理由
+**考虑过的选项**
 
-- profile 必须是 pnpm 能接管的真项目，插件页的包操作与启停才能在打包产物里工作；分离后 profile 的依赖图与
-  磁盘一致，官方包与 dsh 由 runtime 提供，不需要在 profile 里复制一份 1.3G 闭包。
-- 与上游桌面形态一致：它同样把 core 包排除在 profile 之外（由签名 runtime 提供），并把随包 pnpm 经 argv 交给
-  host；`link:` 覆盖让 profile 里插件的 `@deepseek-ai/*` 依赖共享 runtime 的同一份实例（cordis 尤其）。
-- 离线安装成立：依赖全是 `file:` 源与 `link:` 覆盖，首次启动不访问 registry。
+- **把 deploy 闭包直接当 profile**：依赖图与磁盘不一致（手工复制进去的包不在图里），任何包操作都会把它们
+  prune 掉 → 否。
+- **在 profile 里再复制一份完整闭包**：官方包与 dsh 出现两份实例，profile 多背一份 1.3G 量级的闭包 → 否。
+- **profile 自己声明官方依赖、不写 `link:` 覆盖**：profile 里插件的 `@deepseek-ai/*` 依赖会各装一份，cordis
+  不再是单例 → 否。
 
-## 后果
+**后果**
 
-- 指纹变化时，壳在启动 host 前多一步 profile 安装；`DSH_HOME` 不再持有运行时副本。
-- 旧形态的 profile 会被整体替换：用户此前在该 profile 里装的插件需要重新安装，手写的 `cordis.patch.yml`
-  改动也会丢（这是种子替换既有的语义，本次不扩大）。
-- `pnpm-workspace.yaml` 的 `overrides` 由壳写入；种子报告的运行时包列表为空时不动文件，保留手写内容。
-- profile manifest 不再带 app 的 `dsh.version` / `desktop` / `dev`（那些是打包输入）；运行时不再从 profile 读它们。
+- 指纹变化时壳在启动 host 前多一步 profile 安装；`DSH_HOME` 只放 profile，不持有运行时副本。
+- 种子替换是**整目录替换**：profile 里用户装的插件要重装；手写在 `cordis.patch.yml` 里的设置由豁免逻辑保住
+  （[债务 profile 的 `cordis.patch.yml` 豁免替换](../debts/20260922-profile的cordis.patch.yml豁免替换.md)）。
+- profile manifest 只带 app 自己声明的 bundle，不带 app 的 `dsh.version` / `desktop` / `dev`（那些是打包输入）。
+- `pnpm-workspace.yaml` 的 `overrides` 由壳写入；运行时包列表为空时不动文件，保留手写内容。

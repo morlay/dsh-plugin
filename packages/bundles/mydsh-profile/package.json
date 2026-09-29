@@ -1,8 +1,7 @@
 {
   "name": "@morlay/mydsh-profile",
   "version": "0.0.2",
-  "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图——只按行 id 配值，不插行、不禁行。",
-  "icon": "./icon.svg",
+  "description": "我的 dsh 个人配置项：界面语言、新会话默认 preset、欢迎提示版本、默认模型与对话视图——只按行 id 配值，不插行、不禁行。",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -40,15 +39,16 @@
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
   },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
   "devDependencies": {
     "@local/devkit": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
+  },
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   }
 }

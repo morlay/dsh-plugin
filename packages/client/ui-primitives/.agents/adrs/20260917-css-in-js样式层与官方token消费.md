@@ -2,7 +2,7 @@
 
 状态：已采纳
 
-fork 过来的对话 UI（`packages/session/ui-conversation`）沿用上游的 CSS Modules：
+背景：fork 过来的对话 UI（`packages/session/ui-conversation`）沿用上游的 CSS Modules：
 `.module.css` 需要 lightningcss 在构建期编译并内联成 `<style>` 注入代码。这带来两件事——样式必须经过
 一次预编译才能加载，以及样式与组件分居两处。目标是样式统一走 css-in-js，让前后端不经过任何预编译
 即可加载同一份源码。
@@ -10,7 +10,7 @@ fork 过来的对话 UI（`packages/session/ui-conversation`）沿用上游的 C
 设计变量则不必自己造：官方 `ui-theme` 已经把 `--dsw-*` 注入 `body`（light）与
 `body[data-ds-dark-theme]`（dark），我们**只消费**。
 
-## 决策
+**决定**
 
 建立 `@morlay/dsh-client-ui-primitives`（`packages/client/ui-primitives`），提供 css-in-js 样式层：
 
@@ -26,7 +26,7 @@ token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上
 重新生成；`design-tokens.spec.ts` 守卫漂移（树与上游定义集合逐一相等）、往返（叶子能
 还原变量名）与默认值完整性。
 
-## 考虑过的选项
+**考虑过的选项**
 
 | 选项                                                     | 代价                                                                                              |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -35,12 +35,12 @@ token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上
 | 移植参考实现的原样（`@tspkg/runtime` + `@ark-ui/react`） | 多两个运行时依赖；其 `signal`/`produce`/`effect` 只为 Provider 响应式服务，`ark` 只为 polymorphic |
 | **生成 token 树 + 轻量 styled（选定）**                  | 每次上游主题变化重跑生成器；换来类型化访问与零预编译                                              |
 
-## 后果
+**后果**
 
 - 与上游 `@deepseek-ai/dsh-client-ui-primitives` **平行**：那个是平台 baseline 模块（前端种子静态提供），
   插件无法替换；本包不替换它、也不依赖它，只服务本仓库的 fork 包。
 - 不提供 Provider：我们的组件由上游 `ChatView` 渲染，没有自己的渲染根；注入因此做成惰性立即注入。
 - `styled` 不做 polymorphic（无 `as` / `asChild`）：需要换元素时 `styled('a')` 或包一层组件。
 - 值只在生成物里（默认值），运行时不重新定义官方变量——主题切换仍由官方 `--dsw-*` 覆盖完成。
-- 反转：fork 包的 `.styles.ts` 已全部回退上游 CSS Modules——`styled` / `dsw` 现在只被本仓库自有的 client
-  组件消费（`session/ui-conversation-manager`、`session/ui-conversation-message-actions`）。
+- `styled` / `dsw` 的消费方是本仓库自有的 client 组件（`session/ui-conversation-manager`、
+  `session/ui-conversation-message-actions` 的 `.styles.ts`）；fork 过来的对话 UI 仍走上游那套样式。

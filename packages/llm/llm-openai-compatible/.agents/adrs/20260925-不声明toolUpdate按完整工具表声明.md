@@ -2,7 +2,9 @@
 
 状态：已采纳
 
-上游 0.1.7-rc.2 给 `dsh-llm` 加了动态工具更新：`LlmResolvedModelInfo.toolUpdate`（`'in-history' | 'addition-only'`）、
+背景：`dsh-llm` 有动态工具更新这条面：`LlmResolvedModelInfo.toolUpdate`
+（`'in-history' | 'addition-only'`）、`GenerateOptions.toolHistory`、`ToolSchema.deferLoading`，agent-loop
+在工具集变化时写 `developer/message`（tool-addition / tool-removal）。runtime 在分发边界按该声明投影`LlmResolvedModelInfo.toolUpdate`（`'in-history' | 'addition-only'`）、
 `GenerateOptions.toolHistory`、`ToolSchema.deferLoading`，agent-loop 在工具集变化时写
 `developer/message`（tool-addition / tool-removal）。runtime 在分发边界按该声明投影
 （`vendor/deepseek-harness/packages/llm/llm/src/index.ts:1075-1086`）：**未声明**的 route 会被剥掉全部 developer 消息

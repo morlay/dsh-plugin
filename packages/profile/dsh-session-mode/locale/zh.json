@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "会话模式",
-    "description": "coding / chat 两个模式：一行数据（提示词 + 工具白名单），host 按会话应用；composer 里的模式 chip 替代官方的 agent preset 面。"
+    "description": "coding / chat 两个模式：一行数据（提示词、工具白名单、instruction / 动态快照开关与可选默认模型），host 按会话应用；composer 里的模式 chip 与官方 agent preset 入口并存。"
   }
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session Branch",
-    "description": "Provider abstraction and service for rewind / retry / fork over event-sourced sessions."
+    "description": "Contract layer for branch-based session editing: the data-layer provider abstraction and the high-level service for rewind / retry / fork over event-sourced sessions."
   }
 }

@@ -24,15 +24,16 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - **默认模型**：新会话的 `agent/request` waterfall 结果是这个模式配的 `defaultModel`；没配的模式不插手；
     会话落过 `request/header`、或用户选过模型（投影 `modelSelection.pending`，用例里注册最小同 key 投影）之后
     不再兜底；子代理继承父模式（投影与 persona 都换过去），父不在场时回落默认。
-  - **它是顶层 volatile**：schema 上只有 `models` 带 volatile meta（`modes` 不是）——设置面能编辑的正是它；
-    解析之后它是个稳定引用，用例直接对着引用提交一次新值，下一次请求就该读到新值（"设置页保存不重挂这行"
-    的判据；引用符号的 home 是 cosmokit 的 `volatile.ts`）。
-- `src/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有模式清单
-  （`modes.<id>.<字段>`，模式是成员行）与按清单列出的 `models` 候选行（`pending`）——用真 `volatileForm` 与真
-  `Config`，只把 settings 的读写面换成替身。
-- 配置页的**渲染**在通用面测（`client/ui-schema-form`：dict → 每个模式一组字段，保存成
-  `{ op: 'set', path: ['models', <模式 id>], value }`）；本包测两件事：schema 上那一处 volatile 标注仍在
-  （上一条判据），以及 client 半的字段文案只认领 `models` 下那三个字段（`field-wording.spec.ts`）。
+  - **volatile 落在 `default` 与 `modes` 上**：schema 上只有这两个字段带 volatile meta（顶层的 `models` 不带，
+    它是 `hidden()` 的报错用字段）——设置面能编辑的正是这两个；解析之后它们是稳定引用，下一次请求读到的就是
+    引用里的新值（引用符号的 home 是 cosmokit 的 `volatile.ts`）。
+- `src/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有默认模式
+  （`default`）、模式清单（`modes.<id>.<字段>`，模式是成员行）与每个模式自己的默认模型（没配时是
+  `modes.<id>` 下的可添加项，配了就有 `provider` / `model` / `reasoningEffort` 三个位子）——用真
+  `volatileForm` 与真 `Config`，只把 settings 的读写面换成替身。
+- 配置页的**渲染**在通用面测（[`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 schema 表单：
+  dict → 每个模式一组字段）；本包测两件事：schema 上那两处 volatile 标注仍在（上一条判据），以及 client 半的
+  字段文案只认领 `['modes','*','defaultModel',…]` 下那三个字段（`field-wording.spec.ts`）。
 - `src/__tests__/preset-plane.spec.ts`：**两个模式共享自己注册的那份 preset** 时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析）——chat 的目录正好是提问 + 联网三件（三件都真的注册着）、注入
   0 条；coding 的目录里有文件与联网工具，注入只有**一份**技能目录（`id: skill-catalog`、`kind:
@@ -60,8 +61,8 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-preset-plane.mts
   （收口行装上了）；`ctx.agentPresets` **存在**（行清单归 preset 平面）；`ctx.sessionModes.roster()` 等于
   config（`coding` / `chat`，默认 `coding`）；`GET /session-mode` 返回 200 且清单相同；`POST /session-mode` 用
   一个不存在的会话打一次，必须拿回我们自己那句「未知的会话」——那条路会读 `ctx.sessions` / `ctx.agents`，而
-  cordis 的**属性访问**要求 fiber 在 `inject` 里点过名，漏一个就成了真回归（2026-09-24：`cannot get property
-"sessions" without inject`，只跑 GET 与包内测试都看不见——包内测试从 root ctx 调服务，绕开了 inject
+  cordis 的**属性访问**要求 fiber 在 `inject` 里点过名，漏一个就成了真回归（`cannot get property
+"sessions" without inject`：只跑 GET 与包内测试都看不见——包内测试从 root ctx 调服务，绕开了 inject
   白名单）。
 - [`verify-preset-plane.mts`](../../../../desktop/dsh-desktop-host/tool/verify-preset-plane.mts)（preset 平面）：
   真 web profile 里 registry 的默认是 `mode-switch`、名册里那一项装配成功；它的行清单里有 `tool-web` 与

@@ -63,14 +63,14 @@ autoInstallPeers: true
   含「样式 import 不残留」「class 映射与上游同形」「watch 图登记」）；`resolveId` 用
   `order: 'pre'`，与上游 patch（`patches/css-inline-query.patch`）保持同一口径。
 
-## 考虑过的选项
+**考虑过的选项**
 
 - **每个包独立 tsconfig + 独立 tsdown.config.ts 复制**：配置模板重复，
   升级编译选项 / 构建选项要逐包改，易漂移。
 - **工具链放根 package.json devDeps 共享、不抽象**：tsdown 公共选项仍
   逐包复制，没有"生成"能力。
 
-## 后果
+**后果**
 
 - 编译 / 构建配置单点声明，升级工具链（tsdown / typescript）只改
   devkit 与根。

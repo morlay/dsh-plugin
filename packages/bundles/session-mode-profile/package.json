@@ -1,8 +1,7 @@
 {
   "name": "@morlay/session-mode-profile",
   "version": "0.0.2",
-  "description": "会话模式与注入面：会话模式行 + 注入通道 + 工具说明（汉化）+ subagent 服务接管行，一次装齐。",
-  "icon": "./icon.svg",
+  "description": "会话模式与注入面：本部署自己的 agent preset 声明 + 会话模式行 + subagent 服务接管行 + 注入通道与它的收口行 + 工具说明（汉化 / 用法分组），一次装齐。",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -56,6 +55,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
   },
+  "icon": "./icon.svg",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

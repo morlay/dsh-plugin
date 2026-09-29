@@ -15,8 +15,8 @@
 **加一个工具 = 改它所属的族**；同一个工具名出现在两个族里会在汇总时报错（归类错了，不是"后者覆盖前者"）。
 
 **组**：
-用法说明的切分单位（`base` / `flow` / `delegation` / `team`），定义在
-[`src/guidance/groups.ts`](../src/guidance/groups.ts)。
+用法说明的切分单位（`base` / `flow` / `delegation` / `team`）：数据是 [`packs/group-*.ts`](../src/guidance/packs/index.ts)
+里的组 pack，汇总与渲染在 [`groups.ts`](../src/guidance/groups.ts)。
 _避免使用_：分类、分组表
 
 **组 skill**：

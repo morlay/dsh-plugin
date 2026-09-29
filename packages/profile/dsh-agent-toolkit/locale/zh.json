@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "功能行清单",
-    "description": "agent 的功能行清单：shell、文件、任务、skill 发现、goal、压缩、委派、工作流、问答、todo、联网、交付物。"
+    "description": "工具说明（短描述汉化 / schema 精简 / 用法分组）与功能行清单数据（本部署的 preset `mode-switch` 引用它）：shell、文件、任务、skill 发现、goal、压缩、计划模式、委派与工作流、问答、todo、联网；另含可选的 Agent Teams 行与 relax-intent 策略行。"
   }
 }

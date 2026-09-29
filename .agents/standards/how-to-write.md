@@ -35,6 +35,10 @@
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
+- **bundle 的 patch 由构建生成，不手写**：bundle 的 `tsdown.config.ts` 调 devkit 的 patch 插件写出包根那份
+  `cordis.patch.yml`（首行是「由 …/tsdown.config.ts 生成，请勿手工编辑」）；能力包只发布实现与 `rows` 出口，
+  patch 住在 bundle 里——这是 `ADR-profile层三分（配置初始化与提示词开关与能力清单）`
+  的「一份数据、两种平面」约定，判据是各 bundle 的 `patch.spec.ts`。
 - **清单由构建写回，不手写**：`exports` 与 `publishConfig.exports` 由 devkit 的 `packageExportsHook`
   在 `build:done` 里按**入口**推导后写回 `package.json`——顶层指源码（workspace 内直连 `src`），发布态
   指产物；手改这两段会在下次 `just build` 被覆盖。要加一个面就加一个入口（`src/<面>.ts` +

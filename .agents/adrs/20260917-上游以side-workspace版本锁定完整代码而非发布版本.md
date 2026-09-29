@@ -16,7 +16,7 @@ workspace 成员参与安装与构建，使 `@deepseek-ai/*` 各包解析到**�
 `DEEPSEEK_HARNESS_REVISION` 指向特定 commit，优先于 VERSION），同步时
 tag `dsh-v{version}` 优先、回退同名 branch。
 
-## 考虑过的选项
+**考虑过的选项**
 
 - **用 npm 发布版本**（`@deepseek-ai/*` 包）：发布滞后于源码、只有 lib
   产物与 d.ts 而非源码（无法读 coordinator 私有实现）、无法打本地 patch；
@@ -24,7 +24,7 @@ tag `dsh-v{version}` 优先、回退同名 branch。
 - **直接依赖 git 远程**（`github:...`）：无版本锁定粒度（分支漂移）、无
   本地 patch 机制、pnpm 解析不稳定。
 
-## 后果
+**后果**
 
 - 上游 `@deepseek-ai/*` 不可修改（红线见 [AGENTS.md](../../AGENTS.md)）——
   vendor 只读，本地 patch 是例外且由 `just vendor patch` 重打（删 acp

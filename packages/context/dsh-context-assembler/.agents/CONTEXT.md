@@ -2,10 +2,11 @@
 
 一个包（`packages/context/dsh-context-assembler/`）承载注入通道与它的注入方，每个能力一个子出口：门面与各出口见
 [README](../README.md)，规则与 id 表见[设计 上下文注入规则](./designs/20260921-上下文注入规则.md)。
-引用展开已独立成 [`@morlay/dsh-reference`](../../dsh-reference/README.md)（术语见[那边](../../dsh-reference/.agents/CONTEXT.md)），
-这里的「内容块」定义它也用。
+引用展开是另一个包 [`@morlay/dsh-reference`](../../dsh-reference/README.md)（术语见[那边](../../dsh-reference/.agents/CONTEXT.md)），
+这里的「内容块」定义它也用；工具说明的词与数据在
+[`@morlay/dsh-agent-toolkit` 的术语表](../../../profile/dsh-agent-toolkit/.agents/CONTEXT.md)。
 
-## 共用术语
+## 术语
 
 **规则块**：
 `<system-reminder id="…">` 包着的持久系统级指令。id 必带，参与覆盖。只有注入通道能写它。
@@ -21,7 +22,7 @@
 
 **id**：
 规则块的稳定标识，`<owner>:<key>`（第一个冒号前是 owner）。id 里不放 seq / 时间 / digest 这类易变值。
-_避免使用_：条目名（旧说法，与 skill 名混用）
+_避免使用_：条目名（与 skill 名混用）
 
 **覆盖**：
 语义覆盖——同 id 的最新一条取代更早的同 id 条目，不重写会话历史；规则在系统提示词里声明一次
@@ -35,9 +36,8 @@ _避免使用_：条目名（旧说法，与 skill 名混用）
 **通道**：
 `ctx.contextAssembler`（`assembler` 出口）：唯一渲染者与唯一的覆盖判定处。注入方只声明
 `{ name, title, description, content, injection? }`、`registerRule({ id, text })` 或 `replaceSection` / `suppressSection`。
-**全局一份、不隔离**：通道在装配平面装一次，注册表全局共享；模式差异由 `context-scope` 那一行收口（工具白名单 /
-instruction / 动态快照），不靠 `isolate` 组——理由见
-[ADR 通道作为全局服务装配不隔离](./adrs/20260923-通道作为全局服务装配不隔离.md)。
+全局一份、不隔离——注册表整个部署共享，模式差异由 `scope` 出口按会话收口
+（[ADR 通道作为全局服务装配不隔离](./adrs/20260923-通道作为全局服务装配不隔离.md)）。
 
 **面**：
 上游那类"整面注入"的内容：工作区指令链是一条面，skill 目录与它的加载工具是另一条面
@@ -57,9 +57,7 @@ _避免使用_：去重（去重说的是同 id 覆盖）、认领（认领说�
 [ADR-20260929-工作区指令让位skill面由通道抢面](./adrs/20260929-工作区指令让位skill面由通道抢面.md)。
 _避免使用_：覆盖（覆盖说的是同 id 的条目取代）
 
-## 能力术语
-
-### skill 目录与加载工具（`skill-catalog`）
+### 能力
 
 **skill 目录**：
 `skill-catalog` 规则块：一行 `名字: 摘要`，只列模型可调用的 skill。
@@ -68,9 +66,3 @@ _避免使用_：技能清单、skill 列表
 **`skill` 工具**：
 模型侧按名字加载 skill 正文的入口（按虚拟 skill 形态渲染）。
 _避免使用_：技能加载器
-
-### 工具说明（归 toolkit）
-
-工具的汉化精简与用法分组不在这个包里了——它们的词与数据在
-[`@morlay/dsh-agent-toolkit` 的术语表](../../../profile/dsh-agent-toolkit/.agents/CONTEXT.md)（族 / 组 / 组 skill /
-注入方式 / 丢弃清单 / 短描述）。本包只提供它们注入用的通道。

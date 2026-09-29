@@ -33,8 +33,12 @@
 **触发条件**
 
 - 每次改动 `session-rdb` 的截断 / 导入路径，或改动 `ui-conversation-message-actions` 的重放路径时，
-  必须确认失效调用仍在生效（守护测试见下）；
-- 上游提供下列任一能力时，结算本记录。
+  必须确认失效调用仍在生效；
+- 基线版本是 `DEEPSEEK_HARNESS_VERSION`（根 [`mise.toml`](../../mise.toml)）；失败模式与截断语义见
+  [设计 分支能力](../../packages/session/session-rdb/.agents/designs/20260917-分支能力.md)；
+- 守护测试（同一 meter 实例 + 预热水位）：`packages/session/session-rdb/src/__tests__/{branch,import}.spec.ts`、
+  `packages/session/ui-conversation-message-actions/src/__tests__/meter-watermark.spec.ts`
+  （多 op 叠加 / agent loop 续跑 / compaction 入口）。
 
 **销账条件**
 
@@ -44,6 +48,11 @@ Done when：上游满足任一项，我们侧的 duck-type 失效被删除：
    自行失效；
 2. 提供公开的失效 / 回滚 API（例如 `ctx.tokenMeter.invalidate(session)`）。
 
+眼下两条都未达成：上游仍按**位置**折叠——水位是 `consumedEvents`（`SessionLogOffset` 递增），
+`logRevision` 也直接取它；全包没有 `invalidate` / 回滚 API（证据：
+`vendor/deepseek-harness/packages/llm/token-meter/src/index.ts:63,184,232-237`，该包 `src/` grep
+`invalidate` 0 命中）。
+
 回退动作：
 
 - 删除我们侧的 duck-type 失效调用与能力探测告警，改用上游公开 API；
@@ -51,21 +60,7 @@ Done when：上游满足任一项，我们侧的 duck-type 失效被删除：
   meter 保险」的那部分说明同步改写；
 - 结算本记录。
 
-**核查（2026-09-21）**：销账条件未达成。上游仍按**位置**折叠——水位是 `consumedEvents`（`SessionLogOffset` 递增），
-`logRevision` 也直接取它；全包没有 `invalidate` / 回滚 API。证据：
-`vendor/deepseek-harness/packages/llm/token-meter/src/index.ts:63,184,232-237`（该包 `src/` grep `invalidate` 0 命中）。
-我们侧的 duck-type 失效与能力探测继续有效，守护测试不变。
-
 **不修的理由**
 
 修不了上游（红线：`@deepseek-ai/*` 不可修改），只能在我们侧规避；而规避本身已经带了能力探测与
 配平自愈，代价是上游改结构时要跟一次告警。
-
-## 基线
-
-- 基线版本：`DEEPSEEK_HARNESS_VERSION`（见根 `mise.toml`）；
-- 失败模式与截断语义：[packages/session/session-rdb/.agents/designs/20260917-分支能力.md](../../packages/session/session-rdb/.agents/designs/20260917-分支能力.md)；
-- 守护测试（同一 meter 实例 + 预热水位）：
-  `packages/session/session-rdb/src/__tests__/{branch,import}.spec.ts`、
-  `packages/session/ui-conversation-message-actions/src/__tests__/meter-watermark.spec.ts`
-  （多 op 叠加 / agent loop 续跑 / compaction 入口）。

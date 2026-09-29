@@ -10,10 +10,10 @@
 
 - `volatileForm(schema)` 只有两条出路——顶层 `meta.volatile`，或 `type === 'object'` 时逐字段挑出 volatile 子树；
   其余根形状直接返回 `undefined`（`vendor/deepseek-harness/packages/settings/settings/src/schema.ts:37-47`）。
-- 于是 `describe()` 不会列出这一行（`settings/src/index.ts:306-311`），我们的行注册也就无从注册——页面上整行
+- 于是 `describe()` 不会列出这一行（`vendor/deepseek-harness/packages/settings/settings/src/index.ts:302-311`），我们的行注册也就无从注册——页面上整行
   消失，且没有提示。
 - 分支内部的字段**不能**单独标 volatile：`validateVolatileSchema` 把 `inner` 与 `list` 成员都标成 blocked，祖先链
-  上再有 volatile 会直接抛（`vendor/schemastery/src/index.ts:488-509`）。
+  上再有 volatile 会直接抛（`vendor/deepseek-harness/vendor/schemastery/src/index.ts:488-509`）。
 
 结果是：写判别式行 Config 的人必须知道「要么把整段标 `.volatile()`，要么把它包在一层 `z.object` 里」，否则页面
 静默消失。
@@ -22,7 +22,7 @@
 
 - 插件作者写出正确的判别式 schema，却看不到页面——第一反应会当成我们的 bug（没有任何日志或界面提示）。
 - 顶层 `.volatile()` 是可行变通：`isVolatilePath` 对 volatile 之下的任何路径都放行
-  （`settings/src/schema.ts:69-76`），所以分支字段照样能写；代价是**整段**都可编辑（连接串、部署路径之类也跟着
+  （`vendor/deepseek-harness/packages/settings/settings/src/schema.ts:69-76`），所以分支字段照样能写；代价是**整段**都可编辑（连接串、部署路径之类也跟着
   上页面），判据从"逐字段"退化成"整段"。`session-rdb` 就是这么做的：`z.union([...]).volatile()`，页面上 `type`
   是只读 const（切后端仍要改 YAML），同后端内的参数可改。
 - 两处判据不同宽，改任何一侧都要同时看另一侧，容易被下游误读成"我们支持了非对象根"或"host 不支持"。
@@ -35,7 +35,7 @@
 **销账条件**
 
 Done when：host 的 `volatileForm` 能投影非对象根（相交段 / 带 tag 的 union）里的 volatile 子树——届时本包的
-README「什么能当页面根」只剩一条判据（我们自己的），不再提示 `.volatile()` 变通。
+设计文档「可调项上页面的判据」只剩一条判据（我们自己的），不再提示 `.volatile()` 变通。
 
 **不修的理由**
 

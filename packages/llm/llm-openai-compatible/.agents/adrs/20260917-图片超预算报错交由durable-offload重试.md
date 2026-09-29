@@ -2,6 +2,11 @@
 
 状态：已采纳
 
+背景：请求里的图片以 data URL 内联，体积有上限；而「要不要 offload、offload 到哪一步」是会话事实（要落 durable
+事件，重放与重试才看得到同一份历史），不是一次请求内的局部优化。
+
+**决定**
+
 图片请求预算的所有权在上游：路由只把 surface 上已 offload 的图片替换为占位
 文本（`projectOffloadedImages`），保留的图片按 base64 长度合计超过
 `maxRequestImageBytes` 时抛 `LlmError('IMAGE_OFFLOAD_REQUIRED')`（经
@@ -9,13 +14,13 @@
 `compaction-image-offload` 在 `agent/request-error` 里记录 durable 的
 `image/offload` 事件并重试同一请求。本适配器不自行裁剪请求图片。
 
-## 考虑过的选项
+**考虑过的选项**
 
 - **由路由自行 offload**：上游已删除 `offloadRequestImagesWithPolicy`；且路由
   局部裁剪不落 durable 事实，每次请求重算，重放与重试得不到同一份历史。
 - **静默丢弃超预算图片**：模型看到的历史随请求漂移，与 surface 不一致。
 
-## 后果
+**后果**
 
 - 超预算不静默：请求失败一次，durable offload 后重试成功；没有
   `compaction-image-offload` 装配时（纯后端）错误直接上抛。

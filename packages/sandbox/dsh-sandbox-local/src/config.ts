@@ -44,11 +44,12 @@ export const Config: z<Config, ResolvedConfig> = z.object({
     .description(
       localized({
         zh:
-          "额外可写根与拒绝项，一行一条：`rw:<路径>` 追加可写根，`r-:<路径>` 只读，`--:<路径>` 拒绝；" +
-          "支持 `~`、环境变量与 glob。改它当场生效（沙箱规则每次按当前值重算），不用重挂这一行。",
+          "额外可写根与拒绝项，一行一条：`rw <路径>` 追加可写根，`r- <路径>` 只读，`-- <路径>` 拒绝；" +
+          "路径可用环境变量模板与 glob（`rw` 项必须是具体路径）。改它当场生效（沙箱规则每次按当前值重算），不用重挂这一行。",
         en:
-          "Extra writable roots and refusals, one entry per line: `rw:<path>` grants a writable root, " +
-          "`r-:<path>` makes it read-only, `--:<path>` denies it; `~`, env templates, and globs are supported. " +
+          "Extra writable roots and refusals, one entry per line: `rw <path>` grants a writable root, " +
+          "`r- <path>` makes it read-only, `-- <path>` denies it; env templates and globs work " +
+          "(`rw` entries must name a concrete path). " +
           "Edits take effect on the next rule compile without remounting the row.",
       }),
     )

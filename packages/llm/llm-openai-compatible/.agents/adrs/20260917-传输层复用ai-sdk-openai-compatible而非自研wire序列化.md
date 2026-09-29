@@ -2,6 +2,11 @@
 
 状态：已采纳
 
+背景：chat-completions 的 wire 序列化、SSE 解析与错误体方言细节量大且各家有别；harness 侧要的只是
+「消息进、chunk 出」的适配。
+
+**决定**
+
 传输层复用 **[@ai-sdk/openai-compatible](https://www.npmjs.com/package/@ai-sdk/openai-compatible)**
 （`LanguageModelV4.doStream`：wire 序列化与 SSE 解析由 SDK 负责）；本插件只负责
 harness 适配。
@@ -18,14 +23,14 @@ harness 适配。
 - 用量：`prompt_tokens_details.cached_tokens` 与 DeepSeek 方言的
   `prompt_cache_hit_tokens` 都拆出为 `cacheReadTokens`（disjoint 计数）。
 
-## 考虑过的选项
+**考虑过的选项**
 
 - **自研 wire 序列化与 SSE 解析**：需要维护 OpenAI 兼容协议的全部细节
   （SSE 解析、错误体、用量字段方言），且与 AI SDK 生态脱节。
 - **复用 `@ai-sdk/openai-compatible`**：协议细节由 SDK 维护，本插件聚焦
   harness 适配；代价是受 SDK 的 `LanguageModelV4` 接口约束。
 
-## 后果
+**后果**
 
 - 非标准字段与用量方言需在本层显式处理（`top_k` 经 `providerOptions` 透传、
   `convertUsage` 兼容 `prompt_cache_hit_tokens`）。

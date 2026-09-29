@@ -2,12 +2,11 @@
 
 ## 必读
 
-- 技术栈 [mise.toml](./mise.toml)；命令 [justfile](./justfile)（`just --list`）
-- 记录树与分层规则 [`.agents/README.md`](./.agents/README.md)
-- 术语与上下文边界 [`.agents/CONTEXT-MAP.md`](./.agents/CONTEXT-MAP.md)
-- 规范（如何写 / 如何验证）[`.agents/standards/`](./.agents/standards)
-- 整体设计：仓库布局与装配 [`.agents/designs/20260917-系统设计.md`](./.agents/designs/20260917-系统设计.md)
-- 会话编辑闭环（`@morlay/better-session` 设计）[`packages/bundles/better-session/.agents/designs/20260917-会话编辑闭环装配.md`](./packages/bundles/better-session/.agents/designs/20260917-会话编辑闭环装配.md)
+- 命令与版本：[`justfile`](./justfile)（`just --list`）· [`mise.toml`](./mise.toml)
+- 记录树的布局与命名：[`.agents/README.md`](./.agents/README.md)
+- 术语与上下文边界：[`.agents/CONTEXT-MAP.md`](./.agents/CONTEXT-MAP.md)
+- 规范（如何写 / 如何验证）：本层 `.agents/standards/`
+- 设计、决策与债：本层 `.agents/{designs,adrs,debts}/`
 
 ## 一个事实只有一个 home
 
@@ -25,10 +24,6 @@
 | 难逆的决策与理由          | 该层 `.agents/adrs/`                                                                     |
 | 已知且被接受的债          | 该层 `.agents/debts/`                                                                    |
 | 包 / 应用的门面与用法     | 该包的 `README.md`（一句话定位 + 用法 + 链接）                                           |
-| 怎么做（流程）            | 仓库根 [`.agents/skills/`](./.agents/skills)（不分子域）                                 |
-
-依赖方向、构建与验证的细则在各层规范（[`.agents/standards/`](./.agents/standards)）里；只读上游与
-发布纪律这两条红线在下面列一次。
 
 ## 红线
 
