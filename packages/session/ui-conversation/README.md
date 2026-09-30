@@ -1,7 +1,8 @@
 # @morlay/dsh-client-ui-conversation
 
 上游 `@deepseek-ai/dsh-client-ui-conversation` 的**薄壳 fork**（host 半 + client 半），一对一替换官方
-`ui-conversation` 行：官方该行在装配里被禁用，槽声明、locale 与设置命名空间与我们保持同形。
+`ui-conversation` 行：官方该行在装配里被禁用，槽声明与 locale 与上游同形；设置命名空间是本包的行 id
+`ui-conversation-fork`（见 `src/settings-namespace.ts`）。
 
 ## 用法
 
