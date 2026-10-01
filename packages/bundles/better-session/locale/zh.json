@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "会话编辑装配",
-    "description": "profile 聚合 bundle：把 @morlay/session-branch、@morlay/session-rdb、@morlay/ui-conversation-message-actions、@morlay/ui-conversation-manager 与 @morlay/dsh-reference 连同对话外壳的薄壳 fork 行装进 web profile，提供就地编辑 / 重试 / 撤回 / 分支（rewind / retry / recall / fork）闭环。"
+    "description": "profile 聚合 bundle：把 @morlay/session-branch、@morlay/session-rdb、@morlay/ui-conversation-message-actions、@morlay/ui-conversation-manager 与 @morlay/dsh-reference 装进 web profile，提供就地编辑 / 重试 / 撤回 / 分支（rewind / retry / recall / fork）闭环；对话外壳走官方 ui-conversation 行，扩展只注册在它的槽位上。"
   }
 }

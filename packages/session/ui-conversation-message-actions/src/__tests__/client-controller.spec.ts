@@ -95,7 +95,7 @@ function fakeSessions(
       },
     }),
     scope: () => ({
-      get: () => ({ input: { for: () => ({ restoreDraft: (d: string) => drafts.push(d) }) } }),
+      get: () => ({ input: { for: () => ({ setDraft: (d: string) => drafts.push(d) }) } }),
     }),
     ...(withRefresh
       ? {

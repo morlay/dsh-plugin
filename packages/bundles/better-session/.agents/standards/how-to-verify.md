@@ -14,14 +14,17 @@ bundle 一旦断链，装配在别人机器上静默失效。改 patch、改依�
   （`exports["."]`）。
 - **插入面 == 依赖面**：patch 插入的包名集合与本 bundle 的 `dependencies` **互为相等**——只声明不装配、
   只装配不声明都错。
-- **fork 的 client 包声明齐全**：insert 的每个 `@morlay/dsh-client-ui-*` 必须声明 `./client` 的 `types` 与
-  `default`（client-modules 的入口），且 `dsh.client.platform` 为 `web`。
+- **插入的 client 包声明齐全**：insert 的每个带 client 半的包必须声明 `./client` 的 `types` 与 `default`
+  （client-modules 的入口），且 `dsh.client.platform` 为 `web`；**内联库**（清单里标 `dsh.client.inline`，
+  如 `@morlay/dsh-client-ui-primitives`）不在此列——它不是行，不插。
 - **宿主内嵌的编排层 client 半**：`@morlay/ui-conversation-message-actions` 的 `dsh.client.inject` 必须含
   `@deepseek-ai/dsh-client-connection` 与 `@deepseek-ai/dsh-client-store`。
 - **patch 的形状**：禁用的官方行集合、insert 的行 id 集合与预期逐项相等；insert 的 id 不得与上游 bundle
   行 id 撞名，且禁用的行 id 必须仍存在于上游 bundle（`vendor/deepseek-harness/packages/bundle/{base,web-app}/cordis.patch.yml`）。
 - **同 id 重复 insert 是有意设计**：本 patch 插入的 id 与各子包自己的 bundle patch 相同
-  （`session-branch` / `session-rdb` / `ui-conversation-message-actions` / `ui-primitives-fork`）——
+  （`session-branch` / `session-rdb` / `ui-conversation-message-actions` / `ui-conversation-manager`）——
   每个子包都要能作为**独立 bundle** 被采用，所以同一行 id 在不同 bundle 里各插一次是正常形态，
   不是撞名。本 bundle 因此自包含（装上就全套可用）；判据是**本 patch 内的 id 互不重复**、
   **不与上游行 id 撞名**，而不是与子包 patch 去重。
+- **对话外壳不被接管**：patch 里没有 `ui-conversation` 的 `disabled: true`，也没有 fork 行
+  （[ADR 不 fork 上游前端组件](../../../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)）。

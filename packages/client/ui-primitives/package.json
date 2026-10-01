@@ -1,7 +1,7 @@
 {
   "name": "@morlay/dsh-client-ui-primitives",
   "version": "0.0.6",
-  "description": "css-in-js styling kit (styled / Token / Styling), the shared reference parser and renderer (findReferences / parseReferenceToken) for the forked conversation UI, and the settings-form primitives forked from upstream (SettingsFormModel / field controls / form shell): consumes the official --dsw-* design tokens, so no CSS Modules precompile step is needed.",
+  "description": "css-in-js styling kit (styled / Token / Styling), the shared reference parser and renderer (findReferences / parseReferenceToken), and the settings-form primitives forked from upstream (SettingsFormModel / field controls / form shell) plus the schema-generated row config page: consumes the official --dsw-* design tokens, so no CSS Modules precompile step is needed. Ships as an inlined client library (`dsh.client.inline`), not as an assembly row.",
   "keywords": [
     "client",
     "css-in-js",
@@ -24,18 +24,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json",
     "./client": "./src/client/index.ts",
+    "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
+      "./client": "./dist/client.mjs",
       "./package.json": "./package.json",
-      "./client": {
-        "types": "./dist/client.d.cts",
-        "default": "./dist/client.cjs"
-      },
       "./locale/*.json": "./locale/*.json"
     }
   },
@@ -82,13 +79,7 @@
   },
   "dsh": {
     "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-plugin-manager",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-slots"
-      ]
+      "inline": true
     }
   }
 }

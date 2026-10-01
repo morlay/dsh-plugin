@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { FORK_SETTINGS_NAMESPACE } from "../../../../session/ui-conversation/src/settings-namespace.ts";
 
 const repoRoot = process.cwd();
 const PATCH_PATH = join(repoRoot, "packages/bundles/better-session/cordis.patch.yml");
@@ -46,8 +45,15 @@ describe("better-session patch wiring", () => {
       "session-projection-cache",
       "session-query-sqlite",
       "storage-json",
-      "ui-conversation",
     ]);
+  });
+
+  // 前端不 fork：官方 `ui-conversation` 行照旧启用，接管只走官方槽位；基础面随 client 行内联、不插行。
+  it("keeps the official conversation row enabled and inserts no forked rows", () => {
+    expect(disabledIds(patch)).not.toContain("ui-conversation");
+    const inserted = insertedIds(patch);
+    expect(inserted).not.toContain("ui-conversation-fork");
+    expect(inserted).not.toContain("ui-primitives-fork");
   });
 
   it("inserts morlay rows without colliding with upstream ids", () => {
@@ -56,21 +62,9 @@ describe("better-session patch wiring", () => {
       "reference",
       "session-branch",
       "session-rdb",
-      "ui-conversation-fork",
       "ui-conversation-manager",
       "ui-conversation-message-actions",
-      "ui-primitives-fork",
     ]);
     for (const id of inserted) expect(upstreamIds.has(id)).toBe(false);
-  });
-
-  // fork 客户端按自己的行 id 读写设置；行 id 与命名空间脱节时设置只改内存、重启即丢。
-  it("inserts the conversation fork under its settings namespace", () => {
-    expect(patch).toMatch(
-      new RegExp(
-        `^ {4}- id: ${FORK_SETTINGS_NAMESPACE}\n {6}name: "@morlay/dsh-client-ui-conversation"$`,
-        "m",
-      ),
-    );
   });
 });

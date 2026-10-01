@@ -66,7 +66,9 @@ function escapeRegExp(value: string): string {
 
 // 本包依赖里 client 行的 external 面（判据：该包清单有 `exports["./client"]`，与上游 host 半同一判据）：
 // 漏判会让自己的 client 行落进内联分支，页面第二次注册即抛 `duplicate factory registration`。
-// 每个 client 行返回一条 `^包名(?:/|$)` 正则；`cwd` 缺省 `process.cwd()`。
+// 例外是标了 `dsh.client.inline` 的包：它有同一个出口，但**不是行**——代码随消费方打进产物（模块表里没有它，
+// 外置会 `missed the module table`），所以这里不纳入。每个 client 行返回一条 `^包名(?:/|$)` 正则；
+// `cwd` 缺省 `process.cwd()`。
 export async function clientRowExternals(cwd = process.cwd()): Promise<RegExp[]> {
   const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;
@@ -89,7 +91,9 @@ export async function clientRowExternals(cwd = process.cwd()): Promise<RegExp[]>
     }
     const dependency = JSON.parse(await readFile(target, "utf8")) as {
       exports?: Record<string, unknown>;
+      dsh?: { client?: { inline?: boolean } };
     };
+    if (dependency.dsh?.client?.inline === true) continue;
     if (dependency.exports?.["./client"] === undefined) continue;
     rows.push(new RegExp(`^${escapeRegExp(name)}(?:/|$)`));
   }

@@ -14,7 +14,7 @@ import { Button, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { UserMessageNode } from "@deepseek-ai/dsh-client-ui-chat/client";
 import { JsonBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ChatNodeViewProps, ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
-import type { RenderMessageImages } from "@morlay/dsh-client-ui-conversation/client";
+import type { RenderMessageImages } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { MessageIconActions } from "./MessageIconActions.tsx";
 import { styles } from "./MessageItem.styles.ts";
 import type { EditableMessageBlock } from "../../shared.ts";

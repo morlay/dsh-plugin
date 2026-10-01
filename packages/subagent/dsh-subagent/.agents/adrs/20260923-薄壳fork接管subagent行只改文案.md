@@ -15,7 +15,7 @@
 
 **决定**
 
-沿用 `session/ui-conversation` 已确立的薄壳 fork 形态：保留文件只留有意改过的那份（`continuation-messages.ts` /
+沿用本仓库已确立的薄壳 fork 形态（原先由对话 UI 那个包立的规矩，该包 2026-10-01 已回退删除）：保留文件只留有意改过的那份（`continuation-messages.ts` /
 `continuation.ts` / `index.ts`），其余 import 指向上游源码、构建内联；装配**按官方行 id 复用**（`id: "subagent"` +
 本包 `name`），理由与事实基线见 [ADR 接管官方行按 id 复用](./20260928-接管官方行按id复用而非换id.md)。
 

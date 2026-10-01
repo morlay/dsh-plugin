@@ -24,8 +24,10 @@
 - 共享替身放 `src/client/schema-form/testing/`：`FakeScope`（内存里的共享配置表单）、`fakeDescribe`（可推动的
   describe 读面）。slots / locale / remote 是外部框架面，用最小替身记录注册事实；真实的槽位声明与授权校验
   在上游包内完成。
-- 浏览器半的构建判据：`just build` 后 `dist/client.cjs` 里 `window.__ModuleLoader__.load` 只出现一次
-  （多一次就是内联了别的 client 行，页面会重复注册）。
+- 浏览器半的构建判据：`just build` 后产物是**普通 ESM 库**（`dist/client.mjs` + `dist/client.d.mts`），
+  不含模块注册外壳——它随消费方内联，带外壳会让页面注册第二个 factory。
+- **多份副本的幂等**：`apply.spec.ts`（同一 ctx 装两次只装配一次、服务已在场就不装配）与 `styling.spec.tsx`
+  （`vi.resetModules()` 后重取的单例仍是同一份）——inline 后每个消费行产物里各有一份本包代码。
 
 ## 本包特有的判据
 

@@ -9,7 +9,6 @@ export default defineConfig(async () => ({
     client: {
       name: "@morlay/dsh-session-mode",
       entry: "./src/client/index.ts",
-      externals: [/^@morlay\/dsh-client-ui-/],
     },
   })),
 }));

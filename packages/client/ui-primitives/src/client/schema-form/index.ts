@@ -74,7 +74,18 @@ export type { SuggestedKeys } from "./schema-node.ts";
 type RowConfigEntryProps = PropsRuntime<"plugins.row.config"> & PropsRenderFactories;
 
 // 装上本包：字典、Factory（字段槽的声明者）与按行自动注册。
+//
+// 调用方是**内联了本包的 client 行**（本包不再是装配行）：inline 后每个消费行的产物里各带一份这份代码、
+// 都会调到这里，所以先等依赖服务到齐（调用方不必自己排顺序），并保证同一运行时只装一次。
 export function apply(ctx: Context): void {
+  ctx.inject([...inject], (scope) => {
+    // 提示面已在场 = 另一份副本装过了：字典 / 槽 / 行入口都不再重复注册。
+    if (scope.get("schemaFormHints") !== undefined) return;
+    install(scope);
+  });
+}
+
+function install(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "ui-schema-form: dictionaries");
   // 提示面（dict 的候选键）：同一次 apply 里提供，业务插件注册读数，本包的行投影读它。
   const hints = new SchemaFormHints(ctx);

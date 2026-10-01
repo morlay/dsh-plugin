@@ -8,7 +8,8 @@ import type {} from "@deepseek-ai/dsh-api-remotes/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only：槽位声明与 standard props（session / session-maybe / global）。
-import type {} from "@morlay/dsh-client-ui-conversation/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
+import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 import { POLICY_NAMES } from "../shared.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
@@ -62,6 +63,8 @@ function readAt(root: unknown, path: readonly string[]): unknown {
 
 // 装上会话里的那一个面，以及本行配置页的字段文案。
 export function apply(ctx: Context): void {
+  // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
+  installUiPrimitives(ctx);
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "session-mode: dictionaries");
 

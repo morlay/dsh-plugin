@@ -34,9 +34,15 @@ function bench(): Bench {
   const services: Record<string, unknown> = {
     uiWorkspace: { unarchiveSession: vi.fn() },
     sessions: { refresh: vi.fn() },
+    // 基础面（随本包内联）已由同页面的另一份副本装上：它的装配在这里直接让位（见 ui-primitives 的 apply）。
+    schemaFormHints: {},
   };
   const ctx = {
+    // cordis 的服务基类在构造时经 ctx.reflect 往 ctx 上 provide 自己。
+    reflect: { provide: () => {}, set: () => {}, get: () => undefined },
     get: (name: string) => services[name],
+    // `ctx.inject`：本包自己 inject 的槽位与基础面的依赖声明都走它（真运行时是服务到齐后回调）。
+    inject: (_names: readonly string[], callback: (scope: unknown) => unknown) => callback(ctx),
     effect: (effect: () => unknown, label: string) => {
       effects.push(label);
       return effect();

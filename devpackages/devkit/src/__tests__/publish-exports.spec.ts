@@ -9,6 +9,7 @@ interface Manifest {
   readonly name: string;
   readonly exports?: Record<string, unknown>;
   readonly publishConfig?: { exports?: Record<string, unknown> };
+  readonly dsh?: { client?: { platform?: string; inline?: boolean } };
 }
 
 // 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。
@@ -40,21 +41,35 @@ describe("发布态的包出口", () => {
     expect(dropped).toEqual([]);
   });
 
-  it("client 半的开发态出口回源，发布态才指产物", () => {
+  // 同一个出口两种形态：装配行（`dsh.client.platform`）发布态是 CJS 单文件工厂，内联库
+  // （`dsh.client.inline`）发布态是普通 ESM 库——后者会被消费方打进产物，不能带模块注册的工厂外壳。
+  it("client 半的开发态出口回源，发布态按形态指产物", () => {
     const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
     expect(clients.length).toBeGreaterThan(0);
 
     const wrong: string[] = [];
     for (const { name, manifest } of clients) {
       const dev = manifest.exports?.["./client"];
-      const published = (manifest.publishConfig?.exports ?? {})["./client"] as
-        | { types?: unknown; default?: unknown }
-        | undefined;
+      const published = (manifest.publishConfig?.exports ?? {})["./client"];
       // 开发态的出口就是一个指源码的字符串（上游按它读字节），与 host 面同一条规则。
       if (dev !== "./src/client/index.ts") wrong.push(`${name}: dev=${String(dev)}`);
-      if (published?.default !== "./dist/client.cjs")
-        wrong.push(`${name}: published=${String(published?.default)}`);
+      if (manifest.dsh?.client?.inline === true) {
+        if (published !== "./dist/client.mjs")
+          wrong.push(`${name}: published=${String(published)}`);
+        continue;
+      }
+      const runtime = (published as { default?: unknown } | undefined)?.default;
+      if (runtime !== "./dist/client.cjs") wrong.push(`${name}: published=${String(runtime)}`);
     }
     expect(wrong).toEqual([]);
+  });
+
+  it("client 半的形态只有一个：要么是装配行，要么是内联库", () => {
+    const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
+    const both = clients.filter(
+      ({ manifest }) =>
+        manifest.dsh?.client?.inline === true && manifest.dsh?.client?.platform !== undefined,
+    );
+    expect(both.map(({ name }) => name)).toEqual([]);
   });
 });

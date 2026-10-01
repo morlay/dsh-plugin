@@ -5,7 +5,6 @@
 
 | 装什么                                     | 数据从哪来                                                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `ui-primitives-fork`（共享 client 行）     | 每个 client bundle 各插一次：同 id 重复插入是幂等的（Loader 复用同一 Entry，后者胜）                               |
 | `session-mode`（模式定义，会话级扩展）     | [`@morlay/dsh-session-mode/rows`](../../profile/dsh-session-mode/src/rows.ts)                                      |
 | `subagent` 行（按官方行 id 复用换实现）    | [`@morlay/dsh-subagent/rows`](../../subagent/dsh-subagent/src/rows.ts)                                             |
 | `context-assembler`（通道本体）            | [`@morlay/dsh-context-assembler/rows`](../../context/dsh-context-assembler/src/rows.ts)                            |

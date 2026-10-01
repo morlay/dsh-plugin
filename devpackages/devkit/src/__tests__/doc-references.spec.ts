@@ -60,7 +60,6 @@ const basesOf = (dir: string, packageRoot: string): string[] => [
 const SAMPLE = "示例 / 通式：说的是通例（每个包都该有、按约定探测入口），没有唯一所指";
 const SHORT_FORM = "省略前缀的短形式：省了包名或 `.agents/`，或承接同句前一个全路径";
 const ELSEWHERE = "「同包 / 该包」指文内已交代的另一个包（上游包或兄弟包），代码片段省了前缀";
-const UPSTREAM_SHORT = "上游短形式（省 `packages/<scope>/`）且后缀不唯一，上游内部布局随 tag 变";
 const EXCEPTIONS: readonly {
   readonly file: string;
   readonly code: string;
@@ -142,17 +141,7 @@ const EXCEPTIONS: readonly {
   {
     file: "packages/session/ui-conversation-message-actions/.agents/adrs/20260917-接管官方ui-conversation行（薄壳fork）.md",
     code: "client/apply.ts",
-    reason: `${ELSEWHERE}（= packages/session/ui-conversation/src/client/apply.ts）`,
-  },
-  {
-    file: "packages/session/ui-conversation-message-actions/.agents/debts/20260917-对话UI客户端半的装配面缺测试辅助.md",
-    code: "src/client/contract/input.ts",
-    reason: `${ELSEWHERE}（= packages/session/ui-conversation）`,
-  },
-  {
-    file: "packages/session/ui-conversation-message-actions/.agents/designs/20260917-对话UI重构.md",
-    code: "client/apply.ts",
-    reason: `${ELSEWHERE}（= packages/session/ui-conversation/src/client/apply.ts）`,
+    reason: `${ELSEWHERE}（= 当时那个薄壳 fork 包的 client 装配，该包已删）`,
   },
   {
     file: "packages/subagent/dsh-subagent/.agents/designs/20260929-薄壳fork的接管面与保留文件.md",
@@ -160,21 +149,6 @@ const EXCEPTIONS: readonly {
     reason: `${ELSEWHERE}（= 上游 subagent 包内同目录的那个文件）`,
   },
   // 上游短形式
-  {
-    file: ".agents/debts/20260925-ui-conversation构建偶发dts生成失败.md",
-    code: "client/service.ts",
-    reason: `${UPSTREAM_SHORT}（= 上游 client/ui-conversation 的 client 半）`,
-  },
-  {
-    file: "packages/session/ui-conversation/.agents/debts/20260917-临时接管上游对话UI的client半.md",
-    code: "contract/slots.ts",
-    reason: UPSTREAM_SHORT,
-  },
-  {
-    file: "packages/session/ui-conversation/.agents/standards/how-to-write.md",
-    code: "contract/slots.ts",
-    reason: UPSTREAM_SHORT,
-  },
 ];
 
 // 行内代码片段（成对的单反引号）与它所在行号；fenced code block 内的不算行内代码。

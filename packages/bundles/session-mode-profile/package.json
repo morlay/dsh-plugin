@@ -40,7 +40,6 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@morlay/dsh-client-ui-primitives": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",
     "@morlay/dsh-session-mode": "workspace:*",
     "@morlay/dsh-subagent": "workspace:*",

@@ -4,8 +4,7 @@ import { defineConfig } from "tsdown";
 import { webSearchRows } from "@morlay/dsh-web-search-ollama/rows";
 
 const ROWS: readonly unknown[] = [
-  // 共享 client 行：本 bundle 的 client 半 inject 它；同 id 重复插入是幂等的（Loader 复用同一 Entry，后者胜）。
-  { insert: [{ id: "ui-primitives-fork", name: "@morlay/dsh-client-ui-primitives" }] },
+  // 基础面（`@morlay/dsh-client-ui-primitives`）随用到它的 client 行内联，不再单独插行。
   ...webSearchRows(),
   {
     id: "llm-pi-ai",

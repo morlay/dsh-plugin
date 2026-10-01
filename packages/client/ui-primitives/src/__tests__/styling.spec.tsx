@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Styling / styled 的注入行为：规则进 head、按 id 去重、组件带 data-css 属性。
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Styling, styling } from "../client/styling/styling.ts";
 import { styled } from "../client/styling/styled.tsx";
 import { dsw } from "../client/theme.ts";
@@ -61,5 +61,14 @@ describe("Styling", () => {
     const second = styling.props({ margin: 0 });
     expect(first).toEqual(second);
     expect(document.querySelectorAll(`style[data-css]`).length).toBeGreaterThan(0);
+  });
+
+  // inline 后每个消费方的产物里各带一份本包代码，同一个页面上会有多份模块实例。
+  it("模块副本之间共享同一份单例（样式表与注入状态只有一份）", async () => {
+    vi.resetModules();
+    const again = await import("../client/styling/styling.ts");
+    expect(again.styling).toBe(styling);
+    // 单例之外的实例仍是各自独立的（`Styling.create()` 不受影响）。
+    expect(again.Styling.create()).not.toBe(styling);
   });
 });

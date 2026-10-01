@@ -123,6 +123,7 @@ export class SessionEditorController {
     });
   }
 
+  // 撤回回填：写官方输入契约的草稿（`setDraft`）。拿不到输入面（会话没打开 / 面未就绪）就只撤回、不回填。
   private setComposerDraft(text: string): void {
     if (this.sessions.binding(this.sessionId) === undefined) return;
     const scoped = this.sessions.scope(this.sessionId);
@@ -130,10 +131,10 @@ export class SessionEditorController {
     const conversation = scoped.get("conversation") as
       | {
           input?: {
-            for(ctx: ClientContext): { restoreDraft(draft: string): void };
+            for(ctx: ClientContext): { setDraft(draft: string): void };
           };
         }
       | undefined;
-    conversation?.input?.for(scoped).restoreDraft(text);
+    conversation?.input?.for(scoped).setDraft(text);
   }
 }

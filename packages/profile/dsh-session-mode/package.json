@@ -60,6 +60,7 @@
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
@@ -72,7 +73,6 @@
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@morlay/dsh-client-ui-conversation": "workspace:*",
     "@morlay/dsh-client-ui-primitives": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",
     "@testing-library/react": "^16.3.0",
@@ -89,6 +89,7 @@
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:^",
     "@deepseek-ai/dsh-api-session-controller": "workspace:^",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-fs": "workspace:^",
@@ -96,17 +97,14 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
-    "@morlay/dsh-client-ui-conversation": "workspace:*",
-    "@morlay/dsh-client-ui-primitives": "workspace:*"
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "dsh": {
     "client": {
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-slots",
-        "@morlay/dsh-client-ui-primitives"
+        "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
   }

@@ -1,8 +1,9 @@
 # 如何验证（薄壳 fork：按官方行 id 接管一行，只改文案）
 
 通用规则（证据矩阵、失败处理、发布纪律）见根[如何验证](../../../../../.agents/standards/how-to-verify.md)；
-写法约束见 [`session/ui-conversation` 的 how-to-write](../../../../session/ui-conversation/.agents/standards/how-to-write.md)
-（薄壳 fork 的 tsconfig / 合并接口硬约束，本包同样适用）。这里只写本包的落点与判据。
+薄壳 fork 的硬约束（本包同样适用）：根 `tsconfig.json` 保持 `composite: false`（vendor 源被 import 又在
+exclude 里）、不给本包加包级 tsconfig（dts 阶段的 `rootDir` 会把 vendor 源推出去）、合并接口
+（`Context` / `Events` 等）只能有一份实例（结构相同也算不同实例 → `TS2717`）。这里只写本包的落点与判据。
 
 本包的行为只有一条（两处模型面向文案是中文、回报指引按会话选——默认不限 preset），**同步纪律**是它的第二半。
 

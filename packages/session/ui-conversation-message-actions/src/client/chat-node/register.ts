@@ -1,6 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
-import "@morlay/dsh-client-ui-conversation/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-chat/client";
 import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import { UserMessageNodeView } from "./MessageItem.tsx";

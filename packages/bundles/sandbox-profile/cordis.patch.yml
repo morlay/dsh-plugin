@@ -1,7 +1,4 @@
 # 本文件由 packages/bundles/sandbox-profile/tsdown.config.ts 生成，请勿手工编辑
-- insert:
-    - id: ui-primitives-fork
-      name: "@morlay/dsh-client-ui-primitives"
 - id: sandbox
   disabled: true
 - id: fs-sandbox

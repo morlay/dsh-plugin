@@ -44,15 +44,15 @@ export type { Reference, ReferenceSpan } from "../reference.ts";
 export { ReferenceMarkdown, referenceMentions } from "../reference-markdown.tsx";
 export type { ReferenceActions, ReferenceMarkdownProps } from "../reference-markdown.tsx";
 
-// 需要的**服务名**：样式与引用那半不要服务，schema 表单那半要槽位、字典与配置表单。
-//
-// 与包清单里的 `dsh.client.inject` 不是一回事：那份是**装配行 id**（谁先到），交给模块系统排 arrival 顺序；
-// 这里读的是 cordis 服务名（谁已 provide），Loader 拿它决定这一行何时才算 active。写错成包名，这一行就永远
-// pending（`web boot: ... waiting for services`）。
-//
-// 值直接取自 schema 表单那一面，不另抄一份清单。
+// `apply` 需要的**服务名**（cordis 服务，不是包名）：样式与引用那半不要服务，schema 表单那半要槽位、字典与
+// 配置表单。本包不是装配行，所以这份清单不再由 Loader 读；它由 `schemaForm.apply` 自己的 `ctx.inject` 用，
+// 调用方（内联本包的 client 行）因此不必自己排服务顺序。值直接取自 schema 表单那一面，不另抄一份。
 export const inject: readonly string[] = [...schemaForm.inject];
 
+// 装上基础面：字典、字段槽与按行配置页。
+//
+// 由**内联本包的 client 行**调用（本包不是装配行）：多份副本各带一份这份代码，`schemaForm.apply` 保证同一
+// 运行时只装配一次（服务已在场就返回）。见本包 `.agents/adrs/20261001-暂时内联而不是装配行.md`。
 export function apply(ctx: Context): void {
   schemaForm.apply(ctx);
 }

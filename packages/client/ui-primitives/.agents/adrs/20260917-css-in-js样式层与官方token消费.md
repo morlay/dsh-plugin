@@ -2,7 +2,7 @@
 
 状态：已采纳
 
-背景：fork 过来的对话 UI（`packages/session/ui-conversation`）沿用上游的 CSS Modules：
+背景：我们自有的对话 UI 组件（fork 过来的那份，2026-10-01 已删）原沿用上游的 CSS Modules：
 `.module.css` 需要 lightningcss 在构建期编译并内联成 `<style>` 注入代码。这带来两件事——样式必须经过
 一次预编译才能加载，以及样式与组件分居两处。目标是样式统一走 css-in-js，让前后端不经过任何预编译
 即可加载同一份源码。
@@ -43,4 +43,4 @@ token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上
 - `styled` 不做 polymorphic（无 `as` / `asChild`）：需要换元素时 `styled('a')` 或包一层组件。
 - 值只在生成物里（默认值），运行时不重新定义官方变量——主题切换仍由官方 `--dsw-*` 覆盖完成。
 - `styled` / `dsw` 的消费方是本仓库自有的 client 组件（`session/ui-conversation-manager`、
-  `session/ui-conversation-message-actions` 的 `.styles.ts`）；fork 过来的对话 UI 仍走上游那套样式。
+  `session/ui-conversation-message-actions` 的 `.styles.ts`）；上游组件的样式机制（CSS Modules）我们不碰。

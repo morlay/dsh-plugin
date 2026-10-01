@@ -1,9 +1,9 @@
 # @morlay/better-session
 
 profile 聚合 bundle：一次性装配 `@morlay/session-branch`、`@morlay/session-rdb`、
-`@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、`@morlay/dsh-reference` 与对话外壳的
-**薄壳 fork 行**（只留我们改过的文件，其余引用上游源码）到 DeepSeek Harness 的 profile，提供
-**就地编辑 / 重试 / 撤回 / 分支**（rewind / retry / recall / fork）闭环。
+`@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、`@morlay/dsh-reference` 到 DeepSeek
+Harness 的 profile，提供**就地编辑 / 重试 / 撤回 / 分支**（rewind / retry / recall / fork）闭环。对话外壳走**官方
+`ui-conversation` 行**，我们的扩展只注册在它的槽位上（`conversation.chat.node` / `conversation.composer.dock`）。
 
 ## 安装
 
@@ -11,10 +11,11 @@ profile 聚合 bundle：一次性装配 `@morlay/session-branch`、`@morlay/sess
 dsh plugin --profile web add "@morlay/better-session"
 ```
 
-安装带上全部子包，bundle patch（[`cordis.patch.yml`](./cordis.patch.yml)）自动装配四层服务、接管官方对话 UI 行，
-并把官方 `session-persistence-jsonl` / `storage-json` / `session-projection-cache` / `session-query-sqlite` /
-`ui-conversation` 那几行换掉。装了什么、为什么这么换、边界在哪，见
-[设计 会话编辑闭环装配](./.agents/designs/20260917-会话编辑闭环装配.md)。
+安装带上全部子包，bundle patch（[`cordis.patch.yml`](./cordis.patch.yml)）自动装配四层服务，并把官方
+`session-persistence-jsonl` / `storage-json` / `session-projection-cache` / `session-query-sqlite` 那几行换掉
+（对话 UI 行不动）。装了什么、为什么这么换、边界在哪，见
+[设计 会话编辑闭环装配](./.agents/designs/20260917-会话编辑闭环装配.md)与
+[ADR 不 fork 上游前端组件](../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)。
 
 ## 使用
 

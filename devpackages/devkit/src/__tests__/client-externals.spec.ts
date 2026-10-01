@@ -1,37 +1,49 @@
-// external 判据：**模块表里的行**才是 external（包清单有 `exports["./client"]`）。
-// 漏判会让自己的 `@morlay/*` client 行被内联，页面注册两次即抛 `duplicate factory registration`。
+// external 判据：**模块表里的行**才是 external（包清单有 `exports["./client"]`）；标了
+// `dsh.client.inline` 的包是「随消费方打进产物的库」，不是行，哪怕它有同一个出口。
+// 漏判行会让自己的 `@morlay/*` client 行被内联，页面注册两次即抛 `duplicate factory registration`；
+// 漏判库会把它当行外置，页面 `require` 时模块表里没有它（`missed the module table`）。
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { clientBundleSpec, clientRowExternals, isClientExternal } from "../cordis-client.ts";
 
-// 一个「本包声明了两种依赖」的最小工作区：一种有 client 行、一种没有、一种装不上。
+// 一个「本包声明了三种依赖」的最小工作区：一种有 client 行、一种标了内联、一种没有、一种装不上。
 async function fixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "devkit-client-externals-"));
-  const pkg = (name: string, exportsField: Record<string, string>): Promise<void> =>
+  const pkg = (name: string, manifest: Record<string, unknown>): Promise<void> =>
     (async () => {
       const dir = join(root, "node_modules", ...name.split("/"));
       await mkdir(dir, { recursive: true });
-      await writeFile(
-        join(dir, "package.json"),
-        `${JSON.stringify({ name, exports: exportsField })}\n`,
-      );
+      await writeFile(join(dir, "package.json"), `${JSON.stringify({ name, ...manifest })}\n`);
     })();
   await writeFile(
     join(root, "package.json"),
     `${JSON.stringify({
       name: "fixture-pkg",
-      dependencies: { "@fixture/client-row": "1.0.0" },
+      dependencies: { "@fixture/client-row": "1.0.0", "@fixture/client-lib": "1.0.0" },
       peerDependencies: { "@fixture/plain": "1.0.0", "@fixture/missing": "1.0.0" },
     })}\n`,
   );
   await pkg("@fixture/client-row", {
-    ".": "./src/index.ts",
-    "./client": "./dist/client.cjs",
-    "./package.json": "./package.json",
+    exports: {
+      ".": "./src/index.ts",
+      "./client": "./dist/client.cjs",
+      "./package.json": "./package.json",
+    },
+    dsh: { client: { platform: "web", inject: [] } },
   });
-  await pkg("@fixture/plain", { ".": "./src/index.ts", "./package.json": "./package.json" });
+  await pkg("@fixture/client-lib", {
+    exports: {
+      ".": "./src/index.ts",
+      "./client": "./dist/client.cjs",
+      "./package.json": "./package.json",
+    },
+    dsh: { client: { inline: true } },
+  });
+  await pkg("@fixture/plain", {
+    exports: { ".": "./src/index.ts", "./package.json": "./package.json" },
+  });
   return root;
 }
 
@@ -42,6 +54,12 @@ describe("clientRowExternals", () => {
     expect(isClientExternal("@fixture/client-row", externals)).toBe(true);
     expect(isClientExternal("@fixture/client-row/client", externals)).toBe(true);
     expect(isClientExternal("@fixture/client-row-extra", externals)).toBe(false);
+  });
+
+  it("标了内联的库不外置：它有同一个出口，但代码要随消费方进产物", async () => {
+    const externals = await clientRowExternals(await fixture());
+    expect(isClientExternal("@fixture/client-lib", externals)).toBe(false);
+    expect(isClientExternal("@fixture/client-lib/client", externals)).toBe(false);
   });
 
   it("没有 client 行、装不上的依赖都不外置", async () => {

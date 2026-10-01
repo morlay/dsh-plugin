@@ -10,8 +10,6 @@
 - id: storage-domain
   config:
     backend: rdb
-- id: ui-conversation
-  disabled: true
 - insert:
     - id: session-branch
       name: "@morlay/session-branch"
@@ -22,10 +20,6 @@
         path: !!js dshHomePath('sessions', 'sessions.sqlite')
     - id: ui-conversation-message-actions
       name: "@morlay/ui-conversation-message-actions"
-    - id: ui-conversation-fork
-      name: "@morlay/dsh-client-ui-conversation"
-    - id: ui-primitives-fork
-      name: "@morlay/dsh-client-ui-primitives"
     - id: ui-conversation-manager
       name: "@morlay/ui-conversation-manager"
     - id: reference

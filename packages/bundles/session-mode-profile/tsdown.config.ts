@@ -10,11 +10,8 @@ import { subagentRows } from "@morlay/dsh-subagent/rows";
 // preset（registry 的 `default` 由官方 web-app 给，`standard`），模式是叠加在它之上的会话级扩展——本 bundle 只装
 // host 平面那几行。取舍与代价见 `./.agents/adrs/20260929-不再持有行清单.md`。
 export const ROWS: readonly unknown[] = [
-  // 共享 client 行：本 bundle 的 client 半 inject 它们。**同 id 重复插入是幂等的**——Loader 对同 id
-  // 复用同一个 Entry（后者胜），所以每个 bundle 都插齐自己需要的那几行，单独装也能用。
-  {
-    insert: [{ id: "ui-primitives-fork", name: "@morlay/dsh-client-ui-primitives" }],
-  },
+  // 基础面（`@morlay/dsh-client-ui-primitives`）随用到它的 client 行（`dsh-session-mode` 就是其一）内联，
+  // 不再单独插行——所以这里只有本 bundle 自己要装的那几行。
   ...sessionModeRows(),
   // 接管官方 `subagent` 行（同 id 复用换实现，官方设置卡照常可用）：中文回报指引**不限制 preset**
   // （不配名单 = 官方四个 shipped 与还没绑 preset 的会话都用中文），所以这里不传 `localizedReturnGuidancePresets`。

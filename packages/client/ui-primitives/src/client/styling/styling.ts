@@ -134,4 +134,9 @@ function incrementalHash(value: string, previous = 0): number {
   return hash;
 }
 
-export const styling = Styling.create();
+// 全局单例：本包被 inline 进各消费方的产物后，同一个页面会有多份模块实例，而样式表与注入状态必须只有一份
+// ——否则同一份规则按各自的实例各注入一遍、同名的 global 规则互相顶替。`Styling.create()` 仍是独立实例工厂。
+const STYLING_SINGLETON = Symbol.for("@morlay/dsh-client-ui-primitives/styling");
+const globalScope = globalThis as unknown as { [key: symbol]: unknown };
+
+export const styling: Styling = (globalScope[STYLING_SINGLETON] ??= Styling.create()) as Styling;

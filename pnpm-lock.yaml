@@ -301,12 +301,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-conversation':
-        specifier: workspace:*
-        version: link:../../session/ui-conversation
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
       '@morlay/dsh-reference':
         specifier: workspace:*
         version: link:../../context/dsh-reference
@@ -338,9 +332,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
       '@morlay/dsh-web-search-ollama':
         specifier: workspace:*
         version: link:../../web/dsh-web-search-ollama
@@ -354,9 +345,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
       '@morlay/dsh-sandbox-local':
         specifier: workspace:*
         version: link:../../sandbox/dsh-sandbox-local
@@ -370,9 +358,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
@@ -759,6 +744,9 @@ importers:
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-conversation
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
@@ -795,9 +783,6 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/tools
-      '@morlay/dsh-client-ui-conversation':
-        specifier: workspace:*
-        version: link:../../session/ui-conversation
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../client/ui-primitives
@@ -1024,136 +1009,6 @@ importers:
         specifier: 1.0.0-rc.5-ab785fc
         version: 1.0.0-rc.5-ab785fc
 
-  packages/session/ui-conversation:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/vendor/schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent
-      '@deepseek-ai/dsh-api-session-controller':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/api/session-controller
-      '@deepseek-ai/dsh-api-workspace-controller':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/api/workspace-controller
-      '@deepseek-ai/dsh-attachment':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/attachment/attachment
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/util/brand
-      '@deepseek-ai/dsh-client-file-upload':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/file-upload
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/locale
-      '@deepseek-ai/dsh-client-product-analytics':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/product-analytics
-      '@deepseek-ai/dsh-client-shortcuts':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/shortcuts
-      '@deepseek-ai/dsh-client-store':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/store
-      '@deepseek-ai/dsh-client-ui-layout':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-layout
-      '@deepseek-ai/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-primitives
-      '@deepseek-ai/dsh-client-ui-renderer':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-renderer
-      '@deepseek-ai/dsh-client-ui-session':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-session
-      '@deepseek-ai/dsh-client-ui-settings':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
-      '@deepseek-ai/dsh-client-ui-workspace':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/ui-workspace
-      '@deepseek-ai/dsh-commands':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/interaction/commands
-      '@deepseek-ai/dsh-goal':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/goal/goal
-      '@deepseek-ai/dsh-llm':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/llm
-      '@deepseek-ai/dsh-llm-retry':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/llm-retry
-      '@deepseek-ai/dsh-plan-mode':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/plan/plan-mode
-      '@deepseek-ai/dsh-session':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/session
-      '@deepseek-ai/dsh-settings':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/settings/settings
-      '@deepseek-ai/dsh-token-meter':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/llm/token-meter
-      '@deepseek-ai/dsh-tool-todo':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/todo/tool-todo
-      '@deepseek-ai/dsh-util-crypto':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/util/crypto
-      '@deepseek-ai/dsh-util-values':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/util/values
-      '@deepseek-ai/dsh-workspace':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/workspace/workspace
-      '@lexical/history':
-        specifier: ^0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/plain-text':
-        specifier: ^0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/text':
-        specifier: ^0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/utils':
-        specifier: ^0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@morlay/dsh-client-ui-primitives':
-        specifier: workspace:*
-        version: link:../../client/ui-primitives
-      '@types/react':
-        specifier: ~18.3.1
-        version: 18.3.1
-      '@types/react-dom':
-        specifier: ~18.3.0
-        version: 18.3.1
-      clsx:
-        specifier: ^2.0.0
-        version: 2.1.1
-      lexical:
-        specifier: ^0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-
   packages/session/ui-conversation-manager:
     dependencies:
       '@deepseek-ai/cordis':
@@ -1262,13 +1117,13 @@ importers:
       '@deepseek-ai/dsh-token-meter':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/llm/token-meter
-      '@morlay/dsh-client-ui-conversation':
-        specifier: workspace:*
-        version: link:../ui-conversation
       '@morlay/session-branch':
         specifier: workspace:*
         version: link:../session-branch
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-conversation
       '@deepseek-ai/dsh-session-stats':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/session/session-stats

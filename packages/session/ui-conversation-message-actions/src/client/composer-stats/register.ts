@@ -1,6 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-client-ui-chat/client";
-import type {} from "@morlay/dsh-client-ui-conversation/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { StatsPills } from "./StatsPills.tsx";
 
 // 官方 ui-chat 的字典命名空间：文案沿用上游（`stats.*` / `message.turnUsage.*`）。

@@ -2,9 +2,13 @@ import { defineCordisPluginConfig } from "@local/devkit";
 import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { defineConfig } from "tsdown";
 
-// 会话面接管的装配行：持久化换 RDB（停官方 `session-persistence-jsonl` / `session-projection-cache` /
-// `session-query-sqlite` / `storage-json` 四行，`storage-domain` 的 backend 路由到 `rdb`）、对话外壳换 fork
-// （停 `ui-conversation`，插 `ui-conversation-fork` 与 `ui-primitives-fork`）、会话编辑四行、基础面与引用展开（`reference`）。
+// 会话面的装配行：持久化换 RDB（停官方 `session-persistence-jsonl` / `session-projection-cache` /
+// `session-query-sqlite` / `storage-json` 四行，`storage-domain` 的 backend 路由到 `rdb`）、会话编辑两行
+// （`ui-conversation-message-actions` / `ui-conversation-manager`，都注册在官方对话外壳的槽位上）、
+// 分支数据与引用展开（`session-branch` / `reference`）。
+//
+// 官方 `ui-conversation` 行**照旧启用**：前端不再 fork，接管只走官方槽位；基础面
+// （`@morlay/dsh-client-ui-primitives`）随用到它的 client 行内联，不再单独插行。
 const ROWS: readonly unknown[] = [
   {
     id: "session-persistence-jsonl",
@@ -29,10 +33,6 @@ const ROWS: readonly unknown[] = [
     },
   },
   {
-    id: "ui-conversation",
-    disabled: true,
-  },
-  {
     insert: [
       {
         id: "session-branch",
@@ -51,14 +51,6 @@ const ROWS: readonly unknown[] = [
       {
         id: "ui-conversation-message-actions",
         name: "@morlay/ui-conversation-message-actions",
-      },
-      {
-        id: "ui-conversation-fork",
-        name: "@morlay/dsh-client-ui-conversation",
-      },
-      {
-        id: "ui-primitives-fork",
-        name: "@morlay/dsh-client-ui-primitives",
       },
       {
         id: "ui-conversation-manager",

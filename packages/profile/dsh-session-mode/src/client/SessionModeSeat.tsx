@@ -12,7 +12,7 @@ import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots
 // Type-only：拉入本包 host 半的 Context / 投影声明（`sessionMode`），让 `projectionValues` 有类型。
 import type {} from "../index.ts";
 // Type-only：拉入 ui-conversation 的 SlotMap 合并（composer 工具行的座位）。
-import type {} from "@morlay/dsh-client-ui-conversation/client";
+import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { selectMode } from "./api.ts";
 import { useRoster } from "./use-roster.ts";
 import css from "./SessionModeSeat.module.css";

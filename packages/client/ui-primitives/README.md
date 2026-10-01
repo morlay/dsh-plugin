@@ -48,5 +48,6 @@ import { SettingsFormModel, settingsNumberField } from "@morlay/dsh-client-ui-pr
 const form = new SettingsFormModel(scope, [settingsNumberField("timeoutMs")]);
 ```
 
-装配：一行 insert（行 id `ui-primitives-fork`，各 bundle 都插同一行，同 id 重复插入由 Loader 幂等处理），见
-[`@morlay/better-session`](../../bundles/better-session/cordis.patch.yml) 的 patch。
+装配：**不是装配行**——client 半随用到它的 client 行内联（清单里标 `dsh.client.inline`，devkit 因此不把它当
+模块表里的行外置），装配入口 `apply` 由那些行各自调用、按服务在场与否幂等去重；`styling` 单例跨副本共享一份。
+取舍见 [ADR 基础面暂时内联而不是装配行](./.agents/adrs/20261001-暂时内联而不是装配行.md)。

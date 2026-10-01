@@ -48,8 +48,8 @@ describe("profile overrides", () => {
       report([
         { name: "@deepseek-ai/dsh-llm", path: "node_modules/@deepseek-ai/dsh-llm" },
         {
-          name: "@morlay/dsh-client-ui-conversation",
-          path: "node_modules/.pnpm/@morlay+better-session@file+/node_modules/@morlay/dsh-client-ui-conversation",
+          name: "@morlay/ui-conversation-message-actions",
+          path: "node_modules/.pnpm/@morlay+better-session@file+/node_modules/@morlay/ui-conversation-message-actions",
         },
       ]),
     );
@@ -57,10 +57,10 @@ describe("profile overrides", () => {
     expect(await runtimeOverrides(profile, runtime)).toEqual([
       { name: "@deepseek-ai/dsh-llm", target: join(runtime, "node_modules/@deepseek-ai/dsh-llm") },
       {
-        name: "@morlay/dsh-client-ui-conversation",
+        name: "@morlay/ui-conversation-message-actions",
         target: join(
           runtime,
-          "node_modules/.pnpm/@morlay+better-session@file+/node_modules/@morlay/dsh-client-ui-conversation",
+          "node_modules/.pnpm/@morlay+better-session@file+/node_modules/@morlay/ui-conversation-message-actions",
         ),
       },
     ]);

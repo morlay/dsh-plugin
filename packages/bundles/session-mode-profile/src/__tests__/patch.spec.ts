@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { applyEntryPatches, entryListSchema } from "@deepseek-ai/cordis-plugin-include";
+import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import { sessionModeRows } from "@morlay/dsh-session-mode/rows";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
@@ -33,22 +33,6 @@ function rowById(rows: readonly Row[], id: string): Row {
   return found;
 }
 
-const compose = applyEntryPatches as unknown as (
-  data: unknown[],
-  patches: unknown[],
-  warn: (...args: unknown[]) => void,
-) => Row[];
-
-// 本 bundle 的 patch + better-session 的 patch（两者都插了共享 client 行）。
-async function layers(): Promise<Row[]> {
-  const mine = patch();
-  const theirs = yaml.load(
-    await readFile(join(process.cwd(), "packages/bundles/better-session/cordis.patch.yml"), "utf8"),
-    { schema: entryListSchema },
-  ) as Row[];
-  return compose([], [...mine, ...theirs], () => {});
-}
-
 describe("session-mode-profile 的 bundle patch", () => {
   it("仓库里那份与生成结果同形", async () => {
     const stored = await readFile(
@@ -62,19 +46,11 @@ describe("session-mode-profile 的 bundle patch", () => {
     ).toBe(true);
   });
 
-  it("共享 client 行与别的 bundle 重复插入：两份内容一致（Loader 同 id 复用 Entry，后者胜）", async () => {
-    const rows = await layers();
-
-    // `ui-schema-form` 已在 2026-09-28 并进 ui-primitives：共享面只剩这一行。
-    for (const [id, name] of [
-      ["ui-primitives-fork", "@morlay/dsh-client-ui-primitives"],
-    ] as const) {
-      const inserted = rows.filter((row) => row.id === id).map((row) => row.name);
-      // patch 层不去重（insert 是追加）——去重在 Loader：同 id 复用同一个 Entry，后者胜。
-      // 所以这里要守的是"两层写的内容一样"，否则结果就取决于 bundle 顺序。
-      expect(inserted, id).toHaveLength(2);
-      expect(new Set(inserted), id).toEqual(new Set([name]));
-    }
+  // 基础面（`@morlay/dsh-client-ui-primitives`）随 client 行内联：装配里不再有共享 client 行可插。
+  it("不插基础面那一行，只装自己要装的行", () => {
+    const ids = inserted().map((row) => row.id ?? "");
+    expect(ids).not.toContain("ui-primitives-fork");
+    expect(ids).not.toContain("ui-conversation-fork");
   });
 });
 

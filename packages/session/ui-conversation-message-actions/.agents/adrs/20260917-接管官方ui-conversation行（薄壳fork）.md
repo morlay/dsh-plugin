@@ -1,6 +1,8 @@
 # 接管官方 ui-conversation 行（薄壳 fork）
 
-状态：已采纳
+状态：已被取代（2026-10-01 起不再 fork 上游前端组件，见
+[ADR-不fork上游前端组件只做插槽扩展](../../../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)；
+下面是当时的决策与理由，保留作历史。）
 
 背景：对话 UI 的改造点全部落在组件内部，而插件面只有「整格 shadow keyed slot」：
 
@@ -15,18 +17,17 @@ patch（`patches/steps.json` 只能落干净基线，上游同区域变动即中
 **决定**
 
 在 `@morlay/better-session` 的 bundle patch 里把官方 `ui-conversation` 行 `disabled: true`，并 insert
-我们的一对一行 `@morlay/dsh-client-ui-conversation`（包内位置 `packages/session/ui-conversation`）。
+我们的一对一行 `@morlay/dsh-client-ui-conversation`（一个我们维护的薄壳 fork 包，随本次取代一并删除）。
 
 **为什么是整包而不是只 client 半**：`disabled: true` 停的是**整条插件行**（host 半与 client 半同属一个
 package 与装配行）。`ui-conversation` 的 host 半注册对话设置段（`CONVERSATION_SETTINGS_NAMESPACE`），只停
 client 半就会让命名空间无人注册。因此 fork 面是整包，命名空间与 schema 保持同名同形。
 
 **为什么是薄壳而不是整包复制**：整包复制的跟随成本随复制面线性上涨。薄壳只留我们**有意改过**的文件，
-其余上游文件由保留文件里的相对 import 指向 vendor 源、构建期内联进 `dist/client.cjs`（保留清单见
-[债务 20260917-临时接管上游对话UI的client半](../../../ui-conversation/.agents/debts/20260917-临时接管上游对话UI的client半.md)）。
-代价是**上游 client 半源码进了同一个 TS program**，随之而来的硬约束（根 `tsconfig.json` 保持
-`composite: false`、合并接口只能有一份实例）见
-[接管包规范 how-to-write](../../../ui-conversation/.agents/standards/how-to-write.md)。
+其余上游文件由保留文件里的相对 import 指向 vendor 源、构建期内联进 `dist/client.cjs`（当时保留清单登记在
+那份已销账的接管债务里）。代价是**上游 client 半源码进了同一个 TS program**：根 `tsconfig.json` 必须保持
+`composite: false`、合并接口只能有一份实例（这份约束对薄壳 fork 包普遍成立，现在仍适用于
+[`@morlay/dsh-subagent`](../../../../subagent/dsh-subagent/.agents/standards/how-to-verify.md)）。
 
 `ui-primitives` **不在接管范围**：它是平台 baseline 模块
 （`vendor/deepseek-harness/packages/client/web/src/platform.ts` 的 `PLATFORM_MODULES`），由前端种子提供，
@@ -53,8 +54,7 @@ client 半就会让命名空间无人注册。因此 fork 面是整包，命名�
 - **类型面不受影响**：其它插件对官方包的引用都是 `import type` 或 `declare module`，禁用 cordis 行只停掉
   运行时槽声明与渲染，包仍在依赖树里，类型增强照常生效。
 - **跟随上游**：复制面记录 fork 基线（`DEEPSEEK_HARNESS_VERSION`，见 `mise.toml`）；接管了什么、什么条件
-  下回退登记为技术债（[债务 20260917-临时接管上游对话UI的client半](../../../ui-conversation/.agents/debts/20260917-临时接管上游对话UI的client半.md)），
-  不新增 fork 清单文件。
+  下回退登记为技术债（那份债随本次取代销账），不新增 fork 清单文件。
 - **回滚**：把 `disabled: true` 改回、删掉 insert 行即可回到官方渲染（我们的包不写会话数据，切换不需要搬
   数据）。
 - 相关：引用解析与渲染转换的取舍见

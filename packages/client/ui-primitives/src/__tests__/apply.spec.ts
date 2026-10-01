@@ -49,16 +49,35 @@ interface Registered {
 function bench(options: {
   namespaces: readonly SettingsNamespaceView[];
   bundles: readonly BundleInfo[];
+  // 已在场的服务（模拟「同一运行时里本包的另一份副本装过了」）。
+  services?: readonly string[];
 }) {
   const registrations: Registered[] = [];
   const factories: Registered[] = [];
   const dictionaries: string[] = [];
   const effects: string[] = [];
+  const injected: string[] = [];
   const describeFace = fakeDescribe(options.namespaces);
   const scope = new FakeScope();
+  // 服务面替身：`ctx.reflect.provide` 是 Service 构造的注册口，`ctx.get` 是「装过了吗」的判据读口。
+  const provided = new Set<string>(options.services ?? []);
+  const serviceOf = (name: string): unknown => (provided.has(name) ? {} : undefined);
   const ctx = {
     // cordis 的服务基类在构造时经 ctx.reflect 往 ctx 上 provide 自己。
-    reflect: { provide: () => {}, set: () => {}, get: () => undefined },
+    reflect: {
+      provide: (name: string) => {
+        provided.add(name);
+      },
+      set: () => {},
+      get: serviceOf,
+    },
+    // 服务读面：装配前的「装过了吗」判据走它。
+    get: serviceOf,
+    // `ctx.inject` 的接缝：记下声明的服务名，并立刻以同一 scope 回调（真运行时是服务到齐后回调）。
+    inject: (names: readonly string[], callback: (scope: unknown) => unknown) => {
+      injected.push(...names);
+      return callback(ctx);
+    },
     effect: (effect: () => unknown, label: string) => {
       effects.push(label);
       return effect();
@@ -96,7 +115,7 @@ function bench(options: {
       $on: (_event: string, _listener: (...params: never[]) => void) => () => {},
     },
   };
-  return { ctx, registrations, factories, dictionaries, effects };
+  return { ctx, registrations, factories, dictionaries, effects, injected };
 }
 
 describe("装上本包的注册面", () => {
@@ -109,6 +128,34 @@ describe("装上本包的注册面", () => {
       "remote",
       "remote.pluginManager",
     ]);
+  });
+
+  it("经 ctx.inject 声明依赖后再装配（调用方不必自己排服务顺序）", () => {
+    const b = bench({ namespaces: [], bundles: [] });
+
+    apply(b.ctx as never);
+
+    expect(b.injected).toEqual([...inject]);
+  });
+
+  // inline 后每个消费行的产物里各带一份本包代码、都会调 apply：同一运行时只装配一次。
+  it("多份副本各自装上时只装配一次", () => {
+    const b = bench({ namespaces: [], bundles: [] });
+
+    apply(b.ctx as never);
+    apply(b.ctx as never);
+
+    expect(b.dictionaries).toEqual([NS]);
+    expect(b.factories).toHaveLength(1);
+  });
+
+  it("服务已在场（另一份副本装过）就不再装配", () => {
+    const b = bench({ namespaces: [], bundles: [], services: ["schemaFormHints"] });
+
+    apply(b.ctx as never);
+
+    expect(b.dictionaries).toEqual([]);
+    expect(b.factories).toEqual([]);
   });
 
   it("注册自己的字典与表单 Factory，Factory 声明字段槽", () => {
