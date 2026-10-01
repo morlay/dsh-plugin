@@ -780,6 +780,9 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tool-skill':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/skill/tool-skill
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/tools

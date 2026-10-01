@@ -79,11 +79,17 @@ describe("host 平面的那几行", () => {
 });
 
 describe("模式定义", () => {
-  it("两个模式都不写 `preset` 与 `denyTools`：`chat` 写着 `allowTools` 收窄到三件，`coding` 留空（不设收窄）", () => {
+  it("两个模式都不写 `preset`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
     const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
       | Record<
           string,
-          { preset?: string; allowTools?: readonly string[]; denyTools?: readonly string[] }
+          {
+            preset?: string;
+            allowTools?: readonly string[];
+            denyTools?: readonly string[];
+            allowSkills?: readonly string[];
+            denySkills?: readonly string[];
+          }
         >
       | undefined;
 
@@ -91,12 +97,17 @@ describe("模式定义", () => {
     for (const [id, mode] of Object.entries(modes ?? {})) {
       // 不写 `preset`：选模式不换行清单（用户选的 shipped preset 不被模式覆盖）。
       expect(mode.preset, id).toBeUndefined();
-      // 一个模式都不写 `denyTools`：没有要禁的工具。
-      expect(mode.denyTools, id).toBeUndefined();
     }
-    // `coding` 不设收窄（用 preset 的全部工具）；`chat` 收成提问 + 联网三件。
+    // `coding` 不设工具白名单（用 preset 的全部工具），只排除官方 Office 组合里那个载荷查询；
+    // 技能面按名排除官方那三件（技能目录不列、`skill` 工具加载被拒）。
     expect(modes?.["coding"]?.allowTools).toBeUndefined();
+    expect(modes?.["coding"]?.denyTools).toEqual(["load_workspace_dependencies"]);
+    expect(modes?.["coding"]?.allowSkills).toBeUndefined();
+    expect(modes?.["coding"]?.denySkills).toEqual(["office-docx", "office-pptx", "office-xlsx"]);
+    // `chat` 收成提问 + 联网三件，技能与工具名单都不再另配。
     expect(modes?.["chat"]?.allowTools).toEqual(["ask_user_question", "web_search", "web_fetch"]);
+    expect(modes?.["chat"]?.denyTools).toBeUndefined();
+    expect(modes?.["chat"]?.denySkills).toBeUndefined();
   });
 
   it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」，写路径的规则留着", () => {

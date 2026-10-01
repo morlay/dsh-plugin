@@ -24,6 +24,8 @@ function list<T>(values: readonly T[] | undefined): readonly T[] | undefined {
 function modeConfig(source: ModeSource): Record<string, unknown> {
   const allowTools = list(source.allowTools);
   const denyTools = list(source.denyTools);
+  const allowSkills = list(source.allowSkills);
+  const denySkills = list(source.denySkills);
   const allowPolicies = list(source.allowPolicies);
   const denyPolicies = list(source.denyPolicies);
   return {
@@ -35,9 +37,12 @@ function modeConfig(source: ModeSource): Record<string, unknown> {
     ...(source.persona === undefined ? {} : { persona: { ...source.persona } }),
     // 四份名单都是可选的：不写（或写成空数组）就是这个键不进 config，schema 默认空数组。
     // `allowTools` 不写 = 不设收窄；`denyTools` 不写 = 一件都不禁（两份同配时 deny 优先）；
+    // `allowSkills` / `denySkills` 同一套语义，收的是技能名（技能目录与 `skill` 工具两处一起收）；
     // `allowPolicies` 不写 = 全部上游 policy 规则生效；`denyPolicies` 不写 = 一条都不禁。
     ...(allowTools === undefined ? {} : { allowTools }),
     ...(denyTools === undefined ? {} : { denyTools }),
+    ...(allowSkills === undefined ? {} : { allowSkills }),
+    ...(denySkills === undefined ? {} : { denySkills }),
     ...(allowPolicies === undefined ? {} : { allowPolicies }),
     ...(denyPolicies === undefined ? {} : { denyPolicies }),
     ...(source.instructions === undefined ? {} : { instructions: source.instructions }),

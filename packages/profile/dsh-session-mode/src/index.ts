@@ -389,12 +389,14 @@ export class SessionModes extends Service {
         for (const dispose of disposers) dispose();
       },
     });
-    // 收口要的那几项按模式定义整份推过去：`name` / `allowTools` / `denyTools` / 三个开关。`skills` 缺省时在这里
+    // 收口要的那几项按模式定义整份推过去：`name` / 两份工具名单 / 两份技能名单 / 三个开关。`skills` 缺省时在这里
     // 按这份定义自己的工具名单推导（见 `derivedSkills`）——收口那一侧只认解析后的布尔。
     this.scope.apply(agent, {
       name: mode.name,
       allowTools: mode.allowTools,
       denyTools: mode.denyTools,
+      allowSkills: mode.allowSkills,
+      denySkills: mode.denySkills,
       instructions: mode.instructions,
       skills: mode.skills ?? derivedSkills(mode),
       runtimeContext: mode.runtimeContext,

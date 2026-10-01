@@ -18,6 +18,9 @@
 import { type Context } from "@deepseek-ai/cordis";
 import type { Agent, PreStepDecision } from "@deepseek-ai/dsh-agent";
 import type { UserMessage } from "@deepseek-ai/dsh-llm";
+// 技能目录那条消息的 `source` 形状由官方 `tool-skill` 行声明（`MessageSourceMap` 的合并扩展）：这里只借它的类型，
+// 认它仍是按 `kind` 字符串读——运行期不依赖那一行在场。
+import type {} from "@deepseek-ai/dsh-tool-skill";
 // 通道的服务声明（`ctx.contextAssembler`）住在 `@morlay/dsh-context-assembler` 的包根上；那是可选搭档，
 // 所以只借它的类型，取服务仍按"可能没有"处理。
 import type {} from "@morlay/dsh-context-assembler";
@@ -30,6 +33,10 @@ export interface SessionScopeDefinition {
   readonly allowTools: readonly string[];
   // 这个会话明确排除的工具。与 `allowTools` 同时命中一个名字时**黑名单优先**（拒，且文案说黑名单）。
   readonly denyTools: readonly string[];
+  // 这个会话能用的技能；其余既不进技能目录，`skill` 工具加载它也被拒。**留空表示不设白名单**——起点是全部技能。
+  readonly allowSkills: readonly string[];
+  // 这个会话明确排除的技能。与 `allowSkills` 同时命中一个名字时**黑名单优先**（拒，且文案说黑名单）。
+  readonly denySkills: readonly string[];
   // 这个会话要不要 instruction 类注入（`false` → 丢掉官方 `agent-instructions` 的注入，并关通道的降级注入）。
   readonly instructions: boolean;
   // 这个会话要不要技能目录（`false` → 丢掉官方 `skill-catalog` 的注入）。
@@ -53,28 +60,45 @@ function refusalOf(toolName: string, modeName: string, denial: Denial): string {
     : OUT_OF_SCOPE(toolName, modeName);
 }
 
+// 技能被拒的两类原因：同一套白名单 / 黑名单语义，文案换到技能面（拒绝加载某一件技能，而不是某个工具）。
+const SKILL_OUT_OF_SCOPE = (skillName: string, modeName: string): string =>
+  `${skillName} 不在「${modeName}」的技能白名单里，加载它不会有结果；按当前模式可用的技能完成任务，或让用户切到别的模式。`;
+
+const SKILL_DENYLISTED = (skillName: string, modeName: string): string =>
+  `${skillName} 被「${modeName}」的技能黑名单排除，加载它不会有结果；按当前模式可用的技能完成任务，或让用户切到别的模式。`;
+
+function skillRefusalOf(skillName: string, modeName: string, denial: Denial): string {
+  return denial === "denylisted"
+    ? SKILL_DENYLISTED(skillName, modeName)
+    : SKILL_OUT_OF_SCOPE(skillName, modeName);
+}
+
 // 单个工具的说明 section 名前缀：`tool:<工具名>`（`tools:` 那类是聚合块，不归收口管）。
 const TOOL_SECTION_PREFIX = "tool:";
 
-// 一次收口**合成**出来的工具面：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单。
-// `undefined` 表示不过滤（两条名单都空）——装配投影、section 过滤与执行 guard 三处都读同一个合成结果。
-type ToolGate = {
-  // undefined = 不设白名单（全部工具都是起点）。
+// 加载技能的那个官方工具名：官方 `tool-skill` 行的注册名，本包不 import 那一行（依赖面只到服务），所以按字符串读
+// ——与 `kindOf` 读官方注入面同一做法。
+const SKILL_TOOL_NAME = "skill";
+
+// 一次收口**合成**出来的一份名单面：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单。工具面与技能面同形：
+// 两处（装配投影 / 执行 guard）都读同一个合成结果。
+type NameGate = {
+  // undefined = 不设白名单（全部都是起点）。
   readonly allow: ReadonlySet<string> | undefined;
   readonly deny: ReadonlySet<string>;
 };
 
-function gateOf(definition: SessionScopeDefinition): ToolGate | undefined {
-  const deny = new Set(definition.denyTools);
-  const allow = definition.allowTools.length === 0 ? undefined : new Set(definition.allowTools);
-  if (allow === undefined && deny.size === 0) return undefined;
-  return { allow, deny };
+function gateOfNames(allow: readonly string[], deny: readonly string[]): NameGate | undefined {
+  const denied = new Set(deny);
+  const allowed = allow.length === 0 ? undefined : new Set(allow);
+  if (allowed === undefined && denied.size === 0) return undefined;
+  return { allow: allowed, deny: denied };
 }
 
-// 判定一个工具名：`undefined` = 放行，否则是被拒的原因（黑名单先判，于是 deny 优先）。
-function denialOf(gate: ToolGate, toolName: string): Denial | undefined {
-  if (gate.deny.has(toolName)) return "denylisted";
-  if (gate.allow !== undefined && !gate.allow.has(toolName)) return "not-allowlisted";
+// 判定一个名字：`undefined` = 放行，否则是被拒的原因（黑名单先判，于是 deny 优先）。
+function denialOf(gate: NameGate, name: string): Denial | undefined {
+  if (gate.deny.has(name)) return "denylisted";
+  if (gate.allow !== undefined && !gate.allow.has(name)) return "not-allowlisted";
   return undefined;
 }
 
@@ -85,10 +109,68 @@ function kindOf(message: UserMessage): string | undefined {
   return typeof kind === "string" ? kind : undefined;
 }
 
+// 技能目录正文里的条目行：`- \`<技能名>\`: <说明>`（官方 `tool-skill` 的渲染形状）。只认行首这一种，
+// 认不出的行一律原样留着——宁可多列，不可把别的东西删掉。
+const CATALOG_LINE = /^- `([^`]+)`: /u;
+
+// 按技能名单收窄一条 `skill-catalog` 消息：正文删掉被拒技能那几行，`source.entries` 同步剔除。
+// `undefined` = 这条消息不用动（名单没排除它任何一项，或者形状认不出）。
+function narrowCatalog(
+  message: UserMessage,
+  gate: NameGate,
+  warn: (line: string) => void,
+): UserMessage | undefined {
+  const source = message.source;
+  if (source.kind !== "skill-catalog") return undefined;
+  const entries = source.entries;
+  const denied = new Set(
+    entries.map((entry) => entry.name).filter((name) => denialOf(gate, name) !== undefined),
+  );
+  if (denied.size === 0) return undefined;
+
+  const [block, ...rest] = message.content;
+  if (block?.type !== "text" || rest.length > 0) {
+    warn(
+      `skill catalog message is not one text block; denied skills stay listed: ${[...denied].join(", ")}`,
+    );
+    return undefined;
+  }
+  const removed = new Set<string>();
+  const lines = block.text.split("\n").filter((line) => {
+    const match = CATALOG_LINE.exec(line);
+    if (match === null) return true;
+    const name = match[1] ?? "";
+    if (!denied.has(name)) return true;
+    removed.add(name);
+    return false;
+  });
+  // 上游渲染形状漂移：正文里没定位到这些名字。这一条**整条不动**（正文与结构化名单保持一致：宁可多列，
+  // 不可出现"正文里有、名单里没有"的分叉），但要点出来——这条名单面就靠这行告警才不算静默失灵。
+  const missing = [...denied].filter((name) => !removed.has(name));
+  if (missing.length > 0) {
+    warn(`skill catalog lines not recognized; denied skills stay listed: ${missing.join(", ")}`);
+    return undefined;
+  }
+  return {
+    ...message,
+    content: [{ ...block, text: lines.join("\n") }],
+    source: { ...source, entries: entries.filter((entry) => !denied.has(entry.name)) },
+  };
+}
+
+// `skill` 工具调用的技能名：参数形状是官方那一行的 `{ name: string }`，认不出就不判（那是别人的工具）。
+function skillNameOf(arguments_: unknown): string | undefined {
+  if (typeof arguments_ !== "object" || arguments_ === null) return undefined;
+  const name = (arguments_ as { readonly name?: unknown }).name;
+  return typeof name === "string" && name.length > 0 ? name : undefined;
+}
+
 // 一个 agent 当前装着的那一份：`apply` 时解析好的开关（抑制面读它）。
 interface Applied {
   // 两条名单都空 = 不过滤（装配期与执行层都放行）。
-  readonly gate: ToolGate | undefined;
+  readonly gate: NameGate | undefined;
+  // 技能面的名单：与工具面同形，`undefined` = 不设收窄（目录照旧、`skill` 工具不按名判）。
+  readonly skillGate: NameGate | undefined;
   readonly instructions: boolean;
   readonly skills: boolean;
   // 收回这一份在 `agent.ctx` 上的注册（抑制器与执行层 guard）。
@@ -122,7 +204,7 @@ export class SessionScope {
     });
 
     // 两个抑制面：官方 `agent-instructions`（工作区指令）与官方 `skill-catalog`（技能目录）都在装配投影之外自己
-    // 往这条瀑布里 append，所以只有在这里丢掉它们的条目。
+    // 往这条瀑布里 append，所以只有在这里丢掉它们的条目（技能名单则在这里把目录按名收窄）。
     //
     // `prepend` 是必需的：官方那两行比本行早注册（会话挂着的 preset 先于 host 平面），瀑布里先注册的是**外层**，
     // 站在它们后面就看不到、也丢不掉它们 append 的条目——只有抢在最外层（`await next()` 之后再收）才拿得到最终
@@ -135,15 +217,36 @@ export class SessionScope {
         const applied = this.applied.get(payload.agent);
         // 没收过口的会话一律不动。
         if (applied === undefined) return decision;
-        const kept = decision.messages.filter((message) => {
+        let changed = false;
+        const kept: UserMessage[] = [];
+        for (const message of decision.messages) {
           const kind = kindOf(message);
-          if (kind === "agent-instructions") return applied.instructions;
-          if (kind === "skill-catalog") return applied.skills;
-          return true;
-        });
-        return kept.length === decision.messages.length
-          ? decision
-          : { ...decision, messages: kept };
+          if (kind === "agent-instructions") {
+            if (applied.instructions) kept.push(message);
+            else changed = true;
+            continue;
+          }
+          if (kind === "skill-catalog") {
+            if (!applied.skills) {
+              changed = true;
+              continue;
+            }
+            const narrowed =
+              applied.skillGate === undefined
+                ? undefined
+                : narrowCatalog(message, applied.skillGate, (line) =>
+                    this.ctx.logger.warn(`session-mode: ${line}`),
+                  );
+            if (narrowed === undefined) kept.push(message);
+            else {
+              changed = true;
+              kept.push(narrowed);
+            }
+            continue;
+          }
+          kept.push(message);
+        }
+        return changed ? { ...decision, messages: kept } : decision;
       },
       { prepend: true },
     );
@@ -153,8 +256,9 @@ export class SessionScope {
   apply(agent: Agent, definition: SessionScopeDefinition): void {
     const previous = this.applied.get(agent);
     if (previous !== undefined) previous.dispose();
-    // 两条名单都空 = 不过滤：没有守卫要装，装配期也一路放行。
-    const gate = gateOf(definition);
+    // 两份名单都空 = 不过滤：没有守卫要装，装配期也一路放行。
+    const gate = gateOfNames(definition.allowTools, definition.denyTools);
+    const skillGate = gateOfNames(definition.allowSkills, definition.denySkills);
 
     // 落在 `agent.ctx` 上的那两件用一个 effect 装：动态快照抑制是 scope 层的一次注册；执行层 guard 要等
     // `tools` 激活才装得上（`inject` 的回调），它挂在那个 inject fiber 下，所以收回时连 fiber 一起收。
@@ -166,10 +270,19 @@ export class SessionScope {
       }
       // 必须落在 `agent.ctx` 上才是这个会话的作用域。
       const fiber = agent.ctx.inject(["tools"], (scope) => {
-        if (gate === undefined) return;
+        if (gate === undefined && skillGate === undefined) return;
         scope.tools.guard((exec) => {
-          const denial = denialOf(gate, exec.name);
-          return denial === undefined ? undefined : refusalOf(exec.name, definition.name, denial);
+          // 工具面：按名判这个工具本身能不能用。
+          const denial = gate === undefined ? undefined : denialOf(gate, exec.name);
+          if (denial !== undefined) return refusalOf(exec.name, definition.name, denial);
+          // 技能面：`skill` 工具本身照旧可用，被收窄的是它这次要加载的那一件技能。
+          if (skillGate === undefined || exec.name !== SKILL_TOOL_NAME) return undefined;
+          const skillName = skillNameOf(exec.arguments);
+          if (skillName === undefined) return undefined;
+          const skillDenial = denialOf(skillGate, skillName);
+          return skillDenial === undefined
+            ? undefined
+            : skillRefusalOf(skillName, definition.name, skillDenial);
         });
       });
       return [...stoppers, () => fiber.dispose()];
@@ -180,6 +293,7 @@ export class SessionScope {
 
     this.applied.set(agent, {
       gate,
+      skillGate,
       instructions: definition.instructions,
       skills: definition.skills,
       dispose,

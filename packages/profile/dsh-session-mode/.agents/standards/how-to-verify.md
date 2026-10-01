@@ -13,9 +13,10 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 - `bundles/session-mode-profile/src/__tests__/patch.spec.ts`：生成物与 `renderPatch()` 同形；host 平面那几行
   （`session-mode`、`context-assembler`、`subagent`、`tool-guidance`）在装配入口那一份里，**没有单独的收口行**；
   **装配里不再有 agent preset 行**（行清单归 shipped preset）、行数据类行（`tool-web` / `plan-mode` / …）一件都不在；
-  子代理那一行**没有 `config`**（中文回报指引不限 preset）；两个模式都不写 `preset` 与 `denyTools`，`chat` 写着
-  `allowTools` 收窄到三件（`coding` 留空 = 不设收窄），`coding` 写着 `denyPolicies: [fs/edit-intent]`（`chat` 一份
-  policy 名单都没有）。
+  子代理那一行**没有 `config`**（中文回报指引不限 preset）；两个模式都不写 `preset`，`chat` 写着
+  `allowTools` 收窄到三件（`coding` 留空 = 不设收窄），`coding` 收窄官方 Office 面（`denyTools:
+[load_workspace_dependencies]` + `denySkills: [office-docx, office-pptx, office-xlsx]`），`coding` 写着
+  `denyPolicies: [fs/edit-intent]`（`chat` 一份 policy 名单都没有）。
   本包的装配期校验（默认模式在清单里且是 `main` 角色、`role` 非空、`preset` 允许共享、`defaultModel` 的 provider
   与 model 要给全、policy 名字必须在 `POLICY_NAMES` 里）在 `session-mode.spec.ts` 里按预期拒绝；`allowTools`
   留空**不再**报错。
@@ -53,7 +54,10 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   `chat` 的 `agent-instructions` 与 `skill-catalog` 都不进（连续三步都丢、inbox 不积压、日志 0 条），显式
   `skills: true` 时目录照旧发布，而 `coding` 那边两条都在（它那两个**注入面**开关 `instructions` / `skills` 都缺省为要，
   所以那边钉的正是"开关为 `true` 时零干预"这一侧）；`skills` 推导的减法那一半也成对钉住：名单留空 +
-  `denyTools: [skill]` → 目录不注入，而 `instructions` 没关，上游那条工作区指令照旧在。host 平面里装着**真**
+  `denyTools: [skill]` → 目录不注入，而 `instructions` 没关，上游那条工作区指令照旧在。**技能名单三条**也在这份里
+  （两种装配顺序各跑一遍）：黑名单（被拒那件从正文与 `source.entries` 一起消失、`skill` 工具加载它被拒，其余技能照旧；
+  另一份没配名单的定义里两件都在）、白名单（名单外的技能同样收掉，拒的是"白名单外"那一类文案）、行形状漂移
+  （认不出的目录消息整条不动 + 点名告警）。host 平面里装着**真**
   `fs-observation-policy` 行，成对判 policy 拦截：`coding` 编辑没读过的文件拿到 `undefined`（免"先读后改"），
   `chat` 照旧抛 `FS_NOT_OBSERVED`，而写那条规则两边都照旧给 `createIfAbsent`。`session-mode.spec.ts` 里
   另有一组单元判据（空 `preset` 不碰 registry、`modeForPreset` 不回答、重复选幂等、留空 `allowTools` = 全部工具）。

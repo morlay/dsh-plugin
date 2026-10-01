@@ -72,6 +72,7 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@morlay/dsh-client-ui-primitives": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",

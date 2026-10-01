@@ -51,6 +51,12 @@ export interface SessionMode {
   // 这个模式**不用**哪些工具（黑名单）：从 `allowTools` 定下的那份里减掉（`allowTools` 留空时就是从全部里减）。
   // 留空表示不禁任何工具。同时命中两份名单时以这里为准（deny 优先）。
   readonly denyTools: string[];
+  // 这个模式能用哪些**技能**；其余的既不进技能目录，`skill` 工具加载它也被拒。**留空表示不设收窄**：技能注册表
+  // 里有什么就用什么（官方 `skill-office` 那类由宿主代码挂载的技能也在这份"全部"里）。
+  readonly allowSkills: string[];
+  // 这个模式**不用**哪些技能（黑名单）：从 `allowSkills` 定下的那份里减掉（`allowSkills` 留空时就是从全部里减）。
+  // 留空表示不禁任何技能；同时命中两份名单时以这里为准（deny 优先）。
+  readonly denySkills: string[];
   // 上游 policy 规则的**生效白名单**：留空（或不写）表示全部规则照旧生效；有值表示只有列出的那些生效，
   // 其余的按 `denyPolicies` 那一套被绕过。名单见 `POLICY_NAMES`。空数组与不写同义。
   readonly allowPolicies: string[];
@@ -198,6 +204,24 @@ const modeSchema: z<SessionMode> = z.object({
         en: "Tools this mode must not use (deny list): subtracted from whatever `allowTools` settled on (with an empty `allowTools`, from everything). Empty denies nothing; a name in both lists is denied.",
       }),
     ),
+  allowSkills: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "这个模式能用的技能；其余既不进技能目录，`skill` 工具加载它也被拒。**留空就是不设收窄**：技能注册表里有什么就用什么。",
+        en: "Skills this mode may use; everything else leaves the skill catalog and loading it through the `skill` tool is refused. Leave it empty to narrow nothing: the session then sees every skill the registry carries.",
+      }),
+    ),
+  denySkills: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "这个模式不用的技能（黑名单）：从 `allowSkills` 定下的那份里减掉（`allowSkills` 留空就是从全部里减）。留空 = 一条都不禁；同时命中两份名单时以这里为准。",
+        en: "Skills this mode must not use (deny list): subtracted from whatever `allowSkills` settled on (with an empty `allowSkills`, from everything). Empty denies nothing; a name in both lists is denied.",
+      }),
+    ),
   allowPolicies: z
     .array(z.string())
     .default([])
@@ -298,6 +322,10 @@ interface Validated {
         readonly allowTools?: readonly string[];
         // 留空合法：不禁任何工具；与 `allowTools` 同时命中合法（deny 优先）。
         readonly denyTools?: readonly string[];
+        // 留空合法：不设技能收窄。
+        readonly allowSkills?: readonly string[];
+        // 留空合法：不禁任何技能；与 `allowSkills` 同时命中合法（deny 优先）。
+        readonly denySkills?: readonly string[];
         // 留空合法：全部规则生效。
         readonly allowPolicies?: readonly string[];
         // 留空合法：一条都不禁；与 `allowPolicies` 同时命中合法（deny 优先）。

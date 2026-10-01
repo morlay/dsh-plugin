@@ -140,7 +140,7 @@ describe("会话模式的行配置页", () => {
     expect(paths).not.toContain("modes.coding.skills");
     expect(
       snapshot.addable.get(JSON.stringify(["modes", "coding"]))?.map((option) => option.key),
-    ).toEqual(["preset", "skills", "defaultModel"]);
+    ).toEqual(["preset", "allowSkills", "denySkills", "skills", "defaultModel"]);
   });
 
   it("给某个模式配默认模型：加成 `defaultModel` 后里面就是能填的位子", () => {

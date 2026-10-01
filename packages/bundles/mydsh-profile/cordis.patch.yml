@@ -13,3 +13,6 @@
 - id: ui-chat
   config:
     transcriptView: verbose
+- id: session-log-deepseek
+  config:
+    enabled: false

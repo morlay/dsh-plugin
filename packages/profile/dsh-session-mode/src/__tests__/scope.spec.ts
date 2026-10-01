@@ -32,6 +32,8 @@ function modeOf(name: string, overrides: Partial<SessionMode> = {}): SessionMode
     persona: { prefix: "", suffix: "" },
     allowTools: [],
     denyTools: [],
+    allowSkills: [],
+    denySkills: [],
     allowPolicies: [],
     denyPolicies: [],
     instructions: true,

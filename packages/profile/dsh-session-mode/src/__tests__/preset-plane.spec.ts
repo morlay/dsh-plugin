@@ -26,7 +26,7 @@ import { ToolCallId, createUserMessage, type UserMessage } from "@deepseek-ai/ds
 import { SessionId } from "@deepseek-ai/dsh-session";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
 import * as contextPlugin from "@morlay/dsh-context-assembler";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as plugin from "../index.ts";
 import { sessionModeRows } from "../rows.ts";
 
@@ -40,6 +40,8 @@ afterEach(async () => {
 
 const AGENTS_BODY = "先读 AGENTS.md。";
 const SKILL = "repo-skill";
+// 装在本部署里、但模式按名排除的那一类技能（形状与官方 `office-docx` 同：技能注册表里真的注册着）。
+const DENIED_SKILL = "office-docx";
 
 // 会话默认挂的那份 shipped preset（`standard`）的关键几行，与 `web-app/presets/standard.patch.yml` 同形：
 // 上游的工作区指令与 `tool-skill` 行（注入的两面都归官方）、文件与 skill 发现、chat 收口要的两件。
@@ -91,6 +93,13 @@ function catalogs(messages: readonly UserMessage[]): UserMessage[] {
   return messages.filter((message) => kindOf(message) === "skill-catalog");
 }
 
+// 目录消息里那份**结构化**名单（官方把发布的条目一起记在 source 上，消费方不用去解析给模型看的正文）。
+function catalogEntries(message: UserMessage): string[] {
+  const entries = (message.source as { readonly entries?: readonly { readonly name: string }[] })
+    .entries;
+  return (entries ?? []).map((entry) => entry.name).toSorted();
+}
+
 // 一条 preset 声明：`register` 的返回值要 `yield` 出去，声明方才有生命期。
 async function declare(ctx: Context, definition: PresetDefinition): Promise<void> {
   await ctx.plugin({
@@ -124,6 +133,13 @@ async function mount(options: {
     name: SKILL,
     description: "仓库自带的 skill。",
     content: "SKILL_BODY",
+    source: "runtime",
+    invocation: { modelInvocable: true, userInvocable: true },
+  });
+  ctx.skills.register({
+    name: DENIED_SKILL,
+    description: "模式按名排除的那一件。",
+    content: "DENIED_SKILL_BODY",
     source: "runtime",
     invocation: { modelInvocable: true, userInvocable: true },
   });
@@ -201,10 +217,11 @@ async function editIntent(ctx: Context, target: FsTarget, agent: Agent): Promise
 async function preStep(
   ctx: Context,
   agent: Agent,
-  options: { turn?: number; persist?: boolean } = {},
+  options: { turn?: number; persist?: boolean; extra?: readonly UserMessage[] } = {},
 ): Promise<UserMessage[]> {
   const input = [
     createUserMessage({ content: [{ type: "text", text: "任务" }], source: { kind: "user" } }),
+    ...(options.extra ?? []),
   ];
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
@@ -224,6 +241,17 @@ async function preStep(
 async function toolNames(ctx: Context, agent: Agent): Promise<string[]> {
   const prompt = await ctx.systemPrompt.assemble(assembleContextFor(agent));
   return prompt.tools.map((tool) => tool.name).toSorted();
+}
+
+// 一次真的 `skill` 工具调用（官方的加载技能那件工具；`name` 是模型给的那个技能名）。
+async function loadSkill(ctx: Context, agent: Agent, name: string) {
+  return await ctx.tools.execute({
+    callId: ToolCallId(`call-skill-${name}`),
+    name: "skill",
+    arguments: { name },
+    agent,
+    signal: new AbortController().signal,
+  });
 }
 
 describe.each([
@@ -337,6 +365,111 @@ describe.each([
     expect(textOf(catalogs_[0]!)).toContain(SKILL);
     // 工作区指令也由上游那一行给：我们通道不重复注入。
     expect(kindsOf(messages, "agent-instructions")).toEqual(["upstream"]);
+  });
+
+  it("技能黑名单：被拒的技能从目录里拿掉，其余技能照旧（成对：不配名单时两件都在）", async () => {
+    const { ctx, create } = await mount({
+      hostFirst,
+      modeOverrides: {
+        coding: { denySkills: [DENIED_SKILL] },
+        // 成对的那一份：chat 显式要目录（它自己的工具名单推不出"要"），技能名单一条都不配。
+        chat: { skills: true },
+      },
+    });
+    const agent = await create();
+
+    const [catalog] = catalogs(await preStep(ctx, agent));
+
+    expect(catalog).toBeDefined();
+    // 模型读到的正文与结构化名单一起收：其余技能那几行原样留着。
+    expect(textOf(catalog!)).toContain(SKILL);
+    expect(textOf(catalog!)).toContain("仓库自带的 skill。");
+    expect(textOf(catalog!)).not.toContain(DENIED_SKILL);
+    expect(catalogEntries(catalog!)).toEqual([SKILL]);
+
+    // 成对判据：另一份**没配技能名单**的定义里两件都在——"把目录整份丢掉"那种实现过不了这一条。
+    const other = await create();
+    await ctx.sessionModes.select(other.id, "chat");
+    const [otherCatalog] = catalogs(await preStep(ctx, other));
+    expect(catalogEntries(otherCatalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
+  });
+
+  it("技能黑名单：`skill` 工具加载被拒的技能被拒，别的技能照旧可加载", async () => {
+    const { ctx, create } = await mount({
+      hostFirst,
+      modeOverrides: { coding: { denySkills: [DENIED_SKILL] } },
+    });
+    const agent = await create();
+
+    const denied = await loadSkill(ctx, agent, DENIED_SKILL);
+
+    expect(denied.error).toBeDefined();
+    expect(JSON.stringify(denied)).toContain("编码模式");
+    expect(JSON.stringify(denied)).toContain("技能黑名单");
+    // 成对：名单只排除那一件，别的技能照旧加载得到。
+    expect((await loadSkill(ctx, agent, SKILL)).error).toBeUndefined();
+  });
+
+  it("技能白名单：名单外的技能从目录里拿掉，`skill` 工具加载它也被拒", async () => {
+    const { ctx, create } = await mount({
+      hostFirst,
+      // 源定义里 `coding` 本来就带技能黑名单（官方 Office 三件）：这一份换成纯白名单，两类拒绝才分得开。
+      modeOverrides: { coding: { allowSkills: [SKILL], denySkills: [] } },
+    });
+    const agent = await create();
+
+    const [catalog] = catalogs(await preStep(ctx, agent));
+
+    expect(catalogEntries(catalog!)).toEqual([SKILL]);
+    expect(textOf(catalog!)).not.toContain(DENIED_SKILL);
+
+    const denied = await loadSkill(ctx, agent, DENIED_SKILL);
+    expect(JSON.stringify(denied)).toContain("技能白名单");
+    expect((await loadSkill(ctx, agent, SKILL)).error).toBeUndefined();
+  });
+
+  it("目录行格式漂移：那一条整条不动（正文与名单不分叉），告警点名被拒的那件没被拿掉", async () => {
+    const { ctx, create } = await mount({
+      hostFirst,
+      modeOverrides: { coding: { denySkills: [DENIED_SKILL] } },
+    });
+    const warn = vi.spyOn(ctx.logger, "warn").mockImplementation(() => undefined);
+    const agent = await create();
+    // 官方那一行只认**第一条**目录消息（它把它换成自己渲染的那份），所以这里放两条：第一条喂给官方行，
+    // 第二条就是"上游渲染形状变了"的那一条——它留到过滤面上，`- \`名字\`: ` 那个行首认不出。
+    const replaced = createUserMessage({
+      content: [
+        { type: "text", text: "<available_skills>\n- `office-docx`: 自造\n</available_skills>" },
+      ],
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: DENIED_SKILL, description: "自造" }],
+      } as never,
+    });
+    const drift = createUserMessage({
+      content: [
+        {
+          type: "text",
+          text: "<available_skills>\n* office-docx: 漂移形状\n</available_skills>",
+        },
+      ],
+      source: {
+        kind: "skill-catalog",
+        form: "catalog",
+        entries: [{ name: DENIED_SKILL, description: "漂移形状" }],
+      } as never,
+    });
+
+    const messages = await preStep(ctx, agent, { extra: [replaced, drift] });
+    const catalogList = catalogs(messages);
+    const official = catalogList.find((message) => !textOf(message).includes("漂移形状"))!;
+    const drifted = catalogList.find((message) => textOf(message).includes("漂移形状"))!;
+
+    // 官方发布的那条照旧被收窄；认不出行的那一条整条不动（正文与结构化名单两处不分叉），并点名告警。
+    expect(catalogEntries(official)).toEqual([SKILL]);
+    expect(catalogEntries(drifted)).toEqual([DENIED_SKILL]);
+    expect(warn.mock.calls.flat().join("\n")).toContain(DENIED_SKILL);
   });
 
   it("`skills` 推导的减法那一半：名单留空 + 黑名单禁掉 `skill` → 技能目录不注入", async () => {

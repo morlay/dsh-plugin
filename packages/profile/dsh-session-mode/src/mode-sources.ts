@@ -20,6 +20,10 @@ export interface ModeSource {
   readonly allowTools?: readonly string[];
   // 这个模式不用的工具（黑名单）：从 `allowTools` 定的那份里减掉（deny 优先）。
   readonly denyTools?: readonly string[];
+  // 这个模式能用的技能；**可选**，不写（留空）就是不设收窄——技能注册表里有什么就用什么。
+  readonly allowSkills?: readonly string[];
+  // 这个模式不用的技能（黑名单）：从 `allowSkills` 定的那份里减掉（deny 优先）。
+  readonly denySkills?: readonly string[];
   // 上游 policy 规则的生效白名单：**可选**，不写（留空）= 全部规则生效。
   readonly allowPolicies?: readonly PolicyName[];
   // 上游 policy 规则的黑名单：列出的规则禁用（它在上游那条 waterfall 上的裁决被绕过）。
@@ -69,7 +73,11 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
     // 不写 `allowTools`：不设收窄——这个会话用它挂着的 preset 提供的全部工具（抄一份清单只会与行清单漂移）。
-    // 不写 `denyTools`：一件工具都不禁。
+    // 只排除一件工具：官方 Office 组合（宿主代码挂载，profile 层停不掉它的行）里那个载荷查询。
+    denyTools: ["load_workspace_dependencies"],
+    // 官方 Office 技能的三个名字同样按会话排除：技能目录里不列它们，`skill` 工具加载它们也被拒。
+    // 名单是技能名这一层的模型可见契约（官方 `skill-office` 的 `SKILL_NAMES`），跟着上游改名走。
+    denySkills: ["office-docx", "office-pptx", "office-xlsx"],
     //
     // `denyPolicies` 只禁 `fs/edit-intent`（上游那条"先读后改"）：改文件不再要求先读过——写路径上的
     // `fs/write-intent`（陈旧版本 CAS 那层安全网）照旧生效，那正是这条配置不写成"两条都禁"的理由。
