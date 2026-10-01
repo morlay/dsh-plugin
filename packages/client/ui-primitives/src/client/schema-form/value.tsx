@@ -4,14 +4,11 @@
 // 形状——字符串把换行写成 `\n`，与一行的输入框相配）。
 
 import { useState, type ReactNode } from "react";
-import {
-  IconChevronDownOutlineRegular,
-  Menu,
-  Tooltip,
-} from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconChevronDownOutlineRegular, Menu } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SelectOption } from "./hints.ts";
 import type { SchemaFieldOwnerProps } from "./slot-contract.ts";
 import { ICON_SIZE, LineValue, ValueTrigger } from "./styles.ts";
+import { TruncatedTooltip } from "./TruncatedTooltip.tsx";
 
 // 编辑态文本：字符串就是原文（换行照旧），其余按 JSON 写。
 export function valueText(value: unknown): string {
@@ -46,25 +43,22 @@ export function tokenTone(value: unknown): "string" | "number" | "boolean" | "em
 export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactNode {
   if (owner.options !== undefined) return <OptionSelect owner={owner} options={owner.options} />;
   if (owner.node.meta.secret) {
-    // secret 不回显值：截断时不给全文，只给说明。
-    const bullets = (
-      <LineValue data-tone="empty">{owner.secretConfigured ? "••••••" : ""}</LineValue>
-    );
-    if (owner.hint === undefined) return bullets;
+    // secret 不回显值：这里显示的是「已配置」的 `••••••`，它不会截断，`owner.hint` 也不是「被截断文本的全文」
+    // ——按行内浮层的口径它不该弹气泡，所以回到非侵入的原行为：挂原生 `title`。
     return (
-      <Tooltip label={owner.hint} side="bottom" portal>
-        {bullets}
-      </Tooltip>
+      <LineValue data-tone="empty" title={owner.hint}>
+        {owner.secretConfigured ? "••••••" : ""}
+      </LineValue>
     );
   }
-  // 值长了会在行里截断（值槽可收缩）：整份内容挂在官方 `Tooltip` 上，hover 就能看全。
+  // 值长了会在行里截断（值槽可收缩）：确实截断时整份内容由官方 `Tooltip` 承载，放得下就不挂。
   const text = tokenText(owner.value);
   return (
-    <Tooltip label={text} side="bottom" portal>
+    <TruncatedTooltip label={text}>
       <LineValue data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}>
         {text}
       </LineValue>
-    </Tooltip>
+    </TruncatedTooltip>
   );
 }
 

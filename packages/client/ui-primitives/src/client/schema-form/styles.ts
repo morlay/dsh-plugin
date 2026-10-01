@@ -235,8 +235,8 @@ export const CompactTextField = styled("span")({
   },
 });
 
-// 行内注释（schema 说明与业务文案）：比配置值小一档、tertiary 色，占满这一行剩下的宽度，长了就截断——**全文由
-// 官方 `Tooltip` 承载**（`Editor.tsx` 里包着它），不再挂原生 `title`。
+// 行内注释（schema 说明与业务文案）：比配置值小一档、tertiary 色，占满这一行剩下的宽度，长了就截断——**真的被
+// 截断时**才由官方 `Tooltip` 给全文（`Editor.tsx` 里的 `TruncatedTooltip` 包着它），放得下就一个浮层也不挂。
 export const LineComment = styled("span")({
   flex: "1 1 auto",
   minWidth: 0,
@@ -248,8 +248,8 @@ export const LineComment = styled("span")({
 });
 
 // 行内的校验消息（与注释放同一档字号）：注释位装的也可能是整段校验或解析失败的长消息，所以与注释同一套约束
-// ——可收缩、自己截断、全文由官方 `Tooltip` 给。`flex: 0 1 auto`（不生长）：短消息别铺满整行，添加入口那一行
-// 里也不跟输入框抢剩下的宽度。红字先说清。
+// ——可收缩、自己截断、**截断了**才由官方 `Tooltip` 给全文。`flex: 0 1 auto`（不生长）：短消息别铺满整行，添加
+// 入口那一行里也不跟输入框抢剩下的宽度。红字先说清。
 export const LineInvalid = styled("span")({
   flex: "0 1 auto",
   minWidth: 0,

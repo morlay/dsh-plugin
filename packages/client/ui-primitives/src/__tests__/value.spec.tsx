@@ -4,7 +4,7 @@
 // 盯的接缝是**值 → 显示 / 文本 → 值**：字符串带引号显示但编辑的是原文；secret 不回显值；数字、布尔、JSON 各有
 // 自己的解析规则与失败消息。
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SchemaFormActions } from "../client/schema-form/controller.ts";
@@ -12,6 +12,7 @@ import { parseFor } from "../client/schema-form/fields.tsx";
 import { isMultiline } from "../client/schema-form/value.tsx";
 import { zh } from "../client/schema-form/locales.ts";
 import { projectNode, type FieldNode } from "../client/schema-form/schema-node.ts";
+import { stubResizeObserver } from "../client/schema-form/testing/resize-observer-stub.ts";
 import type {
   SchemaFieldOwnerProps,
   SchemaFormTranslate,
@@ -25,6 +26,8 @@ import {
 } from "../client/schema-form/value.tsx";
 
 afterEach(cleanup);
+// 值的显示态挂着「被截断才给全文」的那层包装：它要 ResizeObserver（jsdom 没有这个 API）。
+stubResizeObserver();
 
 const t = ((key: string, params?: Record<string, unknown>) => {
   const template = (zh as unknown as Record<string, string>)[key] ?? key;
@@ -111,6 +114,21 @@ describe("行内值", () => {
     const blank = ownerOf(z.string().role("secret"), ["field"], { secretConfigured: false });
     render(<InlineValue owner={blank} />);
     expect(screen.queryByText("••••••")).toBeNull();
+  });
+
+  it("secret 位不弹气泡：显示的是「已配置」而不是被截断的文本，说明走原生 title", () => {
+    // 说明再长也一样：这一格不会截断，`owner.hint` 也不是「被截断文本的全文」。
+    const hint = "在 providers 里配的密钥，页面不回显；改了才会写下去".repeat(3);
+    const owner = ownerOf(z.string().role("secret"), ["field"], {
+      secretConfigured: true,
+      hint,
+    });
+    render(<InlineValue owner={owner} />);
+
+    const bullets = screen.getByText("••••••");
+    expect(bullets.getAttribute("title")).toBe(hint);
+    fireEvent.mouseEnter(bullets);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("带换行的字符串原样进编辑、原样出草稿（多行输入里编辑）", () => {

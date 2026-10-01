@@ -6,7 +6,7 @@
 //
 // 字段槽仍然生效：命中时该字段**值**的位置换成注册方的组件，键名、注释、行号与行为按钮仍由这里画。
 //
-// 被 `ellipsis` 截断的文本（注释行、值）由官方 `Tooltip` 承载全文——本页不再依赖原生 `title`。
+// 被 `ellipsis` 截断的文本（注释行、值）由官方 `Tooltip` 承载全文——**只有真的截断了才挂**（`TruncatedTooltip`）。
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
@@ -19,7 +19,6 @@ import {
   IconTrashOutlineRegular,
   Input,
   Menu,
-  Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SchemaFormFace, SchemaFormState } from "./controller.ts";
 import { fieldKey } from "./controller.ts";
@@ -32,6 +31,7 @@ import {
 } from "./lines.ts";
 import { parseFor } from "./fields.tsx";
 import type { ResolveText } from "./labels.ts";
+import { TruncatedTooltip } from "./TruncatedTooltip.tsx";
 import { isMultiline, valueText } from "./value.tsx";
 import type { SchemaFieldOwnerProps, SchemaFormTranslate } from "./slot-contract.ts";
 import {
@@ -207,14 +207,14 @@ function Row({
       <>
         <LineFoldSpacer data-role="fold" />
         {/* 这一行有问题时注释位装的就是那条消息：红字，别整行铺红。
-            注释被 `ellipsis` 截断：全文交给官方 `Tooltip`，不再挂原生 `title`。 */}
-        <Tooltip label={line.text} side="bottom" portal>
+            注释被 `ellipsis` 截断时全文交给官方 `Tooltip`——**只有真的截断才挂**，放得下就原样画。 */}
+        <TruncatedTooltip label={line.text}>
           {line.invalid ? (
             <LineInvalid data-role="comment">{`// ${line.text}`}</LineInvalid>
           ) : (
             <LineComment data-role="comment">{`// ${line.text}`}</LineComment>
           )}
-        </Tooltip>
+        </TruncatedTooltip>
       </>
     ) : line.kind === "open" ? (
       <>
@@ -761,11 +761,11 @@ function AddLine({
         }
       />
       {invalid ? <LineInvalid>{t("unknownProperty")}</LineInvalid> : null}
-      {/* 候选的说明：选中之前先看清"要加的是什么"（长了同样由 `Tooltip` 给全文）。 */}
+      {/* 候选的说明：选中之前先看清"要加的是什么"（长了同样由 `Tooltip` 给全文，只有截断时才挂）。 */}
       {!invalid && matched.length === 1 && matched[0]?.description !== undefined ? (
-        <Tooltip label={resolveText(matched[0].description)} side="bottom" portal>
+        <TruncatedTooltip label={resolveText(matched[0].description)}>
           <LineComment>{resolveText(matched[0].description)}</LineComment>
-        </Tooltip>
+        </TruncatedTooltip>
       ) : null}
     </AddWrap>
   );

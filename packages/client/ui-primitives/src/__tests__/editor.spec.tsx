@@ -4,7 +4,7 @@
 //
 // 盯的接缝是**读数 → 行 → 动作**：一行画什么由字段树与草稿状态决定，一次交互只产生一个动作。
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
 import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +22,10 @@ import { projectNode, walkFields, type FieldNode } from "../client/schema-form/s
 import { Config as SessionModeConfig } from "../../../../profile/dsh-session-mode/src/modes.ts";
 import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
 import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
-import { stubResizeObserver } from "../client/schema-form/testing/resize-observer-stub.ts";
+import {
+  notifyResize,
+  stubResizeObserver,
+} from "../client/schema-form/testing/resize-observer-stub.ts";
 import type {
   SchemaFieldOwnerProps,
   SchemaFormComponentProps,
@@ -32,6 +35,16 @@ import type {
 afterEach(cleanup);
 // 官方 Tooltip 的气泡要 ResizeObserver 才可见；jsdom 没有它（替身只让气泡进入可见态）。
 stubResizeObserver();
+
+// jsdom 没有布局：`scrollWidth` / `clientWidth` 都是 0，截断判据永远不成立（也就永远不挂浮层）。这里显式给出这两个
+// 读数，再让 `ResizeObserver` 替身通知一次——真机上「盒子宽度变了」是浏览器通知的，用例里就是这一下。
+function sized(el: HTMLElement, box: { content: number; visible: number }): void {
+  act(() => {
+    Object.defineProperty(el, "scrollWidth", { configurable: true, value: box.content });
+    Object.defineProperty(el, "clientWidth", { configurable: true, value: box.visible });
+    notifyResize();
+  });
+}
 
 const t = ((key: string) =>
   (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
@@ -855,24 +868,51 @@ describe("与真控制器一起跑", () => {
     expect(calls.addKey).toHaveBeenCalledWith([], "note");
   });
 
+  it("放得下的文本不挂浮层：hover 也不出气泡，也没有原生 title", () => {
+    const schema = z.object({ note: z.string().description("短说明") });
+    const { props } = bench(schema, { note: "hi" });
+    const { container } = render(<SchemaForm {...props} />);
+
+    const comment = container.querySelector('[data-role="comment"]') as HTMLElement;
+    const value = container.querySelector('[data-tone="string"]') as HTMLElement;
+    // 内容宽 ≤ 可见宽：这两处没截断。
+    sized(comment, { content: 36, visible: 584 });
+    sized(value, { content: 48, visible: 487 });
+    fireEvent.mouseEnter(comment);
+    fireEvent.mouseEnter(value);
+
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(comment.getAttribute("title")).toBeNull();
+    expect(value.getAttribute("title")).toBeNull();
+  });
+
   it("被截断的行内文本 hover 出全文：注释与值都给官方提示气泡", () => {
     const localized = { zh: "很长的一段说明", en: "long" } as unknown as string;
     const schema = z.object({ note: z.string().description(localized) });
     const { props } = bench(schema, { note: "一个很长的值" });
     const { container } = render(<SchemaForm {...props} />);
 
-    // hover 的目标就是那两处会被 ellipsis 截断的元素本身：气泡里是它们的全文。
     const comment = container.querySelector('[data-role="comment"]') as HTMLElement;
+    const value = container.querySelector('[data-tone="string"]') as HTMLElement;
+    // 内容宽超过可见宽 = 行里正被 `ellipsis` 截断（浏览器里量到的读数是注释 894/584、值 893/487）。
+    sized(comment, { content: 894, visible: 584 });
+    sized(value, { content: 893, visible: 487 });
+
+    // hover 的目标就是那两处被截断的元素本身：气泡里是它们的全文。
     fireEvent.mouseEnter(comment);
     expect(screen.getByRole("tooltip").textContent).toBe("很长的一段说明");
     expect(screen.getByRole("tooltip").style.visibility).toBe("visible");
 
-    const value = container.querySelector('[data-tone="string"]') as HTMLElement;
     fireEvent.mouseEnter(value);
     expect(screen.getAllByRole("tooltip").at(-1)?.textContent).toBe('"一个很长的值"');
 
     fireEvent.mouseLeave(comment);
     fireEvent.mouseLeave(value);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
+    // 盒子变宽、放得下了：截断状态跟着这次 `ResizeObserver` 通知收回去，气泡不再给。
+    sized(value, { content: 100, visible: 487 });
+    fireEvent.mouseEnter(value);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
@@ -973,6 +1013,8 @@ describe("与真控制器一起跑", () => {
     expect(style.textOverflow).toBe("ellipsis");
     expect(style.flexGrow).toBe("0");
 
+    // 这条消息在行里是截断的（浏览器里量到 757/584）：hover 才给全文。
+    sized(invalid, { content: 757, visible: 584 });
     fireEvent.mouseEnter(invalid);
     expect(screen.getByRole("tooltip").textContent).toBe(long);
   });
