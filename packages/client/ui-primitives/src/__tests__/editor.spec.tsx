@@ -22,6 +22,7 @@ import { projectNode, walkFields, type FieldNode } from "../client/schema-form/s
 import { Config as SessionModeConfig } from "../../../../profile/dsh-session-mode/src/modes.ts";
 import { fakeDescribe } from "../client/schema-form/testing/fake-describe.ts";
 import { FakeScope } from "../client/schema-form/testing/fake-scope.ts";
+import { stubResizeObserver } from "../client/schema-form/testing/resize-observer-stub.ts";
 import type {
   SchemaFieldOwnerProps,
   SchemaFormComponentProps,
@@ -29,6 +30,8 @@ import type {
 } from "../client/schema-form/slot-contract.ts";
 
 afterEach(cleanup);
+// 官方 Tooltip 的气泡要 ResizeObserver 才可见；jsdom 没有它（替身只让气泡进入可见态）。
+stubResizeObserver();
 
 const t = ((key: string) =>
   (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
@@ -852,16 +855,43 @@ describe("与真控制器一起跑", () => {
     expect(calls.addKey).toHaveBeenCalledWith([], "note");
   });
 
-  it("截断的地方 hover 出全文：注释与值都挂 title", () => {
+  it("被截断的行内文本 hover 出全文：注释与值都给官方提示气泡", () => {
     const localized = { zh: "很长的一段说明", en: "long" } as unknown as string;
     const schema = z.object({ note: z.string().description(localized) });
     const { props } = bench(schema, { note: "一个很长的值" });
     const { container } = render(<SchemaForm {...props} />);
 
-    const comment = container.querySelector('[data-line="comment"] [title]') as HTMLElement;
-    expect(comment.getAttribute("title")).toBe("很长的一段说明");
+    // hover 的目标就是那两处会被 ellipsis 截断的元素本身：气泡里是它们的全文。
+    const comment = container.querySelector('[data-role="comment"]') as HTMLElement;
+    fireEvent.mouseEnter(comment);
+    expect(screen.getByRole("tooltip").textContent).toBe("很长的一段说明");
+    expect(screen.getByRole("tooltip").style.visibility).toBe("visible");
+
     const value = container.querySelector('[data-tone="string"]') as HTMLElement;
-    expect(value.getAttribute("title")).toBe('"一个很长的值"');
+    fireEvent.mouseEnter(value);
+    expect(screen.getAllByRole("tooltip").at(-1)?.textContent).toBe('"一个很长的值"');
+
+    fireEvent.mouseLeave(comment);
+    fireEvent.mouseLeave(value);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("超长的值不会把这一行撑宽：值槽是可收缩的盒子，值自己截断", () => {
+    const long = `postgres://user:pass@host:5432/db?sslmode=require&application_name=${"x".repeat(80)}`;
+    const { props } = bench(z.object({ access: z.string() }), { access: long });
+    const { container } = render(<SchemaForm {...props} />);
+
+    const slot = container.querySelector('[data-role="value"]') as HTMLElement;
+    const token = slot.querySelector("[data-tone]") as HTMLElement;
+    const style = getComputedStyle(slot);
+    // 值槽是行里唯一可收缩的那一项（键名、标点、动作按钮都是 flex: none）：值长了它跟着行收缩，
+    // 而不是反过来把行撑出去。`min-width: auto` + 行上的 `white-space: nowrap` 正是撑宽的原因。
+    expect(style.minWidth).toBe("0px");
+    expect(style.overflow).toBe("hidden");
+    expect(style.flexGrow).toBe("0");
+    // 值本身必须是块级盒：inline 盒上 `overflow` / `text-overflow` 都不生效，截断也就无从谈起。
+    expect(getComputedStyle(token).display).not.toBe("inline");
+    expect(getComputedStyle(token).textOverflow).toBe("ellipsis");
   });
 
   it("行内编辑按 schema 的类型解析：number 存下去是数字，不是字符串", () => {
@@ -911,6 +941,40 @@ describe("与真控制器一起跑", () => {
     expect(
       container.querySelector('[data-field-path="busyTimeout"] [data-role="body"]')?.textContent,
     ).toContain("只接受 2000");
+  });
+
+  it("行内的校验消息再长也压在行里：注释位自己收缩并截断，hover 给全文", async () => {
+    const long =
+      "busyTimeout 只接受 2000；这个值是装配期定下的探测超时，写别的数会让本地沙箱在建立连接池那一步反复重试，页面只能给到这里";
+    const { props } = live(
+      z.object({ busyTimeout: z.number().default(5000) }),
+      { busyTimeout: 5000 },
+      () => ({ message: long, path: ["busyTimeout"] }),
+    );
+    const { container } = render(<SchemaForm {...props} />);
+    // 得先有一次草稿改动，保存才会走到整段校验那一关。
+    fireEvent.click(
+      container.querySelector('[data-field-path="busyTimeout"] [data-tone]') as HTMLElement,
+    );
+    fireEvent.change(
+      container.querySelector('[data-field-path="busyTimeout"] input') as HTMLInputElement,
+      { target: { value: "3000" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: zh.save }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // 行有问题时注释位装的就是这条消息：它与值槽同一套契约——可收缩、自己截断，不把整行撑出去。
+    const invalid = container.querySelector('[data-role="comment"]') as HTMLElement;
+    expect(invalid.textContent).toContain(long);
+    const style = getComputedStyle(invalid);
+    expect(style.minWidth).toBe("0px");
+    expect(style.overflow).toBe("hidden");
+    expect(style.textOverflow).toBe("ellipsis");
+    expect(style.flexGrow).toBe("0");
+
+    fireEvent.mouseEnter(invalid);
+    expect(screen.getByRole("tooltip").textContent).toBe(long);
   });
 
   it("成员的值本身是容器时也能移除（字典键删掉一整项、数组项同理）", () => {

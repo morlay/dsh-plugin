@@ -5,6 +5,8 @@
 // 与设置页其余部分同一套视觉与键盘行为。
 //
 // 字段槽仍然生效：命中时该字段**值**的位置换成注册方的组件，键名、注释、行号与行为按钮仍由这里画。
+//
+// 被 `ellipsis` 截断的文本（注释行、值）由官方 `Tooltip` 承载全文——本页不再依赖原生 `title`。
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
@@ -17,6 +19,7 @@ import {
   IconTrashOutlineRegular,
   Input,
   Menu,
+  Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SchemaFormFace, SchemaFormState } from "./controller.ts";
 import { fieldKey } from "./controller.ts";
@@ -48,6 +51,7 @@ import {
   LineRow,
   LineToken,
   LineValue,
+  ValueSlot,
   ValueTrigger,
 } from "./styles.ts";
 
@@ -202,12 +206,15 @@ function Row({
     line.kind === "comment" ? (
       <>
         <LineFoldSpacer data-role="fold" />
-        {/* 这一行有问题时注释位装的就是那条消息：红字，别整行铺红。 */}
-        {line.invalid ? (
-          <LineInvalid title={line.text}>{`// ${line.text}`}</LineInvalid>
-        ) : (
-          <LineComment title={line.text}>{`// ${line.text}`}</LineComment>
-        )}
+        {/* 这一行有问题时注释位装的就是那条消息：红字，别整行铺红。
+            注释被 `ellipsis` 截断：全文交给官方 `Tooltip`，不再挂原生 `title`。 */}
+        <Tooltip label={line.text} side="bottom" portal>
+          {line.invalid ? (
+            <LineInvalid data-role="comment">{`// ${line.text}`}</LineInvalid>
+          ) : (
+            <LineComment data-role="comment">{`// ${line.text}`}</LineComment>
+          )}
+        </Tooltip>
       </>
     ) : line.kind === "open" ? (
       <>
@@ -427,13 +434,14 @@ function FieldLine({
       ) : null}
       {/* 编辑态只留输入框：原值不再在它旁边画一遍。 */}
       {isEditing || line.variantsStandIn ? null : (
-        <span
+        <ValueSlot
+          data-role="value"
           onClick={() => {
             if (editable) onEdit(key);
           }}
         >
           {renderField(owner)}
-        </span>
+        </ValueSlot>
       )}
       <VariantSelect
         control={line.variants}
@@ -753,11 +761,11 @@ function AddLine({
         }
       />
       {invalid ? <LineInvalid>{t("unknownProperty")}</LineInvalid> : null}
-      {/* 候选的说明：选中之前先看清"要加的是什么"。 */}
+      {/* 候选的说明：选中之前先看清"要加的是什么"（长了同样由 `Tooltip` 给全文）。 */}
       {!invalid && matched.length === 1 && matched[0]?.description !== undefined ? (
-        <LineComment title={resolveText(matched[0].description)}>
-          {resolveText(matched[0].description)}
-        </LineComment>
+        <Tooltip label={resolveText(matched[0].description)} side="bottom" portal>
+          <LineComment>{resolveText(matched[0].description)}</LineComment>
+        </Tooltip>
       ) : null}
     </AddWrap>
   );

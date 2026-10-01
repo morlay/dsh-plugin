@@ -4,7 +4,11 @@
 // 形状——字符串把换行写成 `\n`，与一行的输入框相配）。
 
 import { useState, type ReactNode } from "react";
-import { IconChevronDownOutlineRegular, Menu } from "@deepseek-ai/dsh-client-ui-primitives";
+import {
+  IconChevronDownOutlineRegular,
+  Menu,
+  Tooltip,
+} from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SelectOption } from "./hints.ts";
 import type { SchemaFieldOwnerProps } from "./slot-contract.ts";
 import { ICON_SIZE, LineValue, ValueTrigger } from "./styles.ts";
@@ -43,20 +47,24 @@ export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactN
   if (owner.options !== undefined) return <OptionSelect owner={owner} options={owner.options} />;
   if (owner.node.meta.secret) {
     // secret 不回显值：截断时不给全文，只给说明。
+    const bullets = (
+      <LineValue data-tone="empty">{owner.secretConfigured ? "••••••" : ""}</LineValue>
+    );
+    if (owner.hint === undefined) return bullets;
     return (
-      <LineValue data-tone="empty" title={owner.hint}>
-        {owner.secretConfigured ? "••••••" : ""}
-      </LineValue>
+      <Tooltip label={owner.hint} side="bottom" portal>
+        {bullets}
+      </Tooltip>
     );
   }
+  // 值长了会在行里截断（值槽可收缩）：整份内容挂在官方 `Tooltip` 上，hover 就能看全。
+  const text = tokenText(owner.value);
   return (
-    <LineValue
-      data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}
-      // 值长了会截断：整份内容挂在 title 上，hover 就能看全。
-      title={tokenText(owner.value)}
-    >
-      {tokenText(owner.value)}
-    </LineValue>
+    <Tooltip label={text} side="bottom" portal>
+      <LineValue data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}>
+        {text}
+      </LineValue>
+    </Tooltip>
   );
 }
 

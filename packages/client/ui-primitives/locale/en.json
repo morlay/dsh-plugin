@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "UI Primitives",
-    "description": "css-in-js styling layer, the shared reference parser and renderer for the forked conversation UI, and the settings-form primitives forked from upstream. It also carries the schema-driven row config pages (field-slot injection)."
+    "description": "The shared base for the conversation UI and the settings pages: the css-in-js styling layer, the reference parser and renderer (one source shared with the host), the staged settings-form primitives forked from upstream, and the schema-generated row config pages (field-slot injection). Inlined by the client rows that use it, not an assembly row."
   }
 }

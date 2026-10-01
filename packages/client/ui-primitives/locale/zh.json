@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "UI 基础层",
-    "description": "css-in-js 样式层、被 fork 的对话 UI 共用的引用解析与渲染转换，以及从上游 fork 过来的设置表单原语。另含按行 schema 自动生成的行配置页（字段槽注入）。"
+    "description": "对话 UI 与设置页共用的基础面：css-in-js 样式层、host 与 client 共用一份源码的引用解析与渲染转换、上游 fork 过来的暂存式设置表单原语，以及按 schema 自动生成的行配置页（字段槽注入）。随用到它的 client 行内联，不是装配行。"
   }
 }

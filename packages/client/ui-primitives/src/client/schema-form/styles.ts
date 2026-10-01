@@ -140,7 +140,11 @@ export const LineToken = styled("span")({
 });
 
 // 值（token）：字符串 / 数字 / 布尔各有语法色。
+//
+// **必须是块级盒**：`overflow` / `text-overflow` 对 inline 盒不生效，inline 的 token 无论多长都不会截断，
+// 只会把行撑宽（`min-width` / `overflow` 那两条声明在 inline 盒上是死代码）。
 export const LineValue = styled("span")({
+  display: "block",
   minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -149,6 +153,19 @@ export const LineValue = styled("span")({
   "&[data-tone='number']": { color: dsw.alias.state.warn.primary },
   "&[data-tone='boolean']": { color: dsw.alias.state.success.primary },
   "&[data-tone='empty']": { color: dsw.alias.label.caption },
+});
+
+// 值在行里的位置（字段槽的宿主）：键名与结构符都是 `flex: none`，它是行里**唯一可收缩**的那一项。
+//
+// 这里不能放一个裸 `<span>`：flex item 的自动最小尺寸（`min-width: auto`）加上行上的 `white-space: nowrap`，
+// 等于「整段值的宽度」——值长了它一步不让，直接把整行（进而整个表单壳）撑宽。给它 `min-width: 0` 之后，
+// 值要么按自然宽度摆着，要么收缩到行尾并自己截断，长值因此不再有上限之外的影响。
+export const ValueSlot = styled("span")({
+  display: "block",
+  // 不生长：短值保持自然宽度（不会被拉成一整行），长值才收缩。
+  flex: "0 1 auto",
+  minWidth: 0,
+  overflow: "hidden",
 });
 
 // 值上的下拉触发：**它自己就是值的呈现**（不再是「值 + 一个下拉」两遍），点开才出菜单。
@@ -218,7 +235,8 @@ export const CompactTextField = styled("span")({
   },
 });
 
-// 行内注释（schema 说明与业务文案）：比配置值小一档，占满这一行剩下的宽度，长了就截断（hover 看全文）。
+// 行内注释（schema 说明与业务文案）：比配置值小一档、tertiary 色，占满这一行剩下的宽度，长了就截断——**全文由
+// 官方 `Tooltip` 承载**（`Editor.tsx` 里包着它），不再挂原生 `title`。
 export const LineComment = styled("span")({
   flex: "1 1 auto",
   minWidth: 0,
@@ -229,9 +247,14 @@ export const LineComment = styled("span")({
   fontSize: "12px",
 });
 
-// 行内的校验消息（与注释放同一档字号）。
+// 行内的校验消息（与注释放同一档字号）：注释位装的也可能是整段校验或解析失败的长消息，所以与注释同一套约束
+// ——可收缩、自己截断、全文由官方 `Tooltip` 给。`flex: 0 1 auto`（不生长）：短消息别铺满整行，添加入口那一行
+// 里也不跟输入框抢剩下的宽度。红字先说清。
 export const LineInvalid = styled("span")({
-  flex: "none",
+  flex: "0 1 auto",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
   color: dsw.alias.state.error.primary,
   fontFamily: "inherit",
   fontSize: "12px",
