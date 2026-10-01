@@ -43,7 +43,7 @@ handler，非 405/404 才算过）目前没有。再遇到撤回 / 重试整片 
 - `importSession` 的浏览器半（`FileReader` + `location.reload()` 薄壳）：服务端面由 `@morlay/session-rdb`
   的 `import.spec.ts` 覆盖。
 - slot 装配面（`client/index.ts` 的 `apply`：slot 注册）需要 cordis client 运行时 →
-  [债务 20260917-对话UI客户端半的装配面缺测试辅助](../debts/20260917-对话UI客户端半的装配面缺测试辅助.md)；
+  [债务 20260917-对话UI的槽注册面缺真装配用例](../debts/20260917-对话UI的槽注册面缺真装配用例.md)；
   纯注册表的部分（`stats` 覆盖）已由 `composer-stats.spec.ts` 覆盖。
 - **版本导航入口**：`conversation.session.header.utilities` 上只有上游 `ui-open-in-app` / `ui-schedule` 的项，
   我们的版本导航没有注册方，也没有消费方——版本树读取面本身不存在

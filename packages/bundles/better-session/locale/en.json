@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session Editing",
-    "description": "dsh profile bundle: assembles @morlay/session-branch, @morlay/session-rdb, @morlay/ui-conversation-message-actions, @morlay/ui-conversation-manager and @morlay/dsh-reference into a web profile — the rewind / retry / recall / fork closed loop on RDB persistence, with the conversation shell taken over through the official slots only (no forked components)."
+    "description": "dsh profile bundle: assembles @morlay/session-branch, @morlay/session-rdb, @morlay/ui-conversation-message-actions, @morlay/ui-conversation-manager and @morlay/dsh-reference into a web profile — the rewind / retry / recall / fork closed loop on RDB persistence; the conversation shell stays on the official ui-conversation row and our extensions only register on its slots."
   }
 }

@@ -15,8 +15,8 @@
 
 **决定**
 
-沿用本仓库已确立的薄壳 fork 形态（原先由对话 UI 那个包立的规矩，该包 2026-10-01 已回退删除）：保留文件只留有意改过的那份（`continuation-messages.ts` /
-`continuation.ts` / `index.ts`），其余 import 指向上游源码、构建内联；装配**按官方行 id 复用**（`id: "subagent"` +
+沿用本仓库的薄壳 fork 形态（保留有意改过的文件，其余用相对 import 指向上游源码、构建期内联）：保留文件只留
+`continuation-messages.ts` / `continuation.ts` / `index.ts` 三份；装配**按官方行 id 复用**（`id: "subagent"` +
 本包 `name`），理由与事实基线见 [ADR 接管官方行按 id 复用](./20260928-接管官方行按id复用而非换id.md)。
 
 两处文案各走一条实现面：

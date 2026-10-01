@@ -1,10 +1,10 @@
 {
   "name": "@morlay/dsh-session-mode",
   "version": "0.0.4",
-  "description": "Personal dsh bundle: session modes (coding / chat) as data — a mode is a persona plus its tool lists, its upstream policy lists, its instruction / skill-catalog / runtime-context switches and an optional default model. The host applies the current mode to each session, and the chip in the composer sits beside the official agent-preset entry, which stays.",
+  "description": "Session modes for dsh: coding / chat as data — a mode is a persona plus its tool lists, its upstream policy lists, its instruction / skill-catalog / runtime-context switches and an optional default model. The host applies the current mode to each session, and the chip in the composer sits beside the official agent-preset entry, which stays.",
   "keywords": [
     "dsh",
-    "dsh-bundle",
+    "dsh-plugin",
     "persona",
     "session-mode"
   ],

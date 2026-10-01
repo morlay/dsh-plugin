@@ -1,7 +1,7 @@
 # 如何验证（装配面）
 
 `@morlay/better-session` 的装配面是 `cordis.patch.yml` ↔ 包依赖 ↔ client 声明三者的一致性：发布出去的
-bundle 一旦断链，装配在别人机器上静默失效。改 patch、改依赖、改 fork 包出口或平台声明，都按下面判据验证。
+bundle 一旦断链，装配在别人机器上静默失效。改 patch、改依赖、改 client 包出口或平台声明，都按下面判据验证。
 
 守护测试（`bundles/better-session/src/__tests__/`，命令 `just test <spec 路径>`）：
 
@@ -21,10 +21,7 @@ bundle 一旦断链，装配在别人机器上静默失效。改 patch、改依�
   `@deepseek-ai/dsh-client-connection` 与 `@deepseek-ai/dsh-client-store`。
 - **patch 的形状**：禁用的官方行集合、insert 的行 id 集合与预期逐项相等；insert 的 id 不得与上游 bundle
   行 id 撞名，且禁用的行 id 必须仍存在于上游 bundle（`vendor/deepseek-harness/packages/bundle/{base,web-app}/cordis.patch.yml`）。
-- **同 id 重复 insert 是有意设计**：本 patch 插入的 id 与各子包自己的 bundle patch 相同
-  （`session-branch` / `session-rdb` / `ui-conversation-message-actions` / `ui-conversation-manager`）——
-  每个子包都要能作为**独立 bundle** 被采用，所以同一行 id 在不同 bundle 里各插一次是正常形态，
-  不是撞名。本 bundle 因此自包含（装上就全套可用）；判据是**本 patch 内的 id 互不重复**、
-  **不与上游行 id 撞名**，而不是与子包 patch 去重。
+- **行 id 只在本 patch 内判**：能力包只发布实现与 `rows` 出口、patch 住在 bundle 里，所以不拿别的 bundle 的
+  id 去重；本 bundle 因此自包含（装上就全套可用）。
 - **对话外壳不被接管**：patch 里没有 `ui-conversation` 的 `disabled: true`，也没有 fork 行
   （[ADR 不 fork 上游前端组件](../../../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)）。
