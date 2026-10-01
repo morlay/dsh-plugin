@@ -337,6 +337,8 @@ describe("parseImportZip", () => {
 });
 
 describe("import round-trip through the backend", () => {
+  // 这条用例真的写两千轮日志再整份导入（单跑约 1.2s）：默认 5s 预算在全仓并行跑时会因为 CPU 争抢而超时，
+  // 所以给它一份够用的显式预算——判据是结果，不是它的耗时。
   it("imports a large batch beyond the single-INSERT binding limit", async () => {
     const path = await freshDbPath();
     const ctx = new Context();
@@ -375,7 +377,7 @@ describe("import round-trip through the backend", () => {
     } finally {
       await fiber.dispose();
     }
-  });
+  }, 30_000);
 
   it("exports a session, imports it under a new id, and reloads identical events", async () => {
     const path = await freshDbPath();
