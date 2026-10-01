@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-sandbox-local",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Configurable sandbox for dsh: replaces the shipped process-sandbox provider and filesystem fence with implementations that add extra writable roots, read-only roots and access denials on top of the upstream semantics, and owns the runtime-context snapshot (`sandbox:policy` / `approval:policy`) with the deployment's own wording.",
   "keywords": [
     "dsh",

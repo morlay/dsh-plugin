@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-context-assembler",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Prompt channel for dsh: assembly-result text conversion (replace / suppress) plus per-step delivery of demoted sections. Workspace instructions and the skill catalog use the official rows (@deepseek-ai/dsh-agent-instructions / @deepseek-ai/dsh-tool-skill); the per-session scope gate lives in @morlay/dsh-session-mode. Reference expansion is its own package (@morlay/dsh-reference).",
   "keywords": [
     "context",
