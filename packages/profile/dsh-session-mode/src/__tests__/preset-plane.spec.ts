@@ -381,17 +381,38 @@ describe.each([
     const [catalog] = catalogs(await preStep(ctx, agent));
 
     expect(catalog).toBeDefined();
-    // 模型读到的正文与结构化名单一起收：其余技能那几行原样留着。
+    // 模型读到的正文收窄；官方发布的那份结构化名单原样留着（官方按它的 digest 判目录变没变，改它会每步重发）。
     expect(textOf(catalog!)).toContain(SKILL);
     expect(textOf(catalog!)).toContain("仓库自带的 skill。");
     expect(textOf(catalog!)).not.toContain(DENIED_SKILL);
-    expect(catalogEntries(catalog!)).toEqual([SKILL]);
+    expect(catalogEntries(catalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
 
     // 成对判据：另一份**没配技能名单**的定义里两件都在——"把目录整份丢掉"那种实现过不了这一条。
     const other = await create();
     await ctx.sessionModes.select(other.id, "chat");
     const [otherCatalog] = catalogs(await preStep(ctx, other));
     expect(catalogEntries(otherCatalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
+  });
+
+  it("技能名单不反复发布目录：连续三步只发布一次（收窄不打断官方的历史 digest）", async () => {
+    const { ctx, create } = await mount({
+      hostFirst,
+      modeOverrides: { coding: { denySkills: [DENIED_SKILL] } },
+    });
+    const agent = await create();
+
+    const steps: UserMessage[][] = [];
+    for (const turn of [1, 2, 3]) steps.push(await preStep(ctx, agent, { turn, persist: true }));
+
+    // 官方按"历史里可见那份目录"的 digest 判要不要再发一条：收窄只改模型可见的正文时它稳定；连结构化名单
+    // 一起改会让 digest 永远对不上，于是每一步都重发一条目录（这条用例就是钉住那件事）。
+    expect(catalogs(steps[0]!).length).toBe(1);
+    expect(catalogs(steps[1]!)).toEqual([]);
+    expect(catalogs(steps[2]!)).toEqual([]);
+    const stored = agent.session
+      .ownEvents()
+      .filter((event) => event.type === "user/message" && kindOf(event.data) === "skill-catalog");
+    expect(stored).toHaveLength(1);
   });
 
   it("技能黑名单：`skill` 工具加载被拒的技能被拒，别的技能照旧可加载", async () => {
@@ -420,7 +441,8 @@ describe.each([
 
     const [catalog] = catalogs(await preStep(ctx, agent));
 
-    expect(catalogEntries(catalog!)).toEqual([SKILL]);
+    // 正文收窄成名单里那一件；官方发布的结构化名单原样留着（同一条理由：那是官方 digest 的输入）。
+    expect(catalogEntries(catalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
     expect(textOf(catalog!)).not.toContain(DENIED_SKILL);
 
     const denied = await loadSkill(ctx, agent, DENIED_SKILL);
@@ -466,8 +488,8 @@ describe.each([
     const official = catalogList.find((message) => !textOf(message).includes("漂移形状"))!;
     const drifted = catalogList.find((message) => textOf(message).includes("漂移形状"))!;
 
-    // 官方发布的那条照旧被收窄；认不出行的那一条整条不动（正文与结构化名单两处不分叉），并点名告警。
-    expect(catalogEntries(official)).toEqual([SKILL]);
+    // 官方发布的那条照旧被收窄（正文）；认不出行的那一条整条不动，并点名告警。
+    expect(catalogEntries(official)).toEqual([DENIED_SKILL, SKILL].toSorted());
     expect(catalogEntries(drifted)).toEqual([DENIED_SKILL]);
     expect(warn.mock.calls.flat().join("\n")).toContain(DENIED_SKILL);
   });

@@ -151,11 +151,10 @@ function narrowCatalog(
     warn(`skill catalog lines not recognized; denied skills stay listed: ${missing.join(", ")}`);
     return undefined;
   }
-  return {
-    ...message,
-    content: [{ ...block, text: lines.join("\n") }],
-    source: { ...source, entries: entries.filter((entry) => !denied.has(entry.name)) },
-  };
+  // **只改正文**，`source.entries` 原样留着：官方 `tool-skill` 用那份结构化名单的 digest 判断"目录变没变"
+  // （`catalogHistory` 从会话日志里读它），改了它 digest 就永远对不上，于是每一步都重发一条目录。
+  // 收窄是"模型看到什么"，不是"官方发布过什么"：日志里留的是官方发布的完整名单，模型可见面由正文承担。
+  return { ...message, content: [{ ...block, text: lines.join("\n") }] };
 }
 
 // `skill` 工具调用的技能名：参数形状是官方那一行的 `{ name: string }`，认不出就不判（那是别人的工具）。
