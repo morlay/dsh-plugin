@@ -4,6 +4,9 @@
 import {
   Bubble,
   Button,
+  IconButton,
+  IconEditOutlineRegular,
+  IconRefreshOutlineRegular,
   JsonBlock,
   markdownLabels,
   Modal,
@@ -18,7 +21,8 @@ import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
 import type { UserMessageNode } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { ChatNodeViewProps, ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { RenderMessageImages } from "@deepseek-ai/dsh-client-ui-conversation/client";
-import { MessageIconActions } from "./MessageIconActions.tsx";
+// 动作行整条用上游那份：复制 / 分支 / 时间标签的悬停显形都归它，我们只经它的 `extraActions` 注入自己的两个入口。
+import { MessageIconActions } from "@deepseek-ai/dsh-client-ui-chat/src/client/chat/MessageIconActions.tsx";
 import type { EditableMessageBlock } from "../../shared.ts";
 import type { SessionEditorFace } from "../controller.ts";
 
@@ -203,8 +207,20 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
             time={data.time}
             clock="start"
             t={t}
-            onEdit={onEdit}
-            onRetry={onRetry}
+            extraActions={
+              <>
+                {onEdit === undefined ? null : (
+                  <IconButton shape="circle" label="编辑" onClick={onEdit}>
+                    <IconEditOutlineRegular />
+                  </IconButton>
+                )}
+                {onRetry === undefined ? null : (
+                  <IconButton shape="circle" label="重试此回合" onClick={onRetry}>
+                    <IconRefreshOutlineRegular />
+                  </IconButton>
+                )}
+              </>
+            }
           />
         )}
       />
