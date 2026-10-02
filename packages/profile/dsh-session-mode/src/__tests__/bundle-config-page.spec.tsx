@@ -203,13 +203,6 @@ describe("会话模式的 bundle 配置页", () => {
   it("字段排法与通用设置一致：标签 / 控件 / 说明同列，字段之间一条细分隔线", () => {
     renderPage();
 
-    // 排法与官方 `SettingsValueField` 同一种：标签在上、控件在中、说明在下（都是 column）。
-    expect(styles.field.flexDirection).toBe("column");
-    expect(styles.fieldBody.flexDirection).toBe("column");
-    expect(styles.fieldBody.padding).toBe("12px 0");
-    expect(styles.defaultRow.flexDirection).toBe("row");
-    expect(styles.defaultRow.justifyContent).toBe("space-between");
-
     fireEvent.click(within(card("coding")).getByText("编码模式"));
     const tools = document.querySelector('[data-field="modes.coding.denyTools"]') as HTMLElement;
     const text = tools.textContent ?? "";
@@ -254,8 +247,6 @@ describe("会话模式的 bundle 配置页", () => {
     expect(switches[0]?.getAttribute("aria-label")).toBe(bundleZh["field.instructions"]);
 
     // 这三类字段都是右置行：左列是标签与说明，控件贴最右。
-    expect(styles.fieldInline.flexDirection).toBe("row");
-    expect(styles.fieldInline.justifyContent).toBe("space-between");
     const field = document.querySelector('[data-field="modes.coding.instructions"]') as HTMLElement;
     const row = field.children[0] as HTMLElement;
     expect(row.children).toHaveLength(2);
@@ -296,17 +287,10 @@ describe("会话模式的 bundle 配置页", () => {
     const page = renderPage();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
-    // 卡片头的删除入口是纯图标按钮：只有图标（无文字），也无边框、不带错误色——形态照侧边栏那种方形图标按钮
-    // （28×28、padding 0、次级文本色），危险配色只留给确认按钮。
+    // 卡片头的删除入口是纯图标按钮（`IconButton`，primitives）：只有图标（无文字），名字走无障碍名；
+    // 它的几何与危险配色归 primitives，这里只钉"入口是它、删除动作照旧"。
     const remove = within(card("coding")).getByRole("button", { name: /^删除模式/u });
     expect(remove.textContent).toBe("");
-    expect(remove.className).toContain("cls-");
-    expect(styles.iconAction).toMatchObject({
-      width: "28px",
-      height: "28px",
-      padding: "0",
-      color: "var(--dsw-alias-label-secondary)",
-    });
 
     // 取消：什么都没发生（草稿也没动）。
     fireEvent.click(remove);
@@ -331,8 +315,8 @@ describe("会话模式的 bundle 配置页", () => {
     const page = renderPage();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
-    const input = document.querySelector(
-      'input[data-tags-input="modes.coding.allowTools"]',
+    const input = within(card("coding")).getByLabelText(
+      bundleZh["field.allowTools"],
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "read" } });
     fireEvent.keyDown(input, { key: "Enter" });

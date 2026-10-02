@@ -188,29 +188,6 @@ const MODE_FIELDS: readonly FieldSpec[] = [
   },
 ];
 
-// 粘贴或输入的一串名字 → 标签列表：逗号（中英）、分号、制表符、换行都当分隔符，去空白、去重、保序。
-export function parseTagList(text: string): string[] {
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (const raw of text.split(/[,，;；\t\n\r]+/u)) {
-    const name = raw.trim();
-    if (name === "" || seen.has(name)) continue;
-    seen.add(name);
-    names.push(name);
-  }
-  return names;
-}
-
-// 把新名字并进现有标签：去重、保序（现有的在前），返回新数组。
-export function mergeTags(current: readonly string[], incoming: readonly string[]): string[] {
-  const merged = [...current];
-  for (const name of incoming) {
-    if (name === "" || merged.includes(name)) continue;
-    merged.push(name);
-  }
-  return merged;
-}
-
 // 控制器读数里一个字段的状态（`SchemaFormState.fields` 的值）。
 type FieldRead = NonNullable<ReturnType<SchemaFormState["fields"]["get"]>>;
 

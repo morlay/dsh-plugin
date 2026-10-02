@@ -155,4 +155,57 @@ export const styles = {
     lineHeight: 1.5,
     color: dsw.alias.label.tertiary,
   },
+  // 字段行（`SettingsFieldRow`）：官方 `SettingsValueField` 的留白口径（上下各 12px），分隔线由调用方按
+  // "不是这一组的第一个字段"显式声明——两种排法与官方控件的留白因此完全一致。
+  row: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  rowDivider: {
+    borderTop: `0.5px solid ${String(dsw.alias.border.l2)}`,
+  },
+  // 上下排（输入类）：标签 / 控件 / 说明同列。
+  rowBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    padding: "12px 0",
+  },
+  // 右置排（切换类）：左列标签与说明，控件贴最右。
+  rowInline: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "12px 0",
+  },
+  rowText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+    minWidth: "0",
+  },
+  rowLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "13px",
+    fontWeight: 500,
+    lineHeight: 1.5,
+    color: dsw.alias.label.primary,
+  },
+  // 多选类标签（例如"已覆盖"）：照官方 badge 的 neutral 那一档。
+  rowBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "1px 8px",
+    borderRadius: "999px",
+    cornerShape: "round",
+    fontSize: "11px",
+    lineHeight: "17px",
+    fontWeight: 500,
+    color: dsw.alias.label.secondary,
+    background: dsw.alias.bg.module.platform,
+  },
 } satisfies Record<string, CSSProps>;

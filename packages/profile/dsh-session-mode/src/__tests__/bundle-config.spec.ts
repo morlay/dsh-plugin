@@ -8,8 +8,6 @@ import { describe, expect, it, vi } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import {
   createBundleConfigFace,
-  mergeTags,
-  parseTagList,
   projectBundleConfig,
   type BundleTranslate,
   type HintsLike,
@@ -268,19 +266,6 @@ describe("bundle 配置页：读这一行配置的阶段", () => {
     const diagnosis = absent.face.diagnose();
     expect(diagnosis.namespaces).toEqual([]);
     expect(diagnosis.problem).toContain("session-mode");
-  });
-});
-
-describe("bundle 配置页：名单的解析", () => {
-  it("粘贴的一串按逗号（中英）/ 分号 / 换行拆开：去空白、去重、保序", () => {
-    expect(parseTagList("read, write；bash\nls")).toEqual(["read", "write", "bash", "ls"]);
-    expect(parseTagList(" read ,,read ; read ")).toEqual(["read"]);
-    expect(parseTagList("   ")).toEqual([]);
-  });
-
-  it("并进现有标签：重复的不再进来，现有的保持在前", () => {
-    expect(mergeTags(["read"], ["write", "read"])).toEqual(["read", "write"]);
-    expect(mergeTags([], ["bash"])).toEqual(["bash"]);
   });
 });
 

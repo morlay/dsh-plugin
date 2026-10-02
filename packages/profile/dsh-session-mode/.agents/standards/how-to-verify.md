@@ -53,15 +53,16 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - `bundle-config-stack.spec.ts`：接**真 settings 服务栈**（`ConfigForms` + describe 镜像 + schema 服务）跑两件事——
     视图晚到时控制器读数自己跟上；提示面经 cordis 服务（追踪代理）拿到时，直接调代理上的方法会抛（实现用 JS 私有
     字段），解包成原实例之后读得到候选。
-  - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、`noop` 不可删、默认模式选项、六组字段）、
-    名单的解析（`parseTagList` 按中英逗号 / 分号 / 换行拆开并去空白去重保序、`mergeTags` 不重复且现有项在前）、
-    动作（新增模式连名称一起给、受保护的模式删不动、一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、
-    默认模型只给一半 → 保存被挡且页面上有对应消息）。
+  - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、`noop` 不可删、默认模式选项、六组字段、
+    `presetsOnly` 是标签输入且候选来自 `agent-presets` 具名源）、动作（新增模式连名称一起给、受保护的模式删不动、
+    一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、默认模型只给一半 → 保存被挡且页面上有对应消息）。
   - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、编辑带着真实路径上报、
     名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是两个 `Button`（`aria-pressed`，点一下写回去掉该项的数
     组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
-    开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、默认模式那一行也是左右布局（选择器在最右）、删除要过
-    确认弹窗（取消不删、确认才删，确认按钮挂错误色 class）、添加与保存各走一次动作。
+    开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、删除要过确认弹窗（取消不删、确认才删，确认按钮挂错误色
+    class）、添加与保存各走一次动作。**控件本身的几何与输入输出**（标签输入的回车 / 粘贴 / 移除 / 候选、图标按钮的
+    无障碍名与方形几何、选择器的当前值、字段行的两种排法与徽标）在
+    [`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
 - `src/__tests__/preset-plane.spec.ts`：**模式不限 preset（名单留空）、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面

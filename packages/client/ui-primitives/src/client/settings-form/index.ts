@@ -15,5 +15,7 @@ export type {
 } from "./form-model.ts";
 export { SettingsSecretField, SettingsValueField } from "./fields.tsx";
 export type { SettingsFieldProps } from "./fields.tsx";
+export { SettingsFieldRow } from "./SettingsFieldRow.tsx";
+export type { SettingsFieldRowProps } from "./SettingsFieldRow.tsx";
 export { SettingsForm } from "./SettingsForm.tsx";
 export type { SettingsFormLabels, SettingsFormProps } from "./SettingsForm.tsx";

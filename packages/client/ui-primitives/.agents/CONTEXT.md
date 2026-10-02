@@ -106,3 +106,9 @@ union 字段行尾的那个小下拉：带标签的挂在**标签行**上（选�
 
 **递归收口**（recursive 节点）：
 自引用 schema 回到祖先的那一层：投影在那里停下，渲染成一行只读提示。
+
+**设置面控件**（settings controls）：
+跨设置面复用的控件：字段行 `SettingsFieldRow`（`stack` / `inline` 两种排法 + 分隔线 + 「已覆盖」徽标与恢复默认）、
+选择器 `SelectMenu`、标签输入 `TagInput`、多行文本 `MultilineField`、图标按钮 `IconButton`。官方那套基础组件
+（`Button` / `Menu` / `Modal` / `Switch` / `SegmentedControl` / `DisclosureRow` / 图标 …）也由本包 `export *` 统一转出：
+业务包只向本包取控件，**不写控件外观**（业务层留的是页面结构布局）。
