@@ -125,8 +125,8 @@ const modelSchema = z.object({
     ),
   reasoningEffort: z.string().description(
     localized({
-      zh: "思考档位；省略就跟服务商自己的默认。",
-      en: "Reasoning effort; unset keeps the provider's own default.",
+      zh: "思考档位；默认跟服务商自己的默认。",
+      en: "Reasoning effort; the default is the provider's own.",
     }),
   ),
 });
@@ -259,8 +259,8 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   skills: z.boolean().description(
     localized({
-      zh: "是否要技能目录（官方 `skill-catalog` 的注入）。**不写就按这个模式自己的工具名单推导**：`(allowTools 留空 ? 全部 : allowTools) − denyTools` 里含 `skill` 就要；写 `false` 就丢掉官方 `skill-catalog` 的注入（`skill` 工具的可见性仍归 `allowTools`）。",
-      en: "Whether the skill catalog applies (the official `skill-catalog` injection). Unset derives it from this mode's own tool lists: it applies when `(empty allowTools ? every tool : allowTools) − denyTools` contains `skill`; `false` drops the official `skill-catalog` injection (`skill` tool visibility still belongs to `allowTools`).",
+      zh: "是否要技能目录（官方 `skill-catalog` 的注入）。**默认就按这个模式自己的工具名单推导**：`(allowTools 留空 ? 全部 : allowTools) − denyTools` 里含 `skill` 就要；写 `false` 就丢掉官方 `skill-catalog` 的注入（`skill` 工具的可见性仍归 `allowTools`）。",
+      en: "Whether the skill catalog applies (the official `skill-catalog` injection). The default derives it from this mode's own tool lists: it applies when `(empty allowTools ? every tool : allowTools) − denyTools` contains `skill`; `false` drops the official `skill-catalog` injection (`skill` tool visibility still belongs to `allowTools`).",
     }),
   ),
   runtimeContext: z
@@ -280,8 +280,8 @@ const modeSchema: z<SessionMode> = z.object({
     .default(null as unknown as SessionModeModel)
     .description(
       localized({
-        zh: "这个模式的默认模型；省略就跟全局默认模型。只在会话还没有模型事实时接管。",
-        en: "Default model for this mode; unset follows the global default. Applies only while a session has no model fact yet.",
+        zh: "这个模式的默认模型；不设就跟全局默认模型。只在会话还没有模型事实时接管。",
+        en: "Default model for this mode; empty follows the global default. Applies only while a session has no model fact yet.",
       }),
     ),
 });

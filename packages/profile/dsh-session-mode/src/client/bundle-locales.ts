@@ -62,7 +62,7 @@ export const bundleZh = {
   "hint.allowPolicies": "只让这些上游规则生效；不填 = 全部生效。",
   "hint.denyPolicies": "禁用这些上游规则，它的判断连拒绝一起丢掉。",
   "hint.instructions": "每步都把工作区指令（AGENTS.md 之类）发给模型；关掉就不发。",
-  "hint.skills": "每步都把技能目录发给模型；不填就按这个模式的工具名单自动判断。",
+  "hint.skills": "每步都把技能目录发给模型；默认按这个模式的工具名单自动判断。",
   "hint.runtimeContext": "每步都把沙箱与审批策略发给模型。",
   "hint.defaultModel": "开 = 这个模式自带一个默认模型（会话还没选过模型时用它）；关 = 跟随全局模型。",
   "hint.modelRoute": "从部署里已设置的模型里挑一条：服务商与模型是一对，选它等于两个一起定。",
@@ -75,7 +75,7 @@ export const bundleZh = {
   "tags.remove": "移除 {name}",
   "select.search": "搜索候选",
   "select.noMatch": "没有匹配的候选",
-  "tri.unset": "不写",
+  "tri.unset": "默认",
   "tri.on": "开",
   "tri.off": "关",
   "remove.title": "删除模式",
@@ -165,7 +165,7 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   "hint.instructions":
     "Sends the workspace instructions (AGENTS.md and friends) with every step; off means it is not sent.",
   "hint.skills":
-    "Sends the skill catalog with every step; unset decides from this mode's tool lists.",
+    "Sends the skill catalog with every step; default decides from this mode's tool lists.",
   "hint.runtimeContext": "Sends the sandbox and approval policies with every step.",
   "hint.defaultModel":
     "On = this mode carries a default model (used while a session has picked none); off = follow the global model.",
@@ -180,7 +180,7 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   "tags.remove": "Remove {name}",
   "select.search": "Search candidates",
   "select.noMatch": "No matching candidate",
-  "tri.unset": "Unset",
+  "tri.unset": "Default",
   "tri.on": "On",
   "tri.off": "Off",
   "remove.title": "Delete mode",

@@ -11,7 +11,7 @@ export const zh = {
   model: "模型",
   modelHint: "模型 id。",
   reasoningEffort: "思考档位",
-  reasoningEffortHint: "省略就跟服务商自己的默认。",
+  reasoningEffortHint: "默认就跟服务商自己的默认。",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -24,7 +24,7 @@ export const en: Record<keyof typeof zh, string> = {
   model: "Model",
   modelHint: "Model id.",
   reasoningEffort: "Reasoning effort",
-  reasoningEffortHint: "Unset keeps the provider's own default.",
+  reasoningEffortHint: "Default keeps the provider's own default.",
 };
 
 export type SessionModeLocaleKey = keyof typeof zh;
