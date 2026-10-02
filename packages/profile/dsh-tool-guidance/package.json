@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-tool-guidance",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Tool guidance for dsh: localized short tool descriptions, trimmed schema and usage groups as one host-plane row. The agent row list lives in the agent presets themselves (shipped or deployment-owned).",
   "keywords": [
     "dsh",
