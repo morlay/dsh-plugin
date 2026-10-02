@@ -1,6 +1,6 @@
-// client 半：会话里那一个面（模式 chip，槽位 `conversation.input.left`，list + session scope）+ 配置页字段文案。
-// 官方 `@deepseek-ai/dsh-client-ui-agent-preset` 保留（官方管"挂哪套行"，我们管"会话级扩展"，两套入口并存）；
-// 本行的配置页由 `@morlay/dsh-client-ui-primitives` 按 schema 自动生成，key = `<bundle 包名>#<行 id>`。
+// client 半：会话里那一个面（模式 chip，槽位 `conversation.input.left`，list + session scope）+ 配置面两处——
+// 本行自己那页（由 `@morlay/dsh-client-ui-primitives` 按 schema 自动生成，key = `<bundle 包名>#<行 id>`）与
+// 装本行的 bundle 那一页（`plugins.bundle.config`，key = bundle 包名，见 `./BundleConfigPage.tsx`）。
 
 import type { Context } from "@deepseek-ai/cordis";
 // Type-only：`ctx.remote` 的合并面（选模型的候选来自 LLM 目录）。
@@ -9,15 +9,22 @@ import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only：槽位声明与 standard props（session / session-maybe / global）。
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
+// Type-only：`plugins.bundle.config` 的槽位声明（bundle 详情页的配置座位）。
+import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
 import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 import { POLICY_NAMES } from "../shared.ts";
+import { BUNDLE_CONFIG_KEY, createBundleConfigFace, SESSION_MODE_NS } from "./bundle-config.ts";
+import { BundleConfigPage } from "./BundleConfigPage.tsx";
+import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-locales.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
-    // 会话里两个面的文案（配置页文案在通用 schema 表单的字典里）。
+    // 会话里两个面的文案（本行配置页的文案在通用 schema 表单的字典里）。
     "session-mode": SessionModeLocaleKey;
+    // bundle 配置页（`plugins.bundle.config`）的文案。
+    "session-mode-bundle": BundleLocaleKey;
   }
 }
 
@@ -45,12 +52,14 @@ interface ProviderEntry {
 
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
 export type { SessionModeLocaleKey } from "./locales.ts";
+export type { BundleConfigPageProps } from "./BundleConfigPage.tsx";
 
-// 需要的服务：槽位与字典（会话列表经槽位的标准 props 到达组件，不必自己 inject）。
+// 需要的服务：槽位与字典（会话列表经槽位的标准 props 到达组件，不必自己 inject）；bundle 那页另要配置表单与
+// schema 服务，见下面那段注册自己的 `ctx.inject`。
 export const inject = ["slots", "locale"];
 
-// 本包 host 行 id：行配置页读的就是这个命名空间。
-export const SESSION_MODE_NS = "session-mode";
+// 本包 host 行 id：行配置页与 bundle 配置页读的都是这个命名空间。
+export { SESSION_MODE_NS };
 
 // 按路径读一段配置里的值（本包只读 provider 档案里的模型清单）。
 function readAt(root: unknown, path: readonly string[]): unknown {
@@ -61,7 +70,7 @@ function readAt(root: unknown, path: readonly string[]): unknown {
   }, root);
 }
 
-// 装上会话里的那一个面，以及本行配置页的字段文案。
+// 装上会话里的那一个面、本行配置页的字段文案，以及装本行的 bundle 那一页的表单。
 export function apply(ctx: Context): void {
   // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
   installUiPrimitives(ctx);
@@ -195,5 +204,31 @@ export function apply(ctx: Context): void {
         seat();
       };
     }, "session-mode: composer chip");
+  });
+
+  // 装本行的 bundle 那一页（`plugins.bundle.config`，key = bundle 包名）：本行是那份配置的 owner，页面摆的就是
+  // `modes` 与 `default` 这几项——按模式折叠分组而不是按 schema 平铺，所以它自带表单，不用自动生成那页。
+  ctx.inject(["slots", "locale", "configForms", "settingsSchema"], (scope) => {
+    scope.effect(() => {
+      const bundleT = scope.locale.bind(BUNDLE_NS);
+      const { face, dispose } = createBundleConfigFace(scope, bundleT);
+      const bundleDictionary = scope.locale.register(BUNDLE_NS, { zh: bundleZh, en: bundleEn });
+      const off = scope.slots.inject("plugins.bundle.config", () =>
+        scope.slots.register(
+          {
+            name: "plugins.bundle.config",
+            key: BUNDLE_CONFIG_KEY,
+            locale: BUNDLE_NS,
+            inject: () => face,
+          },
+          BundleConfigPage,
+        ),
+      );
+      return () => {
+        off();
+        bundleDictionary();
+        dispose();
+      };
+    }, "session-mode: bundle configuration page");
   });
 }

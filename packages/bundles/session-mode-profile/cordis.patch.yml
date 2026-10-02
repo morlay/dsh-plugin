@@ -37,6 +37,12 @@
               - web_fetch
             instructions: false
             runtimeContext: false
+          noop:
+            name: 原样模式
+            description: 与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。
+            role:
+              - main
+              - subagent
 - insert:
     - id: subagent
       name: "@morlay/dsh-subagent"

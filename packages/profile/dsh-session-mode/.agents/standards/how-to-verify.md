@@ -13,7 +13,8 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 - `bundles/session-mode-profile/src/__tests__/patch.spec.ts`：生成物与 `renderPatch()` 同形；host 平面那几行
   （`session-mode`、`context-assembler`、`subagent`、`tool-guidance`）在装配入口那一份里，**没有单独的收口行**；
   **装配里不再有 agent preset 行**（行清单归 shipped preset）、行数据类行（`tool-web` / `plan-mode` / …）一件都不在；
-  子代理那一行**没有 `config`**（中文回报指引不限 preset）；两个模式都不写 `preset`，`chat` 写着
+  子代理那一行**没有 `config`**（中文回报指引不限 preset）；三个模式都不写 `preset`（`noop` 除名称、说明与角色外一个字段
+  都不写），`chat` 写着
   `allowTools` 收窄到三件（`coding` 留空 = 不设收窄），`coding` 收窄官方 Office 面（`denyTools:
 [load_workspace_dependencies]` + `denySkills: [office-docx, office-pptx, office-xlsx]`），`coding` 写着
   `denyPolicies: [fs/edit-intent]`（`chat` 一份 policy 名单都没有）。
@@ -45,6 +46,15 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   dict → 每个模式一组字段）；本包测两件事：schema 上那两处 volatile 标注仍在（上一条判据），以及 client 半的
   字段文案只认领 `['modes','*','defaultModel',…]` 下那三个字段，两份 policy 名单的候选值只认领
   `['modes','*','allowPolicies'|'denyPolicies','*']`（`field-wording.spec.ts`）。
+- bundle 配置页那一份（`plugins.bundle.config`）自成一页，判据分三份：
+  - `bundle-config-registration.spec.ts`：注册进 `plugins.bundle.config` 且 key = bundle 包名（与
+    `bundles/session-mode-profile/package.json` 的 `name` 同源比对，改名时先红），字典是 `session-mode-bundle`，
+    注入面给出读数（`hooks.bundleConfig`）与动作。
+  - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、`noop` 不可删、默认模式选项、六组字段）、
+    动作（新增模式连名称一起给、受保护的模式删不动、一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、
+    默认模型只给一半 → 保存被挡且页面上有对应消息）。
+  - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、编辑与删除带着真实
+    路径上报、添加与保存各走一次动作。
 - `src/__tests__/preset-plane.spec.ts`：**模式不绑 preset、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面
@@ -90,7 +100,7 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
   shipped `standard`、切模式一次 `recompose` 都不发生、chat 收成三件、我们通道注入 0 条、行清单里缺工具的 preset
   上白名单一件都收不到）与
   [`bundles/session-mode-profile` 的 `patch.spec.ts`](../../../../bundles/session-mode-profile/src/__tests__/patch.spec.ts)
-  （生成物：装配里不再有 agent preset 行、两个模式都不写 `preset`）。
+  （生成物：装配里不再有 agent preset 行、三个模式都不写 `preset`）。
 - **还没进探针的**（改这条装配形状时值得加）：`ctx.settings.describe()` 里能看见 `session-mode` 这个命名空间
   （设置面能编辑 `default` / `modes` 的前提）。它在包内已经钉住（第 1 层的 volatile 用例与 schema 断言），
   探针里加一条只是多一层"真装配也如此"。

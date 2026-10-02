@@ -79,7 +79,7 @@ describe("host 平面的那几行", () => {
 });
 
 describe("模式定义", () => {
-  it("两个模式都不写 `preset`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
+  it("三个模式都不写 `preset`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
     const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
       | Record<
           string,
@@ -93,7 +93,7 @@ describe("模式定义", () => {
         >
       | undefined;
 
-    expect(Object.keys(modes ?? {}).sort()).toEqual(["chat", "coding"]);
+    expect(Object.keys(modes ?? {}).sort()).toEqual(["chat", "coding", "noop"]);
     for (const [id, mode] of Object.entries(modes ?? {})) {
       // 不写 `preset`：选模式不换行清单（用户选的 shipped preset 不被模式覆盖）。
       expect(mode.preset, id).toBeUndefined();
@@ -108,6 +108,9 @@ describe("模式定义", () => {
     expect(modes?.["chat"]?.allowTools).toEqual(["ask_user_question", "web_search", "web_fetch"]);
     expect(modes?.["chat"]?.denyTools).toBeUndefined();
     expect(modes?.["chat"]?.denySkills).toBeUndefined();
+    // `noop` 什么都不配：名单留空 = 不设收窄，装配结果与"没有模式"一致。
+    expect(modes?.["noop"]).toMatchObject({ name: "原样模式", role: ["main", "subagent"] });
+    expect(Object.keys(modes?.["noop"] ?? {}).sort()).toEqual(["description", "name", "role"]);
   });
 
   it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」，写路径的规则留着", () => {

@@ -59,11 +59,16 @@ const CHAT_PERSONA = {
     "你是一个助手。全程用中文（专有名词除外），包括但不限于思考，回答，工具描述；思考不要陷入重复循环，一旦循环立即退出。",
 };
 
+// 原样模式：**一份什么都不加的扩展**——persona 空、名单全空、三个开关不写，装配结果与"没有模式"时一致。
+// 它存在的理由有两个：想完全按上游默认跑的会话有个可选项；排查扩展干扰时有一个对照档（切到它就只剩上游行为）。
+// 它同样是 `session-mode` 行的一份定义，所以模式自己的收口代码照常经过它——只是没有任何收口要求。
+const NOOP_MODE_ID = "noop";
+
 // 新会话用哪个模式（`session-mode` 行的 `config.default`）。
 export const DEFAULT_MODE = "coding";
 
-// 两个模式：编码与对话。**都不绑定 preset**（差异全在会话级收口），行清单由会话挂着的 preset 提供：`coding`
-// 不收窄（用全部），`chat` 收成提问 + 联网三件。
+// 三个模式：编码、对话与原样。**都不绑定 preset**（差异全在会话级收口），行清单由会话挂着的 preset 提供：`coding`
+// 不收窄（用全部），`chat` 收成提问 + 联网三件，`noop` 什么都不加。
 export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
@@ -103,5 +108,14 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     // 同样丢掉。取舍见 `.agents/designs/20260929-抑制官方注入面.md`。
     instructions: false,
     runtimeContext: false,
+  },
+  {
+    id: NOOP_MODE_ID,
+    name: "原样模式",
+    description: "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
+    // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
+    role: ["main", "subagent"],
+    // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，
+    // `skills` 由工具名单推导（`allowTools` 留空 → 含 `skill` → 要目录），`preset` 不绑、`defaultModel` 跟全局。
   },
 ];

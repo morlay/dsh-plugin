@@ -40,7 +40,7 @@ policy 名单 / 收口 / 注入开关 / 默认模型）。
 - **模式是会话级扩展**：`config.modes.<id>` 只声明 persona、工具与 policy 的名单（`allowTools` 留空 = 不设收窄，用
   preset 提供的全部工具；`denyTools` / `allowPolicies` / `denyPolicies` 留空 = 不禁）、`instructions` / `skills` /
   `runtimeContext` 三个开关与可选 `defaultModel`（`skills` 不写就按模式自己的工具名单推导：名单里没有 `skill` 就是
-  不要技能目录）；`preset` 字段留在 schema 里但两个模式都不写——
+  不要技能目录）；`preset` 字段留在 schema 里但三个模式都不写——
   写了才会在切模式时把 preset 切过去，本部署不覆盖用户在官方 roster 里的选择
   （[ADR-模式不绑定preset](../../packages/profile/dsh-session-mode/.agents/adrs/20260929-模式不绑定preset.md)）。真源在
   [`mode-sources.ts`](../../packages/profile/dsh-session-mode/src/mode-sources.ts)，行 config 由 `rows.ts` 渲染。

@@ -7,7 +7,9 @@
 `config.modes.<id>.preset` 是可选声明，写了才会在切模式时把 preset 切过去。模式清单与默认值就是本行的 `config.modes`：真源在
 [`src/mode-sources.ts`](./src/mode-sources.ts)，行 config 由 [`src/rows.ts`](./src/rows.ts) 渲染；**模式不是 Cordis
 子树**，选择落成会话事实（`session-mode/selected` 事件 + `sessionMode` 投影）。会话里选模式走本包 client 半的 chip
-与 `GET/POST /session-mode`，且只在**空白会话**成立。
+与 `GET/POST /session-mode`，且只在**空白会话**成立。本部署三个模式：`coding`（完整编码 Agent）、`chat`
+（只提问与联网）、`noop`（**原样模式**：一份什么都不加的扩展——persona 空、名单全空、三个开关走默认，装配结果与
+"没有模式"时一致；想按上游默认跑、或排查扩展干扰时的对照档）。
 
 **按会话收口也在这个包里**（[`src/scope.ts`](./src/scope.ts)，模式行内部持有、不发布服务）：工具目录与
 `tool:<工具名>` section 按同一份合成结果过滤、执行层 guard 挂在该 agent 的 ctx 上（同一份 guard 也按名拒 `skill`
@@ -53,9 +55,17 @@
         # preset: standard   # 可选：写了才会在切模式时把 preset 切过去（不写 = 保持会话当前那份）
 ```
 
+页面上改这份配置有两个入口（读写都是同一份 `config.modes`）：插件管理页里**本 bundle 的详情页**
+（`plugins.bundle.config`，key 是 bundle 包名）——"新会话的默认模式 + 每个模式一张可折叠卡片"，卡片里按六组分
+字段，支持增删模式（`noop` 不给删）；以及这一行自己的**行配置页**（`plugins.row.config`，key
+`@morlay/session-mode-profile#session-mode`，由通用 schema 表单按 volatile 字段自动生成，是行式的结构视图）。
+两处都是暂存式写入（改完点保存，唯一的写盘点），改动等 Loader 重挂这一行才对**新会话**生效。形态与取舍见
+[设计 bundle 配置页](./.agents/designs/20261002-bundle配置页.md)。
+
 `skills` **不写就由这个模式自己的工具名单推导**：`(allowTools 留空 ? 全部 : allowTools) − denyTools` 里含 `skill`
-就要技能目录（`allowTools` 留空即"全部"，所以只有 `denyTools` 能把它推成 `false`）。本部署两个模式都不写它：
-`coding` 留空名单 → `true`，`chat` 的三件里没有 `skill` → `false`。要"工具收窄但目录照旧列"就显式写 `skills: true`。
+就要技能目录（`allowTools` 留空即"全部"，所以只有 `denyTools` 能把它推成 `false`）。本部署三个模式都不写它：
+`coding` 与 `noop` 留空名单 → `true`，`chat` 的三件里没有 `skill` → `false`。要"工具收窄但目录照旧列"就显式写
+`skills: true`。
 
 技能名单（`allowSkills` / `denySkills`）收的是**技能名**，与工具名单同一套合成规则（`allowSkills` 留空 = 不设收窄，
 两份同时命中时 deny 优先），收窄落在两处：`skill-catalog` 那条消息的**正文**（删掉 ``- `<名字>`: <说明>`` 那几行；

@@ -12,6 +12,14 @@
 | 行清单（工具 / 命令 / 压缩 / 计划 / 委派） | **不在本包**：会话挂着的 shipped preset（新会话是官方 web-app 的默认 `standard`）                                  |
 | 官方 roster 保留（`ui-agent-preset`）      | 官方管"挂哪套行"的选择面；我们的模式 chip 挂 composer 工具行左侧（`conversation.input.left`，list 槽位），两套并存 |
 
+三个模式（`coding` / `chat` / `noop`，真源在 `session-mode` 行的 [`rows` 出口](../../profile/dsh-session-mode/src/rows.ts)）
+里，**`noop` 是什么都不加的那一档**：与上游默认一致，想按上游跑或排查扩展干扰时的对照。
+
+**本 bundle 详情页上的配置表单**就是这个 bundle 里那几行的配置：由 `session-mode` 行的 client 半注册进
+`plugins.bundle.config`（key = 本 bundle 的包名），形态是"新会话的默认模式 + 每个模式一张可折叠卡片"，支持增删模式
+（`noop` 不给删）；读写的是 `session-mode` 那一行的配置命名空间。取舍见
+[设计 bundle 配置页](../../profile/dsh-session-mode/.agents/designs/20261002-bundle配置页.md)。
+
 **本包不声明自己的 agent preset**（曾经那份 `preset-mode-switch` 与它的行数据已删除）：行清单归 shipped preset，
 模式是叠加在它之上的会话级扩展——chip 不覆盖用户在官方 roster 里选的 preset。代价（计划模式规则段是官方那份英文
 契约、`chat` 的两条官方注入面要靠 `agent/pre-step` 上丢、每步仍付一次重算）与判据见
