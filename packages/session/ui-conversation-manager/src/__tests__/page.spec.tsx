@@ -3,7 +3,7 @@
 // 三种空态各自的文案由数据形状决定。
 // 动作闭环：取消归档 / 删除 / 导入都只经注入面；删除必须先过确认弹窗；
 // host 拒绝时把错误码翻成可读文案。
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ConversationManagerPage } from "../client/ConversationManagerPage.tsx";
@@ -679,6 +679,52 @@ describe("对话管理页面：token 用量统计", () => {
     expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
     expect(container.querySelector('[data-usage-cell="turns"]')).toBeNull();
     expect(container.querySelector('[data-usage-cell="output"]')).toBeTruthy();
+  });
+
+  it("按模型把子代理的桶合进同一行（人类与子代理不拆）", async () => {
+    const { container } = await renderPage({
+      archived: [],
+      faces: { loadUsage: vi.fn(async () => REPORT) },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    await screen.findByText("总览");
+
+    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    // 人类 65 + 子代理 55 折进同一个 provider / model 行。
+    expect(container.querySelectorAll('[data-usage-key="deepseek-official / v4"]').length).toBe(1);
+    expect(
+      container.querySelector('[data-usage-cell="output"]')?.getAttribute("data-usage-value"),
+    ).toBe("120");
+  });
+
+  it("按会话标出子代理会话，并可只看子代理", async () => {
+    const { container } = await renderPage({
+      archived: [],
+      faces: { loadUsage: vi.fn(async () => REPORT) },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    await screen.findByText("总览");
+
+    // 过滤开关只在按会话维度出现（总览 / 按模型没有这个维度）。
+    expect(screen.queryByRole("checkbox", { name: "只看子代理会话" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+
+    const humanRow = container.querySelector('[data-usage-key="s1"]');
+    const subagentRow = container.querySelector('[data-usage-key="s4"]');
+    expect(humanRow?.getAttribute("data-subagent")).toBe("false");
+    expect(subagentRow?.getAttribute("data-subagent")).toBe("true");
+    // 子代理行的「子代理」标记：标签精确匹配，不吃行标题里的同名文字。
+    expect(within(subagentRow as HTMLElement).getByText("子代理")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "只看子代理会话" }));
+    expect(container.querySelector('[data-usage-key="s1"]')).toBeNull();
+    expect(container.querySelector('[data-usage-key="s4"]')).toBeTruthy();
+
+    // 维度切走再切回：开关与筛选都保留（只是该维度自己的过滤）。
+    fireEvent.click(screen.getByRole("tab", { name: "总览" }));
+    expect(screen.queryByRole("checkbox", { name: "只看子代理会话" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    expect(container.querySelector('[data-usage-key="s1"]')).toBeNull();
   });
 
   it("统计失败时给出原因", async () => {

@@ -91,6 +91,7 @@ export function ConversationManagerPage({
   const [view, setView] = useState<PageView>("sessions");
   const [usageTab, setUsageTab] = useState<UsageTab>("overview");
   const [usageRange, setUsageRange] = useState<UsageRange>("day");
+  const [usageOnlySubagents, setUsageOnlySubagents] = useState(false);
   const [usage, setUsage] = useState<SessionUsageReport | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
@@ -314,6 +315,8 @@ export function ConversationManagerPage({
             onTab={setUsageTab}
             range={usageRange}
             onRange={requestUsage}
+            onlySubagents={usageOnlySubagents}
+            onOnlySubagents={setUsageOnlySubagents}
             t={t}
           />
         </div>
@@ -647,6 +650,8 @@ interface UsageListRow {
   key: string;
   label: string;
   totals: UsageTotals;
+  // 子代理派生会话的行（按会话维度才有此维度；其余维度不带标记）。
+  subagent?: boolean;
 }
 
 function emptyTotals(): UsageTotals {
@@ -663,7 +668,7 @@ function emptyTotals(): UsageTotals {
   };
 }
 
-// 把桶按一个键折叠成行并按用量降序（按天 / 按模型都用它）。
+// 把桶按一个键折叠成行并按用量降序（按模型维度用它：人类的桶与子代理的桶折进同一行）。
 function foldBuckets(
   buckets: readonly UsageBucket[],
   keyOf: (bucket: UsageBucket) => string,
@@ -684,23 +689,32 @@ function foldBuckets(
   );
 }
 
-// 一行用量：label 在上，下面是横向排布的单项。
+// 一行用量：label 在上（子代理行另带标记），下面是横向排布的单项。
 function UsageRow({
   rowKey,
   label,
   totals,
   t,
+  subagent,
   withActivity = true,
 }: {
   rowKey: string;
   label: string;
   totals: UsageTotals;
   t: Translate;
+  subagent?: boolean;
   withActivity?: boolean;
 }): ReactNode {
   return (
-    <li {...styling.props(styles.usageRow)} data-usage-key={rowKey}>
-      <span {...styling.props(styles.usageRowLabel)}>{label}</span>
+    <li
+      {...styling.props(styles.usageRow)}
+      data-usage-key={rowKey}
+      {...(subagent === undefined ? {} : { "data-subagent": subagent ? "true" : "false" })}
+    >
+      <span {...styling.props(styles.titleLine)}>
+        <span {...styling.props(styles.usageRowLabel)}>{label}</span>
+        {subagent === true ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
+      </span>
       <span {...styling.props(styles.usageMetrics)}>
         {usageMetrics(totals, t, { withActivity }).map((metric) => (
           <span
@@ -749,6 +763,7 @@ function UsageList({
           label={row.label}
           totals={row.totals}
           t={t}
+          {...(row.subagent === undefined ? {} : { subagent: row.subagent })}
           withActivity={withActivity}
         />
       ))}
@@ -775,6 +790,8 @@ function UsageView({
   onTab,
   range,
   onRange,
+  onlySubagents,
+  onOnlySubagents,
   t,
 }: {
   report: SessionUsageReport | null;
@@ -784,6 +801,8 @@ function UsageView({
   onTab: (tab: UsageTab) => void;
   range: UsageRange;
   onRange: (range: UsageRange) => void;
+  onlySubagents: boolean;
+  onOnlySubagents: (next: boolean) => void;
   t: Translate;
 }): ReactNode {
   const items: UsageTab[] = ["overview", "models", "sessions"];
@@ -802,10 +821,13 @@ function UsageView({
               `${bucket.provider ?? t("usage.unknownModel")} / ${bucket.model ?? t("usage.unknownModel")}`,
           )
         : report.sessions
+            // 子代理会话单个用量小，混排时会被行数上限挤掉：给一个只看它们的开关（过滤在本页，数据已全量在手）。
+            .filter((row) => !onlySubagents || row.subagent)
             .map((row) => ({
               key: row.sessionId,
               label: row.title ?? row.sessionId,
               totals: row,
+              subagent: row.subagent,
             }))
             .sort((left, right) => sortWeight(right.totals) - sortWeight(left.totals))
             .slice(0, USAGE_SESSION_ROWS);
@@ -845,6 +867,15 @@ function UsageView({
           </button>
         ))}
       </div>
+      {tab === "sessions" ? (
+        <div {...styling.props(styles.filters)} data-filter="usage-subagents">
+          <Checkbox
+            checked={onlySubagents}
+            label={t("usage.onlySubagents")}
+            onChange={onOnlySubagents}
+          />
+        </div>
+      ) : null}
       {loading ? (
         <p {...styling.props(styles.status)} data-usage-status="loading">
           {t("usage.loading")}
