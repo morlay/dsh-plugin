@@ -104,15 +104,16 @@
   list-style: none;
 }
 
-/* 内距档：`card` 是模式卡片那档，`body` 是卡片内容那档，`page` / `row` / `blocking` 见注释。 */
+/* 内距档：`card` 是模式卡片那档，`body` 是卡片内容那档，`page` / `row` / `blocking` 见注释。
+   上下必须对称——不对称的内距会让里面的行看着不在卡片中线（旧实现里的 4/8 与 8/4 就是这么偏的）。 */
 .padNone {
   padding: 0;
 }
 .padCard {
-  padding: 4px 12px 8px;
+  padding: 8px 12px;
 }
 .padBody {
-  padding: 8px 0 4px;
+  padding: 8px 0;
 }
 /* 页面根那一档。 */
 .padPage {
