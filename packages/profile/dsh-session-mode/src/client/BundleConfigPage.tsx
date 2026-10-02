@@ -181,6 +181,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             <Button
               variant="outline"
               size="sm"
+              className={className(styles.controlHeight)}
               data-action="add-mode"
               disabled={!state.writable || adding.trim() === ""}
               onClick={() => {
@@ -269,44 +270,38 @@ function ModeCard({
         contentClassName={className(styles.disclosureRoot)}
         contentLayoutClassName={className(styles.disclosureContent)}
         collapsedContent={
-          <span {...stylingProps(styles.modeHeadAside)}>
-            <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
-            {mode.deletable ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className={className(styles.dangerOutline)}
-                data-action="remove-mode"
-                disabled={!writable}
-                aria-label={t("removeNamed", { name: mode.title })}
-                onClick={(event) => {
-                  // 行本身是折叠开关：删除先拦下这次点击，别顺手把卡片收起来。
-                  event.stopPropagation();
-                  onRequestRemove();
-                }}
-              >
-                <IconTrashOutlineRegular size={13} />
-                {t("remove")}
-              </Button>
-            ) : (
-              <span {...stylingProps(styles.protectedNote)} data-protected="true">
-                {t("protected")}
-              </span>
-            )}
-          </span>
-        }
-      >
-        <div {...stylingProps(styles.modeBody)}>
-          <div {...stylingProps(styles.modeMeta)}>
+          // 两段：先是紧挨名称的 id，再是贴最右的摘要 + 删除。
+          <>
             <code {...stylingProps(styles.modeId)} data-mode-id>
               {mode.id}
             </code>
-            {mode.role.map((role) => (
-              <Tag key={role} tone="quiet">
-                {role}
-              </Tag>
-            ))}
-          </div>
+            <span {...stylingProps(styles.modeHeadAside)}>
+              <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
+              {mode.deletable ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={className(styles.dangerOutline)}
+                  data-action="remove-mode"
+                  disabled={!writable}
+                  icon={<IconTrashOutlineRegular size={13} />}
+                  aria-label={t("removeNamed", { name: mode.title })}
+                  onClick={(event) => {
+                    // 行本身是折叠开关：删除先拦下这次点击，别顺手把卡片收起来（确认弹窗照旧）。
+                    event.stopPropagation();
+                    onRequestRemove();
+                  }}
+                />
+              ) : (
+                <span {...stylingProps(styles.protectedNote)} data-protected="true">
+                  {t("protected")}
+                </span>
+              )}
+            </span>
+          </>
+        }
+      >
+        <div {...stylingProps(styles.modeBody)}>
           {mode.groups.map((group) => (
             <div key={group.key} {...stylingProps(styles.group)} data-group={group.key}>
               <div {...stylingProps(styles.groupHead)}>
@@ -567,8 +562,9 @@ function TagList({
     <div {...stylingProps(styles.tagRow)} data-control="tags">
       <div {...stylingProps(styles.chips)} data-tags={field.path.join(".")}>
         {values.map((value) => (
-          <span key={value} {...stylingProps(styles.tagItem)} data-tag={value}>
-            <Tag tone="neutral">{value}</Tag>
+          // 胶囊与里面的"移除"是同一个整体：× 在框内，点它才删。
+          <span key={value} {...stylingProps(styles.tagChip)} data-tag={value}>
+            {value}
             <button
               type="button"
               {...stylingProps(styles.tagRemove)}
@@ -659,6 +655,7 @@ function PickMenu({
         <Button
           variant="outline"
           size="sm"
+          className={className(styles.controlHeight)}
           data-action="pick"
           disabled={disabled}
           aria-haspopup="menu"

@@ -98,12 +98,6 @@ export const styles = {
     gap: "14px",
     padding: "8px 0 4px",
   },
-  modeMeta: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    flexWrap: "wrap",
-  },
   // 受保护的模式在头部给一句说明（与删除按钮同一个位置）。
   protectedNote: {
     fontSize: "12px",
@@ -188,11 +182,15 @@ export const styles = {
     gap: "4px 6px",
     boxSizing: "border-box",
     width: "100%",
-    minHeight: "34px",
+    minHeight: "32px",
     padding: "4px 8px",
     background: "var(--dsw-alias-bg-layer-3)",
     border: "0.5px solid var(--dsw-alias-border-l4)",
     borderRadius: "var(--dsw-radius-md)",
+  },
+  // 与官方输入框同高（`Input.module.css` 的 32px）：同行摆的控件高度必须一致。
+  controlHeight: {
+    height: "32px",
   },
   // 框内的裸输入：边框与背景都交给外面那个框。
   chipInput: {
@@ -207,15 +205,27 @@ export const styles = {
     border: "none",
     outline: "none",
   },
-  tagItem: {
+  // 可移除的胶囊：几何与配色照官方 `Tag` 的 neutral（999px 圆角、11px/17px、wt500、
+  // `bg-module-platform` + 二级文本色），只是里面多一个"移除"按钮——官方 Tag 是只读的，嵌不进按钮。
+  tagChip: {
     display: "inline-flex",
     alignItems: "center",
-    gap: "4px",
+    gap: "2px",
+    padding: "1px 4px 1px 8px",
+    borderRadius: "999px",
+    cornerShape: "round",
+    fontSize: "11px",
+    lineHeight: "17px",
+    fontWeight: "500",
+    whiteSpace: "nowrap",
+    color: "var(--dsw-alias-label-secondary)",
+    background: "var(--dsw-alias-bg-module-platform)",
   },
   tagRemove: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    flex: "none",
     padding: "0",
     color: "var(--dsw-alias-label-tertiary)",
     background: "transparent",
