@@ -71,31 +71,21 @@ interface PresetRosterReader {
   >;
 }
 
-// 本包从 LLM 命名空间读的那两件事（活着的路由清单与可配置声明）。
-interface LlmReader {
-  listProviders: () => Promise<
-    { ok: true; value: readonly { id: string; name: string }[] } | { ok: false }
-  >;
-  listConfigurableProviders: () => Promise<
+// 部署的模型目录（`remote.session.modelCatalog()` 的读侧）：provider 分组，每组带它当前可用的模型。
+interface ModelCatalogReader {
+  modelCatalog: () => Promise<
     | {
         ok: true;
-        value: readonly {
-          provider: string;
-          displayName: string;
-          settingsNs: string;
-          settingsPath: readonly string[];
-        }[];
+        value: {
+          groups: readonly {
+            id: string;
+            name: string;
+            models: readonly { id: string; name: string }[];
+          }[];
+        };
       }
     | { ok: false }
   >;
-}
-
-// 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。
-interface ProviderEntry {
-  value: string;
-  label: string;
-  settingsNs: string;
-  settingsPath: readonly string[];
 }
 
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
@@ -108,15 +98,6 @@ export const inject = ["slots", "locale"];
 
 // 本包 host 行 id：行配置页与 bundle 配置页读的都是这个命名空间。
 export { SESSION_MODE_NS };
-
-// 按路径读一段配置里的值（本包只读 provider 档案里的模型清单）。
-function readAt(root: unknown, path: readonly string[]): unknown {
-  return path.reduce<unknown>((node, segment) => {
-    if (Array.isArray(node)) return node[Number(segment)];
-    if (typeof node !== "object" || node === null) return undefined;
-    return Reflect.get(node, segment);
-  }, root);
-}
 
 // 从 inject 的 scope 上取提示面服务并解包：cordis 把它包成追踪代理，而它的实现用的是 JS 私有字段，
 // 代理上的方法调用会以代理为 `this` 而抛（`Cannot read private member #texts …`）。
@@ -165,75 +146,45 @@ export function apply(ctx: Context): void {
     }, "session-mode: policy candidates"),
   );
 
-  // 选模型的候选不在本行的 schema 里：provider 是部署里的 LLM 目录（活着的路由 + 可配置声明），模型清单读那份声明
-  // 指向的配置（`settingsNs` / `settingsPath`）。目录异步取到后注册——注册本身就是一次变更通知。
+  // 选模型的候选不在本行的 schema 里：用的是**部署已有的模型目录**（`remote.session.modelCatalog()`——会话里那个
+  // 模型选择器读的同一份：provider 分组，每个 provider 带着它当前可用的模型）。目录异步取到后注册——注册本身就是
+  // 一次变更通知。
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
       const hints = unwrapHintService(scope);
       const remote = scope.get("remote");
-      const llm = remoteNamespace<LlmReader>(scope, "llm");
-      const forms = scope.get("configForms");
-      if (remote === undefined || llm === undefined || forms === undefined) return () => {};
-      let providers: ProviderEntry[] = [];
+      const session = remoteNamespace<ModelCatalogReader>(scope, "session");
+      if (remote === undefined || session === undefined) return () => {};
+      let providers: readonly { value: string; label: string }[] = [];
+      let models = new Map<string, readonly { value: string; label: string }[]>();
       const load = async (): Promise<void> => {
-        const [routes, directory] = await Promise.all([
-          llm.listProviders(),
-          llm.listConfigurableProviders(),
-        ]);
-        if (!routes.ok || !directory.ok) return;
-        const merged = new Map<string, ProviderEntry>();
-        for (const entry of directory.value) {
-          merged.set(entry.provider, {
-            value: entry.provider,
-            label: entry.displayName,
-            settingsNs: entry.settingsNs,
-            settingsPath: [...entry.settingsPath],
-          });
-        }
-        for (const route of routes.value) {
-          if (!merged.has(route.id)) {
-            merged.set(route.id, {
-              value: route.id,
-              label: route.name,
-              settingsNs: "",
-              settingsPath: [],
-            });
-          }
-        }
-        providers = [...merged.values()];
+        const catalog = await session.modelCatalog();
+        if (!catalog.ok) return;
+        providers = catalog.value.groups.map((group) => ({ value: group.id, label: group.name }));
+        models = new Map(
+          catalog.value.groups.map((group) => [
+            group.id,
+            group.models.map((model) => ({ value: model.id, label: model.name })),
+          ]),
+        );
         hints.refresh();
-      };
-      const modelsOf = (provider: unknown): readonly { value: string }[] => {
-        if (typeof provider !== "string") return [];
-        const entry = providers.find((candidate) => candidate.value === provider);
-        if (entry === undefined || entry.settingsNs === "") return [];
-        const profile = readAt(forms.get(entry.settingsNs).getSnapshot().value, entry.settingsPath);
-        const models =
-          typeof profile === "object" && profile !== null
-            ? Reflect.get(profile, "models")
-            : undefined;
-        if (!Array.isArray(models)) return [];
-        return models.flatMap((model) => {
-          const id =
-            typeof model === "object" && model !== null ? Reflect.get(model, "id") : undefined;
-          return typeof id === "string" ? [{ value: id }] : [];
-        });
       };
       const offs = [
         // 两个具名源：schema 上 `role('select', { source })` 认领它们，本包因此不必知道行 id 与字段路径。
-        hints.source("llm-providers", {
-          options: () => providers.map((entry) => ({ value: entry.value, label: entry.label })),
-        }),
+        hints.source("llm-providers", { options: () => providers }),
         // 换服务商就换模型清单：依赖声明让表单在投影时按当前 provider 重算候选。
         hints.source("llm-models", {
           dependsOn: [["provider"]],
-          options: (read) => modelsOf(read(["provider"])),
+          options: (read) => {
+            const provider = read(["provider"]);
+            return typeof provider === "string" ? (models.get(provider) ?? []) : [];
+          },
         }),
         remote.$on("llm/adapters-updated", () => {
           void load();
         }),
         remote.$on("settings/document-updated", () => {
-          hints.refresh();
+          void load();
         }),
       ];
       void load();
