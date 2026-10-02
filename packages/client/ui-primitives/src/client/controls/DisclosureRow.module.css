@@ -1,5 +1,13 @@
-/* 折叠行的内容区：官方那份的 `contentClassName` / `contentLayoutClassName` 是给消费方覆盖用的，
-   设置面每次都要同样两条——「撑开并允许收缩」+「标题行左右分列」，所以在这里定下来。 */
+/* 折叠行的两个覆盖类——官方 `DisclosureRow` 的 `contentClassName` / `contentLayoutClassName` 名字容易读错，
+   它们不是"内容区布局"，而是**标题那一块**的类：
+
+   - `contentClassName` 落在 `TextShimmer` 的 `.root` 上（上游是 `display: inline-grid; width: max-content;
+     max-width: 100%`）。这里只加 flex 属性把它撑开（`flex: 1 1 auto` 不会覆盖 `display`），让右侧那一组
+     （摘要 / 删除入口）能用 `margin-left: auto` 贴到行尾。
+   - `contentLayoutClassName` 落在内层 `.content` 上（上游默认就是 `display: flex; align-items: center;
+     min-width: 0`）：补上标题与右侧内容之间的间距，其余保持上游口径。
+
+   注意别往这两条里塞"卡片头布局"——它们只作用于标题文字那一层。 */
 .content {
   flex: 1 1 auto;
   min-width: 0;
@@ -7,7 +15,6 @@
 
 .contentLayout {
   display: flex;
-  flex-direction: row;
   align-items: center;
   gap: 8px;
   width: 100%;
