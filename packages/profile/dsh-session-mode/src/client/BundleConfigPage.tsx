@@ -279,12 +279,12 @@ function ModeCard({
               <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
               {mode.deletable ? (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className={className(styles.dangerOutline)}
+                  className={className(styles.iconAction)}
                   data-action="remove-mode"
                   disabled={!writable}
-                  icon={<IconTrashOutlineRegular size={13} />}
+                  icon={<IconTrashOutlineRegular />}
                   aria-label={t("removeNamed", { name: mode.title })}
                   onClick={(event) => {
                     // 行本身是折叠开关：删除先拦下这次点击，别顺手把卡片收起来（确认弹窗照旧）。

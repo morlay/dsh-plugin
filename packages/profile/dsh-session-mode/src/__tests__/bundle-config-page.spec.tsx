@@ -296,8 +296,20 @@ describe("会话模式的 bundle 配置页", () => {
     const page = renderPage();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
+    // 卡片头的删除入口是纯图标按钮：只有图标（无文字），也无边框、不带错误色——形态照侧边栏那种方形图标按钮
+    // （28×28、padding 0、次级文本色），危险配色只留给确认按钮。
+    const remove = within(card("coding")).getByRole("button", { name: /^删除模式/u });
+    expect(remove.textContent).toBe("");
+    expect(remove.className).toContain("cls-");
+    expect(styles.iconAction).toMatchObject({
+      width: "28px",
+      height: "28px",
+      padding: "0",
+      color: "var(--dsw-alias-label-secondary)",
+    });
+
     // 取消：什么都没发生（草稿也没动）。
-    fireEvent.click(within(card("coding")).getByRole("button", { name: /^删除模式/u }));
+    fireEvent.click(remove);
     const cancelled = await screen.findByRole("dialog");
     expect(within(cancelled).getByText(bundleZh["remove.title"])).toBeTruthy();
     fireEvent.click(within(cancelled).getByRole("button", { name: bundleZh["remove.cancel"] }));
@@ -313,7 +325,6 @@ describe("会话模式的 bundle 配置页", () => {
     expect(styles.dangerFill["--dsw-alias-button-primary-fill"]).toBe(
       "var(--dsw-alias-state-error-primary)",
     );
-    expect(styles.dangerOutline.color).toBe("var(--dsw-alias-state-error-primary)");
   });
 
   it("名单是标签输入：回车确认一个，粘贴逗号分隔的一串拆成多个", () => {

@@ -240,13 +240,15 @@ export const styles = {
     gap: "8px",
     width: "100%",
   },
-  // 危险动作：描边按钮用错误色 + 错误色 hover；确认按钮把 primary 的填充换成错误色。
-  dangerOutline: {
-    color: "var(--dsw-alias-state-error-primary)",
-    borderColor: "color-mix(in srgb, var(--dsw-alias-state-error-primary) 30%, transparent)",
-    "--dsw-alias-interactive-bg-hover":
-      "color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent)",
+  // 卡片头的删除入口：官方 `Button` 的 `ghost` 变体（无边框、hover 才上底色）配上侧边栏那种方形图标按钮的几何
+  // ——28×28、`padding: 0`、次级文本色。
+  iconAction: {
+    width: "28px",
+    height: "28px",
+    padding: "0",
+    color: "var(--dsw-alias-label-secondary)",
   },
+  // 危险动作的配色只在确认那一刻出现：确认按钮把 primary 的填充换成错误色。
   dangerFill: {
     "--dsw-alias-button-primary-fill": "var(--dsw-alias-state-error-primary)",
   },
