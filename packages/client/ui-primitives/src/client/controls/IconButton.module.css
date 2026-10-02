@@ -30,6 +30,13 @@
   outline-offset: -2px;
 }
 
+/* 行内小档：24px 高的行（上游折叠行的 `.row`）里放 28px 会顶出这一行。 */
+.sm {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+
 /* 圆形那一档：对话动作行的 28×28 圆键（hover 才上底色，颜色走三级文本色）。 */
 .circle {
   padding: 6px;

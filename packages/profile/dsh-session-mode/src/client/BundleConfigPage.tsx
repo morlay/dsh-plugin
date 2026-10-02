@@ -332,6 +332,7 @@ function ModeCard({
               <Text as="span" size="sm" tone="tertiary">{mode.summary}</Text>
               {mode.deletable ? (
                 <IconButton
+                  size="sm"
                   data-action="remove-mode"
                   disabled={!writable}
                   label={t("removeNamed", { name: mode.title })}

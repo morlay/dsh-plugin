@@ -45,6 +45,9 @@
 }
 
 .chevron {
-  flex: none;
+  /* inline-flex 而不是 inline：inline 的座位会在 svg 下面预留 baseline descent，把箭头顶得不在 28px 的
+     座位里居中（上游 `PermissionSelect.module.css` 的 `.chevron` 记着同一条）。 */
+  display: inline-flex;
+  flex: 0 0 auto;
   color: var(--dsw-alias-label-caption);
 }
