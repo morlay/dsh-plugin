@@ -18,6 +18,11 @@
 `agent/pre-step` 上**丢掉官方两条注入面**（工作区指令、技能目录）。取舍见
 [设计 抑制官方注入面](./.agents/designs/20260929-抑制官方注入面.md)。
 
+这三个开关管的是**每步请求里额外塞进去的文本**（不是工具本身，工具可见性归 `allowTools` / `denyTools`）：
+`instructions` = 官方 `agent-instructions` 的每步注入（`AGENTS.md` 之类的工作区指令）加本通道自己的降级注入；
+`skills` = 官方 `tool-skill` 的**技能目录**（那份 `- 名字: 说明` 列表，`skill` 工具本身照旧可见）；`runtimeContext` =
+两条动态快照（文件沙箱策略、审批策略）。
+
 本包不装配任何行：装配入口在 [`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)
 （它插 `session-mode`、通道、工具说明与 subagent 那几行）。
 

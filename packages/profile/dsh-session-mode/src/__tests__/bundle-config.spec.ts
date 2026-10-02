@@ -8,6 +8,8 @@ import { describe, expect, it, vi } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import {
   createBundleConfigFace,
+  mergeTags,
+  parseTagList,
   projectBundleConfig,
   type BundleTranslate,
 } from "../client/bundle-config.ts";
@@ -177,17 +179,30 @@ describe("bundle 配置页：视图", () => {
       "persona",
       "tools",
       "rules",
-      "switches",
+      "injections",
       "model",
     ]);
     const tools = card?.groups.find((group) => group.key === "tools");
     const denied = tools?.fields.find((field) => field.path.join(".") === "modes.coding.denyTools");
-    expect(denied?.items.map((item) => item.text)).toEqual(["load_workspace_dependencies"]);
+    expect(denied?.value).toEqual(["load_workspace_dependencies"]);
     // 没配的 `skills` 是三态里的"不写"：按工具名单推导，页面上不等于关。
     const skills = card?.groups
-      .find((group) => group.key === "switches")
+      .find((group) => group.key === "injections")
       ?.fields.find((field) => field.path.join(".") === "modes.coding.skills");
     expect(skills?.value).toBe("unset");
+  });
+});
+
+describe("bundle 配置页：名单的解析", () => {
+  it("粘贴的一串按逗号（中英）/ 分号 / 换行拆开：去空白、去重、保序", () => {
+    expect(parseTagList("read, write；bash\nls")).toEqual(["read", "write", "bash", "ls"]);
+    expect(parseTagList(" read ,,read ; read ")).toEqual(["read"]);
+    expect(parseTagList("   ")).toEqual([]);
+  });
+
+  it("并进现有标签：重复的不再进来，现有的保持在前", () => {
+    expect(mergeTags(["read"], ["write", "read"])).toEqual(["read", "write"]);
+    expect(mergeTags([], ["bash"])).toEqual(["bash"]);
   });
 });
 

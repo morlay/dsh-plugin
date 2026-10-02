@@ -1,27 +1,32 @@
 // bundle 配置页：装这个 bundle 的那一行（`session-mode`）的完整配置——新会话的默认模式 + 每个模式一张可折叠卡片。
 //
 // 注册进 `plugins.bundle.config`（key = bundle 包名），读写的命名空间是 `session-mode`。草稿、整段校验与保存都归通用
-// schema 表单的控制器（`bundle-config.ts` 的注入面），本文件只管布局与控件：卡片头是官方折叠行，展开后按分组摆字段，
-// 卡片内没有"立即生效"的写——一切改动先落草稿，底部保存是唯一写盘点。
+// schema 表单的控制器（`bundle-config.ts` 的注入面），本文件只管布局与控件：控件一律用官方 primitives——文本字段是
+// `SettingsValueField`（标签 / 说明 / "已覆盖" / 恢复默认 / 非法提示都在它里面），候选是 `Menu`，开关是 `Checkbox`，
+// 三态是 `SegmentedControl`，名单是 `Input` + `Tag` 拼的标签输入。改动一律先落草稿，底部保存是唯一写盘点。
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import {
   Button,
   Checkbox,
   DisclosureRow,
   IconAgentPresetOutlineRegular,
   IconCloseOutlineRegular,
-  IconPlusOutlineRegular,
   IconTrashOutlineRegular,
   Input,
+  Menu,
   SegmentedControl,
   SettingsForm,
+  SettingsValueField,
   Tag,
+  type MenuEntry,
   type SettingsFormLabels,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SchemaFormState } from "@morlay/dsh-client-ui-primitives/client";
 import {
+  mergeTags,
+  parseTagList,
   projectBundleConfig,
   ROLES,
   type BundleConfigActions,
@@ -53,12 +58,11 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
     save: props.save,
     discard: props.discard,
   };
-  const state = props.useBundleConfig((snapshot: SchemaFormState) =>
-    projectBundleConfig(snapshot, t),
-  );
+  // 读数取原始快照（引用稳定，uSES 语义正确），投影在渲染里做。
+  const snapshot = props.useBundleConfig((current: SchemaFormState) => current);
+  const state = useMemo(() => projectBundleConfig(snapshot, t), [snapshot, t]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [adding, setAdding] = useState("");
-  const triId = useId();
   // 槽位注册项只为 `page` 视图存在（bundle 页不给 `summary` 座位）。
   if (view !== "page") return null;
   if (!state.configured) {
@@ -90,29 +94,17 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
           <h4 {...stylingProps(styles.sectionTitle)}>{t("default.label")}</h4>
           <p {...stylingProps(styles.hint)}>{t("default.hint")}</p>
           <div {...stylingProps(styles.defaultRow)}>
-            <select
-              {...stylingProps(styles.select)}
-              data-field="default"
+            <PickMenu
+              label={t("default.label")}
               value={state.defaultMode.value}
+              emptyLabel={t("tri.unset")}
+              options={state.defaultMode.options}
               disabled={!state.writable}
-              aria-label={t("default.label")}
-              onChange={(event) => {
-                face.set(["default"], event.currentTarget.value);
+              onPick={(next) => {
+                if (next === "") face.clear(["default"]);
+                else face.set(["default"], next);
               }}
-            >
-              {state.defaultMode.options.some(
-                (option) => String(option.value) === state.defaultMode.value,
-              ) ? null : (
-                <option value={state.defaultMode.value}>
-                  {state.defaultMode.value || t("tri.unset")}
-                </option>
-              )}
-              {state.defaultMode.options.map((option) => (
-                <option key={String(option.value)} value={String(option.value)}>
-                  {option.label ?? String(option.value)}
-                </option>
-              ))}
-            </select>
+            />
             {state.defaultMode.invalid === undefined ? null : (
               <p {...stylingProps(styles.invalid)} role="alert" data-invalid="default">
                 {state.defaultMode.invalid}
@@ -130,7 +122,6 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               mode={mode}
               open={expanded.has(mode.id)}
               writable={state.writable}
-              triId={triId}
               t={t}
               face={face}
               onToggle={() => {
@@ -176,7 +167,6 @@ function ModeCard({
   mode,
   open,
   writable,
-  triId,
   t,
   face,
   onToggle,
@@ -184,7 +174,6 @@ function ModeCard({
   mode: BundleModeView;
   open: boolean;
   writable: boolean;
-  triId: string;
   t: BundleTranslate;
   face: BundleConfigActions;
   onToggle: () => void;
@@ -239,14 +228,7 @@ function ModeCard({
                 )}
               </div>
               {group.fields.map((field) => (
-                <FieldRow
-                  key={field.key}
-                  field={field}
-                  writable={writable}
-                  triId={triId}
-                  t={t}
-                  face={face}
-                />
+                <FieldRow key={field.key} field={field} writable={writable} t={t} face={face} />
               ))}
             </div>
           ))}
@@ -277,45 +259,62 @@ function ModeCard({
   );
 }
 
-// 一个字段行：左标签 + 右控件；开关与三态把标签交给控件本身（官方控件都自带标签）。
+// 一个字段：文本字段交给官方 `SettingsValueField`（标签、说明、覆盖标记、恢复默认与非法提示都在它里面），其余控件
+// 用同一套「标签一行（或控件自带标签）、控件一行、说明一行」的块。
 function FieldRow({
   field,
   writable,
-  triId,
   t,
   face,
 }: {
   field: BundleFieldView;
   writable: boolean;
-  triId: string;
   t: BundleTranslate;
   face: BundleConfigActions;
 }): ReactNode {
+  const id = useId();
+  if (field.control === "text") {
+    return (
+      <div data-field={field.path.join(".")} data-control={field.control}>
+        <SettingsValueField
+          id={`${id}-${field.key}`}
+          label={field.label}
+          hint={field.hint}
+          text={field.text}
+          overridden={field.overridden}
+          invalid={field.invalid !== undefined}
+          overriddenLabel={t("overridden")}
+          resetLabel={t("field.reset")}
+          invalidLabel={field.invalid ?? ""}
+          disabled={!writable}
+          onEdit={(text) => {
+            face.editText(field.path, text);
+          }}
+          onReset={() => {
+            face.clear(field.path);
+          }}
+        />
+      </div>
+    );
+  }
   const inline = field.control === "switch" || field.control === "tri";
-  const control = (
-    <FieldControl
-      field={field}
-      writable={writable}
-      triId={`${triId}-${field.key}`}
-      t={t}
-      face={face}
-    />
-  );
   return (
     <div
       {...stylingProps(styles.field)}
       data-field={field.path.join(".")}
       data-control={field.control}
     >
-      {inline ? null : <span {...stylingProps(styles.fieldLabel)}>{field.label}</span>}
-      <div {...stylingProps(styles.fieldBody)}>
-        {control}
-        {field.invalid === undefined ? null : (
-          <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
-            {field.invalid}
-          </p>
-        )}
+      <div {...stylingProps(styles.fieldHead)}>
+        {inline ? null : <span {...stylingProps(styles.fieldLabel)}>{field.label}</span>}
+        <FieldControl field={field} writable={writable} t={t} face={face} />
+        {field.overridden ? <Tag tone="neutral">{t("overridden")}</Tag> : null}
       </div>
+      {field.invalid === undefined ? null : (
+        <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
+          {field.invalid}
+        </p>
+      )}
+      <p {...stylingProps(styles.fieldHint)}>{field.hint}</p>
     </div>
   );
 }
@@ -323,42 +322,66 @@ function FieldRow({
 function FieldControl({
   field,
   writable,
-  triId,
   t,
   face,
 }: {
   field: BundleFieldView;
   writable: boolean;
-  triId: string;
   t: BundleTranslate;
   face: BundleConfigActions;
 }): ReactNode {
   const disabled = !writable;
+  const id = useId();
   switch (field.control) {
-    case "text":
-      return (
-        <Input
-          data-field-control="text"
-          value={field.text}
-          disabled={disabled}
-          aria-label={field.label}
-          aria-invalid={field.invalid !== undefined}
-          onChange={(event) => {
-            face.editText(field.path, event.currentTarget.value);
-          }}
-        />
-      );
     case "multiline":
+      // 官方表单没有多行控件（`SettingsValueField` 是单行）：按官方输入框的 token 画一个。
       return (
         <textarea
           {...stylingProps(styles.multiline)}
-          data-field-control="multiline"
+          data-control="multiline"
           value={field.text}
           rows={3}
           disabled={disabled}
           aria-label={field.label}
           onChange={(event) => {
             face.editText(field.path, event.currentTarget.value);
+          }}
+        />
+      );
+    case "choice":
+      // 候选读不到时（没有任何可配置的服务商）退回文本输入：否则这条字段没有可选项，是个死胡同。
+      if (field.options.length === 0) {
+        return (
+          <SettingsValueField
+            id={`${id}-choice`}
+            label={field.label}
+            hint={field.hint}
+            text={field.text}
+            overridden={field.overridden}
+            invalid={field.invalid !== undefined}
+            overriddenLabel={t("overridden")}
+            resetLabel={t("field.reset")}
+            invalidLabel={field.invalid ?? ""}
+            disabled={disabled}
+            onEdit={(text) => {
+              face.editText(field.path, text);
+            }}
+            onReset={() => {
+              face.clear(field.path);
+            }}
+          />
+        );
+      }
+      return (
+        <PickMenu
+          label={field.label}
+          value={field.text}
+          emptyLabel={t("tri.unset")}
+          options={field.options}
+          disabled={disabled}
+          onPick={(next) => {
+            if (next === "") face.clear(field.path);
+            else face.set(field.path, next);
           }}
         />
       );
@@ -376,7 +399,7 @@ function FieldControl({
     case "tri":
       return (
         <SegmentedControl<TriValue>
-          id={triId}
+          id={`${id}-tri`}
           label={field.label}
           value={triValue(field)}
           disabled={disabled}
@@ -393,7 +416,7 @@ function FieldControl({
       );
     case "roles":
       return (
-        <div {...stylingProps(styles.roles)} data-field-control="roles">
+        <div {...stylingProps(styles.roles)} data-control="roles">
           {ROLES.map((role) => (
             <Checkbox
               key={role}
@@ -411,123 +434,155 @@ function FieldControl({
           ))}
         </div>
       );
-    case "select":
-      // 候选读不到时退回文本输入：否则用户在这条字段上没有可选项（死胡同）。
-      if (field.options.length === 0) {
-        return (
-          <Input
-            data-field-control="text"
-            value={field.text}
-            disabled={disabled}
-            aria-label={field.label}
-            onChange={(event) => {
-              face.editText(field.path, event.currentTarget.value);
-            }}
-          />
-        );
-      }
-      return (
-        <select
-          {...stylingProps(styles.select)}
-          data-field-control="select"
-          value={field.text}
-          disabled={disabled}
-          aria-label={field.label}
-          onChange={(event) => {
-            const next = event.currentTarget.value;
-            if (next === "") face.clear(field.path);
-            else face.set(field.path, next);
-          }}
-        >
-          <option value="">{t("tri.unset")}</option>
-          {withCurrent(field.options, field.text).map((option) => (
-            <option key={String(option.value)} value={String(option.value)}>
-              {option.label ?? String(option.value)}
-            </option>
-          ))}
-        </select>
-      );
-    case "list":
-      return (
-        <div {...stylingProps(styles.list)} data-field-control="list">
-          {field.items.map((item) => (
-            <div
-              key={item.path.join(".")}
-              {...stylingProps(styles.listRow)}
-              data-list-item={item.index}
-            >
-              {item.options.length === 0 ? (
-                <Input
-                  data-field-control="text"
-                  value={item.text}
-                  disabled={disabled}
-                  aria-label={field.label}
-                  onChange={(event) => {
-                    face.editText(item.path, event.currentTarget.value);
-                  }}
-                />
-              ) : (
-                <select
-                  {...stylingProps(styles.select)}
-                  data-field-control="select"
-                  value={item.text}
-                  disabled={disabled}
-                  aria-label={field.label}
-                  onChange={(event) => {
-                    face.editText(item.path, event.currentTarget.value);
-                  }}
-                >
-                  <option value="">{t("tri.unset")}</option>
-                  {withCurrent(item.options, item.text).map((option) => (
-                    <option key={String(option.value)} value={String(option.value)}>
-                      {option.label ?? String(option.value)}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                data-action="remove-item"
-                disabled={disabled}
-                aria-label={t("list.remove")}
-                onClick={() => {
-                  face.removeItem(field.path, item.index);
-                }}
-              >
-                <IconCloseOutlineRegular size={13} />
-              </Button>
-              {item.invalid === undefined ? null : (
-                <p {...stylingProps(styles.invalid)} role="alert">
-                  {item.invalid}
-                </p>
-              )}
-            </div>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            data-action="add-item"
-            disabled={disabled}
-            onClick={() => {
-              face.appendItem(field.path);
-            }}
-          >
-            <IconPlusOutlineRegular size={13} />
-            {t("list.add")}
-          </Button>
-        </div>
-      );
+    case "tags":
+      return <TagList field={field} disabled={disabled} t={t} face={face} />;
+    case "text":
+      return null;
   }
 }
 
-// 候选里补上当前值：手写进去的名字（不在候选里）也要能在下拉里显示出来。
-function withCurrent(
-  options: BundleFieldView["options"],
-  current: string,
-): readonly { value: unknown; label?: string | undefined }[] {
-  if (current === "" || options.some((option) => String(option.value) === current)) return options;
-  return [{ value: current, label: current }, ...options];
+// 名单字段：标签输入。回车确认一个；**粘贴逗号分隔的一串会拆成多个**（中英逗号、分号、换行、制表符都是分隔符）；
+// 有候选的名单（两份 policy）另给一个「从候选里选」的菜单。
+function TagList({
+  field,
+  disabled,
+  t,
+  face,
+}: {
+  field: BundleFieldView;
+  disabled: boolean;
+  t: BundleTranslate;
+  face: BundleConfigActions;
+}): ReactNode {
+  const [draft, setDraft] = useState("");
+  const values = Array.isArray(field.value) ? field.value.map(String) : [];
+  const commit = (text: string): void => {
+    const names = parseTagList(text);
+    if (names.length === 0) return;
+    face.set(field.path, mergeTags(values, names));
+    setDraft("");
+  };
+  const remaining = field.options.filter((option) => !values.includes(String(option.value)));
+  return (
+    <div data-control="tags">
+      {values.length === 0 ? null : (
+        <div {...stylingProps(styles.tags)} data-tags={field.path.join(".")}>
+          {values.map((value) => (
+            <span key={value} {...stylingProps(styles.tagItem)} data-tag={value}>
+              <Tag tone="neutral">{value}</Tag>
+              <button
+                type="button"
+                {...stylingProps(styles.tagRemove)}
+                data-action="remove-tag"
+                disabled={disabled}
+                aria-label={t("tags.remove", { name: value })}
+                onClick={() => {
+                  face.set(
+                    field.path,
+                    values.filter((candidate) => candidate !== value),
+                  );
+                }}
+              >
+                <IconCloseOutlineRegular size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div {...stylingProps(styles.tagRow)}>
+        <Input
+          data-tags-input={field.path.join(".")}
+          value={draft}
+          placeholder={t("tags.placeholder")}
+          aria-label={field.label}
+          disabled={disabled}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            commit(draft);
+          }}
+          onPaste={(event) => {
+            // 只有真的一串才拦：单个名字照旧走普通输入（粘进去还能接着改）。
+            const text = event.clipboardData.getData("text");
+            if (parseTagList(text).length < 2) return;
+            event.preventDefault();
+            commit(text);
+          }}
+        />
+        {remaining.length === 0 ? null : (
+          <PickMenu
+            label={t("tags.candidates")}
+            value=""
+            emptyLabel={t("tags.candidates")}
+            options={remaining}
+            disabled={disabled}
+            onPick={(next) => {
+              if (next !== "") commit(next);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 一个候选菜单（官方 `Menu`）：触发按钮显示当前值，菜单里选一个。`emptyLabel` 那一项是"不写"。
+function PickMenu({
+  label,
+  value,
+  emptyLabel,
+  options,
+  disabled,
+  onPick,
+}: {
+  label: string;
+  value: string;
+  emptyLabel: string;
+  options: readonly { value: unknown; label?: string | undefined }[];
+  disabled: boolean;
+  onPick: (next: string) => void;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const items: readonly MenuEntry[] = [
+    { id: "", label: emptyLabel },
+    ...options.map((option) => ({
+      id: String(option.value),
+      label: option.label ?? String(option.value),
+    })),
+  ];
+  const current = options.find((option) => String(option.value) === value);
+  return (
+    <Menu
+      open={open}
+      anchor={
+        <Button
+          variant="outline"
+          size="sm"
+          data-action="pick"
+          disabled={disabled}
+          aria-haspopup="menu"
+          aria-label={label}
+          onClick={() => {
+            setOpen(!open);
+          }}
+        >
+          {value === "" ? emptyLabel : (current?.label ?? value)}
+        </Button>
+      }
+      items={items}
+      selectedId={value}
+      onSelect={(id) => {
+        setOpen(false);
+        onPick(id);
+      }}
+      onClose={() => {
+        setOpen(false);
+      }}
+    />
+  );
 }
 
 function triValue(field: BundleFieldView): TriValue {

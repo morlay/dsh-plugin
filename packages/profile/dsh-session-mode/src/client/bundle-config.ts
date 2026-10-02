@@ -33,18 +33,18 @@ export const PROTECTED_MODE_IDS: readonly string[] = ["noop"];
 // 模式的角色取值：与 schema 的 `roleSchema`（`main` / `subagent` 两个字面量的集合）同源，改 schema 要一起改。
 const ROLE_VALUES: readonly string[] = ["main", "subagent"];
 
-// 字段的控件形状。
-type Control = "text" | "multiline" | "list" | "switch" | "tri" | "roles" | "select";
+// 字段的控件形状：文本 / 多行文本 / 选择器（有候选）/ 标签列表 / 开关 / 三态 / 角色。
+type Control = "text" | "multiline" | "choice" | "tags" | "switch" | "tri" | "roles";
 
 // 卡片里的分组（页面按它分段，顺序即数组顺序）。
-export type GroupKey = "identity" | "persona" | "tools" | "rules" | "switches" | "model";
+export type GroupKey = "identity" | "persona" | "tools" | "rules" | "injections" | "model";
 
 export const GROUPS: readonly { key: GroupKey; labelKey: BundleLocaleKey }[] = [
   { key: "identity", labelKey: "group.identity" },
   { key: "persona", labelKey: "group.persona" },
   { key: "tools", labelKey: "group.tools" },
   { key: "rules", labelKey: "group.rules" },
-  { key: "switches", labelKey: "group.switches" },
+  { key: "injections", labelKey: "group.injections" },
   { key: "model", labelKey: "group.model" },
 ];
 
@@ -53,45 +53,162 @@ interface FieldSpec {
   readonly path: readonly string[];
   readonly control: Control;
   readonly labelKey: BundleLocaleKey;
+  readonly hintKey: BundleLocaleKey;
   readonly group: GroupKey;
 }
 
 // 页面摆出来的字段与顺序。缺值的可选字段照常出现（控件显示"没写"，用户一填即是写）。
 const MODE_FIELDS: readonly FieldSpec[] = [
-  { path: ["name"], control: "text", labelKey: "field.name", group: "identity" },
-  { path: ["description"], control: "text", labelKey: "field.description", group: "identity" },
-  { path: ["role"], control: "roles", labelKey: "field.role", group: "identity" },
-  { path: ["preset"], control: "text", labelKey: "field.preset", group: "identity" },
-  { path: ["persona", "prefix"], control: "multiline", labelKey: "field.prefix", group: "persona" },
-  { path: ["persona", "suffix"], control: "multiline", labelKey: "field.suffix", group: "persona" },
-  { path: ["allowTools"], control: "list", labelKey: "field.allowTools", group: "tools" },
-  { path: ["denyTools"], control: "list", labelKey: "field.denyTools", group: "tools" },
-  { path: ["allowSkills"], control: "list", labelKey: "field.allowSkills", group: "tools" },
-  { path: ["denySkills"], control: "list", labelKey: "field.denySkills", group: "tools" },
-  { path: ["allowPolicies"], control: "list", labelKey: "field.allowPolicies", group: "rules" },
-  { path: ["denyPolicies"], control: "list", labelKey: "field.denyPolicies", group: "rules" },
-  { path: ["instructions"], control: "switch", labelKey: "field.instructions", group: "switches" },
-  { path: ["skills"], control: "tri", labelKey: "field.skills", group: "switches" },
+  {
+    path: ["name"],
+    control: "text",
+    labelKey: "field.name",
+    hintKey: "hint.name",
+    group: "identity",
+  },
+  {
+    path: ["description"],
+    control: "text",
+    labelKey: "field.description",
+    hintKey: "hint.description",
+    group: "identity",
+  },
+  {
+    path: ["role"],
+    control: "roles",
+    labelKey: "field.role",
+    hintKey: "hint.role",
+    group: "identity",
+  },
+  {
+    path: ["preset"],
+    control: "text",
+    labelKey: "field.preset",
+    hintKey: "hint.preset",
+    group: "identity",
+  },
+  {
+    path: ["persona", "prefix"],
+    control: "multiline",
+    labelKey: "field.prefix",
+    hintKey: "hint.prefix",
+    group: "persona",
+  },
+  {
+    path: ["persona", "suffix"],
+    control: "multiline",
+    labelKey: "field.suffix",
+    hintKey: "hint.suffix",
+    group: "persona",
+  },
+  {
+    path: ["allowTools"],
+    control: "tags",
+    labelKey: "field.allowTools",
+    hintKey: "hint.allowTools",
+    group: "tools",
+  },
+  {
+    path: ["denyTools"],
+    control: "tags",
+    labelKey: "field.denyTools",
+    hintKey: "hint.denyTools",
+    group: "tools",
+  },
+  {
+    path: ["allowSkills"],
+    control: "tags",
+    labelKey: "field.allowSkills",
+    hintKey: "hint.allowSkills",
+    group: "tools",
+  },
+  {
+    path: ["denySkills"],
+    control: "tags",
+    labelKey: "field.denySkills",
+    hintKey: "hint.denySkills",
+    group: "tools",
+  },
+  {
+    path: ["allowPolicies"],
+    control: "tags",
+    labelKey: "field.allowPolicies",
+    hintKey: "hint.allowPolicies",
+    group: "rules",
+  },
+  {
+    path: ["denyPolicies"],
+    control: "tags",
+    labelKey: "field.denyPolicies",
+    hintKey: "hint.denyPolicies",
+    group: "rules",
+  },
+  {
+    path: ["instructions"],
+    control: "switch",
+    labelKey: "field.instructions",
+    hintKey: "hint.instructions",
+    group: "injections",
+  },
+  {
+    path: ["skills"],
+    control: "tri",
+    labelKey: "field.skills",
+    hintKey: "hint.skills",
+    group: "injections",
+  },
   {
     path: ["runtimeContext"],
     control: "switch",
     labelKey: "field.runtimeContext",
-    group: "switches",
+    hintKey: "hint.runtimeContext",
+    group: "injections",
   },
   {
     path: ["defaultModel", "provider"],
-    control: "select",
+    control: "choice",
     labelKey: "field.provider",
+    hintKey: "hint.provider",
     group: "model",
   },
-  { path: ["defaultModel", "model"], control: "select", labelKey: "field.model", group: "model" },
+  {
+    path: ["defaultModel", "model"],
+    control: "choice",
+    labelKey: "field.model",
+    hintKey: "hint.model",
+    group: "model",
+  },
   {
     path: ["defaultModel", "reasoningEffort"],
     control: "text",
     labelKey: "field.reasoningEffort",
+    hintKey: "hint.reasoningEffort",
     group: "model",
   },
 ];
+
+// 粘贴或输入的一串名字 → 标签列表：逗号（中英）、分号、制表符、换行都当分隔符，去空白、去重、保序。
+export function parseTagList(text: string): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const raw of text.split(/[,，;；\t\n\r]+/u)) {
+    const name = raw.trim();
+    if (name === "" || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+// 把新名字并进现有标签：去重、保序（现有的在前），返回新数组。
+export function mergeTags(current: readonly string[], incoming: readonly string[]): string[] {
+  const merged = [...current];
+  for (const name of incoming) {
+    if (name === "" || merged.includes(name)) continue;
+    merged.push(name);
+  }
+  return merged;
+}
 
 // 控制器读数里一个字段的状态（`SchemaFormState.fields` 的值）。
 type FieldRead = NonNullable<ReturnType<SchemaFormState["fields"]["get"]>>;
@@ -99,26 +216,18 @@ type FieldRead = NonNullable<ReturnType<SchemaFormState["fields"]["get"]>>;
 // 页面用的字典（键集合在 `bundle-locales.ts`）。
 export type BundleTranslate = (key: BundleLocaleKey, args?: Record<string, unknown>) => string;
 
-// 列表字段的一项：值 + 它的草稿状态（项也可能有候选，policy 名单就是）。
-export interface BundleListItemView {
-  readonly index: number;
-  readonly path: readonly string[];
-  readonly text: string;
-  readonly invalid: string | undefined;
-  readonly options: readonly SelectOption[];
-}
-
 // 一个字段的显示状态：值（草稿优先）、是否还没写、是否覆盖了组成层。
 export interface BundleFieldView {
   readonly key: string;
   readonly path: readonly string[];
   readonly control: Control;
   readonly label: string;
+  // 字段下面那句说明（"这一项到底管什么"）。
+  readonly hint: string;
   // 文本类控件的显示文本（草稿优先）。
   readonly text: string;
-  // 开关 / 三态 / 角色 / 列表的当前值。
+  // 开关 / 三态 / 角色 / 标签列表的当前值。
   readonly value: unknown;
-  readonly items: readonly BundleListItemView[];
   // 字段当前有没有值（"没写"的可选字段照常出现在页面上）。
   readonly present: boolean;
   readonly overridden: boolean;
@@ -385,36 +494,22 @@ function fieldView(
     path,
     control: spec.control,
     label: t(spec.labelKey),
+    hint: t(spec.hintKey),
     present: field !== undefined,
     overridden: field?.overridden === true,
     options: optionsAt(path),
     invalid: invalidAt(path),
   };
-  if (spec.control === "list") {
-    const items = arrayOf(field).map((item, index) => {
-      const itemPath = [...path, String(index)];
-      const itemField = read(itemPath);
-      return {
-        index,
-        path: itemPath,
-        // 列表项是字符串：生效值就是显示文本（草稿存在时以草稿为准）。
-        text: itemField?.text ?? item,
-        invalid: invalidAt(itemPath),
-        options: optionsAt(itemPath),
-      };
-    });
-    return { ...common, text: "", value: arrayOf(field), items };
-  }
-  if (spec.control === "roles") {
-    return { ...common, text: "", value: arrayOf(field), items: [] };
+  if (spec.control === "tags" || spec.control === "roles") {
+    return { ...common, text: "", value: arrayOf(field) };
   }
   if (spec.control === "switch") {
-    return { ...common, text: "", value: field?.value === true, items: [] };
+    return { ...common, text: "", value: field?.value === true };
   }
   if (spec.control === "tri") {
-    return { ...common, text: "", value: triOf(field), items: [] };
+    return { ...common, text: "", value: triOf(field) };
   }
-  return { ...common, text: textOf(field), value: field?.value, items: [] };
+  return { ...common, text: textOf(field), value: field?.value };
 }
 
 // 三态字段（`skills`）：`unset` 表示配置里没写这个键（按工具名单推导），另两档是显式的开关值。

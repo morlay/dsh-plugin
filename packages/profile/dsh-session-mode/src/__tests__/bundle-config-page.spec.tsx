@@ -2,6 +2,7 @@
 // bundle 配置页的布局与交互：模式卡片默认收起、点开才出现字段；`noop` 没有删除入口；编辑与增删都只上报动作
 // （真正的写盘归保存）。
 
+import { useSyncExternalStore } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -111,6 +112,7 @@ function mounted() {
     t,
   );
   const edits: { text: string; path: readonly string[] }[] = [];
+  const sets: { path: readonly string[]; value: unknown }[] = [];
   const added: string[] = [];
   const removed: string[] = [];
   const saved = vi.fn();
@@ -119,6 +121,10 @@ function mounted() {
     editText: (path: readonly string[], text: string) => {
       edits.push({ path, text });
       face.editText(path, text);
+    },
+    set: (path: readonly string[], value: unknown) => {
+      sets.push({ path, value });
+      face.set(path, value);
     },
     addMode: (id: string) => {
       added.push(id);
@@ -133,7 +139,7 @@ function mounted() {
       face.save();
     },
   };
-  return { wrapped, dispose, edits, added, removed, saved };
+  return { wrapped, dispose, edits, sets, added, removed, saved };
 }
 
 function renderPage(): ReturnType<typeof mounted> {
@@ -141,8 +147,12 @@ function renderPage(): ReturnType<typeof mounted> {
   const props = {
     view: "page",
     t,
+    // 框架那个 hook 是 uSES：替身也走订阅，草稿一变页面就重渲染（否则标签列表停在旧值）。
     useBundleConfig: (selector: (state: unknown) => unknown) =>
-      selector(mountedPage.wrapped.hooks.bundleConfig.getSnapshot()),
+      useSyncExternalStore(
+        (listener: () => void) => mountedPage.wrapped.hooks.bundleConfig.subscribe(listener),
+        () => selector(mountedPage.wrapped.hooks.bundleConfig.getSnapshot()),
+      ),
     ...mountedPage.wrapped,
   } as unknown as BundleConfigPageProps;
   render(<BundleConfigPage {...props} />);
@@ -205,13 +215,30 @@ describe("会话模式的 bundle 配置页", () => {
       text: "编码模式（改）",
     });
 
-    const addItem = within(card("coding")).getAllByRole("button", {
-      name: bundleZh["list.add"],
-    })[0];
-    fireEvent.click(addItem as HTMLElement);
-
-    fireEvent.click(within(card("coding")).getByRole("button", { name: "删除模式 编码模式" }));
+    // 名字刚被改过：删除入口的可访问名跟着当前名称走，所以按前缀找。
+    fireEvent.click(within(card("coding")).getByRole("button", { name: /^删除模式/u }));
     expect(page.removed).toEqual(["coding"]);
+  });
+
+  it("名单是标签输入：回车确认一个，粘贴逗号分隔的一串拆成多个", () => {
+    const page = renderPage();
+    fireEvent.click(within(card("coding")).getByText("编码模式"));
+
+    const input = document.querySelector(
+      'input[data-tags-input="modes.coding.allowTools"]',
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "read" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(page.sets.at(-1)).toEqual({ path: ["modes", "coding", "allowTools"], value: ["read"] });
+
+    // 粘贴：中英逗号、分号、换行都是分隔符，去空白、去重、保序。
+    fireEvent.paste(input, {
+      clipboardData: { getData: () => "write, bash；read\nls" },
+    });
+    expect(page.sets.at(-1)).toEqual({
+      path: ["modes", "coding", "allowTools"],
+      value: ["read", "write", "bash", "ls"],
+    });
   });
 
   it("添加模式与保存：一个入口写 id，一次保存写全部改动", () => {

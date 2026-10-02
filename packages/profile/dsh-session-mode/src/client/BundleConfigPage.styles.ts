@@ -1,7 +1,8 @@
-// bundle 配置页的样式（官方 `--dsw-*` 变量 + 我们的 css-in-js 层）。
+// bundle 配置页的样式：布局与容器归这里，控件本身一律用官方 primitives（`SettingsValueField` / `Checkbox` /
+// `SegmentedControl` / `Menu` / `Input` / `Tag` / `Button`）——视觉与上游设置面同一套。
 //
-// 页面本体是"默认模式 + 一串模式卡片"：卡片头是通用折叠行（官方 `DisclosureRow`），卡片内按分组摆「左标签 + 右控件」，
-// 控件用原生元素补官方 primitives 没有的形状（多行文本、下拉），外观与官方输入保持一致（同一套 token）。
+// 唯一自造外观的是多行文本：官方通用表单只有单行 `SettingsValueField`，而 persona 是多行文本。它按官方输入框的
+// token 画（边框 / 圆角 / 字号 / 内距），不再另立一套。
 
 import { styling, type CSSProps } from "@morlay/dsh-client-ui-primitives/client";
 
@@ -35,32 +36,7 @@ export const styles = {
     lineHeight: "18px",
     color: "var(--dsw-alias-label-error, var(--dsw-alias-label-primary))",
   },
-  // 原生控件（多行文本 / 下拉）：与官方 `Input` 同一套 token。
-  control: {
-    boxSizing: "border-box",
-    width: "100%",
-    padding: "5px 8px",
-    fontFamily: "inherit",
-    fontSize: "13px",
-    lineHeight: "20px",
-    color: "var(--dsw-alias-label-primary)",
-    background: "var(--dsw-alias-bg-base)",
-    border: "1px solid var(--dsw-alias-border-l1)",
-    borderRadius: "6px",
-  },
-  select: {
-    boxSizing: "border-box",
-    width: "100%",
-    padding: "5px 8px",
-    fontFamily: "inherit",
-    fontSize: "13px",
-    lineHeight: "20px",
-    color: "var(--dsw-alias-label-primary)",
-    background: "var(--dsw-alias-bg-base)",
-    border: "1px solid var(--dsw-alias-border-l1)",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
+  // 多行文本：官方表单没有这个控件，按官方输入框的 token 画。
   multiline: {
     boxSizing: "border-box",
     width: "100%",
@@ -115,7 +91,7 @@ export const styles = {
   group: {
     display: "flex",
     flexDirection: "column",
-    gap: "6px",
+    gap: "8px",
   },
   groupHead: {
     display: "flex",
@@ -129,39 +105,60 @@ export const styles = {
     fontWeight: "600",
     color: "var(--dsw-alias-label-secondary)",
   },
+  // 非文本控件的字段块：标签一行、控件一行、说明一行。
   field: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "10px",
-  },
-  fieldLabel: {
-    flex: "0 0 150px",
-    fontSize: "12px",
-    lineHeight: "20px",
-    color: "var(--dsw-alias-label-tertiary)",
-  },
-  fieldBody: {
     display: "flex",
     flexDirection: "column",
     gap: "4px",
-    flex: "1 1 auto",
-    minWidth: "0",
   },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    gap: "6px",
+  fieldLabel: {
+    fontSize: "12px",
+    lineHeight: "18px",
+    color: "var(--dsw-alias-label-tertiary)",
   },
-  listRow: {
+  fieldHead: {
     display: "flex",
     alignItems: "center",
-    gap: "6px",
+    gap: "8px",
+  },
+  fieldHint: {
+    margin: "0",
+    fontSize: "12px",
+    lineHeight: "18px",
+    color: "var(--dsw-alias-label-tertiary)",
   },
   roles: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
+  },
+  tags: {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "6px",
+  },
+  tagItem: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "2px",
+  },
+  tagRemove: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0",
+    color: "var(--dsw-alias-label-tertiary)",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    lineHeight: "1",
+  },
+  tagRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    maxWidth: "420px",
   },
   addRow: {
     display: "flex",
