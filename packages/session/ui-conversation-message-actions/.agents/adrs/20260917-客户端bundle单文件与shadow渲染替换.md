@@ -10,9 +10,9 @@ shadow keyed slot」。
 
 - **渲染替换**：`conversation.chat.node` 的 `user` / `steering` 两个 key 以 `priority: -1` 重新注册（最低
   优先级渲染，shadow 上游默认注册），编辑 / 重试按钮只挂在 user 消息上；其余 key 沿用上游渲染器。
-- **list 槽同法覆盖**：`conversation.composer.dock` 的 `stats` id 以 `priority: -1` 覆盖官方同 id 行，承载
-  我们的 token 口径与 `data-composer-stats`（语义见
-  [设计 20260917-编排层操作语义](../designs/20260917-编排层操作语义.md) 的「浏览器半」）。
+- ~~**list 槽同法覆盖**：`conversation.composer.dock` 的 `stats` id 以 `priority: -1` 覆盖官方同 id 行。~~
+  （已撤：官方自带同一套统计行，fork 一份去 shadow 是重复实现；`composer-stats` 已删，
+  `conversation.composer.dock` 交回官方。见 [设计 20260917-编排层操作语义](../designs/20260917-编排层操作语义.md)。）
 - **单文件构建约束**：devkit 的 client 入口插件（`clientEntryPlugin` + `isClientExternal`）把平台 baseline
   （react / cordis / store / slots / primitives）与 `@deepseek-ai/*` client 插件行保持 external（由模块表
   提供；内联会把别的插件的 `__ModuleLoader__.load` 嵌进来导致 duplicate factory），契约层

@@ -18,9 +18,6 @@
   失败不阻塞下一次操作、会话列表 / 快照变化不发任何请求：`client-controller.spec.ts`。
 - **浏览器半（入口门控）**：`conversation.chat.node` 的 `user` / `steering` 覆盖——编辑只要存在可编辑文本块
   （含轮外消息）、重试仅已闭合轮次、确认后才提交：`chat-node-actions.spec.tsx`。
-- **composer 统计行**：`conversation.composer.dock` 的 `stats` id 覆盖注册（官方同 id 行让位，priority −1）
-  - `formatCacheHitPercent` 越界输入口径：`composer-stats.spec.ts`（真实 `SlotCore` 断言赢家 id / priority /
-    locale / 组件）与承载组件的可见契约 `composer-stats-view.spec.tsx`。
 
 ## 真装配面空缺的判据
 
@@ -44,7 +41,7 @@ handler，非 405/404 才算过）目前没有。再遇到撤回 / 重试整片 
   的 `import.spec.ts` 覆盖。
 - slot 装配面（`client/index.ts` 的 `apply`：slot 注册）需要 cordis client 运行时 →
   [债务 20260917-对话UI的槽注册面缺真装配用例](../debts/20260917-对话UI的槽注册面缺真装配用例.md)；
-  纯注册表的部分（`stats` 覆盖）已由 `composer-stats.spec.ts` 覆盖。
+  两处槽注册如今只剩 `conversation.chat.node` 这一处（composer 统计行交回官方）。
 - **版本导航入口**：`conversation.session.header.utilities` 上只有上游 `ui-open-in-app` / `ui-schedule` 的项，
   我们的版本导航没有注册方，也没有消费方——版本树读取面本身不存在
   （[ADR-20260920-删除版本树投影并停止写版本效果](../../../session-branch/.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)）；

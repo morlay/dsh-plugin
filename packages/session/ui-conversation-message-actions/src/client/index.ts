@@ -5,7 +5,6 @@ import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "./controller.ts";
 import { registerChatNodeRenderers } from "./chat-node/register.ts";
-import { registerComposerStats } from "./composer-stats/register.ts";
 import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 export const inject = ["slots", "conversation", "connection", "sessions", "uiWorkspace"];
@@ -25,6 +24,4 @@ export function apply(ctx: Context): void {
   };
 
   registerChatNodeRenderers(ctx, controllerFor);
-
-  ctx.slots.inject("conversation.composer.dock", () => registerComposerStats(ctx.slots));
 }

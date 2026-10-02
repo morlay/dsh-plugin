@@ -7,10 +7,7 @@
 
 export { Bubble, type BubbleProps } from "./Bubble.tsx";
 export { Button, type ButtonProps, type ButtonTone } from "./Button.tsx";
-export { DescriptionList, type DescriptionListProps } from "./DescriptionList.tsx";
 export { DisclosureRow, type DisclosureRowProps } from "./DisclosureRow.tsx";
-export { PopoverPanel, type PopoverPanelProps } from "./PopoverPanel.tsx";
-export { Separator } from "./Separator.tsx";
 export { SearchInput, type SearchInputProps, type SearchInputWidth } from "./SearchInput.tsx";
 export { SeatButton, type SeatButtonProps } from "./SeatButton.tsx";
 export { Spinner, type SpinnerProps } from "./Spinner.tsx";
