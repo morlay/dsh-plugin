@@ -77,6 +77,7 @@ interface PathOp {
 
 // 挂上页面：真 `Config` 的 volatile 投影 + 替身的 settings 读写面。
 // `user` 是用户层那份（字段"已覆盖"的判据是它有没有这个键）：清一个已覆盖的字段才会产生写。
+// `served: false` = describe 里没有这一行；`arrive()` 让视图在之后出现，**且不通知订阅者**（复现"通知没落上"）。
 function mounted(options: { user?: unknown; served?: boolean } = {}) {
   const form = volatileForm(Config as never) as z;
   const listeners = new Set<() => void>();
@@ -94,6 +95,16 @@ function mounted(options: { user?: unknown; served?: boolean } = {}) {
     revision: 1,
     mode: "host",
   };
+  const namespaceView = {
+    ns: "session-mode",
+    schema: form.toJSON(),
+    value: section,
+    autoGenerate: true,
+    applies: "live",
+    secrets: [],
+    revision: 1,
+  };
+  let served = options.served !== false;
   const face = createBundleConfigFace(
     {
       configForms: {
@@ -113,20 +124,7 @@ function mounted(options: { user?: unknown; served?: boolean } = {}) {
           getSnapshot: () => ({
             status: "ready",
             view: {
-              namespaces:
-                options.served === false
-                  ? []
-                  : [
-                      {
-                        ns: "session-mode",
-                        schema: form.toJSON(),
-                        value: section,
-                        autoGenerate: true,
-                        applies: "live",
-                        secrets: [],
-                        revision: 1,
-                      },
-                    ],
+              namespaces: served ? [namespaceView] : [],
               writable: true,
               hasDocument: false,
             },
@@ -145,7 +143,11 @@ function mounted(options: { user?: unknown; served?: boolean } = {}) {
   ).face;
   const view = (): ReturnType<typeof projectBundleConfig> =>
     projectBundleConfig(face.hooks.bundleConfig.getSnapshot(), t);
-  return { face, view, ops, mutate };
+  // 视图晚到：只改 describe 的读数，**不**触发订阅回调（模拟通知丢了）。
+  const arrive = (): void => {
+    served = true;
+  };
+  return { face, view, ops, mutate, arrive };
 }
 
 describe("bundle 配置页：视图", () => {
@@ -211,6 +213,18 @@ describe("bundle 配置页：读这一行配置的阶段", () => {
     expect(projectBundleConfig(snapshot, t, "unavailable").readiness).toBe("missing");
     // 命名空间在，schema 却渲染不出来（行在跑，是配置面自己的问题）。
     expect(projectBundleConfig(snapshot, t, "ready").readiness).toBe("unreadable");
+  });
+
+  it("视图晚到且通知没落上：重建式重读把读数拉平（页面挂载与提示面到达都会调用它）", () => {
+    const page = mounted({ served: false });
+    expect(page.face.hooks.bundleConfig.getSnapshot().configured).toBe(false);
+
+    // 视图到了，但没有任何通知到达控制器。
+    page.arrive();
+    expect(page.face.hooks.bundleConfig.getSnapshot().configured).toBe(false);
+
+    page.face.resync();
+    expect(page.face.hooks.bundleConfig.getSnapshot().configured).toBe(true);
   });
 
   it("诊断读数：说出设置面现在有哪些命名空间、这一行卡在哪", () => {

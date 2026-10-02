@@ -259,10 +259,12 @@ export interface BundleModeView {
 // - `ready`：可编辑。
 export type BundleConfigReadiness = "loading" | "missing" | "unreadable" | "ready";
 
-// 异常态的诊断读数：设置面现在有哪些命名空间，以及这一行的 schema 卡在哪。
+// 异常态的诊断读数：设置面现在有哪些命名空间，这一行的 schema 卡在哪，以及控制器那一侧的读数。
 export interface BundleConfigDiagnosis {
   readonly namespaces: readonly string[];
   readonly problem: string;
+  // 控制器当前投影的摘要 + 现建一个探针控制器的结果：用来区分"实例没跟上"与"这条路径本身失败"。
+  readonly controller: string;
 }
 
 // 页面的完整读数。
@@ -303,6 +305,9 @@ export interface BundleConfigFace extends BundleConfigActions {
   };
   // 异常态的诊断读数（页面只在读不出来时调用一次）。
   diagnose: () => BundleConfigDiagnosis;
+  // 强制重读一次 describe 并重建投影（页面挂载时调用一次）：视图晚到、通知没落上时，这一步把它拉平。
+  // 只在没有草稿时有效——重建出来的投影不带草稿，有草稿时直接跳过。
+  resync: () => void;
 }
 
 // `ctx.configForms` 一个命名空间的送达状态（与 `ConfigFormSnapshot.status` 同源）。
@@ -337,7 +342,7 @@ export function createBundleConfigFace(
   // 不把"那一刻还没有"缓存下来——否则模型那两个字段会静默退回手输。
   const hintsOf = (): HintsLike | undefined =>
     ctx.get("schemaFormHints") as unknown as HintsLike | undefined;
-  const controller = new SchemaFormController(SESSION_MODE_NS, {
+  const deps = (): ConstructorParameters<typeof SchemaFormController>[1] => ({
     form: forms.get(SESSION_MODE_NS),
     describe: forms.describe(),
     rehydrate: (serialized: unknown) => ctx.settingsSchema.rehydrate(serialized),
@@ -350,6 +355,7 @@ export function createBundleConfigFace(
       sourceFor: (name: string) => hintsOf()?.sourceFor(name),
     },
   });
+  const controller = new SchemaFormController(SESSION_MODE_NS, deps());
   const face = controller.face();
   const form = forms.get(SESSION_MODE_NS);
   const statusStore = createSnapshotStore<ConfigStatus>(form.getSnapshot().status);
@@ -360,9 +366,15 @@ export function createBundleConfigFace(
   const diagnose = (): BundleConfigDiagnosis => {
     const view = forms.describe().getSnapshot().view;
     const namespaces = view?.namespaces.map((row) => row.ns) ?? [];
+    const live = controller.face().hooks.schemaForm.getSnapshot();
+    const controllerSummary = `store configured=${String(live.configured)} walked=${String(live.walked.length)}`;
     const own = view?.namespaces.find((row) => row.ns === SESSION_MODE_NS);
     if (own === undefined) {
-      return { namespaces, problem: `describe has no namespace "${SESSION_MODE_NS}"` };
+      return {
+        namespaces,
+        controller: controllerSummary,
+        problem: `describe has no namespace "${SESSION_MODE_NS}"`,
+      };
     }
     try {
       const schema = ctx.settingsSchema.rehydrate(own.schema) as unknown as { type?: unknown };
@@ -370,21 +382,48 @@ export function createBundleConfigFace(
         projectRoot(own.schema, (serialized: unknown) =>
           ctx.settingsSchema.rehydrate(serialized),
         ) !== undefined;
+      // 探针：用同一份依赖现建一个控制器，看控制器的构造路径本身会不会失败。
+      let probe: string;
+      try {
+        const rebuilt = new SchemaFormController(SESSION_MODE_NS, deps());
+        probe = `probe configured=${String(rebuilt.face().hooks.schemaForm.getSnapshot().configured)}`;
+        rebuilt.dispose();
+      } catch (error: unknown) {
+        probe = `probe threw: ${error instanceof Error ? error.message : String(error)}`;
+      }
       return {
         namespaces,
+        controller: `${controllerSummary}; ${probe}`,
         problem: renderable ? "renderable" : `schema root is "${String(schema.type)}"`,
       };
     } catch (error: unknown) {
       return {
         namespaces,
+        controller: controllerSummary,
         problem: `schema rehydrate failed: ${error instanceof Error ? error.message : String(error)}`,
       };
+    }
+  };
+  // 重建一次并把投影写回**现有的** store：组件的 hook 绑的就是这个 store，所以只换读数、不换引用。
+  const resync = (): void => {
+    // 有草稿时不动：重建出来的投影不带草稿，会把正在编辑的东西抹掉。
+    if (controller.face().hooks.schemaForm.getSnapshot().dirty) return;
+    let rebuilt: SchemaFormController | undefined;
+    try {
+      rebuilt = new SchemaFormController(SESSION_MODE_NS, deps());
+      face.hooks.schemaForm.set(rebuilt.face().hooks.schemaForm.getSnapshot());
+    } catch (error: unknown) {
+      // 拉平失败不该让页面崩：保留现有读数，异常态那句诊断会把原因说出来。
+      ctx.logger?.warn?.(`session-mode: bundle config resync failed (${String(error)})`);
+    } finally {
+      rebuilt?.dispose();
     }
   };
   return {
     face: {
       hooks: { bundleConfig: face.hooks.schemaForm, bundleStatus: statusStore },
       diagnose,
+      resync,
       set: (path, value) => {
         face.set(path, value);
       },
@@ -422,7 +461,7 @@ export function createBundleConfigFace(
     },
     refresh: () => {
       statusStore.set(form.getSnapshot().status);
-      controller.refresh();
+      resync();
     },
     dispose: () => {
       unsubscribeStatus();

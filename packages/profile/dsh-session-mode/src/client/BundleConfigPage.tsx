@@ -5,7 +5,7 @@
 // `SettingsValueField`（标签 / 说明 / "已覆盖" / 恢复默认 / 非法提示都在它里面），候选是 `Menu`，开关是 `Checkbox`，
 // 三态是 `SegmentedControl`，名单是 `Input` + `Tag` 拼的标签输入。改动一律先落草稿，底部保存是唯一写盘点。
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import {
   Button,
   DisclosureRow,
@@ -69,6 +69,11 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   const [adding, setAdding] = useState("");
   // 要删的那个模式：删除是不可逆的一步，先过一次确认弹窗（保存之前仍可丢弃）。
   const [removing, setRemoving] = useState<BundleModeView | null>(null);
+  // 挂载时强制重读一次 describe：视图晚到、通知没落上时，这一步把读数拉平（有草稿时它自己跳过）。
+  const resync = props.resync;
+  useEffect(() => {
+    resync();
+  }, [resync]);
   // 槽位注册项只为 `page` 视图存在（bundle 页不给 `summary` 座位）。
   if (view !== "page") return null;
   if (state.readiness !== "ready") {
@@ -87,6 +92,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
         data-namespace={SESSION_MODE_NS}
         data-namespaces={diagnosis.namespaces.join(",")}
         data-problem={diagnosis.problem}
+        data-controller={diagnosis.controller}
       >
         {message}
       </p>
