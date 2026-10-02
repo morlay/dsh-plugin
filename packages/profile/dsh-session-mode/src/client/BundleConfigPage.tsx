@@ -265,7 +265,36 @@ function ModeCard({
         expandable
         expandOnRowClick
         onToggle={onToggle}
-        collapsedContent={<span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>}
+        keepContentWhenOpen
+        contentClassName={className(styles.disclosureRoot)}
+        contentLayoutClassName={className(styles.disclosureContent)}
+        collapsedContent={
+          <span {...stylingProps(styles.modeHeadAside)}>
+            <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
+            {mode.deletable ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className={className(styles.dangerOutline)}
+                data-action="remove-mode"
+                disabled={!writable}
+                aria-label={t("removeNamed", { name: mode.title })}
+                onClick={(event) => {
+                  // 行本身是折叠开关：删除先拦下这次点击，别顺手把卡片收起来。
+                  event.stopPropagation();
+                  onRequestRemove();
+                }}
+              >
+                <IconTrashOutlineRegular size={13} />
+                {t("remove")}
+              </Button>
+            ) : (
+              <span {...stylingProps(styles.protectedNote)} data-protected="true">
+                {t("protected")}
+              </span>
+            )}
+          </span>
+        }
       >
         <div {...stylingProps(styles.modeBody)}>
           <div {...stylingProps(styles.modeMeta)}>
@@ -311,26 +340,6 @@ function ModeCard({
               ))}
             </div>
           ))}
-          <div {...stylingProps(styles.modeFooter)}>
-            {mode.deletable ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className={className(styles.dangerOutline)}
-                data-action="remove-mode"
-                disabled={!writable}
-                aria-label={t("removeNamed", { name: mode.title })}
-                onClick={onRequestRemove}
-              >
-                <IconTrashOutlineRegular size={13} />
-                {t("remove")}
-              </Button>
-            ) : (
-              <span {...stylingProps(styles.hint)} data-protected="true">
-                {t("protected")}
-              </span>
-            )}
-          </div>
         </div>
       </DisclosureRow>
     </div>
@@ -555,37 +564,34 @@ function TagList({
   };
   const remaining = field.options.filter((option) => !values.includes(String(option.value)));
   return (
-    <div data-control="tags">
-      {values.length === 0 ? null : (
-        <div {...stylingProps(styles.tags)} data-tags={field.path.join(".")}>
-          {values.map((value) => (
-            <span key={value} {...stylingProps(styles.tagItem)} data-tag={value}>
-              <Tag tone="neutral">{value}</Tag>
-              <button
-                type="button"
-                {...stylingProps(styles.tagRemove)}
-                data-action="remove-tag"
-                disabled={disabled}
-                aria-label={t("tags.remove", { name: value })}
-                onClick={() => {
-                  face.set(
-                    field.path,
-                    values.filter((candidate) => candidate !== value),
-                  );
-                }}
-              >
-                <IconCloseOutlineRegular size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div {...stylingProps(styles.tagRow)}>
-        <Input
-          className={className(styles.tagInput)}
+    <div {...stylingProps(styles.tagRow)} data-control="tags">
+      <div {...stylingProps(styles.chips)} data-tags={field.path.join(".")}>
+        {values.map((value) => (
+          <span key={value} {...stylingProps(styles.tagItem)} data-tag={value}>
+            <Tag tone="neutral">{value}</Tag>
+            <button
+              type="button"
+              {...stylingProps(styles.tagRemove)}
+              data-action="remove-tag"
+              disabled={disabled}
+              aria-label={t("tags.remove", { name: value })}
+              onClick={() => {
+                face.set(
+                  field.path,
+                  values.filter((candidate) => candidate !== value),
+                );
+              }}
+            >
+              <IconCloseOutlineRegular size={12} />
+            </button>
+          </span>
+        ))}
+        {/* 裸输入：边框与背景归外面那个框，标签与它一起换行。 */}
+        <input
+          {...stylingProps(styles.chipInput)}
           data-tags-input={field.path.join(".")}
           value={draft}
-          placeholder={t("tags.placeholder")}
+          placeholder={values.length === 0 ? t("tags.placeholder") : ""}
           aria-label={field.label}
           disabled={disabled}
           onChange={(event) => {
@@ -604,19 +610,19 @@ function TagList({
             commit(text);
           }}
         />
-        {remaining.length === 0 ? null : (
-          <PickMenu
-            label={t("tags.candidates")}
-            value=""
-            emptyLabel={t("tags.candidates")}
-            options={remaining}
-            disabled={disabled}
-            onPick={(next) => {
-              if (next !== "") commit(next);
-            }}
-          />
-        )}
       </div>
+      {remaining.length === 0 ? null : (
+        <PickMenu
+          label={t("tags.candidates")}
+          value=""
+          emptyLabel={t("tags.candidates")}
+          options={remaining}
+          disabled={disabled}
+          onPick={(next) => {
+            if (next !== "") commit(next);
+          }}
+        />
+      )}
     </div>
   );
 }

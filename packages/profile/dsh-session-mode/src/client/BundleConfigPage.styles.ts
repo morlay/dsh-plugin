@@ -60,6 +60,28 @@ export const styles = {
     background: "var(--dsw-alias-bg-base)",
     flex: "none",
   },
+  // 折叠行的文本容器：在行里撑开（否则右侧那一组贴不到最右）。
+  disclosureRoot: {
+    flex: "1 1 auto",
+    minWidth: "0",
+  },
+  // 折叠行内部：标题与右侧的摘要/删除在同一行，右侧那一组贴最右。
+  disclosureContent: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: "8px",
+    width: "100%",
+    minWidth: "0",
+  },
+  modeHeadAside: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: "8px",
+    marginLeft: "auto",
+    flex: "none",
+  },
   modeSummary: {
     fontSize: "12px",
     lineHeight: "18px",
@@ -82,11 +104,11 @@ export const styles = {
     gap: "6px",
     flexWrap: "wrap",
   },
-  modeFooter: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: "8px",
+  // 受保护的模式在头部给一句说明（与删除按钮同一个位置）。
+  protectedNote: {
+    fontSize: "12px",
+    lineHeight: "1.5",
+    color: "var(--dsw-alias-label-tertiary)",
   },
   group: {
     display: "flex",
@@ -157,11 +179,33 @@ export const styles = {
     flexWrap: "wrap",
     gap: "6px",
   },
-  tags: {
+  // 标签输入：与官方输入框同一种边框/背景，标签与内联输入都在框内，放不下就换行。
+  chips: {
     display: "flex",
+    flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: "8px",
+    gap: "4px 6px",
+    boxSizing: "border-box",
+    width: "100%",
+    minHeight: "34px",
+    padding: "4px 8px",
+    background: "var(--dsw-alias-bg-layer-3)",
+    border: "0.5px solid var(--dsw-alias-border-l4)",
+    borderRadius: "var(--dsw-radius-md)",
+  },
+  // 框内的裸输入：边框与背景都交给外面那个框。
+  chipInput: {
+    flex: "1 1 120px",
+    minWidth: "120px",
+    padding: "2px 0",
+    fontFamily: "inherit",
+    fontSize: "13px",
+    lineHeight: "1.5",
+    color: "var(--dsw-alias-label-primary)",
+    background: "transparent",
+    border: "none",
+    outline: "none",
   },
   tagItem: {
     display: "inline-flex",
@@ -179,16 +223,12 @@ export const styles = {
     cursor: "pointer",
     lineHeight: "1",
   },
-  // 输入框与候选按钮一行；输入框吃掉剩余宽度（占位文案不再被截成一条缝）。
+  // 框 + 候选按钮一行。
   tagRow: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: "8px",
     width: "100%",
-  },
-  tagInput: {
-    flex: "1 1 auto",
-    minWidth: "240px",
   },
   // 危险动作：描边按钮用错误色 + 错误色 hover；确认按钮把 primary 的填充换成错误色。
   dangerOutline: {
