@@ -56,7 +56,8 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、`noop` 不可删、默认模式选项、六组字段、
     `presetsOnly` 是标签输入且候选来自 `agent-presets` 具名源）、动作（新增模式连名称一起给、受保护的模式删不动、
     一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、默认模型只给一半 → 保存被挡且页面上有对应消息）。
-  - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、编辑带着真实路径上报、
+  - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、添加入口是「模式」标题右边的
+    + 图标按钮（打开弹窗表单、底部不再有添加行）、编辑带着真实路径上报、
     名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是两个 `Button`（`aria-pressed`，点一下写回去掉该项的数
     组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
     开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、删除要过确认弹窗（取消不删、确认才删，确认按钮挂错误色

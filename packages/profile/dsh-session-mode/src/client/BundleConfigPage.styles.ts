@@ -18,6 +18,13 @@ export const styles = {
     flexDirection: "column",
     gap: "8px",
   },
+  // "模式"标题与它右边的 + 图标按钮一行。
+  sectionHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+  },
   sectionTitle: {
     margin: "0",
     fontSize: "13px",
@@ -124,15 +131,6 @@ export const styles = {
     lineHeight: "1.5",
     color: "var(--dsw-alias-label-tertiary)",
     wordBreak: "break-all",
-  },
-  addRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-  },
-  addInput: {
-    width: "200px",
-    flex: "0 0 auto",
   },
 } satisfies Record<string, CSSProps>;
 

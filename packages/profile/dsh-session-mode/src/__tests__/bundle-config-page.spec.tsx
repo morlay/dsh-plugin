@@ -332,12 +332,20 @@ describe("会话模式的 bundle 配置页", () => {
     });
   });
 
-  it("添加模式与保存：一个入口写 id，一次保存写全部改动", () => {
+  it("添加模式与保存：入口在'模式'标题右边（+ 图标按钮），弹窗里填 id，一次保存写全部改动", async () => {
     const page = renderPage();
 
-    const input = document.querySelector('[data-field="new-mode"]') as HTMLInputElement;
+    // 入口是标题右边那个 + 图标按钮（卡片区底部不再有添加行）。
+    const open = screen.getByRole("button", { name: bundleZh["add.label"] });
+    expect(open.textContent).toBe("");
+    expect(document.querySelector('[data-field="new-mode"]')).toBeNull();
+
+    fireEvent.click(open);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(bundleZh["add.hint"])).toBeTruthy();
+    const input = within(dialog).getByLabelText(bundleZh["add.label"]) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "draft" } });
-    fireEvent.click(screen.getByRole("button", { name: bundleZh["add.confirm"] }));
+    fireEvent.click(within(dialog).getByRole("button", { name: bundleZh["add.confirm"] }));
     expect(page.added).toEqual(["draft"]);
 
     fireEvent.click(screen.getByRole("button", { name: bundleZh.save }));

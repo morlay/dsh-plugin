@@ -12,6 +12,7 @@ import {
   DisclosureRow,
   IconAgentPresetOutlineRegular,
   IconButton,
+  IconPlusOutlineRegular,
   IconTrashOutlineRegular,
   Input,
   Modal,
@@ -65,7 +66,9 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   const status = props.useBundleStatus((current: ConfigStatus) => current);
   const state = useMemo(() => projectBundleConfig(snapshot, t, status), [snapshot, t, status]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const [adding, setAdding] = useState("");
+  const [addingId, setAddingId] = useState("");
+  // "添加模式"的弹窗：由"模式"标题右边那个 + 图标按钮打开。
+  const [addingOpen, setAddingOpen] = useState(false);
   // 要删的那个模式：删除是不可逆的一步，先过一次确认弹窗（保存之前仍可丢弃）。
   const [removing, setRemoving] = useState<BundleModeView | null>(null);
   // 挂载时强制重读一次 describe：视图晚到、通知没落上时，这一步把读数拉平（有草稿时它自己跳过）。
@@ -150,7 +153,20 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
         </section>
 
         <section {...stylingProps(styles.section)} data-section="modes">
-          <h4 {...stylingProps(styles.sectionTitle)}>{t("modes.label")}</h4>
+          <div {...stylingProps(styles.sectionHead)}>
+            <h4 {...stylingProps(styles.sectionTitle)}>{t("modes.label")}</h4>
+            <IconButton
+              label={t("add.label")}
+              data-action="open-add-mode"
+              disabled={!state.writable}
+              onClick={() => {
+                setAddingId("");
+                setAddingOpen(true);
+              }}
+            >
+              <IconPlusOutlineRegular />
+            </IconButton>
+          </div>
           <p {...stylingProps(styles.hint)}>{t("modes.hint")}</p>
           {state.modes.map((mode) => (
             <ModeCard
@@ -168,36 +184,54 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               }}
             />
           ))}
-          <div {...stylingProps(styles.addRow)}>
-            <Input
-              className={className(styles.addInput)}
-              data-field="new-mode"
-              value={adding}
-              placeholder={t("add.placeholder")}
-              aria-label={t("add.label")}
-              disabled={!state.writable}
-              onChange={(event) => {
-                setAdding(event.currentTarget.value);
-              }}
-            />
+        </section>
+      </div>
+      <Modal
+        open={addingOpen}
+        onClose={() => {
+          setAddingOpen(false);
+        }}
+        title={t("add.label")}
+        closeLabel={t("add.close")}
+        description={t("add.hint")}
+        footer={
+          <>
             <Button
               variant="outline"
-              size="sm"
-              className={className(styles.controlHeight)}
-              data-action="add-mode"
-              disabled={!state.writable || adding.trim() === ""}
               onClick={() => {
-                const id = adding.trim();
+                setAddingOpen(false);
+              }}
+            >
+              {t("add.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              data-action="add-mode"
+              disabled={addingId.trim() === ""}
+              onClick={() => {
+                const id = addingId.trim();
                 face.addMode(id);
-                setAdding("");
+                setAddingId("");
+                setAddingOpen(false);
                 setExpanded((previous) => new Set(previous).add(id));
               }}
             >
               {t("add.confirm")}
             </Button>
-          </div>
-        </section>
-      </div>
+          </>
+        }
+      >
+        <Input
+          data-field="new-mode"
+          data-modal-autofocus
+          value={addingId}
+          placeholder={t("add.placeholder")}
+          aria-label={t("add.label")}
+          onChange={(event) => {
+            setAddingId(event.currentTarget.value);
+          }}
+        />
+      </Modal>
       <Modal
         open={removing !== null}
         onClose={() => {
@@ -356,6 +390,9 @@ function FieldRow({
   t: BundleTranslate;
   face: BundleConfigActions;
 }): ReactNode {
+  // 选项类字段要有候选才画：候选按字段树里的路径给，`defaultModel` 整块没配时它的子字段不在树上，
+  // 这时画出来只会是一个没有可选值的空选择器（"设置默认模型"按钮才是那个状态下的入口）。
+  if (field.control === "choice" && !field.present) return null;
   return (
     <SettingsFieldRow
       label={field.label}

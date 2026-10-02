@@ -1,5 +1,5 @@
-// 「选模型」的候选：provider 与模型清单来自**部署已有的模型目录**（`remote.session.modelCatalog()`——会话里那个
-// 模型选择器读的同一份）。接缝是目录 → 候选：provider 候选是目录里的分组，模型清单跟着 provider 当前值变。
+// 「选模型」的候选：provider 与模型清单来自部署里的 LLM 目录。接缝是目录 → 候选——provider 候选是活着的路由
+// 与可配置声明合并后的清单，模型清单读那份声明指向的配置并跟着 provider 当前值变。
 
 import { describe, expect, it } from "vitest";
 import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-primitives/client";
@@ -10,7 +10,7 @@ interface Registered {
   spec: SelectSpec;
 }
 
-// 一套最小的 client 面：提示面记账、模型目录与 preset registry 是替身。
+// 一套最小的 client 面：提示面记账、LLM 目录与配置读数是替身。
 function bench() {
   const sources: Registered[] = [];
   let refreshes = 0;
@@ -37,23 +37,19 @@ function bench() {
     },
     // 客户端 remote 的命名空间是**独立服务**（服务名 `remote.<命名空间>`），不是 `remote` 上的属性：
     // 这一对是接缝本身（属性访问读到的是 undefined）。
-    "remote.session": {
-      modelCatalog: () =>
+    "remote.llm": {
+      listProviders: () => Promise.resolve({ ok: true, value: [{ id: "openai", name: "OpenAI" }] }),
+      listConfigurableProviders: () =>
         Promise.resolve({
           ok: true,
-          value: {
-            groups: [
-              {
-                id: "mine",
-                name: "自建",
-                models: [
-                  { id: "m1", name: "M1" },
-                  { id: "m2", name: "M2" },
-                ],
-              },
-              { id: "openai", name: "OpenAI", models: [] },
-            ],
-          },
+          value: [
+            {
+              provider: "mine",
+              displayName: "自建",
+              settingsNs: "llm-openai-compatible",
+              settingsPath: ["providers", "mine"],
+            },
+          ],
         }),
     },
     // 模式允许挂哪些 preset 的候选：部署里注册的那些（`name` 缺省时用 id 兜底）。
@@ -63,6 +59,14 @@ function bench() {
           ok: true,
           value: { presets: [{ id: "standard", name: "标准" }, { id: "minimal" }] },
         }),
+    },
+    configForms: {
+      get: () => ({
+        getSnapshot: () => ({
+          value: { providers: { mine: { models: [{ id: "m1" }, { id: "m2" }] } } },
+        }),
+        subscribe: () => () => {},
+      }),
     },
   };
   const ctx = {
@@ -85,7 +89,7 @@ async function settled(): Promise<void> {
 }
 
 describe("选模型的候选", () => {
-  it("provider 候选就是模型目录里的分组", async () => {
+  it("provider 候选来自 LLM 目录：活着的路由与可配置声明合并、去重", async () => {
     const b = bench();
     apply(b.ctx as never);
     await settled();
@@ -99,7 +103,7 @@ describe("选模型的候选", () => {
     expect(b.refreshes()).toBeGreaterThan(0);
   });
 
-  it("模型候选取自那个 provider 的分组，并声明依赖 provider", async () => {
+  it("模型候选读 provider 声明指向的那份配置，并声明依赖 provider", async () => {
     const b = bench();
     apply(b.ctx as never);
     await settled();
@@ -109,11 +113,8 @@ describe("选模型的候选", () => {
     const options = (provider: unknown): readonly SelectOption[] =>
       model?.spec.options((path) => (path.join(".") === "provider" ? provider : undefined)) ?? [];
 
-    expect(options("mine")).toEqual([
-      { value: "m1", label: "M1" },
-      { value: "m2", label: "M2" },
-    ]);
-    // 目录里一个模型都没有的 provider：列不出模型，字段退回文本输入。
+    expect(options("mine")).toEqual([{ value: "m1" }, { value: "m2" }]);
+    // 目录里没有配置地址的 provider（内置路由）：列不出模型，字段退回文本输入。
     expect(options("openai")).toEqual([]);
     expect(options(undefined)).toEqual([]);
   });
@@ -138,7 +139,7 @@ describe("选模型的候选", () => {
     // 属性访问读到的是 undefined（gateway 的 client 半把每个命名空间注册成独立服务 `remote.<名字>`）；
     // 两个具名源照样注册上了，说明读的是那两个服务。
     const remote = b.ctx.get("remote") as Record<string, unknown>;
-    expect(remote["session"]).toBeUndefined();
+    expect(remote["llm"]).toBeUndefined();
     expect(remote["agentPresets"]).toBeUndefined();
     expect(b.sources.map((entry) => entry.name)).toContain("llm-providers");
     expect(b.sources.map((entry) => entry.name)).toContain("agent-presets");
