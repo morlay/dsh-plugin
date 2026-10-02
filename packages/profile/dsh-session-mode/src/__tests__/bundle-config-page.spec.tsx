@@ -227,12 +227,15 @@ describe("会话模式的 bundle 配置页", () => {
     ]);
   });
 
-  it("角色是多选按钮（Pill），开关是 Switch", () => {
+  it("开关 / 三态 / 多选按钮右置：标签与说明在左，控件贴最右", () => {
     const page = renderPage();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
+    // 角色是同一个 Button 组件：选中的用 primary，未选的用 outline。
     const main = document.querySelector('[data-role="main"]') as HTMLElement;
     const subagent = document.querySelector('[data-role="subagent"]') as HTMLElement;
+    expect(main.tagName).toBe("BUTTON");
+    expect(subagent.tagName).toBe("BUTTON");
     expect(main.getAttribute("aria-pressed")).toBe("true");
     expect(subagent.getAttribute("aria-pressed")).toBe("true");
 
@@ -244,6 +247,17 @@ describe("会话模式的 bundle 配置页", () => {
     const switches = within(card("coding")).getAllByRole("switch");
     expect(switches).toHaveLength(2);
     expect(switches[0]?.getAttribute("aria-label")).toBe(bundleZh["field.instructions"]);
+
+    // 这三类字段都是右置行：左列是标签与说明，控件贴最右。
+    expect(styles.fieldInline.flexDirection).toBe("row");
+    expect(styles.fieldInline.justifyContent).toBe("space-between");
+    const field = document.querySelector('[data-field="modes.coding.instructions"]') as HTMLElement;
+    const row = field.children[0] as HTMLElement;
+    expect(row.children).toHaveLength(2);
+    // 左列是标签与说明，右列是控件本身。
+    expect(row.children[0]?.textContent).toContain(bundleZh["field.instructions"]);
+    expect(row.children[0]?.textContent).toContain(bundleZh["hint.instructions"]);
+    expect(row.children[1]?.getAttribute("role")).toBe("switch");
   });
 
   it("`noop` 不给删：没有删除入口，只有一句说明", () => {
@@ -259,7 +273,7 @@ describe("会话模式的 bundle 配置页", () => {
     expect(within(card("coding")).getByRole("button", { name: "删除模式 编码模式" })).toBeTruthy();
   });
 
-  it("编辑字段与删除模式：动作带着真实路径上报", () => {
+  it("编辑字段：动作带着真实路径上报", () => {
     const page = renderPage();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
@@ -271,10 +285,30 @@ describe("会话模式的 bundle 配置页", () => {
       path: ["modes", "coding", "name"],
       text: "编码模式（改）",
     });
+  });
 
-    // 名字刚被改过：删除入口的可访问名跟着当前名称走，所以按前缀找。
+  it("删除要过确认弹窗：取消不删、确认才删，确认按钮是危险配色", async () => {
+    const page = renderPage();
+    fireEvent.click(within(card("coding")).getByText("编码模式"));
+
+    // 取消：什么都没发生（草稿也没动）。
     fireEvent.click(within(card("coding")).getByRole("button", { name: /^删除模式/u }));
+    const cancelled = await screen.findByRole("dialog");
+    expect(within(cancelled).getByText(bundleZh["remove.title"])).toBeTruthy();
+    fireEvent.click(within(cancelled).getByRole("button", { name: bundleZh["remove.cancel"] }));
+    expect(page.removed).toEqual([]);
+
+    // 确认：写回的是被点名的那个模式，确认按钮挂上错误色填充的 class。
+    fireEvent.click(within(card("coding")).getByRole("button", { name: /^删除模式/u }));
+    const confirmed = await screen.findByRole("dialog");
+    const confirm = within(confirmed).getByRole("button", { name: bundleZh["remove.confirm"] });
+    expect(confirm.className).toContain("cls-");
+    fireEvent.click(confirm);
     expect(page.removed).toEqual(["coding"]);
+    expect(styles.dangerFill["--dsw-alias-button-primary-fill"]).toBe(
+      "var(--dsw-alias-state-error-primary)",
+    );
+    expect(styles.dangerOutline.color).toBe("var(--dsw-alias-state-error-primary)");
   });
 
   it("名单是标签输入：回车确认一个，粘贴逗号分隔的一串拆成多个", () => {

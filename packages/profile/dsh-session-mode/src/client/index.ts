@@ -208,10 +208,25 @@ export function apply(ctx: Context): void {
 
   // 装本行的 bundle 那一页（`plugins.bundle.config`，key = bundle 包名）：本行是那份配置的 owner，页面摆的就是
   // `modes` 与 `default` 这几项——按模式折叠分组而不是按 schema 平铺，所以它自带表单，不用自动生成那页。
+  // 提示面的候选（选服务商 / 选模型的两个具名源）可能比本页晚到，所以这一页自己重投影的入口留在外面：
+  // 提示面一到（或它的候选变了）就刷一次，模型那两个字段不会静默退回手输。
+  let refreshPage: (() => void) | undefined;
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const off = scope.schemaFormHints.subscribe(() => {
+        refreshPage?.();
+      });
+      return () => {
+        off();
+      };
+    }, "session-mode: bundle page candidates"),
+  );
+
   ctx.inject(["slots", "locale", "configForms", "settingsSchema"], (scope) => {
     scope.effect(() => {
       const bundleT = scope.locale.bind(BUNDLE_NS);
-      const { face, dispose } = createBundleConfigFace(scope, bundleT);
+      const { face, refresh, dispose } = createBundleConfigFace(scope, bundleT);
+      refreshPage = refresh;
       const bundleDictionary = scope.locale.register(BUNDLE_NS, { zh: bundleZh, en: bundleEn });
       const off = scope.slots.inject("plugins.bundle.config", () =>
         scope.slots.register(
@@ -227,6 +242,7 @@ export function apply(ctx: Context): void {
       return () => {
         off();
         bundleDictionary();
+        refreshPage = undefined;
         dispose();
       };
     }, "session-mode: bundle configuration page");

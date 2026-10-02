@@ -14,7 +14,7 @@ import {
   IconTrashOutlineRegular,
   Input,
   Menu,
-  Pill,
+  Modal,
   SegmentedControl,
   SettingsForm,
   SettingsValueField,
@@ -64,6 +64,8 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   const state = useMemo(() => projectBundleConfig(snapshot, t), [snapshot, t]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [adding, setAdding] = useState("");
+  // 要删的那个模式：删除是不可逆的一步，先过一次确认弹窗（保存之前仍可丢弃）。
+  const [removing, setRemoving] = useState<BundleModeView | null>(null);
   // 槽位注册项只为 `page` 视图存在（bundle 页不给 `summary` 座位）。
   if (view !== "page") return null;
   if (!state.configured) {
@@ -92,8 +94,6 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
     <SettingsForm labels={labels} state={state} onSave={face.save} onDiscard={face.discard}>
       <div {...stylingProps(styles.root)} data-bundle-config="page">
         <section {...stylingProps(styles.section)} data-section="default">
-          <h4 {...stylingProps(styles.sectionTitle)}>{t("default.label")}</h4>
-          <p {...stylingProps(styles.hint)}>{t("default.hint")}</p>
           <div {...stylingProps(styles.defaultRow)}>
             <div {...stylingProps(styles.defaultText)}>
               <span {...stylingProps(styles.fieldLabel)}>{t("default.label")}</span>
@@ -129,6 +129,9 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               writable={state.writable}
               t={t}
               face={face}
+              onRequestRemove={() => {
+                setRemoving(mode);
+              }}
               onToggle={() => {
                 toggle(mode.id);
               }}
@@ -163,6 +166,38 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
           </div>
         </section>
       </div>
+      <Modal
+        open={removing !== null}
+        onClose={() => {
+          setRemoving(null);
+        }}
+        title={t("remove.title")}
+        closeLabel={t("remove.close")}
+        description={t("remove.description", { name: removing?.title ?? "" })}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRemoving(null);
+              }}
+            >
+              {t("remove.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              className={className(styles.dangerFill)}
+              data-action="confirm-remove"
+              onClick={() => {
+                if (removing !== null) face.removeMode(removing.id);
+                setRemoving(null);
+              }}
+            >
+              {t("remove.confirm")}
+            </Button>
+          </>
+        }
+      />
     </SettingsForm>
   );
 }
@@ -174,6 +209,7 @@ function ModeCard({
   writable,
   t,
   face,
+  onRequestRemove,
   onToggle,
 }: {
   mode: BundleModeView;
@@ -181,6 +217,8 @@ function ModeCard({
   writable: boolean;
   t: BundleTranslate;
   face: BundleConfigActions;
+  // 删除要过确认弹窗：卡片只上报"想删这一个"，真正删谁由页面在弹窗里定。
+  onRequestRemove: () => void;
   onToggle: () => void;
 }): ReactNode {
   const model = mode.groups.find((group) => group.key === "model");
@@ -249,12 +287,11 @@ function ModeCard({
               <Button
                 variant="outline"
                 size="sm"
+                className={className(styles.dangerOutline)}
                 data-action="remove-mode"
                 disabled={!writable}
                 aria-label={t("removeNamed", { name: mode.title })}
-                onClick={() => {
-                  face.removeMode(mode.id);
-                }}
+                onClick={onRequestRemove}
               >
                 <IconTrashOutlineRegular size={13} />
                 {t("remove")}
@@ -320,19 +357,39 @@ function FieldRow({
       </div>
     );
   }
+  const label = (
+    <span {...stylingProps(styles.fieldLabel)}>
+      {field.label}
+      {field.overridden ? <Tag tone="neutral">{t("overridden")}</Tag> : null}
+    </span>
+  );
+  const invalid =
+    field.invalid === undefined ? null : (
+      <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
+        {field.invalid}
+      </p>
+    );
+  // 开关 / 三态 / 多选按钮：控件贴右，标签与说明在左（与官方设置页的开关行同一种排法）。
+  if (field.control === "switch" || field.control === "tri" || field.control === "roles") {
+    return (
+      <div {...container}>
+        <div {...stylingProps(styles.fieldInline)}>
+          <div {...stylingProps(styles.fieldText)}>
+            {label}
+            <p {...stylingProps(styles.fieldHint)}>{field.hint}</p>
+          </div>
+          <FieldControl field={field} writable={writable} t={t} face={face} />
+        </div>
+        {invalid}
+      </div>
+    );
+  }
   return (
     <div {...container}>
       <div {...stylingProps(styles.fieldBody)}>
-        <span {...stylingProps(styles.fieldLabel)}>
-          {field.label}
-          {field.overridden ? <Tag tone="neutral">{t("overridden")}</Tag> : null}
-        </span>
+        {label}
         <FieldControl field={field} writable={writable} t={t} face={face} />
-        {field.invalid === undefined ? null : (
-          <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
-            {field.invalid}
-          </p>
-        )}
+        {invalid}
         <p {...stylingProps(styles.fieldHint)}>{field.hint}</p>
       </div>
     </div>
@@ -440,9 +497,10 @@ function FieldControl({
           {ROLES.map((role) => {
             const active = Array.isArray(field.value) && field.value.includes(role);
             return (
-              <Pill
+              <Button
                 key={role}
-                active={active}
+                variant={active ? "primary" : "outline"}
+                size="sm"
                 data-role={role}
                 disabled={disabled}
                 aria-pressed={active}
@@ -455,7 +513,7 @@ function FieldControl({
                 }}
               >
                 {t(`role.${role}` as "role.main")}
-              </Pill>
+              </Button>
             );
           })}
         </div>
@@ -517,6 +575,7 @@ function TagList({
       )}
       <div {...stylingProps(styles.tagRow)}>
         <Input
+          className={className(styles.tagInput)}
           data-tags-input={field.path.join(".")}
           value={draft}
           placeholder={t("tags.placeholder")}

@@ -39,6 +39,8 @@ function bench(options: { withHints?: boolean } = {}) {
         selected.push({ ns, path, options: spec.options });
         return () => {};
       },
+      // 本包订阅提示面的变化（候选晚到时重投影一次）：替身给一个空订阅。
+      subscribe: () => () => {},
     };
   }
   const ctx = {

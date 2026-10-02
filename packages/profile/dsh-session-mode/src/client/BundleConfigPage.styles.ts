@@ -120,6 +120,21 @@ export const styles = {
     gap: "6px",
     padding: "12px 0",
   },
+  // 开关 / 三态 / 多选按钮这一类"右侧控件"的字段：标签与说明在左，控件贴最右。
+  fieldInline: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "12px 0",
+  },
+  fieldText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+    minWidth: "0",
+  },
   // 标签与说明的数值取自官方 `fields.module.css`（`.label` 13px/wt500、`.hint` 12px/tertiary）。
   fieldLabel: {
     display: "flex",
@@ -146,12 +161,12 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: "6px",
+    gap: "8px",
   },
   tagItem: {
     display: "inline-flex",
     alignItems: "center",
-    gap: "2px",
+    gap: "4px",
   },
   tagRemove: {
     display: "inline-flex",
@@ -164,11 +179,26 @@ export const styles = {
     cursor: "pointer",
     lineHeight: "1",
   },
+  // 输入框与候选按钮一行；输入框吃掉剩余宽度（占位文案不再被截成一条缝）。
   tagRow: {
     display: "flex",
     alignItems: "center",
-    gap: "6px",
-    maxWidth: "420px",
+    gap: "8px",
+    width: "100%",
+  },
+  tagInput: {
+    flex: "1 1 auto",
+    minWidth: "240px",
+  },
+  // 危险动作：描边按钮用错误色 + 错误色 hover；确认按钮把 primary 的填充换成错误色。
+  dangerOutline: {
+    color: "var(--dsw-alias-state-error-primary)",
+    borderColor: "color-mix(in srgb, var(--dsw-alias-state-error-primary) 30%, transparent)",
+    "--dsw-alias-interactive-bg-hover":
+      "color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent)",
+  },
+  dangerFill: {
+    "--dsw-alias-button-primary-fill": "var(--dsw-alias-state-error-primary)",
   },
   addRow: {
     display: "flex",

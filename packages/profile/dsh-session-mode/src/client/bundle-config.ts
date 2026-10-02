@@ -307,9 +307,12 @@ export function fieldKey(path: readonly string[]): string {
 export function createBundleConfigFace(
   ctx: ClientContext,
   t: BundleTranslate,
-): { face: BundleConfigFace; dispose: () => void } {
+): { face: BundleConfigFace; refresh: () => void; dispose: () => void } {
   const forms = ctx.configForms;
-  const hints = ctx.get("schemaFormHints") as unknown as HintsLike | undefined;
+  // 提示面（候选值：服务商、模型、policy 名单）由基础面异步装上，可能比本页晚到：每次读的时候现取，
+  // 不把"那一刻还没有"缓存下来——否则模型那两个字段会静默退回手输。
+  const hintsOf = (): HintsLike | undefined =>
+    ctx.get("schemaFormHints") as unknown as HintsLike | undefined;
   const controller = new SchemaFormController(SESSION_MODE_NS, {
     form: forms.get(SESSION_MODE_NS),
     describe: forms.describe(),
@@ -318,9 +321,9 @@ export function createBundleConfigFace(
     t: ctx.locale.bind("settings.schema-form"),
     hints: {
       keysFor: () => [],
-      textFor: (path: readonly string[]) => hints?.textFor(SESSION_MODE_NS, path) ?? {},
-      selectFor: (path: readonly string[]) => hints?.selectFor(SESSION_MODE_NS, path),
-      sourceFor: (name: string) => hints?.sourceFor(name),
+      textFor: (path: readonly string[]) => hintsOf()?.textFor(SESSION_MODE_NS, path) ?? {},
+      selectFor: (path: readonly string[]) => hintsOf()?.selectFor(SESSION_MODE_NS, path),
+      sourceFor: (name: string) => hintsOf()?.sourceFor(name),
     },
   });
   const face = controller.face();
@@ -361,6 +364,9 @@ export function createBundleConfigFace(
       discard: () => {
         face.discard();
       },
+    },
+    refresh: () => {
+      controller.refresh();
     },
     dispose: () => {
       controller.dispose();
