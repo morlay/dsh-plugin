@@ -21,6 +21,13 @@
   - 判据：同一份配置在两个页面上长得一样；控件要改外观只改一处。
   - 反例：业务包里就地画一个输入框或按钮（跟官方控件对不齐），或把控件样式写进业务的 `.styles.ts`。
   - **同一个控件被第二个页面需要时上提到本包**：本包是唯一能跨业务包复用的地方（业务包之间不互相 import 组件）。
+- **按钮只从 `Button` / `IconButton` / `SeatButton` 三件里选，业务不写裸 `<button>`**：
+  - `Button`：有文字的按钮（危险动作给 `tone="danger"`）；
+  - `IconButton`：只有图标的键，`shape="square"` 是设置面那一档（28×28、圆角方形、二级文本色），
+    `shape="circle"` 是对话动作行那一档（28×28 圆、三级文本色、hover 上底色）；
+  - `SeatButton`：工具行里的"座位"（图标 + 文本 + 可选箭头，展开时保持底色）。
+  - 判据：同一类位置上的按钮几何与状态反馈（hover / disabled / 焦点环）逐帧一致，改一次全站生效。
+  - 反例：业务自己画 `<button className={…}>`——几何、hover、disabled、焦点环要各写一遍，两个页面上立刻不一样。
 - **每个内容组件带一个稳定的 `data-role`**：`button` / `icon-button` / `search-select` / `tag-input` /
   `multiline-field` / `model-route-list` / `field-row` …——它是"这是个什么控件"的身份，供样式、测试与自动化定位。
   - 判据：控件能被统一地找到，不靠 class 名或 DOM 层级。

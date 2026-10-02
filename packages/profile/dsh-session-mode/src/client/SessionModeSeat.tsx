@@ -7,7 +7,10 @@ import {
   IconAgentPresetOutlineRegular,
   IconChevronDownOutlineRegular,
   Menu,
-} from "@deepseek-ai/dsh-client-ui-primitives";
+  SeatButton,
+  Stack,
+  Text,
+} from "@morlay/dsh-client-ui-primitives/client";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only：拉入本包 host 半的 Context / 投影声明（`sessionMode`），让 `projectionValues` 有类型。
 import type {} from "../index.ts";
@@ -15,7 +18,6 @@ import type {} from "../index.ts";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { selectMode } from "./api.ts";
 import { useRoster } from "./use-roster.ts";
-import css from "./SessionModeSeat.module.css";
 
 // 完整 props：composer 工具行左侧槽位的运行时 props + 本包的字典。
 export type SessionModeSeatProps = PropsRuntime<"conversation.input.left"> &
@@ -50,10 +52,12 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
   // 开过 turn 的会话只读：chip 只写当前模式、点不动（判据与 host 拒绝切换读的是同一个投影）。
   if (editable === false) {
     return (
-      <button type="button" className={css.seat} disabled title={t("lockedHint")}>
-        <IconAgentPresetOutlineRegular className={css.seatIcon} />
-        <span className={css.seatLabel}>{label}</span>
-      </button>
+      <SeatButton
+        disabled
+        title={t("lockedHint")}
+        icon={<IconAgentPresetOutlineRegular />}
+        label={label}
+      />
     );
   }
 
@@ -66,10 +70,12 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
       items={roster.modes.map((mode) => ({
         id: mode.id,
         label: (
-          <span className={css.item}>
-            <span className={css.itemName}>{mode.name}</span>
-            <span className={css.itemDesc}>{mode.description ?? t("noDescription")}</span>
-          </span>
+          <Stack gap={2}>
+            <Text size="md">{mode.name}</Text>
+            <Text size="sm" tone="tertiary">
+              {mode.description ?? t("noDescription")}
+            </Text>
+          </Stack>
         ),
       }))}
       selectedId={current}
@@ -88,23 +94,19 @@ export function SessionModeSeat({ sessionId, useSessions, t }: SessionModeSeatPr
       }}
       align="start"
       portal
-      className={css.menuAnchor}
       anchor={
-        <button
-          type="button"
-          className={css.seat}
+        <SeatButton
           aria-haspopup="menu"
           aria-expanded={open}
           title={error ?? t("seatHint")}
           disabled={busy}
+          icon={<IconAgentPresetOutlineRegular />}
+          label={label}
+          chevron={<IconChevronDownOutlineRegular />}
           onClick={() => {
             setOpen((value) => !value);
           }}
-        >
-          <IconAgentPresetOutlineRegular className={css.seatIcon} />
-          <span className={css.seatLabel}>{label}</span>
-          <IconChevronDownOutlineRegular className={css.chevron} />
-        </button>
+        />
       }
     />
   );
