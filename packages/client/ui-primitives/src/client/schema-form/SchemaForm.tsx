@@ -8,7 +8,7 @@ import { SettingsForm, type SettingsFormLabels } from "@deepseek-ai/dsh-client-u
 import { Editor } from "./Editor.tsx";
 import { parseFor } from "./fields.tsx";
 import type { SchemaFieldOwnerProps, SchemaFormComponentProps } from "./slot-contract.ts";
-import { Hint } from "./styles.ts";
+import css from "./schema-form.module.css";
 import { SchemaFieldDefault } from "./value.tsx";
 
 // 渲染一行的配置页。
@@ -26,7 +26,7 @@ export function SchemaForm(props: SchemaFormComponentProps): ReactNode {
     save: t("save"),
     saving: t("saving"),
   };
-  if (!state.configured) return <Hint role="status">{t("noSchema")}</Hint>;
+  if (!state.configured) return <p className={css.hint} role="status">{t("noSchema")}</p>;
   return (
     <SettingsForm
       labels={labels}
@@ -52,9 +52,9 @@ export function SchemaForm(props: SchemaFormComponentProps): ReactNode {
       />
       {/* 本地整段校验挡下的保存要说出来：否则点保存"没有反应"看起来像按钮坏了。 */}
       {state.violation === undefined ? null : (
-        <Hint role="alert" data-violation="true">
+        <p className={css.hint} role="alert" data-violation="true">
           {t("notSaved", { message: state.violation.message })}
-        </Hint>
+        </p>
       )}
     </SettingsForm>
   );

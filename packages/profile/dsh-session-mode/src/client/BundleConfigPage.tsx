@@ -18,12 +18,15 @@ import {
   Modal,
   ModelRouteList,
   MultilineField,
+  Row,
   SegmentedControl,
   SearchSelect,
   SettingsFieldRow,
   SettingsForm,
+  Stack,
   Switch,
   TagInput,
+  Text,
   type SettingsFormLabels,
 } from "@morlay/dsh-client-ui-primitives/client";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
@@ -41,7 +44,6 @@ import {
   type BundleTranslate,
 } from "./bundle-config.ts";
 import { routeKey } from "./llm-directory.ts";
-import { className, props as stylingProps, styles } from "./BundleConfigPage.styles.ts";
 
 export type BundleConfigPageProps = PropsRuntime<"plugins.bundle.config"> &
   PropsLocale<"session-mode-bundle"> &
@@ -93,19 +95,21 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
           : t("configured.unreadable", { problem: diagnosis.problem });
     return (
       <div data-bundle-config={state.readiness} data-namespace={SESSION_MODE_NS}>
-        <p
-          {...stylingProps(styles.hint)}
+        <Text
+          as="p"
+          size="sm"
+          tone="tertiary"
           data-namespaces={diagnosis.namespaces.join(",")}
           data-problem={diagnosis.problem}
           data-controller={diagnosis.controller}
         >
           {message}
-        </p>
+        </Text>
         {state.readiness !== "unreadable" ? null : (
           // 读不出来时把诊断也画出来：这时页面本来就用不了，原因说在明面上比藏在属性里有用。
-          <p {...stylingProps(styles.diagnosis)} data-diagnosis="true">
+          <Text as="p" size="xs" tone="tertiary" mono data-diagnosis="true">
             {`${diagnosis.problem} · ${diagnosis.controller} · namespaces=[${diagnosis.namespaces.join(", ")}]`}
-          </p>
+          </Text>
         )}
       </div>
     );
@@ -127,8 +131,8 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   };
   return (
     <SettingsForm labels={labels} state={state} onSave={face.save} onDiscard={face.discard}>
-      <div {...stylingProps(styles.root)} data-bundle-config="page">
-        <section {...stylingProps(styles.section)} data-section="default">
+      <Stack gap={16} data-bundle-config="page">
+        <Stack as="section" gap={8} data-section="default">
           <SettingsFieldRow
             label={t("default.label")}
             hint={t("default.hint")}
@@ -154,15 +158,19 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               }}
             />
           </SettingsFieldRow>
-        </section>
+        </Stack>
 
-        <section {...stylingProps(styles.section)} data-section="modes">
+        <Stack as="section" gap={8} data-section="modes">
           {/* 这一段的第一个 child 是 `row(col(标题, 说明), 控件)`：左列标题与说明同列，添加入口贴最右。 */}
-          <div {...stylingProps(styles.sectionHead)}>
-            <span {...stylingProps(styles.sectionHeadText)}>
-              <h4 {...stylingProps(styles.sectionTitle)}>{t("modes.label")}</h4>
-              <p {...stylingProps(styles.hint)}>{t("modes.hint")}</p>
-            </span>
+          <Row gap={8} justify="between">
+            <Stack gap={2} grow>
+              <Text as="h4" size="md" tone="primary" weight="strong">
+                {t("modes.label")}
+              </Text>
+              <Text as="p" size="sm" tone="tertiary">
+                {t("modes.hint")}
+              </Text>
+            </Stack>
             <IconButton
               label={t("add.label")}
               data-action="open-add-mode"
@@ -174,7 +182,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             >
               <IconPlusOutlineRegular />
             </IconButton>
-          </div>
+          </Row>
           {state.modes.map((mode) => (
             <ModeCard
               key={mode.id}
@@ -192,8 +200,8 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               }}
             />
           ))}
-        </section>
-      </div>
+        </Stack>
+      </Stack>
       <Modal
         open={addingOpen}
         onClose={() => {
@@ -260,7 +268,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             </Button>
             <Button
               variant="primary"
-              className={className(styles.dangerFill)}
+              tone="danger"
               data-action="confirm-remove"
               onClick={() => {
                 if (removing !== null) face.removeMode(removing.id);
@@ -300,8 +308,9 @@ function ModeCard({
 }): ReactNode {
   const hasModel = mode.model !== undefined;
   return (
-    <div
-      {...stylingProps(styles.modeCard)}
+    <Stack
+      boxed
+      pad="card"
       data-mode={mode.id}
       data-deletable={mode.deletable ? "true" : "false"}
     >
@@ -313,16 +322,14 @@ function ModeCard({
         expandOnRowClick
         onToggle={onToggle}
         keepContentWhenOpen
-        contentClassName={className(styles.disclosureRoot)}
-        contentLayoutClassName={className(styles.disclosureContent)}
         collapsedContent={
           // 两段：先是紧挨名称的 id，再是贴最右的摘要 + 删除。
           <>
-            <code {...stylingProps(styles.modeId)} data-mode-id>
+            <Text as="code" size="sm" tone="tertiary" data-mode-id>
               {mode.id}
-            </code>
-            <span {...stylingProps(styles.modeHeadAside)}>
-              <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
+            </Text>
+            <Row gap={8} push>
+              <Text as="span" size="sm" tone="tertiary">{mode.summary}</Text>
               {mode.deletable ? (
                 <IconButton
                   data-action="remove-mode"
@@ -337,20 +344,20 @@ function ModeCard({
                   <IconTrashOutlineRegular />
                 </IconButton>
               ) : (
-                <span {...stylingProps(styles.protectedNote)} data-protected="true">
+                <Text as="span" size="sm" tone="tertiary" data-protected="true">
                   {t("protected")}
-                </span>
+                </Text>
               )}
-            </span>
+            </Row>
           </>
         }
       >
-        <div {...stylingProps(styles.modeBody)}>
+        <Stack gap={14} pad="body">
           {mode.groups.map((group) => (
-            <div key={group.key} {...stylingProps(styles.group)} data-group={group.key}>
-              <div {...stylingProps(styles.groupHead)}>
-                <span {...stylingProps(styles.groupTitle)}>{group.label}</span>
-              </div>
+            <Stack key={group.key} gap={0} data-group={group.key}>
+              <Row gap={8} justify="between">
+                <Text size="sm" tone="secondary" weight="strong">{group.label}</Text>
+              </Row>
               {group.key === "model" ? (
                 <>
                   {/* 整块 `defaultModel` 是一个可加字段：开关开 = 这个模式自带默认模型，关 = 跟随全局。 */}
@@ -426,11 +433,11 @@ function ModeCard({
                   />
                 ))
               )}
-            </div>
+            </Stack>
           ))}
-        </div>
+        </Stack>
       </DisclosureRow>
-    </div>
+    </Stack>
   );
 }
 
@@ -557,7 +564,7 @@ function FieldControl({
       );
     case "roles":
       return (
-        <div {...stylingProps(styles.roles)} data-control="roles">
+        <Row gap={6} wrap data-control="roles">
           {ROLES.map((role) => {
             const active = Array.isArray(field.value) && field.value.includes(role);
             return (
@@ -581,7 +588,7 @@ function FieldControl({
               </Button>
             );
           })}
-        </div>
+        </Row>
       );
     case "tags":
       return (

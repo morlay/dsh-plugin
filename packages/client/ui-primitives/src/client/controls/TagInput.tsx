@@ -10,10 +10,9 @@ import {
   MenuItemButton,
   rankByName,
 } from "@deepseek-ai/dsh-client-ui-primitives";
-import { styling } from "../styling/styling.ts";
-import { styles } from "./controls.styles.ts";
 import { type SearchSelectOption } from "./SearchSelect.tsx";
 import { mergeTags, parseTagList } from "./tags.ts";
+import css from "./TagInput.module.css";
 
 export interface TagInputProps {
   // 当前名单。
@@ -65,18 +64,20 @@ export function TagInput({
   );
   const matches = useMemo(() => rankByName(remaining, draft), [remaining, draft]);
   return (
-    <div {...styling.props(styles.tagRow)} data-role="tag-input" data-control="tags">
+    <div className={css.row} data-role="tag-input" data-control="tags">
       <Menu
         open={open && remaining.length > 0}
+        // 官方那份 wrapper 是 `inline-flex`：不撑满的话框只有内容那么宽（见 `TagInput.module.css` 的 `.anchor`）。
+        className={css.anchor}
         anchor={
-          <div {...styling.props(styles.chipsBox)}>
+          <div className={css.box}>
             {value.map((name) => (
               // 标签与里面的移除按钮是同一个整体：× 在框内，点它才移除。
-              <span key={name} {...styling.props(styles.chip)} data-tag={name}>
+              <span key={name} className={css.chip} data-tag={name}>
                 {name}
                 <button
                   type="button"
-                  {...styling.props(styles.chipRemove)}
+                  className={css.chipRemove}
                   data-action="remove-tag"
                   disabled={disabled}
                   aria-label={removeLabel(name)}
@@ -90,7 +91,7 @@ export function TagInput({
             ))}
             {/* 裸输入：边框与背景归外面那个框，标签与它一起换行。 */}
             <input
-              {...styling.props(styles.chipInput)}
+              className={css.input}
               value={draft}
               placeholder={value.length === 0 ? placeholder : ""}
               aria-label={label}
@@ -141,7 +142,7 @@ export function TagInput({
           </span>
         ))}
         {matches.length === 0 ? (
-          <p {...styling.props(styles.searchEmpty)} data-role="tag-input-empty">
+          <p className={css.empty} data-role="tag-input-empty">
             {noMatchLabel}
           </p>
         ) : null}

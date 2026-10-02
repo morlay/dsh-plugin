@@ -1,0 +1,15 @@
+/* 折叠行的内容区：官方那份的 `contentClassName` / `contentLayoutClassName` 是给消费方覆盖用的，
+   设置面每次都要同样两条——「撑开并允许收缩」+「标题行左右分列」，所以在这里定下来。 */
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contentLayout {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}

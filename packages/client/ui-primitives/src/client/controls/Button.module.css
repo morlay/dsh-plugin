@@ -1,0 +1,10 @@
+/* 按钮宽度由内容定："添加"这类短词被折成两行只是没必要的换行。 */
+.label {
+  white-space: nowrap;
+}
+
+/* 危险动作的配色：把 primary 的填充换成错误色。危险感只出现在确认那一刻（确认弹窗的按钮），
+   卡片头那类入口保持中性。 */
+.danger {
+  --dsw-alias-button-primary-fill: var(--dsw-alias-state-error-primary);
+}

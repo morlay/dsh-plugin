@@ -3,8 +3,8 @@
 // 留白与分隔线的口径与官方 `SettingsValueField` 一致（上下各 12px、相邻 0.5px 细线）。
 
 import type { HTMLAttributes, ReactNode } from "react";
-import { styling } from "../styling/styling.ts";
-import { styles } from "./fields.styles.ts";
+import { classes } from "../controls/classes.ts";
+import css from "./SettingsFieldRow.module.css";
 
 export interface SettingsFieldRowProps
   extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "color"> {
@@ -36,25 +36,19 @@ export function SettingsFieldRow({
   onReset,
   invalid,
   children,
+  className,
   ...rest
 }: SettingsFieldRowProps): ReactNode {
-  const container = {
-    ...styling.props(styles.row),
-    "data-role": "field-row",
-    ...(divider ? styling.props(styles.rowDivider) : {}),
-    "data-divider": divider ? "true" : "false",
-    ...rest,
-  };
   const labelNode = (
-    <span {...styling.props(styles.rowLabel)}>
+    <span className={css.label}>
       {label}
       {overriddenLabel === undefined ? null : (
         <>
-          <span {...styling.props(styles.rowBadge)}>{overriddenLabel}</span>
+          <span className={css.badge}>{overriddenLabel}</span>
           {resetLabel === undefined || onReset === undefined ? null : (
             <button
               type="button"
-              {...styling.props(styles.reset)}
+              className={css.reset}
               onClick={() => {
                 onReset();
               }}
@@ -68,17 +62,22 @@ export function SettingsFieldRow({
   );
   const invalidNode =
     invalid === undefined ? null : (
-      <p {...styling.props(styles.invalid)} role="alert">
+      <p className={css.invalid} role="alert">
         {invalid}
       </p>
     );
   if (layout === "inline") {
     return (
-      <div {...container}>
-        <div {...styling.props(styles.rowInline)}>
-          <div {...styling.props(styles.rowText)}>
+      <div
+        className={classes(css.row, className)}
+        data-role="field-row"
+        data-divider={divider ? "true" : "false"}
+        {...rest}
+      >
+        <div className={css.inline}>
+          <div className={css.text}>
             {labelNode}
-            <p {...styling.props(styles.hint)}>{hint}</p>
+            <p className={css.hint}>{hint}</p>
           </div>
           {children}
         </div>
@@ -87,11 +86,16 @@ export function SettingsFieldRow({
     );
   }
   return (
-    <div {...container}>
-      <div {...styling.props(styles.rowBody)}>
+    <div
+      className={classes(css.row, className)}
+      data-role="field-row"
+      data-divider={divider ? "true" : "false"}
+      {...rest}
+    >
+      <div className={css.body}>
         {labelNode}
         {children}
-        <p {...styling.props(styles.hint)}>{hint}</p>
+        <p className={css.hint}>{hint}</p>
       </div>
       {invalidNode}
     </div>

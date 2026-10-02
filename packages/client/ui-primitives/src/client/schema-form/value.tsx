@@ -7,7 +7,8 @@ import { useState, type ReactNode } from "react";
 import { IconChevronDownOutlineRegular, Menu } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { SelectOption } from "./hints.ts";
 import type { SchemaFieldOwnerProps } from "./slot-contract.ts";
-import { ICON_SIZE, LineValue, ValueTrigger } from "./styles.ts";
+import { ICON_SIZE } from "./geometry.ts";
+import css from "./schema-form.module.css";
 import { TruncatedTooltip } from "./TruncatedTooltip.tsx";
 
 // 编辑态文本：字符串就是原文（换行照旧），其余按 JSON 写。
@@ -46,18 +47,18 @@ export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactN
     // secret 不回显值：这里显示的是「已配置」的 `••••••`，它不会截断，`owner.hint` 也不是「被截断文本的全文」
     // ——按行内浮层的口径它不该弹气泡，所以回到非侵入的原行为：挂原生 `title`。
     return (
-      <LineValue data-tone="empty" title={owner.hint}>
+      <span className={css.lineValue} data-tone="empty" title={owner.hint}>
         {owner.secretConfigured ? "••••••" : ""}
-      </LineValue>
+      </span>
     );
   }
   // 值长了会在行里截断（值槽可收缩）：确实截断时整份内容由官方 `Tooltip` 承载，放得下就不挂。
   const text = tokenText(owner.value);
   return (
     <TruncatedTooltip label={text}>
-      <LineValue data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}>
+      <span className={css.lineValue} data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}>
         {text}
-      </LineValue>
+      </span>
     </TruncatedTooltip>
   );
 }
@@ -101,7 +102,7 @@ function OptionSelect({
         setOpen(false);
       }}
       anchor={
-        <ValueTrigger
+        <button className={css.valueTrigger}
           type="button"
           disabled={owner.disabled}
           aria-label={owner.label}
@@ -109,13 +110,13 @@ function OptionSelect({
             setOpen(true);
           }}
         >
-          <LineValue
+          <span className={css.lineValue}
             data-tone={current === undefined ? tokenTone(owner.value) : tokenTone(current.value)}
           >
             {label}
-          </LineValue>
+          </span>
           <IconChevronDownOutlineRegular size={ICON_SIZE} />
-        </ValueTrigger>
+        </button>
       }
     />
   );

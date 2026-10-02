@@ -1,45 +1,18 @@
 import type { Context } from "@deepseek-ai/cordis";
 import * as schemaForm from "./schema-form/index.ts";
 
-// 官方那套基础组件（`Button` / `Menu` / `Modal` / `Switch` / `SegmentedControl` / `DisclosureRow` / 图标 …）统一
-// 从这里转出：业务包只向本包取控件，不必各自去认官方包名。同名以本包 fork 的那份为准（下面显式再导出
-// `SettingsForm` / `SettingsValueField` / `SettingsSecretField` / `SettingsFormModel` —— 它们是同一套 API 的本地
-// 实现，样式走包内 css-in-js），星号导出之间的同名项因此不会被判成歧义。
+// 官方那套基础组件（`Button` / `Menu` / `Input` / `Tag` / `Modal` / `Switch` / `SegmentedControl` /
+// `SettingsForm` 与两个字段控件 / `DisclosureRow` / 图标 …）统一从这里转出：业务包只向本包取控件，不必各自去认
+// 官方包名。官方那份**直接用**（同形同名、样式本来就是上游的 CSS Modules），本包只补官方没有的那几件。
 export * from "@deepseek-ai/dsh-client-ui-primitives";
 
-export * from "./styling/index.ts";
-export * from "./theme.ts";
 export * from "./markdown-labels.ts";
+export * from "./layout/index.ts";
 export * from "./settings-form/index.ts";
-// 本包 fork 的那套设置面原语的**具名**再导出：官方 `ui-primitives` 也导出同名成员，两个星号导出之间必须显式点名，
-// 否则 TypeScript 判成歧义、两边都不导出。这里以本包这份为准（同一套 API，样式走包内 css-in-js）。
-export {
-  SettingsFieldRow,
-  SettingsForm,
-  SettingsFormModel,
-  SettingsSecretField,
-  SettingsValueField,
-  settingsNumberField,
-  settingsTextField,
-} from "./settings-form/index.ts";
-export type {
-  SettingsFieldProps,
-  SettingsFieldRowProps,
-  SettingsFieldSpec,
-  SettingsFieldState,
-  SettingsFieldWrite,
-  SettingsFormActions,
-  SettingsFormLabels,
-  SettingsFormPathOp,
-  SettingsFormProps,
-  SettingsFormScope,
-  SettingsFormScopeSnapshot,
-  SettingsFormShell,
-  SettingsSecretSpec,
-} from "./settings-form/index.ts";
 export * from "./controls/index.ts";
-// `Button` 是本包包装版（官方那份 + 文字不换行）：两个星号导出之间必须显式点名，否则判成歧义。
-export { Button, type ButtonProps } from "./controls/index.ts";
+// `Button` 与 `DisclosureRow` 是本包包装版（官方那份 + 文字不换行 / 危险档 / 两条固定的布局类）：
+// 两个星号导出之间必须显式点名，否则判成歧义。
+export { Button, DisclosureRow, type ButtonProps, type ButtonTone, type DisclosureRowProps } from "./controls/index.ts";
 // 按行 schema 自动生成的行配置页（原 `@morlay/dsh-client-ui-schema-form/client`，2026-09-28 合并进来）：
 // 两者都是"对话 UI / 设置页的基础面"，拆成两行会各自注册一遍、还要求每个 bundle 都插齐两行。
 // 只**具名导出**它那一面的门面：`export *` 会与 settings-form 的样式 / token 重名。

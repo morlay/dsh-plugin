@@ -8,7 +8,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Button } from "../client/controls/Button.tsx";
-import { styles } from "../client/controls/controls.styles.ts";
+import iconCss from "../client/controls/IconButton.module.css";
+import buttonCss from "../client/controls/Button.module.css";
 import { IconButton } from "../client/controls/IconButton.tsx";
 import { ModelRouteList } from "../client/controls/ModelRouteList.tsx";
 import { MultilineField } from "../client/controls/MultilineField.tsx";
@@ -187,12 +188,8 @@ describe("图标按钮", () => {
     expect(button.textContent).toBe("");
     expect(within(button).getByTestId("glyph")).toBeTruthy();
     expect(button.getAttribute("type")).toBe("button");
-    expect(styles.iconButton).toMatchObject({
-      width: "28px",
-      height: "28px",
-      padding: "0",
-    });
-    expect(String(styles.iconButton.color)).toBe("var(--dsw-alias-label-secondary)");
+    // 外观归 `IconButton.module.css`（方形、无边框那一档）：这里只认它带上了那个类。
+    expect(button.className).toContain(iconCss.iconButton);
   });
 });
 
@@ -454,7 +451,6 @@ describe("按钮", () => {
 
     const button = screen.getByRole("button", { name: "添加" });
     expect(button.textContent).toBe("添加");
-    expect(styles.buttonLabel.whiteSpace).toBe("nowrap");
-    expect(button.className).toContain("cls-");
+    expect(button.className).toContain(buttonCss.label);
   });
 });

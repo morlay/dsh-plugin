@@ -1,0 +1,5 @@
+/* 0.5px 的细线：与官方面板里的分隔线同一档。 */
+.separator {
+  width: 100%;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}

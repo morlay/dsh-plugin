@@ -1,0 +1,11 @@
+/* 宽度档：搜索框那一档是固定宽（列表里的搜索行），`full` 撑满。 */
+.search {
+  width: 360px;
+  max-width: 100%;
+  flex: none;
+}
+
+.full {
+  width: 100%;
+  flex: none;
+}

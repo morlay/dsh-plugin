@@ -62,6 +62,10 @@ export async function defineCordisPluginConfig(options?: {
     options?.client === false || (!hasClientSource && options?.client === undefined)
       ? undefined
       : (options?.client ?? { name: await packageName(), entry: "./src/client/index.ts" });
+  // 有 client 源码但没有「CJS 单文件工厂」形态（`client: false`）：产物是普通 ESM 库（内联库，消费方把它打进
+  // 自己的 client 产物）。它没有工厂外壳，样式却照旧要内联——`dist/client.mjs` 里 import 的 `.module.css`
+  // 不处理就是构建报错，处理了才是「模块执行即注入 style tag + 导出 class 映射」。
+  const inlineLibrary = client === undefined && hasClientSource;
 
   // 入口按存在性探测：`index` 是包的门面（工具类包没有它，例如只发 bin 的 CLI）。
   const entry: Record<string, string> = {};
@@ -118,8 +122,8 @@ export async function defineCordisPluginConfig(options?: {
         isInlinedPackage(id, options?.inline) ||
         (fromClient(importer) && !isClientExternal(id, spec.externals)),
     },
-    plugins:
-      client === undefined
+    plugins: [
+      ...(client === undefined
         ? []
         : [
             clientEntryPlugin({
@@ -127,9 +131,13 @@ export async function defineCordisPluginConfig(options?: {
               entry: client.entry ?? "./src/client/index.ts",
               ...(client.externals === undefined ? {} : { externals: client.externals }),
             }),
-            // 这里的产物会被 clientEntryPlugin 换成现场打包的字节，但 tsdown 这一次解析也必须认得样式 import。
-            ...cssInlinePlugins({ name: client.name }),
-          ],
+          ]),
+      // 这里的产物会被 clientEntryPlugin 换成现场打包的字节，但 tsdown 这一次解析也必须认得样式 import；
+      // 内联库（见上）没有工厂外壳，样式插件照旧要挂。
+      ...(client === undefined && !inlineLibrary
+        ? []
+        : cssInlinePlugins({ name: client?.name ?? (await packageName()) })),
+    ],
   };
 }
 

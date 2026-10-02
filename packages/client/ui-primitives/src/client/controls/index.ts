@@ -5,7 +5,17 @@
 // - **multi-input**（`TagInput`）：多值 + 自由输入，聚焦即整体下拉候选、输入即过滤，候选只是加速；
 // - **searchable**（`SearchSelect`）：单值，从候选里搜着选。
 
-export { Button, type ButtonProps } from "./Button.tsx";
+export { Bubble, type BubbleProps } from "./Bubble.tsx";
+export { Button, type ButtonProps, type ButtonTone } from "./Button.tsx";
+export { DescriptionList, type DescriptionListProps } from "./DescriptionList.tsx";
+export { DisclosureRow, type DisclosureRowProps } from "./DisclosureRow.tsx";
+export { PopoverPanel, type PopoverPanelProps } from "./PopoverPanel.tsx";
+export { Separator } from "./Separator.tsx";
+export { SearchInput, type SearchInputProps, type SearchInputWidth } from "./SearchInput.tsx";
+export { Spinner, type SpinnerProps } from "./Spinner.tsx";
+export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
+export { TimeLabel, type TimeLabelProps } from "./TimeLabel.tsx";
+export { VisuallyHidden, type VisuallyHiddenProps } from "./VisuallyHidden.tsx";
 export { IconButton, type IconButtonProps } from "./IconButton.tsx";
 export {
   ModelRouteList,

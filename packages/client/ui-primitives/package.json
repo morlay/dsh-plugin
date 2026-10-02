@@ -1,14 +1,14 @@
 {
   "name": "@morlay/dsh-client-ui-primitives",
   "version": "0.0.7",
-  "description": "css-in-js styling kit (styled / Token / Styling), the shared reference parser and renderer (findReferences / parseReferenceToken), and the settings-form primitives forked from upstream (SettingsFormModel / field controls / form shell) plus the schema-generated row config page: consumes the official --dsw-* design tokens, so no CSS Modules precompile step is needed. Ships as an inlined client library (`dsh.client.inline`), not as an assembly row.",
+  "description": "client UI kit for this workspace: re-exports the official ui-primitives (Button / Menu / Input / Tag / Modal / Switch / SettingsForm …) plus our own layout primitives (Stack / Row / Text / Panel) and controls (TagInput / SearchSelect / ModelRouteList / Tabs / Spinner …), all styled with the same CSS Modules + `--dsw-*` tokens as upstream; also the shared reference parser/renderer (findReferences / parseReferenceToken) and the schema-generated row config page. Ships as an inlined client library (`dsh.client.inline`), not as an assembly row.",
   "keywords": [
     "client",
-    "css-in-js",
+    "css-modules",
     "design-tokens",
     "dsh",
     "dsh-plugin",
-    "styled"
+    "ui-kit"
   ],
   "license": "MIT",
   "repository": {
@@ -38,7 +38,6 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "gen:tokens": "pnpm exec tsx scripts/gen-design-tokens.mts && pnpm exec oxfmt src/client/theme.generated.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
@@ -63,7 +62,6 @@
     "@testing-library/react": "^16.3.0",
     "@types/mdast": "^4.0.4",
     "@types/react": "~18.3.1",
-    "csstype": "^3.1.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

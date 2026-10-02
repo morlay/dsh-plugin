@@ -1,0 +1,11 @@
+/* 对话气泡：`--dsw-specific-bubble` 是官方给气泡那一档底色（主题里定义），字号跟内容走。 */
+.bubble {
+  box-sizing: border-box;
+  max-width: min(525px, 82%);
+  padding: 10px 16px;
+  border-radius: 22px;
+  background: var(--dsw-specific-bubble);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-primary);
+}

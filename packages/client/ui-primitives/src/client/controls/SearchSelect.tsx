@@ -11,8 +11,8 @@ import {
   MenuItemButton,
   rankByName,
 } from "@deepseek-ai/dsh-client-ui-primitives";
-import { styling } from "../styling/styling.ts";
-import { styles } from "./controls.styles.ts";
+import { classes } from "./classes.ts";
+import css from "./SearchSelect.module.css";
 
 // 一项候选：值是写进配置的那份，label 是给人看的（也是搜索的第二个键）。
 export interface SearchSelectOption {
@@ -84,7 +84,7 @@ export function SearchSelect({
           variant="outline"
           size="sm"
           data-role="search-select"
-          className={styling.className(styles.controlHeight, styles.buttonLabel)}
+          className={classes(css.trigger)}
           data-action="pick"
           disabled={disabled}
           aria-haspopup="menu"
@@ -101,9 +101,9 @@ export function SearchSelect({
       onSelect={pick}
       onClose={close}
     >
-      <div {...styling.props(styles.searchRow)}>
+      <div className={css.searchRow}>
         <input
-          {...styling.props(styles.searchInput)}
+          className={css.searchInput}
           ref={searchRef}
           value={query}
           aria-label={searchLabel}
@@ -132,9 +132,7 @@ export function SearchSelect({
           {option.name}
         </MenuItemButton>
       ))}
-      {matches.length === 0 ? (
-        <p {...styling.props(styles.searchEmpty)}>{noMatchLabel}</p>
-      ) : null}
+      {matches.length === 0 ? <p className={css.empty}>{noMatchLabel}</p> : null}
     </Menu>
   );
 }

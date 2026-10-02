@@ -6,8 +6,8 @@
 
 import type { ReactNode } from "react";
 import { IconCheckOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
-import { styling } from "../styling/styling.ts";
-import { styles } from "./controls.styles.ts";
+import { classes } from "./classes.ts";
+import css from "./ModelRouteList.module.css";
 
 // 一条可选路由：`key` 是稳定身份（调用方只用来比对，不解析它）。
 export interface ModelRouteCandidate {
@@ -46,48 +46,46 @@ export function ModelRouteList({
 }: ModelRouteListProps): ReactNode {
   if (status === "loading") {
     return (
-      <p {...styling.props(styles.routeNotice)} role="status">
+      <p className={css.notice} role="status">
         {loadingLabel}
       </p>
     );
   }
   if (status === "error") {
     return (
-      <p {...styling.props(styles.routeError)} role="alert">
+      <p className={css.error} role="alert">
         {errorLabel}
       </p>
     );
   }
   if (candidates.length === 0) {
-    return <p {...styling.props(styles.routeNotice)}>{emptyLabel}</p>;
+    return <p className={css.notice}>{emptyLabel}</p>;
   }
   // 按 provider 分组，组的顺序就是候选来的顺序。
   const groups = new Map<string, { name: string; items: ModelRouteCandidate[] }>();
   for (const candidate of candidates) {
     const group = groups.get(candidate.provider);
-    if (group === undefined) groups.set(candidate.provider, { name: candidate.providerName, items: [candidate] });
-    else group.items.push(candidate);
+    if (group === undefined) {
+      groups.set(candidate.provider, { name: candidate.providerName, items: [candidate] });
+    } else group.items.push(candidate);
   }
   return (
     <div
-      {...styling.props(styles.routeList)}
+      className={css.list}
       data-role="model-route-list"
       role="radiogroup"
       aria-label={label}
       data-control="model-routes"
     >
       {[...groups].map(([provider, group]) => (
-        <div key={provider} {...styling.props(styles.routeGroup)} data-route-group={provider}>
-          <span {...styling.props(styles.routeProvider)}>{group.name}</span>
+        <div key={provider} className={css.group} data-route-group={provider}>
+          <span className={css.provider}>{group.name}</span>
           {group.items.map((candidate) => {
             const picked = candidate.key === selectedKey;
             return (
               <div
                 key={candidate.key}
-                {...styling.props(
-                  styles.routeItem,
-                  picked ? styles.routeItemPicked : undefined,
-                )}
+                className={classes(css.item, picked ? css.picked : undefined)}
                 role="radio"
                 aria-checked={picked}
                 aria-label={`${candidate.modelName} ${candidate.provider}/${candidate.model}`}
@@ -104,9 +102,9 @@ export function ModelRouteList({
                 }}
               >
                 {picked ? <IconCheckOutlineRegular /> : <span aria-hidden="true" />}
-                <span {...styling.props(styles.routeText)}>
-                  <span {...styling.props(styles.routeName)}>{candidate.modelName}</span>
-                  <span {...styling.props(styles.routeId)}>
+                <span className={css.text}>
+                  <span className={css.name}>{candidate.modelName}</span>
+                  <span className={css.id}>
                     {`${candidate.providerName} · ${candidate.provider}/${candidate.model}`}
                   </span>
                 </span>

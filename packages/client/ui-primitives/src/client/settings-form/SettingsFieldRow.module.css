@@ -1,0 +1,93 @@
+/* 字段行（`SettingsFieldRow`）：官方 `SettingsValueField` 的留白口径（上下各 12px），分隔线由调用方按
+   「不是这一组的第一个字段」显式声明——两种排法与官方控件的留白因此完全一致。 */
+.row {
+  display: flex;
+  flex-direction: column;
+}
+
+.row[data-divider='true'] {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* 上下排（输入类）：标签 / 控件 / 说明同列。 */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+/* 右置排（切换类）：左列标签与说明，控件贴最右。 */
+.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 覆盖标记（「已覆盖」）：照官方 badge 的 neutral 那一档。 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  corner-shape: round;
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* 恢复默认的入口：文字按钮，没有边框与底色。 */
+.reset {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.reset:disabled {
+  cursor: default;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.invalid {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}

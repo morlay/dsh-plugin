@@ -1,0 +1,18 @@
+/* 加载指示：一圈细描边 + 一段主色弧，转起来。 */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--dsw-alias-border-l2);
+  border-top-color: var(--dsw-alias-label-primary);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

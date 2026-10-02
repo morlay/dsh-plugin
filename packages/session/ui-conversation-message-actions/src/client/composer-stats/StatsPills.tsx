@@ -7,9 +7,15 @@
 import { memo, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  DescriptionList,
   IconDatabaseOutlineRegular,
   IconGaugeOutlineRegular,
-} from "@deepseek-ai/dsh-client-ui-primitives";
+  Pill,
+  PopoverPanel,
+  Row,
+  Separator,
+  Text,
+} from "@morlay/dsh-client-ui-primitives/client";
 import type { UseProjection } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { SnapshotSelectorHook } from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
@@ -20,9 +26,6 @@ import { formatTokensPerSecond } from "../chat-node/message-chrome.ts";
 import { assistantStepReading } from "./turn-reading.ts";
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from "./token-format.ts";
 import { MEASURE_STYLE, useStatDialog } from "./stat-dialog.ts";
-import { styling } from "@morlay/dsh-client-ui-primitives/client";
-import { styles } from "./StatsPills.styles.ts";
-import { styles as dialogStyles } from "./stat-dialog.styles.ts";
 
 interface WindowStats {
   turns: number;
@@ -135,35 +138,33 @@ function TimePill({
         })
       : null;
   const label = (
-    <span {...styling.props(styles.label)}>
+    <Text as="span" truncate>
       {counts}
       {tps !== null && (
         <>
-          <span {...styling.props(styles.sep)} aria-hidden>
+          <Text as="span" tone="tertiary" aria-hidden>
             ·
-          </span>
+          </Text>
           {tps}
         </>
       )}
-    </span>
+    </Text>
   );
   // A window without one timed figure has no dialog rows to show, so the pill
   // stays a plain reading instead of a button opening an empty dialog.
   if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && stats.decodeMs <= 0) {
     return (
-      <span {...styling.props(styles.anchor)}>
-        <span {...styling.props(styles.pill)}>
+      <Row as="span">
+        <Pill>
           <IconGaugeOutlineRegular />
           {label}
-        </span>
-      </span>
+        </Pill>
+      </Row>
     );
   }
   return (
-    <span ref={rootRef} {...styling.props(styles.anchor)}>
-      <button
-        type="button"
-        {...styling.props(styles.pill)}
+    <Row as="span" ref={rootRef}>
+      <Pill
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={tps === null ? counts : `${counts} · ${tps}`}
@@ -173,24 +174,23 @@ function TimePill({
       >
         <IconGaugeOutlineRegular />
         {label}
-      </button>
+      </Pill>
       {open &&
         createPortal(
-          <div
+          <PopoverPanel
             ref={panelRef}
-            {...styling.props(dialogStyles.panel)}
             role="dialog"
             aria-label={t("stats.dialog.title")}
             style={pos ?? MEASURE_STYLE}
           >
-            <div {...styling.props(dialogStyles.title)}>
-              <span {...styling.props(dialogStyles.titleLabel)}>
+            <Row gap={16} justify="between">
+              <Row as="span" gap={6}>
                 <IconGaugeOutlineRegular />
                 {t("stats.dialog.title")}
-              </span>
-            </div>
-            <div {...styling.props(dialogStyles.titleRule)} aria-hidden />
-            <dl {...styling.props(dialogStyles.details)} data-session-stats-details>
+              </Row>
+            </Row>
+            <Separator />
+            <DescriptionList data-session-stats-details>
               {stats.llmMs > 0 && (
                 <>
                   <dt>{t("stats.dialog.llmTime")}</dt>
@@ -219,11 +219,11 @@ function TimePill({
                   </dd>
                 </>
               )}
-            </dl>
-          </div>,
+            </DescriptionList>
+          </PopoverPanel>,
           document.body,
         )}
-    </span>
+    </Row>
   );
 }
 
@@ -243,10 +243,8 @@ function UsagePill({
   const cacheHit = cacheHitPercent(usage);
   const cacheHitText = cacheHit !== null ? t("stats.cacheHit", { percent: cacheHit }) : null;
   return (
-    <span ref={rootRef} {...styling.props(styles.anchor)}>
-      <button
-        type="button"
-        {...styling.props(styles.pill)}
+    <Row as="span" ref={rootRef}>
+      <Pill
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
@@ -255,41 +253,40 @@ function UsagePill({
         }}
       >
         <IconDatabaseOutlineRegular />
-        <span {...styling.props(styles.label)}>
+        <Text as="span" truncate>
           {totalText}
           {cacheHitText !== null && (
             <>
-              <span {...styling.props(styles.sep)} aria-hidden>
+              <Text as="span" tone="tertiary" aria-hidden>
                 ·
-              </span>
+              </Text>
               {cacheHitText}
             </>
           )}
-        </span>
-      </button>
+        </Text>
+      </Pill>
       {open &&
         createPortal(
-          <div
+          <PopoverPanel
             ref={panelRef}
-            {...styling.props(dialogStyles.panel)}
             role="dialog"
             aria-label={t("stats.dialog.usageTitle")}
             style={pos ?? MEASURE_STYLE}
           >
-            <div {...styling.props(dialogStyles.title)}>
-              <span {...styling.props(dialogStyles.titleLabel)}>
+            <Row gap={16} justify="between">
+              <Row as="span" gap={6}>
                 <IconDatabaseOutlineRegular />
                 {t("stats.dialog.usageTitle")}
-              </span>
-              <span {...styling.props(dialogStyles.titleValue)}>{exactCount(total, t)}</span>
-            </div>
-            <div {...styling.props(dialogStyles.titleRule)} aria-hidden />
+              </Row>
+              <Text tabular>{exactCount(total, t)}</Text>
+            </Row>
+            <Separator />
             {/* jscpd:ignore-start -- the session-total bucket rows deliberately mirror
               TurnUsagePanel's per-turn dl: same skin, different data contract (the
               buckets are always present here; per-turn fields are optional). A
               session that never wrote cache drops the row, as the per-turn panel
               drops its absent fields. */}
-            <dl {...styling.props(dialogStyles.details)} data-session-stats-usage>
+            <DescriptionList data-session-stats-usage>
               {cacheHit !== null && (
                 <>
                   <dt>{t("message.turnUsage.cacheHit")}</dt>
@@ -308,12 +305,12 @@ function UsagePill({
               )}
               <dt>{t("message.turnUsage.output")}</dt>
               <dd>{exactCount(usage.outputTokens, t)}</dd>
-            </dl>
+            </DescriptionList>
             {/* jscpd:ignore-end */}
-          </div>,
+          </PopoverPanel>,
           document.body,
         )}
-    </span>
+    </Row>
   );
 }
 
@@ -332,7 +329,7 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, t }
   if (stats.steps === 0 && !hasTokens) return null;
   // data-composer-stats: 这一行的稳定锚点（样式 / 测试定位用）。
   return (
-    <div {...styling.props(styles.root)} data-composer-stats>
+    <Row justify="center" gap={12} data-composer-stats>
       {stats.steps > 0 && (
         <TimePill
           stats={stats}
@@ -357,6 +354,6 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, t }
           }}
         />
       )}
-    </div>
+    </Row>
   );
 });

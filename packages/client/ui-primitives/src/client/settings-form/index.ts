@@ -1,21 +1,6 @@
-// 设置表单原语的 client 出口：模型 + 控件 + 表单框，命名与上游
-// `@deepseek-ai/dsh-client-ui-primitives` 同形（搬迁记录见本包 .agents/adrs/）。
+// 设置表单原语的 client 出口：**直接用上游那份**（同名同形的 `SettingsForm` / 两个字段控件 / 表单模型，样式
+// 本来就是上游的 `.module.css`），这里只留本包自造的那一个字段行——上游的 `SettingsValueField` 摆不下
+// 「标签 + 控件 + 说明 + 覆盖标记」这一整行。
 
-export { SettingsFormModel, settingsNumberField, settingsTextField } from "./form-model.ts";
-export type {
-  SettingsFieldSpec,
-  SettingsFieldState,
-  SettingsFieldWrite,
-  SettingsFormActions,
-  SettingsFormPathOp,
-  SettingsFormScope,
-  SettingsFormScopeSnapshot,
-  SettingsFormShell,
-  SettingsSecretSpec,
-} from "./form-model.ts";
-export { SettingsSecretField, SettingsValueField } from "./fields.tsx";
-export type { SettingsFieldProps } from "./fields.tsx";
 export { SettingsFieldRow } from "./SettingsFieldRow.tsx";
 export type { SettingsFieldRowProps } from "./SettingsFieldRow.tsx";
-export { SettingsForm } from "./SettingsForm.tsx";
-export type { SettingsFormLabels, SettingsFormProps } from "./SettingsForm.tsx";

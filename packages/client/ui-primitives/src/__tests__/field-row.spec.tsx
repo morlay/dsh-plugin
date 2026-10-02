@@ -5,7 +5,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { styles } from "../client/settings-form/fields.styles.ts";
+import rowCss from "../client/settings-form/SettingsFieldRow.module.css";
 import { SettingsFieldRow } from "../client/settings-form/SettingsFieldRow.tsx";
 
 afterEach(cleanup);
@@ -59,7 +59,8 @@ describe("字段行", () => {
     );
     const row = screen.getByText("名称").closest("[data-divider]") as HTMLElement;
     expect(row.getAttribute("data-divider")).toBe("true");
-    expect(styles.rowDivider.borderTop).toBe("0.5px solid var(--dsw-alias-border-l2)");
+    // 分隔线本身（0.5px 细线）归 `SettingsFieldRow.module.css`：这里只认行带上了那个类。
+    expect(row.className).toContain(rowCss.row);
   });
 
   it("被用户层覆盖：给徽标与恢复默认入口，点一下就回调", () => {

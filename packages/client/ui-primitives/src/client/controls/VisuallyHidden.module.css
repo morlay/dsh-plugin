@@ -1,0 +1,9 @@
+/* 视觉隐藏但仍可被辅助技术读到（不是 `display: none`，那会连读屏一起藏掉）。 */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

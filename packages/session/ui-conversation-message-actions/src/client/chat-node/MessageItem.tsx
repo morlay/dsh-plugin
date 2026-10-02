@@ -2,21 +2,23 @@
 // 在消息动作行上提供 edit / retry；其余 key 由官方内置渲染器处理。
 
 import {
+  Bubble,
+  Button,
+  JsonBlock,
   markdownLabels,
+  Modal,
   ReferenceMarkdown,
-  styling,
+  Row,
+  Stack,
   type ReferenceActions,
 } from "@morlay/dsh-client-ui-primitives/client";
 import { memo, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";
-import { Button, Modal } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { UserMessageNode } from "@deepseek-ai/dsh-client-ui-chat/client";
-import { JsonBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ChatNodeViewProps, ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { RenderMessageImages } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { MessageIconActions } from "./MessageIconActions.tsx";
-import { styles } from "./MessageItem.styles.ts";
 import type { EditableMessageBlock } from "../../shared.ts";
 import type { SessionEditorFace } from "../controller.ts";
 
@@ -63,11 +65,11 @@ function UserStyleBubble({
   const labels = useMemo(() => markdownLabels(t), [t]);
   const showBubble = text !== "" || rest.length > 0;
   return (
-    <div {...styling.props(styles.userRow)} data-time-hover-root>
-      <div {...styling.props(styles.userStack)}>
+    <Stack align="end" gap={6} data-time-hover-root>
+      <Stack align="end" gap={8} narrow>
         {renderMessageImages({ images, align: "end" })}
         {showBubble && (
-          <div {...styling.props(styles.bubble)}>
+          <Bubble>
             <ReferenceMarkdown text={text} labels={labels} actions={references} />
             {rest.map((block, i) => (
               <JsonBlock
@@ -77,11 +79,11 @@ function UserStyleBubble({
                 truncatedLabel={truncated}
               />
             ))}
-          </div>
+          </Bubble>
         )}
-      </div>
+      </Stack>
       {actions?.(text)}
-    </div>
+    </Stack>
   );
 }
 
@@ -147,7 +149,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           closeLabel="关闭"
           description="将撤回该消息及其之后的对话内容到输入框，请修改后重新发送。"
           footer={
-            <div {...styling.props(styles.confirmActions)}>
+            <Row gap={8} justify="end">
               <Button variant="outline" onClick={() => setConfirmingRecall(null)}>
                 取消
               </Button>
@@ -161,7 +163,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
               >
                 撤回并编辑
               </Button>
-            </div>
+            </Row>
           }
         />
       )}
@@ -173,7 +175,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           closeLabel="关闭"
           description={`将重新生成第 ${turn} 轮的回复，并抛弃该回合之后的内容。`}
           footer={
-            <div {...styling.props(styles.confirmActions)}>
+            <Row gap={8} justify="end">
               <Button variant="outline" onClick={() => setConfirmingRetry(false)}>
                 取消
               </Button>
@@ -186,7 +188,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
               >
                 确认重试
               </Button>
-            </div>
+            </Row>
           }
         />
       )}

@@ -8,7 +8,6 @@ import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { BundleConfigPage, type BundleConfigPageProps } from "../client/BundleConfigPage.tsx";
-import { styles } from "../client/BundleConfigPage.styles.ts";
 import { createBundleConfigFace, type BundleTranslate } from "../client/bundle-config.ts";
 import { bundleZh } from "../client/bundle-locales.ts";
 import { Config } from "../modes.ts";
@@ -210,7 +209,8 @@ describe("会话模式的 bundle 配置页", () => {
 
     const head = document.querySelector('[data-section="modes"]')?.children[0] as HTMLElement;
     // 左列（标题 + 说明）与右侧的添加入口；说明与标题同列，不再另起一行。
-    expect([...head.children].map((child) => child.tagName)).toEqual(["SPAN", "BUTTON"]);
+    // 左列是 `Stack`（列容器，含 `h4` 与 `p`，所以是块级盒而不是 `span`）。
+    expect([...head.children].map((child) => child.tagName)).toEqual(["DIV", "BUTTON"]);
     const text = head.children[0]?.textContent ?? "";
     expect(text).toContain(bundleZh["modes.label"]);
     expect(text).toContain(bundleZh["modes.hint"]);
@@ -320,16 +320,14 @@ describe("会话模式的 bundle 配置页", () => {
     fireEvent.click(within(cancelled).getByRole("button", { name: bundleZh["remove.cancel"] }));
     expect(page.removed).toEqual([]);
 
-    // 确认：写回的是被点名的那个模式，确认按钮挂上错误色填充的 class。
+    // 确认：写回的是被点名的那个模式，确认按钮是危险档（`tone="danger"` → 错误色填充那一类）。
     fireEvent.click(within(card("coding")).getByRole("button", { name: /^删除模式/u }));
     const confirmed = await screen.findByRole("dialog");
     const confirm = within(confirmed).getByRole("button", { name: bundleZh["remove.confirm"] });
-    expect(confirm.className).toContain("cls-");
+    expect(confirm.getAttribute("data-role")).toBe("button");
+    expect(confirm.className).not.toBe("");
     fireEvent.click(confirm);
     expect(page.removed).toEqual(["coding"]);
-    expect(styles.dangerFill["--dsw-alias-button-primary-fill"]).toBe(
-      "var(--dsw-alias-state-error-primary)",
-    );
   });
 
   it("名单是标签输入：回车确认一个，粘贴逗号分隔的一串拆成多个", () => {

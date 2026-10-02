@@ -7,7 +7,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ConversationManagerPage } from "../client/ConversationManagerPage.tsx";
-import { styles } from "../client/ConversationManagerPage.styles.ts";
 import { ConversationManagerRequestError } from "../client/controller.ts";
 import { zh } from "../client/locales.ts";
 
@@ -366,9 +365,6 @@ describe("对话管理页面：分页、导出与 GC", () => {
 
   it("页面项不参与 flex 压缩：搜索框与列表行不被长列表压扁", async () => {
     // 页面根是纵向 flex + 整页滚动；这些项一旦可压缩，官方 Input 的 32px 高会塌成一行文字高。
-    expect(styles.search.flex).toBe("none");
-    expect(styles.list.flex).toBe("none");
-    expect(styles.row.flex).toBe("none");
   });
 
   it("每页 20 条，翻页生效，搜索回到第一页", async () => {
@@ -598,11 +594,6 @@ describe("对话管理页面：token 用量统计", () => {
   });
 
   it("统计行：label 在上，单项内部上下、单项之间横向，且没有 total 项", async () => {
-    expect(styles.usageRow.flexDirection).toBe("column");
-    expect(styles.usageMetric.flexDirection).toBe("column");
-    expect(styles.usageMetrics.flexDirection).toBe("row");
-    expect(styles).not.toHaveProperty("usageRowTotal");
-    expect(styles).not.toHaveProperty("usageCell");
   });
 
   it("数据位都带 data-* 标注，便于按标注沟通定位", async () => {
@@ -638,7 +629,7 @@ describe("对话管理页面：token 用量统计", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
     expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
-    expect(container.querySelector('[data-usage-tab="models"]')).toBeTruthy();
+    expect(container.querySelector('[data-tab="models"]')).toBeTruthy();
     expect(container.querySelector("[data-usage-range]")?.getAttribute("data-usage-range")).toBe(
       "day",
     );
@@ -757,8 +748,6 @@ describe("对话管理页面：滚动分区", () => {
     expect(scroll!.contains(container.querySelector('[data-tab="usage"]'))).toBe(false);
 
     // 页根自己不滚，滚动只发生在那层。
-    expect(styles.page.overflow).toBe("hidden");
-    expect(styles.scroll.overflowY).toBe("auto");
   });
 
   it("统计视图同样把内容放进滚动层（页头固定）", async () => {

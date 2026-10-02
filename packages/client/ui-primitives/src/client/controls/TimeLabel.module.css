@@ -1,0 +1,16 @@
+/* 悬停显形：所在行带 `data-time-hover-root` 时，指针悬停或焦点落在行内都露出来。
+   `:global()` 是因为这个选择器要读到行上的属性——它不属于本组件自己。 */
+.label {
+  padding: 0;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+:global([data-time-hover-root]:hover) .label,
+:global([data-time-hover-root]:focus-within) .label {
+  opacity: 1;
+}

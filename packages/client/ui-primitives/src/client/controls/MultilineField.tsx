@@ -2,13 +2,18 @@
 // 标签与说明由外面的字段行给（见 `settings-form` 的 `SettingsFieldRow`）。
 
 import type { TextareaHTMLAttributes } from "react";
-import { styled } from "../styling/styled.tsx";
-import { styles } from "./controls.styles.ts";
-
-const Textarea = styled("textarea")(styles.multiline);
+import { classes } from "./classes.ts";
+import css from "./MultilineField.module.css";
 
 export type MultilineFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
-export function MultilineField({ rows = 3, ...rest }: MultilineFieldProps) {
-  return <Textarea rows={rows} data-role="multiline-field" {...rest} />;
+export function MultilineField({ rows = 3, className, ...rest }: MultilineFieldProps) {
+  return (
+    <textarea
+      rows={rows}
+      data-role="multiline-field"
+      className={classes(css.multiline, className)}
+      {...rest}
+    />
+  );
 }

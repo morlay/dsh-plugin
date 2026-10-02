@@ -1,0 +1,34 @@
+/* 与官方输入框同高（`Input.module.css` 的 32px）：同行摆的控件高度必须一致。 */
+.trigger {
+  height: 32px;
+  white-space: nowrap;
+}
+
+/* 菜单顶部那一行搜索框：与候选行同一个内距尺度。 */
+.searchRow {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.searchInput {
+  width: 100%;
+  padding: 2px 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* 一个候选都没匹配上：在候选区里说一句，而不是给一张空菜单。 */
+.empty {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}

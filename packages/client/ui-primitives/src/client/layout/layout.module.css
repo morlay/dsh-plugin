@@ -1,0 +1,215 @@
+/* 布局原语共用的档位表：几何只有一套（间距 / 内距 / 文本档位），四个原语都从这份里取类名。
+   数值照官方设置面的尺度：2/4/6/8/12/14/16 的间距档、11/12/13/16 的字号档。 */
+
+/* 纵向列与横向行的底座。 */
+.stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+
+/* 间距档。 */
+.gap0 {
+  gap: 0;
+}
+.gap2 {
+  gap: 2px;
+}
+.gap4 {
+  gap: 4px;
+}
+.gap6 {
+  gap: 6px;
+}
+.gap8 {
+  gap: 8px;
+}
+.gap10 {
+  gap: 10px;
+}
+.gap12 {
+  gap: 12px;
+}
+.gap14 {
+  gap: 14px;
+}
+.gap16 {
+  gap: 16px;
+}
+
+/* 交叉轴对齐：不写就是 `stretch`（列里子项撑满，行里子项等高）。 */
+.alignStart {
+  align-items: flex-start;
+}
+.alignCenter {
+  align-items: center;
+}
+.alignEnd {
+  align-items: flex-end;
+}
+
+/* 主轴分布：`between` 是「左列文本 + 右侧控件」那一行，`end` 是分页那种贴右。 */
+.justifyBetween {
+  justify-content: space-between;
+}
+.justifyEnd {
+  justify-content: flex-end;
+}
+.justifyCenter {
+  justify-content: center;
+}
+
+/* 一行放不下就换行（标签与按钮排）。 */
+.wrap {
+  flex-wrap: wrap;
+}
+
+/* 撑开：吃掉剩下的宽度并允许收缩（长文本因此不会把整行撑出去）。 */
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 贴右：把这一项推到行尾。 */
+.push {
+  margin-left: auto;
+}
+
+/* 占满：整块页面的根（宽高都撑满，自己不滚——滚动交给里面的 `scroll` 那一层）。 */
+.fill {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 滚动区：吃掉剩下的高度，内容长了它自己滚。 */
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 列表（`as="ul"` 时）：去掉列表标记与内距。 */
+.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 内距档：`card` 是模式卡片那档，`body` 是卡片内容那档，`page` / `row` / `blocking` 见注释。 */
+.padNone {
+  padding: 0;
+}
+.padCard {
+  padding: 4px 12px 8px;
+}
+.padBody {
+  padding: 8px 0 4px;
+}
+/* 页面根那一档。 */
+.padPage {
+  padding: 24px 28px;
+}
+/* 列表里的一行卡片。 */
+.padRow {
+  padding: 10px 12px;
+}
+/* 居中的提示块（加载中 / 阻塞提示）。 */
+.padBlocking {
+  padding: 32px 40px;
+}
+
+/* 文本档：字号 / 行高 / 颜色 / 字重 / 等宽 / 截断 / 等宽数字。 */
+.text {
+  margin: 0;
+}
+.sizeXs {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sizeSm {
+  font-size: 12px;
+  line-height: 18px;
+}
+.sizeMd {
+  font-size: 13px;
+  line-height: 20px;
+}
+.sizeBase {
+  font-size: 14px;
+  line-height: 24px;
+}
+.sizeLg {
+  font-size: 16px;
+  line-height: 24px;
+}
+.tonePrimary {
+  color: var(--dsw-alias-label-primary);
+}
+.toneSecondary {
+  color: var(--dsw-alias-label-secondary);
+}
+.toneTertiary {
+  color: var(--dsw-alias-label-tertiary);
+}
+/* 失败提示那一档：官方主题里有就用它，没有就退回主文本色。 */
+.toneDanger {
+  color: var(--dsw-alias-label-error, var(--dsw-alias-label-primary));
+}
+.weightMedium {
+  font-weight: 500;
+}
+.strong {
+  font-weight: 600;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片底座：边框 + 圆角 + 底色（列表里的一行、用量块）。内距由 `pad` 档给。 */
+.boxed {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* 不被压缩：页头、动作排这类固定项（内容变长时它们不该被压成 min-content）。 */
+.fixed {
+  flex: none;
+}
+
+/* 两轴不同间距的一排（统计项：列间距 20，换行后的行间距 6）。 */
+.gapWide {
+  column-gap: 20px;
+  row-gap: 6px;
+}
+
+/* 窄列：对话消息那一列（`min(525px, 82%)`）。 */
+.narrow {
+  min-width: 0;
+  max-width: min(525px, 82%);
+}
+
+/* 搜索框那一档宽度（列表与设置面的搜索行）。 */
+.wSearch {
+  width: 360px;
+  max-width: 100%;
+  flex: none;
+}

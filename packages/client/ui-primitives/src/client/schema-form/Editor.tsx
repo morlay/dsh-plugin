@@ -34,26 +34,9 @@ import type { ResolveText } from "./labels.ts";
 import { TruncatedTooltip } from "./TruncatedTooltip.tsx";
 import { isMultiline, valueText } from "./value.tsx";
 import type { SchemaFieldOwnerProps, SchemaFormTranslate } from "./slot-contract.ts";
-import {
-  AddWrap,
-  CompactInput,
-  CompactTextField,
-  EditorRoot,
-  HoverActions,
-  ICON_SIZE,
-  LineBody,
-  LineComment,
-  LineFold,
-  LineFoldSpacer,
-  LineInvalid,
-  LineKey,
-  LineNumber,
-  LineRow,
-  LineToken,
-  LineValue,
-  ValueSlot,
-  ValueTrigger,
-} from "./styles.ts";
+import { classes } from "../controls/classes.ts";
+import { ICON_SIZE } from "./geometry.ts";
+import css from "./schema-form.module.css";
 
 // 编辑器要的一切。
 export interface EditorProps {
@@ -85,7 +68,7 @@ export function Editor(props: EditorProps): ReactNode {
   );
   const disabled = !state.writable || !state.available;
   return (
-    <EditorRoot data-editor="schema-form">
+    <div className={css.editorRoot} data-editor="schema-form">
       {lines.map((line, index) => (
         <Row
           key={`${line.kind}:${fieldKey(line.path)}:${String(index)}`}
@@ -124,7 +107,7 @@ export function Editor(props: EditorProps): ReactNode {
           renderField={renderField}
         />
       ))}
-    </EditorRoot>
+    </div>
   );
 }
 
@@ -205,20 +188,20 @@ function Row({
   const body =
     line.kind === "comment" ? (
       <>
-        <LineFoldSpacer data-role="fold" />
+        <span className={css.lineFoldSpacer} data-role="fold" />
         {/* 这一行有问题时注释位装的就是那条消息：红字，别整行铺红。
             注释被 `ellipsis` 截断时全文交给官方 `Tooltip`——**只有真的截断才挂**，放得下就原样画。 */}
         <TruncatedTooltip label={line.text}>
           {line.invalid ? (
-            <LineInvalid data-role="comment">{`// ${line.text}`}</LineInvalid>
+            <span className={css.lineInvalid} data-role="comment">{`// ${line.text}`}</span>
           ) : (
-            <LineComment data-role="comment">{`// ${line.text}`}</LineComment>
+            <span className={css.lineComment} data-role="comment">{`// ${line.text}`}</span>
           )}
         </TruncatedTooltip>
       </>
     ) : line.kind === "open" ? (
       <>
-        <LineFold
+        <button className={css.lineFold}
           data-role="fold"
           type="button"
           aria-expanded={!line.collapsed}
@@ -232,11 +215,11 @@ function Row({
           ) : (
             <IconChevronDownOutlineRegular size={ICON_SIZE} />
           )}
-        </LineFold>
+        </button>
         <LinePrefix line={line} face={face} t={t} disabled={disabled} />
-        <LineToken>
+        <span className={css.lineToken}>
           {line.shape === "object" ? (line.collapsed ? "{…}" : "{") : line.collapsed ? "[…]" : "["}
-        </LineToken>
+        </span>
         <VariantSelect
           control={line.variants}
           path={line.path}
@@ -247,8 +230,8 @@ function Row({
       </>
     ) : line.kind === "close" ? (
       <>
-        <LineFoldSpacer data-role="fold" />
-        <LineToken>{line.shape === "object" ? "}" : "]"}</LineToken>
+        <span className={css.lineFoldSpacer} data-role="fold" />
+        <span className={css.lineToken}>{line.shape === "object" ? "}" : "]"}</span>
         <AddLine
           line={line}
           state={state}
@@ -275,7 +258,7 @@ function Row({
       />
     );
   return (
-    <LineRow
+    <div className={css.lineRow}
       data-line={line.kind}
       data-field-path={line.path.join(".")}
       data-selected={selected === key ? "true" : undefined}
@@ -289,18 +272,18 @@ function Row({
           : undefined
       }
     >
-      <LineNumber
+      <span className={css.lineNumber}
         data-role="number"
         onClick={() => {
           onSelect(line.path);
         }}
       >
         {n}
-      </LineNumber>
-      <LineBody data-role="body" style={indent}>
+      </span>
+      <div className={css.lineBody} data-role="body" style={indent}>
         {body}
-      </LineBody>
-    </LineRow>
+      </div>
+    </div>
   );
 }
 
@@ -378,19 +361,19 @@ function FieldLine({
   const multiline = isMultiline(line.field.value) || /[\r\n]/.test(text);
   return (
     <>
-      <LineFoldSpacer data-role="fold" />
-      <LineKey
+      <span className={css.lineFoldSpacer} data-role="fold" />
+      <span className={css.lineKey}
         data-role="key"
         data-index={member?.index === undefined ? undefined : "true"}
         title={member?.key ?? line.node.key}
       >
         {member?.key ?? line.node.key}
-      </LineKey>
-      <LineToken>{member?.index === undefined ? ": " : "  "}</LineToken>
+      </span>
+      <span className={css.lineToken}>{member?.index === undefined ? ": " : "  "}</span>
       {isEditing ? (
         // 带换行的值给多行输入（Enter 换行、Esc 撤销），其余是一行的官方输入框。
         multiline ? (
-          <CompactTextField>
+          <span className={css.compactTextField}>
             <textarea
               autoFocus={!missing}
               rows={1}
@@ -406,9 +389,9 @@ function FieldLine({
                 }
               }}
             />
-          </CompactTextField>
+          </span>
         ) : (
-          <CompactInput>
+          <span className={css.compactInput}>
             <Input
               autoFocus={!missing}
               type="text"
@@ -429,19 +412,19 @@ function FieldLine({
                 }
               }}
             />
-          </CompactInput>
+          </span>
         )
       ) : null}
       {/* 编辑态只留输入框：原值不再在它旁边画一遍。 */}
       {isEditing || line.variantsStandIn ? null : (
-        <ValueSlot
+        <span className={css.valueSlot}
           data-role="value"
           onClick={() => {
             if (editable) onEdit(key);
           }}
         >
           {renderField(owner)}
-        </ValueSlot>
+        </span>
       )}
       <VariantSelect
         control={line.variants}
@@ -452,7 +435,7 @@ function FieldLine({
       />
       {isEditing ? (
         // 编辑态：确认收起这一格的编辑、取消把值退回去——都在输入框旁边，不用记快捷键。
-        <HoverActions data-role="actions" data-editing="true">
+        <span className={classes(css.lineActions, css.hoverActions)} data-role="actions" data-editing="true">
           <button
             type="button"
             aria-label={t("confirmEdit")}
@@ -476,9 +459,9 @@ function FieldLine({
           >
             <IconCloseOutlineRegular size={ICON_SIZE} />
           </button>
-        </HoverActions>
+        </span>
       ) : null}
-      <HoverActions data-role="actions">
+      <span className={classes(css.lineActions, css.hoverActions)} data-role="actions">
         {line.field.staged && !disabled ? (
           <button
             type="button"
@@ -518,7 +501,7 @@ function FieldLine({
         {member === undefined ? null : (
           <RemoveLineButton member={member} face={face} t={t} disabled={disabled} />
         )}
-      </HoverActions>
+      </span>
     </>
   );
 }
@@ -566,7 +549,7 @@ function VariantSelect({
         setOpen(false);
       }}
       anchor={
-        <ValueTrigger
+        <button className={css.valueTrigger}
           type="button"
           data-role="variant"
           disabled={disabled}
@@ -575,9 +558,9 @@ function VariantSelect({
             setOpen(true);
           }}
         >
-          <LineValue data-tone="empty">{current?.label ?? ""}</LineValue>
+          <span className={css.lineValue} data-tone="empty">{current?.label ?? ""}</span>
           <IconChevronDownOutlineRegular size={ICON_SIZE} />
-        </ValueTrigger>
+        </button>
       }
     />
   );
@@ -602,15 +585,15 @@ function LinePrefix({
   const indexed = member !== undefined && member.index !== undefined;
   return (
     <>
-      <LineKey data-role="key" data-index={indexed ? "true" : undefined} title={key}>
+      <span className={css.lineKey} data-role="key" data-index={indexed ? "true" : undefined} title={key}>
         {key}
-      </LineKey>
-      <LineToken>{indexed ? "  " : ": "}</LineToken>
+      </span>
+      <span className={css.lineToken}>{indexed ? "  " : ": "}</span>
       {/* 值本身是容器（对象/数组）的成员：它也要能移除，否则这一项删不掉。 */}
       {member === undefined ? null : (
-        <HoverActions data-role="actions">
+        <span className={classes(css.lineActions, css.hoverActions)} data-role="actions">
           <RemoveLineButton member={member} face={face} t={t} disabled={disabled} />
-        </HoverActions>
+        </span>
       )}
     </>
   );
@@ -713,7 +696,7 @@ function AddLine({
     setOpen(false);
   };
   return (
-    <AddWrap data-add={spec.kind} data-invalid={invalid ? "true" : undefined}>
+    <span className={css.addWrap} data-add={spec.kind} data-invalid={invalid ? "true" : undefined}>
       <Menu
         open={open && spec.kind !== "item" && matched.length > 0}
         dense
@@ -728,7 +711,7 @@ function AddLine({
           setOpen(false);
         }}
         anchor={
-          <CompactInput>
+          <span className={css.compactInput}>
             <Input
               value={text}
               placeholder={label}
@@ -757,16 +740,16 @@ function AddLine({
                 }
               }}
             />
-          </CompactInput>
+          </span>
         }
       />
-      {invalid ? <LineInvalid>{t("unknownProperty")}</LineInvalid> : null}
+      {invalid ? <span className={css.lineInvalid}>{t("unknownProperty")}</span> : null}
       {/* 候选的说明：选中之前先看清"要加的是什么"（长了同样由 `Tooltip` 给全文，只有截断时才挂）。 */}
       {!invalid && matched.length === 1 && matched[0]?.description !== undefined ? (
         <TruncatedTooltip label={resolveText(matched[0].description)}>
-          <LineComment>{resolveText(matched[0].description)}</LineComment>
+          <span className={css.lineComment}>{resolveText(matched[0].description)}</span>
         </TruncatedTooltip>
       ) : null}
-    </AddWrap>
+    </span>
   );
 }

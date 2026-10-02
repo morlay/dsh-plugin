@@ -1,0 +1,26 @@
+/* 多行文本：官方通用表单只有单行控件，这个按官方输入框的数值画（边框 / 圆角 / 字号 / 内距）。 */
+.multiline {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  resize: vertical;
+}
+
+.multiline:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.multiline:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}

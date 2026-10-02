@@ -1,6 +1,6 @@
 # css-in-js 样式层与官方 token 消费
 
-状态：已采纳
+状态：已被取代（见 [ADR-本包样式改用上游那套 CSS Modules](./20261003-样式改用上游的CSS-Modules.md)：css-in-js 那一层已删，token 直接写 `var(--dsw-*)`）
 
 背景：我们自有的对话 UI 组件（fork 过来的那份，2026-10-01 已删）原沿用上游的 CSS Modules：
 `.module.css` 需要 lightningcss 在构建期编译并内联成 `<style>` 注入代码。这带来两件事——样式必须经过
@@ -21,7 +21,7 @@
 - `dsw`：官方主题变量引用，`dsw.alias.bg.base` → `var(--dsw-alias-bg-base)`；
 - `designTokens`：由上游 CSS **生成**的 token 树，叶子是该变量的默认值。
 
-token 树由`packages/client/ui-primitives/scripts/gen-design-tokens.mts` 从上游主题源码
+token 树由token 树的生成脚本（已随 css-in-js 层删除） 从上游主题源码
 生成（367 个 `--dsw-*`），`pnpm --filter @morlay/dsh-client-ui-primitives run gen:tokens`
 重新生成；`design-tokens.spec.ts` 守卫漂移（树与上游定义集合逐一相等）、往返（叶子能
 还原变量名）与默认值完整性。

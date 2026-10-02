@@ -17,6 +17,7 @@ import {
   type SchemaFormState,
 } from "../client/schema-form/controller.ts";
 import { zh } from "../client/schema-form/locales.ts";
+import css from "../client/schema-form/schema-form.module.css";
 import { SchemaForm } from "../client/schema-form/SchemaForm.tsx";
 import { projectNode, walkFields, type FieldNode } from "../client/schema-form/schema-node.ts";
 import { Config as SessionModeConfig } from "../../../../profile/dsh-session-mode/src/modes.ts";
@@ -923,15 +924,10 @@ describe("与真控制器一起跑", () => {
 
     const slot = container.querySelector('[data-role="value"]') as HTMLElement;
     const token = slot.querySelector("[data-tone]") as HTMLElement;
-    const style = getComputedStyle(slot);
-    // 值槽是行里唯一可收缩的那一项（键名、标点、动作按钮都是 flex: none）：值长了它跟着行收缩，
-    // 而不是反过来把行撑出去。`min-width: auto` + 行上的 `white-space: nowrap` 正是撑宽的原因。
-    expect(style.minWidth).toBe("0px");
-    expect(style.overflow).toBe("hidden");
-    expect(style.flexGrow).toBe("0");
-    // 值本身必须是块级盒：inline 盒上 `overflow` / `text-overflow` 都不生效，截断也就无从谈起。
-    expect(getComputedStyle(token).display).not.toBe("inline");
-    expect(getComputedStyle(token).textOverflow).toBe("ellipsis");
+    // 收缩与截断的规则住在 `schema-form.module.css`（值槽 `flex: 0 1 auto` + `min-width: 0`，值自己
+    // `overflow: hidden` + 省略号）——jsdom 不做布局，所以这里认那两个类；真实布局由页面端到端看。
+    expect(slot.className).toContain(css.valueSlot);
+    expect(token.className).toContain(css.lineValue);
   });
 
   it("行内编辑按 schema 的类型解析：number 存下去是数字，不是字符串", () => {
@@ -1007,11 +1003,8 @@ describe("与真控制器一起跑", () => {
     // 行有问题时注释位装的就是这条消息：它与值槽同一套契约——可收缩、自己截断，不把整行撑出去。
     const invalid = container.querySelector('[data-role="comment"]') as HTMLElement;
     expect(invalid.textContent).toContain(long);
-    const style = getComputedStyle(invalid);
-    expect(style.minWidth).toBe("0px");
-    expect(style.overflow).toBe("hidden");
-    expect(style.textOverflow).toBe("ellipsis");
-    expect(style.flexGrow).toBe("0");
+    // 与值槽同一套契约（可收缩、自己截断）住在 `schema-form.module.css` 的 `.lineInvalid` 里。
+    expect(invalid.className).toContain(css.lineInvalid);
 
     // 这条消息在行里是截断的（浏览器里量到 757/584）：hover 才给全文。
     sized(invalid, { content: 757, visible: 584 });

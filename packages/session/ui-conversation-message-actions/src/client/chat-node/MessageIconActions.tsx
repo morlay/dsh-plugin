@@ -1,21 +1,23 @@
 // Shared IconActions chrome for user and assistant messages: copy
 // live, optional branch wiring, and an optional date-aware clock.
 
-import { styling } from "@morlay/dsh-client-ui-primitives/client";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   IconBranchOutlineRegular,
+  IconButton,
   IconCheckOutlineRegular,
   IconCopyOutlineRegular,
   IconEditOutlineRegular,
   IconRefreshOutlineRegular,
+  Row,
+  TimeLabel,
   Tooltip,
+  VisuallyHidden,
   writeClipboard,
-} from "@deepseek-ai/dsh-client-ui-primitives";
+} from "@morlay/dsh-client-ui-primitives/client";
 import type { ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import { formatMessageClock } from "./message-chrome.ts";
 import { useCalendarDay } from "./use-calendar-day.ts";
-import { styles } from "./MessageIconActions.styles.ts";
 
 export interface MessageIconActionsProps {
   text: string;
@@ -86,54 +88,38 @@ export function MessageIconActions({
   // 会话统计弹窗与轮次过程节点），上游那套聊天文案表也不再提供这三个 key。
   const clockEl =
     time === undefined ? null : (
-      <span
-        data-time-label=""
-        {...styling.props(clock === "start" ? styles.timeStart : styles.timeEnd)}
-      >
-        {formatMessageClock(time, t, day)}
-      </span>
+      <TimeLabel data-time-label="">{formatMessageClock(time, t, day)}</TimeLabel>
     );
-  // 外部 className 需要拼接：给 actions 一个真实类名（而不是 data-css 属性）。
-  const actionsClass = styling.className(styles.actions);
   return (
-    <div
-      data-time-hover-root=""
-      className={className === undefined ? actionsClass : `${actionsClass} ${className}`}
-    >
+    <Row gap={10} fixed data-time-hover-root="" {...(className === undefined ? {} : { className })}>
       {clock === "start" ? clockEl : null}
       <Tooltip label={copied ? t("copied" as never) : t("copy" as never)} side="bottom">
-        <button
-          type="button"
-          {...styling.props(styles.action)}
-          aria-label={copied ? t("copied" as never) : t("copy" as never)}
+        <IconButton shape="circle"
+          label={copied ? t("copied" as never) : t("copy" as never)}
           onClick={onCopy}
         >
           {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
-        </button>
+        </IconButton>
       </Tooltip>
       {extraActions}
       {onEdit !== undefined && (
         <Tooltip label="编辑" side="bottom">
-          <button
-            type="button"
-            {...styling.props(styles.action)}
-            aria-label="编辑"
+          <IconButton shape="circle"
+            label="编辑"
             onClick={onEdit}
           >
             <IconEditOutlineRegular />
-          </button>
+          </IconButton>
         </Tooltip>
       )}
       {onRetry !== undefined && (
         <Tooltip label="重试此回合" side="bottom">
-          <button
-            type="button"
-            {...styling.props(styles.action)}
-            aria-label="重试此回合"
+          <IconButton shape="circle"
+            label="重试此回合"
             onClick={onRetry}
           >
             <IconRefreshOutlineRegular />
-          </button>
+          </IconButton>
         </Tooltip>
       )}
       {onBranch !== undefined && (
@@ -142,25 +128,21 @@ export function MessageIconActions({
           side="bottom"
         >
           {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}
-          <button
-            type="button"
-            {...styling.props(styles.action)}
-            aria-label={t("message.branch")}
+          <IconButton shape="circle"
+            label={t("message.branch")}
             aria-disabled={branchUnavailable || undefined}
             aria-describedby={branchUnavailable ? reasonId : undefined}
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onBranch}
           >
             <IconBranchOutlineRegular />
-          </button>
+          </IconButton>
         </Tooltip>
       )}
       {onBranch !== undefined && branchUnavailable && (
-        <span id={reasonId} {...styling.props(styles.visuallyHidden)}>
-          {t("message.branchUnavailable")}
-        </span>
+        <VisuallyHidden id={reasonId}>{t("message.branchUnavailable")}</VisuallyHidden>
       )}
       {clock === "end" ? clockEl : null}
-    </div>
+    </Row>
   );
 }

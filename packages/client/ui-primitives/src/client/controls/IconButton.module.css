@@ -1,0 +1,43 @@
+/* 方形图标按钮：没有文字、没有边框，hover 才上底色（官方侧边栏那种 28×28 几何）。 */
+.iconButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.iconButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+/* 圆形那一档：对话动作行的 28×28 圆键（hover 才上底色，颜色走三级文本色）。 */
+.circle {
+  padding: 6px;
+  border-radius: 28px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.circle:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}

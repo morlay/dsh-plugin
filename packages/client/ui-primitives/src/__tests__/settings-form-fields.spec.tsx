@@ -5,9 +5,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsSecretField, SettingsValueField } from "@morlay/dsh-client-ui-primitives/client";
-import { styles as formStyles } from "../client/settings-form/SettingsForm.styles.ts";
-import { styles as fieldStyles } from "../client/settings-form/fields.styles.ts";
-import { Styling } from "../client/styling/styling.ts";
 
 afterEach(cleanup);
 
@@ -217,28 +214,6 @@ describe("SettingsSecretField", () => {
   });
 });
 
-// 焦点环口径搬上游 `focus.css` 的表达式：颜色读官方 `--dsw-focus-ring-color`
-// （主题按输入模态解析成蓝），变量缺失时回退 `--dsw-alias-state-business-primary`。
-describe("设置表单的焦点环", () => {
-  const FOCUS_RING =
-    "var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary))";
+// 焦点环（`--dsw-focus-ring-width` / `--dsw-focus-ring-color`）不住本包了：设置表单原语用的是上游那份，
+// 它的样式在 `vendor/.../client/ui-primitives/src/settings-form/*.module.css`，由上游自己的用例守着。
 
-  it("帮助按钮与保存按钮的 :focus-visible 外框读官方焦点变量", () => {
-    const local = Styling.create();
-    local.props(fieldStyles.helpButton);
-    local.props(formStyles.save);
-
-    const sheets = local.sheets().join("\n");
-    expect(sheets).toContain("outline: var(--dsw-focus-ring-width) solid var(");
-    expect(sheets).toContain(FOCUS_RING);
-  });
-
-  it("输入框的 :focus-visible 边框用业务蓝", () => {
-    const local = Styling.create();
-    local.props(fieldStyles.input);
-
-    expect(local.sheets().join("\n")).toContain(
-      "border-color: var(--dsw-alias-state-business-primary)",
-    );
-  });
-});

@@ -1,0 +1,100 @@
+/* 模型路由清单（`ModelRouteList`）：分组铺开、只选一条。数值照官方「子智能体」那张卡的模型清单。 */
+.list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-height: 280px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+}
+
+.group {
+  display: grid;
+  gap: 6px;
+}
+
+.group + .group {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.provider {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+}
+
+.item:hover {
+  /* 上游那张卡的 hover 底色引用了 `--dsw-alias-bg-layer-4`：它不在官方 token 集里，照抄引用而不是换一个近义 token。 */
+  background: var(--dsw-alias-bg-layer-4);
+}
+
+.item:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.item[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* 选中的那一条：底色 + 勾（勾由组件画）。 */
+.picked {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.text {
+  min-width: 0;
+}
+
+.name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.id {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 清单的状态行（读目录中 / 失败 / 一条都没有）。 */
+.notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-state-error-primary);
+}

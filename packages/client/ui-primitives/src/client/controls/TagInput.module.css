@@ -1,0 +1,105 @@
+/* 标签输入与它右边的候选菜单：一行，顶部对齐（框会随标签换行变高）。 */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 候选菜单包锚点的那层 wrapper：官方 `Menu.module.css` 的 `.root` 是 `display: inline-flex`（宽度按内容收缩），
+   框因此只有内容那么宽。这一条把它撑满——框的宽度归外面那行，不归锚点自己的内容。 */
+.anchor {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 框：与官方输入框同一种边框 / 背景 / 高度，标签与内联输入都在框里，放不下就换行。 */
+.box {
+  box-sizing: border-box;
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 4px 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+}
+
+/* 框内的裸输入：边框、背景与焦点环都交给外面那个框。 */
+.input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  padding: 2px 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* 可移除的胶囊：几何与配色照官方 `Tag` 的 neutral（999px 圆角、11px/17px、wt500、`bg-module-platform`
+   + 二级文本色），只是里面多一个「移除」按钮——官方 `Tag` 是只读的，嵌不进按钮。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  corner-shape: round;
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* 胶囊里的移除按钮：图标本身很小，给它一块贴着字号的点击区，不给可见的边框与背景。 */
+.chipRemove {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.chipRemove:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.chipRemove:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.chipRemove:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid
+    var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 0;
+}
+
+/* 一个候选都没匹配上：在候选区里说一句，而不是给一张空菜单。 */
+.empty {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
