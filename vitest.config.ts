@@ -46,8 +46,9 @@ async function clientSourceAliases(): Promise<{ find: string; replacement: strin
 // 上游 typert 用**标准（TC39）装饰器**标记远程面（如 `@Remote('prompt')`）。上游包在测试里走已构建的
 // lib，本仓库的 fork 包走源码入口，而 Vite 8 的默认转换器（oxc）不降级装饰器——原样执行时
 // `node:vm` 编译报 SyntaxError。预转换的实现在 devkit（产物那边的 tsdown 用同一份）。
-// 范围限定 subagent 子树：只有那批源码带装饰器（YAGNI，需要时再扩）；`pre` 是必需的时机（默认时机太晚）。
-const DECORATOR_SOURCES = /\/packages\/subagent\//;
+// 范围是**接管了带装饰器上游源码的包树**：`subagent`（上游那批远程面），以及 `profile`（`dsh-session-mode`
+// 的 host 半自己开的远程面也带 `@Remote`）。新增同类包时按树的粒度加一个分支；`pre` 是必需的时机（默认时机太晚）。
+const DECORATOR_SOURCES = /\/packages\/(?:subagent|profile)\//;
 
 export default defineConfig(async () => ({
   plugins: [

@@ -12,6 +12,7 @@ import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 // Type-only：`plugins.bundle.config` 的槽位声明（bundle 详情页的配置座位）。
 import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
 import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
+import { CATALOG_NS, SESSION_MODE_CATALOG_REMOTE, type SessionModeCatalogRemote } from "../catalog-remote.ts";
 import { POLICY_NAMES } from "../shared.ts";
 import {
   BUNDLE_CONFIG_KEY,
@@ -194,6 +195,47 @@ export function apply(ctx: Context): void {
         for (const off of offs) off();
       };
     }, "session-mode: preset candidates"),
+  );
+
+  // 配置页的名单候选（工具名 / 技能名 / 上游 policy 名）：前两个来自本包自己开的那条 Remote 面
+  // （`../catalog-remote.ts`——工具清单只在 host，技能面按会话，配置页都没有别的路可走），mount 由这里做；
+  // policy 名是一份封闭名单（`shared.ts`）。三个都是**具名源**，schema 上名单字段声明 `role('select', { source })`
+  // 认领——标签输入因此聚焦就有候选，而不是只能手输。
+  ctx.inject(["schemaFormHints", "remote"], (scope) =>
+    scope.effect(() => {
+      const hints = unwrapHintService(scope);
+      let tools: readonly string[] = [];
+      let skills: readonly string[] = [];
+      const offs = [
+        hints.source("catalog-tools", { options: () => tools.map((value) => ({ value })) }),
+        hints.source("catalog-skills", { options: () => skills.map((value) => ({ value })) }),
+        hints.source("policies", { options: () => POLICY_NAMES.map((value) => ({ value })) }),
+      ];
+      let disposeMount: (() => Promise<void>) | undefined;
+      // `$mount` 不是每个环境都有（测试替身、极简装配）：没有就只留 policy 那份候选。
+      if (typeof scope.remote.$mount !== "function") {
+        return () => {
+          for (const off of offs) off();
+        };
+      }
+      void scope.remote
+        .$mount(SESSION_MODE_CATALOG_REMOTE)
+        .then(async (dispose) => {
+          disposeMount = dispose;
+          const listed = await remoteNamespace<SessionModeCatalogRemote>(scope, CATALOG_NS)?.list();
+          if (listed?.ok !== true) return;
+          tools = listed.value.tools;
+          skills = listed.value.skills;
+          hints.refresh();
+        })
+        .catch(() => {
+          // 这条面 mount 不上（旧 host）时不给候选：字段退回自由输入，不炸页面。
+        });
+      return () => {
+        for (const off of offs) off();
+        void disposeMount?.();
+      };
+    }, "session-mode: catalog candidates"),
   );
 
   // chip 挂 **composer 工具行左侧**（`conversation.input.left`，list + session scope）：新会话屏也是一个

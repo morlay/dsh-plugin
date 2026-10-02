@@ -25,6 +25,7 @@ import {
   type SessionMode,
   type SessionModeRole,
 } from "./modes.ts";
+import { SessionModeCatalog } from "./catalog.ts";
 import { installPersona } from "./persona.ts";
 import { SessionScope } from "./scope.ts";
 import {
@@ -440,6 +441,8 @@ export class SessionModes extends Service {
 export function apply(ctx: Context, config: ResolvedConfig): void {
   const modes = new SessionModes(ctx, config);
   registerHttpRoutes(ctx, modes);
+  // 配置页的工具 / 技能候选：一条本包自己开的 Remote 面（客户端半自己 mount，见 `./catalog-remote.ts`）。
+  ctx.plugin(SessionModeCatalog);
 }
 
 interface HttpRequestLike {

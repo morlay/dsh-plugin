@@ -196,6 +196,8 @@ const modeSchema: z<SessionMode> = z.object({
   persona: personaSchema.default({}),
   allowTools: z
     .array(z.string())
+    // 候选是部署里的工具名（具名源 `catalog-tools`，由 client 半注册）：字段只说"这是选几个"，不关心清单从哪来。
+    .role("select", { source: "catalog-tools" })
     .default([])
     .description(
       localized({
@@ -205,6 +207,7 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   denyTools: z
     .array(z.string())
+    .role("select", { source: "catalog-tools" })
     .default([])
     .description(
       localized({
@@ -214,6 +217,8 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   allowSkills: z
     .array(z.string())
+    // 候选是技能注册表里的名字（具名源 `catalog-skills`）。
+    .role("select", { source: "catalog-skills" })
     .default([])
     .description(
       localized({
@@ -223,6 +228,7 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   denySkills: z
     .array(z.string())
+    .role("select", { source: "catalog-skills" })
     .default([])
     .description(
       localized({
@@ -232,6 +238,8 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   allowPolicies: z
     .array(z.string())
+    // 候选是上游那两条 policy 名（具名源 `policies`）。
+    .role("select", { source: "policies" })
     .default([])
     .description(
       localized({
@@ -241,6 +249,7 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   denyPolicies: z
     .array(z.string())
+    .role("select", { source: "policies" })
     .default([])
     .description(
       localized({

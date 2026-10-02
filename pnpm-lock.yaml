@@ -795,6 +795,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/core/tools
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/typert/protocol
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../../client/ui-primitives
