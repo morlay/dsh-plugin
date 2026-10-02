@@ -18,7 +18,7 @@ export const styles = {
     flexDirection: "column",
     gap: "8px",
   },
-  // "模式"标题与它右边的 + 图标按钮一行。
+  // "模式"标题（含说明）与它右边的 + 图标按钮一行：左列标题与说明，控件贴最右。
   sectionHead: {
     display: "flex",
     alignItems: "center",
@@ -61,18 +61,12 @@ export const styles = {
     width: "100%",
     minWidth: "0",
   },
-  // 卡片头的左列：标题一行、说明（id · 摘要）一行。
-  modeHeadText: {
+  // 标题行的左列：标题与说明同列（设置面的 `row(col(标签, 说明), 控件)`）。
+  sectionHeadText: {
     display: "flex",
     flexDirection: "column",
     gap: "2px",
     minWidth: "0",
-  },
-  modeTitle: {
-    fontSize: "13px",
-    lineHeight: "20px",
-    fontWeight: "500",
-    color: "var(--dsw-alias-label-primary)",
   },
   modeHeadAside: {
     display: "flex",

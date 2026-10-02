@@ -16,7 +16,7 @@ export interface IconButtonProps
 
 export function IconButton({ label, children, type = "button", ...rest }: IconButtonProps): ReactNode {
   return (
-    <Button type={type} aria-label={label} {...rest}>
+    <Button type={type} data-role="icon-button" aria-label={label} {...rest}>
       {children}
     </Button>
   );

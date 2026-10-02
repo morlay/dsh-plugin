@@ -113,4 +113,6 @@ union 字段行尾的那个小下拉：带标签的挂在**标签行**上（选�
 provider + model 这一对）、标签输入 `TagInput`（multi-input，与 `SearchSelect` 共用同一套「搜索 + 候选」交互）、
 多行文本 `MultilineField`、图标按钮 `IconButton`、按钮 `Button`（官方那份 + 文字不换行）。官方那套基础组件
 （`Button` / `Menu` / `Modal` / `Switch` / `SegmentedControl` / `DisclosureRow` / 图标 …）也由本包 `export *` 统一转出：
-业务包只向本包取控件，**不写控件外观**（业务层留的是页面结构布局）。
+业务包只向本包取控件，**不写控件外观**（业务层留的是页面结构布局）。每个控件都带一个稳定的 `data-role`
+（`field-row` / `search-select` / `model-route-list` / `tag-input` / `multiline-field` / `icon-button` / `button`）：
+它是控件身份，供样式、测试与自动化定位；业务自己的标记另起名字，不占用它。

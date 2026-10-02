@@ -205,6 +205,18 @@ describe("会话模式的 bundle 配置页", () => {
     expect((name as HTMLInputElement).value).toBe("编码模式");
   });
 
+  it("模式区第一个 child 是 `row(col(标题, 说明), + 按钮)`", () => {
+    renderPage();
+
+    const head = document.querySelector('[data-section="modes"]')?.children[0] as HTMLElement;
+    // 左列（标题 + 说明）与右侧的添加入口；说明与标题同列，不再另起一行。
+    expect([...head.children].map((child) => child.tagName)).toEqual(["SPAN", "BUTTON"]);
+    const text = head.children[0]?.textContent ?? "";
+    expect(text).toContain(bundleZh["modes.label"]);
+    expect(text).toContain(bundleZh["modes.hint"]);
+    expect(head.children[1]?.getAttribute("data-action")).toBe("open-add-mode");
+  });
+
   it("字段排法与通用设置一致：标签 / 控件 / 说明同列，字段之间一条细分隔线", () => {
     renderPage();
 
@@ -235,8 +247,8 @@ describe("会话模式的 bundle 配置页", () => {
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
     // 角色是同一个 Button 组件：选中的用 primary，未选的用 outline。
-    const main = document.querySelector('[data-role="main"]') as HTMLElement;
-    const subagent = document.querySelector('[data-role="subagent"]') as HTMLElement;
+    const main = document.querySelector('[data-mode-role="main"]') as HTMLElement;
+    const subagent = document.querySelector('[data-mode-role="subagent"]') as HTMLElement;
     expect(main.tagName).toBe("BUTTON");
     expect(subagent.tagName).toBe("BUTTON");
     expect(main.getAttribute("aria-pressed")).toBe("true");

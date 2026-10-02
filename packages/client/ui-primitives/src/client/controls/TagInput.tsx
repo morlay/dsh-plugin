@@ -51,7 +51,7 @@ export function TagInput({
   };
   const remaining = (options ?? []).filter((option) => !value.includes(option.value));
   return (
-    <div {...styling.props(styles.tagRow)} data-control="tags">
+    <div {...styling.props(styles.tagRow)} data-role="tag-input" data-control="tags">
       <div {...styling.props(styles.chipsBox)}>
         {value.map((name) => (
           // 标签与里面的移除按钮是同一个整体：× 在框内，点它才移除。

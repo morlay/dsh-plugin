@@ -10,5 +10,5 @@ const Textarea = styled("textarea")(styles.multiline);
 export type MultilineFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 export function MultilineField({ rows = 3, ...rest }: MultilineFieldProps) {
-  return <Textarea rows={rows} {...rest} />;
+  return <Textarea rows={rows} data-role="multiline-field" {...rest} />;
 }

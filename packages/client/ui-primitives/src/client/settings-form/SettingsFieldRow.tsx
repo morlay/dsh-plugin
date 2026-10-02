@@ -40,6 +40,7 @@ export function SettingsFieldRow({
 }: SettingsFieldRowProps): ReactNode {
   const container = {
     ...styling.props(styles.row),
+    "data-role": "field-row",
     ...(divider ? styling.props(styles.rowDivider) : {}),
     "data-divider": divider ? "true" : "false",
     ...rest,

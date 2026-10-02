@@ -17,6 +17,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <OfficialButton
       ref={ref}
+      data-role="button"
       className={className === undefined || className === "" ? nowrap : `${className} ${nowrap}`}
       {...rest}
     />

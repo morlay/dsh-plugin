@@ -19,6 +19,7 @@ describe("字段行", () => {
     );
 
     const row = screen.getByText("允许的工具").closest("[data-divider]") as HTMLElement;
+    expect(row.getAttribute("data-role")).toBe("field-row");
     const text = row.textContent ?? "";
     expect(text.indexOf("允许的工具")).toBeLessThan(text.indexOf("留空 = 不限制"));
     expect(screen.getByRole("alert").textContent).toBe("认不出的工具");

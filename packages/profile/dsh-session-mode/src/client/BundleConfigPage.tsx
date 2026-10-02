@@ -157,8 +157,12 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
         </section>
 
         <section {...stylingProps(styles.section)} data-section="modes">
+          {/* 这一段的第一个 child 是 `row(col(标题, 说明), 控件)`：左列标题与说明同列，添加入口贴最右。 */}
           <div {...stylingProps(styles.sectionHead)}>
-            <h4 {...stylingProps(styles.sectionTitle)}>{t("modes.label")}</h4>
+            <span {...stylingProps(styles.sectionHeadText)}>
+              <h4 {...stylingProps(styles.sectionTitle)}>{t("modes.label")}</h4>
+              <p {...stylingProps(styles.hint)}>{t("modes.hint")}</p>
+            </span>
             <IconButton
               label={t("add.label")}
               data-action="open-add-mode"
@@ -171,7 +175,6 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
               <IconPlusOutlineRegular />
             </IconButton>
           </div>
-          <p {...stylingProps(styles.hint)}>{t("modes.hint")}</p>
           {state.modes.map((mode) => (
             <ModeCard
               key={mode.id}
@@ -304,8 +307,7 @@ function ModeCard({
     >
       <DisclosureRow
         icon={<IconAgentPresetOutlineRegular />}
-        // 标题由 header 自己画（要「标题 + 说明」同列、按钮贴右）：官方 title 留空，这一行的可访问名因此来自内容。
-        title=""
+        title={mode.title}
         open={open}
         expandable
         expandOnRowClick
@@ -314,18 +316,13 @@ function ModeCard({
         contentClassName={className(styles.disclosureRoot)}
         contentLayoutClassName={className(styles.disclosureContent)}
         collapsedContent={
-          // 左列是「标题 + 一行说明」（id · 摘要），右侧是删除入口——与设置面的 row(col(label, desc), control) 同形。
+          // 两段：先是紧挨名称的 id，再是贴最右的摘要 + 删除。
           <>
-            <span {...stylingProps(styles.modeHeadText)}>
-              <span {...stylingProps(styles.modeTitle)}>{mode.title}</span>
-              <span {...stylingProps(styles.modeSummary)}>
-                <code {...stylingProps(styles.modeId)} data-mode-id>
-                  {mode.id}
-                </code>
-                {` · ${mode.summary}`}
-              </span>
-            </span>
+            <code {...stylingProps(styles.modeId)} data-mode-id>
+              {mode.id}
+            </code>
             <span {...stylingProps(styles.modeHeadAside)}>
+              <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
               {mode.deletable ? (
                 <IconButton
                   data-action="remove-mode"
@@ -568,7 +565,8 @@ function FieldControl({
                 key={role}
                 variant={active ? "primary" : "outline"}
                 size="sm"
-                data-role={role}
+                // `data-role` 归控件身份（见 primitives 的控件），这一处标的是"哪个模式角色"，所以另起一个名字。
+                data-mode-role={role}
                 disabled={disabled}
                 aria-pressed={active}
                 onClick={() => {

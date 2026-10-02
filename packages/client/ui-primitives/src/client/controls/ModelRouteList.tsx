@@ -71,6 +71,7 @@ export function ModelRouteList({
   return (
     <div
       {...styling.props(styles.routeList)}
+      data-role="model-route-list"
       role="radiogroup"
       aria-label={label}
       data-control="model-routes"

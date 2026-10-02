@@ -11,6 +11,7 @@ import { Button } from "../client/controls/Button.tsx";
 import { styles } from "../client/controls/controls.styles.ts";
 import { IconButton } from "../client/controls/IconButton.tsx";
 import { ModelRouteList } from "../client/controls/ModelRouteList.tsx";
+import { MultilineField } from "../client/controls/MultilineField.tsx";
 import { SearchSelect } from "../client/controls/SearchSelect.tsx";
 import { TagInput } from "../client/controls/TagInput.tsx";
 import { mergeTags, parseTagList } from "../client/controls/tags.ts";
@@ -350,6 +351,65 @@ describe("模型路由清单", () => {
       />,
     );
     expect(screen.getByText("还没有模型")).toBeTruthy();
+  });
+});
+
+describe("内容组件的身份标记", () => {
+  it("每个控件都带稳定的 `data-role`（供样式 / 测试 / 自动化定位）", () => {
+    render(
+      <>
+        <Button variant="outline">添加</Button>
+        <IconButton label="删除">
+          <span />
+        </IconButton>
+        <MultilineField aria-label="提示词" />
+        <TagInput
+          value={[]}
+          onChange={() => {}}
+          placeholder="加一个后回车"
+          label="允许的工具"
+          removeLabel={(name) => `移除 ${name}`}
+        />
+        <SearchSelect
+          label="服务商"
+          value=""
+          emptyLabel="不写"
+          options={[{ value: "ollama", label: "Ollama" }]}
+          searchLabel="搜索候选"
+          noMatchLabel="没有匹配的候选"
+          onSelect={() => {}}
+        />
+        <ModelRouteList
+          label="用哪个模型"
+          candidates={[
+            {
+              key: "ollama\u0000flash",
+              provider: "ollama",
+              providerName: "Ollama Cloud",
+              model: "flash",
+              modelName: "Flash",
+            },
+          ]}
+          selectedKey={undefined}
+          status="ready"
+          loadingLabel="读模型中"
+          errorLabel="读不出来"
+          emptyLabel="还没有模型"
+          onSelect={() => {}}
+        />
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: "添加" }).getAttribute("data-role")).toBe("button");
+    expect(screen.getByRole("button", { name: "删除" }).getAttribute("data-role")).toBe(
+      "icon-button",
+    );
+    expect(screen.getByLabelText("提示词").getAttribute("data-role")).toBe("multiline-field");
+    expect(document.querySelector('[data-role="tag-input"]')).toBeTruthy();
+    expect(screen.getByRole("button", { name: "服务商" }).getAttribute("data-role")).toBe(
+      "search-select",
+    );
+    expect(document.querySelector('[data-role="model-route-list"]')).toBeTruthy();
   });
 });
 

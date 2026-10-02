@@ -51,7 +51,8 @@ import { SettingsFormModel, settingsNumberField } from "@morlay/dsh-client-ui-pr
 const form = new SettingsFormModel(scope, [settingsNumberField("timeoutMs")]);
 ```
 
-业务页面组设置面时，控件与字段摆位都从这里取（**业务层不写控件外观**）：
+业务页面组设置面时，控件与字段摆位都从这里取（**业务层不写控件外观**；每个控件带稳定的 `data-role` 供样式、测试与
+自动化定位）：
 
 ```tsx
 import {

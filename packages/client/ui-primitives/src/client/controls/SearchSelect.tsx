@@ -83,6 +83,7 @@ export function SearchSelect({
         <Button
           variant="outline"
           size="sm"
+          data-role="search-select"
           className={styling.className(styles.controlHeight, styles.buttonLabel)}
           data-action="pick"
           disabled={disabled}
