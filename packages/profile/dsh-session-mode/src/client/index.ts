@@ -49,6 +49,47 @@ const POLICY_FIELDS = ["allowPolicies", "denyPolicies"] as const;
 // 动态键的占位段（与通用表单的字段树同一约定）。
 const DYNAMIC = "*";
 
+// 客户端 remote 的一个命名空间：gateway 的 client 半把每个命名空间注册成**独立服务**（服务名
+// `remote.<命名空间>`），**不是** `remote` 服务上的属性——所以按服务名取（属性访问读不到）。
+// 部署里可能没有这个命名空间（headless 没装 preset registry），读不到就按"没有候选"处理。
+function remoteNamespace<T>(scope: Context, namespace: string): T | undefined {
+  try {
+    return (scope as unknown as { get(key: string): unknown }).get(`remote.${namespace}`) as
+      | T
+      | undefined;
+  } catch {
+    // 服务没注册时 `ctx.get` 抛错：按"这个命名空间不在这一版部署里"处理。
+    return undefined;
+  }
+}
+
+// 部署里的 agent preset 清单（`remote.agentPresets.list()`）：本包只用它的 id 与显示名做候选。
+interface PresetRosterReader {
+  list: () => Promise<
+    | { ok: true; value: { presets: readonly { id: string; name?: string }[] } }
+    | { ok: false }
+  >;
+}
+
+// 本包从 LLM 命名空间读的那两件事（活着的路由清单与可配置声明）。
+interface LlmReader {
+  listProviders: () => Promise<
+    { ok: true; value: readonly { id: string; name: string }[] } | { ok: false }
+  >;
+  listConfigurableProviders: () => Promise<
+    | {
+        ok: true;
+        value: readonly {
+          provider: string;
+          displayName: string;
+          settingsNs: string;
+          settingsPath: readonly string[];
+        }[];
+      }
+    | { ok: false }
+  >;
+}
+
 // 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。
 interface ProviderEntry {
   value: string;
@@ -130,13 +171,14 @@ export function apply(ctx: Context): void {
     scope.effect(() => {
       const hints = unwrapHintService(scope);
       const remote = scope.get("remote");
+      const llm = remoteNamespace<LlmReader>(scope, "llm");
       const forms = scope.get("configForms");
-      if (remote === undefined || forms === undefined) return () => {};
+      if (remote === undefined || llm === undefined || forms === undefined) return () => {};
       let providers: ProviderEntry[] = [];
       const load = async (): Promise<void> => {
         const [routes, directory] = await Promise.all([
-          remote.llm.listProviders(),
-          remote.llm.listConfigurableProviders(),
+          llm.listProviders(),
+          llm.listConfigurableProviders(),
         ]);
         if (!routes.ok || !directory.ok) return;
         const merged = new Map<string, ProviderEntry>();
@@ -199,6 +241,40 @@ export function apply(ctx: Context): void {
         for (const off of offs) off();
       };
     }, "session-mode: model candidates"),
+  );
+
+  // 模式"允许挂哪些 preset"的候选：部署里注册的 agent preset（`remote.agentPresets.list()`），登记成具名源
+  // `agent-presets`——schema 上 `presetsOnly` 声明 `role('select', { source })` 认领它，页面不必知道这些 preset
+  // 从哪来。装配组合变了（设置文档一次更新）就重取一次。
+  ctx.inject(["schemaFormHints"], (scope) =>
+    scope.effect(() => {
+      const hints = unwrapHintService(scope);
+      const remote = scope.get("remote");
+      if (remote === undefined) return () => {};
+      const roster = remoteNamespace<PresetRosterReader>(scope, "agentPresets");
+      if (roster === undefined) return () => {};
+      let presets: readonly { value: string; label: string }[] = [];
+      const load = async (): Promise<void> => {
+        const listed = await roster.list();
+        if (!listed.ok) return;
+        presets = listed.value.presets.map((preset) => ({
+          value: preset.id,
+          label: preset.name ?? preset.id,
+        }));
+        // 候选变了：注册本身就是一次变更通知（页面据此重投影）。
+        hints.refresh();
+      };
+      const offs = [
+        hints.source("agent-presets", { options: () => presets }),
+        remote.$on("settings/document-updated", () => {
+          void load();
+        }),
+      ];
+      void load();
+      return () => {
+        for (const off of offs) off();
+      };
+    }, "session-mode: preset candidates"),
   );
 
   // chip 挂 **composer 工具行左侧**（`conversation.input.left`，list + session scope）：新会话屏也是一个

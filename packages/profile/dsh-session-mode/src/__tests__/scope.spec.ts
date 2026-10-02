@@ -25,7 +25,7 @@ afterEach(async () => {
 // 留给按名单推导，其余给 schema 的缺省值。
 function modeOf(name: string, overrides: Partial<SessionMode> = {}): SessionMode {
   return {
-    preset: "",
+    presetsOnly: [],
     name,
     description: "",
     role: ["main"],

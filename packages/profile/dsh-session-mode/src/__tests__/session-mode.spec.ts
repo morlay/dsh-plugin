@@ -32,7 +32,7 @@ const CONFIG: Config = {
   default: "coding",
   modes: {
     coding: {
-      preset: "standard",
+      presetsOnly: ["standard"],
       name: "编码模式",
       description: "编码",
       role: ["main"],
@@ -47,7 +47,7 @@ const CONFIG: Config = {
       runtimeContext: true,
     },
     chat: {
-      preset: "minimal",
+      presetsOnly: ["minimal"],
       name: "对话模式",
       description: "对话",
       role: ["main"],
@@ -271,13 +271,13 @@ describe("模式的读取与切换", () => {
     );
   });
 
-  it("选模式时把官方 preset 一起切，且只写一条 session-mode/selected", async () => {
+  it("选模式时把官方 preset 落到模式允许的那份，且只写一条 session-mode/selected", async () => {
     const { ctx, agent } = await mount();
     const picked = installFakeRegistry(ctx);
 
     await ctx.sessionModes.select(agent.id, "chat");
 
-    // preset 跟着模式走：行清单归官方 registry，模式只决定"用哪一份行 + 怎么收口"。
+    // preset 跟着模式走：行清单归官方 registry，模式只声明"允许挂哪些"、切的时候把当前那份落进名单。
     expect(picked).toEqual(["minimal"]);
     // 官方那条路会 emit `agent-preset/selected`（监听里再落一次事实）：同一个值不写第二条。
     const selected = agent.session
@@ -287,10 +287,10 @@ describe("模式的读取与切换", () => {
     expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
   });
 
-  it("模式没声明 preset（空串）时不碰官方 registry", async () => {
+  it("模式不限 preset（空名单）时不碰官方 registry", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
-      modes: { ...CONFIG.modes, chat: { ...CONFIG.modes["chat"]!, preset: "" } },
+      modes: { ...CONFIG.modes, chat: { ...CONFIG.modes["chat"]!, presetsOnly: [] } },
     });
     const picked = installFakeRegistry(ctx);
 
@@ -318,30 +318,44 @@ describe("模式的读取与切换", () => {
       ctx.plugin(plugin, { default: "absent", modes: CONFIG.modes }).then(() => ctx.fiber.await()),
     ).rejects.toThrow("default");
   });
+
+  it("装配期校验：退役的 `preset` 还配着值就拒绝装载（指向 `presetsOnly`）", async () => {
+    await expectRefused(
+      {
+        default: "coding",
+        modes: {
+          ...CONFIG.modes,
+          chat: { ...CONFIG.modes["chat"]!, preset: "minimal" },
+        },
+      },
+      "presetsOnly",
+    );
+  });
 });
 
-// 机制：两个模式可以共享**同一份** preset 声明（差异全在会话级收口：persona / 名单 / 三个开关）。preset 是
-// 行清单的 home，模式是它的会话级扩展；本部署两个模式都不声明它，这条路径留给"声明了才换"的部署形态。
+// 机制：两个模式可以共享**同一份** preset 白名单（差异全在会话级收口：persona / 名单 / 三个开关）。preset 是
+// 行清单的 home，模式只声明"允许挂哪些"；本部署两个模式都不声明它，这条路径留给"声明了就把当前那份落进名单"的形态。
 const SHARED: Config = {
   default: "coding",
   modes: {
-    coding: { ...CONFIG.modes["coding"]!, preset: "mode-switch" },
-    chat: { ...CONFIG.modes["chat"]!, preset: "mode-switch" },
+    coding: { ...CONFIG.modes["coding"]!, presetsOnly: ["mode-switch", "spare"] },
+    chat: { ...CONFIG.modes["chat"]!, presetsOnly: ["mode-switch", "spare"] },
   },
 };
 
-describe("两个模式共享一份 preset", () => {
+describe("两个模式共享一份 preset 白名单", () => {
   it("共享是合法的：装配期校验不再要求 preset 一对一", async () => {
     const { ctx } = await mount(SHARED);
 
     expect(ctx.sessionModes.defaultId).toBe("coding");
     expect(ctx.sessionModes.roster().modes.map((mode) => mode.id)).toEqual(["coding", "chat"]);
-    expect(SHARED.modes["coding"]?.preset).toBe(SHARED.modes["chat"]?.preset);
+    expect(SHARED.modes["coding"]?.presetsOnly).toEqual(SHARED.modes["chat"]?.presetsOnly);
   });
 
   it("共享时 preset → 模式的反查不回答；一对一映射照旧回答", async () => {
     const { ctx } = await mount(SHARED);
     expect(ctx.sessionModes.modeForPreset("mode-switch")).toBeUndefined();
+    expect(ctx.sessionModes.modeForPreset("spare")).toBeUndefined();
     expect(ctx.sessionModes.modeForPreset(undefined)).toBeUndefined();
 
     const unique = await mount(CONFIG);
@@ -351,7 +365,7 @@ describe("两个模式共享一份 preset", () => {
 
   it("目标 preset 已经挂着就不换：切模式只换会话收口（不重挂行清单）", async () => {
     const { ctx, agent } = await mount(SHARED);
-    const picked = installFakeRegistry(ctx, { composedPreset: "mode-switch" });
+    const picked = installFakeRegistry(ctx, { composedPreset: "spare" });
 
     await ctx.sessionModes.select(agent.id, "chat");
 
@@ -381,7 +395,7 @@ describe("两个模式共享一份 preset", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
   });
 
-  it("挂在别的 preset 上时照旧切过去（模式声明的 preset 与当前不同）", async () => {
+  it("当前那份不在名单里就落到名单第一个（白名单的默认落点）", async () => {
     const { ctx, agent } = await mount(SHARED);
     const picked = installFakeRegistry(ctx, { composedPreset: "standard" });
 
@@ -412,7 +426,7 @@ const EXTENDED: Config = {
     },
     chat: { ...CONFIG.modes["chat"]!, role: ["main"] },
     reviewer: {
-      preset: "",
+      presetsOnly: [],
       name: "评审模式",
       description: "只读评审",
       role: ["subagent"],

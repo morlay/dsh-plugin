@@ -142,7 +142,7 @@ async function mountStanding(
 // 一份模式定义：只有收口要的那几项在用例里写出来，其余给 schema 的缺省值。
 function modeOf(name: string, overrides: Partial<SessionMode> = {}): SessionMode {
   return {
-    preset: "",
+    presetsOnly: [],
     name,
     description: "",
     role: ["main"],

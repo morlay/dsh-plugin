@@ -32,23 +32,33 @@ function bench() {
       },
     },
     remote: {
-      llm: {
-        listProviders: () =>
-          Promise.resolve({ ok: true, value: [{ id: "openai", name: "OpenAI" }] }),
-        listConfigurableProviders: () =>
-          Promise.resolve({
-            ok: true,
-            value: [
-              {
-                provider: "mine",
-                displayName: "自建",
-                settingsNs: "llm-openai-compatible",
-                settingsPath: ["providers", "mine"],
-              },
-            ],
-          }),
-      },
+      // `remote` 服务本身只提供 `$on`（事件订阅）。
       $on: () => () => {},
+    },
+    // 客户端 remote 的命名空间是**独立服务**（服务名 `remote.<命名空间>`），不是 `remote` 上的属性：
+    // 这一对是接缝本身（属性访问读到的是 undefined）。
+    "remote.llm": {
+      listProviders: () => Promise.resolve({ ok: true, value: [{ id: "openai", name: "OpenAI" }] }),
+      listConfigurableProviders: () =>
+        Promise.resolve({
+          ok: true,
+          value: [
+            {
+              provider: "mine",
+              displayName: "自建",
+              settingsNs: "llm-openai-compatible",
+              settingsPath: ["providers", "mine"],
+            },
+          ],
+        }),
+    },
+    // 模式允许挂哪些 preset 的候选：部署里注册的那些（`name` 缺省时用 id 兜底）。
+    "remote.agentPresets": {
+      list: () =>
+        Promise.resolve({
+          ok: true,
+          value: { presets: [{ id: "standard", name: "标准" }, { id: "minimal" }] },
+        }),
     },
     configForms: {
       get: () => ({
@@ -107,5 +117,31 @@ describe("选模型的候选", () => {
     // 目录里没有配置地址的 provider（内置路由）：列不出模型，字段退回文本输入。
     expect(options("openai")).toEqual([]);
     expect(options(undefined)).toEqual([]);
+  });
+
+  it("模式允许挂的 preset 候选来自部署 registry：`name` 缺省时用 id 兜底", async () => {
+    const b = bench();
+    apply(b.ctx as never);
+    await settled();
+
+    const presets = b.sources.find((entry) => entry.name === "agent-presets");
+    expect(presets?.spec.options(() => undefined)).toEqual([
+      { value: "standard", label: "标准" },
+      { value: "minimal", label: "minimal" },
+    ]);
+  });
+
+  it("命名空间按服务名读：`remote` 服务上没有 `llm` / `agentPresets` 属性", async () => {
+    const b = bench();
+    apply(b.ctx as never);
+    await settled();
+
+    // 属性访问读到的是 undefined（gateway 的 client 半把每个命名空间注册成独立服务 `remote.<名字>`）；
+    // 两个具名源照样注册上了，说明读的是那两个服务。
+    const remote = b.ctx.get("remote") as Record<string, unknown>;
+    expect(remote["llm"]).toBeUndefined();
+    expect(remote["agentPresets"]).toBeUndefined();
+    expect(b.sources.map((entry) => entry.name)).toContain("llm-providers");
+    expect(b.sources.map((entry) => entry.name)).toContain("agent-presets");
   });
 });

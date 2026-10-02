@@ -22,6 +22,7 @@ function list<T>(values: readonly T[] | undefined): readonly T[] | undefined {
 
 // 一个模式的源定义 → 行 config（schema 的输入形状：可省的字段就省）。
 function modeConfig(source: ModeSource): Record<string, unknown> {
+  const presetsOnly = list(source.presetsOnly);
   const allowTools = list(source.allowTools);
   const denyTools = list(source.denyTools);
   const allowSkills = list(source.allowSkills);
@@ -29,8 +30,8 @@ function modeConfig(source: ModeSource): Record<string, unknown> {
   const allowPolicies = list(source.allowPolicies);
   const denyPolicies = list(source.denyPolicies);
   return {
-    // `preset` 是可选的：不写就是不绑（行 config 里也不出现这个键，schema 默认空串）。
-    ...(source.preset === undefined ? {} : { preset: source.preset }),
+    // `presetsOnly` 是可选的：不写（或写成空数组）就是这个键不进 config，schema 默认空数组（= 不限制）。
+    ...(presetsOnly === undefined ? {} : { presetsOnly }),
     name: source.name,
     description: source.description,
     ...(source.role === undefined ? {} : { role: [...source.role] }),

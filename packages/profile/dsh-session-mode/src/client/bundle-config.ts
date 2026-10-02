@@ -82,10 +82,10 @@ const MODE_FIELDS: readonly FieldSpec[] = [
     group: "identity",
   },
   {
-    path: ["preset"],
-    control: "text",
-    labelKey: "field.preset",
-    hintKey: "hint.preset",
+    path: ["presetsOnly"],
+    control: "tags",
+    labelKey: "field.presetsOnly",
+    hintKey: "hint.presetsOnly",
     group: "identity",
   },
   {

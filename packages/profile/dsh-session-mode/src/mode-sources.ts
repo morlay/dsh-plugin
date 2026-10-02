@@ -7,10 +7,10 @@ import type { PolicyName } from "./shared.ts";
 // 一个模式的源定义：就是 `session-mode` 行 `config.modes` 里的一项。
 export interface ModeSource {
   readonly id: string;
-  // 挂哪个 agent preset（它的 `id`）：**可选**，不写就是不绑——选这个模式不换 preset，会话保持它当前挂着的那份，
-  // 行清单由那份 preset 提供（官方四个 shipped preset 照旧可选）。写了才在切模式时把 preset 切过去；
-  // 模式定义里可以整体改写它（用户 patch 层）。
-  readonly preset?: string;
+  // 这个模式**只允许**挂哪些 agent preset（它们的 `id`）：**可选**，不写（留空）就是不限制——选这个模式不换 preset，
+  // 会话保持它当前挂着的那份，行清单由那份 preset 提供（官方四个 shipped preset 照旧可选）。有值时切模式会让 preset
+  // 落进名单：当前的已经在里面就不动，否则换成第一个。模式定义里可以整体改写它（用户 patch 层）。
+  readonly presetsOnly?: readonly string[];
   readonly name: string;
   readonly description: string;
   // 归谁用：`main`（用户选择器，缺省）、`subagent`（可作子代理 mode 的候选）。
@@ -67,7 +67,7 @@ const NOOP_MODE_ID = "noop";
 // 新会话用哪个模式（`session-mode` 行的 `config.default`）。
 export const DEFAULT_MODE = "coding";
 
-// 三个模式：编码、对话与原样。**都不绑定 preset**（差异全在会话级收口），行清单由会话挂着的 preset 提供：`coding`
+// 三个模式：编码、对话与原样。**都不限制 preset**（差异全在会话级收口），行清单由会话挂着的那份提供：`coding`
 // 不收窄（用全部），`chat` 收成提问 + 联网三件，`noop` 什么都不加。
 export const MODE_SOURCES: readonly ModeSource[] = [
   {
@@ -116,6 +116,6 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
     role: ["main", "subagent"],
     // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，
-    // `skills` 由工具名单推导（`allowTools` 留空 → 含 `skill` → 要目录），`preset` 不绑、`defaultModel` 跟全局。
+    // `skills` 由工具名单推导（`allowTools` 留空 → 含 `skill` → 要目录），`presetsOnly` 留空 = 不限制、`defaultModel` 跟全局。
   },
 ];

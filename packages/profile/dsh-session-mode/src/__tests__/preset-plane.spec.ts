@@ -1,4 +1,4 @@
-// 本部署的 preset 平面：**模式不绑 preset**（两个模式都不声明 `preset`），行清单归会话挂着的那份——这里用
+// 本部署的 preset 平面：**模式不限 preset**（两个模式都不声明 `presetsOnly`），行清单归会话挂着的那份——这里用
 // 官方 `standard` 同形的行清单跑真装配（真 `Loader` + registry + 真上游行 + fs 与 skill 注册表）：工作区指令与
 // 技能目录都由**官方行**注入，我们只做会话级收窄、文本转换，以及两条官方注入面的抑制（`agent/pre-step` 上丢）；
 // chat 收成提问 + 联网三件、官方那两条注入面也都收掉（`instructions: false` + 工具名单推出来的 `skills: false`）；
@@ -527,7 +527,7 @@ describe.each([
     await ctx.sessionModes.select(agent.id, "coding");
     await ctx.sessionModes.select(agent.id, "chat");
 
-    // 模式不声明 preset：一次 recompose 都没发生，模式事实照落。
+    // 模式不限 preset（名单留空）：一次 recompose 都没发生，模式事实照落。
     expect(recomposes).toEqual([]);
     expect(
       agent.session.ownEvents().filter((event) => event.type === "agent-preset/selected"),

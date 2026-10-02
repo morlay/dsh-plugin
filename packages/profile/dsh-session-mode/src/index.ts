@@ -263,8 +263,8 @@ export class SessionModes extends Service {
     return undefined;
   }
 
-  // 把某个空白会话（必须还没开过 turn）切到某个模式：先把 agent preset 换成模式声明的那个
-  // （目标与当前相同时不切——换 preset 是一次重挂），再落会话事实并重装该 agent 的扩展。
+  // 把某个空白会话（必须还没开过 turn）切到某个模式：先按模式的白名单把 agent preset 落到位（当前那份已经在
+  // 名单里就不换——换 preset 是一次重挂；不在名单里就换成名单里的第一个），再落会话事实并重装该 agent 的扩展。
   async select(sessionId: SessionId, mode: string): Promise<string> {
     const definition = this.definition(mode);
     if (!definition.role.includes("main")) {
@@ -278,11 +278,12 @@ export class SessionModes extends Service {
     }
     const agent = this.ctx.agents.get(sessionId);
     const registry = this.presetRegistry();
-    if (agent !== undefined && registry !== undefined && definition.preset.length > 0) {
-      // 官方那条路自己也会查空白窗口（`agent-preset/locked`）；它切完会 emit `agent-preset/selected`，
-      // 监听据此落事实并重装——所以这里先比一次投影，同一个值不写第二条。
-      if (this.presetOfAgent(registry, agent) !== definition.preset) {
-        await registry.select(agent, definition.preset);
+    if (agent !== undefined && registry !== undefined) {
+      const target = this.presetTarget(definition.presetsOnly, this.presetOfAgent(registry, agent));
+      if (target !== undefined) {
+        // 官方那条路自己也会查空白窗口（`agent-preset/locked`）；它切完会 emit `agent-preset/selected`，
+        // 监听据此落事实并重装——所以这里先比一次投影，同一个值不写第二条。
+        await registry.select(agent, target);
       }
     }
     if (this.ctx.sessionProjections.stateOf(session, "sessionMode") !== mode) {
@@ -291,6 +292,16 @@ export class SessionModes extends Service {
     // 会话可能已经建好了 agent（空白会话也有）：立刻按新模式重新应用一遍（与监听那次重复也无妨，幂等）。
     if (agent !== undefined) this.installFor(agent);
     return mode;
+  }
+
+  // 把当前挂着的 preset 落进模式的白名单：已经在名单里就返回 `undefined`（不换）；不在里面（或读不到当前那份）
+  // 就返回名单的**第一个**（`undefined` = 名单为空 = 不限制，什么都不换）。
+  private presetTarget(allowed: readonly string[], current: string | undefined): string | undefined {
+    if (allowed.length === 0) return undefined;
+    // 当前那份在名单里：保持不动（用户自己选的 preset 落在许可范围内，模式不去覆盖它）。
+    if (current !== undefined && allowed.includes(current)) return undefined;
+    const target = allowed[0];
+    return target === current ? undefined : target;
   }
 
   // 某个 agent 当前挂着的 preset（registry 的 `composedPreset`）；读不到时按"未知"处理（该切就切）。
@@ -355,12 +366,12 @@ export class SessionModes extends Service {
     }
   }
 
-  // 某个 preset 对应的模式 id——只在映射唯一时回答（共享同一份 preset、或没有模式挂它时 `undefined`）；
-  // 本部署的模式由会话事实决定，这条反查留给"一对一映射"的部署形态。
+  // 某个 preset 对应的模式 id——只在映射唯一时回答（只有它一个模式的名单里有这份 preset；没有模式认领、或几个
+  // 模式的名单都含它时 `undefined`）；本部署的模式由会话事实决定，这条反查留给"一对一映射"的部署形态。
   modeForPreset(preset: string | undefined): string | undefined {
     if (preset === undefined) return undefined;
-    const owners = Object.keys(this.config.modes).filter(
-      (id) => this.config.modes[id]?.preset === preset,
+    const owners = Object.keys(this.config.modes).filter((id) =>
+      this.config.modes[id]?.presetsOnly.includes(preset),
     );
     return owners.length === 1 ? owners[0] : undefined;
   }

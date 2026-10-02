@@ -1,5 +1,6 @@
 // 模式的定义形状与它的装配期校验：一个模式就是"一段提示词 + 一组能力开关"，本行的 `config.modes` 声明它们。
-// 行清单来自 `preset` 指的那份 agent preset；装配层能整体改写 `modes`，也可以只给某几个模式换提示词或白名单。
+// 行清单来自会话挂着的那份 agent preset（`presetsOnly` 只声明这个模式允许挂哪些）；装配层能整体改写 `modes`，
+// 也可以只给某几个模式换提示词或白名单。
 // 取舍见 `.agents/adrs/20260925-默认模型住在模式定义里.md`、`.agents/designs/20260924-会话模式.md`。
 
 import type { Volatile } from "@deepseek-ai/cordis";
@@ -31,11 +32,12 @@ export type SessionModeModels = Readonly<Record<string, SessionModeModel>>;
 // 一个模式：提示词 + 能力开关。这份形状是 **schema 归一化之后**的（每个字段都有值，schema 用默认补上），
 // 配置里能省略哪些字段看 `modeSchema` 的 default。
 export interface SessionMode {
-  // 这个模式挂在哪个 **agent preset** 上（官方四个，或本部署自己注册的那一份）。**可选**：不写（schema 里是空串）
-  // 就是不绑——选这个模式不换 preset，会话保持它当前挂着的那份，行清单由那份 preset 提供；模式自己的那几项扩展
+  // 这个模式**只允许**挂哪些 **agent preset**（官方四个，或本部署自己注册的那一份）。**留空（不写）表示不限制**：
+  // 选这个模式不换 preset，会话保持它当前挂着的那份；行清单由那份 preset 提供，模式自己的那几项扩展
   // （persona / 工具名单 / policy 名单 / 三个开关 / `defaultModel`）在任意 preset 上都照常生效。
-  // 写了才在切模式时切过去；**可以共享**（共享时反查无从下手，见 `SessionModes.modeForPreset`）。
-  readonly preset: string;
+  // 有值时切到这个模式会让会话的 preset 落进名单：当前那份已经在名单里就原样不动，否则换成名单里的**第一个**
+  // （`modes.ts` 只声明"允许哪些"，落在哪个由 `SessionModes.select` 决定）。多个模式可以共享同一份名单。
+  readonly presetsOnly: string[];
   // 模式的展示名（选择面归官方 roster；这里留着做事实文案）。
   readonly name: string;
   // 一句话说明这个模式干什么；空串表示没写。
@@ -76,6 +78,8 @@ export interface SessionMode {
   // 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
   // （`defaultModel` 是它所在模式的一个可加字段）。
   readonly defaultModel?: SessionModeModel;
+  // 退役字段：单个 `preset` 已换成白名单 `presetsOnly`。这里留着只为**报错**（见 `configProblem`），页面上不出现。
+  readonly preset?: string;
 }
 
 // `skills` 不写时的推导：起点是白名单（留空 = 起点是全部工具，含 `skill`），减去黑名单，还留着 `skill` 就要技能
@@ -149,13 +153,17 @@ export interface ResolvedConfig {
 }
 
 const modeSchema: z<SessionMode> = z.object({
-  preset: z
-    .string()
-    .default("")
+  // 退役字段：这里留着只为**报错**（见 `configProblem`），页面上不出现（`hidden()`）。不给默认：没配就没这个键。
+  preset: z.string().hidden(),
+  presetsOnly: z
+    .array(z.string())
+    // 候选是部署里注册的 agent preset（具名源 `agent-presets`）：字段只说"这是选几个"，不关心它从哪来。
+    .role("select", { source: "agent-presets" })
+    .default([])
     .description(
       localized({
-        zh: "这个模式挂哪个 agent preset（它的 id，官方或本部署自建的）：行清单由那份 preset 提供，几个模式可以共享同一个。留空就是不绑——选这个模式不换 preset，会话保持当前挂着的那份，模式自己的提示词、工具收口与开关照常生效。",
-        en: "Which agent preset this mode rides on (its id, shipped or deployment-owned): that preset supplies the row list, and several modes may share it. Leave it empty to bind none — selecting the mode then keeps whatever preset the session already has, while the mode's persona, tool narrowing, and switches still apply.",
+        zh: "这个模式只允许挂哪些 agent preset（它们的 id，官方或本部署自建的）：行清单由挂着的那份提供，几个模式可以共享同一份名单。留空表示不限制——选这个模式不换 preset，会话保持当前挂着的那份；有值时当前的已经在名单里就不动，否则换成名单里的第一个。模式自己的提示词、工具收口与开关照常生效。",
+        en: "Which agent presets this mode may ride on (their ids, shipped or deployment-owned): that preset supplies the row list, and several modes may share one list. Empty means no restriction — selecting the mode keeps whatever preset the session already has; when set, the current one stays if it is listed, otherwise the session switches to the first entry. The mode's persona, tool narrowing, and switches apply either way.",
       }),
     ),
   name: z
@@ -266,8 +274,7 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   // 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
   // schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
-  defaultModel: modelSchema
-    // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
+  defaultModel: modelSchema    // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
     // 凭空多出一行；给了 null 反而让它保持缺失（页面按非必填处理，从候选加成）。
     // 类型上放行一次：`null` 在这里只是"没有这个键"的写法，schema 的输入形状不接受它。
     .default(null as unknown as SessionModeModel)
@@ -316,7 +323,9 @@ interface Validated {
     Record<
       string,
       {
-        // 空串合法的"不挂"；共享合法（差异由会话级收口表达），所以这里不做任何映射唯一性校验。
+        // 留空合法的"不限制"；允许共享（差异由会话级收口表达），所以这里不做任何映射唯一性校验。
+        readonly presetsOnly?: readonly string[];
+        // 退役的单个 preset：还配着值就报错（它已经不再生效）。
         readonly preset?: string;
         // 留空合法：不设收窄（用 preset 的全部工具）。
         readonly allowTools?: readonly string[];
@@ -369,10 +378,17 @@ export function configProblem(config: Validated): string | undefined {
     return `session-mode: mode(s) ${unknownPolicies.join(", ")} name unknown policies; the known ones are ${POLICY_NAMES.join(", ")}`;
   }
   // `allowTools` **留空是合法的**：不设收窄，用这个会话挂着的 preset 的全部工具。
-  // `preset` **允许共享**（共享时 preset → 模式的反查交给 `SessionModes.modeForPreset`），空串是"不挂"；
-  // 退役的顶层 `models` 还配着值就报错——别让一份"看着像配过"的配置静静地失效。
+  // `presetsOnly` **允许留空**（不限制会话挂哪份 preset）**也允许共享**（共享时 preset → 模式的反查交给
+  // `SessionModes.modeForPreset`）；退役的顶层 `models` 还配着值就报错——别让一份"看着像配过"的配置静静地失效。
   if (Object.keys(config.models ?? {}).length > 0) {
     return "session-mode: `models` has moved into each mode's `defaultModel`; move the entries there and drop the top-level `models`";
+  }
+  // 退役的单个 `preset`（现在是白名单 `presetsOnly`）：旧写法照旧"看着像配过"却不再生效，所以装配期拒绝。
+  const retiredPresets = Object.entries(config.modes)
+    .filter(([, mode]) => mode.preset !== undefined)
+    .map(([id]) => id);
+  if (retiredPresets.length > 0) {
+    return `session-mode: mode(s) ${retiredPresets.join(", ")} still declare \`preset\`; it has moved to \`presetsOnly\` (the presets that mode may ride on)`;
   }
   // 每个模式自己的默认模型：成对给全（`provider` 与 `model` 都要）。
   const partial = Object.entries(config.modes)

@@ -79,12 +79,12 @@ describe("host 平面的那几行", () => {
 });
 
 describe("模式定义", () => {
-  it("三个模式都不写 `preset`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
+  it("三个模式都不写 `presetsOnly`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
     const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
       | Record<
           string,
           {
-            preset?: string;
+            presetsOnly?: readonly string[];
             allowTools?: readonly string[];
             denyTools?: readonly string[];
             allowSkills?: readonly string[];
@@ -95,8 +95,8 @@ describe("模式定义", () => {
 
     expect(Object.keys(modes ?? {}).sort()).toEqual(["chat", "coding", "noop"]);
     for (const [id, mode] of Object.entries(modes ?? {})) {
-      // 不写 `preset`：选模式不换行清单（用户选的 shipped preset 不被模式覆盖）。
-      expect(mode.preset, id).toBeUndefined();
+      // 不写 `presetsOnly`：不限制会话挂哪份 preset（用户选的 shipped preset 不被模式覆盖）。
+      expect(mode.presetsOnly, id).toBeUndefined();
     }
     // `coding` 不设工具白名单（用 preset 的全部工具），只排除官方 Office 组合里那个载荷查询；
     // 技能面按名排除官方那三件（技能目录不列、`skill` 工具加载被拒）。

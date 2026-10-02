@@ -12,8 +12,10 @@ import {
   parseTagList,
   projectBundleConfig,
   type BundleTranslate,
+  type HintsLike,
 } from "../client/bundle-config.ts";
 import { Config } from "../modes.ts";
+import type { SelectOption } from "@morlay/dsh-client-ui-primitives/client";
 
 // 页面字典的替身：把模板参数并进 key，断言里能看见"哪一条文案、带了什么数"。
 const t = ((key: string, args?: Record<string, unknown>) =>
@@ -27,6 +29,7 @@ const section = {
       name: "编码模式",
       description: "编码",
       role: ["main", "subagent"],
+      presetsOnly: ["standard"],
       persona: { prefix: "你是编程专家", suffix: "" },
       allowTools: [],
       denyTools: ["load_workspace_dependencies"],
@@ -78,7 +81,14 @@ interface PathOp {
 // 挂上页面：真 `Config` 的 volatile 投影 + 替身的 settings 读写面。
 // `user` 是用户层那份（字段"已覆盖"的判据是它有没有这个键）：清一个已覆盖的字段才会产生写。
 // `served: false` = describe 里没有这一行；`arrive()` 让视图在之后出现，**且不通知订阅者**（复现"通知没落上"）。
-function mounted(options: { user?: unknown; served?: boolean } = {}) {
+// `sources` 是提示面的具名候选源（schema 上 `role('select', { source })` 认领的那些）。
+function mounted(
+  options: {
+    user?: unknown;
+    served?: boolean;
+    sources?: Record<string, readonly SelectOption[]>;
+  } = {},
+) {
   const form = volatileForm(Config as never) as z;
   const listeners = new Set<() => void>();
   const ops: PathOp[] = [];
@@ -105,6 +115,15 @@ function mounted(options: { user?: unknown; served?: boolean } = {}) {
     revision: 1,
   };
   let served = options.served !== false;
+  const hints: HintsLike = {
+    textFor: () => ({}),
+    selectFor: () => undefined,
+    sourceFor: (name) => {
+      const candidates = options.sources?.[name];
+      return candidates === undefined ? undefined : { options: () => candidates };
+    },
+    subscribe: () => () => {},
+  };
   const face = createBundleConfigFace(
     {
       configForms: {
@@ -140,6 +159,7 @@ function mounted(options: { user?: unknown; served?: boolean } = {}) {
       get: () => undefined,
     } as never,
     t,
+    () => hints,
   ).face;
   const view = (): ReturnType<typeof projectBundleConfig> =>
     projectBundleConfig(face.hooks.bundleConfig.getSnapshot(), t);
@@ -195,6 +215,19 @@ describe("bundle 配置页：视图", () => {
       .find((group) => group.key === "injections")
       ?.fields.find((field) => field.path.join(".") === "modes.coding.skills");
     expect(skills?.value).toBe("unset");
+  });
+
+  it("`presetsOnly` 是一个名单：值照实列出，候选来自部署的 preset 列表", () => {
+    const presetsOnly = mounted({
+      sources: { "agent-presets": [{ value: "standard", label: "标准" }] },
+    })
+      .view()
+      .modes[0]?.groups.find((group) => group.key === "identity")
+      ?.fields.find((field) => field.path.join(".") === "modes.coding.presetsOnly");
+
+    expect(presetsOnly?.control).toBe("tags");
+    expect(presetsOnly?.value).toEqual(["standard"]);
+    expect(presetsOnly?.options).toEqual([{ value: "standard", label: "标准" }]);
   });
 });
 

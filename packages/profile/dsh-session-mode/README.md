@@ -2,9 +2,10 @@
 
 **模式 = agent preset 的会话级扩展**：每个模式给这个会话加六样东西——一段 persona、两组按名收窄的名单（工具与技能
 各自允许哪些、另外禁掉哪些）、一份 policy 名单（哪些上游裁决规则生效）、instruction / 技能目录 / 动态快照三个开关，
-外加可选的默认模型。模式**不绑 preset**：行清单（工具 / 命令 / 压缩 / 委派）由会话挂着
+外加可选的默认模型。模式**不限制 preset**：行清单（工具 / 命令 / 压缩 / 委派）由会话挂着
 的那份 preset 提供，本部署用官方 shipped `standard`（registry 的默认由官方 web-app 给，我们不覆盖）；
-`config.modes.<id>.preset` 是可选声明，写了才会在切模式时把 preset 切过去。模式清单与默认值就是本行的 `config.modes`：真源在
+`config.modes.<id>.presetsOnly` 是可选的白名单，留空就是不限制、切模式不换 preset，写了才把当前那份落进名单
+（已经在名单里就不动，否则换成名单第一个）。模式清单与默认值就是本行的 `config.modes`：真源在
 [`src/mode-sources.ts`](./src/mode-sources.ts)，行 config 由 [`src/rows.ts`](./src/rows.ts) 渲染；**模式不是 Cordis
 子树**，选择落成会话事实（`session-mode/selected` 事件 + `sessionMode` 投影）。会话里选模式走本包 client 半的 chip
 与 `GET/POST /session-mode`，且只在**空白会话**成立。本部署三个模式：`coding`（完整编码 Agent）、`chat`
@@ -57,7 +58,7 @@
         skills: false # 显式丢掉官方技能目录的注入；**本部署不写这一项**——推导已给出同一个值（见下）
         runtimeContext: false # 动态快照（沙箱策略、审批策略）
         defaultModel: { provider: ollama, model: deepseek-v4.1-flash, reasoningEffort: high }
-        # preset: standard   # 可选：写了才会在切模式时把 preset 切过去（不写 = 保持会话当前那份）
+        # presetsOnly: [standard, minimal]   # 可选白名单：切模式时把会话的 preset 落进名单（已在名单里就不动，否则换成第一个）；不写 = 不限制
 ```
 
 页面上改这份配置有两个入口（读写都是同一份 `config.modes`）：插件管理页里**本 bundle 的详情页**
@@ -86,7 +87,8 @@
 
 写错在装载时就拒绝：`default` 必须在清单里且声明 `main`、`role` 不能是空数组、`defaultModel` 要给全 `provider` 与
 `model`、`allowPolicies` / `denyPolicies` 里的名字必须是上游那两条 waterfall（`fs/write-intent` /
-`fs/edit-intent`）。改动等 Loader 重挂这一行生效，已运行会话不自动换定义。
+`fs/edit-intent`）、退役的 `preset`（单个 preset 的旧写法）还配着值也拒绝——它已经换成 `presetsOnly`。改动等 Loader
+重挂这一行生效，已运行会话不自动换定义。
 
 四处别当成全能开关：`allowTools` **留空就是不设收窄**（用会话挂着的 preset 的全部工具），列了名单时那份 preset
 没有的工具会**自动跳过**（会话挂着官方 `minimal` 时 `chat` 一件都不剩）；`instructions: false` 丢的是官方
@@ -94,7 +96,6 @@
 （结果被丢掉）；开关为 `true`（或 `instructions` 缺省）时这条抑制**零干预**——官方那两行的注入节奏（首次、以及内容
 有变才注入的增量）照旧；`skills: false` 只丢官方目录的注入，`skill` 工具本身的可见性归 `allowTools`；`denyPolicies` 只改
 **上游那两条 waterfall** 上的裁决（`tool-fs` 的写 / 改与 `tool-str-replace-editor`），`bash` 之类自己写文件的通路
-不经过它们。取舍见 [ADR 模式不绑定 preset](./.agents/adrs/20260929-模式不绑定preset.md)、
-[ADR allowTools 留空即不设收窄](./.agents/adrs/20260929-allowTools留空即不设收窄.md)、
+不经过它们。取舍见 [ADR 模式不绑定 preset](./.agents/adrs/20260929-模式不绑定preset.md)、[ADR allowTools 留空即不设收窄](./.agents/adrs/20260929-allowTools留空即不设收窄.md)、
 [设计 按模式的 policy 拦截](./.agents/designs/20260929-按模式的policy拦截.md) 与
 [设计 抑制官方注入面](./.agents/designs/20260929-抑制官方注入面.md)。

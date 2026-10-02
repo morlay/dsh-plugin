@@ -13,14 +13,14 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 - `bundles/session-mode-profile/src/__tests__/patch.spec.ts`：生成物与 `renderPatch()` 同形；host 平面那几行
   （`session-mode`、`context-assembler`、`subagent`、`tool-guidance`）在装配入口那一份里，**没有单独的收口行**；
   **装配里不再有 agent preset 行**（行清单归 shipped preset）、行数据类行（`tool-web` / `plan-mode` / …）一件都不在；
-  子代理那一行**没有 `config`**（中文回报指引不限 preset）；三个模式都不写 `preset`（`noop` 除名称、说明与角色外一个字段
+  子代理那一行**没有 `config`**（中文回报指引不限 preset）；三个模式都不写 `presetsOnly`（`noop` 除名称、说明与角色外一个字段
   都不写），`chat` 写着
   `allowTools` 收窄到三件（`coding` 留空 = 不设收窄），`coding` 收窄官方 Office 面（`denyTools:
 [load_workspace_dependencies]` + `denySkills: [office-docx, office-pptx, office-xlsx]`），`coding` 写着
   `denyPolicies: [fs/edit-intent]`（`chat` 一份 policy 名单都没有）。
-  本包的装配期校验（默认模式在清单里且是 `main` 角色、`role` 非空、`preset` 允许共享、`defaultModel` 的 provider
-  与 model 要给全、policy 名字必须在 `POLICY_NAMES` 里）在 `session-mode.spec.ts` 里按预期拒绝；`allowTools`
-  留空**不再**报错。
+  本包的装配期校验（默认模式在清单里且是 `main` 角色、`role` 非空、`presetsOnly` 允许留空与共享、退役的 `preset`
+  还配着值就拒绝装载、`defaultModel` 的 provider 与 model 要给全、policy 名字必须在 `POLICY_NAMES` 里）在
+  `session-mode.spec.ts` 里按预期拒绝；`allowTools` 留空**不再**报错。
 - `src/__tests__/session-mode.spec.ts`：在真依赖（agent-loop testkit + 收口住在那一行里）下装一次——
   新会话读到的 persona 是默认模式的、**遮蔽部署级那层**；切到 `chat` 后 persona 换掉、工具目录只剩它那几件、
   动态快照被抑制（成对判据：`coding` 那边必须非空，否则"全局关掉"也能让 chat 通过）；装配幂等；
@@ -62,7 +62,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
     组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
     开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、默认模式那一行也是左右布局（选择器在最右）、删除要过
     确认弹窗（取消不删、确认才删，确认按钮挂错误色 class）、添加与保存各走一次动作。
-- `src/__tests__/preset-plane.spec.ts`：**模式不绑 preset、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
+- `src/__tests__/preset-plane.spec.ts`：**模式不限 preset（名单留空）、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面
   也都不进（`skill` 不在模型目录里、真调用被收口拒）；coding 用行清单的全部工具，注入只有**一份**技能目录
@@ -78,7 +78,8 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   `skill-catalog` 只有一条）。host 平面里装着**真**
   `fs-observation-policy` 行，成对判 policy 拦截：`coding` 编辑没读过的文件拿到 `undefined`（免"先读后改"），
   `chat` 照旧抛 `FS_NOT_OBSERVED`，而写那条规则两边都照旧给 `createIfAbsent`。`session-mode.spec.ts` 里
-  另有一组单元判据（空 `preset` 不碰 registry、`modeForPreset` 不回答、重复选幂等、留空 `allowTools` = 全部工具）。
+  另有一组单元判据（空名单不碰 registry、当前那份不在名单里就落名单第一个、名单内的选择不换、退役 `preset` 拒绝装载、
+  `modeForPreset` 不回答、重复选幂等、留空 `allowTools` = 全部工具）。
 - `src/__tests__/scope.spec.ts`：按会话收口的几条（经 `ctx.sessionModes.applyTo(agent, <模式 id>)`，与部署里同一个
   入口）——目录只留白名单、`tool:<名字>` section 同源过滤、白名单外调用被拒（文案带模式名）、黑名单内的调用按另一句
   被拒（deny 优先）、**换个模式就是换一份**（旧 guard 收回，换回去的工具重新可用）、`instructions: false` 时通道被关、
@@ -107,7 +108,7 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
   shipped `standard`、切模式一次 `recompose` 都不发生、chat 收成三件、我们通道注入 0 条、行清单里缺工具的 preset
   上白名单一件都收不到）与
   [`bundles/session-mode-profile` 的 `patch.spec.ts`](../../../../bundles/session-mode-profile/src/__tests__/patch.spec.ts)
-  （生成物：装配里不再有 agent preset 行、三个模式都不写 `preset`）。
+  （生成物：装配里不再有 agent preset 行、三个模式都不写 `presetsOnly`）。
 - **还没进探针的**（改这条装配形状时值得加）：`ctx.settings.describe()` 里能看见 `session-mode` 这个命名空间
   （设置面能编辑 `default` / `modes` 的前提）。它在包内已经钉住（第 1 层的 volatile 用例与 schema 断言），
   探针里加一条只是多一层"真装配也如此"。
