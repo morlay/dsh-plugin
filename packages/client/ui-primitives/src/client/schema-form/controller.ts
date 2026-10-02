@@ -304,9 +304,12 @@ export class SchemaFormController {
     return this.#ns;
   }
 
-  // 外部提示（候选键这类）变了：重新投影一次，字段树与草稿都不动。
+  // 外部读数变了（提示面的候选、或 describe 里的 schema 本身）：**重读一次 describe** 再投影。
+  //
+  // 只重投影是不够的：行页在 describe 变化时会重建控制器，而"这一行常驻、只订阅 describe"的消费方（bundle 配置页）
+  // 依赖这次重读——否则视图晚到、通知没落上时，字段树会停在"还没有"的那一次投影上。
   refresh(): void {
-    this.#store.set(this.#project());
+    this.#sync();
   }
 
   // 释放订阅。

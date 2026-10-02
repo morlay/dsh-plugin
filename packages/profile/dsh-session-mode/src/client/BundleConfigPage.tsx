@@ -86,16 +86,22 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
           ? t("configured.missing")
           : t("configured.unreadable", { problem: diagnosis.problem });
     return (
-      <p
-        {...stylingProps(styles.hint)}
-        data-bundle-config={state.readiness}
-        data-namespace={SESSION_MODE_NS}
-        data-namespaces={diagnosis.namespaces.join(",")}
-        data-problem={diagnosis.problem}
-        data-controller={diagnosis.controller}
-      >
-        {message}
-      </p>
+      <div data-bundle-config={state.readiness} data-namespace={SESSION_MODE_NS}>
+        <p
+          {...stylingProps(styles.hint)}
+          data-namespaces={diagnosis.namespaces.join(",")}
+          data-problem={diagnosis.problem}
+          data-controller={diagnosis.controller}
+        >
+          {message}
+        </p>
+        {state.readiness !== "unreadable" ? null : (
+          // 读不出来时把诊断也画出来：这时页面本来就用不了，原因说在明面上比藏在属性里有用。
+          <p {...stylingProps(styles.diagnosis)} data-diagnosis="true">
+            {`${diagnosis.problem} · ${diagnosis.controller} · namespaces=[${diagnosis.namespaces.join(", ")}]`}
+          </p>
+        )}
+      </div>
     );
   }
   const labels: SettingsFormLabels = {

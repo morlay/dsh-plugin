@@ -405,19 +405,10 @@ export function createBundleConfigFace(
     }
   };
   // 重建一次并把投影写回**现有的** store：组件的 hook 绑的就是这个 store，所以只换读数、不换引用。
+  // 重读一次 describe 与候选（`SchemaFormController.refresh` 现在就是重读，草稿不动）。
   const resync = (): void => {
-    // 有草稿时不动：重建出来的投影不带草稿，会把正在编辑的东西抹掉。
-    if (controller.face().hooks.schemaForm.getSnapshot().dirty) return;
-    let rebuilt: SchemaFormController | undefined;
-    try {
-      rebuilt = new SchemaFormController(SESSION_MODE_NS, deps());
-      face.hooks.schemaForm.set(rebuilt.face().hooks.schemaForm.getSnapshot());
-    } catch (error: unknown) {
-      // 拉平失败不该让页面崩：保留现有读数，异常态那句诊断会把原因说出来。
-      ctx.logger?.warn?.(`session-mode: bundle config resync failed (${String(error)})`);
-    } finally {
-      rebuilt?.dispose();
-    }
+    statusStore.set(form.getSnapshot().status);
+    controller.refresh();
   };
   return {
     face: {
@@ -459,10 +450,7 @@ export function createBundleConfigFace(
         face.discard();
       },
     },
-    refresh: () => {
-      statusStore.set(form.getSnapshot().status);
-      resync();
-    },
+    refresh: resync,
     dispose: () => {
       unsubscribeStatus();
       controller.dispose();

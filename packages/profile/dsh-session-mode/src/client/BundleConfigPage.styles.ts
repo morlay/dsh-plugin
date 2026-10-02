@@ -200,6 +200,15 @@ export const styles = {
   dangerFill: {
     "--dsw-alias-button-primary-fill": "var(--dsw-alias-state-error-primary)",
   },
+  // 诊断行：异常态才出现，等宽小字。
+  diagnosis: {
+    margin: "0",
+    fontFamily: "monospace",
+    fontSize: "11px",
+    lineHeight: "1.5",
+    color: "var(--dsw-alias-label-tertiary)",
+    wordBreak: "break-all",
+  },
   addRow: {
     display: "flex",
     alignItems: "center",
