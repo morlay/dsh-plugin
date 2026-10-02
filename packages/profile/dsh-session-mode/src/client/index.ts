@@ -23,6 +23,11 @@ import {
 } from "./bundle-config.ts";
 import { BundleConfigPage } from "./BundleConfigPage.tsx";
 import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-locales.ts";
+import {
+  loadLlmProviders,
+  remoteNamespace,
+  type ProviderModels,
+} from "./llm-directory.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
@@ -49,20 +54,6 @@ const POLICY_FIELDS = ["allowPolicies", "denyPolicies"] as const;
 // 动态键的占位段（与通用表单的字段树同一约定）。
 const DYNAMIC = "*";
 
-// 客户端 remote 的一个命名空间：gateway 的 client 半把每个命名空间注册成**独立服务**（服务名
-// `remote.<命名空间>`），**不是** `remote` 服务上的属性——所以按服务名取（属性访问读不到）。
-// 部署里可能没有这个命名空间（headless 没装 preset registry），读不到就按"没有候选"处理。
-function remoteNamespace<T>(scope: Context, namespace: string): T | undefined {
-  try {
-    return (scope as unknown as { get(key: string): unknown }).get(`remote.${namespace}`) as
-      | T
-      | undefined;
-  } catch {
-    // 服务没注册时 `ctx.get` 抛错：按"这个命名空间不在这一版部署里"处理。
-    return undefined;
-  }
-}
-
 // 部署里的 agent preset 清单（`remote.agentPresets.list()`）：本包只用它的 id 与显示名做候选。
 interface PresetRosterReader {
   list: () => Promise<
@@ -70,42 +61,6 @@ interface PresetRosterReader {
     | { ok: false }
   >;
 }
-
-// 本包从 LLM 命名空间读的那两件事（活着的路由清单与可配置声明）。
-interface LlmReader {
-  listProviders: () => Promise<
-    { ok: true; value: readonly { id: string; name: string }[] } | { ok: false }
-  >;
-  listConfigurableProviders: () => Promise<
-    | {
-        ok: true;
-        value: readonly {
-          provider: string;
-          displayName: string;
-          settingsNs: string;
-          settingsPath: readonly string[];
-        }[];
-      }
-    | { ok: false }
-  >;
-}
-
-// 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。
-interface ProviderEntry {
-  value: string;
-  label: string;
-  settingsNs: string;
-  settingsPath: readonly string[];
-}
-
-// 一个可配置 provider 的候选信息：显示名 + 它的配置在哪（模型清单从那份配置里读）。
-interface ProviderEntry {
-  value: string;
-  label: string;
-  settingsNs: string;
-  settingsPath: readonly string[];
-}
-
 
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
 export type { SessionModeLocaleKey } from "./locales.ts";
@@ -117,15 +72,6 @@ export const inject = ["slots", "locale"];
 
 // 本包 host 行 id：行配置页与 bundle 配置页读的都是这个命名空间。
 export { SESSION_MODE_NS };
-
-// 按路径读一段配置里的值（本包只读 provider 档案里的模型清单）。
-function readAt(root: unknown, path: readonly string[]): unknown {
-  return path.reduce<unknown>((node, segment) => {
-    if (Array.isArray(node)) return node[Number(segment)];
-    if (typeof node !== "object" || node === null) return undefined;
-    return Reflect.get(node, segment);
-  }, root);
-}
 
 // 从 inject 的 scope 上取提示面服务并解包：cordis 把它包成追踪代理，而它的实现用的是 JS 私有字段，
 // 代理上的方法调用会以代理为 `this` 而抛（`Cannot read private member #texts …`）。
@@ -174,59 +120,17 @@ export function apply(ctx: Context): void {
     }, "session-mode: policy candidates"),
   );
 
-  // 选模型的候选不在本行的 schema 里：provider 是部署里的 LLM 目录（活着的路由 + 可配置声明），模型清单读那份声明
-  // 指向的配置（`settingsNs` / `settingsPath`）。目录异步取到后注册——注册本身就是一次变更通知。
+  // 选模型的候选不在本行的 schema 里：读的是部署里的 LLM 目录（活着的路由 + 可配置声明，模型清单在声明指向的
+  // 配置里，见 `./llm-directory.ts`）。目录异步取到后注册——注册本身就是一次变更通知。
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
       const hints = unwrapHintService(scope);
       const remote = scope.get("remote");
-      const llm = remoteNamespace<LlmReader>(scope, "llm");
-      const forms = scope.get("configForms");
-      if (remote === undefined || llm === undefined || forms === undefined) return () => {};
-      let providers: ProviderEntry[] = [];
+      if (remote === undefined) return () => {};
+      let providers: readonly ProviderModels[] = [];
       const load = async (): Promise<void> => {
-        const [routes, directory] = await Promise.all([
-          llm.listProviders(),
-          llm.listConfigurableProviders(),
-        ]);
-        if (!routes.ok || !directory.ok) return;
-        const merged = new Map<string, ProviderEntry>();
-        for (const entry of directory.value) {
-          merged.set(entry.provider, {
-            value: entry.provider,
-            label: entry.displayName,
-            settingsNs: entry.settingsNs,
-            settingsPath: [...entry.settingsPath],
-          });
-        }
-        for (const route of routes.value) {
-          if (!merged.has(route.id)) {
-            merged.set(route.id, {
-              value: route.id,
-              label: route.name,
-              settingsNs: "",
-              settingsPath: [],
-            });
-          }
-        }
-        providers = [...merged.values()];
+        providers = await loadLlmProviders(scope);
         hints.refresh();
-      };
-      const modelsOf = (provider: unknown): readonly { value: string }[] => {
-        if (typeof provider !== "string") return [];
-        const entry = providers.find((candidate) => candidate.value === provider);
-        if (entry === undefined || entry.settingsNs === "") return [];
-        const profile = readAt(forms.get(entry.settingsNs).getSnapshot().value, entry.settingsPath);
-        const models =
-          typeof profile === "object" && profile !== null
-            ? Reflect.get(profile, "models")
-            : undefined;
-        if (!Array.isArray(models)) return [];
-        return models.flatMap((model) => {
-          const id =
-            typeof model === "object" && model !== null ? Reflect.get(model, "id") : undefined;
-          return typeof id === "string" ? [{ value: id }] : [];
-        });
       };
       const offs = [
         // 两个具名源：schema 上 `role('select', { source })` 认领它们，本包因此不必知道行 id 与字段路径。
@@ -236,13 +140,18 @@ export function apply(ctx: Context): void {
         // 换服务商就换模型清单：依赖声明让表单在投影时按当前 provider 重算候选。
         hints.source("llm-models", {
           dependsOn: [["provider"]],
-          options: (read) => modelsOf(read(["provider"])),
+          options: (read) => {
+            const provider = read(["provider"]);
+            return typeof provider === "string"
+              ? (providers.find((entry) => entry.value === provider)?.models ?? [])
+              : [];
+          },
         }),
         remote.$on("llm/adapters-updated", () => {
           void load();
         }),
         remote.$on("settings/document-updated", () => {
-          hints.refresh();
+          void load();
         }),
       ];
       void load();

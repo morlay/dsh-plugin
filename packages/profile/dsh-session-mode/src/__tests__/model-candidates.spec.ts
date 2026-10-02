@@ -63,7 +63,9 @@ function bench() {
     configForms: {
       get: () => ({
         getSnapshot: () => ({
-          value: { providers: { mine: { models: [{ id: "m1" }, { id: "m2" }] } } },
+          value: {
+            providers: { mine: { models: [{ id: "m1", name: "M1 显示名" }, { id: "m2" }] } },
+          },
         }),
         subscribe: () => () => {},
       }),
@@ -113,7 +115,11 @@ describe("选模型的候选", () => {
     const options = (provider: unknown): readonly SelectOption[] =>
       model?.spec.options((path) => (path.join(".") === "provider" ? provider : undefined)) ?? [];
 
-    expect(options("mine")).toEqual([{ value: "m1" }, { value: "m2" }]);
+    // 显示名优先取档案里的 `name`，没有就用 id。
+    expect(options("mine")).toEqual([
+      { value: "m1", label: "M1 显示名" },
+      { value: "m2", label: "m2" },
+    ]);
     // 目录里没有配置地址的 provider（内置路由）：列不出模型，字段退回文本输入。
     expect(options("openai")).toEqual([]);
     expect(options(undefined)).toEqual([]);

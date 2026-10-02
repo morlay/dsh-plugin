@@ -61,6 +61,19 @@ export const styles = {
     width: "100%",
     minWidth: "0",
   },
+  // 卡片头的左列：标题一行、说明（id · 摘要）一行。
+  modeHeadText: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+    minWidth: "0",
+  },
+  modeTitle: {
+    fontSize: "13px",
+    lineHeight: "20px",
+    fontWeight: "500",
+    color: "var(--dsw-alias-label-primary)",
+  },
   modeHeadAside: {
     display: "flex",
     flexDirection: "row",
@@ -70,6 +83,9 @@ export const styles = {
     flex: "none",
   },
   modeSummary: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
     fontSize: "12px",
     lineHeight: "18px",
     color: "var(--dsw-alias-label-tertiary)",

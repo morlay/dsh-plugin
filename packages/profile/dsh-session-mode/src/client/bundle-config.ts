@@ -21,6 +21,7 @@ import {
   type ValidationFailure,
 } from "@morlay/dsh-client-ui-primitives/client";
 import type { BundleLocaleKey } from "./bundle-locales.ts";
+import { loadLlmProviders, routesOf, type ModelRoute } from "./llm-directory.ts";
 
 // `session-mode` 行的 settings 命名空间：行 id。
 export const SESSION_MODE_NS = "session-mode";
@@ -166,20 +167,6 @@ const MODE_FIELDS: readonly FieldSpec[] = [
     group: "injections",
   },
   {
-    path: ["defaultModel", "provider"],
-    control: "choice",
-    labelKey: "field.provider",
-    hintKey: "hint.provider",
-    group: "model",
-  },
-  {
-    path: ["defaultModel", "model"],
-    control: "choice",
-    labelKey: "field.model",
-    hintKey: "hint.model",
-    group: "model",
-  },
-  {
     path: ["defaultModel", "reasoningEffort"],
     control: "text",
     labelKey: "field.reasoningEffort",
@@ -219,6 +206,8 @@ export interface BundleModeView {
   readonly title: string;
   readonly role: readonly string[];
   readonly summary: string;
+  // 这个模式配的默认模型（服务商与模型一起给）：没有 = 跟随全局，页面据此画开关与路由清单。
+  readonly model: { readonly provider: string; readonly model: string } | undefined;
   readonly deletable: boolean;
   // 这个模式里有还没保存的编辑。
   readonly staged: boolean;
@@ -242,6 +231,12 @@ export interface BundleConfigDiagnosis {
   readonly problem: string;
   // 控制器当前投影的摘要 + 现建一个探针控制器的结果：用来区分"实例没跟上"与"这条路径本身失败"。
   readonly controller: string;
+}
+
+// 部署里"已设置的模型"的读数：路由清单与它的加载状态（默认模型那一组用它）。
+export interface BundleModelsState {
+  readonly status: "loading" | "ready" | "error";
+  readonly routes: readonly ModelRoute[];
 }
 
 // 页面的完整读数。
@@ -279,6 +274,8 @@ export interface BundleConfigFace extends BundleConfigActions {
     readonly bundleConfig: SnapshotStore<SchemaFormState>;
     // 这一行命名空间的送达状态（`loading` / `ready` / `unavailable`）：页面据此区分"还在读"与"这一行没在跑"。
     readonly bundleStatus: SnapshotStore<ConfigStatus>;
+    // 部署里"已设置的模型"（一条路由 = provider + model）：默认模型那一组的选择器用它。
+    readonly bundleModels: SnapshotStore<BundleModelsState>;
   };
   // 异常态的诊断读数（页面只在读不出来时调用一次）。
   diagnose: () => BundleConfigDiagnosis;
@@ -364,6 +361,31 @@ export function createBundleConfigFace(
   const unsubscribeStatus = form.subscribe(() => {
     statusStore.set(form.getSnapshot().status);
   });
+  // "已设置的模型"：进页面就取一次，目录变了（适配器或设置文档一动）再取一次。
+  const modelsStore = createSnapshotStore<BundleModelsState>({ status: "loading", routes: [] });
+  const loadModels = async (): Promise<void> => {
+    try {
+      const providers = await loadLlmProviders(ctx);
+      modelsStore.set({ status: "ready", routes: routesOf(providers) });
+    } catch {
+      // 目录读不到（没有可用的 provider 服务）时说一句"读不出来"，不给一张空清单。
+      modelsStore.set({ status: "error", routes: [] });
+    }
+  };
+  const remote = ctx.get("remote");
+  // 事件订阅不是每个环境都有（测试替身、headless 部署）：没有就只加载一次。
+  const unsubscribeModels =
+    typeof remote?.$on !== "function"
+      ? []
+      : [
+          remote.$on("llm/adapters-updated", () => {
+            void loadModels();
+          }),
+          remote.$on("settings/document-updated", () => {
+            void loadModels();
+          }),
+        ];
+  void loadModels();
   // 诊断：只在页面读不出来时被调用——把"设置面有哪些命名空间"和"这一行为什么渲染不出来"说清。
   const diagnose = (): BundleConfigDiagnosis => {
     const view = forms.describe().getSnapshot().view;
@@ -414,7 +436,11 @@ export function createBundleConfigFace(
   };
   return {
     face: {
-      hooks: { bundleConfig: face.hooks.schemaForm, bundleStatus: statusStore },
+      hooks: {
+        bundleConfig: face.hooks.schemaForm,
+        bundleStatus: statusStore,
+        bundleModels: modelsStore,
+      },
       diagnose,
       resync,
       set: (path, value) => {
@@ -455,6 +481,7 @@ export function createBundleConfigFace(
     refresh: resync,
     dispose: () => {
       unsubscribeStatus();
+      for (const off of unsubscribeModels) off?.();
       controller.dispose();
     },
   };
@@ -549,6 +576,7 @@ export function projectBundleConfig(
       title: labelOf(id, read),
       role: arrayOf(read(["modes", id, "role"])),
       summary: summaryOf(id, read, t),
+      model: modelOf(id, read),
       deletable: !PROTECTED_MODE_IDS.includes(id),
       staged: MODE_FIELDS.some((spec) => read(["modes", id, ...spec.path])?.staged === true),
       groups: GROUPS.map((group) => ({
@@ -579,6 +607,18 @@ function collectModeIds(state: SchemaFormState): string[] {
     ids.push(id);
   }
   return ids;
+}
+
+// 这个模式配的默认模型：`defaultModel` 整块不在字段树里就是"跟随全局"，其余情况给出服务商与模型当前值。
+function modelOf(
+  id: string,
+  read: (path: readonly string[]) => FieldRead | undefined,
+): { provider: string; model: string } | undefined {
+  if (read(["modes", id, "defaultModel"]) === undefined) return undefined;
+  return {
+    provider: textOf(read(["modes", id, "defaultModel", "provider"])),
+    model: textOf(read(["modes", id, "defaultModel", "model"])),
+  };
 }
 
 // 一个字段的视图。

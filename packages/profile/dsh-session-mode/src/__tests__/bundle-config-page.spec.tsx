@@ -159,6 +159,11 @@ function renderPage(): ReturnType<typeof mounted> {
         (listener: () => void) => mountedPage.wrapped.hooks.bundleStatus.subscribe(listener),
         () => selector(mountedPage.wrapped.hooks.bundleStatus.getSnapshot()),
       ),
+    useBundleModels: (selector: (models: unknown) => unknown) =>
+      useSyncExternalStore(
+        (listener: () => void) => mountedPage.wrapped.hooks.bundleModels.subscribe(listener),
+        () => selector(mountedPage.wrapped.hooks.bundleModels.getSnapshot()),
+      ),
     ...mountedPage.wrapped,
   } as unknown as BundleConfigPageProps;
   render(<BundleConfigPage {...props} />);
@@ -241,10 +246,14 @@ describe("会话模式的 bundle 配置页", () => {
     fireEvent.click(subagent);
     expect(page.sets.at(-1)).toEqual({ path: ["modes", "coding", "role"], value: ["main"] });
 
-    // 注入面的两个开关是官方 Switch（`role="switch"`，无可见文本，标签由字段块给）。
+    // 这一张卡片上的开关共三个：注入面的两个（工作区指令 / 动态快照）+ 默认模型那一组的「设默认模型」。
     const switches = within(card("coding")).getAllByRole("switch");
-    expect(switches).toHaveLength(2);
-    expect(switches[0]?.getAttribute("aria-label")).toBe(bundleZh["field.instructions"]);
+    expect(switches).toHaveLength(3);
+    expect(switches.map((entry) => entry.getAttribute("aria-label"))).toEqual([
+      bundleZh["field.instructions"],
+      bundleZh["field.runtimeContext"],
+      bundleZh["field.defaultModel"],
+    ]);
 
     // 这三类字段都是右置行：左列是标签与说明，控件贴最右。
     const field = document.querySelector('[data-field="modes.coding.instructions"]') as HTMLElement;

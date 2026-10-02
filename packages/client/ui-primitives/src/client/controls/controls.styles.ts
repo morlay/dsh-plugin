@@ -170,4 +170,86 @@ export const styles = {
     lineHeight: "1.5",
     color: dsw.alias.label.tertiary,
   },
+  // 模型路由清单（`ModelRouteList`）：分组铺开、只选一条。数值照官方"子智能体"那张卡的模型清单。
+  routeList: {
+    display: "grid",
+    gap: "6px",
+    minWidth: "0",
+    maxHeight: "280px",
+    margin: "0",
+    padding: "10px",
+    overflow: "auto",
+    border: `0.5px solid ${String(dsw.alias.border.l4)}`,
+    borderRadius: dsw.radius.lg,
+  },
+  routeGroup: {
+    display: "grid",
+    gap: "6px",
+    "& + &": {
+      marginTop: "4px",
+      paddingTop: "10px",
+      borderTop: `0.5px solid ${String(dsw.alias.border.l3)}`,
+    },
+  },
+  routeProvider: {
+    padding: "0 6px",
+    fontSize: "11px",
+    fontWeight: 500,
+    color: dsw.alias.label.tertiary,
+  },
+  routeItem: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    alignItems: "center",
+    gap: "8px",
+    minWidth: "0",
+    padding: "6px",
+    borderRadius: dsw.radius.md,
+    cursor: "pointer",
+    "&:hover": {
+      // 上游那张卡的 hover 底色引用了 `--dsw-alias-bg-layer-4`：它不在官方 token 集里，照抄引用而不是换一个近义 token。
+      background: "var(--dsw-alias-bg-layer-4)",
+    },
+    "&:focus-visible": {
+      outline: focusRing,
+      outlineOffset: "-2px",
+    },
+  },
+  // 选中的那一条：底色 + 勾（勾由组件画）。
+  routeItemPicked: {
+    background: dsw.alias.interactive.bg.hover,
+  },
+  routeText: {
+    minWidth: "0",
+  },
+  routeName: {
+    display: "block",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: "13px",
+    color: dsw.alias.label.primary,
+  },
+  routeId: {
+    display: "block",
+    marginTop: "2px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontSize: "11px",
+    color: dsw.alias.label.tertiary,
+  },
+  // 清单的状态行（读目录中 / 失败 / 一条都没有）。
+  routeNotice: {
+    margin: "0",
+    fontSize: "12px",
+    lineHeight: "1.5",
+    color: dsw.alias.label.tertiary,
+  },
+  routeError: {
+    margin: "0",
+    fontSize: "12px",
+    lineHeight: "1.5",
+    color: dsw.alias.state.error.primary,
+  },
 } satisfies Record<string, CSSProps>;

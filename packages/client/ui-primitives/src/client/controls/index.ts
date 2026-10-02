@@ -7,6 +7,11 @@
 
 export { Button, type ButtonProps } from "./Button.tsx";
 export { IconButton, type IconButtonProps } from "./IconButton.tsx";
+export {
+  ModelRouteList,
+  type ModelRouteCandidate,
+  type ModelRouteListProps,
+} from "./ModelRouteList.tsx";
 export { MultilineField, type MultilineFieldProps } from "./MultilineField.tsx";
 export {
   SearchSelect,

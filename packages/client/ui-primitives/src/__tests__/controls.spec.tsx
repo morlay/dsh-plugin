@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Button } from "../client/controls/Button.tsx";
 import { styles } from "../client/controls/controls.styles.ts";
 import { IconButton } from "../client/controls/IconButton.tsx";
+import { ModelRouteList } from "../client/controls/ModelRouteList.tsx";
 import { SearchSelect } from "../client/controls/SearchSelect.tsx";
 import { TagInput } from "../client/controls/TagInput.tsx";
 import { mergeTags, parseTagList } from "../client/controls/tags.ts";
@@ -240,6 +241,115 @@ describe("可搜索选择器", () => {
 
     expect(screen.getByText("没有匹配的候选")).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "OpenAI" })).toBeNull();
+  });
+});
+
+describe("模型路由清单", () => {
+  const routes = [
+    {
+      key: "ollama\u0000flash",
+      provider: "ollama",
+      providerName: "Ollama Cloud",
+      model: "flash",
+      modelName: "DeepSeek V4.1 Flash",
+    },
+    {
+      key: "deepseek\u0000chat",
+      provider: "deepseek",
+      providerName: "DeepSeek Account",
+      model: "chat",
+      modelName: "DeepSeek Chat",
+    },
+  ];
+
+  it("按 provider 分组铺开，选一条回调整条路由（服务商与模型一起）", () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelRouteList
+        label="用哪个模型"
+        candidates={routes}
+        selectedKey={undefined}
+        status="ready"
+        loadingLabel="读模型中"
+        errorLabel="读不出来"
+        emptyLabel="还没有模型"
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(screen.getByText("Ollama Cloud")).toBeTruthy();
+    expect(screen.getByText("DeepSeek Account")).toBeTruthy();
+    expect(screen.getByText("Ollama Cloud · ollama/flash")).toBeTruthy();
+
+    const picked = screen.getByRole("radio", { name: "DeepSeek Chat deepseek/chat" });
+    expect(picked.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(picked);
+    expect(onSelect).toHaveBeenCalledWith(routes[1]);
+  });
+
+  it("当前那条打勾", () => {
+    render(
+      <ModelRouteList
+        label="用哪个模型"
+        candidates={routes}
+        selectedKey={routes[0]!.key}
+        status="ready"
+        loadingLabel="读模型中"
+        errorLabel="读不出来"
+        emptyLabel="还没有模型"
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", { name: "DeepSeek V4.1 Flash ollama/flash" }).getAttribute(
+        "aria-checked",
+      ),
+    ).toBe("true");
+  });
+
+  it("读模型中 / 读不出来 / 一条都没有：各说一句，不给空清单", () => {
+    const { rerender } = render(
+      <ModelRouteList
+        label="用哪个模型"
+        candidates={[]}
+        selectedKey={undefined}
+        status="loading"
+        loadingLabel="读模型中"
+        errorLabel="读不出来"
+        emptyLabel="还没有模型"
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByText("读模型中")).toBeTruthy();
+
+    rerender(
+      <ModelRouteList
+        label="用哪个模型"
+        candidates={[]}
+        selectedKey={undefined}
+        status="error"
+        loadingLabel="读模型中"
+        errorLabel="读不出来"
+        emptyLabel="还没有模型"
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("读不出来");
+
+    rerender(
+      <ModelRouteList
+        label="用哪个模型"
+        candidates={[]}
+        selectedKey={undefined}
+        status="ready"
+        loadingLabel="读模型中"
+        errorLabel="读不出来"
+        emptyLabel="还没有模型"
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByText("还没有模型")).toBeTruthy();
   });
 });
 

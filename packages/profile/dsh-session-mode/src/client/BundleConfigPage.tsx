@@ -16,6 +16,7 @@ import {
   IconTrashOutlineRegular,
   Input,
   Modal,
+  ModelRouteList,
   MultilineField,
   SegmentedControl,
   SearchSelect,
@@ -36,8 +37,10 @@ import {
   type ConfigStatus,
   type BundleFieldView,
   type BundleModeView,
+  type BundleModelsState,
   type BundleTranslate,
 } from "./bundle-config.ts";
+import { routeKey } from "./llm-directory.ts";
 import { className, props as stylingProps, styles } from "./BundleConfigPage.styles.ts";
 
 export type BundleConfigPageProps = PropsRuntime<"plugins.bundle.config"> &
@@ -64,6 +67,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   // 读数取原始快照（引用稳定，uSES 语义正确），投影在渲染里做。
   const snapshot = props.useBundleConfig((current: SchemaFormState) => current);
   const status = props.useBundleStatus((current: ConfigStatus) => current);
+  const models = props.useBundleModels((current: BundleModelsState) => current);
   const state = useMemo(() => projectBundleConfig(snapshot, t, status), [snapshot, t, status]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [addingId, setAddingId] = useState("");
@@ -172,6 +176,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             <ModeCard
               key={mode.id}
               mode={mode}
+              models={models}
               open={expanded.has(mode.id)}
               writable={state.writable}
               t={t}
@@ -271,6 +276,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
 // 一张模式卡片：折叠头显示名称与摘要，展开后是分组字段与删除入口。
 function ModeCard({
   mode,
+  models,
   open,
   writable,
   t,
@@ -279,6 +285,8 @@ function ModeCard({
   onToggle,
 }: {
   mode: BundleModeView;
+  // 部署里"已设置的模型"（默认模型那一组的清单用它）。
+  models: BundleModelsState;
   open: boolean;
   writable: boolean;
   t: BundleTranslate;
@@ -287,8 +295,7 @@ function ModeCard({
   onRequestRemove: () => void;
   onToggle: () => void;
 }): ReactNode {
-  const model = mode.groups.find((group) => group.key === "model");
-  const hasModel = model?.fields.some((field) => field.present) === true;
+  const hasModel = mode.model !== undefined;
   return (
     <div
       {...stylingProps(styles.modeCard)}
@@ -297,7 +304,8 @@ function ModeCard({
     >
       <DisclosureRow
         icon={<IconAgentPresetOutlineRegular />}
-        title={mode.title}
+        // 标题由 header 自己画（要「标题 + 说明」同列、按钮贴右）：官方 title 留空，这一行的可访问名因此来自内容。
+        title=""
         open={open}
         expandable
         expandOnRowClick
@@ -306,13 +314,18 @@ function ModeCard({
         contentClassName={className(styles.disclosureRoot)}
         contentLayoutClassName={className(styles.disclosureContent)}
         collapsedContent={
-          // 两段：先是紧挨名称的 id，再是贴最右的摘要 + 删除。
+          // 左列是「标题 + 一行说明」（id · 摘要），右侧是删除入口——与设置面的 row(col(label, desc), control) 同形。
           <>
-            <code {...stylingProps(styles.modeId)} data-mode-id>
-              {mode.id}
-            </code>
+            <span {...stylingProps(styles.modeHeadText)}>
+              <span {...stylingProps(styles.modeTitle)}>{mode.title}</span>
+              <span {...stylingProps(styles.modeSummary)}>
+                <code {...stylingProps(styles.modeId)} data-mode-id>
+                  {mode.id}
+                </code>
+                {` · ${mode.summary}`}
+              </span>
+            </span>
             <span {...stylingProps(styles.modeHeadAside)}>
-              <span {...stylingProps(styles.modeSummary)}>{mode.summary}</span>
               {mode.deletable ? (
                 <IconButton
                   data-action="remove-mode"
@@ -340,33 +353,82 @@ function ModeCard({
             <div key={group.key} {...stylingProps(styles.group)} data-group={group.key}>
               <div {...stylingProps(styles.groupHead)}>
                 <span {...stylingProps(styles.groupTitle)}>{group.label}</span>
-                {group.key !== "model" ? null : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-action={hasModel ? "clear-model" : "set-model"}
-                    disabled={!writable}
-                    onClick={() => {
-                      // 整个 `defaultModel` 是一个可加字段：没有就是跟随全局，清掉它同样回到跟随全局。
-                      if (hasModel) face.clear(["modes", mode.id, "defaultModel"]);
-                      else
-                        face.set(["modes", mode.id, "defaultModel"], { provider: "", model: "" });
-                    }}
-                  >
-                    {hasModel ? t("model.follow") : t("model.set")}
-                  </Button>
-                )}
               </div>
-              {group.fields.map((field, index) => (
-                <FieldRow
-                  key={field.key}
-                  field={field}
-                  writable={writable}
-                  t={t}
-                  face={face}
-                  divider={index > 0}
-                />
-              ))}
+              {group.key === "model" ? (
+                <>
+                  {/* 整块 `defaultModel` 是一个可加字段：开关开 = 这个模式自带默认模型，关 = 跟随全局。 */}
+                  <SettingsFieldRow
+                    label={t("field.defaultModel")}
+                    hint={t("hint.defaultModel")}
+                    layout="inline"
+                    data-control="default-model"
+                  >
+                    <Switch
+                      checked={hasModel}
+                      label={t("field.defaultModel")}
+                      disabled={!writable}
+                      onChange={(next) => {
+                        if (next) {
+                          face.set(["modes", mode.id, "defaultModel"], { provider: "", model: "" });
+                        } else {
+                          face.clear(["modes", mode.id, "defaultModel"]);
+                        }
+                      }}
+                    />
+                  </SettingsFieldRow>
+                  {!hasModel ? null : (
+                    <SettingsFieldRow
+                      label={t("field.modelRoute")}
+                      hint={t("hint.modelRoute")}
+                      divider
+                      data-control="model-routes"
+                    >
+                      <ModelRouteList
+                        label={t("field.modelRoute")}
+                        candidates={models.routes}
+                        selectedKey={
+                          mode.model === undefined || mode.model.provider === ""
+                            ? undefined
+                            : routeKey(mode.model.provider, mode.model.model)
+                        }
+                        disabled={!writable}
+                        status={models.status}
+                        loadingLabel={t("model.loading")}
+                        errorLabel={t("model.error")}
+                        emptyLabel={t("model.empty")}
+                        onSelect={(candidate) => {
+                          // 服务商与模型是一对：选一条路由等于把两个字段一起定下来。
+                          face.set(["modes", mode.id, "defaultModel"], {
+                            provider: candidate.provider,
+                            model: candidate.model,
+                          });
+                        }}
+                      />
+                    </SettingsFieldRow>
+                  )}
+                  {group.fields.map((field, index) => (
+                    <FieldRow
+                      key={field.key}
+                      field={field}
+                      writable={writable}
+                      t={t}
+                      face={face}
+                      divider={index > 0 || hasModel}
+                    />
+                  ))}
+                </>
+              ) : (
+                group.fields.map((field, index) => (
+                  <FieldRow
+                    key={field.key}
+                    field={field}
+                    writable={writable}
+                    t={t}
+                    face={face}
+                    divider={index > 0}
+                  />
+                ))
+              )}
             </div>
           ))}
         </div>
