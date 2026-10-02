@@ -162,8 +162,8 @@ const modeSchema: z<SessionMode> = z.object({
     .default([])
     .description(
       localized({
-        zh: "这个模式只允许挂哪些 agent preset（它们的 id，官方或本部署自建的）：行清单由挂着的那份提供，几个模式可以共享同一份名单。留空表示不限制——选这个模式不换 preset，会话保持当前挂着的那份；有值时当前的已经在名单里就不动，否则换成名单里的第一个。模式自己的提示词、工具收口与开关照常生效。",
-        en: "Which agent presets this mode may ride on (their ids, shipped or deployment-owned): that preset supplies the row list, and several modes may share one list. Empty means no restriction — selecting the mode keeps whatever preset the session already has; when set, the current one stays if it is listed, otherwise the session switches to the first entry. The mode's persona, tool narrowing, and switches apply either way.",
+        zh: "这个模式只允许挂哪些 agent preset（它们的 id，官方或本部署自建的）：行清单由挂着的那份提供，几个模式可以共享同一份名单。留空表示**允许全部**——哪份 preset 都行，选这个模式也不动会话当前挂着的那份；有值时当前的已经在名单里就不动，否则换成名单里的第一个。模式自己的提示词、工具收口与开关照常生效。",
+        en: "Which agent presets this mode may ride on (their ids, shipped or deployment-owned): that preset supplies the row list, and several modes may share one list. Empty means **every preset is allowed** — selecting the mode then leaves the session's current preset alone; when set, the current one stays if it is listed, otherwise the session switches to the first entry. The mode's persona, tool narrowing, and switches apply either way.",
       }),
     ),
   name: z

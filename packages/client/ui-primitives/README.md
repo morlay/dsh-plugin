@@ -5,8 +5,8 @@
 [`@morlay/dsh-reference`](../../context/dsh-reference/README.md) 的引用展开复用 host 那半）、**官方基础组件的统一出口**
 （`Button` / `Menu` / `Modal` / `Switch` / `SegmentedControl` / `DisclosureRow` / 图标 … 由本包 `export *` 转出，业务包
 只向本包取控件），以及**设置面原语**（从上游 fork 的暂存式表单原语、按 schema 自动生成的行配置页，加上这套设置面
-自有的控件：字段行 `SettingsFieldRow`、选择器 `SelectMenu`、标签输入 `TagInput`、多行文本 `MultilineField`、
-图标按钮 `IconButton`）。
+自有的控件：字段行 `SettingsFieldRow`、可搜索选择器 `SearchSelect`、标签输入 `TagInput`、多行文本 `MultilineField`、
+图标按钮 `IconButton`、按钮 `Button`）。
 
 ## 用法
 
@@ -55,7 +55,7 @@ const form = new SettingsFormModel(scope, [settingsNumberField("timeoutMs")]);
 
 ```tsx
 import {
-  IconButton, SelectMenu, SettingsFieldRow, TagInput,
+  IconButton, SearchSelect, SettingsFieldRow, TagInput,
 } from "@morlay/dsh-client-ui-primitives/client";
 
 <SettingsFieldRow label="允许的工具" hint="留空 = 不限制" divider layout="inline">

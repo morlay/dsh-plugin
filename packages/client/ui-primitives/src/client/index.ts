@@ -38,6 +38,8 @@ export type {
   SettingsSecretSpec,
 } from "./settings-form/index.ts";
 export * from "./controls/index.ts";
+// `Button` 是本包包装版（官方那份 + 文字不换行）：两个星号导出之间必须显式点名，否则判成歧义。
+export { Button, type ButtonProps } from "./controls/index.ts";
 // 按行 schema 自动生成的行配置页（原 `@morlay/dsh-client-ui-schema-form/client`，2026-09-28 合并进来）：
 // 两者都是"对话 UI / 设置页的基础面"，拆成两行会各自注册一遍、还要求每个 bundle 都插齐两行。
 // 只**具名导出**它那一面的门面：`export *` 会与 settings-form 的样式 / token 重名。

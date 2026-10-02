@@ -49,7 +49,7 @@ export const bundleZh = {
   "hint.description": "一句话说明这个模式做什么。",
   "hint.role": "「会话可选」= 用户能在会话里选它；「子代理可用」= 可以把子代理跑在这个模式下。",
   "hint.presetsOnly":
-    "只允许这个模式挂这些 preset（行清单由挂着的那份提供）；不填 = 不限制。切到这个模式时，会话当前那份不在名单里就换成名单第一个。",
+    "只允许这个模式挂这些 preset（行清单由挂着的那份提供）；不填 = 允许全部（哪份 preset 都行，切模式也不动它）。有值时切到这个模式，会话当前那份不在名单里就换成名单第一个。",
   "hint.prefix": "加在系统提示词开头的一段话。",
   "hint.suffix": "加在系统提示词结尾的一段话。",
   "hint.allowTools": "只允许这些工具；不填 = 不限制（用会话当前 preset 的全部工具）。",
@@ -68,6 +68,8 @@ export const bundleZh = {
   "tags.add": "添加",
   "tags.remove": "移除 {name}",
   "tags.candidates": "从候选里选",
+  "select.search": "搜索候选",
+  "select.noMatch": "没有匹配的候选",
   "tri.unset": "不写",
   "tri.on": "开",
   "tri.off": "关",
@@ -142,7 +144,7 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   "hint.role":
     "Selectable in sessions = the user can pick it; usable for subagents = subagents may run in it.",
   "hint.presetsOnly":
-    "Only these presets may back this mode (the one it rides on supplies the row list); empty = no restriction. Selecting the mode switches to the first entry when the session's current preset is not listed.",
+    "Only these presets may back this mode (the one it rides on supplies the row list); empty = every preset is allowed (and selecting the mode switches nothing). When set, selecting the mode switches to the first entry if the session's current preset is not listed.",
   "hint.prefix": "Text prepended to the system prompt.",
   "hint.suffix": "Text appended to the system prompt.",
   "hint.allowTools":
@@ -164,6 +166,8 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   "tags.add": "Add",
   "tags.remove": "Remove {name}",
   "tags.candidates": "Pick from candidates",
+  "select.search": "Search candidates",
+  "select.noMatch": "No matching candidate",
   "tri.unset": "Unset",
   "tri.on": "On",
   "tri.off": "Off",

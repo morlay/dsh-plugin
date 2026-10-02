@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
-// 设置面通用控件：标签输入（回车 / 粘贴 / 移除 / 候选菜单）、图标按钮、选择器。
+// 设置面通用控件：标签输入（multi-input：回车 / 粘贴 / 移除 / 候选菜单）、可搜索选择器（searchable：搜索过滤 /
+// 选择 / 空态）、图标按钮、按钮文字不换行。
 //
 // 盯的接缝是**控件的输入输出**：粘贴与回车都折成"整段替换"的一次回调，候选菜单只列还没加进去的那些；
 // 图标按钮没有文字，名字走无障碍名。样式几何归各控件自己的样式对象，这里只钉住它的关键数值。
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Button } from "../client/controls/Button.tsx";
 import { styles } from "../client/controls/controls.styles.ts";
 import { IconButton } from "../client/controls/IconButton.tsx";
-import { SelectMenu } from "../client/controls/SelectMenu.tsx";
+import { SearchSelect } from "../client/controls/SearchSelect.tsx";
 import { TagInput } from "../client/controls/TagInput.tsx";
 import { mergeTags, parseTagList } from "../client/controls/tags.ts";
 
@@ -157,29 +159,97 @@ describe("图标按钮", () => {
   });
 });
 
-describe("选择器", () => {
-  it("显示当前值；空值显示'没写'那一档，选中一项回调它的值", () => {
-    const onSelect = vi.fn();
+describe("可搜索选择器", () => {
+  const options = [
+    { value: "ollama", label: "Ollama Cloud" },
+    { value: "deepseek", label: "DeepSeek Account" },
+    { value: "openai", label: "OpenAI" },
+  ];
+
+  it("触发按钮显示当前值；空值显示'没写'那一档", () => {
     const { rerender } = render(
-      <SelectMenu
+      <SearchSelect
         label="服务商"
         value=""
         emptyLabel="不写"
-        options={[{ value: "ollama", label: "Ollama" }]}
-        onSelect={onSelect}
+        options={options}
+        searchLabel="搜索候选"
+        noMatchLabel="没有匹配的候选"
+        onSelect={() => {}}
       />,
     );
     expect(screen.getByRole("button", { name: "服务商" }).textContent).toBe("不写");
 
     rerender(
-      <SelectMenu
+      <SearchSelect
         label="服务商"
         value="ollama"
         emptyLabel="不写"
-        options={[{ value: "ollama", label: "Ollama" }]}
+        options={options}
+        searchLabel="搜索候选"
+        noMatchLabel="没有匹配的候选"
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "服务商" }).textContent).toBe("Ollama Cloud");
+  });
+
+  it("打开后先给搜索框：输入即过滤，选中一项回调它的值", async () => {
+    const onSelect = vi.fn();
+    render(
+      <SearchSelect
+        label="服务商"
+        value=""
+        emptyLabel="不写"
+        options={options}
+        searchLabel="搜索候选"
+        noMatchLabel="没有匹配的候选"
         onSelect={onSelect}
       />,
     );
-    expect(screen.getByRole("button", { name: "服务商" }).textContent).toBe("Ollama");
+
+    fireEvent.click(screen.getByRole("button", { name: "服务商" }));
+    // 打开就有搜索框，候选全列着（含"不写"那一档）。
+    const search = screen.getByPlaceholderText("搜索候选");
+    expect(await screen.findByRole("menuitem", { name: "Ollama Cloud" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "不写" })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "deep" } });
+    expect(await screen.findByRole("menuitem", { name: "DeepSeek Account" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Ollama Cloud" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "DeepSeek Account" }));
+    expect(onSelect).toHaveBeenCalledWith("deepseek");
+  });
+
+  it("一个都没匹配上：说一句而不是给一张空菜单", () => {
+    render(
+      <SearchSelect
+        label="服务商"
+        value=""
+        emptyLabel="不写"
+        options={options}
+        searchLabel="搜索候选"
+        noMatchLabel="没有匹配的候选"
+        onSelect={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "服务商" }));
+    fireEvent.change(screen.getByPlaceholderText("搜索候选"), { target: { value: "zzz" } });
+
+    expect(screen.getByText("没有匹配的候选")).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "OpenAI" })).toBeNull();
+  });
+});
+
+describe("按钮", () => {
+  it("文字不换行：本包取到的按钮带那条修饰", () => {
+    render(<Button variant="outline">添加</Button>);
+
+    const button = screen.getByRole("button", { name: "添加" });
+    expect(button.textContent).toBe("添加");
+    expect(styles.buttonLabel.whiteSpace).toBe("nowrap");
+    expect(button.className).toContain("cls-");
   });
 });

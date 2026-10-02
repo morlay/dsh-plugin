@@ -140,4 +140,34 @@ export const styles = {
   controlHeight: {
     height: "32px",
   },
+  // 按钮文字不换行：按钮宽度由内容定，"添加"这类短词被折成两行只是没必要的换行。
+  buttonLabel: {
+    whiteSpace: "nowrap",
+  },
+  // 可搜索选择器里那一行搜索框：夹在菜单顶部，与候选行同一个内距尺度。
+  searchRow: {
+    display: "flex",
+    alignItems: "center",
+    padding: "4px 8px 8px",
+    borderBottom: `0.5px solid ${String(dsw.alias.border.l2)}`,
+  },
+  searchInput: {
+    width: "100%",
+    padding: "2px 0",
+    fontFamily: "inherit",
+    fontSize: "13px",
+    lineHeight: "1.5",
+    color: dsw.alias.label.primary,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+  },
+  // 一个候选都没匹配上：在候选区里说一句，而不是给一张空菜单。
+  searchEmpty: {
+    margin: "0",
+    padding: "8px",
+    fontSize: "12px",
+    lineHeight: "1.5",
+    color: dsw.alias.label.tertiary,
+  },
 } satisfies Record<string, CSSProps>;

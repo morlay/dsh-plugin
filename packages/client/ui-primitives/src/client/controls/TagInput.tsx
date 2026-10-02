@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { IconCloseOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
 import { styling } from "../styling/styling.ts";
 import { styles } from "./controls.styles.ts";
-import { SelectMenu, type SelectMenuOption } from "./SelectMenu.tsx";
+import { SearchSelect, type SearchSelectOption } from "./SearchSelect.tsx";
 import { mergeTags, parseTagList } from "./tags.ts";
 
 export interface TagInputProps {
@@ -14,7 +14,7 @@ export interface TagInputProps {
   // 整段替换（一次粘贴 / 回车 / 移除就是一次编辑动作）。
   onChange: (next: string[]) => void;
   // 候选（可空）：不空时给「从候选里选」菜单；已经在名单里的项不再列出。
-  options?: readonly SelectMenuOption[] | undefined;
+  options?: readonly SearchSelectOption[] | undefined;
   // 空框时的提示。
   placeholder: string;
   // 框内输入框的无障碍名。
@@ -22,6 +22,10 @@ export interface TagInputProps {
   disabled?: boolean;
   // 候选菜单的触发文案（同时也是菜单的无障碍名）。
   candidatesLabel?: string;
+  // 候选菜单里搜索框的占位与无障碍名。
+  searchLabel?: string;
+  // 候选菜单里一个都没匹配上时的那句话。
+  noMatchLabel?: string;
   // 一个标签的移除按钮名（文案归调用方：它要带标签名）。
   removeLabel: (name: string) => string;
 }
@@ -34,6 +38,8 @@ export function TagInput({
   label,
   disabled = false,
   candidatesLabel = "",
+  searchLabel = "",
+  noMatchLabel = "",
   removeLabel,
 }: TagInputProps): ReactNode {
   const [draft, setDraft] = useState("");
@@ -90,12 +96,14 @@ export function TagInput({
         />
       </div>
       {remaining.length === 0 ? null : (
-        <SelectMenu
+        <SearchSelect
           label={candidatesLabel}
           value=""
           emptyLabel={candidatesLabel}
           options={remaining}
           disabled={disabled}
+          searchLabel={searchLabel}
+          noMatchLabel={noMatchLabel}
           onSelect={(next) => {
             if (next !== "") commit(next);
           }}

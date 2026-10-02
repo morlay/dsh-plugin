@@ -3,7 +3,7 @@
 // 注册进 `plugins.bundle.config`（key = bundle 包名），读写的命名空间是 `session-mode`。草稿、整段校验与保存都归通用
 // schema 表单的控制器（`bundle-config.ts` 的注入面），本文件只管布局与装配：**控件一律从
 // `@morlay/dsh-client-ui-primitives/client` 取**（它转出官方那套基础组件，并给出这套设置面自有的控件——
-// 字段行 `SettingsFieldRow`、选择器 `SelectMenu`、标签输入 `TagInput`、多行文本 `MultilineField`、图标按钮
+// 字段行 `SettingsFieldRow`、可搜索选择器 `SearchSelect`、标签输入 `TagInput`、多行文本 `MultilineField`、图标按钮
 // `IconButton`），这一页自己的样式只剩结构布局。改动一律先落草稿，底部保存是唯一写盘点。
 
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
@@ -17,7 +17,7 @@ import {
   Modal,
   MultilineField,
   SegmentedControl,
-  SelectMenu,
+  SearchSelect,
   SettingsFieldRow,
   SettingsForm,
   Switch,
@@ -130,7 +130,7 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             data-field="default"
             data-control="choice"
           >
-            <SelectMenu
+            <SearchSelect
               label={t("default.label")}
               value={state.defaultMode.value}
               emptyLabel={t("tri.unset")}
@@ -138,6 +138,8 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
                 value: String(option.value),
                 ...(option.label === undefined ? {} : { label: option.label }),
               }))}
+              searchLabel={t("select.search")}
+              noMatchLabel={t("select.noMatch")}
               disabled={!state.writable}
               onSelect={(next) => {
                 if (next === "") face.clear(["default"]);
@@ -411,7 +413,7 @@ function FieldControl({
       );
     case "choice":
       return (
-        <SelectMenu
+        <SearchSelect
           label={field.label}
           value={field.text}
           emptyLabel={t("tri.unset")}
@@ -419,6 +421,8 @@ function FieldControl({
             value: String(option.value),
             ...(option.label === undefined ? {} : { label: option.label }),
           }))}
+          searchLabel={t("select.search")}
+          noMatchLabel={t("select.noMatch")}
           disabled={disabled}
           onSelect={(next) => {
             if (next === "") face.clear(field.path);
@@ -493,6 +497,8 @@ function FieldControl({
           placeholder={t("tags.placeholder")}
           label={field.label}
           candidatesLabel={t("tags.candidates")}
+          searchLabel={t("select.search")}
+          noMatchLabel={t("select.noMatch")}
           removeLabel={(name) => t("tags.remove", { name })}
           disabled={disabled}
           onChange={(next) => {
