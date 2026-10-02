@@ -8,7 +8,7 @@
   min-height: 28px;
   padding: 0 8px;
   border: none;
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
@@ -29,7 +29,10 @@
   color: var(--dsw-alias-label-quaternary);
 }
 
+/* 图标直接是 flex item（上游给图标自己挂类，不再套一层）：套一层会让它在 inline-flex 里按基线对齐，视觉上偏。 */
 .icon {
+  display: inline-flex;
+  align-items: center;
   flex: none;
   color: var(--dsw-alias-label-primary);
 }

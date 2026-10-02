@@ -1,11 +1,17 @@
-/* 对话气泡：`--dsw-specific-bubble` 是官方给气泡那一档底色（主题里定义），字号跟内容走。 */
+/* 对话气泡：照上游 `ui-chat/chat/MessageItem.module.css` 的 `.bubble` 逐字（含那两条决定换行行为的声明——
+   投影出来的用户文本是 inline runs，气泡自己负责折行，装饰过的单行消息因此仍是一行）。 */
 .bubble {
-  box-sizing: border-box;
-  max-width: min(525px, 82%);
-  padding: 10px 16px;
-  border-radius: 22px;
+  /* 上游以宽度轴的比例表达 Figma 那个 525px 上限（525/748 ≈ 0.702）：气泡跟着可拖拽/自适应的列一起变宽，
+     百分比让窄窗口仍然成立。 */
+  max-width: 100%;
   background: var(--dsw-specific-bubble);
-  font-size: 16px;
-  line-height: 24px;
+  border-radius: var(--dsw-radius-xl);
+  /* 默认字号下单行气泡 42px：22 行高 + 上下各 10 内距；字号偏好经 body 发布的轴同时移动字号与行高。 */
+  padding: 10px 16px;
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-primary);
+  /* 折行归气泡：不加这两条，投影出来的 runs 会按 `white-space: normal` 折叠空白，与上游对不上。 */
+  white-space: pre-wrap;
+  word-break: break-word;
 }
