@@ -22,7 +22,8 @@ import type { UserMessageNode } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { ChatNodeViewProps, ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { RenderMessageImages } from "@deepseek-ai/dsh-client-ui-conversation/client";
 // 动作行整条用上游那份：复制 / 分支 / 时间标签的悬停显形都归它，我们只经它的 `extraActions` 注入自己的两个入口。
-import { MessageIconActions } from "@deepseek-ai/dsh-client-ui-chat/src/client/chat/MessageIconActions.tsx";
+// 走 vendor 源码的相对路径（与 `dsh-subagent` 接上游源码同一种写法），不经包出口。
+import { MessageIconActions } from "../../../../../../vendor/deepseek-harness/packages/client/ui-chat/src/client/chat/MessageIconActions.tsx";
 import type { EditableMessageBlock } from "../../shared.ts";
 import type { SessionEditorFace } from "../controller.ts";
 
