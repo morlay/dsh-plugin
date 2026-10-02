@@ -313,15 +313,39 @@ export interface BundleConfigFace extends BundleConfigActions {
 // `ctx.configForms` 一个命名空间的送达状态（与 `ConfigFormSnapshot.status` 同源）。
 export type ConfigStatus = "loading" | "ready" | "unavailable";
 
-// 提示面（`schemaFormHints`）在本文件用到的读侧。
-interface HintsLike {
+// cordis 会把服务值包成追踪代理（`Symbol.for("cordis.original")` 指回原始实例）。代理上的方法调用以代理为
+// `this`，而服务实现用的是 JS 私有字段（`#texts` …）——私有字段只认声明它的那个实例，于是
+// `Cannot read private member #texts from an object whose class did not declare it`。
+// 读候选前先把服务解包成原始实例：这是跨副本共享的唯一入口，解包之后方法里的 `this` 才是原实例。
+export function unwrapService<T>(value: T | undefined): T | undefined {
+  if (value === undefined) return undefined;
+  const original = (value as { [key: symbol]: unknown })[Symbol.for("cordis.original")];
+  return (original ?? value) as T;
+}
+
+// 提示面（`schemaFormHints`）在本文件用到的读侧（订阅只在这里用：候选晚到时让页面重投影）。
+export interface HintsLike {
   textFor(ns: string, path: readonly string[]): { label?: string; hint?: string };
   selectFor(ns: string, path: readonly string[]): SelectRead | undefined;
   sourceFor(name: string): SelectRead | undefined;
+  subscribe(listener: () => void): () => void;
 }
 
-// 候选源：依赖字段变化时按读数重算候选。
+// 提示面的注册侧（业务行用它登记字段文案、候选键与候选值）。
+export interface HintsService extends HintsLike {
+  describe(
+    ns: string,
+    path: readonly string[],
+    read: () => { label?: string; hint?: string },
+  ): () => void;
+  select(ns: string, path: readonly string[], spec: SelectRead): () => void;
+  source(name: string, spec: SelectRead): () => void;
+  refresh(): void;
+}
+
+// 候选源：依赖字段变化时按读数重算候选（`dependsOn` 只声明"何时重算"，值由 options 自己读）。
 interface SelectRead {
+  dependsOn?: readonly (readonly string[])[] | undefined;
   options: (read: (path: readonly string[]) => unknown) => readonly SelectOption[];
 }
 
@@ -336,12 +360,13 @@ export function fieldKey(path: readonly string[]): string {
 export function createBundleConfigFace(
   ctx: ClientContext,
   t: BundleTranslate,
+  // 提示面（候选值：服务商、模型、policy 名单）：由调用方以**属性访问**取到再传进来——`ctx.get(name)` 给的是
+  // cordis 的追踪代理，调它上面带 JS 私有字段的方法会抛
+  // `Cannot read private member #x from an object whose class did not declare it`。
+  hintsOf: () => HintsLike | undefined = () => undefined,
 ): { face: BundleConfigFace; refresh: () => void; dispose: () => void } {
   const forms = ctx.configForms;
-  // 提示面（候选值：服务商、模型、policy 名单）由基础面异步装上，可能比本页晚到：每次读的时候现取，
-  // 不把"那一刻还没有"缓存下来——否则模型那两个字段会静默退回手输。
-  const hintsOf = (): HintsLike | undefined =>
-    ctx.get("schemaFormHints") as unknown as HintsLike | undefined;
+  const hints = (): HintsLike | undefined => unwrapService(hintsOf());
   const deps = (): ConstructorParameters<typeof SchemaFormController>[1] => ({
     form: forms.get(SESSION_MODE_NS),
     describe: forms.describe(),
@@ -350,9 +375,9 @@ export function createBundleConfigFace(
     t: ctx.locale.bind("settings.schema-form"),
     hints: {
       keysFor: () => [],
-      textFor: (path: readonly string[]) => hintsOf()?.textFor(SESSION_MODE_NS, path) ?? {},
-      selectFor: (path: readonly string[]) => hintsOf()?.selectFor(SESSION_MODE_NS, path),
-      sourceFor: (name: string) => hintsOf()?.sourceFor(name),
+      textFor: (path: readonly string[]) => hints()?.textFor(SESSION_MODE_NS, path) ?? {},
+      selectFor: (path: readonly string[]) => hints()?.selectFor(SESSION_MODE_NS, path),
+      sourceFor: (name: string) => hints()?.sourceFor(name),
     },
   });
   const controller = new SchemaFormController(SESSION_MODE_NS, deps());

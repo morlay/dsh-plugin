@@ -455,29 +455,7 @@ function FieldControl({
         />
       );
     case "choice":
-      // 候选读不到时（没有任何可配置的服务商）退回文本输入：否则这条字段没有可选项，是个死胡同。
-      if (field.options.length === 0) {
-        return (
-          <SettingsValueField
-            id={`${id}-choice`}
-            label={field.label}
-            hint={field.hint}
-            text={field.text}
-            overridden={field.overridden}
-            invalid={field.invalid !== undefined}
-            overriddenLabel={t("overridden")}
-            resetLabel={t("field.reset")}
-            invalidLabel={field.invalid ?? ""}
-            disabled={disabled}
-            onEdit={(text) => {
-              face.editText(field.path, text);
-            }}
-            onReset={() => {
-              face.clear(field.path);
-            }}
-          />
-        );
-      }
+      // 没有候选的情况在 `FieldRow` 里就转成了官方文本控件（见那里的 `asValueField`）。
       return (
         <PickMenu
           label={field.label}

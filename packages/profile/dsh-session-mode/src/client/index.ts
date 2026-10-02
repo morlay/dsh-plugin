@@ -13,7 +13,14 @@ import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
 import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 import { POLICY_NAMES } from "../shared.ts";
-import { BUNDLE_CONFIG_KEY, createBundleConfigFace, SESSION_MODE_NS } from "./bundle-config.ts";
+import {
+  BUNDLE_CONFIG_KEY,
+  createBundleConfigFace,
+  SESSION_MODE_NS,
+  unwrapService,
+  type HintsLike,
+  type HintsService,
+} from "./bundle-config.ts";
 import { BundleConfigPage } from "./BundleConfigPage.tsx";
 import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-locales.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
@@ -70,6 +77,12 @@ function readAt(root: unknown, path: readonly string[]): unknown {
   }, root);
 }
 
+// 从 inject 的 scope 上取提示面服务并解包：cordis 把它包成追踪代理，而它的实现用的是 JS 私有字段，
+// 代理上的方法调用会以代理为 `this` 而抛（`Cannot read private member #texts …`）。
+function unwrapHintService(scope: Context): HintsService {
+  return unwrapService(scope.schemaFormHints as unknown as HintsService) as HintsService;
+}
+
 // 装上会话里的那一个面、本行配置页的字段文案，以及装本行的 bundle 那一页的表单。
 export function apply(ctx: Context): void {
   // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
@@ -81,7 +94,8 @@ export function apply(ctx: Context): void {
   // 中文标签与说明。
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
-      const hints = scope.schemaFormHints;
+      // 提示面服务走 cordis 的追踪代理，而它的实现用 JS 私有字段：先解包成原实例再调（见 `./bundle-config.ts`）。
+      const hints = unwrapHintService(scope);
       const offs = FIELDS.map((key) =>
         hints.describe(SESSION_MODE_NS, ["modes", DYNAMIC, "defaultModel", key], () => ({
           label: t(key),
@@ -100,7 +114,7 @@ export function apply(ctx: Context): void {
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
       const offs = POLICY_FIELDS.map((key) =>
-        scope.schemaFormHints.select(SESSION_MODE_NS, ["modes", DYNAMIC, key, DYNAMIC], {
+        unwrapHintService(scope).select(SESSION_MODE_NS, ["modes", DYNAMIC, key, DYNAMIC], {
           options: () => POLICY_NAMES.map((value) => ({ value })),
         }),
       );
@@ -114,7 +128,7 @@ export function apply(ctx: Context): void {
   // 指向的配置（`settingsNs` / `settingsPath`）。目录异步取到后注册——注册本身就是一次变更通知。
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
-      const hints = scope.schemaFormHints;
+      const hints = unwrapHintService(scope);
       const remote = scope.get("remote");
       const forms = scope.get("configForms");
       if (remote === undefined || forms === undefined) return () => {};
@@ -211,13 +225,19 @@ export function apply(ctx: Context): void {
   // 提示面的候选（选服务商 / 选模型的两个具名源）可能比本页晚到，所以这一页自己重投影的入口留在外面：
   // 提示面一到（或它的候选变了）就刷一次，模型那两个字段不会静默退回手输。
   let refreshPage: (() => void) | undefined;
+  // 提示面按**属性访问**取（`ctx.get(name)` 给的是追踪代理，调带 JS 私有字段的方法会抛），存下来给下面那一页用。
+  let hints: HintsLike | undefined;
   ctx.inject(["schemaFormHints"], (scope) =>
     scope.effect(() => {
-      const off = scope.schemaFormHints.subscribe(() => {
+      // 订阅也要用解包后的实例（服务实现用 JS 私有字段，代理上的调用会抛）。
+      const service = unwrapHintService(scope);
+      hints = service;
+      const off = service.subscribe(() => {
         refreshPage?.();
       });
       return () => {
         off();
+        hints = undefined;
       };
     }, "session-mode: bundle page candidates"),
   );
@@ -225,7 +245,7 @@ export function apply(ctx: Context): void {
   ctx.inject(["slots", "locale", "configForms", "settingsSchema"], (scope) => {
     scope.effect(() => {
       const bundleT = scope.locale.bind(BUNDLE_NS);
-      const { face, refresh, dispose } = createBundleConfigFace(scope, bundleT);
+      const { face, refresh, dispose } = createBundleConfigFace(scope, bundleT, () => hints);
       refreshPage = refresh;
       const bundleDictionary = scope.locale.register(BUNDLE_NS, { zh: bundleZh, en: bundleEn });
       const off = scope.slots.inject("plugins.bundle.config", () =>

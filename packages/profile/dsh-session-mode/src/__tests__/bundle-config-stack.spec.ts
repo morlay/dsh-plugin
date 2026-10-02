@@ -17,7 +17,13 @@ import {
   projectForm,
   volatileForm,
 } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
-import { createBundleConfigFace, type BundleTranslate } from "../client/bundle-config.ts";
+import { SchemaFormHints } from "@morlay/dsh-client-ui-primitives/client";
+import {
+  createBundleConfigFace,
+  unwrapService,
+  type BundleTranslate,
+  type HintsLike,
+} from "../client/bundle-config.ts";
 import { Config } from "../modes.ts";
 
 const t = ((key: string) => key) as BundleTranslate;
@@ -122,6 +128,25 @@ function bench() {
     faceOf: () => createBundleConfigFace(ctx as never, t),
   };
 }
+
+describe("bundle 配置页：提示面经 cordis 服务拿到", () => {
+  it("代理上直接调方法会抛（私有字段），解包成原实例之后读得到候选", () => {
+    const stack = bench();
+    // 真的提示面服务（与 dsh-session-mode 的 client 半同一份实现）：自己挂到 ctx 上。
+    const hints = new SchemaFormHints(stack.ctx);
+    hints.source("llm-providers", {
+      options: () => [{ value: "provider-a", label: "A" }],
+    });
+
+    // cordis 会给服务值包一层追踪代理：代理上的调用以代理为 `this`，而服务实现用 JS 私有字段。
+    const proxied = stack.ctx.get("schemaFormHints") as unknown as HintsLike;
+    expect(() => proxied.sourceFor("llm-providers")).toThrow();
+
+    // 页面走的是解包之后那条路。
+    const original = unwrapService(proxied);
+    expect(original?.sourceFor("llm-providers")).toBeDefined();
+  });
+});
 
 describe("bundle 配置页：真 settings 栈下的视图到达", () => {
   it("控制器建起来时视图还没到：作答之后读数自己跟上（不用人工重建）", async () => {

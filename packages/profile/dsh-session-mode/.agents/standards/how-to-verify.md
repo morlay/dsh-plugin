@@ -50,6 +50,9 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - `bundle-config-registration.spec.ts`：注册进 `plugins.bundle.config` 且 key = bundle 包名（与
     `bundles/session-mode-profile/package.json` 的 `name` 同源比对，改名时先红），字典是 `session-mode-bundle`，
     注入面给出读数（`hooks.bundleConfig`）与动作。
+  - `bundle-config-stack.spec.ts`：接**真 settings 服务栈**（`ConfigForms` + describe 镜像 + schema 服务）跑两件事——
+    视图晚到时控制器读数自己跟上；提示面经 cordis 服务（追踪代理）拿到时，直接调代理上的方法会抛（实现用 JS 私有
+    字段），解包成原实例之后读得到候选。
   - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、`noop` 不可删、默认模式选项、六组字段）、
     名单的解析（`parseTagList` 按中英逗号 / 分号 / 换行拆开并去空白去重保序、`mergeTags` 不重复且现有项在前）、
     动作（新增模式连名称一起给、受保护的模式删不动、一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、
