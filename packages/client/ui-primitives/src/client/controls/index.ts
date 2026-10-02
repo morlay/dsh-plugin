@@ -2,7 +2,7 @@
 //
 // 官方那套基础组件（`Menu` / `Modal` / `Switch` / …）由本包统一 re-export（见 `../index.ts`），业务包只从这里取控件。
 // 两类"带候选"的控件共用同一套「搜索 + 候选」交互：
-// - **multi-input**（`TagInput`）：多值 + 自由输入，候选只是加速；
+// - **multi-input**（`TagInput`）：多值 + 自由输入，聚焦即整体下拉候选、输入即过滤，候选只是加速；
 // - **searchable**（`SearchSelect`）：单值，从候选里搜着选。
 
 export { Button, type ButtonProps } from "./Button.tsx";

@@ -593,8 +593,6 @@ function FieldControl({
           }))}
           placeholder={t("tags.placeholder")}
           label={field.label}
-          candidatesLabel={t("tags.candidates")}
-          searchLabel={t("select.search")}
           noMatchLabel={t("select.noMatch")}
           removeLabel={(name) => t("tags.remove", { name })}
           disabled={disabled}

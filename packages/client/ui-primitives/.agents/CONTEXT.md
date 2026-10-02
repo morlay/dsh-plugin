@@ -110,7 +110,7 @@ union 字段行尾的那个小下拉：带标签的挂在**标签行**上（选�
 **设置面控件**（settings controls）：
 跨设置面复用的控件：字段行 `SettingsFieldRow`（`stack` / `inline` 两种排法 + 分隔线 + 「已覆盖」徽标与恢复默认）、
 可搜索选择器 `SearchSelect`（searchable）、模型路由清单 `ModelRouteList`（按 provider 分组、只选一条，一条路由就是
-provider + model 这一对）、标签输入 `TagInput`（multi-input，与 `SearchSelect` 共用同一套「搜索 + 候选」交互）、
+provider + model 这一对）、标签输入 `TagInput`（multi-input：聚焦即整体下拉候选、输入即过滤、回车收自定义值，与 `SearchSelect` 共用同一套「搜索 + 候选」交互）、
 多行文本 `MultilineField`、图标按钮 `IconButton`、按钮 `Button`（官方那份 + 文字不换行）。官方那套基础组件
 （`Button` / `Menu` / `Modal` / `Switch` / `SegmentedControl` / `DisclosureRow` / 图标 …）也由本包 `export *` 统一转出：
 业务包只向本包取控件，**不写控件外观**（业务层留的是页面结构布局）。每个控件都带一个稳定的 `data-role`

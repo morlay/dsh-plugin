@@ -106,7 +106,7 @@ describe("标签输入", () => {
     expect(onChange).toHaveBeenCalledWith(["bash"]);
   });
 
-  it("候选菜单只列还没加进去的那些：全加过就不给菜单", () => {
+  it("聚焦即整体下拉：候选只列还没加进去的那些，输入跟着过滤", () => {
     const options = [
       { value: "read" },
       { value: "bash" },
@@ -119,12 +119,24 @@ describe("标签输入", () => {
         options={options}
         placeholder="加一个后回车"
         label="允许的工具"
-        candidatesLabel="从候选里选"
+        noMatchLabel="没有匹配的候选"
         removeLabel={(name) => `移除 ${name}`}
       />,
     );
-    expect(screen.getByRole("button", { name: "从候选里选" })).toBeTruthy();
 
+    // 聚焦前没有下拉；聚焦后列出候选，已加进去的 `read` 不在里面。
+    expect(screen.queryByRole("menuitem", { name: "bash" })).toBeNull();
+    fireEvent.focus(screen.getByLabelText("允许的工具"));
+    expect(screen.getByRole("menuitem", { name: "bash" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "web_search" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "read" })).toBeNull();
+
+    // 输入跟着过滤候选。
+    fireEvent.change(screen.getByLabelText("允许的工具"), { target: { value: "web" } });
+    expect(screen.getByRole("menuitem", { name: "web_search" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "bash" })).toBeNull();
+
+    // 候选全加过：下拉不再出现。
     rerender(
       <TagInput
         value={["read", "bash", "web_search"]}
@@ -132,11 +144,34 @@ describe("标签输入", () => {
         options={options}
         placeholder="加一个后回车"
         label="允许的工具"
-        candidatesLabel="从候选里选"
+        noMatchLabel="没有匹配的候选"
         removeLabel={(name) => `移除 ${name}`}
       />,
     );
-    expect(screen.queryByRole("button", { name: "从候选里选" })).toBeNull();
+    fireEvent.focus(screen.getByLabelText("允许的工具"));
+    expect(screen.queryByRole("menuitem", { name: "read" })).toBeNull();
+  });
+
+  it("点候选加一个：留在框里继续加下一个（输入框焦点不丢）", () => {
+    const onChange = vi.fn();
+    render(
+      <TagInput
+        value={["read"]}
+        onChange={onChange}
+        options={[{ value: "bash" }]}
+        placeholder="加一个后回车"
+        label="允许的工具"
+        noMatchLabel="没有匹配的候选"
+        removeLabel={(name) => `移除 ${name}`}
+      />,
+    );
+
+    fireEvent.focus(screen.getByLabelText("允许的工具"));
+    const item = screen.getByRole("menuitem", { name: "bash" });
+    fireEvent.mouseDown(item.parentElement as HTMLElement);
+    fireEvent.click(item);
+
+    expect(onChange).toHaveBeenCalledWith(["read", "bash"]);
   });
 });
 
