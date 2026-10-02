@@ -84,7 +84,10 @@ export const bundleZh = {
   readOnly: "这份部署的配置是只读的。",
   unavailable: "这一行当前不可写。",
   notSaved: "没有保存：{message}",
-  "configured.missing": "这一行没在跑：等它被装配起来就能改。",
+  "configured.loading": "正在读取这一行的配置…",
+  "configured.missing":
+    "设置面里没有 `session-mode` 这一行：没装、被禁用，或者还没装配成功（依赖没到齐时会一直 PENDING）。",
+  "configured.unreadable": "`session-mode` 这一行在跑，但这份配置读不出来（{problem}）。",
   "violation.modesEmpty": "至少要有一种模式。",
   "violation.defaultMissing": "默认模式不在模式清单里。",
   "violation.modelPair": "默认模型要同时给出服务商与模型。",
@@ -179,7 +182,11 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   readOnly: "This deployment stores settings read-only.",
   unavailable: "This row is not writable right now.",
   notSaved: "Not saved: {message}",
-  "configured.missing": "This row is not running yet; once it is composed you can edit it.",
+  "configured.loading": "Reading this row's configuration…",
+  "configured.missing":
+    "The settings surface has no `session-mode` row: not installed, disabled, or not composed yet (it stays PENDING while a dependency is missing).",
+  "configured.unreadable":
+    "The `session-mode` row is running, but its configuration cannot be read ({problem}).",
   "violation.modesEmpty": "At least one mode is required.",
   "violation.defaultMissing": "The default mode is not in the mode list.",
   "violation.modelPair": "A default model needs both a provider and a model.",

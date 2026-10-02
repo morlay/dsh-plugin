@@ -10,9 +10,10 @@
 import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-api-remotes/client";
 import type {} from "@deepseek-ai/dsh-client-ui-settings/client";
-import type { SnapshotStore } from "@deepseek-ai/dsh-client-store";
+import { createSnapshotStore, type SnapshotStore } from "@deepseek-ai/dsh-client-store";
 import {
   failureOf,
+  projectRoot,
   SchemaFormController,
   type SchemaFormState,
   type SelectOption,
@@ -251,10 +252,24 @@ export interface BundleModeView {
   }[];
 }
 
+// 页面读这一行配置的阶段：
+// - `loading`：设置面还没送到（还没读到这一行的命名空间）；
+// - `missing`：设置面送到了，但没有 `session-mode` 这个命名空间（行没装或被禁用）；
+// - `unreadable`：命名空间在，schema 却读不出来（rehydrate / 字段树失败）——这是配置面自己的问题，不是行没跑；
+// - `ready`：可编辑。
+export type BundleConfigReadiness = "loading" | "missing" | "unreadable" | "ready";
+
+// 异常态的诊断读数：设置面现在有哪些命名空间，以及这一行的 schema 卡在哪。
+export interface BundleConfigDiagnosis {
+  readonly namespaces: readonly string[];
+  readonly problem: string;
+}
+
 // 页面的完整读数。
 export interface BundleConfigView extends SettingsFormShell {
   // 行的 schema 可渲染（否则页面只说明这一行没在跑）。
   readonly configured: boolean;
+  readonly readiness: BundleConfigReadiness;
   readonly defaultMode: {
     readonly value: string;
     readonly options: readonly SelectOption[];
@@ -281,8 +296,17 @@ export interface BundleConfigActions {
 
 // 完整注入面：动作 + 读数（读数由框架绑成 `useBundleConfig`）。
 export interface BundleConfigFace extends BundleConfigActions {
-  readonly hooks: { readonly bundleConfig: SnapshotStore<SchemaFormState> };
+  readonly hooks: {
+    readonly bundleConfig: SnapshotStore<SchemaFormState>;
+    // 这一行命名空间的送达状态（`loading` / `ready` / `unavailable`）：页面据此区分"还在读"与"这一行没在跑"。
+    readonly bundleStatus: SnapshotStore<ConfigStatus>;
+  };
+  // 异常态的诊断读数（页面只在读不出来时调用一次）。
+  diagnose: () => BundleConfigDiagnosis;
 }
+
+// `ctx.configForms` 一个命名空间的送达状态（与 `ConfigFormSnapshot.status` 同源）。
+export type ConfigStatus = "loading" | "ready" | "unavailable";
 
 // 提示面（`schemaFormHints`）在本文件用到的读侧。
 interface HintsLike {
@@ -327,9 +351,40 @@ export function createBundleConfigFace(
     },
   });
   const face = controller.face();
+  const form = forms.get(SESSION_MODE_NS);
+  const statusStore = createSnapshotStore<ConfigStatus>(form.getSnapshot().status);
+  const unsubscribeStatus = form.subscribe(() => {
+    statusStore.set(form.getSnapshot().status);
+  });
+  // 诊断：只在页面读不出来时被调用——把"设置面有哪些命名空间"和"这一行为什么渲染不出来"说清。
+  const diagnose = (): BundleConfigDiagnosis => {
+    const view = forms.describe().getSnapshot().view;
+    const namespaces = view?.namespaces.map((row) => row.ns) ?? [];
+    const own = view?.namespaces.find((row) => row.ns === SESSION_MODE_NS);
+    if (own === undefined) {
+      return { namespaces, problem: `describe has no namespace "${SESSION_MODE_NS}"` };
+    }
+    try {
+      const schema = ctx.settingsSchema.rehydrate(own.schema) as unknown as { type?: unknown };
+      const renderable =
+        projectRoot(own.schema, (serialized: unknown) =>
+          ctx.settingsSchema.rehydrate(serialized),
+        ) !== undefined;
+      return {
+        namespaces,
+        problem: renderable ? "renderable" : `schema root is "${String(schema.type)}"`,
+      };
+    } catch (error: unknown) {
+      return {
+        namespaces,
+        problem: `schema rehydrate failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  };
   return {
     face: {
-      hooks: { bundleConfig: face.hooks.schemaForm },
+      hooks: { bundleConfig: face.hooks.schemaForm, bundleStatus: statusStore },
+      diagnose,
       set: (path, value) => {
         face.set(path, value);
       },
@@ -366,9 +421,11 @@ export function createBundleConfigFace(
       },
     },
     refresh: () => {
+      statusStore.set(form.getSnapshot().status);
       controller.refresh();
     },
     dispose: () => {
+      unsubscribeStatus();
       controller.dispose();
     },
   };
@@ -423,7 +480,11 @@ function rosterProblem(value: unknown, t: BundleTranslate): ValidationFailure | 
 }
 
 // 把控制器读数折成页面视图。
-export function projectBundleConfig(state: SchemaFormState, t: BundleTranslate): BundleConfigView {
+export function projectBundleConfig(
+  state: SchemaFormState,
+  t: BundleTranslate,
+  status: ConfigStatus = "ready",
+): BundleConfigView {
   const read = (path: readonly string[]): FieldRead | undefined => state.fields.get(fieldKey(path));
   const optionsAt = (path: readonly string[]): readonly SelectOption[] =>
     state.options.get(fieldKey(path)) ?? [];
@@ -440,6 +501,13 @@ export function projectBundleConfig(state: SchemaFormState, t: BundleTranslate):
     saving: state.saving,
     failed: state.failed,
     configured: state.configured,
+    readiness: state.configured
+      ? "ready"
+      : status === "loading"
+        ? "loading"
+        : status === "ready"
+          ? "unreadable"
+          : "missing",
     defaultMode: {
       value: selected,
       options: modes.map((id) => ({ value: id, label: labelOf(id, read) })),

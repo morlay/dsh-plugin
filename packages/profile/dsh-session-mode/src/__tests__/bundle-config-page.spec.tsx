@@ -154,6 +154,11 @@ function renderPage(): ReturnType<typeof mounted> {
         (listener: () => void) => mountedPage.wrapped.hooks.bundleConfig.subscribe(listener),
         () => selector(mountedPage.wrapped.hooks.bundleConfig.getSnapshot()),
       ),
+    useBundleStatus: (selector: (status: unknown) => unknown) =>
+      useSyncExternalStore(
+        (listener: () => void) => mountedPage.wrapped.hooks.bundleStatus.subscribe(listener),
+        () => selector(mountedPage.wrapped.hooks.bundleStatus.getSnapshot()),
+      ),
     ...mountedPage.wrapped,
   } as unknown as BundleConfigPageProps;
   render(<BundleConfigPage {...props} />);

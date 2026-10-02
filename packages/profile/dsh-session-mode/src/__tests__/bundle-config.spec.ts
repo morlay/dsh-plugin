@@ -77,7 +77,7 @@ interface PathOp {
 
 // 挂上页面：真 `Config` 的 volatile 投影 + 替身的 settings 读写面。
 // `user` 是用户层那份（字段"已覆盖"的判据是它有没有这个键）：清一个已覆盖的字段才会产生写。
-function mounted(options: { user?: unknown } = {}) {
+function mounted(options: { user?: unknown; served?: boolean } = {}) {
   const form = volatileForm(Config as never) as z;
   const listeners = new Set<() => void>();
   const ops: PathOp[] = [];
@@ -113,17 +113,20 @@ function mounted(options: { user?: unknown } = {}) {
           getSnapshot: () => ({
             status: "ready",
             view: {
-              namespaces: [
-                {
-                  ns: "session-mode",
-                  schema: form.toJSON(),
-                  value: section,
-                  autoGenerate: true,
-                  applies: "live",
-                  secrets: [],
-                  revision: 1,
-                },
-              ],
+              namespaces:
+                options.served === false
+                  ? []
+                  : [
+                      {
+                        ns: "session-mode",
+                        schema: form.toJSON(),
+                        value: section,
+                        autoGenerate: true,
+                        applies: "live",
+                        secrets: [],
+                        revision: 1,
+                      },
+                    ],
               writable: true,
               hasDocument: false,
             },
@@ -190,6 +193,34 @@ describe("bundle 配置页：视图", () => {
       .find((group) => group.key === "injections")
       ?.fields.find((field) => field.path.join(".") === "modes.coding.skills");
     expect(skills?.value).toBe("unset");
+  });
+});
+
+describe("bundle 配置页：读这一行配置的阶段", () => {
+  it("设置面送到了：页面就绪", () => {
+    expect(mounted().view().readiness).toBe("ready");
+  });
+
+  it("读不出来与没在跑分开说：还没送到 / 没有这个命名空间 / schema 读不出来", () => {
+    const { face } = mounted({ served: false });
+    const snapshot = face.hooks.bundleConfig.getSnapshot();
+
+    // 设置面还没送到。
+    expect(projectBundleConfig(snapshot, t, "loading").readiness).toBe("loading");
+    // 送到了但没有这一行。
+    expect(projectBundleConfig(snapshot, t, "unavailable").readiness).toBe("missing");
+    // 命名空间在，schema 却渲染不出来（行在跑，是配置面自己的问题）。
+    expect(projectBundleConfig(snapshot, t, "ready").readiness).toBe("unreadable");
+  });
+
+  it("诊断读数：说出设置面现在有哪些命名空间、这一行卡在哪", () => {
+    const served = mounted();
+    expect(served.face.diagnose().problem).toBe("renderable");
+
+    const absent = mounted({ served: false });
+    const diagnosis = absent.face.diagnose();
+    expect(diagnosis.namespaces).toEqual([]);
+    expect(diagnosis.problem).toContain("session-mode");
   });
 });
 

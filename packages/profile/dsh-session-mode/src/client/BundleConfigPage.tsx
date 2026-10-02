@@ -26,12 +26,14 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SchemaFormState } from "@morlay/dsh-client-ui-primitives/client";
 import {
+  SESSION_MODE_NS,
   mergeTags,
   parseTagList,
   projectBundleConfig,
   ROLES,
   type BundleConfigActions,
   type BundleConfigFace,
+  type ConfigStatus,
   type BundleFieldView,
   type BundleModeView,
   type BundleTranslate,
@@ -61,17 +63,32 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
   };
   // 读数取原始快照（引用稳定，uSES 语义正确），投影在渲染里做。
   const snapshot = props.useBundleConfig((current: SchemaFormState) => current);
-  const state = useMemo(() => projectBundleConfig(snapshot, t), [snapshot, t]);
+  const status = props.useBundleStatus((current: ConfigStatus) => current);
+  const state = useMemo(() => projectBundleConfig(snapshot, t, status), [snapshot, t, status]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [adding, setAdding] = useState("");
   // 要删的那个模式：删除是不可逆的一步，先过一次确认弹窗（保存之前仍可丢弃）。
   const [removing, setRemoving] = useState<BundleModeView | null>(null);
   // 槽位注册项只为 `page` 视图存在（bundle 页不给 `summary` 座位）。
   if (view !== "page") return null;
-  if (!state.configured) {
+  if (state.readiness !== "ready") {
+    // 只有异常态才做诊断（它读 describe 与 schema，正常路径一次也不跑）。
+    const diagnosis = props.diagnose();
+    const message =
+      state.readiness === "loading"
+        ? t("configured.loading")
+        : state.readiness === "missing"
+          ? t("configured.missing")
+          : t("configured.unreadable", { problem: diagnosis.problem });
     return (
-      <p {...stylingProps(styles.hint)} data-bundle-config="missing">
-        {t("configured.missing")}
+      <p
+        {...stylingProps(styles.hint)}
+        data-bundle-config={state.readiness}
+        data-namespace={SESSION_MODE_NS}
+        data-namespaces={diagnosis.namespaces.join(",")}
+        data-problem={diagnosis.problem}
+      >
+        {message}
       </p>
     );
   }
