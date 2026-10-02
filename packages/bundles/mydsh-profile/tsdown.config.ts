@@ -6,7 +6,7 @@ const ROWS: readonly unknown[] = [
   { id: "locale", config: { preference: "zh" } },
   {
     id: "ui-settings-general",
-    config: { welcomeNoticeVersion: "2026-08-13.1" },
+    config: { welcomeNoticeVersion: "2026-09-28.1" },
   },
   {
     id: "agent-default-model",
