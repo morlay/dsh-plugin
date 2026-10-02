@@ -33,22 +33,22 @@ export const styles = {
   invalid: {
     margin: "0",
     fontSize: "12px",
-    lineHeight: "18px",
-    color: "var(--dsw-alias-label-error, var(--dsw-alias-label-primary))",
+    lineHeight: "1.5",
+    color: "var(--dsw-alias-state-error-primary)",
   },
-  // 多行文本：官方表单没有这个控件，按官方输入框的 token 画。
+  // 多行文本：官方表单没有这个控件，按官方输入框（`fields.module.css` 的 `.input`）的数值画。
   multiline: {
     boxSizing: "border-box",
     width: "100%",
     minHeight: "64px",
-    padding: "5px 8px",
+    padding: "6px 12px",
     fontFamily: "inherit",
     fontSize: "13px",
-    lineHeight: "20px",
+    lineHeight: "1.5",
     color: "var(--dsw-alias-label-primary)",
-    background: "var(--dsw-alias-bg-base)",
-    border: "1px solid var(--dsw-alias-border-l1)",
-    borderRadius: "6px",
+    background: "var(--dsw-alias-bg-layer-3)",
+    border: "0.5px solid var(--dsw-alias-border-l4)",
+    borderRadius: "var(--dsw-radius-md)",
     resize: "vertical",
   },
   modeCard: {
@@ -91,7 +91,7 @@ export const styles = {
   group: {
     display: "flex",
     flexDirection: "column",
-    gap: "8px",
+    gap: "0",
   },
   groupHead: {
     display: "flex",
@@ -105,32 +105,42 @@ export const styles = {
     fontWeight: "600",
     color: "var(--dsw-alias-label-secondary)",
   },
-  // 非文本控件的字段块：标签一行、控件一行、说明一行。
+  // 字段容器：只负责分隔线与留白口径。文本字段用官方 `SettingsValueField`（它自带 `padding: 12px 0`），
+  // 其余字段的内层用 `fieldBody` 给同样的 12px —— 两种字段在页面上因此上下留白与分隔完全一致。
   field: {
     display: "flex",
     flexDirection: "column",
-    gap: "4px",
   },
+  fieldDivider: {
+    borderTop: "0.5px solid var(--dsw-alias-border-l2)",
+  },
+  fieldBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    padding: "12px 0",
+  },
+  // 标签与说明的数值取自官方 `fields.module.css`（`.label` 13px/wt500、`.hint` 12px/tertiary）。
   fieldLabel: {
-    fontSize: "12px",
-    lineHeight: "18px",
-    color: "var(--dsw-alias-label-tertiary)",
-  },
-  fieldHead: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
+    fontSize: "13px",
+    fontWeight: "500",
+    lineHeight: "1.5",
+    color: "var(--dsw-alias-label-primary)",
   },
   fieldHint: {
     margin: "0",
     fontSize: "12px",
-    lineHeight: "18px",
+    lineHeight: "1.5",
     color: "var(--dsw-alias-label-tertiary)",
   },
   roles: {
     display: "flex",
     alignItems: "center",
-    gap: "12px",
+    flexWrap: "wrap",
+    gap: "6px",
   },
   tags: {
     display: "flex",
@@ -169,11 +179,20 @@ export const styles = {
     width: "200px",
     flex: "0 0 auto",
   },
+  // 默认模式这一行是左右布局：左侧标签与说明，右侧选择器。
   defaultRow: {
     display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+  },
+  defaultText: {
+    display: "flex",
     flexDirection: "column",
-    gap: "6px",
-    maxWidth: "320px",
+    gap: "2px",
+    padding: "12px 0",
+    minWidth: "0",
   },
 } satisfies Record<string, CSSProps>;
 

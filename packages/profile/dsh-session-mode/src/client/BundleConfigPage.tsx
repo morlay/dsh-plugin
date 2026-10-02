@@ -8,16 +8,17 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 import {
   Button,
-  Checkbox,
   DisclosureRow,
   IconAgentPresetOutlineRegular,
   IconCloseOutlineRegular,
   IconTrashOutlineRegular,
   Input,
   Menu,
+  Pill,
   SegmentedControl,
   SettingsForm,
   SettingsValueField,
+  Switch,
   Tag,
   type MenuEntry,
   type SettingsFormLabels,
@@ -94,6 +95,10 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
           <h4 {...stylingProps(styles.sectionTitle)}>{t("default.label")}</h4>
           <p {...stylingProps(styles.hint)}>{t("default.hint")}</p>
           <div {...stylingProps(styles.defaultRow)}>
+            <div {...stylingProps(styles.defaultText)}>
+              <span {...stylingProps(styles.fieldLabel)}>{t("default.label")}</span>
+              <p {...stylingProps(styles.fieldHint)}>{t("default.hint")}</p>
+            </div>
             <PickMenu
               label={t("default.label")}
               value={state.defaultMode.value}
@@ -105,12 +110,12 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
                 else face.set(["default"], next);
               }}
             />
-            {state.defaultMode.invalid === undefined ? null : (
-              <p {...stylingProps(styles.invalid)} role="alert" data-invalid="default">
-                {state.defaultMode.invalid}
-              </p>
-            )}
           </div>
+          {state.defaultMode.invalid === undefined ? null : (
+            <p {...stylingProps(styles.invalid)} role="alert" data-invalid="default">
+              {state.defaultMode.invalid}
+            </p>
+          )}
         </section>
 
         <section {...stylingProps(styles.section)} data-section="modes">
@@ -227,8 +232,15 @@ function ModeCard({
                   </Button>
                 )}
               </div>
-              {group.fields.map((field) => (
-                <FieldRow key={field.key} field={field} writable={writable} t={t} face={face} />
+              {group.fields.map((field, index) => (
+                <FieldRow
+                  key={field.key}
+                  field={field}
+                  writable={writable}
+                  t={t}
+                  face={face}
+                  divider={index > 0}
+                />
               ))}
             </div>
           ))}
@@ -264,18 +276,29 @@ function ModeCard({
 function FieldRow({
   field,
   writable,
+  divider,
   t,
   face,
 }: {
   field: BundleFieldView;
   writable: boolean;
+  // 不是这一组的第一个字段：与上一个之间画一条细分隔线（与官方设置面同一种口径）。
+  divider: boolean;
   t: BundleTranslate;
   face: BundleConfigActions;
 }): ReactNode {
   const id = useId();
+  const container = {
+    ...stylingProps(styles.field),
+    ...stylingProps(divider ? styles.fieldDivider : {}),
+    "data-field": field.path.join("."),
+    "data-control": field.control,
+    "data-divider": divider ? "true" : "false",
+  };
   if (field.control === "text") {
+    // 官方 `SettingsValueField` 自带标签 / 说明 / 覆盖标记 / 恢复默认与 12px 上下留白。
     return (
-      <div data-field={field.path.join(".")} data-control={field.control}>
+      <div {...container}>
         <SettingsValueField
           id={`${id}-${field.key}`}
           label={field.label}
@@ -297,24 +320,21 @@ function FieldRow({
       </div>
     );
   }
-  const inline = field.control === "switch" || field.control === "tri";
   return (
-    <div
-      {...stylingProps(styles.field)}
-      data-field={field.path.join(".")}
-      data-control={field.control}
-    >
-      <div {...stylingProps(styles.fieldHead)}>
-        {inline ? null : <span {...stylingProps(styles.fieldLabel)}>{field.label}</span>}
+    <div {...container}>
+      <div {...stylingProps(styles.fieldBody)}>
+        <span {...stylingProps(styles.fieldLabel)}>
+          {field.label}
+          {field.overridden ? <Tag tone="neutral">{t("overridden")}</Tag> : null}
+        </span>
         <FieldControl field={field} writable={writable} t={t} face={face} />
-        {field.overridden ? <Tag tone="neutral">{t("overridden")}</Tag> : null}
+        {field.invalid === undefined ? null : (
+          <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
+            {field.invalid}
+          </p>
+        )}
+        <p {...stylingProps(styles.fieldHint)}>{field.hint}</p>
       </div>
-      {field.invalid === undefined ? null : (
-        <p {...stylingProps(styles.invalid)} role="alert" data-invalid={field.path.join(".")}>
-          {field.invalid}
-        </p>
-      )}
-      <p {...stylingProps(styles.fieldHint)}>{field.hint}</p>
     </div>
   );
 }
@@ -387,7 +407,7 @@ function FieldControl({
       );
     case "switch":
       return (
-        <Checkbox
+        <Switch
           checked={field.value === true}
           label={field.label}
           disabled={disabled}
@@ -417,21 +437,27 @@ function FieldControl({
     case "roles":
       return (
         <div {...stylingProps(styles.roles)} data-control="roles">
-          {ROLES.map((role) => (
-            <Checkbox
-              key={role}
-              checked={Array.isArray(field.value) && field.value.includes(role)}
-              label={role}
-              disabled={disabled}
-              onChange={(next) => {
-                const current = Array.isArray(field.value) ? field.value.map(String) : [];
-                const wanted = next
-                  ? [...current.filter((value) => value !== role), role]
-                  : current.filter((value) => value !== role);
-                face.set(field.path, wanted);
-              }}
-            />
-          ))}
+          {ROLES.map((role) => {
+            const active = Array.isArray(field.value) && field.value.includes(role);
+            return (
+              <Pill
+                key={role}
+                active={active}
+                data-role={role}
+                disabled={disabled}
+                aria-pressed={active}
+                onClick={() => {
+                  const current = Array.isArray(field.value) ? field.value.map(String) : [];
+                  const wanted = active
+                    ? current.filter((value) => value !== role)
+                    : [...current.filter((value) => value !== role), role];
+                  face.set(field.path, wanted);
+                }}
+              >
+                {t(`role.${role}` as "role.main")}
+              </Pill>
+            );
+          })}
         </div>
       );
     case "tags":

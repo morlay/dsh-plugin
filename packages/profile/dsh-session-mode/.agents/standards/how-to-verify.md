@@ -55,7 +55,9 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
     动作（新增模式连名称一起给、受保护的模式删不动、一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、
     默认模型只给一半 → 保存被挡且页面上有对应消息）。
   - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、编辑与删除带着真实
-    路径上报、名单是标签输入（回车确认一个、粘贴一串拆成多个）、添加与保存各走一次动作。
+    路径上报、名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是 `Pill` 按钮（`aria-pressed`，点一下写回去掉
+    该项的数组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
+    默认模式那一行是左右布局（选择器在最右）、添加与保存各走一次动作。
 - `src/__tests__/preset-plane.spec.ts`：**模式不绑 preset、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面

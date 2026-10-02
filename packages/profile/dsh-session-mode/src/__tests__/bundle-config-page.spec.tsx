@@ -8,6 +8,7 @@ import z from "@deepseek-ai/schemastery";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { BundleConfigPage, type BundleConfigPageProps } from "../client/BundleConfigPage.tsx";
+import { styles } from "../client/BundleConfigPage.styles.ts";
 import { createBundleConfigFace, type BundleTranslate } from "../client/bundle-config.ts";
 import { bundleZh } from "../client/bundle-locales.ts";
 import { Config } from "../modes.ts";
@@ -179,7 +180,12 @@ describe("会话模式的 bundle 配置页", () => {
   it("点开一张卡片：字段按分组出现（默认模式另有一处选择）", () => {
     renderPage();
 
-    expect(screen.getByText(bundleZh["default.label"])).toBeTruthy();
+    const defaultSection = document.querySelector('[data-section="default"]') as HTMLElement;
+    expect(within(defaultSection).getAllByText(bundleZh["default.label"]).length).toBeGreaterThan(
+      0,
+    );
+    // 默认模式那一行是左右布局：标签与说明在左，选择器在最右。
+    expect(defaultSection.querySelector('[data-action="pick"]')).toBeTruthy();
     fireEvent.click(within(card("coding")).getByText("编码模式"));
 
     expect(within(card("coding")).getByText(bundleZh["group.tools"])).toBeTruthy();
@@ -187,6 +193,57 @@ describe("会话模式的 bundle 配置页", () => {
     const name = document.querySelector('[data-field="modes.coding.name"] input');
     expect(name).not.toBeNull();
     expect((name as HTMLInputElement).value).toBe("编码模式");
+  });
+
+  it("字段排法与通用设置一致：标签 / 控件 / 说明同列，字段之间一条细分隔线", () => {
+    renderPage();
+
+    // 排法与官方 `SettingsValueField` 同一种：标签在上、控件在中、说明在下（都是 column）。
+    expect(styles.field.flexDirection).toBe("column");
+    expect(styles.fieldBody.flexDirection).toBe("column");
+    expect(styles.fieldBody.padding).toBe("12px 0");
+    expect(styles.defaultRow.flexDirection).toBe("row");
+    expect(styles.defaultRow.justifyContent).toBe("space-between");
+
+    fireEvent.click(within(card("coding")).getByText("编码模式"));
+    const tools = document.querySelector('[data-field="modes.coding.denyTools"]') as HTMLElement;
+    const text = tools.textContent ?? "";
+    expect(text).toContain(bundleZh["field.denyTools"]);
+    expect(text).toContain(bundleZh["hint.denyTools"]);
+    // 说明在标签之后（同一列里的先后顺序）。
+    expect(text.indexOf(bundleZh["hint.denyTools"])).toBeGreaterThan(
+      text.indexOf(bundleZh["field.denyTools"]),
+    );
+
+    // 分隔线：这一组的第一个字段没有，其余有（与官方设置面的 `.field + .field` 同一种口径）。
+    const fields = [
+      ...document.querySelectorAll('[data-group="tools"] [data-field]'),
+    ] as HTMLElement[];
+    expect(fields.map((field) => field.getAttribute("data-divider"))).toEqual([
+      "false",
+      "true",
+      "true",
+      "true",
+    ]);
+  });
+
+  it("角色是多选按钮（Pill），开关是 Switch", () => {
+    const page = renderPage();
+    fireEvent.click(within(card("coding")).getByText("编码模式"));
+
+    const main = document.querySelector('[data-role="main"]') as HTMLElement;
+    const subagent = document.querySelector('[data-role="subagent"]') as HTMLElement;
+    expect(main.getAttribute("aria-pressed")).toBe("true");
+    expect(subagent.getAttribute("aria-pressed")).toBe("true");
+
+    // 点一下取消 `subagent`：写回的是去掉它的那份数组。
+    fireEvent.click(subagent);
+    expect(page.sets.at(-1)).toEqual({ path: ["modes", "coding", "role"], value: ["main"] });
+
+    // 注入面的两个开关是官方 Switch（`role="switch"`，无可见文本，标签由字段块给）。
+    const switches = within(card("coding")).getAllByRole("switch");
+    expect(switches).toHaveLength(2);
+    expect(switches[0]?.getAttribute("aria-label")).toBe(bundleZh["field.instructions"]);
   });
 
   it("`noop` 不给删：没有删除入口，只有一句说明", () => {
