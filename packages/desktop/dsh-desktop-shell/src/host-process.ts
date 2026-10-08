@@ -14,6 +14,7 @@ import {
   encodeDesktopRequestStart,
   isDesktopHostEvent,
   type DesktopHostCommand,
+  type DesktopHostEvent,
   type DesktopHostResponseFrame,
 } from "@morlay/dsh-desktop-host/wire";
 import { DESKTOP_HOST_PACKAGE } from "./official.ts";
@@ -53,6 +54,9 @@ export interface DesktopHostReady {
   readonly protocolVersion: number;
 }
 
+// 后端调试端点的状态：`url` 为空表示没开（被关掉或开不起来，原因在 `message`）。
+export type DesktopHostInspected = Extract<DesktopHostEvent, { type: "inspected" }>;
+
 export type DesktopHostSpawn = (
   command: string,
   args: readonly string[],
@@ -85,6 +89,7 @@ export class DesktopHostProcess {
   private nextStreamId = 1;
   private readonly pending = new Map<number, PendingResponse>();
   private readonly blockedResponses = new Set<number>();
+  private readonly inspectedListeners = new Set<(state: DesktopHostInspected) => void>();
   private readyResolve!: (ready: DesktopHostReady) => void;
   private readyReject!: (error: Error) => void;
   private readonly readyPromise = new Promise<DesktopHostReady>((resolve, reject) => {
@@ -193,6 +198,10 @@ export class DesktopHostProcess {
         this.fail(new Error(message.message));
         return;
       }
+      if (message.type === "inspected") {
+        for (const listener of this.inspectedListeners) listener(message);
+        return;
+      }
       this.readyResolve({ protocolVersion: message.protocolVersion });
     });
     child.once("error", (error) => {
@@ -255,6 +264,24 @@ export class DesktopHostProcess {
         this.failPending(streamId, errorOf(error, "dsh desktop request upload failed"));
       });
     });
+  }
+
+  // 打开后端调试端点（`port` 为 0 表示由 host 挑一个随机端口）；端点经 `onInspected` 回报。
+  inspect(port = 0): void {
+    this.send({ type: "inspect", port });
+  }
+
+  // 关掉后端调试端点。
+  endInspect(): void {
+    this.send({ type: "inspect-off" });
+  }
+
+  // 订阅调试端点状态；返回退订。
+  onInspected(listener: (state: DesktopHostInspected) => void): () => void {
+    this.inspectedListeners.add(listener);
+    return () => {
+      this.inspectedListeners.delete(listener);
+    };
   }
 
   // 请求优雅退出，再等子进程收尾。

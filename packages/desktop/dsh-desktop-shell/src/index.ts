@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "elec
 import type { BrowserWindowConstructorOptions } from "electron";
 import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
+import { installDeveloperMenu } from "./developer-menu.ts";
 import { resolveDshHome } from "./dshhome.ts";
 import { DesktopHostProcess } from "./host-process.ts";
 import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT, assertDesktopSender, desktopScheme } from "./ipc.ts";
@@ -488,6 +489,17 @@ async function main(): Promise<void> {
     window.show();
     window.focus();
   };
+
+  // 后端调试面：View 菜单里的 Node inspector 开关，端点在需要时才开（决策见 .agents/adrs）。
+  const developerMenu = installDeveloperMenu({
+    scheme: SCHEME,
+    appName: appConfig.displayName,
+    host: () => host,
+    mainWindow: () => mainWindow,
+  });
+  app.on("will-quit", () => {
+    developerMenu.dispose();
+  });
 
   host = await startHost();
 

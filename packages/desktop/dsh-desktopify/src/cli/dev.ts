@@ -317,7 +317,9 @@ async function launchElectron(
     throw new Error("desktop development: electron executable is unavailable");
   const mainPort = debugPort("DSH_DESKTOP_MAIN_INSPECT_PORT", 9229);
   const rendererPort = debugPort("DSH_DESKTOP_RENDERER_DEBUG_PORT", 9222);
-  const hostPort = debugPort("DSH_DESKTOP_HOST_INSPECT_PORT", 9230);
+  // 9231 而不是 9230：那是上游 `experimental-inspector` 的 Worker 默认端口，桌面档装着那条行时
+  // 两者会抢同一个端口，抢输的是整条 inspector 行（Worker 起不来 → 行回滚）。
+  const hostPort = debugPort("DSH_DESKTOP_HOST_INSPECT_PORT", 9231);
   const developmentRoot = join(buildRootDir, "development");
   // 数据面与 `dev --web` 共用工作区 store；只有浏览器数据留在构建目录里。
   const userData = join(developmentRoot, "electron-user-data");

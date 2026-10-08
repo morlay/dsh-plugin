@@ -21,6 +21,8 @@ import {
   installDesktopTransport,
   takeOverDesktopAuthentication,
 } from "./transport.ts";
+import { applyInspectorCommand, closeInspectorEndpoint } from "./inspector.ts";
+import { installDevtoolsAssets } from "./devtools-assets.ts";
 import { PortlessWebServer } from "./webserver.ts";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
@@ -138,6 +140,8 @@ async function main(): Promise<void> {
   const { ctx } = await application;
   takeOverDesktopAuthentication(ctx);
   installDesktopTransport(ctx);
+  // 调试窗口的前端产物：桌面档自己托管，不从上游 inspector 行取（那条路由与它的 Worker 绑在一起）。
+  installDevtoolsAssets(ctx, [runtimeDir, projectDir]);
   const webServer = ctx.get("webServer") as unknown as PortlessWebServer;
 
   const pending = new Map<number, PendingRequest>();
@@ -240,6 +244,7 @@ async function main(): Promise<void> {
   const stop = (exitCode = 0): Promise<void> => {
     stopping ??= (async () => {
       closing = true;
+      closeInspectorEndpoint();
       requestPipe.pause();
       requestPipe.destroy();
       for (const entry of pending.values()) entry.abort.abort();
@@ -278,7 +283,14 @@ async function main(): Promise<void> {
     }
   });
   process.on("message", (message: unknown) => {
-    if (isDesktopHostCommand(message)) void stop();
+    if (!isDesktopHostCommand(message)) return;
+    // 调试端点命令先于 shutdown 分派：它们只影响回环上的 Node inspector。
+    const inspected = applyInspectorCommand(message);
+    if (inspected !== undefined) {
+      send(inspected);
+      return;
+    }
+    if (message.type === "shutdown") void stop();
   });
   process.once("disconnect", () => {
     void stop();

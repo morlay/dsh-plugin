@@ -230,6 +230,35 @@ describe("桌面 host 子进程", () => {
     await stopped;
   });
 
+  // 后端调试端点：壳只发命令与订阅状态，端口与端点由 host 回报（壳不猜端口）。
+  it("调试端点命令走 IPC，端点状态回调给订阅者", async () => {
+    const { child, host } = harness();
+    const started = host.start();
+    ready(child);
+    await started;
+
+    const states: unknown[] = [];
+    const release = host.onInspected((state) => states.push(state));
+    host.inspect(0);
+    host.endInspect();
+    expect(child.sent).toEqual([{ type: "inspect", port: 0 }, { type: "inspect-off" }]);
+
+    child.emit("message", { type: "inspected", url: "ws://127.0.0.1:9229/uuid" });
+    child.emit("message", { type: "inspected", url: null, message: "listen failed" });
+    expect(states).toEqual([
+      { type: "inspected", url: "ws://127.0.0.1:9229/uuid" },
+      { type: "inspected", url: null, message: "listen failed" },
+    ]);
+
+    release();
+    child.emit("message", { type: "inspected", url: null });
+    expect(states).toHaveLength(2);
+
+    const stopped = host.stop();
+    child.emit("close", 0);
+    await stopped;
+  });
+
   it("stop 通过 IPC 请求收尾并关掉请求管道写端", async () => {
     const { child, host } = harness();
     const started = host.start();

@@ -76,7 +76,12 @@ export type DesktopHostResponseFrame =
   | { readonly type: "error"; readonly streamId: number; readonly message: string };
 
 // 仍留在 Node IPC 上的控制命令（不携带 Fetch 载荷字节）。
-export type DesktopHostCommand = { readonly type: "shutdown" };
+export type DesktopHostCommand =
+  | { readonly type: "shutdown" }
+  // 打开回环上的 Node inspector（`port` 为 0 表示随机端口）。
+  | { readonly type: "inspect"; readonly port: number }
+  // 关掉它；重复关是幂等的。
+  | { readonly type: "inspect-off" };
 
 // 仍留在 Node IPC 上的生命周期事件。
 export type DesktopHostEvent =
@@ -87,6 +92,12 @@ export type DesktopHostEvent =
       readonly message: string;
       // 完整诊断（`util.inspect` 的错误，含 code/syscall/path/cause）；缺省时壳只有 message。
       readonly diagnostic?: string;
+    }
+  | {
+      readonly type: "inspected";
+      // 当前可用的调试端点；为 null 表示没开（被关掉或开不起来，原因在 `message`）。
+      readonly url: string | null;
+      readonly message?: string;
     };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -440,10 +451,22 @@ export function isDesktopHostEvent(value: unknown): value is DesktopHostEvent {
       typeof value.message === "string" &&
       (value.diagnostic === undefined || typeof value.diagnostic === "string")
     );
+  if (value.type === "inspected")
+    return (
+      (value.url === null || typeof value.url === "string") &&
+      (value.message === undefined || typeof value.message === "string")
+    );
   return false;
 }
 
 // IPC 命令校验（host 侧）。
 export function isDesktopHostCommand(value: unknown): value is DesktopHostCommand {
-  return isRecord(value) && value.type === "shutdown";
+  if (!isRecord(value)) return false;
+  if (value.type === "shutdown" || value.type === "inspect-off") return true;
+  return (
+    value.type === "inspect" &&
+    Number.isInteger(value.port) &&
+    (value.port as number) >= 0 &&
+    (value.port as number) <= 65_535
+  );
 }

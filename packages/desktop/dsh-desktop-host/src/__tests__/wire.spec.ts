@@ -212,9 +212,27 @@ describe("IPC 契约", () => {
     expect(isDesktopHostEvent("ready")).toBe(false);
   });
 
-  it("只接受 shutdown 命令", () => {
+  it("调试端点事件带可选 url 与原因", () => {
+    expect(isDesktopHostEvent({ type: "inspected", url: "ws://127.0.0.1:9229/uuid" })).toBe(true);
+    expect(isDesktopHostEvent({ type: "inspected", url: null })).toBe(true);
+    expect(isDesktopHostEvent({ type: "inspected", url: null, message: "listen failed" })).toBe(
+      true,
+    );
+    expect(isDesktopHostEvent({ type: "inspected" })).toBe(false);
+    expect(isDesktopHostEvent({ type: "inspected", url: 9229 })).toBe(false);
+    expect(isDesktopHostEvent({ type: "inspected", url: null, message: 7 })).toBe(false);
+  });
+
+  it("只接受 shutdown 与调试端点命令", () => {
     expect(isDesktopHostCommand({ type: "shutdown" })).toBe(true);
+    expect(isDesktopHostCommand({ type: "inspect", port: 0 })).toBe(true);
+    expect(isDesktopHostCommand({ type: "inspect", port: 65_535 })).toBe(true);
+    expect(isDesktopHostCommand({ type: "inspect-off" })).toBe(true);
     expect(isDesktopHostCommand({ type: "update-tasks" })).toBe(false);
+    expect(isDesktopHostCommand({ type: "inspect" })).toBe(false);
+    expect(isDesktopHostCommand({ type: "inspect", port: -1 })).toBe(false);
+    expect(isDesktopHostCommand({ type: "inspect", port: 65_536 })).toBe(false);
+    expect(isDesktopHostCommand({ type: "inspect", port: 9229.5 })).toBe(false);
     expect(isDesktopHostCommand(null)).toBe(false);
   });
 });

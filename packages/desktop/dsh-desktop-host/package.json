@@ -26,6 +26,7 @@
     ".": "./src/index.ts",
     "./webserver": "./src/webserver.ts",
     "./wire": "./src/wire.ts",
+    "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -34,6 +35,7 @@
       ".": "./lib/index.js",
       "./webserver": "./lib/webserver.js",
       "./wire": "./lib/wire.js",
+      "./paths": "./lib/paths.js",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }

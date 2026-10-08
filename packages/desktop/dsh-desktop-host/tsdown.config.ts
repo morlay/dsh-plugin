@@ -8,6 +8,7 @@ export default defineCordisPluginConfig({
   entries: {
     webserver: "./src/webserver.ts",
     wire: "./src/wire.ts",
+    paths: "./src/paths.ts",
   },
   outDir: "lib",
   fixedExtension: false,
