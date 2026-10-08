@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-web-search-ollama",
-  "version": "0.0.6",
+  "version": "0.0.7-alpha.0",
   "description": "Ollama-backed search provider for the DeepSeek Harness web seam (ctx.web): one web_search backend calling POST https://ollama.com/api/web_search.",
   "keywords": [
     "dsh",
