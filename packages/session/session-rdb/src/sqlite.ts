@@ -38,6 +38,7 @@ import {
   tEventUsage,
   tEvents,
   tPersistenceState,
+  tScheduleTasks,
   tSessionEvents,
   tSessionProjcacheRows,
   tSessions,
@@ -430,6 +431,7 @@ export class SqliteBackend implements Backend {
         t_workspaces: tWorkspaces,
         t_workspace_sessions: tWorkspaceSessions,
         t_workspace_state: tWorkspaceState,
+        t_schedule_tasks: tScheduleTasks,
         t_session_projcache_row: tSessionProjcacheRows,
       },
     });

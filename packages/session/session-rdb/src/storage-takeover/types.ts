@@ -1,4 +1,5 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
+import type { ScheduleTask } from "@deepseek-ai/dsh-schedule";
 import type { CheckpointIdentity } from "@deepseek-ai/dsh-session-projection-cache";
 import type {
   ProjectionCheckpoint,
@@ -10,6 +11,7 @@ export type {
   CheckpointIdentity,
   ProjectionCheckpoint,
   ProjectionCheckpointRow,
+  ScheduleTask,
   WorkspaceDomainState,
   WorkspaceRecord,
 };
@@ -34,6 +36,13 @@ export interface StorageRepository {
   readWorkspaceState(): Promise<WorkspaceDomainState | null>;
 
   writeWorkspaceState(state: WorkspaceDomainState): Promise<void>;
+
+  // 官方 `schedule` 域的 `tasks` 表：一个提醒一行（key 是 `ScheduleId`）。
+  listScheduleTasks(): Promise<Array<{ id: string; task: ScheduleTask }>>;
+
+  putScheduleTask(id: string, task: ScheduleTask): Promise<void>;
+
+  deleteScheduleTask(id: string): Promise<void>;
 
   loadProjcache(): Promise<StoredProjcacheEntry[]>;
 

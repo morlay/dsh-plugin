@@ -12,6 +12,7 @@ import type {
   CheckpointIdentity,
   ProjectionCheckpoint,
   ProjectionCheckpointRow,
+  ScheduleTask,
   StorageRepository,
   StoredProjcacheEntry,
   WorkspaceDomainState,
@@ -89,6 +90,39 @@ function pendingMutationOf(row: {
   return { operation, workspaceId: (row.fPendingWorkspaceId ?? "") as WorkspaceId };
 }
 
+interface ScheduleTaskRowRecord {
+  fId: string;
+  fSessionId: string;
+  fStatus: string;
+  fRecord: string;
+  fLastDelivery: string | null;
+  fDeliveryHistory: string | null;
+}
+
+// 行的读写映射：形状校验在 KV 那一层做（`storage-backend.ts` 的 `scheduleTaskOf`），这里只按列拆装——
+// 归属会话与状态是列，其余三段保持上游契约的 JSON 原样（读回时 `dsh-schedule` 的域 schema 还会再校验）。
+function taskFromRow(row: ScheduleTaskRowRecord): ScheduleTask {
+  return {
+    sessionId: row.fSessionId as SessionId,
+    record: JSON.parse(row.fRecord),
+    status: row.fStatus === "inactive" ? "inactive" : "active",
+    ...(row.fLastDelivery === null ? {} : { lastDelivery: JSON.parse(row.fLastDelivery) }),
+    ...(row.fDeliveryHistory === null ? {} : { deliveryHistory: JSON.parse(row.fDeliveryHistory) }),
+  } as ScheduleTask;
+}
+
+function rowFromTask(id: string, task: ScheduleTask): ScheduleTaskRowRecord {
+  return {
+    fId: id,
+    fSessionId: task.sessionId,
+    fStatus: task.status === "inactive" ? "inactive" : "active",
+    fRecord: JSON.stringify(task.record),
+    fLastDelivery: task.lastDelivery === undefined ? null : JSON.stringify(task.lastDelivery),
+    fDeliveryHistory:
+      task.deliveryHistory === undefined ? null : JSON.stringify(task.deliveryHistory),
+  };
+}
+
 export function createStorageRepository(host: StorageRepositoryHost): StorageRepository {
   const tables = host.tables as Record<string, any>;
   const tUnits = tables["t_storage_units"]!;
@@ -96,6 +130,7 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
   const tWorkspaces = tables["t_workspaces"]!;
   const tWorkspaceSessions = tables["t_workspace_sessions"]!;
   const tWorkspaceState = tables["t_workspace_state"]!;
+  const tScheduleTasks = tables["t_schedule_tasks"]!;
   const tProjcacheRows = tables["t_session_projcache_row"]!;
 
   const sessionIdentity = {
@@ -335,6 +370,32 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
               }),
           );
         }
+      });
+    },
+
+    async listScheduleTasks(): Promise<Array<{ id: string; task: ScheduleTask }>> {
+      const db = await dbx();
+      const rows = await allRows<ScheduleTaskRowRecord>(db.select().from(tScheduleTasks));
+      return rows.map((row) => ({ id: row.fId, task: taskFromRow(row) }));
+    },
+
+    async putScheduleTask(id: string, task: ScheduleTask): Promise<void> {
+      await host.writeAtomically(async () => {
+        const db = await dbx();
+        const values = rowFromTask(id, task);
+        await runQuery(
+          db
+            .insert(tScheduleTasks)
+            .values(values)
+            .onConflictDoUpdate({ target: tScheduleTasks.fId, set: values }),
+        );
+      });
+    },
+
+    async deleteScheduleTask(id: string): Promise<void> {
+      await host.writeAtomically(async () => {
+        const db = await dbx();
+        await runQuery(db.delete(tScheduleTasks).where(eq(tScheduleTasks.fId, id)));
       });
     },
 

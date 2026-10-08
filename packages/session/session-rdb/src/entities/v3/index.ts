@@ -7,6 +7,7 @@ import { storageUnits } from "./storage-units.ts";
 import { workspaces } from "./workspaces.ts";
 import { workspaceSessions } from "./workspace-sessions.ts";
 import { workspaceState } from "./workspace-state.ts";
+import { scheduleTasks } from "./schedule-tasks.ts";
 import { sessionProjcacheRows } from "./session-projcache-rows.ts";
 import { eventUsage } from "./event-usage.ts";
 import { sessionUsage } from "./session-usage.ts";
@@ -21,6 +22,7 @@ export { storageUnits };
 export { workspaces };
 export { workspaceSessions };
 export { workspaceState };
+export { scheduleTasks };
 export { sessionProjcacheRows };
 export { eventUsage };
 export { sessionUsage };
@@ -36,6 +38,7 @@ export const sqliteTableDefs = [
   workspaces,
   workspaceSessions,
   workspaceState,
+  scheduleTasks,
   sessionProjcacheRows,
   eventUsage,
   sessionUsage,
@@ -52,6 +55,7 @@ export const postgresTableDefs = [
   workspaces,
   workspaceSessions,
   workspaceState,
+  scheduleTasks,
   sessionProjcacheRows,
   eventUsage,
   sessionUsage,

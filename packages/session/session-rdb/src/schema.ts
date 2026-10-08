@@ -28,6 +28,8 @@ export const tWorkspaceSessions = sqliteTables["t_workspace_sessions"]!;
 
 export const tWorkspaceState = sqliteTables["t_workspace_state"]!;
 
+export const tScheduleTasks = sqliteTables["t_schedule_tasks"]!;
+
 export const tSessionProjcacheRows = sqliteTables["t_session_projcache_row"]!;
 
 export const tEventUsage = sqliteTables["t_event_usage"]!;

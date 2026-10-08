@@ -8,10 +8,13 @@
 （记录顺序、显示顺序、归档集都不可从会话日志推导）。本包已经用 RDB 接管了会话日志与分支能力，只剩这两份数据
 还在文件层：SQLite 场景下它们是同一份状态的两个介质，PostgreSQL 场景下更是本地文件与共享库不一致（多实例各写
 各的 `workspace.json`）；此外 `workspace` 是 single 布局，任一会话 attach / detach 都会原子重写整个文档。
+上游 0.2.1-alpha.1 起又多了一个 **`schedule`（v1，single，一张 `tasks` 表、无 global）**：`dsh-schedule` 的
+Host 提醒数据，由 web-app 在每份 profile 里挂的那一行打开——`storage-domain` 的 backend 已路由到 `rdb`，
+没人服务这个域时那一行装载即报 `serves only the 'workspace' domain`。
 
 **决定**
 
-**这两个域的数据落进与会话日志同库的语义表，官方文件介质整条禁用**：投影缓存由本包提供同名
+**这些域的数据落进与会话日志同库的语义表，官方文件介质整条禁用**：投影缓存由本包提供同名
 `ctx.sessionProjectionCache` 服务，workspace 域保留官方 registry 行为、只把介质换成 rdb KV 后端。
 
 1. **投影缓存服务级替换**：禁用官方 `session-projection-cache` 插件，由本包提供同名服务
@@ -22,10 +25,10 @@
    `f_created_at` / `f_cwd` / `f_seed_length`，不另存记录头。读方法是同步签名（session 列表在请求路径上直接
    调用）：**SQLite 直读表**（`readProjcacheDirect`，启动不做全表加载、外部写入立即可见）；PostgreSQL 驱动
    异步，只有该后端保留写穿镜像来支撑同一签名。
-2. **workspace 域只换介质**：保留官方 `workspace` 插件（registry 行为零漂移），由本包在 storage hub 注册
-   `rdb` KV 后端（`src/storage-takeover/storage-backend.ts`），实现上游 `StorageBackend.kv` / `KvUnit`
-   契约并把域映射到语义表；`storage-domain` 的 backend 路由改为 `rdb`。KV 这层名字来自上游 storage-domain
-   的扩展点，不是本包引入的概念。
+2. **workspace 与 schedule 两域只换介质**：保留官方 `workspace` 插件与官方 `dsh-schedule` 行（行为零漂移），
+   由本包在 storage hub 注册 `rdb` KV 后端（`src/storage-takeover/storage-backend.ts`），实现上游
+   `StorageBackend.kv` / `KvUnit` 契约并把域映射到语义表（`workspace` / `schedule` 各一个显式映射）；
+   `storage-domain` 的 backend 路由改为 `rdb`。KV 这层名字来自上游 storage-domain 的扩展点，不是本包引入的概念。
 3. **状态即数据**：上游把状态装进整值对象（`workspaceRecord.sessionIds` 数组、
    `workspaceDomainState.workspaceIds` / `archivedSessionIds` 数组、待恢复的 `pendingMutation`），文件介质
    只能整文档重写。接管后全部拆成行 / 列：
@@ -36,6 +39,8 @@
    - **钉住集合 → `t_sessions.f_pinned_seq`**（非空即已钉住，值就是它在 `pinnedSessionIds` 里的位次）；
    - 两写标记 → `t_workspace_state.f_pending_operation` / `f_pending_workspace_id`；
    - 投影 checkpoint → 每个投影 key 一行（`t_session_projcache_row`），identity 复用会话行（1:1 不拆表）；
+   - **schedule 提醒 → `t_schedule_tasks` 一个提醒一行**（key 是 `ScheduleId`）：归属会话与 `active` / `inactive`
+     是列，记录本体与投递回执按上游契约存 JSON——那三段只有 `dsh-schedule` 自己消费，拆列没有第二个读法；
    - **会话标题 → `t_sessions.f_title` / `f_title_seq`**：写路径遇到 `session/title` 事件即刷新、rewind 截断后
      重算，列表消费在 checkpoint 行缺 title 时直接取该列。
      workspace 的每次写入（记录 + 归属、顺序 + 归档）在介质事务内整体替换，不留部分应用的中间态。
@@ -61,12 +66,13 @@
   多实例不再各写各的。
 - workspace 的写入从「整文档重写」变成行级 upsert；归档、归属、顺序都能直接 SQL 查询（归档即
   `t_sessions.f_archived_at IS NOT NULL`，归属在 `t_workspace_sessions`）。
-- 表结构与上游域 spec 版本绑定（projcache v7、workspace v2）：上游升级域版本时需要同步适配（迁移 + 记录映射），
+- 表结构与上游域 spec 版本绑定（projcache v7、workspace v2、schedule v1）：上游升级域版本时需要同步适配（迁移 + 记录映射），
   当前由 `t_storage_units` 的版本戳 fail loud 暴露不匹配。
-- 存储层类型直接复用上游契约（`WorkspaceRecord` / `WorkspaceDomainState` / `CheckpointIdentity` /
+- 存储层类型直接复用上游契约（`WorkspaceRecord` / `WorkspaceDomainState` / `ScheduleTask` / `CheckpointIdentity` /
   `ProjectionCheckpoint`，全部 `import type`，运行时零依赖）：上游 spec 变化在编译期暴露，本包不复制一份结构
   定义（`src/storage-takeover/types.ts` 只声明 `StorageRepository` 接口与「上游类型 + 会话键」的组合）。
-- `rdb` KV 后端只服务 `workspace` 域：未知 unit 名直接报错，表结构显式维护，不做通用 KV 兜底。
+- `rdb` KV 后端只服务 `workspace` 与 `schedule` 两个域（各一个显式映射）：未知 unit 名直接报错，表结构显式维护，
+  不做通用 KV 兜底。上游再加域时同样是"加一张表 + 加一个映射"，不是放宽成什么都收。
 - 归档标记落在会话行上：live 但从未物化的会话归档时补一行骨架（head = -1、无 cwd / seed），标记立即可落；
   该会话后续真正物化走 `upsertSession`，其冲突列不含 `f_archived_at`，标记继续保留（组合回归用例锁定
   「归档 → 物化 → 重启」）。

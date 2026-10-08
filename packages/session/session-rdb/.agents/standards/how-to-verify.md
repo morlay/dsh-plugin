@@ -12,9 +12,15 @@
   驱动）；写事务的介质契约在 `write-guard.spec.ts`、`busy-timeout.spec.ts`、`multi-instance.spec.ts`、
   `multi-session.spec.ts`、`workspace-registry.spec.ts`。
 - **接管面与形状**：`session-query.spec.ts`（查询接管与搜索 disabled）、`session-title.spec.ts`、
-  `storage-takeover.spec.ts`、`projection-cache.spec.ts`、`legacy-shape.spec.ts`（自造事件类型的 `ignorable`
+  `storage-takeover.spec.ts`、`schedule-row.spec.ts`、`projection-cache.spec.ts`、`legacy-shape.spec.ts`（自造事件类型的 `ignorable`
   信封与旧形状归一）、`inbox-repair.spec.ts`、`migrate.spec.ts`、`vendor-spec-alignment.spec.ts`、
   `config-surface.spec.ts`（行配置在设置页上的门面）。
+- **rdb KV 后端服务哪些域**：`storage-takeover.spec.ts` 走真域层——`workspace` 域（记录 + 注册表状态）与
+  `schedule` 域（官方 `scheduleDomain`：一个提醒一行、`put` / `delete` / 重开后读回）各自跑通，
+  **不服务的域名 fail loud**（`serves only`）与 per-record 布局拒绝、版本戳不匹配仍按原样断言；
+  `schedule-row.spec.ts` 再跑一次更外层的真装配：官方 `dsh-schedule` 行 + rdb 后端，`create` 落进
+  `t_schedule_tasks`、换一个进程形（新 ctx、同一库）`list` 读回。加一个域时这两层都要有判据：域层（映射与
+  形状）与行层（那一行真的能用）。
 - **读放大（`read-path.spec.ts`）**：`load` 只走一条读取路径（以注入后端的 `getEventRows` 调用计数为证）、
   rewind 的类型查询只取 `fSequence` / `fType` 两列（行键集为证）、读视图修复一次扫描建好溯源索引
   （replace 的 `sourceEventSeqs` 与 metering 的 `shadowedSeqs` 形状为证）。判的是**每条读取路径付的代价**，

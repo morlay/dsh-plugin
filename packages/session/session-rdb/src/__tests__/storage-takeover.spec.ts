@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Context } from "@deepseek-ai/cordis";
+import { createAtScheduleRecord, ScheduleId, scheduleDomain } from "@deepseek-ai/dsh-schedule";
 import { SessionId, SessionStore } from "@deepseek-ai/dsh-session";
 import Storage from "@deepseek-ai/dsh-storage";
 import type { StorageBackend } from "@deepseek-ai/dsh-storage";
@@ -108,6 +109,68 @@ describe("workspace domain on the rdb storage backend", () => {
   });
 });
 
+// 官方 `dsh-schedule` 的域（`tasks` 一张表、无 global）：web-app 在每份 profile 里挂那一行，而
+// `storage-domain` 的 backend 路由指向 `rdb` —— 这个域也得由 rdb 服务（否则那一行开域即报错）。
+describe("schedule domain on the rdb storage backend", () => {
+  async function mount(dbPath: string): Promise<Context> {
+    const ctx = new Context();
+    await ctx.plugin(Storage);
+    await ctx.plugin(StorageDomain, { backend: "rdb" });
+    await ctx.plugin(SessionStore);
+    await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: dbPath });
+    return ctx;
+  }
+
+  it("stores host reminders in the session database and reads them back after a reopen", async () => {
+    const root = await tempDir("schedule-domain-");
+    const dbPath = join(root, "sessions.sqlite");
+    const id = ScheduleId("sched-1");
+    const task = {
+      sessionId: SessionId("session-sched"),
+      record: createAtScheduleRecord(
+        id,
+        "提醒我喝水",
+        "2030-01-01T00:00:00.000Z",
+        Date.now(),
+        "喝水",
+      ),
+      status: "active" as const,
+    };
+
+    const first = await mount(dbPath);
+    try {
+      const domain = await first.storageDomain.open(scheduleDomain);
+      await domain.table("tasks").put(id, task);
+
+      const db = new DatabaseSync(dbPath);
+      try {
+        const rows = db
+          .prepare("SELECT f_id, f_session_id, f_status FROM t_schedule_tasks")
+          .all() as Array<{ f_id: string; f_session_id: string; f_status: string }>;
+        expect(rows).toEqual([
+          { f_id: "sched-1", f_session_id: "session-sched", f_status: "active" },
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      await first.fiber.dispose();
+    }
+
+    // 重开：任务从库里读回来（同一份介质，没有第二个 storages 文件树）。
+    const second = await mount(dbPath);
+    try {
+      const reopened = await second.storageDomain.open(scheduleDomain);
+      expect(reopened.table("tasks").get(id)).toEqual(task);
+
+      await reopened.table("tasks").delete(id);
+      expect([...reopened.table("tasks").entries()]).toEqual([]);
+    } finally {
+      await second.fiber.dispose();
+    }
+  });
+});
+
 describe("rdb KV backend contract", () => {
   const descriptor = {
     name: "workspace",
@@ -188,6 +251,17 @@ describe("rdb KV backend contract", () => {
       await expect(backend.kv!.open({ ...descriptor, layout: "per-record" })).rejects.toThrow(
         /single/,
       );
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("rejects a domain it does not serve instead of guessing a table", async () => {
+    const { backend, dispose } = await harness();
+    try {
+      await expect(
+        backend.kv!.open({ name: "goal", version: 1, tables: ["goals"], hasGlobal: false }),
+      ).rejects.toThrow(/serves only/);
     } finally {
       await dispose();
     }

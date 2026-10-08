@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { Context } from "@deepseek-ai/cordis";
-import { SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
+import { createAtScheduleRecord, ScheduleId } from "@deepseek-ai/dsh-schedule";
+import { SessionId, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
 import SessionPersistenceRdb from "@morlay/session-rdb";
 import { runPersistenceContract } from "@morlay/session-rdb/testing";
@@ -147,6 +148,42 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL backend", () => {
       expect(report.subagent).toMatchObject({ turns: 0, inputTokens: 0 });
       // 汇总表的时间范围走本地日比较：事件时间戳在 1970 年，落在任何范围之外。
       expect((await persistence.usageReport(Date.now())).totals.inputTokens).toBe(0);
+    } finally {
+      await fiber.dispose();
+      await drop();
+    }
+  });
+
+  // schedule 域的提醒行在 PG 上：迁移建表 + 行级 upsert / 读回 / 删除（SQLite 侧走真域层，
+  // 这里走仓储面——两套 SQL 都要真跑一次，见 `.agents/standards/how-to-verify.md`）。
+  it("schedule 域的提醒行可写可读可删", async () => {
+    const { connectionString, drop } = await createTestDatabase();
+    const ctx = new Context();
+    await ctx.plugin(SessionStore);
+    const fiber = await ctx.plugin(SessionPersistenceRdb, {
+      type: "postgres",
+      connectionString,
+    });
+    try {
+      const persistence = ctx.sessionPersistence as InstanceType<typeof SessionPersistenceRdb>;
+      const storage = persistence.internals().backend.storage;
+      const task = {
+        sessionId: SessionId("pg-schedule"),
+        record: createAtScheduleRecord(
+          ScheduleId("pg-1"),
+          "该喝水了",
+          "2030-01-01T00:00:00.000Z",
+          Date.now(),
+          "喝水",
+        ),
+        status: "active" as const,
+      };
+
+      await storage.putScheduleTask("pg-1", task);
+      expect(await storage.listScheduleTasks()).toEqual([{ id: "pg-1", task }]);
+
+      await storage.deleteScheduleTask("pg-1");
+      expect(await storage.listScheduleTasks()).toEqual([]);
     } finally {
       await fiber.dispose();
       await drop();
