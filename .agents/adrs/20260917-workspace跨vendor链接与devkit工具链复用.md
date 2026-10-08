@@ -34,7 +34,7 @@ autoInstallPeers: true
 - **tsdown 配置工厂** `defineCordisPluginConfig()`（devkit 导出）：
   收敛 cordis 插件包重复的公共构建选项（ESM、exports：packageJson /
   devExports / cordis.patch.yml 与 `./client` 透传、deps.onlyBundle、
-  clean），entry 按约定探测（`src/index.ts` + 存在则 `src/invariant.ts`）。
+  clean），entry 按约定探测（`src/index.ts` + 存在则 `src/client/index.ts`）。
   包级 `tsdown.config.ts` 从 ~20 行模板收敛为单入口声明：
 
   ```ts

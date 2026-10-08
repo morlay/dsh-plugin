@@ -36,7 +36,7 @@ async function entryExists(path: string): Promise<boolean> {
 
 // cordis 插件包共享 tsdown 配置：host 与 client 是**同一次构建的两个入口**（client 的差别由
 // `clientEntryPlugin` 与按入口的 external 规则承担，不是第二个 config）。
-// entry 按约定探测：`src/index.ts`；`src/invariant.ts` 与 `src/client/index.ts` 存在则自动附带。
+// entry 按约定探测：`src/index.ts`；`src/client/index.ts` 存在则自动附带。
 export async function defineCordisPluginConfig(options?: {
   client?: CordisClientOptions | false;
   entries?: Record<string, string>;
@@ -73,9 +73,6 @@ export async function defineCordisPluginConfig(options?: {
     entry["index"] = "./src/index.ts";
   }
   Object.assign(entry, options?.entries);
-  if (await entryExists(join(process.cwd(), "src", "invariant.ts"))) {
-    entry["invariant"] = "./src/invariant.ts";
-  }
   if (client !== undefined) entry[CLIENT_ENTRY] = client.entry ?? "./src/client/index.ts";
 
   const spec = await clientBundleSpec(

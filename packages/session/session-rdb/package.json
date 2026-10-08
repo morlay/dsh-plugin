@@ -34,7 +34,6 @@
     "./storage": "./src/storage.ts",
     "./testing": "./src/testing.ts",
     "./usage": "./src/usage.ts",
-    "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -49,7 +48,6 @@
       "./storage": "./dist/storage.mjs",
       "./testing": "./dist/testing.mjs",
       "./usage": "./dist/usage.mjs",
-      "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
@@ -81,7 +79,6 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cosmokit": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",

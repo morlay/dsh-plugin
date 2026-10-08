@@ -73,7 +73,7 @@ const EXCEPTIONS: readonly {
   },
   {
     file: ".agents/adrs/20260917-workspace跨vendor链接与devkit工具链复用.md",
-    code: "src/invariant.ts",
+    code: "src/client/index.ts",
     reason: SAMPLE,
   },
   { file: ".agents/standards/how-to-write.md", code: "src/client/index.ts", reason: SAMPLE },

@@ -11,7 +11,7 @@ import { defineCordisPluginConfig } from "@local/devkit";
 import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 
 export default defineCordisPluginConfig({
-  entries: { rows: "./src/rows.ts" }, // 额外入口（index / invariant / client 按约定探测）
+  entries: { rows: "./src/rows.ts" }, // 额外入口（index / client 按约定探测）
   inline: ["@morlay/dsh-client-ui-primitives"], // 打进产物、不进依赖清单
 });
 ```

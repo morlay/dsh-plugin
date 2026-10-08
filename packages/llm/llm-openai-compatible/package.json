@@ -25,7 +25,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./wire": "./src/wire.ts",
-    "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -33,7 +32,6 @@
     "exports": {
       ".": "./dist/index.mjs",
       "./wire": "./dist/wire.mjs",
-      "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
@@ -52,7 +50,6 @@
     "@deepseek-ai/dsh-anonymous-user-id": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-settings": "workspace:^",

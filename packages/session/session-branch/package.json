@@ -24,14 +24,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./invariant": "./src/invariant.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
-      "./invariant": "./dist/invariant.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
@@ -42,7 +40,6 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^"
   }

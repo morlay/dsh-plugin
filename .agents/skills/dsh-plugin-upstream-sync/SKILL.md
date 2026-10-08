@@ -148,8 +148,6 @@ build`），直接 `tsx` 调用脚本，语义与流程一致。
 5. **重跑生成物与 lockfile**（上游包与主题一变就漂移，门禁只在重跑后才可信）：
    - 根 lockfile：`pnpm install --lockfile-only`（上游新包、上游钉住的依赖版本
      如 koffi 都靠它对齐）；
-   - 主题 token 树：`pnpm --filter @morlay/dsh-client-ui-primitives run gen:tokens`
-     （上游 `--dsw-*` 增删有 `design-tokens.spec.ts` 漂移守卫）；
    - 官方包清单：`pnpm --filter @morlay/dsh-desktop-shell run gen:official-packages`
      （读上游 bundle 的 `cordis.patch.yml`，需上游 lib 产物在）。
 6. 门禁：test / lint / build，与 CI 一致。
@@ -169,7 +167,6 @@ build`），直接 `tsx` 调用脚本，语义与流程一致。
 | 用户覆盖      | settings namespace                       | `installSection` 钩子；纯 YAML 无 `!!js` |
 | 运行时协调    | 读取 / 同步上游服务内部状态              | 私有字段名与语义是升级时最脆弱的面       |
 | client bundle | 手递单文件替换上游渲染                   | 单文件约束、external 边界                |
-| 不变量        | `./invariant`（仅观察可发散时）          | 注册命名、disposer                       |
 
 ## 排查上游行为
 
