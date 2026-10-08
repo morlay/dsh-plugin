@@ -1,17 +1,19 @@
 // 「对话管理」页面：已归档会话的搜索、取消归档、导出、删除，以及导入为新会话与孤儿数据 GC。
 // 数据面：会话行读**我们自己的**列表路由（注入面 listRows，含归档；搜索 / 子代理过滤 / 分页都在后端），
 // 动作面只读注入面。
+// 形态：页面框架与上游一级页面同款（960px 居中列 + 标题行 + 过滤 chip 行 + 搜索行，见
+// `ConversationManagerPage.module.css`）；切换与过滤都用那套 chip（`role="group"` + `aria-pressed`），
+// 读取 / 空语料 / 读列表失败三种状态整屏居中。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
-  Checkbox,
+  IconCloseOutlineRegular,
   IconSearchOutlineRegular,
+  Input,
   Modal,
   Row,
-  SearchInput,
   Spinner,
   Stack,
-  Tabs,
   Tag,
   Text,
   relativeTime,
@@ -27,6 +29,7 @@ import {
   type UsageRangeKey,
   type UsageTotals,
 } from "./controller.ts";
+import frameCss from "./ConversationManagerPage.module.css";
 import { formatCount, formatPercent, formatTokens } from "./format.ts";
 
 // 一页的行数（会话列表）。
@@ -70,6 +73,69 @@ function failureText(error: unknown, t: Translate): string {
   if (code === "SESSION_LIVE") return t("failure.live");
   if (code === "SESSION_NOT_FOUND") return t("failure.missing");
   return t("failure.other", { reason: error instanceof Error ? error.message : String(error) });
+}
+
+// 过滤 chip：上游一级页面那套（28px 胶囊，选中那档带填充 + 主标签色）。语义是**筛选**：`role="group"` 的组里
+// 每个 chip 用 `aria-pressed` 说选中，不是 tab 条。
+function FilterChip({
+  active,
+  label,
+  tab,
+  onSelect,
+}: {
+  active: boolean;
+  label: string;
+  // `data-tab` 标注（沟通与 e2e 按它定位那一个 chip）。
+  tab?: string;
+  onSelect: () => void;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      className={active ? `${frameCss.filterTab} ${frameCss.filterTabActive}` : frameCss.filterTab}
+      aria-pressed={active}
+      {...(tab === undefined ? {} : { "data-tab": tab })}
+      onClick={onSelect}
+    >
+      {label}
+    </button>
+  );
+}
+
+// 整屏居中的状态态：列表还没就绪 / 一份会话都没有 / 读列表失败。这三种时候页面没有别的内容可看，状态占满
+// 整个面板（`.status` 住 `ConversationManagerPage.module.css`），因此不画标题行、过滤行与搜索行。
+function PageStatus({
+  t,
+  status,
+  text,
+  spinner = false,
+  failure = false,
+}: {
+  t: Translate;
+  status: "loading" | "empty" | "failure";
+  text: string;
+  spinner?: boolean;
+  failure?: boolean;
+}): ReactNode {
+  return (
+    <section className={frameCss.page} aria-label={t("title")}>
+      <div className={frameCss.listPane}>
+        <div className={frameCss.status} data-status={status}>
+          <div className={frameCss.statusBody}>
+            {spinner ? <Spinner label={t("loading")} /> : null}
+            <p
+              className={
+                failure ? `${frameCss.statusText} ${frameCss.statusFailure}` : frameCss.statusText
+              }
+              {...(failure ? { role: "alert" } : {})}
+            >
+              {text}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export function ConversationManagerPage({
@@ -212,7 +278,11 @@ export function ConversationManagerPage({
   };
 
   if (rowsPage === null) {
-    return <Text as="p" size="md" tone="tertiary">{rowsFailure ?? t("loading")}</Text>;
+    return rowsFailure === null ? (
+      <PageStatus t={t} status="loading" text={t("loading")} spinner />
+    ) : (
+      <PageStatus t={t} status="failure" text={rowsFailure} failure />
+    );
   }
 
   const now = Date.now();
@@ -224,250 +294,298 @@ export function ConversationManagerPage({
   const matched = rows;
   const confirmed = confirming;
 
+  // 一份会话都没有（也没在搜索）：标题行与搜索行都没有可做的事，整个面板就让给这个状态。
+  if (total === 0 && settledQuery === "") {
+    return <PageStatus t={t} status="empty" text={t("empty")} />;
+  }
+
   return (
-    <Stack data-view={view} fill pad="page" gap={12}>
-      <Row gap={12} justify="between" fixed>
-        <Text as="h1" size="lg" weight="medium">{t("title")}</Text>
-        <Tabs
-          label={t("title")}
-          items={[
-            { value: "sessions", label: t("view.sessions") },
-            { value: "usage", label: t("view.usage") },
-          ]}
-          value={view}
-          onChange={(next) => {
-            if (next === "usage") openUsage();
-            else setView("sessions");
-          }}
-        />
-        <Row gap={8} fixed>
-          <Button
-            variant="outline"
-            size="sm"
-            data-action="import"
-            disabled={importing}
-            aria-busy={importing}
-            aria-label={importing ? t("importing") : t("import")}
-            onClick={() => {
-              fileRef.current?.click();
-            }}
-          >
-            {importing ? t("importing") : t("import")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            data-action="gc"
-            disabled={gcPhase !== "idle"}
-            aria-label={t("gc.button")}
-            onClick={() => {
-              setFailure(null);
-              setNotice(null);
-              setGcPhase("confirm");
-            }}
-          >
-            {t("gc.button")}
-          </Button>
-        </Row>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".zip,application/zip"
-          hidden
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            event.currentTarget.value = "";
-            if (file === undefined) return;
-            setImporting(true);
-            setFailure(null);
-            setNotice(null);
-            void importZip(file)
-              .then(
-                () => {
-                  setNotice(t("imported"));
-                },
-                (error: unknown) => {
-                  setFailure(failureText(error, t));
-                },
-              )
-              .finally(() => {
-                setImporting(false);
-              });
-          }}
-        />
-      </Row>
-      {view === "usage" ? (
-        <Stack data-scroll="page" gap={12} scroll>
-          <UsageView
-            report={usage}
-            loading={usageLoading}
-            error={usageError}
-            tab={usageTab}
-            onTab={setUsageTab}
-            range={usageRange}
-            onRange={requestUsage}
-            onlySubagents={usageOnlySubagents}
-            onOnlySubagents={setUsageOnlySubagents}
-            t={t}
-          />
-        </Stack>
-      ) : (
-        <>
-          <Row gap={16} fixed>
-            <SearchInput
-              width="search"
-              data-filter="search"
-              type="search"
-              icon={<IconSearchOutlineRegular />}
-              value={query}
-              placeholder={t("search")}
-              aria-label={t("search")}
+    <section className={frameCss.page} data-view={view} aria-label={t("title")}>
+      <div className={frameCss.listPane}>
+        <div className={frameCss.pageScroll} data-scroll="page">
+          <div className={frameCss.pageContent}>
+            <div className={frameCss.pageHeading}>
+              <h1>{t("title")}</h1>
+              <div className={frameCss.headingActions}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-action="import"
+                  disabled={importing}
+                  aria-busy={importing}
+                  aria-label={importing ? t("importing") : t("import")}
+                  onClick={() => {
+                    fileRef.current?.click();
+                  }}
+                >
+                  {importing ? t("importing") : t("import")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-action="gc"
+                  disabled={gcPhase !== "idle"}
+                  aria-label={t("gc.button")}
+                  onClick={() => {
+                    setFailure(null);
+                    setNotice(null);
+                    setGcPhase("confirm");
+                  }}
+                >
+                  {t("gc.button")}
+                </Button>
+              </div>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".zip,application/zip"
+              hidden
               onChange={(event) => {
-                setQuery(event.currentTarget.value);
-                setPage(1);
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file === undefined) return;
+                setImporting(true);
+                setFailure(null);
+                setNotice(null);
+                void importZip(file)
+                  .then(
+                    () => {
+                      setNotice(t("imported"));
+                    },
+                    (error: unknown) => {
+                      setFailure(failureText(error, t));
+                    },
+                  )
+                  .finally(() => {
+                    setImporting(false);
+                  });
               }}
             />
-            <span data-filter="subagents">
-              <Checkbox
-                checked={showSubagents}
-                label={t("showSubagents")}
-                onChange={(next) => {
-                  setShowSubagents(next);
-                  setPage(1);
-                }}
-              />
-            </span>
-          </Row>
-          <Stack data-scroll="page" gap={12} scroll>
-            {notice === null ? null : (
-              <Text data-notice="result" as="p" size="md" tone="tertiary">
-                {notice}
-              </Text>
+            <div className={frameCss.filters}>
+              <div
+                className={frameCss.filterTabs}
+                role="group"
+                aria-label={t("filter.view")}
+                data-filter="view"
+              >
+                <FilterChip
+                  active={view === "sessions"}
+                  label={t("view.sessions")}
+                  tab="sessions"
+                  onSelect={() => {
+                    setView("sessions");
+                  }}
+                />
+                <FilterChip
+                  active={view === "usage"}
+                  label={t("view.usage")}
+                  tab="usage"
+                  onSelect={openUsage}
+                />
+              </div>
+            </div>
+            {view === "usage" ? null : (
+              <div className={frameCss.filters}>
+                <div
+                  className={frameCss.filterTabs}
+                  role="group"
+                  aria-label={t("filter.subagents")}
+                  data-filter="subagents"
+                >
+                  <FilterChip
+                    active={showSubagents}
+                    label={t("showSubagents")}
+                    onSelect={() => {
+                      setShowSubagents(!showSubagents);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </div>
             )}
-            {failure === null ? null : (
-              <Text data-failure="result" role="alert" as="p" size="md" tone="danger">
-                {failure}
-              </Text>
-            )}
-            {total === 0 ? (
-              <Text data-status="empty" as="p" size="md" tone="tertiary">
-                {t(settledQuery === "" ? "empty" : "emptySearch")}
-              </Text>
-            ) : null}
-            {visible.length > 0 ? (
-              <Stack as="ul" gap={4} plain>
-                {visible.map((row) => (
-                  <Row
-                    as="li"
-                    key={row.id}
-                    gap={16}
-                    justify="between"
-                    boxed
-                    pad="row"
-                    fixed
-                    data-session-id={String(row.id)}
-                    data-archived={row.archived ? "true" : "false"}
-                    data-subagent={row.subagent ? "true" : "false"}
+            {view === "usage" ? null : (
+              <div className={frameCss.searchField}>
+                <Input
+                  data-filter="search"
+                  type="search"
+                  icon={<IconSearchOutlineRegular />}
+                  value={query}
+                  placeholder={t("search")}
+                  aria-label={t("search")}
+                  onChange={(event) => {
+                    setQuery(event.currentTarget.value);
+                    setPage(1);
+                  }}
+                />
+                {query === "" ? null : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={frameCss.searchClear}
+                    aria-label={t("clearSearch")}
+                    onClick={() => {
+                      setQuery("");
+                      setPage(1);
+                    }}
                   >
-                    <Stack gap={2} grow>
-                      <Row gap={8} grow>
-                        <Text size="md" truncate>{row.title}</Text>
-                        {row.archived ? <Tag tone="neutral">{t("archived")}</Tag> : null}
-                        {row.subagent ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
+                    <IconCloseOutlineRegular />
+                  </Button>
+                )}
+              </div>
+            )}
+            {view === "usage" ? (
+              <UsageView
+                report={usage}
+                loading={usageLoading}
+                error={usageError}
+                tab={usageTab}
+                onTab={setUsageTab}
+                range={usageRange}
+                onRange={requestUsage}
+                onlySubagents={usageOnlySubagents}
+                onOnlySubagents={setUsageOnlySubagents}
+                t={t}
+              />
+            ) : (
+              <div className={frameCss.list}>
+                {notice === null ? null : (
+                  <Text data-notice="result" as="p" size="md" tone="tertiary">
+                    {notice}
+                  </Text>
+                )}
+                {failure === null ? null : (
+                  <Text data-failure="result" role="alert" as="p" size="md" tone="danger">
+                    {failure}
+                  </Text>
+                )}
+                {total === 0 ? (
+                  <div className={frameCss.listStatus} data-status="empty-search">
+                    <p className={frameCss.statusText}>{t("emptySearch")}</p>
+                  </div>
+                ) : null}
+                {visible.length > 0 ? (
+                  <Stack as="ul" gap={4} plain>
+                    {visible.map((row) => (
+                      <Row
+                        as="li"
+                        key={row.id}
+                        gap={16}
+                        justify="between"
+                        boxed
+                        pad="row"
+                        fixed
+                        data-session-id={String(row.id)}
+                        data-archived={row.archived ? "true" : "false"}
+                        data-subagent={row.subagent ? "true" : "false"}
+                      >
+                        <Stack gap={2} grow>
+                          <Row gap={8} grow>
+                            <Text size="md" truncate>
+                              {row.title}
+                            </Text>
+                            {row.archived ? <Tag tone="neutral">{t("archived")}</Tag> : null}
+                            {row.subagent ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
+                          </Row>
+                          <Text size="sm" tone="tertiary">
+                            {[row.workspace, timeLabel(row.updatedAt, now, t)].join(" · ")}
+                          </Text>
+                        </Stack>
+                        <Row gap={8} fixed>
+                          {row.archived ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-action="unarchive"
+                              aria-label={t("unarchiveNamed", { title: row.title })}
+                              onClick={() => {
+                                run(unarchive(row.id));
+                              }}
+                            >
+                              {t("unarchive")}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-action="archive"
+                              aria-label={t("archiveNamed", { title: row.title })}
+                              onClick={() => {
+                                run(archive(row.id));
+                              }}
+                            >
+                              {t("archive")}
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-action="export"
+                            aria-label={t("exportNamed", { title: row.title })}
+                            onClick={() => {
+                              run(exportZip(row.id));
+                            }}
+                          >
+                            {t("export")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!row.archived}
+                            data-action="remove"
+                            aria-label={t("removeNamed", { title: row.title })}
+                            onClick={() => {
+                              setFailure(null);
+                              setNotice(null);
+                              setConfirming(row);
+                            }}
+                          >
+                            {t("remove")}
+                          </Button>
+                        </Row>
                       </Row>
-                      <Text size="sm" tone="tertiary">
-                        {[row.workspace, timeLabel(row.updatedAt, now, t)].join(" · ")}
-                      </Text>
-                    </Stack>
-                    <Row gap={8} fixed>
-                      {row.archived ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          data-action="unarchive"
-                          aria-label={t("unarchiveNamed", { title: row.title })}
-                          onClick={() => {
-                            run(unarchive(row.id));
-                          }}
-                        >
-                          {t("unarchive")}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          data-action="archive"
-                          aria-label={t("archiveNamed", { title: row.title })}
-                          onClick={() => {
-                            run(archive(row.id));
-                          }}
-                        >
-                          {t("archive")}
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-action="export"
-                        aria-label={t("exportNamed", { title: row.title })}
-                        onClick={() => {
-                          run(exportZip(row.id));
-                        }}
-                      >
-                        {t("export")}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!row.archived}
-                        data-action="remove"
-                        aria-label={t("removeNamed", { title: row.title })}
-                        onClick={() => {
-                          setFailure(null);
-                          setNotice(null);
-                          setConfirming(row);
-                        }}
-                      >
-                        {t("remove")}
-                      </Button>
-                    </Row>
+                    ))}
+                  </Stack>
+                ) : null}
+                {matched.length > 0 ? (
+                  <Row
+                    data-pagination=""
+                    data-page-current={currentPage}
+                    data-page-total={pageCount}
+                    gap={8}
+                    justify="end"
+                    fixed
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={currentPage <= 1}
+                      onClick={() => {
+                        setPage(currentPage - 1);
+                      }}
+                    >
+                      {t("page.previous")}
+                    </Button>
+                    <Text size="sm" tone="tertiary" tabular>
+                      {t("page.label", { page: currentPage, total: pageCount })}
+                    </Text>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={currentPage >= pageCount}
+                      onClick={() => {
+                        setPage(currentPage + 1);
+                      }}
+                    >
+                      {t("page.next")}
+                    </Button>
                   </Row>
-                ))}
-              </Stack>
-            ) : null}
-            {matched.length > 0 ? (
-              <Row
-                data-pagination=""
-                data-page-current={currentPage}
-                data-page-total={pageCount} gap={8} justify="end" fixed>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => {
-                    setPage(currentPage - 1);
-                  }}
-                >
-                  {t("page.previous")}
-                </Button>
-                <Text size="sm" tone="tertiary" tabular>
-                  {t("page.label", { page: currentPage, total: pageCount })}
-                </Text>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={currentPage >= pageCount}
-                  onClick={() => {
-                    setPage(currentPage + 1);
-                  }}
-                >
-                  {t("page.next")}
-                </Button>
-              </Row>
-            ) : null}
-          </Stack>
-        </>
-      )}
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       <Modal
         open={confirmed !== null}
         onClose={() => {
@@ -528,10 +646,12 @@ export function ConversationManagerPage({
       <Modal open={gcPhase === "running"} onClose={() => {}} headless title={t("gc.title")}>
         <Stack align="center" gap={14} pad="blocking">
           <Spinner label={t("gc.running")} />
-          <Text as="p" size="md">{t("gc.running")}</Text>
+          <Text as="p" size="md">
+            {t("gc.running")}
+          </Text>
         </Stack>
       </Modal>
-    </Stack>
+    </section>
   );
 }
 
@@ -710,7 +830,9 @@ function UsageRow({
       {...(subagent === undefined ? {} : { "data-subagent": subagent ? "true" : "false" })}
     >
       <Row gap={8} grow>
-        <Text size="sm" tone="tertiary" truncate>{label}</Text>
+        <Text size="sm" tone="tertiary" truncate>
+          {label}
+        </Text>
         {subagent === true ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
       </Row>
       <Row gap="wide" wrap>
@@ -718,8 +840,12 @@ function UsageRow({
           <Stack
             key={metric.key}
             data-usage-cell={metric.key}
-            data-usage-value={metric.value} gap={2}>
-            <Text size="sm" tone="tertiary">{metric.label}</Text>
+            data-usage-value={metric.value}
+            gap={2}
+          >
+            <Text size="sm" tone="tertiary">
+              {metric.label}
+            </Text>
             <Text size="lg" weight="medium" tabular>
               {metric.kind === "percent"
                 ? formatPercent(metric.value)
@@ -829,31 +955,57 @@ function UsageView({
             .slice(0, USAGE_SESSION_ROWS);
   return (
     <Stack data-usage-view={tab} data-usage-range={range} gap={12} fixed>
-      <Tabs
-        role="radiogroup"
-        label={t("usage.range")}
-        items={USAGE_RANGES.map((option) => ({ value: option, label: rangeLabel(option, t) }))}
-        value={range}
-        onChange={(next) => {
-          onRange(next as UsageRange);
-        }}
-      />
-      <Tabs
-        label={t("usage.range")}
-        items={items.map((item) => ({ value: item, label: labels[item] }))}
-        value={tab}
-        onChange={(next) => {
-          onTab(next as UsageTab);
-        }}
-      />
-      {tab === "sessions" ? (
-        <Row data-filter="usage-subagents" gap={16} fixed>
-          <Checkbox
-            checked={onlySubagents}
-            label={t("usage.onlySubagents")}
-            onChange={onOnlySubagents}
+      <div
+        className={frameCss.filterTabs}
+        role="group"
+        aria-label={t("usage.range")}
+        data-filter="usage-range"
+      >
+        {USAGE_RANGES.map((option) => (
+          <FilterChip
+            key={option}
+            active={option === range}
+            label={rangeLabel(option, t)}
+            tab={option}
+            onSelect={() => {
+              onRange(option);
+            }}
           />
-        </Row>
+        ))}
+      </div>
+      <div
+        className={frameCss.filterTabs}
+        role="group"
+        aria-label={t("usage.dimension")}
+        data-filter="usage-tabs"
+      >
+        {items.map((item) => (
+          <FilterChip
+            key={item}
+            active={item === tab}
+            label={labels[item]}
+            tab={item}
+            onSelect={() => {
+              onTab(item);
+            }}
+          />
+        ))}
+      </div>
+      {tab === "sessions" ? (
+        <div
+          className={frameCss.filterTabs}
+          role="group"
+          aria-label={t("filter.subagents")}
+          data-filter="usage-subagents"
+        >
+          <FilterChip
+            active={onlySubagents}
+            label={t("usage.onlySubagents")}
+            onSelect={() => {
+              onOnlySubagents(!onlySubagents);
+            }}
+          />
+        </div>
       ) : null}
       {loading ? (
         <Text data-usage-status="loading" as="p" size="md" tone="tertiary">

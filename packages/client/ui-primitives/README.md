@@ -5,7 +5,7 @@
 `Tag` / `Modal` / `Switch` / `SettingsForm` / 图标 … 由本包 `export *` 转出，业务包只向本包取控件）、**布局原语**
 （`Stack` / `Row` / `Text`，间距 / 内距 / 文本档位集中在 `layout` 的档位表里）、**这套界面自有的控件**（字段行
 `SettingsFieldRow`、可搜索选择器 `SearchSelect`、模型路由清单 `ModelRouteList`、标签输入 `TagInput`、多行文本
-`MultilineField`、图标按钮 `IconButton`、按钮 `Button`、`Tabs` / `Spinner` / `Bubble` / `PopoverPanel` …）、
+`MultilineField`、图标按钮 `IconButton`、按钮 `Button`、`Spinner` / `Bubble` / `PopoverPanel` …）、
 **按 schema 自动生成的行配置页**，以及**引用解析与渲染转换**（host 与 client 共用唯一一份源码，
 [`@morlay/dsh-reference`](../../context/dsh-reference/README.md) 的引用展开复用 host 那半）。
 
@@ -57,7 +57,10 @@ const form = new SettingsFormModel(scope, [settingsNumberField("timeoutMs")]);
 
 ```tsx
 import {
-  IconButton, SearchSelect, SettingsFieldRow, TagInput,
+  IconButton,
+  SearchSelect,
+  SettingsFieldRow,
+  TagInput,
 } from "@morlay/dsh-client-ui-primitives/client";
 
 <SettingsFieldRow label="允许的工具" hint="留空 = 不限制" divider layout="inline">
@@ -68,7 +71,7 @@ import {
     label="允许的工具"
     removeLabel={(name) => `移除 ${name}`}
   />
-</SettingsFieldRow>
+</SettingsFieldRow>;
 ```
 
 装配：**不是装配行**——client 半随用到它的 client 行内联（清单里标 `dsh.client.inline`，devkit 因此不把它当

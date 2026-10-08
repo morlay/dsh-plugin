@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ConversationManagerPage } from "../client/ConversationManagerPage.tsx";
+import frameCss from "../client/ConversationManagerPage.module.css";
 import { ConversationManagerRequestError } from "../client/controller.ts";
 import { zh } from "../client/locales.ts";
 
@@ -241,7 +242,7 @@ describe("对话管理页面：列表与搜索", () => {
     expect(rowTexts()).toHaveLength(3);
     expect(screen.queryByText("子代理会话")).toBeNull();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "显示子代理会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "显示子代理会话" }));
     await waitFor(() => {
       expect(rowTexts()).toHaveLength(4);
     });
@@ -361,10 +362,6 @@ describe("对话管理页面：分页、导出与 GC", () => {
     expect(wrap?.tagName).toBe("SPAN");
     expect(wrap?.querySelector("svg")).toBeTruthy();
     expect(input.getAttribute("style")).toBeNull();
-  });
-
-  it("页面项不参与 flex 压缩：搜索框与列表行不被长列表压扁", async () => {
-    // 页面根是纵向 flex + 整页滚动；这些项一旦可压缩，官方 Input 的 32px 高会塌成一行文字高。
   });
 
   it("每页 20 条，翻页生效，搜索回到第一页", async () => {
@@ -522,12 +519,12 @@ describe("对话管理页面：token 用量统计", () => {
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await waitFor(() => {
       expect(faces.loadUsage).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole("tab", { name: "总览" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "总览" })).toBeTruthy();
     expect(screen.getByText("全部会话")).toBeTruthy();
     expect(screen.getAllByText("输入（含缓存）").length).toBe(2);
     expect(screen.getByText("65")).toBeTruthy();
@@ -540,30 +537,30 @@ describe("对话管理页面：token 用量统计", () => {
   it("二层切维度（按模型 / 按会话），时间范围切换会带参数重新请求", async () => {
     const loadUsage = vi.fn(async () => REPORT);
     await renderPage({ archived: [], faces: { loadUsage } });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
     expect(loadUsage).toHaveBeenCalledWith("day");
 
-    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "按模型" }));
     expect(screen.getByText("deepseek-official / v4")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "按会话" }));
     expect(screen.getByText("会话 A")).toBeTruthy();
 
     // 「按天」这一栏已被时间范围取代。
-    expect(screen.queryByRole("tab", { name: "按天" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "按天" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("radio", { name: "近 7 天" }));
+    fireEvent.click(screen.getByRole("button", { name: "近 7 天" }));
     await waitFor(() => {
       expect(loadUsage).toHaveBeenLastCalledWith("7d");
     });
 
     // 自然边界也走同一套语义键。
-    fireEvent.click(screen.getByRole("radio", { name: "本日" }));
+    fireEvent.click(screen.getByRole("button", { name: "本日" }));
     await waitFor(() => {
       expect(loadUsage).toHaveBeenLastCalledWith("day");
     });
-    fireEvent.click(screen.getByRole("radio", { name: "本周" }));
+    fireEvent.click(screen.getByRole("button", { name: "本周" }));
     await waitFor(() => {
       expect(loadUsage).toHaveBeenLastCalledWith("week");
     });
@@ -579,7 +576,7 @@ describe("对话管理页面：token 用量统计", () => {
       archived: [],
       faces: { loadUsage: vi.fn(async () => withCache) },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
 
     // 输入含缓存：100 + 1000 = 1100（原始值挂在 data-usage-value 上）。
@@ -593,8 +590,7 @@ describe("对话管理页面：token 用量统计", () => {
     expect(screen.getByText("90.9%")).toBeTruthy();
   });
 
-  it("统计行：label 在上，单项内部上下、单项之间横向，且没有 total 项", async () => {
-  });
+  it("统计行：label 在上，单项内部上下、单项之间横向，且没有 total 项", async () => {});
 
   it("数据位都带 data-* 标注，便于按标注沟通定位", async () => {
     const { container } = await renderPage({
@@ -617,7 +613,7 @@ describe("对话管理页面：token 用量统计", () => {
     expect(container.querySelector('[data-filter="search"]')).toBeTruthy();
 
     // 统计视图：格子、行、维度也带标注。
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
     expect(
       container.querySelector('[data-usage-cell="output"]')?.getAttribute("data-usage-value"),
@@ -627,7 +623,7 @@ describe("对话管理页面：token 用量统计", () => {
       container.querySelector('[data-usage-cell="toolCalls"]')?.getAttribute("data-usage-value"),
     ).toBe("1");
 
-    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "按模型" }));
     expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
     expect(container.querySelector('[data-tab="models"]')).toBeTruthy();
     expect(container.querySelector("[data-usage-range]")?.getAttribute("data-usage-range")).toBe(
@@ -640,7 +636,7 @@ describe("对话管理页面：token 用量统计", () => {
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
 
     const cell = (key: string): string | null | undefined =>
@@ -654,7 +650,7 @@ describe("对话管理页面：token 用量统计", () => {
     expect(screen.getAllByText("轮次").length).toBeGreaterThan(0);
     expect(screen.getAllByText("工具调用").length).toBe(2);
 
-    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "按会话" }));
     expect(cell("turns")).toBe("2");
   });
 
@@ -663,10 +659,10 @@ describe("对话管理页面：token 用量统计", () => {
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
 
-    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "按模型" }));
     expect(container.querySelector('[data-usage-key="deepseek-official / v4"]')).toBeTruthy();
     expect(container.querySelector('[data-usage-cell="turns"]')).toBeNull();
     expect(container.querySelector('[data-usage-cell="output"]')).toBeTruthy();
@@ -677,10 +673,10 @@ describe("对话管理页面：token 用量统计", () => {
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
 
-    fireEvent.click(screen.getByRole("tab", { name: "按模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "按模型" }));
     // 人类 65 + 子代理 55 折进同一个 provider / model 行。
     expect(container.querySelectorAll('[data-usage-key="deepseek-official / v4"]').length).toBe(1);
     expect(
@@ -693,12 +689,12 @@ describe("对话管理页面：token 用量统计", () => {
       archived: [],
       faces: { loadUsage: vi.fn(async () => REPORT) },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await screen.findByText("总览");
 
     // 过滤开关只在按会话维度出现（总览 / 按模型没有这个维度）。
-    expect(screen.queryByRole("checkbox", { name: "只看子代理会话" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    expect(screen.queryByRole("button", { name: "只看子代理会话" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "按会话" }));
 
     const humanRow = container.querySelector('[data-usage-key="s1"]');
     const subagentRow = container.querySelector('[data-usage-key="s4"]');
@@ -707,14 +703,14 @@ describe("对话管理页面：token 用量统计", () => {
     // 子代理行的「子代理」标记：标签精确匹配，不吃行标题里的同名文字。
     expect(within(subagentRow as HTMLElement).getByText("子代理")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "只看子代理会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "只看子代理会话" }));
     expect(container.querySelector('[data-usage-key="s1"]')).toBeNull();
     expect(container.querySelector('[data-usage-key="s4"]')).toBeTruthy();
 
     // 维度切走再切回：开关与筛选都保留（只是该维度自己的过滤）。
-    fireEvent.click(screen.getByRole("tab", { name: "总览" }));
-    expect(screen.queryByRole("checkbox", { name: "只看子代理会话" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "按会话" }));
+    fireEvent.click(screen.getByRole("button", { name: "总览" }));
+    expect(screen.queryByRole("button", { name: "只看子代理会话" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "按会话" }));
     expect(container.querySelector('[data-usage-key="s1"]')).toBeNull();
   });
 
@@ -727,7 +723,7 @@ describe("对话管理页面：token 用量统计", () => {
         }),
       },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await waitFor(() => {
       expect(screen.getByText("操作失败：boom")).toBeTruthy();
     });
@@ -735,32 +731,140 @@ describe("对话管理页面：token 用量统计", () => {
 });
 
 describe("对话管理页面：滚动分区", () => {
-  // 滚动只发生在内容层：页头（标题 / tab 条 / 动作）与搜索行固定在顶部不动。
-  it("列表与分页在滚动层内，页头与搜索在滚动层外", async () => {
+  // 上游一级页面的滚动形态（`ui-schedule/TaskManagerPage` 那套）：列自己滚，标题行 / 过滤行 / 搜索行 /
+  // 列表在**同一个**滚动层里，页面根不滚。
+  it("标题行、过滤行、搜索行与列表在同一个滚动层里", async () => {
     const { container } = await renderPage({ archived: [B.id, C.id] });
 
-    const scroll = container.querySelector('[data-scroll="page"]');
+    const scroll = container.querySelector(`.${frameCss.pageScroll}`);
     expect(scroll).not.toBeNull();
+    // 通信用的稳定标注仍在：滚动层自己能按 `[data-scroll="page"]` 找到。
+    expect(scroll!.getAttribute("data-scroll")).toBe("page");
+    expect(scroll!.querySelector(`.${frameCss.pageHeading}`)).not.toBeNull();
+    expect(scroll!.querySelector(`.${frameCss.pageContent}`)).not.toBeNull();
+    expect(scroll!.querySelector('[data-filter="search"]')).not.toBeNull();
     expect(scroll!.querySelector("li[data-session-id]")).not.toBeNull();
     expect(scroll!.querySelector("[data-pagination]")).not.toBeNull();
-    expect(scroll!.contains(container.querySelector('[data-filter="search"]'))).toBe(false);
-    expect(scroll!.contains(screen.getByRole("heading"))).toBe(false);
-    expect(scroll!.contains(container.querySelector('[data-tab="usage"]'))).toBe(false);
-
-    // 页根自己不滚，滚动只发生在那层。
   });
 
-  it("统计视图同样把内容放进滚动层（页头固定）", async () => {
+  it("统计视图同样在这一层里（换视图不换滚动容器）", async () => {
     const { container } = await renderPage({ archived: [] });
-    fireEvent.click(screen.getByRole("tab", { name: "统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "统计" }));
     await waitFor(() => {
       expect(container.querySelector("[data-usage-range]")).not.toBeNull();
     });
 
-    const scroll = container.querySelector('[data-scroll="page"]');
+    const scroll = container.querySelector(`.${frameCss.pageScroll}`);
     expect(scroll).not.toBeNull();
+    expect(scroll!.querySelector(`.${frameCss.pageHeading}`)).not.toBeNull();
     expect(scroll!.contains(container.querySelector("[data-usage-range]"))).toBe(true);
     expect(scroll!.contains(container.querySelector('[data-filter="search"]'))).toBe(false);
-    expect(scroll!.contains(screen.getByRole("heading"))).toBe(false);
+  });
+});
+
+// 页面框架与状态态：框架与上游一级页面同款（960px 居中列 + `pageHeading` 标题行 + `filterTabs` 过滤 chip 行 +
+// `searchField` 搜索行），切换控件是**筛选 chip**（`role="group"` + `aria-pressed`，不再是 tab 条）；
+// 读取 / 一份会话都没有 / 读列表失败这三种状态占满整个面板并居中。
+// 几何（960px 上限、28px + macOS 顶栏让位、居中）住在 `ConversationManagerPage.module.css`：jsdom 没有布局，
+// 这里钉住结构与类名契约，真几何在浏览器里核对。
+describe("对话管理页面：框架与状态态", () => {
+  it("标题行与过滤行来自页面框架那几档类名", async () => {
+    const { container } = await renderPage({ archived: [C.id] });
+
+    const heading = container.querySelector(`.${frameCss.pageHeading}`);
+    expect(heading?.querySelector("h1")?.textContent).toBe(zh.title);
+    expect(heading?.querySelector('[data-action="import"]')).not.toBeNull();
+
+    const viewGroup = container.querySelector('[data-filter="view"]');
+    expect(viewGroup?.getAttribute("role")).toBe("group");
+    const usageChip = within(viewGroup as HTMLElement).getByRole("button", { name: "统计" });
+    expect(usageChip.className).toContain(frameCss.filterTab);
+    expect(usageChip.getAttribute("aria-pressed")).toBe("false");
+
+    expect(container.querySelector(`.${frameCss.searchField}`)).not.toBeNull();
+  });
+
+  it("子代理过滤是 chip：选中带 active 类与 aria-pressed", async () => {
+    const { container } = await renderPage({ archived: [C.id] });
+    const chip = within(
+      container.querySelector('[data-filter="subagents"]') as HTMLElement,
+    ).getByRole("button", { name: "显示子代理会话" });
+
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(chip.className).not.toContain(frameCss.filterTabActive);
+
+    fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(chip.className).toContain(frameCss.filterTabActive);
+  });
+
+  it("搜索行里的清空按钮只在有查询时出现，点了清空并还原列表", async () => {
+    await renderPage({ archived: [B.id, C.id] });
+    expect(screen.queryByRole("button", { name: "清空搜索" })).toBeNull();
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "B" } });
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "清空搜索" }));
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(3);
+    });
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+  });
+
+  it("读取中：状态占满面板并居中，此时不画标题行与搜索行", async () => {
+    const { container } = await renderPage({
+      archived: [B.id],
+      listRows: () => new Promise(() => {}),
+      skipReady: true,
+    });
+
+    const status = container.querySelector('[data-status="loading"]');
+    expect(status?.className).toContain(frameCss.status);
+    expect(status?.querySelector('[role="status"]')).not.toBeNull();
+    expect(screen.getByText(zh.loading)).toBeTruthy();
+    expect(container.querySelector(`.${frameCss.pageHeading}`)).toBeNull();
+    expect(container.querySelector('[data-filter="search"]')).toBeNull();
+  });
+
+  it("一份会话都没有：同样整屏居中，不画框架", async () => {
+    const { container } = await renderPage({ archived: [], sessions: [], workspaces: [] });
+
+    const status = container.querySelector('[data-status="empty"]');
+    expect(status?.className).toContain(frameCss.status);
+    expect(screen.getByText(zh.empty)).toBeTruthy();
+    expect(container.querySelector(`.${frameCss.pageHeading}`)).toBeNull();
+  });
+
+  it("读列表失败：整屏居中的失败态（并带 role=alert）", async () => {
+    const { container } = await renderPage({
+      archived: [],
+      listRows: async () => {
+        throw new ConversationManagerRequestError("boom", undefined);
+      },
+      skipReady: true,
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-status="failure"]')).not.toBeNull();
+    });
+    const status = container.querySelector('[data-status="failure"]');
+    expect(status?.className).toContain(frameCss.status);
+    expect(status?.querySelector('[role="alert"]')?.textContent).toContain("boom");
+    expect(container.querySelector(`.${frameCss.pageHeading}`)).toBeNull();
+  });
+
+  it("搜索无结果：框架照旧在，空态落在列表位置", async () => {
+    const { container } = await renderPage({ archived: [B.id, C.id] });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(0);
+    });
+
+    expect(container.querySelector('[data-status="empty-search"]')).not.toBeNull();
+    expect(container.querySelector(`.${frameCss.pageHeading}`)).not.toBeNull();
+    expect(screen.getByText(zh.emptySearch)).toBeTruthy();
   });
 });

@@ -8,10 +8,8 @@
 export { Bubble, type BubbleProps } from "./Bubble.tsx";
 export { Button, type ButtonProps, type ButtonTone } from "./Button.tsx";
 export { DisclosureRow, type DisclosureRowProps } from "./DisclosureRow.tsx";
-export { SearchInput, type SearchInputProps, type SearchInputWidth } from "./SearchInput.tsx";
 export { SeatButton, type SeatButtonProps } from "./SeatButton.tsx";
 export { Spinner, type SpinnerProps } from "./Spinner.tsx";
-export { Tabs, type TabItem, type TabsProps } from "./Tabs.tsx";
 export { TimeLabel, type TimeLabelProps } from "./TimeLabel.tsx";
 export { VisuallyHidden, type VisuallyHiddenProps } from "./VisuallyHidden.tsx";
 export { IconButton, type IconButtonProps } from "./IconButton.tsx";
@@ -21,10 +19,6 @@ export {
   type ModelRouteListProps,
 } from "./ModelRouteList.tsx";
 export { MultilineField, type MultilineFieldProps } from "./MultilineField.tsx";
-export {
-  SearchSelect,
-  type SearchSelectOption,
-  type SearchSelectProps,
-} from "./SearchSelect.tsx";
+export { SearchSelect, type SearchSelectOption, type SearchSelectProps } from "./SearchSelect.tsx";
 export { TagInput, type TagInputProps } from "./TagInput.tsx";
 export { mergeTags, parseTagList } from "./tags.ts";

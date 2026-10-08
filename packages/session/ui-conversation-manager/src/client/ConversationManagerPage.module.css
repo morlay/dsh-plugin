@@ -1,0 +1,226 @@
+/* 「对话管理」页的页面框架：**与上游一级页面同款**——上游没有这份框架的共享原子，它是每个一级页面自己
+   CSS Modules 里那套同样的度量（`ui-schedule/TaskManagerPage.module.css`、`ui-plugin-manager/PluginManagerPage.module.css`）。
+   这里只放页面骨架与状态态：960px 居中列、标题行（28px 上边距 + macOS 顶栏让位）、过滤 chip 行、搜索行，
+   以及读取 / 空 / 失败这三个整屏居中的状态。行内排版（列表行、统计视图）不在这里。 */
+
+.page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.listPane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pageScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* 内容列：与上游一级页面同一个 960px 上限与 clamp(24–48px) 内距，底部 48px。 */
+.pageContent {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+
+/* 标题行：页面名与右侧动作同一行；28px 的上内距归这一行自己（列不再留顶部内距）。 */
+.pageHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 28px;
+  margin-bottom: 24px;
+}
+
+/* macOS hiddenInset 标题栏：一级页面的头部在自身 28px 之上再加框架顶栏让位。 */
+:global([data-platform="darwin"]) .pageHeading {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+.pageHeading h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.headingActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 过滤行：chip 组之间 20px、组内 8px，列表在它下面 14px。 */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-bottom: 14px;
+}
+
+.filterTabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* 过滤 chip：28px 盒、10px 两侧、14px 圆角；选中那档取 hover 填充 + 主标签色。 */
+.filterTab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filterTab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterTabActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 搜索框：外层盒子负责那根 0.5px 细线与 12px 圆角，里面的官方 `Input` 只留图标与输入框。 */
+.searchField {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  margin: 0 0 16px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  transition: border-color 0.15s;
+}
+
+.searchField:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.searchField:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.searchField > :first-child {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.searchField > :first-child:focus-within {
+  border-color: transparent;
+}
+
+.searchField > :first-child svg {
+  width: 14px;
+  height: 14px;
+}
+
+.searchField input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.searchField input:focus-visible {
+  outline: none;
+}
+
+/* 清空搜索由右侧那个按钮负责，原生那个叉不要。 */
+.searchField input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.searchClear {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: -6px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchClear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 列表区：行的内部排版归各行的组件（`Stack` / `Row`），这里只管列与间距。 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 整屏居中的状态态：列表还没就绪 / 一份会话都没有 / 读列表失败——这三种时候页面没有别的内容可看，
+   状态占满整个面板并居中。 */
+.status {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  text-align: center;
+}
+
+.statusBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.statusText {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.statusFailure {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 列表区里的空态（搜索结果为空这类）：框架照旧在，只在列表位置上居中那行字。 */
+.listStatus {
+  display: grid;
+  place-items: center;
+  padding: 32px 0;
+  text-align: center;
+}
