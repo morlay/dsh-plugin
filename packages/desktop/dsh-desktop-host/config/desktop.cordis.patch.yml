@@ -22,6 +22,18 @@
     surfaceContext: false
     trustedHosts: []
 
+# 桌面档的产品遥测面：上游那两行只在 profile 名为 `desktop` 时激活，靠构建期环境变量 `DSH_CLIENT_VERSION`
+# 填 `serviceVersion`（必填）。自研壳不传那个变量，于是遥测行配置校验失败、`product-analytics` 行 pending，
+# 页面启动时 `productAnalytics/watchPolicy` 那条流拿 502，前端又在非 JSON 响应上抛未捕获错误。
+# 本地桌面部署没有上报对象（endpoint 是官方 collector），两行一起停。
+# 决策见 [ADR 桌面档无产品遥测](../.agents/adrs/20261008-桌面档无产品遥测.md)。
+
+- id: desktop-product-telemetry
+  disabled: true
+
+- id: product-analytics
+  disabled: true
+
 # 桌面档不含登录，账号面整条停掉。DeepSeek 账号登录是「系统浏览器授权 + 回环地址回调」：
 # 上游 `dsh-deepseek-account-platform` 在 webServer 上注册 `/oauth/callback`，授权页要回到
 # `http://localhost:<端口>/oauth/callback`——而本部署的 webServer 没有端口（上面的

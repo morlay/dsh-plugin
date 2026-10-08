@@ -52,6 +52,14 @@ const ACCOUNT_ROWS = {
   "ui-settings-account": "@deepseek-ai/dsh-client-ui-settings-account",
 } as const;
 
+// 桌面档**必须**停的产品遥测面：两行只在 profile 名为 `desktop` 时激活，靠构建期环境变量
+// `DSH_CLIENT_VERSION` 填 `serviceVersion`（必填）；自研壳不传那个变量 → 遥测行配置校验失败、
+// 产品分析行 pending，页面启动时那条 watchPolicy 流拿 502。本地桌面部署没有上报对象。
+const TELEMETRY_ROWS = {
+  "desktop-product-telemetry": "@deepseek-ai/dsh-host-product-telemetry-otel",
+  "product-analytics": "@deepseek-ai/dsh-client-product-analytics",
+} as const;
+
 // 桌面档**故意不动**的行：它们不是登录面，模型路径靠它们。
 const KEPT_ROWS = {
   credentials: "@deepseek-ai/dsh-credentials-local",
@@ -59,7 +67,7 @@ const KEPT_ROWS = {
   "llm-deepseek": "@deepseek-ai/dsh-llm-deepseek-api-key",
 } as const;
 
-// 除桌面 overlay 之外的装配层：账号面不该在这些地方被停（决定只影响桌面档）。
+// 除桌面 overlay 之外的装配层：这些停用只该影响桌面档。
 async function otherPatchFiles(): Promise<string[]> {
   const files: string[] = [join(repoRoot, "apps/dsh-custom-next/cordis.patch.yml")];
   for (const entry of await readdir(join(repoRoot, "packages/bundles"), { withFileTypes: true })) {
@@ -69,10 +77,11 @@ async function otherPatchFiles(): Promise<string[]> {
   return files;
 }
 
-describe("桌面 overlay 的账号面停用", () => {
+describe("桌面 overlay 的停用清单", () => {
   it("瞄准的上游行都存在，且行 id 现在确实指向那个模块", () => {
     for (const [id, module] of [
       ...Object.entries(ACCOUNT_ROWS),
+      ...Object.entries(TELEMETRY_ROWS),
       ...Object.entries(KEPT_ROWS),
       ["webserver", "@deepseek-ai/dsh-host-webserver"] as const,
     ]) {
@@ -80,15 +89,20 @@ describe("桌面 overlay 的账号面停用", () => {
     }
   });
 
-  it("停用清单就是登录/账号面加上传输接管那一行", () => {
-    expect(disabledIds(patch).sort()).toEqual(["webserver", ...Object.keys(ACCOUNT_ROWS)].sort());
+  it("停用清单就是传输接管那一行，加上产品遥测与登录/账号面", () => {
+    expect(disabledIds(patch).sort()).toEqual(
+      ["webserver", ...Object.keys(TELEMETRY_ROWS), ...Object.keys(ACCOUNT_ROWS)].sort(),
+    );
   });
 
-  it("账号的 client 面是停用行里唯一的浏览器模块（设置页账号页随它消失）", () => {
-    const clientModules = Object.values(ACCOUNT_ROWS).filter((module) =>
-      module.startsWith("@deepseek-ai/dsh-client-"),
+  it("停用的浏览器模块就是账号 client 面与产品分析", () => {
+    const clientModules = [...Object.values(ACCOUNT_ROWS), ...Object.values(TELEMETRY_ROWS)].filter(
+      (module) => module.startsWith("@deepseek-ai/dsh-client-"),
     );
-    expect(clientModules).toEqual(["@deepseek-ai/dsh-client-ui-settings-account"]);
+    expect(clientModules.sort()).toEqual([
+      "@deepseek-ai/dsh-client-product-analytics",
+      "@deepseek-ai/dsh-client-ui-settings-account",
+    ]);
   });
 
   it("模型路径那几行没有一起被停", () => {
@@ -101,10 +115,11 @@ describe("桌面 overlay 的账号面停用", () => {
     expect(targetedIds(patch)).toContain("web-runtime");
   });
 
-  it("账号面只在桌面 overlay 里被提到（bundles 与 profile 层不受影响）", async () => {
+  it("这些停用只在桌面 overlay 里出现（bundles 与 profile 层不受影响）", async () => {
+    const rows = [...Object.entries(ACCOUNT_ROWS), ...Object.entries(TELEMETRY_ROWS)];
     for (const file of await otherPatchFiles()) {
       const text = await readFile(file, "utf8");
-      for (const [id, module] of Object.entries(ACCOUNT_ROWS)) {
+      for (const [id, module] of rows) {
         expect(text, `${file} mentions ${id}`).not.toContain(id);
         expect(text, `${file} mentions ${module}`).not.toContain(module);
       }
