@@ -14,14 +14,14 @@
     "@morlay/dsh-desktopify": "workspace:*",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^26.5.0",
+    "@types/node": "^26.6.4",
     "@types/react": "18.3.1",
     "@types/react-dom": "18.3.1",
-    "jsdom": "^30.1.0",
-    "oxfmt": "^0.68.0",
-    "oxlint": "^1.83.0",
+    "jsdom": "^30.1.2",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
     "oxlint-tsgolint": "7.x",
-    "postcss": "^8.5.28",
+    "postcss": "^8.5.29",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "rolldown": "1.x",
@@ -33,5 +33,5 @@
     "vitest": "5.x",
     "zx": "^8.8.5"
   },
-  "packageManager": "pnpm@12.8.1"
+  "packageManager": "pnpm@12.10.1"
 }

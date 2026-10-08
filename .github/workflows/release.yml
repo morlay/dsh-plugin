@@ -27,13 +27,10 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d postgres"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 15
+          --health-cmd "pg_isready -U postgres -d postgres" --health-interval 2s --health-timeout 2s --health-retries 15
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
 
       - run: just vendor prepare
       - run: just dep
@@ -49,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
       - run: just vendor prepare
       - run: just dep
 

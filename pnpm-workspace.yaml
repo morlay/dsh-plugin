@@ -38,3 +38,7 @@ patchedDependencies:
   "@fortune-sheet/react@1.0.4": vendor/deepseek-harness/patches/@fortune-sheet__react@1.0.4.patch
   exceljs@4.4.0: vendor/deepseek-harness/patches/exceljs@4.4.0.patch
   node-pty@1.2.0-beta.15: vendor/deepseek-harness/patches/node-pty@1.2.0-beta.15.patch
+
+overrides:
+  react: "18.x"
+  react-dom: "18.x"
