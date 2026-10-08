@@ -51,6 +51,8 @@ const STANDARD_ROWS = [
     name: "@deepseek-ai/dsh-agent-instructions",
     config: { maxBytes: 65_536 },
   },
+  // 时钟：`standard` 从 0.2.1-alpha.1 起声明它，每步往请求历史注入一条带时间读数的 `user/message`。
+  { id: "time-context", name: "@deepseek-ai/dsh-time-context", config: { refreshIntervalMs: 0 } },
   { id: "tool-fs", name: "@deepseek-ai/dsh-tool-fs" },
   { id: "skill-filesystem", name: "@deepseek-ai/dsh-skill-filesystem" },
   { id: "tool-skill", name: "@deepseek-ai/dsh-tool-skill" },
@@ -309,6 +311,25 @@ describe.each([
     });
     expect(denied.error).toBeDefined();
     expect(JSON.stringify(denied)).toContain("对话模式");
+  });
+
+  // 时钟（`time-context`）是**另一条**注入通道：它不经 `systemPrompt.suppressRuntimeContext()`，而是自己的
+  // `agent/pre-step`（`prepend`，先委托再追加）。`runtimeContext: false` 说的是"不要动态快照"，所以它也要收。
+  it("时钟：coding 每步一条，chat（`runtimeContext: false`）一条都没有、日志里也不留", async () => {
+    const { ctx, create } = await mountBoth();
+    const coding = await create();
+    expect(kindsOf(await preStep(ctx, coding, { persist: true }), "time-context")).toHaveLength(1);
+
+    const chat = await create();
+    await ctx.sessionModes.select(chat.id, "chat");
+    expect(kindsOf(await preStep(ctx, chat, { persist: true }), "time-context")).toEqual([]);
+
+    // 落库判据：丢在注入之前——会话日志里没有时钟条目（不是"注入了再删"）。
+    const stored = chat.session
+      .ownEvents()
+      .filter((event) => event.type === "user/message")
+      .map((event) => kindOf(event.data));
+    expect(stored).not.toContain("time-context");
   });
 
   it("chat：连续三步都不注入官方那两条，inbox 不积压、日志里一条都没有", async () => {

@@ -103,9 +103,10 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     // 配了只是噪音，所以留空。
     // 没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
     //
-    // 两个抑制面都关：`instructions: false` 丢掉官方 `agent-instructions`（工作区指令）的注入；这个模式不写
+    // 注入面全关：`instructions: false` 丢掉官方 `agent-instructions`（工作区指令）的注入；这个模式不写
     // `skills`，而白名单三件里没有 `skill`、`denyTools` 也留空 → 推导成 `false`，官方 `skill-catalog` 的注入
-    // 同样丢掉。取舍见 `.agents/designs/20260929-抑制官方注入面.md`。
+    // 同样丢掉；`runtimeContext: false` 连动态快照与时钟（`standard` 那类 preset 声明的 `time-context`）一起收。
+    // 取舍见 `.agents/designs/20260929-抑制官方注入面.md`。
     instructions: false,
     runtimeContext: false,
   },

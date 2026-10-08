@@ -72,8 +72,9 @@ export interface SessionMode {
   // denyTools` 里含 `skill` 就要（`allowTools` 留空即"全部"，所以只有 `denyTools` 能把它推成 `false`）。
   // `false` 表示这个模式不要技能目录：丢掉官方 `skill-catalog` 的注入（`skill` 工具的收窄仍归 `allowTools`）。
   readonly skills?: boolean;
-  // 是否要 runtime context（文件沙箱策略、审批策略那两条动态快照）。缺省要；`false` 表示这个模式不要它们
-  // ——对话模式没有文件与 shell 工具，"能改工作区哪些文件、要不要走审批"对它全是噪音。
+  // 是否要动态快照（文件沙箱策略、审批策略那两条 snapshot section，以及 `standard` 那类 preset 声明的时钟
+  // `time-context` 注入）。缺省要；`false` 表示这个模式不要它们——对话模式没有文件与 shell 工具，"能改工作区
+  // 哪些文件、要不要走审批"对它全是噪音，它也不谈时间。
   readonly runtimeContext: boolean;
   // 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
   // （`defaultModel` 是它所在模式的一个可加字段）。
@@ -277,8 +278,8 @@ const modeSchema: z<SessionMode> = z.object({
     .default(true)
     .description(
       localized({
-        zh: "是否要动态快照（文件沙箱策略、审批策略）。",
-        en: "Whether the runtime snapshot applies (sandbox and approval policy).",
+        zh: "是否要动态快照（文件沙箱策略、审批策略）与时钟注入（`standard` 那类 preset 声明的 `time-context`）。",
+        en: "Whether the runtime snapshot (sandbox and approval policy) and the clock injection (`time-context`, declared by presets such as `standard`) apply.",
       }),
     ),
   // 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被

@@ -6,11 +6,11 @@
 // - **装配期投影**：模型目录与 `tool:<工具名>` section 按同一份合成结果过滤；
 // - **执行层 guard**（在 `agent.ctx` 的 `tools` inject 回调里）：拒绝时给该模式的文案，并说得出是哪一类（白名单外 /
 //   黑名单内）；
-// - **两个抑制面**（`agent/pre-step`）：官方 `agent-instructions` 与 `skill-catalog` 的注入按开关丢掉——官方那两行
-//   在装配投影之外自己往瀑布里 append，只能在瀑布上丢（不动注册表、也不动它们的行）；
+// - **三个抑制面**（`agent/pre-step`）：官方 `agent-instructions`、`skill-catalog` 与 `time-context` 的注入按开关
+//   丢掉——官方那几行在装配投影之外自己往瀑布里 append，只能在瀑布上丢（不动注册表、也不动它们的行）；
 // - **另两个开关**（注入面那个 `skills` 在上面那条里）：`runtimeContext: false` 抑制动态快照
-//   （`systemPrompt.suppressRuntimeContext`），`instructions: false` 关掉通道自己的降级注入
-//   （`ctx.contextAssembler.setInstructions`）。
+//   （`systemPrompt.suppressRuntimeContext`）与时钟那条注入（`agent/pre-step` 上的 `time-context`），
+//   `instructions: false` 关掉通道自己的降级注入（`ctx.contextAssembler.setInstructions`）。
 //
 // 同一个 agent 再 `apply` 就是换一份（旧 disposer 全部收回）；不走 `tools.restrict()`（会触发 `tools/change`），
 // 也不建 preset 子树。
@@ -41,7 +41,7 @@ export interface SessionScopeDefinition {
   readonly instructions: boolean;
   // 这个会话要不要技能目录（`false` → 丢掉官方 `skill-catalog` 的注入）。
   readonly skills: boolean;
-  // 这个会话要不要动态快照（`false` → 按 scope 抑制）。
+  // 这个会话要不要动态快照（`false` → 按 scope 抑制，并在瀑布上丢掉时钟那条注入）。
   readonly runtimeContext: boolean;
 }
 
@@ -164,19 +164,15 @@ function skillNameOf(arguments_: unknown): string | undefined {
   return typeof name === "string" && name.length > 0 ? name : undefined;
 }
 
-// 一个 agent 当前装着的那一份：`apply` 时解析好的开关（抑制面读它）。
+// 一个 agent 当前装着的那一份：装配期过滤读它（`apply` 时解析好的名单）。
 interface Applied {
   // 两条名单都空 = 不过滤（装配期与执行层都放行）。
   readonly gate: NameGate | undefined;
-  // 技能面的名单：与工具面同形，`undefined` = 不设收窄（目录照旧、`skill` 工具不按名判）。
-  readonly skillGate: NameGate | undefined;
-  readonly instructions: boolean;
-  readonly skills: boolean;
   // 收回这一份在 `agent.ctx` 上的注册（抑制器与执行层 guard）。
   readonly dispose: () => void;
 }
 
-// 按会话收口工具面与注入面的状态机：一份 per-agent 的状态 + 两条全局监听器。
+// 按会话收口工具面与注入面的状态机：一份 per-agent 的装配期名单 + 挂在各 agent 上的注册。
 export class SessionScope {
   private readonly applied = new WeakMap<Agent, Applied>();
   private readonly ctx: Context;
@@ -201,54 +197,6 @@ export class SessionScope {
         tools: result.tools.filter((tool) => denialOf(gate, tool.name) === undefined),
       };
     });
-
-    // 两个抑制面：官方 `agent-instructions`（工作区指令）与官方 `skill-catalog`（技能目录）都在装配投影之外自己
-    // 往这条瀑布里 append，所以只有在这里丢掉它们的条目（技能名单则在这里把目录按名收窄）。
-    //
-    // `prepend` 是必需的：官方那两行比本行早注册（会话挂着的 preset 先于 host 平面），瀑布里先注册的是**外层**，
-    // 站在它们后面就看不到、也丢不掉它们 append 的条目——只有抢在最外层（`await next()` 之后再收）才拿得到最终
-    // 消息表。
-    ctx.on(
-      "agent/pre-step",
-      async (payload, next): Promise<PreStepDecision> => {
-        const decision = await next();
-        if (decision.kind !== "enter") return decision;
-        const applied = this.applied.get(payload.agent);
-        // 没收过口的会话一律不动。
-        if (applied === undefined) return decision;
-        let changed = false;
-        const kept: UserMessage[] = [];
-        for (const message of decision.messages) {
-          const kind = kindOf(message);
-          if (kind === "agent-instructions") {
-            if (applied.instructions) kept.push(message);
-            else changed = true;
-            continue;
-          }
-          if (kind === "skill-catalog") {
-            if (!applied.skills) {
-              changed = true;
-              continue;
-            }
-            const narrowed =
-              applied.skillGate === undefined
-                ? undefined
-                : narrowCatalog(message, applied.skillGate, (line) =>
-                    this.ctx.logger.warn(`session-mode: ${line}`),
-                  );
-            if (narrowed === undefined) kept.push(message);
-            else {
-              changed = true;
-              kept.push(narrowed);
-            }
-            continue;
-          }
-          kept.push(message);
-        }
-        return changed ? { ...decision, messages: kept } : decision;
-      },
-      { prepend: true },
-    );
   }
 
   // 把某个会话收口到这份定义上（同一个 agent 再调就是换一份）。
@@ -259,10 +207,29 @@ export class SessionScope {
     const gate = gateOfNames(definition.allowTools, definition.denyTools);
     const skillGate = gateOfNames(definition.allowSkills, definition.denySkills);
 
-    // 落在 `agent.ctx` 上的那两件用一个 effect 装：动态快照抑制是 scope 层的一次注册；执行层 guard 要等
-    // `tools` 激活才装得上（`inject` 的回调），它挂在那个 inject fiber 下，所以收回时连 fiber 一起收。
+    // 落在 `agent.ctx` 上的那几件用一个 effect 装：注入面的抑制与动态快照抑制是 scope 层的注册；执行层 guard
+    // 要等 `tools` 激活才装得上（`inject` 的回调），它挂在那个 inject fiber 下，所以收回时连 fiber 一起收。
     const dispose = agent.ctx.effect(() => {
       const stoppers: (() => void)[] = [];
+      // 三个抑制面：官方 `agent-instructions`（工作区指令）、官方 `skill-catalog`（技能目录）与官方 `time-context`
+      // （时钟）都在装配投影之外自己往这条瀑布里 append，所以只能在这里丢它们的条目（技能目录那条还要按名收窄）。
+      //
+      // 两件事让这条注册必须落在**会话**上而不是行上：
+      // - `prepend` 只是把自己排到表头，不保证一直在那儿：表头归**最后**注册的那个 prepend，而时钟那条也 prepend；
+      // - 官方那几行随 preset 挂载（早于 `agent/created`，本注册就在那儿），所以按会话注册天然排在它们之后。
+      //   换模式 / 换 preset 时 `apply` 会重来一遍（旧的收回、新的 prepend），最外层由此回到我们手上。
+      stoppers.push(
+        agent.ctx.on(
+          "agent/pre-step",
+          async (_payload, next): Promise<PreStepDecision> => {
+            const decision = await next();
+            if (decision.kind !== "enter") return decision;
+            const kept = this.suppress(decision.messages, definition, skillGate);
+            return kept === undefined ? decision : { ...decision, messages: kept };
+          },
+          { prepend: true },
+        ),
+      );
       if (definition.runtimeContext === false) {
         // service 在 `agent.ctx` 上是 shadow：抑制落在该 agent 的 scope 层，只覆盖这个会话。
         stoppers.push(agent.ctx.systemPrompt.suppressRuntimeContext());
@@ -292,14 +259,56 @@ export class SessionScope {
 
     this.applied.set(agent, {
       gate,
-      skillGate,
-      instructions: definition.instructions,
-      skills: definition.skills,
       dispose,
     });
   }
 
-  // 通道是可选的搭档：没有它就没有降级注入可关，工具面与两个抑制面照常生效。
+  // 三个抑制面按这份定义过一遍本步的消息表：`undefined` = 一条都不动（开关都是"要"、技能名单也没排除谁），
+  // 其余 = 过滤 / 按名收窄之后的那份表。
+  private suppress(
+    messages: readonly UserMessage[],
+    definition: SessionScopeDefinition,
+    skillGate: NameGate | undefined,
+  ): UserMessage[] | undefined {
+    let changed = false;
+    const kept: UserMessage[] = [];
+    for (const message of messages) {
+      const kind = kindOf(message);
+      if (kind === "agent-instructions") {
+        if (definition.instructions) kept.push(message);
+        else changed = true;
+        continue;
+      }
+      if (kind === "skill-catalog") {
+        if (!definition.skills) {
+          changed = true;
+          continue;
+        }
+        const narrowed =
+          skillGate === undefined
+            ? undefined
+            : narrowCatalog(message, skillGate, (line) =>
+                this.ctx.logger.warn(`session-mode: ${line}`),
+              );
+        if (narrowed === undefined) kept.push(message);
+        else {
+          changed = true;
+          kept.push(narrowed);
+        }
+        continue;
+      }
+      if (kind === "time-context") {
+        // 时钟也归"动态快照"：它不经 `suppressRuntimeContext`（那是 snapshot section 那条路），只在瀑布上丢。
+        if (definition.runtimeContext) kept.push(message);
+        else changed = true;
+        continue;
+      }
+      kept.push(message);
+    }
+    return changed ? kept : undefined;
+  }
+
+  // 通道是可选的搭档：没有它就没有降级注入可关，工具面与三个抑制面照常生效。
   private channel(): { setInstructions(agent: Agent, on: boolean): void } | undefined {
     try {
       return this.ctx.get("contextAssembler");

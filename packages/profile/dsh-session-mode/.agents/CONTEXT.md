@@ -1,7 +1,7 @@
 # 会话模式
 
 本层是 `packages/profile/dsh-session-mode/`：模式（会话级扩展）与**按会话收口**。门面与用法见
-[README](../README.md)，形态与应用时机见[设计 会话模式](./designs/20260924-会话模式.md)，收口与两条官方注入面的抑制见
+[README](../README.md)，形态与应用时机见[设计 会话模式](./designs/20260924-会话模式.md)，收口与三条官方注入面的抑制见
 [设计 抑制官方注入面](./designs/20260929-抑制官方注入面.md)，policy 名单见[设计 按模式的policy拦截](./designs/20260929-按模式的policy拦截.md)。
 注入形态与信封（规则块 / 内容块、id、覆盖）是注入通道那边的词
 （[注入通道的术语表](../../../context/dsh-context-assembler/.agents/CONTEXT.md)）；工具说明的词在
