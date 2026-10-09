@@ -44,13 +44,16 @@ export interface ModeModelSource {
   readonly reasoningEffort?: string;
 }
 
-// 编码模式：编程专家 + 语言与思考纪律 + 工作目录提醒。
+// 编码模式：编程专家 + 语言与思考纪律。
+// 这里**不再有**工作目录那半句（原为 `你的工作目录在 \`{{cwd}}\``）：上游 0.2.1-alpha.2 起工作目录由
+// `working-directory:current` 这条运行时上下文注入（文本是 `Current working directory: "<绝对路径>".`），
+// 而 persona 用的提示词插值是**严格**的——`cwd` 变量已不再注册，残留 `{{cwd}}` 会在渲染时直接抛
+// `unknown prompt variable`（注册变量只剩 provider / model）。
 const CODING_PERSONA = {
   prefix: [
     "你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。",
     "全程用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考不要陷入重复循环，一旦循环立即退出；思考聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。",
   ].join("\n"),
-  suffix: "你的工作目录在 `{{cwd}}`",
 };
 
 // 对话模式：一个助手，保留语言与思考纪律，没有 suffix。
@@ -106,6 +109,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
     // 注入面全关：`instructions: false` 丢掉官方 `agent-instructions`（工作区指令）的注入；这个模式不写
     // `skills`，而白名单三件里没有 `skill`、`denyTools` 也留空 → 推导成 `false`，官方 `skill-catalog` 的注入
     // 同样丢掉；`runtimeContext: false` 连动态快照与时钟（`standard` 那类 preset 声明的 `time-context`）一起收。
+    // **收不掉的**：上游 `working-directory:current` 是 required 的目录上下文（0.2.1-alpha.2 起工作目录只走这条），
+    // 抑制可选运行时上下文不影响它——chat 会话的模型仍会看到工作目录那条快照。
     // 取舍见 `.agents/designs/20260929-抑制官方注入面.md`。
     instructions: false,
     runtimeContext: false,

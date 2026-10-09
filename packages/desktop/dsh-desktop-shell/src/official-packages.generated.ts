@@ -146,6 +146,7 @@ export const OFFICIAL_PROFILE_PACKAGES: readonly string[] = [
   "@deepseek-ai/dsh-tool-call-timeout-policy",
   "@deepseek-ai/dsh-tool-cordis",
   "@deepseek-ai/dsh-tool-subagent",
+  "@deepseek-ai/dsh-tool-working-directory",
   "@deepseek-ai/dsh-tools",
   "@deepseek-ai/dsh-typert-loader",
   "@deepseek-ai/dsh-typert-registry",
@@ -155,6 +156,7 @@ export const OFFICIAL_PROFILE_PACKAGES: readonly string[] = [
   "@deepseek-ai/dsh-web-app",
   "@deepseek-ai/dsh-web-fetch-http",
   "@deepseek-ai/dsh-web-search-deepseek",
+  "@deepseek-ai/dsh-working-directory",
   "@deepseek-ai/dsh-workspace",
   "@deepseek-ai/dsh-workspace-changes",
 ];

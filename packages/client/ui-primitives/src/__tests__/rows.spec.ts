@@ -25,6 +25,8 @@ function view(ns: string, overrides: Partial<SettingsNamespaceView> = {}): Setti
 function bundle(name: string, rowIds: readonly string[]): BundleInfo {
   return {
     name,
+    official: false,
+    availability: "installation",
     enabled: true,
     installed: true,
     optional: false,

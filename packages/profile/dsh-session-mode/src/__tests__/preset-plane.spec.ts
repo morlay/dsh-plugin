@@ -25,6 +25,8 @@ import type { FsTarget } from "@deepseek-ai/dsh-fs";
 import { ToolCallId, createUserMessage, type UserMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId } from "@deepseek-ai/dsh-session";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
+import { renderContextSnapshot, renderPrompt } from "@deepseek-ai/dsh-system-prompt";
+import WorkingDirectory from "@deepseek-ai/dsh-working-directory";
 import * as contextPlugin from "@morlay/dsh-context-assembler";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as plugin from "../index.ts";
@@ -146,6 +148,9 @@ async function mount(options: {
     invocation: { modelInvocable: true, userInvocable: true },
   });
   await ctx.plugin(LocalFileSystem, { cwd: "/" });
+  // 上游 preset 行里的 `agent-instructions` / `tool-fs` / `tool-skill` 都 `inject` 这个服务（0.2.1-alpha.2 起）：
+  // 装配里没有它就整行等在那里，preset 挂载直接判 `agent-preset/invalid`。
+  await ctx.plugin(WorkingDirectory, { defaultDirectory: workspace });
   // provider 面替身：工具注册只要求服务在场（本用例不验 provider 行为）。
   ctx.provide("web", {} as never);
   ctx.provide("userQuestions", {} as never);
@@ -269,6 +274,24 @@ describe.each([
     const agent = await create();
     expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe("standard");
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
+  });
+
+  it("提示词渲染：persona 里不留提示词变量，工作目录由上游那条运行时上下文给", async () => {
+    const { ctx, create } = await mountBoth();
+    const agent = await create();
+    const assembly = await ctx.systemPrompt.assemble(assembleContextFor(agent));
+
+    // 模式 persona 照旧在（人格提示词没被这场搬迁动过）。渲染本身就带判据：插值是严格的，persona 里残留任何
+    // 未注册的 `{{变量}}` 都会在这里抛错——`cwd` 变量上游 0.2.1-alpha.2 起已不再注册。
+    expect(renderPrompt(assembly)).toContain("经验丰富的编程专家");
+    // 工作目录改由上游 `working-directory:current` 那条上下文给（模型看到的仍是同一件事）。
+    expect(renderContextSnapshot(assembly)).toContain("Current working directory:");
+
+    // chat 的 `runtimeContext: false` 收的是**可选**运行时上下文（快照与时钟），上游那条 required 的目录上下文
+    // 照旧随装配注入——这条事实钉在这里，免得下次同步误以为 chat 连工作目录都不给。
+    await ctx.sessionModes.select(agent.id, "chat");
+    const chatAssembly = await ctx.systemPrompt.assemble(assembleContextFor(agent));
+    expect(renderContextSnapshot(chatAssembly)).toContain("Current working directory:");
   });
 
   it("chat：联网三件可见可用，目录被收口到这三件", async () => {

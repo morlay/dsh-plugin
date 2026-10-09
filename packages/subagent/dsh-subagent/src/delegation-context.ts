@@ -4,9 +4,9 @@
 // - **同名遮蔽**：同一 scope 里重复注册同名 context 会抛错（`NamedEntries.insert` 报
 //   `prompt context "subagent:delegation" is already registered in this scope`），而装配用的 scope 就是子代理自己
 //   （`assembleContextFor(agent)` → `scope: agent`），与上游那次注册同层；
-// - **fork `child-agent.ts`**：注册这条文本的两个调用方都在上游**未复制**的文件里——
-//   `continuation-activation.ts` import 同目录的 `./child-agent.ts`，一次性路径的 `subagent-in-process-driver`
-//   import 的是包名 `@deepseek-ai/dsh-subagent`——所以只改 fork 那份，真装配里读到的仍是上游英文。
+// - **fork `child-agent.ts`**：注册这条文本的调用方现在只剩本包已复制的 `manager.ts`（上游 0.2.1-alpha.2 把一次性
+//   driver 并进了它）——但 fork 要再复制一份 290 行、并改本包 manager 的接线，而且对外部 backend（`subagent-acp` /
+//   `subagent-dsh-sdk`）在别的进程里装配的子代理无效。
 //
 // 这里改的是**装配结果**：`SystemPrompt.assemble()` 先 merge 好 contexts、再进 `system-prompt/assemble` 瀑布，本包
 // 在瀑布里把该名字那条的文本换成中文。它在**该次**装配内生效（第一次装配就是中文），两条派发路径一起覆盖；父 agent

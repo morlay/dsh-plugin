@@ -10,24 +10,25 @@
    （子代理视角下 `send_message` 带内部标记 `Symbol.for('dsh.subagent.adjacentAgentSendMessageTool')`）。
 2. 子代理自己的**委派范围说明**（运行时上下文 `subagent:delegation`，上游英文原文见 `child-agent.ts` 的
    `SUBAGENT_DELEGATION_CONTEXT`）。它由 `applyChildComposition` 在**子代理自己的 agent 作用域**上注册，两种接管
-   手法都不通：同层重复注册同名 context 会抛错（`NamedEntries.insert`），而 fork `child-agent.ts` 不改变运行期
-   （注册它的调用方 `continuation-activation.ts` 与 `subagent-in-process-driver` 都在上游未复制的文件里）。
+   手法都不通：同层重复注册同名 context 会抛错（`NamedEntries.insert`），而 fork `child-agent.ts` 只影响本包
+   `manager.ts` 那条路径（外部 backend 的子代理在别的进程里装配）——改文本的瀑布替换一次覆盖本装配里所有子代理。
 
 **决定**
 
 沿用本仓库的薄壳 fork 形态（保留有意改过的文件，其余用相对 import 指向上游源码、构建期内联）：保留文件只留
-`continuation-messages.ts` / `continuation.ts` / `index.ts` 三份；装配**按官方行 id 复用**（`id: "subagent"` +
+`continuation-messages.ts` / `manager.ts` / `index.ts` 三份（0.2.1-alpha.2 前中间那份叫 `continuation.ts`，上游把它与
+`continuation-activation.ts` 并成了 `manager.ts`）；装配**按官方行 id 复用**（`id: "subagent"` +
 本包 `name`），理由与事实基线见 [ADR 接管官方行按 id 复用](./20260928-接管官方行按id复用而非换id.md)。
 
 两处文案各走一条实现面：
 
 - 回报指引：中文文案**默认对任意会话生效**（官方四个 shipped preset、还没绑 preset 的会话、不装 registry 的部署
   都在内）。名单走 `Config` 的装配面字段 `localizedReturnGuidancePresets`（`.hidden()`，不进设置页），**不配就是
-  不限**，配了才收窄成「只有名单里的 preset 用中文」，名单外走上游英文。判定在 `continuation.ts` 里读
-  `ctx.agentPresets` 的 `composedPreset(parent.ctx)`（`src/continuation.ts:210-211`）。
+  不限**，配了才收窄成「只有名单里的 preset 用中文」，名单外走上游英文。判定在本包 `manager.ts` 里读
+  `ctx.agentPresets` 的 `composedPreset(parent.ctx)`。
 - 委派范围说明：`subagent:delegation` 在 `system-prompt/assemble` 瀑布里替换文本（`src/delegation-context.ts`，由
   `index.ts` 的构造器挂上）。它改的是**装配结果**而不是注册面，所以在该次装配内生效（第一次装配就是中文），
-  continuable 与一次性两条派发路径一起覆盖。
+  本地与外部两条派发路径一起覆盖。
 
 **考虑过的选项**
 
@@ -45,9 +46,11 @@
 
 **后果**
 
-- **复制面由静态 import 链决定，不是自由选择**：`continuation-messages.ts`（改文案）被 `continuation.ts` 引用、后者
-  被 `index.ts` 引用，所以复制集是这三个文件（约 1375 行）。上游升级时这三个文件要与上游对照跟随，
-  [守护测试](../standards/how-to-verify.md) 盯着这件事。
+- **复制面由静态 import 链决定，不是自由选择**：`continuation-messages.ts`（改文案）被 `manager.ts` 引用、后者
+  被 `index.ts` 引用，所以复制集是这三个文件；0.2.1-alpha.2 的上游重构把中间那份从 552 行的 `continuation.ts` 换成
+  1475 行的 `manager.ts`（复制集合计约 2270 行）。上游升级时这三个文件要与上游对照跟随，
+  [守护测试](../standards/how-to-verify.md) 盯着这件事，跟随负担见
+  [债务 continuation-messages 两份实例与保留文件跟随](../debts/20260923-continuation-messages两份实例与保留文件跟随.md)。
 - **偏离面是登记式的**：`src/__tests__/upstream-wiring.spec.ts` 的 `DELTAS` 表逐条登记（新增块、改过的行、装配面
   字段），片段没命中就红——加偏离必须同时登记。
 - **两处结构性偏离**（`index.ts` 不复述 cordis 合并接口、构建期降级标准装饰器）各自有理由，见

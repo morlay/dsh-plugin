@@ -13,6 +13,8 @@ import {
   MockAdapter,
   textResponse,
 } from "../../../../../vendor/deepseek-harness/packages/core/agent-loop/tests/mock-adapter.ts";
+// 上游 subagent 服务 `static inject = ['workingDirectory']`：装配里没这个服务就不挂（夹具是上游测试用的那一份）。
+import { mountWorkingDirectoryFixture } from "../../../../../vendor/deepseek-harness/packages/subagent/subagent/tests/working-directory-fixture.ts";
 import SubagentRuntime from "../index.ts";
 
 const contexts = new Set<Context>();
@@ -34,6 +36,7 @@ async function boot(
   const ctx = new Context();
   contexts.add(ctx);
   await mountAgentLoopTestDependencies(ctx);
+  await mountWorkingDirectoryFixture(ctx);
   const root = await mkdtemp(join(tmpdir(), "dsh-subagent-guidance-"));
   roots.push(root);
   await ctx.plugin(JsonlSessionPersistence, { root });
@@ -73,11 +76,13 @@ function visibleTexts(adapter: MockAdapter): string[] {
 // 一次 continuable 派发之后，模型侧看到的所有文本。
 async function textsAfterDelegation(booted: Awaited<ReturnType<typeof boot>>): Promise<string[]> {
   const { ctx, parent, adapter } = booted;
-  const started = await ctx.subagents.startContinuable({
+  const started = await ctx.subagents.startActivation({
     provider: "spawn",
     label: "写简报",
     request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
     signal: new AbortController().signal,
+    // 回报指引只在"通知父智能体"的派发上加：`delivery: 'caller'` 那条不给指引（上游新版语义）。
+    delivery: "parent",
   });
   await vi.waitFor(() => {
     expect(visibleTexts(adapter).length).toBeGreaterThan(0);

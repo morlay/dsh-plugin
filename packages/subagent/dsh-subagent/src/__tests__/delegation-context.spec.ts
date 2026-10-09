@@ -16,6 +16,8 @@ import {
   MockAdapter,
   textResponse,
 } from "../../../../../vendor/deepseek-harness/packages/core/agent-loop/tests/mock-adapter.ts";
+// 上游 subagent 服务 `static inject = ['workingDirectory']`：装配里没这个服务就不挂（夹具是上游测试用的那一份）。
+import { mountWorkingDirectoryFixture } from "../../../../../vendor/deepseek-harness/packages/subagent/subagent/tests/working-directory-fixture.ts";
 import { DELEGATION_CONTEXT_NAME } from "../delegation-context.ts";
 import SubagentRuntime from "../index.ts";
 
@@ -36,6 +38,7 @@ async function boot() {
   const ctx = new Context();
   contexts.add(ctx);
   await mountAgentLoopTestDependencies(ctx);
+  await mountWorkingDirectoryFixture(ctx);
   const root = await mkdtemp(join(tmpdir(), "dsh-delegation-"));
   roots.push(root);
   await ctx.plugin(JsonlSessionPersistence, { root });
@@ -60,11 +63,12 @@ async function delegationTextOf(ctx: Context, child: Agent): Promise<string | un
 describe("子代理的委派范围说明", () => {
   it("continuable 子代理：真装配里是中文那条，没有上游英文原文", async () => {
     const { ctx, parent } = await boot();
-    const started = await ctx.subagents.startContinuable({
+    const started = await ctx.subagents.startActivation({
       provider: "spawn",
       label: "写简报",
       request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
       signal: new AbortController().signal,
+      delivery: "parent",
     });
     await vi.waitFor(() => {
       expect(ctx.agents.get(started.childId)).toBeDefined();
@@ -80,22 +84,23 @@ describe("子代理的委派范围说明", () => {
     expect(await delegationTextOf(ctx, child)).toBe(text);
   });
 
-  it("一次性子代理（`ctx.subagents.start`）也走同一条替换", async () => {
+  it("一次性派发（`delivery: 'caller'`）也走同一条替换", async () => {
     const { ctx, parent } = await boot();
-    const run = await ctx.subagents.start("spawn", {
+    const activation = await ctx.subagents.startActivation({
+      provider: "spawn",
       label: "一次性",
-      prompt: [{ type: "text", text: "干活" }],
-      parent,
+      request: { prompt: [{ type: "text", text: "干活" }], parent },
       signal: new AbortController().signal,
+      delivery: "caller",
     });
-    const child = run.localAgent;
+    const child = ctx.agents.get(activation.childId);
     expect(child).toBeDefined();
     if (child === undefined) return;
 
     const text = await delegationTextOf(ctx, child);
     expect(text).toContain(CHINESE_SENTENCE);
     expect(text).not.toContain(UPSTREAM_SENTENCE);
-    await run.dispose();
+    await activation.dispose();
   });
 
   it("父 agent 的装配不出现这条（替换只认子代理）", async () => {

@@ -7,7 +7,7 @@ const FORK = join(process.cwd(), "packages/subagent/dsh-subagent/src");
 const VENDOR_PREFIX = "../../../../vendor/deepseek-harness/packages/subagent/subagent/src/";
 const CORDIS_DECLARATION = "declare module '@deepseek-ai/cordis' {";
 const RETURN_GUIDANCE = "export function withContinuableReturnGuidance(";
-const RETAINED = ["index.ts", "continuation.ts", "continuation-messages.ts"] as const;
+const RETAINED = ["index.ts", "manager.ts", "continuation-messages.ts"] as const;
 
 type Retained = (typeof RETAINED)[number];
 
@@ -54,31 +54,24 @@ type Delta =
   | { readonly drop: string; readonly until?: string };
 
 const DELTAS: Record<Retained, readonly Delta[]> = {
-  "continuation.ts": [
+  "manager.ts": [
     {
       // 判定函数的接线：多一条上游英文版的 import，并多引一个判定函数。
       from: [
-        "import {",
-        "  createAgentMessage,",
-        "  localizedReturnGuidance,",
-        "  withContinuableReturnGuidance,",
-        "} from './continuation-messages.ts'",
+        "import { createAgentMessage, localizedReturnGuidance, withContinuableReturnGuidance, createSettlementMessage } from './continuation-messages.ts'",
         "// 会话不在本部署名单里时用上游那一份（英文）：文案跟着 preset 走，不是整进程只有一份。",
         "import { withContinuableReturnGuidance as upstreamWithContinuableReturnGuidance } from './continuation-messages.ts'",
         "",
       ].join("\n"),
       to: [
-        "import {",
-        "  createAgentMessage,",
-        "  withContinuableReturnGuidance,",
-        "} from './continuation-messages.ts'",
+        "import { createAgentMessage, withContinuableReturnGuidance, createSettlementMessage } from './continuation-messages.ts'",
         "",
       ].join("\n"),
     },
     {
       // 管理器多收一个读取器：本行配置里的 preset 名单。
-      from: "    maxActiveSubagents: () => number,\n    private readonly localizedGuidancePresets: () => readonly string[],\n",
-      to: "    maxActiveSubagents: () => number,\n",
+      from: "    private readonly maxActiveSubagents: () => number,\n    private readonly localizedGuidancePresets: () => readonly string[],\n",
+      to: "    private readonly maxActiveSubagents: () => number,\n",
     },
     {
       // 调用点从"永远是本包的中文"改成"按会话选"。
@@ -130,11 +123,11 @@ const DELTAS: Record<Retained, readonly Delta[]> = {
     {
       // 中文委派说明的接线：多一个本包文件的 import（见 `./delegation-context.ts`）。
       from: [
-        "import SubagentContinuationManager from './continuation.ts'",
+        "import SubagentManager from './manager.ts'",
         "import { installDelegationContext } from './delegation-context.ts'",
         "",
       ].join("\n"),
-      to: "import SubagentContinuationManager from './continuation.ts'\n",
+      to: "import SubagentManager from './manager.ts'\n",
     },
     {
       // 同上，构造器里那一行挂载调用。
@@ -189,7 +182,7 @@ function withoutTypeBridge(lines: string[]): string[] {
 // 上游侧要与本地比对的形状：本包不复述的声明块，以及本包整段替换过的实现（本地那份不一样）。
 const UPSTREAM_BLOCKS: Record<Retained, readonly string[]> = {
   "index.ts": [CORDIS_DECLARATION],
-  "continuation.ts": [],
+  "manager.ts": [],
   "continuation-messages.ts": [RETURN_GUIDANCE],
 };
 
@@ -218,8 +211,8 @@ describe("薄壳 fork 的接线", () => {
     expect(restored("continuation-messages.ts")).toBe(upstreamOf("continuation-messages.ts"));
   });
 
-  it("continuation.ts 除接线与按会话选文案的偏离外与上游逐行一致", () => {
-    expect(restored("continuation.ts")).toBe(upstreamOf("continuation.ts"));
+  it("manager.ts 除接线与按会话选文案的偏离外与上游逐行一致", () => {
+    expect(restored("manager.ts")).toBe(upstreamOf("manager.ts"));
   });
 
   it("index.ts 除接线、类型桥与装配面配置外与上游逐行一致", () => {

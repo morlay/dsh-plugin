@@ -15,7 +15,6 @@
               prefix: |-
                 你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。
                 全程用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考不要陷入重复循环，一旦循环立即退出；思考聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。
-              suffix: 你的工作目录在 `{{cwd}}`
             denyTools:
               - load_workspace_dependencies
             denySkills:

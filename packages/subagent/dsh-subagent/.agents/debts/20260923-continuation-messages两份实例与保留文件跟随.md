@@ -5,14 +5,17 @@
 
 **现象**
 
-1. **`continuation-messages.ts` 在运行期有两份实例**：本包那份（中文回报指引）与 vendor 那份（英文原文）。上游
-   `vendor/deepseek-harness/packages/subagent/subagent/src/continuation-activation.ts`（902 行，未被复制）仍 import
-   同目录的 `./continuation-messages.ts`，用于**结算消息**（`createSettlementMessage`，文案未改）。
-2. **保留文件跟随靠人读、靠测试兜底**：三个保留文件里，`continuation.ts` / `index.ts` 只允许接线不同，
+1. **`continuation-messages.ts` 在运行期有两份实例**：本包那份（中文回报指引；结算消息与上游同形）由本包复制的
+   `manager.ts` 使用；vendor 那份随上游 `@deepseek-ai/dsh-subagent` 一起加载——providers（`subagent-spawn-in-process`、
+   `subagent-fork-in-process`、`subagent-acp`、`subagent-dsh-sdk`）都值导入该包，模块图里就带上了上游的
+   `manager.ts` 与它引的那份 `continuation-messages.ts`。上游 0.2.1-alpha.2 之前，vendor 那份的消费者是未复制的
+   `continuation-activation.ts`（902 行）；那一版把它并进 `manager.ts`，而 `manager.ts` 已被本包复制。
+2. **保留文件跟随靠人读、靠测试兜底**：三个保留文件里，`manager.ts` / `index.ts` 只允许接线不同，
    `continuation-messages.ts` 只允许 `withContinuableReturnGuidance` 内不同——这些由
    `src/__tests__/upstream-wiring.spec.ts` 逐行守护（上游改动会红），但**它不判断语义**：上游改了行为而行级对照仍
    相等时，测试不会提醒。跟随方式：`git -C vendor/deepseek-harness diff` 看这三个文件，把改动搬进保留文件（接线照
-   归一规则改写，即指向上游源码的相对路径），跑测试确认偏离集合没变大。
+   归一规则改写，即指向上游源码的相对路径），跑测试确认偏离集合没变大。0.2.1-alpha.2 把中间那份从 552 行的
+   `continuation.ts` 换成 1475 行的 `manager.ts`，跟随负担随之变大。
 3. **保留文件不做格式化**：`.oxfmtrc.json` 的 `ignorePatterns` 忽略 `packages/subagent/dsh-subagent/src/*.ts`——
    格式化会引入成千行无关偏离，行级对照失去意义；改这三个文件时手工保持上游的引号与分号风格。
 
@@ -31,10 +34,11 @@
 
 **销账条件**
 
-Done when：本包复制 `continuation-activation.ts`（多 902 行同步负担）或上游把文案抽成可配置面，两份实例随之消失；
-行级守护的语义缺口由上游测试或契约替代。
+Done when：本包不再复制 `manager.ts`（上游把文案抽成可配置面，或把结算消息与回报指引拆到本包能单独接管的模块），
+两份实例随之消失；行级守护的语义缺口由上游测试或契约替代。
 
 **不修的理由**
 
-复制 `continuation-activation.ts` 只是把 902 行的同步负担挪进本包，收益是消掉一处看漏风险；在那之前，行级对照 +
-上游 diff 人工过一遍是成本更低的组合。
+不为了消掉两份实例去 fork 上游的 `activation.ts` 或整包复制——那是把同步负担搬进本包；行级对照 + 上游 diff 人工过
+一遍，仍是成本更低的组合。`manager.ts` 的复制面已经由 0.2.1-alpha.2 的上游重构推高到 1475 行，但放弃中文回报指引或
+改走本地 patch 的代价更高（见 [ADR 薄壳fork接管subagent行只改文案](../adrs/20260923-薄壳fork接管subagent行只改文案.md)）。
