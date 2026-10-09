@@ -1,5 +1,9 @@
 # @morlay/better-session
 
+[![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)
+[![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)
+[![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)
+
 profile 聚合 bundle：一次性装配 `@morlay/session-branch`、`@morlay/session-rdb`、
 `@morlay/ui-conversation-message-actions`、`@morlay/ui-conversation-manager`、`@morlay/dsh-reference` 到 DeepSeek
 Harness 的 profile，提供**就地编辑 / 重试 / 撤回 / 分支**（rewind / retry / recall / fork）闭环。对话外壳走**官方

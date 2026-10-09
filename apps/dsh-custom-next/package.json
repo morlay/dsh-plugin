@@ -1,6 +1,6 @@
 {
   "name": "dsh-custom-next",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "files": [
     "icon.svg",
@@ -30,7 +30,8 @@
         "@morlay/ollama-provider-profile",
         "@morlay/sandbox-profile",
         "@morlay/session-mode-profile",
-        "@morlay/mydsh-profile"
+        "@morlay/mydsh-profile",
+        "@deepseek-ai/dsh-experimental-agent-team-profile"
       ]
     },
     "dev": {

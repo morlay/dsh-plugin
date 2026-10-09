@@ -1,5 +1,9 @@
 # @morlay/session-mode-profile
 
+[![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)
+[![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)
+[![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)
+
 会话模式与注入面：**一次装齐 host 平面那几行**——会话模式行（各模式的会话级扩展定义，按会话收口也由它内部持有）、
 注入通道、subagent 服务接管行、工具说明（汉化 + 用法分组）。
 

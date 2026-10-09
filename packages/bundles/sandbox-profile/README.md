@@ -1,5 +1,9 @@
 # @morlay/sandbox-profile
 
+[![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)
+[![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)
+[![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)
+
 可配置沙箱与审批的运行时策略面：禁官方 `sandbox` / `fs-sandbox` 两行、插入替换行，并在**同一个 bundle 里**给出访问
 规则的值。替换行同时接管模型看到的运行时快照（`sandbox:policy` / `approval:policy`）。
 

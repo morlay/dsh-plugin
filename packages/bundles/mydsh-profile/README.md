@@ -1,5 +1,9 @@
 # @morlay/mydsh-profile
 
+[![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)
+[![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)
+[![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)
+
 我的 dsh 个人配置项：**不插行、不停行**——只按行 id 覆盖 `config`（行由官方 base / web-app 提供）。
 
 | 配什么                 | 值                                                       |

@@ -5,7 +5,8 @@
   "keywords": [
     "bundle-entry",
     "dsh",
-    "dsh-bundle"
+    "dsh-bundle",
+    "dsh-plugin"
   ],
   "license": "MIT",
   "repository": {

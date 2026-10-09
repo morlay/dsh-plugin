@@ -1,5 +1,9 @@
 # @morlay/ollama-provider-profile
 
+[![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile)
+[![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile)
+[![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile)
+
 Ollama 一家：llm route（`llm-pi-ai` 的 ollama provider）、搜索后端的注册行、`web` 行的 provider 选择与 key 引用。
 
 | 装什么                                                             | 数据从哪来                                                                          |
