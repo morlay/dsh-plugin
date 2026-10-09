@@ -201,7 +201,8 @@ function Row({
       </>
     ) : line.kind === "open" ? (
       <>
-        <button className={css.lineFold}
+        <button
+          className={css.lineFold}
           data-role="fold"
           type="button"
           aria-expanded={!line.collapsed}
@@ -258,7 +259,8 @@ function Row({
       />
     );
   return (
-    <div className={css.lineRow}
+    <div
+      className={css.lineRow}
       data-line={line.kind}
       data-field-path={line.path.join(".")}
       data-selected={selected === key ? "true" : undefined}
@@ -272,7 +274,8 @@ function Row({
           : undefined
       }
     >
-      <span className={css.lineNumber}
+      <span
+        className={css.lineNumber}
         data-role="number"
         onClick={() => {
           onSelect(line.path);
@@ -362,7 +365,8 @@ function FieldLine({
   return (
     <>
       <span className={css.lineFoldSpacer} data-role="fold" />
-      <span className={css.lineKey}
+      <span
+        className={css.lineKey}
         data-role="key"
         data-index={member?.index === undefined ? undefined : "true"}
         title={member?.key ?? line.node.key}
@@ -417,7 +421,8 @@ function FieldLine({
       ) : null}
       {/* 编辑态只留输入框：原值不再在它旁边画一遍。 */}
       {isEditing || line.variantsStandIn ? null : (
-        <span className={css.valueSlot}
+        <span
+          className={css.valueSlot}
           data-role="value"
           onClick={() => {
             if (editable) onEdit(key);
@@ -435,7 +440,11 @@ function FieldLine({
       />
       {isEditing ? (
         // 编辑态：确认收起这一格的编辑、取消把值退回去——都在输入框旁边，不用记快捷键。
-        <span className={classes(css.lineActions, css.hoverActions)} data-role="actions" data-editing="true">
+        <span
+          className={classes(css.lineActions, css.hoverActions)}
+          data-role="actions"
+          data-editing="true"
+        >
           <button
             type="button"
             aria-label={t("confirmEdit")}
@@ -549,7 +558,8 @@ function VariantSelect({
         setOpen(false);
       }}
       anchor={
-        <button className={css.valueTrigger}
+        <button
+          className={css.valueTrigger}
           type="button"
           data-role="variant"
           disabled={disabled}
@@ -558,7 +568,9 @@ function VariantSelect({
             setOpen(true);
           }}
         >
-          <span className={css.lineValue} data-tone="empty">{current?.label ?? ""}</span>
+          <span className={css.lineValue} data-tone="empty">
+            {current?.label ?? ""}
+          </span>
           <IconChevronDownOutlineRegular size={ICON_SIZE} />
         </button>
       }
@@ -585,7 +597,12 @@ function LinePrefix({
   const indexed = member !== undefined && member.index !== undefined;
   return (
     <>
-      <span className={css.lineKey} data-role="key" data-index={indexed ? "true" : undefined} title={key}>
+      <span
+        className={css.lineKey}
+        data-role="key"
+        data-index={indexed ? "true" : undefined}
+        title={key}
+      >
         {key}
       </span>
       <span className={css.lineToken}>{indexed ? "  " : ": "}</span>

@@ -12,7 +12,11 @@ import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 // Type-only：`plugins.bundle.config` 的槽位声明（bundle 详情页的配置座位）。
 import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
 import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
-import { CATALOG_NS, SESSION_MODE_CATALOG_REMOTE, type SessionModeCatalogRemote } from "../catalog-remote.ts";
+import {
+  CATALOG_NS,
+  SESSION_MODE_CATALOG_REMOTE,
+  type SessionModeCatalogRemote,
+} from "../catalog-remote.ts";
 import { POLICY_NAMES } from "../shared.ts";
 import {
   BUNDLE_CONFIG_KEY,
@@ -24,11 +28,7 @@ import {
 } from "./bundle-config.ts";
 import { BundleConfigPage } from "./BundleConfigPage.tsx";
 import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-locales.ts";
-import {
-  loadLlmProviders,
-  remoteNamespace,
-  type ProviderModels,
-} from "./llm-directory.ts";
+import { loadLlmProviders, remoteNamespace, type ProviderModels } from "./llm-directory.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
@@ -58,8 +58,7 @@ const DYNAMIC = "*";
 // 部署里的 agent preset 清单（`remote.agentPresets.list()`）：本包只用它的 id 与显示名做候选。
 interface PresetRosterReader {
   list: () => Promise<
-    | { ok: true; value: { presets: readonly { id: string; name?: string }[] } }
-    | { ok: false }
+    { ok: true; value: { presets: readonly { id: string; name?: string }[] } } | { ok: false }
   >;
 }
 
@@ -161,7 +160,6 @@ export function apply(ctx: Context): void {
       };
     }, "session-mode: model candidates"),
   );
-
 
   // 模式"允许挂哪些 preset"的候选：部署里注册的 agent preset（`remote.agentPresets.list()`），登记成具名源
   // `agent-presets`——schema 上 `presetsOnly` 声明 `role('select', { source })` 认领它，页面不必知道这些 preset

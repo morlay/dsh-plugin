@@ -108,11 +108,7 @@ describe("标签输入", () => {
   });
 
   it("聚焦即整体下拉：候选只列还没加进去的那些，输入跟着过滤", () => {
-    const options = [
-      { value: "read" },
-      { value: "bash" },
-      { value: "web_search" },
-    ];
+    const options = [{ value: "read" }, { value: "bash" }, { value: "web_search" }];
     const { rerender } = render(
       <TagInput
         value={["read"]}
@@ -335,9 +331,9 @@ describe("模型路由清单", () => {
     );
 
     expect(
-      screen.getByRole("radio", { name: "DeepSeek V4.1 Flash ollama/flash" }).getAttribute(
-        "aria-checked",
-      ),
+      screen
+        .getByRole("radio", { name: "DeepSeek V4.1 Flash ollama/flash" })
+        .getAttribute("aria-checked"),
     ).toBe("true");
   });
 

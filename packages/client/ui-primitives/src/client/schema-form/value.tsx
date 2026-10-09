@@ -56,7 +56,10 @@ export function InlineValue({ owner }: { owner: SchemaFieldOwnerProps }): ReactN
   const text = tokenText(owner.value);
   return (
     <TruncatedTooltip label={text}>
-      <span className={css.lineValue} data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}>
+      <span
+        className={css.lineValue}
+        data-tone={owner.node.readOnly === null ? tokenTone(owner.value) : "empty"}
+      >
         {text}
       </span>
     </TruncatedTooltip>
@@ -102,7 +105,8 @@ function OptionSelect({
         setOpen(false);
       }}
       anchor={
-        <button className={css.valueTrigger}
+        <button
+          className={css.valueTrigger}
           type="button"
           disabled={owner.disabled}
           aria-label={owner.label}
@@ -110,7 +114,8 @@ function OptionSelect({
             setOpen(true);
           }}
         >
-          <span className={css.lineValue}
+          <span
+            className={css.lineValue}
             data-tone={current === undefined ? tokenTone(owner.value) : tokenTone(current.value)}
           >
             {label}

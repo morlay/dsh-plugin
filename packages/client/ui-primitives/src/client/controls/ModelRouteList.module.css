@@ -51,7 +51,7 @@
   outline-offset: -2px;
 }
 
-.item[aria-disabled='true'] {
+.item[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.4;
 }

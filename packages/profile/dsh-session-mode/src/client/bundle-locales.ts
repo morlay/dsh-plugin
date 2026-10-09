@@ -64,7 +64,8 @@ export const bundleZh = {
   "hint.instructions": "每步都把工作区指令（AGENTS.md 之类）发给模型；关掉就不发。",
   "hint.skills": "每步都把技能目录发给模型；默认按这个模式的工具名单自动判断。",
   "hint.runtimeContext": "每步都把沙箱与审批策略发给模型。",
-  "hint.defaultModel": "开 = 这个模式自带一个默认模型（会话还没选过模型时用它）；关 = 跟随全局模型。",
+  "hint.defaultModel":
+    "开 = 这个模式自带一个默认模型（会话还没选过模型时用它）；关 = 跟随全局模型。",
   "hint.modelRoute": "从部署里已设置的模型里挑一条：服务商与模型是一对，选它等于两个一起定。",
   "hint.reasoningEffort": "思考档位；不填用服务商默认。",
   "model.loading": "正在读部署里已设置的模型…",
@@ -115,7 +116,8 @@ export const bundleEn: Record<keyof typeof bundleZh, string> = {
   "add.confirm": "Add",
   "add.cancel": "Cancel",
   "add.close": "Close",
-  "add.hint": "Give the new mode an id (it also shows in pickers and lists; rename it after adding).",
+  "add.hint":
+    "Give the new mode an id (it also shows in pickers and lists; rename it after adding).",
   removeNamed: "Delete mode {name}",
   protected: "Built-in mode: no delete",
   untitled: "(untitled)",

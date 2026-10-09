@@ -284,7 +284,7 @@ const modeSchema: z<SessionMode> = z.object({
     ),
   // 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
   // schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
-  defaultModel: modelSchema    // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
+  defaultModel: modelSchema // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
     // 凭空多出一行；给了 null 反而让它保持缺失（页面按非必填处理，从候选加成）。
     // 类型上放行一次：`null` 在这里只是"没有这个键"的写法，schema 的输入形状不接受它。
     .default(null as unknown as SessionModeModel)

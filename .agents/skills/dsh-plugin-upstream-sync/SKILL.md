@@ -134,7 +134,7 @@ tsx <skill 路径>/scripts/build.ts   # 3. 干净构建
 于是上游「新增导出」这类改动在本机表现为 `MISSING_EXPORT`，干净 clone 的 CI 却正常。
 
 > 仓库可封装为命令（如 just：`vendor sync` / `vendor patch` / `vendor
-build`），直接 `tsx` 调用脚本，语义与流程一致。
+> build`），直接 `tsx` 调用脚本，语义与流程一致。
 
 ## 升级
 

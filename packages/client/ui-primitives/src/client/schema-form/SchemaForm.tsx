@@ -26,7 +26,12 @@ export function SchemaForm(props: SchemaFormComponentProps): ReactNode {
     save: t("save"),
     saving: t("saving"),
   };
-  if (!state.configured) return <p className={css.hint} role="status">{t("noSchema")}</p>;
+  if (!state.configured)
+    return (
+      <p className={css.hint} role="status">
+        {t("noSchema")}
+      </p>
+    );
   return (
     <SettingsForm
       labels={labels}

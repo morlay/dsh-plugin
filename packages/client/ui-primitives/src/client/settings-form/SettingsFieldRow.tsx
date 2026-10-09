@@ -6,8 +6,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { classes } from "../controls/classes.ts";
 import css from "./SettingsFieldRow.module.css";
 
-export interface SettingsFieldRowProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "color"> {
+export interface SettingsFieldRowProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children" | "color"
+> {
   // 字段名。
   label: string;
   // 字段下面那句说明（"这一项到底管什么"）。

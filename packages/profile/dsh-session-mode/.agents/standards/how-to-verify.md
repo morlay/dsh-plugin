@@ -16,7 +16,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   子代理那一行**没有 `config`**（中文回报指引不限 preset）；三个模式都不写 `presetsOnly`（`noop` 除名称、说明与角色外一个字段
   都不写），`chat` 写着
   `allowTools` 收窄到三件（`coding` 留空 = 不设收窄），`coding` 收窄官方 Office 面（`denyTools:
-[load_workspace_dependencies]` + `denySkills: [office-docx, office-pptx, office-xlsx]`），`coding` 写着
+  [load_workspace_dependencies]` + `denySkills: [office-docx, office-pptx, office-xlsx]`），`coding` 写着
   `denyPolicies: [fs/edit-intent]`（`chat` 一份 policy 名单都没有）。
   本包的装配期校验（默认模式在清单里且是 `main` 角色、`role` 非空、`presetsOnly` 允许留空与共享、退役的 `preset`
   还配着值就拒绝装载、`defaultModel` 的 provider 与 model 要给全、policy 名字必须在 `POLICY_NAMES` 里）在
@@ -57,14 +57,14 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
     默认模式选项、六组字段、`presetsOnly` 是标签输入且候选来自 `agent-presets` 具名源）、动作（新增模式连名称一起给、受保护的模式删不动、
     一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、默认模型只给一半 → 保存被挡且页面上有对应消息）。
   - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、添加入口是「模式」标题右边的
-    + 图标按钮（打开弹窗表单、底部不再有添加行）、编辑带着真实路径上报、
-    名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是两个 `Button`（`aria-pressed`，点一下写回去掉该项的数
-    组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
-    开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、删除要过确认弹窗（取消不删、确认才删，确认按钮挂错误色
-    class）、默认模型那一组是「`Switch` + 路由清单」（开关关时不画清单）、添加与保存各走一次动作。**控件本身的几何与
-    输入输出**（标签输入的回车 / 粘贴 / 移除 / 候选、图标按钮的无障碍名与方形几何、选择器的当前值、模型路由清单的分组与
-    单选、字段行的两种排法与徽标）在
-    [`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
+    - 图标按钮（打开弹窗表单、底部不再有添加行）、编辑带着真实路径上报、
+      名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是两个 `Button`（`aria-pressed`，点一下写回去掉该项的数
+      组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
+      开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、删除要过确认弹窗（取消不删、确认才删，确认按钮挂错误色
+      class）、默认模型那一组是「`Switch` + 路由清单」（开关关时不画清单）、添加与保存各走一次动作。**控件本身的几何与
+      输入输出**（标签输入的回车 / 粘贴 / 移除 / 候选、图标按钮的无障碍名与方形几何、选择器的当前值、模型路由清单的分组与
+      单选、字段行的两种排法与徽标）在
+      [`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
 - `src/__tests__/preset-plane.spec.ts`：**模式不限 preset（名单留空）、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面
@@ -104,7 +104,7 @@ pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
   config（`coding` / `chat`，默认 `coding`）；`GET /session-mode` 返回 200 且清单相同；`POST /session-mode` 用
   一个不存在的会话打一次，必须拿回我们自己那句「未知的会话」——那条路会读 `ctx.sessions` / `ctx.agents`，而
   cordis 的**属性访问**要求 fiber 在 `inject` 里点过名，漏一个就成了真回归（`cannot get property
-"sessions" without inject`：只跑 GET 与包内测试都看不见——包内测试从 root ctx 调服务，绕开了 inject
+  "sessions" without inject`：只跑 GET 与包内测试都看不见——包内测试从 root ctx 调服务，绕开了 inject
   白名单）。
 - **preset 平面不进探针**：整条行清单能不能装上、注入面归哪一侧，由包内的真装配用例承担——
   [`preset-plane.spec.ts`](../../src/__tests__/preset-plane.spec.ts)（真 `Loader` + 真 registry + 真上游行：新会话挂

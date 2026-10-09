@@ -27,40 +27,40 @@
 }
 
 /* 选中一行（点行号）：整行留一层底色，便于对着行号找内容。 */
-.lineRow[data-selected='true'] {
+.lineRow[data-selected="true"] {
   background: var(--dsw-alias-bg-layer-3);
 }
 
 /* 本页改过还没保存：左边一道强调色，和「已经存进用户层」的浅灰区分开。 */
-.lineRow[data-dirty='true'] {
+.lineRow[data-dirty="true"] {
   box-shadow: inset 2px 0 0 var(--dsw-alias-brand-primary);
 }
 
-.lineRow[data-overridden='true'] {
+.lineRow[data-overridden="true"] {
   box-shadow: inset 2px 0 0 var(--dsw-elevation-stroke-color);
 }
 
 /* 改过的字段名用强调色（存没存看左边那道条）；出错时红优先。 */
-.lineRow[data-dirty='true'] [data-role='key'] {
+.lineRow[data-dirty="true"] [data-role="key"] {
   color: var(--dsw-alias-brand-primary);
 }
 
-.lineRow[data-overridden='true'] [data-role='key'] {
+.lineRow[data-overridden="true"] [data-role="key"] {
   color: var(--dsw-alias-brand-primary);
 }
 
 /* 有问题的行：半透明红底 + 左侧一道实红条，字段名与注释位那句都是红字。 */
-.lineRow[data-invalid='true'] {
+.lineRow[data-invalid="true"] {
   background: color-mix(in srgb, var(--dsw-alias-state-error-secondary) 12%, transparent);
   box-shadow: inset 2px 0 0 var(--dsw-alias-state-error-primary);
 }
 
-.lineRow[data-invalid='true'] [data-role='key'] {
+.lineRow[data-invalid="true"] [data-role="key"] {
   color: var(--dsw-alias-state-error-primary);
 }
 
 /* 行内的行为按钮（撤回 / 恢复默认 / 复制 / 移除）：平时透明，悬停这一行才显形。 */
-.lineRow:hover [data-role='actions'] {
+.lineRow:hover [data-role="actions"] {
   opacity: 1;
 }
 
@@ -116,7 +116,7 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.lineKey[data-index='true'] {
+.lineKey[data-index="true"] {
   color: var(--dsw-alias-label-caption);
 }
 
@@ -138,15 +138,15 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
-.lineValue[data-tone='number'] {
+.lineValue[data-tone="number"] {
   color: var(--dsw-alias-state-warn-primary);
 }
 
-.lineValue[data-tone='boolean'] {
+.lineValue[data-tone="boolean"] {
   color: var(--dsw-alias-state-success-primary);
 }
 
-.lineValue[data-tone='empty'] {
+.lineValue[data-tone="empty"] {
   color: var(--dsw-alias-label-caption);
 }
 
@@ -296,18 +296,18 @@
 
 /* 编辑态的两个按钮常显，而且**要有底色与描边**：行底色上只有淡色图标是看不见的，
    所以这里给实体按钮（theme 的描边 + 一层底），确认用成功档、取消用中性档。 */
-.hoverActions[data-editing='true'] {
+.hoverActions[data-editing="true"] {
   opacity: 1;
   gap: 6px;
 }
 
-.hoverActions[data-editing='true'] > button {
+.hoverActions[data-editing="true"] > button {
   box-shadow: 0 0 0 0.5px var(--dsw-elevation-stroke-color);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
 
-.hoverActions[data-editing='true'] > button:first-of-type {
+.hoverActions[data-editing="true"] > button:first-of-type {
   color: var(--dsw-alias-state-success-primary);
 }
 
@@ -322,7 +322,7 @@
   margin-left: 6px;
 }
 
-.addWrap[data-invalid='true'] input {
+.addWrap[data-invalid="true"] input {
   border-color: var(--dsw-alias-state-error-primary);
 }
 

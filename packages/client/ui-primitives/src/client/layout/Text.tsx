@@ -4,7 +4,14 @@
 import type { ElementType, HTMLAttributes, ReactNode } from "react";
 import { classes } from "../controls/classes.ts";
 import css from "./layout.module.css";
-import { sizeClass, toneClass, weightClass, type TextSize, type TextTone, type TextWeight } from "./scales.ts";
+import {
+  sizeClass,
+  toneClass,
+  weightClass,
+  type TextSize,
+  type TextTone,
+  type TextWeight,
+} from "./scales.ts";
 
 export interface TextProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "color"> {
   // 渲染成哪个元素（标题用 `h4`、说明用 `p`、行内摘要用 `span`）。

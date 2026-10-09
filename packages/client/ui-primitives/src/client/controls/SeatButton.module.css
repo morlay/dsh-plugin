@@ -19,7 +19,7 @@
 }
 
 .seat:not(:disabled):hover,
-.seat[aria-expanded='true'],
+.seat[aria-expanded="true"],
 .expanded {
   background: var(--dsw-alias-interactive-bg-hover);
 }

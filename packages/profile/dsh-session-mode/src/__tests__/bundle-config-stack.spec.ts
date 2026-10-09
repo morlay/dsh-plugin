@@ -148,7 +148,8 @@ describe("bundle 配置页：提示面经 cordis 服务拿到", () => {
   });
 });
 
-describe("bundle 配置页：真 settings 栈下的视图到达", () => {  it("控制器建起来时视图还没到：作答之后读数自己跟上（不用人工重建）", async () => {
+describe("bundle 配置页：真 settings 栈下的视图到达", () => {
+  it("控制器建起来时视图还没到：作答之后读数自己跟上（不用人工重建）", async () => {
     const stack = bench();
     const { face } = stack.faceOf();
 

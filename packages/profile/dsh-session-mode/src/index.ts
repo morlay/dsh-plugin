@@ -297,7 +297,10 @@ export class SessionModes extends Service {
 
   // 把当前挂着的 preset 落进模式的白名单：已经在名单里就返回 `undefined`（不换）；不在里面（或读不到当前那份）
   // 就返回名单的**第一个**（`undefined` = 名单为空 = 不限制，什么都不换）。
-  private presetTarget(allowed: readonly string[], current: string | undefined): string | undefined {
+  private presetTarget(
+    allowed: readonly string[],
+    current: string | undefined,
+  ): string | undefined {
     if (allowed.length === 0) return undefined;
     // 当前那份在名单里：保持不动（用户自己选的 preset 落在许可范围内，模式不去覆盖它）。
     if (current !== undefined && allowed.includes(current)) return undefined;

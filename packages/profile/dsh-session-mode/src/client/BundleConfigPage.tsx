@@ -137,7 +137,9 @@ export function BundleConfigPage(props: BundleConfigPageProps): ReactNode {
             label={t("default.label")}
             hint={t("default.hint")}
             layout="inline"
-            {...(state.defaultMode.invalid === undefined ? {} : { invalid: state.defaultMode.invalid })}
+            {...(state.defaultMode.invalid === undefined
+              ? {}
+              : { invalid: state.defaultMode.invalid })}
             data-field="default"
             data-control="choice"
           >
@@ -308,12 +310,7 @@ function ModeCard({
 }): ReactNode {
   const hasModel = mode.model !== undefined;
   return (
-    <Stack
-      boxed
-      pad="card"
-      data-mode={mode.id}
-      data-deletable={mode.deletable ? "true" : "false"}
-    >
+    <Stack boxed pad="card" data-mode={mode.id} data-deletable={mode.deletable ? "true" : "false"}>
       <DisclosureRow
         icon={<IconAgentPresetOutlineRegular />}
         title={mode.title}
@@ -329,7 +326,9 @@ function ModeCard({
               {mode.id}
             </Text>
             <Row gap={8} push>
-              <Text as="span" size="sm" tone="tertiary">{mode.summary}</Text>
+              <Text as="span" size="sm" tone="tertiary">
+                {mode.summary}
+              </Text>
               {mode.deletable ? (
                 <IconButton
                   size="sm"
@@ -357,7 +356,9 @@ function ModeCard({
           {mode.groups.map((group) => (
             <Stack key={group.key} gap={0} data-group={group.key}>
               <Row gap={8} justify="between">
-                <Text size="sm" tone="secondary" weight="strong">{group.label}</Text>
+                <Text size="sm" tone="secondary" weight="strong">
+                  {group.label}
+                </Text>
               </Row>
               {group.key === "model" ? (
                 <>

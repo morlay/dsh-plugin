@@ -38,22 +38,25 @@ export interface StackProps extends HTMLAttributes<HTMLDivElement> {
   plain?: boolean;
 }
 
-export const Stack = forwardRef<HTMLElement, StackProps>(function Stack({
-  as: Element = "div",
-  gap,
-  align,
-  pad,
-  grow = false,
-  boxed = false,
-  fixed = false,
-  narrow = false,
-  fill = false,
-  scroll = false,
-  plain = false,
-  className,
-  children,
-  ...rest
-}, ref): ReactNode {
+export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
+  {
+    as: Element = "div",
+    gap,
+    align,
+    pad,
+    grow = false,
+    boxed = false,
+    fixed = false,
+    narrow = false,
+    fill = false,
+    scroll = false,
+    plain = false,
+    className,
+    children,
+    ...rest
+  },
+  ref,
+): ReactNode {
   return (
     <Element
       ref={ref}

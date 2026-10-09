@@ -97,16 +97,19 @@ function modelsOf(
 // 部署里"已设置"的 provider 与它们的模型：活着的路由与可配置声明合并（按 provider 去重，声明的显示名优先）。
 export async function loadLlmProviders(scope: Context): Promise<readonly ProviderModels[]> {
   const llm = remoteNamespace<LlmReader>(scope, "llm");
-  const forms = (scope as unknown as { get(key: string): unknown }).get(
-    "configForms",
-  ) as ConfigFormsReader | undefined;
+  const forms = (scope as unknown as { get(key: string): unknown }).get("configForms") as
+    | ConfigFormsReader
+    | undefined;
   if (llm === undefined || forms === undefined) return [];
   const [routes, directory] = await Promise.all([
     llm.listProviders(),
     llm.listConfigurableProviders(),
   ]);
   if (!routes.ok || !directory.ok) return [];
-  const merged = new Map<string, { value: string; label: string; settingsNs: string; settingsPath: readonly string[] }>();
+  const merged = new Map<
+    string,
+    { value: string; label: string; settingsNs: string; settingsPath: readonly string[] }
+  >();
   for (const entry of directory.value) {
     merged.set(entry.provider, {
       value: entry.provider,

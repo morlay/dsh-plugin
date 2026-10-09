@@ -41,23 +41,26 @@ export interface RowProps extends HTMLAttributes<HTMLDivElement> {
   pad?: LayoutPad;
 }
 
-export const Row = forwardRef<HTMLElement, RowProps>(function Row({
-  as: Element = "div",
-  gap,
-  align,
-  justify,
-  wrap = false,
-  grow = false,
-  boxed = false,
-  fixed = false,
-  narrow = false,
-  push = false,
-  plain = false,
-  pad,
-  className,
-  children,
-  ...rest
-}, ref): ReactNode {
+export const Row = forwardRef<HTMLElement, RowProps>(function Row(
+  {
+    as: Element = "div",
+    gap,
+    align,
+    justify,
+    wrap = false,
+    grow = false,
+    boxed = false,
+    fixed = false,
+    narrow = false,
+    push = false,
+    plain = false,
+    pad,
+    className,
+    children,
+    ...rest
+  },
+  ref,
+): ReactNode {
   return (
     <Element
       ref={ref}

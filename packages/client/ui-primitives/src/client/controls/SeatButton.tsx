@@ -5,8 +5,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { classes } from "./classes.ts";
 import css from "./SeatButton.module.css";
 
-export interface SeatButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+export interface SeatButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   // 座位上的图标（16px 那一档）。
   icon: ReactNode;
   // 座位上的文本；放不下就以省略号收窄。

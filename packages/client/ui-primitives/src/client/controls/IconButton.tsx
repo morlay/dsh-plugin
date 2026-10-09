@@ -4,8 +4,10 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { classes } from "./classes.ts";
 import css from "./IconButton.module.css";
 
-export interface IconButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "aria-label"> {
+export interface IconButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children" | "aria-label"
+> {
   // 无障碍名（图标没有文字，这个名字是它唯一的标识）。
   label: string;
   // 图标。
