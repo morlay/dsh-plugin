@@ -95,6 +95,10 @@ describe("globToRegexSource", () => {
     const single = globToRegexSource("/ws/mise.*.toml");
     expect(new RegExp(`^${single}$`).test("/ws/mise.local.toml")).toBe(true);
     expect(new RegExp(`^${single}$`).test("/ws/sub/mise.local.toml")).toBe(false);
+    // `*` 要吃掉一整个"点与点之间"的段：`mise.*.toml` 只覆盖**带中间段的变体**，不含 `mise.toml` 本身。
+    // 这个边界是**有意**的用法（默认那份配置不敏感、要保护的正是环境特有的变体），不是漏写——策略文本里
+    // 列的是规则原文，别把它读成"这条路径被拒"。要连 `mise.toml` 一起拒，得写 `mise*.toml` 或另加精确路径。
+    expect(new RegExp(`^${single}$`).test("/ws/mise.toml")).toBe(false);
 
     const nested = globToRegexSource("/ws/**/*.pem");
     expect(new RegExp(`^${nested}$`).test("/ws/key.pem")).toBe(true);
