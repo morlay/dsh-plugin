@@ -13,6 +13,9 @@ const PACKAGES = join(REPO, "vendor/deepseek-harness/packages");
 // （`config.plugins` 就是装配），住在 web-app bundle 的 patch 文件里，不再是目录里的
 // `agent.cordis.yml`。
 const STANDARD_PRESET_PATCH = join(PACKAGES, "bundle/web-app/presets/standard.patch.yml");
+// 宿主平面（base bundle）的装配行：工具说明是按**这个会话最终可见的工具目录**送的，所以两处装配都要覆盖——
+// 上游把新工具挂进 base（例如 0.2.1-alpha.2 的 `tool-working-directory`）时，只看 preset 会漏过去。
+const BASE_BUNDLE_PATCH = join(PACKAGES, "bundle/base/cordis.patch.yml");
 
 // 取 shipped standard preset 的 `config.plugins`（装配行数组）。
 async function standardPlugins(): Promise<unknown> {
@@ -27,9 +30,25 @@ async function standardPlugins(): Promise<unknown> {
   throw new Error(`shipped standard preset row is missing in ${STANDARD_PRESET_PATCH}`);
 }
 
-// 不在分组表里的工具：这些行在 standard 装配里被禁用，或不是标准模式的模型可见工具。
-// 新增项必须写清理由，否则覆盖性断言会失败。
-const OUT_OF_SCOPE_TOOLS: readonly string[] = [];
+// 取 base bundle 那一次 insert 的全部行。
+async function basePlugins(): Promise<unknown> {
+  const layers = yaml.load(await readFile(BASE_BUNDLE_PATCH, "utf8"), {
+    schema: entryListSchema,
+  }) as { insert?: unknown }[];
+  const insert = layers.flatMap((layer) => (Array.isArray(layer.insert) ? layer.insert : []));
+  if (insert.length === 0)
+    throw new Error(`base bundle row list is missing in ${BASE_BUNDLE_PATCH}`);
+  return insert;
+}
+
+// 不在分组表里的工具：装配里停掉的行，或已评估过、**有意不归本包管**的那批。新增项必须写清理由，
+// 否则覆盖性断言会失败。
+// - MCP 资源三件：本部署按需接入 MCP server 才有意义，工具说明留上游原文（用户明确不管这一批）。
+const OUT_OF_SCOPE_TOOLS: readonly string[] = [
+  "list_mcp_resources",
+  "list_mcp_resource_templates",
+  "read_mcp_resource",
+];
 
 // 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
 // （plan 规则、文件引用语义、MCP 资源清单、Agent Teams 协作规则）。新增项必须写清理由，
@@ -72,7 +91,9 @@ function collectRows(value: unknown, rows: Row[]): void {
   }
   if (typeof value !== "object" || value === null) return;
   const row = value as CompositionRow;
-  const enabled = row.disabled !== true;
+  // 只有没声明 `disabled`、或显式 `disabled: false` 的行才算启用：base 里用条件表达式
+  // （`!!js "!ctx.get('profileContext')"`）停掉的行在本部署就是关的，扫它的工具只会造假阳性。
+  const enabled = row.disabled === undefined || row.disabled === false;
   const config = row.config;
   const inline =
     typeof config === "object" && config !== null && !Array.isArray(config) ? config : undefined;
@@ -142,8 +163,20 @@ function objectBlocks(text: string, marker: string): string[] {
   return blocks;
 }
 
+// 块内**顶层**的 `name`：PTC 那类代码生成源码里的 `defineTool(` 附近还有 `errorClass: { name: 'ToolCallError' }`
+// 这种嵌套字面量，只认顶层的才不会把它们当成工具名。
 function literalName(block: string): string | undefined {
-  return /\bname:\s*['"]([^'"]+)['"]/.exec(block)?.[1];
+  let depth = 0;
+  for (let index = 0; index < block.length; index += 1) {
+    const token = block[index];
+    if (token === "{") depth += 1;
+    else if (token === "}") depth -= 1;
+    else if (depth === 1 && block.startsWith("name", index)) {
+      const match = /^name:\s*['"]([^'"]+)['"]/.exec(block.slice(index));
+      if (match !== null) return match[1];
+    }
+  }
+  return undefined;
 }
 
 async function inventory(directories: readonly string[]): Promise<{
@@ -174,10 +207,10 @@ async function inventory(directories: readonly string[]): Promise<{
   return { tools, sections };
 }
 
-// standard 装配引用的包目录（跳过禁用的行）。
-async function enabledDirectories(): Promise<string[]> {
+// 装配引用的包目录（跳过禁用的行）。
+async function enabledDirectoriesOf(plugins: unknown): Promise<string[]> {
   const rows: Row[] = [];
-  collectRows(await standardPlugins(), rows);
+  collectRows(plugins, rows);
   const wanted = new Set(
     rows.filter((row) => row.enabled).map((row) => directoryName(row.packageName)),
   );
@@ -186,27 +219,40 @@ async function enabledDirectories(): Promise<string[]> {
   );
 }
 
-// standard 装配里显式给出的动态工具名：源码扫描看不到这些字面量。
-async function declaredToolNames(): Promise<string[]> {
+// 装配里显式给出的动态工具名：源码扫描看不到这些字面量。
+function declaredToolNamesOf(plugins: unknown): string[] {
   const rows: Row[] = [];
-  collectRows(await standardPlugins(), rows);
+  collectRows(plugins, rows);
   return rows.flatMap((row) => (row.toolName === undefined || !row.enabled ? [] : [row.toolName]));
 }
 
 describe("覆盖性：标准模式的工具与说明都必须归组", () => {
   it("standard 装配引用的每个工具都在组表或豁免表里", async () => {
-    const { tools } = await inventory(await enabledDirectories());
+    const plugins = await standardPlugins();
+    const { tools } = await inventory(await enabledDirectoriesOf(plugins));
     const known = new Set([...TOOL_GROUPS.flatMap((group) => group.tools), ...OUT_OF_SCOPE_TOOLS]);
 
     expect(
-      [...new Set([...tools, ...(await declaredToolNames())])]
+      [...new Set([...tools, ...declaredToolNamesOf(plugins)])]
+        .filter((tool) => !known.has(tool))
+        .sort(),
+    ).toEqual([]);
+  });
+
+  it("宿主平面（base bundle）装配引用的每个工具都在组表或豁免表里", async () => {
+    const plugins = await basePlugins();
+    const { tools } = await inventory(await enabledDirectoriesOf(plugins));
+    const known = new Set([...TOOL_GROUPS.flatMap((group) => group.tools), ...OUT_OF_SCOPE_TOOLS]);
+
+    expect(
+      [...new Set([...tools, ...declaredToolNamesOf(plugins)])]
         .filter((tool) => !known.has(tool))
         .sort(),
     ).toEqual([]);
   });
 
   it("standard 装配引用的每个工具说明 section 都有归属（丢弃 / 保留）", async () => {
-    const { sections } = await inventory(await enabledDirectories());
+    const { sections } = await inventory(await enabledDirectoriesOf(await standardPlugins()));
     const known = new Set([...droppedSections(), ...DEFAULT_SUPPRESS, ...UNGATED_SECTIONS]);
 
     expect([...sections].filter((section) => !known.has(section)).sort()).toEqual([]);

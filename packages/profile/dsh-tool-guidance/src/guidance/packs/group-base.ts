@@ -34,6 +34,10 @@ export const BASE_GROUP: GroupPack = {
         text: "grep：按内容搜索（不要用 shell grep / rg）；需要上下文再 read 命中的文件。",
       },
       {
+        when: "working_directory",
+        text: "working_directory：查会话当前工作目录，或传 cd 切到某个已存在的目录——切完相对路径都按它解析；已开的 shell 与在跑进程留在自己的目录里，不受这次切换影响。",
+      },
+      {
         when: "bash",
         text: "bash：执行命令。使用参数 workdir，默认是你的工作目录，严禁使用 `cd`；非零退出会标 [exit code: N]，先查清失败原因再继续。",
       },
@@ -92,6 +96,7 @@ export const BASE_GROUP: GroupPack = {
       "str_replace_editor",
       "glob",
       "grep",
+      "working_directory",
       "bash",
       "pwsh",
       "ask_user_question",
