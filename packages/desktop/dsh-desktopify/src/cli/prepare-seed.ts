@@ -34,6 +34,7 @@ import {
 } from "./official-deps.ts";
 import {
   PROFILE_NAME,
+  appProfileBundles,
   buildRoot,
   cleanDeployedSpec,
   dshVersion as readDshVersion,
@@ -441,7 +442,7 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
 
 // Bundles the profile itself owns; shipped bundles come from the runtime installation instead.
 export function profileLocalBundles(manifest: WorkspaceManifest): string[] {
-  return mergedProfileBundles(manifest).filter((name) => !OFFICIAL_PROFILE_BUNDLES.includes(name));
+  return appProfileBundles(manifest).filter((name) => !OFFICIAL_PROFILE_BUNDLES.includes(name));
 }
 
 // profile 的直接依赖要带上本地依赖的闭包：pnpm 对 `file:` 包自己声明的 `workspace:` 依赖**静默跳过**
@@ -521,8 +522,8 @@ export function profileManifest(
     dependencies: Object.fromEntries(
       localBundles.map((name) => [name, `file:./${PROFILE_VENDOR_DIR_NAME}/${name}`]),
     ),
-    // profile 是安装产物：只保留 profile 层装配字段，app 的 dsh.version / desktop / dev
-    // 属于打包输入，运行时不再从 profile 读它们。
+    // profile 是安装产物：清单按官方形态写（官方 bundles 在前 + app 自己声明的），只保留装配字段，
+    // app 的 `dsh.version` / `desktop` / `dev` 属于打包输入，运行时不再从 profile 读它们。
     dsh: { profile: { ...manifest.dsh?.profile, bundles: mergedProfileBundles(manifest) } },
   };
 }

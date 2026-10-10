@@ -24,6 +24,8 @@
     "version": "workspace:*",
     "profile": {
       "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
         "@morlay/better-session",
         "@morlay/ollama-provider-profile",
         "@morlay/sandbox-profile",

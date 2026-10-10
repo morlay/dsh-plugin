@@ -95,6 +95,9 @@ export function desktopConfig(manifest: ResolvedWorkspaceManifest): DesktopConfi
   };
 }
 
+// 装配清单只有一份：app 目录就是 profile root，`dsh.profile.bundles` 是它的装配清单，
+// 官方 bundles（`@deepseek-ai/dsh-base` / `@deepseek-ai/dsh-web-app`）也由 app 自己列出来，
+// 不再由工具在这里替它合并出一份（理由见 `../../.agents/designs/20261010-app目录即profile-root.md`）。
 export function appProfileBundles(manifest: WorkspaceManifest): string[] {
   const bundles = manifest.dsh?.profile?.bundles;
   if (!Array.isArray(bundles) || !bundles.every((bundle) => typeof bundle === "string")) {
@@ -105,8 +108,14 @@ export function appProfileBundles(manifest: WorkspaceManifest): string[] {
   return bundles as string[];
 }
 
+// 打包形态那份清单按官方形态写：官方 bundles 在前，app 自己声明的在后。app 的清单里已经列过的官方
+// bundles 按包名去重，同一层不插两遍。
 export function mergedProfileBundles(manifest: WorkspaceManifest): string[] {
-  return [...OFFICIAL_PROFILE_BUNDLES, ...appProfileBundles(manifest)];
+  const official = new Set(OFFICIAL_PROFILE_BUNDLES);
+  return [
+    ...OFFICIAL_PROFILE_BUNDLES,
+    ...appProfileBundles(manifest).filter((name) => !official.has(name)),
+  ];
 }
 
 export async function findWorkspaceRoot(workspace: string): Promise<string> {

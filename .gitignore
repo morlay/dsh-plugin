@@ -10,6 +10,13 @@ node_modules/
 .scratch/
 .turbo/
 
+# app 目录就是 profile root（dev 形态直接用工作区里那个目录，打包形态用它的副本）：
+# 这几样是 boot / 包操作写在 profile root 里的运行时状态，不是源文件。
+# 见 packages/desktop/dsh-desktopify/.agents/designs/20261010-app目录即profile-root.md
+apps/dsh-custom-next/cordis.yml
+apps/dsh-custom-next/compatibility.json
+apps/dsh-custom-next/.plugin-manager/
+
 *.tsbuildinfo
 
 .dsh-desktopify-host/

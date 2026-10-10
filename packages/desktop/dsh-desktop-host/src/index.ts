@@ -1,6 +1,10 @@
-// 桌面部署里的 host 进程入口：按 `desktop` profile 装配 Web 应用，并把请求经字节管道（FD 3/4）
-// 交给宿主内的无端口 `webServer`。argv：`[runtimeDir, projectDir, pnpmEntry?, nodeBin?]`；
+// 桌面部署里的 host 进程入口：按 profile root 装配 Web 应用，并把请求经字节管道（FD 3/4）
+// 交给宿主内的无端口 `webServer`。argv：`[runtimeDir, profileDir, pnpmEntry?, nodeBin?]`；
 // IPC：`ready` / `fatal`，另收 `shutdown`。
+//
+// 装配走官方那两步（`loadProfileDirectory` + `runProfile`）：打包形态的 profile 由工具按官方形态
+// 种出（见 `../.agents/designs/20260929-桌面host的运行时面与依赖边界.md`）；dev 形态由启动器把
+// app 目录当 profile root 传进来（同一份清单，见 `../../dsh-desktopify/.agents/designs/20261010-app目录即profile-root.md`）。
 
 import { once } from "node:events";
 import { createReadStream, createWriteStream, type ReadStream, type WriteStream } from "node:fs";
@@ -91,8 +95,8 @@ function reportMemoryWhenAsked(): void {
 
 async function main(): Promise<void> {
   const runtimeDir = process.argv[2];
-  const projectDir = process.argv[3];
-  if (runtimeDir === undefined || projectDir === undefined || process.send === undefined)
+  const profileDir = process.argv[3];
+  if (runtimeDir === undefined || profileDir === undefined || process.send === undefined)
     throw new Error(
       "dsh desktop: expected runtime and profile directories, byte pipes, and a Node IPC channel",
     );
@@ -136,7 +140,7 @@ async function main(): Promise<void> {
   };
 
   const installAnchor = join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json");
-  const profile = loadProfileDirectory("dsh", projectDir, installAnchor);
+  const profile = loadProfileDirectory("dsh", profileDir, installAnchor);
   // 加载跳过原因由启动方上报（与上游 desktop-host 同一口径）。
   reportSkippedBundles("dsh", profile);
   const application = runProfile({
@@ -165,7 +169,7 @@ async function main(): Promise<void> {
   installDesktopTransport(ctx);
   reportMemoryWhenAsked();
   // 调试窗口的前端产物：桌面档自己托管，不从上游 inspector 行取（那条路由与它的 Worker 绑在一起）。
-  installDevtoolsAssets(ctx, [runtimeDir, projectDir]);
+  installDevtoolsAssets(ctx, [runtimeDir, profileDir]);
   const webServer = ctx.get("webServer") as unknown as PortlessWebServer;
 
   const pending = new Map<number, PendingRequest>();

@@ -34,9 +34,9 @@ uplink、peer 是 operator，以及注入脚本 `openStream` 的上行转发与�
   renderer 调试口（`--remote-debugging-port=9222`，`curl /json/list` 拿页面 target 后在页面里 `fetch` 同一路径）。
   两者都应拿到现场转换的字节（与 `dist/client.cjs` 不同、也不是 `src/client/index.ts` 的原文），且改一处 client
   源码再取一次能看到字节随之变化。无 GUI 的环境（CI / 受限沙箱：`sandbox initialization failed` + GPU 进程退出）
-  起不来 Electron，那里退一步只验证准备物：`<projectDir>/cordis.patch.yml` 含 `dev-client-bundles` 行、
-  `<projectDir>/node_modules/@morlay/dsh-desktopify` 可达、以 projectDir 为 cwd 能
-  `import("@morlay/dsh-desktopify/dev-client-bundles")`（三样齐了那行才会激活）。
+  起不来 Electron，那里退一步只验证装配面：profile root 是 app 目录（`<app>/cordis.yml` 被 boot 重写成空根）、
+  安装根是 `<workspaceRoot>/node_modules/.pnpm`（锚点与 host 载荷都在）、且 dev 的现场打包行
+  （`dev-client-bundles`）由宿主 overlay 挂上、它的包 `@morlay/dsh-desktopify` 从 app 目录可达。
 - **Electron 主进程 / preload / 工具侧 `cli/{bundle,dev}.ts` 私有逻辑**：导入即触发 `app.whenReady()` 等副作用，
   需要整套 Electron mock 面——真实启动见[设计 桌面化工具](../designs/20260917-桌面化工具.md)与其中链接的打包器
   ADR。preload 里能拿出来的纯逻辑已有单测（壳包的 `stream-uplink.spec.ts`），留在 `preload-app.ts` 里的只剩 IPC

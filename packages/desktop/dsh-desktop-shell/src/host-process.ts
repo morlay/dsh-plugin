@@ -104,7 +104,7 @@ export class DesktopHostProcess {
   constructor(
     private readonly node: string,
     private readonly runtimeDir: string,
-    private readonly projectDir: string,
+    private readonly profileDir: string,
     private readonly inspectPort?: number,
     private readonly options: DesktopHostOptions = {},
   ) {}
@@ -130,8 +130,8 @@ export class DesktopHostProcess {
       ...(this.options.nodeArgs ?? []),
       entry,
       this.runtimeDir,
-      this.projectDir,
-      // 桌面档不挂 Office 组合，argv 因此比上游少 `primaryRuntime` 那一格：projectDir 之后直接是 pnpm 与 node bin。
+      this.profileDir,
+      // 桌面档不挂 Office 组合，argv 因此比上游少 `primaryRuntime` 那一格：profileDir 之后直接是 pnpm 与 node bin。
       ...(packageManager === undefined ? [] : [packageManager.pnpm, packageManager.nodeBin]),
     ];
     const env = {
@@ -147,7 +147,7 @@ export class DesktopHostProcess {
     };
     const spawnChild = this.options.spawn ?? spawn;
     const child = spawnChild(this.node, args, {
-      cwd: this.projectDir,
+      cwd: this.profileDir,
       env,
       stdio: ["ignore", "pipe", "pipe", "pipe", "pipe", "ipc"],
     });

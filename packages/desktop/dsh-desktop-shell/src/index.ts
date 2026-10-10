@@ -138,14 +138,28 @@ async function installPlantedProfile(
   });
 }
 
-function developmentProject(): string | undefined {
-  const configured = process.env.DSH_DESKTOP_DEV_PROJECT_DIR;
-  if (configured === undefined || configured === "") return undefined;
+// dev 形态的两格：profile root（app 目录本身）与安装根（官方闭包、前端产物与 host 载荷的来源）。
+// 打包形态两格分别由 `$DSH_HOME/profiles/<name>` 与随包 runtime 给出。
+interface DevelopmentLayout {
+  readonly profileDir: string;
+  readonly runtimeDir: string;
+}
+
+function configuredPath(value: string | undefined): string | undefined {
+  return value === undefined || value === "" ? undefined : value;
+}
+
+function developmentLayout(): DevelopmentLayout | undefined {
+  const profileDir = configuredPath(process.env.DSH_DESKTOP_DEV_PROFILE_DIR);
+  const runtimeDir = configuredPath(process.env.DSH_DESKTOP_DEV_RUNTIME_DIR);
+  if (profileDir === undefined && runtimeDir === undefined) return undefined;
   if (app.isPackaged)
+    throw new Error("dsh desktop: the development layout is unavailable in packaged applications");
+  if (profileDir === undefined || runtimeDir === undefined)
     throw new Error(
-      "dsh desktop: development project override is unavailable in packaged applications",
+      "dsh desktop: DSH_DESKTOP_DEV_PROFILE_DIR and DSH_DESKTOP_DEV_RUNTIME_DIR must be set together",
     );
-  return resolve(configured);
+  return { profileDir: resolve(profileDir), runtimeDir: resolve(runtimeDir) };
 }
 
 // 窗口形态：macOS 走 sidebar vibrancy + hiddenInset（交通灯落在侧边栏内），Windows 自绘 caption。
@@ -237,15 +251,15 @@ function sourceLoaderEnvironment(path: string): Record<string, string> {
 }
 
 async function main(): Promise<void> {
-  const development = developmentProject();
+  const development = developmentLayout();
   const resources = runtimeResources();
   const hostInspectPort = developmentHostInspectPort(development !== undefined);
-  const activeProject =
-    development ?? join(resolveDshHome(appConfig) ?? "", "profiles", PROFILE_NAME);
+  const profileDir =
+    development?.profileDir ?? join(resolveDshHome(appConfig) ?? "", "profiles", PROFILE_NAME);
 
-  const runtimeProject = development ?? resources.runtime;
+  const runtimeDir = development?.runtimeDir ?? resources.runtime;
   const webDocumentRoot = join(
-    runtimeProject,
+    runtimeDir,
     "node_modules",
     ...WEB_FRONTEND_PACKAGE.split("/"),
     "dist",
@@ -256,7 +270,7 @@ async function main(): Promise<void> {
     if (dshHome === undefined)
       throw new Error("dsh desktop: packaged applications require a concrete dshHome");
     if (await ensureSeedProfile(resources.seed, dshHome)) {
-      await installPlantedProfile(activeProject, resources);
+      await installPlantedProfile(profileDir, resources);
     }
   }
   if (!(await pathExists(join(webDocumentRoot, "index.html")))) {
@@ -310,31 +324,25 @@ async function main(): Promise<void> {
     app.exit(1);
   };
 
-  const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
+  const startHost = async (target: string = profileDir): Promise<DesktopHostProcess> => {
     const loader = sourceLoader(resources);
-    const next = new DesktopHostProcess(
-      resources.node,
-      runtimeProject,
-      projectDir,
-      hostInspectPort,
-      {
-        nodeArgs: [`--import=${loader}`],
+    const next = new DesktopHostProcess(resources.node, runtimeDir, target, hostInspectPort, {
+      nodeArgs: [`--import=${loader}`],
 
-        extraEnv: {
-          ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
-          ...(development === undefined ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
-          ...sourceLoaderEnvironment(loader),
-        },
-        // `ps` 里能把后端与别的 node 进程区分开。
-        processTitle: `${appConfig.name}-server`,
-        // 打包形态的包操作使用随包 pnpm；dev 形态回退到 PATH 上的 pnpm。
-        ...(development === undefined
-          ? { packageManager: { pnpm: resources.pnpm, nodeBin: resources.nodeBin } }
-          : {}),
-        spawn: shellWrappedSpawn,
-        onFailure: handleHostFailure,
+      extraEnv: {
+        ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
+        ...(development === undefined ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+        ...sourceLoaderEnvironment(loader),
       },
-    );
+      // `ps` 里能把后端与别的 node 进程区分开。
+      processTitle: `${appConfig.name}-server`,
+      // 打包形态的包操作使用随包 pnpm；dev 形态回退到 PATH 上的 pnpm。
+      ...(development === undefined
+        ? { packageManager: { pnpm: resources.pnpm, nodeBin: resources.nodeBin } }
+        : {}),
+      spawn: shellWrappedSpawn,
+      onFailure: handleHostFailure,
+    });
     await next.start();
     return next;
   };

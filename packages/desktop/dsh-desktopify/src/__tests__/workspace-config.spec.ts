@@ -84,11 +84,30 @@ describe("desktopConfig", () => {
 });
 
 describe("profile bundles", () => {
-  it("puts the official bundles ahead of the app's own", () => {
+  // dev 形态：app 目录就是 profile root，清单读它自己那份（官方 bundles 也由 app 列出来）。
+  it("照抄 app 的清单，顺序不动", () => {
+    expect(
+      appProfileBundles({
+        name: "app",
+        dsh: {
+          profile: {
+            bundles: ["@deepseek-ai/dsh-base", "@morlay/better-session", "@morlay/dsh-profile"],
+          },
+        },
+      }),
+    ).toEqual(["@deepseek-ai/dsh-base", "@morlay/better-session", "@morlay/dsh-profile"]);
+  });
+
+  // 打包形态：清单按官方形态写——官方 bundles 在前，app 里已经列过的按包名去重。
+  it("官方 bundles 排前，已列过的不重复", () => {
     expect(
       mergedProfileBundles({
         name: "app",
-        dsh: { profile: { bundles: ["@morlay/better-session", "@morlay/dsh-profile"] } },
+        dsh: {
+          profile: {
+            bundles: ["@morlay/better-session", "@deepseek-ai/dsh-base", "@morlay/dsh-profile"],
+          },
+        },
       }),
     ).toEqual([...OFFICIAL_PROFILE_BUNDLES, "@morlay/better-session", "@morlay/dsh-profile"]);
   });
