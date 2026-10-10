@@ -2,6 +2,7 @@
 // 并把客户端的 transport 行注入 index、注册它访问的 `/.dsh/remote-stream`（请求体首行定
 // endpoint/payload、后续行是逻辑流的上行项，响应体是下行 NDJSON）。
 
+import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { TypertGatewayWireStream } from "@deepseek-ai/dsh-api-gateway";
 import type { Context } from "@deepseek-ai/cordis";
@@ -198,7 +199,17 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
         "content-type": "application/x-ndjson",
         "cache-control": "no-store",
       });
-      for await (const value of values) response.write(`${JSON.stringify(value)}\n`);
+      for await (const value of values) {
+        // 尊重下游背压：`write()` 返回 false 就是这一侧的缓冲满了，必须等 `drain` 再继续拉上游。
+        // 不等就是「客户端丢下这条流、上游还在产」时的无界缓冲——侧栏反复重试那条循环实测
+        // 4MB/s 一路涨到 GB（进程崩在这里，而不是崩在业务错误上）。
+        if (!response.write(`${JSON.stringify(value)}\n`)) {
+          await Promise.race([once(response, "drain"), once(response, "close")]).catch(
+            () => undefined,
+          );
+          if (response.destroyed) return;
+        }
+      }
       response.end();
     } catch (error) {
       reportStreamFailure(`stream ${endpoint} failed`, error);
