@@ -83,6 +83,12 @@ const DELTAS: Record<Retained, readonly Delta[]> = {
       drop: "  /**\n   * Return guidance for a continuable child's initial task, per session.",
       until: "\n  }\n",
     },
+    {
+      // 上游那行 `catch (_error: unknown)` 在本仓库的 oxlint 下报未用绑定（上游自己的配置放行）。
+      // 为保逐行同形而就地加的一行窄 disable（理由写在注释里）。
+      from: "            // oxlint-disable-next-line eslint/no-unused-vars -- 逐行保留上游文件：绑定本就不用\n",
+      to: "",
+    },
   ],
   "continuation-messages.ts": [
     // 判定函数（含它的文档注释）：本包新增的纯函数。

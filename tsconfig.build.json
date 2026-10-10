@@ -1,0 +1,11 @@
+{
+  // 构建（dts 生成）那一份 program：host / client 两个 face 都在，与切分前一致。
+  // 声明生成要沿 import 链逐个解析上游 `src`（见 `tsconfig.json` 里的说明），所以这里不做 face 切分——
+  // 切分后 client 入口不在 program 里，`rolldown-plugin-dts` 直接报
+  // `tsgo did not generate dts file for …/src/client/index.ts`。
+  // 类型判定的那两份是 `tsconfig.json`（宿主面）与 `tsconfig.client.json`（client 面）：`just lint` 按文件
+  // 就近发现，编辑器同理。这一份不是类型门：直接 `tsc -p tsconfig.build.json` 会看到合并 program 里
+  // 宿主面那批按 client 面判出来的误报（`ctx.sessions` 那类），dts 生成不看它们。
+  "extends": "./tsconfig.json",
+  "exclude": ["**/node_modules/**", "**/dist/*", "vendor/**/*.config.ts", "vendor/**/tests/**"]
+}

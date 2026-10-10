@@ -70,6 +70,19 @@
   （`devpackages/devkit/tsconfig.json`）。跨边界 id 使用 branded 类型（如 `SessionId`），不做裸
   `string`。**类型检查由 `just lint` 承担**（oxlint 的 `typeAware` + `typeCheck`，后端
   `oxlint-tsgolint`）——本仓库没有独立的 `tsc` 步骤，类型报错就是 lint 报错。
+- **host / client 是两个 compiler face，各自成 program**：上游对同一份合并接口在两边各声明一次
+  （如 `Context.sessions`：宿主面 `SessionStore`、client 面 `ISessions`），一个 program 里只会剩先绑定
+  那份、另一边的用法全红（`TS2717` 报在 vendor 侧、被 oxlint 的 ignorePatterns 吞掉，看见的是
+  `TS2339: Property 'get'/'flush' does not exist on type 'ISessions'`、`TS2554: Expected 0-1
+  arguments, but got 2`（`sessions.create(id, opts)`）这一批）。所以：
+  - `**/src/client/**`（含它下面的 spec，例如 `packages/client/ui-primitives/src/__tests__/`）归
+    **client 面** program：目录里放一份就近 `tsconfig.json`（内容只有 `extends` 到根
+    `tsconfig.client.json`），新开一个 client 半目录要照做；
+  - 根 `tsconfig.json` 是**宿主面** program，不许把上游 client face 拉进来——宿主面的文件别 import
+    任何 `…/client` 出口（那会把上游 client 面的那套声明连同它们的依赖拖进来）；
+  - `just lint` 一趟就够：oxlint 的 typeCheck 按文件就近发现 tsconfig，两个 program 各判各的；
+  - 构建（dts）走两份 face 都在的 `tsconfig.build.json`（tsdown 一个包只有一份 tsconfig，client 入口
+    必须在里面才出得了 `dist/client.d.cts`），由 devkit 的配置工厂从包目录往上找、自动带上。
 - **`node/no-sync` 全开、无豁免**：运行时代码、测试与脚本（含 `.agents/skills/` 的同步 / patch / build
   脚本）一律用异步 node API（`node:fs/promises`、`promisify(execFile)`、`spawn` + Promise 包装），
   不用 `*Sync` 变体。`node:sqlite` 的 `DatabaseSync` 与 better-sqlite3 的同步用法是该驱动的语义、

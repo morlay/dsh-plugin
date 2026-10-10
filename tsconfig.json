@@ -6,6 +6,8 @@
     // 开发线：oxc / rolldown 读它按 legacy 降级装饰器，配 `patches/decorator-dual-protocol.patch` 的双协议写端
     // （dev loader 与 vitest 也各自显式写着 `decorator: { legacy: true }`，这是给按文件读 tsconfig 的工具兜底）。
     // 发布线（tsdown 打包自有包）要标准语义，在 devkit 的 host 预设里显式关掉（`decorator.legacy: false`）。
+    // 类型面照这条开关按 legacy 判，而源码与上游一样是 TC39 装饰器：写端的**声明**由同一个 patch 补成两种
+    // 协议都收，否则 `@Remote(…)` 报 TS1241（见 `.agents/debts/20260923-标准装饰器降级分居两套机制.md`）。
     "experimentalDecorators": true
   },
   // 不排除 `vendor/**`：自有包经 `exports` 指到上游 `src` 后，发布构建的 dts 生成要逐个解析 vendor 里的模块
@@ -13,10 +15,17 @@
   // 开发线的类型检查也才看得到上游源码。
   // 但上游的**构建配置与测试**例外：它们在我们这套 tsconfig 下会报不可命名的推断类型（TS2883），
   // 而 dts 生成只沿 import 链走、不会碰到它们。
+  //
+  // 这是宿主面 program：`**/src/client/**` 不进这里。上游把 host / client 当两个 compiler face
+  // （同一份合并接口 `Context` 两边各声明一次，如 `sessions`：宿主面是 `SessionStore`、client 面是
+  // `ISessions`），塞进同一个 program 时后绑定的那份会把先绑定的挤掉（TS2717），宿主面的 `ctx.sessions`
+  // 就全成了 client 面的类型。浏览器半那份 program 见 `tsconfig.client.json`。
   "exclude": [
     "**/node_modules/**",
     "**/dist/*",
     "vendor/**/*.config.ts",
-    "vendor/**/tests/**"
+    "vendor/**/tests/**",
+    "**/src/client/**",
+    "packages/client/ui-primitives/src/__tests__/**"
   ]
 }

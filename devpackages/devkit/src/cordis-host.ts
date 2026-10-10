@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { join, sep } from "node:path";
+import { dirname, join, sep } from "node:path";
 import type { UserConfig } from "tsdown";
 import {
   CLIENT_ENTRY,
@@ -31,6 +31,21 @@ async function entryExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+// 从包目录往上找仓库根的 `tsconfig.build.json`：tsdown 一个包只有一份 tsconfig，而 client 入口必须
+// 在它里面才出得了 `dist/client.d.cts`——所以构建用的是两个 face 都在的那一份（理由见该文件），
+// 类型判定的两份（宿主 / client）在根上，`just lint` 按文件就近发现。
+// 仓库外（例如本包那个临时项目用例：cwd 在系统临时目录）找不到就交回 tsdown 默认发现；仓库里有包却缺
+// 这份配置，会在 dts 阶段以 `tsgo did not generate dts file for …/src/client/index.ts` 直接炸出来。
+async function findBuildTsconfig(from: string): Promise<string | undefined> {
+  for (let current = from; ;) {
+    const candidate = join(current, "tsconfig.build.json");
+    if (await entryExists(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
   }
 }
 
@@ -82,10 +97,14 @@ export async function defineCordisPluginConfig(options?: {
   const fromClient = (importer: string | null | undefined): boolean =>
     typeof importer === "string" && importer.includes(clientRoot);
 
+  // 声明生成那份 program（两个 face 都在）：见 `findBuildTsconfig`。
+  const buildTsconfig = await findBuildTsconfig(process.cwd());
+
   return {
     name: client?.name ?? (await packageName()),
     entry,
     outDir: options?.outDir ?? "dist",
+    ...(buildTsconfig === undefined ? {} : { tsconfig: buildTsconfig }),
     // client 产物是 CJS（模块系统的工厂契约），host 产物是 ESM；没有 client 入口的包只产 ESM。
     format: client === undefined ? ["esm"] : ["esm", "cjs"],
     platform: "node",

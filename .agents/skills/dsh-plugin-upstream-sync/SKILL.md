@@ -143,7 +143,9 @@ node --import=<仓库>/devpackages/devkit/src/ts-loader.mjs <skill 路径>/scrip
 
    `git` 步骤是**本地补丁**（`patches/*.patch` 打进上游工作树，打不上就失败——上游改到这些行即信号）：
    `decorator-dual-protocol.patch` 让写端（typert 的 `Remote`/`RemoteScope`、cordis 的 `Inject`）同时接受
-   TC39 与 legacy 两种调用约定；`source-loader.patch` 让 subprocess runner 的转译器可由 `DSH_SOURCE_LOADER`
+   TC39 与 legacy 两种调用约定，**类型面也一样**（`RemoteMethodDecorator` 与 `Remote` 的裸用法各多一条
+   legacy 签名、`Inject` 多一条 `(target: Function)`——本仓库根 tsconfig 开着 `experimentalDecorators`，
+   少了它们 `@Remote(…)` 就报 `TS1241`）；`source-loader.patch` 让 subprocess runner 的转译器可由 `DSH_SOURCE_LOADER`
    注入（上游默认的 `tsx/esm` 在本仓库与随包产物里都不存在）。
 
    `typert` 是**生成式**步骤：直接编排上游 analyzer/emitter 生成 typert 产物，写成 `.ts`

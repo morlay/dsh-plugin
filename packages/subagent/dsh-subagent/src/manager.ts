@@ -1068,6 +1068,7 @@ export class SubagentManager {
               done = this.close(activation, () => this.finishDisposal(activation, false))
               return Promise.resolve()
             })
+            // oxlint-disable-next-line eslint/no-unused-vars -- 逐行保留上游文件：绑定本就不用
           } catch (_error: unknown) {
             // Another activity already owns the Agent's idle phase.
             return Promise.resolve('retry')
