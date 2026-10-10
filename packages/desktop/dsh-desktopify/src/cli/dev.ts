@@ -14,6 +14,7 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { syncProfileBundles } from "./dev-web.ts";
 import {
@@ -290,6 +291,18 @@ async function prepareWebProfile(
   return profileDir;
 }
 
+// 源码 client 半「现场打包」那条行的定义只有一份：宿主包里的 overlay（它按相对路径指自己的 `lib/`）。
+// 桌面形态由宿主自己挂；web 形态的 profile 是 `dsh web` 自己装的，拿不到那层，所以这里按 `--patch` 挂上。
+async function devClientPatch(): Promise<string> {
+  const hostRoot = dirname(
+    fileURLToPath(import.meta.resolve("@morlay/dsh-desktop-host/package.json")),
+  );
+  const patch = join(hostRoot, "config", "dev-client-bundles.cordis.patch.yml");
+  if (!(await pathExists(patch)))
+    throw new Error(`desktop development: missing ${patch}; run the tool build (pnpm build)`);
+  return patch;
+}
+
 function resolveLinkTarget(workspace: string, packageName: string): string {
   const require = createRequire(join(workspace, "package.json"));
   const resolved = require.resolve(packageName);
@@ -377,9 +390,11 @@ export async function runDev(options: DevOptions): Promise<void> {
     );
 
     const environment = { ...process.env, DSH_HOME: home };
+    // web 形态的 profile 由 `dsh web` 自己装，拿不到宿主那层 overlay，所以那条「源码 client 半现场
+    // 打包」的行得由启动器按 `--patch` 挂上——定义只有宿主包里那一份，两种形态共用。
     await run(
       process.execPath,
-      [entry, "web", "--port", port],
+      [entry, "web", "--patch", await devClientPatch(), "--port", port],
       repositoryRoot,
       withTsLoader(environment, tsLoader),
     );

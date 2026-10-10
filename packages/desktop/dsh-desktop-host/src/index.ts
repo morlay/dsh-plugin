@@ -40,6 +40,11 @@ import {
 } from "./wire.ts";
 
 const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml", import.meta.url));
+// 源码面的 client 现场打包行单独一层：web 形态（）也要挂它，
+// 但不要桌面专属的那几层。
+const DEV_CLIENT_PATCH = fileURLToPath(
+  new URL("../config/dev-client-bundles.cordis.patch.yml", import.meta.url),
+);
 
 interface PendingRequest {
   readonly abort: AbortController;
@@ -120,7 +125,7 @@ async function main(): Promise<void> {
     environment: loadLayeredEnv("dsh"),
     profile: "desktop",
     resolvedProfile: { profile, installAnchor },
-    patchFiles: [DESKTOP_PATCH],
+    patchFiles: [DESKTOP_PATCH, DEV_CLIENT_PATCH],
     args: ["--no-open"],
     ...(pnpmEntry === undefined
       ? {}

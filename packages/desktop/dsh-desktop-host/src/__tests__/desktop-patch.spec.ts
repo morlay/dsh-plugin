@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +8,22 @@ const PATCH_PATH = join(
   "packages/desktop/dsh-desktop-host/config/desktop.cordis.patch.yml",
 );
 const BUNDLE_ROOT = join(repoRoot, "vendor/deepseek-harness/packages/bundle");
+// 源码 client 半的现场打包行：单独一层，web 形态也要挂（ 用 `--patch`）。
+const DEV_CLIENT_PATCH_PATH = join(
+  repoRoot,
+  "packages/desktop/dsh-desktop-host/config/dev-client-bundles.cordis.patch.yml",
+);
+const devClientPatch = await readFile(DEV_CLIENT_PATCH_PATH, "utf8");
 const UPSTREAM_PATCHES = ["base/cordis.patch.yml", "web-app/cordis.patch.yml"];
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const patch = await readFile(PATCH_PATH, "utf8");
 
@@ -109,12 +124,18 @@ describe("桌面 overlay 的停用清单", () => {
     ]);
   });
 
+  it("源码 client 半的那一行单独一层，指向宿主自己的产物", async () => {
+    expect(insertedNames(devClientPatch)).toEqual(["../lib/dev-client-bundles.js"]);
+    const built = join(repoRoot, "packages/desktop/dsh-desktop-host/lib/dev-client-bundles.js");
+    if (await pathExists(built)) expect((await stat(built)).isFile()).toBe(true);
+  });
+
   it("模型路径那几行没有一起被停", () => {
     for (const id of Object.keys(KEPT_ROWS)) expect(disabledIds(patch)).not.toContain(id);
   });
 
   it("传输接管的两处配置仍在（无端口 webServer + web-runtime 全项）", () => {
-    expect(insertedNames(patch)).toEqual(["../lib/webserver.js", "../lib/dev-client-bundles.js"]);
+    expect(insertedNames(patch)).toEqual(["../lib/webserver.js"]);
     expect(configuredIds(patch)).toEqual(["web-runtime"]);
     expect(targetedIds(patch)).toContain("web-runtime");
   });

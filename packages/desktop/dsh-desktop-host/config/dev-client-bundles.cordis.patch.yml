@@ -1,0 +1,9 @@
+# 源码面的 client 半：`@deepseek-ai/*` 与本仓库插件包的 `exports["./client"]` 都指到 `src/client/index.ts`，
+# 而 `client-modules` 只会把那个文件当 JS 原样下发——所以要有人把源码半现场打成模块表的工厂脚本。
+# 判据与实现见 [`src/dev-client/`](../src/dev-client/index.ts)。
+#
+# 这一层单独一份、由宿主与 `dsh-desktopify dev --web` 都用 `--patch` 挂上：它开发与打包都要，而
+# 桌面专属的那几层（传输接管、遥测、登录面）web 形态不能挂。
+- insert:
+    - id: dev-client-bundles
+      name: "../lib/dev-client-bundles.js"

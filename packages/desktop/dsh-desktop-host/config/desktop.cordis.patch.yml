@@ -64,12 +64,3 @@
 - id: ui-settings-account
   disabled: true
 
-# 源码面的 client 半：`@deepseek-ai/*` 与本仓库的插件包 `exports["./client"]` 都指到 `src/client/index.ts`，
-# 而 `client-modules` 只会把那个文件当 JS 原样下发——所以要有人把源码半现场打成模块表的工厂脚本。
-# 这一行就住在宿主里（相对路径指宿主自己的产物）：它开发与打包都要，且必须不依赖用户的 profile 数据
-# （那份 `cordis.patch.yml` 是设置面板的写入对象，装配行放进去会被覆盖掉）。
-# 判据与实现见 [`src/dev-client/`](../src/dev-client/index.ts)。
-
-- insert:
-    - id: dev-client-bundles
-      name: "../lib/dev-client-bundles.js"
