@@ -13,19 +13,33 @@ import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "rolldown/utils";
 
+// `decorate` 按 tsc 的 legacy `__decorate` 语义实现。oxc 的 legacy 降级按**实参个数**分三种调用，
+// 个数是协议的一部分，不能按 `undefined` 归一：
+//
+//   `decorate([decs], Target)`                      类装饰器：装饰器不返回值时也必须返回 Target。
+//     上游 `@Inject` 的 legacy 分路正是 `return`，缺这条兜底会让 `X = decorate([…], X)` 把类抹成
+//     undefined——`hmr` 行的 `export default Hmr` 因此成了 `{ default: undefined }`，Loader 判成
+//     "invalid plugin"，那一行不激活。
+//   `decorate([decs], Target, key, void 0)`         字段装饰器：没有现成 descriptor。
+//   `decorate([decs], Target.prototype, key, null)` 方法装饰器：descriptor 由被装饰处取。
 globalThis.babelHelpers = {
-  decorate(decorators, target, key, desc) {
-    let descriptor = desc;
-    if (descriptor === null && key !== null) {
-      descriptor = Object.getOwnPropertyDescriptor(target, key) ?? null;
-    }
-    let result = descriptor;
+  decorate(decorators, target, ...rest) {
+    const arity = 2 + rest.length;
+    const [key, desc] = rest;
+    let result;
+    if (arity < 3) result = target;
+    else if (desc === null) result = Object.getOwnPropertyDescriptor(target, key);
+    else result = desc;
     for (let index = decorators.length - 1; index >= 0; index -= 1) {
       const decorator = decorators[index];
       if (typeof decorator !== "function") continue;
-      const next = decorator(target, key, descriptor);
-      if (next !== undefined) result = next;
+      let next;
+      if (arity < 3) next = decorator(result);
+      else if (arity > 3) next = decorator(target, key, result);
+      else next = decorator(target, key);
+      result = next || result;
     }
+    if (arity > 3 && result) Object.defineProperty(target, key, result);
     return result;
   },
 };
