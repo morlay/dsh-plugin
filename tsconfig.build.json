@@ -1,11 +1,20 @@
 {
-  // 构建（dts 生成）那一份 program：host / client 两个 face 都在，与切分前一致。
-  // 声明生成要沿 import 链逐个解析上游 `src`（见 `tsconfig.json` 里的说明），所以这里不做 face 切分——
-  // 切分后 client 入口不在 program 里，`rolldown-plugin-dts` 直接报
-  // `tsgo did not generate dts file for …/src/client/index.ts`。
-  // 类型判定的那两份是 `tsconfig.json`（宿主面）与 `tsconfig.client.json`（client 面）：`just lint` 按文件
-  // 就近发现，编辑器同理。这一份不是类型门：直接 `tsc -p tsconfig.build.json` 会看到合并 program 里
-  // 宿主面那批按 client 面判出来的误报（`ctx.sessions` 那类），dts 生成不看它们。
-  "extends": "./tsconfig.json",
-  "exclude": ["**/node_modules/**", "**/dist/*", "vendor/**/*.config.ts", "vendor/**/tests/**"]
+  // 构建（dts 生成）那一份 program：两个 face 都在。tsdown 一个包只有一份 tsconfig，client 入口必须在
+  // 里面才出得了 `dist/client.d.cts`；换成 solution 根（`files: []`）时 tsgo 没有 program，连 host 入口的
+  // dts 都出不来（实测 `tsgo did not generate dts file for …/src/index.ts`），所以这份还留着。
+  // 不能 extend `tsconfig.json`（solution 的 `files: []` 会被叶继承、program 直接变空），所以直接接 devkit。
+  // 类型判定的两份是 `tsconfig.host.json` / `tsconfig.client.json`，这一份不参与类型门。
+  "extends": ["@local/devkit/tsconfig.json"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": ".tmp/tsc-build",
+  },
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/*",
+    "vendor/**/*.config.ts",
+    "vendor/**/tests/**",
+  ],
 }

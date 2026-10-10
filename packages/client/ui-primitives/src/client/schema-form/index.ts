@@ -57,6 +57,11 @@ export { parseFor } from "./fields.tsx";
 export { containerShape, editorLines, visibleFields } from "./lines.ts";
 export type { EditorLine, FoldState } from "./lines.ts";
 export { SchemaFormController, canRender, optionsFor, projectRoot } from "./controller.ts";
+// 行投影的输入件：外部的「真配置验收」要按与控制器同一套算法自己排行（见各消费包 client 面的 __tests__）。
+export { addableAt, fieldKey } from "./controller.ts";
+export { readPath } from "./schema-node.ts";
+export type { SchemaFormTranslate } from "./slot-contract.ts";
+export { zh } from "./locales.ts";
 export { failureOf } from "./draft.ts";
 export type { ValidationFailure } from "./draft.ts";
 export { walkFields, projectNode } from "./schema-node.ts";

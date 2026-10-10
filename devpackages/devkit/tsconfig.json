@@ -4,6 +4,9 @@
     "target": "esnext",
     "types": ["node"],
     "composite": true,
+    // 与 `composite` 一起开（上游 `tsconfig.base.json` 同样是两项并写）：`tsc -b` 的增量缓存在各 config
+    // 旁那份 `*.tsbuildinfo` 里（gitignore），references 的叶才谈得上「只重编变了的」。
+    "incremental": true,
     "sourceMap": false,
     "declaration": true,
     "noEmit": true,

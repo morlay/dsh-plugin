@@ -9,7 +9,7 @@ type CordisPluginConfig = Awaited<ReturnType<typeof defineCordisPluginConfig>>;
 // （装配数据：模式定义与 `preset` 映射）同一次构建。
 export default defineConfig(async (): Promise<CordisPluginConfig> => {
   const config = await defineCordisPluginConfig({
-    entries: { rows: "./src/rows.ts" },
+    entries: { rows: "./src/rows.ts", testing: "./src/testing.ts" },
     client: {
       name: "@morlay/dsh-session-mode",
       entry: "./src/client/index.ts",

@@ -24,6 +24,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./rows": "./src/rows.ts",
+    "./testing": "./src/testing.ts",
     "./package.json": "./package.json",
     "./client": "./src/client/index.ts",
     "./locale/*.json": "./locale/*.json"
@@ -32,6 +33,7 @@
     "exports": {
       ".": "./dist/index.mjs",
       "./rows": "./dist/rows.mjs",
+      "./testing": "./dist/testing.mjs",
       "./package.json": "./package.json",
       "./client": {
         "types": "./dist/client.d.cts",
@@ -73,6 +75,7 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tool-skill": "workspace:*",

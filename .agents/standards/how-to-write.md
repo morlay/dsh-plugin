@@ -70,19 +70,32 @@
   （`devpackages/devkit/tsconfig.json`）。跨边界 id 使用 branded 类型（如 `SessionId`），不做裸
   `string`。**类型检查由 `just lint` 承担**（oxlint 的 `typeAware` + `typeCheck`，后端
   `oxlint-tsgolint`）——本仓库没有独立的 `tsc` 步骤，类型报错就是 lint 报错。
-- **host / client 是两个 compiler face，各自成 program**：上游对同一份合并接口在两边各声明一次
-  （如 `Context.sessions`：宿主面 `SessionStore`、client 面 `ISessions`），一个 program 里只会剩先绑定
-  那份、另一边的用法全红（`TS2717` 报在 vendor 侧、被 oxlint 的 ignorePatterns 吞掉，看见的是
-  `TS2339: Property 'get'/'flush' does not exist on type 'ISessions'`、`TS2554: Expected 0-1
-  arguments, but got 2`（`sessions.create(id, opts)`）这一批）。所以：
-  - `**/src/client/**`（含它下面的 spec，例如 `packages/client/ui-primitives/src/__tests__/`）归
-    **client 面** program：目录里放一份就近 `tsconfig.json`（内容只有 `extends` 到根
-    `tsconfig.client.json`），新开一个 client 半目录要照做；
-  - 根 `tsconfig.json` 是**宿主面** program，不许把上游 client face 拉进来——宿主面的文件别 import
-    任何 `…/client` 出口（那会把上游 client 面的那套声明连同它们的依赖拖进来）；
-  - `just lint` 一趟就够：oxlint 的 typeCheck 按文件就近发现 tsconfig，两个 program 各判各的；
-  - 构建（dts）走两份 face 都在的 `tsconfig.build.json`（tsdown 一个包只有一份 tsconfig，client 入口
-    必须在里面才出得了 `dist/client.d.cts`），由 devkit 的配置工厂从包目录往上找、自动带上。
+- **host / client 是两个 compiler face，各自成 program**：形状是**上游那条规矩**——solution 根 + face 叶
+  （"face-specific leaf configs + a solution-only root"）：根 `tsconfig.json` 只写 `files: []` 与
+  `references`（`tsconfig.host.json` / `tsconfig.client.json`），自己不装 program。为什么非这样不可 +
+  为什么下面几条边界是硬的，都有实测依据：
+  - 上游对同一份合并接口（`Context` / `Events`）在两个 face 各声明一次（如 `Context.sessions`：宿主面
+    `SessionStore`、client 面 `ISessions`）。塞进同一个 program 时后绑定的那份把先绑定的挤掉（`TS2717`
+    报在 vendor 侧、被 lint 的 ignorePatterns 吞掉），看见的是 `TS2339: Property 'get'/'flush' does not
+    exist on type 'ISessions'`、`TS2554: Expected 0-1 arguments, but got 2`（`sessions.create(id, opts)`）
+    这一批——宿主面**不许 import client 面**，别让它们进同一个 program。
+  - **client 面的文件按目录分家**：`**/src/client/**` 归 client 叶；client 面的测试住
+    `src/client/__tests__/`（与它测的那半同目录，跟宿主面的 `src/__tests__/` 分开），不要用文件名后缀或
+    额外的就近 `tsconfig.json` 去表达 face。新开一个 client 半目录什么都不用加：client 叶的
+    `include` 认的是 `packages/*/*/src/client/**/*` 这个目录形状。
+  - **跨包、跨面的依赖走 export 路径**（`@morlay/<包>`、`@morlay/<包>/client`、`./testing`），
+    相对路径只在同包同面内用（本地相对 import 带 `.ts`）。外部测试要用的内部件先开出口再引
+    （测试辅助走 `./testing`；client 面的组件/算法走 `/client`）。
+  - 两叶 `composite`（devkit 的 base 给的）是 references 的前提，也带来两条硬约束：被引用的项目不许
+    disable emit（所以宿主叶 `noEmit: false` + `emitDeclarationOnly`，声明落进 gitignore 的
+    `.tmp/tsc-host`，只给 `tsc -b` 的类型图用）；program 里的文件必须都在自己或引用项目的 `include` 里
+    （TS6307）——上面两条边界就是为它服务的。跨项目 import 还要关掉 `rewriteRelativeImportExtensions`
+    （否则 `TS2878`），上游两片 aggregate 同样关着。
+  - 门仍是 `just lint`：oxlint 的 typeCheck 按文件就近发现 tsconfig、再按 references 解析到叶。`tsc -b`
+    （或 `tsc -p` 两份叶）能把两片都过一遍，本仓文件 0 条，但会带 vendor 侧既有的 TS6307 之类的噪音。
+  - 构建（dts）另走 `tsconfig.build.json`：tsdown 一个包只有一份 tsconfig，client 入口必须在里面才出得了
+    `dist/client.d.cts`；换成 solution 根时 tsgo 没有 program，连 host 入口的 dts 都出不来（实测）。它不参与
+    类型门，由 devkit 的配置工厂从包目录往上找、自动带上。
 - **`node/no-sync` 全开、无豁免**：运行时代码、测试与脚本（含 `.agents/skills/` 的同步 / patch / build
   脚本）一律用异步 node API（`node:fs/promises`、`promisify(execFile)`、`spawn` + Promise 包装），
   不用 `*Sync` 变体。`node:sqlite` 的 `DatabaseSync` 与 better-sqlite3 的同步用法是该驱动的语义、

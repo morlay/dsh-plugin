@@ -440,6 +440,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      '@morlay/session-rdb':
+        specifier: workspace:*
+        version: link:../../session/session-rdb
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -779,6 +782,9 @@ importers:
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/session/session-projection
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/settings/settings
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/skill/skill

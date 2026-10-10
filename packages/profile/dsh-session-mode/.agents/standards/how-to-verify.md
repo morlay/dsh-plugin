@@ -38,7 +38,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   - **volatile 落在 `default` 与 `modes` 上**：schema 上只有这两个字段带 volatile meta（顶层的 `models` 不带，
     它是 `hidden()` 的报错用字段）——设置面能编辑的正是这两个；解析之后它们是稳定引用，下一次请求读到的就是
     引用里的新值（引用符号的 home 是 cosmokit 的 `volatile.ts`）。
-- `src/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有默认模式
+- `src/client/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有默认模式
   （`default`）、模式清单（`modes.<id>.<字段>`，模式是成员行；四份名单都是数组，配过的值各占一项）与每个模式自己的
   默认模型（没配时是 `modes.<id>` 下的可添加项，配了就有 `provider` / `model` / `reasoningEffort` 三个位子）——用真
   `volatileForm` 与真 `Config`，只把 settings 的读写面换成替身。

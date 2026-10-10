@@ -1,0 +1,22 @@
+{
+  "extends": ["@local/devkit/tsconfig.json"],
+  "compilerOptions": {
+    "rewriteRelativeImportExtensions": false,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": ".tmp/tsc-host",
+  },
+  "include": ["**/*"],
+  "files": [
+    "vendor/deepseek-harness/packages/core/agent-loop/tests/mock-adapter.ts",
+    "vendor/deepseek-harness/packages/subagent/subagent/tests/working-directory-fixture.ts",
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/*",
+    "**/lib/*",
+    "**/src/client/**",
+    "vendor/**/*.config.ts",
+    "vendor/**/tests/**",
+  ],
+}

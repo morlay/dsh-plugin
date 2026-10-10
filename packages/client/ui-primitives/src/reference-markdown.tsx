@@ -13,12 +13,12 @@
 // 因此 `code-review` 这种没有路径特征的 skill 也能稳定成 chip、而普通 inline code 不会。
 
 import { memo, useMemo } from "react";
-import { MarkdownText } from "./client/markdown-text.ts";
+import { MarkdownText } from "./markdown-text.ts";
 import type {
   MarkdownFileMentions,
   MarkdownLabels,
   MarkdownPathImages,
-} from "./client/markdown-text.ts";
+} from "./markdown-text.ts";
 import {
   findReferences,
   formatReference,

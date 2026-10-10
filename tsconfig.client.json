@@ -1,15 +1,17 @@
 {
-  // client 面（浏览器半）的 program：`**/src/client/**` 与它们的 spec。宿主面那份在 `tsconfig.json`。
-  // 上游把 host / client 当两个 compiler face，同一个合并接口（`Context` / `Events`）两边各声明一次；
-  // 只有分居两个 program 才谈得上「一份实例」。每个 client 面目录里放一份 `tsconfig.json` 指向这里，
-  // 按文件发现 tsconfig 的工具（oxlint 的 typeCheck、编辑器）才会把那些文件算进这一份。
-  // 判据面是「每个文件按就近那份判」；直接 `tsc -p tsconfig.client.json` 会把被这些 spec 拉进来的宿主
-  // 文件也算进这份 program，看到它们按 client 面判出来的误报——那些文件不在这一趟的判据里。
-  "extends": "./tsconfig.json",
+  "extends": ["@local/devkit/tsconfig.json"],
+  // 跨项目 import 不重写相对扩展名（上游两片 aggregate 同样关着它）：开了就报 TS2878。
+  "compilerOptions": {
+    "rewriteRelativeImportExtensions": false,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": ".tmp/tsc-client",
+  },
+  "references": [{ "path": "./tsconfig.host.json" }],
   "include": [
     "packages/*/*/src/client/**/*",
+    "vendor/**/src/client/**/*",
     "packages/*/*/src/css-modules.d.ts",
-    "packages/client/ui-primitives/src/__tests__/**/*"
   ],
-  "exclude": ["**/node_modules/**", "**/dist/*"]
+  "exclude": ["**/node_modules/**", "**/dist/*"],
 }
