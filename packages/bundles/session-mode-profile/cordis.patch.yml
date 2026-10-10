@@ -23,6 +23,7 @@
               - office-xlsx
             denyPolicies:
               - fs/edit-intent
+              - fs/write-intent
           chat:
             name: 对话模式
             description: 只做对话：提问与联网（搜索、抓取）三件工具，不注入系统提示词、工作区指令与技能目录。

@@ -113,14 +113,13 @@ describe("模式定义", () => {
     expect(Object.keys(modes?.["noop"] ?? {}).sort()).toEqual(["description", "name", "role"]);
   });
 
-  it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」，写路径的规则留着", () => {
+  it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」与写路径的意图判定", () => {
     const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
       | Record<string, { allowPolicies?: readonly string[]; denyPolicies?: readonly string[] }>
       | undefined;
 
-    // 改路径上的上游规则（`fs/edit-intent`）禁用：免"先读后改"。
-    expect(modes?.["coding"]?.denyPolicies).toEqual(["fs/edit-intent"]);
-    // 写路径上的（`fs/write-intent`）不在黑名单里，也没写白名单：照旧生效（陈旧版本 CAS 那层安全网）。
+    // 两条上游规则都进黑名单：改路径的免「先读后改」，写路径的免意图判定。
+    expect(modes?.["coding"]?.denyPolicies).toEqual(["fs/edit-intent", "fs/write-intent"]);
     expect(modes?.["coding"]?.allowPolicies).toBeUndefined();
     // `chat` 一条 policy 都不配：没有文件工具，两条都碰不到。
     expect(modes?.["chat"]?.denyPolicies).toBeUndefined();

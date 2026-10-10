@@ -581,15 +581,14 @@ describe.each([
     expect(await toolNames(ctx, agent)).toEqual(["ask_user_question", "web_fetch", "web_search"]);
   });
 
-  it("按模式的 policy 拦截：coding 免「先读后改」，chat 照旧吃上游的拒绝", async () => {
+  it("按模式的 policy 拦截：coding 两条上游规则都免掉，chat 照旧吃上游的拒绝", async () => {
     const { ctx, create, workspace } = await mountBoth();
     const agent = await create();
     const target = await ctx.fs.resolve(join(workspace, "notes.md"));
 
-    // coding（源数据里禁了 `fs/edit-intent`）：真策略那句"先读后改"被绕过 → 无条件编辑。
+    // coding（源数据里两条都禁）：真策略的「先读后改」与写意图判定都被绕过 → 两条都不再由策略回答。
     await expect(editIntent(ctx, target, agent)).resolves.toBeUndefined();
-    // 写那条规则没禁：真策略照旧给"没读过的目标 = createIfAbsent"（CAS 那层安全网留着）。
-    expect(await writeIntent(ctx, target, agent)).toEqual({ kind: "createIfAbsent" });
+    await expect(writeIntent(ctx, target, agent)).resolves.toBeUndefined();
 
     await ctx.sessionModes.select(agent.id, "chat");
 
