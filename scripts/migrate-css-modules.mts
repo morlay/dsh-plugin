@@ -1,6 +1,7 @@
 // CSS Modules → css-in-js 样式对象迁移器：把 `.module.css` 机械转成 `*.styles.ts`（类选择器 → 样式对象、
 // `:hover` → `"&:hover"`、`@media` / `@keyframes` / `:global` 各有归并位置）。
-// 用法：pnpm exec tsx scripts/migrate-css-modules.mts <packageDir> [--write]（不带 `--write` 只报告计划）。
+// 用法：node --import=devpackages/devkit/src/ts-loader.mjs scripts/migrate-css-modules.mts <packageDir>
+// [--write]（不带 `--write` 只报告计划）。
 
 import { glob, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";

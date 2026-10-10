@@ -1,11 +1,16 @@
+# 三个脚本都是 TS，用随仓库的 oxc loader 直跑（`@local/devkit/ts-loader`）；不依赖 tsx：它没被任何
+# 清单声明过，`node_modules/.bin/tsx` 只是别家依赖顺带提升上来的。
+loader := join(module_directory(), '../devpackages/devkit/src/ts-loader.mjs')
+skill := join(module_directory(), '../.agents/skills/dsh-plugin-upstream-sync/scripts')
+
 sync:
-    tsx {{ join(module_directory(), '../.agents/skills/dsh-plugin-upstream-sync/scripts/sync.ts') }}
+    node --import={{ loader }} {{ skill }}/sync.ts
 
 patch:
-    tsx {{ join(module_directory(), '../.agents/skills/dsh-plugin-upstream-sync/scripts/patch.ts') }}
+    node --import={{ loader }} {{ skill }}/patch.ts
 
 build:
-    tsx {{ join(module_directory(), '../.agents/skills/dsh-plugin-upstream-sync/scripts/build.ts') }}
+    node --import={{ loader }} {{ skill }}/build.ts
 
 # 日常升级只做 sync + patch：exports 指到 src、装饰器写端双协议、typert 生成物写成 .ts，开发与桌面
 # dev 形态直接消费源码面（见 ADR-开发与桌面消费上游源码面而非lib产物）。`build` 是发布档，只在需要

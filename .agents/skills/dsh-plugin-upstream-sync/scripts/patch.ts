@@ -46,7 +46,9 @@ async function packageDirs(root: string): Promise<string[]> {
   async function children(path: string): Promise<string[]> {
     try {
       return (await readdir(path, { withFileTypes: true }))
-        .filter((entry) => entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git")
+        .filter(
+          (entry) => entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git",
+        )
         .map((entry) => join(path, entry.name));
     } catch {
       return [];
@@ -77,7 +79,12 @@ function srcCandidates(target: string): string[] | undefined {
     .replace(/\.cjs$/, "")
     .replace(/\.mjs$/, "")
     .replace(/\.js$/, "");
-  return [`./src/${rest}.ts`, `./src/${rest}.tsx`, `./src/${rest}/index.ts`, `./src/${rest}/index.tsx`];
+  return [
+    `./src/${rest}.ts`,
+    `./src/${rest}.tsx`,
+    `./src/${rest}/index.ts`,
+    `./src/${rest}/index.tsx`,
+  ];
 }
 
 // 映射一个出口目标；`undefined` 表示保持原样（非 lib 目标、白名单、或找不到源码）。
@@ -101,10 +108,34 @@ async function mapTarget(
   return undefined;
 }
 
+// `files` 是发布面的文件集，而 deploy 闭包（桌面 bundle）正是按它拷工作区副本。源码面下代码载体从 `lib/`
+// 换成 `src`，不改这一项，闭包拷出来就是「清单在、代码没了」的空壳：app 能起来、host 起不来。
+// 生成物仍落在 `lib/`（`typert` 步骤写的 `lib/typert.<face>.ts`，出口也指着它们），所以单独补一条。
+// 「有 `lib/` 项」即整棵 `src` 入列——只列了 `src/main.c` 这类个别文件（native 的 entry 包）也算：缺
+// `src/index.ts` 时那一条行的 import 直接失败。没有源码的包（例如只发 bin 的）保持原样。
+async function rewriteFiles(pkgDir: string, manifest: { files?: unknown }): Promise<boolean> {
+  const files = manifest.files;
+  if (!Array.isArray(files)) return false;
+  let sawLib = false;
+  const kept: string[] = [];
+  for (const entry of files) {
+    if (typeof entry !== "string" || entry === "") continue;
+    if (entry.startsWith("lib/")) {
+      sawLib = true;
+      continue;
+    }
+    kept.push(entry);
+  }
+  if (!sawLib || !(await pathExists(join(pkgDir, "src")))) return false;
+  manifest.files = [...new Set([...kept, "src", "lib/typert.*"])];
+  return true;
+}
+
 async function rewriteExports(dir: string): Promise<void> {
   const unmapped: string[] = [];
   const touched: string[] = [];
   let addedSrcWildcard = 0;
+  let filesRewritten = 0;
   for (const pkgDir of await packageDirs(dir)) {
     const manifestPath = join(pkgDir, "package.json");
     if (!(await pathExists(manifestPath))) continue;
@@ -112,17 +143,22 @@ async function rewriteExports(dir: string): Promise<void> {
       exports?: unknown;
       main?: unknown;
       types?: unknown;
+      files?: unknown;
       name?: string;
     };
     const exportsField = manifest.exports;
-    if (exportsField === undefined || exportsField === null || typeof exportsField !== "object") continue;
+    if (exportsField === undefined || exportsField === null || typeof exportsField !== "object")
+      continue;
     const shortName = (manifest.name ?? pkgDir).replace("@deepseek-ai/", "");
     let changed = false;
 
     for (const [exportName, value] of Object.entries(exportsField as Record<string, unknown>)) {
       const generated = GENERATED_EXPORTS[exportName];
       if (generated !== undefined) {
-        (exportsField as Record<string, unknown>)[exportName] = { types: generated, default: generated };
+        (exportsField as Record<string, unknown>)[exportName] = {
+          types: generated,
+          default: generated,
+        };
         changed = true;
         continue;
       }
@@ -201,11 +237,20 @@ async function rewriteExports(dir: string): Promise<void> {
       addedSrcWildcard += 1;
     }
 
+    if (await rewriteFiles(pkgDir, manifest)) {
+      changed = true;
+      filesRewritten += 1;
+    }
+
     if (changed) {
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       touched.push(shortName);
     }
-  }  console.log(`[patch] exports -> src: ${touched.length} 个包改写，${addedSrcWildcard} 个包补 ./src/*`);
+  }
+  console.log(
+    `[patch] exports -> src: ${touched.length} 个包改写，${addedSrcWildcard} 个包补 ./src/*，` +
+      `${filesRewritten} 个包的 files 改指源码面`,
+  );
   if (unmapped.length > 0) {
     const unique = [...new Set(unmapped)];
     console.log(`[patch] exports 未映射 ${unique.length} 条（保持 lib 形态）:`);
@@ -260,7 +305,10 @@ async function generateTypertArtifacts(dir: string): Promise<void> {
       // - 值声明带上原声明的类型（`TYPERT` 保持 unknown，与上游「不让业务包依赖运行时注册表」一致）；
       // - 丢掉 dts 里与值重名的 `export declare const`、重复的 `export default` 与失效的 sourceMappingURL；
       // - 保留 `import type` 与 `declare module`（remote 的类型增强靠它）。
-      const hostTs = artifact.js.replace(/^export const TYPERT = \{$/mu, "export const TYPERT: unknown = {");
+      const hostTs = artifact.js.replace(
+        /^export const TYPERT = \{$/mu,
+        "export const TYPERT: unknown = {",
+      );
       await writeFile(join(outDir, `typert.${artifact.face}.ts`), hostTs);
       if (artifact.remote !== undefined) {
         const withType = artifact.remote.js.replace(
@@ -271,9 +319,9 @@ async function generateTypertArtifacts(dir: string): Promise<void> {
           .split("\n")
           .filter(
             (line) =>
-              !line.startsWith("export declare const TYPERT_REMOTE")
-              && !line.startsWith("export default ")
-              && !line.startsWith("//# sourceMappingURL"),
+              !line.startsWith("export declare const TYPERT_REMOTE") &&
+              !line.startsWith("export default ") &&
+              !line.startsWith("//# sourceMappingURL"),
           )
           .join("\n");
         await writeFile(join(outDir, "typert.remote-client.ts"), `${withType}\n${enhancement}`);

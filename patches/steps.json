@@ -1,6 +1,7 @@
 [
   { "type": "rm", "path": "apps/cli/tests/profiles/acp/cordis.yml" },
   { "type": "git", "patch": "decorator-dual-protocol.patch" },
+  { "type": "git", "patch": "source-loader.patch" },
   { "type": "exports" },
   {
     "type": "text",

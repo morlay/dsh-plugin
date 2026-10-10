@@ -24,7 +24,6 @@
   ],
   "type": "module",
   "exports": {
-    "./dev-client-bundles": "./src/dev-client/index.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -33,7 +32,6 @@
       "dsh-desktopify": "./dist/cli/index.mjs"
     },
     "exports": {
-      "./dev-client-bundles": "./dist/dev-client-bundles.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
@@ -50,9 +48,7 @@
     "electron": "^44.3.0",
     "electron-builder": "^26.16.1",
     "extract-zip": "^2.0.1",
-    "lightningcss": "^1.32.0",
     "pnpm": "12.4.2",
-    "rolldown": "1.x",
     "sharp": "^0.35.4",
     "tar": "^7.5.0",
     "tsdown": "0.23.x"

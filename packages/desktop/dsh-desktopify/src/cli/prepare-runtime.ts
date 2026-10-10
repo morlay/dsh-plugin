@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { access, chmod, cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, cp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -15,6 +15,10 @@ const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
 // What the runtime entry loads: its wrapper and the node-gyp payload; pnpm's install script
 // relinks the platform binary, so the package must not be copied wholesale.
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
+// 随包的 TS loader（`@local/devkit` 的 oxc loader 入口）与它自己那份 rolldown：打包形态的 host 进程
+// 用它把上游源码（`exports` 指 `src`）转成 node 能执行的东西。
+const LOADER_ENTRY = "@local/devkit/ts-loader";
+const ROLDDOWN_MANIFEST = "rolldown/package.json";
 
 type RuntimePlatform = "darwin" | "linux" | "win";
 type RuntimeArch = "arm64" | "x64";
@@ -234,6 +238,39 @@ async function prepareBin(platform: RuntimePlatform, runtimeRoot: string): Promi
   await symlink("../node/node", join(binRoot, "node"), "file");
 }
 
+// 随包 loader 载荷：loader 自己（一个 `.mjs`，只 import `rolldown/utils`）与 rolldown 那一层的依赖。
+// pnpm 把同一个包的依赖都放在 `<store>/rolldown@<version>/node_modules/` 这一层里，整层拷过去，
+// rolldown 的解析就与在仓库里一致——包括它自己按平台挑的原生绑定（约 16 MiB）。
+async function prepareLoader(runtimeRoot: string): Promise<string> {
+  const entry = fileURLToPath(import.meta.resolve(LOADER_ENTRY));
+  const rolldownRoot = dirname(fileURLToPath(import.meta.resolve(ROLDDOWN_MANIFEST)));
+  const layer = dirname(rolldownRoot);
+  if (basename(layer) !== "node_modules")
+    throw new Error(
+      `desktop runtime: unexpected install layout for rolldown (${rolldownRoot}); ` +
+        "the loader payload needs pnpm's virtual store",
+    );
+  const manifest = JSON.parse(await readFile(join(rolldownRoot, "package.json"), "utf8")) as {
+    version?: unknown;
+  };
+  const destination = join(runtimeRoot, "loader");
+  await rm(destination, { recursive: true, force: true });
+  await mkdir(join(destination, "node_modules"), { recursive: true });
+  await cp(entry, join(destination, basename(entry)));
+  await writeFile(
+    join(destination, "package.json"),
+    `${JSON.stringify({ name: "dsh-desktop-loader", private: true, type: "module" }, undefined, 2)}\n`,
+  );
+  for (const child of await readdir(layer)) {
+    if (child.startsWith(".")) continue;
+    await cp(join(layer, child), join(destination, "node_modules", child), {
+      recursive: true,
+      dereference: true,
+    });
+  }
+  return typeof manifest.version === "string" ? manifest.version : "unknown";
+}
+
 export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise<void> {
   const { platform, arch } = target();
   requireBundledPnpmTarget(platform, arch);
@@ -243,6 +280,7 @@ export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise
   await mkdir(runtimeRoot, { recursive: true });
   await prepareNode(platform, arch, buildRootDir);
   const pnpmVersion = await preparePnpm(platform, runtimeRoot);
+  const loaderRolldown = await prepareLoader(runtimeRoot);
   await prepareBin(platform, runtimeRoot);
   await writeFile(
     join(runtimeRoot, "versions.json"),
@@ -257,6 +295,7 @@ export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise
     )}\n`,
   );
   console.log(
-    `desktop runtime: prepared Node.js ${NODE_VERSION} and pnpm ${pnpmVersion} for ${platform}-${arch}`,
+    `desktop runtime: prepared Node.js ${NODE_VERSION}, pnpm ${pnpmVersion} and the oxc loader ` +
+      `(rolldown ${loaderRolldown}) for ${platform}-${arch}`,
   );
 }

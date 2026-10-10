@@ -15,7 +15,7 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
-import { installProfilePatch, syncProfileBundles } from "./dev-web.ts";
+import { syncProfileBundles } from "./dev-web.ts";
 import {
   DSH_PACKAGE,
   desktopHost,
@@ -30,7 +30,6 @@ import {
   PROFILE_NAME,
   buildRoot,
   desktopConfig,
-  devWebConfig,
   dshVersion as readDshVersion,
   findWorkspaceRoot,
   mergedProfileBundles,
@@ -41,9 +40,6 @@ import {
 } from "./workspace.ts";
 
 const APP_ROOT = resolve(import.meta.dirname, "..", "..");
-// 本包名：app 的 `cordis.patch.yml` 用它拼 `dev-client-bundles` 行，profile 里也得装它。
-export const DESKTOPIFY_PACKAGE = "@morlay/dsh-desktopify";
-
 function debugPort(name: string, fallback: number): number {
   const value = process.env[name];
   if (value === undefined || value === "") return fallback;
@@ -270,7 +266,6 @@ async function prepareWebProfile(
   workspace: string,
   input: OfficialResolutionInput,
   home: string,
-  clientBundles: boolean,
   tsLoader: string,
 ): Promise<string> {
   const manifest = await workspaceManifest(workspace);
@@ -285,16 +280,6 @@ async function prepareWebProfile(
     await run(
       process.execPath,
       [entry, "plugin", "--profile", "web", "add", `${packageName}@link:${link}`],
-      workspace,
-      { ...environment, DSH_HOME: home },
-    );
-  }
-  // 把本包 link 进 profile：app 只把 desktopify 声明成 peer，而那一行按包名 + 出口写，
-  // 缺它 dev 的 client bundle 路由就 `failed to import`。
-  if (clientBundles && !dependencies.includes(DESKTOPIFY_PACKAGE)) {
-    await run(
-      process.execPath,
-      [entry, "plugin", "--profile", "web", "add", `${DESKTOPIFY_PACKAGE}@link:${APP_ROOT}`],
       workspace,
       { ...environment, DSH_HOME: home },
     );
@@ -318,7 +303,6 @@ async function launchElectron(
   projectDir: string,
   buildRootDir: string,
   tsLoader: string,
-  clientBundles: boolean,
   home: string,
 ): Promise<void> {
   const require = createRequire(import.meta.url);
@@ -343,10 +327,7 @@ async function launchElectron(
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
 
-    DSH_DESKTOP_TSX_IMPORT: tsLoader,
-    // host 进程按这个开关启用 profile 里那条 `dev-client-bundles` 行（它继承 Electron 的环境，
-    // 而 host 会滤掉 `DSH_DESKTOP_*`）。桌面与 web 两条 dev 路径都要它：清单里 client 半指源码。
-    ...(clientBundles ? { DSH_DEV_CLIENT_BUNDLES: "1" } : {}),
+    DSH_DESKTOP_SOURCE_LOADER: tsLoader,
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS ?? "1",
     ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? "1",
   };
@@ -383,17 +364,9 @@ export async function runDev(options: DevOptions): Promise<void> {
   // 两种 dev 形态共用同一个数据面根；`--home=xdg` 时与打包形态落到同一个目录。
   const home = resolveDevHome(workspace, manifest.name, options.home);
   await buildShell();
-  // client 半的现场转换（清单里 `./client` 指源码）：两条 dev 形态都要挂。
-  const devWeb = devWebConfig(manifest);
   const tsLoader = tsLoaderSpecifier();
   if (options.web) {
-    const profileDir = await prepareWebProfile(
-      workspace,
-      input,
-      home,
-      devWeb !== undefined,
-      tsLoader,
-    );
+    const profileDir = await prepareWebProfile(workspace, input, home, tsLoader);
     const port = process.env.PORT ?? "3080";
     const entry = await cliEntry(input);
     if (!(await pathExists(entry))) {
@@ -403,16 +376,7 @@ export async function runDev(options: DevOptions): Promise<void> {
       `desktop development: web mode DSH_HOME=${home} profile=${profileDir} port=${port}`,
     );
 
-    if (devWeb !== undefined) {
-      const patchFile = await installProfilePatch(profileDir, workspace);
-      console.log(`desktop development: dev client bundles patch=${patchFile}`);
-    }
-
-    const environment = {
-      ...process.env,
-      DSH_HOME: home,
-      ...(devWeb === undefined ? {} : { DSH_DEV_CLIENT_BUNDLES: "1" }),
-    };
+    const environment = { ...process.env, DSH_HOME: home };
     await run(
       process.execPath,
       [entry, "web", "--port", port],
@@ -429,11 +393,6 @@ export async function runDev(options: DevOptions): Promise<void> {
     workspace,
     input,
   );
-  // 桌面 dev 的 profile 就是 projectDir（壳把它当 profile 目录用），patch 因此写在这里。
-  if (devWeb !== undefined) {
-    const patchFile = await installProfilePatch(projectDir, workspace);
-    console.log(`desktop development: dev client bundles patch=${patchFile}`);
-  }
   const desktop = desktopConfig(manifest);
   const runtimeRoot = join(buildRootDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });
@@ -447,5 +406,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(projectDir, buildRootDir, tsLoader, devWeb !== undefined, home);
+  await launchElectron(projectDir, buildRootDir, tsLoader, home);
 }

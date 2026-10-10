@@ -2,16 +2,19 @@ import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
-import { bundleClientFactory } from "@local/devkit";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
 
 export const name = "dev-client-bundles";
 
 export const inject = ["webServer", "clientModules"];
 
-export interface Config {
-  prefixes?: string[];
+// 打包器（`@local/devkit` 的现场打包面，连带 rolldown 与它的原生绑定）按需加载：打包产物里的行
+// 已经切成 dist，这一支一次都不会走——常驻它等于给每个宿主进程白加一份打包器的内存。
+const loadBundler = async (): Promise<typeof import("@local/devkit").bundleClientFactory> =>
+  (await import("@local/devkit")).bundleClientFactory;
 
+export interface Config {
+  // 显式点名的包：client 出口是**产物**（`.js`）但也要现场打包时用它压过默认判据。
   packages?: string[];
 }
 
@@ -28,8 +31,6 @@ interface ModuleTable {
   clientPath(id: string): string | undefined;
   fetchBundle(request: Request): Promise<Response>;
 }
-
-const DEFAULT_PREFIXES = ["@morlay/"];
 
 // 源码后缀：`clientPath` 命中它就意味着这一行还没有构建产物，需要现场打包。
 const SOURCE_ENTRY = /\.[cm]?tsx?$/;
@@ -63,19 +64,18 @@ export function apply(ctx: Context, config: Config = {}): void {
   if (webServer === undefined || modules === undefined)
     throw new Error("dev-client-bundles: webServer and clientModules are required services");
 
-  const prefixes = config.prefixes ?? DEFAULT_PREFIXES;
   const explicit = new Set(config.packages ?? []);
-  const isDevPackage = (id: string): boolean =>
-    explicit.has(id) || prefixes.some((prefix) => id.startsWith(prefix));
 
   // 现场打包的判据是「这一行的 client 出口指向源码」：`exports` 指到 `src/client/index.ts` 后，
   // `client-modules` 读到的就是 TS 源文件，直接下发会把 TS 当 JS 执行——浏览器要的是工厂脚本。
+  // 源码面对上游与本仓库的包一视同仁（两边都是 `src`），所以判据只看出口指向，不看包名前缀：
+  // 打包产物里 `@morlay/*` 的出口已切回 `dist`，按前缀判会把它们当源码行去找不存在的 `src`。
   const sourceRow = (id: string): boolean => {
     const path = modules.clientPath(id);
     return path !== undefined && SOURCE_ENTRY.test(path);
   };
 
-  const needsBundle = (id: string): boolean => isDevPackage(id) || sourceRow(id);
+  const needsBundle = (id: string): boolean => explicit.has(id) || sourceRow(id);
 
   // 留给模块表的行集：只匹配行入口与 `/client` 子路径。`.../remote`、`/display` 这类子路径不是行条目
   // （模块表按行注册），把它们当 external 会让整行在浏览器里 require 失败。
@@ -102,7 +102,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       throw new Error(`dev-client-bundles: ${id} has no client source at ${resolved}`);
     // cwd 是**被打包的那个包**：external 判据读它自己的依赖清单（谁有 `exports["./client"]`），
     // 用 dev 进程的 cwd（工作区根）会漏掉我们的 client 行，把它们内联成第二份 factory。
-    return await bundleClientFactory({ name: id, entry: resolved, externals, cwd: root });
+    return await (await loadBundler())({ name: id, entry: resolved, externals, cwd: root });
   };
 
   const readBuilt = async (id: string): Promise<string> =>

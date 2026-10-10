@@ -50,8 +50,8 @@
 - **日常验证不要跑 `verify-session-mode.mts` / `just pg test` 这类起真实服务的探针**：
   它们绑端口、装依赖，会被机器上别的进程（残留的 dev server、另一个探针）阻塞住，卡住的是验证本身而不是被测
   代码。装配链的回归用不起服务的证据覆盖——生成物断言、`composeLayers` 式的层组合断言、以及各包的行为用例；
-  那两支探针（`pnpm exec tsx packages/desktop/dsh-desktop-host/tool/<探针>.mts`）只在人工排查"真装配下才看得见
-  的事实"时手动跑。
+  那两支探针（`node --import=devpackages/devkit/src/ts-loader.mjs
+  packages/desktop/dsh-desktop-host/tool/<探针>.mts`）只在人工排查"真装配下才看得见的事实"时手动跑。
 
 ## 失败怎么处理
 

@@ -7,6 +7,7 @@ import { defineCordisPluginConfig } from "@local/devkit";
 export default defineCordisPluginConfig({
   entries: {
     webserver: "./src/webserver.ts",
+    "dev-client-bundles": "./src/dev-client/index.ts",
     wire: "./src/wire.ts",
     paths: "./src/paths.ts",
   },

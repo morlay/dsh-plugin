@@ -17,11 +17,12 @@
 // 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
 //
 // ```sh
-// pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
+// pnpm exec node --import=../../../../devpackages/devkit/src/ts-loader.mjs \
+//   packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
 // ```
 //
 // 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
-// `just custom dev --web` 或 `just custom desktop`）；脚本只读它，不会改，也不建会话。
+// `just custom dev --web`）；脚本只读它，不会改，也不建会话。
 
 import { access } from "node:fs/promises";
 import { join } from "node:path";

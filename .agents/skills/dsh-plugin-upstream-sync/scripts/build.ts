@@ -1,5 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pathExists, requireWorkspaceEnv, runInherited } from "./common.ts";
 
 // 上游构建（前置：先跑 patch）。
@@ -41,11 +42,14 @@ async function main(): Promise<void> {
   } else {
     // 默认路径**不**跑 `pnpm run`：上游目录里 `pnpm` 一旦发现 node_modules 缺失就会触发**隐式 install**，
     // 造出上游自己的顶层 node_modules，与根 workspace 的链接形成双副本（实测会让 client 测试成片失败）。
-    // 直接用根目录的 `tsx` 调 native 的构建脚本——它只编译 addon，不碰依赖树。
-    console.log(`[build] tsx native/system/scripts/build.ts --host-addon-only @ ${dir}`);
+    // 直接用随仓库的 oxc loader 调 native 的构建脚本——它只编译 addon，不碰依赖树。
+    const loader = fileURLToPath(import.meta.resolve("@local/devkit/ts-loader"));
+    console.log(
+      `[build] node --import=@local/devkit/ts-loader native/system/scripts/build.ts @ ${dir}`,
+    );
     await runInherited(
-      join(root, "node_modules", ".bin", "tsx"),
-      ["native/system/scripts/build.ts", "--host-addon-only"],
+      process.execPath,
+      [`--import=${loader}`, "native/system/scripts/build.ts", "--host-addon-only"],
       dir,
     );
   }

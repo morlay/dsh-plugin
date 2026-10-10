@@ -26,9 +26,13 @@ function configuredIds(text: string): string[] {
 }
 
 function insertedNames(text: string): string[] {
-  const block = text.split(/^- insert:\s*$/m)[1];
-  if (block === undefined) return [];
-  return [...block.matchAll(/^ {4}- id: (\S+)\n {6}name: "([^"]+)"$/gm)].map((match) => match[2]!);
+  const names: string[] = [];
+  for (const block of text.split(/^- insert:\s*$/m).slice(1)) {
+    names.push(
+      ...[...block.matchAll(/^ {4}- id: (\S+)\n {6}name: "([^"]+)"$/gm)].map((m) => m[2]!),
+    );
+  }
+  return names;
 }
 
 // 上游 patch 里的 `行 id → 模块名`（本 overlay 只按 id 瞄准，名字留在上游那一份）。
@@ -69,7 +73,7 @@ const KEPT_ROWS = {
 
 // 除桌面 overlay 之外的装配层：这些停用只该影响桌面档。
 async function otherPatchFiles(): Promise<string[]> {
-  const files: string[] = [join(repoRoot, "apps/dsh-custom-next/cordis.patch.yml")];
+  const files: string[] = [];
   for (const entry of await readdir(join(repoRoot, "packages/bundles"), { withFileTypes: true })) {
     if (entry.isDirectory())
       files.push(join(repoRoot, "packages/bundles", entry.name, "cordis.patch.yml"));
@@ -110,7 +114,7 @@ describe("桌面 overlay 的停用清单", () => {
   });
 
   it("传输接管的两处配置仍在（无端口 webServer + web-runtime 全项）", () => {
-    expect(insertedNames(patch)).toEqual(["../lib/webserver.js"]);
+    expect(insertedNames(patch)).toEqual(["../lib/webserver.js", "../lib/dev-client-bundles.js"]);
     expect(configuredIds(patch)).toEqual(["web-runtime"]);
     expect(targetedIds(patch)).toContain("web-runtime");
   });

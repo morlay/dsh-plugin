@@ -91,11 +91,12 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 ## 2. 真装配探针（改装配形状时跑）
 
 ```sh
-pnpm exec tsx packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
+pnpm exec node --import=devpackages/devkit/src/ts-loader.mjs \
+  packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
 ```
 
 前提：`apps/dsh-custom-next/.dsh-store/profiles/web` 已被 desktopify 准备过（跑过一次
-`just custom dev --web` 或 `just custom dev`）——探针读它，且只读、不建会话。
+`just custom dev --web`）——探针读它，且只读、不建会话。
 
 **判据**：
 

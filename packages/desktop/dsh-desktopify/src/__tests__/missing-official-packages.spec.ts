@@ -35,8 +35,11 @@ describe("desktop seed missing official packages error", () => {
     expect(matched[1]).toBe(shell.name);
     const command = shell.scripts?.[matched[2] ?? ""];
     expect(command).toBeDefined();
-    const [runner, target] = (command ?? "").trim().split(/\s+/u);
-    expect(runner).toBe("tsx");
+    // TS 脚本靠随仓库的 oxc loader 直跑（`node --import=…ts-loader.mjs <脚本>`）：仓库里没有 tsx 依赖，
+    // `node_modules/.bin/tsx` 只是别家依赖顺带提升上来的。
+    const [runner, loaderArg, target] = (command ?? "").trim().split(/\s+/u);
+    expect(runner).toBe("node");
+    expect(loaderArg).toMatch(/^--import=.*ts-loader\.mjs$/u);
     expect((await stat(join(SHELL_ROOT, target ?? ""))).isFile()).toBe(true);
   });
 
@@ -45,7 +48,7 @@ describe("desktop seed missing official packages error", () => {
     expect(message()).toContain("@deepseek-ai/dsh-missing (required by @morlay/plugin)");
   });
 
-  // 注入面归壳包：本包不留同名入口，也不转发（没有 `tsx` 依赖，转发只是第二个名字）。
+  // 注入面归壳包：本包不留同名入口，也不转发（本包没有那个生成器，转发只是第二个名字）。
   it("keeps the generator entry out of desktopify", () => {
     expect(desktopify.scripts?.["gen:official-packages"]).toBeUndefined();
   });

@@ -192,7 +192,7 @@ importers:
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/node':
-        specifier: ^26.6.4
+        specifier: ^26.6.5
         version: 26.6.5
       '@types/react':
         specifier: 18.3.1
@@ -227,9 +227,6 @@ importers:
       tsdown:
         specifier: 0.23.x
         version: 0.23.0(tsx@4.23.15)(typescript@7.0.2)
-      tsx:
-        specifier: 4.x
-        version: 4.23.15
       typescript:
         specifier: 7.x
         version: 7.0.2
@@ -547,6 +544,12 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      lightningcss:
+        specifier: ^1.32.0
+        version: 1.33.0
+      rolldown:
+        specifier: 1.x
+        version: 1.2.13
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:*
@@ -624,15 +627,9 @@ importers:
       extract-zip:
         specifier: ^2.0.1
         version: 2.0.1(supports-color@9.4.0)
-      lightningcss:
-        specifier: ^1.32.0
-        version: 1.33.0
       pnpm:
         specifier: 12.4.2
         version: 12.4.2
-      rolldown:
-        specifier: 1.x
-        version: 1.2.13
       sharp:
         specifier: ^0.35.4
         version: 0.35.5(@types/node@26.6.5)

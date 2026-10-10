@@ -45,7 +45,7 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "gen:official-packages": "tsx scripts/gen-official-packages.ts",
+    "gen:official-packages": "node --import=../../../devpackages/devkit/src/ts-loader.mjs scripts/gen-official-packages.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {

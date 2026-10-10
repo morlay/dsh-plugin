@@ -30,7 +30,7 @@ interface Run {
   readonly stderr: string;
 }
 
-// 子进程的环境：丢掉继承来的 `NODE_OPTIONS`（宿主 shell 挂的 tsx loader 按子进程 cwd 解析，
+// 子进程的环境：丢掉继承来的 `NODE_OPTIONS`（宿主 shell 挂的 oxc loader 按子进程 cwd 解析，
 // 会把「不在工作区里报什么错」的用例顶成 ERR_MODULE_NOT_FOUND）。
 function childEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };

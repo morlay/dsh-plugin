@@ -4,8 +4,7 @@
   "private": true,
   "files": [
     "icon.svg",
-    "justfile",
-    "cordis.patch.yml"
+    "justfile"
   ],
   "type": "module",
   "exports": {
@@ -32,15 +31,6 @@
         "@morlay/mydsh-profile",
         "@deepseek-ai/dsh-experimental-agent-team-profile"
       ]
-    },
-    "dev": {
-      "web": {
-        "clientBundles": {
-          "prefixes": [
-            "@morlay/"
-          ]
-        }
-      }
     },
     "desktop": {
       "id": "ai.deepseek.dsh.custom-next",

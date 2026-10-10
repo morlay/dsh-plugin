@@ -24,6 +24,7 @@ export interface WorkspaceManifest {
   readonly version?: string;
   readonly files?: string[];
   readonly dependencies?: Record<string, string>;
+  readonly peerDependencies?: Record<string, string>;
   readonly dsh?: {
     readonly version?: string;
     readonly profile?: { readonly bundles?: unknown };
@@ -33,15 +34,6 @@ export interface WorkspaceManifest {
       readonly dshHome?: string;
       readonly icon?: string;
       readonly window?: Record<string, number>;
-    };
-
-    readonly dev?: {
-      readonly web?: {
-        readonly clientBundles?: {
-          readonly prefixes?: unknown;
-          readonly packages?: unknown;
-        };
-      };
     };
   };
 }
@@ -115,35 +107,6 @@ export function appProfileBundles(manifest: WorkspaceManifest): string[] {
 
 export function mergedProfileBundles(manifest: WorkspaceManifest): string[] {
   return [...OFFICIAL_PROFILE_BUNDLES, ...appProfileBundles(manifest)];
-}
-
-export interface DevWebConfig {
-  readonly prefixes: string[];
-
-  readonly packages: string[];
-}
-
-const DEFAULT_DEV_CLIENT_PREFIXES = ["@morlay/"];
-
-function devStringList(subject: string, value: unknown): string[] {
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item !== "")) {
-    throw new Error(`dsh-desktopify: ${subject} must be a non-empty string list`);
-  }
-  return value as string[];
-}
-
-export function devWebConfig(manifest: WorkspaceManifest): DevWebConfig | undefined {
-  const value = manifest.dsh?.dev?.web?.clientBundles;
-  if (value === undefined) return undefined;
-  const subject = `workspace ${String(manifest.name)} dsh.dev.web.clientBundles`;
-  return {
-    prefixes:
-      value.prefixes === undefined
-        ? [...DEFAULT_DEV_CLIENT_PREFIXES]
-        : devStringList(`${subject}.prefixes`, value.prefixes),
-    packages:
-      value.packages === undefined ? [] : devStringList(`${subject}.packages`, value.packages),
-  };
 }
 
 export async function findWorkspaceRoot(workspace: string): Promise<string> {

@@ -16,16 +16,23 @@ const DEV_SOURCE = [
   "",
 ].join("\n");
 
-async function fixturePackage(name: string, source?: string): Promise<string> {
+// 行 fixture：返回的 client 出口路径就是判据的输入。`source` 给出时出口指源码（`.ts`，源码面行的形态）；
+// `built: true` 让出口指产物（`.js`），用来验「显式点名压过产物行」这条路。
+async function fixturePackage(
+  name: string,
+  options: { source?: string; built?: boolean } = {},
+): Promise<string> {
   const root = join(await mkdtemp(join(tmpdir(), "dev-client-bundles-")), "pkg");
   await mkdir(join(root, "dist"), { recursive: true });
   await writeFile(join(root, "package.json"), `${JSON.stringify({ name })}\n`);
   await writeFile(join(root, "dist", "client.js"), OFFICIAL_BYTES);
-  if (source !== undefined) {
+  if (options.source !== undefined) {
     await mkdir(join(root, "src", "client"), { recursive: true });
-    await writeFile(join(root, "src", "client", "index.ts"), source);
+    await writeFile(join(root, "src", "client", "index.ts"), options.source);
   }
-  return join(root, "dist", "client.js");
+  if (options.built === true || options.source === undefined)
+    return join(root, "dist", "client.js");
+  return join(root, "src", "client", "index.ts");
 }
 
 interface Captured {
@@ -115,9 +122,9 @@ function request(url: string, method = "GET"): IncomingMessage {
 }
 
 describe("dev client bundles route", () => {
-  it("bundles a configured package from source and keeps official rows as built bytes", async () => {
+  it("bundles a source-exporting row and keeps built rows as built bytes", async () => {
     const paths = {
-      [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, DEV_SOURCE),
+      [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, { source: DEV_SOURCE }),
       [OFFICIAL_PACKAGE]: await fixturePackage(OFFICIAL_PACKAGE),
     };
     const { serve, fallbackRequests } = harness({}, paths);
@@ -134,10 +141,10 @@ describe("dev client bundles route", () => {
     expect(fallbackRequests).toEqual([]);
   });
 
-  it("respects an explicit package list over the default prefixes", async () => {
+  it("lets an explicit package list override a row whose client export is built", async () => {
     const paths = {
-      [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, DEV_SOURCE),
-      [OFFICIAL_PACKAGE]: await fixturePackage(OFFICIAL_PACKAGE, DEV_SOURCE),
+      [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, { source: DEV_SOURCE }),
+      [OFFICIAL_PACKAGE]: await fixturePackage(OFFICIAL_PACKAGE, { source: DEV_SOURCE, built: true }),
     };
     const { serve } = harness({ packages: [DEV_PACKAGE] }, paths);
     const response = await serve(request(`/plugins/??${OFFICIAL_PACKAGE}/client.js&rev=abc`));
@@ -156,7 +163,7 @@ describe("dev client bundles route", () => {
   });
 
   it("hands source-map and non-GET requests back to the module table", async () => {
-    const paths = { [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, DEV_SOURCE) };
+    const paths = { [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE, { source: DEV_SOURCE }) };
     const { serve, fallbackRequests } = harness({}, paths);
     await serve(request(`/plugins/??${DEV_PACKAGE}/client.js.map&rev=abc`));
     await serve(request(`/plugins/??${DEV_PACKAGE}/client.js&rev=abc`, "POST"));
@@ -165,7 +172,7 @@ describe("dev client bundles route", () => {
 
   it("reports a configured package whose client row or source entry is missing", async () => {
     const paths = { [DEV_PACKAGE]: await fixturePackage(DEV_PACKAGE) };
-    const { serve, errors } = harness({}, paths);
+    const { serve, errors } = harness({ packages: [DEV_PACKAGE] }, paths);
     const noSource = await serve(request(`/plugins/??${DEV_PACKAGE}/client.js&rev=abc`));
     expect(noSource.status).toBe(500);
     expect(noSource.body).toContain("has no client source at");

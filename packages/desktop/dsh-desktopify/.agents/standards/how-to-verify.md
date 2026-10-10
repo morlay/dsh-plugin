@@ -8,9 +8,8 @@
 **工具包**（`packages/desktop/dsh-desktopify/src/__tests__/`）：
 
 - **命令面与工作区契约**：`cli-surface.spec.ts`、`workspace-config.spec.ts`、`appconfig.spec.ts`、
-  `dev-home.spec.ts`、`dev-web.spec.ts`、`desktop-host.spec.ts`、`shell-app-directory.spec.ts`、
-  `tsx-import.spec.ts`（给 host 的 tsx specifier 必须是绝对 `file:` 地址——子进程的 cwd 是部署目录，裸名
-  `tsx/esm` 在那儿解析不到）；
+  `dev-home.spec.ts`、`dev-web.spec.ts`、`desktop-host.spec.ts`、`shell-app-directory.spec.ts`（给 host 的
+  loader specifier 必须是绝对 `file:` 地址——子进程的 cwd 是部署目录，裸名在那儿解析不到）；
 - **部署与依赖闭包**：`deploy-spec.spec.ts`、`deploy-settings.spec.ts`、`official-deploy-specs.spec.ts`、
   `official-package-payload.spec.ts`、`missing-official-packages.spec.ts`；
 - **种子、指纹与随包载荷**：`profile-seed.spec.ts`、`seed-fingerprint.spec.ts`、`prepare-runtime-target.spec.ts`；

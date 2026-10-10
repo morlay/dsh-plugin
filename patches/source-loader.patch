@@ -1,0 +1,19 @@
+diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
+index 381219bab0..d50fdde29d 100644
+--- a/packages/subprocess/subprocess-local/src/runner-launch.ts
++++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
+@@ -33,10 +33,13 @@ export function spawnRunnerInvocation(): RunnerInvocation {
+   if (extname(fileURLToPath(import.meta.url)) !== '.ts') {
+     return [process.execPath, fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-subprocess-local/runner'))]
+   }
++  // 本地 patch（patches/source-loader.patch）：源码面的转译器由部署侧注入——开发面是工作区的
++  // `@local/devkit/ts-loader`，打包产物是随包那份；两者都没注入时才回落到上游默认的 `tsx/esm`
++  // （本仓库不声明 tsx，随包产物里也没有它，`import.meta.resolve` 会直接抛）。
+   return [
+     process.execPath,
+     '--import',
+-    import.meta.resolve('tsx/esm'),
++    process.env.DSH_SOURCE_LOADER ?? import.meta.resolve('tsx/esm'),
+     fileURLToPath(new URL('./bin.ts', import.meta.url)),
+   ]
+ }

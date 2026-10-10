@@ -24,8 +24,10 @@ disable-model-invocation: true
 └── 版本变量配置               # 如 mise.toml：DEEPSEEK_HARNESS_*
 ```
 
-skill 自带脚本 `scripts/{sync,patch,build}.ts`，用 **`tsx` 执行**（勿用
-`pnpm exec`：node_modules 缺失时会触发隐式 install，下载已裁剪依赖）：
+skill 自带脚本 `scripts/{sync,patch,build}.ts` 都是 TS，用 **`@local/devkit/ts-loader`**（oxc）直跑：
+`node --import=<仓库>/devpackages/devkit/src/ts-loader.mjs scripts/<脚本>.ts`。**不要**用 `pnpm exec <脚本>`
+（node_modules 缺失时会触发隐式 install，下载已裁剪依赖），也不要引入 tsx——仓库里没有它，`node_modules/.bin/tsx`
+只是别家依赖顺带提升上来的：
 
 | env                                                   | 含义                                                            |
 | ----------------------------------------------------- | --------------------------------------------------------------- |
@@ -87,12 +89,13 @@ skill 自带脚本 `scripts/{sync,patch,build}.ts`，用 **`tsx` 执行**（勿�
 ## 同步流程
 
 日常同步 = sync → patch（**同步链不需要根目录 `pnpm install`**）。`build` 是发布档，只在需要上游 built
-产物时跑（`native/` 变化、上游 built-only 门禁、发布校验）。顺序固定，用 `tsx` 直调脚本（勿用 `pnpm exec`）：
+产物时跑（`native/` 变化、上游 built-only 门禁、发布校验）。顺序固定，用 oxc loader 直调脚本（勿用
+`pnpm exec`，也勿引入 tsx）：
 
 ```sh
-tsx <skill 路径>/scripts/sync.ts    # 1. 对齐到目标提交
-tsx <skill 路径>/scripts/patch.ts   # 2. EXCLUDE 裁剪 + steps.json 补丁（含 exports 改写与 typert 生成）
-tsx <skill 路径>/scripts/build.ts   # 3.（可选，发布档）干净构建
+node --import=<仓库>/devpackages/devkit/src/ts-loader.mjs <skill 路径>/scripts/sync.ts   # 1. 对齐到目标提交
+node --import=<仓库>/devpackages/devkit/src/ts-loader.mjs <skill 路径>/scripts/patch.ts  # 2. EXCLUDE 裁剪 + steps.json 补丁
+node --import=<仓库>/devpackages/devkit/src/ts-loader.mjs <skill 路径>/scripts/build.ts  # 3.（可选，发布档）干净构建
 ```
 
 ### sync.ts：同步上游到指定提交
@@ -131,13 +134,20 @@ tsx <skill 路径>/scripts/build.ts   # 3.（可选，发布档）干净构建
    `build --full` 那条路要用上游自己的 tsconfig，所以只能在 `patch` 之前跑（见下）。
 
    `exports` 是**生成式**步骤（不存 diff）：把上游各包 `exports` 里指向 `lib/` 的目标改写成对应的
-   `src` 源文件，并给缺 `"./src/*"` 出口的包补上，使开发与桌面 dev 形态直接消费源码
+   `src` 源文件，并给缺 `"./src/*"` 出口的包补上，使开发与桌面两种形态直接消费源码
    （决定见 [ADR-开发与桌面消费上游源码面](../../adrs/20261010-开发与桌面消费上游源码面而非lib产物.md)）。
+   同一步还把各包 `files` 里的 `lib/*` 项换成 `src`（有 `src/` 的包才动），另补 `lib/typert.*`——`files`
+   是发布面的文件集，而桌面 bundle 的 deploy 闭包正是按它拷工作区副本，不改就是「清单在、代码没了」的空壳。
    生成物出口 `./typert`、`./client/typert`、`./remote` 改指 `typert` 步骤产出的 `.ts`；非 `lib/` 目标
    （资产、`./src/*`）原样。找不到源码的出口打印清单后保持原样——它是上游新增出口的信号，不是同步失败。
 
+   `git` 步骤是**本地补丁**（`patches/*.patch` 打进上游工作树，打不上就失败——上游改到这些行即信号）：
+   `decorator-dual-protocol.patch` 让写端（typert 的 `Remote`/`RemoteScope`、cordis 的 `Inject`）同时接受
+   TC39 与 legacy 两种调用约定；`source-loader.patch` 让 subprocess runner 的转译器可由 `DSH_SOURCE_LOADER`
+   注入（上游默认的 `tsx/esm` 在本仓库与随包产物里都不存在）。
+
    `typert` 是**生成式**步骤：直接编排上游 analyzer/emitter 生成 typert 产物，写成 `.ts`
-   （`lib/typert.<face>.ts`、`lib/typert.remote-client.ts`），避免开发/桌面 dev 形态为这两个出口
+   （`lib/typert.<face>.ts`、`lib/typert.remote-client.ts`），避免开发/桌面形态为这两个出口
    再构建一次上游。它不调用 `WorkspaceTypertGenerator.generate`——那条路径带 lib 形态的强制契约校验。
    前置的 `text` 步骤给 analyzer 的「数据出口」跳过列表补 `css`：`.css` 与 `svg`/`png` 同类（无 TS API），
    `client/ui-theme` 的 `brand-font.css` 出口否则会在分析期被判为「missing source」。
@@ -147,9 +157,9 @@ tsx <skill 路径>/scripts/build.ts   # 3.（可选，发布档）干净构建
 
 ### build.ts：默认只编译 native，且不 install
 
-默认直接拿**根目录的 `tsx`** 调 `native/system/scripts/build.ts --host-addon-only`——上游只剩 `native/` 的
-addon 必须编译（`.node` 是二进制产物，源码面消费不了）。其余产物都由源码面取代：`exports` 指 `src`、
-client 半现场打包、typert 生成物由 `patch` 写成 `.ts`，见
+默认直接用随仓库的 oxc loader（`@local/devkit/ts-loader`）调 `native/system/scripts/build.ts
+--host-addon-only`——上游只剩 `native/` 的 addon 必须编译（`.node` 是二进制产物，源码面消费不了）。其余
+产物都由源码面取代：`exports` 指 `src`、client 半现场打包、typert 生成物由 `patch` 写成 `.ts`，见
 [ADR-开发与桌面消费上游源码面](../../adrs/20261010-开发与桌面消费上游源码面而非lib产物.md)。
 
 **不 install**：上游自带 pnpm workspace，在它目录里跑 pnpm（`run` 在 node_modules 缺失时还会**隐式 install**）
@@ -161,7 +171,7 @@ web 前端），供发布档或上游 built-only 门禁；它需要上游自己�
 **未 patch 的干净基线**上跑（`sync` 之后、`patch` 之前），结束时用根 `pnpm install --force` 复原解析。
 
 > 仓库可封装为命令（如 just：`vendor sync` / `vendor patch` / `vendor
-> build`），直接 `tsx` 调用脚本，语义与流程一致。
+> build`），直接 `node --import=<ts-loader>` 调用脚本，语义与流程一致。
 
 ## 升级
 

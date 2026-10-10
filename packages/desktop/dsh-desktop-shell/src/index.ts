@@ -93,6 +93,8 @@ interface RuntimeResources {
   readonly pnpm: string;
   readonly nodeBin: string;
   readonly seed: string;
+  // 随包的 TS loader：源码面下 host 进程用它转译上游（`exports` 指 `src`），也交给它拉起的子进程。
+  readonly loader: string;
 }
 
 function runtimeResources(): RuntimeResources {
@@ -115,6 +117,7 @@ function runtimeResources(): RuntimeResources {
     runtime: join(seed, SEED_RUNTIME_DIR_NAME),
     pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
     nodeBin: join(process.resourcesPath, "runtime", "bin"),
+    loader: join(process.resourcesPath, "runtime", "loader", "ts-loader.mjs"),
   };
 }
 
@@ -220,9 +223,17 @@ function developmentHostInspectPort(enabled: boolean): number | undefined {
   return port;
 }
 
-function developmentNodeArgs(): string[] {
-  const specifier = process.env.DSH_DESKTOP_TSX_IMPORT;
-  return specifier === undefined || specifier === "" ? [] : [`--import=${specifier}`];
+// host 进程自己那份转译器：dev 形态用工作区里的（改完即生效），打包形态用随包的。
+// 两条都是绝对路径——host 的 cwd 是部署 / profile 目录，裸名在那儿解析不到。
+function sourceLoader(resources: RuntimeResources): string {
+  const configured = process.env.DSH_DESKTOP_SOURCE_LOADER;
+  return configured === undefined || configured === "" ? resources.loader : configured;
+}
+
+// 拉起的子进程（上游 subprocess runner 等）走同一份转译器：它们按源码面加载上游入口，
+// 而 argv 里的 `--import` 只有自己那份，所以要经环境把选择传下去。
+function sourceLoaderEnvironment(path: string): Record<string, string> {
+  return { DSH_SOURCE_LOADER: path };
 }
 
 async function main(): Promise<void> {
@@ -300,17 +311,19 @@ async function main(): Promise<void> {
   };
 
   const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
+    const loader = sourceLoader(resources);
     const next = new DesktopHostProcess(
       resources.node,
       runtimeProject,
       projectDir,
       hostInspectPort,
       {
-        nodeArgs: development === undefined ? [] : developmentNodeArgs(),
+        nodeArgs: [`--import=${loader}`],
 
         extraEnv: {
           ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
-          ...(development === undefined ? {} : { ELECTRON_RUN_AS_NODE: "1" }),
+          ...(development === undefined ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+          ...sourceLoaderEnvironment(loader),
         },
         // `ps` 里能把后端与别的 node 进程区分开。
         processTitle: `${appConfig.name}-server`,
