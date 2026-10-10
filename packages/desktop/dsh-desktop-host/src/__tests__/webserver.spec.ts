@@ -172,3 +172,37 @@ describe("无端口 webServer", () => {
     expect((await webServer.dispatch(get("/gone"))).status).toBe(404);
   });
 });
+
+describe("请求取消传到 handler", () => {
+  it("Request.signal abort 时合成请求中止——长流靠它收尾", async () => {
+    const { webServer } = server();
+    const abort = new AbortController();
+    let observed: string | undefined;
+    let release!: () => void;
+    const observedAbort = new Promise<void>((done) => {
+      release = done;
+    });
+    webServer.register({
+      kind: "exact",
+      path: "/stream",
+      handler: (req, res) => {
+        res.writeHead(200, { "content-type": "application/x-ndjson" });
+        req.once("aborted", () => {
+          observed = "aborted";
+          release();
+        });
+        res.once("close", () => {
+          observed ??= "close";
+          release();
+        });
+      },
+    });
+    await webServer.dispatch(
+      new Request(new URL("/stream", "http://app.invalid"), { signal: abort.signal }),
+    );
+
+    abort.abort();
+    await observedAbort;
+    expect(observed).toBe("aborted");
+  });
+});

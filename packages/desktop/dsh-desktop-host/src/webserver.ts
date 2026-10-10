@@ -175,7 +175,7 @@ function createRequest(request: Request, url: URL): IncomingMessage {
   const stream = Readable.from(request.body === null ? [] : consume(request.body));
   const headers: Record<string, string> = {};
   for (const [name, value] of request.headers) headers[name.toLowerCase()] = value;
-  return Object.assign(stream, {
+  const req = Object.assign(stream, {
     url: `${url.pathname}${url.search}`,
     method: request.method,
     headers,
@@ -185,6 +185,17 @@ function createRequest(request: Request, url: URL): IncomingMessage {
     complete: false,
     aborted: false,
   }) as unknown as IncomingMessage;
+  // `Request.signal` 是这条请求唯一的取消来源（桌面管道在客户端的 cancel 帧上 abort 它）。
+  // 不翻成 node 请求的中止，handler 的 `request.once('aborted')` 永不开火，长流没人收尾——
+  // 客户端切走之后那条流（与它留住的会话状态）会一直挂在宿主里。
+  const abort = (): void => {
+    (req as unknown as { aborted: boolean }).aborted = true;
+    req.emit("aborted");
+    stream.destroy();
+  };
+  if (request.signal.aborted) queueMicrotask(abort);
+  else request.signal.addEventListener("abort", abort, { once: true });
+  return req;
 }
 
 async function* consume(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {

@@ -300,6 +300,35 @@ describe("页面侧流载体的取消语义", () => {
     expect(await settled(iterator.next())).toEqual({ done: true, value: undefined });
   });
 
+  it("消费方提前退出即收尾载体流——切会话时上游只 return 迭代器", async () => {
+    const { transport, carrier } = pageTransport();
+    const iterator = transport
+      .openStream("/session.follow", {}, new AbortController().signal)
+      [Symbol.asyncIterator]();
+
+    const first = iterator.next();
+    carrier.handlers?.chunk('{"frame":1}\n');
+    expect(await settled(first)).toEqual({ done: false, value: { frame: 1 } });
+
+    // 消费方 break / iterator.return()：signal 不 abort，收尾只能从 finally 走。
+    await settled(iterator.return!(undefined));
+    expect(carrier.cancels).toBe(1);
+  });
+
+  it("abort 与 return 都发生也只 cancel 一次", async () => {
+    const { transport, carrier } = pageTransport();
+    const abort = new AbortController();
+    const iterator = transport
+      .openStream("/session.follow", {}, abort.signal)
+      [Symbol.asyncIterator]();
+
+    const pending = iterator.next();
+    abort.abort(new Error("disposed"));
+    expect(await settled(pending)).toEqual({ done: true, value: undefined });
+    await settled(iterator.return!(undefined));
+    expect(carrier.cancels).toBe(1);
+  });
+
   it("end 帧交付已收数据后结束迭代", async () => {
     const { transport, carrier } = pageTransport();
     const iterator = transport

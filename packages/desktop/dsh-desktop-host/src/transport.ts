@@ -11,7 +11,7 @@ import { DESKTOP_STREAM_PATH, DesktopStreamBodyDecoder } from "./wire.ts";
 export { DESKTOP_STREAM_PATH } from "./wire.ts";
 
 // 桌面流的计数：给「宿主内存一直在涨」这类问题用的——把增长落到「哪条流、多少字节」上。
-// 只在 `DSH_DESKTOP_MEMORY_REPORT=1` 时被读出来打印（见 `index.ts`），平时就是几个自增。
+// 只在 `DSH_MEMORY_REPORT=1` 时被读出来打印（见 `index.ts` 的 reportMemoryWhenAsked），平时就是几个自增。
 export const desktopStreamStats = {
   active: 0,
   opened: 0,
@@ -56,9 +56,19 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
       },
       fail(message){failure=new Error(message);ended=true;notify()},
     })
-    // 取消必须结束迭代：不叫醒它，等在这一句上的消费方收不到 end 帧，dispose（await iterator.return）
-    // 也永不落定——窗口重建会卡在这里。
-    const onAbort=()=>{stream.cancel();ended=true;notify()}
+    // 收尾只有一处：取消必须结束迭代（不叫醒它，等在这一句上的消费方收不到 end 帧，
+    // dispose（await iterator.return）也永不落定——窗口重建会卡在这里），同时取消载体流本身。
+    // abort（窗口重建）与消费方提前退出（切会话时上游只 return 迭代器，不发 abort）都走它；
+    // 幂等，两条路径都发生也只 cancel 一次。
+    let closed=false
+    const close=()=>{
+      if(closed)return
+      closed=true
+      stream.cancel()
+      ended=true
+      notify()
+    }
+    const onAbort=close
     signal.addEventListener('abort',onAbort,{once:true})
     if(signal.aborted)onAbort()
     // 上行（客户端 → 宿主）是逻辑流的输入项：逐条交给主进程，收尾时结束请求体；
@@ -86,6 +96,7 @@ export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
       }
     }finally{
       signal.removeEventListener('abort',onAbort)
+      close()
     }
   }
 }
