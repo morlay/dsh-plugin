@@ -56,7 +56,7 @@
 - **两处结构性偏离**（`index.ts` 不复述 cordis 合并接口、构建期降级标准装饰器）各自有理由，见
   [包 README](../../README.md)。
 - **`@Remote` 装饰器**：本包走源码入口，vitest 与 tsdown 都必须先降级装饰器（oxc 不做），
-  [根债务](../../../../../.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md) 记录了这两处补丁与回退条件。
+  [根债务](../../../../../.agents/debts/20260923-标准装饰器降级分居两套机制.md) 记录了这两处补丁与回退条件。
 - **provider 与依赖方不受影响**：服务名、`./internal` 等子路径、`subagent-spawn-in-process` /
   `subagent-fork-in-process` / `tool-subagent-control` 都仍走上游包；只有 `ctx.subagents` 的实例实现来自本包。
 - **官方设置卡照常可用**：接管没换行 id，`subagent` 与 `subagent-model-selection` 两个 namespace 都还在，本包因此

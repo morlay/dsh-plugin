@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { basename, dirname, resolve as resolvePath } from "node:path";
 import { transform } from "lightningcss";
 import type { Plugin } from "rolldown";
@@ -46,11 +47,11 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
       name: "dsh-css-modules-inline",
       resolveId: {
         // rolldown 在默认顺序的钩子之前剥离 import query、再把它拼回返回的 id；pre 才拿得到
-        // 原始 specifier（vendor 侧同理，见 patches/css-inline-query.patch）。
+        // 原始 specifier（上游 client 构建同理）。
         order: "pre",
         handler(source: string, importer: string | undefined) {
           if (!source.endsWith(".module.css")) return null;
-          return MODULES_PREFIX + stylesheetPath(source, importer) + VIRTUAL_SUFFIX;
+          return MODULES_PREFIX + resolveFileSpecifier(source, importer) + VIRTUAL_SUFFIX;
         },
       },
       async load(virtualId: string) {
@@ -76,7 +77,7 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
         handler(source: string, importer: string | undefined) {
           if (!source.endsWith(`.css${INLINE_QUERY}`)) return null;
           const stylesheet = source.slice(0, -INLINE_QUERY.length);
-          return INLINE_PREFIX + stylesheetPath(stylesheet, importer) + VIRTUAL_SUFFIX;
+          return INLINE_PREFIX + resolveFileSpecifier(stylesheet, importer) + VIRTUAL_SUFFIX;
         },
       },
       async load(virtualId: string) {
@@ -97,7 +98,7 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
         order: "pre",
         handler(source: string, importer: string | undefined) {
           if (!source.endsWith(".css")) return null;
-          return GLOBAL_PREFIX + stylesheetPath(source, importer) + VIRTUAL_SUFFIX;
+          return GLOBAL_PREFIX + resolveFileSpecifier(source, importer) + VIRTUAL_SUFFIX;
         },
       },
       async load(virtualId: string) {
@@ -115,8 +116,14 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
   ];
 }
 
-// 样式文件的物理路径：相对 specifier 相对 importer 解析，绝对 specifier 原样使用。
-function stylesheetPath(source: string, importer: string | undefined): string {
+// 文件 specifier 的物理路径：相对 specifier 相对 importer 解析，裸包 specifier 按 importer 所在的包解析
+// （例如 `@xterm/xterm/css/xterm.css`——直接拼路径会落到 importer 目录下，ENOENT），绝对 specifier 原样使用。
+// 样式与资产（`?raw`）两类插件共用同一套解析。
+export function resolveFileSpecifier(source: string, importer: string | undefined): string {
+  const relative = source.startsWith(".") || source.startsWith("/");
+  if (!relative && importer !== undefined) {
+    return createRequire(importer).resolve(source);
+  }
   return importer === undefined ? source : resolvePath(dirname(importer), source);
 }
 

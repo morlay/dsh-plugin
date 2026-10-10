@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { bundleClientFactory } from "@local/devkit";
-import { COMBO_PATH, comboEntryIds, stripSourceMapTrailer } from "./combo.ts";
+import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
 
 export const name = "dev-client-bundles";
 
@@ -30,6 +30,9 @@ interface ModuleTable {
 }
 
 const DEFAULT_PREFIXES = ["@morlay/"];
+
+// 源码后缀：`clientPath` 命中它就意味着这一行还没有构建产物，需要现场打包。
+const SOURCE_ENTRY = /\.[cm]?tsx?$/;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
@@ -65,12 +68,23 @@ export function apply(ctx: Context, config: Config = {}): void {
   const isDevPackage = (id: string): boolean =>
     explicit.has(id) || prefixes.some((prefix) => id.startsWith(prefix));
 
+  // 现场打包的判据是「这一行的 client 出口指向源码」：`exports` 指到 `src/client/index.ts` 后，
+  // `client-modules` 读到的就是 TS 源文件，直接下发会把 TS 当 JS 执行——浏览器要的是工厂脚本。
+  const sourceRow = (id: string): boolean => {
+    const path = modules.clientPath(id);
+    return path !== undefined && SOURCE_ENTRY.test(path);
+  };
+
+  const needsBundle = (id: string): boolean => isDevPackage(id) || sourceRow(id);
+
+  // 留给模块表的行集：只匹配行入口与 `/client` 子路径。`.../remote`、`/display` 这类子路径不是行条目
+  // （模块表按行注册），把它们当 external 会让整行在浏览器里 require 失败。
   const devExternals = (): (string | RegExp)[] =>
     modules
       .graph()
       .entries.map((entry) => entry.id)
-      .filter(isDevPackage)
-      .map((id) => new RegExp(`^${escapeRegExp(id)}(?:/|$)`));
+      .filter(needsBundle)
+      .map((id) => new RegExp(`^${escapeRegExp(id)}(?:/client)?$`));
 
   const builtPathOf = (id: string): string => {
     const path = modules.clientPath(id);
@@ -79,12 +93,16 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   const bundleSource = async (id: string, externals: (string | RegExp)[]): Promise<string> => {
-    const { root, entry } = await clientEntryOf(builtPathOf(id));
-    if (!(await pathExists(entry)))
-      throw new Error(`dev-client-bundles: ${id} has no client source at ${entry}`);
+    const clientPath = builtPathOf(id);
+    const { root, entry } = await clientEntryOf(clientPath);
+    // 源码行：`clientPath` 就是入口本身（`src/client/index.ts` 或 `src/client.ts`）；
+    // 产物行（未改指源码的白名单出口）：沿用包内约定的 `src/client/index.ts`。
+    const resolved = SOURCE_ENTRY.test(clientPath) ? clientPath : entry;
+    if (!(await pathExists(resolved)))
+      throw new Error(`dev-client-bundles: ${id} has no client source at ${resolved}`);
     // cwd 是**被打包的那个包**：external 判据读它自己的依赖清单（谁有 `exports["./client"]`），
     // 用 dev 进程的 cwd（工作区根）会漏掉我们的 client 行，把它们内联成第二份 factory。
-    return await bundleClientFactory({ name: id, entry, externals, cwd: root });
+    return await bundleClientFactory({ name: id, entry: resolved, externals, cwd: root });
   };
 
   const readBuilt = async (id: string): Promise<string> =>
@@ -113,16 +131,18 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   const serve = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const ids = comboEntryIds(req.url ?? COMBO_PATH);
-    if ((req.method !== "GET" && req.method !== "HEAD") || ids === undefined)
-      return fallback(req, res);
-    if (!ids.some(isDevPackage)) return fallback(req, res);
+    const url = req.url ?? COMBO_PATH;
+    if (req.method !== "GET" && req.method !== "HEAD") return fallback(req, res);
+    // combo（`??a/client.js,b/client.js`）与单包（`/<id>/client.js`）都要现场打包：源码行下发的
+    // 字节若走 clientModules，会把 TS 原文当 JS 执行。包内 chunk 仍交给 clientModules。
+    const combo = comboEntryIds(url);
+    const single = combo === undefined ? singleEntryId(url) : undefined;
+    const ids = combo ?? (single === undefined ? undefined : [single]);
+    if (ids === undefined || !ids.some(needsBundle)) return fallback(req, res);
     try {
       const externals = devExternals();
       const parts = await Promise.all(
-        ids.map(async (id) =>
-          isDevPackage(id) ? await bundleSource(id, externals) : readBuilt(id),
-        ),
+        ids.map(async (id) => (needsBundle(id) ? await bundleSource(id, externals) : readBuilt(id))),
       );
       res.writeHead(200, {
         "content-type": "text/javascript; charset=utf-8",

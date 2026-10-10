@@ -8,7 +8,7 @@ type CordisPluginConfig = Awaited<ReturnType<typeof defineCordisPluginConfig>>;
 
 // 本包接管的上游源码带**标准（TC39）装饰器**（`@Remote('prompt')`），而 oxc / rolldown 不降级——产物会
 // 带着 `@Remote(...)` 出厂，部署形态加载 `dist` 时直接语法错（`subagents` 服务因此没人注册）。预转换的
-// 实现在 devkit，范围与理由见 `../../../.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md`。
+// 实现在 devkit，范围与理由见 `../../../.agents/debts/20260923-标准装饰器降级分居两套机制.md`。
 export default (async (): Promise<CordisPluginConfig> => {
   const config = await defineCordisPluginConfig({
     entries: { rows: "./src/rows.ts" },

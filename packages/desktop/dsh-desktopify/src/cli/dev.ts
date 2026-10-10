@@ -22,7 +22,6 @@ import {
   officialDependencySpecs,
   resolveOfficialPackage,
   toolModulesDir,
-  tsxImportSpecifier,
   type OfficialResolutionInput,
 } from "./official-deps.ts";
 import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
@@ -83,7 +82,22 @@ async function cliEntry(input: OfficialResolutionInput): Promise<string> {
   if (dsh === undefined) {
     throw new Error(`desktop development: cannot resolve ${DSH_PACKAGE}`);
   }
-  return join(dsh.dir, "lib", "bin.js");
+  // dev 形态跑上游 CLI 的**源码**入口：`@deepseek-ai/*` 经 exports 指到 src 后运行期没有 lib 产物，
+  // 转译与装饰器降级由注入的 TS loader 承担。
+  return join(dsh.dir, "src", "bin.ts");
+}
+
+// dev 形态给子进程注入的 TS loader：`@local/devkit` 的 oxc loader（转译 + legacy 装饰器降级）。
+// 上游包经 exports 指到 src 后，Node 原生 strip-only 不支持 parameter properties / enum / 装饰器。
+function tsLoaderSpecifier(): string {
+  return import.meta.resolve("@local/devkit/ts-loader");
+}
+
+function withTsLoader(environment: NodeJS.ProcessEnv, loader: string): NodeJS.ProcessEnv {
+  return {
+    ...environment,
+    NODE_OPTIONS: [environment.NODE_OPTIONS, `--import=${loader}`].filter(Boolean).join(" "),
+  };
 }
 
 async function run(
@@ -257,12 +271,14 @@ async function prepareWebProfile(
   input: OfficialResolutionInput,
   home: string,
   clientBundles: boolean,
+  tsLoader: string,
 ): Promise<string> {
   const manifest = await workspaceManifest(workspace);
   const entry = await cliEntry(input);
   if (!(await pathExists(entry))) {
-    throw new Error(`desktop development: missing built artifact ${entry}`);
+    throw new Error(`desktop development: missing source entry ${entry}`);
   }
+  const environment = withTsLoader({ ...process.env, DSH_HOME: home }, tsLoader);
   const dependencies = Object.keys(manifest.dependencies ?? {});
   for (const packageName of dependencies) {
     const link = resolveLinkTarget(workspace, packageName);
@@ -270,10 +286,7 @@ async function prepareWebProfile(
       process.execPath,
       [entry, "plugin", "--profile", "web", "add", `${packageName}@link:${link}`],
       workspace,
-      {
-        ...process.env,
-        DSH_HOME: home,
-      },
+      { ...environment, DSH_HOME: home },
     );
   }
   // 把本包 link 进 profile：app 只把 desktopify 声明成 peer，而那一行按包名 + 出口写，
@@ -283,10 +296,7 @@ async function prepareWebProfile(
       process.execPath,
       [entry, "plugin", "--profile", "web", "add", `${DESKTOPIFY_PACKAGE}@link:${APP_ROOT}`],
       workspace,
-      {
-        ...process.env,
-        DSH_HOME: home,
-      },
+      { ...environment, DSH_HOME: home },
     );
   }
   const profileDir = join(home, "profiles", "web");
@@ -307,7 +317,7 @@ function resolveLinkTarget(workspace: string, packageName: string): string {
 async function launchElectron(
   projectDir: string,
   buildRootDir: string,
-  tsxImport: string | undefined,
+  tsLoader: string,
   clientBundles: boolean,
   home: string,
 ): Promise<void> {
@@ -333,7 +343,7 @@ async function launchElectron(
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
 
-    DSH_DESKTOP_TSX_IMPORT: tsxImport ?? "",
+    DSH_DESKTOP_TSX_IMPORT: tsLoader,
     // host 进程按这个开关启用 profile 里那条 `dev-client-bundles` 行（它继承 Electron 的环境，
     // 而 host 会滤掉 `DSH_DESKTOP_*`）。桌面与 web 两条 dev 路径都要它：清单里 client 半指源码。
     ...(clientBundles ? { DSH_DEV_CLIENT_BUNDLES: "1" } : {}),
@@ -375,13 +385,19 @@ export async function runDev(options: DevOptions): Promise<void> {
   await buildShell();
   // client 半的现场转换（清单里 `./client` 指源码）：两条 dev 形态都要挂。
   const devWeb = devWebConfig(manifest);
-  const tsxImport = tsxImportSpecifier(workspace, repositoryRoot);
+  const tsLoader = tsLoaderSpecifier();
   if (options.web) {
-    const profileDir = await prepareWebProfile(workspace, input, home, devWeb !== undefined);
+    const profileDir = await prepareWebProfile(
+      workspace,
+      input,
+      home,
+      devWeb !== undefined,
+      tsLoader,
+    );
     const port = process.env.PORT ?? "3080";
     const entry = await cliEntry(input);
     if (!(await pathExists(entry))) {
-      throw new Error(`desktop development: missing built artifact ${entry}`);
+      throw new Error(`desktop development: missing source entry ${entry}`);
     }
     console.log(
       `desktop development: web mode DSH_HOME=${home} profile=${profileDir} port=${port}`,
@@ -392,17 +408,17 @@ export async function runDev(options: DevOptions): Promise<void> {
       console.log(`desktop development: dev client bundles patch=${patchFile}`);
     }
 
-    const nodeOptions =
-      tsxImport === undefined
-        ? process.env.NODE_OPTIONS
-        : [process.env.NODE_OPTIONS, `--import=${tsxImport}`].filter(Boolean).join(" ");
-    await run(process.execPath, [entry, "web", "--port", port], repositoryRoot, {
+    const environment = {
       ...process.env,
       DSH_HOME: home,
-
       ...(devWeb === undefined ? {} : { DSH_DEV_CLIENT_BUNDLES: "1" }),
-      ...(nodeOptions === undefined ? {} : { NODE_OPTIONS: nodeOptions }),
-    });
+    };
+    await run(
+      process.execPath,
+      [entry, "web", "--port", port],
+      repositoryRoot,
+      withTsLoader(environment, tsLoader),
+    );
     return;
   }
   if (!(await pathExists(SHELL_ENTRY))) {
@@ -431,5 +447,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(projectDir, buildRootDir, tsxImport, devWeb !== undefined, home);
+  await launchElectron(projectDir, buildRootDir, tsLoader, devWeb !== undefined, home);
 }

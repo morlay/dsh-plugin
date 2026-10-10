@@ -17,7 +17,7 @@ export default defineConfig(async (): Promise<CordisPluginConfig> => {
   });
   // host 半的目录面带**标准（TC39）装饰器**（`src/catalog.ts` 的 `@Remote('list')`），而 oxc / rolldown
   // 不降级——产物会带着 `@Remote(...)` 出厂，部署形态加载 dist 时直接语法错。预转换的实现在 devkit，
-  // 范围与理由见 `../../../.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md`。devkit 的 host
+  // 范围与理由见 `../../../.agents/debts/20260923-标准装饰器降级分居两套机制.md`。devkit 的 host
   // 预设给数组（client 入口只体现在这份数组的成员上，不是另一种形态）。
   const inherited = Array.isArray(config.plugins) ? config.plugins : [];
   return { ...config, plugins: [...inherited, standardDecoratorsPlugin()] };

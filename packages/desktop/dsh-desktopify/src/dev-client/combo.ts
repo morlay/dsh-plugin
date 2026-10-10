@@ -19,6 +19,15 @@ export function comboEntryIds(requestUrl: string): string[] | undefined {
   return ids;
 }
 
+/** 单包资源路径（`/<id>/client.js`，不含 combo 的 `??` 前缀）；chunk 与其它路径返回 undefined。 */
+export function singleEntryId(requestUrl: string): string | undefined {
+  const path = requestUrl.split("?", 1)[0] ?? "";
+  if (!path.startsWith(COMBO_PATH)) return undefined;
+  const matched = CLIENT_RESOURCE.exec(path.slice(COMBO_PATH.length));
+  const id = matched?.groups?.id;
+  return id === undefined || id === "" ? undefined : id;
+}
+
 export function stripSourceMapTrailer(code: string): string {
   return code.replace(SOURCE_MAP_TRAILER, "\n");
 }

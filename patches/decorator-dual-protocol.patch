@@ -1,0 +1,71 @@
+diff --git a/packages/typert/protocol/src/index.ts b/packages/typert/protocol/src/index.ts
+index f94096beb3..a4f63407aa 100644
+--- a/packages/typert/protocol/src/index.ts
++++ b/packages/typert/protocol/src/index.ts
+@@ -214,6 +214,14 @@ export function Remote<This extends object, Args extends unknown[], Result>(
+     return remoteDecorator({ kind: 'direct' }, undefined, methodExportOrOptions)
+   }
+   if (typeof methodExportOrOptions === 'object') {
++    // 本地 patch（patches/decorator-dual-protocol.patch）：legacy 装饰器协议下裸 `@Remote` 以
++    // `(target, propertyKey, descriptor)` 调用，第一个实参是 prototype——第二个实参是方法名而不是 context。
++    // oxc 的 legacy 降级产物走这条路径；TC39 降级（esbuild）仍走下面的标准路径。
++    const legacyName = legacyMethodName(context)
++    if (legacyName !== undefined) {
++      mark(methodExportOrOptions, legacyName, { kind: 'direct' })
++      return
++    }
+     if (remoteOptionMode(methodExportOrOptions) !== 'stream'
+       || Reflect.ownKeys(methodExportOrOptions).length !== 1) {
+       throw new TypeError('typert-protocol: Remote options must contain exactly mode: "stream"')
+@@ -228,6 +236,11 @@ function remoteOptionMode(options: object): unknown {
+   return Reflect.get(options, 'mode') as unknown
+ }
+ 
++// 本地 patch 的协议判别：legacy 把 propertyKey 作为第二个实参传入（string），标准传的是 context 对象。
++function legacyMethodName(key: unknown): string | undefined {
++  return typeof key === 'string' ? key : undefined
++}
++
+ function remoteDecorator(
+   invocation: RemoteInvocationMarker,
+   mode?: 'stream',
+@@ -237,6 +250,13 @@ function remoteDecorator(
+     _method: (this: This, ...args: Args) => Result,
+     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
+   ): void {
++    // 本地 patch：legacy 调用是 `(target, propertyKey, descriptor)`，标准调用是 `(method, context)`。
++    const target: unknown = _method
++    const legacyName = legacyMethodName(context)
++    if (typeof target === 'object' && target !== null && legacyName !== undefined) {
++      mark(target, legacyName, invocation, mode, exportName)
++      return
++    }
+     addMarkerInitializer(context, invocation, mode, exportName)
+   }
+ }
+diff --git a/vendor/cordis/src/registry.ts b/vendor/cordis/src/registry.ts
+index 478cf036cb..ffa4d2639c 100644
+--- a/vendor/cordis/src/registry.ts
++++ b/vendor/cordis/src/registry.ts
+@@ -35,7 +35,20 @@ export type InjectKey = keyof {
+  * @returns the class or method decorator.
+  */
+ export function Inject<K extends InjectKey>(name: K, config?: Context[K] extends { [symbols.config]: infer T } ? T : never) {
+-  return function (value: any, decorator: ClassDecoratorContext<any> | ClassMethodDecoratorContext<any>) {
++  return function (value: any, decorator?: ClassDecoratorContext<any> | ClassMethodDecoratorContext<any>) {
++    // 本地 patch（patches/decorator-dual-protocol.patch）：legacy 装饰器协议下类装饰器只收到
++    // `(target)`，没有 context 对象；oxc 的 legacy 降级产物走这条路径。
++    if (decorator === undefined) {
++      if (typeof value !== 'function') {
++        throw new Error('@Inject() can only be used on class or class methods')
++      }
++      if (!Object.hasOwn(value, 'inject')) {
++        defineProperty(value, 'inject', Object.create(Object.getPrototypeOf(value).inject ?? null))
++        defineProperty(value.inject, symbols.checkProto, true)
++      }
++      value.inject[name] = config
++      return
++    }
+     if (decorator.kind === 'class') {
+       if (!Object.hasOwn(value, 'inject')) {
+         defineProperty(value, 'inject', Object.create(Object.getPrototypeOf(value).inject ?? null))

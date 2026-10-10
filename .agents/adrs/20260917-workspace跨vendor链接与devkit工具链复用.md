@@ -61,7 +61,7 @@ autoInstallPeers: true
   `packages/*/*` 清单扫描、`PLATFORM_MODULES` 等上游仓库内部路径。代价是语义有一份
   重复，由 devkit 自己的单测钉住（`devpackages/devkit/src/__tests__/css.spec.ts`，
   含「样式 import 不残留」「class 映射与上游同形」「watch 图登记」）；`resolveId` 用
-  `order: 'pre'`，与上游 patch（`patches/css-inline-query.patch`）保持同一口径。
+  `order: 'pre'`（与上游 client 构建同一口径）。
 
 **考虑过的选项**
 

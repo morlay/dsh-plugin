@@ -11,6 +11,7 @@
     "rewriteRelativeImportExtensions": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    "experimentalDecorators": true,
     "strict": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": false,

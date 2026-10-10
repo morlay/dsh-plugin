@@ -20,7 +20,7 @@
 [`apps/dsh-custom-next/package.json`](../../../apps/dsh-custom-next/package.json)。
 
 ```sh
-pnpm exec dsh-desktopify dev            # 本仓库示例工作区：just custom desktop
+pnpm exec dsh-desktopify dev            # 本仓库示例工作区：just custom dev
 pnpm exec dsh-desktopify bundle --dir   #                  just custom bundle
 ```
 

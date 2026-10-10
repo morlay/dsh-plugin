@@ -1,7 +1,22 @@
 {
   "extends": ["@local/devkit/tsconfig.json"],
-  "exclude": ["vendor/**", "**/dist/*"],
   "compilerOptions": {
-    "composite": false
-  }
+    "incremental": true,
+    "composite": false,
+    // 开发线：oxc / rolldown 读它按 legacy 降级装饰器，配 `patches/decorator-dual-protocol.patch` 的双协议写端
+    // （dev loader 与 vitest 也各自显式写着 `decorator: { legacy: true }`，这是给按文件读 tsconfig 的工具兜底）。
+    // 发布线（tsdown 打包自有包）要标准语义，在 devkit 的 host 预设里显式关掉（`decorator.legacy: false`）。
+    "experimentalDecorators": true
+  },
+  // 不排除 `vendor/**`：自有包经 `exports` 指到上游 `src` 后，发布构建的 dts 生成要逐个解析 vendor 里的模块
+  // （否则 `rolldown-plugin-dts` 报 `tsgo did not generate dts file for vendor/…/src/index.ts`），
+  // 开发线的类型检查也才看得到上游源码。
+  // 但上游的**构建配置与测试**例外：它们在我们这套 tsconfig 下会报不可命名的推断类型（TS2883），
+  // 而 dts 生成只沿 import 链走、不会碰到它们。
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/*",
+    "vendor/**/*.config.ts",
+    "vendor/**/tests/**"
+  ]
 }

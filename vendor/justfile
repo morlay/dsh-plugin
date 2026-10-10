@@ -7,4 +7,7 @@ patch:
 build:
     tsx {{ join(module_directory(), '../.agents/skills/dsh-plugin-upstream-sync/scripts/build.ts') }}
 
-prepare: sync patch build
+# 日常升级只做 sync + patch：exports 指到 src、装饰器写端双协议、typert 生成物写成 .ts，开发与桌面
+# dev 形态直接消费源码面（见 ADR-开发与桌面消费上游源码面而非lib产物）。`build` 是发布档，只在需要
+# 上游 built 产物时单独跑：`native/` 变化出 `.node`，或上游 built-only 门禁 / 发布校验。
+prepare: sync patch

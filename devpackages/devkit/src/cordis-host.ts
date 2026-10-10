@@ -105,10 +105,20 @@ export async function defineCordisPluginConfig(options?: {
         ...(options?.legacy === undefined ? {} : { legacy: options.legacy }),
       }),
     },
-    // 双模式库（如 lexical 的 exports 带 development / production / node 条件）必须解析到与下面 defines
+    // 双模式库（如 lexical 的 exports 带 development / production / node 条件）必须解析到与下面条件名
     // 一致的静态变体：条件名按 NODE_ENV 选 production / development，且不含 node。
-    inputOptions: { resolve: { conditionNames: spec.conditionNames } },
-    define: spec.define,
+    //
+    // `transform.decorator.legacy: false` 是**发布线**的声明：dist 里的装饰器调用 registry 官方实现
+    // （TC39 标准协议），而仓库 tsconfig 开着 `experimentalDecorators`（开发线用，见 devkit 的 tsconfig），
+    // 不显式关掉 oxc 就会按 legacy 降级，产物与官方实现不兼容。
+    inputOptions: {
+      resolve: { conditionNames: spec.conditionNames },
+      transform: { decorator: { legacy: false } },
+    },
+    // 这里**不写 `define`**：`spec.define` 是浏览器产物的替换约定（`process.env` / `import.meta` 替成空壳），
+    // 而 tsdown 的 define 对同一个 config 里的所有入口生效——host 半（Node / Electron 主进程）拿到它就成了
+    // `{}.DSH_HOME` / `({}).url` 这种运行期必炸的代码。client 半的字节最终由 `clientEntryPlugin` 换成
+    // `bundleClientFactory` 的产物，那条链自己带 define（见 cordis-client.ts）。
     deps: {
       // external 只对 client 入口的模块图生效：host 半照常打自己的依赖闭包。
       neverBundle: (id: string, importer: string | null | undefined) =>

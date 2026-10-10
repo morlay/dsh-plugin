@@ -1,4 +1,13 @@
 [
   { "type": "rm", "path": "apps/cli/tests/profiles/acp/cordis.yml" },
-  { "type": "git", "patch": "css-inline-query.patch" }
+  { "type": "git", "patch": "decorator-dual-protocol.patch" },
+  { "type": "exports" },
+  {
+    "type": "text",
+    "file": "packages/typert/generator/src/analyzer.ts",
+    "pattern": "json\\|ya\\?ml\\|svg\\|png\\|jpe\\?g\\|webp",
+    "to": "css|json|ya?ml|svg|png|jpe?g|webp"
+  },
+  { "type": "typert" },
+  { "type": "rm", "glob": "**/tsconfig*.json" }
 ]

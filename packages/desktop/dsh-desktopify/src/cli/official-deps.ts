@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { access, cp, glob, mkdir, readFile, readdir, realpath, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   DESKTOP_HOST_PACKAGE,
   OFFICIAL_RUNTIME_PACKAGES,
@@ -406,17 +406,4 @@ export async function officialDeploySpecs(
     specs[packageName] = `^${resolved.version}`;
   }
   return specs;
-}
-
-// tsx 的导入 specifier（绝对 `file:` URL），找不到时 undefined。
-//
-// 子进程的 cwd 是部署目录，`tsx` 不在它的解析链上——裸名加载会 `ERR_MODULE_NOT_FOUND`。
-export function tsxImportSpecifier(workspace: string, workspaceRoot: string): string | undefined {
-  for (const dir of [workspace, workspaceRoot]) {
-    try {
-      const resolved = createRequire(join(dir, "package.json")).resolve("tsx/esm");
-      return pathToFileURL(resolved).href;
-    } catch {}
-  }
-  return undefined;
 }

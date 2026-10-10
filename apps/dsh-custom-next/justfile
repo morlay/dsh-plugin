@@ -1,19 +1,9 @@
 # dsh-custom-next 示例工作区：web 模式（浏览器）与 desktop 模式（Electron 壳）。
 
-# 装配入口（bundles/*）的 patch 是生成物：改过它们的 tsdown.config.ts 后跑一次 build 刷新。
-# `-C ../..`：just 在**本 justfile 所在目录**执行配方，路径过滤器按 cwd 解析——不加它，`./bundles/*` 筛出 0 个包
-# （配方静默空转，patch 不刷新）。
-preset-build:
-    pnpm -C ../.. -r --filter './bundles/*' run build
-
-# 开发模式
-dev *args: preset-build
-    pnpm exec dsh-desktopify dev {{ args }}
-
-# desktop 模式：Electron 壳 + 链接工作区（TS 源码直载，无需构建 morlay 包）。
-desktop *args: preset-build
+# 开发模式：`--web` 走浏览器，缺省走 Electron 壳。
+dev *args:
     pnpm exec dsh-desktopify dev {{ args }}
 
 # 打包为静态桌面应用（--dir 产物，无签名）。
-bundle *args: preset-build
+bundle *args:
     pnpm exec dsh-desktopify bundle --dir {{ args }}

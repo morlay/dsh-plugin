@@ -30,8 +30,10 @@ lint:
 publish:
     pnpm -r --filter './packages/*/*' --workspace-concurrency=1 exec tsx {{ justfile_directory() }}/scripts/publish-if-need.mts
 
+# 插件包构建：`@deepseek-ai/*` 经 exports 指到 src 后，tsdown 加载 config（→ @local/devkit → 上游源码）
+# 需要 TS loader 转译（Node 原生 strip-only 不支持 parameter properties / 枚举 / 装饰器）。
 build *args:
-    @pnpm -r --filter './packages/*/*' run build {{ args }}
+    @NODE_OPTIONS="--import={{ join(justfile_directory(), 'devpackages/devkit/src/ts-loader.mjs') }}" pnpm -r --filter './packages/*/*' run build {{ args }}
 
 version *args:
     pnpm -r --filter './packages/*/*' version {{ args }}

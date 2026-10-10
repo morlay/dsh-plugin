@@ -86,13 +86,13 @@ skill 自带脚本 `scripts/{sync,patch,build}.ts`，用 **`tsx` 执行**（勿�
 
 ## 同步流程
 
-完整同步 = sync → patch → build（**同步链不需要根目录 `pnpm install`**；
-build 内含干净 install）。顺序固定，用 `tsx` 直调脚本（勿用 `pnpm exec`）：
+日常同步 = sync → patch（**同步链不需要根目录 `pnpm install`**）。`build` 是发布档，只在需要上游 built
+产物时跑（`native/` 变化、上游 built-only 门禁、发布校验）。顺序固定，用 `tsx` 直调脚本（勿用 `pnpm exec`）：
 
 ```sh
 tsx <skill 路径>/scripts/sync.ts    # 1. 对齐到目标提交
-tsx <skill 路径>/scripts/patch.ts   # 2. EXCLUDE 裁剪 + steps.json 补丁
-tsx <skill 路径>/scripts/build.ts   # 3. 干净构建
+tsx <skill 路径>/scripts/patch.ts   # 2. EXCLUDE 裁剪 + steps.json 补丁（含 exports 改写与 typert 生成）
+tsx <skill 路径>/scripts/build.ts   # 3.（可选，发布档）干净构建
 ```
 
 ### sync.ts：同步上游到指定提交
@@ -114,24 +114,51 @@ tsx <skill 路径>/scripts/build.ts   # 3. 干净构建
    ```jsonc
    [
      { "type": "rm", "path": "…" },
+     { "type": "rm", "glob": "**/tsconfig*.json" },
      { "type": "text", "file": "…", "pattern": "…", "flags": "gm", "to": "" },
      { "type": "git", "patch": "…" },
+     { "type": "exports" },
+     { "type": "typert" },
    ]
    ```
 
    **任一步骤失败即失败**——上游已变化，评估更新 / 删除 / 新增，不跳过。
 
+   `rm` 的 `glob` 形态按模式批量删（`fs.glob` 展开，`node_modules` 永不在范围内）。本仓库用它删掉上游
+   **全部** `tsconfig*.json`：上游不再构建，那些配置只剩干扰。实测**留着也能全量 `just build` 通过**
+   （根 `tsconfig.json` 已把 `vendor/**` 纳进编译面），删掉的理由是口径唯一——按文件就近找 tsconfig 的
+   工具（tsgo / oxc）只会读到根上那一份，不会撞上未开 `experimentalDecorators` 的上游口径。
+   `build --full` 那条路要用上游自己的 tsconfig，所以只能在 `patch` 之前跑（见下）。
+
+   `exports` 是**生成式**步骤（不存 diff）：把上游各包 `exports` 里指向 `lib/` 的目标改写成对应的
+   `src` 源文件，并给缺 `"./src/*"` 出口的包补上，使开发与桌面 dev 形态直接消费源码
+   （决定见 [ADR-开发与桌面消费上游源码面](../../adrs/20261010-开发与桌面消费上游源码面而非lib产物.md)）。
+   生成物出口 `./typert`、`./client/typert`、`./remote` 改指 `typert` 步骤产出的 `.ts`；非 `lib/` 目标
+   （资产、`./src/*`）原样。找不到源码的出口打印清单后保持原样——它是上游新增出口的信号，不是同步失败。
+
+   `typert` 是**生成式**步骤：直接编排上游 analyzer/emitter 生成 typert 产物，写成 `.ts`
+   （`lib/typert.<face>.ts`、`lib/typert.remote-client.ts`），避免开发/桌面 dev 形态为这两个出口
+   再构建一次上游。它不调用 `WorkspaceTypertGenerator.generate`——那条路径带 lib 形态的强制契约校验。
+   前置的 `text` 步骤给 analyzer 的「数据出口」跳过列表补 `css`：`.css` 与 `svg`/`png` 同类（无 TS API），
+   `client/ui-theme` 的 `brand-font.css` 出口否则会在分析期被判为「missing source」。
+
 > 裁剪或改补丁后，若 lockfile 仍固化被裁依赖，需重新生成 lockfile
 > （`pnpm install --lockfile-only`）——否则后续 install 仍会下载。
 
-### build.ts：干净构建
+### build.ts：默认只编译 native，且不 install
 
-上游目录内 `pnpm install --no-frozen-lockfile && pnpm run clean && pnpm run build`，
-默认清理其 node_modules（`DEEPSEEK_HARNESS_NO_CLEAN=1` 保留）。
+默认直接拿**根目录的 `tsx`** 调 `native/system/scripts/build.ts --host-addon-only`——上游只剩 `native/` 的
+addon 必须编译（`.node` 是二进制产物，源码面消费不了）。其余产物都由源码面取代：`exports` 指 `src`、
+client 半现场打包、typert 生成物由 `patch` 写成 `.ts`，见
+[ADR-开发与桌面消费上游源码面](../../adrs/20261010-开发与桌面消费上游源码面而非lib产物.md)。
 
-`pnpm run clean`（上游自带脚本）不是可选项：`lib/` 产物不在 git 里、sync 的 reset 清不掉，
-残留的上一版产物会被并行构建的包当作解析目标（rolldown 按 package.json exports 读 lib），
-于是上游「新增导出」这类改动在本机表现为 `MISSING_EXPORT`，干净 clone 的 CI 却正常。
+**不 install**：上游自带 pnpm workspace，在它目录里跑 pnpm（`run` 在 node_modules 缺失时还会**隐式 install**）
+会造出上游自己的顶层 `node_modules`，与根 workspace 的链接形成双副本——实测让 client 测试成片失败，
+且根 install 不加 `--force` 认不出差别、复不了原。native 构建要的依赖由根 install 提供。
+
+`--full` 跑原来的完整上游构建（install + `pnpm run clean` + `pnpm run build`：tsc -b 全仓 + tsdown 全仓 +
+web 前端），供发布档或上游 built-only 门禁；它需要上游自己的 tsconfig，而 `patch` 会删掉它们，所以要在
+**未 patch 的干净基线**上跑（`sync` 之后、`patch` 之前），结束时用根 `pnpm install --force` 复原解析。
 
 > 仓库可封装为命令（如 just：`vendor sync` / `vendor patch` / `vendor
 > build`），直接 `tsx` 调用脚本，语义与流程一致。
@@ -144,12 +171,13 @@ tsx <skill 路径>/scripts/build.ts   # 3. 干净构建
    `tsc -b` 解析到，表现为双副本类型错误（playwright / zod 版本对不上），
    干净 clone 的 CI 无此问题。build 结束时本就会清掉它，日常恢复姿势是
    `just clean && just dep`。
-4. sync → patch（失效即信号）→ build。
-5. **重跑生成物与 lockfile**（上游包与主题一变就漂移，门禁只在重跑后才可信）：
+4. sync → patch（含 `exports` 改写与 `typert` 生成；失效即信号）。
+5. 上游 `native/` 变化、或需要 built 产物（上游 built-only 门禁 / 发布校验）时，再跑 `vendor build`。
+6. **重跑生成物与 lockfile**（上游包与主题一变就漂移，门禁只在重跑后才可信）：
    - 根 lockfile：`pnpm install --lockfile-only`（上游新包、上游钉住的依赖版本
      如 koffi 都靠它对齐）；
    - 官方包清单：`pnpm --filter @morlay/dsh-desktop-shell run gen:official-packages`
-     （读上游 bundle 的 `cordis.patch.yml`，需上游 lib 产物在）。
+     （读上游 bundle 的 `cordis.patch.yml`，需上游 lib 产物在——先跑一次 `vendor build`）。
 6. 门禁：test / lint / build，与 CI 一致。
 7. **适配评估（必做）**：对照「cordis 扩展面清单」逐面核对变化；结论记录
    为决策文档或变更日志；行为变更连同测试一起改。

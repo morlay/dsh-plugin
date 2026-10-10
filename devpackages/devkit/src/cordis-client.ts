@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { rolldown } from "rolldown";
 import type { Plugin } from "rolldown";
-import { cssInlinePlugins } from "./css.ts";
+import { cssInlinePlugins, resolveFileSpecifier } from "./css.ts";
 
 // `__ModuleLoader__.load` 手递的三段：banner / intro / footer（构建与现场打包共用）。
 const factoryBanner = (name: string): string =>
@@ -26,6 +26,9 @@ export interface CordisClientOptions {
 export interface ClientBundleSpec {
   externals: (string | RegExp)[];
   conditionNames: string[];
+  // **浏览器产物专用**的替换约定（`process.env` / `import.meta` 替成空壳）：只许用在 client 半
+  // （`bundleClientFactory`）。tsdown 的 define 对同一 config 的所有入口生效，塞进去会把 host 半
+  // （Node / Electron 主进程）的 `process.env.DSH_*`、`import.meta.url` 一起抹掉。
   define: Record<string, string>;
 }
 
@@ -56,6 +59,14 @@ export async function clientBundleSpec(
       "process.env.NODE_ENV": JSON.stringify(mode),
       "import.meta.env.MODE": JSON.stringify(mode),
       "import.meta.env": JSON.stringify({ MODE: mode }),
+      // CJS 输出下 rolldown 本来就把 `import.meta` 替换成 `{}`（`import.meta.url` 之类在浏览器产物里
+      // 不可用）；显式声明同一语义，换掉 pdfjs 这类依赖的 EMPTY_IMPORT_META 警告。
+      "import.meta": "({})",
+      // 其余 `process.env.DSH_CLIENT_*`（源码按构建期常量读，例如 `ui-brand-official` 的
+      // `process.env.DSH_CLIENT_BUILD_PROFILE !== 'official'`）：浏览器没有 `process`，不替换就是
+      // 运行期 ReferenceError。上游由 `clientBuildEnvironmentDefines` 注入真实值；开发面这些名未设，
+      // 按 undefined 处理与之一致。精确键（上面的 NODE_ENV）仍然优先。
+      "process.env": "({})",
     },
   };
 }
@@ -171,13 +182,17 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
   const build = await rolldown({
     input: options.entry,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-    // tsdown 对 `format: 'cjs'` 的产物按 node 平台解析；现场打包保持一致，否则内置模块与条件解析会和发布产物分叉。
-    platform: "node",
+    // client 半是**浏览器**产物（上游 `clientConfig` 同样是 `platform: 'browser'` + browser 条件）：
+    // 用 node 平台会让第三方库走 node 条件导出，把 `crypto` 这类内置带进产物——浏览器 `require` 它
+    // 必然在 boot 期抛错（`missed the module table`）。
+    platform: "browser",
     resolve: { conditionNames: spec.conditionNames },
     transform: { define: spec.define },
-    external: (id: string) => isClientExternal(id, spec.externals),
+    // 内置模块**不能** external：`platform: 'browser'` 下 rolldown 默认把 node 内置标成 external，
+    // 浏览器 require 它们必然失败。显式放行 → 走 clientAssetPlugin 的替身。
+    external: (id: string) => !NODE_BUILTIN.test(id) && isClientExternal(id, spec.externals),
     // 样式内联进字节：产物是自包含单文件，样式不能留在外部（见 cssInlinePlugins）。
-    plugins: cssInlinePlugins({ name: options.name }),
+    plugins: [...cssInlinePlugins({ name: options.name }), clientAssetPlugin()],
   });
   try {
     const { output } = await build.generate({
@@ -201,6 +216,66 @@ function isExternal(id: string, externals: (string | RegExp)[]): boolean {
   return externals.some((e) => (typeof e === "string" ? id === e : e.test(id)));
 }
 
+// 资产内联：现场打包的产物是自包含单文件，图片与字体不能留在外部——上游 client 产物同样是
+// `data:<mime>;base64,…` 字符串（如 `ui-settings-account` 的 onboarding svg）。rolldown 默认把未知
+// 扩展名当 JS 解析，所以必须显式 load，否则 client 源码里的 `import x from './x.svg'` 会变成 PARSE_ERROR。
+const ASSET_MIME: Record<string, string> = {
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  eot: "application/vnd.ms-fontobject",
+};
+
+// `?raw` 内联：源码把 worker 之类的内容当字符串内联（`import source from './worker.ts?raw'`）。
+// query 必须在 `pre` 拿（默认顺序的钩子会先剥离它），所以走虚拟 id。
+const RAW_PREFIX = "\0dsh-client-raw:";
+const RAW_SUFFIX = ".mjs";
+
+// node 内置的浏览器替身：第三方向浏览器产物里带 `require("util")` 这类调用时，模块表与平台种子词都答不上来，
+// 整行会在 boot 期失败。上游对 `node:module` 是同一手法（`apps/web/src/node-module-stub.ts`）；这里统一成
+// 一个空 CJS 模块——不执行到的分支无害，真执行到会抛（浏览器里本就没有这些能力）。
+const NODE_BUILTIN_STUB = "\0dsh-node-builtin-stub.cjs";
+const NODE_BUILTIN =
+  /^(?:node:)?(?:assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib)$/;
+
+// 资产与 `?raw` 内联插件：client 半（现场打包）与 web 前端（现场编译）两条链共用。
+export function clientAssetPlugin(): Plugin {
+  return {
+    name: "dsh-client-asset",
+    resolveId: {
+      order: "pre",
+      handler(source: string, importer: string | undefined) {
+        if (NODE_BUILTIN.test(source)) return NODE_BUILTIN_STUB;
+        if (!source.endsWith("?raw")) return null;
+        return `${RAW_PREFIX}${resolveFileSpecifier(source.slice(0, -4), importer)}${RAW_SUFFIX}`;
+      },
+    },
+    async load(id: string) {
+      if (id === NODE_BUILTIN_STUB) return "module.exports = {};\n";
+      if (id.startsWith(RAW_PREFIX)) {
+        const file = id.slice(RAW_PREFIX.length, -RAW_SUFFIX.length);
+        this.addWatchFile(file);
+        return `export default ${JSON.stringify(await readFile(file, "utf8"))};`;
+      }
+      const file = id.split("?", 1)[0]!;
+      if (file.startsWith("\0")) return;
+      const mime = ASSET_MIME[file.slice(file.lastIndexOf(".") + 1).toLowerCase()];
+      if (mime === undefined) return;
+      const data = await readFile(file);
+      return `export default "data:${mime};base64,${data.toString("base64")}";`;
+    },
+  };
+}
+
 // 平台 baseline：主应用种子或静态表提供的模块（React / cordis / 共享原语）。
 const BASELINE: (string | RegExp)[] = [
   "react",
@@ -219,11 +294,11 @@ const BASELINE: (string | RegExp)[] = [
 export const INLINE_SAFE =
   /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-presets\/display$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$))/;
 
-// 判断一个模块是否留给平台/模块表（其余一律内联）。
+// 判断一个模块是否留给平台/模块表（其余一律内联）。只信**显式列表**（baseline + 调用方给的行集）：
+// 「所有 `@deepseek-ai/*` 都是 client 行」的兜底会把 `.../remote`、`/display` 这类子路径也送进模块表，
+// 而模块表只按行条目注册——那些子路径在浏览器里 `require` 不到，整行会加载失败。
 export function isClientExternal(id: string, externals: (string | RegExp)[]): boolean {
-  if (isExternal(id, externals)) return true;
-  if (!id.startsWith("@deepseek-ai/")) return false; // 第三方库内联
-  // 契约层内联：这些包不是 client 插件行（模块表没有条目），require 必然运行时抛错。
-  if (INLINE_SAFE.test(id)) return false;
-  return true; // 其余 @deepseek-ai/* 是 client 插件行，由模块表提供
+  if (!isExternal(id, externals)) return false;
+  // 契约层内联：这些包没有模块表条目（即便名单里出现同名）。
+  return !INLINE_SAFE.test(id);
 }

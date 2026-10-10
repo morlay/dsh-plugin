@@ -23,7 +23,7 @@ exclude 里）、不给本包加包级 tsconfig（dts 阶段的 `rootDir` 会把
 **测试要跑得起来的前提**（改这几处会一起红）：
 
 - vitest 侧：根 `vitest.config.ts` 的 `standardDecoratorsPlugin`（范围 `/packages/subagent/`，标准装饰器降级，见
-  [根债务](../../../../../.agents/debts/20260923-vitest与构建需自行降级标准装饰器.md)）；
+  [根债务](../../../../../.agents/debts/20260923-标准装饰器降级分居两套机制.md)）；
 - 构建侧：本包 `tsdown.config.ts` 的同名预转换（否则 `dist` 里的装饰器在 Node 上直接语法错）。
 - 配置页：`assembly.spec.ts` 断言两个限额字段仍是 `.volatile()`——去掉标注，官方卡片就会在装配后画不出可改的限额；
   这类回归只有人工看页面才发现，所以用 manifest 层断言兜住声明面。
