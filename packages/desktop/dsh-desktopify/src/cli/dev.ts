@@ -276,11 +276,21 @@ async function prepareWebProfile(
   }
   const environment = withTsLoader({ ...process.env, DSH_HOME: home }, tsLoader);
   const dependencies = Object.keys(manifest.dependencies ?? {});
-  for (const packageName of dependencies) {
-    const link = resolveLinkTarget(workspace, packageName);
+  // 一次 `plugin add` 带上全部 link 规格：`dsh plugin` 是把参数原样转给 profile 里的 pnpm，
+  // 逐个包起一次 CLI 只是白等 N 次进程启动 + N 次解析。
+  if (dependencies.length > 0) {
     await run(
       process.execPath,
-      [entry, "plugin", "--profile", "web", "add", `${packageName}@link:${link}`],
+      [
+        entry,
+        "plugin",
+        "--profile",
+        "web",
+        "add",
+        ...dependencies.map(
+          (packageName) => `${packageName}@link:${resolveLinkTarget(workspace, packageName)}`,
+        ),
+      ],
       workspace,
       { ...environment, DSH_HOME: home },
     );

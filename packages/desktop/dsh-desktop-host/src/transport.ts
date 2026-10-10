@@ -10,6 +10,16 @@ import { DESKTOP_STREAM_PATH, DesktopStreamBodyDecoder } from "./wire.ts";
 
 export { DESKTOP_STREAM_PATH } from "./wire.ts";
 
+// 桌面流的计数：给「宿主内存一直在涨」这类问题用的——把增长落到「哪条流、多少字节」上。
+// 只在 `DSH_DESKTOP_MEMORY_REPORT=1` 时被读出来打印（见 `index.ts`），平时就是几个自增。
+export const desktopStreamStats = {
+  active: 0,
+  opened: 0,
+  failed: 0,
+  items: 0,
+  bytes: 0,
+};
+
 // 注入 index 的 transport 行：声明页面拥有 Host，并给出 Gateway 流载体（下行流 + 上行项）。
 export const DESKTOP_TRANSPORT_SCRIPT = `globalThis.__DSH_TRANSPORT__={
   _desktop:true,
@@ -199,19 +209,29 @@ function streamHandler(ctx: Context): (req: IncomingMessage, res: ServerResponse
         "content-type": "application/x-ndjson",
         "cache-control": "no-store",
       });
-      for await (const value of values) {
-        // 尊重下游背压：`write()` 返回 false 就是这一侧的缓冲满了，必须等 `drain` 再继续拉上游。
-        // 不等就是「客户端丢下这条流、上游还在产」时的无界缓冲——侧栏反复重试那条循环实测
-        // 4MB/s 一路涨到 GB（进程崩在这里，而不是崩在业务错误上）。
-        if (!response.write(`${JSON.stringify(value)}\n`)) {
-          await Promise.race([once(response, "drain"), once(response, "close")]).catch(
-            () => undefined,
-          );
-          if (response.destroyed) return;
+      desktopStreamStats.opened += 1;
+      desktopStreamStats.active += 1;
+      try {
+        for await (const value of values) {
+          // 尊重下游背压：`write()` 返回 false 就是这一侧的缓冲满了，必须等 `drain` 再继续拉上游。
+          // 不等就是「客户端丢下这条流、上游还在产」时的无界缓冲——侧栏反复重试那条循环实测
+          // 4MB/s 一路涨到 GB（进程崩在这里，而不是崩在业务错误上）。
+          const line = `${JSON.stringify(value)}\n`;
+          desktopStreamStats.items += 1;
+          desktopStreamStats.bytes += Buffer.byteLength(line);
+          if (!response.write(line)) {
+            await Promise.race([once(response, "drain"), once(response, "close")]).catch(
+              () => undefined,
+            );
+            if (response.destroyed) return;
+          }
         }
+        response.end();
+      } finally {
+        desktopStreamStats.active -= 1;
       }
-      response.end();
     } catch (error) {
+      desktopStreamStats.failed += 1;
       reportStreamFailure(`stream ${endpoint} failed`, error);
       if (response.headersSent) {
         response.destroy(error instanceof Error ? error : new Error(String(error)));

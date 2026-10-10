@@ -18,6 +18,7 @@ import type {} from "@deepseek-ai/dsh-client-connection";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import {
   DESKTOP_STREAM_PATH,
+  desktopStreamStats,
   installDesktopTransport,
   takeOverDesktopAuthentication,
 } from "./transport.ts";
@@ -69,6 +70,23 @@ function fatalEvent(error: unknown): DesktopHostEvent {
       MAX_FATAL_DIAGNOSTIC_CHARS,
     ),
   };
+}
+
+// 按需的内存/流上报：默认关，`DSH_MEMORY_REPORT=1` 时每 5 秒一行。用来把「宿主内存一直在涨」
+// 落到具体哪条流、多少字节上（heapUsed 涨 = 转译/业务对象，external 涨 = 缓冲或原生件）。
+function reportMemoryWhenAsked(): void {
+  if (process.env.DSH_MEMORY_REPORT !== "1") return;
+  const megabytes = (bytes: number): string => (bytes / 1024 / 1024).toFixed(0);
+  const timer = setInterval(() => {
+    const memory = process.memoryUsage();
+    console.error(
+      `[dsh-desktop] memory rss=${megabytes(memory.rss)}MB heapUsed=${megabytes(memory.heapUsed)}MB ` +
+        `external=${megabytes(memory.external)}MB | streams active=${String(desktopStreamStats.active)} ` +
+        `opened=${String(desktopStreamStats.opened)} failed=${String(desktopStreamStats.failed)} ` +
+        `items=${String(desktopStreamStats.items)} bytes=${megabytes(desktopStreamStats.bytes)}MB`,
+    );
+  }, 5000);
+  timer.unref();
 }
 
 async function main(): Promise<void> {
@@ -145,6 +163,7 @@ async function main(): Promise<void> {
   const { ctx } = await application;
   takeOverDesktopAuthentication(ctx);
   installDesktopTransport(ctx);
+  reportMemoryWhenAsked();
   // 调试窗口的前端产物：桌面档自己托管，不从上游 inspector 行取（那条路由与它的 Worker 绑在一起）。
   installDevtoolsAssets(ctx, [runtimeDir, projectDir]);
   const webServer = ctx.get("webServer") as unknown as PortlessWebServer;

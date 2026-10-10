@@ -18,7 +18,8 @@
   "files": [
     "locale/*.json",
     "lib",
-    "config/desktop.cordis.patch.yml"
+    "config/desktop.cordis.patch.yml",
+    "config/dev-client-bundles.cordis.patch.yml"
   ],
   "type": "module",
   "main": "./lib/index.js",
