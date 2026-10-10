@@ -41,6 +41,7 @@ registerHooks({
     // 装饰器降级用 oxc 自己的变换选项（字段是**单数** `decorator`）：`legacy: true` 即
     // experimentalDecorators 语义。不传 `tsconfig`——上游各包自带的 tsconfig 已被 patch 删除，
     // 而按文件找 tsconfig 也不可靠（实测 `tsconfig: true` 不向上查找）。
+    // oxlint-disable-next-line node/no-sync -- registerHooks 的钩子必须同步返回，读文件与转译只能用同步 API
     const result = transformSync(filename, readFileSync(filename, "utf8"), {
       decorator: { legacy: true },
       helpers: { mode: "External" },

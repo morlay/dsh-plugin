@@ -2,8 +2,8 @@
 
 状态：**已实现**（dev 两条形态按这一份装配；打包形态保持官方语义，见「打包形态不动」）
 范围：dev（Electron 与 `--web`）与 app 目录的关系、装配清单的来源、dev web 入口
-（[`dsh-desktop-host/src/app-boot.ts`](../../dsh-desktop-host/src/app-boot.ts) 与
-[`src/web.ts`](../../dsh-desktop-host/src/web.ts)）、以及 boot 在 profile root 里留下的文件。
+（[`dsh-desktop-host/src/app-boot.ts`](../../../dsh-desktop-host/src/app-boot.ts) 与
+[`src/web.ts`](../../../dsh-desktop-host/src/web.ts)）、以及 boot 在 profile root 里留下的文件。
 约束：上游 `vendor/**` 只读（本轮不改上游，因此不动 `dsh-plugin-upstream-sync` 的补丁面）；loader 的装载机制
 沿用上游原语，不另起第二套启动路径；**打包形态保持官方 profile 语义**。
 
@@ -25,7 +25,7 @@
 
 | 形态            | profileDir         | runtimeDir                           | boot 入口                                                         | overlay                                                                          |
 | --------------- | ------------------ | ------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| dev（Electron） | app 目录（工作区） | `<workspaceRoot>/node_modules/.pnpm` | 宿主 `src/index.ts`（官方 `loadProfileDirectory` + `runProfile`） | `config/desktop.cordis.patch.yml` + `config/dev-client-bundles.cordis.patch.yml` |
+| dev（Electron） | app 目录（工作区） | `<workspaceRoot>/node_modules/.pnpm` | 宿主 `packages/desktop/dsh-desktop-host/src/index.ts`（官方 `loadProfileDirectory` + `runProfile`） | `config/desktop.cordis.patch.yml` + `config/dev-client-bundles.cordis.patch.yml` |
 | dev `--web`     | app 目录（工作区） | 同上                                 | `src/web.ts` → `app-boot.ts` 的 `bootAppProfile`                  | `config/dev-client-bundles.cordis.patch.yml`                                     |
 
 `bootAppProfile` 做三件事：按 app 清单装配（同一套上游两步 + 跳过清单上报）、把形态 overlay 排在 bundle 层与
@@ -59,7 +59,7 @@ dev 的安装根就是工作区 pnpm store：`<runtimeDir>/node_modules/@deepsee
 
 ## 打包形态不动
 
-打包走[运行时与 profile 分离且由随包 pnpm 安装](../../dsh-desktopify/.agents/adrs/20260918-运行时与profile分离且由随包pnpm安装.md)
+打包走[运行时与 profile 分离且由随包 pnpm 安装](../adrs/20260918-运行时与profile分离且由随包pnpm安装.md)
 那套官方语义：种子在 `seed/profiles/<name>`，manifest 由工具生成（官方 bundles 在前，app 自己声明的 bundle 按包名
 去重后排在后面；依赖是 `file:./vendor/<name>`），`cordis.patch.yml` 是用户数据（重种豁免），随包 pnpm 离线装、
 runtime `overrides` 指回随包 runtime、`installAnchor` 指 runtime 的 `@deepseek-ai/dsh`，宿主按官方那两步装配。app
@@ -69,7 +69,7 @@ runtime `overrides` 指回随包 runtime、`installAnchor` 指 runtime 的 `@dee
 
 - **不重写 loader**：装配在「app 目录即 profile root」之后是数据（清单、bundle 的 patch、profile 自己的 patch、
   形态 overlay），机制仍复用上游 `loadProfileDirectory` + `runProfile`。自己实现一遍等于把上游的兼容性检查、
-  跳过清单、fail-loud、关停语义全部抄一遍并跟着版本走（[宿主设计](../../dsh-desktop-host/.agents/designs/20260929-桌面host的运行时面与依赖边界.md)的「不做第二套启动路径」同一条理由）。
+  跳过清单、fail-loud、关停语义全部抄一遍并跟着版本走（[宿主设计](../../../dsh-desktop-host/.agents/designs/20260929-桌面host的运行时面与依赖边界.md)的「不做第二套启动路径」同一条理由）。
 - **官方 bundles 写进 app 清单**：dev 两个形态没有中间产物，清单必须自足；打包那份由工具的合并（官方在前 + 去重）
   产出，两者内容一致。
 - **dev 直接用源目录当 profile**：代价是插件页的安装 / 卸载会改 app 的 `package.json` 与工作区 lockfile（那正是
