@@ -23,6 +23,7 @@ export const name = "dev-client-bundles";
 
 export const inject = ["webServer", "clientModules"];
 
+
 // 打包器（`@local/devkit` 的现场打包面，连带 rolldown 与它的原生绑定）按需加载：打包产物里的行
 // 已经切成 dist，这一支一次都不会走——常驻它等于给每个宿主进程白加一份打包器的内存。
 const loadBundler = async (): Promise<typeof import("@local/devkit").bundleClientFactory> =>
@@ -233,10 +234,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) {
         return undefined;
       }
-      const url = await resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
-      if (url !== undefined) return url;
-      // 解析不出来：多半是三方包（它的包根在 node_modules 里，不在工作区/上游的源码目录）。
-      // 走预打包：把依赖闭包打成单个 ESM（顺带完成 CJS→ESM），URL 指到缓存的产物。
+      const resolved = await resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
+      // 仓库自己的包（工作区与上游源码）逐文件直出；`node_modules` 里的**三方包**不行——它们大量是
+      // CJS，得整包预打包成单个 ESM（vite 的 optimizeDeps 那一层）。
+      if (resolved?.via === "source") return resolved.url;
       return await prebundleUrl(specifier, file, depsDir);
     };
     try {
@@ -282,10 +283,9 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   ctx.effect(
-    // `exact /plugins`：上游的 `client-modules` 已经占了 `prefix /plugins`（重复注册会直接抛），而 exact
-    // 优先于 prefix 命中——按文件寻址（`/plugins/<pkg>/<version>/<file>`）与 combo 都从这一个入口进来，
-    // 在 handler 里按 `req.url` 自己分发。
-    () => webServer.register({ kind: "exact", path: PLUGIN_ROUTE, handler: serve }),
+    // `prefix /plugins`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）都从
+    // 这一个入口进来，在 handler 里按 `req.url` 分发。
+    () => webServer.register({ kind: "prefix", path: PLUGIN_ROUTE, handler: serve }),
     "dev-client-bundles: /plugins route",
   );
 }

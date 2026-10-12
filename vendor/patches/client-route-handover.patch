@@ -1,0 +1,22 @@
+diff --git a/packages/client/modules/src/index.ts b/packages/client/modules/src/index.ts
+index 9734685e70..3cc506b807 100644
+--- a/packages/client/modules/src/index.ts
++++ b/packages/client/modules/src/index.ts
+@@ -645,10 +645,13 @@ export class ClientModuleRegistry extends Service {
+     }
+ 
+     const registerWebCarrier = (webCtx: Context): void => {
+-      webCtx.effect(
+-        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, handler: this.serveBundle }),
+-        'client-modules: bundle route',
+-      )
++      // 本地 patch（patches/client-route-handover.patch）：`/plugins` 前缀整个交给
++      // @morlay/dsh-desktop-host 的 dev-client-bundles——它按文件 ESM 直访
++      // （`/plugins/<pkg>/<version>/<file>`），开发与打包两种形态都是这条路（两边都从 TS 源码直出），
++      // 所以这里**不再注册**自己的 prefix 路由，免得两条同名冲突
++      // （`webserver: duplicate prefix route "/plugins"`）。client-modules 的其它面——模块表、
++      // combo 的组装与 HMR 通知——照旧，只是不再挂路由。
++      void webCtx
+     }
+     ctx.inject(['webServer'], registerWebCarrier)
+     ctx.on('webserver/index-inject', (table) => {

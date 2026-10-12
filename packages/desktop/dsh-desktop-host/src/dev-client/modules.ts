@@ -238,7 +238,7 @@ export async function resolveBareUrl(
   fromFile: string,
   clientEntryOf: (name: string) => string | undefined,
   indexEntryOf: (name: string) => Promise<string | undefined> = async () => undefined,
-): Promise<string | undefined> {
+): Promise<{ url: string; via: "source" | "dependency" } | undefined> {
   const name = packageNameOf(specifier);
   const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
   // 前端资源的依赖很复杂：只有"行"才在模块表里，普通依赖得按 node 的解析规则从**当前文件**出发
@@ -251,18 +251,22 @@ export async function resolveBareUrl(
     const target = subpath === undefined ? await exportTargetOf(indexed, undefined) : await exportTargetOf(indexed, subpath);
     if (manifest !== undefined && target !== undefined) {
       const filepath = relative(indexed, target).split(sep).join("/");
-      return `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`;
+      return {
+        url: `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`,
+        via: "source",
+      };
     }
   }
-  const clientPath =
-    clientEntryOf(name) ?? (await entryFileOf(fromFile, name, subpath));
+  const clientPath = clientEntryOf(name) ?? (await entryFileOf(fromFile, name, subpath));
   if (clientPath === undefined) return undefined;
   const owner = await owningPackageOf(clientPath);
   if (owner === undefined) return undefined;
   const target = subpath === undefined ? clientPath : await exportTargetOf(owner.root, subpath);
   if (target === undefined) return undefined;
   const filepath = relative(owner.root, target).split(sep).join("/");
-  return `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`;
+  // 三方包（入口在 `node_modules` 里）由调用方改走预打包。
+  const via = target.includes(`${sep}node_modules${sep}`) ? "dependency" : "source";
+  return { url: `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`, via };
 }
 
 /**

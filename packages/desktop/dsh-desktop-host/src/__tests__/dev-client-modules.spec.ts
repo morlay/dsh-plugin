@@ -106,7 +106,10 @@ describe("逐文件 ESM 转译", () => {
       resolveBareUrl("@morlay/demo/client", join(dir, "src", "index.ts"), () =>
         join(dir, "src", "client", "index.ts"),
       ),
-    ).resolves.toBe("/plugins/@morlay+demo/2.0.0/src/client/index.ts");
+    ).resolves.toEqual({
+      url: "/plugins/@morlay+demo/2.0.0/src/client/index.ts",
+      via: "source",
+    });
     // 模块表里没有的包：交给调用方（浏览器会报 404，比静默改写安全）。
     await expect(
       resolveBareUrl("@morlay/absent", join(dir, "src", "index.ts"), () => undefined),
