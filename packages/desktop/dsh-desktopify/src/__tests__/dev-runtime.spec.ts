@@ -36,8 +36,9 @@ describe("dev 安装根", () => {
     expect(devInstallAnchor(runtimeDir)).toBe(
       join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json"),
     );
+    // 宿主入口是**源码**（TS 一等公民，dev 全程直载源码，不需要先出 dist）。
     expect(devHostEntry(runtimeDir)).toBe(
-      join(runtimeDir, "node_modules", "@morlay", "dsh-desktop-host", "dist", "index.js"),
+      join(runtimeDir, "node_modules", "@morlay", "dsh-desktop-host", "src", "index.ts"),
     );
   });
 
@@ -62,6 +63,6 @@ describe("dev 安装根", () => {
     const runtimeDir = devRuntimeRoot(await workDir());
     await plant(devInstallAnchor(runtimeDir));
 
-    await expect(requireDevRuntime(runtimeDir)).rejects.toThrow(/dsh-desktop-host.*pnpm build/u);
+    await expect(requireDevRuntime(runtimeDir)).rejects.toThrow(/dsh-desktop-host.*源码入口/u);
   });
 });
