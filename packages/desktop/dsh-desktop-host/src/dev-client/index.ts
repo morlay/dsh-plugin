@@ -168,9 +168,16 @@ export function apply(ctx: Context): void {
       rewrite: async (specifier: string, resolvedId: string) => {
         const owned = await owningPackageOf(resolvedId);
         if (owned === undefined || !isOurSource(owned.root)) return undefined;
+        // **同包**引用（client 半 import 自己主出口的符号）必须 inline：external 到自己的出口 URL 会指到
+        // client 那半，而符号在主出口里——`does not provide an export named …` 就是这么来的。
+        if (owned.name === name) return undefined;
+        // **按 specifier 的出口**引（`@pkg` → 根出口、`@pkg/client` → client 出口）：不能一律强指 `client`
+        // ——根出口里的符号（`workspaceDisplayTitle` 这类）在 client 那半没有，强指会 `does not provide an
+        // export named …`。
         const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
         const targetExport = subpath === undefined ? "." : `./${subpath}`;
-        return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${exportSegmentOf(targetExport)}`;
+        const segment = exportSegmentOf(targetExport);
+        return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${segment}`;
       },
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
     });
@@ -196,10 +203,34 @@ export function apply(ctx: Context): void {
   const APP_ENTRY_PATH = "/plugins/.app/entry.js";
   const serveAppEntry = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
     if ((req.url ?? "").split("?")[0] !== APP_ENTRY_PATH) return false;
-    const ids = modules
+    const rows = modules
       .graph()
       .entries.map((entry) => entry.id)
       .filter((id) => id !== "client-modules");
+    // **按 `dsh.client.inject` 排序**：那是每个 client 行在清单里声明的依赖（"我生效前谁得先就绪"）。
+    // 平铺 import 是不够的——提供服务的行还没加载，用它的行就生效了（`ui-layout` 缺 theme/locale/shortcuts
+    // 就是这么来的：它们正是它 inject 里那几行提供的）。这里做一次拓扑排序，依赖先行。
+    const depsOfRow = async (id: string): Promise<string[]> => {
+      const root = await rootOf(id);
+      if (root === undefined) return [];
+      const manifest = await manifestOf(root);
+      const client = (manifest as { dsh?: { client?: { inject?: unknown } } } | undefined)?.dsh?.client;
+      const inject = client?.inject;
+      return Array.isArray(inject) ? inject.filter((name): name is string => typeof name === "string") : [];
+    };
+    const ordered: string[] = [];
+    const visiting = new Set<string>();
+    const visitRow = async (id: string): Promise<void> => {
+      if (ordered.includes(id) || visiting.has(id)) return;
+      visiting.add(id);
+      for (const dep of await depsOfRow(id)) await visitRow(dep);
+      visiting.delete(id);
+      if (rows.includes(id)) ordered.push(id);
+    };
+    for (const row of rows) await visitRow(row);
+    // 依赖里可能有不在行集里的包（不该出现），补在末尾以免漏掉它的服务。
+    for (const dep of rows) if (!ordered.includes(dep)) ordered.push(dep);
+    const ids = ordered;
     // 自研装配：建一个客户端 Context，按模块表的顺序调用每个 client 行的 `apply`
     // （每个 client 入口就是这样导出的：`export { apply, inject }`）。上游那套是 classic script +
     // `__ModuleLoader__.load` 工厂，加载与装配绑在一起；这里把两件事分开——ESM 负责加载，这段负责装配。
