@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
 import {
-  clientAssetPlugin,
   cssInlinePlugins,
 } from "@local/devkit";
 import {
