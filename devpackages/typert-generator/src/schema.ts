@@ -135,6 +135,9 @@ async function dtsFiles(root: string): Promise<string[]> {
         await walk(full);
       } else if (entry.name.endsWith(".d.ts")) {
         found.push(full);
+      } else if (entry.name.endsWith(".ts")) {
+        // 声明树里的源码形态（上游 generator 的 fixtures 就是源码树：类型与实现同居一文件）。
+        found.push(full);
       }
     }
   }

@@ -1,6 +1,13 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
-import { type Node, type ParsedFile, nameOf, parseFile, typeArgumentsOf, walkAll } from "./ast.ts";
+import {
+  type Node,
+  type ParsedFile,
+  nameOf,
+  parseFile,
+  typeArgumentsOf,
+  walkAll,
+} from "./ast.ts";
 import { reflectModel, type ReflectionModel } from "./reflection.ts";
 import { type SchemaIndex, buildSchemaIndex, newContext, zodOf } from "./schema.ts";
 
@@ -11,6 +18,47 @@ import { type SchemaIndex, buildSchemaIndex, newContext, zodOf } from "./schema.
 //   lib/typert.remote-client.ts                 远端客户端面（TYPERT_REMOTE + declare module）
 //
 // 这是"ts → schema"的纯语法活：不建类型图、不依赖任何 TypeScript 版本。
+
+/**
+ * 上下文查找表：`declare module '@deepseek-ai/dsh-typert-protocol'` 里的
+ * `TypertLookupMap { agent: TypertLookup<Agent, AgentId> }` / `TypertContextMap { agent: TypertContext<AgentId> }`。
+ *
+ * wire 上的"上下文参数"（descriptor 的 `scope`）就是从这里来的：参数的**类型**在这张表里时，它按 lookup 传、
+ * 而不是当 JSON 载荷，wire 名取 id 类型的小驼峰（`AgentId` → `agentId`）。
+ */
+async function lookupContexts(
+  packages: readonly { name: string; root: string }[],
+): Promise<Map<string, { idType: string; objectType: string | undefined }>> {
+  const table = new Map<string, { idType: string; objectType: string | undefined }>();
+  // 类型实参是引用节点（名字在 `typeName` 上）。
+  const argumentName = (argument: Node | undefined): string | undefined =>
+    argument === undefined ? undefined : nameOf((argument["typeName"] ?? argument) as Node);
+  for (const pkg of packages) {
+    for (const file of await sourceFiles(pkg.root)) {
+      const parsed = await parseFile(file);
+      walkAll(parsed.program, (node) => {
+        if (node["type"] !== "TSInterfaceDeclaration") return;
+        const interfaceName = nameOf(node["id"] as Node);
+        if (interfaceName !== "TypertLookupMap" && interfaceName !== "TypertContextMap") return;
+        for (const member of (node["body"]?.["body"] ?? []) as Node[]) {
+          if (member["type"] !== "TSPropertySignature") continue;
+          const key = nameOf(member["key"] as Node);
+          const annotation = member["typeAnnotation"]?.["typeAnnotation"] as Node | undefined;
+          if (key === undefined || annotation === undefined) continue;
+          const args = typeArgumentsOf(annotation);
+          const idType = argumentName(args.at(-1));
+          const objectType = interfaceName === "TypertLookupMap" ? argumentName(args[0]) : undefined;
+          if (idType === undefined) continue;
+          // `TypertLookupMap` 给"对象 → id"的对照（`agent: TypertLookup<Agent, SessionId>`），
+          // `TypertContextMap` 只给 id；两张表都注册同一个键时，保留带对象名的那条。
+          const previous = table.get(key);
+          table.set(key, { idType, objectType: objectType ?? previous?.objectType });
+        }
+      });
+    }
+  }
+  return table;
+}
 
 export type GenerateOptions = {
   /** 上游 clone 的根目录（`<vendor>/<name>`）：产物里的 `sourceLocation.file` 相对它。 */
@@ -37,9 +85,21 @@ type RemoteMethod = {
   mode: "direct" | "stream";
   /** 声明面签名用的参数文本（含被 wire 跳过的 `signal`）。 */
   signatureParameters: string;
-  parameters: { name: string; type: Node | undefined; optional: boolean }[];
+  parameters: {
+    name: string;
+    type: Node | undefined;
+    optional: boolean;
+    node: Node;
+    /** 由查找表补出来的上下文参数：它的 codec 用 id 类型而不是参数注解。 */
+    idType?: string;
+  }[];
   /** 取消通道参数名（`signal: AbortSignal`）：wire 上不传，但 invocation 要记下来。 */
   cancellation?: string;
+  /** 上下文名：来自 `@RemoteScope('<context>')`，或参数类型命中 `TypertLookupMap` / `TypertContextMap`。 */
+  scope?: string;
+  scopeWire?: string;
+  scopeIdType?: string;
+  scopeParameter?: Node;
   result: Node | undefined;
   node: Node;
 };
@@ -113,11 +173,20 @@ function serviceHeaderOf(klass: Node): { serviceKey: string; namespace: string }
 }
 
 /** `@Remote('wire')` 的第一个字符串参数是 **wire 名**（缺省用方法名）；`@Remote({ mode: … })` 给载体。 */
-function remoteOptionsOf(member: Node): { wireName?: string; mode: "direct" | "stream" } {
+function remoteOptionsOf(member: Node): { wireName?: string; scope?: string; mode: "direct" | "stream" } {
   let wireName: string | undefined;
+  let scope: string | undefined;
   let mode: "direct" | "stream" = "direct";
   for (const decorator of (member["decorators"] ?? []) as Node[]) {
     const expression = decorator["expression"] as Node;
+    if (nameOf((expression["callee"] ?? expression) as Node) === "RemoteScope") {
+      // `@RemoteScope('<ctx>')` 的参数是上下文名，**不是** wire 名：它不参与下面的 wireName 判定。
+      const first = ((expression["arguments"] ?? []) as Node[])[0];
+      if (first?.["type"] === "Literal" && typeof first["value"] === "string") {
+        scope = first["value"];
+      }
+      continue;
+    }
     const args = ((expression["arguments"] ?? []) as Node[]).filter(
       (argument) => argument["type"] !== "SpreadElement",
     );
@@ -133,7 +202,7 @@ function remoteOptionsOf(member: Node): { wireName?: string; mode: "direct" | "s
       }
     }
   }
-  return { ...(wireName === undefined ? {} : { wireName }), mode };
+  return { ...(wireName === undefined ? {} : { wireName }), ...(scope === undefined ? {} : { scope }), mode };
 }
 
 /** 声明面签名里的参数文本（源码切片，保留 `signal?: AbortSignal` 这类取消通道）。 */
@@ -165,11 +234,16 @@ function schemaOfParameter(
 function isRemoteDecorated(member: Node): boolean {
   return ((member["decorators"] ?? []) as Node[]).some((decorator) => {
     const expression = decorator["expression"] as Node;
-    return nameOf((expression["callee"] ?? expression) as Node) === "Remote";
+    const name = nameOf((expression["callee"] ?? expression) as Node);
+    return name === "Remote" || name === "RemoteScope";
   });
 }
 
-function remoteMethodsOf(klass: Node, source: string): RemoteMethod[] {
+function remoteMethodsOf(
+  klass: Node,
+  source: string,
+  contexts: Map<string, { idType: string; objectType: string | undefined }>,
+): RemoteMethod[] {
   const methods: RemoteMethod[] = [];
   for (const member of (klass["body"]?.["body"] ?? []) as Node[]) {
     if (member["type"] !== "MethodDefinition" || !isRemoteDecorated(member)) continue;
@@ -179,21 +253,67 @@ function remoteMethodsOf(klass: Node, source: string): RemoteMethod[] {
         (parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as Node | undefined,
       ) === "AbortSignal";
     const cancellation = declaredParameters.find(isCancellation);
-    const parameters = declaredParameters
+    const parameters: RemoteMethod["parameters"] = declaredParameters
       // 取消通道只在本进程内传，wire 上没有它的位置——记成 invocation 的 `cancellation`。
       .filter((parameter) => !isCancellation(parameter))
       .map((parameter, index) => ({
         name: parameterName(parameter) ?? `arg${String(index)}`,
         type: parameter["typeAnnotation"]?.["typeAnnotation"] as Node | undefined,
         optional: parameter["optional"] === true,
+        node: parameter,
       }));
+    // 参数类型落在上下文查找表里 → 它是 scope 参数（wire 上按 lookup 传、名字用 id 类型）。
+    const scopeHit = declaredParameters
+      .map((parameter) => {
+        const typeName = nameOf(
+          (parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as Node | undefined,
+        );
+        if (typeName === undefined) return undefined;
+        for (const [key, entry] of contexts) {
+          if (entry.objectType === typeName || entry.idType === typeName) {
+            return { key, wire: `${key}Id`, idType: entry.idType, parameter };
+          }
+        }
+        return undefined;
+      })
+      .find((hit) => hit !== undefined);
+    // 参数类型命中查找表 → 该参数就是上下文参数（wire 上用 id 类型，不是宿主对象）。
+    const scopedParameter =
+      scopeHit === undefined
+        ? undefined
+        : parameters.find((candidate) => candidate.node === scopeHit.parameter);
+    if (scopedParameter !== undefined && scopeHit !== undefined) {
+      scopedParameter.idType = scopeHit.idType;
+    }
     const options = remoteOptionsOf(member);
+    // `@RemoteScope('<key>')` 的方法在 wire 上自带一个上下文参数（即使实现里没写它）：
+    // 名字用上下文键，类型用查找表里的 id 类型。
+    const scopeEntry = options.scope === undefined ? undefined : contexts.get(options.scope);
+    if (options.scope !== undefined && scopeHit === undefined && scopeEntry !== undefined) {
+      parameters.unshift({
+        name: options.scope,
+        type: undefined,
+        optional: false,
+        node: member,
+        idType: scopeEntry.idType,
+      });
+    }
     const implementation = String(nameOf(member["key"] as Node) ?? "");
     const method = options.wireName ?? implementation;
     methods.push({
       method,
       ...(method === implementation ? {} : { implementation }),
       mode: options.mode,
+      ...(options.scope === undefined && scopeHit === undefined
+        ? {}
+        : { scope: options.scope ?? scopeHit?.key ?? "" }),
+      ...(scopeHit === undefined
+        ? {}
+        : {
+            scopeWire: `${scopeHit.key}Id`,
+            scopeIdType: scopeHit.idType,
+            scopeParameter: scopeHit.parameter,
+          }),
       signatureParameters: signatureParametersOf(source, member),
       parameters,
       ...(cancellation === undefined
@@ -207,13 +327,16 @@ function remoteMethodsOf(klass: Node, source: string): RemoteMethod[] {
 }
 
 /** 服务类：`extends TypertRemoteService`。 */
-function servicesOf(file: ParsedFile): RemoteService[] {
+function servicesOf(
+  file: ParsedFile,
+  contexts: Map<string, { idType: string; objectType: string | undefined }>,
+): RemoteService[] {
   const found: RemoteService[] = [];
   for (const statement of file.program["body"] as Node[]) {
     // `export class X` / `export default class X` / 裸 `class X` 三种都要认。
     const declaration = unwrapExport(statement);
     if (declaration["type"] !== "ClassDeclaration") continue;
-    const methods = remoteMethodsOf(declaration, file.source);
+    const methods = remoteMethodsOf(declaration, file.source, contexts);
     if (methods.length === 0) continue;
     const header = serviceHeaderOf(declaration);
     if (header === undefined) continue;
@@ -320,6 +443,8 @@ async function packageDirs(upstreamRoot: string): Promise<string[]> {
   )) {
     if (!group.isDirectory()) continue;
     const groupDir = join(upstreamRoot, "packages", group.name);
+    // 上游是 `packages/<组>/<包>` 两层；也存在一层布局（`packages/<包>`，例如 generator 的 fixtures）。
+    if (await pathExists(join(groupDir, "package.json"))) found.push(groupDir);
     for (const pkg of await readdir(groupDir, { withFileTypes: true }).catch(() => [])) {
       if (pkg.isDirectory() && pkg.name !== "node_modules") found.push(join(groupDir, pkg.name));
     }
@@ -341,6 +466,7 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     }
   }
   const clientPackages = await clientFacingPackages(options.upstreamRoot, discovered);
+  const contexts = await lookupContexts(discovered);
   const owners = new Map<string, string | undefined>();
   const index = await buildSchemaIndex(options.dtsRoot, {
     // 声明树里的位置 `<dtsRoot>/<仓库相对路径>` 就是包目录的位置，包名仍从上游清单读。
@@ -360,6 +486,7 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
       return owner;
     },
   });
+  indexForSymbols = index;
   const artifacts: GeneratedArtifact[] = [];
   for (const pkgDir of await packageDirs(options.upstreamRoot)) {
     let name: string | undefined;
@@ -373,7 +500,7 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     if (options.packages !== undefined && !options.packages.includes(name)) continue;
     const services: RemoteService[] = [];
     for (const file of await sourceFiles(pkgDir)) {
-      services.push(...servicesOf(await parseFile(file)));
+      services.push(...servicesOf(await parseFile(file), contexts));
     }
     if (services.length === 0) continue;
     const text = renderHostArtifact(name, services, index, options.upstreamRoot, "host");
@@ -469,16 +596,32 @@ export function renderRemoteClient(
             : [`      implementation: '${method.implementation}',`]),
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
           "      invocation: { kind: 'direct' },",
+          // 上下文参数（`@RemoteScope` 或类型命中查找表）：descriptor 记 scope，参数按 lookup 传。
+          ...(method.scope === undefined
+            ? []
+            : [
+                "      scope: {",
+                `        context: '${method.scope}',`,
+                `        wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
+                "      },",
+              ]),
           "      parameters: [",
           ...parameters.map(({ parameter, symbol }) =>
             [
               "        {",
               `          name: '${parameter.name}',`,
-              `          wire: '${parameter.name}',`,
-              "          source: 'json',",
+              // `@RemoteScope` 的第一个参数是上下文：wire 名带 Id、按查找传，而不是当 JSON 载荷。
+              ...(parameter.idType !== undefined ||
+              (method.scopeParameter !== undefined && method.scopeParameter === parameter.node)
+                ? [
+                    `          wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
+                    "          source: 'lookup',",
+                    `          lookup: '${method.scope}',`,
+                  ]
+                : [`          wire: '${parameter.name}',`, "          source: 'json',"]),
               "          codec: {",
               "            mode: 'strict',",
-              `            typeSymbol: '${typeSymbolOf(parameter.type, index) ?? `${name}#${service.namespace}/${method.method}:${parameter.name}`}',`,
+              `            typeSymbol: '${parameter.idType === undefined ? (typeSymbolOf(parameter.type, index) ?? `${name}#${service.namespace}/${method.method}:${parameter.name}`) : (symbolForName(parameter.idType) ?? `${name}#${service.namespace}/${method.method}:${parameter.name}`)}',`,
               `            create: ${symbol}$schema,`,
               "          },",
               "        },",
@@ -526,7 +669,7 @@ export function renderRemoteClient(
   for (const service of services) {
     lines.push(`  interface TypertRemoteNamespace$${hexOf(service.namespace)} {`);
     for (const method of service.methods) {
-      lines.push(`    ${method.method}: ${signatureFor(method, service.file.source)}`);
+      lines.push(`    ${method.method}: ${signatureFor(method, service.file.source, method.scope !== undefined)}`);
     }
     lines.push("  }");
   }
@@ -534,7 +677,7 @@ export function renderRemoteClient(
   for (const service of services) {
     for (const method of service.methods) {
       lines.push(
-        `    '${service.namespace}/${method.method}': ${signatureFor(method, service.file.source)}`,
+        `    '${service.namespace}/${method.method}': ${signatureFor(method, service.file.source, method.scope !== undefined)}`,
       );
     }
   }
@@ -543,19 +686,48 @@ export function renderRemoteClient(
   for (const service of services) {
     lines.push(`    '${service.namespace}': TypertRemoteNamespace$${hexOf(service.namespace)}`);
   }
+  lines.push("  }");
+  // ScopeMap：`@RemoteScope` 的调用方在已绑定上下文的载体里发起，签名里不再重复上下文参数。
+  const scoped = services.flatMap((service) =>
+    service.methods
+      .filter((method) => method.scope !== undefined)
+      .map((method) => ({ service, method })),
+  );
+  if (scoped.length > 0) {
+    lines.push("  interface TypertRemoteScopeMap {");
+    for (const { service, method } of scoped) {
+      lines.push(
+        `    '${String(method.scope)}:${service.namespace}/${method.method}': ${signatureFor(method, service.file.source, true, true)}`,
+      );
+    }
+    lines.push("  }");
+  }
   // 末尾照上游留一个空行。
-  lines.push("  }", "}", "", "");
+  lines.push("}", "", "");
   return `${lines.join("\n")}`;
 }
 
 /** 声明面签名：direct 走 `Promise<RemoteResult<T>>`，stream 走 `RemoteStreamHandle<T, never>`。 */
-function signatureFor(method: RemoteMethod, source: string): string {
+function signatureFor(
+  method: RemoteMethod,
+  source: string,
+  scopeAsId = false,
+  dropScope = false,
+): string {
   const inner = returnInnerOf(method.result, source);
   const wrapped =
     method.mode === "stream"
       ? `RemoteStreamHandle<${inner}, never>`
       : `Promise<RemoteResult<${inner}>>`;
-  return `(${method.signatureParameters}) => ${wrapped}`;
+  // scope 方法在客户端签名里用上下文 id 代替宿主侧的对象参数（`agent: Agent` → `agentId: SessionId`）。
+  // `scopeAsId`：上下文参数以 id 形态出现在签名里（`agent: Agent` → `agentId: SessionId`）。
+  // `dropScope`：已经绑定了上下文的载体里，签名不再重复它。
+  const parameters = dropScope
+    ? signatureParametersWithoutScope(method)
+    : scopeAsId && method.scope !== undefined
+      ? signatureParametersWithScopeId(method)
+      : method.signatureParameters;
+  return `(${parameters}) => ${wrapped}`;
 }
 
 function returnInnerOf(type: Node | undefined, source: string): string {
@@ -694,16 +866,32 @@ export function renderHostArtifact(
           // `mode` 是 registry 判定载体（stream 还是 unary）的依据，host 面与远端面都要写。
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
           "      invocation: { kind: 'direct' },",
+          // `@RemoteScope('<ctx>')`：首个参数按上下文查找传（不是 JSON），wire 名带 Id。
+          ...(method.scope === undefined
+            ? []
+            : [
+                "      scope: {",
+                `        context: '${method.scope}',`,
+                `        wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
+                "      },",
+              ]),
           "      parameters: [",
           ...parameters.map(({ parameter, symbol }) =>
             [
               "        {",
               `          name: '${parameter.name}',`,
-              `          wire: '${parameter.name}',`,
-              "          source: 'json',",
+              // `@RemoteScope` 的第一个参数是上下文：wire 名带 Id、按查找传，而不是当 JSON 载荷。
+              ...(parameter.idType !== undefined ||
+              (method.scopeParameter !== undefined && method.scopeParameter === parameter.node)
+                ? [
+                    `          wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
+                    "          source: 'lookup',",
+                    `          lookup: '${method.scope}',`,
+                  ]
+                : [`          wire: '${parameter.name}',`, "          source: 'json',"]),
               "          codec: {",
               "            mode: 'strict',",
-              `            typeSymbol: '${symbolOf(parameter.type, `${name}#${service.namespace}/${method.method}:${parameter.name}`)}',`,
+              `            typeSymbol: '${parameter.idType === undefined ? symbolOf(parameter.type, `${name}#${service.namespace}/${method.method}:${parameter.name}`) : (symbolForName(parameter.idType) ?? `${name}#${service.namespace}/${method.method}:${parameter.name}`)}',`,
               `            create: ${symbol}$schema,`,
               "          },",
               "        },",
@@ -811,6 +999,40 @@ async function ownerFor(pkgDir: string, file: string): Promise<string | undefine
     }
   }
   return `${name}${subpath}`;
+}
+
+/** 类型名 → 它的类型符号（`@pkg/出口#Name`）；索引里没有就交给调用方的兜底。 */
+function symbolForName(name: string): string | undefined {
+  const declared = indexForSymbols.get(name);
+  return declared === undefined ? undefined : `${declared.owner}#${name}`;
+}
+
+/** 供 `symbolForName` 用的索引（每次 `generateTypert` 覆盖）。 */
+let indexForSymbols: SchemaIndex = new Map();
+
+/** 签名里把上下文参数换成 id 形态（`agent: Agent` → `agentId: SessionId`）。 */
+function signatureParametersWithScopeId(method: RemoteMethod): string {
+  const name = method.parameters.find(
+    (parameter) => parameter.idType !== undefined || parameter.node === method.scopeParameter,
+  )?.name;
+  const replaced = `${String(method.scope)}Id: ${method.scopeIdType ?? "string"}`;
+  if (name === undefined || method.signatureParameters === "") return replaced;
+  return method.signatureParameters
+    .split(", ")
+    .map((part) => (part.startsWith(`${name}:`) || part.startsWith(`${name}?:`) ? replaced : part))
+    .join(", ");
+}
+
+/** 签名里去掉上下文参数（`@RemoteScope` 的 ScopeMap 形态）。 */
+function signatureParametersWithoutScope(method: RemoteMethod): string {
+  const scopeParameterName = method.parameters.find(
+    (parameter) => parameter.idType !== undefined || parameter.node === method.scopeParameter,
+  )?.name;
+  if (scopeParameterName === undefined || method.signatureParameters === "") return "";
+  return method.signatureParameters
+    .split(", ")
+    .filter((part) => !part.startsWith(`${scopeParameterName}:`) && !part.startsWith(`${scopeParameterName}?:`))
+    .join(", ");
 }
 
 function lineOf(file: ParsedFile, node: Node): { line: number; column: number } {
