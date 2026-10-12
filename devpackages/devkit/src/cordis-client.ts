@@ -192,7 +192,8 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
     // 浏览器 require 它们必然失败。显式放行 → 走 clientAssetPlugin 的替身。
     external: (id: string) => !NODE_BUILTIN.test(id) && isClientExternal(id, spec.externals),
     // 样式内联进字节：产物是自包含单文件，样式不能留在外部（见 cssInlinePlugins）。
-    plugins: [...cssInlinePlugins({ name: options.name }), clientAssetPlugin()],
+    // dev 形态的产物是自包含单文件，没有放资产的位置：CSS 里的图片一律内联。
+    plugins: [...cssInlinePlugins({ name: options.name, assets: "inline" }), clientAssetPlugin()],
   });
   try {
     const { output } = await build.generate({

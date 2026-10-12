@@ -174,7 +174,12 @@ export async function defineCordisPluginConfig(options?: {
       // 内联库（见上）没有工厂外壳，样式插件照旧要挂。
       ...(client === undefined && !inlineLibrary
         ? []
-        : cssInlinePlugins({ name: client?.name ?? (await packageName()) })),
+        : cssInlinePlugins({
+            // 资产先全内联：`threshold` 那条要等发布链把 `assets/` 的命名与 URL 改写对齐
+            // （emit 回来的文件名带 hash，CSS 里的相对 URL 得跟着它走），见债务「CSS 大图资产化」。
+            name: client?.name ?? (await packageName()),
+            assets: "inline",
+          })),
     ],
   };
 }

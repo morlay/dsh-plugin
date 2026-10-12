@@ -13,10 +13,66 @@ const INLINE_PREFIX = "\0dsh-inline-css:";
 const VIRTUAL_SUFFIX = ".mjs";
 const INLINE_QUERY = "?inline";
 
+// CSS 里 `url('./x.png')` 这类**文件引用**要内联成 data URI：现场打包的产物是自包含单文件，样式表里
+// 留相对路径的话浏览器会按当前页面去请求、多半 404（`ui-chat` 的 running-whale 掩膜图就是这样丢的）。
+// 上游 client 产物同样是内联形态（其它包直接在源码里写 data URI）。
+const CSS_ASSET_MIME: Record<string, string> = {
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+};
+
+async function inlineCssUrls(
+  css: string,
+  from: string,
+  policy: CssAssetPolicy = "threshold",
+  emit?: (name: string, bytes: Uint8Array) => string,
+): Promise<string> {
+  const matches = [...css.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gu)];
+  let result = css;
+  for (const match of matches) {
+    const specifier = match[1];
+    if (specifier === undefined) continue;
+    if (specifier.startsWith("data:") || /^(?:https?:)?\/\//u.test(specifier) || specifier.startsWith("#")) {
+      continue;
+    }
+    const file = resolvePath(dirname(from), specifier);
+    try {
+      const bytes = await readFile(file);
+      const extension = (file.split(".").pop() ?? "").toLowerCase();
+      if (policy === "threshold" && bytes.byteLength >= INLINE_LIMIT && emit !== undefined) {
+        // 大图产出资产文件（发布链），URL 指向它而不是塞 base64。
+        result = result.replaceAll(match[0], `url("${emit(basename(file), bytes)}")`);
+        continue;
+      }
+      const mime = CSS_ASSET_MIME[extension] ?? "application/octet-stream";
+      result = result.replaceAll(match[0], `url("data:${mime};base64,${bytes.toString("base64")}")`);
+    } catch {
+      // 找不到的文件保持原样：让浏览器按原路径报错，比静默吞掉更好定位。
+    }
+  }
+  return result;
+}
+
 // 样式内联插件（CSS Modules / 全局 CSS / `?inline`）：`.module.css` 交 lightningcss 编译出 class
 // 映射并在模块执行时注入样式，其余 `.css` 只注入，`.css?inline` 只导出编译后的文本。
 // `options.name` 是插件 id（模块表键），写入注入 style tag 的 `data-plugin*` 属性；两条链共用这份实现。
-export function cssInlinePlugins(options: { name: string }): Plugin[] {
+/** 资产策略：`inline` 全部内联（dev——产物是自包含单文件，没有可放资产的位置）；`threshold` 按
+ *  vite 的默认阈值（4KB）：小图内联、大图产出 `assets/` 文件（发布包不该被 base64 撑大）。 */
+export type CssAssetPolicy = "inline" | "threshold";
+
+const INLINE_LIMIT = 4096;
+
+export function cssInlinePlugins(options: { name: string; assets?: CssAssetPolicy }): Plugin[] {
   const styleModule = (
     file: string,
     css: string,
@@ -56,12 +112,16 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
       },
       async load(virtualId: string) {
         if (!virtualId.startsWith(MODULES_PREFIX)) return null;
+        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
+          this.emitFile({ type: "asset", name: assetName, source: bytes, originalFileName: assetName });
         const file = unwrap(virtualId, MODULES_PREFIX);
         // 虚拟 id 让真实样式文件落在 rolldown 的 watch 图之外，这里补回来。
         this.addWatchFile(file);
         const { code, exports } = transform({
           filename: file,
-          code: await readFile(file),
+          code: Buffer.from(
+            await inlineCssUrls(await readFile(file, "utf8"), file, options.assets, emitAsset),
+          ),
           cssModules: { pattern: "[hash]_[local]" },
           minify: true,
         });
@@ -84,9 +144,13 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
         if (!virtualId.startsWith(INLINE_PREFIX)) return null;
         const file = unwrap(virtualId, INLINE_PREFIX);
         this.addWatchFile(file);
+        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
+          this.emitFile({ type: "asset", name: assetName, source: bytes, originalFileName: assetName });
         const { code } = transform({
           filename: file,
-          code: await readFile(file),
+          code: Buffer.from(
+            await inlineCssUrls(await readFile(file, "utf8"), file, options.assets, emitAsset),
+          ),
           minify: true,
         });
         return `export default ${JSON.stringify(code.toString())};`;
@@ -105,9 +169,13 @@ export function cssInlinePlugins(options: { name: string }): Plugin[] {
         if (!virtualId.startsWith(GLOBAL_PREFIX)) return null;
         const file = unwrap(virtualId, GLOBAL_PREFIX);
         this.addWatchFile(file);
+        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
+          this.emitFile({ type: "asset", name: assetName, source: bytes, originalFileName: assetName });
         const { code } = transform({
           filename: file,
-          code: await readFile(file),
+          code: Buffer.from(
+            await inlineCssUrls(await readFile(file, "utf8"), file, options.assets, emitAsset),
+          ),
           minify: true,
         });
         return styleModule(file, code.toString());
