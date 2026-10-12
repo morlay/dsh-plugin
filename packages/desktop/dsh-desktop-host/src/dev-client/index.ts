@@ -1,11 +1,14 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
+import { prebundleDependency } from "@local/devkit";
 import {
   buildPackageIndex,
+  dependencyEntryOf,
+  packageNameOf,
   manifestOf,
   owningPackageOf,
   packageRootOf,
@@ -89,6 +92,9 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   const explicit = new Set(config.packages ?? []);
 
+  // 三方依赖的预打包产物落在这里（profile 的 store，跨进程复用）。
+  const depsDir = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "deps");
+
   // 现场打包的判据是「这一行的 client 出口指向源码」：`exports` 指到 `src/client/index.ts` 后，
   // `client-modules` 读到的就是 TS 源文件，直接下发会把 TS 当 JS 执行——浏览器要的是工厂脚本。
   // 源码面对上游与本仓库的包一视同仁（两边都是 `src`），所以判据只看出口指向，不看包名前缀：
@@ -153,9 +159,39 @@ export function apply(ctx: Context, config: Config = {}): void {
     res.end(req.method === "HEAD" ? undefined : Buffer.from(await response.arrayBuffer()));
   };
 
+  const prebundleUrl = async (specifier: string, fromFile: string, outDir: string): Promise<string | undefined> => {
+    const entry = await dependencyEntryOf(specifier, fromFile);
+    if (entry === undefined) return undefined;
+    const name = packageNameOf(specifier);
+    try {
+      const result = await prebundleDependency({ name, entry, outDir });
+      ctx.logger.debug("dev-client-bundles: 预打包 %s → %s", name, result.file);
+      return `${PLUGIN_ROUTE}/.deps/${result.file}`;
+    } catch (error) {
+      ctx.logger.error(error);
+      return undefined;
+    }
+  };
+
   // 按文件寻址：`/plugins/{pkg}/{version}/{filepath}`——仓库源码逐个文件转译直出，依赖由浏览器原生
   // ESM 解析。命中就自己下发，不再走 combo 打包。
   const serveFile = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
+    // 预打包产物：`/plugins/.deps/<file>` 直接从缓存目录读。
+    const depsMatch = /^\/plugins\/\.deps\/([^?]+)/u.exec(req.url ?? "");
+    if (depsMatch?.[1] !== undefined) {
+      try {
+        const code = await readFile(join(depsDir, basename(depsMatch[1])), "utf8");
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(req.method === "HEAD" ? undefined : code);
+      } catch {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end(`dev-client-bundles: 未预打包 ${depsMatch[1]}\n`);
+      }
+      return true;
+    }
     const address = parseFileAddress(req.url ?? "");
     if (address === undefined) return false;
     // 包根从模块表推：`clientPath(id)` 给的就是该包的 client 源文件（`exports` 已指 `src`），
@@ -177,7 +213,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       res.end("dev-client-bundles: 越界路径\n");
       return true;
     }
-    // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用。
+  
+  // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用。
   const repoRoot = await findRepoRoot();
   let packageIndex: Map<string, string> | undefined;
   const indexEntryOf = async (name: string): Promise<string | undefined> => {
@@ -196,7 +233,11 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) {
         return undefined;
       }
-      return resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
+      const url = await resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
+      if (url !== undefined) return url;
+      // 解析不出来：多半是三方包（它的包根在 node_modules 里，不在工作区/上游的源码目录）。
+      // 走预打包：把依赖闭包打成单个 ESM（顺带完成 CJS→ESM），URL 指到缓存的产物。
+      return await prebundleUrl(specifier, file, depsDir);
     };
     try {
       const code = await transpileFile({ file, rewrite });
@@ -241,8 +282,10 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   ctx.effect(
-    // `prefix`：既覆盖 combo（`/plugins/??a,b`），也覆盖按文件寻址（`/plugins/<pkg>/<version>/<file>`）。
-    () => webServer.register({ kind: "prefix", path: PLUGIN_ROUTE, handler: serve }),
+    // `exact /plugins`：上游的 `client-modules` 已经占了 `prefix /plugins`（重复注册会直接抛），而 exact
+    // 优先于 prefix 命中——按文件寻址（`/plugins/<pkg>/<version>/<file>`）与 combo 都从这一个入口进来，
+    // 在 handler 里按 `req.url` 自己分发。
+    () => webServer.register({ kind: "exact", path: PLUGIN_ROUTE, handler: serve }),
     "dev-client-bundles: /plugins route",
   );
 }

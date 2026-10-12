@@ -89,9 +89,10 @@ function harness(config: Config, paths: Record<string, string>): Harness {
   apply(ctx, config);
   const route = routes[0];
   if (route === undefined) throw new Error("route was not registered");
-  // `prefix`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）共用一条路由。
+  // `exact /plugins`：上游 client-modules 占了 `prefix /plugins`（重复注册会抛），exact 优先命中，
+  // combo 与按文件寻址都从这一个入口进来。
   expect(route.path).toBe("/plugins");
-  expect(route.kind).toBe("prefix");
+  expect(route.kind).toBe("exact");
 
   return {
     fallbackRequests,

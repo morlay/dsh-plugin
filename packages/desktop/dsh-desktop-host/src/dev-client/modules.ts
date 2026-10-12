@@ -197,6 +197,24 @@ export async function resolveRelativeUrl(
   return `${PLUGIN_ROUTE}/${encodePackageName(pkg.name)}/${pkg.version}/${filepath}`;
 }
 
+/** 三方依赖的入口：按 node 的解析规则从 `fromFile` 出发找（`node_modules` 里的那一份）。 */
+export async function dependencyEntryOf(
+  specifier: string,
+  fromFile: string,
+): Promise<string | undefined> {
+  const name = packageNameOf(specifier);
+  const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
+  const root = packageRootOf(fromFile, name);
+  if (root === undefined) return undefined;
+  const byExports = await exportTargetOf(root, subpath);
+  if (byExports !== undefined) return byExports;
+  try {
+    return createRequire(fromFile).resolve(specifier);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 说明符里的包名：`@scope/name` 取两段、`name` 取一段。作用域包**没有子路径**时，
  * `indexOf("/", slash + 1)` 会返回 -1——直接 `slice` 会削掉最后一个字符，这里显式判掉。
