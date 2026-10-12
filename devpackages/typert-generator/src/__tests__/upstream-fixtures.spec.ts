@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildSchemaIndex, newContext, zodOf } from "../schema.ts";
 import { generateTypert } from "../index.ts";
 
 // 上游 generator 自带的 fixtures 就是现成的语料（`typert/generator/tests/fixtures/`）：拿它们当上游包，
@@ -43,6 +44,32 @@ async function workspaceOf(fixture: string): Promise<{ upstreamRoot: string; dts
 }
 
 describe("上游 fixtures", () => {
+  // `type-model` 的 `SyntaxZoo` 是上游自己的"每个受支持 TypeNode 形态"语料（泛型、条件、映射、模板字面量、
+  // 元组、unique symbol、import 类型、类型查询……），逐类型快照一遍：上游升级改了语料或我们改了规则，
+  // 快照都会立刻挡住。
+  it("type-model：逐类型生成 zod 的形状（快照）", async () => {
+    const { dtsRoot } = await workspaceOf("type-model");
+    const index = await buildSchemaIndex(dtsRoot, {});
+    const declarations = [...index.keys()].sort();
+    const shapes: Record<string, string> = {};
+    for (const name of declarations) {
+      const declared = index.get(name);
+      if (declared === undefined) continue;
+      const context = newContext(index);
+      const node =
+        declared.node["body"]?.["body"] === undefined
+          ? declared.node
+          : { type: "TSTypeLiteral", members: declared.node["body"]["body"] as unknown };
+      try {
+        shapes[name] = zodOf(node as never, context);
+      } catch {
+        shapes[name] = "<抛错>";
+      }
+    }
+    expect(Object.keys(shapes).length).toBeGreaterThan(10);
+    expect(shapes).toMatchSnapshot();
+  });
+
   it("remote-model：@Remote / @RemoteScope / stream 三种方法都有各自的 descriptor", async () => {
     const { upstreamRoot, dtsRoot } = await workspaceOf("remote-model");
     const artifacts = await generateTypert({ upstreamRoot, dtsRoot });

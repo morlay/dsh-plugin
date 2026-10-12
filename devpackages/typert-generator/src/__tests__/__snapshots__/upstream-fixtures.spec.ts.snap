@@ -1,0 +1,148 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照） 1`] = `
+{
+  "AbstractEntity": "z.object({
+
+})",
+  "Added": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Agent": "z.object({
+
+})",
+  "AgentPhase": "z.union([z.literal("Unknown"), z.literal("idle"), z.literal("running")])",
+  "AliasedService": "z.object({
+
+})",
+  "Box": "z.object({
+  'value': z.unknown() /* 未解析 T */.readonly(),
+})",
+  "Callable": "z.record(z.string(), z.unknown())",
+  "ClientAgent": "z.object({
+
+})",
+  "ClientBridge": "z.object({
+
+})",
+  "ClientView": "z.object({
+  'agent': z.unknown() /* 未解析 HostAgent */.readonly(),
+  'inherited': z.object({
+
+}).readonly(),
+  'importedAgent': z.unknown() /* TODO TSImportType */.readonly(),
+  'importedAgentWithNamedArgument': z.unknown() /* TODO TSImportType */.readonly(),
+  'namespaceAgent': z.unknown() /* 未解析 Host.Agent */.readonly(),
+  'defaultService': z.unknown() /* 未解析 HostDefault */.readonly(),
+  'payload': z.object({
+  'name': z.string(),
+  'count': z.number().optional(),
+}).readonly(),
+  'phase': z.union([z.literal("Unknown"), z.literal("idle"), z.literal("running")]).readonly(),
+})",
+  "DefaultOnlyService": "z.object({
+
+})",
+  "DemoService": "z.object({
+
+})",
+  "Entity": "z.object({
+  'id': z.string().readonly(),
+})",
+  "Flags": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Guards": "z.object({
+
+})",
+  "Payload": "z.object({
+  'name': z.string(),
+  'count': z.number().optional(),
+})",
+  "PlainMap": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Present": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Recursive": "z.object({
+  'next': z.object({
+  'next': z.lazy(() => RecursiveRemoteCodec$schema()).readonly().optional(),
+}).readonly().optional(),
+})",
+  "Remapped": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Result": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Route": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "StringResult": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "SyntaxZoo": "z.object({
+  'anyValue': z.unknown(),
+  'bigintValue': z.unknown() /* TODO TSBigIntKeyword */,
+  'parenthesized': z.union([z.literal(null), z.object({
+  'id': z.string().readonly(),
+})]),
+  'literals': z.union([z.literal(1), z.literal(1), z.literal(undefined), z.literal(undefined), z.literal(false), z.literal(undefined)]),
+  'uniqueToken': z.unknown() /* TODO TSSymbolKeyword */.readonly(),
+  'intersection': z.intersection(z.object({
+  'id': z.string().readonly(),
+}), z.object({
+  'active': z.boolean(),
+})),
+  'array': z.array(z.string()),
+  'tuple': z.unknown() /* TODO TSTupleType */,
+  'unnamedTuple': z.unknown() /* TODO TSTupleType */,
+  'readonlyTuple': z.unknown() /* TODO TSTupleType */,
+  'object': z.object({
+  'value': z.string().readonly().optional(),
+  '"quoted-name"': z.number(),
+  '1': z.boolean(),
+  '"computed"': z.unknown() /* TODO TSSymbolKeyword */,
+}),
+  'callback': z.unknown() /* TODO TSFunctionType */,
+  'constCallback': z.unknown() /* TODO TSFunctionType */,
+  'factory': z.unknown() /* TODO TSConstructorType */,
+  'abstractFactory': z.unknown() /* TODO TSConstructorType */,
+  'indexed': z.string(),
+  'inferred': z.unknown() /* TODO TSConditionalType */,
+  'constrainedInfer': z.unknown() /* TODO TSConditionalType */,
+  'topic': z.unknown() /* TODO TSTemplateLiteralType */,
+  'route': z.unknown() /* TODO TSTemplateLiteralType */,
+  'query': z.unknown() /* TODO TSTypeQuery */,
+  'instantiatedQuery': z.unknown() /* TODO TSTypeQuery */,
+  'imported': z.unknown() /* TODO TSImportType */,
+  'importedWith': z.unknown() /* TODO TSImportType */,
+  'importedModule': z.unknown() /* TODO TSTypeQuery */,
+  'process': z.unknown() /* 未解析 NodeJS.Process */,
+  'callable': z.record(z.string(), z.unknown()),
+  'guards': z.object({
+
+}),
+  'variance': z.object({
+  'consume': z.unknown() /* TODO TSFunctionType */,
+  'produce': z.unknown() /* TODO TSFunctionType */.readonly(),
+  'state': z.unknown() /* 未解析 State */,
+}),
+  'plainMap': z.unknown() /* TODO TSMappedType */,
+  'remapped': z.unknown() /* TODO TSMappedType */,
+  'added': z.unknown() /* TODO TSMappedType */,
+  'abstractEntity': z.object({
+
+}),
+  'recursive': z.object({
+  'next': z.lazy(() => RecursiveRemoteCodec$schema()).readonly().optional(),
+}),
+  'tagOnly': z.object({
+  'value': z.string().readonly(),
+}),
+  'unpunctuated': z.object({
+  'value': z.string().readonly(),
+}),
+})",
+  "TagOnly": "z.object({
+  'value': z.string().readonly(),
+})",
+  "Topic": "z.unknown() /* TODO TSTypeAliasDeclaration */",
+  "Unpunctuated": "z.object({
+  'value': z.string().readonly(),
+})",
+  "Variance": "z.object({
+  'consume': z.unknown() /* TODO TSFunctionType */,
+  'produce': z.unknown() /* TODO TSFunctionType */.readonly(),
+  'state': z.unknown() /* 未解析 State */,
+})",
+  "WritableService": "z.object({
+
+})",
+}
+`;
