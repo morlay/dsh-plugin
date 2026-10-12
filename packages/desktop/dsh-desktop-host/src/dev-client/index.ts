@@ -1,6 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { basename, dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
@@ -22,6 +22,22 @@ import {
 } from "./modules.ts";
 
 export const name = "dev-client-bundles";
+
+// 资产 MIME：按扩展名原样下发（与 devkit 的 CSS 资产表同集合）。
+const ASSET_MIME: Record<string, string> = {
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+};
 
 export const inject = ["webServer", "clientModules"];
 
@@ -237,15 +253,31 @@ export function apply(ctx: Context, config: Config = {}): void {
     // 原样留着浏览器自己拼就对（`../shared.ts` → 同包同版本的 `src/shared.ts`），改写反而多一层。
     // 裸导入（含 `@pkg/subpath`）用模块表解析到目标包的源文件，再拼成绝对 URL。
     const rewrite = async (specifier: string): Promise<string | undefined> => {
-      if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) {
-        return undefined;
-      }
+      // 仓库内绝对路径（`/vendor/deepseek-harness/packages/…/x.tsx` 这种写法源码里也有）照样改写成
+      // 按文件 URL；相对导入留给浏览器自己拼（URL 结构镜像文件结构）。
+      if (specifier.startsWith("/")) return await absoluteToPluginUrl(specifier);
+      if (specifier.startsWith(".") || specifier.startsWith("node:")) return undefined;
       const resolved = await resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
       // 仓库自己的包（工作区与上游源码）逐文件直出；`node_modules` 里的**三方包**不行——它们大量是
       // CJS，得整包预打包成单个 ESM（vite 的 optimizeDeps 那一层）。
       if (resolved?.via === "source") return resolved.url;
       return await prebundleUrl(specifier, file, depsDir);
     };
+    // 资产（图片、字体）：原样下发，带上 MIME。它们不是模块，转译会直接失败。
+    if (ASSET_MIME[file.split(".").pop()?.toLowerCase() ?? ""] !== undefined) {
+      try {
+        const bytes = await readFile(file);
+        res.writeHead(200, {
+          "content-type": ASSET_MIME[file.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream",
+          "cache-control": "no-store",
+        });
+        res.end(req.method === "HEAD" ? undefined : bytes);
+      } catch {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end("dev-client-bundles: 资产不存在\n");
+      }
+      return true;
+    }
     // 样式：编译成"注入 style + 导出 class 映射"的 ESM（与 rolldown 插件那条链同一份实现），
     // 否则浏览器把 CSS 文本当 JS 解析会直接报错。
     if (file.endsWith(".module.css") || file.endsWith(".css")) {
@@ -284,6 +316,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   const serve = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = req.url ?? COMBO_PATH;
     if (req.method !== "GET" && req.method !== "HEAD") return fallback(req, res);
+    if (await serveAppEntry(req, res)) return;
     if (await serveFile(req, res)) return;
     // combo（`??a/client.js,b/client.js`）与单包（`/<id>/client.js`）都要现场打包：源码行下发的
     // 字节若走 clientModules，会把 TS 原文当 JS 执行。包内 chunk 仍交给 clientModules。
@@ -362,6 +395,33 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   /** 包 id → 按文件入口 URL（包清单的 client 出口 → 源文件）。 */
+  /** 仓库内绝对路径 → 按文件 URL（`/vendor/…/packages/<组>/<包>/src/x.tsx`）。 */
+  async function absoluteToPluginUrl(specifier: string): Promise<string | undefined> {
+    const marker = "/packages/";
+    const index = specifier.indexOf(marker);
+    if (index < 0) return undefined;
+    const name = specifier.slice(0, index).split("/").pop();
+    if (name === undefined) return undefined;
+    const rest = specifier.slice(index + marker.length);
+    const [group, pkgName, ...tail] = rest.split("/");
+    if (group === undefined || pkgName === undefined || tail.length === 0) return undefined;
+    for (const candidate of [`@deepseek-ai/dsh-${pkgName}`, pkgName]) {
+      const entry = await indexEntryOf(candidate);
+      if (entry === undefined) continue;
+      const target = resolvePath(entry, tail.join("/"));
+      if (!target.startsWith(entry)) continue;
+      try {
+        await access(target);
+      } catch {
+        continue;
+      }
+      const manifest = await manifestOf(entry);
+      if (manifest === undefined) continue;
+      return `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/${relative(entry, target).split(sep).join("/")}`;
+    }
+    return undefined;
+  }
+
   async function clientEntryUrl(id: string): Promise<string | undefined> {
     const indexed = await indexEntryOf(id);
     if (indexed === undefined) return undefined;
@@ -372,6 +432,29 @@ export function apply(ctx: Context, config: Config = {}): void {
     return `/plugins/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`;
   }
 
+  // 自研 app 入口：一个 `type="module"` 的 ESM 模块，按文件 import 每个 client 行的源码入口。
+  // 上游那套引导器是 classic script + `__ModuleLoader__.load` 工厂（`system.ts` 的默认加载钩子），
+  // 与按文件 ESM 互斥——所以这里不再让它加载资源，只**读**它的行清单（`graph().entries`）当列表。
+  const APP_ENTRY_PATH = "/plugins/.app/entry.js";
+  const serveAppEntry = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
+    if ((req.url ?? "").split("?")[0] !== APP_ENTRY_PATH) return false;
+    const ids = modules
+      .graph()
+      .entries.map((entry) => entry.id)
+      .filter((id) => id !== "client-modules");
+    const lines: string[] = ["// dev 客户端入口：按文件 ESM 直访，改哪看哪。"];
+    for (const id of ids) {
+      const url = await clientEntryUrl(id);
+      lines.push(url === undefined ? `// 跳过（找不到 client 入口）：${id}` : `import ${JSON.stringify(url)};`);
+    }
+    res.writeHead(200, {
+      "content-type": "text/javascript; charset=utf-8",
+      "cache-control": "no-store",
+    });
+    res.end(req.method === "HEAD" ? undefined : `${lines.join("\n")}\n`);
+    return true;
+  };
+
   const serveIndex = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET" && req.method !== "HEAD") {
       res.writeHead(405);
@@ -379,7 +462,11 @@ export function apply(ctx: Context, config: Config = {}): void {
       return;
     }
     try {
-      const html = await rewriteClientUrls(webServer.renderIndex(indexHtml));
+      const rendered = webServer
+        .renderIndex(indexHtml)
+        // 上游注入的引导器（`<script src="plugins/??…">` 那一条）不再需要：资源由我们的入口按文件加载。
+        .replace(/<script[^>]*plugins\/\?\?[^>]*><\/script>/gu, "");
+      const html = `${await rewriteClientUrls(rendered)}\n<script type="module" src="${APP_ENTRY_PATH}"></script>\n`;
       res.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
