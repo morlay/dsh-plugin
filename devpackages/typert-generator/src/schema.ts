@@ -162,7 +162,14 @@ type EmitContext = {
   /** 包的出口表：`包名 → 导出名 → 声明`（解析跨包引用用）。 */
   exports?: Map<string, Map<string, { node: Node; file: string; text: string }>>;
   /** 导入别名表：`文件 → 本地名 → 目标（包 + 导出名 / default / 命名空间）`。 */
-  aliases?: Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>;
+  aliases?: Map<
+    string,
+    Map<
+      string,
+      | { pkg: string; name: string; namespace?: boolean }
+      | { declared: { node: Node; file: string; text: string } }
+    >
+  >;
 };
 
 /** 类型注解 AST（或类型节点）→ zod 表达式文本。 */
@@ -372,6 +379,12 @@ function objectLiteralOf(node: Node | undefined, context: EmitContext): Node[] |
   return undefined;
 }
 
+/** 文件路径 → 包名（从 `<…>/packages/<组>/<包>/…` 里取）。 */
+function packageOf(file: string): string {
+  const parts = file.split("/packages/")[1]?.split("/") ?? [];
+  return parts.length >= 2 ? `${String(parts[0])}/${String(parts[1])}` : "";
+}
+
 /** 文件 → 别名表的键（去扩展名，`x.d.ts` 与 `x.ts` 归一到同一个）。 */
 function relativeKey(file: string): string {
   const marker = "/packages/";
@@ -395,15 +408,16 @@ function viaAlias(name: string, context: EmitContext): TypeDecl | undefined {
   const key = context.file === undefined ? undefined : relativeKey(context.file);
   const aliases = key === undefined ? undefined : context.aliases?.get(key);
   const alias = aliases?.get(name);
-  if (alias === undefined || alias.namespace === true) return undefined;
-  const declared = context.exports?.get(alias.pkg)?.get(alias.name);
-  if (declared === undefined || !isTypeDeclaration(declared.node)) return undefined;
+  if (alias === undefined || ("namespace" in alias && alias.namespace === true)) return undefined;
+  // 相对导入在建表时就解析成声明了；跨包导入再去出口表查一次。
+  const resolved = "declared" in alias ? alias.declared : context.exports?.get(alias.pkg)?.get(alias.name);
+  if (resolved === undefined || !isTypeDeclaration(resolved.node)) return undefined;
   return {
     name,
-    owner: alias.pkg,
-    node: declared.node,
-    file: declared.file,
-    text: declared.text,
+    owner: "declared" in alias ? (alias.declared.file.includes("/packages/") ? packageOf(alias.declared.file) : "") : alias.pkg,
+    node: resolved.node,
+    file: resolved.file,
+    text: resolved.text,
   };
 }
 
@@ -411,7 +425,7 @@ function viaAlias(name: string, context: EmitContext): TypeDecl | undefined {
 function viaNamespace(namespace: string, exported: string, context: EmitContext): TypeDecl | undefined {
   const key = context.file === undefined ? undefined : relativeKey(context.file);
   const alias = key === undefined ? undefined : context.aliases?.get(key)?.get(namespace);
-  if (alias === undefined) return undefined;
+  if (alias === undefined || "declared" in alias) return undefined;
   const declared = context.exports?.get(alias.pkg)?.get(exported);
   if (declared === undefined || !isTypeDeclaration(declared.node)) return undefined;
   return { name: exported, owner: alias.pkg, node: declared.node, file: declared.file, text: declared.text };

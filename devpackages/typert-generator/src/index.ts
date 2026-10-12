@@ -1037,7 +1037,10 @@ let indexForSymbols: SchemaIndex = new Map();
 
 /** 供跨包引用解析用的出口表 / 别名表（同样每次 `generateTypert` 覆盖）。 */
 let surfaceExports = new Map<string, Map<string, { node: Node; file: string; text: string }>>();
-let surfaceAliases = new Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>();
+type AliasEntry =
+  | { pkg: string; name: string; namespace?: boolean }
+  | { declared: { node: Node; file: string; text: string } };
+let surfaceAliases = new Map<string, Map<string, AliasEntry>>();
 
 /** 签名里把上下文参数换成 id 形态（`agent: Agent` → `agentId: SessionId`）。 */
 function signatureParametersWithScopeId(method: RemoteMethod): string {
@@ -1074,10 +1077,10 @@ function signatureParametersWithoutScope(method: RemoteMethod): string {
  */
 export async function packageSurfaces(packages: readonly { name: string; root: string }[]): Promise<{
   exports: Map<string, Map<string, { node: Node; file: string; text: string }>>;
-  aliases: Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>;
+  aliases: Map<string, Map<string, AliasEntry>>;
 }> {
   const exports = new Map<string, Map<string, { node: Node; file: string; text: string }>>();
-  const aliases = new Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>();
+  const aliases = new Map<string, Map<string, AliasEntry>>();
   const byName = new Map(packages.map((pkg) => [pkg.name, pkg.root]));
   const entryByPkg = new Map<string, string>();
   for (const pkg of packages) {
@@ -1174,25 +1177,40 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
   for (const pkg of packages) {
     for (const file of await sourceFiles(pkg.root)) {
       const parsed = await parseFile(file);
-      const table = new Map<string, { pkg: string; name: string; namespace?: boolean }>();
+      const table = new Map<string, AliasEntry>();
       for (const statement of parsed.program["body"] as Node[]) {
         if (statement["type"] !== "ImportDeclaration") continue;
         const source = statement["source"]?.["value"];
         if (typeof source !== "string") continue;
+        // 跨包导入用包名当目标；同包的相对导入（`import { A as B } from './types.ts'`）记文件路径，
+        // 解析时顺着那个文件找导出。
         const target =
-          source.startsWith(".") || !byName.has(source) ? undefined : source;
+          byName.has(source) ? source : (await resolveRelative(file, source)) ?? undefined;
         if (target === undefined) continue;
+        const isPackage = byName.has(target);
         for (const specifier of (statement["specifiers"] ?? []) as Node[]) {
           const local = nameOf(specifier["local"] as Node);
           if (local === undefined) continue;
           if (specifier["type"] === "ImportNamespaceSpecifier") {
-            table.set(local, { pkg: target, name: "*", namespace: true });
-          } else if (specifier["type"] === "ImportDefaultSpecifier") {
-            table.set(local, { pkg: target, name: "default" });
-          } else {
-            const imported = nameOf(specifier["imported"] as Node) ?? local;
-            table.set(local, { pkg: target, name: imported });
+            if (isPackage) table.set(local, { pkg: target, name: "*", namespace: true });
+            continue;
           }
+          const imported =
+            specifier["type"] === "ImportDefaultSpecifier"
+              ? "default"
+              : (nameOf(specifier["imported"] as Node) ?? local);
+          if (isPackage) {
+            table.set(local, { pkg: target, name: imported });
+            continue;
+          }
+          // 同包的相对导入：当场解析出目标声明（同文件的重命名导入也算跨包的一种）。
+          const declared =
+            imported === "default"
+              ? (await exportedNode(target, "default", new Set())) ?? undefined
+              : (await exportedNode(target, imported, new Set())) ??
+                (await exportedNode(target, local, new Set())) ??
+                undefined;
+          if (declared !== undefined) table.set(local, { declared });
         }
       }
       // key 用"仓库相对路径"的尾段：声明树与源码树是两份拷贝，绝对路径对不上。
