@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
@@ -44,6 +44,15 @@ interface ModuleTable {
   fetchBundle(request: Request): Promise<Response>;
 }
 
+/** 目录判定（找不到就是 false，不抛）。 */
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;
   const modules = ctx.get("clientModules") as ModuleTable | undefined;
@@ -63,6 +72,27 @@ export function apply(ctx: Context): void {
     for (const base of bases) {
       const found = await packageRootOf(base, name);
       if (found !== undefined) return found.root;
+    }
+    // 兜底：pnpm 的虚拟 store。按出口请求时**没有 importer**（URL 里只有包名），"从谁出发解析"这个信息
+    // 已经丢了——嵌套依赖（`oniguruma-parser` 之于 `oniguruma-to-es`）从模块表首行那类基准解析不到，
+    // 但 store 里装过就一定能找到。
+    return await findInPnpmStore(name);
+  };
+
+  /** 在 `<root>/node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>` 里找包（一层 readdir + 前缀匹配）。 */
+  const findInPnpmStore = async (name: string): Promise<string | undefined> => {
+    const store = join(process.cwd(), "node_modules", ".pnpm");
+    let entries: string[];
+    try {
+      entries = await readdir(store);
+    } catch {
+      return undefined;
+    }
+    const prefix = `${encodePackageName(name)}@`;
+    for (const entry of entries) {
+      if (!entry.startsWith(prefix)) continue;
+      const candidate = join(store, entry, "node_modules", name);
+      if (await isDirectory(candidate)) return candidate;
     }
     return undefined;
   };
