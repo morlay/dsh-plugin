@@ -43,6 +43,47 @@ export interface ExportAddress {
   exportName: string;
 }
 
+/**
+ * 权威寻址：`/plugins/{pkg}/{version}/{export}?rev=…`。
+ *
+ * - `pkg` 里的 `/` 转义成 `+`（`@scope/name` → `@scope+name`）；
+ * - `export` 默认 `_default`（= 清单的 `"."` 出口），其余是出口名（`client` → `"./client"`）；
+ * - `rev` 是 query，可省（服务端按内容算得出来）。
+ *
+ * 三方包与仓库包**同格式**：访问这件事上它们没有区别。
+ */
+export interface PluginAddress {
+  name: string;
+  version: string;
+  /** 出口名：`"."` 或 `"./client"` 这类清单键。 */
+  exportName: string;
+}
+
+/** URL 段里的默认出口写法。 */
+export const DEFAULT_EXPORT_SEGMENT = "_default";
+
+export function parsePluginAddress(url: string): PluginAddress | undefined {
+  const path = url.split("?")[0] ?? "";
+  if (!path.startsWith(`${PLUGIN_ROUTE}/`)) return undefined;
+  const segments = path.slice(PLUGIN_ROUTE.length + 1).split("/").filter((segment) => segment !== "");
+  // combo（`??a,b`）、我们自己的入口（`.app/entry.js`）都不是按包寻址。
+  if (segments[0]?.startsWith("??") === true || segments[0]?.startsWith(".") === true) return undefined;
+  const [pkgSegment, version, ...exportSegments] = segments;
+  if (pkgSegment === undefined || version === undefined) return undefined;
+  const exportSegment = exportSegments.join("/");
+  return {
+    name: decodePackageName(pkgSegment),
+    version,
+    exportName:
+      exportSegment === "" || exportSegment === DEFAULT_EXPORT_SEGMENT ? "." : `./${exportSegment}`,
+  };
+}
+
+/** 出口名 → URL 段（`"."` 写成 `_default`）。 */
+export function exportSegmentOf(exportName: string): string {
+  return exportName === "." ? DEFAULT_EXPORT_SEGMENT : exportName.replace(/^\.\//u, "");
+}
+
 /** `/plugins/<pkg>/<export>`；export 段里根出口用 `_` 表示（URL 里 `.` 不便）。 */
 export function parseExportAddress(url: string): ExportAddress | undefined {
   const path = url.split("?")[0] ?? "";
@@ -117,7 +158,10 @@ export async function exportTargetOf(
         ? entry
         : entry === null || typeof entry !== "object"
           ? undefined
-          : ((entry as Record<string, unknown>)["types"] ?? (entry as Record<string, unknown>)["default"]);
+          : // **运行期**入口优先：`types` 是类型声明（`index.d.ts`），拿它去打包会得到 3460 个
+            // PARSE_ERROR——rolldown 把声明文件当 JS 解析。
+            ((entry as Record<string, unknown>)["default"] ??
+              (entry as Record<string, unknown>)["types"]);
     if (typeof target !== "string") return undefined;
     return resolveInPackage({ name: "", version: "", root }, target.replace(/^\.\//u, ""));
   } catch {
