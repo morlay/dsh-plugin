@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
+import { sep } from "node:path";
 import {
   clientAssetPlugin,
   cssInlinePlugins,
@@ -11,6 +12,7 @@ import {
   encodePackageName,
   exportSegmentOf,
   exportTargetOf,
+  owningPackageOf,
   packageNameOf,
   parsePluginAddress,
   manifestOf,
@@ -40,6 +42,14 @@ interface ModuleTable {
   graph(): { entries: readonly { id: string }[] };
   clientPath(id: string): string | undefined;
   fetchBundle(request: Request): Promise<Response>;
+}
+
+/** 是不是"我们自己的源码"（工作区包或上游源码包）——只有这些才 external 成统一路径 URL。 */
+function isOurSource(root: string): boolean {
+  return (
+    root.includes(`${sep}vendor${sep}deepseek-harness${sep}packages${sep}`) ||
+    /[/\\]packages[/\\][^/\\]+[/\\][^/\\]+$/u.test(root)
+  );
 }
 
 export function apply(ctx: Context): void {
@@ -151,24 +161,14 @@ export function apply(ctx: Context): void {
     const code = await bundleExport({
       root,
       entry,
-      rewrite: async (specifier: string) => {
-        if (specifier.startsWith(".")) return undefined;
-        const target = packageNameOf(specifier);
-        if (target === name) return undefined;
-        // 跨包引用 → 对方的**同格式** URL（对方按需预处理）。
-        const targetRoot = await rootOf(target, entry);
-        if (targetRoot === undefined) {
-          throw new Error(`dev-client-bundles: 解析不到 ${specifier}（从 ${entry} 出发）`);
-        }
-        const targetManifest = await manifestOf(targetRoot);
-        if (targetManifest === undefined) {
-          throw new Error(`dev-client-bundles: ${target} 的包清单读不到`);
-        }
-        // 同格式的对方 URL：出口按 specifier 的子路径（`@pkg/client` → `client`），rev 不带
-        // （rev 由对方产物算出，带上就成循环）。
-        const subpath = specifier === target ? undefined : specifier.slice(target.length + 1);
+      // 跨包引用 → 对方的**同格式** URL。目标包由 rolldown 解析出的**绝对路径**反推：
+      // 只有落在我们自己目录下（工作区 / 上游源码）才 external，`node_modules` 一律 inline。
+      rewrite: async (specifier: string, resolvedId: string) => {
+        const owned = await owningPackageOf(resolvedId);
+        if (owned === undefined || !isOurSource(owned.root)) return undefined;
+        const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
         const targetExport = subpath === undefined ? "." : `./${subpath}`;
-        return `${PLUGIN_ROUTE}/${encodePackageName(targetManifest.name)}/${targetManifest.version}/${exportSegmentOf(targetExport)}`;
+        return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${exportSegmentOf(targetExport)}`;
       },
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
     });
@@ -229,17 +229,17 @@ export function apply(ctx: Context): void {
       "const ctx = new Context();",
       "globalThis.__DSH_CTX__ = ctx;",
       'console.log("[dsh] entry: context created");',
+      // 每个 client 行导出 `{ apply, inject }`——**交给 cordis 的 plugin 机制**装配，不要手工调 apply：
+      // 它按 `inject` 等依赖就绪、按声明顺序生效，手工调用会在服务还没注册时就去用（`undefined.register`）。
       `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
       '  if (typeof mod.apply !== "function") continue;',
       "  try {",
-      '    console.log("[dsh] apply", index, mod.inject ?? "");',
-      "    await mod.apply(ctx);",
+      '    ctx.plugin({ apply: mod.apply, inject: mod.inject ?? [], name: mod.name ?? "client-" + index });',
       "  } catch (error) {",
-      '    console.error("[dsh] apply failed at", index, error);',
-      "    throw error;",
+      '    console.error("[dsh] plugin failed at", index, error);',
       "  }",
       "}",
-      'console.log("[dsh] entry: all applied");',
+      'console.log("[dsh] entry: plugins registered");',
     ]
     res.writeHead(200, {
       "content-type": "text/javascript; charset=utf-8",

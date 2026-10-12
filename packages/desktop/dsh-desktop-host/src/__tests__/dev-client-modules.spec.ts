@@ -5,90 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
   parseFileAddress,
   resolveBareUrl,
-  resolveRelativeUrl,
-  transpileFile,
 } from "../dev-client/modules.ts";
 
 // 这一组用例钉住「逐文件 ESM 直出」的两条硬约定：裸导入必须改写成绝对 URL（浏览器没有包解析），
 // 相对导入**不动**（URL 结构镜像文件结构，浏览器自己拼就对）。
 
-async function fixture(): Promise<{ dir: string; file: string }> {
-  const dir = await mkdtemp(join(tmpdir(), "dev-esm-"));
-  await mkdir(join(dir, "src"), { recursive: true });
-  await writeFile(
-    join(dir, "src", "index.ts"),
-    [
-      `import { helper } from "./helper.ts";`,
-      `import { Button } from "@morlay/dsh-client-ui-primitives/client";`,
-      `export const value: number = helper() + 1;`,
-      `export { Button };`,
-      "",
-    ].join("\n"),
-  );
-  await writeFile(join(dir, "src", "helper.ts"), "export const helper = (): number => 1;\n");
-  return { dir, file: join(dir, "src", "index.ts") };
-}
-
 describe("逐文件 ESM 转译", () => {
-  it("跨包引用变成 URL，包内相对导入 inline（不交给浏览器）", async () => {
-    const { dir, file } = await fixture();
-    const rewritten: string[] = [];
-    const code = await transpileFile({
-      file,
-      rewrite: async (specifier) => {
-        rewritten.push(specifier);
-        return specifier.startsWith(".")
-          ? undefined
-          : "/plugins/@morlay+dsh-client-ui-primitives/0.0.1/src/client/index.ts";
-      },
-    });
-    // 跨包（裸导入）进改写并换成 URL；包内相对导入**不出现在改写里**，而是被 rolldown inline 进产物
-    // ——交给浏览器的话它会按根路径解析（`./x` → `/vendor/…` 那种 404）。
-    expect(rewritten).toContain("@morlay/dsh-client-ui-primitives/client");
-    expect(code).toContain('"/plugins/@morlay+dsh-client-ui-primitives/0.0.1/src/client/index.ts"');
-    expect(code).not.toContain('"./helper.ts"');
-    expect(code).toContain("const helper");
-    expect(code).toContain("const value = helper() + 1");
-    void dir;
-  });
-
-  it("`export * from` 这类 re-export 也要改写（不能只处理 import）", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "dev-esm-reexport-"));
-    await mkdir(join(dir, "src"), { recursive: true });
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `export * from "@morlay/dsh-client-ui-primitives";\nexport { x } from "@morlay/other/sub";\n`,
-    );
-    const seen: string[] = [];
-    const code = await transpileFile({
-      file: join(dir, "src", "index.ts"),
-      rewrite: async (specifier) => {
-        seen.push(specifier);
-        return `/plugins/rewritten/${specifier.length}`;
-      },
-    });
-    expect(seen).toContain("@morlay/dsh-client-ui-primitives");
-    expect(seen).toContain("@morlay/other/sub");
-    expect(code).toContain("/plugins/rewritten/");
-    expect(code).not.toContain('"@morlay/');
-  });
-
-  it("类型注解被转译掉（浏览器拿到的不是 TS）", async () => {
-    const { file } = await fixture();
-    const code = await transpileFile({ file, rewrite: async () => undefined });
-    expect(code).not.toContain(": number");
-  });
-
-  it("相对导入能拼出同包同版本的 URL", async () => {
-    const { dir, file } = await fixture();
-    const url = await resolveRelativeUrl(
-      { name: "@morlay/demo", version: "1.2.3", root: dir },
-      file,
-      "./helper.ts",
-    );
-    expect(url).toBe("/plugins/@morlay+demo/1.2.3/src/helper.ts");
-  });
-
   it("裸导入按包清单的 exports 解析子路径（`./client` → `src/client/index.ts`）", async () => {
     const dir = await mkdtemp(join(tmpdir(), "dev-esm-pkg-"));
     await mkdir(join(dir, "src", "client"), { recursive: true });

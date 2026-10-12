@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
-import { rolldown, type Plugin } from "rolldown";
+import { rolldown, type Plugin, type PluginContext } from "rolldown";
 
 // 开发态的 client 资源按**文件**寻址：`/plugins/{pkgName}/{version}/{filepath}`。仓库自己的包都是 TS/ESM
 // 源码（`exports` 在 patch 阶段已改指 `src`），所以逐个文件转译直出即可——浏览器原生 ESM 自己解析依赖，
@@ -408,15 +408,21 @@ export async function bundleExport(options: {
   /** 出口指向的源文件（绝对路径）。 */
   entry: string;
   /** 跨包引用 → 绝对 URL；返回 undefined 表示"包内"，交给 rolldown inline。 */
-  rewrite: (specifier: string) => Promise<string | undefined> | undefined;
+  rewrite: (specifier: string, resolvedId: string) => Promise<string | undefined> | undefined;
   /** rolldown 插件（样式内联等）。 */
   plugins?: Plugin[];
 }): Promise<string> {
   const rewritePlugin = {
     name: "dsh-client-external",
-    async resolveId(source: string, importer: string | undefined) {
+    async resolveId(this: PluginContext, source: string, importer: string | undefined) {
       if (importer === undefined) return null;
-      const url = await options.rewrite(source);
+      if (source.startsWith(".")) return null;
+      // 解析交给 rolldown（`this.resolve`）：它认 `exports` 的 `import` 条件、认 `type: "module"`、
+      // 认 `main`，与打包本身同一套规则——`createRequire` 是 CJS 视角，解不出只有 `import` 条件的包。
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      if (resolved === null || resolved.external === true) return null;
+      const url = await options.rewrite(source, resolved.id);
+      // 我们自己的包（工作区 / 上游源码）external 成统一路径 URL；`node_modules` 里的依赖 inline 进产物。
       return url === undefined ? null : { id: url, external: true };
     },
   };
@@ -432,49 +438,6 @@ export async function bundleExport(options: {
     const chunk = output.find((item) => item.type === "chunk");
     if (chunk === undefined || chunk.type !== "chunk") {
       throw new Error(`dev-client: ${options.entry} produced no chunk`);
-    }
-    return chunk.code;
-  } finally {
-    await build.close();
-  }
-}
-
-/** 逐文件转译：不打包、只改依赖 URL，产物是浏览器可直接 `import` 的 ESM。 */
-export async function transpileFile(options: {
-  file: string;
-  rewrite: (specifier: string) => Promise<string | undefined> | undefined;
-}): Promise<string> {
-  // 依赖改写走 `resolveId`：它可以是异步的（`paths` 同步，做不了文件探测），返回的 URL 直接当 external id
-  // ——产物里的 import 就换成 `/plugins/...` 绝对地址，浏览器自己按 URL 取。
-  const rewritePlugin = {
-    name: "dev-client-rewrite",
-    async resolveId(source: string, importer: string | undefined) {
-      // 入口（没有 importer）必须让 rolldown 自己加载：入口不能是 external。
-      if (importer === undefined) return null;
-      const url = await options.rewrite(source);
-      // 改写不出 URL 的（包内相对导入、同包别名）**交给 rolldown 自己解析**，于是它们被 inline 进这一份
-      // 产物——这正是要的：相对路径交给浏览器会被按根路径解析（`./x` → `/vendor/…` 那种 404）。
-      // 只有跨包引用才 external 成按文件 URL（用户的原话：相对路径 inline，其他包 external）。
-      return url === undefined ? null : { id: url, external: true };
-    },
-  };
-  const build = await rolldown({
-    input: options.file,
-    cwd: dirname(options.file),
-    platform: "browser",
-    // **不设** `external`：那个钩子对所有 id 先命中，会把 `resolveId` 插件绕过去（依赖原样留在产物里）。
-    // 依赖改由 `rewritePlugin` 决定：改写成 URL 的标 external（浏览器去取），入口让它自己加载。
-    resolve: { conditionNames: ["browser", "import", "default"] },
-    plugins: [rewritePlugin],
-  });
-  try {
-    const { output } = await build.generate({
-      format: "esm",
-      codeSplitting: false,
-    });
-    const chunk = output.find((item) => item.type === "chunk");
-    if (chunk === undefined || chunk.type !== "chunk") {
-      throw new Error(`dev-client: ${options.file} produced no chunk`);
     }
     return chunk.code;
   } finally {
