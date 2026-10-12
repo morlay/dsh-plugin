@@ -1,4 +1,5 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
@@ -42,6 +43,32 @@ interface ModuleTable {
   graph(): { entries: readonly { id: string }[] };
   clientPath(id: string): string | undefined;
   fetchBundle(request: Request): Promise<Response>;
+}
+
+/**
+ * CJS 包的具名导出补全。
+ *
+ * `react` 这类包的入口是 `module.exports = require('./cjs/…')`，rolldown 静态分析不出具名导出，产物只带
+ * `export default require_react()`——而浏览器侧要 `import { Fragment } from "react"`，于是**整个 import
+ * 阶段就失败**（入口一行都执行不了）。这里按 CJS 对象的键补一段**静态** `export const`（ESM 的导出必须
+ * 静态可枚举，不能 `export * from` 一个运行期对象）。
+ */
+async function exportCjsNames(code: string, entry: string): Promise<string> {
+  const alias = "__dshCjs";
+  // 默认导出的**整行**（可能是 `require_react()` 这种调用，不只是标识符）。
+  const head = code.replace(/export default ([^\n]+);?\s*$/u, `const ${alias} = $1;\nexport default ${alias};\n`);
+  if (head === code) return code; // 没有 `export default`（已有具名导出）或形状不认识
+  if (!code.includes("__commonJS")) return code; // 不是 CJS 产物
+  let names: string[];
+  try {
+    // require **这个出口的入口文件**（不是包名）：`react/jsx-runtime` 的键与主包不同。
+    const loaded = createRequire(entry)(entry) as Record<string, unknown>;
+    names = Object.keys(loaded).filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key));
+  } catch {
+    return code; // 宿主侧 require 不了（纯 ESM 包）就保持原样
+  }
+  if (names.length === 0) return code;
+  return `${head}\n${names.map((key) => `export const ${key} = ${alias}.${key};`).join("\n")}\n`;
 }
 
 /** 目录判定（找不到就是 false，不抛）。 */
@@ -187,7 +214,7 @@ export function apply(ctx: Context): void {
       (await exportTargetOf(root, exportName === "." ? undefined : exportName.slice(2))) ??
       (await dependencyEntryOf(name, fallbackBase ?? root));
     if (entry === undefined) return undefined;
-    const code = await bundleExport({
+    const rawCode = await bundleExport({
       root,
       entry,
       // 跨包引用 → 对方的**同格式** URL。目标包由 rolldown 解析出的**绝对路径**反推：
@@ -213,6 +240,7 @@ export function apply(ctx: Context): void {
       },
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
     });
+    const code = await exportCjsNames(rawCode, entry);
     packageCache.set(key, code);
     // 落盘路径与**访问 URL 同形**：`<pkg(+/ 转义成 +)>@<version>/<export>.js`，与
     // `/plugins/<pkg>/<version>/<export>` 一一对应——排查时能直接从 URL 找到文件。
@@ -301,7 +329,9 @@ export function apply(ctx: Context): void {
       `import { Context } from ${JSON.stringify(cordisUrl ?? "/plugins/@deepseek-ai+cordis/0/_default")};`,
       ...imports,
       "",
-      'console.log("[dsh] entry: modules loaded", ' + String(names.length) + ");",
+      // 执行到哪一步写进全局：agent-browser 的 console 抓取不稳，用 eval 读这个更可靠。
+      'const stage = (value) => { globalThis.__DSH_STAGE__ = value; console.log("[dsh]", value); };',
+      'stage("entry: modules loaded", ' + String(names.length) + ");",
       "const ctx = new Context();",
       // cordis 把 fiber 内的失败交给 `ctx.logger.error`（`fiber.ts:126`），而它在浏览器里默认不落 console
       // ——这就是"页面空白却无报错"的原因。先把它接到 console，装配期的失败才看得见。
