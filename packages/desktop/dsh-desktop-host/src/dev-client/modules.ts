@@ -437,6 +437,9 @@ export async function bundleExport(options: {
     platform: "browser",
     resolve: { conditionNames: spec.conditionNames },
     transform: { define: spec.define },
+    // **不摇树**：一份产物按 URL 缓存、由多处按需取用（`pdf_viewer.mjs` 的 `TextLayerBuilder` 就是被消费方
+    // 具名 import 的），摇掉没用到的导出会让这些 import 在运行期直接失败。
+    treeshake: false,
     plugins: [...(options.plugins ?? []), rewritePlugin],
   });
   try {

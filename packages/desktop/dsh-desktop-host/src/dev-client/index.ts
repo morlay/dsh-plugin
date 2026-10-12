@@ -201,6 +201,8 @@ export function apply(ctx: Context): void {
   // 预处理产物**落盘**（不是只在内存里）：出问题能直接打开看——哪份产物里 inline 了什么、跨包引用指向
   // 谁，一眼可查。内存缓存只是省掉重复的打包开销，落盘那份才是排查依据。
   const depsDir = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "deps");
+  // 模块表的行 id 集合（`dsh.client` 声明的权威来源）：入口与跨包引用都按它判断该用哪个出口。
+  const rowIds = new Set(modules.graph().entries.map((entry) => entry.id));
   const packageCache = new Map<string, string>();
   const bundlePackage = async (name: string, exportName: string): Promise<string | undefined> => {
     // 键是 (包, 出口)：同一个包的不同出口是不同产物。
@@ -230,15 +232,22 @@ export function apply(ctx: Context): void {
         const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
         // 带子路径的按子路径（`@pkg/default-workspace` → `default-workspace`，那种符号在别的出口里）；
         // **裸包名**且目标是 client 行时引 `/client`——只有那半导出 `apply` / `default`。
+        // "是不是 client 行"直接用**模块表的行集合**判（`clientPath` 对某些包判不出来，会造成同一个包被
+        // `/client` 与 `/_default` 两条 URL 各加载一次 → 两份实例 → 重复注册）。
+        // 判据是**模块表的行集合**（`dsh.client` 声明的权威来源）——不能用"该包有没有 `./client` 出口"：
+        // `react-dom` 也有 `./client` 子路径（那是另一个入口，不是"行"），那样会被误判、于是把
+        // `createPortal`（在主出口里）引成了 `react-dom/client`，import 直接失败。
         const segment =
           subpath === undefined
-            ? modules.clientPath(owned.name) === undefined
-              ? exportSegmentOf(".")
-              : "client"
+            ? rowIds.has(owned.name)
+              ? "client"
+              : exportSegmentOf(".")
             : exportSegmentOf(`./${subpath}`);
         return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${segment}`;
       },
-      plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
+      // 样式内联（CSS 是模块语义，必须内联成注入脚本）；**资产不内联**——图片按 URL 交给浏览器，
+      // 不塞 data URI（产物要能一眼看出引用了什么，也避免把大图灌进每个产物）。
+      plugins: [...cssInlinePlugins({ name, assets: "threshold" })],
     });
     const code = await exportCjsNames(rawCode, entry);
     packageCache.set(key, code);
@@ -249,7 +258,7 @@ export function apply(ctx: Context): void {
     try {
       await mkdir(dirname(fileName), { recursive: true });
       await writeFile(fileName, code);
-      ctx.logger.debug("dev-client-bundles: 预处理 %s → %s", key, fileName);
+      ctx.logger.info("dev-client-bundles: 预处理 %s → %s", key, fileName);
     } catch (error) {
       ctx.logger.warn("dev-client-bundles: 落盘失败 %s", error);
     }
