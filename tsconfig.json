@@ -1,5 +1,8 @@
 {
   "extends": ["@local/devkit/tsconfig.json"],
   "files": [],
-  "references": [{ "path": "./tsconfig.host.json" }, { "path": "./tsconfig.client.json" }]
+  "references": [
+    { "path": "./tsconfig.host.json" },
+    { "path": "./tsconfig.client.json" },
+  ],
 }

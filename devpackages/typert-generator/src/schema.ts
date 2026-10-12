@@ -66,6 +66,10 @@ export async function buildSchemaIndex(
         declaration["type"] === "TSEnumDeclaration" ||
         declaration["type"] === "ClassDeclaration"
       ) {
+        // 同名类型可能出现在同包的多个声明文件里（`src/types.ts` 是定义、`src/control.ts` 可能只是一段
+        // 再导出）：保留**带出口子路径**的那份，`typeSymbol` 才指得准（registry 按它找 schema）。
+        const previous = index.get(name);
+        if (previous !== undefined && (previous.owner.includes("/") || !owner.includes("/"))) continue;
         index.set(name, {
           name,
           file,
@@ -148,6 +152,8 @@ type EmitContext = {
   stack: Set<string>;
   /** 这次 schema 里引用到的自定义类型名（反射的 `types` 用）。 */
   referenced: Set<string>;
+  /** 递归类型提到顶层的具名 schema：名字 → zod 定义（产物里 `let X$schema$value` 那一对）。 */
+  named: Map<string, string>;
 };
 
 /** 类型注解 AST（或类型节点）→ zod 表达式文本。 */
@@ -294,7 +300,23 @@ function referenceOf(node: Node, context: EmitContext): string {
   context.referenced.add(name);
   const declared = context.index.get(name);
   if (declared === undefined) return `z.unknown() /* 未解析 ${name} */`;
-  if (context.stack.has(name)) return `z.lazy(() => ${name}$schema())`;
+  if (context.stack.has(name)) {
+    // 递归：类型提到顶层具名，引用处走 `z.lazy` 自引用（先占位再展开，展开里再遇到自己就走这条）。
+    const symbol = `${name}RemoteCodec`;
+    if (!context.named.has(symbol)) {
+      context.named.set(symbol, "");
+      const declaredSelf = context.index.get(name);
+      const definition =
+        declaredSelf?.node["type"] === "TSTypeAliasDeclaration"
+          ? zodOf(declaredSelf.node["typeAnnotation"] as Node, context)
+          : zodOf(
+              { type: "TSTypeLiteral", members: (declaredSelf?.node["body"]?.["body"] ?? []) as Node[] },
+              context,
+            );
+      context.named.set(symbol, definition);
+    }
+    return `z.lazy(() => ${symbol}$schema())`;
+  }
   context.stack.add(name);
   const inner =
     declared.node["type"] === "TSTypeAliasDeclaration"
@@ -307,5 +329,5 @@ function referenceOf(node: Node, context: EmitContext): string {
 }
 
 export function newContext(index: SchemaIndex): EmitContext {
-  return { index, stack: new Set(), referenced: new Set() };
+  return { index, stack: new Set(), referenced: new Set(), named: new Map() };
 }

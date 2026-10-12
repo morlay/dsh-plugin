@@ -1,5 +1,4 @@
 packages:
-  - bundles/*
   - vendor/deepseek-harness/vendor/*
   - vendor/deepseek-harness/packages/*/*
   - vendor/deepseek-harness/native/system

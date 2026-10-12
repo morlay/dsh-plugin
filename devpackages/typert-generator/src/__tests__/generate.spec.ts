@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -100,9 +100,11 @@ describe("typert 产物生成", () => {
     const host = files.find((file) => file.path.endsWith("typert.host.ts"))?.text ?? "";
     // 可选参数在 wire 上是 `undefined | T`
     expect(host).toContain("z.union([z.undefined(), z.object({");
-    // 具名类型用类型的符号；内联类型（`watch` 返回 boolean）用方法级符号
+    // 具名类型用类型的符号（stream 方法的 `AsyncIterable<T>` 也要解包）；内联类型用方法级符号
     expect(host).toContain("typeSymbol: '@x/demo#Payload'");
     expect(host).toContain("typeSymbol: '@x/demo#demo/watch:result'");
+    // 该包的声明树里有 `types.ts`，出口是 `.`——类型符号要带它自己的出口
+    expect(host).toContain("typeSymbol: '@x/demo#Payload'");
     // AbortSignal 不进参数、记成 cancellation
     expect(host).toContain("cancellation: { parameter: 'signal' }");
     const remote = files.find((file) => file.path.endsWith("typert.remote-client.ts"))?.text ?? "";
@@ -115,6 +117,16 @@ describe("typert 产物生成", () => {
     expect(remote).toContain("interface TypertRemoteNamespaceMap {");
     expect(remote).toContain("interface TypertRemoteMap {");
     expect(remote).toContain("'demo': TypertRemoteNamespace$");
+  });
+
+  it("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {
+    const { upstreamRoot, dtsRoot } = await fixture();
+    const lib = join(upstreamRoot, "packages", "demo", "demo", "lib");
+    await mkdir(lib, { recursive: true });
+    await writeFile(join(lib, "typert.client.ts"), "陈旧残留\n");
+    await generateTypert({ upstreamRoot, dtsRoot, write: true });
+    // 产物按包覆盖写：留着上一次的会变成引用已改名常量的陈旧文件（运行时直接炸）
+    await expect(stat(join(lib, "typert.client.ts"))).rejects.toThrow();
   });
 
   it("没有 @Remote 方法的包不产物", async () => {

@@ -91,7 +91,7 @@ describe("ts 2 schema", () => {
   it("递归类型走 z.lazy 自引用", async () => {
     const index = await indexOf("export interface Node { next: Node | null; value: string }");
     expect(zod("Node", index)).toBe(
-      "z.object({\n  'next': z.union([z.literal(null), z.lazy(() => Node$schema())]),\n  'value': z.string(),\n})",
+      "z.object({\n  'next': z.union([z.literal(null), z.lazy(() => NodeRemoteCodec$schema())]),\n  'value': z.string(),\n})",
     );
   });
 
