@@ -157,6 +157,12 @@ type EmitContext = {
   referenced: Set<string>;
   /** 递归类型提到顶层的具名 schema：名字 → zod 定义（产物里 `let X$schema$value` 那一对）。 */
   named: Map<string, string>;
+  /** 当前文件：解析导入别名 / 命名空间限定名时要它（展开跨文件声明时会临时切换）。 */
+  file: string | undefined;
+  /** 包的出口表：`包名 → 导出名 → 声明`（解析跨包引用用）。 */
+  exports?: Map<string, Map<string, { node: Node; file: string; text: string }>>;
+  /** 导入别名表：`文件 → 本地名 → 目标（包 + 导出名 / default / 命名空间）`。 */
+  aliases?: Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>;
 };
 
 /** 类型注解 AST（或类型节点）→ zod 表达式文本。 */
@@ -224,7 +230,7 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
       const declared = name === undefined ? undefined : context.index.get(name);
       const members = (declared?.node["body"]?.["body"] ?? []) as Node[];
       // 索引访问也能自引用（`T = T['k']`），所以和引用一样过一遍展开栈。
-      const guard = `${String(name)} ${key["type"] === "TSTypeOperator" ? String(key["operator"]) : String(nameOf(key) ?? key["literal"]?.["value"])}`;
+      const guard = `${String(name)}|${key["type"] === "TSTypeOperator" ? String(key["operator"]) : String(nameOf(key) ?? key["literal"]?.["value"])}`;
       if (context.stack.has(guard)) return "z.unknown()";
       context.stack.add(guard);
       try {
@@ -329,16 +335,118 @@ const BUILTIN: Record<string, (args: Node[], context: EmitContext) => string> = 
   Array: (args, context) => `z.array(${zodOf(args[0], context)})`,
   ReadonlyArray: (args, context) => `z.array(${zodOf(args[0], context)}).readonly()`,
   Record: (args, context) => `z.record(${zodOf(args[0], context)}, ${zodOf(args[1], context)})`,
+  // TS 内置工具类型：`Partial` / `Readonly` 直接把对象类型的字段逐个改修饰符（wire 面就是那个形状）。
+  Partial: (args, context) => mappedObject(args[0], context, { optional: true }),
+  Readonly: (args, context) => mappedObject(args[0], context, { readonly: true }),
 };
 
+/** 对对象类型的每个字段施加修饰符（`Partial<T>` / `Readonly<T>`）。 */
+function mappedObject(
+  node: Node | undefined,
+  context: EmitContext,
+  modifiers: { optional?: boolean; readonly?: boolean },
+): string {
+  const literal = objectLiteralOf(node, context);
+  if (literal === undefined) return zodOf(node, context);
+  return objectOf(
+    literal.map((member) => ({
+      ...member,
+      ...(modifiers.optional === true && member["optional"] !== true ? { optional: true } : {}),
+      ...(modifiers.readonly === true ? { readonly: true } : {}),
+    })),
+    context,
+  );
+}
+
+/** 拿对象类型的成员（`TSTypeLiteral`，或顺着引用/交叉/索引找到的那个字面量）。 */
+function objectLiteralOf(node: Node | undefined, context: EmitContext): Node[] | undefined {
+  if (node === undefined) return undefined;
+  if (node["type"] === "TSTypeLiteral") return node["members"] as Node[];
+  if (node["type"] === "TSTypeReference") {
+    const name = nameOf(node["typeName"] as Node);
+    const declared = name === undefined ? undefined : context.index.get(name);
+    return declared === undefined
+      ? undefined
+      : objectLiteralOf(declared.node["typeAnnotation"] as Node | undefined, context);
+  }
+  return undefined;
+}
+
+/** 文件 → 别名表的键（去扩展名，`x.d.ts` 与 `x.ts` 归一到同一个）。 */
+function relativeKey(file: string): string {
+  const marker = "/packages/";
+  const tail = file.slice(file.lastIndexOf(marker) + marker.length);
+  return tail.replace(/\.[jt]sx?$/u, "");
+}
+
+/** 索引与出口表都只认类型类声明：同名函数 / 常量（`export function SessionId`）不是类型。 */
+function isTypeDeclaration(node: Node): boolean {
+  return (
+    node["type"] === "TSInterfaceDeclaration" ||
+    node["type"] === "TSTypeAliasDeclaration" ||
+    node["type"] === "TSEnumDeclaration" ||
+    node["type"] === "ClassDeclaration"
+  );
+}
+
+/** 顺着导入别名 + 包出口表找声明（AST 路线的跨包解析）。 */
+function viaAlias(name: string, context: EmitContext): TypeDecl | undefined {
+  // 别名表按"仓库相对路径尾段"建键（声明树与源码树是两份拷贝，绝对路径对不上）。
+  const key = context.file === undefined ? undefined : relativeKey(context.file);
+  const aliases = key === undefined ? undefined : context.aliases?.get(key);
+  const alias = aliases?.get(name);
+  if (alias === undefined || alias.namespace === true) return undefined;
+  const declared = context.exports?.get(alias.pkg)?.get(alias.name);
+  if (declared === undefined || !isTypeDeclaration(declared.node)) return undefined;
+  return {
+    name,
+    owner: alias.pkg,
+    node: declared.node,
+    file: declared.file,
+    text: declared.text,
+  };
+}
+
+/** 命名空间导入（`import type * as Host from '@fixture/host'`）下的限定名。 */
+function viaNamespace(namespace: string, exported: string, context: EmitContext): TypeDecl | undefined {
+  const key = context.file === undefined ? undefined : relativeKey(context.file);
+  const alias = key === undefined ? undefined : context.aliases?.get(key)?.get(namespace);
+  if (alias === undefined) return undefined;
+  const declared = context.exports?.get(alias.pkg)?.get(exported);
+  if (declared === undefined || !isTypeDeclaration(declared.node)) return undefined;
+  return { name: exported, owner: alias.pkg, node: declared.node, file: declared.file, text: declared.text };
+}
+
 function referenceOf(node: Node, context: EmitContext): string {
-  const name = nameOf(node["typeName"] as Node);
+  const typeName = node["typeName"] as Node;
+  // `Host.Agent`：左半是命名空间别名，右半是目标包里的导出名。
+  if (typeName["type"] === "TSQualifiedName") {
+    const namespace = nameOf(typeName["left"] as Node);
+    const exported = nameOf(typeName["right"] as Node);
+    const declared =
+      namespace === undefined || exported === undefined
+        ? undefined
+        : viaNamespace(namespace, exported, context);
+    if (declared !== undefined) {
+      context.referenced.add(exported ?? "");
+      return zodOf(
+        declared.node["body"] === undefined
+          ? declared.node
+          : { type: "TSTypeLiteral", members: declared.node["body"]["body"] as unknown },
+        context,
+      );
+    }
+  }
+  const name = nameOf(typeName);
   const args = typeArgumentsOf(node);
   if (name === undefined) return "z.unknown()";
   const builtin = BUILTIN[name];
   if (builtin !== undefined) return builtin(args, context);
   context.referenced.add(name);
-  const declared = context.index.get(name);
+  // 跨包引用：先看当前文件的导入别名（`HostAgent` / `HostDefault` / `Host.Agent` 里的 `Host`），
+  // 顺着包的出口表指回真实声明；找不到再退回按名字查索引。
+  const throughAlias = viaAlias(name, context);
+  const declared = throughAlias ?? context.index.get(name);
   if (declared === undefined) return `z.unknown() /* 未解析 ${name} */`;
   if (context.stack.has(name)) {
     // 递归：类型提到顶层具名，引用处走 `z.lazy` 自引用（先占位再展开，展开里再遇到自己就走这条）。
@@ -358,16 +466,34 @@ function referenceOf(node: Node, context: EmitContext): string {
     return `z.lazy(() => ${symbol}$schema())`;
   }
   context.stack.add(name);
-  const inner =
-    declared.node["type"] === "TSTypeAliasDeclaration"
-      ? zodOf(declared.node["typeAnnotation"] as Node, context)
-      : declared.node["type"] === "TSEnumDeclaration"
-        ? enumOf(declared.node)
-        : objectOf((declared.node["body"]?.["body"] ?? []) as Node[], context);
-  context.stack.delete(name);
+  // 展开时按**声明所在文件**查别名：`context.file` 是服务文件，而它的导入表在另一个文件里
+  // （`src/index.ts` 的类型，导入写在 `src/types.ts`）。
+  const callerFile = context.file;
+  context.file = declared.file;
+  let inner: string;
+  try {
+    inner =
+      declared.node["type"] === "TSTypeAliasDeclaration"
+        ? zodOf(declared.node["typeAnnotation"] as Node, context)
+        : declared.node["type"] === "TSEnumDeclaration"
+          ? enumOf(declared.node)
+          : objectOf((declared.node["body"]?.["body"] ?? []) as Node[], context);
+  } finally {
+    context.file = callerFile;
+    context.stack.delete(name);
+  }
   return inner;
 }
 
-export function newContext(index: SchemaIndex): EmitContext {
-  return { index, stack: new Set(), referenced: new Set(), named: new Map() };
+export function newContext(index: SchemaIndex, extra: Partial<EmitContext> = {}): EmitContext {
+  return {
+    index,
+    stack: new Set(),
+    referenced: new Set(),
+    named: new Map(),
+    file: undefined,
+    ...extra,
+  };
 }
+
+export type { EmitContext as SchemaEmitContext };

@@ -24,14 +24,20 @@ exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照�
 
 })",
   "ClientView": "z.object({
-  'agent': z.unknown() /* 未解析 HostAgent */.readonly(),
+  'agent': z.object({
+
+}).readonly(),
   'inherited': z.object({
 
 }).readonly(),
   'importedAgent': z.unknown() /* TODO TSImportType */.readonly(),
   'importedAgentWithNamedArgument': z.unknown() /* TODO TSImportType */.readonly(),
-  'namespaceAgent': z.unknown() /* 未解析 Host.Agent */.readonly(),
-  'defaultService': z.unknown() /* 未解析 HostDefault */.readonly(),
+  'namespaceAgent': z.object({
+
+}).readonly(),
+  'defaultService': z.object({
+
+}).readonly(),
   'payload': z.object({
   'name': z.string(),
   'count': z.number().optional(),

@@ -436,7 +436,7 @@ async function clientHalfOf(pkgDir: string): Promise<boolean> {
   }
 }
 
-async function packageDirs(upstreamRoot: string): Promise<string[]> {
+export async function packageDirs(upstreamRoot: string): Promise<string[]> {
   const found: string[] = [];
   for (const group of await readdir(join(upstreamRoot, "packages"), { withFileTypes: true }).catch(
     () => [],
@@ -487,6 +487,15 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     },
   });
   indexForSymbols = index;
+  const surfaces = await packageSurfaces(discovered);
+  if (process.env["TYPERT_DEBUG"] === "1") {
+    const att = surfaces.exports.get("@deepseek-ai/dsh-attachment");
+    console.error("[dbg] attachment 出口:", JSON.stringify([...(att?.keys() ?? [])].filter((k) => k.toLowerCase().includes("attachmentid"))));
+    const aliases = surfaces.aliases.get("api/session-controller/src/types");
+    console.error("[dbg] types.ts 别名:", JSON.stringify([...(aliases?.entries() ?? [])].slice(0, 4)));
+  }
+  surfaceExports = surfaces.exports;
+  surfaceAliases = surfaces.aliases;
   const artifacts: GeneratedArtifact[] = [];
   for (const pkgDir of await packageDirs(options.upstreamRoot)) {
     let name: string | undefined;
@@ -565,7 +574,11 @@ export function renderRemoteClient(
       const prefix = `${packagePrefix}_${mangle(service.namespace)}_${mangle(method.method)}`;
       const parameters = method.parameters.map((parameter, position) => {
         const symbol = `${prefix}_parameter_${String(position)}`;
-        const context = newContext(index);
+        const context = newContext(index, {
+          file: service.file.path,
+          exports: surfaceExports,
+          aliases: surfaceAliases,
+        });
         lines.push(
           `let ${symbol}$schema$value`,
           `const ${symbol}$schema = () => (${symbol}$schema$value ??= ${schemaOfParameter(parameter, context)})`,
@@ -575,7 +588,11 @@ export function renderRemoteClient(
         return { parameter, symbol };
       });
       const resultSymbol = `${prefix}_result`;
-      const resultContext = newContext(index);
+      const resultContext = newContext(index, {
+        file: service.file.path,
+        exports: surfaceExports,
+        aliases: surfaceAliases,
+      });
       lines.push(
         `let ${resultSymbol}$schema$value`,
         `const ${resultSymbol}$schema = () => (${resultSymbol}$schema$value ??= ${zodOf(method.result, resultContext)})`,
@@ -829,7 +846,11 @@ export function renderHostArtifact(
       const referenced: string[] = [];
       const parameters = method.parameters.map((parameter, position) => {
         const symbol = `${prefix}_parameter_${String(position)}`;
-        const context = newContext(index);
+        const context = newContext(index, {
+          file: service.file.path,
+          exports: surfaceExports,
+          aliases: surfaceAliases,
+        });
         const zod = schemaOfParameter(parameter, context);
         referenced.push(...context.referenced);
         flushNamed(context);
@@ -840,7 +861,11 @@ export function renderHostArtifact(
         return { parameter, symbol };
       });
       const resultSymbol = `${prefix}_result`;
-      const resultContext = newContext(index);
+      const resultContext = newContext(index, {
+        file: service.file.path,
+        exports: surfaceExports,
+        aliases: surfaceAliases,
+      });
       const resultZod = zodOf(method.result, resultContext);
       referenced.push(...resultContext.referenced);
       flushNamed(resultContext);
@@ -1010,6 +1035,10 @@ function symbolForName(name: string): string | undefined {
 /** 供 `symbolForName` 用的索引（每次 `generateTypert` 覆盖）。 */
 let indexForSymbols: SchemaIndex = new Map();
 
+/** 供跨包引用解析用的出口表 / 别名表（同样每次 `generateTypert` 覆盖）。 */
+let surfaceExports = new Map<string, Map<string, { node: Node; file: string; text: string }>>();
+let surfaceAliases = new Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>();
+
 /** 签名里把上下文参数换成 id 形态（`agent: Agent` → `agentId: SessionId`）。 */
 function signatureParametersWithScopeId(method: RemoteMethod): string {
   const name = method.parameters.find(
@@ -1033,6 +1062,222 @@ function signatureParametersWithoutScope(method: RemoteMethod): string {
     .split(", ")
     .filter((part) => !part.startsWith(`${scopeParameterName}:`) && !part.startsWith(`${scopeParameterName}?:`))
     .join(", ");
+}
+
+/**
+ * 包的出口表与导入别名表：AST 路线要能替代 TS API，跨包引用就得自己解析。
+ *
+ * - 出口表：`包名 → 导出名 → 声明`（含 `export { A as B } from './x.ts'` 这类再导出与别名导出）；
+ * - 别名表：`文件 → 本地名 → 目标（包 + 导出名 / default / 命名空间）`。
+ *
+ * 两者合起来就能把 `HostAgent`、`Host.Agent`、`import('@fixture/host').Agent` 这类写法指回真实声明。
+ */
+export async function packageSurfaces(packages: readonly { name: string; root: string }[]): Promise<{
+  exports: Map<string, Map<string, { node: Node; file: string; text: string }>>;
+  aliases: Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>;
+}> {
+  const exports = new Map<string, Map<string, { node: Node; file: string; text: string }>>();
+  const aliases = new Map<string, Map<string, { pkg: string; name: string; namespace?: boolean }>>();
+  const byName = new Map(packages.map((pkg) => [pkg.name, pkg.root]));
+  const entryByPkg = new Map<string, string>();
+  for (const pkg of packages) {
+    const candidates = [join(pkg.root, "src", "index.ts"), join(pkg.root, "src", "index.tsx")];
+    for (const candidate of candidates) {
+      if (await pathExists(candidate)) {
+        entryByPkg.set(pkg.name, candidate);
+        break;
+      }
+    }
+  }
+  const collect = async (pkgName: string, file: string, seen: Set<string>): Promise<void> => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const parsed = await parseFile(file);
+    let table = exports.get(pkgName);
+    if (table === undefined) {
+      table = new Map();
+      exports.set(pkgName, table);
+    }
+    for (const statement of parsed.program["body"] as Node[]) {
+      if (statement["type"] === "ExportDefaultDeclaration") {
+        const declaration = statement["declaration"] as Node;
+        // `export default Service` / `export default class …`：引用形态要看它在本文件里的声明。
+        const referenced = nameOf((declaration["typeName"] ?? declaration) as Node);
+        const resolved =
+          declaration["type"] === "TSTypeReference" || declaration["type"] === "Identifier"
+            ? declarationIn(parsed.program, String(referenced))
+            : declaration;
+        table.set("default", {
+          node: resolved ?? declaration,
+          file,
+          text: sliceOf(parsed.source, resolved ?? declaration),
+        });
+        continue;
+      }
+      if (statement["type"] === "ExportAllDeclaration") {
+        const target = await resolveRelative(file, statement["source"]?.["value"]);
+        if (target !== undefined) await collect(pkgName, target, seen);
+        continue;
+      }
+      if (statement["type"] !== "ExportNamedDeclaration") continue;
+      const source = statement["source"]?.["value"];
+      const specifiers = (statement["specifiers"] ?? []) as Node[];
+      if (typeof source === "string") {
+        const target = await resolveRelative(file, source);
+        if (target === undefined) continue;
+        // 再导出：在目标文件里找被导出的名字（它自己可能也只是再导出，所以走递归）。
+        for (const specifier of specifiers) {
+          const local = nameOf(specifier["local"] as Node);
+          const exported = nameOf(specifier["exported"] as Node) ?? local;
+          if (local === undefined || exported === undefined) continue;
+          // 目标文件里的名字：`export { A as B } from './x'` 里 A 是目标侧的名字，
+          // 但不同解析器对 `local` / `exported` 的落位有出入，两边都试。
+          const declared =
+            (await exportedNode(target, local, new Set())) ??
+            (await exportedNode(target, exported, new Set()));
+          if (declared !== undefined) {
+            table.set(exported, declared);
+            table.set(local, declared);
+          }
+        }
+        continue;
+      }
+      const declaration = statement["declaration"] as Node | null | undefined;
+      if (declaration !== undefined && declaration !== null) {
+        const declaredName = nameOf(declaration["id"] as Node);
+        if (declaredName !== undefined) {
+          table.set(declaredName, {
+            node: declaration,
+            file,
+            text: sliceOf(parsed.source, declaration),
+          });
+        }
+        continue;
+      }
+      // `export { A as B }`（本地别名）：A 就住在同一个文件里。
+      for (const specifier of specifiers) {
+        const local = nameOf(specifier["local"] as Node);
+        const exported = nameOf(specifier["exported"] as Node) ?? local;
+        if (local === undefined || exported === undefined) continue;
+        const declared = declarationIn(parsed.program, local);
+        if (declared !== undefined) {
+          table.set(exported, { node: declared, file, text: sliceOf(parsed.source, declared) });
+        }
+      }
+    }
+  };
+  for (const pkg of packages) {
+    const entry = entryByPkg.get(pkg.name);
+    if (entry !== undefined) await collect(pkg.name, entry, new Set());
+  }
+
+  for (const pkg of packages) {
+    for (const file of await sourceFiles(pkg.root)) {
+      const parsed = await parseFile(file);
+      const table = new Map<string, { pkg: string; name: string; namespace?: boolean }>();
+      for (const statement of parsed.program["body"] as Node[]) {
+        if (statement["type"] !== "ImportDeclaration") continue;
+        const source = statement["source"]?.["value"];
+        if (typeof source !== "string") continue;
+        const target =
+          source.startsWith(".") || !byName.has(source) ? undefined : source;
+        if (target === undefined) continue;
+        for (const specifier of (statement["specifiers"] ?? []) as Node[]) {
+          const local = nameOf(specifier["local"] as Node);
+          if (local === undefined) continue;
+          if (specifier["type"] === "ImportNamespaceSpecifier") {
+            table.set(local, { pkg: target, name: "*", namespace: true });
+          } else if (specifier["type"] === "ImportDefaultSpecifier") {
+            table.set(local, { pkg: target, name: "default" });
+          } else {
+            const imported = nameOf(specifier["imported"] as Node) ?? local;
+            table.set(local, { pkg: target, name: imported });
+          }
+        }
+      }
+      // key 用"仓库相对路径"的尾段：声明树与源码树是两份拷贝，绝对路径对不上。
+      if (table.size > 0) aliases.set(packageRelative(file), table);
+    }
+  }
+  return { exports, aliases };
+}
+
+/** 声明在源码里的原文切片。 */
+function sliceOf(source: string, node: Node): string {
+  const start = node["start"] as number | undefined;
+  const end = node["end"] as number | undefined;
+  return start === undefined || end === undefined ? "" : source.slice(start, end);
+}
+
+/**
+ * 文件在仓库里的相对路径尾段（`<组>/<包>/src/x`）——两棵树共用这一个键。
+ * 去掉扩展名：声明树里是 `x.d.ts`、源码树里是 `x.ts`，两边要用同一个键才连得起来。
+ */
+export function packageRelative(file: string): string {
+  const marker = `${sep}packages${sep}`;
+  const index = file.lastIndexOf(marker);
+  const tail = index < 0 ? file : file.slice(index + marker.length);
+  return tail.replace(/\.[jt]sx?$/u, "");
+}
+
+/** 相对说明符 → 绝对路径（`.ts` / `.tsx` / `/index.ts` 依次试）。 */
+async function resolveRelative(fromFile: string, specifier: unknown): Promise<string | undefined> {
+  if (typeof specifier !== "string" || !specifier.startsWith(".")) return undefined;
+  const base = join(dirname(fromFile), specifier.replace(/\.[jt]sx?$/u, ""));
+  for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+    if (await pathExists(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * 在文件里找某个导出的声明节点；找不到就顺着它的 `export … from` 再走一层（再导出的链可能不止一层：
+ * `index.ts` → `types.ts` → `brand.ts`）。
+ */
+async function exportedNode(
+  file: string,
+  name: string,
+  seen: Set<string>,
+): Promise<{ node: Node; file: string; text: string } | undefined> {
+  if (seen.has(file)) return undefined;
+  seen.add(file);
+  const parsed = await parseFile(file);
+  const direct = declarationIn(parsed.program, name);
+  if (direct !== undefined) return { node: direct, file, text: sliceOf(parsed.source, direct) };
+  for (const statement of parsed.program["body"] as Node[]) {
+    if (statement["type"] !== "ExportNamedDeclaration") continue;
+    const source = statement["source"]?.["value"];
+    if (typeof source !== "string") continue;
+    const forwards = ((statement["specifiers"] ?? []) as Node[]).some((specifier) => {
+      const local = nameOf(specifier["local"] as Node);
+      const exported = nameOf(specifier["exported"] as Node) ?? local;
+      return local === name || exported === name;
+    });
+    if (!forwards) continue;
+    const target = await resolveRelative(file, source);
+    if (target === undefined) continue;
+    const found = await exportedNode(target, name, seen);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** 在文件里找某个顶层声明的声明节点。 */
+function declarationIn(program: Node, name: string): Node | undefined {
+  let found: Node | undefined;
+  for (const statement of program["body"] as Node[]) {
+    if (statement["type"] === "ExportNamedDeclaration" && statement["declaration"] != null) {
+      const declaration = statement["declaration"] as Node;
+      if (declaration["id"] != null && nameOf(declaration["id"] as Node) === name) found = declaration;
+      continue;
+    }
+    // 只有带 `id` 的声明才算（`export default …`、`import …` 这些没有 id）。
+    const declaration = statement as Node;
+    if (declaration["id"] !== undefined && nameOf(declaration["id"] as Node) === name) {
+      found = declaration;
+    }
+  }
+  return found;
 }
 
 function lineOf(file: ParsedFile, node: Node): { line: number; column: number } {

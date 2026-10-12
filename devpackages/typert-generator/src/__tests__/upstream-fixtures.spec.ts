@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildSchemaIndex, newContext, zodOf } from "../schema.ts";
-import { generateTypert } from "../index.ts";
+import { generateTypert, packageSurfaces } from "../index.ts";
 
 // 上游 generator 自带的 fixtures 就是现成的语料（`typert/generator/tests/fixtures/`）：拿它们当上游包，
 // 断言我们生成的 descriptor 与上游测试里的期望一致。fixture 是源码树，声明面就用它自己那份 `.ts`
@@ -48,14 +48,31 @@ describe("上游 fixtures", () => {
   // 元组、unique symbol、import 类型、类型查询……），逐类型快照一遍：上游升级改了语料或我们改了规则，
   // 快照都会立刻挡住。
   it("type-model：逐类型生成 zod 的形状（快照）", async () => {
-    const { dtsRoot } = await workspaceOf("type-model");
+    const { upstreamRoot, dtsRoot } = await workspaceOf("type-model");
     const index = await buildSchemaIndex(dtsRoot, {});
+    // 跨包引用要带出口表 / 别名表（`HostAgent`、`Host.Agent`、`import('@fixture/host').Agent`）。
+    const discovered = await Promise.all(
+      (await readdir(join(upstreamRoot, "packages"), { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          const root = join(upstreamRoot, "packages", entry.name);
+          const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+            name: string;
+          };
+          return { name: manifest.name, root };
+        }),
+    );
+    const surfaces = await packageSurfaces(discovered);
     const declarations = [...index.keys()].sort();
     const shapes: Record<string, string> = {};
     for (const name of declarations) {
       const declared = index.get(name);
       if (declared === undefined) continue;
-      const context = newContext(index);
+      const context = newContext(index, {
+        file: declared.file,
+        exports: surfaces.exports,
+        aliases: surfaces.aliases,
+      });
       const node =
         declared.node["body"]?.["body"] === undefined
           ? declared.node
