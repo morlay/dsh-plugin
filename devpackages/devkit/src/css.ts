@@ -63,6 +63,67 @@ async function inlineCssUrls(
   return result;
 }
 
+/**
+ * 把一份样式编译成**可直接下发的 ESM 模块**：执行时注入 `<style>`，`export default` 给 class 映射。
+ *
+ * 两条路径共用这一份实现：rolldown 插件（现场打包 / 发布）与 dev 的逐文件直访（按 URL 取 `.css`）。
+ * 两者必须同形——同一份 CSS 在两种形态下的 class 名与注入方式要一致。
+ */
+export function compileStyleModule(options: {
+  file: string;
+  css: string;
+  /** 注入的 style 归属（插件 id）：写进 `data-plugin` / `data-plugin-css`。 */
+  name: string;
+  classMap?: Readonly<Record<string, string>>;
+}): string {
+  const tagId = `${options.name}/${basename(options.file)}`;
+  const source = [
+    `const css = ${JSON.stringify(options.css)};`,
+    `const tagId = ${JSON.stringify(tagId)};`,
+    `if (typeof document !== "undefined" && document.querySelector(${JSON.stringify(
+      `style[data-plugin-css="${tagId}"]`,
+    )}) === null) {`,
+    `  const tag = document.createElement("style");`,
+    `  tag.dataset.plugin = ${JSON.stringify(options.name)};`,
+    `  tag.dataset.pluginCss = tagId;`,
+    `  tag.textContent = css;`,
+    `  document.head.appendChild(tag);`,
+    `}`,
+  ];
+  source.push(
+    options.classMap === undefined
+      ? "export {};"
+      : `export default ${JSON.stringify(options.classMap)};`,
+  );
+  return source.join("\n");
+}
+
+/** 编译 CSS Modules：lightningcss 出 class 映射与压缩后的文本（`[hash]_[local]` 与上游同形）。 */
+export async function compileCssModule(file: string, source: string): Promise<string> {
+  const { code, exports } = transform({
+    filename: file,
+    code: Buffer.from(await inlineCssUrls(source, file)),
+    cssModules: { pattern: "[hash]_[local]" },
+    minify: true,
+  });
+  const classMap: Record<string, string> = {};
+  for (const [local, entry] of Object.entries(exports ?? {})) classMap[local] = entry.name;
+  return compileStyleModule({ file, css: code.toString(), name: PLUGIN_STYLE_NAME, classMap });
+}
+
+/** 编译全局样式（无 class 映射）。 */
+export async function compileGlobalCss(file: string, source: string): Promise<string> {
+  const { code } = transform({
+    filename: file,
+    code: Buffer.from(await inlineCssUrls(source, file)),
+    minify: true,
+  });
+  return compileStyleModule({ file, css: code.toString(), name: PLUGIN_STYLE_NAME });
+}
+
+// 逐文件直访时注入的 style 归属（打包形态下由插件 id 决定，dev 侧统一成这个）。
+const PLUGIN_STYLE_NAME = "dev-client";
+
 // 样式内联插件（CSS Modules / 全局 CSS / `?inline`）：`.module.css` 交 lightningcss 编译出 class
 // 映射并在模块执行时注入样式，其余 `.css` 只注入，`.css?inline` 只导出编译后的文本。
 // `options.name` 是插件 id（模块表键），写入注入 style tag 的 `data-plugin*` 属性；两条链共用这份实现。

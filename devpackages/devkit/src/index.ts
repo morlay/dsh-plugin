@@ -2,6 +2,7 @@ export { defineCordisPluginConfig, isLocalPackage, LOCAL_PACKAGE_PREFIX } from "
 export { packageExportsHook, type PackageExportsOptions } from "./package-exports.ts";
 export { standardDecoratorsPlugin, type StandardDecoratorsOptions } from "./standard-decorators.ts";
 export { prebundleDependency, type PrebundledDependency } from "./prebundle.ts";
+export { compileCssModule, compileGlobalCss, compileStyleModule } from "./css.ts";
 export {
   bundleClientFactory,
   clientBundleSpec,

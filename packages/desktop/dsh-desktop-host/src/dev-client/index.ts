@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
-import { prebundleDependency } from "@local/devkit";
+import { compileCssModule, compileGlobalCss, prebundleDependency } from "@local/devkit";
 import {
   buildPackageIndex,
   dependencyEntryOf,
@@ -240,6 +240,26 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (resolved?.via === "source") return resolved.url;
       return await prebundleUrl(specifier, file, depsDir);
     };
+    // 样式：编译成"注入 style + 导出 class 映射"的 ESM（与 rolldown 插件那条链同一份实现），
+    // 否则浏览器把 CSS 文本当 JS 解析会直接报错。
+    if (file.endsWith(".module.css") || file.endsWith(".css")) {
+      try {
+        const source = await readFile(file, "utf8");
+        const code = file.endsWith(".module.css")
+          ? await compileCssModule(file, source)
+          : await compileGlobalCss(file, source);
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(req.method === "HEAD" ? undefined : code);
+      } catch (error) {
+        ctx.logger.error(error);
+        res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+        res.end(`${error instanceof Error ? error.message : String(error)}\n`);
+      }
+      return true;
+    }
     try {
       const code = await transpileFile({ file, rewrite });
       res.writeHead(200, {
