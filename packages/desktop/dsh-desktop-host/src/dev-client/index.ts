@@ -1,8 +1,18 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
+import {
+  encodePackageName,
+  manifestOf,
+  owningPackageOf,
+  packageRootOf,
+  parseFileAddress,
+  PLUGIN_ROUTE,
+  resolveInPackage,
+  transpileFile,
+} from "./modules.ts";
 
 export const name = "dev-client-bundles";
 
@@ -20,7 +30,8 @@ export interface Config {
 
 interface RouteHost {
   register(route: {
-    kind: "exact";
+    // `prefix` 匹配 `p` 与 `p/<anything>`（上游 webServer 的原生能力）：按文件寻址要用它。
+    kind: "exact" | "prefix";
     path: string;
     handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
   }): () => void;
@@ -130,9 +141,79 @@ export function apply(ctx: Context, config: Config = {}): void {
     res.end(req.method === "HEAD" ? undefined : Buffer.from(await response.arrayBuffer()));
   };
 
+  // 裸导入 → 目标包的源文件 URL。先看模块表（行包都在表里，`clientPath` 直接给源码路径），
+  // 再看包清单的 `exports` 子路径（`@pkg/types` 这种）。
+  const resolveBareUrl = async (specifier: string): Promise<string | undefined> => {
+    const slash = specifier.indexOf("/");
+    const name = specifier.startsWith("@")
+      ? specifier.slice(0, specifier.indexOf("/", slash + 1))
+      : (specifier.split("/")[0] ?? specifier);
+    const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
+    let target = modules.clientPath(name);
+    if (target !== undefined && subpath !== undefined) {
+      const owner = await owningPackageOf(target);
+      if (owner !== undefined) {
+        const resolved = resolveInPackage(owner, join("src", subpath).replace(/^src\//u, "src/"));
+        target = resolved ?? target;
+      }
+    }
+    if (target === undefined) return undefined;
+    const owner = await owningPackageOf(target);
+    if (owner === undefined) return undefined;
+    const filepath = relative(owner.root, target).split(sep).join("/");
+    return `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`;
+  };
+
+  // 按文件寻址：`/plugins/{pkg}/{version}/{filepath}`——仓库源码逐个文件转译直出，依赖由浏览器原生
+  // ESM 解析。命中就自己下发，不再走 combo 打包。
+  const serveFile = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
+    const address = parseFileAddress(req.url ?? "");
+    if (address === undefined) return false;
+    // 包根从模块表推：`clientPath(id)` 给的就是该包的 client 源文件（`exports` 已指 `src`），
+    // 沿它向上找清单即可。用 `require.resolve` 不行——dev 进程是 dsh-desktop-host，它的依赖清单里
+    // 没有业务包。
+    const clientPath = modules.clientPath(address.name);
+    const owner = clientPath === undefined ? undefined : await owningPackageOf(clientPath);
+    const root = owner?.root ?? packageRootOf(import.meta.filename, address.name);
+    if (root === undefined) {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end(`dev-client-bundles: 未知包 ${address.name}\n`);
+      return true;
+    }
+    const pkg = await manifestOf(root);
+    if (pkg === undefined) return false;
+    const file = resolveInPackage({ ...pkg, root }, address.filepath);
+    if (file === undefined) {
+      res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+      res.end("dev-client-bundles: 越界路径\n");
+      return true;
+    }
+    // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
+    // 原样留着浏览器自己拼就对（`../shared.ts` → 同包同版本的 `src/shared.ts`），改写反而多一层。
+    // 裸导入（含 `@pkg/subpath`）用模块表解析到目标包的源文件，再拼成绝对 URL。
+    const rewrite = (specifier: string): Promise<string | undefined> | undefined =>
+      specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")
+        ? undefined
+        : resolveBareUrl(specifier);
+    try {
+      const code = await transpileFile({ file, rewrite });
+      res.writeHead(200, {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      res.end(req.method === "HEAD" ? undefined : code);
+    } catch (error) {
+      ctx.logger.error(error);
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      res.end(`${error instanceof Error ? error.message : String(error)}\n`);
+    }
+    return true;
+  };
+
   const serve = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = req.url ?? COMBO_PATH;
     if (req.method !== "GET" && req.method !== "HEAD") return fallback(req, res);
+    if (await serveFile(req, res)) return;
     // combo（`??a/client.js,b/client.js`）与单包（`/<id>/client.js`）都要现场打包：源码行下发的
     // 字节若走 clientModules，会把 TS 原文当 JS 执行。包内 chunk 仍交给 clientModules。
     const combo = comboEntryIds(url);
@@ -157,7 +238,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   };
 
   ctx.effect(
-    () => webServer.register({ kind: "exact", path: COMBO_PATH, handler: serve }),
+    // `prefix`：既覆盖 combo（`/plugins/??a,b`），也覆盖按文件寻址（`/plugins/<pkg>/<version>/<file>`）。
+    () => webServer.register({ kind: "prefix", path: PLUGIN_ROUTE, handler: serve }),
     "dev-client-bundles: /plugins route",
   );
 }

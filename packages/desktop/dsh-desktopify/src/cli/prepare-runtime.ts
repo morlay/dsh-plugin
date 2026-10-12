@@ -15,9 +15,9 @@ const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
 // What the runtime entry loads: its wrapper and the node-gyp payload; pnpm's install script
 // relinks the platform binary, so the package must not be copied wholesale.
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
-// 随包的 TS loader（`@local/devkit` 的 oxc loader 入口）与它自己那份 rolldown：打包形态的 host 进程
+// 随包的 TS 注册钩子（`@oxc-node/core` 的 register，与工作区里那条 `--import` 同一份实现）与它依赖的那层
 // 用它把上游源码（`exports` 指 `src`）转成 node 能执行的东西。
-const LOADER_ENTRY = "@local/devkit/ts-loader";
+const LOADER_ENTRY = "@oxc-node/core/register";
 const ROLDDOWN_MANIFEST = "rolldown/package.json";
 
 type RuntimePlatform = "darwin" | "linux" | "win";
@@ -280,7 +280,7 @@ export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise
   await mkdir(runtimeRoot, { recursive: true });
   await prepareNode(platform, arch, buildRootDir);
   const pnpmVersion = await preparePnpm(platform, runtimeRoot);
-  const loaderRolldown = await prepareLoader(runtimeRoot);
+  const loaderVersion = await prepareLoader(runtimeRoot);
   await prepareBin(platform, runtimeRoot);
   await writeFile(
     join(runtimeRoot, "versions.json"),
@@ -296,6 +296,6 @@ export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise
   );
   console.log(
     `desktop runtime: prepared Node.js ${NODE_VERSION}, pnpm ${pnpmVersion} and the oxc loader ` +
-      `(rolldown ${loaderRolldown}) for ${platform}-${arch}`,
+      `(@oxc-node/core ${loaderVersion}) for ${platform}-${arch}`,
   );
 }

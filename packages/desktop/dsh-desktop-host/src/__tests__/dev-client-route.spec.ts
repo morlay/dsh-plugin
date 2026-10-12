@@ -49,6 +49,7 @@ interface Harness {
 
 function harness(config: Config, paths: Record<string, string>): Harness {
   const routes: {
+    kind: string;
     path: string;
     handler: (req: IncomingMessage, res: ServerResponse) => unknown;
   }[] = [];
@@ -88,7 +89,9 @@ function harness(config: Config, paths: Record<string, string>): Harness {
   apply(ctx, config);
   const route = routes[0];
   if (route === undefined) throw new Error("route was not registered");
-  expect(route.path).toBe("/plugins/");
+  // `prefix`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）共用一条路由。
+  expect(route.path).toBe("/plugins");
+  expect(route.kind).toBe("prefix");
 
   return {
     fallbackRequests,

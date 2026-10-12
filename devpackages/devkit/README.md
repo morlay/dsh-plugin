@@ -17,7 +17,7 @@ export default defineCordisPluginConfig({
 ```
 
 出口：`.`（构建预设与 client 规则）、`./patch`（bundle patch）、`./dts`（声明生成与合并）、
-`./ts-loader`（**只给打包产物当随包载荷的源**，见下）、
+
 `./tsconfig.json`（共享 TS 配置）。
 
 ## 两条线：开发线与发布线

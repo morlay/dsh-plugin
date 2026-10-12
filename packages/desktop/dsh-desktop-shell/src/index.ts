@@ -117,7 +117,8 @@ function runtimeResources(): RuntimeResources {
     runtime: join(seed, SEED_RUNTIME_DIR_NAME),
     pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
     nodeBin: join(process.resourcesPath, "runtime", "bin"),
-    loader: join(process.resourcesPath, "runtime", "loader", "ts-loader.mjs"),
+    // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
+    loader: join(process.resourcesPath, "runtime", "loader", "register.mjs"),
   };
 }
 

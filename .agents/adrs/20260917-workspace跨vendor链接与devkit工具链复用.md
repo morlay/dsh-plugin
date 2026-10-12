@@ -77,7 +77,7 @@ autoInstallPeers: true
 - 新插件包脚手架 = 一行 tsdown 配置（根 tsconfig 已 extends devkit），无
   模板复制。
 - devkit 是 TS 源码直出（`exports: { ".": "./src/index.ts", "./tsconfig.json":
-  "./tsconfig.json" }`，另有 `./dts` 与 `./ts-loader`（后者是打包产物随包载荷的源）），由 tsdown / 自带的 oxc
+  "./tsconfig.json" }`，另有 `./dts`），由 tsdown / 自带的 oxc
   loader 等 TS 加载器消费，无需自身构建链。
 - 已知限制（样式内联只覆盖**代码**图，不覆盖 client 的**声明**图）：client 入口把
   `?inline` 的文本**再导出**时，tsdown 的 dts 这一步失败——生成的 `.d.ts` 保留

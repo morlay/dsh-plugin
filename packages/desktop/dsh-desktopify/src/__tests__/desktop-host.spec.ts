@@ -27,8 +27,8 @@ async function workDir(): Promise<string> {
 
 async function plantStaleHost(modulesDir: string): Promise<string> {
   const target = join(modulesDir, ...DESKTOP_HOST_PACKAGE.split("/"));
-  await mkdir(join(target, "lib"), { recursive: true });
-  await writeFile(join(target, "lib", "index.js"), "// stale copy\n");
+  await mkdir(join(target, "dist"), { recursive: true });
+  await writeFile(join(target, "dist", "index.js"), "// stale copy\n");
   await writeFile(
     join(target, "package.json"),
     `${JSON.stringify({ name: DESKTOP_HOST_PACKAGE, version: "9.9.9" })}\n`,
@@ -44,9 +44,9 @@ function payloadDir(): string {
 // 部署里 host 的四样载荷：入口、无端口 webServer、wire 协议与桌面 patch——host 启动时按
 // 相对路径读后两者，缺任一样都起不来。
 const DEPLOYED_HOST_FILES: readonly (readonly string[])[] = [
-  ["lib", "index.js"],
-  ["lib", "webserver.js"],
-  ["lib", "wire.js"],
+  ["dist", "index.js"],
+  ["dist", "webserver.js"],
+  ["dist", "wire.js"],
   ["config", "desktop.cordis.patch.yml"],
 ];
 
@@ -75,7 +75,7 @@ describe("desktop host 载荷", () => {
 
     expect(await materializeDesktopHost(modulesDir)).toBe(stale);
 
-    expect(await readFile(join(stale, "lib", "index.js"), "utf8")).not.toContain("stale copy");
+    expect(await readFile(join(stale, "dist", "index.js"), "utf8")).not.toContain("stale copy");
     const manifest = JSON.parse(await readFile(join(stale, "package.json"), "utf8")) as {
       version?: string;
     };
@@ -98,7 +98,7 @@ describe("desktop host 载荷", () => {
     const target = await materializeDesktopHost(modulesDir);
 
     expect((await lstat(target)).isSymbolicLink()).toBe(false);
-    expect(await readFile(join(linked, "lib", "index.js"), "utf8")).toBe("// stale copy\n");
+    expect(await readFile(join(linked, "dist", "index.js"), "utf8")).toBe("// stale copy\n");
   });
 
   it("闭包与 dev 项目的装配都用这个载荷", async () => {

@@ -37,7 +37,7 @@ describe("dev 安装根", () => {
       join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json"),
     );
     expect(devHostEntry(runtimeDir)).toBe(
-      join(runtimeDir, "node_modules", "@morlay", "dsh-desktop-host", "lib", "index.js"),
+      join(runtimeDir, "node_modules", "@morlay", "dsh-desktop-host", "dist", "index.js"),
     );
   });
 

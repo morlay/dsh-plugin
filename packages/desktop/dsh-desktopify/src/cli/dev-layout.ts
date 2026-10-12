@@ -26,9 +26,9 @@ export function devInstallAnchor(runtimeDir: string): string {
   return join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json");
 }
 
-/** 宿主载荷入口：`<runtimeDir>/node_modules/@morlay/dsh-desktop-host/lib/index.js`。 */
+/** 宿主载荷入口：`<runtimeDir>/node_modules/@morlay/dsh-desktop-host/dist/index.js`（该包的产出目录）。 */
 export function devHostEntry(runtimeDir: string): string {
-  return join(runtimeDir, "node_modules", ...DESKTOP_HOST_PACKAGE.split("/"), "lib", "index.js");
+  return join(runtimeDir, "node_modules", ...DESKTOP_HOST_PACKAGE.split("/"), "dist", "index.js");
 }
 
 /**

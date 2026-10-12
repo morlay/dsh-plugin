@@ -17,12 +17,12 @@
   },
   "files": [
     "locale/*.json",
-    "lib",
+    "dist",
     "config/desktop.cordis.patch.yml",
     "config/dev-client-bundles.cordis.patch.yml"
   ],
   "type": "module",
-  "main": "./lib/index.js",
+  "main": "./dist/index.js",
   "exports": {
     ".": "./src/index.ts",
     "./webserver": "./src/webserver.ts",
@@ -34,11 +34,11 @@
   },
   "publishConfig": {
     "exports": {
-      ".": "./lib/index.js",
-      "./webserver": "./lib/webserver.js",
-      "./dev-client-bundles": "./lib/dev-client-bundles.js",
-      "./wire": "./lib/wire.js",
-      "./paths": "./lib/paths.js",
+      ".": "./dist/index.js",
+      "./webserver": "./dist/webserver.js",
+      "./dev-client-bundles": "./dist/dev-client-bundles.js",
+      "./wire": "./dist/wire.js",
+      "./paths": "./dist/paths.js",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }
