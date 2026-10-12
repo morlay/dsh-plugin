@@ -79,6 +79,26 @@ export function parsePluginAddress(url: string): PluginAddress | undefined {
   };
 }
 
+/**
+ * 条件导出里挑**运行期**入口：`import` > `default` > `require` > `types`。
+ *
+ * 条件是**可嵌套**的（`zustand` 的 `./vanilla` 出口就是
+ * `{ import: { types, default }, default: { types, default } }`），所以命中条件后要继续往里挑——
+ * 只看顶层字符串会跳过 `import` 落到 `default`，拿到 CJS 那支（`vanilla.js` 而不是 `esm/vanilla.mjs`），
+ * 产物里就只剩 `export default require_…`，消费方要的具名导出一个都没有。
+ */
+function pickCondition(entry: unknown): string | undefined {
+  if (typeof entry === "string") return entry;
+  if (entry === null || typeof entry !== "object") return undefined;
+  const record = entry as Record<string, unknown>;
+  for (const key of ["import", "default", "require", "types"]) {
+    if (!(key in record)) continue;
+    const picked = pickCondition(record[key]);
+    if (picked !== undefined) return picked;
+  }
+  return undefined;
+}
+
 /** 出口名 → URL 段（`"."` 写成 `_default`）。 */
 export function exportSegmentOf(exportName: string): string {
   return exportName === "." ? DEFAULT_EXPORT_SEGMENT : exportName.replace(/^\.\//u, "");
@@ -131,7 +151,8 @@ export function parseFileAddress(url: string): FileAddress | undefined {
 export async function packageRootOf(from: string, name: string): Promise<PackageRoot | undefined> {
   try {
     const require = createRequire(from);
-    return await owningPackageOf(require.resolve(name));
+    // 只解析**包名**：带子路径的说明符（`pkg/sub`）会要求清单里有对应 `exports` 键，而我们要的是包根。
+    return await owningPackageOf(require.resolve(name.split("/").slice(0, name.startsWith("@") ? 2 : 1).join("/")));
   } catch {
     return undefined;
   }
@@ -158,10 +179,10 @@ export async function exportTargetOf(
         ? entry
         : entry === null || typeof entry !== "object"
           ? undefined
-          : // **运行期**入口优先：`types` 是类型声明（`index.d.ts`），拿它去打包会得到 3460 个
-            // PARSE_ERROR——rolldown 把声明文件当 JS 解析。
-            ((entry as Record<string, unknown>)["default"] ??
-              (entry as Record<string, unknown>)["types"]);
+          : // 条件按**运行期**优先级挑：`import`（ESM 入口，`"type": "module"` 的包都走它）→
+            // `default` → `require`。`types` 是类型声明（`index.d.ts`），拿它去打包会得到 3460 个
+            // PARSE_ERROR——rolldown 把声明文件当 JS 解析，所以它只能垫底。
+            pickCondition(entry as Record<string, unknown>);
     if (typeof target !== "string") return undefined;
     return resolveInPackage({ name: "", version: "", root }, target.replace(/^\.\//u, ""));
   } catch {

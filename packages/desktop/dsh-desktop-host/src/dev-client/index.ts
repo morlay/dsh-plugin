@@ -52,6 +52,8 @@ export function apply(ctx: Context): void {
   // 基准是**发起引用的那个文件**——node 的规则就是这样，pnpm 的 node_modules 也按依赖关系摆好了。
   // 没有 importer 的场合（我们自己生成的入口），退到模块表里任一 client 行当基准（它们都在有依赖的包里）。
   let fallbackBase: string | undefined;
+  // 只按**包名**解析（不带子路径）：`resolve('pkg/subpath')` 要求清单有对应的 `exports` 键，而很多包的
+  // 子路径是要另外解的（`oniguruma-parser/parser` 这种）。包根拿到之后，子路径再按 `exports` 落文件。
   const rootOf = async (name: string, from?: string): Promise<string | undefined> => {
     const bases = from === undefined ? [] : [from];
     fallbackBase ??= modules.clientPath(modules.graph().entries[0]?.id ?? "") ?? undefined;
@@ -223,11 +225,21 @@ export function apply(ctx: Context): void {
       `import { Context } from ${JSON.stringify(cordisUrl ?? "/plugins/@deepseek-ai+cordis/0/_default")};`,
       ...imports,
       "",
+      'console.log("[dsh] entry: modules loaded", ' + String(names.length) + ");",
       "const ctx = new Context();",
       "globalThis.__DSH_CTX__ = ctx;",
-      `for (const mod of [${names.join(", ")}]) {`,
-      '  if (typeof mod.apply === "function") await mod.apply(ctx);',
+      'console.log("[dsh] entry: context created");',
+      `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
+      '  if (typeof mod.apply !== "function") continue;',
+      "  try {",
+      '    console.log("[dsh] apply", index, mod.inject ?? "");',
+      "    await mod.apply(ctx);",
+      "  } catch (error) {",
+      '    console.error("[dsh] apply failed at", index, error);',
+      "    throw error;",
+      "  }",
       "}",
+      'console.log("[dsh] entry: all applied");',
     ]
     res.writeHead(200, {
       "content-type": "text/javascript; charset=utf-8",
@@ -238,31 +250,32 @@ export function apply(ctx: Context): void {
   };
 
   /**
-   * 去掉上游客户端那一套的注入：引导器（`<script src="plugins/??…">`）、bootstrap/application 的
-   * `script-src`/`script-preload` 行，以及内联的 `__DSH_BOOT__` + 模块表引导器。资源的加载改由我们的
-   * 入口（`/plugins/.app/entry.js`）按**出口** import，模块表的那套协议（classic script +
-   * `__ModuleLoader__.load`）与按出口 ESM 互斥，留着只会引发无用请求。
+   * 去掉上游客户端那一套的注入：引导器（`<script>` / `<link rel=preload>` 里的
+   * `plugins/??<id>/client.js` 引用）、内联的 `__DSH_BOOT__` 与 `__ModuleLoader__` 引导器。
+   *
+   * 资源的加载改由我们的入口按**统一路径**（`/plugins/<pkg>/<version>/<export>`）import；上游那套是
+   * classic script + 工厂注册（`__ModuleLoader__.load`），与 ESM 互斥，留着只会引发无用请求与报错。
+   * 按**标签**扫而不是按 `<script>` 扫：preload 是 `<link>`，之前就是这里漏了。
    */
+  const upstreamMarkers = ["plugins/??", "__DSH_BOOT__", "__ModuleLoader__"];
   const stripUpstreamBoot = (html: string): string => {
     let out = "";
     let cursor = 0;
     for (;;) {
-      const start = html.indexOf("<script", cursor);
-      if (start < 0) break;
-      const end = html.indexOf("</script>", start);
-      const block = end < 0 ? html.slice(start) : html.slice(start, end + "</script>".length);
-      // `__ModuleLoader__` 是模块表引导器的排队入口（classic script + 工厂协议），自研装配后它没有
-      // 消费方；`plugins/??` 是 combo 引用；`__DSH_BOOT__` 是模块表的行清单。三类都清掉。
-      const upstream =
-        block.includes("plugins/??") ||
-        block.includes("__DSH_BOOT__") ||
-        block.includes("__ModuleLoader__");
+      const candidates = ["<script", "<link"]
+        .map((tag) => html.indexOf(tag, cursor))
+        .filter((index) => index >= 0);
+      if (candidates.length === 0) break;
+      const start = Math.min(...candidates);
+      const tag = html.startsWith("<script", start) ? "script" : "link";
+      const end = html.indexOf(">", html.indexOf(`${tag === "script" ? "</script" : ""}`, start) + 1);
+      // `<link …>` 以 `>` 结尾；`<script …>…</script>` 要连内容一起吃掉（内联引导器就在里面）。
+      const close = tag === "script" ? html.indexOf("</script>", start) : -1;
+      const stop = close < 0 ? end + 1 : close + "</script>".length;
+      const block = html.slice(start, stop);
+      const upstream = upstreamMarkers.some((marker) => block.includes(marker));
       out += html.slice(cursor, start) + (upstream ? "" : block);
-      if (end < 0) {
-        cursor = html.length;
-        break;
-      }
-      cursor = end + "</script>".length;
+      cursor = stop;
     }
     return out + html.slice(cursor);
   };
