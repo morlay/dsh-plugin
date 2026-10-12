@@ -281,12 +281,15 @@ export function apply(ctx: Context): void {
       `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
       // client 行的导出有两种形状：`{ apply, inject }`（多数）与 `{ default: X }`（如
       // `dsh-client-shortcuts` 导出 `ShortcutsService as default`）。两种都要认。
-      '  const factory = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);',
-      '  if (factory === undefined) { console.warn("[dsh] skip (no apply/default)", index); continue; }',
+      // 两种形状：`{ apply, inject }` 与 `{ default: X }`（如 `dsh-client-shortcuts` 导出
+      // `ShortcutsService as default`）。整块交给 cordis——**不要**自己拼 `{ apply: factory.apply }`：
+      // default 形状的 `factory` 上没有 `apply`，那样会取到 `Function.prototype.apply`（
+      // `Function.prototype.apply was called on #<Object>…`）。
+      '  const plugin = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);',
+      '  if (plugin === undefined) { console.warn("[dsh] skip (no apply/default)", index); continue; }',
       "  try {",
-      '    const inject = factory.inject ?? mod.inject ?? [];',
-      '    console.log("[dsh] plugin", index, factory.name ?? "-", "inject:", JSON.stringify(inject));',
-      '    ctx.plugin({ apply: factory.apply, inject, name: factory.name ?? "client-" + index });',
+      '    console.log("[dsh] plugin", index, plugin.name ?? "-", "inject:", JSON.stringify(plugin.inject ?? []));',
+      '    ctx.plugin(plugin, { name: plugin.name ?? "client-" + index });',
       "  } catch (error) {",
       '    console.error("[dsh] plugin failed at", index, error);',
       "  }",
@@ -300,7 +303,7 @@ export function apply(ctx: Context): void {
       '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
       "});",
       // 诊断：`ui-layout` 注册 'root' slot，它的 inject 是这几个服务；谁没就绪就说明缺哪一环。
-      'for (const name of ["slots", "theme", "locale", "shortcuts", "uiRenderer"]) {',
+      'for (const name of ["slots", "theme", "locale", "shortcuts", "uiRenderer", "connection", "typert", "remote", "configForms"]) {',
       '  console.log("[dsh] service", name, ctx[name] === undefined ? "缺" : "有");',
       "}",
       'console.log("[dsh] entry: mounted");',
