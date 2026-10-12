@@ -1,9 +1,11 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
 import {
+  buildPackageIndex,
   manifestOf,
   owningPackageOf,
   packageRootOf,
@@ -48,6 +50,16 @@ const SOURCE_ENTRY = /\.[cm]?tsx?$/;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
+}
+
+/** 向上找含 `pnpm-workspace.yaml` 的目录（模块自身位置起算，与 dev 进程的 cwd 无关）。 */
+async function findRepoRoot(): Promise<string | undefined> {
+  let directory = dirname(fileURLToPath(import.meta.url));
+  while (directory !== dirname(directory)) {
+    if (await pathExists(join(directory, "pnpm-workspace.yaml"))) return directory;
+    directory = dirname(directory);
+  }
+  return undefined;
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -165,7 +177,18 @@ export function apply(ctx: Context, config: Config = {}): void {
       res.end("dev-client-bundles: 越界路径\n");
       return true;
     }
-    // 模块表给的"行 id → client 源文件"。
+    // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用。
+  const repoRoot = await findRepoRoot();
+  let packageIndex: Map<string, string> | undefined;
+  const indexEntryOf = async (name: string): Promise<string | undefined> => {
+    if (packageIndex === undefined) {
+      packageIndex = await buildPackageIndex(
+        repoRoot === undefined ? [] : [repoRoot],
+      );
+    }
+    return packageIndex.get(name);
+  };
+  // 模块表给的"行 id → client 源文件"；不在表里就走包索引（普通依赖、上游包、三方包都在这里）。
   const moduleEntryOf = (name: string): string | undefined => modules.clientPath(name);
 
   // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
@@ -174,7 +197,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const rewrite = (specifier: string): Promise<string | undefined> | undefined =>
       specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")
         ? undefined
-        : resolveBareUrl(specifier, file, moduleEntryOf);
+        : resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
     try {
       const code = await transpileFile({ file, rewrite });
       res.writeHead(200, {

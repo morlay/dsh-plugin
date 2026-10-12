@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import { rolldown } from "rolldown";
@@ -212,6 +212,7 @@ export async function resolveBareUrl(
   specifier: string,
   fromFile: string,
   clientEntryOf: (name: string) => string | undefined,
+  indexEntryOf: (name: string) => Promise<string | undefined> = async () => undefined,
 ): Promise<string | undefined> {
   const slash = specifier.indexOf("/");
   const name = specifier.startsWith("@")
@@ -223,6 +224,16 @@ export async function resolveBareUrl(
   // 前端资源的依赖很复杂：只有"行"才在模块表里，普通依赖得按 node 的解析规则从**当前文件**出发
   // 找到它的 node_modules（工作区链接、pnpm 的虚拟 store、三方包都走这条路），再把包清单的 `exports`
   // 落到具体文件。都注册成模块反而难用——依赖图不该由模块表决定。
+  // 三段：模块表（行）→ 包索引（工作区与上游源码）→ node 解析（node_modules 里的一切，含三方包）。
+  const indexed = await indexEntryOf(name);
+  if (indexed !== undefined) {
+    const manifest = await manifestOf(indexed);
+    const target = subpath === undefined ? await exportTargetOf(indexed, undefined) : await exportTargetOf(indexed, subpath);
+    if (manifest !== undefined && target !== undefined) {
+      const filepath = relative(indexed, target).split(sep).join("/");
+      return `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`;
+    }
+  }
   const clientPath =
     clientEntryOf(name) ?? (await entryFileOf(fromFile, name, subpath));
   if (clientPath === undefined) return undefined;
@@ -234,22 +245,64 @@ export async function resolveBareUrl(
   return `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`;
 }
 
-/** 按 node 的解析规则从 `fromFile` 出发找包：先清单（拿包根），失败再按 `exports` 解子路径。 */
+/**
+ * 扫出「包名 → 包根」的索引：工作区与上游各自的 `packages/<组>/<包>`。
+ *
+ * 依赖解析的最后一道兜底：消费方的 `node_modules` 里不一定有目标包（`@deepseek-ai/*` 常常只被别的包
+ * 依赖），而工作区与上游的源码都在仓库里，直接按目录扫一遍比一路试 `require.resolve` 靠谱。
+ */
+export async function buildPackageIndex(roots: readonly string[]): Promise<Map<string, string>> {
+  const index = new Map<string, string>();
+  const visit = async (directory: string): Promise<void> => {
+    const manifest = await manifestOf(directory);
+    if (manifest !== undefined) {
+      index.set(manifest.name, directory);
+      return;
+    }
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      await visit(join(directory, entry.name));
+    }
+  };
+  for (const root of roots) {
+    for (const base of ["packages", join("vendor", "deepseek-harness", "packages")]) {
+      await visit(join(root, base));
+    }
+  }
+  return index;
+}
+
+/**
+ * 按 node 的解析规则找包：从 `fromFile` 出发，失败再试**额外解析根**。
+ *
+ * 消费方的 `node_modules` 里不一定有目标包（`@deepseek-ai/*` 只在 vendor 那边、工作区包各有各的依赖面），
+ * 所以除了当前文件的目录，还要按仓库根与上游根解析一遍——vite 用「项目根」当解析根是同一个意思。
+ */
 async function entryFileOf(
   fromFile: string,
   name: string,
   subpath: string | undefined,
 ): Promise<string | undefined> {
+  const roots = [fromFile];
   const root = packageRootOf(fromFile, name);
   if (root === undefined) return undefined;
   const byExports = await exportTargetOf(root, subpath);
   if (byExports !== undefined) return byExports;
-  try {
-    const require = createRequire(fromFile);
-    return require.resolve(subpath === undefined ? name : `${name}/${subpath}`);
-  } catch {
-    return undefined;
+  for (const from of roots) {
+    try {
+      const require = createRequire(from);
+      return require.resolve(subpath === undefined ? name : `${name}/${subpath}`);
+    } catch {
+      // 换下一个解析根。
+    }
   }
+  return undefined;
 }
 
 /** 逐文件转译：不打包、只改依赖 URL，产物是浏览器可直接 `import` 的 ESM。 */

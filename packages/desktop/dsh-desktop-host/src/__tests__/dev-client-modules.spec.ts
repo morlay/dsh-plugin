@@ -51,6 +51,27 @@ describe("逐文件 ESM 转译", () => {
     void dir;
   });
 
+  it("`export * from` 这类 re-export 也要改写（不能只处理 import）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dev-esm-reexport-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `export * from "@morlay/dsh-client-ui-primitives";\nexport { x } from "@morlay/other/sub";\n`,
+    );
+    const seen: string[] = [];
+    const code = await transpileFile({
+      file: join(dir, "src", "index.ts"),
+      rewrite: async (specifier) => {
+        seen.push(specifier);
+        return `/plugins/rewritten/${specifier.length}`;
+      },
+    });
+    expect(seen).toContain("@morlay/dsh-client-ui-primitives");
+    expect(seen).toContain("@morlay/other/sub");
+    expect(code).toContain("/plugins/rewritten/");
+    expect(code).not.toContain('"@morlay/');
+  });
+
   it("类型注解被转译掉（浏览器拿到的不是 TS）", async () => {
     const { file } = await fixture();
     const code = await transpileFile({ file, rewrite: async () => undefined });
