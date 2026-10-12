@@ -240,6 +240,13 @@ export function apply(ctx: Context): void {
       "  }",
       "}",
       'console.log("[dsh] entry: plugins registered");',
+      // 最后一步是**挂载**：`ui-renderer` 只提供 `uiRenderer.mount` 能力，调用它的是 boot kernel
+      // （上游 `mountClient` 就一句话：等 `uiRenderer` 就绪后在 effect 里挂进容器）。这里做同一件事。
+      'const container = document.body;',
+      'await ctx.inject(["uiRenderer"], (scope) => {',
+      '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
+      "});",
+      'console.log("[dsh] entry: mounted");',
     ]
     res.writeHead(200, {
       "content-type": "text/javascript; charset=utf-8",
