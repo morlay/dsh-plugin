@@ -174,7 +174,6 @@ export function apply(ctx: Context): void {
         // 目标是 **client 行**时一律引它的 `/client` 出口：只有那半导出 `apply` / `default`（装配要的），
         // 根出口是宿主半，浏览器里没有那些东西。其余按 specifier 的出口走。
         const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
-        const targetExport = subpath === undefined ? "." : `./${subpath}`;
         // 带子路径的按子路径（`@pkg/default-workspace` → `default-workspace`，那种符号在别的出口里）；
         // **裸包名**且目标是 client 行时引 `/client`——只有那半导出 `apply` / `default`。
         const segment =
