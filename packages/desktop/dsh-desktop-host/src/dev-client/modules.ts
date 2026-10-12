@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
+import { clientBundleSpec } from "@local/devkit";
 import { rolldown, type Plugin, type PluginContext } from "rolldown";
+
 
 // 开发态的 client 资源按**文件**寻址：`/plugins/{pkgName}/{version}/{filepath}`。仓库自己的包都是 TS/ESM
 // 源码（`exports` 在 patch 阶段已改指 `src`），所以逐个文件转译直出即可——浏览器原生 ESM 自己解析依赖，
@@ -426,11 +428,15 @@ export async function bundleExport(options: {
       return url === undefined ? null : { id: url, external: true };
     },
   };
+  // 浏览器替身（`process.env` / `import.meta` 空壳）与条件名，取 devkit 的同一份约定：
+  // CJS 依赖常读 `process.env.NODE_ENV`，不替掉在浏览器里直接 `ReferenceError: process is not defined`。
+  const spec = await clientBundleSpec({ cwd: options.root });
   const build = await rolldown({
     input: options.entry,
     cwd: options.root,
     platform: "browser",
-    resolve: { conditionNames: ["browser", "import", "default"] },
+    resolve: { conditionNames: spec.conditionNames },
+    transform: { define: spec.define },
     plugins: [...(options.plugins ?? []), rewritePlugin],
   });
   try {

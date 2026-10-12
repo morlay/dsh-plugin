@@ -13,7 +13,6 @@ import {
   exportSegmentOf,
   exportTargetOf,
   owningPackageOf,
-  packageNameOf,
   parsePluginAddress,
   manifestOf,
   packageRootOf,
@@ -230,6 +229,15 @@ export function apply(ctx: Context): void {
       "",
       'console.log("[dsh] entry: modules loaded", ' + String(names.length) + ");",
       "const ctx = new Context();",
+      // cordis 把 fiber 内的失败交给 `ctx.logger.error`（`fiber.ts:126`），而它在浏览器里默认不落 console
+      // ——这就是"页面空白却无报错"的原因。先把它接到 console，装配期的失败才看得见。
+      'const originalError = ctx.logger?.error?.bind(ctx.logger);',
+      "if (ctx.logger !== undefined) {",
+      "  ctx.logger.error = (...args) => {",
+      '    console.error("[dsh] cordis error", ...args);',
+      "    if (originalError !== undefined) originalError(...args);",
+      "  };",
+      "}",
       "globalThis.__DSH_CTX__ = ctx;",
       'console.log("[dsh] entry: context created");',
       // 每个 client 行导出 `{ apply, inject }`——**交给 cordis 的 plugin 机制**装配，不要手工调 apply：
