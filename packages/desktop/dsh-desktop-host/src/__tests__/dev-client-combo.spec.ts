@@ -44,14 +44,15 @@ interface RouteHarness {
 }
 
 function routeHarness(moduleResponse: Response): RouteHarness {
-  const routes: Array<{ handler: RouteHarness["handler"] }> = [];
+  const routes: Array<{ path: string; handler: RouteHarness["handler"] }> = [];
   const fetchBundle = vi.fn(async () => moduleResponse);
   const ctx = {
     get: (name: string) => {
       if (name === "webServer")
         return {
-          register: (route: { handler: RouteHarness["handler"] }) => {
-            routes.push(route);
+          renderIndex: (html: string) => html,
+          register: (route: { path: string; kind?: string; handler: RouteHarness["handler"] }) => {
+            routes.push({ path: route.path, handler: route.handler });
             return () => {};
           },
         };
@@ -65,7 +66,8 @@ function routeHarness(moduleResponse: Response): RouteHarness {
     logger: { error: () => {} },
   };
   apply(ctx as never, {});
-  const handler = routes[0]?.handler;
+  // 现在不止一条路由（`/` 与 `/index.html` 归接管页面用），按 path 取。
+  const handler = routes.find((route) => route.path === "/plugins")?.handler;
   if (handler === undefined) throw new Error("dev-client-bundles did not register its route");
   return { handler, fetchBundle };
 }

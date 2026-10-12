@@ -87,7 +87,7 @@ function harness(config: Config, paths: Record<string, string>): Harness {
   } as unknown as Context;
 
   apply(ctx, config);
-  const route = routes[0];
+  const route = routes.find((candidate) => candidate.path === "/plugins");
   if (route === undefined) throw new Error("route was not registered");
   // `prefix /plugins`：我们整体接管这个前缀（上游 client-modules 的那条注册由
   // `patches/client-route-handover.patch` 让出），combo 与按文件寻址都从这一个入口进来。
