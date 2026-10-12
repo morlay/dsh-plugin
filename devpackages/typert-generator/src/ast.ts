@@ -72,6 +72,16 @@ export function jsDocOf(file: ParsedFile, node: Node): string | undefined {
   return best === undefined ? undefined : String(best["value"] ?? "");
 }
 
+/** 类型类声明：同名函数 / 常量（`export function SessionId`）不是类型，索引与出口表都只认这几种。 */
+export function isTypeDeclaration(node: Node): boolean {
+  return (
+    node["type"] === "TSInterfaceDeclaration" ||
+    node["type"] === "TSTypeAliasDeclaration" ||
+    node["type"] === "TSEnumDeclaration" ||
+    node["type"] === "ClassDeclaration"
+  );
+}
+
 /** 取注解的"名字"文本（`Identifier` / `TSQualifiedName`）。 */
 export function nameOf(node: Node | null | undefined): string | undefined {
   if (node === null || node === undefined) return undefined;

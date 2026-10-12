@@ -117,7 +117,9 @@ exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照�
   'variance': z.object({
   'consume': z.unknown() /* TODO TSFunctionType */,
   'produce': z.unknown() /* TODO TSFunctionType */.readonly(),
-  'state': z.unknown() /* 未解析 State */,
+  'state': z.object({
+  'value': z.string().readonly(),
+}),
 }),
   'plainMap': z.unknown() /* TODO TSMappedType */,
   'remapped': z.unknown() /* TODO TSMappedType */,

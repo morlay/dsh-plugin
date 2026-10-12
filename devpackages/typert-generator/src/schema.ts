@@ -9,7 +9,7 @@ async function pathExists(path: string): Promise<boolean> {
     return false;
   }
 }
-import { type Node, nameOf, parseFile, typeArgumentsOf } from "./ast.ts";
+import { isTypeDeclaration, type Node, nameOf, parseFile, typeArgumentsOf } from "./ast.ts";
 
 // `ts 2 schema`：把 TypeScript 的**类型语法**翻成 zod 表达式文本。
 //
@@ -159,6 +159,8 @@ type EmitContext = {
   named: Map<string, string>;
   /** 当前文件：解析导入别名 / 命名空间限定名时要它（展开跨文件声明时会临时切换）。 */
   file: string | undefined;
+  /** 泛型形参 → 实参节点（展开定义时由引用处的实参代入；无实参时用形参默认值）。 */
+  typeArguments: Map<string, Node>;
   /** 包的出口表：`包名 → 导出名 → 声明`（解析跨包引用用）。 */
   exports?: Map<string, Map<string, { node: Node; file: string; text: string }>>;
   /** 导入别名表：`文件 → 本地名 → 目标（包 + 导出名 / default / 命名空间）`。 */
@@ -392,16 +394,6 @@ function relativeKey(file: string): string {
   return tail.replace(/\.[jt]sx?$/u, "");
 }
 
-/** 索引与出口表都只认类型类声明：同名函数 / 常量（`export function SessionId`）不是类型。 */
-function isTypeDeclaration(node: Node): boolean {
-  return (
-    node["type"] === "TSInterfaceDeclaration" ||
-    node["type"] === "TSTypeAliasDeclaration" ||
-    node["type"] === "TSEnumDeclaration" ||
-    node["type"] === "ClassDeclaration"
-  );
-}
-
 /** 顺着导入别名 + 包出口表找声明（AST 路线的跨包解析）。 */
 function viaAlias(name: string, context: EmitContext): TypeDecl | undefined {
   // 别名表按"仓库相对路径尾段"建键（声明树与源码树是两份拷贝，绝对路径对不上）。
@@ -454,6 +446,22 @@ function referenceOf(node: Node, context: EmitContext): string {
   const name = nameOf(typeName);
   const args = typeArgumentsOf(node);
   if (name === undefined) return "z.unknown()";
+  // 泛型形参：用引用处传进来的实参代入（`Box<string>` 里的 `T` 就是 `string`）。
+  const substituted = context.typeArguments.get(name);
+  if (substituted !== undefined) {
+    // 实参可能就是形参自己（`type F<T> = T` 被引用成 `F<T>`），代入前先看名字，别原地打转。
+    const substitutedName = nameOf((substituted["typeName"] ?? substituted) as Node);
+    if (substitutedName === name) return "z.unknown()";
+    // 形参之间可能互相代入（`F<T> = G<T>`、`G<U> = F<U>`），代入也过一遍展开栈。
+    const guard = `substitute|${name}`;
+    if (context.stack.has(guard)) return "z.unknown()";
+    context.stack.add(guard);
+    try {
+      return zodOf(substituted, context);
+    } finally {
+      context.stack.delete(guard);
+    }
+  }
   const builtin = BUILTIN[name];
   if (builtin !== undefined) return builtin(args, context);
   context.referenced.add(name);
@@ -483,7 +491,21 @@ function referenceOf(node: Node, context: EmitContext): string {
   // 展开时按**声明所在文件**查别名：`context.file` 是服务文件，而它的导入表在另一个文件里
   // （`src/index.ts` 的类型，导入写在 `src/types.ts`）。
   const callerFile = context.file;
+  const callerArguments = context.typeArguments;
   context.file = declared.file;
+  // 形参 → 实参：实参来自引用处；没给实参就用形参自己的默认值。
+  const parameters = (declared.node["typeParameters"]?.["params"] ?? []) as Node[];
+  if (parameters.length > 0) {
+    const mapping = new Map(callerArguments);
+    parameters.forEach((parameter, position) => {
+      const parameterName = nameOf((parameter["name"] ?? parameter) as Node);
+      const argument = args[position] ?? (parameter["default"] as Node | null | undefined) ?? undefined;
+      if (parameterName !== undefined && argument !== undefined && argument !== null) {
+        mapping.set(parameterName, argument);
+      }
+    });
+    context.typeArguments = mapping;
+  }
   let inner: string;
   try {
     inner =
@@ -494,6 +516,7 @@ function referenceOf(node: Node, context: EmitContext): string {
           : objectOf((declared.node["body"]?.["body"] ?? []) as Node[], context);
   } finally {
     context.file = callerFile;
+    context.typeArguments = callerArguments;
     context.stack.delete(name);
   }
   return inner;
@@ -506,6 +529,7 @@ export function newContext(index: SchemaIndex, extra: Partial<EmitContext> = {})
     referenced: new Set(),
     named: new Map(),
     file: undefined,
+    typeArguments: new Map(),
     ...extra,
   };
 }

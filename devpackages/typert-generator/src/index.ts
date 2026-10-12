@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import {
+  isTypeDeclaration,
   type Node,
   type ParsedFile,
   nameOf,
@@ -1101,6 +1102,15 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
       table = new Map();
       exports.set(pkgName, table);
     }
+    // 同一个导出名可能既有类型又有值（`export type WorkspaceId` + `export function WorkspaceId`）：
+    // wire 面要的是类型，类型优先，非类型只在没有类型时兜底。
+    const put = (name: string, entry: { node: Node; file: string; text: string }): void => {
+      const previous = table.get(name);
+      if (previous !== undefined && (isTypeDeclaration(previous.node) || !isTypeDeclaration(entry.node))) {
+        return;
+      }
+      table.set(name, entry);
+    };
     for (const statement of parsed.program["body"] as Node[]) {
       if (statement["type"] === "ExportDefaultDeclaration") {
         const declaration = statement["declaration"] as Node;
@@ -1110,7 +1120,7 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
           declaration["type"] === "TSTypeReference" || declaration["type"] === "Identifier"
             ? declarationIn(parsed.program, String(referenced))
             : declaration;
-        table.set("default", {
+        put("default", {
           node: resolved ?? declaration,
           file,
           text: sliceOf(parsed.source, resolved ?? declaration),
@@ -1139,8 +1149,8 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
             (await exportedNode(target, local, new Set())) ??
             (await exportedNode(target, exported, new Set()));
           if (declared !== undefined) {
-            table.set(exported, declared);
-            table.set(local, declared);
+            put(exported, declared);
+            put(local, declared);
           }
         }
         continue;
@@ -1149,7 +1159,7 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
       if (declaration !== undefined && declaration !== null) {
         const declaredName = nameOf(declaration["id"] as Node);
         if (declaredName !== undefined) {
-          table.set(declaredName, {
+          put(declaredName, {
             node: declaration,
             file,
             text: sliceOf(parsed.source, declaration),
@@ -1164,7 +1174,7 @@ export async function packageSurfaces(packages: readonly { name: string; root: s
         if (local === undefined || exported === undefined) continue;
         const declared = declarationIn(parsed.program, local);
         if (declared !== undefined) {
-          table.set(exported, { node: declared, file, text: sliceOf(parsed.source, declared) });
+          put(exported, { node: declared, file, text: sliceOf(parsed.source, declared) });
         }
       }
     }
