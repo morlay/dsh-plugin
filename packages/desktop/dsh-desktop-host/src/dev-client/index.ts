@@ -141,7 +141,10 @@ export function apply(ctx: Context): void {
     "    <title>DSH</title>",
     '    <base href="./" />',
     "  </head>",
-    "  <body></body>",
+    // 应用的挂载点：内核的 boot 页在 body 里自建自己的容器，应用挂这里。
+    '  <body>',
+    '    <main id="app"></main>',
+    "  </body>",
     "</html>",
     "",
   ].join("\n");
@@ -242,7 +245,8 @@ export function apply(ctx: Context): void {
       'console.log("[dsh] entry: plugins registered");',
       // 最后一步是**挂载**：`ui-renderer` 只提供 `uiRenderer.mount` 能力，调用它的是 boot kernel
       // （上游 `mountClient` 就一句话：等 `uiRenderer` 就绪后在 effect 里挂进容器）。这里做同一件事。
-      'const container = document.body;',
+      'const container = document.getElementById("app");',
+      'if (container === null) throw new Error("[dsh] entry: #app 挂载点不存在");',
       'await ctx.inject(["uiRenderer"], (scope) => {',
       '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
       "});",
