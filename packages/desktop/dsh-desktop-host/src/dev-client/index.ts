@@ -171,12 +171,18 @@ export function apply(ctx: Context): void {
         // **同包**引用（client 半 import 自己主出口的符号）必须 inline：external 到自己的出口 URL 会指到
         // client 那半，而符号在主出口里——`does not provide an export named …` 就是这么来的。
         if (owned.name === name) return undefined;
-        // **按 specifier 的出口**引（`@pkg` → 根出口、`@pkg/client` → client 出口）：不能一律强指 `client`
-        // ——根出口里的符号（`workspaceDisplayTitle` 这类）在 client 那半没有，强指会 `does not provide an
-        // export named …`。
+        // 目标是 **client 行**时一律引它的 `/client` 出口：只有那半导出 `apply` / `default`（装配要的），
+        // 根出口是宿主半，浏览器里没有那些东西。其余按 specifier 的出口走。
         const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
         const targetExport = subpath === undefined ? "." : `./${subpath}`;
-        const segment = exportSegmentOf(targetExport);
+        // 带子路径的按子路径（`@pkg/default-workspace` → `default-workspace`，那种符号在别的出口里）；
+        // **裸包名**且目标是 client 行时引 `/client`——只有那半导出 `apply` / `default`。
+        const segment =
+          subpath === undefined
+            ? modules.clientPath(owned.name) === undefined
+              ? exportSegmentOf(".")
+              : "client"
+            : exportSegmentOf(`./${subpath}`);
         return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${segment}`;
       },
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
@@ -274,9 +280,14 @@ export function apply(ctx: Context): void {
       // 每个 client 行导出 `{ apply, inject }`——**交给 cordis 的 plugin 机制**装配，不要手工调 apply：
       // 它按 `inject` 等依赖就绪、按声明顺序生效，手工调用会在服务还没注册时就去用（`undefined.register`）。
       `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
-      '  if (typeof mod.apply !== "function") continue;',
+      // client 行的导出有两种形状：`{ apply, inject }`（多数）与 `{ default: X }`（如
+      // `dsh-client-shortcuts` 导出 `ShortcutsService as default`）。两种都要认。
+      '  const factory = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);',
+      '  if (factory === undefined) { console.warn("[dsh] skip (no apply/default)", index); continue; }',
       "  try {",
-      '    ctx.plugin({ apply: mod.apply, inject: mod.inject ?? [], name: mod.name ?? "client-" + index });',
+      '    const inject = factory.inject ?? mod.inject ?? [];',
+      '    console.log("[dsh] plugin", index, factory.name ?? "-", "inject:", JSON.stringify(inject));',
+      '    ctx.plugin({ apply: factory.apply, inject, name: factory.name ?? "client-" + index });',
       "  } catch (error) {",
       '    console.error("[dsh] plugin failed at", index, error);',
       "  }",
