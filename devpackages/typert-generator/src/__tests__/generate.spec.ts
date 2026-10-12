@@ -9,8 +9,10 @@ import { generateTypert } from "../index.ts";
 async function fixture(
   options: { client?: boolean } = {},
 ): Promise<{ upstreamRoot: string; dtsRoot: string }> {
-  const upstreamRoot = await mkdtemp(join(tmpdir(), "typert-upstream-"));
-  const dtsRoot = await mkdtemp(join(tmpdir(), "typert-dts-"));
+  // 真实布局：`<repo>/vendor/<name>` 与 `<repo>/target/dts`——owner 推导靠这两者的相对位置。
+  const repo = await mkdtemp(join(tmpdir(), "typert-ws-"));
+  const upstreamRoot = join(repo, "vendor", "demo-harness");
+  const dtsRoot = join(repo, "target", "dts");
   const pkg = join(upstreamRoot, "packages", "demo", "demo");
   await mkdir(join(pkg, "src"), { recursive: true });
   await writeFile(
@@ -37,7 +39,7 @@ async function fixture(
       "",
     ].join("\n"),
   );
-  const dtsPkg = join(dtsRoot, "vendor", "x", "packages", "demo", "demo", "src");
+  const dtsPkg = join(dtsRoot, "vendor", "demo-harness", "packages", "demo", "demo", "src");
   await mkdir(dtsPkg, { recursive: true });
   await writeFile(join(dtsPkg, "types.d.ts"), "export interface Payload {\n    id: string;\n}\n");
   return { upstreamRoot, dtsRoot };
@@ -59,6 +61,60 @@ describe("typert 产物生成", () => {
     expect(remote).toContain("export const TYPERT_REMOTE: TypertRemoteContribution = {");
     expect(remote).toContain("declare module '@deepseek-ai/dsh-typert-protocol' {");
     expect(remote).toContain("read: (payload: Payload) => Promise<RemoteResult<Payload>>");
+  });
+
+  it("三件套的 wire 细节：可选参数、AbortSignal、stream、typeSymbol、declare module", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "typert-ws-"));
+    const upstreamRoot = join(repo, "vendor", "demo-harness");
+    const dtsRoot = join(repo, "target", "dts");
+    const pkg = join(upstreamRoot, "packages", "demo", "demo");
+    await mkdir(join(pkg, "src"), { recursive: true });
+    await writeFile(
+      join(pkg, "package.json"),
+      `${JSON.stringify({ name: "@x/demo", exports: { ".": "./src/index.ts" } })}\n`,
+    );
+    await writeFile(
+      join(pkg, "src", "index.ts"),
+      [
+        "/** Demo service. */",
+        "export class Demo extends TypertRemoteService {",
+        "  constructor(ctx: Context) { super(ctx, 'demo', { namespace: 'demo' }) }",
+        "  /** Direct call. */",
+        "  @Remote",
+        "  async read(payload: Payload, options?: Options, signal?: AbortSignal): Promise<Payload> { throw new Error() }",
+        "  /** Stream call. */",
+        "  @Remote({ mode: 'stream' })",
+        "  async *watch(signal: AbortSignal): AsyncIterable<boolean> { yield true }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const dtsPkg = join(dtsRoot, "vendor", "demo-harness", "packages", "demo", "demo", "src");
+    await mkdir(dtsPkg, { recursive: true });
+    await writeFile(
+      join(dtsPkg, "types.d.ts"),
+      "export interface Payload {\n    id: string;\n}\nexport interface Options {\n    deep?: boolean;\n}\n",
+    );
+    const artifacts = await generateTypert({ upstreamRoot, dtsRoot });
+    const files = artifacts[0]?.files ?? [];
+    const host = files.find((file) => file.path.endsWith("typert.host.ts"))?.text ?? "";
+    // 可选参数在 wire 上是 `undefined | T`
+    expect(host).toContain("z.union([z.undefined(), z.object({");
+    // 具名类型用类型的符号；内联类型（`watch` 返回 boolean）用方法级符号
+    expect(host).toContain("typeSymbol: '@x/demo#Payload'");
+    expect(host).toContain("typeSymbol: '@x/demo#demo/watch:result'");
+    // AbortSignal 不进参数、记成 cancellation
+    expect(host).toContain("cancellation: { parameter: 'signal' }");
+    const remote = files.find((file) => file.path.endsWith("typert.remote-client.ts"))?.text ?? "";
+    // stream 方法的 mode 与声明面签名
+    expect(remote).toContain("mode: 'stream'");
+    expect(remote).toContain("watch: (signal?: AbortSignal) => RemoteStreamHandle<boolean, never>");
+    expect(remote).toContain("read: (payload: Payload, options?: Options, signal?: AbortSignal) => Promise<RemoteResult<Payload>>");
+    // declare module 三段齐（少了 NamespaceMap，client 半的类型会整片解析不到）
+    expect(remote).toContain("interface TypertRemoteNamespace$");
+    expect(remote).toContain("interface TypertRemoteNamespaceMap {");
+    expect(remote).toContain("interface TypertRemoteMap {");
+    expect(remote).toContain("'demo': TypertRemoteNamespace$");
   });
 
   it("没有 @Remote 方法的包不产物", async () => {

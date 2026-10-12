@@ -133,7 +133,12 @@ function signatureParametersOf(source: string, member: Node): string {
     .map((parameter) => {
       const start = parameter["start"] as number;
       const end = parameter["end"] as number;
-      return source.slice(start, end).replace(/\s+/gu, " ").trim();
+      const text = source.slice(start, end).replace(/\s+/gu, " ").trim();
+      // 取消通道在声明面上是可选的（调用方可以不给），wire 上则整个不进参数表。
+      const isCancellation =
+        nameOf((parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as Node | undefined) ===
+        "AbortSignal";
+      return isCancellation && !text.includes("?") ? text.replace(":", "?:") : text;
     })
     .join(", ");
 }
