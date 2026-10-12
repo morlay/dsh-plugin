@@ -125,7 +125,7 @@ describe("桌面 overlay 的停用清单", () => {
   });
 
   it("源码 client 半的那一行单独一层，指向宿主自己的产物", async () => {
-    expect(insertedNames(devClientPatch)).toEqual(["../lib/dev-client-bundles.js"]);
+    expect(insertedNames(devClientPatch)).toEqual(["../src/dev-client/index.ts"]);
     const built = join(repoRoot, "packages/desktop/dsh-desktop-host/lib/dev-client-bundles.js");
     if (await pathExists(built)) expect((await stat(built)).isFile()).toBe(true);
   });
@@ -135,7 +135,7 @@ describe("桌面 overlay 的停用清单", () => {
   });
 
   it("传输接管的两处配置仍在（无端口 webServer + web-runtime 全项）", () => {
-    expect(insertedNames(patch)).toEqual(["../lib/webserver.js"]);
+    expect(insertedNames(patch)).toEqual(["../dist/webserver.js"]);
     expect(configuredIds(patch)).toEqual(["web-runtime"]);
     expect(targetedIds(patch)).toContain("web-runtime");
   });
