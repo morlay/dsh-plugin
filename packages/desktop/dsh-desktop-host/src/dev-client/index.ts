@@ -250,6 +250,10 @@ export function apply(ctx: Context): void {
       'await ctx.inject(["uiRenderer"], (scope) => {',
       '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
       "});",
+      // 诊断：`ui-layout` 注册 'root' slot，它的 inject 是这几个服务；谁没就绪就说明缺哪一环。
+      'for (const name of ["slots", "theme", "locale", "shortcuts", "uiRenderer"]) {',
+      '  console.log("[dsh] service", name, ctx[name] === undefined ? "缺" : "有");',
+      "}",
       'console.log("[dsh] entry: mounted");',
     ]
     res.writeHead(200, {
