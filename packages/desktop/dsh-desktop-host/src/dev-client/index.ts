@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
 import {
@@ -152,6 +152,7 @@ export function apply(ctx: Context): void {
     if (cached !== undefined) return cached;
     const root = await rootOf(name);
     if (root === undefined) return undefined;
+    const pkgManifest = await manifestOf(root);
     const entry =
       (await exportTargetOf(root, exportName === "." ? undefined : exportName.slice(2))) ??
       (await dependencyEntryOf(name, fallbackBase ?? root));
@@ -183,12 +184,14 @@ export function apply(ctx: Context): void {
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
     });
     packageCache.set(key, code);
-    // 文件名里带上包名与出口（`/` 与 `@` 换成可读又安全的形式），方便直接定位。
-    const fileName = `${key.replace(/[/@]/gu, "_")}.js`;
+    // 落盘路径与**访问 URL 同形**：`<pkg(+/ 转义成 +)>@<version>/<export>.js`，与
+    // `/plugins/<pkg>/<version>/<export>` 一一对应——排查时能直接从 URL 找到文件。
+    const exportSeg = exportName === "." ? "default" : exportName.replace(/^\.\//u, "").replace(/[/@]/gu, "_");
+    const fileName = join(depsDir, `${encodePackageName(name)}@${pkgManifest?.version ?? "unknown"}`, `${exportSeg}.js`);
     try {
-      await mkdir(depsDir, { recursive: true });
-      await writeFile(join(depsDir, fileName), code);
-      ctx.logger.debug("dev-client-bundles: 预处理 %s → %s", key, join(depsDir, fileName));
+      await mkdir(dirname(fileName), { recursive: true });
+      await writeFile(fileName, code);
+      ctx.logger.debug("dev-client-bundles: 预处理 %s → %s", key, fileName);
     } catch (error) {
       ctx.logger.warn("dev-client-bundles: 落盘失败 %s", error);
     }
