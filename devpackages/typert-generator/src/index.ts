@@ -1292,17 +1292,28 @@ async function exportedNode(
 
 /** 在文件里找某个顶层声明的声明节点。 */
 function declarationIn(program: Node, name: string): Node | undefined {
+  // 同名可能既有类型又有值（`export type AttachmentId = …` + `export function AttachmentId(…)`）：
+  // wire 面要类型，类型优先。
   let found: Node | undefined;
+  let foundType = false;
   for (const statement of program["body"] as Node[]) {
     if (statement["type"] === "ExportNamedDeclaration" && statement["declaration"] != null) {
       const declaration = statement["declaration"] as Node;
-      if (declaration["id"] != null && nameOf(declaration["id"] as Node) === name) found = declaration;
+      if (declaration["id"] != null && nameOf(declaration["id"] as Node) === name) {
+        if (!foundType || isTypeDeclaration(declaration)) {
+          found = declaration;
+          foundType = isTypeDeclaration(declaration);
+        }
+      }
       continue;
     }
     // 只有带 `id` 的声明才算（`export default …`、`import …` 这些没有 id）。
     const declaration = statement as Node;
     if (declaration["id"] !== undefined && nameOf(declaration["id"] as Node) === name) {
-      found = declaration;
+      if (!foundType || isTypeDeclaration(declaration)) {
+        found = declaration;
+        foundType = isTypeDeclaration(declaration);
+      }
     }
   }
   return found;

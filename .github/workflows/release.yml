@@ -33,7 +33,6 @@ jobs:
       - uses: jdx/mise-action@v5
 
       - run: just prepare
-      - run: just build
       - run: just lint
       - run: just test
         env:

@@ -109,8 +109,8 @@ describe("ts 2 schema", () => {
     expect(zod("AsyncIterable<boolean>")).toBe("z.boolean()");
   });
 
-  it("未解析的类型名留标记而不是静默变成 unknown", async () => {
-    expect(zod("Missing")).toBe("z.unknown() /* 未解析 Missing */");
+  it("解析不了就报错（与上游同规则：不静默降级成 unknown）", async () => {
+    expect(() => zod("Missing")).toThrow(/引用解析失败：Missing/);
     expect(await indexOf("")).toEqual(emptyIndex());
   });
 });

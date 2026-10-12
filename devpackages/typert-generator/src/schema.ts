@@ -259,7 +259,9 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
             ? key["value"]
             : undefined);
       const target = members.find((member) => nameOf(member["key"] as Node) === field);
-      if (target === undefined) return `z.unknown() /* 未解析 ${String(name)}[${String(field)}] */`;
+      if (target === undefined) {
+        throw new Error(`索引访问解析失败：${String(name)}[${String(field)}]`);
+      }
       let value = zodOf(target["typeAnnotation"]?.["typeAnnotation"] as Node, context);
       if (target["optional"] === true) value += ".optional()";
       if (target["readonly"] === true) value += ".readonly()";
@@ -344,6 +346,9 @@ const BUILTIN: Record<string, (args: Node[], context: EmitContext) => string> = 
   Array: (args, context) => `z.array(${zodOf(args[0], context)})`,
   ReadonlyArray: (args, context) => `z.array(${zodOf(args[0], context)}).readonly()`,
   Record: (args, context) => `z.record(${zodOf(args[0], context)}, ${zodOf(args[1], context)})`,
+  // 上游 `standard` 表里只有这几个：`Date` / `Uint8Array` 各有专门投影，其余 standard 一律 fail。
+  Date: () => "z.date()",
+  Uint8Array: () => "z.instanceof(Uint8Array)",
   // TS 内置工具类型：`Partial` / `Readonly` 直接把对象类型的字段逐个改修饰符（wire 面就是那个形状）。
   Partial: (args, context) => mappedObject(args[0], context, { optional: true }),
   Readonly: (args, context) => mappedObject(args[0], context, { readonly: true }),
@@ -391,7 +396,8 @@ function packageOf(file: string): string {
 function relativeKey(file: string): string {
   const marker = "/packages/";
   const tail = file.slice(file.lastIndexOf(marker) + marker.length);
-  return tail.replace(/\.[jt]sx?$/u, "");
+  // 声明树是 `x.d.ts`、源码树是 `x.ts`——`.d.ts` 要整个去掉，别只去 `.ts`。
+  return tail.replace(/(\.d)?\.[jt]sx?$/u, "");
 }
 
 /** 顺着导入别名 + 包出口表找声明（AST 路线的跨包解析）。 */
@@ -469,7 +475,10 @@ function referenceOf(node: Node, context: EmitContext): string {
   // 顺着包的出口表指回真实声明；找不到再退回按名字查索引。
   const throughAlias = viaAlias(name, context);
   const declared = throughAlias ?? context.index.get(name);
-  if (declared === undefined) return `z.unknown() /* 未解析 ${name} */`;
+  // 与上游同规则：解析不了就**报错**，不静默降级（上游 `standard` 表之外的引用一律 fail）。
+  if (declared === undefined) {
+    throw new Error(`引用解析失败：${name}（没有声明，或不在导入别名 / 包出口表里）`);
+  }
   if (context.stack.has(name)) {
     // 递归：类型提到顶层具名，引用处走 `z.lazy` 自引用（先占位再展开，展开里再遇到自己就走这条）。
     const symbol = `${name}RemoteCodec`;
