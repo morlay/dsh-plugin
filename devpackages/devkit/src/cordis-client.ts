@@ -191,8 +191,10 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
     // 内置模块**不能** external：`platform: 'browser'` 下 rolldown 默认把 node 内置标成 external，
     // 浏览器 require 它们必然失败。显式放行 → 走 clientAssetPlugin 的替身。
     external: (id: string) => !NODE_BUILTIN.test(id) && isClientExternal(id, spec.externals),
+    // `treeshake` 显式开：两条线（现场打包与发布）共用这一支，产物都该只留用到的代码。
+    treeshake: { moduleSideEffects: "no-external" },
     // 样式内联进字节：产物是自包含单文件，样式不能留在外部（见 cssInlinePlugins）。
-    // dev 形态的产物是自包含单文件，没有放资产的位置：CSS 里的图片一律内联。
+    // 资产同样内联：单文件没有放资产的位置（发布线也是这一支，见债务「CSS 大图资产化」）。
     plugins: [...cssInlinePlugins({ name: options.name, assets: "inline" }), clientAssetPlugin()],
   });
   try {
