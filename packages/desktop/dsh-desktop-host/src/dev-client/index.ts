@@ -1,6 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
@@ -8,6 +8,8 @@ import { compileCssModule, compileGlobalCss, prebundleDependency } from "@local/
 import {
   buildPackageIndex,
   dependencyEntryOf,
+  encodePackageName,
+  exportTargetOf,
   packageNameOf,
   manifestOf,
   owningPackageOf,
@@ -35,6 +37,8 @@ export interface Config {
 }
 
 interface RouteHost {
+  /** 把注入表（boot 数据、引导器、script 行）渲染进一份 index.html 骨架。 */
+  renderIndex(html: string): string;
   register(route: {
     // `prefix` 匹配 `p` 与 `p/<anything>`（上游 webServer 的原生能力）：按文件寻址要用它。
     kind: "exact" | "prefix";
@@ -92,6 +96,20 @@ export function apply(ctx: Context, config: Config = {}): void {
     throw new Error("dev-client-bundles: webServer and clientModules are required services");
 
   const explicit = new Set(config.packages ?? []);
+
+  // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用
+  // （`apply` 不是 async，所以这里不 await，第一次用到时才建）。
+  let repoRoot: string | undefined;
+  let packageIndex: Map<string, string> | undefined;
+  const indexEntryOf = async (name: string): Promise<string | undefined> => {
+    if (packageIndex === undefined) {
+      repoRoot ??= await findRepoRoot();
+      packageIndex = await buildPackageIndex(repoRoot === undefined ? [] : [repoRoot]);
+    }
+    return packageIndex.get(name);
+  };
+  // 模块表给的"行 id → client 源文件"；不在表里就走包索引（普通依赖、上游包、三方包都在这里）。
+  const moduleEntryOf = (name: string): string | undefined => modules.clientPath(name);
 
   // 三方依赖的预打包产物落在这里（profile 的 store，跨进程复用）。
   const depsDir = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "deps");
@@ -215,18 +233,6 @@ export function apply(ctx: Context, config: Config = {}): void {
       return true;
     }
   
-  // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用。
-  const repoRoot = await findRepoRoot();
-  let packageIndex: Map<string, string> | undefined;
-  const indexEntryOf = async (name: string): Promise<string | undefined> => {
-    if (packageIndex === undefined) {
-      packageIndex = await buildPackageIndex(repoRoot === undefined ? [] : [repoRoot]);
-    }
-    return packageIndex.get(name);
-  };
-  // 模块表给的"行 id → client 源文件"；不在表里就走包索引（普通依赖、上游包、三方包都在这里）。
-  const moduleEntryOf = (name: string): string | undefined => modules.clientPath(name);
-
   // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
     // 原样留着浏览器自己拼就对（`../shared.ts` → 同包同版本的 `src/shared.ts`），改写反而多一层。
     // 裸导入（含 `@pkg/subpath`）用模块表解析到目标包的源文件，再拼成绝对 URL。
@@ -301,6 +307,95 @@ export function apply(ctx: Context, config: Config = {}): void {
       res.end(`${error instanceof Error ? error.message : String(error)}\n`);
     }
   };
+
+  // 页面 HTML：dev 形态的页面来自哪儿？上游 `frontend-static` 服务的是**构建产物**里的 index.html
+  // （`distIndex`），源码面没有它，于是 `/` 一直是兜底 404。这里接管：给一份最小骨架，其余交给上游的
+  // `renderIndex`——注入表（boot 数据 `window.__DSH_BOOT__`、内联引导器、bootstrap/application 的
+  // script 行）由订阅者（client-modules 等）自己往表里推，我们不需要拼。上游用的是 `registerFallback`，
+  // 我们的 exact 路由优先命中，所以不必禁用那一行。
+  const indexHtml = [
+    "<!doctype html>",
+    '<html lang="zh-CN">',
+    "  <head>",
+    '    <meta charset="utf-8" />',
+    '    <meta name="viewport" content="width=device-width, initial-scale=1" />',
+    "    <title>DSH</title>",
+    '    <base href="./" />',
+    "  </head>",
+    "  <body></body>",
+    "</html>",
+    "",
+  ].join("\n");
+  // 页面里的 client 资源引用（入口脚本、boot 的 `batches`/`entries`）都按 combo 形状写：
+  // `plugins/??<id>/client.js&rev=<hash>`。那是模块表的地址——按文件直访把它们换成
+  // `/plugins/<pkg>/<version>/src/client/index.ts`，浏览器就能原生 ESM 直接加载。
+  // 多包 combo（`??a,b`，真合并）不在替换范围内，保留给上游的 combo 路由兜底。
+  // 页面里的 client 资源引用（入口脚本、boot 的 `batches`/`entries`）都按 combo 形状写：
+  // `plugins/??<id>/client.js&rev=<hash>`（HTML 里 `&` 是实体）。那是模块表的地址，按文件直访要把它们
+  // 换成 `/plugins/<pkg>/<version>/src/client/index.ts`，浏览器才能原生 ESM 加载。
+  //
+  // 用「找标记 + 手工切」而不是正则：这里的形状固定（`plugins/??` 起、`client.js` 止、后面跟引号或空白），
+  // 字符串扫描比在转义环境里调正则稳得多。
+  const CLIENT_REF_START = "plugins/??";
+  const CLIENT_REF_END = "/client.js";
+  const rewriteClientUrls = async (html: string): Promise<string> => {
+    let out = "";
+    let cursor = 0;
+    for (;;) {
+      const start = html.indexOf(CLIENT_REF_START, cursor);
+      if (start < 0) break;
+      const idStart = start + CLIENT_REF_START.length;
+      const idEnd = html.indexOf(CLIENT_REF_END, idStart);
+      if (idEnd < 0) break;
+      const id = html.slice(idStart, idEnd);
+      // 多包 combo（`??a,b`，真合并）不在替换范围：那是模块表的能力，保留给它的 combo 路由。
+      const url = id.includes(",") ? undefined : await clientEntryUrl(id);
+      // 引用结束于 `client.js` 之后的第一个引号或空白（`&rev=…` 一类的 query 一并吃掉）。
+      let tail = idEnd + CLIENT_REF_END.length;
+      while (tail < html.length && html[tail] !== '"' && html[tail] !== "'" && !/\s/u.test(html[tail] ?? "")) {
+        tail += 1;
+      }
+      out += html.slice(cursor, start) + (url ?? html.slice(start, tail));
+      cursor = tail;
+    }
+    return out + html.slice(cursor);
+  };
+
+  /** 包 id → 按文件入口 URL（包清单的 client 出口 → 源文件）。 */
+  async function clientEntryUrl(id: string): Promise<string | undefined> {
+    const indexed = await indexEntryOf(id);
+    if (indexed === undefined) return undefined;
+    const manifest = await manifestOf(indexed);
+    const target = await exportTargetOf(indexed, "client");
+    if (manifest === undefined || target === undefined) return undefined;
+    const filepath = relative(indexed, target).split(sep).join("/");
+    return `/plugins/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`;
+  }
+
+  const serveIndex = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      res.writeHead(405);
+      res.end();
+      return;
+    }
+    try {
+      const html = await rewriteClientUrls(webServer.renderIndex(indexHtml));
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      res.end(req.method === "HEAD" ? undefined : html);
+    } catch (error) {
+      ctx.logger.error(error);
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      res.end(`${error instanceof Error ? error.message : String(error)}\n`);
+    }
+  };
+  ctx.effect(() => webServer.register({ kind: "exact", path: "/", handler: serveIndex }), "dev-client-bundles: index");
+  ctx.effect(
+    () => webServer.register({ kind: "exact", path: "/index.html", handler: serveIndex }),
+    "dev-client-bundles: /index.html",
+  );
 
   ctx.effect(
     // `prefix /plugins`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）都从
