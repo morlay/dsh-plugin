@@ -1,7 +1,7 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
-import { rolldown } from "rolldown";
+import { rolldown, type Plugin } from "rolldown";
 
 // 开发态的 client 资源按**文件**寻址：`/plugins/{pkgName}/{version}/{filepath}`。仓库自己的包都是 TS/ESM
 // 源码（`exports` 在 patch 阶段已改指 `src`），所以逐个文件转译直出即可——浏览器原生 ESM 自己解析依赖，
@@ -30,6 +30,35 @@ export function decodePackageName(segment: string): string {
   return segment.replace("+", "/");
 }
 
+/**
+ * 按「包与出口」寻址的解析结果：`/plugins/<pkg>/<export>`。
+ *
+ * 与"按文件"不同：一个出口对应**一份产物**（rolldown 打包，包内相对导入 inline、跨包引用 external 成
+ * 对方出口的 URL）。出口名与文件名不同构（`./client` → `src/client/index.ts`、`./remote` →
+ * `lib/typert.remote-client.ts`），所以寻址只能按清单的 `exports` 来，不能按文件。
+ */
+export interface ExportAddress {
+  name: string;
+  /** 出口名：根出口写成 `.`，其余是清单里的键（`./client`）。 */
+  exportName: string;
+}
+
+/** `/plugins/<pkg>/<export>`；export 段里根出口用 `_` 表示（URL 里 `.` 不便）。 */
+export function parseExportAddress(url: string): ExportAddress | undefined {
+  const path = url.split("?")[0] ?? "";
+  if (!path.startsWith(`${PLUGIN_ROUTE}/`)) return undefined;
+  const segments = path.slice(PLUGIN_ROUTE.length + 1).split("/").filter((segment) => segment !== "");
+  const [pkgSegment, ...rest] = segments;
+  if (pkgSegment === undefined || rest.length === 0) return undefined;
+  // combo（`??a,b`）、入口（`.app/entry.js`）与外部的 `??` 形状都不是出口寻址。
+  if (pkgSegment.startsWith("??") || pkgSegment.startsWith(".")) return undefined;
+  const exportSegment = rest.join("/");
+  return {
+    name: decodePackageName(pkgSegment),
+    exportName: exportSegment === "_" ? "." : `./${exportSegment}`,
+  };
+}
+
 /** 按文件寻址的解析结果：包名 + 包内相对路径（`src/client/index.ts` 这种）。 */
 export interface FileAddress {
   name: string;
@@ -52,11 +81,16 @@ export function parseFileAddress(url: string): FileAddress | undefined {
   return { name: decodePackageName(pkgSegment), version, filepath: fileSegments.join("/") };
 }
 
-/** 包名 → 包根（走 node 解析；软链指到真实目录，越界校验按真实路径做）。 */
-export function packageRootOf(from: string, name: string): string | undefined {
+/**
+ * 包名 → 包根：走 node 的解析（pnpm 已经把依赖摆好了），**解析入口**再向上找最近的清单。
+ *
+ * 不能用 `resolve('<name>/package.json')`：现代包（`clsx` 这类）的 `exports` 通常不暴露
+ * `./package.json`，那样明明装着也解析不出来。
+ */
+export async function packageRootOf(from: string, name: string): Promise<PackageRoot | undefined> {
   try {
     const require = createRequire(from);
-    return dirname(require.resolve(join(name, "package.json")));
+    return await owningPackageOf(require.resolve(name));
   } catch {
     return undefined;
   }
@@ -105,7 +139,7 @@ export async function manifestOf(root: string): Promise<{ name: string; version:
   }
 }
 
-/** 向上找最近的包清单（软链已由 node 解析解开）。 */
+/** 向上找最近的包（软链已由 node 解析解开）：返回清单与包根。 */
 export async function owningPackageOf(file: string): Promise<PackageRoot | undefined> {
   let directory = dirname(file);
   while (directory !== dirname(directory)) {
@@ -204,9 +238,9 @@ export async function dependencyEntryOf(
 ): Promise<string | undefined> {
   const name = packageNameOf(specifier);
   const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
-  const root = packageRootOf(fromFile, name);
-  if (root === undefined) return undefined;
-  const byExports = await exportTargetOf(root, subpath);
+  const pkg = await packageRootOf(fromFile, name);
+  if (pkg === undefined) return undefined;
+  const byExports = await exportTargetOf(pkg.root, subpath);
   if (byExports !== undefined) return byExports;
   try {
     return createRequire(fromFile).resolve(specifier);
@@ -270,39 +304,6 @@ export async function resolveBareUrl(
 }
 
 /**
- * 扫出「包名 → 包根」的索引：工作区与上游各自的 `packages/<组>/<包>`。
- *
- * 依赖解析的最后一道兜底：消费方的 `node_modules` 里不一定有目标包（`@deepseek-ai/*` 常常只被别的包
- * 依赖），而工作区与上游的源码都在仓库里，直接按目录扫一遍比一路试 `require.resolve` 靠谱。
- */
-export async function buildPackageIndex(roots: readonly string[]): Promise<Map<string, string>> {
-  const index = new Map<string, string>();
-  const visit = async (directory: string): Promise<void> => {
-    const manifest = await manifestOf(directory);
-    if (manifest !== undefined) {
-      index.set(manifest.name, directory);
-      return;
-    }
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-      await visit(join(directory, entry.name));
-    }
-  };
-  for (const root of roots) {
-    for (const base of ["packages", join("vendor", "deepseek-harness", "packages")]) {
-      await visit(join(root, base));
-    }
-  }
-  return index;
-}
-
-/**
  * 按 node 的解析规则找包：从 `fromFile` 出发，失败再试**额外解析根**。
  *
  * 消费方的 `node_modules` 里不一定有目标包（`@deepseek-ai/*` 只在 vendor 那边、工作区包各有各的依赖面），
@@ -314,9 +315,9 @@ async function entryFileOf(
   subpath: string | undefined,
 ): Promise<string | undefined> {
   const roots = [fromFile];
-  const root = packageRootOf(fromFile, name);
-  if (root === undefined) return undefined;
-  const byExports = await exportTargetOf(root, subpath);
+  const pkg = await packageRootOf(fromFile, name);
+  if (pkg === undefined) return undefined;
+  const byExports = await exportTargetOf(pkg.root, subpath);
   if (byExports !== undefined) return byExports;
   for (const from of roots) {
     try {
@@ -327,6 +328,50 @@ async function entryFileOf(
     }
   }
   return undefined;
+}
+
+/**
+ * 把一个**出口**打成一份 ESM：包内（相对导入、同包别名）inline，跨包引用 external 成对方出口的 URL。
+ *
+ * 这正是「一个出口一份产物」的落地：相对路径不能交给浏览器——它按根路径解析（`./x` → `/vendor/…` 那种
+ * 404），必须在构建期 inline；而跨包引用要留给运行时（改一个包不用重打别的包），所以 external 成 URL。
+ * 样式与资产由 `cssInlinePlugins` 内联（自包含单文件，与打包链同一份实现）。
+ */
+export async function bundleExport(options: {
+  /** 包根（rolldown 的 cwd：条件导出与 tsconfig 都按它读）。 */
+  root: string;
+  /** 出口指向的源文件（绝对路径）。 */
+  entry: string;
+  /** 跨包引用 → 绝对 URL；返回 undefined 表示"包内"，交给 rolldown inline。 */
+  rewrite: (specifier: string) => Promise<string | undefined> | undefined;
+  /** rolldown 插件（样式内联等）。 */
+  plugins?: Plugin[];
+}): Promise<string> {
+  const rewritePlugin = {
+    name: "dsh-client-external",
+    async resolveId(source: string, importer: string | undefined) {
+      if (importer === undefined) return null;
+      const url = await options.rewrite(source);
+      return url === undefined ? null : { id: url, external: true };
+    },
+  };
+  const build = await rolldown({
+    input: options.entry,
+    cwd: options.root,
+    platform: "browser",
+    resolve: { conditionNames: ["browser", "import", "default"] },
+    plugins: [...(options.plugins ?? []), rewritePlugin],
+  });
+  try {
+    const { output } = await build.generate({ format: "esm", codeSplitting: false });
+    const chunk = output.find((item) => item.type === "chunk");
+    if (chunk === undefined || chunk.type !== "chunk") {
+      throw new Error(`dev-client: ${options.entry} produced no chunk`);
+    }
+    return chunk.code;
+  } finally {
+    await build.close();
+  }
 }
 
 /** 逐文件转译：不打包、只改依赖 URL，产物是浏览器可直接 `import` 的 ESM。 */
@@ -342,7 +387,10 @@ export async function transpileFile(options: {
       // 入口（没有 importer）必须让 rolldown 自己加载：入口不能是 external。
       if (importer === undefined) return null;
       const url = await options.rewrite(source);
-      return url === undefined ? { id: source, external: true } : { id: url, external: true };
+      // 改写不出 URL 的（包内相对导入、同包别名）**交给 rolldown 自己解析**，于是它们被 inline 进这一份
+      // 产物——这正是要的：相对路径交给浏览器会被按根路径解析（`./x` → `/vendor/…` 那种 404）。
+      // 只有跨包引用才 external 成按文件 URL（用户的原话：相对路径 inline，其他包 external）。
+      return url === undefined ? null : { id: url, external: true };
     },
   };
   const build = await rolldown({

@@ -30,7 +30,7 @@ async function fixture(): Promise<{ dir: string; file: string }> {
 }
 
 describe("逐文件 ESM 转译", () => {
-  it("裸导入改写成绝对 URL，相对导入原样留着", async () => {
+  it("跨包引用变成 URL，包内相对导入 inline（不交给浏览器）", async () => {
     const { dir, file } = await fixture();
     const rewritten: string[] = [];
     const code = await transpileFile({
@@ -42,11 +42,12 @@ describe("逐文件 ESM 转译", () => {
           : "/plugins/@morlay+dsh-client-ui-primitives/0.0.1/src/client/index.ts";
       },
     });
-    // 相对导入不进改写（保持 `./helper.ts`），裸导入进改写并换成 URL。
+    // 跨包（裸导入）进改写并换成 URL；包内相对导入**不出现在改写里**，而是被 rolldown inline 进产物
+    // ——交给浏览器的话它会按根路径解析（`./x` → `/vendor/…` 那种 404）。
     expect(rewritten).toContain("@morlay/dsh-client-ui-primitives/client");
     expect(code).toContain('"/plugins/@morlay+dsh-client-ui-primitives/0.0.1/src/client/index.ts"');
-    expect(code).toContain('"./helper.ts"');
-    // rolldown 会把声明与导出拆开（`const value = …` + `export { Button, value }`）。
+    expect(code).not.toContain('"./helper.ts"');
+    expect(code).toContain("const helper");
     expect(code).toContain("const value = helper() + 1");
     void dir;
   });

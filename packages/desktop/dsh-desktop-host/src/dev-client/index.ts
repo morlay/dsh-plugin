@@ -1,12 +1,17 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, dirname, join, relative, resolve as resolvePath, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
-import { compileCssModule, compileGlobalCss, prebundleDependency } from "@local/devkit";
 import {
-  buildPackageIndex,
+  clientAssetPlugin,
+  compileCssModule,
+  compileGlobalCss,
+  cssInlinePlugins,
+  prebundleDependency,
+} from "@local/devkit";
+import {
+  bundleExport,
   dependencyEntryOf,
   encodePackageName,
   exportTargetOf,
@@ -14,6 +19,7 @@ import {
   manifestOf,
   owningPackageOf,
   packageRootOf,
+  parseExportAddress,
   parseFileAddress,
   PLUGIN_ROUTE,
   resolveBareUrl,
@@ -76,16 +82,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
 }
 
-/** 向上找含 `pnpm-workspace.yaml` 的目录（模块自身位置起算，与 dev 进程的 cwd 无关）。 */
-async function findRepoRoot(): Promise<string | undefined> {
-  let directory = dirname(fileURLToPath(import.meta.url));
-  while (directory !== dirname(directory)) {
-    if (await pathExists(join(directory, "pnpm-workspace.yaml"))) return directory;
-    directory = dirname(directory);
-  }
-  return undefined;
-}
-
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -113,17 +109,21 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   const explicit = new Set(config.packages ?? []);
 
-  // 依赖解析的兜底：包名 → 包根（扫工作区与上游的源码目录）。懒建一次，之后复用
-  // （`apply` 不是 async，所以这里不 await，第一次用到时才建）。
-  let repoRoot: string | undefined;
-  let packageIndex: Map<string, string> | undefined;
-  const indexEntryOf = async (name: string): Promise<string | undefined> => {
-    if (packageIndex === undefined) {
-      repoRoot ??= await findRepoRoot();
-      packageIndex = await buildPackageIndex(repoRoot === undefined ? [] : [repoRoot]);
+  // 包名 → 包根：交给 node 的解析（`createRequire(from).resolve`），不自己扫目录。
+  // 基准是**发起引用的那个文件**——node 的规则就是这样，pnpm 的 node_modules 也按依赖关系摆好了。
+  // 没有 importer 的场合（我们自己生成的入口），退到模块表里任一 client 行当基准（它们都在有依赖的包里）。
+  let fallbackBase: string | undefined;
+  const rootOf = async (name: string, from?: string): Promise<string | undefined> => {
+    const bases = from === undefined ? [] : [from];
+    fallbackBase ??= modules.clientPath(modules.graph().entries[0]?.id ?? "") ?? undefined;
+    if (fallbackBase !== undefined) bases.push(fallbackBase);
+    for (const base of bases) {
+      const found = await packageRootOf(base, name);
+      if (found !== undefined) return found.root;
     }
-    return packageIndex.get(name);
+    return undefined;
   };
+  const indexEntryOf = (name: string): Promise<string | undefined> => rootOf(name);
   // 模块表给的"行 id → client 源文件"；不在表里就走包索引（普通依赖、上游包、三方包都在这里）。
   const moduleEntryOf = (name: string): string | undefined => modules.clientPath(name);
 
@@ -227,6 +227,73 @@ export function apply(ctx: Context, config: Config = {}): void {
       }
       return true;
     }
+    // 按「包与出口」寻址：`/plugins/<pkg>/<export>` → 该出口打一份 ESM。
+    const exportAddress = parseExportAddress(req.url ?? "");
+    if (exportAddress !== undefined) {
+      try {
+        const root = await indexEntryOf(exportAddress.name);
+        if (root === undefined) {
+          res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          res.end(`dev-client-bundles: 未知包 ${exportAddress.name}\n`);
+          return true;
+        }
+        const manifest = await manifestOf(root);
+        // `exportTargetOf` 的 subpath 不带 `./`（根出口传 undefined）。
+        const subpath = exportAddress.exportName === "." ? undefined : exportAddress.exportName.slice(2);
+        const entry = await exportTargetOf(root, subpath);
+        if (manifest === undefined || entry === undefined) {
+          res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          res.end(`dev-client-bundles: ${exportAddress.name} 没有出口 ${exportAddress.exportName}\n`);
+          return true;
+        }
+        const code = await bundleExport({
+          root,
+          entry,
+          // 包内（相对导入、同包引用）inline；跨包 external 成对方**出口的 URL**；三方依赖走**预处理**
+          // （打成一份 ESM 缓存到 `.deps/`）——它们不是工作区包，没有源码面的出口可指。
+          // 解析不到**报错**：静默 external 只会让浏览器拿到一个 404，把问题推后。
+          rewrite: async (specifier: string) => {
+            if (specifier.startsWith(".")) return undefined;
+            const target = packageNameOf(specifier);
+            if (target === exportAddress.name) return undefined;
+            const subpath = specifier === target ? undefined : specifier.slice(target.length + 1);
+            const targetRoot = await rootOf(target, entry);
+            if (targetRoot !== undefined && !targetRoot.includes(`${sep}node_modules${sep}`)) {
+              const targetManifest = await manifestOf(targetRoot);
+              if (targetManifest === undefined) {
+                throw new Error(`dev-client-bundles: ${target} 的包清单读不到（${targetRoot}）`);
+              }
+              return `${PLUGIN_ROUTE}/${encodePackageName(targetManifest.name)}/${subpath === undefined ? "_" : subpath}`;
+            }
+            // 三方依赖：预处理成 `.deps/<name>-<hash>.js`。
+            const entryFile = await dependencyEntryOf(specifier, entry);
+            if (entryFile === undefined) {
+              throw new Error(
+                `dev-client-bundles: 解析不到 ${specifier}（从 ${entry} 出发，包 ${exportAddress.name}）`,
+              );
+            }
+            const bundled = await prebundleDependency({ name: target, entry: entryFile, outDir: depsDir });
+            return `${PLUGIN_ROUTE}/.deps/${bundled.file}`;
+          },
+          // 样式内联 + 资产内联（`.svg` / 字体转 data URI）：产物是自包含单文件，缺这两样
+          // rolldown 会把 `.svg` 当 JS 解析（PARSE_ERROR）。
+          plugins: [
+            ...cssInlinePlugins({ name: exportAddress.name, assets: "inline" }),
+            clientAssetPlugin(),
+          ],
+        });
+        res.writeHead(200, {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(req.method === "HEAD" ? undefined : code);
+      } catch (error) {
+        ctx.logger.error(error);
+        res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+        res.end(`${error instanceof Error ? error.message : String(error)}\n`);
+      }
+      return true;
+    }
     const address = parseFileAddress(req.url ?? "");
     if (address === undefined) return false;
     // 包根从模块表推：`clientPath(id)` 给的就是该包的 client 源文件（`exports` 已指 `src`），
@@ -234,7 +301,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     // 没有业务包。
     const clientPath = modules.clientPath(address.name);
     const owner = clientPath === undefined ? undefined : await owningPackageOf(clientPath);
-    const root = owner?.root ?? packageRootOf(import.meta.filename, address.name);
+    const root = owner?.root ?? (await packageRootOf(import.meta.filename, address.name))?.root;
     if (root === undefined) {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end(`dev-client-bundles: 未知包 ${address.name}\n`);
@@ -428,8 +495,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     const manifest = await manifestOf(indexed);
     const target = await exportTargetOf(indexed, "client");
     if (manifest === undefined || target === undefined) return undefined;
-    const filepath = relative(indexed, target).split(sep).join("/");
-    return `/plugins/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`;
+    // 一个出口一份产物：引用的是**出口**，不是文件。
+    return `/plugins/${encodePackageName(manifest.name)}/client`;
   }
 
   // 自研 app 入口：一个 `type="module"` 的 ESM 模块，按文件 import 每个 client 行的源码入口。
@@ -442,17 +509,67 @@ export function apply(ctx: Context, config: Config = {}): void {
       .graph()
       .entries.map((entry) => entry.id)
       .filter((id) => id !== "client-modules");
-    const lines: string[] = ["// dev 客户端入口：按文件 ESM 直访，改哪看哪。"];
+    // 自研装配：建一个客户端 Context，按模块表的顺序调用每个 client 行的 `apply`
+    // （每个 client 入口就是这样导出的：`export { apply, inject }`）。上游那套是 classic script +
+    // `__ModuleLoader__.load` 工厂，加载与装配绑在一起；这里把两件事分开——ESM 负责加载，这段负责装配。
+    const imports: string[] = [];
+    const names: string[] = [];
+    let index = 0;
     for (const id of ids) {
       const url = await clientEntryUrl(id);
-      lines.push(url === undefined ? `// 跳过（找不到 client 入口）：${id}` : `import ${JSON.stringify(url)};`);
+      if (url === undefined) continue;
+      const alias = `m${String(index)}`;
+      index += 1;
+      imports.push(`import * as ${alias} from ${JSON.stringify(url)};`);
+      names.push(alias);
     }
+    const lines: string[] = [
+      "// dev 客户端入口：按出口 ESM 直访 + 本地装配（改哪看哪）。",
+      'import { Context } from "/plugins/@deepseek-ai+cordis/_";',
+      ...imports,
+      "",
+      "const ctx = new Context();",
+      "globalThis.__DSH_CTX__ = ctx;",
+      `for (const mod of [${names.join(", ")}]) {`,
+      '  if (typeof mod.apply === "function") await mod.apply(ctx);',
+      "}",
+    ]
     res.writeHead(200, {
       "content-type": "text/javascript; charset=utf-8",
       "cache-control": "no-store",
     });
     res.end(req.method === "HEAD" ? undefined : `${lines.join("\n")}\n`);
     return true;
+  };
+
+  /**
+   * 去掉上游客户端那一套的注入：引导器（`<script src="plugins/??…">`）、bootstrap/application 的
+   * `script-src`/`script-preload` 行，以及内联的 `__DSH_BOOT__` + 模块表引导器。资源的加载改由我们的
+   * 入口（`/plugins/.app/entry.js`）按**出口** import，模块表的那套协议（classic script +
+   * `__ModuleLoader__.load`）与按出口 ESM 互斥，留着只会引发无用请求。
+   */
+  const stripUpstreamBoot = (html: string): string => {
+    let out = "";
+    let cursor = 0;
+    for (;;) {
+      const start = html.indexOf("<script", cursor);
+      if (start < 0) break;
+      const end = html.indexOf("</script>", start);
+      const block = end < 0 ? html.slice(start) : html.slice(start, end + "</script>".length);
+      // `__ModuleLoader__` 是模块表引导器的排队入口（classic script + 工厂协议），自研装配后它没有
+      // 消费方；`plugins/??` 是 combo 引用；`__DSH_BOOT__` 是模块表的行清单。三类都清掉。
+      const upstream =
+        block.includes("plugins/??") ||
+        block.includes("__DSH_BOOT__") ||
+        block.includes("__ModuleLoader__");
+      out += html.slice(cursor, start) + (upstream ? "" : block);
+      if (end < 0) {
+        cursor = html.length;
+        break;
+      }
+      cursor = end + "</script>".length;
+    }
+    return out + html.slice(cursor);
   };
 
   const serveIndex = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -462,10 +579,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       return;
     }
     try {
-      const rendered = webServer
-        .renderIndex(indexHtml)
-        // 上游注入的引导器（`<script src="plugins/??…">` 那一条）不再需要：资源由我们的入口按文件加载。
-        .replace(/<script[^>]*plugins\/\?\?[^>]*><\/script>/gu, "");
+      const rendered = stripUpstreamBoot(webServer.renderIndex(indexHtml));
       const html = `${await rewriteClientUrls(rendered)}\n<script type="module" src="${APP_ENTRY_PATH}"></script>\n`;
       res.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
