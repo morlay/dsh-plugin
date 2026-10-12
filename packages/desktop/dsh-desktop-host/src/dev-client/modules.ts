@@ -62,6 +62,35 @@ export function packageRootOf(from: string, name: string): string | undefined {
   }
 }
 
+/**
+ * 按包清单的 `exports` 解析子路径（`./client` → `./src/client/index.ts`）。
+ *
+ * 不能自己拼 `src/<subpath>`：出口名与文件名**不同构**（`./client` 指向 `src/client/index.ts`、
+ * `./remote` 指向 `lib/typert.remote-client.ts` 这类都由清单说了算）。
+ */
+export async function exportTargetOf(
+  root: string,
+  subpath: string | undefined,
+): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      exports?: Record<string, unknown>;
+    };
+    const key = subpath === undefined ? "." : `./${subpath}`;
+    const entry = manifest.exports?.[key];
+    const target =
+      typeof entry === "string"
+        ? entry
+        : entry === null || typeof entry !== "object"
+          ? undefined
+          : ((entry as Record<string, unknown>)["types"] ?? (entry as Record<string, unknown>)["default"]);
+    if (typeof target !== "string") return undefined;
+    return resolveInPackage({ name: "", version: "", root }, target.replace(/^\.\//u, ""));
+  } catch {
+    return undefined;
+  }
+}
+
 /** 读包清单（名字 + 版本）。 */
 export async function manifestOf(root: string): Promise<{ name: string; version: string } | undefined> {
   try {
@@ -171,6 +200,56 @@ export async function resolveRelativeUrl(
   const filepath = relative(pkg.root, hit).split(sep).join("/");
   if (filepath.startsWith("..")) return undefined;
   return `${PLUGIN_ROUTE}/${encodePackageName(pkg.name)}/${pkg.version}/${filepath}`;
+}
+
+/**
+ * 裸导入 → 目标包源文件的绝对 URL。
+ *
+ * `clientEntryOf` 给"包名 → 该包的 client 源文件"（模块表就是这么用的）；据此定位包根后，无子路径的按入口、
+ * 有子路径的按包清单 `exports` 解析。
+ */
+export async function resolveBareUrl(
+  specifier: string,
+  fromFile: string,
+  clientEntryOf: (name: string) => string | undefined,
+): Promise<string | undefined> {
+  const slash = specifier.indexOf("/");
+  const name = specifier.startsWith("@")
+    ? slash < 0
+      ? specifier
+      : (specifier.slice(0, specifier.indexOf("/", slash + 1)) || specifier)
+    : (specifier.split("/")[0] ?? specifier);
+  const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
+  // 前端资源的依赖很复杂：只有"行"才在模块表里，普通依赖得按 node 的解析规则从**当前文件**出发
+  // 找到它的 node_modules（工作区链接、pnpm 的虚拟 store、三方包都走这条路），再把包清单的 `exports`
+  // 落到具体文件。都注册成模块反而难用——依赖图不该由模块表决定。
+  const clientPath =
+    clientEntryOf(name) ?? (await entryFileOf(fromFile, name, subpath));
+  if (clientPath === undefined) return undefined;
+  const owner = await owningPackageOf(clientPath);
+  if (owner === undefined) return undefined;
+  const target = subpath === undefined ? clientPath : await exportTargetOf(owner.root, subpath);
+  if (target === undefined) return undefined;
+  const filepath = relative(owner.root, target).split(sep).join("/");
+  return `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`;
+}
+
+/** 按 node 的解析规则从 `fromFile` 出发找包：先清单（拿包根），失败再按 `exports` 解子路径。 */
+async function entryFileOf(
+  fromFile: string,
+  name: string,
+  subpath: string | undefined,
+): Promise<string | undefined> {
+  const root = packageRootOf(fromFile, name);
+  if (root === undefined) return undefined;
+  const byExports = await exportTargetOf(root, subpath);
+  if (byExports !== undefined) return byExports;
+  try {
+    const require = createRequire(fromFile);
+    return require.resolve(subpath === undefined ? name : `${name}/${subpath}`);
+  } catch {
+    return undefined;
+  }
 }
 
 /** 逐文件转译：不打包、只改依赖 URL，产物是浏览器可直接 `import` 的 ESM。 */

@@ -1,15 +1,15 @@
 import { access, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH, comboEntryIds, singleEntryId, stripSourceMapTrailer } from "./combo.ts";
 import {
-  encodePackageName,
   manifestOf,
   owningPackageOf,
   packageRootOf,
   parseFileAddress,
   PLUGIN_ROUTE,
+  resolveBareUrl,
   resolveInPackage,
   transpileFile,
 } from "./modules.ts";
@@ -141,29 +141,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     res.end(req.method === "HEAD" ? undefined : Buffer.from(await response.arrayBuffer()));
   };
 
-  // 裸导入 → 目标包的源文件 URL。先看模块表（行包都在表里，`clientPath` 直接给源码路径），
-  // 再看包清单的 `exports` 子路径（`@pkg/types` 这种）。
-  const resolveBareUrl = async (specifier: string): Promise<string | undefined> => {
-    const slash = specifier.indexOf("/");
-    const name = specifier.startsWith("@")
-      ? specifier.slice(0, specifier.indexOf("/", slash + 1))
-      : (specifier.split("/")[0] ?? specifier);
-    const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
-    let target = modules.clientPath(name);
-    if (target !== undefined && subpath !== undefined) {
-      const owner = await owningPackageOf(target);
-      if (owner !== undefined) {
-        const resolved = resolveInPackage(owner, join("src", subpath).replace(/^src\//u, "src/"));
-        target = resolved ?? target;
-      }
-    }
-    if (target === undefined) return undefined;
-    const owner = await owningPackageOf(target);
-    if (owner === undefined) return undefined;
-    const filepath = relative(owner.root, target).split(sep).join("/");
-    return `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`;
-  };
-
   // 按文件寻址：`/plugins/{pkg}/{version}/{filepath}`——仓库源码逐个文件转译直出，依赖由浏览器原生
   // ESM 解析。命中就自己下发，不再走 combo 打包。
   const serveFile = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
@@ -188,13 +165,16 @@ export function apply(ctx: Context, config: Config = {}): void {
       res.end("dev-client-bundles: 越界路径\n");
       return true;
     }
-    // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
+    // 模块表给的"行 id → client 源文件"。
+  const moduleEntryOf = (name: string): string | undefined => modules.clientPath(name);
+
+  // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
     // 原样留着浏览器自己拼就对（`../shared.ts` → 同包同版本的 `src/shared.ts`），改写反而多一层。
     // 裸导入（含 `@pkg/subpath`）用模块表解析到目标包的源文件，再拼成绝对 URL。
     const rewrite = (specifier: string): Promise<string | undefined> | undefined =>
       specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")
         ? undefined
-        : resolveBareUrl(specifier);
+        : resolveBareUrl(specifier, file, moduleEntryOf);
     try {
       const code = await transpileFile({ file, rewrite });
       res.writeHead(200, {

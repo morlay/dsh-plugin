@@ -2,8 +2,9 @@
 # 而 `client-modules` 只会把那个文件当 JS 原样下发——所以要有人把源码半现场打成模块表的工厂脚本。
 # 判据与实现见 [`src/dev-client/`](../src/dev-client/index.ts)。
 #
-# 这一层单独一份、由宿主与 `dsh-desktopify dev --web` 都用 `--patch` 挂上：它开发与打包都要，而
-# 桌面专属的那几层（传输接管、遥测、登录面）web 形态不能挂。
+# 这一层**只服务 dev 形态**（`dsh-desktopify dev` 用 `--patch` 挂上），所以直接指 TS 源码：
+# dev 宿主进程由 `--import @oxc-node/core/register` 转译，不需要先有构建产物。打包形态走的是
+# `desktop.cordis.patch.yml`，那份仍指产物（部署里没有源码）。
 - insert:
     - id: dev-client-bundles
-      name: "../lib/dev-client-bundles.js"
+      name: "../src/dev-client/index.ts"
