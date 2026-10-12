@@ -26,9 +26,14 @@ export function devInstallAnchor(runtimeDir: string): string {
   return join(runtimeDir, "node_modules", "@deepseek-ai", "dsh", "package.json");
 }
 
-/** 宿主载荷入口：`<runtimeDir>/node_modules/@morlay/dsh-desktop-host/dist/index.js`（该包的产出目录）。 */
+/**
+ * 宿主载荷入口：该包的**源码**入口（`src/index.ts`）。
+ *
+ * TS 是一等公民：dev 全程直载源码（`nodeOptions` 里挂了 `@oxc-node/core/register`），不需要先出 `dist`
+ * 再跑——那一步既慢又要求每次改完都重新构建，与"开发态直接用"相悖。
+ */
 export function devHostEntry(runtimeDir: string): string {
-  return join(runtimeDir, "node_modules", ...DESKTOP_HOST_PACKAGE.split("/"), "dist", "index.js");
+  return join(runtimeDir, "node_modules", ...DESKTOP_HOST_PACKAGE.split("/"), "src", "index.ts");
 }
 
 /**
@@ -48,8 +53,8 @@ export async function requireDevRuntime(runtimeDir: string): Promise<void> {
   const hostEntry = devHostEntry(runtimeDir);
   if (!(await pathExists(hostEntry))) {
     throw new Error(
-      `desktop development: bundled ${DESKTOP_HOST_PACKAGE} is missing at ${hostEntry}; ` +
-        "run the tool build (pnpm build)",
+      `desktop development: ${DESKTOP_HOST_PACKAGE} 的源码入口缺失（${hostEntry}）；` +
+        "确认工作区已安装、且该包没有被裁掉源码",
     );
   }
 }

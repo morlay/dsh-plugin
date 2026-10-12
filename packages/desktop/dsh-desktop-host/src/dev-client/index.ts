@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
 import {
+  clientAssetPlugin,
   cssInlinePlugins,
 } from "@local/devkit";
 import {
@@ -15,6 +16,7 @@ import {
   exportTargetOf,
   owningPackageOf,
   parsePluginAddress,
+  resolveInPackage,
   manifestOf,
   packageRootOf,
   PLUGIN_ROUTE,
@@ -211,8 +213,12 @@ export function apply(ctx: Context): void {
     const root = await rootOf(name);
     if (root === undefined) return undefined;
     const pkgManifest = await manifestOf(root);
+    const subpathOfExport = exportName === "." ? undefined : exportName.slice(2);
+    // 先按清单的 `exports` 解析（标准路径）；**清单没覆盖**这个子路径时退回**物理文件**
+    // （`pdfjs-dist/web/pdf_viewer.mjs` 就是这种：文件在、`exports` 里没有它的键）。两者都拿不到才算找不到。
     const entry =
-      (await exportTargetOf(root, exportName === "." ? undefined : exportName.slice(2))) ??
+      (await exportTargetOf(root, subpathOfExport)) ??
+      (subpathOfExport === undefined ? undefined : resolveInPackage({ name, version: pkgManifest?.version ?? "", root }, subpathOfExport)) ??
       (await dependencyEntryOf(name, fallbackBase ?? root));
     if (entry === undefined) return undefined;
     const rawCode = await bundleExport({
@@ -244,9 +250,10 @@ export function apply(ctx: Context): void {
             : exportSegmentOf(`./${subpath}`);
         return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${segment}`;
       },
-      // 样式内联（CSS 是模块语义，必须内联成注入脚本）；**资产不内联**——图片按 URL 交给浏览器，
-      // 不塞 data URI（产物要能一眼看出引用了什么，也避免把大图灌进每个产物）。
-      plugins: [...cssInlinePlugins({ name, assets: "threshold" })],
+      // 样式内联（CSS 是模块语义，必须内联成注入脚本）。**资产目前仍走 data URI**（devkit 的
+      // `clientAssetPlugin` 只这一种模式）——但按需求应改成 URL 引用（`/plugins/<pkg>/<version>/…`），
+      // 需要给它加一个"外置"模式并恢复资产路由。见设计文档的待办。
+      plugins: [...cssInlinePlugins({ name, assets: "threshold" }), clientAssetPlugin()],
     });
     const code = await exportCjsNames(rawCode, entry);
     packageCache.set(key, code);
