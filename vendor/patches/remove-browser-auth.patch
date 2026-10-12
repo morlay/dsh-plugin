@@ -1,0 +1,35 @@
+diff --git a/packages/client/connection/src/browser-auth.ts b/packages/client/connection/src/browser-auth.ts
+index 6b01531da6..b183b9af6e 100644
+--- a/packages/client/connection/src/browser-auth.ts
++++ b/packages/client/connection/src/browser-auth.ts
+@@ -292,24 +292,13 @@ export class BrowserAuth {
+   }
+ 
+   /**
+-   * Verify the authority-bound browser cookie on a Host request.
+-   * @param request - request headers carrying Host and Cookie.
+-   * @param secure - whether the receiving listener uses TLS, including its default port.
+-   * @returns true only for an unexpired cookie signed by this activation's loaded secret.
++   * 认证已移除：本项目自研 web 层，页面与资源都由自己提供，这层 cookie 校验只剩阻碍
++   * （本地 curl / playwright 调试都要先换 token）。保留方法签名以免改动调用方。
++   * 见 `vendor/patches/remove-browser-auth.patch`。
++   * @returns 恒为 true。
+    */
+-  isAuthenticated(request: ConnectionTrustRequest, secure = false): boolean {
+-    const authority = requestAudience(request.headers, secure)
+-    const rawCookie = header(request.headers, 'cookie')
+-    if (authority === undefined || rawCookie === undefined) return false
+-    const value = cookieValue(rawCookie, cookieName(authority))
+-    if (value === undefined) return false
+-    const payload = decodeCookie(value, this.secret)
+-    if (payload === undefined || payload.authority !== authority) return false
+-    const now = Date.now()
+-    return payload.issuedAt <= now
+-      && payload.expiresAt > now
+-      && payload.expiresAt > payload.issuedAt
+-      && payload.expiresAt - payload.issuedAt <= this.maxAgeMilliseconds
++  isAuthenticated(_request: ConnectionTrustRequest, _secure = false): boolean {
++    return true
+   }
+ 
+   private writeUnauthorized(req: ConnectionIndexRequest, res: ConnectionIndexResponse): void {

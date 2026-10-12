@@ -26,6 +26,9 @@ export const patch: Step[] = [
   // 开发态的 `/plugins` 前缀交给 `dev-client-bundles`（按文件 ESM 直访）：它提供 `devClientRoute` 服务时
   // client-modules 让出前缀，否则两条 prefix 路由同名冲突。打包形态没有该服务，行为不变。
   { type: "git", patch: "client-route-handover.patch" },
+  // 认证移除：自研 web 层后页面与资源都由我们提供，这层 cookie 校验只剩阻碍（本地 curl / playwright
+  // 调试都得先换 token）。
+  { type: "git", patch: "remove-browser-auth.patch" },
   {
     type: "exports",
     // 生成物出口：目标是 `prebuild` 阶段写出的 `.ts`（不是 `lib/*.js`），所以按出口名显式改指。

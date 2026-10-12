@@ -1,7 +1,8 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join, sep } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
-import { sep } from "node:path";
 import {
   clientAssetPlugin,
   cssInlinePlugins,
@@ -148,10 +149,13 @@ export function apply(ctx: Context): void {
     "",
   ].join("\n");
   // 缓存键是 (包, 出口)：同一个包的不同出口是不同产物；dev 内存即可（内容 hash 作 rev 时再谈落盘）。
+  // 预处理产物**落盘**（不是只在内存里）：出问题能直接打开看——哪份产物里 inline 了什么、跨包引用指向
+  // 谁，一眼可查。内存缓存只是省掉重复的打包开销，落盘那份才是排查依据。
+  const depsDir = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "deps");
   const packageCache = new Map<string, string>();
   const bundlePackage = async (name: string, exportName: string): Promise<string | undefined> => {
     // 键是 (包, 出口)：同一个包的不同出口是不同产物。
-    const key = `${name}\u0000${exportName}`;
+    const key = `${name}#${exportName}`;
     const cached = packageCache.get(key);
     if (cached !== undefined) return cached;
     const root = await rootOf(name);
@@ -187,6 +191,15 @@ export function apply(ctx: Context): void {
       plugins: [...cssInlinePlugins({ name, assets: "inline" }), clientAssetPlugin()],
     });
     packageCache.set(key, code);
+    // 文件名里带上包名与出口（`/` 与 `@` 换成可读又安全的形式），方便直接定位。
+    const fileName = `${key.replace(/[/@]/gu, "_")}.js`;
+    try {
+      await mkdir(depsDir, { recursive: true });
+      await writeFile(join(depsDir, fileName), code);
+      ctx.logger.debug("dev-client-bundles: 预处理 %s → %s", key, join(depsDir, fileName));
+    } catch (error) {
+      ctx.logger.warn("dev-client-bundles: 落盘失败 %s", error);
+    }
     return code;
   };
 
@@ -278,6 +291,7 @@ export function apply(ctx: Context): void {
       'console.log("[dsh] entry: context created");',
       // 每个 client 行导出 `{ apply, inject }`——**交给 cordis 的 plugin 机制**装配，不要手工调 apply：
       // 它按 `inject` 等依赖就绪、按声明顺序生效，手工调用会在服务还没注册时就去用（`undefined.register`）。
+      `const ROW_IDS = ${JSON.stringify(ids)};`,
       `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
       // client 行的导出有两种形状：`{ apply, inject }`（多数）与 `{ default: X }`（如
       // `dsh-client-shortcuts` 导出 `ShortcutsService as default`）。两种都要认。
@@ -288,7 +302,7 @@ export function apply(ctx: Context): void {
       '  const plugin = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);',
       '  if (plugin === undefined) { console.warn("[dsh] skip (no apply/default)", index); continue; }',
       "  try {",
-      '    console.log("[dsh] plugin", index, plugin.name ?? "-", "inject:", JSON.stringify(plugin.inject ?? []));',
+      '    console.log("[dsh] plugin", index, ROW_IDS[index] ?? plugin.name ?? "-", "inject:", JSON.stringify(plugin.inject ?? []));',
       '    ctx.plugin(plugin, { name: plugin.name ?? "client-" + index });',
       "  } catch (error) {",
       '    console.error("[dsh] plugin failed at", index, error);',
@@ -299,6 +313,15 @@ export function apply(ctx: Context): void {
       // （上游 `mountClient` 就一句话：等 `uiRenderer` 就绪后在 effect 里挂进容器）。这里做同一件事。
       'const container = document.getElementById("app");',
       'if (container === null) throw new Error("[dsh] entry: #app 挂载点不存在");',
+      // 挂载要等 **'root' slot 真的注册**：`layout` 服务在注册之前就已提供（`ui-layout` 的 apply 里
+      // `provide('layout')` 在 `slots.register({name:'root'})` 之前），所以等它不够——那时挂载会渲染
+      // 一棵空树，之后 slot 注册也不会补渲。
+      // 注意 `ctx.slots` 此刻可能是 undefined（它由 ui-renderer 的 apply 提供），直接取会抛错、
+      // 让这个 Promise 永不 resolve。用可选链 + 上限轮询（约 10 秒）。
+      'for (let i = 0; i < 600 && (ctx.slots?.entries?.("root")?.length ?? 0) === 0; i += 1) {',
+      "  await new Promise((resolve) => setTimeout(resolve, 16));",
+      "}",
+      'console.log("[dsh] entry: root slot ready");',
       'await ctx.inject(["uiRenderer"], (scope) => {',
       '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
       "});",
