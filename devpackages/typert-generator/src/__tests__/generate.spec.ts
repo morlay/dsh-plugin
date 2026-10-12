@@ -45,6 +45,10 @@ async function fixture(
   return { upstreamRoot, dtsRoot };
 }
 
+function remoteTextOf(artifacts: Awaited<ReturnType<typeof generateTypert>>): string {
+  return artifacts[0]?.files.find((f) => f.path.endsWith("typert.remote-client.ts"))?.text ?? "";
+}
+
 describe("typert 产物生成", () => {
   it("产出 host / client / remote-client 三件套，并带上 invocation 与反射", async () => {
     const { upstreamRoot, dtsRoot } = await fixture({ client: true });
@@ -136,7 +140,9 @@ describe("typert 产物生成", () => {
     const host = artifacts[0]?.files.find((f) => f.path.endsWith("typert.host.ts"))?.text ?? "";
     expect(host).toContain("method: 'list'");
     expect(host).toContain("id: '@x/demo#demo/list'");
-    expect(host).not.toContain("remoteExportList'");
+    // wire 名与实现名不同时要写 `implementation`：gateway 拿它反射调用宿主的方法，缺了就调不到（返回 undefined）
+    expect(host).toContain("implementation: 'remoteExportList'");
+    expect(remoteTextOf(artifacts)).toContain("implementation: 'remoteExportList'");
   });
 
   it("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {

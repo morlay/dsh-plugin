@@ -31,6 +31,8 @@ export type GeneratedArtifact = {
 
 type RemoteMethod = {
   method: string;
+  /** 实现方法名：与 wire 名不同时才写（gateway 靠它反射调用宿主的方法）。 */
+  implementation?: string;
   /** `@Remote({ mode: 'stream' })` → `stream`；缺省 `direct`。 */
   mode: "direct" | "stream";
   /** 声明面签名用的参数文本（含被 wire 跳过的 `signal`）。 */
@@ -186,8 +188,11 @@ function remoteMethodsOf(klass: Node, source: string): RemoteMethod[] {
         optional: parameter["optional"] === true,
       }));
     const options = remoteOptionsOf(member);
+    const implementation = String(nameOf(member["key"] as Node) ?? "");
+    const method = options.wireName ?? implementation;
     methods.push({
-      method: options.wireName ?? String(nameOf(member["key"] as Node) ?? ""),
+      method,
+      ...(method === implementation ? {} : { implementation }),
       mode: options.mode,
       signatureParameters: signatureParametersOf(source, member),
       parameters,
@@ -459,6 +464,9 @@ export function renderRemoteClient(
           `      service: '${service.serviceKey}',`,
           `      namespace: '${service.namespace}',`,
           `      method: '${method.method}',`,
+          ...(method.implementation === undefined
+            ? []
+            : [`      implementation: '${method.implementation}',`]),
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
           "      invocation: { kind: 'direct' },",
           "      parameters: [",
@@ -676,6 +684,10 @@ export function renderHostArtifact(
           `      service: '${service.serviceKey}',`,
           `      namespace: '${service.namespace}',`,
           `      method: '${method.method}',`,
+          // wire 名与实现名不同时要写 `implementation`（gateway 拿它反射调用宿主方法）。
+          ...(method.implementation === undefined
+            ? []
+            : [`      implementation: '${method.implementation}',`]),
           // `mode` 是 registry 判定载体（stream 还是 unary）的依据，host 面与远端面都要写。
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
           "      invocation: { kind: 'direct' },",
