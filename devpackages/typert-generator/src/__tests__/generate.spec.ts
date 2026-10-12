@@ -119,6 +119,26 @@ describe("typert 产物生成", () => {
     expect(remote).toContain("'demo': TypertRemoteNamespace$");
   });
 
+  it("`@Remote('wire')` 的第一个参数是 wire 名（方法名只是实现名）", async () => {
+    const { upstreamRoot, dtsRoot } = await fixture();
+    await writeFile(
+      join(upstreamRoot, "packages", "demo", "demo", "src", "index.ts"),
+      [
+        "export class Demo extends TypertRemoteService {",
+        "  constructor(ctx: Context) { super(ctx, 'demo') }",
+        "  @Remote('list')",
+        "  async remoteExportList(): Promise<string> { throw new Error() }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const artifacts = await generateTypert({ upstreamRoot, dtsRoot });
+    const host = artifacts[0]?.files.find((f) => f.path.endsWith("typert.host.ts"))?.text ?? "";
+    expect(host).toContain("method: 'list'");
+    expect(host).toContain("id: '@x/demo#demo/list'");
+    expect(host).not.toContain("remoteExportList'");
+  });
+
   it("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     const lib = join(upstreamRoot, "packages", "demo", "demo", "lib");

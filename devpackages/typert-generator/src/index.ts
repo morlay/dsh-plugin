@@ -110,20 +110,28 @@ function serviceHeaderOf(klass: Node): { serviceKey: string; namespace: string }
   return found;
 }
 
-/** `@Remote({ mode: 'stream' })` → `stream`（其余按 direct）。 */
-function modeOf(member: Node): "direct" | "stream" {
+/** `@Remote('wire')` 的第一个字符串参数是 **wire 名**（缺省用方法名）；`@Remote({ mode: … })` 给载体。 */
+function remoteOptionsOf(member: Node): { wireName?: string; mode: "direct" | "stream" } {
+  let wireName: string | undefined;
+  let mode: "direct" | "stream" = "direct";
   for (const decorator of (member["decorators"] ?? []) as Node[]) {
     const expression = decorator["expression"] as Node;
-    const args = (expression["arguments"] ?? []) as Node[];
-    const options = args[0];
-    if (options?.["type"] !== "ObjectExpression") continue;
-    for (const property of options["properties"] as Node[]) {
-      if (nameOf(property["key"] as Node) === "mode" && property["value"]?.["value"] === "stream") {
-        return "stream";
+    const args = ((expression["arguments"] ?? []) as Node[]).filter(
+      (argument) => argument["type"] !== "SpreadElement",
+    );
+    for (const argument of args) {
+      if (argument["type"] === "Literal" && typeof argument["value"] === "string") {
+        wireName = argument["value"];
+      } else if (argument["type"] === "ObjectExpression") {
+        for (const property of argument["properties"] as Node[]) {
+          if (nameOf(property["key"] as Node) === "mode" && property["value"]?.["value"] === "stream") {
+            mode = "stream";
+          }
+        }
       }
     }
   }
-  return "direct";
+  return { ...(wireName === undefined ? {} : { wireName }), mode };
 }
 
 /** 声明面签名里的参数文本（源码切片，保留 `signal?: AbortSignal` 这类取消通道）。 */
@@ -177,9 +185,10 @@ function remoteMethodsOf(klass: Node, source: string): RemoteMethod[] {
         type: parameter["typeAnnotation"]?.["typeAnnotation"] as Node | undefined,
         optional: parameter["optional"] === true,
       }));
+    const options = remoteOptionsOf(member);
     methods.push({
-      method: String(nameOf(member["key"] as Node) ?? ""),
-      mode: modeOf(member),
+      method: options.wireName ?? String(nameOf(member["key"] as Node) ?? ""),
+      mode: options.mode,
       signatureParameters: signatureParametersOf(source, member),
       parameters,
       ...(cancellation === undefined
@@ -220,7 +229,51 @@ function servicesOf(file: ParsedFile): RemoteService[] {
   return found;
 }
 
+/**
+ * client 面的包集合：自己有 client 半（`src/client` 或 `dsh.client`），或被 client 半 import 过。
+ *
+ * 上游是按它自己的 client aggregate（两份 tsconfig 的 references）挑的，那份配置本仓库已删；这里按
+ * 「谁在 client 面露过面」推——服务被 client 半引用的包（`ctx.compaction`、`ctx.fileReference` 这类）
+ * 同样要产 `typert.client.ts`，否则客户端的远程面会缺一整块。
+ */
+async function clientFacingPackages(
+  upstreamRoot: string,
+  packages: readonly { name: string; root: string }[],
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  const names = new Map(packages.map((pkg) => [pkg.name, pkg]));
+  for (const pkg of packages) {
+    const hasClientHalf =
+      (await pathExists(join(pkg.root, "src", "client"))) || (await clientHalfOf(pkg.root));
+    if (hasClientHalf) result.add(pkg.name);
+  }
+  const clientFiles: string[] = [];
+  for (const pkg of packages) {
+    // 只看 client 半：`src/client/**` 与 `src/client.ts` 这两种形态都要。
+    for (const file of await filesUnder(join(pkg.root, "src"))) {
+      const relativePath = relative(pkg.root, file).split(sep).join("/");
+      if (relativePath.startsWith("src/client")) clientFiles.push(file);
+    }
+  }
+  for (const file of clientFiles) {
+    const parsed = await parseFile(file);
+    for (const statement of parsed.program["body"] as Node[]) {
+      if (statement["type"] !== "ImportDeclaration") continue;
+      const specifier = statement["source"]?.["value"];
+      if (typeof specifier !== "string" || !specifier.startsWith("@")) continue;
+      const name = specifier.split("/").slice(0, 2).join("/");
+      if (names.has(name)) result.add(name);
+    }
+  }
+  return result;
+}
+
 async function sourceFiles(pkgDir: string): Promise<string[]> {
+  return filesUnder(join(pkgDir, "src"));
+}
+
+/** 目录下的 TS 源文件（不拼 `src`：调用方给的就是要扫的那层）。 */
+async function filesUnder(root: string): Promise<string[]> {
   const found: string[] = [];
   async function walk(current: string): Promise<void> {
     let entries;
@@ -239,7 +292,7 @@ async function sourceFiles(pkgDir: string): Promise<string[]> {
       }
     }
   }
-  await walk(join(pkgDir, "src"));
+  await walk(root);
   return found.sort();
 }
 
@@ -270,6 +323,19 @@ async function packageDirs(upstreamRoot: string): Promise<string[]> {
 }
 
 export async function generateTypert(options: GenerateOptions): Promise<GeneratedArtifact[]> {
+  // 先扫出包清单：client 面的成员判定要按"谁在 client 面露过面"来算（见 `clientFacingPackages`）。
+  const discovered: { name: string; root: string }[] = [];
+  for (const pkgDir of await packageDirs(options.upstreamRoot)) {
+    try {
+      const manifest = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8")) as {
+        name?: string;
+      };
+      if (manifest.name !== undefined) discovered.push({ name: manifest.name, root: pkgDir });
+    } catch {
+      // 没有清单的目录不是包
+    }
+  }
+  const clientPackages = await clientFacingPackages(options.upstreamRoot, discovered);
   const owners = new Map<string, string | undefined>();
   const index = await buildSchemaIndex(options.dtsRoot, {
     // 声明树里的位置 `<dtsRoot>/<仓库相对路径>` 就是包目录的位置，包名仍从上游清单读。
@@ -311,9 +377,7 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     const remotePath = join(pkgDir, "lib", "typert.remote-client.ts");
     // 有 client 半的包另出一份 client 面的 TYPERT（invocations 相同，face 与反射面不同）。
     const clientPath = join(pkgDir, "lib", "typert.client.ts");
-    const hasClientHalf =
-      (await pathExists(join(pkgDir, "src", "client"))) || (await clientHalfOf(pkgDir));
-    const client = hasClientHalf
+    const client = clientPackages.has(name)
       ? renderHostArtifact(name, services, index, options.upstreamRoot, "client")
       : undefined;
     if (options.write === true) {
@@ -612,6 +676,8 @@ export function renderHostArtifact(
           `      service: '${service.serviceKey}',`,
           `      namespace: '${service.namespace}',`,
           `      method: '${method.method}',`,
+          // `mode` 是 registry 判定载体（stream 还是 unary）的依据，host 面与远端面都要写。
+          ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
           "      invocation: { kind: 'direct' },",
           "      parameters: [",
           ...parameters.map(({ parameter, symbol }) =>
