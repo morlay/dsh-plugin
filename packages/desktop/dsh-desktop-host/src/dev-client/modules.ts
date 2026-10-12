@@ -159,12 +159,7 @@ export async function resolveSpecifier(options: {
     }
     return undefined;
   }
-  const slash = specifier.indexOf("/");
-  const name = specifier.startsWith("@")
-    ? slash < 0
-      ? specifier
-      : specifier.slice(0, specifier.indexOf("/", slash + 1)) || specifier
-    : (specifier.split("/")[0] ?? specifier);
+  const name = packageNameOf(specifier);
   const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
   const file = await options.moduleEntryOf(name, subpath);
   if (file === undefined) return undefined;
@@ -203,6 +198,18 @@ export async function resolveRelativeUrl(
 }
 
 /**
+ * 说明符里的包名：`@scope/name` 取两段、`name` 取一段。作用域包**没有子路径**时，
+ * `indexOf("/", slash + 1)` 会返回 -1——直接 `slice` 会削掉最后一个字符，这里显式判掉。
+ */
+export function packageNameOf(specifier: string): string {
+  if (!specifier.startsWith("@")) return specifier.split("/")[0] ?? specifier;
+  const slash = specifier.indexOf("/");
+  if (slash < 0) return specifier;
+  const second = specifier.indexOf("/", slash + 1);
+  return second < 0 ? specifier : specifier.slice(0, second);
+}
+
+/**
  * 裸导入 → 目标包源文件的绝对 URL。
  *
  * `clientEntryOf` 给"包名 → 该包的 client 源文件"（模块表就是这么用的）；据此定位包根后，无子路径的按入口、
@@ -214,12 +221,7 @@ export async function resolveBareUrl(
   clientEntryOf: (name: string) => string | undefined,
   indexEntryOf: (name: string) => Promise<string | undefined> = async () => undefined,
 ): Promise<string | undefined> {
-  const slash = specifier.indexOf("/");
-  const name = specifier.startsWith("@")
-    ? slash < 0
-      ? specifier
-      : (specifier.slice(0, specifier.indexOf("/", slash + 1)) || specifier)
-    : (specifier.split("/")[0] ?? specifier);
+  const name = packageNameOf(specifier);
   const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
   // 前端资源的依赖很复杂：只有"行"才在模块表里，普通依赖得按 node 的解析规则从**当前文件**出发
   // 找到它的 node_modules（工作区链接、pnpm 的虚拟 store、三方包都走这条路），再把包清单的 `exports`

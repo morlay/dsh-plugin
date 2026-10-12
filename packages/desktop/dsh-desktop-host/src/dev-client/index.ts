@@ -182,9 +182,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   let packageIndex: Map<string, string> | undefined;
   const indexEntryOf = async (name: string): Promise<string | undefined> => {
     if (packageIndex === undefined) {
-      packageIndex = await buildPackageIndex(
-        repoRoot === undefined ? [] : [repoRoot],
-      );
+      packageIndex = await buildPackageIndex(repoRoot === undefined ? [] : [repoRoot]);
     }
     return packageIndex.get(name);
   };
@@ -194,10 +192,12 @@ export function apply(ctx: Context, config: Config = {}): void {
   // 只改**裸导入**：URL 结构镜像了文件结构（`/plugins/<pkg>/<v>/src/client/x.ts`），包内的相对导入
     // 原样留着浏览器自己拼就对（`../shared.ts` → 同包同版本的 `src/shared.ts`），改写反而多一层。
     // 裸导入（含 `@pkg/subpath`）用模块表解析到目标包的源文件，再拼成绝对 URL。
-    const rewrite = (specifier: string): Promise<string | undefined> | undefined =>
-      specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")
-        ? undefined
-        : resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
+    const rewrite = async (specifier: string): Promise<string | undefined> => {
+      if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) {
+        return undefined;
+      }
+      return resolveBareUrl(specifier, file, moduleEntryOf, indexEntryOf);
+    };
     try {
       const code = await transpileFile({ file, rewrite });
       res.writeHead(200, {
