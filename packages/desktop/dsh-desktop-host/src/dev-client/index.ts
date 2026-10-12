@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { COMBO_PATH } from "./combo.ts";
 import {
@@ -42,14 +42,6 @@ interface ModuleTable {
   graph(): { entries: readonly { id: string }[] };
   clientPath(id: string): string | undefined;
   fetchBundle(request: Request): Promise<Response>;
-}
-
-/** 是不是"我们自己的源码"（工作区包或上游源码包）——只有这些才 external 成统一路径 URL。 */
-function isOurSource(root: string): boolean {
-  return (
-    root.includes(`${sep}vendor${sep}deepseek-harness${sep}packages${sep}`) ||
-    /[/\\]packages[/\\][^/\\]+[/\\][^/\\]+$/u.test(root)
-  );
 }
 
 export function apply(ctx: Context): void {
@@ -171,7 +163,7 @@ export function apply(ctx: Context): void {
       // 只有落在我们自己目录下（工作区 / 上游源码）才 external，`node_modules` 一律 inline。
       rewrite: async (specifier: string, resolvedId: string) => {
         const owned = await owningPackageOf(resolvedId);
-        if (owned === undefined || !isOurSource(owned.root)) return undefined;
+        if (owned === undefined) return undefined;
         // **同包**引用（client 半 import 自己主出口的符号）必须 inline：external 到自己的出口 URL 会指到
         // client 那半，而符号在主出口里——`does not provide an export named …` 就是这么来的。
         if (owned.name === name) return undefined;
