@@ -213,6 +213,43 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
         .join(", ")})`;
     case "TSTypeLiteral":
       return objectOf(node["members"] as Node[], context);
+    case "TSIndexedAccessType": {
+      // `T['field']`：顺着引用找到 T 的声明，取那个字段的类型（上游也是就地展开）。
+      const object = node["objectType"] as Node;
+      const key = node["indexType"] as Node;
+      const name = object["type"] === "TSTypeReference" ? nameOf(object["typeName"] as Node) : undefined;
+      const declared = name === undefined ? undefined : context.index.get(name);
+      const members = (declared?.node["body"]?.["body"] ?? []) as Node[];
+      // 索引访问也能自引用（`T = T['k']`），所以和引用一样过一遍展开栈。
+      const guard = `${String(name)} ${key["type"] === "TSTypeOperator" ? String(key["operator"]) : String(nameOf(key) ?? key["literal"]?.["value"])}`;
+      if (context.stack.has(guard)) return "z.unknown()";
+      context.stack.add(guard);
+      try {
+      // `T[keyof T]`：取所有字段值类型的 union（`ModelModality` 就是这种写法）。
+      if (key["type"] === "TSTypeOperator" && key["operator"] === "keyof") {
+        const values = members
+          .filter((member) => member["type"] === "TSPropertySignature")
+          .map((member) => zodOf(member["typeAnnotation"]?.["typeAnnotation"] as Node, context));
+        const unique = [...new Set(values)];
+        return unique.length === 1 ? (unique[0] as string) : `z.union([${unique.join(", ")}])`;
+      }
+      const field =
+        nameOf(key) ??
+        (key["type"] === "TSLiteralType"
+          ? String(key["literal"]?.["value"])
+          : typeof key["value"] === "string"
+            ? key["value"]
+            : undefined);
+      const target = members.find((member) => nameOf(member["key"] as Node) === field);
+      if (target === undefined) return `z.unknown() /* 未解析 ${String(name)}[${String(field)}] */`;
+      let value = zodOf(target["typeAnnotation"]?.["typeAnnotation"] as Node, context);
+      if (target["optional"] === true) value += ".optional()";
+      if (target["readonly"] === true) value += ".readonly()";
+      return value;
+      } finally {
+        context.stack.delete(guard);
+      }
+    }
     case "TSTypeReference":
       return referenceOf(node, context);
     case "TSEnumDeclaration":
