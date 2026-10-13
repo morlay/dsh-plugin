@@ -1,30 +1,30 @@
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { clientAssetPlugin, clientBundleSpec, cssInlinePlugins } from "@local/devkit";
 import type { Context } from "@deepseek-ai/cordis";
+import { rolldown, type Plugin, type PluginContext } from "rolldown";
+import { esmExternalRequirePlugin } from "rolldown/plugins";
 import { COMBO_PATH } from "./combo.ts";
+import { startViteDev } from "./serve-vite.ts";
 import {
-  clientAssetPlugin,
-  cssInlinePlugins,
-} from "@local/devkit";
-import {
-  bundleExport,
-  dependencyEntryOf,
+  directImports,
+  resolveInPackage,
   encodePackageName,
+  isCjsOnlySource,
+  packageNameOf,
   exportSegmentOf,
   exportTargetOf,
-  owningPackageOf,
-  parsePluginAddress,
-  resolveInPackage,
   manifestOf,
   packageRootOf,
+  parsePluginAddress,
   PLUGIN_ROUTE,
 } from "./modules.ts";
 
 export const name = "dev-client-bundles";
 
-export const inject = ["webServer", "clientModules"];
+export const inject = ["loader", "webServer"];
 
 
 // 打包器（`@local/devkit` 的现场打包面，连带 rolldown 与它的原生绑定）按需加载：打包产物里的行
@@ -32,6 +32,7 @@ export const inject = ["webServer", "clientModules"];
 interface RouteHost {
   /** 把注入表（boot 数据、引导器、script 行）渲染进一份 index.html 骨架。 */
   renderIndex(html: string): string;
+  registerFallback(handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void): () => void;
   register(route: {
     // `prefix` 匹配 `p` 与 `p/<anything>`（上游 webServer 的原生能力）：按文件寻址要用它。
     kind: "exact" | "prefix";
@@ -40,36 +41,24 @@ interface RouteHost {
   }): () => void;
 }
 
-interface ModuleTable {
-  graph(): { entries: readonly { id: string }[] };
-  clientPath(id: string): string | undefined;
-  fetchBundle(request: Request): Promise<Response>;
-}
 
-/**
- * CJS 包的具名导出补全。
+/** CJS 包的具名导出补全。
  *
  * `react` 这类包的入口是 `module.exports = require('./cjs/…')`，rolldown 静态分析不出具名导出，产物只带
  * `export default require_react()`——而浏览器侧要 `import { Fragment } from "react"`，于是**整个 import
  * 阶段就失败**（入口一行都执行不了）。这里按 CJS 对象的键补一段**静态** `export const`（ESM 的导出必须
  * 静态可枚举，不能 `export * from` 一个运行期对象）。
  */
-async function exportCjsNames(code: string, entry: string): Promise<string> {
-  const alias = "__dshCjs";
-  // 默认导出的**整行**（可能是 `require_react()` 这种调用，不只是标识符）。
-  const head = code.replace(/export default ([^\n]+);?\s*$/u, `const ${alias} = $1;\nexport default ${alias};\n`);
-  if (head === code) return code; // 没有 `export default`（已有具名导出）或形状不认识
-  if (!code.includes("__commonJS")) return code; // 不是 CJS 产物
-  let names: string[];
-  try {
-    // require **这个出口的入口文件**（不是包名）：`react/jsx-runtime` 的键与主包不同。
-    const loaded = createRequire(entry)(entry) as Record<string, unknown>;
-    names = Object.keys(loaded).filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key));
-  } catch {
-    return code; // 宿主侧 require 不了（纯 ESM 包）就保持原样
+/**
+    return [];
   }
-  if (names.length === 0) return code;
-  return `${head}\n${names.map((key) => `export const ${key} = ${alias}.${key};`).join("\n")}\n`;
+  const names = new Set<string>();
+  for (const match of raw.matchAll(/(?:from|require\()\s*["']([^"']+)["']/gu)) {
+    const specifier = match[1] ?? "";
+    if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) continue;
+    names.add(packageNameOf(specifier));
+  }
+  return [...names];
 }
 
 /** 目录判定（找不到就是 false，不抛）。 */
@@ -81,11 +70,70 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
+/** cordis Loader 条目里我们用到的那几项（上游 `client-modules` 用同样几个字段判断行）。 */
+interface LoaderEntry {
+  disabled?: boolean;
+  fiber?: unknown;
+  options?: { name?: string };
+  /** 该 entry 的解析基：Loader 用它解析插件名（上游 `client-modules` 的 `resolveSource` 读的就是这里）。 */
+  parent?: { tree?: { ctx?: { baseUrl?: string } } };
+}
+
+/** 一行 client 声明：包名与它的 client 半源文件。 */
+export interface ClientRow {
+  id: string;
+  clientPath: string;
+}
+
+/**
+ * 行清单：**cordis Loader 的 entries** 里声明了 `dsh.client` 的那些包——**上游 `client-modules` 的同一份
+ * 来源**（"装配的真相"，任何项目/上游都通用），`disabled` 的行在这里被跳过（profile 的开关就此生效）。
+ *
+ * 每行给出**包名**与该包 **client 半的源文件**。包的位置用 **entry 自己的 `parent.tree.ctx.baseUrl`**
+ * 解析（上游 `resolveSource`/`resolveMeta` 用的就是它）——从进程的 cwd 解析不到这些包：pnpm 的严格布局
+ * 下它们只在各自消费者的 node_modules 里，profile 的运行时目录又另有一套。
+ */
+async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Promise<ClientRow[]> {
+  const found: ClientRow[] = [];
+  // `entries()` 是**生成器**（cordis 的 Loader 就是这么给的），要展开。
+  for (const entry of [...loader.entries()]) {
+    if (entry.disabled === true || entry.fiber === undefined) continue;
+    const name = entry.options?.name;
+    if (typeof name !== "string" || name === "") continue;
+    // 虚拟入口（`cordis:include`、`<插件>:<组>`）不是包名。
+    if (name.includes(":")) continue;
+    const baseUrl = entry.parent?.tree?.ctx?.baseUrl;
+    if (baseUrl === undefined) continue;
+    const resolved = await packageRootOf(baseUrl, name);
+    if (resolved === undefined) continue;
+    const clientPath = await clientHalfOf(resolved.root);
+    if (clientPath !== undefined) found.push({ id: name, clientPath });
+  }
+  return found;
+}
+
+/** 包根 → client 半的源文件：清单的 `exports["./client"]` 优先，其次约定路径 `src/client/index.ts`。 */
+async function clientHalfOf(root: string): Promise<string | undefined> {
+  const byExports = await exportTargetOf(root, "client");
+  if (byExports !== undefined) return byExports;
+  const conventional = join(root, "src", "client", "index.ts");
+  return (await isDirectory(join(root, "src", "client"))) ? conventional : undefined;
+}
+
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;
-  const modules = ctx.get("clientModules") as ModuleTable | undefined;
-  if (webServer === undefined || modules === undefined)
-    throw new Error("dev-client-bundles: webServer and clientModules are required services");
+  // 行清单：自己扫（上游 `client-modules` 在 dev patch 里禁用了）。懒建一次——`apply` 不是 async。
+  let rowsCache: ClientRow[] | undefined;
+  // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。
+  const loader = ctx.loader;
+  const rows = async (): Promise<ClientRow[]> => {
+    if (rowsCache !== undefined) return rowsCache;
+    rowsCache = loader === undefined ? [] : await clientRowsOf(loader);
+    process.stderr.write(`[rows] ${String(rowsCache.length)} 行\n`);
+    return rowsCache;
+  };
+  if (webServer === undefined)
+    throw new Error("dev-client-bundles: webServer is a required service");
 
   // 包名 → 包根：交给 node 的解析（`createRequire(from).resolve`），不自己扫目录。
   // 基准是**发起引用的那个文件**——node 的规则就是这样，pnpm 的 node_modules 也按依赖关系摆好了。
@@ -95,7 +143,7 @@ export function apply(ctx: Context): void {
   // 子路径是要另外解的（`oniguruma-parser/parser` 这种）。包根拿到之后，子路径再按 `exports` 落文件。
   const rootOf = async (name: string, from?: string): Promise<string | undefined> => {
     const bases = from === undefined ? [] : [from];
-    fallbackBase ??= modules.clientPath(modules.graph().entries[0]?.id ?? "") ?? undefined;
+    fallbackBase ??= undefined;
     if (fallbackBase !== undefined) bases.push(fallbackBase);
     for (const base of bases) {
       const found = await packageRootOf(base, name);
@@ -104,58 +152,79 @@ export function apply(ctx: Context): void {
     // 兜底：pnpm 的虚拟 store。按出口请求时**没有 importer**（URL 里只有包名），"从谁出发解析"这个信息
     // 已经丢了——嵌套依赖（`oniguruma-parser` 之于 `oniguruma-to-es`）从模块表首行那类基准解析不到，
     // 但 store 里装过就一定能找到。
-    return await findInPnpmStore(name);
-  };
-
-  /** 在 `<root>/node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg>` 里找包（一层 readdir + 前缀匹配）。 */
-  const findInPnpmStore = async (name: string): Promise<string | undefined> => {
-    const store = join(process.cwd(), "node_modules", ".pnpm");
-    let entries: string[];
-    try {
-      entries = await readdir(store);
-    } catch {
-      return undefined;
-    }
-    const prefix = `${encodePackageName(name)}@`;
-    for (const entry of entries) {
-      if (!entry.startsWith(prefix)) continue;
-      const candidate = join(store, entry, "node_modules", name);
-      if (await isDirectory(candidate)) return candidate;
-    }
     return undefined;
   };
 
-  const fallback = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    let response: Response;
-    try {
-      response = await modules.fetchBundle(
-        new Request(new URL(req.url ?? COMBO_PATH, "http://dsh.invalid"), {
-          method: req.method ?? "GET",
-        }),
+
+  /** 兜底：vite 不认的路径直接 404（dev 形态下页面与资源全归它）。 */
+  const fallback = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dev-client-bundles: 没有这条路由\n");
+  };
+
+  // vite dev server（懒建）：客户端资源全权交给它——依赖预打包、CJS→ESM、具名导出、外置 require、共享
+  // chunk、HMR 都是它现成的能力；我们只提供"哪些包是行、源码入口在哪"与页面骨架。
+  let viteHandoff: Awaited<ReturnType<typeof startViteDev>> | undefined;
+  let viteStarting: Promise<void> | undefined;
+  const ensureVite = async (): Promise<void> => {
+    if (viteHandoff !== undefined) return;
+    viteStarting ??= (async () => {
+      const repoRoot = process.cwd();
+      viteHandoff = await startViteDev(ctx, {
+        repoRoot,
+        base: PLUGIN_ROUTE,
+        // 行清单：包名 → client 半的源文件（各 entry 用**自己的 baseUrl** 解析，见 `clientRowsOf`）。
+        rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
+        // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
+        resolvePluginUrl: (url: string) => resolvePluginUrl(url),
+        httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
+      });;
+    })();
+    await viteStarting;
+  };
+
+  /**
+   * 对外 URL → **源文件**。`exports` 优先，**没有该键**时退回物理路径（上游多数包没有 `./client` 出口，
+   * 它们的 client 半就是 `src/client/index.ts`）——中间件的改写与插件的 `resolveId` 共用这一份。
+   */
+  const resolvePluginUrl = async (url: string): Promise<string | undefined> => {
+    const address = parsePluginAddress(url);
+    if (address === undefined) return undefined;
+    const root = await rootOf(address.name);
+    if (root === undefined) return undefined;
+    const manifest = await manifestOf(root);
+    const subpath = address.exportName === "." ? undefined : address.exportName.slice(2);
+    if (subpath !== undefined) {
+      const byExports = await exportTargetOf(root, subpath);
+      if (byExports !== undefined) return byExports;
+      // 物理回退：上游多数包没有 `./client` 出口，它们的 client 半就是 `src/client/index.ts`。
+      const pkg = { name: address.name, version: manifest?.version ?? "", root };
+      return (
+        resolveInPackage(pkg, join("src", subpath, "index.ts")) ??
+        resolveInPackage(pkg, join(subpath, "index.ts")) ??
+        resolveInPackage(pkg, subpath)
       );
-    } catch (error) {
-      ctx.logger.error(error);
-      res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
-      res.end("dev-client-bundles: clientModules.fetchBundle failed\n");
-      return;
     }
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-    res.writeHead(response.status, headers);
-    res.end(req.method === "HEAD" ? undefined : Buffer.from(await response.arrayBuffer()));
+    return await exportTargetOf(root, undefined);
   };
 
   const serve = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET" && req.method !== "HEAD") return fallback(req, res);
-    // 1) 我们自己的入口（生成的装配脚本）。
-    if (await serveAppEntry(req, res)) return;
-    // 2) 统一资源路径：`/plugins/<pkg>/<version>/<export>`——仓库包与三方包同格式。
+    // `/plugins/*` 下的请求交给 vite。**不做任何 URL 改写**：包名、路径与 client 半的入口都由 vite 自己
+    // resolve（它认 node 规则、workspace 软链与 pnpm 布局），我们只提供行清单与页面。
+    try {
+      await ensureVite();
+    } catch (error) {
+      ctx.logger.error(error);
+    }
+    if (viteHandoff?.serve(req, res) === true) return;
+    // 统一资源路径：`/plugins/<pkg>/<version>/<export>`——仓库包与三方包同格式。
     const address = parsePluginAddress(req.url ?? "");
     if (address !== undefined) {
       try {
-        const code = await bundlePackage(address.name, address.exportName);
+        // URL → 一次构建产出的 chunk（`<pkg>@<ver>/<export>.js`，与 URL 同形）。
+        const fileName = await bundleExportFiles(address.name, address.exportName);
+        const code = fileName === undefined ? undefined : await readFile(fileName, "utf8");
         if (code === undefined) {
           res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
           res.end(`dev-client-bundles: 未知包 ${address.name}\n`);
@@ -167,6 +236,7 @@ export function apply(ctx: Context): void {
         });
         res.end(req.method === "HEAD" ? undefined : code);
       } catch (error) {
+        process.stderr.write(`[build] 失败 ${address.name}#${address.exportName}: ${String(error)}\n`);
         ctx.logger.error(error);
         res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
         res.end(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -203,72 +273,142 @@ export function apply(ctx: Context): void {
   // 谁，一眼可查。内存缓存只是省掉重复的打包开销，落盘那份才是排查依据。
   const depsDir = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "deps");
   // 模块表的行 id 集合（`dsh.client` 声明的权威来源）：入口与跨包引用都按它判断该用哪个出口。
-  const rowIds = new Set(modules.graph().entries.map((entry) => entry.id));
+  // 行 id 集合：现在按行清单取（上游 client-modules 已退场）。
+  /**
+   * 一个**出口**一份产物（各包彼此隔离，可并行）。
+   *
+   * 入口按 `exports` 取该出口的目标；跨包引用 external 成对方的同格式 URL（改一个包不必重打别的）。
+   */
   const packageCache = new Map<string, string>();
-  const bundlePackage = async (name: string, exportName: string): Promise<string | undefined> => {
-    // 键是 (包, 出口)：同一个包的不同出口是不同产物。
+  /**
+   * 构建**串行化**。
+   *
+   * 页面首次加载会并行请求几十个出口，而 rolldown 的多实例并发构建撑不住（同发时 500、单发 200）。
+   * 用一个 Promise 链把构建排队：每个出口仍然各自独立产物（隔离、可缓存），只是不并发跑原生绑定。
+   * 键级去重由 `inFlight` 负责——同一个出口的并发请求共用一个构建。
+   */
+  let buildQueue: Promise<unknown> = Promise.resolve();
+  const inFlight = new Map<string, Promise<string | undefined>>();
+  const bundleExportFiles = (name: string, exportName: string): Promise<string | undefined> => {
     const key = `${name}#${exportName}`;
     const cached = packageCache.get(key);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) return Promise.resolve(cached);
+    const running = inFlight.get(key);
+    if (running !== undefined) return running;
+    const task = buildQueue.then(() => buildOne(name, exportName, key));
+    buildQueue = task.catch(() => undefined);
+    inFlight.set(key, task);
+    task.finally(() => inFlight.delete(key));
+    return task;
+  };
+
+  const buildOne = async (name: string, exportName: string, key: string): Promise<string | undefined> => {
     const root = await rootOf(name);
-    if (root === undefined) return undefined;
-    const pkgManifest = await manifestOf(root);
-    const subpathOfExport = exportName === "." ? undefined : exportName.slice(2);
-    // 先按清单的 `exports` 解析（标准路径）；**清单没覆盖**这个子路径时退回**物理文件**
-    // （`pdfjs-dist/web/pdf_viewer.mjs` 就是这种：文件在、`exports` 里没有它的键）。两者都拿不到才算找不到。
-    const entry =
-      (await exportTargetOf(root, subpathOfExport)) ??
-      (subpathOfExport === undefined ? undefined : resolveInPackage({ name, version: pkgManifest?.version ?? "", root }, subpathOfExport)) ??
-      (await dependencyEntryOf(name, fallbackBase ?? root));
-    if (entry === undefined) return undefined;
-    const rawCode = await bundleExport({
-      root,
-      entry,
-      // 跨包引用 → 对方的**同格式** URL。目标包由 rolldown 解析出的**绝对路径**反推：
-      // 只有落在我们自己目录下（工作区 / 上游源码）才 external，`node_modules` 一律 inline。
-      rewrite: async (specifier: string, resolvedId: string) => {
-        const owned = await owningPackageOf(resolvedId);
-        if (owned === undefined) return undefined;
-        // **同包**引用（client 半 import 自己主出口的符号）必须 inline：external 到自己的出口 URL 会指到
-        // client 那半，而符号在主出口里——`does not provide an export named …` 就是这么来的。
-        if (owned.name === name) return undefined;
-        // 目标是 **client 行**时一律引它的 `/client` 出口：只有那半导出 `apply` / `default`（装配要的），
-        // 根出口是宿主半，浏览器里没有那些东西。其余按 specifier 的出口走。
-        const subpath = specifier === owned.name ? undefined : specifier.slice(owned.name.length + 1);
-        // 带子路径的按子路径（`@pkg/default-workspace` → `default-workspace`，那种符号在别的出口里）；
-        // **裸包名**且目标是 client 行时引 `/client`——只有那半导出 `apply` / `default`。
-        // "是不是 client 行"直接用**模块表的行集合**判（`clientPath` 对某些包判不出来，会造成同一个包被
-        // `/client` 与 `/_default` 两条 URL 各加载一次 → 两份实例 → 重复注册）。
-        // 判据是**模块表的行集合**（`dsh.client` 声明的权威来源）——不能用"该包有没有 `./client` 出口"：
-        // `react-dom` 也有 `./client` 子路径（那是另一个入口，不是"行"），那样会被误判、于是把
-        // `createPortal`（在主出口里）引成了 `react-dom/client`，import 直接失败。
-        const segment =
-          subpath === undefined
-            ? rowIds.has(owned.name)
-              ? "client"
-              : exportSegmentOf(".")
-            : exportSegmentOf(`./${subpath}`);
-        return `${PLUGIN_ROUTE}/${encodePackageName(owned.name)}/${owned.version}/${segment}`;
-      },
-      // 样式内联（CSS 是模块语义，必须内联成注入脚本）。**资产目前仍走 data URI**（devkit 的
-      // `clientAssetPlugin` 只这一种模式）——但按需求应改成 URL 引用（`/plugins/<pkg>/<version>/…`），
-      // 需要给它加一个"外置"模式并恢复资产路由。见设计文档的待办。
-      plugins: [...cssInlinePlugins({ name, assets: "threshold" }), clientAssetPlugin()],
-    });
-    const code = await exportCjsNames(rawCode, entry);
-    packageCache.set(key, code);
-    // 落盘路径与**访问 URL 同形**：`<pkg(+/ 转义成 +)>@<version>/<export>.js`，与
-    // `/plugins/<pkg>/<version>/<export>` 一一对应——排查时能直接从 URL 找到文件。
-    const exportSeg = exportName === "." ? "default" : exportName.replace(/^\.\//u, "").replace(/[/@]/gu, "_");
-    const fileName = join(depsDir, `${encodePackageName(name)}@${pkgManifest?.version ?? "unknown"}`, `${exportSeg}.js`);
-    try {
-      await mkdir(dirname(fileName), { recursive: true });
-      await writeFile(fileName, code);
-      ctx.logger.info("dev-client-bundles: 预处理 %s → %s", key, fileName);
-    } catch (error) {
-      ctx.logger.warn("dev-client-bundles: 落盘失败 %s", error);
+    if (root === undefined) {
+      ctx.logger.error("dev-client-bundles: 解析不到包 %s", name);
+      return undefined;
     }
-    return code;
+    const pkgManifest = await manifestOf(root);
+    const subpath = exportName === "." ? undefined : exportName.slice(2);
+    const spec = await clientBundleSpec({ cwd: process.cwd() });
+    const entry =
+      (await exportTargetOf(root, subpath)) ??
+      (subpath === undefined
+        ? undefined
+        : resolveInPackage({ name, version: pkgManifest?.version ?? "", root }, subpath));
+    if (entry === undefined) return undefined;
+    // **分层**（这是这套设计的关键，别搅在一起）：
+    // · 上半截 `esmExternalRequirePlugin`：认**包名**，把 CJS 的 `require("<包名>")` 转成 facade
+    //   （`import * as m from "<包名>"`）。它 `pre` 抢在前面是**对的**——`require` 必须在说明符还叫
+    //   `react` 的时候被处理掉，之后 URL 才不会成为 `require` 的参数（URL 级 require 没人能转，
+    //   浏览器直接报 "in an environment that doesn't expose the require function"）。
+    // · 下半截我们的 `rewritePlugin`：只把过了那层的说明符（含 facade 里的 import）落成
+    //   `/plugins/<pkg>/<version>/<export>` 统一 URL。
+    // **`react` / `react-dom` 这类必须 external**（不能 inline）：inline 会在每份产物里各留一份实例，
+    // hook 分发就冲突（"React 多份自然启动不了"）。
+    // **facade 模块**：做法照 vite 的 dep 预打包（`vite:dep-pre-bundle` 那段）——
+    //   · 跨包引用 → 返回一个**非 external** 的 facade 虚拟模块（inline 进本产物）；
+    //   · facade 内容 `export { default } from "<URL>"; export * from "<URL>";` —— 具名导出由此天然成立
+    //     （cjs 的 `require("react")` 也在这里被 rolldown 换成对 facade 的引用），**不用**手搓具名补全；
+    //   · facade 内部对 URL 的引用 → `external: "absolute"`，浏览器原生按 URL 取。
+    const FACADE_PREFIX = "\0dsh-facade:";
+    const rewritePlugin: Plugin = {
+      name: "dsh-client-external",
+      async resolveId(this: PluginContext, source: string, importer: string | undefined) {
+        // facade 里那条指向 URL 的 import：external 且是绝对路径。
+        if (source.startsWith(`${FACADE_PREFIX}url:`)) {
+          return { id: source.slice(FACADE_PREFIX.length + "url:".length), external: "absolute" };
+        }
+        if (importer === undefined || source.startsWith(".") || source.startsWith("/")) return null;
+        const specifier = packageNameOf(source);
+        if (specifier === "") return null;
+        const targetRoot = await rootOf(specifier, entry);
+        if (targetRoot === undefined) return null;
+        const targetManifest = await manifestOf(targetRoot);
+        if (targetManifest === undefined) return null;
+        const subpath = source === specifier ? undefined : source.slice(specifier.length + 1);
+        const segment = subpath === undefined ? exportSegmentOf(".") : exportSegmentOf(`./${subpath}`);
+        const url = `${PLUGIN_ROUTE}/${encodePackageName(targetManifest.name)}/${targetManifest.version}/${segment}`;
+        // **CJS-only 的包走 facade**（它的 `require` 要在同一趟里被换成对 facade 的引用，并且 facade 的
+        // `export { default } from X; export * from X;` 把 CJS 的具名导出补齐）；
+        // **ESM 的包直接 external 成 URL**（它本来就有具名导出，套 facade 反而会因为缺 default 报错）。
+        const targetEntry = await exportTargetOf(targetRoot, subpath);
+        const isCjs = targetEntry !== undefined && isCjsOnlySource(await readFile(targetEntry, "utf8"));
+        return isCjs ? { id: `${FACADE_PREFIX}${url}` } : { id: url, external: true };
+      },
+      load(id: string) {
+        if (!id.startsWith(FACADE_PREFIX) || id.startsWith(`${FACADE_PREFIX}url:`)) return null;
+        const url = id.slice(FACADE_PREFIX.length);
+        const modulePath = `${FACADE_PREFIX}url:${url}`;
+        return `export { default } from ${JSON.stringify(modulePath)};\nexport * from ${JSON.stringify(modulePath)};\n`;
+      },
+    };
+    // **预扫**：本入口（及其直接依赖）里哪些包是 **CJS-only**。
+    //
+    // 两截插件只能有一个赢家，所以把 external 的归属分清楚：
+    // · CJS-only 的包（`react` 这类，同步 `require`，必须转 import）→ 交给官方插件（它认包名）；
+    // · 其余（我们的 ESM 源码、纯 ESM 的依赖）→ 留给我们的 rewrite（它落成统一路径 URL）。
+    const cjsOnly: string[] = [];
+    for (const dep of await directImports(entry)) {
+      const depRoot = await rootOf(dep, entry);
+      if (depRoot === undefined) continue;
+      const depManifest = await manifestOf(depRoot);
+      const depEntry = await exportTargetOf(depRoot, undefined);
+      if (depManifest === undefined || depEntry === undefined) continue;
+      const raw = await readFile(depEntry, "utf8");
+      if (isCjsOnlySource(raw)) cjsOnly.push(dep);
+    }
+    process.stderr.write(`[build] ${key} entry=${entry}\n`);
+    const build = await rolldown({
+      input: entry,
+      cwd: root,
+      platform: "browser",
+      resolve: { conditionNames: spec.conditionNames },
+      transform: { define: spec.define },
+      treeshake: false,
+      plugins: [
+        rewritePlugin,
+        ...cssInlinePlugins({ name, assets: "threshold" }),
+        clientAssetPlugin(),
+      ],
+    });
+    try {
+      const { output } = await build.generate({ format: "esm", exports: "auto", codeSplitting: false });
+      const chunk = output.find((item) => item.type === "chunk");
+      if (chunk === undefined || chunk.type !== "chunk") return undefined;
+      const fileName = join(
+        depsDir,
+        `${encodePackageName(name)}@${pkgManifest?.version ?? "unknown"}`,
+        `${exportSegmentOf(exportName)}.js`,
+      );
+      await mkdir(dirname(fileName), { recursive: true });
+      await writeFile(fileName, chunk.code);
+      packageCache.set(key, fileName);
+      process.stderr.write(`[build] ok ${key} → ${fileName}\n`);
+      return fileName;
+    } finally {
+      await build.close();
+    }
   };
 
   async function clientEntryUrl(id: string): Promise<string | undefined> {
@@ -278,193 +418,27 @@ export function apply(ctx: Context): void {
     if (manifest === undefined) return undefined;
     const target = await exportTargetOf(root, "client");
     if (target === undefined) return undefined;
-    // 统一路径：与三方依赖同格式。
-    return `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/client`;
+    // **先走 vite 的原生形态**：入口里用**包名**（bare），由 vite 的解析 + 我们插件的 resolveId 落到源码。
+    return manifest.name;
   }
 
 
-  // 自研 app 入口：一个 `type="module"` 的 ESM 模块，按文件 import 每个 client 行的源码入口。
-  // 上游那套引导器是 classic script + `__ModuleLoader__.load` 工厂（`system.ts` 的默认加载钩子），
-  // 与按文件 ESM 互斥——所以这里不再让它加载资源，只**读**它的行清单（`graph().entries`）当列表。
-  const APP_ENTRY_PATH = "/plugins/.app/entry.js";
-  const serveAppEntry = async (req: IncomingMessage, res: ServerResponse): Promise<boolean> => {
-    if ((req.url ?? "").split("?")[0] !== APP_ENTRY_PATH) return false;
-    const rows = modules
-      .graph()
-      .entries.map((entry) => entry.id)
-      .filter((id) => id !== "client-modules");
-    // **按 `dsh.client.inject` 排序**：那是每个 client 行在清单里声明的依赖（"我生效前谁得先就绪"）。
-    // 平铺 import 是不够的——提供服务的行还没加载，用它的行就生效了（`ui-layout` 缺 theme/locale/shortcuts
-    // 就是这么来的：它们正是它 inject 里那几行提供的）。这里做一次拓扑排序，依赖先行。
-    const depsOfRow = async (id: string): Promise<string[]> => {
-      const root = await rootOf(id);
-      if (root === undefined) return [];
-      const manifest = await manifestOf(root);
-      const client = (manifest as { dsh?: { client?: { inject?: unknown } } } | undefined)?.dsh?.client;
-      const inject = client?.inject;
-      return Array.isArray(inject) ? inject.filter((name): name is string => typeof name === "string") : [];
-    };
-    const ordered: string[] = [];
-    const visiting = new Set<string>();
-    const visitRow = async (id: string): Promise<void> => {
-      if (ordered.includes(id) || visiting.has(id)) return;
-      visiting.add(id);
-      for (const dep of await depsOfRow(id)) await visitRow(dep);
-      visiting.delete(id);
-      if (rows.includes(id)) ordered.push(id);
-    };
-    for (const row of rows) await visitRow(row);
-    // 依赖里可能有不在行集里的包（不该出现），补在末尾以免漏掉它的服务。
-    for (const dep of rows) if (!ordered.includes(dep)) ordered.push(dep);
-    const ids = ordered;
-    // 自研装配：建一个客户端 Context，按模块表的顺序调用每个 client 行的 `apply`
-    // （每个 client 入口就是这样导出的：`export { apply, inject }`）。上游那套是 classic script +
-    // `__ModuleLoader__.load` 工厂，加载与装配绑在一起；这里把两件事分开——ESM 负责加载，这段负责装配。
-    // cordis 客户端的根出口 URL（统一路径：包/版本/出口）。
-    const cordisRoot = await rootOf("@deepseek-ai/cordis", fallbackBase);
-    const cordisManifest = cordisRoot === undefined ? undefined : await manifestOf(cordisRoot);
-    const cordisUrl =
-      cordisManifest === undefined
-        ? undefined
-        : `${PLUGIN_ROUTE}/${encodePackageName(cordisManifest.name)}/${cordisManifest.version}/_default`;
-    const imports: string[] = [];
-    const names: string[] = [];
-    let index = 0;
-    for (const id of ids) {
-      const url = await clientEntryUrl(id);
-      if (url === undefined) continue;
-      const alias = `m${String(index)}`;
-      index += 1;
-      imports.push(`import * as ${alias} from ${JSON.stringify(url)};`);
-      names.push(alias);
-    }
-    const lines: string[] = [
-      "// dev 客户端入口：按出口 ESM 直访 + 本地装配（改哪看哪）。",
-      // cordis 也走统一路径（它的根出口）。
-      `import { Context } from ${JSON.stringify(cordisUrl ?? "/plugins/@deepseek-ai+cordis/0/_default")};`,
-      ...imports,
-      "",
-      // 执行到哪一步写进全局：agent-browser 的 console 抓取不稳，用 eval 读这个更可靠。
-      'const stage = (value) => { globalThis.__DSH_STAGE__ = value; console.log("[dsh]", value); };',
-      'stage("entry: modules loaded", ' + String(names.length) + ");",
-      "const ctx = new Context();",
-      // cordis 把 fiber 内的失败交给 `ctx.logger.error`（`fiber.ts:126`），而它在浏览器里默认不落 console
-      // ——这就是"页面空白却无报错"的原因。先把它接到 console，装配期的失败才看得见。
-      'const originalError = ctx.logger?.error?.bind(ctx.logger);',
-      "if (ctx.logger !== undefined) {",
-      "  ctx.logger.error = (...args) => {",
-      '    console.error("[dsh] cordis error", ...args);',
-      "    if (originalError !== undefined) originalError(...args);",
-      "  };",
-      "}",
-      "globalThis.__DSH_CTX__ = ctx;",
-      'console.log("[dsh] entry: context created");',
-      // 每个 client 行导出 `{ apply, inject }`——**交给 cordis 的 plugin 机制**装配，不要手工调 apply：
-      // 它按 `inject` 等依赖就绪、按声明顺序生效，手工调用会在服务还没注册时就去用（`undefined.register`）。
-      `const ROW_IDS = ${JSON.stringify(ids)};`,
-      `for (const [index, mod] of [${names.join(", ")}].entries()) {`,
-      // client 行的导出有两种形状：`{ apply, inject }`（多数）与 `{ default: X }`（如
-      // `dsh-client-shortcuts` 导出 `ShortcutsService as default`）。两种都要认。
-      // 两种形状：`{ apply, inject }` 与 `{ default: X }`（如 `dsh-client-shortcuts` 导出
-      // `ShortcutsService as default`）。整块交给 cordis——**不要**自己拼 `{ apply: factory.apply }`：
-      // default 形状的 `factory` 上没有 `apply`，那样会取到 `Function.prototype.apply`（
-      // `Function.prototype.apply was called on #<Object>…`）。
-      '  const plugin = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);',
-      '  if (plugin === undefined) { console.warn("[dsh] skip (no apply/default)", index); continue; }',
-      "  try {",
-      '    console.log("[dsh] plugin", index, ROW_IDS[index] ?? plugin.name ?? "-", "inject:", JSON.stringify(plugin.inject ?? []));',
-      '    ctx.plugin(plugin, { name: plugin.name ?? "client-" + index });',
-      "  } catch (error) {",
-      '    console.error("[dsh] plugin failed at", index, error);',
-      "  }",
-      "}",
-      'console.log("[dsh] entry: plugins registered");',
-      // 最后一步是**挂载**：`ui-renderer` 只提供 `uiRenderer.mount` 能力，调用它的是 boot kernel
-      // （上游 `mountClient` 就一句话：等 `uiRenderer` 就绪后在 effect 里挂进容器）。这里做同一件事。
-      'const container = document.getElementById("app");',
-      'if (container === null) throw new Error("[dsh] entry: #app 挂载点不存在");',
-      // 挂载要等 **'root' slot 真的注册**：`layout` 服务在注册之前就已提供（`ui-layout` 的 apply 里
-      // `provide('layout')` 在 `slots.register({name:'root'})` 之前），所以等它不够——那时挂载会渲染
-      // 一棵空树，之后 slot 注册也不会补渲。
-      // 注意 `ctx.slots` 此刻可能是 undefined（它由 ui-renderer 的 apply 提供），直接取会抛错、
-      // 让这个 Promise 永不 resolve。用可选链 + 上限轮询（约 10 秒）。
-      'for (let i = 0; i < 600 && (ctx.slots?.entries?.("root")?.length ?? 0) === 0; i += 1) {',
-      "  await new Promise((resolve) => setTimeout(resolve, 16));",
-      "}",
-      'console.log("[dsh] entry: root slot ready");',
-      'await ctx.inject(["uiRenderer"], (scope) => {',
-      '  scope.effect(() => scope.uiRenderer.mount(container), "dev entry: application mount");',
-      "});",
-      // 诊断：`ui-layout` 注册 'root' slot，它的 inject 是这几个服务；谁没就绪就说明缺哪一环。
-      'for (const name of ["slots", "theme", "locale", "shortcuts", "uiRenderer", "connection", "typert", "remote", "configForms"]) {',
-      '  console.log("[dsh] service", name, ctx[name] === undefined ? "缺" : "有");',
-      "}",
-      'console.log("[dsh] entry: mounted");',
-    ]
-    res.writeHead(200, {
-      "content-type": "text/javascript; charset=utf-8",
-      "cache-control": "no-store",
-    });
-    res.end(req.method === "HEAD" ? undefined : `${lines.join("\n")}\n`);
-    return true;
-  };
-
-  /**
-   * 去掉上游客户端那一套的注入：引导器（`<script>` / `<link rel=preload>` 里的
-   * `plugins/??<id>/client.js` 引用）、内联的 `__DSH_BOOT__` 与 `__ModuleLoader__` 引导器。
-   *
-   * 资源的加载改由我们的入口按**统一路径**（`/plugins/<pkg>/<version>/<export>`）import；上游那套是
-   * classic script + 工厂注册（`__ModuleLoader__.load`），与 ESM 互斥，留着只会引发无用请求与报错。
-   * 按**标签**扫而不是按 `<script>` 扫：preload 是 `<link>`，之前就是这里漏了。
-   */
-  const upstreamMarkers = ["plugins/??", "__DSH_BOOT__", "__ModuleLoader__"];
-  const stripUpstreamBoot = (html: string): string => {
-    let out = "";
-    let cursor = 0;
-    for (;;) {
-      const candidates = ["<script", "<link"]
-        .map((tag) => html.indexOf(tag, cursor))
-        .filter((index) => index >= 0);
-      if (candidates.length === 0) break;
-      const start = Math.min(...candidates);
-      const tag = html.startsWith("<script", start) ? "script" : "link";
-      const end = html.indexOf(">", html.indexOf(`${tag === "script" ? "</script" : ""}`, start) + 1);
-      // `<link …>` 以 `>` 结尾；`<script …>…</script>` 要连内容一起吃掉（内联引导器就在里面）。
-      const close = tag === "script" ? html.indexOf("</script>", start) : -1;
-      const stop = close < 0 ? end + 1 : close + "</script>".length;
-      const block = html.slice(start, stop);
-      const upstream = upstreamMarkers.some((marker) => block.includes(marker));
-      out += html.slice(cursor, start) + (upstream ? "" : block);
-      cursor = stop;
-    }
-    return out + html.slice(cursor);
-  };
-
-  const serveIndex = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      res.writeHead(405);
-      res.end();
-      return;
-    }
+  const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    process.stderr.write(`[serveAny] ${req.method ?? "?"} ${req.url ?? ""}\n`);
     try {
-      const rendered = stripUpstreamBoot(webServer.renderIndex(indexHtml));
-      const html = `${rendered}\n<script type="module" src="${APP_ENTRY_PATH}"></script>\n`;
-      res.writeHead(200, {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-      });
-      res.end(req.method === "HEAD" ? undefined : html);
+      await ensureVite();
+      process.stderr.write(`[serveAny] vite=${String(viteHandoff !== undefined)}\n`);
     } catch (error) {
+      process.stderr.write(`[serveAny] vite 启动失败: ${String(error)}\n`);
       ctx.logger.error(error);
-      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-      res.end(`${error instanceof Error ? error.message : String(error)}\n`);
     }
+    // 先交给 vite（页面、入口、依赖预打包产物、HMR 通道都是它的）；它不认的再回上游兜底。
+    if (viteHandoff !== undefined && viteHandoff.serve(req, res)) return;
+    return fallback(req, res);
   };
-  ctx.effect(() => webServer.register({ kind: "exact", path: "/", handler: serveIndex }), "dev-client-bundles: index");
-  ctx.effect(
-    () => webServer.register({ kind: "exact", path: "/index.html", handler: serveIndex }),
-    "dev-client-bundles: /index.html",
-  );
+  // 用与上游同一个 API 占**兜底位**（`registerFallback`）：页面、入口、依赖预打包产物与 HMR 通道都是
+  // vite 的；上游 `frontend-static` 已由 `dev-web-handover.patch` 让出这个位置。
+  ctx.effect(() => webServer.registerFallback(serveAny), "dev-client-bundles: vite 兜底");
 
   ctx.effect(
     // `prefix /plugins`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）都从

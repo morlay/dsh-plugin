@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import { clientBundleSpec } from "@local/devkit";
 import { rolldown, type Plugin, type PluginContext } from "rolldown";
+import { esmExternalRequirePlugin } from "rolldown/plugins";
 
 
 // 开发态的 client 资源按**文件**寻址：`/plugins/{pkgName}/{version}/{filepath}`。仓库自己的包都是 TS/ESM
@@ -173,9 +174,20 @@ export async function exportTargetOf(
   try {
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
       exports?: Record<string, unknown>;
+      main?: string;
+      module?: string;
     };
     const key = subpath === undefined ? "." : `./${subpath}`;
-    const entry = manifest.exports?.[key];
+    // `exports` 的三种形状（都要认）：
+    // · 以 `.` 开头的键映射（标准）→ 取 `exports["."]` / `exports["./sub"]`；
+    // · **条件对象本身**（`{ development, default }`，`mdast-util-*` 就是这形状）→ 它**就是**根出口；
+    // · 没有 `exports` → 按 node 规则退回 `module` → `main`（老包如 `fortune-sheet`）。
+    const table = manifest.exports;
+    const isSubpathMap =
+      table !== undefined && Object.keys(table).some((name) => name === "." || name.startsWith("./"));
+    const entry =
+      (isSubpathMap ? table?.[key] : key === "." ? table : undefined) ??
+      (key === "." ? (manifest.module ?? manifest.main) : undefined);
     const target =
       typeof entry === "string"
         ? entry
@@ -414,20 +426,22 @@ export async function bundleExport(options: {
   /** rolldown 插件（样式内联等）。 */
   plugins?: Plugin[];
 }): Promise<string> {
-  const rewritePlugin = {
+  const rewritePlugin: Plugin = {
     name: "dsh-client-external",
     async resolveId(this: PluginContext, source: string, importer: string | undefined) {
       if (importer === undefined) return null;
       if (source.startsWith(".")) return null;
-      // 解析交给 rolldown（`this.resolve`）：它认 `exports` 的 `import` 条件、认 `type: "module"`、
-      // 认 `main`，与打包本身同一套规则——`createRequire` 是 CJS 视角，解不出只有 `import` 条件的包。
+      // **先**按说明符改写，**再**管解析结果：跨包引用一律 external 成统一路径 URL（这是本层的核心约定）。
+      // 反过来先判 `this.resolve` 的话，解析成 external 的说明符（例如 vendor 里 cordis 依赖的
+      // `@deepseek-ai/cosmokit`）会在改写之前就 return，产物里留下浏览器认不了的裸包名。
       const resolved = await this.resolve(source, importer, { skipSelf: true });
-      if (resolved === null || resolved.external === true) return null;
-      const url = await options.rewrite(source, resolved.id);
-      // 我们自己的包（工作区 / 上游源码）external 成统一路径 URL；`node_modules` 里的依赖 inline 进产物。
-      return url === undefined ? null : { id: url, external: true };
+      const url = await options.rewrite(source, resolved?.id ?? source);
+      if (url !== undefined) return { id: url, external: true };
+      // 改写不出 URL 的（包内相对导入、同包引用）交给 rolldown 自己解析，于是 inline 进这一份产物。
+      return null;
     },
   };
+
   // 浏览器替身（`process.env` / `import.meta` 空壳）与条件名，取 devkit 的同一份约定：
   // CJS 依赖常读 `process.env.NODE_ENV`，不替掉在浏览器里直接 `ReferenceError: process is not defined`。
   const spec = await clientBundleSpec({ cwd: options.root });
@@ -440,7 +454,26 @@ export async function bundleExport(options: {
     // **不摇树**：一份产物按 URL 缓存、由多处按需取用（`pdf_viewer.mjs` 的 `TextLayerBuilder` 就是被消费方
     // 具名 import 的），摇掉没用到的导出会让这些 import 在运行期直接失败。
     treeshake: false,
-    plugins: [...(options.plugins ?? []), rewritePlugin],
+    plugins: [
+      // **顺序有讲究**：`esmExternalRequirePlugin` 会生成 facade（`import * as m from "<specifier>"`），
+      // 而那个说明符还得由我们的 `rewritePlugin` 换成统一路径 URL——所以 rewrite 必须排在它**前面**
+      // （内置插件把 `resolveId` 的 order 设成 `pre`，同序则按注册先后）。
+      rewritePlugin,
+      // CJS 依赖里的外部 `require()`：rolldown **默认保留 require 语义**（文档 "Bundling CJS → require
+      // external modules"），浏览器没有 `require`，产物一跑就报 "require … in an environment that doesn't
+      // expose the require function"。这个内置插件把外置 require 转成 ESM import。
+      esmExternalRequirePlugin({
+        // 只认两类：`node:` 内置，和**已经是我们统一路径的 URL**。
+        //
+        // 范围不能放成"所有非相对说明符"：它的 `resolveId` 带 `pre`（Vite 兼容），那样会抢在我们 rewrite
+        // 之前把跨包引用标成外部，产物里留下裸包名（`Failed to resolve module specifier`）。
+        // 而 URL 这条是必需的：CJS 模块对**外置依赖**的 `require("<url>")` 里，`<url>` 是 external id，
+        // rolldown 不会再走 `resolveId`，只有这个插件能把 `require` 转成 `import`。
+        external: [/^node:/u, /^\/plugins\//u],
+        skipDuplicateCheck: true,
+      }),
+      ...(options.plugins ?? []),
+    ],
   });
   try {
     const { output } = await build.generate({ format: "esm", codeSplitting: false });
@@ -461,4 +494,32 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * 目标入口是不是 **CJS-only**——决定跨包引用该交给谁处理。
+ *
+ * CJS 对外置依赖是**同步** `require`，必须由 `esmExternalRequirePlugin` 认包名转成 import（转完那份
+ * facade 的 `import` 说明符再由我们的 rewrite 落成统一 URL）。**不能** inline：`react` 这类被多处引用，
+ * inline 会在每份产物里各留一份实例，hook 分发就冲突。
+ */
+export function isCjsOnlySource(source: string): boolean {
+  return source.includes("module.exports") || source.includes("exports.");
+}
+
+/** 入口文件里出现的**裸导入**包名（近似：只看说明符，不展开语法树）——预扫本入口依赖了哪些包。 */
+export async function directImports(file: string): Promise<string[]> {
+  let raw: string;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch {
+    return [];
+  }
+  const names = new Set<string>();
+  for (const match of raw.matchAll(/(?:from|require\()\s*["']([^"']+)["']/gu)) {
+    const specifier = match[1] ?? "";
+    if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) continue;
+    names.add(packageNameOf(specifier));
+  }
+  return [...names];
 }

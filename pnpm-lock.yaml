@@ -297,6 +297,9 @@ importers:
       lightningcss:
         specifier: ^1.32.0
         version: 1.33.0
+      playwright:
+        specifier: ^1.64.0
+        version: 1.64.0
       rolldown:
         specifier: ^1.2.8
         version: 1.2.13
@@ -588,6 +591,9 @@ importers:
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5
+      playwright:
+        specifier: ^1.64.0
+        version: 1.64.0
 
   packages/desktop/dsh-desktop-shell:
     dependencies:

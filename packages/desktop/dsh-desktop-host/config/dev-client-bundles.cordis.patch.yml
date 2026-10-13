@@ -8,3 +8,16 @@
 - insert:
     - id: dev-client-bundles
       name: "../src/dev-client/index.ts"
+
+# `web-runtime` 挂着 `frontend-static`（服务**构建产物**里的 index.html，占兜底位）——dev 形态下页面与资源
+# 全归 vite，这一行连同它挂的兜底一起用不到；而且兜底位只有一个，留着它 vite 就没位置可占。
+- id: web-runtime
+  disabled: true
+
+# 上游那两行在 dev 形态下完全用不到：`client-modules`（模块表：行 roster、combo 打包、工厂引导器）与
+# `client-hmr`（热替换）都由我们这套替代——页面、入口、资源与依赖预打包改由 vite dev server 负责，
+# 热更新也走 vite 的通道。留着它们只会争兜底位/前缀位、并往页面注入我们不需要的引导器。
+- id: modules
+  disabled: true
+- id: client-hmr
+  disabled: true
