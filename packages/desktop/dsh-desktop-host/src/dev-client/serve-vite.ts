@@ -61,6 +61,9 @@ export async function startViteDev(
     const fromEnv = process.env["PORT"];
     return fromEnv === undefined ? undefined : Number(fromEnv);
   })();
+  // **当前**实例：vite 自己 `restart()` 后会建一个新 server，插件的 `configureServer` 再回调过来。
+  // 不跟这个引用的话，重启之后路由还指着已关闭的旧实例（请求开始成片失败，宿主也可能因此退出）。
+  let current: ViteDevServer | undefined;
   const server: ViteDevServer = await createServer({
     // **root 是整个仓库**：这样 vite 能服务仓库里任何源文件（`/@fs/…` 与依赖解析都要它）；页面与入口
     // 仍是 `app-boot/index.html` 与 `app-boot/index.ts`，由下面那条重写把 `/` 指过去。
@@ -131,9 +134,13 @@ export async function startViteDev(
         repoRoot,
         rows: () => rowsOf(options.rows),
         resolvePluginUrl: options.resolvePluginUrl,
+        onServer: (devServer) => {
+          current = devServer;
+        },
       }),
     ],
   });
+  current = server;
   ctx.logger.info("dev-client: vite dev server 就绪（root=%s）", repoRoot);
   /** 页面入口（相对 root 的路径）：`/` 重写到这里，HTML 里的 `./index.ts` 也随之解析到 app-boot 下。 */
   const pageEntry = "/packages/desktop/dsh-desktop-host/app-boot/index.html";
@@ -145,10 +152,17 @@ export async function startViteDev(
     // 它要服务的形态很多（虚拟模块 `/@id`、取文件 `/@fs`、预打包 `/node_modules/.vite/deps`、HMR
     // 通道），白名单只会不断漏。
     if ((req.url ?? "").startsWith(`${base}/`)) return false;
-    server.middlewares(req, res, () => {
-      if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-      if (!res.writableEnded) res.end("dev-client: vite 没有这条路由\n");
-    });
+    // 单次请求出错不该把宿主带走：vite 的 middlewares 里任何未捕获异常都只记一条 500。
+    try {
+      ;(current ?? server).middlewares(req, res, () => {
+        if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        if (!res.writableEnded) res.end("dev-client: vite 没有这条路由\n");
+      });
+    } catch (error) {
+      ctx.logger.error(error);
+      if (!res.headersSent) res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      if (!res.writableEnded) res.end(`dev-client: vite 处理失败：${String(error)}\n`);
+    }
     return true;
   };
   return {

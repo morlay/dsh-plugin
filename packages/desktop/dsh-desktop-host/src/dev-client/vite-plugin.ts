@@ -31,6 +31,8 @@ export interface ClientRowsPluginOptions {
    * 由它把 URL 换成 vite 能继续处理的文件路径——浏览器请求那条路由时也是同一套解析。
    */
   resolvePluginUrl?: (url: string) => Promise<string | undefined>;
+  /** 每次 dev server 建好时回调（含 vite 自己 `restart()` 后的新实例）——调用方据此切换当前实例。 */
+  onServer?: (server: ViteDevServer) => void;
 }
 
 /**
@@ -175,6 +177,7 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
     },
     configureServer(devServer) {
       server = devServer;
+      options.onServer?.(devServer);
     },
   };
 }

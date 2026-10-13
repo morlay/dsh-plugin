@@ -188,6 +188,8 @@ export function apply(ctx: Context): void {
   // chunk、HMR 都是它现成的能力；我们只提供"哪些包是行、源码入口在哪"与页面骨架。
   let viteHandoff: Awaited<ReturnType<typeof startViteDev>> | undefined;
   let viteStarting: Promise<void> | undefined;
+  /** 地址只印一次（vite 就绪那一刻，跟它自己的 ready 提示一个意思）。 */
+  let announced = false;
   const ensureVite = async (): Promise<void> => {
     if (viteHandoff !== undefined) return;
     viteStarting ??= (async () => {
@@ -203,6 +205,11 @@ export function apply(ctx: Context): void {
       });;
     })();
     await viteStarting;
+    if (!announced) {
+      announced = true;
+      const port = process.env["PORT"] ?? "3080";
+      process.stdout.write(`\n  ➜  Local:   http://127.0.0.1:${port}/\n\n`);
+    }
   };
 
   /**
@@ -257,6 +264,9 @@ export function apply(ctx: Context): void {
   // 用与上游同一个 API 占**兜底位**（`registerFallback`）：页面、入口、依赖预打包产物与 HMR 通道都是
   // vite 的；上游 `frontend-static` 那一行（挂在 `web-runtime` 上）在 dev patch 里已停用。
   ctx.effect(() => webServer.registerFallback(serveAny), "dev-client-bundles: vite 兜底");
+  // 启动即预热：vite dev server 起来那一刻打出访问地址（跟它自己的 ready 提示一个意思），
+  // 也把首屏要用的模块图先备好——懒建会让第一条请求等它冷启动。
+  void ensureVite().catch((error: unknown) => { ctx.logger.error(error); });
   // vite 的 HMR WebSocket：上游对**未注册**的升级请求会直接 destroy socket（vite 就握不上手），所以在这
   // 里给它一条同名路由——handler 什么都不做，只让 socket 活着，vite 自己挂在 `upgrade` 上的处理器完成握手。
   ctx.effect(
