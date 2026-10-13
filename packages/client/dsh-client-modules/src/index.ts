@@ -579,10 +579,17 @@ export function apply(ctx: Context): void {
         process.stderr.write(`[serveAny] 页面骨架读不到：${join(appRoot, "index.html")}\n`);
         return fallback(req, res);
       }
-      const injected = html.replace(
-        "</head>",
-        `  <script type="module" src="/@vite/client"></script>\n  </head>`,
-      );
+      try {
+        await ensureVite();
+      } catch (error) {
+        ctx.logger.error(error);
+      }
+      // HMR 客户端只在那条通道真的挂着时才注入（无端口形态没有同源的 http server，注了只会报
+      // `WebSocket closed without opened.`）。
+      const injected =
+        viteHandoff?.hmr === true
+          ? html.replace("</head>", `  <script type="module" src="/@vite/client"></script>\n  </head>`)
+          : html;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
       res.end(req.method === "HEAD" ? undefined : injected);
       return;

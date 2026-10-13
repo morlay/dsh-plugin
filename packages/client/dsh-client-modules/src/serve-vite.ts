@@ -35,6 +35,8 @@ export const HMR_PATH = "/__dsh_hmr";
 type HmrServer = NonNullable<Extract<NonNullable<ServerOptions["hmr"]>, { server?: unknown }>["server"]>;
 
 export interface ViteHandoff {
+  /** 有没有挂 HMR（无端口形态没有同源的 http server 可挂，见 `hmr: false`）——页面决定要不要注入客户端。 */
+  hmr: boolean;
   /** 把 `/plugins/*` 的请求交给 vite（返回 true 表示它接管了）。 */
   serve: (req: IncomingMessage, res: ServerResponse) => boolean;
   /** 让 vite 渲染一份 HTML（插件的 `transformIndexHtml` 会在这里注入入口 script）。 */
@@ -82,6 +84,8 @@ export async function startViteDev(
     define: {
       "process.env.NODE_ENV": JSON.stringify(process.env["NODE_ENV"] ?? "development"),
       "process.env": "{ env: {} }",
+      // 裸 `process` 同样要给空壳（逐文件服务的源码里也会读它）。
+      process: "{ env: {} }",
     },
     publicDir: false,
     appType: "spa",
@@ -177,6 +181,7 @@ export async function startViteDev(
   return {
     serve,
     transformHtml: async (html: string) => await server.transformIndexHtml(`${base}/`, html),
+    hmr: options.httpServer !== undefined,
   };
 }
 

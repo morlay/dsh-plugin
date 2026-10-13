@@ -9,7 +9,7 @@
  * 两者产出的地址同构（`@client-modules/<pkg>@<version>/<file>`），所以运行时按 URL 取即可。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
@@ -182,6 +182,31 @@ export function urlOf(
 }
 
 /**
+ * 依赖里的 `process.env`。
+ *
+ * 顶层的 `define` 只作用于我们的源码面：`node_modules` 里的包直接进产物，而 `immer@10` 的
+ * `dist/immer.mjs` 在模块顶层就读 `process.env.NODE_ENV`——浏览器里没有 `process`，一个
+ * `process is not defined` 会把整份产物带下去。
+ *
+ * **只替换 `process.env` 系列**：裸的 `process` 不能碰——它可能只是个普通标识符（`zod` 里就有一个叫
+ * `process` 的函数，替换掉直接把源码变成语法错误）。
+ */
+function browserProcessPlugin(): PluginOption {
+  const replace = (code: string): string =>
+    code
+      .replaceAll(/\bprocess\.env\.NODE_ENV\b/gu, JSON.stringify("development"))
+      .replaceAll(/\bprocess\.env\b/gu, "({ env: {} })");
+  return {
+    name: "dsh-browser-process",
+    enforce: "pre",
+    transform(code: string) {
+      if (!code.includes("process.env")) return null;
+      return { code: replace(code), map: null };
+    },
+  };
+}
+
+/**
  * CJS 入口的**具名导出包装**（`react` 这类）。
  *
  * `react` 的入口是 `module.exports = require('./cjs/react.development.js')`，rolldown 静态分析不出具名
@@ -304,6 +329,7 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   // **同一份配置**：CSS / 资产 / `?raw` / node 内置替身与 dev 用的是同一个插件；只有 alias 由调用方给。
   // 资产走 `threshold`：产品是我们自己落盘、自己服务的，大图产出独立文件即可，不必塞进 JS 里当 base64。
   const plugins: PluginOption[] = [
+    browserProcessPlugin(),
     cssInlinePlugins({ name: key, assets: "threshold" }),
     clientAssetPlugin({ assets: "threshold" }),
     // 外置**全部裸说明符**（`node:*` 除外——它走 `clientAssetPlugin` 的浏览器替身）。
@@ -333,7 +359,12 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // 资产的 URL 要落在**这个包自己的地址前缀**下（`/@client-modules/<pkg>@<ver>/assets/…`）：产物是我们
     // 服务的，`base` 是相对 URL 的基准，默认的 `/` 会让浏览器去根上找图。
     base: `${CLIENT_MODULES_PREFIX}/${key}/`,
-    define: { "process.env": "{ env: {} }" },
+    define: {
+      // 浏览器没有 `process`：精确替换 `process.env`，裸 `process` 再给一个空壳——`immer` 这类包会在
+      // 模块顶层读它，漏掉就是一个 `process is not defined` 把整份产物带下去。
+      "process.env": "{ env: {} }",
+      process: "{ env: {} }",
+    },
     resolve: { alias: options.alias },
     // 被间接拉进 client 图的宿主专有包里有 `new Worker(new URL('./worker.js', import.meta.url))`：
     // vite 默认把 worker 打成 **iife**，而那个 worker 里有顶层 await（iife 不支持）——整份产物因此构建失败。
@@ -380,9 +411,11 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     );
     return undefined;
   }
-  // 指纹没变就**增量合并**：别的出口的产物还在磁盘上、还在 manifest 里，删了就得让它们重新构建一次；
-  // 指纹变了（源码改过）则整包作废——旧产物里的 URL 归一等规则也可能已经过时。
-  if (!fresh) await rm(outDir, { recursive: true, force: true });
+  // 指纹没变就**增量合并**：别的出口的产物还在磁盘上、还在 manifest 里，删了就得让它们重新构建一次。
+  //
+  // 指纹变了也**不整目录删**：这个缓存是**跨进程共用**的（同时跑 `dev --web` 与桌面 dev 是常态），删掉整个
+  // 目录会把另一个进程刚写的产物一起带走，表现为偶发 404。产物名本身带语义（出口名 / 资产 hash），直接
+  // 覆盖即可；旧的字节留在盘上不碍事。
   await mkdir(outDir, { recursive: true });
   for (const chunk of chunks) {
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），落盘要先把父目录建出来。
