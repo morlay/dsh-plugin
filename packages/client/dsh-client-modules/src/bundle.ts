@@ -16,6 +16,14 @@ import { build, type PluginOption } from "vite";
 import { depsUrlOf } from "./deps.ts";
 import { packageNameOf } from "./resolve.ts";
 
+/**
+ * 构建器版本：**改了就 bump**。
+ *
+ * 缓存指纹算的是输入源码，而产物的形态还取决于这里的解析/改写规则（联邦地址怎么归一等）——
+ * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
+ */
+const BUNDLER_REV = "2";
+
 /** 一次聚合构建的输入。 */
 export interface BundleOptions {
   /** 缓存根（`node_modules/.dsh-plugins`）。 */
@@ -73,7 +81,7 @@ async function fingerprint(paths: readonly string[]): Promise<string> {
 export async function bundleAggregate(options: BundleOptions): Promise<Bundled> {
   const outDir = join(options.cacheRoot, options.key);
   const manifestPath = join(outDir, ".files.json");
-  const rev = await fingerprint(options.watch);
+  const rev = `${BUNDLER_REV}:${await fingerprint(options.watch)}`;
   const cached = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     rev?: string;
     files?: Record<string, string>;

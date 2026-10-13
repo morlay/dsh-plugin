@@ -301,8 +301,10 @@ export function apply(ctx: Context): void {
     { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
   ];
   // 外置说明符要写成"联邦地址"，同步回调里查不了异步的东西：先把行清单读出来算成两张表。
+  // "我们的包"是**工作区里的所有包**（不只行清单里的）：`client-store` 这种不在行里，但它的联邦地址
+  // 同样指向聚合产物（`client.js`），判成三方就会去找 `index.js`。
   const ownNamesOf = async (): Promise<ReadonlySet<string>> =>
-    new Set((await sourceRowsOf()).map((row) => row.id));
+    new Set((await ownVersionsOf()).keys());
   const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> => {
     // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
     // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读（读一次缓存）。

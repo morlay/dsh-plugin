@@ -24,7 +24,11 @@ export const CLIENT_MODULES_PREFIX = "/@client-modules";
  * @param file - 产物文件名（默认 `index.js`）。
  * @returns 浏览器地址。
  */
-export function depsUrlOf(name: string, version: string, file = "index.js"): string {
+/** 依赖/插件在浏览器里的地址（联邦式：`<pkg>@<version>/<file>`）。 */
+export function depsUrlOf(specifier: string, version: string, file = "index.js"): string {
+  // 归一到**包名**：说明符可能带子路径（`@deepseek-ai/dsh-x/client`、`react/jsx-dev-runtime`），
+  // 联邦地址按包寻址。
+  const name = packageNameOf(specifier) || specifier;
   return `${CLIENT_MODULES_PREFIX}/${name.replaceAll("/", "+")}@${version}/${file}`;
 }
 
@@ -67,7 +71,8 @@ export async function bundleDep(options: {
   const source = await readFile(pkgJson, "utf8").catch(() => "");
   const info = await stat(entry).catch(() => undefined);
   // 指纹：清单 + 入口（三方在 dev 期间不会改，够用且便宜）。
-  const rev = `${String(source.length)}:${String(info?.size ?? 0)}:${source.slice(-64)}`;
+  // 同样带构建器版本（见 `bundle.ts` 的说明：规则变了要作废旧产物）。
+  const rev = `2:${String(source.length)}:${String(info?.size ?? 0)}:${source.slice(-64)}`;
   const key = options.name.replaceAll("/", "+");
   // 我们的包（工作区里的）产物按出口命名（`client.js`）；三方是 `index.js`。两侧同构。
   const fileName = options.own === true ? "client.js" : "index.js";

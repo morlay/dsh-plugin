@@ -155,7 +155,12 @@ async function workspaceIndexOf(from: string): Promise<Map<string, string>> {
     const root = await workspaceRootOf(from);
     if (root === undefined) return index;
     const { glob } = await import("node:fs/promises");
-    for (const pattern of ["packages/*/*/package.json", "vendor/*/packages/*/*/package.json"]) {
+    for (const pattern of [
+      "packages/*/*/package.json",
+      "vendor/*/packages/*/*/package.json",
+      // 上游把自己的依赖 vendors 在仓库内（cordis、cosmokit…），它们也参与联邦寻址。
+      "vendor/*/vendor/*/package.json",
+    ]) {
       for await (const file of glob(pattern, { cwd: root })) {
         const path = join(root, file);
         const manifest = JSON.parse(await readFile(path, "utf8").catch(() => "{}")) as {
