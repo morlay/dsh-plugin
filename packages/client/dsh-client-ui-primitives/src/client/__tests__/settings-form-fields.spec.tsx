@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// 与 vendor/deepseek-harness/packages/client/dsh-client-ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
 // （导入面换成我们的 client 出口），另加一条 help 折叠的用例；改这里之前先看上游。
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SettingsSecretField, SettingsValueField } from "@morlay/dsh-client-ui-primitives/client";
+import { SettingsSecretField, SettingsValueField } from "@morlay/dsh-client-ui-primitives";
 
 afterEach(cleanup);
 

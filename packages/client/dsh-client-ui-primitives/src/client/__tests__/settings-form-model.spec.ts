@@ -1,4 +1,4 @@
-// 与 vendor/deepseek-harness/packages/client/dsh-client-ui-primitives/tests/settings-form-model.client.spec.ts 的用例逐条对应
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form-model.client.spec.ts 的用例逐条对应
 // （导入面换成我们的 client 出口），另加两条 revision 栅栏 / 版本冲突重试的用例；改这里之前先看上游。
 
 import { describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ import {
   type SettingsFormPathOp,
   type SettingsFormScope,
   type SettingsFormScopeSnapshot,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 
 interface StubScope<T> {
   scope: SettingsFormScope<T>;

@@ -11,21 +11,25 @@ interface Publishable {
   readonly dir: string;
 }
 
-// 所有发布包：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布）。
-async function publishablePackages(): Promise<Publishable[]> {
+// **插件包**：`packages/<group>/<pkg>/package.json`（devpackages 的 `@local/*` 不发布），
+// 且 `peerDependencies` 里声明了 cordis——那才是插件契约。普通库（`dsh-client-ui-primitives`
+// 这种 UI/工具库）不参与插件清单，也就不需要 locale。
+async function pluginPackages(): Promise<Publishable[]> {
   const { glob } = await import("node:fs/promises");
   const found: Publishable[] = [];
   for await (const file of glob("packages/*/*/package.json", { cwd: process.cwd() })) {
     const dir = join(process.cwd(), file, "..");
     const manifest = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
       name: string;
+      peerDependencies?: Record<string, string>;
     };
+    if (manifest.peerDependencies?.["@deepseek-ai/cordis"] === undefined) continue;
     found.push({ name: manifest.name, dir });
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const packages = await publishablePackages();
+const packages = await pluginPackages();
 
 describe("插件清单的多语言声明", () => {
   it("有发布包可查（守卫本身没空转）", () => {

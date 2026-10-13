@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-// 与 vendor/deepseek-harness/packages/client/dsh-client-ui-primitives/tests/settings-form.client.spec.tsx 的用例逐条对应
+// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form.client.spec.tsx 的用例逐条对应
 // （导入面换成我们的 client 出口）；改这里之前先看上游是否也改了同一处。
 // The settings form frame: what it says in each state, and that leaving it discards.
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { SettingsForm, type SettingsFormShell } from "@morlay/dsh-client-ui-primitives/client";
+import { SettingsForm, type SettingsFormShell } from "@morlay/dsh-client-ui-primitives";
 
 afterEach(cleanup);
 

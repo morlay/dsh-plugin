@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "客户端模块",
+    "description": "开发态的前端服务：页面、入口与全部客户端资源都由进程内的 vite dev server 提供（上游 client-modules 的 node 半，模块表那一套换成 vite 的解析、预打包与 HMR）。"
+  }
+}

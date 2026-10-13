@@ -9,7 +9,7 @@ describe("isInlinedPackage", () => {
       isInlinedPackage("@morlay/dsh-client-ui-primitives", ["@morlay/dsh-client-ui-primitives"]),
     ).toBe(true);
     expect(
-      isInlinedPackage("@morlay/dsh-client-ui-primitives/client", [
+      isInlinedPackage("@morlay/dsh-client-ui-primitives", [
         "@morlay/dsh-client-ui-primitives",
       ]),
     ).toBe(true);

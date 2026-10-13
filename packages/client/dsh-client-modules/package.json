@@ -18,18 +18,21 @@
   "files": [
     "app-boot",
     "config/dev.cordis.patch.yml",
-    "dist"
+    "dist",
+    "locale/*.json"
   ],
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.js",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {

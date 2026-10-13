@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { join } from "node:path";
 import { rolldown } from "rolldown";
 import type { Plugin } from "rolldown";
@@ -75,40 +74,26 @@ function escapeRegExp(value: string): string {
   return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
 }
 
-// 本包依赖里 client 行的 external 面（判据：该包清单有 `exports["./client"]`，与上游 host 半同一判据）：
-// 漏判会让自己的 client 行落进内联分支，页面第二次注册即抛 `duplicate factory registration`。
-// 例外是标了 `dsh.client.inline` 的包：它有同一个出口，但**不是行**——代码随消费方打进产物（模块表里没有它，
-// 外置会 `missed the module table`），所以这里不纳入。每个 client 行返回一条 `^包名(?:/|$)` 正则；
-// `cwd` 缺省 `process.cwd()`。
+/**
+ * 消费方清单里**要 external 的包**：`peerDependencies` 的那些。
+ *
+ * 判据就一条——**按声明位置分流**：`peerDependencies` 由宿主/运行时提供，client 产物里保留 import
+ * （模块表有它的身份，内联反而会二次注册）；`dependencies` 的代码随产物内联（模块表里没有它们，
+ * 外置必然 `missed the module table`）。
+ *
+ * 这套规则**只用于 CJS 产物**：那是模块表（`__ModuleLoader__.load` 工厂）的形态，谁内联谁外置有硬约束。
+ * ESM 产物不做这套处理——它交给 vite / node 的 resolver。
+ *
+ * @param cwd - 消费方包目录，缺省 `process.cwd()`。
+ * @returns 每条一个 `^包名(?:/|$)` 的正则。
+ */
 export async function clientRowExternals(cwd = process.cwd()): Promise<RegExp[]> {
   const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
-    dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
   };
-  const names = [
-    ...new Set([
-      ...Object.keys(manifest.dependencies ?? {}),
-      ...Object.keys(manifest.peerDependencies ?? {}),
-    ]),
-  ].sort();
-  const require = createRequire(join(cwd, "package.json"));
-  const rows: RegExp[] = [];
-  for (const name of names) {
-    let target: string;
-    try {
-      target = require.resolve(`${name}/package.json`);
-    } catch {
-      continue; // 装不上（可选依赖 / 测试面）——按内联处理，不猜。
-    }
-    const dependency = JSON.parse(await readFile(target, "utf8")) as {
-      exports?: Record<string, unknown>;
-      dsh?: { client?: { inline?: boolean } };
-    };
-    if (dependency.dsh?.client?.inline === true) continue;
-    if (dependency.exports?.["./client"] === undefined) continue;
-    rows.push(new RegExp(`^${escapeRegExp(name)}(?:/|$)`));
-  }
-  return rows;
+  return Object.keys(manifest.peerDependencies ?? {})
+    .sort()
+    .map((name) => new RegExp(`^${escapeRegExp(name)}(?:/|$)`));
 }
 
 // client 入口的 entry 名（同一个 tsdown config 里与 host 入口并存）。
