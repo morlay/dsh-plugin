@@ -1,11 +1,15 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
-import { bundleAggregate } from "./bundle.ts";
 import { devExcluded, isAggregated, profileRootOf } from "./config.ts";
-import { bundleDep, CLIENT_MODULES_PREFIX } from "./deps.ts";
+import {
+  bundlePackage,
+  CLIENT_MODULES_CACHE,
+  CLIENT_MODULES_PREFIX,
+  dependencyEntry,
+} from "./bundle.ts";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
   clientHalfOf,
@@ -115,10 +119,15 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
     if (manifest === undefined || declared === undefined) continue;
     const clientPath = await clientHalfOf(resolved.root);
     if (clientPath === undefined) continue;
+    // 本地文件一律写成 `@/{filepath}`（对外只有两种形态：`@/…` 本地文件、`@client-modules/…` 联邦产物）。
     // 入口是**源码文件路径**：vite 按它解析、按需转换（改着的包逐文件走，HMR 照旧）；而
     // "这次不改的包"（`dsh.dev.exclude`）会进 `optimizeDeps.include`——vite 把该文件收编成依赖，
     // 引用被重写成它的 deps 产物（一次构建、共享 chunk、落盘缓存、按内容 hash 失效）。
-    found.set(name, { id: name, clientPath, version: manifest.version });
+    found.set(name, {
+      id: name,
+      clientPath: `@/${relative(process.cwd(), clientPath).split(sep).join("/")}`,
+      version: manifest.version,
+    });
   }
   return [...found.values()];
 }
@@ -293,8 +302,8 @@ export function apply(ctx: Context): void {
   };
 
   // 聚合与三方的缓存都在 `node_modules/` 下（与 vite 的 `.vite` 并列，跨进程共用）。
-  const aggregateRoot = join(process.cwd(), "node_modules", ".dsh-plugins");
-  const depsRoot = join(process.cwd(), "node_modules", ".dsh-deps");
+  // 一个缓存目录：三方的与我们的**没有本质区别**（同一条链、同一种地址）。
+  const cacheRoot = join(process.cwd(), CLIENT_MODULES_CACHE);
   const appRoot = join(process.cwd(), "packages", "client", "dsh-client-modules", "app-boot");
   const federationAlias = [
     { find: /^@\//, replacement: `${process.cwd()}/` },
@@ -335,44 +344,57 @@ export function apply(ctx: Context): void {
     if (slash <= 0) return false;
     const pkgVersion = rest.slice(0, slash);
     const file = rest.slice(slash + 1);
-    // scope 的 `@` 在前、版本分隔的 `@` 在后：从**最后一个** `@` 切。
+    // scope 的 `@` 在前、版本分隔的在后：从**最后一个** `@` 切。
     const at = pkgVersion.lastIndexOf("@");
     if (at <= 0) return false;
     const name = decodePackageName(pkgVersion.slice(0, at));
     const version = pkgVersion.slice(at + 1);
-    const root = await rootOf(name);
-    const code =
-      root === undefined
-        ? await bundleDep({
-            cacheRoot: depsRoot,
-            repoRoot: process.cwd(),
-            from: join(await profileRootOf(), "package.json"),
-            alias: federationAlias,
-            name,
-            versions: await ownVersionsOf(),
-          })
-            .then(async (target) =>
-              target === undefined ? undefined : await readFile(join(depsRoot, target), "utf8"),
-            )
-            .catch(() => undefined)
-        : await bundleAggregate({
-            cacheRoot: aggregateRoot,
-            key: `${encodePackageName(name)}@${version}`,
-            repoRoot: process.cwd(),
-            input: { client: (await exportTargetOf(root, "client")) ?? (await exportTargetOf(root, undefined)) ?? "" },
-            watch: [join(root, "src")],
-            alias: federationAlias,
-            ownNames: await ownNamesOf(),
-            versions: await ownVersionsOf(),
-          })
-            .then(async (bundled) => {
-              const target = bundled.files.get(file) ?? bundled.files.get(file.replace(/\.js$/u, ""));
-              return target === undefined ? undefined : await readFile(join(aggregateRoot, target), "utf8");
-            })
-            .catch((error: unknown) => {
-              process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
-              return undefined;
-            });
+    // 入口：我们的包按 `exports` 找 client 半；三方按 node 的解析找。之后**同一条链**。
+    const resolvedRoot = await rootOf(name);
+    // "我们的包" = **仓库内**的包：`rootOf` 对 node_modules 里的三方同样会解析成功，
+    // 但那些不是我们的源码（它们的产物名与出口都不同）。
+    const ownRoot =
+      resolvedRoot !== undefined && !resolvedRoot.includes(`${sep}node_modules${sep}`)
+        ? resolvedRoot
+        : undefined;
+    const ownEntry =
+      ownRoot === undefined
+        ? undefined
+        : ((await exportTargetOf(ownRoot, "client")) ?? (await exportTargetOf(ownRoot, undefined)));
+    const dependency =
+      ownEntry === undefined
+        ? await dependencyEntry(join(process.cwd(), "package.json"), name).catch(() => undefined)
+        : undefined;
+    const entry = ownEntry ?? dependency?.entry;
+    if (entry === undefined) {
+      process.stderr.write(
+        `[federation] ${name}: 解析不到入口（工作区=${String(ownRoot !== undefined)}）\n`,
+      );
+      return false;
+    }
+    const bundled = await bundlePackage({
+      cacheRoot,
+      repoRoot: process.cwd(),
+      alias: federationAlias,
+      name,
+      version: ownRoot === undefined ? (dependency?.version ?? version) : version,
+      input: ownEntry === undefined ? { index: entry } : { client: entry },
+      watch: ownRoot === undefined ? [entry] : [join(ownRoot, "src")],
+      own: ownRoot !== undefined,
+      versions: await ownVersionsOf(),
+      ownNames: await ownNamesOf(),
+    }).catch((error: unknown) => {
+      process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
+      return undefined;
+    });
+    if (bundled === undefined) {
+      process.stderr.write(`[federation] ${name}: 产出为空（entry=${entry}）\n`);
+      return false;
+    }
+    const target =
+      bundled.files.get(file) ?? bundled.files.get(file.replace(/\.js$/u, "")) ?? bundled.files.get("client");
+    if (target === undefined) return false;
+    const code = await readFile(join(cacheRoot, target), "utf8").catch(() => undefined);
     if (code === undefined || code === "") return false;
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
     res.end(req.method === "HEAD" ? undefined : code);
@@ -380,6 +402,15 @@ export function apply(ctx: Context): void {
   };
 
   const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    process.stderr.write(`[serveAny] ${req.url ?? ""}
+`);
+    // `@/{filepath}` = **本地文件**（与源码里 import 的 alias 同一套写法）：浏览器 URL 不走 alias 解析，
+    // 所以在这里落成 vite 认的根相对路径。
+    const rawUrl = req.url ?? "";
+    if (rawUrl.startsWith("/@/")) {
+      const query = rawUrl.includes("?") ? rawUrl.slice(rawUrl.indexOf("?")) : "";
+      req.url = `/${(rawUrl.slice(3).split("?")[0] ?? "")}${query}`;
+    }
     const requestUrl = (req.url ?? "").split("?")[0] ?? "";
     if (requestUrl.startsWith(`${CLIENT_MODULES_PREFIX}/`)) {
       if (await serveFederation(requestUrl, req, res)) return;

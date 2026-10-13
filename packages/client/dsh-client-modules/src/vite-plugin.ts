@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
 import { devExcluded, isAggregated } from "./config.ts";
-import { CLIENT_MODULES_PREFIX } from "./deps.ts";
+import { CLIENT_MODULES_PREFIX } from "./bundle.ts";
 import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./resolve.ts";
 
 /** 行清单的虚拟模块 id（`app-boot/index.ts` 里 `import rows from "virtual:dsh-client-rows"`）。 */
