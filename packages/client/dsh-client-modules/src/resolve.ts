@@ -88,6 +88,15 @@ export function parsePluginAddress(url: string): PluginAddress | undefined {
  */
 function pickCondition(entry: unknown): string | undefined {
   if (typeof entry === "string") return entry;
+  // **数组**形态（`@oxc-project/runtime` 的每个出口都是 `[{ node, import, default }, "./src/…"]`）：
+  // node 的语义是"依次尝试"，这里取第一个答得上来的。
+  if (Array.isArray(entry)) {
+    for (const item of entry) {
+      const picked = pickCondition(item);
+      if (picked !== undefined) return picked;
+    }
+    return undefined;
+  }
   if (entry === null || typeof entry !== "object") return undefined;
   const record = entry as Record<string, unknown>;
   for (const key of ["import", "default", "require", "types"]) {
@@ -181,14 +190,25 @@ async function workspaceIndexOf(from: string): Promise<Map<string, string>> {
  * `./package.json`，那样明明装着也解析不出来。
  */
 export async function packageRootOf(from: string, name: string): Promise<PackageRoot | undefined> {
+  const bare = name.split("/").slice(0, name.startsWith("@") ? 2 : 1).join("/");
+  // 虚拟模块的 id（`\0…`）不是路径：`createRequire` 拿到它会抛，直接跳过这层解析。
+  const require = from.startsWith("\0") ? undefined : createRequire(from);
   try {
-    const require = createRequire(from);
+    if (require === undefined) throw new Error("virtual id: 不走 node 解析");
     // 只解析**包名**：带子路径的说明符（`pkg/sub`）会要求清单里有对应 `exports` 键，而我们要的是包根。
-    const resolved = require.resolve(name.split("/").slice(0, name.startsWith("@") ? 2 : 1).join("/"));
+    const resolved = require.resolve(bare);
     const owned = await owningPackageOf(resolved);
     if (owned !== undefined) return owned;
   } catch {
-    // 落到下面的工作区索引。
+    // 落到下面的候选目录：**没有 `.` 出口**的包（`@oxc-project/runtime` 只有 `./helpers/*`）解析不了
+    // 包名本身，明明装着却"解析不到"。
+  }
+  for (const directory of require?.resolve.paths(bare) ?? []) {
+    const manifest = join(directory, bare, "package.json");
+    if (await readFile(manifest, "utf8").then(() => true, () => false)) {
+      const owned = await owningPackageOf(manifest);
+      if (owned !== undefined) return owned;
+    }
   }
   const root = (await workspaceIndexOf(from)).get(name);
   return root === undefined ? undefined : await owningPackageOf(join(root, "package.json"));
@@ -277,6 +297,28 @@ export function resolveInPackage(pkg: PackageRoot, filepath: string): string | u
   return inside === "" || inside.startsWith("..") || inside.startsWith(sep) ? undefined : target;
 }
 
+/**
+ * 包内**物理路径**回退：清单的 `exports` 没覆盖这个子路径时，按约定位置找文件。
+ *
+ * 老包很常见：`picomatch` 没有 `exports`、只有 `main`，而 `picomatch/posix` 就是 `posix.js`；
+ * 只声明了部分子路径的包同理。寻址按 URL 来（`<pkg>@<version>/<子路径>.js`），所以这里按子路径找文件。
+ */
+export async function fileInPackage(root: string, subpath: string): Promise<string | undefined> {
+  const pkg = { name: "", version: "", root };
+  for (const candidate of [
+    subpath,
+    `${subpath}.js`,
+    `${subpath}.mjs`,
+    join(subpath, "index.js"),
+    join(subpath, "index.mjs"),
+    join(subpath, "index.ts"),
+  ]) {
+    const file = resolveInPackage(pkg, candidate);
+    if (file !== undefined && (await readFile(file, "utf8").then(() => true, () => false))) return file;
+  }
+  return undefined;
+}
+
 /** 一个 specifier 的寻址结果：包名、包内路径、以及它对应的 URL。 */
 export interface ResolvedSpecifier {
   name: string;
@@ -302,17 +344,6 @@ export function packageNameOf(specifier: string): string {
 
 
 
-
-/**
- * 目标入口是不是 **CJS-only**——决定跨包引用该交给谁处理。
- *
- * CJS 对外置依赖是**同步** `require`，必须由 `esmExternalRequirePlugin` 认包名转成 import（转完那份
- * facade 的 `import` 说明符再由我们的 rewrite 落成统一 URL）。**不能** inline：`react` 这类被多处引用，
- * inline 会在每份产物里各留一份实例，hook 分发就冲突。
- */
-export function isCjsOnlySource(source: string): boolean {
-  return source.includes("module.exports") || source.includes("exports.");
-}
 
 /**
  * 包根 → 它**浏览器面**的文件。

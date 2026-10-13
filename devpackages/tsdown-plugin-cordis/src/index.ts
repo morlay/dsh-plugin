@@ -24,6 +24,7 @@ export {
   clientAssetPlugin,
   clientEntryPlugin,
   clientRowExternals,
+  ASSET_MIME,
   CLIENT_ENTRY,
   INLINE_SAFE,
   isClientExternal,

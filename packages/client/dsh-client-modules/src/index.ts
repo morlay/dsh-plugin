@@ -3,20 +3,25 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, sep } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
+import { ASSET_MIME } from "@local/tsdown-plugin-cordis";
 import { devExcluded, isAggregated, profileRootOf } from "./config.ts";
 import {
   bundlePackage,
   CLIENT_MODULES_CACHE,
   CLIENT_MODULES_PREFIX,
+  clientModulesAlias,
   dependencyEntry,
+  urlOf,
 } from "./bundle.ts";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
   clientHalfOf,
   decodePackageName,
-  encodePackageName,
   exportTargetOf,
+  fileInPackage,
   manifestOf,
+  owningPackageOf,
+  packageNameOf,
   packageRootOf,
   parsePluginAddress,
   PLUGIN_ROUTE,
@@ -48,27 +53,6 @@ interface RouteHost {
   }): () => void;
 }
 
-
-/** CJS 包的具名导出补全。
- *
- * `react` 这类包的入口是 `module.exports = require('./cjs/…')`，rolldown 静态分析不出具名导出，产物只带
- * `export default require_react()`——而浏览器侧要 `import { Fragment } from "react"`，于是**整个 import
- * 阶段就失败**（入口一行都执行不了）。这里按 CJS 对象的键补一段**静态** `export const`（ESM 的导出必须
- * 静态可枚举，不能 `export * from` 一个运行期对象）。
- */
-/**
-    return [];
-  }
-  const names = new Set<string>();
-  for (const match of raw.matchAll(/(?:from|require\()\s*["']([^"']+)["']/gu)) {
-    const specifier = match[1] ?? "";
-    if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) continue;
-    names.add(packageNameOf(specifier));
-  }
-  return [...names];
-}
-
-/** 目录判定（找不到就是 false，不抛）。 */
 
 /** cordis Loader 条目里我们用到的那几项（上游 `client-modules` 用同样几个字段判断行）。 */
 interface LoaderEntry {
@@ -133,6 +117,12 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
 }
 
 
+/** 打包器指纹的输入集：**只与包有关、与出口无关**（缓存按包聚合，rev 跟着出口变就等于永不命中）。 */
+function watchOf(root: string | undefined, entry: string): string[] {
+  if (root === undefined) return [entry];
+  return root.includes("node_modules") ? [join(root, "package.json")] : [join(root, "src")];
+}
+
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;
 
@@ -181,17 +171,11 @@ export function apply(ctx: Context): void {
   };
   const allRowsOf = async (): Promise<ClientRow[]> => {
     const patterns = await excludedOf();
-    const exports = await exportNamesOf();
-    return (await sourceRowsOf()).map((row) => {
-      if (!isAggregated(row.id, patterns)) return row;
-      // 出口名用**清单里真实存在的**那个（有 `./client` 才给 `client`）：`client` 就是普通 export，
-      // 不是所有包都有它——没有的走根出口（`index`）。
-      const exportName = exports.get(row.id) ?? "index";
-      return {
-        ...row,
-        clientPath: `${CLIENT_MODULES_PREFIX}/${encodePackageName(row.id)}@${row.version}/${exportName}.js`,
-      };
-    });
+    return (await sourceRowsOf()).map((row) =>
+      // **非开发模块**（`dsh.dev.exclude` 点名）的行给**包名**而不是路径：走哪条链（联邦产物 / 源码）
+      // 由解析规则决定，地址也由同一份出口表（`urlOf`）算——这里写死 URL 就等于把"地址长什么样"抄成两份。
+      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
+    );
   };
   const rows = async (): Promise<ClientRow[]> => await allRowsOf();
   if (webServer === undefined)
@@ -209,6 +193,9 @@ export function apply(ctx: Context): void {
     // （我们自己生成的入口没有 importer，得有个能站住的基准）。
     fallbackBase ??= join(await profileRootOf(), "package.json");
     if (fallbackBase !== undefined) bases.push(fallbackBase);
+    // 本包自己的清单也是一个基准：这条链的运行期依赖声明在它里面——典型是 rolldown 注入装饰器 helper 用的
+    // `@oxc-project/runtime`，pnpm 的严格布局下从 profile 出发解析不到，只有从声明它的包出发才找得到。
+    bases.push(join(process.cwd(), "packages", "client", "dsh-client-modules", "package.json"));
     for (const base of bases) {
       const found = await packageRootOf(base, name);
       if (found !== undefined) return found.root;
@@ -220,8 +207,7 @@ export function apply(ctx: Context): void {
   };
 
 
-  /** 兜底：vite 不认的路径直接 404（dev 形态下页面与资源全归它）。 */
-  const fallback = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+  /** 兜底：vite 不认的路径直接 404（dev 形态下页面与资源全归它）。 */  const fallback = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("client-modules: 没有这条路由\n");
   };
@@ -243,6 +229,7 @@ export function apply(ctx: Context): void {
         rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
+        depsUrl: (specifier: string) => depsUrlOfSpecifier(specifier),
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
       });
       viteHandoff = started;
@@ -298,47 +285,78 @@ export function apply(ctx: Context): void {
   // 一个缓存目录：三方的与我们的**没有本质区别**（同一条链、同一种地址）。
   const cacheRoot = join(process.cwd(), CLIENT_MODULES_CACHE);
   const appRoot = join(process.cwd(), "packages", "client", "dsh-client-modules", "app-boot");
-  const federationAlias = [
-    { find: /^@\//, replacement: `${process.cwd()}/` },
-    { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
-  ];
+  const federationAlias = clientModulesAlias({
+    repoRoot: process.cwd(),
+    // 联邦构建走 rolldown：替身必须是 CJS 形态，否则未知具名导入在构建期就是 `MISSING_EXPORT`。
+    nodeStub: join(appRoot, "node-stub.cjs"),
+  });
   // 外置说明符要写成"联邦地址"，而 `paths` 回调不能 await：先把要用的两张表算出来。
   // 表一：包名 → 它外置时该指的**出口**——`client` 就是清单里的一个普通 export（有 `./client` 用它，
   // 否则根出口）。这不是"身份判断"，所以 `immer` 这类三方不会因为它被特殊对待。
-  const exportNamesOf = async (): Promise<ReadonlyMap<string, string>> => {
-    const names = new Map<string, string>();
-    const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [
-      /.*/u,
-    ]);
-    for (const pkg of packages) {
-      const manifest = await manifestOf(pkg.root).catch(() => undefined);
-      const exports = (manifest as { exports?: Record<string, unknown> } | undefined)?.exports ?? {};
-      names.set(pkg.name, "./client" in exports ? "client" : "index");
-    }
-    return names;
-  };
-  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> => {
-    // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
-    // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读（读一次缓存）。
-    const versions = new Map((await sourceRowsOf()).map((row) => [row.id, row.version]));
-    const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [/.*/u]);
-    for (const pkg of packages) {
-      if (versions.has(pkg.name)) continue;
-      const manifest = await manifestOf(pkg.root).catch(() => undefined);
-      if (manifest !== undefined) versions.set(pkg.name, manifest.version);
-    }
-    // **三方也要版本**（zod、immer、react…）：pnpm 的 store 目录名就是 `<名字>@<版本>`（scope 写成
-    // `@scope+name@1.2.3`），读一层目录即可，不必去读几千个清单。
-    const store = await readdir(join(process.cwd(), "node_modules", ".pnpm"), { withFileTypes: true })
-      .catch(() => []);
-    for (const entry of store) {
-      if (!entry.isDirectory()) continue;
-      const at = entry.name.lastIndexOf("@");
-      if (at <= 0) continue;
-      const name = entry.name.slice(0, at).replaceAll("+", "/");
-      if (!versions.has(name)) versions.set(name, entry.name.slice(at + 1));
-    }
-    return versions;
+  // 两张表**懒建一次**：它们要扫工作区（几百个清单）与 pnpm store，而联邦路由是**每个请求**都要它们
+  // ——每次重算等于把首屏时间乘以产物数（几百次全仓扫描）。dev 里包的版本与出口不会中途变。
+  let exportsCache: Promise<ReadonlyMap<string, string>> | undefined;
+  const exportNamesOf = async (): Promise<ReadonlyMap<string, string>> =>
+    await (exportsCache ??= (async () => {
+      const names = new Map<string, string>();
+      const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [
+        /.*/u,
+      ]);
+      for (const pkg of packages) {
+        const manifest = await manifestOf(pkg.root).catch(() => undefined);
+        const exports = (manifest as { exports?: Record<string, unknown> } | undefined)?.exports ?? {};
+        names.set(pkg.name, "./client" in exports ? "client" : "index");
+      }
+      return names as ReadonlyMap<string, string>;
+    })());
+  let versionsCache: Promise<ReadonlyMap<string, string>> | undefined;
+  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> =>
+    await (versionsCache ??= (async () => {
+      // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
+      // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读。
+      const versions = new Map<string, string>();
+      for (const row of await sourceRowsOf()) versions.set(row.id, row.version);
+      const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [/.*/u]);
+      for (const pkg of packages) {
+        if (versions.has(pkg.name)) continue;
+        const manifest = await manifestOf(pkg.root).catch(() => undefined);
+        if (manifest !== undefined) versions.set(pkg.name, manifest.version);
+      }
+      // 三方也要版本（zod、immer、react…）：pnpm 的 store 目录名就是 `<名字>@<版本>`（scope 写成
+      // `@scope+name@1.2.3`），读一层目录即可，不必去读几千个清单。**peer 后缀要去掉**：同一包因 peer
+      // 不同会有多份目录（`zustand@4.5.7_@types+react@18…`），从最后一个 `@` 切会把 `18.3.1` 当版本。
+      const store = await readdir(join(process.cwd(), "node_modules", ".pnpm"), { withFileTypes: true }).catch(
+        () => [],
+      );
+      for (const entry of store) {
+        if (!entry.isDirectory()) continue;
+        const matched = /^(?<name>.+?)@(?<version>[^_@]+)(?:_.*)?$/u.exec(entry.name);
+        const name = matched?.groups?.["name"];
+        const version = matched?.groups?.["version"];
+        if (name === undefined || version === undefined) continue;
+        const bare = name.replaceAll("+", "/");
+        if (!versions.has(bare)) versions.set(bare, version);
+      }
+      return versions as ReadonlyMap<string, string>;
+    })());
+
+  /**
+   * dev 侧源码里的**裸说明符** → 联邦地址；`undefined` 表示"交给 vite 走源码"。
+   *
+   * 判据与产物侧一致：仓库内的**开发模块**（没被 `dsh.dev.exclude` 点名）逐文件走 vite（改它要 HMR）；
+   * 其余——三方与"非开发模块"——都由联邦链按包产出（同一条链、同一种地址）。放给 vite 的 `optimizeDeps`
+   * 会多出第二条链：浏览器里同时有 `.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`，
+   * 两个 react 实例，hook 分发立刻报 `Invalid hook call`。
+   */
+  const depsUrlOfSpecifier = async (specifier: string): Promise<string | undefined> => {
+    // `@/…` 是本地文件（alias 管），不是包——`packageNameOf` 会把它切成 `@/vendor` 这种假包名。
+    if (specifier.startsWith("@/")) return undefined;
+    const bare = packageNameOf(specifier) || specifier;
+    const root = await rootOf(bare);
+    const devModule =
+      root !== undefined && !root.includes("node_modules") && !isAggregated(bare, await excludedOf());
+    if (devModule) return undefined;
+    return urlOf(specifier, { versions: await ownVersionsOf(), exportsOf: await exportNamesOf() });
   };
 
   /**
@@ -353,7 +371,9 @@ export function apply(ctx: Context): void {
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<boolean> => {
-    const rest = url.slice(`${CLIENT_MODULES_PREFIX}/`.length).split("?")[0] ?? "";
+    // `?rev=` 是**构建世代**（见 `urlOf`）：它在地址里只是让"同一份产物的 URL 稳定且可辨识"，
+    // 路由不据此改变响应（产物一律协商缓存）。
+    const rest = (url.slice(`${CLIENT_MODULES_PREFIX}/`.length).split("?")[0] ?? "");
     const slash = rest.indexOf("/");
     process.stderr.write(`[fed] rest=${rest} slash=${String(slash)}\n`);
     if (slash <= 0) return false;
@@ -363,17 +383,42 @@ export function apply(ctx: Context): void {
     const at = pkgVersion.lastIndexOf("@");
     if (at <= 0) return false;
     const name = decodePackageName(pkgVersion.slice(0, at));
-    const version = pkgVersion.slice(at + 1);
+    const urlVersion = pkgVersion.slice(at + 1);
     // 入口：我们的包按 `exports` 找 client 半；三方按 node 的解析找。之后**同一条链**。
     // 一视同仁：包根可能在仓库里（工作区/vendor），也可能在 node_modules（三方）——对取入口这件事
     // 没有区别。出口名来自 URL，入口一律从清单的 `exports` 取。
     const root = await rootOf(name);
+    // 版本以**包清单**为准：URL 里那个是外置时按版本表写下的，而多版本共存时表只能猜（`katex@0.16.47`
+    // 的 URL 解析到的可能是 0.18.10）——缓存键跟着清单走，键与内容才对得上。
+    const version = (root === undefined ? undefined : (await manifestOf(root))?.version) ?? urlVersion;
+    const key = `${name.replaceAll("/", "+")}@${version}`;
+    // **资产**（大图 / 字体 / worker）：产物里只留 URL，文件本身按清单（`.files.json`）取——清单是
+    // "这个包产出里有什么"的唯一真相，也顺手挡住了凭 URL 读任意文件。
+    if (file.startsWith("assets/")) {
+      const manifest = JSON.parse(await readFile(join(cacheRoot, key, ".files.json"), "utf8").catch(() => "{}")) as {
+        files?: Record<string, string>;
+      };
+      const target = manifest.files?.[file];
+      if (target === undefined) return false;
+      const bytes = await readFile(join(cacheRoot, target)).catch(() => undefined);
+      if (bytes === undefined) return false;
+      const extension = file.slice(file.lastIndexOf(".") + 1).toLowerCase();
+      res.writeHead(200, {
+        "content-type": ASSET_MIME[extension] ?? "application/octet-stream",
+        // 资产的文件名里就带内容 hash（`assets/<name>-<hash>.<ext>`）：内容与 URL 一一对应，可以长缓存。
+        "cache-control": "public, max-age=31536000, immutable",
+      });
+      res.end(req.method === "HEAD" ? undefined : bytes);
+      return true;
+    }
     const exportName = file.replace(/\.js$/u, "") || "index";
     const entry =
       root === undefined
         ? (await dependencyEntry(join(process.cwd(), "package.json"), name).catch(() => undefined))
             ?.entry
-        : await exportTargetOf(root, exportName === "index" ? undefined : exportName);
+        : ((await exportTargetOf(root, exportName === "index" ? undefined : exportName)) ??
+          // 清单没覆盖这个子路径时按物理路径找（没有 `exports` 的老包：`picomatch/posix` 就是 `posix.js`）。
+          (await fileInPackage(root, exportName)));
     process.stderr.write(
       `[fed] ${name}@${version}/${exportName} root=${String(root)} entry=${String(entry)}\n`,
     );
@@ -396,7 +441,10 @@ export function apply(ctx: Context): void {
       name,
       version,
       input: { [exportName]: entry },
-      watch: root === undefined ? [entry] : [join(root, "src")],
+      // 指纹的输入必须**与出口无关**（缓存是按包聚合的，rev 随出口变就等于永不命中）：仓库内的包看它的
+      // `src`（源码改了就重打）；`node_modules` 里的包看它的清单——那边的目录名与布局都不由我们定，
+      // 拿目录去算只会算到空（曾经所有三方包的指纹都是同一个空目录的哈希）。
+      watch: watchOf(root ?? (await owningPackageOf(entry))?.root, entry),
       versions: await ownVersionsOf(),
       exportsOf: await exportNamesOf(),
     }).catch((error: unknown) => {
@@ -419,23 +467,57 @@ export function apply(ctx: Context): void {
     });
     // 空产物是**合法的**：纯类型 / 空的 client 半编译出来就是空 JS，不是失败。
     if (code === undefined) return false;
-    res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
+    // 产物缓存策略**按"这份产物还会不会变"分**：
+    // - 三方包（`node_modules` 里的）在 dev 期间不会变，地址里又有它的版本 + 构建世代，可以长缓存；
+    // - 仓库内的包（`dsh.dev.exclude` 点名的那些）随时可能被改 → 协商缓存（`no-cache` + `ETag`，
+    //   重复请求走 304）。这就是 vite 对"预打包依赖"与"源码模块"的分法。
+    const cacheControl =
+      root !== undefined && !root.includes("node_modules")
+        ? "no-cache"
+        : "public, max-age=31536000, immutable";
+    const etag = `"${bundled.rev}"`;
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, { etag, "cache-control": cacheControl });
+      res.end();
+      return true;
+    }
+    res.writeHead(200, {
+      "content-type": "text/javascript; charset=utf-8",
+      "cache-control": cacheControl,
+      etag,
+    });
     res.end(req.method === "HEAD" ? undefined : code);
     return true;
   };
 
   const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // **只认 `@` 前缀的 URL 空间**：本地文件 `@/…`、联邦产物 `@client-modules/…`（vite 自己的
+    // `/@vite`、`/@id`、`/@fs` 也在这个前缀下）。其余路径（裸的 `/packages/…`、`/vendor/…`）**一律 404**
+    // 并把线索打出来——它们是"没被解析规则换掉"的漏网请求，放过去只会让人在几百条请求里猜谁发的。
+    const path = (req.url ?? "").split("?")[0] ?? "";
+    const known =
+      // 页面本身（vite 的 root 就是 `app-boot`，它生成的是 root 相对路径）与我们/ vite 的 `@` 前缀
+      // URL 空间（`@/…` 本地文件、`@client-modules/…` 联邦产物、`/@fs/…` 仓库里的源码、`/@id/…` 虚拟模块）。
+      path === "/" ||
+      path === "/index.html" ||
+      path === "/index.ts" ||
+      path.startsWith("/@");
+    // 浏览器自己的探测（Chrome DevTools 的 `.well-known`）：给个 204，别让它出现在失败列表里。
+    if (path.startsWith("/.well-known/")) {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    if (!known) {
+      process.stderr.write(`[reject] ${req.url ?? ""} referer=${req.headers.referer ?? "-"}\n`);
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("client-modules: 只认 `@/…`（本地文件）与 `@client-modules/…`（联邦产物）两种形态\n");
+      return;
+    }
     process.stderr.write(`[serveAny] ${req.url ?? ""}
 `);
-    // `@/{filepath}` = **本地文件**（与源码里 import 的 alias 同一套写法）：浏览器 URL 不走 alias 解析，
-    // 所以在这里落成 vite 认的根相对路径。
-    const rawUrl = req.url ?? "";
-    if (rawUrl.startsWith("/@/")) {
-      const query = rawUrl.includes("?") ? rawUrl.slice(rawUrl.indexOf("?")) : "";
-      req.url = `/${(rawUrl.slice(3).split("?")[0] ?? "")}${query}`;
-    }
-    const requestUrl = (req.url ?? "").split("?")[0] ?? "";
-    if (requestUrl.startsWith(`${CLIENT_MODULES_PREFIX}/`)) {
+    const requestUrl = req.url ?? "";
+    if (requestUrl.split("?")[0]?.startsWith(`${CLIENT_MODULES_PREFIX}/`) === true) {
       const handled = await serveFederation(requestUrl, req, res);
       process.stderr.write(`[fed-exit] ${requestUrl} handled=${String(handled)} status=${String(res.statusCode)}\n`);
       if (handled) return;

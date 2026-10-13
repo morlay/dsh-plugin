@@ -131,7 +131,8 @@ const PLUGIN_STYLE_NAME = "dev-client";
  *  vite 的默认阈值（4KB）：小图内联、大图产出 `assets/` 文件（发布包不该被 base64 撑大）。 */
 export type CssAssetPolicy = "inline" | "threshold";
 
-const INLINE_LIMIT = 4096;
+/** 内联阈值（与 vite 的 `assetsInlineLimit` 同一个量级）：超过它就产出独立资产文件。 */
+export const INLINE_LIMIT = 4096;
 
 export function cssInlinePlugins(options: { name: string; assets?: CssAssetPolicy }): Plugin[] {
   const styleModule = (

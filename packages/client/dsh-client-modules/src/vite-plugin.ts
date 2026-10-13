@@ -33,6 +33,11 @@ export interface ClientRowsPluginOptions {
    * 由它把 URL 换成 vite 能继续处理的文件路径——浏览器请求那条路由时也是同一套解析。
    */
   resolvePluginUrl?: (url: string) => Promise<string | undefined>;
+  /**
+   * 裸说明符 → **联邦地址**（`@client-modules/<pkg>@<ver>/<export>`）。三方与"非开发模块"都走它：
+   * 它们由 `dsh-client-modules` 自己的路由按包预编译，vite 只该把这个地址当外部留着。
+   */
+  depsUrl?: (specifier: string) => Promise<string | undefined>;
   /** 每次 dev server 建好时回调（含 vite 自己 `restart()` 后的新实例）——调用方据此切换当前实例。 */
   onServer?: (server: ViteDevServer) => void;
 }
@@ -79,13 +84,16 @@ async function clientVariantOf(source: string, importer: string): Promise<string
 }
 
 export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
-  let server: ViteDevServer | undefined;
   let excludedCache: RegExp[] | undefined;
   const excludedOf = async (): Promise<RegExp[]> => (excludedCache ??= await devExcluded());
   const requireFromRepo = createRequire(join(options.repoRoot, "package.json"));
 
   return {
     name: "dsh-client-rows",
+    // **必须在 `vite:resolve` 之前**：vite 的解析器会先查 `optimizeDeps` 的缓存，命中就把裸说明符改写成
+    // `node_modules/.vite/deps/…`（那条链一旦成立，同一个包就有两份实例——react 的 `Invalid hook call`
+    // 就是这么来的）。我们这条链要自己说了算：裸说明符归联邦地址、行包归源码。
+    enforce: "pre",
     config() {
       return {
         resolve: {
@@ -100,10 +108,15 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       if (source === ROWS_VIRTUAL) return RESOLVED_ROWS;
       // 联邦地址（`@client-modules/<pkg>@<version>/<export>`）：它由我们自己的路由服务（聚合产物 /
       // 三方预打包），vite 只该把它当外部地址留在 import 里，不要试图去解析。
-      if (source.startsWith(`${CLIENT_MODULES_PREFIX}/`)) return { id: source, external: true };
+      // 联邦地址：由我们自己那条链服务（按请求预编译 + 落盘缓存），vite 只把它当**外部**留着。
+      // `external: "absolute"` 而不是 `true`：这是以 `/` 开头的地址，vite 的预转换会把它当仓库文件去加载
+      // （日志里一串 `Failed to load url /@client-modules/…` 就是它）。
+      if (source.startsWith(`${CLIENT_MODULES_PREFIX}/`)) return { id: source, external: "absolute" };
       // 聚合产物的 URL：它由 `dsh-client-modules` 自己的路由服务（按包预编译 + 落盘缓存），
       // vite 只该把它当外部地址保留在 import 里，不要试图去读文件。
       // 对外形态的 URL → 源码文件（vite 只认文件路径与它自己的虚拟 id）。
+      // `@/…` = **仓库内的本地文件**（页面与源码都用它引用仓库里别处的文件）：交给 alias，绝不外置。
+      if (source.startsWith("@/")) return null;
       if (source.startsWith("/") && options.resolvePluginUrl !== undefined) {
         const file = await options.resolvePluginUrl(source.split("?")[0] ?? source);
         if (file !== undefined) return file;
@@ -123,31 +136,41 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       //
       // 例外是 `dsh.dev.exclude` 点名的**非开发模块**：它们本来就该被预打包（`optimizeDeps.include` +
       // alias 指的也是同一个入口），所以这里**放行**，交给优化器。
-      const fromFile = importer !== undefined && importer.startsWith("/") ? join(options.repoRoot, importer) : importer;
+      // 解析基准：虚拟模块（`\0…`）**不是**文件系统路径——`createRequire` 拿到它会直接抛
+      // （行清单里的包名 import 就走在虚拟模块里）。以 `/` 开头的是仓库根相对路径。
+      const fromFile =
+        importer === undefined || importer.startsWith("\0")
+          ? undefined
+          : importer.startsWith("/")
+            ? join(options.repoRoot, importer)
+            : importer;
       if (fromFile !== undefined) {
         const bare = packageNameOf(source);
         if (bare !== "") {
-          if (!isAggregated(bare, await excludedOf())) {
+          const pkg = await packageRootOf(fromFile, bare);
+          const inRepo = pkg !== undefined && !pkg.root.includes("node_modules");
+          if (inRepo && !isAggregated(bare, await excludedOf())) {
             const subpath = source === bare ? undefined : source.slice(bare.length + 1);
-            const pkg = await packageRootOf(fromFile, bare);
-            if (pkg !== undefined && !pkg.root.includes("node_modules")) {
-              const half = await clientHalfOf(pkg.root, subpath);
-              if (half !== undefined) return half;
-            }
+            const half = await clientHalfOf(pkg.root, subpath);
+            if (half !== undefined) return half;
           }
         }
+      }
+      // **非开发模块与三方**：都交给联邦链（按包预编译 + 落盘缓存），vite 只把地址当外部留着。
+      // 这一条是必需的：若放给 vite（`optimizeDeps`），同一份依赖会多出第二条链——浏览器里同时出现
+      // `node_modules/.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`，两个 react 实例，
+      // hook 分发立刻报 `Invalid hook call`。
+      if (options.depsUrl !== undefined) {
+        const url = await options.depsUrl(source);
+        if (url !== undefined) return { id: url, external: true };
       }
       // 行包名 → 它的 **client 半**源文件（行清单已经解析好；vite 只负责把它当普通模块编译与缓存）。
       const rows = await options.rows();
       const shared = (await options.shared?.()) ?? new Map<string, string>();
       const known = rows.get(source) ?? shared.get(source);
-      if (known !== undefined) {
-        void server;
-        // 值是它**自己的名字**：这一行是"非开发模块"，入口交给 `optimizeDeps`（alias 指的也是同一个
-        // 源文件）——这里放行，别拦成源码路径，否则预打包与引用成了两个身份。
-        if (known === source) return null;
-        return known;
-      }
+      // 值是**源码路径** → 直接用它（开发模块逐文件走 vite）；值是**包名本身**（"非开发模块"的行）→
+      // 不在这里作答，继续往下走 `depsUrl`，让它按同一条规则算地址。
+      if (known !== undefined && known !== source) return known;
       // **行包 + 子路径**（`@deepseek-ai/dsh-client-ui-theme/brand-font.css` 这种）：包在 vendor 下、root 的
       // node_modules 里没有，vite 自己解析不到；用行的包根 + 清单的 `exports` 落文件（标准 exports 语义）。
       const slash = source.startsWith("@") ? source.indexOf("/", source.indexOf("/") + 1) : source.indexOf("/");
@@ -187,7 +210,6 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       return [...imports, "", "export default [", ...entries, "];", ""].join("\n");
     },
     configureServer(devServer) {
-      server = devServer;
       options.onServer?.(devServer);
     },
   };

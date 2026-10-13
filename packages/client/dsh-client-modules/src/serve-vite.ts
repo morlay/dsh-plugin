@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { createServer, type ServerOptions, type ViteDevServer } from "vite";
+import { clientModulesAlias } from "./bundle.ts";
 import { dshClientRowsPlugin, ROWS_VIRTUAL } from "./vite-plugin.ts";
 import { packageRootOf } from "./resolve.ts";
 
@@ -47,6 +48,8 @@ export async function startViteDev(
     base: string;
     rows: RowsSource;
     resolvePluginUrl: (url: string) => Promise<string | undefined>;
+    /** 裸说明符 → 联邦地址（三方与"非开发模块"都由它接管，见 `ClientRowsPluginOptions.depsUrl`）。 */
+    depsUrl: (specifier: string) => Promise<string | undefined>;
     /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
     httpServer?: HmrServer | undefined;
   },
@@ -65,11 +68,15 @@ export async function startViteDev(
   // 不跟这个引用的话，重启之后路由还指着已关闭的旧实例（请求开始成片失败，宿主也可能因此退出）。
   let current: ViteDevServer | undefined;
   const server: ViteDevServer = await createServer({
-    // **root 是整个仓库**：这样 vite 能服务仓库里任何源文件（`/@fs/…` 与依赖解析都要它）；页面与入口
-    // 仍是 `app-boot/index.html` 与 `app-boot/index.ts`，由下面那条重写把 `/` 指过去。
-    root: repoRoot,
+    // **root 收在 app-boot**：仓库里的源码都在 root 之外，vite 因此只能用 `/@fs/<绝对路径>` 引用它们
+    // ——URL 空间只剩 `@` 前缀（`@/…`、`@client-modules/…`、`/@fs/…`、`/@id/…`、`/@vite/…`），不会有
+    // 裸的 `/packages/…`、`/vendor/…` 混进来。页面与入口就是这个目录里的两个文件。
+    root: appRoot,
     // 先让 vite 用**它自己的 URL 空间**（`/@vite`、`/@id`、`/@fs` 都在根上）；对外那层 `/plugins/...`
     // 等页面跑起来再作为映射加回来。
+    //
+    // **不要**把 base 改成 `/@/` 去"统一前缀"：vite 会给所有不以 base 开头的绝对 URL 再补一层，
+    // 联邦地址（`/@client-modules/…`）会变成 `/@/@client-modules/…`，两条链全断。
     base: "/",
     // 浏览器没有 `process`：客户端半常读 `process.env.NODE_ENV`（上游 client 打包也做同样的替换）。
     define: {
@@ -90,16 +97,15 @@ export async function startViteDev(
     // 服务拖下水。关掉这条路径。
     configFile: false,
     resolve: {
-      alias: [
-        // `@/…` → 仓库根：HTML 与源码里引用仓库内文件都用这个前缀，不写死绝对路径、也不依赖相对谁。
-        { find: /^@\//, replacement: `${repoRoot}/` },
-        // `node:*` 一律指向求值安全的空替身：宿主半的代码偶尔被同包的相对导入拖进 client 图，vite 默认的
-        // browser-external 代理在读取成员时抛错，会让整条入口求值中断（页面白屏 + 一条难归因的报错）。
-        { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
-      ],
+      // `@/…` → 仓库根、`node:*` → 求值安全的空替身（与联邦构建同一套约定，替身形态见 `node-stub.*`）。
+      alias: clientModulesAlias({ repoRoot, nodeStub: join(appRoot, "node-stub.ts") }),
     },
     server: {
       middlewareMode: true,
+      // **关掉预转换**：vite 会对模块的静态 import 递归预热（`transformRequest`），而我们的联邦地址是
+      // **外部** URL（由自己的路由按请求预编译）——它照样去 load，于是日志里一串
+      // `Pre-transform error: Failed to load url /@client-modules/…`。预热换来的并行度不值得这份噪音。
+      preTransformRequests: false,
       // HMR 的 WebSocket 挂到宿主的 http server 上：**路径专有**（避免与上游自身的 upgrade 路由抢），
       // **端口与页面一致**（客户端连的就是页面这个端口）。调用方要先在 webServer 上注册同名 upgrade
       // 路由——上游对未注册的升级请求会直接 destroy socket，vite 就握不上手。
@@ -118,11 +124,16 @@ export async function startViteDev(
     },
     // **不用** vite 的 `optimizeDeps`：裸说明符已由插件统一改写成 `@deps/`（我们自己预打包的产物），
     // vite 再打一份就会与聚合产物里的那份形成两个实例。
+    // **不用** vite 的 `optimizeDeps`（关掉自动发现）：非开发模块与三方都由我们的联邦链产出，裸说明符
+    // 已在插件里改写成 `@client-modules/…`，这里没有任何东西需要预打包。开着只会多出第二条链（浏览器里
+    // 同时出现 `.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`）与一次全仓扫描。
+    optimizeDeps: { noDiscovery: true, include: [] },
     plugins: [
       dshClientRowsPlugin({
         repoRoot,
         rows: () => rowsOf(options.rows),
         resolvePluginUrl: options.resolvePluginUrl,
+        depsUrl: options.depsUrl,
         onServer: (devServer) => {
           current = devServer;
         },
@@ -131,15 +142,9 @@ export async function startViteDev(
   });
   current = server;
   ctx.logger.info("client-modules: vite dev server 就绪（root=%s）", repoRoot);
-  /** 页面入口（相对 root 的路径）：`/` 重写到这里，HTML 里的 `./index.ts` 也随之解析到 app-boot 下。 */
-  const pageEntry = "/packages/client/dsh-client-modules/app-boot/index.html";
+  /** 页面入口（root=app-boot，所以就是 `/index.html`）。 */
+  const pageEntry = "/index.html";
   const serve = (req: IncomingMessage, res: ServerResponse): boolean => {
-    // `@/…` = **当前 workspace 的文件**（与源码里 import 的 alias 同一套写法）。浏览器 URL 不走 alias
-    // 解析，所以在这里把它落成 root 相对的路径——`/@/packages/client/x/src/a.ts` → `/packages/client/x/src/a.ts`。
-    const url = req.url ?? "";
-    if (url.startsWith("/@/")) {
-      req.url = url.slice("/@".length);
-    }
     if ((req.url ?? "").split("?")[0] === "/" || (req.url ?? "").split("?")[0] === "/index.html") {
       req.url = pageEntry;
     }
