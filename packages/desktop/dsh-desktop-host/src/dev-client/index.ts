@@ -1,5 +1,6 @@
+import { appendFile, mkdir } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
@@ -113,6 +114,37 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
 
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;
+
+  // **宿主进程的异常要留下痕迹**：dev 形态下 vite 跑在同一个进程里（它的原生绑定或某个未捕获异常崩过一次，
+  // 外部只看到连接被拒，无从溯源）。落一份日志到 `$DSH_HOME/logs/dev-host.log`，退出时在 stderr 指路。
+  const logFile = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "logs", "dev-host.log");
+  const appendLog = async (text: string): Promise<void> => {
+    try {
+      await mkdir(dirname(logFile), { recursive: true });
+      await appendFile(logFile, `${new Date().toISOString()} ${text}\n`, "utf8");
+    } catch {
+      // 记不下来就算了：这里已在异常路径上，不该再抛。
+    }
+  };
+  ctx.effect(() => {
+    const onException = (error: Error): void => {
+      void appendLog(`[uncaughtException] ${error.stack ?? error.message}`);
+    };
+    const onRejection = (reason: unknown): void => {
+      void appendLog(`[unhandledRejection] ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`);
+    };
+    const onExit = (code: number): void => {
+      process.stderr.write(`[dsh] dev 宿主退出：code=${String(code)}，异常日志见 ${logFile}\n`);
+    };
+    process.on("uncaughtException", onException);
+    process.on("unhandledRejection", onRejection);
+    process.on("exit", onExit);
+    return () => {
+      process.off("uncaughtException", onException);
+      process.off("unhandledRejection", onRejection);
+      process.off("exit", onExit);
+    };
+  }, "dev-client-bundles: 宿主异常日志");
   // 行清单：自己扫（上游 `client-modules` 在 dev patch 里禁用了）。懒建一次——`apply` 不是 async。
   let rowsCache: ClientRow[] | undefined;
   // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。

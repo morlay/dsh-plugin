@@ -11,7 +11,6 @@ import type {} from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 // Type-only：`plugins.bundle.config` 的槽位声明（bundle 详情页的配置座位）。
 import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
-import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 import {
   CATALOG_NS,
   SESSION_MODE_CATALOG_REMOTE,
@@ -82,7 +81,6 @@ function unwrapHintService(scope: Context): HintsService {
 // 装上会话里的那一个面、本行配置页的字段文案，以及装本行的 bundle 那一页的表单。
 export function apply(ctx: Context): void {
   // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
-  installUiPrimitives(ctx);
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "session-mode: dictionaries");
 
