@@ -1,0 +1,29 @@
+diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/packages/api/session-controller/src/client/sessions/service.ts
+index dd86e7cac2..5f9d17ed63 100644
+--- a/packages/api/session-controller/src/client/sessions/service.ts
++++ b/packages/api/session-controller/src/client/sessions/service.ts
+@@ -565,12 +565,18 @@ export class ClientSessions implements ISessions {
+   }
+ 
+   private publishRetention(id: SessionId): void {
+-    const state = this.list.getSnapshot()
+-    const row = state.byId[id]
+-    const retainedBy = this.retentionSnapshot(id).retainedBy
+-    if (row !== undefined && row.retainedBy !== retainedBy) {
+-      this.list.set({ ...state, byId: { ...state.byId, [id]: { ...row, retainedBy } } })
+-    }
++    // 写入批处理到微任务：本方法会在**渲染窗口内**被调到（`ui-model-selection` 的 inject 工厂在渲染期
++    // materialize 会话 scope → retain），同步写 store 会让 React 的 `useSyncExternalStore` 在渲染期间
++    // 发现快照变化并报「Cannot update a component (…) while rendering a different component (…)」。
++    // 结构性更新走微任务本就是这个层的既有纪律（见 notifier 的 `markDirty`）。
++    queueMicrotask(() => {
++      const state = this.list.getSnapshot()
++      const row = state.byId[id]
++      const retainedBy = this.retentionSnapshot(id).retainedBy
++      if (row !== undefined && row.retainedBy !== retainedBy) {
++        this.list.set({ ...state, byId: { ...state.byId, [id]: { ...row, retainedBy } } })
++      }
++    })
+     const observer = this.retainObservers.get(id)
+     const snapshot = this.retentionSnapshot(id)
+     if (observer === undefined || observer.published === snapshot) return

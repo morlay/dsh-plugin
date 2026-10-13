@@ -31,6 +31,11 @@ export const patch: Step[] = [
   // "Cannot update a component while rendering a different component"（`DocumentTitle` 订阅了 store）。
   // 把首次同步推到微任务。
   { type: "git", patch: "model-selection-deferred-sync.patch" },
+  // 渲染窗口内的 store 写入：`publishRetention` 会在渲染期被调到（`ui-model-selection` 的 inject 工厂在
+  // 渲染期 materialize 会话 scope → retain），同步写 sessions store 会让 React 的 `useSyncExternalStore`
+  // 在渲染期间发现快照变化并报「Cannot update a component while rendering a different component」。
+  // 写入批处理到微任务（结构性更新走微任务本来就是这一层的纪律）。
+  { type: "git", patch: "session-retention-batched.patch" },
   {
     type: "exports",
     // 生成物出口：目标是 `prebuild` 阶段写出的 `.ts`（不是 `lib/*.js`），所以按出口名显式改指。
