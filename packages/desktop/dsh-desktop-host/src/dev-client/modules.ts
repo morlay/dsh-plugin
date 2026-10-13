@@ -1,9 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
-import { clientBundleSpec } from "@local/devkit";
-import { rolldown, type Plugin, type PluginContext } from "rolldown";
-import { esmExternalRequirePlugin } from "rolldown/plugins";
 
 
 // 开发态的 client 资源按**文件**寻址：`/plugins/{pkgName}/{version}/{filepath}`。仓库自己的包都是 TS/ESM
@@ -102,26 +99,7 @@ function pickCondition(entry: unknown): string | undefined {
   return undefined;
 }
 
-/** 出口名 → URL 段（`"."` 写成 `_default`）。 */
-export function exportSegmentOf(exportName: string): string {
-  return exportName === "." ? DEFAULT_EXPORT_SEGMENT : exportName.replace(/^\.\//u, "");
-}
 
-/** `/plugins/<pkg>/<export>`；export 段里根出口用 `_` 表示（URL 里 `.` 不便）。 */
-export function parseExportAddress(url: string): ExportAddress | undefined {
-  const path = url.split("?")[0] ?? "";
-  if (!path.startsWith(`${PLUGIN_ROUTE}/`)) return undefined;
-  const segments = path.slice(PLUGIN_ROUTE.length + 1).split("/").filter((segment) => segment !== "");
-  const [pkgSegment, ...rest] = segments;
-  if (pkgSegment === undefined || rest.length === 0) return undefined;
-  // combo（`??a,b`）、入口（`.app/entry.js`）与外部的 `??` 形状都不是出口寻址。
-  if (pkgSegment.startsWith("??") || pkgSegment.startsWith(".")) return undefined;
-  const exportSegment = rest.join("/");
-  return {
-    name: decodePackageName(pkgSegment),
-    exportName: exportSegment === "_" ? "." : `./${exportSegment}`,
-  };
-}
 
 /** 按文件寻址的解析结果：包名 + 包内相对路径（`src/client/index.ts` 这种）。 */
 export interface FileAddress {
@@ -130,20 +108,6 @@ export interface FileAddress {
   filepath: string;
 }
 
-/** 解析 `/plugins/{pkg}/{version}/{filepath}`；不是这个形状返回 undefined（交回 combo 路由）。 */
-export function parseFileAddress(url: string): FileAddress | undefined {
-  const path = url.split("?")[0] ?? "";
-  if (!path.startsWith(`${PLUGIN_ROUTE}/`)) return undefined;
-  const segments = path
-    .slice(PLUGIN_ROUTE.length + 1)
-    .split("/")
-    .filter((segment) => segment !== "");
-  const [pkgSegment, version, ...fileSegments] = segments;
-  if (pkgSegment === undefined || version === undefined || fileSegments.length === 0) return undefined;
-  // combo（`??a,b`）与模块表的 `/plugins/<id>/client.js` 都不是这个形状。
-  if (pkgSegment.startsWith("??")) return undefined;
-  return { name: decodePackageName(pkgSegment), version, filepath: fileSegments.join("/") };
-}
 
 /**
  * 包名 → 包根：走 node 的解析（pnpm 已经把依赖摆好了），**解析入口**再向上找最近的清单。
@@ -243,90 +207,8 @@ export interface ResolvedSpecifier {
   url: string;
 }
 
-/**
- * 把说明符解析成 `/plugins/<pkg>/<version>/<filepath>`。
- *
- * - 裸导入：先按包名解析入口，再按 `exports` 的**子路径**（`@pkg/types`）落文件；
- * - 相对导入：留在同包同版本里（`.ts` / `.tsx` / `/index.ts` 依次试）。
- *
- * 解析不了就返回 undefined——由调用方决定是保持原样（浏览器报 404）还是报错。
- */
-export async function resolveSpecifier(options: {
-  fromFile: string;
-  pkg: PackageRoot;
-  specifier: string;
-  moduleEntryOf: (name: string, subpath: string | undefined) => Promise<string | undefined>;
-}): Promise<ResolvedSpecifier | undefined> {
-  const { fromFile, specifier } = options;
-  if (specifier.startsWith(".")) {
-    const base = resolvePath(dirname(fromFile), specifier);
-    for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
-      if (!(await exists(candidate))) continue;
-      const target = await owningPackageOf(candidate);
-      if (target === undefined) continue;
-      return {
-        name: target.name,
-        filepath: relative(target.root, candidate).split(sep).join("/"),
-        url: `${PLUGIN_ROUTE}/${encodePackageName(target.name)}/${target.version}/${relative(target.root, candidate).split(sep).join("/")}`,
-      };
-    }
-    return undefined;
-  }
-  const name = packageNameOf(specifier);
-  const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
-  const file = await options.moduleEntryOf(name, subpath);
-  if (file === undefined) return undefined;
-  const target = await owningPackageOf(file);
-  if (target === undefined) return undefined;
-  const filepath = relative(target.root, file).split(sep).join("/");
-  return {
-    name: target.name,
-    filepath,
-    url: `${PLUGIN_ROUTE}/${encodePackageName(target.name)}/${target.version}/${filepath}`,
-  };
-}
 
-/**
- * 相对导入 → 同包同版本的绝对 URL（`.ts` / `.tsx` / `/index.ts` 依次试）。找不到就返回 undefined，
- * 让原样的相对路径进到浏览器（404 比静默改错好定位）。
- */
-export async function resolveRelativeUrl(
-  pkg: PackageRoot,
-  fromFile: string,
-  specifier: string,
-): Promise<string | undefined> {
-  const base = resolvePath(dirname(fromFile), specifier);
-  const candidates = [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts"), `${base}.js`];
-  let hit: string | undefined;
-  for (const candidate of candidates) {
-    if (await exists(candidate)) {
-      hit = candidate;
-      break;
-    }
-  }
-  if (hit === undefined) return undefined;
-  const filepath = relative(pkg.root, hit).split(sep).join("/");
-  if (filepath.startsWith("..")) return undefined;
-  return `${PLUGIN_ROUTE}/${encodePackageName(pkg.name)}/${pkg.version}/${filepath}`;
-}
 
-/** 三方依赖的入口：按 node 的解析规则从 `fromFile` 出发找（`node_modules` 里的那一份）。 */
-export async function dependencyEntryOf(
-  specifier: string,
-  fromFile: string,
-): Promise<string | undefined> {
-  const name = packageNameOf(specifier);
-  const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
-  const pkg = await packageRootOf(fromFile, name);
-  if (pkg === undefined) return undefined;
-  const byExports = await exportTargetOf(pkg.root, subpath);
-  if (byExports !== undefined) return byExports;
-  try {
-    return createRequire(fromFile).resolve(specifier);
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * 说明符里的包名：`@scope/name` 取两段、`name` 取一段。作用域包**没有子路径**时，
@@ -340,161 +222,9 @@ export function packageNameOf(specifier: string): string {
   return second < 0 ? specifier : specifier.slice(0, second);
 }
 
-/**
- * 裸导入 → 目标包源文件的绝对 URL。
- *
- * `clientEntryOf` 给"包名 → 该包的 client 源文件"（模块表就是这么用的）；据此定位包根后，无子路径的按入口、
- * 有子路径的按包清单 `exports` 解析。
- */
-export async function resolveBareUrl(
-  specifier: string,
-  fromFile: string,
-  clientEntryOf: (name: string) => string | undefined,
-  indexEntryOf: (name: string) => Promise<string | undefined> = async () => undefined,
-): Promise<{ url: string; via: "source" | "dependency" } | undefined> {
-  const name = packageNameOf(specifier);
-  const subpath = specifier === name ? undefined : specifier.slice(name.length + 1);
-  // 前端资源的依赖很复杂：只有"行"才在模块表里，普通依赖得按 node 的解析规则从**当前文件**出发
-  // 找到它的 node_modules（工作区链接、pnpm 的虚拟 store、三方包都走这条路），再把包清单的 `exports`
-  // 落到具体文件。都注册成模块反而难用——依赖图不该由模块表决定。
-  // 三段：模块表（行）→ 包索引（工作区与上游源码）→ node 解析（node_modules 里的一切，含三方包）。
-  const indexed = await indexEntryOf(name);
-  if (indexed !== undefined) {
-    const manifest = await manifestOf(indexed);
-    const target = subpath === undefined ? await exportTargetOf(indexed, undefined) : await exportTargetOf(indexed, subpath);
-    if (manifest !== undefined && target !== undefined) {
-      const filepath = relative(indexed, target).split(sep).join("/");
-      return {
-        url: `${PLUGIN_ROUTE}/${encodePackageName(manifest.name)}/${manifest.version}/${filepath}`,
-        via: "source",
-      };
-    }
-  }
-  const clientPath = clientEntryOf(name) ?? (await entryFileOf(fromFile, name, subpath));
-  if (clientPath === undefined) return undefined;
-  const owner = await owningPackageOf(clientPath);
-  if (owner === undefined) return undefined;
-  const target = subpath === undefined ? clientPath : await exportTargetOf(owner.root, subpath);
-  if (target === undefined) return undefined;
-  const filepath = relative(owner.root, target).split(sep).join("/");
-  // 三方包（入口在 `node_modules` 里）由调用方改走预打包。
-  const via = target.includes(`${sep}node_modules${sep}`) ? "dependency" : "source";
-  return { url: `${PLUGIN_ROUTE}/${encodePackageName(owner.name)}/${owner.version}/${filepath}`, via };
-}
 
-/**
- * 按 node 的解析规则找包：从 `fromFile` 出发，失败再试**额外解析根**。
- *
- * 消费方的 `node_modules` 里不一定有目标包（`@deepseek-ai/*` 只在 vendor 那边、工作区包各有各的依赖面），
- * 所以除了当前文件的目录，还要按仓库根与上游根解析一遍——vite 用「项目根」当解析根是同一个意思。
- */
-async function entryFileOf(
-  fromFile: string,
-  name: string,
-  subpath: string | undefined,
-): Promise<string | undefined> {
-  const roots = [fromFile];
-  const pkg = await packageRootOf(fromFile, name);
-  if (pkg === undefined) return undefined;
-  const byExports = await exportTargetOf(pkg.root, subpath);
-  if (byExports !== undefined) return byExports;
-  for (const from of roots) {
-    try {
-      const require = createRequire(from);
-      return require.resolve(subpath === undefined ? name : `${name}/${subpath}`);
-    } catch {
-      // 换下一个解析根。
-    }
-  }
-  return undefined;
-}
 
-/**
- * 把一个**出口**打成一份 ESM：包内（相对导入、同包别名）inline，跨包引用 external 成对方出口的 URL。
- *
- * 这正是「一个出口一份产物」的落地：相对路径不能交给浏览器——它按根路径解析（`./x` → `/vendor/…` 那种
- * 404），必须在构建期 inline；而跨包引用要留给运行时（改一个包不用重打别的包），所以 external 成 URL。
- * 样式与资产由 `cssInlinePlugins` 内联（自包含单文件，与打包链同一份实现）。
- */
-export async function bundleExport(options: {
-  /** 包根（rolldown 的 cwd：条件导出与 tsconfig 都按它读）。 */
-  root: string;
-  /** 出口指向的源文件（绝对路径）。 */
-  entry: string;
-  /** 跨包引用 → 绝对 URL；返回 undefined 表示"包内"，交给 rolldown inline。 */
-  rewrite: (specifier: string, resolvedId: string) => Promise<string | undefined> | undefined;
-  /** rolldown 插件（样式内联等）。 */
-  plugins?: Plugin[];
-}): Promise<string> {
-  const rewritePlugin: Plugin = {
-    name: "dsh-client-external",
-    async resolveId(this: PluginContext, source: string, importer: string | undefined) {
-      if (importer === undefined) return null;
-      if (source.startsWith(".")) return null;
-      // **先**按说明符改写，**再**管解析结果：跨包引用一律 external 成统一路径 URL（这是本层的核心约定）。
-      // 反过来先判 `this.resolve` 的话，解析成 external 的说明符（例如 vendor 里 cordis 依赖的
-      // `@deepseek-ai/cosmokit`）会在改写之前就 return，产物里留下浏览器认不了的裸包名。
-      const resolved = await this.resolve(source, importer, { skipSelf: true });
-      const url = await options.rewrite(source, resolved?.id ?? source);
-      if (url !== undefined) return { id: url, external: true };
-      // 改写不出 URL 的（包内相对导入、同包引用）交给 rolldown 自己解析，于是 inline 进这一份产物。
-      return null;
-    },
-  };
 
-  // 浏览器替身（`process.env` / `import.meta` 空壳）与条件名，取 devkit 的同一份约定：
-  // CJS 依赖常读 `process.env.NODE_ENV`，不替掉在浏览器里直接 `ReferenceError: process is not defined`。
-  const spec = await clientBundleSpec({ cwd: options.root });
-  const build = await rolldown({
-    input: options.entry,
-    cwd: options.root,
-    platform: "browser",
-    resolve: { conditionNames: spec.conditionNames },
-    transform: { define: spec.define },
-    // **不摇树**：一份产物按 URL 缓存、由多处按需取用（`pdf_viewer.mjs` 的 `TextLayerBuilder` 就是被消费方
-    // 具名 import 的），摇掉没用到的导出会让这些 import 在运行期直接失败。
-    treeshake: false,
-    plugins: [
-      // **顺序有讲究**：`esmExternalRequirePlugin` 会生成 facade（`import * as m from "<specifier>"`），
-      // 而那个说明符还得由我们的 `rewritePlugin` 换成统一路径 URL——所以 rewrite 必须排在它**前面**
-      // （内置插件把 `resolveId` 的 order 设成 `pre`，同序则按注册先后）。
-      rewritePlugin,
-      // CJS 依赖里的外部 `require()`：rolldown **默认保留 require 语义**（文档 "Bundling CJS → require
-      // external modules"），浏览器没有 `require`，产物一跑就报 "require … in an environment that doesn't
-      // expose the require function"。这个内置插件把外置 require 转成 ESM import。
-      esmExternalRequirePlugin({
-        // 只认两类：`node:` 内置，和**已经是我们统一路径的 URL**。
-        //
-        // 范围不能放成"所有非相对说明符"：它的 `resolveId` 带 `pre`（Vite 兼容），那样会抢在我们 rewrite
-        // 之前把跨包引用标成外部，产物里留下裸包名（`Failed to resolve module specifier`）。
-        // 而 URL 这条是必需的：CJS 模块对**外置依赖**的 `require("<url>")` 里，`<url>` 是 external id，
-        // rolldown 不会再走 `resolveId`，只有这个插件能把 `require` 转成 `import`。
-        external: [/^node:/u, /^\/plugins\//u],
-        skipDuplicateCheck: true,
-      }),
-      ...(options.plugins ?? []),
-    ],
-  });
-  try {
-    const { output } = await build.generate({ format: "esm", codeSplitting: false });
-    const chunk = output.find((item) => item.type === "chunk");
-    if (chunk === undefined || chunk.type !== "chunk") {
-      throw new Error(`dev-client: ${options.entry} produced no chunk`);
-    }
-    return chunk.code;
-  } finally {
-    await build.close();
-  }
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await readFile(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 目标入口是不是 **CJS-only**——决定跨包引用该交给谁处理。
@@ -507,19 +237,3 @@ export function isCjsOnlySource(source: string): boolean {
   return source.includes("module.exports") || source.includes("exports.");
 }
 
-/** 入口文件里出现的**裸导入**包名（近似：只看说明符，不展开语法树）——预扫本入口依赖了哪些包。 */
-export async function directImports(file: string): Promise<string[]> {
-  let raw: string;
-  try {
-    raw = await readFile(file, "utf8");
-  } catch {
-    return [];
-  }
-  const names = new Set<string>();
-  for (const match of raw.matchAll(/(?:from|require\()\s*["']([^"']+)["']/gu)) {
-    const specifier = match[1] ?? "";
-    if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) continue;
-    names.add(packageNameOf(specifier));
-  }
-  return [...names];
-}

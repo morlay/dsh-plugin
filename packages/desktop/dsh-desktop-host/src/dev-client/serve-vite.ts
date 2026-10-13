@@ -27,6 +27,9 @@ function rowsOf(source: RowsSource): Promise<Map<string, string>> {
 }
 
 /** 起一个 vite dev server（middleware 模式），并把 `/plugins` 前缀下的请求交给它。 */
+/** vite 的 HMR WebSocket 路径：专有路径，避免与上游自身的 upgrade 路由抢。 */
+export const HMR_PATH = "/__dsh_hmr";
+
 /** vite 期望的 http server 类型（`server.hmr.server`）：HMR 的 WebSocket 挂在它的 `upgrade` 上。 */
 type HmrServer = NonNullable<Extract<NonNullable<ServerOptions["hmr"]>, { server?: unknown }>["server"]>;
 
@@ -51,6 +54,13 @@ export async function startViteDev(
   const { repoRoot, base } = options;
   /** 页面与入口所在的真实目录（vite 的 root）。 */
   const appRoot = join(repoRoot, "packages", "desktop", "dsh-desktop-host", "app-boot");
+  /** 页面所在的端口（HMR 的 WebSocket 必须与页面**同源同端口**，否则客户端连不上）。 */
+  const pagePort = ((): number | undefined => {
+    const address = options.httpServer?.address();
+    if (address !== null && address !== undefined && typeof address === "object") return address.port;
+    const fromEnv = process.env["PORT"];
+    return fromEnv === undefined ? undefined : Number(fromEnv);
+  })();
   const server: ViteDevServer = await createServer({
     // **root 是整个仓库**：这样 vite 能服务仓库里任何源文件（`/@fs/…` 与依赖解析都要它）；页面与入口
     // 仍是 `app-boot/index.html` 与 `app-boot/index.ts`，由下面那条重写把 `/` 指过去。
@@ -78,9 +88,18 @@ export async function startViteDev(
     },
     server: {
       middlewareMode: true,
-      // HMR 的 WebSocket 挂到宿主的 http server 上；不给的话 vite 自己另起一个，浏览器连不上
-      // （`WebSocket closed without opened.`）。
-      ...(options.httpServer === undefined ? {} : { hmr: { server: options.httpServer } }),
+      // HMR 的 WebSocket 挂到宿主的 http server 上：**路径专有**（避免与上游自身的 upgrade 路由抢），
+      // **端口与页面一致**（客户端连的就是页面这个端口）。调用方要先在 webServer 上注册同名 upgrade
+      // 路由——上游对未注册的升级请求会直接 destroy socket，vite 就握不上手。
+      ...(options.httpServer === undefined
+        ? {}
+        : {
+            hmr: {
+              server: options.httpServer,
+              path: HMR_PATH,
+              ...(pagePort === undefined ? {} : { clientPort: pagePort }),
+            },
+          }),
       // 整个仓库都在 root 内，`/@fs/…` 的许可自然覆盖（vite 对 root 之外的文件会**放行**到 next，
       // 表现为一串"没被 vite 接手"的 404）。
       fs: { strict: false, allow: [repoRoot] },
@@ -99,7 +118,6 @@ export async function startViteDev(
     plugins: [
       dshClientRowsPlugin({
         repoRoot,
-        base,
         rows: () => rowsOf(options.rows),
         resolvePluginUrl: options.resolvePluginUrl,
       }),
@@ -112,13 +130,10 @@ export async function startViteDev(
     if ((req.url ?? "").split("?")[0] === "/" || (req.url ?? "").split("?")[0] === "/index.html") {
       req.url = pageEntry;
     }
-    // 放行 `/plugins/*`（我们的对外形态）与 vite 自己的 `/@id/…`、`/@vite/…`、`/node_modules/…`
-    // （虚拟模块、HMR 通道、预打包产物）——后者是它内部要用到的 URL 空间。
-    // **除明确不归它的**（我们自己的路由前缀 `/plugins` 由 host 那层先处理）之外，全交给 vite——
+    // `/plugins/*` 由 host 那层自己的路由先处理（那里挂的是对外形态的资源），其余全交给 vite——
     // 它要服务的形态很多（虚拟模块 `/@id`、取文件 `/@fs`、预打包 `/node_modules/.vite/deps`、HMR
-    // `/@vite`、以及站点根下的**相对路径**资源如 `./.dsh-dev/app-entry.js`），白名单只会不断漏。
-    const url = req.url ?? "";
-    if (url.startsWith(`${base}/`)) return false;
+    // 通道），白名单只会不断漏。
+    if ((req.url ?? "").startsWith(`${base}/`)) return false;
     server.middlewares(req, res, () => {
       if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       if (!res.writableEnded) res.end("dev-client: vite 没有这条路由\n");

@@ -20,8 +20,6 @@ const RESOLVED_ROWS = `\0${ROWS_VIRTUAL}`;
 export interface ClientRowsPluginOptions {
   /** 仓库根（vite 的 root）。 */
   repoRoot: string;
-  /** 对外路由前缀（`/plugins`）。 */
-  base: string;
   /** 行清单：包名 → client 半的**源码**入口（`src/client/index.ts` 那种）。 */
   rows: () => Promise<Map<string, string>>;
   /** 公共包（被多处引用，预打包时共享 chunk 才能保证实例唯一）：包名 → 源码入口。 */
@@ -77,7 +75,6 @@ async function clientVariantOf(source: string, importer: string): Promise<string
 }
 
 export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
-  const base = options.base;
   let server: ViteDevServer | undefined;
   const requireFromRepo = createRequire(join(options.repoRoot, "package.json"));
 

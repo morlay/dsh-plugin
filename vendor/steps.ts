@@ -23,11 +23,8 @@ export const patch: Step[] = [
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
-  // 开发态的 `/plugins` 前缀交给 `dev-client-bundles`（按文件 ESM 直访）：它提供 `devClientRoute` 服务时
-  // client-modules 让出前缀，否则两条 prefix 路由同名冲突。打包形态没有该服务，行为不变。
-  { type: "git", patch: "client-route-handover.patch" },
-  // 认证移除：自研 web 层后页面与资源都由我们提供，这层 cookie 校验只剩阻碍（本地 curl / playwright
-  // 调试都得先换 token）。
+  // 认证移除：页面与资源都由自研 web 层（vite dev server）提供，这层 cookie 校验只剩阻碍——摘掉它
+  // 之后所有 `/api/*` 一律 401（见 `remove-browser-auth.patch` 的说明）。
   { type: "git", patch: "remove-browser-auth.patch" },
   {
     type: "exports",
