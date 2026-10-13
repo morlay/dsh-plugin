@@ -232,10 +232,6 @@ export function apply(ctx: Context): void {
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
       });
       viteHandoff = started;
-      // 预热入口：首次的依赖预打包（几十个非开发模块）是秒级的，先替第一个页面请求把它等掉。
-      await started.warmup("/packages/client/dsh-client-modules/app-boot/index.ts").catch((error: unknown) => {
-        ctx.logger.warn(`client-modules: 预热失败 ${String(error)}`);
-      });
     })();
     await viteStarting;
     if (!announced) {

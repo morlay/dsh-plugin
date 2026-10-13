@@ -39,13 +39,6 @@ export interface ViteHandoff {
   serve: (req: IncomingMessage, res: ServerResponse) => boolean;
   /** 让 vite 渲染一份 HTML（插件的 `transformIndexHtml` 会在这里注入入口 script）。 */
   transformHtml: (html: string) => Promise<string>;
-  /**
-   * 预热一个 URL：把它的模块图连同**依赖预打包**跑一遍。
-   *
-   * 首次预打包（非开发模块有几十个）是秒级的，不预热就会让第一个页面请求等到超时；预热走的是
-   * vite 自己的 `warmupRequest`，没有第二套机制。
-   */
-  warmup: (url: string) => Promise<void>;
 }
 
 export async function startViteDev(
@@ -191,7 +184,6 @@ export async function startViteDev(
   return {
     serve,
     transformHtml: async (html: string) => await server.transformIndexHtml(`${base}/`, html),
-    warmup: async (url: string) => await server.warmupRequest(url),
   };
 }
 
