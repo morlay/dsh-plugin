@@ -10,7 +10,7 @@
 
 - insert:
     - id: portless-webserver
-      name: "../dist/webserver.js"
+      name: "../src/webserver.ts"
       config:
         host: "127.0.0.1"
         port: 0

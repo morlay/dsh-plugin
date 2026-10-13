@@ -1,0 +1,154 @@
+import { contextBridge, ipcRenderer, webFrame } from "electron";
+import { markDocumentPlatform, markWindowsTitlebar, syncNativeTheme } from "./document-marks.ts";
+import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT, DESKTOP_WS_PORT_ARGUMENT } from "./ipc.ts";
+import { desktopWebSocketShimCode } from "./page-ws-shim.ts";
+import { createStreamUplink } from "./stream-uplink.ts";
+
+interface StreamChunk {
+  readonly id: number;
+  readonly status?: number;
+  readonly data?: string;
+  readonly message?: string;
+}
+
+// scheme 取自 app 名，只有主进程知道；sandboxed preload 里只能从 argv 读回。
+const scheme = process.argv
+  .find((argument) => argument.startsWith(`${DESKTOP_SCHEME_ARGUMENT}=`))
+  ?.slice(DESKTOP_SCHEME_ARGUMENT.length + 1);
+
+// 宿主进程内回环的 ws 端口：页面把 `ws://app/…` 重写到它，就能用原生 WebSocket（垫片见
+// `@morlay/dsh-client-modules` 的 `app-boot/desktop-ws-shim.ts`）。
+const wsPort = process.argv
+  .find((argument) => argument.startsWith(`${DESKTOP_WS_PORT_ARGUMENT}=`))
+  ?.slice(DESKTOP_WS_PORT_ARGUMENT.length + 1);
+
+if (
+  scheme !== undefined &&
+  scheme !== "" &&
+  location.protocol === `${scheme}:` &&
+  location.hostname === "app"
+) {
+  console.log(`[dsh-shell] preload: scheme=${String(scheme)} wsPort=${String(wsPort)} webFrame=${typeof webFrame}`);
+  if (wsPort !== undefined && wsPort !== "") {
+    // 页面是 web 与桌面共用的，而这条垫片只对桌面形态有意义：在渲染进程最早的一刻把它注入**主 world**
+    // （`WebSocket` 是内建对象，`contextBridge` 覆盖不了，只有主 world 的脚本能换掉它）。
+    void webFrame.executeJavaScript(desktopWebSocketShimCode(Number(wsPort))).catch((error: unknown) => {
+      console.error("[dsh-shell] WebSocket 垫片注入失败", error);
+    });
+  }
+  contextBridge.exposeInMainWorld("__DSH_DIRECTORY_PICKER__", {
+    pick: () => ipcRenderer.invoke(DESKTOP_IPC.directoryPick) as Promise<string | null>,
+  });
+  // 页面 fetch 到自定义协议时请求体不可靠（POST 场景会挂住），桌面流改走主进程；
+  // 返回的 send / end 是逻辑流的上行（页面侧 uplink）：主进程把它们写成宿主请求体的后续行。
+  contextBridge.exposeInMainWorld("__DSH_DESKTOP_STREAM__", {
+    open(
+      endpoint: string,
+      payload: unknown,
+      handlers: {
+        chunk(text: string): void;
+        end(): void;
+        fail(message: string): void;
+      },
+    ): {
+      cancel(): void;
+      send(item: unknown): void;
+      end(): void;
+    } {
+      let id: number | undefined;
+      let cancelled = false;
+      const uplink = createStreamUplink(
+        (streamId, item) => {
+          ipcRenderer.send(DESKTOP_IPC.streamUplink, streamId, item);
+        },
+        (streamId) => {
+          ipcRenderer.send(DESKTOP_IPC.streamUplinkEnd, streamId);
+        },
+      );
+      const onChunk = (_event: unknown, value: StreamChunk): void => {
+        if (value.id !== id || value.data === undefined) return;
+        handlers.chunk(value.data);
+      };
+      const onEnd = (_event: unknown, value: StreamChunk): void => {
+        if (value.id === id) handlers.end();
+      };
+      const onError = (_event: unknown, value: StreamChunk): void => {
+        if (value.id === id) handlers.fail(value.message ?? "desktop stream failed");
+      };
+      ipcRenderer.on(DESKTOP_IPC.streamChunk, onChunk);
+      ipcRenderer.on(DESKTOP_IPC.streamEnd, onEnd);
+      ipcRenderer.on(DESKTOP_IPC.streamError, onError);
+      void ipcRenderer
+        .invoke(DESKTOP_IPC.streamOpen, endpoint, payload)
+        .then((opened: unknown) => {
+          id = opened as number;
+          if (cancelled) {
+            ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+            return;
+          }
+          uplink.bind(id);
+        })
+        .catch((error: unknown) => {
+          handlers.fail(error instanceof Error ? error.message : String(error));
+        });
+      return {
+        cancel() {
+          if (cancelled) return;
+          cancelled = true;
+          ipcRenderer.off(DESKTOP_IPC.streamChunk, onChunk);
+          ipcRenderer.off(DESKTOP_IPC.streamEnd, onEnd);
+          ipcRenderer.off(DESKTOP_IPC.streamError, onError);
+          if (id !== undefined) ipcRenderer.send(DESKTOP_IPC.streamCancel, id);
+        },
+        send(item) {
+          if (!cancelled) uplink.push(item);
+        },
+        end() {
+          if (!cancelled) uplink.close();
+        },
+      };
+    },
+  });
+}
+
+markDocumentPlatform(process.platform, document);
+markWindowsTitlebar(process.platform, document);
+
+// 上游 client 半按 `data-platform` 判定 desktop 运行时，并在那时**要求**这份桥存在
+// （`@deepseek-ai/dsh-client-shortcuts` 的 client 半缺它就直接构造失败）。
+contextBridge.exposeInMainWorld("dshDesktop", {
+  protocolVersion: 1,
+  keyboard: {
+    subscribe(listener: (input: unknown) => void): () => void {
+      const handle = (_event: unknown, input: unknown): void => {
+        listener(input);
+      };
+      ipcRenderer.on(DESKTOP_IPC.shortcutsInput, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.shortcutsInput, handle);
+      };
+    },
+    closeWindow: (revision: string) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsCloseWindow, revision) as Promise<void>,
+  },
+  shortcuts: {
+    get: (definitions: unknown) => ipcRenderer.invoke(DESKTOP_IPC.shortcutsGet, definitions),
+    edit: (edit: unknown, revision: string) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsEdit, edit, revision),
+    subscribe(listener: (snapshot: unknown) => void): () => void {
+      const handle = (_event: unknown, snapshot: unknown): void => {
+        listener(snapshot);
+      };
+      ipcRenderer.on(DESKTOP_IPC.shortcutsChanged, handle);
+      return () => {
+        ipcRenderer.off(DESKTOP_IPC.shortcutsChanged, handle);
+      };
+    },
+    recording: (active: boolean) =>
+      ipcRenderer.invoke(DESKTOP_IPC.shortcutsRecording, active) as Promise<void>,
+  },
+});
+
+syncNativeTheme(process.platform, document, (source) => {
+  ipcRenderer.send(DESKTOP_IPC.nativeThemeSet, source);
+});

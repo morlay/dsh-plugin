@@ -15,12 +15,11 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
-    "src",
     "locale/*.json",
+    "src",
     "dist"
   ],
   "type": "module",
-  "main": "./dist/index.mjs",
   "exports": {
     ".": "./src/index.ts",
     "./appconfig": "./src/appconfig.ts",
@@ -67,7 +66,8 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "electron": "^44.3.0"
+    "electron": "^44.3.0",
+    "@oxc-node/core": "^0.1.6"
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "workspace:*",

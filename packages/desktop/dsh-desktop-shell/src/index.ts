@@ -1,8 +1,15 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "./electron.ts";
+
+declare global {
+  /** 壳的包根：由引导（`bootstrap.mjs`，它就在包根）写入；发布包里没有引导时为 undefined。 */
+  // eslint-disable-next-line no-var -- 引导与业务代码之间的约定。
+  var __DSH_SHELL_ROOT__: string | undefined;
+}
+
 import type { BrowserWindow as BrowserWindowType, BrowserWindowConstructorOptions } from "electron";
 import { DESKTOP_HOST_PACKAGE } from "./official.ts";
 import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
@@ -301,7 +308,11 @@ async function main(): Promise<void> {
   let mainWindow: BrowserWindowType | undefined;
   let quitConfirmed = false;
   let quitPrompting = false;
-  const appPreload = fileURLToPath(new URL("./preload-app.cjs", import.meta.url));
+  // preload 必须是 CJS（sandboxed preload 只能 require electron 自己的几个模块），所以它仍是**构建产物**；
+  // 而壳的业务代码直接跑 `src/`，`import.meta.url` 的层级与 dist 形态不同——包根由引导报出来（发布包里没有
+  // 引导时退回相对推导，那时壳自己就在 dist 下）。
+  const shellRoot = globalThis.__DSH_SHELL_ROOT__ ?? join(dirname(fileURLToPath(import.meta.url)), "..");
+  const appPreload = join(shellRoot, "dist", "preload-app.cjs");
 
   // 只有打包形态拦一次确认（开发形态关窗即退出）。
   const confirmQuit = async (window?: BrowserWindowType): Promise<void> => {

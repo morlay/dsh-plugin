@@ -41,12 +41,12 @@ function payloadDir(): string {
   return PAYLOAD.dir;
 }
 
-// 部署里 host 的四样载荷：入口、无端口 webServer、wire 协议与桌面 patch——host 启动时按
-// 相对路径读后两者，缺任一样都起不来。
+// 部署里 host 的四样载荷：入口、无端口 webServer、wire 协议与桌面 patch——都是**源码**（宿主由壳用
+// `--import` 的 TS loader 起），缺任一样都起不来。
 const DEPLOYED_HOST_FILES: readonly (readonly string[])[] = [
-  ["dist", "index.js"],
-  ["dist", "webserver.js"],
-  ["dist", "wire.js"],
+  ["src", "index.ts"],
+  ["src", "webserver.ts"],
+  ["src", "wire.ts"],
   ["config", "desktop.cordis.patch.yml"],
 ];
 
@@ -75,7 +75,7 @@ describe("desktop host 载荷", () => {
 
     expect(await materializeDesktopHost(modulesDir)).toBe(stale);
 
-    expect(await readFile(join(stale, "dist", "index.js"), "utf8")).not.toContain("stale copy");
+    expect(await readFile(join(stale, "src", "index.ts"), "utf8")).not.toContain("stale copy");
     const manifest = JSON.parse(await readFile(join(stale, "package.json"), "utf8")) as {
       version?: string;
     };

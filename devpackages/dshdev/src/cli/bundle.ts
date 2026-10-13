@@ -6,7 +6,7 @@ import { buildDesktopApp } from "./electron-builder.ts";
 import { prepareIcons } from "./icon.ts";
 import { runPrepareRuntime } from "./prepare-runtime.ts";
 import { runPrepareSeed } from "./prepare-seed.ts";
-import { buildShell, SHELL_PACKAGE_ROOT } from "./shell.ts";
+import { prepareShell } from "./shell.ts";
 import {
   PROFILE_NAME,
   buildRoot,
@@ -167,7 +167,7 @@ export async function runBundle(options: BundleOptions): Promise<void> {
   console.log(
     `desktop bundle: workspace ${workspace} (${appConfig.displayName}@${appConfig.version})`,
   );
-  await buildShell();
+  const shell = await prepareShell(workspace);
   await runPrepareRuntime({ workspace });
   await runPrepareSeed({ workspace });
 
@@ -177,7 +177,7 @@ export async function runBundle(options: BundleOptions): Promise<void> {
   await writeAppConfig(join(buildRootDir, "runtime"), appConfig);
 
   await buildDesktopApp({
-    appRoot: SHELL_PACKAGE_ROOT,
+    appRoot: shell.root,
     buildRoot: buildRootDir,
     appConfig,
     icons,

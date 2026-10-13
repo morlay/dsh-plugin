@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop Shell",
+    "description": "The Electron shell of a dsh desktop app: serves the app's own scheme, boots the desktop profile through the host child over byte pipes, and installs the profile seed on first launch."
+  }
+}

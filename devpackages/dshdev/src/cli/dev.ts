@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
 import { devRuntimeRoot, requireDevRuntime } from "./dev-layout.ts";
-import { buildShell, SHELL_ENTRY, SHELL_PACKAGE_ROOT } from "./shell.ts";
+import { prepareShell } from "./shell.ts";
 import {
   PROFILE_NAME,
   buildRoot,
@@ -103,6 +103,7 @@ function threadpoolSize(): string {
 }
 
 async function launchElectron(
+  appRoot: string,
   profileDir: string,
   runtimeDir: string,
   buildRootDir: string,
@@ -158,9 +159,9 @@ async function launchElectron(
       // 远程 shell、CI）里 Chromium 的沙箱与 GPU 进程常常起不来——报 `sandbox initialization failed`
       // 之后 GPU 连环崩、最后 SIGTRAP。要保留沙箱就设 `DSH_DESKTOP_SANDBOX=1`。
       ...(process.env["DSH_DESKTOP_SANDBOX"] === "1" ? [] : ["--no-sandbox", "--disable-gpu"]),
-      SHELL_PACKAGE_ROOT,
+      appRoot,
     ],
-    SHELL_PACKAGE_ROOT,
+    appRoot,
     environment,
   );
 }
@@ -181,7 +182,8 @@ export async function runDev(options: DevOptions): Promise<void> {
   const home = resolveDevHome(workspace, manifest.name, options.home);
   const runtimeDir = devRuntimeRoot(repositoryRoot);
   await requireDevRuntime(runtimeDir);
-  await buildShell();
+  // 壳装配到打包工作目录（`.dshdev/shell`）：源码树里那份 `dist` 不再被 dev 依赖。
+  const shell = await prepareShell(workspace);
   const tsLoader = tsLoaderSpecifier();
 
   if (options.web) {
@@ -206,9 +208,6 @@ export async function runDev(options: DevOptions): Promise<void> {
     return;
   }
 
-  if (!(await pathExists(SHELL_ENTRY))) {
-    throw new Error(`desktop development: missing built artifact ${SHELL_ENTRY}`);
-  }
   const desktop = desktopConfig(manifest);
   const runtimeRoot = join(buildRootDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });
@@ -222,5 +221,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(workspace, runtimeDir, buildRootDir, tsLoader, home);
+  await launchElectron(shell.root, workspace, runtimeDir, buildRootDir, tsLoader, home);
 }
