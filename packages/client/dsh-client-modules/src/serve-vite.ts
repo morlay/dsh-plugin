@@ -125,10 +125,10 @@ export async function startViteDev(
       // **列表要显式**（不要设 `optimizeDeps.entries` 去扫描源码入口）：一旦让优化器扫源码图，workspace 的
       // 包也会被预打包，于是同一个包出现两份实例——症状是「同 namespace 的 locale 已注册」与跨实例的
       // 私有字段报错。workspace 包一律走源码面。
-      // 每个条目都是一份**独立**产物：`react-dom` 与 `react-dom/client` 同时列上会打出两份 react-dom，
-      // 页面里 `createRoot`（client 入口）与 `createPortal`（主入口）各拿一份实例，跨实例访问内部字段就炸。
-      // 只列一个入口，另一个会复用它。
-      include: ["react", "react-dom", "scheduler"],
+      // 每个条目都是一份**独立**产物：`react-dom` 与 `react-dom/client` 同时列上会打出两份 react-dom
+      // （`createRoot` 与 `createPortal` 各拿一份实例，跨实例访问内部字段就炸），所以只列主入口；
+      // `scheduler` 这类传递依赖也不用列——列了反而会因解析不到在启动时报警，react-dom 自己会带上它。
+      include: ["react", "react-dom"],
       rolldownOptions: {
         platform: "browser",
         transform: { define: { "process.env.NODE_ENV": JSON.stringify(process.env["NODE_ENV"] ?? "development") } },
