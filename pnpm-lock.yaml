@@ -432,9 +432,6 @@ importers:
 
   packages/client/dsh-client-ui-primitives:
     dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.1.0(supports-color@9.4.0)
@@ -454,6 +451,9 @@ importers:
         specifier: ^2.0.2
         version: 2.0.3
     devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/api/remotes
