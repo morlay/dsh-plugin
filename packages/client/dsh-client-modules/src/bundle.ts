@@ -146,12 +146,18 @@ export async function bundlePackage(options: BundleOptions): Promise<Bundled | u
       // 走 `lib` 而不是 `rollupOptions.input`：库模式的入口语义明确（接受绝对路径，按 entry 名出产物）。
       lib: { entry: options.input, formats: ["es"], fileName: (_format, entryName) => `${entryName}.js` },
       rollupOptions: {
-        external: (id: string) => !id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0"),
+        // `node:*` **不算外置**：它得走 `clientAssetPlugin` 的浏览器替身（空壳）——产物是我们自己服务的，
+        // 不经 vite 的 alias，原样留给浏览器就是 `Access to script at 'node:path' blocked by CORS`。
+        external: (id: string) =>
+          !id.startsWith("node:") &&
+          !id.startsWith(".") &&
+          !id.startsWith("/") &&
+          !id.startsWith("\0"),
         output: {
           format: "es",
           entryFileNames: "[name].js",
           chunkFileNames: "chunk-[hash].js",
-          paths: (id: string) => (id.startsWith("node:") ? id : urlOfSpecifier(options, id)),
+          paths: (id: string) => urlOfSpecifier(options, id),
         },
       },
     },
