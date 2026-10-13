@@ -81,11 +81,13 @@ export interface ClientRow {
  * 每行给出**包名**与该包 **client 半的源文件**。包的位置用 **entry 自己的 `parent.tree.ctx.baseUrl`**
  * 解析（上游 `resolveSource`/`resolveMeta` 用的就是它）——从进程的 cwd 解析不到这些包：pnpm 的严格布局
  * 下它们只在各自消费者的 node_modules 里，profile 的运行时目录又另有一套。
+ *
+ * **判据是清单里的 `dsh.client` 声明**（与上游 `client-modules` 同源）：光有 `src/client/` 目录不算行——
+ * 上游有若干包只是"宿主插件 + 一份 client 半"（`@deepseek-ai/dsh-session-title` 那种），它们由真正的行在
+ * 自己的 client 半里 import，不该出现在装配清单里；混进来就会多装配一次（`apply` 里那些"同 namespace 的
+ * locale 已注册"的报错就是这么来的），也会在入口打出一串 `skip (no apply/default)`。
  */
 async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Promise<ClientRow[]> {
-  // **按包名去重**：同一个包可以被多条 entry 引到（不同 baseUrl、或 profile 的分层里各写一次），
-  // 那样装配脚本会对同一个模块 `ctx.plugin` 两次——第二次 `apply` 会撞上"同 namespace 的 locale 已注册"
-  // 这类重复注册断言（`locale namespace "settings.schema-form" already has locale "zh"`）。
   const found = new Map<string, ClientRow>();
   // `entries()` 是生成器（cordis 的 Loader 就是这么给的），直接迭代即可。
   for (const entry of loader.entries()) {
@@ -99,6 +101,9 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
     if (baseUrl === undefined) continue;
     const resolved = await packageRootOf(baseUrl, name);
     if (resolved === undefined) continue;
+    const manifest = await manifestOf(resolved.root);
+    const declared = (manifest as { dsh?: { client?: unknown } } | undefined)?.dsh?.client;
+    if (manifest === undefined || declared === undefined) continue;
     const clientPath = await clientHalfOf(resolved.root);
     if (clientPath !== undefined) found.set(name, { id: name, clientPath });
   }

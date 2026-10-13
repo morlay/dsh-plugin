@@ -168,15 +168,23 @@ export async function exportTargetOf(
   }
 }
 
-/** 读包清单（名字 + 版本）。 */
-export async function manifestOf(root: string): Promise<{ name: string; version: string } | undefined> {
+/** 包清单里我们用到的那些字段（其余原样留着，调用方按需读）。 */
+export interface PackageManifest {
+  name: string;
+  version: string;
+  /** `dsh.client` 声明：有它才是 client 行（上游 `client-modules` 的 roster 判据）。 */
+  dsh?: { client?: unknown };
+  exports?: Record<string, unknown>;
+  main?: string;
+  module?: string;
+}
+
+/** 读包清单。 */
+export async function manifestOf(root: string): Promise<PackageManifest | undefined> {
   try {
-    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
-      name?: string;
-      version?: string;
-    };
+    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as Partial<PackageManifest>;
     if (manifest.name === undefined) return undefined;
-    return { name: manifest.name, version: manifest.version ?? "0" };
+    return { ...manifest, name: manifest.name, version: manifest.version ?? "0" };
   } catch {
     return undefined;
   }
