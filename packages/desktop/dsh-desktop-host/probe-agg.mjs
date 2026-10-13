@@ -1,0 +1,20 @@
+/** 临时探针：首屏请求数与聚合路径。 */
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const requests = [];
+const errors = [];
+page.on("request", (r) => requests.push(r.url()));
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 110)); });
+page.on("pageerror", (e) => errors.push(`[pageerror] ${e.message.slice(0, 110)}`));
+await page.goto("http://127.0.0.1:3080/", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(12000);
+const local = requests.filter((u) => u.includes("127.0.0.1"));
+const agg = local.filter((u) => u.includes("/@plugins/"));
+const deps = local.filter((u) => u.includes(".vite/deps"));
+const src = local.filter((u) => u.includes("/packages/") || u.includes("/vendor/"));
+console.log(`总请求 ${String(local.length)} | 聚合 ${String(agg.length)} | deps ${String(deps.length)} | 源码逐文件 ${String(src.length)}`);
+console.log("聚合样本:", [...new Set(agg)].slice(0, 3).join(" | "));
+const text = await page.evaluate(() => document.body.innerText.length);
+console.log("错误数:", errors.length, "| 正文长度:", text, errors.slice(0, 2).join(" || "));
+await browser.close();

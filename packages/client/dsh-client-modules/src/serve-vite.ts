@@ -78,13 +78,9 @@ export async function startViteDev(
     },
     publicDir: false,
     appType: "spa",
-    // 依赖预打包的缓存目录**按进程隔离**：常驻的 dev 服务与并行跑的 e2e 都从同一个仓库根出发，
-    // 共用默认的 `node_modules/.vite` 会互相踩（一方的 deps 产物被另一方覆盖 → 偶发 404/500）。
-    cacheDir: join(
-      process.env["DSH_HOME"] ?? join(repoRoot, ".dsh-store"),
-      "vite",
-      `p${process.env["PORT"] ?? "0"}`,
-    ),
+    // 缓存目录**不按进程隔离**（用 vite 默认的 `<root>/node_modules/.vite`）：deps 预打包与聚合产物
+    // 都该跨进程共用一份——隔离会让每次启动各打一遍，而且聚合产物里的 external 直接指向
+    // `/node_modules/.vite/deps/…`，那正是这里的默认位置。
     // **不读也不监听配置文件**：配置全是内联的（下面这些字段）。默认它会在 root 下找 `vite.config.*`
     // 并 watch，改动就 `restart()` 自己——而这个 dev server 跑在 dsh 宿主进程里，重启会连带把整条
     // 服务拖下水。关掉这条路径。
