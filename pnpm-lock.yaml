@@ -254,6 +254,9 @@ importers:
       '@morlay/better-session':
         specifier: workspace:*
         version: link:../../packages/bundles/better-session
+      '@morlay/dsh-client-modules':
+        specifier: workspace:*
+        version: link:../../packages/client/dsh-client-modules
       '@morlay/dsh-desktopify':
         specifier: workspace:*
         version: link:../../packages/desktop/dsh-desktopify
@@ -407,6 +410,25 @@ importers:
       js-yaml:
         specifier: ^4.1.0
         version: 4.3.2
+
+  packages/client/dsh-client-modules:
+    dependencies:
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/host/webserver
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+      '@types/node':
+        specifier: ^26.5.0
+        version: 26.6.5
 
   packages/client/ui-primitives:
     dependencies:

@@ -281,8 +281,8 @@ export function apply(ctx: Context): void {
   );
 
   ctx.effect(
-    // `prefix /plugins`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）都从
-    // 这一个入口进来，在 handler 里按 `req.url` 分发。
+    // `prefix /plugins`：对外形态（`/plugins/<pkg>/<version>/<export>`）之外的资源都由 vite 的兜底路由
+    // 处理，这里只留一条出口给「按包寻址」的请求。
     () => webServer.register({ kind: "prefix", path: PLUGIN_ROUTE, handler: serve }),
     "client-modules: /plugins route",
   );

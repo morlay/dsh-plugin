@@ -8,10 +8,9 @@ import { dirname, join, relative, resolve as resolvePath, sep } from "node:path"
 // 前端资源之间不再受模块表的行集（`inject`）限制。`version` 段取自包清单：既参与寻址，也天然当
 // cache-busting，不必再挂 `?rev=`。
 //
-// 转译交给 rolldown（它内部就是 oxc，且 `output.paths` 正好能做依赖改写）：`external` 全放行 → 不打包、
-// 逐文件出 ESM；`paths` 把每个 external 说明符换成 `/plugins/...` 的绝对 URL。
+// 转译与依赖图交给 vite（dev server 的模块图 + 依赖预打包），这里只做**对外地址**的解析。
 
-/** 路由前缀（与上游 `/plugins` 同前缀；combo 路由并存，回退时不用改页面）。 */
+/** 路由前缀（沿用上游的 `/plugins`，页面上不改 URL 形态）。 */
 export const PLUGIN_ROUTE = "/plugins";
 
 /** 仓库里的包：包根按真实路径记（软链已解开），供越界校验。 */
@@ -66,7 +65,7 @@ export function parsePluginAddress(url: string): PluginAddress | undefined {
   const path = url.split("?")[0] ?? "";
   if (!path.startsWith(`${PLUGIN_ROUTE}/`)) return undefined;
   const segments = path.slice(PLUGIN_ROUTE.length + 1).split("/").filter((segment) => segment !== "");
-  // combo（`??a,b`）、我们自己的入口（`.app/entry.js`）都不是按包寻址。
+  // 不是按包寻址的都放行（上游的 combo `??a,b` 那类；如今资源由 vite 直接服务，这条路只留兜底）。
   if (segments[0]?.startsWith("??") === true || segments[0]?.startsWith(".") === true) return undefined;
   const [pkgSegment, version, ...exportSegments] = segments;
   if (pkgSegment === undefined || version === undefined) return undefined;
