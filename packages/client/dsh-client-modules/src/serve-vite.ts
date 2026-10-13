@@ -48,8 +48,10 @@ export async function startViteDev(
     base: string;
     rows: RowsSource;
     resolvePluginUrl: (url: string) => Promise<string | undefined>;
-    /** 非开发模块的入口（`<pkg>/client`）：交给 vite 的 `optimizeDeps` 预打包。 */
+    /** 非开发模块的包名：交给 vite 的 `optimizeDeps` 预打包（`include` 用裸名，alias 指到源码）。 */
     optimizeInclude: readonly string[];
+    /** 这些包名 → 各自的 client 半源码（给 `resolve.alias`，让裸名可解析）。 */
+    optimizeAlias: readonly { name: string; entry: string }[];
     /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
     httpServer?: HmrServer | undefined;
   },
@@ -87,6 +89,9 @@ export async function startViteDev(
     //
     // 这些入口是**我们的源码**（里面有 `?raw`、CSS Modules 这类只有 vite 转换链认得的东西），优化器自己
     // 不认识——所以把它俩用的插件也挂给它：预打包与 dev 转换因此是同一套规则，我们没另造机制。
+    //
+    // `include` 里写的是**包名**（裸说明符）：optimizer 只认这个形态，再靠下面 `resolve.alias` 把
+    // 这些名字指到各自的 client 半，于是"预打包"与"引用"是同一个身份。
     optimizeDeps: {
       include: [...options.optimizeInclude],
       rolldownOptions: {
@@ -106,6 +111,12 @@ export async function startViteDev(
         // `node:*` 一律指向求值安全的空替身：宿主半的代码偶尔被同包的相对导入拖进 client 图，vite 默认的
         // browser-external 代理在读取成员时抛错，会让整条入口求值中断（页面白屏 + 一条难归因的报错）。
         { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
+        // **非开发模块**的包名 → 各自的 client 半源码：这样`optimizeDeps.include` 里的裸名能被
+        // optimizer 解析到，预打包与引用是同一个身份（改着的包不进这里，仍走 vite 的模块图）。
+        ...options.optimizeAlias.map(({ name, entry }) => ({
+          find: new RegExp(`^${name.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&")}$`),
+          replacement: entry,
+        })),
       ],
     },
     server: {

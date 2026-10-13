@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
+import { devExcluded, isAggregated } from "./config.ts";
 import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./resolve.ts";
 
 /** 行清单的虚拟模块 id（`app-boot/index.ts` 里 `import rows from "virtual:dsh-client-rows"`）。 */
@@ -78,6 +79,8 @@ async function clientVariantOf(source: string, importer: string): Promise<string
 
 export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
   let server: ViteDevServer | undefined;
+  let excludedCache: RegExp[] | undefined;
+  const excludedOf = async (): Promise<RegExp[]> => (excludedCache ??= await devExcluded());
   const requireFromRepo = createRequire(join(options.repoRoot, "package.json"));
 
   return {
@@ -111,18 +114,22 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
         if (variant !== undefined) return variant;
       }
       if (importer === undefined || source.startsWith(".") || source.startsWith("/")) return null;
-      // **仓库内的包一律落到源码文件**（不只行清单里那些）：它们的 bare 包名一旦交给依赖优化器，就会被
-      // 预打包，于是同一个包既有预打包版又有源码版——两份实例，表现为「同 namespace 的 locale 已注册」
-      // 与跨实例的私有字段报错。三方包（在 node_modules 下）不拦，交给优化器。
+      // **仓库内的包**：默认一律落到源码文件——它们的 bare 包名一旦交给依赖优化器就会被预打包，于是同一个
+      // 包既有预打包版又有源码版（两份实例，表现为「同 namespace 的 locale 已注册」）。
+      //
+      // 例外是 `dsh.dev.exclude` 点名的**非开发模块**：它们本来就该被预打包（`optimizeDeps.include` +
+      // alias 指的也是同一个入口），所以这里**放行**，交给优化器。
       const fromFile = importer !== undefined && importer.startsWith("/") ? join(options.repoRoot, importer) : importer;
       if (fromFile !== undefined) {
         const bare = packageNameOf(source);
         if (bare !== "") {
-          const subpath = source === bare ? undefined : source.slice(bare.length + 1);
-          const pkg = await packageRootOf(fromFile, bare);
-          if (pkg !== undefined && !pkg.root.includes("node_modules")) {
-            const half = await clientHalfOf(pkg.root, subpath);
-            if (half !== undefined) return half;
+          if (!isAggregated(bare, await excludedOf())) {
+            const subpath = source === bare ? undefined : source.slice(bare.length + 1);
+            const pkg = await packageRootOf(fromFile, bare);
+            if (pkg !== undefined && !pkg.root.includes("node_modules")) {
+              const half = await clientHalfOf(pkg.root, subpath);
+              if (half !== undefined) return half;
+            }
           }
         }
       }
@@ -132,6 +139,9 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       const known = rows.get(source) ?? shared.get(source);
       if (known !== undefined) {
         void server;
+        // 值是它**自己的名字**：这一行是"非开发模块"，入口交给 `optimizeDeps`（alias 指的也是同一个
+        // 源文件）——这里放行，别拦成源码路径，否则预打包与引用成了两个身份。
+        if (known === source) return null;
         return known;
       }
       // **行包 + 子路径**（`@deepseek-ai/dsh-client-ui-theme/brand-font.css` 这种）：包在 vendor 下、root 的

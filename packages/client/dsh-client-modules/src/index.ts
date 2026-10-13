@@ -154,21 +154,29 @@ export function apply(ctx: Context): void {
   let rowsCache: ClientRow[] | undefined;
   // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。
   const loader = ctx.loader;
-  // 非开发模块（`dsh.dev.exclude` 点名）：它们的入口交给 vite 的 `optimizeDeps` 预打包——
-  // 一次构建、共享 chunk、落盘缓存、按内容 hash 失效，全是 vite 现成的机制。
+  // 非开发模块（`dsh.dev.exclude` 点名）：入口交给 vite 的 `optimizeDeps`——一次构建、共享 chunk、
+  // 落盘缓存、按内容 hash 失效，全是 vite 现成的机制。它们的入口用**包名**（optimizer 只认裸说明符），
+  // 由 alias 指到各自的 client 半源码。
   let excludedCache: RegExp[] | undefined;
-  const optimizeInclude = async (): Promise<string[]> => {
-    excludedCache ??= await devExcluded();
-    const all = await allRowsOf();
-    return all
-      .filter((row) => isAggregated(row.id, excludedCache ?? []))
-      .map((row) => row.clientPath);
-  };
-  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
-  const allRowsOf = async (): Promise<ClientRow[]> => {
+  const excludedOf = async (): Promise<RegExp[]> => (excludedCache ??= await devExcluded());
+  const sourceRowsOf = async (): Promise<ClientRow[]> => {
     rowsCache ??= loader === undefined ? [] : await clientRowsOf(loader);
     return rowsCache;
   };
+  const allRowsOf = async (): Promise<ClientRow[]> => {
+    const patterns = await excludedOf();
+    return (await sourceRowsOf()).map((row) =>
+      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
+    );
+  };
+  const optimizeInclude = async (): Promise<string[]> => (await allRowsOf()).map((row) => row.clientPath);
+  const optimizeAlias = async (): Promise<{ name: string; entry: string }[]> => {
+    const patterns = await excludedOf();
+    return (await sourceRowsOf())
+      .filter((row) => isAggregated(row.id, patterns))
+      .map((row) => ({ name: row.id, entry: row.clientPath }));
+  };
+  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
   if (webServer === undefined)
     throw new Error("client-modules: webServer is a required service");
 
@@ -218,8 +226,9 @@ export function apply(ctx: Context): void {
         rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
-        // 非开发模块（`dsh.dev.exclude`）的入口：交给 vite 的 `optimizeDeps` 预打包。
+        // 非开发模块的入口（包名）与它们的 alias：交给 vite 的 `optimizeDeps` 预打包。
         optimizeInclude: await optimizeInclude(),
+        optimizeAlias: await optimizeAlias(),
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
       });
     })();
