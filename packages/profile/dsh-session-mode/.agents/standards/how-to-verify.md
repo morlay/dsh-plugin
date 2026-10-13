@@ -42,7 +42,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   （`default`）、模式清单（`modes.<id>.<字段>`，模式是成员行；四份名单都是数组，配过的值各占一项）与每个模式自己的
   默认模型（没配时是 `modes.<id>` 下的可添加项，配了就有 `provider` / `model` / `reasoningEffort` 三个位子）——用真
   `volatileForm` 与真 `Config`，只把 settings 的读写面换成替身。
-- 配置页的**渲染**在通用面测（[`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 schema 表单：
+- 配置页的**渲染**在通用面测（[`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 的 schema 表单：
   dict → 每个模式一组字段）；本包测两件事：schema 上那两处 volatile 标注仍在（上一条判据），以及 client 半的
   字段文案只认领 `['modes','*','defaultModel',…]` 下那三个字段，两份 policy 名单的候选值只认领
   `['modes','*','allowPolicies'|'denyPolicies','*']`（`field-wording.spec.ts`）。
@@ -64,7 +64,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
       class）、默认模型那一组是「`Switch` + 路由清单」（开关关时不画清单）、添加与保存各走一次动作。**控件本身的几何与
       输入输出**（标签输入的回车 / 粘贴 / 移除 / 候选、图标按钮的无障碍名与方形几何、选择器的当前值、模型路由清单的分组与
       单选、字段行的两种排法与徽标）在
-      [`client/ui-primitives`](../../../../client/ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
+      [`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
 - `src/__tests__/preset-plane.spec.ts`：**模式不限 preset（名单留空）、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面

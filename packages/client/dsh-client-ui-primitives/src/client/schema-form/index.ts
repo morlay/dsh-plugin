@@ -82,20 +82,10 @@ type RowConfigEntryProps = PropsRuntime<"plugins.row.config"> & PropsRenderFacto
 //
 // 调用方是**内联了本包的 client 行**（本包不再是装配行）：inline 后每个消费行的产物里各带一份这份代码、
 // 都会调到这里，所以先等依赖服务到齐（调用方不必自己排顺序），并保证同一运行时只装一次。
-//
-// 判据用**模块级标记**而不是"服务在场"：在 ESM 模块图（vite）下这份代码只有一份实例，标记即权威；而
-// "服务在场"要在第一次 `install` 的 provide 生效后才看得见，多个消费行的回调同时到齐时会全部落空，
-// 于是重复注册字典（`locale namespace "settings.schema-form" already has locale "zh"`）。
-let installed = false;
-
 export function apply(ctx: Context): void {
   ctx.inject([...inject], (scope) => {
-    if (installed) return;
-    installed = true;
-    // 本 fiber 销毁（HMR 重载）时放开标记，下一份能重新装上。
-    ctx.effect(() => () => {
-      installed = false;
-    }, "ui-schema-form: installed flag");
+    // 提示面已在场 = 另一份副本装过了：字典 / 槽 / 行入口都不再重复注册。
+    if (scope.get("schemaFormHints") !== undefined) return;
     install(scope);
   });
 }

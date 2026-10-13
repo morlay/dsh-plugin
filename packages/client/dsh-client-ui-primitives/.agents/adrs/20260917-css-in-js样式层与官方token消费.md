@@ -12,7 +12,7 @@
 
 **决定**
 
-建立 `@morlay/dsh-client-ui-primitives`（`packages/client/ui-primitives`），提供 css-in-js 样式层：
+建立 `@morlay/dsh-client-ui-primitives`（`packages/client/dsh-client-ui-primitives`），提供 css-in-js 样式层：
 
 - `styled('div')(...styles)`：样式对象 → 哈希 id + `data-css-*` 属性；
 - `styling`：规则表与**惰性立即注入**（新规则首次生成即 append `<style data-css>`，按 id 去重）；

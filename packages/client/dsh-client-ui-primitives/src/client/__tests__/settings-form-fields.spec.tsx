@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
+// 与 vendor/deepseek-harness/packages/client/dsh-client-ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
 // （导入面换成我们的 client 出口），另加一条 help 折叠的用例；改这里之前先看上游。
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -215,4 +215,4 @@ describe("SettingsSecretField", () => {
 });
 
 // 焦点环（`--dsw-focus-ring-width` / `--dsw-focus-ring-color`）不住本包了：设置表单原语用的是上游那份，
-// 它的样式在 `vendor/.../client/ui-primitives/src/settings-form/*.module.css`，由上游自己的用例守着。
+// 它的样式在 `vendor/.../client/dsh-client-ui-primitives/src/settings-form/*.module.css`，由上游自己的用例守着。

@@ -22,5 +22,5 @@
 **引用解析**：
 把引用文本归一成结构化引用的那一步（`findReferences` / `parseReferenceToken` /
 `formatReferenceMention`）。它的 home 是
-[`@morlay/dsh-client-ui-primitives`](../../../client/ui-primitives/src/reference.ts)（client 与 host 共用一份），
+[`@morlay/dsh-client-ui-primitives`](../../../client/dsh-client-ui-primitives/src/reference.ts)（client 与 host 共用一份），
 本包构建时内联。

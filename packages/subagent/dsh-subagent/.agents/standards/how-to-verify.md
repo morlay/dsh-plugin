@@ -31,7 +31,7 @@ exclude 里）、不给本包加包级 tsconfig（dts 阶段的 `rootDir` 会把
 ## 未覆盖（有明确原因）
 
 - **官方设置卡页面本身**（渲染出什么控件、能不能存）归上游那两行与通用面
-  [`client/ui-primitives`](../../../../client/ui-primitives/.agents/standards/how-to-verify.md)的用例；本包只保证
+  [`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/.agents/standards/how-to-verify.md)的用例；本包只保证
   「两个限额字段是 volatile + 装配行按官方 id 复用 + 文案被认领」这三条前提。
 - **上游文件的行为**（`child-agent.ts` / `activation.ts` 等未复制的那部分）由上游自己的测试覆盖，本包只在
   接线层面保证它们仍是同一份实现；`subagent:delegation` 那条文本由本包在装配期改写，所以它的判据在本包（见上表）。

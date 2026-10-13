@@ -27,7 +27,7 @@
 - **不能复用就组合上游**：`TagInput`（官方 `Menu` + 裸输入）、`SearchSelect`、`ModelRouteList`、`MultilineField`、
   `IconButton` 各配一个 `.module.css`；
 - **补布局原语**：`Stack` / `Row` / `Text` / `Panel`（档位表在 `layout.module.css` + `scales.ts`），
-  **业务插件只组合、不写样式**（这条同时写进本层 `packages/client/ui-primitives/.agents/standards/how-to-write.md`）。
+  **业务插件只组合、不写样式**（这条同时写进本层 `packages/client/dsh-client-ui-primitives/.agents/standards/how-to-write.md`）。
 
 工具链缺口一并补上：本包是 `client: false` 的**内联库**，`defineCordisPluginConfig` 之前在那种形态下不挂样式
 插件（`.module.css` 直接构建报错「`@tsdown/css` is not installed」）——现在内联库也挂 `cssInlinePlugins`。

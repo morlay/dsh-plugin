@@ -430,7 +430,7 @@ importers:
         specifier: ^26.5.0
         version: 26.6.5
 
-  packages/client/ui-primitives:
+  packages/client/dsh-client-ui-primitives:
     dependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -572,7 +572,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/skill/skill
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -855,7 +855,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/session/working-directory
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
@@ -983,7 +983,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/interaction/user-approval
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
 
   packages/session/session-branch:
     dependencies:
@@ -1116,7 +1116,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/core/session
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
     devDependencies:
       '@testing-library/react':
         specifier: ^16.1.0
@@ -1196,7 +1196,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/session/session-stats
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
       '@morlay/session-rdb':
         specifier: workspace:*
         version: link:../session-rdb
@@ -1324,7 +1324,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
       '@morlay/dsh-client-ui-primitives':
         specifier: workspace:*
-        version: link:../../client/ui-primitives
+        version: link:../../client/dsh-client-ui-primitives
 
   vendor/deepseek-harness/apps/cli:
     dependencies:
