@@ -64,7 +64,8 @@
     "@morlay/dsh-client-modules": "workspace:*",
     "@morlay/web-custom-profile": "workspace:*",
     "lightningcss": "^1.32.0",
-    "rolldown": "1.x"
+    "rolldown": "1.x",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
@@ -72,6 +73,7 @@
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@local/devkit": "workspace:*",
     "@types/node": "^26.5.0",
+    "@types/ws": "^8.18.2",
     "playwright": "^1.64.0"
   },
   "peerDependencies": {

@@ -249,6 +249,22 @@ export class PortlessWebServer extends Service {
     };
   }
 
+  /**
+   * 把一次升级请求交给已注册的路由（桌面形态的 WebSocket 桥用它：请求与 socket 都由桥造出来）。
+   *
+   * @param req - 升级请求（至少要带 `url` 与 `headers`）。
+   * @param socket - 承载这条连接的流。
+   * @param head - 升级请求之后已经读到的字节。
+   * @returns 命中路由返回 true；没有对应路由返回 false（调用方据此收摊）。
+   */
+  dispatchUpgrade(req: IncomingMessage, socket: unknown, head: Buffer): boolean {
+    const path = (req.url ?? "").split("?")[0] ?? "";
+    const route = this.upgrades.get(path);
+    if (route === undefined) return false;
+    void route.handler(req, socket, head);
+    return true;
+  }
+
   registerUpgrade(route: WebUpgradeRoute): () => void {
     if (this.upgrades.has(route.path))
       throw new Error(`webserver: duplicate upgrade route "${route.path}"`);

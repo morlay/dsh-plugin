@@ -1,5 +1,8 @@
 import type { IpcMainInvokeEvent } from "electron";
 
+/** 壳把宿主回环的 ws 端口经 preload 递进页面（`additionalArguments`，与 scheme 同一手法）。 */
+export const DESKTOP_WS_PORT_ARGUMENT = "--dsh-desktop-ws-port";
+
 export const DESKTOP_IPC = {
   directoryPick: "dsh-desktop:directory-pick",
   nativeThemeSet: "dsh-desktop:native-theme-set",

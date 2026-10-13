@@ -85,7 +85,16 @@ export type DesktopHostCommand =
 
 // 仍留在 Node IPC 上的生命周期事件。
 export type DesktopHostEvent =
-  | { readonly type: "ready"; readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION }
+  | {
+      readonly type: "ready";
+      readonly protocolVersion: typeof DESKTOP_HOST_PROTOCOL_VERSION;
+      /**
+       * 进程内回环上的 ws 端口（`127.0.0.1:<port>`）：桌面形态的页面拿不到 ws 端点（自定义协议下
+       * `ws://app/…` 无处可去），壳把这个端口经 preload 告诉页面，页面把地址重写过来即可用**原生**
+       * `WebSocket`。端口随机、只回环、不出本机。
+       */
+      readonly wsPort: number;
+    }
   | {
       readonly type: "fatal";
       // 给人看的一句失败原因（壳的 dialog 用它）。
@@ -98,7 +107,8 @@ export type DesktopHostEvent =
       // 当前可用的调试端点；为 null 表示没开（被关掉或开不起来，原因在 `message`）。
       readonly url: string | null;
       readonly message?: string;
-    };
+    }
+  ;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

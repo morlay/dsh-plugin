@@ -9,8 +9,14 @@ import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
 import { installDeveloperMenu } from "./developer-menu.ts";
 import { resolveDshHome } from "./dshhome.ts";
-import { DesktopHostProcess } from "./host-process.ts";
-import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT, assertDesktopSender, desktopScheme } from "./ipc.ts";
+import { DesktopHostProcess, type DesktopHostReady } from "./host-process.ts";
+import {
+  DESKTOP_IPC,
+  DESKTOP_SCHEME_ARGUMENT,
+  DESKTOP_WS_PORT_ARGUMENT,
+  assertDesktopSender,
+  desktopScheme,
+} from "./ipc.ts";
 import {
   PROFILE_WORKSPACE_NAME,
   installProfile,
@@ -202,6 +208,8 @@ function windowFrame(): Pick<
 function createWindow(
   preload: string,
   config: { width: number; height: number; minWidth: number; minHeight: number },
+  /** 宿主回环的 ws 端口（页面把 `ws://app/…` 重写到它，见 preload 的 `__DSH_DESKTOP_WS__`）。 */
+  wsPort: number,
 ): BrowserWindowType {
   const window = new BrowserWindow({
     width: config.width,
@@ -217,7 +225,11 @@ function createWindow(
       sandbox: true,
       webSecurity: true,
       // preload 是 sandboxed 的（读不到文件），scheme 只能这样递进去。
-      additionalArguments: [`${DESKTOP_SCHEME_ARGUMENT}=${SCHEME}`],
+      additionalArguments: [
+        `${DESKTOP_SCHEME_ARGUMENT}=${SCHEME}`,
+        // 页面把它当作 `ws://app/…` 的落点（见 preload 的 `__DSH_DESKTOP_WS__`）。
+        `${DESKTOP_WS_PORT_ARGUMENT}=${String(wsPort)}`,
+      ],
     },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -329,7 +341,9 @@ async function main(): Promise<void> {
     app.exit(1);
   };
 
-  const startHost = async (target: string = profileDir): Promise<DesktopHostProcess> => {
+  const startHost = async (
+    target: string = profileDir,
+  ): Promise<{ process: DesktopHostProcess; ready: DesktopHostReady }> => {
     const loader = sourceLoader(resources);
     const next = new DesktopHostProcess(resources.node, runtimeDir, target, hostInspectPort, {
       nodeArgs: [`--import=${loader}`],
@@ -357,8 +371,8 @@ async function main(): Promise<void> {
       spawn: shellWrappedSpawn,
       onFailure: handleHostFailure,
     });
-    await next.start();
-    return next;
+    const ready = await next.start();
+    return { process: next, ready };
   };
 
   // 应用页面的全部请求（文档、资源、插件 bundle、API、流）都经字节管道交给宿主进程内的 webServer。
@@ -496,8 +510,10 @@ async function main(): Promise<void> {
     shortcuts.dispose();
   });
 
+  /** 宿主回环的 ws 端口：宿主起好之后填入（窗口重建时仍用它）。 */
+  let desktopWsPort = 0;
   const createMainWindow = (): BrowserWindowType => {
-    const window = createWindow(appPreload, appConfig.window);
+    const window = createWindow(appPreload, appConfig.window, desktopWsPort);
     mainWindow = window;
     shortcuts.attach(window);
     window.once("ready-to-show", () => {
@@ -536,7 +552,10 @@ async function main(): Promise<void> {
     developerMenu.dispose();
   });
 
-  host = await startHost();
+  const started = await startHost();
+  host = started.process;
+  desktopWsPort = started.ready.wsPort;
+  console.log(`[dsh-shell] 宿主就绪：wsPort=${String(desktopWsPort)} protocol=${String(started.ready.protocolVersion)}`);
 
   mainWindow = createMainWindow();
   await mainWindow.loadURL(APPLICATION_URL);

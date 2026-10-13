@@ -1,6 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webFrame } from "electron";
 import { markDocumentPlatform, markWindowsTitlebar, syncNativeTheme } from "./document-marks.ts";
-import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT } from "./ipc.ts";
+import { DESKTOP_IPC, DESKTOP_SCHEME_ARGUMENT, DESKTOP_WS_PORT_ARGUMENT } from "./ipc.ts";
+import { desktopWebSocketShimCode } from "./page-ws-shim.ts";
 import { createStreamUplink } from "./stream-uplink.ts";
 
 interface StreamChunk {
@@ -15,12 +16,26 @@ const scheme = process.argv
   .find((argument) => argument.startsWith(`${DESKTOP_SCHEME_ARGUMENT}=`))
   ?.slice(DESKTOP_SCHEME_ARGUMENT.length + 1);
 
+// 宿主进程内回环的 ws 端口：页面把 `ws://app/…` 重写到它，就能用原生 WebSocket（垫片见
+// `@morlay/dsh-client-modules` 的 `app-boot/desktop-ws-shim.ts`）。
+const wsPort = process.argv
+  .find((argument) => argument.startsWith(`${DESKTOP_WS_PORT_ARGUMENT}=`))
+  ?.slice(DESKTOP_WS_PORT_ARGUMENT.length + 1);
+
 if (
   scheme !== undefined &&
   scheme !== "" &&
   location.protocol === `${scheme}:` &&
   location.hostname === "app"
 ) {
+  console.log(`[dsh-shell] preload: scheme=${String(scheme)} wsPort=${String(wsPort)} webFrame=${typeof webFrame}`);
+  if (wsPort !== undefined && wsPort !== "") {
+    // 页面是 web 与桌面共用的，而这条垫片只对桌面形态有意义：在渲染进程最早的一刻把它注入**主 world**
+    // （`WebSocket` 是内建对象，`contextBridge` 覆盖不了，只有主 world 的脚本能换掉它）。
+    void webFrame.executeJavaScript(desktopWebSocketShimCode(Number(wsPort))).catch((error: unknown) => {
+      console.error("[dsh-shell] WebSocket 垫片注入失败", error);
+    });
+  }
   contextBridge.exposeInMainWorld("__DSH_DIRECTORY_PICKER__", {
     pick: () => ipcRenderer.invoke(DESKTOP_IPC.directoryPick) as Promise<string | null>,
   });

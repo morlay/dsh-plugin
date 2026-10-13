@@ -28,6 +28,7 @@ import {
 } from "./transport.ts";
 import { applyInspectorCommand, closeInspectorEndpoint } from "./inspector.ts";
 import { installDevtoolsAssets } from "./devtools-assets.ts";
+import { startLoopbackUpgradeServer } from "./ws-bridge.ts";
 import { PortlessWebServer } from "./webserver.ts";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
@@ -331,7 +332,10 @@ async function main(): Promise<void> {
       `gateway=${gateway === undefined ? "missing" : "present"} ` +
       `streamRoute=${DESKTOP_STREAM_PATH}`,
   );
-  send({ type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION });
+  // 页面侧的 ws（`ws://app/…`）在自定义协议下无处可去：起一个进程内回环端点，把端口告诉壳（壳再经
+  // preload 交给页面），页面把它重写成 `ws://127.0.0.1:<port>/…` 就能直接用原生 WebSocket。
+  const wsEndpoint = await startLoopbackUpgradeServer(webServer);
+  send({ type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION, wsPort: wsEndpoint.port });
 }
 
 if (import.meta.main) {

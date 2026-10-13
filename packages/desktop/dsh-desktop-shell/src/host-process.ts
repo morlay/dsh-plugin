@@ -52,6 +52,8 @@ async function exitsWithin(exit: Promise<void>, milliseconds: number): Promise<b
 
 export interface DesktopHostReady {
   readonly protocolVersion: number;
+  /** 宿主进程内回环的 ws 端口（页面把 `ws://app/…` 重写到这里，见 `@morlay/dsh-desktop-host/ws-bridge`）。 */
+  readonly wsPort: number;
 }
 
 // 后端调试端点的状态：`url` 为空表示没开（被关掉或开不起来，原因在 `message`）。
@@ -205,7 +207,7 @@ export class DesktopHostProcess {
         for (const listener of this.inspectedListeners) listener(message);
         return;
       }
-      this.readyResolve({ protocolVersion: message.protocolVersion });
+      this.readyResolve({ protocolVersion: message.protocolVersion, wsPort: message.wsPort });
     });
     child.once("error", (error) => {
       this.fail(error);
