@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import { createServer, type ServerOptions, type ViteDevServer } from "vite";
 import { dshClientRowsPlugin, ROWS_VIRTUAL } from "./vite-plugin.ts";
-import { packageRootOf } from "./modules.ts";
+import { packageRootOf } from "./resolve.ts";
 
 /**
  * 行清单来源：cordis Loader 的 entries 里声明 `dsh.client` 的那些包。
@@ -53,7 +53,7 @@ export async function startViteDev(
 ): Promise<ViteHandoff> {
   const { repoRoot, base } = options;
   /** 页面与入口所在的真实目录（vite 的 root）。 */
-  const appRoot = join(repoRoot, "packages", "desktop", "dsh-desktop-host", "app-boot");
+  const appRoot = join(repoRoot, "packages", "client", "dsh-client-modules", "app-boot");
   /** 页面所在的端口（HMR 的 WebSocket 必须与页面**同源同端口**，否则客户端连不上）。 */
   const pagePort = ((): number | undefined => {
     const address = options.httpServer?.address();
@@ -141,9 +141,9 @@ export async function startViteDev(
     ],
   });
   current = server;
-  ctx.logger.info("dev-client: vite dev server 就绪（root=%s）", repoRoot);
+  ctx.logger.info("client-modules: vite dev server 就绪（root=%s）", repoRoot);
   /** 页面入口（相对 root 的路径）：`/` 重写到这里，HTML 里的 `./index.ts` 也随之解析到 app-boot 下。 */
-  const pageEntry = "/packages/desktop/dsh-desktop-host/app-boot/index.html";
+  const pageEntry = "/packages/client/dsh-client-modules/app-boot/index.html";
   const serve = (req: IncomingMessage, res: ServerResponse): boolean => {
     if ((req.url ?? "").split("?")[0] === "/" || (req.url ?? "").split("?")[0] === "/index.html") {
       req.url = pageEntry;
@@ -156,7 +156,7 @@ export async function startViteDev(
     try {
       ;(current ?? server).middlewares(req, res, () => {
         if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-        if (!res.writableEnded) res.end("dev-client: vite 没有这条路由\n");
+        if (!res.writableEnded) res.end("client-modules: vite 没有这条路由\n");
       });
     } catch (error) {
       ctx.logger.error(error);

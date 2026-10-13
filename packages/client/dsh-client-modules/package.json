@@ -1,0 +1,54 @@
+{
+  "name": "@morlay/dsh-client-modules",
+  "version": "0.2.6-alpha.0",
+  "description": "Dev-form web layer for dsh: serves the page, the app entry and every client resource through an in-process vite dev server (middleware mode) — the node-side counterpart of upstream @deepseek-ai/dsh-client-modules, with the module table replaced by vite's resolver, dependency prebundling and HMR.",
+  "keywords": [
+    "client",
+    "dsh",
+    "dsh-plugin",
+    "host",
+    "vite"
+  ],
+  "license": "MIT",
+  "author": "morlay",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "app-boot",
+    "config/dev.cordis.patch.yml",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.js",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "vite": "^8.3.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:*",
+    "@local/devkit": "workspace:*",
+    "@types/node": "^26.5.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  }
+}

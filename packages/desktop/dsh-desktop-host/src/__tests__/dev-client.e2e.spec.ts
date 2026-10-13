@@ -72,7 +72,7 @@ beforeAll(async () => {
     runtimeDir: `${REPO}node_modules/.pnpm`,
     profile: "web",
     patchFiles: [
-      `${REPO}packages/desktop/dsh-desktop-host/config/dev-client-bundles.cordis.patch.yml`,
+      `${REPO}packages/client/dsh-client-modules/config/dev.cordis.patch.yml`,
     ],
     args: webArgs([], String(port)),
   });

@@ -45,10 +45,10 @@ import {
 } from "./wire.ts";
 
 const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml", import.meta.url));
-// 源码面的 client 现场打包行单独一层：web 形态（）也要挂它，
+// 前端服务（`@morlay/dsh-client-modules`）单独一层：web 与桌面两种形态都要挂它，
 // 但不要桌面专属的那几层。
 const DEV_CLIENT_PATCH = fileURLToPath(
-  new URL("../config/dev-client-bundles.cordis.patch.yml", import.meta.url),
+  new URL(import.meta.resolve("@morlay/dsh-client-modules/config/dev.cordis.patch.yml")),
 );
 
 interface PendingRequest {

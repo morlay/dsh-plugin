@@ -12,9 +12,9 @@ import {
   parsePluginAddress,
   PLUGIN_ROUTE,
   resolveInPackage,
-} from "./modules.ts";
+} from "./resolve.ts";
 
-export const name = "dev-client-bundles";
+export const name = "client-modules";
 
 export const inject = ["loader", "webServer"];
 
@@ -144,7 +144,7 @@ export function apply(ctx: Context): void {
       process.off("unhandledRejection", onRejection);
       process.off("exit", onExit);
     };
-  }, "dev-client-bundles: 宿主异常日志");
+  }, "client-modules: 宿主异常日志");
   // 行清单：自己扫（上游 `client-modules` 在 dev patch 里禁用了）。懒建一次——`apply` 不是 async。
   let rowsCache: ClientRow[] | undefined;
   // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。
@@ -155,7 +155,7 @@ export function apply(ctx: Context): void {
     return rowsCache;
   };
   if (webServer === undefined)
-    throw new Error("dev-client-bundles: webServer is a required service");
+    throw new Error("client-modules: webServer is a required service");
 
   // 包名 → 包根：交给 node 的解析（`createRequire(from).resolve`），不自己扫目录。
   // 基准是**发起引用的那个文件**——node 的规则就是这样，pnpm 的 node_modules 也按依赖关系摆好了。
@@ -181,7 +181,7 @@ export function apply(ctx: Context): void {
   /** 兜底：vite 不认的路径直接 404（dev 形态下页面与资源全归它）。 */
   const fallback = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-    res.end("dev-client-bundles: 没有这条路由\n");
+    res.end("client-modules: 没有这条路由\n");
   };
 
   // vite dev server（懒建）：客户端资源全权交给它——依赖预打包、CJS→ESM、具名导出、外置 require、共享
@@ -263,7 +263,7 @@ export function apply(ctx: Context): void {
   };
   // 用与上游同一个 API 占**兜底位**（`registerFallback`）：页面、入口、依赖预打包产物与 HMR 通道都是
   // vite 的；上游 `frontend-static` 那一行（挂在 `web-runtime` 上）在 dev patch 里已停用。
-  ctx.effect(() => webServer.registerFallback(serveAny), "dev-client-bundles: vite 兜底");
+  ctx.effect(() => webServer.registerFallback(serveAny), "client-modules: vite 兜底");
   // 启动即预热：vite dev server 起来那一刻打出访问地址（跟它自己的 ready 提示一个意思），
   // 也把首屏要用的模块图先备好——懒建会让第一条请求等它冷启动。
   void ensureVite().catch((error: unknown) => { ctx.logger.error(error); });
@@ -277,13 +277,13 @@ export function apply(ctx: Context): void {
           /* vite 的 HMR 通道自己处理这次升级 */
         },
       }),
-    "dev-client-bundles: vite hmr upgrade",
+    "client-modules: vite hmr upgrade",
   );
 
   ctx.effect(
     // `prefix /plugins`：combo（`/plugins/??a,b`）与按文件寻址（`/plugins/<pkg>/<version>/<file>`）都从
     // 这一个入口进来，在 handler 里按 `req.url` 分发。
     () => webServer.register({ kind: "prefix", path: PLUGIN_ROUTE, handler: serve }),
-    "dev-client-bundles: /plugins route",
+    "client-modules: /plugins route",
   );
 }

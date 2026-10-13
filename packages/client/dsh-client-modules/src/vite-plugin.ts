@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
-import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./modules.ts";
+import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./resolve.ts";
 
 /** 行清单的虚拟模块 id（`app-boot/index.ts` 里 `import rows from "virtual:dsh-client-rows"`）。 */
 export const ROWS_VIRTUAL = "dsh-client-rows";

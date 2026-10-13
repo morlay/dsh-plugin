@@ -18,15 +18,13 @@
   "files": [
     "locale/*.json",
     "dist",
-    "config/desktop.cordis.patch.yml",
-    "config/dev-client-bundles.cordis.patch.yml"
+    "config/desktop.cordis.patch.yml"
   ],
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
     ".": "./src/index.ts",
     "./webserver": "./src/webserver.ts",
-    "./dev-client-bundles": "./src/dev-client/index.ts",
     "./wire": "./src/wire.ts",
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
@@ -36,7 +34,6 @@
     "exports": {
       ".": "./dist/index.js",
       "./webserver": "./dist/webserver.js",
-      "./dev-client-bundles": "./dist/dev-client-bundles.js",
       "./wire": "./dist/wire.js",
       "./paths": "./dist/paths.js",
       "./package.json": "./package.json",

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@morlay/better-session": "workspace:*",
+    "@morlay/dsh-client-modules": "workspace:*",
     "@morlay/mydsh-profile": "workspace:*",
     "@morlay/ollama-provider-profile": "workspace:*",
     "@morlay/sandbox-profile": "workspace:*",

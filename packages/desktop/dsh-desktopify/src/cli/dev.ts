@@ -84,10 +84,11 @@ async function webEntry(): Promise<string> {
 // 源码 client 半「现场打包」那条行的定义只有一份：宿主包里的 overlay（它按相对路径指自己的 `lib/`）。
 // 桌面形态由宿主自己挂；web 形态的 profile 就是 app 目录，宿主那层拿不到，所以这里按 `--patch` 挂上。
 async function devClientPatch(): Promise<string> {
-  const hostRoot = dirname(
-    fileURLToPath(import.meta.resolve(`${DESKTOP_HOST_PACKAGE}/package.json`)),
+  // dev 形态挂的前端服务行住在 `@morlay/dsh-client-modules`（与上游 `client/modules` 同位置）。
+  const clientModulesRoot = dirname(
+    fileURLToPath(import.meta.resolve("@morlay/dsh-client-modules/package.json")),
   );
-  const patch = join(hostRoot, "config", "dev-client-bundles.cordis.patch.yml");
+  const patch = join(clientModulesRoot, "config", "dev.cordis.patch.yml");
   if (!(await pathExists(patch)))
     throw new Error(`desktop development: missing ${patch}; run the tool build (pnpm build)`);
   return patch;
