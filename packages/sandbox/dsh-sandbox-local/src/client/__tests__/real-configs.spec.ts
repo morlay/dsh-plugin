@@ -7,7 +7,7 @@
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { schemaForm } from "@morlay/dsh-client-ui-primitives";
-import { Config as SandboxConfig } from "@morlay/dsh-sandbox-local";
+import { Config as SandboxConfig } from "../../index.ts";
 
 const t = ((key: string) =>
   (schemaForm.zh as unknown as Record<string, string>)[key] ??

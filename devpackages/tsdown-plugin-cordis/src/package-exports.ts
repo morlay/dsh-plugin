@@ -157,13 +157,18 @@ async function writeManifest(
 
     const runtime = pick(found.runtime);
     if (runtime === undefined) continue;
+    // host 面也带 `types`：产物里本来就有 `.d.mts`，出口不写它，消费方的类型解析就落到 `any`。
+    const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
     dev[exportKey(entry)] = entrySource;
-    published[exportKey(entry)] = artifact(runtime);
+    published[exportKey(entry)] =
+      declarations === undefined
+        ? artifact(runtime)
+        : { types: artifact(declarations), default: artifact(runtime) };
   }
 
   dev[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
-  // 源码子路径出口：包内测试与工具按**包名**引用自己的源码（上游同一约定），发布清单里不带它。
-  dev["./src/*"] = "./src/*";
+  // 不写 `./src/*`：那会让消费方（含预打包器）伸手进任意源码，破坏"按 export 预编译"的准确性。
+  // 包内测试要内部符号时走**相对路径**（上游同一约定）。
   published[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   if (await exists(join(cwd, "cordis.patch.yml"))) {
     dev[PATCH_EXPORT] = PATCH_EXPORT;

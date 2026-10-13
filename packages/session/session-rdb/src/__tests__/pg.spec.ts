@@ -4,10 +4,10 @@ import { Client } from "pg";
 import { Context } from "@deepseek-ai/cordis";
 import { createAtScheduleRecord, ScheduleId } from "@deepseek-ai/dsh-schedule";
 import { SessionId, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
-import SessionPersistenceRdb from "@morlay/session-rdb";
-import { runPersistenceContract } from "@morlay/session-rdb/testing";
-import { runCoordinatorContract, type CoordinatorFixture } from "@morlay/session-rdb/testing";
+import { meta, oneTurnLog } from "../testing.ts";
+import SessionPersistenceRdb from "../index.ts";
+import { runPersistenceContract } from "../testing.ts";
+import { runCoordinatorContract, type CoordinatorFixture } from "../testing.ts";
 
 const ADMIN_URL =
   process.env.TEST_PG_URL ?? "postgres://postgres:postgres@localhost:25433/postgres";

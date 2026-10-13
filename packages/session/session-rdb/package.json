@@ -35,20 +35,46 @@
     "./testing": "./src/testing.ts",
     "./usage": "./src/usage.ts",
     "./package.json": "./package.json",
-    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
-      "./artifact": "./dist/artifact.mjs",
-      "./deletion": "./dist/deletion.mjs",
-      "./export": "./dist/export.mjs",
-      "./gc": "./dist/gc.mjs",
-      "./import": "./dist/import.mjs",
-      "./storage": "./dist/storage.mjs",
-      "./testing": "./dist/testing.mjs",
-      "./usage": "./dist/usage.mjs",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./artifact": {
+        "types": "./dist/artifact.d.mts",
+        "default": "./dist/artifact.mjs"
+      },
+      "./deletion": {
+        "types": "./dist/deletion.d.mts",
+        "default": "./dist/deletion.mjs"
+      },
+      "./export": {
+        "types": "./dist/export.d.mts",
+        "default": "./dist/export.mjs"
+      },
+      "./gc": {
+        "types": "./dist/gc.d.mts",
+        "default": "./dist/gc.mjs"
+      },
+      "./import": {
+        "types": "./dist/import.d.mts",
+        "default": "./dist/import.mjs"
+      },
+      "./storage": {
+        "types": "./dist/storage.d.mts",
+        "default": "./dist/storage.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./usage": {
+        "types": "./dist/usage.d.mts",
+        "default": "./dist/usage.mjs"
+      },
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }

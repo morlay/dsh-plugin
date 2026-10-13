@@ -9,8 +9,8 @@ import {
   SESSION_EDITOR_PATHS,
   type SessionEditorAction,
   twoTurnLog,
-} from "@morlay/ui-conversation-message-actions/testing";
-import { closedTurns, editableMessages } from "@morlay/ui-conversation-message-actions/plan";
+} from "../testing.ts";
+import { closedTurns, editableMessages } from "../plan.ts";
 
 interface FakeRequest {
   method?: string;

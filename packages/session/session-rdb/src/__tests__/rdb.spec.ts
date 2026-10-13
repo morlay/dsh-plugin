@@ -20,8 +20,8 @@ import type {
   SurfaceEvent,
   SurfaceEventType,
 } from "@deepseek-ai/dsh-session";
-import SessionPersistenceSqlite, { SCHEMA_VERSION } from "@morlay/session-rdb";
-import { parseJsonlArtifact } from "@morlay/session-rdb/artifact";
+import SessionPersistenceSqlite, { SCHEMA_VERSION } from "../index.ts";
+import { parseJsonlArtifact } from "../artifact.ts";
 import {
   findSurfaceRepairs,
   recomputeReplaceProvenance,
@@ -30,17 +30,17 @@ import {
   rowToMeta,
   scanRows,
   syncMeteringRanges,
-} from "@morlay/session-rdb/artifact";
+} from "../artifact.ts";
 import {
   DEFAULT_BUSY_TIMEOUT_MS,
   eventDimensions,
   SESSION_PERSISTENCE_SQLITE_APPLICATION_ID,
   type EventRow,
   type SessionRow,
-} from "@morlay/session-rdb/storage";
-import { openDatabase } from "@morlay/session-rdb/storage";
-import { runPersistenceContract, meta, oneTurnLog, appendLog } from "@morlay/session-rdb/testing";
-import { runCoordinatorContract, type CoordinatorFixture } from "@morlay/session-rdb/testing";
+} from "../storage.ts";
+import { openDatabase } from "../storage.ts";
+import { runPersistenceContract, meta, oneTurnLog, appendLog } from "../testing.ts";
+import { runCoordinatorContract, type CoordinatorFixture } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

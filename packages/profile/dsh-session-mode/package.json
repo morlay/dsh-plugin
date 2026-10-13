@@ -26,15 +26,23 @@
     "./rows": "./src/rows.ts",
     "./testing": "./src/testing.ts",
     "./package.json": "./package.json",
-    "./src/*": "./src/*",
     "./client": "./src/client/index.ts",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
-      "./rows": "./dist/rows.mjs",
-      "./testing": "./dist/testing.mjs",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./rows": {
+        "types": "./dist/rows.d.mts",
+        "default": "./dist/rows.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
       "./package.json": "./package.json",
       "./client": {
         "types": "./dist/client.d.mts",

@@ -13,8 +13,8 @@ import {
   createUserMessage,
 } from "@deepseek-ai/dsh-llm";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta } from "../testing.ts";
 import { needsShapeAdoption, normalizeToCurrentShape } from "../log.ts";
 
 // 旧代消息形状的读取：迁移链是**严格**的——它拒绝既有库里那批退役形状

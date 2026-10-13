@@ -9,7 +9,7 @@ import {
   type SettingsFormPathOp,
   type SettingsFormScope,
   type SettingsFormScopeSnapshot,
-} from "@morlay/dsh-client-ui-primitives";
+} from "../../client/index.ts";
 
 interface StubScope<T> {
   scope: SettingsFormScope<T>;

@@ -6,7 +6,7 @@ import {
   closedTurns,
   editableMessages,
   retryableTurns,
-} from "@morlay/ui-conversation-message-actions/plan";
+} from "../plan.ts";
 import {
   assistantMessage,
   createPersisted,
@@ -15,7 +15,7 @@ import {
   TokenMeter,
   turnLog,
   userMessage,
-} from "@morlay/ui-conversation-message-actions/testing";
+} from "../testing.ts";
 
 function rdb(ctx: Context): SessionPersistenceSqlite {
   return ctx.sessionPersistence as SessionPersistenceSqlite;

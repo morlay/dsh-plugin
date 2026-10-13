@@ -10,7 +10,7 @@ import { ConversationManagerIcon } from "../ConversationManagerIcon.tsx";
 import { ConversationManagerPage } from "../ConversationManagerPage.tsx";
 import { NS, PANEL_ID, PANEL_ORDER, apply, inject } from "../index.ts";
 import { zh } from "../locales.ts";
-import { apply as hostApply } from "@morlay/ui-conversation-manager";
+import { apply as hostApply } from "../../index.ts";
 
 afterEach(cleanup);
 

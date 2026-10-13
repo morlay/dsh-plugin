@@ -25,7 +25,7 @@ describe("装配面", () => {
     ) as { dependencies: Record<string, string> };
 
     expect(dsh.profile.bundles).toContain("@morlay/session-mode-profile");
-    expect(bundle.dependencies["@morlay/dsh-subagent"]).toBe("workspace:*");
+    expect(bundle.dependencies["../index.ts"]).toBe("workspace:*");
   });
 });
 

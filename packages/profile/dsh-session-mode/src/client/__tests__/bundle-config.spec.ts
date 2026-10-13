@@ -12,7 +12,7 @@ import {
   type BundleTranslate,
   type HintsLike,
 } from "../bundle-config.ts";
-import { Config } from "@morlay/dsh-session-mode";
+import { Config } from "../../index.ts";
 import type { SelectOption } from "@morlay/dsh-client-ui-primitives";
 
 // 页面字典的替身：把模板参数并进 key，断言里能看见"哪一条文案、带了什么数"。

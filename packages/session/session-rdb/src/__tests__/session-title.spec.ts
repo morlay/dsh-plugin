@@ -12,8 +12,8 @@ import {
   type SessionHeader,
 } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 import { titleOfEventData } from "../log.ts";
 import { SqliteBackend } from "../sqlite.ts";
 

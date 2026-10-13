@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore, type SessionHeader } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceRdb from "@morlay/session-rdb";
-import { SESSION_GC_PATH } from "@morlay/session-rdb/gc";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceRdb from "../index.ts";
+import { SESSION_GC_PATH } from "../gc.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {

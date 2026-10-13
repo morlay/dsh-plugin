@@ -28,15 +28,26 @@
     "./wire": "./src/wire.ts",
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
-    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.js",
-      "./webserver": "./dist/webserver.js",
-      "./wire": "./dist/wire.js",
-      "./paths": "./dist/paths.js",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.js"
+      },
+      "./webserver": {
+        "types": "./dist/webserver.d.mts",
+        "default": "./dist/webserver.js"
+      },
+      "./wire": {
+        "types": "./dist/wire.d.mts",
+        "default": "./dist/wire.js"
+      },
+      "./paths": {
+        "types": "./dist/paths.d.mts",
+        "default": "./dist/paths.js"
+      },
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }

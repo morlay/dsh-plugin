@@ -13,9 +13,9 @@ import {
   type SessionHeader,
 } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceRdb from "@morlay/session-rdb";
-import { SESSION_USAGE_PATH } from "@morlay/session-rdb/usage";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceRdb from "../index.ts";
+import { SESSION_USAGE_PATH } from "../usage.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {

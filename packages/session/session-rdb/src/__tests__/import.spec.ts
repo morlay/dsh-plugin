@@ -17,9 +17,9 @@ import type { SessionEvent } from "@deepseek-ai/dsh-session";
 import { TokenMeter, type TokenMeasurement } from "@deepseek-ai/dsh-token-meter";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import { strToU8, zip } from "fflate";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { toJsonlArtifact } from "@morlay/session-rdb/artifact";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { toJsonlArtifact } from "../artifact.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 import {
   SESSION_IMPORT_PATH,
   SESSION_LOG_ARTIFACT_FILENAME,
@@ -27,7 +27,7 @@ import {
   parseJsonlArtifact,
   persistImport,
   registerSessionImport,
-} from "@morlay/session-rdb/artifact";
+} from "../artifact.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

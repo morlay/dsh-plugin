@@ -17,8 +17,8 @@ import { SessionBranchError } from "@morlay/session-branch";
 import SessionPersistenceSqlite, {
   SessionBranchRdbProvider,
   locateTurnEnd,
-} from "@morlay/session-rdb";
-import { appendLog, meta, oneTurnLog } from "@morlay/session-rdb/testing";
+} from "../index.ts";
+import { appendLog, meta, oneTurnLog } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

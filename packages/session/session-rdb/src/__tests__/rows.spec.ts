@@ -3,8 +3,8 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionSeq, SessionStore } from "@deepseek-ai/dsh-session";
 import type { SessionEvent } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceSqlite, { SESSION_ROWS_PATH } from "@morlay/session-rdb";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite, { SESSION_ROWS_PATH } from "../index.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 // 管理面的会话行路由（`/api/session.rows`）：**完整语料（含归档）** + 标题 + 最后活动时间。
 //

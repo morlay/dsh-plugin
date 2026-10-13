@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { apply, inject } from "../index.ts";
 import { zh } from "../locales.ts";
-import { POLICY_NAMES } from "@morlay/dsh-session-mode";
+import { POLICY_NAMES } from "../../index.ts";
 
 interface Described {
   ns: string;

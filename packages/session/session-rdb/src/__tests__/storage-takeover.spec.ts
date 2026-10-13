@@ -10,8 +10,8 @@ import Storage from "@deepseek-ai/dsh-storage";
 import type { StorageBackend } from "@deepseek-ai/dsh-storage";
 import * as StorageDomain from "@deepseek-ai/dsh-storage-domain";
 import Workspace from "@deepseek-ai/dsh-workspace";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta } from "../testing.ts";
 import { importStorages } from "../import-storages.ts";
 import { SqliteBackend } from "../sqlite.ts";
 

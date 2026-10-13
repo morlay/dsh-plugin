@@ -14,8 +14,8 @@ import {
 } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import * as SessionTurnOutline from "@deepseek-ai/dsh-session-turn-outline";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

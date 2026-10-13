@@ -13,7 +13,7 @@ import {
   SessionStore,
   SESSION_FORMAT_VERSION,
 } from "@deepseek-ai/dsh-session";
-import SessionPersistenceSqlite, { SessionBranchRdbProvider } from "@morlay/session-rdb";
+import SessionPersistenceSqlite, { SessionBranchRdbProvider } from "../index.ts";
 
 function rdb(ctx: Context): SessionPersistenceSqlite {
   return ctx.sessionPersistence as SessionPersistenceSqlite;

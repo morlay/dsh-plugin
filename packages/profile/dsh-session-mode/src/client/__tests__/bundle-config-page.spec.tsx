@@ -10,7 +10,7 @@ import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
 import { BundleConfigPage, type BundleConfigPageProps } from "../BundleConfigPage.tsx";
 import { createBundleConfigFace, type BundleTranslate } from "../bundle-config.ts";
 import { bundleZh } from "../bundle-locales.ts";
-import { Config } from "@morlay/dsh-session-mode";
+import { Config } from "../../index.ts";
 
 afterEach(cleanup);
 

@@ -6,9 +6,9 @@ import { SessionStore, type SessionEvent, type SessionHeader } from "@deepseek-a
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import { unzip } from "fflate";
 import { parseSessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
-import SessionPersistenceRdb from "@morlay/session-rdb";
-import { SESSION_EXPORT_PATH } from "@morlay/session-rdb/export";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceRdb from "../index.ts";
+import { SESSION_EXPORT_PATH } from "../export.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 import { parseJsonlArtifact } from "../import.ts";
 
 // fflate 只给回调式异步 API（同步变体被 node/no-sync 禁止）。

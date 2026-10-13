@@ -11,7 +11,7 @@ import {
 } from "@deepseek-ai/dsh-session";
 import type { SessionEvent, SessionHeader } from "@deepseek-ai/dsh-session";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
-import SessionPersistenceRdb from "@morlay/session-rdb";
+import SessionPersistenceRdb from "../index.ts";
 
 function rdb(ctx: import("@deepseek-ai/cordis").Context): SessionPersistenceRdb {
   return ctx.sessionPersistence as SessionPersistenceRdb;

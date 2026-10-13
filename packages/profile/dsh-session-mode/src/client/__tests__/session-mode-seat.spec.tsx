@@ -4,7 +4,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SessionModeRoster } from "@morlay/dsh-session-mode";
+import type { SessionModeRoster } from "../../index.ts";
 import { SessionModeSeat, type SessionModeSeatProps } from "../SessionModeSeat.tsx";
 
 const ROSTER: SessionModeRoster = {

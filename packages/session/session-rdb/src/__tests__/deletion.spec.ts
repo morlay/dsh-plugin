@@ -10,9 +10,9 @@ import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceRdb, {
   SessionBranchRdbProvider,
   SessionDeletionError,
-} from "@morlay/session-rdb";
-import { SESSION_DELETE_PATH } from "@morlay/session-rdb/deletion";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+} from "../index.ts";
+import { SESSION_DELETE_PATH } from "../deletion.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {

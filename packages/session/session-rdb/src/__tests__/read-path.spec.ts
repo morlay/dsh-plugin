@@ -2,8 +2,8 @@ import { Context } from "@deepseek-ai/cordis";
 import { createDeveloperMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId, SessionSeq, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import { describe, expect, it } from "vitest";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 import type { Backend } from "../backend.ts";
 import { repairReadView } from "../log.ts";
 

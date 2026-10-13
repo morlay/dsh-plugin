@@ -3,9 +3,9 @@ import { rm } from "node:fs/promises";
 import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionSeq, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta } from "@morlay/session-rdb/testing";
-import { orphanInboxSpliceSeqs, repairOrphanInboxSplices } from "@morlay/session-rdb/artifact";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta } from "../testing.ts";
+import { orphanInboxSpliceSeqs, repairOrphanInboxSplices } from "../artifact.ts";
 
 function splice(
   seq: number,

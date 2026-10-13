@@ -152,6 +152,12 @@ export async function startViteDev(
   /** 页面入口（相对 root 的路径）：`/` 重写到这里，HTML 里的 `./index.ts` 也随之解析到 app-boot 下。 */
   const pageEntry = "/packages/client/dsh-client-modules/app-boot/index.html";
   const serve = (req: IncomingMessage, res: ServerResponse): boolean => {
+    // `@/…` = **当前 workspace 的文件**（与源码里 import 的 alias 同一套写法）。浏览器 URL 不走 alias
+    // 解析，所以在这里把它落成 root 相对的路径——`/@/packages/client/x/src/a.ts` → `/packages/client/x/src/a.ts`。
+    const url = req.url ?? "";
+    if (url.startsWith("/@/")) {
+      req.url = url.slice("/@".length);
+    }
     if ((req.url ?? "").split("?")[0] === "/" || (req.url ?? "").split("?")[0] === "/index.html") {
       req.url = pageEntry;
     }

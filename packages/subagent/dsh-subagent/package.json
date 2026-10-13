@@ -23,13 +23,18 @@
     ".": "./src/index.ts",
     "./rows": "./src/rows.ts",
     "./package.json": "./package.json",
-    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
-      "./rows": "./dist/rows.mjs",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./rows": {
+        "types": "./dist/rows.d.mts",
+        "default": "./dist/rows.mjs"
+      },
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }

@@ -5,7 +5,7 @@ import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
 import { SchemaFormController } from "@morlay/dsh-client-ui-primitives";
 import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
-import { Config } from "@morlay/dsh-session-mode";
+import { Config } from "../../index.ts";
 
 const t = ((key: string) => key) as never;
 

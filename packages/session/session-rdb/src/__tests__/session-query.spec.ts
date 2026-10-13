@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 import { SessionQueryRdb } from "../session-query.ts";
 
 async function harness(): Promise<{ ctx: Context; dispose: () => Promise<void> }> {

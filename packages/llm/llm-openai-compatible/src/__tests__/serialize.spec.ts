@@ -15,12 +15,12 @@ import type { AttachmentStore, ImageAttachmentRef } from "@deepseek-ai/dsh-attac
 import type {
   ResolvedModelProfile,
   ResolvedProviderProfile,
-} from "@morlay/dsh-llm-openai-compatible";
+} from "../index.ts";
 import {
   resolveReasoningWire,
   serializeCallOptions,
   serializeCallOptionsWithImages,
-} from "@morlay/dsh-llm-openai-compatible/wire";
+} from "../wire.ts";
 
 function userMessage(text: string): Message {
   return createUserMessage({ content: [{ type: "text", text }], source: { kind: "user" } });

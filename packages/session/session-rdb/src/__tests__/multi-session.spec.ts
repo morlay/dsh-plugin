@@ -6,7 +6,7 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionStore, SessionId } from "@deepseek-ai/dsh-session";
 import type { Session } from "@deepseek-ai/dsh-session";
 import { createMessage, createUserMessage } from "@deepseek-ai/dsh-llm";
-import SessionPersistenceRdb from "@morlay/session-rdb";
+import SessionPersistenceRdb from "../index.ts";
 
 function rdb(ctx: import("@deepseek-ai/cordis").Context): SessionPersistenceRdb {
   return ctx.sessionPersistence as SessionPersistenceRdb;

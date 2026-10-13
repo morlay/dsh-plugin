@@ -1,8 +1,8 @@
 import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
 import { describe, expect, it } from "vitest";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta, oneTurnLog } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 async function mount(): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();

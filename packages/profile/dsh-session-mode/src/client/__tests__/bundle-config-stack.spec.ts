@@ -24,7 +24,7 @@ import {
   type BundleTranslate,
   type HintsLike,
 } from "../bundle-config.ts";
-import { Config } from "@morlay/dsh-session-mode";
+import { Config } from "../../index.ts";
 
 const t = ((key: string) => key) as BundleTranslate;
 

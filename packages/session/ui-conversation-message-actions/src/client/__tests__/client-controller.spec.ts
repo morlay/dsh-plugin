@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "../controller.ts";
-import { SESSION_EDITOR_PATHS } from "@morlay/ui-conversation-message-actions/client";
+import { SESSION_EDITOR_PATHS } from "../index.ts";
 
 interface FetchCall {
   url: string;

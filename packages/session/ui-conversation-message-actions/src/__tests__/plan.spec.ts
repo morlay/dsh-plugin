@@ -9,14 +9,14 @@ import {
   retryPlan,
   rerollPlan,
   retryableTurns,
-} from "@morlay/ui-conversation-message-actions/plan";
+} from "../plan.ts";
 import {
   assistantMessage,
   oneTurnLog,
   turnLog,
   twoTurnLog,
   userMessage,
-} from "@morlay/ui-conversation-message-actions/testing";
+} from "../testing.ts";
 
 function emptyTurn(base: number, turn: number): SessionEvent[] {
   return [

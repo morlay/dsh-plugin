@@ -14,7 +14,7 @@ import Schedule from "@deepseek-ai/dsh-schedule";
 import { SessionId } from "@deepseek-ai/dsh-session";
 import Storage from "@deepseek-ai/dsh-storage";
 import * as StorageDomain from "@deepseek-ai/dsh-storage-domain";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
+import SessionPersistenceSqlite from "../index.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

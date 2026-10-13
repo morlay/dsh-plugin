@@ -12,7 +12,7 @@ import {
   SessionSeq,
   userMessage,
   type SessionEvent,
-} from "@morlay/ui-conversation-message-actions/testing";
+} from "../testing.ts";
 
 function rdb(ctx: import("@deepseek-ai/cordis").Context): SessionPersistenceSqlite {
   return ctx.sessionPersistence as SessionPersistenceSqlite;

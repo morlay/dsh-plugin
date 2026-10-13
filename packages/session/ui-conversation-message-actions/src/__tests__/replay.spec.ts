@@ -12,7 +12,7 @@ import {
   SessionIdBrand,
   SessionSeq,
   type SessionEvent as Event,
-} from "@morlay/ui-conversation-message-actions/testing";
+} from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

@@ -6,7 +6,7 @@ import {
   SessionIdBrand,
   SESSION_EDITOR_PATHS,
   twoTurnLog,
-} from "@morlay/ui-conversation-message-actions/testing";
+} from "../testing.ts";
 
 interface FakeRequest {
   method?: string;

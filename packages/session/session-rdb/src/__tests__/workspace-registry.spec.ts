@@ -8,8 +8,8 @@ import { SessionId, SessionStore } from "@deepseek-ai/dsh-session";
 import Storage from "@deepseek-ai/dsh-storage";
 import * as StorageDomain from "@deepseek-ai/dsh-storage-domain";
 import Workspace from "@deepseek-ai/dsh-workspace";
-import SessionPersistenceSqlite from "@morlay/session-rdb";
-import { meta } from "@morlay/session-rdb/testing";
+import SessionPersistenceSqlite from "../index.ts";
+import { meta } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

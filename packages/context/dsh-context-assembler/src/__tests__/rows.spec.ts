@@ -7,7 +7,7 @@ describe("通道行", () => {
   it("包根即通道本体，行不带 config（缺省就是本部署要的那一份转换）", () => {
     const row = contextChannel();
 
-    expect(row).toEqual({ id: "context-assembler", name: "@morlay/dsh-context-assembler" });
+    expect(row).toEqual({ id: "context-assembler", name: "../index.ts" });
     expect(row).not.toHaveProperty("config");
   });
 });
