@@ -347,15 +347,12 @@ async function main(): Promise<void> {
     const loader = sourceLoader(resources);
     const next = new DesktopHostProcess(resources.node, runtimeDir, target, hostInspectPort, {
       nodeArgs: [`--import=${loader}`],
-      // 开发形态按 node 的解析取源码入口（`exports` 指 `src/index.ts`，loader 转译）；打包形态不传，
-      // 用部署里落位的 `lib/index.js`。
-      ...(development === undefined
-        ? {}
-        : {
-            // 用**壳自己**的清单当基准：宿主包是壳的依赖（`@morlay/dsh-desktop-host/wire` 就在用），
-            // pnpm 的严格布局下只有从这里才解析得到它（profile 的清单里没有它）。
-            entry: createRequire(import.meta.url).resolve(DESKTOP_HOST_PACKAGE),
-          }),
+      // 宿主入口一律按 node 的解析取**源码**（`@morlay/dsh-desktop-host` 的 exports 指 `src/index.ts`，
+      // 由上面的 loader 转译）：两种形态同一条路，部署里不必再落一份 dist 载荷。
+      //
+      // 解析基准是**运行时根**（dev 是仓库的 pnpm store，bundle 是 `Resources/runtime`）：那个目录的
+      // `node_modules` 里装着宿主包。
+      entry: createRequire(join(runtimeDir, "index.js")).resolve(DESKTOP_HOST_PACKAGE),
 
       extraEnv: {
         ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),

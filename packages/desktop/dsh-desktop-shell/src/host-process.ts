@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { once } from "node:events";
-import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
   DESKTOP_HOST_PROTOCOL_VERSION,
@@ -17,7 +16,6 @@ import {
   type DesktopHostEvent,
   type DesktopHostResponseFrame,
 } from "@morlay/dsh-desktop-host/wire";
-import { DESKTOP_HOST_PACKAGE } from "./official.ts";
 
 const MAX_HOST_DIAGNOSTIC_CHARS = 64 * 1024;
 
@@ -67,11 +65,11 @@ export type DesktopHostSpawn = (
 
 export interface DesktopHostOptions {
   /**
-   * 宿主入口（绝对路径）。**开发形态**由壳用 node 的解析给出（`@morlay/dsh-desktop-host` 的 exports 指到
-   * `src/index.ts`，配合 `--import` 的 TS loader 直接跑源码——开发模式不打包）；打包形态不传，按部署布局
-   * 取 `<runtime>/node_modules/@morlay/dsh-desktop-host/lib/index.js`。
+   * 宿主入口（绝对路径）：由壳按 node 的解析给出（`@morlay/dsh-desktop-host` 的 exports 指到
+   * `src/index.ts`）。宿主由壳用 `--import` 挂着 TS loader 起，**两种形态都直接跑源码**——部署里不必再落
+   * 一份 dist 载荷。
    */
-  readonly entry?: string;
+  readonly entry: string;
   readonly nodeArgs?: readonly string[];
 
   readonly extraEnv?: Readonly<Record<string, string>>;
@@ -113,18 +111,14 @@ export class DesktopHostProcess {
     private readonly node: string,
     private readonly runtimeDir: string,
     private readonly profileDir: string,
-    private readonly inspectPort?: number,
-    private readonly options: DesktopHostOptions = {},
+    private readonly inspectPort: number | undefined,
+    private readonly options: DesktopHostOptions,
   ) {}
 
   // 启动子进程一次；`ready` 之后才解析。
   async start(): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise;
-    // 部署里的 host 是工具自己的变体包（@morlay/dsh-desktop-host），落位名字与入口路径都要对上；
-    // 开发形态由壳给入口（见 `DesktopHostOptions.entry`）。
-    const entry =
-      this.options.entry ??
-      join(this.runtimeDir, "node_modules", ...DESKTOP_HOST_PACKAGE.split("/"), "lib", "index.js");
+    const entry = this.options.entry;
     const packageManager = this.options.packageManager;
     const args = [
       "--expose-internals",

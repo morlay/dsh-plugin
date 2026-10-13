@@ -15,12 +15,12 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
+    "src",
     "locale/*.json",
     "dist"
   ],
   "type": "module",
   "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "exports": {
     ".": "./src/index.ts",
     "./appconfig": "./src/appconfig.ts",

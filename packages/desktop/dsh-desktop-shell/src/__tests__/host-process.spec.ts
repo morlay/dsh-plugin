@@ -49,7 +49,7 @@ function fakeChild(): FakeChild {
   return child;
 }
 
-function harness(options: DesktopHostOptions = {}, inspectPort?: number) {
+function harness(options: Partial<DesktopHostOptions> = {}, inspectPort?: number) {
   const calls: SpawnCall[] = [];
   const child = fakeChild();
   const host = new DesktopHostProcess(
@@ -58,6 +58,7 @@ function harness(options: DesktopHostOptions = {}, inspectPort?: number) {
     "/home/profiles/desktop",
     inspectPort,
     {
+      entry: ENTRY,
       ...options,
       spawn: ((command: string, args: readonly string[], spawnOptions: { cwd?: string }) => {
         calls.push({
@@ -73,7 +74,9 @@ function harness(options: DesktopHostOptions = {}, inspectPort?: number) {
   return { calls, child, host };
 }
 
-const ENTRY = join("/app/seed", "node_modules", "@morlay", "dsh-desktop-host", "lib", "index.js");
+// 宿主入口是**源码**（包的 `exports` 指 `src/index.ts`），由 `--import` 的 TS loader 转译：
+// 两种形态（dev / bundle）同一条路，部署里不再落 dist 载荷。
+const ENTRY = join("/app/seed", "node_modules", "@morlay", "dsh-desktop-host", "src", "index.ts");
 
 function ready(child: FakeChild): void {
   child.emit("message", { type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION });

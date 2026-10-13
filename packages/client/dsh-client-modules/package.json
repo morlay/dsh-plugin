@@ -16,6 +16,7 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
+    "src",
     "app-boot",
     "dist",
     "locale/*.json"
