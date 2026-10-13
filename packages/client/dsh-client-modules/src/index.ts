@@ -395,7 +395,11 @@ export function apply(ctx: Context): void {
       return undefined;
     });
     if (bundled === undefined) return false;
+    process.stderr.write(
+      `[fed-tail] ${name}: files=${[...bundled.files.keys()].join(",")} exportName=${exportName}\n`,
+    );
     const target = bundled.files.get(exportName) ?? bundled.files.get("client") ?? bundled.files.get("index");
+    process.stderr.write(`[fed-tail] ${name}: target=${String(target)} 绝对=${String(target === undefined ? undefined : join(cacheRoot, target))}\n`);
     if (target === undefined) {
       process.stderr.write(`[fed] ${name}: 产物里没有 ${exportName}（有 ${[...bundled.files.keys()].join(",")}）\n`);
       return false;
@@ -404,7 +408,8 @@ export function apply(ctx: Context): void {
       process.stderr.write(`[fed] ${name}: 读不到 ${join(cacheRoot, target)}（${String(error)}\n`);
       return undefined;
     });
-    if (code === undefined || code === "") return false;
+    // 空产物是**合法的**：纯类型 / 空的 client 半编译出来就是空 JS，不是失败。
+    if (code === undefined) return false;
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
     res.end(req.method === "HEAD" ? undefined : code);
     return true;
