@@ -10,6 +10,10 @@
 // 品牌字体样式：上游的 Web 入口同样单独引这一份（`apps/web/src/main.ts`）。其余全局样式表由 `ui-theme`
 // 的 client 半用 `?inline` 在运行时注入，不需要在这里引。
 import "@deepseek-ai/dsh-client-ui-theme/brand-font.css";
+// shell 的挂载默认样式（`html, body, #root { height: 100%; margin: 0 }` 与 body 的字体/颜色/抗锯齿）：
+// 上游由 shell 入口 `client/web/src/boot.ts` 引入，而我们自研入口不走 shell，所以在这里直接按路径引。
+// 用**相对 vite root（仓库根）**的路径：这个包不在行清单里，vite 解析不了它的裸包名。
+import "/vendor/deepseek-harness/packages/client/web/src/base.css";
 import { Context } from "@deepseek-ai/cordis";
 // @ts-expect-error 虚拟模块由 devkit 的 vite 插件提供
 import rows from "dsh-client-rows";
