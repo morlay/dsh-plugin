@@ -106,6 +106,9 @@ function urlOfSpecifier(options: BundleOptions, id: string): string {
  * @returns 产物映射；`input` 为空时 undefined。
  */
 export async function bundlePackage(options: BundleOptions): Promise<Bundled | undefined> {
+  process.stderr.write(
+    `[bundle-in] ${options.name}: input=${Object.keys(options.input).join(",")} cache=${options.cacheRoot}\n`,
+  );
   if (Object.keys(options.input).length === 0) return undefined;
   const key = `${options.name.replaceAll("/", "+")}@${options.version}`;
   const outDir = join(options.cacheRoot, key);
@@ -154,7 +157,12 @@ export async function bundlePackage(options: BundleOptions): Promise<Bundled | u
     output: readonly { type: string; fileName: string; name: string; code: string }[];
   }[];
   const chunks = outputs.flatMap((item) => item.output).filter((item) => item.type === "chunk");
-  if (chunks.length === 0) return undefined;
+  if (chunks.length === 0) {
+    process.stderr.write(
+      `[bundle] ${options.name}: 输出为空（input=${Object.keys(options.input).join(",")} outputs=${String(outputs.length)}）\n`,
+    );
+    return undefined;
+  }
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const files: Record<string, string> = {};
