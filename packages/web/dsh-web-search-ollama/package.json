@@ -24,6 +24,7 @@
     ".": "./src/index.ts",
     "./rows": "./src/rows.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./client": "./src/client/index.ts",
     "./locale/*.json": "./locale/*.json"
   },
@@ -33,8 +34,9 @@
       "./rows": "./dist/rows.mjs",
       "./package.json": "./package.json",
       "./client": {
-        "types": "./dist/client.d.cts",
-        "default": "./dist/client.cjs"
+        "types": "./dist/client.d.mts",
+        "import": "./dist/client.mjs",
+        "default": "./dist/client.mjs"
       },
       "./locale/*.json": "./locale/*.json"
     }

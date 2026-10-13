@@ -23,6 +23,7 @@
     ".": "./src/index.ts",
     "./rows": "./src/rows.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {

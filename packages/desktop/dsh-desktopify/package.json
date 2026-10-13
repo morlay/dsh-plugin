@@ -25,6 +25,7 @@
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {

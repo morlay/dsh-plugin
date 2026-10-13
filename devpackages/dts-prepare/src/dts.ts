@@ -151,6 +151,55 @@ async function run(command: string, args: readonly string[], cwd: string): Promi
   });
 }
 
+/** 路径存在与否（任何 stat 失败都算不存在）。 */
+async function exists(path: string): Promise<boolean> {
+  return await stat(path).then(() => true, () => false);
+}
+
+/**
+ * 确保声明树在：**谁先到谁生成，其余等锁**。
+ *
+ * 声明树是"一次生成、全仓共用"（tsc 扫两个 face），但构建是**多包并行**的，所以这里用目录锁把它串起来：
+ * 第一个进入的包生成，其它包轮询等待，之后各自从 `target/dts` 取自己那份。
+ *
+ * 这样 `just build` 不必再有个"先编译声明"的前置步骤——构建自己会把这件事做掉。
+ * 锁是**目录**（`mkdir` 原子）：进程崩了会留下它，所以带一个陈旧阈值，超过就抢占。
+ *
+ * @param root - 仓库根。
+ */
+export async function ensureWorkspaceDts(root: string): Promise<void> {
+  const outDir = dtsRootOf(root);
+  // 判定"生成完了"要看**完成标记**，不能看目录在不在：tsc 一开工就会把目录建出来，
+  // 别的包看到半成品就往下走，于是"声明缺失"。
+  const doneMark = join(outDir, ".complete");
+  if (await exists(doneMark)) return;
+  const lockDir = join(root, "target", ".dts.lock");
+  const staleMs = 10 * 60 * 1000;
+  // 父目录先建好：锁本身必须用**非递归**的 `mkdir`——带 `recursive: true` 时目录已存在也不报错，
+  // 那就不成其为锁了（人人都以为拿到了）。
+  await mkdir(dirname(lockDir), { recursive: true });
+  for (;;) {
+    try {
+      await mkdir(lockDir);
+      break;
+    } catch {
+      // 拿不到锁：等一会儿再看——要么别人建好了声明树，要么那把锁陈了。
+      if (await exists(doneMark)) return;
+      const age = await stat(lockDir).then((info) => Date.now() - info.mtimeMs, () => 0);
+      if (age > staleMs) await rm(lockDir, { recursive: true, force: true });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+    }
+  }
+  try {
+    if (!(await exists(doneMark))) {
+      await generateWorkspaceDts(root);
+      await writeFile(doneMark, `${new Date().toISOString()}\n`, "utf8");
+    }
+  } finally {
+    await rm(lockDir, { recursive: true, force: true });
+  }
+}
+
 /** 声明树根：仓库根的 `target/dts/`（`generateWorkspaceDts` 的产物，`emitDts` 的来源）。 */
 export function dtsRootOf(root: string): string {
   return join(root, "target", "dts");

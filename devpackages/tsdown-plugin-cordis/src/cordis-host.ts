@@ -10,7 +10,7 @@ import {
 } from "./cordis-client.ts";
 import { cssInlinePlugins } from "./css.ts";
 import { packageExportsHook, type PackageExportsOptions } from "./package-exports.ts";
-import { dtsRootOf, emitDts, repoRootOf } from "./dts.ts";
+import { dtsRootOf, emitDts, ensureWorkspaceDts, repoRootOf } from "@local/dts-prepare";
 
 type BuildDoneHook = TsdownHooks["build:done"];
 
@@ -52,6 +52,7 @@ function buildDone(
     if (!dtsRuns.has(cwd)) {
       dtsRuns.add(cwd);
       const root = await repoRootOf(cwd);
+      await ensureWorkspaceDts(root);
       await emitDts({ cwd, root, dtsRoot: dtsRootOf(root), entries: options.entries, outDir });
     }
     await exportsHook(ctx);
@@ -134,7 +135,9 @@ export async function buildCordisConfig(
   // 入口：**以 tsdown 声明为准**；一个字都没写时按约定探测（`index` 是包的门面——工具类包没有它，
   // 例如只发 bin 的 CLI）。`client` 半由本插件按约定补上（它是 cordis 的约定，不是 tsdown 的）。
   const entry: Record<string, string> = declaredEntries(incoming.entry);
-  if (Object.keys(entry).length === 0 && (await entryExists(join(process.cwd(), "src", "index.ts")))) {
+  // `index` 是包的**门面**：`src/index.ts` 在就一定有它，包名与 `./src/*` 之外的人只该从这里进。
+  // 没声明时才补（声明了以声明为准）。
+  if (entry["index"] === undefined && (await entryExists(join(process.cwd(), "src", "index.ts")))) {
     entry["index"] = "./src/index.ts";
   }
   if (client !== undefined) entry[CLIENT_ENTRY] = client.entry ?? "./src/client/index.ts";
@@ -142,6 +145,12 @@ export async function buildCordisConfig(
   const spec = await clientBundleSpec(
     client?.externals === undefined ? {} : { externals: client.externals },
   );
+  // **host 面一律外置**：host 产物跑在 Node 里，依赖由部署的 `node_modules` 提供——内联它们的字节既多余，
+  // 又会让同一份包在部署里出现第二个实例（cordis 的服务类最怕这个）。内联只对 **client 面** 有意义
+  // （浏览器没有 node_modules，模块表也只认自己那份身份），所以那边才按声明位置分流。
+  //
+  // 例外是"本仓库私有"与显式 `inline` 点名的包（见下面的 `alwaysBundle`）：它们不进部署的依赖面，
+  // 只能随产物走。
   const clientRoot = `${sep}src${sep}${CLIENT_ENTRY}${sep}`;
   const fromClient = (importer: string | null | undefined): boolean =>
     typeof importer === "string" && importer.includes(clientRoot);
@@ -194,7 +203,7 @@ export async function buildCordisConfig(
       // external 只对 client 入口的模块图生效：host 半照常打自己的依赖闭包。
       neverBundle: (id: string, importer: string | null | undefined) =>
         (options?.neverBundle?.includes(id) ?? false) ||
-        (fromClient(importer) && isClientExternal(id, spec.externals)),
+        (fromClient(importer) ? isClientExternal(id, spec.externals) : true),
       alwaysBundle: (id: string, importer: string | null | undefined) =>
         isLocalPackage(id) ||
         isInlinedPackage(id, options?.inline) ||

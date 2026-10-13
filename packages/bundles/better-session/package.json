@@ -29,6 +29,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },

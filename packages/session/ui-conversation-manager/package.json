@@ -25,6 +25,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./client": "./src/client/index.ts",
     "./locale/*.json": "./locale/*.json"
   },

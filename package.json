@@ -11,6 +11,7 @@
   "type": "module",
   "devDependencies": {
     "@local/devkit": "workspace:*",
+    "@local/dts-prepare": "workspace:*",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@local/typert-generator": "workspace:*",
     "@morlay/dsh-desktopify": "workspace:*",

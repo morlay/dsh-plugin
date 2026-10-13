@@ -162,6 +162,8 @@ async function writeManifest(
   }
 
   dev[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
+  // 源码子路径出口：包内测试与工具按**包名**引用自己的源码（上游同一约定），发布清单里不带它。
+  dev["./src/*"] = "./src/*";
   published[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   if (await exists(join(cwd, "cordis.patch.yml"))) {
     dev[PATCH_EXPORT] = PATCH_EXPORT;

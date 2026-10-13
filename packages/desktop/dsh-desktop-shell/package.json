@@ -29,6 +29,7 @@
     "./profile-project": "./src/profile-project.ts",
     "./seed": "./src/seed.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {

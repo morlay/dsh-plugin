@@ -64,7 +64,7 @@ async function lookupContexts(
 export type GenerateOptions = {
   /** 上游 clone 的根目录（`<vendor>/<name>`）：产物里的 `sourceLocation.file` 相对它。 */
   upstreamRoot: string;
-  /** 声明树根（`<root>/target/dts`），布局见 `devpackages/devkit/src/dts-project.ts`。 */
+  /** 声明树根（`<root>/target/dts`），布局见 `devpackages/dts-prepare/src/cli.ts`。 */
   dtsRoot: string;
   /** 只处理这些包名（调试用）；缺省全量。 */
   packages?: readonly string[];

@@ -25,11 +25,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.js",
+      ".": "./dist/index.mjs",
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
     }

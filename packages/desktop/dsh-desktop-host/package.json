@@ -28,6 +28,7 @@
     "./wire": "./src/wire.ts",
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
+    "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {

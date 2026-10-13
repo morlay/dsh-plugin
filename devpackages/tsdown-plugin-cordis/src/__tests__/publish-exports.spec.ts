@@ -31,9 +31,12 @@ describe("发布态的包出口", () => {
   });
 
   it("发布态出口覆盖顶层出口的每个键", () => {
+    // `./src/*` 例外：那是**源码面**出口（包内测试按包名引用自己的源码），只在 workspace 内有效，
+    // 发布物里不承诺它——顶层有、发布态无是正常的。
+    const sourceOnly = new Set(["./src/*"]);
     const dropped: string[] = [];
     for (const { name, manifest } of packages) {
-      const top = Object.keys(manifest.exports ?? {});
+      const top = Object.keys(manifest.exports ?? {}).filter((key) => !sourceOnly.has(key));
       const published = manifest.publishConfig?.exports ?? manifest.exports ?? {};
       const missing = top.filter((key) => !(key in published));
       if (missing.length > 0) dropped.push(`${name}: ${missing.join(", ")}`);
@@ -41,8 +44,8 @@ describe("发布态的包出口", () => {
     expect(dropped).toEqual([]);
   });
 
-  // 同一个出口两种形态：装配行（`dsh.client.platform`）发布态是 CJS 单文件工厂，内联库
-  // （`dsh.client.inline`）发布态是普通 ESM 库——后者会被消费方打进产物，不能带模块注册的工厂外壳。
+  // client 面发布态是**普通 ESM 库**：消费方按 vite / node 的 resolver 取它，CJS 工厂（模块表的注册脚本）
+  // 不进出口——它由 boot 按路径加载。
   it("client 面开发态出口回源，发布态指 ESM 库产物与它的类型", () => {
     const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
     expect(clients.length).toBeGreaterThan(0);
