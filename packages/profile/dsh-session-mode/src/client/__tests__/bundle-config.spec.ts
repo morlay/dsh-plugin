@@ -13,7 +13,7 @@ import {
   type HintsLike,
 } from "../bundle-config.ts";
 import { Config } from "@morlay/dsh-session-mode";
-import type { SelectOption } from "@morlay/dsh-client-ui-primitives/client";
+import type { SelectOption } from "@morlay/dsh-client-ui-primitives";
 
 // 页面字典的替身：把模板参数并进 key，断言里能看见"哪一条文案、带了什么数"。
 const t = ((key: string, args?: Record<string, unknown>) =>

@@ -3,7 +3,7 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { SchemaFormController } from "@morlay/dsh-client-ui-primitives/client";
+import { SchemaFormController } from "@morlay/dsh-client-ui-primitives";
 import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
 import { Config } from "@morlay/dsh-session-mode";
 

@@ -17,7 +17,7 @@ import {
   Tag,
   Text,
   relativeTime,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import {

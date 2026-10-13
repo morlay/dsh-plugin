@@ -19,7 +19,7 @@ import {
   type SelectOption,
   type SettingsFormShell,
   type ValidationFailure,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 import type { BundleLocaleKey } from "./bundle-locales.ts";
 import { loadLlmProviders, routesOf, type ModelRoute } from "./llm-directory.ts";
 

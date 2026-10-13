@@ -14,7 +14,7 @@ import {
   Row,
   Stack,
   type ReferenceActions,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 import { memo, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { InjectFace } from "@deepseek-ai/dsh-client-ui-slots";

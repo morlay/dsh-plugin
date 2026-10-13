@@ -25,8 +25,8 @@
 
 | 形态            | profileDir         | runtimeDir                           | boot 入口                                                         | overlay                                                                          |
 | --------------- | ------------------ | ------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| dev（Electron） | app 目录（工作区） | `<workspaceRoot>/node_modules/.pnpm` | 宿主 `packages/desktop/dsh-desktop-host/src/index.ts`（官方 `loadProfileDirectory` + `runProfile`） | `config/desktop.cordis.patch.yml` + `config/dev-client-bundles.cordis.patch.yml` |
-| dev `--web`     | app 目录（工作区） | 同上                                 | `src/web.ts` → `app-boot.ts` 的 `bootAppProfile`                  | `config/dev-client-bundles.cordis.patch.yml`                                     |
+| dev（Electron） | app 目录（工作区） | `<workspaceRoot>/node_modules/.pnpm` | 宿主 `packages/desktop/dsh-desktop-host/src/index.ts`（官方 `loadProfileDirectory` + `runProfile`） | `config/desktop.cordis.patch.yml` + `packages/client/dsh-client-modules/config/dev.cordis.patch.yml` |
+| dev `--web`     | app 目录（工作区） | 同上                                 | `src/web.ts` → `app-boot.ts` 的 `bootAppProfile`                  | `packages/client/dsh-client-modules/config/dev.cordis.patch.yml`                                     |
 
 `bootAppProfile` 做三件事：按 app 清单装配（同一套上游两步 + 跳过清单上报）、把形态 overlay 排在 bundle 层与
 profile 自己的 `cordis.patch.yml` 之后、让 `runProfile` 每次启动重写空根 `cordis.yml`。形态名 `web` 与桌面档的

@@ -10,7 +10,7 @@ import {
   SeatButton,
   Stack,
   Text,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 import type { PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 // Type-only：拉入本包 host 半的 Context / 投影声明（`sessionMode`），让 `projectionValues` 有类型。
 import type {} from "../index.ts";

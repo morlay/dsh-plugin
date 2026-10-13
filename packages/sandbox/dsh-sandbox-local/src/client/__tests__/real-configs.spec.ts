@@ -6,7 +6,7 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { schemaForm } from "@morlay/dsh-client-ui-primitives/client";
+import { schemaForm } from "@morlay/dsh-client-ui-primitives";
 import { Config as SandboxConfig } from "@morlay/dsh-sandbox-local";
 
 const t = ((key: string) =>

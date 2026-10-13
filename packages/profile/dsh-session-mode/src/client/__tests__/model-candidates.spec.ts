@@ -2,7 +2,7 @@
 // 与可配置声明合并后的清单，模型清单读那份声明指向的配置并跟着 provider 当前值变。
 
 import { describe, expect, it } from "vitest";
-import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-primitives/client";
+import type { SelectOption, SelectSpec } from "@morlay/dsh-client-ui-primitives";
 import { apply } from "../index.ts";
 
 interface Registered {

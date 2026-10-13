@@ -17,7 +17,7 @@ import {
   projectForm,
   volatileForm,
 } from "@deepseek-ai/dsh-settings/src/schema.ts";
-import { SchemaFormHints } from "@morlay/dsh-client-ui-primitives/client";
+import { SchemaFormHints } from "@morlay/dsh-client-ui-primitives";
 import {
   createBundleConfigFace,
   unwrapService,

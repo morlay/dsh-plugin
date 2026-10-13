@@ -28,9 +28,9 @@ import {
   TagInput,
   Text,
   type SettingsFormLabels,
-} from "@morlay/dsh-client-ui-primitives/client";
+} from "@morlay/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
-import type { SchemaFormState } from "@morlay/dsh-client-ui-primitives/client";
+import type { SchemaFormState } from "@morlay/dsh-client-ui-primitives";
 import {
   SESSION_MODE_NS,
   projectBundleConfig,
