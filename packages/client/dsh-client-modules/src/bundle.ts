@@ -94,14 +94,14 @@ export async function bundleAggregate(options: BundleOptions): Promise<Bundled> 
       write: false,
       minify: false,
       target: "esnext",
+      // 走 `lib` 而不是 `rollupOptions.input`：库模式的入口语义明确（接受绝对路径，且按 entry 名出产物），
+      // 不会在 root 与 cwd 之间折来折去。
+      lib: {
+        entry: options.input,
+        formats: ["es"],
+        fileName: (_format, entryName) => `${entryName}.js`,
+      },
       rollupOptions: {
-        // 入口按 **root 相对**给：vite 会自己折算（绝对路径它也会折，但那条路上的解析基准不同）。
-        input: Object.fromEntries(
-          Object.entries(options.input).map(([name, file]) => [
-            name,
-            relative(options.repoRoot, file).split(sep).join("/"),
-          ]),
-        ),
         // 裸说明符外置：地址统一交给 `paths`（`@deps/…`），于是三方与我们的包共用同一条链。
         external: (id: string) => !id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0"),
         output: {
