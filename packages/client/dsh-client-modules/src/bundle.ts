@@ -113,7 +113,9 @@ export async function bundlePackage(options: BundleOptions): Promise<Bundled | u
   const key = `${options.name.replaceAll("/", "+")}@${options.version}`;
   const outDir = join(options.cacheRoot, key);
   const manifestPath = join(outDir, ".files.json");
+  process.stderr.write(`[bundle-rev] ${options.name}: 开始算指纹 watch=${options.watch.join(",")}\n`);
   const rev = `${BUNDLER_REV}:${await fingerprint(options.watch)}`;
+  process.stderr.write(`[bundle-rev] ${options.name}: 指纹=${rev}\n`);
   const cached = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     rev?: string;
     files?: Record<string, string>;
@@ -127,6 +129,8 @@ export async function bundlePackage(options: BundleOptions): Promise<Bundled | u
     cssInlinePlugins({ name: key, assets: "threshold" }),
     clientAssetPlugin(),
   ];
+  const startedAt = Date.now();
+  process.stderr.write(`[bundle-build] ${options.name}: vite build 开始\n`);
   const result = await build({
     configFile: false,
     root: options.repoRoot,
@@ -152,6 +156,7 @@ export async function bundlePackage(options: BundleOptions): Promise<Bundled | u
       },
     },
   });
+  process.stderr.write(`[bundle-build] ${options.name}: vite build 结束（${String(Date.now() - startedAt)}ms）\n`);
   // `write: false` 时 vite 返回输出对象（不是 watcher）；取 `output` 这一段。
   const outputs = (Array.isArray(result) ? result : [result]).filter((item) => "output" in item) as {
     output: readonly { type: string; fileName: string; name: string; code: string }[];
