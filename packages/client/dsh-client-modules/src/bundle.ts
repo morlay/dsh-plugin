@@ -294,13 +294,40 @@ async function cssShimOf(options: {
  */
 export async function bundlePackage(options: BundleOptions): Promise<Bundled | undefined> {
   const key = cacheKeyOf(options.name, options.version);
+  // 同一个包**排队**：产物目录包级共享，而"这次要的出口"可能已经在上一轮里产出（第二个请求跑到
+  // `bundlePackageOnce` 开头就会命中缓存，不会重建）。
   const previous = building.get(key) ?? Promise.resolve();
-  const task = previous.catch(() => undefined).then(() => bundlePackageOnce(options, key));
+  const task = previous
+    .catch(() => undefined)
+    .then(() => withBuildSlot(() => bundlePackageOnce(options, key)));
   building.set(key, task);
   try {
     return await task;
   } finally {
     if (building.get(key) === task) building.delete(key);
+  }
+}
+
+/**
+ * 同时在跑的构建数上限。
+ *
+ * 每次联邦构建都是一次完整的 vite build（自建实例、加载插件、跑 rolldown），首屏那两百多个包**一起上**
+ * 只会互相拖慢、把内存吃满——排队反而更快。要调就设 `DSH_BUNDLE_CONCURRENCY`。
+ */
+const MAX_CONCURRENT_BUILDS = Math.max(1, Number(process.env["DSH_BUNDLE_CONCURRENCY"] ?? 8));
+let runningBuilds = 0;
+const buildQueue: (() => void)[] = [];
+
+async function withBuildSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (runningBuilds >= MAX_CONCURRENT_BUILDS) {
+    await new Promise<void>((resolve) => buildQueue.push(resolve));
+  }
+  runningBuilds += 1;
+  try {
+    return await work();
+  } finally {
+    runningBuilds -= 1;
+    buildQueue.shift()?.();
   }
 }
 
