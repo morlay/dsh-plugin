@@ -181,14 +181,17 @@ export function apply(ctx: Context): void {
   };
   const allRowsOf = async (): Promise<ClientRow[]> => {
     const patterns = await excludedOf();
-    return (await sourceRowsOf()).map((row) =>
-      isAggregated(row.id, patterns)
-        ? {
-            ...row,
-            clientPath: `${CLIENT_MODULES_PREFIX}/${encodePackageName(row.id)}@${row.version}/client.js`,
-          }
-        : row,
-    );
+    const exports = await exportNamesOf();
+    return (await sourceRowsOf()).map((row) => {
+      if (!isAggregated(row.id, patterns)) return row;
+      // 出口名用**清单里真实存在的**那个（有 `./client` 才给 `client`）：`client` 就是普通 export，
+      // 不是所有包都有它——没有的走根出口（`index`）。
+      const exportName = exports.get(row.id) ?? "index";
+      return {
+        ...row,
+        clientPath: `${CLIENT_MODULES_PREFIX}/${encodePackageName(row.id)}@${row.version}/${exportName}.js`,
+      };
+    });
   };
   const optimizeInclude = async (): Promise<string[]> => (await allRowsOf()).map((row) => row.clientPath);
   const optimizeAlias = async (): Promise<{ name: string; entry: string }[]> => {
@@ -309,11 +312,21 @@ export function apply(ctx: Context): void {
     { find: /^@\//, replacement: `${process.cwd()}/` },
     { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
   ];
-  // 外置说明符要写成"联邦地址"，同步回调里查不了异步的东西：先把行清单读出来算成两张表。
-  // "我们的包"是**工作区里的所有包**（不只行清单里的）：`client-store` 这种不在行里，但它的联邦地址
-  // 同样指向聚合产物（`client.js`），判成三方就会去找 `index.js`。
-  const ownNamesOf = async (): Promise<ReadonlySet<string>> =>
-    new Set((await ownVersionsOf()).keys());
+  // 外置说明符要写成"联邦地址"，而 `paths` 回调不能 await：先把要用的两张表算出来。
+  // 表一：包名 → 它外置时该指的**出口**——`client` 就是清单里的一个普通 export（有 `./client` 用它，
+  // 否则根出口）。这不是"身份判断"，所以 `immer` 这类三方不会因为它被特殊对待。
+  const exportNamesOf = async (): Promise<ReadonlyMap<string, string>> => {
+    const names = new Map<string, string>();
+    const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [
+      /.*/u,
+    ]);
+    for (const pkg of packages) {
+      const manifest = await manifestOf(pkg.root).catch(() => undefined);
+      const exports = (manifest as { exports?: Record<string, unknown> } | undefined)?.exports ?? {};
+      names.set(pkg.name, "./client" in exports ? "client" : "index");
+    }
+    return names;
+  };
   const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> => {
     // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
     // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读（读一次缓存）。
@@ -341,6 +354,7 @@ export function apply(ctx: Context): void {
   ): Promise<boolean> => {
     const rest = url.slice(`${CLIENT_MODULES_PREFIX}/`.length).split("?")[0] ?? "";
     const slash = rest.indexOf("/");
+    process.stderr.write(`[fed] rest=${rest} slash=${String(slash)}\n`);
     if (slash <= 0) return false;
     const pkgVersion = rest.slice(0, slash);
     const file = rest.slice(slash + 1);
@@ -350,26 +364,20 @@ export function apply(ctx: Context): void {
     const name = decodePackageName(pkgVersion.slice(0, at));
     const version = pkgVersion.slice(at + 1);
     // 入口：我们的包按 `exports` 找 client 半；三方按 node 的解析找。之后**同一条链**。
-    const resolvedRoot = await rootOf(name);
-    // "我们的包" = **仓库内**的包：`rootOf` 对 node_modules 里的三方同样会解析成功，
-    // 但那些不是我们的源码（它们的产物名与出口都不同）。
-    const ownRoot =
-      resolvedRoot !== undefined && !resolvedRoot.includes(`${sep}node_modules${sep}`)
-        ? resolvedRoot
-        : undefined;
-    const ownEntry =
-      ownRoot === undefined
-        ? undefined
-        : ((await exportTargetOf(ownRoot, "client")) ?? (await exportTargetOf(ownRoot, undefined)));
-    const dependency =
-      ownEntry === undefined
-        ? await dependencyEntry(join(process.cwd(), "package.json"), name).catch(() => undefined)
-        : undefined;
-    const entry = ownEntry ?? dependency?.entry;
+    // 一视同仁：包根可能在仓库里（工作区/vendor），也可能在 node_modules（三方）——对取入口这件事
+    // 没有区别。出口名来自 URL，入口一律从清单的 `exports` 取。
+    const root = await rootOf(name);
+    const exportName = file.replace(/\.js$/u, "") || "index";
+    const entry =
+      root === undefined
+        ? (await dependencyEntry(join(process.cwd(), "package.json"), name).catch(() => undefined))
+            ?.entry
+        : await exportTargetOf(root, exportName === "index" ? undefined : exportName);
+    process.stderr.write(
+      `[fed] ${name}@${version}/${exportName} root=${String(root)} entry=${String(entry)}\n`,
+    );
     if (entry === undefined) {
-      process.stderr.write(
-        `[federation] ${name}: 解析不到入口（工作区=${String(ownRoot !== undefined)}）\n`,
-      );
+      process.stderr.write(`[federation] ${name}/${exportName}: 解析不到入口（root=${String(root)}\n`);
       return false;
     }
     const bundled = await bundlePackage({
@@ -377,22 +385,17 @@ export function apply(ctx: Context): void {
       repoRoot: process.cwd(),
       alias: federationAlias,
       name,
-      version: ownRoot === undefined ? (dependency?.version ?? version) : version,
-      input: ownEntry === undefined ? { index: entry } : { client: entry },
-      watch: ownRoot === undefined ? [entry] : [join(ownRoot, "src")],
-      own: ownRoot !== undefined,
+      version,
+      input: { [exportName]: entry },
+      watch: root === undefined ? [entry] : [join(root, "src")],
       versions: await ownVersionsOf(),
-      ownNames: await ownNamesOf(),
+      exportsOf: await exportNamesOf(),
     }).catch((error: unknown) => {
       process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
       return undefined;
     });
-    if (bundled === undefined) {
-      process.stderr.write(`[federation] ${name}: 产出为空（entry=${entry}）\n`);
-      return false;
-    }
-    const target =
-      bundled.files.get(file) ?? bundled.files.get(file.replace(/\.js$/u, "")) ?? bundled.files.get("client");
+    if (bundled === undefined) return false;
+    const target = bundled.files.get(exportName) ?? bundled.files.get("client") ?? bundled.files.get("index");
     if (target === undefined) return false;
     const code = await readFile(join(cacheRoot, target), "utf8").catch(() => undefined);
     if (code === undefined || code === "") return false;

@@ -53,12 +53,15 @@ export interface BundleOptions {
   input: Record<string, string>;
   /** 指纹的输入文件集（我们的包给 `src`；三方给它的入口）。 */
   watch: readonly string[];
-  /** 它是不是我们的包（决定外置说明符指向 `client.js` 还是 `index.js`）。 */
-  own: boolean;
   /** 包名 → 版本：外置说明符要写成联邦地址（回调同步，故预建表）。 */
   versions?: ReadonlyMap<string, string>;
-  /** 我们的包名集合。 */
-  ownNames?: ReadonlySet<string>;
+  /**
+   * 包名 → 外置它时该指的**出口**（`client` / `index`）。
+   *
+   * `client` 不是什么特殊身份，就是清单里的一个普通 export：有 `./client` 的包外置成 `client.js`，
+   * 没有的就是 `index.js`（= 根出口）。表是预建的，因为 `paths` 回调必须同步。
+   */
+  exportsOf?: ReadonlyMap<string, string>;
 }
 
 /** 产物：文件相对路径。 */
@@ -92,8 +95,8 @@ async function fingerprint(paths: readonly string[]): Promise<string> {
 /** 说明符 → 联邦地址（外置时用；同步）。 */
 function urlOfSpecifier(options: BundleOptions, id: string): string {
   const bare = packageNameOf(id) || id;
-  const own = options.ownNames?.has(bare) === true;
-  return depsUrlOf(id, options.versions?.get(bare) ?? "0.0.0", own ? "client.js" : "index.js");
+  const exportName = options.exportsOf?.get(bare) ?? "index";
+  return depsUrlOf(id, options.versions?.get(bare) ?? "0.0.0", `${exportName}.js`);
 }
 
 /**
