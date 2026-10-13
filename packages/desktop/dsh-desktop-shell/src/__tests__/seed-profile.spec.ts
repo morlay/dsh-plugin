@@ -36,7 +36,7 @@ interface Fixture {
 }
 
 async function fixture(): Promise<Fixture> {
-  const root = await mkdtemp(resolve(tmpdir(), "dsh-desktopify-seed-"));
+  const root = await mkdtemp(resolve(tmpdir(), "dshdev-seed-"));
   roots.push(root);
   const seed = join(root, SEED_DIR_NAME);
   const home = join(root, "home");

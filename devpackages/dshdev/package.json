@@ -1,0 +1,44 @@
+{
+  "name": "@local/dshdev",
+  "version": "0.2.6-alpha.0",
+  "description": "dsh dev toolchain: run a workspace in the browser (`dshdev web`) or in the Electron shell (`dshdev desktop`), and package it as a static desktop app (`dshdev desktop bundle`).",
+  "keywords": [
+    "desktop",
+    "dsh",
+    "electron",
+    "electron-builder",
+    "packaging"
+  ],
+  "bin": {
+    "dshdev": "./src/cli/index.ts"
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/dsh-desktop-host": "workspace:*",
+    "@morlay/dsh-desktop-shell": "workspace:*",
+    "@morlay/web-custom-profile": "workspace:*",
+    "commander": "^15.0.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.16.1",
+    "extract-zip": "^2.0.1",
+    "pnpm": "12.4.2",
+    "sharp": "^0.35.4",
+    "tar": "^7.5.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@local/devkit": "workspace:*",
+    "@oxc-node/core": "^0.1.6",
+    "@types/node": "^26.5.0"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "private": true
+}

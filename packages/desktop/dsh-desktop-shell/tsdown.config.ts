@@ -4,7 +4,7 @@ import { cordisPlugin, isLocalPackage } from "@local/tsdown-plugin-cordis";
 // 壳产物只含壳自己的字节（`@local/*` 与 `@morlay/dsh-desktop-host` 内联进来），上游包一律留在产物外——
 // 壳可达的模块不许出现上游裸引用，守 `src/__tests__/shell-import-boundary.spec.ts`。
 //
-// 子出口（appconfig / dshhome / official / profile-project / seed）是 `@morlay/dsh-desktopify`
+// 子出口（appconfig / dshhome / official / profile-project / seed）是 `@local/dshdev`
 // 复用同一份事实的入口。
 export default [
   defineConfig({

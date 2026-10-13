@@ -11,7 +11,7 @@ const BUNDLE_ROOT = join(repoRoot, "vendor/deepseek-harness/packages/bundle");
 // 前端服务（`@morlay/dsh-client-modules`）那一行：单独一层，web 形态也要挂（用 `--patch`）。
 const DEV_CLIENT_PATCH_PATH = join(
   repoRoot,
-  "packages/client/dsh-client-modules/config/dev.cordis.patch.yml",
+  "packages/bundles/web-custom-profile/cordis.patch.yml",
 );
 const devClientPatch = await readFile(DEV_CLIENT_PATCH_PATH, "utf8");
 const UPSTREAM_PATCHES = ["base/cordis.patch.yml", "web-app/cordis.patch.yml"];

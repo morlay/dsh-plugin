@@ -19,7 +19,7 @@
     "@morlay/session-mode-profile": "workspace:*"
   },
   "peerDependencies": {
-    "@morlay/dsh-desktopify": "workspace:*"
+    "@local/dshdev": "workspace:*"
   },
   "dsh": {
     "version": "workspace:*",

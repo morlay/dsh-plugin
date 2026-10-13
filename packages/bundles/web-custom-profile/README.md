@@ -1,6 +1,6 @@
 # @morlay/web-custom-profile
 
-**开发形态**（`dsh-desktopify dev`，web 与桌面两条路都算）挂的前端装配层：把 `@morlay/dsh-client-modules`
+**开发形态**（`dshdev dev`，web 与桌面两条路都算）挂的前端装配层：把 `@morlay/dsh-client-modules`
 插成行，并停用被它取代的上游行（模块表 `modules`、`client-hmr`、`frontend-static`）。
 
 - 它是**只给开发形态**用的 overlay：打包形态需要上游那几行，所以它不进 `dsh.profile.bundles`，

@@ -4,9 +4,9 @@ dsh 桌面应用的 **Electron 壳**：服务应用自己的 `<name>://` 协议�
 
 ## 用法
 
-它**不单独跑**——启动与打包它的是 [`@morlay/dsh-desktopify`](../dsh-desktopify/README.md)：
+它**不单独跑**——启动与打包它的是 [`@local/dshdev`](../dshdev/README.md)：
 
-- `dsh-desktopify dev` 以**本包目录**为 Electron app 启动（Electron 按本包清单的 `main` 找到 `dist/index.mjs`）；
-- `dsh-desktopify bundle` 把本包的 `dist/` 复制成最小壳 app 目录再交给 electron-builder。
+- `dshdev dev` 以**本包目录**为 Electron app 启动（Electron 按本包清单的 `main` 找到 `dist/index.mjs`）；
+- `dshdev bundle` 把本包的 `dist/` 复制成最小壳 app 目录再交给 electron-builder。
 
-出口面、依赖边界与拆分理由见[设计 壳独立成包](./.agents/designs/20260924-壳独立成包.md)；传输、启动链与平台标记见[设计 桌面无端口传输与窗口对齐](../dsh-desktopify/.agents/designs/20260920-桌面无端口传输与窗口对齐.md)。
+出口面、依赖边界与拆分理由见[设计 壳独立成包](./.agents/designs/20260924-壳独立成包.md)；传输、启动链与平台标记见[设计 桌面无端口传输与窗口对齐](../dshdev/.agents/designs/20260920-桌面无端口传输与窗口对齐.md)。

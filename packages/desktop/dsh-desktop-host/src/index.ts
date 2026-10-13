@@ -4,7 +4,7 @@
 //
 // 装配走官方那两步（`loadProfileDirectory` + `runProfile`）：打包形态的 profile 由工具按官方形态
 // 种出（见 `../.agents/designs/20260929-桌面host的运行时面与依赖边界.md`）；dev 形态由启动器把
-// app 目录当 profile root 传进来（同一份清单，见 `../../dsh-desktopify/.agents/designs/20261010-app目录即profile-root.md`）。
+// app 目录当 profile root 传进来（同一份清单，见 `../../dshdev/.agents/designs/20261010-app目录即profile-root.md`）。
 
 import { once } from "node:events";
 import { createReadStream, createWriteStream, type ReadStream, type WriteStream } from "node:fs";

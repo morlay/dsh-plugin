@@ -30,7 +30,7 @@
 - **client 半的开发态出口回源**：`./client` 就是一条指 `src/client/index.ts` 的字符串（不是
   `{ types, default }` 那种两份同值的形态）——与 host 面同一条规则。上游把这个路径拼成绝对路径后
   **直接读字节**（浏览器模块工厂执行的就是那份字节），那份 TS 由 `dev-client-bundles`
-  （`dsh-desktopify dev` 装进 profile 的那一行）现场转换；**发布态**才写成 `{ types, default }` 取
+  （`dshdev dev` 装进 profile 的那一行）现场转换；**发布态**才写成 `{ types, default }` 取
   `dist/client.cjs`——CJS 单文件：多文件产物会破坏 ModuleLoader 手递，约束与理由见
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。

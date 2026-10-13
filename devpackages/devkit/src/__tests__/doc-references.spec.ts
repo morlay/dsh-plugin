@@ -11,7 +11,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 // 上游源码：文档引用上游文件时写的是上游仓内的相对路径（`packages/core/system-prompt/src/index.ts`）。
 const UPSTREAM = join(ROOT, "vendor/deepseek-harness");
 const SKIP_DIRS = new Set([
-  ".dsh-desktopify",
+  ".dshdev",
   ".git",
   ".pnpm",
   ".scratch",
@@ -32,7 +32,7 @@ const NOT_A_PATH = /[\s`*<>…{}|$="'?!()[\]]/u;
 // 历史修订路径（`git show HEAD:<path>`）：那个路径指的不是工作区当前状态。
 const REVISION = /^(?:[0-9a-f]{7,40}|HEAD|MERGE_HEAD|ORIG_HEAD)(?:[~^]\d*)?:/iu;
 // 构建产物 / 打包器布局 / 运行期数据：不是工作区里的源文件（本地不构建就压根没有）。
-const NON_SOURCE_DIR = /^(?:dist|lib|build|out|target|deploy|pnpm|userData|\.dsh-desktopify)\//u;
+const NON_SOURCE_DIR = /^(?:dist|lib|build|out|target|deploy|pnpm|userData|\.dshdev)\//u;
 const LINE_SUFFIX = /:\d+(?:-\d+)?$/u;
 const REMOTE = /^(?:https?:|mailto:)/u;
 
@@ -82,7 +82,7 @@ const EXCEPTIONS: readonly {
   { file: ".agents/standards/how-to-write.md", code: "./cordis.patch.yml", reason: SAMPLE },
   { file: ".agents/standards/how-to-write.md", code: "./icon.svg", reason: SAMPLE },
   {
-    file: "packages/desktop/dsh-desktopify/.agents/standards/how-to-verify.md",
+    file: "devpackages/dshdev/.agents/standards/how-to-verify.md",
     code: "src/client/index.ts",
     reason: SAMPLE,
   },
@@ -119,17 +119,17 @@ const EXCEPTIONS: readonly {
     reason: `${ELSEWHERE}（= 上游 client/shortcuts）`,
   },
   {
-    file: "packages/desktop/dsh-desktopify/.agents/debts/20260920-桌面宿主覆写connection认证方法.md",
+    file: "devpackages/dshdev/.agents/debts/20260920-桌面宿主覆写connection认证方法.md",
     code: "src/index.ts",
     reason: `${ELSEWHERE}（= packages/desktop/dsh-desktop-host）`,
   },
   {
-    file: "packages/desktop/dsh-desktopify/.agents/designs/20260920-桌面无端口传输与窗口对齐.md",
+    file: "devpackages/dshdev/.agents/designs/20260920-桌面无端口传输与窗口对齐.md",
     code: "src/index.ts",
     reason: `${ELSEWHERE}（= packages/desktop/dsh-desktop-host，同段全路径已给）`,
   },
   {
-    file: "packages/desktop/dsh-desktopify/.agents/designs/20260920-桌面无端口传输与窗口对齐.md",
+    file: "devpackages/dshdev/.agents/designs/20260920-桌面无端口传输与窗口对齐.md",
     code: "src/seed.ts",
     reason: `${ELSEWHERE}（= packages/desktop/dsh-desktop-shell）`,
   },

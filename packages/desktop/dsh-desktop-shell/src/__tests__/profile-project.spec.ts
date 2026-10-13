@@ -12,7 +12,7 @@ import {
 const roots: string[] = [];
 
 async function workDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "dsh-desktopify-profile-"));
+  const root = await mkdtemp(join(tmpdir(), "dshdev-profile-"));
   roots.push(root);
   return root;
 }

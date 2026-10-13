@@ -182,6 +182,9 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:devpackages/devkit
+      '@local/dshdev':
+        specifier: workspace:*
+        version: link:devpackages/dshdev
       '@local/dts-prepare':
         specifier: workspace:*
         version: link:devpackages/dts-prepare
@@ -191,9 +194,6 @@ importers:
       '@local/typert-generator':
         specifier: workspace:*
         version: link:devpackages/typert-generator
-      '@morlay/dsh-desktopify':
-        specifier: workspace:*
-        version: link:packages/desktop/dsh-desktopify
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.6
@@ -257,15 +257,15 @@ importers:
 
   apps/dsh-custom-next:
     dependencies:
+      '@local/dshdev':
+        specifier: workspace:*
+        version: link:../../devpackages/dshdev
       '@morlay/better-session':
         specifier: workspace:*
         version: link:../../packages/bundles/better-session
       '@morlay/dsh-client-modules':
         specifier: workspace:*
         version: link:../../packages/client/dsh-client-modules
-      '@morlay/dsh-desktopify':
-        specifier: workspace:*
-        version: link:../../packages/desktop/dsh-desktopify
       '@morlay/mydsh-profile':
         specifier: workspace:*
         version: link:../../packages/bundles/mydsh-profile
@@ -318,6 +318,61 @@ importers:
       vite:
         specifier: ^8.3.1
         version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  devpackages/dshdev:
+    dependencies:
+      '@morlay/dsh-desktop-host':
+        specifier: workspace:*
+        version: link:../../packages/desktop/dsh-desktop-host
+      '@morlay/dsh-desktop-shell':
+        specifier: workspace:*
+        version: link:../../packages/desktop/dsh-desktop-shell
+      '@morlay/web-custom-profile':
+        specifier: workspace:*
+        version: link:../../packages/bundles/web-custom-profile
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      electron:
+        specifier: ^44.3.0
+        version: 44.7.0(supports-color@9.4.0)
+      electron-builder:
+        specifier: ^26.16.1
+        version: 26.17.0(electron-builder-squirrel-windows@26.17.0)(supports-color@9.4.0)
+      extract-zip:
+        specifier: ^2.0.1
+        version: 2.0.1(supports-color@9.4.0)
+      pnpm:
+        specifier: 12.4.2
+        version: 12.4.2
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.5(@types/node@26.6.5)
+      tar:
+        specifier: ^7.5.0
+        version: 7.5.22
+    devDependencies:
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/boot/app-boot
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/client/connection
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/core/tools
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../devkit
+      '@oxc-node/core':
+        specifier: ^0.1.6
+        version: 0.1.6
+      '@types/node':
+        specifier: ^26.5.0
+        version: 26.6.5
 
   devpackages/dts-prepare:
     dependencies:
@@ -717,76 +772,6 @@ importers:
       '@morlay/dsh-desktop-host':
         specifier: workspace:*
         version: link:../dsh-desktop-host
-      '@types/node':
-        specifier: ^26.5.0
-        version: 26.6.5
-
-  packages/desktop/dsh-desktopify:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/vendor/cordis
-      '@deepseek-ai/dsh':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/apps/cli
-      '@deepseek-ai/dsh-client-modules':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/client/modules
-      '@deepseek-ai/dsh-host-webserver':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/host/webserver
-      '@morlay/dsh-desktop-host':
-        specifier: workspace:*
-        version: link:../dsh-desktop-host
-      '@morlay/dsh-desktop-shell':
-        specifier: workspace:*
-        version: link:../dsh-desktop-shell
-      '@morlay/web-custom-profile':
-        specifier: workspace:*
-        version: link:../../bundles/web-custom-profile
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-      electron:
-        specifier: ^44.3.0
-        version: 44.7.0(supports-color@9.4.0)
-      electron-builder:
-        specifier: ^26.16.1
-        version: 26.17.0(electron-builder-squirrel-windows@26.17.0)(supports-color@9.4.0)
-      extract-zip:
-        specifier: ^2.0.1
-        version: 2.0.1(supports-color@9.4.0)
-      pnpm:
-        specifier: 12.4.2
-        version: 12.4.2
-      sharp:
-        specifier: ^0.35.4
-        version: 0.35.5(@types/node@26.6.5)
-      tar:
-        specifier: ^7.5.0
-        version: 7.5.22
-      tsdown:
-        specifier: 0.23.x
-        version: 0.23.1(tsx@4.23.15)(typescript@7.0.2)
-    devDependencies:
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/agent
-      '@deepseek-ai/dsh-app-boot':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/boot/app-boot
-      '@deepseek-ai/dsh-client-connection':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/connection
-      '@deepseek-ai/dsh-tools':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/core/tools
-      '@local/devkit':
-        specifier: workspace:*
-        version: link:../../../devpackages/devkit
-      '@oxc-node/core':
-        specifier: ^0.1.6
-        version: 0.1.6
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5

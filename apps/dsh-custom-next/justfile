@@ -1,9 +1,12 @@
 # dsh-custom-next 示例工作区：web 模式（浏览器）与 desktop 模式（Electron 壳）。
 
-# 开发模式：`--web` 走浏览器，缺省走 Electron 壳。
+# 开发模式：桌面是 Electron 壳，`web` 走浏览器（都在仓库源码上跑，见 devpackages/dshdev）。
 dev *args:
-    pnpm exec dsh-desktopify dev {{ args }}
+    pnpm exec dshdev desktop {{ args }}
+
+web *args:
+    pnpm exec dshdev web {{ args }}
 
 # 打包为静态桌面应用（--dir 产物，无签名）。
 bundle *args:
-    pnpm exec dsh-desktopify bundle --dir {{ args }}
+    pnpm exec dshdev desktop bundle --dir {{ args }}

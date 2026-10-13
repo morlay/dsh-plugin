@@ -13,7 +13,7 @@ const ORIGINAL = {
 const roots: string[] = [];
 
 async function tempDir(): Promise<string> {
-  const root = await mkdtemp(resolve(tmpdir(), "dsh-desktopify-home-"));
+  const root = await mkdtemp(resolve(tmpdir(), "dshdev-home-"));
   roots.push(root);
   return root;
 }
