@@ -335,6 +335,8 @@ async function main(): Promise<void> {
   // 页面侧的 ws（`ws://app/…`）在自定义协议下无处可去：起一个进程内回环端点，把端口告诉壳（壳再经
   // preload 交给页面），页面把它重写成 `ws://127.0.0.1:<port>/…` 就能直接用原生 WebSocket。
   const wsEndpoint = await startLoopbackUpgradeServer(webServer);
+  // 这条链（含 vite 的 HMR）要从 webServer 上取到它：没有别的同源 http server 可挂升级。
+  (webServer as unknown as { desktopUpgradeServer?: unknown }).desktopUpgradeServer = wsEndpoint.server;
   send({ type: "ready", protocolVersion: DESKTOP_HOST_PROTOCOL_VERSION, wsPort: wsEndpoint.port });
 }
 

@@ -272,7 +272,19 @@ export function apply(ctx: Context): void {
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
         depsUrl: (specifier: string) => depsUrlOfSpecifier(specifier),
-        httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
+        // 同源的 http server：web 形态是宿主自己的端口；桌面形态是宿主**进程内**的回环端点
+        // （`desktopUpgradeServer`）——HMR 的 WebSocket 就挂它上面，页面侧由垫片重写到它。
+        httpServer: (
+          webServer as {
+            server?: Parameters<typeof startViteDev>[1]["httpServer"];
+            desktopUpgradeServer?: Parameters<typeof startViteDev>[1]["httpServer"];
+          }
+        ).server ??
+          (
+            webServer as {
+              desktopUpgradeServer?: Parameters<typeof startViteDev>[1]["httpServer"];
+            }
+          ).desktopUpgradeServer,
       });
       viteHandoff = started;
     })();
@@ -612,9 +624,8 @@ export function apply(ctx: Context): void {
   // 用与上游同一个 API 占**兜底位**（`registerFallback`）：页面、入口、依赖预打包产物与 HMR 通道都是
   // vite 的；上游 `frontend-static` 那一行（挂在 `web-runtime` 上）在 dev patch 里已停用。
   ctx.effect(() => webServer.registerFallback(serveAny), "client-modules: vite 兜底");
-  // 启动即预热：vite dev server 起来那一刻打出访问地址（跟它自己的 ready 提示一个意思），
-  // 也把首屏要用的模块图先备好——懒建会让第一条请求等它冷启动。
-  void ensureVite().catch((error: unknown) => { ctx.logger.error(error); });
+  // **懒建**（第一条请求时起）：桌面的宿主会在启动过程中把"同源 http server"（进程内回环端点）挂到
+  // webServer 上，而这条链要拿它当 HMR 的落脚点——预热跑在这之前就会拿不到它，HMR 从此挂不上去。
   // vite 的 HMR WebSocket：上游对**未注册**的升级请求会直接 destroy socket（vite 就握不上手），所以在这
   // 里给它一条同名路由——handler 什么都不做，只让 socket 活着，vite 自己挂在 `upgrade` 上的处理器完成握手。
   ctx.effect(

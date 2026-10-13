@@ -18,6 +18,11 @@ export interface UpgradeDispatcher {
 export interface LoopbackUpgradeServer {
   /** `127.0.0.1:<port>` 上的端口（页面据此重写 `ws://app/…`）。 */
   readonly port: number;
+  /**
+   * 这个 http server 本身。**vite 的 HMR 要挂在它上面**（`server.hmr.server`）：桌面形态没有别的同源
+   * http server，HMR 的 WebSocket 只能落在同一个回环端点上（页面侧被垫片重写到它）。
+   */
+  readonly server: HttpServer;
   dispose(): void;
 }
 
@@ -29,7 +34,9 @@ export async function startLoopbackUpgradeServer(
     res.writeHead(426).end();
   });
   server.on("upgrade", (req, socket, head) => {
-    if (!dispatcher.dispatchUpgrade(req, socket, head)) socket.destroy();
+    if (dispatcher.dispatchUpgrade(req, socket, head)) return;
+    // 不是 webServer 的路由：同一个 server 上还挂着 vite 的 HMR，交给它；两边都不认才关掉。
+    if (server.listenerCount("upgrade") <= 1) socket.destroy();
   });
   await new Promise<void>((resolve) => {
     server.listen(0, "127.0.0.1", resolve);
@@ -38,6 +45,7 @@ export async function startLoopbackUpgradeServer(
   const port = typeof address === "object" && address !== null ? address.port : 0;
   return {
     port,
+    server,
     dispose() {
       server.close();
     },

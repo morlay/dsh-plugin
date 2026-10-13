@@ -114,9 +114,7 @@ export async function startViteDev(
       // **端口与页面一致**（客户端连的就是页面这个端口）。调用方要先在 webServer 上注册同名 upgrade
       // 路由——上游对未注册的升级请求会直接 destroy socket，vite 就握不上手。
       ...(options.httpServer === undefined
-        ? // 无端口形态（桌面）：没有同源的 http server 可以挂 HMR 的 WebSocket，vite 自开的端口只会
-          // 在同一个开发机上互相抢（`Port 24678 is already in use`）。桌面形态先不挂 HMR。
-          { hmr: false }
+        ? {}
         : {
             hmr: {
               server: options.httpServer,
