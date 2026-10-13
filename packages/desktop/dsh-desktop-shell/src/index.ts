@@ -359,6 +359,9 @@ async function main(): Promise<void> {
 
       extraEnv: {
         ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
+        // 形态标志：壳起宿主时会过滤掉所有 `DSH_DESKTOP_*`（那些是 Electron 侧的元数据），所以这条链要
+        // 判断"跑在桌面形态里"得用别的名字（前端资源的预编译策略据此分流）。
+        DSH_DEV_FORM: "desktop",
         // 这条链是 fs / 哈希密集的（预编译按包读源码、算指纹、写产物 + vite 的转译），这些全走 libuv 线程池，
         // 默认只有 4：并发一多请求就排在池子外。bundle 形态不经过 `dshdev`，所以这里也设一份。
         UV_THREADPOOL_SIZE: process.env["UV_THREADPOOL_SIZE"] ?? "64",
@@ -385,7 +388,17 @@ async function main(): Promise<void> {
     const active = host;
     if (active === undefined) return new Response("backend unavailable", { status: 503 });
     if (!app.isPackaged) console.error(`[dsh-shell] recv ${request.method} ${url.pathname}`);
-    const response = await active.fetch(request);
+    // **去掉条件请求头**：宿主的响应要包成 Fetch `Response`，而它不接受 304（`Invalid response status
+    // code 304`）——vite 对源码模块正是回 304 的（`/@vite/client`、`/index.ts` 那些），于是每次刷新都在
+    // 这里抛错。不带条件头，服务端就只会回 200（这条链的产物也不大，不值得为 304 冒这个险）。
+    const conditional = new Request(request.url, {
+      method: request.method,
+      headers: [...request.headers].filter(
+        ([name]) => name !== "if-none-match" && name !== "if-modified-since",
+      ),
+      ...(request.body === null ? {} : { body: request.body, duplex: "half" }),
+    });
+    const response = await active.fetch(conditional);
     // dev 形态打印每个应用请求：排查「页面 → 壳 → 宿主」断在哪一段。
     if (!app.isPackaged)
       console.error(`[dsh-shell] ${request.method} ${url.pathname} → ${String(response.status)}`);

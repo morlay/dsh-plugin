@@ -21,7 +21,20 @@ function globToRegExp(pattern: string): RegExp {
  *
  * @returns 匹配"非开发模块"的正则表；**没配就是全部**（见函数末尾的说明）。
  */
+/**
+ * 桌面形态（含 bundle）：**全部按非开发模块**处理。
+ *
+ * 它的页面跑在自定义协议下（`dsh-…://app/`），请求经壳的字节管道进来——每个逐文件请求都要走一趟这条路，
+ * 几百个源码模块叠起来就是"刷新一次卡几十秒"。桌面形态本来也不需要"改哪个包只看哪个包"的细粒度取舍：
+ * 全部按包预编译，改包时那一份重建 + 通知页面刷新（见壳的 ws 端点）。
+ */
+function isDesktopForm(): boolean {
+  // `DSH_DEV_FORM` 由壳注入给宿主（壳起宿主时会过滤掉 `DSH_DESKTOP_*`，那些是 Electron 侧的元数据）。
+  return process.env["DSH_DEV_FORM"] === "desktop";
+}
+
 export async function devExcluded(): Promise<RegExp[]> {
+  if (isDesktopForm()) return [/.*/u];
   const home = process.env["DSH_HOME"];
   const candidates = [
     process.env["DSH_DESKTOP_DEV_PROFILE_DIR"],

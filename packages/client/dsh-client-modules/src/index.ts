@@ -532,12 +532,9 @@ export function apply(ctx: Context): void {
       root !== undefined && !root.includes("node_modules")
         ? "no-cache"
         : "public, max-age=31536000, immutable";
+    // **不发 304**：这边的响应最终要由上游包成 Fetch `Response`，而它不接受 304
+    // （`Invalid response status code 304`）——请求会以异常告终。产物本来就不大，直接 200 全量。
     const etag = `"${bundled.rev}"`;
-    if (req.headers["if-none-match"] === etag) {
-      res.writeHead(304, { etag, "cache-control": cacheControl });
-      res.end();
-      return true;
-    }
     res.writeHead(200, {
       "content-type": "text/javascript; charset=utf-8",
       "cache-control": cacheControl,
