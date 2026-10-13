@@ -26,6 +26,11 @@ export const patch: Step[] = [
   // 认证移除：页面与资源都由自研 web 层（vite dev server）提供，这层 cookie 校验只剩阻碍——摘掉它
   // 之后所有 `/api/*` 一律 401（见 `remove-browser-auth.patch` 的说明）。
   { type: "git", patch: "remove-browser-auth.patch" },
+  // 渲染期写入：`ui-model-selection` 的目录由 inject 工厂构造，而 renderer 会在**渲染期间**跑那个工厂；
+  // 构造里那次 `syncInputs()` 写 store 会触发 React 的
+  // "Cannot update a component while rendering a different component"（`DocumentTitle` 订阅了 store）。
+  // 把首次同步推到微任务。
+  { type: "git", patch: "model-selection-deferred-sync.patch" },
   {
     type: "exports",
     // 生成物出口：目标是 `prebuild` 阶段写出的 `.ts`（不是 `lib/*.js`），所以按出口名显式改指。

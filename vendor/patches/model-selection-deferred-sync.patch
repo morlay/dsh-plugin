@@ -1,0 +1,17 @@
+diff --git a/packages/client/ui-model-selection/src/client/directory.ts b/packages/client/ui-model-selection/src/client/directory.ts
+index 41f67832a0..f4d248e680 100644
+--- a/packages/client/ui-model-selection/src/client/directory.ts
++++ b/packages/client/ui-model-selection/src/client/directory.ts
+@@ -67,7 +67,11 @@ export class ModelDirectory {
+   ) {
+     this.unsubscribeCatalog = catalog.store.subscribe(() => { this.syncInputs() })
+     this.unsubscribeSelection = projected.subscribe(() => { this.syncInputs() })
+-    this.syncInputs()
++    // 首次同步推到微任务：本目录由 inject 工厂构造，而 renderer 会在**渲染期间**跑那个工厂
++    // （`scoped-slots.tsx` 的 `runInject`）。在渲染期写 store 会触发 React 的
++    // "Cannot update a component while rendering a different component"
++    // （`DocumentTitle` 订阅了 store），也违反"inject 工厂无副作用"的约定。
++    queueMicrotask(() => { if (!this.disposed) this.syncInputs() })
+   }
+ 
+   /**
