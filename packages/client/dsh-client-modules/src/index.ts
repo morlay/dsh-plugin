@@ -396,8 +396,14 @@ export function apply(ctx: Context): void {
     });
     if (bundled === undefined) return false;
     const target = bundled.files.get(exportName) ?? bundled.files.get("client") ?? bundled.files.get("index");
-    if (target === undefined) return false;
-    const code = await readFile(join(cacheRoot, target), "utf8").catch(() => undefined);
+    if (target === undefined) {
+      process.stderr.write(`[fed] ${name}: 产物里没有 ${exportName}（有 ${[...bundled.files.keys()].join(",")}）\n`);
+      return false;
+    }
+    const code = await readFile(join(cacheRoot, target), "utf8").catch((error: unknown) => {
+      process.stderr.write(`[fed] ${name}: 读不到 ${join(cacheRoot, target)}（${String(error)}\n`);
+      return undefined;
+    });
     if (code === undefined || code === "") return false;
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
     res.end(req.method === "HEAD" ? undefined : code);
