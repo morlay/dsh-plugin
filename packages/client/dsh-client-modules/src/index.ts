@@ -219,7 +219,7 @@ export function apply(ctx: Context): void {
     if (viteHandoff !== undefined) return;
     viteStarting ??= (async () => {
       const repoRoot = process.cwd();
-      viteHandoff = await startViteDev(ctx, {
+      const started = await startViteDev(ctx, {
         repoRoot,
         base: PLUGIN_ROUTE,
         // 行清单：包名 → client 半的源文件（各 entry 用**自己的 baseUrl** 解析，见 `clientRowsOf`）。
@@ -230,6 +230,11 @@ export function apply(ctx: Context): void {
         optimizeInclude: await optimizeInclude(),
         optimizeAlias: await optimizeAlias(),
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
+      });
+      viteHandoff = started;
+      // 预热入口：首次的依赖预打包（几十个非开发模块）是秒级的，先替第一个页面请求把它等掉。
+      await started.warmup("/packages/client/dsh-client-modules/app-boot/index.ts").catch((error: unknown) => {
+        ctx.logger.warn(`client-modules: 预热失败 ${String(error)}`);
       });
     })();
     await viteStarting;
