@@ -84,11 +84,9 @@ async function webEntry(): Promise<string> {
 // 源码 client 半「现场打包」那条行的定义只有一份：宿主包里的 overlay（它按相对路径指自己的 `lib/`）。
 // 桌面形态由宿主自己挂；web 形态的 profile 就是 app 目录，宿主那层拿不到，所以这里按 `--patch` 挂上。
 async function devClientPatch(): Promise<string> {
-  // dev 形态挂的前端服务行住在 `@morlay/dsh-client-modules`（与上游 `client/modules` 同位置）。
-  const clientModulesRoot = dirname(
-    fileURLToPath(import.meta.resolve("@morlay/dsh-client-modules/package.json")),
-  );
-  const patch = join(clientModulesRoot, "config", "dev.cordis.patch.yml");
+  // dev 形态的前端装配层（挂 `@morlay/dsh-client-modules`、停上游那几行）由一个 dev-only bundle 提供：
+  // web 与桌面两种形态挂的是**同一份** patch。
+  const patch = fileURLToPath(import.meta.resolve("@morlay/web-custom-profile/cordis.patch.yml"));
   if (!(await pathExists(patch)))
     throw new Error(`desktop development: missing ${patch}; run the tool build (pnpm build)`);
   return patch;
@@ -117,6 +115,10 @@ async function launchElectron(
   const systemNode = process.env.DSH_DESKTOP_NODE_BINARY ?? process.env.npm_node_execpath ?? "node";
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
+    // **壳必须是真 Electron**：`ELECTRON_RUN_AS_NODE` 会让它退化成一个 node 进程，于是
+    // `--remote-debugging-port` / `--user-data-dir` 这类 Chromium 开关全被当成 bad option，壳根本起不来。
+    // （这个变量在环境里很常见——它本来是给"把 Electron 当 node 用"的子进程准备的。）
+    ELECTRON_RUN_AS_NODE: undefined,
     DSH_HOME: home,
     DSH_DESKTOP_APPCONFIG_DIR: join(buildRootDir, "runtime"),
     // 两格分工：`PROFILE_DIR` 是 profile root（app 目录本身），`RUNTIME_DIR` 是安装根
@@ -141,6 +143,10 @@ async function launchElectron(
       `--inspect=127.0.0.1:${String(mainPort)}`,
       `--remote-debugging-port=${String(rendererPort)}`,
       `--user-data-dir=${userData}`,
+      // dev 形态的壳跑在**开发机**上（不是产品形态，`bundle` 那条路不经过这里）：受限会话（容器、
+      // 远程 shell、CI）里 Chromium 的沙箱与 GPU 进程常常起不来——报 `sandbox initialization failed`
+      // 之后 GPU 连环崩、最后 SIGTRAP。要保留沙箱就设 `DSH_DESKTOP_SANDBOX=1`。
+      ...(process.env["DSH_DESKTOP_SANDBOX"] === "1" ? [] : ["--no-sandbox", "--disable-gpu"]),
       SHELL_PACKAGE_ROOT,
     ],
     SHELL_PACKAGE_ROOT,

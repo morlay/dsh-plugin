@@ -3,7 +3,8 @@
 // 上游 `@deepseek-ai/dsh-client-shortcuts` 在 desktop 运行时**要求** `window.dshDesktop.keyboard`
 // 存在（缺了就构造失败）；这里就是那份契约的实现——主进程按已绑定键过滤物理按键，把命中的手势经
 // IPC 交给渲染进程派发。
-import { ipcMain, type BrowserWindow, type Input } from "electron";
+import { ipcMain } from "./electron.ts";
+import type { BrowserWindow as BrowserWindowType, Input } from "electron";
 import {
   bindingKey,
   effectiveShortcuts,
@@ -22,14 +23,14 @@ import { desktopKeybindings } from "./keybindings.ts";
 
 export interface DesktopShortcuts {
   // 把一个窗口接进原生按键转发（每个新建的窗口都要接一次）。
-  attach(window: BrowserWindow): void;
+  attach(window: BrowserWindowType): void;
   // 释放 IPC 与持久化（退出时调用）。
   dispose(): void;
 }
 
 // 装上桌面快捷键的原生侧，返回窗口接入与释放操作；`scheme` 用于校验 IPC 来源。
 export function installDesktopShortcuts(
-  getWindow: () => BrowserWindow | undefined,
+  getWindow: () => BrowserWindowType | undefined,
   userData: string,
   platform: ShortcutPlatform,
   scheme: string,
@@ -61,7 +62,7 @@ export function installDesktopShortcuts(
 
   const persistence = desktopKeybindings(userData, platform, publish);
 
-  const windowOf = (event: Electron.IpcMainInvokeEvent): BrowserWindow => {
+  const windowOf = (event: Electron.IpcMainInvokeEvent): BrowserWindowType => {
     assertDesktopSender(event, scheme, ["app"]);
     const window = getWindow();
     if (window === undefined || window.isDestroyed() || event.sender !== window.webContents)
@@ -93,7 +94,7 @@ export function installDesktopShortcuts(
     window.close();
   });
 
-  const attach = (window: BrowserWindow): void => {
+  const attach = (window: BrowserWindowType): void => {
     const contents = window.webContents;
     let deadKey = false;
     const held = new Set<string>();

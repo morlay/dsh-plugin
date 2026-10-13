@@ -1,0 +1,39 @@
+{
+  "name": "@morlay/web-custom-profile",
+  "version": "0.0.1-alpha.0",
+  "description": "Dev-only dsh profile bundle: mounts @morlay/dsh-client-modules (our vite + federated prebundle frontend chain) and disables the upstream module-table rows it replaces — shared by `dsh-desktopify dev` in both its web and desktop forms.",
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "dsh-plugin",
+    "client-modules",
+    "dev"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "publishConfig": {
+    "exports": {
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@morlay/dsh-client-modules": "workspace:*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

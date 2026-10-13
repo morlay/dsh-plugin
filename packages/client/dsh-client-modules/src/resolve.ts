@@ -126,7 +126,8 @@ export interface FileAddress {
  */
 let workspaceIndex: Promise<Map<string, string>> | undefined;
 
-async function workspaceRootOf(from: string): Promise<string | undefined> {
+/** 从某个文件向上找仓库根（`pnpm-workspace.yaml` 那一层）。 */
+export async function workspaceRootOf(from: string): Promise<string | undefined> {
   let directory = dirname(from);
   for (;;) {
     if (await readFile(join(directory, "pnpm-workspace.yaml"), "utf8").then(() => true, () => false)) {

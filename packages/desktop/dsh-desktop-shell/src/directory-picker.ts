@@ -1,11 +1,12 @@
-import { dialog, ipcMain, type BrowserWindow } from "electron";
+import { dialog, ipcMain } from "./electron.ts";
+import type { BrowserWindow as BrowserWindowType } from "electron";
 import { DESKTOP_IPC, assertDesktopSender } from "./ipc.ts";
 
 export function installDesktopDirectoryPicker(
-  getWindow: () => BrowserWindow | undefined,
+  getWindow: () => BrowserWindowType | undefined,
   scheme: string,
 ): void {
-  const pending = new WeakMap<BrowserWindow, Promise<string | null>>();
+  const pending = new WeakMap<BrowserWindowType, Promise<string | null>>();
   ipcMain.handle(DESKTOP_IPC.directoryPick, async (event) => {
     const window = getWindow();
     if (

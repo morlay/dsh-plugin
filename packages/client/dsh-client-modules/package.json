@@ -17,7 +17,6 @@
   },
   "files": [
     "app-boot",
-    "config/dev.cordis.patch.yml",
     "dist",
     "locale/*.json"
   ],

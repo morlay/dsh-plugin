@@ -110,7 +110,9 @@ export async function startViteDev(
       // **端口与页面一致**（客户端连的就是页面这个端口）。调用方要先在 webServer 上注册同名 upgrade
       // 路由——上游对未注册的升级请求会直接 destroy socket，vite 就握不上手。
       ...(options.httpServer === undefined
-        ? {}
+        ? // 无端口形态（桌面）：没有同源的 http server 可以挂 HMR 的 WebSocket，vite 自开的端口只会
+          // 在同一个开发机上互相抢（`Port 24678 is already in use`）。桌面形态先不挂 HMR。
+          { hmr: false }
         : {
             hmr: {
               server: options.httpServer,
@@ -154,7 +156,14 @@ export async function startViteDev(
     if ((req.url ?? "").startsWith(`${base}/`)) return false;
     // 单次请求出错不该把宿主带走：vite 的 middlewares 里任何未捕获异常都只记一条 500。
     try {
+      // 非 2xx 才留痕（正常请求不吵）：vite 没接住时能立刻看到是哪条 URL。
+      res.on("finish", () => {
+        if (res.statusCode < 400) return;
+        process.stderr.write(`[vite] ${req.method ?? ""} ${req.url ?? ""} → ${String(res.statusCode)}\n`);
+      });
       ;(current ?? server).middlewares(req, res, () => {
+        // vite 没接住：留下线索（桌面形态经自定义协议进来，请求形态与 http 不同，这条日志能立刻定位）。
+        process.stderr.write(`[vite] miss ${req.method ?? ""} ${req.url ?? ""}\n`);
         if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         if (!res.writableEnded) res.end("client-modules: vite 没有这条路由\n");
       });

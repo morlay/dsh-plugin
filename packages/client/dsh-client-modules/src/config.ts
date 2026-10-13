@@ -19,7 +19,7 @@ function globToRegExp(pattern: string): RegExp {
  * profile 根按这个顺序找：启动器给的 `DSH_DESKTOP_DEV_PROFILE_DIR`（桌面形态）；`DSH_HOME` 的父目录
  * （它总是 `<profile>/.dsh-store`，web 形态也有）；当前目录。
  *
- * @returns 匹配"非开发模块"的正则表；没配就是空的。
+ * @returns 匹配"非开发模块"的正则表；**没配就是全部**（见函数末尾的说明）。
  */
 export async function devExcluded(): Promise<RegExp[]> {
   const home = process.env["DSH_HOME"];
@@ -39,7 +39,9 @@ export async function devExcluded(): Promise<RegExp[]> {
       // 换下一个候选。
     }
   }
-  return [];
+  // **读不到配置就是"不打算改任何包"**：全部走按包预编译（桌面/bundle 形态没有 dev 配置，源码逐文件
+  // 那条路对它们没有意义）。这正是两种形态"完美复用同一条链"的地方。
+  return [/.*/u];
 }
 
 /**

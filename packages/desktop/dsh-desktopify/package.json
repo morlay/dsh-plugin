@@ -44,6 +44,7 @@
     "@deepseek-ai/dsh": "workspace:^",
     "@morlay/dsh-desktop-host": "workspace:*",
     "@morlay/dsh-desktop-shell": "workspace:*",
+    "@morlay/web-custom-profile": "workspace:*",
     "commander": "^15.0.0",
     "electron": "^44.3.0",
     "electron-builder": "^26.16.1",

@@ -469,6 +469,12 @@ importers:
         specifier: ^4.1.0
         version: 4.3.2
 
+  packages/bundles/web-custom-profile:
+    dependencies:
+      '@morlay/dsh-client-modules':
+        specifier: workspace:*
+        version: link:../../client/dsh-client-modules
+
   packages/client/dsh-client-modules:
     dependencies:
       '@deepseek-ai/dsh-host-webserver':
@@ -655,6 +661,12 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      '@morlay/dsh-client-modules':
+        specifier: workspace:*
+        version: link:../../client/dsh-client-modules
+      '@morlay/web-custom-profile':
+        specifier: workspace:*
+        version: link:../../bundles/web-custom-profile
       lightningcss:
         specifier: ^1.32.0
         version: 1.33.0
@@ -729,6 +741,9 @@ importers:
       '@morlay/dsh-desktop-shell':
         specifier: workspace:*
         version: link:../dsh-desktop-shell
+      '@morlay/web-custom-profile':
+        specifier: workspace:*
+        version: link:../../bundles/web-custom-profile
       commander:
         specifier: ^15.0.0
         version: 15.0.0

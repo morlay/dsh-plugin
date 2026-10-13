@@ -203,7 +203,12 @@ export async function buildCordisConfig(
       // external 只对 client 入口的模块图生效：host 半照常打自己的依赖闭包。
       neverBundle: (id: string, importer: string | null | undefined) =>
         (options?.neverBundle?.includes(id) ?? false) ||
-        (fromClient(importer) ? isClientExternal(id, spec.externals) : true),
+        (fromClient(importer)
+          ? isClientExternal(id, spec.externals)
+          : // host 面外置的是**依赖**（裸包，部署的 `node_modules` 提供），不是**源码**：相对 / 绝对 /
+            // 虚拟 id 是同一个包里的文件，必须内联——否则产物里留下 `import "./x.ts"`，跑起来直接
+            // `ERR_MODULE_NOT_FOUND`（壳就是这么起不来的）。
+            !/^[.\/\0]/u.test(id)),
       alwaysBundle: (id: string, importer: string | null | undefined) =>
         isLocalPackage(id) ||
         isInlinedPackage(id, options?.inline) ||

@@ -2,8 +2,13 @@
 // 为什么是 Node inspector 而不是上游那套跨 realm 面板，见
 // [ADR 桌面档调试面用 Node inspector](../../.agents/adrs/20261008-桌面档调试面用Node-inspector而非跨realm面板.md)。
 
-import { BrowserWindow, Menu, MenuItem, dialog } from "electron";
-import type { MenuItemConstructorOptions } from "electron";
+import { BrowserWindow, Menu, MenuItem, dialog } from "./electron.ts";
+import type {
+  BrowserWindow as BrowserWindowType,
+  Menu as MenuType,
+  MenuItem as MenuItemType,
+  MenuItemConstructorOptions,
+} from "electron";
 import { nodeInspectorDevtoolsUrl } from "./developer-endpoint.ts";
 
 // 后端调试面要的 host 面（`DesktopHostProcess` 的结构子集）：命令 + 端点状态订阅。
@@ -20,7 +25,7 @@ export interface DeveloperMenuOptions {
   // 后端进程还没起来时返回 undefined——菜单仍然可用，点了给提示。
   readonly host: () => DeveloperHostProcess | undefined;
   // 对话框的父窗口。
-  readonly mainWindow: () => BrowserWindow | undefined;
+  readonly mainWindow: () => BrowserWindowType | undefined;
 }
 
 function reportFailure(options: DeveloperMenuOptions, title: string, detail: string): void {
@@ -31,7 +36,7 @@ function reportFailure(options: DeveloperMenuOptions, title: string, detail: str
 }
 
 // 往应用菜单的 View 子菜单里插两项（分隔符 + 调试项）；现有菜单没有 View 时返回 false。
-function insertIntoViewMenu(menu: Menu | null, toggle: MenuItemConstructorOptions): boolean {
+function insertIntoViewMenu(menu: MenuType | null, toggle: MenuItemConstructorOptions): boolean {
   const view = menu?.items.find((entry) => entry.role === "viewMenu")?.submenu;
   if (view === undefined) return false;
   const devtools = view.items.findIndex((entry) => entry.role === "toggleDevTools");
@@ -43,7 +48,7 @@ function insertIntoViewMenu(menu: Menu | null, toggle: MenuItemConstructorOption
 
 // 现有菜单不可用时的兜底：只摆桌面应用该有的几项。macOS 的 app 菜单与 window 菜单不能省，
 // 少了它们 Cmd+Q / Cmd+W 这类系统快捷键会失效。
-function buildFallbackMenu(toggle: MenuItemConstructorOptions): Menu {
+function buildFallbackMenu(toggle: MenuItemConstructorOptions): MenuType {
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === "darwin" ? [{ role: "appMenu" } as const] : []),
     { role: "fileMenu" },
@@ -76,12 +81,12 @@ function buildFallbackMenu(toggle: MenuItemConstructorOptions): Menu {
  * @returns 退订与收尾。
  */
 export function installDeveloperMenu(options: DeveloperMenuOptions): { dispose(): void } {
-  let window: BrowserWindow | undefined;
+  let window: BrowserWindowType | undefined;
   // 我们自己关窗口时置位：那一刻别再当成「用户关掉调试」。
   let closingWindow = false;
   let releaseInspected: (() => void) | undefined;
   // 菜单项实例只有挂上之后才有，勾选状态一律经它同步（模板对象里拿不到实例）。
-  let toggleItem: MenuItem | undefined;
+  let toggleItem: MenuItemType | undefined;
   const setChecked = (checked: boolean): void => {
     if (toggleItem !== undefined) toggleItem.checked = checked;
   };

@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
 import { ASSET_MIME } from "@local/tsdown-plugin-cordis";
@@ -27,6 +28,7 @@ import {
   PLUGIN_ROUTE,
   resolveInPackage,
   workspacePackagesMatching,
+  workspaceRootOf,
 } from "./resolve.ts";
 
 export const name = "client-modules";
@@ -109,13 +111,47 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
     // 引用被重写成它的 deps 产物（一次构建、共享 chunk、落盘缓存、按内容 hash 失效）。
     found.set(name, {
       id: name,
-      clientPath: `@/${relative(process.cwd(), clientPath).split(sep).join("/")}`,
+      clientPath: `@/${relative(await repoRootOf(), clientPath).split(sep).join("/")}`,
       version: manifest.version,
     });
   }
   return [...found.values()];
 }
 
+
+/** 本包清单的位置（`src/index.ts` 或打包后的 `dist/index.mjs` 都指向包根）。 */
+function packageRootOfSelf(): string {
+  return fileURLToPath(new URL("../package.json", import.meta.url));
+}
+
+let repoRootPromise: Promise<string> | undefined;
+
+/**
+ * 这条链的根（vite 的 cwd：解析、watch、缓存都相对它）。
+ *
+ * - **dev 态**：**仓库根**。两种形态一致——桌面宿主的进程 cwd 是 profile 目录（`apps/<profile>`），
+ *   从 cwd 推出来的仓库根、app-boot、缓存目录全是错的（web 形态下 cwd 恰好是仓库根，所以这条一直没
+ *   暴露）。所以这里按**模块位置**推：本包在 `packages/<组>/<包>` 下，工作区标记找不到时退回向上三级。
+ * - **bundle 后**：`$DSH_HOME/profiles/desktop`——那时没有仓库，源码与产物都在 profile 目录里。
+ */
+async function repoRootOf(): Promise<string> {
+  repoRootPromise ??= (async () => {
+    // bundle（非 dev）形态：profile 目录就是根。
+    if (process.env["DSH_DESKTOP_DEV_PROFILE_DIR"] === undefined) {
+      const home = process.env["DSH_HOME"];
+      const packaged = home === undefined ? undefined : join(home, "profiles", "desktop");
+      if (
+        packaged !== undefined &&
+        (await readFile(join(packaged, "package.json"), "utf8").then(() => true, () => false))
+      ) {
+        return packaged;
+      }
+    }
+    const own = packageRootOfSelf();
+    return (await workspaceRootOf(own)) ?? join(own, "..", "..", "..");
+  })();
+  return await repoRootPromise;
+}
 
 /** 打包器指纹的输入集：**只与包有关、与出口无关**（缓存按包聚合，rev 跟着出口变就等于永不命中）。 */
 function watchOf(root: string | undefined, entry: string): string[] {
@@ -125,10 +161,16 @@ function watchOf(root: string | undefined, entry: string): string[] {
 
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;
+  // 本包的位置（`src/` 或打包后的 `dist/`）：`app-boot` 与仓库根都从它推。
+  //
+  // **不用 `process.cwd()`**：桌面形态的宿主进程 cwd 是 profile 目录（`apps/<profile>`），从那里推出来的
+  // 仓库根、app-boot、缓存目录全是错的（web 形态下 cwd 恰好是仓库根，所以这条一直没暴露）。
+  const packageRoot = dirname(packageRootOfSelf());
+  const appRoot = join(packageRoot, "app-boot");
 
   // **宿主进程的异常要留下痕迹**：dev 形态下 vite 跑在同一个进程里（它的原生绑定或某个未捕获异常崩过一次，
   // 外部只看到连接被拒，无从溯源）。落一份日志到 `$DSH_HOME/logs/dev-host.log`，退出时在 stderr 指路。
-  const logFile = join(process.env["DSH_HOME"] ?? join(process.cwd(), ".dsh-store"), "logs", "dev-host.log");
+  const logFile = join(process.env["DSH_HOME"] ?? join(packageRoot, ".dsh-store"), "logs", "dev-host.log");
   const appendLog = async (text: string): Promise<void> => {
     try {
       await mkdir(dirname(logFile), { recursive: true });
@@ -195,7 +237,7 @@ export function apply(ctx: Context): void {
     if (fallbackBase !== undefined) bases.push(fallbackBase);
     // 本包自己的清单也是一个基准：这条链的运行期依赖声明在它里面——典型是 rolldown 注入装饰器 helper 用的
     // `@oxc-project/runtime`，pnpm 的严格布局下从 profile 出发解析不到，只有从声明它的包出发才找得到。
-    bases.push(join(process.cwd(), "packages", "client", "dsh-client-modules", "package.json"));
+    bases.push(join(packageRoot, "package.json"));
     for (const base of bases) {
       const found = await packageRootOf(base, name);
       if (found !== undefined) return found.root;
@@ -221,7 +263,7 @@ export function apply(ctx: Context): void {
   const ensureVite = async (): Promise<void> => {
     if (viteHandoff !== undefined) return;
     viteStarting ??= (async () => {
-      const repoRoot = process.cwd();
+      const repoRoot = await repoRootOf();
       const started = await startViteDev(ctx, {
         repoRoot,
         base: PLUGIN_ROUTE,
@@ -283,10 +325,11 @@ export function apply(ctx: Context): void {
 
   // 聚合与三方的缓存都在 `node_modules/` 下（与 vite 的 `.vite` 并列，跨进程共用）。
   // 一个缓存目录：三方的与我们的**没有本质区别**（同一条链、同一种地址）。
-  const cacheRoot = join(process.cwd(), CLIENT_MODULES_CACHE);
-  const appRoot = join(process.cwd(), "packages", "client", "dsh-client-modules", "app-boot");
-  const federationAlias = clientModulesAlias({
-    repoRoot: process.cwd(),
+  // 缓存与 alias 都要仓库根，但 `apply` 是同步的：惰性算一次。
+  let cacheRootCache: string | undefined;
+  const cacheRootOf = async (): Promise<string> => (cacheRootCache ??= join(await repoRootOf(), CLIENT_MODULES_CACHE));
+  const federationAliasOf = async (): Promise<ReturnType<typeof clientModulesAlias>> => clientModulesAlias({
+    repoRoot: await repoRootOf(),
     // 联邦构建走 rolldown：替身必须是 CJS 形态，否则未知具名导入在构建期就是 `MISSING_EXPORT`。
     nodeStub: join(appRoot, "node-stub.cjs"),
   });
@@ -325,7 +368,7 @@ export function apply(ctx: Context): void {
       // 三方也要版本（zod、immer、react…）：pnpm 的 store 目录名就是 `<名字>@<版本>`（scope 写成
       // `@scope+name@1.2.3`），读一层目录即可，不必去读几千个清单。**peer 后缀要去掉**：同一包因 peer
       // 不同会有多份目录（`zustand@4.5.7_@types+react@18…`），从最后一个 `@` 切会把 `18.3.1` 当版本。
-      const store = await readdir(join(process.cwd(), "node_modules", ".pnpm"), { withFileTypes: true }).catch(
+      const store = await readdir(join(await repoRootOf(), "node_modules", ".pnpm"), { withFileTypes: true }).catch(
         () => [],
       );
       for (const entry of store) {
@@ -371,7 +414,9 @@ export function apply(ctx: Context): void {
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<boolean> => {
-    // `?rev=` 是**构建世代**（见 `urlOf`）：它在地址里只是让"同一份产物的 URL 稳定且可辨识"，
+    const cacheRoot = await cacheRootOf();
+    const federationAlias = await federationAliasOf();
+    // `?v=` 是**构建世代**（见 `urlOf`）：它在地址里只是让"同一份产物的 URL 稳定且可辨识"，
     // 路由不据此改变响应（产物一律协商缓存）。
     const rest = (url.slice(`${CLIENT_MODULES_PREFIX}/`.length).split("?")[0] ?? "");
     const slash = rest.indexOf("/");
@@ -414,7 +459,7 @@ export function apply(ctx: Context): void {
     const exportName = file.replace(/\.js$/u, "") || "index";
     const entry =
       root === undefined
-        ? (await dependencyEntry(join(process.cwd(), "package.json"), name).catch(() => undefined))
+        ? (await dependencyEntry(join(await repoRootOf(), "package.json"), name).catch(() => undefined))
             ?.entry
         : ((await exportTargetOf(root, exportName === "index" ? undefined : exportName)) ??
           // 清单没覆盖这个子路径时按物理路径找（没有 `exports` 的老包：`picomatch/posix` 就是 `posix.js`）。
@@ -436,7 +481,7 @@ export function apply(ctx: Context): void {
     }
     const bundled = await bundlePackage({
       cacheRoot,
-      repoRoot: process.cwd(),
+      repoRoot: await repoRootOf(),
       alias: federationAlias,
       name,
       version,
@@ -491,10 +536,17 @@ export function apply(ctx: Context): void {
   };
 
   const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // 桌面形态的请求经自定义协议（`dsh-…://app/…`）进来，`req.url` 是**完整 URL** 而不是路径——先归一，
+    // 否则下面所有按路径判断的规则（`@` 前缀、页面、联邦地址）都会落空，页面直接 404。
+    if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(req.url ?? "")) {
+      const absolute = new URL(req.url ?? "");
+      req.url = `${absolute.pathname}${absolute.search}`;
+    }
     // **只认 `@` 前缀的 URL 空间**：本地文件 `@/…`、联邦产物 `@client-modules/…`（vite 自己的
     // `/@vite`、`/@id`、`/@fs` 也在这个前缀下）。其余路径（裸的 `/packages/…`、`/vendor/…`）**一律 404**
     // 并把线索打出来——它们是"没被解析规则换掉"的漏网请求，放过去只会让人在几百条请求里猜谁发的。
-    const path = (req.url ?? "").split("?")[0] ?? "";
+    const requestPath = (req.url ?? "").split("?")[0] ?? "";
+    const path = requestPath;
     const known =
       // 页面本身（vite 的 root 就是 `app-boot`，它生成的是 root 相对路径）与我们/ vite 的 `@` 前缀
       // URL 空间（`@/…` 本地文件、`@client-modules/…` 联邦产物、`/@fs/…` 仓库里的源码、`/@id/…` 虚拟模块）。
@@ -516,6 +568,25 @@ export function apply(ctx: Context): void {
     }
     process.stderr.write(`[serveAny] ${req.url ?? ""}
 `);
+    // 页面由**我们自己**服务：读 `app-boot/index.html`，注入 vite 的客户端（HMR），入口脚本仍走 vite
+    // （它要转译 `index.ts`、解析 `dsh-client-rows` 虚拟模块）。
+    //
+    // 为什么不交给 vite 的 indexHtml 中间件：桌面形态的请求经自定义协议（`dsh-…://app/`）进来，那条
+    // 中间件不认（返回 404），而两端要的页面是同一份。
+    if (requestPath === "/" || requestPath === "/index.html") {
+      const html = await readFile(join(appRoot, "index.html"), "utf8").catch(() => undefined);
+      if (html === undefined) {
+        process.stderr.write(`[serveAny] 页面骨架读不到：${join(appRoot, "index.html")}\n`);
+        return fallback(req, res);
+      }
+      const injected = html.replace(
+        "</head>",
+        `  <script type="module" src="/@vite/client"></script>\n  </head>`,
+      );
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
+      res.end(req.method === "HEAD" ? undefined : injected);
+      return;
+    }
     const requestUrl = req.url ?? "";
     if (requestUrl.split("?")[0]?.startsWith(`${CLIENT_MODULES_PREFIX}/`) === true) {
       const handled = await serveFederation(requestUrl, req, res);

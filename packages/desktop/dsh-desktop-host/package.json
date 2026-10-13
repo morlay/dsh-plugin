@@ -61,6 +61,8 @@
     "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
+    "@morlay/dsh-client-modules": "workspace:*",
+    "@morlay/web-custom-profile": "workspace:*",
     "lightningcss": "^1.32.0",
     "rolldown": "1.x"
   },

@@ -1,8 +1,10 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "electron";
-import type { BrowserWindowConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "./electron.ts";
+import type { BrowserWindow as BrowserWindowType, BrowserWindowConstructorOptions } from "electron";
+import { DESKTOP_HOST_PACKAGE } from "./official.ts";
 import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
 import { installDeveloperMenu } from "./developer-menu.ts";
@@ -200,7 +202,7 @@ function windowFrame(): Pick<
 function createWindow(
   preload: string,
   config: { width: number; height: number; minWidth: number; minHeight: number },
-): BrowserWindow {
+): BrowserWindowType {
   const window = new BrowserWindow({
     width: config.width,
     height: config.height,
@@ -274,7 +276,9 @@ async function main(): Promise<void> {
       await installPlantedProfile(profileDir, resources);
     }
   }
-  if (!(await pathExists(join(webDocumentRoot, "index.html")))) {
+  // **开发形态不要求上游的前端静态产物**：页面与资源由 dev 的 client 服务（vite + 联邦产物）在宿主进程里
+  // 现场提供，壳只是把请求经字节管道交给它——`webDocumentRoot` 在打包形态才是前端来源。
+  if (development === undefined && !(await pathExists(join(webDocumentRoot, "index.html")))) {
     throw new Error(
       `dsh desktop: the Web frontend is missing at ${webDocumentRoot}; ` +
         `the runtime closure must carry ${WEB_FRONTEND_PACKAGE}`,
@@ -282,13 +286,13 @@ async function main(): Promise<void> {
   }
 
   let host: DesktopHostProcess | undefined;
-  let mainWindow: BrowserWindow | undefined;
+  let mainWindow: BrowserWindowType | undefined;
   let quitConfirmed = false;
   let quitPrompting = false;
   const appPreload = fileURLToPath(new URL("./preload-app.cjs", import.meta.url));
 
   // 只有打包形态拦一次确认（开发形态关窗即退出）。
-  const confirmQuit = async (window?: BrowserWindow): Promise<void> => {
+  const confirmQuit = async (window?: BrowserWindowType): Promise<void> => {
     if (quitPrompting) return;
     quitPrompting = true;
     try {
@@ -329,6 +333,15 @@ async function main(): Promise<void> {
     const loader = sourceLoader(resources);
     const next = new DesktopHostProcess(resources.node, runtimeDir, target, hostInspectPort, {
       nodeArgs: [`--import=${loader}`],
+      // 开发形态按 node 的解析取源码入口（`exports` 指 `src/index.ts`，loader 转译）；打包形态不传，
+      // 用部署里落位的 `lib/index.js`。
+      ...(development === undefined
+        ? {}
+        : {
+            // 用**壳自己**的清单当基准：宿主包是壳的依赖（`@morlay/dsh-desktop-host/wire` 就在用），
+            // pnpm 的严格布局下只有从这里才解析得到它（profile 的清单里没有它）。
+            entry: createRequire(import.meta.url).resolve(DESKTOP_HOST_PACKAGE),
+          }),
 
       extraEnv: {
         ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
@@ -483,7 +496,7 @@ async function main(): Promise<void> {
     shortcuts.dispose();
   });
 
-  const createMainWindow = (): BrowserWindow => {
+  const createMainWindow = (): BrowserWindowType => {
     const window = createWindow(appPreload, appConfig.window);
     mainWindow = window;
     shortcuts.attach(window);
