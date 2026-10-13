@@ -28,7 +28,7 @@ export const CLIENT_MODULES_CACHE = join("node_modules", ".dsh-client-modules");
  * 缓存指纹算的是输入源码，而产物的形态还取决于这里的解析/改写规则（联邦地址怎么归一等）——
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
-const BUNDLER_REV = "3";
+const BUNDLER_REV = "4";
 
 /** 包 → 它在浏览器里的地址（联邦式）。 */
 export function depsUrlOf(specifier: string, version: string, file = "index.js"): string {

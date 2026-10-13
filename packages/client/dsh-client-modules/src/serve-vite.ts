@@ -5,7 +5,6 @@
  * 入口（`/plugins/.app/entry.js`）。其余（依赖预打包、CJS→ESM、具名导出、外置 require、共享 chunk、
  * 内容 hash 缓存、HMR）都是 vite dev server 的现成能力——自己实现这些正是前面绕远路的地方。
  */
-import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
@@ -48,10 +47,6 @@ export async function startViteDev(
     base: string;
     rows: RowsSource;
     resolvePluginUrl: (url: string) => Promise<string | undefined>;
-    /** 非开发模块的包名：交给 vite 的 `optimizeDeps` 预打包（`include` 用裸名，alias 指到源码）。 */
-    optimizeInclude: readonly string[];
-    /** 这些包名 → 各自的 client 半源码（给 `resolve.alias`，让裸名可解析）。 */
-    optimizeAlias: readonly { name: string; entry: string }[];
     /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
     httpServer?: HmrServer | undefined;
   },
@@ -87,36 +82,20 @@ export async function startViteDev(
     // 落盘 `<root>/node_modules/.vite/deps`、按内容 hash 失效；改着的包不在其中，仍逐文件走 vite（HMR）。
     // 缓存目录用默认的 `node_modules/.vite`：跨进程、跨 profile 共用一份，不按进程隔离。
     //
-    // 这些入口是**我们的源码**（里面有 `?raw`、CSS Modules 这类只有 vite 转换链认得的东西），优化器自己
-    // 不认识——所以把它俩用的插件也挂给它：预打包与 dev 转换因此是同一套规则，我们没另造机制。
-    //
-    // `include` 里写的是**包名**（裸说明符）：optimizer 只认这个形态，再靠下面 `resolve.alias` 把
-    // 这些名字指到各自的 client 半，于是"预打包"与"引用"是同一个身份。
-    optimizeDeps: {
-      include: [...options.optimizeInclude],
-      rolldownOptions: {
-        plugins: [cssInlinePlugins({ name: "dsh-deps", assets: "inline" }), clientAssetPlugin()],
-      },
-    },
+    // **不用 vite 的 optimizeDeps**：客户端资源由我们自己的联邦链产出（`@client-modules/…`），vite 只管
+    // 页面与本地文件（`@/…`）。开着它会去预打包 workspace 源码，形成第二条链（浏览器里出现
+    // `node_modules/.vite/deps/@_packages_profile…` 就是这么来的）。
     // **不读也不监听配置文件**：配置全是内联的（下面这些字段）。默认它会在 root 下找 `vite.config.*`
     // 并 watch，改动就 `restart()` 自己——而这个 dev server 跑在 dsh 宿主进程里，重启会连带把整条
     // 服务拖下水。关掉这条路径。
     configFile: false,
     resolve: {
-      // `node:*` 一律指向求值安全的空替身：宿主半的代码偶尔被同包的相对导入拖进 client 图，vite 默认的
-      // browser-external 代理在读取成员时抛错，会让整条入口求值中断（页面白屏 + 一条难归因的报错）。
       alias: [
         // `@/…` → 仓库根：HTML 与源码里引用仓库内文件都用这个前缀，不写死绝对路径、也不依赖相对谁。
         { find: /^@\//, replacement: `${repoRoot}/` },
         // `node:*` 一律指向求值安全的空替身：宿主半的代码偶尔被同包的相对导入拖进 client 图，vite 默认的
         // browser-external 代理在读取成员时抛错，会让整条入口求值中断（页面白屏 + 一条难归因的报错）。
         { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
-        // **非开发模块**的包名 → 各自的 client 半源码：这样`optimizeDeps.include` 里的裸名能被
-        // optimizer 解析到，预打包与引用是同一个身份（改着的包不进这里，仍走 vite 的模块图）。
-        ...options.optimizeAlias.map(({ name, entry }) => ({
-          find: new RegExp(`^${name.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&")}$`),
-          replacement: entry,
-        })),
       ],
     },
     server: {

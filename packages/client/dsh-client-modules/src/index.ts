@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, sep } from "node:path";
 import type { Duplex } from "node:stream";
@@ -193,13 +193,6 @@ export function apply(ctx: Context): void {
       };
     });
   };
-  const optimizeInclude = async (): Promise<string[]> => (await allRowsOf()).map((row) => row.clientPath);
-  const optimizeAlias = async (): Promise<{ name: string; entry: string }[]> => {
-    const patterns = await excludedOf();
-    return (await sourceRowsOf())
-      .filter((row) => isAggregated(row.id, patterns))
-      .map((row) => ({ name: row.id, entry: row.clientPath }));
-  };
   const rows = async (): Promise<ClientRow[]> => await allRowsOf();
   if (webServer === undefined)
     throw new Error("client-modules: webServer is a required service");
@@ -250,9 +243,6 @@ export function apply(ctx: Context): void {
         rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
-        // 非开发模块的入口（包名）与它们的 alias：交给 vite 的 `optimizeDeps` 预打包。
-        optimizeInclude: await optimizeInclude(),
-        optimizeAlias: await optimizeAlias(),
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
       });
       viteHandoff = started;
@@ -336,6 +326,17 @@ export function apply(ctx: Context): void {
       if (versions.has(pkg.name)) continue;
       const manifest = await manifestOf(pkg.root).catch(() => undefined);
       if (manifest !== undefined) versions.set(pkg.name, manifest.version);
+    }
+    // **三方也要版本**（zod、immer、react…）：pnpm 的 store 目录名就是 `<名字>@<版本>`（scope 写成
+    // `@scope+name@1.2.3`），读一层目录即可，不必去读几千个清单。
+    const store = await readdir(join(process.cwd(), "node_modules", ".pnpm"), { withFileTypes: true })
+      .catch(() => []);
+    for (const entry of store) {
+      if (!entry.isDirectory()) continue;
+      const at = entry.name.lastIndexOf("@");
+      if (at <= 0) continue;
+      const name = entry.name.slice(0, at).replaceAll("+", "/");
+      if (!versions.has(name)) versions.set(name, entry.name.slice(at + 1));
     }
     return versions;
   };
