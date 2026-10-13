@@ -378,7 +378,15 @@ export function apply(ctx: Context): void {
       `[fed] ${name}@${version}/${exportName} root=${String(root)} entry=${String(entry)}\n`,
     );
     if (entry === undefined) {
-      process.stderr.write(`[federation] ${name}/${exportName}: 解析不到入口（root=${String(root)}\n`);
+      // 仓库内的包但**这一侧没有实现**（纯 host 包：只有 `./types` 出口、`src/` 下全是宿主代码）：
+      // client 图里偶有值引用它们（跨包类型 oxc 判定不了，保守保留），客户端本就拿不到宿主半——
+      // 给个空模块，让它照样是"导入了、什么都没导出"。
+      if (root !== undefined) {
+        res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+        res.end(req.method === "HEAD" ? undefined : "export {};\n");
+        return true;
+      }
+      process.stderr.write(`[federation] ${name}/${exportName}: 解析不到入口（root=${String(root)}）\n`);
       return false;
     }
     const bundled = await bundlePackage({
