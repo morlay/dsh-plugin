@@ -359,6 +359,9 @@ async function main(): Promise<void> {
 
       extraEnv: {
         ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
+        // 这条链是 fs / 哈希密集的（预编译按包读源码、算指纹、写产物 + vite 的转译），这些全走 libuv 线程池，
+        // 默认只有 4：并发一多请求就排在池子外。bundle 形态不经过 `dshdev`，所以这里也设一份。
+        UV_THREADPOOL_SIZE: process.env["UV_THREADPOOL_SIZE"] ?? "64",
         ...(development === undefined ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
         ...sourceLoaderEnvironment(loader),
       },

@@ -92,6 +92,16 @@ async function devClientPatch(): Promise<string> {
   return patch;
 }
 
+/**
+ * 我们这条链是**文件密集**的：客户端资源的预编译按包读源码、算内容指纹（`createHash`）、写产物，dev 形态下
+ * 还叠着 vite 的转译与 fs 读——这些全走 libuv 的线程池，而它默认只有 4：并发请求一多就排在池子外面
+ * （表现为"明明没在算，请求却卡着"）。**必须在进程启动前**设（运行时改无效），所以在这里注入给由 dshdev
+ * 起的每一个进程（壳、宿主、以及它们再拉起的子进程）。用户显式设过就不动。
+ */
+function threadpoolSize(): string {
+  return process.env["UV_THREADPOOL_SIZE"] ?? "64";
+}
+
 async function launchElectron(
   profileDir: string,
   runtimeDir: string,
@@ -115,6 +125,7 @@ async function launchElectron(
   const systemNode = process.env.DSH_DESKTOP_NODE_BINARY ?? process.env.npm_node_execpath ?? "node";
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
+    UV_THREADPOOL_SIZE: threadpoolSize(),
     // **壳必须是真 Electron**：`ELECTRON_RUN_AS_NODE` 会让它退化成一个 node 进程，于是
     // `--remote-debugging-port` / `--user-data-dir` 这类 Chromium 开关全被当成 bad option，壳根本起不来。
     // （这个变量在环境里很常见——它本来是给"把 Electron 当 node 用"的子进程准备的。）
@@ -190,7 +201,7 @@ export async function runDev(options: DevOptions): Promise<void> {
         await devClientPatch(),
       ],
       repositoryRoot,
-      withTsLoader({ ...process.env, DSH_HOME: home }, tsLoader),
+      withTsLoader({ ...process.env, DSH_HOME: home, UV_THREADPOOL_SIZE: threadpoolSize() }, tsLoader),
     );
     return;
   }
