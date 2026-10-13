@@ -23,12 +23,9 @@
 - id: client-hmr
   disabled: true
 
-# 插件管理面整体退场：模块表没了，依赖它的那几行留着只会得到一张"本部署没有开放任何插件视图"的空页，
-# 所以连**入口**一起停掉——设置里的「插件」页（`ui-plugin-manager`）、「内置插件」清单
-# （`ui-settings-plugin-inventory`）、设置页的插件分节（`ui-settings-plugins`）。
-# 本部署的插件面由 profile 自己的依赖与 settings namespace 承担。
-- id: ui-plugin-manager
-  disabled: true
+# **插件管理页保留**（`ui-plugin-manager`：它只依赖 `remote.pluginManager*` 那几个 remote 面，
+# 不依赖被停用的模块表）；停的只是**设置页里的插件清单**——那两行要 `modules` 服务
+# （模块表 roster）与 bundle 清单，模块表已随 `client-modules` 退场，留着只会是空页。
 - id: ui-settings-plugin-inventory
   disabled: true
 - id: ui-settings-plugins

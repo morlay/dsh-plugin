@@ -46,6 +46,11 @@
         "minHeight": 600
       },
       "dshHome": "xdg"
+    },
+    "dev": {
+      "exclude": [
+        "@deepseek-ai/*"
+      ]
     }
   }
 }
