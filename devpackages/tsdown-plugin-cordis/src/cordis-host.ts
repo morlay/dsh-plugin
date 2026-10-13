@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
-import type { TsdownHooks, UserConfig } from "tsdown";
+import type { TsdownHooks, TsdownPlugin, UserConfig } from "tsdown";
 import {
   CLIENT_ENTRY,
   clientBundleSpec,
@@ -61,9 +61,8 @@ function buildDone(
 // cordis 插件包共享 tsdown 配置：host 与 client 是**同一次构建的两个入口**（client 的差别由
 // `clientEntryPlugin` 与按入口的 external 规则承担，不是第二个 config）。
 // entry 按约定探测：`src/index.ts`；`src/client/index.ts` 存在则自动附带。
-export async function defineCordisPluginConfig(options?: {
+export interface CordisPluginOptions {
   client?: CordisClientOptions | false;
-  entries?: Record<string, string>;
   // 打进产物、不进 `package.json` 依赖清单的包（含子路径）：源码上仍是那一份，产物里内联一份。
   inline?: readonly string[];
   // 无条件留在产物外的包（原生模块、自带二进制的构建器）；client 面的 external 由 `CordisClientOptions.externals` 管。
@@ -80,8 +79,49 @@ export async function defineCordisPluginConfig(options?: {
   bin?: Record<string, string>;
   // 额外写 Node / Electron 的传统入口 `main` / `module`（理由见 `PackageExportsOptions`）。
   legacy?: boolean;
-}): Promise<UserConfig> {
-  const hasClientSource = await entryExists(join(process.cwd(), "src", "client", "index.ts"));
+}
+
+/**
+ * 本包在 tsdown 配置里声明的入口（`defineConfig({ entry })` 的归一形态）。
+ *
+ * **入口归 tsdown**：插件只消费它——额外入口、`client` 半的路径都由那里读，不再从插件选项传。
+ *
+ * @param entry - tsdown 的 `entry` 字段原值。
+ * @returns 入口名 → 源码路径。
+ */
+function declaredEntries(entry: UserConfig["entry"]): Record<string, string> {
+  if (entry === undefined || entry === null) return {};
+  if (typeof entry === "string") return { index: entry };
+  if (Array.isArray(entry)) {
+    const fromArray: Record<string, string> = {};
+    for (const file of entry) {
+      if (typeof file === "string") fromArray[file.replace(/\W+/gu, "_")] = file;
+    }
+    return fromArray;
+  }
+  if (typeof entry !== "object") return {};
+  const declared: Record<string, string> = {};
+  for (const [name, value] of Object.entries(entry as Record<string, string | string[]>)) {
+    const file = Array.isArray(value) ? value[0] : value;
+    if (typeof file === "string") declared[name] = file;
+  }
+  return declared;
+}
+
+/**
+ * 直接产出整份 tsdown 配置。
+ *
+ * 新代码写 `defineConfig({ entry, plugins: [cordisPlugin()] })`——入口归 tsdown，插件只消费。
+ * 这个入口留给"一个包要产出多份配置"的组合场景（`dsh-desktop-shell`），它还得自己拼 `plugins` 数组。
+ */
+export async function buildCordisConfig(
+  options: CordisPluginOptions | undefined,
+  incoming: UserConfig = {},
+): Promise<UserConfig> {
+  const declared = declaredEntries(incoming.entry);
+  const hasClientSource =
+    declared[CLIENT_ENTRY] !== undefined ||
+    (await entryExists(join(process.cwd(), "src", "client", "index.ts")));
   const client =
     options?.client === false || (!hasClientSource && options?.client === undefined)
       ? undefined
@@ -91,12 +131,12 @@ export async function defineCordisPluginConfig(options?: {
   // 不处理就是构建报错，处理了才是「模块执行即注入 style tag + 导出 class 映射」。
   const inlineLibrary = client === undefined && hasClientSource;
 
-  // 入口按存在性探测：`index` 是包的门面（工具类包没有它，例如只发 bin 的 CLI）。
-  const entry: Record<string, string> = {};
-  if (await entryExists(join(process.cwd(), "src", "index.ts"))) {
+  // 入口：**以 tsdown 声明为准**；一个字都没写时按约定探测（`index` 是包的门面——工具类包没有它，
+  // 例如只发 bin 的 CLI）。`client` 半由本插件按约定补上（它是 cordis 的约定，不是 tsdown 的）。
+  const entry: Record<string, string> = declaredEntries(incoming.entry);
+  if (Object.keys(entry).length === 0 && (await entryExists(join(process.cwd(), "src", "index.ts")))) {
     entry["index"] = "./src/index.ts";
   }
-  Object.assign(entry, options?.entries);
   if (client !== undefined) entry[CLIENT_ENTRY] = client.entry ?? "./src/client/index.ts";
 
   const spec = await clientBundleSpec(
@@ -190,4 +230,26 @@ async function packageName(): Promise<string> {
   };
   if (!pkg.name) throw new Error("package.json 缺少 name");
   return pkg.name;
+}
+
+/**
+ * cordis 插件包的 tsdown 插件：`defineConfig({ plugins: [cordisPlugin({ … })] })`。
+ *
+ * 它把"一个 cordis 插件包该怎么打"的所有约定收在一处——入口探测、host/client 两种产物形态、
+ * client 入口的字节替换、样式与资产、依赖内外联规则、声明与出口清单的写回——各包只需声明
+ * **自己的**那点差异（额外入口、client 的 id 与 external、bin…）。
+ *
+ * 实现走 tsdown 的 `tsdownConfig` 钩子（等价 Vite 的 `config` 钩子）：返回的 partial 会深合并进用户配置，
+ * 数组字段（`plugins`）按替换处理——所以这里把自身的 rolldown 插件一并带上。
+ *
+ * @param options - 与 {@link defineCordisPluginConfig} 相同。
+ * @returns tsdown 插件。
+ */
+export function cordisPlugin(options?: CordisPluginOptions): TsdownPlugin {
+  return {
+    name: "tsdown-plugin-cordis",
+    async tsdownConfig(config) {
+      return await buildCordisConfig(options, config);
+    },
+  };
 }

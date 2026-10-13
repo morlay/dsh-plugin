@@ -24,13 +24,19 @@
   "exports": {
     ".": "./src/client/index.ts",
     "./reference": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./src/client/index.ts"
   },
   "publishConfig": {
     "exports": {
       ".": "./dist/index.mjs",
       "./reference": "./dist/reference.mjs",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./client": {
+        "types": "./dist/client.d.mts",
+        "import": "./dist/client.mjs",
+        "default": "./dist/client.mjs"
+      }
     }
   },
   "scripts": {

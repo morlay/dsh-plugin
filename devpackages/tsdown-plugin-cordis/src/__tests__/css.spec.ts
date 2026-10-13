@@ -6,7 +6,7 @@ import { runInThisContext } from "node:vm";
 import { rolldown } from "rolldown";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bundleClientFactory } from "../cordis-client.ts";
-import { defineCordisPluginConfig } from "../cordis-host.ts";
+import { buildCordisConfig } from "../cordis-host.ts";
 import { cssInlinePlugins } from "../css.ts";
 
 // 插件 id：与现场打包的 `name` 同义，写入注入 style tag 的 `data-plugin*` 属性。
@@ -147,7 +147,7 @@ describe("client bundle CSS", () => {
   });
 
   // tsdown 那一次解析也必须认得样式 import：clientEntryPlugin 之后要用现场打包的字节换掉 chunk。
-  describe("defineCordisPluginConfig", () => {
+  describe("buildCordisConfig", () => {
     it("hands the client entry pipeline a working CSS inliner", async () => {
       const cwd = process.cwd();
       await writeFile(
@@ -161,7 +161,7 @@ describe("client bundle CSS", () => {
       );
       process.chdir(directory);
       try {
-        const config = await defineCordisPluginConfig({
+        const config = await buildCordisConfig({
           client: { name: PLUGIN_ID, entry: "./src/client/index.ts" },
         });
         const inputOptions = typeof config.inputOptions === "function" ? {} : config.inputOptions;

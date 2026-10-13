@@ -59,7 +59,7 @@ autoInstallPeers: true
 - **样式内联自己实现，不复用 vendor 的同一份逻辑**：上游那三个插件内联在未导出的
   `clientConfig` 里（导出面只有 `clientBundle`），复用会拖进 `REPOSITORY_ROOT`、
   `packages/*/*` 清单扫描、`PLATFORM_MODULES` 等上游仓库内部路径。代价是语义有一份
-  重复，由 devkit 自己的单测钉住（`devpackages/devkit/src/__tests__/css.spec.ts`，
+  重复，由 devkit 自己的单测钉住（`devpackages/tsdown-plugin-cordis/src/__tests__/css.spec.ts`，
   含「样式 import 不残留」「class 映射与上游同形」「watch 图登记」）；`resolveId` 用
   `order: 'pre'`（与上游 client 构建同一口径）。
 

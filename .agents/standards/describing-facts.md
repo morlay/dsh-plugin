@@ -96,7 +96,7 @@ cordis 的 `_hooks` 按插入序决定 waterfall 的嵌套：**先注册的在�
 - **单文件模块放 `src/<模块>.ts`**，不建 `src/<模块>/index.ts` 这种一层目录。
 - **子出口 `./<面>` 对 `src/<面>.ts`**：加面 = 加一个入口文件 + `tsdown.config.ts` 的 `entries` 里加一项，
   `exports` 由构建按入口写回（规则在
-  [`devpackages/devkit/src/package-exports.ts`](../../devpackages/devkit/src/package-exports.ts)）。反例：手改
+  [`devpackages/tsdown-plugin-cordis/src/package-exports.ts`](../../devpackages/tsdown-plugin-cordis/src/package-exports.ts)）。反例：手改
   `exports` 指一个不存在或与入口不同名的文件——工作区里能跑，装出来的包少一个面。
 - 判据：`src/<面>.ts`、`tsdown.config.ts` 的 `entries`、构建后的 `exports` 三处同名；改名的同一笔改动里
   一起改（并重建），否则装配链按包名 + 出口解析时会断。

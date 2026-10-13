@@ -27,13 +27,13 @@ export default defineCordisPluginConfig({
 |               | 开发线                                                                                                                                                     | 发布线                                                                                                                                                             |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 消费什么      | `vendor/**` 上游**源码**（`exports` 指 `src`）                                                                                                             | registry 官方包的 `lib/`                                                                                                                                           |
-| 转译          | `@oxc-node/core/register`（工作区只此一处）：`pnpm-workspace.yaml` 的 `nodeOptions` 覆盖 pnpm 起的进程，vitest worker 与 dev 子进程各自补同一条 `--import` | [`cordis-host.ts`](./src/cordis-host.ts)：tsdown 配置工厂，`transform.decorator.legacy: false`（**TC39** 语义）                                                    |
-| 装饰器降级    | oxc legacy                                                                                                                                                 | [`standard-decorators.ts`](./src/standard-decorators.ts)（esbuild 标准降级）                                                                                       |
-| client 半字节 | [`bundleClientFactory`](./src/cordis-client.ts) 现场打包（浏览器平台）                                                                                     | [`clientEntryPlugin`](./src/cordis-client.ts) 用同一份现场打包的结果换掉 tsdown 的 chunk                                                                           |
-| 声明产物      | 与发布线同一条链（转译由上面的 oxc 注册负责）                                                                                                              | 全仓一次类型图（[`dts.ts`](./src/dts.ts) 的 `generateWorkspaceDts`，两个 face 扫到 `target/dts`）→ 每包按路径取 + 合并（`emitDts`，`dtsInput` 模式，不建 program） |
+| 转译          | `@oxc-node/core/register`（工作区只此一处）：`pnpm-workspace.yaml` 的 `nodeOptions` 覆盖 pnpm 起的进程，vitest worker 与 dev 子进程各自补同一条 `--import` | [`cordis-host.ts`](../tsdown-plugin-cordis/src/cordis-host.ts)：tsdown 配置工厂，`transform.decorator.legacy: false`（**TC39** 语义）                                                    |
+| 装饰器降级    | oxc legacy                                                                                                                                                 | [`standard-decorators.ts`](../tsdown-plugin-cordis/src/standard-decorators.ts)（esbuild 标准降级）                                                                                       |
+| client 半字节 | [`bundleClientFactory`](../tsdown-plugin-cordis/src/cordis-client.ts) 现场打包（浏览器平台）                                                                                     | [`clientEntryPlugin`](../tsdown-plugin-cordis/src/cordis-client.ts) 用同一份现场打包的结果换掉 tsdown 的 chunk                                                                           |
+| 声明产物      | 与发布线同一条链（转译由上面的 oxc 注册负责）                                                                                                              | 全仓一次类型图（[`dts.ts`](../tsdown-plugin-cordis/src/dts.ts) 的 `generateWorkspaceDts`，两个 face 扫到 `target/dts`）→ 每包按路径取 + 合并（`emitDts`，`dtsInput` 模式，不建 program） |
 
-两条线共用 [`css.ts`](./src/css.ts)、[`package-exports.ts`](./src/package-exports.ts)（出口推导与 patch bundle）
-与 [`clientBundleSpec`](./src/cordis-client.ts)（解析与外置判据）。装饰器两侧同时成立靠写端 patch 的双协议，
+两条线共用 [`css.ts`](../tsdown-plugin-cordis/src/css.ts)、[`package-exports.ts`](../tsdown-plugin-cordis/src/package-exports.ts)（出口推导与 patch bundle）
+与 [`clientBundleSpec`](../tsdown-plugin-cordis/src/cordis-client.ts)（解析与外置判据）。装饰器两侧同时成立靠写端 patch 的双协议，
 分工与债见 [债务 标准装饰器降级分居两套机制](../../.agents/debts/20260923-标准装饰器降级分居两套机制.md)。
 
 **不变量**：`defineCordisPluginConfig` 返回的 tsdown 配置里**不写 `define`**。`clientBundleSpec.define`
@@ -44,9 +44,9 @@ export default defineCordisPluginConfig({
 
 ## 约定在这里，不在各包
 
-- `exports` / `publishConfig.exports` 由构建从产物推导写回（[`packageExportsHook`](./src/package-exports.ts)），
+- `exports` / `publishConfig.exports` 由构建从产物推导写回（[`packageExportsHook`](../tsdown-plugin-cordis/src/package-exports.ts)），
   client 半的两种形态（装配行 → CJS 工厂；清单标 `dsh.client.inline` 的库 → 普通 ESM）见
-  [`clientRowExternals`](./src/cordis-client.ts)；
+  [`clientRowExternals`](../tsdown-plugin-cordis/src/cordis-client.ts)；
 - `@local/*` 一律内联、不发布；
 - 判断这些规则有没有走样的 spec 就在本包 [`src/__tests__/`](./src/__tests__)（出口推导、client external 判据、
   内联名单与上游 `INLINE_SAFE` 对齐、文档引用与链接可达性）。

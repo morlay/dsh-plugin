@@ -113,32 +113,34 @@ export function clientEntryPlugin(options: {
   return {
     name: "dsh-client-entry",
     async generateBundle(_outputOptions, bundle) {
-      const clientChunks: string[] = [];
+      // 一个 client 入口出**两种**产物：CJS 是模块表的工厂形态（发布/桌面用），ESM 是普通库
+      // （交给 vite / node resolver 消费）。tsdown 的 deps 规则按 format 区分不了，所以两边都由这里
+      // 自己产出字节：CJS 走 `bundleClientFactory`（内联判定那套），ESM 走 `bundleClientLibrary`。
+      let clientChunk: string | undefined;
+      let libraryChunk: string | undefined;
       for (const [fileName, item] of Object.entries(bundle)) {
         if (item.type !== "chunk") continue;
         if (DECLARATION_SUFFIXES.some((suffix) => fileName.endsWith(suffix))) continue;
-        const isClient = item.name === CLIENT_ENTRY;
-        const isClientFormat = fileName.endsWith(".cjs");
-        if (isClient !== isClientFormat) {
-          delete bundle[fileName];
-          continue;
-        }
-        if (isClient) clientChunks.push(fileName);
+        if (item.name !== CLIENT_ENTRY) continue;
+        if (fileName.endsWith(".cjs")) clientChunk = fileName;
+        else libraryChunk = fileName;
       }
-      const target = clientChunks[0];
-      if (target === undefined) return;
-      const chunk = bundle[target];
-      if (chunk === undefined || chunk.type !== "chunk") return;
-      const code = await bundleClientFactory({
-        name: options.name,
-        entry: options.entry,
-        ...(options.externals === undefined ? {} : { externals: options.externals }),
-      });
-      chunk.code = code;
-      // 自包含：断掉 tsdown 分块留下的相对引用（模块表解析不到它们）。
-      chunk.imports = [];
-      chunk.dynamicImports = [];
-      chunk.moduleIds = [];
+      const factory = clientChunk === undefined ? undefined : bundle[clientChunk];
+      if (factory !== undefined && factory.type === "chunk") {
+        factory.code = await bundleClientFactory({
+          name: options.name,
+          entry: options.entry,
+          ...(options.externals === undefined ? {} : { externals: options.externals }),
+        });
+        // 自包含：断掉 tsdown 分块留下的相对引用（模块表解析不到它们）。
+        factory.imports = [];
+        factory.dynamicImports = [];
+        factory.moduleIds = [];
+      }
+      const library = libraryChunk === undefined ? undefined : bundle[libraryChunk];
+      if (library !== undefined && library.type === "chunk") {
+        library.code = await bundleClientLibrary({ name: options.name, entry: options.entry });
+      }
     },
   };
 }
@@ -194,6 +196,47 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
     const chunk = output.find((item) => item.type === "chunk");
     if (chunk === undefined || chunk.type !== "chunk")
       throw new Error(`devkit: bundleClientFactory(${options.name}) produced no chunk`);
+    return chunk.code;
+  } finally {
+    await build.close();
+  }
+}
+
+/**
+ * 同一份 client 入口的 **ESM 库产物**。
+ *
+ * 与 {@link bundleClientFactory} 的差别只有一处：**裸说明符一律外置**，不做模块表那套内联/外置判定——
+ * 模块表形态（CJS 工厂）对"谁内联谁外置"有硬约束，而 ESM 产物的依赖交给 vite / node 的 resolver。
+ *
+ * @param options - 插件 id 与 client 入口。
+ * @returns 产物源码。
+ */
+export async function bundleClientLibrary(options: {
+  name: string;
+  entry: string;
+  cwd?: string;
+}): Promise<string> {
+  const build = await rolldown({
+    input: options.entry,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    platform: "browser",
+    // 相对路径（含样式、资产、包内模块）照常处理；**裸说明符全部外置**。
+    external: (id: string) => !id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0"),
+    // 库产物保留导出面：消费方按名字取用，不能按"有没有被用到"摇掉。
+    treeshake: false,
+    // 样式与资产照旧内联成"模块执行即注入 + 导出 class 映射"：rolldown 不再支持把 CSS 当资源打包，
+    // 不处理就是 `UNSUPPORTED_FEATURE: Bundling CSS is no longer supported`。
+    plugins: [...cssInlinePlugins({ name: options.name, assets: "inline" }), clientAssetPlugin()],
+  });
+  try {
+    const { output } = await build.generate({
+      format: "es",
+      codeSplitting: false,
+      entryFileNames: "client.mjs",
+    });
+    const chunk = output.find((item) => item.type === "chunk");
+    if (chunk === undefined || chunk.type !== "chunk")
+      throw new Error(`devkit: bundleClientLibrary(${options.name}) produced no chunk`);
     return chunk.code;
   } finally {
     await build.close();

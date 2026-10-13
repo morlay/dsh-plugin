@@ -3,12 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { UserConfig } from "tsdown";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { defineCordisPluginConfig } from "../cordis-host.ts";
+import { buildCordisConfig } from "../cordis-host.ts";
 
 // 发布线的两条硬约束：tsdown 顶层不带浏览器替换约定、装饰器按标准（TC39）语义产出。
 // 前者踩过一次：`define` 对同一 config 的所有入口生效，host 半的 `process.env.DSH_*` 与
 // `import.meta.url` 被替成 `{}.…` / `({}).url`，Electron 壳与另外 8 个包的产物当场失效。
-describe("defineCordisPluginConfig", () => {
+describe("buildCordisConfig", () => {
   let directory: string;
   let config: UserConfig;
 
@@ -23,7 +23,7 @@ describe("defineCordisPluginConfig", () => {
     const cwd = process.cwd();
     process.chdir(directory);
     try {
-      config = await defineCordisPluginConfig();
+      config = await buildCordisConfig(undefined, {});
     } finally {
       process.chdir(cwd);
     }

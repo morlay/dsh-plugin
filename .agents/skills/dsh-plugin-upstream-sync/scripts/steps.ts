@@ -39,7 +39,7 @@ const OXC_CLI = ["dlx", "@oxc-node/cli"];
 // 声明树（`target/dts`，由 `@local/devkit` 的 `generateWorkspaceDts` 生成）是它的输入：缺了就先生成一次
 // ——同一条链里 `just build` 也要它，共用一份。
 async function generateTypertArtifacts(dir: string, root: string): Promise<void> {
-  const { generateWorkspaceDts, dtsRootOf } = (await import("@local/devkit/dts")) as {
+  const { generateWorkspaceDts, dtsRootOf } = (await import("@local/tsdown-plugin-cordis/dts")) as {
     generateWorkspaceDts: (root: string) => Promise<void>;
     dtsRootOf: (root: string) => string;
   };

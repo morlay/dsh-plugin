@@ -5,9 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./patch": "./src/patch.ts",
     "./tsconfig.json": "./tsconfig.json",
-    "./dts": "./src/dts.ts"
+    "./patch": "./src/patch.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",

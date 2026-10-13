@@ -182,6 +182,9 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:devpackages/devkit
+      '@local/tsdown-plugin-cordis':
+        specifier: workspace:*
+        version: link:devpackages/tsdown-plugin-cordis
       '@local/typert-generator':
         specifier: workspace:*
         version: link:devpackages/typert-generator
@@ -274,6 +277,46 @@ importers:
         version: link:../../packages/bundles/session-mode-profile
 
   devpackages/devkit:
+    dependencies:
+      tsdown:
+        specifier: 0.23.x
+        version: 0.23.1(tsx@4.23.15)(typescript@7.0.2)
+      typescript:
+        specifier: 7.x
+        version: 7.0.2
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/vendor/include
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/boot/app-boot
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
+      lightningcss:
+        specifier: ^1.32.0
+        version: 1.33.0
+      playwright:
+        specifier: ^1.64.0
+        version: 1.64.0
+      rolldown:
+        specifier: ^1.2.8
+        version: 1.2.13
+      rolldown-plugin-dts:
+        specifier: 0.28.x
+        version: 0.28.8(rolldown@1.2.13)(typescript@7.0.2)
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  devpackages/tsdown-plugin-cordis:
     dependencies:
       tsdown:
         specifier: 0.23.x

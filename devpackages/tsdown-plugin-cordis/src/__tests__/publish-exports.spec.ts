@@ -43,33 +43,34 @@ describe("发布态的包出口", () => {
 
   // 同一个出口两种形态：装配行（`dsh.client.platform`）发布态是 CJS 单文件工厂，内联库
   // （`dsh.client.inline`）发布态是普通 ESM 库——后者会被消费方打进产物，不能带模块注册的工厂外壳。
-  it("client 半的开发态出口回源，发布态按形态指产物", () => {
+  it("client 面开发态出口回源，发布态指 ESM 库产物与它的类型", () => {
     const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
     expect(clients.length).toBeGreaterThan(0);
 
     const wrong: string[] = [];
     for (const { name, manifest } of clients) {
       const dev = manifest.exports?.["./client"];
-      const published = (manifest.publishConfig?.exports ?? {})["./client"];
-      // 开发态的出口就是一个指源码的字符串（上游按它读字节），与 host 面同一条规则。
+      const published = (manifest.publishConfig?.exports ?? {})["./client"] as
+        | { types?: unknown; import?: unknown; default?: unknown }
+        | undefined;
+      // 开发态的出口就是一个指源码的字符串（宿主按它读字节），与 host 面同一条规则。
       if (dev !== "./src/client/index.ts") wrong.push(`${name}: dev=${String(dev)}`);
-      if (manifest.dsh?.client?.inline === true) {
-        if (published !== "./dist/client.mjs")
-          wrong.push(`${name}: published=${String(published)}`);
-        continue;
-      }
-      const runtime = (published as { default?: unknown } | undefined)?.default;
-      if (runtime !== "./dist/client.cjs") wrong.push(`${name}: published=${String(runtime)}`);
+      // 发布态：`import`/`default` 指 **ESM 库**（CJS 工厂不进 exports，它是模块表的注册脚本），
+      // `types` 指 ESM 面的声明。
+      if (published?.import !== "./dist/client.mjs") wrong.push(`${name}: import=${String(published?.import)}`);
+      if (published?.types !== "./dist/client.d.mts") wrong.push(`${name}: types=${String(published?.types)}`);
     }
     expect(wrong).toEqual([]);
   });
 
-  it("client 半的形态只有一个：要么是装配行，要么是内联库", () => {
+  it("client 面只出一种形态：ESM 库（CJS 工厂不进 exports）", () => {
     const clients = packages.filter(({ manifest }) => manifest.exports?.["./client"] !== undefined);
-    const both = clients.filter(
-      ({ manifest }) =>
-        manifest.dsh?.client?.inline === true && manifest.dsh?.client?.platform !== undefined,
-    );
-    expect(both.map(({ name }) => name)).toEqual([]);
+    const wrong = clients.filter(({ manifest }) => {
+      const published = (manifest.publishConfig?.exports ?? {})["./client"] as
+        | { default?: unknown }
+        | undefined;
+      return published?.default !== "./dist/client.mjs";
+    });
+    expect(wrong.map(({ name }) => name)).toEqual([]);
   });
 });

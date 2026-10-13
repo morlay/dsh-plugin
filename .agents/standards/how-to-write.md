@@ -43,13 +43,13 @@
   在 `build:done` 里按**入口**推导后写回 `package.json`——顶层指源码（workspace 内直连 `src`），发布态
   指产物；手改这两段会在下次 `just build` 被覆盖。要加一个面就加一个入口（`src/<面>.ts` +
   `tsdown.config.ts` 的 `entries`）。入口约定、生成规则与理由都在
-  [`devpackages/devkit/src/package-exports.ts`](../../devpackages/devkit/src/package-exports.ts)。
+  [`devpackages/tsdown-plugin-cordis/src/package-exports.ts`](../../devpackages/tsdown-plugin-cordis/src/package-exports.ts)。
 - **client 半只有一个形态（发布态）**：它是 CJS 单文件 bundle，出口固定写成 `{ types, default }`，**不参与
   ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的 require 变体，包根出口就指到了
   client 半。
 - **固定面按文件存在性补**：`./package.json` 一律在；`./cordis.patch.yml` 有该文件才有；`./locale/*.json`
   有 `locale/en.json` 才有。守卫见
-  `devpackages/devkit/src/__tests__/publish-exports.spec.ts`（发布态的键集合必须覆盖顶层的键集合——
+  `devpackages/tsdown-plugin-cordis/src/__tests__/publish-exports.spec.ts`（发布态的键集合必须覆盖顶层的键集合——
   `publishConfig.exports` 是**整体替换**顶层 `exports`，漏一个键就是发布包少一个面，
   `@morlay/dsh-desktop-host` 的 `./package.json` 就这样丢过：
   `import.meta.resolve("<包名>/package.json")` 抛 `ERR_PACKAGE_PATH_NOT_EXPORTED`，桌面打包整个起不来）。

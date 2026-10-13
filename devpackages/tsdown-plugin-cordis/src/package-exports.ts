@@ -53,11 +53,16 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// client 半取 CJS 产物，host 面取 ESM 产物——扩展名按产物实际落点，不猜。
-function pick(files: readonly string[], cjs: boolean): string | undefined {
-  return files.find((file) =>
-    cjs ? file.endsWith(".cjs") : file.endsWith(".mjs") || file.endsWith(".js"),
-  );
+// host 面取 ESM 产物——扩展名按产物实际落点，不猜。
+function pick(files: readonly string[]): string | undefined {
+  return files.find((file) => file.endsWith(".mjs") || file.endsWith(".js"));
+}
+
+// client 面取 **ESM 库**产物：`./client` 是"普通库"的出口，给 vite / node resolver 消费。
+// CJS（模块表的工厂形态）不进 exports —— 它是 `__ModuleLoader__.load` 的注册脚本，由 boot 按路径加载，
+// 不是给 `import`/`require` 用的模块。
+function pickLibrary(files: readonly string[]): string | undefined {
+  return files.find((file) => file.endsWith(".mjs"));
 }
 
 // 出口键：`index` 是包根，其余按入口名。
@@ -71,7 +76,9 @@ function complete(run: BuildRun, options: PackageExportsOptions): boolean {
   const hidden = new Set(options.hidden ?? []);
   return Object.keys(options.entries).every((entry) => {
     if (hidden.has(entry)) return true;
-    const runtime = pick(run.entries.get(entry)?.runtime ?? [], entry === options.clientEntry);
+    const files = run.entries.get(entry)?.runtime ?? [];
+    // client 面等的是 **ESM 库**产物（`./client` 的出口就是它），host 面等 ESM。
+    const runtime = entry === options.clientEntry ? pickLibrary(files) : pick(files);
     return runtime !== undefined;
   });
 }
@@ -136,19 +143,19 @@ async function writeManifest(
     if (found === undefined) continue;
 
     if (entry === options.clientEntry) {
-      // client 半只有 CJS 单文件这一种形态：发布态直接写产物、不做格式推导，开发态写一条指源码的字符串出口。
-      const runtime = pick(found.runtime, true);
-      if (runtime === undefined) continue;
-      const declarations = found.declarations.find((file) => file.endsWith(".d.cts"));
+      // client 面出口：开发态指源码，发布态指 **ESM 库**产物 + 它的类型声明。
+      const library = pickLibrary(found.runtime);
+      if (library === undefined) continue;
+      const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
       clientDev = entrySource;
       clientPublished =
         declarations === undefined
-          ? { default: artifact(runtime) }
-          : { types: artifact(declarations), default: artifact(runtime) };
+          ? { import: artifact(library), default: artifact(library) }
+          : { types: artifact(declarations), import: artifact(library), default: artifact(library) };
       continue;
     }
 
-    const runtime = pick(found.runtime, false);
+    const runtime = pick(found.runtime);
     if (runtime === undefined) continue;
     dev[exportKey(entry)] = entrySource;
     published[exportKey(entry)] = artifact(runtime);
@@ -177,7 +184,7 @@ async function writeManifest(
     const publishedBins: Record<string, string> = {};
     for (const [name, entry] of Object.entries(options.bin)) {
       const entrySource = options.entries[entry];
-      const runtime = pick(run.entries.get(entry)?.runtime ?? [], false);
+      const runtime = pick(run.entries.get(entry)?.runtime ?? []);
       if (entrySource === undefined || runtime === undefined) continue;
       bins[name] = entrySource;
       publishedBins[name] = artifact(runtime);

@@ -1,7 +1,8 @@
-import { defineCordisPluginConfig } from "@local/devkit";
+import { defineConfig } from "tsdown";
+import { cordisPlugin } from "@local/tsdown-plugin-cordis";
 
-export default defineCordisPluginConfig({
-  entries: {
+export default defineConfig({
+  entry: {
     artifact: "./src/artifact.ts",
     deletion: "./src/deletion.ts",
     export: "./src/export.ts",
@@ -11,4 +12,5 @@ export default defineCordisPluginConfig({
     testing: "./src/testing.ts",
     usage: "./src/usage.ts",
   },
+  plugins: [cordisPlugin({})],
 });

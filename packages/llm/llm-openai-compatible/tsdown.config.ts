@@ -1,7 +1,9 @@
-import { defineCordisPluginConfig } from "@local/devkit";
+import { defineConfig } from "tsdown";
+import { cordisPlugin } from "@local/tsdown-plugin-cordis";
 
-export default defineCordisPluginConfig({
-  entries: {
+export default defineConfig({
+  entry: {
     wire: "./src/wire.ts",
   },
+  plugins: [cordisPlugin({})],
 });

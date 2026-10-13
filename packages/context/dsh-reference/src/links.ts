@@ -1,5 +1,5 @@
 import type { UserMessage } from "@deepseek-ai/dsh-session";
-import { findReferences, parseReferenceToken } from "@morlay/dsh-client-ui-primitives";
+import { findReferences, parseReferenceToken } from "@morlay/dsh-client-ui-primitives/reference";
 import { fromMarkdown } from "mdast-util-from-markdown";
 
 const SKILL_PROTOCOL = "skill";

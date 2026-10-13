@@ -1,22 +1,3 @@
-export { defineCordisPluginConfig, isLocalPackage, LOCAL_PACKAGE_PREFIX } from "./cordis-host.ts";
-export { packageExportsHook, type PackageExportsOptions } from "./package-exports.ts";
-export { standardDecoratorsPlugin, type StandardDecoratorsOptions } from "./standard-decorators.ts";
-export { prebundleDependency, type PrebundledDependency } from "./prebundle.ts";
-export {
-  compileCssModule,
-  compileGlobalCss,
-  compileStyleModule,
-  cssInlinePlugins,
-} from "./css.ts";
-export {
-  bundleClientFactory,
-  clientBundleSpec,
-  clientAssetPlugin,
-  clientEntryPlugin,
-  clientRowExternals,
-  CLIENT_ENTRY,
-  INLINE_SAFE,
-  isClientExternal,
-} from "./cordis-client.ts";
-export type { ClientBundleSpec, ClientFactoryOptions } from "./cordis-client.ts";
-export type { CordisClientOptions } from "./cordis-client.ts";
+// 通用开发工具的门面已空：插件打包机制搬到了 `@local/tsdown-plugin-cordis`，
+// 这里只剩子路径出口——`@local/devkit/tsconfig.json`（各包 extends 的那份）与 `@local/devkit/patch`。
+export {};

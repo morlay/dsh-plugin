@@ -15,7 +15,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
-import { bundleClientFactory } from "@local/devkit";
+import { bundleClientFactory } from "@local/tsdown-plugin-cordis";
 import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 import {
   PROFILE_RUNTIME_REPORT_NAME,

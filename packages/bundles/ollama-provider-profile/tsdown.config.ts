@@ -1,6 +1,6 @@
-import { defineCordisPluginConfig } from "@local/devkit";
-import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { defineConfig } from "tsdown";
+import { cordisPlugin } from "@local/tsdown-plugin-cordis";
+import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { webSearchRows } from "@morlay/dsh-web-search-ollama/rows";
 
 const ROWS: readonly unknown[] = [
@@ -45,10 +45,6 @@ export const patch: PatchBundleOptions = {
 // 渲染生成物文本（测试拿它与入库那份比对）。
 export const render = (): Promise<string> => renderPatch(patch);
 
-export default defineConfig(async () => {
-  const base = await defineCordisPluginConfig();
-  const plugins = Array.isArray(base.plugins)
-    ? [...base.plugins, bundlePatch(patch)]
-    : [bundlePatch(patch)];
-  return { ...base, plugins };
+export default defineConfig({
+  plugins: [cordisPlugin(), bundlePatch(patch)],
 });

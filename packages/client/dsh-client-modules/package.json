@@ -22,7 +22,6 @@
     "locale/*.json"
   ],
   "type": "module",
-  "main": "./dist/index.js",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
