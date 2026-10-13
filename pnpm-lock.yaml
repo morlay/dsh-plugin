@@ -484,6 +484,9 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:../../../devpackages/devkit
+      '@local/tsdown-plugin-cordis':
+        specifier: workspace:*
+        version: link:../../../devpackages/tsdown-plugin-cordis
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5

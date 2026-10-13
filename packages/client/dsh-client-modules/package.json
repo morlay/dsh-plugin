@@ -48,6 +48,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:*",
     "@local/devkit": "workspace:*",
+    "@local/tsdown-plugin-cordis": "workspace:*",
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {
