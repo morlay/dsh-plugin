@@ -9,6 +9,7 @@ import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
 import { build } from "vite";
+import { packageNameOf } from "./resolve.ts";
 
 /** 依赖在浏览器里的地址。 */
 export const CLIENT_MODULES_PREFIX = "/@client-modules";
@@ -98,14 +99,14 @@ export async function bundleDep(options: {
         output: {
           format: "es",
           entryFileNames: fileName,
-          paths: (id: string) =>
-            id.startsWith("node:")
-              ? id
-              : depsUrlOf(
-                  id,
-                  options.versions?.get(id) ?? "0.0.0",
-                  options.ownNames?.has(id) === true ? "client.js" : "index.js",
-                ),
+          paths: (id: string) => {
+            if (id.startsWith("node:")) return id;
+            // `paths` 收到的是**说明符**（可能是子路径，如 `@deepseek-ai/dsh-x/client`）：先归一到包名，
+            // 再看它是不是我们这个工作区里的（决定出口名），版本从预建的表里取（回调不能 await）。
+            const bare = packageNameOf(id) || id;
+            const own = options.ownNames?.has(bare) === true;
+            return depsUrlOf(id, options.versions?.get(bare) ?? "0.0.0", own ? "client.js" : "index.js");
+          },
         },
       },
     },

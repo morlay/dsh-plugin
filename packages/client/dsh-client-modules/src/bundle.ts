@@ -14,6 +14,7 @@ import { join, relative, sep } from "node:path";
 import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
 import { build, type PluginOption } from "vite";
 import { depsUrlOf } from "./deps.ts";
+import { packageNameOf } from "./resolve.ts";
 
 /** 一次聚合构建的输入。 */
 export interface BundleOptions {
@@ -112,14 +113,14 @@ export async function bundleAggregate(options: BundleOptions): Promise<Bundled> 
           format: "es",
           entryFileNames: "[name].js",
           chunkFileNames: "chunk-[hash].js",
-          paths: (id: string) =>
-            id.startsWith("node:")
-              ? id
-              : depsUrlOf(
-                  id,
-                  options.versions?.get(id) ?? "0.0.0",
-                  options.ownNames?.has(id) === true ? "client.js" : "index.js",
-                ),
+          paths: (id: string) => {
+            if (id.startsWith("node:")) return id;
+            // `paths` 收到的是**说明符**（可能是子路径，如 `@deepseek-ai/dsh-x/client`）：先归一到包名，
+            // 再看它是不是我们这个工作区里的（决定出口名），版本从预建的表里取（回调不能 await）。
+            const bare = packageNameOf(id) || id;
+            const own = options.ownNames?.has(bare) === true;
+            return depsUrlOf(id, options.versions?.get(bare) ?? "0.0.0", own ? "client.js" : "index.js");
+          },
         },
       },
     },

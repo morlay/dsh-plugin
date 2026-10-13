@@ -17,6 +17,7 @@ import {
   parsePluginAddress,
   PLUGIN_ROUTE,
   resolveInPackage,
+  workspacePackagesMatching,
 } from "./resolve.ts";
 
 export const name = "client-modules";
@@ -302,8 +303,18 @@ export function apply(ctx: Context): void {
   // 外置说明符要写成"联邦地址"，同步回调里查不了异步的东西：先把行清单读出来算成两张表。
   const ownNamesOf = async (): Promise<ReadonlySet<string>> =>
     new Set((await sourceRowsOf()).map((row) => row.id));
-  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> =>
-    new Map((await sourceRowsOf()).map((row) => [row.id, row.version]));
+  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> => {
+    // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
+    // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读（读一次缓存）。
+    const versions = new Map((await sourceRowsOf()).map((row) => [row.id, row.version]));
+    const packages = await workspacePackagesMatching(join(await profileRootOf(), "package.json"), [/.*/u]);
+    for (const pkg of packages) {
+      if (versions.has(pkg.name)) continue;
+      const manifest = await manifestOf(pkg.root).catch(() => undefined);
+      if (manifest !== undefined) versions.set(pkg.name, manifest.version);
+    }
+    return versions;
+  };
 
   /**
    * `@client-modules/<pkg>@<version>/<file>`：**联邦式**的统一寻址。

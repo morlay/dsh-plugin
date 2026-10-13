@@ -129,6 +129,26 @@ async function workspaceRootOf(from: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * 仓库内**命中给定 glob** 的包（包名 + 包根）。
+ *
+ * 预打包与联邦寻址都要它：非开发模块不只是"行"，还有 `ui-primitives` 这种共享库；版本表也要覆盖
+ * 那些没进行清单、却会被外置说明符提到的包（cordis、client-store…）。
+ *
+ * @param from - 解析基准（用来找仓库根）。
+ * @param patterns - 匹配包名的正则。
+ * @returns 命中的包。
+ */
+export async function workspacePackagesMatching(
+  from: string,
+  patterns: readonly RegExp[],
+): Promise<{ name: string; root: string }[]> {
+  const index = await workspaceIndexOf(from);
+  return [...index.entries()]
+    .filter(([name]) => patterns.some((pattern) => pattern.test(name)))
+    .map(([name, root]) => ({ name, root }));
+}
+
 async function workspaceIndexOf(from: string): Promise<Map<string, string>> {
   workspaceIndex ??= (async () => {
     const index = new Map<string, string>();
