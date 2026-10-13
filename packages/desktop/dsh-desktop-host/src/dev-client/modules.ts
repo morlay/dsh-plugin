@@ -237,3 +237,29 @@ export function isCjsOnlySource(source: string): boolean {
   return source.includes("module.exports") || source.includes("exports.");
 }
 
+/**
+ * 包根 → 它**浏览器面**的文件。
+ *
+ * @param root - 包根目录。
+ * @param subpath - 出口名（不含包名，如 `client`、`brand-font.css`）；省略表示包的根出口。
+ * @returns 该出口对应的文件；清单没这个出口、且约定路径也不存在时返回 undefined。
+ */
+export async function clientHalfOf(root: string, subpath?: string): Promise<string | undefined> {
+  const exists = async (file: string): Promise<boolean> => await readFile(file, "utf8").then(() => true, () => false);
+  if (subpath !== undefined) {
+    const byExports = await exportTargetOf(root, subpath);
+    if (byExports !== undefined) return byExports;
+    // 清单没覆盖的按物理路径试（`src/<subpath>/index.ts` 是 client 半的约定位置）。
+    const pkg = { name: "", version: "", root };
+    for (const candidate of [join("src", subpath, "index.ts"), join(subpath, "index.ts"), subpath]) {
+      const file = resolveInPackage(pkg, candidate);
+      if (file !== undefined && (await exists(file))) return file;
+    }
+    return undefined;
+  }
+  // 根出口：`dsh.client` 声明的包用它的 `./client`；其余用约定路径 `src/client/index.ts`。
+  const byClient = await exportTargetOf(root, "client");
+  if (byClient !== undefined) return byClient;
+  const conventional = join(root, "src", "client", "index.ts");
+  return (await exists(conventional)) ? conventional : undefined;
+}

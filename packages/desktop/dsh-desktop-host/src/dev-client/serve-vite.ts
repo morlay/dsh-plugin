@@ -75,6 +75,10 @@ export async function startViteDev(
     },
     publicDir: false,
     appType: "spa",
+    // **不读也不监听配置文件**：配置全是内联的（下面这些字段）。默认它会在 root 下找 `vite.config.*`
+    // 并 watch，改动就 `restart()` 自己——而这个 dev server 跑在 dsh 宿主进程里，重启会连带把整条
+    // 服务拖下水。关掉这条路径。
+    configFile: false,
     resolve: {
       // `node:*` 一律指向求值安全的空替身：宿主半的代码偶尔被同包的相对导入拖进 client 图，vite 默认的
       // browser-external 代理在读取成员时抛错，会让整条入口求值中断（页面白屏 + 一条难归因的报错）。
@@ -107,7 +111,14 @@ export async function startViteDev(
     optimizeDeps: {
       // 三方依赖（CJS 居多）由 vite 预打包：具名导出、外置 require、共享 chunk 都在这一步解决。
       // vite 8 起优化器就是 rolldown，`esbuildOptions` 已弃用（它自己在启动时警告），用 rolldownOptions。
-      include: ["react", "react-dom", "react-dom/client", "scheduler"],
+      //
+      // **列表要显式**（不要设 `optimizeDeps.entries` 去扫描源码入口）：一旦让优化器扫源码图，workspace 的
+      // 包也会被预打包，于是同一个包出现两份实例——症状是「同 namespace 的 locale 已注册」与跨实例的
+      // 私有字段报错。workspace 包一律走源码面。
+      // 每个条目都是一份**独立**产物：`react-dom` 与 `react-dom/client` 同时列上会打出两份 react-dom，
+      // 页面里 `createRoot`（client 入口）与 `createPortal`（主入口）各拿一份实例，跨实例访问内部字段就炸。
+      // 只列一个入口，另一个会复用它。
+      include: ["react", "react-dom", "scheduler"],
       rolldownOptions: {
         platform: "browser",
         transform: { define: { "process.env.NODE_ENV": JSON.stringify(process.env["NODE_ENV"] ?? "development") } },

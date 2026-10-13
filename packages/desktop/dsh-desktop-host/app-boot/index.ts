@@ -37,8 +37,17 @@ if (ctx.logger !== undefined) {
   };
 }
 
+// **按模块身份去重**：行清单里可能出现两条指向同一个包的 entry（包名写法不同，如带 `/client` 后缀），
+// 那样同一个模块会被 `ctx.plugin` 两次——第二次 `apply` 就撞上"同 namespace 的 locale 已注册"这类
+// 重复注册断言。
+const plugged = new Set<unknown>();
 for (const [index, row] of rows.entries()) {
   const mod = row.module;
+  if (plugged.has(mod)) {
+    console.warn("[dsh] 同一模块出现在多行，跳过", row.id);
+    continue;
+  }
+  plugged.add(mod);
   // client 行的导出有两种形状：`{ apply, inject }` 与 `{ default: X }`。整块交给 cordis——不要自己拼
   // `{ apply: factory.apply }`：default 形状上没有 `apply`，那样会取到 `Function.prototype.apply`。
   const plugin = typeof mod.apply === "function" ? mod : (mod.default ?? undefined);

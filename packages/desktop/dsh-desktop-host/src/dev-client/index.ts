@@ -1,10 +1,10 @@
-import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
+  clientHalfOf,
   exportTargetOf,
   manifestOf,
   packageRootOf,
@@ -58,13 +58,6 @@ interface RouteHost {
 }
 
 /** 目录判定（找不到就是 false，不抛）。 */
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory();
-  } catch {
-    return false;
-  }
-}
 
 /** cordis Loader 条目里我们用到的那几项（上游 `client-modules` 用同样几个字段判断行）。 */
 interface LoaderEntry {
@@ -90,7 +83,10 @@ export interface ClientRow {
  * 下它们只在各自消费者的 node_modules 里，profile 的运行时目录又另有一套。
  */
 async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Promise<ClientRow[]> {
-  const found: ClientRow[] = [];
+  // **按包名去重**：同一个包可以被多条 entry 引到（不同 baseUrl、或 profile 的分层里各写一次），
+  // 那样装配脚本会对同一个模块 `ctx.plugin` 两次——第二次 `apply` 会撞上"同 namespace 的 locale 已注册"
+  // 这类重复注册断言（`locale namespace "settings.schema-form" already has locale "zh"`）。
+  const found = new Map<string, ClientRow>();
   // `entries()` 是生成器（cordis 的 Loader 就是这么给的），直接迭代即可。
   for (const entry of loader.entries()) {
     if (entry.disabled === true || entry.fiber === undefined) continue;
@@ -98,23 +94,17 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
     if (typeof name !== "string" || name === "") continue;
     // 虚拟入口（`cordis:include`、`<插件>:<组>`）不是包名。
     if (name.includes(":")) continue;
+    if (found.has(name)) continue;
     const baseUrl = entry.parent?.tree?.ctx?.baseUrl;
     if (baseUrl === undefined) continue;
     const resolved = await packageRootOf(baseUrl, name);
     if (resolved === undefined) continue;
     const clientPath = await clientHalfOf(resolved.root);
-    if (clientPath !== undefined) found.push({ id: name, clientPath });
+    if (clientPath !== undefined) found.set(name, { id: name, clientPath });
   }
-  return found;
+  return [...found.values()];
 }
 
-/** 包根 → client 半的源文件：清单的 `exports["./client"]` 优先，其次约定路径 `src/client/index.ts`。 */
-async function clientHalfOf(root: string): Promise<string | undefined> {
-  const byExports = await exportTargetOf(root, "client");
-  if (byExports !== undefined) return byExports;
-  const conventional = join(root, "src", "client", "index.ts");
-  return (await isDirectory(join(root, "src", "client"))) ? conventional : undefined;
-}
 
 export function apply(ctx: Context): void {
   const webServer = ctx.get("webServer") as RouteHost | undefined;

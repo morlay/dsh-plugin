@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
-import { exportTargetOf } from "./modules.ts";
+import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./modules.ts";
 
 /** 行清单的虚拟模块 id（`app-boot/index.ts` 里 `import rows from "virtual:dsh-client-rows"`）。 */
 export const ROWS_VIRTUAL = "dsh-client-rows";
@@ -93,12 +93,6 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
         },
       };
     },
-    async configResolved(resolved) {
-      // `optimizeDeps.entries` 用行入口的**源码文件**当 discovery 种子。
-      const rows = await options.rows();
-      const shared = (await options.shared?.()) ?? new Map<string, string>();
-      resolved.optimizeDeps.entries = [...new Set([...rows.values(), ...shared.values()])];
-    },
     // 包名 → 源码入口：上游包经 exports 指到 `src`，工作区包本来就是源码；这里把两侧都显式接上，
     // 免得 vite 走 `main`/`dist`（那些在 dev 形态下要么不存在、要么是构建产物）。
     async resolveId(source, importer) {
@@ -118,6 +112,21 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
         if (variant !== undefined) return variant;
       }
       if (importer === undefined || source.startsWith(".") || source.startsWith("/")) return null;
+      // **仓库内的包一律落到源码文件**（不只行清单里那些）：它们的 bare 包名一旦交给依赖优化器，就会被
+      // 预打包，于是同一个包既有预打包版又有源码版——两份实例，表现为「同 namespace 的 locale 已注册」
+      // 与跨实例的私有字段报错。三方包（在 node_modules 下）不拦，交给优化器。
+      const fromFile = importer !== undefined && importer.startsWith("/") ? join(options.repoRoot, importer) : importer;
+      if (fromFile !== undefined) {
+        const bare = packageNameOf(source);
+        if (bare !== "") {
+          const subpath = source === bare ? undefined : source.slice(bare.length + 1);
+          const pkg = await packageRootOf(fromFile, bare);
+          if (pkg !== undefined && !pkg.root.includes("node_modules")) {
+            const half = await clientHalfOf(pkg.root, subpath);
+            if (half !== undefined) return half;
+          }
+        }
+      }
       // 行包名 → 它的 **client 半**源文件（行清单已经解析好；vite 只负责把它当普通模块编译与缓存）。
       const rows = await options.rows();
       const shared = (await options.shared?.()) ?? new Map<string, string>();
@@ -149,12 +158,15 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       if (id !== RESOLVED_ROWS) return null;
       const rows = await options.rows();
       const shared = (await options.shared?.()) ?? new Map<string, string>();
+      // import **源码文件路径**（不是包名）：包名会让依赖优化器把它当"依赖"预打包，于是同一个包出现
+      // 预打包版与源码版两份实例（症状是「同 namespace 的 locale 已注册」与跨实例的私有字段报错）。
+      // 文件路径只走源码面，vite 照常转译它。
       const imports: string[] = [];
       const entries: string[] = [];
       let index = 0;
-      for (const pkg of [...shared.keys(), ...rows.keys()]) {
+      for (const [pkg, file] of [...shared, ...rows]) {
         const alias = `m${String(index)}`;
-        imports.push(`import * as ${alias} from ${JSON.stringify(pkg)};`);
+        imports.push(`import * as ${alias} from ${JSON.stringify(file)};`);
         entries.push(`  { id: ${JSON.stringify(pkg)}, module: ${alias} },`);
         index += 1;
       }
