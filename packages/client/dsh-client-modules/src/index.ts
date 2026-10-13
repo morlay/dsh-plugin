@@ -422,7 +422,9 @@ export function apply(ctx: Context): void {
     }
     const requestUrl = (req.url ?? "").split("?")[0] ?? "";
     if (requestUrl.startsWith(`${CLIENT_MODULES_PREFIX}/`)) {
-      if (await serveFederation(requestUrl, req, res)) return;
+      const handled = await serveFederation(requestUrl, req, res);
+      process.stderr.write(`[fed-exit] ${requestUrl} handled=${String(handled)} status=${String(res.statusCode)}\n`);
+      if (handled) return;
     }
     try {
       await ensureVite();
