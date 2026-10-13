@@ -1,12 +1,16 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
+import { bundleAggregate } from "./bundle.ts";
 import { devExcluded, isAggregated, profileRootOf } from "./config.ts";
+import { bundleDep, CLIENT_MODULES_PREFIX } from "./deps.ts";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
   clientHalfOf,
+  decodePackageName,
+  encodePackageName,
   exportTargetOf,
   manifestOf,
   packageRootOf,
@@ -74,6 +78,8 @@ interface LoaderEntry {
 export interface ClientRow {
   id: string;
   clientPath: string;
+  /** 包版本：联邦地址（`@client-modules/<pkg>@<version>/<file>`）的组成部分。 */
+  version: string;
 }
 
 /**
@@ -111,7 +117,7 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
     // 入口是**源码文件路径**：vite 按它解析、按需转换（改着的包逐文件走，HMR 照旧）；而
     // "这次不改的包"（`dsh.dev.exclude`）会进 `optimizeDeps.include`——vite 把该文件收编成依赖，
     // 引用被重写成它的 deps 产物（一次构建、共享 chunk、落盘缓存、按内容 hash 失效）。
-    found.set(name, { id: name, clientPath });
+    found.set(name, { id: name, clientPath, version: manifest.version });
   }
   return [...found.values()];
 }
@@ -166,7 +172,12 @@ export function apply(ctx: Context): void {
   const allRowsOf = async (): Promise<ClientRow[]> => {
     const patterns = await excludedOf();
     return (await sourceRowsOf()).map((row) =>
-      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
+      isAggregated(row.id, patterns)
+        ? {
+            ...row,
+            clientPath: `${CLIENT_MODULES_PREFIX}/${encodePackageName(row.id)}@${row.version}/client.js`,
+          }
+        : row,
     );
   };
   const optimizeInclude = async (): Promise<string[]> => (await allRowsOf()).map((row) => row.clientPath);
@@ -280,13 +291,92 @@ export function apply(ctx: Context): void {
     return fallback(req, res);
   };
 
+  // 聚合与三方的缓存都在 `node_modules/` 下（与 vite 的 `.vite` 并列，跨进程共用）。
+  const aggregateRoot = join(process.cwd(), "node_modules", ".dsh-plugins");
+  const depsRoot = join(process.cwd(), "node_modules", ".dsh-deps");
+  const appRoot = join(process.cwd(), "packages", "client", "dsh-client-modules", "app-boot");
+  const federationAlias = [
+    { find: /^@\//, replacement: `${process.cwd()}/` },
+    { find: /^node:/, replacement: join(appRoot, "node-stub.ts") },
+  ];
+  // 外置说明符要写成"联邦地址"，同步回调里查不了异步的东西：先把行清单读出来算成两张表。
+  const ownNamesOf = async (): Promise<ReadonlySet<string>> =>
+    new Set((await sourceRowsOf()).map((row) => row.id));
+  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> =>
+    new Map((await sourceRowsOf()).map((row) => [row.id, row.version]));
+
+  /**
+   * `@client-modules/<pkg>@<version>/<file>`：**联邦式**的统一寻址。
+   *
+   * 三方（react）与我们的包在这件事上没有区别——都是"带版本、可独立寻址的一份产物"。落在哪个缓存里
+   * 由"包是不是我们这个工作区的"决定：是 → 按包聚合（整包一次 vite build、产物按出口分开）；
+   * 不是 → 三方的预打包。两条链用的是同一份配置。
+   */
+  const serveFederation = async (
+    url: string,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> => {
+    const rest = url.slice(`${CLIENT_MODULES_PREFIX}/`.length).split("?")[0] ?? "";
+    const slash = rest.indexOf("/");
+    if (slash <= 0) return false;
+    const pkgVersion = rest.slice(0, slash);
+    const file = rest.slice(slash + 1);
+    // scope 的 `@` 在前、版本分隔的 `@` 在后：从**最后一个** `@` 切。
+    const at = pkgVersion.lastIndexOf("@");
+    if (at <= 0) return false;
+    const name = decodePackageName(pkgVersion.slice(0, at));
+    const version = pkgVersion.slice(at + 1);
+    const root = await rootOf(name);
+    const code =
+      root === undefined
+        ? await bundleDep({
+            cacheRoot: depsRoot,
+            repoRoot: process.cwd(),
+            from: join(await profileRootOf(), "package.json"),
+            alias: federationAlias,
+            name,
+            versions: await ownVersionsOf(),
+          })
+            .then(async (target) =>
+              target === undefined ? undefined : await readFile(join(depsRoot, target), "utf8"),
+            )
+            .catch(() => undefined)
+        : await bundleAggregate({
+            cacheRoot: aggregateRoot,
+            key: `${encodePackageName(name)}@${version}`,
+            repoRoot: process.cwd(),
+            input: { client: (await exportTargetOf(root, "client")) ?? (await exportTargetOf(root, undefined)) ?? "" },
+            watch: [join(root, "src")],
+            alias: federationAlias,
+            ownNames: await ownNamesOf(),
+            versions: await ownVersionsOf(),
+          })
+            .then(async (bundled) => {
+              const target = bundled.files.get(file) ?? bundled.files.get(file.replace(/\.js$/u, ""));
+              return target === undefined ? undefined : await readFile(join(aggregateRoot, target), "utf8");
+            })
+            .catch((error: unknown) => {
+              process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
+              return undefined;
+            });
+    if (code === undefined || code === "") return false;
+    res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
+    res.end(req.method === "HEAD" ? undefined : code);
+    return true;
+  };
+
   const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const requestUrl = (req.url ?? "").split("?")[0] ?? "";
+    if (requestUrl.startsWith(`${CLIENT_MODULES_PREFIX}/`)) {
+      if (await serveFederation(requestUrl, req, res)) return;
+    }
     try {
       await ensureVite();
     } catch (error) {
       ctx.logger.error(error);
     }
-    // 先交给 vite（页面、入口、依赖预打包产物、HMR 通道都是它的）；它不认的再回上游兜底。
+    // 先交给 vite（页面、入口、HMR 通道都是它的）；它不认的再回上游兜底。
     if (viteHandoff !== undefined && viteHandoff.serve(req, res)) return;
     return fallback(req, res);
   };

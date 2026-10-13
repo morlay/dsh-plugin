@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
-import { build, type InlineConfig, type PluginOption } from "vite";
+import { build, type PluginOption } from "vite";
 import { depsUrlOf } from "./deps.ts";
 
 /** 一次聚合构建的输入。 */
@@ -28,7 +28,11 @@ export interface BundleOptions {
   /** 指纹的输入文件集（通常是包内的 `src/**`）。 */
   watch: readonly string[];
   /** 与 dev 共用的解析配置（alias）。 */
-  alias: InlineConfig["resolve"] extends { alias?: infer A } ? A : never;
+  alias: readonly { find: RegExp | string; replacement: string }[];
+  /** 我们的包名集合：外置它们时指向 `client.js`（与聚合产物同名），三方是 `index.js`。 */
+  ownNames?: ReadonlySet<string>;
+  /** 包名 → 版本：URL 里要带（联邦式的寻址）。 */
+  versions?: ReadonlyMap<string, string>;
 }
 
 /** 聚合产物：出口 → 落盘路径（相对缓存根）。 */
@@ -108,7 +112,14 @@ export async function bundleAggregate(options: BundleOptions): Promise<Bundled> 
           format: "es",
           entryFileNames: "[name].js",
           chunkFileNames: "chunk-[hash].js",
-          paths: (id: string) => (id.startsWith("node:") ? id : depsUrlOf(id)),
+          paths: (id: string) =>
+            id.startsWith("node:")
+              ? id
+              : depsUrlOf(
+                  id,
+                  options.versions?.get(id) ?? "0.0.0",
+                  options.ownNames?.has(id) === true ? "client.js" : "index.js",
+                ),
         },
       },
     },
