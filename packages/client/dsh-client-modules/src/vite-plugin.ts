@@ -82,13 +82,8 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
 
   return {
     name: "dsh-client-rows",
-    // 预打包：把每个行入口按**包名**纳入 optimizeDeps，让 vite 的依赖优化器去处理 CJS/具名导出/HMR。
     config() {
       return {
-        optimizeDeps: {
-          // 行入口是源码路径，不在 node_modules 里；显式 include 让优化器把它们当"要预打包的依赖"。
-          include: [],
-        },
         resolve: {
           // 让 vite 认我们的条件顺序（与打包链一致）。
           conditions: ["browser", "import", "module", "default"],
@@ -101,7 +96,6 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       if (source === ROWS_VIRTUAL) return RESOLVED_ROWS;
       // 聚合产物的 URL：它由 `dsh-client-modules` 自己的路由服务（按包预编译 + 落盘缓存），
       // vite 只该把它当外部地址保留在 import 里，不要试图去读文件。
-      if (source.startsWith("/@plugins/")) return { id: source, external: true };
       // 对外形态的 URL → 源码文件（vite 只认文件路径与它自己的虚拟 id）。
       if (source.startsWith("/") && options.resolvePluginUrl !== undefined) {
         const file = await options.resolvePluginUrl(source.split("?")[0] ?? source);

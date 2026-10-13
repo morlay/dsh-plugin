@@ -5,6 +5,7 @@
  * 入口（`/plugins/.app/entry.js`）。其余（依赖预打包、CJS→ESM、具名导出、外置 require、共享 chunk、
  * 内容 hash 缓存、HMR）都是 vite dev server 的现成能力——自己实现这些正是前面绕远路的地方。
  */
+import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
@@ -47,6 +48,8 @@ export async function startViteDev(
     base: string;
     rows: RowsSource;
     resolvePluginUrl: (url: string) => Promise<string | undefined>;
+    /** 非开发模块的入口（`<pkg>/client`）：交给 vite 的 `optimizeDeps` 预打包。 */
+    optimizeInclude: readonly string[];
     /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
     httpServer?: HmrServer | undefined;
   },
@@ -78,9 +81,18 @@ export async function startViteDev(
     },
     publicDir: false,
     appType: "spa",
-    // 缓存目录**不按进程隔离**（用 vite 默认的 `<root>/node_modules/.vite`）：deps 预打包与聚合产物
-    // 都该跨进程共用一份——隔离会让每次启动各打一遍，而且聚合产物里的 external 直接指向
-    // `/node_modules/.vite/deps/…`，那正是这里的默认位置。
+    // 依赖优化：**非开发模块**（`dsh.dev.exclude`）的入口交给 vite 预打包——一次构建、共享 chunk、
+    // 落盘 `<root>/node_modules/.vite/deps`、按内容 hash 失效；改着的包不在其中，仍逐文件走 vite（HMR）。
+    // 缓存目录用默认的 `node_modules/.vite`：跨进程、跨 profile 共用一份，不按进程隔离。
+    //
+    // 这些入口是**我们的源码**（里面有 `?raw`、CSS Modules 这类只有 vite 转换链认得的东西），优化器自己
+    // 不认识——所以把它俩用的插件也挂给它：预打包与 dev 转换因此是同一套规则，我们没另造机制。
+    optimizeDeps: {
+      include: [...options.optimizeInclude],
+      rolldownOptions: {
+        plugins: [cssInlinePlugins({ name: "dsh-deps", assets: "inline" }), clientAssetPlugin()],
+      },
+    },
     // **不读也不监听配置文件**：配置全是内联的（下面这些字段）。默认它会在 root 下找 `vite.config.*`
     // 并 watch，改动就 `restart()` 自己——而这个 dev server 跑在 dsh 宿主进程里，重启会连带把整条
     // 服务拖下水。关掉这条路径。
@@ -114,24 +126,8 @@ export async function startViteDev(
       // 表现为一串"没被 vite 接手"的 404）。
       fs: { strict: false, allow: [repoRoot] },
     },
-    optimizeDeps: {
-      // 三方依赖（CJS 居多）由 vite 预打包：具名导出、外置 require、共享 chunk 都在这一步解决。
-      // vite 8 起优化器就是 rolldown，`esbuildOptions` 已弃用（它自己在启动时警告），用 rolldownOptions。
-      //
-      // **列表要显式**（不要设 `optimizeDeps.entries` 去扫描源码入口）：一旦让优化器扫源码图，workspace 的
-      // 包也会被预打包，于是同一个包出现两份实例——症状是「同 namespace 的 locale 已注册」与跨实例的
-      // 私有字段报错。workspace 包一律走源码面。
-      // 每个条目都是一份**独立**产物：`react-dom` 与 `react-dom/client` 同时列上会打出两份 react-dom
-      // （`createRoot` 与 `createPortal` 各拿一份实例，跨实例访问内部字段就炸），所以只列主入口；
-      // `scheduler` 这类传递依赖也不用列——列了反而会因解析不到在启动时报警，react-dom 自己会带上它。
-      include: ["react", "react-dom"],
-      rolldownOptions: {
-        platform: "browser",
-        transform: { define: { "process.env.NODE_ENV": JSON.stringify(process.env["NODE_ENV"] ?? "development") } },
-        // 预打包产物要供多处按需取用，导出一律保留（摇掉会让消费方的具名 import 落空）。
-        treeshake: false,
-      },
-    },
+    // **不用** vite 的 `optimizeDeps`：裸说明符已由插件统一改写成 `@deps/`（我们自己预打包的产物），
+    // vite 再打一份就会与聚合产物里的那份形成两个实例。
     plugins: [
       dshClientRowsPlugin({
         repoRoot,

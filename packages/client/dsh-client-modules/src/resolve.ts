@@ -109,6 +109,47 @@ export interface FileAddress {
 
 
 /**
+ * 工作区包索引：包名 → 包根。
+ *
+ * `pnpm` 的布局只保证"**能解析的**才在"——vendor 里的包、以及当前包没声明为依赖的工作区包，从 importer
+ * 出发都解析不到。但它们是**仓库内的包**（有自己的 `exports`、自己的 `./client` 出口），不该被当成三方。
+ * 所以扫一遍仓库内的清单，懒建一次索引。
+ */
+let workspaceIndex: Promise<Map<string, string>> | undefined;
+
+async function workspaceRootOf(from: string): Promise<string | undefined> {
+  let directory = dirname(from);
+  for (;;) {
+    if (await readFile(join(directory, "pnpm-workspace.yaml"), "utf8").then(() => true, () => false)) {
+      return directory;
+    }
+    const parent = dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
+async function workspaceIndexOf(from: string): Promise<Map<string, string>> {
+  workspaceIndex ??= (async () => {
+    const index = new Map<string, string>();
+    const root = await workspaceRootOf(from);
+    if (root === undefined) return index;
+    const { glob } = await import("node:fs/promises");
+    for (const pattern of ["packages/*/*/package.json", "vendor/*/packages/*/*/package.json"]) {
+      for await (const file of glob(pattern, { cwd: root })) {
+        const path = join(root, file);
+        const manifest = JSON.parse(await readFile(path, "utf8").catch(() => "{}")) as {
+          name?: string;
+        };
+        if (manifest.name !== undefined) index.set(manifest.name, dirname(path));
+      }
+    }
+    return index;
+  })();
+  return await workspaceIndex;
+}
+
+/**
  * 包名 → 包根：走 node 的解析（pnpm 已经把依赖摆好了），**解析入口**再向上找最近的清单。
  *
  * 不能用 `resolve('<name>/package.json')`：现代包（`clsx` 这类）的 `exports` 通常不暴露
@@ -118,10 +159,14 @@ export async function packageRootOf(from: string, name: string): Promise<Package
   try {
     const require = createRequire(from);
     // 只解析**包名**：带子路径的说明符（`pkg/sub`）会要求清单里有对应 `exports` 键，而我们要的是包根。
-    return await owningPackageOf(require.resolve(name.split("/").slice(0, name.startsWith("@") ? 2 : 1).join("/")));
+    const resolved = require.resolve(name.split("/").slice(0, name.startsWith("@") ? 2 : 1).join("/"));
+    const owned = await owningPackageOf(resolved);
+    if (owned !== undefined) return owned;
   } catch {
-    return undefined;
+    // 落到下面的工作区索引。
   }
+  const root = (await workspaceIndexOf(from)).get(name);
+  return root === undefined ? undefined : await owningPackageOf(join(root, "package.json"));
 }
 
 /**

@@ -1,15 +1,12 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
-import { aggregatePackage } from "./aggregate.ts";
 import { devExcluded, isAggregated, profileRootOf } from "./config.ts";
 import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
   clientHalfOf,
-  decodePackageName,
-  encodePackageName,
   exportTargetOf,
   manifestOf,
   packageRootOf,
@@ -92,10 +89,7 @@ export interface ClientRow {
  * 自己的 client 半里 import，不该出现在装配清单里；混进来就会多装配一次（`apply` 里那些"同 namespace 的
  * locale 已注册"的报错就是这么来的），也会在入口打出一串 `skip (no apply/default)`。
  */
-async function clientRowsOf(
-  loader: { entries(): Generator<LoaderEntry> },
-  aggregated: readonly RegExp[],
-): Promise<ClientRow[]> {
+async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Promise<ClientRow[]> {
   const found = new Map<string, ClientRow>();
   // `entries()` 是生成器（cordis 的 Loader 就是这么给的），直接迭代即可。
   for (const entry of loader.entries()) {
@@ -114,14 +108,10 @@ async function clientRowsOf(
     if (manifest === undefined || declared === undefined) continue;
     const clientPath = await clientHalfOf(resolved.root);
     if (clientPath === undefined) continue;
-    // 走**聚合**的包（`dsh.dev.exclude` 点名的非开发模块）：入口直接给 `@plugins/…` 的 URL——
-    // 整包一份产物、共享 chunk，首屏不再为它发几十个请求；其余包照旧给源码文件，逐文件走 vite（HMR）。
-    found.set(name, {
-      id: name,
-      clientPath: isAggregated(name, aggregated)
-        ? `/@plugins/${encodePackageName(name)}/${manifest.version}/client`
-        : clientPath,
-    });
+    // 入口是**源码文件路径**：vite 按它解析、按需转换（改着的包逐文件走，HMR 照旧）；而
+    // "这次不改的包"（`dsh.dev.exclude`）会进 `optimizeDeps.include`——vite 把该文件收编成依赖，
+    // 引用被重写成它的 deps 产物（一次构建、共享 chunk、落盘缓存、按内容 hash 失效）。
+    found.set(name, { id: name, clientPath });
   }
   return [...found.values()];
 }
@@ -164,11 +154,19 @@ export function apply(ctx: Context): void {
   let rowsCache: ClientRow[] | undefined;
   // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。
   const loader = ctx.loader;
-  let aggregatedCache: RegExp[] | undefined;
-  const rows = async (): Promise<ClientRow[]> => {
-    if (rowsCache !== undefined) return rowsCache;
-    aggregatedCache ??= await devExcluded();
-    rowsCache = loader === undefined ? [] : await clientRowsOf(loader, aggregatedCache);
+  // 非开发模块（`dsh.dev.exclude` 点名）：它们的入口交给 vite 的 `optimizeDeps` 预打包——
+  // 一次构建、共享 chunk、落盘缓存、按内容 hash 失效，全是 vite 现成的机制。
+  let excludedCache: RegExp[] | undefined;
+  const optimizeInclude = async (): Promise<string[]> => {
+    excludedCache ??= await devExcluded();
+    const all = await allRowsOf();
+    return all
+      .filter((row) => isAggregated(row.id, excludedCache ?? []))
+      .map((row) => row.clientPath);
+  };
+  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
+  const allRowsOf = async (): Promise<ClientRow[]> => {
+    rowsCache ??= loader === undefined ? [] : await clientRowsOf(loader);
     return rowsCache;
   };
   if (webServer === undefined)
@@ -220,8 +218,10 @@ export function apply(ctx: Context): void {
         rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
+        // 非开发模块（`dsh.dev.exclude`）的入口：交给 vite 的 `optimizeDeps` 预打包。
+        optimizeInclude: await optimizeInclude(),
         httpServer: (webServer as { server?: Parameters<typeof startViteDev>[1]["httpServer"] }).server,
-      });;
+      });
     })();
     await viteStarting;
     if (!announced) {
@@ -256,57 +256,6 @@ export function apply(ctx: Context): void {
     return await exportTargetOf(root, undefined);
   };
 
-  // 聚合预编译的缓存根与分流配置（每次请求读一次配置很便宜：它只是个 package.json）。
-  // 聚合缓存放 `node_modules/` 下（与 vite 的 `.vite` 并列）：它是**开发/构建缓存**，不是运行态数据；
-  // 放这里也天然跨进程、跨 profile 共用——deps 与聚合产物都只该打一次。
-  const aggregateRoot = join(process.cwd(), "node_modules", ".dsh-plugins");
-
-  /**
-   * `@plugins/<pkg>/<version>/<file>`：按包聚合的产物。
-   *
-   * 第一次请求某包时整包打一次（全部出口 ✓ 共享 chunk），之后同包的其它出口直接命中缓存；
-   * 失效看包内源码指纹（见 `aggregatePackage`）。
-   */
-  const serveAggregate = async (
-    url: string,
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<boolean> => {
-    const rest = url.slice("/@plugins/".length).split("?")[0] ?? "";
-    const [pkgSegment, version, ...fileSegments] = rest.split("/");
-    const file = fileSegments.join("/");
-    if (pkgSegment === undefined || version === undefined || file === "") return false;
-    const name = decodePackageName(pkgSegment);
-    const root = await rootOf(name);
-    if (root === undefined) return false;
-    const manifest = await manifestOf(root);
-    if (manifest === undefined) return false;
-    // 只聚合**浏览器面**：`./client` 优先（行都在这一半），没有它就用根出口（纯库）。
-    const clientEntry = await exportTargetOf(root, "client");
-    const indexEntry = clientEntry ?? (await exportTargetOf(root, undefined));
-    if (indexEntry === undefined) return false;
-    const exports = clientEntry === undefined ? { ".": indexEntry } : { "./client": clientEntry };
-    const aggregated = await aggregatePackage({
-      cacheRoot: aggregateRoot,
-      name: manifest.name,
-      version,
-      root,
-      exports,
-    });
-    if (aggregated === undefined) return false;
-    // URL 允许写语义名（`client`）或文件名（`client.js` / `chunk-x.js`），两种都认。
-    const target =
-      aggregated.files.get(file) ??
-      aggregated.files.get(file.replace(/\.js$/u, "")) ??
-      aggregated.files.get(file.replace(/^index\.js$/u, "."));
-    if (target === undefined) return false;
-    const code = await readFile(join(aggregateRoot, target), "utf8").catch(() => undefined);
-    if (code === undefined) return false;
-    res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
-    res.end(req.method === "HEAD" ? undefined : code);
-    return true;
-  };
-
   const serve = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET" && req.method !== "HEAD") return fallback(req, res);
     // `/plugins/*` 下的请求交给 vite。**不做任何 URL 改写**：包名、路径与 client 半的入口都由 vite 自己
@@ -322,9 +271,6 @@ export function apply(ctx: Context): void {
   };
 
   const serveAny = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    // 聚合产物：`/@plugins/<pkg>/<version>/<file>`——它和 `@/…` 一样是我们自己的前缀，先于 vite 处理。
-    const aggregateUrl = (req.url ?? "").split("?")[0] ?? "";
-    if (aggregateUrl.startsWith("/@plugins/") && (await serveAggregate(aggregateUrl, req, res))) return;
     try {
       await ensureVite();
     } catch (error) {
