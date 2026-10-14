@@ -47,8 +47,9 @@ uplink、peer 是 operator，以及注入脚本 `openStream` 的上行转发与�
 
 ## 起 dev 与跑 e2e 的规矩
 
-- **dev 一律带 `--data-dir=xdg`**（`just custom dev --data-dir=xdg` / `just custom web --data-dir=xdg`）：缺省
-  `<profileDir>/.dsh-store` 会与本地那套数据面（会话库、设置）互相踩。
+- **验证 dev 时用 `--data-dir=xdg`**（`just custom dev --data-dir=xdg` / `just custom web --data-dir=xdg`）：
+  验证是"起一个干净的实例看一眼"，缺省 `<profileDir>/.dsh-store` 会与开发机上那套数据面（会话库、设置）
+  互相踩。这是**验证时**的取舍，不是给日常使用定的规矩。
 - **e2e 与常驻服务别抢端口**：`dev-client.e2e.spec.ts` 默认自己 boot 一个 web 服务（3080）。本机若已经有
   `just custom web` 在跑，要么先停它，要么用 `DSH_E2E_REUSE=1 DSH_E2E_PORT=3080` 复用——否则它 boot 的新实例
   端口被占，表现为"页面渲染出内容"那条偶发失败（单跑绿、全量跑红，就是撞上了这个）。
