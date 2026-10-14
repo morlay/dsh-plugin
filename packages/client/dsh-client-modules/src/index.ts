@@ -598,7 +598,13 @@ export function apply(ctx: Context): void {
       ctx.logger.error(error);
     }
     // 先交给 vite（页面、入口、HMR 通道都是它的）；它不认的再回上游兜底。
+    //
+    // **`@` 前缀的路径不兜给页面**：那是这条链的模块 URL 空间，没解析出来就是解析规则漏了一段——当场 404
+    // 并把 URL 与 referer 打出来，别让它静默变成一份 HTML（那样浏览器只会报"模块语法错误"）。
     if (viteHandoff !== undefined && viteHandoff.serve(req, res)) return;
+    if (path.startsWith("/@")) {
+      process.stderr.write(`[unresolved] ${req.url ?? ""} referer=${req.headers.referer ?? "-"}\n`);
+    }
     return fallback(req, res);
   };
   // 用与上游同一个 API 占**兜底位**（`registerFallback`）：页面、入口、依赖预打包产物与 HMR 通道都是

@@ -96,7 +96,10 @@ export async function startViteDev(
       process: "{ env: {} }",
     },
     publicDir: false,
-    appType: "spa",
+    // **不做 history fallback**（`spa` 会把没解析出来的路径静默回一份 index.html）：请求都在 `@` 前缀
+    // 的 URL 空间里（`@/…`、`@client-modules/…`、`/@fs/…`），谁没解析出来就该**当场 404**——否则浏览器
+    // 把 HTML 当模块执行，报出来的是一堆看不懂的错，而真正没命中的那个 URL 连线索都没有。
+    appType: "mpa",
     // 依赖优化：**非开发模块**（`dsh.dev.exclude`）的入口交给 vite 预打包——一次构建、共享 chunk、
     // 落盘 `<root>/node_modules/.vite/deps`、按内容 hash 失效；改着的包不在其中，仍逐文件走 vite（HMR）。
     // 缓存目录用默认的 `node_modules/.vite`：跨进程、跨 profile 共用一份，不按进程隔离。
