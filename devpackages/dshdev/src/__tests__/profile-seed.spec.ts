@@ -65,7 +65,7 @@ describe("profile seed manifest", () => {
     ]);
   });
 
-  it("declares every local bundle as a file: dependency on its vendor copy", () => {
+  it("把每个本地 bundle 声明成指回随包 runtime 的 link 依赖（不再落 vendor 副本）", () => {
     expect(
       profileManifest(app(["@morlay/better-session", "dsh-context"]), [
         "@morlay/better-session",
@@ -77,8 +77,8 @@ describe("profile seed manifest", () => {
       version: "0.1.6",
       type: "module",
       dependencies: {
-        "@morlay/better-session": "file:./vendor/@morlay/better-session",
-        "dsh-context": "file:./vendor/dsh-context",
+        "@morlay/better-session": "link:../../runtime/node_modules/@morlay/better-session",
+        "dsh-context": "link:../../runtime/node_modules/dsh-context",
       },
       dsh: {
         profile: {

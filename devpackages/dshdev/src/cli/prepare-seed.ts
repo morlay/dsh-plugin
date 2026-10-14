@@ -18,7 +18,6 @@ import { bundleClientFactory } from "@local/tsdown-plugin-cordis";
 import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 import {
   PROFILE_RUNTIME_REPORT_NAME,
-  PROFILE_VENDOR_DIR_NAME,
   PROFILE_WORKSPACE_NAME,
 } from "@morlay/dsh-desktop-shell/profile-project";
 import { SEED_HASH_NAME, SEED_RUNTIME_DIR_NAME } from "@morlay/dsh-desktop-shell/seed";
@@ -315,10 +314,6 @@ async function hashSeedLayout(hash: Hash, seedRoot: string): Promise<void> {
     for (const entry of entries.sort((left, right) => (left.name < right.name ? -1 : 1))) {
       if (entry.name === "node_modules" || entry.name === SEED_HASH_NAME) continue;
       const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-      if (entry.name === PROFILE_VENDOR_DIR_NAME) {
-        await hashVendorPackages(hash, join(directory, entry.name), path);
-        continue;
-      }
       const child = join(directory, entry.name);
       if (entry.isDirectory()) {
         await visit(child, path);
@@ -335,20 +330,6 @@ async function hashSeedLayout(hash: Hash, seedRoot: string): Promise<void> {
 }
 
 // Enumerate the `file:` sources by package path; their payload is a closure copy already hashed.
-async function hashVendorPackages(hash: Hash, directory: string, prefix: string): Promise<void> {
-  if (await pathExists(join(directory, "package.json"))) {
-    hash.update(`${prefix}\0`);
-    return;
-  }
-  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) =>
-    left.name < right.name ? -1 : 1,
-  )) {
-    if (!entry.isDirectory()) continue;
-    const child = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    await hashVendorPackages(hash, join(directory, entry.name), child);
-  }
-}
-
 export interface PrepareSeedOptions {
   readonly workspace?: string;
 }
@@ -393,12 +374,11 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
     `desktop seed: bundled ${String(bundledClients)} source client halves into the runtime`,
   );
 
-  // profile 只持有 app 自带的（非官方 bundle）插件：官方包与 dsh 由 runtime 提供，
-  // 这些包以 `file:` 指向随包 vendor 副本，由启动器用随包 pnpm 在用户 profile 里装出来。
+  // profile 只持有 app 自带的（非官方 bundle）插件：官方包与 dsh 由 runtime 提供，这些包在 profile 的清单里
+  // 直接 `link:` 回随包 runtime 的闭包（不再往 profile 里落 `vendor/` 副本）。
   const localBundles = profileLocalBundles(manifest);
   const profilePackages = await withLocalClosure(runtimeModulesDir, localBundles);
   await copyProfileEntries(workspace, profileDir, entries);
-  await copyVendorSources(runtimeModulesDir, profileDir, profilePackages);
   const runtimeLinks = await profileRuntimeLinks(runtimeDir, runtimeModulesDir, profilePackages);
   await writeFile(
     join(profileDir, "package.json"),
@@ -506,8 +486,10 @@ export function profileManifest(
     private: true,
     version: manifest.version ?? "0.0.0",
     type: "module",
+    // 直接 `link:` 回随包 runtime 的那份闭包（`seed/profiles/desktop` → `seed/runtime/node_modules`）：
+    // 不再往 profile 里落一份 `vendor/` 副本（省一次拷贝，也省掉那份 41M）。
     dependencies: Object.fromEntries(
-      localBundles.map((name) => [name, `file:./${PROFILE_VENDOR_DIR_NAME}/${name}`]),
+      localBundles.map((name) => [name, `link:../../runtime/node_modules/${name}`]),
     ),
     // profile 是安装产物：清单按官方形态写（官方 bundles 在前 + app 自己声明的），只保留装配字段，
     // app 的 `dsh.version` / `desktop` / `dev` 属于打包输入，运行时不再从 profile 读它们。
@@ -537,23 +519,6 @@ async function copyProfileEntries(
 }
 
 // Copy each profile-owned bundle out of the closure as an installable `file:` source.
-async function copyVendorSources(
-  runtimeModulesDir: string,
-  profileDir: string,
-  names: readonly string[],
-): Promise<void> {
-  for (const name of names) {
-    const source = join(runtimeModulesDir, ...name.split("/"));
-    if (!(await pathExists(source))) {
-      throw new Error(
-        `desktop seed: profile bundle ${name} is missing from the deployed closure (${source})`,
-      );
-    }
-    const target = join(profileDir, PROFILE_VENDOR_DIR_NAME, ...name.split("/"));
-    await mkdir(dirname(target), { recursive: true });
-    await cp(source, target, { recursive: true, dereference: true });
-  }
-}
 
 // runtime 包：profile 自己的依赖经 `overrides` 指回 runtime 副本，写成 runtime-relative 的 `link:`。
 //
