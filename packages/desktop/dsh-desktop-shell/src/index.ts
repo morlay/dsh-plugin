@@ -43,8 +43,17 @@ import { shellWrappedSpawn } from "./shell-env.ts";
 let focusPrimaryWindow = (): void => {};
 
 // appconfig.json 的位置：打包形态只看 resources，dev 形态由 CLI 指到构建目录。
+/** app 目录（dev 是装配目录、打包是 `Resources/app`）：由引导写进全局。 */
+function shellRoot(): string {
+  const root = globalThis.__DSH_SHELL_ROOT__;
+  if (root === undefined || root === "") {
+    throw new Error("dsh desktop: the shell root is missing (bootstrap did not report it)");
+  }
+  return root;
+}
+
 function appConfigDir(): string {
-  const configured = process.env.DSH_DESKTOP_APPCONFIG_DIR;
+  const configured = developmentLayout() === undefined ? undefined : join(shellRoot(), "..", "runtime");
   return app.isPackaged || configured === undefined || configured === ""
     ? process.resourcesPath
     : configured;
@@ -105,25 +114,24 @@ interface RuntimeResources {
 }
 
 function runtimeResources(): RuntimeResources {
-  const development = !app.isPackaged;
+  // 两种形态的"随包载荷"位置都能自己推出来：
+  // - 打包：`Resources/{runtime,seed}`；
+  // - dev：壳跑在装配目录 `<buildCache>/shell`，于是同级的 `../{runtime,seed}`——工具因此**不需要**把这些
+  //   路径注入进来（dev 的宿主用系统 node，PATH 上就有）。
+  const resourcesDir =
+    developmentLayout() === undefined ? process.resourcesPath : join(shellRoot(), "..");
   const node =
-    (development ? process.env.DSH_DESKTOP_NODE_BINARY : undefined) ??
-    join(
-      process.resourcesPath,
-      "runtime",
-      "node",
-      process.platform === "win32" ? "node.exe" : "node",
-    );
-  const seed =
-    (development ? process.env.DSH_DESKTOP_SEED_DIR : undefined) ??
-    join(process.resourcesPath, "seed");
+    developmentLayout() === undefined
+      ? join(resourcesDir, "runtime", "node", process.platform === "win32" ? "node.exe" : "node")
+      : "node";
+  const seed = join(resourcesDir, "seed");
   return {
     node,
     seed,
     // 随包运行时与 pnpm 只在打包产物里存在；dev 形态从工作区解析依赖。
     runtime: join(seed, SEED_RUNTIME_DIR_NAME),
-    pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
-    nodeBin: join(process.resourcesPath, "runtime", "bin"),
+    pnpm: join(resourcesDir, "runtime", "pnpm", "bin", "pnpm.mjs"),
+    nodeBin: join(resourcesDir, "runtime", "bin"),
     // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
     // TS 运行时入口：**按包名解析**（`@local/oxc-node` 是壳的依赖，dev 的装配目录与打包的 app 目录里都装了
     // 它）。不再由工具注入路径，也不依赖"随包 runtime 里那份拷贝"的布局。

@@ -125,7 +125,6 @@ async function launchElectron(
   // 数据面与 `dev --web` 共用工作区 store；只有浏览器数据留在构建目录里。
   const userData = join(developmentRoot, "electron-user-data");
 
-  const systemNode = process.env.DSH_DESKTOP_NODE_BINARY ?? process.env.npm_node_execpath ?? "node";
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     UV_THREADPOOL_SIZE: threadpoolSize(),
@@ -134,15 +133,11 @@ async function launchElectron(
     // （这个变量在环境里很常见——它本来是给"把 Electron 当 node 用"的子进程准备的。）
     ELECTRON_RUN_AS_NODE: undefined,
     DSH_HOME: dataDir,
-    DSH_DESKTOP_APPCONFIG_DIR: join(buildCacheDir, "runtime"),
     // 两格分工：`PROFILE_DIR` 是 profile root（app 目录本身），`RUNTIME_DIR` 是安装根
     // （官方闭包、前端产物与 host 载荷的来源）。
     DSH_DESKTOP_DEV_PROFILE_DIR: profileDir,
     DSH_DESKTOP_DEV_RUNTIME_DIR: runtimeDir,
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
-    DSH_DESKTOP_NODE_BINARY: systemNode,
-    // dev 形态的随包载荷：seed 在工作区里（壳起宿主要用它）。
-    DSH_DESKTOP_SEED_DIR: join(buildCacheDir, "seed"),
 
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS ?? "1",
     ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? "1",
