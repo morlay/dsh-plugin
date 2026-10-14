@@ -87,6 +87,7 @@
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@local/oxc-node": "workspace:*",
     "@morlay/dsh-desktop-host": "workspace:*"
   }
 }

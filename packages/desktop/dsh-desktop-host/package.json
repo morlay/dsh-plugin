@@ -22,7 +22,6 @@
     "config/desktop.cordis.patch.yml"
   ],
   "type": "module",
-  "main": "./dist/index.js",
   "exports": {
     ".": "./src/index.ts",
     "./webserver": "./src/webserver.ts",
@@ -30,7 +29,6 @@
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
-    "./ts-register": "./src/ts-register.mjs",
     "./preload-source": "./src/preload-source.ts"
   },
   "publishConfig": {
@@ -64,12 +62,10 @@
     "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
+    "@local/oxc-node": "workspace:*",
     "@morlay/dsh-client-modules": "workspace:*",
     "@morlay/web-custom-profile": "workspace:*",
-    "@oxc-node/core": "^0.1.6",
-    "@oxc-project/runtime": "^0.154.0",
     "lightningcss": "^1.32.0",
-    "oxc-transform": "^0.154.0",
     "rolldown": "1.x",
     "ws": "^8.21.3"
   },

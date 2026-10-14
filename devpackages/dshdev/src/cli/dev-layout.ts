@@ -29,7 +29,7 @@ export function devInstallAnchor(runtimeDir: string): string {
 /**
  * 宿主载荷入口：该包的**源码**入口（`src/index.ts`）。
  *
- * TS 是一等公民：dev 全程直载源码（`nodeOptions` 里挂了 `@morlay/dsh-desktop-host/ts-register`），不需要先出 `dist`
+ * TS 是一等公民：dev 全程直载源码（`nodeOptions` 里挂了 `@local/oxc-node`），不需要先出 `dist`
  * 再跑——那一步既慢又要求每次改完都重新构建，与"开发态直接用"相悖。
  */
 export function devHostEntry(runtimeDir: string): string {

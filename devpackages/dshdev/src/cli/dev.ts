@@ -37,12 +37,12 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 // dev 形态给子进程注入的 TS 注册：与工作区其它地方同一份（`pnpm-workspace.yaml` 的 `nodeOptions`），
-// 即 `@morlay/dsh-desktop-host/ts-register`。上游包经 exports 指到 src 后，Node 原生 strip-only 不支持
+// 即 `@local/oxc-node`。上游包经 exports 指到 src 后，Node 原生 strip-only 不支持
 // parameter properties / enum / 装饰器，这一层转译必须挂上。
 function tsLoaderSpecifier(): string {
-  // `@morlay/dsh-desktop-host/ts-register`：自建 hooks + `oxc-transform`，**接管 `node_modules` 下的
-  // `.ts`**——整包源码直跑（壳与宿主都在那里），所以这条链要的是它，不是 `@oxc-node/core/register`。
-  return import.meta.resolve("@morlay/dsh-desktop-host/ts-register");
+  // `@local/oxc-node`（本仓库的 TS 运行时入口）：注册 hooks + `oxc-transform`，**接管 `node_modules` 下的
+  // `.ts`**——整包源码直跑（壳与宿主都在那里），所以这条链要的是它。
+  return import.meta.resolve("@local/oxc-node");
 }
 
 function withTsLoader(environment: NodeJS.ProcessEnv, loader: string): NodeJS.ProcessEnv {
@@ -142,7 +142,7 @@ async function launchElectron(
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
     // dev 形态的随包载荷（壳起宿主要用）：runtime 根、seed 与那份 TS 注册钩子都在工作区里。
-    DSH_DESKTOP_LOADER: join(buildCacheDir, "runtime", "loader", "ts-register.mjs"),
+    DSH_DESKTOP_LOADER: join(buildCacheDir, "runtime", "loader", "register.mjs"),
     DSH_DESKTOP_SEED_DIR: join(buildCacheDir, "seed"),
 
     DSH_DESKTOP_SOURCE_LOADER: tsLoader,

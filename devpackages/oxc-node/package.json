@@ -1,0 +1,14 @@
+{
+  "name": "@local/oxc-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "本仓库的 TS 运行时入口：注册 hooks 后 Node 也能跑 node_modules 下的 .ts（ESM only）。壳与宿主都用它。",
+  "exports": {
+    ".": "./register.mjs"
+  },
+  "dependencies": {
+    "@oxc-project/runtime": "^0.154.0",
+    "oxc-transform": "^0.154.0"
+  }
+}

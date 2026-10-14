@@ -126,7 +126,7 @@ function runtimeResources(): RuntimeResources {
     // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
     loader:
       (development ? process.env.DSH_DESKTOP_LOADER : undefined) ??
-      join(process.resourcesPath, "runtime", "loader", "ts-register.mjs"),
+      join(process.resourcesPath, "runtime", "loader", "register.mjs"),
   };
 }
 

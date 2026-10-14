@@ -367,6 +367,9 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:../devkit
+      '@local/oxc-node':
+        specifier: workspace:^
+        version: link:../oxc-node
       '@local/tsdown-plugin-cordis':
         specifier: workspace:*
         version: link:../tsdown-plugin-cordis
@@ -394,6 +397,15 @@ importers:
       typescript:
         specifier: 7.x
         version: 7.0.2
+
+  devpackages/oxc-node:
+    dependencies:
+      '@oxc-project/runtime':
+        specifier: ^0.154.0
+        version: 0.154.0
+      oxc-transform:
+        specifier: ^0.154.0
+        version: 0.154.0
 
   devpackages/tsdown-plugin-cordis:
     dependencies:
@@ -725,24 +737,18 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
+      '@local/oxc-node':
+        specifier: workspace:*
+        version: link:../../../devpackages/oxc-node
       '@morlay/dsh-client-modules':
         specifier: workspace:*
         version: link:../../client/dsh-client-modules
       '@morlay/web-custom-profile':
         specifier: workspace:*
         version: link:../../bundles/web-custom-profile
-      '@oxc-node/core':
-        specifier: ^0.1.6
-        version: 0.1.6
-      '@oxc-project/runtime':
-        specifier: ^0.154.0
-        version: 0.154.0
       lightningcss:
         specifier: ^1.32.0
         version: 1.33.0
-      oxc-transform:
-        specifier: ^0.154.0
-        version: 0.154.0
       rolldown:
         specifier: 1.x
         version: 1.2.13
@@ -786,6 +792,9 @@ importers:
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/util/values
+      '@local/oxc-node':
+        specifier: workspace:*
+        version: link:../../../devpackages/oxc-node
       '@morlay/dsh-desktop-host':
         specifier: workspace:*
         version: link:../dsh-desktop-host

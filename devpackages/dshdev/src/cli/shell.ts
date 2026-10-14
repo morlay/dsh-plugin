@@ -92,7 +92,7 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
       "  // 先让 Node（含 Electron 的主进程）能跑 `node_modules` 下的 `.ts`：这条链的源码都是 TS（app 目录",
       "  // 是 deploy 出来的、上游包经 exports 指到 src），而 Node 内建的类型剥离拒绝对 `node_modules` 动手。",
       "  // 那份注册钩子在**随包 runtime** 里（`../runtime/loader/`，dev 由 dshdev 备、打包由 prepareRuntime 备）。",
-      '  await import(new URL("../runtime/loader/ts-register.mjs", import.meta.url).href);',
+      '  await import(new URL("../runtime/loader/register.mjs", import.meta.url).href);',
       "  // 业务入口：按**包名**加载，走壳包清单的 `exports`（指向 `src/index.ts`）。",
       '  await import("@morlay/dsh-desktop-shell");',
       "} catch (error) {",

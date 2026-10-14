@@ -102,7 +102,7 @@ describe("桌面 host 子进程", () => {
     const { calls, child, host } = harness(
       {
         packageManager: { pnpm: "/app/runtime/pnpm/bin/pnpm.mjs", nodeBin: "/app/runtime/bin" },
-        nodeArgs: ["--import=/app/runtime/loader/ts-register.mjs"],
+        nodeArgs: ["--import=/app/runtime/loader/register.mjs"],
       },
       9230,
     );
@@ -115,7 +115,7 @@ describe("桌面 host 子进程", () => {
     expect(call?.args.slice(0, 3)).toEqual([
       "--expose-internals",
       "--inspect=127.0.0.1:9230",
-      "--import=/app/runtime/loader/ts-register.mjs",
+      "--import=/app/runtime/loader/register.mjs",
     ]);
     expect(call?.args.slice(3)).toEqual([
       ENTRY,

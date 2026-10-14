@@ -15,9 +15,9 @@ const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
 // What the runtime entry loads: its wrapper and the node-gyp payload; pnpm's install script
 // relinks the platform binary, so the package must not be copied wholesale.
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
-// 随包的 TS 注册钩子：`@morlay/dsh-desktop-host/ts-register`（自建 hooks + `oxc-transform`）——它接管
-// **node_modules 下**的 `.ts`，而这条链的宿主正好住在那里（上游源码经 `exports` 指到 `src`）。
-const LOADER_ENTRY = "@morlay/dsh-desktop-host/ts-register";
+// 随包的 TS 运行时入口（`@local/oxc-node`：注册 hooks + `oxc-transform`）——它接管 **node_modules 下**的
+// `.ts`，而这条链的壳与宿主正好住在那里（源码经 `exports` 指到 `src`）。
+const LOADER_ENTRY = fileURLToPath(import.meta.resolve("@local/oxc-node"));
 // loader 要用到的两层依赖：`oxc-transform` 的转译器（含它按平台挑的原生绑定），以及装饰器转出来的
 // helper 所在的 `@oxc-project/runtime`。
 const LOADER_DEPENDENCY_MANIFESTS = [
@@ -266,7 +266,7 @@ function storeLayerOf(packageRoot: string): string {
 }
 
 async function prepareLoader(runtimeRoot: string): Promise<string> {
-  const entry = fileURLToPath(import.meta.resolve(LOADER_ENTRY));
+  const entry = LOADER_ENTRY;
   const destination = join(runtimeRoot, "loader");
   await rm(destination, { recursive: true, force: true });
   await mkdir(join(destination, "node_modules"), { recursive: true });
