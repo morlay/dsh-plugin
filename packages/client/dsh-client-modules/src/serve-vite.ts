@@ -7,6 +7,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { createServer, type ServerOptions, type ViteDevServer } from "vite";
 import { clientModulesAlias } from "./bundle.ts";
@@ -57,8 +58,15 @@ export async function startViteDev(
   },
 ): Promise<ViteHandoff> {
   const { repoRoot, base } = options;
-  /** 页面与入口所在的真实目录（vite 的 root）。 */
-  const appRoot = join(repoRoot, "packages", "client", "dsh-client-modules", "app-boot");
+  /**
+   * 页面与入口所在的真实目录（vite 的 root）。
+   *
+   * 按**本包自己的位置**推，不从 `repoRoot` 拼：打包形态下 `repoRoot` 是 profile 目录
+   * （`$DSH_HOME/profiles/desktop`），从它拼出的 `packages/client/…/app-boot` 并不存在——vite 的 root
+   * 一空，`/index.html` 404、入口也转译不了，页面就只剩一具空壳。这条事实与 `index.ts` 的 `appRoot`
+   * 同源（那里也从包根推）。
+   */
+  const appRoot = fileURLToPath(new URL("../app-boot", import.meta.url));
   /** 页面所在的端口（HMR 的 WebSocket 必须与页面**同源同端口**，否则客户端连不上）。 */
   const pagePort = ((): number | undefined => {
     const address = options.httpServer?.address();

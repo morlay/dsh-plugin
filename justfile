@@ -31,10 +31,11 @@ clean:
     pnpm clean
 
 clean-dist:
+    rm -rf target/dts/*
     pnpm exec -r \
         --filter "./devpackages/*"  \
         --filter "./packages/*/*" \
-        rm -rf dist 
+        rm -rf dist/* 
 
 fmt:
     pnpm exec oxfmt .

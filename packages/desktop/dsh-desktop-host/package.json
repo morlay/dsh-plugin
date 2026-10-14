@@ -25,11 +25,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./webserver": "./src/webserver.ts",
+    "./preload-source": "./src/preload-source.ts",
     "./wire": "./src/wire.ts",
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json",
-    "./preload-source": "./src/preload-source.ts"
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
@@ -41,6 +41,10 @@
         "types": "./dist/webserver.d.mts",
         "default": "./dist/webserver.js"
       },
+      "./preload-source": {
+        "types": "./dist/preload-source.d.mts",
+        "default": "./dist/preload-source.js"
+      },
       "./wire": {
         "types": "./dist/wire.d.mts",
         "default": "./dist/wire.js"
@@ -50,11 +54,7 @@
         "default": "./dist/paths.js"
       },
       "./package.json": "./package.json",
-      "./locale/*.json": "./locale/*.json",
-      "./preload-source": {
-        "types": "./dist/preload-source.d.mts",
-        "default": "./dist/preload-source.js"
-      }
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {

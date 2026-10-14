@@ -27,9 +27,9 @@
     "./official": "./src/official.ts",
     "./profile-project": "./src/profile-project.ts",
     "./seed": "./src/seed.ts",
+    "./inline-packages": "./src/inline-packages.ts",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json",
-    "./inline-packages": "./src/inline-packages.ts"
+    "./locale/*.json": "./locale/*.json"
   },
   "publishConfig": {
     "exports": {
@@ -57,12 +57,12 @@
         "types": "./dist/seed.d.mts",
         "default": "./dist/seed.mjs"
       },
-      "./package.json": "./package.json",
-      "./locale/*.json": "./locale/*.json",
       "./inline-packages": {
         "types": "./dist/inline-packages.d.mts",
         "default": "./dist/inline-packages.mjs"
-      }
+      },
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
     }
   },
   "scripts": {
