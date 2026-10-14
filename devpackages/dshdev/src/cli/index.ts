@@ -89,4 +89,14 @@ desktop
     });
   });
 
+program
+  .command("check-deps")
+  .description("scan a package's runtime imports (from its entry) and report the ones that cannot resolve")
+  .argument("[package]", "package directory (default: current directory)")
+  .action(async (pkg: string | undefined) => {
+    const { reportRuntimeDependencies } = await import("./runtime-deps.ts");
+    const missing = await reportRuntimeDependencies(pkg === undefined ? process.cwd() : resolve(pkg));
+    if (missing.length > 0) process.exitCode = 1;
+  });
+
 await program.parseAsync(process.argv);

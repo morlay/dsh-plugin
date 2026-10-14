@@ -453,8 +453,7 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     input,
     plugins,
     // **不指 tsconfig**：装饰器由下面的 `transform.decorator.legacy` 直接开（直出时它生效，见对照表）。
-    // 指过去反而有坑——仓库根那份是 `extends: ["@local/devkit/tsconfig.json"]`，而 rolldown 不解析
-    // `extends`，`experimentalDecorators` 拿不到；profile 那份虽是自包含的，但两种形态各指一处不如一处都不指。
+    // rolldown 自己会解析 tsconfig（含 `extends`，实测过），所以两种形态各指一处不如一处都不指。
     ...(options.tsconfig === undefined ? {} : { resolve: { tsconfigFilename: options.tsconfig } }),
     transform: {
       target: "esnext",

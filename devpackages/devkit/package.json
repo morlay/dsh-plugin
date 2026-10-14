@@ -15,6 +15,7 @@
     "esbuild": "^0.28.2",
     "js-yaml": "^4.1.0",
     "lightningcss": "^1.32.0",
+    "oxc-parser": "^0.154.0",
     "playwright": "^1.64.0",
     "rolldown": "^1.2.8",
     "rolldown-plugin-dts": "0.28.x",

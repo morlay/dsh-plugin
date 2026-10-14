@@ -39,6 +39,7 @@
     "@oxc-node/core": "^0.1.6",
     "@oxc-project/runtime": "^0.154.0",
     "@types/node": "^26.5.0",
+    "oxc-parser": "^0.153.0",
     "oxc-transform": "^0.154.0"
   },
   "engines": {
