@@ -11,6 +11,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-base": "workspace:*",
+    "@deepseek-ai/dsh-web-app": "workspace:*",
     "@morlay/better-session": "workspace:*",
     "@morlay/dsh-client-modules": "workspace:*",
     "@morlay/mydsh-profile": "workspace:*",

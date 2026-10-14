@@ -257,6 +257,12 @@ importers:
 
   apps/dsh-custom-next:
     dependencies:
+      '@deepseek-ai/dsh-base':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/bundle/base
+      '@deepseek-ai/dsh-web-app':
+        specifier: workspace:*
+        version: link:../../vendor/deepseek-harness/packages/bundle/web-app
       '@local/dshdev':
         specifier: workspace:*
         version: link:../../devpackages/dshdev
