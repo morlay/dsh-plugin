@@ -112,7 +112,6 @@ export interface BundleOptions {
    * `client` 不是什么特殊身份，就是清单里的一个普通 export：有 `./client` 的包外置成 `client.js`，
    * 没有的就是 `index.js`（= 根出口）。表是预建的，因为 `paths` 回调必须同步。
    */
-  exportsOf?: ReadonlyMap<string, string>;
 }
 
 /** 产物：文件相对路径。 */
@@ -187,15 +186,21 @@ async function fingerprint(paths: readonly string[]): Promise<string> {
  */
 export function urlOf(
   specifier: string,
-  tables: { versions?: ReadonlyMap<string, string>; exportsOf?: ReadonlyMap<string, string> },
+  tables: { versions?: ReadonlyMap<string, string>; clientRows?: ReadonlySet<string> },
 ): string {
   const bare = packageNameOf(specifier) || specifier;
   const version = tables.versions?.get(bare) ?? "0.0.0";
   // **子路径引用**（`pkg/sub`，如 rolldown 注入的 `@oxc-project/runtime/helpers/decorate`、三方的
-  // `katex/dist/katex.min.css`）保留子路径：出口表只回答"**包级**引用该指哪个出口"（`client` / `index`），
-  // 对子路径没有意义。也**不要**自作主张加 `.js`（子路径本身可能带扩展名：`.css`）。
+  // `katex/dist/katex.min.css`）保留子路径——也**不要**自作主张加 `.js`（子路径本身可能带扩展名：`.css`）。
+  //
+  // **包级引用**的出口按"它是不是行"分（`dsh.client` + client 半，由 loader 给）：
+  // - **行** → `client.js`：行的客户端产物就是它的 client 半。以前这里向一张"包名 → client/index"的表要
+  //   出口名，那张表是按 `exports` 里有没有 `./client` 猜的——于是没有该键的行（`@deepseek-ai/dsh-api-*`）
+  //   被打成 `index.js`（宿主半）。
+  // - **普通 npm 包**（三方、被依赖的）→ `index.js`：出口按 npm 语义（包的根出口）。
   const subpath = specifier === bare ? "" : specifier.slice(bare.length + 1);
-  const file = subpath !== "" ? subpath : `${tables.exportsOf?.get(bare) ?? "index"}.js`;
+  const file =
+    subpath !== "" ? subpath : tables.clientRows?.has(bare) === true ? "client.js" : "index.js";
   return depsUrlOf(specifier, version, `${file}?v=${BUNDLER_REV}`);
 }
 

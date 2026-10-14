@@ -279,6 +279,10 @@ export function apply(ctx: Context): void {
     }
   };
 
+  /** **行**的包名集合（loader 给的 `dsh.client` + client 半）：包级引用的出口按它分。 */
+  const clientRowIds = async (): Promise<ReadonlySet<string>> =>
+    new Set((await rows()).map((row) => row.id));
+
   /** 解析根那份 tsconfig 的路径（不存在时返回 undefined，交给 rolldown 默认）。 */
   const tsconfigOf = async (): Promise<string | undefined> => {
     const candidate = join(await resolutionRoot(), "tsconfig.json");
@@ -353,20 +357,6 @@ export function apply(ctx: Context): void {
   // 否则根出口）。这不是"身份判断"，所以 `immer` 这类三方不会因为它被特殊对待。
   // 两张表**懒建一次**：它们要扫工作区（几百个清单）与 pnpm store，而联邦路由是**每个请求**都要它们
   // ——每次重算等于把首屏时间乘以产物数（几百次全仓扫描）。dev 里包的版本与出口不会中途变。
-  let exportsCache: Promise<ReadonlyMap<string, string>> | undefined;
-  const exportNamesOf = async (): Promise<ReadonlyMap<string, string>> =>
-    await (exportsCache ??= (async () => {
-      const names = new Map<string, string>();
-      const packages = await workspacePackagesMatching(await profileManifestPath(), [
-        /.*/u,
-      ]);
-      for (const pkg of packages) {
-        const manifest = await manifestOf(pkg.root).catch(() => undefined);
-        const exports = (manifest as { exports?: Record<string, unknown> } | undefined)?.exports ?? {};
-        names.set(pkg.name, "./client" in exports ? "client" : "index");
-      }
-      return names as ReadonlyMap<string, string>;
-    })());
   let versionsCache: Promise<ReadonlyMap<string, string>> | undefined;
   const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> =>
     await (versionsCache ??= (async () => {
@@ -417,7 +407,7 @@ export function apply(ctx: Context): void {
     const devModule =
       root !== undefined && !root.includes("node_modules") && !isAggregated(bare, await excludedOf());
     if (devModule) return undefined;
-    return urlOf(specifier, { versions: await ownVersionsOf(), exportsOf: await exportNamesOf() });
+    return urlOf(specifier, { versions: await ownVersionsOf(), clientRows: await clientRowIds() });
   };
 
   /**
@@ -525,7 +515,6 @@ export function apply(ctx: Context): void {
       declaredDependencies: await declaredDependenciesOf(root),
       // 编译设置：解析根那份 tsconfig（有就用；没有交给 rolldown 默认）。
       ...(await tsconfigOf().then((path) => (path === undefined ? {} : { tsconfig: path }))),
-      exportsOf: await exportNamesOf(),
     }).catch((error: unknown) => {
       process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
       return undefined;

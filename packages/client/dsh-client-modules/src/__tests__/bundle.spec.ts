@@ -12,12 +12,19 @@ import { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "../bundle
 
 const repoRoot = process.cwd();
 
-test("包级引用走出口表（有 `./client` 的包指 client，否则根出口）", () => {
-  const tables = { versions: new Map([["@deepseek-ai/dsh-x", "1.2.3"]]), exportsOf: new Map([["@deepseek-ai/dsh-x", "client"]]) };
+test("包级引用的出口按「是不是行」分：行 → client.js，普通 npm 包 → 根出口 index.js", () => {
+  const tables = {
+    versions: new Map([
+      ["@deepseek-ai/dsh-x", "1.2.3"],
+      ["react", "18.3.1"],
+    ]),
+    // 行由 loader 给（`dsh.client` + client 半）；react 是普通 npm 包，不在里面。
+    clientRows: new Set(["@deepseek-ai/dsh-x"]),
+  };
   expect(urlOf("@deepseek-ai/dsh-x", tables)).toBe(
     `/@client-modules/@deepseek-ai+dsh-x@1.2.3/client.js?v=${BUNDLER_REV}`,
   );
-  expect(urlOf("react", tables)).toBe(`/@client-modules/react@0.0.0/index.js?v=${BUNDLER_REV}`);
+  expect(urlOf("react", tables)).toBe(`/@client-modules/react@18.3.1/index.js?v=${BUNDLER_REV}`);
 });
 
 test("地址带 `?v=`（构建世代；与 vite 同名的参数）", () => {
