@@ -145,3 +145,50 @@ test("装饰器在产物里必须已被转译，且**不依赖进程 cwd**", asy
     await rm(elsewhere, { recursive: true, force: true });
   }
 });
+
+test("包住在没有 tsconfig 祖先的地方时，靠 `resolve.tsconfigFilename` 指路也能转装饰器", async () => {
+  // 外置/官方的包就住在 `node_modules/.pnpm/…` 里——向上找不到任何 tsconfig。这条守着那个开关：
+  // 只给 `transform.decorator`（实测 vite 不带进 rolldown）不行，`resolve.tsconfigFilename` 才行。
+  const work2 = await mkdtemp(join(tmpdir(), "dsh-bundle-tsfn-"));
+  const pkg2 = join(work2, "node_modules", "fixture");
+  await mkdir(join(pkg2, "src"), { recursive: true });
+  await writeFile(
+    join(pkg2, "src", "a.ts"),
+    [
+      "function Remote(): MethodDecorator { return () => undefined; }",
+      "export class Registry {",
+      "  @Remote()",
+      "  list(): string[] { return []; }",
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  // tsconfig 放在**解析根**（work2），不在那个包的祖先链上（它是 `work2/node_modules/…`，往上只有 work2
+  // —— 而 work2 正是解析根，所以这里换到 sibling 目录模拟"祖先里没有"）。
+  const elsewhere = join(work2, "..", `dsh-tsconfig-${String(Date.now())}`, "tsconfig.json");
+  await mkdir(join(elsewhere, ".."), { recursive: true });
+  await writeFile(
+    elsewhere,
+    `${JSON.stringify({ compilerOptions: { target: "esnext", experimentalDecorators: true } })}\n`,
+    "utf8",
+  );
+  try {
+    const bundled = await bundlePackage({
+      cacheRoot: join(work2, ".cache"),
+      repoRoot: work2,
+      alias: [],
+      name: "fixture",
+      version: "1.0.0",
+      input: { a: join(pkg2, "src", "a.ts") },
+      watch: [join(pkg2, "src")],
+      declaredDependencies: [],
+      tsconfig: elsewhere,
+    });
+    const code = await readFile(join(join(work2, ".cache"), bundled?.files.get("a") ?? ""), "utf8");
+    expect(code).not.toMatch(/@Remote/u);
+  } finally {
+    await rm(work2, { recursive: true, force: true });
+    await rm(join(elsewhere, ".."), { recursive: true, force: true });
+  }
+});

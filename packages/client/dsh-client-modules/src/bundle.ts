@@ -468,22 +468,16 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
       // 的 `output.paths` 与装饰器开关都在这里。写到弃用的那一处，`paths` 就形同不存在——产物里留着裸名
       // （`import … from "@deepseek-ai/cosmokit"`），浏览器报 "Failed to resolve module specifier"。
       rolldownOptions: {
-        // **装饰器：有 tsconfig 走它，没有就用这份默认**。rolldown 的 oxc 不看 tsconfig 的
-        // `experimentalDecorators`（文档说"有正确的 tsconfig 时会自动"，但上游那种 `@Remote` 用法不会），
-        // 产物里留着 `@Remote(...)`、浏览器报 `SyntaxError`、入口整条不执行。
-        // **编译设置**：有 tsconfig 就走**解析根那份**（`repoRoot`：dev 是工作区、打包是 profile）——
-        // rolldown 默认是"按被转译的文件就近向上找"，而外置/官方的包住在 `node_modules/.pnpm/…` 里，
-        // 向上什么也找不到，于是上游那些用 cordis 装饰器的包原样留着 `@Remote(...)`（浏览器
-        // `SyntaxError`、入口整条不执行）。这里显式指过去，两种形态同一份。
-        tsconfig: options.tsconfig ?? true,
-        // 默认那份（万一 tsconfig 读不到）：legacy 装饰器。实测 vite 未必把这份 transform 带进
-        // rolldown（见单测），所以它是兜底、不是主路径。
-        transform: {
-          // `target` 必须一起给：oxc 的装饰器转换要看到"目标环境支持到什么程度"，只给 `decorator` 时
-          // 它并不启用（node loader 那边也是 `target: "es2022"` + `decorator.legacy` 一起才转）。
-          target: "es2022",
-          decorator: { legacy: true },
-        },
+        // **编译设置**：rolldown 的 oxc 要**解析到 tsconfig** 才启用 legacy 装饰器（`experimentalDecorators`）
+        // —— 官方文档：Oxc 支持 legacy 装饰器（[oxc#9170](https://github.com/oxc-project/oxc/issues/9170)），
+        // 但**不支持** Stage 3 的原生装饰器；而它默认"按被转译的文件就近向上找"，外置/官方的包住在
+        // `node_modules/.pnpm/…` 里，向上什么也找不到 → `@Remote(...)` 原样留下 → 浏览器 `SyntaxError`。
+        //
+        // 开关是 `resolve.tsconfigFilename`（rolldown 的）：显式指解析根那份（dev 是工作区、打包是 profile）。
+        // 注意别用 `transform.decorator`：实测 vite 8 不会把 `rolldownOptions.transform` 带进 rolldown。
+        ...(options.tsconfig === undefined
+          ? {}
+          : { resolve: { tsconfigFilename: options.tsconfig } }),
         // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
         output: {
           format: "es",
