@@ -53,7 +53,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "16";
+const BUNDLER_RULES = "17";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -296,7 +296,25 @@ async function cssShimOf(options: {
  * @param options - 见 {@link BundleOptions}。
  * @returns 产物映射；`input` 为空时 undefined。
  */
+/**
+ * 摆正 **cwd** 之后再进构建。
+ *
+ * rolldown 的 oxc 转译是**按 cwd 往上找 tsconfig** 拿 `experimentalDecorators` 的，而这条链跑在宿主
+ * 进程里——cwd 是宿主的（dev 是工作区、打包是 profile）。不摆正，上游用 cordis 装饰器的包就会在产物里
+ * 留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行（这是"不同工作目录行为不一致"里最隐蔽的一处）。
+ * 跑完恢复，别把进程的 cwd 改坏了。
+ */
 export async function bundlePackage(options: BundleOptions): Promise<Bundled | undefined> {
+  const previousCwd = process.cwd();
+  if (previousCwd !== options.repoRoot) process.chdir(options.repoRoot);
+  try {
+    return await bundlePackageInRoot(options);
+  } finally {
+    if (process.cwd() !== previousCwd) process.chdir(previousCwd);
+  }
+}
+
+async function bundlePackageInRoot(options: BundleOptions): Promise<Bundled | undefined> {
   const key = cacheKeyOf(options.name, options.version);
   // 同一个包**排队**：产物目录包级共享，而"这次要的出口"可能已经在上一轮里产出（第二个请求跑到
   // `bundlePackageOnce` 开头就会命中缓存，不会重建）。

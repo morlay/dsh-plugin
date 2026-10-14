@@ -4,7 +4,7 @@
  * 缓存那条最要紧：产物目录是**包级**的（出口各有自己的文件），而构建是按请求逐出口触发的——命中判据
  * 少了"这次要的出口在不在"，第二次请求的出口就会 404；构建之间不排队，并发请求会互相删掉对方的产物。
  */
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -44,7 +44,24 @@ beforeAll(async () => {
   cacheRoot = join(work, ".cache");
   packageRoot = join(work, "fixture");
   await mkdir(join(packageRoot, "src"), { recursive: true });
-  await writeFile(join(packageRoot, "src", "a.ts"), "export const a = 1;\n", "utf8");
+  await writeFile(
+    join(packageRoot, "src", "a.ts"),
+    [
+      "function Remote(): MethodDecorator { return () => undefined; }",
+      "export class Registry {",
+      "  @Remote()",
+      "  list(): string[] { return []; }",
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  // 与 profile 同形：编译设置**在解析根里**（打包形态是 profile，dev 是工作区）。
+  await writeFile(
+    join(work, "tsconfig.json"),
+    `${JSON.stringify({ compilerOptions: { target: "esnext", experimentalDecorators: true } })}\n`,
+    "utf8",
+  );
   await writeFile(join(packageRoot, "src", "b.ts"), "export const b = 2;\n", "utf8");
 });
 
@@ -95,4 +112,22 @@ test("源码变了：指纹变、重打（且旧产物作废）", async () => {
   await appendFile(join(packageRoot, "src", "a.ts"), "export const a2 = 3;\n", "utf8");
   const second = await bundlePackage(options("a"));
   expect(second?.rev).not.toBe(first?.rev);
+});
+
+test("装饰器在产物里必须已被转译，且**不依赖进程 cwd**", async () => {
+  // 这条是"不同工作目录要有一致行为"的守卫：vite build（rolldown 的 oxc）默认按 **cwd** 找 tsconfig，
+  // 而这条链在打包形态下跑在宿主进程里（cwd 是宿主的，不是解析根）——少了这条，上游用 cordis 装饰器的包
+  // 就会在产物里原样留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行。
+  const elsewhere = await mkdtemp(join(tmpdir(), "dsh-bundle-cwd-"));
+  const before = process.cwd();
+  process.chdir(elsewhere);
+  try {
+    const bundled = await bundlePackage(options("a"));
+    const code = await readFile(join(cacheRoot, bundled?.files.get("a") ?? ""), "utf8");
+    expect(code).not.toMatch(/@Remote/u);
+    expect(code).toMatch(/__decorate|_ts_decorate|decorate/u);
+  } finally {
+    process.chdir(before);
+    await rm(elsewhere, { recursive: true, force: true });
+  }
 });
