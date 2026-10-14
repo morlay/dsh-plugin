@@ -279,6 +279,12 @@ export function apply(ctx: Context): void {
     }
   };
 
+  /** 解析根那份 tsconfig 的路径（不存在时返回 undefined，交给 rolldown 默认）。 */
+  const tsconfigOf = async (): Promise<string | undefined> => {
+    const candidate = join(await resolutionRoot(), "tsconfig.json");
+    return (await readFile(candidate, "utf8").then(() => true, () => false)) ? candidate : undefined;
+  };
+
   /** 一个包声明的运行期依赖：`dependencies` + `peerDependencies` 的键（外置名单的唯一来源）。 */
   const declaredDependenciesOf = async (root: string | undefined): Promise<string[]> => {
     if (root === undefined) return [];
@@ -517,6 +523,8 @@ export function apply(ctx: Context): void {
       versions: await ownVersionsOf(),
       // **就近**：外置名单就是这个包自己声明的运行期依赖（`dependencies` + `peerDependencies`）。
       declaredDependencies: await declaredDependenciesOf(root),
+      // 编译设置：解析根那份 tsconfig（有就用；没有交给 rolldown 默认）。
+      ...(await tsconfigOf().then((path) => (path === undefined ? {} : { tsconfig: path }))),
       exportsOf: await exportNamesOf(),
     }).catch((error: unknown) => {
       process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);

@@ -104,6 +104,8 @@ export interface BundleOptions {
    * 留在产物里内联（相对路径、node 内置、虚拟模块本来也不在里面）。
    */
   declaredDependencies?: readonly string[];
+  /** 编译设置（rolldown 的 `tsconfig`）：解析根那份 tsconfig 的路径；缺省时交给 rolldown 就近找。 */
+  tsconfig?: string;
   /**
    * 包名 → 外置它时该指的**出口**（`client` / `index`）。
    *
@@ -464,6 +466,13 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
         // **装饰器：有 tsconfig 走它，没有就用这份默认**。rolldown 的 oxc 不看 tsconfig 的
         // `experimentalDecorators`（文档说"有正确的 tsconfig 时会自动"，但上游那种 `@Remote` 用法不会），
         // 产物里留着 `@Remote(...)`、浏览器报 `SyntaxError`、入口整条不执行。
+        // **编译设置**：有 tsconfig 就走**解析根那份**（`repoRoot`：dev 是工作区、打包是 profile）——
+        // rolldown 默认是"按被转译的文件就近向上找"，而外置/官方的包住在 `node_modules/.pnpm/…` 里，
+        // 向上什么也找不到，于是上游那些用 cordis 装饰器的包原样留着 `@Remote(...)`（浏览器
+        // `SyntaxError`、入口整条不执行）。这里显式指过去，两种形态同一份。
+        tsconfig: options.tsconfig ?? true,
+        // 默认那份（万一 tsconfig 读不到）：legacy 装饰器。实测 vite 未必把这份 transform 带进
+        // rolldown（见单测），所以它是兜底、不是主路径。
         transform: { decorator: { legacy: true } },
         // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
         output: {
