@@ -28,13 +28,13 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
+        "@morlay/web-custom-profile",
         "@morlay/better-session",
         "@morlay/ollama-provider-profile",
         "@morlay/sandbox-profile",
         "@morlay/session-mode-profile",
         "@morlay/mydsh-profile",
-        "@deepseek-ai/dsh-experimental-agent-team-profile",
-        "@morlay/web-custom-profile"
+        "@deepseek-ai/dsh-experimental-agent-team-profile"
       ]
     },
     "desktop": {
