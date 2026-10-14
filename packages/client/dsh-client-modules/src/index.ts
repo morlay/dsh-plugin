@@ -474,8 +474,17 @@ export function apply(ctx: Context): void {
         res.end(req.method === "HEAD" ? undefined : "export {};\n");
         return true;
       }
-      process.stderr.write(`[federation] ${name}/${exportName}: 解析不到入口（root=${String(root)}）\n`);
-      return false;
+      // **解析不到就说解析不到**（404 + 线索），不伪造空模块。
+      //
+      // 伪造过一版，代价是：`node:fs/promises` 这类**本来就该被替身接管**的说明符被当成包去解析时，
+      // 页面照样"能跑"，而真正的不一致（不同工作目录下的解析行为）被盖住了——问题只在别的形态、
+      // 别的包上零星冒出来。解析规则在两种形态下是同一份，所以"解析不到"只有一种解释：规则有漏。
+      process.stderr.write(
+        `[unresolved] ${name}@${version}/${exportName}: 解析不到入口（root=${String(root)}）\n`,
+      );
+      res.writeHead(404, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      res.end(req.method === "HEAD" ? undefined : "export {};\n");
+      return true;
     }
     const bundled = await bundlePackage({
       cacheRoot,

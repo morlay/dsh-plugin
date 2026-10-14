@@ -44,7 +44,11 @@ const NODE_BUILTIN_STUB = "\0dsh-node-builtin-stub.cjs";
 export const NODE_BUILTIN_NAMES =
   "assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib";
 
-export const NODE_BUILTIN = new RegExp(`^(?:node:)?(?:${NODE_BUILTIN_NAMES})$`, "u");
+/**
+ * 匹配 node 内置，**含子路径与 `node:` 前缀**：`fs/promises`、`node:fs/promises`、`node:stream/web` 都算。
+ * 只写 `$` 结尾会让带子路径的那些漏过去——它们接着被当成包去解析，报的是"构建失败/解析不到入口"。
+ */
+export const NODE_BUILTIN = new RegExp(`^(?:node:)?(?:${NODE_BUILTIN_NAMES})(?:/.*)?$`, "u");
 
 // 资产与 `?raw` 内联插件：client 半（现场打包）与 web 前端（现场编译）两条链共用。
 //
