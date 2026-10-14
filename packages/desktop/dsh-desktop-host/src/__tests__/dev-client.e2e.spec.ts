@@ -61,6 +61,9 @@ let browser: Browser;
 beforeAll(async () => {
   process.env["PORT"] = String(port);
   process.env["DSH_HOME"] = `${REPO}apps/dsh-custom-next/.dsh-store`;
+  // 形态标志：这条用例自己 boot，绕过了 `dshdev`（它平时负责注入这个），少了它这条链的"根"会当成
+  // bundle 来推——`/index.ts` 直接 404。
+  process.env["DSH_DEV_FORM"] = "web";
   // **手动起的服务优先**：`DSH_E2E_REUSE=1` 时不自己装配，直接连已经在跑的那个（本地调试常用——
   // 自己装配意味着构建跑在测试进程里，一旦原生绑定崩了，报出来的是一堆连接被拒，看不出真因）。
   if (process.env["DSH_E2E_REUSE"] === "1" && (await waitForPort(port, 300))) {

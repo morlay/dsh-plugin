@@ -23,13 +23,14 @@ import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "oxc-transform";
 
-// 挂上时留一行（stderr）：分辨"loader 没被加载"与"加载了但没拦住"是排查这条链的第一步。
-process.stderr.write(`[ts-register] 已挂载 pid=${String(process.pid)}\n`);
+/** 排查用：`DSH_TS_DEBUG=1` 时把"挂上/转译了哪个"打到 stderr（平时安静）。 */
+const debug = process.env.DSH_TS_DEBUG === "1";
+if (debug) process.stderr.write(`[ts-register] 已挂载 pid=${String(process.pid)}\n`);
 
 registerHooks({
   load(url, context, nextLoad) {
     if (!url.startsWith("file:") || !url.endsWith(".ts")) return nextLoad(url, context);
-    process.stderr.write(`[ts-register] 转译 ${url.slice(7)}\n`);
+    if (debug) process.stderr.write(`[ts-register] 转译 ${url.slice(7)}\n`);
     const path = fileURLToPath(url);
     // oxlint-disable-next-line node/no-sync -- `registerHooks` 的 load 钩子必须同步返回。
     const original = readFileSync(path, "utf8");
@@ -42,8 +43,8 @@ registerHooks({
       // 装饰器：dsh 用的是 legacy 装饰器（`experimentalDecorators`），oxc 要显式开才会转；`@Remote` 这类
       // 原样留着就是上面那句语法错。
       decorator: { legacy: true },
-      // 装饰器转出来的 helper 走 `@oxc-project/runtime`（本包的依赖之一，随 runtime 的 loader 层一起带）。
-      helpers: { mode: "Runtime" },
+      // helper 用默认形态：输出 `@oxc-project/runtime/helpers/<name>` 这种子出口（那个包只导出
+      // `./helpers/*`）。显式写 `helpers: { mode: "Runtime" }` 反而会引到它的**根**导出处而解析失败。
     });
     if (result.errors.length > 0) {
       const detail = result.errors.map((e) => e.message).join("; ");
@@ -55,14 +56,27 @@ registerHooks({
     // 而它们的 `package.json` 未必带 `type: "module"`——按包类型去判会把 ESM 代码当 CJS 载入，
     // 报出来是一句没头没尾的 `SyntaxError: Invalid or unexpected token`。
     const format = "module";
+    // 装饰器 helper 的 specifier 是相对**被转译的文件**解析的，而那些文件（上游包）身边没有
+    // `@oxc-project/runtime`。这里把它解析成绝对 URL（按 loader 自己的解析面）——不能直接拼目录，
+    // 那个包的 helper 名字经 `exports` 映射到 `src/helpers/*.js`。
+    const code = result.code.replace(
+      /(["'])(@oxc-project\/runtime\/[^"']+)\1/gu,
+      (whole, quote, specifier) => {
+        try {
+          return `${quote}${import.meta.resolve(specifier)}${quote}`;
+        } catch {
+          return whole;
+        }
+      },
+    );
     // `map` 可能是字符串，也可能是 sourcemap 对象——两种都要能带上（栈里才指向原文件）。
     const map = result.map === undefined || result.map === null ? undefined : JSON.stringify(result.map);
     return {
       format,
       source:
         map === undefined
-          ? result.code
-          : `${result.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(map, "utf8").toString("base64")}`,
+          ? code
+          : `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(map, "utf8").toString("base64")}`,
       shortCircuit: true,
     };
   },

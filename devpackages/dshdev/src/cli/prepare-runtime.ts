@@ -246,6 +246,25 @@ async function prepareBin(platform: RuntimePlatform, runtimeRoot: string): Promi
 // 随包 loader 载荷：loader 自己（一个 `.mjs`，import `oxc-transform`）与它依赖的那一层。
 // pnpm 把同一个包的依赖都放在 `<store>/oxc-transform@<version>/node_modules/` 这一层里，整层拷过去，
 // 解析就与在仓库里一致——包括它按平台挑的原生绑定。
+/**
+ * 一个包在 pnpm 虚拟 store 里的"层"：同层放着它的依赖与按平台挑的原生绑定。
+ *
+ * @param packageRoot - 包目录。
+ * @returns 层目录（`node_modules`）。
+ */
+function storeLayerOf(packageRoot: string): string {
+  for (let dir = packageRoot; ; ) {
+    if (basename(dir) === "node_modules") return dir;
+    const parent = dirname(dir);
+    if (parent === dir)
+      throw new Error(
+        `desktop runtime: unexpected install layout (${packageRoot}); the loader payload needs ` +
+          "pnpm's virtual store",
+      );
+    dir = parent;
+  }
+}
+
 async function prepareLoader(runtimeRoot: string): Promise<string> {
   const entry = fileURLToPath(import.meta.resolve(LOADER_ENTRY));
   const destination = join(runtimeRoot, "loader");
@@ -259,12 +278,9 @@ async function prepareLoader(runtimeRoot: string): Promise<string> {
   let version = "unknown";
   for (const manifest of LOADER_DEPENDENCY_MANIFESTS) {
     const root = dirname(fileURLToPath(import.meta.resolve(manifest)));
-    const layer = dirname(root);
-    if (basename(layer) !== "node_modules")
-      throw new Error(
-        `desktop runtime: unexpected install layout for the loader dependency (${root}); ` +
-          "the loader payload needs pnpm's virtual store",
-      );
+    // 层 = 从包目录向上找第一个 `node_modules`（作用域包如 `@oxc-project/runtime` 的上一层是
+    // `node_modules/@oxc-project`，不是 `node_modules` 本身）。
+    const layer = storeLayerOf(root);
     const parsed = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
       name?: unknown;
       version?: unknown;
