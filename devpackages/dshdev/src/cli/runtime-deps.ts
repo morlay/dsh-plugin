@@ -111,37 +111,35 @@ export async function runtimeDependenciesOf(root: string): Promise<RuntimeDepend
 /**
  * 这些依赖里，哪些**没有任何包声明**（不在任何 `dependencies` / `peerDependencies` 里）。
  *
- * 判据不是"能不能 require"（那是运行期解析，另一回事），而是"**有没有归属**"：
- * - 有（哪怕声明在别的包上）→ 补进闭包就有它了；
- * - 没有 → 上游把它放进了 `devDependencies`（`katex`、`clsx` 这类"构建时内联、生产安装里没有"的），
- *   运行期一定缺——**直接抛错**，别让它到打包/浏览器才现形。
+ * **单包视角**（批量交给 `pnpm -r exec`，别在这里扫全仓）：判据是"**这个包自己声明了吗**"。
  *
- * @param manifests - 所有已知包的清单（工作区 + 闭包，调用方给）。
+ * 判据不是"能不能 require"（那是运行期解析，另一回事）：自己声明了 → 有归属、能补进闭包；没声明 →
+ * 多半是上游把运行期依赖放进了 `devDependencies`（`clsx`、`shiki` 这类"构建时内联、生产安装里没有"的），
+ * 运行期一定缺——**直接抛错**，别让它到打包/浏览器才现形。
+ *
+ * @param manifest - 这个包自己的清单。
  * @param dependencies - 扫出来的依赖。
- * @returns 无归属的依赖名（按扫出来的顺序）。
+ * @returns 未声明的依赖名（按扫出来的顺序）。
  */
 export function undeclaredDependencies(
-  manifests: readonly {
-    dependencies?: Record<string, string>;
-    peerDependencies?: Record<string, string>;
-  }[],
+  manifest: { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> } | undefined,
   dependencies: readonly RuntimeDependency[],
 ): string[] {
-  const declared = new Set<string>();
-  for (const manifest of manifests) {
-    for (const name of Object.keys(manifest.dependencies ?? {})) declared.add(name);
-    for (const name of Object.keys(manifest.peerDependencies ?? {})) declared.add(name);
-  }
+  const declared = new Set<string>([
+    ...Object.keys(manifest?.dependencies ?? {}),
+    ...Object.keys(manifest?.peerDependencies ?? {}),
+  ]);
   return dependencies.map(({ name }) => name).filter((name) => !declared.has(name));
 }
 
 /** 供 CLI 用：扫 + 报（缺的单独一行）。 */
-export async function reportRuntimeDependencies(
-  root: string,
-  manifests: readonly { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }[],
-): Promise<string[]> {
+export async function reportRuntimeDependencies(root: string): Promise<string[]> {
   const dependencies = await runtimeDependenciesOf(root);
-  const missing = undeclaredDependencies(manifests, dependencies);
+  const manifest = await readFile(join(root, "package.json"), "utf8").then(
+    (text) => JSON.parse(text) as { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> },
+    () => undefined,
+  );
+  const missing = undeclaredDependencies(manifest, dependencies);
   process.stdout.write(
     `${root}: 运行期依赖 ${String(dependencies.length)} 个` +
       `${missing.length === 0 ? "（都可解析）" : `，其中**解析不到** ${String(missing.length)} 个`}\n`,
@@ -151,52 +149,4 @@ export async function reportRuntimeDependencies(
     process.stdout.write(`  ${flag} ${name} ← ${from}\n`);
   }
   return missing;
-}
-
-/**
- * 收一份"所有已知包的清单"：判断某个依赖**有没有归属**用（谁声明了它）。
- *
- * 扫三处（够用即可，不追求完整）：仓库里的包（`packages/<组>/<包>`）、闭包（`node_modules/.pnpm` 下）、
- * 以及 `vendor` 下的上游包。任意一处声明过，就算有归属。
- *
- * @param root - 起点（一般传工作区根）。
- * @returns 清单数组。
- */
-export async function manifestsUnder(
-  root: string,
-): Promise<{ dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }[]> {
-  const manifests: { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }[] = [];
-  const add = async (file: string): Promise<void> => {
-    const parsed = await readFile(file, "utf8").then(
-      (text) => JSON.parse(text) as { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> },
-      () => undefined,
-    );
-    if (parsed !== undefined) manifests.push(parsed);
-  };
-  for (const pattern of [
-    "packages/*/*/package.json",
-    "devpackages/*/package.json",
-    "apps/*/package.json",
-    "node_modules/.pnpm/*/node_modules/*/package.json",
-    "vendor/deepseek-harness/packages/*/*/package.json",
-  ]) {
-    // 只按固定层级展开（`*` 一层），不做通用 glob：路径形状是我们自己的约定，够用且快。
-    const segments = pattern.split("/");
-    const walk = async (base: string, index: number): Promise<void> => {
-      if (index === segments.length) {
-        await add(base);
-        return;
-      }
-      const segment = segments[index];
-      if (segment !== undefined && !segment.includes("*")) {
-        await walk(join(base, segment), index + 1);
-        return;
-      }
-      for (const entry of await readdir(base, { withFileTypes: true }).catch(() => [])) {
-        if (entry.isDirectory()) await walk(join(base, entry.name), index + 1);
-      }
-    };
-    await walk(root, 0);
-  }
-  return manifests;
 }

@@ -5,7 +5,6 @@ import { resolve } from "node:path";
 import { Command } from "commander";
 import { runBundle } from "./bundle.ts";
 import { runDev } from "./dev.ts";
-import { findWorkspaceRoot } from "./workspace.ts";
 
 const APP_ROOT = resolve(import.meta.dirname, "..", "..");
 
@@ -95,11 +94,9 @@ program
   .description("scan a package's runtime imports (from its entry) and report the ones that cannot resolve")
   .argument("[package]", "package directory (default: current directory)")
   .action(async (pkg: string | undefined) => {
-    const { reportRuntimeDependencies, manifestsUnder } = await import("./runtime-deps.ts");
-    const root = pkg === undefined ? process.cwd() : resolve(pkg);
-    // 判据是"有没有归属"：把工作区与闭包里所有清单都收进来，谁都没声明的才算缺。
-    const manifests = await manifestsUnder(await findWorkspaceRoot(root));
-    const missing = await reportRuntimeDependencies(root, manifests);
+    const { reportRuntimeDependencies } = await import("./runtime-deps.ts");
+    // **单包视角**：批量交给 `pnpm -r exec dshdev check-deps`，这里不扫全仓。
+    const missing = await reportRuntimeDependencies(pkg === undefined ? process.cwd() : resolve(pkg));
     if (missing.length > 0) process.exitCode = 1;
   });
 
