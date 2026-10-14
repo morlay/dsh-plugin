@@ -407,6 +407,16 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
       process: "{ env: {} }",
     },
     resolve: { alias: options.alias },
+    // **装饰器的开关要显式给**：vite 是**从 root 往上找 tsconfig** 拿 `experimentalDecorators` 的，
+    // 而这条链在打包形态下的 root 是 profile 目录（`$DSH_HOME/profiles/<name>`）——那里没有 tsconfig，
+    // 于是上游那些用 cordis 装饰器的包（`@deepseek-ai/dsh-api-*`）原样留着 `@Remote(...)`，浏览器报
+    // `Uncaught SyntaxError: Invalid or unexpected token`。dev 的 root 是仓库（有 tsconfig），所以只有
+    // 打包形态会中招——又一个"两种工作目录行为不一致"。
+    esbuild: {
+      tsconfigRaw: {
+        compilerOptions: { experimentalDecorators: true, useDefineForClassFields: false },
+      },
+    },
     // 被间接拉进 client 图的宿主专有包里有 `new Worker(new URL('./worker.js', import.meta.url))`：
     // vite 默认把 worker 打成 **iife**，而那个 worker 里有顶层 await（iife 不支持）——整份产物因此构建失败。
     // 我们这条链本就是 ESM（`lib.formats: ["es"]`），worker 也用 es。
