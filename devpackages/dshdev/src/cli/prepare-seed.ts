@@ -378,6 +378,7 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
     join(profileDir, "package.json"),
     `${JSON.stringify(profileManifest(manifest), undefined, 2)}\n`,
   );
+  await writeFile(join(profileDir, "tsconfig.json"), profileTsconfig());
   await writeFile(
     join(profileDir, PROFILE_WORKSPACE_NAME),
     profileWorkspace(await allowedBuilds(deployRoot)),
@@ -450,6 +451,36 @@ export function profileManifest(manifest: WorkspaceManifest): Record<string, unk
     type: "module",
     dsh: { profile: { ...manifest.dsh?.profile, bundles: mergedProfileBundles(manifest) } },
   };
+}
+
+/**
+ * profile 自带的 `tsconfig.json`。
+ *
+ * **profile 是个完整的项目**：清单、pnpm 设置、依赖、以及这份编译设置都在它里面。vite 是**从 root 往上找
+ * tsconfig** 拿 `experimentalDecorators` 的，而打包形态下这条链的 root 正是 profile —— 少了这份文件，
+ * 上游那些用 cordis 装饰器的包就原样留着 `@Remote(...)`，浏览器报
+ * `Uncaught SyntaxError: Invalid or unexpected token`，入口整条不执行。
+ *
+ * 自包含（不 `extends` 仓库里的任何东西）：profile 是要搬到用户机器上跑的，那里没有仓库。
+ * 关键项与 `@local/devkit/tsconfig.json` 同一份语义——`experimentalDecorators` 与 `jsx` 是这里真正被用到的。
+ */
+export function profileTsconfig(): string {
+  return `${JSON.stringify(
+    {
+      compilerOptions: {
+        module: "nodenext",
+        target: "esnext",
+        jsx: "react-jsx",
+        experimentalDecorators: true,
+        allowImportingTsExtensions: true,
+        verbatimModuleSyntax: false,
+        isolatedModules: false,
+        skipLibCheck: true,
+      },
+    },
+    undefined,
+    2,
+  )}\n`;
 }
 
 // Profile pnpm settings shared by the seed and every later package operation.
