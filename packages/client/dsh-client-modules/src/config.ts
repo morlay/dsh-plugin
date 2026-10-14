@@ -29,15 +29,16 @@ function globToRegExp(pattern: string): RegExp {
  * 全部按包预编译，改包时那一份重建 + 通知页面刷新（见壳的 ws 端点）。
  */
 /**
- * 是不是**开发形态**（桌面壳的 dev：`dshdev desktop` / `dshdev web`）。
+ * 是不是**开发形态**（`dshdev web` / `dshdev desktop`；打包产物不是）。
  *
- * `DSH_DEV_FORM` 由壳注入给宿主（壳起宿主时会过滤掉 `DSH_DESKTOP_*`，那些是 Electron 侧的元数据）。这一
- * 判据**一个 home**：预编译策略（本文件）与"这条链的根在哪"（`src/index.ts` 的 `repoRootOf`）都用它。
+ * `DSH_DEV_FORM` 由 `dshdev` 注入给宿主（壳起宿主时会过滤掉 `DSH_DESKTOP_*`，那些是 Electron 侧的元数据；
+ * web 形态没有壳，所以这条由 CLI 直接给）——值只说哪种形态，**有没有值**才是判据。这一判据**一个 home**：
+ * 预编译策略（本文件）与"这条链的根在哪"（`src/index.ts` 的 `repoRootOf`）都用它。
  *
  * @returns dev 形态为 true；bundle（打包产物）为 false。
  */
 export function isDevForm(): boolean {
-  return process.env["DSH_DEV_FORM"] === "desktop";
+  return process.env["DSH_DEV_FORM"] !== undefined;
 }
 
 export async function devExcluded(): Promise<RegExp[]> {

@@ -209,7 +209,16 @@ export async function runDev(options: DevOptions): Promise<void> {
         await devClientPatch(),
       ],
       repositoryRoot,
-      withTsLoader({ ...process.env, DSH_HOME: dataDir, UV_THREADPOOL_SIZE: threadpoolSize() }, tsLoader),
+      withTsLoader(
+        {
+          ...process.env,
+          DSH_HOME: dataDir,
+          UV_THREADPOOL_SIZE: threadpoolSize(),
+          // 形态标志：两种 dev 形态都要标（web 没有壳，但同样是 dev——这条链的"根在哪"与预编译策略都看它）。
+          DSH_DEV_FORM: "web",
+        },
+        tsLoader,
+      ),
     );
     return;
   }
