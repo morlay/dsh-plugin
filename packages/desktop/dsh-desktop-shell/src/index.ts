@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "./electron.ts";
 
 declare global {
@@ -124,9 +125,9 @@ function runtimeResources(): RuntimeResources {
     pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
     nodeBin: join(process.resourcesPath, "runtime", "bin"),
     // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
-    loader:
-      (development ? process.env.DSH_DESKTOP_LOADER : undefined) ??
-      join(process.resourcesPath, "runtime", "loader", "register.mjs"),
+    // TS 运行时入口：**按包名解析**（`@local/oxc-node` 是壳的依赖，dev 的装配目录与打包的 app 目录里都装了
+    // 它）。不再由工具注入路径，也不依赖"随包 runtime 里那份拷贝"的布局。
+    loader: fileURLToPath(import.meta.resolve("@local/oxc-node")),
   };
 }
 
@@ -252,11 +253,9 @@ function developmentHostInspectPort(enabled: boolean): number | undefined {
   return port;
 }
 
-// host 进程自己那份转译器：dev 形态用工作区里的（改完即生效），打包形态用随包的。
-// 两条都是绝对路径——host 的 cwd 是部署 / profile 目录，裸名在那儿解析不到。
+// host 进程自己那份转译器（绝对路径——host 的 cwd 是部署 / profile 目录，裸名在那儿解析不到）。
 function sourceLoader(resources: RuntimeResources): string {
-  const configured = process.env.DSH_DESKTOP_SOURCE_LOADER;
-  return configured === undefined || configured === "" ? resources.loader : configured;
+  return resources.loader;
 }
 
 // 拉起的子进程（上游 subprocess runner 等）走同一份转译器：它们按源码面加载上游入口，

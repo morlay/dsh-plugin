@@ -141,11 +141,9 @@ async function launchElectron(
     DSH_DESKTOP_DEV_RUNTIME_DIR: runtimeDir,
     DSH_DESKTOP_HOST_INSPECT_PORT: String(hostPort),
     DSH_DESKTOP_NODE_BINARY: systemNode,
-    // dev 形态的随包载荷（壳起宿主要用）：runtime 根、seed 与那份 TS 注册钩子都在工作区里。
-    DSH_DESKTOP_LOADER: join(buildCacheDir, "runtime", "loader", "register.mjs"),
+    // dev 形态的随包载荷：seed 在工作区里（壳起宿主要用它）。
     DSH_DESKTOP_SEED_DIR: join(buildCacheDir, "seed"),
 
-    DSH_DESKTOP_SOURCE_LOADER: tsLoader,
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS ?? "1",
     ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? "1",
   };
