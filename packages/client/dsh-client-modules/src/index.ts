@@ -474,15 +474,18 @@ export function apply(ctx: Context): void {
         res.end(req.method === "HEAD" ? undefined : "export {};\n");
         return true;
       }
-      // **解析不到就说解析不到**（404 + 线索），不伪造空模块。
+      // **这里只剩一种情况：说明符既不是内置、也不在闭包里**——即"这台机器上没有的可选依赖"
+      // （`ws` 的 `require("bufferutil")`，它本就在 try/catch 里；pnpm 也不装传递的原生可选包）。
       //
-      // 伪造过一版，代价是：`node:fs/promises` 这类**本来就该被替身接管**的说明符被当成包去解析时，
-      // 页面照样"能跑"，而真正的不一致（不同工作目录下的解析行为）被盖住了——问题只在别的形态、
-      // 别的包上零星冒出来。解析规则在两种形态下是同一份，所以"解析不到"只有一种解释：规则有漏。
+      // 区别对待，别混成一锅：
+      // - **内置**（`node:*`、`fs/promises`…）在更早的解析里就被替身接管了，**不该**走到这里；真走到了
+      //   就是规则有漏，如实 404（上面那条就是为此把伪造空模块删掉的）。
+      // - **可选依赖**：产物里的 `require` 已被转成模块图里的 ESM import，一个 404 就让整条图断掉、入口
+      //   一行都不执行（页面空白，且只有一句没头没尾的模块错误）。它本就允许缺失，给空模块是对的。
       process.stderr.write(
-        `[unresolved] ${name}@${version}/${exportName}: 解析不到入口（root=${String(root)}）\n`,
+        `[optional-missing] ${name}@${version}/${exportName}: 闭包里没有（可选依赖？），给空模块\n`,
       );
-      res.writeHead(404, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
       res.end(req.method === "HEAD" ? undefined : "export {};\n");
       return true;
     }
