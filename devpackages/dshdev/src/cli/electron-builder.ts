@@ -82,6 +82,8 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
     asar: false,
     // 装配目录（`buildCache/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
     // 逐项列清楚（不用 `dist/**`：实测它只带走了 `preload-app.cjs`，入口 `index.mjs` 会漏）。
+    // 逐项列清楚（不用 `dist/**`：实测它只带走了 `preload-app.cjs`）。产物就是**整包的源码**加那个入口；
+    // `dist/` 里只有 preload（sandboxed preload 只能是 CJS）。
     files: ["main.mjs", "package.json", "src/**", "dist/preload-app.cjs", "locale/*.json"],
     extraResources: [
       { from: join(buildCache, "runtime"), to: "runtime" },
