@@ -154,8 +154,18 @@ async function refreshProfileLinks(
   const overrides = await runtimeOverrides(profileDir, resources.runtime);
   const current = await readFile(settingsPath, "utf8");
   const next = workspaceWithOverrides(current, overrides);
-  if (next === current) return;
-  await writeFile(settingsPath, next);
+  // profile 的 `dependencies` 也在这里补：清单里只声明了"要哪些装配行"，来源是**当前这份运行时**的
+  // 绝对位置（相对路径在这里没有稳定解），写成 `link:` 就不必去 registry 解析。
+  const manifestPath = join(profileDir, "package.json");
+  const manifestText = await readFile(manifestPath, "utf8");
+  const manifest = JSON.parse(manifestText) as { dependencies?: Record<string, string> };
+  const dependencies = Object.fromEntries(
+    overrides.map((entry) => [entry.name, `link:${entry.target}`]),
+  );
+  const dependencyText = `${JSON.stringify({ ...manifest, dependencies }, undefined, 2)}\n`;
+  if (next === current && dependencyText === manifestText) return;
+  if (next !== current) await writeFile(settingsPath, next);
+  await writeFile(manifestPath, dependencyText);
   await installProfile({
     node: resources.node,
     pnpmEntry: resources.pnpm,
@@ -313,14 +323,9 @@ async function main(): Promise<void> {
   if (development === undefined) {
     if (dataDir === undefined)
       throw new Error("dsh desktop: packaged applications require a concrete dataDir");
-    if (await ensureSeedProfile(resources.seed, dataDir)) {
-      await installProfile({
-        node: resources.node,
-        pnpmEntry: resources.pnpm,
-        profileDir,
-      });
-    }
-    // 重种与否都要刷新一次：应用可能被挪过目录，而 link 指向的是"现在这份运行时"。
+    // 重种换的是**装配面**；装那一步不在这儿做——紧接着的 `refreshProfileLinks` 会把依赖写上并装一次
+    // （刚重种出来的清单里没有 `dependencies`，它一定认为需要装）。
+    await ensureSeedProfile(resources.seed, dataDir);
     await refreshProfileLinks(profileDir, resources);
   }
   // **两种形态都不要求上游的前端静态产物**：页面与资源由这条链（vite + 联邦预编译，见

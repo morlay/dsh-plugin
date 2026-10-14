@@ -65,21 +65,14 @@ describe("profile seed manifest", () => {
     ]);
   });
 
-  it("只声明要哪些包（来源由运行时的 overrides 定，seed 里不写相对 link）", () => {
-    expect(
-      profileManifest(app(["@morlay/better-session", "dsh-context"]), [
-        "@morlay/better-session",
-        "dsh-context",
-      ]),
-    ).toEqual({
+  it("清单只声明要哪些装配行，dependencies 留给运行时写（来源只有运行时知道）", () => {
+    const manifest = profileManifest(app(["@morlay/better-session", "dsh-context"]));
+
+    expect(manifest).toEqual({
       name: "dsh-custom",
       private: true,
       version: "0.1.6",
       type: "module",
-      dependencies: {
-        "@morlay/better-session": "*",
-        "dsh-context": "*",
-      },
       dsh: {
         profile: {
           bundles: [
@@ -91,22 +84,20 @@ describe("profile seed manifest", () => {
         },
       },
     });
+    expect(manifest).not.toHaveProperty("dependencies");
   });
 
   // 种出来的 profile 就是 app 目录的副本：装配清单照抄 app 定义的那份（官方 bundles 也在里面），
   // 装到 profile 里的只有 app 自己的 bundle（官方那些由 runtime 提供）。
-  it("照抄 app 的清单，官方 bundles 留在清单里但不由 profile 安装", () => {
+  it("照抄 app 的装配清单，官方 bundles 留在清单里但不由 profile 安装", () => {
     const bundles = ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "@morlay/better-session"];
-    const manifest = profileManifest(app(bundles), profileLocalBundles(app(bundles)));
+    const manifest = profileManifest(app(bundles));
 
     expect((manifest.dsh as { profile: { bundles: string[] } }).profile.bundles).toEqual(bundles);
-    expect(Object.keys(manifest.dependencies as Record<string, string>)).toEqual([
-      "@morlay/better-session",
-    ]);
   });
 
   it("carries no workspace-only spec into the profile manifest", () => {
-    const manifest = profileManifest(app(["@morlay/better-session"]), ["@morlay/better-session"]);
+    const manifest = profileManifest(app(["@morlay/better-session"]));
     expect(JSON.stringify(manifest)).not.toContain("workspace:");
   });
 

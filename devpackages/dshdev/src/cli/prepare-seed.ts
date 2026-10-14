@@ -376,7 +376,7 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
   const runtimeLinks = await profileRuntimeLinks(runtimeDir, runtimeModulesDir, profilePackages);
   await writeFile(
     join(profileDir, "package.json"),
-    `${JSON.stringify(profileManifest(manifest, profilePackages), undefined, 2)}\n`,
+    `${JSON.stringify(profileManifest(manifest), undefined, 2)}\n`,
   );
   await writeFile(
     join(profileDir, PROFILE_WORKSPACE_NAME),
@@ -434,22 +434,20 @@ async function withLocalClosure(
   return packages;
 }
 
-// Generate the profile manifest: app identity plus its own bundles as `file:` dependencies.
-export function profileManifest(
-  manifest: WorkspaceManifest,
-  localBundles: readonly string[],
-): Record<string, unknown> {
+// Generate the profile manifest: app identity plus the assembly rows it declares.
+//
+// **不含 `dependencies`**：清单只声明"要哪些装配行"（`dsh.profile.bundles`），而来源是**当前这份运行时**
+// 的绝对位置——只有运行时知道（应用会被挪目录），所以由壳在装 profile 时写进去。种子里写死任何 spec
+// 都会在离线安装时去 registry 解析，或指向不成立的相对路径。
+//
+// profile 是安装产物：清单按官方形态写（官方 bundles 在前 + app 自己声明的），只保留装配字段，
+// app 的 `dsh.version` / `desktop` / `dev` 属于打包输入，运行时不再从 profile 读它们。
+export function profileManifest(manifest: WorkspaceManifest): Record<string, unknown> {
   return {
     name: manifest.name,
     private: true,
     version: manifest.version ?? "0.0.0",
     type: "module",
-    // 只声明"要哪些包"，**来源**由运行时的 `overrides` 定：壳装 profile 时会按随包 runtime 的**绝对**路径
-    // 写一组 `link:` 覆盖（`workspaceWithOverrides`）。这里不能写相对 `link:`——种子里那份闭包的位置（
-    // `Resources/seed/runtime`）与 profile 的实际位置（`$DSH_HOME/profiles/<name>`）没有固定的相对关系。
-    dependencies: Object.fromEntries(localBundles.map((name) => [name, "*"])),
-    // profile 是安装产物：清单按官方形态写（官方 bundles 在前 + app 自己声明的），只保留装配字段，
-    // app 的 `dsh.version` / `desktop` / `dev` 属于打包输入，运行时不再从 profile 读它们。
     dsh: { profile: { ...manifest.dsh?.profile, bundles: mergedProfileBundles(manifest) } },
   };
 }
