@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
 import { ASSET_MIME } from "@local/tsdown-plugin-cordis";
-import { devExcluded, isAggregated, profileRootOf } from "./config.ts";
+import { devExcluded, isAggregated, isDevForm, profileRootOf } from "./config.ts";
 import {
   bundlePackage,
   CLIENT_MODULES_CACHE,
@@ -136,16 +136,14 @@ let repoRootPromise: Promise<string> | undefined;
  */
 async function repoRootOf(): Promise<string> {
   repoRootPromise ??= (async () => {
-    // bundle（非 dev）形态：profile 目录就是根。
-    if (process.env["DSH_DESKTOP_DEV_PROFILE_DIR"] === undefined) {
+    // bundle 形态（唯一的非 dev 形态）：profile 目录就是根——那时没有仓库，源码与产物都在 profile 里。
+    // 判据用**形态标志**（壳注入），不是"`$DSH_HOME/profiles/desktop` 有没有 package.json"：后者会被
+    // `--data-dir=xdg` 之类的数据面选择误导（dev 的 `$DSH_HOME` 也可以落在 XDG，于是 dev 被当成 bundle，
+    // 根指到 profile、`/index.html` 404）。判据与预编译策略（`devExcluded`）同一份。
+    if (!isDevForm()) {
       const home = process.env["DSH_HOME"];
       const packaged = home === undefined ? undefined : join(home, "profiles", "desktop");
-      if (
-        packaged !== undefined &&
-        (await readFile(join(packaged, "package.json"), "utf8").then(() => true, () => false))
-      ) {
-        return packaged;
-      }
+      if (packaged !== undefined) return packaged;
     }
     const own = packageRootOfSelf();
     return (await workspaceRootOf(own)) ?? join(own, "..", "..", "..");

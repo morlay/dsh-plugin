@@ -28,13 +28,20 @@ function globToRegExp(pattern: string): RegExp {
  * 几百个源码模块叠起来就是"刷新一次卡几十秒"。桌面形态本来也不需要"改哪个包只看哪个包"的细粒度取舍：
  * 全部按包预编译，改包时那一份重建 + 通知页面刷新（见壳的 ws 端点）。
  */
-function isDesktopForm(): boolean {
-  // `DSH_DEV_FORM` 由壳注入给宿主（壳起宿主时会过滤掉 `DSH_DESKTOP_*`，那些是 Electron 侧的元数据）。
+/**
+ * 是不是**开发形态**（桌面壳的 dev：`dshdev desktop` / `dshdev web`）。
+ *
+ * `DSH_DEV_FORM` 由壳注入给宿主（壳起宿主时会过滤掉 `DSH_DESKTOP_*`，那些是 Electron 侧的元数据）。这一
+ * 判据**一个 home**：预编译策略（本文件）与"这条链的根在哪"（`src/index.ts` 的 `repoRootOf`）都用它。
+ *
+ * @returns dev 形态为 true；bundle（打包产物）为 false。
+ */
+export function isDevForm(): boolean {
   return process.env["DSH_DEV_FORM"] === "desktop";
 }
 
 export async function devExcluded(): Promise<RegExp[]> {
-  if (isDesktopForm()) return [/.*/u];
+  if (isDevForm()) return [/.*/u];
   const home = process.env["DSH_HOME"];
   const candidates = [
     process.env["DSH_DESKTOP_DEV_PROFILE_DIR"],

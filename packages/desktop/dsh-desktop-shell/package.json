@@ -29,7 +29,8 @@
     "./profile-project": "./src/profile-project.ts",
     "./seed": "./src/seed.ts",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./inline-packages": "./src/inline-packages.ts"
   },
   "publishConfig": {
     "exports": {

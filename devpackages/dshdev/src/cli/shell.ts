@@ -14,6 +14,8 @@ import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "tsdown";
+import { isInlinedPackage, isLocalPackage } from "@local/tsdown-plugin-cordis";
+import { SHELL_INLINE_PACKAGES } from "@morlay/dsh-desktop-shell/inline-packages";
 
 // 壳包根：源码树里那个包（装配的输入）。工具里不写死包名，一律由 node 解析。
 export const SHELL_PACKAGE_ROOT = dirname(
@@ -78,16 +80,35 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
     "utf8",
   );
 
-  // 转译：**直接用壳自己的 tsdown 配置**（含 `SHELL_INLINE_PACKAGES` 那份内联规则与两遍构建：壳入口 ESM +
-  // preload CJS）。配置里的 entry 相对**壳包目录**解析，所以临时切到那里跑，只把 `outDir` 指到装配目录——
-  // 壳要什么由它自己的配置说了算，这里不重复一遍规则。
-  const cwd = process.cwd();
-  process.chdir(SHELL_PACKAGE_ROOT);
-  try {
-    await build({ config: join(SHELL_PACKAGE_ROOT, "tsdown.config.ts"), outDir: join(root, "dist") });
-  } finally {
-    process.chdir(cwd);
-  }
+  // 转译两遍。判据与名单**复用壳那一份**（`SHELL_INLINE_PACKAGES` 与 `isInlinedPackage` / `isLocalPackage`）：
+  // 壳跑在 app 目录里，`@morlay/*` 这类进不了解析面的包必须内联，否则打包后就是 ERR_MODULE_NOT_FOUND。
+  // 不走壳的 tsdown 配置本身：那是仓库构建的入口（两段各有自己的 `outDir` 与声明校验），而这里要的是
+  // "把同一套外置规则用在这个目录上"。
+  const bundle = (id: string): boolean =>
+    isInlinedPackage(id, SHELL_INLINE_PACKAGES) || isLocalPackage(id);
+  await build({
+    config: false,
+    entry: { index: join(root, "src", "index.ts") },
+    outDir: join(root, "dist"),
+    format: ["esm"],
+    platform: "node",
+    target: "es2024",
+    dts: false,
+    clean: true,
+    deps: { neverBundle: ["electron"], alwaysBundle: bundle },
+  });
+  // preload 必须是 CJS（sandboxed preload 的约束），单独一遍；`clean: false` 保住上一遍的产物。
+  await build({
+    config: false,
+    entry: { "preload-app": join(root, "src", "preload-app.ts") },
+    outDir: join(root, "dist"),
+    format: ["cjs"],
+    platform: "node",
+    target: "es2024",
+    dts: false,
+    clean: false,
+    deps: { neverBundle: ["electron"], alwaysBundle: bundle },
+  });
 
   return { root, entry: join(root, "bootstrap.mjs") };
 }
