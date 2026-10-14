@@ -431,6 +431,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../vendor/deepseek-harness/packages/boot/app-boot
+      '@morlay/dsh-client-modules':
+        specifier: workspace:*
+        version: link:../../packages/client/dsh-client-modules
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -568,6 +571,9 @@ importers:
       '@oxc-project/runtime':
         specifier: 0.153.0
         version: 0.153.0
+      lightningcss:
+        specifier: ^1.30.0
+        version: 1.33.0
       vite:
         specifier: ^8.3.1
         version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)

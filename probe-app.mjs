@@ -1,4 +1,4 @@
-const deadline = Date.now() + 200_000;
+const deadline = Date.now() + 240_000;
 const evalIn = async (expression) => {
   let list;
   try { list = await (await fetch("http://127.0.0.1:9223/json/list")).json(); } catch { return undefined; }

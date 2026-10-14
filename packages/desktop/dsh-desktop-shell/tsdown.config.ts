@@ -17,6 +17,8 @@ export default [
       official: "./src/official.ts",
       "profile-project": "./src/profile-project.ts",
       seed: "./src/seed.ts",
+      // 壳要内联进产物的包名单（`@local/dshdev` 装配时也读它，避免两处各写一份）。
+      "inline-packages": "./src/inline-packages.ts",
     },
     plugins: [
       cordisPlugin({

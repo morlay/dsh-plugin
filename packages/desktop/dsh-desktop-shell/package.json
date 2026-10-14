@@ -58,7 +58,11 @@
         "default": "./dist/seed.mjs"
       },
       "./package.json": "./package.json",
-      "./locale/*.json": "./locale/*.json"
+      "./locale/*.json": "./locale/*.json",
+      "./inline-packages": {
+        "types": "./dist/inline-packages.d.mts",
+        "default": "./dist/inline-packages.mjs"
+      }
     }
   },
   "scripts": {

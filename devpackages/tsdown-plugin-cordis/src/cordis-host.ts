@@ -210,7 +210,7 @@ export async function buildCordisConfig(
             // · **本仓库私有**（`@local/*`）与**显式 `inline` 点名的包**——它们不进部署的依赖面，
             //   壳这类产物必须自包含（否则打包后去 asar 外找 `@morlay/dsh-desktop-host`，直接
             //   `ERR_MODULE_NOT_FOUND`）。
-            !(isLocalPackage(id) || isInlinedPackage(id, options?.inline) || /^[.\/\0]/u.test(id))),
+            !(isLocalPackage(id) || isInlinedPackage(id, options?.inline) || /^[./\0]/u.test(id))),
       alwaysBundle: (id: string, importer: string | null | undefined) =>
         isLocalPackage(id) ||
         isInlinedPackage(id, options?.inline) ||

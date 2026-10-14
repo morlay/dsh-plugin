@@ -7,7 +7,7 @@ import { rolldown } from "rolldown";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bundleClientFactory } from "../cordis-client.ts";
 import { buildCordisConfig } from "../cordis-host.ts";
-import { cssInlinePlugins } from "../css.ts";
+import { cssInlinePlugins } from "@morlay/dsh-client-modules/styles";
 
 // 插件 id：与现场打包的 `name` 同义，写入注入 style tag 的 `data-plugin*` 属性。
 const PLUGIN_ID = "@morlay/devkit-css-fixture";

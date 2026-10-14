@@ -12,7 +12,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
-import { clientAssetPlugin, cssInlinePlugins } from "@local/tsdown-plugin-cordis";
+import { clientAssetPlugin } from "./assets.ts";
+import { cssInlinePlugins } from "./styles.ts";
 import { build, esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, packageNameOf } from "./resolve.ts";
 

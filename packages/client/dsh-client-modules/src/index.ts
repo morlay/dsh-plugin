@@ -4,7 +4,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
-import { ASSET_MIME } from "@local/tsdown-plugin-cordis";
+import { ASSET_MIME } from "./assets.ts";
 import { devExcluded, isAggregated, isDevForm, profileRootOf } from "./config.ts";
 import {
   bundlePackage,

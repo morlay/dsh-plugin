@@ -10,6 +10,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@morlay/dsh-client-modules": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "esbuild": "^0.28.2",
     "js-yaml": "^4.1.0",

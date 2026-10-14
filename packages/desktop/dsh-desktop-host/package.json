@@ -50,7 +50,11 @@
         "default": "./dist/paths.js"
       },
       "./package.json": "./package.json",
-      "./locale/*.json": "./locale/*.json"
+      "./locale/*.json": "./locale/*.json",
+      "./preload-source": {
+        "types": "./dist/preload-source.d.mts",
+        "default": "./dist/preload-source.js"
+      }
     }
   },
   "scripts": {

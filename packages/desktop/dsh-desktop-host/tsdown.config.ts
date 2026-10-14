@@ -8,6 +8,8 @@ import { cordisPlugin } from "@local/tsdown-plugin-cordis";
 export default defineConfig({
   entry: {
     webserver: "./src/webserver.ts",
+    // 宿主现场打包 preload 的那份实现（壳经 `./preload-source` 取用）。
+    "preload-source": "./src/preload-source.ts",
     wire: "./src/wire.ts",
     paths: "./src/paths.ts",
   },
