@@ -14,7 +14,6 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
-import { bundleClientFactory } from "@local/tsdown-plugin-cordis";
 import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 import {
   PROFILE_RUNTIME_REPORT_NAME,
@@ -368,11 +367,6 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
     recursive: true,
     verbatimSymlinks: true,
   });
-  await switchToPublishedExports(runtimeModulesDir);
-  const bundledClients = await bundleSourceClientHalves(runtimeModulesDir, input);
-  console.log(
-    `desktop seed: bundled ${String(bundledClients)} source client halves into the runtime`,
-  );
 
   // profile 只持有 app 自带的（非官方 bundle）插件：官方包与 dsh 由 runtime 提供，这些包在 profile 的清单里
   // 直接 `link:` 回随包 runtime 的闭包（不再往 profile 里落 `vendor/` 副本）。
@@ -438,42 +432,6 @@ async function withLocalClosure(
     }
   }
   return packages;
-}
-
-// 随包闭包里那些还指着源码的 client 半，在打包时现场打成模块表的工厂脚本。
-//
-// 为什么不在运行期做：上游 client 包的浏览器实现依赖（`clsx` 这类）按上游规则是 **devDependencies**，
-// 上游构建时被内联，生产安装里没有——随包 runtime 解析不到它们，运行期打包只会得到一堆
-// `UNRESOLVED_IMPORT`，整行在浏览器里 require 失败。打包机上工作区装齐了这些依赖，所以这一趟在
-// **工作区源码**（`resolveOfficialPackage` 解析到的那份）里打，产物写回随包副本并改指它。
-// 判据只看 `exports["./client"]` 是否指向 `.ts`/`.tsx`：`@morlay/*` 的副本此时已切到 dist，不进这一趟。
-async function bundleSourceClientHalves(
-  runtimeModulesDir: string,
-  input: OfficialResolutionInput,
-): Promise<number> {
-  let bundled = 0;
-  for (const [name, dir] of await closurePackageDirs(runtimeModulesDir)) {
-    const manifestPath = join(dir, "package.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-      exports?: Record<string, unknown>;
-    };
-    const client = manifest.exports?.["./client"];
-    const fallback = (client as { default?: unknown } | undefined)?.default;
-    const target =
-      typeof client === "string" ? client : typeof fallback === "string" ? fallback : undefined;
-    if (target === undefined || !/\.(?:ts|tsx)$/u.test(target)) continue;
-    const source = await resolveOfficialPackage(name, input);
-    if (source === undefined) continue;
-    const entry = join(source.dir, ...target.replace(/^\.\//u, "").split("/"));
-    if (!(await pathExists(entry))) continue;
-    const code = await bundleClientFactory({ name, entry, cwd: source.dir });
-    await mkdir(join(dir, "lib"), { recursive: true });
-    await writeFile(join(dir, "lib", "client.js"), code);
-    manifest.exports = { ...manifest.exports, "./client": "./lib/client.js" };
-    await writeFile(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
-    bundled += 1;
-  }
-  return bundled;
 }
 
 // Generate the profile manifest: app identity plus its own bundles as `file:` dependencies.
@@ -578,19 +536,3 @@ async function allowedBuilds(deployRoot: string): Promise<string> {
   return topLevelYamlBlock(await readFile(path, "utf8"), "allowBuilds") ?? "";
 }
 
-async function switchToPublishedExports(modulesDir: string): Promise<void> {
-  for (const [name, dir] of await closurePackageDirs(modulesDir)) {
-    if (!name.startsWith("@morlay/")) continue;
-    const manifestPath = join(dir, "package.json");
-    if (!(await pathExists(manifestPath))) continue;
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-      publishConfig?: { exports?: Record<string, string> };
-    };
-    const published = manifest.publishConfig?.exports;
-    if (published === undefined) continue;
-    await writeFile(
-      manifestPath,
-      `${JSON.stringify({ ...manifest, exports: published }, undefined, 2)}\n`,
-    );
-  }
-}
