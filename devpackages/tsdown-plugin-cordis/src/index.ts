@@ -4,6 +4,7 @@
 export {
   buildCordisConfig,
   cordisPlugin,
+  isInlinedPackage,
   isLocalPackage,
   LOCAL_PACKAGE_PREFIX,
   type CordisPluginOptions,

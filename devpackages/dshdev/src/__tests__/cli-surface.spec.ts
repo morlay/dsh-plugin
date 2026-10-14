@@ -102,13 +102,14 @@ describe("published command surface", () => {
     }
   });
 
-  it("两个形态都有 --home，且说明里点出 dshHome 的三种取值", async () => {
+  it("两个形态都有 --data-dir，且说明里点出 dshHome 的三种取值", async () => {
     for (const command of ["web", "desktop"]) {
       const { status, stdout } = await cli([command, "--help"]);
       expect(status).toBe(0);
-      expect(/--home\b/u.test(stdout)).toBe(true);
+      expect(/--data-dir\b/u.test(stdout)).toBe(true);
       expect(/xdg/u.test(stdout)).toBe(true);
-      expect(/absolute path/u.test(stdout)).toBe(true);
+      // 描述会被 help 折行，正则别假定它在一行里。
+      expect(/absolute\s+path/u.test(stdout)).toBe(true);
     }
   });
 

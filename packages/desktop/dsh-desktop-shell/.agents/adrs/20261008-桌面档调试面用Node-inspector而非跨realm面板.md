@@ -7,7 +7,7 @@
 iframe 内的 bootstrap 按 `location` 算出 WebSocket 端点（`assets/devtools/connect.js:6-10`），DevTools 前端再把
 `ws` 参数拼成 `ws://<参数>`（`lib/devtools/chunks/legacy-CGqoaXQ2.js:23994`）。
 
-桌面档的页面 origin 是自定义协议 `<scheme>://app`（[桌面无端口传输与窗口对齐](../../../../devpackages/dshdev/.agents/designs/20260920-桌面无端口传输与窗口对齐.md)），
+桌面档的页面 origin 是自定义协议 `<scheme>://app`（[桌面无端口传输与窗口对齐](../../../../../devpackages/dshdev/.agents/designs/20260920-桌面无端口传输与窗口对齐.md)），
 于是端点被算成 `ws://app/inspector/devtools/cdp`：`app` 不是可解析主机，而 Electron 至今不支持自定义协议上的
 WebSocket（[electron#43522](https://github.com/electron/electron/issues/43522) 仍 open）。就算端点写对，桌面主传输也只有
 fetch（[index.ts:329](../../src/index.ts#L329) → 无端口 `webServer.dispatch`），`registerUpgrade` 那张表
@@ -57,5 +57,5 @@ fetch（[index.ts:329](../../src/index.ts#L329) → 无端口 `webServer.dispatc
   非 GET 拒绝）、壳侧的 DevTools URL 拼接都有单测。
   真机形态（菜单项与那个窗口）在本环境验不了——Electron 在这里因沙箱与 GPU 进程限制直接退出
   （`sandbox initialization failed: Operation not permitted` → `GPU process isn't usable. Goodbye.`，与
-  [如何验证](../../../../devpackages/dshdev/.agents/standards/how-to-verify.md) 记的受限环境同一现象），只验证到准备物：
+  [如何验证](../../../../../devpackages/dshdev/.agents/standards/how-to-verify.md) 记的受限环境同一现象），只验证到准备物：
   壳产物构建通过、菜单模板与 `Menu.getApplicationMenu()` 为 null 时的自建兜底就位。

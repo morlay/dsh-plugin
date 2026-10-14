@@ -9,7 +9,7 @@ import { runPrepareSeed } from "./prepare-seed.ts";
 import { prepareShell } from "./shell.ts";
 import {
   PROFILE_NAME,
-  buildRoot,
+  buildCache,
   desktopConfig,
   resolveWorkspace,
   workspaceManifest,
@@ -126,7 +126,7 @@ export async function installPlan(input: InstallPlanInput): Promise<InstallPlan>
 async function installApp(workspace: string, appConfig: AppConfig): Promise<void> {
   const plan = await installPlan({
     platform: process.platform,
-    artifacts: join(buildRoot(workspace), "artifacts"),
+    artifacts: join(buildCache(workspace), "artifacts"),
     home: homedir(),
     name: appConfig.name,
     displayName: appConfig.displayName,
@@ -152,7 +152,7 @@ async function installApp(workspace: string, appConfig: AppConfig): Promise<void
 export async function runBundle(options: BundleOptions): Promise<void> {
   const workspace = resolve(options.workspace ?? resolveWorkspace());
   const manifest = await workspaceManifest(workspace);
-  const buildRootDir = buildRoot(workspace);
+  const buildCacheDir = buildCache(workspace);
   const desktop = desktopConfig(manifest);
   const appConfig: AppConfig = {
     name: manifest.name,
@@ -167,22 +167,23 @@ export async function runBundle(options: BundleOptions): Promise<void> {
   console.log(
     `desktop bundle: workspace ${workspace} (${appConfig.displayName}@${appConfig.version})`,
   );
-  const shell = await prepareShell(workspace);
   await runPrepareRuntime({ workspace });
   await runPrepareSeed({ workspace });
+  // **放在准备步骤之后**：它们会重置工作目录里的内容，先装配的壳会被清掉。
+  const shell = await prepareShell(buildCacheDir);
 
-  const icons = await prepareIcons(workspace, buildRootDir, desktop.icon);
+  const icons = await prepareIcons(workspace, buildCacheDir, desktop.icon);
 
-  await mkdir(join(buildRootDir, "runtime"), { recursive: true });
-  await writeAppConfig(join(buildRootDir, "runtime"), appConfig);
+  await mkdir(join(buildCacheDir, "runtime"), { recursive: true });
+  await writeAppConfig(join(buildCacheDir, "runtime"), appConfig);
 
   await buildDesktopApp({
     appRoot: shell.root,
-    buildRoot: buildRootDir,
+    buildCache: buildCacheDir,
     appConfig,
     icons,
     dir: options.dir,
   });
-  console.log(`desktop bundle: artifacts in ${join(buildRootDir, "artifacts")}`);
+  console.log(`desktop bundle: artifacts in ${join(buildCacheDir, "artifacts")}`);
   if (options.install) await installApp(workspace, appConfig);
 }

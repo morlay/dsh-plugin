@@ -2,16 +2,16 @@
 
 把任意 dsh 工作区打包 / 运行为桌面应用的工具：`dev` 链接工作区直接跑，`bundle` 产出静态、无签名的应用目录。
 
-本包只做**工具**（CLI）：壳是独立的 [`@morlay/dsh-desktop-shell`](../dsh-desktop-shell/README.md)——`dev` 以它的
+本包只做**工具**（CLI）：壳是独立的 [`@morlay/dsh-desktop-shell`](../../packages/desktop/dsh-desktop-shell/README.md)——`dev` 以它的
 包目录为 Electron app 启动，`bundle` 把它的 `dist/` 复制成最小壳目录；后端是独立变体
-[`@morlay/dsh-desktop-host`](../dsh-desktop-host/README.md)，本包以 `dependencies` 引用它。
+[`@morlay/dsh-desktop-host`](../../packages/desktop/dsh-desktop-host/README.md)，本包以 `dependencies` 引用它。
 
 ## 用法
 
 | 命令                                                     | 作用                                                                              |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `dshdev web [--home <spec>] [workspace]` | 在浏览器里跑 `dsh web`（页面与资源走宿主自己的 http 端口） |
-| `dshdev desktop [--home <spec>] [workspace]` | 启动 Electron 壳（不打包） |
+| `dshdev web [--data-dir <spec>] [workspace]` | 在浏览器里跑 `dsh web`（页面与资源走宿主自己的 http 端口） |
+| `dshdev desktop [--data-dir <spec>] [workspace]` | 启动 Electron 壳（不打包） |
 | `dshdev desktop bundle [--dir] [--install] [workspace]` | 构建当前平台的静态、无签名桌面应用 |
 
 工作区取首个位置参数（缺省当前目录）。装配输入是工作区 `package.json` 的 `dsh` 段：`version`（`@deepseek-ai/dsh`

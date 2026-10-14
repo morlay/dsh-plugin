@@ -38,7 +38,7 @@ async function pathExists(path: string): Promise<boolean> {
 
 export async function prepareIcons(
   workspace: string,
-  buildRootDir: string,
+  buildCacheDir: string,
   icon: string | undefined,
 ): Promise<PreparedIcons> {
   if (icon === undefined || icon === "") return {};
@@ -46,7 +46,7 @@ export async function prepareIcons(
   if (!(await pathExists(source))) {
     throw new Error(`desktop bundle: workspace icon ${source} does not exist`);
   }
-  const outDir = join(buildRootDir, "icon");
+  const outDir = join(buildCacheDir, "icon");
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const png512 = join(outDir, "icon-512.png");

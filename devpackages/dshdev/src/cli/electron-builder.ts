@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { build, type CliOptions } from "electron-builder";
@@ -7,16 +7,10 @@ import type { PreparedIcons } from "./icon.ts";
 
 type DesktopConfiguration = Exclude<NonNullable<CliOptions["config"]>, string>;
 
-interface ToolManifest {
-  readonly name?: string;
-  readonly description?: string;
-  readonly author?: string;
-}
-
 export interface DesktopBuildOptions {
   readonly appRoot: string;
 
-  readonly buildRoot: string;
+  readonly buildCache: string;
 
   readonly appConfig: AppConfig;
 
@@ -32,7 +26,7 @@ export interface DesktopBuildConfigInput {
 
   readonly electron: { readonly version: string; readonly dist?: string };
 
-  readonly buildRoot: string;
+  readonly buildCache: string;
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -55,49 +49,43 @@ async function installedElectron(): Promise<{ readonly version: string; readonly
   return { version: manifest.version, ...((await pathExists(dist)) ? { dist } : {}) };
 }
 
+/**
+ * app 目录就是 **prebuild 装配好的那个**（`prepareShell` 产出：引导 + 转译后的 `dist` + 清单 + 本地化）。
+ *
+ * 这里**不要再装一遍**：曾经有过第二套装配（清目录、只拷 `dist`、自己写清单），两套打在同一个
+ * `<buildCache>/shell` 上，先装的会被后装的清掉——那正是"装配完却找不到 `dist`"的来源。
+ * 现在只补一件 electron-builder 需要的东西：让它的包遍历在工作目录这里停下。
+ *
+ * @param options - 见 {@link DesktopBuildOptions}。
+ * @returns app 目录（装配目录本身）。
+ */
 export async function prepareShellAppDirectory(options: DesktopBuildOptions): Promise<string> {
-  const { appRoot, buildRoot, appConfig } = options;
-  const appDir = join(buildRoot, "shell");
-  await rm(appDir, { recursive: true, force: true });
-  await mkdir(appDir, { recursive: true });
-  await cp(join(appRoot, "dist"), join(appDir, "dist"), { recursive: true });
-  await writeFile(join(appDir, "pnpm-workspace.yaml"), "packages: []\n");
-  const tool = JSON.parse(await readFile(join(appRoot, "package.json"), "utf8")) as ToolManifest;
-  await writeFile(
-    join(appDir, "package.json"),
-    `${JSON.stringify(
-      {
-        name: tool.name ?? "dsh-desktop-shell",
-        version: appConfig.version,
-        ...(tool.description === undefined ? {} : { description: tool.description }),
-        ...(tool.author === undefined ? {} : { author: tool.author }),
-        main: "dist/index.mjs",
-      },
-      undefined,
-      2,
-    )}\n`,
-  );
-  return appDir;
+  const { appRoot } = options;
+  await writeFile(join(appRoot, "pnpm-workspace.yaml"), "packages: []\n");
+  return appRoot;
 }
 
 // electron-builder 的产物配置：对外名字取 `displayName`（mac 的 `.app`、Windows 的 exe、artifact 名），
 // Linux 的可执行名取工作区包名 `name`——electron-builder 的 Linux 可执行名本就读壳 app 目录 `package.json`
 // 的 `name`，显式钉住它，安装脚本拼的 `Exec` 才与产物一致。
 export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfiguration {
-  const { buildRoot, appConfig, icons, electron } = input;
+  const { buildCache, appConfig, icons, electron } = input;
   return {
     appId: appConfig.id,
     productName: appConfig.displayName,
     artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
     electronVersion: electron.version,
     ...(electron.dist === undefined ? {} : { electronDist: electron.dist }),
-    directories: { output: join(buildRoot, "artifacts") },
-    asar: true,
-    files: ["dist/**", "package.json"],
+    directories: { output: join(buildCache, "artifacts") },
+    // **不用 asar**：壳的入口是原生 ESM（`bootstrap.mjs` -> `dist/index.mjs`），而 Electron 的 ESM 加载器
+    // 在 asar 归档里不可靠（要么挂住、要么报找不到）。产物结构与 dev 形态保持一致，少一层差异。
+    asar: false,
+    // 装配目录（`.dshdev/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
+    files: ["bootstrap.mjs", "dist/**", "locale/**", "package.json"],
     extraResources: [
-      { from: join(buildRoot, "runtime"), to: "runtime" },
-      { from: join(buildRoot, "seed"), to: "seed" },
-      { from: join(buildRoot, "runtime", "appconfig.json"), to: "appconfig.json" },
+      { from: join(buildCache, "runtime"), to: "runtime" },
+      { from: join(buildCache, "seed"), to: "seed" },
+      { from: join(buildCache, "runtime", "appconfig.json"), to: "appconfig.json" },
     ],
     mac: {
       category: "public.app-category.developer-tools",
@@ -119,7 +107,7 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
 }
 
 export async function buildDesktopApp(options: DesktopBuildOptions): Promise<string[]> {
-  const { buildRoot, appConfig, icons, dir } = options;
+  const { buildCache, appConfig, icons, dir } = options;
   const appDir = await prepareShellAppDirectory(options);
   const electron = await installedElectron();
   console.log(
@@ -127,7 +115,7 @@ export async function buildDesktopApp(options: DesktopBuildOptions): Promise<str
   );
   return build({
     projectDir: appDir,
-    config: desktopBuildConfig({ buildRoot, appConfig, icons, electron }),
+    config: desktopBuildConfig({ buildCache, appConfig, icons, electron }),
     publish: "never",
     dir,
   });

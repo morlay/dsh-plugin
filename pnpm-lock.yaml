@@ -367,6 +367,9 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:../devkit
+      '@local/tsdown-plugin-cordis':
+        specifier: workspace:*
+        version: link:../tsdown-plugin-cordis
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.6
@@ -755,13 +758,6 @@ importers:
         version: 1.64.0
 
   packages/desktop/dsh-desktop-shell:
-    dependencies:
-      '@oxc-node/core':
-        specifier: ^0.1.6
-        version: 0.1.6
-      electron:
-        specifier: ^44.3.0
-        version: 44.7.0(supports-color@9.4.0)
     devDependencies:
       '@deepseek-ai/dsh':
         specifier: workspace:*
@@ -781,9 +777,15 @@ importers:
       '@morlay/dsh-desktop-host':
         specifier: workspace:*
         version: link:../dsh-desktop-host
+      '@oxc-node/core':
+        specifier: ^0.1.6
+        version: 0.1.6
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5
+      electron:
+        specifier: ^44.3.0
+        version: 44.7.0(supports-color@9.4.0)
 
   packages/llm/llm-openai-compatible:
     dependencies:

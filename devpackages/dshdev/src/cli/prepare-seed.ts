@@ -35,7 +35,7 @@ import {
 import {
   PROFILE_NAME,
   appProfileBundles,
-  buildRoot,
+  buildCache,
   cleanDeployedSpec,
   dshVersion as readDshVersion,
   findWorkspaceRoot,
@@ -377,9 +377,9 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
     toolRoot: APP_ROOT,
     ...(dshVersion === undefined ? {} : { dshVersion }),
   };
-  const buildRootDir = buildRoot(workspace);
-  const seedOutputRoot = join(buildRootDir, "seed");
-  const deployRoot = join(buildRootDir, "deploy");
+  const buildCacheDir = buildCache(workspace);
+  const seedOutputRoot = join(buildCacheDir, "seed");
+  const deployRoot = join(buildCacheDir, "deploy");
   const entries = seedEntries(workspace, manifest);
   console.log(`desktop seed: workspace ${workspace} (${manifest.name})`);
   console.log(`desktop seed: whitelist ${entries.join(", ")}`);

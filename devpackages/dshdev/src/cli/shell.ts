@@ -1,17 +1,13 @@
 /**
  * 壳的装配（**prebuild**）：把 `@morlay/dsh-desktop-shell` 装到打包工作目录里，成为 Electron 的 app 目录。
  *
- * 边界就到这里为止：**产物只落在 `<workspace>/.dshdev/shell/`**，源码树里的
- * `packages/desktop/dsh-desktop-shell/dist` 不再被 dev / bundle 依赖。
- *
- * **不能落在 `node_modules` 下**：Node 拒绝对那里的文件做类型剥离
- * （`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`），而壳的 `src/*.ts` 正是靠它 + loader 跑的。
+ * 边界就到这里为止：**产物只落在 `<workspace>/node_modules/.dshdev/shell/`**（打包工作目录，与 runtime /
+ * seed 并列），源码树里的 `packages/desktop/dsh-desktop-shell/dist` 不再被 dev / bundle 依赖。
  *
  * 装配内容（壳要什么给什么）：
  * - `bootstrap.mjs`：手写的启动引导（真 JS；Electron 的 app 目录必须有它，且它不参与构建）；
- * - `src/`：业务代码，由引导在运行期注册的 TS loader 直接跑；
- * - **`dist/preload-app.cjs`：唯一需要转译的一件**——Electron 要求 sandboxed preload 是 CJS（不能 ESM、
- *   不能 require 第三方），而它的源码是 TS，所以这里用 tsdown 单文件打一次（几十毫秒）；
+ * - `dist/`：**转译后的业务代码**——必须转译，`node_modules` 下的 `.ts` 跑不了（Node 的内建类型剥离对
+ *   那里是硬限制，自定义 loader 拦不住），所以 prebuild 用 tsdown 打两遍（入口 ESM + preload CJS）；
  * - `package.json`（`main` 指引导）与 `locale/`。
  */
 import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -44,11 +40,11 @@ async function pathExists(path: string): Promise<boolean> {
 /**
  * 装配壳（幂等：每次重来一遍，几十毫秒）。
  *
- * @param workspace - app 工作区目录（产物落在它下面的 `.dshdev/shell`）。
+ * @param workRoot - 打包工作目录（调用方给的就是 `node_modules/.dshdev`）。
  * @returns 装配后的 app 目录与入口。
  */
-export async function prepareShell(workspace: string): Promise<AssembledShell> {
-  const root = join(workspace, ".dshdev", "shell");
+export async function prepareShell(workRoot: string): Promise<AssembledShell> {
+  const root = join(workRoot, "shell");
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
 
@@ -58,26 +54,40 @@ export async function prepareShell(workspace: string): Promise<AssembledShell> {
   if (await pathExists(join(SHELL_PACKAGE_ROOT, "locale"))) {
     await cp(join(SHELL_PACKAGE_ROOT, "locale"), join(root, "locale"), { recursive: true });
   }
-  const manifest = JSON.parse(await readFile(join(SHELL_PACKAGE_ROOT, "package.json"), "utf8")) as {
-    main?: string;
+  // 装配清单：Electron 只读 `name` / `version` / `main`（`main` 指引导）。**不要带 dependencies**——
+  // 那些是壳的实现依赖（electron / loader），运行期由 Electron 与引导负责，而 electron-builder 会因为
+  // app 目录里出现 `electron` 依赖直接拒绝打包。
+  const source = JSON.parse(await readFile(join(SHELL_PACKAGE_ROOT, "package.json"), "utf8")) as {
+    version?: string;
+    description?: string;
+    author?: string;
   };
-  manifest.main = "./bootstrap.mjs";
-  await writeFile(join(root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeFile(
+    join(root, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "dsh-desktop-shell",
+        version: source.version ?? "0.0.0",
+        ...(source.description === undefined ? {} : { description: source.description }),
+        ...(source.author === undefined ? {} : { author: source.author }),
+        main: "./bootstrap.mjs",
+      },
+      undefined,
+      2,
+    )}\n`,
+    "utf8",
+  );
 
-  // **唯一要转译的那一件**：sandboxed preload 必须是 CJS。
-  await build({
-    config: false,
-    entry: { "preload-app": join(root, "src", "preload-app.ts") },
-    outDir: join(root, "dist"),
-    format: ["cjs"],
-    platform: "node",
-    target: "es2024",
-    dts: false,
-    clean: true,
-    logLevel: "silent",
-    // preload 只 require electron 自己的模块（sandboxed 约束），别把依赖内联进来。
-    deps: { neverBundle: ["electron"] },
-  });
+  // 转译：**直接用壳自己的 tsdown 配置**（含 `SHELL_INLINE_PACKAGES` 那份内联规则与两遍构建：壳入口 ESM +
+  // preload CJS）。配置里的 entry 相对**壳包目录**解析，所以临时切到那里跑，只把 `outDir` 指到装配目录——
+  // 壳要什么由它自己的配置说了算，这里不重复一遍规则。
+  const cwd = process.cwd();
+  process.chdir(SHELL_PACKAGE_ROOT);
+  try {
+    await build({ config: join(SHELL_PACKAGE_ROOT, "tsdown.config.ts"), outDir: join(root, "dist") });
+  } finally {
+    process.chdir(cwd);
+  }
 
   return { root, entry: join(root, "bootstrap.mjs") };
 }

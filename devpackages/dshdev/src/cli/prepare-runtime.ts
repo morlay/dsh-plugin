@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { pipeline } from "node:stream/promises";
 import extractZip from "extract-zip";
 import { extract } from "tar";
-import { buildRoot, resolveWorkspace } from "./workspace.ts";
+import { buildCache, resolveWorkspace } from "./workspace.ts";
 
 const NODE_VERSION = "24.17.0";
 const PNPM_MANIFEST = "pnpm/package.json";
@@ -89,13 +89,13 @@ async function download(url: string, path: string): Promise<void> {
 async function prepareNode(
   platform: RuntimePlatform,
   arch: RuntimeArch,
-  buildRootDir: string,
+  buildCacheDir: string,
 ): Promise<void> {
   const extension = platform === "win" ? "zip" : "tar.gz";
   const folder = `node-v${NODE_VERSION}-${platform}-${arch}`;
   const archiveName = `${folder}.${extension}`;
   const releaseRoot = `https://nodejs.org/download/release/v${NODE_VERSION}`;
-  const downloadRoot = join(buildRootDir, "downloads");
+  const downloadRoot = join(buildCacheDir, "downloads");
   const archive = join(downloadRoot, archiveName);
   const sums = join(downloadRoot, `node-v${NODE_VERSION}-SHASUMS256.txt`);
   if (!(await pathExists(archive))) await download(`${releaseRoot}/${archiveName}`, archive);
@@ -111,13 +111,13 @@ async function prepareNode(
     .digest("hex");
   if (actual !== expected) throw new Error(`desktop runtime: checksum mismatch for ${archiveName}`);
 
-  const extraction = join(buildRootDir, "node-extract");
+  const extraction = join(buildCacheDir, "node-extract");
   await rm(extraction, { recursive: true, force: true });
   await mkdir(extraction, { recursive: true });
   if (platform === "win") await extractZip(archive, { dir: extraction });
   else await extract({ cwd: extraction, file: archive });
   const source = join(extraction, folder, platform === "win" ? "node.exe" : "bin/node");
-  const destinationRoot = join(buildRootDir, "runtime", "node");
+  const destinationRoot = join(buildCacheDir, "runtime", "node");
   const destination = join(destinationRoot, platform === "win" ? "node.exe" : "node");
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(destinationRoot, { recursive: true });
@@ -274,11 +274,11 @@ async function prepareLoader(runtimeRoot: string): Promise<string> {
 export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise<void> {
   const { platform, arch } = target();
   requireBundledPnpmTarget(platform, arch);
-  const buildRootDir = buildRoot(resolve(options.workspace ?? resolveWorkspace()));
-  const runtimeRoot = join(buildRootDir, "runtime");
-  await mkdir(join(buildRootDir, "downloads"), { recursive: true });
+  const buildCacheDir = buildCache(resolve(options.workspace ?? resolveWorkspace()));
+  const runtimeRoot = join(buildCacheDir, "runtime");
+  await mkdir(join(buildCacheDir, "downloads"), { recursive: true });
   await mkdir(runtimeRoot, { recursive: true });
-  await prepareNode(platform, arch, buildRootDir);
+  await prepareNode(platform, arch, buildCacheDir);
   const pnpmVersion = await preparePnpm(platform, runtimeRoot);
   const loaderVersion = await prepareLoader(runtimeRoot);
   await prepareBin(platform, runtimeRoot);

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { OFFICIAL_PROFILE_BUNDLES } from "@morlay/dsh-desktop-shell/official";
 import {
   appProfileBundles,
-  buildRoot,
+  buildCache,
   devStoreHome,
   desktopConfig,
   dshVersion,
@@ -138,8 +138,8 @@ describe("workspace layout", () => {
   it("keeps generated artefacts under the workspace node_modules", async () => {
     const workspace = await tempDir();
 
-    expect(buildRoot(workspace)).toBe(join(workspace, "node_modules", ".dshdev"));
-    expect(buildRoot(workspace).startsWith(workspace + sep)).toBe(true);
+    expect(buildCache(workspace)).toBe(join(workspace, "node_modules", ".dshdev"));
+    expect(buildCache(workspace).startsWith(workspace + sep)).toBe(true);
     // dev（Electron）与 dev --web 共用工作区 store。
     expect(devStoreHome(workspace)).toBe(join(workspace, ".dsh-store"));
   });

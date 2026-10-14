@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +52,7 @@ function appConfigDir(): string {
 function startupFailure(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   console.error(error);
+  void shellLog(`启动失败：${message}`);
   dialog.showErrorBox("dsh desktop startup failed", message);
   app.exit(1);
   throw error instanceof Error ? error : new Error(message);
@@ -272,8 +273,29 @@ function sourceLoaderEnvironment(path: string): Record<string, string> {
   return { DSH_SOURCE_LOADER: path };
 }
 
+/**
+ * 壳的日志。
+ *
+ * 打包形态的 Electron **不把 `console` 写进 stdout**（它进系统日志），出了事只看到"窗口没起来"。
+ * 所以壳自己的关键节点（启动、宿主就绪、fatal）落一份文件日志，与宿主那份（`${DSH_HOME}/logs/dev-host.log`，
+ * 由 `@morlay/dsh-client-modules` 写）同目录，两边对着看就能定位"页面 → 壳 → 宿主"断在哪一段。
+ */
+async function shellLog(text: string): Promise<void> {
+  const home = resolveDshHome(appConfig) ?? join(process.cwd(), ".dsh-store");
+  const file = join(home, "logs", "shell.log");
+  try {
+    await mkdir(dirname(file), { recursive: true });
+    await appendFile(file, `${new Date().toISOString()} ${text}\n`, "utf8");
+  } catch {
+    // 记不下来就算了：这里已在异常路径上，不该再抛。
+  }
+}
+
 async function main(): Promise<void> {
   const development = developmentLayout();
+  await shellLog(
+    `启动：形态=${development === undefined ? "bundle" : "dev"} root=${globalThis.__DSH_SHELL_ROOT__ ?? "(未知)"}`,
+  );
   const resources = runtimeResources();
   const hostInspectPort = developmentHostInspectPort(development !== undefined);
   const profileDir =
@@ -347,6 +369,7 @@ async function main(): Promise<void> {
     if (hostFailureHandled) return;
     hostFailureHandled = true;
     console.error(`[dsh-shell] backend stopped: ${error.message}`);
+    void shellLog(`宿主停止：${error.message}`);
     dialog.showErrorBox("dsh desktop backend stopped", error.message);
     quitConfirmed = true;
     app.exit(1);
@@ -580,6 +603,7 @@ async function main(): Promise<void> {
   host = started.process;
   desktopWsPort = started.ready.wsPort;
   console.log(`[dsh-shell] 宿主就绪：wsPort=${String(desktopWsPort)} protocol=${String(started.ready.protocolVersion)}`);
+  await shellLog(`宿主就绪 wsPort=${String(desktopWsPort)}`);
 
   mainWindow = createMainWindow();
   await mainWindow.loadURL(APPLICATION_URL);

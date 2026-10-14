@@ -18,7 +18,7 @@ import { promisify } from "node:util";
 import { create as createArchive } from "tar";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runPrepareRuntime } from "../cli/prepare-runtime.ts";
-import { buildRoot } from "../cli/workspace.ts";
+import { buildCache } from "../cli/workspace.ts";
 
 const run = promisify(execFile);
 
@@ -160,7 +160,7 @@ describe("bundled runtime target", () => {
 
       await runPrepareRuntime({ workspace });
 
-      const runtime = join(buildRoot(resolve(workspace)), "runtime");
+      const runtime = join(buildCache(resolve(workspace)), "runtime");
       expect(await readFile(join(runtime, "pnpm", "bin", "pnpm.mjs"), "utf8")).toBe(
         await readFile(join(PNPM_DIRECTORY, "bin", "pnpm.mjs"), "utf8"),
       );

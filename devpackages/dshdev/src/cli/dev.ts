@@ -9,10 +9,10 @@ import { devRuntimeRoot, requireDevRuntime } from "./dev-layout.ts";
 import { prepareShell } from "./shell.ts";
 import {
   PROFILE_NAME,
-  buildRoot,
+  buildCache,
   desktopConfig,
   findWorkspaceRoot,
-  resolveDevHome,
+  resolveDataDir,
   resolveWorkspace,
   workspaceManifest,
 } from "./workspace.ts";
@@ -106,9 +106,9 @@ async function launchElectron(
   appRoot: string,
   profileDir: string,
   runtimeDir: string,
-  buildRootDir: string,
+  buildCacheDir: string,
   tsLoader: string,
-  home: string,
+  dataDir: string,
 ): Promise<void> {
   const require = createRequire(import.meta.url);
   const electron: unknown = require("electron");
@@ -119,7 +119,7 @@ async function launchElectron(
   // 9231 而不是 9230：那是上游 `experimental-inspector` 的 Worker 默认端口，桌面档装着那条行时
   // 两者会抢同一个端口，抢输的是整条 inspector 行（Worker 起不来 → 行回滚）。
   const hostPort = debugPort("DSH_DESKTOP_HOST_INSPECT_PORT", 9231);
-  const developmentRoot = join(buildRootDir, "development");
+  const developmentRoot = join(buildCacheDir, "development");
   // 数据面与 `dev --web` 共用工作区 store；只有浏览器数据留在构建目录里。
   const userData = join(developmentRoot, "electron-user-data");
 
@@ -131,8 +131,8 @@ async function launchElectron(
     // `--remote-debugging-port` / `--user-data-dir` 这类 Chromium 开关全被当成 bad option，壳根本起不来。
     // （这个变量在环境里很常见——它本来是给"把 Electron 当 node 用"的子进程准备的。）
     ELECTRON_RUN_AS_NODE: undefined,
-    DSH_HOME: home,
-    DSH_DESKTOP_APPCONFIG_DIR: join(buildRootDir, "runtime"),
+    DSH_HOME: dataDir,
+    DSH_DESKTOP_APPCONFIG_DIR: join(buildCacheDir, "runtime"),
     // 两格分工：`PROFILE_DIR` 是 profile root（app 目录本身），`RUNTIME_DIR` 是安装根
     // （官方闭包、前端产物与 host 载荷的来源）。
     DSH_DESKTOP_DEV_PROFILE_DIR: profileDir,
@@ -144,7 +144,7 @@ async function launchElectron(
     DSH_DESKTOP_OPEN_DEVTOOLS: process.env.DSH_DESKTOP_OPEN_DEVTOOLS ?? "1",
     ELECTRON_ENABLE_LOGGING: process.env.ELECTRON_ENABLE_LOGGING ?? "1",
   };
-  console.log(`desktop development: DSH_HOME=${home}`);
+  console.log(`desktop development: DSH_HOME=${dataDir}`);
   console.log(`desktop development: profile root=${profileDir} runtime=${runtimeDir}`);
   console.log(
     `desktop development: inspectors main=${String(mainPort)}, renderer=${String(rendererPort)}, host=${String(hostPort)}`,
@@ -169,28 +169,28 @@ async function launchElectron(
 export interface DevOptions {
   readonly workspace?: string;
   readonly web: boolean;
-  // 数据面根；缺省是工作区内的 `.dsh-store`，取值语义见 `resolveDevHome`。
-  readonly home?: string;
+  // 数据目录（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`，取值语义见 `resolveDataDir`。
+  readonly dataDir?: string;
 }
 
 export async function runDev(options: DevOptions): Promise<void> {
   const workspace = resolve(options.workspace ?? resolveWorkspace());
   const repositoryRoot = await findWorkspaceRoot(workspace);
   const manifest = await workspaceManifest(workspace);
-  const buildRootDir = buildRoot(workspace);
-  // 两种 dev 形态共用同一个数据面根；`--home=xdg` 时与打包形态落到同一个目录。
-  const home = resolveDevHome(workspace, manifest.name, options.home);
+  const buildCacheDir = buildCache(workspace);
+  // 两种 dev 形态共用同一个数据目录；`--data-dir=xdg` 时与打包形态落到同一个位置。
+  const dataDir = resolveDataDir(workspace, manifest.name, options.dataDir);
   const runtimeDir = devRuntimeRoot(repositoryRoot);
   await requireDevRuntime(runtimeDir);
   // 壳装配到打包工作目录（`.dshdev/shell`）：源码树里那份 `dist` 不再被 dev 依赖。
-  const shell = await prepareShell(workspace);
+  const shell = await prepareShell(buildCacheDir);
   const tsLoader = tsLoaderSpecifier();
 
   if (options.web) {
     // web 形态的 profile 就是 app 目录：清单来自 app 的 `package.json`，bundle 由工作区链接解析，
     // 因此没有 `plugin add`、也没有 `$DSH_HOME/profiles/web`。端口契约（`PORT`，缺省 3080）与
     // 内层参数归 web 入口：它把 `--` 之后原样交给 web app 的 flag family。
-    console.log(`desktop development: web mode DSH_HOME=${home} profile root=${workspace}`);
+    console.log(`desktop development: web mode DSH_HOME=${dataDir} profile root=${workspace}`);
     await run(
       process.execPath,
       [
@@ -203,23 +203,23 @@ export async function runDev(options: DevOptions): Promise<void> {
         await devClientPatch(),
       ],
       repositoryRoot,
-      withTsLoader({ ...process.env, DSH_HOME: home, UV_THREADPOOL_SIZE: threadpoolSize() }, tsLoader),
+      withTsLoader({ ...process.env, DSH_HOME: dataDir, UV_THREADPOOL_SIZE: threadpoolSize() }, tsLoader),
     );
     return;
   }
 
   const desktop = desktopConfig(manifest);
-  const runtimeRoot = join(buildRootDir, "runtime");
+  const runtimeRoot = join(buildCacheDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });
   await writeAppConfig(runtimeRoot, {
     name: manifest.name,
     displayName: desktop.displayName,
     id: desktop.id,
     version: desktop.version,
-    dshHome: home,
+    dshHome: dataDir,
     window: desktop.window,
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(shell.root, workspace, runtimeDir, buildRootDir, tsLoader, home);
+  await launchElectron(shell.root, workspace, runtimeDir, buildCacheDir, tsLoader, dataDir);
 }

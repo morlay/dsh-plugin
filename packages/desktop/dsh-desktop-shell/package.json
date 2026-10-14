@@ -15,8 +15,9 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
-    "locale/*.json",
+    "bootstrap.mjs",
     "src",
+    "locale/*.json",
     "dist"
   ],
   "type": "module",
@@ -65,10 +66,6 @@
     "gen:official-packages": "node --import @oxc-node/core/register scripts/gen-official-packages.ts",
     "prepublishOnly": "pnpm run build"
   },
-  "dependencies": {
-    "electron": "^44.3.0",
-    "@oxc-node/core": "^0.1.6"
-  },
   "devDependencies": {
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
@@ -76,7 +73,9 @@
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@local/devkit": "workspace:*",
     "@morlay/dsh-desktop-host": "workspace:*",
-    "@types/node": "^26.5.0"
+    "@types/node": "^26.5.0",
+    "electron": "^44.3.0",
+    "@oxc-node/core": "^0.1.6"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:^",

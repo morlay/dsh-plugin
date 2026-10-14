@@ -1,5 +1,6 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin, isLocalPackage } from "@local/tsdown-plugin-cordis";
+import { SHELL_INLINE_PACKAGES } from "./src/inline-packages.ts";
 
 // 壳产物只含壳自己的字节（`@local/*` 与 `@morlay/dsh-desktop-host` 内联进来），上游包一律留在产物外——
 // 壳可达的模块不许出现上游裸引用，守 `src/__tests__/shell-import-boundary.spec.ts`。
@@ -9,6 +10,8 @@ import { cordisPlugin, isLocalPackage } from "@local/tsdown-plugin-cordis";
 export default [
   defineConfig({
     entry: {
+      // Electron 的 app 入口（装配目录的清单 `main` 指引导，引导再加载它）。
+      index: "./src/index.ts",
       appconfig: "./src/appconfig.ts",
       dshhome: "./src/dshhome.ts",
       official: "./src/official.ts",
@@ -17,18 +20,7 @@ export default [
     },
     plugins: [
       cordisPlugin({
-        inline: [
-          "@morlay/dsh-desktop-host",
-          // 快捷键桥的原生侧（`src/shortcuts.ts` / `src/keybindings.ts`）要用上游的「设备偏好单写者」与原子写：
-          // 它们进不了 app.asar 的解析面，所以内联进壳产物（`dsh-brand` 只做类型，擦除后不留字节）。
-          "@deepseek-ai/dsh-client-shortcuts",
-          "@deepseek-ai/dsh-atomic-write",
-          "@deepseek-ai/dsh-util-values",
-          "@deepseek-ai/dsh-util-crypto",
-        ],
-        // dev 与 bundle 都以**本包目录**为 Electron app：Electron 按包清单的 `main` 找壳入口，
-        // 所以壳包必须有传统入口（值由构建写回，指 `dist/index.mjs`）。
-        legacy: true,
+        inline: SHELL_INLINE_PACKAGES,
         dts: false,
       }),
     ],

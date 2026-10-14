@@ -22,7 +22,7 @@ function resolveWorkspaceArg(workspace: string | undefined): string {
 }
 
 interface DevFlags {
-  readonly home?: string;
+  readonly dataDir?: string;
 }
 
 interface BundleFlags {
@@ -30,10 +30,15 @@ interface BundleFlags {
   readonly install?: boolean;
 }
 
-/** 两个形态共用的 dev 选项（数据面根）。 */
-const HOME_OPTION =
-  "dev data plane: xdg (the packaged home), env (ambient DSH_HOME), or an absolute path " +
-  "(default: <workspace>/.dsh-store)";
+/**
+ * 两个形态共用的数据面选项：**数据目录**（`$DSH_HOME`，放 `logs/` 与会话库那些）。
+ *
+ * 缺省是 `<profileDir>/.dsh-store`（dev 的 profileDir 就是工作区）；给了值就按 `dshHome` 的三态解析
+ * （与打包形态同一份规则，见 [design](./../.agents/designs/20261014-数据与工作目录的-layout.md)）。
+ */
+const DATA_DIR_OPTION =
+  "data directory ($DSH_HOME: logs, sessions…): xdg (the packaged data dir), env (ambient " +
+  "DSH_HOME), or an absolute path (default: <profile-dir>/.dsh-store)";
 
 const program = new Command();
 
@@ -47,26 +52,26 @@ program
 program
   .command("web")
   .description("boot the workspace as `dsh web` in the browser")
-  .option("--home <spec>", HOME_OPTION)
+  .option("--data-dir <spec>", DATA_DIR_OPTION)
   .argument("[workspace]", "app workspace directory (default: current directory)")
   .action(async (workspace: string | undefined, options: DevFlags) => {
     await runDev({
       workspace: resolveWorkspaceArg(workspace),
       web: true,
-      ...(options.home === undefined ? {} : { home: options.home }),
+      ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
     });
   });
 
 const desktop = program
   .command("desktop")
   .description("launch the Electron shell against the workspace")
-  .option("--home <spec>", HOME_OPTION)
+  .option("--data-dir <spec>", DATA_DIR_OPTION)
   .argument("[workspace]", "app workspace directory (default: current directory)")
   .action(async (workspace: string | undefined, options: DevFlags) => {
     await runDev({
       workspace: resolveWorkspaceArg(workspace),
       web: false,
-      ...(options.home === undefined ? {} : { home: options.home }),
+      ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
     });
   });
 

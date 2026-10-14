@@ -129,7 +129,7 @@ export async function findWorkspaceRoot(workspace: string): Promise<string> {
   }
 }
 
-export function buildRoot(workspace: string): string {
+export function buildCache(workspace: string): string {
   return join(workspace, "node_modules", ".dshdev");
 }
 
@@ -138,16 +138,16 @@ export function devStoreHome(workspace: string): string {
   return join(workspace, ".dsh-store");
 }
 
-// dev 形态的数据面根：缺省是工作区内的 `.dsh-store`；`--home` 给出时按 `dshHome` 的三态解析
-// （`xdg` / `env` / 绝对路径，与打包形态共用一份规则）。
-export function resolveDevHome(workspace: string, name: string, spec?: string): string {
+// dev 形态的**数据目录**（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`（dev 的 profileDir 就是工作区）；
+// `--data-dir` 给出时按 `dshHome` 的三态解析（`xdg` / `env` / 绝对路径，与打包形态共用一份规则）。
+export function resolveDataDir(workspace: string, name: string, spec?: string): string {
   if (spec === undefined) return devStoreHome(workspace);
   const configured = resolveConfiguredHome(name, spec);
   if (configured !== undefined) return configured;
   const ambient = process.env.DSH_HOME;
   if (ambient === undefined || ambient.trim() === "")
     throw new Error(
-      "dshdev: --home=env needs DSH_HOME in the environment " +
+      "dshdev: --data-dir=env needs DSH_HOME in the environment " +
         "(pass xdg or an absolute path instead)",
     );
   return resolve(ambient);

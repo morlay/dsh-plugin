@@ -36,35 +36,32 @@ function appConfig(): AppConfig {
 }
 
 describe("prepareShellAppDirectory", () => {
-  it("writes a self-contained shell project with an isolating workspace file", async () => {
-    const appRoot = await workDir();
-    const buildRoot = await workDir();
-    await mkdir(join(appRoot, "dist"), { recursive: true });
-    await writeFile(join(appRoot, "dist", "index.mjs"), "export {};\n");
-    await writeFile(join(appRoot, "dist", "preload-app.cjs"), "module.exports = {};\n");
-    await writeFile(
-      join(appRoot, "package.json"),
-      `${JSON.stringify({ name: "@local/dshdev", description: "d", author: "a" })}\n`,
-    );
+  it("用 prebuild 装配好的 app 目录，只补一份 electron-builder 需要的隔离文件", async () => {
+    // appRoot 现在是 `prepareShell` 装配出来的目录（引导 + 转译后的 dist + 清单 + 本地化）：
+    // 这里只补 `pnpm-workspace.yaml`（让 electron-builder 的包遍历停在工作目录），**不再重新装配**。
+    const appDir = await workDir();
+    await writeFile(join(appDir, "package.json"), `${JSON.stringify({ main: "./bootstrap.mjs" })}\n`);
+    await writeFile(join(appDir, "bootstrap.mjs"), "export {};\n");
+    await mkdir(join(appDir, "dist"), { recursive: true });
+    await writeFile(join(appDir, "dist", "index.mjs"), "export {};\n");
+    await writeFile(join(appDir, "dist", "preload-app.cjs"), "module.exports = {};\n");
 
-    const appDir = await prepareShellAppDirectory({
-      appRoot,
-      buildRoot,
+    const prepared = await prepareShellAppDirectory({
+      appRoot: appDir,
+      buildCache: await workDir(),
       appConfig: appConfig(),
       icons: {},
       dir: true,
     });
 
-    expect(await exists(join(appDir, "pnpm-workspace.yaml"))).toBe(true);
-    expect(await readFile(join(appDir, "pnpm-workspace.yaml"), "utf8")).toBe("packages: []\n");
-    const manifest = JSON.parse(await readFile(join(appDir, "package.json"), "utf8")) as {
+    expect(prepared).toBe(appDir);
+    expect(await readFile(join(prepared, "pnpm-workspace.yaml"), "utf8")).toBe("packages: []\n");
+    const manifest = JSON.parse(await readFile(join(prepared, "package.json"), "utf8")) as {
       main?: string;
-      version?: string;
-      dependencies?: unknown;
     };
-    expect(manifest.main).toBe("dist/index.mjs");
-    expect(manifest.version).toBe("0.1.5");
-    expect(manifest.dependencies).toBeUndefined();
-    expect(await exists(join(appDir, "dist", "preload-app.cjs"))).toBe(true);
+    expect(manifest.main).toBe("./bootstrap.mjs");
+    // 装配好的字节原样留着（dist 的入口与 preload）。
+    expect(await exists(join(prepared, "dist", "index.mjs"))).toBe(true);
+    expect(await exists(join(prepared, "dist", "preload-app.cjs"))).toBe(true);
   });
 });

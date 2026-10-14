@@ -24,7 +24,7 @@ describe("desktopBuildConfig", () => {
       appConfig: appConfig(),
       icons: {},
       electron: { version: "44.3.0" },
-      buildRoot: "/build",
+      buildCache: "/build",
     });
 
     expect(config.appId).toBe("ai.deepseek.dsh.custom-next");
@@ -33,8 +33,10 @@ describe("desktopBuildConfig", () => {
     expect(config.linux?.executableName).toBe("dsh-custom-next");
     expect(config.electronVersion).toBe("44.3.0");
     expect(config.directories?.output).toBe(join("/build", "artifacts"));
-    expect(config.asar).toBe(true);
-    expect(config.files).toEqual(["dist/**", "package.json"]);
+    // 不用 asar：壳入口是原生 ESM（引导 → `dist/index.mjs`），Electron 的 ESM 加载器在归档里不可靠；
+    // 产物结构与 dev 的装配目录保持一致。
+    expect(config.asar).toBe(false);
+    expect(config.files).toEqual(["bootstrap.mjs", "dist/**", "locale/**", "package.json"]);
     expect(config.mac?.target).toEqual(["dir"]);
     expect(config.linux?.target).toEqual(["dir"]);
     expect(config.win?.target).toEqual(["dir"]);
@@ -45,7 +47,7 @@ describe("desktopBuildConfig", () => {
       appConfig: appConfig(),
       icons: { mac: "/icons/icon.icns", linux: "/icons/icon.png", win: "/icons/icon.ico" },
       electron: { version: "44.3.0", dist: "/electron/dist" },
-      buildRoot: "/build",
+      buildCache: "/build",
     });
 
     expect(config.mac?.icon).toBe("/icons/icon.icns");
