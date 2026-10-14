@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
-import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
+import { clientAssetPlugin, NODE_BUILTIN, NODE_BUILTIN_NAMES } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
 import { build, esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, packageNameOf } from "./resolve.ts";
@@ -369,7 +369,17 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // `require` 语义（产物里是运行期必抛的 `__require(...)`——浏览器没有 `require`），而这个插件把这类
     // require 转成 ESM import。它**必须独占**外置名单：顶层 `external` 一旦也列了同一个模块，它就整块跳过，
     // 产物里又留下 `require`。
-    esmExternalRequirePlugin({ external: [/^(?!node:)(?!\.)(?!\/)(?!@\/)(?!\0).*/u] }),
+    // 外置名单里**先排掉 node 内置（含裸名）**：`require("https")` 这种写法在 dev 由 alias 的替身接管，
+    // 而 external 判定发生在 alias 之前——不在这儿排掉，它就会被外置，浏览器只好按联邦地址去要
+    // （`/@client-modules/https@0.0.0/index.js` → 404）。名单与 replace 侧同源。
+    esmExternalRequirePlugin({
+      external: [
+        new RegExp(
+          `^(?!(?:node:)?(?:${NODE_BUILTIN_NAMES})$)(?!\\.)(?!\\/)(?!@\\/)(?!\\0).*$`,
+          "u",
+        ),
+      ],
+    }),
   ];
   const startedAt = Date.now();
   process.stderr.write(`[bundle-build] ${options.name}: vite build 开始\n`);

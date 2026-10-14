@@ -40,8 +40,11 @@ const ASSET_PREFIX = "\0dsh-client-asset:";
 // 整行会在 boot 期失败。上游对 `node:module` 是同一手法（`apps/web/src/node-module-stub.ts`）；这里统一成
 // 一个空 CJS 模块——不执行到的分支无害，真执行到会抛（浏览器里本就没有这些能力）。
 const NODE_BUILTIN_STUB = "\0dsh-node-builtin-stub.cjs";
-export const NODE_BUILTIN =
-  /^(?:node:)?(?:assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib)$/;
+/** 名单本体：`NODE_BUILTIN` 与"外置豁免"两处正则都从它拼，别再各写一份。 */
+export const NODE_BUILTIN_NAMES =
+  "assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib";
+
+export const NODE_BUILTIN = new RegExp(`^(?:node:)?(?:${NODE_BUILTIN_NAMES})$`, "u");
 
 // 资产与 `?raw` 内联插件：client 半（现场打包）与 web 前端（现场编译）两条链共用。
 //
