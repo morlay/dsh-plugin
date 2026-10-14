@@ -12,7 +12,7 @@ export default defineConfig({
     paths: "./src/paths.ts",
   },
   plugins: [cordisPlugin({
-  // 产物落 `.js` 而不是 `.mjs`/`.cjs`：`config/desktop.cordis.patch.yml` 按 `../dist/webserver.js`
+  // 产物落 `.js` 而不是 `.mjs`/`.cjs`：壳与工具按 node 解析读这里的子出口（`./webserver` 等）；
   // 这样的**路径**加载它们（patch 行只认路径，不认包出口）。
   fixedExtension: false,
   dts: false,

@@ -135,7 +135,8 @@ describe("桌面 overlay 的停用清单", () => {
   });
 
   it("传输接管的两处配置仍在（无端口 webServer + web-runtime 全项）", () => {
-    expect(insertedNames(patch)).toEqual(["../dist/webserver.js"]);
+    // webServer 的实现由宿主按**源码**装配（宿主挂着 TS loader）：指向 `src/webserver.ts`。
+    expect(insertedNames(patch)).toEqual(["../src/webserver.ts"]);
     expect(configuredIds(patch)).toEqual(["web-runtime"]);
     expect(targetedIds(patch)).toContain("web-runtime");
   });
