@@ -44,3 +44,11 @@ uplink、peer 是 operator，以及注入脚本 `openStream` 的上行转发与�
 - **Windows 目标的运行时载荷分支**：`prepare-runtime` 的 Windows 分支（zip 解包、复制 `node.exe`、`bin/` 复制而非
   符号链接）需要造 zip fixture，本机（unix）跑不到，测试里以 `it.skipIf(process.platform === "win32")` 明示；
   跨平台打包本身被显式拒绝（见[设计 桌面化工具](../designs/20260917-桌面化工具.md)「随包运行时载荷」）。
+
+## 起 dev 与跑 e2e 的规矩
+
+- **dev 一律带 `--data-dir=xdg`**（`just custom dev --data-dir=xdg` / `just custom web --data-dir=xdg`）：缺省
+  `<profileDir>/.dsh-store` 会与本地那套数据面（会话库、设置）互相踩。
+- **e2e 与常驻服务别抢端口**：`dev-client.e2e.spec.ts` 默认自己 boot 一个 web 服务（3080）。本机若已经有
+  `just custom web` 在跑，要么先停它，要么用 `DSH_E2E_REUSE=1 DSH_E2E_PORT=3080` 复用——否则它 boot 的新实例
+  端口被占，表现为"页面渲染出内容"那条偶发失败（单跑绿、全量跑红，就是撞上了这个）。
