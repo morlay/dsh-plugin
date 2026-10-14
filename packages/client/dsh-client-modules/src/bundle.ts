@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
-import { clientAssetPlugin } from "./assets.ts";
+import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
 import { build, esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, packageNameOf } from "./resolve.ts";
@@ -39,7 +39,10 @@ export function clientModulesAlias(options: {
 }): { find: RegExp; replacement: string }[] {
   return [
     { find: /^@\//u, replacement: `${options.repoRoot}/` },
-    { find: /^node:.+$/u, replacement: options.nodeStub },
+    // **裸名的内置也要接管**：产物里出现的是 `require("zlib")`、`import { Readable } from "stream"`
+    // 这类写法（没有 `node:` 前缀），只匹配前缀会让它们漏到浏览器里当包解析——那边报的是一串
+    // `@client-modules/zlib@0.0.0/index.js` 404。名单与联邦构建用的是同一份。
+    { find: NODE_BUILTIN, replacement: options.nodeStub },
   ];
 }
 
@@ -50,7 +53,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "15";
+const BUNDLER_RULES = "16";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。

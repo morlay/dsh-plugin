@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, sep } from "node:path";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
-import { ASSET_MIME } from "./assets.ts";
+import { ASSET_MIME, NODE_BUILTIN } from "./assets.ts";
 import { devExcluded, isAggregated } from "./config.ts";
 import {
   appBootDir,
@@ -389,6 +389,9 @@ export function apply(ctx: Context): void {
   const depsUrlOfSpecifier = async (specifier: string): Promise<string | undefined> => {
     // `@/…` 是本地文件（alias 管），不是包——`packageNameOf` 会把它切成 `@/vendor` 这种假包名。
     if (specifier.startsWith("@/")) return undefined;
+    // `zlib` / `stream` 这类**裸名的 node 内置**不是包：接管成联邦地址只会换来一串 404。留给 alias
+    // 的替身（名单同一份）。
+    if (NODE_BUILTIN.test(specifier)) return undefined;
     const bare = packageNameOf(specifier) || specifier;
     const root = await rootOf(bare);
     const devModule =

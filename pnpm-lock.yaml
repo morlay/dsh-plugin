@@ -572,7 +572,7 @@ importers:
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/host/webserver
       '@oxc-project/runtime':
-        specifier: 0.153.0
+        specifier: ^0.153.0
         version: 0.153.0
       lightningcss:
         specifier: ^1.30.0
