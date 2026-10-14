@@ -534,18 +534,16 @@ export function apply(ctx: Context): void {
       const absolute = new URL(req.url ?? "");
       req.url = `${absolute.pathname}${absolute.search}`;
     }
-    // **只认 `@` 前缀的 URL 空间**：本地文件 `@/…`、联邦产物 `@client-modules/…`（vite 自己的
-    // `/@vite`、`/@id`、`/@fs` 也在这个前缀下）。其余路径（裸的 `/packages/…`、`/vendor/…`）**一律 404**
-    // 并把线索打出来——它们是"没被解析规则换掉"的漏网请求，放过去只会让人在几百条请求里猜谁发的。
+    // **拒的是"仓库路径"，不是"非 `@` 前缀"**：vite 的 root 就是 `app-boot`，页面自己的资源在这个 root
+    // 下是**root 相对**的 URL（`/index.ts`、`/base.css`、将来的 `/assets/…`），逐个列举只会漏——今天就
+    // 漏了 `/base.css`（vite 解析出来就是它，被白名单挡在门外 → 入口整条没跑起来，页面空）。
+    //
+    // 真正该拦的是那些"没被解析规则换掉"的漏网请求：裸的 `/packages/…`、`/vendor/…`、`/apps/…`、
+    // `/node_modules/…`——它们是仓库里的路径，在打包形态下根本不存在，放过去只会让人在几百条请求里猜。
     const requestPath = (req.url ?? "").split("?")[0] ?? "";
     const path = requestPath;
-    const known =
-      // 页面本身（vite 的 root 就是 `app-boot`，它生成的是 root 相对路径）与我们/ vite 的 `@` 前缀
-      // URL 空间（`@/…` 本地文件、`@client-modules/…` 联邦产物、`/@fs/…` 仓库里的源码、`/@id/…` 虚拟模块）。
-      path === "/" ||
-      path === "/index.html" ||
-      path === "/index.ts" ||
-      path.startsWith("/@");
+    const repoPath = /^\/(?:packages|vendor|apps|devpackages|node_modules)(?:\/|$)/u;
+    const known = !repoPath.test(path);
     // 浏览器自己的探测（Chrome DevTools 的 `.well-known`）：给个 204，别让它出现在失败列表里。
     if (path.startsWith("/.well-known/")) {
       res.writeHead(204);
@@ -555,7 +553,7 @@ export function apply(ctx: Context): void {
     if (!known) {
       process.stderr.write(`[reject] ${req.url ?? ""} referer=${req.headers.referer ?? "-"}\n`);
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-      res.end("client-modules: 只认 `@/…`（本地文件）与 `@client-modules/…`（联邦产物）两种形态\n");
+      res.end("client-modules: 这是仓库里的路径，打包形态下不存在（页面资源在 app-boot 下、包走 exports）\n");
       return;
     }
     process.stderr.write(`[serveAny] ${req.url ?? ""}
