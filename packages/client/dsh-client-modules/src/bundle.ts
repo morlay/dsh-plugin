@@ -478,7 +478,12 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
         tsconfig: options.tsconfig ?? true,
         // 默认那份（万一 tsconfig 读不到）：legacy 装饰器。实测 vite 未必把这份 transform 带进
         // rolldown（见单测），所以它是兜底、不是主路径。
-        transform: { decorator: { legacy: true } },
+        transform: {
+          // `target` 必须一起给：oxc 的装饰器转换要看到"目标环境支持到什么程度"，只给 `decorator` 时
+          // 它并不启用（node loader 那边也是 `target: "es2022"` + `decorator.legacy` 一起才转）。
+          target: "es2022",
+          decorator: { legacy: true },
+        },
         // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
         output: {
           format: "es",
