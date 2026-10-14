@@ -14,7 +14,7 @@ const MANIFEST = JSON.parse(
 ) as { bin?: Record<string, string>; version?: string };
 
 const BIN_NAME = Object.keys(MANIFEST.bin ?? {})[0] ?? "";
-const BIN_COMMANDS = ["web", "desktop"];
+const BIN_COMMANDS = ["web", "desktop", "check-deps"];
 
 const roots: string[] = [];
 
@@ -79,7 +79,7 @@ describe("published command surface", () => {
     expect(/^Usage: (\S+)/u.exec(stdout)?.[1]).toBe(BIN_NAME);
   });
 
-  it("exposes exactly the web and desktop subcommands", async () => {
+  it("exposes exactly the web / desktop / check-deps subcommands", async () => {
     const { stdout } = await cli(["--help"]);
 
     expect(listedCommands(stdout)).toEqual(BIN_COMMANDS);
