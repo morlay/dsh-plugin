@@ -103,12 +103,20 @@ export async function runtimeDependenciesOf(root: string): Promise<RuntimeDepend
   return [...seen].map(([name, from]) => ({ name, from })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** 这些依赖里，哪些**当前解析不到**（按 `from` 那个文件的位置解析）。 */
+/**
+ * 这些依赖里，哪些**解析不到**。
+ *
+ * @param root - 被扫的包目录。
+ * @param dependencies - 扫出来的依赖。
+ * @param from - 解析基准目录（`--from`）：缺依赖要在**闭包的解析面**上看（`…/seed/runtime/node_modules`），
+ *   在工作区里跑只会看到工作区缺的（`katex` 那种"上游构建时内联、生产安装里没有"的，在工作区恰好装着）。
+ */
 export async function unresolvableDependencies(
   root: string,
   dependencies: readonly RuntimeDependency[],
+  from?: string,
 ): Promise<string[]> {
-  const require = createRequire(join(root, "package.json"));
+  const require = createRequire(join(from ?? root, "dsh-check-deps.cjs"));
   return dependencies
     .filter(({ name }) => {
       try {
@@ -122,9 +130,9 @@ export async function unresolvableDependencies(
 }
 
 /** 供 CLI 用：扫 + 报（缺的单独一行）。 */
-export async function reportRuntimeDependencies(root: string): Promise<string[]> {
+export async function reportRuntimeDependencies(root: string, from?: string): Promise<string[]> {
   const dependencies = await runtimeDependenciesOf(root);
-  const missing = await unresolvableDependencies(root, dependencies);
+  const missing = await unresolvableDependencies(root, dependencies, from);
   process.stdout.write(
     `${root}: 运行期依赖 ${String(dependencies.length)} 个` +
       `${missing.length === 0 ? "（都可解析）" : `，其中**解析不到** ${String(missing.length)} 个`}\n`,

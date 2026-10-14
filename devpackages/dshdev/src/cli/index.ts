@@ -92,10 +92,14 @@ desktop
 program
   .command("check-deps")
   .description("scan a package's runtime imports (from its entry) and report the ones that cannot resolve")
+  .option("--from <dir>", "resolve dependencies from this directory (e.g. the deployed closure)")
   .argument("[package]", "package directory (default: current directory)")
-  .action(async (pkg: string | undefined) => {
+  .action(async (pkg: string | undefined, options: { from?: string }) => {
     const { reportRuntimeDependencies } = await import("./runtime-deps.ts");
-    const missing = await reportRuntimeDependencies(pkg === undefined ? process.cwd() : resolve(pkg));
+    const missing = await reportRuntimeDependencies(
+      pkg === undefined ? process.cwd() : resolve(pkg),
+      options.from === undefined ? undefined : resolve(options.from),
+    );
     if (missing.length > 0) process.exitCode = 1;
   });
 
