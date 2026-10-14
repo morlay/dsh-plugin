@@ -1,4 +1,4 @@
-const deadline = Date.now() + 260_000;
+const deadline = Date.now() + 240_000;
 const evalIn = async (expression) => {
   let list;
   try { list = await (await fetch("http://127.0.0.1:9223/json/list")).json(); } catch { return undefined; }
@@ -18,13 +18,13 @@ const evalIn = async (expression) => {
     ws.onerror = () => { clearTimeout(timer); resolve(undefined); };
   });
 };
-const probe = `JSON.stringify({root: document.querySelector("#root")?.children.length ?? -1, len: document.body.innerText.length})`;
+const probe = `JSON.stringify({root: document.querySelector("#root")?.children.length ?? -1, len: document.body.innerText.length, text: document.body.innerText.slice(0,60)})`;
 for (;;) {
   const raw = await evalIn(probe);
   if (raw !== undefined && raw !== "") {
     const seen = JSON.parse(raw);
     if (seen.root > 0) { console.log("[页面] 渲染出来了：", raw); break; }
-    if (Date.now() > deadline) { console.log("[页面] 超时，仍空：", raw); break; }
-  } else if (Date.now() > deadline) { console.log("[页面] 超时，页面没起来"); break; }
+    if (Date.now() > deadline) { console.log("[页面] 超时：", raw); break; }
+  } else if (Date.now() > deadline) { console.log("[页面] 超时：页面没起来"); break; }
   await new Promise((r) => setTimeout(r, 6000));
 }

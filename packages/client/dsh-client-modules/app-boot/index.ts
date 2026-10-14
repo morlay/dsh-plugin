@@ -14,10 +14,10 @@
 // 链（联邦产物 / 源码）由解析规则决定——写仓库路径等于把 vendor 的目录布局抄进代码，还会把一份样式
 // 拆成一串 `/vendor/…` 的逐文件请求。
 import "@deepseek-ai/dsh-client-ui-theme/brand-font.css";
-// shell 的挂载默认样式（`html, body, #root { height: 100%; margin: 0 }` 与 body 的字体/颜色/抗锯齿）：
-// 上游由 shell 入口 `client/web/src/boot.ts` 引入，而我们自研入口不走 shell；`dsh-client-web` 没有
-// 单独的样式出口，按它的 `./src/*` 子路径引。
-import "@deepseek-ai/dsh-client-web/src/base.css";
+// 挂载默认样式（`html, body, #root { height: 100%; margin: 0 }` 与 body 的字体/颜色/抗锯齿）：这份
+// 自己带——上游由 shell 的 `client/web/src/boot.ts` 引入，而**我们不走 shell**；`dsh-client-web` 是上游
+// web 应用的包，不在我们的部署闭包里（按包名引会解析成 `0.0.0` 而 404）。
+import "./base.css";
 import { Context } from "@deepseek-ai/cordis";
 // @ts-expect-error 虚拟模块由 devkit 的 vite 插件提供
 import rows from "dsh-client-rows";

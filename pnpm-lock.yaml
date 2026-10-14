@@ -565,6 +565,9 @@ importers:
 
   packages/client/dsh-client-modules:
     dependencies:
+      '@deepseek-ai/dsh-client-ui-theme':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-theme
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/host/webserver

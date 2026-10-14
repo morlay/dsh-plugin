@@ -52,6 +52,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@oxc-project/runtime": "0.153.0",
     "lightningcss": "^1.30.0",

@@ -1,0 +1,34 @@
+/* 挂载默认样式：`html, body, #root` 撑满、字体栈、灰度抗锯齿与基础配色。
+ *
+ * 这几条本来由上游 shell 的挂载面带来（`@deepseek-ai/dsh-client-web/src/base.css`），而我们自研入口
+ * 不走 shell——那就**自己带一份**：包名是唯一的寻址入口，而 `dsh-client-web` 是上游 web 应用的包，
+ * 不在我们的部署闭包（`@deepseek-ai/dsh-client-web` 解析成 `0.0.0` 就是没装）。语义照它抄，
+ * 主题 token（`--dsw-*`）仍由 `ui-theme` 的 client 半在运行时注入——这里的回退值只是"注入之前别闪"。 */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(
+    --dsw-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif
+  );
+  /* 灰度抗锯齿优于次像素渲染：WebKit/Blink 与 Firefox 在 macOS 上的等价写法，其余引擎忽略这两行。 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--dsw-alias-label-primary, #0f1115);
+  background: var(--dsw-alias-bg-base, #fff);
+}
