@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import type { Plugin, ViteDevServer } from "vite";
 import { devExcluded, isAggregated } from "./config.ts";
+import { profileDir } from "./dirs.ts";
 import { CLIENT_MODULES_PREFIX } from "./bundle.ts";
 import { clientHalfOf, exportTargetOf, packageNameOf, packageRootOf } from "./resolve.ts";
 
@@ -85,7 +86,10 @@ async function clientVariantOf(source: string, importer: string): Promise<string
 
 export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
   let excludedCache: RegExp[] | undefined;
-  const excludedOf = async (): Promise<RegExp[]> => (excludedCache ??= await devExcluded());
+  const excludedOf = async (): Promise<RegExp[]> => {
+    if (excludedCache === undefined) excludedCache = await devExcluded(await profileDir());
+    return excludedCache;
+  };
   const requireFromRepo = createRequire(join(options.repoRoot, "package.json"));
 
   return {

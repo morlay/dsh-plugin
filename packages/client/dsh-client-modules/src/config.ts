@@ -5,7 +5,7 @@
  * 走按包聚合（一个包一份产物、共享 chunk），换掉模块级 HMR；没被点名的包是正在改的，保持逐文件走 vite。
  */
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 /** 一条 glob（只支持 `*`，够用）→ 正则。 */
 function globToRegExp(pattern: string): RegExp {
@@ -41,48 +41,20 @@ export function isDevForm(): boolean {
   return process.env["DSH_DEV_FORM"] !== undefined;
 }
 
-export async function devExcluded(): Promise<RegExp[]> {
+export async function devExcluded(profileDir: string): Promise<RegExp[]> {
   if (isDevForm()) return [/.*/u];
-  const home = process.env["DSH_HOME"];
-  const candidates = [
-    process.env["DSH_DESKTOP_DEV_PROFILE_DIR"],
-    home === undefined ? undefined : dirname(home),
-    process.cwd(),
-  ].filter((value): value is string => value !== undefined && value !== "");
-  for (const profileRoot of candidates) {
-    try {
-      const manifest = JSON.parse(await readFile(join(profileRoot, "package.json"), "utf8")) as {
-        dsh?: { dev?: { exclude?: string[] } };
-      };
-      const patterns = (manifest.dsh?.dev?.exclude ?? []).map(globToRegExp);
-      if (patterns.length > 0) return patterns;
-    } catch {
-      // 换下一个候选。
-    }
+  try {
+    const manifest = JSON.parse(await readFile(join(profileDir, "package.json"), "utf8")) as {
+      dsh?: { dev?: { exclude?: string[] } };
+    };
+    const patterns = (manifest.dsh?.dev?.exclude ?? []).map(globToRegExp);
+    if (patterns.length > 0) return patterns;
+  } catch {
+    // 读不到就算没配。
   }
   // **读不到配置就是"不打算改任何包"**：全部走按包预编译（桌面/bundle 形态没有 dev 配置，源码逐文件
   // 那条路对它们没有意义）。这正是两种形态"完美复用同一条链"的地方。
   return [/.*/u];
-}
-
-/**
- * profile 根：启动器给的 `DSH_DESKTOP_DEV_PROFILE_DIR`、或 `DSH_HOME` 的父目录、或当前目录。
- *
- * @returns 第一个存在的候选目录。
- */
-export async function profileRootOf(): Promise<string> {
-  const home = process.env["DSH_HOME"];
-  const candidates = [
-    process.env["DSH_DESKTOP_DEV_PROFILE_DIR"],
-    home === undefined ? undefined : dirname(home),
-    process.cwd(),
-  ].filter((value): value is string => value !== undefined && value !== "");
-  for (const candidate of candidates) {
-    if (await readFile(join(candidate, "package.json"), "utf8").then(() => true, () => false)) {
-      return candidate;
-    }
-  }
-  return process.cwd();
 }
 
 /**
