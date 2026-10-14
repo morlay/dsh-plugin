@@ -29,7 +29,8 @@
     "./wire": "./src/wire.ts",
     "./paths": "./src/paths.ts",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./ts-register": "./src/ts-register.mjs"
   },
   "publishConfig": {
     "exports": {
@@ -64,7 +65,9 @@
     "@deepseek-ai/schemastery": "workspace:^",
     "@morlay/dsh-client-modules": "workspace:*",
     "@morlay/web-custom-profile": "workspace:*",
+    "@oxc-node/core": "^0.1.6",
     "lightningcss": "^1.32.0",
+    "oxc-transform": "^0.154.0",
     "rolldown": "1.x",
     "ws": "^8.21.3"
   },

@@ -1,4 +1,4 @@
-import { access, appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,21 +87,11 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-const WEB_FRONTEND_PACKAGE = "@deepseek-ai/dsh-web-frontend";
 
 const APPLICATION_URL = `${SCHEME}://app/`;
 
 // Windows 自绘标题栏高度（DIP），与 preload 写入的 CSS 变量一致。
 const WINDOWS_TITLEBAR_HEIGHT = 40;
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 interface RuntimeResources {
   readonly node: string;
@@ -134,7 +124,9 @@ function runtimeResources(): RuntimeResources {
     pnpm: join(process.resourcesPath, "runtime", "pnpm", "bin", "pnpm.mjs"),
     nodeBin: join(process.resourcesPath, "runtime", "bin"),
     // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
-    loader: join(process.resourcesPath, "runtime", "loader", "register.mjs"),
+    loader:
+      (development ? process.env.DSH_DESKTOP_LOADER : undefined) ??
+      join(process.resourcesPath, "runtime", "loader", "register.mjs"),
   };
 }
 
@@ -302,12 +294,6 @@ async function main(): Promise<void> {
     development?.profileDir ?? join(resolveDshHome(appConfig) ?? "", "profiles", PROFILE_NAME);
 
   const runtimeDir = development?.runtimeDir ?? resources.runtime;
-  const webDocumentRoot = join(
-    runtimeDir,
-    "node_modules",
-    ...WEB_FRONTEND_PACKAGE.split("/"),
-    "dist",
-  );
   const dshHome = resolveDshHome(appConfig);
 
   if (development === undefined) {
@@ -317,14 +303,9 @@ async function main(): Promise<void> {
       await installPlantedProfile(profileDir, resources);
     }
   }
-  // **开发形态不要求上游的前端静态产物**：页面与资源由 dev 的 client 服务（vite + 联邦产物）在宿主进程里
-  // 现场提供，壳只是把请求经字节管道交给它——`webDocumentRoot` 在打包形态才是前端来源。
-  if (development === undefined && !(await pathExists(join(webDocumentRoot, "index.html")))) {
-    throw new Error(
-      `dsh desktop: the Web frontend is missing at ${webDocumentRoot}; ` +
-        `the runtime closure must carry ${WEB_FRONTEND_PACKAGE}`,
-    );
-  }
+  // **两种形态都不要求上游的前端静态产物**：页面与资源由这条链（vite + 联邦预编译，见
+  // `@morlay/dsh-client-modules`）在宿主进程里现场提供，壳只是把请求经字节管道交给它。所以这里不再检查
+  // `@deepseek-ai/dsh-web-frontend/dist`——profile 的 `dsh.profile.bundles` 声明了那条链，就不该再要求它。
 
   let host: DesktopHostProcess | undefined;
   let mainWindow: BrowserWindowType | undefined;

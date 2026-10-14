@@ -15,10 +15,11 @@ const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
 // What the runtime entry loads: its wrapper and the node-gyp payload; pnpm's install script
 // relinks the platform binary, so the package must not be copied wholesale.
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
-// 随包的 TS 注册钩子（`@oxc-node/core` 的 register，与工作区里那条 `--import` 同一份实现）与它依赖的那层
-// 用它把上游源码（`exports` 指 `src`）转成 node 能执行的东西。
+// 随包的 TS 注册钩子：`@morlay/dsh-desktop-host/ts-register`（自建 hooks + `oxc-transform`）——它接管
+// **node_modules 下**的 `.ts`，而这条链的宿主正好住在那里（上游源码经 `exports` 指到 `src`）。
 const LOADER_ENTRY = "@oxc-node/core/register";
-const ROLDDOWN_MANIFEST = "rolldown/package.json";
+// loader 依赖的那一层：`oxc-transform` 的转译器（含它按平台挑的原生绑定）。
+const LOADER_DEPENDENCY_MANIFEST = "rolldown/package.json";
 
 type RuntimePlatform = "darwin" | "linux" | "win";
 type RuntimeArch = "arm64" | "x64";
@@ -238,19 +239,19 @@ async function prepareBin(platform: RuntimePlatform, runtimeRoot: string): Promi
   await symlink("../node/node", join(binRoot, "node"), "file");
 }
 
-// 随包 loader 载荷：loader 自己（一个 `.mjs`，只 import `rolldown/utils`）与 rolldown 那一层的依赖。
-// pnpm 把同一个包的依赖都放在 `<store>/rolldown@<version>/node_modules/` 这一层里，整层拷过去，
-// rolldown 的解析就与在仓库里一致——包括它自己按平台挑的原生绑定（约 16 MiB）。
+// 随包 loader 载荷：loader 自己（一个 `.mjs`，import `oxc-transform`）与它依赖的那一层。
+// pnpm 把同一个包的依赖都放在 `<store>/oxc-transform@<version>/node_modules/` 这一层里，整层拷过去，
+// 解析就与在仓库里一致——包括它按平台挑的原生绑定。
 async function prepareLoader(runtimeRoot: string): Promise<string> {
   const entry = fileURLToPath(import.meta.resolve(LOADER_ENTRY));
-  const rolldownRoot = dirname(fileURLToPath(import.meta.resolve(ROLDDOWN_MANIFEST)));
-  const layer = dirname(rolldownRoot);
+  const dependencyRoot = dirname(fileURLToPath(import.meta.resolve(LOADER_DEPENDENCY_MANIFEST)));
+  const layer = dirname(dependencyRoot);
   if (basename(layer) !== "node_modules")
     throw new Error(
-      `desktop runtime: unexpected install layout for rolldown (${rolldownRoot}); ` +
+      `desktop runtime: unexpected install layout for the loader dependency (${dependencyRoot}); ` +
         "the loader payload needs pnpm's virtual store",
     );
-  const manifest = JSON.parse(await readFile(join(rolldownRoot, "package.json"), "utf8")) as {
+  const manifest = JSON.parse(await readFile(join(dependencyRoot, "package.json"), "utf8")) as {
     version?: unknown;
   };
   const destination = join(runtimeRoot, "loader");
@@ -296,6 +297,6 @@ export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise
   );
   console.log(
     `desktop runtime: prepared Node.js ${NODE_VERSION}, pnpm ${pnpmVersion} and the oxc loader ` +
-      `(@oxc-node/core ${loaderVersion}) for ${platform}-${arch}`,
+      `(oxc-transform ${loaderVersion}) for ${platform}-${arch}`,
   );
 }

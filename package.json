@@ -11,6 +11,7 @@
   "type": "module",
   "devDependencies": {
     "@local/devkit": "workspace:*",
+    "@local/dshdev": "workspace:*",
     "@local/dts-prepare": "workspace:*",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@local/typert-generator": "workspace:*",
@@ -33,8 +34,7 @@
     "vite": "8.x",
     "vite-tsconfig-paths": "6.x",
     "vitest": "5.x",
-    "zx": "^8.8.5",
-    "@local/dshdev": "workspace:*"
+    "zx": "^8.8.5"
   },
-  "packageManager": "pnpm@12.10.1"
+  "packageManager": "pnpm@12.11.2"
 }

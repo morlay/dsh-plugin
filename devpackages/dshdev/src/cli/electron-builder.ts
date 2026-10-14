@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, readdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { build, type CliOptions } from "electron-builder";
@@ -77,11 +77,12 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
     electronVersion: electron.version,
     ...(electron.dist === undefined ? {} : { electronDist: electron.dist }),
     directories: { output: join(buildCache, "artifacts") },
-    // **不用 asar**：壳的入口是原生 ESM（`bootstrap.mjs` -> `dist/index.mjs`），而 Electron 的 ESM 加载器
-    // 在 asar 归档里不可靠（要么挂住、要么报找不到）。产物结构与 dev 形态保持一致，少一层差异。
+    // **不用 asar**：壳的入口是引导 + `dist/index.mjs`，而 Electron 在归档里的模块解析面更窄（原生 ESM
+    // 尤其不可靠）。产物结构与 dev 的装配目录保持一致，少一层差异。
     asar: false,
-    // 装配目录（`.dshdev/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
-    files: ["bootstrap.mjs", "dist/**", "locale/**", "package.json"],
+    // 装配目录（`buildCache/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
+    // 逐项列清楚（不用 `dist/**`：实测它只带走了 `preload-app.cjs`，入口 `index.mjs` 会漏）。
+    files: ["main.mjs", "package.json", "src/**", "dist/preload-app.cjs", "locale/*.json"],
     extraResources: [
       { from: join(buildCache, "runtime"), to: "runtime" },
       { from: join(buildCache, "seed"), to: "seed" },
@@ -109,6 +110,13 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
 export async function buildDesktopApp(options: DesktopBuildOptions): Promise<string[]> {
   const { buildCache, appConfig, icons, dir } = options;
   const appDir = await prepareShellAppDirectory(options);
+  // 打包前把 app 目录摊开看一眼：electron-builder 只按 `files` 取件，缺件时从这里能立刻分辨"没装出来"
+  // 还是"没打进去"。
+  console.log(`desktop bundle: app 目录 ${appDir} -> ${(await readdir(appDir)).join(", ")}`);
+  const distDir = join(appDir, "dist");
+  console.log(
+    `desktop bundle: dist -> ${(await readdir(distDir).catch(() => ["(无 dist)"])).join(", ")}`,
+  );
   const electron = await installedElectron();
   console.log(
     `desktop bundle: electron-builder appId=${appConfig.id} productName=${appConfig.displayName} version=${appConfig.version} electron=${electron.version}`,

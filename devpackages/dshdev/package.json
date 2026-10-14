@@ -34,9 +34,10 @@
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@local/devkit": "workspace:*",
+    "@local/tsdown-plugin-cordis": "workspace:*",
     "@oxc-node/core": "^0.1.6",
     "@types/node": "^26.5.0",
-    "@local/tsdown-plugin-cordis": "workspace:*"
+    "oxc-transform": "^0.154.0"
   },
   "engines": {
     "node": ">=24.11.0"

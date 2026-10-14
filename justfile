@@ -16,9 +16,8 @@ dep *args:
 
 update:
     pnpm dlx -r \
-        --filter 'dsh-plugin' \
-        --filter './packages/*' \
-        --filter './devpackages/*' \
+        --filter "./devpackages/*"  \
+        --filter "./packages/*/*" \
         taze latest -w
 
 prepare:
@@ -30,6 +29,12 @@ prepare:
 clean:
     rm -f pnpm-lock.yaml;
     pnpm clean
+
+clean-dist:
+    pnpm exec -r \
+        --filter "./devpackages/*"  \
+        --filter "./packages/*/*" \
+        rm -rf dist 
 
 fmt:
     pnpm exec oxfmt .

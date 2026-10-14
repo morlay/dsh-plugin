@@ -15,7 +15,6 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
-    "bootstrap.mjs",
     "src",
     "locale/*.json",
     "dist"

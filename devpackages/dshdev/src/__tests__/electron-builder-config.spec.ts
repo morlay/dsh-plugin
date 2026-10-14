@@ -36,7 +36,13 @@ describe("desktopBuildConfig", () => {
     // 不用 asar：壳入口是原生 ESM（引导 → `dist/index.mjs`），Electron 的 ESM 加载器在归档里不可靠；
     // 产物结构与 dev 的装配目录保持一致。
     expect(config.asar).toBe(false);
-    expect(config.files).toEqual(["bootstrap.mjs", "dist/**", "locale/**", "package.json"]);
+    expect(config.files).toEqual([
+      "main.mjs",
+      "package.json",
+      "src/**",
+      "dist/preload-app.cjs",
+      "locale/*.json",
+    ]);
     expect(config.mac?.target).toEqual(["dir"]);
     expect(config.linux?.target).toEqual(["dir"]);
     expect(config.win?.target).toEqual(["dir"]);
