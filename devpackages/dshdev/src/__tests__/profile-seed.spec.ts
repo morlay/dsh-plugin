@@ -109,7 +109,7 @@ describe("profile seed manifest", () => {
 });
 
 describe("profile runtime links", () => {
-  it("links every dependency the closure carries, plain and workspace alike", async () => {
+  it("lists the bundles themselves along with every dependency the closure carries", async () => {
     const { root, modules } = await closureFixture();
 
     expect(await profileRuntimeLinks(root, modules, ["@morlay/plugin"])).toEqual([
@@ -117,6 +117,8 @@ describe("profile runtime links", () => {
         name: "@deepseek-ai/dsh-llm",
         path: "node_modules/.pnpm/store/node_modules/@deepseek-ai/dsh-llm",
       },
+      // 装配行**自己**也在名单里：profile 的 `dependencies` 照它写，少了它那一行就根本不会装进去。
+      { name: "@morlay/plugin", path: "node_modules/@morlay/plugin" },
       { name: "zod", path: "node_modules/zod" },
     ]);
   });

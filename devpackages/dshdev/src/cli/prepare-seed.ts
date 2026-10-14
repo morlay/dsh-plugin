@@ -475,7 +475,11 @@ async function copyProfileEntries(
 
 // Copy each profile-owned bundle out of the closure as an installable `file:` source.
 
-// runtime 包：profile 自己的依赖经 `overrides` 指回 runtime 副本，写成 runtime-relative 的 `link:`。
+// runtime 包：profile 要装的东西（自己的 bundles 及其闭包）经 `overrides` 指回 runtime 副本，写成
+// runtime-relative 的 `link:`。
+//
+// **这些包本身也在名单里**：profile 的 `dependencies` 由壳照这份名单写，少了它们，装配行（如
+// `@morlay/web-custom-profile`）就根本不会被装进 profile，宿主那边表现是一排 `failed to import`。
 //
 // profile 里的包来自工作区（`file:`），依赖在 profile 内解析不到（无工作区、离线无 registry）；
 // peer / optional 找不到就跳过（profile 安装不装 peer），普通依赖找不到即打包失败。取舍见
@@ -489,6 +493,8 @@ export async function profileRuntimeLinks(
   for (const name of names) {
     const manifestPath = join(runtimeModulesDir, ...name.split("/"), "package.json");
     if (!(await pathExists(manifestPath))) continue;
+    // 包**自己**也是 profile 要装的一份。
+    required.set(name, true);
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       dependencies?: Record<string, string>;
       peerDependencies?: Record<string, string>;
