@@ -444,11 +444,10 @@ export function profileManifest(
     private: true,
     version: manifest.version ?? "0.0.0",
     type: "module",
-    // 直接 `link:` 回随包 runtime 的那份闭包（`seed/profiles/desktop` → `seed/runtime/node_modules`）：
-    // 不再往 profile 里落一份 `vendor/` 副本（省一次拷贝，也省掉那份 41M）。
-    dependencies: Object.fromEntries(
-      localBundles.map((name) => [name, `link:../../runtime/node_modules/${name}`]),
-    ),
+    // 只声明"要哪些包"，**来源**由运行时的 `overrides` 定：壳装 profile 时会按随包 runtime 的**绝对**路径
+    // 写一组 `link:` 覆盖（`workspaceWithOverrides`）。这里不能写相对 `link:`——种子里那份闭包的位置（
+    // `Resources/seed/runtime`）与 profile 的实际位置（`$DSH_HOME/profiles/<name>`）没有固定的相对关系。
+    dependencies: Object.fromEntries(localBundles.map((name) => [name, "*"])),
     // profile 是安装产物：清单按官方形态写（官方 bundles 在前 + app 自己声明的），只保留装配字段，
     // app 的 `dsh.version` / `desktop` / `dev` 属于打包输入，运行时不再从 profile 读它们。
     dsh: { profile: { ...manifest.dsh?.profile, bundles: mergedProfileBundles(manifest) } },

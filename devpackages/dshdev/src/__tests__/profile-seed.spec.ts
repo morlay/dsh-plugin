@@ -65,7 +65,7 @@ describe("profile seed manifest", () => {
     ]);
   });
 
-  it("把每个本地 bundle 声明成指回随包 runtime 的 link 依赖（不再落 vendor 副本）", () => {
+  it("只声明要哪些包（来源由运行时的 overrides 定，seed 里不写相对 link）", () => {
     expect(
       profileManifest(app(["@morlay/better-session", "dsh-context"]), [
         "@morlay/better-session",
@@ -77,8 +77,8 @@ describe("profile seed manifest", () => {
       version: "0.1.6",
       type: "module",
       dependencies: {
-        "@morlay/better-session": "link:../../runtime/node_modules/@morlay/better-session",
-        "dsh-context": "link:../../runtime/node_modules/dsh-context",
+        "@morlay/better-session": "*",
+        "dsh-context": "*",
       },
       dsh: {
         profile: {

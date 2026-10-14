@@ -139,16 +139,23 @@ function runtimeResources(): RuntimeResources {
   };
 }
 
-async function installPlantedProfile(
+/**
+ * 让 profile 的依赖指向**当前**这份运行时，**每次启动**都做。
+ *
+ * profile 住在 `$DSH_HOME`（用户数据，跨应用路径），而它的依赖经 `overrides` 的 `link:` 指到随包运行时
+ * ——那个位置**只有现在这一刻**才知道（应用可以被挪到别的目录）。所以这份 `link:` 必须动态算，不能靠
+ * "种的那一次"写死：内容没变就什么都不做，变了才重装一次（离线安装，增量的）。
+ */
+async function refreshProfileLinks(
   profileDir: string,
   resources: RuntimeResources,
 ): Promise<void> {
   const settingsPath = join(profileDir, PROFILE_WORKSPACE_NAME);
   const overrides = await runtimeOverrides(profileDir, resources.runtime);
-  await writeFile(
-    settingsPath,
-    workspaceWithOverrides(await readFile(settingsPath, "utf8"), overrides),
-  );
+  const current = await readFile(settingsPath, "utf8");
+  const next = workspaceWithOverrides(current, overrides);
+  if (next === current) return;
+  await writeFile(settingsPath, next);
   await installProfile({
     node: resources.node,
     pnpmEntry: resources.pnpm,
@@ -307,8 +314,14 @@ async function main(): Promise<void> {
     if (dataDir === undefined)
       throw new Error("dsh desktop: packaged applications require a concrete dataDir");
     if (await ensureSeedProfile(resources.seed, dataDir)) {
-      await installPlantedProfile(profileDir, resources);
+      await installProfile({
+        node: resources.node,
+        pnpmEntry: resources.pnpm,
+        profileDir,
+      });
     }
+    // 重种与否都要刷新一次：应用可能被挪过目录，而 link 指向的是"现在这份运行时"。
+    await refreshProfileLinks(profileDir, resources);
   }
   // **两种形态都不要求上游的前端静态产物**：页面与资源由这条链（vite + 联邦预编译，见
   // `@morlay/dsh-client-modules`）在宿主进程里现场提供，壳只是把请求经字节管道交给它。所以这里不再检查
