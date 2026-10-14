@@ -442,6 +442,10 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
       target: "esnext",
       // 走 `lib` 而不是 `rollupOptions.input`：库模式的入口语义明确（接受绝对路径，按 entry 名出产物）。
       lib: { entry: input, formats: ["es"], fileName: (_format, entryName) => `${entryName}.js` },
+      // **装饰器：有 tsconfig 走它，没有就用这份默认**。rolldown 的 oxc 不看 tsconfig 的
+      // `experimentalDecorators`（文档说"有正确的 tsconfig 时会自动"，但上游那种 `@Remote` 用法不会），
+      // 于是产物里留着 `@Remote(...)`、浏览器报 `SyntaxError`、入口整条不执行。显式写下来最稳。
+      rolldownOptions: { transform: { decorator: { legacy: true } } },
       rollupOptions: {
         // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
         output: {
