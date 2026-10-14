@@ -4,6 +4,7 @@
 // 否则两条链对"资产内联还是落文件"会各说各话。
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "rolldown";
 import { INLINE_LIMIT, resolveFileSpecifier, type CssAssetPolicy } from "./styles.ts";
 
@@ -39,7 +40,14 @@ const ASSET_PREFIX = "\0dsh-client-asset:";
 // node 内置的浏览器替身：第三方向浏览器产物里带 `require("util")` 这类调用时，模块表与平台种子词都答不上来，
 // 整行会在 boot 期失败。上游对 `node:module` 是同一手法（`apps/web/src/node-module-stub.ts`）；这里统一成
 // 一个空 CJS 模块——不执行到的分支无害，真执行到会抛（浏览器里本就没有这些能力）。
-const NODE_BUILTIN_STUB = "\0dsh-node-builtin-stub.cjs";
+/**
+ * node 内置的浏览器替身：**指向那份真实文件**（`app-boot/node-stub.cjs`），不再用"虚拟空模块"。
+ *
+ * 差别是语义：空模块只有 `module.exports = {}`，而源码里是 `import { Readable } from "node:stream"` 这种
+ * **具名**引用——build 出来 `Readable` 会是 `undefined`，跑到就炸；dev 那条链由 alias 指向真实的
+ * `node-stub`，所以只有打包形态会坏。两份形态指同一份语义，才谈得上"行为一致"。
+ */
+const NODE_BUILTIN_STUB = fileURLToPath(new URL("../app-boot/node-stub.cjs", import.meta.url));
 /** 名单本体：`NODE_BUILTIN` 与"外置豁免"两处正则都从它拼，别再各写一份。 */
 export const NODE_BUILTIN_NAMES =
   "assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib";
@@ -70,7 +78,6 @@ export function clientAssetPlugin(options: { assets?: CssAssetPolicy } = {}): Pl
       },
     },
     async load(id: string) {
-      if (id === NODE_BUILTIN_STUB) return "module.exports = {};\n";
       if (id.startsWith(RAW_PREFIX)) {
         const file = id.slice(RAW_PREFIX.length, -RAW_SUFFIX.length);
         this.addWatchFile(file);

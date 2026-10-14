@@ -52,8 +52,7 @@
     },
     "dev": {
       "exclude": [
-        "@deepseek-ai/*",
-        "@morlay/*"
+        "@deepseek-ai/*"
       ]
     }
   }
