@@ -3,6 +3,7 @@
 // home 在这里的理由同 `./styles.ts`：**运行期**（现场打包给浏览器）与**构建期**（tsdown 插件）共用一份，
 // 否则两条链对"资产内联还是落文件"会各说各话。
 import { readFile } from "node:fs/promises";
+import { builtinModules } from "node:module";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "rolldown";
@@ -48,9 +49,19 @@ const ASSET_PREFIX = "\0dsh-client-asset:";
  * `node-stub`，所以只有打包形态会坏。两份形态指同一份语义，才谈得上"行为一致"。
  */
 const NODE_BUILTIN_STUB = fileURLToPath(new URL("../app-boot/node-stub.cjs", import.meta.url));
-/** 名单本体：`NODE_BUILTIN` 与"外置豁免"两处正则都从它拼，别再各写一份。 */
-export const NODE_BUILTIN_NAMES =
-  "assert|async_hooks|buffer|child_process|crypto|events|fs|http|https|module|net|os|path|process|stream|url|util|vm|worker_threads|zlib";
+/**
+ * 名单本体：`NODE_BUILTIN` 与"外置豁免"两处正则都从它拼。
+ *
+ * **取自 node 自己的 `builtinModules`**，不手抄：手抄的那份漏了 `tls` 之类，于是它们被当成包去解析、
+ * 构建失败（`[UNRESOLVED_ENTRY] Cannot resolve entry module tls`），而 dev 因为走的是另一条解析路
+ * （vite dev server 的 alias）反而看不出来。名单只有一份、且由运行时给出，才谈得上"行为一致"。
+ */
+export const NODE_BUILTIN_NAMES = [...builtinModules, "node:test", "node:sea"]
+  .map((name) => name.replace(/^node:/u, ""))
+  .filter((name, index, all) => all.indexOf(name) === index)
+  .map((name) => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+  .sort()
+  .join("|");
 
 /**
  * 匹配 node 内置，**含子路径与 `node:` 前缀**：`fs/promises`、`node:fs/promises`、`node:stream/web` 都算。
