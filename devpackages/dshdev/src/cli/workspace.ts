@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { resolveConfiguredHome } from "@morlay/dsh-desktop-shell/dshhome";
@@ -236,4 +237,18 @@ export async function packageVersion(path: string, subject: string): Promise<str
   if (typeof manifest.version !== "string")
     throw new Error(`dshdev: ${subject} has no version`);
   return manifest.version;
+}
+
+export function runPnpm(args: readonly string[], cwd: string): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn("pnpm", args, { cwd, stdio: "inherit" });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) resolvePromise();
+      else
+        reject(
+          new Error(`desktop seed: pnpm ${args.join(" ")} exited with ${String(code ?? signal)}`),
+        );
+    });
+  });
 }

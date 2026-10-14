@@ -80,6 +80,10 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
     // **不用 asar**：壳的入口是引导 + `dist/index.mjs`，而 Electron 在归档里的模块解析面更窄（原生 ESM
     // 尤其不可靠）。产物结构与 dev 的装配目录保持一致，少一层差异。
     asar: false,
+    // **不做 native 重编**：app 目录里那份依赖是**宿主**的（宿主跑在随包的真 node 上），它里面的原生模块
+    // 已经按那个 node 装好了；按 Electron 的 ABI 再编一遍既不对（壳自己不用它们），也会去写全局的
+    // `~/.electron-gyp`（`@electron/rebuild` 把那个路径硬编码在 home 下）。
+    npmRebuild: false,
     // 装配目录（`buildCache/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
     // 产物就是**整包的源码**加那个入口：preload 的 CJS 由宿主机现场打包（见 `preload-source.ts`），
     // 所以装配目录里没有 `dist/`。逐项列清楚（不用通配：`dist/**` 那种写法实测会漏件）。

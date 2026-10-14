@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createHash, type Hash } from "node:crypto";
 import type { Dirent } from "node:fs";
 import {
@@ -44,6 +43,7 @@ import {
   resolveWorkspace,
   topLevelYamlBlock,
   workspaceManifest,
+  runPnpm,
   type WorkspaceManifest,
 } from "./workspace.ts";
 
@@ -57,19 +57,6 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-function runPnpm(args: readonly string[], cwd: string): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn("pnpm", args, { cwd, stdio: "inherit" });
-    child.once("error", reject);
-    child.once("close", (code, signal) => {
-      if (code === 0) resolvePromise();
-      else
-        reject(
-          new Error(`desktop seed: pnpm ${args.join(" ")} exited with ${String(code ?? signal)}`),
-        );
-    });
-  });
-}
 
 async function inheritDeploySettings(root: string, destination: string): Promise<void> {
   const sourcePath = join(root, "pnpm-workspace.yaml");

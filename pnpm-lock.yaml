@@ -773,6 +773,22 @@ importers:
         version: 1.64.0
 
   packages/desktop/dsh-desktop-shell:
+    dependencies:
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/atomic-write
+      '@deepseek-ai/dsh-client-shortcuts':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/client/shortcuts
+      '@deepseek-ai/dsh-util-crypto':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/crypto
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../../vendor/deepseek-harness/packages/util/values
+      '@morlay/dsh-desktop-host':
+        specifier: workspace:*
+        version: link:../dsh-desktop-host
     devDependencies:
       '@deepseek-ai/dsh':
         specifier: workspace:*
@@ -780,18 +796,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../../vendor/deepseek-harness/packages/boot/app-boot
-      '@deepseek-ai/dsh-atomic-write':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/util/atomic-write
-      '@deepseek-ai/dsh-client-shortcuts':
-        specifier: workspace:*
-        version: link:../../../vendor/deepseek-harness/packages/client/shortcuts
       '@local/devkit':
         specifier: workspace:*
         version: link:../../../devpackages/devkit
-      '@morlay/dsh-desktop-host':
-        specifier: workspace:*
-        version: link:../dsh-desktop-host
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.6

@@ -69,13 +69,10 @@
   "devDependencies": {
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
-    "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@local/devkit": "workspace:*",
     "@types/node": "^26.5.0",
     "electron": "^44.3.0",
-    "@oxc-node/core": "^0.1.6",
-    "@morlay/dsh-desktop-host": "workspace:*"
+    "@oxc-node/core": "^0.1.6"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
@@ -84,5 +81,12 @@
   "engines": {
     "node": ">=24.11.0"
   },
-  "main": "./main.mjs"
+  "main": "./main.mjs",
+  "dependencies": {
+    "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+    "@deepseek-ai/dsh-util-crypto": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@morlay/dsh-desktop-host": "workspace:*"
+  }
 }

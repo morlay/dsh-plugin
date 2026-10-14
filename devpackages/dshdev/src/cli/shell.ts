@@ -12,9 +12,10 @@
  *   壳在窗口创建前取走；
  * - `package.json`（`main` 指引导）与 `locale/`。
  */
-import { access, cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findWorkspaceRoot, runPnpm } from "./workspace.ts";
 
 // 壳包根：源码树里那个包（装配的输入）。工具里不写死包名，一律由 node 解析。
 export const SHELL_PACKAGE_ROOT = dirname(
@@ -39,7 +40,9 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 /**
- * 装配壳（幂等：每次重来一遍，几十毫秒）。
+ * 装配壳这一单元（app 目录）。
+ *
+ * 内容是"壳 + 它的依赖"：依赖交给 `pnpm deploy`（无外链的真目录），源码与本地化整包拷过来，入口按包名生成。
  *
  * @param workRoot - 打包工作目录（调用方给的就是 `node_modules/.dshdev`）。
  * @returns 装配后的 app 目录与入口。
@@ -49,34 +52,32 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
 
-  // 解析面：装配目录**不在工作区里**，rolldown 从那里解析不到壳的依赖（`@morlay/dsh-desktop-host` 那些）
-  // ——解析失败就无从内联，产物里会留下裸引用（打包后 `ERR_MODULE_NOT_FOUND`）。把壳包自己的解析面链过来。
-  const modules = join(root, "node_modules");
-  // 先显式清掉目标：上一轮装配失败时留下的链接不保证被上面的 `rm` 跟随，`symlink` 会 `EEXIST`。
-  await rm(modules, { recursive: true, force: true });
-  await symlink(join(SHELL_PACKAGE_ROOT, "node_modules"), modules, "junction");
-  // 自引用：入口按**包名**加载自己（`import "@morlay/dsh-desktop-shell"`），走本目录清单的 `exports`。
-  const selfLink = join(modules, "@morlay", "dsh-desktop-shell");
-  await mkdir(dirname(selfLink), { recursive: true });
-  await rm(selfLink, { recursive: true, force: true });
-  await symlink(root, selfLink, "junction");
-  // **整包拷**（包作为整体）：清单原样带着（`main` 与 `exports` 都由壳包自己声明，装配不改写它）。
-  await cp(join(SHELL_PACKAGE_ROOT, "package.json"), join(root, "package.json"));
+  // 壳这一单元的依赖：**交给 `pnpm deploy`**（`--node-linker=hoisted`：装成真目录、无外链），而不是
+  // 手写链接或逐个挑包。它要什么由壳包自己的清单说了算（与壳构建时内联的同一份名单）。
+  // `pnpm --filter` 要在**工作区根**跑（那里才有 `pnpm-workspace.yaml`）。
+  await runPnpm(
+    [
+      "--filter",
+      "@morlay/dsh-desktop-shell",
+      "deploy",
+      "--prod",
+      "--node-linker=hoisted",
+      "--ignore-scripts",
+      root,
+    ],
+    await findWorkspaceRoot(SHELL_PACKAGE_ROOT),
+  );
+
+  // `pnpm deploy` 会把自己的配置（含 `pnpm-workspace.yaml`）一并落在 app 目录里；electron-builder 见到
+  // 它会把这个目录当成 workspace root，随后又按它去推导 `package.json` 而失败。这里把它换成"到此为止"
+  // 的那一份（空 `packages`），包遍历就停在这里。
+  await writeFile(join(root, "pnpm-workspace.yaml"), "packages: []\n");
+
   // 业务源码与本地化：拷过来**不转译**（入口先挂 `ts-register`，Node 就能跑 `node_modules` 下的 `.ts`）。
   await cp(join(SHELL_PACKAGE_ROOT, "src"), join(root, "src"), { recursive: true });
   if (await pathExists(join(SHELL_PACKAGE_ROOT, "locale"))) {
     await cp(join(SHELL_PACKAGE_ROOT, "locale"), join(root, "locale"), { recursive: true });
   }
-  // 壳自己要用宿主包的三个子出口（`wire` / `paths` / `preload-source`），而产物 app 目录里没有
-  // `node_modules`：把那个包**整包**带过来（清单照它的 exports，只这一份，别处不改写）。
-  const hostRoot = dirname(fileURLToPath(import.meta.resolve("@morlay/dsh-desktop-host/package.json")));
-  const hostDest = join(modules, "@morlay", "dsh-desktop-host");
-  if (!(await pathExists(join(hostDest, "package.json")))) {
-    await mkdir(hostDest, { recursive: true });
-    await cp(join(hostRoot, "package.json"), join(hostDest, "package.json"));
-    await cp(join(hostRoot, "src"), join(hostDest, "src"), { recursive: true });
-  }
-
   // 入口**自动生成**：Electron 的 app 目录必须有一个真 JS 入口，内容就三件事——报出包根、让 Node 能跑
   // `node_modules` 下的 `.ts`、按**包名**加载业务入口（走本目录清单的 `exports`）。
   const entry = join(root, "main.mjs");
@@ -88,9 +89,9 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
       "",
       "// Electron 打包后不把主进程的 stderr 送出去，这里兜一层：入口失败时至少留下原因。",
       "try {",
-      "  // 先让 Node（含 Electron 的主进程）能跑 `node_modules` 下的 `.ts`：这条链的源码都是 TS，而",
-      "  // Node 内建的类型剥离拒绝对那里动手。那份注册钩子在**随包 runtime** 里（`../runtime/loader/`，",
-      "  // dev 由 dshdev 备、打包由 prepareRuntime 备）——app 目录里没有 `node_modules`。",
+      "  // 先让 Node（含 Electron 的主进程）能跑 `node_modules` 下的 `.ts`：这条链的源码都是 TS（app 目录",
+      "  // 是 deploy 出来的、上游包经 exports 指到 src），而 Node 内建的类型剥离拒绝对 `node_modules` 动手。",
+      "  // 那份注册钩子在**随包 runtime** 里（`../runtime/loader/`，dev 由 dshdev 备、打包由 prepareRuntime 备）。",
       '  await import(new URL("../runtime/loader/ts-register.mjs", import.meta.url).href);',
       "  // 业务入口：按**包名**加载，走壳包清单的 `exports`（指向 `src/index.ts`）。",
       '  await import("@morlay/dsh-desktop-shell");',
