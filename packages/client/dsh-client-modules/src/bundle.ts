@@ -395,6 +395,12 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   const result = await build({
     configFile: false,
     root: options.repoRoot,
+    // **显式指 tsconfig**（相对 root）：vite 的 oxc 转译要读 `experimentalDecorators` 之类，而它默认
+    // 是从 **cwd** 往上找的——打包形态下 cwd 是宿主的（不是 profile），于是那份 tsconfig 形同不存在，
+    // 上游用 cordis 装饰器的包原样留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行。
+    //
+    // profile 自带一份（seed 生成）；dev 形态的 root 是工作区，同一句指到仓库那份。两种形态一处配置。
+    tsconfig: "tsconfig.json",
     logLevel: "silent",
     publicDir: false,
     // 资产的 URL 要落在**这个包自己的地址前缀**下（`/@client-modules/<pkg>@<ver>/assets/…`）：产物是我们
