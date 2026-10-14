@@ -278,6 +278,9 @@ importers:
       '@morlay/session-mode-profile':
         specifier: workspace:*
         version: link:../../packages/bundles/session-mode-profile
+      '@morlay/web-custom-profile':
+        specifier: workspace:*
+        version: link:../../packages/bundles/web-custom-profile
 
   devpackages/devkit:
     dependencies:

@@ -47,9 +47,8 @@ import {
 } from "./wire.ts";
 
 const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml", import.meta.url));
-// 前端服务（`@morlay/dsh-client-modules`）单独一层：web 与桌面两种形态都要挂它（patch 由
-// `@morlay/web-custom-profile` 这个 dev-only bundle 提供），
-// 但不要桌面专属的那几层。
+// 前端服务（`@morlay/dsh-client-modules`）单独一层：**两种形态**都要挂它（dev 由工具按
+// `dsh.bundle.patch` 挂、打包形态随 app 的 `dsh.profile.bundles` 进 profile），但不要桌面专属的那几层。
 const DEV_CLIENT_PATCH = fileURLToPath(
   new URL(import.meta.resolve("@morlay/web-custom-profile/cordis.patch.yml")),
 );

@@ -16,7 +16,8 @@
     "@morlay/mydsh-profile": "workspace:*",
     "@morlay/ollama-provider-profile": "workspace:*",
     "@morlay/sandbox-profile": "workspace:*",
-    "@morlay/session-mode-profile": "workspace:*"
+    "@morlay/session-mode-profile": "workspace:*",
+    "@morlay/web-custom-profile": "workspace:*"
   },
   "peerDependencies": {
     "@local/dshdev": "workspace:*"
@@ -32,7 +33,8 @@
         "@morlay/sandbox-profile",
         "@morlay/session-mode-profile",
         "@morlay/mydsh-profile",
-        "@deepseek-ai/dsh-experimental-agent-team-profile"
+        "@deepseek-ai/dsh-experimental-agent-team-profile",
+        "@morlay/web-custom-profile"
       ]
     },
     "desktop": {
