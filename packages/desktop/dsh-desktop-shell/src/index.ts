@@ -294,12 +294,12 @@ async function main(): Promise<void> {
     development?.profileDir ?? join(resolveDshHome(appConfig) ?? "", "profiles", PROFILE_NAME);
 
   const runtimeDir = development?.runtimeDir ?? resources.runtime;
-  const dshHome = resolveDshHome(appConfig);
+  const dataDir = resolveDshHome(appConfig);
 
   if (development === undefined) {
-    if (dshHome === undefined)
-      throw new Error("dsh desktop: packaged applications require a concrete dshHome");
-    if (await ensureSeedProfile(resources.seed, dshHome)) {
+    if (dataDir === undefined)
+      throw new Error("dsh desktop: packaged applications require a concrete dataDir");
+    if (await ensureSeedProfile(resources.seed, dataDir)) {
       await installPlantedProfile(profileDir, resources);
     }
   }
@@ -367,7 +367,7 @@ async function main(): Promise<void> {
       entry: createRequire(join(runtimeDir, "index.js")).resolve(DESKTOP_HOST_PACKAGE),
 
       extraEnv: {
-        ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
+        ...(dataDir === undefined ? {} : { DSH_HOME: dataDir }),
         // 宿主按它现场打包 preload（见 `@morlay/dsh-desktop-host/preload-source`）。
         ...(globalThis.__DSH_SHELL_ROOT__ === undefined
           ? {}

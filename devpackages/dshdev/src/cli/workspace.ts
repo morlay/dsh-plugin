@@ -9,7 +9,7 @@ export const PROFILE_NAME = "desktop";
 export interface DesktopConfig {
   readonly id: string;
   readonly version: string;
-  readonly dshHome: string;
+  readonly dataDir: string;
   readonly window: {
     readonly width: number;
     readonly height: number;
@@ -32,7 +32,10 @@ export interface WorkspaceManifest {
     readonly desktop?: {
       readonly id?: string;
       readonly name?: string;
-      readonly dshHome?: string;
+      /** 数据面根（`$DSH_HOME` 的三态：`xdg` / `env` / 绝对路径）。 */
+      readonly dataDir?: string;
+      /** 只有桌面形态要挂的装配行（web 形态读 `dsh.profile.bundles`）。 */
+      readonly profile?: { readonly bundles?: unknown };
       readonly icon?: string;
       readonly window?: Record<string, number>;
     };
@@ -77,14 +80,14 @@ export function dshVersion(manifest: WorkspaceManifest): string | undefined {
 }
 
 // `displayName` 是桌面应用的对外名字（electron-builder 的 `productName`、安装后的启动器名）；壳的身份标识
-// （自定义协议 scheme、`dshHome` 目录名）仍取包名 `name`——见 [设计 桌面标识取自 app 名](../.agents/designs/20260921-桌面标识取自app名.md)。
+// （自定义协议 scheme、`dataDir` 目录名）仍取包名 `name`——见 [设计 桌面标识取自 app 名](../.agents/designs/20260921-桌面标识取自app名.md)。
 export function desktopConfig(manifest: ResolvedWorkspaceManifest): DesktopConfig {
   const desktop = manifest.dsh?.desktop ?? {};
   const window = desktop.window ?? {};
   return {
     id: desktop.id ?? "ai.deepseek.dsh.custom",
     version: manifest.version ?? "0.0.1",
-    dshHome: desktop.dshHome ?? "xdg",
+    dataDir: desktop.dataDir ?? "xdg",
     displayName: desktop.name === undefined || desktop.name === "" ? manifest.name : desktop.name,
     window: {
       width: window.width ?? 1280,
@@ -96,26 +99,41 @@ export function desktopConfig(manifest: ResolvedWorkspaceManifest): DesktopConfi
   };
 }
 
-// 装配清单只有一份：app 目录就是 profile root，`dsh.profile.bundles` 是它的装配清单，
-// 官方 bundles（`@deepseek-ai/dsh-base` / `@deepseek-ai/dsh-web-app`）也由 app 自己列出来，
-// 不再由工具在这里替它合并出一份（理由见 `../../.agents/designs/20261010-app目录即profile-root.md`）。
+// 装配清单显式写在 app 的清单里，工具不替它合并：`dsh.profile.bundles` 是**两种形态共用**的那些，
+// `dsh.desktop.profile.bundles` 是**只有桌面形态**才要挂的。清单写在哪一层，就是哪一层的语义。
 export function appProfileBundles(manifest: WorkspaceManifest): string[] {
   const bundles = manifest.dsh?.profile?.bundles;
   if (!Array.isArray(bundles) || !bundles.every((bundle) => typeof bundle === "string")) {
-    throw new Error(
-      `dshdev: workspace ${String(manifest.name)} has no dsh.profile.bundles`,
-    );
+    throw new Error(`dshdev: workspace ${String(manifest.name)} has no dsh.profile.bundles`);
   }
   return bundles as string[];
 }
 
-// 打包形态那份清单按官方形态写：官方 bundles 在前，app 自己声明的在后。app 的清单里已经列过的官方
-// bundles 按包名去重，同一层不插两遍。
+// 桌面形态的装配清单：共用的那份 + 桌面独有的那段（顺序照写的顺序，重复的按包名去掉）。
+export function desktopProfileBundles(manifest: WorkspaceManifest): string[] {
+  const desktop = manifest.dsh?.desktop?.profile?.bundles;
+  const extra =
+    desktop === undefined
+      ? []
+      : Array.isArray(desktop) && desktop.every((bundle) => typeof bundle === "string")
+        ? (desktop as string[])
+        : (() => {
+            throw new Error(
+              `dshdev: workspace ${String(manifest.name)} has an invalid dsh.desktop.profile.bundles`,
+            );
+          })();
+  const merged = [...appProfileBundles(manifest)];
+  for (const name of extra) if (!merged.includes(name)) merged.push(name);
+  return merged;
+}
+
+// 打包形态（桌面）那份清单按官方形态写：官方 bundles 在前，app 自己声明的在后（共用 + 桌面独有）。
+// app 的清单里已经列过的官方 bundles 按包名去重，同一层不插两遍。
 export function mergedProfileBundles(manifest: WorkspaceManifest): string[] {
   const official = new Set(OFFICIAL_PROFILE_BUNDLES);
   return [
     ...OFFICIAL_PROFILE_BUNDLES,
-    ...appProfileBundles(manifest).filter((name) => !official.has(name)),
+    ...desktopProfileBundles(manifest).filter((name) => !official.has(name)),
   ];
 }
 
@@ -140,7 +158,7 @@ export function devStoreHome(workspace: string): string {
 }
 
 // dev 形态的**数据目录**（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`（dev 的 profileDir 就是工作区）；
-// `--data-dir` 给出时按 `dshHome` 的三态解析（`xdg` / `env` / 绝对路径，与打包形态共用一份规则）。
+// `--data-dir` 给出时按 `dataDir` 的三态解析（`xdg` / `env` / 绝对路径，与打包形态共用一份规则）。
 export function resolveDataDir(workspace: string, name: string, spec?: string): string {
   if (spec === undefined) return devStoreHome(workspace);
   const configured = resolveConfiguredHome(name, spec);

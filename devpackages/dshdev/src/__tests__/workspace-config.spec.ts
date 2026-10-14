@@ -40,7 +40,7 @@ describe("desktopConfig", () => {
     expect(config).toEqual({
       id: "ai.deepseek.dsh.custom",
       version: "0.0.1",
-      dshHome: "xdg",
+      dataDir: "xdg",
       displayName: "dsh-custom",
       window: { width: 1280, height: 800, minWidth: 800, minHeight: 600 },
     });
@@ -54,7 +54,7 @@ describe("desktopConfig", () => {
       dsh: {
         desktop: {
           id: "ai.deepseek.dsh.custom-next",
-          dshHome: "env",
+          dataDir: "env",
           icon: "icon.svg",
           window: { width: 1024, minHeight: 480 },
         },
@@ -64,7 +64,7 @@ describe("desktopConfig", () => {
     expect(config).toEqual({
       id: "ai.deepseek.dsh.custom-next",
       version: "0.1.5",
-      dshHome: "env",
+      dataDir: "env",
       icon: "icon.svg",
       displayName: "dsh-custom",
       window: { width: 1024, height: 800, minWidth: 800, minHeight: 480 },

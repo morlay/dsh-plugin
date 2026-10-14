@@ -102,7 +102,7 @@ describe("published command surface", () => {
     }
   });
 
-  it("两个形态都有 --data-dir，且说明里点出 dshHome 的三种取值", async () => {
+  it("两个形态都有 --data-dir，且说明里点出 dataDir 的三种取值", async () => {
     for (const command of ["web", "desktop"]) {
       const { status, stdout } = await cli([command, "--help"]);
       expect(status).toBe(0);

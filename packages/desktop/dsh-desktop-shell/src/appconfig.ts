@@ -21,7 +21,7 @@ export interface AppConfig {
   readonly version: string;
   readonly profile: typeof PROFILE_NAME;
 
-  readonly dshHome: string;
+  readonly dataDir: string;
   readonly window: AppWindowConfig;
 }
 
@@ -57,7 +57,7 @@ export async function loadAppConfig(exeDir: string): Promise<AppConfig> {
     typeof value.version !== "string" ||
     value.version === "" ||
     value.profile !== PROFILE_NAME ||
-    (value.dshHome !== "xdg" && value.dshHome !== "env" && typeof value.dshHome !== "string")
+    (value.dataDir !== "xdg" && value.dataDir !== "env" && typeof value.dataDir !== "string")
   ) {
     throw new Error(`dsh desktop: invalid shell configuration ${path}`);
   }
@@ -67,7 +67,7 @@ export async function loadAppConfig(exeDir: string): Promise<AppConfig> {
     id: value.id,
     version: value.version,
     profile: PROFILE_NAME,
-    dshHome: value.dshHome,
+    dataDir: value.dataDir,
     window: windowConfig(value.window),
   };
 }

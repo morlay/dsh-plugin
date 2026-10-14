@@ -6,7 +6,7 @@ import { xdgDataHome } from "@morlay/dsh-desktop-shell/dshhome";
 import { devStoreHome, resolveDataDir } from "../cli/workspace.ts";
 
 const ORIGINAL = {
-  dshHome: process.env.DSH_HOME,
+  dataDir: process.env.DSH_HOME,
   xdg: process.env.XDG_DATA_HOME,
 };
 
@@ -20,8 +20,8 @@ async function tempDir(): Promise<string> {
 
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-  if (ORIGINAL.dshHome === undefined) delete process.env.DSH_HOME;
-  else process.env.DSH_HOME = ORIGINAL.dshHome;
+  if (ORIGINAL.dataDir === undefined) delete process.env.DSH_HOME;
+  else process.env.DSH_HOME = ORIGINAL.dataDir;
   if (ORIGINAL.xdg === undefined) delete process.env.XDG_DATA_HOME;
   else process.env.XDG_DATA_HOME = ORIGINAL.xdg;
 });
@@ -69,10 +69,10 @@ describe("resolveDataDir", () => {
     const workspace = await tempDir();
 
     expect(() => resolveDataDir(workspace, "dsh-custom-next", `store${sep}data`)).toThrow(
-      /dshHome must be xdg, env, or an absolute path/u,
+      /dataDir must be xdg, env, or an absolute path/u,
     );
     expect(() => resolveDataDir(workspace, "dsh-custom-next", "~/data")).toThrow(
-      /dshHome must be xdg, env, or an absolute path/u,
+      /dataDir must be xdg, env, or an absolute path/u,
     );
   });
 });

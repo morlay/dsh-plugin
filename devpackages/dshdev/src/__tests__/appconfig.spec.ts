@@ -31,7 +31,7 @@ function fullConfig(): AppConfig {
     id: "ai.deepseek.dsh.custom-next",
     version: "0.1.5",
     profile: PROFILE_NAME,
-    dshHome: "env",
+    dataDir: "env",
     window: { width: 1024, height: 768, minWidth: 640, minHeight: 480 },
   };
 }
@@ -55,7 +55,7 @@ describe("shell configuration handoff", () => {
     const derived = desktopConfig({
       name: "dsh-custom",
       version: "0.1.5",
-      dsh: { desktop: { id: "ai.deepseek.dsh.custom", name: "DSH Custom", dshHome: "xdg" } },
+      dsh: { desktop: { id: "ai.deepseek.dsh.custom", name: "DSH Custom", dataDir: "xdg" } },
     });
 
     await writeAppConfig(dir, { name: "dsh-custom", ...derived, profile: PROFILE_NAME });
@@ -79,7 +79,7 @@ describe("shell configuration handoff", () => {
             id: "b",
             version: "1.0.0",
             profile: PROFILE_NAME,
-            dshHome: "xdg",
+            dataDir: "xdg",
           }),
         )
       ).window,
@@ -93,7 +93,7 @@ describe("shell configuration handoff", () => {
             id: "b",
             version: "1.0.0",
             profile: PROFILE_NAME,
-            dshHome: "env",
+            dataDir: "env",
             window: { width: 0, height: -1, minWidth: Number.NaN, minHeight: "800" },
           }),
         )
@@ -109,7 +109,7 @@ describe("shell configuration handoff", () => {
         id: "b",
         version: "1.0.0",
         profile: PROFILE_NAME,
-        dshHome: "xdg",
+        dataDir: "xdg",
         window: { width: 1440 },
       }),
     );
@@ -125,16 +125,16 @@ describe("shell configuration handoff", () => {
         id: "b",
         version: "1.0.0",
         profile: PROFILE_NAME,
-        dshHome: "xdg",
+        dataDir: "xdg",
       },
-      { name: "a", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: "xdg" },
+      { name: "a", id: "b", version: "1.0.0", profile: PROFILE_NAME, dataDir: "xdg" },
       {
         name: "a",
         displayName: "",
         id: "b",
         version: "1.0.0",
         profile: PROFILE_NAME,
-        dshHome: "xdg",
+        dataDir: "xdg",
       },
       {
         name: "a",
@@ -142,11 +142,11 @@ describe("shell configuration handoff", () => {
         id: "",
         version: "1.0.0",
         profile: PROFILE_NAME,
-        dshHome: "xdg",
+        dataDir: "xdg",
       },
-      { name: "a", displayName: "A", id: "b", version: "", profile: PROFILE_NAME, dshHome: "xdg" },
-      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: "web", dshHome: "xdg" },
-      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: PROFILE_NAME, dshHome: 7 },
+      { name: "a", displayName: "A", id: "b", version: "", profile: PROFILE_NAME, dataDir: "xdg" },
+      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: "web", dataDir: "xdg" },
+      { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: PROFILE_NAME, dataDir: 7 },
       { name: "a", displayName: "A", id: "b", version: "1.0.0", profile: PROFILE_NAME },
       [],
     ];

@@ -33,7 +33,7 @@ interface BundleFlags {
 /**
  * 两个形态共用的数据面选项：**数据目录**（`$DSH_HOME`，放 `logs/` 与会话库那些）。
  *
- * 缺省是 `<profileDir>/.dsh-store`（dev 的 profileDir 就是工作区）；给了值就按 `dshHome` 的三态解析
+ * 缺省是 `<profileDir>/.dsh-store`（dev 的 profileDir 就是工作区）；给了值就按 `dataDir` 的三态解析
  * （与打包形态同一份规则，见 [design](./../.agents/designs/20261014-数据与工作目录的-layout.md)）。
  */
 const DATA_DIR_OPTION =

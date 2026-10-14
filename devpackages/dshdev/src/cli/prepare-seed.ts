@@ -31,7 +31,7 @@ import {
 } from "./official-deps.ts";
 import {
   PROFILE_NAME,
-  appProfileBundles,
+  desktopProfileBundles,
   buildCache,
   cleanDeployedSpec,
   dshVersion as readDshVersion,
@@ -403,7 +403,7 @@ export async function runPrepareSeed(options: PrepareSeedOptions): Promise<void>
 
 // Bundles the profile itself owns; shipped bundles come from the runtime installation instead.
 export function profileLocalBundles(manifest: WorkspaceManifest): string[] {
-  return appProfileBundles(manifest).filter((name) => !OFFICIAL_PROFILE_BUNDLES.includes(name));
+  return desktopProfileBundles(manifest).filter((name) => !OFFICIAL_PROFILE_BUNDLES.includes(name));
 }
 
 // profile 的直接依赖要带上本地依赖的闭包：pnpm 对 `file:` 包自己声明的 `workspace:` 依赖**静默跳过**

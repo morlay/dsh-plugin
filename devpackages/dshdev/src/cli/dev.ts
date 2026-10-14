@@ -230,7 +230,7 @@ export async function runDev(options: DevOptions): Promise<void> {
     displayName: desktop.displayName,
     id: desktop.id,
     version: desktop.version,
-    dshHome: dataDir,
+    dataDir: dataDir,
     window: desktop.window,
     profile: PROFILE_NAME,
   });

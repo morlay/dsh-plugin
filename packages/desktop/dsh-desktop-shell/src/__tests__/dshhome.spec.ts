@@ -18,14 +18,14 @@ async function tempDir(): Promise<string> {
   return root;
 }
 
-function config(dshHome: string, name = "dsh-custom"): AppConfig {
+function config(dataDir: string, name = "dsh-custom"): AppConfig {
   return {
     name,
     displayName: name,
     id: "ai.deepseek.dsh.custom",
     version: "0.1.5",
     profile: "desktop",
-    dshHome,
+    dataDir,
     window: { width: 1280, height: 800, minWidth: 800, minHeight: 600 },
   };
 }
@@ -99,10 +99,10 @@ describe("resolveDshHome", () => {
     delete process.env.DSH_APP_DSH_HOME;
 
     expect(() => resolveDshHome(config(`.${sep}data`))).toThrow(
-      /dshHome must be xdg, env, or an absolute path/u,
+      /dataDir must be xdg, env, or an absolute path/u,
     );
     expect(() => resolveDshHome(config("~/data"))).toThrow(
-      /dshHome must be xdg, env, or an absolute path/u,
+      /dataDir must be xdg, env, or an absolute path/u,
     );
   });
 });

@@ -30,7 +30,7 @@ function appConfig(): AppConfig {
     id: "ai.deepseek.dsh.custom-next",
     version: "0.1.5",
     profile: "desktop",
-    dshHome: "xdg",
+    dataDir: "xdg",
     window: { width: 1280, height: 800, minWidth: 800, minHeight: 600 },
   };
 }

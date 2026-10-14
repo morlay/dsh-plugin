@@ -47,7 +47,7 @@
         "minWidth": 800,
         "minHeight": 600
       },
-      "dshHome": "xdg"
+      "dataDir": "xdg"
     },
     "dev": {
       "exclude": [

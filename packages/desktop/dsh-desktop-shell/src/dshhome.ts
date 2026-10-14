@@ -9,14 +9,14 @@ export function xdgDataHome(): string {
   return join(homedir(), ".local", "share");
 }
 
-// 解析 `dshHome` 的三态：`xdg`（平台数据目录 + app 名）、`env`（交给环境，这里没有具体路径）、
+// 解析 `dataDir` 的三态：`xdg`（平台数据目录 + app 名）、`env`（交给环境，这里没有具体路径）、
 // 绝对路径。打包壳与 dev CLI（`--data-dir`）共用这一份，措辞与校验只写在这里。
 export function resolveConfiguredHome(name: string, spec: string): string | undefined {
   if (spec === "env") return undefined;
   if (spec === "xdg") return join(xdgDataHome(), name);
   if (!isAbsolute(spec)) {
     throw new Error(
-      `dsh desktop: dshHome must be xdg, env, or an absolute path, got ${JSON.stringify(spec)}`,
+      `dsh desktop: dataDir must be xdg, env, or an absolute path, got ${JSON.stringify(spec)}`,
     );
   }
   return spec;
@@ -25,5 +25,5 @@ export function resolveConfiguredHome(name: string, spec: string): string | unde
 export function resolveDshHome(config: AppConfig): string | undefined {
   const override = process.env.DSH_APP_DSH_HOME;
   if (override !== undefined && override.trim() !== "") return resolve(override);
-  return resolveConfiguredHome(config.name, config.dshHome);
+  return resolveConfiguredHome(config.name, config.dataDir);
 }

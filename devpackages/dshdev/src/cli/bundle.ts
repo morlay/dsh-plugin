@@ -159,7 +159,7 @@ export async function runBundle(options: BundleOptions): Promise<void> {
     displayName: desktop.displayName,
     id: desktop.id,
     version: desktop.version,
-    dshHome: desktop.dshHome,
+    dataDir: desktop.dataDir,
     window: desktop.window,
     profile: PROFILE_NAME,
   };
