@@ -12,10 +12,15 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
-import { clientAssetPlugin, NODE_BUILTIN, NODE_BUILTIN_NAMES } from "./assets.ts";
+import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
 import { build, esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, packageNameOf } from "./resolve.ts";
+
+/** 裸包名 → `^名(/|$)`：既覆盖子路径引用，也不会把 `node:fs`、`./x` 误判成包。 */
+function barePackageRegExp(name: string): RegExp {
+  return new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?:/|$)`, "u");
+}
 
 /** 统一前缀：三方与我们的包共用同一个命名空间。 */
 export const CLIENT_MODULES_PREFIX = "/@client-modules";
@@ -92,6 +97,13 @@ export interface BundleOptions {
   watch: readonly string[];
   /** 包名 → 版本：外置说明符要写成联邦地址（回调同步，故预建表）。 */
   versions?: ReadonlyMap<string, string>;
+  /**
+   * 这个包的依赖声明（`dependencies` + `peerDependencies` 的键）——**外置名单的唯一来源**。
+   *
+   * 就近：每个包只看**自己**的声明。声明里的 → 独立联邦产物（地址由 `output.paths` 换）；没声明的 →
+   * 留在产物里内联（相对路径、node 内置、虚拟模块本来也不在里面）。
+   */
+  declaredDependencies?: readonly string[];
   /**
    * 包名 → 外置它时该指的**出口**（`client` / `index`）。
    *
@@ -387,16 +399,19 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // `require` 语义（产物里是运行期必抛的 `__require(...)`——浏览器没有 `require`），而这个插件把这类
     // require 转成 ESM import。它**必须独占**外置名单：顶层 `external` 一旦也列了同一个模块，它就整块跳过，
     // 产物里又留下 `require`。
-    // 外置名单里**先排掉 node 内置（含裸名）**：`require("https")` 这种写法在 dev 由 alias 的替身接管，
-    // 而 external 判定发生在 alias 之前——不在这儿排掉，它就会被外置，浏览器只好按联邦地址去要
-    // （`/@client-modules/https@0.0.0/index.js` → 404）。名单与 replace 侧同源。
+    // **外置名单 = 包名**：凡是"一个包"（有自己的 `package.json`）就独立成联邦产物，地址由 `output.paths`
+    // 交给 `urlOf`；不是包的（相对路径、内置、虚拟模块）留在产物里内联。
+    //
+    // 名单就是手里那张"包名 → 版本"表的键——它本来就是"这条链认识哪些包"这份事实。写成 `^名(/|$)`：
+    // 既覆盖子路径引用（`katex/dist/katex.min.css`），又不会把 `node:fs`、`./x` 误判成包。
+    //
+    // 名单只有这一个 home：顶层 `external` 不能再列同一个模块（插件会整块跳过，产物里留下 `__require`）。
     esmExternalRequirePlugin({
-      external: [
-        new RegExp(
-          `^(?!(?:node:)?(?:${NODE_BUILTIN_NAMES})$)(?!\\.)(?!\\/)(?!@\\/)(?!\\0).*$`,
-          "u",
-        ),
-      ],
+      // **外置名单 = 这条链认识的那些包**（包名 → 版本表的键），node 内置除外（它们走替身）。
+      // 不是包的（相对路径、内置、虚拟模块）留在产物里内联。
+      external: [...(options.versions?.keys() ?? [])]
+        .filter((name) => !NODE_BUILTIN.test(name))
+        .map((name) => barePackageRegExp(name)),
     }),
   ];
   const startedAt = Date.now();
@@ -442,11 +457,14 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
       target: "esnext",
       // 走 `lib` 而不是 `rollupOptions.input`：库模式的入口语义明确（接受绝对路径，按 entry 名出产物）。
       lib: { entry: input, formats: ["es"], fileName: (_format, entryName) => `${entryName}.js` },
-      // **装饰器：有 tsconfig 走它，没有就用这份默认**。rolldown 的 oxc 不看 tsconfig 的
-      // `experimentalDecorators`（文档说"有正确的 tsconfig 时会自动"，但上游那种 `@Remote` 用法不会），
-      // 于是产物里留着 `@Remote(...)`、浏览器报 `SyntaxError`、入口整条不执行。显式写下来最稳。
-      rolldownOptions: { transform: { decorator: { legacy: true } } },
-      rollupOptions: {
+      // **vite 8 的构建选项走 `rolldownOptions`**（`rollupOptions` 已弃用、被忽略）：外置说明符换联邦地址
+      // 的 `output.paths` 与装饰器开关都在这里。写到弃用的那一处，`paths` 就形同不存在——产物里留着裸名
+      // （`import … from "@deepseek-ai/cosmokit"`），浏览器报 "Failed to resolve module specifier"。
+      rolldownOptions: {
+        // **装饰器：有 tsconfig 走它，没有就用这份默认**。rolldown 的 oxc 不看 tsconfig 的
+        // `experimentalDecorators`（文档说"有正确的 tsconfig 时会自动"，但上游那种 `@Remote` 用法不会），
+        // 产物里留着 `@Remote(...)`、浏览器报 `SyntaxError`、入口整条不执行。
+        transform: { decorator: { legacy: true } },
         // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
         output: {
           format: "es",

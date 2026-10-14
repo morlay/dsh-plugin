@@ -56,6 +56,12 @@ beforeAll(async () => {
     ].join("\n"),
     "utf8",
   );
+  // 这个包声明的运行期依赖（外置名单从这里来）。
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify({ name: "fixture", dependencies: { zod: "^4.0.0" } })}\n`,
+    "utf8",
+  );
   // 与 profile 同形：编译设置**在解析根里**（打包形态是 profile，dev 是工作区）。
   await writeFile(
     join(work, "tsconfig.json"),
@@ -78,6 +84,7 @@ function options(exportName: string): Parameters<typeof bundlePackage>[0] {
     version: "1.0.0",
     input: { [exportName]: join(packageRoot, "src", `${exportName}.ts`) },
     watch: [join(packageRoot, "src")],
+    declaredDependencies: ["zod"],
   };
 }
 
