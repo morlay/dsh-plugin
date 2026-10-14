@@ -452,10 +452,10 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   const bundle = await rolldown({
     input,
     plugins,
-    // 编译设置：显式指解析根那份 tsconfig（dev 是工作区、打包是 profile）。rolldown 的 oxc 靠它启用
-    // legacy 装饰器（`experimentalDecorators`）——它默认"按被转译的文件就近向上找"，而外置/官方的包住在
-    // `node_modules/.pnpm/…` 里，向上什么也找不到，产物里就会留着 `@Remote(...)`。
-    resolve: { tsconfigFilename: options.tsconfig ?? "tsconfig.json" },
+    // **不指 tsconfig**：装饰器由下面的 `transform.decorator.legacy` 直接开（直出时它生效，见对照表）。
+    // 指过去反而有坑——仓库根那份是 `extends: ["@local/devkit/tsconfig.json"]`，而 rolldown 不解析
+    // `extends`，`experimentalDecorators` 拿不到；profile 那份虽是自包含的，但两种形态各指一处不如一处都不指。
+    ...(options.tsconfig === undefined ? {} : { resolve: { tsconfigFilename: options.tsconfig } }),
     transform: {
       target: "esnext",
       // 装饰器：legacy（cordis 与上游用的就是这套）。有 tsconfig 时它会被那份覆盖，这里是默认。
