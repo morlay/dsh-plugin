@@ -14,7 +14,8 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
-import { build, esmExternalRequirePlugin, type PluginOption } from "vite";
+import { rolldown, type Plugin } from "rolldown";
+import { esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, packageNameOf } from "./resolve.ts";
 
 /** 裸包名 → `^名(/|$)`：既覆盖子路径引用，也不会把 `node:fs`、`./x` 误判成包。 */
@@ -396,7 +397,20 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
 
   // **同一份配置**：CSS / 资产 / `?raw` / node 内置替身与 dev 用的是同一个插件；只有 alias 由调用方给。
   // 资产走 `threshold`：产品是我们自己落盘、自己服务的，大图产出独立文件即可，不必塞进 JS 里当 base64。
-  const plugins: PluginOption[] = [
+  const plugins: (PluginOption | Plugin)[] = [
+    // alias：rolldown 的 `resolve.alias` 只吃"字符串 → 字符串"的对象，而我们的 alias 带正则
+    // （`^@/`）——用一个最小插件表达，放在最前面（它相当于 vite 里 `enforce: "pre"` 的那一层）。
+    {
+      name: "dsh-alias",
+      resolveId: (source: string): string | undefined => {
+        for (const { find, replacement } of options.alias) {
+          if (typeof find === "string" ? source.startsWith(find) : find.test(source)) {
+            return source.replace(find, replacement);
+          }
+        }
+        return undefined;
+      },
+    },
     browserProcessPlugin(),
     cssInlinePlugins({ name: key, assets: "threshold" }),
     clientAssetPlugin({ assets: "threshold" }),
@@ -432,82 +446,45 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
       (await cssShimOf({ exportName, entry, outDir })) ??
       entry;
   }
-  const result = await build({
-    configFile: false,
-    root: options.repoRoot,
-    // **显式指 tsconfig**（相对 root）：vite 的 oxc 转译要读 `experimentalDecorators` 之类，而它默认
-    // 是从 **cwd** 往上找的——打包形态下 cwd 是宿主的（不是 profile），于是那份 tsconfig 形同不存在，
-    // 上游用 cordis 装饰器的包原样留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行。
-    //
-    // profile 自带一份（seed 生成）；dev 形态的 root 是工作区，同一句指到仓库那份。两种形态一处配置。
-    tsconfig: "tsconfig.json",
-    logLevel: "silent",
-    publicDir: false,
-    // 资产的 URL 要落在**这个包自己的地址前缀**下（`/@client-modules/<pkg>@<ver>/assets/…`）：产物是我们
-    // 服务的，`base` 是相对 URL 的基准，默认的 `/` 会让浏览器去根上找图。
-    base: `${CLIENT_MODULES_PREFIX}/${key}/`,
-    define: {
+  // **直接跑 rolldown**（不经过 `vite build`）：插件本来就是 rolldown 的接口，而 vite 在这条路上只提供了
+  // lib 模式的入口/输出命名与 `worker.format`——那几项自己写更直接，且 `build.rolldownOptions` 里的
+  // `transform` / `resolve` 也不会再被 vite 吞掉（对照表见债文档，那份债随这次改动一起销）。
+  const bundle = await rolldown({
+    input,
+    plugins,
+    // 编译设置：显式指解析根那份 tsconfig（dev 是工作区、打包是 profile）。rolldown 的 oxc 靠它启用
+    // legacy 装饰器（`experimentalDecorators`）——它默认"按被转译的文件就近向上找"，而外置/官方的包住在
+    // `node_modules/.pnpm/…` 里，向上什么也找不到，产物里就会留着 `@Remote(...)`。
+    resolve: { tsconfigFilename: options.tsconfig ?? "tsconfig.json" },
+    transform: {
+      target: "esnext",
+      // 装饰器：legacy（cordis 与上游用的就是这套）。有 tsconfig 时它会被那份覆盖，这里是默认。
+      decorator: { legacy: true },
       // 浏览器没有 `process`：精确替换 `process.env`，裸 `process` 再给一个空壳——`immer` 这类包会在
       // 模块顶层读它，漏掉就是一个 `process is not defined` 把整份产物带下去。
-      "process.env": "{ env: {} }",
-      process: "{ env: {} }",
-    },
-    resolve: { alias: options.alias },
-    // 被间接拉进 client 图的宿主专有包里有 `new Worker(new URL('./worker.js', import.meta.url))`：
-    // vite 默认把 worker 打成 **iife**，而那个 worker 里有顶层 await（iife 不支持）——整份产物因此构建失败。
-    // 我们这条链本就是 ESM（`lib.formats: ["es"]`），worker 也用 es。
-    worker: { format: "es" },
-    plugins,
-    build: {
-      write: false,
-      minify: false,
-      target: "esnext",
-      // 走 `lib` 而不是 `rollupOptions.input`：库模式的入口语义明确（接受绝对路径，按 entry 名出产物）。
-      lib: { entry: input, formats: ["es"], fileName: (_format, entryName) => `${entryName}.js` },
-      // **vite 8 的构建选项走 `rolldownOptions`**（`rollupOptions` 已弃用、被忽略）：外置说明符换联邦地址
-      // 的 `output.paths` 与装饰器开关都在这里。写到弃用的那一处，`paths` 就形同不存在——产物里留着裸名
-      // （`import … from "@deepseek-ai/cosmokit"`），浏览器报 "Failed to resolve module specifier"。
-      rolldownOptions: {
-        // **编译设置**：rolldown 的 oxc 要**解析到 tsconfig** 才启用 legacy 装饰器（`experimentalDecorators`）
-        // —— 官方文档：Oxc 支持 legacy 装饰器（[oxc#9170](https://github.com/oxc-project/oxc/issues/9170)），
-        // 但**不支持** Stage 3 的原生装饰器；而它默认"按被转译的文件就近向上找"，外置/官方的包住在
-        // `node_modules/.pnpm/…` 里，向上什么也找不到 → `@Remote(...)` 原样留下 → 浏览器 `SyntaxError`。
-        //
-        // 开关是 `resolve.tsconfigFilename`（rolldown 的）：显式指解析根那份（dev 是工作区、打包是 profile）。
-        // 注意别用 `transform.decorator`：实测 vite 8 不会把 `rolldownOptions.transform` 带进 rolldown。
-        ...(options.tsconfig === undefined
-          ? {}
-          : { resolve: { tsconfigFilename: options.tsconfig } }),
-        // `external` 在插件里（见上）：这里留空**是刻意的**——两边都列会让插件跳过它该管的模块。
-        output: {
-          format: "es",
-          entryFileNames: "[name].js",
-          chunkFileNames: "chunk-[hash].js",
-          // 资产统一落在 `assets/` 下、带内容 hash：路由按这个前缀把它们当文件吐，
-          // 出口产物与资产不混在一个命名空间里。
-          assetFileNames: "assets/[name]-[hash][extname]",
-          paths: (id: string) => urlOf(id, options),
-        },
+      define: {
+        "process.env": "{ env: {} }",
+        process: "{ env: {} }",
       },
     },
   });
-  process.stderr.write(`[bundle-build] ${options.name}: vite build 结束（${String(Date.now() - startedAt)}ms）\n`);
-  // `write: false` 时 vite 返回输出对象（不是 watcher）；取 `output` 这一段（chunk 是入口产物，asset 是
-  // 大图 / 字体 / worker 这类独立文件）。
-  const outputs = (Array.isArray(result) ? result : [result]).filter((item) => "output" in item) as {
-    output: readonly {
-      type: string;
-      fileName: string;
-      name: string;
-      code?: string;
-      source?: string | Uint8Array;
-    }[];
-  }[];
-  const items = outputs.flatMap((item) => item.output);
-  const chunks = items.filter((item) => item.type === "chunk");
-  if (chunks.length === 0) {
+  const { output: items } = await bundle.generate({
+    format: "es",
+    // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
+    entryFileNames: "[name].js",
+    chunkFileNames: "chunk-[hash].js",
+    // 资产统一落在 `assets/` 下、带内容 hash：路由按这个前缀把它们当文件吐，
+    // 出口产物与资产不混在一个命名空间里。
+    assetFileNames: "assets/[name]-[hash][extname]",
+    // 外置说明符 → 联邦地址（`/@client-modules/<pkg>@<ver>/…`）。
+    paths: (id: string) => urlOf(id, options),
+  });
+  await bundle.close();
+  process.stderr.write(`[bundle-build] ${options.name}: rolldown 结束（${String(Date.now() - startedAt)}ms）\n`);
+
+  if (!items.some((item) => item.type === "chunk")) {
     process.stderr.write(
-      `[bundle] ${options.name}: 输出为空（input=${wanted.join(",")} outputs=${String(outputs.length)}）\n`,
+      `[bundle] ${options.name}: 输出为空（input=${wanted.join(",")} outputs=${String(items.length)}）\n`,
     );
     return undefined;
   }
@@ -517,11 +494,12 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   // 目录会把另一个进程刚写的产物一起带走，表现为偶发 404。产物名本身带语义（出口名 / 资产 hash），直接
   // 覆盖即可；旧的字节留在盘上不碍事。
   await mkdir(outDir, { recursive: true });
-  for (const chunk of chunks) {
+  for (const item of items) {
+    if (item.type !== "chunk") continue;
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），落盘要先把父目录建出来。
-    await mkdir(dirname(join(outDir, chunk.fileName)), { recursive: true });
-    await writeFile(join(outDir, chunk.fileName), chunk.code ?? "", "utf8");
-    files[chunk.name] = `${key}/${chunk.fileName}`;
+    await mkdir(dirname(join(outDir, item.fileName)), { recursive: true });
+    await writeFile(join(outDir, item.fileName), item.code, "utf8");
+    files[item.name] = `${key}/${item.fileName}`;
   }
   // 资产也进清单（键就是它在包内的相对路径 `assets/<name>-<hash>.<ext>`）：清单是"这个包产出里有什么"
   // 的**唯一真相**——路由按它服务资产，缓存命中/增量合并也照它判断，不必去猜目录里躺了什么。

@@ -146,7 +146,7 @@ test("装饰器在产物里必须已被转译，且**不依赖进程 cwd**", asy
   }
 });
 
-test("（债）包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` 目前**不生效**", async () => {
+test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` 也能让它转", async () => {
   // 外置/官方的包就住在 `node_modules/.pnpm/…` 里——向上找不到任何 tsconfig。这条守着那个开关：
   // 只给 `transform.decorator`（实测 vite 不带进 rolldown）不行，`resolve.tsconfigFilename` 才行。
   const work2 = await mkdtemp(join(tmpdir(), "dsh-bundle-tsfn-"));
@@ -164,8 +164,8 @@ test("（债）包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFi
     ].join("\n"),
     "utf8",
   );
-  // tsconfig 放在**解析根**（work2），不在那个包的祖先链上（它是 `work2/node_modules/…`，往上只有 work2
-  // —— 而 work2 正是解析根，所以这里换到 sibling 目录模拟"祖先里没有"）。
+  // tsconfig 放在**解析根之外**（那个包在 `work2/node_modules/…`，祖先链里没有 tsconfig），由
+  // `resolve.tsconfigFilename` 显式指过去——这正是外置/官方包在产物里的处境。
   const elsewhere = join(work2, "..", `dsh-tsconfig-${String(Date.now())}`, "tsconfig.json");
   await mkdir(join(elsewhere, ".."), { recursive: true });
   await writeFile(
@@ -186,10 +186,9 @@ test("（债）包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFi
       tsconfig: elsewhere,
     });
     const code = await readFile(join(join(work2, ".cache"), bundled?.files.get("a") ?? ""), "utf8");
-    // **这条守着债**（`debts/20261014-联邦产物里的装饰器不转.md`）：vite 8 这条 build 路上，
-    // `rolldownOptions.resolve.tsconfigFilename` 没落到 rolldown 手里，装饰器原样留着。债收了以后
-    // 这里会红——那时把断言翻成 `not.toMatch(/@Remote/u)`。
-    expect(code).toMatch(/@Remote/u);
+    // 债已销：这条链改成 **rolldown 直出**（不再经 `vite build`），`resolve.tsconfigFilename` 才落到
+    // rolldown 手里——外置/官方的包住在 `node_modules/.pnpm/…`、祖先链里没有 tsconfig，全靠这里指路。
+    expect(code).not.toMatch(/@Remote/u);
   } finally {
     await rm(work2, { recursive: true, force: true });
     await rm(join(elsewhere, ".."), { recursive: true, force: true });
