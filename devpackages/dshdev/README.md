@@ -18,7 +18,7 @@
 的依赖 spec）、`profile.bundles`（必填）、`desktop.{id,name,icon,dshHome,window}`——`desktop.name` 是桌面应用的
 对外名字（缺省用工作区包名），产物名、macOS 的 `.app`、Linux 启动器条目与退出确认都用它；字段语义与实例见
 [设计 桌面化工具](./.agents/designs/20260917-桌面化工具.md)与
-[`apps/dsh-custom-next/package.json`](../../../apps/dsh-custom-next/package.json)。
+[`apps/dsh-custom-next/package.json`](../../apps/dsh-custom-next/package.json)。
 
 ```sh
 pnpm exec dshdev desktop        # 本仓库示例工作区：just custom dev

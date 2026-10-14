@@ -60,6 +60,8 @@ const basesOf = (dir: string, packageRoot: string): string[] => [
 const SAMPLE = "示例 / 通式：说的是通例（每个包都该有、按约定探测入口），没有唯一所指";
 const SHORT_FORM = "省略前缀的短形式：省了包名或 `.agents/`，或承接同句前一个全路径";
 const ELSEWHERE = "「同包 / 该包」指文内已交代的另一个包（上游包或兄弟包），代码片段省了前缀";
+const URL_PATH = "说的是宿主页面里的那个地址（URL 路径），不是工作区里的文件";
+const PACKAGE_SUBPATH = "包内子路径：省了包名，指的是某个依赖包里的哪一层";
 const EXCEPTIONS: readonly {
   readonly file: string;
   readonly code: string;
@@ -148,7 +150,22 @@ const EXCEPTIONS: readonly {
     code: "./child-agent.ts",
     reason: `${ELSEWHERE}（= 上游 subagent 包内同目录的那个文件）`,
   },
-  // 上游短形式
+  // 上游短形式  // URL 路径与包内子路径：说的是"宿主页面里那个地址"或"某个包里的哪一层"，不是工作区里的文件
+  {
+    file: "packages/client/dsh-client-modules/.agents/debts/20261013-vite与宿主同进程.md",
+    code: "/index.ts",
+    reason: URL_PATH,
+  },
+  {
+    file: "packages/client/dsh-client-modules/.agents/designs/20261013-客户端资源的联邦式预编译.md",
+    code: "katex/dist/katex.min.css",
+    reason: PACKAGE_SUBPATH,
+  },
+  {
+    file: "packages/client/dsh-client-modules/.agents/designs/20261013-客户端资源的联邦式预编译.md",
+    code: "app-boot/node-stub.cjs",
+    reason: PACKAGE_SUBPATH,
+  },
 ];
 
 // 行内代码片段（成对的单反引号）与它所在行号；fenced code block 内的不算行内代码。

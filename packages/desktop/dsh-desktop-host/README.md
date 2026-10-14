@@ -8,7 +8,7 @@
 
 被 [`@local/dshdev`](../../../devpackages/dshdev/README.md) 使用，不单独跑：
 
-- `dev` / `bundle` 把本包落位到部署的 `<runtime>/node_modules/@morlay/dsh-desktop-host`（`dev` 从工作区解析同一份包，`bundle` 按 manifest `files` 复制），四样必须都在——`dist/index.js`（启动入口）、`dist/webserver.js`（桌面 patch 行按 `../dist/webserver.js` 加载）、`dist/wire.js`、`config/desktop.cordis.patch.yml`（入口按它作 `patchFiles` 读）；
+- `dev` / `bundle` 把本包落位到部署的 `<runtime>/node_modules/@morlay/dsh-desktop-host`（`dev` 从工作区解析同一份包，`bundle` 按 manifest `files` 复制），四样必须都在——`dist/index.js`（启动入口）、`dist/webserver.js`（桌面 patch 行按 `../src/webserver.ts` 加载）、`dist/wire.js`、`config/desktop.cordis.patch.yml`（入口按它作 `patchFiles` 读）；
 - 壳按 `dist/index.js` 启动它（stdio 五元组：FD 3/4 是管道，FD 5 是 Node IPC），argv 为 `[entry, runtimeDir, profileDir, pnpmEntry?, nodeBin?]`——`profileDir` 是 profile root（打包形态是种子种出的 `$DSH_HOME/profiles/<name>`，dev 形态是 app 目录本身），装配是官方那两步（`loadProfileDirectory` + `runProfile`）；
 - `src/app-boot.ts` 与 `src/web.ts` 只服务 dev 形态的 `--web`（不进包的 `files`）：上游 `dsh web` 按 profile 名找 profile，与「dev 的 profile root 是 app 目录」冲突，所以那里有 dev 自己的入口，见[设计 dev 形态的 profile root 就是 app 目录](../../../devpackages/dshdev/.agents/designs/20261014-数据与工作目录的-layout.md)；
 - IPC：`ready { protocolVersion }` / `fatal { message, diagnostic }`，另外收 `shutdown`。
