@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { Command } from "commander";
 import { runBundle } from "./bundle.ts";
 import { runDev } from "./dev.ts";
+import { findWorkspaceRoot } from "./workspace.ts";
 
 const APP_ROOT = resolve(import.meta.dirname, "..", "..");
 
@@ -92,14 +93,13 @@ desktop
 program
   .command("check-deps")
   .description("scan a package's runtime imports (from its entry) and report the ones that cannot resolve")
-  .option("--from <dir>", "resolve dependencies from this directory (e.g. the deployed closure)")
   .argument("[package]", "package directory (default: current directory)")
-  .action(async (pkg: string | undefined, options: { from?: string }) => {
-    const { reportRuntimeDependencies } = await import("./runtime-deps.ts");
-    const missing = await reportRuntimeDependencies(
-      pkg === undefined ? process.cwd() : resolve(pkg),
-      options.from === undefined ? undefined : resolve(options.from),
-    );
+  .action(async (pkg: string | undefined) => {
+    const { reportRuntimeDependencies, manifestsUnder } = await import("./runtime-deps.ts");
+    const root = pkg === undefined ? process.cwd() : resolve(pkg);
+    // 判据是"有没有归属"：把工作区与闭包里所有清单都收进来，谁都没声明的才算缺。
+    const manifests = await manifestsUnder(await findWorkspaceRoot(root));
+    const missing = await reportRuntimeDependencies(root, manifests);
     if (missing.length > 0) process.exitCode = 1;
   });
 
