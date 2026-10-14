@@ -600,9 +600,15 @@ export function apply(ctx: Context): void {
     }
     // 先交给 vite（页面、入口、HMR 通道都是它的）；它不认的再回上游兜底。
     //
+    // 结果留一行（与联邦那条 `[fed-exit]` 对称）：入口 `index.ts` 转译失败时，浏览器那边只报一句
+    // 没头没尾的模块错误，而这里能直接看到是哪个 URL、什么状态。
+    //
     // **`@` 前缀的路径不兜给页面**：那是这条链的模块 URL 空间，没解析出来就是解析规则漏了一段——当场 404
     // 并把 URL 与 referer 打出来，别让它静默变成一份 HTML（那样浏览器只会报"模块语法错误"）。
-    if (viteHandoff !== undefined && viteHandoff.serve(req, res)) return;
+    if (viteHandoff !== undefined && viteHandoff.serve(req, res)) {
+      process.stderr.write(`[vite-out] ${path} status=${String(res.statusCode)}\n`);
+      return;
+    }
     if (path.startsWith("/@")) {
       process.stderr.write(`[unresolved] ${req.url ?? ""} referer=${req.headers.referer ?? "-"}\n`);
     }

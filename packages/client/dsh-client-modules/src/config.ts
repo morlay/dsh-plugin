@@ -42,7 +42,8 @@ export function isDevForm(): boolean {
 }
 
 export async function devExcluded(profileDir: string): Promise<RegExp[]> {
-  if (isDevForm()) return [/.*/u];
+  // **两种形态同一条判据**：读 profile 的 `dsh.dev.exclude`（dev 的 profile 就是工作区里的 app 目录）。
+  // 原先 dev 一律"全部聚合"——那让 dev 与 bundle 走两条不同的解析路，问题只在重的那条上才暴露。
   try {
     const manifest = JSON.parse(await readFile(join(profileDir, "package.json"), "utf8")) as {
       dsh?: { dev?: { exclude?: string[] } };
