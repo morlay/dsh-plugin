@@ -67,6 +67,16 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
   if (await pathExists(join(SHELL_PACKAGE_ROOT, "locale"))) {
     await cp(join(SHELL_PACKAGE_ROOT, "locale"), join(root, "locale"), { recursive: true });
   }
+  // 壳自己要用宿主包的三个子出口（`wire` / `paths` / `preload-source`），而产物 app 目录里没有
+  // `node_modules`：把那个包**整包**带过来（清单照它的 exports，只这一份，别处不改写）。
+  const hostRoot = dirname(fileURLToPath(import.meta.resolve("@morlay/dsh-desktop-host/package.json")));
+  const hostDest = join(modules, "@morlay", "dsh-desktop-host");
+  if (!(await pathExists(join(hostDest, "package.json")))) {
+    await mkdir(hostDest, { recursive: true });
+    await cp(join(hostRoot, "package.json"), join(hostDest, "package.json"));
+    await cp(join(hostRoot, "src"), join(hostDest, "src"), { recursive: true });
+  }
+
   // 入口**自动生成**：Electron 的 app 目录必须有一个真 JS 入口，内容就三件事——报出包根、让 Node 能跑
   // `node_modules` 下的 `.ts`、按**包名**加载业务入口（走本目录清单的 `exports`）。
   const entry = join(root, "main.mjs");

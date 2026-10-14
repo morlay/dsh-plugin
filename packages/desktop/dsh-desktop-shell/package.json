@@ -72,10 +72,10 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@local/devkit": "workspace:*",
-    "@morlay/dsh-desktop-host": "workspace:*",
     "@types/node": "^26.5.0",
     "electron": "^44.3.0",
-    "@oxc-node/core": "^0.1.6"
+    "@oxc-node/core": "^0.1.6",
+    "@morlay/dsh-desktop-host": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
