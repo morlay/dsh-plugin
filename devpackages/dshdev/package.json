@@ -36,6 +36,7 @@
     "@local/devkit": "workspace:*",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@oxc-node/core": "^0.1.6",
+    "@oxc-project/runtime": "^0.154.0",
     "@types/node": "^26.5.0",
     "oxc-transform": "^0.154.0"
   },

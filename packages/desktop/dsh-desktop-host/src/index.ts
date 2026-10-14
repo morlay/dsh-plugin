@@ -28,6 +28,7 @@ import {
 } from "./transport.ts";
 import { applyInspectorCommand, closeInspectorEndpoint } from "./inspector.ts";
 import { installDevtoolsAssets } from "./devtools-assets.ts";
+import { installPreloadSource } from "./preload-source.ts";
 import { startLoopbackUpgradeServer } from "./ws-bridge.ts";
 import { PortlessWebServer } from "./webserver.ts";
 import {
@@ -172,6 +173,12 @@ async function main(): Promise<void> {
   reportMemoryWhenAsked();
   // 调试窗口的前端产物：桌面档自己托管，不从上游 inspector 行取（那条路由与它的 Worker 绑在一起）。
   installDevtoolsAssets(ctx, [runtimeDir, profileDir]);
+  // preload 的源码由这里现场打成 CJS（sandboxed preload 只能 CJS），壳在窗口创建前取走——装配目录里
+  // 因此不再需要一份预产的 `dist/`。
+  const shellRoot = process.env["DSH_DESKTOP_SHELL_ROOT"];
+  if (shellRoot !== undefined && shellRoot !== "") {
+    installPreloadSource(ctx, { shellRoot });
+  }
   const webServer = ctx.get("webServer") as unknown as PortlessWebServer;
 
   const pending = new Map<number, PendingRequest>();

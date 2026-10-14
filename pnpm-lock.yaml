@@ -373,6 +373,9 @@ importers:
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.6
+      '@oxc-project/runtime':
+        specifier: ^0.154.0
+        version: 0.154.0
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5
@@ -731,6 +734,9 @@ importers:
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.6
+      '@oxc-project/runtime':
+        specifier: ^0.154.0
+        version: 0.154.0
       lightningcss:
         specifier: ^1.32.0
         version: 1.33.0
@@ -17832,6 +17838,10 @@ packages:
     resolution: {integrity: sha512-rXJvtlsVG4xJNq64hiaUTIatE7jbBgpa6l4QgmEa2jLgT3ULH9scUBkpsC9N1DfmqixLEyT6DuK6OSXozziIlw==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
+  '@oxc-project/runtime@0.154.0':
+    resolution: {integrity: sha512-cBQNGoh659BNgvA8OC/e4BNDtFkv03dJaYdkp2adgOQNtISNAPQ+nB4S8XvWtNk7Xl+0g+7aa+iRGR25Xycd1Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
 
@@ -24691,6 +24701,8 @@ snapshots:
     optional: true
 
   '@oxc-project/runtime@0.153.0': {}
+
+  '@oxc-project/runtime@0.154.0': {}
 
   '@oxc-project/types@0.153.0': {}
 

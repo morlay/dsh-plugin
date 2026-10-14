@@ -17,9 +17,13 @@ const PNPM_NATIVE_HELPERS = "pnpm/native-binary.mjs";
 const PNPM_PAYLOAD = ["bin", "dist", "native-binary.mjs", "package.json", "THIRD-PARTY-NOTICES.md"];
 // 随包的 TS 注册钩子：`@morlay/dsh-desktop-host/ts-register`（自建 hooks + `oxc-transform`）——它接管
 // **node_modules 下**的 `.ts`，而这条链的宿主正好住在那里（上游源码经 `exports` 指到 `src`）。
-const LOADER_ENTRY = "@oxc-node/core/register";
-// loader 依赖的那一层：`oxc-transform` 的转译器（含它按平台挑的原生绑定）。
-const LOADER_DEPENDENCY_MANIFEST = "rolldown/package.json";
+const LOADER_ENTRY = "@morlay/dsh-desktop-host/ts-register";
+// loader 要用到的两层依赖：`oxc-transform` 的转译器（含它按平台挑的原生绑定），以及装饰器转出来的
+// helper 所在的 `@oxc-project/runtime`。
+const LOADER_DEPENDENCY_MANIFESTS = [
+  "oxc-transform/package.json",
+  "@oxc-project/runtime/package.json",
+];
 
 type RuntimePlatform = "darwin" | "linux" | "win";
 type RuntimeArch = "arm64" | "x64";
@@ -244,16 +248,6 @@ async function prepareBin(platform: RuntimePlatform, runtimeRoot: string): Promi
 // 解析就与在仓库里一致——包括它按平台挑的原生绑定。
 async function prepareLoader(runtimeRoot: string): Promise<string> {
   const entry = fileURLToPath(import.meta.resolve(LOADER_ENTRY));
-  const dependencyRoot = dirname(fileURLToPath(import.meta.resolve(LOADER_DEPENDENCY_MANIFEST)));
-  const layer = dirname(dependencyRoot);
-  if (basename(layer) !== "node_modules")
-    throw new Error(
-      `desktop runtime: unexpected install layout for the loader dependency (${dependencyRoot}); ` +
-        "the loader payload needs pnpm's virtual store",
-    );
-  const manifest = JSON.parse(await readFile(join(dependencyRoot, "package.json"), "utf8")) as {
-    version?: unknown;
-  };
   const destination = join(runtimeRoot, "loader");
   await rm(destination, { recursive: true, force: true });
   await mkdir(join(destination, "node_modules"), { recursive: true });
@@ -262,14 +256,33 @@ async function prepareLoader(runtimeRoot: string): Promise<string> {
     join(destination, "package.json"),
     `${JSON.stringify({ name: "dsh-desktop-loader", private: true, type: "module" }, undefined, 2)}\n`,
   );
-  for (const child of await readdir(layer)) {
-    if (child.startsWith(".")) continue;
-    await cp(join(layer, child), join(destination, "node_modules", child), {
-      recursive: true,
-      dereference: true,
-    });
+  let version = "unknown";
+  for (const manifest of LOADER_DEPENDENCY_MANIFESTS) {
+    const root = dirname(fileURLToPath(import.meta.resolve(manifest)));
+    const layer = dirname(root);
+    if (basename(layer) !== "node_modules")
+      throw new Error(
+        `desktop runtime: unexpected install layout for the loader dependency (${root}); ` +
+          "the loader payload needs pnpm's virtual store",
+      );
+    const parsed = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      name?: unknown;
+      version?: unknown;
+    };
+    if (manifest.startsWith("oxc-transform") && typeof parsed.version === "string") {
+      version = parsed.version;
+    }
+    // 整层拷过去（pnpm 把同一个包的依赖都放在 `<store>/<pkg>@<version>/node_modules/` 这一层里），
+    // 解析就与在仓库里一致——包括按平台挑的原生绑定。
+    for (const child of await readdir(layer)) {
+      if (child.startsWith(".")) continue;
+      await cp(join(layer, child), join(destination, "node_modules", child), {
+        recursive: true,
+        dereference: true,
+      });
+    }
   }
-  return typeof manifest.version === "string" ? manifest.version : "unknown";
+  return version;
 }
 
 export async function runPrepareRuntime(options: PrepareRuntimeOptions): Promise<void> {

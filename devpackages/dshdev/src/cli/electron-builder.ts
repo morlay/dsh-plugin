@@ -81,10 +81,9 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
     // 尤其不可靠）。产物结构与 dev 的装配目录保持一致，少一层差异。
     asar: false,
     // 装配目录（`buildCache/shell`）里要进产物的东西：**引导**（Electron 的 `main`）、转译后的字节与本地化。
-    // 逐项列清楚（不用 `dist/**`：实测它只带走了 `preload-app.cjs`，入口 `index.mjs` 会漏）。
-    // 逐项列清楚（不用 `dist/**`：实测它只带走了 `preload-app.cjs`）。产物就是**整包的源码**加那个入口；
-    // `dist/` 里只有 preload（sandboxed preload 只能是 CJS）。
-    files: ["main.mjs", "package.json", "src/**", "dist/preload-app.cjs", "locale/*.json"],
+    // 产物就是**整包的源码**加那个入口：preload 的 CJS 由宿主机现场打包（见 `preload-source.ts`），
+    // 所以装配目录里没有 `dist/`。逐项列清楚（不用通配：`dist/**` 那种写法实测会漏件）。
+    files: ["main.mjs", "package.json", "src/**", "locale/*.json"],
     extraResources: [
       { from: join(buildCache, "runtime"), to: "runtime" },
       { from: join(buildCache, "seed"), to: "seed" },

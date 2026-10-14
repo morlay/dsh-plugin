@@ -1,7 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "./electron.ts";
 
 declare global {
@@ -12,6 +11,7 @@ declare global {
 
 import type { BrowserWindow as BrowserWindowType, BrowserWindowConstructorOptions } from "electron";
 import { DESKTOP_HOST_PACKAGE } from "./official.ts";
+import { PRELOAD_SOURCE_PATH } from "@morlay/dsh-desktop-host/preload-source";
 import { loadAppConfig, PROFILE_NAME, type AppConfig } from "./appconfig.ts";
 import { installDesktopDirectoryPicker } from "./directory-picker.ts";
 import { installDeveloperMenu } from "./developer-menu.ts";
@@ -126,7 +126,7 @@ function runtimeResources(): RuntimeResources {
     // 随包载荷就是 `@oxc-node/core` 的 register（与工作区那条 `--import` 同一份实现）。
     loader:
       (development ? process.env.DSH_DESKTOP_LOADER : undefined) ??
-      join(process.resourcesPath, "runtime", "loader", "register.mjs"),
+      join(process.resourcesPath, "runtime", "loader", "ts-register.mjs"),
   };
 }
 
@@ -311,11 +311,8 @@ async function main(): Promise<void> {
   let mainWindow: BrowserWindowType | undefined;
   let quitConfirmed = false;
   let quitPrompting = false;
-  // preload 必须是 CJS（sandboxed preload 只能 require electron 自己的几个模块），所以它仍是**构建产物**；
-  // 而壳的业务代码直接跑 `src/`，`import.meta.url` 的层级与 dist 形态不同——包根由引导报出来（发布包里没有
-  // 引导时退回相对推导，那时壳自己就在 dist 下）。
-  const shellRoot = globalThis.__DSH_SHELL_ROOT__ ?? join(dirname(fileURLToPath(import.meta.url)), "..");
-  const appPreload = join(shellRoot, "dist", "preload-app.cjs");
+  /** preload 落盘的位置：字节由宿主现场打包（sandboxed preload 只能是 CJS），这里只是放它。 */
+  const preloadPathOf = (): string => join(app.getPath("userData"), "preload-app.cjs");
 
   // 只有打包形态拦一次确认（开发形态关窗即退出）。
   const confirmQuit = async (window?: BrowserWindowType): Promise<void> => {
@@ -371,6 +368,10 @@ async function main(): Promise<void> {
 
       extraEnv: {
         ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }),
+        // 宿主按它现场打包 preload（见 `@morlay/dsh-desktop-host/preload-source`）。
+        ...(globalThis.__DSH_SHELL_ROOT__ === undefined
+          ? {}
+          : { DSH_DESKTOP_SHELL_ROOT: globalThis.__DSH_SHELL_ROOT__ }),
         // 形态标志：壳起宿主时会过滤掉所有 `DSH_DESKTOP_*`（那些是 Electron 侧的元数据），所以这条链要
         // 判断"跑在桌面形态里"得用别的名字（前端资源的预编译策略据此分流）。
         DSH_DEV_FORM: "desktop",
@@ -540,6 +541,7 @@ async function main(): Promise<void> {
 
   /** 宿主回环的 ws 端口：宿主起好之后填入（窗口重建时仍用它）。 */
   let desktopWsPort = 0;
+  let appPreload = preloadPathOf();
   const createMainWindow = (): BrowserWindowType => {
     const window = createWindow(appPreload, appConfig.window, desktopWsPort);
     mainWindow = window;
@@ -583,6 +585,18 @@ async function main(): Promise<void> {
   const started = await startHost();
   host = started.process;
   desktopWsPort = started.ready.wsPort;
+  // preload 的字节由宿主机现场打包（sandboxed preload 只能 CJS，也挂不了 hooks）：取回来落到用户数据目录，
+  // 再把路径交给窗口——装配目录里因此没有预产的 `dist/`。
+  appPreload = preloadPathOf();
+  const preload = await started.process.fetch(
+    new Request(`${SCHEME}://app${PRELOAD_SOURCE_PATH}`),
+  );
+  if (!preload.ok) {
+    throw new Error(
+      `dsh desktop: preload bundling failed (${String(preload.status)}): ${await preload.text()}`,
+    );
+  }
+  await writeFile(appPreload, await preload.text(), "utf8");
   console.log(`[dsh-shell] 宿主就绪：wsPort=${String(desktopWsPort)} protocol=${String(started.ready.protocolVersion)}`);
   await shellLog(`宿主就绪 wsPort=${String(desktopWsPort)}`);
 

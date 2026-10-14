@@ -40,7 +40,6 @@ describe("desktopBuildConfig", () => {
       "main.mjs",
       "package.json",
       "src/**",
-      "dist/preload-app.cjs",
       "locale/*.json",
     ]);
     expect(config.mac?.target).toEqual(["dir"]);

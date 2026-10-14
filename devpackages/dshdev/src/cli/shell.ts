@@ -8,14 +8,13 @@
  * - `main.mjs`：**自动生成**的入口（真 JS；Electron 的 app 目录必须有它）。它只报包根、按包名加载
  *   业务入口——源码树里不需要一份手写的引导；
  * - **整包的源码**（`src/`、清单、本地化）——入口由 `main.mjs` 按包名加载，走清单的 `exports`；
- * - `dist/preload-app.cjs`：唯一要转译的一件（sandboxed preload 只能是 CJS，挂不了 hooks）；
+ * - **不再产 `dist/`**：preload 的 CJS 由宿主机现场打包（见 `@morlay/dsh-desktop-host/preload-source`），
+ *   壳在窗口创建前取走；
  * - `package.json`（`main` 指引导）与 `locale/`。
  */
 import { access, cp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "tsdown";
-import { isLocalPackage } from "@local/tsdown-plugin-cordis";
 
 // 壳包根：源码树里那个包（装配的输入）。工具里不写死包名，一律由 node 解析。
 export const SHELL_PACKAGE_ROOT = dirname(
@@ -61,27 +60,13 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
   await mkdir(dirname(selfLink), { recursive: true });
   await rm(selfLink, { recursive: true, force: true });
   await symlink(root, selfLink, "junction");
+  // **整包拷**（包作为整体）：清单原样带着（`main` 与 `exports` 都由壳包自己声明，装配不改写它）。
+  await cp(join(SHELL_PACKAGE_ROOT, "package.json"), join(root, "package.json"));
   // 业务源码与本地化：拷过来**不转译**（入口先挂 `ts-register`，Node 就能跑 `node_modules` 下的 `.ts`）。
   await cp(join(SHELL_PACKAGE_ROOT, "src"), join(root, "src"), { recursive: true });
   if (await pathExists(join(SHELL_PACKAGE_ROOT, "locale"))) {
     await cp(join(SHELL_PACKAGE_ROOT, "locale"), join(root, "locale"), { recursive: true });
   }
-  // 唯一要转译的一件：**preload 必须是 CJS**（sandboxed preload 的约束，挂不了本仓库的 TS hooks）。
-  await build({
-    config: false,
-    entry: { "preload-app": join(root, "src", "preload-app.ts") },
-    outDir: join(root, "dist"),
-    format: ["cjs"],
-    platform: "node",
-    target: "es2024",
-    dts: false,
-    clean: false,
-    deps: { neverBundle: ["electron"], alwaysBundle: (id) => isLocalPackage(id) },
-  });
-
-  // 清单**原样拷**（包作为整体：`main` 与 `exports` 都由壳包自己声明，装配不改写它）。
-  await cp(join(SHELL_PACKAGE_ROOT, "package.json"), join(root, "package.json"));
-
   // 入口**自动生成**：Electron 的 app 目录必须有一个真 JS 入口，内容就三件事——报出包根、让 Node 能跑
   // `node_modules` 下的 `.ts`、按**包名**加载业务入口（走本目录清单的 `exports`）。
   const entry = join(root, "main.mjs");
@@ -90,11 +75,20 @@ export async function prepareShell(workRoot: string): Promise<AssembledShell> {
     [
       "// 由 `dshdev` 装配时生成（见 devpackages/dshdev/src/cli/shell.ts）：不手写、不参与仓库构建。",
       "globalThis.__DSH_SHELL_ROOT__ = import.meta.dirname;",
-      "// 先让 Node（含 Electron 的主进程）能跑 `node_modules` 下的 `.ts`：这条链的源码都是 TS，而",
-      "// Node 内建的类型剥离拒绝对那里动手。",
-      'await import("@morlay/dsh-desktop-host/ts-register");',
-      "// 业务入口：按**包名**加载，走壳包清单的 `exports`（指向 `src/index.ts`）。",
-      'await import("@morlay/dsh-desktop-shell");',
+      "",
+      "// Electron 打包后不把主进程的 stderr 送出去，这里兜一层：入口失败时至少留下原因。",
+      "try {",
+      "  // 先让 Node（含 Electron 的主进程）能跑 `node_modules` 下的 `.ts`：这条链的源码都是 TS，而",
+      "  // Node 内建的类型剥离拒绝对那里动手。那份注册钩子在**随包 runtime** 里（`../runtime/loader/`，",
+      "  // dev 由 dshdev 备、打包由 prepareRuntime 备）——app 目录里没有 `node_modules`。",
+      '  await import(new URL("../runtime/loader/ts-register.mjs", import.meta.url).href);',
+      "  // 业务入口：按**包名**加载，走壳包清单的 `exports`（指向 `src/index.ts`）。",
+      '  await import("@morlay/dsh-desktop-shell");',
+      "} catch (error) {",
+      '  console.error("[dsh-shell] 入口失败:", error);',
+      "  throw error;",
+      "}",
+      "",
       "",
     ].join("\n"),
     "utf8",

@@ -23,17 +23,27 @@ import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 import { transformSync } from "oxc-transform";
 
+// 挂上时留一行（stderr）：分辨"loader 没被加载"与"加载了但没拦住"是排查这条链的第一步。
+process.stderr.write(`[ts-register] 已挂载 pid=${String(process.pid)}\n`);
+
 registerHooks({
   load(url, context, nextLoad) {
     if (!url.startsWith("file:") || !url.endsWith(".ts")) return nextLoad(url, context);
+    process.stderr.write(`[ts-register] 转译 ${url.slice(7)}\n`);
     const path = fileURLToPath(url);
     // oxlint-disable-next-line node/no-sync -- `registerHooks` 的 load 钩子必须同步返回。
     const original = readFileSync(path, "utf8");
     // oxlint-disable-next-line node/no-sync -- 钩子契约要求同步。
     const result = transformSync(path, original, {
-      sourcemap: true,
-      // `esnext`：保住顶层 await 这些（我们的源码与上游指到 `src` 的包都在用）。
-      target: "esnext",
+      sourcemap: false,
+      // `es2022`：装饰器要在这里降级（`esnext` 会把 `@dec` 原样留着，而 Node 不认它——报出来是一句没头没尾
+      // 的 `SyntaxError: Invalid or unexpected token`）；顶层 await 在 es2022 就有，保得住。
+      target: "es2022",
+      // 装饰器：dsh 用的是 legacy 装饰器（`experimentalDecorators`），oxc 要显式开才会转；`@Remote` 这类
+      // 原样留着就是上面那句语法错。
+      decorator: { legacy: true },
+      // 装饰器转出来的 helper 走 `@oxc-project/runtime`（本包的依赖之一，随 runtime 的 loader 层一起带）。
+      helpers: { mode: "Runtime" },
     });
     if (result.errors.length > 0) {
       const detail = result.errors.map((e) => e.message).join("; ");
@@ -41,10 +51,14 @@ registerHooks({
       process.stderr.write(`[ts-register] 转译失败 ${path}: ${detail}\n`);
       throw new Error(`ts-register: ${path}: ${detail}`);
     }
+    // 一律按 ESM 交回 Node：这条链要跑的 `.ts`（上游经 `exports` 指到 `src` 的那些）都是 ESM 源码，
+    // 而它们的 `package.json` 未必带 `type: "module"`——按包类型去判会把 ESM 代码当 CJS 载入，
+    // 报出来是一句没头没尾的 `SyntaxError: Invalid or unexpected token`。
+    const format = "module";
     // `map` 可能是字符串，也可能是 sourcemap 对象——两种都要能带上（栈里才指向原文件）。
     const map = result.map === undefined || result.map === null ? undefined : JSON.stringify(result.map);
     return {
-      format: "module",
+      format,
       source:
         map === undefined
           ? result.code
