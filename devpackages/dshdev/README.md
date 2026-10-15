@@ -10,9 +10,14 @@
 
 | 命令                                                     | 作用                                                                              |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `dshdev web [--data-dir <spec>] [workspace]` | 在浏览器里跑 `dsh web`（页面与资源走宿主自己的 http 端口） |
+| `dshdev web [--data-dir <spec>] [--prod] [workspace]` | 在浏览器里跑 `dsh web`（页面与资源走宿主自己的 http 端口） |
 | `dshdev desktop [--data-dir <spec>] [workspace]` | 启动 Electron 壳（不打包） |
 | `dshdev desktop bundle [--dir] [--install] [workspace]` | 构建当前平台的静态、无签名桌面应用 |
+| `dshdev check-deps [package]` | 从一个包的入口扫出它运行期 import 的包，报**没在自己清单里声明**的那些（非零退出） |
+
+`--prod`：起之前先装配**打包形态的解析面**（`pnpm deploy` 的闭包 + profile 清单，即 seed 的布局），再让 web
+跑在它上面——闭包内容、profile 清单、依赖解析面与真打完包一致，于是不必等一轮打包就能验证打包形态的问题
+（闭包缺依赖、清单不对）。`--prod` 下前端装配在 profile bundles 里，不再挂 dev 形态那份 `--patch`。
 
 工作区取首个位置参数（缺省当前目录）。装配输入是工作区 `package.json` 的 `dsh` 段：`version`（`@deepseek-ai/dsh`
 的依赖 spec）、`profile.bundles`（必填）、`desktop.{id,name,icon,dshHome,window}`——`desktop.name` 是桌面应用的

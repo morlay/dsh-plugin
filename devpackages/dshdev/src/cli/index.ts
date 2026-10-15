@@ -72,11 +72,16 @@ const desktop = program
   .command("desktop")
   .description("launch the Electron shell against the workspace")
   .option("--data-dir <spec>", DATA_DIR_OPTION)
+  .option(
+    "--prod",
+    "assemble the packaged surface first (pnpm deploy closure + profile manifests) and boot against it",
+  )
   .argument("[workspace]", "app workspace directory (default: current directory)")
   .action(async (workspace: string | undefined, options: DevFlags) => {
     await runDev({
       workspace: resolveWorkspaceArg(workspace),
       web: false,
+      ...(options.prod === true ? { prod: true } : {}),
       ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
     });
   });
