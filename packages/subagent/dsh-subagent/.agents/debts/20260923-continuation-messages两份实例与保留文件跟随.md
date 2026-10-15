@@ -12,7 +12,7 @@
    `continuation-activation.ts`（902 行）；那一版把它并进 `manager.ts`，而 `manager.ts` 已被本包复制。
 2. **保留文件跟随靠人读、靠测试兜底**：三个保留文件里，`manager.ts` / `index.ts` 只允许接线不同，
    `continuation-messages.ts` 只允许 `withContinuableReturnGuidance` 内不同——这些由
-   `src/__tests__/upstream-wiring.spec.ts` 逐行守护（上游改动会红），但**它不判断语义**：上游改了行为而行级对照仍
+   （曾有的）逐行守护表（已删：上游改动会红，但它只比对文本、不判断语义），但**它不判断语义**：上游改了行为而行级对照仍
    相等时，测试不会提醒。跟随方式：`git -C vendor/deepseek-harness diff` 看这三个文件，把改动搬进保留文件（接线照
    归一规则改写，即指向上游源码的相对路径），跑测试确认偏离集合没变大。0.2.1-alpha.2 把中间那份从 552 行的
    `continuation.ts` 换成 1475 行的 `manager.ts`，跟随负担随之变大。
@@ -30,7 +30,7 @@
 
 - 动 `continuation-messages.ts` 的**结构**（不只是文案）时，必须先看 vendor 那一份是否也跟着变；
 - 每次同步 `vendor/deepseek-harness`（尤其 `packages/subagent/subagent`）之后，走一遍上面的跟随流程并跑
-  `upstream-wiring.spec.ts`。
+  那张逐行守护表（已删）。
 
 **销账条件**
 

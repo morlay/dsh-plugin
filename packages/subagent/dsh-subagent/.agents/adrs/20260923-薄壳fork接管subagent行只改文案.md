@@ -51,7 +51,7 @@
   1475 行的 `manager.ts`（复制集合计约 2270 行）。上游升级时这三个文件要与上游对照跟随，
   [守护测试](../standards/how-to-verify.md) 盯着这件事，跟随负担见
   [债务 continuation-messages 两份实例与保留文件跟随](../debts/20260923-continuation-messages两份实例与保留文件跟随.md)。
-- **偏离面是登记式的**：`src/__tests__/upstream-wiring.spec.ts` 的 `DELTAS` 表逐条登记（新增块、改过的行、装配面
+- **偏离面是登记式的**：（曾有的）逐行守护 `DELTAS` 表（已删：它只比对文本、不判断语义）逐条登记（新增块、改过的行、装配面
   字段），片段没命中就红——加偏离必须同时登记。
 - **两处结构性偏离**（`index.ts` 不复述 cordis 合并接口、构建期降级标准装饰器）各自有理由，见
   [包 README](../../README.md)。

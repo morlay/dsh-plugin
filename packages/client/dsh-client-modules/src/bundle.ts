@@ -498,7 +498,10 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），落盘要先把父目录建出来。
     await mkdir(dirname(join(outDir, item.fileName)), { recursive: true });
     await writeFile(join(outDir, item.fileName), item.code, "utf8");
-    files[item.name] = `${key}/${item.fileName}`;
+    // **出口产物**按出口名进清单（路由按出口名找它）；**拆出来的块**（`import()` 各成 chunk）按文件名——
+    // 引它的产物写的就是那个名字（`./chunk-<hash>.js`），它没有第二个身份。只记出口名的话这些块不在清单里，
+    // 路由按清单服务就 404，浏览器报 "does not provide an export named …"。
+    files[item.isEntry ? item.name : item.fileName] = `${key}/${item.fileName}`;
   }
   // 资产也进清单（键就是它在包内的相对路径 `assets/<name>-<hash>.<ext>`）：清单是"这个包产出里有什么"
   // 的**唯一真相**——路由按它服务资产，缓存命中/增量合并也照它判断，不必去猜目录里躺了什么。

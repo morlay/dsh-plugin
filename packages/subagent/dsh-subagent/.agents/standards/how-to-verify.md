@@ -12,7 +12,7 @@ exclude 里）、不给本包加包级 tsconfig（dts 阶段的 `rootDir` 会把
 | `__tests__/continuation-messages.spec.ts` | `withContinuableReturnGuidance`（纯函数）     | 文案要点齐全（父 id 插值、`send_message`、回报不结束回合），且不含上游英文                                                                                  |
 | `__tests__/return-guidance.spec.ts`       | 运行期装配（`ctx.subagents.startActivation`） | **模型可见的请求**里是中文、没有英文——唯一的行为证据；判定的两个方向都覆盖（不配名单 = 官方四个 shipped preset 也用中文；配了名单 = 名单外走上游英文）      |
 | `__tests__/delegation-context.spec.ts`    | 运行期装配（真子代理 + 真 `assemble`）        | 子代理的 `subagent:delegation` 是中文、没有上游英文原文；本地两条派发（`delivery` 为 `parent` / `caller`）都覆盖，父 agent 的装配不出现这条                 |
-| `__tests__/upstream-wiring.spec.ts`       | 保留文件本身                                  | 接线归一后与上游逐行一致；偏离只允许 `DELTAS` 表登记的那几条（新增块 / 接线 / 该函数体）；相对 import 都指向真实文件                                        |
+| （曾有的）逐行守护表（已删）       | 保留文件本身                                  | 接线归一后与上游逐行一致；偏离只允许 `DELTAS` 表登记的那几条（新增块 / 接线 / 该函数体）；相对 import 都指向真实文件                                        |
 | `__tests__/assembly.spec.ts`              | 装配入口与两份 manifest                       | 装配入口是 `@morlay/session-mode-profile`（app 列它、它依赖本包）；本包不发布 client 面（无 `./client` 出口、无 `dsh` 注入声明）；两个限额字段仍是 volatile |
 
 运行期那条用最小装配：`mountAgentLoopTestDependencies` + `mountWorkingDirectoryFixture`（上游服务
