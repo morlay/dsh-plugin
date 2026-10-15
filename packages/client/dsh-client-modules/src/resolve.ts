@@ -21,6 +21,26 @@ export interface PackageRoot {
 }
 
 /** `@deepseek-ai/dsh-x` → `@deepseek-ai+dsh-x`：包名里的 `/` 在 URL 段里要转义。 */
+/**
+ * **出口名 ↔ 产物文件名**的约定：出口产物的文件名是 `<出口名>.js`。
+ *
+ * 这条规则**只有一处**（这里）：`urlOf` 生成地址、产物路由解析地址，两边都调它——各写一遍"补 `.js` / 剥
+ * `.js`"就会漂（`remote` 与 `remote.js` 两种地址，明明产出过却查不到）。
+ */
+export function entryFileNameOf(exportName: string): string {
+  return `${exportName}.js`;
+}
+
+/**
+ * 地址里的文件名 → 出口名（{@link entryFileNameOf} 的反向）。
+ *
+ * @param file - 地址里最后一段（`client.js`、`remote.js`、`chunks/…`）。
+ * @returns 出口名；没有扩展名的按原样（`index` 是包级引用的缺省出口）。
+ */
+export function exportNameOfFileName(file: string): string {
+  return file.replace(/\.js$/u, "") || "index";
+}
+
 export function encodePackageName(name: string): string {
   return name.replace("/", "+");
 }

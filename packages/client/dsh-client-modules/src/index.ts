@@ -37,6 +37,7 @@ import {
   PLUGIN_ROUTE,
   resolveInPackage,
   workspacePackagesMatching,
+  exportNameOfFileName,
 } from "./resolve.ts";
 
 export const name = "client-modules";
@@ -455,7 +456,7 @@ export function apply(ctx: Context): void {
       res.end(req.method === "HEAD" ? undefined : bytes);
       return true;
     }
-    const exportName = file.replace(/\.js$/u, "") || "index";
+    const exportName = exportNameOfFileName(file);
     const entry =
       root === undefined
         ? (await dependencyEntry(await resolutionManifestPath(), name).catch(() => undefined))

@@ -16,7 +16,7 @@ import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
 import { rolldown, type Plugin } from "rolldown";
 import { esmExternalRequirePlugin, type PluginOption } from "vite";
-import { encodePackageName, packageNameOf } from "./resolve.ts";
+import { encodePackageName, entryFileNameOf, packageNameOf } from "./resolve.ts";
 
 /** 裸包名 → `^名(/|$)`：既覆盖子路径引用，也不会把 `node:fs`、`./x` 误判成包。 */
 function barePackageRegExp(name: string): RegExp {
@@ -59,7 +59,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "18";
+const BUNDLER_RULES = "19";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -196,14 +196,14 @@ export function urlOf(
   // 所以只带包内路径的引用（`zustand/vanilla`）要补 `.js`，否则 URL 一半带（`index.js`）、一半不带（`vanilla`），
   // 而磁盘上的文件名全都带。本来就有扩展名的（`katex/dist/katex.min.css`）原样。
   const subpath = specifier === bare ? "" : specifier.slice(bare.length + 1);
+  // 扩展名统一走 {@link entryFileNameOf} 那条约定：本来有扩展名的（`katex/dist/katex.min.css`）原样，
+  // 其余按"出口产物文件名 = `<出口名>.js`"补上。
   const file =
     subpath !== ""
       ? /\.[a-z0-9]+$/iu.test(subpath)
         ? subpath
-        : `${subpath}.js`
-      : tables.clientRows?.has(bare) === true
-        ? "client.js"
-        : "index.js";
+        : entryFileNameOf(subpath)
+      : entryFileNameOf(tables.clientRows?.has(bare) === true ? "client" : "index");
   return depsUrlOf(specifier, version, `${file}?v=${BUNDLER_REV}`);
 }
 
