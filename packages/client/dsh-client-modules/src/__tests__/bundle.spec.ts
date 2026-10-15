@@ -32,10 +32,11 @@ test("地址带 `?v=`（构建世代；与 vite 同名的参数）", () => {
   expect(urlOf("react", tables)).toBe(`/@client-modules/react@18.3.1/index.js?v=${BUNDLER_REV}`);
 });
 
-test("子路径引用保留子路径，不自作主张加 `.js`", () => {
+test("子路径引用保留子路径；扩展名与产物一致（没有扩展名的补 `.js`，有的原样）", () => {
   const tables = { versions: new Map([["@oxc-project/runtime", "0.153.0"], ["katex", "0.16.47"]]) };
+  // 产物名一律 `<出口名>.js`（`entryFileNames`），所以没扩展名的子路径要补上——不然一半 URL 带、一半不带。
   expect(urlOf("@oxc-project/runtime/helpers/decorate", tables)).toBe(
-    `/@client-modules/@oxc-project+runtime@0.153.0/helpers/decorate?v=${BUNDLER_REV}`,
+    `/@client-modules/@oxc-project+runtime@0.153.0/helpers/decorate.js?v=${BUNDLER_REV}`,
   );
   expect(urlOf("katex/dist/katex.min.css", tables)).toBe(
     `/@client-modules/katex@0.16.47/dist/katex.min.css?v=${BUNDLER_REV}`,

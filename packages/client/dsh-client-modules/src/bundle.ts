@@ -199,9 +199,18 @@ export function urlOf(
   //   出口名，那张表是按 `exports` 里有没有 `./client` 猜的——于是没有该键的行（`@deepseek-ai/dsh-api-*`）
   //   被打成 `index.js`（宿主半）。
   // - **普通 npm 包**（三方、被依赖的）→ `index.js`：出口按 npm 语义（包的根出口）。
+  // **子路径引用**（`pkg/sub`）保留子路径——但**扩展名要统一**：产物名一律 `<出口名>.js`（`entryFileNames`），
+  // 所以只带包内路径的引用（`zustand/vanilla`）要补 `.js`，否则 URL 一半带（`index.js`）、一半不带（`vanilla`），
+  // 而磁盘上的文件名全都带。本来就有扩展名的（`katex/dist/katex.min.css`）原样。
   const subpath = specifier === bare ? "" : specifier.slice(bare.length + 1);
   const file =
-    subpath !== "" ? subpath : tables.clientRows?.has(bare) === true ? "client.js" : "index.js";
+    subpath !== ""
+      ? /\.[a-z0-9]+$/iu.test(subpath)
+        ? subpath
+        : `${subpath}.js`
+      : tables.clientRows?.has(bare) === true
+        ? "client.js"
+        : "index.js";
   return depsUrlOf(specifier, version, `${file}?v=${BUNDLER_REV}`);
 }
 
