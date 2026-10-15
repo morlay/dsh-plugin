@@ -25,7 +25,8 @@ describe("装配面", () => {
     ) as { dependencies: Record<string, string> };
 
     expect(dsh.profile.bundles).toContain("@morlay/session-mode-profile");
-    expect(bundle.dependencies["../index.ts"]).toBe("workspace:*");
+    // bundle 的依赖键是**包名**（`a4b43a0` 起行不再写成相对入口）。
+    expect(bundle.dependencies["@morlay/dsh-subagent"]).toBe("workspace:*");
   });
 });
 

@@ -48,7 +48,13 @@ const ASSET_PREFIX = "\0dsh-client-asset:";
  * **具名**引用——build 出来 `Readable` 会是 `undefined`，跑到就炸；dev 那条链由 alias 指向真实的
  * `node-stub`，所以只有打包形态会坏。两份形态指同一份语义，才谈得上"行为一致"。
  */
-const NODE_BUILTIN_STUB = fileURLToPath(new URL("../app-boot/node-stub.cjs", import.meta.url));
+// 惰性算：模块加载期算等于要求 `import.meta.url` 一定是 `file:` 协议，而这条链的模块在测试运行器里
+// （vitest 的转换管线）未必是——用不到替身时不该为它付这个约束。
+let nodeBuiltinStub: string | undefined;
+function nodeBuiltinStubPath(): string {
+  nodeBuiltinStub ??= fileURLToPath(new URL("../app-boot/node-stub.cjs", import.meta.url));
+  return nodeBuiltinStub;
+}
 /**
  * 名单本体：`NODE_BUILTIN` 与"外置豁免"两处正则都从它拼。
  *
@@ -81,7 +87,7 @@ export function clientAssetPlugin(options: { assets?: CssAssetPolicy } = {}): Pl
     resolveId: {
       order: "pre",
       handler(source: string, importer: string | undefined) {
-        if (NODE_BUILTIN.test(source)) return NODE_BUILTIN_STUB;
+        if (NODE_BUILTIN.test(source)) return nodeBuiltinStubPath();
         if (source.endsWith("?raw")) return `${RAW_PREFIX}${resolveFileSpecifier(source.slice(0, -4), importer)}${RAW_SUFFIX}`;
         const file = source.split("?", 1)[0] ?? "";
         if (mimeOf(file) !== undefined) return `${ASSET_PREFIX}${resolveFileSpecifier(file, importer)}`;

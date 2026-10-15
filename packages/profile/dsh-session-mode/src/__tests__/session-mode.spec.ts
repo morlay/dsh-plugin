@@ -15,7 +15,7 @@ import { FsVersion, type FsWriteIntent } from "@deepseek-ai/dsh-fs";
 import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { afterEach, describe, expect, it } from "vitest";
-import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
+import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import { z } from "zod";
 import * as plugin from "../index.ts";
 import { sessionModeEditableProjection } from "../index.ts";
