@@ -42,8 +42,9 @@ export function isDevForm(): boolean {
 }
 
 export async function devExcluded(profileDir: string): Promise<RegExp[]> {
-  // **两种形态同一条判据**：读 profile 的 `dsh.dev.exclude`（dev 的 profile 就是工作区里的 app 目录）。
-  // 原先 dev 一律"全部聚合"——那让 dev 与 bundle 走两条不同的解析路，问题只在重的那条上才暴露。
+  // **只有 dev 形态才谈"哪些包不打算改"**：`dsh.dev.exclude` 是 dev 的取舍（点名的包不值得付逐文件请求的
+  // 代价，走按包聚合），打包形态（含 `dshdev --prod` 那份解析面）没有"改哪个包"这回事——一律全部预编译。
+  if (!isDevForm()) return [/.*/u];
   try {
     const manifest = JSON.parse(await readFile(join(profileDir, "package.json"), "utf8")) as {
       dsh?: { dev?: { exclude?: string[] } };
@@ -53,8 +54,7 @@ export async function devExcluded(profileDir: string): Promise<RegExp[]> {
   } catch {
     // 读不到就算没配。
   }
-  // **读不到配置就是"不打算改任何包"**：全部走按包预编译（桌面/bundle 形态没有 dev 配置，源码逐文件
-  // 那条路对它们没有意义）。这正是两种形态"完美复用同一条链"的地方。
+  // **读不到配置就是"不打算改任何包"**：全部走按包预编译。这正是两种形态"完美复用同一条链"的地方。
   return [/.*/u];
 }
 

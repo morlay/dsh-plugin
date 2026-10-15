@@ -22,8 +22,9 @@ import type { UserMessageNode } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { ChatNodeViewProps, ChatViewSlotProps } from "@deepseek-ai/dsh-client-ui-chat/client";
 import type { RenderMessageImages } from "@deepseek-ai/dsh-client-ui-conversation/client";
 // 动作行整条用上游那份：复制 / 分支 / 时间标签的悬停显形都归它，我们只经它的 `extraActions` 注入自己的两个入口。
-// 走 vendor 源码的相对路径（与 `dsh-subagent` 接上游源码同一种写法），不经包出口。
-import { MessageIconActions } from "../../../../../../vendor/deepseek-harness/packages/client/ui-chat/src/client/chat/MessageIconActions.tsx";
+// 按**包名**引（上游 `exports` 里有 `./src/*`）：走相对路径等于把 vendor 的目录布局抄进代码，闭包面
+// （`node_modules/.pnpm/…`，部署形态）里深度对不上就解析不到——开发态恰好因为目录层级吻合而看不出来。
+import { MessageIconActions } from "@deepseek-ai/dsh-client-ui-chat/src/client/chat/MessageIconActions.tsx";
 import type { EditableMessageBlock } from "../../shared.ts";
 import type { SessionEditorFace } from "../controller.ts";
 
