@@ -38,7 +38,7 @@ export interface ClientRowsPluginOptions {
    * 裸说明符 → **联邦地址**（`@client-modules/<pkg>@<ver>/<export>`）。三方与"非开发模块"都走它：
    * 它们由 `dsh-client-modules` 自己的路由按包预编译，vite 只该把这个地址当外部留着。
    */
-  depsUrl?: (specifier: string) => Promise<string | undefined>;
+  depsUrl?: (specifier: string, importer?: string) => Promise<string | undefined>;
   /** 每次 dev server 建好时回调（含 vite 自己 `restart()` 后的新实例）——调用方据此切换当前实例。 */
   onServer?: (server: ViteDevServer) => void;
 }
@@ -165,7 +165,7 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       // `node_modules/.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`，两个 react 实例，
       // hook 分发立刻报 `Invalid hook call`。
       if (options.depsUrl !== undefined) {
-        const url = await options.depsUrl(source);
+        const url = await options.depsUrl(source, importer);
         if (url !== undefined) return { id: url, external: true };
       }
       // 行包名 → 它的 **client 半**源文件（行清单已经解析好；vite 只负责把它当普通模块编译与缓存）。

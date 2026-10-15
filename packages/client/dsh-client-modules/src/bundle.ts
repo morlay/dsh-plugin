@@ -11,7 +11,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { findPackageJSON } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins } from "./styles.ts";
 import { rolldown, type Plugin } from "rolldown";
@@ -59,7 +61,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "21";
+const BUNDLER_RULES = "22";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -96,8 +98,15 @@ export interface BundleOptions {
   input: Record<string, string>;
   /** 指纹的输入文件集（我们的包给 `src`；三方给它的入口）。 */
   watch: readonly string[];
-  /** 包名 → 版本：外置说明符要写成联邦地址（回调同步，故预建表）。 */
-  versions?: ReadonlyMap<string, string>;
+  /**
+   * **本包**的清单（`package.json` 的绝对路径）。
+   *
+   * 外置说明符要写成带版本的联邦地址，而版本必须**从引它的那个包**解析——不同包的依赖树不同（peer 分叉时
+   * 同一个名字可以是不同版本），全局一张表必然猜错。回调是同步的，所以先对这个包的依赖面预建一张小表。
+   */
+  manifestOf?: string;
+  /** **行**的包名集合（loader 给的 `dsh.client` + client 半）：决定包级引用的出口名。 */
+  clientRows?: ReadonlySet<string>;
   /** 编译设置（rolldown 的 `tsconfig`）：解析根那份 tsconfig 的路径；缺省时交给 rolldown 就近找。 */
   tsconfig?: string;
   /**
@@ -178,6 +187,61 @@ async function fingerprint(paths: readonly string[]): Promise<string> {
  * （多一个 URL 就多一份模块实例）。内容变了**不换 URL**，靠 `cache-control: no-cache` + `ETag` 协商
  * ——vite dev 对它自己的模块也是这套。
  */
+/**
+ * **本包视角**的可外置包与版本：从引它的那个包的清单出发，用 `findPackageJSON` 按 node 的解析找。
+ *
+ * 两点都要紧：
+ * - **按包解析**：不同包的依赖树不同（peer 分叉时同一个名字可以是不同版本），全局一张表必然猜错；
+ * - **不碰布局**：`node:module` 的解析对 hoisted / `.pnpm` / 实体目录一视同仁——我们不该知道 pnpm 把包放哪儿。
+ *
+ * 候选是"这个包声明的依赖"（`dependencies` + `peerDependencies`）：声明过、又能解析到，才谈得上外置；
+ * 解析不到的（可选依赖、纯 host 包）不列，产物里内联或由上层如实报错。
+ *
+ * @param manifestPath - 本包清单的绝对路径。
+ * @returns 包名 → 版本（供 {@link urlOf} 写地址）。
+ */
+/** 本包视角版本表的缓存：**键是"包 + 版本"**（与产物缓存目录 `cacheKeyOf` 同一形态）——同一个包的同一个版本只解析一次。 */
+const resolvableCache = new Map<string, Promise<Map<string, string>>>();
+
+/**
+ * 带缓存的前者：按"包 + 版本"复用解析结果。
+ *
+ * @param key - `cacheKeyOf(name, version)`（与产物目录名同一串）。
+ * @param manifestPath - 本包清单的绝对路径。
+ * @returns 包名 → 版本。
+ */
+export async function resolvableVersionsFor(
+  key: string,
+  manifestPath: string | undefined,
+): Promise<Map<string, string>> {
+  const cached = resolvableCache.get(key);
+  if (cached !== undefined) return await cached;
+  const computed = resolvableVersionsOf(manifestPath);
+  resolvableCache.set(key, computed);
+  return await computed;
+}
+
+export async function resolvableVersionsOf(manifestPath: string | undefined): Promise<Map<string, string>> {
+  const versions = new Map<string, string>();
+  if (manifestPath === undefined) return versions;
+  const here = pathToFileURL(manifestPath).href;
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  };
+  const names = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.peerDependencies ?? {}),
+  ]);
+  for (const name of names) {
+    const found = findPackageJSON(name, here);
+    if (found === undefined) continue;
+    const parsed = JSON.parse(await readFile(found, "utf8").catch(() => "{}")) as { version?: unknown };
+    if (typeof parsed.version === "string") versions.set(name, parsed.version);
+  }
+  return versions;
+}
+
 export function urlOf(
   specifier: string,
   tables: { versions?: ReadonlyMap<string, string>; clientRows?: ReadonlySet<string> },
@@ -421,6 +485,8 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
 
   // **同一份配置**：CSS / 资产 / `?raw` / node 内置替身与 dev 用的是同一个插件；只有 alias 由调用方给。
   // 资产走 `threshold`：产品是我们自己落盘、自己服务的，大图产出独立文件即可，不必塞进 JS 里当 base64。
+  // **本包视角**的版本表：外置名单与地址里的版本都从它来（见 `resolvableVersionsOf`）。
+  const resolvable = await resolvableVersionsFor(key, options.manifestOf);
   const plugins: (PluginOption | Plugin)[] = [
     // alias：rolldown 的 `resolve.alias` 只吃"字符串 → 字符串"的对象，而我们的 alias 带正则
     // （`^@/`）——用一个最小插件表达，放在最前面（它相当于 vite 里 `enforce: "pre"` 的那一层）。
@@ -454,7 +520,7 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     esmExternalRequirePlugin({
       // **外置名单 = 这条链认识的那些包**（包名 → 版本表的键），node 内置除外（它们走替身）。
       // 不是包的（相对路径、内置、虚拟模块）留在产物里内联。
-      external: [...(options.versions?.keys() ?? [])]
+      external: [...resolvable.keys()]
         .filter((name) => !NODE_BUILTIN.test(name))
         .map((name) => barePackageRegExp(name)),
     }),
@@ -513,7 +579,11 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // 出口产物与资产不混在一个命名空间里。
     assetFileNames: "assets/[name]-[hash][extname]",
     // 外置说明符 → 联邦地址（`/@client-modules/<pkg>@<ver>/…`）。
-    paths: (id: string) => urlOf(id, options),
+    paths: (id: string) =>
+        urlOf(id, {
+          versions: resolvable,
+          ...(options.clientRows === undefined ? {} : { clientRows: options.clientRows }),
+        }),
   });
   await bundle.close();
   process.stderr.write(`[bundle-build] ${options.name}: rolldown done ms=${String(Date.now() - startedAt)}\n`);

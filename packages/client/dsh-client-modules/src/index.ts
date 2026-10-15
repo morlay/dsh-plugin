@@ -1,6 +1,8 @@
-import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { findPackageJSON } from "node:module";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, relative, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
 import { ASSET_MIME, NODE_BUILTIN } from "./assets.ts";
@@ -14,7 +16,6 @@ import {
   profileManifestPath,
   resolutionManifestPath,
   resolutionRoot,
-  storeDir,
 } from "./dirs.ts";
 import {
   bundlePackage,
@@ -36,7 +37,6 @@ import {
   parsePluginAddress,
   PLUGIN_ROUTE,
   resolveInPackage,
-  workspacePackagesMatching,
   exportNameOfFileName,
 } from "./resolve.ts";
 
@@ -255,7 +255,7 @@ export function apply(ctx: Context): void {
         rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
-        depsUrl: (specifier: string) => depsUrlOfSpecifier(specifier),
+        depsUrl: (specifier: string, importer?: string) => depsUrlOfSpecifier(specifier, importer),
         // 同源的 http server：web 形态是宿主自己的端口；桌面形态是宿主**进程内**的回环端点
         // （`desktopUpgradeServer`）——HMR 的 WebSocket 就挂它上面，页面侧由垫片重写到它。
         httpServer: (
@@ -344,70 +344,6 @@ export function apply(ctx: Context): void {
   // 否则根出口）。这不是"身份判断"，所以 `immer` 这类三方不会因为它被特殊对待。
   // 两张表**懒建一次**：它们要扫工作区（几百个清单）与 pnpm store，而联邦路由是**每个请求**都要它们
   // ——每次重算等于把首屏时间乘以产物数（几百次全仓扫描）。dev 里包的版本与出口不会中途变。
-  let versionsCache: Promise<ReadonlyMap<string, string>> | undefined;
-  const ownVersionsOf = async (): Promise<ReadonlyMap<string, string>> =>
-    await (versionsCache ??= (async () => {
-      // 版本表要覆盖**工作区里的所有包**：外置说明符里会出现没进行清单的（cordis、client-store…），
-      // 而联邦地址必须带版本。行清单里的包版本从行里取，其余从各自的清单读。
-      const versions = new Map<string, string>();
-      for (const row of await sourceRowsOf()) versions.set(row.id, row.version);
-      const packages = await workspacePackagesMatching(await profileManifestPath(), [/.*/u]);
-      for (const pkg of packages) {
-        if (versions.has(pkg.name)) continue;
-        const manifest = await manifestOf(pkg.root).catch(() => undefined);
-        if (manifest !== undefined) versions.set(pkg.name, manifest.version);
-      }
-      // **顶层 `node_modules`**：打包形态的 profile 是 hoisted 布局（壳用 `pnpm deploy --node-linker=hoisted`），
-      // 没有 `.pnpm` 虚拟店——三方与闭包里的包只在这一层。只扫 `.pnpm` 的话，打包面扫不出任何三方版本，
-      // 外置名单跟着空，产物里所有依赖被**内联**（同一个 `dsh-client-ui-layout`，`--prod` 面 react 是外置的、
-      // 打包面却内联了）。顶层这一层对两种布局都成立：hoisted 是实体目录，常规布局是 symlink（readdir 一样看得到）。
-      const top = join(await resolutionRoot(), "node_modules");
-      for (const holder of await readdir(top, { withFileTypes: true }).catch(() => [])) {
-        if (!holder.isDirectory() || holder.name.startsWith(".")) continue;
-        const holders = holder.name.startsWith("@")
-          ? (await readdir(join(top, holder.name), { withFileTypes: true }).catch(() => []))
-              .filter((scoped) => scoped.isDirectory())
-              .map((scoped) => `${holder.name}/${scoped.name}`)
-          : [holder.name];
-        for (const bare of holders) {
-          if (versions.has(bare)) continue;
-          const parsed = JSON.parse(
-            await readFile(join(top, ...bare.split("/"), "package.json"), "utf8").catch(() => "{}"),
-          ) as { version?: unknown };
-          if (typeof parsed.version === "string") versions.set(bare, parsed.version);
-        }
-      }
-      // 三方与闭包里的包也要版本（zod、immer、react、cordis…）：**从各自的清单读**。
-      //
-      // 不用 `.pnpm` 的**目录名**去猜：那只是 pnpm 的布局（`<名字>@<版本>_<peer 后缀>`），而且工作区/闭包里
-      // link 进来的包写的是 `file++++<路径>`——猜出来的"版本"会是一串路径，联邦地址跟着变成
-      // `/@client-modules/@deepseek-ai+cordis@file++++Users+…/index.js`。
-      //
-      // 扫 `.pnpm/<dir>/node_modules/<name>/package.json`（scope 多一层）：一次读完，命中过的包不再读。
-      const store = await storeDir();
-      for (const entry of await readdir(store, { withFileTypes: true }).catch(() => [])) {
-        if (!entry.isDirectory()) continue;
-        const modules = join(store, entry.name, "node_modules");
-        for (const holder of await readdir(modules, { withFileTypes: true }).catch(() => [])) {
-          if (!holder.isDirectory()) continue;
-          const holders = holder.name.startsWith("@")
-            ? (await readdir(join(modules, holder.name), { withFileTypes: true }).catch(() => []))
-                .filter((scoped) => scoped.isDirectory())
-                .map((scoped) => `${holder.name}/${scoped.name}`)
-            : [holder.name];
-          for (const bare of holders) {
-            if (versions.has(bare)) continue;
-            const manifestPath = join(modules, ...bare.split("/"), "package.json");
-            const parsed = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
-              version?: unknown;
-            };
-            if (typeof parsed.version === "string") versions.set(bare, parsed.version);
-          }
-        }
-      }
-      return versions as ReadonlyMap<string, string>;
-    })());
-
   /**
    * dev 侧源码里的**裸说明符** → 联邦地址；`undefined` 表示"交给 vite 走源码"。
    *
@@ -416,7 +352,7 @@ export function apply(ctx: Context): void {
    * 会多出第二条链：浏览器里同时有 `.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`，
    * 两个 react 实例，hook 分发立刻报 `Invalid hook call`。
    */
-  const depsUrlOfSpecifier = async (specifier: string): Promise<string | undefined> => {
+  const depsUrlOfSpecifier = async (specifier: string, importer?: string): Promise<string | undefined> => {
     // `@/…` 是本地文件（alias 管），不是包——`packageNameOf` 会把它切成 `@/vendor` 这种假包名。
     if (specifier.startsWith("@/")) return undefined;
     // `zlib` / `stream` 这类**裸名的 node 内置**不是包：接管成联邦地址只会换来一串 404。留给 alias
@@ -427,7 +363,18 @@ export function apply(ctx: Context): void {
     const devModule =
       root !== undefined && !root.includes("node_modules") && !isAggregated(bare, await excludedOf());
     if (devModule) return undefined;
-    return urlOf(specifier, { versions: await ownVersionsOf(), clientRows: await clientRowIds() });
+    // 版本**从引用方解析**（`findPackageJSON` 按 node 的解析、与布局无关）：与产物侧同一条规则
+    // （`resolvableVersionsOf`），两边写出的地址才对应得上。
+    const from = importer === undefined ? await resolutionManifestPath() : pathToFileURL(importer).href;
+    const found = findPackageJSON(bare, from);
+    const version =
+      found === undefined
+        ? undefined
+        : (JSON.parse(await readFile(found, "utf8").catch(() => "{}")) as { version?: string }).version;
+    return urlOf(specifier, {
+      ...(version === undefined ? {} : { versions: new Map([[bare, version]]) }),
+      clientRows: await clientRowIds(),
+    });
   };
 
   /**
@@ -522,12 +469,14 @@ export function apply(ctx: Context): void {
       alias: federationAlias,
       name,
       version,
+      // 外置名单与地址里的版本都**从本包解析**（`findPackageJSON` 按 node 的解析、与布局无关）。
+      ...(root === undefined ? {} : { manifestOf: join(root, "package.json") }),
+      clientRows: await clientRowIds(),
       input: { [exportName]: entry },
       // 指纹的输入必须**与出口无关**（缓存是按包聚合的，rev 随出口变就等于永不命中）：仓库内的包看它的
       // `src`（源码改了就重打）；`node_modules` 里的包看它的清单——那边的目录名与布局都不由我们定，
       // 拿目录去算只会算到空（曾经所有三方包的指纹都是同一个空目录的哈希）。
       watch: watchOf(root ?? (await owningPackageOf(entry))?.root, entry),
-      versions: await ownVersionsOf(),
       // 编译设置：解析根那份 tsconfig（有就用；没有交给 rolldown 默认）。
       ...(await tsconfigOf().then((path) => (path === undefined ? {} : { tsconfig: path }))),
     }).catch((error: unknown) => {
