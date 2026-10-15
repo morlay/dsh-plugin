@@ -59,7 +59,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "17";
+const BUNDLER_RULES = "18";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -353,7 +353,9 @@ async function bundlePackageInRoot(options: BundleOptions): Promise<Bundled | un
     .then(() => withBuildSlot(() => bundlePackageOnce(options, key)));
   building.set(key, task);
   try {
-    return await task;
+    // **排队要等它做完，但不能无限等**：首屏那几十个请求都在飞，同包的后来者排在队里是正常的；可要是
+    // 一次构建卡死（原生绑定、磁盘），排队的人就永远挂在 pending——浏览器那边看不出所以然。超时如实抛。
+    return await withTimeout(task, BUILD_TIMEOUT_MS, `${options.name}@${options.version} 构建超时`);
   } finally {
     if (building.get(key) === task) building.delete(key);
   }
@@ -368,6 +370,26 @@ async function bundlePackageInRoot(options: BundleOptions): Promise<Bundled | un
 const MAX_CONCURRENT_BUILDS = Math.max(1, Number(process.env["DSH_BUNDLE_CONCURRENCY"] ?? 8));
 let runningBuilds = 0;
 const buildQueue: (() => void)[] = [];
+
+/** 排队/构建的等待上限：等它做完，但不无限等（卡死的构建要如实报出来，而不是让请求挂在 pending）。 */
+const BUILD_TIMEOUT_MS = Math.max(1_000, Number(process.env["DSH_BUNDLE_TIMEOUT_MS"] ?? 180_000));
+
+/** 给一个 promise 加超时；超时如实抛，不返回兜底值。 */
+async function withTimeout<T>(work: Promise<T>, ms: number, subject: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${subject}（超过 ${String(ms)}ms）`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 async function withBuildSlot<T>(work: () => Promise<T>): Promise<T> {
   if (runningBuilds >= MAX_CONCURRENT_BUILDS) {
@@ -391,9 +413,9 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   if (wanted.length === 0) return undefined;
   const outDir = join(options.cacheRoot, key);
   const manifestPath = join(outDir, ".files.json");
-  process.stderr.write(`[bundle-rev] ${options.name}: 开始算指纹 watch=${options.watch.join(",")}\n`);
+  process.stderr.write(`[bundle-rev] ${options.name}: hash-start watch=${options.watch.join(",")}\n`);
   const rev = `${BUNDLER_REV}:${await fingerprint(options.watch)}`;
-  process.stderr.write(`[bundle-rev] ${options.name}: 指纹=${rev}\n`);
+  process.stderr.write(`[bundle-rev] ${options.name}: hash=${rev}\n`);
   const cached = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     rev?: string;
     files?: Record<string, string>;
@@ -445,7 +467,7 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     }),
   ];
   const startedAt = Date.now();
-  process.stderr.write(`[bundle-build] ${options.name}: vite build 开始\n`);
+  process.stderr.write(`[bundle-build] ${options.name}: rolldown start\n`);
   // 入口补偿：CJS 要带具名导出的包装；CSS 不能直接当入口（vite 的库模式 `cssCodeSplit: false`，
   // 明确拒绝 `rolldownOptions.input` 里出现 CSS 文件），包一层 side-effect import 让样式插件处理它。
   const input: Record<string, string> = {};
@@ -483,7 +505,9 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     format: "es",
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
     entryFileNames: "[name].js",
-    chunkFileNames: "chunk-[hash].js",
+    // 拆出来的块落**自己的前缀**（与资产 `assets/` 并列）：它们不是"包的出口"——出口名要回源码里找目标，
+    // 而块没有源码对应（`src/chunk-abc.js` 不存在）。与出口共用一段 URL，服务端就只能把它当出口、落空。
+    chunkFileNames: "chunks/[name]-[hash].js",
     // **拆分的下限**：`import()` 该拆就拆（动态加载是它的价值），但"被某个包静态共享的小模块"不值得各自
     // 一次请求——`@shikijs/langs` 那种按语言一个文件能把产物切成几千块（实测 3092），而这条链是按包产出、
     // 浏览器按需取的，每块都是一次请求。小于 `minSize` 的不单拆（并进引用它的产物）；只被一个入口用的也不拆
@@ -499,7 +523,7 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     paths: (id: string) => urlOf(id, options),
   });
   await bundle.close();
-  process.stderr.write(`[bundle-build] ${options.name}: rolldown 结束（${String(Date.now() - startedAt)}ms）\n`);
+  process.stderr.write(`[bundle-build] ${options.name}: rolldown done ms=${String(Date.now() - startedAt)}\n`);
 
   if (!items.some((item) => item.type === "chunk")) {
     process.stderr.write(

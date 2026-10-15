@@ -445,9 +445,13 @@ export function apply(ctx: Context): void {
     // 的 URL 解析到的可能是 0.18.10）——缓存键跟着清单走，键与内容才对得上。
     const version = (root === undefined ? undefined : (await manifestOf(root))?.version) ?? urlVersion;
     const key = `${name.replaceAll("/", "+")}@${version}`;
-    // **资产**（大图 / 字体 / worker）：产物里只留 URL，文件本身按清单（`.files.json`）取——清单是
+    // **产出的整文件**（资产 / 拆出来的块）：产物里只留 URL，文件本身按清单（`.files.json`）取——清单是
     // "这个包产出里有什么"的唯一真相，也顺手挡住了凭 URL 读任意文件。
-    if (file.startsWith("assets/")) {
+    //
+    // 给它们**自己的前缀**（`assets/`、`chunks/`）而不与出口共用一段：出口名要回源码里找目标，而块和资产
+    // 都没有源码对应（`src/chunk-abc.js` 不存在），混在同一段里服务端只能把它当出口，落空后回个空模块
+    // （浏览器那边就是 "does not provide an export named …"）。
+    if (file.startsWith("assets/") || file.startsWith("chunks/")) {
       const manifest = JSON.parse(await readFile(join(cacheRoot, key, ".files.json"), "utf8").catch(() => "{}")) as {
         files?: Record<string, string>;
       };
@@ -457,8 +461,9 @@ export function apply(ctx: Context): void {
       if (bytes === undefined) return false;
       const extension = file.slice(file.lastIndexOf(".") + 1).toLowerCase();
       res.writeHead(200, {
-        "content-type": ASSET_MIME[extension] ?? "application/octet-stream",
-        // 资产的文件名里就带内容 hash（`assets/<name>-<hash>.<ext>`）：内容与 URL 一一对应，可以长缓存。
+        "content-type":
+          extension === "js" ? "text/javascript; charset=utf-8" : (ASSET_MIME[extension] ?? "application/octet-stream"),
+        // 资产与块的文件名里就带内容 hash：内容与 URL 一一对应，可以长缓存。
         "cache-control": "public, max-age=31536000, immutable",
       });
       res.end(req.method === "HEAD" ? undefined : bytes);
@@ -476,27 +481,19 @@ export function apply(ctx: Context): void {
       `[fed] ${name}@${version}/${exportName} root=${String(root)} entry=${String(entry)}\n`,
     );
     if (entry === undefined) {
-      // 仓库内的包但**这一侧没有实现**（纯 host 包：只有 `./types` 出口、`src/` 下全是宿主代码）：
-      // client 图里偶有值引用它们（跨包类型 oxc 判定不了，保守保留），客户端本就拿不到宿主半——
-      // 给个空模块，让它照样是"导入了、什么都没导出"。
-      if (root !== undefined) {
-        res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
-        res.end(req.method === "HEAD" ? undefined : "export {};\n");
-        return true;
-      }
-      // **这里只剩一种情况：说明符既不是内置、也不在闭包里**——即"这台机器上没有的可选依赖"
-      // （`ws` 的 `require("bufferutil")`，它本就在 try/catch 里；pnpm 也不装传递的原生可选包）。
+      // **如实报错**。走到这里只剩两类：仓库内的包这一侧没有实现（纯 host 包：只有 `./types` 出口、
+      // `src/` 下全是宿主代码），或说明符既不是内置、也不在闭包里（这台机器上没有的可选依赖）。
       //
-      // 区别对待，别混成一锅：
-      // - **内置**（`node:*`、`fs/promises`…）在更早的解析里就被替身接管了，**不该**走到这里；真走到了
-      //   就是规则有漏，如实 404（上面那条就是为此把伪造空模块删掉的）。
-      // - **可选依赖**：产物里的 `require` 已被转成模块图里的 ESM import，一个 404 就让整条图断掉、入口
-      //   一行都不执行（页面空白，且只有一句没头没尾的模块错误）。它本就允许缺失，给空模块是对的。
+      // 以前这两种都回一个空模块（"让它照样是导入了、什么都没导出"）——那是**神坑**：浏览器只报一句
+      // 没头没尾的 `does not provide an export named …`，谁也追不到这里；而页面空白的原因看起来像
+      // 上游产物坏了。现在如实 404：谁引了不存在的东西，一眼就看见。可选依赖那条：产物里的 `require`
+      // 已被转成模块图里的 ESM import，一个 404 会让整条图断掉、入口一行都不执行——那也正是"缺什么"的
+      // 正确表现（该装它、或该在我们的包里声明它），而不是静默降级。
       process.stderr.write(
-        `[optional-missing] ${name}@${version}/${exportName}: 闭包里没有（可选依赖？），给空模块\n`,
+        `[federation] ${name}@${version}/${exportName}: unresolved-entry root=${String(root)}\n`,
       );
-      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
-      res.end(req.method === "HEAD" ? undefined : "export {};\n");
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end(req.method === "HEAD" ? undefined : `unresolved entry: ${name}@${version}/${exportName}\n`);
       return true;
     }
     const bundled = await bundlePackage({
@@ -516,7 +513,7 @@ export function apply(ctx: Context): void {
       // 编译设置：解析根那份 tsconfig（有就用；没有交给 rolldown 默认）。
       ...(await tsconfigOf().then((path) => (path === undefined ? {} : { tsconfig: path }))),
     }).catch((error: unknown) => {
-      process.stderr.write(`[federation] ${name} 构建失败: ${String(error)}\n`);
+      process.stderr.write(`[federation] ${name}: bundle-failed ${String(error)}\n`);
       return undefined;
     });
     if (bundled === undefined) return false;
@@ -526,11 +523,11 @@ export function apply(ctx: Context): void {
     const target = bundled.files.get(exportName) ?? bundled.files.get("client") ?? bundled.files.get("index");
     process.stderr.write(`[fed-tail] ${name}: target=${String(target)} 绝对=${String(target === undefined ? undefined : join(cacheRoot, target))}\n`);
     if (target === undefined) {
-      process.stderr.write(`[fed] ${name}: 产物里没有 ${exportName}（有 ${[...bundled.files.keys()].join(",")}）\n`);
+      process.stderr.write(`[fed] ${name}: missing-export export=${exportName} have=${[...bundled.files.keys()].join(",")}\n`);
       return false;
     }
     const code = await readFile(join(cacheRoot, target), "utf8").catch((error: unknown) => {
-      process.stderr.write(`[fed] ${name}: 读不到 ${join(cacheRoot, target)}（${String(error)}\n`);
+      process.stderr.write(`[fed] ${name}: unreadable file=${join(cacheRoot, target)} ${String(error)}\n`);
       return undefined;
     });
     // 空产物是**合法的**：纯类型 / 空的 client 半编译出来就是空 JS，不是失败。
