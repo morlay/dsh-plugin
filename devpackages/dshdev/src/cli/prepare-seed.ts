@@ -23,6 +23,7 @@ import { SEED_HASH_NAME, SEED_RUNTIME_DIR_NAME } from "@morlay/dsh-desktop-shell
 import {
   DSH_PACKAGE,
   closurePackageDirs,
+  copyPackageTree,
   materializeOfficialClosure,
   missingOfficialPackages,
   officialDeploySpecs,
@@ -116,6 +117,41 @@ export function missingOfficialPackagesError(
     `desktop seed: deployed closure is missing official packages: ${detail}; ` +
       "regenerate the injected surface with `pnpm --filter @morlay/dsh-desktop-shell run gen:official-packages`",
   );
+}
+
+/**
+ * **验证用的装配面**（`dshdev web|desktop --prod`）：只做 `pnpm deploy` 的闭包，拿 deploy 目录当
+ * profile/runtime 就闭环了。
+ *
+ * deploy 目录里已经有 `package.json` 与 `node_modules`（含 `.pnpm` 虚拟店）——解析根要的东西齐了；再把 app
+ * 的 profile 面文件（`cordis.yml` 等）带过去，宿主就能像打包形态那样起来。
+ *
+ * 与 {@link runPrepareSeed} 的分工：那一条是**打包形态**的完整装配（官方闭包、profile 清单、typert 生成物、
+ * 壳装配、seed 布局），验证"打包形态的解析面"用不上它后面那些阶段——所以别调它。
+ *
+ * @param workspace - app 工作区目录。
+ * @returns deploy 目录（当 profileDir 与 runtimeDir 用）。
+ */
+export async function prepareDeploySurface(workspace: string): Promise<string> {
+  const manifest = await workspaceManifest(workspace);
+  const workspaceRoot = await findWorkspaceRoot(workspace);
+  const dshVersion = readDshVersion(manifest);
+  const input: OfficialResolutionInput = {
+    workspace,
+    workspaceRoot,
+    toolRoot: APP_ROOT,
+    ...(dshVersion === undefined ? {} : { dshVersion }),
+  };
+  const destination = join(buildCache(workspace), "deploy");
+  console.log(`desktop prod-surface: pnpm deploy -> ${destination}`);
+  await deployClosure(workspace, manifest.name, destination, input);
+  // profile 面那几个文件（行清单等）按 app 的样子带过去：deploy 的产物是"安装结果"，不含它们。
+  for (const entry of seedEntries(workspace, manifest)) {
+    const source = join(workspace, entry);
+    if (!(await pathExists(source))) continue;
+    await copyPackageTree(source, join(destination, entry));
+  }
+  return destination;
 }
 
 async function deployClosure(

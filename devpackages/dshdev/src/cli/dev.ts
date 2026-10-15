@@ -5,7 +5,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
-import { SEED_RUNTIME_DIR_NAME } from "@morlay/dsh-desktop-shell/seed";
 import { devRuntimeRoot, requireDevRuntime } from "./dev-layout.ts";
 import { prepareShell } from "./shell.ts";
 import {
@@ -185,13 +184,12 @@ export interface DevOptions {
 async function prepareProdSurface(
   workspace: string,
 ): Promise<{ profileDir: string; runtimeDir: string }> {
-  const { runPrepareSeed } = await import("./prepare-seed.ts");
-  await runPrepareSeed({ workspace });
-  const seedRoot = join(buildCache(workspace), "seed");
-  return {
-    profileDir: join(seedRoot, "profiles", PROFILE_NAME),
-    runtimeDir: join(seedRoot, SEED_RUNTIME_DIR_NAME),
-  };
+  // **只做 deploy**：deploy 目录里已有 `package.json` 与 `node_modules`（含 `.pnpm` 虚拟店），解析根要的东西
+  // 齐了——拿它同时当 profileDir 与 runtimeDir 就闭环。以前这里跑整条 `runPrepareSeed`（官方闭包、profile
+  // 清单、typert 生成物、壳装配、seed 布局），那是**打包形态**才需要的阶段，验证解析面纯属浪费时间。
+  const { prepareDeploySurface } = await import("./prepare-seed.ts");
+  const surface = await prepareDeploySurface(workspace);
+  return { profileDir: surface, runtimeDir: surface };
 }
 
 export async function runDev(options: DevOptions): Promise<void> {
