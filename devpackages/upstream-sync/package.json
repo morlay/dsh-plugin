@@ -1,0 +1,19 @@
+{
+  "name": "@local/upstream-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "跟随上游 deepseek-harness 的同步链（sync / patch / prebuild）。做成包是为了能声明自己的依赖（oxc 的 AST 解析器等）。",
+  "bin": {
+    "upstream-sync": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/steps.ts",
+    "./steps": "./src/steps.ts",
+    "./exports": "./src/exports.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "oxc-parser": "^0.153.0"
+  }
+}

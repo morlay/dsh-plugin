@@ -27,12 +27,15 @@ disable-model-invocation: true
 └── 版本变量配置               # 如 mise.toml：DEEPSEEK_HARNESS_*
 ```
 
-三个脚本 `scripts/{sync,patch,prebuild}.ts` 都是 TS，一律用 **`pnpm dlx @oxc-node/cli`**
-直跑（oxc transformer + resolver）：
+同步链是一个 **devpackage**（`devpackages/upstream-sync`）：`sync` / `patch` / `prebuild` 三条子命令，
+一律用 **`pnpm dlx @oxc-node/cli`** 直跑它的 CLI（oxc transformer + resolver）：
 
 ```sh
-pnpm dlx @oxc-node/cli <skill 路径>/scripts/<脚本>.ts
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts <sync|patch|prebuild>
 ```
+
+**为什么是包**：链上要用到解析器（AST 探查，如 `exports` 步骤里的依赖修复）。散脚本住在技能目录下、不属于任何
+包，`node_modules` 里什么也解析不到；做成包之后依赖写在清单里，脚本向上一条目录就是它的 `node_modules`。
 
 **不要**用 `pnpm exec <脚本>`（node_modules 缺失时会触发隐式 install，下载已裁剪依赖），
 不要引入 tsx——仓库里没有它，`node_modules/.bin/tsx` 只是别家依赖顺带提升上来的；也别再写
@@ -99,7 +102,8 @@ pnpm dlx @oxc-node/cli <skill 路径>/scripts/<脚本>.ts
 6. **`vendor/steps.ts` 两阶段清单**：裁剪、补丁与生成步骤都写在这里（见「patch 阶段」），
    `vendor/patches/*.patch` 放补丁文件本身。清单是 TS，两个阶段各一个具名导出
    （`export const patch` / `export const prebuild`），每条步骤就地写「为什么」。它是同步配置、
-   不属于任何编译面（host 叶已把它排除），类型检查走 `scripts/tsconfig.json`。
+   不属于任何编译面（host 叶已把它排除），类型检查走同步链包自己的 `tsconfig.json`
+   （`devpackages/upstream-sync/tsconfig.json`）。
 
 ## 同步流程
 
@@ -107,9 +111,9 @@ pnpm dlx @oxc-node/cli <skill 路径>/scripts/<脚本>.ts
 用 oxc 驱动直调脚本（勿用 `pnpm exec`，也勿引入 tsx）：
 
 ```sh
-pnpm dlx @oxc-node/cli <skill 路径>/scripts/sync.ts       # 1. 对齐到目标提交
-pnpm dlx @oxc-node/cli <skill 路径>/scripts/patch.ts      # 2. steps.ts 的 patch 阶段（从干净基线跑一次）
-pnpm dlx @oxc-node/cli <skill 路径>/scripts/prebuild.ts   # 3. steps.ts 的 prebuild 阶段（生成物 + native）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts sync      # 1. 对齐到目标提交
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts patch     # 2. steps.ts 的 patch 阶段（从干净基线跑一次）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts prebuild  # 3. steps.ts 的 prebuild 阶段（生成物 + native）
 ```
 
 **上游代码不再 build**：`exports` 改指源码面、client 半现场打包、typert 产物写成 `.ts`，

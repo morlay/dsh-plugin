@@ -5,7 +5,7 @@ import { execFileCapture, pathExists, requireWorkspaceEnv, runInherited } from "
 // 保证 repatch 干净基线）；检出优先级 REVISION > VERSION（tag → branch）。env 名与含义见 `SKILL.md` 的表；
 // 同步后工作树是「目标提交未打补丁」，必须再跑 patch 与 prebuild；可从任意目录执行。
 
-async function main(): Promise<void> {
+export async function runSync(): Promise<void> {
   const { value: dirValue, root } = await requireWorkspaceEnv("DEEPSEEK_HARNESS_DIR");
   const version = process.env.DEEPSEEK_HARNESS_VERSION;
   const revision = process.env.DEEPSEEK_HARNESS_REVISION;
@@ -75,10 +75,5 @@ async function main(): Promise<void> {
   }
 
   console.log(`[sync] 已检出 ${used} @ ${await shortHead(dir)}`);
-  console.log("[sync] 下一步必须运行 patch 脚本（repatch），再 prebuild。");
+  console.log("[sync] 下一步必须运行 patch（repatch），再 prebuild。");
 }
-
-void main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});

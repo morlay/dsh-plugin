@@ -11,7 +11,7 @@ import { runPhase } from "./steps.ts";
 // 上游代码本身**不再 build**：`exports` 指 src、client 半现场打包、typert 产物由这里写成 `.ts`
 // （决策见 `.agents/adrs/20261010-开发与桌面消费上游源码面而非lib产物.md`）。
 
-async function main(): Promise<void> {
+export async function runPrebuild(): Promise<void> {
   const paths = await upstreamPaths();
   if (!(await pathExists(join(paths.dir, ".git")))) {
     console.error(`上游目录不存在或非 git 仓库: ${paths.dir}（先跑 sync 与 patch）`);
@@ -20,8 +20,3 @@ async function main(): Promise<void> {
   await runPhase("prebuild", paths);
   console.log("[prebuild] done");
 }
-
-void main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});

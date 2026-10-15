@@ -475,6 +475,12 @@ importers:
         specifier: ^26.6.5
         version: 26.6.5
 
+  devpackages/upstream-sync:
+    dependencies:
+      oxc-parser:
+        specifier: ^0.153.0
+        version: 0.153.0
+
   packages/bundles/better-session:
     dependencies:
       '@deepseek-ai/cordis':
