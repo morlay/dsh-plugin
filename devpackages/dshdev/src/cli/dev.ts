@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeAppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import { DESKTOP_HOST_PACKAGE } from "@morlay/dsh-desktop-shell/official";
+import { SEED_RUNTIME_DIR_NAME } from "@morlay/dsh-desktop-shell/seed";
 import { devRuntimeRoot, requireDevRuntime } from "./dev-layout.ts";
 import { prepareShell } from "./shell.ts";
 import {
@@ -167,8 +168,30 @@ async function launchElectron(
 export interface DevOptions {
   readonly workspace?: string;
   readonly web: boolean;
+  /**
+   * 先用**打包形态的解析面**装配一遍再起（`--prod`）：跑 `pnpm deploy` 的闭包 + profile 清单，
+   * 然后拿它当 profile/runtime。价值是"不打包也能验证打包形态"——闭包内容、profile 清单、依赖解析
+   * 面与真打包完全一致，而不必先等一次 electron-builder。
+   */
+  readonly prod?: boolean;
   // 数据目录（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`，取值语义见 `resolveDataDir`。
   readonly dataDir?: string;
+}
+
+/**
+ * `--prod` 的装配面：seed 的布局就是打包形态的布局（`<buildCache>/seed/{runtime,profiles/<name>}`），
+ * 复用生成它的那条链，别再写一遍。
+ */
+async function prepareProdSurface(
+  workspace: string,
+): Promise<{ profileDir: string; runtimeDir: string }> {
+  const { runPrepareSeed } = await import("./prepare-seed.ts");
+  await runPrepareSeed({ workspace });
+  const seedRoot = join(buildCache(workspace), "seed");
+  return {
+    profileDir: join(seedRoot, "profiles", PROFILE_NAME),
+    runtimeDir: join(seedRoot, SEED_RUNTIME_DIR_NAME),
+  };
 }
 
 export async function runDev(options: DevOptions): Promise<void> {
@@ -179,7 +202,11 @@ export async function runDev(options: DevOptions): Promise<void> {
   // 两种 dev 形态共用同一个数据目录；`--data-dir=xdg` 时与打包形态落到同一个位置。
   const dataDir = resolveDataDir(workspace, manifest.name, options.dataDir);
   const runtimeDir = devRuntimeRoot(repositoryRoot);
-  await requireDevRuntime(runtimeDir);
+  // `--prod`：先装配"打包形态的解析面"（deploy 闭包 + profile 清单），再照常起——闭包内容、profile
+  // 清单、依赖解析面与真打包一致，于是**不打包**也能验证打包形态。seed 的布局就是打包形态的布局。
+  const prod = options.prod === true ? await prepareProdSurface(workspace) : undefined;
+  const activeRuntimeDir = prod?.runtimeDir ?? runtimeDir;
+  if (prod === undefined) await requireDevRuntime(runtimeDir);
   // 壳装配到打包工作目录（`.dshdev/shell`）：源码树里那份 `dist` 不再被 dev 依赖。
   const shell = await prepareShell(buildCacheDir);
   const tsLoader = tsLoaderSpecifier();
@@ -188,17 +215,23 @@ export async function runDev(options: DevOptions): Promise<void> {
     // web 形态的 profile 就是 app 目录：清单来自 app 的 `package.json`，bundle 由工作区链接解析，
     // 因此没有 `plugin add`、也没有 `$DSH_HOME/profiles/web`。端口契约（`PORT`，缺省 3080）与
     // 内层参数归 web 入口：它把 `--` 之后原样交给 web app 的 flag family。
-    console.log(`desktop development: web mode DSH_HOME=${dataDir} profile root=${workspace}`);
+    //
+    // `--prod` 时 profile 换成 seed 里那份（含 profile bundles），前端装配也在那里，所以**不挂** dev
+    // 形态那份 `--patch`。
+    const profileRoot = prod?.profileDir ?? workspace;
+    console.log(
+      `desktop development: web mode${prod === undefined ? "" : " (prod surface)"} ` +
+        `DSH_HOME=${dataDir} profile root=${profileRoot}`,
+    );
     await run(
       process.execPath,
       [
         await webEntry(),
         "--profile-dir",
-        workspace,
+        profileRoot,
         "--runtime-dir",
-        runtimeDir,
-        "--patch",
-        await devClientPatch(),
+        activeRuntimeDir,
+        ...(prod === undefined ? ["--patch", await devClientPatch()] : []),
       ],
       repositoryRoot,
       withTsLoader(
@@ -228,5 +261,5 @@ export async function runDev(options: DevOptions): Promise<void> {
     profile: PROFILE_NAME,
   });
 
-  await launchElectron(shell.root, workspace, runtimeDir, buildCacheDir, tsLoader, dataDir);
+  await launchElectron(shell.root, prod?.profileDir ?? workspace, activeRuntimeDir, buildCacheDir, tsLoader, dataDir);
 }
