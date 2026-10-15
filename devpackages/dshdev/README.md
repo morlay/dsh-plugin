@@ -11,7 +11,7 @@
 | 命令                                                     | 作用                                                                              |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `dshdev web [--data-dir <spec>] [--prod] [workspace]` | 在浏览器里跑 `dsh web`（页面与资源走宿主自己的 http 端口） |
-| `dshdev desktop [--data-dir <spec>] [workspace]` | 启动 Electron 壳（不打包） |
+| `dshdev desktop [--data-dir <spec>] [--prod] [workspace]` | 启动 Electron 壳（不打包） |
 | `dshdev desktop bundle [--dir] [--install] [workspace]` | 构建当前平台的静态、无签名桌面应用 |
 | `dshdev check-deps [package]` | 从一个包的入口扫出它运行期 import 的包，报**没在自己清单里声明**的那些（非零退出） |
 
