@@ -120,6 +120,28 @@ export function missingOfficialPackagesError(
 }
 
 /**
+ * 剔掉**本机的构建缓存**（`.dsh-client-modules`）。
+ *
+ * 它是这台机器上"按需预编译"的产物（几百 MB、内容随本机改动漂），既不该进 seed，也不该跟着闭包被拷来拷去
+ * ——换个工作目录就该重新构建，带着它只会让两边看到不同世代的产物。
+ *
+ * @param surface - 装配面的根目录。
+ */
+async function dropClientModulesCache(surface: string): Promise<void> {
+  // 目录名与 `@morlay/dsh-client-modules` 的 `CLIENT_MODULES_CACHE` 同源（那边没把它放进包出口——为一个常量
+  // 扩公开面不值当，这里就地写死并靠这条注释对齐）。
+  const cache = join("node_modules", ".dsh-client-modules");
+  for (const entry of await readdir(surface, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === "node_modules") {
+      await rm(join(surface, cache), { recursive: true, force: true });
+      continue;
+    }
+    await dropClientModulesCache(join(surface, entry.name));
+  }
+}
+
+/**
  * **验证用的装配面**（`dshdev web|desktop --prod`）：只做 `pnpm deploy` 的闭包，拿 deploy 目录当
  * profile/runtime 就闭环了。
  *
@@ -151,6 +173,7 @@ export async function prepareDeploySurface(workspace: string): Promise<string> {
     if (!(await pathExists(source))) continue;
     await copyPackageTree(source, join(destination, entry));
   }
+  await dropClientModulesCache(destination);
   return destination;
 }
 
