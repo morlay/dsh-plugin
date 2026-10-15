@@ -5,7 +5,7 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
+import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
 import { SessionPersistenceRdb } from "../index.ts";
 
 const Config = SessionPersistenceRdb.Config as never as z;

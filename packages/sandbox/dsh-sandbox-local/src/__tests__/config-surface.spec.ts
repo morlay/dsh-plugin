@@ -3,7 +3,7 @@
 
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it } from "vitest";
-import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
+import { volatileForm } from "@deepseek-ai/dsh-settings/src/schema.ts";
 import { Config, upstreamConfigOf } from "../config.ts";
 
 // 装配事实：页面上只读可见的那五个。

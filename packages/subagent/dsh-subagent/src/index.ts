@@ -45,14 +45,14 @@ import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
   rejectPrompt, validateControlRequest,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/control.ts'
+} from '@deepseek-ai/dsh-subagent/src/control.ts'
 import type {
   SubagentDelivery,
   SubagentInterruptReceipt,
   SubagentPromptReceipt,
   SubagentPromptRequest,
   SubagentPromptRequestId,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/control-types.ts'
+} from '@deepseek-ai/dsh-subagent/src/control-types.ts'
 import type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -63,25 +63,25 @@ import type {
   SubagentProvider,
   SubagentSendMessageOptions,
   SubagentStartRequest,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/types.ts'
-import { SubagentError } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/error.ts'
-import { assertSubagentMaxDepth } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/depth.ts'
-import { createActivationObserver, createLifecycleEmitter } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/lifecycle.ts'
-import type { ActivationObserver, LifecycleEmitter } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/lifecycle.ts'
+} from '@deepseek-ai/dsh-subagent/src/types.ts'
+import { SubagentError } from '@deepseek-ai/dsh-subagent/src/error.ts'
+import { assertSubagentMaxDepth } from '@deepseek-ai/dsh-subagent/src/depth.ts'
+import { createActivationObserver, createLifecycleEmitter } from '@deepseek-ai/dsh-subagent/src/lifecycle.ts'
+import type { ActivationObserver, LifecycleEmitter } from '@deepseek-ai/dsh-subagent/src/lifecycle.ts'
 import SubagentManager from './manager.ts'
 import { installDelegationContext } from './delegation-context.ts'
-import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/list-children.ts'
-import type { SubagentDescendantListEntry } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/list-children.ts'
-import { installSubagentArchiveAdmission } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/archive-admission.ts'
-import type { SubagentCatalogEntry } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/projection-types.ts'
-import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/projection.ts'
-import { subagentCatalogProjectionDefinition } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/catalog.ts'
-import { deliverSubagentPrompt } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/internal.ts'
+import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from '@deepseek-ai/dsh-subagent/src/list-children.ts'
+import type { SubagentDescendantListEntry } from '@deepseek-ai/dsh-subagent/src/list-children.ts'
+import { installSubagentArchiveAdmission } from '@deepseek-ai/dsh-subagent/src/archive-admission.ts'
+import type { SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent/src/projection-types.ts'
+import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
+import { subagentCatalogProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
+import { deliverSubagentPrompt } from '@deepseek-ai/dsh-subagent/src/internal.ts'
 
-export type {} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/catalog.ts'
-export * from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/out-of-process.ts'
-export { AssistantOutputFold, finalAssistantOutput } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/assistant-output.ts'
-export { SubagentRunId } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/types.ts'
+export type {} from '@deepseek-ai/dsh-subagent/src/catalog.ts'
+export * from '@deepseek-ai/dsh-subagent/src/out-of-process.ts'
+export { AssistantOutputFold, finalAssistantOutput } from '@deepseek-ai/dsh-subagent/src/assistant-output.ts'
+export { SubagentRunId } from '@deepseek-ai/dsh-subagent/src/types.ts'
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -97,21 +97,21 @@ export type {
   ResolvedSubagentStartRequest,
   SubagentStopReason,
   SubagentStopReasonMap,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/types.ts'
+} from '@deepseek-ai/dsh-subagent/src/types.ts'
 export {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
   SUBAGENT_DESCRIPTOR_VERSION,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/descriptor.ts'
+} from '@deepseek-ai/dsh-subagent/src/descriptor.ts'
 export type {
   ContinuableSubagentDescriptorData,
   ContinuableSubagentDescriptorInput,
   OneShotSubagentDescriptorData,
   SubagentDescriptorData,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/descriptor.ts'
-export { STRUCTURED_OUTPUT_TOOL } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/structured.ts'
-export { SubagentError } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/error.ts'
-export { assertSubagentMaxDepth, delegationDepthOf } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/depth.ts'
+} from '@deepseek-ai/dsh-subagent/src/descriptor.ts'
+export { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent/src/structured.ts'
+export { SubagentError } from '@deepseek-ai/dsh-subagent/src/error.ts'
+export { assertSubagentMaxDepth, delegationDepthOf } from '@deepseek-ai/dsh-subagent/src/depth.ts'
 export {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
@@ -121,13 +121,13 @@ export {
   resolveChildAgentOptions,
   resolveChildDepth,
   SubagentDepthError,
-} from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/child-agent.ts'
-export type { ChildComposition, DelegatedPolicyOverrides } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/child-agent.ts'
+} from '@deepseek-ai/dsh-subagent/src/child-agent.ts'
+export type { ChildComposition, DelegatedPolicyOverrides } from '@deepseek-ai/dsh-subagent/src/child-agent.ts'
 export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
-export type * from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/control-types.ts'
-export type { SubagentDescendantListEntry } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/list-children.ts'
-export type { SubagentRunEndInfo, SubagentRunInfo } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/types.ts'
-export type { SubagentCatalogEntry, SubagentIdentityProjection, SubagentTimingProjection } from '../../../../vendor/deepseek-harness/packages/subagent/subagent/src/projection-types.ts'
+export type * from '@deepseek-ai/dsh-subagent/src/control-types.ts'
+export type { SubagentDescendantListEntry } from '@deepseek-ai/dsh-subagent/src/list-children.ts'
+export type { SubagentRunEndInfo, SubagentRunInfo } from '@deepseek-ai/dsh-subagent/src/types.ts'
+export type { SubagentCatalogEntry, SubagentIdentityProjection, SubagentTimingProjection } from '@deepseek-ai/dsh-subagent/src/projection-types.ts'
 
 
 /**
