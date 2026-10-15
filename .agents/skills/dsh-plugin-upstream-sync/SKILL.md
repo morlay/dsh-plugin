@@ -111,10 +111,18 @@ pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts <sync|patch|prebuild
 用 oxc 驱动直调脚本（勿用 `pnpm exec`，也勿引入 tsx）：
 
 ```sh
-pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts sync      # 1. 对齐到目标提交
-pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts patch     # 2. steps.ts 的 patch 阶段（从干净基线跑一次）
-pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts prebuild  # 3. steps.ts 的 prebuild 阶段（生成物 + native）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts sync          # 1. 对齐到目标提交
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts patch         # 2. steps.ts 的 patch 阶段（从干净基线跑一次）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts vendor        # 3. 按需 vendored 的上游内部文件（见下）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts prebuild      # 4. steps.ts 的 prebuild 阶段（生成物 + native）
+pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts vendor-check  # CI：只比对 vendored 快照与上游，不写
 ```
+
+**`vendor`（按需 vendored 的上游内部文件）**：我们的包有时要用上游的**内部**实现文件（薄壳 fork、
+`MessageIconActions.tsx` 这类）。三条路里选第三条：不让上游把 `src/*` 摊成出口（那会让打包边界跟着乱：同一个包
+既按出口引、又按源码路径引），也不写指向 vendor 树的相对路径（闭包面里深度对不上、解析不到），而是**把这些文件
+按需复制进自己包的 `src/vendor/<短名>/…`**，import 走包内相对路径。清单与递归补闭包在
+`devpackages/upstream-sync/src/vendored.ts`；`.oxlintrc.json` 忽略 `**/src/vendor/**`（那是上游代码）。
 
 **上游代码不再 build**：`exports` 改指源码面、client 半现场打包、typert 产物写成 `.ts`，
 所以没有「构建上游」这一步（决策与放弃的产物见
@@ -138,7 +146,7 @@ pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts prebuild  # 3. steps
 新增，不跳过。清单形状（`patch` 阶段为例，`prebuild` 同理）：
 
 ```ts
-import type { Step } from "../.agents/skills/dsh-plugin-upstream-sync/scripts/steps.ts";
+import type { Step } from "../devpackages/upstream-sync/src/steps.ts";
 
 export const patch: Step[] = [
   // 为什么裁它 / 为什么打这个补丁，写在步骤旁边
@@ -149,6 +157,13 @@ export const patch: Step[] = [
   { type: "exports", generated: { … }, explicit: { … } },
 ];
 ```
+
+`exports` 步骤除了把出口/`main`/`types`/`files` 改指源码面，还连带做四件事（都在 `rewriteExports` 里）：
+**删顶层 `main`/`types`**（`"type": "module"` 且有 `exports` 时它们只是重复）、**把同值的条件对象压成字符串**
+（`{"types": "./src/x.ts", "default": "./src/x.ts"}` → `"./src/x.ts"`）、**把运行期真用到的依赖从
+`devDependencies` 挪进 `dependencies` 并整段删掉 `devDependencies`**（上游把 client 半的浏览器依赖算 devDeps、
+构建时内联，而我们这条链是运行期现场打包）、以及**不补 `./src/*` 出口**（内部文件面不该当包边界，要用的按上面的
+`vendor` 步骤复制进来）。
 
 步骤类型与语义：
 
