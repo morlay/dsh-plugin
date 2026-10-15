@@ -472,6 +472,14 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
     entryFileNames: "[name].js",
     chunkFileNames: "chunk-[hash].js",
+    // **拆分的下限**：`import()` 该拆就拆（动态加载是它的价值），但"被某个包静态共享的小模块"不值得各自
+    // 一次请求——`@shikijs/langs` 那种按语言一个文件能把产物切成几千块（实测 3092），而这条链是按包产出、
+    // 浏览器按需取的，每块都是一次请求。小于 `minSize` 的不单拆（并进引用它的产物）；只被一个入口用的也不拆
+    // （拆了纯粹多一次请求）。
+    advancedChunks: {
+      minSize: 20_000,
+      minShareCount: 2,
+    },
     // 资产统一落在 `assets/` 下、带内容 hash：路由按这个前缀把它们当文件吐，
     // 出口产物与资产不混在一个命名空间里。
     assetFileNames: "assets/[name]-[hash][extname]",
