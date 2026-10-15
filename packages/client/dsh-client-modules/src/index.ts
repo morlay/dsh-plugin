@@ -504,7 +504,13 @@ export function apply(ctx: Context): void {
     process.stderr.write(
       `[fed-tail] ${name}: files=${[...bundled.files.keys()].join(",")} exportName=${exportName}\n`,
     );
-    const target = bundled.files.get(exportName) ?? bundled.files.get("client") ?? bundled.files.get("index");
+    // 清单的键是**文件名**（出口产物 `<出口名>.js`，拆出的块 `chunks/…`）：按 `exportName` 去查会落空
+    // （`remote` 的产物叫 `remote.js`），于是明明产出过也回退到 `client.js`——看起来像"每次都在实时打包"。
+    const target =
+      bundled.files.get(`${exportName}.js`) ??
+      bundled.files.get(exportName) ??
+      bundled.files.get("client.js") ??
+      bundled.files.get("index.js");
     process.stderr.write(`[fed-tail] ${name}: target=${String(target)} 绝对=${String(target === undefined ? undefined : join(cacheRoot, target))}\n`);
     if (target === undefined) {
       process.stderr.write(`[fed] ${name}: missing-export export=${exportName} have=${[...bundled.files.keys()].join(",")}\n`);
