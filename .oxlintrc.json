@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "node"],
-  "ignorePatterns": ["target/**", "lib/**", "**/dist/**"],
+  "ignorePatterns": ["target/**", "lib/**", "**/dist/**", "**/src/vendor/**"],
   "options": {
     "typeAware": true,
     "typeCheck": true

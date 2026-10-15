@@ -217,13 +217,32 @@ async function rewriteDependencies(
   return { moved: Object.keys(moved).length };
 }
 
+/**
+ * `exports` 里"每个条件都指同一个文件"的对象压成字符串。
+ *
+ * `{"types": "./src/index.ts", "default": "./src/index.ts"}` → `"./src/index.ts"`——`exports` 的字符串写法
+ * 就是"所有条件都指它"，条件块只在真的分叉（`import` 与 `require` 不同文件）时才有意义。
+ *
+ * @param target - 一个出口的值（字符串 / 条件对象 / 数组）。
+ * @returns 压过的值（没得压就原样）。
+ */
+function collapseSameTargets(target: unknown): unknown {
+  if (target === null || typeof target !== "object" || Array.isArray(target)) return target;
+  const conditions = target as Record<string, unknown>;
+  const values = Object.values(conditions).map(collapseSameTargets);
+  const first = values[0];
+  if (typeof first === "string" && values.every((value) => value === first)) return first;
+  return Object.fromEntries(Object.keys(conditions).map((key, index) => [key, values[index]]));
+}
+
 export async function rewriteExports(dir: string, options: ExportsOptions): Promise<void> {
   const unmapped: string[] = [];
   const touched: string[] = [];
-  let addedSrcWildcard = 0;
   let filesRewritten = 0;
   let devDropped = 0;
   let dependenciesMoved = 0;
+  let entryFieldsDropped = 0;
+  let exportsCollapsed = 0;
   for (const pkgDir of await packageDirs(dir)) {
     const manifestPath = join(pkgDir, "package.json");
     if (!(await pathExists(manifestPath))) continue;
@@ -233,6 +252,7 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
       types?: unknown;
       files?: unknown;
       name?: string;
+      type?: string;
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
@@ -307,29 +327,36 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
       }
     }
 
-    // 只改 `exports` 时，仍走 `main`/`types` 的解析路径（CJS require、按 main 装载的 loader）
-    // 会指向已被移走的 `lib/`：同一份源码面要么全走 src，要么留一个静默失效的入口。
-    for (const field of ["main", "types"] as const) {
-      const target = manifest[field];
-      if (typeof target !== "string") continue;
-      const mapped = await mapTarget(pkgDir, target, unmapped, `${shortName} ${field}`);
-      if (mapped !== undefined) {
-        manifest[field] = mapped;
-        changed = true;
+    // **`main` / `types` 直接删**：包是 `"type": "module"` 且有 `exports` 时，Node 与打包器都只按 `exports`
+    // 走，顶层这两个是重复（上游两份都指 `lib/`，改指 src 之后更是纯冗余，还容易忘了同步）。
+    // 没有 `exports` 的包保留它们——那是它唯一的入口声明。
+    if (manifest.type === "module" && typeof exportsField === "object") {
+      for (const field of ["main", "types"] as const) {
+        if (manifest[field] !== undefined) {
+          delete manifest[field];
+          changed = true;
+          entryFieldsDropped += 1;
+        }
       }
     }
 
-    // 上游测试按源码子路径导入（`<pkg>/src/<x>.ts`）；没有该出口的包补上，保证改写后仍可显式走源码。
-    // 只补已有 `exports` 的包：给没有 `exports` 的包添加会封死它原有的子路径解析。
-    if (!Object.hasOwn(exportsField as Record<string, unknown>, "./src/*")) {
-      (exportsField as Record<string, unknown>)["./src/*"] = "./src/*";
-      changed = true;
-      addedSrcWildcard += 1;
-    }
+    // **不补 `./src/*` 出口**：包边界就是 `exports` 里列的那些，把 `src` 摊开当出口等于把内部文件面变成
+    // 公开面——我们的插件包按它引源码，打包边界会跟着乱（同一个包既按出口引、又按源码路径引）。
+    // 上游自己的测试按源码路径导入，那是上游仓库内的事，与我们这条链无关。
 
     if (await rewriteFiles(pkgDir, manifest)) {
       changed = true;
       filesRewritten += 1;
+    }
+
+    // 每个出口的值：条件同值就压成字符串（放最后：`./src/*` 刚补进 `exportsField`，压要在那之后）。
+    for (const [exportName, value] of Object.entries(exportsField as Record<string, unknown>)) {
+      const collapsedValue = collapseSameTargets(value);
+      if (collapsedValue !== value) {
+        (exportsField as Record<string, unknown>)[exportName] = collapsedValue;
+        changed = true;
+        exportsCollapsed += 1;
+      }
     }
 
     const deps = await rewriteDependencies(pkgDir, manifest);
@@ -345,9 +372,10 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
     }
   }
   console.log(
-    `[steps] exports -> src: ${touched.length} 个包改写，${addedSrcWildcard} 个包补 ./src/*，` +
+    `[steps] exports -> src: ${touched.length} 个包改写，` +
       `${filesRewritten} 个包的 files 改指源码面，` +
-      `${devDropped} 个包删了 devDependencies（其中挪回 dependencies ${dependenciesMoved} 条）`,
+      `${devDropped} 个包删了 devDependencies（其中挪回 dependencies ${dependenciesMoved} 条），` +
+      `${entryFieldsDropped} 处冗余 main/types 删除，${exportsCollapsed} 个出口的条件对象压成字符串`,
   );
   if (unmapped.length > 0) {
     const unique = [...new Set(unmapped)];

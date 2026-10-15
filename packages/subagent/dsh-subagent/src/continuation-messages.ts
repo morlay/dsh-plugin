@@ -8,7 +8,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { SubagentResult } from '@deepseek-ai/dsh-subagent/src/types.ts'
+import type { SubagentResult } from './vendor/dsh-subagent/types.ts'
 
 /** Durable attribution for one model-authored message between Agents. */
 export interface AgentMessageSource {

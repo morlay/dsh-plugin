@@ -22,28 +22,28 @@ import type { ToolRestriction, ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import {
   appendDelegatedPolicyOverrides, applyChildComposition, captureDelegatedPolicyOverrides,
   childSessionMeta, resolveChildAgentOptions, resolveChildDepth,
-} from '@deepseek-ai/dsh-subagent/src/child-agent.ts'
-import type { DelegatedPolicyOverrides } from '@deepseek-ai/dsh-subagent/src/child-agent.ts'
+} from './vendor/dsh-subagent/child-agent.ts'
+import type { DelegatedPolicyOverrides } from './vendor/dsh-subagent/child-agent.ts'
 import { createAgentMessage, localizedReturnGuidance, withContinuableReturnGuidance, createSettlementMessage } from './continuation-messages.ts'
 // 会话不在本部署名单里时用上游那一份（英文）：文案跟着 preset 走，不是整进程只有一份。
-import { withContinuableReturnGuidance as upstreamWithContinuableReturnGuidance } from '@deepseek-ai/dsh-subagent/src/continuation-messages.ts'
-import { assertSubagentMaxDepth } from '@deepseek-ai/dsh-subagent/src/depth.ts'
-import { foldSubagentDescriptor, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent/src/descriptor.ts'
-import type { SubagentDescriptorData } from '@deepseek-ai/dsh-subagent/src/descriptor.ts'
-import { establishCatalogChild, establishExternalCatalogChild } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
-import { SubagentError } from '@deepseek-ai/dsh-subagent/src/error.ts'
-import { isAdjacentAgentSendMessageTool } from '@deepseek-ai/dsh-subagent/src/internal.ts'
-import type { ActivationObserver } from '@deepseek-ai/dsh-subagent/src/lifecycle.ts'
+import { withContinuableReturnGuidance as upstreamWithContinuableReturnGuidance } from './vendor/dsh-subagent/continuation-messages.ts'
+import { assertSubagentMaxDepth } from './vendor/dsh-subagent/depth.ts'
+import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './vendor/dsh-subagent/descriptor.ts'
+import type { SubagentDescriptorData } from './vendor/dsh-subagent/descriptor.ts'
+import { establishCatalogChild, establishExternalCatalogChild } from './vendor/dsh-subagent/catalog.ts'
+import { SubagentError } from './vendor/dsh-subagent/error.ts'
+import { isAdjacentAgentSendMessageTool } from './vendor/dsh-subagent/internal.ts'
+import type { ActivationObserver } from './vendor/dsh-subagent/lifecycle.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
   SubagentSendMessageOptions, SubagentResult, ResolvedSubagentStartRequest,
-} from '@deepseek-ai/dsh-subagent/src/types.ts'
-import { attachStructuredRuntime } from '@deepseek-ai/dsh-subagent/src/structured.ts'
-import type { StructuredAttachment } from '@deepseek-ai/dsh-subagent/src/structured.ts'
-import type { SubagentDelivery } from '@deepseek-ai/dsh-subagent/src/control-types.ts'
-import { ActivationPool, ChildLock, activationAgent, captureLocalResult, observeLocalFailure, requireLocalActivation } from '@deepseek-ai/dsh-subagent/src/activation.ts'
-import type { Activation, ActivationResource, LocalActivation } from '@deepseek-ai/dsh-subagent/src/activation.ts'
+} from './vendor/dsh-subagent/types.ts'
+import { attachStructuredRuntime } from './vendor/dsh-subagent/structured.ts'
+import type { StructuredAttachment } from './vendor/dsh-subagent/structured.ts'
+import type { SubagentDelivery } from './vendor/dsh-subagent/control-types.ts'
+import { ActivationPool, ChildLock, activationAgent, captureLocalResult, observeLocalFailure, requireLocalActivation } from './vendor/dsh-subagent/activation.ts'
+import type { Activation, ActivationResource, LocalActivation } from './vendor/dsh-subagent/activation.ts'
 
 /** Inputs shared by model steering and human prompt delivery. */
 type ChildDeliveryOptions =

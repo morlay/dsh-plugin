@@ -5,8 +5,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 const VENDOR = join(process.cwd(), "vendor/deepseek-harness/packages/subagent/subagent/src");
 const FORK = join(process.cwd(), "packages/subagent/dsh-subagent/src");
 const VENDOR_PREFIX = "../../../../vendor/deepseek-harness/packages/subagent/subagent/src/";
-// 本仓库的写法：按**包名**引同一个源码面（上游 `exports` 有 `./src/*`）。两种写法都归一到同包相对路径——
-// 相对路径在闭包面（`node_modules/.pnpm/…`，打包与 `dshdev --prod`）里深度对不上、解析不到，所以 fork 用包名。
+// 本仓库的写法：上游内部文件**按需复制**进本包（`src/vendor/dsh-subagent/…`，由 `upstream-sync vendor` 同步），
+// import 走包内相对路径。三种写法都归一到同包相对路径——相对路径指 vendor 树在闭包面（`node_modules/.pnpm/…`）
+// 里深度对不上、解析不到；按包名引要求上游把 `src/*` 摊成出口，那会让打包边界跟着乱。
+const VENDORED_PREFIX = "./vendor/dsh-subagent/";
 const PACKAGE_PREFIX = "@deepseek-ai/dsh-subagent/src/";
 const CORDIS_DECLARATION = "declare module '@deepseek-ai/cordis' {";
 const RETURN_GUIDANCE = "export function withContinuableReturnGuidance(";
@@ -30,7 +32,10 @@ beforeAll(async () => {
 
 // fork 保留文件的接线改写：指向上游源码的 import 指回同目录。归一后应能与上游逐行对齐。
 function wiringNormalized(text: string): string {
-  return text.replaceAll(VENDOR_PREFIX, "./").replaceAll(PACKAGE_PREFIX, "./");
+  return text
+    .replaceAll(VENDOR_PREFIX, "./")
+    .replaceAll(VENDORED_PREFIX, "./")
+    .replaceAll(PACKAGE_PREFIX, "./");
 }
 
 // 剔除从 `marker` 起、到 `until` 那一段的块（缺省到顶格的 `}`：模块级声明与函数）；`marker` 不存在时按现状

@@ -11,11 +11,29 @@
 import { runPatch } from "./patch.ts";
 import { runPrebuild } from "./prebuild.ts";
 import { runSync } from "./sync.ts";
+import { vendoredDrift, syncVendoredFiles } from "./vendored.ts";
+import { upstreamPaths } from "./common.ts";
 
 const COMMANDS: Record<string, () => Promise<void>> = {
   sync: runSync,
   patch: runPatch,
   prebuild: runPrebuild,
+  // 按需 vendored 的上游内部文件：复制进各包的 `src/vendor/…`（清单见 `./vendored.ts`）。
+  vendor: async () => {
+    const written = await syncVendoredFiles(await upstreamPaths());
+    console.log(`[vendor] 同步完成：写了 ${String(written)} 份`);
+  },
+  // CI 用：只比对，不写。
+  "vendor-check": async () => {
+    const drift = await vendoredDrift(await upstreamPaths());
+    if (drift.length === 0) {
+      console.log("[vendor] 与上游一致");
+      return;
+    }
+    console.error(`[vendor] ${String(drift.length)} 份与上游不一致：`);
+    for (const file of drift) console.error(`  - ${file}`);
+    process.exitCode = 1;
+  },
 };
 
 const name = process.argv[2];
