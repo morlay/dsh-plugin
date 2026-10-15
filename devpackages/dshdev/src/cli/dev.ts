@@ -239,8 +239,10 @@ export async function runDev(options: DevOptions): Promise<void> {
           ...process.env,
           DSH_HOME: dataDir,
           UV_THREADPOOL_SIZE: threadpoolSize(),
-          // 形态标志：两种 dev 形态都要标（web 没有壳，但同样是 dev——这条链的"根在哪"与预编译策略都看它）。
-          DSH_DEV_FORM: "web",
+          // 形态标志：dev 形态要标（这条链的"根在哪"与预编译策略都看它）。`--prod` **不标**——它要跑的
+          // 就是打包形态那一套（联邦预编译、`dev.exclude` 之外的包按包产出），标了会退回 dev 的逐文件策略，
+          // 于是"验证打包形态"就落空了。
+          ...(prod === undefined ? { DSH_DEV_FORM: "web" } : {}),
         },
         tsLoader,
       ),
