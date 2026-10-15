@@ -186,24 +186,17 @@ export function apply(ctx: Context): void {
   let rowsCache: ClientRow[] | undefined;
   // `ctx.loader` 是 cordis 的服务（属性访问，别用 `ctx.get`——那给的是追踪代理）；上游 `hmr` 也是这么用的。
   const loader = ctx.loader;
-  // 非开发模块（`dsh.dev.exclude` 点名）：入口交给 vite 的 `optimizeDeps`——一次构建、共享 chunk、
-  // 落盘缓存、按内容 hash 失效，全是 vite 现成的机制。它们的入口用**包名**（optimizer 只认裸说明符），
-  // 由 alias 指到各自的 client 半源码。
   let excludedCache: RegExp[] | undefined;
   const excludedOf = async (): Promise<RegExp[]> => (excludedCache ??= await devExcluded(await profileDir()));
   const sourceRowsOf = async (): Promise<ClientRow[]> => {
     rowsCache ??= loader === undefined ? [] : await clientRowsOf(loader);
     return rowsCache;
   };
-  const allRowsOf = async (): Promise<ClientRow[]> => {
-    const patterns = await excludedOf();
-    return (await sourceRowsOf()).map((row) =>
-      // **非开发模块**（`dsh.dev.exclude` 点名）的行给**包名**而不是路径：走哪条链（联邦产物 / 源码）
-      // 由解析规则决定，地址也由同一份出口表（`urlOf`）算——这里写死 URL 就等于把"地址长什么样"抄成两份。
-      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
-    );
-  };
-  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
+  // **行的入口永远是源码**（`@/<filepath>`）。`dsh.dev.exclude` 的"聚合"只作用于**裸说明符**（依赖）：
+  // 它按需生效——某个说明符是不是走联邦，由解析规则在同一次 resolve 里判（能解析到、且是"非开发模块"），
+  // 而不是**预匹配**地把整行的入口也换成包名。包名会被 vite 的依赖优化器当成"依赖"预打包，与我们的聚合
+  // 产物形成两份实例（症状是「同 namespace 的 locale 已注册」、跨实例的私有字段报错）。
+  const rows = async (): Promise<ClientRow[]> => await sourceRowsOf();
   if (webServer === undefined)
     throw new Error("client-modules: webServer is a required service");
 
