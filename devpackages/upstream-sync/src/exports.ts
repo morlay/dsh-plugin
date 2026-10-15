@@ -1,5 +1,6 @@
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { parse } from "oxc-parser";
 import { pathExists } from "./common.ts";
 
 // `exports` 步骤：把上游各包 `exports` / `main` / `types` 里指向 `lib/` 的目标改写成对应的 `src`
@@ -109,11 +110,120 @@ async function rewriteFiles(pkgDir: string, manifest: { files?: unknown }): Prom
   return true;
 }
 
+/** 相对 / 绝对 / 虚拟 / node 内置之外的裸说明符——**该由包管理器解析**的那些。 */
+function isBareSpecifier(specifier: unknown): specifier is string {
+  return (
+    typeof specifier === "string" &&
+    specifier !== "" &&
+    !specifier.startsWith(".") &&
+    !specifier.startsWith("/") &&
+    !specifier.startsWith("\0") &&
+    !specifier.startsWith("node:")
+  );
+}
+
+/** 说明符 → 包名：`@scope/name/sub` → `@scope/name`；`katex/dist/katex.min.css` → `katex`。 */
+function packageNameOf(specifier: string): string {
+  const parts = specifier.split("/");
+  return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : (parts[0] ?? specifier);
+}
+
+/**
+ * 一棵源码树里 import 到的全部**包名**。
+ *
+ * 判据是 AST，不是正则：`import` / `export … from` / `import()` / `require()` / `import.meta.resolve()`
+ * 五种写法都要认（相对路径之外的裸说明符**就是依赖**）。用 oxc 的解析器——它是这个包自己的依赖。
+ */
+async function importedPackagesOf(dir: string): Promise<Set<string>> {
+  const found = new Set<string>();
+  const walk = async (path: string): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true }).catch(() => [])) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) {
+        await walk(child);
+        continue;
+      }
+      if (!/\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u.test(entry.name)) continue;
+      const { program } = await parse(child, await readFile(child, "utf8"));
+      const visit = (node: unknown): void => {
+        if (node === null || typeof node !== "object") return;
+        if (Array.isArray(node)) {
+          for (const item of node) visit(item);
+          return;
+        }
+        const record = node as Record<string, unknown>;
+        if (
+          record["type"] === "ImportDeclaration" ||
+          record["type"] === "ExportNamedDeclaration" ||
+          record["type"] === "ExportAllDeclaration" ||
+          record["type"] === "ImportExpression"
+        ) {
+          const source = (record["source"] as { value?: unknown } | undefined)?.value;
+          if (isBareSpecifier(source)) found.add(packageNameOf(source));
+        }
+        if (record["type"] === "CallExpression") {
+          const callee = record["callee"] as { name?: unknown; property?: { name?: unknown } } | undefined;
+          const first = (record["arguments"] as { value?: unknown }[] | undefined)?.[0];
+          // `require("x")` 与 `import.meta.resolve("x")`（后者长成 `(<import.meta>).resolve(...)`）。
+          if (
+            (callee?.name === "require" || callee?.property?.name === "resolve") &&
+            isBareSpecifier(first?.value)
+          ) {
+            found.add(packageNameOf(first.value));
+          }
+        }
+        for (const value of Object.values(record)) visit(value);
+      };
+      visit(program);
+    }
+  };
+  await walk(dir);
+  return found;
+}
+
+/**
+ * **deps 修复**：把上游放错段的运行期依赖挪回 `dependencies`，并**整段删掉 `devDependencies`**。
+ *
+ * 上游的规矩是"client 半的浏览器依赖（`clsx`、`shiki`、`katex` 这类）算 `devDependencies`，构建时由它
+ * 自己的打包内联"，所以生产安装（`pnpm deploy --prod`）里没有它们。而本仓库这条链是**运行期现场打包**、
+ * 真会 import 它们——闭包里因此缺一大片，只有到打包/浏览器才现形。做法：扫源码里出现的包名，凡在
+ * `devDependencies` 里**被用到**的挪进 `dependencies`；然后删掉整个 `devDependencies`（我们的链不需要
+ * 上游的测试与构建工具）。
+ *
+ * @param pkgDir - 包目录。
+ * @param manifest - 该包的清单（就地改）。
+ * @returns 本次挪了几个依赖；没有 `devDependencies` 时 undefined（不改）。
+ */
+async function rewriteDependencies(
+  pkgDir: string,
+  manifest: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  },
+): Promise<{ moved: number } | undefined> {
+  const dev = manifest.devDependencies;
+  if (dev === undefined) return undefined;
+  const used = (await pathExists(join(pkgDir, "src")))
+    ? await importedPackagesOf(join(pkgDir, "src"))
+    : new Set<string>();
+  const moved: Record<string, string> = {};
+  for (const [name, range] of Object.entries(dev)) {
+    if (used.has(name)) moved[name] = range;
+  }
+  delete manifest.devDependencies;
+  if (Object.keys(moved).length > 0) {
+    manifest.dependencies = { ...manifest.dependencies, ...moved };
+  }
+  return { moved: Object.keys(moved).length };
+}
+
 export async function rewriteExports(dir: string, options: ExportsOptions): Promise<void> {
   const unmapped: string[] = [];
   const touched: string[] = [];
   let addedSrcWildcard = 0;
   let filesRewritten = 0;
+  let devDropped = 0;
+  let dependenciesMoved = 0;
   for (const pkgDir of await packageDirs(dir)) {
     const manifestPath = join(pkgDir, "package.json");
     if (!(await pathExists(manifestPath))) continue;
@@ -123,6 +233,8 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
       types?: unknown;
       files?: unknown;
       name?: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
     };
     const exportsField = manifest.exports;
     if (exportsField === undefined || exportsField === null || typeof exportsField !== "object")
@@ -220,6 +332,13 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
       filesRewritten += 1;
     }
 
+    const deps = await rewriteDependencies(pkgDir, manifest);
+    if (deps !== undefined) {
+      changed = true;
+      devDropped += 1;
+      dependenciesMoved += deps.moved;
+    }
+
     if (changed) {
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       touched.push(shortName);
@@ -227,7 +346,8 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
   }
   console.log(
     `[steps] exports -> src: ${touched.length} 个包改写，${addedSrcWildcard} 个包补 ./src/*，` +
-      `${filesRewritten} 个包的 files 改指源码面`,
+      `${filesRewritten} 个包的 files 改指源码面，` +
+      `${devDropped} 个包删了 devDependencies（其中挪回 dependencies ${dependenciesMoved} 条）`,
   );
   if (unmapped.length > 0) {
     const unique = [...new Set(unmapped)];
