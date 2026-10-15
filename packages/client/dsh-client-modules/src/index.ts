@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
-import { ASSET_MIME, NODE_BUILTIN } from "./assets.ts";
+import { ASSET_MIME, NODE_BUILTIN } from "@local/tsdown-plugin-cordis/assets";
 import { devExcluded, isAggregated } from "./config.ts";
 import {
   appBootDir,
@@ -192,11 +192,16 @@ export function apply(ctx: Context): void {
     rowsCache ??= loader === undefined ? [] : await clientRowsOf(loader);
     return rowsCache;
   };
-  // **行的入口永远是源码**（`@/<filepath>`）。`dsh.dev.exclude` 的"聚合"只作用于**裸说明符**（依赖）：
-  // 它按需生效——某个说明符是不是走联邦，由解析规则在同一次 resolve 里判（能解析到、且是"非开发模块"），
-  // 而不是**预匹配**地把整行的入口也换成包名。包名会被 vite 的依赖优化器当成"依赖"预打包，与我们的聚合
-  // 产物形成两份实例（症状是「同 namespace 的 locale 已注册」、跨实例的私有字段报错）。
-  const rows = async (): Promise<ClientRow[]> => await sourceRowsOf();
+  // **非开发模块**（`dsh.dev.exclude` 点名）的行给**包名**而不是源码路径：走哪条链（聚合产物 / 源码逐文件）
+  // 由解析规则在那一次 resolve 里判（能解析到 + 被点名 → 联邦），地址也由同一份出口表（`urlOf`）算——
+  // 在这里写死 URL 就等于把"地址长什么样"抄成两份。没被点名的行仍是源码路径（改它要 HMR）。
+  const allRowsOf = async (): Promise<ClientRow[]> => {
+    const patterns = await excludedOf();
+    return (await sourceRowsOf()).map((row) =>
+      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
+    );
+  };
+  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
   if (webServer === undefined)
     throw new Error("client-modules: webServer is a required service");
 

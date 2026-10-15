@@ -437,9 +437,6 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../vendor/deepseek-harness/packages/boot/app-boot
-      '@morlay/dsh-client-modules':
-        specifier: workspace:*
-        version: link:../../packages/client/dsh-client-modules
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -583,6 +580,9 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/host/webserver
+      '@local/tsdown-plugin-cordis':
+        specifier: workspace:*
+        version: link:../../../devpackages/tsdown-plugin-cordis
       '@oxc-project/runtime':
         specifier: ^0.153.0
         version: 0.153.0
@@ -599,9 +599,6 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:../../../devpackages/devkit
-      '@local/tsdown-plugin-cordis':
-        specifier: workspace:*
-        version: link:../../../devpackages/tsdown-plugin-cordis
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.5

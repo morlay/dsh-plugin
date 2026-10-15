@@ -14,8 +14,8 @@ import { createRequire } from "node:module";
 import { findPackageJSON } from "node:module";
 import { dirname, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
-import { cssInlinePlugins } from "./styles.ts";
+import { clientAssetPlugin, NODE_BUILTIN } from "@local/tsdown-plugin-cordis/assets";
+import { cssInlinePlugins } from "@local/tsdown-plugin-cordis/styles";
 import { rolldown, type Plugin } from "rolldown";
 import { esmExternalRequirePlugin, type PluginOption } from "vite";
 import { encodePackageName, entryFileNameOf, packageNameOf } from "./resolve.ts";
@@ -567,14 +567,6 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // 拆出来的块落**自己的前缀**（与资产 `assets/` 并列）：它们不是"包的出口"——出口名要回源码里找目标，
     // 而块没有源码对应（`src/chunk-abc.js` 不存在）。与出口共用一段 URL，服务端就只能把它当出口、落空。
     chunkFileNames: "chunks/[name]-[hash].js",
-    // **拆分的下限**：`import()` 该拆就拆（动态加载是它的价值），但"被某个包静态共享的小模块"不值得各自
-    // 一次请求——`@shikijs/langs` 那种按语言一个文件能把产物切成几千块（实测 3092），而这条链是按包产出、
-    // 浏览器按需取的，每块都是一次请求。小于 `minSize` 的不单拆（并进引用它的产物）；只被一个入口用的也不拆
-    // （拆了纯粹多一次请求）。
-    advancedChunks: {
-      minSize: 20_000,
-      minShareCount: 2,
-    },
     // 资产统一落在 `assets/` 下、带内容 hash：路由按这个前缀把它们当文件吐，
     // 出口产物与资产不混在一个命名空间里。
     assetFileNames: "assets/[name]-[hash][extname]",
