@@ -357,6 +357,26 @@ export function apply(ctx: Context): void {
         const manifest = await manifestOf(pkg.root).catch(() => undefined);
         if (manifest !== undefined) versions.set(pkg.name, manifest.version);
       }
+      // **顶层 `node_modules`**：打包形态的 profile 是 hoisted 布局（壳用 `pnpm deploy --node-linker=hoisted`），
+      // 没有 `.pnpm` 虚拟店——三方与闭包里的包只在这一层。只扫 `.pnpm` 的话，打包面扫不出任何三方版本，
+      // 外置名单跟着空，产物里所有依赖被**内联**（同一个 `dsh-client-ui-layout`，`--prod` 面 react 是外置的、
+      // 打包面却内联了）。顶层这一层对两种布局都成立：hoisted 是实体目录，常规布局是 symlink（readdir 一样看得到）。
+      const top = join(await resolutionRoot(), "node_modules");
+      for (const holder of await readdir(top, { withFileTypes: true }).catch(() => [])) {
+        if (!holder.isDirectory() || holder.name.startsWith(".")) continue;
+        const holders = holder.name.startsWith("@")
+          ? (await readdir(join(top, holder.name), { withFileTypes: true }).catch(() => []))
+              .filter((scoped) => scoped.isDirectory())
+              .map((scoped) => `${holder.name}/${scoped.name}`)
+          : [holder.name];
+        for (const bare of holders) {
+          if (versions.has(bare)) continue;
+          const parsed = JSON.parse(
+            await readFile(join(top, ...bare.split("/"), "package.json"), "utf8").catch(() => "{}"),
+          ) as { version?: unknown };
+          if (typeof parsed.version === "string") versions.set(bare, parsed.version);
+        }
+      }
       // 三方与闭包里的包也要版本（zod、immer、react、cordis…）：**从各自的清单读**。
       //
       // 不用 `.pnpm` 的**目录名**去猜：那只是 pnpm 的布局（`<名字>@<版本>_<peer 后缀>`），而且工作区/闭包里
