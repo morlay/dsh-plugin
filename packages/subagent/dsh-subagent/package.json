@@ -14,9 +14,11 @@
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
   "files": [
+    "src",
     "locale/*.json",
     "dist",
-    "!**/__tests__"
+    "!**/__tests__",
+    "!**/vendor/**/__tests__"
   ],
   "type": "module",
   "exports": {
