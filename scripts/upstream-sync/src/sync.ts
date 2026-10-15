@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { execFileCapture, pathExists, requireWorkspaceEnv, runInherited } from "./common.ts";
+import { execFileCapture, pathExists, requireWorkspaceEnv, runInherited } from "./common.js";
 
 // 同步上游到指定提交（git 增量）：目录缺失 → 首次 clone，存在 → fetch + reset --hard（目标相同也 reset，
 // 保证 repatch 干净基线）；检出优先级 REVISION > VERSION（tag → branch）。env 名与含义见 `SKILL.md` 的表；

@@ -1,7 +1,7 @@
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "oxc-parser";
-import { pathExists } from "./common.ts";
+import { pathExists } from "./common.js";
 
 // `exports` 步骤：把上游各包 `exports` / `main` / `types` 里指向 `lib/` 的目标改写成对应的 `src`
 // 源文件，并给缺 `"./src/*"` 出口的包补上——开发与桌面两种形态直接消费源码，不再需要构建上游

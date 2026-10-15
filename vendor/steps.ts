@@ -3,7 +3,7 @@
 //
 // 执行器与步骤类型见 `devpackages/upstream-sync/src/steps.ts`；两阶段的语义与各步骤类型的判据在
 // `dsh-plugin-upstream-sync` 技能里。
-import type { Step } from "../devpackages/upstream-sync/src/steps.ts";
+import type { Step } from "../scripts/upstream-sync/src/steps.ts";
 
 // 从 sync 的干净基线跑一次（不是每条步骤都幂等）。
 export const patch: Step[] = [
@@ -53,9 +53,12 @@ export const patch: Step[] = [
     // 要求每个 export 解析到**存在的**源文件，未映射的出口会让生成失败。
     explicit: {
       "@deepseek-ai/dsh-app-boot": {
-        "./worker/profile-resolution-bootstrap": "./src/profile-resolution/worker-bootstrap.ts",
+        "./worker/profile-resolution-bootstrap":
+          "./src/profile-resolution/worker-bootstrap.ts",
       },
-      "@deepseek-ai/dsh-client-ui-theme": { "./brand-font.css": "./src/styles/brand-font.css" },
+      "@deepseek-ai/dsh-client-ui-theme": {
+        "./brand-font.css": "./src/styles/brand-font.css",
+      },
       "@deepseek-ai/dsh-host-directory-picker-native": {
         "./worker": "./src/win32-dialog-worker.ts",
       },

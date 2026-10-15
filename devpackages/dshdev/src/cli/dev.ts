@@ -205,8 +205,6 @@ export async function runDev(options: DevOptions): Promise<void> {
   const prod = options.prod === true ? await prepareProdSurface(workspace) : undefined;
   const activeRuntimeDir = prod?.runtimeDir ?? runtimeDir;
   if (prod === undefined) await requireDevRuntime(runtimeDir);
-  // 壳装配到打包工作目录（`.dshdev/shell`）：源码树里那份 `dist` 不再被 dev 依赖。
-  const shell = await prepareShell(buildCacheDir);
   const tsLoader = tsLoaderSpecifier();
 
   if (options.web) {
@@ -251,6 +249,9 @@ export async function runDev(options: DevOptions): Promise<void> {
     return;
   }
 
+  // **壳只在桌面形态要**：web 形态的宿主是 node http（没有壳），把它装到 `.dshdev/shell` 只是白跑一遍
+  // `pnpm install`——这正是 `dshdev web` 会去那个目录装东西的原因。
+  const shell = await prepareShell(buildCacheDir);
   const desktop = desktopConfig(manifest);
   const runtimeRoot = join(buildCacheDir, "runtime");
   await mkdir(runtimeRoot, { recursive: true });

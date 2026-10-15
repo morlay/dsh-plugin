@@ -9,6 +9,7 @@
     "./patch": "./src/patch.ts"
   },
   "devDependencies": {
+    "@browserbasehq/stagehand": "^4.2.1",
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@types/js-yaml": "^4.0.9",

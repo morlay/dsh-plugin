@@ -28,6 +28,7 @@ import { HMR_PATH, startViteDev } from "./serve-vite.ts";
 import {
   clientHalfOf,
   decodePackageName,
+  encodePackageName,
   exportTargetOf,
   fileInPackage,
   manifestOf,
@@ -195,13 +196,7 @@ export function apply(ctx: Context): void {
   // **非开发模块**（`dsh.dev.exclude` 点名）的行给**包名**而不是源码路径：走哪条链（聚合产物 / 源码逐文件）
   // 由解析规则在那一次 resolve 里判（能解析到 + 被点名 → 联邦），地址也由同一份出口表（`urlOf`）算——
   // 在这里写死 URL 就等于把"地址长什么样"抄成两份。没被点名的行仍是源码路径（改它要 HMR）。
-  const allRowsOf = async (): Promise<ClientRow[]> => {
-    const patterns = await excludedOf();
-    return (await sourceRowsOf()).map((row) =>
-      isAggregated(row.id, patterns) ? { ...row, clientPath: row.id } : row,
-    );
-  };
-  const rows = async (): Promise<ClientRow[]> => await allRowsOf();
+  const rows = async (): Promise<ClientRow[]> => await sourceRowsOf();
   if (webServer === undefined)
     throw new Error("client-modules: webServer is a required service");
 
@@ -249,8 +244,25 @@ export function apply(ctx: Context): void {
       const started = await startViteDev(ctx, {
         repoRoot,
         base: PLUGIN_ROUTE,
-        // 行清单：包名 → client 半的源文件（各 entry 用**自己的 baseUrl** 解析，见 `clientRowsOf`）。
-        rows: { rows: async () => new Map((await rows()).map((row) => [row.id, row.clientPath])) },
+        // 行清单：包名 → 入口。**被 `dsh.dev.exclude` 点名的行给联邦地址**（带 loader 给的版本）：它是我们自己
+        // 路由服务的产物（按包预编译 + 落盘缓存），插件对 `@client-modules/` 开头的直接当外部地址留着；
+        // 而**裸包名**会被 vite 的 import 分析按 `package.json` 去解析——行清单是虚拟模块，那些上游 workspace
+        // 内部包不在工作区解析面上，于是 `Cannot find package … imported from …/package.json`。
+        // 没被点名的行仍给源码路径（改它要 HMR）。
+        rows: {
+          rows: async () => {
+            const patterns = await excludedOf();
+            const all = await rows();
+            return new Map(
+              all.map((row) => [
+                row.id,
+                isAggregated(row.id, patterns)
+                  ? `${CLIENT_MODULES_PREFIX}/${encodePackageName(row.id)}@${row.version}/client`
+                  : row.clientPath,
+              ]),
+            );
+          },
+        },
         // `/plugins/<pkg>/<version>/<export>` → 源码文件（对外形态 → vite 认的路径）。
         resolvePluginUrl: (url: string) => resolvePluginUrl(url),
         depsUrl: (specifier: string, importer?: string) => depsUrlOfSpecifier(specifier, importer),

@@ -1,8 +1,8 @@
 import { glob, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { pathExists, runInherited, type UpstreamPaths } from "./common.ts";
-import { rewriteExports } from "./exports.ts";
+import { pathExists, runInherited, type UpstreamPaths } from "./common.js";
+import { rewriteExports } from "./exports.js";
 
 // `<vendor>/steps.ts` 的两阶段清单（`export const patch` / `export const prebuild`）与执行器；任一步骤
 // 失败即失败——上游已变化，评估更新 / 删除 / 新增，不跳过。清单用 TS 写：每条步骤就地注释「为什么」。

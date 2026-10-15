@@ -9,7 +9,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { rewriteExports } from "../exports.ts";
+import { rewriteExports } from "../exports.js";
 
 let work: string;
 let pkgDir: string;

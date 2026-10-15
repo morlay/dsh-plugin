@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { pathExists, upstreamPaths } from "./common.ts";
-import { runPhase } from "./steps.ts";
+import { pathExists, upstreamPaths } from "./common.js";
+import { runPhase } from "./steps.js";
 
 // 给上游工作树打本地补丁：跑 `<vendor>/steps.ts` 的 `patch` 阶段（裁剪、git apply、exports 改写）。
 //

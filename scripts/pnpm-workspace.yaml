@@ -1,0 +1,6 @@
+# 强制环境隔离，让 pnx 更好用
+
+packages:
+  - ./upstream-sync
+
+nodeOptions: "--import @oxc-node/core/register"

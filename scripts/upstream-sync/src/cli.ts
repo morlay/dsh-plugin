@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 // 上游同步链的 CLI：`sync` / `patch` / `prebuild` 三条子命令，对应「日常同步 = sync → patch → prebuild」。
 //
 // 为什么是包而不是技能目录里的散脚本：这里要解析依赖（AST 探查用 `oxc-parser`）。散脚本住在 `.agents/skills/`
@@ -8,11 +10,11 @@
 //   pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts sync      # 1. 对齐到目标提交
 //   pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts patch     # 2. steps.ts 的 patch 阶段
 //   pnpm dlx @oxc-node/cli devpackages/upstream-sync/src/cli.ts prebuild  # 3. steps.ts 的 prebuild 阶段
-import { runPatch } from "./patch.ts";
-import { runPrebuild } from "./prebuild.ts";
-import { runSync } from "./sync.ts";
-import { vendoredDrift, syncVendoredFiles } from "./vendored.ts";
-import { upstreamPaths } from "./common.ts";
+import { runPatch } from "./patch.js";
+import { runPrebuild } from "./prebuild.js";
+import { runSync } from "./sync.js";
+import { vendoredDrift, syncVendoredFiles } from "./vendored.js";
+import { upstreamPaths } from "./common.js";
 
 const COMMANDS: Record<string, () => Promise<void>> = {
   sync: runSync,

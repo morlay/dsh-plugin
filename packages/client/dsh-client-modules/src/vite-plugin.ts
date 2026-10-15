@@ -206,7 +206,14 @@ export function dshClientRowsPlugin(options: ClientRowsPluginOptions): Plugin {
       let index = 0;
       for (const [pkg, file] of [...shared, ...rows]) {
         const alias = `m${String(index)}`;
-        imports.push(`import * as ${alias} from ${JSON.stringify(file)};`);
+        // **行的入口**两种形态：源码文件（`@/…`，vite 逐文件转译、HMR 照旧）与**聚合行**（`dsh.dev.exclude`
+        // 点名的那些——`rows` 把它们的 `clientPath` 写成了包名本身）。后者要在这里**换成联邦地址**：
+        // 虚拟模块里写**包名**会被 `vite:import-analysis` 当成依赖去解析（importer 记成根 `package.json`），
+        // 落到工作区解析面上就是 `Cannot find package '@deepseek-ai/dsh-typert-registry' …`——上游 workspace
+        // 内部包只存在于 vendor 与闭包里。写地址则只是"一个外部 URL"，vite 不会去碰它。
+        const specifier =
+          file === pkg ? ((await options.depsUrl?.(pkg)) ?? file) : file;
+        imports.push(`import * as ${alias} from ${JSON.stringify(specifier)};`);
         entries.push(`  { id: ${JSON.stringify(pkg)}, module: ${alias} },`);
         index += 1;
       }

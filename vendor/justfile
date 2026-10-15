@@ -1,13 +1,13 @@
-# 同步链是 `devpackages/upstream-sync` 这个包（做成包是为了它能声明自己的依赖，比如 AST 探查用的解析器），
-# 一律用 `pnpm dlx @oxc-node/cli` 直跑它的 CLI（oxc transformer + resolver）；
-# 不用 tsx（没被任何清单声明过），也不写 `node --import=…`。
-cli := join(module_directory(), '../devpackages/upstream-sync/src/cli.ts')
+upstream-sync-source := join(module_directory(), '../scripts/upstream-sync')
 
-sync:
-    pnpm dlx @oxc-node/cli {{ cli }} sync
+_deps:
+    @cd {{ upstream-sync-source }} && pnpm install --reporter=silent
 
-patch:
-    pnpm dlx @oxc-node/cli {{ cli }} patch
+sync: _deps
+    pnx --package={{ upstream-sync-source }} upstream-sync sync
 
-prebuild:
-    pnpm dlx @oxc-node/cli {{ cli }} prebuild
+patch: _deps
+    pnx --package={{ upstream-sync-source }} upstream-sync patch
+
+prebuild: _deps
+    pnx --package={{ upstream-sync-source }} upstream-sync prebuild

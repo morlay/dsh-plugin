@@ -8,8 +8,8 @@
 // 判据：**只有 src 侧（非测试）按上游内部路径 import 的**才在这里。测试按需自己引，不进快照。
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";
-import type { UpstreamPaths } from "./common.ts";
-import { pathExists } from "./common.ts";
+import type { UpstreamPaths } from "./common.js";
+import { pathExists } from "./common.js";
 
 /** 一组要复制到某个本地包里的上游文件。 */
 export interface VendoredGroup {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { pathExists, upstreamPaths } from "./common.ts";
-import { runPhase } from "./steps.ts";
+import { pathExists, upstreamPaths } from "./common.js";
+import { runPhase } from "./steps.js";
 
 // 构建前的准备：跑 `<vendor>/steps.ts` 的 `prebuild` 阶段——生成源码面消费的产物（typert 生成物）、
 // 编译不得不编译的 native addon、删上游 tsconfig（口径收口）。
