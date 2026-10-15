@@ -357,20 +357,33 @@ export function apply(ctx: Context): void {
         const manifest = await manifestOf(pkg.root).catch(() => undefined);
         if (manifest !== undefined) versions.set(pkg.name, manifest.version);
       }
-      // 三方也要版本（zod、immer、react…）：pnpm 的 store 目录名就是 `<名字>@<版本>`（scope 写成
-      // `@scope+name@1.2.3`），读一层目录即可，不必去读几千个清单。**peer 后缀要去掉**：同一包因 peer
-      // 不同会有多份目录（`zustand@4.5.7_@types+react@18…`），从最后一个 `@` 切会把 `18.3.1` 当版本。
-      const store = await readdir(await storeDir(), { withFileTypes: true }).catch(
-        () => [],
-      );
-      for (const entry of store) {
+      // 三方与闭包里的包也要版本（zod、immer、react、cordis…）：**从各自的清单读**。
+      //
+      // 不用 `.pnpm` 的**目录名**去猜：那只是 pnpm 的布局（`<名字>@<版本>_<peer 后缀>`），而且工作区/闭包里
+      // link 进来的包写的是 `file++++<路径>`——猜出来的"版本"会是一串路径，联邦地址跟着变成
+      // `/@client-modules/@deepseek-ai+cordis@file++++Users+…/index.js`。
+      //
+      // 扫 `.pnpm/<dir>/node_modules/<name>/package.json`（scope 多一层）：一次读完，命中过的包不再读。
+      const store = await storeDir();
+      for (const entry of await readdir(store, { withFileTypes: true }).catch(() => [])) {
         if (!entry.isDirectory()) continue;
-        const matched = /^(?<name>.+?)@(?<version>[^_@]+)(?:_.*)?$/u.exec(entry.name);
-        const name = matched?.groups?.["name"];
-        const version = matched?.groups?.["version"];
-        if (name === undefined || version === undefined) continue;
-        const bare = name.replaceAll("+", "/");
-        if (!versions.has(bare)) versions.set(bare, version);
+        const modules = join(store, entry.name, "node_modules");
+        for (const holder of await readdir(modules, { withFileTypes: true }).catch(() => [])) {
+          if (!holder.isDirectory()) continue;
+          const holders = holder.name.startsWith("@")
+            ? (await readdir(join(modules, holder.name), { withFileTypes: true }).catch(() => []))
+                .filter((scoped) => scoped.isDirectory())
+                .map((scoped) => `${holder.name}/${scoped.name}`)
+            : [holder.name];
+          for (const bare of holders) {
+            if (versions.has(bare)) continue;
+            const manifestPath = join(modules, ...bare.split("/"), "package.json");
+            const parsed = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
+              version?: unknown;
+            };
+            if (typeof parsed.version === "string") versions.set(bare, parsed.version);
+          }
+        }
       }
       return versions as ReadonlyMap<string, string>;
     })());
