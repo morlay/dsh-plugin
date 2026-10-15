@@ -1,7 +1,7 @@
 // 上游同步的步骤清单：`patch` 改上游工作树，`prebuild` 生成源码面消费的产物、编译 native addon。
 // 用 TS 写就是为了每个阶段、每条步骤旁边写得下「为什么」。
 //
-// 执行器与步骤类型见 `devpackages/upstream-sync/src/steps.ts`；两阶段的语义与各步骤类型的判据在
+// 执行器与步骤类型见 `scripts/upstream-sync/src/steps.ts`；两阶段的语义与各步骤类型的判据在
 // `dsh-plugin-upstream-sync` 技能里。
 import type { Step } from "../scripts/upstream-sync/src/steps.ts";
 
