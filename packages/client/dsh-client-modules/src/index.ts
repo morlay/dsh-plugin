@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { findPackageJSON } from "node:module";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Duplex } from "node:stream";
 import type { Context } from "@deepseek-ai/cordis";
@@ -365,8 +365,14 @@ export function apply(ctx: Context): void {
     if (devModule) return undefined;
     // 版本**从引用方解析**（`findPackageJSON` 按 node 的解析、与布局无关）：与产物侧同一条规则
     // （`resolvableVersionsOf`），两边写出的地址才对应得上。
-    const from = importer === undefined ? await resolutionManifestPath() : pathToFileURL(importer).href;
-    const found = findPackageJSON(bare, from);
+    // `importer` 可能**不是文件路径**：虚拟模块（`\0dsh-client-rows`）、vite 的 `/@id/…`、或根本没给。
+    // 拿它们当 base 解析会失败（`pathToFileURL("\0…")` 直接抛），于是这条说明符落到 vite 手里变成
+    // `Cannot find package`——行清单的虚拟模块就是这么把整条链带崩的。那种情况退到**解析根的清单**。
+    const base =
+      importer === undefined || !isAbsolute(importer)
+        ? await resolutionManifestPath()
+        : pathToFileURL(importer).href;
+    const found = findPackageJSON(bare, base);
     const version =
       found === undefined
         ? undefined
