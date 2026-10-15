@@ -456,7 +456,10 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
     // rolldown 自己会解析 tsconfig（含 `extends`，实测过），所以两种形态各指一处不如一处都不指。
     ...(options.tsconfig === undefined ? {} : { resolve: { tsconfigFilename: options.tsconfig } }),
     transform: {
-      target: "esnext",
+      // **浏览器 baseline**（vite 8 的默认那组：Chrome 111 / Edge 111 / Firefox 114 / Safari 16.4）。
+      // 直出后没有 `build.target: "baseline-widely-available"` 那层展开，这里自己写全。不要图省事写
+      // `esnext` 或留空——目标一低，oxc 就给类字段、可选链这些逐个加降级 helper，产物里全是奇怪的垫片。
+      target: ["chrome111", "edge111", "firefox114", "safari16.4"],
       // 装饰器：legacy（cordis 与上游用的就是这套）。有 tsconfig 时它会被那份覆盖，这里是默认。
       decorator: { legacy: true },
       // 浏览器没有 `process`：精确替换 `process.env`，裸 `process` 再给一个空壳——`immer` 这类包会在
