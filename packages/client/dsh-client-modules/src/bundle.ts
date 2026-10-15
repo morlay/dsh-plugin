@@ -469,6 +469,10 @@ async function bundlePackageOnce(options: BundleOptions, key: string): Promise<B
   });
   const { output: items } = await bundle.generate({
     format: "es",
+    // **关掉 code splitting**：每个包一份自足的产物。之前走 vite 的 lib 模式时它固定单 chunk；直出后
+    // rolldown 默认会切共享 chunk，而那些 chunk 的路径是相对**当前包**的产物目录写的——跨包复用时就
+    // 对不上（浏览器报 "does not provide an export named …"）。
+    codeSplitting: false,
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
     entryFileNames: "[name].js",
     chunkFileNames: "chunk-[hash].js",
