@@ -157,8 +157,11 @@ export function devStoreHome(workspace: string): string {
   return join(workspace, ".dsh-store");
 }
 
-// dev 形态的**数据目录**（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`（dev 的 profileDir 就是工作区）；
-// `--data-dir` 给出时按 `dataDir` 的三态解析（`xdg` / `env` / 绝对路径，与打包形态共用一份规则）。
+// dev 形态的**数据目录**（`$DSH_HOME`）：缺省是 profileDir 下的 `.dsh-store`（dev 的 profileDir 就是工作区）。
+//
+// **两种形态的缺省有意不同**：dev 落在工作区里，打包形态落在系统应用数据目录（`xdg` → macOS 的
+// `~/Library/Application Support/<name>`）。开发不该污染稳定版本的数据（会话库、凭据）；要对齐两边就
+// `--data-dir=xdg`（三态，与打包形态共用一份规则）。
 export function resolveDataDir(workspace: string, name: string, spec?: string): string {
   if (spec === undefined) return devStoreHome(workspace);
   const configured = resolveConfiguredHome(name, spec);
