@@ -239,6 +239,9 @@ export async function runDev(options: DevOptions): Promise<void> {
           ...process.env,
           DSH_HOME: dataDir,
           UV_THREADPOOL_SIZE: threadpoolSize(),
+          // profile 根也要从 env 传一份：这条链的"解析根/缓存根"（client-modules 的 `resolutionRoot`）
+          // 是拿它算的，只给 `--profile-dir` 参数的话 web 形态那边看不到（桌面形态由壳注入同一个变量）。
+          DSH_DESKTOP_DEV_PROFILE_DIR: profileRoot,
           // 形态标志：dev 形态要标（这条链的"根在哪"与预编译策略都看它）。`--prod` **不标**——它要跑的
           // 就是打包形态那一套（联邦预编译、`dev.exclude` 之外的包按包产出），标了会退回 dev 的逐文件策略，
           // 于是"验证打包形态"就落空了。
