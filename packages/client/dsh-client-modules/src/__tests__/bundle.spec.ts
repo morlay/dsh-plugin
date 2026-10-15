@@ -92,7 +92,6 @@ function options(exportName: string): Parameters<typeof bundlePackage>[0] {
     version: "1.0.0",
     input: { [exportName]: join(packageRoot, "src", `${exportName}.ts`) },
     watch: [join(packageRoot, "src")],
-    declaredDependencies: ["zod"],
   };
 }
 
@@ -183,7 +182,6 @@ test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` �
       version: "1.0.0",
       input: { a: join(pkg2, "src", "a.ts") },
       watch: [join(pkg2, "src")],
-      declaredDependencies: [],
       tsconfig: elsewhere,
     });
     const code = await readFile(join(join(work2, ".cache"), bundled?.files.get("a") ?? ""), "utf8");

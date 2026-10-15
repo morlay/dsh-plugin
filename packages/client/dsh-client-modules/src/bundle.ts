@@ -98,13 +98,6 @@ export interface BundleOptions {
   watch: readonly string[];
   /** 包名 → 版本：外置说明符要写成联邦地址（回调同步，故预建表）。 */
   versions?: ReadonlyMap<string, string>;
-  /**
-   * 这个包的依赖声明（`dependencies` + `peerDependencies` 的键）——**外置名单的唯一来源**。
-   *
-   * 就近：每个包只看**自己**的声明。声明里的 → 独立联邦产物（地址由 `output.paths` 换）；没声明的 →
-   * 留在产物里内联（相对路径、node 内置、虚拟模块本来也不在里面）。
-   */
-  declaredDependencies?: readonly string[];
   /** 编译设置（rolldown 的 `tsconfig`）：解析根那份 tsconfig 的路径；缺省时交给 rolldown 就近找。 */
   tsconfig?: string;
   /**

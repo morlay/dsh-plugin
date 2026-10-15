@@ -289,20 +289,6 @@ export function apply(ctx: Context): void {
     return (await readFile(candidate, "utf8").then(() => true, () => false)) ? candidate : undefined;
   };
 
-  /** 一个包声明的运行期依赖：`dependencies` + `peerDependencies` 的键（外置名单的唯一来源）。 */
-  const declaredDependenciesOf = async (root: string | undefined): Promise<string[]> => {
-    if (root === undefined) return [];
-    const manifest = (await manifestOf(root).catch(() => undefined)) as
-      | { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }
-      | undefined;
-    return [
-      ...new Set([
-        ...Object.keys(manifest?.dependencies ?? {}),
-        ...Object.keys(manifest?.peerDependencies ?? {}),
-      ]),
-    ];
-  };
-
   /**
    * 对外 URL → **源文件**。`exports` 优先，**没有该键**时退回物理路径（上游多数包没有 `./client` 出口，
    * 它们的 client 半就是 `src/client/index.ts`）——中间件的改写与插件的 `resolveId` 共用这一份。
@@ -508,8 +494,6 @@ export function apply(ctx: Context): void {
       // 拿目录去算只会算到空（曾经所有三方包的指纹都是同一个空目录的哈希）。
       watch: watchOf(root ?? (await owningPackageOf(entry))?.root, entry),
       versions: await ownVersionsOf(),
-      // **就近**：外置名单就是这个包自己声明的运行期依赖（`dependencies` + `peerDependencies`）。
-      declaredDependencies: await declaredDependenciesOf(root),
       // 编译设置：解析根那份 tsconfig（有就用；没有交给 rolldown 默认）。
       ...(await tsconfigOf().then((path) => (path === undefined ? {} : { tsconfig: path }))),
     }).catch((error: unknown) => {
