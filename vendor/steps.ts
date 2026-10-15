@@ -36,6 +36,11 @@ export const patch: Step[] = [
   // 在渲染期间发现快照变化并报「Cannot update a component while rendering a different component」。
   // 写入批处理到微任务（结构性更新走微任务本来就是这一层的纪律）。
   { type: "git", patch: "session-retention-batched.patch" },
+  // `connection/src/client/rpc.ts` 按值用到 `RpcId`，而 `client/api.ts` / `client/index.ts` 又把它**从这里**
+  // 再导出（类型面）。类型被当值处理时（我们这边 `verbatimModuleSyntax: false`）这条链断在 `client/rpc.ts`：
+  // `api/remotes` 的 client 面 `export type { …, RpcId, … } from '@deepseek-ai/dsh-client-connection/client'`
+  // 会求值成运行导入，浏览器报 `does not provide an export named 'RpcId'`。补一行再导出，两侧同形。
+  { type: "git", patch: "connection-client-rpc-reexport.patch" },
   {
     type: "exports",
     // 生成物出口：目标是 `prebuild` 阶段写出的 `.ts`（不是 `lib/*.js`），所以按出口名显式改指。

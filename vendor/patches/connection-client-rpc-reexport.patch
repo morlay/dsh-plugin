@@ -1,0 +1,15 @@
+diff --git a/packages/client/connection/src/client/rpc.ts b/packages/client/connection/src/client/rpc.ts
+index c5d5c9b394..51c1b91d2b 100644
+--- a/packages/client/connection/src/client/rpc.ts
++++ b/packages/client/connection/src/client/rpc.ts
+@@ -8,6 +8,10 @@ import {
+ import type { ClientConnectionRpc, ConnectionRpcResult } from '../rpc.ts'
+ import { randomUuid } from './random-uuid.ts'
+ 
++// 本模块按值用到 `RpcId`，而 `client/api.ts` 与 `client/index.ts` 又把它**从这里**再导出（类型面）——
++// 类型被当值处理时这条链就断在这儿。补一行再导出，让两侧同形。
++export { RpcId } from '../rpc.ts'
++
+ const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
+ const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
+ 
