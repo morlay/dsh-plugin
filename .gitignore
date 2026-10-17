@@ -15,6 +15,7 @@ node_modules/
 # 这几样是 boot / 包操作写在 profile root 里的运行时状态，不是源文件。
 # 见 packages/desktop/dsh-desktopify/.agents/designs/20261010-app目录即profile-root.md
 apps/dsh-custom-next/cordis.yml
+apps/dsh-custom-next/cordis.patch.yml
 apps/dsh-custom-next/compatibility.json
 apps/dsh-custom-next/.plugin-manager/
 
