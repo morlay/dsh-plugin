@@ -399,14 +399,17 @@ function objectLiteralOf(node: Node | undefined, context: EmitContext): Node[] |
 
 /** 文件路径 → 包名（从 `<…>/packages/<组>/<包>/…` 里取）。 */
 function packageOf(file: string): string {
-  const parts = file.split("/packages/")[1]?.split("/") ?? [];
+  // win32 的本地分隔符先归一成 `/`：这一族解析都按 `/` 切分，两套分隔符混用会切不出段。
+  const parts = file.split(sep).join("/").split("/packages/")[1]?.split("/") ?? [];
   return parts.length >= 2 ? `${String(parts[0])}/${String(parts[1])}` : "";
 }
 
 /** 文件 → 别名表的键（去扩展名，`x.d.ts` 与 `x.ts` 归一到同一个）。 */
 function relativeKey(file: string): string {
+  // win32 的本地分隔符先归一成 `/`：键在建表侧（`packageRelative`）同样归一，两处才对得上。
+  const normalized = file.split(sep).join("/");
   const marker = "/packages/";
-  const tail = file.slice(file.lastIndexOf(marker) + marker.length);
+  const tail = normalized.slice(normalized.lastIndexOf(marker) + marker.length);
   // 声明树是 `x.d.ts`、源码树是 `x.ts`——`.d.ts` 要整个去掉，别只去 `.ts`。
   return tail.replace(/(\.d)?\.[jt]sx?$/u, "");
 }
@@ -426,7 +429,7 @@ function viaAlias(name: string, context: EmitContext): TypeDecl | undefined {
     name,
     owner:
       "declared" in alias
-        ? alias.declared.file.includes("/packages/")
+        ? alias.declared.file.split(sep).join("/").includes("/packages/")
           ? packageOf(alias.declared.file)
           : ""
         : alias.pkg,

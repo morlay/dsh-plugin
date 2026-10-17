@@ -2,7 +2,7 @@
 // 行清单写在各自 `packages/bundles/*/tsdown.config.ts` 里。
 
 import { stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
@@ -37,7 +37,9 @@ async function entryExists(path: string): Promise<boolean> {
 async function sourcePathOf(options: PatchBundleOptions): Promise<string> {
   const file = fileURLToPath(options.from);
   for (let directory = dirname(file); ; directory = dirname(directory)) {
-    if (await entryExists(join(directory, "pnpm-workspace.yaml"))) return relative(directory, file);
+    // 归一成 `/`：生成物是跨平台的仓库相对路径，win32 原生分隔符会写进头注释。
+    if (await entryExists(join(directory, "pnpm-workspace.yaml")))
+      return relative(directory, file).split(sep).join("/");
     if (dirname(directory) === directory) {
       throw new Error(`devkit: no pnpm-workspace.yaml above ${file}`);
     }

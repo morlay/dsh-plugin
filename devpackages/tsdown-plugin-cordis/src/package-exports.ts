@@ -74,16 +74,20 @@ function exportKey(entry: string): string {
   return entry === "index" ? "." : `./${entry}`;
 }
 
-// 每个要导出的入口都拿到自己那份产物了吗（host 面等 ESM、client 半等 CJS）——按「产物齐」判断，
-// 多格式构建分多轮进 `build:done`，不必猜哪一轮是最后一轮。
+// 每个要导出的入口都拿到自己那份产物了吗（host 面等 ESM、client 半等 ESM 库 + CJS 工厂）——按「产物齐」
+// 判断，多格式构建分多轮进 `build:done`，不必猜哪一轮是最后一轮。
 function complete(run: BuildRun, options: PackageExportsOptions): boolean {
   const hidden = new Set(options.hidden ?? []);
   return Object.keys(options.entries).every((entry) => {
     if (hidden.has(entry)) return true;
     const files = run.entries.get(entry)?.runtime ?? [];
-    // client 面等的是 **ESM 库**产物（`./client` 的出口就是它），host 面等 ESM。
-    const runtime = entry === options.clientEntry ? pickLibrary(files) : pick(files);
-    return runtime !== undefined;
+    if (entry === options.clientEntry) {
+      // client 面两种产物都要等齐：多格式分轮到达时，只等 ESM 库会先把清单写成
+      // `default → .mjs`（宿主按 `default` 取注册脚本，拿到裸 ESM 必然解析失败），
+      // 后到的 CJS 工厂轮又被「清单只落一次」挡掉，错误从此固化。
+      return pickLibrary(files) !== undefined && pickFactory(files) !== undefined;
+    }
+    return pick(files) !== undefined;
   });
 }
 

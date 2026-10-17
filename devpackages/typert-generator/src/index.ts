@@ -1299,7 +1299,11 @@ export function packageRelative(file: string): string {
   const marker = `${sep}packages${sep}`;
   const index = file.lastIndexOf(marker);
   const tail = index < 0 ? file : file.slice(index + marker.length);
-  return tail.replace(/\.[jt]sx?$/u, "");
+  // 尾段归一成 `/`：查键那侧（`relativeKey`）按 `/` 切分，win32 下两处必须同一套分隔符。
+  return tail
+    .replace(/\.[jt]sx?$/u, "")
+    .split(sep)
+    .join("/");
 }
 
 /** 相对说明符 → 绝对路径（`.ts` / `.tsx` / `/index.ts` 依次试）。 */
