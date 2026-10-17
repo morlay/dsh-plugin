@@ -1,16 +1,12 @@
-// client 半：**只把上游 `modules` 服务面补上**，别的什么都不做。
+// client 半：两件事，都是**把上游那条链缺的面补上**。
 //
-// 为什么需要它：上游 `ui-settings-general` 的 client 插件从 0.2.x 起 inject `modules`，并真的用两个成员
-// （`entries.releaseChange` 是 Host release 变更提示的数据源、`entries.dismissRelease` 记下"已读"）。
-// 我们的装配停用了上游 `client-modules` 行——它的宿主半提供模块表 roster、`/plugins` 路由与 boot 注入，
-// 页面与资源改由本包的宿主半（vite dev server）提供——于是在浏览器侧**没有**这个服务，那一行永远等不到
-// inject 满足、`apply` 不执行，`sidebar.settings` 槽没有占位者，侧栏左下角的设置入口整个消失。
-//
-// 最小实现的口径：本链没有"模块表条目"这回事，所以
-// · `releaseChange` 恒 `undefined`（没有跨 Host 版本的插件更新要提示），
-// · `dismissRelease()` 空操作（提示不出现，也没有"已读"要记），
-// · `invalidate(id)` 空操作（上游动态插件运行器用它做模块失效；它下一步就去要 `__ModuleLoader__` 模块表，
-//   在我们这里会自己报缺 sink——错误信息比"不是函数"清楚得多）。
+// 1. `modules` 服务面：上游 `ui-settings-general` 的 client 插件 inject 它（有它就忽略 peer），
+//    我们的装配停用了上游 `client-modules` 行，所以这里补一个最小实现（见文件头注释与 README）。
+// 2. 终端恢复兜底：上游 `api-terminal-controller` 的客户端把「侧栏 tab → 终端 id」记在 `bindings` 里
+//    （`dsh.terminal.binding.v1.[sessionId, contentId]`），而 Host 侧 `close()` 会把那个 id 记进
+//    `closedIds` 并且**永不再接受**（`retain()` 回 `terminal/unavailable`）。布局与 binding 会把这个
+//    已失效的 id 一直带回来，`TerminalView` 的 `createWhenMissing` 只在「没有 saved id」时才分配新终端
+//    —— 于是面板永远停在"此终端已不存在，请新建终端"，点"新建终端"复用的还是它。
 import type { Context } from "@deepseek-ai/cordis";
 
 /** 恒 `undefined` 的可订阅快照（`useSyncExternalStore` 的入参形状）。 */
@@ -20,7 +16,7 @@ const NO_RELEASE_CHANGE = {
 };
 
 /**
- * 发布 `modules` 服务（上游同名的服务面，见文件头）。
+ * 浏览器侧的根插件。
  *
  * @param ctx - 浏览器侧根上下文。
  */
@@ -31,5 +27,75 @@ export function apply(ctx: Context): void {
       dismissRelease: () => {},
     },
     invalidate: () => {},
+  });
+  installTerminalRecovery(ctx);
+}
+
+/** 终端 id 与它在宿主清单里的存在性（清单未加载时按"不在"处理，见下面的取舍）。 */
+interface TerminalInventoryLike {
+  readonly items?: Map<string, unknown>;
+}
+interface TerminalsLike {
+  readonly bindings?: {
+    get?: (sessionId: string, contentId: string) => string | undefined;
+    delete?: (sessionId: string, contentId: string) => void;
+  };
+  readonly inventories?: Map<string, TerminalInventoryLike>;
+  readonly views?: Map<string, Map<string, unknown>>;
+}
+type ViewFn = (
+  sessionId: string,
+  key: string,
+  contentId: string,
+  terminalId?: string,
+  shellPath?: string,
+) => unknown;
+
+/**
+ * 终端恢复兜底：`view` 之前先**对账**，把宿主已经不认的终端 id 当新 tab 处理。
+ *
+ * 上游 `TerminalView` 的语义是「新 tab 才分配」（`createWhenMissing = saved === undefined`），而
+ * `saved = terminalId ?? bindings.get(sessionId, contentId)`：UI 传的 `terminalId` 实测是 `undefined`，
+ * 所以决定权全在 `bindings` —— 它不随宿主侧关闭状态失效。清单里没有这个 id（宿主重启过、或那个终端被
+ * 关过）时删掉这条 binding，让上游按新 tab 分配；清单里有则原样透传，恢复能力不变。清单**没加载**时按
+ * 「不在」处理：那时用户要的就是打开一个终端，让它重新分配比卡在死状态里强。
+ *
+ * 注意：`bindings` / `inventories` 是上游 Service 的私有字段，`view` 在其原型上（实例属性覆盖无效，
+ * 见 cordis 的 Service 代理）——所以这里改的是原型。这是**绕过上游缺陷**，等上游把 binding 与关闭状态
+ * 对上账就该删掉。
+ *
+ * @param ctx - 浏览器侧根上下文。
+ */
+function installTerminalRecovery(ctx: Context): void {
+  ctx.inject(["webTerminals"], (scope) => {
+    const terminals = scope.get("webTerminals") as TerminalsLike | undefined;
+    if (terminals === undefined) return;
+    const proto = Object.getPrototypeOf(terminals) as {
+      view?: ViewFn;
+      __terminalRecovery?: boolean;
+    };
+    if (proto.view === undefined || proto.__terminalRecovery === true) return;
+    proto.__terminalRecovery = true;
+    const original = proto.view;
+    proto.view = function (
+      this: TerminalsLike,
+      sessionId: string,
+      key: string,
+      contentId: string,
+      terminalId?: string,
+      shellPath?: string,
+    ) {
+      const bound = terminalId ?? this.bindings?.get?.(sessionId, contentId);
+      const alive =
+        bound === undefined || this.inventories?.get(sessionId)?.items?.has(bound) === true;
+      if (!alive) {
+        this.bindings?.delete?.(sessionId, contentId);
+        // 已存在的视图**不会**重新构造（`view()` 里只在没有它时才 new），而它的 `createWhenMissing` 早就是
+        // false 了——不丢掉它，清 binding 也没用。
+        this.views?.get(sessionId)?.delete(key);
+        return original.call(this, sessionId, key, contentId, undefined, shellPath);
+      }
+      return original.call(this, sessionId, key, contentId, terminalId, shellPath);
+    };
   });
 }
