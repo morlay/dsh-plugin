@@ -165,12 +165,14 @@ describe("packageExportsHook 写回的 dsh 版本要求", () => {
     });
   });
 
-  it("不是 bundle 的包不写（engines 不是每一层的要求）", async () => {
+  it("不是 bundle 的插件包照写（engines.dsh 是每个插件包都要的）", async () => {
     const directory = await makePackage();
     await withHarnessVersion("0.2.1-alpha.5", async () => {
       await write(directory, [ALL_ARTIFACTS]);
     });
-    expect((await manifestOf(directory))["engines"]).toBeUndefined();
+    expect((await manifestOf(directory))["engines"]).toEqual({
+      dsh: ">= 0.2.1-alpha.5 < 0.2.2",
+    });
   });
 
   it("env 缺失或认不出该形态时不写（清单原值留着，构建不因此失败）", async () => {

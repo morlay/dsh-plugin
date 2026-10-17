@@ -18,7 +18,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@morlay/dsh-desktop-host": "workspace:*",
     "@morlay/dsh-desktop-shell": "workspace:*",
@@ -32,9 +32,9 @@
     "tar": "^7.5.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-client-connection": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
     "@local/devkit": "workspace:*",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@morlay/dsh-oxc-node": "workspace:^",

@@ -50,7 +50,7 @@
     "@morlay/dsh-tool-guidance": "workspace:*"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@local/devkit": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0"
@@ -60,7 +60,7 @@
   },
   "icon": "./icon.svg",
   "engines": {
-    "dsh": ">= 0.2.1-alpha.5 < 0.2.2"
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
   },
   "dsh": {
     "bundle": {

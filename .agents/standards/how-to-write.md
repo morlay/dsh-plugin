@@ -62,11 +62,12 @@
   default: dist/client.cjs }`，**不参与 ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.`
   的 require 变体，包根出口就指到了 client 半。两条条件各等自己那份产物：只有库或只有工厂时构建**推迟**写回
   （判据见 `package-exports.spec.ts`）。
-- **装配面（`dsh.bundle` 的包）带 `engines.dsh`，也由构建写回**：上游装配前的
+- **`engines.dsh` 是每个插件包都要的，也由构建写回**：上游装配前的
   `evaluatePluginCompatibility` 优先认这个字段，**有它就忽略 peer 范围**——peer 的 `^X.Y.Z-pre` 在 SemVer
   下只被同一 `major.minor.patch` 元组的候选接受，跨不得版本。范围从构建环境里的
   `DEEPSEEK_HARNESS_VERSION` 推导成 `>= <当前版本> < <major>.<minor>.<patch+1>`（env 缺失或认不出该形态
-  时留原值不写，构建不因此失败）。**没有源码入口的数据包**（只有 patch / locale / icon 的那种）进不了
+  时留原值不写，构建不因此失败）。**不按 `dsh.bundle` 分档**：预检逐行做，非 bundle 的插件行缺了它就只能
+  按 peer 判，跨 patch 线必被拒。**没有源码入口的数据包**（只有 patch / locale / icon 的那种）进不了
   tsdown 的 `build:done`，它的 `build` 脚本就是一行 `pnpm exec dshdev manifest`——与钩子共用同一份写回
   实现，口径不会两处漂移。
 - **固定面按文件存在性补**：`./package.json` 一律在；`./cordis.patch.yml` 有该文件才有；`./locale/*.json`

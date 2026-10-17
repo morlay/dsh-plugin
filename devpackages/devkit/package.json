@@ -15,8 +15,8 @@
   },
   "devDependencies": {
     "@browserbasehq/stagehand": "^4.2.1",
-    "@deepseek-ai/cordis-plugin-include": "workspace:*",
-    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@types/js-yaml": "^4.0.9",
     "esbuild": "^0.28.2",
     "js-yaml": "^4.1.0",

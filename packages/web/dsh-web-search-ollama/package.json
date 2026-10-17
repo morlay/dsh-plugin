@@ -55,9 +55,9 @@
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cosmokit": "workspace:*",
-    "@deepseek-ai/dsh-client-locale": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@deepseek-ai/cosmokit": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@morlay/dsh-client-ui-primitives": "workspace:*"
   },
   "peerDependencies": {
@@ -77,5 +77,8 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
   }
 }
