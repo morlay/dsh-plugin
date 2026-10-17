@@ -69,8 +69,8 @@ export async function emitDts(options: EmitDtsOptions): Promise<void> {
       chunkFileNames: "[name]-[hash].d.mts",
       sourcemap: false,
     });
-    // 双格式包的 client 半在构建里是 CJS，出口清单的 `types` 指 `.d.cts`（tsdown 的双格式各产一份声明）；
-    // 声明内容两者一致，所以这里把 ESM 那份复制成 CJS 那份，清单不必改口径。
+    // 双格式包的 client 半在产物里出 ESM 与 CJS 两份，出口清单的 `types` 指 ESM 那份（`.d.mts`）；
+    // 声明内容两者一致，所以这里把 ESM 那份复制成 CJS 那份，CJS 消费方（工厂那条链）也有声明可读。
     if (Object.hasOwn(entries, "client")) {
       const esm = join(outDir, "client.d.mts");
       if (await pathExists(esm)) await copyFile(esm, join(outDir, "client.d.cts"));

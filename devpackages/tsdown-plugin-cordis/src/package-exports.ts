@@ -1,5 +1,6 @@
 // 包清单（`exports` / `publishConfig.exports`）由构建从产物推导并写回 `package.json`，不手写：
-// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态是 CJS 单文件 bundle。
+// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态是 **ESM 库**（它那份 CJS
+// 工厂由 boot 按路径加载，进出口）。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
@@ -11,7 +12,7 @@ type BuildDoneHook = TsdownHooks["build:done"];
 export interface PackageExportsOptions {
   // 入口名 → 源码路径（`index` 是包根出口 `.`）。
   readonly entries: Record<string, string>;
-  // client 半的入口名；有它时该出口按 CJS 单文件写。
+  // client 半的入口名；有它时该出口按 **ESM 库**写（工厂形态不进出口，见 `pickLibrary`）。
   readonly clientEntry?: string;
   // 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。
   readonly hidden?: readonly string[];
@@ -58,15 +59,12 @@ function pick(files: readonly string[]): string | undefined {
   return files.find((file) => file.endsWith(".mjs") || file.endsWith(".js"));
 }
 
-// client 面的两种产物各归其位：**ESM 库**给 `import` 的消费方（vite / node resolver），**CJS 工厂**给
-// `require` 的消费方（`__ModuleLoader__.load` 的注册脚本那条链）。两者都要进出口——只写 `import` 时，
-// 条件里没有 `require`，一个 CJS 消费方会落到 `default` 拿到 `.mjs`，直接 `ERR_REQUIRE_ESM`。
+// client 面取 **ESM 库**产物：`./client` 是给 `import` 消费的普通库（vite / node resolver）。CJS 工厂
+// 不进 exports——它是 `__ModuleLoader__.load` 的注册脚本，**由 boot 按路径加载**（部署闭包照 `files`
+// 拷 `dist`），不是给 `import` / `require` 用的模块；条件里给它 `require` / `default` 只会让按 `default`
+// 兜底解析的消费方拿到带 `window.__ModuleLoader__` 外壳的工厂字节。
 function pickLibrary(files: readonly string[]): string | undefined {
   return files.find((file) => file.endsWith(".mjs"));
-}
-
-function pickFactory(files: readonly string[]): string | undefined {
-  return files.find((file) => file.endsWith(".cjs"));
 }
 
 // 出口键：`index` 是包根，其余按入口名。
@@ -147,20 +145,21 @@ async function writeManifest(
     if (found === undefined) continue;
 
     if (entry === options.clientEntry) {
-      // client 面出口：开发态指源码；发布态按条件分派——ESM 库给 `import`，CJS 工厂给 `require`，
-      // `default` 也指向 CJS（它是"没匹配上任何条件"的兜底，CJS 消费方正是走这条）。
+      // client 面出口：开发态指源码，发布态指 **ESM 库**产物 + 它的类型声明。CJS 工厂是模块表的注册
+      // 脚本（按路径加载），不进出口——理由见 `pickLibrary`。写回内容也因此不取决于哪一轮先攒齐产物：
+      // 两轮（cjs / esm）里只有 esm 那轮满足 {@link complete}，写出的都是这一种形态。
       const library = pickLibrary(found.runtime);
       if (library === undefined) continue;
-      const factory = pickFactory(found.runtime);
       const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
-      const conditions: Record<string, unknown> = {
-        import: artifact(library),
-        ...(factory === undefined ? {} : { require: artifact(factory) }),
-        default: artifact(factory ?? library),
-      };
       clientDev = entrySource;
       clientPublished =
-        declarations === undefined ? conditions : { types: artifact(declarations), ...conditions };
+        declarations === undefined
+          ? { import: artifact(library), default: artifact(library) }
+          : {
+              types: artifact(declarations),
+              import: artifact(library),
+              default: artifact(library),
+            };
       continue;
     }
 

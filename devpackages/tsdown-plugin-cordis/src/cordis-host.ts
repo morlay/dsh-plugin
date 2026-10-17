@@ -169,7 +169,8 @@ export async function buildCordisConfig(
     sourcemap: false,
     clean: true,
     // 清单由构建写回（`exports` 指源码、`publishConfig.exports` 指产物）：出口按入口推导，
-    // client 半固定成 CJS 单文件形态，手写的面（locale、cordis.patch.yml）在生成器里按文件存在性补。
+    // client 半固定成 **ESM 库**形态（它那份 CJS 工厂由 boot 按路径加载，不进出口），手写的面
+    // （locale、cordis.patch.yml）在生成器里按文件存在性补。
     exports: false,
     hooks: {
       "build:done": buildDone(

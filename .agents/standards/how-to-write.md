@@ -37,9 +37,13 @@
 - **client 半的开发态出口回源**：`./client` 就是一条指 `src/client/index.ts` 的字符串（不是
   `{ types, default }` 那种两份同值的形态）——与 host 面同一条规则。上游把这个路径拼成绝对路径后
   **直接读字节**（浏览器模块工厂执行的就是那份字节），那份 TS 由 `dev-client-bundles`
-  （`dshdev dev` 装进 profile 的那一行）现场转换；**发布态**才写成 `{ types, default }` 取
-  `dist/client.cjs`——CJS 单文件：多文件产物会破坏 ModuleLoader 手递，约束与理由见
-  [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)。
+  （`dshdev dev` 装进 profile 的那一行）现场转换；**发布态**写成 `{ types, import, default }`，三者都指
+  ESM 库 `dist/client.mjs`——消费方（`dsh-client-modules` 的解析器优先取 `import`，见
+  [`resolve.ts`](../../packages/client/dsh-client-modules/src/resolve.ts)）按它取普通库。**CJS 工厂不在
+  `exports` 里**：它是自包含单文件（多文件产物会破坏 ModuleLoader 手递，约束与理由见
+  [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)），
+  但那是 `__ModuleLoader__.load` 的注册脚本，由 boot **按路径**加载；写进 `require` / `default` 只会让
+  按兜底条件解析的消费方拿到带 `window.__ModuleLoader__` 外壳的字节。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
 - **bundle 的 patch 由构建生成，不手写**：bundle 的 `tsdown.config.ts` 调 devkit 的 patch 插件写出包根那份
@@ -50,10 +54,11 @@
   在 `build:done` 里按**入口**推导后写回 `package.json`——顶层指源码（workspace 内直连 `src`），发布态
   指产物；手改这两段会在下次 `just build` 被覆盖。要加一个面就加一个入口（`src/<面>.ts` +
   `tsdown.config.ts` 的 `entries`）。入口约定、生成规则与理由都在
-  [`devpackages/tsdown-plugin-cordis/src/package-exports.ts`](../../devpackages/tsdown-plugin-cordis/src/package-exports.ts)。
-- **client 半只有一个形态（发布态）**：它是 CJS 单文件 bundle，出口固定写成 `{ types, default }`，**不参与
-  ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的 require 变体，包根出口就指到了
-  client 半。
+  [`devpackages/tsdown-plugin-cordis/src/package-exports.ts`](../../devpackages/tsdown-plugin-cordis/src/package-exports.ts)；
+  写出的两份清单由 `publish-exports.spec.ts`（已提交的清单）与 `package-exports.spec.ts`（写回行为本身）守。
+- **client 半的发布态是 ESM 库一种形态**：出口固定写成 `{ types, import, default }`（都指
+  `dist/client.mjs`），**不参与 ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的
+  require 变体，包根出口就指到了 client 半。
 - **固定面按文件存在性补**：`./package.json` 一律在；`./cordis.patch.yml` 有该文件才有；`./locale/*.json`
   有 `locale/en.json` 才有。守卫见
   `devpackages/tsdown-plugin-cordis/src/__tests__/publish-exports.spec.ts`（发布态的键集合必须覆盖顶层的键集合——
