@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-session-mode",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Session modes for dsh: coding / chat as data — a mode is a persona plus its tool lists, its upstream policy lists, its instruction / skill-catalog / runtime-context switches and an optional default model. The host applies the current mode to each session, and the chip in the composer sits beside the official agent-preset entry, which stays.",
   "keywords": [
     "dsh",
@@ -47,7 +47,7 @@
       "./client": {
         "types": "./dist/client.d.mts",
         "import": "./dist/client.mjs",
-        "default": "./dist/client.mjs"
+        "default": "./dist/client.cjs"
       },
       "./locale/*.json": "./locale/*.json"
     }
@@ -57,6 +57,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@morlay/dsh-client-ui-primitives": "workspace:*",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -119,7 +120,6 @@
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
-    "@morlay/dsh-client-ui-primitives": "workspace:*",
     "@morlay/dsh-context-assembler": "workspace:*",
     "react": "^18.2.0"
   },

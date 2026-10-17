@@ -1,6 +1,6 @@
 // 包清单（`exports` / `publishConfig.exports`）由构建从产物推导并写回 `package.json`，不手写：
-// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态是 **ESM 库**（它那份 CJS
-// 工厂由 boot 按路径加载，进出口）。
+// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态两条条件各指一份产物——
+// `import` 指 **ESM 库**、`default` 兜底指 **CJS 工厂**（理由见 `pickLibrary` / `pickFactory`）。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
@@ -12,7 +12,7 @@ type BuildDoneHook = TsdownHooks["build:done"];
 export interface PackageExportsOptions {
   // 入口名 → 源码路径（`index` 是包根出口 `.`）。
   readonly entries: Record<string, string>;
-  // client 半的入口名；有它时该出口按 **ESM 库**写（工厂形态不进出口，见 `pickLibrary`）。
+  // client 半的入口名；有它时该出口按 **库 + 工厂**两条条件写（见 `pickLibrary` / `pickFactory`）。
   readonly clientEntry?: string;
   // 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。
   readonly hidden?: readonly string[];
@@ -85,12 +85,18 @@ function pick(files: readonly string[]): string | undefined {
   return files.find((file) => file.endsWith(".mjs") || file.endsWith(".js"));
 }
 
-// client 面取 **ESM 库**产物：`./client` 是给 `import` 消费的普通库（vite / node resolver）。CJS 工厂
-// 不进 exports——它是 `__ModuleLoader__.load` 的注册脚本，**由 boot 按路径加载**（部署闭包照 `files`
-// 拷 `dist`），不是给 `import` / `require` 用的模块；条件里给它 `require` / `default` 只会让按 `default`
-// 兜底解析的消费方拿到带 `window.__ModuleLoader__` 外壳的工厂字节。
+// client 面取 **ESM 库**产物：`./client` 的 `import` 条件是给按 ESM 解析的消费方（vite / node 的
+// resolver）的一份普通库，包内相对引用与样式都已内联成单文件。
 function pickLibrary(files: readonly string[]): string | undefined {
   return files.find((file) => file.endsWith(".mjs"));
+}
+
+// client 面另取 **CJS 工厂**产物，挂在 `./client` 的 `default` 上：那是 `__ModuleLoader__.load` 的注册
+// 脚本，按包名 + `./client` 解析并读字节的加载方走的就是这条**兜底**条件（CJS 的 `require` /
+// `require.resolve` 只认 `require` / `default`，而工厂没有 `require` 键——它是单文件、只该被读一次）。
+// 挂 `import` 反而会把工厂字节送给要普通库的 ESM 消费方。
+function pickFactory(files: readonly string[]): string | undefined {
+  return files.find((file) => file.endsWith(".cjs"));
 }
 
 // 出口键：`index` 是包根，其余按入口名。
@@ -98,16 +104,18 @@ function exportKey(entry: string): string {
   return entry === "index" ? "." : `./${entry}`;
 }
 
-// 每个要导出的入口都拿到自己那份产物了吗（host 面等 ESM、client 半等 CJS）——按「产物齐」判断，
+// 每个要导出的入口都拿到自己那份产物了吗（host 面等 ESM、client 半等库与工厂两份）——按「产物齐」判断，
 // 多格式构建分多轮进 `build:done`，不必猜哪一轮是最后一轮。
 function complete(run: BuildRun, options: PackageExportsOptions): boolean {
   const hidden = new Set(options.hidden ?? []);
   return Object.keys(options.entries).every((entry) => {
     if (hidden.has(entry)) return true;
     const files = run.entries.get(entry)?.runtime ?? [];
-    // client 面等的是 **ESM 库**产物（`./client` 的出口就是它），host 面等 ESM。
-    const runtime = entry === options.clientEntry ? pickLibrary(files) : pick(files);
-    return runtime !== undefined;
+    // client 面的两条条件各指一份产物，缺一份就写不出完整的 `./client`：`import` 等 ESM 库、`default`
+    // 等 CJS 工厂（两轮各来一份）。
+    return entry === options.clientEntry
+      ? pickLibrary(files) !== undefined && pickFactory(files) !== undefined
+      : pick(files) !== undefined;
   });
 }
 
@@ -186,20 +194,21 @@ async function writeManifest(
     if (found === undefined) continue;
 
     if (entry === options.clientEntry) {
-      // client 面出口：开发态指源码，发布态指 **ESM 库**产物 + 它的类型声明。CJS 工厂是模块表的注册
-      // 脚本（按路径加载），不进出口——理由见 `pickLibrary`。写回内容也因此不取决于哪一轮先攒齐产物：
-      // 两轮（cjs / esm）里只有 esm 那轮满足 {@link complete}，写出的都是这一种形态。
+      // client 面出口：开发态指源码，发布态指**两份产物 + 类型声明**——`import` 给按 ESM 解析的消费方、
+      // `default` 兜底留给读字节的加载方（工厂是模块表的注册脚本）。写回内容也因此不取决于哪一轮先攒齐
+      // 产物：{@link complete} 要求两份都在，两轮里只有齐了的那一轮会写。
       const library = pickLibrary(found.runtime);
-      if (library === undefined) continue;
+      const factory = pickFactory(found.runtime);
+      if (library === undefined || factory === undefined) continue;
       const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
       clientDev = entrySource;
       clientPublished =
         declarations === undefined
-          ? { import: artifact(library), default: artifact(library) }
+          ? { import: artifact(library), default: artifact(factory) }
           : {
               types: artifact(declarations),
               import: artifact(library),
-              default: artifact(library),
+              default: artifact(factory),
             };
       continue;
     }

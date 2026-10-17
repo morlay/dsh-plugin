@@ -1,11 +1,11 @@
 // 出口清单的**写回行为**：`publish-exports.spec.ts` 守的是已提交的清单，这里守生成它的那一步。
 //
-// 判据一句话：client 出口只出 **ESM 库**一种形态——CJS 工厂是模块表的注册脚本（`__ModuleLoader__.load`
-// 的调用者按**路径**加载它），不是给 `import` / `require` 用的模块；把它写进 `require` / `default` 只会
-// 让按 `default` 兜底解析的消费方拿到工厂字节（`window.__ModuleLoader__` 外壳），不是普通模块。
+// 判据一句话：client 出口的两个条件各指一份产物——`import` 指 **ESM 库**（按 ESM 解析的消费方拿它当普通
+// 库用），`default` 兜底指 **CJS 工厂**（`__ModuleLoader__.load` 的注册脚本：按包名 + `./client` 解析
+// 并读字节的加载方走的正是这条兜底链）。
 //
-// 另有一条判据同时被两条用例覆盖：写回内容不该取决于「哪一轮构建先攒齐产物」——第一轮就齐的包与
-// 第二轮才齐的包必须写出同一份 `./client`。
+// 另有一条判据同时被三条用例覆盖：写回内容不该取决于「哪一轮构建先攒齐产物」——库与工厂两份都齐了才写，
+// 且写出的永远是同一份 `./client`。
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +40,19 @@ const ENTRIES = {
   client: "./src/client/index.ts",
 } as const;
 
-const ALL_ESM = ["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"] as const;
+// tsdown 的两轮产物（esm 一轮、cjs 一轮）：host 面等 ESM；client 面等**库与工厂两份都齐**。
+const ALL_ARTIFACTS = [
+  "index.mjs",
+  "rows.mjs",
+  "client.mjs",
+  "client.d.mts",
+  "index.cjs",
+  "rows.cjs",
+  "client.cjs",
+] as const;
+
+// 只有 ESM 那一轮：host 面齐了，client 面的 CJS 工厂还没落位。
+const ESM_ROUND = ["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"] as const;
 
 const created: string[] = [];
 
@@ -97,29 +109,35 @@ async function withHarnessVersion(version: string | undefined, run: () => Promis
 }
 
 describe("packageExportsHook 写回的 client 出口", () => {
-  it("一轮就攒齐时：client 是 ESM 库一种形态", async () => {
+  it("两轮产物都齐时：`import` 指 ESM 库、`default` 兜底指 CJS 工厂", async () => {
     const directory = await makePackage();
-    await write(directory, [ALL_ESM]);
+    await write(directory, [ALL_ARTIFACTS]);
     expect(await publishedClient(directory)).toEqual({
       types: "./dist/client.d.mts",
       import: "./dist/client.mjs",
-      default: "./dist/client.mjs",
+      default: "./dist/client.cjs",
     });
   });
 
-  it("CJS 轮先到、ESM 轮才攒齐时：形态仍只有 ESM 库（写回不取决于哪一轮先到）", async () => {
+  it("CJS 轮先到、ESM 轮才攒齐时：形态与一轮就齐时相同（写回不取决于哪一轮先到）", async () => {
     const directory = await makePackage();
     await write(directory, [
       // tsdown 的两轮里 cjs 先到：这一轮 host 面还没有 ESM 产物，写回推迟。
       ["index.cjs", "rows.cjs", "client.cjs"],
       // esm 轮到齐（run 里此时累积了两轮的产物，client 既有工厂也有库）。
-      ALL_ESM,
+      ESM_ROUND,
     ]);
     expect(await publishedClient(directory)).toEqual({
       types: "./dist/client.d.mts",
       import: "./dist/client.mjs",
-      default: "./dist/client.mjs",
+      default: "./dist/client.cjs",
     });
+  });
+
+  it("ESM 轮已到、CJS 轮未到时也推迟：`default` 指的工厂还没落位", async () => {
+    const directory = await makePackage();
+    await write(directory, [ESM_ROUND]);
+    expect(await publishedClient(directory)).toBeUndefined();
   });
 });
 
@@ -129,7 +147,7 @@ describe("packageExportsHook 写回的 dsh 版本要求", () => {
   it("bundle 包：engines.dsh 由 DEEPSEEK_HARNESS_VERSION 推导（当前版本到下一个 patch）", async () => {
     const directory = await makePackage(BUNDLE);
     await withHarnessVersion("0.2.1-alpha.5", async () => {
-      await write(directory, [ALL_ESM]);
+      await write(directory, [ALL_ARTIFACTS]);
     });
     expect((await manifestOf(directory))["engines"]).toEqual({
       dsh: ">= 0.2.1-alpha.5 < 0.2.2",
@@ -139,7 +157,7 @@ describe("packageExportsHook 写回的 dsh 版本要求", () => {
   it("已有 engines 的其它键保留（只加 dsh 这一条）", async () => {
     const directory = await makePackage({ ...BUNDLE, engines: { node: ">=22" } });
     await withHarnessVersion("0.1.7-rc.1", async () => {
-      await write(directory, [ALL_ESM]);
+      await write(directory, [ALL_ARTIFACTS]);
     });
     expect((await manifestOf(directory))["engines"]).toEqual({
       node: ">=22",
@@ -150,7 +168,7 @@ describe("packageExportsHook 写回的 dsh 版本要求", () => {
   it("不是 bundle 的包不写（engines 不是每一层的要求）", async () => {
     const directory = await makePackage();
     await withHarnessVersion("0.2.1-alpha.5", async () => {
-      await write(directory, [ALL_ESM]);
+      await write(directory, [ALL_ARTIFACTS]);
     });
     expect((await manifestOf(directory))["engines"]).toBeUndefined();
   });
@@ -159,7 +177,7 @@ describe("packageExportsHook 写回的 dsh 版本要求", () => {
     for (const version of [undefined, "", "workspace:*", "vendor/deepseek-harness"]) {
       const directory = await makePackage(BUNDLE);
       await withHarnessVersion(version, async () => {
-        await write(directory, [ALL_ESM]);
+        await write(directory, [ALL_ARTIFACTS]);
       });
       expect((await manifestOf(directory))["engines"], String(version)).toBeUndefined();
     }

@@ -37,13 +37,15 @@
 - **client 半的开发态出口回源**：`./client` 就是一条指 `src/client/index.ts` 的字符串（不是
   `{ types, default }` 那种两份同值的形态）——与 host 面同一条规则。上游把这个路径拼成绝对路径后
   **直接读字节**（浏览器模块工厂执行的就是那份字节），那份 TS 由 `dev-client-bundles`
-  （`dshdev dev` 装进 profile 的那一行）现场转换；**发布态**写成 `{ types, import, default }`，三者都指
-  ESM 库 `dist/client.mjs`——消费方（`dsh-client-modules` 的解析器优先取 `import`，见
-  [`resolve.ts`](../../packages/client/dsh-client-modules/src/resolve.ts)）按它取普通库。**CJS 工厂不在
-  `exports` 里**：它是自包含单文件（多文件产物会破坏 ModuleLoader 手递，约束与理由见
+  （`dshdev dev` 装进 profile 的那一行）现场转换；**发布态**写成 `{ types, import, default }`，两个条件各指
+  一份产物：`types` 与 `import` 指 ESM 库 `dist/client.mjs`——按 ESM 解析的消费方（`dsh-client-modules`
+  的解析器优先取 `import`，见
+  [`resolve.ts`](../../packages/client/dsh-client-modules/src/resolve.ts)）按它取普通库；`default` 是**兜底**
+  条件，指 CJS 工厂 `dist/client.cjs`——按包名 + `./client` 解析并读字节的加载方走的正是它（CJS 的
+  `require` / `require.resolve` 只认 `require` / `default`），而它读到的必须是 `__ModuleLoader__.load` 的
+  注册脚本。工厂是自包含单文件（多文件产物会破坏 ModuleLoader 手递，约束与理由见
   [ADR-20260917-客户端bundle单文件与shadow渲染替换](../../packages/session/ui-conversation-message-actions/.agents/adrs/20260917-客户端bundle单文件与shadow渲染替换.md)），
-  但那是 `__ModuleLoader__.load` 的注册脚本，由 boot **按路径**加载；写进 `require` / `default` 只会让
-  按兜底条件解析的消费方拿到带 `window.__ModuleLoader__` 外壳的字节。
+  所以只许挂在 `default` 上：挂 `import` 会把工厂字节送给要普通库的 ESM 消费方。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
 - **bundle 的 patch 由构建生成，不手写**：bundle 的 `tsdown.config.ts` 调 devkit 的 patch 插件写出包根那份
@@ -56,9 +58,10 @@
   `tsdown.config.ts` 的 `entries`）。入口约定、生成规则与理由都在
   [`devpackages/tsdown-plugin-cordis/src/package-exports.ts`](../../devpackages/tsdown-plugin-cordis/src/package-exports.ts)；
   写出的两份清单由 `publish-exports.spec.ts`（已提交的清单）与 `package-exports.spec.ts`（写回行为本身）守。
-- **client 半的发布态是 ESM 库一种形态**：出口固定写成 `{ types, import, default }`（都指
-  `dist/client.mjs`），**不参与 ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.` 的
-  require 变体，包根出口就指到了 client 半。
+- **client 半的发布态出口按「库 + 工厂」两条条件写死**：`{ types, import: dist/client.mjs,
+  default: dist/client.cjs }`，**不参与 ESM / CJS 的格式推导**——让推导去猜，它会把 `client.cjs` 当成 `.`
+  的 require 变体，包根出口就指到了 client 半。两条条件各等自己那份产物：只有库或只有工厂时构建**推迟**写回
+  （判据见 `package-exports.spec.ts`）。
 - **装配面（`dsh.bundle` 的包）带 `engines.dsh`，也由构建写回**：上游装配前的
   `evaluatePluginCompatibility` 优先认这个字段，**有它就忽略 peer 范围**——peer 的 `^X.Y.Z-pre` 在 SemVer
   下只被同一 `major.minor.patch` 元组的候选接受，跨不得版本。范围从构建环境里的
