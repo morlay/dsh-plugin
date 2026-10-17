@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-cordis-assets",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "cordis client 产物的资产与样式处理：扩展名 → mime、`?raw` 内联、资产按策略内联成 `data:` 或落成独立文件、CSS 内联与作用域化。构建期（tsdown 插件）与运行期（现场打包给浏览器）共用同一份，两条链才不会各说各话。",
   "keywords": [
     "assets",
