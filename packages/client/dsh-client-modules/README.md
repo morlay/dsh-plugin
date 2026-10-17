@@ -11,3 +11,14 @@
 
 被 [`@local/dshdev`](../../../devpackages/dshdev/README.md) 经 `@morlay/web-custom-profile` 挂进 profile；上游内部
 文件按需 vendored 到各包的 `src/vendor/`（同步工具见 `@local/upstream-sync`）。
+
+## 浏览器侧：只补上游的 `modules` 服务面
+
+本包的 client 半不做别的事——它只把上游 `modules` 服务补上（`entries.releaseChange` 恒 `undefined`、
+`dismissRelease()` 与 `invalidate()` 空操作），见
+[`src/client/index.ts`](./src/client/index.ts) 的文件头。
+
+原因：上游 `ui-settings-general`（侧栏左下角那个设置入口的占位者）从 0.2.x 起 inject `modules`，
+而上游 `client-modules` 行已被 `web-custom-profile` 停用（模块表 roster 与 `/plugins` 路由由本链取代），
+浏览器侧于是没有这个服务——那一行永远等不到 inject 满足，设置入口整个消失。**停用一行就要补上它对外
+承诺的服务面**，这是本包必须带着 client 半的原因。

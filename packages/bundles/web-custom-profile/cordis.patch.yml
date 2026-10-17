@@ -16,6 +16,9 @@
 # 上游这两行在 dev 形态下用不到，**整行停用**（含它们提供的服务）：
 # · `client-modules`——combo 打包、工厂引导器、`/plugins` 路由与**模块表 roster**（`modules` 服务）都在
 #   这一行。页面、入口、资源与依赖预打包由 vite dev server 提供，模块表那一套不再需要；
+#   **但它对外承诺的 `modules` 服务面要有人接**：上游 `ui-settings-general` 的 client 插件 inject 它
+#   （设置入口占位者），缺了服务那一行就不 apply、侧栏左下角的设置入口整个消失——由
+#   `@morlay/dsh-client-modules` 的 client 半补上（见该包的 README）；
 # · `client-hmr`——热替换由 vite 的通道接管。
 #
 - id: modules
