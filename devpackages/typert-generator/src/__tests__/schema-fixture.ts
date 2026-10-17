@@ -35,7 +35,7 @@ export async function fixtureOfSource(source: string): Promise<Fixture> {
       declared.node["type"] === "TSTypeAliasDeclaration"
         ? zodOf(declared.node["typeAnnotation"], context)
         : objectOf(membersOf(declared, context), context);
-    // oxlint-disable-next-line typescript/no-implied-eval -- 测试辅助：把生成的 zod 表达式文本变成真 schema，
+    // oxlint-disable-next-line no-implied-eval -- 测试辅助：把生成的 zod 表达式文本变成真 schema，
     // 才好按上游的契约断言"接受 / 拒绝哪些值"。
     const schema = new Function("z", `return (${expression});`)(z) as {
       safeParse: (value: unknown) => { success: boolean };
