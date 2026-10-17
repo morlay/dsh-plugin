@@ -140,6 +140,16 @@ program
   });
 
 program
+  .command("manifest")
+  .description(
+    "write back the manifest in the current directory (exports + the dsh version requirement) for a data package that has no source entry",
+  )
+  .action(async () => {
+    const { runManifest } = await import("./manifest.ts");
+    await runManifest();
+  });
+
+program
   .command("publish")
   .description(
     "publish the package in the current directory if its version is new (CI step; don't run locally)",

@@ -59,6 +59,9 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "icon": "./icon.svg",
+  "engines": {
+    "dsh": ">= 0.2.1-alpha.5 < 0.2.2"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

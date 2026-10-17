@@ -339,6 +339,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../../vendor/deepseek-harness/packages/boot/app-boot
+      '@local/tsdown-plugin-cordis':
+        specifier: workspace:*
+        version: link:../tsdown-plugin-cordis
       '@morlay/dsh-desktop-host':
         specifier: workspace:*
         version: link:../../packages/desktop/dsh-desktop-host
@@ -382,9 +385,6 @@ importers:
       '@local/devkit':
         specifier: workspace:*
         version: link:../devkit
-      '@local/tsdown-plugin-cordis':
-        specifier: workspace:*
-        version: link:../tsdown-plugin-cordis
       '@oxc-node/core':
         specifier: ^0.1.6
         version: 0.1.7

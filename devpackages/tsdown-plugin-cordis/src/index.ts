@@ -9,7 +9,11 @@ export {
   LOCAL_PACKAGE_PREFIX,
   type CordisPluginOptions,
 } from "./cordis-host.ts";
-export { packageExportsHook, type PackageExportsOptions } from "./package-exports.ts";
+export {
+  packageExportsHook,
+  writePackageManifest,
+  type PackageExportsOptions,
+} from "./package-exports.ts";
 export { prebundleDependency, type PrebundledDependency } from "./prebundle.ts";
 export { standardDecoratorsPlugin, type StandardDecoratorsOptions } from "./standard-decorators.ts";
 export { compileCssModule, compileGlobalCss, compileStyleModule, cssInlinePlugins } from "./css.ts";

@@ -30,6 +30,32 @@ const PACKAGE_JSON_EXPORT = "./package.json";
 const PATCH_EXPORT = "./cordis.patch.yml";
 const LOCALE_EXPORT = "./locale/*.json";
 
+// 构建环境里的上游版本常量（`mise.toml` 的 `DEEPSEEK_HARNESS_VERSION`）：装配面的 dsh 要求由它推导。
+const HARNESS_VERSION_ENV = "DEEPSEEK_HARNESS_VERSION";
+
+// `X.Y.Z` 加可选 pre-release / build 后缀；其余形态（含 `workspace:`）不认。
+const SEMANTIC_VERSION = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/u;
+
+/**
+ * 装配面（清单里声明了 `dsh.bundle.patch` 的包）要写的 `engines.dsh`。
+ *
+ * 上游装配前的 `evaluatePluginCompatibility` 优先认这个字段——**有它就忽略 peer 范围**，而 peer 的
+ * `^X.Y.Z-pre` 在 SemVer 下只被同一 `major.minor.patch` 元组的候选接受，跨不得版本。范围取
+ * `>= <当前版本> < <major>.<minor>.<patch+1>`：当前 patch 线连同它后续的 pre-release 都算兼容，再往上
+ * 交回装配面拒绝（`includePrerelease` 下 `< 0.2.2` 也接受 `0.2.2-alpha.1`）。
+ *
+ * @param version - 构建环境里的 `DEEPSEEK_HARNESS_VERSION`。
+ * @returns 版本范围；env 缺失或不认得该形态时 `undefined`（不写，清单原值留着）。
+ */
+function bundleDshRange(version: string | undefined): string | undefined {
+  const value = version?.trim();
+  if (value === undefined || value === "") return undefined;
+  const matched = SEMANTIC_VERSION.exec(value);
+  if (matched === null) return undefined;
+  const [, major, minor, patch] = matched as unknown as [string, string, string, string];
+  return `>= ${value} < ${major}.${minor}.${String(Number(patch) + 1)}`;
+}
+
 interface EntryArtifacts {
   runtime: string[];
   declarations: string[];
@@ -115,6 +141,21 @@ export function packageExportsHook(options: PackageExportsOptions): BuildDoneHoo
     run.write = writeManifest(cwd, options, run);
     await run.write;
   };
+}
+
+/**
+ * 直接写回某个包的清单（不跑 tsdown）：给**没有源码入口的数据包**用——`dsh.bundle` 的纯数据包只有
+ * patch / locale / icon，没有可打包的入口，进不了 `build:done` 那条路。推导与钩子共用同一份
+ * {@link writeManifest}，所以固定面与 `engines.dsh` 的口径不会两处漂移。
+ *
+ * @param cwd - 包目录。
+ * @param options - 入口声明；数据包没有入口，缺省即空。
+ */
+export async function writePackageManifest(
+  cwd: string,
+  options: PackageExportsOptions = { entries: {} },
+): Promise<void> {
+  await writeManifest(cwd, options, { entries: new Map(), outDir: "dist" });
 }
 
 async function writeManifest(
@@ -215,6 +256,19 @@ async function writeManifest(
   manifest["exports"] = dev;
   publishConfig["exports"] = published;
   manifest["publishConfig"] = publishConfig;
+
+  // 装配面（`dsh.bundle`）才写 dsh 要求的版本范围：它是"装进 profile 的那一层"被预检的字段，
+  // 与出口一样由构建推导（值见 `bundleDshRange`），不手写。
+  const declared = manifest["dsh"] as { bundle?: unknown } | undefined;
+  const isBundle = typeof declared?.bundle === "object" && declared.bundle !== null;
+  const dshRange = isBundle ? bundleDshRange(process.env[HARNESS_VERSION_ENV]) : undefined;
+  if (dshRange !== undefined) {
+    const engines = manifest["engines"];
+    manifest["engines"] = {
+      ...(typeof engines === "object" && engines !== null ? engines : {}),
+      dsh: dshRange,
+    };
+  }
 
   const next = `${JSON.stringify(manifest, null, 2)}\n`;
   if (next !== source) await writeFile(path, next);

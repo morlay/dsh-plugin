@@ -6,11 +6,11 @@
 //
 // 另有一条判据同时被两条用例覆盖：写回内容不该取决于「哪一轮构建先攒齐产物」——第一轮就齐的包与
 // 第二轮才齐的包必须写出同一份 `./client`。
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { packageExportsHook } from "../package-exports.ts";
+import { afterEach, describe, expect, it } from "vitest";
+import { packageExportsHook, writePackageManifest } from "../package-exports.ts";
 
 type BuildDoneContext = Parameters<ReturnType<typeof packageExportsHook>>[0];
 
@@ -40,48 +40,66 @@ const ENTRIES = {
   client: "./src/client/index.ts",
 } as const;
 
-async function fixturePackage(): Promise<string> {
+const ALL_ESM = ["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"] as const;
+
+const created: string[] = [];
+
+async function makePackage(extra: Record<string, unknown> = {}): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "dsh-devkit-package-exports-"));
+  created.push(directory);
   await writeFile(
     join(directory, "package.json"),
-    `${JSON.stringify({ name: "@morlay/devkit-exports-fixture", private: true, type: "module" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "@morlay/devkit-exports-fixture", private: true, type: "module", ...extra }, null, 2)}\n`,
   );
   return directory;
 }
 
+async function manifestOf(directory: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(join(directory, "package.json"), "utf8")) as Record<
+    string,
+    unknown
+  >;
+}
+
 async function publishedClient(directory: string): Promise<unknown> {
-  const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8")) as {
-    publishConfig?: { exports?: Record<string, unknown> };
-  };
-  return manifest.publishConfig?.exports?.["./client"];
+  const manifest = await manifestOf(directory);
+  return (manifest["publishConfig"] as { exports?: Record<string, unknown> } | undefined)
+    ?.exports?.["./client"];
 }
 
 // 临时目录是 fixture；`runs` 按 cwd 记录构建轮次，所以每条用例换一个目录，互不串。
-describe("packageExportsHook 写回的 client 出口", () => {
-  let directory: string;
-
-  beforeEach(async () => {
-    directory = await fixturePackage();
-  });
-
-  afterEach(async () => {
-    await rm(directory, { recursive: true, force: true });
-  });
-
-  async function write(rounds: readonly (readonly string[])[]): Promise<void> {
-    const hook = packageExportsHook({ entries: ENTRIES, clientEntry: "client" });
-    const cwd = process.cwd();
-    process.chdir(directory);
-    try {
-      // 多格式构建分多轮进这个钩子（esm 一轮、cjs 一轮）。
-      for (const files of rounds) await hook(context(files));
-    } finally {
-      process.chdir(cwd);
-    }
+async function write(directory: string, rounds: readonly (readonly string[])[]): Promise<void> {
+  const hook = packageExportsHook({ entries: ENTRIES, clientEntry: "client" });
+  const cwd = process.cwd();
+  process.chdir(directory);
+  try {
+    // 多格式构建分多轮进这个钩子（esm 一轮、cjs 一轮）。
+    for (const files of rounds) await hook(context(files));
+  } finally {
+    process.chdir(cwd);
   }
+}
 
+afterEach(async () => {
+  await Promise.all(
+    created.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+});
+
+// 范围由构建环境推导，所以每条相关用例自己摆 env，跑完收拾干净。
+async function withHarnessVersion(version: string | undefined, run: () => Promise<void>) {
+  if (version !== undefined) process.env["DEEPSEEK_HARNESS_VERSION"] = version;
+  try {
+    await run();
+  } finally {
+    delete process.env["DEEPSEEK_HARNESS_VERSION"];
+  }
+}
+
+describe("packageExportsHook 写回的 client 出口", () => {
   it("一轮就攒齐时：client 是 ESM 库一种形态", async () => {
-    await write([["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"]]);
+    const directory = await makePackage();
+    await write(directory, [ALL_ESM]);
     expect(await publishedClient(directory)).toEqual({
       types: "./dist/client.d.mts",
       import: "./dist/client.mjs",
@@ -90,16 +108,84 @@ describe("packageExportsHook 写回的 client 出口", () => {
   });
 
   it("CJS 轮先到、ESM 轮才攒齐时：形态仍只有 ESM 库（写回不取决于哪一轮先到）", async () => {
-    await write([
+    const directory = await makePackage();
+    await write(directory, [
       // tsdown 的两轮里 cjs 先到：这一轮 host 面还没有 ESM 产物，写回推迟。
       ["index.cjs", "rows.cjs", "client.cjs"],
       // esm 轮到齐（run 里此时累积了两轮的产物，client 既有工厂也有库）。
-      ["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"],
+      ALL_ESM,
     ]);
     expect(await publishedClient(directory)).toEqual({
       types: "./dist/client.d.mts",
       import: "./dist/client.mjs",
       default: "./dist/client.mjs",
     });
+  });
+});
+
+describe("packageExportsHook 写回的 dsh 版本要求", () => {
+  const BUNDLE = { dsh: { bundle: { patch: "./cordis.patch.yml" } } };
+
+  it("bundle 包：engines.dsh 由 DEEPSEEK_HARNESS_VERSION 推导（当前版本到下一个 patch）", async () => {
+    const directory = await makePackage(BUNDLE);
+    await withHarnessVersion("0.2.1-alpha.5", async () => {
+      await write(directory, [ALL_ESM]);
+    });
+    expect((await manifestOf(directory))["engines"]).toEqual({
+      dsh: ">= 0.2.1-alpha.5 < 0.2.2",
+    });
+  });
+
+  it("已有 engines 的其它键保留（只加 dsh 这一条）", async () => {
+    const directory = await makePackage({ ...BUNDLE, engines: { node: ">=22" } });
+    await withHarnessVersion("0.1.7-rc.1", async () => {
+      await write(directory, [ALL_ESM]);
+    });
+    expect((await manifestOf(directory))["engines"]).toEqual({
+      node: ">=22",
+      dsh: ">= 0.1.7-rc.1 < 0.1.8",
+    });
+  });
+
+  it("不是 bundle 的包不写（engines 不是每一层的要求）", async () => {
+    const directory = await makePackage();
+    await withHarnessVersion("0.2.1-alpha.5", async () => {
+      await write(directory, [ALL_ESM]);
+    });
+    expect((await manifestOf(directory))["engines"]).toBeUndefined();
+  });
+
+  it("env 缺失或认不出该形态时不写（清单原值留着，构建不因此失败）", async () => {
+    for (const version of [undefined, "", "workspace:*", "vendor/deepseek-harness"]) {
+      const directory = await makePackage(BUNDLE);
+      await withHarnessVersion(version, async () => {
+        await write(directory, [ALL_ESM]);
+      });
+      expect((await manifestOf(directory))["engines"], String(version)).toBeUndefined();
+    }
+  });
+});
+
+// 没有源码入口的数据包（`dsh.bundle` 的纯数据包只有 patch / locale / icon）进不了 `build:done`，
+// 但清单口径得和别的包同一份——它走的入口与钩子共用同一个写回实现。
+describe("writePackageManifest（数据包的写回入口）", () => {
+  it("固定面按文件存在性补，engines.dsh 照写", async () => {
+    const directory = await makePackage({ dsh: { bundle: { patch: "./cordis.patch.yml" } } });
+    await writeFile(join(directory, "cordis.patch.yml"), "# patch\n");
+    await mkdir(join(directory, "locale"), { recursive: true });
+    await writeFile(join(directory, "locale", "en.json"), "{}\n");
+    await withHarnessVersion("0.2.1-alpha.5", async () => {
+      await writePackageManifest(directory);
+    });
+
+    const manifest = await manifestOf(directory);
+    const faces = {
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json",
+    };
+    expect(manifest["exports"]).toEqual(faces);
+    expect(manifest["publishConfig"]).toEqual({ exports: faces });
+    expect(manifest["engines"]).toEqual({ dsh: ">= 0.2.1-alpha.5 < 0.2.2" });
   });
 });

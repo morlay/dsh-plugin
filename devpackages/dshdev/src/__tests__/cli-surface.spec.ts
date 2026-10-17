@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -14,7 +14,15 @@ const MANIFEST = JSON.parse(
 ) as { bin?: Record<string, string>; version?: string };
 
 const BIN_NAME = Object.keys(MANIFEST.bin ?? {})[0] ?? "";
-const BIN_COMMANDS = ["web", "desktop", "check-deps", "check-locale", "publish", "login"];
+const BIN_COMMANDS = [
+  "web",
+  "desktop",
+  "check-deps",
+  "check-locale",
+  "manifest",
+  "publish",
+  "login",
+];
 
 const roots: string[] = [];
 
@@ -127,6 +135,52 @@ describe("published command surface", () => {
 
     expect(status).not.toBe(0);
     expect(stderr).toContain("prepare:runtime");
+  });
+});
+
+// 没有源码入口的数据包（`dsh.bundle` 的纯数据包）的清单写回：出口与 dsh 版本要求都由构建推导，
+// 但这类包没有可打包的入口、进不了 tsdown 的 `build:done`，所以给它一条命令走同一份推导。
+describe("manifest 写回", () => {
+  it("按文件存在性写固定面，并按 DEEPSEEK_HARNESS_VERSION 写 engines.dsh", async () => {
+    const root = await nonWorkspaceDir();
+    await writeFile(
+      join(root, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "@morlay/data-fixture",
+          private: true,
+          dsh: { bundle: { patch: "./cordis.patch.yml" } },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await writeFile(join(root, "cordis.patch.yml"), "# patch\n");
+    await mkdir(join(root, "locale"), { recursive: true });
+    await writeFile(join(root, "locale", "en.json"), "{}\n");
+
+    process.env["DEEPSEEK_HARNESS_VERSION"] = "0.2.1-alpha.5";
+    try {
+      const { status, stderr } = await cli(["manifest"], root);
+      expect(stderr).toBe("");
+      expect(status).toBe(0);
+    } finally {
+      delete process.env["DEEPSEEK_HARNESS_VERSION"];
+    }
+
+    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      exports?: Record<string, unknown>;
+      publishConfig?: { exports?: Record<string, unknown> };
+      engines?: Record<string, unknown>;
+    };
+    const faces = {
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json",
+    };
+    expect(manifest.exports).toEqual(faces);
+    expect(manifest.publishConfig?.exports).toEqual(faces);
+    expect(manifest.engines).toEqual({ dsh: ">= 0.2.1-alpha.5 < 0.2.2" });
   });
 });
 
