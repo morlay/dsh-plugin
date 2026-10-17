@@ -79,8 +79,9 @@ describe("上游 fixtures", () => {
           : { type: "TSTypeLiteral", members: declared.node["body"]["body"] as unknown };
       try {
         shapes[name] = zodOf(node as never, context);
-      } catch {
-        shapes[name] = "<抛错>";
+      } catch (error) {
+        // 带上消息：只看 "<抛错>" 定位不到是哪条规则炸的。
+        shapes[name] = `<抛错: ${error instanceof Error ? error.message : String(error)}>`;
       }
     }
     expect(Object.keys(shapes).length).toBeGreaterThan(10);

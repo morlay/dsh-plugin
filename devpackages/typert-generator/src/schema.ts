@@ -146,6 +146,33 @@ async function dtsFiles(root: string): Promise<string[]> {
   return found.sort();
 }
 
+/**
+ * 字面量节点的**源码文本**（`z.literal(...)` 的参数）。
+ *
+ * oxc 里三种形态都出现过：负数是一元表达式（`-2` → `UnaryExpression{operator:'-', argument:Literal}`）、
+ * 无替换的模板字面量是 `TemplateLiteral`、其余是 `Literal`（`raw` 保真：`-2n` / `'ready'`）。
+ */
+function literalSourceOf(node: Node | undefined): string | undefined {
+  if (node === undefined) return undefined;
+  if (node["type"] === "UnaryExpression") {
+    const inner = literalSourceOf(node["argument"] as Node | undefined);
+    return inner === undefined ? undefined : `${String(node["operator"])}${inner}`;
+  }
+  if (node["type"] === "TemplateLiteral") {
+    if (((node["expressions"] ?? []) as Node[]).length > 0) return undefined;
+    const raw = (((node["quasis"] ?? []) as Node[])[0]?.["value"] as Node | undefined)?.["raw"];
+    return typeof raw === "string" ? JSON.stringify(raw) : undefined;
+  }
+  const raw = node["raw"];
+  if (typeof raw === "string") return raw;
+  const value = node["value"];
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number") return String(value);
+  if (typeof value === "bigint") return `${String(value)}n`;
+  if (typeof value === "boolean") return String(value);
+  return value === null ? "null" : undefined;
+}
+
 function literalText(value: unknown): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
@@ -196,8 +223,10 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
       return "z.never()";
     case "TSNullKeyword":
       return "z.literal(null)";
-    case "TSLiteralType":
-      return `z.literal(${literalText((node["literal"] as Node)["value"])})`;
+    case "TSLiteralType": {
+      const text = literalSourceOf(node["literal"] as Node);
+      return text === undefined ? "z.unknown() /* TODO 未知字面量形态 */" : `z.literal(${text})`;
+    }
     case "TSArrayType":
       return `z.array(${zodOf(node["elementType"] as Node, context)})`;
     case "TSParenthesizedType":
@@ -231,7 +260,10 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
         .map((part) => (isBrandMarker(part) ? "z.unknown()" : zodOf(part, context)))
         .join(", ")})`;
     case "TSTypeLiteral":
-      return objectOf(node["members"] as Node[], context);
+      return objectOf(
+        ((node["members"] ?? []) as Node[]).map((member) => ({ node: member, file: context.file })),
+        context,
+      );
     case "TSIndexedAccessType": {
       // `T['field']`：顺着引用找到 T 的声明，取那个字段的类型（上游也是就地展开）。
       const object = node["objectType"] as Node;
@@ -244,7 +276,7 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
       const name =
         object["type"] === "TSTypeReference" ? nameOf(object["typeName"] as Node) : undefined;
       const declared = name === undefined ? undefined : context.index.get(name);
-      const members = (declared?.node["body"]?.["body"] ?? []) as Node[];
+      const members = membersOf(declared, context);
       // 索引访问也能自引用（`T = T['k']`），所以和引用一样过一遍展开栈。
       const guard = `${String(name)}|${key["type"] === "TSTypeOperator" ? String(key["operator"]) : String(nameOf(key) ?? key["literal"]?.["value"])}`;
       if (context.stack.has(guard)) return "z.unknown()";
@@ -253,8 +285,11 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
         // `T[keyof T]`：取所有字段值类型的 union（`ModelModality` 就是这种写法）。
         if (key["type"] === "TSTypeOperator" && key["operator"] === "keyof") {
           const values = members
-            .filter((member) => member["type"] === "TSPropertySignature")
-            .map((member) => zodOf(member["typeAnnotation"]?.["typeAnnotation"] as Node, context));
+            .filter((member) => member.node["type"] === "TSPropertySignature")
+            .map((member) => {
+              context.file = member.file ?? context.file;
+              return zodOf(member.node["typeAnnotation"]?.["typeAnnotation"] as Node, context);
+            });
           const unique = [...new Set(values)];
           return unique.length === 1 ? (unique[0] as string) : `z.union([${unique.join(", ")}])`;
         }
@@ -265,7 +300,7 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
             : typeof key["value"] === "string"
               ? key["value"]
               : undefined);
-        const target = members.find((member) => nameOf(member["key"] as Node) === field);
+        const target = members.find((member) => nameOf(member.node["key"] as Node) === field);
         if (target === undefined) {
           throw new Error(
             `索引访问解析失败：${String(name)}[${String(field)}] ` +
@@ -273,9 +308,10 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
               `objectType=${String(object["type"])} indexType=${String(key["type"])}`,
           );
         }
-        let value = zodOf(target["typeAnnotation"]?.["typeAnnotation"] as Node, context);
-        if (target["optional"] === true) value += ".optional()";
-        if (target["readonly"] === true) value += ".readonly()";
+        context.file = target.file ?? context.file;
+        let value = zodOf(target.node["typeAnnotation"]?.["typeAnnotation"] as Node, context);
+        if (target.node["optional"] === true) value += ".optional()";
+        if (target.node["readonly"] === true) value += ".readonly()";
         return value;
       } finally {
         context.stack.delete(guard);
@@ -330,9 +366,56 @@ function enumOf(node: Node): string {
   return values.length === 1 ? (values[0] as string) : `z.union([${values.join(", ")}])`;
 }
 
-function objectOf(members: Node[], context: EmitContext): string {
+/**
+ * 一条字段 + 它所在的声明文件：继承来的字段要用**基接口那份文件**的导入别名表渲染，所以文件得跟着成员走。
+ */
+export type MemberRef = { readonly node: Node; readonly file: string | undefined };
+
+/**
+ * 一个具名声明（interface / type literal）的**全部字段**：自身成员 + `extends` 基接口的成员（递归，同名以
+ * 自身为准，环上停住）。
+ *
+ * 继承来的字段同样是"这个对象上的字段"。漏掉它们的代价不是类型不准，而是**线上丢参数**：
+ * `SessionSelectModelRequest extends ModelSelection` 的 `provider` / `model` 就这样在服务端反序列化时被
+ * 丢掉，`requireModel` 拿到 `provider === undefined`（`no adapter registered for provider "undefined"`），
+ * 界面上的表现是"模型列得出来、点选报 `session/model-unavailable`"。
+ */
+export function membersOf(
+  declared: TypeDecl | undefined,
+  context: EmitContext,
+  seen: Set<string> = new Set(),
+): MemberRef[] {
+  if (declared === undefined) return [];
+  const node = declared.node;
+  const own = ((node["body"]?.["body"] ?? []) as Node[]).map((member) => ({
+    node: member,
+    file: declared.file,
+  }));
+  if (node["type"] !== "TSInterfaceDeclaration" || seen.has(declared.name)) return own;
+  seen.add(declared.name);
+  const ownKeys = new Set(own.map((member) => nameOf(member.node["key"] as Node | undefined)));
+  const inherited: MemberRef[] = [];
+  for (const clause of (node["extends"] ?? []) as Node[]) {
+    const expression = clause["expression"] as Node | undefined;
+    const name = expression === undefined ? undefined : nameOf(expression);
+    const base = name === undefined ? undefined : context.index.get(name);
+    // 带类型参数的基接口（`interface Base<T>`）：AST 路线替不了实参，展开只会撞上"引用解析失败：T"，
+    // 跳过它——与本线对泛型的一贯兜底口径一致（wire 面出现泛型时本来就落 `z.unknown()`）。
+    if (((base?.node["typeParameters"]?.["params"] ?? []) as unknown[]).length > 0) continue;
+    for (const member of membersOf(base, context, seen)) {
+      const key = nameOf(member.node["key"] as Node | undefined);
+      if (!ownKeys.has(key)) inherited.push(member);
+    }
+  }
+  return [...inherited, ...own];
+}
+
+export function objectOf(members: readonly MemberRef[], context: EmitContext): string {
   const fields: string[] = [];
-  for (const member of members) {
+  const callerFile = context.file;
+  for (const { node: member, file } of members) {
+    // 继承来的字段要用**基接口那份文件**的导入表渲染（它的类型名不一定在本文件的别名表里）。
+    context.file = file ?? callerFile;
     if (member["type"] === "TSIndexSignature") {
       // `[key: string]: T` → `z.record(z.string(), T)`
       const parameter = (member["parameters"] as Node[])[0];
@@ -342,12 +425,23 @@ function objectOf(members: Node[], context: EmitContext): string {
     }
     if (member["type"] !== "TSPropertySignature") continue;
     const key = nameOf(member["key"] as Node) ?? literalText((member["key"] as Node)["value"]);
-    let value = zodOf(member["typeAnnotation"]?.["typeAnnotation"] as Node, context);
+    // 继承来的字段来自**另一份声明文件**：它引用的类型名不一定在这条链的别名表里（跨包别名），
+    // 解析不了就跳过这一条——而**自身字段**解析不了必须抛，那才是真错。
+    const inherited = (file ?? callerFile) !== callerFile;
+    let value: string;
+    try {
+      value = zodOf(member["typeAnnotation"]?.["typeAnnotation"] as Node, context);
+    } catch (error) {
+      context.file = callerFile;
+      if (inherited) continue;
+      throw error;
+    }
     // 顺序固定：`.readonly()` 先、`.optional()` 后（上游产物就是这么落的）。
     if (member["readonly"] === true) value += ".readonly()";
     if (member["optional"] === true) value += ".optional()";
     fields.push(`  '${key}': ${value},`);
   }
+  context.file = callerFile;
   return `z.object({\n${fields.join("\n")}\n})`;
 }
 
@@ -375,9 +469,12 @@ function mappedObject(
   if (literal === undefined) return zodOf(node, context);
   return objectOf(
     literal.map((member) => ({
-      ...member,
-      ...(modifiers.optional === true && member["optional"] !== true ? { optional: true } : {}),
-      ...(modifiers.readonly === true ? { readonly: true } : {}),
+      node: {
+        ...member,
+        ...(modifiers.optional === true && member["optional"] !== true ? { optional: true } : {}),
+        ...(modifiers.readonly === true ? { readonly: true } : {}),
+      },
+      file: context.file,
     })),
     context,
   );
@@ -471,7 +568,7 @@ function referenceOf(node: Node, context: EmitContext): string {
       return zodOf(
         declared.node["body"] === undefined
           ? declared.node
-          : { type: "TSTypeLiteral", members: declared.node["body"]["body"] as unknown },
+          : { type: "TSTypeLiteral", members: membersOf(declared, context) as unknown },
         context,
       );
     }
@@ -518,7 +615,7 @@ function referenceOf(node: Node, context: EmitContext): string {
           : zodOf(
               {
                 type: "TSTypeLiteral",
-                members: (declaredSelf?.node["body"]?.["body"] ?? []) as Node[],
+                members: membersOf(declaredSelf, context),
               },
               context,
             );
@@ -553,7 +650,7 @@ function referenceOf(node: Node, context: EmitContext): string {
         ? zodOf(declared.node["typeAnnotation"] as Node, context)
         : declared.node["type"] === "TSEnumDeclaration"
           ? enumOf(declared.node)
-          : objectOf((declared.node["body"]?.["body"] ?? []) as Node[], context);
+          : objectOf(membersOf(declared, context), context);
   } finally {
     context.file = callerFile;
     context.typeArguments = callerArguments;

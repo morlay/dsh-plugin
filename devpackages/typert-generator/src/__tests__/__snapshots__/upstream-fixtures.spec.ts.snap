@@ -13,7 +13,7 @@ exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照�
   "AliasedService": "z.object({
 
 })",
-  "Box": "<抛错>",
+  "Box": "<抛错: 引用解析失败：T（没有声明，或不在导入别名 / 包出口表里）>",
   "Callable": "z.record(z.string(), z.unknown())",
   "ClientAgent": "z.object({
 
@@ -70,7 +70,7 @@ exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照�
   "Result": "z.unknown() /* TODO TSTypeAliasDeclaration */",
   "Route": "z.unknown() /* TODO TSTypeAliasDeclaration */",
   "StringResult": "z.unknown() /* TODO TSTypeAliasDeclaration */",
-  "SyntaxZoo": "<抛错>",
+  "SyntaxZoo": "<抛错: 引用解析失败：NodeJS.Process（没有声明，或不在导入别名 / 包出口表里）>",
   "TagOnly": "z.object({
   'value': z.string().readonly(),
 })",
@@ -78,7 +78,7 @@ exports[`上游 fixtures > type-model：逐类型生成 zod 的形状（快照�
   "Unpunctuated": "z.object({
   'value': z.string().readonly(),
 })",
-  "Variance": "<抛错>",
+  "Variance": "<抛错: 引用解析失败：State（没有声明，或不在导入别名 / 包出口表里）>",
   "WritableService": "z.object({
 
 })",

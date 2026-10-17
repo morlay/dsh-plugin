@@ -465,6 +465,9 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/boot/dsh-app-boot:
     dependencies:
