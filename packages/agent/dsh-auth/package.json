@@ -1,0 +1,30 @@
+{
+  "name": "@morlay/dsh-auth",
+  "version": "0.0.1",
+  "description": "只有 API Key 的凭证与授权两行：给 LLM 与工具调用一个可判定的凭据来源，不接平台账号。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-authorization": "workspace:*",
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-credentials-local": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-auth": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      "./server": "./src/server/index.ts"
+    }
+  }
+}

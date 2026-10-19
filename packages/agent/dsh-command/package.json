@@ -1,0 +1,28 @@
+{
+  "name": "@morlay/dsh-command",
+  "version": "0.0.1",
+  "description": "命令注册表与斜杠命令的两半：谁能登记一条命令、模型与用户怎么触发它，各有各的面。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-commands": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-command": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

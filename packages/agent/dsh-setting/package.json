@@ -1,0 +1,52 @@
+{
+  "name": "@morlay/dsh-setting",
+  "version": "0.0.1",
+  "description": "LLM provider 的配置行（pi-ai、DeepSeek API key、API 扩展注册表）与设置面板的浏览器半：装起来就生效。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./ui": "./src/ui/index.ts",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-api-settings-controller": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-model-selection": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-general": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-models": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-theme": "workspace:*",
+    "@deepseek-ai/dsh-deepseek-llm-api-extensions": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
+    "@deepseek-ai/dsh-llm-pi-ai": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-attachment": "workspace:*",
+    "@morlay/dsh-auth": "workspace:*",
+    "@morlay/dsh-command": "workspace:*",
+    "@morlay/dsh-persistence": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-session-persistence": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*",
+    "@morlay/dsh-skill": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/dsh-upload": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/dsh-workspace": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      "./server": "./src/server/index.ts"
+    }
+  }
+}

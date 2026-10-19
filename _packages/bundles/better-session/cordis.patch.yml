@@ -1,0 +1,21 @@
+# 本文件由 packages/bundles/better-session/tsdown.config.ts 生成，请勿手工编辑
+- id: session-persistence-jsonl
+  disabled: true
+- id: session-projection-cache
+  disabled: true
+- id: session-query-sqlite
+  disabled: true
+- id: storage-json
+  disabled: true
+- insert:
+    - id: session-rdb
+      name: "@morlay/session-rdb/cordis-register"
+    - id: ui-conversation-message-actions
+      name: "@morlay/ui-conversation-message-actions/cordis-register"
+    - id: ui-conversation-manager
+      name: "@morlay/ui-conversation-manager/cordis-register"
+    - id: reference
+      name: "@morlay/dsh-reference/cordis-register"
+- id: storage-domain
+  config:
+    backend: rdb

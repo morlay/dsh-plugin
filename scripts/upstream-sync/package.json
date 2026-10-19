@@ -14,7 +14,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@oxc-node/core": "^0.1.6",
-    "oxc-parser": "^0.153.0"
+    "@oxc-node/core": "^1.0.0",
+    "oxc-parser": "^0.155.0"
   }
 }

@@ -1,0 +1,303 @@
+# 本文件由 packages/bundles/dsh-base/tsdown.config.ts 生成，请勿手工编辑
+- insert:
+    - id: llm-pi-ai
+      name: "@deepseek-ai/dsh-llm-pi-ai"
+    - id: llm-deepseek-account
+      name: "@deepseek-ai/dsh-llm-deepseek-account"
+    - id: llm-deepseek
+      name: "@deepseek-ai/dsh-llm-deepseek-api-key"
+    - id: typert-loader
+      name: "@deepseek-ai/dsh-typert-loader"
+    - id: plugin-package-inventory-deepseek
+      name: "@deepseek-ai/dsh-plugin-package-inventory-deepseek"
+    - id: web-search-deepseek
+      name: "@deepseek-ai/dsh-web-search-deepseek"
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+    - id: web-fetch-http
+      name: "@deepseek-ai/dsh-web-fetch-http"
+    - id: bash-sandbox
+      name: "@deepseek-ai/dsh-bash-sandbox"
+      config:
+        timeoutMs: 60000
+      disabled: !!js process.platform === "win32"
+    - id: fs-sandbox
+      name: "@deepseek-ai/dsh-fs-sandbox"
+    - id: fs-observation-policy
+      name: "@deepseek-ai/dsh-fs-observation-policy"
+    - id: tool-bash
+      name: "@deepseek-ai/dsh-tool-bash"
+      disabled: !!js process.platform === "win32"
+    - id: tool-fs
+      name: "@deepseek-ai/dsh-tool-fs"
+    - id: tool-jobs
+      name: "@deepseek-ai/dsh-tool-jobs"
+    - id: tool-working-directory
+      name: "@deepseek-ai/dsh-tool-working-directory"
+    - id: tool-fs-search
+      name: "@deepseek-ai/dsh-tool-fs-search"
+      config:
+        sampleOverCapGlobResults: false
+    - id: tool-skill
+      name: "@deepseek-ai/dsh-tool-skill"
+    - id: tool-todo
+      name: "@deepseek-ai/dsh-tool-todo"
+      config:
+        allowParallelInProgress: true
+    - id: tool-goal
+      name: "@deepseek-ai/dsh-tool-goal"
+    - id: repeat-tool-reminder
+      name: "@deepseek-ai/dsh-repeat-tool-reminder"
+      config:
+        thresholds:
+          - 3
+          - 5
+          - 8
+        argumentsPreviewChars: 500
+    - id: tool-web
+      name: "@deepseek-ai/dsh-tool-web"
+      config:
+        fetch: true
+        searchTimeoutMs: 60000
+    - id: timeout-policy
+      name: "@deepseek-ai/dsh-tool-call-timeout-policy"
+    - id: tool-result-pruner
+      name: "@deepseek-ai/dsh-compaction-tool-result-pruner"
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+    - id: image-offload
+      name: "@deepseek-ai/dsh-compaction-image-offload"
+    - id: mcp-resources
+      name: "@deepseek-ai/dsh-mcp-resources"
+    - id: spill-local
+      name: "@deepseek-ai/dsh-spill-local"
+    - id: spill-policy
+      name: "@deepseek-ai/dsh-spill-policy"
+      config:
+        maxInlineTokens: 12500
+    - id: tool-workflow
+      name: "@deepseek-ai/dsh-tool-workflow"
+    - id: session-persistence-jsonl
+      name: "@deepseek-ai/dsh-session-persistence-jsonl"
+      config:
+        root: !!js dshHomePath("sessions")
+    - id: session-query-sqlite
+      name: "@deepseek-ai/dsh-session-query-sqlite"
+      config:
+        path: ":memory:"
+        openAt: never
+    - id: session-title-llm
+      name: "@deepseek-ai/dsh-session-title-first-prompt-llm"
+      config:
+        targetWords: 5
+        targetCjkCharacters: 10
+        maxInputBytes: 4096
+        maxOutputTokens: 4096
+        timeoutMs: 60000
+    - id: session-log-deepseek
+      name: "@deepseek-ai/dsh-session-log-deepseek"
+    - id: session-checkpoint-policy
+      name: "@deepseek-ai/dsh-session-checkpoint-policy"
+    - id: compaction-basic
+      name: "@deepseek-ai/dsh-compaction-basic"
+    - id: llm-retry
+      name: "@deepseek-ai/dsh-llm-retry"
+    - id: agent-instructions
+      name: "@deepseek-ai/dsh-agent-instructions"
+      config:
+        maxBytes: 65536
+    - id: skill-filesystem
+      name: "@deepseek-ai/dsh-skill-filesystem"
+    - id: command-feedback
+      name: "@deepseek-ai/dsh-command-feedback"
+    - id: goal-round-driver
+      name: "@deepseek-ai/dsh-goal-round-driver"
+    - id: command-goal
+      name: "@deepseek-ai/dsh-command-goal"
+    - id: command-compact
+      name: "@deepseek-ai/dsh-command-compact"
+    - id: workflow-ptc
+      name: "@deepseek-ai/dsh-workflow-ptc"
+      config:
+        provider: spawn
+    - id: subagent-spawn-in-process
+      name: "@deepseek-ai/dsh-subagent-spawn-in-process"
+      config:
+        providerName: spawn
+    - id: subagent-fork-in-process
+      name: "@deepseek-ai/dsh-subagent-fork-in-process"
+      config:
+        providerName: fork
+    - id: tool-subagent-control
+      name: "@deepseek-ai/dsh-tool-subagent-control"
+    - id: tool-subagent-list-agents
+      name: "@deepseek-ai/dsh-tool-subagent-control/list-agents"
+    - id: tool-subagent
+      name: "@deepseek-ai/dsh-tool-subagent"
+      config:
+        provider: spawn
+        toolName: subagent
+    - id: tool-subagent-fork
+      name: "@deepseek-ai/dsh-tool-subagent"
+      config:
+        provider: fork
+        toolName: subagent_fork
+    - id: session-telemetry-otel
+      name: "@deepseek-ai/dsh-session-telemetry-otel"
+      config:
+        mode: !!js process.env.DSH_TELEMETRY_MODE || "FEEDBACK_ONLY"
+        shutdownTimeoutMillis: 3000
+        maxRequestBytes: 4000000
+        exporter:
+          url: !!js process.env.DSH_TELEMETRY_OTLP_URL ?? "https://dsh-otel-collector.deepseeksvc.com/v1/logs"
+          compression: gzip
+          timeoutMillis: 1000
+        processor:
+          scheduledDelayMillis: 10000
+          maxQueueSize: 2048
+          maxExportBatchSize: 2048
+          exportTimeoutMillis: 1500
+    - id: plugin-manager
+      name: "@deepseek-ai/dsh-plugin-manager"
+      disabled: !!js "!ctx.get(\"profileContext\")"
+    - id: hmr
+      name: "@deepseek-ai/dsh-hmr"
+      config:
+        root: []
+      disabled: !!js "!ctx.get(\"profileContext\")"
+    - id: config-editor
+      name: "@deepseek-ai/dsh-config-editor"
+      disabled: !!js "!ctx.get(\"profileContext\")"
+    - id: settings
+      name: "@deepseek-ai/dsh-settings"
+      disabled: !!js "!ctx.get(\"profileContext\")"
+    - id: tool-plugin-manager
+      name: "@deepseek-ai/dsh-plugin-manager/tools"
+      disabled: true
+    - id: pwsh-sandbox
+      name: "@deepseek-ai/dsh-pwsh-sandbox"
+      disabled: !!js process.platform !== "win32"
+    - id: tool-pwsh
+      name: "@deepseek-ai/dsh-tool-pwsh"
+      disabled: !!js process.platform !== "win32"
+- id: llm-default
+  config: {}
+- id: deepseek-llm-api-extensions-default
+  config: {}
+- id: storage-default
+  config: {}
+- id: storage-backend-json
+  config:
+    root: !!js dshHomePath("storages")
+- id: storage-domain-default
+  config:
+    backend: json
+- id: typert-default
+  config: {}
+- id: remote-access-default
+  config: {}
+- id: typert-gateway-default
+  config: {}
+- id: web-default
+  config:
+    searchProvider: deepseek-official
+    fetchProvider: http
+- id: subprocess-default
+  config: {}
+- id: sandbox-default
+  config: {}
+- id: sandbox-policy-default
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? "workspace-write"
+    workspaceRoot: !!js process.cwd()
+- id: working-directory-default
+  config: {}
+- id: shell-env-default
+  config: {}
+- id: approval-default
+  config:
+    policy: !!js "(process.env.DSH_PERMISSION_MODE ?? \"workspace-write\") === \"danger-full-access\" ? \"never\" : \"ask\""
+- id: permission-default
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+- id: tools-default
+  config: {}
+- id: session-store-default
+  config: {}
+- id: session-projection-default
+  config: {}
+- id: session-title-default
+  config:
+    fallbackMaxWords: 5
+    fallbackMaxBytes: 40
+    maxTitleBytes: 80
+- id: session-projection-cache-default
+  config:
+    writeEveryEvents: 200
+    writeIntervalMs: 5000
+- id: token-meter-default
+  config: {}
+- id: agents-default
+  config: {}
+- id: system-prompt-default
+  config:
+    personaPrefix: ""
+- id: credentials-default
+  config: {}
+- id: authorization-default
+  config: {}
+- id: deepseek-account-default
+  config:
+    desktopPlatform: !!js "ctx.get(\"profileContext\")?.name === \"desktop\" && [\"darwin\", \"win32\"].includes(process.platform) ? process.platform : null"
+- id: agent-default-model-default
+  config:
+    provider: deepseek-official
+    model: deepseek-flash
+- id: user-questions-default
+  config: {}
+- id: agent-loop-default
+  config:
+    agents: []
+- id: skill-default
+  config: {}
+- id: commands-default
+  config: {}
+- id: goal-default
+  config: {}
+- id: plan-mode-default
+  config:
+    section: |
+      You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+      Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+      The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed only to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+      Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+      Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+      When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+- id: timer-default
+  config: {}
+- id: attachments-default
+  config: {}
+- id: jobs-default
+  config: {}
+- id: ptc-runtime-default
+  config: {}
+- id: subagents-default
+  config: {}
+- id: otel-default
+  config: {}

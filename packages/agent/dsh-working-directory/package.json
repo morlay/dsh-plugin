@@ -1,0 +1,27 @@
+{
+  "name": "@morlay/dsh-working-directory",
+  "version": "0.0.1",
+  "description": "OS 工作目录：给 shell 与工具一个当前目录，与会话绑定工作区不是一回事。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@morlay/dsh-fs": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

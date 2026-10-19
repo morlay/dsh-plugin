@@ -1,5 +1,46 @@
 {
-  "extends": ["@local/devkit/tsconfig.json"],
-  "files": [],
-  "references": [{ "path": "./tsconfig.host.json" }, { "path": "./tsconfig.client.json" }]
+  "compilerOptions": {
+    // —— 仓库统一的 TS 口径（原先由 `devpackages/devkit` 的 base config 提供，该包已移除）——
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "composite": true,
+    // 与 `composite` 一起开（上游 `tsconfig.base.json` 同样是两项并写）：`tsc -b` 的增量缓存在各 config
+    // 旁那份 `*.tsbuildinfo` 里（gitignore），references 的叶才谈得上「只重编变了的」。
+    "incremental": true,
+    "sourceMap": false,
+    "declaration": true,
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "experimentalDecorators": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true,
+    // 跨项目 import 不重写相对扩展名（上游两片 aggregate 同样关着它）：开了就报 TS2878。
+    "rewriteRelativeImportExtensions": false,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    // 声明只给 `tsc -b` 的类型图用：落进 gitignore 的 `.tmp/`，不污染源码树。
+    "outDir": ".tmp/tsc",
+  },
+  "include": ["**/*"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/*",
+    "**/lib/*",
+    "vendor/**/*.config.ts",
+    "vendor/**/tests/**",
+    // 上游 apps 是它自己的应用面（本仓库只用 apps/cli 当 install anchor），按我们的 TS 口径过不了；
+    // 声明生成（`target/dts`）压根不含它。文档站那类整块没用的已经由 patch 的 `rm` 步骤裁掉。
+    "vendor/**/apps/**",
+    "target/**",
+    "**/website/**",
+    "vendor/**/vitest.shared.ts",
+    // 归档目录：不在 workspace 里（依赖没装、也不参与构建），类型口径不覆盖它。
+    "_packages/**",
+  ],
 }

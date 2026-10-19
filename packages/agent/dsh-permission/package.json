@@ -1,0 +1,38 @@
+{
+  "name": "@morlay/dsh-permission",
+  "version": "0.0.1",
+  "description": "权限三面：权限预设、用户批准、用户提问——决定一次调用能不能放行、要不要问人。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./ui": "./src/ui/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-api-settings-controller": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-approval": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-permission-presets": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-permission-presets": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-user-approval": "workspace:*",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-permission": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

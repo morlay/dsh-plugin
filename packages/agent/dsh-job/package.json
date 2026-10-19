@@ -1,0 +1,29 @@
+{
+  "name": "@morlay/dsh-job",
+  "version": "0.0.1",
+  "description": "后台任务注册表：长跑动作在此登记、查询与取消，工具调用之外也有统一出口。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-api-job-controller": "workspace:*",
+    "@deepseek-ai/dsh-jobs": "workspace:*",
+    "@deepseek-ai/dsh-jobs-local": "workspace:*",
+    "@deepseek-ai/dsh-tool-jobs": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-job": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

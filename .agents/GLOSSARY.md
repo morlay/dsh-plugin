@@ -55,7 +55,7 @@ _避免使用_：检查点、checkpoint
 `session-branch/version` 事件记录一次分支操作（edit / reroll / retry /
 fork / rewind）的目标轮次、变更前后文本与逆操作；它的类型定义只用来识别既有会话里
 这一类事件，写侧不产出、读侧不参与投影
-（[ADR-删除版本树投影并停止写版本效果](../packages/session/session-branch/.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)）。
+（[ADR-删除版本树投影并停止写版本效果](../packages/session/session-rdb/.agents/adrs/20260920-删除版本树投影并停止写版本效果.md)）。
 _避免使用_：版本事件、变更记录
 
 **ignorable 事件**：

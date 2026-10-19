@@ -1,0 +1,26 @@
+{
+  "name": "@morlay/dsh-checkpoint-policy",
+  "version": "0.0.1",
+  "description": "会话检查点策略：按 LLM 与工具活动决定何时为会话落一次检查点。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-session-checkpoint-policy": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-session-persistence": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@morlay/dsh-checkpoint-policy": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

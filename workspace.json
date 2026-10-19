@@ -1,0 +1,28 @@
+{
+  "unit": {
+    "name": "workspace",
+    "version": 2
+  },
+  "global": {
+    "initialized": true,
+    "workspaceIds": [
+      "937a43a9-3a9a-41ea-8792-4756413933f9"
+    ],
+    "archivedSessionIds": [],
+    "pinnedSessionIds": []
+  },
+  "tables": {
+    "workspaces": {
+      "937a43a9-3a9a-41ea-8792-4756413933f9": {
+        "path": "/private/var/folders/r0/jnrxjtyd3t91_tm25_lks6j40000gp/T/dsh-sidebar-tree-lxq6hq",
+        "title": "dsh-sidebar-tree-lxq6hq",
+        "sessionIds": [
+          "s-blank",
+          "s-engaged"
+        ],
+        "createdAt": "2026-10-30T10:02:45.748Z",
+        "updatedAt": "2026-10-30T10:02:45.748Z"
+      }
+    }
+  }
+}

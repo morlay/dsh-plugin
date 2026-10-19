@@ -1,0 +1,26 @@
+{
+  "name": "@morlay/dsh-tool-policy",
+  "version": "0.0.1",
+  "description": "工具调用生命周期上的四条策略：重复调用提醒、超时、图片外置、MCP 资源注入。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-compaction-image-offload": "workspace:*",
+    "@deepseek-ai/dsh-mcp-resources": "workspace:*",
+    "@deepseek-ai/dsh-repeat-tool-reminder": "workspace:*",
+    "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-tool-policy": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@morlay/dsh-persistence",
+  "version": "0.0.1",
+  "description": "存储的 json 后端行：给存储 hub 注册一个文件后端，让数据落盘而不绑死实现。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-storage-json": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-persistence": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

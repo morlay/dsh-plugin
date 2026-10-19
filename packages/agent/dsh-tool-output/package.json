@@ -1,0 +1,26 @@
+{
+  "name": "@morlay/dsh-tool-output",
+  "version": "0.0.1",
+  "description": "工具输出的治理：大输出落盘（spill）、按策略裁剪，别让工具结果把上下文吃满。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
+    "@deepseek-ai/dsh-spill-local": "workspace:*",
+    "@deepseek-ai/dsh-spill-policy": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-spill": "workspace:*",
+    "@morlay/dsh-tool-output": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

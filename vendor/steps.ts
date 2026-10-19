@@ -18,6 +18,12 @@ export const patch: Step[] = [
   // 指向上游不入库的测试快照的符号链接（断链）；本仓库不跑这条 acp e2e，删掉免得断链被遍历到。
   // 同样用 glob 形态：快照不入库，`reset` 之后它也不会回来。
   { type: "rm", glob: "apps/cli/tests/profiles/acp/cordis.yml" },
+  // `cordis-client-runner` 的 `src/client/timer.d.ts` 是上游发布产物的残留（对应 `.ts` 已不存在，
+  // 也没有任何源码 import 它）。它把 `Context.timer` 声明成 `ClientTimerService`，而 host 侧
+  // `cordis-plugin-timer` 把同一个 `Context.timer` 声明成 `TimerService`——本仓 host 与 client 在
+  // 同一个 program 里，两处 `extends Pick<…>` 会撞 TS2320。删掉这份孤儿声明，`Context.timer` 只由
+  // host 侧那份定义。
+  { type: "rm", path: "packages/extensions/cordis-client-runner/src/client/timer.d.ts" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },

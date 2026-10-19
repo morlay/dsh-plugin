@@ -1,0 +1,28 @@
+{
+  "name": "@morlay/dsh-fs",
+  "version": "0.0.1",
+  "description": "文件系统契约（`FileSystem`）本身，让工具与沙箱共用一个读写面。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-fs": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@morlay/dsh-fs": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./src/index.ts"
+    }
+  }
+}

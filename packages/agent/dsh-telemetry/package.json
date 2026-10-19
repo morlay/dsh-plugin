@@ -1,0 +1,24 @@
+{
+  "name": "@morlay/dsh-telemetry",
+  "version": "0.0.1",
+  "description": "OpenTelemetry 聚合面与会话遥测后端：把会话与工具调用变成可导出的 trace。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-otel": "workspace:*",
+    "@deepseek-ai/dsh-session-telemetry-otel": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-telemetry": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@morlay/dsh-upload",
+  "version": "0.0.1",
+  "description": "附件上传面：先给宿主一个只登记解析器的最小实现，真正的上传与解析另排期。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-client-file-upload": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-attachment": "workspace:*",
+    "@morlay/dsh-command": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-upload": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

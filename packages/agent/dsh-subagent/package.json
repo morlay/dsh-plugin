@@ -1,0 +1,34 @@
+{
+  "name": "@morlay/dsh-subagent",
+  "version": "0.0.1",
+  "description": "子代理：运行时、同进程 spawn/fork 两个 provider，以及控制、列举、派生的工具行。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-subagent": "workspace:*",
+    "@deepseek-ai/dsh-subagent-fork-in-process": "workspace:*",
+    "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",
+    "@deepseek-ai/dsh-tool-subagent": "workspace:*",
+    "@deepseek-ai/dsh-tool-subagent-control": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-subagent": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@morlay/dsh-storage",
+  "version": "0.0.1",
+  "description": "存储 hub 与 domain 契约：后端可换，消费方只认这一个面。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-storage": "workspace:*",
+    "@deepseek-ai/dsh-storage-domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-storage-json": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

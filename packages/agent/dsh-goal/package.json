@@ -1,0 +1,36 @@
+{
+  "name": "@morlay/dsh-goal",
+  "version": "0.0.1",
+  "description": "目标状态机与续跑驱动：把「一个会话要反复推进的目标」变成可持久化的状态并自动续跑。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-client-ui-goal": "workspace:*",
+    "@deepseek-ai/dsh-command-goal": "workspace:*",
+    "@deepseek-ai/dsh-goal": "workspace:*",
+    "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
+    "@deepseek-ai/dsh-tool-goal": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-command": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-goal": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      "./server": "./src/server/index.ts"
+    }
+  }
+}

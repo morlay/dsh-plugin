@@ -1,0 +1,113 @@
+{
+  "name": "@morlay/session-rdb",
+  "version": "0.1.9",
+  "description": "RDB durable session backend for DeepSeek Harness: implements both session-persistence and session-branch (rewind / retry / fork) providers.",
+  "keywords": [
+    "branch",
+    "dsh",
+    "dsh-plugin",
+    "rdb",
+    "rewind",
+    "session-persistence",
+    "session-rdb"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "locale/*.json",
+    "dist",
+    "src",
+    "drizzle",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cordis-register": "./src/cordis-register.ts",
+    "./admin": "./src/admin/index.ts",
+    "./branch": "./src/branch/index.ts",
+    "./artifact": "./src/artifact.ts",
+    "./storage": "./src/storage.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./cordis-register": {
+        "types": "./dist/cordis-register.d.mts",
+        "default": "./dist/cordis-register.mjs"
+      },
+      "./admin": {
+        "types": "./dist/admin.d.mts",
+        "default": "./dist/admin.mjs"
+      },
+      "./branch": {
+        "types": "./dist/branch.d.mts",
+        "default": "./dist/branch.mjs"
+      },
+      "./artifact": {
+        "types": "./dist/artifact.d.mts",
+        "default": "./dist/artifact.mjs"
+      },
+      "./storage": {
+        "types": "./dist/storage.d.mts",
+        "default": "./dist/storage.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts && drizzle-kit generate --config drizzle.pg.config.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^1.0.0-rc.5-ab785fc",
+    "fflate": "^0.8.2",
+    "pg": "^8.23.0",
+    "@morlay/dsh-base": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
+    "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-session-turn-outline": "workspace:^",
+    "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-token-meter": "workspace:^",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "1.0.0-rc.5-ab785fc"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cosmokit": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-schedule": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-session-format-catalog": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
+    "@deepseek-ai/dsh-session-query": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-home-paths": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

@@ -1,0 +1,43 @@
+import { Module } from "@morlay/zephyr";
+import { OpenClientModule } from "./open/client/index.ts";
+import { SettingsClientModule } from "./settings/client/index.ts";
+import { ConnectionClientModule } from "./connection/client/index.ts";
+import { FileUploadClientModule } from "./file-upload/client/index.ts";
+import { ApiRemotesClientModule } from "./api-remotes/client/index.ts";
+import { ThemeClientModule } from "./theme/client/index.ts";
+import { LocaleClientModule } from "./locale/client/index.ts";
+import { ShortcutsClientModule } from "./shortcuts/client/index.ts";
+import { LayoutClientModule } from "./layout/client/index.ts";
+import { RendererClientModule } from "./renderer/client/index.ts";
+import { SessionClientModule } from "./session/client/index.ts";
+import { ResourcesClientModule } from "./resources/client/index.ts";
+import { SidebarClientModule } from "./sidebar/client/index.ts";
+import { ConversationClientModule } from "./conversation/client/index.ts";
+import { ApprovalClientModule } from "./approval/client/index.ts";
+import { ChatClientModule } from "./chat/client/index.ts";
+import { BrandClientModule } from "./brand/client/index.ts";
+import { AttachmentClientModule } from "./attachment/client/index.ts";
+import { ToolClientModule } from "./tool/client/index.ts";
+import { CordisClientModule } from "./cordis/client/index.ts";
+import { DeliverablesClientModule } from "./deliverables/client/index.ts";
+import { WorkspaceClientModule } from "./workspace/client/index.ts";
+import { WorkflowClientModule } from "./workflow/client/index.ts";
+import { InputClientModule } from "./input/client/index.ts";
+import { CommandsClientModule } from "./commands/client/index.ts";
+import { SkillClientModule } from "./skill/client/index.ts";
+import { SubagentClientModule } from "./subagent/client/index.ts";
+import { ReferenceClientModule } from "./reference/client/index.ts";
+import { SecretClientModule } from "./secret/client/index.ts";
+import { JobsClientModule } from "./jobs/client/index.ts";
+import { ScheduleClientModule } from "./schedule/client/index.ts";
+import { GoalClientModule } from "./goal/client/index.ts";
+import { MessageClientModule } from "./message/client/index.ts";
+import { ModelClientModule } from "./model/client/index.ts";
+import { PermissionClientModule } from "./permission/client/index.ts";
+import { AgentClientModule } from "./agent/client/index.ts";
+import { PlanClientModule } from "./plan/client/index.ts";
+import { UserClientModule } from "./user/client/index.ts";
+import { TrajectoryClientModule } from "./trajectory/client/index.ts";
+
+@Module({ imports: [ConnectionClientModule, OpenClientModule, SettingsClientModule, FileUploadClientModule, ThemeClientModule, LocaleClientModule, ShortcutsClientModule, LayoutClientModule, RendererClientModule, SessionClientModule, ResourcesClientModule, SidebarClientModule, ConversationClientModule, ApprovalClientModule, ChatClientModule, BrandClientModule, AttachmentClientModule, ToolClientModule, CordisClientModule, DeliverablesClientModule, WorkspaceClientModule, WorkflowClientModule, InputClientModule, CommandsClientModule, SkillClientModule, SubagentClientModule, ReferenceClientModule, SecretClientModule, JobsClientModule, ScheduleClientModule, GoalClientModule, MessageClientModule, ModelClientModule, PermissionClientModule, AgentClientModule, PlanClientModule, UserClientModule, TrajectoryClientModule] })
+export class DshWebAppClientPluginsModule {}

@@ -1,6 +1,6 @@
 [env]
 DEEPSEEK_HARNESS_DIR = "vendor/deepseek-harness"
-DEEPSEEK_HARNESS_VERSION = "0.2.1-rc.1"
+DEEPSEEK_HARNESS_VERSION = "0.2.2-alpha.2"
 
 [tools]
 node = "26"

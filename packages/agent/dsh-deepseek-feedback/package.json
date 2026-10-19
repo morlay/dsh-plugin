@@ -1,0 +1,27 @@
+{
+  "name": "@morlay/dsh-deepseek-feedback",
+  "version": "0.0.1",
+  "description": "把会话日志按 DeepSeek 反馈渠道上报，并附 `/feedback` 命令入口。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/dsh-command": "workspace:*",
+    "@deepseek-ai/dsh-command-feedback": "workspace:*",
+    "@deepseek-ai/dsh-commands": "workspace:*",
+    "@deepseek-ai/dsh-session-log-deepseek": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-deepseek-feedback": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

@@ -1,0 +1,542 @@
+// 用量统计口径闭环：POST /api/session.usage 按事件行去重（fork 共享行只算一次）、
+// 排除无会话引用的孤儿行，并把 subagent 会话的消耗单独拆出；另给按天×模型的桶与按会话的行。
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import {
+  SessionId,
+  type SessionEvent,
+  type SessionHeader,
+} from "@deepseek-ai/dsh-session";
+import { SessionAdmin, parseUsageRange, resolveUsageSince } from "../../admin/index.ts";
+import type { Config } from "../../persistence/config.ts";
+import { harness as rdbHarness, meta, oneTurnLog } from "../../testing.ts";
+
+const disposers: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  for (const dispose of disposers.splice(0)) await dispose();
+});
+
+// 一天：便于造出两个不同的日期桶（具体日期由本地时区决定，断言只比结构）。
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_ONE = 1_788_852_417_912;
+const DAY_TWO = DAY_ONE + DAY_MS;
+
+interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+}
+
+function usageOf(input: number, output: number, cacheRead = 0, reasoning = 0): Usage {
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: input + output,
+    cacheReadTokens: cacheRead,
+    reasoningTokens: reasoning,
+  };
+}
+
+// 一轮对话，assistant 消息带用量与模型来源，事件时间落在指定时刻。
+function turnWithUsage(
+  time: number,
+  model: { provider: string; model: string },
+  usage: Usage,
+): SessionEvent[] {
+  return oneTurnLog().map((event) => {
+    if (event.type !== "assistant/message") return { ...event, time } as SessionEvent;
+    const data = event.data as unknown as { message: Record<string, unknown> };
+    return {
+      ...event,
+      time,
+      data: {
+        ...event.data,
+        message: { ...data.message, source: { kind: "model", ...model } },
+        usage,
+      },
+    } as unknown as SessionEvent;
+  });
+}
+
+const DEFAULT_CONFIG: Config = { type: "sqlite", path: ":memory:" };
+
+async function harness(config: Config = DEFAULT_CONFIG): Promise<
+  Awaited<ReturnType<typeof rdbHarness>> & { admin: SessionAdmin }
+> {
+  const rdb = await rdbHarness({ config });
+  disposers.push(() => rdb.app.dispose());
+  return { ...rdb, admin: rdb.app.get(SessionAdmin) };
+}
+
+// 文件库 harness：回填只在"表为空"时发生，需要在同一文件上重开。
+function harnessAt(path: string) {
+  return harness({ type: "sqlite", path });
+}
+
+async function createPersisted(
+  persistence: Awaited<ReturnType<typeof rdbHarness>>["persistence"],
+  header: SessionHeader,
+  events: readonly SessionEvent[],
+): Promise<void> {
+  const handle = await persistence.create(header);
+  try {
+    await handle.append([...events]);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function archive(
+  persistence: Awaited<ReturnType<typeof rdbHarness>>["persistence"],
+  ...ids: string[]
+): Promise<void> {
+  await persistence.internals().backend.storage.writeWorkspaceState({
+    initialized: true,
+    workspaceIds: [],
+    pinnedSessionIds: [],
+    archivedSessionIds: ids.map((id) => SessionId(id)),
+  });
+}
+
+interface UsageTotals {
+  turns: number;
+  steps: number;
+  userInputs: number;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+}
+
+// 按天 × 模型的桶只有 token 用量：活动计数没有模型归属。
+interface UsageBucket {
+  day: string;
+  provider: string | null;
+  model: string | null;
+  subagent: boolean;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+}
+
+interface UsageSessionRow extends UsageTotals {
+  sessionId: string;
+  title: string | null;
+  subagent: boolean;
+  archived: boolean;
+}
+
+interface UsageReport {
+  totals: UsageTotals;
+  subagent: UsageTotals;
+  human: UsageTotals;
+  buckets: UsageBucket[];
+  sessions: UsageSessionRow[];
+}
+
+function report(admin: SessionAdmin, body: { range?: unknown } = {}): Promise<UsageReport> {
+  return admin.usage(resolveUsageSince(parseUsageRange(body.range), Date.now()));
+}
+
+describe("用量统计口径", () => {
+  it("总览按事件行去重，并把 subagent 会话的消耗单独拆出", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("human"),
+      turnWithUsage(
+        DAY_ONE,
+        { provider: "deepseek-official", model: "v4" },
+        usageOf(100, 10, 1_000, 5),
+      ),
+    );
+    await createPersisted(
+      persistence,
+      { ...meta("child"), origin: "subagent", parentSession: SessionId("human") },
+      turnWithUsage(DAY_ONE, { provider: "deepseek-official", model: "v4" }, usageOf(50, 5)),
+    );
+
+    const value = await report(admin);
+
+    expect(value.totals).toMatchObject({
+      turns: 2,
+      steps: 2,
+      userInputs: 2,
+      toolCalls: 0,
+      inputTokens: 150,
+      outputTokens: 15,
+      cacheReadTokens: 1_000,
+      reasoningTokens: 5,
+    });
+    expect(value.subagent).toMatchObject({ turns: 1, steps: 1, toolCalls: 0, inputTokens: 50 });
+    expect(value.human).toMatchObject({ turns: 1, inputTokens: 100 });
+  });
+
+  it("活动计数按事件类型数出来（轮次 / 步骤 / 用户输入 / 工具调用）", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    const first = turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2));
+    const toolCall = {
+      type: "tool/call",
+      seq: 6,
+      time: DAY_ONE,
+      data: { turn: 1, step: 1, callId: "c1", name: "read", arguments: "{}" },
+    } as unknown as SessionEvent;
+    const second = turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2)).map(
+      (event) => ({ ...event, seq: event.seq + 7, time: DAY_ONE + 1 }) as SessionEvent,
+    );
+    await createPersisted(persistence, meta("s1"), [...first, toolCall, ...second]);
+
+    const value = await report(admin);
+
+    expect(value.totals).toMatchObject({ turns: 2, steps: 2, userInputs: 2, toolCalls: 1 });
+    expect(value.sessions[0]?.toolCalls).toBe(1);
+    expect(value.sessions[0]?.turns).toBe(2);
+  });
+
+  it("按天 × 模型 × subagent 分桶", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("human"),
+      turnWithUsage(DAY_ONE, { provider: "provider-a", model: "m-a" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      persistence,
+      meta("other"),
+      turnWithUsage(DAY_TWO, { provider: "provider-b", model: "m-b" }, usageOf(7, 3)),
+    );
+
+    const value = await report(admin);
+
+    expect(value.buckets).toHaveLength(2);
+    const days = new Set(value.buckets.map((bucket) => bucket.day));
+    expect(days.size).toBe(2);
+    for (const day of days) expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    const secondDay = value.buckets.find((bucket) => bucket.inputTokens === 7);
+    expect(secondDay).toMatchObject({ provider: "provider-b", model: "m-b", subagent: false });
+  });
+
+  it("按会话列出用量，并带上子代理与归档标记", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("human"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      persistence,
+      { ...meta("child"), origin: "subagent", parentSession: SessionId("human") },
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(50, 5)),
+    );
+    await archive(persistence, "child");
+
+    const value = await report(admin);
+
+    const byId = new Map(value.sessions.map((row) => [row.sessionId, row]));
+    expect(byId.get("human")).toMatchObject({ subagent: false, archived: false, inputTokens: 100 });
+    expect(byId.get("child")).toMatchObject({ subagent: true, archived: true, inputTokens: 50 });
+  });
+
+  it("旧库回填：用量表为空时按事件行补一次（历史数据迁移）", { timeout: 20000 }, async () => {
+    const dir = await mkdtemp(join(tmpdir(), "usage-backfill-"));
+    const dbPath = join(dir, "sessions.sqlite");
+    try {
+      const first = await harnessAt(dbPath);
+      await createPersisted(
+        first.persistence,
+        meta("old"),
+        turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10, 0, 0)),
+      );
+      await first.app.dispose();
+
+      // 模拟历史库：事件行在，用量表被清空（旧版本从未写过 t_event_usage）。
+      const raw = new DatabaseSync(dbPath);
+      raw.exec("DELETE FROM t_event_usage");
+      raw.close();
+
+      const second = await harnessAt(dbPath);
+      const value = await report(second.admin);
+      expect(value.totals.inputTokens).toBe(100);
+      expect(value.totals.turns).toBe(1);
+
+      // 幂等：再开一次不会重复累计。
+      await second.app.dispose();
+      const third = await harnessAt(dbPath);
+      const again = await report(third.admin);
+      expect(again.totals.inputTokens).toBe(100);
+      await third.app.dispose();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("时间范围过滤：只算范围内的事件行", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    const now = Date.now();
+    await createPersisted(
+      persistence,
+      meta("recent"),
+      turnWithUsage(now - 60_000, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      persistence,
+      meta("stale"),
+      turnWithUsage(now - 40 * DAY_MS, { provider: "p", model: "m" }, usageOf(7, 3)),
+    );
+
+    const all = await report(admin);
+    expect(all.totals.turns).toBe(2);
+
+    const week = await report(admin, { range: "7d" });
+    expect(week.totals.turns).toBe(1);
+    expect(week.totals.inputTokens).toBe(100);
+    expect(week.sessions.map((row) => row.sessionId)).toEqual(["recent"]);
+  });
+
+  it("本自然日 / 本自然周按本地零点与周一起算", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+
+    await createPersisted(
+      persistence,
+      meta("today"),
+      turnWithUsage(dayStart.getTime() + 1_000, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      persistence,
+      meta("yesterday"),
+      turnWithUsage(dayStart.getTime() - 1_000, { provider: "p", model: "m" }, usageOf(20, 2)),
+    );
+    await createPersisted(
+      persistence,
+      meta("this-week"),
+      turnWithUsage(weekStart.getTime() + 1_000, { provider: "p", model: "m" }, usageOf(7, 1)),
+    );
+    await createPersisted(
+      persistence,
+      meta("last-week"),
+      turnWithUsage(weekStart.getTime() - 1_000, { provider: "p", model: "m" }, usageOf(3, 1)),
+    );
+
+    const today = await report(admin, { range: "day" });
+    const todayIds = today.sessions.map((row) => row.sessionId);
+    expect(todayIds).toContain("today");
+    expect(todayIds).not.toContain("yesterday");
+
+    const week = await report(admin, { range: "week" });
+    const weekIds = week.sessions.map((row) => row.sessionId);
+    expect(weekIds).toContain("this-week");
+    expect(weekIds).not.toContain("last-week");
+  });
+
+  // 派生统计表：可以随时清掉、启动时按事件表重建（首次/表空才回填，幂等）。
+  it("统计表被清空后按事件表全量回填（可销毁重建）", { timeout: 20000 }, async () => {
+    const dir = await mkdtemp(join(tmpdir(), "session-rdb-counts-"));
+    const path = join(dir, "sessions.sqlite");
+    const first = await harnessAt(path);
+    try {
+      await createPersisted(
+        first.persistence,
+        meta("s1"),
+        turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(10, 2)),
+      );
+    } finally {
+      await first.app.dispose();
+    }
+
+    const raw = new DatabaseSync(path);
+    raw.exec(
+      "DELETE FROM t_event_usage; DELETE FROM t_session_usage; DELETE FROM t_session_counts",
+    );
+    raw.close();
+
+    const second = await harnessAt(path);
+    try {
+      const value = await report(second.admin);
+      expect(value.totals).toMatchObject({
+        turns: 1,
+        steps: 1,
+        userInputs: 1,
+        toolCalls: 0,
+        inputTokens: 10,
+        outputTokens: 2,
+      });
+      expect(value.sessions[0]).toMatchObject({ turns: 1, inputTokens: 10 });
+    } finally {
+      await second.app.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // fork 不参与统计：继承前缀那一次消耗是父会话真实发生的，子会话只记自己新产生的（写路径旁路累加）。
+  it("fork 不把继承前缀算进统计：归属与按会话行都留给父会话", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("src"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    const forkable = branch as unknown as {
+      forkFrom(
+        id: SessionId,
+        options: {
+          atSeq: number;
+          anchorMode: "before" | "after";
+          childSessionId: SessionId;
+          meta?: { origin?: string };
+        },
+      ): Promise<SessionId>;
+    };
+    await forkable.forkFrom(SessionId("src"), {
+      atSeq: 6,
+      anchorMode: "before",
+      childSessionId: SessionId("child"),
+      meta: { origin: "subagent" },
+    });
+
+    const value = await report(admin);
+
+    // 总量是父会话那一次真实消耗；共享的事件行不会被 fork 改成 subagent 归属。
+    expect(value.totals.inputTokens).toBe(100);
+    expect(value.human.inputTokens).toBe(100);
+    expect(value.subagent.inputTokens).toBe(0);
+    // 子会话自己没有产生的用量 → 按会话行里只有父会话。
+    const byId = new Map(value.sessions.map((row) => [row.sessionId, row]));
+    expect([...byId.keys()]).toEqual(["src"]);
+    expect(byId.get("src")).toMatchObject({ subagent: false, inputTokens: 100, turns: 1 });
+  });
+
+  // 迁移对统计表先删后建：旧结构（没有物化列 / 按类型存的计数表）升级后必须被重建并回填。
+  it("旧结构的统计表在迁移里删表重建，并按事件表回填", { timeout: 20000 }, async () => {
+    const dir = await mkdtemp(join(tmpdir(), "session-rdb-migrate-"));
+    const path = join(dir, "sessions.sqlite");
+    const first = await harnessAt(path);
+    try {
+      await createPersisted(
+        first.persistence,
+        meta("old"),
+        turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+      );
+    } finally {
+      await first.app.dispose();
+    }
+
+    // 模拟旧库：统计表回到迁移之前的结构，并抹掉这条迁移的应用记录。
+    const raw = new DatabaseSync(path);
+    raw.exec(`
+      DROP TABLE t_event_usage;
+      DROP TABLE t_session_usage;
+      DROP TABLE t_session_counts;
+      CREATE TABLE t_event_usage (
+        f_event_id text PRIMARY KEY NOT NULL,
+        f_created_at bigint NOT NULL,
+        f_provider text,
+        f_model text,
+        f_input_tokens integer DEFAULT 0 NOT NULL,
+        f_output_tokens integer DEFAULT 0 NOT NULL,
+        f_cache_read_tokens integer DEFAULT 0 NOT NULL,
+        f_reasoning_tokens integer DEFAULT 0 NOT NULL,
+        f_total_tokens integer DEFAULT 0 NOT NULL
+      );
+      CREATE TABLE t_event_counts (
+        f_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        f_session_id TEXT NOT NULL,
+        f_day TEXT NOT NULL,
+        f_type TEXT NOT NULL,
+        f_count INTEGER NOT NULL DEFAULT 0
+      );
+      DELETE FROM __drizzle_migrations WHERE name = '20260923120000_v3_usage_materialized';
+    `);
+    raw.close();
+
+    const second = await harnessAt(path);
+    try {
+      // 先查一次报表（触发后端打开与迁移 + 回填），再验表结构。
+      const value = await report(second.admin);
+      expect(value.totals).toMatchObject({ turns: 1, inputTokens: 100, outputTokens: 10 });
+      expect(value.sessions[0]).toMatchObject({ sessionId: "old", turns: 1, inputTokens: 100 });
+
+      const inspect = new DatabaseSync(path);
+      const columns = inspect
+        .prepare("SELECT name FROM pragma_table_info('t_event_usage')")
+        .all() as Array<{ name: string }>;
+      inspect.close();
+      const names = columns.map((column) => column.name);
+      expect(names).toContain("f_day");
+      expect(names).toContain("f_referenced");
+      expect(names).toContain("f_subagent");
+    } finally {
+      await second.app.dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // 「近 N 天」的起点按本地时区对齐到零点：含今天共 N 个自然日，与 `day` / `week` 同一套边界。
+  it("滚动范围（近 N 天）的起点对齐本地零点", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const cutoff = new Date(dayStart);
+    cutoff.setDate(cutoff.getDate() - 6);
+    await createPersisted(
+      persistence,
+      meta("inside"),
+      turnWithUsage(cutoff.getTime() + 1_000, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    await createPersisted(
+      persistence,
+      meta("outside"),
+      turnWithUsage(cutoff.getTime() - 1_000, { provider: "p", model: "m" }, usageOf(7, 3)),
+    );
+
+    const value = await report(admin, { range: "7d" });
+
+    expect(value.sessions.map((row) => row.sessionId)).toEqual(["inside"]);
+    expect(value.totals.inputTokens).toBe(100);
+  });
+
+  it("被删除会话留下的事件行（无引用）不计入统计", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("drop-me"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(999, 99)),
+    );
+    await archive(persistence, "drop-me");
+    await persistence.deleteSession(SessionId("drop-me"));
+
+    const value = await report(admin);
+
+    expect(value.totals.turns).toBe(0);
+    expect(value.totals.inputTokens).toBe(0);
+    expect(value.sessions).toEqual([]);
+  });
+
+  it("撤回（rewind）不回退统计：请求已发起就已消耗", { timeout: 20000 }, async () => {
+    const { admin, branch, persistence } = await harness();
+    await createPersisted(
+      persistence,
+      meta("rewind-me"),
+      turnWithUsage(DAY_ONE, { provider: "p", model: "m" }, usageOf(100, 10)),
+    );
+    expect((await report(admin)).totals.inputTokens).toBe(100);
+
+    await branch.rewind(SessionId("rewind-me"), -1);
+
+    const value = await report(admin);
+    expect(value.totals.inputTokens).toBe(100);
+    expect(value.sessions.map((row) => row.sessionId)).toEqual(["rewind-me"]);
+  });
+});

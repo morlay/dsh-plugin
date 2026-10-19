@@ -1,0 +1,39 @@
+{
+  "name": "@morlay/dsh-workspace",
+  "version": "0.0.1",
+  "description": "工作区与会话的绑定：注册表、目录选择、变更广播，外加浏览器侧的工作区面。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-workspace": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-session-persistence": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-persistence": "workspace:*",
+    "@morlay/dsh-workspace": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      "./server": "./src/server/index.ts"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@local/zephyr-codegen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "bundle 的 @Module 元数据拍平成 cordis.patch.yml 行清单的最小生成器",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "js-yaml": "^4.1.0",
+    "rolldown": "*"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
+}

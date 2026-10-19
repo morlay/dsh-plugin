@@ -1,0 +1,32 @@
+{
+  "name": "@morlay/dsh-web-access",
+  "version": "0.0.1",
+  "description": "联网访问：搜索与抓取两个后端、一个 `Web` 契约，以及给模型的 web 工具行。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tool-web": "workspace:*",
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-web-fetch-http": "workspace:*",
+    "@deepseek-ai/dsh-web-search-deepseek": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-web-access": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      "./server": "./src/server/index.ts"
+    }
+  }
+}

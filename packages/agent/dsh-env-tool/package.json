@@ -1,0 +1,30 @@
+{
+  "name": "@morlay/dsh-env-tool",
+  "version": "0.0.1",
+  "description": "四个宿主侧工具行：bash、文件读写、文件检索、工作目录，工具定义在上游插件里。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tool-bash": "workspace:*",
+    "@deepseek-ai/dsh-tool-fs": "workspace:*",
+    "@deepseek-ai/dsh-tool-fs-search": "workspace:*",
+    "@deepseek-ai/dsh-tool-working-directory": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-fs": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-env-tool": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

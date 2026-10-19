@@ -1,0 +1,54 @@
+{
+  "name": "@morlay/dsh-skill",
+  "version": "0.0.1",
+  "private": true,
+  "description": "技能注册表与文件系统技能来源：把「技能」变成可被发现、可注入目录的一等对象。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-client-ui-skill": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@morlay/dsh-fs": "workspace:*",
+    "@morlay/dsh-skill": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  }
+}
