@@ -10,6 +10,7 @@
   config:
     access: |-
       rw /tmp
+      rw {{ env.HOME }}/.agent-browser
       rw {{ env.XDG_CACHE_HOME }}
       rw {{ env.XDG_STATE_HOME }}
       rw {{ env.XDG_DATA_HOME }}

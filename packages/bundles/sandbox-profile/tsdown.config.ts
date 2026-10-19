@@ -1,6 +1,10 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin } from "@local/tsdown-plugin-cordis";
-import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
+import {
+  bundlePatch,
+  renderPatch,
+  type PatchBundleOptions,
+} from "@local/devkit/patch";
 import { sandboxRows } from "@morlay/dsh-sandbox-local/rows";
 
 const ROWS: readonly unknown[] = [
@@ -11,6 +15,7 @@ const ROWS: readonly unknown[] = [
     config: {
       access: [
         "rw /tmp",
+        "rw {{ env.HOME }}/.agent-browser",
         "rw {{ env.XDG_CACHE_HOME }}",
         "rw {{ env.XDG_STATE_HOME }}",
         "rw {{ env.XDG_DATA_HOME }}",

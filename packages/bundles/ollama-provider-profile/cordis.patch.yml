@@ -13,8 +13,8 @@
         reasoning: high
         requestImageMaxBytes: 2097152
         models:
-          - id: deepseek-v4.1-flash
-            name: DeepSeek V4.1 Flash @ Ollama Cloud
+          - id: deepseek-v4.1-flash:1017
+            name: DeepSeek V4.1 Flash 1017 @ Ollama Cloud
             contextWindow: 1000000
             input:
               - text

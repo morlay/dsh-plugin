@@ -52,7 +52,7 @@ export interface ModeModelSource {
 const CODING_PERSONA = {
   prefix: [
     "你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。",
-    "全程用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考不要陷入重复循环，一旦循环立即退出；思考聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。",
+    "全程 MUST 用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考 NEVER 陷入重复循环，一旦循环立即退出；思考 SHOULD 聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。",
   ].join("\n"),
 };
 
@@ -76,7 +76,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
     name: "编码模式",
-    description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
+    description:
+      "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
@@ -115,7 +116,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: NOOP_MODE_ID,
     name: "原样模式",
-    description: "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
+    description:
+      "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
     // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
     role: ["main", "subagent"],
     // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，

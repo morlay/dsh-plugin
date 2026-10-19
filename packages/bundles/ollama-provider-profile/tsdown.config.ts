@@ -1,6 +1,10 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin } from "@local/tsdown-plugin-cordis";
-import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
+import {
+  bundlePatch,
+  renderPatch,
+  type PatchBundleOptions,
+} from "@local/devkit/patch";
 import { webSearchRows } from "@morlay/dsh-web-search-ollama/rows";
 
 const ROWS: readonly unknown[] = [
@@ -20,11 +24,16 @@ const ROWS: readonly unknown[] = [
           requestImageMaxBytes: 2 * 1024 * 1024,
           models: [
             {
-              id: "deepseek-v4.1-flash",
-              name: "DeepSeek V4.1 Flash @ Ollama Cloud",
+              id: "deepseek-v4.1-flash:1017",
+              name: "DeepSeek V4.1 Flash 1017 @ Ollama Cloud",
               contextWindow: 1000000,
               input: ["text", "image"],
-              reasoningEfforts: { off: null, low: "low", high: "high", max: "max" },
+              reasoningEfforts: {
+                off: null,
+                low: "low",
+                high: "high",
+                max: "max",
+              },
             },
           ],
         },
