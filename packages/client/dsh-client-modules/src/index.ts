@@ -131,10 +131,19 @@ async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Prom
   return [...found.values()];
 }
 
-/** 打包器指纹的输入集：**只与包有关、与出口无关**（缓存按包聚合，rev 跟着出口变就等于永不命中）。 */
-function watchOf(root: string | undefined, entry: string): string[] {
+/**
+ * 打包器指纹的输入集：**只与包有关、与出口无关**（缓存按包聚合，rev 跟着出口变就等于永不命中）。
+ *
+ * 上游包的 `lib/` 也是打包输入：`exports` 的 `./typert` / `./remote` / `./client/typert` 指向
+ * `lib/typert.*.ts`（`just vendor prebuild` 生成的），只盯 `src/` 时重新生成 typert 产物不会让缓存失效，
+ * 浏览器会继续拿旧的 descriptor——例如 `terminal/retain` 仍按旧的 `workspaceFileScopeId` 发参数，宿主
+ * 按新 descriptor 拒掉（`missing "sessionId"`）。
+ */
+export function watchOf(root: string | undefined, entry: string): string[] {
   if (root === undefined) return [entry];
-  return root.includes("node_modules") ? [join(root, "package.json")] : [join(root, "src")];
+  return root.includes("node_modules")
+    ? [join(root, "package.json")]
+    : [join(root, "src"), join(root, "lib")];
 }
 
 export function apply(ctx: Context): void {

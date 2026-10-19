@@ -1,15 +1,14 @@
-// 文档里的引用必须落得到真文件：行内代码里的工作区路径、`just <recipe>`、探针路径（`tool/*.mts`）。
-// 与 markdown-links.spec.ts 分工：那条守**链接目标**（`[x](path)`），这条守**行内代码里的路径**；
-// 行内代码只当链接文本用短形式时，可解析的路径在链接目标里，那条已经在守，这里不重复判。
-// 规则、判据与例外表见 `.agents/standards/describing-facts.md`（这份 spec 就是它的判据）。
+/**
+ * 文档里的引用检查（`just lint` 的独立命令，不经过 vitest）：
+ *
+ * 1. 行内代码里的工作区路径必须解析到真实文件（判据与例外表见 `.agents/standards/describing-facts.md`）；
+ * 2. 行内代码里的 `just <recipe>` 必须能在根 justfile（或它 mod 进来的 justfile）里找到。
+ *
+ * 返回人类可读的问题列表；空数组表示通过。与 `markdown-links.ts` 分工：那条守链接目标，这条守行内代码。
+ */
 import { access, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-// 上游源码：文档引用上游文件时写的是上游仓内的相对路径（`packages/core/system-prompt/src/index.ts`）。
-const UPSTREAM = join(ROOT, "vendor/deepseek-harness");
 const SKIP_DIRS = new Set([
   ".dshdev",
   ".git",
@@ -39,19 +38,19 @@ const REMOTE = /^(?:https?:|mailto:)/u;
 // 解析基址（按序取第一个存在的）：文档所在目录 → 所在包根 → 包内 `src/` → 所在 scope 目录 →
 // 仓库根 → `packages|devpackages|apps/`（跨包省略前缀）→ 上游仓根及其 `packages|vendor|apps/`。
 // 上游短形式（`fs/src/types.ts`）与探针（`tool/x.mts`）靠最后一步的**工作区唯一后缀匹配**兜。
-const basesOf = (dir: string, packageRoot: string): string[] => [
+const basesOf = (dir: string, packageRoot: string, root: string, upstream: string): string[] => [
   dir,
   packageRoot,
   join(packageRoot, "src"),
   dirname(packageRoot),
-  ROOT,
-  join(ROOT, "packages"),
-  join(ROOT, "devpackages"),
-  join(ROOT, "apps"),
-  UPSTREAM,
-  join(UPSTREAM, "packages"),
-  join(UPSTREAM, "vendor"),
-  join(UPSTREAM, "apps"),
+  root,
+  join(root, "packages"),
+  join(root, "devpackages"),
+  join(root, "apps"),
+  upstream,
+  join(upstream, "packages"),
+  join(upstream, "vendor"),
+  join(upstream, "apps"),
 ];
 
 // 例外表：机械解析不到、但按上下文合理的引用。理由不是「它存在」，
@@ -228,7 +227,11 @@ async function packageRootOf(dir: string, cache: Map<string, string>): Promise<s
 }
 
 // 后缀索引：只为「基址都解析不到」的引用建立，按 basename 收敛（常态零开销）。
-async function suffixIndex(names: ReadonlySet<string>): Promise<Map<string, string[]>> {
+async function suffixIndex(
+  names: ReadonlySet<string>,
+  root: string,
+  upstream: string,
+): Promise<Map<string, string[]>> {
   const index = new Map<string, string[]>();
   const walk = async (dir: string, prefix: string): Promise<void> => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -238,12 +241,12 @@ async function suffixIndex(names: ReadonlySet<string>): Promise<Map<string, stri
         continue;
       }
       if (!names.has(entry.name)) continue;
-      const path = prefix + relative(ROOT, join(dir, entry.name));
+      const path = prefix + relative(root, join(dir, entry.name));
       index.set(entry.name, [...(index.get(entry.name) ?? []), path]);
     }
   };
-  await walk(ROOT, "");
-  if (await exists(UPSTREAM)) await walk(UPSTREAM, `${relative(ROOT, UPSTREAM)}/`);
+  await walk(root, "");
+  if (await exists(upstream)) await walk(upstream, `${relative(root, upstream)}/`);
   return index;
 }
 
@@ -263,84 +266,90 @@ function modulesOf(text: string): Map<string, string> {
   );
 }
 
-describe("文档里的引用", () => {
-  it("行内代码里的工作区路径都指向真实文件", async () => {
-    const exceptions = new Set(EXCEPTIONS.map((entry) => `${entry.file}::${entry.code}`));
-    const roots = new Map<string, string>();
-    const pending: { file: string; line: number; code: string; bare: string }[] = [];
-    let checked = 0;
-    for (const file of await markdownFiles(ROOT)) {
-      const relativeFile = relative(ROOT, file);
-      for (const { line, text } of spansOf(await readFile(file, "utf8"))) {
-        const code = text.trim();
-        if (!code.includes("/") || NOT_A_PATH.test(code) || REMOTE.test(code)) continue;
-        if (code.startsWith("@") || code.includes("...") || REVISION.test(code)) continue;
-        const bare = code.replace(LINE_SUFFIX, "");
-        if (!SOURCE_EXT.test(bare) || NON_SOURCE_DIR.test(bare)) continue;
-        if (exceptions.has(`${relativeFile}::${code}`)) continue;
-        checked += 1;
-        const bases = basesOf(dirname(file), await packageRootOf(dirname(file), roots));
-        let found = false;
-        for (const base of bases) {
-          if (await exists(resolve(base, bare))) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) pending.push({ file: relativeFile, line, code, bare });
-      }
-    }
-    const index = await suffixIndex(new Set(pending.map((entry) => basename(entry.bare))));
-    // 防空转：规则写窄了（正则写错、目录被跳过）会静默变绿，这里要求确实扫到了东西。
-    expect(checked).toBeGreaterThan(100);
-    const broken = pending.filter(({ bare }) => {
-      const hits = (index.get(basename(bare)) ?? []).filter(
-        (path) => path === bare || path.endsWith(`/${bare}`),
+/**
+ * 扫描仓库里的 markdown（跳过构建产物 / 依赖 / 上游），返回引用检查的问题列表。
+ * @param root - 仓库根。
+ * @returns 问题描述；空数组表示通过。
+ */
+export async function checkReferences(root: string): Promise<string[]> {
+  const upstream = join(root, "vendor", "deepseek-harness");
+  const problems: string[] = [];
+  const exceptions = new Set(EXCEPTIONS.map((entry) => `${entry.file}::${entry.code}`));
+  const roots = new Map<string, string>();
+  const pending: { file: string; line: number; code: string; bare: string }[] = [];
+  let checked = 0;
+  for (const file of await markdownFiles(root)) {
+    const relativeFile = relative(root, file);
+    for (const { line, text } of spansOf(await readFile(file, "utf8"))) {
+      const code = text.trim();
+      if (!code.includes("/") || NOT_A_PATH.test(code) || REMOTE.test(code)) continue;
+      if (code.startsWith("@") || code.includes("...") || REVISION.test(code)) continue;
+      const bare = code.replace(LINE_SUFFIX, "");
+      if (!SOURCE_EXT.test(bare) || NON_SOURCE_DIR.test(bare)) continue;
+      if (exceptions.has(`${relativeFile}::${code}`)) continue;
+      checked += 1;
+      const bases = basesOf(
+        dirname(file),
+        await packageRootOf(dirname(file), roots),
+        root,
+        upstream,
       );
-      return hits.length !== 1;
-    });
-    expect(
-      broken
-        .map(
-          ({ file, line, code }) =>
-            `${file}:${line} \`${code}\` —— 解析不到文件：写全路径或补进例外表（见 describing-facts.md）`,
-        )
-        .sort(),
-    ).toEqual([]);
-  });
-
-  it("`just <recipe>` 都在根 justfile 里", async () => {
-    const rootJustfile = await readFile(join(ROOT, "justfile"), "utf8");
-    const recipes = recipesOf(rootJustfile);
-    const modules = modulesOf(rootJustfile);
-    const broken: string[] = [];
-    const seen = new Set<string>();
-    for (const file of await markdownFiles(ROOT)) {
-      const relativeFile = relative(ROOT, file);
-      for (const { line, text } of spansOf(await readFile(file, "utf8"))) {
-        for (const match of text.matchAll(/(?:^|[\s(（])just\s+([^\s`]+)(?:\s+([^\s`]+))?/gu)) {
-          const head = match[1] ?? "";
-          // 占位（`just <recipe>`、`just …`）与 `--list` 这类旗标不是 recipe 名。
-          if (head.startsWith("-") || NOT_A_PATH.test(head)) continue;
-          seen.add(head);
-          if (recipes.has(head)) continue;
-          const module = modules.get(head);
-          if (module === undefined) {
-            broken.push(
-              `${relativeFile}:${line} just ${head} —— 根 justfile 里没有这条 recipe，也没有这个 mod`,
-            );
-            continue;
-          }
-          const sub = match[2] ?? "";
-          if (sub.length === 0 || sub.startsWith("-") || NOT_A_PATH.test(sub)) continue;
-          const subRecipes = recipesOf(await readFile(join(ROOT, module), "utf8"));
-          if (!subRecipes.has(sub))
-            broken.push(`${relativeFile}:${line} just ${head} ${sub} —— ${module} 里没有它`);
+      let found = false;
+      for (const base of bases) {
+        if (await exists(resolve(base, bare))) {
+          found = true;
+          break;
         }
       }
+      if (!found) pending.push({ file: relativeFile, line, code, bare });
     }
-    // 防空转：正则写错就静默变绿，这里要求确实扫到了 `just <recipe>`。
-    expect(seen.size).toBeGreaterThan(0);
-    expect(broken.sort()).toEqual([]);
-  });
-});
+  }
+  const index = await suffixIndex(
+    new Set(pending.map((entry) => basename(entry.bare))),
+    root,
+    upstream,
+  );
+  for (const { file, line, code, bare } of pending) {
+    const hits = (index.get(basename(bare)) ?? []).filter(
+      (path) => path === bare || path.endsWith(`/${bare}`),
+    );
+    if (hits.length !== 1) {
+      problems.push(
+        `${file}:${line} \`${code}\` —— 解析不到文件：写全路径或补进例外表（见 describing-facts.md）`,
+      );
+    }
+  }
+  // 防空转：规则写窄了（正则写错、目录被跳过）会静默变绿。
+  if (checked === 0) problems.push("没有扫描到任何行内代码路径引用（检查规则可能写窄了）");
+
+  const rootJustfile = join(root, "justfile");
+  const recipes = recipesOf(await readFile(rootJustfile, "utf8"));
+  const modules = modulesOf(await readFile(rootJustfile, "utf8"));
+  const seen = new Set<string>();
+  for (const file of await markdownFiles(root)) {
+    const relativeFile = relative(root, file);
+    for (const { line, text } of spansOf(await readFile(file, "utf8"))) {
+      for (const match of text.matchAll(/(?:^|[\s(（])just\s+([^\s`]+)(?:\s+([^\s`]+))?/gu)) {
+        const head = match[1] ?? "";
+        if (head.startsWith("-") || NOT_A_PATH.test(head)) continue;
+        seen.add(head);
+        if (recipes.has(head)) continue;
+        const module = modules.get(head);
+        if (module === undefined) {
+          problems.push(
+            `${relativeFile}:${line} just ${head} —— 根 justfile 里没有这条 recipe，也没有这个 mod`,
+          );
+          continue;
+        }
+        const sub = match[2] ?? "";
+        if (sub.length === 0 || sub.startsWith("-") || NOT_A_PATH.test(sub)) continue;
+        const subRecipes = recipesOf(await readFile(join(root, module), "utf8"));
+        if (!subRecipes.has(sub))
+          problems.push(`${relativeFile}:${line} just ${head} ${sub} —— ${module} 里没有它`);
+      }
+    }
+  }
+  // 防空转：要求确实扫到了 `just <recipe>`。
+  if (seen.size === 0) problems.push("没有扫描到任何 `just <recipe>` 引用（检查规则可能写窄了）");
+  return problems.sort();
+}

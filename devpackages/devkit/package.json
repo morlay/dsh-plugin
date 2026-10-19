@@ -11,7 +11,8 @@
     ".": "./src/index.ts",
     "./tsconfig.json": "./tsconfig.json",
     "./patch": "./src/patch.ts",
-    "./log": "./src/log.ts"
+    "./log": "./src/log.ts",
+    "./checks": "./src/checks/index.ts"
   },
   "devDependencies": {
     "@browserbasehq/stagehand": "^4.2.1",

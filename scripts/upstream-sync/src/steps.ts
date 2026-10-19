@@ -36,26 +36,17 @@ const OXC_CLI = ["dlx", "@oxc-node/cli"];
 // `typert` 步骤：跑**本仓库自己的** typert 生成器（`@local/typert-generator`）——它按 AST 把上游源码的
 // 方法面与声明树的类型面合成 `lib/typert.*.ts`。不读上游 tsconfig，也不 import 上游 generator。
 //
-// 声明树（`target/dts`，由 `@local/devkit` 的 `generateWorkspaceDts` 生成）是它的输入：缺了就先生成一次
-// ——同一条链里 `just build` 也要它，共用一份。
-async function generateTypertArtifacts(dir: string, root: string): Promise<void> {
-  const { generateWorkspaceDts, dtsRootOf } = (await import("@local/dts-prepare")) as {
-    generateWorkspaceDts: (root: string) => Promise<void>;
-    dtsRootOf: (root: string) => string;
-  };
+// 声明树（`target/dts`）的生成与并发锁收在 `@local/dts-prepare`，由生成器自己确保（与 tsdown 的
+// `repoRootOf(cwd) → ensureWorkspaceDts → dtsRootOf` 同一条流程）：这条步骤不再有"先跑一个 dts 子命令"
+// 的前置，也不自己判断声明树在不在。
+async function generateTypertArtifacts(dir: string): Promise<void> {
   const { generateTypert } = (await import("@local/typert-generator")) as {
     generateTypert: (options: {
       upstreamRoot: string;
-      dtsRoot: string;
       write: boolean;
     }) => Promise<{ package: string; invocations: number }[]>;
   };
-  const dtsRoot = dtsRootOf(root);
-  if (!(await pathExists(join(dtsRoot, "vendor")))) {
-    console.log("[steps] typert: 声明树缺失，先生成一次");
-    await generateWorkspaceDts(root);
-  }
-  const artifacts = await generateTypert({ upstreamRoot: dir, dtsRoot, write: true });
+  const artifacts = await generateTypert({ upstreamRoot: dir, write: true });
   const invocations = artifacts.reduce((total, artifact) => total + artifact.invocations, 0);
   console.log(
     `[steps] typert: ${artifacts.length} 个包 / ${invocations} 条 invocation —— 已写入 lib/typert.*.ts`,
@@ -127,7 +118,7 @@ async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
   }
   if (step.type === "typert") {
     console.log("[steps] typert -> lib/*.ts");
-    await generateTypertArtifacts(dir, paths.root);
+    await generateTypertArtifacts(dir);
     return;
   }
   if (step.type === "native") {

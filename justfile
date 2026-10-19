@@ -43,15 +43,12 @@ fmt:
 # 我们自己的规矩的检查工具（不是测试）：包面（`dsh.bundle` 的包才有 locale 那套）与运行期依赖声明，
 # 外加文档与记录树的三条硬规矩——行内代码里像工作区路径的东西要解析得到真实文件、md 链接要存在
 # （判据与例外表见 `.agents/standards/describing-facts.md`）、术语表的登记双向一致且每行声明归属
-# （判据见 `.agents/GLOSSARY-MAP.md`）。这几条住在 devkit 的 spec 里，这里定向跑；
-# `just test` 跑全仓时同样覆盖它们。
+# （判据见 `.agents/GLOSSARY-MAP.md`）。这些都是**独立的检查命令**（`dshdev check-*`），不挂 vitest；
+# `just test` 不重复跑它们（CI 的检查步骤会跑 `just lint`）。
 lint:
     pnpm exec oxlint .
     pnpm exec dshdev check-locale
-    pnpm exec vitest run --reporter=dot \
-        devpackages/devkit/src/__tests__/doc-references.spec.ts \
-        devpackages/devkit/src/__tests__/markdown-links.spec.ts \
-        devpackages/devkit/src/__tests__/glossary.spec.ts
+    pnpm exec dshdev check-docs
 
 # 发布一律走 CI；这一条是 CI 的发布步骤（逐包唤起，只发 `@morlay/*` 里版本是新的那些）。
 publish:

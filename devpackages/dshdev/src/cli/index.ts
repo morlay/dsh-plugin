@@ -140,6 +140,25 @@ program
   });
 
 program
+  .command("check-docs")
+  .description(
+    "check documentation references, markdown links and the glossary registry (a lint tool, not a test)",
+  )
+  .argument("[root]", "repository root (default: current directory)")
+  .action(async (root: string | undefined) => {
+    const { checkGlossary, checkMarkdownLinks, checkReferences } =
+      await import("@local/devkit/checks");
+    const repositoryRoot = resolve(root ?? process.cwd());
+    const problems = [
+      ...(await checkReferences(repositoryRoot)),
+      ...(await checkMarkdownLinks(repositoryRoot)),
+      ...(await checkGlossary(repositoryRoot)),
+    ];
+    for (const problem of problems) process.stderr.write(`[check-docs] ${problem}\n`);
+    if (problems.length > 0) process.exitCode = 1;
+  });
+
+program
   .command("manifest")
   .description(
     "write back the manifest in the current directory (exports + the dsh version requirement) for a data package that has no source entry",

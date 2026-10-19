@@ -54,7 +54,8 @@ describe("配置页", () => {
       "utf8",
     );
 
-    expect(source).toContain(".default(1).volatile()");
-    expect(source).toContain(".default(8).volatile()");
+    // 格式化会把长链拆行（`.default(8)` 与 `.volatile()` 之间可能有换行），按"相邻两个调用"匹配。
+    expect(source).toMatch(/\.default\(1\)\s*\.volatile\(\)/u);
+    expect(source).toMatch(/\.default\(8\)\s*\.volatile\(\)/u);
   });
 });

@@ -19,6 +19,7 @@ const BIN_COMMANDS = [
   "desktop",
   "check-deps",
   "check-locale",
+  "check-docs",
   "manifest",
   "publish",
   "login",

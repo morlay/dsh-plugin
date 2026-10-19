@@ -458,6 +458,9 @@ importers:
 
   devpackages/typert-generator:
     dependencies:
+      '@local/dts-prepare':
+        specifier: workspace:*
+        version: link:../dts-prepare
       oxc-parser:
         specifier: ^0.153.0
         version: 0.153.0

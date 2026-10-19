@@ -3,11 +3,11 @@
 **描述**是任何声称事实的文本：`README.md`、记录树、manifest 文案、schema 的字段说明、给模型看的文案。
 这一层管两件事：**承载描述的地方必须与真源一致**；**引用代码必须写成人能核对、机器能校验的形式**。
 
-判据是两条机械检查，别再手抄规则：
+判据是 `dshdev check-docs`（独立的 lint 命令，不挂 vitest），分两类：
 
-- [`doc-references.spec.ts`](../../devpackages/devkit/src/__tests__/doc-references.spec.ts)：行内代码里的工作区路径必须
-  存在、`just <recipe>` 必须在根 [`justfile`](../../justfile) 里（例外表在这份 spec 里，那是它的 home）；
-- [`markdown-links.spec.ts`](../../devpackages/devkit/src/__tests__/markdown-links.spec.ts)：相对链接必须可达。
+- [`reference-paths.ts`](../../devpackages/devkit/src/checks/reference-paths.ts)：行内代码里的工作区路径必须
+  存在、`just <recipe>` 必须在根 [`justfile`](../../justfile) 里（例外表在它里面，那是它的 home）；
+- [`markdown-links.ts`](../../devpackages/devkit/src/checks/markdown-links.ts)：相对链接必须可达。
 
 ## 一个描述只有一个真源
 
@@ -57,7 +57,7 @@
   ```
 
 - **例外表不在这里**：确因上下文合理而机械解析不到的引用（通式、省略前缀、「同包」指另一个包、悬挂引用）
-  逐条列在 `doc-references.spec.ts` 的 `EXCEPTIONS` 里，每条必须写清「为什么这条引用不该由这条检查判」。
+  逐条列在 `reference-paths.ts` 的 `EXCEPTIONS` 里，每条必须写清「为什么这条引用不该由这条检查判」。
   往例外表里加一条之前先想清楚：能不能改成写全路径或补链接。
 
 ## 注册顺序 = 瀑布嵌套顺序

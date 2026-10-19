@@ -21,16 +21,68 @@ import { type SchemaIndex, buildSchemaIndex, newContext, zodOf } from "./schema.
 // 这是"ts → schema"的纯语法活：不建类型图、不依赖任何 TypeScript 版本。
 
 /**
- * 上下文查找表：`declare module '@deepseek-ai/dsh-typert-protocol'` 里的
+ * 上下文声明表：`declare module '@deepseek-ai/dsh-typert-protocol'` 里的
  * `TypertLookupMap { agent: TypertLookup<Agent, AgentId> }` / `TypertContextMap { agent: TypertContext<AgentId> }`。
  *
- * wire 上的"上下文参数"（descriptor 的 `scope`）就是从这里来的：参数的**类型**在这张表里时，它按 lookup 传、
- * 而不是当 JSON 载荷，wire 名取 id 类型的小驼峰（`AgentId` → `agentId`）。
+ * 两张表在上游是**分开**用的（`typert/generator/src/analyzer.ts`）：
+ *
+ * - `lookups`：参数**类型**是该条目的宿主类型（`Agent` / `WorkspaceFileScope`）时，它按 lookup 传，
+ *   wire 名取 `${key}Id`；参数名必须等于 key、且不能可选。
+ * - `contexts`：`@RemoteScope('<key>')` 的上下文必须在这里有条目（只有 lookup 条目不够），wire 名同样是
+ *   `${key}Id`。
+ *
+ * 不能把两张表合并、也不能只按 wire id 类型认参数：`SessionId` 同时是 agent / session /
+ * workspaceFileScope 的 wire 类型，按 id 类型认会把 `list(sessionId: SessionId)` 误当成 workspaceFileScope
+ * 参数——gateway 会把 `{ sessionId, workspaceRoot }` 对象塞进这个位置，宿主拿它当字符串查表。
+ */
+interface ContextTables {
+  readonly lookups: Map<string, { readonly hostType: string; readonly idType: string }>;
+  readonly contexts: Map<string, { readonly idType: string }>;
+  /** 包内声明的 class 名：未在 lookup 表注册的 class 参数不能按 JSON 传（上游 `isWorkspaceClass`）。 */
+  readonly classes: ReadonlySet<string>;
+}
+
+/** RPC endpoint segment：与上游 `isRemoteSegment()` 同口径。 */
+function isRemoteSegment(value: string): boolean {
+  return value !== "." && value !== ".." && /^[A-Za-z0-9_$.-]+$/u.test(value);
+}
+
+/** 属性名 / 模块名：标识符与字符串字面量都取文本（上游 `memberName()`）。 */
+function memberNameOf(node: Node | undefined): string | undefined {
+  if (node === undefined) return undefined;
+  const name = nameOf(node);
+  if (name !== undefined) return name;
+  if (node["type"] === "Literal" && typeof node["value"] === "string") return node["value"];
+  if (node["type"] === "TemplateLiteral" && (node["expressions"] as unknown[]).length === 0) {
+    const quasi = (node["quasis"] as Node[] | undefined)?.[0];
+    const cooked = quasi?.["value"]?.["cooked"];
+    return typeof cooked === "string" ? cooked : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * 扫上游包源码里的两张上下文声明表与 class 名。
+ *
+ * 校验口径与上游 `lookupDeclarations()` / `contextDeclarations()` / `typeMetaMapMembers()` 对齐：
+ *
+ * - 只认 `declare module '@deepseek-ai/dsh-typert-protocol'` 内的接口（普通 interface 同名不参与）；
+ * - 条目必须是带类型的 property signature；
+ * - key 必须是 RPC endpoint segment，且各自唯一；
+ * - 值必须是 `TypertLookup<Host, Wire>` / `TypertContext<Wire>`，Host / Wire 必须是命名类型。
+ *
+ * 上游在违反时让生成失败；这里同样抛错——静默跳过会生成"看起来正常、运行时少一个 lookup"的产物。
+ *
+ * @param packages - 上游客包清单（名称与源码根）。
+ * @returns lookup / context 两张表与包内 class 名。
  */
 async function lookupContexts(
   packages: readonly { name: string; root: string }[],
-): Promise<Map<string, { idType: string; objectType: string | undefined }>> {
-  const table = new Map<string, { idType: string; objectType: string | undefined }>();
+): Promise<ContextTables> {
+  const lookups = new Map<string, { hostType: string; idType: string }>();
+  const contexts = new Map<string, { idType: string }>();
+  const hosts = new Map<string, string>();
+  const classes = new Set<string>();
   // 类型实参是引用节点（名字在 `typeName` 上）。
   const argumentName = (argument: Node | undefined): string | undefined =>
     argument === undefined ? undefined : nameOf((argument["typeName"] ?? argument) as Node);
@@ -38,35 +90,103 @@ async function lookupContexts(
     for (const file of await sourceFiles(pkg.root)) {
       const parsed = await parseFile(file);
       walkAll(parsed.program, (node) => {
-        if (node["type"] !== "TSInterfaceDeclaration") return;
-        const interfaceName = nameOf(node["id"] as Node);
-        if (interfaceName !== "TypertLookupMap" && interfaceName !== "TypertContextMap") return;
-        for (const member of (node["body"]?.["body"] ?? []) as Node[]) {
-          if (member["type"] !== "TSPropertySignature") continue;
-          const key = nameOf(member["key"] as Node);
-          const annotation = member["typeAnnotation"]?.["typeAnnotation"] as Node | undefined;
-          if (key === undefined || annotation === undefined) continue;
-          const args = typeArgumentsOf(annotation);
-          const idType = argumentName(args.at(-1));
-          const objectType =
-            interfaceName === "TypertLookupMap" ? argumentName(args[0]) : undefined;
-          if (idType === undefined) continue;
-          // `TypertLookupMap` 给"对象 → id"的对照（`agent: TypertLookup<Agent, SessionId>`），
-          // `TypertContextMap` 只给 id；两张表都注册同一个键时，保留带对象名的那条。
-          const previous = table.get(key);
-          table.set(key, { idType, objectType: objectType ?? previous?.objectType });
-        }
+        if (node["type"] !== "ClassDeclaration") return;
+        const name = nameOf(node["id"] as Node);
+        if (name !== undefined) classes.add(name);
       });
+      // 只扫协议模块：`typeMetaMapMembers()` 同样限定在 `declare module '@deepseek-ai/dsh-typert-protocol'`。
+      for (const statement of parsed.program["body"] as Node[]) {
+        if (statement["type"] !== "TSModuleDeclaration") continue;
+        if (memberNameOf(statement["id"] as Node) !== "@deepseek-ai/dsh-typert-protocol") continue;
+        const body = statement["body"] as Node | undefined;
+        if (body?.["type"] !== "TSModuleBlock") continue;
+        for (const nested of body["body"] as Node[]) {
+          if (nested["type"] !== "TSInterfaceDeclaration") continue;
+          const interfaceName = nameOf(nested["id"] as Node);
+          if (interfaceName !== "TypertLookupMap" && interfaceName !== "TypertContextMap") continue;
+          for (const member of (nested["body"]?.["body"] ?? []) as Node[]) {
+            if (
+              member["type"] !== "TSPropertySignature" ||
+              member["typeAnnotation"] === undefined
+            ) {
+              throw new Error(`${interfaceName} entries must be required properties`);
+            }
+            const key = memberNameOf(member["key"] as Node);
+            if (key === undefined || !isRemoteSegment(key)) {
+              throw new Error(
+                `${interfaceName} key must contain only RPC endpoint segment characters`,
+              );
+            }
+            const annotation = member["typeAnnotation"]["typeAnnotation"] as Node | undefined;
+            if (annotation?.["type"] !== "TSTypeReference") {
+              throw new Error(
+                `${interfaceName}.${key} 的值必须是 TypertLookup / TypertContext 引用`,
+              );
+            }
+            const metaType = nameOf(annotation["typeName"] as Node);
+            const args = typeArgumentsOf(annotation);
+            if (interfaceName === "TypertLookupMap") {
+              if (metaType !== "TypertLookup" || args.length !== 2) {
+                throw new Error(
+                  `${interfaceName}.${key} 的值必须是 TypertLookup<Host, Wire>（实际 ${String(metaType)}）`,
+                );
+              }
+              const hostType = argumentName(args[0]);
+              const idType = argumentName(args[1]);
+              if (hostType === undefined || idType === undefined) {
+                throw new Error(`${interfaceName}.${key} 的 Host / Wire 必须是命名类型`);
+              }
+              if (lookups.has(key)) throw new Error(`重复的 TypertLookupMap key ${key}`);
+              const previousHost = hosts.get(hostType);
+              if (previousHost !== undefined) {
+                throw new Error(
+                  `宿主类型 ${hostType} 有多个 Typert lookup（${previousHost} / ${key}）`,
+                );
+              }
+              lookups.set(key, { hostType, idType });
+              hosts.set(hostType, key);
+              continue;
+            }
+            if (metaType !== "TypertContext" || args.length !== 1) {
+              throw new Error(
+                `${interfaceName}.${key} 的值必须是 TypertContext<Wire>（实际 ${String(metaType)}）`,
+              );
+            }
+            const idType = argumentName(args[0]);
+            if (idType === undefined) {
+              throw new Error(`${interfaceName}.${key} 的 Wire 必须是命名类型`);
+            }
+            if (contexts.has(key)) throw new Error(`重复的 TypertContextMap key ${key}`);
+            contexts.set(key, { idType });
+          }
+        }
+      }
     }
   }
-  return table;
+  return { lookups, contexts, classes };
+}
+
+/**
+ * 缺省声明树：与 tsdown 的构建流程同一套（`repoRootOf(cwd)` → `ensureWorkspaceDts` → `dtsRootOf`）。
+ *
+ * 调用方不必再跑单独的 dts 子命令，也不必自己判断声明树在不在——声明树的生成与并发锁都收在
+ * `@local/dts-prepare`。这里用动态 import：显式给 `dtsRoot` 的调用（测试、预演）不加载 rolldown。
+ */
+async function workspaceDtsRoot(): Promise<string> {
+  const { dtsRootOf, ensureWorkspaceDts, repoRootOf } = await import("@local/dts-prepare");
+  const root = await repoRootOf(process.cwd());
+  await ensureWorkspaceDts(root);
+  return dtsRootOf(root);
 }
 
 export type GenerateOptions = {
   /** 上游 clone 的根目录（`<vendor>/<name>`）：产物里的 `sourceLocation.file` 相对它。 */
   upstreamRoot: string;
-  /** 声明树根（`<root>/target/dts`），布局见 `devpackages/dts-prepare/src/cli.ts`。 */
-  dtsRoot: string;
+  /**
+   * 声明树根（`<root>/target/dts`）。缺省按 tsdown 的同一条流程解析：从 `cwd` 找仓库根、
+   * `ensureWorkspaceDts()` 确保声明树就绪，再取 `<root>/target/dts`。测试可显式注入临时声明树。
+   */
+  dtsRoot?: string;
   /** 只处理这些包名（调试用）；缺省全量。 */
   packages?: readonly string[];
   /** 真写产物；缺省只返回文本（对照 / 预演）。 */
@@ -85,6 +205,10 @@ type RemoteMethod = {
   implementation?: string;
   /** `@Remote({ mode: 'stream' })` → `stream`；缺省 `direct`。 */
   mode: "direct" | "stream";
+  /** 调用形态：`@Remote`（direct）或 `@RemoteScope`（context receiver）。 */
+  invocation: "direct" | "context";
+  /** context receiver 的上下文 key（`@RemoteScope('<key>')`）。 */
+  context?: string;
   /** 声明面签名用的参数文本（含被 wire 跳过的 `signal`）。 */
   signatureParameters: string;
   parameters: {
@@ -92,7 +216,9 @@ type RemoteMethod = {
     type: Node | undefined;
     optional: boolean;
     node: Node;
-    /** 由查找表补出来的上下文参数：它的 codec 用 id 类型而不是参数注解。 */
+    /** lookup 参数的 key（`TypertLookupMap` 的键）：wire 名是 `${key}Id`，codec 用 wire id 类型。 */
+    lookup?: string;
+    /** lookup / `@RemoteScope` 参数的 wire id 类型：codec 用它而不是宿主对象注解。 */
     idType?: string;
   }[];
   /** 取消通道参数名（`signal: AbortSignal`）：wire 上不传，但 invocation 要记下来。 */
@@ -101,7 +227,6 @@ type RemoteMethod = {
   scope?: string;
   scopeWire?: string;
   scopeIdType?: string;
-  scopeParameter?: Node;
   result: Node | undefined;
   node: Node;
 };
@@ -134,6 +259,13 @@ function parameterName(parameter: Node): string | undefined {
   const direct = parameter["name"];
   if (typeof direct === "string") return direct;
   return nameOf(direct as Node | undefined) ?? nameOf(parameter["left"] as Node | undefined);
+}
+
+/** 参数声明的类型名（`agent: Agent` → `Agent`；`signal: AbortSignal` → `AbortSignal`）。 */
+function typeNameOf(parameter: Node): string | undefined {
+  return nameOf(
+    (parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as Node | undefined,
+  );
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -175,47 +307,106 @@ function serviceHeaderOf(klass: Node): { serviceKey: string; namespace: string }
 }
 
 /** `@Remote('wire')` 的第一个字符串参数是 **wire 名**（缺省用方法名）；`@Remote({ mode: … })` 给载体。 */
-function remoteOptionsOf(member: Node): {
-  wireName?: string;
-  scope?: string;
-  mode: "direct" | "stream";
-} {
-  let wireName: string | undefined;
-  let scope: string | undefined;
-  let mode: "direct" | "stream" = "direct";
-  for (const decorator of (member["decorators"] ?? []) as Node[]) {
-    const expression = decorator["expression"] as Node;
-    if (nameOf((expression["callee"] ?? expression) as Node) === "RemoteScope") {
-      // `@RemoteScope('<ctx>')` 的参数是上下文名，**不是** wire 名：它不参与下面的 wireName 判定。
-      const first = ((expression["arguments"] ?? []) as Node[])[0];
-      if (first?.["type"] === "Literal" && typeof first["value"] === "string") {
-        scope = first["value"];
-      }
-      continue;
-    }
-    const args = ((expression["arguments"] ?? []) as Node[]).filter(
-      (argument) => argument["type"] !== "SpreadElement",
-    );
-    for (const argument of args) {
-      if (argument["type"] === "Literal" && typeof argument["value"] === "string") {
-        wireName = argument["value"];
-      } else if (argument["type"] === "ObjectExpression") {
-        for (const property of argument["properties"] as Node[]) {
-          if (
-            nameOf(property["key"] as Node) === "mode" &&
-            property["value"]?.["value"] === "stream"
-          ) {
-            mode = "stream";
-          }
-        }
-      }
+/** 一个方法上的 Remote 调用装饰器（`@Remote` / `@RemoteScope`）。 */
+interface RemoteMarker {
+  readonly kind: "direct" | "context";
+  /** `@RemoteScope` 的上下文 key。 */
+  readonly context?: string;
+  /** 导出方法名（`@Remote('name')` / `@RemoteScope('ctx', 'name')` 的字符串参数）。 */
+  readonly wireName?: string;
+  readonly mode: "direct" | "stream";
+}
+
+/** 字符串字面量取值（`@Remote` / `@RemoteScope` 的参数）。 */
+function literalStringOf(node: Node | undefined): string | undefined {
+  if (node === undefined) return undefined;
+  if (node["type"] === "Literal" && typeof node["value"] === "string") return node["value"];
+  if (node["type"] === "TemplateLiteral" && (node["expressions"] as unknown[]).length === 0) {
+    const cooked = (node["quasis"] as Node[] | undefined)?.[0]?.["value"]?.["cooked"];
+    return typeof cooked === "string" ? cooked : undefined;
+  }
+  return undefined;
+}
+
+/** `@Remote` / `@RemoteScope` 的 options 对象里只取生成需要的 `mode`。 */
+function modeOfOptions(node: Node): "direct" | "stream" {
+  if (node["type"] !== "ObjectExpression") return "direct";
+  for (const property of node["properties"] as Node[]) {
+    if (nameOf(property["key"] as Node) === "mode" && property["value"]?.["value"] === "stream") {
+      return "stream";
     }
   }
-  return {
-    ...(wireName === undefined ? {} : { wireName }),
-    ...(scope === undefined ? {} : { scope }),
-    mode,
+  return "direct";
+}
+
+/**
+ * 解析方法上的 Remote 调用装饰器（与上游 `remoteMarker()` 同口径）。
+ *
+ * - `@Remote` / `@Remote()`：direct；第一个字符串参数是导出方法名，options 对象取 `mode`。
+ * - `@RemoteScope('<key>')` / `@RemoteScope('<key>', '<name>' | options)`：context receiver。
+ * - 一个方法只能有一个这样的装饰器。
+ *
+ * @param member - 类方法节点。
+ * @returns 装饰器描述；没有 Remote 装饰器时 undefined。
+ */
+function remoteMarkerOf(member: Node): RemoteMarker | undefined {
+  let found: RemoteMarker | undefined;
+  const remote = (expression: Node, args: Node[]): RemoteMarker => {
+    if (args.length === 0) return { kind: "direct", mode: "direct" };
+    const name = literalStringOf(args[0]);
+    if (name !== undefined) {
+      if (!isRemoteSegment(name)) {
+        throw new Error("Remote() name must contain only RPC endpoint segment characters");
+      }
+      return { kind: "direct", wireName: name, mode: "direct" };
+    }
+    return { kind: "direct", mode: modeOfOptions(args[0] as Node) };
   };
+  const scope = (expression: Node, args: Node[]): RemoteMarker => {
+    if (args.length < 1 || args.length > 2) {
+      throw new Error(
+        "RemoteScope() requires a Context key and an optional exported method name or options object",
+      );
+    }
+    const context = literalStringOf(args[0]);
+    if (context === undefined || !isRemoteSegment(context)) {
+      throw new Error(
+        "RemoteScope() key must be a string literal containing only RPC endpoint segment characters",
+      );
+    }
+    const option = args[1];
+    if (option === undefined) return { kind: "context", context, mode: "direct" };
+    const name = literalStringOf(option);
+    if (name === undefined) return { kind: "context", context, mode: modeOfOptions(option) };
+    if (!isRemoteSegment(name)) {
+      throw new Error(
+        "RemoteScope() name must be a string literal containing only RPC endpoint segment characters",
+      );
+    }
+    return { kind: "context", context, wireName: name, mode: "direct" };
+  };
+  for (const decorator of (member["decorators"] ?? []) as Node[]) {
+    const expression = decorator["expression"] as Node;
+    const decoratorName = nameOf((expression["callee"] ?? expression) as Node);
+    let marker: RemoteMarker | undefined;
+    if (decoratorName === "Remote") {
+      const args = ((expression["arguments"] ?? []) as Node[]).filter(
+        (argument) => argument["type"] !== "SpreadElement",
+      );
+      marker = remote(expression, args);
+    } else if (decoratorName === "RemoteScope") {
+      const args = ((expression["arguments"] ?? []) as Node[]).filter(
+        (argument) => argument["type"] !== "SpreadElement",
+      );
+      marker = scope(expression, args);
+    }
+    if (marker === undefined) continue;
+    if (found !== undefined) {
+      throw new Error("a method can have only one Remote invocation decorator");
+    }
+    found = marker;
+  }
+  return found;
 }
 
 /** 声明面签名里的参数文本（源码切片，保留 `signal?: AbortSignal` 这类取消通道）。 */
@@ -251,27 +442,30 @@ function schemaOfParameter(
   return parameter.optional ? `z.union([z.undefined(), ${inner}])` : inner;
 }
 
-function isRemoteDecorated(member: Node): boolean {
-  return ((member["decorators"] ?? []) as Node[]).some((decorator) => {
-    const expression = decorator["expression"] as Node;
-    const name = nameOf((expression["callee"] ?? expression) as Node);
-    return name === "Remote" || name === "RemoteScope";
-  });
-}
-
-function remoteMethodsOf(
-  klass: Node,
-  source: string,
-  contexts: Map<string, { idType: string; objectType: string | undefined }>,
-): RemoteMethod[] {
+function remoteMethodsOf(klass: Node, source: string, tables: ContextTables): RemoteMethod[] {
   const methods: RemoteMethod[] = [];
+  // 宿主对象类型 → lookup 条目（上游按**类型符号**命中 `TypertLookupMap`，一个宿主类型只能有一个 lookup）。
+  const lookupByHost = new Map(
+    [...tables.lookups].map(([key, entry]) => [entry.hostType, { key, ...entry }]),
+  );
   for (const member of (klass["body"]?.["body"] ?? []) as Node[]) {
-    if (member["type"] !== "MethodDefinition" || !isRemoteDecorated(member)) continue;
+    if (member["type"] !== "MethodDefinition") continue;
+    const marker = remoteMarkerOf(member);
+    if (marker === undefined) continue;
     const declaredParameters = (member["value"]?.["params"] ?? []) as Node[];
-    const isCancellation = (parameter: Node): boolean =>
-      nameOf(
-        (parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as Node | undefined,
-      ) === "AbortSignal";
+    // 取消通道（上游 1164-1175）：名字 `signal` 与全局 `AbortSignal` 必须成对出现，且必须是最后一个参数。
+    const isCancellation = (parameter: Node): boolean => typeNameOf(parameter) === "AbortSignal";
+    for (const [index, parameter] of declaredParameters.entries()) {
+      const cancellation = isCancellation(parameter);
+      if ((parameterName(parameter) === "signal") !== cancellation) {
+        throw new Error(
+          "Remote cancellation must use a parameter named signal with the global AbortSignal type",
+        );
+      }
+      if (cancellation && index !== declaredParameters.length - 1) {
+        throw new Error("Remote cancellation signal must be the final parameter");
+      }
+    }
     const cancellation = declaredParameters.find(isCancellation);
     const parameters: RemoteMethod["parameters"] = declaredParameters
       // 取消通道只在本进程内传，wire 上没有它的位置——记成 invocation 的 `cancellation`。
@@ -282,65 +476,98 @@ function remoteMethodsOf(
         optional: parameter["optional"] === true,
         node: parameter,
       }));
-    // 参数类型落在上下文查找表里 → 它是 scope 参数（wire 上按 lookup 传、名字用 id 类型）。
-    const scopeHit = declaredParameters
-      .map((parameter) => {
-        const typeName = nameOf(
-          (parameter["typeAnnotation"]?.["typeAnnotation"] as Node)?.["typeName"] as
-            | Node
-            | undefined,
-        );
-        if (typeName === undefined) return undefined;
-        for (const [key, entry] of contexts) {
-          if (entry.objectType === typeName || entry.idType === typeName) {
-            return { key, wire: `${key}Id`, idType: entry.idType, parameter };
-          }
+    // lookup 参数按上游的判据认：参数**类型**是 `TypertLookupMap` 的宿主对象类型（`Agent` /
+    // `WorkspaceFileScope`）；命中后参数名必须等于 lookup key、且不能可选。
+    //
+    // 不能只看 wire id 类型：`SessionId` 同时是 agent / session / workspaceFileScope 的 wire 类型，按类型认会
+    // 把 `list(sessionId: SessionId)`、`retain(sessionId, id)` 误当成 workspaceFileScope 参数——gateway 会把
+    // `{ sessionId, workspaceRoot }` 对象塞进这个位置，宿主拿它当字符串查表，于是终端清单恒空、retain 恒
+    // `terminal/unavailable`（侧栏终端"此终端已不存在，请新建终端"就是这么来的）。
+    const lookupHits = new Map<Node, { key: string; idType: string }>();
+    for (const parameter of declaredParameters) {
+      if (isCancellation(parameter)) continue;
+      const typeName = typeNameOf(parameter);
+      if (typeName === undefined) continue;
+      const lookup = lookupByHost.get(typeName);
+      if (lookup === undefined) {
+        // 上游 `isWorkspaceClass`：包内 class 不是 JSON 值，未注册 lookup 时不能按 JSON 传。
+        if (tables.classes.has(typeName)) {
+          throw new Error(`non-JSON class parameter ${typeName} requires a TypertLookupMap entry`);
         }
-        return undefined;
-      })
-      .find((hit) => hit !== undefined);
-    // 参数类型命中查找表 → 该参数就是上下文参数（wire 上用 id 类型，不是宿主对象）。
-    const scopedParameter =
-      scopeHit === undefined
-        ? undefined
-        : parameters.find((candidate) => candidate.node === scopeHit.parameter);
-    if (scopedParameter !== undefined && scopeHit !== undefined) {
-      scopedParameter.idType = scopeHit.idType;
+        continue;
+      }
+      const name = parameterName(parameter);
+      if (parameter["optional"] === true) {
+        throw new Error(`lookup 参数 ${lookup.key} 不能是可选参数`);
+      }
+      if (name !== lookup.key) {
+        throw new Error(
+          `lookup 参数必须命名为 ${lookup.key}（实际 ${String(name)}；宿主类型 ${typeName}）`,
+        );
+      }
+      lookupHits.set(parameter, { key: lookup.key, idType: lookup.idType });
+      const modeled = parameters.find((candidate) => candidate.node === parameter);
+      if (modeled !== undefined) {
+        modeled.lookup = lookup.key;
+        modeled.idType = lookup.idType;
+      }
     }
-    const options = remoteOptionsOf(member);
-    // `@RemoteScope('<key>')` 的方法在 wire 上自带一个上下文参数（即使实现里没写它）：
-    // 名字用上下文键，类型用查找表里的 id 类型。
-    const scopeEntry = options.scope === undefined ? undefined : contexts.get(options.scope);
-    if (options.scope !== undefined && scopeHit === undefined && scopeEntry !== undefined) {
-      parameters.unshift({
-        name: options.scope,
-        type: undefined,
-        optional: false,
-        node: member,
-        idType: scopeEntry.idType,
-      });
+    // wire 字段唯一：lookup 参数按 `${key}Id`、JSON 参数按名字（上游 duplicate wire field）。
+    const wires = new Set<string>();
+    for (const parameter of parameters) {
+      const wire = parameter.idType === undefined ? parameter.name : `${parameter.name}Id`;
+      if (wires.has(wire)) throw new Error(`重复的 Remote wire 字段 ${wire}`);
+      wires.add(wire);
+    }
+    // 方法的 scope / receiver 有两条来源（与上游 `analyzer.ts` 的 `receiver` / `scope` 一致）：
+    //
+    // 1. `@RemoteScope('<key>')`：descriptor 的 `invocation` 是 context receiver，wire 为 `${key}Id`；
+    //    receiver 独立于业务参数表（实现签名里本来就不写）。必须是 `TypertContextMap` 条目。
+    // 2. direct 方法**恰好一个** lookup 参数、且同名条目也在 `TypertContextMap` 里：scope 取该参数。
+    //    两个以上 lookup 参数时上游不设 scope（参数仍按 lookup 传）。
+    let scope: string | undefined;
+    let scopeIdType: string | undefined;
+    if (marker.kind === "context") {
+      const context = marker.context as string;
+      const entry = tables.contexts.get(context);
+      if (entry === undefined) {
+        throw new Error(`@RemoteScope('${context}') 没有 TypertContextMap 条目`);
+      }
+      const wire = `${context}Id`;
+      if (wires.has(wire)) throw new Error(`重复的 Remote wire 字段 ${wire}`);
+      scope = context;
+      scopeIdType = entry.idType;
+    } else if (lookupHits.size === 1) {
+      const [, hit] = [...lookupHits][0] as [Node, { key: string; idType: string }];
+      const context = tables.contexts.get(hit.key);
+      if (context !== undefined) {
+        // 上游要求 scope 的 wire 类型与 lookup 的 wire 类型是同一个符号。
+        if (context.idType !== hit.idType) {
+          throw new Error(
+            `context ${hit.key} 的 wire 类型 ${context.idType} 与 lookup wire 类型 ${hit.idType} 不一致`,
+          );
+        }
+        scope = hit.key;
+        scopeIdType = hit.idType;
+      }
     }
     const implementation = String(nameOf(member["key"] as Node) ?? "");
-    const method = options.wireName ?? implementation;
+    const method = marker.wireName ?? implementation;
     methods.push({
       method,
       ...(method === implementation ? {} : { implementation }),
-      mode: options.mode,
-      ...(options.scope === undefined && scopeHit === undefined
+      mode: marker.mode,
+      invocation: marker.kind,
+      ...(marker.context === undefined ? {} : { context: marker.context }),
+      ...(scope === undefined ? {} : { scope }),
+      ...(scope === undefined || scopeIdType === undefined
         ? {}
-        : { scope: options.scope ?? scopeHit?.key ?? "" }),
-      ...(scopeHit === undefined
-        ? {}
-        : {
-            scopeWire: `${scopeHit.key}Id`,
-            scopeIdType: scopeHit.idType,
-            scopeParameter: scopeHit.parameter,
-          }),
+        : { scopeWire: `${scope}Id`, scopeIdType }),
       signatureParameters: signatureParametersOf(source, member),
       parameters,
       ...(cancellation === undefined
         ? {}
-        : { cancellation: String(nameOf(cancellation["name"] as Node) ?? "signal") }),
+        : { cancellation: String(parameterName(cancellation) ?? "signal") }),
       result: member["value"]?.["returnType"]?.["typeAnnotation"] as Node | undefined,
       node: member,
     });
@@ -349,16 +576,13 @@ function remoteMethodsOf(
 }
 
 /** 服务类：`extends TypertRemoteService`。 */
-function servicesOf(
-  file: ParsedFile,
-  contexts: Map<string, { idType: string; objectType: string | undefined }>,
-): RemoteService[] {
+function servicesOf(file: ParsedFile, tables: ContextTables): RemoteService[] {
   const found: RemoteService[] = [];
   for (const statement of file.program["body"] as Node[]) {
     // `export class X` / `export default class X` / 裸 `class X` 三种都要认。
     const declaration = unwrapExport(statement);
     if (declaration["type"] !== "ClassDeclaration") continue;
-    const methods = remoteMethodsOf(declaration, file.source, contexts);
+    const methods = remoteMethodsOf(declaration, file.source, tables);
     if (methods.length === 0) continue;
     const header = serviceHeaderOf(declaration);
     if (header === undefined) continue;
@@ -488,15 +712,16 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     }
   }
   const clientPackages = await clientFacingPackages(options.upstreamRoot, discovered);
-  const contexts = await lookupContexts(discovered);
+  const tables = await lookupContexts(discovered);
   const owners = new Map<string, string | undefined>();
-  const index = await buildSchemaIndex(options.dtsRoot, {
+  const dtsRoot = options.dtsRoot ?? (await workspaceDtsRoot());
+  const index = await buildSchemaIndex(dtsRoot, {
     // 声明树里的位置 `<dtsRoot>/<仓库相对路径>` 就是包目录的位置，包名仍从上游清单读。
     ownerOf: async (file) => {
       // 声明树按仓库根布局（`<dtsRoot>/<仓库相对路径>`），从 dtsRoot 反推仓库根就得到真实路径；
       // 包根按路径里的 `src/` 段切——声明可能住在 `src/<子目录>/…`，数目录层级会数错。
-      const repoRoot = dirname(dirname(options.dtsRoot));
-      const absolute = join(repoRoot, relative(options.dtsRoot, file));
+      const repoRoot = dirname(dirname(dtsRoot));
+      const absolute = join(repoRoot, relative(dtsRoot, file));
       const srcIndex = absolute.lastIndexOf(`${sep}src${sep}`);
       const pkgDir = srcIndex < 0 ? dirname(absolute) : absolute.slice(0, srcIndex);
       // 按**文件**缓存：同一个包里不同文件属于不同出口（`src/types.ts` 是 `/types`，`src/client/x.ts`
@@ -539,7 +764,7 @@ export async function generateTypert(options: GenerateOptions): Promise<Generate
     if (options.packages !== undefined && !options.packages.includes(name)) continue;
     const services: RemoteService[] = [];
     for (const file of await sourceFiles(pkgDir)) {
-      services.push(...servicesOf(await parseFile(file), contexts));
+      services.push(...servicesOf(await parseFile(file), tables));
     }
     if (services.length === 0) continue;
     const text = renderHostArtifact(name, services, index, options.upstreamRoot, "host");
@@ -642,36 +867,41 @@ export function renderRemoteClient(
             ? []
             : [`      implementation: '${method.implementation}',`]),
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
-          "      invocation: { kind: 'direct' },",
-          // 上下文参数（`@RemoteScope` 或类型命中查找表）：descriptor 记 scope，参数按 lookup 传。
-          ...(method.scope === undefined
-            ? []
-            : [
+          // `@RemoteScope` 是 Context receiver（`{ kind: 'context', context, wire }`）；
+          // 普通 `@Remote` 是 direct，命中查找表的方法另记 scope。
+          ...(method.invocation === "context"
+            ? [
+                `      invocation: { kind: 'context', context: '${String(method.context)}', wire: '${String(method.scopeWire ?? `${String(method.context)}Id`)}' },`,
+              ]
+            : ["      invocation: { kind: 'direct' },"]),
+          ...(method.invocation === "direct" && method.scope !== undefined
+            ? [
                 "      scope: {",
                 `        context: '${method.scope}',`,
                 `        wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
                 "      },",
-              ]),
+              ]
+            : []),
           "      parameters: [",
           ...parameters.map(({ parameter, symbol }) =>
             [
               "        {",
               `          name: '${parameter.name}',`,
-              // `@RemoteScope` 的第一个参数是上下文：wire 名带 Id、按查找传，而不是当 JSON 载荷。
-              ...(parameter.idType !== undefined ||
-              (method.scopeParameter !== undefined && method.scopeParameter === parameter.node)
+              // lookup 参数用**自己的** key 生成 wire / lookup 名，不能从 method.scope 取：一个方法可以
+              // 有多个 lookup 参数（上游此时不设 scope），scope 为空时从它取会写出 `undefinedId`。
+              ...(parameter.lookup === undefined
                 ? [
-                    `          wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
-                    "          source: 'lookup',",
-                    `          lookup: '${method.scope}',`,
-                  ]
-                : [
                     `          wire: '${parameter.name}',`,
                     "          source: 'json',",
                     // 可选参数在 wire 上可以缺：gateway 判断"这个字段能少"看的就是它（`api/gateway` 的
                     // `missing` 过滤）。只靠签名里的 `?` 不够——descriptor 里没这个标记，客户端省略
                     // 该字段时会被判成"缺了必填"（`wire field "…" failed boundary validation`）。
                     ...(parameter.optional ? ["          acceptsUndefined: true,"] : []),
+                  ]
+                : [
+                    `          wire: '${parameter.lookup}Id',`,
+                    "          source: 'lookup',",
+                    `          lookup: '${parameter.lookup}',`,
                   ]),
               "          codec: {",
               "            mode: 'strict',",
@@ -722,7 +952,9 @@ export function renderRemoteClient(
   );
   for (const service of services) {
     lines.push(`  interface TypertRemoteNamespace$${hexOf(service.namespace)} {`);
-    for (const method of service.methods) {
+    // Context-only 方法（`@RemoteScope`）不在 direct 方法表里：调用方从 `TypertRemoteScopeMap`
+    // 的已绑定上下文载体发起（上游 `remote-model.spec.ts` 376-384）。
+    for (const method of service.methods.filter((candidate) => candidate.invocation === "direct")) {
       lines.push(
         `    ${method.method}: ${signatureFor(method, service.file.source, method.scope !== undefined)}`,
       );
@@ -731,7 +963,7 @@ export function renderRemoteClient(
   }
   lines.push("  interface TypertRemoteMap {");
   for (const service of services) {
-    for (const method of service.methods) {
+    for (const method of service.methods.filter((candidate) => candidate.invocation === "direct")) {
       lines.push(
         `    '${service.namespace}/${method.method}': ${signatureFor(method, service.file.source, method.scope !== undefined)}`,
       );
@@ -929,36 +1161,41 @@ export function renderHostArtifact(
             : [`      implementation: '${method.implementation}',`]),
           // `mode` 是 registry 判定载体（stream 还是 unary）的依据，host 面与远端面都要写。
           ...(method.mode === "stream" ? ["      mode: 'stream',"] : []),
-          "      invocation: { kind: 'direct' },",
-          // `@RemoteScope('<ctx>')`：首个参数按上下文查找传（不是 JSON），wire 名带 Id。
-          ...(method.scope === undefined
-            ? []
-            : [
+          // `@RemoteScope` 是 Context receiver（`{ kind: 'context', context, wire }`），receiver 不占业务参数；
+          // 普通 `@Remote` 是 direct，命中查找表的方法另记 scope。
+          ...(method.invocation === "context"
+            ? [
+                `      invocation: { kind: 'context', context: '${String(method.context)}', wire: '${String(method.scopeWire ?? `${String(method.context)}Id`)}' },`,
+              ]
+            : ["      invocation: { kind: 'direct' },"]),
+          ...(method.invocation === "direct" && method.scope !== undefined
+            ? [
                 "      scope: {",
                 `        context: '${method.scope}',`,
                 `        wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
                 "      },",
-              ]),
+              ]
+            : []),
           "      parameters: [",
           ...parameters.map(({ parameter, symbol }) =>
             [
               "        {",
               `          name: '${parameter.name}',`,
-              // `@RemoteScope` 的第一个参数是上下文：wire 名带 Id、按查找传，而不是当 JSON 载荷。
-              ...(parameter.idType !== undefined ||
-              (method.scopeParameter !== undefined && method.scopeParameter === parameter.node)
+              // lookup 参数用**自己的** key 生成 wire / lookup 名，不能从 method.scope 取：一个方法可以
+              // 有多个 lookup 参数（上游此时不设 scope），scope 为空时从它取会写出 `undefinedId`。
+              ...(parameter.lookup === undefined
                 ? [
-                    `          wire: '${method.scopeWire ?? `${method.scope}Id`}',`,
-                    "          source: 'lookup',",
-                    `          lookup: '${method.scope}',`,
-                  ]
-                : [
                     `          wire: '${parameter.name}',`,
                     "          source: 'json',",
                     // 可选参数在 wire 上可以缺：gateway 判断"这个字段能少"看的就是它（`api/gateway` 的
                     // `missing` 过滤）。只靠签名里的 `?` 不够——descriptor 里没这个标记，客户端省略
                     // 该字段时会被判成"缺了必填"（`wire field "…" failed boundary validation`）。
                     ...(parameter.optional ? ["          acceptsUndefined: true,"] : []),
+                  ]
+                : [
+                    `          wire: '${parameter.lookup}Id',`,
+                    "          source: 'lookup',",
+                    `          lookup: '${parameter.lookup}',`,
                   ]),
               "          codec: {",
               "            mode: 'strict',",
@@ -1091,7 +1328,7 @@ let surfaceAliases = new Map<string, Map<string, AliasEntry>>();
 /** 签名里把上下文参数换成 id 形态（`agent: Agent` → `agentId: SessionId`）。 */
 function signatureParametersWithScopeId(method: RemoteMethod): string {
   const name = method.parameters.find(
-    (parameter) => parameter.idType !== undefined || parameter.node === method.scopeParameter,
+    (parameter) => method.scope !== undefined && parameter.lookup === method.scope,
   )?.name;
   const replaced = `${String(method.scope)}Id: ${method.scopeIdType ?? "string"}`;
   if (name === undefined || method.signatureParameters === "") return replaced;
@@ -1103,8 +1340,10 @@ function signatureParametersWithScopeId(method: RemoteMethod): string {
 
 /** 签名里去掉上下文参数（`@RemoteScope` 的 ScopeMap 形态）。 */
 function signatureParametersWithoutScope(method: RemoteMethod): string {
+  // Context-only（`@RemoteScope`）的实现签名本来就不写 receiver，原样用。
+  if (method.invocation === "context") return method.signatureParameters;
   const scopeParameterName = method.parameters.find(
-    (parameter) => parameter.idType !== undefined || parameter.node === method.scopeParameter,
+    (parameter) => method.scope !== undefined && parameter.lookup === method.scope,
   )?.name;
   if (scopeParameterName === undefined || method.signatureParameters === "") return "";
   return method.signatureParameters
