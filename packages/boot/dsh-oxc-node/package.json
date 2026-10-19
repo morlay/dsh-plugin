@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-oxc-node",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "本仓库的 TS 运行时入口：注册 hooks 后 Node 也能跑 node_modules 下的 .ts（ESM only）。壳与宿主按路径取用（工具把它装进随包运行时）。",
   "keywords": [
     "dsh",
