@@ -75,7 +75,8 @@ describe("rewound live session with a warm token meter", () => {
       });
       expect(recalled.sessionId).toBe(SessionIdBrand("live"));
 
-      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4]);
+      // followup 撤回保留前缀以 interrupted closer 闭合（seq 5）
+      expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
       expectMeterUpToDate(meter, live);
     } finally {
       await dispose();

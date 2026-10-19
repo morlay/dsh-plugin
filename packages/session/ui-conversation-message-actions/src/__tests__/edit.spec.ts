@@ -733,9 +733,11 @@ describe("SessionEditor edit", () => {
         }
       ).internals().backend;
       const rows = await backend.getEventRows(SessionIdBrand("src"));
+      // 切点之前的轮内正文保留；尾部未闭合的 turn 3 由 interrupted closer 闭合（seq 17）
       expect(rows.map((r) => r.fSequence)).toEqual([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
       ]);
+      expect(rows[17]?.fType).toBe("turn/end");
       expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
       expect(rows.some((r) => r.fType === "step/start" && r.fSequence === 17)).toBe(false);
       expect(rows.some((r) => r.fType === "user/message" && r.fSequence === 18)).toBe(false);

@@ -7,6 +7,7 @@ import {
   assistantMessage,
   createPersisted,
   harness,
+  meta,
   SessionIdBrand,
   TokenMeter,
   turnLog,
@@ -33,7 +34,12 @@ function outline(events: readonly SessionEvent[]): string[] {
 // 所在的 turn 里，位置在 turn/start 之后、step/start 与该用户消息之前。
 // turn 1 / turn 2（长历史）→ turn 3：compaction/start + compaction/summary + 摘要替换消息
 // （surface replace 2-9）+ compaction/end → step/start(3,1) → 「第三轮问题」（seq 18）→ turn 4。
-function compactedSession(): { events: SessionEvent[]; targetSeq: number } {
+function compactedSession(
+  checkpointSource: Record<string, unknown> = {
+    kind: "compact-checkpoint",
+    compactionId: COMPACTION_ID,
+  },
+): { events: SessionEvent[]; targetSeq: number } {
   const events = [
     ...turnLog(0, 1, { users: [{ id: "t1-u1", text: "第一轮问题" }], time: 0 }),
     ...turnLog(6, 2, { users: [{ id: "t2-u1", text: "第二轮问题" }], time: 6 }),
@@ -66,7 +72,7 @@ function compactedSession(): { events: SessionEvent[]; targetSeq: number } {
         id: "t3-compacted-summary",
         role: "user",
         content: [{ type: "text", text: "前两轮摘要" }],
-        source: { kind: "plugin", plugin: "compact", compactionId: COMPACTION_ID },
+        source: checkpointSource,
       },
       surfaceOp: { op: "replace", startSeq: 2, endSeq: 9 },
       sourceEventSeqs: [13, 14, 2, 3, 8, 9],
@@ -154,6 +160,35 @@ describe("压缩后第一条用户数据的 rewind / retry / edit", () => {
     }
   });
 
+  it("recall：旧 plugin: compact 形状的 checkpoint 同样补回", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = compactedSession({
+        kind: "plugin",
+        plugin: "compact",
+        compactionId: COMPACTION_ID,
+      });
+      await createPersisted(ctx, "src", events);
+
+      await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+      });
+
+      const after = await afterOperation(ctx, SessionIdBrand("src"));
+      expect(outline(after)).toEqual([
+        ...BEFORE_COMPACTION,
+        "12:compaction/start",
+        "13:compaction/summary",
+        "14:user/message",
+        "15:compaction/end",
+      ]);
+    } finally {
+      await dispose();
+    }
+  });
+
   it("retry：压缩留在保留前缀里，只重放该回合的输入", async () => {
     const { ctx, editor, dispose } = await harness();
     try {
@@ -218,6 +253,224 @@ describe("压缩后第一条用户数据的 rewind / retry / edit", () => {
         "第二轮问题",
       ]);
       expect(editableMessages(turns).filter((block) => block.kind === "user")).toHaveLength(2);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+// 上下文注入（`user/message`，source 非 user，如 runtime-context / time-context）与队伍事件
+// （`team/*`）是会话级注入与状态，不是被撤回轮的正文：它们落在目标 user 消息之前，
+// 撤回整轮时同样要重写保留。
+function injectedSession(): { events: SessionEvent[]; targetSeq: number } {
+  const events = [
+    ...turnLog(0, 1, { users: [{ id: "t1-u1", text: "第一轮问题" }], time: 0 }),
+    { type: "turn/start", seq: SessionSeq(6), time: 6, data: { turn: 2 } },
+    {
+      type: "user/message",
+      seq: SessionSeq(7),
+      time: 7,
+      data: {
+        id: "t2-runtime-context",
+        role: "user",
+        content: [{ type: "text", text: "当前运行时上下文" }],
+        source: { kind: "runtime-context" },
+      },
+      surfaceOp: "append",
+    },
+    {
+      type: "team/member",
+      seq: SessionSeq(8),
+      time: 8,
+      data: {
+        version: 2,
+        teamId: "team-1",
+        member: {
+          id: "member-1",
+          name: "worker",
+          description: "worker",
+          provider: "mock",
+          context: "fresh",
+          phase: "active",
+        },
+      },
+    },
+    { type: "step/start", seq: SessionSeq(9), time: 9, data: { turn: 2, step: 1 } },
+    userMessage(10, "t2-u1", "第二轮问题", 10),
+    assistantMessage(11, 2, 1, "t2-a1", "第二轮回答", 11),
+    { type: "step/end", seq: SessionSeq(12), time: 12, data: { turn: 2, step: 1 } },
+    {
+      type: "turn/end",
+      seq: SessionSeq(13),
+      time: 13,
+      data: { turn: 2, reason: { kind: "completed" } },
+    },
+  ] as unknown as SessionEvent[];
+  return { events, targetSeq: 10 };
+}
+
+// 第一轮完整保留；目标之前的注入与队伍事件重写在它之后、按原相对顺序。
+const KEPT_WITH_INJECTIONS = [
+  "0:turn/start",
+  "1:step/start",
+  "2:user/message",
+  "3:assistant/message",
+  "4:step/end",
+  "5:turn/end",
+  "6:user/message",
+  "7:team/member",
+];
+
+describe("目标消息之前的上下文注入与队伍事件", () => {
+  it("recall 整轮：注入与队伍事件重写保留，不随目标轮一起被吞", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = injectedSession();
+      await createPersisted(ctx, "src", events);
+
+      await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+      });
+
+      const after = (await rdb(ctx).load(SessionIdBrand("src"))).events;
+      expect(outline(after)).toEqual(KEPT_WITH_INJECTIONS);
+      const restoredInjection = after[6];
+      if (restoredInjection === undefined) throw new Error("missing restored injection");
+      expect((restoredInjection.data as { source?: { kind?: string } }).source?.kind).toBe(
+        "runtime-context",
+      );
+      // 注入是 append surface 节点：补回后仍在模型可见上下文里，不只是一行日志
+      expect(surfaceNodes(after)).toContain(6);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit 整轮：注入与队伍事件重写保留，不重复写", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = injectedSession();
+      await createPersisted(ctx, "src", events);
+
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+        blockIndex: 0,
+        text: "第二轮问题（改）",
+        cascade: "truncate",
+      });
+
+      const after = (await rdb(ctx).load(SessionIdBrand("src"))).events;
+      expect(outline(after)).toEqual(KEPT_WITH_INJECTIONS);
+      expect(after.filter((event) => event.type === "team/member")).toHaveLength(1);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("live 会话：注入与队伍事件在内存 log 与持久化里都保留", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = injectedSession();
+      ctx.sessions.create(SessionIdBrand("live"), { meta: meta("live"), seed: events });
+      const live = ctx.sessions.get(SessionIdBrand("live"))!;
+      await ctx.sessions.flush(live);
+
+      await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("live"),
+        eventSeq: targetSeq,
+      });
+
+      expect(outline(live.snapshotEvents())).toEqual(KEPT_WITH_INJECTIONS);
+      const stored = await rdb(ctx).load(SessionIdBrand("live"));
+      expect(outline(stored.events)).toEqual(KEPT_WITH_INJECTIONS);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+// 轮首撤回：保留规则是「除轮结构与轮正文之外都留」，不登记具体事件类型——上游新增的插件事件
+// （这里用 request/header、system/message、todo/write 代表）自动保留，删减也不会失配。
+function unlistedEventsSession(): { events: SessionEvent[]; targetSeq: number } {
+  const events = [
+    ...turnLog(0, 1, { users: [{ id: "t1-u1", text: "第一轮问题" }], time: 0 }),
+    { type: "turn/start", seq: SessionSeq(6), time: 6, data: { turn: 2 } },
+    {
+      type: "request/header",
+      seq: SessionSeq(7),
+      time: 7,
+      data: { header: { config: { provider: "mock", model: "mock" } }, reason: "initial" },
+    },
+    {
+      type: "system/message",
+      seq: SessionSeq(8),
+      time: 8,
+      data: {
+        turn: 2,
+        step: 1,
+        message: {
+          id: "t2-system",
+          role: "system",
+          content: [{ type: "text", text: "系统提示" }],
+          source: { kind: "system-prompt" },
+        },
+      },
+      surfaceOp: "append",
+    },
+    {
+      type: "todo/write",
+      seq: SessionSeq(9),
+      time: 9,
+      data: { todos: [{ content: "整理上下文", status: "pending" }] },
+    },
+    { type: "step/start", seq: SessionSeq(10), time: 10, data: { turn: 2, step: 1 } },
+    userMessage(11, "t2-u1", "第二轮问题", 11),
+    assistantMessage(12, 2, 1, "t2-a1", "第二轮回答", 12),
+    { type: "step/end", seq: SessionSeq(13), time: 13, data: { turn: 2, step: 1 } },
+    {
+      type: "turn/end",
+      seq: SessionSeq(14),
+      time: 14,
+      data: { turn: 2, reason: { kind: "completed" } },
+    },
+  ] as unknown as SessionEvent[];
+  return { events, targetSeq: 11 };
+}
+
+const KEPT_WITH_UNLISTED_EVENTS = [
+  "0:turn/start",
+  "1:step/start",
+  "2:user/message",
+  "3:assistant/message",
+  "4:step/end",
+  "5:turn/end",
+  "6:request/header",
+  "7:system/message",
+  "8:todo/write",
+];
+
+describe("轮首撤回：非轮次事件默认保留", () => {
+  it("没有登记过的事件类型（request/header、system/message、todo/write）同样保留", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const { events, targetSeq } = unlistedEventsSession();
+      await createPersisted(ctx, "src", events);
+
+      await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: targetSeq,
+      });
+
+      const after = (await rdb(ctx).load(SessionIdBrand("src"))).events;
+      expect(outline(after)).toEqual(KEPT_WITH_UNLISTED_EVENTS);
+      // 保留的事件仍构成可重建的会话（surface 与引用没有断）
+      expect(() => Session.create(SessionIdBrand("probe"), after)).not.toThrow();
     } finally {
       await dispose();
     }

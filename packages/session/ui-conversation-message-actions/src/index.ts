@@ -31,7 +31,8 @@ import {
   closedTurns,
   droppedCompactions,
   editPlan,
-  keptConfigEvents,
+  keptOutsideTurn,
+  openTurnCloser,
   precedingContentIndex,
   recallBoundary,
   restoreCompactions,
@@ -261,8 +262,10 @@ export class SessionEditor extends Service {
     // 补回被截断丢掉、但在重放目标之前的压缩
     const keepFrom = keepFromOf(events, boundary);
     const compactions = droppedCompactions(events, keepFrom, plan.targetSeq);
-    // 同理保留这之前的配置事件（它们表达的是当前生效的配置）
-    const configs = keptConfigEvents(events, keepFrom, plan.targetSeq);
+    // 同理保留这之前的非轮次事件（配置 / 上下文注入 / 队伍 / 请求头…）；首轮撤回等同清空重开
+    const preserved = boundary === -1 ? [] : keptOutsideTurn(events, keepFrom, plan.targetSeq);
+    // 切点落在轮内：保留前缀尾部是未闭合轮，补 interrupted closer
+    const closer = openTurnCloser(events, keepFrom);
 
     const replayTurn = preceding < 0 ? 1 : turns[preceding]!.turn + 1;
 
@@ -285,7 +288,8 @@ export class SessionEditor extends Service {
     const seedStart = this.seedStart(live, events, keepFrom);
     const seedSuffix: SessionEvent[] = [
       ...restoreCompactions(compactions, keepFrom, seedStart),
-      ...configs,
+      ...preserved,
+      ...(closer === undefined ? [] : [closer]),
       ...manualSeed,
     ];
     await this.appendSeedSuffix(operation.sessionId, live, seedSuffix, events, keepFrom);
@@ -316,10 +320,14 @@ export class SessionEditor extends Service {
     signal?.throwIfAborted();
     const events = await this.readEvents(operation.sessionId, signal);
     const boundary = recallBoundary(events, closedTurns(events), operation.eventSeq);
-    // 撤回同样要补回被丢掉、但在撤回目标之前的压缩与配置事件
+    // 撤回同样要补回被丢掉、但在撤回目标之前的非轮次事件（配置 / 压缩 / 上下文注入 / 队伍…）；
+    // 首轮撤回等同清空重开
     const keepFrom = keepFromOf(events, boundary);
-    const compactions = droppedCompactions(events, keepFrom, operation.eventSeq);
-    const configs = keptConfigEvents(events, keepFrom, operation.eventSeq);
+    const compactions =
+      boundary === -1 ? [] : droppedCompactions(events, keepFrom, operation.eventSeq);
+    const preserved = boundary === -1 ? [] : keptOutsideTurn(events, keepFrom, operation.eventSeq);
+    // 轮内 followup 撤回：保留前缀尾部是未闭合轮，补 interrupted closer
+    const closer = openTurnCloser(events, keepFrom);
 
     await this.stopLoop(operation.sessionId, signal);
     const live = this.ctx.sessions.get(operation.sessionId);
@@ -329,7 +337,8 @@ export class SessionEditor extends Service {
       live,
       [
         ...restoreCompactions(compactions, keepFrom, this.seedStart(live, events, keepFrom)),
-        ...configs,
+        ...preserved,
+        ...(closer === undefined ? [] : [closer]),
       ],
       events,
       keepFrom,

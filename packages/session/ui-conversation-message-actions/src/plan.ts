@@ -328,12 +328,18 @@ function compactionTypeOf(event: SessionEvent): string | undefined {
 }
 
 // 压缩事务的替换消息：compact 插件写入的 surface replace 用户消息（checkpoint）。
+// 当前格式的 source 是 `compact-checkpoint`（`@deepseek-ai/dsh-compaction/checkpoint` 的
+// `isCompactCheckpointSource`）；v3 时代的旧日志是 `plugin: "compact"`，session-rdb 读路径不归一它，
+// 所以两种形状都要认。
 function isCompactionCheckpoint(event: SessionEvent): boolean {
   if (event.type !== "user/message") return false;
   const op = (event as unknown as { surfaceOp?: unknown }).surfaceOp;
   if (typeof op !== "object" || op === null) return false;
   const source = event.data.source as unknown as { kind?: unknown; plugin?: unknown };
-  return source.kind === "plugin" && source.plugin === "compact";
+  return (
+    source.kind === "compact-checkpoint" ||
+    (source.kind === "plugin" && source.plugin === "compact")
+  );
 }
 
 function compactionBrackets(events: readonly SessionEvent[]): CompactionBracket[] {
@@ -378,27 +384,68 @@ export function droppedCompactions(
   );
 }
 
-// 会话级配置事件：写入即「最后一条生效」，与某一轮的正文无关（分类同 session-rdb 的事件 schema）。
-const CONFIG_EVENT_TYPES: ReadonlySet<string> = new Set([
-  "model/selection",
-  "permission/preset",
-  "approval/policy",
-  "sandbox/mode",
-  "plan/mode",
-  "agent-preset/selected",
-  "session-mode/selected",
+// 轮次结构与正文是会话格式的核心稳定集合；其余事件（配置、上下文注入、队伍、请求头、压缩…）默认
+// 保留——上游插件新增事件类型不需要在这里登记，只有删除核心事件类型才会影响判定。
+const TURN_STRUCTURE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "turn/start",
+  "turn/end",
+  "step/start",
+  "step/end",
 ]);
 
-// 截断丢掉、但位于目标消息之前的配置事件：撤回整轮时它们要重写回保留前缀之后——否则当前生效的配置
-// 跟着撤回了。轮内后续 user 消息的边界不退整轮，这个区间自然为空（那些事件本来就在保留前缀里）。
-export function keptConfigEvents(
+// 压缩事务的四件套由 restoreCompactions 统一重排与重算跨事件引用，不参与普通保留。
+const COMPACTION_BRACKET_TYPES: ReadonlySet<string> = new Set([
+  "compaction/start",
+  "compaction/summary",
+  "compaction/end",
+]);
+
+function isTurnBodyEvent(event: SessionEvent): boolean {
+  if (event.type === "assistant/message") return true;
+  // 上游的工具事件族（tool/call、tool/result、ptc / code dispatch 变体…）都是轮内正文。
+  if (event.type.startsWith("tool/")) return true;
+  return event.type === "user/message" && event.data.source.kind === "user";
+}
+
+// 截断丢掉、但位于目标之前的非轮次事件（轮结构与轮正文之外的都算）：撤回整轮时它们按原顺序重写回
+// 保留前缀之后——否则已注入的上下文、团队状态、配置与压缩会随目标轮一起被吞。轮内 followup 的边界
+// 不退整轮，这个区间自然为空（那些事件本来就在保留前缀里）。
+export function keptOutsideTurn(
   events: readonly SessionEvent[],
   keepFrom: number,
   targetSeq: number,
 ): SessionEvent[] {
   return events.filter(
-    (event) => event.seq >= keepFrom && event.seq < targetSeq && CONFIG_EVENT_TYPES.has(event.type),
+    (event) =>
+      event.seq >= keepFrom &&
+      event.seq < targetSeq &&
+      !TURN_STRUCTURE_EVENT_TYPES.has(event.type) &&
+      !COMPACTION_BRACKET_TYPES.has(event.type) &&
+      !isCompactionCheckpoint(event) &&
+      !isTurnBodyEvent(event),
   );
+}
+
+// 保留前缀（`events[0..keepLength)`）尾部若停在未闭合的 turn 上（turn/start 之后没有 turn/end），
+// 追加一条 interrupted closer 让轮次闭合、后续轮次导航与续跑不落在孤儿轮上。轮内 followup 撤回会
+// 留下这种尾部；轮首撤回（退到前一轮 turn/end）与轮外消息不会。
+export function openTurnCloser(
+  events: readonly SessionEvent[],
+  keepLength: number,
+): SessionEvent | undefined {
+  let openTurn: number | undefined;
+  for (let index = 0; index < keepLength; index += 1) {
+    const event = events[index]!;
+    if (event.type === "turn/start") openTurn = event.data.turn;
+    else if (event.type === "turn/end") openTurn = undefined;
+  }
+  if (openTurn === undefined) return undefined;
+  return {
+    type: "turn/end",
+    seq: SessionSeq(keepLength),
+    time: Date.now(),
+    data: { turn: openTurn, reason: { kind: "interrupted" } },
+  } as SessionEvent;
 }
 
 function replacementRange(event: SessionEvent): { start: number; end: number } | undefined {

@@ -12,6 +12,11 @@
 - **传输（注册面）**：只注册一条 exact `/session-editor`（没有 `/api` 前缀的重复注册）：`http-connection.spec.ts`。
 - **水位与失效**：rewind / 覆盖导入后 token meter 折叠与投影单元缓存必须失效（同一 meter 实例 +
   预热水位）：`meter-watermark.spec.ts`、`compaction-rewind.spec.ts`。
+- **轮次切分与默认保留**：整轮撤回 / 编辑时，目标之前的事件按「只排除轮结构与轮正文」保留——
+  未登记过的事件类型（request/header、system/message、todo/write…）、上下文注入、队伍事件都要留；
+  压缩事务（当前 `compact-checkpoint` 与旧 `plugin: "compact"` 两种 checkpoint 形状）前移后引用重算；
+  轮内 followup 撤回补 `turn/end(interrupted)` 闭合（cold 与 live 两条路径）：`compaction-rewind.spec.ts`、
+  `recall.spec.ts`。
 - **浏览器半（编排）**：`SessionEditorController.face`——动作 POST、成功后重建会话窗口（探测顺序
   `binding.resync()` → `sessions.refresh()` → warn，**不整页重载**）、recall 回填**该消息的全部文本块**、
   recall 在**重建落定后**把 `[data-conversation-scroll]` 写到底（重建没落定前不动视口、失败不动视口）、

@@ -151,12 +151,16 @@ describe("SessionEditor recall", () => {
       });
 
       const rows = await eventRows(ctx, SessionIdBrand("src"));
-      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-      expect(rows.some((r) => r.fSequence === 12)).toBe(false);
+      // 切点之前的正文保留；保留前缀尾部是未闭合的 turn 2，补一条 interrupted closer
+      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(rows[12]?.fType).toBe("turn/end");
 
       const after = await rdb(ctx).load(SessionIdBrand("src"));
       expect(after.events.some((e) => textOf(e) === "q1")).toBe(true);
       expect(after.events.some((e) => textOf(e) === "followup")).toBe(false);
+      const closer = after.events.at(-1);
+      expect(closer?.type).toBe("turn/end");
+      expect(closer?.data).toEqual({ turn: 2, reason: { kind: "interrupted" } });
     } finally {
       await dispose();
     }
