@@ -5,13 +5,11 @@ import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionEditorController } from "./controller.ts";
 import { registerChatNodeRenderers } from "./chat-node/register.ts";
-import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 export const inject = ["slots", "conversation", "connection", "sessions", "uiWorkspace"];
 
 export function apply(ctx: Context): void {
-  installUiPrimitives(ctx);
-  // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
+  // 基础面（内联库）由 `@morlay/dsh-client-modules` 的 client 行统一装配；这里只注册本行的字段文案。
 
   const controllers = new Map<SessionId, SessionEditorController>();
   const controllerFor = (sessionId: SessionId): SessionEditorController => {

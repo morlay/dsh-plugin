@@ -119,6 +119,8 @@ function bench(options: {
       $on: (_event: string, _listener: (...params: never[]) => void) => () => {},
     },
   };
+  // 服务挂在 root 上（`install` 的提供位置）：替身把 root 指回自己。
+  (ctx as Record<string, unknown>).root = ctx;
   return { ctx, registrations, factories, dictionaries, effects, injected };
 }
 
@@ -253,9 +255,10 @@ describe("装上本包的注册面", () => {
   });
 });
 
-// 内联本包的 client 行必须调用装配入口（ADR-暂时内联而不是装配行）：少了它，`schemaFormHints`、
-// `settings.schema-form.form` 与 `plugins.row.config` 的自动注册都不会发生——插件管理页的组件行没有
-// 「配置」入口（session-rdb 的 JSON 编辑器就是这么消失的）。清单与 ADR 的调用方列表同一份。
+// 内联库的装配入口只在**一个地方**调用：`@morlay/dsh-client-modules` 的 client 行（客户端装配的根）。
+// 消费方各自调用会让多份副本同时注册同一个 locale 命名空间——第二次抛
+// `locale namespace "settings.schema-form" already has locale "zh"`。
+const INSTALLER = "packages/client/dsh-client-modules/src/client/index.ts";
 const CONSUMERS = [
   "packages/profile/dsh-session-mode/src/client/index.ts",
   "packages/sandbox/dsh-sandbox-local/src/client/index.ts",
@@ -265,12 +268,14 @@ const CONSUMERS = [
 ] as const;
 
 describe("内联消费者", () => {
-  it("每个都调用本包的 apply，否则按行配置页不会注册", async () => {
+  it("基础面只在 client-modules 的 client 行装配一次，消费方不再各自调用", async () => {
     const root = resolve(import.meta.dirname, "../../../../../..");
+    const installer = await readFile(join(root, INSTALLER), "utf8");
+    expect(installer, INSTALLER).toContain("@morlay/dsh-client-ui-primitives/client");
+    expect(installer, INSTALLER).toContain("installUiPrimitives(ctx)");
     for (const path of CONSUMERS) {
       const source = await readFile(join(root, path), "utf8");
-      expect(source, path).toContain("@morlay/dsh-client-ui-primitives/client");
-      expect(source, path).toContain("installUiPrimitives(ctx)");
+      expect(source, path).not.toContain("installUiPrimitives");
     }
   });
 });

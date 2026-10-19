@@ -1,4 +1,8 @@
-// client 半：两件事，都是**把上游那条链缺的面补上**。
+// client 半：三件事——把上游那条链缺的面补上，并给内联的 UI 基础面一个唯一装配点。
+//
+// 0. UI 基础面（`@morlay/dsh-client-ui-primitives`）的装配：它是内联库（不是装配行），
+//    字典 / 字段槽 / 按行配置页只能装一次；由本行（客户端装配的根）统一调用，消费方不再各自调用
+//    （多份副本同时注册会撞 `locale namespace "settings.schema-form" already has locale "zh"`）。
 //
 // 1. `modules` 服务面：上游 `ui-settings-general` 的 client 插件 inject 它（有它就忽略 peer），
 //    我们的装配停用了上游 `client-modules` 行，所以这里补一个最小实现（见文件头注释与 README）。
@@ -8,6 +12,7 @@
 //    已失效的 id 一直带回来，`TerminalView` 的 `createWhenMissing` 只在「没有 saved id」时才分配新终端
 //    —— 于是面板永远停在"此终端已不存在，请新建终端"，点"新建终端"复用的还是它。
 import type { Context } from "@deepseek-ai/cordis";
+import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 /** 恒 `undefined` 的可订阅快照（`useSyncExternalStore` 的入参形状）。 */
 const NO_RELEASE_CHANGE = {
@@ -21,6 +26,8 @@ const NO_RELEASE_CHANGE = {
  * @param ctx - 浏览器侧根上下文。
  */
 export function apply(ctx: Context): void {
+  // 内联库的唯一装配点：`apply` 自己等依赖到齐，并在服务已在场时让位。
+  installUiPrimitives(ctx);
   ctx.reflect.provide("modules", {
     entries: {
       releaseChange: NO_RELEASE_CHANGE,

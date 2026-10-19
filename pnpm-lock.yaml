@@ -614,6 +614,9 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/host/webserver
+      '@morlay/dsh-client-ui-primitives':
+        specifier: workspace:*
+        version: link:../dsh-client-ui-primitives
       '@morlay/dsh-cordis-assets':
         specifier: workspace:*
         version: link:../../tooling/dsh-cordis-assets

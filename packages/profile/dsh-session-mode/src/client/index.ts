@@ -30,7 +30,6 @@ import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-lo
 import { loadLlmProviders, remoteNamespace, type ProviderModels } from "./llm-directory.ts";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
-import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
@@ -81,8 +80,7 @@ function unwrapHintService(scope: Context): HintsService {
 
 // 装上会话里的那一个面、本行配置页的字段文案，以及装本行的 bundle 那一页的表单。
 export function apply(ctx: Context): void {
-  installUiPrimitives(ctx);
-  // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
+  // 基础面（内联库）由 `@morlay/dsh-client-modules` 的 client 行统一装配；这里只注册本行的字段文案。
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "session-mode: dictionaries");
 

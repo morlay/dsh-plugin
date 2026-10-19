@@ -126,7 +126,7 @@ function bench() {
 }
 
 describe("bundle 配置页：提示面经 cordis 服务拿到", () => {
-  it("代理上直接调方法会抛（私有字段），解包成原实例之后读得到候选", () => {
+  it("代理上直接调方法也读得到候选（状态不是 JS 私有字段，跨副本副本可读）", () => {
     const stack = bench();
     // 真的提示面服务（与 dsh-session-mode 的 client 半同一份实现）：自己挂到 ctx 上。
     const hints = new SchemaFormHints(stack.ctx);
@@ -134,11 +134,11 @@ describe("bundle 配置页：提示面经 cordis 服务拿到", () => {
       options: () => [{ value: "provider-a", label: "A" }],
     });
 
-    // cordis 会给服务值包一层追踪代理：代理上的调用以代理为 `this`，而服务实现用 JS 私有字段。
+    // cordis 会给服务值包一层追踪代理；服务状态用普通属性（不是 JS 私有字段），代理调用也读得到。
     const proxied = stack.ctx.get("schemaFormHints") as unknown as HintsLike;
-    expect(() => proxied.sourceFor("llm-providers")).toThrow();
+    expect(proxied.sourceFor("llm-providers")).toBeDefined();
 
-    // 页面走的是解包之后那条路。
+    // 页面仍走解包之后那条路。
     const original = unwrapService(proxied);
     expect(original?.sourceFor("llm-providers")).toBeDefined();
   });

@@ -91,9 +91,17 @@ export function apply(ctx: Context): void {
 }
 
 function install(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), "ui-schema-form: dictionaries");
   // 提示面（dict 的候选键）：同一次 apply 里提供，业务插件注册读数，本包的行投影读它。
-  const hints = new SchemaFormHints(ctx);
+  //
+  // **必须最先提供，并且挂在 root 上**：多份副本各自的 `apply` 会同时等依赖到齐、各自回调；`apply` 里的检查
+  // 靠 `schemaFormHints` 判断“另一份已经装过”。两个细节缺一不可：
+  //
+  // - 放在 `locale.register` 之前：否则两次回调都可能先通过检查、再各注册一次 `settings.schema-form` 字典，
+  //   第二个抛 `locale namespace "settings.schema-form" already has locale "zh"`；
+  // - 用 `ctx.root` 提供：`scope.get` 默认只认 ACTIVE fiber，而 inject 回调期间它自己的 fiber 还没转
+  //   ACTIVE——挂在当前 scope 上时，兄弟副本的回调看不到这个服务，照样会进来装第二遍。
+  const hints = new SchemaFormHints(ctx.root);
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), "ui-schema-form: dictionaries");
   ctx.effect(
     () =>
       ctx.slots.registerFactory(

@@ -64,91 +64,95 @@ export interface SchemaFormHintsFace {
 }
 
 // 提示面的完整服务（业务用注册侧，表单一侧用读侧）。
+//
+// 状态用 TS `private`（运行时是普通属性）而不是 JS `#` 私有字段：本包是内联库，同一服务实例会被**另一份
+// 副本**的代码读（多份副本各带一份类定义，`#` 字段跨类定义不可见，会抛
+// `Cannot read private member #texts from an object whose class did not declare it`）。
 export class SchemaFormHints extends Service implements SchemaFormHintsFace {
-  readonly #readers = new Map<string, SuggestedKeysReader>();
-  readonly #texts = new Map<string, FieldTextReader>();
-  readonly #selects = new Map<string, SelectSpec>();
-  readonly #sources = new Map<string, SelectSpec>();
-  readonly #listeners = new Set<() => void>();
+  private readonly readers = new Map<string, SuggestedKeysReader>();
+  private readonly texts = new Map<string, FieldTextReader>();
+  private readonly selects = new Map<string, SelectSpec>();
+  private readonly sources = new Map<string, SelectSpec>();
+  private readonly listeners = new Set<() => void>();
 
   constructor(ctx: Context) {
     super(ctx, "schemaFormHints");
   }
 
   keysFor(ns: string, path: readonly string[]): readonly string[] {
-    return lookup(this.#readers, ns, path)?.() ?? [];
+    return lookup(this.readers, ns, path)?.() ?? [];
   }
 
   textFor(ns: string, path: readonly string[]): FieldText {
-    return lookup(this.#texts, ns, path)?.() ?? {};
+    return lookup(this.texts, ns, path)?.() ?? {};
   }
 
   select(ns: string, path: readonly string[], spec: SelectSpec): () => void {
     const key = locationKey(ns, path);
-    this.#selects.set(key, spec);
-    this.#publish();
+    this.selects.set(key, spec);
+    this.publish();
     return () => {
-      if (this.#selects.get(key) !== spec) return;
-      this.#selects.delete(key);
-      this.#publish();
+      if (this.selects.get(key) !== spec) return;
+      this.selects.delete(key);
+      this.publish();
     };
   }
 
   selectFor(ns: string, path: readonly string[]): SelectSpec | undefined {
-    return lookup(this.#selects, ns, path);
+    return lookup(this.selects, ns, path);
   }
 
   source(name: string, spec: SelectSpec): () => void {
-    this.#sources.set(name, spec);
-    this.#publish();
+    this.sources.set(name, spec);
+    this.publish();
     return () => {
-      if (this.#sources.get(name) !== spec) return;
-      this.#sources.delete(name);
-      this.#publish();
+      if (this.sources.get(name) !== spec) return;
+      this.sources.delete(name);
+      this.publish();
     };
   }
 
   sourceFor(name: string): SelectSpec | undefined {
-    return this.#sources.get(name);
+    return this.sources.get(name);
   }
 
   describe(ns: string, path: readonly string[], read: FieldTextReader): () => void {
     const key = locationKey(ns, path);
-    this.#texts.set(key, read);
-    this.#publish();
+    this.texts.set(key, read);
+    this.publish();
     return () => {
-      if (this.#texts.get(key) !== read) return;
-      this.#texts.delete(key);
-      this.#publish();
+      if (this.texts.get(key) !== read) return;
+      this.texts.delete(key);
+      this.publish();
     };
   }
 
   suggestKeys(ns: string, path: readonly string[], read: SuggestedKeysReader): () => void {
     const key = locationKey(ns, path);
-    this.#readers.set(key, read);
-    this.#publish();
+    this.readers.set(key, read);
+    this.publish();
     return () => {
-      if (this.#readers.get(key) !== read) return;
-      this.#readers.delete(key);
-      this.#publish();
+      if (this.readers.get(key) !== read) return;
+      this.readers.delete(key);
+      this.publish();
     };
   }
 
   // 观察候选键的变化（注册与注销）；返回取消订阅。
   subscribe(listener: () => void): () => void {
-    this.#listeners.add(listener);
+    this.listeners.add(listener);
     return () => {
-      this.#listeners.delete(listener);
+      this.listeners.delete(listener);
     };
   }
 
   // 重新通知一次：读数背后的数据变了（业务自己知道），页面据此重算候选行。
   refresh(): void {
-    this.#publish();
+    this.publish();
   }
 
-  #publish(): void {
-    for (const listener of this.#listeners) listener();
+  private publish(): void {
+    for (const listener of this.listeners) listener();
   }
 }
 
