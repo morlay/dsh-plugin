@@ -5,6 +5,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-slots";
 import { en, zh, type WebSearchFieldLocaleKey } from "./locales.ts";
+import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 // 本包 host 行 id：行配置页读的就是这个命名空间。
 export const WEB_SEARCH_NS = "web-search-ollama";
@@ -27,6 +28,7 @@ export const inject = ["locale"];
 
 // 给这一行的四个字段补文案。
 export function apply(ctx: Context): void {
+  installUiPrimitives(ctx);
   // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
   const t = ctx.locale.bind(NS);
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "web-search-ollama: field locale");

@@ -13,6 +13,7 @@ import { ConversationManagerController } from "./controller.ts";
 import { ConversationManagerPage } from "./ConversationManagerPage.tsx";
 import { ConversationManagerIcon } from "./ConversationManagerIcon.tsx";
 import { en, zh, type ConversationManagerKey } from "./locales.ts";
+import { apply as installUiPrimitives } from "@morlay/dsh-client-ui-primitives/client";
 
 export type { ConversationManagerFace, ConversationManagerPorts } from "./controller.ts";
 export { ConversationManagerController, ConversationManagerRequestError } from "./controller.ts";
@@ -39,6 +40,7 @@ export const PANEL_ORDER = 1;
 export const inject = ["slots", "locale", "uiWorkspace", "sessions"];
 
 export function apply(ctx: ClientContext): void {
+  installUiPrimitives(ctx);
   // 基础面随本包 inline（不再是装配行）：装上它提供的字典、字段槽与按行配置页；多份副本只装一次。
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "ui-conversation-manager: dictionaries");
   const t = ctx.locale.bind(NS);

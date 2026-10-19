@@ -3,6 +3,8 @@
 // slots / locale / remote 是外部框架面，这里用最小替身记录**注册事实**——Factory 的 children 声明、行入口的 key 与
 // 兜底 priority、不可渲染的行不占入口。真实槽位声明校验在上游包内完成。
 
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import z from "@deepseek-ai/schemastery";
 import { describe, expect, it, vi } from "vitest";
@@ -248,5 +250,27 @@ describe("装上本包的注册面", () => {
       },
     });
     expect(rendered).toEqual([{ ns: "row" }]);
+  });
+});
+
+// 内联本包的 client 行必须调用装配入口（ADR-暂时内联而不是装配行）：少了它，`schemaFormHints`、
+// `settings.schema-form.form` 与 `plugins.row.config` 的自动注册都不会发生——插件管理页的组件行没有
+// 「配置」入口（session-rdb 的 JSON 编辑器就是这么消失的）。清单与 ADR 的调用方列表同一份。
+const CONSUMERS = [
+  "packages/profile/dsh-session-mode/src/client/index.ts",
+  "packages/sandbox/dsh-sandbox-local/src/client/index.ts",
+  "packages/web/dsh-web-search-ollama/src/client/index.ts",
+  "packages/session/ui-conversation-message-actions/src/client/index.ts",
+  "packages/session/ui-conversation-manager/src/client/index.ts",
+] as const;
+
+describe("内联消费者", () => {
+  it("每个都调用本包的 apply，否则按行配置页不会注册", async () => {
+    const root = resolve(import.meta.dirname, "../../../../../..");
+    for (const path of CONSUMERS) {
+      const source = await readFile(join(root, path), "utf8");
+      expect(source, path).toContain("@morlay/dsh-client-ui-primitives/client");
+      expect(source, path).toContain("installUiPrimitives(ctx)");
+    }
   });
 });
