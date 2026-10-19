@@ -12,7 +12,7 @@ const ROWS: readonly unknown[] = [
     id: "agent-default-model",
     config: {
       provider: "ollama",
-      model: "deepseek-v4.1-flash",
+      model: "deepseek-v4.1-flash:1017",
       reasoningEffort: "high",
     },
   },

@@ -76,8 +76,7 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
     name: "编码模式",
-    description:
-      "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
+    description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
@@ -116,8 +115,7 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: NOOP_MODE_ID,
     name: "原样模式",
-    description:
-      "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
+    description: "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
     // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
     role: ["main", "subagent"],
     // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，

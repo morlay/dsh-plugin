@@ -27,32 +27,36 @@
  *
  * @module @deepseek-ai/dsh-subagent
  */
-import type { Volatile } from '@deepseek-ai/cordis'
+import type { Volatile } from "@deepseek-ai/cordis";
 
-import { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-working-directory'
-import type {} from '@deepseek-ai/dsh-attachment'
-import { scopeTarget } from '@deepseek-ai/dsh-scope'
-import type {} from '@deepseek-ai/dsh-subagent'
+import { Context } from "@deepseek-ai/cordis";
+import z from "@deepseek-ai/schemastery";
+import type {} from "@deepseek-ai/dsh-working-directory";
+import type {} from "@deepseek-ai/dsh-attachment";
+import { scopeTarget } from "@deepseek-ai/dsh-scope";
+import type {} from "@deepseek-ai/dsh-subagent";
 // 服务面声明（`ctx.agentPresets`）由它给：回报指引按会话挂的 preset 选文案。
-import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
-import { Remote, RemoteError, TypertRemoteService, principalOf, type Principal } from '@deepseek-ai/dsh-typert-protocol'
+import type {} from "@deepseek-ai/dsh-agent-preset-registry";
+import { assertObjectJsonSchema } from "@deepseek-ai/dsh-tools";
+import type { ContentBlock, MessageId, MessageSource } from "@deepseek-ai/dsh-llm";
+import type { Agent } from "@deepseek-ai/dsh-agent";
+import type { SessionId } from "@deepseek-ai/dsh-session";
+import { canonicalClientTimeZone } from "@deepseek-ai/dsh-util-time";
 import {
-  rejectPrompt, validateControlRequest,
-} from './vendor/dsh-subagent/control.ts'
+  Remote,
+  RemoteError,
+  TypertRemoteService,
+  principalOf,
+  type Principal,
+} from "@deepseek-ai/dsh-typert-protocol";
+import { rejectPrompt, validateControlRequest } from "./vendor/dsh-subagent/control.ts";
 import type {
   SubagentDelivery,
   SubagentInterruptReceipt,
   SubagentPromptReceipt,
   SubagentPromptRequest,
   SubagentPromptRequestId,
-} from './vendor/dsh-subagent/control-types.ts'
+} from "./vendor/dsh-subagent/control-types.ts";
 import type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -63,25 +67,37 @@ import type {
   SubagentProvider,
   SubagentSendMessageOptions,
   SubagentStartRequest,
-} from './vendor/dsh-subagent/types.ts'
-import { SubagentError } from './vendor/dsh-subagent/error.ts'
-import { assertSubagentMaxDepth } from './vendor/dsh-subagent/depth.ts'
-import { createActivationObserver, createLifecycleEmitter } from './vendor/dsh-subagent/lifecycle.ts'
-import type { ActivationObserver, LifecycleEmitter } from './vendor/dsh-subagent/lifecycle.ts'
-import SubagentManager from './manager.ts'
-import { installDelegationContext } from './delegation-context.ts'
-import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from './vendor/dsh-subagent/list-children.ts'
-import type { SubagentDescendantListEntry } from './vendor/dsh-subagent/list-children.ts'
-import { installSubagentArchiveAdmission } from './vendor/dsh-subagent/archive-admission.ts'
-import type { SubagentCatalogEntry } from './vendor/dsh-subagent/projection-types.ts'
-import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './vendor/dsh-subagent/projection.ts'
-import { subagentCatalogProjectionDefinition } from './vendor/dsh-subagent/catalog.ts'
-import { deliverSubagentPrompt } from './vendor/dsh-subagent/internal.ts'
+} from "./vendor/dsh-subagent/types.ts";
+import { SubagentError } from "./vendor/dsh-subagent/error.ts";
+import { assertSubagentMaxDepth } from "./vendor/dsh-subagent/depth.ts";
+import {
+  createActivationObserver,
+  createLifecycleEmitter,
+} from "./vendor/dsh-subagent/lifecycle.ts";
+import type { ActivationObserver, LifecycleEmitter } from "./vendor/dsh-subagent/lifecycle.ts";
+import SubagentManager from "./manager.ts";
+import { installDelegationContext } from "./delegation-context.ts";
+import {
+  listChildren as listSubagentChildren,
+  listDescendants as listSubagentDescendants,
+} from "./vendor/dsh-subagent/list-children.ts";
+import type { SubagentDescendantListEntry } from "./vendor/dsh-subagent/list-children.ts";
+import { installSubagentArchiveAdmission } from "./vendor/dsh-subagent/archive-admission.ts";
+import type { SubagentCatalogEntry } from "./vendor/dsh-subagent/projection-types.ts";
+import {
+  subagentIdentityProjectionDefinition,
+  subagentTimingProjectionDefinition,
+} from "./vendor/dsh-subagent/projection.ts";
+import { subagentCatalogProjectionDefinition } from "./vendor/dsh-subagent/catalog.ts";
+import { deliverSubagentPrompt } from "./vendor/dsh-subagent/internal.ts";
 
-export type {} from './vendor/dsh-subagent/catalog.ts'
-export * from './vendor/dsh-subagent/out-of-process.ts'
-export { AssistantOutputFold, finalAssistantOutput } from './vendor/dsh-subagent/assistant-output.ts'
-export { SubagentRunId } from './vendor/dsh-subagent/types.ts'
+export type {} from "./vendor/dsh-subagent/catalog.ts";
+export * from "./vendor/dsh-subagent/out-of-process.ts";
+export {
+  AssistantOutputFold,
+  finalAssistantOutput,
+} from "./vendor/dsh-subagent/assistant-output.ts";
+export { SubagentRunId } from "./vendor/dsh-subagent/types.ts";
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -97,21 +113,21 @@ export type {
   ResolvedSubagentStartRequest,
   SubagentStopReason,
   SubagentStopReasonMap,
-} from './vendor/dsh-subagent/types.ts'
+} from "./vendor/dsh-subagent/types.ts";
 export {
   foldSubagentDescriptor,
   snapshotSubagentDescriptor,
   SUBAGENT_DESCRIPTOR_VERSION,
-} from './vendor/dsh-subagent/descriptor.ts'
+} from "./vendor/dsh-subagent/descriptor.ts";
 export type {
   ContinuableSubagentDescriptorData,
   ContinuableSubagentDescriptorInput,
   OneShotSubagentDescriptorData,
   SubagentDescriptorData,
-} from './vendor/dsh-subagent/descriptor.ts'
-export { STRUCTURED_OUTPUT_TOOL } from './vendor/dsh-subagent/structured.ts'
-export { SubagentError } from './vendor/dsh-subagent/error.ts'
-export { assertSubagentMaxDepth, delegationDepthOf } from './vendor/dsh-subagent/depth.ts'
+} from "./vendor/dsh-subagent/descriptor.ts";
+export { STRUCTURED_OUTPUT_TOOL } from "./vendor/dsh-subagent/structured.ts";
+export { SubagentError } from "./vendor/dsh-subagent/error.ts";
+export { assertSubagentMaxDepth, delegationDepthOf } from "./vendor/dsh-subagent/depth.ts";
 export {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
@@ -121,13 +137,20 @@ export {
   resolveChildAgentOptions,
   resolveChildDepth,
   SubagentDepthError,
-} from './vendor/dsh-subagent/child-agent.ts'
-export type { ChildComposition, DelegatedPolicyOverrides } from './vendor/dsh-subagent/child-agent.ts'
-export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
-export type * from './vendor/dsh-subagent/control-types.ts'
-export type { SubagentDescendantListEntry } from './vendor/dsh-subagent/list-children.ts'
-export type { SubagentRunEndInfo, SubagentRunInfo } from './vendor/dsh-subagent/types.ts'
-export type { SubagentCatalogEntry, SubagentIdentityProjection, SubagentTimingProjection } from './vendor/dsh-subagent/projection-types.ts'
+} from "./vendor/dsh-subagent/child-agent.ts";
+export type {
+  ChildComposition,
+  DelegatedPolicyOverrides,
+} from "./vendor/dsh-subagent/child-agent.ts";
+export type { AgentMessageSource, SubagentSettledMessageSource } from "./continuation-messages.ts";
+export type * from "./vendor/dsh-subagent/control-types.ts";
+export type { SubagentDescendantListEntry } from "./vendor/dsh-subagent/list-children.ts";
+export type { SubagentRunEndInfo, SubagentRunInfo } from "./vendor/dsh-subagent/types.ts";
+export type {
+  SubagentCatalogEntry,
+  SubagentIdentityProjection,
+  SubagentTimingProjection,
+} from "./vendor/dsh-subagent/projection-types.ts";
 
 /**
  * Durable attribution of one browser-authored follow-up. The Session
@@ -137,73 +160,94 @@ export type { SubagentCatalogEntry, SubagentIdentityProjection, SubagentTimingPr
  * Client reconciles its optimistic prompt against.
  */
 interface BrowserPromptSource {
-  readonly kind: 'user'
-  readonly rpcId: SubagentPromptRequestId
-  readonly clientTimeZone?: string
+  readonly kind: "user";
+  readonly rpcId: SubagentPromptRequestId;
+  readonly clientTimeZone?: string;
   /** Caller that submitted this follow-up, written only when it is not the owner; absent means the owner. */
-  readonly principal?: Principal
+  readonly principal?: Principal;
 }
 
 /** Host configuration for continuable subagent capacity. */
 export interface Config {
   /** Maximum live children sharing uninterrupted continuable parent links; defaults to 8. */
-  maxActiveSubagents: Volatile<number>
+  maxActiveSubagents: Volatile<number>;
   /** Default delegation depth for tools without an explicit limit; defaults to 1. */
-  maxDepth: Volatile<number>
+  maxDepth: Volatile<number>;
   /**
    * Preset ids the Chinese return guidance is restricted to; empty (default) means no restriction.
    *
    * 不配 = 任意 preset 的会话都用本包的中文回报指引（官方四个 shipped preset 也在内，还有还没绑 preset 的会话）。
    * 要反过来只让某几份 preset 用中文，就在这里列出来。装配面，不是用户面——所以不进设置页（`.hidden()`）。
    */
-  localizedReturnGuidancePresets: string[]
+  localizedReturnGuidancePresets: string[];
 }
 
 /** Named provider registry with managed activations, durable discovery, and local child messaging. */
 export class SubagentRuntime extends TypertRemoteService {
   static Config = z.object({
     maxDepth: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(1).volatile(),
-    maxActiveSubagents: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(8).volatile(),
+    maxActiveSubagents: z
+      .number()
+      .step(1)
+      .min(1)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(8)
+      .volatile(),
     localizedReturnGuidancePresets: z.array(z.string()).default([]).hidden(),
-  })
-  static inject = ['workingDirectory']
-  private providers = new Map<string, SubagentProvider>()
-  private manager: SubagentManager | undefined
+  });
+  static inject = ["workingDirectory"];
+  private providers = new Map<string, SubagentProvider>();
+  private manager: SubagentManager | undefined;
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
    * keys its carrier by this exact service instance, whose own context filter
    * composes into the carrier.
    */
-  private readonly emitLifecycle: LifecycleEmitter
+  private readonly emitLifecycle: LifecycleEmitter;
 
-  constructor(ctx: Context, private config: Config) {
-    super(ctx, 'subagents')
+  constructor(
+    ctx: Context,
+    private config: Config,
+  ) {
+    super(ctx, "subagents");
     // 模型看到的委派范围说明换成中文（见 `./delegation-context.ts`）。
-    installDelegationContext(ctx)
-    this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
-    ctx.inject(['agents'], (childCtx: Context) => {
-      const manager = new SubagentManager(childCtx, {
-        startExternal: (name, request) => {
-          const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'start'>>
-          return provider.start(request)
+    installDelegationContext(ctx);
+    this.emitLifecycle = createLifecycleEmitter(this.ctx, (parent) => scopeTarget(this, parent));
+    ctx.inject(["agents"], (childCtx: Context) => {
+      const manager = new SubagentManager(
+        childCtx,
+        {
+          startExternal: (name, request) => {
+            const provider = this.expectProvider(name) as SubagentProvider &
+              Required<Pick<SubagentProvider, "start">>;
+            return provider.start(request);
+          },
+          prepareContinuable: (name, request) => this.prepareContinuable(name, request),
+          observeActivation: (provider, childId, parent) =>
+            this.observeActivation(provider, childId, parent),
         },
-        prepareContinuable: (name, request) => this.prepareContinuable(name, request),
-        observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
-      }, () => this.config.maxActiveSubagents.get(), () => this.config.localizedReturnGuidancePresets)
-      this.manager = manager
-      childCtx.effect(() => () => {
-        /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */
-        if (this.manager === manager) this.manager = undefined
-      }, 'subagents.managerBinding()')
-    })
-    ctx.inject(['sessionProjections'], (projectionCtx) => {
-      projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition)
-      projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
-      projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
-    })
+        () => this.config.maxActiveSubagents.get(),
+        () => this.config.localizedReturnGuidancePresets,
+      );
+      this.manager = manager;
+      childCtx.effect(
+        () => () => {
+          /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */
+          if (this.manager === manager) this.manager = undefined;
+        },
+        "subagents.managerBinding()",
+      );
+    });
+    ctx.inject(["sessionProjections"], (projectionCtx) => {
+      projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition);
+      projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition);
+      projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition);
+    });
     // Archive admission: this runtime is the owner that knows which live
     // children descend from a Session and how a parent stops them.
-    ctx.inject(['agents'], (agentsCtx: Context) => { installSubagentArchiveAdmission(agentsCtx) })
+    ctx.inject(["agents"], (agentsCtx: Context) => {
+      installSubagentArchiveAdmission(agentsCtx);
+    });
   }
 
   /**
@@ -211,12 +255,12 @@ export class SubagentRuntime extends TypertRemoteService {
    * @param configured - Explicit tool limit, or provider-managed for external delegation.
    * @returns The numeric limit, or undefined when the provider owns depth enforcement.
    */
-  resolveMaxDepth(configured?: number | 'provider-managed'): number | undefined {
-    if (configured === 'provider-managed') return undefined
-    if (configured !== undefined) return configured
-    const depth = this.config.maxDepth.get()
-    assertSubagentMaxDepth(depth)
-    return depth
+  resolveMaxDepth(configured?: number | "provider-managed"): number | undefined {
+    if (configured === "provider-managed") return undefined;
+    if (configured !== undefined) return configured;
+    const depth = this.config.maxDepth.get();
+    assertSubagentMaxDepth(depth);
+    return depth;
   }
 
   /**
@@ -224,14 +268,15 @@ export class SubagentRuntime extends TypertRemoteService {
    * @param spec - local task, reserved child id, and result recipient.
    * @returns activation with its accepted initial message id.
    */
-  startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
-  Promise<SubagentActivation & { readonly messageId: MessageId }>
+  startActivation(
+    spec: SubagentActivationSpec & { readonly childId: SessionId },
+  ): Promise<SubagentActivation & { readonly messageId: MessageId }>;
   /**
    * Start a local or external child.
    * @param spec - task, backend, and result recipient.
    * @returns activation with a message id only for local children.
    */
-  startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
+  startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;
   /**
    * Establish a managed child with backend-specific execution capabilities.
    * @param spec - task, backend, and result recipient.
@@ -239,20 +284,26 @@ export class SubagentRuntime extends TypertRemoteService {
    * childId requires a local backend and guarantees an accepted messageId.
    */
   async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation> {
-    const provider = this.expectProvider(spec.provider)
+    const provider = this.expectProvider(spec.provider);
     if (spec.childId !== undefined && provider.prepareContinuable === undefined) {
-      throw new SubagentError('reserved child ids require a local backend', 'UNSUPPORTED_CAPABILITY')
+      throw new SubagentError(
+        "reserved child ids require a local backend",
+        "UNSUPPORTED_CAPABILITY",
+      );
     }
-    assertSubagentMaxDepth(spec.request.maxDepth)
-    this.assertCapabilities(provider, { ...spec.request, signal: spec.signal })
-    const manager = this.requireManager()
-    if (this.ctx.get('agents')?.get(spec.request.parent.id) !== spec.request.parent) {
-      throw new SubagentError('subagent creation requires the exact live parent agent', 'UNAUTHORIZED')
+    assertSubagentMaxDepth(spec.request.maxDepth);
+    this.assertCapabilities(provider, { ...spec.request, signal: spec.signal });
+    const manager = this.requireManager();
+    if (this.ctx.get("agents")?.get(spec.request.parent.id) !== spec.request.parent) {
+      throw new SubagentError(
+        "subagent creation requires the exact live parent agent",
+        "UNAUTHORIZED",
+      );
     }
-    if (spec.request.outputSchema !== undefined) assertObjectJsonSchema(spec.request.outputSchema)
+    if (spec.request.outputSchema !== undefined) assertObjectJsonSchema(spec.request.outputSchema);
     return provider.prepareContinuable === undefined
       ? manager.startExternal(spec)
-      : manager.startLocal(spec)
+      : manager.startLocal(spec);
   }
 
   /**
@@ -262,7 +313,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns whether work was joined; hosts recheck parent idle after true.
    */
   async waitForChildren(parent: Agent): Promise<boolean> {
-    return this.manager?.waitForChildren(parent) ?? false
+    return this.manager?.waitForChildren(parent) ?? false;
   }
 
   /**
@@ -285,7 +336,7 @@ export class SubagentRuntime extends TypertRemoteService {
     content: ContentBlock[],
     options: SubagentSendMessageOptions,
   ): Promise<MessageId> {
-    return this.requireManager().sendMessage(sender, targetId, content, options)
+    return this.requireManager().sendMessage(sender, targetId, content, options);
   }
 
   /**
@@ -308,9 +359,9 @@ export class SubagentRuntime extends TypertRemoteService {
     signal: AbortSignal,
     delivery: SubagentDelivery,
   ): Promise<MessageId> {
-    return delivery === 'steer'
+    return delivery === "steer"
       ? this.requireManager().steerPrompt(parent, childId, content, source, signal)
-      : this.requireManager().queuePrompt(parent, childId, content, source, signal)
+      : this.requireManager().queuePrompt(parent, childId, content, source, signal);
   }
 
   /**
@@ -329,7 +380,7 @@ export class SubagentRuntime extends TypertRemoteService {
    *   live target.
    */
   interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void {
-    this.manager?.interrupt(targetSessionId, authority)
+    this.manager?.interrupt(targetSessionId, authority);
   }
 
   /**
@@ -343,10 +394,10 @@ export class SubagentRuntime extends TypertRemoteService {
    * @throws an aggregate error after all branches settle when any failed.
    */
   async drainDescendants(parents: readonly Agent[]): Promise<void> {
-    const manager = this.manager
+    const manager = this.manager;
     // An absent activation manager cannot own materialized children.
-    if (manager === undefined) return
-    await manager.drainDescendants(parents)
+    if (manager === undefined) return;
+    await manager.drainDescendants(parents);
   }
 
   /**
@@ -360,9 +411,9 @@ export class SubagentRuntime extends TypertRemoteService {
    *   different parent or the supplied parent identity is stale.
    */
   async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void> {
-    const manager = this.manager
-    if (manager === undefined) return
-    await manager.drainChildren(parent, childIds)
+    const manager = this.manager;
+    if (manager === undefined) return;
+    await manager.drainChildren(parent, childIds);
   }
 
   /**
@@ -375,7 +426,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
    */
   listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]> {
-    return listSubagentChildren(this.ctx, parentSessionId, signal)
+    return listSubagentChildren(this.ctx, parentSessionId, signal);
   }
 
   /**
@@ -394,8 +445,11 @@ export class SubagentRuntime extends TypertRemoteService {
    * @throws {@link SubagentError} when listing dependencies are unavailable or the caller cancels.
    * @throws SessionQueryError when the root catalog cannot be read.
    */
-  listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]> {
-    return listSubagentDescendants(this.ctx, rootSessionId, signal)
+  listDescendants(
+    rootSessionId: SessionId,
+    signal?: AbortSignal,
+  ): Promise<SubagentDescendantListEntry[]> {
+    return listSubagentDescendants(this.ctx, rootSessionId, signal);
   }
 
   /**
@@ -416,45 +470,52 @@ export class SubagentRuntime extends TypertRemoteService {
    *   `subagent/not-resumable`, `subagent/unauthorized`,
    *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
    */
-  @Remote('prompt')
-  async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
-    const { parentSessionId, childSessionId, clientTimeZone, delivery } = request
-    validateControlRequest('subagent.prompt', request)
-    const canonicalTimeZone = clientTimeZone === undefined
-      ? undefined
-      : canonicalClientTimeZone(clientTimeZone)
+  @Remote("prompt")
+  async prompt(
+    request: SubagentPromptRequest,
+    signal: AbortSignal,
+  ): Promise<SubagentPromptReceipt> {
+    const { parentSessionId, childSessionId, clientTimeZone, delivery } = request;
+    validateControlRequest("subagent.prompt", request);
+    const canonicalTimeZone =
+      clientTimeZone === undefined ? undefined : canonicalClientTimeZone(clientTimeZone);
     if (clientTimeZone !== undefined && canonicalTimeZone === undefined) {
       throw new RemoteError(
-        'subagent/invalid-time-zone',
-        'clientTimeZone must be UTC or a valid IANA Area/Location name',
+        "subagent/invalid-time-zone",
+        "clientTimeZone must be UTC or a valid IANA Area/Location name",
         { value: clientTimeZone },
-      )
+      );
     }
-    const parent = this.ctx.get('agents')?.get(parentSessionId)
+    const parent = this.ctx.get("agents")?.get(parentSessionId);
     if (parent === undefined) {
       throw new RemoteError(
-        'subagent/parent-unavailable',
+        "subagent/parent-unavailable",
         `parent session "${parentSessionId}" is not live`,
         { parentSessionId },
-      )
+      );
     }
-    const principal = principalOf(this.ctx.invocation)
+    const principal = principalOf(this.ctx.invocation);
     const source: BrowserPromptSource = {
-      kind: 'user',
+      kind: "user",
       rpcId: request.requestId,
       ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
       ...(principal === undefined ? {} : { principal }),
-    }
+    };
     try {
       // Admission precedes delivery: image parts become durable references
       // here, so the child inbox only ever accepts Host-persisted attachments.
-      let content: ContentBlock[]
-      if (request.content.every((part): part is { readonly type: 'text'; readonly text: string } => part.type === 'text')) {
-        content = request.content.map(part => ({ type: 'text', text: part.text }))
+      let content: ContentBlock[];
+      if (
+        request.content.every(
+          (part): part is { readonly type: "text"; readonly text: string } => part.type === "text",
+        )
+      ) {
+        content = request.content.map((part) => ({ type: "text", text: part.text }));
       } else {
-        const attachments = this.ctx.get('attachments')
-        if (attachments === undefined) throw new Error('subagent image prompt requires an attachment store')
-        content = await attachments.admitPromptContent(request.content)
+        const attachments = this.ctx.get("attachments");
+        if (attachments === undefined)
+          throw new Error("subagent image prompt requires an attachment store");
+        content = await attachments.admitPromptContent(request.content);
       }
       return {
         messageId: await this[deliverSubagentPrompt](
@@ -465,9 +526,9 @@ export class SubagentRuntime extends TypertRemoteService {
           signal,
           delivery,
         ),
-      }
+      };
     } catch (error: unknown) {
-      return rejectPrompt(error, childSessionId, signal)
+      return rejectPrompt(error, childSessionId, signal);
     }
   }
 
@@ -485,27 +546,27 @@ export class SubagentRuntime extends TypertRemoteService {
    *   `subagent/unauthorized` when the address does not own the live target,
    *   otherwise `gateway/internal`.
    */
-  @Remote('interruptByParent')
+  @Remote("interruptByParent")
   interruptByParent(
     childSessionId: SessionId,
     parentSessionId: SessionId,
-    mode: 'continuable',
+    mode: "continuable",
   ): SubagentInterruptReceipt {
-    validateControlRequest('subagent.interrupt', { childSessionId, parentSessionId, mode })
+    validateControlRequest("subagent.interrupt", { childSessionId, parentSessionId, mode });
     try {
-      this.interrupt(childSessionId, { kind: 'user', parentSessionId })
+      this.interrupt(childSessionId, { kind: "user", parentSessionId });
     } catch (error: unknown) {
-      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') {
+      if (error instanceof SubagentError && error.code === "UNAUTHORIZED") {
         throw new RemoteError(
-          'subagent/unauthorized',
-          'subagent does not belong to this parent',
+          "subagent/unauthorized",
+          "subagent does not belong to this parent",
           { childSessionId },
           { cause: error },
-        )
+        );
       }
-      throw new RemoteError('gateway/internal', 'subagent interrupt failed', {}, { cause: error })
+      throw new RemoteError("gateway/internal", "subagent interrupt failed", {}, { cause: error });
     }
-    return { accepted: true }
+    return { accepted: true };
   }
 
   /**
@@ -517,24 +578,33 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the exact Cordis effect disposer.
    */
   registerProvider(provider: SubagentProvider): () => void {
-    const name = provider.name
+    const name = provider.name;
     if (provider.start === undefined && provider.prepareContinuable === undefined) {
-      throw new SubagentError(`subagent provider "${name}" must implement start or prepareContinuable`, 'UNSUPPORTED_CAPABILITY')
+      throw new SubagentError(
+        `subagent provider "${name}" must implement start or prepareContinuable`,
+        "UNSUPPORTED_CAPABILITY",
+      );
     }
     // oxlint-disable-next-line typescript/no-misused-promises -- synchronous disposer
-    return this.ctx.effect(function* (this: SubagentRuntime) {
-      if (this.providers.has(name)) {
-        throw new SubagentError(`a subagent provider named "${name}" is already registered`, 'DUPLICATE_PROVIDER')
-      }
-      this.providers.set(name, provider)
-      yield () => {
-        this.providers.delete(name)
-        this.emitLifecycle('subagent/provider-removed', name)
-      }
-      // A throwing added-listener unwinds the yielded rollback, matching the
-      // repository's fail-loud registration semantics.
-      this.ctx.emit('subagent/provider-added', provider)
-    }.bind(this), 'subagents.registerProvider()')
+    return this.ctx.effect(
+      function* (this: SubagentRuntime) {
+        if (this.providers.has(name)) {
+          throw new SubagentError(
+            `a subagent provider named "${name}" is already registered`,
+            "DUPLICATE_PROVIDER",
+          );
+        }
+        this.providers.set(name, provider);
+        yield () => {
+          this.providers.delete(name);
+          this.emitLifecycle("subagent/provider-removed", name);
+        };
+        // A throwing added-listener unwinds the yielded rollback, matching the
+        // repository's fail-loud registration semantics.
+        this.ctx.emit("subagent/provider-added", provider);
+      }.bind(this),
+      "subagents.registerProvider()",
+    );
   }
 
   /**
@@ -543,7 +613,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the provider, or undefined when absent.
    */
   getProvider(name: string): SubagentProvider | undefined {
-    return this.providers.get(name)
+    return this.providers.get(name);
   }
 
   /**
@@ -551,7 +621,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the registered names.
    */
   list(): string[] {
-    return [...this.providers.keys()]
+    return [...this.providers.keys()];
   }
 
   /**
@@ -563,28 +633,29 @@ export class SubagentRuntime extends TypertRemoteService {
     name: string,
     request: ContinuableCreateRequest,
   ): Promise<ContinuableCreateSpec> {
-    const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'prepareContinuable'>>
-    return provider.prepareContinuable(request)
+    const provider = this.expectProvider(name) as SubagentProvider &
+      Required<Pick<SubagentProvider, "prepareContinuable">>;
+    return provider.prepareContinuable(request);
   }
 
   /** Look up a provider for dispatch or fail loud. */
   private expectProvider(name: string): SubagentProvider {
-    const provider = this.providers.get(name)
+    const provider = this.providers.get(name);
     if (provider === undefined) {
-      throw new SubagentError(`no subagent provider registered for "${name}"`, 'NO_PROVIDER')
+      throw new SubagentError(`no subagent provider registered for "${name}"`, "NO_PROVIDER");
     }
-    return provider
+    return provider;
   }
 
   /** Resolve the subagent manager or fail loud. */
   private requireManager(): SubagentManager {
     if (this.manager === undefined) {
       throw new SubagentError(
-        'continuable subagents require the agents service',
-        'CONTINUATION_UNAVAILABLE',
-      )
+        "continuable subagents require the agents service",
+        "CONTINUATION_UNAVAILABLE",
+      );
     }
-    return this.manager
+    return this.manager;
   }
 
   /**
@@ -596,32 +667,34 @@ export class SubagentRuntime extends TypertRemoteService {
     childId: SessionId,
     parent: Agent,
   ): ActivationObserver {
-    return createActivationObserver(this.emitLifecycle, provider, childId, parent)
+    return createActivationObserver(this.emitLifecycle, provider, childId, parent);
   }
 
   /** Reject the first requested capability that the provider lacks. */
   private assertCapabilities(provider: SubagentProvider, request: SubagentStartRequest): void {
-    if (request.agentPreset !== undefined && (!provider.capabilities.agentPreset || provider.inheritsParentContext)) {
+    if (
+      request.agentPreset !== undefined &&
+      (!provider.capabilities.agentPreset || provider.inheritsParentContext)
+    ) {
       throw new SubagentError(
         `subagent provider "${provider.name}" does not support independent agent preset selection`,
-        'UNSUPPORTED_CAPABILITY',
-      )
+        "UNSUPPORTED_CAPABILITY",
+      );
     }
     const needs: { when: boolean; cap: keyof SubagentCapabilities }[] = [
-      { when: request.agentOptions !== undefined, cap: 'agentOptions' },
-      { when: request.outputSchema !== undefined, cap: 'outputSchema' },
-      { when: request.maxDepth !== undefined, cap: 'depthLimit' },
-    ]
+      { when: request.agentOptions !== undefined, cap: "agentOptions" },
+      { when: request.outputSchema !== undefined, cap: "outputSchema" },
+      { when: request.maxDepth !== undefined, cap: "depthLimit" },
+    ];
     for (const { when, cap } of needs) {
       if (when && !provider.capabilities[cap]) {
         throw new SubagentError(
           `subagent provider "${provider.name}" does not support the "${cap}" capability`,
-          'UNSUPPORTED_CAPABILITY',
-        )
+          "UNSUPPORTED_CAPABILITY",
+        );
       }
     }
   }
-
 }
 
-export default SubagentRuntime
+export default SubagentRuntime;

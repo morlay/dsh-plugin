@@ -1,10 +1,6 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin } from "@local/tsdown-plugin-cordis";
-import {
-  bundlePatch,
-  renderPatch,
-  type PatchBundleOptions,
-} from "@local/devkit/patch";
+import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { webSearchRows } from "@morlay/dsh-web-search-ollama/rows";
 
 const ROWS: readonly unknown[] = [

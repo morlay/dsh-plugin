@@ -4,19 +4,19 @@
  * @module @deepseek-ai/dsh-subagent/continuation-messages
  */
 
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { SubagentResult } from './vendor/dsh-subagent/types.ts'
+import type { Agent } from "@deepseek-ai/dsh-agent";
+import { boundContextSummary, createUserMessage } from "@deepseek-ai/dsh-llm";
+import type { ContentBlock } from "@deepseek-ai/dsh-llm";
+import type { SessionId } from "@deepseek-ai/dsh-session";
+import type { SubagentResult } from "./vendor/dsh-subagent/types.ts";
 
 /** Durable attribution for one model-authored message between Agents. */
 export interface AgentMessageSource {
-  readonly kind: 'agent-message'
+  readonly kind: "agent-message";
   /** A message another agent addressed to this one (`relay` context form). */
-  readonly form: 'relay'
+  readonly form: "relay";
   /** Session id of the Agent whose tool call produced the message. */
-  readonly senderSessionId: SessionId
+  readonly senderSessionId: SessionId;
 }
 
 /**
@@ -27,29 +27,29 @@ export interface AgentMessageSource {
  * transcript that merged them would credit the child with words it never wrote.
  */
 export interface SubagentSettledMessageSource {
-  readonly kind: 'subagent-settled'
+  readonly kind: "subagent-settled";
   /** A runtime account shown without expanding the row (`notice` context form). */
-  readonly form: 'notice'
+  readonly form: "notice";
   /** One-line account of how the child ended. */
-  readonly summary: string
+  readonly summary: string;
   /** Session id of the child that settled. */
-  readonly senderSessionId: SessionId
+  readonly senderSessionId: SessionId;
 }
 
-declare module '@deepseek-ai/dsh-llm' {
+declare module "@deepseek-ai/dsh-llm" {
   interface MessageSourceMap {
-    'agent-message': AgentMessageSource
-    'subagent-settled': SubagentSettledMessageSource
+    "agent-message": AgentMessageSource;
+    "subagent-settled": SubagentSettledMessageSource;
   }
 }
 
 /** Build durable attribution for one adjacent-Agent message. */
 function agentMessageSource(sender: Agent): AgentMessageSource {
   return {
-    kind: 'agent-message',
-    form: 'relay',
+    kind: "agent-message",
+    form: "relay",
     senderSessionId: sender.id,
-  }
+  };
 }
 
 /**
@@ -63,12 +63,9 @@ export function createAgentMessage(
   content: ContentBlock[],
 ): ReturnType<typeof createUserMessage> {
   return createUserMessage({
-    content: [
-      { type: 'text' as const, text: `Agent ${sender.id} sent a message: ` },
-      ...content,
-    ],
+    content: [{ type: "text" as const, text: `Agent ${sender.id} sent a message: ` }, ...content],
     source: agentMessageSource(sender),
-  })
+  });
 }
 
 /**
@@ -87,8 +84,8 @@ export function localizedReturnGuidance(
   composedPreset: string | undefined,
   configured: readonly string[],
 ): boolean {
-  if (configured.length === 0) return true
-  return composedPreset !== undefined && configured.includes(composedPreset)
+  if (configured.length === 0) return true;
+  return composedPreset !== undefined && configured.includes(composedPreset);
 }
 /**
  * Append adjacent-Agent return guidance to a continuable child's initial task.
@@ -100,16 +97,17 @@ export function withContinuableReturnGuidance(
   parentId: SessionId,
   prompt: ContentBlock[],
 ): ContentBlock[] {
-  const encodedParentId = JSON.stringify(parentId)
+  const encodedParentId = JSON.stringify(parentId);
   return [
     ...prompt,
     {
-      type: 'text',
-      text: `你的父智能体 id 是 ${encodedParentId}。完成前用 send_message({ agent_id: ${encodedParentId}, `
-        + 'message: "<自包含的结论>" }) 把结果发给它。父智能体与你共享工作区，但不会自动收到你的对话、'
-        + '工具输出与推理过程。发现会改变父智能体下一步行动的事情时也尽早再发一条；发消息不会结束你的回合。',
+      type: "text",
+      text:
+        `你的父智能体 id 是 ${encodedParentId}。完成前用 send_message({ agent_id: ${encodedParentId}, ` +
+        'message: "<自包含的结论>" }) 把结果发给它。父智能体与你共享工作区，但不会自动收到你的对话、' +
+        "工具输出与推理过程。发现会改变父智能体下一步行动的事情时也尽早再发一条；发消息不会结束你的回合。",
     },
-  ]
+  ];
 }
 
 /**
@@ -120,28 +118,32 @@ export function withContinuableReturnGuidance(
  * @param continuable - whether the child accepts a later message.
  * @returns the model-facing opening line of the settlement notice.
  */
-function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
-  const subject = `Background subagent ${childId}`
+function settlementSummary(
+  childId: SessionId,
+  stopReason: SubagentResult["stopReason"],
+  continuable: boolean,
+): string {
+  const subject = `Background subagent ${childId}`;
   switch (stopReason) {
-    case 'completed':
+    case "completed":
       return continuable
         ? `${subject} finished and will do no further work unless you send it more.`
-        : `${subject} finished. It cannot receive follow-up messages.`
-    case 'aborted':
-      return `${subject} was stopped before it finished.`
-    case 'max-tokens':
-      return `${subject} ran out of room before it finished.`
+        : `${subject} finished. It cannot receive follow-up messages.`;
+    case "aborted":
+      return `${subject} was stopped before it finished.`;
+    case "max-tokens":
+      return `${subject} ran out of room before it finished.`;
     // A pre-step rejection — a hook deny, a policy plugin — discarded input
     // the child had claimed, so the parent must not treat the task as done.
-    case 'refusal':
-      return `${subject} declined the task.`
-    case 'error':
-      return `${subject} failed before it finished.`
+    case "refusal":
+      return `${subject} declined the task.`;
+    case "error":
+      return `${subject} failed before it finished.`;
     /* v8 ignore next 4 -- `SubagentResult['stopReason']` is merge-extensible, so this arm
      * needs a backend that adds a variant; an unnameable ending is reported as unfinished
      * rather than silently as success. */
     default:
-      return `${subject} ended abnormally (${String(stopReason)}) before it finished.`
+      return `${subject} ended abnormally (${String(stopReason)}) before it finished.`;
   }
 }
 
@@ -157,29 +159,36 @@ export function createSettlementMessage(
   terminal: SubagentResult,
   continuable = true,
 ): ReturnType<typeof createUserMessage> {
-  const summary = settlementSummary(childId, terminal.stopReason, continuable)
+  const summary = settlementSummary(childId, terminal.stopReason, continuable);
   // Parent providers receive this notice as a user message and may reject
   // nontext assistant blocks. Keep this conversion local so SDK/UI consumers
   // retain the complete child output.
-  const closingText = terminal.output.flatMap(block =>
-    block.type === 'text' && block.text.length > 0 ? [block] : [],
-  )
+  const closingText = terminal.output.flatMap((block) =>
+    block.type === "text" && block.text.length > 0 ? [block] : [],
+  );
   return createUserMessage({
     content: [
-      { type: 'text' as const, text: summary },
-      ...closingText.length === 0
-        ? [{ type: 'text' as const, text: 'It left no closing message.' }]
-        : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingText],
-      ...terminal.structured !== undefined
-        ? [{ type: 'text' as const, text: `Structured result: ${JSON.stringify(terminal.structured)}` }] : [],
-      ...terminal.diagnostic !== undefined
-        ? [{ type: 'text' as const, text: terminal.diagnostic }] : [],
+      { type: "text" as const, text: summary },
+      ...(closingText.length === 0
+        ? [{ type: "text" as const, text: "It left no closing message." }]
+        : [{ type: "text" as const, text: "Its closing message:" }, ...closingText]),
+      ...(terminal.structured !== undefined
+        ? [
+            {
+              type: "text" as const,
+              text: `Structured result: ${JSON.stringify(terminal.structured)}`,
+            },
+          ]
+        : []),
+      ...(terminal.diagnostic !== undefined
+        ? [{ type: "text" as const, text: terminal.diagnostic }]
+        : []),
     ],
     source: {
-      kind: 'subagent-settled' as const,
-      form: 'notice' as const,
+      kind: "subagent-settled" as const,
+      form: "notice" as const,
       summary: boundContextSummary(summary),
       senderSessionId: childId,
     },
-  })
+  });
 }

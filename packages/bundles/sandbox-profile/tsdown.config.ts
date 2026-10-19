@@ -1,10 +1,6 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin } from "@local/tsdown-plugin-cordis";
-import {
-  bundlePatch,
-  renderPatch,
-  type PatchBundleOptions,
-} from "@local/devkit/patch";
+import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
 import { sandboxRows } from "@morlay/dsh-sandbox-local/rows";
 
 const ROWS: readonly unknown[] = [

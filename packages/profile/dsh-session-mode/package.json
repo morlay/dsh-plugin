@@ -123,6 +123,9 @@
     "@morlay/dsh-context-assembler": "workspace:*",
     "react": "^18.2.0"
   },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
   "dsh": {
     "client": {
       "platform": "web",
@@ -133,8 +136,5 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
-  },
-  "engines": {
-    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
   }
 }
