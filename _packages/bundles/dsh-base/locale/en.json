@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH Base",
+    "description": "The dsh-base layer as a Module plus its bundle patch."
+  }
+}

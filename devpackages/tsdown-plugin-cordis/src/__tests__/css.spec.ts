@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +40,7 @@ interface Registered {
   factory: (require: (id: string) => unknown) => Record<string, unknown>;
 }
 
-// 在 jsdom 里执行注册脚本，取出 `__ModuleLoader__.load` 手递的工厂并调用：注入的 `<style>`
+// 在 happy-dom 里执行注册脚本，取出 `__ModuleLoader__.load` 手递的工厂并调用：注入的 `<style>`
 // 与 class 映射只在工厂执行时出现，纯文本断言看不到。
 function runFactory(code: string): Record<string, unknown> {
   const registered: Registered[] = [];

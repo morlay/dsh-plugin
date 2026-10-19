@@ -1,0 +1,19 @@
+{
+  "name": "@morlay/dsh-deepseek-feedback",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-command-feedback": "workspace:*",
+    "@deepseek-ai/dsh-commands": "workspace:*",
+    "@deepseek-ai/dsh-session-log-deepseek": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  }
+}

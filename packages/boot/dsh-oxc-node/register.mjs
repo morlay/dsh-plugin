@@ -42,7 +42,6 @@ registerHooks({
       target: "es2022",
       // 装饰器：dsh 用的是 legacy 装饰器（`experimentalDecorators`），oxc 要显式开才会转；`@Remote` 这类
       // 原样留着就是上面那句语法错。
-      decorator: { legacy: true },
       // helper 用默认形态：输出 `@oxc-project/runtime/helpers/<name>` 这种子出口（那个包只导出
       // `./helpers/*`）。显式写 `helpers: { mode: "Runtime" }` 反而会引到它的**根**导出处而解析失败。
     });

@@ -1,0 +1,25 @@
+{
+  "name": "@morlay/dsh-task",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./jobs": "./src/jobs/index.ts"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-command-goal": "workspace:*",
+    "@deepseek-ai/dsh-goal": "workspace:*",
+    "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
+    "@deepseek-ai/dsh-plan-mode": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-env": "workspace:*",
+    "@deepseek-ai/dsh-tool-goal": "workspace:*",
+    "@deepseek-ai/dsh-tool-todo": "workspace:*",
+    "@deepseek-ai/dsh-tool-jobs": "workspace:*",
+    "@deepseek-ai/dsh-jobs-local": "workspace:*"
+  }
+}

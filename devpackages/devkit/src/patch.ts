@@ -1,12 +1,24 @@
 // bundle patch：一份真源（`rows()`）渲染成包根那份 `cordis.patch.yml`，构建期由 tsdown 插件重写；
 // 行清单写在各自 `packages/bundles/*/tsdown.config.ts` 里。
 
+import { readFileSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { entryListSchema } from "@deepseek-ai/cordis-plugin-include";
 import yaml from "js-yaml";
 import type { Plugin } from "rolldown";
+
+// 上游 patch 的行 id → 包名：官方行的 insert 名按它落，不手写映射表。
+export function patchPackagesOf(file: string): ReadonlyMap<string, string> {
+  // oxlint-disable-next-line node/no-sync -- 构建期读取上游 patch
+  const text = readFileSync(file, "utf8");
+  const packages = new Map<string, string>();
+  for (const match of text.matchAll(/- id: ([\w-]+)\n\s+name: ["']?([^"'\n]+)["']?/gu)) {
+    if (match[1] !== undefined && match[2] !== undefined) packages.set(match[1], match[2]);
+  }
+  return packages;
+}
 
 // 一个 bundle 的 patch 真源。
 export interface PatchBundleOptions {

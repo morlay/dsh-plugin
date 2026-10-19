@@ -1,5 +1,5 @@
 mod vendor 'vendor/justfile'
-mod pg 'packages/session/session-rdb/tool/pg/justfile'
+# mod pg 'packages/session/session-rdb/tool/pg/justfile'
 mod custom 'apps/dsh-custom-next/justfile'
 
 default:
@@ -64,5 +64,5 @@ build *args:
 version *args:
     pnpm -r --filter './packages/*/*' version {{ args }}
 
-test:
-    pnpm exec vitest run
+test *args:
+    pnpm exec vitest run {{ args }}

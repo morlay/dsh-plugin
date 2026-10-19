@@ -1,0 +1,12 @@
+# 本文件由 packages/bundles/web-custom-profile/tsdown.config.ts 生成，请勿手工编辑
+- id: modules
+  disabled: true
+- id: client-hmr
+  disabled: true
+- id: ui-settings-plugin-inventory
+  disabled: true
+- id: ui-settings-plugins
+  disabled: true
+- insert:
+    - id: client-modules
+      name: "@morlay/dsh-client-modules/cordis-register"

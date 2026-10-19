@@ -1,0 +1,76 @@
+{
+  "name": "@morlay/better-session",
+  "version": "0.1.10",
+  "description": "dsh profile bundle: assembles @morlay/session-rdb, @morlay/ui-conversation-message-actions, @morlay/ui-conversation-manager and @morlay/dsh-reference into a DeepSeek Harness web profile — the rewind / retry / recall / fork closed loop on RDB persistence, with the conversation shell left on the official ui-conversation row and our extensions registered on its slots only.",
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "dsh-plugin",
+    "fork",
+    "retry",
+    "rewind",
+    "session-rdb",
+    "ui-conversation-message-actions"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "locale/*.json",
+    "dist",
+    "icon.svg",
+    "src",
+    "cordis.patch.yml",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@morlay/dsh-reference": "workspace:*",
+    "@morlay/session-rdb": "workspace:*",
+    "@morlay/ui-conversation-manager": "workspace:*",
+    "@morlay/ui-conversation-message-actions": "workspace:*",
+    "@morlay/dsh-base": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "icon": "./icon.svg",
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "@local/devkit": "workspace:*",
+    "@local/zephyr-codegen": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-home-paths": "workspace:*",
+    "tsdown": "^0.23.1"
+  }
+}

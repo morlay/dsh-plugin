@@ -20,8 +20,6 @@
   "dependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@local/tsdown-plugin-cordis": "workspace:*",
-    "@morlay/dsh-desktop-host": "workspace:*",
-    "@morlay/dsh-desktop-shell": "workspace:*",
     "@morlay/dsh-oxc-node": "workspace:*",
     "commander": "^15.0.0",
     "electron": "44.7.0",

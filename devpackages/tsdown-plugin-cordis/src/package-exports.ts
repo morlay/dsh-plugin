@@ -3,8 +3,9 @@
 // `import` 指 **ESM 库**、`default` 兜底指 **CJS 工厂**（理由见 `pickLibrary` / `pickFactory`）。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { readFile, stat, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import type { TsdownHooks } from "tsdown";
+import { clientInjectOf } from "./client-inject.ts";
 
 // tsdown `build:done` 钩子；上下文与产物块类型都从 tsdown 自己的定义取，不手抄一份。
 type BuildDoneHook = TsdownHooks["build:done"];
@@ -278,6 +279,19 @@ async function writeManifest(
       ...(typeof engines === "object" && engines !== null ? engines : {}),
       dsh: dshRange,
     };
+  }
+
+  // client 行的 loader 依赖（`dsh.client.inject`）从 client 入口的注入面推导，不手写。
+  const dsh = manifest["dsh"] as Record<string, unknown> | undefined;
+  const client = dsh?.["client"];
+  const clientSource =
+    options.clientEntry === undefined ? undefined : options.entries[options.clientEntry];
+  if (dsh !== undefined && typeof client === "object" && client !== null && clientSource !== undefined) {
+    const hosts = await clientInjectOf(resolve(cwd, clientSource));
+    const nextClient: Record<string, unknown> = { ...(client as Record<string, unknown>) };
+    if (hosts.length === 0) delete nextClient["inject"];
+    else nextClient["inject"] = [...hosts];
+    manifest["dsh"] = { ...dsh, client: nextClient };
   }
 
   const next = `${JSON.stringify(manifest, null, 2)}\n`;

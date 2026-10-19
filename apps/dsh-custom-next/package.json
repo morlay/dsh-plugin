@@ -10,35 +10,27 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-base": "workspace:^",
-    "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:^",
-    "@deepseek-ai/dsh-web-app": "workspace:^",
-    "@morlay/better-session": "workspace:*",
-    "@morlay/dsh-client-modules": "workspace:*",
-    "@morlay/mydsh-profile": "workspace:*",
-    "@morlay/ollama-provider-profile": "workspace:*",
-    "@morlay/sandbox-profile": "workspace:*",
-    "@morlay/session-mode-profile": "workspace:*",
-    "@morlay/web-custom-profile": "workspace:*"
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*",
+    "@morlay/zephyr-ui": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-auth": "workspace:*",
+    "@morlay/dsh-context": "workspace:*",
+    "@morlay/dsh-env": "workspace:*",
+    "@morlay/dsh-permission": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/dsh-task": "workspace:*",
+    "@morlay/dsh-telemetry": "workspace:*",
+    "@morlay/dsh-tool-web": "workspace:*",
+    "@morlay/dsh-deepseek-feedback": "workspace:*"
   },
   "peerDependencies": {
     "@local/dshdev": "workspace:*"
   },
   "dsh": {
     "version": "workspace:*",
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "@morlay/web-custom-profile",
-        "@morlay/better-session",
-        "@morlay/ollama-provider-profile",
-        "@morlay/sandbox-profile",
-        "@morlay/session-mode-profile",
-        "@morlay/mydsh-profile",
-        "@deepseek-ai/dsh-experimental-agent-team-profile"
-      ]
-    },
     "desktop": {
       "id": "ai.deepseek.dsh.custom-next",
       "name": "DSH Custom Next",
@@ -56,5 +48,8 @@
         "@deepseek-ai/*"
       ]
     }
+  },
+  "scripts": {
+    "web": "node --import @oxc-node/core/register src/main.ts"
   }
 }

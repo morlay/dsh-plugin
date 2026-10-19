@@ -1,6 +1,9 @@
 {
   "extends": ["@local/devkit/tsconfig.json"],
   "compilerOptions": {
+    "paths": {
+      "@morlay/dsh-base/*": ["./packages/bundles/dsh-base/src/*/index.ts"]
+    },
     "rewriteRelativeImportExtensions": false,
     "noEmit": false,
     "emitDeclarationOnly": true

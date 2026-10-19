@@ -37,9 +37,9 @@ describe("buildCordisConfig", () => {
     expect(config.define).toBeUndefined();
   });
 
-  it("发布线按标准装饰器语义产出", () => {
+  it("装饰器语义交给 tsconfig，不由构建覆盖", () => {
     const inputOptions =
       typeof config.inputOptions === "function" ? undefined : config.inputOptions;
-    expect(inputOptions?.transform).toEqual({ decorator: { legacy: false } });
+    expect(inputOptions?.transform).toBeUndefined();
   });
 });

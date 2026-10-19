@@ -117,7 +117,19 @@ export function clientEntryPlugin(options: {
 }): Plugin {
   return {
     name: "dsh-client-entry",
-    async generateBundle(_outputOptions, bundle) {
+    async generateBundle(outputOptions, bundle) {
+      // CJS 只有 client 入口要（模块表的工厂形态）。tsdown 的 format 是配置级的，会顺手给 host 入口也产一份；
+      // 这里在 cjs 轮把非 client 的 chunk 去掉，host 产物只剩 ESM。
+      if (outputOptions.format === "cjs") {
+        const hasClient = Object.values(bundle).some(
+          (item) => item.type === "chunk" && item.name === CLIENT_ENTRY,
+        );
+        if (hasClient) {
+          for (const [fileName, item] of Object.entries(bundle)) {
+            if (item.type === "chunk" && item.name !== CLIENT_ENTRY) delete bundle[fileName];
+          }
+        }
+      }
       // 一个 client 入口出**两种**产物：CJS 是模块表的工厂形态（发布/桌面用），ESM 是普通库
       // （交给 vite / node resolver 消费）。tsdown 的 deps 规则按 format 区分不了，所以两边都由这里
       // 自己产出字节：CJS 走 `bundleClientFactory`（内联判定那套），ESM 走 `bundleClientLibrary`。

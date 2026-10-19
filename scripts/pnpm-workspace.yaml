@@ -3,4 +3,23 @@
 packages:
   - ./upstream-sync
 
+minimumReleaseAgeExclude:
+  - "@oxc-node/core-android-arm-eabi@1.0.0"
+  - "@oxc-node/core-android-arm64@1.0.0"
+  - "@oxc-node/core-darwin-arm64@1.0.0"
+  - "@oxc-node/core-darwin-x64@1.0.0"
+  - "@oxc-node/core-freebsd-x64@1.0.0"
+  - "@oxc-node/core-linux-arm-gnueabihf@1.0.0"
+  - "@oxc-node/core-linux-arm64-gnu@1.0.0"
+  - "@oxc-node/core-linux-arm64-musl@1.0.0"
+  - "@oxc-node/core-linux-ppc64-gnu@1.0.0"
+  - "@oxc-node/core-linux-s390x-gnu@1.0.0"
+  - "@oxc-node/core-linux-x64-gnu@1.0.0"
+  - "@oxc-node/core-linux-x64-musl@1.0.0"
+  - "@oxc-node/core-openharmony-arm64@1.0.0"
+  - "@oxc-node/core-win32-arm64-msvc@1.0.0"
+  - "@oxc-node/core-win32-ia32-msvc@1.0.0"
+  - "@oxc-node/core-win32-x64-msvc@1.0.0"
+  - "@oxc-node/core@1.0.0"
+
 nodeOptions: "--import @oxc-node/core/register"

@@ -1,0 +1,25 @@
+{
+  "name": "@morlay/dsh-context",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-agent-instructions": "workspace:*",
+    "@deepseek-ai/dsh-command-compact": "workspace:*",
+    "@deepseek-ai/dsh-compaction-basic": "workspace:*",
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-env": "workspace:*",
+    "@deepseek-ai/dsh-tool-skill": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
+    "@deepseek-ai/dsh-spill-local": "workspace:*",
+    "@deepseek-ai/dsh-spill-policy": "workspace:*"
+  }
+}

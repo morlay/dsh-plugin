@@ -4,8 +4,13 @@
 dev *args:
     pnpm exec dshdev desktop {{ args }}
 
+# 自研入口：zephyr Module 组合直启 web（不走官方 cordis-loader）。
 web *args:
-    pnpm exec dshdev web {{ args }}
+    pnpm run web -- {{ args }}
+
+# 入口装配判据（不启 HTTP）：Module 直接装起来、client 行清单与连接契约就位。
+test *args:
+    cd ../.. && pnpm exec vitest run apps/dsh-custom-next {{ args }}
 
 # 打包为静态桌面应用（--dir 产物，无签名）。
 bundle *args:

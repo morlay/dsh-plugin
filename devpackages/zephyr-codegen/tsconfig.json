@@ -1,0 +1,4 @@
+{
+  "extends": ["@local/devkit/tsconfig.json"],
+  "include": ["./src/**/*"]
+}

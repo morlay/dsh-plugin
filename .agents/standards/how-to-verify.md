@@ -12,7 +12,8 @@
 | 单包源码                    | 该行为对应的测试（全量 `just test`；要只跑一处就 `pnpm exec vitest run <包路径>`，接缝见该包 `.agents/standards/`）                                                                                                                                         |
 | 跨包契约 / 公共类型面       | 涉及包的测试，加全量 `just test`                                                                                                                                                                                                                            |
 | 测试 / 构建配置、依赖       | 全量 `just test`                                                                                                                                                                                                                                            |
-| 浏览器半（client bundle）   | 相关 jsdom 用例 + `just build`；产物里 `window.__ModuleLoader__.load` 只应出现一次（内联了别的 client 行，页面就会注册两次并抛 `duplicate factory registration`）；**内联库**（清单标 `dsh.client.inline`）是设计不是重复注册——它只内联库代码、不带工厂外壳 |
+| 浏览器 e2e（页面渲染 / 行装载） | 真浏览器走一遍：[`how-to-e2e.md`](./how-to-e2e.md) 的判据（title、`#root` 有内容、关键服务就绪、无 `pageerror`） |
+| 浏览器半（client bundle）   | 相关 happy-dom 用例 + `just build`；产物里 `window.__ModuleLoader__.load` 只应出现一次（内联了别的 client 行，页面就会注册两次并抛 `duplicate factory registration`）；**内联库**（清单标 `dsh.client.inline`）是设计不是重复注册——它只内联库代码、不带工厂外壳 |
 | 包出口、构建路径            | `just build`                                                                                                                                                                                                                                                |
 | 文档与记录                  | 相对链接可达、无悬挂引用                                                                                                                                                                                                                                    |
 | vendor 上游（同步 / patch） | 全量 `just test` + `just lint` + `just build`                                                                                                                                                                                                               |
@@ -23,9 +24,15 @@
   `src/__tests__/**/*.spec.ts(x)`，exclude `node_modules` 与 `target`）；共享辅助放该包
   `src/testing/`，经 `./testing` 出口暴露。共享工具链 `devpackages/devkit` 同形——它没有
   自己的构建链，被测的构建行为（如 `bundleClientFactory` 的现场打包）就写在它的 spec 里。
-- 浏览器半测试用文件头 `// @vitest-environment jsdom`（vitest 未开 globals，
+- 浏览器半测试用文件头 `// @vitest-environment happy-dom`（vitest 未开 globals，
   `@testing-library/react` 需在 spec 里显式 `cleanup`）。
+- **单测等待上限 3s**：`vitest.config.ts` 的 `testTimeout`，以及 zephyr 行运行时的等待上限都是 3s；超时即失败并暴露原因，不把失败拖成默认 5s 超时。
 - **测试描述行为，不描述实现**：行为变更必须连同测试一起改。
+- **按功能利用组织**：只经公开使用面描述功能（provider 的 `search()` / `available()`、Module 装配行为），
+  不直测内部映射函数；配置 schema / volatile 引用这类解析不单独测；不新增 e2e（不联网）。
+- **装配测试用我们自己的框架**：`bootstrapApplication` + 我们的 Provider，不起官方 loader / 不直接
+  `new Context()` 装上游插件。
+- **纯装配不写测试**：bundle 只组合 Provider / 覆盖 config 时，生成物由 patch 生成与校验覆盖，不另写 spec。
 - **包特有的环境门控、装配辅助与判据在该包 `.agents/standards/`**：需要外部环境或平台的用例
   （数据库连接串、OS 能力）由该包写明触发方式与跳过条件，这里不复述——门控要有明确原因，
   不静默跳过、不为过验收放宽。

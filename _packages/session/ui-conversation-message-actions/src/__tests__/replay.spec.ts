@@ -1,0 +1,476 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { rm } from "node:fs/promises";
+import type { Context } from "@deepseek-ai/cordis";
+import type { UserMessage } from "@deepseek-ai/dsh-llm";
+import type { Session, SessionEvent } from "@deepseek-ai/dsh-session";
+import SessionPersistenceSqlite from "@morlay/session-rdb";
+import {
+  harness,
+  meta,
+  oneTurnLog,
+  turnLog,
+  SessionIdBrand,
+  SessionSeq,
+  type SessionEvent as Event } from "../testing.ts";
+
+const dirs: string[] = [];
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+});
+
+function appendable(session: Session) {
+  return session as unknown as {
+    append(type: string, data: unknown, opts?: unknown): Event;
+  };
+}
+
+function userText(message: UserMessage): string {
+  return message.content
+    .filter(
+      (block): block is Extract<(typeof message.content)[number], { type: "text" }> =>
+        block.type === "text",
+    )
+    .map((block) => block.text)
+    .join("");
+}
+
+function turnsOf(events: readonly SessionEvent[]): number[] {
+  return events.flatMap((event) => (event.type === "turn/start" ? [event.data.turn] : []));
+}
+
+function inboxPending(session: Session): UserMessage[] {
+  let pending: UserMessage[] = [];
+  for (const event of session.snapshotEvents()) {
+    if (String(event.type) !== "agent/inbox/spliced") continue;
+    const data = (
+      event as unknown as {
+        data: {
+          target: string;
+          start: number;
+          removedCount?: number;
+          inserted: UserMessage[];
+        };
+      }
+    ).data;
+    if (data.target !== "next-turn") continue;
+    pending = pending.toSpliced(data.start, data.removedCount ?? 0, ...data.inserted);
+  }
+  return pending;
+}
+
+function miniAgent(session: Session) {
+  const lastTurn = session.snapshotEvents().findLast((event) => event.type === "turn/start")
+    ?.data.turn;
+  const agent = {
+    session,
+    requestHeaderLogged: false,
+    phase: { lastTurn: lastTurn ?? 0 },
+    inbox: {
+      clear: () => {
+        const pending = inboxPending(session);
+        if (pending.length === 0) return;
+        appendable(session).append("agent/inbox/spliced", {
+          target: "next-turn",
+          start: 0,
+          removedCount: pending.length,
+          inserted: [],
+          outcome: "canceled",
+        });
+      },
+    },
+    received: [] as string[],
+    followup(message: UserMessage): void {
+      agent.received.push(userText(message));
+      agent.phase.lastTurn += 1;
+      const turn = agent.phase.lastTurn;
+      appendable(session).append("turn/start", { turn });
+      appendable(session).append("step/start", { turn, step: 1 });
+      appendable(session).append("user/message", message, { surfaceOp: "append" });
+      appendable(session).append(
+        "assistant/message",
+        {
+          turn,
+          step: 1,
+          message: {
+            id: `assistant-${String(turn)}`,
+            role: "assistant",
+            content: [{ type: "text", text: `answer-${String(turn)}` }],
+            source: { kind: "model", provider: "mock", model: "mock" },
+          },
+          stream: [],
+        },
+        { surfaceOp: "append" },
+      );
+      appendable(session).append("step/end", { turn, step: 1 });
+      appendable(session).append("turn/end", { turn, reason: { kind: "completed" } });
+    },
+    whenIdle: async (): Promise<void> => {},
+  };
+  return agent;
+}
+
+function provideAgents(
+  agents: Awaited<ReturnType<typeof harness>>["agents"],
+  agent: ReturnType<typeof miniAgent>,
+): () => void {
+  return agents.set({
+    get: (id: string) => (id === String(agent.session.id) ? agent : undefined),
+    create: async () => {
+      throw new Error("unused");
+    },
+    resume: async () => {
+      throw new Error("unused");
+    },
+  });
+}
+
+async function liveSession(
+  ctx: Context,
+  sessions: Awaited<ReturnType<typeof harness>>["sessions"],
+  id: string,
+  events: readonly SessionEvent[],
+) {
+  sessions.create(SessionIdBrand(id), { meta: meta(id), seed: [...events] });
+  const live = sessions.get(SessionIdBrand(id))!;
+  await sessions.flush(live);
+  return live;
+}
+
+const header: SessionEvent = {
+  type: "request/header",
+  seq: SessionSeq(0),
+  time: 1,
+  data: { header: { config: { provider: "mock", model: "mock" } }, reason: "initial" },
+} as unknown as SessionEvent;
+
+const threeTurns = (): SessionEvent[] => [
+  header,
+  ...turnLog(1, 1),
+  ...turnLog(7, 2),
+  ...turnLog(13, 3),
+];
+
+function emptyTurn(base: number, turn: number): SessionEvent[] {
+  return [
+    { type: "turn/start", seq: SessionSeq(base), time: base, data: { turn } },
+    {
+      type: "turn/end",
+      seq: SessionSeq(base + 1),
+      time: base + 1,
+      data: { turn, reason: { kind: "completed" } },
+    },
+  ] as unknown as SessionEvent[];
+}
+
+function pendingSplice(seq: number, text: string): SessionEvent {
+  return {
+    type: "agent/inbox/spliced",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      target: "next-turn",
+      start: 0,
+      inserted: [
+        {
+          id: `pending-${String(seq)}`,
+          role: "user",
+          content: [{ type: "text", text }],
+          source: { kind: "user" },
+        },
+      ],
+    },
+  } as unknown as SessionEvent;
+}
+
+describe("SessionEditor replay turn numbering", () => {
+  it("retry of a middle turn reuses the target turn number", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", threeTurns());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.retry({
+        action: "retry",
+        sessionId: SessionIdBrand("s"),
+        turn: 2,
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["turn 2 input"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit of a middle user message reuses the target turn number", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", threeTurns());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("s"),
+        eventSeq: 9,
+        blockIndex: 0,
+        text: "edited2",
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["edited2"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit of an assistant block keeps downstream replay on the next turn number", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", threeTurns());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("s"),
+        eventSeq: 10,
+        blockIndex: 0,
+        text: "edited assistant",
+        cascade: "preserve",
+      });
+      expect(agent.received).toEqual(["turn 3 input"]);
+
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2, 3]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit of a first user message in an open turn reuses the open turn number", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const openTail: SessionEvent[] = [
+        { type: "turn/start", seq: SessionSeq(19), time: 20, data: { turn: 4 } },
+        { type: "step/start", seq: SessionSeq(20), time: 21, data: { turn: 4, step: 1 } },
+        {
+          type: "user/message",
+          seq: SessionSeq(21),
+          time: 22,
+          data: {
+            id: "open-user",
+            role: "user",
+            content: [{ type: "text", text: "open input" }],
+            source: { kind: "user" },
+          },
+          surfaceOp: "append",
+        } as unknown as SessionEvent,
+      ];
+      const live = await liveSession(ctx, sessions, "s", [...threeTurns(), ...openTail]);
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("s"),
+        eventSeq: 21,
+        blockIndex: 0,
+        text: "open edited",
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["open edited"]);
+
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2, 3, 4]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("edit after a surviving pending splice keeps seq contiguous (cancel lands before the version effect)", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", [
+        header,
+        ...turnLog(1, 1),
+        pendingSplice(7, "pending"),
+        ...turnLog(8, 2),
+        ...turnLog(14, 3),
+      ]);
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("s"),
+        eventSeq: 16,
+        blockIndex: 0,
+        text: "edited3",
+        cascade: "truncate",
+      });
+      const events = live.snapshotEvents();
+      expect(events.map((event) => event.seq)).toEqual([...Array(events.length).keys()]);
+      const lastSplice = events.findLast((event) => String(event.type) === "agent/inbox/spliced");
+      expect((lastSplice?.data as { outcome?: string } | undefined)?.outcome).toBe("canceled");
+      expect(turnsOf(events)).toEqual([1, 2, 3]);
+      expect(agent.received).toEqual(["edited3"]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("retry of the first turn replays only that turn", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", threeTurns());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.retry({
+        action: "retry",
+        sessionId: SessionIdBrand("s"),
+        turn: 1,
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["turn 1 input"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("preserve retry replays the target turn and every downstream turn input", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", threeTurns());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.retry({
+        action: "retry",
+        sessionId: SessionIdBrand("s"),
+        turn: 2,
+        cascade: "preserve",
+      });
+      expect(agent.received).toEqual(["turn 2 input", "turn 3 input"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2, 3]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("retry after an empty turn absorbs it and replays continuously", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", [
+        header,
+        ...turnLog(1, 1),
+        ...emptyTurn(7, 2),
+        ...turnLog(9, 3),
+      ]);
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.retry({
+        action: "retry",
+        sessionId: SessionIdBrand("s"),
+        turn: 3,
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["turn 3 input"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("assistant edit after an empty turn writes the manual turn continuously", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", [
+        header,
+        ...turnLog(1, 1),
+        ...emptyTurn(7, 2),
+        ...turnLog(9, 3),
+      ]);
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("s"),
+        eventSeq: 12,
+        blockIndex: 0,
+        text: "edited assistant 3",
+        cascade: "truncate",
+      });
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2]);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("SessionEditor replay on cold sessions", () => {
+  it("cold edit resumes and replays the edited input on the reused turn number", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const handle = await persistence.create(meta("cold"));
+      await handle.append([...threeTurns()]);
+      await handle.close();
+      expect(sessions.get(SessionIdBrand("cold"))).toBeUndefined();
+
+      let resumed = 0;
+      let resumedAgent: ReturnType<typeof miniAgent> | undefined;
+      agents.set( {
+        get: (id: string) =>
+          resumedAgent !== undefined && id === String(resumedAgent.session.id)
+            ? resumedAgent
+            : undefined,
+        create: async () => {
+          throw new Error("unused");
+        },
+        resume: async () => {
+          resumed += 1;
+          const stored = await (persistence as SessionPersistenceSqlite).load(
+            SessionIdBrand("cold"),
+          );
+          sessions.create(SessionIdBrand("cold"), {
+            meta: stored.meta,
+            seed: [...stored.events],
+          });
+          const live = sessions.get(SessionIdBrand("cold"))!;
+          resumedAgent = miniAgent(live);
+          return { agent: resumedAgent, dispose: async () => {} };
+        },
+      });
+
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("cold"),
+        eventSeq: 9,
+        blockIndex: 0,
+        text: "edited2",
+        cascade: "truncate",
+      });
+      const live = sessions.get(SessionIdBrand("cold"))!;
+      expect(resumed).toBe(1);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1, 2]);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("SessionEditor replay against oneTurnLog fixtures", () => {
+  it("retry on a single-turn session replays turn 1", async () => {
+    const { agents, ctx, sessions, persistence, logger, editor, dispose } = await harness();
+    try {
+      const live = await liveSession(ctx, sessions, "s", oneTurnLog());
+      const agent = miniAgent(live);
+      const disposeAgents = provideAgents(agents, agent);
+      await editor.retry({
+        action: "retry",
+        sessionId: SessionIdBrand("s"),
+        turn: 1,
+        cascade: "truncate",
+      });
+      expect(agent.received).toEqual(["hi"]);
+      expect(turnsOf(live.snapshotEvents())).toEqual([1]);
+    } finally {
+      await dispose();
+    }
+  });
+});

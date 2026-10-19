@@ -21,10 +21,14 @@
   settings namespace）。本地 patch 是例外，流程见 `dsh-plugin-upstream-sync` 技能。
 - **工具链在根**：各包 `package.json` 只声明自身依赖；上游包以 `workspace:*` 声明在 `peerDependencies`
   （插件契约面）或 `devDependencies`（测试用）。
+- **能力包只依赖聚合层**：只 import `@morlay/dsh-base/*`、`@morlay/dsh-web-app/<domain>/client/tokens` 与
+  基础库；不直接 import `@deepseek-ai/*` 服务包、不写 `fromCordis`、不伸进上游 `src/*`。聚合层没透出的
+  契约先补在聚合层，再让能力包引用。
 - **运行期用到什么就声明在运行期面**：源码里 `import` 的包（含 client 半用到的 `react` 这类）要写在
   `dependencies` 或 `peerDependencies`——前端链的外置判据只认本包声明的运行期依赖，躺在 `devDependencies`
-  里会被**内联**进产物（同一个库两份实例）。测试与构建用的（`vitest`、`@testing-library/*`、`@types/*`、
-  构建插件）留在 `devDependencies`。
+  里会被**内联**进产物（同一个库两份实例）。聚合层的 sub-export（`@morlay/dsh-base/<domain>` 等）同样是
+  直接依赖；只有宿主必须提供、我们并不 `import` 的契约才进 `peerDependencies`，源码没引用的包不声明。
+  测试与构建用的（`vitest`、`@testing-library/*`、`@types/*`、构建插件）留在 `devDependencies`。
 - **例外：`electron` 只能写在 `devDependencies`**（`packages/desktop/dsh-desktop-shell`）。electron-builder
   有硬规矩——它由打包器自己提供；而且壳的 app 目录是 `pnpm deploy --prod` 的产物，放运行期面就会被实体化进
   那份清单的 `dependencies`，打包直接报 `Package "electron" is only allowed in "devDependencies"`。
@@ -48,6 +52,7 @@
   所以只许挂在 `default` 上：挂 `import` 会把工厂字节送给要普通库的 ESM 消费方。
 - **跨包共享的测试辅助走 `./testing`**，不进 host 面。
 - **装配链依赖 `./cordis.patch.yml` 出口**：装配行按包名 + 出口解析，改名或挪出口会打断装配面测试。
+- **CJS 只属于 client 入口**：只有 client 半需要 CJS 工厂（模块表形态），host 入口只产 ESM。
 - **bundle 的 patch 由构建生成，不手写**：bundle 的 `tsdown.config.ts` 调 devkit 的 patch 插件写出包根那份
   `cordis.patch.yml`（首行是「由 …/tsdown.config.ts 生成，请勿手工编辑」）；能力包只发布实现与 `rows` 出口，
   patch 住在 bundle 里——这是 `ADR-profile层三分（配置初始化与提示词开关与能力清单）`
@@ -114,6 +119,10 @@
 
 ## 代码约定
 
+- **禁止模块增强**：不用 `declare module` 给上游类型加成员；跨包类型契约由聚合层显式导出（接口 / 令牌
+  类型），消费方只引用。
+- **外部 I/O 可注入**：网络、时钟等外部 I/O 作为可配置依赖暴露（缺省用全局实现），不直接调用全局；
+  装配里可替换。
 - **类型安全**：`strict: true` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`
   （`devpackages/devkit/tsconfig.json`）。跨边界 id 使用 branded 类型（如 `SessionId`），不做裸
   `string`。**类型检查由 `just lint` 承担**（oxlint 的 `typeAware` + `typeCheck`，后端

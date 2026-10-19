@@ -9,6 +9,7 @@ export {
   LOCAL_PACKAGE_PREFIX,
   type CordisPluginOptions,
 } from "./cordis-host.ts";
+export { clientInjectOf } from "./client-inject.ts";
 export {
   packageExportsHook,
   writePackageManifest,

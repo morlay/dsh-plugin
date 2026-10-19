@@ -1,0 +1,69 @@
+{
+  "name": "@morlay/web-custom-profile",
+  "version": "0.0.4",
+  "description": "Dev-only dsh profile bundle: mounts @morlay/dsh-client-modules (our vite + federated prebundle frontend chain) and disables the upstream module-table rows it replaces — shared by `dshdev web` and `dshdev desktop`.",
+  "keywords": [
+    "client-modules",
+    "dev",
+    "dsh",
+    "dsh-bundle",
+    "dsh-plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown"
+  },
+  "dependencies": {
+    "@morlay/dsh-client-modules": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-client-modules": "workspace:*",
+    "@deepseek-ai/dsh-client-hmr": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "workspace:*"
+  },
+  "icon": "./icon.svg",
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "@local/devkit": "workspace:*",
+    "@local/zephyr-codegen": "workspace:*",
+    "tsdown": "^0.23.1"
+  },
+  "type": "module"
+}

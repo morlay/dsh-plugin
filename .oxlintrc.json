@@ -1,17 +1,30 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "node"],
-  "ignorePatterns": ["target/**", "lib/**", "**/dist/**", "**/src/vendor/**"],
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "node"
+  ],
+  "ignorePatterns": [
+    "target/**",
+    "lib/**",
+    "**/dist/**",
+    "**/src/vendor/**"
+  ],
   "options": {
     "typeAware": true,
     "typeCheck": true
   },
   "rules": {
-    "node/no-sync": "error"
+    "node/no-sync": "error",
+    "typescript/no-unused-vars": "error"
   },
   "overrides": [
     {
-      "files": ["**/src/__tests__/schema-fixture.ts"],
+      "files": [
+        "**/src/__tests__/schema-fixture.ts"
+      ],
       "rules": {
         "typescript/no-implied-eval": "off"
       }

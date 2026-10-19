@@ -1,0 +1,224 @@
+# 本文件由 packages/bundles/dsh-web-app/tsdown.config.ts 生成，请勿手工编辑
+- insert:
+    - id: loader-mock
+      name: "@morlay/dsh-web-app/cordis-register"
+    - id: profile-context-service
+      name: "@morlay/dsh-web-app/cordis-register"
+    - id: package-config
+      name: "@deepseek-ai/dsh-package-config"
+    - id: config-editor
+      name: "@deepseek-ai/dsh-config-editor"
+      inject:
+        - loader
+        - profileContext
+    - id: settings-forms
+      name: "@deepseek-ai/dsh-settings-forms"
+      inject:
+        - configEditor
+        - profileContext
+    - id: settings-controller
+      name: "@deepseek-ai/dsh-api-settings-controller"
+    - id: desktop-product-telemetry
+      name: "@deepseek-ai/dsh-host-product-telemetry-otel"
+      config:
+        scheduledDelayMillis: 30000
+        timeoutMillis: 15000
+        exportTimeoutMillis: 20000
+        shutdownTimeoutMillis: 2000
+        serviceName: deepseek-harness-desktop
+        serviceVersion: !!js process.env.DSH_CLIENT_VERSION ?? "0.0.0"
+        endpoint: !!js process.env.DSH_PRODUCT_ANALYTICS_OTLP_URL
+    - id: product-analytics
+      name: "@deepseek-ai/dsh-client-product-analytics"
+      config:
+        enabled: true
+        appVersion: !!js process.env.DSH_CLIENT_VERSION ?? "0.0.0"
+    - id: subagent-model-selection-settings
+      name: "@deepseek-ai/dsh-tool-subagent/model-selection-settings"
+    - id: message-feedback
+      name: "@deepseek-ai/dsh-message-feedback"
+      config:
+        maxNoteBytes: 8192
+    - id: session-log-download
+      name: "@deepseek-ai/dsh-session-log-export"
+    - id: session-reference
+      name: "@deepseek-ai/dsh-session-reference"
+    - id: session-stats
+      name: "@deepseek-ai/dsh-session-stats"
+    - id: session-turn-outline
+      name: "@deepseek-ai/dsh-session-turn-outline"
+    - id: open-in-app
+      name: "@deepseek-ai/dsh-host-open-in-app"
+      config:
+        probeTimeoutMs: 10000
+        iconTimeoutMs: 10000
+        launchWatchMs: 1000
+    - id: directory-picker
+      name: "@deepseek-ai/dsh-host-directory-picker-auto"
+    - id: workspace
+      name: "@deepseek-ai/dsh-workspace"
+    - id: workspace-files
+      name: "@deepseek-ai/dsh-api-workspace-files"
+    - id: workspace-controller
+      name: "@deepseek-ai/dsh-api-workspace-controller"
+    - id: workspace-changes
+      name: "@deepseek-ai/dsh-workspace-changes"
+    - id: file-reference-local
+      name: "@deepseek-ai/dsh-file-reference-local"
+    - id: plugin-inventory
+      name: "@deepseek-ai/dsh-host-plugin-inventory"
+    - id: job-controller
+      name: "@deepseek-ai/dsh-api-job-controller"
+    - id: terminal-controller
+      name: "@deepseek-ai/dsh-api-terminal-controller"
+    - id: account-controller
+      name: "@deepseek-ai/dsh-api-account-controller"
+    - id: schedule
+      name: "@deepseek-ai/dsh-schedule"
+    - id: cordis-host-runner
+      name: "@deepseek-ai/dsh-cordis-host-runner"
+    - id: cordis-inspect-providers
+      name: "@deepseek-ai/dsh-tool-cordis/host"
+    - id: cordis-client-runner
+      name: "@deepseek-ai/dsh-cordis-client-runner"
+    - id: web-startup
+      name: "@deepseek-ai/dsh-web-app/startup"
+    - id: webserver
+      name: "@deepseek-ai/dsh-host-webserver"
+      config:
+        host: !!js ctx.webStartup.host ?? "127.0.0.1"
+        port: !!js ctx.webStartup.port ?? 3080
+        tls: !!js ctx.webStartup.tls
+        compression: gzip
+        compressionLevel: 1
+        compressionThresholdBytes: 1024
+    - id: web-runtime
+      name: "@deepseek-ai/dsh-web-app"
+      config:
+        openBrowser: !!js ctx.webStartup.openBrowser
+        printUrl: true
+        publicUrl: !!js ctx.webStartup.publicUrl
+        surfaceContext: true
+    - id: harness-dev-context
+      name: "@deepseek-ai/dsh-harness-dev-context"
+    - id: office-to-pdf
+      name: "@deepseek-ai/dsh-office-to-pdf"
+    - id: agent-presets-mock
+      name: "@morlay/dsh-web-app/cordis-register"
+    - id: api-remotes
+      name: "@deepseek-ai/dsh-api-remotes"
+    - id: ui-open-in-app
+      name: "@deepseek-ai/dsh-client-ui-open-in-app"
+    - id: ui-settings-account
+      name: "@deepseek-ai/dsh-client-ui-settings-account"
+    - id: ui-settings
+      name: "@deepseek-ai/dsh-client-ui-settings"
+    - id: ui-settings-general
+      name: "@deepseek-ai/dsh-client-ui-settings-general"
+    - id: ui-settings-models
+      name: "@deepseek-ai/dsh-client-ui-settings-models"
+    - id: ui-settings-plugin-inventory
+      name: "@deepseek-ai/dsh-client-ui-settings-plugin-inventory"
+    - id: ui-settings-session-log
+      name: "@deepseek-ai/dsh-client-ui-settings-session-log"
+    - id: ui-settings-plugins
+      name: "@deepseek-ai/dsh-client-ui-settings-plugins"
+    - id: ui-settings-shell
+      name: "@deepseek-ai/dsh-client-ui-settings-shell"
+    - id: ui-settings-agent-loop
+      name: "@deepseek-ai/dsh-client-ui-settings-agent-loop"
+    - id: ui-settings-subagent
+      name: "@deepseek-ai/dsh-client-ui-settings-subagent"
+    - id: ui-settings-web-search
+      name: "@deepseek-ai/dsh-client-ui-settings-web-search"
+    - id: file-upload
+      name: "@deepseek-ai/dsh-client-file-upload"
+    - id: ui-theme
+      name: "@deepseek-ai/dsh-client-ui-theme"
+    - id: locale
+      name: "@deepseek-ai/dsh-client-locale"
+    - id: shortcuts
+      name: "@deepseek-ai/dsh-client-shortcuts"
+    - id: ui-shortcuts
+      name: "@deepseek-ai/dsh-client-ui-shortcuts"
+    - id: ui-layout
+      name: "@deepseek-ai/dsh-client-ui-layout"
+    - id: ui-renderer
+      name: "@deepseek-ai/dsh-client-ui-renderer"
+    - id: ui-session
+      name: "@deepseek-ai/dsh-client-ui-session"
+    - id: resources
+      name: "@deepseek-ai/dsh-client-resources"
+    - id: ui-sidebar
+      name: "@deepseek-ai/dsh-client-ui-sidebar"
+    - id: ui-sidebar-right
+      name: "@deepseek-ai/dsh-client-ui-sidebar-right"
+    - id: ui-sidebar-documentpreview
+      name: "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+    - id: ui-sidebar-browser
+      name: "@deepseek-ai/dsh-client-ui-sidebar-browser"
+    - id: ui-sidebar-terminal
+      name: "@deepseek-ai/dsh-client-ui-sidebar-terminal"
+    - id: ui-sidebar-files
+      name: "@deepseek-ai/dsh-client-ui-sidebar-files"
+    - id: ui-conversation
+      name: "@deepseek-ai/dsh-client-ui-conversation"
+    - id: ui-approval
+      name: "@deepseek-ai/dsh-client-ui-approval"
+    - id: ui-chat
+      name: "@deepseek-ai/dsh-client-ui-chat"
+    - id: ui-brand-official
+      name: "@deepseek-ai/dsh-client-ui-brand-official"
+    - id: ui-attachment
+      name: "@deepseek-ai/dsh-client-ui-attachment"
+    - id: ui-tool
+      name: "@deepseek-ai/dsh-client-ui-tool"
+    - id: ui-cordis
+      name: "@deepseek-ai/dsh-client-ui-cordis"
+    - id: ui-deliverables
+      name: "@deepseek-ai/dsh-client-ui-deliverables"
+    - id: ui-workspace
+      name: "@deepseek-ai/dsh-client-ui-workspace"
+    - id: ui-workflow-run
+      name: "@deepseek-ai/dsh-client-ui-workflow-run"
+    - id: ui-input-trigger
+      name: "@deepseek-ai/dsh-client-ui-input-trigger"
+    - id: ui-commands
+      name: "@deepseek-ai/dsh-client-ui-commands"
+    - id: ui-skill
+      name: "@deepseek-ai/dsh-client-ui-skill"
+    - id: ui-subagent
+      name: "@deepseek-ai/dsh-client-ui-subagent"
+    - id: ui-reference
+      name: "@deepseek-ai/dsh-client-ui-reference"
+    - id: ui-secret-mask
+      name: "@deepseek-ai/dsh-client-ui-secret-mask"
+    - id: ui-jobs
+      name: "@deepseek-ai/dsh-client-ui-jobs"
+    - id: ui-schedule
+      name: "@deepseek-ai/dsh-client-ui-schedule"
+    - id: ui-goal
+      name: "@deepseek-ai/dsh-client-ui-goal"
+    - id: ui-message-feedback
+      name: "@deepseek-ai/dsh-client-ui-message-feedback"
+    - id: ui-model-selection
+      name: "@deepseek-ai/dsh-client-ui-model-selection"
+    - id: ui-permission
+      name: "@deepseek-ai/dsh-client-ui-permission-presets"
+    - id: ui-agent-preset
+      name: "@deepseek-ai/dsh-client-ui-agent-preset"
+    - id: ui-plan
+      name: "@deepseek-ai/dsh-client-ui-plan"
+    - id: ui-user-questions
+      name: "@deepseek-ai/dsh-client-ui-user-questions"
+    - id: ui-trajectory
+      name: "@deepseek-ai/dsh-client-ui-trajectory"
+- id: session-controller-default
+  config: {}
+- id: connection-default
+  config:
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+- id: file-uploads
+  config: {}
+- id: client-connection
+  config: {}

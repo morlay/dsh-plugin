@@ -189,12 +189,10 @@ export async function buildCordisConfig(
     // 双模式库（如 lexical 的 exports 带 development / production / node 条件）必须解析到与下面条件名
     // 一致的静态变体：条件名按 NODE_ENV 选 production / development，且不含 node。
     //
-    // `transform.decorator.legacy: false` 是**发布线**的声明：dist 里的装饰器调用 registry 官方实现
-    // （TC39 标准协议），而仓库 tsconfig 开着 `experimentalDecorators`（开发线用，见 devkit 的 tsconfig），
-    // 不显式关掉 oxc 就会按 legacy 降级，产物与官方实现不兼容。
+    // 不覆盖 `transform.decorator`：让 oxc 读取 tsconfig 的 `experimentalDecorators`，
+    // 否则构建工具会暗改装饰器语义。
     inputOptions: {
       resolve: { conditionNames: spec.conditionNames },
-      transform: { decorator: { legacy: false } },
     },
     // 这里**不写 `define`**：`spec.define` 是浏览器产物的替换约定（`process.env` / `import.meta` 替成空壳），
     // 而 tsdown 的 define 对同一个 config 里的所有入口生效——host 半（Node / Electron 主进程）拿到它就成了

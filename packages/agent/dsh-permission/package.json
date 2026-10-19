@@ -1,0 +1,16 @@
+{
+  "name": "@morlay/dsh-permission",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-permission-presets": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-approval": "workspace:*"
+  }
+}

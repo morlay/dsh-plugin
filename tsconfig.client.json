@@ -11,6 +11,8 @@
   "include": [
     "packages/*/*/src/client/**/*",
     "vendor/**/src/client/**/*",
+    // `*/remote` 的生成态（`typert.remote-client.ts`）在 `lib/` 里：client 侧的 remote 装配直接引用它。
+    "vendor/**/lib/**/*",
     "packages/*/*/src/css-modules.d.ts"
   ],
   "exclude": ["**/node_modules/**", "**/dist/*"]

@@ -1,0 +1,16 @@
+{
+  "name": "@morlay/dsh-telemetry",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@deepseek-ai/dsh-otel": "workspace:*",
+    "@deepseek-ai/dsh-session-telemetry-otel": "workspace:*",
+    "@morlay/dsh-session": "workspace:*"
+  }
+}

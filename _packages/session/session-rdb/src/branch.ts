@@ -1,0 +1,520 @@
+import {
+  SESSION_FORMAT_VERSION,
+  SessionLogOffset,
+  type Session,
+  type SessionEvent,
+  type SessionHeader,
+  type SessionId,
+} from "@deepseek-ai/dsh-session";
+import type { SessionPersistenceSnapshot } from "@deepseek-ai/dsh-session-persistence";
+import {
+  SessionBranchProvider,
+  type BranchAnchorMode,
+  type BranchBoundary,
+  type ForkFromOptions,
+} from "./branch/contract.ts";
+import { SessionBranchError } from "./branch/types.ts";
+import { balanceRewindPrefix, rewindKeepLength } from "./branch/balance.ts";
+import { randomUUID } from "node:crypto";
+import { inject, Injectable, Logger } from "@morlay/zephyr";
+import { Agents } from "@morlay/dsh-base/agent";
+import { SessionStore } from "@deepseek-ai/dsh-session";
+import { SessionProjectionRegistry } from "@deepseek-ai/dsh-session-projection";
+import { TokenMeter } from "@deepseek-ai/dsh-token-meter";
+import type { Backend } from "./backend.ts";
+import { isLegacyVersion } from "./legacy.ts";
+import { rowToMeta } from "./log.ts";
+import { SessionPersistenceRdb } from "./persistence/session-persistence-rdb.service.ts";
+import { SessionProjectionCache } from "@morlay/dsh-base/session-projection";
+
+function assertRewindBoundary(
+  id: SessionId,
+  toBoundary: number,
+  boundaryType: string | undefined,
+  head: number,
+): void {
+  if (toBoundary === -1) return;
+  if (toBoundary > head) {
+    throw new SessionBranchError(
+      `rewind boundary ${toBoundary} is beyond the stored head ${head}`,
+      "INVALID_BOUNDARY",
+    );
+  }
+  if (boundaryType === undefined) {
+    throw new SessionBranchError(
+      `rewind boundary ${toBoundary} does not exist in session "${id}"`,
+      "INVALID_BOUNDARY",
+    );
+  }
+  if (boundaryType !== "turn/end" && boundaryType !== "user/message") {
+    throw new SessionBranchError(
+      `rewind boundary ${toBoundary} is not a turn/end or user/message (${boundaryType})`,
+      "INVALID_BOUNDARY",
+    );
+  }
+}
+
+export function locateTurnEnd(
+  events: readonly SessionEvent[],
+  atSeq?: number,
+  mode: BranchAnchorMode = "after",
+): number {
+  const ends = events.filter((event) => event.type === "turn/end").map((event) => event.seq);
+  if (atSeq === undefined) {
+    const last = ends.at(-1);
+    if (last === undefined) throw new SessionBranchError("session has no closed turn", "OPEN_TURN");
+    return last;
+  }
+  if (mode === "before") {
+    let boundary = -1;
+    for (const seq of ends) {
+      if (seq < atSeq) boundary = seq;
+      else break;
+    }
+    return boundary;
+  }
+  const firstAfter = ends.find((seq) => seq >= atSeq);
+  if (firstAfter !== undefined) return firstAfter;
+
+  const lastStart = [...events].reverse().find((event) => event.type === "turn/start");
+  if (lastStart !== undefined && lastStart.seq <= atSeq) {
+    throw new SessionBranchError(`anchor ${atSeq} lies inside an open turn`, "OPEN_TURN");
+  }
+  const last = ends.at(-1);
+  if (last === undefined) throw new SessionBranchError("session has no closed turn", "OPEN_TURN");
+  return last;
+}
+
+function renumber(events: readonly SessionEvent[], offset: number): SessionEvent[] {
+  return events.map((event, index) => ({ ...event, seq: offset + index }) as SessionEvent);
+}
+
+function mintSessionId(): SessionId {
+  return `session-${randomUUID()}` as SessionId;
+}
+
+export interface ProjectionCacheSession {
+  readonly id: SessionId;
+  readonly header: SessionHeader;
+  readonly inheritedEventCount: SessionLogOffset;
+
+  // 没有 live 会话时（cold rewind）缓存按这个新水位截断，不 fold 日志
+  readonly headSeq?: number;
+  snapshotEvents(): readonly SessionEvent[];
+}
+
+interface ProjectionRegistryLike {
+  registrations?: Map<string, { cells: WeakMap<object, unknown> }>;
+}
+
+interface TokenMeterLike {
+  states?: WeakMap<object, unknown>;
+}
+
+export interface LiveAgentLike {
+  session: Session;
+
+  requestHeaderLogged?: boolean;
+
+  inbox?: { clear(): void };
+}
+
+interface SurfaceManagerLike {
+  _state: {
+    nodes: number[];
+    replaceGeneration: number;
+    contentGeneration: number;
+    projectedMessages: Map<unknown, unknown>;
+  };
+  _lastProcessedSeq: number;
+  _pendingPlan?: unknown;
+  baseSeq: number;
+}
+
+function resetSurfaceManager(surfaceManager: SurfaceManagerLike): void {
+  const state = surfaceManager._state;
+  state.nodes = [];
+  state.replaceGeneration = 0;
+  state.contentGeneration = 0;
+  state.projectedMessages = new Map();
+  surfaceManager._lastProcessedSeq = surfaceManager.baseSeq - 1;
+  surfaceManager._pendingPlan = undefined;
+}
+
+export function truncateLiveSession(session: Session, newLength: number): void {
+  const s = session as unknown as {
+    log: SessionEvent[];
+    eventsSnapshot?: unknown;
+    headerFold?: unknown;
+    headerFoldSeq: number;
+    contextFold?: unknown;
+    contextFoldSeq: number;
+    derived: unknown[];
+    derivedNodes: number;
+    derivedGeneration: number;
+    surfaceManager: SurfaceManagerLike;
+  };
+  s.log.length = newLength;
+  s.eventsSnapshot = undefined;
+  s.headerFold = undefined;
+  s.headerFoldSeq = 0;
+  s.contextFold = undefined;
+  s.contextFoldSeq = 0;
+  s.derived = [];
+  s.derivedNodes = 0;
+  s.derivedGeneration = 0;
+  resetSurfaceManager(s.surfaceManager);
+}
+
+export function replaceLiveSessionLog(session: Session, events: readonly SessionEvent[]): void {
+  const s = session as unknown as {
+    log: SessionEvent[];
+    eventsSnapshot?: unknown;
+    headerFold?: unknown;
+    headerFoldSeq: number;
+    contextFold?: unknown;
+    contextFoldSeq: number;
+    derived: unknown[];
+    derivedNodes: number;
+    derivedGeneration: number;
+    surfaceManager: SurfaceManagerLike;
+  };
+  s.log.length = 0;
+  s.log.push(...events);
+  s.eventsSnapshot = undefined;
+  s.headerFold = undefined;
+  s.headerFoldSeq = 0;
+  s.contextFold = undefined;
+  s.contextFoldSeq = 0;
+  s.derived = [];
+  s.derivedNodes = 0;
+  s.derivedGeneration = 0;
+  resetSurfaceManager(s.surfaceManager);
+}
+
+@Injectable()
+export class SessionBranchRdbProvider extends SessionBranchProvider {
+  persistence = inject(SessionPersistenceRdb);
+
+  sessions = inject(SessionStore);
+
+  agents = inject.optional(Agents);
+
+  logger = inject(Logger);
+
+  projectionCells = inject.optional(SessionProjectionRegistry);
+
+  tokenMeterFold = inject.optional(TokenMeter);
+
+  projectionCache = inject.optional(SessionProjectionCache);
+
+  private tokenMeterWarned = false;
+
+  private projectionWarned = false;
+
+  async readBranchPrefix(
+    id: SessionId,
+    atSeq?: number,
+    mode: BranchAnchorMode = "after",
+    signal?: AbortSignal,
+  ): Promise<BranchBoundary> {
+    const { events } = await this.readRawEvents(id, signal);
+    const boundary = locateTurnEnd(events, atSeq, mode);
+    return { seq: boundary, events: events.slice(0, boundary + 1) };
+  }
+
+  async readRawEvents(
+    id: SessionId,
+    signal?: AbortSignal,
+  ): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }> {
+    const stored = await this.persistence.readLog(id, {}, signal);
+    if (stored === undefined)
+      throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
+    return { meta: stored.meta, events: stored.events };
+  }
+
+  async forkFrom(
+    sourceId: SessionId,
+    options: ForkFromOptions = {},
+    signal?: AbortSignal,
+  ): Promise<SessionId> {
+    signal?.throwIfAborted();
+    const { atSeq, anchorMode = "after", seedSuffix = [], childSessionId, meta = {} } = options;
+    const source = await this.persistence.readLog(sourceId, {}, signal);
+    if (source === undefined)
+      throw new SessionBranchError(`session "${sourceId}" not found`, "SESSION_NOT_FOUND");
+    const boundary = locateTurnEnd(source.events, atSeq, anchorMode);
+    const prefix = balanceRewindPrefix(source.events.slice(0, boundary + 1));
+    if (prefix.length <= boundary) {
+      this.logger.warn(
+        `session-rdb: fork "${sourceId}" dropped ${boundary + 1 - prefix.length} trailing event(s) from seq ${prefix.length} to keep the seed's step pairs balanced`,
+      );
+    }
+    const childId = childSessionId ?? mintSessionId();
+    const childMeta: SessionHeader = {
+      version: SESSION_FORMAT_VERSION,
+      id: childId,
+      createdAt: meta.createdAt ?? Date.now(),
+      ...(meta.cwd !== undefined
+        ? { cwd: meta.cwd }
+        : source.meta.cwd !== undefined
+          ? { cwd: source.meta.cwd }
+          : {}),
+      parentSession: sourceId,
+      isSeeded: true,
+      ...(meta.agentPreset !== undefined
+        ? { agentPreset: meta.agentPreset }
+        : source.meta.agentPreset !== undefined
+          ? { agentPreset: source.meta.agentPreset }
+          : {}),
+      ...(meta.origin !== undefined ? { origin: meta.origin } : {}),
+      ...(meta.delegationDepth !== undefined ? { delegationDepth: meta.delegationDepth } : {}),
+    };
+    const seed = [...renumber(prefix, 0), ...renumber(seedSuffix, prefix.length)];
+
+    const internals = this.persistence.internals();
+    // 复用父会话的事件行有个前提：**读取视图的 seq 与存储行的 f_sequence 一一对应**。legacy 会话的读视图
+    // 由迁移链重建（可能重新编号、增删事件），按 seq 复用会把桥接行挂到语义不符的行上——读取时按 `f_data`
+    // 解析，子会话前缀读到的内容就会和它自己的 seed 事件对不上。那种情况下复制事件行（多几行存储，正确优先）。
+    const reusable = !source.migrated && source.events.length === source.storedCount;
+    const reuse = new Map<number, string>();
+    if (reusable) {
+      const sourceRows = await internals.backend.getEventRows(sourceId);
+      const sourceEventIds = new Map(sourceRows.map((row) => [row.fSequence, row.fEventId]));
+      for (const event of prefix) {
+        const eventId = sourceEventIds.get(event.seq);
+        if (eventId !== undefined) reuse.set(event.seq, eventId);
+      }
+    } else if (prefix.length > 0) {
+      this.logger.warn(
+        `session-rdb: fork "${sourceId}" copies event rows instead of reusing them — its read view comes from a migration, so stored seqs need not line up`,
+      );
+    }
+    internals.registerReuseEventIds(childId, reuse);
+    try {
+      const handle = await this.persistence.create(childMeta, {
+        inheritedEventCount: SessionLogOffset(prefix.length),
+      });
+      try {
+        if (seed.length > 0) await handle.append(seed);
+      } finally {
+        await handle.close();
+      }
+    } catch (error) {
+      // fork 没成（id 已存在、append 失败等）：别把复用映射留在进程里——同一个 childId 之后的落写会按它
+      // 去复用父会话的事件行，而那条会话可能完全无关。
+      internals.dropReuseEventIds(childId);
+      throw error;
+    }
+    // fork 不动统计：继承前缀的消耗是父会话真实发生的那一次，子会话只记自己新产生的
+    // （写路径旁路累加，见 ADR-fork不继承统计）。
+    return childId;
+  }
+
+  async rewind(
+    id: SessionId,
+    toBoundary: number,
+    signal?: AbortSignal,
+  ): Promise<SessionPersistenceSnapshot> {
+    signal?.throwIfAborted();
+    if (!Number.isSafeInteger(toBoundary) || toBoundary < -1) {
+      throw new SessionBranchError(
+        `rewind boundary must be a non-negative safe integer, got ${toBoundary}`,
+        "INVALID_BOUNDARY",
+      );
+    }
+    const live = this.sessions.get(id);
+
+    if (live !== undefined) await this.sessions.flush(live);
+
+    const internals = this.persistence.internals();
+
+    // SessionBranch 是「先停止、再操作」的排他面（ADR-rewind绕过handle模型直接截断）：rewind 直连 DB 做最小工作，
+    // 不走持久化抽象的全量读路径（readLog 会拉全部事件 + legacy 转换 + 读视图修复）。
+    const row = await internals.backend.getSession(id);
+    if (row === undefined) {
+      throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
+    }
+    const meta = rowToMeta(row);
+
+    let rawKeepLength: number;
+    let kept: readonly SessionEvent[] | undefined;
+    if (isLegacyVersion(row.fVersion)) {
+      // 旧格式的持久化坐标与当前视图 seq 不一致：只有这条路径需要读日志（含格式转换与读视图修复）
+      const log = await this.persistence.readLog(id, {}, signal);
+      if (log === undefined) {
+        throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
+      }
+      const boundaryType = log.events[toBoundary]?.type;
+      assertRewindBoundary(id, toBoundary, boundaryType, log.events.length - 1);
+      rawKeepLength =
+        toBoundary === -1 ? 0 : boundaryType === "turn/end" ? toBoundary + 1 : toBoundary;
+      kept = balanceRewindPrefix(log.events.slice(0, rawKeepLength));
+    } else {
+      const boundaryType =
+        toBoundary === -1 ? undefined : await internals.backend.getEventTypeAt(id, toBoundary);
+      assertRewindBoundary(id, toBoundary, boundaryType, row.fHeadSequence);
+      rawKeepLength =
+        toBoundary === -1 ? 0 : boundaryType === "turn/end" ? toBoundary + 1 : toBoundary;
+    }
+    const keepLength =
+      kept === undefined
+        ? await this.rewindKeepLength(id, rawKeepLength, internals.backend)
+        : kept.length;
+    if (keepLength < rawKeepLength) {
+      this.logger.warn(
+        `session-rdb: rewind "${id}" dropped ${rawKeepLength - keepLength} trailing event(s) from seq ${keepLength} to keep the retained prefix's step pairs balanced`,
+      );
+    }
+
+    const denseBoundary = keepLength - 1;
+    const newSeedLength = await internals.backend.transaction(async (tx) => {
+      signal?.throwIfAborted();
+      const head = await tx.getHead(id);
+      if (denseBoundary > head.fHeadSequence) {
+        throw new SessionBranchError(
+          `rewind boundary ${toBoundary} is beyond the stored head ${head.fHeadSequence}`,
+          "INVALID_BOUNDARY",
+        );
+      }
+      if (denseBoundary < head.fHeadSequence) {
+        await tx.deleteBridgeTail(id, denseBoundary + 1);
+        const prev = denseBoundary === -1 ? undefined : await tx.getPrevBridge(id, denseBoundary);
+        if (prev === undefined) {
+          await tx.updateHead(id, "", -1);
+        } else {
+          await tx.updateHead(id, prev.fEventId, prev.fSequence);
+        }
+      }
+
+      const storedSeedLength = await tx.getSeedLength(id);
+      let shrunk = storedSeedLength;
+      if (storedSeedLength !== null && storedSeedLength > denseBoundary + 1) {
+        await tx.updateSeedLength(id, denseBoundary + 1);
+        shrunk = denseBoundary + 1;
+      }
+
+      await tx.refreshTitle(id);
+      await tx.bumpRevision(id);
+      return shrunk;
+    });
+
+    internals.writeGuard.confirmHead(id, denseBoundary);
+
+    if (live !== undefined) {
+      truncateLiveSession(live, keepLength);
+
+      this.resetProjectionCells(live);
+
+      this.resetTokenMeterFold(live);
+      const agent = this.agents?.get(id) as LiveAgentLike | undefined;
+      if (agent !== undefined) {
+        agent.requestHeaderLogged = false;
+
+        const lastTurn =
+          live.snapshotEvents().findLast((e) => e.type === "turn/start")?.data.turn ?? 0;
+        const phase = (agent as unknown as { phase?: { lastTurn?: number } }).phase;
+        if (phase !== undefined) phase.lastTurn = lastTurn;
+      }
+
+      const handle = this.persistence.tracker.writerOf(id);
+      if (handle !== undefined) {
+        handle.resetAfterRewind(keepLength, newSeedLength === null ? undefined : newSeedLength);
+      }
+
+      agent?.inbox?.clear();
+
+      await this.sessions.flush(live);
+
+      await this.refreshProjectionCache(live);
+    } else {
+      // rewind 不读日志：缓存行按新水位截断（保留下来的投影单元仍在截断前缀内）
+      await this.refreshProjectionCache({
+        id,
+        header: meta,
+        inheritedEventCount: SessionLogOffset(newSeedLength ?? row.fSeedLength ?? 0),
+        headSeq: keepLength - 1,
+        snapshotEvents: () => [],
+      });
+    }
+
+    // 撤回不改统计：请求已发起就已经消耗过（见 ADR-撤回不回退统计）。
+    return { header: rowToMeta(row), revision: (await internals.readStoredRevision(id))! };
+  }
+
+  // 保留长度只依赖尾部窗口：从 rawKeepLength 往回读类型（有界），窗口没覆盖到最近一个 turn/end
+  // 就翻倍重读，直到覆盖或到达前缀开头。
+  private async rewindKeepLength(
+    id: SessionId,
+    rawKeepLength: number,
+    backend: Backend,
+  ): Promise<number> {
+    if (rawKeepLength === 0) return 0;
+    let limit = 64;
+    for (;;) {
+      const rows = await backend.getEventTypesBefore(id, rawKeepLength, limit);
+      const types = [...rows].reverse().map((row) => row.fType);
+      const windowStart = rawKeepLength - types.length;
+      if (types.includes("turn/end") || windowStart === 0 || types.length >= rawKeepLength) {
+        return rewindKeepLength(types, rawKeepLength);
+      }
+      limit *= 4;
+    }
+  }
+
+  // 覆盖导入整段替换内存 log：旧日志上的派生状态（投影单元缓存 / token-meter 折叠）必须一起失效。
+  resetLiveDerivedState(session: Session): void {
+    this.resetProjectionCells(session);
+    this.resetTokenMeterFold(session);
+  }
+
+  private resetProjectionCells(session: Session): void {
+    const registry = this.projectionCells as unknown as ProjectionRegistryLike | undefined;
+    // 没装投影服务时无需清缓存（也没有缓存可清）。
+    if (registry === undefined) return;
+    const registrations = registry.registrations;
+    if (!(registrations instanceof Map)) {
+      if (this.projectionWarned) return;
+      this.projectionWarned = true;
+      this.logger.warn(
+        `session-rdb: sessionProjections.registrations is not a Map (upstream field shape changed); rewind leaves the projection cell caches of "${session.id}" stale, so replayed events can be skipped`,
+      );
+      return;
+    }
+    for (const registration of registrations.values()) {
+      const cells = registration?.cells;
+      if (cells instanceof WeakMap) {
+        cells.delete(session);
+      }
+    }
+  }
+
+  private resetTokenMeterFold(session: Session): void {
+    const states = (this.tokenMeterFold as unknown as TokenMeterLike | undefined)?.states;
+    if (states instanceof WeakMap) {
+      states.delete(session);
+      return;
+    }
+    if (this.tokenMeterWarned) return;
+    this.tokenMeterWarned = true;
+    this.logger.warn(
+      this.tokenMeterFold === undefined
+        ? "session-rdb: tokenMeter is absent; a rewound live session keeps its token-meter fold and the next measure can fail with \"token-meter: step/end has no matching step/start event\""
+        : "session-rdb: tokenMeter.states is not a WeakMap (upstream field shape changed); a rewound live session keeps its token-meter fold and the next measure can fail with \"token-meter: step/end has no matching step/start event\"",
+    );
+  }
+
+  // live rewind 之后按截断后的快照重写缓存；cold rewind 没有 live Session 可写，
+  // 旧 checkpoint 由 identity / asOfSeq 失效（上游缓存以这两项判新鲜度）。
+  private async refreshProjectionCache(session: ProjectionCacheSession): Promise<void> {
+    const cache = this.projectionCache;
+    if (cache === undefined || cache.write === undefined || session.headSeq !== undefined) return;
+    try {
+      await cache.write(session as unknown as Session);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `session-rdb: projection cache refresh after rewind for "${session.id}" failed (cache stays stale): ${String(error)}`,
+      );
+    }
+  }
+}

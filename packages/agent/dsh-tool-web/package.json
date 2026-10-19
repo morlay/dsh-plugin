@@ -1,0 +1,18 @@
+{
+  "name": "@morlay/dsh-tool-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-web": "workspace:*",
+    "@deepseek-ai/dsh-tool-web": "workspace:*",
+    "@deepseek-ai/dsh-web-search-deepseek": "workspace:*",
+    "@deepseek-ai/dsh-web-fetch-http": "workspace:*"
+  }
+}

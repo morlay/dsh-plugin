@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Client Modules",
-    "description": "Dev-form web layer: serves the page, the app entry and every client resource through an in-process vite dev server (the node-side counterpart of upstream client-modules, with the module table replaced by vite's resolver, prebundling and HMR)."
-  }
-}
