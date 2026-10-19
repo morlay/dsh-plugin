@@ -1,6 +1,6 @@
 {
   "name": "@morlay/web-custom-profile",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Dev-only dsh profile bundle: mounts @morlay/dsh-client-modules (our vite + federated prebundle frontend chain) and disables the upstream module-table rows it replaces — shared by `dshdev web` and `dshdev desktop`.",
   "keywords": [
     "client-modules",
