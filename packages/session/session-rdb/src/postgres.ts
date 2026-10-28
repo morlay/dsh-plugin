@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { and, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgAsyncTransaction } from "drizzle-orm/pg-core";
 import type { NodePgDatabase, NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -20,7 +20,7 @@ import {
 } from "./backend.ts";
 import { toPostgresSchema } from "./adapters/index.ts";
 import { postgresTableDefs } from "./entities/index.ts";
-import { sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
+import { headerChangedSql, sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
 import type { EventUsageRow } from "./log.ts";
 import { createStorageRepository } from "./storage-takeover/repository.ts";
 import type { StorageRepository } from "./storage-takeover/types.ts";
@@ -295,6 +295,8 @@ export class PostgresBackend implements Backend {
       updateSeedLength: (id, seedLength) => this.updateSeedLength(tx, id, seedLength),
       insertEvents: (events, usageRows) => this.insertEvents(tx, events, usageRows),
       insertBridges: (rows) => this.insertBridges(tx, rows),
+      updateHeadAndRevision: (id, headEventId, headSequence, lastEventAt) =>
+        this.updateHeadAndRevision(tx, id, headEventId, headSequence, lastEventAt),
       updateHead: (id, headEventId, headSequence) =>
         this.updateHead(tx, id, headEventId, headSequence),
       bumpRevision: (id, lastEventAt) => this.bumpRevision(tx, id, lastEventAt),
@@ -323,13 +325,15 @@ export class PostgresBackend implements Backend {
     storage: SessionStorageMetadata,
     incarnation: string,
   ): Promise<void> {
+    const sessions = this.tables["t_sessions"];
+    const row = sessionInsertRow(storage, incarnation);
+    const header = sessionConflictRow(storage);
+    await exec.insert(sessions).values(row).onConflictDoNothing().execute();
+    // header 没变就不写：`WHERE` 不匹配时 PostgreSQL 不产生行版本。
     await exec
-      .insert(this.tables["t_sessions"])
-      .values(sessionInsertRow(storage, incarnation))
-      .onConflictDoUpdate({
-        target: this.tables["t_sessions"].fSessionId,
-        set: sessionConflictRow(storage),
-      })
+      .update(sessions)
+      .set(header)
+      .where(and(eq(sessions.fSessionId, row.fSessionId), headerChangedSql(sessions, header)))
       .execute();
   }
 
@@ -442,6 +446,28 @@ export class PostgresBackend implements Backend {
       .execute();
   }
 
+  private async updateHeadAndRevision(
+    exec: PgAsyncDatabase<NodePgQueryResultHKT>,
+    id: SessionId,
+    headEventId: string,
+    headSequence: number,
+    lastEventAt?: number,
+  ): Promise<void> {
+    const sessions = this.tables["t_sessions"];
+    await exec
+      .update(sessions)
+      .set({
+        fHeadEventId: headEventId,
+        fHeadSequence: headSequence,
+        fRevision: sql`${sessions.fRevision} + 1`,
+        ...(lastEventAt === undefined
+          ? {}
+          : { fLastEventAt: sql`MAX(COALESCE(${sessions.fLastEventAt}, 0), ${lastEventAt})` }),
+      })
+      .where(eq(sessions.fSessionId, id))
+      .execute();
+  }
+
   private async bumpRevision(
     exec: PgAsyncDatabase<NodePgQueryResultHKT>,
     id: SessionId,
@@ -477,10 +503,22 @@ export class PostgresBackend implements Backend {
         .execute()
     )[0] as { fSequence: number; fData: string } | undefined;
     const title = row === undefined ? undefined : titleOfEventData(row.fData);
+    const sessions = this.tables["t_sessions"];
+    const nextTitle = title ?? null;
+    const nextSeq = title === undefined ? null : row!.fSequence;
+    // 标题没变就不写：重算标题（rewind / 导入后）常常得出同一个值，无条件 UPDATE 是纯写放大。
     await exec
-      .update(this.tables["t_sessions"])
-      .set({ fTitle: title ?? null, fTitleSeq: title === undefined ? null : row!.fSequence })
-      .where(eq(this.tables["t_sessions"].fSessionId, id))
+      .update(sessions)
+      .set({ fTitle: nextTitle, fTitleSeq: nextSeq })
+      .where(
+        and(
+          eq(sessions.fSessionId, id),
+          or(
+            sql`${sessions.fTitle} is distinct from ${nextTitle}`,
+            sql`${sessions.fTitleSeq} is distinct from ${nextSeq}`,
+          ),
+        ),
+      )
       .execute();
   }
 

@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import type { Backend } from "./backend.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 import { isLegacyVersion } from "./legacy.ts";
-import { rowToMeta } from "./log.ts";
+import { rowToEvent, rowToMeta } from "./log.ts";
 
 function assertRewindBoundary(
   id: SessionId,
@@ -398,14 +398,14 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
           "INVALID_BOUNDARY",
         );
       }
+      let nextHead: { fEventId: string; fSequence: number } | undefined;
       if (denseBoundary < head.fHeadSequence) {
         await tx.deleteBridgeTail(id, denseBoundary + 1);
         const prev = denseBoundary === -1 ? undefined : await tx.getPrevBridge(id, denseBoundary);
-        if (prev === undefined) {
-          await tx.updateHead(id, "", -1);
-        } else {
-          await tx.updateHead(id, prev.fEventId, prev.fSequence);
-        }
+        nextHead =
+          prev === undefined
+            ? { fEventId: "", fSequence: -1 }
+            : { fEventId: prev.fEventId, fSequence: prev.fSequence };
       }
 
       const storedSeedLength = await tx.getSeedLength(id);
@@ -416,14 +416,36 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       }
 
       await tx.refreshTitle(id);
-      await tx.bumpRevision(id);
+      if (nextHead === undefined) {
+        await tx.bumpRevision(id);
+      } else {
+        // head 回退与 revision bump 是同一次行写：分成两条 UPDATE 就是两次行版本。
+        await tx.updateHeadAndRevision(id, nextHead.fEventId, nextHead.fSequence);
+      }
       return shrunk;
     });
 
     internals.writeGuard.confirmHead(id, denseBoundary);
 
     if (live !== undefined) {
-      const lastTurn = truncateLiveSession(live, keepLength);
+      // 内存 log 与存储同源的判据：上游 `Session.append` 用 `log.length` 当 seq，所以「内存条目数 - 1」
+      // 就是存储 head。内存**落后**于存储时（导入 / 取消与截断的竞态），不能拿内存做长度运算——
+      // `log.length = n` 会在尾部补出空洞，之后每次 append 的 seq 都与存储错位，撤回边界就会点到
+      // 存储里不存在的位置。落后就按存储前缀**整体重建**；`replaceLiveSessionLog` 顺手把 folds /
+      // derived / surface 这些派生缓存一并清掉。
+      const liveLength = (live as unknown as { log: readonly SessionEvent[] }).log.length;
+      let lastTurn: number;
+      if (liveLength < keepLength) {
+        const prefix =
+          kept ??
+          (await internals.backend.getEventRows(id))
+            .map(rowToEvent)
+            .filter((event) => event.seq <= denseBoundary);
+        replaceLiveSessionLog(live, prefix);
+        lastTurn = prefix.findLast((event) => event.type === "turn/start")?.data.turn ?? 0;
+      } else {
+        lastTurn = truncateLiveSession(live, keepLength);
+      }
 
       this.live.resetProjections?.(live);
 

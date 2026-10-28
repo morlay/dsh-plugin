@@ -15,7 +15,8 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import * as SessionTurnOutline from "@deepseek-ai/dsh-session-turn-outline";
 import SessionPersistenceSqlite from "../index.ts";
-import { meta } from "../testing.ts";
+import type { StorageRepository } from "../storage-takeover/types.ts";
+import { meta, oneTurnLog } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -134,6 +135,108 @@ function cachedTurns(harness: Harness, id: string): number[] | undefined {
     ? outline.map((entry) => (entry as { turn: number }).turn)
     : undefined;
 }
+
+describe("投影检查点增量写回", () => {
+  it("只 upsert 变化的行、删掉消失的行，未变化的行原样不动", async () => {
+    const { ctx, dbPath, dispose } = await harness();
+    try {
+      const storage = (
+        ctx.sessionPersistence as unknown as {
+          internals(): { backend: { storage: StorageRepository } };
+        }
+      ).internals().backend.storage;
+
+      // 检查点行经外键挂在会话行上，先让会话存在。
+      const handle = await ctx.sessionPersistence.create(meta("s1"));
+      await handle.append(oneTurnLog());
+      await handle.close();
+
+      await storage.putProjcache("s1", {
+        alpha: { ver: 1, seq: SessionSeq(1), val: "a1" },
+        beta: { ver: 1, seq: SessionSeq(2), val: "b1" },
+        gamma: { ver: 1, seq: SessionSeq(3), val: "g1" },
+      });
+
+      const snapshot = (): Array<{ rowid: number; fKey: string; fSeq: number; fVal: string }> => {
+        const db = new DatabaseSync(dbPath!);
+        try {
+          return db
+            .prepare(
+              "SELECT rowid, f_key AS fKey, f_seq AS fSeq, f_val AS fVal FROM t_session_projcache_row WHERE f_session_id = ? ORDER BY f_key",
+            )
+            .all("s1") as Array<{ rowid: number; fKey: string; fSeq: number; fVal: string }>;
+        } finally {
+          db.close();
+        }
+      };
+
+      const before = snapshot();
+      await storage.patchProjcache(
+        "s1",
+        { beta: { ver: 1, seq: SessionSeq(9), val: "b2" } },
+        ["gamma"],
+      );
+      const after = snapshot();
+
+      // alpha 没变：一行都不该被碰（rowid 与值都不动）
+      expect(after.find((row) => row.fKey === "alpha")).toEqual(
+        before.find((row) => row.fKey === "alpha"),
+      );
+      // beta 变了：原地更新（rowid 不变）
+      expect(after.find((row) => row.fKey === "beta")).toMatchObject({ fSeq: 9, fVal: '"b2"' });
+      expect(after.find((row) => row.fKey === "beta")?.rowid).toBe(
+        before.find((row) => row.fKey === "beta")?.rowid,
+      );
+      // gamma 消失
+      expect(after.some((row) => row.fKey === "gamma")).toBe(false);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("session-rdb projection cache 写回时机", () => {
+  const rowsOf = (dbPath: string, id: string): string => {
+    const db = new DatabaseSync(dbPath);
+    try {
+      const rows = db
+        .prepare("select f_key, f_seq, f_val from t_session_projcache_row where f_session_id = ?")
+        .all(id) as Array<{ f_key: string; f_seq: number; f_val: string }>;
+      return rows
+        .map((row) => `${row.f_key}@${String(row.f_seq)}=${row.f_val}`)
+        .sort()
+        .join("|");
+    } finally {
+      db.close();
+    }
+  };
+
+  it("投影没有变化时不写库；有变化才有写回（不按事件条数攒批）", async () => {
+    const { ctx, dbPath, dispose } = await harness();
+    try {
+      const id = SessionId("no-change");
+      ctx.sessions.create(id, { meta: meta("no-change"), seed: threeTurnLog() });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      live.append("turn/start", { turn: 4 });
+
+      const settled = await waitFor(() => {
+        const rows = rowsOf(dbPath!, "no-change");
+        return rows.length > 0 ? rows : undefined;
+      });
+
+      // 一条不进任何已注册投影的事件：不该产生写回。
+      live.append("request/header", {
+        header: { config: { provider: "mock", model: "mock" } },
+        reason: "initial",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(rowsOf(dbPath!, "no-change")).toBe(settled);
+    } finally {
+      await dispose();
+    }
+  });
+});
 
 describe("session-rdb projection cache replacement", () => {
   it("header-only 读接受 ReadonlySet 形态的 keys（会话列表用它取标题）", async () => {

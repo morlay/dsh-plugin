@@ -87,8 +87,6 @@ function maxEventTime(events: readonly { readonly time?: number }[]): number | u
   return max;
 }
 
-const DEFAULT_PROJECTION_WRITE_EVERY_EVENTS = 200;
-const DEFAULT_PROJECTION_WRITE_INTERVAL_MS = 5000;
 
 export { SCHEMA_VERSION } from "./schema.ts";
 export { SESSION_ROWS_PATH } from "./rows.ts";
@@ -121,26 +119,18 @@ export interface SessionPersistenceRdbInternals {
   dropReuseEventIds(childId: SessionId): void;
 }
 
-export interface ProjectionCacheOptions {
-  writeEveryEvents?: number;
-
-  writeIntervalMs?: number;
-}
-
 export type Config =
   | {
       type: "sqlite";
       path: string;
       journalMode?: JournalMode | undefined;
       busyTimeout?: number | undefined;
-      projectionCache?: ProjectionCacheOptions | undefined;
       preparedSessionCacheSize?: number | undefined;
     }
   | {
       type: "postgres";
       connectionString: string;
       schema?: string | undefined;
-      projectionCache?: ProjectionCacheOptions | undefined;
       preparedSessionCacheSize?: number | undefined;
     };
 
@@ -511,34 +501,6 @@ const preparedSessionCacheSchema = z
     }),
   );
 
-const projectionCacheSchema = z
-  .object({
-    writeEveryEvents: z
-      .natural()
-      .min(1)
-      .default(DEFAULT_PROJECTION_WRITE_EVERY_EVENTS)
-      .description(
-        localized({
-          zh: "每累计这么多事件写回一次投影 checkpoint。",
-          en: "Write the projection checkpoint back after this many events.",
-        }),
-      ),
-    writeIntervalMs: z
-      .natural()
-      .min(1)
-      .default(DEFAULT_PROJECTION_WRITE_INTERVAL_MS)
-      .description(
-        localized({
-          zh: "距离上次写回超过这个间隔（毫秒）时也写一次。",
-          en: "Also write back when this many ms passed since the last one.",
-        }),
-      ),
-  })
-  .default({
-    writeEveryEvents: DEFAULT_PROJECTION_WRITE_EVERY_EVENTS,
-    writeIntervalMs: DEFAULT_PROJECTION_WRITE_INTERVAL_MS,
-  });
-
 export class SessionPersistenceRdb extends SessionPersistence {
   static inject = ["sessions"];
 
@@ -577,7 +539,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
               en: "Busy timeout in ms while a write lock is contended.",
             }),
           ),
-        projectionCache: projectionCacheSchema,
         preparedSessionCacheSize: preparedSessionCacheSchema,
       }),
       z.object({
@@ -600,7 +561,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
               en: "Schema name inside the database; `public` by default.",
             }),
           ),
-        projectionCache: projectionCacheSchema,
         preparedSessionCacheSize: preparedSessionCacheSchema,
       }),
     ])
@@ -670,12 +630,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
     installStorageTakeover(this.ctx, {
       repository: this.backend.storage,
       ready: this.ready,
-      projectionCache: {
-        writeEveryEvents:
-          this.config.projectionCache?.writeEveryEvents ?? DEFAULT_PROJECTION_WRITE_EVERY_EVENTS,
-        writeIntervalMs:
-          this.config.projectionCache?.writeIntervalMs ?? DEFAULT_PROJECTION_WRITE_INTERVAL_MS,
-      },
     });
   }
 
@@ -1000,8 +954,12 @@ export class SessionPersistenceRdb extends SessionPersistence {
         reuse,
       );
       usageRows = appended.usageRows;
-      await tx.updateHead(meta.id, appended.headEventId, appended.headSequence);
-      await tx.bumpRevision(meta.id, maxEventTime(events));
+      await tx.updateHeadAndRevision(
+        meta.id,
+        appended.headEventId,
+        appended.headSequence,
+        maxEventTime(events),
+      );
       confirmedHead = appended.headSequence;
     });
     // 事务**成功之后**才丢掉复用映射：失败（并发写者校验、唯一键冲突等）时这份映射还没被消费，

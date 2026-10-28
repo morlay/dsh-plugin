@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Context } from "@deepseek-ai/cordis";
 import {
   Session,
@@ -15,14 +18,14 @@ import { TokenMeter } from "@deepseek-ai/dsh-token-meter";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import { SessionBranchError } from "@morlay/session-branch";
 import SessionPersistenceSqlite, { SessionBranchRdbProvider, locateTurnEnd } from "../index.ts";
-import { appendLog, meta, oneTurnLog } from "../testing.ts";
+import { appendLog, meta, oneTurnLog, truncateLiveSession } from "../testing.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
-async function harness(): Promise<{
+async function harness(path = ":memory:"): Promise<{
   ctx: Context;
   persistence: SessionPersistenceSqlite;
   provider: SessionBranchRdbProvider;
@@ -31,7 +34,7 @@ async function harness(): Promise<{
   const ctx = new Context();
   await ctx.plugin(SessionStore);
   new SessionProjectionRegistry(ctx);
-  const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
+  const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
   const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
   const provider = new SessionBranchRdbProvider(persistence, {
     getSession: (id) => ctx.sessions.get(id),
@@ -1221,6 +1224,80 @@ describe("rewind step balance self-heal", () => {
       expect(child.inheritedEventCount).toBe(6);
       const session = Session.create(childId, [...child.events]);
       expect(() => new TokenMeter(ctx).measure(session)).not.toThrow();
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("rewind 的行写放大", () => {
+  it("rewind 只写一次 session 行（head 回退与 revision 合并）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rdb-rewind-row-writes-"));
+    const path = join(dir, "sessions.sqlite");
+    const { ctx, provider, dispose } = await harness(path);
+    try {
+      ctx.sessions.create(SessionId("live"), { meta: meta("live"), seed: twoTurnLog() });
+      const live = ctx.sessions.get(SessionId("live"))!;
+      await ctx.sessions.flush(live);
+
+      const db = new DatabaseSync(path);
+      try {
+        db.exec("CREATE TABLE probe_rewind_updates (n INTEGER)");
+        db.exec("INSERT INTO probe_rewind_updates VALUES (0)");
+        db.exec(`
+          CREATE TRIGGER probe_rewind_updates_trigger
+          AFTER UPDATE ON t_sessions
+          BEGIN
+            UPDATE probe_rewind_updates SET n = n + 1;
+          END
+        `);
+      } finally {
+        db.close();
+      }
+
+      await provider.rewind(SessionId("live"), 5);
+
+      const probe = new DatabaseSync(path);
+      try {
+        expect((probe.prepare("SELECT n FROM probe_rewind_updates").get() as { n: number }).n).toBe(1);
+      } finally {
+        probe.close();
+      }
+    } finally {
+      await dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("rewind 之后的 memory log 镜像", () => {
+  it("内存 log 落后于存储时按存储前缀重建，而不是在内存上做长度运算", async () => {
+    const { ctx, persistence, provider, dispose } = await harness();
+    try {
+      ctx.sessions.create(SessionId("live"), { meta: meta("live"), seed: [...twoTurnLog()] });
+      const live = ctx.sessions.get(SessionId("live"))!;
+      await ctx.sessions.flush(live);
+
+      // 内存落后于存储（导入 / 竞态路径上的真实现象）：内存只剩前 3 条，存储仍是完整日志。
+      truncateLiveSession(live, 3);
+
+      await provider.rewind(SessionId("live"), 5);
+
+      // 镜像是判据：内存 seq 与存储前缀逐一相等，且没有空洞（上游 seq 就是 log 下标）。
+      expect(live.snapshotEvents().map((event) => event.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(live.snapshotEvents().every((event) => event !== undefined)).toBe(true);
+
+      // 重建后继续写：内存与存储仍然同源。
+      (live as unknown as { append(type: string, data: unknown): SessionEvent }).append(
+        "turn/start",
+        { turn: 3 },
+      );
+      await ctx.sessions.flush(live);
+      const backend = persistence.internals().backend as unknown as {
+        getHead(id: SessionId): Promise<{ fHeadSequence: number }>;
+      };
+      expect((await backend.getHead(SessionId("live"))).fHeadSequence).toBe(6);
+      expect(live.snapshotEvents().map((event) => event.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
     } finally {
       await dispose();
     }

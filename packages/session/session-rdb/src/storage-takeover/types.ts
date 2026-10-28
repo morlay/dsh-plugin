@@ -58,5 +58,12 @@ export interface StorageRepository {
 
   putProjcache(sessionId: string, rows: ProjectionCheckpoint): Promise<void>;
 
+  /** 增量写回：只 upsert `changed` 里的行、删掉 `removedKeys`，其余行原样不动。 */
+  patchProjcache(
+    sessionId: string,
+    changed: ProjectionCheckpoint,
+    removedKeys: readonly string[],
+  ): Promise<void>;
+
   pruneStaleProjcache(): Promise<number>;
 }

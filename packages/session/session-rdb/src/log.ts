@@ -1,4 +1,5 @@
 import { SessionSeq } from "@deepseek-ai/dsh-session";
+import { or, sql, type SQL } from "drizzle-orm";
 import type { SessionEvent, SessionHeader, SessionId, SurfaceOp } from "@deepseek-ai/dsh-session";
 import type { SessionFormatEvent, SessionFormatHeader } from "@deepseek-ai/dsh-session-format";
 import { sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
@@ -92,6 +93,36 @@ export function sessionConflictRow(storage: SessionStorageMetadata): {
     fDelegationDepth: meta.delegationDepth ?? null,
     fAgentPreset: meta.agentPreset ?? null,
   };
+}
+
+/**
+ * 「这次 append 需不需要重写 session 行的 header 列」的 SQL 判据：逐列 `is distinct from`。
+ * 放在 SQL 里判断（而不是先读再比）是为了不增加一次读；`WHERE` 不匹配时数据库不产生行写入，
+ * 也就不会有 WAL 帧与触发器——每次 append 都无条件 UPDATE 一次是纯写放大。
+ */
+export function headerChangedSql(
+  table: {
+    fVersion: unknown;
+    fCreatedAt: unknown;
+    fCwd: unknown;
+    fParentSession: unknown;
+    fSeedLength: unknown;
+    fOrigin: unknown;
+    fDelegationDepth: unknown;
+    fAgentPreset: unknown;
+  },
+  values: ReturnType<typeof sessionConflictRow>,
+): SQL {
+  return or(
+    sql`${table.fVersion} is distinct from ${values.fVersion}`,
+    sql`${table.fCreatedAt} is distinct from ${values.fCreatedAt}`,
+    sql`${table.fCwd} is distinct from ${values.fCwd}`,
+    sql`${table.fParentSession} is distinct from ${values.fParentSession}`,
+    sql`${table.fSeedLength} is distinct from ${values.fSeedLength}`,
+    sql`${table.fOrigin} is distinct from ${values.fOrigin}`,
+    sql`${table.fDelegationDepth} is distinct from ${values.fDelegationDepth}`,
+    sql`${table.fAgentPreset} is distinct from ${values.fAgentPreset}`,
+  )!;
 }
 
 export function rowToEvent(row: EventRow): SessionEvent {

@@ -1,14 +1,11 @@
 import type { Context } from "@deepseek-ai/cordis";
 import { storageBackendServiceKey } from "@deepseek-ai/dsh-storage";
-import type { ProjectionCacheConfig } from "./projection-cache.ts";
 import { SessionProjectionCacheRdb } from "./projection-cache.ts";
 import { RDB_STORAGE_BACKEND, RdbStorageBackend } from "./storage-backend.ts";
 import type { StorageRepository } from "./types.ts";
 
 export interface StorageTakeoverOptions {
   repository: StorageRepository;
-
-  projectionCache: ProjectionCacheConfig;
 
   ready: Promise<unknown>;
 }
@@ -27,7 +24,6 @@ export function installStorageTakeover(ctx: Context, options: StorageTakeoverOpt
   });
 
   ctx.plugin(SessionProjectionCacheRdb, {
-    ...options.projectionCache,
     repository: options.repository,
     ready: options.ready,
   });

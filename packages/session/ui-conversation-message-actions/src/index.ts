@@ -14,7 +14,6 @@ import {
   balanceRewindPrefix,
   type BranchBoundary,
 } from "@morlay/session-branch";
-import { liveEventsOf } from "@morlay/session-rdb";
 import type {
   EditOperation,
   RecallOperation,
@@ -280,13 +279,14 @@ export class SessionEditor extends Service {
       plan.queuedUsers,
       signal,
       headerConfig,
+      events,
     );
 
     await this.stopLoop(operation.sessionId, signal);
     const live = this.ctx.sessions.get(operation.sessionId);
     await this.ctx.sessionBranch.rewind(operation.sessionId, boundary, signal);
     // 补回的压缩落在重放的输入之前
-    const seedStart = this.seedStart(live, events, keepFrom);
+    const seedStart = this.seedStart(events, keepFrom);
     const seedSuffix: SessionEvent[] = [
       ...restoreCompactions(compactions, keepFrom, seedStart),
       ...preserved,
@@ -337,7 +337,7 @@ export class SessionEditor extends Service {
       operation.sessionId,
       live,
       [
-        ...restoreCompactions(compactions, keepFrom, this.seedStart(live, events, keepFrom)),
+        ...restoreCompactions(compactions, keepFrom, this.seedStart(events, keepFrom)),
         ...preserved,
         ...(closer === undefined ? [] : [closer]),
       ],
@@ -351,15 +351,10 @@ export class SessionEditor extends Service {
     };
   }
 
-  // 种子后缀的起点 seq：live 会话是被截断后的日志长度，cold 会话是配平后的保留前缀长度
-  private seedStart(
-    live: Session | undefined,
-    events: readonly SessionEvent[],
-    keepFrom: number,
-  ): number {
-    return live === undefined
-      ? balanceRewindPrefix(events.slice(0, keepFrom)).length
-      : Number(live.seq);
+  // 种子后缀的起点 seq：配平后的保留前缀长度（存储坐标）。rewind 已按同一口径截断过内存与存储，
+  // 所以这里不再读 `live.seq`——那一处读数会把内存坐标带回来。
+  private seedStart(events: readonly SessionEvent[], keepFrom: number): number {
+    return balanceRewindPrefix(events.slice(0, keepFrom)).length;
   }
 
   private async appendSeedSuffix(
@@ -407,10 +402,9 @@ export class SessionEditor extends Service {
     sessionId: SessionId,
     signal?: AbortSignal,
   ): Promise<readonly SessionEvent[]> {
-    const live = this.ctx.sessions.get(sessionId);
-    // 完整序列需求（rewind / retry 要重放历史）：读会话当前内存 log，不走已弃用的 `snapshotEvents()`。
-    if (live !== undefined) return liveEventsOf(live);
-
+    // 撤回边界只能在**存储坐标**上算：`rewind` 的边界校验查的就是库里那条 `f_sequence`，而内存 log 的
+    // seq 是上游按 `log.length` 自增的——内存落后/超前于存储时（取消与截断的竞态、导入），两个坐标不是
+    // 一回事，拿内存算出来的边界会点到存储里不存在的位置。持久化是唯一真源，这里恒读库。
     const branch = this.ctx.sessionBranch as unknown as {
       readRawEvents(
         id: SessionId,
@@ -424,7 +418,8 @@ export class SessionEditor extends Service {
     sessionId: SessionId,
     queuedUsers: readonly UserMessage[],
     signal: AbortSignal | undefined,
-    headerConfig?: { provider?: string; model?: string; maxTokens?: number },
+    headerConfig: { provider?: string; model?: string; maxTokens?: number } | undefined,
+    events: readonly SessionEvent[],
   ): Promise<{ agent: EditorAgent | undefined }> {
     if (queuedUsers.length === 0) return { agent: undefined };
     signal?.throwIfAborted();
@@ -438,7 +433,8 @@ export class SessionEditor extends Service {
     const provider = headerConfig?.provider ?? "";
     const model = headerConfig?.model ?? "";
     if (provider.length === 0 || model.length === 0) {
-      const events = await this.readEvents(sessionId, signal);
+      // 复用调用方已经读出来的那一份事件：撤回路径只该读一次库，重复读就是多一份可能与这次操作
+      // 不同步的快照（也是白花的读）。
       const config = events.findLast((event) => event.type === "request/header")?.data.header
         .config;
       const fallbackProvider = config?.provider ?? "";

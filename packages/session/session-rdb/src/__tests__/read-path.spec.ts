@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Context } from "@deepseek-ai/cordis";
 import { createDeveloperMessage } from "@deepseek-ai/dsh-llm";
 import { SessionId, SessionSeq, SessionStore, type SessionEvent } from "@deepseek-ai/dsh-session";
@@ -7,10 +11,12 @@ import { meta, oneTurnLog } from "../testing.ts";
 import type { Backend } from "../backend.ts";
 import { repairReadView } from "../log.ts";
 
-async function mount(): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
+async function mount(
+  path = ":memory:",
+): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
   await ctx.plugin(SessionStore);
-  const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path: ":memory:" });
+  const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
   return { ctx, dispose: () => fiber.dispose() };
 }
 
@@ -93,6 +99,116 @@ function replaceHeavyLog(): SessionEvent[] {
     surfaceEvent(5, "z", { op: "replace", startSeq: 3, endSeq: 3 }),
   ];
 }
+
+describe("session 行的写放大", () => {
+  it("header 没变时，append 不再 UPDATE 一次 session 行", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rdb-header-idem-"));
+    const path = join(dir, "sessions.sqlite");
+    const { ctx, dispose } = await mount(path);
+    try {
+      const id = SessionId("header-idem");
+      const handle = await ctx.sessionPersistence.create(meta(id));
+      await handle.append(oneTurnLog());
+
+      // 探针：只在 header 列真的出现在 UPDATE 的 SET 里时才计数（head 推进不算）。
+      const db = new DatabaseSync(path);
+      try {
+        db.exec("CREATE TABLE probe_header_update (n INTEGER)");
+        db.exec("INSERT INTO probe_header_update VALUES (0)");
+        db.exec(`
+          CREATE TRIGGER probe_header_update_trigger
+          AFTER UPDATE OF f_version, f_cwd, f_parent_session, f_seed_length, f_origin,
+            f_delegation_depth, f_agent_preset ON t_sessions
+          BEGIN
+            UPDATE probe_header_update SET n = n + 1;
+          END
+        `);
+      } finally {
+        db.close();
+      }
+
+      await handle.append(oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent));
+      await handle.close();
+
+      const probe = new DatabaseSync(path);
+      try {
+        expect((probe.prepare("SELECT n FROM probe_header_update").get() as { n: number }).n).toBe(0);
+      } finally {
+        probe.close();
+      }
+    } finally {
+      await dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("一批 append 只写一次 session 行（head 与 revision 合并成一次 UPDATE）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rdb-row-writes-"));
+    const path = join(dir, "sessions.sqlite");
+    const { ctx, dispose } = await mount(path);
+    try {
+      const id = SessionId("row-writes");
+      const handle = await ctx.sessionPersistence.create(meta(id));
+      await handle.append(oneTurnLog());
+
+      const db = new DatabaseSync(path);
+      try {
+        db.exec("CREATE TABLE probe_session_updates (n INTEGER)");
+        db.exec("INSERT INTO probe_session_updates VALUES (0)");
+        db.exec(`
+          CREATE TRIGGER probe_session_updates_trigger
+          AFTER UPDATE ON t_sessions
+          BEGIN
+            UPDATE probe_session_updates SET n = n + 1;
+          END
+        `);
+      } finally {
+        db.close();
+      }
+
+      await handle.append(
+        oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent),
+      );
+      await handle.close();
+
+      const probe = new DatabaseSync(path);
+      try {
+        expect((probe.prepare("SELECT n FROM probe_session_updates").get() as { n: number }).n).toBe(1);
+      } finally {
+        probe.close();
+      }
+    } finally {
+      await dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("写即落库（flush 只是等上游排空）", () => {
+  it("append 返回后，另一个只读句柄不调 flush 也能读到全部事件", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      const id = SessionId("write-through");
+      const writer = await ctx.sessionPersistence.create(meta(id));
+      try {
+        await writer.append(oneTurnLog());
+      } finally {
+        await writer.close();
+      }
+
+      // 刻意不调用任何 flush：读写都走库，append 的事务提交后事件就该在库里。
+      const reader = await ctx.sessionPersistence.open(id, "read");
+      try {
+        const { events } = await reader.read();
+        expect(events.map((event) => event.seq)).toEqual(oneTurnLog().map((event) => event.seq));
+      } finally {
+        await reader.close();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+});
 
 describe("读路径", () => {
   // load 是会话打开（cold read）的入口：它自己再开一条读取路径就等于把最贵的读付两遍。

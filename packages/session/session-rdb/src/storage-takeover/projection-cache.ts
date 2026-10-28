@@ -46,20 +46,11 @@ type LifecycleIdentity = CheckpointIdentity & {
   isSeeded: boolean;
 };
 
-export interface ProjectionCacheConfig {
-  writeEveryEvents: number;
+// 没有攒批参数：投影检查点按「与已落库那行相比是否有变化」决定写不写，与事件条数 / 时间无关。
 
-  writeIntervalMs: number;
-}
-
-export interface SessionProjectionCacheRdbOptions extends ProjectionCacheConfig {
+export interface SessionProjectionCacheRdbOptions {
   repository: StorageRepository;
   ready: Promise<unknown>;
-}
-
-interface DirtyState {
-  pending: number;
-  timer: ReturnType<typeof setTimeout> | undefined;
 }
 
 const PREDECESSOR_TITLE_KEY = "title" as Extract<keyof SessionProjectionMap, string>;
@@ -68,16 +59,15 @@ export class SessionProjectionCacheRdb extends Service {
   static inject = ["sessionProjections", "sessions"];
 
   private readonly records = new Map<SessionId, StoredProjcacheEntry>();
-  private readonly dirty = new Map<Session, DirtyState>();
+  // 同一 tick 内的事件合并成一次「落库 + 检查点比对」，这不是攒批：flush 之后事件已经在库里。
+  private readonly queued = new Set<SessionId>();
 
   private readonly directReads: boolean;
-  private readonly config: ProjectionCacheConfig;
   private readonly repository: StorageRepository;
   private readonly ready: Promise<unknown>;
 
   constructor(ctx: Context, options: SessionProjectionCacheRdbOptions) {
     super(ctx, SESSION_PROJECTION_CACHE_SERVICE);
-    this.config = options;
     this.repository = options.repository;
     this.ready = options.ready;
     this.directReads = options.repository.readProjcacheDirect !== undefined;
@@ -200,15 +190,45 @@ export class SessionProjectionCacheRdb extends Service {
   }
 
   async write(session: Session): Promise<void> {
-    const rows = this.ctx.sessionProjections.checkpoint(session);
-    this.markClean(session);
+    // 先比差异，**有变化才碰 SQLite**：没变化直接返回，既不写检查点、也不推上游 flush
+    //（事件落库的主节奏是上游 handle 的批量窗口，逐条 flush 会把写放大到每秒数十次——
+    // 见 [设计 写路径](../designs/20260917-写路径.md)「否掉的选项」）。
+    const rows = this.ctx.sessionProjections.checkpoint(session) as unknown as Record<
+      string,
+      ProjectionCheckpointRow
+    >;
+    const previous = this.lookup(session.id)?.rows;
+    if (previous !== undefined && sameCheckpoint(previous, rows)) return;
 
     if (this.ctx.sessions.get(session.id) === session) await this.ctx.sessions.flush(session);
-    await this.put(
+
+    const changed = changedRows(previous, rows);
+    const removedKeys = Object.keys(previous ?? {}).filter((key) => rows[key] === undefined);
+    await this.patch(
       session.id,
       identityOf(session.header, session.inheritedEventCount),
-      rows as unknown as Record<string, ProjectionCheckpointRow>,
+      changed,
+      removedKeys,
     );
+  }
+
+  // 增量写回：只 upsert 变化的行、删掉消失的 key，其余行不碰（整份删重插是纯写放大）。
+  private async patch(
+    id: SessionId,
+    identity: CheckpointIdentity,
+    changed: Record<string, ProjectionCheckpointRow>,
+    removedKeys: readonly string[],
+  ): Promise<void> {
+    const detachedChanged = detachJson(changed);
+    await this.repository.patchProjcache(id, detachedChanged, removedKeys);
+    if (this.directReads) return;
+
+    const merged: Record<string, ProjectionCheckpointRow> = {};
+    const previous = this.records.get(id)?.rows;
+    if (previous !== undefined) Object.assign(merged, previous);
+    Object.assign(merged, detachedChanged);
+    for (const key of removedKeys) delete merged[key];
+    this.records.set(id, { sessionId: id, identity, rows: merged });
   }
 
   // rewind 后 head 回退：把水位超出新 head 的投影单元丢弃，保留仍在截断前缀内的行。
@@ -256,21 +276,8 @@ export class SessionProjectionCacheRdb extends Service {
   }
 
   private installWritePath(): void {
-    this.ctx.on("session/event", (session: Session, event: SessionEvent) => {
-      if (event.type === "turn/end") {
-        void this.flushSoft(session, "turn/end");
-        return;
-      }
-      const state = this.dirty.get(session) ?? { pending: 0, timer: undefined };
-      this.dirty.set(session, state);
-      state.pending += 1;
-      if (state.pending >= this.config.writeEveryEvents) {
-        void this.flushSoft(session, "count threshold");
-        return;
-      }
-      state.timer ??= setTimeout(() => {
-        void this.flushSoft(session, "interval");
-      }, this.config.writeIntervalMs);
+    this.ctx.on("session/event", (session: Session) => {
+      this.scheduleWrite(session, "event");
     });
 
     this.ctx.on("session/created", (session: Session) => {
@@ -279,19 +286,19 @@ export class SessionProjectionCacheRdb extends Service {
 
     this.ctx.on("session/disposed", (session: Session) => {
       void this.flushSoft(session, "detach");
-      this.markClean(session);
-      this.dirty.delete(session);
+      this.queued.delete(session.id);
     });
+  }
 
-    this.ctx.effect(
-      () => () => {
-        for (const state of this.dirty.values()) {
-          if (state.timer !== undefined) clearTimeout(state.timer);
-        }
-        this.dirty.clear();
-      },
-      "sessionProjectionCacheRdb.timers",
-    );
+  // 同一 tick 的多条事件合成一次：flush 一次、checkpoint 取一次、diff 一次。
+  // 落库时机不再取决于事件条数或定时器——事件一到就写库，检查点则只在真的变了才写。
+  private scheduleWrite(session: Session, trigger: string): void {
+    if (this.queued.has(session.id)) return;
+    this.queued.add(session.id);
+    queueMicrotask(() => {
+      this.queued.delete(session.id);
+      void this.flushSoft(session, trigger);
+    });
   }
 
   private async flushSoft(session: Session, trigger: string): Promise<void> {
@@ -301,16 +308,6 @@ export class SessionProjectionCacheRdb extends Service {
       this.ctx.logger.warn(
         `session projection cache: ${trigger} write for "${session.id}" failed (cache stays stale): ${String(error)}`,
       );
-    }
-  }
-
-  private markClean(session: Session): void {
-    const state = this.dirty.get(session);
-    if (state === undefined) return;
-    state.pending = 0;
-    if (state.timer !== undefined) {
-      clearTimeout(state.timer);
-      state.timer = undefined;
     }
   }
 
@@ -325,6 +322,42 @@ export class SessionProjectionCacheRdb extends Service {
 
     if (!this.directReads) this.records.set(id, { sessionId: id, identity, rows: detached });
   }
+}
+
+// 「有没有变化」的判据：逐行比 `ver` 与 `val`，**不比 `seq`**。`seq` 是「最后折入的事件」水位，
+// 上游投影对每个事件都会推进它（哪怕 apply 返回同一份 state），拿它当判据等于每个事件都写一次。
+// 值没变就跳过写回：读侧仍会从旧水位重放那几条事件，得到同样的值——缓存要的是「值对不对」，
+// 不是「水位最新」。`val` 是纯 JSON（写入前已 detach），逐键序列化比较即可。
+function sameRow(before: ProjectionCheckpointRow, after: ProjectionCheckpointRow): boolean {
+  return before.ver === after.ver && JSON.stringify(before.val) === JSON.stringify(after.val);
+}
+
+// 只挑出真的变了的行：写库只碰这些行，其余行原样留在库里（不删不重插）。
+function changedRows(
+  previous: Record<string, ProjectionCheckpointRow> | undefined,
+  next: Record<string, ProjectionCheckpointRow>,
+): Record<string, ProjectionCheckpointRow> {
+  const changed: Record<string, ProjectionCheckpointRow> = {};
+  for (const [key, row] of Object.entries(next)) {
+    const before = previous?.[key];
+    if (before === undefined || !sameRow(before, row)) changed[key] = row;
+  }
+  return changed;
+}
+
+function sameCheckpoint(
+  previous: Record<string, ProjectionCheckpointRow>,
+  next: Record<string, ProjectionCheckpointRow>,
+): boolean {
+  const keys = Object.keys(next);
+  if (keys.length !== Object.keys(previous).length) return false;
+  for (const key of keys) {
+    const before = previous[key];
+    const after = next[key];
+    if (before === undefined || after === undefined) return false;
+    if (!sameRow(before, after)) return false;
+  }
+  return true;
 }
 
 function detachJson(

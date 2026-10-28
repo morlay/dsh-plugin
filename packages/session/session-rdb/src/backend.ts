@@ -90,6 +90,14 @@ export interface BackendTx {
 
   updateHead(id: SessionId, headEventId: string, headSequence: number): Promise<void>;
 
+  /** 推进 head 并 bump revision：同一行一次 UPDATE（分两次写是纯写放大）。 */
+  updateHeadAndRevision(
+    id: SessionId,
+    headEventId: string,
+    headSequence: number,
+    lastEventAt?: number,
+  ): Promise<void>;
+
   // 写批次提交时递增 revision；给了 `lastEventAt` 就一并把「最后活动时间」往前推（只增不减）。
   bumpRevision(id: SessionId, lastEventAt?: number): Promise<void>;
 

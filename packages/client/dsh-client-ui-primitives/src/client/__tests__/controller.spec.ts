@@ -414,7 +414,7 @@ describe("判别式行 Config 的切换与补字段", () => {
       state()
         .addable.get(fieldKey([]))
         ?.map((option) => option.key),
-    ).toEqual(["schema", "projectionCache", "preparedSessionCacheSize"]);
+    ).toEqual(["schema", "preparedSessionCacheSize"]);
   });
 
   it("从候选补一个带默认值的字段：行出现，值取默认值", () => {
@@ -431,7 +431,7 @@ describe("判别式行 Config 的切换与补字段", () => {
       state()
         .addable.get(fieldKey([]))
         ?.map((option) => option.key),
-    ).toEqual(["projectionCache", "preparedSessionCacheSize"]);
+    ).toEqual(["preparedSessionCacheSize"]);
   });
 });
 

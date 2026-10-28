@@ -461,6 +461,39 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
       });
     },
 
+    async patchProjcache(
+      sessionId: string,
+      changed: ProjectionCheckpoint,
+      removedKeys: readonly string[],
+    ): Promise<void> {
+      const values = Object.entries(changed).map(([key, row]) => ({
+        fSessionId: sessionId,
+        fKey: key,
+        fVer: row.ver,
+        fSeq: row.seq,
+        fVal: JSON.stringify(row.val),
+      }));
+      const touched = [...Object.keys(changed), ...removedKeys];
+      if (touched.length === 0) return;
+      await host.writeAtomically(async () => {
+        const db = await dbx();
+        // 只碰这些 key 的行：先删（同时承担 removedKeys 的删除），再插入变化行。
+        // 不用 upsert 语法：两个 dialect 的冲突子句细节不同，删+插在同一事务里是等价的，
+        // 且行数是个位数到几十。
+        await runQuery(
+          db
+            .delete(tProjcacheRows)
+            .where(
+              and(
+                eq(tProjcacheRows.fSessionId, sessionId),
+                inArray(tProjcacheRows.fKey, touched),
+              ),
+            ),
+        );
+        if (values.length > 0) await runQuery(db.insert(tProjcacheRows).values(values));
+      });
+    },
+
     async pruneStaleProjcache(): Promise<number> {
       const db = await dbx();
       const stale = await allRows<{ fSessionId: string }>(

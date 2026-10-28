@@ -3,7 +3,7 @@ import { mkdir, open, readdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { and, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import { drizzle, type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
 import { migrate } from "drizzle-orm/node-sqlite/migrator";
 import type { SessionId } from "@deepseek-ai/dsh-session";
@@ -20,7 +20,7 @@ import {
   type SessionRow,
   type SessionUsageBucket,
 } from "./backend.ts";
-import { sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
+import { headerChangedSql, sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
 import type { EventUsageRow } from "./log.ts";
 import {
   COUNTED_EVENT_TYPES,
@@ -573,6 +573,8 @@ export class SqliteBackend implements Backend {
     insertEvents: (events, usageRows) => this.insertEvents(events, usageRows),
     insertBridges: (rows) => this.insertBridges(rows),
     updateHead: (id, headEventId, headSequence) => this.updateHead(id, headEventId, headSequence),
+    updateHeadAndRevision: (id, headEventId, headSequence, lastEventAt) =>
+      this.updateHeadAndRevision(id, headEventId, headSequence, lastEventAt),
     bumpRevision: (id, lastEventAt) => this.bumpRevision(id, lastEventAt),
     refreshTitle: (id) => this.refreshTitle(id),
     deleteBridgeTail: (id, fromSequence) => this.deleteBridgeTail(id, fromSequence),
@@ -582,13 +584,14 @@ export class SqliteBackend implements Backend {
   };
 
   private async upsertSession(storage: SessionStorageMetadata, incarnation: string): Promise<void> {
+    const row = sessionInsertRow(storage, incarnation);
+    const header = sessionConflictRow(storage);
+    this.db.insert(tSessions).values(row).onConflictDoNothing().run();
+    // header 没变就不写：`WHERE` 不匹配时数据库不产生行写入（没有 WAL 帧、也不触发触发器）。
     this.db
-      .insert(tSessions)
-      .values(sessionInsertRow(storage, incarnation))
-      .onConflictDoUpdate({
-        target: tSessions.fSessionId,
-        set: sessionConflictRow(storage),
-      })
+      .update(tSessions)
+      .set(header)
+      .where(and(eq(tSessions.fSessionId, row.fSessionId), headerChangedSql(tSessions, header)))
       .run();
   }
 
@@ -677,6 +680,26 @@ export class SqliteBackend implements Backend {
       .run();
   }
 
+  private async updateHeadAndRevision(
+    id: SessionId,
+    headEventId: string,
+    headSequence: number,
+    lastEventAt?: number,
+  ): Promise<void> {
+    this.db
+      .update(tSessions)
+      .set({
+        fHeadEventId: headEventId,
+        fHeadSequence: headSequence,
+        fRevision: sql`${tSessions.fRevision} + 1`,
+        ...(lastEventAt === undefined
+          ? {}
+          : { fLastEventAt: sql`MAX(COALESCE(${tSessions.fLastEventAt}, 0), ${lastEventAt})` }),
+      })
+      .where(eq(tSessions.fSessionId, id))
+      .run();
+  }
+
   private async bumpRevision(id: SessionId, lastEventAt?: number): Promise<void> {
     this.db
       .update(tSessions)
@@ -700,10 +723,21 @@ export class SqliteBackend implements Backend {
       .limit(1)
       .get() as { fSequence: number; fData: string } | undefined;
     const title = row === undefined ? undefined : titleOfEventData(row.fData);
+    const nextTitle = title ?? null;
+    const nextSeq = title === undefined ? null : row!.fSequence;
+    // 标题没变就不写：重算标题（rewind / 导入后）常常得出同一个值，无条件 UPDATE 是纯写放大。
     this.db
       .update(tSessions)
-      .set({ fTitle: title ?? null, fTitleSeq: title === undefined ? null : row!.fSequence })
-      .where(eq(tSessions.fSessionId, id))
+      .set({ fTitle: nextTitle, fTitleSeq: nextSeq })
+      .where(
+        and(
+          eq(tSessions.fSessionId, id),
+          or(
+            sql`${tSessions.fTitle} is distinct from ${nextTitle}`,
+            sql`${tSessions.fTitleSeq} is distinct from ${nextSeq}`,
+          ),
+        ),
+      )
       .run();
   }
 

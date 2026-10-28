@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import SessionPersistenceSqlite from "@morlay/session-rdb";
+import { truncateLiveSession } from "@morlay/session-rdb/testing";
 import {
   assistantMessage,
   createPersisted,
@@ -42,6 +43,34 @@ function textOf(event: SessionEvent): string | undefined {
 }
 
 describe("SessionEditor recall", () => {
+  it("内存 log 落后于存储时，撤回目标与边界仍按存储判定", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      ctx.sessions.create(SessionIdBrand("stale"), {
+        meta: meta("stale"),
+        seed: twoTurnLog(),
+      });
+      const live = ctx.sessions.get(SessionIdBrand("stale"))!;
+      await ctx.sessions.flush(live);
+
+      // 内存落后于存储（导入 / 取消与截断的竞态都是这个形状）：内存只剩第一轮，存储仍完整。
+      truncateLiveSession(live, 6);
+
+      const result = await editor.recall({
+        action: "recall",
+        sessionId: SessionIdBrand("stale"),
+        eventSeq: 7,
+      });
+      expect(result.sessionId).toBe(SessionIdBrand("stale"));
+
+      const rows = await eventRows(ctx, SessionIdBrand("stale"));
+      expect(rows.map((row) => row.fSequence)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(rows.at(-1)?.fType).toBe("turn/end");
+    } finally {
+      await dispose();
+    }
+  });
+
   it("recalls a closed-turn first user message: rewinds to the previous turn/end, no version effect", async () => {
     const { ctx, editor, dispose } = await harness();
     try {
