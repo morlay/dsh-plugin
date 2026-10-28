@@ -98,10 +98,11 @@ describe("模式定义", () => {
       // 不写 `presetsOnly`：不限制会话挂哪份 preset（用户选的 shipped preset 不被模式覆盖）。
       expect(mode.presetsOnly, id).toBeUndefined();
     }
-    // `coding` 不设工具白名单（用 preset 的全部工具），只排除官方 Office 组合里那个载荷查询；
+    // `coding` 不设工具白名单（用 preset 的全部工具），只排除两件：官方 Office 组合里的载荷查询，以及
+    // 插件管理工具（`plugin_manager`——装/卸/启停会改整个 profile 的行，模型不该在一个会话里随手动）。
     // 技能面按名排除官方那三件（技能目录不列、`skill` 工具加载被拒）。
     expect(modes?.["coding"]?.allowTools).toBeUndefined();
-    expect(modes?.["coding"]?.denyTools).toEqual(["load_workspace_dependencies"]);
+    expect(modes?.["coding"]?.denyTools).toEqual(["load_workspace_dependencies", "plugin_manager"]);
     expect(modes?.["coding"]?.allowSkills).toBeUndefined();
     expect(modes?.["coding"]?.denySkills).toEqual(["office-docx", "office-pptx", "office-xlsx"]);
     // `chat` 收成提问 + 联网三件，技能与工具名单都不再另配。

@@ -32,6 +32,18 @@ import type {
 afterEach(cleanup);
 // 官方 Tooltip 的气泡要 ResizeObserver 才可见；jsdom 没有它（替身只让气泡进入可见态）。
 stubResizeObserver();
+// 官方 `Tooltip` 只认指针进入（`pointerType === "mouse"`），并且要求 `(any-hover: hover)` 匹配；jsdom 两个都没有。
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: query === "(any-hover: hover)",
+  media: query,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+}));
+
+// 指针进入是官方 `Tooltip` 的触发方式（`mouseEnter` 在 React 里不会合成 `pointerenter`）。
+function hover(el: HTMLElement): void {
+  fireEvent.pointerEnter(el, { pointerType: "mouse" });
+}
 
 // jsdom 没有布局：`scrollWidth` / `clientWidth` 都是 0，截断判据永远不成立（也就永远不挂浮层）。这里显式给出这两个
 // 读数，再让 `ResizeObserver` 替身通知一次——真机上「盒子宽度变了」是浏览器通知的，用例里就是这一下。
@@ -875,8 +887,8 @@ describe("与真控制器一起跑", () => {
     // 内容宽 ≤ 可见宽：这两处没截断。
     sized(comment, { content: 36, visible: 584 });
     sized(value, { content: 48, visible: 487 });
-    fireEvent.mouseEnter(comment);
-    fireEvent.mouseEnter(value);
+    hover(comment);
+    hover(value);
 
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(comment.getAttribute("title")).toBeNull();
@@ -896,20 +908,20 @@ describe("与真控制器一起跑", () => {
     sized(value, { content: 893, visible: 487 });
 
     // hover 的目标就是那两处被截断的元素本身：气泡里是它们的全文。
-    fireEvent.mouseEnter(comment);
+    hover(comment);
     expect(screen.getByRole("tooltip").textContent).toBe("很长的一段说明");
     expect(screen.getByRole("tooltip").style.visibility).toBe("visible");
 
-    fireEvent.mouseEnter(value);
+    hover(value);
     expect(screen.getAllByRole("tooltip").at(-1)?.textContent).toBe('"一个很长的值"');
 
-    fireEvent.mouseLeave(comment);
-    fireEvent.mouseLeave(value);
+    fireEvent.pointerLeave(comment, { pointerType: "mouse" });
+    fireEvent.pointerLeave(value, { pointerType: "mouse" });
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     // 盒子变宽、放得下了：截断状态跟着这次 `ResizeObserver` 通知收回去，气泡不再给。
     sized(value, { content: 100, visible: 487 });
-    fireEvent.mouseEnter(value);
+    hover(value);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
@@ -1004,7 +1016,7 @@ describe("与真控制器一起跑", () => {
 
     // 这条消息在行里是截断的（浏览器里量到 757/584）：hover 才给全文。
     sized(invalid, { content: 757, visible: 584 });
-    fireEvent.mouseEnter(invalid);
+    hover(invalid);
     expect(screen.getByRole("tooltip").textContent).toBe(long);
   });
 

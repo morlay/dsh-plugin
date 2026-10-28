@@ -4,12 +4,12 @@
  * @module @deepseek-ai/dsh-subagent
  */
 
-import { HarnessError } from "@deepseek-ai/dsh-llm";
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 /** Typed failure for the subagent seam. */
 export class SubagentError extends HarnessError {
   constructor(message: string, code: string, options?: ErrorOptions) {
-    super(message, code, options);
-    this.name = "SubagentError";
+    super(message, code, options)
+    this.name = 'SubagentError'
   }
 }

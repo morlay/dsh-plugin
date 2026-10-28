@@ -1,0 +1,149 @@
+diff --git a/packages/api/session-controller/src/client/contract/events.ts b/packages/api/session-controller/src/client/contract/events.ts
+index bc825f08fd..9df68761d6 100644
+--- a/packages/api/session-controller/src/client/contract/events.ts
++++ b/packages/api/session-controller/src/client/contract/events.ts
+@@ -116,10 +116,23 @@ export interface SessionEventWindow {
+ /** Conversation-facing event source exposed by one Session binding. */
+ export type SessionEventSource = ObservableSnapshot<SessionEventWindow>
+ 
++/**
++ * Transient frames retained in the window. A transient frame is a presentation-only
++ * delta of the attempt still streaming: it repeats the attempt's metadata and the
++ * whole accumulated text, and the settlement replaces all of them with one durable
++ * entry. Keeping the newest frames is enough to render the live tail.
++ */
++const TRANSIENT_FRAME_KEEP = 512
++
++/** Transient appends between trims; a trim republishes the window, so it amortizes over frames. */
++const TRANSIENT_TRIM_EVERY = 256
++
+ /** Session-owned event feed; every accepted window mutation publishes synchronously. */
+ export class MutableSessionEventSource implements SessionEventSource {
+   private readonly listeners = new Set<() => void>()
+   private window: EventWindowNode = leaf([])
++  /** Transient frames appended since the last trim. */
++  private transientAppends = 0
+   private snapshot: SessionEventWindow = windowSnapshot(
+     this.window,
+     false,
+@@ -130,6 +143,22 @@ export class MutableSessionEventSource implements SessionEventSource {
+   /** @returns the cached event-window snapshot. */
+   getSnapshot(): SessionEventWindow { return this.snapshot }
+ 
++  /** @returns retained entry count, without materializing the window. */
++  get size(): number { return this.window.length }
++
++  /**
++   * Drop the oldest entries and keep the tail, publishing a replacement window.
++   * @param keep - entries retained from the tail.
++   * @param hasMore - whether the dropped prefix remains loadable upstream.
++   * @returns seq of the retained window's first entry, or undefined when empty.
++   */
++  dropHead(keep: number, hasMore: boolean): number | undefined {
++    const entries = keep <= 0 ? [] : materialize(this.window).slice(-keep)
++    this.window = leaf(entries)
++    this.publish(hasMore, { kind: 'replace', entries })
++    return entries[0]?.event.seq
++  }
++
+   /**
+    * Subscribe to synchronous window publication.
+    * @param listener - invalidation callback.
+@@ -171,6 +200,32 @@ export class MutableSessionEventSource implements SessionEventSource {
+       kind: 'append',
+       entries,
+     })
++    if (entry.type === 'transient' && ++this.transientAppends >= TRANSIENT_TRIM_EVERY) this.trimTransient()
++  }
++
++  /**
++   * Keep only the newest transient frames. Each frame carries a fresh copy of the
++   * attempt's metadata and of the accumulated text, so a long stream grows the
++   * window by frames rather than by messages; the settlement supersedes every one
++   * of them anyway, so older frames only cost memory.
++   */
++  private trimTransient(): void {
++    this.transientAppends = 0
++    const entries = materialize(this.window)
++    let transient = 0
++    for (const entry of entries) if (entry.type === 'transient') transient += 1
++    if (transient <= TRANSIENT_FRAME_KEEP) return
++    let drop = transient - TRANSIENT_FRAME_KEEP
++    const kept: SessionEventLikeEntry[] = []
++    for (const entry of entries) {
++      if (entry.type === 'transient' && drop > 0) {
++        drop -= 1
++        continue
++      }
++      kept.push(entry)
++    }
++    this.window = leaf(kept)
++    this.publish(this.snapshot.hasMore, { kind: 'replace', entries: kept })
+   }
+ 
+   /**
+diff --git a/packages/api/session-controller/src/client/sessions/session.ts b/packages/api/session-controller/src/client/sessions/session.ts
+index 9cb61e55bf..718a5e55bc 100644
+--- a/packages/api/session-controller/src/client/sessions/session.ts
++++ b/packages/api/session-controller/src/client/sessions/session.ts
+@@ -61,6 +61,22 @@ const JUMP_PAGE_OPTIONS = {
+   turnWindow: { ...HISTORY_PAGE_OPTIONS.turnWindow, minMessages: JUMP_PAGE_MESSAGES },
+ }
+ 
++/**
++ * Upper bound on retained window entries. Every loaded page stays in memory
++ * for the Session's lifetime today, and each live event adds one more, so a
++ * long-running Session grows without limit; the bound is the memory fuse, not
++ * a paging policy. Sized well above ordinary Sessions (each page is at most
++ * 500 messages) so only runaway Sessions reach it.
++ */
++const WINDOW_ENTRY_CAP = 20_000
++
++/**
++ * Entries released once the cap is crossed. Trimming republishes the window
++ * and makes the consumers refold the kept tail, so a batch amortizes that work
++ * instead of paying it on every appended event.
++ */
++const WINDOW_TRIM_SLACK = 2_000
++
+ interface PendingHistory {
+   beforeSeq: SessionLogOffset
+   hasMore: boolean
+@@ -708,6 +724,7 @@ export class Session implements SessionFace {
+     if (visible.some(entry => entry.event.type === 'turn/start')) this.firstPromptPendingTurn = false
+     if (projections !== undefined) this.projections.seed(projections)
+     this.eventSource.replace(visible, hasMore)
++    this.capWindow()
+     // A new follow baseline replaces confirmed optimistic inputs with Host-owned rows.
+     // Receipt-backed inputs are accepted, not failed, even if their history is outside this window.
+     if (projections !== undefined) {
+@@ -768,6 +785,21 @@ export class Session implements SessionFace {
+     this.baseSeq = entries[0] === undefined ? this.baseSeq : SessionLogOffset(entries[0].event.seq)
+     this.hasMore = hasMore
+     this.eventSource.prepend(entries, hasMore)
++    this.capWindow()
++  }
++
++  /**
++   * Hold the retained window under its memory fuse by dropping the oldest
++   * entries. Trimming republishes the window as a replacement, so consumers
++   * refold the kept tail; the dropped prefix stays on the Host but is no longer
++   * offered, since loading it again would be trimmed again on arrival.
++   */
++  private capWindow(): void {
++    if (this.eventSource.size <= WINDOW_ENTRY_CAP) return
++    const first = this.eventSource.dropHead(WINDOW_ENTRY_CAP - WINDOW_TRIM_SLACK, false)
++    this.baseSeq = SessionLogOffset(first ?? 0)
++    this.hasMore = false
++    this.notifier.markDirty()
+   }
+ 
+   /** Append one stream-validated live event. */
+@@ -776,6 +808,7 @@ export class Session implements SessionFace {
+     const awaitingFirstTurn = this.firstPromptPendingTurn
+     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
+     this.eventSource.append(entry)
++    this.capWindow()
+     // After the feed append: the conversation assembly's animation frame is
+     // registered by the feed subscribers above, so the echo-retirement frame
+     // scheduled here always runs after the durable node became renderable.

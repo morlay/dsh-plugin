@@ -30,8 +30,11 @@ clean:
     rm -f pnpm-lock.yaml;
     pnpm clean
 
+# 整棵声明树一起删：`target/dts` 下还有"生成完了"的完成标记（`.complete`），只清内容会把标记留下，
+# 之后的构建（`ensureWorkspaceDts` 只看标记）就会当成已就绪、读到空目录报"声明缺失"。
+# 同步上游之后要重跑生成物，入口就是这条（见 `dsh-plugin-upstream-sync` 技能的升级步骤）。
 clean-dist:
-    rm -rf target/dts/*
+    rm -rf target/dts
     pnpm exec -r \
         --filter "./devpackages/*"  \
         --filter "./packages/*/*" \
@@ -44,7 +47,7 @@ fmt:
 # 外加文档与记录树的三条硬规矩——行内代码里像工作区路径的东西要解析得到真实文件、md 链接要存在
 # （判据与例外表见 `.agents/standards/describing-facts.md`）、术语表的登记双向一致且每行声明归属
 # （判据见 `.agents/GLOSSARY-MAP.md`）。这些都是**独立的检查命令**（`dshdev check-*`），不挂 vitest；
-# `just test` 不重复跑它们（CI 的检查步骤会跑 `just lint`）。
+# `just test` 不重复跑它们（`just lint` 就包含它们）。
 lint:
     pnpm exec oxlint .
     pnpm exec dshdev check-locale

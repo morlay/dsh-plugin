@@ -10,8 +10,8 @@
  * @module @deepseek-ai/dsh-subagent/assistant-output
  */
 
-import { joinAssistantStreamText, type ContentBlock } from "@deepseek-ai/dsh-llm";
-import type { SessionEvent } from "@deepseek-ai/dsh-session";
+import { joinAssistantStreamText, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 
 /**
  * Incremental fold of the selection rule, for backends that observe a child's
@@ -20,8 +20,8 @@ import type { SessionEvent } from "@deepseek-ai/dsh-session";
  * text into the same streamed fallback.
  */
 export class AssistantOutputFold {
-  private message: readonly ContentBlock[] | undefined;
-  private partial: string[] = [];
+  private message: readonly ContentBlock[] | undefined
+  private partial: string[] = []
 
   /**
    * Fold one session event: a non-empty assistant message becomes the
@@ -30,12 +30,12 @@ export class AssistantOutputFold {
    * @param event - the next observed session event.
    */
   push(event: SessionEvent): void {
-    if (event.type === "assistant/message") {
-      const content = event.data.message.content;
-      if (content.length > 0) this.message = content;
+    if (event.type === 'assistant/message') {
+      const content = event.data.message.content
+      if (content.length > 0) this.message = content
     }
-    if (event.type === "assistant/message" || event.type === "assistant/attempt") {
-      this.pushText(joinAssistantStreamText(event.data.stream));
+    if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
+      this.pushText(joinAssistantStreamText(event.data.stream))
     }
   }
 
@@ -44,7 +44,7 @@ export class AssistantOutputFold {
    * @param text - the next streamed text piece (an empty piece is a no-op).
    */
   pushText(text: string): void {
-    if (text.length > 0) this.partial.push(text);
+    if (text.length > 0) this.partial.push(text)
   }
 
   /**
@@ -53,9 +53,9 @@ export class AssistantOutputFold {
    *   streamed text, or `undefined` when the child produced neither.
    */
   collect(): readonly ContentBlock[] | undefined {
-    if (this.message !== undefined) return this.message;
-    const text = this.partial.join("");
-    return text.length > 0 ? [{ type: "text", text }] : undefined;
+    if (this.message !== undefined) return this.message
+    const text = this.partial.join('')
+    return text.length > 0 ? [{ type: 'text', text }] : undefined
   }
 }
 
@@ -64,14 +64,12 @@ export class AssistantOutputFold {
  * @param events - the child-owned events (after any seed or epoch boundary).
  * @returns the selected output, or `undefined` when the child produced none.
  */
-export function finalAssistantOutput(
-  events: readonly SessionEvent[],
-): readonly ContentBlock[] | undefined {
+export function finalAssistantOutput(events: readonly SessionEvent[]): readonly ContentBlock[] | undefined {
   // TODO: this folds the complete suffix once per run/epoch settlement. If a
   // long continuable epoch ever profiles hot here, scan backward with early
   // exit for the last non-empty message and fold text deltas only on the
   // no-message fallback.
-  const fold = new AssistantOutputFold();
-  for (const event of events) fold.push(event);
-  return fold.collect();
+  const fold = new AssistantOutputFold()
+  for (const event of events) fold.push(event)
+  return fold.collect()
 }

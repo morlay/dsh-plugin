@@ -1,8 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
-import { createUserMessage, type ToolSchema } from "@deepseek-ai/dsh-llm";
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import type {} from "@deepseek-ai/dsh-skill";
-import type {} from "@deepseek-ai/dsh-tools";
+import type { ToolDefinition } from "@deepseek-ai/dsh-tools";
 import type {} from "@morlay/dsh-context-assembler";
 import z from "@deepseek-ai/schemastery";
 import {
@@ -89,24 +89,72 @@ export function apply(ctx: Context, config: Config): void {
     });
   }
 
-  // 本行挂在**最外层**（`prepend`）：会话收窄的监听比本行先注册（host 平面的行先于本行的 scope），而瀑布里
-  // 先注册的是外层——收窄发生在它的返回路径上，站在内层读 `next()` 拿到的是收窄**之前**的目录。站到最外层，
-  // 一次装配走完手里的 `result` 才是这个会话最终可见的那份。工具投影的改写与过滤可交换（只换描述与 schema，
-  // 不动名字），所以把改写一并挪到最外层，别人看到的结果不变。
+  // 工具投影的改写落在**工具定义**上：装配瀑布不再承载工具声明，而 `llm/stream` 的 options 是上游冻结过的
+  // （`agent-loop` 用 `Object.freeze` 构造请求），在监听器里写 `options.tools` 会抛
+  // `Cannot assign to read only property 'tools'`。定义对象本身可变，改它的 `description` / `parameters` 就等于
+  // 改了 `executor.describe()` 的输出（模型面），**不经过 `tools.register`，也不触发 `tools/change` 重入**；
+  // 执行期的输入校验用的是 `defineTool` 闭包里那份原 schema，不受这里替换影响。
+  const projected = new WeakSet<object>();
+  const project = (definition: ToolDefinition): void => {
+    if (projected.has(definition)) return;
+    projected.add(definition);
+    const description = SHORT_TOOL_DESCRIPTIONS[definition.name];
+    if (description !== undefined) {
+      Object.defineProperty(definition, "description", {
+        value: description,
+        configurable: true,
+        enumerable: true,
+        writable: true,
+      });
+    }
+    Object.defineProperty(definition, "parameters", {
+      value: slimSchema(definition.parameters),
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+  };
+  // 本行挂在**最外层**（`prepend`）：`base` 正文要按这个会话最终可见的工具目录过滤，而装配上下文里的
+  // `toolSet` 就是这一步的准入集（上游 0.2.1-rc.2 起工具声明由 `tools.resolve` 定，装配瀑布不再带 `tools`）。
   ctx.on(
     "system-prompt/assemble",
     async (_assembly, context, next) => {
       const result = await next();
       const agent = context.agent;
-      // 记名字集合：`result.tools` 是投影**之后**的目录（收窄已生效、描述已被 `shortenTools` 换过），
-      // 名字不受描述改写影响。诊断式的无 agent 装配不记（那种装配也不属于任何会话）。
+      // 记名字集合：准入集已应用这个会话的收窄（`tools.restrict`）与条件激活，名字不受描述改写影响。
+      // 诊断式的无 agent 装配不记（那种装配也不属于任何会话）。
       if (agent !== undefined) {
-        visibleTools.set(agent, new Set(result.tools.map((tool) => tool.name)));
+        const toolSet = context.toolSet;
+        const definitions = ctx.tools.definitions(agent, toolSet);
+        visibleTools.set(
+          agent,
+          new Set(definitions.map((tool) => tool.name)),
+        );
+        // 会话内晚注册的工具（MCP 重连、skill 重载）赶不上 `agent/created`：这里补一次改写。本次装配的声明已经
+        // 按旧定义收集过了，所以从**下一次**请求开始生效。
+        for (const definition of definitions) project(definition);
       }
-      return { ...result, tools: shortenTools(result.tools) };
+      return result;
     },
     { prepend: true },
   );
+
+  // 工具注册在**会话挂着的那份 preset 的 scope** 上，全局 `definitions()` 看不到它们：会话建好时按它的视图改一遍，
+  // 这是第一次装配之前的时机。`tools/change` 只管全局可见的那部分；会话内晚注册的工具由装配监听补（下一次请求生效）。
+  ctx.on("agent/created", ({ agent }) => {
+    const projectAgent = (): void => {
+      for (const definition of ctx.tools.definitions(agent)) project(definition);
+    };
+    projectAgent();
+    // 团队、schedule 这类行在**会话建好之后**才把工具注册进 agent scope：全局 `tools/change` 看不到它们，
+    // 所以每个会话自己跟这条事件（监听挂在 `agent.ctx` 上，随会话收回）。
+    agent.ctx.on("tools/change", projectAgent);
+  });
+  const projectVisible = (): void => {
+    for (const definition of ctx.tools.definitions()) project(definition);
+  };
+  ctx.on("tools/change", projectVisible);
+  projectVisible();
 }
 
 const baseGroup = groupByKey(BASE_GROUP_KEY);
@@ -141,13 +189,14 @@ function injectMessage(name: string, text: string): ReturnType<typeof createUser
 // surface 上最近一条该键注入的正文（含信封）；没有则 undefined——压缩掉它、或进程重启后 resume 折叠出它，
 // 都由这一眼分辨。
 function latestInjectText(agent: Agent, name: string): string | undefined {
-  for (const seq of agent.session.surface.nodes.toReversed()) {
-    const event = agent.session.eventAt(seq);
-    if (event?.type !== "user/message") continue;
-    const source = event.data.source as { readonly kind?: unknown; readonly name?: unknown };
+  // `deriveMessages()` 是 surface 的派生消息视图（受支持的同步读）；逐 seq 读事件的
+  // `eventAt` / `snapshotEvents` / `ownEvents` 已被上游声明为「新调用禁止」。
+  for (const message of agent.session.deriveMessages().toReversed()) {
+    if (message.role !== "user") continue;
+    const source = message.source as { readonly kind?: unknown; readonly name?: unknown };
     if (source.kind !== "skill-invocation" || source.name !== name) continue;
-    const [block] = event.data.content;
-    return event.data.content.length === 1 && block?.type === "text" ? block.text : "";
+    const [block] = message.content;
+    return message.content.length === 1 && block?.type === "text" ? block.text : "";
   }
   return undefined;
 }
@@ -179,16 +228,3 @@ function slimSchema(schema: unknown): unknown {
   return rest;
 }
 
-// 改写模型看到的工具投影：描述换成一行中文，参数只留约束（`type` / `enum` / `oneOf` / `required` / `default`），
-// 说明性字段整段丢弃。改装配结果而不是注册表——注册同名工具会触发 `tools/change`，与上游 `tool-subagent` 的
-// composition reconcile 互相触发会造成装配风暴式重入；投影只影响本次请求，晚注册的工具也照样能覆盖。
-function shortenTools(tools: readonly ToolSchema[]): ToolSchema[] {
-  return tools.map((tool) => {
-    const description = SHORT_TOOL_DESCRIPTIONS[tool.name];
-    return {
-      ...tool,
-      parameters: slimSchema(tool.parameters),
-      ...(description === undefined ? {} : { description }),
-    } as ToolSchema;
-  });
-}

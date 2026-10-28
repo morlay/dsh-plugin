@@ -4,15 +4,15 @@
  * @module @deepseek-ai/dsh-subagent/internal
  */
 
-import type { Agent } from "@deepseek-ai/dsh-agent";
-import type { ContentBlock, MessageId, MessageSource } from "@deepseek-ai/dsh-llm";
-import type { SessionId } from "@deepseek-ai/dsh-session";
-import type { ToolDefinition } from "@deepseek-ai/dsh-tools";
-import type SubagentRuntime from "./index.ts";
-import type { SubagentDelivery } from "./control-types.ts";
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type SubagentRuntime from './index.ts'
+import type { SubagentDelivery } from './control-types.ts'
 
 /** Process-stable identity carried only by the standard adjacent-Agent messaging tool. */
-export const adjacentAgentSendMessageTool = Symbol.for("dsh.subagent.adjacentAgentSendMessageTool");
+export const adjacentAgentSendMessageTool = Symbol.for('dsh.subagent.adjacentAgentSendMessageTool')
 
 /**
  * Mark the standard adjacent-Agent messaging tool without changing its model-visible schema.
@@ -20,8 +20,8 @@ export const adjacentAgentSendMessageTool = Symbol.for("dsh.subagent.adjacentAge
  * @returns the same definition with its internal identity installed.
  */
 export function markAdjacentAgentSendMessageTool(definition: ToolDefinition): ToolDefinition {
-  Object.defineProperty(definition, adjacentAgentSendMessageTool, { value: true });
-  return definition;
+  Object.defineProperty(definition, adjacentAgentSendMessageTool, { value: true })
+  return definition
 }
 
 /**
@@ -30,12 +30,8 @@ export function markAdjacentAgentSendMessageTool(definition: ToolDefinition): To
  * @returns whether the definition carries the internal standard-tool identity.
  */
 export function isAdjacentAgentSendMessageTool(definition: ToolDefinition | undefined): boolean {
-  return (
-    definition !== undefined &&
-    (definition as ToolDefinition & { [adjacentAgentSendMessageTool]?: true })[
-      adjacentAgentSendMessageTool
-    ] === true
-  );
+  return definition !== undefined
+    && (definition as ToolDefinition & { [adjacentAgentSendMessageTool]?: true })[adjacentAgentSendMessageTool] === true
 }
 
 /**
@@ -43,7 +39,7 @@ export function isAdjacentAgentSendMessageTool(definition: ToolDefinition | unde
  * entry and this unbundled internal subpath.
  * @internal
  */
-export const deliverSubagentPrompt = Symbol.for("dsh.subagent.deliverPrompt");
+export const deliverSubagentPrompt = Symbol.for('dsh.subagent.deliverPrompt')
 
 /** Runtime face required by the host-only prompt adapters. */
 export interface HostPromptDeliverer {
@@ -54,7 +50,7 @@ export interface HostPromptDeliverer {
     source: MessageSource,
     signal: AbortSignal,
     delivery: SubagentDelivery,
-  ): Promise<MessageId>;
+  ): Promise<MessageId>
 }
 
 /**
@@ -81,8 +77,8 @@ export function queueHostSubagentPrompt(
     content,
     source,
     signal,
-    "queue",
-  );
+    'queue',
+  )
 }
 
 /**
@@ -109,6 +105,6 @@ export function steerHostSubagentPrompt(
     content,
     source,
     signal,
-    "steer",
-  );
+    'steer',
+  )
 }

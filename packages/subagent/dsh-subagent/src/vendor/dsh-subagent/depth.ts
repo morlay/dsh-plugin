@@ -6,12 +6,12 @@
  * @module @deepseek-ai/dsh-subagent/depth
  */
 
-import type { Agent } from "@deepseek-ai/dsh-agent";
+import type { Agent } from '@deepseek-ai/dsh-agent'
 
-declare module "@deepseek-ai/dsh-agent" {
+declare module '@deepseek-ai/dsh-agent' {
   interface AgentOptions {
     /** Delegation depth: zero for a top-level agent and parent depth + 1 for a child. */
-    subagentDepth?: number;
+    subagentDepth?: number
   }
 }
 
@@ -26,16 +26,13 @@ declare module "@deepseek-ai/dsh-agent" {
  * @throws if the runtime `AgentOptions.subagentDepth` is not a non-negative safe integer.
  */
 export function delegationDepthOf(agent: Agent): number {
-  const runtime = agent.options.subagentDepth;
-  if (
-    runtime !== undefined &&
-    (!Number.isSafeInteger(runtime) || runtime < 0 || Object.is(runtime, -0))
-  ) {
-    throw new TypeError("agent subagentDepth must be a non-negative safe integer");
+  const runtime = agent.options.subagentDepth
+  if (runtime !== undefined && (!Number.isSafeInteger(runtime) || runtime < 0 || Object.is(runtime, -0))) {
+    throw new TypeError('agent subagentDepth must be a non-negative safe integer')
   }
   // The header value was validated at the session boundary (creation and
   // persistence load both construct through the store).
-  return Math.max(agent.session.header.delegationDepth ?? 0, runtime ?? 0);
+  return Math.max(agent.session.header.delegationDepth ?? 0, runtime ?? 0)
 }
 
 /**
@@ -43,13 +40,12 @@ export function delegationDepthOf(agent: Agent): number {
  * @param maxDepth - the optional runtime value to validate.
  */
 export function assertSubagentMaxDepth(maxDepth: unknown): void {
-  if (
-    maxDepth !== undefined &&
-    (typeof maxDepth !== "number" ||
-      !Number.isSafeInteger(maxDepth) ||
-      maxDepth < 0 ||
-      Object.is(maxDepth, -0))
-  ) {
-    throw new TypeError("subagent maxDepth must be a non-negative safe integer");
+  if (maxDepth !== undefined && (
+    typeof maxDepth !== 'number'
+    || !Number.isSafeInteger(maxDepth)
+    || maxDepth < 0
+    || Object.is(maxDepth, -0)
+  )) {
+    throw new TypeError('subagent maxDepth must be a non-negative safe integer')
   }
 }

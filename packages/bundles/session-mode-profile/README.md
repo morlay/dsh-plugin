@@ -31,3 +31,7 @@
 [ADR 不再持有行清单](./.agents/adrs/20260929-不再持有行清单.md)。"先读后改"的豁免不需要自建 preset：它由模式自己的
 policy 名单表达（`coding.denyPolicies: [fs/edit-intent]`，见
 [设计 按模式的 policy 拦截](../../profile/dsh-session-mode/.agents/designs/20260929-按模式的policy拦截.md)）。
+
+**插件页不挂长文**：`locale/{zh,en}.json` 的 `meta.detail` 指向空文件 [`docs/detail.md`](./docs/detail.md)，所以 bundle
+详情页的"详细介绍"区是空的——上面这份 README 仍是包门面与用法的 home。上游没有"关掉详情文档"的开关，`meta.detail`
+是唯一的替换口（不指向文件就会回退到 README）。

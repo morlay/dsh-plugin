@@ -15,3 +15,5 @@
 基础面（`@morlay/dsh-client-ui-primitives`）随用到它的 client 行内联，本包不插这一行。
 
 行的语义（`rw` / `r-` / `--`）与两条运行时快照的接管在[能力包的 README](../../sandbox/dsh-sandbox-local/README.md)。
+
+**插件页不挂长文**：`locale/*.json` 的 `meta.detail` 指向空文件 [`docs/detail.md`](./docs/detail.md)，所以 bundle 详情页的"详细介绍"区是空的；本 README 仍是包门面。

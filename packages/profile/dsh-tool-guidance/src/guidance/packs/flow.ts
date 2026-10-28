@@ -14,5 +14,6 @@ export const FLOW_PACK: ToolPack = {
     { tool: "schedule_list", short: "列出本会话的活动提醒" },
     { tool: "schedule_update", short: "原地改一个提醒" },
     { tool: "schedule_delete", short: "删除一个提醒" },
+    { tool: "plugin_manager", short: "管理本 profile 的插件与 bundle" },
   ],
 };

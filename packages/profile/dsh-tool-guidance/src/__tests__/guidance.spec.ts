@@ -205,12 +205,23 @@ async function assembly(ctx: Context, agent: Agent) {
   return ctx.systemPrompt.assemble(assembleContextFor(agent));
 }
 
+// 模型目录 = 注册表视图（收窄落在 `tools.restrict` 上，装配瀑布里不再带工具声明）。
+function visibleSchemas(ctx: Context, agent: Agent) {
+  return ctx.tools.schemas(agent);
+}
+
+// 工具投影直接改在**工具定义**上（请求对象是上游冻结的，不能在那里写），所以模型面的
+// description / parameters 从定义视图读。
+function projectedTools(ctx: Context, agent: Agent) {
+  return ctx.tools.definitions(agent);
+}
+
 async function toolDescription(
   ctx: Context,
   agent: Agent,
   name: string,
 ): Promise<string | undefined> {
-  return (await assembly(ctx, agent)).tools.find((tool) => tool.name === name)?.description;
+  return projectedTools(ctx, agent).find((tool) => tool.name === name)?.description;
 }
 
 function prompt(text: string): UserMessage {
@@ -231,7 +242,7 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages, turn: 1, step: 1, signal: new AbortController().signal },
+    { messages, turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
     async () => ({ kind: "enter" as const, messages }),
   );
   return decision.kind === "enter" ? decision.messages : [];
@@ -268,60 +279,73 @@ async function skillContent(ctx: Context, agent: Agent, skillName: string): Prom
 describe("工具目录", () => {
   it("全部工具都在目录里，分组不裁剪 schema", async () => {
     const { ctx, agent } = await mount();
-    const names = (await assembly(ctx, agent)).tools.map((tool) => tool.name);
+    const names = visibleSchemas(ctx, agent).map((tool) => tool.name);
 
     for (const tool of TOOL_GROUPS.flatMap((group) => group.tools)) {
       if (PRESET_TOOLS.includes(tool)) expect(names).toContain(tool);
     }
   });
 
-  it("上游的长描述在装配投影里被换成中文短描述，执行不受影响", async () => {
+  it("上游的长描述在请求投影里被换成中文短描述，执行不受影响", async () => {
     const { ctx, agent } = await mount();
 
     expect(await toolDescription(ctx, agent, "web_search")).toBe(
       SHORT_TOOL_DESCRIPTIONS["web_search"],
     );
-    expect(
-      await ctx.tools
-        .execute({
-          callId: ToolCallId("call-read"),
+    const batch = await ctx.tools.execute({
+      calls: [
+        {
+          type: "tool-call",
+          id: ToolCallId("call-read"),
           name: "read",
-          arguments: { target: "a" },
-          agent,
-          signal: new AbortController().signal,
-        })
-        .then((result) => result.error),
-    ).toBeUndefined();
+          arguments: JSON.stringify({ target: "a" }),
+        },
+      ],
+      agent,
+      signal: new AbortController().signal,
+    });
+    expect(batch.results[0]?.result.error).toBeUndefined();
   });
 
-  it("参数描述整段丢弃（语义在组 skill 正文里），注册表不动", async () => {
+  it("参数描述整段丢弃（语义在组 skill 正文里），执行不受影响", async () => {
     const { ctx, agent } = await mount();
     const projected = JSON.stringify(
-      (await assembly(ctx, agent)).tools.find((tool) => tool.name === "read")?.parameters,
+      projectedTools(ctx, agent).find((tool) => tool.name === "read")?.parameters,
     );
-    const registered = JSON.stringify(ctx.tools.get("read", agent)?.parameters);
 
-    // 说明性字段占常驻 schema 的大头：投影里连键都不留，注册表照旧。
+    // 说明性字段占常驻 schema 的大头：投影里连键都不留。
     for (const key of ["description", "title", "examples"]) {
       expect(projected).not.toContain(`"${key}"`);
-      expect(registered).toContain(`"${key}"`);
     }
     // 约束照旧：type 与 enum 都在（enum 是校验的一部分，不剥）。
     expect(projected).toContain('"type":"string"');
     expect(projected).toContain('"enum":["a","b"]');
+
+    // 执行期校验用的是 `defineTool` 闭包里那份原 schema：模型面瘦身不影响调用。
+    const batch = await ctx.tools.execute({
+      calls: [
+        {
+          type: "tool-call",
+          id: ToolCallId("call-read-slim"),
+          name: "read",
+          arguments: JSON.stringify({ target: "a" }),
+        },
+      ],
+      agent,
+      signal: new AbortController().signal,
+    });
+    expect(batch.results[0]?.result.error).toBeUndefined();
   });
 
-  it("只改装配投影，不碰注册表", async () => {
-    // 在 agent 作用域注册同名工具会同步触发 `tools/change`，而上游 tool-subagent 用该事件做
+  it("就地改工具定义：注册表里那份描述与参数就是模型看到的那份", async () => {
+    // 在 agent 作用域重新注册同名工具会同步触发 `tools/change`，而上游 tool-subagent 用该事件做
     // composition reconcile——两边互相触发会让装配风暴式重入（曾把 session 创建卡死）。
+    // 现在改写直接落在定义对象上（`agent/created` 时按该会话的视图改），不注册新定义、不发事件。
     const { ctx, agent } = await mount();
+    const definition = ctx.tools.get("web_search", agent);
 
-    expect(ctx.tools.get("web_search", agent)?.description).not.toBe(
-      SHORT_TOOL_DESCRIPTIONS["web_search"],
-    );
-    expect(await toolDescription(ctx, agent, "web_search")).toBe(
-      SHORT_TOOL_DESCRIPTIONS["web_search"],
-    );
+    expect(definition?.description).toBe(SHORT_TOOL_DESCRIPTIONS["web_search"]);
+    expect(JSON.stringify(definition?.parameters)).not.toContain('"description"');
   });
 });
 
@@ -391,7 +415,7 @@ describe("base 组正文的常驻注入", () => {
 
     const decision = await agentEvents(ctx, agent).waterfall(
       "agent/pre-step",
-      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal },
+      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
       async () => ({ kind: "enter" as const, messages: [claimed, trailing] }),
     );
     if (decision.kind !== "enter") throw new Error("expected enter");
@@ -451,7 +475,7 @@ describe("base 组正文的常驻注入", () => {
     const { ctx, agent } = await mount();
     ctx.sessionModes.applyTo(agent, "chat", { record: false });
 
-    expect((await assembly(ctx, agent)).tools.map((tool) => tool.name).toSorted()).toEqual([
+    expect(projectedTools(ctx, agent).map((tool) => tool.name).toSorted()).toEqual([
       "ask_user_question",
       "web_fetch",
       "web_search",
@@ -497,7 +521,7 @@ describe("base 组正文的常驻注入", () => {
 
     const decision = await agentEvents(ctx, agent).waterfall(
       "agent/pre-step",
-      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal },
+      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
       async () => ({ kind: "enter" as const, messages: [claimed] }),
     );
     if (decision.kind !== "enter") throw new Error("expected enter");

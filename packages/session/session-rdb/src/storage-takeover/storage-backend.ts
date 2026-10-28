@@ -177,6 +177,13 @@ class WorkspaceKvUnit extends TrackedKvUnit {
     await this.track(this.repository.deleteWorkspace(key));
   }
 
+  // 上游 `KvUnit.deleteRecords`：行存储一次批量做完（不让调用方逐条重试）。
+  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
+    this.assertOpen();
+    this.assertTable(table);
+    await this.track(this.repository.deleteWorkspaces([...new Set(keys)]));
+  }
+
   async setGlobal(value: unknown): Promise<void> {
     this.assertOpen();
     await this.track(this.repository.writeWorkspaceState(workspaceStateOf(value)));
@@ -206,6 +213,12 @@ class ScheduleKvUnit extends TrackedKvUnit {
     this.assertOpen();
     this.assertTable(table);
     await this.track(this.repository.deleteScheduleTask(key));
+  }
+
+  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
+    this.assertOpen();
+    this.assertTable(table);
+    await this.track(this.repository.deleteScheduleTasks([...new Set(keys)]));
   }
 
   setGlobal(_value: unknown): Promise<void> {

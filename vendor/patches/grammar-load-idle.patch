@@ -1,0 +1,26 @@
+diff --git a/packages/client/ui-primitives/src/markdown/highlight.ts b/packages/client/ui-primitives/src/markdown/highlight.ts
+index fcb6be90e2..ac1e054cf5 100644
+--- a/packages/client/ui-primitives/src/markdown/highlight.ts
++++ b/packages/client/ui-primitives/src/markdown/highlight.ts
+@@ -398,9 +398,18 @@ function ensureGrammar(resolved: string): boolean {
+   if (!requested.has(resolved)) {
+     requested.add(resolved)
+     void load().then((mod) => {
+-      highlighter().loadLanguageSync(mod.default)
+-      loadCount += 1
+-      for (const listener of listeners) listener()
++      // Registering a grammar compiles its regexes (oniguruma patterns lowered
++      // to JavaScript), which measured as a 100–200ms task in the interaction
++      // path the first time a language rendered. The compile stays atomic; idle
++      // dispatch at least keeps it out of a frame the reader is scrolling or
++      // typing in. `timeout` bounds how long a pending fence renders plain.
++      const install = (): void => {
++        highlighter().loadLanguageSync(mod.default)
++        loadCount += 1
++        for (const listener of listeners) listener()
++      }
++      if (typeof requestIdleCallback === 'function') requestIdleCallback(install, { timeout: 2000 })
++      else setTimeout(install, 0)
+     })
+   }
+   return false

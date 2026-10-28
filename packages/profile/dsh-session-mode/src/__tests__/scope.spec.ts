@@ -181,7 +181,9 @@ function apply(ctx: Context, agent: Agent, modeId: string): void {
 }
 
 async function visibleTools(ctx: Context, agent: Agent): Promise<string[]> {
-  return (await ctx.systemPrompt.assemble(assembleContextFor(agent))).tools
+  // 收窄落在注册表视图上（`tools.restrict`）：目录与执行读的是同一份。
+  return ctx.tools
+    .schemas(agent)
     .map((tool) => tool.name)
     .toSorted();
 }
@@ -193,13 +195,14 @@ async function sectionNames(ctx: Context, agent: Agent): Promise<string[]> {
 }
 
 async function callTool(ctx: Context, agent: Agent, name: string, callId: string) {
-  return await ctx.tools.execute({
-    callId: ToolCallId(callId),
-    name,
-    arguments: {},
+  // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
+  const batch = await ctx.tools.execute({
+    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: "{}" }],
     agent,
     signal: new AbortController().signal,
   });
+  const result = batch.results[0]?.result;
+  return { error: result !== undefined && "error" in result ? result.error : undefined };
 }
 
 describe("工具白名单（按会话收口）", () => {
@@ -207,6 +210,8 @@ describe("工具白名单（按会话收口）", () => {
     const { ctx, agent } = await mount();
     const session = await agent("wide");
     apply(ctx, session, "wide");
+    // 收窄在 `tools` 的 inject 回调里注册：先走一步装配，等它跑过。
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     expect(await visibleTools(ctx, session)).toEqual([
       "ask_user_question",
@@ -246,25 +251,22 @@ describe("工具白名单（按会话收口）", () => {
     ]);
   });
 
-  it("白名单之外的工具调用不了，文案说得出是哪一份定义", async () => {
+  it("白名单之外的工具调用不了：不在准入集里，直接是 UNKNOWN_TOOL", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("narrow");
     apply(ctx, session, "narrow");
-    // guard 在收口里注册（等 tools 激活）：先走一步装配。
+    // 收窄在收口里注册（等 tools 激活）：先走一步装配。
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     const denied = await callTool(ctx, session, "web_fetch", "call-denied");
     const allowed = await callTool(ctx, session, "ask_user_question", "call-allowed");
 
     expect(denied.error).toBeDefined();
-    expect(JSON.stringify(denied)).toContain("窄模式");
-    // 拒绝的一类原因：白名单外（另一类是黑名单内，见下面那组用例）。
-    expect(JSON.stringify(denied)).toContain("白名单");
-    expect(JSON.stringify(denied)).not.toContain("黑名单");
+    expect(JSON.stringify(denied)).toContain("unknown tool");
     expect(allowed.error).toBeUndefined();
   });
 
-  it("换个模式就是换一份：新的白名单生效，旧 guard 被收回", async () => {
+  it("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch");
     apply(ctx, session, "wide");
@@ -276,7 +278,7 @@ describe("工具白名单（按会话收口）", () => {
     expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
     expect((await callTool(ctx, session, "web_search", "call-narrow")).error).toBeDefined();
 
-    // 换回宽的：只收新 guard 不收旧 guard 的话，这里会仍然被拒。
+    // 换回宽的：只收新收窄不收旧收窄的话，这里会仍然被拒。
     apply(ctx, session, "wide");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
     expect((await callTool(ctx, session, "web_search", "call-back")).error).toBeUndefined();
@@ -330,17 +332,17 @@ describe("allowTools 留空 = 全部工具（不设收窄）", () => {
     expect(await sectionNames(ctx, session)).toContain("tool:send_message");
   });
 
-  it("白名单之外的工具照旧可调用（不装守卫）", async () => {
+  it("白名单之外的工具照旧可调用（不设收窄）", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("all-call");
     apply(ctx, session, "nothing");
-    // 守卫在收口里注册：先走一步装配，让 `tools` 那边的 inject 回调跑过。
+    // 收窄在收口里注册：先走一步装配，让 `tools` 那边的 inject 回调跑过。
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
   });
 
-  it("从收窄换到留空：旧守卫收回，工具与 section 都回来", async () => {
+  it("从收窄换到留空：旧收窄收回，工具与 section 都回来", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("back-to-all");
@@ -357,8 +359,8 @@ describe("allowTools 留空 = 全部工具（不设收窄）", () => {
   });
 });
 
-// 收口的合成规则：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单；装配投影、`tool:` section 与执行 guard
-// 三处读的是同一个合成结果。
+// 收口的合成规则：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单；注册表视图（= 模型目录与执行准入）、
+// `tool:` section 两处读的是同一个合成结果。
 describe("工具黑名单（与白名单合成）", () => {
   it("只给黑名单：目录与工具说明 section 都扣掉那几件，别的照旧", async () => {
     const { ctx, agent } = await mount();
@@ -366,6 +368,7 @@ describe("工具黑名单（与白名单合成）", () => {
     await mountSection(ctx, "tool:web_search", "搜索说明");
     const session = await agent("deny-only");
     apply(ctx, session, "denyOnly");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     expect(await visibleTools(ctx, session)).toEqual([
       "ask_user_question",
@@ -376,7 +379,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(await sectionNames(ctx, session)).toContain("tool:web_search");
   });
 
-  it("黑名单里的工具调用不了，文案说黑名单（与白名单外那一类区分开）", async () => {
+  it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("deny-call");
     apply(ctx, session, "denyOnly");
@@ -386,9 +389,7 @@ describe("工具黑名单（与白名单合成）", () => {
     const allowed = await callTool(ctx, session, "web_search", "call-allowed");
 
     expect(denied.error).toBeDefined();
-    expect(JSON.stringify(denied)).toContain("排除模式");
-    expect(JSON.stringify(denied)).toContain("黑名单");
-    expect(JSON.stringify(denied)).not.toContain("白名单");
+    expect(JSON.stringify(denied)).toContain("unknown tool");
     expect(allowed.error).toBeUndefined();
   });
 
@@ -403,7 +404,7 @@ describe("工具黑名单（与白名单合成）", () => {
 
     const denied = await callTool(ctx, session, "web_fetch", "call-deny-wins");
     expect(denied.error).toBeDefined();
-    expect(JSON.stringify(denied)).toContain("黑名单");
+    expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 
   it("两条都空 = 不过滤：目录、section 与调用都照旧", async () => {
@@ -418,7 +419,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
   });
 
-  it("从白名单换成白名单 + 黑名单：黑名单生效，旧守卫收回", async () => {
+  it("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch-to-deny");
     apply(ctx, session, "wide");
@@ -428,7 +429,7 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "allowAndDeny");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
     expect((await callTool(ctx, session, "web_fetch", "call-denied")).error).toBeDefined();
-    // 旧守卫（认 `wide` 那份白名单）已收回：换一份之后仍按新名单判，而不是两份叠加。
+    // 旧收窄（认 `wide` 那份白名单）已收回：换一份之后仍按新名单判，而不是两份叠加。
     expect(
       (await callTool(ctx, session, "web_search", "call-still-allowed")).error,
     ).toBeUndefined();

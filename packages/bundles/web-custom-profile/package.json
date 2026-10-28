@@ -16,6 +16,7 @@
   },
   "files": [
     "locale/*.json",
+    "docs",
     "icon.svg",
     "cordis.patch.yml",
     "README.md"
@@ -40,7 +41,7 @@
   },
   "icon": "./icon.svg",
   "engines": {
-    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+    "dsh": ">= 0.2.2-alpha.2 < 0.2.3"
   },
   "dsh": {
     "bundle": {

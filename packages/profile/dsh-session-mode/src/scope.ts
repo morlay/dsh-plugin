@@ -3,17 +3,18 @@
 //
 // `apply` 落到这个 agent 身上四件事：
 //
-// - **装配期投影**：模型目录与 `tool:<工具名>` section 按同一份合成结果过滤；
-// - **执行层 guard**（在 `agent.ctx` 的 `tools` inject 回调里）：拒绝时给该模式的文案，并说得出是哪一类（白名单外 /
-//   黑名单内）；
+// - **工具面**（`agent.ctx.tools.restrict()`）：目录与执行走同一个视图——收窄掉的工具既不在模型目录里，
+//   调用也直接是 `UNKNOWN_TOOL`（上游 0.2.1-rc.2 起工具声明不再经 `system-prompt/assemble`，那里只剩
+//   sections / contexts / variables，所以只能落在注册表视图上；取舍见 `../.agents/adrs/20261026-工具面收窄改用tools.restrict.md`）；
+// - **`tool:<工具名>` section**：装配瀑布里按同一份名单过滤（工具自己的说明与目录同源）；
+// - **执行层 guard**：只留给技能面——`skill` 工具本身照旧可用，被收窄的是它这次要加载的那一件技能；
 // - **三个抑制面**（`agent/pre-step`）：官方 `agent-instructions`、`skill-catalog` 与 `time-context` 的注入按开关
 //   丢掉——官方那几行在装配投影之外自己往瀑布里 append，只能在瀑布上丢（不动注册表、也不动它们的行）；
 // - **另两个开关**（注入面那个 `skills` 在上面那条里）：`runtimeContext: false` 抑制动态快照
 //   （`systemPrompt.suppressRuntimeContext`）与时钟那条注入（`agent/pre-step` 上的 `time-context`），
 //   `instructions: false` 关掉通道自己的降级注入（`ctx.contextAssembler.setInstructions`）。
 //
-// 同一个 agent 再 `apply` 就是换一份（旧 disposer 全部收回）；不走 `tools.restrict()`（会触发 `tools/change`），
-// 也不建 preset 子树。
+// 同一个 agent 再 `apply` 就是换一份（旧 disposer 全部收回）；不建 preset 子树。
 
 import { type Context } from "@deepseek-ai/cordis";
 import type { Agent, PreStepDecision } from "@deepseek-ai/dsh-agent";
@@ -45,20 +46,9 @@ export interface SessionScopeDefinition {
   readonly runtimeContext: boolean;
 }
 
-// 一条工具被拒的两类原因：白名单外 / 黑名单内。文案要能看出是哪一类，模型才知道怎么绕（换工具还是换模式）。
+// 一条工具被拒的两类原因：白名单外 / 黑名单内。技能面文案用（工具面被收窄后不走这里，调用直接是
+// `UNKNOWN_TOOL`——见头注释）。
 type Denial = "not-allowlisted" | "denylisted";
-
-const OUT_OF_SCOPE = (toolName: string, modeName: string): string =>
-  `${toolName} 不在「${modeName}」的工具白名单里，用它不会有结果；按当前模式提供的工具完成任务，或让用户切到别的模式。`;
-
-const DENYLISTED = (toolName: string, modeName: string): string =>
-  `${toolName} 被「${modeName}」的工具黑名单排除，用它不会有结果；按当前模式提供的工具完成任务，或让用户切到别的模式。`;
-
-function refusalOf(toolName: string, modeName: string, denial: Denial): string {
-  return denial === "denylisted"
-    ? DENYLISTED(toolName, modeName)
-    : OUT_OF_SCOPE(toolName, modeName);
-}
 
 // 技能被拒的两类原因：同一套白名单 / 黑名单语义，文案换到技能面（拒绝加载某一件技能，而不是某个工具）。
 const SKILL_OUT_OF_SCOPE = (skillName: string, modeName: string): string =>
@@ -194,7 +184,6 @@ export class SessionScope {
             ? denialOf(gate, section.name.slice(TOOL_SECTION_PREFIX.length)) === undefined
             : true,
         ),
-        tools: result.tools.filter((tool) => denialOf(gate, tool.name) === undefined),
       };
     });
   }
@@ -234,24 +223,52 @@ export class SessionScope {
         // service 在 `agent.ctx` 上是 shadow：抑制落在该 agent 的 scope 层，只覆盖这个会话。
         stoppers.push(agent.ctx.systemPrompt.suppressRuntimeContext());
       }
-      // 必须落在 `agent.ctx` 上才是这个会话的作用域。
-      const fiber = agent.ctx.inject(["tools"], (scope) => {
-        if (gate === undefined && skillGate === undefined) return;
-        scope.tools.guard((exec) => {
-          // 工具面：按名判这个工具本身能不能用。
-          const denial = gate === undefined ? undefined : denialOf(gate, exec.name);
-          if (denial !== undefined) return refusalOf(exec.name, definition.name, denial);
-          // 技能面：`skill` 工具本身照旧可用，被收窄的是它这次要加载的那一件技能。
-          if (skillGate === undefined || exec.name !== SKILL_TOOL_NAME) return undefined;
-          const skillName = skillNameOf(exec.arguments);
-          if (skillName === undefined) return undefined;
-          const skillDenial = denialOf(skillGate, skillName);
-          return skillDenial === undefined
-            ? undefined
-            : skillRefusalOf(skillName, definition.name, skillDenial);
+      // 工具面必须落在 `agent.ctx` 上才是这个会话的作用域。`tools` 服务通常已激活（agent 建好就有），
+      // 那时**同步**注册：装配瀑布读的目录必须立刻是收窄后的那一份；没激活才退回 `inject`（它的回调晚一步，
+      // 由下一次装配兜住）。注册返回的 disposer 自己收——`restrict` / `guard` 的 effect 归 tools 服务的 ctx，
+      // 不随本 effect 收回。
+      const install = (scope: Context): (() => void)[] => {
+        const disposers: (() => void)[] = [];
+        if (gate !== undefined) {
+          // 工具面：收窄**注册表视图**（目录与执行同一份）。名单里没注册的名字先滤掉——`restrict` 对未知的
+          // 全局工具名直接抛，而"行清单里缺工具的 preset"是合法部署形态；白名单过滤后可能为空数组，那正是
+          // "一件都收不到"的语义（与省略 `allow` 的"全部放行"区分开）。
+          const known = new Set(scope.tools.definitions(agent).map((tool) => tool.name));
+          disposers.push(
+            scope.tools.restrict({
+              ...(gate.allow === undefined
+                ? {}
+                : { allow: [...gate.allow].filter((name) => known.has(name)) }),
+              ...(gate.deny.size === 0
+                ? {}
+                : { deny: [...gate.deny].filter((name) => known.has(name)) }),
+            }),
+          );
+        }
+        if (skillGate === undefined) return disposers;
+        disposers.push(
+          scope.tools.guard((exec) => {
+            // 技能面：`skill` 工具本身照旧可用，被收窄的是它这次要加载的那一件技能。
+            if (exec.name !== SKILL_TOOL_NAME) return undefined;
+            const skillName = skillNameOf(exec.arguments);
+            if (skillName === undefined) return undefined;
+            const skillDenial = denialOf(skillGate, skillName);
+            return skillDenial === undefined
+              ? undefined
+              : skillRefusalOf(skillName, definition.name, skillDenial);
+          }),
+        );
+        return disposers;
+      };
+      if (agent.ctx.get("tools") === undefined) {
+        const fiber = agent.ctx.inject(["tools"], (scope) => {
+          stoppers.push(...install(scope));
         });
-      });
-      return [...stoppers, () => fiber.dispose()];
+        stoppers.push(() => fiber.dispose());
+      } else {
+        stoppers.push(...install(agent.ctx));
+      }
+      return stoppers;
     }, "session-mode: per-session gate");
 
     // 通道那一侧的降级注入按 agent 覆盖，不需要收回。

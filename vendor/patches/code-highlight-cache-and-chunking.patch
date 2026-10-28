@@ -1,0 +1,262 @@
+diff --git a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
+index fa573578e1..7b4ef9c8f1 100644
+--- a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
++++ b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
+@@ -1,10 +1,10 @@
+-import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
++import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+ import type { CSSProperties, ReactNode, Ref } from 'react'
+ import clsx from 'clsx'
+ import { writeClipboard } from '../clipboard.ts'
+ import { CodeToolbar, type CodeToolbarLabels } from '../CodeToolbar.tsx'
+ import {
+-  StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,
++  StreamingHighlightSession, grammarLoadCount, highlightToHtml, startSettledHighlight, subscribeGrammarLoaded,
+ } from './highlight.ts'
+ import type { HighlightSpan, StreamingHighlightFrame } from './highlight.ts'
+ import { useViewportHighlighting } from './useViewportHighlighting.ts'
+@@ -57,6 +57,26 @@ const SHIKI_PRE_PROPS = {
+ /** Completed-line group size; React reconciles groups while the DOM remains line-for-line identical. */
+ const STREAMING_LINE_GROUP_SIZE = 32
+ 
++/**
++ * Fences up to this many lines highlight synchronously: a settled 200-line
++ * fence costs ~35ms, about two dropped frames at worst. Longer fences tokenize
++ * in chunks across frames instead (a 2 000-line fence measures ~190ms as one
++ * task, 5 000 lines ~450ms).
++ */
++const SYNC_HIGHLIGHT_MAX_LINES = 200
++
++/** Lines per chunked step; ~80 lines keeps one step near a frame's budget. */
++const CHUNKED_HIGHLIGHT_LINES = 80
++
++/** Line count without materializing a line array. */
++function countLines(text: string): number {
++  let lines = 1
++  for (let index = 0; index < text.length; index += 1) {
++    if (text.charCodeAt(index) === 10) lines += 1
++  }
++  return lines
++}
++
+ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
+   return (
+     <Fragment key={index}>
+@@ -147,11 +167,47 @@ export function CodeBlock({
+     }
+     return body
+   }, [streaming, highlighting, trimmed, lang, loaded])
++  const lineCount = useMemo(() => countLines(trimmed), [trimmed])
++  // Settled fences past the synchronous budget tokenize across frames. The
++  // reader keeps the plain tree until the whole fence is ready, so no single
++  // frame pays the multi-hundred-millisecond `codeToHtml` task of a long fence.
++  const [chunked, setChunked] = useState<{
++    code: string
++    lang: string | undefined
++    lines: readonly HighlightSpan[][]
++  } | null>(null)
++  useEffect(() => {
++    if (!highlighting || streaming === true || lineCount <= SYNC_HIGHLIGHT_MAX_LINES) return
++    const job = startSettledHighlight(trimmed, lang)
++    /* v8 ignore next -- an unknown or still-loading grammar keeps the plain arm and re-runs when it lands. */
++    if (job === undefined) return
++    let cancelled = false
++    let frame = 0
++    const run = (): void => {
++      if (cancelled) return
++      if (job.step(CHUNKED_HIGHLIGHT_LINES)) {
++        setChunked({ code: trimmed, lang, lines: job.lines })
++        return
++      }
++      frame = requestAnimationFrame(run)
++    }
++    frame = requestAnimationFrame(run)
++    return () => {
++      cancelled = true
++      if (frame !== 0) cancelAnimationFrame(frame)
++    }
++    // `loaded` re-runs the job once a lazy grammar lands; the count itself is opaque here.
++  }, [highlighting, streaming, trimmed, lang, lineCount, loaded])
++  const chunkedBody = chunked !== null && streaming !== true && chunked.code === trimmed && chunked.lang === lang
++    ? (
++      <pre {...SHIKI_PRE_PROPS}><code>{chunked.lines.map((line, index) => renderLine(line, index))}</code></pre>
++    )
++    : undefined
+   const html = useMemo(
+-    () => (highlighting && streaming !== true && streamedBody === undefined
++    () => (highlighting && streaming !== true && streamedBody === undefined && lineCount <= SYNC_HIGHLIGHT_MAX_LINES
+       ? highlightToHtml(trimmed, lang)
+       : undefined),
+-    [streaming, highlighting, streamedBody, trimmed, lang, loaded],
++    [streaming, highlighting, streamedBody, trimmed, lang, loaded, lineCount],
+   )
+   const [copied, setCopied] = useState(false)
+   const [localWrapped, setWrapped] = useState(true)
+@@ -174,15 +230,17 @@ export function CodeBlock({
+   // shiki's own docs.
+   const body = streamedBody !== undefined
+     ? streamedBody
+-    : html === undefined
+-      ? (
+-        <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
+-          <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
+-        ))}</code></pre>
+-      )
+-      : (
+-        <div dangerouslySetInnerHTML={{ __html: html }} />
+-      )
++    : chunkedBody !== undefined
++      ? chunkedBody
++      : html === undefined
++        ? (
++          <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
++            <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
++          ))}</code></pre>
++        )
++        : (
++          <div dangerouslySetInnerHTML={{ __html: html }} />
++        )
+ 
+   return (
+     <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, toolbarLabels !== undefined && css.card, className)}
+diff --git a/packages/client/ui-primitives/src/markdown/highlight.ts b/packages/client/ui-primitives/src/markdown/highlight.ts
+index fcb6be90e2..94d02e2357 100644
+--- a/packages/client/ui-primitives/src/markdown/highlight.ts
++++ b/packages/client/ui-primitives/src/markdown/highlight.ts
+@@ -429,9 +429,134 @@ export function highlightToHtml(code: string, lang: string | undefined): string
+   const resolved = grammarForHint(lang)
+   if (resolved === undefined) return undefined
+   if (!ensureGrammar(resolved)) return undefined
+-  return highlighter().codeToHtml(code, {
++  const key = `${resolved}\u0000${code}`
++  const cached = cachedHtml(key)
++  if (cached !== undefined) return cached
++  cacheHtml(key, highlighter().codeToHtml(code, {
+     lang: resolved, theme: 'css-variables', tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+-  })
++  }))
++  return htmlCache.get(key)
++}
++
++/**
++ * Rendered HTML by grammar id + source. Remounting a message (session switch,
++ * fold, re-render after a lazy grammar lands) otherwise re-tokenizes every
++ * fence from scratch: 2 000 lines costs ~190ms a second time. Retained as
++ * rendered HTML, so the cache costs no more than the trees it serves.
++ */
++const htmlCache = new Map<string, string>()
++
++/** Characters of rendered HTML retained; a 5 000-line fence renders ~2.7MB. */
++const HTML_CACHE_MAX_CHARS = 8_000_000
++
++let htmlCacheChars = 0
++
++function cachedHtml(key: string): string | undefined {
++  const hit = htmlCache.get(key)
++  if (hit === undefined) return undefined
++  // Reinsert as most recently used: Map iterates in insertion order.
++  htmlCache.delete(key)
++  htmlCache.set(key, hit)
++  return hit
++}
++
++function cacheHtml(key: string, html: string): void {
++  htmlCache.set(key, html)
++  htmlCacheChars += html.length
++  while (htmlCacheChars > HTML_CACHE_MAX_CHARS) {
++    const oldest = htmlCache.keys().next()
++    /* v8 ignore next -- the loop only runs while entries exist. */
++    if (oldest.done === true) break
++    const value = htmlCache.get(oldest.value)
++    htmlCache.delete(oldest.value)
++    htmlCacheChars -= value?.length ?? 0
++  }
++}
++
++/**
++ * Off-thread-free chunked tokenization of one settled fence. `codeToHtml`
++ * tokenizes the whole fence in one synchronous call (5 000 lines ≈ 450ms on a
++ * laptop, more in a browser), which blocks typing while a long message paints;
++ * TextMate is line-based and forward-only, so feeding `grammarState` from one
++ * chunk into the next reproduces the from-scratch tokens exactly.
++ */
++export class SettledHighlightJob {
++  private readonly spans: HighlightSpan[][] = []
++  private state: GrammarState | undefined
++  private consumed = 0
++  private done = false
++  private readonly code: string
++  private readonly resolved: string
++
++  /**
++   * @param code - the settled fence text (display-trimmed).
++   * @param resolved - grammar id `grammarForHint` resolved.
++   */
++  constructor(code: string, resolved: string) {
++    this.code = code
++    this.resolved = resolved
++  }
++
++  /** @returns the highlighted lines produced so far. */
++  get lines(): readonly HighlightSpan[][] { return this.spans }
++
++  /** @returns whether every line has been tokenized. */
++  get finished(): boolean { return this.done }
++
++  /**
++   * Tokenize at most `maxLines` further lines.
++   * @param maxLines - lines to cover in this step.
++   * @returns whether the job finished.
++   */
++  step(maxLines: number): boolean {
++    if (this.done) return true
++    // `cut` is the last consumed newline (the slice end); `scan` walks past it.
++    let cut = this.consumed
++    let scan = this.consumed
++    let lines = 0
++    while (lines < maxLines) {
++      const next = this.code.indexOf('\n', scan)
++      if (next < 0) break
++      cut = next
++      scan = next + 1
++      lines += 1
++    }
++    if (lines === 0) {
++      this.append(this.code.slice(this.consumed))
++      this.consumed = this.code.length
++      this.done = true
++      return true
++    }
++    this.append(this.code.slice(this.consumed, cut))
++    this.consumed = cut + 1
++    if (this.consumed >= this.code.length) this.done = true
++    return this.done
++  }
++
++  private append(text: string): void {
++    const source = text.endsWith('\r') ? text.slice(0, -1) : text
++    const tokens = highlighter().codeToTokensBase(source, {
++      lang: this.resolved,
++      theme: 'css-variables',
++      tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
++      ...(this.state === undefined ? {} : { grammarState: this.state }),
++    })
++    for (const line of tokens) this.spans.push(lineSpans(line))
++    this.state = highlighter().getLastGrammarState(tokens)
++  }
++}
++
++/**
++ * Start chunked highlighting for one settled fence.
++ * @param code - the settled fence text (display-trimmed).
++ * @param lang - the language hint.
++ * @returns the job to `step` across frames, or `undefined` for the plain arm.
++ */
++export function startSettledHighlight(code: string, lang: string | undefined): SettledHighlightJob | undefined {
++  const resolved = grammarForHint(lang)
++  if (resolved === undefined) return undefined
++  if (!ensureGrammar(resolved)) return undefined
++  return new SettledHighlightJob(code, resolved)
+ }
+ 
+ /**

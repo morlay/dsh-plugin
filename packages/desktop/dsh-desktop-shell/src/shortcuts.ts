@@ -33,7 +33,7 @@ export function installDesktopShortcuts(
   getWindow: () => BrowserWindowType | undefined,
   userData: string,
   platform: ShortcutPlatform,
-  scheme: string,
+  getOrigin: () => string,
 ): DesktopShortcuts {
   let definitions: readonly ShortcutDefinition[] = [];
   let recording = false;
@@ -63,7 +63,7 @@ export function installDesktopShortcuts(
   const persistence = desktopKeybindings(userData, platform, publish);
 
   const windowOf = (event: Electron.IpcMainInvokeEvent): BrowserWindowType => {
-    assertDesktopSender(event, scheme, ["app"]);
+    assertDesktopSender(event, [getOrigin()]);
     const window = getWindow();
     if (window === undefined || window.isDestroyed() || event.sender !== window.webContents)
       throw new Error("desktop shortcuts: rejected sender");

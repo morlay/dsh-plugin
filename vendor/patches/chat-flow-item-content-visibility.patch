@@ -1,0 +1,21 @@
+diff --git a/packages/client/ui-chat/src/client/chat/ChatView.module.css b/packages/client/ui-chat/src/client/chat/ChatView.module.css
+index f05bad098f..25cc4fd602 100644
+--- a/packages/client/ui-chat/src/client/chat/ChatView.module.css
++++ b/packages/client/ui-chat/src/client/chat/ChatView.module.css
+@@ -93,9 +93,15 @@
+ }
+ 
+ /* Settled-flow identity boundary. It is neutral until it becomes the natural
+-   measurement/mount unit for a virtualizer without changing the column gap. */
++   measurement/mount unit for a virtualizer without changing the column gap.
++   Off-screen rows skip their own layout and paint: a long loaded window keeps
++   every row mounted for anchors and find-in-page, but only the rows near the
++   viewport cost frames. `auto` remembers each row's last rendered height, so
++   the estimate covers only rows that never entered the viewport. */
+ .flowItem {
+   min-width: 0;
++  content-visibility: auto;
++  contain-intrinsic-size: auto 72px;
+ }
+ 
+ /* Bottom room: sized by the viewport owner while rows above the reader close,

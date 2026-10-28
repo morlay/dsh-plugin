@@ -152,12 +152,15 @@ function settlementSummary(
  * @param childId - durable child session id named in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
  * @param continuable - whether the child can accept another task.
+ * @param omitClosingText - replace the closing text with a note that the child
+ * already reported to its parent; the parent should not read the result twice.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
   childId: SessionId,
   terminal: SubagentResult,
   continuable = true,
+  omitClosingText = false,
 ): ReturnType<typeof createUserMessage> {
   const summary = settlementSummary(childId, terminal.stopReason, continuable);
   // Parent providers receive this notice as a user message and may reject
@@ -169,9 +172,11 @@ export function createSettlementMessage(
   return createUserMessage({
     content: [
       { type: "text" as const, text: summary },
-      ...(closingText.length === 0
-        ? [{ type: "text" as const, text: "It left no closing message." }]
-        : [{ type: "text" as const, text: "Its closing message:" }, ...closingText]),
+      ...(omitClosingText
+        ? [{ type: "text" as const, text: "It sent you a message just before finishing, so its closing message is omitted." }]
+        : closingText.length === 0
+          ? [{ type: "text" as const, text: "It left no closing message." }]
+          : [{ type: "text" as const, text: "Its closing message:" }, ...closingText]),
       ...(terminal.structured !== undefined
         ? [
             {

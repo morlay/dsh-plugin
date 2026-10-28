@@ -57,7 +57,7 @@ import {
 } from "./schema.ts";
 import { SqliteBackend } from "./sqlite.ts";
 import { PostgresBackend } from "./postgres.ts";
-import { SessionBranchRdb } from "./branch.ts";
+import { SessionBranchRdb, liveEventsOf } from "./branch.ts";
 import { balanceRewindPrefix } from "@morlay/session-branch";
 import { registerSessionImport } from "./import.ts";
 import { registerSessionDeletion } from "./deletion.ts";
@@ -93,7 +93,7 @@ const DEFAULT_PROJECTION_WRITE_INTERVAL_MS = 5000;
 export { SCHEMA_VERSION } from "./schema.ts";
 export { SESSION_ROWS_PATH } from "./rows.ts";
 export type { SessionRowsItem, SessionRowsValue } from "./rows.ts";
-export { SessionBranchRdb, SessionBranchRdbProvider, locateTurnEnd } from "./branch.ts";
+export { SessionBranchRdb, SessionBranchRdbProvider, liveEventsOf, locateTurnEnd } from "./branch.ts";
 
 export interface SessionPersistenceRdbInternals {
   readonly backend: Backend;
@@ -134,12 +134,14 @@ export type Config =
       journalMode?: JournalMode | undefined;
       busyTimeout?: number | undefined;
       projectionCache?: ProjectionCacheOptions | undefined;
+      preparedSessionCacheSize?: number | undefined;
     }
   | {
       type: "postgres";
       connectionString: string;
       schema?: string | undefined;
       projectionCache?: ProjectionCacheOptions | undefined;
+      preparedSessionCacheSize?: number | undefined;
     };
 
 // schema 解析之后的形状：整段 Config 是 **volatile 稳定引用**（页面可编辑），读它要过 `.get()`。
@@ -493,6 +495,22 @@ class RdbSessionHandle implements SessionHandle {
 const localized = (text: { zh: string; en: string }): string => text as unknown as string;
 
 // 投影 checkpoint 的写回节流：两个分支共用。
+// 上游 session-query 的**冷会话观察缓存**容量（`preparedSessionCacheSize`）：缓存按**条目数**持有完整
+// `Session`（含整份 append-only log），被活跃观察租约钉住的条目不淘汰；一次读取中途转成 live 时会重试 live
+// 路径，但**不会顺手清掉已缓存的 cold 条目**——所以同一个 id 可能同时有两份 log 驻留。上游默认 5；本部署把它
+// 收到最小的 1：本地单用户、rdb 后端，冷读复用的收益不值这份内存放大。上游校验是 >= 1（不能设 0）。
+const preparedSessionCacheSchema = z
+  .number()
+  .step(1)
+  .min(1)
+  .default(1)
+  .description(
+    localized({
+      zh: "冷会话观察缓存容量（条数，最小 1）：每个条目持一份完整会话日志；本部署默认 1，把同 id 两份日志的驻留压到最小。",
+      en: "Cold prepared-Session observation cache size (entries, minimum 1): each entry holds one complete session log. This deployment defaults to 1, minimizing duplicate per-id residency.",
+    }),
+  );
+
 const projectionCacheSchema = z
   .object({
     writeEveryEvents: z
@@ -560,6 +578,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
             }),
           ),
         projectionCache: projectionCacheSchema,
+        preparedSessionCacheSize: preparedSessionCacheSchema,
       }),
       z.object({
         type: z.const("postgres"),
@@ -582,6 +601,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
             }),
           ),
         projectionCache: projectionCacheSchema,
+        preparedSessionCacheSize: preparedSessionCacheSchema,
       }),
     ])
     .description(
@@ -628,7 +648,12 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     new SessionBranchRdb(this.ctx);
 
-    this.ctx.plugin(SessionQueryRdb, {});
+    // 冷会话观察缓存的容量在这一行配置里（默认见 `preparedSessionCacheSchema`）；session-query 自己不会再读它。
+    const queryConfig =
+      this.config.preparedSessionCacheSize === undefined
+        ? {}
+        : { preparedSessionCacheSize: this.config.preparedSessionCacheSize };
+    this.ctx.plugin(SessionQueryRdb, queryConfig);
 
     registerSessionImport(this.ctx, this);
 
@@ -873,6 +898,17 @@ export class SessionPersistenceRdb extends SessionPersistence {
   async vacuum(): Promise<void> {
     await this.ready;
     await this.backend.vacuum();
+  }
+
+  /**
+   * 已归档的会话 id（`t_sessions.f_archived_at` 非空）。`session/list` 默认过滤掉它们。
+   * 读的是持久化里的归档标记，不依赖 `workspaceRegistry` 服务的就绪时机。
+   * @returns 归档过的 Session id 集。
+   */
+  async archivedSessionIds(): Promise<ReadonlySet<string>> {
+    await this.ready;
+    const state = await this.backend.storage.readWorkspaceState();
+    return new Set((state?.archivedSessionIds ?? []).map(String));
   }
 
   private async unarchiveBeforeDeletion(id: SessionId): Promise<void> {
@@ -1440,7 +1476,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       handle = (await this.create(session.header, {
         inheritedEventCount: session.inheritedEventCount,
       })) as RdbSessionHandle;
-      const seed = session.snapshotEvents();
+      const seed = liveEventsOf(session);
       if (seed.length > 0) await handle.append(seed);
     } else {
       if (stored.meta.cwd !== session.header.cwd) {
@@ -1456,7 +1492,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       assertVersion(stored.meta);
 
       repairReadView(stored.events);
-      const seed = session.snapshotEvents();
+      const seed = liveEventsOf(session);
       if (!seedCoversPrefix(seed, stored.events)) {
         throw new Error(
           `session "${id}" already has a persisted log on disk that does not match this live session (id collision)`,

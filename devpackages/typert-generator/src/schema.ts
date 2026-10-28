@@ -454,44 +454,97 @@ const BUILTIN: Record<string, (args: Node[], context: EmitContext) => string> = 
   // 上游 `standard` 表里只有这几个：`Date` / `Uint8Array` 各有专门投影，其余 standard 一律 fail。
   Date: () => "z.date()",
   Uint8Array: () => "z.instanceof(Uint8Array)",
-  // TS 内置工具类型：`Partial` / `Readonly` 直接把对象类型的字段逐个改修饰符（wire 面就是那个形状）。
+  // TS 内置工具类型：`Partial` / `Readonly` 直接把对象类型的字段逐个改修饰符（wire 面就是那个形状）；
+  // `Omit` / `Pick` 按字段名收缩字段集——wire 面只有留下的那些（客户端多发字段会校验失败）。
   Partial: (args, context) => mappedObject(args[0], context, { optional: true }),
   Readonly: (args, context) => mappedObject(args[0], context, { readonly: true }),
+  Required: (args, context) => mappedObject(args[0], context, { required: true }),
+  Omit: (args, context) => subsetObject(args[0], args[1], context, false),
+  Pick: (args, context) => subsetObject(args[0], args[1], context, true),
 };
 
-/** 对对象类型的每个字段施加修饰符（`Partial<T>` / `Readonly<T>`）。 */
+/** 对对象类型的每个字段施加修饰符（`Partial<T>` / `Readonly<T>` / `Required<T>`）。 */
 function mappedObject(
   node: Node | undefined,
   context: EmitContext,
-  modifiers: { optional?: boolean; readonly?: boolean },
+  modifiers: { optional?: boolean; readonly?: boolean; required?: boolean },
 ): string {
-  const literal = objectLiteralOf(node, context);
-  if (literal === undefined) return zodOf(node, context);
+  const members = membersOfNode(node, context);
+  if (members === undefined) return zodOf(node, context);
   return objectOf(
-    literal.map((member) => ({
+    members.map((member) => ({
+      ...member,
       node: {
-        ...member,
-        ...(modifiers.optional === true && member["optional"] !== true ? { optional: true } : {}),
+        ...member.node,
+        ...(modifiers.optional === true && member.node["optional"] !== true
+          ? { optional: true }
+          : {}),
+        ...(modifiers.required === true && member.node["optional"] === true
+          ? { optional: false }
+          : {}),
         ...(modifiers.readonly === true ? { readonly: true } : {}),
       },
-      file: context.file,
     })),
     context,
   );
 }
 
-/** 拿对象类型的成员（`TSTypeLiteral`，或顺着引用/交叉/索引找到的那个字面量）。 */
-function objectLiteralOf(node: Node | undefined, context: EmitContext): Node[] | undefined {
+/**
+ * `Omit<T, K>` / `Pick<T, K>`：按名字排除或只保留成员；`K` 取字面量 / 联合 / 已代入的泛型实参。
+ * 解析不了就让 `T` 原样展开。
+ */
+function subsetObject(
+  base: Node | undefined,
+  keys: Node | undefined,
+  context: EmitContext,
+  keep: boolean,
+): string {
+  const named = keyNamesOf(keys, context);
+  const members = membersOfNode(base, context);
+  if (named === undefined || members === undefined) return zodOf(base, context);
+  return objectOf(
+    members.filter((member) => named.has(nameOf(member.node["key"] as Node) ?? "") === keep),
+    context,
+  );
+}
+
+/** 一个字面量键集（`'a' | 'b'`）的名字集；泛型形参先按引用处的实参代入。 */
+function keyNamesOf(node: Node | undefined, context: EmitContext): Set<string> | undefined {
   if (node === undefined) return undefined;
-  if (node["type"] === "TSTypeLiteral") return node["members"] as Node[];
+  if (node["type"] === "TSLiteralType") {
+    const value = node["literal"]?.["value"];
+    return typeof value === "string" || typeof value === "number"
+      ? new Set([String(value)])
+      : undefined;
+  }
+  if (node["type"] === "TSUnionType") {
+    const merged = new Set<string>();
+    for (const part of node["types"] as Node[]) {
+      const names = keyNamesOf(part, context);
+      if (names === undefined) return undefined;
+      for (const name of names) merged.add(name);
+    }
+    return merged;
+  }
   if (node["type"] === "TSTypeReference") {
     const name = nameOf(node["typeName"] as Node);
-    const declared = name === undefined ? undefined : context.index.get(name);
-    return declared === undefined
-      ? undefined
-      : objectLiteralOf(declared.node["typeAnnotation"] as Node | undefined, context);
+    const substituted = name === undefined ? undefined : context.typeArguments.get(name);
+    return substituted === undefined ? undefined : keyNamesOf(substituted, context);
   }
   return undefined;
+}
+
+/** 拿一个类型节点的成员（字面量或具名声明，含 `extends` 继承来的字段）。 */
+function membersOfNode(node: Node | undefined, context: EmitContext): MemberRef[] | undefined {
+  if (node === undefined) return undefined;
+  if (node["type"] === "TSTypeLiteral") {
+    return (node["members"] as Node[]).map((member) => ({ node: member, file: context.file }));
+  }
+  if (node["type"] !== "TSTypeReference") return undefined;
+  const name = nameOf(node["typeName"] as Node);
+  if (name === undefined) return undefined;
+  const declared = viaAlias(name, context) ?? context.index.get(name);
+  return declared === undefined ? undefined : membersOf(declared, context);
 }
 
 /** 文件路径 → 包名（从 `<…>/packages/<组>/<包>/…` 里取）。 */

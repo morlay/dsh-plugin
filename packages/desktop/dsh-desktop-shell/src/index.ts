@@ -457,7 +457,7 @@ async function main(): Promise<void> {
     return response;
   });
 
-  installDesktopDirectoryPicker(() => mainWindow, SCHEME);
+  installDesktopDirectoryPicker(() => mainWindow, () => hostOrigin);
 
   // 桌面流载体：主进程自己构造 Request（body 是流——首行定 endpoint/payload，后续行是上行项），
   // 把响应体逐块推回页面——页面 fetch 到自定义协议的 POST body 在 Chromium 上不可靠。
@@ -481,7 +481,7 @@ async function main(): Promise<void> {
     }
   };
   ipcMain.handle(DESKTOP_IPC.streamOpen, async (event, endpoint: unknown, payload: unknown) => {
-    assertDesktopSender(event, SCHEME, ["app"]);
+    assertDesktopSender(event, [hostOrigin]);
     if (typeof endpoint !== "string") throw new Error("dsh desktop: stream endpoint must be text");
     const active = host;
     if (active === undefined) throw new Error("dsh desktop: Host is unavailable");
@@ -571,7 +571,7 @@ async function main(): Promise<void> {
     () => mainWindow,
     app.getPath("userData"),
     process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : "linux",
-    SCHEME,
+    () => hostOrigin,
   );
   app.on("will-quit", () => {
     shortcuts.dispose();

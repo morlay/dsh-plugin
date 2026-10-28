@@ -15,3 +15,5 @@ Ollama 一家：llm route（`llm-pi-ai` 的 ollama provider）、搜索后端的
 
 后端为什么必须走 Ollama 自己的 `/api/web_search`（而不是把上游 messages 后端指过去）见
 [能力包的 README](../../web/dsh-web-search-ollama/README.md)。
+
+**插件页不挂长文**：`locale/*.json` 的 `meta.detail` 指向空文件 [`docs/detail.md`](./docs/detail.md)，所以 bundle 详情页的"详细介绍"区是空的；本 README 仍是包门面。

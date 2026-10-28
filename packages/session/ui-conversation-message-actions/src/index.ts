@@ -14,6 +14,7 @@ import {
   balanceRewindPrefix,
   type BranchBoundary,
 } from "@morlay/session-branch";
+import { liveEventsOf } from "@morlay/session-rdb";
 import type {
   EditOperation,
   RecallOperation,
@@ -407,7 +408,8 @@ export class SessionEditor extends Service {
     signal?: AbortSignal,
   ): Promise<readonly SessionEvent[]> {
     const live = this.ctx.sessions.get(sessionId);
-    if (live !== undefined) return live.snapshotEvents();
+    // 完整序列需求（rewind / retry 要重放历史）：读会话当前内存 log，不走已弃用的 `snapshotEvents()`。
+    if (live !== undefined) return liveEventsOf(live);
 
     const branch = this.ctx.sessionBranch as unknown as {
       readRawEvents(

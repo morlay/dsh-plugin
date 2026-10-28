@@ -33,6 +33,9 @@ export interface StorageRepository {
 
   deleteWorkspace(id: string): Promise<void>;
 
+  // 一次批量（上游 `KvUnit.deleteRecords` 的契约：行存储要么一次做完、要么不做）。
+  deleteWorkspaces(ids: readonly string[]): Promise<void>;
+
   readWorkspaceState(): Promise<WorkspaceDomainState | null>;
 
   writeWorkspaceState(state: WorkspaceDomainState): Promise<void>;
@@ -43,6 +46,8 @@ export interface StorageRepository {
   putScheduleTask(id: string, task: ScheduleTask): Promise<void>;
 
   deleteScheduleTask(id: string): Promise<void>;
+
+  deleteScheduleTasks(ids: readonly string[]): Promise<void>;
 
   loadProjcache(): Promise<StoredProjcacheEntry[]>;
 

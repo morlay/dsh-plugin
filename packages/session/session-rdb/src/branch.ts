@@ -153,7 +153,19 @@ function resetSurfaceManager(surfaceManager: SurfaceManagerLike): void {
   surfaceManager._pendingPlan = undefined;
 }
 
-export function truncateLiveSession(session: Session, newLength: number): void {
+/**
+ * 会话**当前内存 log** 的快照（复制一份）。用于"需要完整序列"的操作（首次落库的 seed、rewind / fork 的历史），
+ * 不走已弃用的同步历史读 `snapshotEvents()`——那三个读口上游已声明「新调用禁止」，而这里要的是当前内存里
+ * 那份完整日志，不是按需分页的历史。
+ * @param session - 会话。
+ * @returns 事件副本（调用方可以自由遍历）。
+ */
+export function liveEventsOf(session: Session): readonly SessionEvent[] {
+  return [...(session as unknown as { log: readonly SessionEvent[] }).log];
+}
+
+/** @returns 截断后日志里最后一个 `turn/start` 的 turn 号（没有则 0）。 */
+export function truncateLiveSession(session: Session, newLength: number): number {
   const s = session as unknown as {
     log: SessionEvent[];
     eventsSnapshot?: unknown;
@@ -166,6 +178,9 @@ export function truncateLiveSession(session: Session, newLength: number): void {
     derivedGeneration: number;
     surfaceManager: SurfaceManagerLike;
   };
+  // 截断后 agent 的 turn 游标要跟着落在保留前缀的最后一个 turn 上：这里直接读**要保留的那段**（同一个数组，
+  // 不经过已弃用的同步历史读 `snapshotEvents`，也不依赖 agent 侧的投影）。
+  const lastTurn = s.log.slice(0, newLength).findLast((event) => event.type === "turn/start")?.data.turn ?? 0;
   s.log.length = newLength;
   s.eventsSnapshot = undefined;
   s.headerFold = undefined;
@@ -176,6 +191,7 @@ export function truncateLiveSession(session: Session, newLength: number): void {
   s.derivedNodes = 0;
   s.derivedGeneration = 0;
   resetSurfaceManager(s.surfaceManager);
+  return lastTurn;
 }
 
 export function replaceLiveSessionLog(session: Session, events: readonly SessionEvent[]): void {
@@ -407,7 +423,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     internals.writeGuard.confirmHead(id, denseBoundary);
 
     if (live !== undefined) {
-      truncateLiveSession(live, keepLength);
+      const lastTurn = truncateLiveSession(live, keepLength);
 
       this.live.resetProjections?.(live);
 
@@ -416,8 +432,6 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       if (agent !== undefined) {
         agent.requestHeaderLogged = false;
 
-        const lastTurn =
-          live.snapshotEvents().findLast((e) => e.type === "turn/start")?.data.turn ?? 0;
         const phase = (agent as unknown as { phase?: { lastTurn?: number } }).phase;
         if (phase !== undefined) phase.lastTurn = lastTurn;
       }

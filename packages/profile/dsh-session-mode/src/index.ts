@@ -3,6 +3,7 @@
 // `modes.<id>.defaultModel`；换模式只允许在空白窗口。取舍见 `.agents/designs/20260924-会话模式.md`。
 
 import { Service, type Context } from "@deepseek-ai/cordis";
+import { modelSelectionProjectionDefinition } from "@deepseek-ai/dsh-agent";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 // 会话级模型事实（投影 `modelSelection` 与事件 `model/selection`）由上游 session-controller 声明；
 // 那一行可能没装（headless 部署），所以读它时按"可能为空"处理。
@@ -10,11 +11,10 @@ import type {} from "@deepseek-ai/dsh-api-session-controller";
 import { ReasoningEffortId, type LlmCallConfig } from "@deepseek-ai/dsh-llm";
 import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 import type {} from "@deepseek-ai/dsh-session";
-import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
+import { agentPresetProjectionDefinition } from "@deepseek-ai/dsh-agent-preset-registry";
+import type { ProjectionDefinition, ProjectionHandle } from "@deepseek-ai/dsh-session-projection";
 import type {} from "@deepseek-ai/dsh-session-projection";
-// Type-only：官方 roster 的会话投影（`agentPreset`）与它的选择事件——选择面归官方 preset，
-// 我们读它的选择、落成自己的会话事实。
-import type {} from "@deepseek-ai/dsh-agent-preset-registry";
+// 官方 roster 的会话投影（`agentPreset`）：选择面归官方 preset，我们读它的选择、落成自己的会话事实。
 // Type-only：上游 fs 的 policy 事件词汇（`fs/write-intent` / `fs/edit-intent` 的签名与 `FsWriteIntent`）。
 import type {} from "@deepseek-ai/dsh-fs";
 import { z } from "zod";
@@ -116,6 +116,14 @@ export class SessionModes extends Service {
   // 输入就是模式定义、唯一消费者也是模式。
   private readonly scope: SessionScope;
 
+  // 会话投影的读句柄（上游 0.2.1-rc.2 起 `register()` 是异步的，读状态要拿着那次注册的 handle；
+  // 全局的 `stateOf(session, key)` 已弃用）。前两个是本包自己的投影，后两个是上游的（同一份定义重复注册
+  // 只是共享同一个 unit，不改变它的行为）。
+  private projectionHandle!: ProjectionHandle<string | null>;
+  private editableHandle!: ProjectionHandle<boolean>;
+  private modelSelectionHandle!: ProjectionHandle<{ readonly pending: unknown; readonly lastUsed: unknown }>;
+  private agentPresetHandle!: ProjectionHandle<string | null>;
+
   // 装配时的配置快照：`default` / `modes` 读它，改这两项靠 Loader 重挂这一行（已运行会话不自动换定义）。
   readonly config: {
     default: string;
@@ -134,8 +142,6 @@ export class SessionModes extends Service {
     const problem = configProblem({ ...this.config, models: config.models });
     if (problem !== undefined) throw new Error(problem);
     this.scope = new SessionScope(ctx);
-    ctx.sessionProjections.register(sessionModeProjection);
-    ctx.sessionProjections.register(sessionModeEditableProjection);
     // 按模式的 policy 拦截：两条上游 waterfall 各 `prepend` **一次**，注册在行 ctx 上、随行卸载一起撤。
     //
     // 接缝为什么只有这一种：fs 的调用是 `ctx.waterfall('fs/write-intent', target, actor, next)`——事件名在第一个
@@ -169,11 +175,33 @@ export class SessionModes extends Service {
       const mapped = this.modeForPreset(preset);
       const agent = ctx.agents.get(sessionId);
       if (mapped === undefined || agent === undefined) return;
-      if (this.ctx.sessionProjections.stateOf(agent.session, "sessionMode") !== mapped) {
+      if (this.projectionHandle.stateOf(agent.session) !== mapped) {
         agent.session.append("session-mode/selected", { sessionMode: mapped });
       }
       this.installFor(agent, mapped);
     });
+  }
+
+  // 构造即注册（`init` 是异步的）：入口 `apply` 走这条异步工厂。
+  static async create(ctx: Context, config: ResolvedConfig): Promise<SessionModes> {
+    const modes = new SessionModes(ctx, config);
+    await modes.init();
+    return modes;
+  }
+
+  // 注册投影并拿读句柄。`register()` 要 await：句柄与注册同生命期（行卸载时自动释放），而读状态只能经句柄。
+  private async init(): Promise<void> {
+    this.projectionHandle = await this.ctx.sessionProjections.register(sessionModeProjection);
+    this.editableHandle = await this.ctx.sessionProjections.register(sessionModeEditableProjection);
+    // 上游那份 `modelSelection` 由 agent-loop 注册；这里拿同一个定义再注册一次只是要一个读句柄
+    // （refs 共享，卸载时我们这一份跟着减回去）。headless 部署里 agent-loop 也在，所以 key 一定有人注册。
+    this.modelSelectionHandle = await this.ctx.sessionProjections.register(
+      modelSelectionProjectionDefinition,
+    );
+    // `agentPreset` 归官方 roster；同样只借它的定义读会话事实（registry 没装时 header 里的值照旧可读）。
+    this.agentPresetHandle = await this.ctx.sessionProjections.register(
+      agentPresetProjectionDefinition,
+    );
   }
 
   // 新会话用它：config 里的 `default`。
@@ -222,10 +250,21 @@ export class SessionModes extends Service {
     return mode;
   }
 
+  // 会话自己选过的模式（投影原值；没选过是 null）。`modeOf` 在它之上落部署默认。
+  selectedOf(session: Session): string | null {
+    return this.projectionHandle.stateOf(session);
+  }
+
   // 会话当前模式：投影上有就用它，否则是部署默认。
   modeOf(session: Session): string {
-    const selected = this.ctx.sessionProjections.stateOf(session, "sessionMode");
+    const selected = this.projectionHandle.stateOf(session);
     return selected ?? this.defaultId;
+  }
+
+  // 这个会话还能不能换模式（空白窗口）：投影 `sessionModeEditable` 的读口。
+  // 页面 chip 的只读形态与服务端的拒绝判据都读它。
+  editableOf(session: Session): boolean {
+    return this.editableHandle.stateOf(session);
   }
 
   // 会话当前模式的定义。
@@ -274,7 +313,7 @@ export class SessionModes extends Service {
     const session = this.ctx.sessions.get(sessionId);
     if (session === undefined) throw new Error(`未知的会话 ${sessionId}`);
     // 空白窗口的判据只有一处：`sessionModeEditableProjection`（client chip 读同一个投影）。
-    if (this.ctx.sessionProjections.stateOf(session, "sessionModeEditable") === false) {
+    if (this.editableHandle.stateOf(session) === false) {
       throw new Error("这个会话已经开始，模式不能再改；要换模式请新开一个会话。");
     }
     const agent = this.ctx.agents.get(sessionId);
@@ -287,7 +326,7 @@ export class SessionModes extends Service {
         await registry.select(agent, target);
       }
     }
-    if (this.ctx.sessionProjections.stateOf(session, "sessionMode") !== mode) {
+    if (this.projectionHandle.stateOf(session) !== mode) {
       session.append("session-mode/selected", { sessionMode: mode });
     }
     // 会话可能已经建好了 agent（空白会话也有）：立刻按新模式重新应用一遍（与监听那次重复也无妨，幂等）。
@@ -344,7 +383,7 @@ export class SessionModes extends Service {
   // 继承要写进子会话日志——它是一条会话事实，冷恢复与 fork 靠它重建（`modeOf` 只读投影）。
   private resolveModeId(agent: Agent): string {
     // `undefined` = 这个投影没注册（或还没初始化），与"没选过"（`null`）一样落到下一层。
-    const selected = this.ctx.sessionProjections.stateOf(agent.session, "sessionMode");
+    const selected = this.projectionHandle.stateOf(agent.session);
     if (typeof selected === "string") return selected;
     // 会话级选择归官方 roster；结论落成我们自己的会话事实（`sessionMode`：恢复、子代理继承、
     // 服务端读取都读它）。
@@ -361,13 +400,9 @@ export class SessionModes extends Service {
 
   // 官方 roster 选定的 preset（没选过、或 registry 没装时为 `undefined`）。
   private presetOf(session: Session): string | undefined {
-    try {
-      const state = this.ctx.sessionProjections.stateOf(session, "agentPreset");
-      return typeof state === "string" ? state : undefined;
-    } catch {
-      // registry 没装（headless 部署）时这个投影不存在：按"没有选择"处理。
-      return undefined;
-    }
+    // registry 没装（headless 部署）时 header 里没有 preset，读到的就是 `null`：与"没选过"同义。
+    const state = this.agentPresetHandle.stateOf(session);
+    return typeof state === "string" ? state : undefined;
   }
 
   // 某个 preset 对应的模式 id——只在映射唯一时回答（只有它一个模式的名单里有这份 preset；没有模式认领、或几个
@@ -420,13 +455,19 @@ export class SessionModes extends Service {
 
   // 模式的默认模型兜底：只在会话尚无任何模型事实（没选过模型、也没落过 request header）时接管这一请求的
   // 路由。它是配置事实、不写会话事件，读构造时的模式快照（设置页保存会让这一行重挂）。
+  //
+  // `agent/request` 已被上游标为 deprecated（"Retained for existing listeners; do not add new listeners"，且明说
+  // 其他 per-request 控制**没有替代 API**）。这里是这个产品行为唯一的接缝：`agent.model.select()` 会写
+  // `model/selection` 事件，把"配置默认"变成"用户选择"，直接破坏"只在没有模型事实时兜底"的语义
+  // （见 `../.agents/adrs/20260925-默认模型住在模式定义里.md`）。债见
+  // `.agents/debts/20261026-默认模型兜底依赖deprecated的agent-request.md`。
   private installDefaultModel(agent: Agent, modeId: string): () => void {
     return agent.ctx.on("agent/request", async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next();
       const model = this.config.modes[modeId]?.defaultModel;
       if (model === undefined) return resolved;
       // 上游 session-controller 没装（headless）时这个投影不存在，按"没有选择"处理。
-      const pending = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection")?.pending;
+      const pending = this.modelSelectionHandle.stateOf(agent.session).pending;
       if (pending !== undefined && pending !== null) return resolved;
       if (agent.session.requestHeader() !== undefined) return resolved;
       return {
@@ -441,8 +482,8 @@ export class SessionModes extends Service {
   }
 }
 
-export function apply(ctx: Context, config: ResolvedConfig): void {
-  const modes = new SessionModes(ctx, config);
+export async function apply(ctx: Context, config: ResolvedConfig): Promise<void> {
+  const modes = await SessionModes.create(ctx, config);
   registerHttpRoutes(ctx, modes);
   // 配置页的工具 / 技能候选：一条本包自己开的 Remote 面（客户端半自己 mount，见 `./catalog-remote.ts`）。
   ctx.plugin(SessionModeCatalog);

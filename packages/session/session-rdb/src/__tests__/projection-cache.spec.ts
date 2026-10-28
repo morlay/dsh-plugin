@@ -136,6 +136,38 @@ function cachedTurns(harness: Harness, id: string): number[] | undefined {
 }
 
 describe("session-rdb projection cache replacement", () => {
+  it("header-only 读接受 ReadonlySet 形态的 keys（会话列表用它取标题）", async () => {
+    // 上游 `session/list` 传给缓存的是 `sessionProjections.summaryKeys()`——一个 `ReadonlySet`。这里之前只按
+    // 数组写了 `keys.includes()`，Set 上直接抛 TypeError；list 把那一行整列投影吞掉，侧边栏标题全变"未命名"。
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const id = SessionId("set-keys");
+      ctx.sessions.create(id, { meta: meta("set-keys") });
+      const live = ctx.sessions.get(id)!;
+      const titleEvent = {
+        title: "有标题的会话",
+        messageSeqs: [] as number[],
+        source: { kind: "fallback" },
+      };
+      (live as unknown as { append(type: string, data: unknown): void }).append(
+        "session/title",
+        titleEvent,
+      );
+      await ctx.sessions.flush(live);
+
+      // 不带 title 的选择：不抛，也不补标题。
+      const withoutTitle = cache.cachedSnapshot(live.header, new Set(["todos"]) as never);
+      expect(withoutTitle?.values["title"]).toBeUndefined();
+
+      // 带 title 的选择：从 `t_sessions.f_title` 兜底读出标题。
+      const withTitle = cache.cachedSnapshot(live.header, new Set(["title"]) as never);
+      expect(withTitle?.values["title"]).toBe("有标题的会话");
+    } finally {
+      await dispose();
+    }
+  });
+
+
   it("checkpoints a newly created session without an explicit write", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
@@ -182,7 +214,7 @@ describe("session-rdb projection cache replacement", () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const passthrough = { parse: (value: unknown) => value } as never;
-      ctx.sessionProjections.register({
+      await ctx.sessionProjections.register({
         key: "sessionListMetadata",
         stateSchema: passthrough,
         init: () => ({ blank: true, lastPromptAt: null }),

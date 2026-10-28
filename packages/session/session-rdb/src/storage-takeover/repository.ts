@@ -232,6 +232,17 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
       });
     },
 
+    async deleteWorkspaces(ids: readonly string[]): Promise<void> {
+      if (ids.length === 0) return;
+      await host.writeAtomically(async () => {
+        const db = await dbx();
+        await runQuery(
+          db.delete(tWorkspaceSessions).where(inArray(tWorkspaceSessions.fWorkspaceId, [...ids])),
+        );
+        await runQuery(db.delete(tWorkspaces).where(inArray(tWorkspaces.fWorkspaceId, [...ids])));
+      });
+    },
+
     async readWorkspaceState(): Promise<WorkspaceDomainState | null> {
       const db = await dbx();
       const row = await oneRow<{
@@ -396,6 +407,14 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
       await host.writeAtomically(async () => {
         const db = await dbx();
         await runQuery(db.delete(tScheduleTasks).where(eq(tScheduleTasks.fId, id)));
+      });
+    },
+
+    async deleteScheduleTasks(ids: readonly string[]): Promise<void> {
+      if (ids.length === 0) return;
+      await host.writeAtomically(async () => {
+        const db = await dbx();
+        await runQuery(db.delete(tScheduleTasks).where(inArray(tScheduleTasks.fId, [...ids])));
       });
     },
 

@@ -46,7 +46,7 @@ function bench() {
             {
               provider: "mine",
               displayName: "自建",
-              settingsNs: "llm-openai-compatible",
+              settingsNs: "fixture-provider-rows",
               settingsPath: ["providers", "mine"],
             },
           ],

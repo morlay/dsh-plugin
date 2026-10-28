@@ -282,7 +282,7 @@ const BASELINE: (string | RegExp)[] = [
 // 「契约层」：可安全内联的纯函数 / 线格式模块——没有需要跨插件共享的运行时身份（无单例、Symbol、
 // instanceof 判定）；名单与上游 client 构建的 `INLINE_SAFE` 对齐（这些包没有模块表条目）。
 export const INLINE_SAFE =
-  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-presets\/display$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$))/;
+  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-presets\/display$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$))/;
 
 // 判断一个模块是否留给平台/模块表（其余一律内联）。只信**显式列表**（baseline + 调用方给的行集）：
 // 「所有 `@deepseek-ai/*` 都是 client 行」的兜底会把 `.../remote`、`/display` 这类子路径也送进模块表，

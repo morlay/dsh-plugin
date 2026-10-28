@@ -1,0 +1,42 @@
+diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/packages/api/session-controller/src/client/sessions/service.ts
+index 412a2bb904..af16dc2c48 100644
+--- a/packages/api/session-controller/src/client/sessions/service.ts
++++ b/packages/api/session-controller/src/client/sessions/service.ts
+@@ -69,6 +69,24 @@ export interface SessionListState {
+   projectionsBySession: Readonly<Record<SessionId, SessionProjectionSnapshot>>
+ }
+ 
++/**
++ * Whether two projected list states are observationally identical: same order,
++ * same row identities, same phase and projection map.
++ * @param previous - published state.
++ * @param next - freshly derived state.
++ * @returns whether publishing `next` would change nothing.
++ */
++function sameListState(previous: SessionListState, next: SessionListState): boolean {
++  if (previous.phase !== next.phase) return false
++  if (previous.projectionsBySession !== next.projectionsBySession) return false
++  if (previous.ids.length !== next.ids.length) return false
++  for (const [index, id] of next.ids.entries()) {
++    if (previous.ids[index] !== id) return false
++    if (previous.byId[id] !== next.byId[id]) return false
++  }
++  return true
++}
++
+ /** Structured session-create failure. */
+ export class SessionCreateError extends Error {
+   override readonly name = 'SessionCreateError'
+@@ -705,7 +723,11 @@ export class ClientSessions implements ISessions {
+         ...(title === undefined ? {} : { title, displayTitle: title }),
+       }
+     }
+-    this.list.set({ ids, byId, phase, projectionsBySession })
++    const next: SessionListState = { ids, byId, phase, projectionsBySession }
++    // A control frame lands per Session projection step; rebuilding the same
++    // list and publishing it re-renders every list subscriber for nothing.
++    if (sameListState(this.list.getSnapshot(), next)) return
++    this.list.set(next)
+   }
+ 
+   private startScopeDrop(

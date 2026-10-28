@@ -115,7 +115,7 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages: input, turn: 1, step: 1, signal: new AbortController().signal },
+    { messages: input, turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
     async () => ({ kind: "enter" as const, messages: input }),
   );
   return decision.kind === "enter" ? decision.messages : [];

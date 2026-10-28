@@ -1,22 +1,16 @@
 import { Context } from "@deepseek-ai/cordis";
-import { assembleContextFor, installModelSelection, type Agent } from "@deepseek-ai/dsh-agent";
+import { assembleContextFor, type Agent } from "@deepseek-ai/dsh-agent";
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
 } from "@deepseek-ai/dsh-agent-loop-testkit";
 import { SessionId } from "@deepseek-ai/dsh-session";
-import type {
-  ModelSelectionProjection,
-  ModelSelectionProjectionState,
-} from "@deepseek-ai/dsh-api-session-controller";
 import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
 import { ToolCallId } from "@deepseek-ai/dsh-llm";
 import { FsVersion, type FsWriteIntent } from "@deepseek-ai/dsh-fs";
-import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { afterEach, describe, expect, it } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
-import { z } from "zod";
 import * as plugin from "../index.ts";
 import { sessionModeEditableProjection } from "../index.ts";
 import type { Config, SessionMode, SessionModeRole } from "../modes.ts";
@@ -65,23 +59,6 @@ const CONFIG: Config = {
 };
 
 // 只为本包用例服务的最小 `modelSelection` 投影：真实那份由上游 session-controller 注册。
-function mountModelSelectionProjection(ctx: Context): void {
-  ctx.sessionProjections.register({
-    key: "modelSelection",
-    // 与上游那份同样用 `unknown` 校验：这里只关心"有没有 pending"。
-    stateSchema: z.unknown() as unknown as z.ZodType<ModelSelectionProjectionState>,
-    stateVersion: 1,
-    init: () => ({ lastUsed: null, pending: null }),
-    apply: (state, event) =>
-      event.type === "model/selection" ? { lastUsed: state.lastUsed, pending: event.data } : state,
-    // `modelSelection` 在 session-controller 的 SessionProjectionMap 里是带 wire 的，注册必须同形。
-    wire: {
-      viewSchema: z.unknown() as unknown as z.ZodType<ModelSelectionProjection>,
-      view: (state) => ({ lastUsed: state.lastUsed, next: state.pending ?? state.lastUsed }),
-    },
-  } satisfies ProjectionDefinition<"modelSelection", ModelSelectionProjectionState>);
-}
-
 function fixtureTool(toolName: string) {
   return defineTool({
     name: toolName,
@@ -159,6 +136,14 @@ async function assembled(ctx: Context, agent: Agent) {
   return await ctx.systemPrompt.assemble(assembleContextFor(agent));
 }
 
+// 模型目录 = 注册表视图（收窄落在 `tools.restrict` 上，装配瀑布里不再带工具声明）。
+function visibleToolNames(ctx: Context, agent: Agent): string[] {
+  return ctx.tools
+    .schemas(agent)
+    .map((tool) => tool.name)
+    .toSorted();
+}
+
 function sectionText(
   prompt: { sections: readonly { name: string; text: string }[] },
   name: string,
@@ -177,10 +162,7 @@ describe("会话模式的 persona", () => {
 
   it("切到 chat 之后：persona 换掉，工具收口与动态快照一起跟着换", async () => {
     const { ctx, agent } = await mount();
-    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name).toSorted()).toEqual([
-      "read",
-      "web_search",
-    ]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["read", "web_search"]);
 
     await ctx.sessionModes.select(agent.id, "chat");
     const prompt = await assembled(ctx, agent);
@@ -189,10 +171,10 @@ describe("会话模式的 persona", () => {
     // chat 没有 suffix：空串遮蔽掉部署级那层（与上游 persona 行同语义）。
     expect(sectionText(prompt, "deployment:persona-suffix")).toBe("");
     // 收口：只剩 chat 的那一件。
-    expect(prompt.tools.map((tool) => tool.name)).toEqual(["web_search"]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["web_search"]);
     // runtimeContext: false → 这个会话看不到动态快照。
     expect(prompt.contexts).toEqual([]);
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
   it("allowTools 留空：这个会话用宿主平面的全部工具（不设收窄）", async () => {
@@ -202,11 +184,7 @@ describe("会话模式的 persona", () => {
     });
 
     // 宿主平面装了三件（`read` / `web_search` / `send_message`）：留空就是一件都不砍。
-    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name).toSorted()).toEqual([
-      "read",
-      "send_message",
-      "web_search",
-    ]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["read", "send_message", "web_search"]);
   });
 
   it("装配是幂等的：同一个模式反复装配不会重复注册", async () => {
@@ -238,7 +216,7 @@ describe("模式的读取与切换", () => {
   it("没选过模式的会话读投影拿到默认值", async () => {
     const { ctx, agent } = await mount();
 
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBeNull();
+    expect(ctx.sessionModes.selectedOf(agent.session)).toBeNull();
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
   });
 
@@ -253,12 +231,12 @@ describe("模式的读取与切换", () => {
   it("可改与否是**客户端可见**的投影：空白会话为可改，开过 turn 之后为不可改", async () => {
     const { ctx, agent } = await mount();
 
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionModeEditable")).toBe(true);
+    expect(ctx.sessionModes.editableOf(agent.session)).toBe(true);
 
     agent.session.append("turn/start", { turn: 1 });
 
     // 与服务端拒绝切换读同一份事实：client 的只读形态据此而定。
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionModeEditable")).toBe(false);
+    expect(ctx.sessionModes.editableOf(agent.session)).toBe(false);
     expect(sessionModeEditableProjection.wire?.view(false)).toBe(false);
   });
 
@@ -284,7 +262,7 @@ describe("模式的读取与切换", () => {
       .ownEvents()
       .filter((event) => event.type === "session-mode/selected");
     expect(selected.map((event) => event.data.sessionMode)).toEqual(["chat"]);
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
   it("模式不限 preset（空名单）时不碰官方 registry", async () => {
@@ -297,7 +275,7 @@ describe("模式的读取与切换", () => {
     await ctx.sessionModes.select(agent.id, "chat");
 
     expect(picked).toEqual([]);
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
   it("registry 没装（headless）时只落我们的会话事实", async () => {
@@ -305,7 +283,7 @@ describe("模式的读取与切换", () => {
 
     await ctx.sessionModes.select(agent.id, "chat");
 
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
   it("装配期校验：默认模式不在清单里直接拒绝装载", async () => {
@@ -371,7 +349,7 @@ describe("两个模式共享一份 preset 白名单", () => {
 
     // 一次 recompose 都没发生，但模式事实照落、persona 与收口换成 chat 那一份。
     expect(picked).toEqual([]);
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
     expect(sectionText(await assembled(ctx, agent), "deployment:persona-prefix")).toBe(
       "对话模式的提示词。",
     );
@@ -402,7 +380,7 @@ describe("两个模式共享一份 preset 白名单", () => {
     await ctx.sessionModes.select(agent.id, "chat");
 
     expect(picked).toEqual(["mode-switch"]);
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
   it("registry 没有 `composedPreset` 读面时按未知处理：该切就切", async () => {
@@ -502,21 +480,9 @@ describe("模式的角色与默认模型", () => {
     expect(await requestRoute(agent)).toEqual(SEED);
   });
 
-  it("上游会话级选择在场时（无用户选择）模式兜底仍然生效", async () => {
-    const { agent } = await mount(EXTENDED);
-    // 上游 session-controller 的懒安装：没有 pending、没有 header 时它给全局默认。
-    // 真实部署里这两个 listener 同时挂在 `agent/request` 上，谁最后写 route 就是这个用例的判据。
-    installModelSelection(agent.ctx, {
-      current: { provider: "global", model: "global-model" },
-      assembled: undefined,
-    });
-
-    expect((await requestRoute(agent)).model).toBe("coding-model");
-  });
-
   it("用户选过模型（投影 pending）时不覆盖", async () => {
-    const { ctx, agent } = await mount(EXTENDED);
-    mountModelSelectionProjection(ctx);
+    const { agent } = await mount(EXTENDED);
+    // `modelSelection` 投影就是我们注册的上游那份：落一条选择事件，pending 立刻读得到。
     agent.session.append("model/selection", { provider: "vendor", model: "vendor-model" });
 
     expect(await requestRoute(agent)).toEqual(SEED);
@@ -528,7 +494,6 @@ describe("模式的角色与默认模型", () => {
     ctx.sessionModes.applyTo(agent, "reviewer");
 
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("reviewer");
-    expect(ctx.sessionProjections.stateOf(agent.session, "sessionMode")).toBe("reviewer");
     expect(sectionText(await assembled(ctx, agent), "deployment:persona-prefix")).toBe(
       "评审模式的提示词。",
     );
@@ -732,13 +697,21 @@ describe("按模式的 policy 拦截", () => {
 
 // 一次真的工具调用：执行层守卫挂在 `agent` 的 scope 上（被拒时错误里带模式名与拒因）。
 async function executeTool(ctx: Context, agent: Agent, name: string) {
-  return await ctx.tools.execute({
-    callId: ToolCallId(`call-${name}-${String(Math.random())}`),
-    name,
-    arguments: {},
+  // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
+  const batch = await ctx.tools.execute({
+    calls: [
+      {
+        type: "tool-call",
+        id: ToolCallId(`call-${name}-${String(Math.random())}`),
+        name,
+        arguments: "{}",
+      },
+    ],
     agent,
     signal: new AbortController().signal,
   });
+  const result = batch.results[0]?.result;
+  return { error: result !== undefined && "error" in result ? result.error : undefined };
 }
 
 describe("模式与收口（工具名单）", () => {
@@ -754,14 +727,14 @@ describe("模式与收口（工具名单）", () => {
 
     // 收口要的几项按模式定义整份推过去：`chat` 的白名单只剩 web_search。
     ctx.sessionModes.applyTo(agent, "chat");
-    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["web_search"]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["web_search"]);
 
     // 换到 `coding`：白名单是 read / web_search，黑名单减掉 web_search（同一份里 deny 优先）。
     ctx.sessionModes.applyTo(agent, "coding");
-    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["read"]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
   });
 
-  it("`denyTools` 的收窄：黑名单里的工具进不了目录、调用被拒（文案说黑名单）", async () => {
+  it("`denyTools` 的收窄：黑名单里的工具进不了目录、调用是 UNKNOWN_TOOL", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
       modes: {
@@ -773,13 +746,13 @@ describe("模式与收口（工具名单）", () => {
     await assembled(ctx, agent);
 
     // 目录：白名单那两件减掉黑名单那一件。
-    expect((await assembled(ctx, agent)).tools.map((tool) => tool.name)).toEqual(["read"]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
 
     const denied = await executeTool(ctx, agent, "web_search");
-    // 成对判据：留下的那件照旧能调，被拒那件说的是黑名单（与"不在白名单里"分开）。
+    // 成对判据：留下的那件照旧能调，被拒那件不在准入集里（上游 `UNKNOWN_TOOL`，不再带自定义文案）。
     expect((await executeTool(ctx, agent, "read")).error).toBeUndefined();
     expect(denied.error).toBeDefined();
-    expect(JSON.stringify(denied)).toContain("黑名单");
+    expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 });
 
@@ -794,7 +767,7 @@ describe("子代理继承父模式", () => {
       meta: { parentSession: parent.id, origin: "subagent" },
     });
 
-    expect(ctx.sessionProjections.stateOf(child.agent.session, "sessionMode")).toBe("chat");
+    expect(ctx.sessionModes.modeOf(child.agent.session)).toBe("chat");
     expect(ctx.sessionModes.modeOf(child.agent.session)).toBe("chat");
     expect(sectionText(await assembled(ctx, child.agent), "deployment:persona-prefix")).toBe(
       "对话模式的提示词。",

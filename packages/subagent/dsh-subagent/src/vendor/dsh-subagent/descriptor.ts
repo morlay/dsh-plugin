@@ -21,12 +21,12 @@
  * @module @deepseek-ai/dsh-subagent/descriptor
  */
 
-import { snapshotJsonValue } from "@deepseek-ai/dsh-util-values";
-import type { SessionEvent } from "@deepseek-ai/dsh-session";
-import type { ReasoningEffortId } from "@deepseek-ai/dsh-llm";
-import type { ToolRestriction } from "@deepseek-ai/dsh-tools";
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 
-declare module "@deepseek-ai/dsh-session/types" {
+declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
      * Durable identity and lifecycle mode of a session-backed subagent child,
@@ -35,7 +35,7 @@ declare module "@deepseek-ai/dsh-session/types" {
      * resumable composition. Log-only: it carries no `surfaceOp`, never enters
      * model history, and survives compaction.
      */
-    "subagent/descriptor": SubagentDescriptorData;
+    'subagent/descriptor': SubagentDescriptorData
   }
 }
 
@@ -45,181 +45,180 @@ declare module "@deepseek-ai/dsh-session/types" {
  * Supporting another composition input is a deliberate version change, never
  * an implicit extra field.
  */
-export const SUBAGENT_DESCRIPTOR_VERSION = 3;
+export const SUBAGENT_DESCRIPTOR_VERSION = 3
 
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
   /** Descriptor format version ({@link SUBAGENT_DESCRIPTOR_VERSION}). */
-  readonly version: number;
+  readonly version: number
   /** Whether the child is a terminal one-shot run or a resumable conversation. */
-  readonly mode: "one-shot" | "continuable";
+  readonly mode: 'one-shot' | 'continuable'
   /** The `ctx.subagents` provider name that established the child. */
-  readonly provider: string;
+  readonly provider: string
 }
 
 /** A session-backed subagent that cannot be cold-resumed after its run. */
 export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {
-  readonly mode: "one-shot";
+  readonly mode: 'one-shot'
   /**
    * The initial delegation's short `description`, kept as the child's durable
    * creation label so enumeration can identify the conversation without
    * replaying parent tool results or exposing the child prompt.
    */
-  readonly label?: string;
+  readonly label?: string
 }
 
 /** A session-backed subagent whose declared composition supports cold resume. */
 export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {
-  readonly mode: "continuable";
+  readonly mode: 'continuable'
   /** The initial delegation's short `description`, used for durable enumeration. */
-  readonly label: string;
+  readonly label: string
   /** Resolved child `agentOptions.provider`, when one was declared. */
-  readonly agentProvider?: string;
+  readonly agentProvider?: string
   /** Resolved child `agentOptions.model`, when one was declared. */
-  readonly agentModel?: string;
+  readonly agentModel?: string
   /** Resolved child `agentOptions.reasoningEffort`, when one was declared. */
-  readonly agentReasoningEffort?: ReasoningEffortId;
+  readonly agentReasoningEffort?: ReasoningEffortId
   /** Per-child persona that shadows the deployment persona on resume. */
-  readonly persona?: string;
+  readonly persona?: string
   /** Child tool scoping reapplied on resume. */
-  readonly toolFilter?: ToolRestriction;
+  readonly toolFilter?: ToolRestriction
 }
 
 /** The supported durable subagent identity and optional continuation composition. */
 export type SubagentDescriptorData =
   | OneShotSubagentDescriptorData
-  | ContinuableSubagentDescriptorData;
+  | ContinuableSubagentDescriptorData
 
 /** Continuable composition fields before the snapshot stamps their format version. */
-export type ContinuableSubagentDescriptorInput = Omit<ContinuableSubagentDescriptorData, "version">;
+export type ContinuableSubagentDescriptorInput = Omit<ContinuableSubagentDescriptorData, 'version'>
 
-const DESCRIPTOR_BASE_KEYS = ["version", "mode", "provider", "label"] as const;
-const ONE_SHOT_DESCRIPTOR_KEYS = new Set(DESCRIPTOR_BASE_KEYS);
+const DESCRIPTOR_BASE_KEYS = [
+  'version',
+  'mode',
+  'provider',
+  'label',
+] as const
+const ONE_SHOT_DESCRIPTOR_KEYS = new Set(DESCRIPTOR_BASE_KEYS)
 const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
   ...DESCRIPTOR_BASE_KEYS,
-  "agentProvider",
-  "agentModel",
-  "agentReasoningEffort",
-  "persona",
-  "toolFilter",
-]);
-const TOOL_FILTER_KEYS = new Set(["allow", "deny"]);
+  'agentProvider',
+  'agentModel',
+  'agentReasoningEffort',
+  'persona',
+  'toolFilter',
+])
+const TOOL_FILTER_KEYS = new Set(['allow', 'deny'])
 
 /** Whether a persisted JSON value is an object record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** Reject fields outside one versioned record's declared schema. */
-function assertKnownKeys(
-  value: Record<string, unknown>,
-  keys: ReadonlySet<string>,
-  path: string,
-): void {
-  const unknown = Object.keys(value).find((key) => !keys.has(key));
+function assertKnownKeys(value: Record<string, unknown>, keys: ReadonlySet<string>, path: string): void {
+  const unknown = Object.keys(value).find(key => !keys.has(key))
   if (unknown !== undefined) {
-    throw new Error(`persisted subagent descriptor ${path} has unknown field "${unknown}"`);
+    throw new Error(`persisted subagent descriptor ${path} has unknown field "${unknown}"`)
   }
 }
 
 /** Read one optional string field from a persisted descriptor record. */
 function optionalString(value: Record<string, unknown>, key: string): string | undefined {
-  if (!Object.hasOwn(value, key)) return undefined;
-  const field = value[key];
-  if (typeof field !== "string") {
-    throw new Error(`persisted subagent descriptor ${key} must be a string`);
+  if (!Object.hasOwn(value, key)) return undefined
+  const field = value[key]
+  if (typeof field !== 'string') {
+    throw new Error(`persisted subagent descriptor ${key} must be a string`)
   }
-  return field;
+  return field
 }
 
 /** Read one optional string-array field from a persisted tool restriction. */
 function optionalStringArray(value: Record<string, unknown>, key: string): string[] | undefined {
-  if (!Object.hasOwn(value, key)) return undefined;
-  const field = value[key];
+  if (!Object.hasOwn(value, key)) return undefined
+  const field = value[key]
   if (!Array.isArray(field)) {
-    throw new Error(`persisted subagent descriptor toolFilter.${key} must be an array of strings`);
+    throw new Error(`persisted subagent descriptor toolFilter.${key} must be an array of strings`)
   }
-  const items: unknown[] = field;
-  if (items.some((item) => typeof item !== "string")) {
-    throw new Error(`persisted subagent descriptor toolFilter.${key} must be an array of strings`);
+  const items: unknown[] = field
+  if (items.some(item => typeof item !== 'string')) {
+    throw new Error(`persisted subagent descriptor toolFilter.${key} must be an array of strings`)
   }
-  return items as string[];
+  return items as string[]
 }
 
 /** Validate and reconstruct a persisted tool restriction. */
 function parseToolFilter(value: unknown): ToolRestriction {
   if (!isRecord(value)) {
-    throw new Error("persisted subagent descriptor toolFilter must be an object");
+    throw new Error('persisted subagent descriptor toolFilter must be an object')
   }
-  assertKnownKeys(value, TOOL_FILTER_KEYS, "toolFilter");
-  const allow = optionalStringArray(value, "allow");
-  const deny = optionalStringArray(value, "deny");
+  assertKnownKeys(value, TOOL_FILTER_KEYS, 'toolFilter')
+  const allow = optionalStringArray(value, 'allow')
+  const deny = optionalStringArray(value, 'deny')
   if (allow === undefined && deny === undefined) {
-    throw new Error("persisted subagent descriptor toolFilter must declare allow and/or deny");
+    throw new Error('persisted subagent descriptor toolFilter must declare allow and/or deny')
   }
   return {
-    ...(allow !== undefined ? { allow } : {}),
-    ...(deny !== undefined ? { deny } : {}),
-  };
+    ...allow !== undefined ? { allow } : {},
+    ...deny !== undefined ? { deny } : {},
+  }
 }
 
 /** Validate one persisted descriptor payload for the current runtime. */
 function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undefined {
   if (!isRecord(value)) {
-    throw new Error("persisted subagent descriptor payload must be an object");
+    throw new Error('persisted subagent descriptor payload must be an object')
   }
-  const version = value["version"];
-  if (typeof version !== "number") {
-    throw new Error("persisted subagent descriptor version must be a number");
+  const version = value['version']
+  if (typeof version !== 'number') {
+    throw new Error('persisted subagent descriptor version must be a number')
   }
-  if (version !== SUBAGENT_DESCRIPTOR_VERSION) return undefined;
+  if (version !== SUBAGENT_DESCRIPTOR_VERSION) return undefined
 
-  const mode = value["mode"];
-  if (mode !== "one-shot" && mode !== "continuable") {
-    throw new Error('persisted subagent descriptor mode must be "one-shot" or "continuable"');
+  const mode = value['mode']
+  if (mode !== 'one-shot' && mode !== 'continuable') {
+    throw new Error('persisted subagent descriptor mode must be "one-shot" or "continuable"')
   }
   assertKnownKeys(
     value,
-    mode === "one-shot" ? ONE_SHOT_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS,
-    "payload",
-  );
-  const provider = value["provider"];
-  if (typeof provider !== "string") {
-    throw new Error("persisted subagent descriptor provider must be a string");
+    mode === 'one-shot' ? ONE_SHOT_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS,
+    'payload',
+  )
+  const provider = value['provider']
+  if (typeof provider !== 'string') {
+    throw new Error('persisted subagent descriptor provider must be a string')
   }
-  if (mode === "one-shot") {
-    const label = optionalString(value, "label");
+  if (mode === 'one-shot') {
+    const label = optionalString(value, 'label')
     return {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode,
       provider,
-      ...(label !== undefined ? { label } : {}),
-    };
+      ...label !== undefined ? { label } : {},
+    }
   }
-  const label = value["label"];
-  if (typeof label !== "string") {
-    throw new Error("persisted subagent descriptor label must be a string");
+  const label = value['label']
+  if (typeof label !== 'string') {
+    throw new Error('persisted subagent descriptor label must be a string')
   }
-  const agentProvider = optionalString(value, "agentProvider");
-  const agentModel = optionalString(value, "agentModel");
-  const agentReasoningEffort = optionalString(value, "agentReasoningEffort") as
-    | ReasoningEffortId
-    | undefined;
-  const persona = optionalString(value, "persona");
-  const toolFilter = Object.hasOwn(value, "toolFilter")
-    ? parseToolFilter(value["toolFilter"])
-    : undefined;
+  const agentProvider = optionalString(value, 'agentProvider')
+  const agentModel = optionalString(value, 'agentModel')
+  const agentReasoningEffort = optionalString(value, 'agentReasoningEffort') as ReasoningEffortId | undefined
+  const persona = optionalString(value, 'persona')
+  const toolFilter = Object.hasOwn(value, 'toolFilter')
+    ? parseToolFilter(value['toolFilter'])
+    : undefined
   return {
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode,
     provider,
     label,
-    ...(agentProvider !== undefined ? { agentProvider } : {}),
-    ...(agentModel !== undefined ? { agentModel } : {}),
-    ...(agentReasoningEffort !== undefined ? { agentReasoningEffort } : {}),
-    ...(persona !== undefined ? { persona } : {}),
-    ...(toolFilter !== undefined ? { toolFilter } : {}),
-  };
+    ...agentProvider !== undefined ? { agentProvider } : {},
+    ...agentModel !== undefined ? { agentModel } : {},
+    ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
+    ...persona !== undefined ? { persona } : {},
+    ...toolFilter !== undefined ? { toolFilter } : {},
+  }
 }
 
 /**
@@ -236,19 +235,17 @@ export function snapshotSubagentDescriptor(
     mode: input.mode,
     provider: input.provider,
     label: input.label,
-    ...(input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {}),
-    ...(input.agentModel !== undefined ? { agentModel: input.agentModel } : {}),
-    ...(input.agentReasoningEffort !== undefined
-      ? { agentReasoningEffort: input.agentReasoningEffort }
-      : {}),
-    ...(input.persona !== undefined ? { persona: input.persona } : {}),
-    ...(input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {}),
-  };
-  const snapshot = snapshotJsonValue(candidate);
-  if (snapshot === undefined) {
-    throw new Error("subagent descriptor is not losslessly JSON-serializable");
+    ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
+    ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},
+    ...input.agentReasoningEffort !== undefined ? { agentReasoningEffort: input.agentReasoningEffort } : {},
+    ...input.persona !== undefined ? { persona: input.persona } : {},
+    ...input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {},
   }
-  return snapshot;
+  const snapshot = snapshotJsonValue(candidate)
+  if (snapshot === undefined) {
+    throw new Error('subagent descriptor is not losslessly JSON-serializable')
+  }
+  return snapshot
 }
 
 /**
@@ -263,13 +260,10 @@ export function snapshotSubagentDescriptor(
  * @throws when a current-version persisted payload does not match its complete
  *   declared schema.
  */
-export function foldSubagentDescriptor(
-  events: readonly SessionEvent[],
-): SubagentDescriptorData | undefined {
+export function foldSubagentDescriptor(events: readonly SessionEvent[]): SubagentDescriptorData | undefined {
   const event = events.find(
-    (candidate): candidate is SessionEvent<"subagent/descriptor"> =>
-      candidate.type === "subagent/descriptor",
-  );
-  if (event === undefined) return undefined;
-  return parseSubagentDescriptor(event.data);
+    (candidate): candidate is SessionEvent<'subagent/descriptor'> => candidate.type === 'subagent/descriptor',
+  )
+  if (event === undefined) return undefined
+  return parseSubagentDescriptor(event.data)
 }

@@ -27,10 +27,11 @@ tag `dsh-v{version}` 优先、回退同名 branch。
 **后果**
 
 - 上游 `@deepseek-ai/*` 不可修改（红线见 [AGENTS.md](../../AGENTS.md)）——
-  vendor 只读，本地 patch 是例外且由 `just vendor patch` 重打（删 acp profile、裁掉
-  subagent-codex / subagent-claude-code 两个包、exports 改写、装饰器双协议、typert 生成、
-  删上游 tsconfig——步骤清单见 `vendor/steps.ts` 的 `patch` / `prebuild` 两阶段）。
-- 更新流程：`just prepare`（vendor sync + vendor patch + dep + vendor prebuild），升级后
+  vendor 只读，本地 patch 是例外且由 `just vendor patch` 重打（裁掉文档站 / 仓库脚本 /
+  快照 / 基准 / python 这些非产品面、`exports` 改指源码面、装饰器双协议与认证移除等本地补丁、
+  typert 生成、删上游 tsconfig——步骤清单见 `vendor/steps.ts` 的 `patch` / `prebuild` 两阶段）。
+- 更新流程：`just prepare`（vendor sync + vendor patch + dep + vendor prebuild），上游内部文件有变动时
+  再跑 `just vendor vendor`（按需复制进各包的 `src/vendor/`）；升级后
   验证 `just test` / `just lint` / `just build`（门禁与 CI 一致）。
 - vendor 目录删除后必须重新 `just vendor sync` 才能恢复（`pnpm install`
   不会重新克隆）。

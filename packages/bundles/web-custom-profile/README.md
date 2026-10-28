@@ -11,3 +11,5 @@
   的「包出口」）。手改这两段会在下次 `just build` 被覆盖。
 - 前端链路的设计与判据见
   [dsh-client-modules 的设计记录](../../client/dsh-client-modules/.agents/designs/20261013-客户端资源的联邦式预编译.md)。
+
+**插件页不挂长文**：`locale/*.json` 的 `meta.detail` 指向空文件 [`docs/detail.md`](./docs/detail.md)，所以 bundle 详情页的"详细介绍"区是空的；本 README 仍是包门面。

@@ -42,13 +42,14 @@ export function renderReminder(id: string, body: string): string {
 }
 
 // surface 上最近一条该 id 的 reminder 原文（含信封）；没有则 undefined。
+// 走 `deriveMessages()`（surface 的派生消息视图，受支持的同步读）而不是逐 seq 读事件：
+// `Session.eventAt` / `snapshotEvents` / `ownEvents` 已被上游声明为「新调用禁止」。
 export function latestReminderText(agent: Agent, id: string): string | undefined {
-  for (const seq of agent.session.surface.nodes.toReversed()) {
-    const event = agent.session.eventAt(seq);
-    if (event?.type !== "user/message") continue;
-    if (promptEntryIdOf(event.data.source) !== id) continue;
-    const [block] = event.data.content;
-    return event.data.content.length === 1 && block?.type === "text" ? block.text : "";
+  for (const message of agent.session.deriveMessages().toReversed()) {
+    if (message.role !== "user") continue;
+    if (promptEntryIdOf(message.source) !== id) continue;
+    const [block] = message.content;
+    return message.content.length === 1 && block?.type === "text" ? block.text : "";
   }
   return undefined;
 }

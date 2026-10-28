@@ -3,7 +3,7 @@ import { mkdir, open, readdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { and, desc, eq, gte, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { drizzle, type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite";
 import { migrate } from "drizzle-orm/node-sqlite/migrator";
 import type { SessionId } from "@deepseek-ai/dsh-session";
@@ -341,6 +341,10 @@ function configureDatabase(
   db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
+  // 冷读一次要顺序扫整份日志（大会话 30k+ 事件、几十 MiB 的 `f_data`）：把页缓存与 mmap 窗口调大，
+  // 省掉的是 SQLite 与内核页缓存之间的往返。`:memory:` 上这两个 PRAGMA 无害。
+  db.exec("PRAGMA cache_size = -65536");
+  db.exec("PRAGMA mmap_size = 268435456");
   const dbx = drizzle({ client: db });
 
   dbx.transaction(
@@ -500,13 +504,19 @@ export class SqliteBackend implements Backend {
   }
 
   async getEventRows(id: SessionId, fromSequence?: number): Promise<EventRow[]> {
-    const scoped =
-      fromSequence === undefined
-        ? this.eventRows().where(eq(tSessionEvents.fSessionId, id))
-        : this.eventRows().where(
-            and(eq(tSessionEvents.fSessionId, id), gte(tSessionEvents.fSequence, fromSequence)),
-          );
-    return scoped.orderBy(tSessionEvents.fSequence).all() as unknown as EventRow[];
+    // 裸 prepared 语句而不是 drizzle 的 `.select().all()`：冷读要一次拉整份日志（大会话 30k+ 行、几十 MiB 的
+    // `f_data`），drizzle 的逐行对象映射在这条路径上是纯开销。列集合与 `eventRows()` 完全一致。
+    const sql =
+      `select se.f_event_id as fEventId, se.f_sequence as fSequence, e.f_type as fType,
+              e.f_kind as fKind, e.f_role as fRole, e.f_name as fName, e.f_action_id as fActionId,
+              e.f_created_at as fCreatedAt, e.f_data as fData, se.f_surface_op as fSurfaceOp
+         from t_session_events se join t_events e on se.f_event_id = e.f_event_id
+        where se.f_session_id = ?${fromSequence === undefined ? "" : " and se.f_sequence >= ?"}
+        order by se.f_sequence`;
+    const statement = this.db.$client.prepare(sql);
+    const rows =
+      fromSequence === undefined ? statement.all(id) : statement.all(id, fromSequence);
+    return rows as unknown as EventRow[];
   }
 
   // 只取类型：rewind 的边界 / 窗口探测不该把整个事件 JSON（f_data）拖回来。

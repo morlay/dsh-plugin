@@ -1,0 +1,68 @@
+diff --git a/packages/client/ui-theme/src/client/icon-sprite.ts b/packages/client/ui-theme/src/client/icon-sprite.ts
+index 380c6e3786..9c10b9652b 100644
+--- a/packages/client/ui-theme/src/client/icon-sprite.ts
++++ b/packages/client/ui-theme/src/client/icon-sprite.ts
+@@ -13,13 +13,30 @@ export type IconReplacements = Readonly<Partial<Record<IconSymbolId, string>>>
+ /** Root attributes that size or label one rendering, not the reusable artwork. */
+ const DROPPED_ATTRIBUTES = new Set(['width', 'height', 'xmlns', 'class', 'aria-hidden'])
+ 
+-function toSymbol(id: string, markup: string): SVGSymbolElement {
+-  const root = new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement
+-  const symbol = document.createElementNS(SVG_NS, 'symbol')
+-  for (const { name, value } of root.attributes) if (!DROPPED_ATTRIBUTES.has(name)) symbol.setAttribute(name, value)
+-  symbol.id = id
+-  symbol.append(...[...root.childNodes].map(node => document.importNode(node, true)))
+-  return symbol
++/**
++ * Parse one batch of icons through a single document parse. Parsing each icon
++ * as its own SVG document paid the XML parser's per-document setup once per
++ * symbol (~60 in the default set, measured as tens of milliseconds in one long
++ * task); one wrapper document amortizes it over the whole set. The glyph source
++ * is always a single `<svg>` root, so its attributes move onto the symbol and
++ * its children become the symbol's content, exactly as the per-icon path did.
++ * @param entries - symbol id and SVG source pairs.
++ * @returns imported symbol elements, in `entries` order.
++ */
++function toSymbols(entries: readonly (readonly [string, string])[]): SVGSymbolElement[] {
++  const markup = `<svg xmlns="${SVG_NS}">${entries.map(([id, source]) => {
++    const open = source.indexOf('>')
++    const close = source.lastIndexOf('</svg>')
++    const attributes = source.slice('<svg'.length, open)
++    const body = source.slice(open + 1, close < 0 ? source.length : close)
++    return `<symbol id="${id}"${attributes}>${body}</symbol>`
++  }).join('')}</svg>`
++  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml')
++  return [...parsed.querySelectorAll('symbol')].map((node) => {
++    const symbol = document.importNode(node, true) as SVGSymbolElement
++    for (const name of DROPPED_ATTRIBUTES) symbol.removeAttribute(name)
++    return symbol
++  })
+ }
+ 
+ /**
+@@ -37,15 +54,23 @@ export function installIconSprite(ctx: Context, icons: IconReplacements | undefi
+   const rendered = new Map<string, SVGSymbolElement>()
+   const markups = new Map<string, string>()
+   const apply = (replacements: IconReplacements = {}): void => {
++    const pending: [string, string][] = []
+     for (const [id, fallback] of Object.entries(ICON_SYMBOLS) as [IconSymbolId, string][]) {
+       const markup = replacements[id] ?? fallback
+       if (markups.get(id) === markup) continue
+-      const symbol = toSymbol(id, markup)
++      markups.set(id, markup)
++      pending.push([id, markup])
++    }
++    if (pending.length === 0) return
++    const symbols = toSymbols(pending)
++    for (const [index, [id]] of pending.entries()) {
++      const symbol = symbols[index]
++      /* v8 ignore next -- the parsed document yields one symbol per pending entry. */
++      if (symbol === undefined) continue
+       const previous = rendered.get(id)
+       if (previous === undefined) sprite.append(symbol)
+       else previous.replaceWith(symbol)
+       rendered.set(id, symbol)
+-      markups.set(id, markup)
+     }
+   }
+   apply(icons)

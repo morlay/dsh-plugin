@@ -233,7 +233,7 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages: input, turn: options.turn ?? 1, step: 1, signal: new AbortController().signal },
+    { messages: input, turn: options.turn ?? 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
     async () => ({ kind: "enter" as const, messages: input }),
   );
   if (decision.kind !== "enter") return [];
@@ -245,20 +245,30 @@ async function preStep(
   return decision.messages;
 }
 
+// 模型目录 = 注册表视图（收窄落在 `tools.restrict` 上，装配瀑布里不再带工具声明）。
 async function toolNames(ctx: Context, agent: Agent): Promise<string[]> {
-  const prompt = await ctx.systemPrompt.assemble(assembleContextFor(agent));
-  return prompt.tools.map((tool) => tool.name).toSorted();
+  return ctx.tools
+    .schemas(agent)
+    .map((tool) => tool.name)
+    .toSorted();
 }
 
 // 一次真的 `skill` 工具调用（官方的加载技能那件工具；`name` 是模型给的那个技能名）。
 async function loadSkill(ctx: Context, agent: Agent, name: string) {
-  return await ctx.tools.execute({
-    callId: ToolCallId(`call-skill-${name}`),
-    name: "skill",
-    arguments: { name },
+  const batch = await ctx.tools.execute({
+    calls: [
+      {
+        type: "tool-call",
+        id: ToolCallId(`call-skill-${name}`),
+        name: "skill",
+        arguments: JSON.stringify({ name }),
+      },
+    ],
     agent,
     signal: new AbortController().signal,
   });
+  const result = batch.results[0]?.result;
+  return { error: result !== undefined && "error" in result ? result.error : undefined };
 }
 
 describe.each([
@@ -323,17 +333,11 @@ describe.each([
     expect(catalogs(messages)).toEqual([]);
     expect(messages.map(textOf).join("\n")).not.toContain(AGENTS_BODY);
 
-    // 工具面的收窄照旧：`skill` 不进模型目录，真调用被收口拒（文案带模式名）。
+    // 工具面的收窄照旧：`skill` 不进模型目录，真调用是 UNKNOWN_TOOL。
     expect(await toolNames(ctx, agent)).not.toContain("skill");
-    const denied = await ctx.tools.execute({
-      callId: ToolCallId("call-skill-in-chat"),
-      name: "skill",
-      arguments: { name: SKILL },
-      agent,
-      signal: new AbortController().signal,
-    });
+    const denied = await loadSkill(ctx, agent, SKILL);
     expect(denied.error).toBeDefined();
-    expect(JSON.stringify(denied)).toContain("对话模式");
+    expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 
   // 时钟（`time-context`）是**另一条**注入通道：它不经 `systemPrompt.suppressRuntimeContext()`，而是自己的
@@ -377,17 +381,18 @@ describe.each([
     expect(stored).not.toContain("skill-catalog");
   });
 
-  it("显式 `skills: true` 压过名单推导：名单里没有 `skill`，技能目录仍由官方那一行发布", async () => {
+  it("`skills: true` 不复活目录：上游把目录与 `skill` 工具可见性绑在一起", async () => {
+    // 上游 0.2.1-rc.2 起 `tool-skill` 只在"这个 agent 解析到这个 `skill` 注册"时发布目录；chat 的白名单
+    // 把 `skill` 收窄掉，目录因此整条不来——显式 `skills: true` 只能让我们**不主动丢弃**它，不能让它复活。
     const { ctx, create } = await mount({ hostFirst, modeOverrides: { chat: { skills: true } } });
     const agent = await create();
     await ctx.sessionModes.select(agent.id, "chat");
 
     const messages = await preStep(ctx, agent);
 
-    // 显式值说的是"注入面要不要"：目录照旧发布。
-    expect(catalogs(messages)).toHaveLength(1);
-    expect(textOf(catalogs(messages)[0]!)).toContain(SKILL);
-    // 工具面照旧按名单收窄（`skills` 不管工具可见性），另一条面（工作区指令）也照旧不进来。
+    expect(messages.length).toBeGreaterThan(0);
+    expect(catalogs(messages)).toHaveLength(0);
+    // 工具面照旧按名单收窄，另一条面（工作区指令）也照旧不进来。
     expect(await toolNames(ctx, agent)).toEqual(["ask_user_question", "web_fetch", "web_search"]);
     expect(kindsOf(messages, "agent-instructions")).toEqual([]);
   });
@@ -432,8 +437,9 @@ describe.each([
     expect(catalogEntries(catalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
 
     // 成对判据：另一份**没配技能名单**的定义里两件都在——"把目录整份丢掉"那种实现过不了这一条。
+    // （用 `noop`：它不收窄工具，`skill` 可见、目录照常发布。）
     const other = await create();
-    await ctx.sessionModes.select(other.id, "chat");
+    await ctx.sessionModes.select(other.id, "noop");
     const [otherCatalog] = catalogs(await preStep(ctx, other));
     expect(catalogEntries(otherCatalog!)).toEqual([DENIED_SKILL, SKILL].toSorted());
   });

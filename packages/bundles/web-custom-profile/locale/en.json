@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Custom Frontend",
-    "description": "dsh profile bundle: mounts @morlay/dsh-client-modules (our vite + federated prebundle frontend chain) and disables the upstream rows it replaces."
+    "description": "dsh profile bundle: mounts @morlay/dsh-client-modules (our vite + federated prebundle frontend chain) and disables the upstream rows it replaces.",
+    "detail": "docs/detail.md"
   }
 }

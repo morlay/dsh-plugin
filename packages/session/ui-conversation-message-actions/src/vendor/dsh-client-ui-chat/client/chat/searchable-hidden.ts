@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 
 /**
  * Optional visibility operation; its caller owns cancellation and eventually commits the attribute.
@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
  * @param hidden - desired hidden state.
  * @param commit - apply the final visibility before reporting the operation complete.
  */
-export type HiddenTransition = (element: HTMLElement, hidden: boolean, commit: () => void) => void;
+export type HiddenTransition = (element: HTMLElement, hidden: boolean, commit: () => void) => void
 
 /**
  * Apply searchable hidden state without unmounting a stable subtree.
@@ -20,28 +20,26 @@ export function useSearchableHidden(
   reveal: () => void,
   transition?: HiddenTransition,
 ): RefObject<HTMLDivElement> {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    const element = ref.current;
-    if (element === null) return;
+    const element = ref.current
+    if (element === null) return
     if (hidden && element.contains(element.ownerDocument.activeElement)) {
-      reveal();
-      return;
+      reveal()
+      return
     }
     const commit = (): void => {
-      if (hidden) element.setAttribute("hidden", "until-found");
-      else element.removeAttribute("hidden");
-    };
-    if (transition === undefined) commit();
-    else transition(element, hidden, commit);
-  }, [hidden, reveal, transition]);
+      if (hidden) element.setAttribute('hidden', 'until-found')
+      else element.removeAttribute('hidden')
+    }
+    if (transition === undefined) commit()
+    else transition(element, hidden, commit)
+  }, [hidden, reveal, transition])
   useEffect(() => {
-    const element = ref.current;
-    if (element === null) return;
-    element.addEventListener("beforematch", reveal);
-    return () => {
-      element.removeEventListener("beforematch", reveal);
-    };
-  }, [reveal]);
-  return ref;
+    const element = ref.current
+    if (element === null) return
+    element.addEventListener('beforematch', reveal)
+    return () => { element.removeEventListener('beforematch', reveal) }
+  }, [reveal])
+  return ref
 }

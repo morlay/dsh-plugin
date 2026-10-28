@@ -53,6 +53,7 @@ const CODING_PERSONA = {
   prefix: [
     "你是一个经验丰富的编程专家，YAGNI 是你的编程哲学，PDCA 是你的行为规范。",
     "全程 MUST 用中文（专有名词除外），包括但不限于思考，回答，工具描述，subagent 提示词；思考 NEVER 陷入重复循环，一旦循环立即退出；思考 SHOULD 聚焦需求理解与方案设计，不预演具体代码实现，正确性由验证环节确认。",
+    "单轮次内 MUST 完成明确的任务，任务未完成 NEVER 停下，除非有明确分歧点需要停下询问用户来做决断",
   ].join("\n"),
 };
 
@@ -76,13 +77,14 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
     name: "编码模式",
-    description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
+    description:
+      "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
     // 不写 `allowTools`：不设收窄——这个会话用它挂着的 preset 提供的全部工具（抄一份清单只会与行清单漂移）。
     // 只排除一件工具：官方 Office 组合（宿主代码挂载，profile 层停不掉它的行）里那个载荷查询。
-    denyTools: ["load_workspace_dependencies"],
+    denyTools: ["load_workspace_dependencies", "plugin_manager"],
     // 官方 Office 技能的三个名字同样按会话排除：技能目录里不列它们，`skill` 工具加载它们也被拒。
     // 名单是技能名这一层的模型可见契约（官方 `skill-office` 的 `SKILL_NAMES`），跟着上游改名走。
     denySkills: ["office-docx", "office-pptx", "office-xlsx"],
@@ -115,7 +117,8 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: NOOP_MODE_ID,
     name: "原样模式",
-    description: "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
+    description:
+      "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
     // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
     role: ["main", "subagent"],
     // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，

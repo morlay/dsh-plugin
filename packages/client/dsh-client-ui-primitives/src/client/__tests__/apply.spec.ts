@@ -38,6 +38,7 @@ function bundle(name: string, rowIds: readonly string[]): BundleInfo {
     installed: true,
     optional: false,
     removable: true,
+    updatable: false,
     rows: rowIds.map((rowId) => ({ rowId, moduleName: rowId })),
     overrides: [],
   } as BundleInfo;

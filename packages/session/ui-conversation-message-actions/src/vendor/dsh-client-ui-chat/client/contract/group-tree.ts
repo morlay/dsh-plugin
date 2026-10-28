@@ -1,4 +1,4 @@
-import type { ChatConversationViewNode } from "./chat-nodes.ts";
+import type { ChatConversationViewNode } from './chat-nodes.ts'
 
 /**
  * Chat group-tree positions from the outermost inward; a Node at a position
@@ -17,19 +17,14 @@ import type { ChatConversationViewNode } from "./chat-nodes.ts";
  * `assistant-step` Node places its rows without one: its reasoning row joins
  * the step run and its reply row stands outside it.
  *
- * Whole-Turn folding also exempts the finalized answer's reply. That exemption
- * comes from the Turn's process specification (`answerAnchorSeq` and
- * `answerStep`), not from a position, because which step answers changes as
- * later steps arrive.
+ * Whole-Turn folding also exempts reply rows: with the default Replies After
+ * Collapse choice every `assistant-step` reply row stays visible, and with
+ * Final answer only just the final answer's reply row does. Reasoning rows
+ * stay in the folded process in both choices.
  */
-export type ChatGroupTree = "exchange" | "input" | "turn" | "process";
+export type ChatGroupTree = 'exchange' | 'input' | 'turn' | 'process'
 
-const DEPTH: Readonly<Record<ChatGroupTree, number>> = {
-  exchange: 0,
-  input: 1,
-  turn: 2,
-  process: 3,
-};
+const DEPTH: Readonly<Record<ChatGroupTree, number>> = { exchange: 0, input: 1, turn: 2, process: 3 }
 
 /**
  * Test whether a Node stands at a group-tree position or outside it.
@@ -37,9 +32,6 @@ const DEPTH: Readonly<Record<ChatGroupTree, number>> = {
  * @param position - group-tree position to compare against.
  * @returns whether the Node's position is `position` or an outer one.
  */
-export function isAtOrOutside(
-  node: Pick<ChatConversationViewNode, "groupTree">,
-  position: ChatGroupTree,
-): boolean {
-  return node.groupTree !== undefined && DEPTH[node.groupTree] <= DEPTH[position];
+export function isAtOrOutside(node: Pick<ChatConversationViewNode, 'groupTree'>, position: ChatGroupTree): boolean {
+  return node.groupTree !== undefined && DEPTH[node.groupTree] <= DEPTH[position]
 }

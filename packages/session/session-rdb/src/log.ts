@@ -108,12 +108,12 @@ export function rowToEvent(row: EventRow): SessionEvent {
     typeof (record as Record<string, unknown>)["time"] === "number" &&
     "data" in (record as Record<string, unknown>);
   if (full) {
-    return {
-      ...(record as SessionEvent),
-      seq: row.fSequence,
-      time: row.fCreatedAt,
-      ...(surfaceOp === undefined ? {} : { surfaceOp }),
-    } as SessionEvent;
+    // 直接改写出参而不是 `{...record}`：冷读一页就是几万次，spread 在这里是纯开销。
+    const event = record as SessionEvent & { seq: number; time: number; surfaceOp?: unknown };
+    event.seq = row.fSequence as SessionEvent["seq"];
+    event.time = row.fCreatedAt as SessionEvent["time"];
+    if (surfaceOp !== undefined) event.surfaceOp = surfaceOp;
+    return event as SessionEvent;
   }
   return {
     type: row.fType as SessionEvent["type"],
@@ -648,44 +648,40 @@ export function scanRows(
   rows: readonly EventRow[],
   base = 0,
 ): { preserved: SessionEvent[]; tornFrom?: number } {
-  interface Parsed {
-    ok: boolean;
-    event?: SessionEvent;
-  }
-  const parsed: Parsed[] = rows.map((row) => {
-    try {
-      return { ok: true, event: rowToEvent(row) };
-    } catch {
-      return { ok: false };
-    }
-  });
-
+  // 已提交区（最后一个 `turn/end` 及之前）必须完整：坏行/断号只有在它之后才允许当作撕裂尾部丢掉。
+  // 倒序只为找到这个边界，先按行类型筛（绝大多数行直接跳过），再解析候选行确认它本身可读。
   let lastTurnEnd = -1;
-  for (let i = parsed.length - 1; i >= 0; i--) {
-    if (parsed[i]?.ok && rows[i]?.fType === "turn/end") {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i]?.fType !== "turn/end") continue;
+    try {
+      rowToEvent(rows[i] as EventRow);
       lastTurnEnd = i;
       break;
+    } catch {
+      /* 这个 turn/end 自身坏掉：继续往前找上一个可读的边界。 */
     }
   }
 
   const preserved: SessionEvent[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const p = parsed[i];
-    if (!p?.ok || p.event === undefined) {
+    let event: SessionEvent;
+    try {
+      event = rowToEvent(rows[i] as EventRow);
+    } catch {
       if (i <= lastTurnEnd)
         throw new Error(
           `corrupt session log: unparsable committed event at seq ${rows[i]?.fSequence}`,
         );
       break;
     }
-    if (p.event.seq !== base + i) {
+    if (event.seq !== base + i) {
       if (i <= lastTurnEnd)
         throw new Error(
-          `corrupt session log: seq gap in committed region (expected ${base + i}, got ${p.event.seq})`,
+          `corrupt session log: seq gap in committed region (expected ${base + i}, got ${event.seq})`,
         );
       break;
     }
-    preserved.push(p.event);
+    preserved.push(event);
   }
 
   return preserved.length < rows.length

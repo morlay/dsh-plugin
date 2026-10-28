@@ -35,7 +35,7 @@
 
 - 默认后端是 SQLite `:memory:`，无需外部服务。
 - **PostgreSQL 契约测试**（`pg.spec.ts`）需要 `TEST_PG_URL`：本地用 `just pg test`（docker compose 起库并注入
-  连接串），CI 由 postgres service 提供；未设置时 `describe.skipIf` 自动跳过。按根规范，这类起真实服务的探针
+  连接串），流水线环境里由服务容器提供；未设置时 `describe.skipIf` 自动跳过。按根规范，这类起真实服务的探针
   只在**人工排查**时跑，日常验证用不起服务的证据覆盖。
   除持久化 / coordinator 契约外，这里还有**写事务串行**的用例（「并发写事务不交错（失败的那个不留痕迹）」）：
   并发 `putWorkspace`，失败的那个必须整体回滚不留痕迹——判据是介质层的原子性，不是实现细节。

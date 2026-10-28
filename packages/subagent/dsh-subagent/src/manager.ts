@@ -1068,6 +1068,9 @@ export class SubagentManager {
         structured,
         failureAt: undefined,
         poke: Promise.withResolvers<void>(),
+        // 子代理的收尾文本是否该省略（上游 0.2.1-rc.2 的 `omitClosingText`）：最后一条给直接父代理的
+        // 消息已经交代了结果、之后又没有认领新输入时，结算消息不再重复贴一遍关闭文本。
+        omitClosingText: false,
       };
     }
     const observer = this.host.observeActivation(provider, childId, parent);
@@ -1102,8 +1105,16 @@ export class SubagentManager {
       if (activation.kind === "local") {
         observeLocalFailure(activation, wakeSettlement);
         activation.handle.agent.ctx.on("agent/inbox/inserted", wakeSettlement);
-        activation.handle.agent.ctx.on("agent/inbox/claimed", wakeSettlement);
+        activation.handle.agent.ctx.on("agent/inbox/claimed", () => {
+          // 认领了新输入 = 关闭文本可能报告子代理最后那条消息没有的工作。
+          activation.omitClosingText = false;
+          wakeSettlement();
+        });
         activation.handle.agent.ctx.on("agent/inbox/discarded", wakeSettlement);
+        // 那条消息之后又落了工具调用，也作废"省略关闭文本"的判断。
+        activation.handle.agent.ctx.on("session/event", (_session, event) => {
+          if (event.type === "tool/call") activation.omitClosingText = false;
+        });
       }
       observer.start(activationAgent(activation));
     } catch (error: unknown) {
@@ -1367,6 +1378,7 @@ export class SubagentManager {
         activation.childId,
         terminal,
         activationAgent(activation) !== undefined,
+        activation.kind === "local" && activation.omitClosingText,
       );
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message);
@@ -1463,7 +1475,7 @@ export class SubagentManager {
   }
 
   /** Deliver one resident continuable child's message to its live direct parent. */
-  private sendToParent(activation: Activation, sender: Agent, content: ContentBlock[]): MessageId {
+  private sendToParent(activation: LocalActivation, sender: Agent, content: ContentBlock[]): MessageId {
     /* v8 ignore next 6 -- only synchronous re-entrant teardown can open this
      * transaction between exact-agent authorization and this no-await span. */
     if (activation.closing !== undefined) {
@@ -1481,6 +1493,8 @@ export class SubagentManager {
     }
     const message = createAgentMessage(sender, content);
     this.sendAgentMessage(parent, message);
+    // 这条就是"给直接父代理的收尾交代"：结算消息不必再贴一遍关闭文本。
+    activation.omitClosingText = true;
     return message.id;
   }
 

@@ -22,13 +22,18 @@ describe("桌面标识取自 app 名", () => {
     }
   });
 
-  it("发送者校验用传入的 scheme，而不是写死的 dsh-app", () => {
-    const scheme = desktopScheme("dsh-custom-next");
-    expect(() => assertDesktopSender(sender(`${scheme}://app/`), scheme, ["app"])).not.toThrow();
-    expect(() => assertDesktopSender(sender("dsh-app://app/"), scheme, ["app"])).toThrow(
+  it("发送者校验比的是页面 origin（页面从宿主 origin 载入，不是自定义协议）", () => {
+    const origin = "http://127.0.0.1:51234";
+    expect(() => assertDesktopSender(sender(`${origin}/?token=x`), [origin])).not.toThrow();
+    // 自定义协议那条老路：页面早已不从它载入，不能再被当成本应用。
+    expect(() => assertDesktopSender(sender("dsh-custom-next://app/"), [origin])).toThrow(
       /unowned renderer/u,
     );
-    expect(() => assertDesktopSender(sender(`${scheme}://other/`), scheme, ["app"])).toThrow(
+    // 别的 origin（另一个本地端口、外部站点）同样拒绝。
+    expect(() => assertDesktopSender(sender("http://127.0.0.1:59999/"), [origin])).toThrow(
+      /unowned renderer/u,
+    );
+    expect(() => assertDesktopSender(sender("https://example.com/"), [origin])).toThrow(
       /unowned renderer/u,
     );
   });

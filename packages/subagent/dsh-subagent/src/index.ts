@@ -238,10 +238,11 @@ export class SubagentRuntime extends TypertRemoteService {
         "subagents.managerBinding()",
       );
     });
-    ctx.inject(["sessionProjections"], (projectionCtx) => {
-      projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition);
-      projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition);
-      projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition);
+    ctx.inject(["sessionProjections"], async (projectionCtx) => {
+      // 上游 0.2.1-rc.2 起 `register()` 是异步的（句柄随注册一起交付），注册面要 await。
+      await projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition);
+      await projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition);
+      await projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition);
     });
     // Archive admission: this runtime is the owner that knows which live
     // children descend from a Session and how a parent stops them.

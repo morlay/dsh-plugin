@@ -5,26 +5,26 @@
  * @module @deepseek-ai/dsh-subagent
  */
 
-import { AttachmentError } from "@deepseek-ai/dsh-attachment";
-import type { SessionId } from "@deepseek-ai/dsh-session";
-import { RemoteError } from "@deepseek-ai/dsh-typert-protocol";
-import { z } from "zod";
-import { SubagentError } from "./error.ts";
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { z } from 'zod'
+import { SubagentError } from './error.ts'
 
-const SESSION_ID_SCHEMA = z.string().min(1);
+const SESSION_ID_SCHEMA = z.string().min(1)
 const CONTROL_ID_SCHEMAS = {
-  "subagent.prompt": z.object({
+  'subagent.prompt': z.object({
     parentSessionId: SESSION_ID_SCHEMA,
     childSessionId: SESSION_ID_SCHEMA,
-    mode: z.literal("continuable"),
-    delivery: z.enum(["queue", "steer"]),
+    mode: z.literal('continuable'),
+    delivery: z.enum(['queue', 'steer']),
   }),
-  "subagent.interrupt": z.object({
+  'subagent.interrupt': z.object({
     parentSessionId: SESSION_ID_SCHEMA,
     childSessionId: SESSION_ID_SCHEMA,
-    mode: z.literal("continuable"),
+    mode: z.literal('continuable'),
   }),
-} as const;
+} as const
 
 /**
  * Apply the subagent payload checks that are stricter than generated
@@ -37,11 +37,9 @@ export function validateControlRequest(
   method: keyof typeof CONTROL_ID_SCHEMAS,
   payload: unknown,
 ): void {
-  const parsed = CONTROL_ID_SCHEMAS[method].safeParse(payload);
+  const parsed = CONTROL_ID_SCHEMAS[method].safeParse(payload)
   if (!parsed.success) {
-    throw new RemoteError("gateway/bad-request", `invalid payload for ${method}`, {
-      issues: parsed.error.issues,
-    });
+    throw new RemoteError('gateway/bad-request', `invalid payload for ${method}`, { issues: parsed.error.issues })
   }
 }
 
@@ -55,69 +53,55 @@ export function validateControlRequest(
  * @returns Never — the refusal is thrown.
  * @throws {RemoteError} always.
  */
-export function rejectPrompt(
-  error: unknown,
-  childSessionId: SessionId,
-  signal: AbortSignal,
-): never {
+export function rejectPrompt(error: unknown, childSessionId: SessionId, signal: AbortSignal): never {
   if (isCancellation(error, signal)) {
-    throw new RemoteError(
-      "gateway/cancelled",
-      "subagent prompt was cancelled",
-      {},
-      { cause: error },
-    );
+    throw new RemoteError('gateway/cancelled', 'subagent prompt was cancelled', {}, { cause: error })
   }
   if (error instanceof AttachmentError) {
-    throw new RemoteError(
-      "subagent/attachment-invalid",
-      error.message,
-      { reason: error.code },
-      { cause: error },
-    );
+    throw new RemoteError('subagent/attachment-invalid', error.message, { reason: error.code }, { cause: error })
   }
   if (error instanceof SubagentError) {
     switch (error.code) {
-      case "MODEL_DOES_NOT_SUPPORT_IMAGES":
+      case 'MODEL_DOES_NOT_SUPPORT_IMAGES':
         throw new RemoteError(
-          "subagent/attachment-invalid",
+          'subagent/attachment-invalid',
           error.message,
           { reason: error.code },
           { cause: error },
-        );
-      case "NOT_RESUMABLE":
+        )
+      case 'NOT_RESUMABLE':
         throw new RemoteError(
-          "subagent/not-resumable",
-          "subagent cannot be resumed",
+          'subagent/not-resumable',
+          'subagent cannot be resumed',
           { childSessionId },
           { cause: error },
-        );
-      case "UNAUTHORIZED":
+        )
+      case 'UNAUTHORIZED':
         throw new RemoteError(
-          "subagent/unauthorized",
-          "subagent does not belong to this parent",
+          'subagent/unauthorized',
+          'subagent does not belong to this parent',
           { childSessionId },
           { cause: error },
-        );
-      case "DRAINING":
-      case "ACTIVATION_CLOSING":
-      case "ACTIVATION_LIMIT_REACHED":
-      case "CONTINUATION_UNAVAILABLE":
-      case "PERSISTENCE_UNAVAILABLE":
+        )
+      case 'DRAINING':
+      case 'ACTIVATION_CLOSING':
+      case 'ACTIVATION_LIMIT_REACHED':
+      case 'CONTINUATION_UNAVAILABLE':
+      case 'PERSISTENCE_UNAVAILABLE':
         throw new RemoteError(
-          "subagent/delivery-unavailable",
-          "subagent follow-up is temporarily unavailable",
+          'subagent/delivery-unavailable',
+          'subagent follow-up is temporarily unavailable',
           { childSessionId },
           { cause: error },
-        );
+        )
       // A code outside the admission vocabulary is not the caller's move to make.
       default:
-        break;
+        break
     }
   }
-  throw new RemoteError("gateway/internal", "subagent prompt failed", {}, { cause: error });
+  throw new RemoteError('gateway/internal', 'subagent prompt failed', {}, { cause: error })
 }
 
 function isCancellation(error: unknown, signal: AbortSignal): boolean {
-  return signal.aborted || (error instanceof SubagentError && error.code === "CANCELLED");
+  return signal.aborted || (error instanceof SubagentError && error.code === 'CANCELLED')
 }

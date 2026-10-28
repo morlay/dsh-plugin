@@ -12,7 +12,7 @@ mise exec -- pnpm --filter @morlay/dsh-web-search-ollama run test:e2e
 
 门控与判据：
 
-- `OLLAMA_API_KEY` 缺席时整体 skip（CI 没有这个 key），不静默降级成 mock；
+- `OLLAMA_API_KEY` 缺席时整体 skip（流水线环境通常没有这个 key），不静默降级成 mock；
 - 通过判据是**两条都过**：provider 直连拿回可引用 source，以及 provider 装进 `ctx.web` 后选中它的一次搜索；
 - 单测全绿**不能**替代它：把搜索配到 Ollama 的 Anthropic Messages 端点时 mock 同样全绿，真调用却是错的
   （Ollama 把 `web_search_20250305` 降级成客户端工具、不执行搜索）。

@@ -73,6 +73,24 @@ describe("ts 2 schema", () => {
     expect(zod("Promise<string>")).toBe("z.string()");
   });
 
+  it("工具类型：Partial / Readonly / Required / Omit / Pick 改的是对象字段面", async () => {
+    const index = await indexOf("export interface Config { readonly a: string; b?: number }");
+    expect(zod("Partial<Config>", index)).toBe(
+      "z.object({\n  'a': z.string().readonly().optional(),\n  'b': z.number().optional(),\n})",
+    );
+    expect(zod("Required<Config>", index)).toBe(
+      "z.object({\n  'a': z.string().readonly(),\n  'b': z.number(),\n})",
+    );
+    expect(zod('Omit<Config, "a">', index)).toBe(
+      "z.object({\n  'b': z.number().optional(),\n})",
+    );
+    expect(zod('Omit<Config, "a" | "b">', index)).toBe("z.object({\n\n})");
+    expect(zod('Pick<Config, "a">', index)).toBe("z.object({\n  'a': z.string().readonly(),\n})");
+    expect(zod('Pick<Config, "a" | "b">', index)).toBe(
+      "z.object({\n  'a': z.string().readonly(),\n  'b': z.number().optional(),\n})",
+    );
+  });
+
   it("自定义类型就地展开（interface / type / enum）", async () => {
     const index = await indexOf(
       [

@@ -7,13 +7,13 @@
  * @module @deepseek-ai/dsh-subagent/lifecycle
  */
 
-import { randomUUID } from "node:crypto";
-import type { Context } from "@deepseek-ai/cordis";
-import type { Agent } from "@deepseek-ai/dsh-agent";
-import { foldConsumedWork } from "@deepseek-ai/dsh-agent";
-import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
-import { SubagentRunId } from "./types.ts";
-import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from "./types.ts";
+import { randomUUID } from 'node:crypto'
+import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { SubagentRunId } from './types.ts'
+import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 
 /**
  * Lifecycle observer for one activation's residency epoch. Package-private: the
@@ -25,7 +25,7 @@ export interface ActivationObserver {
    * Publish the start edge once the epoch is resident.
    * @param child - the resident local Agent, or undefined for an external execution.
    */
-  start(child?: Agent): void;
+  start(child?: Agent): void
   /**
    * Publish the terminal edge exactly once, pairing this epoch's {@link start},
    * after the disposal outcome is known. Called only for a resident epoch: a
@@ -33,7 +33,7 @@ export interface ActivationObserver {
    * report a lifecycle the child never had.
    * @param result - the captured result, with teardown failures applied.
    */
-  settle(result: SubagentResult): void;
+  settle(result: SubagentResult): void
 }
 
 /**
@@ -46,10 +46,10 @@ export interface ActivationObserver {
  * a narrowed stand-in would silently change scope filtering.
  */
 export type LifecycleEmitter = {
-  (name: "subagent/start", info: SubagentRunInfo, parent: Agent): void;
-  (name: "subagent/end", info: SubagentRunEndInfo, parent: Agent): void;
-  (name: "subagent/provider-removed", info: string): void;
-};
+  (name: 'subagent/start', info: SubagentRunInfo, parent: Agent): void
+  (name: 'subagent/end', info: SubagentRunEndInfo, parent: Agent): void
+  (name: 'subagent/provider-removed', info: string): void
+}
 
 /**
  * Build the contained lifecycle emitter this seam publishes every edge through.
@@ -65,23 +65,24 @@ export function createLifecycleEmitter(
   carrier: (parent: Agent) => object,
 ): LifecycleEmitter {
   return (
-    name: "subagent/start" | "subagent/end" | "subagent/provider-removed",
+    name: 'subagent/start' | 'subagent/end' | 'subagent/provider-removed',
     info: SubagentRunInfo | SubagentRunEndInfo | string,
     parent?: Agent,
   ): void => {
-    const dispatchArgs: unknown[] =
-      parent === undefined ? [name, info] : [carrier(parent), name, info];
-    for (const callback of ctx.events.dispatch("emit", dispatchArgs)) {
+    const dispatchArgs: unknown[] = parent === undefined
+      ? [name, info]
+      : [carrier(parent), name, info]
+    for (const callback of ctx.events.dispatch('emit', dispatchArgs)) {
       try {
-        const returned: unknown = callback(info);
+        const returned: unknown = callback(info)
         void Promise.resolve(returned).catch((error: unknown) => {
-          ctx.logger.warn(`subagent: ${name} listener rejected: ${renderThrown(error)}`);
-        });
+          ctx.logger.warn(`subagent: ${name} listener rejected: ${renderThrown(error)}`)
+        })
       } catch (error: unknown) {
-        ctx.logger.warn(`subagent: ${name} listener threw: ${renderThrown(error)}`);
+        ctx.logger.warn(`subagent: ${name} listener threw: ${renderThrown(error)}`)
       }
     }
-  };
+  }
 }
 
 /**
@@ -98,24 +99,20 @@ export function createActivationObserver(
   childId: SessionId,
   parent: Agent,
 ): ActivationObserver {
-  const identity = { runId: SubagentRunId(randomUUID()), provider, id: childId, local: false };
+  const identity = { runId: SubagentRunId(randomUUID()), provider, id: childId, local: false }
   return {
     start: (child?: Agent): void => {
-      identity.local = child !== undefined;
-      emit("subagent/start", identity, parent);
+      identity.local = child !== undefined
+      emit('subagent/start', identity, parent)
     },
     settle: ({ stopReason, output }: SubagentResult): void => {
-      emit(
-        "subagent/end",
-        {
-          ...identity,
-          stopReason,
-          ...(output.length === 0 ? {} : { lastAssistantMessage: output }),
-        },
-        parent,
-      );
+      emit('subagent/end', {
+        ...identity,
+        stopReason,
+        ...output.length === 0 ? {} : { lastAssistantMessage: output },
+      }, parent)
     },
-  };
+  }
 }
 
 /**
@@ -134,39 +131,39 @@ export function createActivationObserver(
  * @returns its terminal stop reason; `completed` only for an epoch that both
  *   closed cleanly and had nothing left to run.
  */
-export function epochStopReason(events: readonly SessionEvent[]): SubagentResult["stopReason"] {
-  const { end, droppedUnrun } = foldConsumedWork(events);
+export function epochStopReason(events: readonly SessionEvent[]): SubagentResult['stopReason'] {
+  const { end, droppedUnrun } = foldConsumedWork(events)
   switch (end?.data.reason.kind) {
-    case "max-tokens":
-      return "max-tokens";
-    case "aborted":
-    case "interrupted":
-      return "aborted";
-    case "error":
-      return "error";
+    case 'max-tokens':
+      return 'max-tokens'
+    case 'aborted':
+    case 'interrupted':
+      return 'aborted'
+    case 'error':
+      return 'error'
     // A pre-step rejection — a hook deny, a policy plugin — discarded input
     // this epoch had claimed: the work was declined, not done.
-    case "blocked":
-      return "refusal";
+    case 'blocked':
+      return 'refusal'
     // A clean ending and no accounting turn at all share one rule: the epoch
     // finished what it was given unless a cancelled queue says otherwise.
     case undefined:
-    case "completed":
-      return droppedUnrun ? "aborted" : "completed";
+    case 'completed':
+      return droppedUnrun ? 'aborted' : 'completed'
     /* v8 ignore next 4 -- `forked` appears only in constructor seed history, while
      * this function reads an epoch-owned suffix. `TurnEndReason` is merge-extensible,
      * so a backend-added variant cannot be listed; treating an unnameable reason as
      * success would report failed work as completed. */
     default:
-      return "error";
+      return 'error'
   }
 }
 
 /** Render any listener-thrown value without letting coercion escape containment. */
 function renderThrown(value: unknown): string {
   try {
-    return value instanceof Error ? `${value.name}: ${value.message}` : String(value);
+    return value instanceof Error ? `${value.name}: ${value.message}` : String(value)
   } catch {
-    return "<unrenderable thrown value>";
+    return '<unrenderable thrown value>'
   }
 }

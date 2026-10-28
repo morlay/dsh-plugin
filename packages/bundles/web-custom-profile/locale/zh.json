@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "自定义前端装配",
-    "description": "dsh profile bundle：把 @morlay/dsh-client-modules（本仓库的 vite + 联邦预编译前端链）插成行，并停用被它取代的上游行。"
+    "description": "dsh profile bundle：把 @morlay/dsh-client-modules（本仓库的 vite + 联邦预编译前端链）插成行，并停用被它取代的上游行。",
+    "detail": "docs/detail.md"
   }
 }

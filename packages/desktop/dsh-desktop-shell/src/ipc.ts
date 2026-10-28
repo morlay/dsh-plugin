@@ -44,15 +44,28 @@ export function desktopScheme(name: string): string {
   return bare;
 }
 
+/**
+ * 校验一次 IPC 来自**本应用的页面**：senderFrame 的 origin 必须在 `allowedOrigins` 里。
+ *
+ * 页面从宿主 webServer 的 origin（`http://127.0.0.1:<port>`）载入——早先那条自定义协议
+ * `scheme://app/` 已经不再承载页面（它没有 origin，settings 的 describe 流拿不到答复）。所以这里比的是
+ * origin，而不是 scheme + hostname：后者会让所有真实页面都被判成 unowned。
+ * @param event - Electron 的 invoke 事件。
+ * @param allowedOrigins - 允许的页面 origin（应用自己的宿主 origin）。
+ */
 export function assertDesktopSender(
   event: IpcMainInvokeEvent,
-  scheme: string,
-  hostnames: readonly string[],
+  allowedOrigins: readonly string[],
 ): void {
   const senderFrame = event.senderFrame;
   if (senderFrame === null) throw new Error("dsh desktop: rejected IPC without a sender frame");
-  const url = new URL(senderFrame.url);
-  if (url.protocol !== `${scheme}:` || !hostnames.includes(url.hostname)) {
+  let origin: string;
+  try {
+    origin = new URL(senderFrame.url).origin;
+  } catch {
+    throw new Error("dsh desktop: rejected IPC with an unreadable sender URL");
+  }
+  if (!allowedOrigins.includes(origin)) {
     throw new Error("dsh desktop: rejected IPC from an unowned renderer");
   }
 }

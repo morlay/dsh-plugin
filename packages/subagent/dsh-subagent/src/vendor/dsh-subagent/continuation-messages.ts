@@ -4,19 +4,19 @@
  * @module @deepseek-ai/dsh-subagent/continuation-messages
  */
 
-import type { Agent } from "@deepseek-ai/dsh-agent";
-import { boundContextSummary, createUserMessage } from "@deepseek-ai/dsh-llm";
-import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import type { SessionId } from "@deepseek-ai/dsh-session";
-import type { SubagentResult } from "./types.ts";
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SubagentResult } from './types.ts'
 
 /** Durable attribution for one model-authored message between Agents. */
 export interface AgentMessageSource {
-  readonly kind: "agent-message";
+  readonly kind: 'agent-message'
   /** A message another agent addressed to this one (`relay` context form). */
-  readonly form: "relay";
+  readonly form: 'relay'
   /** Session id of the Agent whose tool call produced the message. */
-  readonly senderSessionId: SessionId;
+  readonly senderSessionId: SessionId
 }
 
 /**
@@ -27,29 +27,29 @@ export interface AgentMessageSource {
  * transcript that merged them would credit the child with words it never wrote.
  */
 export interface SubagentSettledMessageSource {
-  readonly kind: "subagent-settled";
+  readonly kind: 'subagent-settled'
   /** A runtime account shown without expanding the row (`notice` context form). */
-  readonly form: "notice";
+  readonly form: 'notice'
   /** One-line account of how the child ended. */
-  readonly summary: string;
+  readonly summary: string
   /** Session id of the child that settled. */
-  readonly senderSessionId: SessionId;
+  readonly senderSessionId: SessionId
 }
 
-declare module "@deepseek-ai/dsh-llm" {
+declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    "agent-message": AgentMessageSource;
-    "subagent-settled": SubagentSettledMessageSource;
+    'agent-message': AgentMessageSource
+    'subagent-settled': SubagentSettledMessageSource
   }
 }
 
 /** Build durable attribution for one adjacent-Agent message. */
 function agentMessageSource(sender: Agent): AgentMessageSource {
   return {
-    kind: "agent-message",
-    form: "relay",
+    kind: 'agent-message',
+    form: 'relay',
     senderSessionId: sender.id,
-  };
+  }
 }
 
 /**
@@ -63,9 +63,12 @@ export function createAgentMessage(
   content: ContentBlock[],
 ): ReturnType<typeof createUserMessage> {
   return createUserMessage({
-    content: [{ type: "text" as const, text: `Agent ${sender.id} sent a message: ` }, ...content],
+    content: [
+      { type: 'text' as const, text: `Agent ${sender.id} sent a message: ` },
+      ...content,
+    ],
     source: agentMessageSource(sender),
-  });
+  })
 }
 
 /**
@@ -78,19 +81,18 @@ export function withContinuableReturnGuidance(
   parentId: SessionId,
   prompt: ContentBlock[],
 ): ContentBlock[] {
-  const encodedParentId = JSON.stringify(parentId);
+  const encodedParentId = JSON.stringify(parentId)
   return [
     ...prompt,
     {
-      type: "text",
-      text:
-        `Your parent agent id is ${encodedParentId}. Before you finish, send your result to that agent with ` +
-        `send_message({ agent_id: ${encodedParentId}, message: "<self-contained result>" }). The parent shares ` +
-        "your workspace but does not automatically receive your transcript, tool output, or reasoning. Send " +
-        "earlier messages as well when a finding changes what the parent should do next; sending a message " +
-        "does not end your turn.",
+      type: 'text',
+      text: `Your parent agent id is ${encodedParentId}. Before you finish, send your result to that agent with `
+        + `send_message({ agent_id: ${encodedParentId}, message: "<self-contained result>" }). The parent shares `
+        + 'your workspace but does not automatically receive your transcript, tool output, or reasoning. Send '
+        + 'earlier messages as well when a finding changes what the parent should do next; sending a message '
+        + 'does not end your turn.',
     },
-  ];
+  ]
 }
 
 /**
@@ -101,32 +103,28 @@ export function withContinuableReturnGuidance(
  * @param continuable - whether the child accepts a later message.
  * @returns the model-facing opening line of the settlement notice.
  */
-function settlementSummary(
-  childId: SessionId,
-  stopReason: SubagentResult["stopReason"],
-  continuable: boolean,
-): string {
-  const subject = `Background subagent ${childId}`;
+function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
+  const subject = `Background subagent ${childId}`
   switch (stopReason) {
-    case "completed":
+    case 'completed':
       return continuable
         ? `${subject} finished and will do no further work unless you send it more.`
-        : `${subject} finished. It cannot receive follow-up messages.`;
-    case "aborted":
-      return `${subject} was stopped before it finished.`;
-    case "max-tokens":
-      return `${subject} ran out of room before it finished.`;
+        : `${subject} finished. It cannot receive follow-up messages.`
+    case 'aborted':
+      return `${subject} was stopped before it finished.`
+    case 'max-tokens':
+      return `${subject} ran out of room before it finished.`
     // A pre-step rejection — a hook deny, a policy plugin — discarded input
     // the child had claimed, so the parent must not treat the task as done.
-    case "refusal":
-      return `${subject} declined the task.`;
-    case "error":
-      return `${subject} failed before it finished.`;
+    case 'refusal':
+      return `${subject} declined the task.`
+    case 'error':
+      return `${subject} failed before it finished.`
     /* v8 ignore next 4 -- `SubagentResult['stopReason']` is merge-extensible, so this arm
      * needs a backend that adds a variant; an unnameable ending is reported as unfinished
      * rather than silently as success. */
     default:
-      return `${subject} ended abnormally (${String(stopReason)}) before it finished.`;
+      return `${subject} ended abnormally (${String(stopReason)}) before it finished.`
   }
 }
 
@@ -135,43 +133,41 @@ function settlementSummary(
  * @param childId - durable child session id named in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
  * @param continuable - whether the child can accept another task.
+ * @param omitClosingText - replace the closing text with a note that the child's
+ *   last message to the parent already carries it.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
   childId: SessionId,
   terminal: SubagentResult,
   continuable = true,
+  omitClosingText = false,
 ): ReturnType<typeof createUserMessage> {
-  const summary = settlementSummary(childId, terminal.stopReason, continuable);
+  const summary = settlementSummary(childId, terminal.stopReason, continuable)
   // Parent providers receive this notice as a user message and may reject
   // nontext assistant blocks. Keep this conversion local so SDK/UI consumers
   // retain the complete child output.
-  const closingText = terminal.output.flatMap((block) =>
-    block.type === "text" && block.text.length > 0 ? [block] : [],
-  );
+  const closingText = terminal.output.flatMap(block =>
+    block.type === 'text' && block.text.length > 0 ? [block] : [],
+  )
   return createUserMessage({
     content: [
-      { type: "text" as const, text: summary },
-      ...(closingText.length === 0
-        ? [{ type: "text" as const, text: "It left no closing message." }]
-        : [{ type: "text" as const, text: "Its closing message:" }, ...closingText]),
-      ...(terminal.structured !== undefined
-        ? [
-            {
-              type: "text" as const,
-              text: `Structured result: ${JSON.stringify(terminal.structured)}`,
-            },
-          ]
-        : []),
-      ...(terminal.diagnostic !== undefined
-        ? [{ type: "text" as const, text: terminal.diagnostic }]
-        : []),
+      { type: 'text' as const, text: summary },
+      ...omitClosingText
+        ? [{ type: 'text' as const, text: 'It sent you a message just before finishing, so its closing message is omitted.' }]
+        : closingText.length === 0
+          ? [{ type: 'text' as const, text: 'It left no closing message.' }]
+          : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingText],
+      ...terminal.structured !== undefined
+        ? [{ type: 'text' as const, text: `Structured result: ${JSON.stringify(terminal.structured)}` }] : [],
+      ...terminal.diagnostic !== undefined
+        ? [{ type: 'text' as const, text: terminal.diagnostic }] : [],
     ],
     source: {
-      kind: "subagent-settled" as const,
-      form: "notice" as const,
+      kind: 'subagent-settled' as const,
+      form: 'notice' as const,
       summary: boundContextSummary(summary),
       senderSessionId: childId,
     },
-  });
+  })
 }

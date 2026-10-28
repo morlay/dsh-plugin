@@ -9,14 +9,14 @@
  * @module @deepseek-ai/dsh-subagent/types
  */
 
-import type { Agent, AgentOptions } from "@deepseek-ai/dsh-agent";
-import type { Branded } from "@deepseek-ai/dsh-brand";
-import type { ContentBlock, MessageId } from "@deepseek-ai/dsh-llm";
-import type { SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
-import type { ObjectJsonSchema } from "@deepseek-ai/dsh-tools";
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 
 /** Identifies one accepted subagent run across its lifecycle event pair. */
-export type SubagentRunId = Branded<"SubagentRunId">;
+export type SubagentRunId = Branded<'SubagentRunId'>
 
 /**
  * Brand a string as a {@link SubagentRunId}.
@@ -24,38 +24,38 @@ export type SubagentRunId = Branded<"SubagentRunId">;
  * @returns the same string, branded.
  */
 export function SubagentRunId(id: string): SubagentRunId {
-  return id as SubagentRunId;
+  return id as SubagentRunId
 }
 
 /** One managed child execution and its result delivery policy. */
 export interface SubagentActivationSpec {
   /** Registered backend to use. */
-  readonly provider: string;
+  readonly provider: string
   /** Short task label retained in cataloged child membership. */
-  readonly label: string;
+  readonly label: string
   /** Optional reserved identity for a local child; external backends allocate their own ids. */
-  readonly childId?: SessionId;
+  readonly childId?: SessionId
   /** Task, parent, and backend-supported execution options. */
-  readonly request: Omit<SubagentStartRequest, "label" | "signal">;
+  readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
-  readonly signal: AbortSignal;
+  readonly signal: AbortSignal
   /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
-  readonly delivery: "parent" | "caller";
+  readonly delivery: 'parent' | 'caller'
 }
 
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 export interface SubagentActivation {
   /** Stable identity of the child. */
-  readonly childId: SessionId;
+  readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */
-  readonly messageId?: MessageId;
+  readonly messageId?: MessageId
   /**
    * Execution result after teardown settles and notifications are sent; capture failures reject.
    * Teardown failures are reported by dispose() without replacing a captured result.
    */
-  readonly result: Promise<SubagentResult>;
+  readonly result: Promise<SubagentResult>
   /** Stop and release this activation and its owned descendants; rejects on teardown failure. */
-  dispose(): Promise<void>;
+  dispose(): Promise<void>
 }
 
 /**
@@ -64,13 +64,13 @@ export interface SubagentActivation {
  * the exact live Agent object whose recorded lineage must contain the caller.
  */
 export type SubagentInterruptAuthority =
-  | { readonly kind: "user"; readonly parentSessionId: SessionId }
-  | { readonly kind: "ancestor"; readonly agent: Agent };
+  | { readonly kind: 'user'; readonly parentSessionId: SessionId }
+  | { readonly kind: 'ancestor'; readonly agent: Agent }
 
 /** Options for one model-authored message between adjacent Agents. */
 export interface SubagentSendMessageOptions {
   /** Caller cancellation, owning the operation only until inbox acceptance. */
-  readonly signal: AbortSignal;
+  readonly signal: AbortSignal
 }
 
 /**
@@ -79,16 +79,16 @@ export interface SubagentSendMessageOptions {
  */
 export interface SubagentRunInfo {
   /** Unique identity shared with the paired terminal event. */
-  readonly runId: SubagentRunId;
+  readonly runId: SubagentRunId
   /**
    * Provider name recorded when the child was first created, retained even
    * after that provider is unregistered.
    */
-  readonly provider: string;
+  readonly provider: string
   /** The child agent's id. */
-  readonly id: SessionId;
+  readonly id: SessionId
   /** Whether this activation owns a local Agent, fixed at publication. */
-  readonly local: boolean;
+  readonly local: boolean
 }
 
 /**
@@ -97,21 +97,21 @@ export interface SubagentRunInfo {
  */
 export interface SubagentRunEndInfo {
   /** Unique identity shared with the paired start event. */
-  readonly runId: SubagentRunId;
+  readonly runId: SubagentRunId
   /** The same provider name carried by the paired start event. */
-  readonly provider: string;
+  readonly provider: string
   /** The child agent's id. */
-  readonly id: SessionId;
+  readonly id: SessionId
   /** Whether this activation owns a local Agent, fixed at publication. */
-  readonly local: boolean;
+  readonly local: boolean
   /** The terminal stop reason. */
-  readonly stopReason: SubagentResult["stopReason"];
+  readonly stopReason: SubagentResult['stopReason']
   /**
    * The child's final assistant output, selected by the same rule as
    * {@link SubagentResult.output}; absent on infrastructure rejection or when
    * the child produced none.
    */
-  readonly lastAssistantMessage?: readonly ContentBlock[];
+  readonly lastAssistantMessage?: readonly ContentBlock[]
 }
 
 /**
@@ -121,11 +121,11 @@ export interface SubagentRunEndInfo {
  * SubagentStartRequest fields.
  */
 export interface SubagentCapabilities {
-  readonly agentOptions: boolean;
+  readonly agentOptions: boolean
   /** Supports selecting a preset independently of the parent's composition. */
-  readonly agentPreset: boolean;
-  readonly outputSchema: boolean;
-  readonly depthLimit: boolean;
+  readonly agentPreset: boolean
+  readonly outputSchema: boolean
+  readonly depthLimit: boolean
 }
 
 /**
@@ -135,22 +135,22 @@ export interface SubagentCapabilities {
  */
 export interface SubagentStartRequest {
   /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
-  readonly cwd?: string;
+  readonly cwd?: string
   /**
    * Independent preset id; omission joins the parent's current generation.
    * Requires a provider with `capabilities.agentPreset` that does not inherit
    * parent context.
    */
-  readonly agentPreset?: string;
+  readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
-  readonly label?: string;
+  readonly label?: string
   /** Content delivered as the child's user message. */
-  readonly prompt: ContentBlock[];
+  readonly prompt: ContentBlock[]
   /**
    * The spawning agent. Its effective directory supplies the default cwd;
    * in-process children retain its origin, lineage, and delegation depth.
    */
-  readonly parent: Agent;
+  readonly parent: Agent
   /**
    * Cancellation signal from the spawning context (the tool's `exec.signal`).
    * This is the canonical cancellation channel both before and after startup:
@@ -158,7 +158,7 @@ export interface SubagentStartRequest {
    * fires before the run is published, and cancels the published run's
    * remaining turn work when it fires afterward.
    */
-  readonly signal: AbortSignal;
+  readonly signal: AbortSignal
   /**
    * Optional host-Agent provider, model, reasoning-effort, and output-token
    * overrides. Requires {@link SubagentCapabilities.agentOptions}; in-process
@@ -166,26 +166,26 @@ export interface SubagentStartRequest {
    * child, while the DSH SDK provider merges them over its instance defaults
    * before initializing the separate child runtime.
    */
-  readonly agentOptions?: AgentOptions;
+  readonly agentOptions?: AgentOptions
   /**
    * Object-rooted JSON Schema within `assertObjectJsonSchema`'s enforced subset. Start rejects
    * unsupported schemas or providers without the capability. Data must be plain host-realm JSON;
    * a successful child returns the matching value as {@link SubagentResult.structured}.
    */
-  readonly outputSchema?: ObjectJsonSchema;
+  readonly outputSchema?: ObjectJsonSchema
   /**
    * Optional absolute delegation-depth cap for the child being started: its
    * computed depth must be less than or equal to this non-negative safe
    * integer. Requires {@link SubagentCapabilities.depthLimit}; rejected at
    * start otherwise.
    */
-  readonly maxDepth?: number;
+  readonly maxDepth?: number
 }
 
 /** Provider-facing request with an absolute directory selected before startup. */
 export interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Absolute child directory captured from the parent or explicit request. */
-  readonly cwd: string;
+  readonly cwd: string
 }
 
 /**
@@ -197,16 +197,16 @@ export interface ResolvedSubagentStartRequest extends SubagentStartRequest {
  */
 export interface ContinuableCreateRequest {
   /** Absolute initial directory captured before provider preparation. */
-  readonly cwd: string;
+  readonly cwd: string
   /** The reserved durable child session id, for provider diagnostics. */
-  readonly sessionId: SessionId;
+  readonly sessionId: SessionId
   /** The delegating parent agent whose history a seeding provider reads. */
-  readonly parent: Agent;
+  readonly parent: Agent
   /**
    * Caller cancellation, which owns preparation only until the manager accepts
    * the initial prompt into the child's inbox.
    */
-  readonly signal: AbortSignal;
+  readonly signal: AbortSignal
 }
 
 /**
@@ -221,7 +221,7 @@ export interface ContinuableCreateSpec {
    * or absent for a fresh child. Same durable contract as
    * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
    */
-  readonly seed?: readonly SessionEvent[];
+  readonly seed?: readonly SessionEvent[]
 }
 
 /**
@@ -232,19 +232,19 @@ export interface ContinuableCreateSpec {
  */
 export interface SubagentStopReasonMap {
   /** The child finished its turn normally. */
-  completed: "completed";
+  completed: 'completed'
   /** Cancelled through the request signal or disposal. */
-  aborted: "aborted";
+  aborted: 'aborted'
   /** Model or transport failure. */
-  error: "error";
+  error: 'error'
   /** The child hit its token ceiling before finishing. */
-  "max-tokens": "max-tokens";
+  'max-tokens': 'max-tokens'
   /** The child declined the task. */
-  refusal: "refusal";
+  refusal: 'refusal'
 }
 
 /** The union over {@link SubagentStopReasonMap} — widens automatically as backends merge in variants. */
-export type SubagentStopReason = SubagentStopReasonMap[keyof SubagentStopReasonMap];
+export type SubagentStopReason = SubagentStopReasonMap[keyof SubagentStopReasonMap]
 
 /**
  * The terminal outcome of a subagent run, resolved by {@link SubagentRun.result}.
@@ -256,7 +256,7 @@ export interface SubagentResult {
    * are skipped. Without a non-empty message, the output is its accumulated
    * assistant text stream, or `[]` when the child produced neither.
    */
-  readonly output: readonly ContentBlock[];
+  readonly output: readonly ContentBlock[]
   /**
    * The structured result after a requested `outputSchema` was successfully
    * satisfied. Requesting a schema does not guarantee presence: a provider can
@@ -265,16 +265,16 @@ export interface SubagentResult {
    * output schema by the provider; `unknown` here because the seam is
    * schema-agnostic.
    */
-  readonly structured?: unknown;
+  readonly structured?: unknown
   /**
    * Provider-authored, non-assistant failure detail for a non-`completed`
    * result. Providers keep this text free of tool inputs, file contents,
    * environment values, credentials, and raw protocol payloads, and limit it
    * to 4096 UTF-8 bytes. Consumers present it separately from {@link output}.
    */
-  readonly diagnostic?: string;
+  readonly diagnostic?: string
   /** Why the run ended. A non-`completed` reason means `output` may be partial. */
-  readonly stopReason: SubagentStopReason;
+  readonly stopReason: SubagentStopReason
 }
 
 /**
@@ -286,7 +286,7 @@ export interface SubagentResult {
  */
 export interface SubagentRun {
   /** Provider-minted id, unique across all parents, providers, and local Sessions in this runtime. */
-  readonly id: SessionId;
+  readonly id: SessionId
   /**
    * Resolves with the child's terminal {@link SubagentResult} when the run
    * settles. Does NOT reject on a child-level failure — a model/transport
@@ -294,12 +294,12 @@ export interface SubagentRun {
    * `isError` tool result. Rejects on an infrastructure fault the seam cannot
    * represent as a stop reason.
    */
-  readonly result: Promise<SubagentResult>;
+  readonly result: Promise<SubagentResult>
   /**
    * Cancel remaining work, reach child quiescence, and release resources.
    * Idempotent.
    */
-  dispose(): Promise<void>;
+  dispose(): Promise<void>
 }
 
 /**
@@ -312,22 +312,22 @@ export interface SubagentRun {
  */
 export interface SubagentProvider {
   /** Unique registry name (e.g. `spawn`, `fork`, `acp`). */
-  readonly name: string;
+  readonly name: string
   /** The start-time features this provider supports (see {@link SubagentCapabilities}). */
-  readonly capabilities: SubagentCapabilities;
+  readonly capabilities: SubagentCapabilities
   /**
    * Whether the child sees the parent's completed-turn prefix. This is descriptive, not a
    * service-validated start capability: the model-facing tool derives truthful wording from it.
    * It says nothing about tool registration, injected services, or authority inheritance.
    */
-  readonly inheritsParentContext: boolean;
+  readonly inheritsParentContext: boolean
   /**
    * Optional static provider-owned provider/model route for child Agent
    * options. Consumers merge tool/model overrides over these values before
    * preflight; providers whose route derives from the parent omit it. The value
    * is detached immutable data and requires `agentOptions` support.
    */
-  readonly agentRouteDefaults?: Readonly<{ provider: string; model: string }>;
+  readonly agentRouteDefaults?: Readonly<{ provider: string; model: string }>
   /**
    * Establish one external execution and return its owned handle.
    * The service has already validated that every requested start-time
@@ -337,7 +337,7 @@ export interface SubagentProvider {
    * the returned run. Distinct starts may overlap; cancellation, failure,
    * result settlement, and disposal remain independent for each run.
    */
-  start?(request: ResolvedSubagentStartRequest): Promise<SubagentRun>;
+  start?(request: ResolvedSubagentStartRequest): Promise<SubagentRun>
   /**
    * OPTIONAL (continuable-creation capability): contribute the detached
    * creation inputs that distinguish this provider's continuable children —
@@ -352,5 +352,5 @@ export interface SubagentProvider {
    * Distinct preparations may overlap; each follows its own signal and returns
    * data belonging only to `request.sessionId`.
    */
-  prepareContinuable?(request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>;
+  prepareContinuable?(request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
 }

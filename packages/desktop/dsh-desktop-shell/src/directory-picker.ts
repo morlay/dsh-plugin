@@ -4,7 +4,7 @@ import { DESKTOP_IPC, assertDesktopSender } from "./ipc.ts";
 
 export function installDesktopDirectoryPicker(
   getWindow: () => BrowserWindowType | undefined,
-  scheme: string,
+  getOrigin: () => string,
 ): void {
   const pending = new WeakMap<BrowserWindowType, Promise<string | null>>();
   ipcMain.handle(DESKTOP_IPC.directoryPick, async (event) => {
@@ -17,7 +17,7 @@ export function installDesktopDirectoryPicker(
     ) {
       throw new Error("dsh desktop: rejected directory picker from an unowned renderer");
     }
-    assertDesktopSender(event, scheme, ["app"]);
+    assertDesktopSender(event, [getOrigin()]);
     const existing = pending.get(window);
     if (existing !== undefined) return existing;
     if (window.isMinimized()) window.restore();

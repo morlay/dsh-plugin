@@ -18,10 +18,16 @@ provider 面），并接管 `ctx.sessionQuery`（全文检索 disabled）与 `$D
     path: /absolute/path/to/sessions.sqlite # 自定义路径请用绝对路径；省略则由 bundle patch 的默认值兜底
     journalMode: wal
     busyTimeout: 5000
+    preparedSessionCacheSize: 1 # 冷会话观察缓存容量（条数，最小 1）
 ```
 
 PostgreSQL 同理：`type: postgres` + `connectionString`（可加 `schema`，默认 `public`）。字段、默认值、装配默认值的
 来源与「改配置由 Loader 重挂这一行生效」见[设计总览](./.agents/designs/20260917-设计总览.md)的「配置门面」。
+
+`preparedSessionCacheSize` 透传给上游 `session-query` 的冷会话观察缓存：缓存**按条目数**持有完整 `Session`
+（含整份 append-only log），被活跃观察租约钉住的条目不淘汰；一次读取中途转成 live 时会重试 live 路径，但不会
+顺手清掉已缓存的 cold 条目——同一个 id 因此可能同时有两份 log 驻留。上游默认 5，**本行默认 1**（本地单用户、
+rdb 后端，冷读复用的收益不值这份内存放大）；上游校验下限是 1，不能设 0。
 
 管理面的 HTTP 通道统一挂在 `/api/morlay/v1/session` 前缀下（均为 `POST`，body `{ sessionId }` 或列表请求
 `{ query?, includeSubagents?, page?, pageSize? }`）：`/rows`（完整语料，含归档）、`/export`、`/import`、

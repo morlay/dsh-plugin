@@ -1,7 +1,7 @@
 /** Per-Session Chat view store. */
-import { defineStore, type EngineStoreHandle } from "@deepseek-ai/dsh-client-store";
-import type { ChatStoreState, TurnProcessViewEntry } from "./contract/store.ts";
-import type { TurnProcessSpec } from "./contract/turn-process.ts";
+import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
+import type { ChatStoreState, TurnProcessViewEntry } from './contract/store.ts'
+import type { TurnProcessSpec } from './contract/turn-process.ts'
 
 type ChatActions = {
   setTurnProcessOpen: (
@@ -9,8 +9,8 @@ type ChatActions = {
     turn: number,
     answerStep: number,
     open: boolean,
-  ) => void;
-};
+  ) => void
+}
 
 /**
  * Resolve the manual disclosure choice for one Turn.
@@ -22,7 +22,7 @@ export function storedTurnProcessEntry(
   state: Readonly<ChatStoreState>,
   turn: number,
 ): Readonly<TurnProcessViewEntry> | undefined {
-  return state.turnProcesses.find((entry) => entry.turn === turn);
+  return state.turnProcesses.find(entry => entry.turn === turn)
 }
 
 /**
@@ -35,12 +35,12 @@ export function storedTurnProcessEntry(
  */
 export function turnProcessOpen(
   state: Readonly<ChatStoreState>,
-  spec: Pick<TurnProcessSpec, "turn" | "answerStep">,
+  spec: Pick<TurnProcessSpec, 'turn' | 'answerStep'>,
   defaultOpen: boolean,
 ): boolean {
-  const stored = storedTurnProcessEntry(state, spec.turn);
-  if (stored === undefined || stored.answerStep !== (spec.answerStep ?? 0)) return defaultOpen;
-  return stored.collapsed !== true;
+  const stored = storedTurnProcessEntry(state, spec.turn)
+  if (stored === undefined || stored.answerStep !== (spec.answerStep ?? 0)) return defaultOpen
+  return stored.collapsed !== true
 }
 
 /**
@@ -52,13 +52,11 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
     init: (): ChatStoreState => ({ turnProcesses: [] }),
     actions: {
       setTurnProcessOpen: (draft, turn, answerStep, open) => {
-        const index = draft.turnProcesses.findIndex((entry) => entry.turn === turn);
-        const next = (
-          open ? { turn, answerStep } : { turn, answerStep, collapsed: true }
-        ) satisfies TurnProcessViewEntry;
-        if (index < 0) draft.turnProcesses.push(next);
-        else draft.turnProcesses[index] = next;
+        const index = draft.turnProcesses.findIndex(entry => entry.turn === turn)
+        const next = (open ? { turn, answerStep } : { turn, answerStep, collapsed: true }) satisfies TurnProcessViewEntry
+        if (index < 0) draft.turnProcesses.push(next)
+        else draft.turnProcesses[index] = next
       },
     },
-  });
+  })
 }

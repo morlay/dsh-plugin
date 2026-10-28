@@ -10,22 +10,17 @@
  * @module @deepseek-ai/dsh-subagent/out-of-process
  */
 
-import { accessSync, constants, statSync } from "node:fs";
-import { isAbsolute } from "node:path";
-import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import type {
-  SubagentCapabilities,
-  SubagentResult,
-  SubagentRun,
-  SubagentStopReason,
-} from "./types.ts";
+import { accessSync, constants, statSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SubagentCapabilities, SubagentResult, SubagentRun, SubagentStopReason } from './types.ts'
 
 /** Maximum UTF-8 size of {@link SubagentResult.diagnostic}. */
-const MAX_SUBAGENT_DIAGNOSTIC_BYTES = 4_096;
+const MAX_SUBAGENT_DIAGNOSTIC_BYTES = 4_096
 
-const DIAGNOSTIC_TRUNCATION_SUFFIX = "\n[diagnostic truncated]";
-const utf8Encoder = new TextEncoder();
-const utf8Decoder = new TextDecoder();
+const DIAGNOSTIC_TRUNCATION_SUFFIX = '\n[diagnostic truncated]'
+const utf8Encoder = new TextEncoder()
+const utf8Decoder = new TextDecoder()
 
 /**
  * Limit provider-authored failure detail without splitting a UTF-8 sequence.
@@ -33,22 +28,23 @@ const utf8Decoder = new TextDecoder();
  * @returns the original text, or a visibly truncated value within the limit.
  */
 function limitSubagentDiagnostic(diagnostic: string): string {
-  const bytes = utf8Encoder.encode(diagnostic);
-  if (bytes.byteLength <= MAX_SUBAGENT_DIAGNOSTIC_BYTES) return diagnostic;
+  const bytes = utf8Encoder.encode(diagnostic)
+  if (bytes.byteLength <= MAX_SUBAGENT_DIAGNOSTIC_BYTES) return diagnostic
 
-  const suffixBytes = utf8Encoder.encode(DIAGNOSTIC_TRUNCATION_SUFFIX).byteLength;
-  let prefixBytes = MAX_SUBAGENT_DIAGNOSTIC_BYTES - suffixBytes;
+  const suffixBytes = utf8Encoder.encode(DIAGNOSTIC_TRUNCATION_SUFFIX).byteLength
+  let prefixBytes = MAX_SUBAGENT_DIAGNOSTIC_BYTES - suffixBytes
   while (((bytes[prefixBytes] as number) & 0b1100_0000) === 0b1000_0000) {
-    prefixBytes -= 1;
+    prefixBytes -= 1
   }
-  return utf8Decoder.decode(bytes.subarray(0, prefixBytes)) + DIAGNOSTIC_TRUNCATION_SUFFIX;
+  return utf8Decoder.decode(bytes.subarray(0, prefixBytes))
+    + DIAGNOSTIC_TRUNCATION_SUFFIX
 }
 
 /** Enforce the byte limit on a provider-returned diagnostic. */
 function normalizeSubagentDiagnostic(result: SubagentResult): SubagentResult {
   return result.diagnostic === undefined
     ? result
-    : { ...result, diagnostic: limitSubagentDiagnostic(result.diagnostic) };
+    : { ...result, diagnostic: limitSubagentDiagnostic(result.diagnostic) }
 }
 
 /**
@@ -62,7 +58,7 @@ export const NO_START_CAPABILITIES: SubagentCapabilities = Object.freeze({
   agentPreset: false,
   outputSchema: false,
   depthLimit: false,
-});
+})
 
 /**
  * Assert a configured timing bound is a positive finite number (it bounds a
@@ -73,7 +69,7 @@ export const NO_START_CAPABILITIES: SubagentCapabilities = Object.freeze({
  */
 export function assertPositiveFinite(prefix: string, name: string, value: number): void {
   if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`${prefix}: ${name} must be a positive finite number`);
+    throw new Error(`${prefix}: ${name} must be a positive finite number`)
   }
 }
 
@@ -84,14 +80,14 @@ export function assertPositiveFinite(prefix: string, name: string, value: number
  */
 function isEnterableDirectory(path: string): boolean {
   try {
-    if (!statSync(path).isDirectory()) return false;
-    accessSync(path, constants.X_OK);
-    return true;
+    if (!statSync(path).isDirectory()) return false
+    accessSync(path, constants.X_OK)
+    return true
   } catch {
     // statSync/accessSync throw only filesystem access errors here
     // (ENOENT/EACCES/ENOTDIR/…), and every one of them means the path cannot
     // serve as the child's cwd.
-    return false;
+    return false
   }
 }
 
@@ -107,12 +103,12 @@ function isEnterableDirectory(path: string): boolean {
  */
 export function assertUsableCwd(prefix: string, label: string, cwd: string): string {
   if (!isAbsolute(cwd)) {
-    throw new Error(`${prefix}: ${label} must be an absolute path: ${cwd}`);
+    throw new Error(`${prefix}: ${label} must be an absolute path: ${cwd}`)
   }
   if (!isEnterableDirectory(cwd)) {
-    throw new Error(`${prefix}: ${label} is not an accessible directory: ${cwd}`);
+    throw new Error(`${prefix}: ${label} is not an accessible directory: ${cwd}`)
   }
-  return cwd;
+  return cwd
 }
 
 /** Normalize an unknown thrown value to an Error (the catch binding is `unknown`). */
@@ -121,25 +117,25 @@ function toError(value: unknown): Error {
   // `Error`s; the `String(value)` arm is a defensive fallback for a non-Error
   // throw the typed surfaces cannot produce.
   /* v8 ignore next */
-  return value instanceof Error ? value : new Error(String(value));
+  return value instanceof Error ? value : new Error(String(value))
 }
 
 /** Inputs to {@link settleRunResult}. */
 export interface RunResultSettlement {
   /** The turn attempt (typically racing local cancellation); returns the terminal result. */
-  attempt: () => Promise<SubagentResult>;
+  attempt: () => Promise<SubagentResult>
   /** Snapshot the provider exposes when cancellation or failure wins settlement. */
-  collectOutput: () => readonly ContentBlock[];
+  collectOutput: () => readonly ContentBlock[]
   /** Snapshot safe provider-authored detail when a failure wins settlement. */
-  collectDiagnostic?: (() => string | undefined) | undefined;
+  collectDiagnostic?: (() => string | undefined) | undefined
   /** Whether local cancellation settled before the attempt's outcome is observed. */
-  cancelled: () => boolean;
+  cancelled: () => boolean
   /** Diagnostic sink for a failure flattened to a stop reason; a throw from it is contained. */
-  onError?: ((error: Error, stopReason: SubagentStopReason) => void) | undefined;
+  onError?: ((error: Error, stopReason: SubagentStopReason) => void) | undefined
   /** The request's cancellation signal (the listener is removed at settlement). */
-  signal: AbortSignal;
+  signal: AbortSignal
   /** The abort listener registered on {@link signal} at start. */
-  onAbort: () => void;
+  onAbort: () => void
 }
 
 /**
@@ -154,45 +150,47 @@ export interface RunResultSettlement {
  */
 export async function settleRunResult(parts: RunResultSettlement): Promise<SubagentResult> {
   try {
-    const result = await parts.attempt();
+    const result = await parts.attempt()
     return parts.cancelled()
-      ? { output: parts.collectOutput(), stopReason: "aborted" }
-      : normalizeSubagentDiagnostic(result);
+      ? { output: parts.collectOutput(), stopReason: 'aborted' }
+      : normalizeSubagentDiagnostic(result)
   } catch (error: unknown) {
     // Cover a rejection already queued when cancellation arrives.
-    if (parts.cancelled()) return { output: parts.collectOutput(), stopReason: "aborted" };
+    if (parts.cancelled()) return { output: parts.collectOutput(), stopReason: 'aborted' }
     // Flatten post-publication transport failures while preserving diagnostics.
     try {
-      parts.onError?.(toError(error), "error");
+      parts.onError?.(toError(error), 'error')
     } catch {
       // The diagnostic sink cannot reject the run result.
     }
-    const collected = parts.collectDiagnostic?.();
-    const diagnostic = collected === undefined ? undefined : limitSubagentDiagnostic(collected);
+    const collected = parts.collectDiagnostic?.()
+    const diagnostic = collected === undefined
+      ? undefined
+      : limitSubagentDiagnostic(collected)
     return {
       output: parts.collectOutput(),
-      ...(diagnostic === undefined ? {} : { diagnostic }),
-      stopReason: "error",
-    };
+      ...diagnostic === undefined ? {} : { diagnostic },
+      stopReason: 'error',
+    }
   } finally {
-    parts.signal.removeEventListener("abort", parts.onAbort);
+    parts.signal.removeEventListener('abort', parts.onAbort)
   }
 }
 
 /** Inputs to {@link subprocessRunHandle}. */
 export interface SubprocessRunHandleParts {
   /** The parent-scoped run id. */
-  id: SubagentRun["id"];
+  id: SubagentRun['id']
   /** The flattened, never-rejecting result (the seam contract). */
-  result: Promise<SubagentResult>;
+  result: Promise<SubagentResult>
   /** The request's cancellation signal (the listener is removed on dispose). */
-  signal: AbortSignal;
+  signal: AbortSignal
   /** The abort listener registered on {@link signal} at start. */
-  onAbort: () => void;
+  onAbort: () => void
   /** Settle local cancellation so {@link result} resolves without the child. */
-  requestCancel: () => void;
+  requestCancel: () => void
   /** Tear the child process down to quiescence (backend-owned ladder). */
-  teardown: () => Promise<void>;
+  teardown: () => Promise<void>
 }
 
 /**
@@ -204,16 +202,16 @@ export interface SubprocessRunHandleParts {
  * @returns the external run handle.
  */
 export function subprocessRunHandle(parts: SubprocessRunHandleParts): SubagentRun {
-  let disposal: Promise<void> | undefined;
+  let disposal: Promise<void> | undefined
   return {
     id: parts.id,
     result: parts.result,
     dispose(): Promise<void> {
-      if (disposal !== undefined) return disposal;
-      parts.signal.removeEventListener("abort", parts.onAbort);
-      parts.requestCancel();
-      disposal = parts.teardown();
-      return disposal;
+      if (disposal !== undefined) return disposal
+      parts.signal.removeEventListener('abort', parts.onAbort)
+      parts.requestCancel()
+      disposal = parts.teardown()
+      return disposal
     },
-  };
+  }
 }

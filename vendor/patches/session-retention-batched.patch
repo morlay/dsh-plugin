@@ -1,8 +1,24 @@
 diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/packages/api/session-controller/src/client/sessions/service.ts
-index dd86e7cac2..5f9d17ed63 100644
+index 4b70888468..412a2bb904 100644
 --- a/packages/api/session-controller/src/client/sessions/service.ts
 +++ b/packages/api/session-controller/src/client/sessions/service.ts
-@@ -565,12 +565,18 @@ export class ClientSessions implements ISessions {
+@@ -563,7 +563,14 @@ export class ClientSessions implements ISessions {
+       else this.publishRetention(id)
+     })
+     if (this.list.getSnapshot().byId[id] === undefined && this.manager.subagentAddress(id) !== undefined) {
+-      this.projectList()
++      // Same render-window rule as `publishRetention`: a `session-maybe` entry
++      // materializes its scope while rendering (`runInject` in the slot
++      // renderer), so a synchronous `projectList` → `list.set` reaches
++      // `DocumentTitle`'s `useSyncExternalStore` mid-render and React reports
++      // "Cannot update a component while rendering a different component".
++      queueMicrotask(() => {
++        if (this.list.getSnapshot().byId[id] === undefined) this.projectList()
++      })
+     }
+     this.publishRetention(id)
+     return reference
+@@ -574,12 +581,18 @@ export class ClientSessions implements ISessions {
    }
  
    private publishRetention(id: SessionId): void {

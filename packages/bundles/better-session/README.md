@@ -42,3 +42,5 @@ await ctx.sessionBranch.forkFrom(sourceId, { atSeq: 6, childSessionId });
 默认配置为 SQLite（`$DSH_HOME/sessions/sessions.sqlite`）。改配置就是改 `session-rdb` 那一行的 config（bundle patch /
 profile patch / 设置页都可）——字段、默认值与生效方式见
 [`@morlay/session-rdb` 的 README](../../session/session-rdb/README.md)。
+
+**插件页不挂长文**：`locale/*.json` 的 `meta.detail` 指向空文件 [`docs/detail.md`](./docs/detail.md)，所以 bundle 详情页的"详细介绍"区是空的；本 README 仍是包门面。

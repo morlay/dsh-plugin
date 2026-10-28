@@ -9,9 +9,22 @@ import type {
 } from "@deepseek-ai/dsh-session";
 import type {
   ProjectionCheckpoint,
+  ProjectionKeySelection,
   ProjectionSnapshot,
   SessionProjectionMap,
 } from "@deepseek-ai/dsh-session-projection";
+
+// 上游的 keys 选择面既接受数组也接受 `ReadonlySet`（`sessionProjections.summaryKeys()` 给的是 Set）。
+// 只看一个键时两种都要认——之前只按数组写了 `.includes`，Set 上直接抛 `keys.includes is not a function`，
+// 列表行于是整列投影都没有（会话标题显示"未命名"）。
+function selects(
+  keys: ProjectionKeySelection | undefined,
+  key: Extract<keyof SessionProjectionMap, string>,
+): boolean {
+  if (keys === undefined) return true;
+  if ("has" in keys) return keys.has(key);
+  return (keys as readonly string[]).includes(key);
+}
 import type {
   StorageRepository,
   StoredProjcacheEntry,
@@ -105,7 +118,7 @@ export class SessionProjectionCacheRdb extends Service {
   // inherited cut（那个只有写路径与 hydration 用得上）。
   cachedSnapshot(
     meta: SessionHeader,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot | undefined {
     const record = this.recordForLifecycle(meta);
     const snapshot = record === undefined ? undefined : this.viewRecord(record, keys);
@@ -121,12 +134,10 @@ export class SessionProjectionCacheRdb extends Service {
 
   private withDirectTitle(
     id: SessionId,
-    keys: readonly Extract<keyof SessionProjectionMap, string>[] | undefined,
+    keys: ProjectionKeySelection | undefined,
     snapshot: ProjectionSnapshot | undefined,
   ): ProjectionSnapshot | undefined {
-    if (keys !== undefined && !(keys as readonly string[]).includes(PREDECESSOR_TITLE_KEY)) {
-      return snapshot;
-    }
+    if (!selects(keys, PREDECESSOR_TITLE_KEY)) return snapshot;
     if (snapshot?.values[PREDECESSOR_TITLE_KEY] !== undefined) return snapshot;
     const direct = this.repository.readSessionTitleDirect?.(id);
     if (direct === undefined) return snapshot;
@@ -150,7 +161,7 @@ export class SessionProjectionCacheRdb extends Service {
 
   private viewRecord(
     record: StoredProjcacheEntry,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot | undefined {
     const values = this.ctx.sessionProjections.viewCheckpoint(
       record.rows as unknown as ProjectionCheckpoint,

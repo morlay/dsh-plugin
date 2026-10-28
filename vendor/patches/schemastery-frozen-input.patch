@@ -1,0 +1,39 @@
+diff --git a/vendor/schemastery/src/index.ts b/vendor/schemastery/src/index.ts
+index 6edc132c49..e73c17efc7 100644
+--- a/vendor/schemastery/src/index.ts
++++ b/vendor/schemastery/src/index.ts
+@@ -761,11 +761,15 @@ function property(data: any, key: keyof any, schema: Schema, options: Schemaster
+       ...options,
+       path: [...options.path || [], key],
+     })
+-    if (adapted !== undefined) data[key] = adapted
++    // Cache the adapted value on the caller's object so a later read sees it —
++    // but a frozen input (settings snapshots are deep-frozen outside
++    // production) cannot take the write, and the caller still receives
++    // `value`, so skipping the cache is safe.
++    if (adapted !== undefined && !Object.isFrozen(data)) data[key] = adapted
+     return value
+   } catch (e) {
+     if (!options?.autofix) throw e
+-    delete data[key]
++    if (!Object.isFrozen(data)) delete data[key]
+     return schema.meta.volatile ? createVolatile(schema.meta.default) : schema.meta.default
+   }
+ }
+@@ -788,8 +792,14 @@ Schema.extend('dict', (data, { inner, sKey }, options, strict) => {
+       throw error
+     }
+     result[rKey] = property(data, key, inner!, options)
+-    data[rKey] = data[key]
+-    if (key !== rKey) delete data[key]
++    // Only rewrite the input when normalising the key actually changes it.
++    // The unconditional write fails on a frozen value (the client store deep
++    // freezes settings snapshots outside production), and the default string
++    // key schema makes it a no-op anyway.
++    if (key !== rKey) {
++      data[rKey] = data[key]
++      delete data[key]
++    }
+   }
+   return [result]
+ })

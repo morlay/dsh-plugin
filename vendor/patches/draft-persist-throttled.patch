@@ -1,0 +1,79 @@
+diff --git a/packages/client/ui-conversation/src/client/input/facade.ts b/packages/client/ui-conversation/src/client/input/facade.ts
+index 6306216b1c..5e944dc70e 100644
+--- a/packages/client/ui-conversation/src/client/input/facade.ts
++++ b/packages/client/ui-conversation/src/client/input/facade.ts
+@@ -124,6 +124,14 @@ const EMPTY_QUEUE: InboxState['next-turn'] = []
+ /** Unavailable catalogs contain no named text references. */
+ const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
+ 
++/**
++ * Idle delay before the draft reaches the Conversation store. That store
++ * persists the whole document synchronously (`JSON.stringify` + localStorage)
++ * on every write, so writing per keystroke pays one serialization per
++ * character; typing only needs the last document to survive.
++ */
++const DRAFT_PERSIST_DELAY_MS = 300
++
+ /**
+  * The per-session input facade: scoped-event application verbs +
+  * setDraft/submit + the published InputState store, over a shell-owned
+@@ -165,6 +173,8 @@ export class SessionInputShell implements SessionInput {
+   private noticeSeq = 0
+   private lastPublishedDraft: DraftSnapshot | undefined
+   private draftSnapshotCache: { revision: number; value: DraftSnapshot } | undefined
++  /** Pending idle write of the current semantic document. */
++  private draftPersistTimer: ReturnType<typeof setTimeout> | undefined
+   private attachmentIds: readonly DraftAttachmentId[] = []
+   private disposed = false
+   /** Conversation store writer for the current semantic document. */
+@@ -291,7 +301,27 @@ export class SessionInputShell implements SessionInput {
+ 
+   /** Persist the latest document without changing the editor or binding a writer. */
+   persistCurrentDraft(): void {
+-    this.persistDraft?.(this.draftSnapshot)
++    this.flushDraftPersist()
++  }
++
++  /** Write the pending document now, cancelling the idle timer. */
++  private flushDraftPersist(): void {
++    if (this.draftPersistTimer !== undefined) {
++      clearTimeout(this.draftPersistTimer)
++      this.draftPersistTimer = undefined
++    }
++    const draft = this.draftSnapshot
++    this.lastPublishedDraft = draft
++    this.persistDraft?.(draft)
++  }
++
++  /** Coalesce keystroke-rate writes into at most one write per idle window. */
++  private scheduleDraftPersist(): void {
++    if (this.draftPersistTimer !== undefined) return
++    this.draftPersistTimer = setTimeout(() => {
++      this.draftPersistTimer = undefined
++      this.flushDraftPersist()
++    }, DRAFT_PERSIST_DELAY_MS)
+   }
+ 
+   /**
+@@ -597,6 +627,9 @@ export class SessionInputShell implements SessionInput {
+     if (this.disposed) return []
+     const retained = [...this.attachmentIds]
+     this.disposed = true
++    // Keep the last keystrokes: the idle timer would otherwise drop a tail the
++    // writer is still bound for.
++    if (this.draftPersistTimer !== undefined) this.flushDraftPersist()
+     this.cancelCommandRestore()
+     this.dispatchRun(({ type: 'release' }))
+     this.unsubscribeInbox?.()
+@@ -858,10 +891,6 @@ export class SessionInputShell implements SessionInput {
+   private publish(): void {
+     const next = this.compose()
+     this.state.set(next)
+-    const draft = this.draftSnapshot
+-    if (draft !== this.lastPublishedDraft) {
+-      this.lastPublishedDraft = draft
+-      this.persistDraft?.(draft)
+-    }
++    if (this.draftSnapshot !== this.lastPublishedDraft) this.scheduleDraftPersist()
+   }
+ }

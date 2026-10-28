@@ -10,27 +10,23 @@
  * @module @deepseek-ai/dsh-subagent/structured
  */
 
-import type { Context } from "@deepseek-ai/cordis";
-import type { ToolSchema } from "@deepseek-ai/dsh-llm";
-import type { ToolExecution, ToolRunContext } from "@deepseek-ai/dsh-tools";
-import {
-  ToolArgsError,
-  validateJsonSchemaValue,
-  type ObjectJsonSchema,
-} from "@deepseek-ai/dsh-tools";
+import type { Context } from '@deepseek-ai/cordis'
+import type { ToolSchema } from '@deepseek-ai/dsh-llm'
+import type { ToolExecution, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, validateJsonSchemaValue, type ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 
 /** The model-facing tool name a structured child must call to finish. */
-export const STRUCTURED_OUTPUT_TOOL = "structured_output";
+export const STRUCTURED_OUTPUT_TOOL = 'structured_output'
 
 /**
  * The instruction registered as the child's trailing scoped prompt section:
  * the demand travels with the
  * tool, as ordinary prompt state of exactly one agent.
  */
-export const STRUCTURED_OUTPUT_INSTRUCTION =
-  "When you have your final answer, you MUST report it by calling the " +
-  `\`${STRUCTURED_OUTPUT_TOOL}\` tool with arguments matching its parameter schema exactly. ` +
-  "Do not finish with a plain text answer: only the tool call counts as your result.";
+export const STRUCTURED_OUTPUT_INSTRUCTION
+  = 'When you have your final answer, you MUST report it by calling the '
+    + `\`${STRUCTURED_OUTPUT_TOOL}\` tool with arguments matching its parameter schema exactly. `
+    + 'Do not finish with a plain text answer: only the tool call counts as your result.'
 
 /** One structured run's live handle: read the captured value once the child settles. */
 export interface StructuredAttachment {
@@ -39,13 +35,13 @@ export interface StructuredAttachment {
    * an enclosing PTC execution. A failed result discards its capture and reopens input.
    * @returns whether the activation can accept another message.
    */
-  acceptsInput(): boolean;
+  acceptsInput(): boolean
   /**
    * The captured value, once the child called the tool with valid arguments
    * and the authoritative final tool result accepted that call.
    * @returns the committed value, or undefined while none was accepted.
    */
-  captured(): { value: unknown } | undefined;
+  captured(): { value: unknown } | undefined
 }
 
 /**
@@ -71,94 +67,89 @@ export function attachStructuredRuntime(
    * correlate nested transports. The final notification always deletes its own
    * stage, whether the result succeeded or failed.
    */
-  const staged = new Map<ToolExecution, { value: unknown }>();
+  const staged = new Map<ToolExecution, { value: unknown }>()
   /** Successful nested capture waiting for its enclosing transport to commit. */
-  let pending: { parent: ToolExecution["token"]; value: unknown } | undefined;
-  let captured: { value: unknown } | undefined;
+  let pending: { parent: ToolExecution['token']; value: unknown } | undefined
+  let captured: { value: unknown } | undefined
 
   const schemaEntry: ToolSchema = {
     name: STRUCTURED_OUTPUT_TOOL,
     description:
-      "Report your final structured result. Call this exactly once, when your answer is complete; " +
-      "the arguments must match this tool's parameter schema exactly.",
+      'Report your final structured result. Call this exactly once, when your answer is complete; '
+      + 'the arguments must match this tool\'s parameter schema exactly.',
     parameters: { ...schema },
-  };
+  }
 
   childCtx.tools.register({
     ...schemaEntry,
     output: {
       schema: {
-        type: "object",
-        properties: { recorded: { type: "boolean", const: true } },
-        required: ["recorded"],
+        type: 'object',
+        properties: { recorded: { type: 'boolean', const: true } },
+        required: ['recorded'],
         additionalProperties: false,
       },
-      render: () => [{ type: "text", text: "Structured output recorded." }],
+      render: () => [{ type: 'text', text: 'Structured output recorded.' }],
     },
     execute(args: unknown, exec: ToolRunContext): Promise<{ recorded: true }> {
-      const violations = validateJsonSchemaValue(schema, args);
+      const violations = validateJsonSchemaValue(schema, args)
       // ToolArgsError → isError result with INVALID_ARGS: the model retries
       // within the same turn, exactly like a schema-validated defineTool call.
-      if (violations.length > 0) throw new ToolArgsError(violations);
-      if (!canComplete())
-        throw new Error(
-          "Wait for all delegated child tasks to finish and process pending messages before submitting structured output.",
-        );
+      if (violations.length > 0) throw new ToolArgsError(violations)
+      if (!canComplete()) throw new Error('Wait for all delegated child tasks to finish and process pending messages before submitting structured output.')
       // Two-phase commit, keyed by THIS execution: later transformable
       // waterfalls may still turn the success into an error. ToolRuntime has
       // already frozen model-bound arguments at the actual input boundary.
-      staged.set(exec, { value: args });
-      exec.concludeTurn();
-      return Promise.resolve({ recorded: true });
+      staged.set(exec, { value: args })
+      exec.concludeTurn()
+      return Promise.resolve({ recorded: true })
     },
-  });
+  })
 
   childCtx.systemPrompt.section({
     name: `tool:${STRUCTURED_OUTPUT_TOOL}`,
-    order: childCtx.systemPrompt.getSectionOrder("STRUCTURED_OUTPUT"),
+    order: childCtx.systemPrompt.getSectionOrder('STRUCTURED_OUTPUT'),
     text: STRUCTURED_OUTPUT_INSTRUCTION,
-  });
+  })
 
   // Terminal WITHIN the step. Guards run after the whole pre-execute
   // waterfall and compose monotonically (deny or abstain, never allow), so a
   // later prepended listener cannot resurrect dispatch. Calls that precede
   // capture in the same response remain untouched.
-  childCtx.tools.guard((exec) =>
-    captured === undefined && pending === undefined
-      ? undefined
-      : `structured output already recorded: the run is complete, so \`${exec.name}\` is not executed`,
-  );
+  childCtx.tools.guard(exec => captured === undefined && pending === undefined
+    ? undefined
+    : `structured output already recorded: the run is complete, so \`${exec.name}\` is not executed`)
 
   // The capture COMMIT observes the immutable, authoritative result after the
   // complete pipeline and outer error normalization. This notification cannot
   // transform the outcome, so there is no wrapper outside the commit verdict.
-  childCtx.on("tools/result", function (this: unknown, exec, result) {
+  childCtx.on('tools/result', function (this: unknown, exec, result) {
     if (exec.name === STRUCTURED_OUTPUT_TOOL) {
-      const entry = staged.get(exec);
-      if (entry === undefined) return;
-      staged.delete(exec);
-      if (result.isError) return;
+      const entry = staged.get(exec)
+      if (entry === undefined) return
+      staged.delete(exec)
+      if (result.isError) return
       if (exec.parent === undefined) {
         /* v8 ignore else -- sequential agent-loop dispatch lets the guard block every later supported call */
-        if (captured === undefined) captured = { value: entry.value };
+        if (captured === undefined) captured = { value: entry.value }
       } else {
         /* v8 ignore else -- PTC mode serializes sub-dispatches, so the guard blocks every later supported call */
         if (captured === undefined && pending === undefined) {
-          pending = { parent: exec.parent, value: entry.value };
+          pending = { parent: exec.parent, value: entry.value }
         }
       }
-      return;
+      return
     }
-    if (pending?.parent !== exec.token) return;
-    const entry = pending;
-    pending = undefined;
-    if (result.isError) return;
+    if (pending?.parent !== exec.token) return
+    const entry = pending
+    pending = undefined
+    if (result.isError) return
     /* v8 ignore else -- PTC mode serializes outer executions, so the guard blocks every later supported call */
-    if (captured === undefined) captured = { value: entry.value };
-  });
+    if (captured === undefined) captured = { value: entry.value }
+  })
 
   return {
     captured: () => captured,
     acceptsInput: () => staged.size === 0 && pending === undefined && captured === undefined,
-  };
+  }
 }
