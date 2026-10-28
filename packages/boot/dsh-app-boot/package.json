@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-app-boot",
-  "version": "0.2.9",
+  "version": "0.2.10-alpha.0",
   "description": "Our own app-boot: assemble a profile (bundle layers + patches) and boot its Cordis tree — replaces the private @deepseek-ai/dsh/profile-boot composition layer while still building on @deepseek-ai/dsh-app-boot.",
   "keywords": [
     "boot",

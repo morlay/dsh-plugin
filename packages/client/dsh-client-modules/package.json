@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-client-modules",
-  "version": "0.2.10",
+  "version": "0.2.11-alpha.0",
   "description": "Dev-form web layer for dsh: serves the page, the app entry and every client resource through an in-process vite dev server (middleware mode) — the node-side counterpart of upstream @deepseek-ai/dsh-client-modules, with the module table replaced by vite's resolver, dependency prebundling and HMR.",
   "keywords": [
     "client",

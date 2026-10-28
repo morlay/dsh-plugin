@@ -54,8 +54,10 @@ lint:
     pnpm exec dshdev check-docs
 
 # 发布一律走 CI；这一条是 CI 的发布步骤（逐包唤起，只发 `@morlay/*` 里版本是新的那些）。
-publish:
-    pnpm -r --filter './packages/*/*' --workspace-concurrency=1 exec dshdev publish
+publish *args:
+    pnpm -r --filter './packages/*/*' --workspace-concurrency=1 exec dshdev publish {{ args }}
+
+publish-npm: (publish '--registry https://registry.npmjs.org/')
 
 # 全仓声明（一步、两个 face）：生成到 target/dts，各包构建只按路径取自己的那份来合并。
 # 插件包构建：`@deepseek-ai/*` 经 exports 指到 src 后，tsdown 加载 config（→ @local/devkit → 上游源码）
