@@ -96,6 +96,15 @@ export function sessionConflictRow(storage: SessionStorageMetadata): {
 }
 
 /**
+ * `f_last_event_at` 的「取大」更新：`max(a, b)` 在 SQLite 是标量函数，PostgreSQL 只有聚合 `max`，
+ * 两参数写法在 PG 上直接 `function max(bigint, unknown) does not exist`。用 `CASE WHEN` 写，
+ * 两个方言同一份表达式（NULL 视作 0，与原来的 `MAX(COALESCE(x, 0), v)` 同义）。
+ */
+export function lastEventAtSql(column: unknown, value: number): SQL {
+  return sql`CASE WHEN COALESCE(${column}, 0) < ${value} THEN ${value} ELSE COALESCE(${column}, 0) END`;
+}
+
+/**
  * 「这次 append 需不需要重写 session 行的 header 列」的 SQL 判据：逐列 `is distinct from`。
  * 放在 SQL 里判断（而不是先读再比）是为了不增加一次读；`WHERE` 不匹配时数据库不产生行写入，
  * 也就不会有 WAL 帧与触发器——每次 append 都无条件 UPDATE 一次是纯写放大。

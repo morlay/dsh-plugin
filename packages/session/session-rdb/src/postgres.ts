@@ -20,7 +20,13 @@ import {
 } from "./backend.ts";
 import { toPostgresSchema } from "./adapters/index.ts";
 import { postgresTableDefs } from "./entities/index.ts";
-import { headerChangedSql, sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
+import {
+  headerChangedSql,
+  lastEventAtSql,
+  sessionConflictRow,
+  sessionInsertRow,
+  titleOfEventData,
+} from "./log.ts";
 import type { EventUsageRow } from "./log.ts";
 import { createStorageRepository } from "./storage-takeover/repository.ts";
 import type { StorageRepository } from "./storage-takeover/types.ts";
@@ -462,7 +468,7 @@ export class PostgresBackend implements Backend {
         fRevision: sql`${sessions.fRevision} + 1`,
         ...(lastEventAt === undefined
           ? {}
-          : { fLastEventAt: sql`MAX(COALESCE(${sessions.fLastEventAt}, 0), ${lastEventAt})` }),
+          : { fLastEventAt: lastEventAtSql(sessions.fLastEventAt, lastEventAt) }),
       })
       .where(eq(sessions.fSessionId, id))
       .execute();

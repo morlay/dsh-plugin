@@ -20,7 +20,13 @@ import {
   type SessionRow,
   type SessionUsageBucket,
 } from "./backend.ts";
-import { headerChangedSql, sessionConflictRow, sessionInsertRow, titleOfEventData } from "./log.ts";
+import {
+  headerChangedSql,
+  lastEventAtSql,
+  sessionConflictRow,
+  sessionInsertRow,
+  titleOfEventData,
+} from "./log.ts";
 import type { EventUsageRow } from "./log.ts";
 import {
   COUNTED_EVENT_TYPES,
@@ -694,7 +700,7 @@ export class SqliteBackend implements Backend {
         fRevision: sql`${tSessions.fRevision} + 1`,
         ...(lastEventAt === undefined
           ? {}
-          : { fLastEventAt: sql`MAX(COALESCE(${tSessions.fLastEventAt}, 0), ${lastEventAt})` }),
+          : { fLastEventAt: lastEventAtSql(tSessions.fLastEventAt, lastEventAt) }),
       })
       .where(eq(tSessions.fSessionId, id))
       .run();
@@ -707,7 +713,7 @@ export class SqliteBackend implements Backend {
         fRevision: sql`${tSessions.fRevision} + 1`,
         ...(lastEventAt === undefined
           ? {}
-          : { fLastEventAt: sql`MAX(COALESCE(${tSessions.fLastEventAt}, 0), ${lastEventAt})` }),
+          : { fLastEventAt: lastEventAtSql(tSessions.fLastEventAt, lastEventAt) }),
       })
       .where(eq(tSessions.fSessionId, id))
       .run();
