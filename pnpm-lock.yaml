@@ -548,9 +548,18 @@ importers:
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/vendor/cordis
     devDependencies:
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/include
       '@local/devkit':
         specifier: workspace:*
         version: link:../../../devpackages/devkit
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.2
 
   packages/bundles/ollama-provider-profile:
     dependencies:

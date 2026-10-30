@@ -1,21 +1,21 @@
 # 官方 AgentPreset 恢复与会话级扩展（装配形态）
 
 状态：**已实现**（判据在各包：`preset-plane.spec.ts` 的真装配用例与各 bundle 的 `patch.spec.ts`）
-范围：本部署怎么用 agent-preset 机制（行清单归 shipped preset），以及我们的扩展落在哪一层（会话级 persona / 工具与
+范围：本部署怎么用 agent-preset 机制（preset 行清单归 `@morlay/mydsh-profile`，由它复制上游四份），以及我们的扩展落在哪一层（会话级 persona / 工具与
 policy 名单 / 收口 / 注入开关 / 默认模型）。
 约束：不改上游 `@deepseek-ai/*`（只读）；扩展只走 cordis 插件层与 profile patch。
 
 ## 结论摘要
 
-| 议题            | 结论                                                                                                                                                                                                        | 一句话理由                                                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| preset 平面     | `agent-preset-registry` + 官方四个 shipped preset 行；本部署**不声明**自己的 preset                                                                                                                         | 行清单与隔离 realm 是官方机制；自己持有一份清单等于替上游维护行 id 与 `config`（[ADR-不再持有行清单](../../packages/bundles/session-mode-profile/.agents/adrs/20260929-不再持有行清单.md)） |
-| 选择面          | 挂哪套行归官方 roster（槽位 `conversation.hero.agentPreset` 是单注册的）；我们的模式 chip 在 composer 工具行左侧，两套**并存**                                                                              | 同一个槽位两个 seat 会直接抛错；官方管"挂哪套行"，我们管"这个会话怎么用它们"                                                                                                                |
-| 模式            | **模式 = preset 之上的会话级扩展**：persona / 工具与 policy 的名单（`allowTools` · `denyTools` · `allowPolicies` · `denyPolicies`）/ 三个开关（`instructions`、`skills`、`runtimeContext`）/ `defaultModel` | preset 给"这个 agent 有哪些行"，模式只回答"这个会话怎么用它们"                                                                                                                              |
-| 行清单          | 归会话挂着的那份 shipped preset（新会话是官方 web-app 的默认 `standard`）；我们的 host 平面只装自己那几行（`session-mode` / `subagent` / `context-assembler` / `tool-guidance`）                            | 一行只属于一个平面：官方 web-app 已把面向模型的行 `disabled` 让给 preset                                                                                                                    |
-| 注入面          | 工作区指令 = 官方 `agent-instructions` 行；技能目录与 `skill` 工具 = 官方 `tool-skill` 行；我们的通道只做文本转换                                                                                           | 那两行在 `agent/pre-step` 里自行送达，通道没有可插的地方；抢面等于与上游对赌                                                                                                                |
-| 会话级事实      | `session-mode/selected` 事件与 `sessionMode` 投影**保留**                                                                                                                                                   | 模式事实要能恢复、被子代理继承、被服务端读到，不借官方的 `agentPreset` 表达                                                                                                                 |
-| 部署默认 preset | 不配 `agent-preset-registry.default`，用官方 web-app 的默认                                                                                                                                                 | registry 的 `default` 就是"选哪个"的配置面（`vendor/deepseek-harness/packages/preset/agent-preset-registry/src/index.ts:54-55,74`）                                                         |
+| 议题            | 结论                                                                                                                                                                                                        | 一句话理由                                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| preset 平面     | `agent-preset-registry` + 四份 shipped preset 行；行清单由 [`@morlay/mydsh-profile`](../../packages/bundles/mydsh-profile/README.md) 复制上游并声明（删掉与 agent-team 冲突的子代理工具行）                 | 行清单与隔离 realm 是官方机制；覆盖点只在一处，便于和上游逐行对齐（[ADR-preset行清单归本包](../../packages/bundles/mydsh-profile/.agents/adrs/20261030-preset行清单归本包.md)） |
+| 选择面          | 挂哪套行归官方 roster（槽位 `conversation.hero.agentPreset` 是单注册的）；我们的模式 chip 在 composer 工具行左侧，两套**并存**                                                                              | 同一个槽位两个 seat 会直接抛错；官方管"挂哪套行"，我们管"这个会话怎么用它们"                                                                                                    |
+| 模式            | **模式 = preset 之上的会话级扩展**：persona / 工具与 policy 的名单（`allowTools` · `denyTools` · `allowPolicies` · `denyPolicies`）/ 三个开关（`instructions`、`skills`、`runtimeContext`）/ `defaultModel` | preset 给"这个 agent 有哪些行"，模式只回答"这个会话怎么用它们"                                                                                                                  |
+| 行清单          | 归会话挂着的那份 preset；四份都由 `@morlay/mydsh-profile` 声明（新会话仍是 web-app 的默认 `standard`）；host 平面只装自己那几行（`session-mode` / `subagent` / `context-assembler` / `tool-guidance`）      | 一行只属于一个平面：官方 web-app 已把面向模型的行 `disabled` 让给 preset                                                                                                        |
+| 注入面          | 工作区指令 = 官方 `agent-instructions` 行；技能目录与 `skill` 工具 = 官方 `tool-skill` 行；我们的通道只做文本转换                                                                                           | 那两行在 `agent/pre-step` 里自行送达，通道没有可插的地方；抢面等于与上游对赌                                                                                                    |
+| 会话级事实      | `session-mode/selected` 事件与 `sessionMode` 投影**保留**                                                                                                                                                   | 模式事实要能恢复、被子代理继承、被服务端读到，不借官方的 `agentPreset` 表达                                                                                                     |
+| 部署默认 preset | 不配 `agent-preset-registry.default`，用官方 web-app 的默认                                                                                                                                                 | registry 的 `default` 就是"选哪个"的配置面（`vendor/deepseek-harness/packages/preset/agent-preset-registry/src/index.ts:54-55,74`）                                             |
 
 ## 事实基线
 
@@ -32,7 +32,9 @@ policy 名单 / 收口 / 注入开关 / 默认模型）。
 
 本部署的装配（现在是这样）：
 
-- **行清单归 shipped preset**：本部署不声明任何 agent preset，也不覆盖 registry 的 `default`；host 平面由
+- **行清单归 preset 平面、由 `@morlay/mydsh-profile` 声明**：四份 shipped preset 的 `config.plugins` 由
+  [`@morlay/mydsh-profile`](../../packages/bundles/mydsh-profile/README.md) 按行 id 整段覆盖（复制上游，删掉 agent-team
+  冲突的三行），registry 的 `default` 仍由 web-app 的 `standard` 给；host 平面由
   [`@morlay/session-mode-profile`](../../packages/bundles/session-mode-profile/README.md) 一次装齐——`session-mode`
   （模式定义 + 按会话收口）、`subagent`（按官方行 id 复用换实现）、`context-assembler`、
   `tool-guidance`（工具说明汉化 + 用法分组：工具投影在 `system-prompt/assemble` 上改写、`base` 组正文由它自己挂
@@ -55,12 +57,11 @@ policy 名单 / 收口 / 注入开关 / 默认模型）。
 
 ## 取舍
 
-- **不覆盖 shipped preset 的 `config.plugins`**：官方明说覆盖是整段替换、不合并后续内置变更，等于把官方四个 preset 的
-  清单复制进本仓库，上游每次升级都要人工对齐（`packages/bundle/web-app/presets/cordis.patch.yml:1-3`）。
-- **不自己持有一份行清单**（理由与代价的 home 是
-  [ADR-不再持有行清单](../../packages/bundles/session-mode-profile/.agents/adrs/20260929-不再持有行清单.md)）：代价照实——
-  计划模式的规则段是官方英文（不能覆盖 shipped preset 的行 config）、「先读后改」的豁免只能由模式自己的 policy 名单
-  表达（`coding.denyPolicies: [fs/edit-intent]`，写路径上的 CAS 安全网留着）、官方那两条注入面要按会话丢只能在
+- **preset 行清单由 `@morlay/mydsh-profile` 持有**：官方覆盖是整段替换、不合并后续内置变更，所以四份清单复制进本仓库，上游每次升级都要
+  人工对齐（判据是 `packages/bundles/mydsh-profile/src/__tests__/patch.spec.ts` 与 vendor 原文件逐行比对），见
+  [ADR-preset行清单归本包](../../packages/bundles/mydsh-profile/.agents/adrs/20261030-preset行清单归本包.md)。代价照实：
+  计划模式的规则段沿用上游英文（复制不译）、「先读后改」的豁免只能由模式自己的 policy 名单表达
+  （`coding.denyPolicies: [fs/edit-intent]`，写路径上的 CAS 安全网留着）、上游那两条注入面要按会话丢只能在
   `agent/pre-step` 上丢条目（`instructions` / `skills` 两个开关）。
 - **不把通道搬进 preset realm**：realm 内的服务 host 侧读不到（`mount.ts:129-166`），而工具说明、会话收口这两个
   consumer 都住在 host 平面；搬进去就要把它们一起搬，收益只是"形态更官方"。

@@ -2,7 +2,7 @@
 
 DeepSeek Harness Plugin 自用开发插件集合：`@deepseek-ai/*` 只读，扩展只走 cordis 插件层（plugin / patch bundle / settings namespace）。
 
-一个工作区 profile = `dsh.profile.bundles` 顺序应用的一串 bundle patch；每个 bundle 聚合一个领域——它插的行与那些行要的配置值住在同一个包里（面向模型的功能行清单归会话挂着的 shipped preset，本部署不自建 preset），能力包只发布实现与装配数据（`rows`）出口。布局与装配的 home 是[系统设计](.agents/designs/20260917-系统设计.md)，上下文边界与术语归属见[上下文地图](.agents/GLOSSARY-MAP.md)。
+一个工作区 profile = `dsh.profile.bundles` 顺序应用的一串 bundle patch；每个 bundle 聚合一个领域——它插的行与那些行要的配置值住在同一个包里（面向模型的功能行清单由 `packages/bundles/mydsh-profile` 复制上游四份 preset 并声明，删掉与 agent-team 冲突的子代理工具行），能力包只发布实现与装配数据（`rows`）出口。布局与装配的 home 是[系统设计](.agents/designs/20260917-系统设计.md)，上下文边界与术语归属见[上下文地图](.agents/GLOSSARY-MAP.md)。
 
 ## 包
 

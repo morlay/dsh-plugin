@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "我的个人配置",
-    "description": "个人部署默认值：界面语言、欢迎提示版本、默认模型与对话视图——只按行 id 配值，行清单归官方 shipped preset。",
+    "description": "个人部署默认值：界面语言、欢迎提示版本、默认模型与对话视图，外加统一声明的四份 agent preset（复制上游，删掉与 agent-team 冲突的子代理工具行）。",
     "detail": "docs/detail.md"
   }
 }

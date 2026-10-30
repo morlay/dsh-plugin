@@ -1,7 +1,7 @@
 {
   "name": "@morlay/mydsh-profile",
   "version": "0.0.13-alpha.0",
-  "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图——只按行 id 配值，不插行、不禁行，也不指定新会话挂哪份 agent preset。",
+  "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图，外加统一声明的四份 agent preset（复制上游，删掉与 agent-team 冲突的子代理工具行）。",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -45,7 +45,10 @@
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
-    "@local/devkit": "workspace:*"
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@local/devkit": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "My Profile",
-    "description": "Personal deployment defaults: locale, welcome notice version, default model and transcript view — config values only; the agent row list belongs to the shipped presets.",
+    "description": "Personal deployment defaults: locale, welcome notice version, default model and transcript view, plus the four agent presets declared here (copied from upstream, minus the subagent rows that conflict with agent-team).",
     "detail": "docs/detail.md"
   }
 }

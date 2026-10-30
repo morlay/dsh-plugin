@@ -155,8 +155,9 @@ describe("桌面 overlay 的停用清单", () => {
       join(repoRoot, "packages/bundles/mydsh-profile/cordis.patch.yml"),
       "utf8",
     );
-    // profile 档不承担停用（写那儿不生效）；它负责的是"空壳注册"。
-    expect(profile, "profile 档不该出现停用").not.toContain("disabled: true");
+    // profile 档不承担顶层行的停用（写那儿不生效）；它负责的是"空壳注册"与 preset 声明。
+    // preset 的 `config.plugins` 里可以有 `disabled`（那是 preset 自己的行清单，不是顶层停用），所以按顶层行判。
+    expect(disabledIds(profile), "profile 档不该停用顶层行").toEqual([]);
   });
 });
 
