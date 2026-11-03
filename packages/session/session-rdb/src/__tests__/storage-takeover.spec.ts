@@ -13,7 +13,7 @@ import Workspace from "@deepseek-ai/dsh-workspace";
 import SessionPersistenceSqlite from "../index.ts";
 import { meta } from "../testing.ts";
 import { importStorages } from "../import-storages.ts";
-import { openRdbBackend } from "../backend-rdb.ts";
+import { openRdbBackend } from "../db/open.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

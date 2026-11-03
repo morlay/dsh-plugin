@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { openSqliteHandle } from "@morlay/rdbkit/testing";
-import { openRdbBackend } from "./backend-rdb.ts";
+import { openRdbBackend } from "./db/open.ts";
 import { DEFAULT_BUSY_TIMEOUT_MS, type JournalMode } from "./version.ts";
 
 export type { ContractBackend } from "./testing/contract.ts";
