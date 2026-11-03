@@ -55,13 +55,16 @@ describe("schedule row over the rdb storage backend", () => {
     let createdId: string;
     try {
       const schedule = await waitFor(() => first.get("schedule") as typeof first.schedule);
-      const record = await schedule.create(sessionId, {
-        prompt: "该喝水了",
-        title: "喝水",
-        at: "2030-01-01T00:00:00.000Z",
-      });
+      const record = await schedule.create(
+        {
+          title: "喝水",
+          prompt: "该喝水了",
+          timing: { kind: "at", at: "2030-01-01T00:00:00.000Z" },
+        },
+        sessionId,
+      );
       createdId = record.id;
-      expect((await schedule.list({ sessionId })).map((entry) => entry.id)).toEqual([createdId]);
+      expect((await schedule.list()).items.map((entry) => entry.id)).toEqual([createdId]);
 
       const db = new DatabaseSync(dbPath);
       try {
@@ -72,11 +75,14 @@ describe("schedule row over the rdb storage backend", () => {
           .all() as Array<{ f_key: string; f_value: string }>;
         expect(rows.map((row) => row.f_key)).toEqual([createdId]);
         const stored = JSON.parse(rows[0]!.f_value) as {
-          sessionId: string;
+          target: { kind: string };
+          involvedSessionIds: string[];
           status: string;
           record: { prompt: string };
         };
-        expect(stored.sessionId).toBe("session-schedule");
+        // 省略 target 时落在 `new_once`：首次投递才建目标会话，创建方会话记进 involvedSessionIds。
+        expect(stored.target.kind).toBe("new_once");
+        expect(stored.involvedSessionIds).toContain("session-schedule");
         expect(stored.status).toBe("active");
         expect(stored.record.prompt).toBe("该喝水了");
       } finally {
@@ -89,7 +95,7 @@ describe("schedule row over the rdb storage backend", () => {
     const second = await mount(dbPath);
     try {
       const schedule = await waitFor(() => second.get("schedule") as typeof second.schedule);
-      const listed = await schedule.list({ sessionId });
+      const listed = (await schedule.list()).items;
       expect(listed.map((entry) => entry.id)).toEqual([createdId]);
       expect(listed[0]!.title).toBe("喝水");
     } finally {

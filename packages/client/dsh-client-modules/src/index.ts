@@ -97,10 +97,13 @@ export interface ClientRow {
  * 自己的 client 半里 import，不该出现在装配清单里；混进来就会多装配一次（`apply` 里那些"同 namespace 的
  * locale 已注册"的报错就是这么来的），也会在入口打出一串 `skip (no apply/default)`。
  */
-async function clientRowsOf(loader: { entries(): Generator<LoaderEntry> }): Promise<ClientRow[]> {
+// 参数只声明"能迭代条目"：上游 `Entry` 的类型面随版本演进（alpha.3 换了 `Generator` 的返回/next 参数），
+// 我们只要下面那几个字段，边界收成 `unknown` 再窄化，别让版本演进每次都在这里报类型错。
+async function clientRowsOf(loader: { entries(): Iterable<unknown> }): Promise<ClientRow[]> {
   const found = new Map<string, ClientRow>();
   // `entries()` 是生成器（cordis 的 Loader 就是这么给的），直接迭代即可。
-  for (const entry of loader.entries()) {
+  for (const raw of loader.entries()) {
+    const entry = raw as LoaderEntry;
     if (entry.disabled === true || entry.fiber === undefined) continue;
     const name = entry.options?.name;
     if (typeof name !== "string" || name === "") continue;

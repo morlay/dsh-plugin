@@ -19,15 +19,11 @@ export const FLOW_GROUP: GroupPack = {
         text: "exit_plan_mode：动手前提交计划（计划模式下只读）；本部署装了计划模式才有这一行。",
       },
       {
-        when: "schedule_create",
-        text: "schedule_create：会话里的定时提醒，恰好给一个时间选择器（after_seconds / at / every_seconds / daily / weekly / cron，every_seconds 最小 60）；schedule_list 看本会话还挂着哪些。",
-      },
-      {
-        when: "schedule_update",
-        text: "schedule_update：原地改、保留 id（它没有 after_seconds，改相对延迟要新建提醒）；schedule_delete 不撤回已经入队的提醒消息。",
+        when: ["schedule_create", "schedule_list", "schedule_view", "schedule_edit"],
+        text: "定时任务：schedule_create 用 rrule（一行 DTSTART + 一行 RRULE）与 target 指定投递去处，prompt 每次触发时作为用户消息送达；schedule_list 列 Host 全部任务（含别的会话建的，分页），schedule_view 看单个，schedule_edit 按 action 改 / 暂停 / 恢复 / 删除（带 expectedUpdatedAt 才防并发覆盖，删除不撤回已入队的消息）。",
       },
     ],
-    drops: ["tool:goal"],
+    drops: ["tool:goal", "tool:schedule"],
     tools: [
       "todo_write",
       "exit_plan_mode",
@@ -37,8 +33,8 @@ export const FLOW_GROUP: GroupPack = {
       "present",
       "schedule_create",
       "schedule_list",
-      "schedule_update",
-      "schedule_delete",
+      "schedule_view",
+      "schedule_edit",
     ],
   },
 };

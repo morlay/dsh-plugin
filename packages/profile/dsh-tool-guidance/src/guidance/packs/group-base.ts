@@ -22,6 +22,10 @@ export const BASE_GROUP: GroupPack = {
         text: "edit：按精确匹配替换；old_string 默认必须唯一，出现多次时给更长的上下文或 replace_all。",
       },
       {
+        when: "apply_patch",
+        text: "apply_patch：跨文件或分开的几处一起改时用它（Codex 风格补丁：`*** Begin Patch` … `*** End Patch`）；整份先校验、拒绝则什么都不改，开始应用后按序执行、遇错即停且不回滚——重试前先重读受影响的文件。",
+      },
+      {
         when: "str_replace_editor",
         text: "str_replace_editor：path 必须绝对路径、目录只能 view；str_replace 的 old_str 必须逐字且唯一（不唯一就不改），删除匹配要省略 new_str 而不是传 null。",
       },
@@ -80,6 +84,7 @@ export const BASE_GROUP: GroupPack = {
       "tool:read",
       "tool:write",
       "tool:edit",
+      "tool:apply_patch",
       "tool:glob",
       "tool:grep",
       "tool:bash",
@@ -93,6 +98,7 @@ export const BASE_GROUP: GroupPack = {
       "read",
       "write",
       "edit",
+      "apply_patch",
       "str_replace_editor",
       "glob",
       "grep",

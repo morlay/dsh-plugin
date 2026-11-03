@@ -125,8 +125,9 @@ describe("schedule domain on the rdb storage backend", () => {
     const root = await tempDir("schedule-domain-");
     const dbPath = join(root, "sessions.sqlite");
     const id = ScheduleId("sched-1");
+    // 当前形状（v2）：投递去处与涉及会话都是任务自己的字段，不再挂在 Session 绑定上。
+    const targetSessionId = SessionId("session-sched");
     const task = {
-      sessionId: SessionId("session-sched"),
       record: createAtScheduleRecord(
         id,
         "提醒我喝水",
@@ -134,7 +135,10 @@ describe("schedule domain on the rdb storage backend", () => {
         Date.now(),
         "喝水",
       ),
+      target: { kind: "session" as const, sessionId: targetSessionId },
+      involvedSessionIds: [targetSessionId],
       status: "active" as const,
+      deliveryHistory: { records: [], earlierRecordsUnavailable: false, earlierRecordsPruned: false },
     };
 
     const first = await mount(dbPath);
@@ -151,7 +155,7 @@ describe("schedule domain on the rdb storage backend", () => {
           .all() as Array<{ f_key: string; f_value: string }>;
         expect(rows.map((row) => row.f_key)).toEqual(["sched-1"]);
         expect(JSON.parse(rows[0]!.f_value)).toMatchObject({
-          sessionId: "session-sched",
+          target: { kind: "session", sessionId: "session-sched" },
           status: "active",
         });
       } finally {
@@ -165,7 +169,12 @@ describe("schedule domain on the rdb storage backend", () => {
     const second = await mount(dbPath);
     try {
       const reopened = await second.storageDomain.open(scheduleDomain);
-      expect(reopened.table("tasks").get(id)).toEqual(task);
+      expect(reopened.table("tasks").get(id)).toMatchObject({
+        record: task.record,
+        target: task.target,
+        involvedSessionIds: task.involvedSessionIds,
+        status: "active",
+      });
 
       await reopened.table("tasks").delete(id);
       expect([...reopened.table("tasks").entries()]).toEqual([]);

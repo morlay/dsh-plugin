@@ -233,7 +233,11 @@ export const patch: Step[] = [
 3. **先清 vendor 顶层 `node_modules`**（本地）：里面有上一版的副本，会被解析到，表现为双副本类型
    错误（playwright / zod 版本对不上），干净 clone 的 CI 无此问题。日常恢复姿势是
    `just clean && just dep`。
-4. sync → patch → prebuild（`text` / `git` / `typert` 步骤失效即信号，逐条评估）。
+4. sync → patch → **`just clean-dist`** → prebuild（`text` / `git` / `typert` 步骤失效即信号，逐条评估）。
+   `clean-dist` 不能省：声明树（`target/dts`）带 `.complete` 完成标记，`ensureWorkspaceDts` 只看标记、
+   不看上游是否已变，旧树会让 typert 分析读到上一版的声明——症状是 `typert` 步骤报
+   `引用解析失败：<新增类型>（没有声明，或不在导入别名 / 包出口表里）`，而不是"声明缺失"。它同时清各包
+   `dist`，所以必须在 prebuild 之前、且在门禁 build 之前跑。
 5. **重跑生成物与 lockfile**（上游包与主题一变就漂移，门禁只在重跑后才可信）：
    - 根 lockfile：`pnpm install --lockfile-only`（上游新包、上游钉住的依赖版本
      如 koffi 都靠它对齐）；
