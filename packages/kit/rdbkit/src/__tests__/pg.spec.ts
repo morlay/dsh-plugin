@@ -32,6 +32,8 @@ const parts = defineTable({
     f_id: { type: "serial", primaryKey: true },
     f_owner: { type: "text", notNull: true },
     f_amount: { type: "integer", notNull: true },
+    // `SUM(bigint)` 在 PostgreSQL 上返回 numeric（驱动给字符串），rdbkit 的 sum 要 cast 回 int8。
+    f_big: { type: "bigint", notNull: true, default: 0 },
   },
 });
 
@@ -69,20 +71,24 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
       expect(created?.f_at).toBe(1_788_852_417_123n);
       await table.insertMany([{ f_owner: "b", f_count: 2 }]);
       await partTable.insertMany([
-        { f_owner: "a", f_amount: 5 },
-        { f_owner: "a", f_amount: 6 },
+        { f_owner: "a", f_amount: 5, f_big: 5_000_000_000n },
+        { f_owner: "a", f_amount: 6, f_big: 6n },
       ]);
 
-      const totals: { owner: string; total: number | bigint }[] = [];
+      const totals: { owner: string; total: number | bigint; big: number | bigint }[] = [];
       for await (const row of table
-        .select({ owner: table.column("f_owner"), total: sum("f_amount", "t_parts") })
+        .select({
+          owner: table.column("f_owner"),
+          total: sum("f_amount", "t_parts"),
+          big: sum("f_big", "t_parts"),
+        })
         .join(parts, fragment('"t_parts"."f_owner" = "t_items"."f_owner"'))
         .groupBy("f_owner")
         .orderBy("f_owner")) {
         totals.push(row);
       }
-      // PostgreSQL 的 SUM 返回 int8 → BigInt。
-      expect(totals).toEqual([{ owner: "a", total: 11n }]);
+      // PostgreSQL 的 SUM 返回 int8 → BigInt；`SUM(bigint)` 是 numeric，sum() 会 cast 回 int8。
+      expect(totals).toEqual([{ owner: "a", total: 11n, big: 5_000_000_006n }]);
 
       // 真游标：逐行读，提前 break 也要把连接还回去（再开新查询不挂）。
       const streamed: string[] = [];

@@ -7,7 +7,7 @@ import {
   type ExprOperand,
   type Operand,
 } from "./expr.ts";
-import { concat, fragment, param, render, text, type Fragment } from "./fragment.ts";
+import { concat, fragment, only, param, render, text, type Fragment } from "./fragment.ts";
 import type { ColumnDef, TableDef } from "./defs.ts";
 import { forUpdate as forUpdateSql, withCtes, type Cte } from "./compound.ts";
 import type { Database } from "./database.ts";
@@ -73,10 +73,26 @@ export function count(): Aggregate<number | bigint> {
   return { kind: "expr", sql: "COUNT(*)", params: [] };
 }
 
-/** SUM(列)；多表查询时传表名避免歧义。 */
+/**
+ * SUM(列)；多表查询时传表名避免歧义。
+ *
+ * PostgreSQL 的 `SUM(bigint)` 返回 `numeric`（驱动给字符串），SQLite 返回整数——统一 cast 回 int8，
+ * 声明的 `number | bigint` 才成立。列类型只有 integer / bigint，所以这个 cast 不丢小数。
+ */
 export function sum(name: string, table?: string): Aggregate<number | bigint> {
   const target = table === undefined ? `"${name}"` : `"${table}"."${name}"`;
-  return { kind: "expr", sql: `SUM(${target})`, params: [] };
+  return {
+    kind: "expr",
+    sql: "",
+    params: [],
+    fragment: concat(
+      [
+        only("sqlite", text(`SUM(${target})`)),
+        only("postgres", text(`SUM(${target})::bigint`)),
+      ],
+      "",
+    ),
+  };
 }
 
 /** 一个查询：实现 `AsyncIterable`，`for await` 直接消费（对应 Golang 的 `iter.Seq2`）。 */
