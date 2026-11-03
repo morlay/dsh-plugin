@@ -59,6 +59,9 @@ function withTsLoader(environment: NodeJS.ProcessEnv, loader: string): NodeJS.Pr
   return {
     ...environment,
     NODE_OPTIONS: [environment.NODE_OPTIONS, `--import=${loader}`].filter(Boolean).join(" "),
+    // 源码面的**子进程**（上游 subprocess runner、Worker）也要同一份转译器：它们不继承 argv 里的
+    // `--import`，由这条变量显式告知（上游注入点只在部署侧取，见 vendor/patches/source-loader.patch）。
+    DSH_SOURCE_LOADER: environment.DSH_SOURCE_LOADER ?? loader,
   };
 }
 

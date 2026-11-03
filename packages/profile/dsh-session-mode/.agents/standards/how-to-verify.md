@@ -91,7 +91,7 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
 ## 2. 真装配探针（改装配形状时跑）
 
 ```sh
-pnpm exec node --import @oxc-node/core/register \
+pnpm exec node --import @morlay/dsh-oxc-node \
   packages/desktop/dsh-desktop-host/tool/verify-session-mode.mts
 ```
 

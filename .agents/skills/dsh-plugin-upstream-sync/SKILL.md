@@ -187,9 +187,10 @@ export const patch: Step[] = [
   信号）：`decorator-dual-protocol.patch` 让写端（typert 的 `Remote`/`RemoteScope`、cordis 的
   `Inject`）同时接受 TC39 与 legacy 两种调用约定，**类型面也一样**（`RemoteMethodDecorator` 与
   `Remote` 的裸用法各多一条 legacy 签名、`Inject` 多一条 `(target: Function)`——本仓库根 tsconfig
-  开着 `experimentalDecorators`，少了它们 `@Remote(…)` 就报 `TS1241`）；`source-loader.patch` 让
-  subprocess runner 的转译器可由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 在本仓库与随包
-  产物里都不存在）。
+  开着 `experimentalDecorators`，少了它们 `@Remote(…)` 就报 `TS1241`）；`source-loader.patch` 把**上游所有源码启动点**
+  （subprocess runner、PTC 的 node-script 子进程、liveshare 网关、语音 worker、win32 目录选择、
+  browser-use / inspector / plugin-market / jsonl / typert 的 Worker）从「自己挂 `tsx/esm`」改成「只从部署侧取」：`DSH_SOURCE_LOADER` 优先，
+  其次跟随当前进程的 `--import` / `NODE_OPTIONS`，都没有就 fail loud（本仓库与随包产物里都没有 tsx）。
 - **`exports`** 是**生成式**步骤（不存 diff）：把上游各包 `exports` 里指向 `lib/` 的目标改写成对应的
   `src` 源文件，并给缺 `"./src/*"` 出口的包补上，使开发与桌面两种形态直接消费源码
   （决定见 [ADR-开发与桌面消费上游源码面](../../adrs/20261010-开发与桌面消费上游源码面而非lib产物.md)）。

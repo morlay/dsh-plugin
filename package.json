@@ -15,7 +15,7 @@
     "@local/dts-prepare": "workspace:*",
     "@local/tsdown-plugin-cordis": "workspace:*",
     "@local/typert-generator": "workspace:*",
-    "@oxc-node/core": "^1.0.1",
+    "@morlay/dsh-oxc-node": "workspace:*",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.5",

@@ -29,9 +29,16 @@ if (debug) process.stderr.write(`[ts-register] 已挂载 pid=${String(process.pi
 
 registerHooks({
   load(url, context, nextLoad) {
-    if (!url.startsWith("file:") || !url.endsWith(".ts")) return nextLoad(url, context);
-    if (debug) process.stderr.write(`[ts-register] 转译 ${url.slice(7)}\n`);
-    const path = fileURLToPath(url);
+    if (!url.startsWith("file:")) return nextLoad(url, context);
+    // 扩展名看**路径**而不是整串 URL：绕缓存的调用方（tsdown 的 `import-without-cache`、vite 的
+    // `?t=` 等）会给 URL 加查询串，按 `url.endsWith('.ts')` 判会漏掉它们，文件就落到 Node 的
+    // strip-only 上（参数属性、legacy 装饰器直接语法错）。`fileURLToPath` 也不能带查询串。
+    const parsed = new URL(url);
+    if (!parsed.pathname.endsWith(".ts") && !parsed.pathname.endsWith(".mts")) {
+      return nextLoad(url, context);
+    }
+    if (debug) process.stderr.write(`[ts-register] 转译 ${parsed.pathname}\n`);
+    const path = fileURLToPath(parsed);
     // oxlint-disable-next-line node/no-sync -- `registerHooks` 的 load 钩子必须同步返回。
     const original = readFileSync(path, "utf8");
     // oxlint-disable-next-line node/no-sync -- 钩子契约要求同步。

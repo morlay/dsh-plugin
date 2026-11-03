@@ -15,7 +15,7 @@
 // 用法（脚本住 `@morlay/dsh-desktop-host/tool/`：只有那个包声明了 `dsh-app-boot` / `dsh`，node 才解析得到）：
 //
 // ```sh
-// pnpm exec node --import @oxc-node/core/register \
+// pnpm exec node --import @morlay/dsh-oxc-node \
 //   packages/desktop/dsh-desktop-host/tool/verify-desktop-account-plane.mts
 // ```
 //

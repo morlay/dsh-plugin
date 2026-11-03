@@ -77,7 +77,6 @@
   },
   "devDependencies": {
     "@local/devkit": "workspace:*",
-    "@oxc-node/core": "^0.1.6",
     "@types/node": "^26.5.0",
     "electron": "44.7.0"
   },
