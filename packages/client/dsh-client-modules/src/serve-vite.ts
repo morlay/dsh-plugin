@@ -142,17 +142,14 @@ export async function startViteDev(
       // 表现为一串"没被 vite 接手"的 404）。
       fs: { strict: false, allow: [repoRoot] },
     },
-    // **不用** vite 的 `optimizeDeps`：裸说明符已由插件统一改写成 `@deps/`（我们自己预打包的产物），
-    // vite 再打一份就会与聚合产物里的那份形成两个实例。
-    // **不用** vite 的 `optimizeDeps`（关掉自动发现）：非开发模块与三方都由我们的联邦链产出，裸说明符
-    // 已在插件里改写成 `@client-modules/…`，这里没有任何东西需要预打包。开着只会多出第二条链（浏览器里
-    // 同时出现 `.vite/deps/react.js` 与我们的 `@client-modules/react@…/index.js`）与一次全仓扫描。
-    // **彻底不用** vite 的依赖优化器：裸说明符已由插件统一改写成 `@client-modules/…`（我们自己的联邦链产出），
-    // 这里没有任何东西需要它预打包。`noDiscovery: true` 只关了"自动发现"，扫描器仍会去解析那些包名——而行清单
-    // 是**虚拟模块**、里面写的包名 vite 按 `package.json` 的去向解析，落到工作区解析面上就报
-    // `Cannot find package … imported from …/package.json`（上游 workspace 内部包只存在于 vendor / 闭包）。
-    // `disabled` 是官方给的"整个关掉"（标了 deprecated，但语义正是这个）。
-    optimizeDeps: { disabled: true, noDiscovery: true, include: [] },
+    // **不用** vite 的依赖优化器：裸说明符已由插件统一改写成 `@client-modules/…`（我们自己的联邦链产出），
+    // 这里没有任何东西需要它预打包。开着只会多出第二条链（浏览器里同时出现 `.vite/deps/react.js` 与我们的
+    // `@client-modules/react@…/index.js`，两个实例）与一次全仓扫描。行清单是**虚拟模块**、里面写的包名 vite
+    // 会按 `package.json` 的去向解析，落到工作区解析面上就报
+    // `Cannot find package … imported from …/package.json`（上游 workspace 内部包只存在于 vendor / 闭包），
+    // 所以必须连"扫描"一起关掉。
+    // 官方口径的"整个关掉"就是这两个字段（`optimizeDeps.disabled` 在 Vite 5.1 已移除，传它只会换来一条告警）。
+    optimizeDeps: { noDiscovery: true, include: [] },
     plugins: [
       dshClientRowsPlugin({
         repoRoot,

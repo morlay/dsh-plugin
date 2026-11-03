@@ -9,10 +9,10 @@
  * 两者产出的地址同构（`@client-modules/<pkg>@<version>/<file>`），所以运行时按 URL 取即可。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { findPackageJSON } from "node:module";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { clientAssetPlugin, NODE_BUILTIN } from "@morlay/dsh-cordis-assets/assets";
 import { cssInlinePlugins } from "@morlay/dsh-cordis-assets/styles";
@@ -61,7 +61,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "22";
+const BUNDLER_RULES = "28";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -323,6 +323,32 @@ function browserProcessPlugin(): PluginOption {
 }
 
 /**
+ * 入口是否按**它所属包的声明**是 CJS（Node 的 ESM 解析会做 `default = module.exports` 的那一侧）。
+ *
+ * 判据只看声明，不看源码内容：
+ * - `type: "module"` 的包 → 恒为 ESM（`.mjs` 同理）；
+ * - 否则是"老约定"：`module` 字段指向的那份视为 ESM（打包器约定，Node 不认），其余 `.js` 视为 CJS、
+ *   `.cjs` 恒为 CJS；`.ts` 这类源码交给语法（rolldown 自己判）。
+ *
+ * 以前这里是"读源码找 `module.exports =`"，那是猜：`exports.` 出现在注释里就会误判，而 `type: module` 的
+ * 包即使有 CJS 写法也不该被当 CJS。
+ */
+async function declaresCjs(entry: string): Promise<boolean> {
+  if (entry.endsWith(".mjs")) return false;
+  if (entry.endsWith(".cjs")) return true;
+  if (!entry.endsWith(".js")) return false;
+  const manifestPath = await packageJsonNear(entry);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
+    type?: string;
+    module?: string;
+  };
+  if (manifest.type === "module") return false;
+  const manifestModule = manifest.module;
+  if (manifestModule === undefined) return true;
+  return resolve(dirname(manifestPath), manifestModule) !== resolve(entry);
+}
+
+/**
  * CJS 入口的**具名导出包装**（`react` 这类）。
  *
  * `react` 的入口是 `module.exports = require('./cjs/react.development.js')`，rolldown 静态分析不出具名
@@ -339,14 +365,7 @@ async function cjsShimOf(options: {
   outDir: string;
   log?: (message: string) => void;
 }): Promise<string | undefined> {
-  const source = await readFile(options.entry, "utf8").catch(() => "");
-  // 判据是**CJS 入口**：`.js`/`.cjs` 且源码里真的在赋值 `module.exports` / `exports.x`（`react` 的入口是
-  // `module.exports = require('./cjs/…')`）。TS 源码不在此列——那是 ESM；按"含 `exports.` 子串"判断会把
-  // 注释里的 `re-exports.` 也当成 CJS，反过来给一份纯 ESM 加 `import mod from …` 而构建失败。
-  const isCjsEntry =
-    /\.(?:cjs|js)$/u.test(options.entry) &&
-    /(?:^|\n)\s*(?:module\.exports\s*=|exports\.[A-Za-z_$][A-Za-z0-9_$]*\s*=)/u.test(source);
-  if (!isCjsEntry) return undefined;
+  if (!(await declaresCjs(options.entry))) return undefined;
   let keys: string[];
   try {
     // 求值才知道键：CJS 的导出面是**运行期**的（静态分析只能看到 `module.exports = require(…)`）。
@@ -379,6 +398,62 @@ async function cjsShimOf(options: {
     `[bundle-cjs] ${options.name}/${options.exportName}: 补 ${String(named.length)} 个具名导出\n`,
   );
   return file;
+}
+
+/** 根出口的产物名（`urlOf` 对非 client 行写的就是它）。 */
+const ROOT_EXPORT = "index";
+
+/** 具名导出的合法标识符：补 default 时按它挑键（非标识符的导出名用不了简写）。 */
+const EXPORT_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+
+/**
+ * 这个入口是否需要「CJS 包的 ESM 便利入口」的 default 补偿。判据**只看 package.json 的声明**：
+ *
+ * - `type: "module"` 的包：Node 与我们都按 `exports`（或 `main` 本身就是 ESM）解析，两边一致，不补；
+ * - 其余是 CJS 包：`module` 只是打包器约定（视为 ESM），`main` 才是 CJS。这条链选 `module`（更小、没有
+ *   webpack 垫片），而 Node 的 `import pkg from 'pkg'` 落到 `main`、default 是它的 `module.exports`——
+ *   所以浏览器侧得补一个 default，否则消费方那句 default import 直接报
+ *   `does not provide an export named 'default'`（`rrule` 就是这一例）。
+ * - 有 `exports` 的包两边都按条件解析，不涉及这条约定；入口不是 `module` 的（选了 `main`）由
+ *   {@link cjsShimOf} 处理。`main`/`module` 只描述根出口，子路径不在此列。
+ */
+async function needsCjsInterop(entry: string, exportName: string): Promise<boolean> {
+  if (exportName !== ROOT_EXPORT) return false;
+  const manifestPath = await packageJsonNear(entry);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
+    main?: string;
+    module?: string;
+    type?: string;
+    exports?: unknown;
+  };
+  if (manifest.type === "module" || manifest.exports !== undefined) return false;
+  const manifestModule = manifest.module;
+  if (manifestModule === undefined || manifest.main === undefined) return false;
+  const modulePath = resolve(dirname(manifestPath), manifestModule);
+  const moduleEntry = await realpath(modulePath).catch(() => modulePath);
+  const entryPath = await realpath(entry).catch(() => resolve(entry));
+  return moduleEntry === entryPath || modulePath === resolve(entry);
+}
+
+/**
+ * 给「CJS 包的 ESM 便利入口」补 default：**看产物的真实导出面**（`chunk.exports`），不猜源码。
+ * 已经有 default 的（`jsbi` 的 `export default JSBI`）原样保留——补成对象会把它顶掉，
+ * `@js-temporal/polyfill` 那句 `import e from "jsbi"` 于是拿到命名空间、运行期 `e.BigInt is not a function`；
+ * 没有的补成 `{ 具名导出… }`，与 CJS 的 `module.exports` 同形（`rrule` 的 `ALL_WEEKDAYS` / `rrulestr` 那批）。
+ */
+function cjsInteropPlugin(exportName: string): Plugin {
+  return {
+    name: "dsh-cjs-interop",
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== "chunk" || chunk.isEntry !== true || chunk.name !== exportName) continue;
+        if (chunk.exports.includes("default")) continue;
+        const named = chunk.exports.filter((name) => EXPORT_IDENTIFIER.test(name));
+        if (named.length === 0) continue;
+        chunk.code += `\nexport default { ${named.join(", ")} };\n`;
+      }
+    },
+  };
 }
 
 /**
@@ -572,7 +647,10 @@ async function bundlePackageOnce(
   // 入口补偿：CJS 要带具名导出的包装；CSS 不能直接当入口（vite 的库模式 `cssCodeSplit: false`，
   // 明确拒绝 `rolldownOptions.input` 里出现 CSS 文件），包一层 side-effect import 让样式插件处理它。
   const input: Record<string, string> = {};
+  // 「CJS 包的 ESM 便利入口」这一形态要补一个 default（判据见 `needsCjsInterop`），补的时机在产物生成之后。
+  let interopExport: string | undefined;
   for (const [exportName, entry] of Object.entries(options.input)) {
+    if (await needsCjsInterop(entry, exportName)) interopExport = exportName;
     input[exportName] =
       (await cjsShimOf({
         name: options.name,
@@ -584,12 +662,25 @@ async function bundlePackageOnce(
       (await cssShimOf({ exportName, entry, outDir })) ??
       entry;
   }
+  if (interopExport !== undefined) plugins.push(cjsInteropPlugin(interopExport));
   // **直接跑 rolldown**（不经过 `vite build`）：插件本来就是 rolldown 的接口，而 vite 在这条路上只提供了
   // lib 模式的入口/输出命名与 `worker.format`——那几项自己写更直接，且 `build.rolldownOptions` 里的
   // `transform` / `resolve` 也不会再被 vite 吞掉（对照表见债文档，那份债随这次改动一起销）。
   const bundle = await rolldown({
     input,
     plugins,
+    // 装饰器口径在两处声明（tsconfig 的 `experimentalDecorators` 与 `transform.decorator`）时，rolldown 会提
+    // 一条 `CONFIGURATION_FIELD_CONFLICT` 让人确认——那是"重复声明"级提示，两者语义等价，我们主动取
+    // transform 这一侧（见上面的 decorator 注释）。过滤掉这一条，别的日志照旧走默认处理。
+    onLog: (level, log, handler) => {
+      if (
+        log.code === "CONFIGURATION_FIELD_CONFLICT" &&
+        log.message?.includes("experimentalDecorators") === true
+      ) {
+        return;
+      }
+      handler(level, log);
+    },
     // **不指 tsconfig**：装饰器由下面的 `transform.decorator.legacy` 直接开（直出时它生效，见对照表）。
     // rolldown 自己会解析 tsconfig（含 `extends`，实测过），所以两种形态各指一处不如一处都不指。
     ...(options.tsconfig === undefined ? {} : { resolve: { tsconfigFilename: options.tsconfig } }),
@@ -598,7 +689,11 @@ async function bundlePackageOnce(
       // 直出后没有 `build.target: "baseline-widely-available"` 那层展开，这里自己写全。不要图省事写
       // `esnext` 或留空——目标一低，oxc 就给类字段、可选链这些逐个加降级 helper，产物里全是奇怪的垫片。
       target: ["chrome111", "edge111", "firefox114", "safari16.4"],
-      // 装饰器：legacy（cordis 与上游用的就是这套）。有 tsconfig 时它会被那份覆盖，这里是默认。
+      // 装饰器：legacy（cordis 与上游用的就是这套）。**必须显式给**：闭包面（`node_modules`）里的包不在
+      // tsconfig 的 include 面里（tsc 默认排除 `node_modules`，oxc 同样不应用那份设置），只靠根 tsconfig 的
+      // `experimentalDecorators` 的话，上游的 `@Remote` 会原样留在产物里、浏览器整条入口不执行。
+      // 它与 tsconfig 那项**语义相同**，两处都声明时 rolldown 会提示"tsconfig 被 transform 覆盖"——这条提示
+      // 对我们没有决策价值（见下面的 `onLog`），不是需要处理的冲突。
       decorator: { legacy: true },
       // 浏览器没有 `process`：精确替换 `process.env`，裸 `process` 再给一个空壳——`immer` 这类包会在
       // 模块顶层读它，漏掉就是一个 `process is not defined` 把整份产物带下去。

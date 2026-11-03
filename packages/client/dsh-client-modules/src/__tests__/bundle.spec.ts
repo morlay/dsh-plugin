@@ -7,6 +7,7 @@
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "../bundle.ts";
 
@@ -82,6 +83,7 @@ beforeAll(async () => {
     "utf8",
   );
   await writeFile(join(packageRoot, "src", "b.ts"), "export const b = 2;\n", "utf8");
+  await writeFile(join(packageRoot, "src", "c.ts"), "export const c = 3;\n", "utf8");
 });
 
 afterAll(async () => {
@@ -154,6 +156,23 @@ test("装饰器在产物里必须已被转译，且**不依赖进程 cwd**", asy
   }
 });
 
+test("tsconfig 与 `transform.decorator` 都声明装饰器时不再提示冲突（语义相同，口径取 transform 那侧）", async () => {
+  // 两处声明是必须的：tsconfig 那项管不到 `node_modules` 里的包（include 面默认排除它），transform 那侧才是
+  // 保底。rolldown 的 `CONFIGURATION_FIELD_CONFLICT` 只是"重复声明"级提示，本链在 `onLog` 里过滤掉——
+  // 这条用例钉住"过滤生效"，别让它哪天又冒出来。
+  const warned: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warned.push(args.map(String).join(" "));
+  };
+  try {
+    await bundlePackage({ ...options("c"), tsconfig: join(work, "tsconfig.json") });
+  } finally {
+    console.warn = original;
+  }
+  expect(warned.filter((line) => line.includes("CONFIGURATION_FIELD_CONFLICT"))).toEqual([]);
+});
+
 test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` 也能让它转", async () => {
   // 外置/官方的包就住在 `node_modules/.pnpm/…` 里——向上找不到任何 tsconfig。这条守着那个开关：
   // 只给 `transform.decorator`（实测 vite 不带进 rolldown）不行，`resolve.tsconfigFilename` 才行。
@@ -172,8 +191,9 @@ test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` �
     ].join("\n"),
     "utf8",
   );
-  // tsconfig 放在**解析根之外**（那个包在 `work2/node_modules/…`，祖先链里没有 tsconfig），由
-  // `resolve.tsconfigFilename` 显式指过去——这正是外置/官方包在产物里的处境。
+  // 包在 `work2/node_modules/…`（祖先链里没有 tsconfig），tsconfig 由 `resolve.tsconfigFilename` 显式指过去——
+  // 外置/官方包在产物里的处境（`dshdev --prod` 的闭包面就是 node_modules 形态）。**装饰器由 transform 那一侧
+  // 保底**（tsconfig 的 include 面默认排除 node_modules），这条用例同时钉住"指了 tsconfig 也不会把装饰器弄丢"。
   const elsewhere = join(work2, "..", `dsh-tsconfig-${String(Date.now())}`, "tsconfig.json");
   await mkdir(join(elsewhere, ".."), { recursive: true });
   await writeFile(
@@ -200,6 +220,111 @@ test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` �
     await rm(work2, { recursive: true, force: true });
     await rm(join(elsewhere, ".."), { recursive: true, force: true });
   }
+});
+
+test("`main` 是 CJS、`module` 是 ESM 的双形态包：产物补出 default（Node 下那句 import 拿的就是 CJS 的 module.exports）", async () => {
+  // `rrule` 就是这个形态：`main`（CJS）与 `module`（ESM，没有 default）导出面不同。浏览器里取的是 `module`，
+  // 不补 default 的话，上游那句 `import rrulePackage from 'rrule'` 会报
+  // `does not provide an export named 'default'`。
+  const dual = join(work, "dual");
+  await mkdir(join(dual, "dist", "cjs"), { recursive: true });
+  await mkdir(join(dual, "dist", "esm"), { recursive: true });
+  await writeFile(
+    join(dual, "package.json"),
+    `${JSON.stringify({
+      name: "dual",
+      version: "1.0.0",
+      main: "dist/cjs/index.js",
+      module: "dist/esm/index.js",
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(dual, "dist", "cjs", "index.js"),
+    "module.exports = { alpha: 1, beta: 2 };\n",
+    "utf8",
+  );
+  await writeFile(
+    join(dual, "dist", "esm", "index.js"),
+    "export const alpha = 1;\nexport const beta = 2;\n",
+    "utf8",
+  );
+
+  const bundled = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: clientModulesAlias({
+      repoRoot,
+      nodeStub: join(repoRoot, "packages/client/dsh-client-modules/app-boot/node-stub.cjs"),
+    }),
+    name: "dual",
+    version: "1.0.0",
+    input: { index: join(dual, "dist", "esm", "index.js") },
+    watch: [join(dual, "dist", "esm")],
+  });
+  const file = join(cacheRoot, bundled?.files.get("index") ?? "");
+  const code = await readFile(file, "utf8");
+  // rolldown 会把 `export default` 压成 `export { x as default }`，两种形态都算补上了。
+  expect(code).toMatch(/\bas default\b|export default/u);
+
+  const loaded = (await import(pathToFileURL(file).href)) as {
+    readonly default: { readonly alpha?: number };
+    readonly beta?: number;
+  };
+  // default 与 Node 下 CJS 的 `module.exports` 同形：键都在上面。
+  expect(loaded.default.alpha).toBe(1);
+  expect(loaded.beta).toBe(2);
+});
+
+test("双形态包的 ESM 入口自带 default 时不覆盖它（`jsbi` 那种：`export default JSBI`）", async () => {
+  // 补 default 只对"ESM 入口没有 default"的那种包。`jsbi` 的 `module` 里有 `export default JSBI`，若也套上
+  // 命名空间对象，`@js-temporal/polyfill` 的 `import e from "jsbi"` 就拿不到 JSBI 类，运行期报
+  // `e.BigInt is not a function`。
+  const dualDefault = join(work, "dual-default");
+  await mkdir(join(dualDefault, "dist", "cjs"), { recursive: true });
+  await mkdir(join(dualDefault, "dist", "esm"), { recursive: true });
+  await writeFile(
+    join(dualDefault, "package.json"),
+    `${JSON.stringify({
+      name: "dual-default",
+      version: "1.0.0",
+      main: "dist/cjs/index.js",
+      module: "dist/esm/index.js",
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(dualDefault, "dist", "cjs", "index.js"),
+    "module.exports = { other: 1 };\n",
+    "utf8",
+  );
+  await writeFile(
+    join(dualDefault, "dist", "esm", "index.js"),
+    "const marker = { own: true };\nexport const other = 1;\nexport default marker;\n",
+    "utf8",
+  );
+
+  const bundled = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "dual-default",
+    version: "1.0.0",
+    input: { index: join(dualDefault, "dist", "esm", "index.js") },
+    watch: [join(dualDefault, "dist", "esm")],
+  });
+  const file = join(cacheRoot, bundled?.files.get("index") ?? "");
+  const loaded = (await import(pathToFileURL(file).href)) as {
+    readonly default: { readonly own?: boolean; readonly other?: number };
+  };
+  // 包自己的 default（不是命名空间对象：命名空间上没有 `own`、倒是有 `other`）。
+  expect(loaded.default.own).toBe(true);
+  expect(loaded.default.other).toBeUndefined();
+});
+
+test("纯 ESM 的包不补 default（不掩盖真实的导出缺失）", async () => {
+  const code = await readFile(join(cacheRoot, "fixture@1.0.0", "b.js"), "utf8");
+  expect(code).not.toContain("export default");
 });
 
 test("清单里解析不到的依赖不算可外置候选，也不该让预编译失败", async () => {
