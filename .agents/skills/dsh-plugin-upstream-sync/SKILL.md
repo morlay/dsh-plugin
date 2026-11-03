@@ -221,6 +221,12 @@ export const patch: Step[] = [
   缺失时还会**隐式 install**）会造出上游自己的顶层 `node_modules`，与根 workspace 的链接形成双副本
   ——实测让 client 测试成片失败，且根 install 不加 `--force` 认不出差别、复不了原。native 构建要的
   依赖由根 install 提供。
+- **`client-meta`**：浏览器产物的版本元数据。上游用 `scripts/client-build-environment.ts` 从**它自己**的
+  `package.json` 与 git 取版本 / 短 commit / 工作区是否 dirty，写成 `.dsh-build/client-build-environment.json`
+  （前端设置页的版本行、侧栏的 `<commit>-dirty` 读它）。`patch` 阶段把整个 `scripts/` 裁掉了（上游自用脚本），
+  所以这一步从 git 取回那**一个**文件跑一次、再删掉：**版本不由我们定义**。记录里的 `artifacts`（client 产物
+  digest）不写——我们的 client 产物是运行时按需构建的，构建期不存在；`environment` 那半与 `formatVersion`
+  跟着上游。
 - **`cua-native`**：Computer Use 的 macOS 应用包（`native/bin/darwin-<arch>/current.json` + 签好的
   `<digest>/DSH Computer Use.app`）。上游把它 `gitignore` 了，因此**源码树 dev 与打包形态读的不是同一份**：
   dev 走 `.build/prepared/<arch>` 现场编译（`native-build.ts` 的 `isSourcePackage` 分支），而装进 app 的

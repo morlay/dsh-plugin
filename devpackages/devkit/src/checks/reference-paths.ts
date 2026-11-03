@@ -61,6 +61,7 @@ const SHORT_FORM = "省略前缀的短形式：省了包名或 `.agents/`，或�
 const ELSEWHERE = "「同包 / 该包」指文内已交代的另一个包（上游包或兄弟包），代码片段省了前缀";
 const URL_PATH = "说的是宿主页面里的那个地址（URL 路径），不是工作区里的文件";
 const PACKAGE_SUBPATH = "包内子路径：省了包名，指的是某个依赖包里的哪一层";
+const PATCHED_AWAY = "上游脚本已被 `patch` 阶段裁掉（只存在于上游 git 对象里），不是工作区文件";
 const EXCEPTIONS: readonly {
   readonly file: string;
   readonly code: string;
@@ -86,6 +87,16 @@ const EXCEPTIONS: readonly {
     file: "devpackages/dshdev/.agents/standards/how-to-verify.md",
     code: "src/client/index.ts",
     reason: SAMPLE,
+  },
+  {
+    file: "packages/client/dsh-client-modules/.agents/designs/20261013-客户端资源的联邦式预编译.md",
+    code: "scripts/client-build-environment.ts",
+    reason: PATCHED_AWAY,
+  },
+  {
+    file: ".agents/skills/dsh-plugin-upstream-sync/SKILL.md",
+    code: "scripts/client-build-environment.ts",
+    reason: PATCHED_AWAY,
   },
   // 短形式
   {

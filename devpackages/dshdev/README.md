@@ -34,7 +34,9 @@ pnpm exec dshdev desktop bundle --dir  #       just custom bundle
 ```
 
 前置条件：pnpm workspace、`vendor/deepseek-harness` 已构建（`just prepare`）、工具 / 壳包 / 后端变体都已
-`pnpm build`。另外，工作区装了 `@deepseek-ai/dsh-experimental-cua-macos`（经 `dsh-cua-bundle`）时，还需要它
+`pnpm build`。浏览器产物的版本元数据（设置页的版本行、侧栏的 `<commit>-dirty`）不在这里定义：`just prepare`
+的 `client-meta` 步骤跑上游生成器，把 `<vendor>/.dsh-build/client-build-environment.json` 产出来，`dshdev`
+起宿主时读它注入 `DSH_CLIENT_*`。另外，工作区装了 `@deepseek-ai/dsh-experimental-cua-macos`（经 `dsh-cua-bundle`）时，还需要它
 的 native 载荷：上游把 `native/bin/` 加进了 `.gitignore`，源码树里 dev 是现场编译，而**打出来的闭包**只认那份
 发布产物（`native/bin/darwin-<arch>/current.json`）。`just prepare` 会在 macOS + Xcode 的机器上顺带产出
 （`cua-native` 步骤，别的平台跳过；单独跑用 `just native-cua`）；缺它时 `desktop bundle` 直接报错，不会产出

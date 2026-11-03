@@ -37,6 +37,8 @@ function debugPort(name: string): number {
   return port;
 }
 
+import { readClientBuildEnvironment } from "./client-meta.ts";
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -221,6 +223,9 @@ export async function runDev(options: DevOptions): Promise<void> {
   const activeRuntimeDir = prod?.runtimeDir ?? runtimeDir;
   if (prod === undefined) await requireDevRuntime(runtimeDir);
   const tsLoader = tsLoaderSpecifier();
+  // 浏览器产物的版本元数据（设置页的版本行、侧栏的 `<commit>-dirty`）：值是上游 `client-meta` 步骤产出的
+  // 那份记录（`<vendor>/.dsh-build/client-build-environment.json`），写进本进程环境，壳与宿主都继承。
+  Object.assign(process.env, await readClientBuildEnvironment(workspace));
 
   if (options.web) {
     // web 形态的 profile 就是 app 目录：清单来自 app 的 `package.json`，bundle 由工作区链接解析，

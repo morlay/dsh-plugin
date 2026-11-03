@@ -1,4 +1,4 @@
-import { glob, readFile, rm, writeFile } from "node:fs/promises";
+import { glob, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pathExists, runInherited, type UpstreamPaths } from "./common.ts";
@@ -27,7 +27,8 @@ export type Step =
     }
   | { type: "typert" }
   | { type: "native" }
-  | { type: "cua-native" };
+  | { type: "cua-native" }
+  | { type: "client-meta" };
 
 export type Phase = "patch" | "prebuild";
 
@@ -109,6 +110,42 @@ async function buildCuaNative(dir: string): Promise<void> {
   }
 }
 
+// `client-meta` 步骤：上游的**浏览器版本元数据**（版本 / commit / 工作区是否 dirty）由它自己的
+// `scripts/client-build-environment.ts` 定义，产物写在仓库根的 `.dsh-build/client-build-environment.json`。
+// 前端设置页的版本行与侧栏的 `<commit>-dirty` 读的就是它——所以我们**不自己定义**这几个值，只是把上游那份
+// 生成器跑一次（`patch` 阶段把整个 `scripts/` 裁掉了，那是上游自用脚本；这里从 git 里取回这一个文件）。
+//
+// 记录里上游还带 `artifacts`（client 产物 digest）：我们的 client 产物是**运行时按需构建**的，构建期不存在，
+// 所以只写 `environment` 那半（字段名与 formatVersion 跟着上游）。
+const CLIENT_META_SCRIPT = `import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { repositoryClientBuildEnvironment } from "../scripts/client-build-environment.ts";
+
+const root = process.argv[2];
+if (root === undefined) throw new Error("usage: write-client-build-environment.ts <vendor root>");
+const environment = { ...repositoryClientBuildEnvironment(root), DSH_CLIENT_BUILD_PROFILE: "local" };
+const directory = join(root, ".dsh-build");
+mkdirSync(directory, { recursive: true });
+writeFileSync(join(directory, "client-build-environment.json"),
+  \`\${JSON.stringify({ formatVersion: 1, environment }, undefined, 2)}\n\`);
+console.log(\`[steps] client-meta \${JSON.stringify(environment)}\`);
+`;
+
+async function writeClientBuildMeta(dir: string): Promise<void> {
+  await runInherited("git", ["checkout", "HEAD", "--", "scripts/client-build-environment.ts"], dir);
+  const directory = join(dir, ".dsh-build");
+  const script = join(directory, "write-client-build-environment.ts");
+  await mkdir(directory, { recursive: true });
+  await writeFile(script, CLIENT_META_SCRIPT);
+  try {
+    await runInherited("pnpm", [...OXC_CLI, script, dir], dir);
+  } finally {
+    await rm(script, { force: true });
+    // 取回来的那个源文件用完就删：`scripts/` 是裁过的，别留一份孤立文件。
+    await rm(join(dir, "scripts"), { recursive: true, force: true });
+  }
+}
+
 async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
   const { dir, patchesRoot } = paths;
   if (step.type === "rm") {
@@ -168,6 +205,11 @@ async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
   }
   if (step.type === "cua-native") {
     await buildCuaNative(dir);
+    return;
+  }
+  if (step.type === "client-meta") {
+    console.log("[steps] client-meta: scripts/client-build-environment.ts");
+    await writeClientBuildMeta(dir);
     return;
   }
   throw new Error(`未知步骤: ${JSON.stringify(step)}`);
