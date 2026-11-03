@@ -7988,9 +7988,6 @@ importers:
       '@puppeteer/browsers':
         specifier: 3.2.2
         version: 3.2.2(yauzl@3.4.0)
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.15
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -9015,9 +9012,6 @@ importers:
       serve-static:
         specifier: ^2.2.1
         version: 2.2.1(supports-color@9.4.0)
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.15
       ws:
         specifier: ^8.21.3
         version: 8.22.0
@@ -9420,9 +9414,6 @@ importers:
       sherpa-onnx-node:
         specifier: 1.13.8
         version: 1.13.8
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.15
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -10416,9 +10407,6 @@ importers:
       koffi:
         specifier: 3.1.1
         version: 3.1.1
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.15
 
   vendor/deepseek-harness/packages/host/frontend-static:
     dependencies:
