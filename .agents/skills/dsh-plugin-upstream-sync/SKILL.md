@@ -221,6 +221,12 @@ export const patch: Step[] = [
   缺失时还会**隐式 install**）会造出上游自己的顶层 `node_modules`，与根 workspace 的链接形成双副本
   ——实测让 client 测试成片失败，且根 install 不加 `--force` 认不出差别、复不了原。native 构建要的
   依赖由根 install 提供。
+- **`cua-native`**：Computer Use 的 macOS 应用包（`native/bin/darwin-<arch>/current.json` + 签好的
+  `<digest>/DSH Computer Use.app`）。上游把它 `gitignore` 了，因此**源码树 dev 与打包形态读的不是同一份**：
+  dev 走 `.build/prepared/<arch>` 现场编译（`native-build.ts` 的 `isSourcePackage` 分支），而装进 app 的
+  闭包是"已安装"形态、只认 `native/bin`。不在这里产出，包能装上、用户点开 CUA 才炸（`dshdev desktop
+  bundle` 会在缺它时报错）。只有 macOS + Xcode 能产：非 darwin、或没有 `xcrun` 的机器**跳过**（CI 是
+  ubuntu，这一步在那里什么都不做）。单独跑用 `just native-cua`。
 - **`rm tsconfig`**：不在这一段——它排在 `patch` 阶段末尾（见上一节的 glob 说明）。
 
 > 仓库可封装为命令（`vendor sync` / `vendor patch` / `vendor prebuild`；根 `just prepare`

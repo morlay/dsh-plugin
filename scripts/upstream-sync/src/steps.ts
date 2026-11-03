@@ -26,7 +26,8 @@ export type Step =
       explicit: Record<string, Record<string, string>>;
     }
   | { type: "typert" }
-  | { type: "native" };
+  | { type: "native" }
+  | { type: "cua-native" };
 
 export type Phase = "patch" | "prebuild";
 
@@ -66,6 +67,46 @@ async function buildNativeAddon(dir: string): Promise<void> {
     [...OXC_CLI, "native/system/scripts/build.ts", "--host-addon-only"],
     dir,
   );
+}
+
+// `cua-native` 步骤：Computer Use 的 native 载荷（macOS 应用包）。它也是"不得不编译"的二进制，但产物形态
+// 是**发布包**才带的 `native/bin/darwin-<arch>/`（上游把它写进了 `.gitignore`）：
+//
+// - **源码树 dev** 走 `.build/prepared/<arch>/` 现场编译（`native-build.ts` 的 `isSourcePackage` 分支），
+//   所以没有它 dev 也能跑；
+// - **装进 app 的闭包**是"已安装"形态（`isSourcePackage` 为 false），只认 `native/bin/darwin-<arch>/current.json`。
+//
+// 不在这里构建的话，包能装上、用户点开 CUA 才炸（`dshdev desktop bundle` 会在缺它时报错）。只有 macOS 能产，
+// 别的平台**跳过**（上游也只支持 darwin）——CI 跑在 ubuntu 上，这一步在那里什么都不做。
+async function buildCuaNative(dir: string): Promise<void> {
+  if (process.platform !== "darwin") {
+    console.log(`[steps] cua-native: 跳过（上游只产 macOS 载荷，当前 ${process.platform}）`);
+    return;
+  }
+  // 没有 Xcode 的机器产不出这份载荷，也不该因此拦下日常 prepare（`dshdev desktop bundle` 会在打包时再拦）。
+  if (!(await pathExists("/usr/bin/xcrun"))) {
+    console.log("[steps] cua-native: 跳过（没有 xcrun：这台机器没装 Xcode）");
+    return;
+  }
+  const packageRoot = join(dir, "packages/experimental/cua-macos");
+  const script = join(packageRoot, "native/build_app.py");
+  if (!(await pathExists(script))) {
+    throw new Error(`cua-native 目标不存在: ${script}（上游已变化，评估本步骤）`);
+  }
+  const architecture = process.arch === "x64" ? "x86_64" : "arm64";
+  console.log(`[steps] cua-native: native/build_app.py --arch ${architecture}`);
+  try {
+    // 与 `native` 同理**不经过 pnpm run**（会在上游目录里造出第二份 node_modules）；构建要的依赖由根 install 提供。
+    await runInherited("/usr/bin/xcrun", ["python3", script, "--arch", architecture], packageRoot);
+  } catch (error: unknown) {
+    // **失败不拦 prepare**：这份载荷只影响桌面打包里的 Computer Use 一行，而 `dshdev desktop bundle` 会在
+    // 缺它时 fail loud（不会产出打不开的包）。常见原因是这台机器没有完整 Xcode，或跑在受限 sandbox 里
+    // （SwiftPM 自己要用 `sandbox-exec`，报 `sandbox_apply: Operation not permitted`）。
+    const detail = String(error instanceof Error ? error.message : error).split("\n")[0] ?? "";
+    console.warn(
+      `[steps] cua-native: 构建失败，跳过（${detail}）；桌面打包前请单独跑 just native-cua`,
+    );
+  }
 }
 
 async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
@@ -123,6 +164,10 @@ async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
   }
   if (step.type === "native") {
     await buildNativeAddon(dir);
+    return;
+  }
+  if (step.type === "cua-native") {
+    await buildCuaNative(dir);
     return;
   }
   throw new Error(`未知步骤: ${JSON.stringify(step)}`);

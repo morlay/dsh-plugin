@@ -156,6 +156,42 @@ export async function deployClosure(
   if (missing.size > 0) {
     throw missingOfficialPackagesError(missing);
   }
+  await assertCuaNativePayload(modulesDir, process.platform, process.arch);
+}
+
+/** Computer Use 那一行（它的 native 载荷是发布产物，见 `assertCuaNativePayload`）。 */
+const CUA_PACKAGE = "@deepseek-ai/dsh-experimental-cua-macos";
+
+/**
+ * 闭包里缺 CUA 的 native 载荷时的报错（消息里带**怎么补**，别让人对着一个坏包猜）。
+ */
+export function missingCuaNativeError(packageRoot: string, directory: string): Error {
+  return new Error(
+    `deployed closure has no CUA native payload: ${join(packageRoot, "native", "bin", directory, "current.json")} is missing; ` +
+      "build it once on macOS with Xcode (`pnpm --filter @deepseek-ai/dsh-experimental-cua-macos run build:native`) " +
+      "before bundling — upstream gitignores native/bin, so a source checkout never carries it",
+  );
+}
+
+/**
+ * CUA 的 native 载荷是**发布产物**：上游把 `native/bin/` 写进了 `.gitignore`，发布包里的那份由 macOS
+ * CI 签好随包分发。源码树形态（dev）走 `.build/prepared/<arch>/` 现场编译（`isSourcePackage` 为 true）；
+ * 而装进 app 的闭包是"已安装"形态，只认 `native/bin/darwin-<arch>/current.json`。缺了它包照样装得上、
+ * 用户点开 Computer Use 才炸——所以在打包这一步拦下来。
+ *
+ * 非 macOS 不看：上游只产 macOS 载荷，这一行在别的平台本来也用不了；闭包里没这一行也不管。
+ */
+export async function assertCuaNativePayload(
+  modulesDir: string,
+  platform: NodeJS.Platform,
+  architecture: string,
+): Promise<void> {
+  if (platform !== "darwin") return;
+  const packageRoot = (await closurePackageDirs(modulesDir)).get(CUA_PACKAGE);
+  if (packageRoot === undefined) return;
+  const directory = `darwin-${architecture === "x64" ? "x64" : "arm64"}`;
+  if (await pathExists(join(packageRoot, "native", "bin", directory, "current.json"))) return;
+  throw missingCuaNativeError(packageRoot, directory);
 }
 
 async function linkClosureTopLevel(modulesDir: string): Promise<void> {

@@ -26,6 +26,12 @@ prepare:
     just dep
     just vendor prebuild
 
+# Computer Use 的 native 载荷（`native/bin/darwin-<arch>/current.json`）：上游把 `native/bin/` 加进了
+# .gitignore，源码树里 dev 走现场编译，而**装进 app 的闭包**只认这份发布产物。桌面打包前跑一次
+# （macOS + Xcode；`just custom bundle` 会在缺它时直接报错）。
+native-cua:
+    pnpm --filter @deepseek-ai/dsh-experimental-cua-macos run build:native
+
 clean:
     rm -f pnpm-lock.yaml;
     pnpm clean

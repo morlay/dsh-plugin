@@ -132,4 +132,8 @@ export const prebuild: Step[] = [
   { type: "typert" },
   // 只编不得不编译的 addon（`.node` 是二进制产物，源码面消费不了）。
   { type: "native" },
+  // Computer Use 的 macOS 应用包：源码树 dev 走 `.build/prepared` 现场编译，而**装进 app 的闭包**只认
+  // `native/bin/darwin-<arch>/current.json`（上游 .gitignore 了 `native/bin/`）。不在这里产出，包能装上、
+  // 用户点开 CUA 才炸；非 macOS 跳过（CI 是 ubuntu）。
+  { type: "cua-native" },
 ];

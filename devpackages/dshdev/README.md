@@ -34,4 +34,8 @@ pnpm exec dshdev desktop bundle --dir  #       just custom bundle
 ```
 
 前置条件：pnpm workspace、`vendor/deepseek-harness` 已构建（`just prepare`）、工具 / 壳包 / 后端变体都已
-`pnpm build`。
+`pnpm build`。另外，工作区装了 `@deepseek-ai/dsh-experimental-cua-macos`（经 `dsh-cua-bundle`）时，还需要它
+的 native 载荷：上游把 `native/bin/` 加进了 `.gitignore`，源码树里 dev 是现场编译，而**打出来的闭包**只认那份
+发布产物（`native/bin/darwin-<arch>/current.json`）。`just prepare` 会在 macOS + Xcode 的机器上顺带产出
+（`cua-native` 步骤，别的平台跳过；单独跑用 `just native-cua`）；缺它时 `desktop bundle` 直接报错，不会产出
+打不开的包。
