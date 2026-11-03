@@ -30,26 +30,26 @@ async function workspace(environment?: Record<string, string>): Promise<string> 
   return app;
 }
 
+// fixture 用中性值：这几个字段的值由上游定义，测试只证明"原样透传"，不锁具体版本 / commit。
+const RECORD = {
+  DSH_CLIENT_VERSION: "1.2.3-rc.1",
+  DSH_CLIENT_COMMIT_HASH: "abc1234",
+  DSH_CLIENT_GIT_DIRTY: "true",
+  DSH_CLIENT_BUILD_PROFILE: "local",
+};
+
 describe("浏览器版本元数据（读上游产出的那份记录）", () => {
-  it("原样读出 `DSH_CLIENT_*`（版本 / commit / dirty 都是上游定义的）", async () => {
-    const app = await workspace({
-      DSH_CLIENT_VERSION: "0.2.2-alpha.3",
-      DSH_CLIENT_COMMIT_HASH: "05b1cae",
-      DSH_CLIENT_GIT_DIRTY: "true",
-      DSH_CLIENT_BUILD_PROFILE: "local",
-    });
-    expect(await readClientBuildEnvironment(app)).toEqual({
-      DSH_CLIENT_VERSION: "0.2.2-alpha.3",
-      DSH_CLIENT_COMMIT_HASH: "05b1cae",
-      DSH_CLIENT_GIT_DIRTY: "true",
-      DSH_CLIENT_BUILD_PROFILE: "local",
-    });
+  it("原样读出 `DSH_CLIENT_*`（值由上游定义，这里只是透传）", async () => {
+    const app = await workspace(RECORD);
+    expect(await readClientBuildEnvironment(app)).toEqual(RECORD);
   });
 
   it("记录不在、或不是 `DSH_CLIENT_*` 的键：给空对象（不挡流程）", async () => {
     expect(await readClientBuildEnvironment(await workspace())).toEqual({});
-    const app = await workspace({ OTHER: "x", DSH_CLIENT_VERSION: "1.0.0" });
-    expect(await readClientBuildEnvironment(app)).toEqual({ DSH_CLIENT_VERSION: "1.0.0" });
+    const app = await workspace({ OTHER: "x", DSH_CLIENT_VERSION: RECORD.DSH_CLIENT_VERSION });
+    expect(await readClientBuildEnvironment(app)).toEqual({
+      DSH_CLIENT_VERSION: RECORD.DSH_CLIENT_VERSION,
+    });
   });
 
   it("`DEEPSEEK_HARNESS_DIR` 指哪读哪", async () => {
@@ -61,12 +61,12 @@ describe("浏览器版本元数据（读上游产出的那份记录）", () => {
       join(custom, CLIENT_BUILD_RECORD),
       JSON.stringify({
         formatVersion: 1,
-        environment: { DSH_CLIENT_VERSION: "9.9.9-alpha.1", DSH_CLIENT_COMMIT_HASH: "aaaaaaa" },
+        environment: { DSH_CLIENT_VERSION: "9.9.9-other.1", DSH_CLIENT_COMMIT_HASH: "bbbbbbb" },
       }),
       "utf8",
     );
     saved.set("DEEPSEEK_HARNESS_DIR", process.env["DEEPSEEK_HARNESS_DIR"]);
     process.env["DEEPSEEK_HARNESS_DIR"] = "harness-copy";
-    expect((await readClientBuildEnvironment(app))["DSH_CLIENT_VERSION"]).toBe("9.9.9-alpha.1");
+    expect((await readClientBuildEnvironment(app))["DSH_CLIENT_VERSION"]).toBe("9.9.9-other.1");
   });
 });

@@ -119,11 +119,15 @@ async function buildCuaNative(dir: string): Promise<void> {
 // 所以只写 `environment` 那半（字段名与 formatVersion 跟着上游）。
 const CLIENT_META_SCRIPT = `import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { repositoryClientBuildEnvironment } from "../scripts/client-build-environment.ts";
+import { repositoryClientBuildEnvironment, resolveClientBuildEnvironment } from "../scripts/client-build-environment.ts";
 
 const root = process.argv[2];
 if (root === undefined) throw new Error("usage: write-client-build-environment.ts <vendor root>");
-const environment = { ...repositoryClientBuildEnvironment(root), DSH_CLIENT_BUILD_PROFILE: "local" };
+// 环境集合也交给上游：\`local\` profile 会补上 \`DSH_CLIENT_BUILD_PROFILE\`，我们不再自己拼任何一项。
+const environment = resolveClientBuildEnvironment(
+  { ...process.env, ...repositoryClientBuildEnvironment(root) },
+  "local",
+);
 const directory = join(root, ".dsh-build");
 mkdirSync(directory, { recursive: true });
 writeFileSync(join(directory, "client-build-environment.json"),

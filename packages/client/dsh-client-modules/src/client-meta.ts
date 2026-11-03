@@ -23,6 +23,8 @@ export interface ClientBuildMeta {
   readonly version?: string;
   readonly commit?: string;
   readonly dirty?: boolean;
+  /** `DSH_CLIENT_BUILD_PROFILE`：`official` / `local`，由上游的构建环境定义，缺了就不注入。 */
+  readonly profile?: string;
 }
 
 /** `prepare` 写、构建读的那份记录（形状与上游 `client-build-environment.json` 一致）。 */
@@ -38,10 +40,12 @@ function metaOfEnvironment(environment: NodeJS.ProcessEnv): ClientBuildMeta {
   const version = environment[VERSION];
   const commit = environment[COMMIT];
   const dirty = environment[DIRTY];
+  const profile = environment[PROFILE];
   return {
     ...(version === undefined || version === "" ? {} : { version }),
     ...(commit === undefined || commit === "" ? {} : { commit }),
     ...(dirty === "true" ? { dirty: true } : {}),
+    ...(profile === undefined || profile === "" ? {} : { profile }),
   };
 }
 
@@ -118,7 +122,7 @@ export function clientMetaDefines(meta: ClientBuildMeta): Record<string, string>
     [`process.env.${VERSION}`]: meta.version === undefined ? "undefined" : JSON.stringify(meta.version),
     [`process.env.${COMMIT}`]: meta.commit === undefined ? "undefined" : JSON.stringify(meta.commit),
     [`process.env.${DIRTY}`]: meta.dirty === true ? JSON.stringify("true") : "undefined",
-    // 我们不是官方构建：官方品牌（`ui-brand-official`）按这个值判断，不该冒用。
-    [`process.env.${PROFILE}`]: JSON.stringify("local"),
+    // 官方品牌（`ui-brand-official`）按这个值判断：值也来自上游的构建环境，缺了就不注入。
+    [`process.env.${PROFILE}`]: meta.profile === undefined ? "undefined" : JSON.stringify(meta.profile),
   };
 }
