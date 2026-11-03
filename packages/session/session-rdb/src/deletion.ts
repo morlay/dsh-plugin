@@ -1,7 +1,9 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
-import { SessionDeletionError, type SessionPersistenceRdb } from "./index.ts";
+import { SessionDeletionError } from "./deletion-error.ts";
+import type { SessionPersistenceRdb } from "./index.ts";
 import { SESSION_DELETE_PATH } from "./routes.ts";
+import { HttpError, mountJsonRoute } from "./http/route.ts";
 
 export { SESSION_DELETE_PATH };
 
@@ -12,77 +14,22 @@ const STATUS_OF_DELETION_ERROR: Record<SessionDeletionError["code"], number> = {
 };
 
 export function registerSessionDeletion(ctx: Context, persistence: SessionPersistenceRdb): void {
-  ctx.inject(["webServer", "connection"] as const, (webCtx) => {
-    const webServer = webCtx.webServer as unknown as {
-      register(route: {
-        kind: "exact";
-        path: string;
-        handler: (
-          req: import("node:http").IncomingMessage,
-          res: import("node:http").ServerResponse,
-        ) => void | Promise<void>;
-      }): () => void;
-    };
-    const connection = webCtx.get("connection") as unknown as {
-      requestRejection(request: {
-        headers: import("node:http").IncomingHttpHeaders;
-      }): number | undefined;
-    };
-    return webCtx.effect(() =>
-      webServer.register({
-        kind: "exact",
-        path: SESSION_DELETE_PATH,
-        handler: async (req, res) => {
-          const rejection = connection.requestRejection(req);
-          if (rejection !== undefined) {
-            res.writeHead(rejection);
-            res.end(rejection === 401 ? "unauthorized" : "forbidden");
-            return;
+  mountJsonRoute(ctx, {
+    path: SESSION_DELETE_PATH,
+    handle: async (body) => {
+      const { sessionId } = body as { sessionId?: unknown };
+      if (typeof sessionId !== "string" || sessionId === "") {
+        throw new HttpError(400, "missing sessionId field");
+      }
+      await persistence.deleteSession(sessionId as SessionId);
+      return { body: { deleted: sessionId } };
+    },
+    statusOfError: (error) =>
+      error instanceof SessionDeletionError
+        ? {
+            status: STATUS_OF_DELETION_ERROR[error.code],
+            body: { error: error.message, code: error.code },
           }
-          if (req.method !== "POST") {
-            res.writeHead(405, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: "method not allowed" }));
-            return;
-          }
-          const chunks: Buffer[] = [];
-          for await (const chunk of req) chunks.push(chunk as Buffer);
-          let envelope: { sessionId?: unknown };
-          try {
-            envelope = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
-              sessionId?: unknown;
-            };
-          } catch {
-            res.writeHead(400, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: "request body is not JSON" }));
-            return;
-          }
-          if (typeof envelope.sessionId !== "string" || envelope.sessionId === "") {
-            res.writeHead(400, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: "missing sessionId field" }));
-            return;
-          }
-          try {
-            await persistence.deleteSession(envelope.sessionId as SessionId);
-          } catch (error: unknown) {
-            if (error instanceof SessionDeletionError) {
-              res.writeHead(STATUS_OF_DELETION_ERROR[error.code], {
-                "content-type": "application/json",
-              });
-              res.end(JSON.stringify({ error: error.message, code: error.code }));
-              return;
-            }
-            res.writeHead(500, { "content-type": "application/json" });
-            res.end(
-              JSON.stringify({
-                error: error instanceof Error ? error.message : "session deletion failed",
-              }),
-            );
-            return;
-          }
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ deleted: envelope.sessionId }));
-        },
-      }),
-    );
+        : undefined,
   });
 }

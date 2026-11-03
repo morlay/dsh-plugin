@@ -17,77 +17,18 @@ import {
   type ForkFromOptions,
   type SessionBranchProvider,
 } from "@morlay/session-branch";
-import { randomUUID } from "node:crypto";
-import type { Backend } from "./backend.ts";
-import type { SessionPersistenceRdb } from "./index.ts";
-import { isLegacyVersion } from "./legacy.ts";
-import { rowToEvent, rowToMeta } from "./log.ts";
+import { isLegacyVersion } from "../legacy.ts";
+import type { BranchPort } from "./port.ts";
+import { rowToEvent, rowToMeta } from "../log/rows.ts";
 
-function assertRewindBoundary(
-  id: SessionId,
-  toBoundary: number,
-  boundaryType: string | undefined,
-  head: number,
-): void {
-  if (toBoundary === -1) return;
-  if (toBoundary > head) {
-    throw new SessionBranchError(
-      `rewind boundary ${toBoundary} is beyond the stored head ${head}`,
-      "INVALID_BOUNDARY",
-    );
-  }
-  if (boundaryType === undefined) {
-    throw new SessionBranchError(
-      `rewind boundary ${toBoundary} does not exist in session "${id}"`,
-      "INVALID_BOUNDARY",
-    );
-  }
-  if (boundaryType !== "turn/end" && boundaryType !== "user/message") {
-    throw new SessionBranchError(
-      `rewind boundary ${toBoundary} is not a turn/end or user/message (${boundaryType})`,
-      "INVALID_BOUNDARY",
-    );
-  }
-}
+import {
+  assertRewindBoundary,
+  locateTurnEnd,
+  mintSessionId,
+  renumber,
+} from "./semantics.ts";
 
-export function locateTurnEnd(
-  events: readonly SessionEvent[],
-  atSeq?: number,
-  mode: BranchAnchorMode = "after",
-): number {
-  const ends = events.filter((event) => event.type === "turn/end").map((event) => event.seq);
-  if (atSeq === undefined) {
-    const last = ends.at(-1);
-    if (last === undefined) throw new SessionBranchError("session has no closed turn", "OPEN_TURN");
-    return last;
-  }
-  if (mode === "before") {
-    let boundary = -1;
-    for (const seq of ends) {
-      if (seq < atSeq) boundary = seq;
-      else break;
-    }
-    return boundary;
-  }
-  const firstAfter = ends.find((seq) => seq >= atSeq);
-  if (firstAfter !== undefined) return firstAfter;
-
-  const lastStart = [...events].reverse().find((event) => event.type === "turn/start");
-  if (lastStart !== undefined && lastStart.seq <= atSeq) {
-    throw new SessionBranchError(`anchor ${atSeq} lies inside an open turn`, "OPEN_TURN");
-  }
-  const last = ends.at(-1);
-  if (last === undefined) throw new SessionBranchError("session has no closed turn", "OPEN_TURN");
-  return last;
-}
-
-function renumber(events: readonly SessionEvent[], offset: number): SessionEvent[] {
-  return events.map((event, index) => ({ ...event, seq: offset + index }) as SessionEvent);
-}
-
-function mintSessionId(): SessionId {
-  return `session-${randomUUID()}` as SessionId;
-}
+export { locateTurnEnd } from "./semantics.ts";
 
 export interface LiveSessionHooks {
   getSession(id: SessionId): Session | undefined;
@@ -225,7 +166,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
   readonly name = "session-rdb";
 
   constructor(
-    private readonly persistence: SessionPersistenceRdb,
+    private readonly port: BranchPort,
 
     private readonly live: LiveSessionHooks = {
       getSession: () => undefined,
@@ -249,7 +190,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     id: SessionId,
     signal?: AbortSignal,
   ): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }> {
-    const stored = await this.persistence.readLog(id, {}, signal);
+    const stored = await this.port.readLog(id, {}, signal);
     if (stored === undefined)
       throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
     return { meta: stored.meta, events: stored.events };
@@ -262,7 +203,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
   ): Promise<SessionId> {
     signal?.throwIfAborted();
     const { atSeq, anchorMode = "after", seedSuffix = [], childSessionId, meta = {} } = options;
-    const source = await this.persistence.readLog(sourceId, {}, signal);
+    const source = await this.port.readLog(sourceId, {}, signal);
     if (source === undefined)
       throw new SessionBranchError(`session "${sourceId}" not found`, "SESSION_NOT_FOUND");
     const boundary = locateTurnEnd(source.events, atSeq, anchorMode);
@@ -294,15 +235,14 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     };
     const seed = [...renumber(prefix, 0), ...renumber(seedSuffix, prefix.length)];
 
-    const internals = this.persistence.internals();
-    await internals.ready;
+    await this.port.ready;
     // 复用父会话的事件行有个前提：**读取视图的 seq 与存储行的 f_sequence 一一对应**。legacy 会话的读视图
     // 由迁移链重建（可能重新编号、增删事件），按 seq 复用会把桥接行挂到语义不符的行上——读取时按 `f_data`
     // 解析，子会话前缀读到的内容就会和它自己的 seed 事件对不上。那种情况下复制事件行（多几行存储，正确优先）。
     const reusable = !source.migrated && source.events.length === source.storedCount;
     const reuse = new Map<number, string>();
     if (reusable) {
-      const sourceRows = await internals.backend.getEventRows(sourceId);
+      const sourceRows = await this.port.eventRows(sourceId);
       const sourceEventIds = new Map(sourceRows.map((row) => [row.fSequence, row.fEventId]));
       for (const event of prefix) {
         const eventId = sourceEventIds.get(event.seq);
@@ -313,9 +253,9 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
         `session-rdb: fork "${sourceId}" copies event rows instead of reusing them — its read view comes from a migration, so stored seqs need not line up`,
       );
     }
-    internals.registerReuseEventIds(childId, reuse);
+    this.port.registerReuseEventIds(childId, reuse);
     try {
-      const handle = await this.persistence.create(childMeta, {
+      const handle = await this.port.create(childMeta, {
         inheritedEventCount: SessionLogOffset(prefix.length),
       });
       try {
@@ -326,7 +266,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     } catch (error) {
       // fork 没成（id 已存在、append 失败等）：别把复用映射留在进程里——同一个 childId 之后的落写会按它
       // 去复用父会话的事件行，而那条会话可能完全无关。
-      internals.dropReuseEventIds(childId);
+      this.port.dropReuseEventIds(childId);
       throw error;
     }
     // fork 不动统计：继承前缀的消耗是父会话真实发生的那一次，子会话只记自己新产生的
@@ -350,12 +290,11 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
 
     if (live !== undefined) await this.live.flush(live);
 
-    const internals = this.persistence.internals();
-    await internals.ready;
+    await this.port.ready;
 
     // SessionBranch 是「先停止、再操作」的排他面（ADR-rewind绕过handle模型直接截断）：rewind 直连 DB 做最小工作，
     // 不走持久化抽象的全量读路径（readLog 会拉全部事件 + legacy 转换 + 读视图修复）。
-    const row = await internals.backend.getSession(id);
+    const row = await this.port.sessionRow(id);
     if (row === undefined) {
       throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
     }
@@ -365,7 +304,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     let kept: readonly SessionEvent[] | undefined;
     if (isLegacyVersion(row.fVersion)) {
       // 旧格式的持久化坐标与当前视图 seq 不一致：只有这条路径需要读日志（含格式转换与读视图修复）
-      const log = await this.persistence.readLog(id, {}, signal);
+      const log = await this.port.readLog(id, {}, signal);
       if (log === undefined) {
         throw new SessionBranchError(`session "${id}" not found`, "SESSION_NOT_FOUND");
       }
@@ -376,14 +315,14 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       kept = balanceRewindPrefix(log.events.slice(0, rawKeepLength));
     } else {
       const boundaryType =
-        toBoundary === -1 ? undefined : await internals.backend.getEventTypeAt(id, toBoundary);
+        toBoundary === -1 ? undefined : await this.port.eventTypeAt(id, toBoundary);
       assertRewindBoundary(id, toBoundary, boundaryType, row.fHeadSequence);
       rawKeepLength =
         toBoundary === -1 ? 0 : boundaryType === "turn/end" ? toBoundary + 1 : toBoundary;
     }
     const keepLength =
       kept === undefined
-        ? await this.rewindKeepLength(id, rawKeepLength, internals.backend)
+        ? await this.rewindKeepLength(id, rawKeepLength)
         : kept.length;
     if (keepLength < rawKeepLength) {
       this.live.warn?.(
@@ -392,7 +331,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     }
 
     const denseBoundary = keepLength - 1;
-    const newSeedLength = await internals.backend.transaction(async (tx) => {
+    const newSeedLength = await this.port.transaction(async (tx) => {
       signal?.throwIfAborted();
       const head = await tx.getHead(id);
       if (denseBoundary > head.fHeadSequence) {
@@ -428,7 +367,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       return shrunk;
     });
 
-    internals.writeGuard.confirmHead(id, denseBoundary);
+    this.port.confirmHead(id, denseBoundary);
 
     if (live !== undefined) {
       // 内存 log 与存储同源的判据：上游 `Session.append` 用 `log.length` 当 seq，所以「内存条目数 - 1」
@@ -441,7 +380,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
       if (liveLength < keepLength) {
         const prefix =
           kept ??
-          (await internals.backend.getEventRows(id))
+          (await this.port.eventRows(id))
             .map(rowToEvent)
             .filter((event) => event.seq <= denseBoundary);
         replaceLiveSessionLog(live, prefix);
@@ -461,10 +400,11 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
         if (phase !== undefined) phase.lastTurn = lastTurn;
       }
 
-      const handle = this.persistence.tracker.writerOf(id);
-      if (handle !== undefined) {
-        handle.resetAfterRewind(keepLength, newSeedLength === null ? undefined : newSeedLength);
-      }
+      this.port.resetWriterAfterRewind(
+        id,
+        keepLength,
+        newSeedLength === null ? undefined : newSeedLength,
+      );
 
       agent?.inbox?.clear();
 
@@ -483,20 +423,16 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     }
 
     // 撤回不改统计：请求已发起就已经消耗过（见 ADR-撤回不回退统计）。
-    return { header: rowToMeta(row), revision: (await internals.readStoredRevision(id))! };
+    return { header: rowToMeta(row), revision: (await this.port.readStoredRevision(id))! };
   }
 
   // 保留长度只依赖尾部窗口：从 rawKeepLength 往回读类型（有界），窗口没覆盖到最近一个 turn/end
   // 就翻倍重读，直到覆盖或到达前缀开头。
-  private async rewindKeepLength(
-    id: SessionId,
-    rawKeepLength: number,
-    backend: Backend,
-  ): Promise<number> {
+  private async rewindKeepLength(id: SessionId, rawKeepLength: number): Promise<number> {
     if (rawKeepLength === 0) return 0;
     let limit = 64;
     for (;;) {
-      const rows = await backend.getEventTypesBefore(id, rawKeepLength, limit);
+      const rows = await this.port.eventTypesBefore(id, rawKeepLength, limit);
       const types = [...rows].reverse().map((row) => row.fType);
       const windowStart = rawKeepLength - types.length;
       if (types.includes("turn/end") || windowStart === 0 || types.length >= rawKeepLength) {
@@ -581,7 +517,7 @@ export class SessionBranchRdb extends SessionBranch {
   }
 
   private readonly provider = new SessionBranchRdbProvider(
-    this.ctx.sessionPersistence as SessionPersistenceRdb,
+    (this.ctx.sessionPersistence as unknown as { branchPort(): BranchPort }).branchPort(),
     {
       getSession: (id) => this.ctx.sessions.get(id),
       getAgent: (id) => {

@@ -43,6 +43,7 @@ async function freshDbPath(): Promise<string> {
 function fakeJsonRequest(body: unknown): import("node:http").IncomingMessage {
   const chunk = Buffer.from(JSON.stringify(body));
   return {
+    method: "POST",
     headers: {},
     async *[Symbol.asyncIterator]() {
       yield chunk;

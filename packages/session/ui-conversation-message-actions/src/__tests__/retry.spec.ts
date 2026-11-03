@@ -64,11 +64,9 @@ describe("SessionEditor retry", () => {
 
       const backend = (
         ctx.sessionPersistence as unknown as {
-          internals(): {
-            backend: { getHead(id: SessionIdBrand): Promise<{ fHeadSequence: number }> };
-          };
+          backend: { getHead(id: SessionIdBrand): Promise<{ fHeadSequence: number }> };
         }
-      ).internals().backend;
+      ).backend;
       const head = await backend.getHead(SessionIdBrand("live"));
       expect(head.fHeadSequence).toBe(5);
     } finally {

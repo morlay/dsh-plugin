@@ -36,7 +36,7 @@ async function harness(path = ":memory:"): Promise<{
   new SessionProjectionRegistry(ctx);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
   const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
-  const provider = new SessionBranchRdbProvider(persistence, {
+  const provider = new SessionBranchRdbProvider(persistence.branchPort(), {
     getSession: (id) => ctx.sessions.get(id),
     getAgent: () => undefined,
     flush: (session) => ctx.sessions.flush(session),
@@ -219,10 +219,12 @@ describe("forkFrom", () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
-      const backend = persistence.internals().backend as unknown as {
-        getEventRows(id: SessionId): Promise<Array<{ fEventId: string; fSequence: number }>>;
+      const backend = persistence.backend as unknown as {
+        reads: {
+          getEventRows(id: SessionId): Promise<Array<{ fEventId: string; fSequence: number }>>;
+        };
       };
-      const parentRows = await backend.getEventRows(SessionId("src"));
+      const parentRows = await backend.reads.getEventRows(SessionId("src"));
       expect(parentRows).toHaveLength(12);
 
       await provider.forkFrom(SessionId("src"), {
@@ -231,13 +233,13 @@ describe("forkFrom", () => {
         childSessionId: SessionId("child"),
       });
 
-      const childRows = await backend.getEventRows(SessionId("child"));
+      const childRows = await backend.reads.getEventRows(SessionId("child"));
       expect(childRows).toHaveLength(6);
       expect(childRows.map((r) => r.fEventId)).toEqual(
         parentRows.slice(0, 6).map((r) => r.fEventId),
       );
 
-      const childBridges = await backend.getEventRows(SessionId("child"));
+      const childBridges = await backend.reads.getEventRows(SessionId("child"));
       expect(childBridges.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5]);
     } finally {
       await dispose();
@@ -263,7 +265,7 @@ describe("forkFrom", () => {
 
       // 该 id 之后从 seq 1 落写一条全新事件：映射残留时 appendBatch 会按它去复用父会话的事件行，
       // 桥接行挂到语义不符的父行上（读出来是父会话 seq 1 的内容，而不是这条 end-seed）。
-      await persistence.internals().append(SessionId("taken"), [
+      await persistence.append(SessionId("taken"), [
         {
           type: "session/end-seed",
           seq: SessionSeq(1),
@@ -283,10 +285,12 @@ describe("forkFrom", () => {
     const { ctx, persistence, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
-      const backend = persistence.internals().backend as unknown as {
-        getEventRows(id: SessionId): Promise<Array<{ fEventId: string; fSequence: number }>>;
+      const backend = persistence.backend as unknown as {
+        reads: {
+          getEventRows(id: SessionId): Promise<Array<{ fEventId: string; fSequence: number }>>;
+        };
       };
-      const parentRows = await backend.getEventRows(SessionId("src"));
+      const parentRows = await backend.reads.getEventRows(SessionId("src"));
 
       // 手工造出 fork 的中间态：子会话已建、复用映射已注册（等价于 forkFrom 走到 append 之前）。
       const child = SessionId("child");
@@ -296,22 +300,21 @@ describe("forkFrom", () => {
       );
       const seed = twoTurnLog().slice(0, 6);
       persistence
-        .internals()
         .registerReuseEventIds(
           child,
           new Map(parentRows.slice(0, 6).map((row) => [row.fSequence, row.fEventId])),
         );
 
       // 第一次 append 被并发写者校验拦下（本实例"已确认"的 head 与磁盘不符）。
-      persistence.internals().writeGuard.confirmHead(child, 999);
+      persistence.writeGuard.confirmHead(child, 999);
       await expect(handle.append(seed)).rejects.toThrow();
-      persistence.internals().writeGuard.confirmHead(child, -1);
+      persistence.writeGuard.confirmHead(child, -1);
 
       // 重试：映射还在（没被提前删掉），所以桥接行直接指向父会话的事件行，而不是再插一份。
       await handle.append(seed);
       await handle.close();
 
-      const childRows = await backend.getEventRows(child);
+      const childRows = await backend.reads.getEventRows(child);
       expect(childRows.map((row) => row.fEventId)).toEqual(
         parentRows.slice(0, 6).map((row) => row.fEventId),
       );
@@ -428,7 +431,7 @@ describe("rewind", () => {
 
       await ctx.sessionBranch.rewind(SessionId("pending"), 5);
 
-      const backend = persistence.internals().backend as unknown as {
+      const backend = persistence.backend as unknown as {
         getHead(id: SessionId): Promise<{ fHeadSequence: number }>;
       };
       const head = await backend.getHead(SessionId("pending"));
@@ -455,7 +458,7 @@ describe("rewind", () => {
 
       expect(live.snapshotEvents().map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
 
-      const backend = persistence.internals().backend as unknown as {
+      const backend = persistence.backend as unknown as {
         getHead(id: SessionId): Promise<{ fHeadSequence: number }>;
       };
       const head = await backend.getHead(SessionId("live"));
@@ -691,14 +694,14 @@ describe("rewind", () => {
 
       const backend = (
         persistence as unknown as {
-          internals(): {
-            backend: {
+          backend: {
+            reads: {
               getEventRows(id: SessionId): Promise<Array<{ fSequence: number; fType: string }>>;
             };
           };
         }
-      ).internals().backend;
-      const rows = await backend.getEventRows(SessionId("s1"));
+      ).backend;
+      const rows = await backend.reads.getEventRows(SessionId("s1"));
       expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
       expect(rows.at(-1)?.fType).toBe("turn/start");
       expect(rows.some((r) => r.fType === "step/start" && r.fSequence === 13)).toBe(false);
@@ -953,14 +956,14 @@ describe("rewind", () => {
 
       const backend = (
         persistence as unknown as {
-          internals(): {
-            backend: {
+          backend: {
+            reads: {
               getEventRows(id: SessionId): Promise<Array<{ fSequence: number; fType: string }>>;
             };
           };
         }
-      ).internals().backend;
-      const rows = await backend.getEventRows(SessionId("s1"));
+      ).backend;
+      const rows = await backend.reads.getEventRows(SessionId("s1"));
 
       expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(rows.some((r) => r.fType === "step/start" && r.fSequence === 11)).toBe(false);
@@ -1125,8 +1128,8 @@ describe("rewind step balance self-heal", () => {
     try {
       await createPersisted(ctx, "s1", orphanStepEndLog());
 
-      const backend = (persistence.internals() as unknown as { backend: Record<string, unknown> })
-        .backend;
+      const backend = (persistence as unknown as { backend: { reads: Record<string, unknown> } })
+        .backend.reads;
       const reads: string[] = [];
       for (const name of ["getEventRows", "getEventTypesBefore"]) {
         const original = (backend[name] as (...args: unknown[]) => Promise<unknown>).bind(backend);
@@ -1164,8 +1167,8 @@ describe("rewind step balance self-heal", () => {
       const live = ctx.sessions.get(SessionId("s1"))!;
       await ctx.sessions.flush(live);
 
-      const backend = (persistence.internals() as unknown as { backend: Record<string, unknown> })
-        .backend;
+      const backend = (persistence as unknown as { backend: { reads: Record<string, unknown> } })
+        .backend.reads;
       const reads: string[] = [];
       for (const name of ["getEventRows", "getEventTypesBefore"]) {
         const original = (backend[name] as (...args: unknown[]) => Promise<unknown>).bind(backend);
@@ -1295,7 +1298,7 @@ describe("rewind 之后的 memory log 镜像", () => {
         { turn: 3 },
       );
       await ctx.sessions.flush(live);
-      const backend = persistence.internals().backend as unknown as {
+      const backend = persistence.backend as unknown as {
         getHead(id: SessionId): Promise<{ fHeadSequence: number }>;
       };
       expect((await backend.getHead(SessionId("live"))).fHeadSequence).toBe(6);

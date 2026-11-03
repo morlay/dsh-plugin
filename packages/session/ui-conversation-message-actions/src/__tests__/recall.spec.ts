@@ -30,12 +30,10 @@ async function eventRows(
 ): Promise<EventRow[]> {
   const backend = (
     ctx.sessionPersistence as unknown as {
-      internals(): {
-        backend: { getEventRows(id: SessionIdBrand): Promise<EventRow[]> };
-      };
+      backend: { reads: { getEventRows(id: SessionIdBrand): Promise<EventRow[]> } };
     }
-  ).internals().backend;
-  return backend.getEventRows(id);
+  ).backend;
+  return backend.reads.getEventRows(id);
 }
 
 function textOf(event: SessionEvent): string | undefined {

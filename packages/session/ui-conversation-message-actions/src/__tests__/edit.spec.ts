@@ -84,11 +84,9 @@ describe("SessionEditor edit", () => {
 
       const backend = (
         ctx.sessionPersistence as unknown as {
-          internals(): {
-            backend: { getHead(id: SessionIdBrand): Promise<{ fHeadSequence: number }> };
-          };
+          backend: { getHead(id: SessionIdBrand): Promise<{ fHeadSequence: number }> };
         }
-      ).internals().backend;
+      ).backend;
       expect(live.snapshotEvents().at(-1)?.seq).toBe(17);
       expect((await backend.getHead(SessionIdBrand("live"))).fHeadSequence).toBe(17);
 
@@ -303,16 +301,16 @@ describe("SessionEditor edit", () => {
 
       const backend = (
         ctx.sessionPersistence as unknown as {
-          internals(): {
-            backend: {
+          backend: {
+            reads: {
               getEventRows(
                 id: SessionIdBrand,
               ): Promise<Array<{ fSequence: number; fType: string }>>;
             };
           };
         }
-      ).internals().backend;
-      const rows = await backend.getEventRows(SessionIdBrand("src"));
+      ).backend;
+      const rows = await backend.reads.getEventRows(SessionIdBrand("src"));
       expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
       expect(rows[11]?.fType).toBe("turn/end");
       expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
@@ -621,16 +619,16 @@ describe("SessionEditor edit", () => {
 
       const backend = (
         ctx.sessionPersistence as unknown as {
-          internals(): {
-            backend: {
+          backend: {
+            reads: {
               getEventRows(
                 id: SessionIdBrand,
               ): Promise<Array<{ fSequence: number; fType: string }>>;
             };
           };
         }
-      ).internals().backend;
-      const rows = await backend.getEventRows(SessionIdBrand("src"));
+      ).backend;
+      const rows = await backend.reads.getEventRows(SessionIdBrand("src"));
       expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
       expect(rows[11]?.fType).toBe("turn/end");
       expect(rows.some((r) => r.fType === "session-branch/version")).toBe(false);
@@ -723,16 +721,16 @@ describe("SessionEditor edit", () => {
 
       const backend = (
         ctx.sessionPersistence as unknown as {
-          internals(): {
-            backend: {
+          backend: {
+            reads: {
               getEventRows(
                 id: SessionIdBrand,
               ): Promise<Array<{ fSequence: number; fType: string }>>;
             };
           };
         }
-      ).internals().backend;
-      const rows = await backend.getEventRows(SessionIdBrand("src"));
+      ).backend;
+      const rows = await backend.reads.getEventRows(SessionIdBrand("src"));
       // 切点之前的轮内正文保留；尾部未闭合的 turn 3 由 interrupted closer 闭合（seq 17）
       expect(rows.map((r) => r.fSequence)).toEqual([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,

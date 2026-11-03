@@ -1,5 +1,5 @@
-import type { TableHandle } from "./table.ts";
-import type { Database } from "./database.ts";
+import type { TableHandle } from "./table/handle.ts";
+import type { Database } from "./database/types.ts";
 // 表定义就是数据库结构的唯一来源：schema（drizzle 对象）、DDL、启动迁移都从它算出来，
 // 所以再加一张表 / 一列时不需要另写迁移 SQL，也不需要在 sqlite 与 postgres 各写一遍。
 

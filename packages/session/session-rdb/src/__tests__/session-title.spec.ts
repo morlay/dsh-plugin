@@ -14,7 +14,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "../index.ts";
 import { meta, oneTurnLog } from "../testing.ts";
-import { titleOfEventData } from "../log.ts";
+import { titleOfEventData } from "../artifact.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {

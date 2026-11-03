@@ -4,23 +4,13 @@ import z from "@deepseek-ai/schemastery";
 import { randomUUID } from "node:crypto";
 import {
   SessionAlreadyExistsError,
-  SessionAlreadyOwnedError,
-  SessionHandleClosedError,
   SessionPersistence,
   SessionPersistenceNotFoundError,
   SessionPersistenceRevision,
-  SessionReadOnlyError,
-  assertContiguous,
-  assertVersion,
-  materializeAppendBatch,
   materializeCreateHeader,
   validateStoredEvents,
   type SessionAccess,
   type SessionHandle,
-  type SessionHandleAppendOptions,
-  type SessionHandleFlushOptions,
-  type SessionHandleReadOptions,
-  type SessionHandleReadResult,
   type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions,
   type SessionPersistenceOpenOptions,
@@ -30,43 +20,39 @@ import {
 import {
   SESSION_FORMAT_VERSION,
   SessionLogOffset,
-  type Session,
   type SessionEvent,
   type SessionHeader,
   type SessionId,
   type SurfaceEventType,
 } from "@deepseek-ai/dsh-session";
 import { sessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
-import {
-  type Backend,
-  type BackendTx,
-  type EventInsert,
-  type SessionCountBucket,
-  type SessionUsageBucket,
-} from "./backend.ts";
+import { type Backend, type BackendTx, type EventInsert } from "./backend.ts";
+import { SessionDeletionError } from "./deletion-error.ts";
 import { WriteGuard } from "./write-guard.ts";
-import { repairReadView, rowToMeta, scanRows, toJsonlArtifact, usageRowOf } from "./log.ts";
-import type { EventUsageRow } from "./log.ts";
+import { RdbBackendTracker, RdbSessionHandle } from "./handles.ts";
+import { repairReadView } from "./log/repair.ts";
+import { rowToMeta } from "./log/rows.ts";
+import { scanRows, toJsonlArtifact } from "./log/export.ts";
+import { usageRowOf } from "./log/usage-row.ts";
+import type { EventUsageRow } from "./log/usage-row.ts";
 import { eventDimensions } from "./event-shape.ts";
 import { DEFAULT_BUSY_TIMEOUT_MS, EVENT_ENCODING, type JournalMode } from "./version.ts";
 import { openRdbBackend, type BackendConfig } from "./backend-rdb.ts";
-import { SessionBranchRdb, liveEventsOf } from "./branch.ts";
+import { SessionBranchRdb } from "./branch/index.ts";
+import type { BranchPort } from "./branch/port.ts";
+import { LiveRouting } from "./live-routing.ts";
 import { balanceRewindPrefix } from "@morlay/session-branch";
 import { registerSessionImport } from "./import.ts";
 import { registerSessionDeletion } from "./deletion.ts";
 import { registerSessionExport } from "./export.ts";
 import { registerSessionGc } from "./gc.ts";
 import { registerSessionRows } from "./rows.ts";
-import {
-  COUNTED_EVENT_TYPES,
-  addActivityCount,
-  localDayKey,
-  registerSessionUsage,
-} from "./usage.ts";
+import { registerSessionUsage } from "./usage.ts";
 import type { UsageAggregate } from "./usage.ts";
 import { SessionQueryRdb } from "./session-query.ts";
+import { sessionCountBuckets, sessionUsageBuckets } from "./stats-fold.ts";
 import { adoptLegacyRows, convertLegacyRows, isLegacyVersion } from "./legacy.ts";
-import { needsShapeAdoption, sealOwnEvents } from "./log.ts";
+import { needsShapeAdoption, sealOwnEvents } from "./log/repair.ts";
 import { installStorageTakeover } from "./storage-takeover/index.ts";
 
 // 一批事件里的最大时间：写路径据此推进会话行的「最后活动时间」。
@@ -88,35 +74,7 @@ export {
   SessionBranchRdbProvider,
   liveEventsOf,
   locateTurnEnd,
-} from "./branch.ts";
-
-export interface SessionPersistenceRdbInternals {
-  /** backend 在打开前不可用；分支能力先等它。 */
-  readonly ready: Promise<void>;
-  readonly backend: Backend;
-  readonly writeGuard: WriteGuard;
-  create(meta: SessionHeader, inheritedEventCount?: number): Promise<SessionHandle>;
-  append(id: SessionId, events: readonly SessionEvent[]): Promise<void>;
-  load(id: SessionId): Promise<import("@deepseek-ai/dsh-session-persistence").SessionInspection>;
-  inspect(
-    id: SessionId,
-    signal?: AbortSignal,
-  ): Promise<import("@deepseek-ai/dsh-session-persistence").SessionInspection>;
-  readFrom(
-    id: SessionId,
-    fromSeq: number,
-    signal?: AbortSignal,
-  ): Promise<{ meta: SessionHeader; inheritedEventCount: number; events: readonly SessionEvent[] }>;
-  listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>;
-  readStoredRevision(
-    id: SessionId,
-    signal?: AbortSignal,
-  ): Promise<import("@deepseek-ai/dsh-session-persistence").SessionPersistenceRevision | undefined>;
-
-  registerReuseEventIds(childId: SessionId, map: ReadonlyMap<number, string>): void;
-  // fork 失败时丢弃还没被消费的映射。
-  dropReuseEventIds(childId: SessionId): void;
-}
+} from "./branch/index.ts";
 
 export type Config =
   | {
@@ -136,348 +94,7 @@ export type Config =
 // schema 解析之后的形状：整段 Config 是 **volatile 稳定引用**（页面可编辑），读它要过 `.get()`。
 export type ResolvedConfig = Volatile<Config>;
 
-export type SessionDeletionErrorCode =
-  | "SESSION_NOT_FOUND"
-  | "SESSION_NOT_ARCHIVED"
-  | "SESSION_LIVE";
-
-export class SessionDeletionError extends Error {
-  constructor(
-    message: string,
-    readonly code: SessionDeletionErrorCode,
-  ) {
-    super(message);
-    this.name = "SessionDeletionError";
-  }
-}
-
-interface PendingSession {
-  readonly header: SessionHeader;
-  readonly revision: SessionPersistenceRevision;
-  readonly inheritedEventCount: SessionLogOffset;
-
-  readonly cursor: number;
-
-  readonly everAppended: boolean;
-}
-
-class RdbBackendTracker {
-  private readonly writers = new Map<SessionId, RdbSessionHandle | null>();
-  private readonly pending = new Map<SessionId, PendingSession>();
-  private readonly openHandles = new Set<RdbSessionHandle>();
-  private counter = 0;
-
-  constructor(private readonly name: string) {}
-
-  registerCreated(header: SessionHeader, inheritedEventCount: SessionLogOffset): void {
-    if (this.writers.has(header.id)) throw new SessionAlreadyExistsError(header.id);
-    this.writers.set(header.id, null);
-    this.pending.set(header.id, {
-      header,
-      revision: SessionPersistenceRevision(`memory:${this.name}:${++this.counter}`),
-      inheritedEventCount,
-      cursor: 0,
-      everAppended: false,
-    });
-  }
-
-  updatePending(id: SessionId, cursor: number, everAppended: boolean): void {
-    const entry = this.pending.get(id);
-    if (entry === undefined) return;
-    this.pending.set(id, { ...entry, cursor, everAppended });
-  }
-
-  claimWrite(id: SessionId): void {
-    if (this.writers.has(id)) throw new SessionAlreadyOwnedError(id);
-    this.writers.set(id, null);
-  }
-
-  releaseClaim(id: SessionId): void {
-    this.writers.delete(id);
-  }
-
-  pendingOf(id: SessionId): PendingSession | undefined {
-    return this.pending.get(id);
-  }
-
-  hasPending(id: SessionId): boolean {
-    return this.pending.has(id);
-  }
-
-  pendingEntries(): IterableIterator<[SessionId, PendingSession]> {
-    return this.pending.entries();
-  }
-
-  materialized(id: SessionId): void {
-    this.pending.delete(id);
-  }
-
-  adopt(handle: RdbSessionHandle): RdbSessionHandle {
-    this.openHandles.add(handle);
-    if (handle.access === "write") this.writers.set(handle.id, handle);
-    return handle;
-  }
-
-  release(handle: RdbSessionHandle, materialized: boolean): void {
-    this.openHandles.delete(handle);
-    if (handle.access !== "write") return;
-    this.writers.delete(handle.id);
-    if (!materialized) this.pending.delete(handle.id);
-  }
-
-  writerOf(id: SessionId): RdbSessionHandle | undefined {
-    const writer = this.writers.get(id);
-    return writer === null ? undefined : writer;
-  }
-
-  hasOpenHandle(id: SessionId): boolean {
-    for (const handle of this.openHandles) {
-      if (handle.id === id) return true;
-    }
-    return false;
-  }
-
-  async flushAll(): Promise<void> {
-    const errors: unknown[] = [];
-    for (const writer of this.writers.values()) {
-      if (writer === null) continue;
-      try {
-        await writer.drainLive();
-        await writer.flush();
-      } catch (error: unknown) {
-        if (error instanceof SessionHandleClosedError) continue;
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) throw new AggregateError(errors, `${this.name} flush failed`);
-  }
-
-  async closeAll(): Promise<void> {
-    const errors: unknown[] = [];
-    for (const handle of this.openHandles) {
-      try {
-        await handle.close();
-      } catch (error: unknown) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) throw new AggregateError(errors, `${this.name} dispose failed`);
-  }
-}
-
-class RdbSessionHandle implements SessionHandle {
-  private chain: Promise<unknown> = Promise.resolve();
-  private closing: Promise<void> | undefined;
-
-  private cursor: number;
-  private materialized: boolean;
-
-  private buffered: SessionEvent[] = [];
-  private batchTimer: ReturnType<typeof setTimeout> | undefined;
-  private drainPaused = false;
-  private draining: Promise<void> | undefined;
-
-  private tornTruncateTo: number | undefined;
-
-  private everAppended = false;
-
-  constructor(
-    private readonly persistence: SessionPersistenceRdb,
-    readonly id: SessionId,
-    readonly header: SessionHeader,
-    readonly access: SessionAccess,
-    private readonly state: {
-      cursor: number;
-      materialized: boolean;
-      inheritedEventCount: SessionLogOffset;
-      tornTruncateTo?: number;
-    },
-  ) {
-    this.cursor = state.cursor;
-    this.materialized = state.materialized;
-    this.tornTruncateTo = state.tornTruncateTo;
-  }
-
-  get inheritedEventCount(): SessionLogOffset {
-    return this.state.inheritedEventCount;
-  }
-
-  get cursorValue(): number {
-    return this.cursor;
-  }
-
-  async read(
-    offset = 0,
-    length = Number.MAX_SAFE_INTEGER,
-    options?: SessionHandleReadOptions,
-  ): Promise<SessionHandleReadResult> {
-    this.assertOpen("read");
-    if (!Number.isSafeInteger(offset) || offset < 0) {
-      throw new TypeError(`read offset must be a non-negative safe integer, got ${String(offset)}`);
-    }
-    if (!Number.isSafeInteger(length) || length < 0) {
-      throw new TypeError(`read length must be a non-negative safe integer, got ${String(length)}`);
-    }
-    options?.signal?.throwIfAborted();
-    const log = await this.persistence.readLog(this.id, {}, options?.signal);
-    if (log === undefined) {
-      if (this.persistence.tracker.hasPending(this.id)) {
-        return { eventState: "detached", events: [] };
-      }
-      throw new SessionPersistenceNotFoundError(this.id);
-    }
-
-    repairReadView(log.events);
-    return { eventState: "detached", events: log.events.slice(offset, offset + length) };
-  }
-
-  async append(
-    events: readonly SessionEvent[],
-    options?: SessionHandleAppendOptions,
-  ): Promise<void> {
-    this.assertOpen("append");
-    const batch = materializeAppendBatch(events);
-    return this.run("append", async () => {
-      options?.signal?.throwIfAborted();
-      if (this.access !== "write") throw new SessionReadOnlyError(this.id, "append");
-      if (batch.length === 0) return;
-      this.everAppended = true;
-      assertContiguous(this.id, batch, this.cursor);
-      await this.persistence.appendBatch(
-        this.header,
-        this.state.inheritedEventCount,
-        batch,
-        this.tornTruncateTo,
-      );
-      this.tornTruncateTo = undefined;
-
-      this.cursor += batch.length;
-      this.materialized = true;
-      this.persistence.tracker.updatePending(this.id, this.cursor, true);
-    });
-  }
-
-  async flush(options?: SessionHandleFlushOptions): Promise<void> {
-    return this.run("flush", async () => {
-      options?.signal?.throwIfAborted();
-      if (this.access !== "write") throw new SessionReadOnlyError(this.id, "flush");
-      if (this.materialized) return;
-      await this.persistence.materializeEmpty(this.header, this.state.inheritedEventCount);
-      this.materialized = true;
-    });
-  }
-
-  close(): Promise<void> {
-    return (this.closing ??= (async () => {
-      let drainFailure: unknown;
-      for (;;) {
-        try {
-          await this.drainLive();
-        } catch (error: unknown) {
-          drainFailure = error;
-          break;
-        }
-        await this.chain;
-        if (this.buffered.length === 0) break;
-      }
-      await this.chain;
-      const failures: Error[] = [];
-      if (drainFailure !== undefined) {
-        failures.push(
-          drainFailure instanceof Error ? drainFailure : new Error(JSON.stringify(drainFailure)),
-        );
-      }
-      this.persistence.tracker.release(this, this.materialized || this.everAppended);
-      if (failures.length > 1)
-        throw new AggregateError(failures, `session "${this.id}": close failed to drain`);
-      if (failures[0] !== undefined) throw failures[0];
-    })());
-  }
-
-  [Symbol.asyncDispose](): Promise<void> {
-    return this.close();
-  }
-
-  enqueueLive(event: SessionEvent, reportBackgroundFailure: (error: unknown) => void): void {
-    this.buffered.push(structuredClone(event));
-    if (this.batchTimer !== undefined || this.drainPaused) return;
-    this.batchTimer = setTimeout(() => {
-      this.batchTimer = undefined;
-      this.drainLive().catch(reportBackgroundFailure);
-    }, RdbSessionHandle.LIVE_WRITE_BATCH_MAX_DELAY_MS);
-  }
-
-  resetAfterRewind(cursor: number, inheritedEventCount?: number): void {
-    this.cursor = cursor;
-    if (inheritedEventCount !== undefined) {
-      (this.state as { inheritedEventCount: SessionLogOffset }).inheritedEventCount =
-        SessionLogOffset(inheritedEventCount);
-    }
-  }
-
-  drainLive(): Promise<void> {
-    return (this.draining ??= this.drainBuffered().finally(() => {
-      this.draining = undefined;
-    }));
-  }
-
-  private async drainBuffered(): Promise<void> {
-    if (this.batchTimer !== undefined) {
-      clearTimeout(this.batchTimer);
-      this.batchTimer = undefined;
-    }
-    this.drainPaused = false;
-    while (this.buffered.length > 0) {
-      await this.enqueueChain(async () => {
-        const batch = this.buffered.splice(0);
-        try {
-          const fresh = batch.filter((event) => event.seq >= this.cursor);
-          if (fresh.length === 0) return;
-          for (const [index, event] of fresh.entries()) {
-            if (event.seq !== this.cursor + index) {
-              throw new Error(
-                `append seq mismatch for "${this.id}": expected ${this.cursor + index} at index ${index}, got ${event.seq}`,
-              );
-            }
-          }
-          await this.persistence.appendBatch(
-            this.header,
-            this.state.inheritedEventCount,
-            fresh,
-            this.tornTruncateTo,
-          );
-          this.tornTruncateTo = undefined;
-          this.cursor += fresh.length;
-          this.materialized = true;
-        } catch (error: unknown) {
-          this.buffered = batch.concat(this.buffered);
-          this.drainPaused = true;
-          throw error;
-        }
-      });
-    }
-  }
-
-  private enqueueChain(op: () => Promise<void>): Promise<void> {
-    const next = this.chain.then(op);
-    this.chain = next.catch(() => {});
-    return next;
-  }
-
-  private async run(operation: string, op: () => Promise<void>): Promise<void> {
-    this.assertOpen(operation);
-    return this.enqueueChain(async () => {
-      this.assertOpen(operation);
-      return op();
-    });
-  }
-
-  private assertOpen(operation: string): void {
-    if (this.closing !== undefined) throw new SessionHandleClosedError(this.id, operation);
-  }
-
-  static readonly LIVE_WRITE_BATCH_MAX_DELAY_MS = 200;
-}
+export { SessionDeletionError, type SessionDeletionErrorCode } from "./deletion-error.ts";
 
 // 本地化说明：`description()` 的类型签名只声明 `string`，而 meta 本身接受 `Dict<string>`
 // （`vendor/schemastery/src/index.ts` 的 `mergeDesc` 就是按字典合并的），所以这里只做一次类型放行。
@@ -575,15 +192,17 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
   readonly tracker = new RdbBackendTracker(this.name);
 
-  private backend!: Backend;
+  /** 打开后的后端；未打开时访问会 fail loud（装配内部、分支端口与测试共用）。 */
+  backend!: Backend;
   private storeIdentity!: string;
-  private readonly ready: Promise<void>;
-  private readonly writeGuard = new WriteGuard();
+  /** 后端打开完成（分支端口与 live 路由都先等它）。 */
+  readonly ready: Promise<void>;
+  /** 写者位点守卫（分支的 rewind 与写路径共用）。 */
+  readonly writeGuard = new WriteGuard();
+  private readonly live: LiveRouting;
 
   private readonly reuseEventIds = new Map<SessionId, Map<number, string>>();
 
-  private readonly liveBuffers = new Map<SessionId, SessionEvent[]>();
-  private readonly liveReady = new Map<SessionId, Promise<void>>();
 
   // 本次装配用的配置快照（整段 Config 是 volatile，重挂会给新的）。
   readonly config: Config;
@@ -591,8 +210,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
   constructor(
     ctx: Context,
     config: ResolvedConfig,
-
-    injectedBackend?: Backend,
   ) {
     super(ctx);
 
@@ -600,8 +217,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
     // 生效靠 **Loader 重挂这一行**（settings 写完经 `reconcileProfilePatches` 重装受影响的 entry）——重挂构造
     // 新实例、拿到新快照，所以这里取一次就够，运行期不必反复读引用。
     this.config = config.get();
-    this.ready = this.init(injectedBackend);
-    this.installLiveRouting(ctx);
+    this.ready = this.init();
+    this.live = new LiveRouting(ctx, this);
+    this.live.install();
 
     new SessionBranchRdb(this.ctx);
 
@@ -637,8 +255,8 @@ export class SessionPersistenceRdb extends SessionPersistence {
     return this.backend;
   }
 
-  private async init(injectedBackend?: Backend): Promise<void> {
-    this.backend = injectedBackend ?? (await openRdbBackend(backendConfigOf(this.config)));
+  private async init(): Promise<void> {
+    this.backend = await openRdbBackend(backendConfigOf(this.config));
     await this.backend.open();
     this.storeIdentity = this.backend.storeIdentity;
   }
@@ -660,7 +278,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     options?.signal?.throwIfAborted();
     if (
       this.tracker.hasPending(snapshot.id) ||
-      (await this.backend.getSession(snapshot.id)) !== undefined
+      (await this.backend.reads.getSession(snapshot.id)) !== undefined
     ) {
       throw new SessionAlreadyExistsError(snapshot.id);
     }
@@ -757,7 +375,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     if (pending !== undefined) {
       return { header: pending.header, revision: pending.revision };
     }
-    const row = await this.backend.getSession(id);
+    const row = await this.backend.reads.getSession(id);
     if (row === undefined) return undefined;
     return {
       header: rowToMeta(row),
@@ -778,7 +396,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     signal?.throwIfAborted();
     await this.ready;
     signal?.throwIfAborted();
-    const rows = await this.backend.listSessions();
+    const rows = await this.backend.reads.listSessions();
     signal?.throwIfAborted();
     for (const row of rows) {
       if (listed.has(row.fSessionId as SessionId)) continue;
@@ -791,7 +409,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     signal?.throwIfAborted();
     await this.ready;
     signal?.throwIfAborted();
-    const row = await this.backend.getSession(id);
+    const row = await this.backend.reads.getSession(id);
     if (row === undefined) {
       throw new SessionDeletionError(`session "${id}" not found`, "SESSION_NOT_FOUND");
     }
@@ -809,10 +427,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     }
     await this.unarchiveBeforeDeletion(id);
     const referenced = await this.backend.transaction((tx) => tx.deleteSession(id));
-    this.liveBuffers.delete(id);
-    this.liveReady.delete(id);
-    this.liveFailures.delete(id);
-    this.liveDropWarned.delete(id);
+    this.live.forget(id);
     this.reuseEventIds.delete(id);
     await this.dropSessionStats(id);
     await this.refreshEventUsageFlags(referenced);
@@ -836,10 +451,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       tx.deleteSessions(deletable),
     );
     for (const id of deletable) {
-      this.liveBuffers.delete(id);
-      this.liveReady.delete(id);
-      this.liveFailures.delete(id);
-      this.liveDropWarned.delete(id);
+      this.live.forget(id);
       this.reuseEventIds.delete(id);
       await this.dropSessionStats(id);
     }
@@ -1004,13 +616,13 @@ export class SessionPersistenceRdb extends SessionPersistence {
     signal?.throwIfAborted();
     await this.ready;
     signal?.throwIfAborted();
-    const row = await this.backend.getSession(id);
+    const row = await this.backend.reads.getSession(id);
     if (row === undefined) return undefined;
     const meta = rowToMeta(row);
     const eventRows =
       options.fromSeq === undefined
-        ? await this.backend.getEventRows(id)
-        : await this.backend.getEventRows(id, options.fromSeq);
+        ? await this.backend.reads.getEventRows(id)
+        : await this.backend.reads.getEventRows(id, options.fromSeq);
     signal?.throwIfAborted();
 
     if (isLegacyVersion(row.fVersion)) {
@@ -1181,7 +793,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
       });
       listed.add(id);
     }
-    const rows = await this.backend.listSessions();
+    const rows = await this.backend.reads.listSessions();
     signal?.throwIfAborted();
     for (const row of rows) {
       if (listed.has(row.fSessionId as SessionId)) continue;
@@ -1201,7 +813,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     signal?.throwIfAborted();
     await this.ready;
     signal?.throwIfAborted();
-    const row = await this.backend.getSession(id);
+    const row = await this.backend.reads.getSession(id);
     if (row === undefined) return undefined;
     return this.rowRevision(row);
   }
@@ -1295,33 +907,24 @@ export class SessionPersistenceRdb extends SessionPersistence {
     this.reuseEventIds.delete(childId);
   }
 
-  internals(): SessionPersistenceRdbInternals {
-    // 打开前拿到会 fail loud（不是静默 undefined）；分支路径先 `await ready`。
-    const openedBackend = (): Backend => {
-      if (this.backend === undefined) throw new Error("session-rdb backend is not opened yet");
-      return this.backend;
-    };
+  /** 分支能力的端口（见 `branch/port.ts`）：每个动词都有真实调用方，不是服务方法表的转抄。 */
+  branchPort(): BranchPort {
     return {
-      get backend(): Backend {
-        return openedBackend();
-      },
       ready: this.ready,
-      writeGuard: this.writeGuard,
-      create: (meta, inheritedEventCount) =>
-        this.create(
-          meta,
-          inheritedEventCount === undefined
-            ? undefined
-            : { inheritedEventCount: SessionLogOffset(inheritedEventCount) },
-        ),
-      append: (id, events) => this.append(id, events),
-      load: (id) => this.load(id),
-      inspect: (id, signal) => this.load(id, signal),
-      readFrom: (id, fromSeq, signal) => this.readFrom(id, fromSeq, signal),
-      listSnapshots: (signal) => this.listSnapshots(signal),
-      readStoredRevision: (id, signal) => this.readStoredRevision(id, signal),
+      readLog: (id, options, signal) => this.readLog(id, options ?? {}, signal),
+      create: (meta, options) => this.create(meta, options),
+      eventRows: (id, fromSequence) => this.backend.reads.getEventRows(id, fromSequence),
+      eventTypesBefore: (id, before, limit) => this.backend.reads.getEventTypesBefore(id, before, limit),
+      sessionRow: (id) => this.backend.reads.getSession(id),
+      eventTypeAt: (id, sequence) => this.backend.reads.getEventTypeAt(id, sequence),
+      transaction: (fn) => this.backend.transaction(fn),
+      confirmHead: (id, sequence) => this.writeGuard.confirmHead(id, sequence),
+      readStoredRevision: (id) => this.readStoredRevision(id),
       registerReuseEventIds: (childId, map) => this.registerReuseEventIds(childId, map),
       dropReuseEventIds: (childId) => this.dropReuseEventIds(childId),
+      resetWriterAfterRewind: (id, cursor, inheritedEventCount) => {
+        this.tracker.writerOf(id)?.resetAfterRewind(cursor, inheritedEventCount);
+      },
     };
   }
 
@@ -1330,212 +933,6 @@ export class SessionPersistenceRdb extends SessionPersistence {
       `${this.storeIdentity}:incarnation:${row.fIncarnation}:revision:${row.fRevision}`,
     );
   }
-
-  private readonly liveFailures = new Map<SessionId, Error>();
-  private readonly liveDropWarned = new Set<SessionId>();
-
-  // live 会话的持久化初始化失败是**终态**（cwd / 继承前缀冲突、id 碰撞、后端打不开都不自愈）：
-  // 记账一条 error、丢掉已缓冲的事件，之后该会话的事件不再进内存缓冲（否则表现为
-  // 「聊了一整轮、重启后全丢，内存里还留一份无界副本」），flush 把失败抛回上游。
-  private watchLiveReady(ctx: Context, session: Session, ready: Promise<void>): void {
-    void ready.catch((error: unknown) => {
-      const failure =
-        error instanceof Error
-          ? error
-          : new Error(
-              typeof error === "string" ? error : `live session "${session.id}" persistence failed`,
-            );
-      this.liveFailures.set(session.id, failure);
-      this.liveBuffers.delete(session.id);
-      ctx.logger.error(
-        `session-rdb: live session "${session.id}" persistence unavailable (${failure.message}); its events will not be persisted`,
-      );
-    });
-  }
-
-  private installLiveRouting(ctx: Context): void {
-    ctx.on("session/created", (session: Session) => {
-      this.liveBuffers.set(session.id, []);
-      const ready = this.ensureLiveHandle(session);
-      this.liveReady.set(session.id, ready);
-      this.watchLiveReady(ctx, session, ready);
-    });
-
-    for (const session of ctx.sessions.list()) {
-      this.liveBuffers.set(session.id, []);
-      const ready = this.ensureLiveHandle(session);
-      this.liveReady.set(session.id, ready);
-      this.watchLiveReady(ctx, session, ready);
-    }
-    ctx.on("session/event", (session: Session, event: SessionEvent) => {
-      const handle = this.tracker.writerOf(session.id);
-      if (handle !== undefined) {
-        handle.enqueueLive(event, (error) => {
-          ctx.logger.warn(
-            `session-rdb: background write for session "${session.id}" failed (buffered events retained): ${String(error)}`,
-          );
-        });
-        return;
-      }
-      if (this.liveFailures.has(session.id)) {
-        if (!this.liveDropWarned.has(session.id)) {
-          this.liveDropWarned.add(session.id);
-          ctx.logger.warn(
-            `session-rdb: dropping events for live session "${session.id}" because persistence failed earlier`,
-          );
-        }
-        return;
-      }
-      this.liveBuffers.get(session.id)?.push(structuredClone(event));
-    });
-    ctx.on("session/flush", (session: Session) => {
-      const failure = this.liveFailures.get(session.id);
-      if (failure !== undefined) return Promise.reject(failure);
-      const handle = this.tracker.writerOf(session.id);
-      if (handle === undefined) {
-        const ready = this.liveReady.get(session.id);
-        if (ready === undefined) return undefined;
-        return ready.then(() => {
-          const settled = this.tracker.writerOf(session.id);
-          if (settled === undefined) return undefined;
-          return settled.drainLive().then(() => settled.flush());
-        });
-      }
-      return handle.drainLive().then(() => handle.flush());
-    });
-    ctx.on("session/disposed", (session: Session) => {
-      const ready = this.liveReady.get(session.id);
-      this.liveBuffers.delete(session.id);
-      this.liveReady.delete(session.id);
-      this.liveFailures.delete(session.id);
-      this.liveDropWarned.delete(session.id);
-      const closeHandle = (): void => {
-        const handle = this.tracker.writerOf(session.id);
-        if (handle === undefined) return;
-        handle.close().catch((error: unknown) => {
-          ctx.logger.warn(
-            `session-rdb: final drain for session "${session.id}" failed: ${String(error)}`,
-          );
-        });
-      };
-      if (ready === undefined) {
-        closeHandle();
-        return;
-      }
-
-      void ready.then(closeHandle, closeHandle);
-    });
-    ctx.effect(
-      () => async () => {
-        await Promise.allSettled(this.liveReady.values());
-        this.liveBuffers.clear();
-        this.liveReady.clear();
-        this.liveFailures.clear();
-        this.liveDropWarned.clear();
-        await this.tracker.closeAll();
-
-        await this.close();
-      },
-      `${this.name} open handles`,
-    );
-  }
-
-  private async ensureLiveHandle(session: Session): Promise<void> {
-    const id = session.header.id;
-    if (this.tracker.writerOf(id) !== undefined) return;
-    await this.ready;
-    const stored = await this.readLog(id, {});
-    let handle: RdbSessionHandle;
-    if (stored === undefined) {
-      handle = (await this.create(session.header, {
-        inheritedEventCount: session.inheritedEventCount,
-      })) as RdbSessionHandle;
-      const seed = liveEventsOf(session);
-      if (seed.length > 0) await handle.append(seed);
-    } else {
-      if (stored.meta.cwd !== session.header.cwd) {
-        throw new Error(
-          `session "${id}" is already persisted at a different cwd (persisted: ${String(stored.meta.cwd)}, live: ${String(session.header.cwd)}) (id collision)`,
-        );
-      }
-      if (stored.inheritedEventCount !== session.inheritedEventCount) {
-        throw new Error(
-          `session "${id}" is already persisted with a different inherited event count (id collision)`,
-        );
-      }
-      assertVersion(stored.meta);
-
-      repairReadView(stored.events);
-      const seed = liveEventsOf(session);
-      if (!seedCoversPrefix(seed, stored.events)) {
-        throw new Error(
-          `session "${id}" already has a persisted log on disk that does not match this live session (id collision)`,
-        );
-      }
-      handle = (await this.open(id, "write")) as RdbSessionHandle;
-
-      const suffix = seed.slice(stored.events.length);
-      if (suffix.length > 0) await handle.append(suffix);
-    }
-
-    const buffered = this.liveBuffers.get(id);
-    if (buffered !== undefined && buffered.length > 0) {
-      this.liveBuffers.set(id, []);
-      for (const event of buffered) {
-        handle.enqueueLive(event, () => {});
-      }
-    }
-  }
-}
-
-function seedCoversPrefix(seed: readonly SessionEvent[], prefix: readonly SessionEvent[]): boolean {
-  return (
-    prefix.length <= seed.length &&
-    prefix.every((event, index) => {
-      const seedEvent = seed[index];
-      return seedEvent !== undefined && JSON.stringify(seedEvent) === JSON.stringify(event);
-    })
-  );
-}
-
-// 一批事件折成活动计数的桶：只数四种类型，按本地日聚合成四项。
-function sessionCountBuckets(events: readonly SessionEvent[]): SessionCountBucket[] {
-  const counted = new Map<string, SessionCountBucket>();
-  for (const event of events) {
-    if (!(COUNTED_EVENT_TYPES as readonly string[]).includes(event.type)) continue;
-    const day = localDayKey(event.time);
-    const bucket = counted.get(day) ?? { day, turns: 0, steps: 0, userInputs: 0, toolCalls: 0 };
-    addActivityCount(bucket, event.type, 1);
-    counted.set(day, bucket);
-  }
-  return [...counted.values()];
-}
-
-// 一批用量行折成 token 桶：按「本地日 × 模型」聚合（模型未知落空串，与表口径一致）。
-function sessionUsageBuckets(usageRows: readonly EventUsageRow[]): SessionUsageBucket[] {
-  const counted = new Map<string, SessionUsageBucket>();
-  for (const row of usageRows) {
-    const provider = row.fProvider ?? "";
-    const model = row.fModel ?? "";
-    const key = `${row.fDay}#${provider}#${model}`;
-    const bucket = counted.get(key) ?? {
-      day: row.fDay,
-      provider,
-      model,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      reasoningTokens: 0,
-      totalTokens: 0,
-    };
-    bucket.inputTokens += row.fInputTokens;
-    bucket.outputTokens += row.fOutputTokens;
-    bucket.cacheReadTokens += row.fCacheReadTokens;
-    bucket.reasoningTokens += row.fReasoningTokens;
-    bucket.totalTokens += row.fTotalTokens;
-    counted.set(key, bucket);
-  }
-  return [...counted.values()];
 }
 
 function describeError(error: unknown): string {

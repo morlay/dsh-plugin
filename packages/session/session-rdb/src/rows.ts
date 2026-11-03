@@ -1,6 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { Backend } from "./backend.ts";
 import { SESSION_ROWS_PATH } from "./routes.ts";
+import { mountJsonRoute } from "./http/route.ts";
 
 // 管理面的会话列表路由：完整语料（含归档）+ 标题 + 最后活动时间，与官方 `session/list` 分开
 // （见 ADR-会话列表两条路）。
@@ -42,82 +43,28 @@ const MAX_PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 20;
 
 export function registerSessionRows(ctx: Context, getBackend: () => Promise<Backend>): void {
-  ctx.inject(["webServer", "connection"] as const, (webCtx) => {
-    const webServer = webCtx.webServer as unknown as {
-      register(route: {
-        kind: "exact";
-        path: string;
-        handler: (
-          req: import("node:http").IncomingMessage,
-          res: import("node:http").ServerResponse,
-        ) => void | Promise<void>;
-      }): () => void;
-    };
-    const connection = webCtx.get("connection") as unknown as {
-      requestRejection(request: {
-        headers: import("node:http").IncomingHttpHeaders;
-      }): number | undefined;
-    };
-    return webCtx.effect(
-      () =>
-        webServer.register({
-          kind: "exact",
-          path: SESSION_ROWS_PATH,
-          handler: async (req, res) => {
-            const rejection = connection.requestRejection(req);
-            if (rejection !== undefined) {
-              res.writeHead(rejection);
-              res.end(rejection === 401 ? "unauthorized" : "forbidden");
-              return;
-            }
-            if (req.method !== "POST") {
-              res.writeHead(405, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "method not allowed" }));
-              return;
-            }
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) chunks.push(chunk as Buffer);
-            const raw = Buffer.concat(chunks).toString("utf8");
-            let envelope: SessionRowsRequest = {};
-            if (raw !== "") {
-              try {
-                envelope = JSON.parse(raw) as SessionRowsRequest;
-              } catch {
-                res.writeHead(400, { "content-type": "application/json" });
-                res.end(JSON.stringify({ error: "request body is not JSON" }));
-                return;
-              }
-            }
-            const page =
-              Number.isSafeInteger(envelope.page) && (envelope.page ?? 0) > 0 ? envelope.page! : 1;
-            const requested = envelope.pageSize;
-            const pageSize =
-              Number.isSafeInteger(requested) && (requested ?? 0) > 0
-                ? Math.min(requested!, MAX_PAGE_SIZE)
-                : DEFAULT_PAGE_SIZE;
-            try {
-              const backend = await getBackend();
-              const { items, total } = await backend.listSessionRows({
-                ...(envelope.query === undefined ? {} : { query: envelope.query }),
-                ...(envelope.includeSubagents === undefined
-                  ? {}
-                  : { includeSubagents: envelope.includeSubagents }),
-                limit: pageSize,
-                offset: (page - 1) * pageSize,
-              });
-              res.writeHead(200, { "content-type": "application/json" });
-              res.end(JSON.stringify({ items, total, page, pageSize } satisfies SessionRowsValue));
-            } catch (error: unknown) {
-              res.writeHead(500, { "content-type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  error: error instanceof Error ? error.message : "session rows failed",
-                }),
-              );
-            }
-          },
-        }),
-      "session-rdb: session rows route",
-    );
+  mountJsonRoute(ctx, {
+    path: SESSION_ROWS_PATH,
+    handle: async (body) => {
+      const envelope = body as SessionRowsRequest;
+      const page =
+        Number.isSafeInteger(envelope.page) && (envelope.page ?? 0) > 0 ? envelope.page! : 1;
+      const requested = envelope.pageSize;
+      const pageSize =
+        Number.isSafeInteger(requested) && (requested ?? 0) > 0
+          ? Math.min(requested!, MAX_PAGE_SIZE)
+          : DEFAULT_PAGE_SIZE;
+      const backend = await getBackend();
+      const { items, total } = await backend.listSessionRows({
+        ...(envelope.query === undefined ? {} : { query: envelope.query }),
+        ...(envelope.includeSubagents === undefined
+          ? {}
+          : { includeSubagents: envelope.includeSubagents }),
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      return { body: { items, total, page, pageSize } satisfies SessionRowsValue };
+    },
+    statusOfError: () => undefined,
   });
 }

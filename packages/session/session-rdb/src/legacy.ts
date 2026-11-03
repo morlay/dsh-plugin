@@ -6,7 +6,9 @@ import {
 } from "@deepseek-ai/dsh-session";
 import { createSessionFormatCatalogWithChildren } from "@deepseek-ai/dsh-session-format-catalog";
 import type { EventRow, SessionRow } from "./backend.ts";
-import { normalizeToCurrentShape, repairRequestHeaders, rowToMeta, scanRows } from "./log.ts";
+import { normalizeToCurrentShape, repairRequestHeaders } from "./log/repair.ts";
+import { rowToMeta } from "./log/rows.ts";
+import { scanRows } from "./log/export.ts";
 
 function physicalHeader(row: SessionRow): Record<string, unknown> {
   const common = {

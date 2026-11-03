@@ -1,6 +1,6 @@
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistence";
-import type { EventUsageRow } from "./log.ts";
+import type { EventUsageRow } from "./log/usage-row.ts";
 import type { StorageRepository } from "./storage-takeover/types.ts";
 import type { UsageActivityTotals, UsageAggregate, UsageTokenTotals } from "./usage.ts";
 
@@ -160,6 +160,23 @@ export interface SessionUsageBucket extends UsageTokenTotals {
   model: string | null;
 }
 
+/** 会话读的共享实现：写路径之外的所有查询都在这里（两方言共用一套投影查询）。 */
+export interface ReadModel {
+  getSession(id: string): Promise<SessionRow | undefined>;
+  getEventRows(id: string, fromSequence?: number): Promise<EventRow[]>;
+  getEventTypeAt(id: string, sequence: number): Promise<string | undefined>;
+  getEventTypesBefore(
+    id: string,
+    beforeSequence: number,
+    limit: number,
+  ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>>;
+  listSessions(): Promise<SessionRow[]>;
+  /** 最新一条 `session/title` 事件（`refreshTitle` 用）。 */
+  latestTitleEvent(id: string): Promise<{ fSequence: number; fData: string } | undefined>;
+  /** 父会话已不在表里的 subagent 会话。 */
+  listOrphanSubagentSessions(): Promise<string[]>;
+}
+
 export interface Backend {
   readonly kind: "sqlite" | "postgres";
 
@@ -167,21 +184,10 @@ export interface Backend {
 
   readonly storage: StorageRepository;
 
+  /** 读面：会话行与事件行的查询（不再是 Backend 自己的 6 个转发方法）。 */
+  readonly reads: ReadModel;
+
   open(): Promise<void>;
-
-  getSession(id: SessionId): Promise<SessionRow | undefined>;
-
-  getEventRows(id: SessionId, fromSequence?: number): Promise<EventRow[]>;
-
-  getEventTypeAt(id: SessionId, sequence: number): Promise<string | undefined>;
-
-  getEventTypesBefore(
-    id: SessionId,
-    beforeSequence: number,
-    limit: number,
-  ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>>;
-
-  listSessions(): Promise<SessionRow[]>;
 
   transaction<T>(fn: (tx: BackendTx) => Promise<T>): Promise<T>;
 

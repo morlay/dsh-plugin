@@ -7,8 +7,8 @@ import {
   type TableShape,
 } from "./dialect.ts";
 import type { Catalog, ColumnDef } from "./defs.ts";
-import type { Database } from "./database.ts";
-import { shapeReader } from "./database.ts";
+import type { Database } from "./database/types.ts";
+import { shapeReader } from "./database/wrap.ts";
 import { fragment } from "./fragment.ts";
 
 /** 一条结构变更（按顺序执行）。 */

@@ -43,7 +43,7 @@ async function createPersisted(
 }
 
 async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Promise<void> {
-  await persistence.internals().backend.storage.writeDomainGlobal("workspace", {
+  await persistence.backend.storage.writeDomainGlobal("workspace", {
     initialized: true,
     workspaceIds: [],
     pinnedSessionIds: [],
@@ -52,7 +52,7 @@ async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Pr
 }
 
 async function eventCountOf(persistence: SessionPersistenceRdb, id: string): Promise<number> {
-  return (await persistence.internals().backend.getEventRows(SessionId(id))).length;
+  return (await persistence.backend.reads.getEventRows(SessionId(id))).length;
 }
 
 describe("deleteSession", () => {
@@ -69,10 +69,10 @@ describe("deleteSession", () => {
     expect(listed).not.toContain(SessionId("drop-me"));
     expect(await eventCountOf(persistence, "keep-me")).toBeGreaterThan(0);
 
-    const remaining = await persistence.internals().backend.getEventRows(SessionId("drop-me"));
+    const remaining = await persistence.backend.reads.getEventRows(SessionId("drop-me"));
     expect(remaining).toEqual([]);
 
-    const kept = await persistence.internals().backend.getEventRows(SessionId("keep-me"));
+    const kept = await persistence.backend.reads.getEventRows(SessionId("keep-me"));
     for (const row of kept) expect(row.fEventId).not.toBe("");
   });
 
@@ -85,7 +85,7 @@ describe("deleteSession", () => {
     await persistence.deleteSession(SessionId("drop-me"));
 
     // 该会话独占的事件行成为孤儿、仍留在 t_events（删除不再做全库清理）：孤儿回收 + VACUUM 归 GC 通道。
-    const backend = persistence.internals().backend;
+    const backend = persistence.backend;
     expect(await backend.collectOrphans()).toBeGreaterThan(0);
     expect(await backend.collectOrphans()).toBe(0);
   });
@@ -155,7 +155,7 @@ describe("deleteSession", () => {
   it("keeps events still referenced by a fork child", async () => {
     const { ctx, persistence } = await harness();
     await createPersisted(ctx, "parent");
-    const provider = new SessionBranchRdbProvider(persistence, {
+    const provider = new SessionBranchRdbProvider(persistence.branchPort(), {
       getSession: (id) => ctx.sessions.get(id),
       getAgent: () => undefined,
       flush: (session) => ctx.sessions.flush(session),

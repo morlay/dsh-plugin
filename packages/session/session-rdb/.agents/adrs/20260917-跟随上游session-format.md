@@ -16,23 +16,23 @@
   `session/end-seed` 推导）——`physicalHeader` 按 `f_version` 选择（`src/legacy.ts:11`）。
 - **`tool/result` 按当前形状读写**：tool 角色、`toolCallId` 在消息顶层、`content` 就是结果块（维度提取
   `f_role` = tool、`f_action_id` = `data.message.toolCallId`；「只改结果」的重写判定也读新形状，
-  `src/event-shape.ts:107`、`src/log.ts:214`）。
+  `src/event-shape.ts:107`、`src/log/repair.ts`）。
 - **message source 的 kind 由生产者自报**：泛型 `{ kind: 'plugin', plugin }` 没有了；compaction 的检查点消息
   自报 `compact-checkpoint`（带 `compactionId`）。
 - **钉住集合落会话行的 `f_pinned_seq`**（最近钉住在前、与归档互斥），读回即按它排序；旧 `storages` 文档没有
   这个集合，导入按空处理。
 - **桥接行 surfaceOp 读取归一**：v2 时代的 `{op:'replace', start, end}` 在 `rowToEvent` 归一为
-  `{op:'replace', startSeq, endSeq}`（`src/log.ts:9`）——上游对旧字段名 fail loud，归一不改数值坐标。
+  `{op:'replace', startSeq, endSeq}`（`src/log/rows.ts`）——上游对旧字段名 fail loud，归一不改数值坐标。
 - **`system/message` 纳入本地 surface 集合**：`SURFACE_EVENT_TYPES` 与上游 `SurfaceEventType` 同步
-  （`src/log.ts:127`），否则 system head 的 surfaceOp 会被当「非 surface 事件携带 surfaceOp」清掉。
+  （`src/log/repair.ts`），否则 system head 的 surfaceOp 会被当「非 surface 事件携带 surfaceOp」清掉。
 - **`assistant/message` 的 replace 降级 append**：上游禁止它携带 `sourceEventSeqs`（来源内嵌在 stream），
-  其 replace 的 provenance 永远无法满足 fold 校验，降级 append 是唯一可加载形态（`src/log.ts:234`）。
+  其 replace 的 provenance 永远无法满足 fold 校验，降级 append 是唯一可加载形态（`src/log/repair.ts`）。
 - **回退视图扛住我们写过、后来被上游退役的形状**（`adoptLegacyRows` → `normalizeToCurrentShape`，
-  `src/log.ts:478`）：pre-step 的 `request/header`（剥掉 `header.system` / 空 `tools` / 空 `adapterDefaults`）、
+  `src/log/repair.ts`）：pre-step 的 `request/header`（剥掉 `header.system` / 空 `tools` / 空 `adapterDefaults`）、
   旧形状的 `tool/result`（user 角色 + 结果块包在 `content[0]`）抬成当前形状、`system/message` 的 source 归一为
   `system-prompt`、PTC 词汇（`tool/code-dispatch-*` → `tool/ptc-dispatch-*`、`tools-code-mode` → `tools-ptc`、
-  preset 值 `code` → `ptc`，`src/log.ts:423`）；白名单里的事件类型标 `ignorable: true`
-  （`OWN_EVENT_TYPES`，`src/log.ts:552`）——**其它未知类型保持 fail loud**（那是「数据来自更新版本的
+  preset 值 `code` → `ptc`，`src/log/repair.ts`）；白名单里的事件类型标 `ignorable: true`
+  （`OWN_EVENT_TYPES`，`src/log/repair.ts`）——**其它未知类型保持 fail loud**（那是「数据来自更新版本的
   harness」的信号，不能用 ignorable 吞掉）。
 - **版本号不可信时按内容再判一次**：库里存在「当前版本号 + 旧代形状」的行（写路径曾把回退视图的结果以当前
   版本号落库），所以当前格式分支里 `scanRows` 之后按内容再判（`needsShapeAdoption`，`src/index.ts:1050`），

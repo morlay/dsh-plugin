@@ -8,7 +8,7 @@ export { appendLog, meta, oneTurnLog, runPersistenceContract } from "./testing/c
 export type { CoordinatorFixture } from "./testing/coordinator-contract.ts";
 export { runCoordinatorContract } from "./testing/coordinator-contract.ts";
 
-export { truncateLiveSession } from "./branch.ts";
+export { truncateLiveSession } from "./branch/index.ts";
 
 /**
  * 测试辅助：先把库初始化（建表 / 迁移 / 身份），再给一个同步句柄——造损坏数据、读 `PRAGMA` 用。

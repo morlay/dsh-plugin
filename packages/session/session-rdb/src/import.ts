@@ -6,10 +6,11 @@ import { parseSessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
 import type { SessionStorageMetadata } from "@deepseek-ai/dsh-session-persistence";
 import { balanceRewindPrefix } from "@morlay/session-branch";
 import { unzip } from "fflate";
-import { replaceLiveSessionLog } from "./branch.ts";
+import { replaceLiveSessionLog } from "./branch/index.ts";
 import { restoreCatalog } from "./legacy.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 import { SESSION_IMPORT_PATH } from "./routes.ts";
+import { HttpError, mountJsonRoute } from "./http/route.ts";
 
 export const SESSION_LOG_ARTIFACT_FILENAME = "session.jsonl";
 
@@ -210,128 +211,65 @@ export async function persistImport(
 }
 
 export function registerSessionImport(ctx: Context, persistence: SessionPersistenceRdb): void {
-  ctx.inject(["webServer", "connection"] as const, (webCtx) => {
-    const webServer = webCtx.webServer as unknown as {
-      register(route: {
-        kind: "exact";
-        path: string;
-        handler: (
-          req: import("node:http").IncomingMessage,
-          res: import("node:http").ServerResponse,
-        ) => void | Promise<void>;
-      }): () => void;
-    };
-    const connection = webCtx.get("connection") as unknown as {
-      requestRejection(request: {
-        headers: import("node:http").IncomingHttpHeaders;
-      }): number | undefined;
-    };
-    return webCtx.effect(
-      () =>
-        webServer.register({
-          kind: "exact",
-          path: SESSION_IMPORT_PATH,
-          handler: async (req, res) => {
-            const rejection = connection.requestRejection(req);
-            if (rejection !== undefined) {
-              res.writeHead(rejection);
-              res.end(rejection === 401 ? "unauthorized" : "forbidden");
-              return;
-            }
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) chunks.push(chunk as Buffer);
-            const body = Buffer.concat(chunks);
-            let envelope: { zip?: unknown; sessionId?: unknown };
-            try {
-              envelope = JSON.parse(body.toString("utf8")) as {
-                zip?: unknown;
-                sessionId?: unknown;
-              };
-            } catch {
-              res.writeHead(400, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "request body is not JSON" }));
-              return;
-            }
-            if (typeof envelope.zip !== "string" || envelope.zip === "") {
-              res.writeHead(400, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "missing zip field" }));
-              return;
-            }
-            if (
-              envelope.sessionId !== undefined &&
-              (typeof envelope.sessionId !== "string" || envelope.sessionId === "")
-            ) {
-              res.writeHead(400, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "sessionId must be a non-empty string" }));
-              return;
-            }
-            let zip: Uint8Array;
-            try {
-              zip = Buffer.from(envelope.zip, "base64");
-            } catch {
-              res.writeHead(400, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "zip field is not valid base64" }));
-              return;
-            }
-            if (zip.byteLength > MAX_IMPORT_ZIP_BYTES) {
-              res.writeHead(413, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "imported zip exceeds the size limit" }));
-              return;
-            }
-            let imported: SessionStorageMetadata & { events: SessionEvent[] };
-            try {
-              imported = await parseImportZip(zip);
-            } catch (error: unknown) {
-              res.writeHead(400, { "content-type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  error: error instanceof Error ? error.message : "imported zip is invalid",
-                }),
-              );
-              return;
-            }
-            const targetId =
-              typeof envelope.sessionId === "string"
-                ? (envelope.sessionId as SessionId)
-                : undefined;
-            const branch = webCtx.get("sessionBranch") as unknown as
-              | {
-                  rewind(id: SessionId, toBoundary: number): Promise<unknown>;
-                  resetLiveDerivedState?(session: Session): void;
-                }
-              | undefined;
-            try {
-              const sessions = webCtx.get("sessions") as
-                | { get(id: SessionId): Session | undefined }
-                | undefined;
-              const id = await persistImport(
-                persistence,
-                branch,
-                imported,
-                targetId,
-                sessions,
-                (sessionId) => stopAgentLoop(webCtx, sessionId),
-              );
-              res.writeHead(200, { "content-type": "application/json" });
-              res.end(JSON.stringify({ sessionId: id }));
-            } catch (error: unknown) {
-              const message = error instanceof Error ? error.message : String(error);
-              if (targetId !== undefined && /not found/i.test(message)) {
-                res.writeHead(404, { "content-type": "application/json" });
-                res.end(JSON.stringify({ error: `session "${targetId}" not found` }));
-                return;
-              }
-              res.writeHead(500, { "content-type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  error: error instanceof Error ? error.message : "import failed",
-                }),
-              );
-              return;
-            }
-          },
-        }),
-      `session-rdb: ${SESSION_IMPORT_PATH} route`,
-    );
+  mountJsonRoute(ctx, {
+    path: SESSION_IMPORT_PATH,
+    handle: async (body, webCtx) => {
+      const envelope = body as { zip?: unknown; sessionId?: unknown };
+      if (typeof envelope.zip !== "string" || envelope.zip === "") {
+        throw new HttpError(400, "missing zip field");
+      }
+      if (
+        envelope.sessionId !== undefined &&
+        (typeof envelope.sessionId !== "string" || envelope.sessionId === "")
+      ) {
+        throw new HttpError(400, "sessionId must be a non-empty string");
+      }
+      let zip: Uint8Array;
+      try {
+        zip = Buffer.from(envelope.zip, "base64");
+      } catch {
+        throw new HttpError(400, "zip field is not valid base64");
+      }
+      if (zip.byteLength > MAX_IMPORT_ZIP_BYTES) {
+        throw new HttpError(413, "imported zip exceeds the size limit");
+      }
+      let imported: SessionStorageMetadata & { events: SessionEvent[] };
+      try {
+        imported = await parseImportZip(zip);
+      } catch (error: unknown) {
+        throw new HttpError(
+          400,
+          error instanceof Error ? error.message : "imported zip is invalid",
+        );
+      }
+      const targetId =
+        typeof envelope.sessionId === "string" ? (envelope.sessionId as SessionId) : undefined;
+      const branch = webCtx.get("sessionBranch") as unknown as
+        | {
+            rewind(id: SessionId, toBoundary: number): Promise<unknown>;
+            resetLiveDerivedState?(session: Session): void;
+          }
+        | undefined;
+      const sessions = webCtx.get("sessions") as
+        | { get(id: SessionId): Session | undefined }
+        | undefined;
+      try {
+        const id = await persistImport(
+          persistence,
+          branch,
+          imported,
+          targetId,
+          sessions,
+          (sessionId) => stopAgentLoop(webCtx, sessionId),
+        );
+        return { body: { sessionId: id } };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (targetId !== undefined && /not found/i.test(message)) {
+          throw new HttpError(404, `session "${targetId}" not found`);
+        }
+        throw error;
+      }
+    },
   });
 }

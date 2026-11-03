@@ -11,25 +11,10 @@ import {
   type Condition,
   type ExprOperand,
 } from "@morlay/rdbkit";
-import type { EventRow, SessionRow } from "../backend.ts";
+import type { EventRow, ReadModel, SessionRow } from "../backend.ts";
 import { events, sessionEvents, sessions } from "../entities/index.ts";
 
-/** 会话读的共享实现：SQLite 与 PostgreSQL 用同一套投影查询，不再各写一遍手写 SQL。 */
-export interface ReadModel {
-  getSession(id: string): Promise<SessionRow | undefined>;
-  getEventRows(id: string, fromSequence?: number): Promise<EventRow[]>;
-  getEventTypeAt(id: string, sequence: number): Promise<string | undefined>;
-  getEventTypesBefore(
-    id: string,
-    beforeSequence: number,
-    limit: number,
-  ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>>;
-  listSessions(): Promise<SessionRow[]>;
-  /** 最新一条 `session/title` 事件（`refreshTitle` 用）。 */
-  latestTitleEvent(id: string): Promise<{ fSequence: number; fData: string } | undefined>;
-  /** 父会话已不在表里的 subagent 会话。 */
-  listOrphanSubagentSessions(): Promise<string[]>;
-}
+export type { ReadModel };
 
 export function createReadModel(database: Database): ReadModel {
   const sessionsTable = sessions.table(database);

@@ -1,5 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import { SESSION_USAGE_PATH } from "./routes.ts";
+import { mountJsonRoute } from "./http/route.ts";
 import type { SessionPersistenceRdb } from "./index.ts";
 
 export { SESSION_USAGE_PATH };
@@ -179,69 +180,14 @@ export function addTotals(target: UsageTotals, row: UsageTotals): UsageTotals {
 // 用量统计通道：一次请求回报总览（含 subagent 拆分）、按天 × 模型的桶与按会话的行。
 // 聚合只算被会话引用的事件行——fork 共享行因此只计一次，已删会话留下的孤儿行不计。
 export function registerSessionUsage(ctx: Context, persistence: SessionPersistenceRdb): void {
-  ctx.inject(["webServer", "connection"] as const, (webCtx) => {
-    const webServer = webCtx.webServer as unknown as {
-      register(route: {
-        kind: "exact";
-        path: string;
-        handler: (
-          req: import("node:http").IncomingMessage,
-          res: import("node:http").ServerResponse,
-        ) => void | Promise<void>;
-      }): () => void;
-    };
-    const connection = webCtx.get("connection") as unknown as {
-      requestRejection(request: {
-        headers: import("node:http").IncomingHttpHeaders;
-      }): number | undefined;
-    };
-    return webCtx.effect(
-      () =>
-        webServer.register({
-          kind: "exact",
-          path: SESSION_USAGE_PATH,
-          handler: async (req, res) => {
-            const rejection = connection.requestRejection(req);
-            if (rejection !== undefined) {
-              res.writeHead(rejection);
-              res.end(rejection === 401 ? "unauthorized" : "forbidden");
-              return;
-            }
-            if (req.method !== "POST") {
-              res.writeHead(405, { "content-type": "application/json" });
-              res.end(JSON.stringify({ error: "method not allowed" }));
-              return;
-            }
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) chunks.push(chunk as Buffer);
-            const raw = Buffer.concat(chunks).toString("utf8");
-            let envelope: { range?: unknown } = {};
-            if (raw !== "") {
-              try {
-                envelope = JSON.parse(raw) as { range?: unknown };
-              } catch {
-                res.writeHead(400, { "content-type": "application/json" });
-                res.end(JSON.stringify({ error: "request body is not JSON" }));
-                return;
-              }
-            }
-            try {
-              const report = await persistence.usageReport(
-                resolveUsageSince(parseUsageRange(envelope.range), Date.now()),
-              );
-              res.writeHead(200, { "content-type": "application/json" });
-              res.end(JSON.stringify(report));
-            } catch (error: unknown) {
-              res.writeHead(500, { "content-type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  error: error instanceof Error ? error.message : "usage report failed",
-                }),
-              );
-            }
-          },
-        }),
-      `session-rdb: ${SESSION_USAGE_PATH} route`,
-    );
+  mountJsonRoute(ctx, {
+    path: SESSION_USAGE_PATH,
+    handle: async (body) => {
+      const { range } = body as { range?: unknown };
+      const report = await persistence.usageReport(
+        resolveUsageSince(parseUsageRange(range), Date.now()),
+      );
+      return { body: report };
+    },
   });
 }

@@ -141,10 +141,8 @@ describe("投影检查点增量写回", () => {
     const { ctx, dbPath, dispose } = await harness();
     try {
       const storage = (
-        ctx.sessionPersistence as unknown as {
-          internals(): { backend: { storage: StorageRepository } };
-        }
-      ).internals().backend.storage;
+        ctx.sessionPersistence as unknown as { backend: { storage: StorageRepository } }
+      ).backend.storage;
 
       // 检查点行经外键挂在会话行上，先让会话存在。
       const handle = await ctx.sessionPersistence.create(meta("s1"));
@@ -630,18 +628,16 @@ async function readStored(
   events: readonly SessionEvent[];
 }> {
   const persistence = ctx.sessionPersistence as unknown as {
-    internals(): {
-      readFrom(
-        id: SessionId,
-        fromSeq: number,
-      ): Promise<{
-        meta: SessionHeader;
-        inheritedEventCount: number;
-        events: readonly SessionEvent[];
-      }>;
-    };
+    readFrom(
+      id: SessionId,
+      fromSeq: number,
+    ): Promise<{
+      meta: SessionHeader;
+      inheritedEventCount: number;
+      events: readonly SessionEvent[];
+    }>;
   };
-  const stored = await persistence.internals().readFrom(id, 0);
+  const stored = await persistence.readFrom(id, 0);
   return {
     header: stored.meta,
     inheritedEventCount: stored.inheritedEventCount,

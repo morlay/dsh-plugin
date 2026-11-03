@@ -1,6 +1,6 @@
 import type { Catalog, TableDef } from "./defs.ts";
 import { defineTable } from "./defs.ts";
-import type { Database } from "./database.ts";
+import type { Database } from "./database/types.ts";
 import { ensureSchema } from "./migrate.ts";
 
 /** 内置迁移账本：一条已执行的数据迁移一行（`f_id` 唯一）。 */

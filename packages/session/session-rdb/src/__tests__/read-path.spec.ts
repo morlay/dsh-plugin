@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import SessionPersistenceSqlite from "../index.ts";
 import { meta, oneTurnLog } from "../testing.ts";
 import type { Backend } from "../backend.ts";
-import { repairReadView } from "../log.ts";
+import { repairReadView } from "../artifact.ts";
 
 async function mount(path = ":memory:"): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
@@ -23,15 +23,15 @@ function persistenceOf(ctx: Context): InstanceType<typeof SessionPersistenceSqli
 }
 
 function backendOf(ctx: Context): Backend {
-  return persistenceOf(ctx).internals().backend;
+  return persistenceOf(ctx).backend;
 }
 
 // 记录后端事件行查询的次数：接缝观测，用来证明读取路径没有重复拉全量。
 function countEventRows(ctx: Context): { rows: number } {
   const backend = backendOf(ctx);
   const counts = { rows: 0 };
-  const original = backend.getEventRows.bind(backend);
-  backend.getEventRows = async (id, fromSequence) => {
+  const original = backend.reads.getEventRows.bind(backend);
+  backend.reads.getEventRows = async (id, fromSequence) => {
     counts.rows += 1;
     return original(id, fromSequence);
   };
@@ -274,8 +274,8 @@ describe("读路径", () => {
       await persistOneTurn(ctx, "s1");
       const backend = backendOf(ctx);
 
-      const at = await backend.getEventTypeAt(SessionId("s1"), 1);
-      const before = await backend.getEventTypesBefore(SessionId("s1"), 5, 2);
+      const at = await backend.reads.getEventTypeAt(SessionId("s1"), 1);
+      const before = await backend.reads.getEventTypesBefore(SessionId("s1"), 5, 2);
 
       expect(at).toBe("user/message");
       expect(before.map((row) => row.fType)).toEqual(["step/end", "assistant/message"]);

@@ -15,7 +15,7 @@ import {
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "../index.ts";
 import { meta } from "../testing.ts";
-import { needsShapeAdoption, normalizeToCurrentShape } from "../log.ts";
+import { needsShapeAdoption, normalizeToCurrentShape } from "../artifact.ts";
 
 // 旧代消息形状的读取：迁移链是**严格**的——它拒绝既有库里那批退役形状
 // （`request/header.header.system`、自造事件类型、inbox 的旧拼接形状），于是这些会话落到回退视图
@@ -54,12 +54,11 @@ async function openHarness(path: string): Promise<{
   // 表在 init 里建：先让 ready 落定，再允许直接 SQL 插入旧形状的行。
   const persistence = ctx.sessionPersistence as SessionPersistenceSqlite;
   await persistence.list();
-  const internals = (
-    persistence as unknown as {
-      internals(): { load(id: string): Promise<LoadedLog> };
-    }
-  ).internals();
-  return { persistence, load: (id) => internals.load(id), dispose: () => fiber.dispose() };
+  return {
+    persistence,
+    load: (id) => (persistence as unknown as { load(id: string): Promise<LoadedLog> }).load(id),
+    dispose: () => fiber.dispose(),
+  };
 }
 
 // 一条当前形状的日志：写路径正常落库，随后用 SQL 把两处消息形状改回旧代。

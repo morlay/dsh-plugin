@@ -16,7 +16,6 @@ import {
 import type {
   Backend,
   BackendTx,
-  EventRow,
   EventInsert,
   SessionCountBucket,
   SessionListRowsPage,
@@ -36,8 +35,9 @@ import {
   sessions,
   sessionUsage,
 } from "./entities/index.ts";
-import type { EventUsageRow } from "./log.ts";
-import { sessionHeaderColumns, sessionInsertColumns, titleOfEventData } from "./log.ts";
+import type { EventUsageRow } from "./log/usage-row.ts";
+import { sessionHeaderColumns, sessionInsertColumns } from "./log/rows.ts";
+import { titleOfEventData } from "./log/export.ts";
 import { sessionMigrations } from "./migrations.ts";
 import {
   collectOrphans,
@@ -111,7 +111,7 @@ export class RdbBackend implements Backend {
   readonly storeIdentity: string;
 
   readonly #database: Database;
-  readonly #readModel: ReadModel;
+  readonly reads: ReadModel;
 
   constructor(options: {
     kind: "sqlite" | "postgres";
@@ -123,7 +123,7 @@ export class RdbBackend implements Backend {
     this.kind = options.kind;
     this.#database = options.database;
     this.storage = options.storage;
-    this.#readModel = options.readModel;
+    this.reads = options.readModel;
     this.storeIdentity = options.storeIdentity;
   }
 
@@ -141,32 +141,8 @@ export class RdbBackend implements Backend {
     return await this.#database.transaction(async (scoped) => fn(this.#txFor(scoped)));
   }
 
-  async getSession(id: SessionRow["fSessionId"]): Promise<SessionRow | undefined> {
-    return await this.#readModel.getSession(id);
-  }
-
-  async getEventRows(id: SessionRow["fSessionId"], fromSequence?: number): Promise<EventRow[]> {
-    return await this.#readModel.getEventRows(id, fromSequence);
-  }
-
-  async getEventTypeAt(id: SessionRow["fSessionId"], sequence: number): Promise<string | undefined> {
-    return await this.#readModel.getEventTypeAt(id, sequence);
-  }
-
-  async getEventTypesBefore(
-    id: SessionRow["fSessionId"],
-    beforeSequence: number,
-    limit: number,
-  ): Promise<Array<Pick<EventRow, "fSequence" | "fType">>> {
-    return await this.#readModel.getEventTypesBefore(id, beforeSequence, limit);
-  }
-
-  async listSessions(): Promise<SessionRow[]> {
-    return await this.#readModel.listSessions();
-  }
-
   async listOrphanSubagentSessions(): Promise<SessionId[]> {
-    return (await this.#readModel.listOrphanSubagentSessions()) as SessionId[];
+    return (await this.reads.listOrphanSubagentSessions()) as SessionId[];
   }
 
   /** 当前 head 指针（分支 / 测试读路径用；写路径在 `BackendTx` 里）。 */
@@ -447,7 +423,7 @@ export class RdbBackend implements Backend {
   }
 
   async #refreshTitle(rdb: Database, id: string): Promise<void> {
-    const latest = await this.#readModel.latestTitleEvent(id);
+    const latest = await this.reads.latestTitleEvent(id);
     const title = latest === undefined ? undefined : titleOfEventData(latest.fData);
     const nextTitle = title ?? null;
     const nextSeq = title === undefined ? null : latest!.fSequence;

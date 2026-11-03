@@ -121,15 +121,13 @@ describe("session-rdb session rows route", () => {
       titled(oneTurnLog(), "归档的子代理"),
     );
     const persistenceRdb = persistence as unknown as {
-      internals(): {
-        backend: {
-          storage: {
-            writeDomainGlobal(domain: string, value: unknown): Promise<void>;
-          };
+      backend: {
+        storage: {
+          writeDomainGlobal(domain: string, value: unknown): Promise<void>;
         };
       };
     };
-    await persistenceRdb.internals().backend.storage.writeDomainGlobal("workspace", {
+    await persistenceRdb.backend.storage.writeDomainGlobal("workspace", {
       initialized: true,
       workspaceIds: [],
       archivedSessionIds: [SessionId("archived")],

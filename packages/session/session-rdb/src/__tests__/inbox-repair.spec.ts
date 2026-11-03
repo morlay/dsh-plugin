@@ -170,7 +170,7 @@ describe("loadStored repairs orphan inbox splices", () => {
 
       expect(orphanInboxSpliceSeqs(events).size).toBe(0);
 
-      const raw = await persistence.internals().backend.getEventRows(SessionId("bad"));
+      const raw = await persistence.backend.reads.getEventRows(SessionId("bad"));
       const rawEvents = raw.map((row) => ({
         type: row.fType,
         seq: row.fSequence,

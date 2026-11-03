@@ -1830,13 +1830,13 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
     await rdb(b.ctx).createAndAppend(m, log);
 
     const persistence = rdb(b.ctx) as SessionPersistenceSqlite;
-    const backendApi = persistence.internals().backend;
-    const rowsBefore = await backendApi.getEventRows(m.id);
+    const backendApi = persistence.backend;
+    const rowsBefore = await backendApi.reads.getEventRows(m.id);
     const revisionBefore = await persistence.readStoredRevision(m.id);
 
     const raw = await persistence.readRaw(m.id);
     expect(raw).toBeDefined();
-    const rowsAfter = await backendApi.getEventRows(m.id);
+    const rowsAfter = await backendApi.reads.getEventRows(m.id);
     expect(rowsAfter).toEqual(rowsBefore);
     expect(await persistence.readStoredRevision(m.id)).toBe(revisionBefore);
 

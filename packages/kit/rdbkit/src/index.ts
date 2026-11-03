@@ -75,7 +75,7 @@ export {
   type RowOf,
   type SelectQuery,
   type TableHandle,
-} from "./table.ts";
+} from "./table/index.ts";
 export {
   openDatabase,
   shapeReader,
@@ -84,7 +84,7 @@ export {
   type OpenConfig,
   type QueryEvent,
   type SqlitePragmaName,
-} from "./database.ts";
+} from "./database/index.ts";
 export {
   ensureSchema,
   planSchema,
