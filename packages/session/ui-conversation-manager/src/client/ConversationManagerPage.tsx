@@ -1,4 +1,4 @@
-// 「对话管理」页面：已归档会话的搜索、取消归档、导出、删除，以及导入为新会话与孤儿数据 GC。
+// 「对话管理」页面：已归档会话的搜索、取消归档、导出、删除，以及导入为新会话与整理数据（孤儿回收 + 统计重算）。
 // 数据面：会话行读**我们自己的**列表路由（注入面 listRows，含归档；搜索 / 子代理过滤 / 分页都在后端），
 // 动作面只读注入面。
 // 形态：页面框架与上游一级页面同款（960px 居中列 + 标题行 + 过滤 chip 行 + 搜索行，见
@@ -45,8 +45,8 @@ export type ConversationManagerPageProps = PropsRuntime<"main"> &
 
 type Translate = ConversationManagerPageProps["t"];
 
-// GC 的三段状态：确认 → 运行（阻塞界面）→ 收尾。
-type GcPhase = "idle" | "confirm" | "running";
+// 整理数据的三段状态：确认 → 运行（阻塞界面）→ 收尾。
+type OrganizePhase = "idle" | "confirm" | "running";
 
 interface ConversationRow {
   id: SessionId;
@@ -146,7 +146,7 @@ export function ConversationManagerPage({
   remove,
   exportZip,
   importZip,
-  collectGarbage,
+  organizeData,
   loadUsage,
 }: ConversationManagerPageProps): ReactNode {
   // 数据面是**我们自己的**列表路由（完整语料，含归档）：官方 `session/list` 按部署策略排除归档，
@@ -165,7 +165,7 @@ export function ConversationManagerPage({
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConversationRow | null>(null);
-  const [gcPhase, setGcPhase] = useState<GcPhase>("idle");
+  const [organizePhase, setOrganizePhase] = useState<OrganizePhase>("idle");
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -236,18 +236,24 @@ export function ConversationManagerPage({
     );
   };
 
-  const startGc = (): void => {
-    setGcPhase("running");
+  const startOrganize = (): void => {
+    setOrganizePhase("running");
     setFailure(null);
     setNotice(null);
-    void collectGarbage().then(
+    void organizeData().then(
       (result) => {
-        setGcPhase("idle");
-        setNotice(t("gc.done", { sessions: result.orphanSessions, events: result.orphanEvents }));
+        setOrganizePhase("idle");
+        setNotice(
+          t("organize.done", {
+            sessions: result.orphanSessions,
+            events: result.orphanEvents,
+            rebuilt: result.rebuiltSessions,
+          }),
+        );
         void reloadRows();
       },
       (error: unknown) => {
-        setGcPhase("idle");
+        setOrganizePhase("idle");
         setFailure(failureText(error, t));
       },
     );
@@ -324,15 +330,15 @@ export function ConversationManagerPage({
                   variant="outline"
                   size="sm"
                   data-action="gc"
-                  disabled={gcPhase !== "idle"}
-                  aria-label={t("gc.button")}
+                  disabled={organizePhase !== "idle"}
+                  aria-label={t("organize.button")}
                   onClick={() => {
                     setFailure(null);
                     setNotice(null);
-                    setGcPhase("confirm");
+                    setOrganizePhase("confirm");
                   }}
                 >
-                  {t("gc.button")}
+                  {t("organize.button")}
                 </Button>
               </div>
             </div>
@@ -619,35 +625,35 @@ export function ConversationManagerPage({
         }
       />
       <Modal
-        open={gcPhase === "confirm"}
+        open={organizePhase === "confirm"}
         onClose={() => {
-          setGcPhase("idle");
+          setOrganizePhase("idle");
         }}
-        title={t("gc.title")}
+        title={t("organize.title")}
         closeLabel={t("close")}
-        description={t("gc.description")}
+        description={t("organize.description")}
         footer={
           <>
             <Button
               variant="ghost"
               onClick={() => {
-                setGcPhase("idle");
+                setOrganizePhase("idle");
               }}
             >
-              {t("gc.cancel")}
+              {t("organize.cancel")}
             </Button>
-            <Button variant="primary" onClick={startGc}>
-              {t("gc.confirm")}
+            <Button variant="primary" onClick={startOrganize}>
+              {t("organize.confirm")}
             </Button>
           </>
         }
       />
       {/* 运行期不给关闭手段：没有关闭按钮，mask 与 Escape 都只走空 onClose。 */}
-      <Modal open={gcPhase === "running"} onClose={() => {}} headless title={t("gc.title")}>
+      <Modal open={organizePhase === "running"} onClose={() => {}} headless title={t("organize.title")}>
         <Stack align="center" gap={14} pad="blocking">
-          <Spinner label={t("gc.running")} />
+          <Spinner label={t("organize.running")} />
           <Text as="p" size="md">
-            {t("gc.running")}
+            {t("organize.running")}
           </Text>
         </Stack>
       </Modal>

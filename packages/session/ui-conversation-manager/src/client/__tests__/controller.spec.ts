@@ -201,14 +201,24 @@ describe("对话管理注入面", () => {
     );
   });
 
-  it("清理孤儿数据打 GC 路由并回报结果，随后刷新会话列表", async () => {
+  it("整理数据打 organize 路由并回报结果（含统计重算数），随后刷新会话列表", async () => {
     const b = bench();
-    const calls = stubFetch(200, { orphanSessions: 3, orphanEvents: 12, stoppedAgents: 2 });
+    const calls = stubFetch(200, {
+      orphanSessions: 3,
+      orphanEvents: 12,
+      rebuiltSessions: 5,
+      stoppedAgents: 2,
+    });
 
-    const result = await b.controller.face.collectGarbage();
+    const result = await b.controller.face.organizeData();
 
-    expect(calls).toEqual([{ url: "/api/morlay/v1/session/gc", body: {} }]);
-    expect(result).toEqual({ orphanSessions: 3, orphanEvents: 12, stoppedAgents: 2 });
+    expect(calls).toEqual([{ url: "/api/morlay/v1/session/organize", body: {} }]);
+    expect(result).toEqual({
+      orphanSessions: 3,
+      orphanEvents: 12,
+      rebuiltSessions: 5,
+      stoppedAgents: 2,
+    });
     expect(b.ports.refreshes).toBe(1);
   });
 

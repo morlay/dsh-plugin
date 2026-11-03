@@ -41,7 +41,7 @@ interface Faces {
   remove: ReturnType<typeof vi.fn>;
   importZip: ReturnType<typeof vi.fn>;
   exportZip: ReturnType<typeof vi.fn>;
-  collectGarbage: ReturnType<typeof vi.fn>;
+  organizeData: ReturnType<typeof vi.fn>;
   loadUsage: ReturnType<typeof vi.fn>;
 }
 
@@ -128,7 +128,7 @@ async function renderPage(options: {
     remove: vi.fn(async () => {}),
     importZip: vi.fn(async () => "session-new"),
     exportZip: vi.fn(async () => {}),
-    collectGarbage: vi.fn(async () => ({ orphanSessions: 0, orphanEvents: 0, stoppedAgents: 0 })),
+    organizeData: vi.fn(async () => ({ orphanSessions: 0, orphanEvents: 0, rebuiltSessions: 0, stoppedAgents: 0 })),
     loadUsage: vi.fn(async () => EMPTY_REPORT),
     ...options.faces,
   };
@@ -353,7 +353,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-describe("对话管理页面：分页、导出与 GC", () => {
+describe("对话管理页面：分页、导出与整理数据", () => {
   it("搜索框复用官方 Input（官方包裹层 + 官方图标），不自造输入外观", async () => {
     await renderPage({ archived: [C.id] });
     const input = screen.getByRole("searchbox");
@@ -411,49 +411,52 @@ describe("对话管理页面：分页、导出与 GC", () => {
     expect(faces.exportZip).toHaveBeenCalled();
   });
 
-  it("清理孤儿数据先确认，执行期间阻塞界面且没有关闭按钮", async () => {
+  it("整理数据先确认，执行期间阻塞界面且没有关闭按钮", async () => {
     const pending = deferred<{
       orphanSessions: number;
       orphanEvents: number;
+      rebuiltSessions: number;
       stoppedAgents: number;
     }>();
     const { faces } = await renderPage({
       archived: [],
-      faces: { collectGarbage: vi.fn(() => pending.promise) },
+      faces: { organizeData: vi.fn(() => pending.promise) },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "清理孤儿数据" }));
+    fireEvent.click(screen.getByRole("button", { name: "整理数据" }));
     const confirm = await screen.findByRole("dialog");
     expect(confirm.textContent).toContain("停止所有运行中的 Agent");
-    expect(faces.collectGarbage).not.toHaveBeenCalled();
+    expect(faces.organizeData).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "开始清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始整理" }));
     await waitFor(() => {
-      expect(screen.getByText("正在清理，请稍候…")).toBeTruthy();
+      expect(screen.getByText("正在整理，请稍候…")).toBeTruthy();
     });
     expect(screen.queryByRole("button", { name: "关闭" })).toBeNull();
     expect(screen.queryByRole("button", { name: "取消" })).toBeNull();
 
-    pending.resolve({ orphanSessions: 3, orphanEvents: 12, stoppedAgents: 2 });
+    pending.resolve({ orphanSessions: 3, orphanEvents: 12, rebuiltSessions: 5, stoppedAgents: 2 });
     await waitFor(() => {
-      expect(screen.getByText("已回收 3 条孤儿会话、12 行孤儿数据。")).toBeTruthy();
+      expect(
+        screen.getByText("已回收 3 条孤儿会话、12 行孤儿数据，并重算 5 个会话的统计数据。"),
+      ).toBeTruthy();
     });
-    expect(faces.collectGarbage).toHaveBeenCalledTimes(1);
+    expect(faces.organizeData).toHaveBeenCalledTimes(1);
   });
 
-  it("清理失败时给出原因", async () => {
+  it("整理失败时给出原因", async () => {
     await renderPage({
       archived: [],
       faces: {
-        collectGarbage: vi.fn(async () => {
-          throw new ConversationManagerRequestError("gc failed", undefined);
+        organizeData: vi.fn(async () => {
+          throw new ConversationManagerRequestError("organize failed", undefined);
         }),
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "清理孤儿数据" }));
-    fireEvent.click(await screen.findByRole("button", { name: "开始清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "整理数据" }));
+    fireEvent.click(await screen.findByRole("button", { name: "开始整理" }));
     await waitFor(() => {
-      expect(screen.getByText("操作失败：gc failed")).toBeTruthy();
+      expect(screen.getByText("操作失败：organize failed")).toBeTruthy();
     });
     expect(screen.queryByRole("dialog")).toBeNull();
   });

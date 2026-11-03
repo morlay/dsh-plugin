@@ -11,6 +11,7 @@ export const SESSION_IMPORT_PATH = `${MORLAY_SESSION_API_PREFIX}/import`;
 
 export const SESSION_DELETE_PATH = `${MORLAY_SESSION_API_PREFIX}/delete`;
 
-export const SESSION_GC_PATH = `${MORLAY_SESSION_API_PREFIX}/gc`;
+// 「整理数据」通道：回收孤儿 + 重算派生统计 + VACUUM，一次请求完成。
+export const SESSION_ORGANIZE_PATH = `${MORLAY_SESSION_API_PREFIX}/organize`;
 
 export const SESSION_USAGE_PATH = `${MORLAY_SESSION_API_PREFIX}/usage`;

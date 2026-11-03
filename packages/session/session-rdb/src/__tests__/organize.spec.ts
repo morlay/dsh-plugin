@@ -5,7 +5,7 @@ import { Context } from "@deepseek-ai/cordis";
 import { SessionId, SessionStore, type SessionHeader } from "@deepseek-ai/dsh-session";
 import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceRdb from "../index.ts";
-import { SESSION_GC_PATH } from "../gc.ts";
+import { SESSION_ORGANIZE_PATH } from "../organize.ts";
 import { meta, oneTurnLog } from "../testing.ts";
 
 const disposers: Array<() => Promise<void>> = [];
@@ -104,8 +104,8 @@ async function gcRoute(
     },
   });
   ctx.provide("connection", { requestRejection: () => undefined });
-  for (let i = 0; i < 1000 && !routes.has(SESSION_GC_PATH); i += 1) await Promise.resolve();
-  const handler = routes.get(SESSION_GC_PATH);
+  for (let i = 0; i < 1000 && !routes.has(SESSION_ORGANIZE_PATH); i += 1) await Promise.resolve();
+  const handler = routes.get(SESSION_ORGANIZE_PATH);
   if (handler === undefined) throw new Error("gc route was not registered");
   return handler;
 }
@@ -127,10 +127,12 @@ describe("GC 通道", () => {
     const value = JSON.parse(response.body) as {
       orphanEvents: number;
       stoppedAgents: number;
+      rebuiltSessions: number;
       vacuumed: boolean;
     };
     expect(value.orphanEvents).toBeGreaterThan(0);
     expect(value.stoppedAgents).toBe(2);
+    expect(value.rebuiltSessions).toBe(1);
     expect(value.vacuumed).toBe(true);
     for (const agent of running) {
       expect(agent.cancel).toHaveBeenCalledWith({ kind: "user" }, { keepInbox: true });

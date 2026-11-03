@@ -4,7 +4,7 @@ import type { SessionId } from "@deepseek-ai/dsh-session";
 export const SESSION_DELETE_PATH = "/api/morlay/v1/session/delete";
 export const SESSION_IMPORT_PATH = "/api/morlay/v1/session/import";
 export const SESSION_EXPORT_PATH = "/api/morlay/v1/session/export";
-export const SESSION_GC_PATH = "/api/morlay/v1/session/gc";
+export const SESSION_ORGANIZE_PATH = "/api/morlay/v1/session/organize";
 export const SESSION_USAGE_PATH = "/api/morlay/v1/session/usage";
 
 // 管理面的会话行（**完整语料，含归档**）：我们自己的路由，与官方 `session/list` 分开——那条按部署策略
@@ -98,10 +98,12 @@ export interface ConversationManagerPorts {
   refresh(): Promise<void>;
 }
 
-// GC 一次执行的回报。
-export interface ConversationManagerGcResult {
+// 一次「整理数据」的回报。
+export interface ConversationManagerOrganizeResult {
   orphanSessions: number;
   orphanEvents: number;
+  // 统计表全量重算涉及的会话数。
+  rebuiltSessions: number;
   stoppedAgents: number;
 }
 
@@ -114,7 +116,7 @@ export interface ConversationManagerFace {
   remove: (sessionId: SessionId) => Promise<void>;
   exportZip: (sessionId: SessionId) => Promise<void>;
   importZip: (file: File) => Promise<SessionId>;
-  collectGarbage: () => Promise<ConversationManagerGcResult>;
+  organizeData: () => Promise<ConversationManagerOrganizeResult>;
   loadUsage: (range: UsageRangeKey) => Promise<SessionUsageReport>;
 }
 
@@ -175,7 +177,7 @@ export class ConversationManagerController {
       remove: (sessionId) => this.remove(sessionId),
       exportZip: (sessionId) => this.exportZip(sessionId),
       importZip: (file) => this.importZip(file),
-      collectGarbage: () => this.collectGarbage(),
+      organizeData: () => this.organizeData(),
       loadUsage: (range) => this.loadUsage(range),
     };
   }
@@ -228,12 +230,13 @@ export class ConversationManagerController {
     return value["sessionId"] as SessionId;
   }
 
-  private async collectGarbage(): Promise<ConversationManagerGcResult> {
-    const value = await postJson(SESSION_GC_PATH, {});
+  private async organizeData(): Promise<ConversationManagerOrganizeResult> {
+    const value = await postJson(SESSION_ORGANIZE_PATH, {});
     await this.ports.refresh();
     return {
       orphanSessions: typeof value["orphanSessions"] === "number" ? value["orphanSessions"] : 0,
       orphanEvents: typeof value["orphanEvents"] === "number" ? value["orphanEvents"] : 0,
+      rebuiltSessions: typeof value["rebuiltSessions"] === "number" ? value["rebuiltSessions"] : 0,
       stoppedAgents: typeof value["stoppedAgents"] === "number" ? value["stoppedAgents"] : 0,
     };
   }

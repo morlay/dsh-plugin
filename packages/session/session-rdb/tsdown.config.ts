@@ -6,7 +6,7 @@ export default defineConfig({
     artifact: "./src/artifact.ts",
     deletion: "./src/deletion.ts",
     export: "./src/export.ts",
-    gc: "./src/gc.ts",
+    organize: "./src/organize.ts",
     import: "./src/import.ts",
     storage: "./src/storage.ts",
     testing: "./src/testing.ts",

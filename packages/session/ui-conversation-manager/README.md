@@ -2,7 +2,7 @@
 
 「对话管理」全局面板页（**浏览器半**）：`sidebar.panellist` 的 nav 行 + `main` keyed 面板（与官方
 ui-plugin-manager 同一种注册方式）。一层 Tabs 在**会话**与**统计**之间切换：会话视图做全量会话的搜索、分页与
-归档 / 取消归档 / 导出 / 删除（确认弹窗），并带导入为新会话与孤儿数据 GC；统计视图给出全部对话的 token 用量。
+归档 / 取消归档 / 导出 / 删除（确认弹窗），并带导入为新会话与整理数据（孤儿回收 + 统计重算）；统计视图给出全部对话的 token 用量。
 
 ## 用法
 
@@ -17,7 +17,7 @@ host 面，只读既有服务与路由：
 | 导出         | `POST /api/morlay/v1/session/export`（`@morlay/session-rdb`，直接下载 zip）                                                                |
 | 删除         | `POST /api/morlay/v1/session/delete`（`@morlay/session-rdb`，仅已归档行可用）                                                              |
 | 导入为新会话 | `POST /api/morlay/v1/session/import`（`@morlay/session-rdb`，不带 `sessionId` = 新建会话）                                                 |
-| 清理孤儿数据 | `POST /api/morlay/v1/session/gc`（停 agent → 回收孤儿 subagent 会话 → 回收孤儿事件行 → VACUUM；执行期间阻塞界面）                          |
+| 整理数据 | `POST /api/morlay/v1/session/organize`（停 agent → 回收孤儿 subagent 会话与孤儿事件行 → 重算全部会话的统计（用量与活动计数）→ VACUUM；执行期间阻塞界面） |
 | 用量统计     | `POST /api/morlay/v1/session/usage`（`@morlay/session-rdb` 读专用用量表聚合；进入统计视图时拉一次，维度切换本地折叠，范围切换重新请求）    |
 
 归档 / 取消归档 / 删除 / 导入 / GC 成功后重拉会话行；host 拒绝（未归档 / 正在使用 / 不存在）时按错误码给出可读

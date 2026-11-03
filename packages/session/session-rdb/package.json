@@ -28,7 +28,7 @@
     "./artifact": "./src/artifact.ts",
     "./deletion": "./src/deletion.ts",
     "./export": "./src/export.ts",
-    "./gc": "./src/gc.ts",
+    "./organize": "./src/organize.ts",
     "./import": "./src/import.ts",
     "./storage": "./src/storage.ts",
     "./testing": "./src/testing.ts",
@@ -54,9 +54,9 @@
         "types": "./dist/export.d.mts",
         "default": "./dist/export.mjs"
       },
-      "./gc": {
-        "types": "./dist/gc.d.mts",
-        "default": "./dist/gc.mjs"
+      "./organize": {
+        "types": "./dist/organize.d.mts",
+        "default": "./dist/organize.mjs"
       },
       "./import": {
         "types": "./dist/import.d.mts",

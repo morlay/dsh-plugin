@@ -35,7 +35,7 @@ import { createWritePath } from "./write-path.ts";
 import { registerSessionImport } from "./import.ts";
 import { registerSessionDeletion } from "./deletion.ts";
 import { registerSessionExport } from "./export.ts";
-import { registerSessionGc } from "./gc.ts";
+import { registerSessionOrganize } from "./organize.ts";
 import { registerSessionRows } from "./rows.ts";
 import { registerSessionUsage } from "./usage.ts";
 import type { UsageAggregate } from "./usage.ts";
@@ -225,7 +225,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     registerSessionExport(this.ctx, this);
 
-    registerSessionGc(this.ctx, this);
+    registerSessionOrganize(this.ctx, this);
 
     registerSessionUsage(this.ctx, this);
 
@@ -422,7 +422,27 @@ export class SessionPersistenceRdb extends SessionPersistence {
     await this.writePath.refreshEventUsageFlags(referenced);
   }
 
-  // GC 通道：回收已无桥接行引用的事件行（孤儿），返回删除行数。
+  /**
+   * 整理数据：回收孤儿会话与孤儿事件行，然后**整表重算**三张派生统计表，最后 VACUUM。
+   *
+   * 顺序有依赖：先清孤儿（被删会话独占的事件行才刚成为孤儿），再按事件表重算统计，
+   * 否则统计会把刚删掉的引用算回去。
+   * @returns 三项计数（孤儿会话 / 孤儿事件行 / 重建涉及的会话数）。
+   */
+  async organize(): Promise<{
+    orphanSessions: number;
+    orphanEvents: number;
+    rebuiltSessions: number;
+  }> {
+    await this.ready;
+    const orphanSessions = await this.collectOrphanSessions();
+    const orphanEvents = await this.collectOrphans();
+    const rebuiltSessions = await this.backend.rebuildAllStats();
+    await this.backend.vacuum();
+    return { orphanSessions, orphanEvents, rebuiltSessions };
+  }
+
+  // 回收已无桥接行引用的事件行（孤儿），返回删除行数。
   async collectOrphans(): Promise<number> {
     await this.ready;
     return this.backend.collectOrphans();

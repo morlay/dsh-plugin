@@ -37,7 +37,7 @@ rdb 后端，冷读复用的收益不值这份内存放大）；上游校验下�
 
 管理面的 HTTP 通道统一挂在 `/api/morlay/v1/session` 前缀下（均为 `POST`，body `{ sessionId }` 或列表请求
 `{ query?, includeSubagents?, page?, pageSize? }`）：`/rows`（完整语料，含归档）、`/export`、`/import`、
-`/delete`、`/gc`、`/usage`（前缀与上游分家的理由见
+`/delete`、`/organize`、`/usage`（前缀与上游分家的理由见
 [ADR-管理面HTTP路由前缀与上游分家](./.agents/adrs/20260929-管理面HTTP路由前缀与上游分家.md)）。旧
 `$DSH_HOME/storages` JSON 的导入是包内 API `importStorages`（`src/import-storages.ts`，不在包出口里）。
 

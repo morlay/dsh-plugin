@@ -215,6 +215,9 @@ export interface Backend {
   // 按会话从事件表重算两张汇总表（旧日志重写之后调用：迁移进来的会话没有旁路累加的历史，得补算）。
   rebuildSessionStats(id: SessionId): Promise<void>;
 
+  // 三张派生统计表清空后全量重算（整理数据的一步）；返回涉及的会话数。
+  rebuildAllStats(): Promise<number>;
+
   // 重算这些用量行的引用标记（`f_referenced` / `f_subagent`）：会话删除 / 日志重写之后调用，
   // `eventIds` 是被删掉的那批桥接行引用的事件（只有它们的引用可能消失）。
   // fork 与撤回（rewind）都**不**走这里——它们不改变已发生过的消耗（见 ADR-fork不继承统计、ADR-撤回不回退统计）。

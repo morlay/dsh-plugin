@@ -108,6 +108,10 @@ export class RdbBackend implements Backend {
     await stats.rebuildSessionStats(this.#database, id);
   }
 
+  async rebuildAllStats(): Promise<number> {
+    return await stats.rebuildAllStats(this.#database);
+  }
+
   async refreshEventUsageFlags(eventIds: readonly string[]): Promise<void> {
     await stats.refreshEventUsageFlags(this.#database, eventIds);
   }
