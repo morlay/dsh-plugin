@@ -251,6 +251,17 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
     ).toEqual([]);
   });
 
+  it("PTC 的专属 section 名与上游一致（`base` 正文靠它认出 PTC）", async () => {
+    // 判据的取值来自上游：PTC 执行器把模型面收窄成 `run_code` 一条，装配期唯一能看到的信号就是它注册的
+    // 这条 section（`PTC_ONLY_SECTION`）。上游改名时这条会红，逼着判据跟着改。
+    const upstream = await readFile(join(PACKAGES, "core/tool-executor-ptc/src/index.ts"), "utf8");
+    const name = /name:\s*'(tools:ptc-only)'/.exec(upstream)?.[1];
+    const ours = await readFile(new URL("../index.ts", import.meta.url), "utf8");
+
+    expect(name).toBe("tools:ptc-only");
+    expect(ours).toContain(`PTC_ONLY_SECTION = "${name}"`);
+  });
+
   it("standard 装配引用的每个工具说明 section 都有归属（丢弃 / 保留）", async () => {
     const { sections } = await inventory(await enabledDirectoriesOf(await standardPlugins()));
     const known = new Set([...droppedSections(), ...DEFAULT_SUPPRESS, ...UNGATED_SECTIONS]);

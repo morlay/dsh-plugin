@@ -2,7 +2,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import type {} from "@deepseek-ai/dsh-skill";
-import type { ToolDefinition } from "@deepseek-ai/dsh-tools";
+import { RUN_CODE_NAME, type ToolDefinition } from "@deepseek-ai/dsh-tools";
 import type {} from "@morlay/dsh-context-assembler";
 import z from "@deepseek-ai/schemastery";
 import {
@@ -114,24 +114,31 @@ export function apply(ctx: Context, config: Config): void {
       writable: true,
     });
   };
-  // 本行挂在**最外层**（`prepend`）：`base` 正文要按这个会话最终可见的工具目录过滤，而装配上下文里的
-  // `toolSet` 就是这一步的准入集（上游 0.2.1-rc.2 起工具声明由 `tools.resolve` 定，装配瀑布不再带 `tools`）。
+  // 本行挂在**最外层**（`prepend`）：`base` 正文要按这个会话**模型面能直接调的工具**过滤。准入集来自装配
+  // 上下文（上游 0.2.1-rc.2 起工具声明由 `tools.resolve` 定，装配瀑布不再带 `tools`），执行器再往上那一层
+  // 见下面 PTC 那段。
   ctx.on(
     "system-prompt/assemble",
-    async (_assembly, context, next) => {
+    async (assembly, context, next) => {
       const result = await next();
       const agent = context.agent;
-      // 记名字集合：准入集已应用这个会话的收窄（`tools.restrict`）与条件激活，名字不受描述改写影响。
-      // 诊断式的无 agent 装配不记（那种装配也不属于任何会话）。
+      // 记名字集合（`base` 正文的过滤判据）。诊断式的无 agent 装配不记。
       if (agent !== undefined) {
-        const toolSet = context.toolSet;
-        const definitions = ctx.tools.definitions(agent, toolSet);
+        const definitions = ctx.tools.definitions(agent, context.toolSet);
+        // 模型面 ≠ 准入集：执行器还会再投影一层，而那一层在装配瀑布**之后**（工具声明由 provider 在瀑布前
+        // 算好，瀑布只拿到 sections / contexts）。PTC 就是这一层——它把模型面收窄成 `run_code` 一条，
+        // 注册表与准入集里工具一个不少。信号是它注册的专属 section：`tools:ptc-only` 只有
+        // `@deepseek-ai/dsh-tool-executor-ptc` 会注册（原生执行器没有 sections）。
+        // 读**入参**那份（原始装配）：瀑布把同一份 value 传给每个监听，而通道会把非 keep 的 section
+        // 降级成 reminder，`result` 里已经看不到执行器那两条。
+        const ptc = assembly.sections.some((section) => section.name === PTC_ONLY_SECTION);
         visibleTools.set(
           agent,
-          new Set(definitions.map((tool) => tool.name)),
+          ptc ? new Set([RUN_CODE_NAME]) : new Set(definitions.map((tool) => tool.name)),
         );
         // 会话内晚注册的工具（MCP 重连、skill 重载）赶不上 `agent/created`：这里补一次改写。本次装配的声明已经
-        // 按旧定义收集过了，所以从**下一次**请求开始生效。
+        // 按旧定义收集过了，所以从**下一次**请求开始生效。改写走准入集的全部定义：PTC 的 SDK 正文就是拿
+        // 它们渲染的，描述与参数说明也要一起汉化精简。
         for (const definition of definitions) project(definition);
       }
       return result;
@@ -158,6 +165,10 @@ export function apply(ctx: Context, config: Config): void {
 }
 
 const baseGroup = groupByKey(BASE_GROUP_KEY);
+
+// PTC 执行器在模型面只声明 `run_code` 一条：它注册的这条专属 section 是装配期唯一能看到的信号
+// （section 名来自 `@deepseek-ai/dsh-tool-executor-ptc` 的 `PTC_ONLY_INSTRUCTION`）。
+const PTC_ONLY_SECTION = "tools:ptc-only";
 
 // **兜底**判据 = 工具注册表（这一行装没装这个工具）：只有当 `visibleTools` 里还没有这个 agent 的记录时才用得上。
 // 为什么需要兜底：理论上 `agent/pre-step` 之前每个 agent 必有一次装配（loop 里先 `assemble` 再走这条瀑布），
@@ -227,4 +238,3 @@ function slimSchema(schema: unknown): unknown {
   }
   return rest;
 }
-

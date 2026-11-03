@@ -10,6 +10,7 @@ import { SessionId } from "@deepseek-ai/dsh-session";
 import SkillRegistry from "@deepseek-ai/dsh-skill";
 import { renderPrompt } from "@deepseek-ai/dsh-system-prompt";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import type { ToolExecutor } from "@deepseek-ai/dsh-tools";
 import * as ContextAssembler from "@morlay/dsh-context-assembler";
 import * as sessionModePlugin from "@morlay/dsh-session-mode";
 import type { Config, SessionMode } from "@morlay/dsh-session-mode";
@@ -101,6 +102,37 @@ const EXPLANATIONS: readonly (readonly [string, string])[] = [
   ["tool:subagent", "SUBAGENT_GUIDE"],
 ];
 
+// PTC 形态的替身执行器：注册表里工具一个不少，但模型面只声明 `run_code`（其余只能从程序里
+// `await tools.name(...)` 调）——与上游 `@deepseek-ai/dsh-tool-executor-ptc` 的 `describe()` 同形。
+function ptcExecutor(): ToolExecutor {
+  return {
+    // 上游那条 `tools:ptc-only`（`PTC_ONLY_INSTRUCTION`）：装配期的判据就是它。
+    sections: [
+      {
+        name: "tools:ptc-only",
+        order: 0,
+        interpolate: false,
+        text: "`run_code` is the only tool you can call directly.",
+      },
+    ],
+    describe: () => ({
+      schemas: [
+        {
+          name: "run_code",
+          description: "运行程序",
+          parameters: {
+            type: "object",
+            properties: { code: { type: "string" } },
+            required: ["code"],
+          },
+        },
+      ],
+      knownNames: ["run_code"],
+    }),
+    execute: async () => ({ results: [], additionalContexts: [], concluded: false }),
+  };
+}
+
 // 在某个 scope 上装载「工具行 + 工具说明 section」，形状与上游 preset 装配一致。
 async function mountToolRows(scope: Context, toolNames: readonly string[]): Promise<void> {
   await scope.plugin(
@@ -125,10 +157,21 @@ async function mountStanding(
   preset: string,
   toolNames: readonly string[],
   config?: plugin.Config,
+  ptc = false,
 ): Promise<Agent> {
   const key = { preset };
   const standing = createScope(ctx, key);
   await mountToolRows(standing.ctx, toolNames);
+  // PTC 换的是这一层的执行器（root 那份由 testkit 装着原生的，同层不能有两个）。
+  if (ptc)
+    await standing.ctx.plugin(
+      Object.assign(
+        (inner: Context) => {
+          inner.tools.setExecutor(ptcExecutor());
+        },
+        { inject: ["tools"] },
+      ),
+    );
   await standing.ctx.plugin(plugin, config);
   const handle = await ctx.agents.create({
     sessionId: SessionId(`tool-guidance-${preset}-${Date.now()}-${Math.random()}`),
@@ -179,6 +222,7 @@ async function mount(
     preset?: string;
     tools?: readonly string[];
     config?: plugin.Config;
+    ptc?: boolean;
   } = {},
 ) {
   const ctx = new Context();
@@ -197,6 +241,7 @@ async function mount(
       options.preset ?? "standard",
       options.tools ?? PRESET_TOOLS,
       options.config,
+      options.ptc === true,
     ),
   };
 }
@@ -242,7 +287,13 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages, turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
+    {
+      messages,
+      turn: 1,
+      step: 1,
+      signal: new AbortController().signal,
+      modelSelection: { provider: "fixture", model: "fixture" },
+    },
     async () => ({ kind: "enter" as const, messages }),
   );
   return decision.kind === "enter" ? decision.messages : [];
@@ -415,7 +466,13 @@ describe("base 组正文的常驻注入", () => {
 
     const decision = await agentEvents(ctx, agent).waterfall(
       "agent/pre-step",
-      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
+      {
+        messages: [claimed],
+        turn: 1,
+        step: 1,
+        signal: new AbortController().signal,
+        modelSelection: { provider: "fixture", model: "fixture" },
+      },
       async () => ({ kind: "enter" as const, messages: [claimed, trailing] }),
     );
     if (decision.kind !== "enter") throw new Error("expected enter");
@@ -475,11 +532,11 @@ describe("base 组正文的常驻注入", () => {
     const { ctx, agent } = await mount();
     ctx.sessionModes.applyTo(agent, "chat", { record: false });
 
-    expect(projectedTools(ctx, agent).map((tool) => tool.name).toSorted()).toEqual([
-      "ask_user_question",
-      "web_fetch",
-      "web_search",
-    ]);
+    expect(
+      projectedTools(ctx, agent)
+        .map((tool) => tool.name)
+        .toSorted(),
+    ).toEqual(["ask_user_question", "web_fetch", "web_search"]);
 
     const [body] = await step(ctx, agent, "任务");
     if (body === undefined) throw new Error("没有注入 base 正文");
@@ -497,6 +554,32 @@ describe("base 组正文的常驻注入", () => {
       "bash：",
       "后台任务",
       "read_image：",
+      "skill：",
+    ]) {
+      expect(body).not.toContain(gone);
+    }
+  });
+
+  it("PTC 会话只送模型面那几行：工具都在注册表里，但直接调用的用法不该列", async () => {
+    // 上游 PTC 执行器把模型面收窄成 `run_code` 一条：准入集（`toolSet`）仍是注册全量，所以判据要从执行器
+    // 注册的 `tools:ptc-only` section 认出来（见 `index.ts` 的 `PTC_ONLY_SECTION`）。
+    const { ctx, agent } = await mount({ ptc: true });
+
+    const [body] = await step(ctx, agent, "任务");
+    if (body === undefined) throw new Error("没有注入 base 正文");
+
+    expect(body).toContain("- run_code：");
+    for (const gone of [
+      "read：",
+      "write：",
+      "edit：",
+      "glob：",
+      "grep：",
+      "bash：",
+      "后台任务",
+      "read_image：",
+      "web_search：",
+      "ask_user_question：",
       "skill：",
     ]) {
       expect(body).not.toContain(gone);
@@ -521,7 +604,13 @@ describe("base 组正文的常驻注入", () => {
 
     const decision = await agentEvents(ctx, agent).waterfall(
       "agent/pre-step",
-      { messages: [claimed], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
+      {
+        messages: [claimed],
+        turn: 1,
+        step: 1,
+        signal: new AbortController().signal,
+        modelSelection: { provider: "fixture", model: "fixture" },
+      },
       async () => ({ kind: "enter" as const, messages: [claimed] }),
     );
     if (decision.kind !== "enter") throw new Error("expected enter");
