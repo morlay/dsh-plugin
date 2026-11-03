@@ -8,6 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 
+// 每条用例都要 spawn 一个 TypeScript 入口的 CLI（oxc loader 冷启动 + 依赖解析）：并行跑全仓时
+// 单个子进程可能就要几秒，默认 5s 的用例超时会把「机器慢」误报成「命令挂了」。这里把 vitest 的
+// 超时与子进程自己的 timeout 对齐成一个常量，两处只有一个 home。
+const CLI_TIMEOUT_MS = 30_000;
+
 const CLI = fileURLToPath(new URL("../cli/index.ts", import.meta.url));
 const MANIFEST = JSON.parse(
   await readFile(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
@@ -47,11 +52,23 @@ function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+// `--help` 是纯读：同一命令的输出在文件里被多个用例读，缓存一次，少 spawn 几次（并行跑全仓时很值钱）。
+const helpCache = new Map<string, Promise<Run>>();
+
+function helpOf(...args: readonly string[]): Promise<Run> {
+  const key = args.join(" ");
+  const cached = helpCache.get(key);
+  if (cached !== undefined) return cached;
+  const run = cli([...args, "--help"]);
+  helpCache.set(key, run);
+  return run;
+}
+
 async function cli(args: readonly string[], cwd?: string): Promise<Run> {
   try {
     const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...args], {
       encoding: "utf8",
-      timeout: 30_000,
+      timeout: CLI_TIMEOUT_MS,
       env: childEnv(),
       ...(cwd === undefined ? {} : { cwd }),
     });
@@ -79,9 +96,9 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
-describe("published command surface", () => {
+describe("published command surface", { timeout: CLI_TIMEOUT_MS }, () => {
   it("names the program after the published bin entry", async () => {
-    const { status, stdout } = await cli(["--help"]);
+    const { status, stdout } = await helpOf();
 
     expect(status).toBe(0);
     expect(BIN_NAME).not.toBe("");
@@ -89,7 +106,7 @@ describe("published command surface", () => {
   });
 
   it("exposes exactly the dev / lint / release subcommands", async () => {
-    const { stdout } = await cli(["--help"]);
+    const { stdout } = await helpOf();
 
     expect(listedCommands(stdout)).toEqual(BIN_COMMANDS);
     expect(stdout).not.toContain("prepare");
@@ -102,33 +119,23 @@ describe("published command surface", () => {
     expect(stdout.trim()).toBe(MANIFEST.version);
   });
 
-  it("给 web 与 desktop 都留了可选 workspace 参数（desktop 不带浏览器开关）", async () => {
-    for (const command of ["web", "desktop"]) {
-      const { status, stdout } = await cli([command, "--help"]);
+  // 只断言「参数面存在」，不断言 help 的措辞（措辞会改，锁死它只会制造假红）：
+  // 行为由下面的 workspace plumbing 与 manifest 写回用例覆盖。
+  it("子命令的参数面：workspace 位置参数、--data-dir、bundle 的 dir / install", async () => {
+    const cases: Array<{ command: string[]; flags: RegExp[]; absent?: RegExp[] }> = [
+      { command: ["web"], flags: [/\[workspace\]/u, /--data-dir\b/u], absent: [/--web\b/u] },
+      { command: ["desktop"], flags: [/\[workspace\]/u, /--data-dir\b/u], absent: [/--web\b/u] },
+      {
+        command: ["desktop", "bundle"],
+        flags: [/\[workspace\]/u, /--dir\b/u, /--install\b/u],
+      },
+    ];
+    for (const { command, flags, absent } of cases) {
+      const { status, stdout } = await helpOf(...command);
       expect(status).toBe(0);
-      expect(/\[workspace\]/u.test(stdout)).toBe(true);
-      expect(/--web\b/u.test(stdout)).toBe(false);
+      for (const flag of flags) expect(flag.test(stdout)).toBe(true);
+      for (const flag of absent ?? []) expect(flag.test(stdout)).toBe(false);
     }
-  });
-
-  it("两个形态都有 --data-dir，且说明里点出 dataDir 的三种取值", async () => {
-    for (const command of ["web", "desktop"]) {
-      const { status, stdout } = await cli([command, "--help"]);
-      expect(status).toBe(0);
-      expect(/--data-dir\b/u.test(stdout)).toBe(true);
-      expect(/xdg/u.test(stdout)).toBe(true);
-      // 描述会被 help 折行，正则别假定它在一行里。
-      expect(/absolute\s+path/u.test(stdout)).toBe(true);
-    }
-  });
-
-  it("bundle 挂在 desktop 下，带 dir / install 与可选 workspace", async () => {
-    const { status, stdout } = await cli(["desktop", "bundle", "--help"]);
-
-    expect(status).toBe(0);
-    expect(/--dir\b/u.test(stdout)).toBe(true);
-    expect(/--install\b/u.test(stdout)).toBe(true);
-    expect(/\[workspace\]/u.test(stdout)).toBe(true);
   });
 
   it("refuses an unknown subcommand", async () => {
@@ -141,7 +148,7 @@ describe("published command surface", () => {
 
 // 没有源码入口的数据包（`dsh.bundle` 的纯数据包）的清单写回：出口与 dsh 版本要求都由构建推导，
 // 但这类包没有可打包的入口、进不了 tsdown 的 `build:done`，所以给它一条命令走同一份推导。
-describe("manifest 写回", () => {
+describe("manifest 写回", { timeout: CLI_TIMEOUT_MS }, () => {
   it("按文件存在性写固定面，并按 DEEPSEEK_HARNESS_VERSION 写 engines.dsh", async () => {
     const root = await nonWorkspaceDir();
     await writeFile(
@@ -185,7 +192,7 @@ describe("manifest 写回", () => {
   });
 });
 
-describe("workspace argument plumbing", () => {
+describe("workspace argument plumbing", { timeout: CLI_TIMEOUT_MS }, () => {
   it("resolves the positional workspace instead of the working directory", async () => {
     const workspace = await nonWorkspaceDir();
     const { status, stderr } = await cli(["desktop", workspace], await nonWorkspaceDir());

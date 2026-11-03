@@ -13,5 +13,6 @@ export default defineConfig({
       "devpackages/**/src/__tests__/**/*.spec.ts",
     ],
     exclude: ["**/node_modules/**", "target/**"],
+    isolate: true
   },
 });
