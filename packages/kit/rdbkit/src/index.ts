@@ -1,7 +1,6 @@
 export {
   defineCatalog,
   defineTable,
-  toProperty,
   type Catalog,
   type CheckDef,
   type ColumnDef,

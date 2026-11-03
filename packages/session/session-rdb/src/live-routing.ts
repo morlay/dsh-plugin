@@ -2,14 +2,15 @@ import type { Context } from "@deepseek-ai/cordis";
 import { assertVersion } from "@deepseek-ai/dsh-session-persistence";
 import type { Session, SessionEvent, SessionId } from "@deepseek-ai/dsh-session";
 import type { SessionHandle } from "@deepseek-ai/dsh-session-persistence";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 import { liveEventsOf } from "./branch/index.ts";
 import { repairReadView } from "./log/repair.ts";
 
 /**
  * live 会话的写路由：把 `session/created|event|flush|disposed` 四个订阅与四张内存表收在一处。
  *
- * 这是 index 之外唯一知道「缓冲—句柄—失败终态」这套生命周期的地方；index 只负责装配与 `forget(id)`。
+ * 会话级的「缓冲—句柄—失败终态」都收在这里；装配点是 `session-store.ts` 的构造函数（`new LiveRouting(ctx, this)`），
+ * `forget(id)` 在删除会话 / 回收孤儿会话时调用。句柄自己的批量窗口在 `handles.ts`。
  */
 /** live 会话的写句柄：`SessionHandle` 加上批量窗口的入口。 */
 interface LiveHandle extends SessionHandle {

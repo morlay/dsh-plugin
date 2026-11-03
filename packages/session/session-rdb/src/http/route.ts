@@ -104,8 +104,8 @@ export function mountRoute(
 /**
  * 挂一条 JSON 路由：鉴权、方法、body 解析、错误码这些每处都一样的部分收在这里。
  *
- * 6 个管理面路由（rows / usage / gc / deletion / export / import）共用它——之前每个文件各抄一遍
- * （约 270 行样板，而且 `import` 那条漏了 405）。
+ * 5 个 JSON 路由（rows / usage / gc / deletion / import）共用 `mountJsonRoute`；`export` 的响应体是 zip，走
+ * `mountRoute`，只复用鉴权 / 405 / 500。之前每个文件各抄一遍（约 270 行样板，而且 `import` 那条漏了 405）。
  */
 export function mountJsonRoute(ctx: Context, spec: JsonRouteSpec): void {
   ctx.inject(["webServer", "connection"] as const, (webCtx) => {

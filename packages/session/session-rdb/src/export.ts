@@ -1,7 +1,7 @@
 import { strToU8, zip } from "fflate";
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 import { SESSION_EXPORT_PATH } from "./routes.ts";
 import { mountRoute } from "./http/route.ts";
 

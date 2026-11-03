@@ -30,7 +30,8 @@ export interface EnsureSchemaOptions {
 /**
  * 结构差异（纯函数）：缺表建表、缺列补列、缺索引补索引。
  *
- * 只做「增」——不删列、不改类型、不删索引：旧库升级不会丢数据，破坏性变更由调用方显式处理。
+ * 默认只做「增」（缺表建表、缺列补列、缺索引补索引），不改类型、不删索引；删多出来的列只由
+ * `allowDestructive: true` 显式打开（旧库升级默认不丢数据）。
  * @param dialect - 目标方言。
  * @param catalog - 表定义（唯一事实来源）。
  * @param shapes - 现有结构（表名 → 列 / 索引；不存在则 undefined）。

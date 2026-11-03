@@ -9,7 +9,7 @@
 **决定**
 
 **同一个 session id 同时只能有一个写入者**：后端记录每个 session「本实例最后确认的稠密 head」，`appendBatch`
-在事务内校验磁盘 head 与该记录一致（`src/write-guard.ts:15`）；不一致（另一写入者提交过、或本实例从未读过该
+在事务内校验磁盘 head 与该记录一致（`src/write-guard.ts`）；不一致（另一写入者提交过、或本实例从未读过该
 session 却遇到已有行）时 **fail loud 拒绝**，而不是把本批次静默重编号到对方尾部。
 
 **考虑过的选项**
@@ -25,5 +25,5 @@ session 却遇到已有行）时 **fail loud 拒绝**，而不是把本批次静
 - 不同 session id 的并发写不受影响（各自独立 head）——多进程部署时各实例各写各的 session 是受支持场景。
 - 一个实例 open（或 HMR adopt）过某 session 后可以继续 append——那是一次明确授权、基于最新磁盘状态的续接；
   同 id 双实例「都 open 过再各自写」不支持（[设计 并发写入](../designs/20260917-并发写入.md)）。
-- write open 的迁移重写同样先做这道校验（`src/index.ts:1144`），否则另一实例在 open 期间提交的事件会被重写
+- write open 的迁移重写同样先做这道校验（`src/session-store.ts` 的 open），否则另一实例在 open 期间提交的事件会被重写
   静默丢掉。

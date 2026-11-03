@@ -1,7 +1,7 @@
 import { concat, text, type Fragment } from "./fragment.ts";
 import type { TableDef } from "./defs.ts";
 
-/** 一条 CTE：`"name" AS (<query>)`；`recursive` 时 `WITH RECURSIVE` 前缀由调用方加。 */
+/** 一条 CTE：`"name" AS (<query>)`；`recursive` 时由 `withCtes` 渲染成 `WITH RECURSIVE` 前缀。 */
 export interface Cte {
   readonly name: string;
   readonly query: Fragment;

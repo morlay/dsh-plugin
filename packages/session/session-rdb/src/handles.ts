@@ -16,7 +16,7 @@ import {
 } from "@deepseek-ai/dsh-session-persistence";
 import { SessionLogOffset } from "@deepseek-ai/dsh-session";
 import type { SessionEvent, SessionHeader, SessionId } from "@deepseek-ai/dsh-session";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 import { repairReadView } from "./log/repair.ts";
 
 interface PendingSession {

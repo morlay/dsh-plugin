@@ -9,12 +9,12 @@ import { openPostgres } from "./postgres.ts";
 import { openSqlite } from "./sqlite.ts";
 import type { Database, Executor, OpenConfigWithCatalog, QueryEvent } from "./types.ts";
 
-/** 打开时的 catalog：装配层传裸数组或已索引的都行，这里统一成按表名索引。 */
+/** 打开时的 catalog：按表名建一次索引（之后 `table("名字")` 才解析得到）。 */
 function withCatalog<C extends Catalog>(config: OpenConfigWithCatalog<C>): CatalogIndex {
   return indexCatalog(config.catalog ?? []);
 }
 
-/** 打开一个库；这是唯一创建连接的地方（连接管理留在这里，业务只拿 `Database`）。 */
+/** 打开一个库；这是连接创建的唯一入口（实际 connect 在 `sqlite.ts` / `postgres.ts`，业务只拿 `Database`）。 */
 export async function openDatabase<const C extends Catalog = Catalog>(
   config: OpenConfigWithCatalog<C>,
 ): Promise<Database<C>> {

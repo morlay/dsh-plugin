@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { SessionDeletionError } from "./deletion-error.ts";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 import { SESSION_DELETE_PATH } from "./routes.ts";
 import { HttpError, mountJsonRoute } from "./http/route.ts";
 

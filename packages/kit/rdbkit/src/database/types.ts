@@ -5,7 +5,8 @@ import type { Fragment } from "../fragment.ts";
 import type { TableHandle } from "../table/handle.ts";
 
 /**
- * 注入给业务的库句柄：只回答「哪张表」与「怎么读/写/开事务」，不暴露方言、连接或 SQL。
+ * 注入给业务的库句柄：只回答「哪张表」与「怎么读/写/开事务」；不暴露连接与 SQL。
+ * `dialect` 只给迁移 / 日志这类基础层用，业务查询不需要它。
  * 连接生命周期由创建它的一方（装配层）管理，业务拿到的是这个接口。
  */
 export interface Database<C extends Catalog = Catalog> {

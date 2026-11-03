@@ -1,7 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import { SESSION_USAGE_PATH } from "./routes.ts";
 import { mountJsonRoute } from "./http/route.ts";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 
 export { SESSION_USAGE_PATH };
 

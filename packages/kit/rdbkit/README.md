@@ -6,7 +6,7 @@
 ## 用法
 
 ```ts
-import { and, column, defineTable, eq, openDatabase, value } from "@morlay/rdbkit";
+import { column, defineTable, ensureSchema, eq, openDatabase, value } from "@morlay/rdbkit";
 
 const sessions = defineTable({
   name: "t_sessions",
@@ -26,16 +26,14 @@ const table = database.table(sessions);
 await table.insert({ f_session_id: "s1", f_created_at: 1 });
 
 // 读是迭代器（对应 Golang 的 iter.Seq2）：逐行消费，不一次性物化结果集。
-for await (const row of table.find(eq(column("f_session_id"), value("s1")))) {
+for await (const row of table.select().where(eq(column("f_session_id"), value("s1")))) {
   console.log(row.f_session_id);
 }
 
 await database.transaction(async (tx) => {
   await tx
     .table(sessions)
-    .update({ f_title: "标题" })
-    .where(eq(column("f_session_id"), value("s1")))
-    .run();
+    .update({ f_title: "标题" }, eq(column("f_session_id"), value("s1")));
 });
 
 await database.close();
@@ -64,8 +62,8 @@ await database.close();
 | `dialect.ts`  | 方言：类型映射、标识符、DDL（建表 / 索引 / 加列）、读现有结构（PRAGMA / information_schema） |
 | `fragment.ts` | SQL 片段与参数；渲染时按方言重编号（SQLite `?`、PostgreSQL `$n`），`only` 限定方言           |
 | `expr.ts`     | 条件表达式（`eq` / `inList` / `and` / `or` …）与函数表达式，值一律走绑定参数（见下）         |
-| `table.ts`    | 表句柄（业务面）：插入 / 插入忽略 / upsert / 更新 / 删除 / 迭代查询 / 计数 / 插入选择        |
-| `database.ts` | `Database`（注入项）：`table` / `iterate` / `read` / `run` / `transaction` / 库级操作        |
+| `table/`      | 表句柄（业务面）：插入 / 插入忽略 / upsert / 更新 / 删除 / 迭代查询 / 计数 / 插入选择（`types` / `handle` / `render` / `select`） |
+| `database/`   | `Database`（注入项）：`table` / `iterate` / `read` / `run` / `transaction` / 库级操作（`types` / `create` / `sqlite` / `postgres` / `capabilities` / `wrap` / `queue`） |
 | `migrate.ts`  | 结构差异：`planSchema`（纯函数）与 `ensureSchema`（缺表建表、缺列补列、缺索引补索引）        |
 
 ## 事务

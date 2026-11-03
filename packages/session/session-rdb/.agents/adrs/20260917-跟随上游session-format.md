@@ -9,14 +9,14 @@
 
 读写的坐标与 shape 全部对齐上游当前格式：
 
-- **非当前格式都走迁移链**：`isLegacyVersion` 为 `version < SESSION_FORMAT_VERSION`（`src/legacy.ts:73`），
+- **非当前格式都走迁移链**：`isLegacyVersion` 为 `version < SESSION_FORMAT_VERSION`（`src/legacy.ts`），
   从 v0 逐段相邻迁移上来；相邻边要求**显式子会话证据**，所以读旧数据用
-  `createSessionFormatCatalogWithChildren([])`（声明「无子会话」，`restoreCatalog`，`src/legacy.ts:52`）。
+  `createSessionFormatCatalogWithChildren([])`（声明「无子会话」，`restoreCatalog`，`src/legacy.ts`）。
 - **物理 header 按版本选形状**：v0 / v1 用 `seedLength`，v2 起用 `isSeeded`（前缀长度由 log 内
-  `session/end-seed` 推导）——`physicalHeader` 按 `f_version` 选择（`src/legacy.ts:11`）。
+  `session/end-seed` 推导）——`physicalHeader` 按 `f_version` 选择（`src/legacy.ts`）。
 - **`tool/result` 按当前形状读写**：tool 角色、`toolCallId` 在消息顶层、`content` 就是结果块（维度提取
   `f_role` = tool、`f_action_id` = `data.message.toolCallId`；「只改结果」的重写判定也读新形状，
-  `src/event-shape.ts:107`、`src/log/repair.ts`）。
+  `src/event-shape.ts`、`src/log/repair.ts`）。
 - **message source 的 kind 由生产者自报**：泛型 `{ kind: 'plugin', plugin }` 没有了；compaction 的检查点消息
   自报 `compact-checkpoint`（带 `compactionId`）。
 - **钉住集合落会话行的 `f_pinned_seq`**（最近钉住在前、与归档互斥），读回即按它排序；旧 `storages` 文档没有
@@ -35,7 +35,7 @@
   （`OWN_EVENT_TYPES`，`src/log/repair.ts`）——**其它未知类型保持 fail loud**（那是「数据来自更新版本的
   harness」的信号，不能用 ignorable 吞掉）。
 - **版本号不可信时按内容再判一次**：库里存在「当前版本号 + 旧代形状」的行（写路径曾把回退视图的结果以当前
-  版本号落库），所以当前格式分支里 `scanRows` 之后按内容再判（`needsShapeAdoption`，`src/index.ts:1050`），
+  版本号落库），所以当前格式分支里 `scanRows` 之后按内容再判（`needsShapeAdoption`，`src/read-path.ts`），
   命中走同一条归一。检测必须在扫干净的边界之内做——撕裂尾部与坏行由 `scanRows` 先丢掉，否则检测本身会撞上
   坏 JSON。
 - **读取视图修复先于校验**：夹取 / 降级必须在 `validateStoredEvents` 看到 replace range 之前完成，否则历史

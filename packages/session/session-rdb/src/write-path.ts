@@ -46,7 +46,7 @@ export interface WritePathDeps {
 /**
  * 写侧：空会话物化、批量追加、统计旁路累加与重算、迁移后重写。
  *
- * 事务边界都在这里；`index` 只负责装配与契约转发。
+ * 事务边界都在这里；`session-store.ts` 只负责装配与契约转发。
  */
 export function createWritePath(deps: WritePathDeps) {
   return {

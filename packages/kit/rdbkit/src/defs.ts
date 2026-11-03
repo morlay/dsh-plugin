@@ -1,6 +1,6 @@
 import type { TableHandle } from "./table/handle.ts";
 import type { Database } from "./database/types.ts";
-// 表定义就是数据库结构的唯一来源：schema（drizzle 对象）、DDL、启动迁移都从它算出来，
+// 表定义就是数据库结构的唯一来源：DDL、启动迁移、类型化的表句柄都从它算出来，
 // 所以再加一张表 / 一列时不需要另写迁移 SQL，也不需要在 sqlite 与 postgres 各写一遍。
 
 /** 列类型：只保留跨方言能一一映射的那几种。 */
@@ -51,12 +51,12 @@ export interface TableDef {
 /** 一组表定义（一个库的结构）。 */
 export type Catalog = readonly TableDef[];
 
-/** 声明一张表（只做形状校验，不改写）。 */
 /** `defineTable` 的返回值：表定义 + 操作钩子（`users.table(database)` 直接拿句柄）。 */
 export type Table<T extends TableDef> = T & {
   table(database: Database): TableHandle<T>;
 };
 
+/** 声明一张表（形状原样保留，另挂一个取句柄的钩子）。 */
 export function defineTable<const T extends TableDef>(def: T): Table<T> {
   if (!/^[a-z][a-z0-9_]*$/u.test(def.name)) {
     throw new Error(`rdbkit: table name '${def.name}' must match [a-z][a-z0-9_]*`);
@@ -79,9 +79,4 @@ export function defineTable<const T extends TableDef>(def: T): Table<T> {
 export function defineCatalog<const T extends readonly TableDef[]>(tables: T): T {
   for (const table of tables) defineTable(table);
   return tables;
-}
-
-/** 列名 → drizzle 的属性名（`f_session_id` → `fSessionId`）。 */
-export function toProperty(name: string): string {
-  return name.replace(/_([a-z])/gu, (_match, char: string) => char.toUpperCase());
 }

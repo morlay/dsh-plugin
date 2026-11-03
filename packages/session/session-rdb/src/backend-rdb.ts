@@ -33,8 +33,8 @@ import { pruneWorkspaceDocuments } from "./storage-takeover/workspace-documents.
 const INSERT_BATCH_ROWS = 1000;
 
 /**
- * 唯一的 backend 实现：所有数据库操作都在这里（读模型 + `session-ops` + 表句柄），
- * 方言差异全部由 rdbkit 的表达式承担（本地日、JSON 提取这类），这里不出现任何 SQL 文本。
+ * 唯一的 backend 实现：读写方法收敛在这里（读模型 + `session-ops` + 表句柄）；打开流程在 `db/open.ts`，
+ * 统计面在 `db/stats.ts`。方言差异全部由 rdbkit 的表达式承担，这里不出现任何 SQL 文本。
  */
 export class RdbBackend implements Backend {
   readonly storage: StorageRepository;

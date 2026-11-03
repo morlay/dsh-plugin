@@ -23,8 +23,8 @@ Host 提醒数据，由 web-app 在每份 profile 里挂的那一行打开——
    identity 校验与 `asOfSeq` 取最低水位）。checkpoint 只落**行级表** `t_session_projcache_row`（每个投影 key
    一行，`f_ver` / `f_seq` / `f_val`）；日志 identity 与会话行 1:1，直接复用 `t_sessions` 的 `f_version` /
    `f_created_at` / `f_cwd` / `f_seed_length`，不另存记录头。读方法是同步签名（session 列表在请求路径上直接
-   调用）：**SQLite 直读表**（`readProjcacheDirect`，启动不做全表加载、外部写入立即可见）；PostgreSQL 驱动
-   异步，只有该后端保留写穿镜像来支撑同一签名。
+   调用）：启动时 `loadProjcache()` 建**内存镜像**，写路径同步更新，`cachedSnapshot` 是纯内存读
+   （两个方言一致；早先的 SQLite 同步直读已删除，见 [设计 去掉 dbDirect](../designs/20261103-去掉dbDirect.md)）。
 2. **workspace、schedule 与 cua 授权三域只换介质**：保留官方 `workspace` 插件、官方 `dsh-schedule` 行与
    官方 `cua` bundle（行为零漂移），由本包在 storage hub 注册 `rdb` KV 后端
    （`src/storage-takeover/storage-backend.ts`），实现上游 `StorageBackend.kv` / `KvUnit` 契约并把域映射到

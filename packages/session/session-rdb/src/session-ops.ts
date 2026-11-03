@@ -11,8 +11,8 @@ import {
 } from "./entities/index.ts";
 
 /**
- * 会话读的小操作：两套 backend 共用（SQLite 传同一连接上的实例，PG 传当前事务的 scoped 实例）。
- * 语义与 Go 的 `session.T` 上的表操作一致——执行面由调用方给，这里不持有连接。
+ * 会话读的小操作：经 `Database` 句柄调用——或为打开后的 base 实例，或为事务内的 scoped 实例，
+ * 执行面由调用方决定，这里不持有连接（与 Go 的 `session.T` 一致）。
  */
 
 /**

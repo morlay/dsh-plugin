@@ -8,7 +8,7 @@ import { balanceRewindPrefix } from "@morlay/session-branch";
 import { unzip } from "fflate";
 import { replaceLiveSessionLog } from "./branch/index.ts";
 import { restoreCatalog } from "./legacy.ts";
-import type { SessionPersistenceRdb } from "./index.ts";
+import type { SessionPersistenceRdb } from "./session-store.ts";
 import { SESSION_IMPORT_PATH } from "./routes.ts";
 import { HttpError, mountJsonRoute } from "./http/route.ts";
 

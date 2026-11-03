@@ -22,7 +22,7 @@ export interface Dialect {
   readShape(database: ShapeReader, table: string, schema?: string): Promise<TableShape | undefined>;
 }
 
-/** 读结构所需的最小执行面（由 `openDatabase` 提供）。 */
+/** 读结构所需的最小执行面（`database/wrap.ts` 的 `shapeReader` 把 `Database` 包成它）。 */
 export interface ShapeReader {
   query<T>(text: string, params?: readonly unknown[]): Promise<T[]>;
 }

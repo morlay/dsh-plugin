@@ -25,7 +25,7 @@ export interface ReadPathDeps {
 /**
  * 读侧：会话日志、原始导出、快照列表与已存储 revision。
  *
- * 这些只读 `backend.reads`，不碰写事务；`index` 的契约方法只是把调用转到这里。
+ * 这些只读 `backend.reads`，不碰写事务；`session-store.ts` 的契约方法（`load` / `open` / `readFrom`）把调用转到这里。
  */
 export function createReadPath(deps: ReadPathDeps) {
   return {
