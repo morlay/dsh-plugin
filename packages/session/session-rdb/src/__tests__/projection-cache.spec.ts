@@ -644,3 +644,79 @@ async function readStored(
     events: stored.events,
   };
 }
+
+// 撤回写回失败的兜底：不能把撤回前的旧快照留在读路径上（否则要重启实例才正确）。
+describe("撤回后缓存写回失败的兜底", () => {
+  it("写回抛错时按新水位截断缓存，而不是保留撤回前的快照", async () => {
+    const h = await harness();
+    try {
+      h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });
+      const live = h.ctx.sessions.get(SessionId("s1"))!;
+      await h.ctx.sessions.flush(live);
+      await waitFor(() => h.cache.cachedSnapshot(live.header));
+      expect(cachedTurns(h, "s1")).toEqual([1, 2, 3]);
+
+      // 模拟「带报错信息的日志让上游 fold 抛错」：写回失败。
+      const projections = h.ctx.sessionProjections as unknown as {
+        checkpoint(session: unknown): unknown;
+      };
+      const original = projections.checkpoint.bind(projections);
+      let failed = false;
+      projections.checkpoint = (session: unknown) => {
+        if (!failed) {
+          failed = true;
+          throw new Error('session projection "turnOutline" cannot advance across missing seq 8');
+        }
+        return original(session);
+      };
+
+      await h.ctx.sessionBranch.rewind(SessionId("s1"), 11);
+
+      expect(failed).toBe(true);
+      // 兜底只保证「不再命中撤回前的快照」：行的水位若都超出新 head，缓存会被清空，
+      // 下一次读走全量 fold（正确但冷读一次）。这比把旧快照留在读路径上好。
+      const turns = cachedTurns(h, "s1");
+      expect(turns === undefined || turns.every((turn) => turn <= 2)).toBe(true);
+    } finally {
+      await h.dispose();
+    }
+  });
+});
+
+// flush 失败不该阻断检查点：检查点基于内存 log，落库失败只影响持久化，不影响撤回后页面显示的数据。
+describe("撤回后 flush 失败的兜底", () => {
+  it("flush 抛错时仍按内存 log 写回检查点", async () => {
+    const h = await harness();
+    try {
+      h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });
+      const live = h.ctx.sessions.get(SessionId("s1"))!;
+      await h.ctx.sessions.flush(live);
+      await waitFor(() => h.cache.cachedSnapshot(live.header));
+      expect(cachedTurns(h, "s1")).toEqual([1, 2, 3]);
+
+      const sessions = h.ctx.sessions as unknown as { flush(session: unknown): Promise<void> };
+      const original = sessions.flush.bind(sessions);
+      let calls = 0;
+      let failed = false;
+      sessions.flush = async (session: unknown) => {
+        if (session === live) {
+          calls += 1;
+          // 第一次是 rewind 开头的「先落库再截断」（失败会让撤回本身失败）；
+          // 第二次是检查点写回前的 flush——这里失败不该阻断检查点。
+          if (calls === 2) {
+            failed = true;
+            throw new Error("persist failed");
+          }
+        }
+        await original(session);
+      };
+
+      await h.ctx.sessionBranch.rewind(SessionId("s1"), 11);
+
+      expect(failed).toBe(true);
+      expect(cachedTurns(h, "s1")).toEqual([1, 2]);
+    } finally {
+      await h.dispose();
+    }
+  });
+});

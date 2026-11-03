@@ -197,7 +197,18 @@ export class SessionProjectionCacheRdb extends Service {
     const previous = this.lookup(session.id)?.rows;
     if (previous !== undefined && sameCheckpoint(previous, rows)) return;
 
-    if (this.ctx.sessions.get(session.id) === session) await this.ctx.sessions.flush(session);
+    if (this.ctx.sessions.get(session.id) === session) {
+      // 检查点是内存 log 的快照：先把 live 事件落库再写检查点，但 **flush 失败不该阻断检查点**——
+      // 否则撤回后缓存会停在旧水位，读路径一直显示撤回前的数据（要重启实例才从库里重新加载）。
+      // flush 失败本身由上游记账，这里只补一条 warn。
+      try {
+        await this.ctx.sessions.flush(session);
+      } catch (error: unknown) {
+        this.ctx.logger.warn(
+          `session projection cache: flush before checkpoint for "${session.id}" failed (checkpoint still written from the in-memory log): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
 
     const changed = changedRows(previous, rows);
     const removedKeys = Object.keys(previous ?? {}).filter((key) => rows[key] === undefined);

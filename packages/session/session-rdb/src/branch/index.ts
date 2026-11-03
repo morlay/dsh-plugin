@@ -408,9 +408,24 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
 
       agent?.inbox?.clear();
 
-      await this.live.flush(live);
+      // flush 是「把 live 缓冲尽力落库」：失败不该让撤回失败，也不该阻断下面的缓存刷新——
+      // 撤回的正确性由库里的截断保证，缓存必须跟着新水位走，否则页面会一直显示撤回前的数据。
+      try {
+        await this.live.flush(live);
+      } catch (error: unknown) {
+        this.live.warn?.(
+          `session-rdb: flush after rewind for "${id}" failed (the stored log is already truncated; live buffers may lag): ${describeError(error)}`,
+        );
+      }
 
-      await this.refreshProjectionCache(live);
+      // 带上新水位：`write` 失败时缓存按这个水位截断兜底，而不是把撤回前的旧快照留在读路径上。
+      await this.refreshProjectionCache({
+        id: live.id,
+        header: live.header,
+        inheritedEventCount: live.inheritedEventCount,
+        headSeq: keepLength - 1,
+        snapshotEvents: () => live.snapshotEvents(),
+      });
     } else {
       // rewind 不读日志：缓存行按新水位截断（保留下来的投影单元仍在截断前缀内）
       await this.refreshProjectionCache({
@@ -544,15 +559,34 @@ export class SessionBranchRdb extends SessionBranch {
             }
           | undefined;
         if (cache === undefined) return;
-        try {
-          if (session.headSeq !== undefined && cache.truncateTo !== undefined) {
+        const cold = session.snapshotEvents().length === 0;
+        if (cold && session.headSeq !== undefined && cache.truncateTo !== undefined) {
+          // 没有 live 会话：不 fold 日志，按新水位截断即可。
+          try {
             await cache.truncateTo(session.header, session.inheritedEventCount, session.headSeq);
-            return;
+          } catch (error: unknown) {
+            this.ctx.logger.warn(
+              `session-rdb: projection cache truncate after rewind for "${session.id}" failed: ${describeError(error)}`,
+            );
           }
+          return;
+        }
+        try {
           await cache.write(session);
         } catch (error: unknown) {
+          // 写回失败（例如带报错信息的日志让上游 fold 抛错、或 flush 失败）：退到「按新水位截断镜像」，
+          // 至少读路径与服务端的截断结果一致；否则要等实例重启才会从库里重新加载。
+          if (session.headSeq !== undefined && cache.truncateTo !== undefined) {
+            try {
+              await cache.truncateTo(session.header, session.inheritedEventCount, session.headSeq);
+            } catch (fallbackError: unknown) {
+              this.ctx.logger.warn(
+                `session-rdb: projection cache truncate fallback after rewind for "${session.id}" failed: ${describeError(fallbackError)}`,
+              );
+            }
+          }
           this.ctx.logger.warn(
-            `session-rdb: projection cache refresh after rewind for "${session.id}" failed (cache stays stale): ${String(error)}`,
+            `session-rdb: projection cache rebuild after rewind for "${session.id}" failed (fell back to truncating the cache at the new head): ${describeError(error)}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
           );
         }
       },
@@ -593,3 +627,7 @@ export class SessionBranchRdb extends SessionBranch {
 }
 
 export default SessionBranchRdb;
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : "unknown error";
+}
