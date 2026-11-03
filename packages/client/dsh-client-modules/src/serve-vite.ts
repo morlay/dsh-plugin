@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import type { Context } from "@deepseek-ai/cordis";
 import { traceOf } from "./trace.ts";
 import { createServer, type ServerOptions, type ViteDevServer } from "vite";
-import { clientModulesAlias } from "./bundle.ts";
+import { browserProcessPlugin, clientModulesAlias } from "./bundle.ts";
+import { clientBuildMeta } from "./client-meta.ts";
 import { dshClientRowsPlugin, ROWS_VIRTUAL } from "./vite-plugin.ts";
 import { packageRootOf } from "./resolve.ts";
 
@@ -93,11 +94,9 @@ export async function startViteDev(
     // **不要**把 base 改成 `/@/` 去"统一前缀"：vite 会给所有不以 base 开头的绝对 URL 再补一层，
     // 联邦地址（`/@client-modules/…`）会变成 `/@/@client-modules/…`，两条链全断。
     base: "/",
-    // 浏览器没有 `process`：客户端半常读 `process.env.NODE_ENV`（上游 client 打包也做同样的替换）。
+    // 浏览器没有 `process`：裸 `process` 给空壳（逐文件服务的源码里会读它）。`process.env` 与版本元数据
+    // （`DSH_CLIENT_*`）由 `browserProcessPlugin` 处理——与联邦构建同一份规则，顺序只写在一处。
     define: {
-      "process.env.NODE_ENV": JSON.stringify(process.env["NODE_ENV"] ?? "development"),
-      "process.env": "{ env: {} }",
-      // 裸 `process` 同样要给空壳（逐文件服务的源码里也会读它）。
       process: "{ env: {} }",
     },
     publicDir: false,
@@ -151,6 +150,8 @@ export async function startViteDev(
     // 官方口径的"整个关掉"就是这两个字段（`optimizeDeps.disabled` 在 Vite 5.1 已移除，传它只会换来一条告警）。
     optimizeDeps: { noDiscovery: true, include: [] },
     plugins: [
+      // 与联邦构建同一份 `process.env` 处理（含 `DSH_CLIENT_*` 的版本元数据）。
+      browserProcessPlugin(await clientBuildMeta(repoRoot)),
       dshClientRowsPlugin({
         repoRoot,
         rows: () => rowsOf(options.rows),

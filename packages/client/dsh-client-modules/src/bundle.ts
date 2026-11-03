@@ -18,6 +18,7 @@ import { clientAssetPlugin, NODE_BUILTIN } from "@morlay/dsh-cordis-assets/asset
 import { cssInlinePlugins } from "@morlay/dsh-cordis-assets/styles";
 import { rolldown, type Plugin } from "rolldown";
 import { esmExternalRequirePlugin, type PluginOption } from "vite";
+import { type ClientBuildMeta, clientBuildMeta, clientMetaDefines } from "./client-meta.ts";
 import { encodePackageName, entryFileNameOf, packageNameOf } from "./resolve.ts";
 
 /** 裸包名 → `^名(/|$)`：既覆盖子路径引用，也不会把 `node:fs`、`./x` 误判成包。 */
@@ -61,7 +62,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "28";
+const BUNDLER_RULES = "30";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -307,11 +308,15 @@ export function urlOf(
  * **只替换 `process.env` 系列**：裸的 `process` 不能碰——它可能只是个普通标识符（`zod` 里就有一个叫
  * `process` 的函数，替换掉直接把源码变成语法错误）。
  */
-function browserProcessPlugin(): PluginOption {
-  const replace = (code: string): string =>
-    code
-      .replaceAll(/\bprocess\.env\.NODE_ENV\b/gu, JSON.stringify("development"))
-      .replaceAll(/\bprocess\.env\b/gu, "({ env: {} })");
+export function browserProcessPlugin(meta: ClientBuildMeta = {}): PluginOption {
+  // 版本元数据那几个键**先**换成字面量：它们要的是真值（设置页的版本行、侧栏的 `<commit>-dirty`），
+  // 而后面那条把 `process.env` 整个换成空壳的规则会连它们一起吞掉。
+  const metaDefines = Object.entries(clientMetaDefines(meta));
+  const replace = (code: string): string => {
+    let next = code.replaceAll(/\bprocess\.env\.NODE_ENV\b/gu, JSON.stringify("development"));
+    for (const [key, value] of metaDefines) next = next.replaceAll(key, value);
+    return next.replaceAll(/\bprocess\.env\b/gu, "({ env: {} })");
+  };
   return {
     name: "dsh-browser-process",
     enforce: "pre",
@@ -612,7 +617,7 @@ async function bundlePackageOnce(
         return undefined;
       },
     },
-    browserProcessPlugin(),
+    browserProcessPlugin(await clientBuildMeta(options.repoRoot)),
     cssInlinePlugins({
       name: key,
       assets: "threshold",
@@ -695,10 +700,10 @@ async function bundlePackageOnce(
       // 它与 tsconfig 那项**语义相同**，两处都声明时 rolldown 会提示"tsconfig 被 transform 覆盖"——这条提示
       // 对我们没有决策价值（见下面的 `onLog`），不是需要处理的冲突。
       decorator: { legacy: true },
-      // 浏览器没有 `process`：精确替换 `process.env`，裸 `process` 再给一个空壳——`immer` 这类包会在
-      // 模块顶层读它，漏掉就是一个 `process is not defined` 把整份产物带下去。
+      // 浏览器没有 `process`：裸 `process` 给一个空壳——`immer` 这类包会在模块顶层读它，漏掉就是一个
+      // `process is not defined` 把整份产物带下去。`process.env` 的替换在 `browserProcessPlugin` 里做
+      // （版本元数据要先于"整个 process.env 变空壳"那一步换成真值，顺序写在一处而不是两处）。
       define: {
-        "process.env": "{ env: {} }",
         process: "{ env: {} }",
       },
     },
