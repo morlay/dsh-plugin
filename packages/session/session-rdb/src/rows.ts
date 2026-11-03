@@ -41,7 +41,7 @@ export interface SessionRowsValue {
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 20;
 
-export function registerSessionRows(ctx: Context, backend: Backend): void {
+export function registerSessionRows(ctx: Context, getBackend: () => Promise<Backend>): void {
   ctx.inject(["webServer", "connection"] as const, (webCtx) => {
     const webServer = webCtx.webServer as unknown as {
       register(route: {
@@ -96,6 +96,7 @@ export function registerSessionRows(ctx: Context, backend: Backend): void {
                 ? Math.min(requested!, MAX_PAGE_SIZE)
                 : DEFAULT_PAGE_SIZE;
             try {
+              const backend = await getBackend();
               const { items, total } = await backend.listSessionRows({
                 ...(envelope.query === undefined ? {} : { query: envelope.query }),
                 ...(envelope.includeSubagents === undefined

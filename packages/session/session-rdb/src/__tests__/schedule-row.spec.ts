@@ -66,11 +66,19 @@ describe("schedule row over the rdb storage backend", () => {
       const db = new DatabaseSync(dbPath);
       try {
         const rows = db
-          .prepare("SELECT f_id, f_session_id, f_status FROM t_schedule_tasks")
-          .all() as Array<{ f_id: string; f_session_id: string; f_status: string }>;
-        expect(rows).toEqual([
-          { f_id: createdId, f_session_id: "session-schedule", f_status: "active" },
-        ]);
+          .prepare(
+            "SELECT f_key, f_value FROM t_storage_records WHERE f_domain = 'schedule' AND f_table = 'tasks'",
+          )
+          .all() as Array<{ f_key: string; f_value: string }>;
+        expect(rows.map((row) => row.f_key)).toEqual([createdId]);
+        const stored = JSON.parse(rows[0]!.f_value) as {
+          sessionId: string;
+          status: string;
+          record: { prompt: string };
+        };
+        expect(stored.sessionId).toBe("session-schedule");
+        expect(stored.status).toBe("active");
+        expect(stored.record.prompt).toBe("该喝水了");
       } finally {
         db.close();
       }

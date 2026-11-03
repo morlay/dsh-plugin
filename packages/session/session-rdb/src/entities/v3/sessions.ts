@@ -1,6 +1,6 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
-export const sessions: TableDef = {
+export const sessions = defineTable({
   name: "t_sessions",
   columns: {
     f_id: { type: "serial", primaryKey: true },
@@ -28,4 +28,4 @@ export const sessions: TableDef = {
 
     f_title_seq: { type: "integer" },
   },
-};
+});

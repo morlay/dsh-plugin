@@ -1,9 +1,9 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
 // 用量日志：一条 `assistant/message` 事件一行（按事件行唯一，fork 共享行不重复）；读侧维度全部物化在行上
 // （本地日、是否被会话引用、是否被子代理会话引用），统计因此不做 `EXISTS` 判定、也不回连事件表。
 // 取舍见 ADR-统计衍生表物化归属与汇总。
-export const eventUsage: TableDef = {
+export const eventUsage = defineTable({
   name: "t_event_usage",
   columns: {
     f_event_id: {
@@ -27,4 +27,4 @@ export const eventUsage: TableDef = {
     f_total_tokens: { type: "integer", notNull: true, default: 0 },
   },
   indexes: { idx_event_usage_created_at: { columns: ["f_created_at"] } },
-};
+});

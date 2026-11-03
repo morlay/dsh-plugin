@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, gte, inArray, isNotNull, lt, notInArray, sql } from "drizzle-orm";
 import {
   SESSION_FORMAT_VERSION,
   SessionId,
@@ -7,67 +6,27 @@ import {
   SessionSeq,
 } from "@deepseek-ai/dsh-session";
 import type { SessionSeqCursor } from "@deepseek-ai/dsh-session";
-import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import type {
   CheckpointIdentity,
+  DomainRecord,
   ProjectionCheckpoint,
   ProjectionCheckpointRow,
-  ScheduleTask,
   StorageRepository,
+  StorageRepositoryHost,
   StoredProjcacheEntry,
   WorkspaceDomainState,
+  WorkspaceIndexEntry,
   WorkspaceRecord,
 } from "./types.ts";
+import { E, type Database } from "@morlay/rdbkit";
+import { sessionProjcacheRows, sessions, storageRecords, storageUnits } from "../entities/index.ts";
 
-export interface StorageRepositoryHost {
-  db: () => Promise<unknown>;
-
-  // 不经 await、直接拿到的数据库句柄；未开放时只走异步的 `db`。
-  dbDirect?: () => unknown;
-
-  tables: Record<string, unknown>;
-
-  writeAtomically: <T>(fn: () => Promise<T>) => Promise<T>;
-}
-
-async function allRows<T>(query: unknown): Promise<T[]> {
-  const q = query as { all?: () => T[] };
-  if (typeof q.all === "function") return q.all();
-  return (await query) as T[];
-}
-
-async function oneRow<T>(query: unknown): Promise<T | undefined> {
-  const q = query as { get?: () => T | undefined };
-  if (typeof q.get === "function") return q.get();
-  const rows = (await query) as T[];
-  return rows[0];
-}
-
-async function runQuery(query: unknown): Promise<void> {
-  const q = query as { run?: () => unknown };
-  if (typeof q.run === "function") {
-    q.run();
-    return;
-  }
-  await query;
-}
-
-interface SessionIdentityRow {
+function identityOfSession(row: {
   fVersion: number;
   fCreatedAt: number;
   fCwd: string | null;
   fSeedLength: number | null;
-}
-
-interface ProjcacheRowRecord {
-  fSessionId: string;
-  fKey: string;
-  fVer: number;
-  fSeq: number;
-  fVal: string;
-}
-
-function identityOfSession(row: SessionIdentityRow): CheckpointIdentity {
+}): CheckpointIdentity {
   return {
     formatVersion: row.fVersion,
     createdAt: row.fCreatedAt,
@@ -81,383 +40,243 @@ function seqCursor(seq: number): SessionSeqCursor {
   return seq === -1 ? -1 : SessionSeq(seq);
 }
 
-function pendingMutationOf(row: {
-  fPendingOperation: string | null;
-  fPendingWorkspaceId: string | null;
-}): WorkspaceDomainState["pendingMutation"] {
-  const operation = row.fPendingOperation;
-  if (operation !== "create" && operation !== "delete") return undefined;
-  return { operation, workspaceId: (row.fPendingWorkspaceId ?? "") as WorkspaceId };
-}
-
-interface ScheduleTaskRowRecord {
-  fId: string;
-  fSessionId: string;
-  fStatus: string;
-  fRecord: string;
-  fLastDelivery: string | null;
-  fDeliveryHistory: string | null;
-}
-
-// 行的读写映射：形状校验在 KV 那一层做（`storage-backend.ts` 的 `scheduleTaskOf`），这里只按列拆装——
-// 归属会话与状态是列，其余三段保持上游契约的 JSON 原样（读回时 `dsh-schedule` 的域 schema 还会再校验）。
-function taskFromRow(row: ScheduleTaskRowRecord): ScheduleTask {
-  return {
-    sessionId: row.fSessionId as SessionId,
-    record: JSON.parse(row.fRecord),
-    status: row.fStatus === "inactive" ? "inactive" : "active",
-    ...(row.fLastDelivery === null ? {} : { lastDelivery: JSON.parse(row.fLastDelivery) }),
-    ...(row.fDeliveryHistory === null ? {} : { deliveryHistory: JSON.parse(row.fDeliveryHistory) }),
-  } as ScheduleTask;
-}
-
-function rowFromTask(id: string, task: ScheduleTask): ScheduleTaskRowRecord {
-  return {
-    fId: id,
-    fSessionId: task.sessionId,
-    fStatus: task.status === "inactive" ? "inactive" : "active",
-    fRecord: JSON.stringify(task.record),
-    fLastDelivery: task.lastDelivery === undefined ? null : JSON.stringify(task.lastDelivery),
-    fDeliveryHistory:
-      task.deliveryHistory === undefined ? null : JSON.stringify(task.deliveryHistory),
-  };
-}
-
 export function createStorageRepository(host: StorageRepositoryHost): StorageRepository {
-  const tables = host.tables as Record<string, any>;
-  const tUnits = tables["t_storage_units"]!;
-  const tSessions = tables["t_sessions"]!;
-  const tWorkspaces = tables["t_workspaces"]!;
-  const tWorkspaceSessions = tables["t_workspace_sessions"]!;
-  const tWorkspaceState = tables["t_workspace_state"]!;
-  const tScheduleTasks = tables["t_schedule_tasks"]!;
-  const tProjcacheRows = tables["t_session_projcache_row"]!;
+  const records = storageRecords.table(host.database);
+  const projcache = sessionProjcacheRows.table(host.database);
+  const sessionRows = sessions.table(host.database);
+  const units = storageUnits.table(host.database);
 
-  const sessionIdentity = {
-    fSessionId: tSessions.fSessionId,
-    fVersion: tSessions.fVersion,
-    fCreatedAt: tSessions.fCreatedAt,
-    fCwd: tSessions.fCwd,
-    fSeedLength: tSessions.fSeedLength,
-  };
+  /** 读一个域的 global（空表名那一行）；没有就返回 `null`（域层据此用 initial）。 */
+  async function readGlobal(domain: string): Promise<unknown> {
+    for await (const row of records
+      .select({ value: records.column("f_value") })
+      .where(E.and(E.eq(records.f_domain, domain), E.eq(records.f_table, GLOBAL_TABLE)))) {
+      return JSON.parse(row.value);
+    }
+    return null;
+  }
 
-  const dbx = async (): Promise<any> => (await host.db()) as any;
+  const GLOBAL_TABLE = "";
+  const WORKSPACE_DOMAIN = "workspace";
+  const WORKSPACE_TABLE = "workspaces";
+
+  // workspace 的 global 里那两个集合仍是会话行上的标记：列表的 archived 与钉住顺序按会话查；
+  // 文档是唯一的域存储，这里只写穿（找不到会话行的 id 跳过，与既有语义一致）。
+  async function syncSessionFlags(database: Database, state: WorkspaceDomainState): Promise<void> {
+    const table = sessions.table(database);
+    const pinned = state.pinnedSessionIds ?? [];
+    // 钉住：先把不在集合里的置空，再按位置写（找不到会话行就跳过，与既有语义一致）。
+    await table.update({ f_pinned_seq: null }, E.isNotNull(table.f_pinned_seq));
+    for (const [position, sessionId] of pinned.entries()) {
+      await table.update({ f_pinned_seq: position }, E.eq(table.f_session_id, sessionId));
+    }
+
+    const archived = state.archivedSessionIds;
+    await table.update({ f_archived_at: null }, E.isNotNull(table.f_archived_at));
+    const stamp = Date.now();
+    for (const sessionId of archived) {
+      // 旧库的归档集合里可能有还没落会话行的 id：先补一行再打标记。
+      await table.insertIgnore(
+        {
+          f_session_id: sessionId,
+          f_head_event_id: "",
+          f_head_sequence: -1,
+          f_version: SESSION_FORMAT_VERSION,
+          f_created_at: stamp,
+          f_cwd: null,
+          f_parent_session: null,
+          f_seed_length: null,
+          f_origin: null,
+          f_delegation_depth: null,
+          f_incarnation: randomUUID(),
+          f_revision: 0,
+          f_archived_at: stamp,
+        },
+        ["f_session_id"],
+      );
+      await table.update({ f_archived_at: stamp }, E.eq(table.f_session_id, sessionId));
+    }
+  }
 
   return {
     async readUnitVersion(name: string): Promise<number | undefined> {
-      const db = await dbx();
-      const row = await oneRow<{ fVersion: number }>(
-        db.select().from(tUnits).where(eq(tUnits.fName, name)),
-      );
-      return row?.fVersion;
+      for await (const row of units
+        .select({ version: units.column("f_version") })
+        .where(E.eq(units.f_name, name))) {
+        return row.version;
+      }
+      return undefined;
     },
 
     async insertUnitVersion(name: string, version: number): Promise<void> {
-      const db = await dbx();
-      await runQuery(
-        db.insert(tUnits).values({ fName: name, fVersion: version }).onConflictDoNothing(),
-      );
+      await host.writeAtomically(async () => {
+        await units.insertIgnore({ f_name: name, f_version: version }, ["f_name"]);
+      });
     },
 
-    async listWorkspaces(): Promise<Array<{ id: string; record: WorkspaceRecord }>> {
-      const db = await dbx();
-      const rows = await allRows<{
-        fWorkspaceId: string;
-        fPath: string;
-        fTitle: string;
-        fCreatedAt: string;
-        fUpdatedAt: string;
-      }>(db.select().from(tWorkspaces));
-      const links = await allRows<{
-        fWorkspaceId: string;
-        fSessionId: string;
-        fPosition: number;
-      }>(db.select().from(tWorkspaceSessions));
-      const sessions = new Map<string, Array<{ id: string; position: number }>>();
-      for (const link of links) {
-        const owned = sessions.get(link.fWorkspaceId) ?? [];
-        owned.push({ id: link.fSessionId, position: link.fPosition });
-        sessions.set(link.fWorkspaceId, owned);
+    async listDomainRecords(domain: string): Promise<DomainRecord[]> {
+      const result: DomainRecord[] = [];
+      for await (const row of records
+        .select({
+          table: records.column("f_table"),
+          key: records.column("f_key"),
+          value: records.column("f_value"),
+        })
+        .where(E.eq(records.f_domain, domain))) {
+        if (row.table === "") continue;
+        result.push({ table: row.table, key: row.key, value: JSON.parse(row.value) });
       }
-      return rows.map((row) => ({
-        id: row.fWorkspaceId,
-        record: {
-          path: row.fPath,
-          title: row.fTitle,
-          sessionIds: (sessions.get(row.fWorkspaceId) ?? [])
-            .sort((left, right) => left.position - right.position)
-            .map((entry) => SessionId(entry.id)),
-          createdAt: row.fCreatedAt,
-          updatedAt: row.fUpdatedAt,
-        },
-      }));
+      return result;
     },
 
-    async putWorkspace(id: string, record: WorkspaceRecord): Promise<void> {
-      await host.writeAtomically(async () => {
-        const db = await dbx();
-        const values = {
-          fWorkspaceId: id,
-          fPath: record.path,
-          fTitle: record.title,
-          fCreatedAt: record.createdAt,
-          fUpdatedAt: record.updatedAt,
-        };
-        await runQuery(
-          db
-            .insert(tWorkspaces)
-            .values(values)
-            .onConflictDoUpdate({ target: tWorkspaces.fWorkspaceId, set: values }),
-        );
+    async readDomainGlobal(domain: string): Promise<unknown> {
+      return await readGlobal(domain);
+    },
 
-        await runQuery(
-          db.delete(tWorkspaceSessions).where(eq(tWorkspaceSessions.fWorkspaceId, id)),
+    async putDomainRecord(
+      domain: string,
+      table: string,
+      key: string,
+      value: unknown,
+    ): Promise<void> {
+      await host.writeAtomically(async () => {
+        await records.upsert(
+          { f_domain: domain, f_table: table, f_key: key, f_value: JSON.stringify(value) },
+          ["f_domain", "f_table", "f_key"],
+          ["f_value"],
         );
-        const links = record.sessionIds.map((sessionId, position) => ({
-          fWorkspaceId: id,
-          fSessionId: sessionId,
-          fPosition: position,
-        }));
-        if (links.length > 0) await runQuery(db.insert(tWorkspaceSessions).values(links));
       });
     },
 
-    async deleteWorkspace(id: string): Promise<void> {
+    async deleteDomainRecord(domain: string, table: string, key: string): Promise<void> {
       await host.writeAtomically(async () => {
-        const db = await dbx();
-        await runQuery(
-          db.delete(tWorkspaceSessions).where(eq(tWorkspaceSessions.fWorkspaceId, id)),
+        await records.delete(
+          E.and(E.eq(records.f_domain, domain), E.eq(records.f_table, table), E.eq(records.f_key, key)),
         );
-        await runQuery(db.delete(tWorkspaces).where(eq(tWorkspaces.fWorkspaceId, id)));
       });
     },
 
-    async deleteWorkspaces(ids: readonly string[]): Promise<void> {
-      if (ids.length === 0) return;
+    async deleteDomainRecords(
+      domain: string,
+      table: string,
+      keys: readonly string[],
+    ): Promise<void> {
+      if (keys.length === 0) return;
       await host.writeAtomically(async () => {
-        const db = await dbx();
-        await runQuery(
-          db.delete(tWorkspaceSessions).where(inArray(tWorkspaceSessions.fWorkspaceId, [...ids])),
+        await records.delete(
+          E.and(
+            E.eq(records.f_domain, domain),
+            E.eq(records.f_table, table),
+            E.inList(records.f_key, [...new Set(keys)]),
+          ),
         );
-        await runQuery(db.delete(tWorkspaces).where(inArray(tWorkspaces.fWorkspaceId, [...ids])));
       });
     },
 
-    async readWorkspaceState(): Promise<WorkspaceDomainState | null> {
-      const db = await dbx();
-      const row = await oneRow<{
-        fInitialized: number;
-        fPendingOperation: string | null;
-        fPendingWorkspaceId: string | null;
-      }>(db.select().from(tWorkspaceState).where(eq(tWorkspaceState.fSingleton, 1)));
-      if (row === undefined) return null;
-      const ordered = await allRows<{ fWorkspaceId: string }>(
-        db
-          .select()
-          .from(tWorkspaces)
-          .where(gte(tWorkspaces.fPosition, 0))
-          .orderBy(tWorkspaces.fPosition),
-      );
-      const archives = await allRows<{ fSessionId: string }>(
-        db
-          .select({ fSessionId: tSessions.fSessionId })
-          .from(tSessions)
-          .where(isNotNull(tSessions.fArchivedAt))
-          .orderBy(tSessions.fArchivedAt),
-      );
-      const pinned = await allRows<{ fSessionId: string; fPinnedSeq: number | null }>(
-        db
-          .select({ fSessionId: tSessions.fSessionId, fPinnedSeq: tSessions.fPinnedSeq })
-          .from(tSessions)
-          .where(isNotNull(tSessions.fPinnedSeq))
-          .orderBy(tSessions.fPinnedSeq),
-      );
-      const pendingMutation = pendingMutationOf(row);
-      return {
-        initialized: row.fInitialized !== 0,
-        workspaceIds: ordered.map((entry) => entry.fWorkspaceId as WorkspaceId),
-        archivedSessionIds: archives.map((entry) => entry.fSessionId as SessionId),
-        pinnedSessionIds: pinned.map((entry) => entry.fSessionId as SessionId),
-        ...(pendingMutation === undefined ? {} : { pendingMutation }),
-      };
-    },
-
-    async writeWorkspaceState(state: WorkspaceDomainState): Promise<void> {
+    async writeDomainGlobal(domain: string, value: unknown): Promise<void> {
       await host.writeAtomically(async () => {
-        const db = await dbx();
-        const pending = state.pendingMutation as
-          | { operation?: unknown; workspaceId?: unknown }
-          | undefined;
-        const values = {
-          fSingleton: 1,
-          fInitialized: state.initialized ? 1 : 0,
-          fPendingOperation:
-            pending === undefined || typeof pending.operation !== "string"
-              ? null
-              : pending.operation,
-          fPendingWorkspaceId:
-            pending === undefined || typeof pending.workspaceId !== "string"
-              ? null
-              : pending.workspaceId,
-        };
-        await runQuery(
-          db
-            .insert(tWorkspaceState)
-            .values(values)
-            .onConflictDoUpdate({ target: tWorkspaceState.fSingleton, set: values }),
+        await records.upsert(
+          { f_domain: domain, f_table: "", f_key: "", f_value: JSON.stringify(value) },
+          ["f_domain", "f_table", "f_key"],
+          ["f_value"],
         );
-
-        await runQuery(db.update(tWorkspaces).set({ fPosition: -1 }));
-        for (const [position, workspaceId] of state.workspaceIds.entries()) {
-          await runQuery(
-            db
-              .update(tWorkspaces)
-              .set({ fPosition: position })
-              .where(eq(tWorkspaces.fWorkspaceId, workspaceId)),
-          );
-        }
-
-        // 钉住：未在集合里的清掉，集合里的按数组位置写序号（读回即按它排序）。
-        // 找不到会话行的 id 跳过：pin 只作用于已存在的会话（与归档不同，不凭空造行）。
-        // 既有 storages 文档里可能没有这个集合，导入路径按空处理。
-        const pinned = state.pinnedSessionIds ?? [];
-        await runQuery(
-          pinned.length === 0
-            ? db.update(tSessions).set({ fPinnedSeq: null }).where(isNotNull(tSessions.fPinnedSeq))
-            : db
-                .update(tSessions)
-                .set({ fPinnedSeq: null })
-                .where(
-                  and(isNotNull(tSessions.fPinnedSeq), notInArray(tSessions.fSessionId, pinned)),
-                ),
-        );
-        for (const [position, sessionId] of pinned.entries()) {
-          await runQuery(
-            db
-              .update(tSessions)
-              .set({ fPinnedSeq: position })
-              .where(eq(tSessions.fSessionId, sessionId)),
-          );
-        }
-
-        const archived = state.archivedSessionIds;
-        await runQuery(
-          archived.length === 0
-            ? db
-                .update(tSessions)
-                .set({ fArchivedAt: null })
-                .where(isNotNull(tSessions.fArchivedAt))
-            : db
-                .update(tSessions)
-                .set({ fArchivedAt: null })
-                .where(
-                  and(isNotNull(tSessions.fArchivedAt), notInArray(tSessions.fSessionId, archived)),
-                ),
-        );
-        const stamp = Date.now();
-        for (const sessionId of archived) {
-          await runQuery(
-            db
-              .insert(tSessions)
-              .values({
-                fSessionId: sessionId,
-                fHeadEventId: "",
-                fHeadSequence: -1,
-                fVersion: SESSION_FORMAT_VERSION,
-                fCreatedAt: stamp,
-                fCwd: null,
-                fParentSession: null,
-                fSeedLength: null,
-                fOrigin: null,
-                fDelegationDepth: null,
-                fIncarnation: randomUUID(),
-                fRevision: 0,
-                fArchivedAt: stamp,
-              })
-              .onConflictDoUpdate({
-                target: tSessions.fSessionId,
-
-                set: { fArchivedAt: sql`COALESCE(${tSessions.fArchivedAt}, ${stamp})` },
-              }),
-          );
+        // workspace 的归档 / 钉住仍是会话行上的标记（列表与删除都按会话查），由这里写穿。
+        if (domain === WORKSPACE_DOMAIN) {
+          await syncSessionFlags(host.database, value as WorkspaceDomainState);
         }
       });
     },
 
-    async listScheduleTasks(): Promise<Array<{ id: string; task: ScheduleTask }>> {
-      const db = await dbx();
-      const rows = await allRows<ScheduleTaskRowRecord>(db.select().from(tScheduleTasks));
-      return rows.map((row) => ({ id: row.fId, task: taskFromRow(row) }));
-    },
-
-    async putScheduleTask(id: string, task: ScheduleTask): Promise<void> {
-      await host.writeAtomically(async () => {
-        const db = await dbx();
-        const values = rowFromTask(id, task);
-        await runQuery(
-          db
-            .insert(tScheduleTasks)
-            .values(values)
-            .onConflictDoUpdate({ target: tScheduleTasks.fId, set: values }),
-        );
-      });
-    },
-
-    async deleteScheduleTask(id: string): Promise<void> {
-      await host.writeAtomically(async () => {
-        const db = await dbx();
-        await runQuery(db.delete(tScheduleTasks).where(eq(tScheduleTasks.fId, id)));
-      });
-    },
-
-    async deleteScheduleTasks(ids: readonly string[]): Promise<void> {
-      if (ids.length === 0) return;
-      await host.writeAtomically(async () => {
-        const db = await dbx();
-        await runQuery(db.delete(tScheduleTasks).where(inArray(tScheduleTasks.fId, [...ids])));
-      });
+    async listWorkspaceIndex(): Promise<WorkspaceIndexEntry[]> {
+      const rows: Array<{ id: string; record: WorkspaceRecord }> = [];
+      for await (const row of records
+        .select({ key: records.column("f_key"), value: records.column("f_value") })
+        .where(
+          E.and(E.eq(records.f_domain, WORKSPACE_DOMAIN), E.eq(records.f_table, WORKSPACE_TABLE)),
+        )) {
+        rows.push({ id: row.key, record: JSON.parse(row.value) as WorkspaceRecord });
+      }
+      const state = (await readGlobal(WORKSPACE_DOMAIN)) as WorkspaceDomainState | null;
+      const order = new Map<string, number>(
+        (state?.workspaceIds ?? []).map((id, position) => [String(id), position]),
+      );
+      return rows
+        .sort(
+          (left, right) =>
+            (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+            (order.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        )
+        .map(({ id, record }) => ({ id, title: record.title, sessionIds: [...record.sessionIds] }));
     },
 
     async loadProjcache(): Promise<StoredProjcacheEntry[]> {
-      const db = await dbx();
-      const rows = await allRows<ProjcacheRowRecord>(db.select().from(tProjcacheRows));
-      if (rows.length === 0) return [];
-      const sessions = await allRows<SessionIdentityRow & { fSessionId: string }>(
-        db.select(sessionIdentity).from(tSessions),
-      );
       const entries = new Map<string, StoredProjcacheEntry>();
-      for (const session of sessions) {
-        entries.set(session.fSessionId, {
-          sessionId: SessionId(session.fSessionId),
-          identity: identityOfSession(session),
+      for await (const row of sessionRows.select({
+        sessionId: sessionRows.f_session_id,
+        version: sessionRows.f_version,
+        createdAt: sessionRows.f_created_at,
+        cwd: sessionRows.f_cwd,
+        seedLength: sessionRows.f_seed_length,
+        title: sessionRows.f_title,
+        titleSeq: sessionRows.f_title_seq,
+      })) {
+        entries.set(row.sessionId, {
+          sessionId: SessionId(row.sessionId),
+          identity: identityOfSession({
+            fVersion: row.version,
+            // `f_created_at` 是 bigint（读回 BigInt）：投影身份的 createdAt 用 number。
+            fCreatedAt: Number(row.createdAt),
+            fCwd: row.cwd,
+            fSeedLength: row.seedLength,
+          }),
           rows: {},
+          ...(typeof row.title === "string" && typeof row.titleSeq === "number"
+            ? { title: { title: row.title, seq: row.titleSeq } }
+            : {}),
         });
       }
-      for (const row of rows) {
-        const entry = entries.get(row.fSessionId);
+      if (entries.size === 0) return [];
+      for await (const row of projcache.select({
+        sessionId: projcache.f_session_id,
+        key: projcache.f_key,
+        ver: projcache.f_ver,
+        seq: projcache.f_seq,
+        val: projcache.f_val,
+      })) {
+        const entry = entries.get(row.sessionId);
         if (entry === undefined) continue;
-        entry.rows[row.fKey] = {
-          ver: row.fVer,
-          seq: seqCursor(row.fSeq),
-          val: JSON.parse(row.fVal),
+        entry.rows[row.key] = {
+          ver: row.ver,
+          seq: seqCursor(row.seq),
+          val: JSON.parse(row.val),
         } satisfies ProjectionCheckpointRow;
       }
-
       return [...entries.values()].filter((entry) => Object.keys(entry.rows).length > 0);
     },
 
+    async readSessionTitle(sessionId: string): Promise<{ title: string; seq: number } | undefined> {
+      const table = sessions.table(host.database);
+      for await (const row of table
+        .select({ title: table.f_title, seq: table.f_title_seq })
+        .where(E.eq(table.f_session_id, sessionId))) {
+        return row.title === null || row.seq === null
+          ? undefined
+          : { title: row.title, seq: row.seq };
+      }
+      return undefined;
+    },
+
     async putProjcache(sessionId: string, rows: ProjectionCheckpoint): Promise<void> {
+      const values = Object.entries(rows).map(([key, row]) => ({
+        f_session_id: sessionId,
+        f_key: key,
+        f_ver: row.ver,
+        f_seq: row.seq,
+        f_val: JSON.stringify(row.val),
+      }));
       await host.writeAtomically(async () => {
-        const db = await dbx();
-        await runQuery(db.delete(tProjcacheRows).where(eq(tProjcacheRows.fSessionId, sessionId)));
-        const values = Object.entries(rows).map(([key, row]) => ({
-          fSessionId: sessionId,
-          fKey: key,
-          fVer: row.ver,
-          fSeq: row.seq,
-          fVal: JSON.stringify(row.val),
-        }));
-        if (values.length > 0) await runQuery(db.insert(tProjcacheRows).values(values));
+        await projcache.delete(E.eq(projcache.f_session_id, sessionId));
+        if (values.length > 0) await projcache.insertMany(values);
       });
     },
 
@@ -467,105 +286,47 @@ export function createStorageRepository(host: StorageRepositoryHost): StorageRep
       removedKeys: readonly string[],
     ): Promise<void> {
       const values = Object.entries(changed).map(([key, row]) => ({
-        fSessionId: sessionId,
-        fKey: key,
-        fVer: row.ver,
-        fSeq: row.seq,
-        fVal: JSON.stringify(row.val),
+        f_session_id: sessionId,
+        f_key: key,
+        f_ver: row.ver,
+        f_seq: row.seq,
+        f_val: JSON.stringify(row.val),
       }));
       const touched = [...Object.keys(changed), ...removedKeys];
       if (touched.length === 0) return;
       await host.writeAtomically(async () => {
-        const db = await dbx();
         // 只碰这些 key 的行：先删（同时承担 removedKeys 的删除），再插入变化行。
-        // 不用 upsert 语法：两个 dialect 的冲突子句细节不同，删+插在同一事务里是等价的，
-        // 且行数是个位数到几十。
-        await runQuery(
-          db
-            .delete(tProjcacheRows)
-            .where(
-              and(
-                eq(tProjcacheRows.fSessionId, sessionId),
-                inArray(tProjcacheRows.fKey, touched),
-              ),
-            ),
+        await projcache.delete(
+          E.and(E.eq(projcache.f_session_id, sessionId), E.inList(projcache.f_key, touched)),
         );
-        if (values.length > 0) await runQuery(db.insert(tProjcacheRows).values(values));
+        if (values.length > 0) await projcache.insertMany(values);
       });
     },
 
     async pruneStaleProjcache(): Promise<number> {
-      const db = await dbx();
-      const stale = await allRows<{ fSessionId: string }>(
-        db
-          .select({ fSessionId: tProjcacheRows.fSessionId })
-          .from(tProjcacheRows)
-          .where(
-            and(
-              lt(tProjcacheRows.fSeq, 0),
-              inArray(
-                tProjcacheRows.fSessionId,
-                db
-                  .select({ fSessionId: tSessions.fSessionId })
-                  .from(tSessions)
-                  .where(gte(tSessions.fHeadSequence, 0)),
-              ),
+      const stale: string[] = [];
+      for await (const row of projcache
+        .select({ sessionId: projcache.f_session_id })
+        .where(
+          E.and(
+            E.lt(projcache.f_seq, 0),
+            E.inSubquery(
+              projcache.f_session_id,
+              sessionRows
+                .select({ id: sessionRows.f_session_id })
+                .where(E.gte(sessionRows.f_head_sequence, 0))
+                .toFragment(),
             ),
           ),
-      );
+        )) {
+        stale.push(row.sessionId);
+      }
       if (stale.length === 0) return 0;
-      await runQuery(
-        db.delete(tProjcacheRows).where(
-          inArray(
-            tProjcacheRows.fSessionId,
-            stale.map((row) => row.fSessionId),
-          ),
-        ),
-      );
+      await host.writeAtomically(async () => {
+        await projcache.delete(E.inList(projcache.f_session_id, stale));
+      });
       return stale.length;
-    },
+    }
 
-    ...(host.dbDirect === undefined
-      ? {}
-      : {
-          readProjcacheDirect: (sessionId: string): StoredProjcacheEntry | undefined => {
-            const db = host.dbDirect!() as any;
-            const stored = db
-              .select()
-              .from(tProjcacheRows)
-              .where(eq(tProjcacheRows.fSessionId, sessionId))
-              .all() as ProjcacheRowRecord[];
-            if (stored.length === 0) return undefined;
-            const session = db
-              .select(sessionIdentity)
-              .from(tSessions)
-              .where(eq(tSessions.fSessionId, sessionId))
-              .get() as (SessionIdentityRow & { fSessionId: string }) | undefined;
-
-            if (session === undefined) return undefined;
-            const rows: ProjectionCheckpoint = {};
-            for (const row of stored) {
-              rows[row.fKey] = {
-                ver: row.fVer,
-                seq: seqCursor(row.fSeq),
-                val: JSON.parse(row.fVal),
-              };
-            }
-            return { sessionId: SessionId(sessionId), identity: identityOfSession(session), rows };
-          },
-          readSessionTitleDirect: (
-            sessionId: string,
-          ): { title: string; seq: number } | undefined => {
-            const db = host.dbDirect!() as any;
-            const row = db
-              .select({ fTitle: tSessions.fTitle, fTitleSeq: tSessions.fTitleSeq })
-              .from(tSessions)
-              .where(eq(tSessions.fSessionId, sessionId))
-              .get() as { fTitle: string | null; fTitleSeq: number | null } | undefined;
-            if (row === undefined || row.fTitle === null || row.fTitleSeq === null)
-              return undefined;
-            return { title: row.fTitle, seq: row.fTitleSeq };
-          },
-        }),
   };
 }

@@ -1,9 +1,9 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
-export const schemaMeta: TableDef = {
+export const schemaMeta = defineTable({
   name: "t_schema_meta",
   columns: {
     f_key: { type: "text", primaryKey: true },
     f_value: { type: "text", notNull: true },
   },
-};
+});

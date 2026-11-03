@@ -1,6 +1,6 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
-export const events: TableDef = {
+export const events = defineTable({
   name: "t_events",
   columns: {
     f_id: { type: "serial", primaryKey: true },
@@ -22,4 +22,4 @@ export const events: TableDef = {
     idx_events_name: { columns: ["f_name"] },
     idx_events_action_id: { columns: ["f_action_id"] },
   },
-};
+});

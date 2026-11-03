@@ -38,7 +38,7 @@ import {
   type EventRow,
   type SessionRow,
 } from "../storage.ts";
-import { openDatabase } from "../storage.ts";
+import { openInitializedSqlite } from "../testing.ts";
 import { runPersistenceContract, meta, oneTurnLog, appendLog } from "../testing.ts";
 import { runCoordinatorContract, type CoordinatorFixture } from "../testing.ts";
 
@@ -118,7 +118,7 @@ runCoordinatorContract("sqlite", async (): Promise<CoordinatorFixture> => {
       return await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
     },
     corruptTail: async (id) => {
-      const db = await openDatabase(path, "wal");
+      const db = await openInitializedSqlite(path, "wal");
       const head = db
         .prepare("SELECT f_head_event_id, f_head_sequence FROM t_sessions WHERE f_session_id = ?")
         .get(id) as { f_head_event_id: string; f_head_sequence: number };
@@ -1244,7 +1244,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
   it("rejects a stored v0 log containing a legacy request/header-delta event", async () => {
     const path = await freshDbPath();
     const m = meta("legacy-header-delta", "/legacy");
-    const db = await openDatabase(path, "wal");
+    const db = await openInitializedSqlite(path, "wal");
     db.prepare(`
       INSERT INTO t_sessions
         (f_session_id, f_head_event_id, f_head_sequence, f_version, f_created_at, f_cwd,
@@ -1334,7 +1334,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await rdb(b1.ctx).createAndAppend(m, oneTurnLog());
     await b1.dispose();
 
-    const db = await openDatabase(path, "wal");
+    const db = await openInitializedSqlite(path, "wal");
     const head = db
       .prepare("SELECT f_head_event_id FROM t_sessions WHERE f_session_id = ?")
       .get(m.id) as { f_head_event_id: string };
@@ -1347,7 +1347,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     expect(loaded.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(loaded.events.at(-1)!.type).toBe("turn/start");
 
-    const probe = await openDatabase(path, "wal");
+    const probe = await openInitializedSqlite(path, "wal");
     const stored = probe
       .prepare(`
       SELECT se.f_sequence, e.f_type FROM t_session_events se
@@ -1363,18 +1363,18 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
 
   it("rejects opening a database whose schema version is not the current build (newer OR older)", async () => {
     const path = await freshDbPath();
-    (await openDatabase(path, "wal")).close();
-    const dbNewer = await openDatabase(path, "wal");
+    (await openInitializedSqlite(path, "wal")).close();
+    const dbNewer = await openInitializedSqlite(path, "wal");
     dbNewer.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
     dbNewer.close();
-    await expect(openDatabase(path, "wal")).rejects.toThrow(/incompatible with this build/);
+    await expect(openInitializedSqlite(path, "wal")).rejects.toThrow(/incompatible with this build/);
 
     const olderPath = await freshDbPath();
-    (await openDatabase(olderPath, "wal")).close();
-    const dbOlder = await openDatabase(olderPath, "wal");
+    (await openInitializedSqlite(olderPath, "wal")).close();
+    const dbOlder = await openInitializedSqlite(olderPath, "wal");
     dbOlder.exec("PRAGMA user_version = 123");
     dbOlder.close();
-    await expect(openDatabase(olderPath, "wal")).rejects.toThrow(/incompatible with this build/);
+    await expect(openInitializedSqlite(olderPath, "wal")).rejects.toThrow(/incompatible with this build/);
   });
 
   it("rejects a table-backed unversioned database before stamping or changing journal mode", async () => {
@@ -1383,7 +1383,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     legacy.exec("CREATE TABLE t_sessions (id TEXT PRIMARY KEY)");
     legacy.close();
 
-    await expect(openDatabase(path, "wal")).rejects.toThrow(
+    await expect(openInitializedSqlite(path, "wal")).rejects.toThrow(
       /unversioned schema or application identity/,
     );
 
@@ -1404,7 +1404,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     viewOnly.exec("CREATE VIEW foreign_view AS SELECT 1 AS value");
     viewOnly.close();
 
-    await expect(openDatabase(viewPath, "wal")).rejects.toThrow(
+    await expect(openInitializedSqlite(viewPath, "wal")).rejects.toThrow(
       /unversioned schema or application identity/,
     );
     const unchangedView = new DatabaseSync(viewPath);
@@ -1419,7 +1419,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     foreignApplication.exec("PRAGMA application_id = 12345");
     foreignApplication.close();
 
-    await expect(openDatabase(applicationPath, "wal")).rejects.toThrow(
+    await expect(openInitializedSqlite(applicationPath, "wal")).rejects.toThrow(
       /unversioned schema or application identity/,
     );
     const unchangedApplication = new DatabaseSync(applicationPath);
@@ -1440,7 +1440,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     foreign.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     foreign.close();
 
-    await expect(openDatabase(path, "wal")).rejects.toThrow(/has application id 12345/);
+    await expect(openInitializedSqlite(path, "wal")).rejects.toThrow(/has application id 12345/);
 
     const unchanged = new DatabaseSync(path);
     expect(unchanged.prepare("PRAGMA application_id").get()).toEqual({ application_id: 12345 });
@@ -1461,7 +1461,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     );
     conflicting.close();
 
-    await expect(openDatabase(path, "wal")).rejects.toThrow();
+    await expect(openInitializedSqlite(path, "wal")).rejects.toThrow();
 
     const unchanged = new DatabaseSync(path);
     expect(
@@ -1488,7 +1488,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
 
   it("stamps the persistence application identity with the schema version", async () => {
     const path = await freshDbPath();
-    (await openDatabase(path, "wal")).close();
+    (await openInitializedSqlite(path, "wal")).close();
 
     const db = new DatabaseSync(path);
     expect(db.prepare("PRAGMA application_id").get()).toEqual({
@@ -1505,7 +1505,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await rdb(b1.ctx).createAndAppend(m, oneTurnLog());
     await b1.dispose();
 
-    const db = await openDatabase(path, "wal");
+    const db = await openInitializedSqlite(path, "wal");
     const head = db
       .prepare("SELECT f_head_event_id FROM t_sessions WHERE f_session_id = ?")
       .get(m.id) as { f_head_event_id: string };
@@ -1596,7 +1596,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const revisionA = (await rdb(a.ctx).listSnapshots())[0]?.revision;
     await a.dispose();
 
-    const probeA = await openDatabase(pathA, "wal");
+    const probeA = await openInitializedSqlite(pathA, "wal");
     const storeIdA = (
       probeA.prepare("SELECT f_store_id FROM t_persistence_state WHERE f_singleton = 1").get() as {
         f_store_id: string;
@@ -1613,7 +1613,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const b = await backend(pathB);
     await rdb(b.ctx).createAndAppend(m, oneTurnLog());
     const revisionB = (await rdb(b.ctx).listSnapshots())[0]?.revision;
-    const probeB = await openDatabase(pathB, "wal");
+    const probeB = await openInitializedSqlite(pathB, "wal");
     const storeIdB = (
       probeB.prepare("SELECT f_store_id FROM t_persistence_state WHERE f_singleton = 1").get() as {
         f_store_id: string;
@@ -1635,7 +1635,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     const before = (await rdb(first.ctx).listSnapshots())[0]?.revision;
     await first.dispose();
 
-    const cleanup = await openDatabase(path, "wal");
+    const cleanup = await openInitializedSqlite(path, "wal");
     cleanup.prepare("DELETE FROM t_sessions WHERE f_session_id = ?").run(m.id);
     cleanup.close();
 
@@ -1664,13 +1664,13 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
   it("applies the configured busy timeout to every opened connection (default 5000ms)", async () => {
     const path = await freshDbPath();
 
-    const immediate = await openDatabase(path, "wal", 0);
+    const immediate = await openInitializedSqlite(path, "wal", 0);
     expect(immediate.prepare("PRAGMA busy_timeout").get()).toEqual({ timeout: 0 });
     immediate.close();
-    const custom = await openDatabase(path, "wal", 321);
+    const custom = await openInitializedSqlite(path, "wal", 321);
     expect(custom.prepare("PRAGMA busy_timeout").get()).toEqual({ timeout: 321 });
     custom.close();
-    const defaulted = await openDatabase(path, "wal");
+    const defaulted = await openInitializedSqlite(path, "wal");
     expect(defaulted.prepare("PRAGMA busy_timeout").get()).toEqual({
       timeout: DEFAULT_BUSY_TIMEOUT_MS,
     });
@@ -1849,7 +1849,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
 describe("SessionPersistenceSqlite: edge cases", () => {
   it("rejects and closes a current-schema database with an invalid store identity", async () => {
     const path = await freshDbPath();
-    const db = await openDatabase(path, "wal");
+    const db = await openInitializedSqlite(path, "wal");
     db.exec("UPDATE t_persistence_state SET f_store_id = '' WHERE f_singleton = 1");
     db.close();
 
@@ -1918,7 +1918,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     const walPath = await freshDbPath();
     const bWal = await backend(walPath);
     await rdb(bWal.ctx).create(meta("jm-wal"));
-    const probe = await openDatabase(walPath, "wal");
+    const probe = await openInitializedSqlite(walPath, "wal");
     expect(
       (probe.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode,
     ).toBe("wal");
@@ -1934,7 +1934,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
       journalMode: "delete",
     });
     await rdb(ctx).create(meta("jm-delete"));
-    const db = await openDatabase(deletePath, "delete");
+    const db = await openInitializedSqlite(deletePath, "delete");
     expect((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode).toBe(
       "delete",
     );

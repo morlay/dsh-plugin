@@ -20,7 +20,6 @@
     "locale/*.json",
     "dist",
     "src",
-    "drizzle",
     "!**/__tests__"
   ],
   "type": "module",
@@ -81,25 +80,22 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "prepublishOnly": "pnpm run build",
-    "db:generate": "drizzle-kit generate --config drizzle.config.ts && drizzle-kit generate --config drizzle.pg.config.ts"
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
+    "@morlay/rdbkit": "workspace:*",
     "@morlay/session-branch": "workspace:*",
-    "drizzle-orm": "^1.0.0-rc.5-ab785fc",
-    "fflate": "^0.8.2",
-    "pg": "^8.23.0"
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@deepseek-ai/cosmokit": "workspace:^",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-cua": "workspace:^",
     "@deepseek-ai/dsh-session-turn-outline": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
-    "@deepseek-ai/dsh-token-meter": "workspace:^",
-    "@types/pg": "^8.23.1",
-    "drizzle-kit": "1.0.0-rc.5-ab785fc"
+    "@deepseek-ai/dsh-token-meter": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

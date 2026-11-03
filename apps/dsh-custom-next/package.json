@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-base": "workspace:^",
+    "@deepseek-ai/dsh-cua-bundle": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:^",
     "@deepseek-ai/dsh-web-app": "workspace:^",
     "@morlay/better-session": "workspace:*",
@@ -36,7 +37,8 @@
         "@morlay/sandbox-profile",
         "@morlay/session-mode-profile",
         "@morlay/mydsh-profile",
-        "@deepseek-ai/dsh-experimental-agent-team-profile"
+        "@deepseek-ai/dsh-experimental-agent-team-profile",
+        "@deepseek-ai/dsh-cua-bundle"
       ]
     },
     "desktop": {

@@ -1,0 +1,59 @@
+{
+  "name": "@morlay/rdbkit",
+  "version": "0.0.1-alpha.0",
+  "description": "Schema-first RDB kit for DeepSeek Harness plugins: one table definition drives the DDL, the typed table handles and the startup migration for SQLite and PostgreSQL alike; business code only ever sees an injected Database.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "postgres",
+    "rdb",
+    "schema",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "pg": "^8.23.0",
+    "pg-cursor": "^2.22.1"
+  },
+  "devDependencies": {
+    "@local/devkit": "workspace:*",
+    "@local/tsdown-plugin-cordis": "workspace:*",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "@types/pg-cursor": "^2.7.2"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  }
+}

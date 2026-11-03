@@ -1,5 +1,5 @@
 mod vendor 'vendor/justfile'
-mod pg 'packages/session/session-rdb/tool/pg/justfile'
+mod pg 'packages/kit/rdbkit/tool/pg/justfile'
 mod custom 'apps/dsh-custom-next/justfile'
 
 default:

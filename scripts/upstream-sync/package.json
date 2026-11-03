@@ -14,7 +14,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@oxc-node/core": "^0.1.6",
+    "@morlay/dsh-oxc-node": "file:../../packages/boot/dsh-oxc-node",
     "oxc-parser": "^0.153.0"
   }
 }

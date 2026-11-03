@@ -6,6 +6,7 @@ import type {
   ProjectionCheckpointRow,
 } from "@deepseek-ai/dsh-session-projection";
 import type { WorkspaceDomainState, WorkspaceRecord } from "@deepseek-ai/dsh-workspace";
+import type { Database } from "@morlay/rdbkit";
 
 export type {
   CheckpointIdentity,
@@ -16,10 +17,32 @@ export type {
   WorkspaceRecord,
 };
 
+export interface DomainRecord {
+  table: string;
+  key: string;
+  value: unknown;
+}
+
+export interface WorkspaceIndexEntry {
+  id: string;
+  title: string;
+  sessionIds: string[];
+}
+
+export interface StorageRepositoryHost {
+  /** 统一的查询面（结构、迁移与域读写都走它）。 */
+  database: Database;
+
+  /** 把一组写做成一次事务（宿主管连接与隔离级别）。 */
+  writeAtomically: <T>(fn: (database: Database) => Promise<T>) => Promise<T>;
+}
+
 export interface StoredProjcacheEntry {
   sessionId: SessionId;
   identity: CheckpointIdentity;
   rows: ProjectionCheckpoint;
+  /** 会话标题（随快照一起加载 / 写路径刷新；`cachedSnapshot` 缺标题时用它补，不回库直读）。 */
+  title?: { title: string; seq: number };
 }
 
 export interface StorageRepository {
@@ -27,34 +50,30 @@ export interface StorageRepository {
 
   insertUnitVersion(name: string, version: number): Promise<void>;
 
-  listWorkspaces(): Promise<Array<{ id: string; record: WorkspaceRecord }>>;
+  // 所有 storage 域共用：`(domain, table, key)` 一行，值是整份记录文档。global 单例用
+  // `table = ''`、`key = ''`；读不到返回 `null`（域层据此改用 spec 的 initial，与上游
+  // `KvUnit.loadAll` 的哨兵语义一致）。
+  listDomainRecords(domain: string): Promise<DomainRecord[]>;
 
-  putWorkspace(id: string, record: WorkspaceRecord): Promise<void>;
+  readDomainGlobal(domain: string): Promise<unknown>;
 
-  deleteWorkspace(id: string): Promise<void>;
+  putDomainRecord(domain: string, table: string, key: string, value: unknown): Promise<void>;
+
+  deleteDomainRecord(domain: string, table: string, key: string): Promise<void>;
 
   // 一次批量（上游 `KvUnit.deleteRecords` 的契约：行存储要么一次做完、要么不做）。
-  deleteWorkspaces(ids: readonly string[]): Promise<void>;
+  deleteDomainRecords(domain: string, table: string, keys: readonly string[]): Promise<void>;
 
-  readWorkspaceState(): Promise<WorkspaceDomainState | null>;
+  writeDomainGlobal(domain: string, value: unknown): Promise<void>;
 
-  writeWorkspaceState(state: WorkspaceDomainState): Promise<void>;
-
-  // 官方 `schedule` 域的 `tasks` 表：一个提醒一行（key 是 `ScheduleId`）。
-  listScheduleTasks(): Promise<Array<{ id: string; task: ScheduleTask }>>;
-
-  putScheduleTask(id: string, task: ScheduleTask): Promise<void>;
-
-  deleteScheduleTask(id: string): Promise<void>;
-
-  deleteScheduleTasks(ids: readonly string[]): Promise<void>;
+  // 会话面读 workspace 文档：列表的标题与搜索、删除会话时清理归属。数据只有 `t_storage_records`
+  // 一份，所以这两条走文档（workspace 数量级小，整份读没问题）。
+  listWorkspaceIndex(): Promise<WorkspaceIndexEntry[]>;
 
   loadProjcache(): Promise<StoredProjcacheEntry[]>;
 
-  // 不经 await、直接读的路径（供同步的 `cachedSnapshot` 消费）；宿主提供不了则缺省。
-  readProjcacheDirect?(sessionId: string): StoredProjcacheEntry | undefined;
-
-  readSessionTitleDirect?(sessionId: string): { title: string; seq: number } | undefined;
+  /** 会话标题（投影缓存的镜像刷新与 `cachedSnapshot` 补标题用）。 */
+  readSessionTitle(sessionId: string): Promise<{ title: string; seq: number } | undefined>;
 
   putProjcache(sessionId: string, rows: ProjectionCheckpoint): Promise<void>;
 

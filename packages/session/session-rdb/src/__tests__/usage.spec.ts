@@ -98,7 +98,7 @@ async function createPersisted(
 }
 
 async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Promise<void> {
-  await persistence.internals().backend.storage.writeWorkspaceState({
+  await persistence.internals().backend.storage.writeDomainGlobal("workspace", {
     initialized: true,
     workspaceIds: [],
     pinnedSessionIds: [],
@@ -488,7 +488,8 @@ describe("用量统计口径", () => {
   });
 
   // 迁移对统计表先删后建：旧结构（没有物化列 / 按类型存的计数表）升级后必须被重建并回填。
-  it("旧结构的统计表在迁移里删表重建，并按事件表回填", async () => {
+  // 旧结构统计表的重建属于 v2 → v3 的历史迁移（已删除）。
+  it.skip("旧结构的统计表在迁移里删表重建，并按事件表回填", async () => {
     const dir = await mkdtemp(join(tmpdir(), "session-rdb-migrate-"));
     const path = join(dir, "sessions.sqlite");
     const first = await harnessAt(path);

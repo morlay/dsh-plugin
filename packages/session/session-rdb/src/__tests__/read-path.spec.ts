@@ -11,9 +11,7 @@ import { meta, oneTurnLog } from "../testing.ts";
 import type { Backend } from "../backend.ts";
 import { repairReadView } from "../log.ts";
 
-async function mount(
-  path = ":memory:",
-): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
+async function mount(path = ":memory:"): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const ctx = new Context();
   await ctx.plugin(SessionStore);
   const fiber = await ctx.plugin(SessionPersistenceSqlite, { type: "sqlite", path });
@@ -127,12 +125,16 @@ describe("session 行的写放大", () => {
         db.close();
       }
 
-      await handle.append(oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent));
+      await handle.append(
+        oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent),
+      );
       await handle.close();
 
       const probe = new DatabaseSync(path);
       try {
-        expect((probe.prepare("SELECT n FROM probe_header_update").get() as { n: number }).n).toBe(0);
+        expect((probe.prepare("SELECT n FROM probe_header_update").get() as { n: number }).n).toBe(
+          0,
+        );
       } finally {
         probe.close();
       }
@@ -173,7 +175,9 @@ describe("session 行的写放大", () => {
 
       const probe = new DatabaseSync(path);
       try {
-        expect((probe.prepare("SELECT n FROM probe_session_updates").get() as { n: number }).n).toBe(1);
+        expect(
+          (probe.prepare("SELECT n FROM probe_session_updates").get() as { n: number }).n,
+        ).toBe(1);
       } finally {
         probe.close();
       }

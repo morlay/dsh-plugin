@@ -1,9 +1,9 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
 // 会话 × 本地日 × 模型的 token 汇总（派生统计表）：**按会话的行**读它，因此保住
 // 「fork 子会话含继承前缀」的口径（各会话行之和 ≥ 总量）而不回连事件表。
 // 旁路累加、可按会话重建，读侧只读；取舍见 ADR-统计衍生表物化归属与汇总。
-export const sessionUsage: TableDef = {
+export const sessionUsage = defineTable({
   name: "t_session_usage",
   columns: {
     f_session_id: {
@@ -24,4 +24,4 @@ export const sessionUsage: TableDef = {
   uniques: {
     uq_session_usage_key: { columns: ["f_session_id", "f_day", "f_provider", "f_model"] },
   },
-};
+});

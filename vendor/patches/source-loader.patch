@@ -1,19 +1,632 @@
+diff --git a/packages/boot/plugin-market/src/parse-thread.ts b/packages/boot/plugin-market/src/parse-thread.ts
+index 68a2ccd7ee..1f3bc6640e 100644
+--- a/packages/boot/plugin-market/src/parse-thread.ts
++++ b/packages/boot/plugin-market/src/parse-thread.ts
+@@ -2,17 +2,39 @@
+ import { Worker, type WorkerOptions } from 'node:worker_threads'
+ import type { IndexParseRequest, IndexParseResult } from './parse.ts'
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ function workerSpawn(): { readonly entry: URL; readonly options: WorkerOptions } {
+   /* v8 ignore next -- built-artifact runs own the bundled path. */
+   if (!import.meta.url.endsWith('.ts')) return { entry: new URL('./worker.cjs', import.meta.url), options: { execArgv: [] } }
+-  const bootstrap = [
+-    `import { register as registerEsm } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}`,
+-    `import { register as registerCjs } from ${JSON.stringify(import.meta.resolve('tsx/cjs/api'))}`,
+-    'registerCjs()',
+-    'registerEsm()',
+-    `await import(${JSON.stringify(new URL('./worker.ts', import.meta.url).href)})`,
+-  ].join('\n')
+-  return { entry: new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), options: { execArgv: [] } }
++  const bootstrap = `await import(${JSON.stringify(new URL('./worker.ts', import.meta.url).href)})`
++  return { entry: new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), options: { execArgv: sourceLoaderArgv() } }
+ }
+ 
+ /** Whether a Worker message is a parse result: an index object, or a violation's path, reason, and message. */
+diff --git a/packages/experimental/browser-use-stagehand-native/src/worker-client.ts b/packages/experimental/browser-use-stagehand-native/src/worker-client.ts
+index 103c8dd81c..b6c03b6821 100644
+--- a/packages/experimental/browser-use-stagehand-native/src/worker-client.ts
++++ b/packages/experimental/browser-use-stagehand-native/src/worker-client.ts
+@@ -12,6 +12,34 @@ import { request } from './worker-rpc.ts'
+  * @param warn - report SDK cleanup failures after connection termination.
+  * @returns a runtime whose close requires SDK request drainage before releasing ownership.
+  */
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export async function openBrowserWorker(
+   config: NativeBrowserConfig, signal: AbortSignal, warn: (message: string) => void,
+ ): Promise<NativeBrowserRuntime> {
+@@ -26,8 +54,8 @@ export async function openBrowserWorker(
+     worker = new Worker(entry, { workerData: config, execArgv: [], env })
+   } else {
+     const source = new URL('./worker.ts', import.meta.url)
+-    const bootstrap = `import { register } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}; register(); await import(${JSON.stringify(source.href)})`
+-    worker = new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), { workerData: config, execArgv: [], env })
++    const bootstrap = `await import(${JSON.stringify(source.href)})`
++    worker = new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), { workerData: config, execArgv: sourceLoaderArgv(), env })
+   }
+   let termination: Promise<number> | undefined
+   const terminate = () => termination ??= worker.terminate()
+diff --git a/packages/experimental/inspector/src/host/bridge/controller.ts b/packages/experimental/inspector/src/host/bridge/controller.ts
+index aa25dac90c..8e1cc86898 100644
+--- a/packages/experimental/inspector/src/host/bridge/controller.ts
++++ b/packages/experimental/inspector/src/host/bridge/controller.ts
+@@ -285,6 +285,34 @@ export async function startInspector(options: InspectorOptions = {}): Promise<In
+   }
+ }
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ function spawnWorker(boot: InspectorWorkerBoot<MessagePort>): Worker {
+   const options: WorkerOptions = {
+     workerData: boot,
+@@ -295,14 +323,10 @@ function spawnWorker(boot: InspectorWorkerBoot<MessagePort>): Worker {
+     return new Worker(new URL('./worker.js', import.meta.url), options)
+   }
+   const workerEntry = new URL('../../worker/entry.ts', import.meta.url)
+-  const tsxEsmApiEntry = import.meta.resolve('tsx/esm/api')
+-  const bootstrap = [
+-    `import { register } from ${JSON.stringify(tsxEsmApiEntry)}`,
+-    'register()',
+-    `await import(${JSON.stringify(workerEntry.href)})`,
+-  ].join('\n')
++  const bootstrap = `await import(${JSON.stringify(workerEntry.href)})`
+   return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), {
+     ...options,
++    execArgv: sourceLoaderArgv(),
+     env: sourceWorkerEnv(),
+   })
+ }
+diff --git a/packages/experimental/liveshare/src/host/tunnel-supervision.ts b/packages/experimental/liveshare/src/host/tunnel-supervision.ts
+index b2a6b38ecb..1500ab3556 100644
+--- a/packages/experimental/liveshare/src/host/tunnel-supervision.ts
++++ b/packages/experimental/liveshare/src/host/tunnel-supervision.ts
+@@ -75,11 +75,39 @@ export interface TunnelProcessCommand {
+  * @param moduleUrl - `import.meta.url` of the running host module.
+  * @returns Node executable and argv that start the owner gateway worker.
+  */
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export function gatewayWorkerCommand(moduleUrl: string): TunnelProcessCommand {
+   if (fileURLToPath(moduleUrl).endsWith('.ts')) {
+     return {
+       executable: process.execPath,
+-      args: ['--import', 'tsx/esm', fileURLToPath(new URL('../owner-gateway/cli.ts', moduleUrl))],
++      args: [...sourceLoaderArgv(), fileURLToPath(new URL('../owner-gateway/cli.ts', moduleUrl))],
+     }
+   }
+   return {
+diff --git a/packages/experimental/speech-to-text-sensevoice/src/recognizer.ts b/packages/experimental/speech-to-text-sensevoice/src/recognizer.ts
+index a74e204b6d..1c59f44c05 100644
+--- a/packages/experimental/speech-to-text-sensevoice/src/recognizer.ts
++++ b/packages/experimental/speech-to-text-sensevoice/src/recognizer.ts
+@@ -99,6 +99,34 @@ export async function readTranscript(response: Response, limit: number): Promise
+ }
+ 
+ /** Own one worker across recordings, and join every accepted job on disposal. */
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export class SenseVoiceWorker {
+   private worker: Worker | undefined
+   private tail: Promise<void> = Promise.resolve()
+@@ -260,7 +288,7 @@ export class SenseVoiceWorker {
+     await mkdir(this.config.dataRoot, { recursive: true })
+     const token = randomBytes(32).toString('hex')
+     const handle = this.ctx.subprocess.spawn({
+-      argv: [process.execPath, ...runtime.worker.endsWith('.ts') ? ['--import', import.meta.resolve('tsx/esm')] : [], runtime.worker, JSON.stringify(Object.assign({}, this.config, runtime))],
++      argv: [process.execPath, ...runtime.worker.endsWith('.ts') ? sourceLoaderArgv() : [], runtime.worker, JSON.stringify(Object.assign({}, this.config, runtime))],
+       cwd: this.config.dataRoot, graceMs: this.config.graceMs,
+       env: { DSH_SPEECH_TOKEN: token, ELECTRON_RUN_AS_NODE: '1' },
+       stdio: { stdin: 'ignore', stdout: 'pipe', stderr: { maxBytes: this.config.maxLogBytes } },
+diff --git a/packages/experimental/webworker-packer/src/bin.ts b/packages/experimental/webworker-packer/src/bin.ts
+index 18bf398e59..36d3dee6e3 100644
+--- a/packages/experimental/webworker-packer/src/bin.ts
++++ b/packages/experimental/webworker-packer/src/bin.ts
+@@ -5,7 +5,7 @@
+  * then write each named fixture overlay and their manifest.
+  *
+  * Usage: dsh-pack-vfs-image --out <file> [--profile web] [--root /dsh]
+- *        node --import tsx/esm src/bin.ts --out ../../apps/web/dist/preview/vfs-image.tar.gz
++ *        node --import <typescript-loader> src/bin.ts --out ../../apps/web/dist/preview/vfs-image.tar.gz
+  * @module @deepseek-ai/dsh-experimental-webworker-packer/src/bin
+  */
+ import { mkdirSync, writeFileSync } from 'node:fs'
+diff --git a/packages/host/directory-picker-native/src/win32-dialog-host.ts b/packages/host/directory-picker-native/src/win32-dialog-host.ts
+index 658ccd8d56..d190162327 100644
+--- a/packages/host/directory-picker-native/src/win32-dialog-host.ts
++++ b/packages/host/directory-picker-native/src/win32-dialog-host.ts
+@@ -21,6 +21,34 @@ import type { Win32DialogWorkerData } from './win32-dialog-worker.ts'
+  * @param data - the child payload (dialog title).
+  * @returns the spawned child process.
+  */
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export function spawnDialogWorker(data: Win32DialogWorkerData): ReturnType<typeof spawn> {
+   const env = { ...process.env, DSH_DIALOG_TITLE: data.title }
+   const stdio: StdioOptions = ['ignore', 'inherit', 'inherit', 'ipc']
+@@ -28,7 +56,7 @@ export function spawnDialogWorker(data: Win32DialogWorkerData): ReturnType<typeo
+   if (!import.meta.url.endsWith('.ts')) {
+     return spawn(process.execPath, [fileURLToPath(new URL('./worker.cjs', import.meta.url))], { env, stdio, windowsHide: true })
+   }
+-  return spawn(process.execPath, ['--import', import.meta.resolve('tsx/esm'), fileURLToPath(new URL('./win32-dialog-worker.ts', import.meta.url))], { env, stdio, windowsHide: true })
++  return spawn(process.execPath, [...sourceLoaderArgv(), fileURLToPath(new URL('./win32-dialog-worker.ts', import.meta.url))], { env, stdio, windowsHide: true })
+ }
+ 
+ export { closeThreadWindows } from './win32-dialog-bindings.ts'
+diff --git a/packages/ptc-runtime/ptc-runtime-node/src/launch.ts b/packages/ptc-runtime/ptc-runtime-node/src/launch.ts
+index 6ee457375e..9b3058d27d 100644
+--- a/packages/ptc-runtime/ptc-runtime-node/src/launch.ts
++++ b/packages/ptc-runtime/ptc-runtime-node/src/launch.ts
+@@ -19,6 +19,39 @@ export type LaunchConfig = {
+   executable: string
+ }
+ 
++/**
++ * Resolve the source loader this host was started with.
++ * Local patch: this checkout does not install tsx, and the PTC child inherits no
++ * `NODE_OPTIONS` (its worker clears the host environment), so the loader must be
++ * pinned on the child argv and mapped into the execution world.
++ * @param mapped - host path to execution-world path.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected or the execution world cannot read it.
++ */
++function sourceLoaderArgv(mapped: (path: string) => string): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  const specifier = injected !== undefined && injected !== ''
++    ? injected
++    : importOption(process.execArgv) ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (specifier === undefined) {
++    throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++  }
++  const path = isAbsolute(specifier) ? specifier : fileURLToPath(import.meta.resolve(specifier))
++  return ['--import', mapped(path)]
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ /**
+  * Resolve the local carrier default or validate an explicit execution-world invocation.
+  * @param config - explicit remote or local worker configuration; omitted selects this carrier.
+@@ -69,5 +102,5 @@ function scriptBootstrapArgs(
+   const subprocess = dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-subprocess/package.json')))
+   const helper = mapped(resolve(subprocess, 'src/control.ts'))
+   const source = `const {openInheritedControlChannel}=await import(${JSON.stringify(pathToFileURL(helper).href)});const {runNodeMain}=await import(${JSON.stringify(pathToFileURL(entry).href)});await runNodeMain(openInheritedControlChannel(),${maxMessageBytes},process);`
+-  return ['--input-type=module', '--eval', source]
++  return [...sourceLoaderArgv(mapped), '--input-type=module', '--eval', source]
+ }
+diff --git a/packages/sandbox/sandbox-local/src/index.ts b/packages/sandbox/sandbox-local/src/index.ts
+index acf4b4e738..44d07da0b2 100644
+--- a/packages/sandbox/sandbox-local/src/index.ts
++++ b/packages/sandbox/sandbox-local/src/index.ts
+@@ -577,10 +577,36 @@ export class LocalSandboxProvider extends SandboxProvider {
+     const builtEntry = this.internals.windowsAclRunnerEntry ?? fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-sandbox-windows-acl/runner'))
+     if (existsSync(builtEntry)) return [process.execPath, builtEntry]
+     const sourceEntry = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-sandbox-windows-acl/src/runner.ts'))
+-    const sourceConfig = fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url))
+-    const registration = `import { register } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}; register({ tsconfig: ${JSON.stringify(sourceConfig)} });`
+-    return [process.execPath, '--import', `data:text/javascript,${encodeURIComponent(registration)}`, sourceEntry]
++    return [process.execPath, ...sourceLoaderArgv(), sourceEntry]
+   }
+ }
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export default LocalSandboxProvider
+diff --git a/packages/sdk/client/src/launch.ts b/packages/sdk/client/src/launch.ts
+index b4a6419d19..f89ae00e51 100644
+--- a/packages/sdk/client/src/launch.ts
++++ b/packages/sdk/client/src/launch.ts
+@@ -52,6 +52,34 @@ function manifest(url: string): PackageManifest {
+  * @param clientManifestUrl - resolved URL of the SDK client manifest.
+  * @returns the absolute dsh executable path.
+  */
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ export function resolveDshBinFromManifests(dshManifestUrl: string, clientManifestUrl: string): string {
+   const dshManifest = manifest(dshManifestUrl)
+   const clientManifest = manifest(clientManifestUrl)
+@@ -100,11 +128,13 @@ export function resolveDshNodeLaunchFromManifests(
+       `@deepseek-ai/dsh is missing its built executable ${bin} and complete source launch files ${sourceBin}, ${sourcePatch}, ${sourceTsconfig}`,
+     )
+   }
+-  const loader = sourceLoaderUrl ?? import.meta.resolve('tsx/esm')
+   return {
+-    nodeArgs: ['--import', loader, sourceBin],
++    nodeArgs: [
++      ...sourceLoaderUrl === undefined ? sourceLoaderArgv() : ['--import', sourceLoaderUrl],
++      sourceBin,
++    ],
+     patches: [sourcePatch],
+-    environment: { TSX_TSCONFIG_PATH: sourceTsconfig },
++    environment: {},
+   }
+ }
+ 
+diff --git a/packages/session/session-persistence-jsonl/src/migration-verifier.ts b/packages/session/session-persistence-jsonl/src/migration-verifier.ts
+index a23692d802..dcf1278577 100644
+--- a/packages/session/session-persistence-jsonl/src/migration-verifier.ts
++++ b/packages/session/session-persistence-jsonl/src/migration-verifier.ts
+@@ -70,6 +70,34 @@ class VerificationScheduler {
+ 
+ const verificationScheduler = new VerificationScheduler()
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ function workerSpawn(request: VerificationRequest): { readonly entry: string | URL; readonly options: WorkerOptions } {
+   /* v8 ignore next 3 -- built-worker coverage owns the bundled path. */
+   if (!import.meta.url.endsWith('.ts')) {
+@@ -79,18 +107,12 @@ function workerSpawn(request: VerificationRequest): { readonly entry: string | U
+     }
+   }
+   const workerEntry = new URL('./worker.ts', import.meta.url)
+-  const bootstrap = [
+-    `import { register as registerEsm } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}`,
+-    `import { register as registerCjs } from ${JSON.stringify(import.meta.resolve('tsx/cjs/api'))}`,
+-    'registerCjs()',
+-    'registerEsm()',
+-    `await import(${JSON.stringify(workerEntry.href)})`,
+-  ].join('\n')
++  const bootstrap = `await import(${JSON.stringify(workerEntry.href)})`
+   return {
+     entry: new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`),
+     options: {
+       workerData: request,
+-      execArgv: [],
++      execArgv: sourceLoaderArgv(),
+     },
+   }
+ }
 diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
-index 381219bab0..d50fdde29d 100644
+index 381219bab0..29d3034704 100644
 --- a/packages/subprocess/subprocess-local/src/runner-launch.ts
 +++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
-@@ -33,10 +33,13 @@ export function spawnRunnerInvocation(): RunnerInvocation {
+@@ -22,6 +22,35 @@ export type RunnerInvocation = [string, ...string[]]
+ const SOURCE_TSCONFIG_PATH = fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url))
+ const RUNNER_CONTROL_ENV_PREFIXES = ['NODE_', 'TSX_'] as const
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
++
+ /**
+  * Resolve the source, built, or packaged entry that calls the same runner core.
+  * @returns executable and arguments for the active runtime form.
+@@ -33,10 +62,12 @@ export function spawnRunnerInvocation(): RunnerInvocation {
    if (extname(fileURLToPath(import.meta.url)) !== '.ts') {
      return [process.execPath, fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-subprocess-local/runner'))]
    }
-+  // 本地 patch（patches/source-loader.patch）：源码面的转译器由部署侧注入——开发面是工作区的
-+  // `@local/devkit/ts-loader`，打包产物是随包那份；两者都没注入时才回落到上游默认的 `tsx/esm`
-+  // （本仓库不声明 tsx，随包产物里也没有它，`import.meta.resolve` 会直接抛）。
++  // 本地 patch（patches/source-loader.patch）：本仓库不装 tsx，源码面的转译器只从部署侧来——
++  // `DSH_SOURCE_LOADER`（壳与工具显式注入），或当前进程自己挂的那份（`--import` / `NODE_OPTIONS`）。
++  // 都没有就 fail loud：回落到 tsx 只会把问题推给一个本仓库不存在的包。
    return [
      process.execPath,
-     '--import',
+-    '--import',
 -    import.meta.resolve('tsx/esm'),
-+    process.env.DSH_SOURCE_LOADER ?? import.meta.resolve('tsx/esm'),
++    ...sourceLoaderArgv(),
      fileURLToPath(new URL('./bin.ts', import.meta.url)),
    ]
  }
+diff --git a/packages/typert/generator/src/tsdown-plugin.ts b/packages/typert/generator/src/tsdown-plugin.ts
+index 325b7e41b5..f8e3dfc236 100644
+--- a/packages/typert/generator/src/tsdown-plugin.ts
++++ b/packages/typert/generator/src/tsdown-plugin.ts
+@@ -199,18 +199,42 @@ function workerError(request: WorkspaceWorkerRequest, problem: string, cause: un
+   )
+ }
+ 
++/**
++ * Resolve the source loader this process was started with.
++ * Local patch: this checkout does not install tsx — a source launch must name the TypeScript
++ * loader to reuse, or inherit the one already registered on this process.
++ * @returns Node options selecting the loader.
++ * @throws When no loader was injected.
++ */
++function sourceLoaderArgv(): string[] {
++  const injected = process.env.DSH_SOURCE_LOADER
++  if (injected !== undefined && injected !== '') return ['--import', injected]
++  const inherited = importOption(process.execArgv)
++    ?? importOption(process.env.NODE_OPTIONS?.split(/\s+/u) ?? [])
++  if (inherited !== undefined) return ['--import', inherited]
++  throw new Error('source TypeScript needs a loader: set DSH_SOURCE_LOADER or start the host with --import')
++}
++
++/**
++ * Read the first `--import` option out of an argv-shaped list.
++ * @param argv - argv-shaped options to scan.
++ * @returns the loader specifier, or undefined when absent.
++ */
++function importOption(argv: readonly string[]): string | undefined {
++  const index = argv.findIndex((arg) => arg === '--import' || arg.startsWith('--import='))
++  if (index < 0) return undefined
++  const arg = argv[index] as string
++  return arg === '--import' ? argv[index + 1] : arg.slice('--import='.length)
++}
++
+ function spawnWorker(request: WorkspaceWorkerRequest): Worker {
+   /* v8 ignore next 3 -- the tsdown host build runs the built worker entry. */
+   if (!import.meta.url.endsWith('.ts')) {
+     return new Worker(new URL('./worker.js', import.meta.url), { workerData: request })
+   }
+-  // Source runs load the TypeScript worker entry through tsx.
+-  const bootstrap = [
+-    `import { register } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}`,
+-    'register()',
+-    `await import(${JSON.stringify(new URL('./worker.ts', import.meta.url).href)})`,
+-  ].join('\n')
+-  return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), { workerData: request, execArgv: [] })
++  // Source runs load the TypeScript worker entry through the deployment loader.
++  const bootstrap = `await import(${JSON.stringify(new URL('./worker.ts', import.meta.url).href)})`
++  return new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), { workerData: request, execArgv: sourceLoaderArgv() })
+ }
+ 
+ function parseWorkerResponse(value: unknown): WorkspaceWorkerResponse | undefined {

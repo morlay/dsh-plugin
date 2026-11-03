@@ -2,8 +2,6 @@ import { Context } from "@deepseek-ai/cordis";
 import type { Volatile } from "@deepseek-ai/cosmokit";
 import z from "@deepseek-ai/schemastery";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
-import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import {
   SessionAlreadyExistsError,
   SessionAlreadyOwnedError,
@@ -49,14 +47,9 @@ import {
 import { WriteGuard } from "./write-guard.ts";
 import { repairReadView, rowToMeta, scanRows, toJsonlArtifact, usageRowOf } from "./log.ts";
 import type { EventUsageRow } from "./log.ts";
-import {
-  DEFAULT_BUSY_TIMEOUT_MS,
-  eventDimensions,
-  EVENT_ENCODING,
-  type JournalMode,
-} from "./schema.ts";
-import { SqliteBackend } from "./sqlite.ts";
-import { PostgresBackend } from "./postgres.ts";
+import { eventDimensions } from "./event-shape.ts";
+import { DEFAULT_BUSY_TIMEOUT_MS, EVENT_ENCODING, type JournalMode } from "./version.ts";
+import { openRdbBackend, type BackendConfig } from "./backend-rdb.ts";
 import { SessionBranchRdb, liveEventsOf } from "./branch.ts";
 import { balanceRewindPrefix } from "@morlay/session-branch";
 import { registerSessionImport } from "./import.ts";
@@ -87,13 +80,19 @@ function maxEventTime(events: readonly { readonly time?: number }[]): number | u
   return max;
 }
 
-
-export { SCHEMA_VERSION } from "./schema.ts";
+export { SCHEMA_VERSION } from "./version.ts";
 export { SESSION_ROWS_PATH } from "./rows.ts";
 export type { SessionRowsItem, SessionRowsValue } from "./rows.ts";
-export { SessionBranchRdb, SessionBranchRdbProvider, liveEventsOf, locateTurnEnd } from "./branch.ts";
+export {
+  SessionBranchRdb,
+  SessionBranchRdbProvider,
+  liveEventsOf,
+  locateTurnEnd,
+} from "./branch.ts";
 
 export interface SessionPersistenceRdbInternals {
+  /** backend 在打开前不可用；分支能力先等它。 */
+  readonly ready: Promise<void>;
   readonly backend: Backend;
   readonly writeGuard: WriteGuard;
   create(meta: SessionHeader, inheritedEventCount?: number): Promise<SessionHandle>;
@@ -576,10 +575,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
   readonly tracker = new RdbBackendTracker(this.name);
 
-  private readonly backend: Backend;
+  private backend!: Backend;
   private storeIdentity!: string;
   private readonly ready: Promise<void>;
-
   private readonly writeGuard = new WriteGuard();
 
   private readonly reuseEventIds = new Map<SessionId, Map<number, string>>();
@@ -602,8 +600,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
     // 生效靠 **Loader 重挂这一行**（settings 写完经 `reconcileProfilePatches` 重装受影响的 entry）——重挂构造
     // 新实例、拿到新快照，所以这里取一次就够，运行期不必反复读引用。
     this.config = config.get();
-    this.backend = injectedBackend ?? createBackend(this.config);
-    this.ready = this.init();
+    this.ready = this.init(injectedBackend);
     this.installLiveRouting(ctx);
 
     new SessionBranchRdb(this.ctx);
@@ -625,15 +622,23 @@ export class SessionPersistenceRdb extends SessionPersistence {
 
     registerSessionUsage(this.ctx, this);
 
-    registerSessionRows(this.ctx, this.backend);
+    // 路由与 storage 接管都在构造期装配，但 backend 是异步打开的：拿到的是「打开后才有值」的读取口。
+    registerSessionRows(this.ctx, () => this.database());
 
     installStorageTakeover(this.ctx, {
-      repository: this.backend.storage,
+      repository: () => this.database().then((backend) => backend.storage),
       ready: this.ready,
     });
   }
 
-  private async init(): Promise<void> {
+  /** 打开完成后的 backend（所有 DB 操作的门）。 */
+  private async database(): Promise<Backend> {
+    await this.ready;
+    return this.backend;
+  }
+
+  private async init(injectedBackend?: Backend): Promise<void> {
+    this.backend = injectedBackend ?? (await openRdbBackend(backendConfigOf(this.config)));
     await this.backend.open();
     this.storeIdentity = this.backend.storeIdentity;
   }
@@ -861,7 +866,9 @@ export class SessionPersistenceRdb extends SessionPersistence {
    */
   async archivedSessionIds(): Promise<ReadonlySet<string>> {
     await this.ready;
-    const state = await this.backend.storage.readWorkspaceState();
+    const state = (await this.backend.storage.readDomainGlobal("workspace")) as {
+      archivedSessionIds?: readonly string[];
+    } | null;
     return new Set((state?.archivedSessionIds ?? []).map(String));
   }
 
@@ -1096,6 +1103,7 @@ export class SessionPersistenceRdb extends SessionPersistence {
   // 重算一个会话的两张汇总表（旧日志重写后；best-effort，同 `recordSessionStats`）——
   // fork 与 rewind 都不动统计。
   async rebuildSessionStats(id: SessionId): Promise<void> {
+    await this.ready;
     try {
       await this.backend.rebuildSessionStats(id);
     } catch (error: unknown) {
@@ -1288,8 +1296,16 @@ export class SessionPersistenceRdb extends SessionPersistence {
   }
 
   internals(): SessionPersistenceRdbInternals {
+    // 打开前拿到会 fail loud（不是静默 undefined）；分支路径先 `await ready`。
+    const openedBackend = (): Backend => {
+      if (this.backend === undefined) throw new Error("session-rdb backend is not opened yet");
+      return this.backend;
+    };
     return {
-      backend: this.backend,
+      get backend(): Backend {
+        return openedBackend();
+      },
+      ready: this.ready,
       writeGuard: this.writeGuard,
       create: (meta, inheritedEventCount) =>
         this.create(
@@ -1526,30 +1542,20 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 
-function createBackend(config: Config): Backend {
-  if (config.type === "sqlite") {
-    return new SqliteBackend({
-      path: config.path,
-      journalMode: config.journalMode ?? "wal",
-      busyTimeout: config.busyTimeout ?? DEFAULT_BUSY_TIMEOUT_MS,
-    });
-  }
-  const pool = new Pool({ connectionString: config.connectionString });
-
-  pool.on("error", () => {});
-  const db = drizzlePg({ client: pool });
-  const identityBase = [
-    "postgres",
-    pool.options.host ?? "localhost",
-    String(pool.options.port ?? 5432),
-    pool.options.database ?? "",
-    config.schema ?? "public",
-  ].join(":");
-  return new PostgresBackend(db, {
-    identityBase,
-    schema: config.schema ?? "public",
-    close: () => pool.end(),
-  });
+/** 装配层配置 → 打开后端所需的最小形状（两方言共用）。 */
+function backendConfigOf(config: Config): BackendConfig {
+  return config.type === "sqlite"
+    ? {
+        type: "sqlite",
+        path: config.path,
+        journalMode: config.journalMode ?? "wal",
+        busyTimeout: config.busyTimeout ?? DEFAULT_BUSY_TIMEOUT_MS,
+      }
+    : {
+        type: "postgres",
+        connectionString: config.connectionString,
+        ...(config.schema === undefined ? {} : { schema: config.schema }),
+      };
 }
 
 async function appendEventTail(

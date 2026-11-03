@@ -171,11 +171,9 @@ describe("投影检查点增量写回", () => {
       };
 
       const before = snapshot();
-      await storage.patchProjcache(
-        "s1",
-        { beta: { ver: 1, seq: SessionSeq(9), val: "b2" } },
-        ["gamma"],
-      );
+      await storage.patchProjcache("s1", { beta: { ver: 1, seq: SessionSeq(9), val: "b2" } }, [
+        "gamma",
+      ]);
       const after = snapshot();
 
       // alpha 没变：一行都不该被碰（rowid 与值都不动）
@@ -257,6 +255,8 @@ describe("session-rdb projection cache replacement", () => {
         titleEvent,
       );
       await ctx.sessions.flush(live);
+      // 标题随写路径一起刷新进镜像（不再有同步直读）。
+      await cache.write(live);
 
       // 不带 title 的选择：不抛，也不补标题。
       const withoutTitle = cache.cachedSnapshot(live.header, new Set(["todos"]) as never);
@@ -269,7 +269,6 @@ describe("session-rdb projection cache replacement", () => {
       await dispose();
     }
   });
-
 
   it("checkpoints a newly created session without an explicit write", async () => {
     const { ctx, cache, dispose } = await harness();
@@ -580,7 +579,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("serves checkpoints straight from the medium, not an in-process mirror", async () => {
+  it("读镜像而不是回库（删掉介质里的行，快照不变）", async () => {
     const { ctx, cache, dbPath, dispose } = await harness();
     try {
       const id = SessionId("live");
@@ -601,7 +600,8 @@ describe("session-rdb projection cache replacement", () => {
         db.prepare(
           "DELETE FROM t_session_projcache_row WHERE f_session_id = 'live' AND f_key = 'turnOutline'",
         ).run();
-        expect(cachedTurns({ ctx, cache, dispose }, "live")).toBeUndefined();
+        // 不再有同步直读：快照只读进程内镜像，删介质里的行不会影响它。
+        expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
         db.prepare(
           "INSERT INTO t_session_projcache_row (f_session_id, f_key, f_ver, f_seq, f_val) VALUES (?, ?, ?, ?, ?)",
         ).run("live", row.f_key, row.f_ver, row.f_seq, row.f_val);

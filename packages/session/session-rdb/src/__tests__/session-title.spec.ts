@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -15,7 +15,6 @@ import SessionProjectionRegistry from "@deepseek-ai/dsh-session-projection";
 import SessionPersistenceSqlite from "../index.ts";
 import { meta, oneTurnLog } from "../testing.ts";
 import { titleOfEventData } from "../log.ts";
-import { SqliteBackend } from "../sqlite.ts";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -116,6 +115,10 @@ describe("session title as session data", () => {
       });
       const live = ctx.sessions.get(id)!;
       await ctx.sessions.flush(live);
+      // 标题随写路径刷新进镜像（不再有同步直读）。
+      await (
+        cache as unknown as { write(session: unknown): Promise<void> }
+      ).write(live);
 
       const snapshot = cache.cachedSnapshot(live.header, ["title"]);
       expect(snapshot?.values["title"]).toBe("直取标题");
@@ -131,48 +134,5 @@ describe("session title as session data", () => {
     expect(titleOfEventData('{"title":"旧世代","messageSeqs":[1]}')).toBe("旧世代");
     expect(titleOfEventData('{"data":{}}')).toBeUndefined();
     expect(titleOfEventData("not json")).toBeUndefined();
-  });
-
-  it("backfills legacy titles through the correction migration", async () => {
-    const root = await tempDir("session-title-");
-    const dbPath = join(root, "sessions.sqlite");
-    const backend = new SqliteBackend({ path: dbPath, journalMode: "wal", busyTimeout: 5000 });
-    await backend.open();
-    try {
-      const db = new DatabaseSync(dbPath);
-      try {
-        db.prepare(
-          "INSERT INTO t_sessions (f_session_id, f_version, f_created_at, f_incarnation, f_revision) " +
-            "VALUES ('legacy', 0, 1, 'seed', 0)",
-        ).run();
-        db.prepare(
-          "INSERT INTO t_events (f_event_id, f_parent_id, f_type, f_kind, f_role, f_name, f_action_id, f_encoding, f_data, f_created_at) " +
-            "VALUES ('e1', '', 'session/title', 'lifecycle', '', '', '', 'json', ?, 1)",
-        ).run(
-          JSON.stringify({ title: "旧世代标题", messageSeqs: [1], source: { kind: "fallback" } }),
-        );
-        db.prepare(
-          "INSERT INTO t_session_events (f_session_id, f_event_id, f_sequence, f_surface_op) VALUES ('legacy', 'e1', 3, NULL)",
-        ).run();
-
-        const sql = await readFile(
-          new URL(
-            "../../drizzle/sqlite/20260910130000_v3_session_title_backfill/migration.sql",
-            import.meta.url,
-          ),
-          "utf8",
-        );
-        db.exec(sql.replaceAll("--> statement-breakpoint", ""));
-        const row = db
-          .prepare("SELECT f_title, f_title_seq FROM t_sessions WHERE f_session_id = 'legacy'")
-          .get() as { f_title: string; f_title_seq: number };
-        expect(row.f_title).toBe("旧世代标题");
-        expect(row.f_title_seq).toBe(3);
-      } finally {
-        db.close();
-      }
-    } finally {
-      await backend.close();
-    }
   });
 });

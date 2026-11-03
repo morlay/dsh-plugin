@@ -1,1 +1,0 @@
-ALTER TABLE "t_session_events" DROP COLUMN "f_original_seq";

@@ -5,7 +5,8 @@ import { RDB_STORAGE_BACKEND, RdbStorageBackend } from "./storage-backend.ts";
 import type { StorageRepository } from "./types.ts";
 
 export interface StorageTakeoverOptions {
-  repository: StorageRepository;
+  /** backend 打开后才有值：接管在构造期完成，真正的读写在打开后发生。 */
+  repository: () => Promise<StorageRepository>;
 
   ready: Promise<unknown>;
 }

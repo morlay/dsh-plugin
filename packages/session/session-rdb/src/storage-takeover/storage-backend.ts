@@ -1,19 +1,12 @@
 import { StorageError } from "@deepseek-ai/dsh-storage";
-import type { SessionId } from "@deepseek-ai/dsh-session";
-import type { ScheduleTask } from "@deepseek-ai/dsh-schedule";
-import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import type { KvFacet, KvUnit, KvUnitDescriptor, StorageBackend } from "@deepseek-ai/dsh-storage";
-import type { StorageRepository, WorkspaceRecord, WorkspaceDomainState } from "./types.ts";
+import type { StorageRepository } from "./types.ts";
 
 export const RDB_STORAGE_BACKEND = "rdb";
 
-// 本后端服务哪些域：一个域一个显式映射（表结构显式维护，未知域名 fail loud——见
-// `.agents/adrs/20260917-接管storages到rdb语义表.md`）。官方那几行谁读哪个域是上游的事，
-// 这里只回答"这个域的数据落在哪张表"。
-const WORKSPACE_UNIT = "workspace";
-const WORKSPACE_TABLE = "workspaces";
-const SCHEDULE_UNIT = "schedule";
-const SCHEDULE_TABLE = "tasks";
+// 本后端服务**所有** storage 域：`(域, 表, 键)` 一行落 `t_storage_records`，global 单例用空表名与空键。
+// 上游 `KvUnit` 的契约只有「按表名读写记录 + 一个 global」这几种操作，行存储直接承载它，所以再加一个域
+// （不论它自带几张表、还是只有 global）都不需要新表或新映射——域名就是行的一部分。
 
 // 本后端对 unit 的内部约定：关闭时把域名让回后端（上游 `KvUnit` 没有这个入口，它归"谁能再开一次"这件事）。
 interface ReleasableKvUnit extends KvUnit {
@@ -24,29 +17,31 @@ export class RdbStorageBackend implements StorageBackend {
   readonly kv: KvFacet = { open: (descriptor) => this.openUnit(descriptor) };
 
   private readonly open = new Map<string, ReleasableKvUnit>();
+  // 正在打开的名字：`open()` 要先等介质，占位必须在 await 之前，否则并发 open 会双双通过检查。
+  private readonly opening = new Set<string>();
   private closed = false;
 
-  constructor(private readonly repository: StorageRepository) {}
+  constructor(private readonly repository: () => Promise<StorageRepository>) {}
 
   private async openUnit(descriptor: KvUnitDescriptor): Promise<KvUnit> {
     if (this.closed) throw new StorageError("closed", "rdb storage backend is closed");
-    if (descriptor.layout !== undefined && descriptor.layout !== "single") {
-      throw new Error(
-        `rdb storage backend serves only the 'single' layout (domain '${descriptor.name}' ` +
-          `declares '${descriptor.layout}')`,
-      );
-    }
-    if (this.open.has(descriptor.name)) {
+    if (this.open.has(descriptor.name) || this.opening.has(descriptor.name)) {
       throw new Error(`kv unit '${descriptor.name}' is already open (double-open is a caller bug)`);
     }
+    this.opening.add(descriptor.name);
 
-    const unit = this.unitFor(descriptor);
+    const repository = await this.repository();
+    const unit = new RdbKvUnit(repository, descriptor);
     this.open.set(descriptor.name, unit);
+    this.opening.delete(descriptor.name);
     try {
-      const stored = await this.repository.readUnitVersion(descriptor.name);
+      const stored = await repository.readUnitVersion(descriptor.name);
+      const accepted =
+        stored === descriptor.version ||
+        (descriptor.compatibleVersions ?? []).includes(stored ?? -1);
       if (stored === undefined) {
-        await this.repository.insertUnitVersion(descriptor.name, descriptor.version);
-      } else if (stored !== descriptor.version) {
+        await repository.insertUnitVersion(descriptor.name, descriptor.version);
+      } else if (!accepted) {
         throw new StorageError(
           "version-mismatch",
           `kv unit '${descriptor.name}' is stamped version ${stored} on the medium, ` +
@@ -55,37 +50,13 @@ export class RdbStorageBackend implements StorageBackend {
       }
     } catch (error) {
       this.open.delete(descriptor.name);
+      this.opening.delete(descriptor.name);
       throw error;
     }
     unit.onClose(() => {
       this.open.delete(descriptor.name);
     });
     return unit;
-  }
-
-  private unitFor(descriptor: KvUnitDescriptor): ReleasableKvUnit {
-    if (descriptor.name === WORKSPACE_UNIT) {
-      if (!descriptor.tables.includes(WORKSPACE_TABLE) || descriptor.hasGlobal !== true) {
-        throw new Error(
-          `rdb storage backend expects the '${WORKSPACE_UNIT}' domain shape ` +
-            `(table '${WORKSPACE_TABLE}' plus a global slot)`,
-        );
-      }
-      return new WorkspaceKvUnit(this.repository, descriptor);
-    }
-    if (descriptor.name === SCHEDULE_UNIT) {
-      if (!descriptor.tables.includes(SCHEDULE_TABLE) || descriptor.hasGlobal !== false) {
-        throw new Error(
-          `rdb storage backend expects the '${SCHEDULE_UNIT}' domain shape ` +
-            `(table '${SCHEDULE_TABLE}' without a global slot)`,
-        );
-      }
-      return new ScheduleKvUnit(this.repository, descriptor);
-    }
-    throw new Error(
-      `rdb storage backend serves only the '${WORKSPACE_UNIT}' and '${SCHEDULE_UNIT}' domains ` +
-        `(requested '${descriptor.name}')`,
-    );
   }
 
   async close(): Promise<void> {
@@ -96,8 +67,7 @@ export class RdbStorageBackend implements StorageBackend {
   }
 }
 
-// 一个 KV unit 的公共形态：关闭后拒写、关闭前把已接受的写排干、关闭回调把名字让回给后端。
-// 域自己的读写在子类里（`unitFor` 的返回类型就地校验它们合得上 `KvUnit`）。
+// 一个 unit 的公共形态：关闭后拒写、关闭前把已接受的写排干、关闭回调把名字让回给后端。
 abstract class TrackedKvUnit {
   private closed = false;
 
@@ -109,9 +79,6 @@ abstract class TrackedKvUnit {
     protected readonly repository: StorageRepository,
     protected readonly descriptor: KvUnitDescriptor,
   ) {}
-
-  // 这个 unit 认的表名（由各自的域决定）。
-  protected abstract readonly tables: readonly string[];
 
   onClose(release: () => void): void {
     this.onClosed = release;
@@ -146,139 +113,57 @@ abstract class TrackedKvUnit {
   }
 
   protected assertTable(table: string): void {
-    if (!this.tables.includes(table)) {
+    if (!this.descriptor.tables.includes(table)) {
       throw new Error(`unit '${this.descriptor.name}' does not declare table '${table}'`);
     }
   }
 }
 
-class WorkspaceKvUnit extends TrackedKvUnit {
-  protected readonly tables = [WORKSPACE_TABLE];
-
+// 行存储：记录按 `(域, 表, 键)` 一行，global 单例是空表名的那一行。`single` 与 `per-record` 两种布局
+// 在这里同构（一行一条记录），所以布局不再拒绝——版本仍按域戳。
+class RdbKvUnit extends TrackedKvUnit {
   async loadAll(): Promise<{ tables: Record<string, Record<string, unknown>>; global: unknown }> {
     this.assertOpen();
-    const records: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-    for (const { id, record } of await this.repository.listWorkspaces()) {
-      records[id] = record;
+    const tables: Record<string, Record<string, unknown>> = Object.create(null) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    for (const record of await this.repository.listDomainRecords(this.descriptor.name)) {
+      (tables[record.table] ??= {})[record.key] = record.value;
     }
-    const state = await this.repository.readWorkspaceState();
-    return { tables: { [WORKSPACE_TABLE]: records }, global: state };
+    // 声明了但从未写过的表也要出现在快照里（域层按 spec.tables 逐表读）。
+    for (const table of this.descriptor.tables) tables[table] ??= {};
+    return {
+      tables,
+      global: this.descriptor.hasGlobal
+        ? await this.repository.readDomainGlobal(this.descriptor.name)
+        : null,
+    };
   }
 
   async putRecord(table: string, key: string, value: unknown): Promise<void> {
     this.assertOpen();
     this.assertTable(table);
-    await this.track(this.repository.putWorkspace(key, workspaceRecordOf(value)));
+    await this.track(this.repository.putDomainRecord(this.descriptor.name, table, key, value));
   }
 
   async deleteRecord(table: string, key: string): Promise<void> {
     this.assertOpen();
     this.assertTable(table);
-    await this.track(this.repository.deleteWorkspace(key));
+    await this.track(this.repository.deleteDomainRecord(this.descriptor.name, table, key));
   }
 
-  // 上游 `KvUnit.deleteRecords`：行存储一次批量做完（不让调用方逐条重试）。
   async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
     this.assertOpen();
     this.assertTable(table);
-    await this.track(this.repository.deleteWorkspaces([...new Set(keys)]));
+    await this.track(this.repository.deleteDomainRecords(this.descriptor.name, table, keys));
   }
 
   async setGlobal(value: unknown): Promise<void> {
     this.assertOpen();
-    await this.track(this.repository.writeWorkspaceState(workspaceStateOf(value)));
-  }
-}
-
-class ScheduleKvUnit extends TrackedKvUnit {
-  protected readonly tables = [SCHEDULE_TABLE];
-
-  async loadAll(): Promise<{ tables: Record<string, Record<string, unknown>>; global: unknown }> {
-    this.assertOpen();
-    const records: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-    for (const { id, task } of await this.repository.listScheduleTasks()) {
-      records[id] = task;
+    if (!this.descriptor.hasGlobal) {
+      throw new Error(`unit '${this.descriptor.name}' declares no global slot`);
     }
-    // 这个域没有 global 槽（`scheduleDomain` 不声明）：`null` = "从未写过"，域层不会读它。
-    return { tables: { [SCHEDULE_TABLE]: records }, global: null };
+    await this.track(this.repository.writeDomainGlobal(this.descriptor.name, value));
   }
-
-  async putRecord(table: string, key: string, value: unknown): Promise<void> {
-    this.assertOpen();
-    this.assertTable(table);
-    await this.track(this.repository.putScheduleTask(key, scheduleTaskOf(value)));
-  }
-
-  async deleteRecord(table: string, key: string): Promise<void> {
-    this.assertOpen();
-    this.assertTable(table);
-    await this.track(this.repository.deleteScheduleTask(key));
-  }
-
-  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
-    this.assertOpen();
-    this.assertTable(table);
-    await this.track(this.repository.deleteScheduleTasks([...new Set(keys)]));
-  }
-
-  setGlobal(_value: unknown): Promise<void> {
-    throw new Error(`unit '${this.descriptor.name}' declares no global slot`);
-  }
-}
-
-function workspaceRecordOf(value: unknown): WorkspaceRecord {
-  const record = value as Partial<WorkspaceRecord> | null;
-  if (
-    typeof record !== "object" ||
-    record === null ||
-    typeof record.path !== "string" ||
-    typeof record.title !== "string" ||
-    !Array.isArray(record.sessionIds) ||
-    typeof record.createdAt !== "string" ||
-    typeof record.updatedAt !== "string"
-  ) {
-    throw new TypeError("workspace record does not match the stored shape");
-  }
-  return {
-    path: record.path,
-    title: record.title,
-    sessionIds: record.sessionIds.map((id) => id as SessionId),
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-function workspaceStateOf(value: unknown): WorkspaceDomainState {
-  const state = value as Partial<WorkspaceDomainState> | null;
-  if (
-    typeof state !== "object" ||
-    state === null ||
-    typeof state.initialized !== "boolean" ||
-    !Array.isArray(state.workspaceIds) ||
-    !Array.isArray(state.archivedSessionIds) ||
-    !Array.isArray(state.pinnedSessionIds)
-  ) {
-    throw new TypeError("workspace registry state does not match the stored shape");
-  }
-  return {
-    initialized: state.initialized,
-    workspaceIds: state.workspaceIds.map((id) => id as WorkspaceId),
-    archivedSessionIds: state.archivedSessionIds.map((id) => id as SessionId),
-    pinnedSessionIds: state.pinnedSessionIds.map((id) => id as SessionId),
-    ...(state.pendingMutation === undefined ? {} : { pendingMutation: state.pendingMutation }),
-  };
-}
-
-function scheduleTaskOf(value: unknown): ScheduleTask {
-  const task = value as Partial<ScheduleTask> | null;
-  if (
-    typeof task !== "object" ||
-    task === null ||
-    typeof task.sessionId !== "string" ||
-    typeof task.record !== "object" ||
-    task.record === null
-  ) {
-    throw new TypeError("schedule task does not match the stored shape");
-  }
-  return task as ScheduleTask;
 }

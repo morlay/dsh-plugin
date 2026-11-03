@@ -1,6 +1,6 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
-export const sessionProjcacheRows: TableDef = {
+export const sessionProjcacheRows = defineTable({
   name: "t_session_projcache_row",
   columns: {
     f_id: { type: "serial", primaryKey: true },
@@ -16,4 +16,4 @@ export const sessionProjcacheRows: TableDef = {
   },
   uniques: { uq_session_projcache_row_session_key: { columns: ["f_session_id", "f_key"] } },
   indexes: { idx_session_projcache_row_key: { columns: ["f_key"] } },
-};
+});

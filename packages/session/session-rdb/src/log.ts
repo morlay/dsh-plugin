@@ -1,5 +1,6 @@
 import { SessionSeq } from "@deepseek-ai/dsh-session";
-import { or, sql, type SQL } from "drizzle-orm";
+import type { InsertRow, RowOf } from "@morlay/rdbkit";
+import { sessions } from "./entities/index.ts";
 import type { SessionEvent, SessionHeader, SessionId, SurfaceOp } from "@deepseek-ai/dsh-session";
 import type { SessionFormatEvent, SessionFormatHeader } from "@deepseek-ai/dsh-session-format";
 import { sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
@@ -36,102 +37,43 @@ export function rowToMeta(row: SessionRow): SessionHeader {
   };
 }
 
-export function sessionInsertRow(
+/** 新建会话行（列名即表定义里的列，值全部显式给出）。 */
+export function sessionInsertColumns(
   storage: SessionStorageMetadata,
   incarnation: string,
-): {
-  fSessionId: string;
-  fHeadEventId: string;
-  fHeadSequence: number;
-  fVersion: number;
-  fCreatedAt: number;
-  fCwd: string | null;
-  fParentSession: string | null;
-  fSeedLength: number | null;
-  fOrigin: string | null;
-  fDelegationDepth: number | null;
-  fAgentPreset: string | null;
-  fIncarnation: string;
-  fRevision: number;
-} {
-  const meta = storage.meta;
+): InsertRow<RowOf<typeof sessions>> {
   return {
-    fSessionId: meta.id,
-    fHeadEventId: "",
-    fHeadSequence: -1,
-    fVersion: meta.version,
-    fCreatedAt: meta.createdAt,
-    fCwd: meta.cwd ?? null,
-    fParentSession: meta.parentSession ?? null,
-    fSeedLength: meta.isSeeded ? storage.inheritedEventCount : null,
-    fOrigin: meta.origin ?? null,
-    fDelegationDepth: meta.delegationDepth ?? null,
-    fAgentPreset: meta.agentPreset ?? null,
-    fIncarnation: incarnation,
-    fRevision: 0,
+    ...sessionHeaderColumns(storage),
+    f_session_id: storage.meta.id,
+    f_head_event_id: "",
+    f_head_sequence: -1,
+    f_incarnation: incarnation,
+    f_revision: 0,
   };
 }
 
-export function sessionConflictRow(storage: SessionStorageMetadata): {
-  fVersion: number;
-  fCreatedAt: number;
-  fCwd: string | null;
-  fParentSession: string | null;
-  fSeedLength: number | null;
-  fOrigin: string | null;
-  fDelegationDepth: number | null;
-  fAgentPreset: string | null;
+/** header 的八列（`upsert` 时「变了的列才写」判据也用它）。 */
+export function sessionHeaderColumns(storage: SessionStorageMetadata): {
+  f_version: number;
+  f_created_at: number;
+  f_cwd: string | null;
+  f_parent_session: string | null;
+  f_seed_length: number | null;
+  f_origin: string | null;
+  f_delegation_depth: number | null;
+  f_agent_preset: string | null;
 } {
   const meta = storage.meta;
   return {
-    fVersion: meta.version,
-    fCreatedAt: meta.createdAt,
-    fCwd: meta.cwd ?? null,
-    fParentSession: meta.parentSession ?? null,
-    fSeedLength: meta.isSeeded ? storage.inheritedEventCount : null,
-    fOrigin: meta.origin ?? null,
-    fDelegationDepth: meta.delegationDepth ?? null,
-    fAgentPreset: meta.agentPreset ?? null,
+    f_version: meta.version,
+    f_created_at: meta.createdAt,
+    f_cwd: meta.cwd ?? null,
+    f_parent_session: meta.parentSession ?? null,
+    f_seed_length: meta.isSeeded ? storage.inheritedEventCount : null,
+    f_origin: meta.origin ?? null,
+    f_delegation_depth: meta.delegationDepth ?? null,
+    f_agent_preset: meta.agentPreset ?? null,
   };
-}
-
-/**
- * `f_last_event_at` 的「取大」更新：`max(a, b)` 在 SQLite 是标量函数，PostgreSQL 只有聚合 `max`，
- * 两参数写法在 PG 上直接 `function max(bigint, unknown) does not exist`。用 `CASE WHEN` 写，
- * 两个方言同一份表达式（NULL 视作 0，与原来的 `MAX(COALESCE(x, 0), v)` 同义）。
- */
-export function lastEventAtSql(column: unknown, value: number): SQL {
-  return sql`CASE WHEN COALESCE(${column}, 0) < ${value} THEN ${value} ELSE COALESCE(${column}, 0) END`;
-}
-
-/**
- * 「这次 append 需不需要重写 session 行的 header 列」的 SQL 判据：逐列 `is distinct from`。
- * 放在 SQL 里判断（而不是先读再比）是为了不增加一次读；`WHERE` 不匹配时数据库不产生行写入，
- * 也就不会有 WAL 帧与触发器——每次 append 都无条件 UPDATE 一次是纯写放大。
- */
-export function headerChangedSql(
-  table: {
-    fVersion: unknown;
-    fCreatedAt: unknown;
-    fCwd: unknown;
-    fParentSession: unknown;
-    fSeedLength: unknown;
-    fOrigin: unknown;
-    fDelegationDepth: unknown;
-    fAgentPreset: unknown;
-  },
-  values: ReturnType<typeof sessionConflictRow>,
-): SQL {
-  return or(
-    sql`${table.fVersion} is distinct from ${values.fVersion}`,
-    sql`${table.fCreatedAt} is distinct from ${values.fCreatedAt}`,
-    sql`${table.fCwd} is distinct from ${values.fCwd}`,
-    sql`${table.fParentSession} is distinct from ${values.fParentSession}`,
-    sql`${table.fSeedLength} is distinct from ${values.fSeedLength}`,
-    sql`${table.fOrigin} is distinct from ${values.fOrigin}`,
-    sql`${table.fDelegationDepth} is distinct from ${values.fDelegationDepth}`,
-    sql`${table.fAgentPreset} is distinct from ${values.fAgentPreset}`,
-  )!;
 }
 
 export function rowToEvent(row: EventRow): SessionEvent {

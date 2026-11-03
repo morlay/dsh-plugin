@@ -1,9 +1,9 @@
-import type { TableDef } from "../../adapters/types.ts";
+import { defineTable } from "@morlay/rdbkit";
 
-export const storageUnits: TableDef = {
+export const storageUnits = defineTable({
   name: "t_storage_units",
   columns: {
     f_name: { type: "text", primaryKey: true },
     f_version: { type: "integer", notNull: true },
   },
-};
+});

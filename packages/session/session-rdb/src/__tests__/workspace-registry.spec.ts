@@ -68,12 +68,16 @@ async function seedSession(ctx: Context, id: string, cwd: string): Promise<Sessi
   return sessionId;
 }
 
-function membershipRows(dbPath: string): Array<{ f_session_id: string; f_position: number }> {
+// 归属只住在 workspace 文档里（`t_storage_records` 的 `workspace / workspaces` 行），顺序就是数组顺序。
+function membershipIds(dbPath: string): string[] {
   const db = new DatabaseSync(dbPath);
   try {
-    return db
-      .prepare("SELECT f_session_id, f_position FROM t_workspace_sessions ORDER BY f_position")
-      .all() as Array<{ f_session_id: string; f_position: number }>;
+    const rows = db
+      .prepare(
+        "SELECT f_key, f_value FROM t_storage_records WHERE f_domain = 'workspace' AND f_table = 'workspaces'",
+      )
+      .all() as Array<{ f_key: string; f_value: string }>;
+    return rows.flatMap((row) => (JSON.parse(row.f_value) as { sessionIds: string[] }).sessionIds);
   } finally {
     db.close();
   }
@@ -94,15 +98,15 @@ describe("official workspace registry over the rdb storage backend", () => {
       }
 
       expect(workspace.sessionIds.map(String)).toEqual(["s3", "s2", "s1"]);
-      expect(membershipRows(dbPath).map((row) => row.f_session_id)).toEqual(["s3", "s2", "s1"]);
+      expect(membershipIds(dbPath)).toEqual(["s3", "s2", "s1"]);
 
       await workspace.insertSessionBefore(SessionId("s1"), SessionId("s3"));
       expect(workspace.sessionIds.map(String)).toEqual(["s1", "s3", "s2"]);
-      expect(membershipRows(dbPath).map((row) => row.f_session_id)).toEqual(["s1", "s3", "s2"]);
+      expect(membershipIds(dbPath)).toEqual(["s1", "s3", "s2"]);
 
       await workspace.detachSession(SessionId("s3"));
       expect(workspace.sessionIds.map(String)).toEqual(["s1", "s2"]);
-      expect(membershipRows(dbPath).map((row) => row.f_session_id)).toEqual(["s1", "s2"]);
+      expect(membershipIds(dbPath)).toEqual(["s1", "s2"]);
     } finally {
       await h.dispose();
     }

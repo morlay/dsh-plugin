@@ -16,7 +16,7 @@
   `session/end-seed` 推导）——`physicalHeader` 按 `f_version` 选择（`src/legacy.ts:11`）。
 - **`tool/result` 按当前形状读写**：tool 角色、`toolCallId` 在消息顶层、`content` 就是结果块（维度提取
   `f_role` = tool、`f_action_id` = `data.message.toolCallId`；「只改结果」的重写判定也读新形状，
-  `src/schema.ts:166`、`src/log.ts:214`）。
+  `src/event-shape.ts:107`、`src/log.ts:214`）。
 - **message source 的 kind 由生产者自报**：泛型 `{ kind: 'plugin', plugin }` 没有了；compaction 的检查点消息
   自报 `compact-checkpoint`（带 `compactionId`）。
 - **钉住集合落会话行的 `f_pinned_seq`**（最近钉住在前、与归档互斥），读回即按它排序；旧 `storages` 文档没有
@@ -64,6 +64,6 @@
 - **已知限制**：父会话迁移时声明无子会话证据，因此不补「父会话里本就没有的」`subagent/catalog` 事实；
   正常数据不受影响（那时代的目录事实由父会话自己承载）。
 - 迁移 `drizzle/{sqlite,postgres}/20260922*_v3_pinned_seq` 只加一列（沿用手写迁移的惯例，见
-  [债务 drizzle生成器与实体定义对不上](../debts/20260921-drizzle生成器与实体定义对不上.md)）。
+  （实体定义已由 `@morlay/rdbkit` 的表定义生成，生成器已下线））。
 - 本地读路径与上游字段名绑定（`startSeq` / `endSeq`、tool/result 的 `toolCallId`、source kind 词汇），
   上游再改名时需同步更新。

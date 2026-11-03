@@ -49,7 +49,8 @@ type LifecycleIdentity = CheckpointIdentity & {
 // 没有攒批参数：投影检查点按「与已落库那行相比是否有变化」决定写不写，与事件条数 / 时间无关。
 
 export interface SessionProjectionCacheRdbOptions {
-  repository: StorageRepository;
+  /** backend 打开后才有值（构造期装配、打开后读写）。 */
+  repository: () => Promise<StorageRepository>;
   ready: Promise<unknown>;
 }
 
@@ -62,20 +63,20 @@ export class SessionProjectionCacheRdb extends Service {
   // 同一 tick 内的事件合并成一次「落库 + 检查点比对」，这不是攒批：flush 之后事件已经在库里。
   private readonly queued = new Set<SessionId>();
 
-  private readonly directReads: boolean;
-  private readonly repository: StorageRepository;
+  private repository!: StorageRepository;
   private readonly ready: Promise<unknown>;
+  private readonly openRepository: () => Promise<StorageRepository>;
 
   constructor(ctx: Context, options: SessionProjectionCacheRdbOptions) {
     super(ctx, SESSION_PROJECTION_CACHE_SERVICE);
-    this.repository = options.repository;
+    this.openRepository = options.repository;
     this.ready = options.ready;
-    this.directReads = options.repository.readProjcacheDirect !== undefined;
   }
 
   protected async [Service.init](): Promise<void> {
     this.installWritePath();
     await this.ready;
+    this.repository = await this.openRepository();
 
     const pruned = await this.repository.pruneStaleProjcache();
     if (pruned > 0) {
@@ -83,15 +84,12 @@ export class SessionProjectionCacheRdb extends Service {
         `session projection cache: pruned stale snapshot(s) for ${String(pruned)} session(s)`,
       );
     }
-    if (!this.directReads) {
-      for (const entry of await this.repository.loadProjcache()) {
-        this.records.set(entry.sessionId as SessionId, entry);
-      }
+    for (const entry of await this.repository.loadProjcache()) {
+      this.records.set(entry.sessionId as SessionId, entry);
     }
   }
 
   private lookup(id: SessionId): StoredProjcacheEntry | undefined {
-    if (this.directReads) return this.repository.readProjcacheDirect?.(id);
     return this.records.get(id);
   }
 
@@ -129,12 +127,11 @@ export class SessionProjectionCacheRdb extends Service {
   ): ProjectionSnapshot | undefined {
     if (!selects(keys, PREDECESSOR_TITLE_KEY)) return snapshot;
     if (snapshot?.values[PREDECESSOR_TITLE_KEY] !== undefined) return snapshot;
-    const direct = this.repository.readSessionTitleDirect?.(id);
-    if (direct === undefined) return snapshot;
-    const values = { ...snapshot?.values, [PREDECESSOR_TITLE_KEY]: direct.title };
-
+    const title = this.records.get(id)?.title;
+    if (title === undefined) return snapshot;
+    const values = { ...snapshot?.values, [PREDECESSOR_TITLE_KEY]: title.title };
     const asOfSeq =
-      snapshot === undefined ? direct.seq : Math.min(snapshot.asOfSeq as number, direct.seq);
+      snapshot === undefined ? title.seq : Math.min(snapshot.asOfSeq as number, title.seq);
     return { asOfSeq: asOfSeq as SessionSeqCursor, values };
   }
 
@@ -221,14 +218,19 @@ export class SessionProjectionCacheRdb extends Service {
   ): Promise<void> {
     const detachedChanged = detachJson(changed);
     await this.repository.patchProjcache(id, detachedChanged, removedKeys);
-    if (this.directReads) return;
 
     const merged: Record<string, ProjectionCheckpointRow> = {};
     const previous = this.records.get(id)?.rows;
     if (previous !== undefined) Object.assign(merged, previous);
     Object.assign(merged, detachedChanged);
     for (const key of removedKeys) delete merged[key];
-    this.records.set(id, { sessionId: id, identity, rows: merged });
+    const title = await this.repository.readSessionTitle(id);
+    this.records.set(id, {
+      sessionId: id,
+      identity,
+      rows: merged,
+      ...(title === undefined ? {} : { title }),
+    });
   }
 
   // rewind 后 head 回退：把水位超出新 head 的投影单元丢弃，保留仍在截断前缀内的行。
@@ -319,8 +321,13 @@ export class SessionProjectionCacheRdb extends Service {
     const detached = detachJson(rows);
 
     await this.repository.putProjcache(id, detached);
-
-    if (!this.directReads) this.records.set(id, { sessionId: id, identity, rows: detached });
+    const title = await this.repository.readSessionTitle(id);
+    this.records.set(id, {
+      sessionId: id,
+      identity,
+      rows: detached,
+      ...(title === undefined ? {} : { title }),
+    });
   }
 }
 

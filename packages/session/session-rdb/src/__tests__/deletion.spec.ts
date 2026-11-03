@@ -43,7 +43,7 @@ async function createPersisted(
 }
 
 async function archive(persistence: SessionPersistenceRdb, ...ids: string[]): Promise<void> {
-  await persistence.internals().backend.storage.writeWorkspaceState({
+  await persistence.internals().backend.storage.writeDomainGlobal("workspace", {
     initialized: true,
     workspaceIds: [],
     pinnedSessionIds: [],

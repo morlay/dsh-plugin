@@ -84,25 +84,30 @@ describe("multi-session repro (cold-path verification)", () => {
     await b2.dispose();
   });
 
-  it("two backend instances share one file and append different sessions concurrently", async () => {
-    const path = await freshDbPath();
-    const b1 = await mount(path);
-    const b2 = await mount(path);
-    const s1 = b1.ctx.sessions.create(SessionId("inst-1"));
-    const s2 = b2.ctx.sessions.create(SessionId("inst-2"));
-    appendTurn(s1, 0);
-    appendTurn(s2, 0);
+  // 两个实例共用一条串行队列 + 磁盘 fsync：默认 5s 在慢机器上会偶发超时。
+  it(
+    "two backend instances share one file and append different sessions concurrently",
+    { timeout: 20_000 },
+    async () => {
+      const path = await freshDbPath();
+      const b1 = await mount(path);
+      const b2 = await mount(path);
+      const s1 = b1.ctx.sessions.create(SessionId("inst-1"));
+      const s2 = b2.ctx.sessions.create(SessionId("inst-2"));
+      appendTurn(s1, 0);
+      appendTurn(s2, 0);
 
-    await Promise.all([b1.ctx.sessions.flush(s1), b2.ctx.sessions.flush(s2)]);
-    await Promise.all([b1.dispose(), b2.dispose()]);
+      await Promise.all([b1.ctx.sessions.flush(s1), b2.ctx.sessions.flush(s2)]);
+      await Promise.all([b1.dispose(), b2.dispose()]);
 
-    const b3 = await mount(path);
-    const l1 = await rdb(b3.ctx).load(SessionId("inst-1"));
-    const l2 = await rdb(b3.ctx).load(SessionId("inst-2"));
-    expect(l1.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(l2.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
-    await b3.dispose();
-  });
+      const b3 = await mount(path);
+      const l1 = await rdb(b3.ctx).load(SessionId("inst-1"));
+      const l2 = await rdb(b3.ctx).load(SessionId("inst-2"));
+      expect(l1.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(l2.events.map((e) => e.seq)).toEqual([0, 1, 2, 3, 4, 5]);
+      await b3.dispose();
+    },
+  );
 
   it("concurrent appends to MANY sessions on ONE live store never interleave parent chains", async () => {
     const path = await freshDbPath();

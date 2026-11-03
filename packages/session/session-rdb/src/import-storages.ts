@@ -47,11 +47,14 @@ export async function importStorages(
       WORKSPACE_UNIT_VERSIONS.values().next().value as number,
     );
     for (const [id, record] of Object.entries(tables["workspaces"] ?? {})) {
-      await repository.putWorkspace(id, record as WorkspaceRecord);
+      await repository.putDomainRecord("workspace", "workspaces", id, record as WorkspaceRecord);
       result.workspaces += 1;
     }
     if (workspaceDocument.global !== undefined && workspaceDocument.global !== null) {
-      await repository.writeWorkspaceState(workspaceDocument.global as WorkspaceDomainState);
+      await repository.writeDomainGlobal(
+        "workspace",
+        workspaceDocument.global as WorkspaceDomainState,
+      );
       result.workspaceState = true;
     }
   }

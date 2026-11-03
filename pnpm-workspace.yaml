@@ -19,7 +19,7 @@ autoInstallPeers: true
 
 # 所有 node 进程（含 tsdown 加载 config、脚本直跑 TS）自动挂 oxc 的注册钩子：TS loader 这件事
 # 从此只有这一处，不需要各处写 `--import`，也不需要 tsx。
-nodeOptions: "--import @oxc-node/core/register"
+nodeOptions: "--import @morlay/dsh-oxc-node"
 
 # 安装脚本白名单：与上游清单对齐（true = 放行，false = 明确拒绝但允许安装），再补上本仓库部署需要的
 # （桌面壳要 electron 的二进制、沙箱与 PTY 要各自的原生件）。上游用 false 表达"评估过、不需要它的脚本"，

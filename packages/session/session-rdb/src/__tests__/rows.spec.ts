@@ -124,17 +124,12 @@ describe("session-rdb session rows route", () => {
       internals(): {
         backend: {
           storage: {
-            writeWorkspaceState(state: {
-              initialized: boolean;
-              workspaceIds: readonly string[];
-              archivedSessionIds: readonly SessionId[];
-              pinnedSessionIds: readonly string[];
-            }): Promise<void>;
+            writeDomainGlobal(domain: string, value: unknown): Promise<void>;
           };
         };
       };
     };
-    await persistenceRdb.internals().backend.storage.writeWorkspaceState({
+    await persistenceRdb.internals().backend.storage.writeDomainGlobal("workspace", {
       initialized: true,
       workspaceIds: [],
       archivedSessionIds: [SessionId("archived")],

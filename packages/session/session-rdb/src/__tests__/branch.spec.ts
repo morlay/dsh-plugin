@@ -1259,7 +1259,9 @@ describe("rewind 的行写放大", () => {
 
       const probe = new DatabaseSync(path);
       try {
-        expect((probe.prepare("SELECT n FROM probe_rewind_updates").get() as { n: number }).n).toBe(1);
+        expect((probe.prepare("SELECT n FROM probe_rewind_updates").get() as { n: number }).n).toBe(
+          1,
+        );
       } finally {
         probe.close();
       }

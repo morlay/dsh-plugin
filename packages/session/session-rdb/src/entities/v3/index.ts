@@ -4,10 +4,7 @@ import { sessions } from "./sessions.ts";
 import { events } from "./events.ts";
 import { sessionEvents } from "./session-events.ts";
 import { storageUnits } from "./storage-units.ts";
-import { workspaces } from "./workspaces.ts";
-import { workspaceSessions } from "./workspace-sessions.ts";
-import { workspaceState } from "./workspace-state.ts";
-import { scheduleTasks } from "./schedule-tasks.ts";
+import { storageRecords } from "./storage-records.ts";
 import { sessionProjcacheRows } from "./session-projcache-rows.ts";
 import { eventUsage } from "./event-usage.ts";
 import { sessionUsage } from "./session-usage.ts";
@@ -19,10 +16,7 @@ export { sessions };
 export { events };
 export { sessionEvents };
 export { storageUnits };
-export { workspaces };
-export { workspaceSessions };
-export { workspaceState };
-export { scheduleTasks };
+export { storageRecords };
 export { sessionProjcacheRows };
 export { eventUsage };
 export { sessionUsage };
@@ -35,10 +29,7 @@ export const sqliteTableDefs = [
   events,
   sessionEvents,
   storageUnits,
-  workspaces,
-  workspaceSessions,
-  workspaceState,
-  scheduleTasks,
+  storageRecords,
   sessionProjcacheRows,
   eventUsage,
   sessionUsage,
@@ -52,10 +43,7 @@ export const postgresTableDefs = [
   events,
   sessionEvents,
   storageUnits,
-  workspaces,
-  workspaceSessions,
-  workspaceState,
-  scheduleTasks,
+  storageRecords,
   sessionProjcacheRows,
   eventUsage,
   sessionUsage,

@@ -3,4 +3,4 @@
 packages:
   - ./upstream-sync
 
-nodeOptions: "--import @oxc-node/core/register"
+nodeOptions: "--import @morlay/dsh-oxc-node"

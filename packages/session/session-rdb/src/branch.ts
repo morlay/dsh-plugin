@@ -180,7 +180,8 @@ export function truncateLiveSession(session: Session, newLength: number): number
   };
   // 截断后 agent 的 turn 游标要跟着落在保留前缀的最后一个 turn 上：这里直接读**要保留的那段**（同一个数组，
   // 不经过已弃用的同步历史读 `snapshotEvents`，也不依赖 agent 侧的投影）。
-  const lastTurn = s.log.slice(0, newLength).findLast((event) => event.type === "turn/start")?.data.turn ?? 0;
+  const lastTurn =
+    s.log.slice(0, newLength).findLast((event) => event.type === "turn/start")?.data.turn ?? 0;
   s.log.length = newLength;
   s.eventsSnapshot = undefined;
   s.headerFold = undefined;
@@ -294,6 +295,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     const seed = [...renumber(prefix, 0), ...renumber(seedSuffix, prefix.length)];
 
     const internals = this.persistence.internals();
+    await internals.ready;
     // 复用父会话的事件行有个前提：**读取视图的 seq 与存储行的 f_sequence 一一对应**。legacy 会话的读视图
     // 由迁移链重建（可能重新编号、增删事件），按 seq 复用会把桥接行挂到语义不符的行上——读取时按 `f_data`
     // 解析，子会话前缀读到的内容就会和它自己的 seed 事件对不上。那种情况下复制事件行（多几行存储，正确优先）。
@@ -349,6 +351,7 @@ export class SessionBranchRdbProvider implements SessionBranchProvider {
     if (live !== undefined) await this.live.flush(live);
 
     const internals = this.persistence.internals();
+    await internals.ready;
 
     // SessionBranch 是「先停止、再操作」的排他面（ADR-rewind绕过handle模型直接截断）：rewind 直连 DB 做最小工作，
     // 不走持久化抽象的全量读路径（readLog 会拉全部事件 + legacy 转换 + 读视图修复）。
