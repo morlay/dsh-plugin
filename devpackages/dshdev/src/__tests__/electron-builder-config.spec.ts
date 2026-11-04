@@ -25,7 +25,6 @@ describe("desktopBuildConfig", () => {
       icons: {},
       electron: { version: "44.3.0" },
       buildCache: "/build",
-      appWorkspace: "/app",
     });
 
     expect(config.appId).toBe("ai.deepseek.dsh.custom-next");
@@ -58,7 +57,6 @@ describe("desktopBuildConfig", () => {
       icons: { mac: "/icons/icon.icns", linux: "/icons/icon.png", win: "/icons/icon.ico" },
       electron: { version: "44.3.0", dist: "/electron/dist" },
       buildCache: "/build",
-      appWorkspace: "/app",
     });
 
     expect(config.mac?.icon).toBe("/icons/icon.icns");
@@ -67,7 +65,7 @@ describe("desktopBuildConfig", () => {
     expect(config.electronDist).toBe("/electron/dist");
     expect(config.extraResources).toEqual([
       // profile 的解析面（闭包）不在这里：electron-builder 的忽略规则会吞掉 node_modules，
-      // 它由 `afterPack` 用 `deployClosure` 部署到 `Resources/profile`。
+      // 它由 `afterPack` 把 `prepareSeed` 的 deploy 闭包复制到 `Resources/profile`。
       { from: join("/build", "runtime"), to: "runtime" },
       { from: join("/build", "seed"), to: "seed" },
       { from: join("/build", "runtime", "appconfig.json"), to: "appconfig.json" },

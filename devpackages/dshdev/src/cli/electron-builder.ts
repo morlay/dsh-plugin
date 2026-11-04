@@ -1,19 +1,16 @@
 import { logOf } from "@local/devkit/log";
-import { access, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, cp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { build, type CliOptions } from "electron-builder";
 import type { AppConfig } from "@morlay/dsh-desktop-shell/appconfig";
 import type { PreparedIcons } from "./icon.ts";
-import { deployClosure } from "./prepare-seed.ts";
 
 type DesktopConfiguration = Exclude<NonNullable<CliOptions["config"]>, string>;
 
 const log = logOf("dshdev");
 
 export interface DesktopBuildOptions {
-  /** 真的 app 目录（工作区根）：`afterPack` 部署 profile 的解析面要以它为基准。 */
-  readonly appWorkspace: string;
   readonly appRoot: string;
 
   readonly buildCache: string;
@@ -26,8 +23,6 @@ export interface DesktopBuildOptions {
 }
 
 export interface DesktopBuildConfigInput {
-  /** 真的 app 目录（工作区根）：`afterPack` 里部署 profile 的解析面要以它为基准。 */
-  readonly appWorkspace: string;
   readonly appConfig: AppConfig;
 
   readonly icons: PreparedIcons;
@@ -77,7 +72,7 @@ export async function prepareShellAppDirectory(options: DesktopBuildOptions): Pr
 // Linux 的可执行名取工作区包名 `name`——electron-builder 的 Linux 可执行名本就读壳 app 目录 `package.json`
 // 的 `name`，显式钉住它，安装脚本拼的 `Exec` 才与产物一致。
 export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfiguration {
-  const { buildCache, appConfig, icons, electron, appWorkspace } = input;
+  const { buildCache, appConfig, icons, electron } = input;
   return {
     appId: appConfig.id,
     productName: appConfig.displayName,
@@ -108,12 +103,12 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
     ],
     // **profile 的解析面**（bundle 与它们的依赖）：`extraResources` 指望不上——electron-builder 的默认
     // 忽略规则里有 `**/node_modules/**`，而这一份**就是** node_modules（实测：目录建了、非 node_modules
-    // 的文件也拷了，唯独它是空的；显式 `filter: ["**/*"]` 覆盖不掉）。所以放在打包之后自己放：调
-    // `deployClosure`（deploy 到目标 + 把 `.pnpm` 的包挂平到顶层，解析面才扁平）。
+    // 的文件也拷了，唯独它是空的；显式 `filter: ["**/*"]` 覆盖不掉）。所以放在打包之后自己放。
     //
-    // **不能用 `--node-linker=hoisted`**：它会去解析依赖的真实路径，而我们的 lockfile 里有指向 workspace
-    // 之外（`vendor/deepseek-harness/...`）的 `file:` 依赖，pnpm 会以 `ERR_PNPM_CANNOT_DEPLOY`（unsafe
-    // lockfile path）拒绝。
+    // **不再在这里跑第二次 `pnpm deploy`**：`prepareSeed` 已经产出了同一份闭包（`<buildCache>/deploy`，
+    // 含顶层挂平）。同一个装配跑两遍，第二次在 electron-builder 进程里会拿到另一套结果（实测：工作区包
+    // 被换成发布版清单，`main`/`exports` 指 `lib/index.js`，而包目录里只有 `src` 没有 `lib`——宿主启动
+    // 时整片 `ERR_MODULE_NOT_FOUND`）。一次装配、两处一致。
     afterPack: async (context) => {
       const resources =
         context.packager.platform.name === "mac"
@@ -124,13 +119,7 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
               "Resources",
             )
           : join(context.appOutDir, "resources");
-      // **工作区根**必须是真的 app 目录，不能拿 `context.packager.projectDir`：那是壳的装配目录
-      // （`.dshdev/shell`），`pnpm deploy` 在那里写过一份 `pnpm-workspace.yaml`，于是它会被当成工作区根，
-      // 而 lockfile 里的 `file:` 依赖在仓库内 → pnpm 以"路径在工作区之外"拒绝。
-      const name = (
-        JSON.parse(await readFile(join(appWorkspace, "package.json"), "utf8")) as { name: string }
-      ).name;
-      await deployClosure(appWorkspace, name, join(resources, "profile"));
+      await installProfileClosure(resources, buildCache);
     },
     mac: {
       category: "public.app-category.developer-tools",
@@ -151,8 +140,24 @@ export function desktopBuildConfig(input: DesktopBuildConfigInput): DesktopConfi
   };
 }
 
+/**
+ * 把 `prepareSeed` 产出的部署闭包原样铺到产物的 `Resources/profile`。
+ *
+ * **复制而不是再 deploy 一次**：闭包只有一份（`<buildCache>/deploy`，`deployClosure` 已把 `.pnpm` 的包
+ * 挂平到顶层），打包只负责搬。符号链接按原样保留（`verbatimSymlinks`）：顶层包都是指进 `.pnpm` 的
+ * **相对**链接，跟产物一起搬走仍然是有效的；解析成绝对路径就会指回构建机。
+ *
+ * @param resources - 产物里的 `Resources` 目录（mac 是 `.app/Contents/Resources`）。
+ * @param buildCache - 打包工作目录（`<workspace>/node_modules/.dshdev`）。
+ */
+export async function installProfileClosure(resources: string, buildCache: string): Promise<void> {
+  const target = join(resources, "profile");
+  await rm(target, { recursive: true, force: true });
+  await cp(join(buildCache, "deploy"), target, { recursive: true, verbatimSymlinks: true });
+}
+
 export async function buildDesktopApp(options: DesktopBuildOptions): Promise<string[]> {
-  const { buildCache, appConfig, icons, dir, appWorkspace } = options;
+  const { buildCache, appConfig, icons, dir } = options;
   const appDir = await prepareShellAppDirectory(options);
   // 打包前把 app 目录摊开看一眼：electron-builder 只按 `files` 取件，缺件时从这里能立刻分辨"没装出来"
   // 还是"没打进去"。
@@ -168,7 +173,7 @@ export async function buildDesktopApp(options: DesktopBuildOptions): Promise<str
   });
   return build({
     projectDir: appDir,
-    config: desktopBuildConfig({ buildCache, appConfig, icons, electron, appWorkspace }),
+    config: desktopBuildConfig({ buildCache, appConfig, icons, electron }),
     publish: "never",
     dir,
   });

@@ -186,7 +186,6 @@ export async function runBundle(options: BundleOptions): Promise<void> {
   await buildDesktopApp({
     appRoot: shell.root,
     buildCache: buildCacheDir,
-    appWorkspace: workspace,
     appConfig,
     icons,
     dir: options.dir,
