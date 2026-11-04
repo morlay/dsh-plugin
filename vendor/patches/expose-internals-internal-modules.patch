@@ -1,0 +1,36 @@
+diff --git a/packages/boot/app-boot/src/profile-resolution/resolver.ts b/packages/boot/app-boot/src/profile-resolution/resolver.ts
+index 468ec82e24..3c0722256b 100644
+--- a/packages/boot/app-boot/src/profile-resolution/resolver.ts
++++ b/packages/boot/app-boot/src/profile-resolution/resolver.ts
+@@ -732,18 +732,25 @@ class ResolutionRouter {
+ 
+ function internalModules(): InternalModules {
+   const require = createRequire(import.meta.url)
+-  const addon = require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }
+-  const esmModule = addon.requireBuiltin('internal/modules/esm/loader') as {
++  // Local patch: Electron 45's V8 fingerprint is not in node-addon-require-builtin@0.1.9's support
++  // table. The desktop host always starts with --expose-internals, so prefer Node's own require and
++  // keep the addon as the fallback for launches without the flag (same order as the Loader's
++  // requireInternal).
++  const load = (id: string): unknown => {
++    if (process.execArgv.includes('--expose-internals')) return require(id)
++    return (require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }).requireBuiltin(id)
++  }
++  const esmModule = load('internal/modules/esm/loader') as {
+     getOrInitializeCascadedLoader(): ModuleLoaderV1 | ModuleLoaderV2
+   }
+-  const cjsModule = addon.requireBuiltin('internal/modules/cjs/loader') as { Module: CommonJsModule }
+-  const cjsHelpers = addon.requireBuiltin('internal/modules/helpers') as {
++  const cjsModule = load('internal/modules/cjs/loader') as { Module: CommonJsModule }
++  const cjsHelpers = load('internal/modules/helpers') as {
+     getCjsConditions(): ReadonlySet<string>
+   }
+-  const esmUtils = addon.requireBuiltin('internal/modules/esm/utils') as {
++  const esmUtils = load('internal/modules/esm/utils') as {
+     getDefaultConditions(): readonly string[]
+   }
+-  const esmResolve = addon.requireBuiltin('internal/modules/esm/resolve') as {
++  const esmResolve = load('internal/modules/esm/resolve') as {
+     defaultResolve(
+       specifier: string,
+       context: { parentURL?: string; conditions?: readonly string[] },

@@ -23,6 +23,12 @@ export const patch: Step[] = [
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
+  // 宿主启动时那条运行时解析（`internalModules()`）只走 `node-addon-require-builtin`，而该 addon
+  // 0.1.9 的 V8 指纹表只到 Electron 44.7（45 只有 alpha）。桌面壳给宿主的命令行恒带
+  // `--expose-internals`，所以补上与 Loader/HMR 的 `requireInternal` 同一顺序：开关在就 `require`，
+  // 不在才回退 addon。上游加上这层判断后即可删除
+  // （见 `expose-internals-internal-modules.patch`）。
+  { type: "git", patch: "expose-internals-internal-modules.patch" },
   // schemastery 解析会**写回调用方的输入对象**，两处：
   // - `dict`：每个键无条件重写一遍（`data[rKey] = data[key]`），键名没变也写；
   // - `property`：把转换后的值缓存回输入（`data[key] = adapted`），凡是 `z.transform(...)` 字段都会触发。

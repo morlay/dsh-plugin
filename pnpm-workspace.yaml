@@ -60,6 +60,10 @@ patchedDependencies:
   node-pty@1.2.0-beta.15: vendor/deepseek-harness/patches/node-pty@1.2.0-beta.15.patch
 
 overrides:
+  # Electron 全仓一个版本：上游 `apps/desktop` 声明 `^44.7.0`（它被 `node-addon-require-builtin@0.1.9`
+  # 的 Electron 44.7 V8 指纹钉住，见其 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`）。桌面宿主
+  # 跑在 Electron 的 node 上，所以这个升级必须只解析出一份 Electron——上游那份也一起抬。
+  electron: "45.x"
   react: "18.x"
   react-dom: "18.x"
   # 上游把 vendor 里的 cordis 依赖两件收成源码副本（其 overrides 写的是相对它自己 workspace 根的

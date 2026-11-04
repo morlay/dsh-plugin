@@ -78,7 +78,7 @@
   "devDependencies": {
     "@local/devkit": "workspace:*",
     "@types/node": "^26.5.0",
-    "electron": "44.7.0"
+    "electron": "45.2.2"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:^",

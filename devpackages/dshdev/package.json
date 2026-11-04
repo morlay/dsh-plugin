@@ -24,7 +24,7 @@
     "@morlay/dsh-desktop-shell": "workspace:*",
     "@morlay/dsh-oxc-node": "workspace:*",
     "commander": "^15.0.0",
-    "electron": "44.7.0",
+    "electron": "45.2.2",
     "electron-builder": "^26.16.1",
     "extract-zip": "^2.0.1",
     "pnpm": "12.4.2",

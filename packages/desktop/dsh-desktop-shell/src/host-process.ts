@@ -129,6 +129,10 @@ export class DesktopHostProcess {
     const entry = this.options.entry;
     const packageManager = this.options.packageManager;
     const args = [
+      // 宿主读 Node internal 模块（Loader/HMR 的 `requireInternal`、运行时解析）走这条开关：
+      // `node-addon-require-builtin@0.1.9` 的 V8 指纹表只到 Electron 44.7，Electron 45 上
+      // `requireBuiltin` 会拒绝；带开关时上游各调用点直接 `require`（见
+      // `vendor/patches/expose-internals-internal-modules.patch`）。
       "--expose-internals",
       ...(this.options.processTitle === undefined ? [] : [`--title=${this.options.processTitle}`]),
       ...(this.inspectPort === undefined

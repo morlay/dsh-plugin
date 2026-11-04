@@ -93,9 +93,11 @@ store 是内容寻址、已经去过重的，仍旧 1.5 G / 9.1 万文件。而�
 也不经过 electron-builder 的拷贝。
 
 实测（`--dir` 产物）：`Resources/profile/node_modules` 顶层 **661** 个；用 Electron 的 node 以
-`Resources/profile` 下的清单为锚点解析 9 个 bundle **全部 OK**，`node-addon-require-builtin` 也 **ok**
-（Electron 必须 pin 到 **44.7.0**：它按 V8 指纹精确匹配，44.7.2 会以 `unsupported Electron runtime
-fingerprint` 失败）。
+`Resources/profile` 下的清单为锚点解析 9 个 bundle **全部 OK**。
+Node internal 模块的读取在 Electron 45 上走 `--expose-internals` 的 `require`（壳给宿主的命令行恒带该开关；
+`node-addon-require-builtin@0.1.9` 的 V8 指纹表只到 Electron 44.7，指纹不匹配时 addon 拒绝服务），
+所以 Electron 版本不再被指纹钉住——运行时解析那一处由
+[本地补丁](../../../../vendor/patches/expose-internals-internal-modules.patch)对齐 Loader/HMR 的顺序。
 
 ## 还没做的（下一步）
 
