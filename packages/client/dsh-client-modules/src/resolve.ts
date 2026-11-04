@@ -268,7 +268,8 @@ export async function exportTargetOf(
     // `exports` 的三种形状（都要认）：
     // · 以 `.` 开头的键映射（标准）→ 取 `exports["."]` / `exports["./sub"]`；
     // · **条件对象本身**（`{ development, default }`，`mdast-util-*` 就是这形状）→ 它**就是**根出口；
-    // · 没有 `exports` → 按 node 规则退回 `module` → `main`（老包如 `fortune-sheet`）。
+    // · 没有 `exports` → 打包器约定：`module`（ESM）→ `main`。有 ESM 就走 ESM，不把双形态包
+    //   降级成 CJS 再来适配（`rrule` / `@xterm/xterm` 的 `module` 都是它们的 ESM 面）。
     const table = manifest.exports;
     const isSubpathMap =
       table !== undefined &&

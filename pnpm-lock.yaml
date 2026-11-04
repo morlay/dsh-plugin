@@ -7,153 +7,153 @@ importers:
     configDependencies: {}
     packageManagerDependencies:
       pnpm:
-        specifier: 12.15.0
-        version: 12.15.0
+        specifier: 12.16.1
+        version: 12.16.1
 
 packages:
 
-  '@pnpm/exe.android-arm64@12.15.0':
-    resolution: {integrity: sha512-eVCqmscY70LGvgRzu3mi8IBWBFGix+a6mNZoWmXxESsBdeiKEF9xQSuaeel10yn+zI7TXy2jlI63vFLzETk+aQ==}
+  '@pnpm/exe.android-arm64@12.16.1':
+    resolution: {integrity: sha512-PKf78Ew+i0CBYf0Xc+eMcqQiqyBT+u8XCVg1F5roc98/6wWfdYlWhrUMmEBiKWaJ3JqHxrtt8l1NwZ7qfJt2/Q==}
     cpu: [arm64]
     os: [android]
 
-  '@pnpm/exe.android-x64@12.15.0':
-    resolution: {integrity: sha512-Gx/WbkFcdUFUg8g8AShezcS9EiQxfYvdAm2hfKLO8sfJmJvKOCt5fzlgHWDzmGhoclibgW+tUGZ/KF4F4wOTCA==}
+  '@pnpm/exe.android-x64@12.16.1':
+    resolution: {integrity: sha512-xdu7gMbB98pdvhwMeA6612Of515FDlRUtfA/1f7nWPZfPLnEdSRBO2u+1N0XBtQ/ennhPH/lrxB1gC6gnR/cdg==}
     cpu: [x64]
     os: [android]
 
-  '@pnpm/exe.darwin-arm64@12.15.0':
-    resolution: {integrity: sha512-N0ZykiDWCvqSBJvt71j7cSoBR993FqvYZFtmpCtqvW3pguiI+NAgraLPA5OTwu5mV+/d8hYpVcPktJA3xFDLtA==}
+  '@pnpm/exe.darwin-arm64@12.16.1':
+    resolution: {integrity: sha512-pVbmIIbhixiLvADLu1WA3TaW8FZy/D72R1De27WbbFx8/2mxvnsTyFVm4fO9kjpjMY7RzJd48CiQ96p8fO3ebQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@pnpm/exe.darwin-x64@12.15.0':
-    resolution: {integrity: sha512-7Ntr2HlBUxzwWOg7NwDxCbRW/3vXuqKO+hcXm+w3SBi9rrHY53li1wLqWVT7Gjxd+lVEHM1QJZo6WJEGFU8C6A==}
+  '@pnpm/exe.darwin-x64@12.16.1':
+    resolution: {integrity: sha512-xZvQBFqcZjO7vFKTK3XsJpqY6lnBL9EWSLCzVUPq3kZ94+D96gwJCa76xxGNK8Cj32f4eeM91Qg+yNRR4sRpDw==}
     cpu: [x64]
     os: [darwin]
 
-  '@pnpm/exe.freebsd-x64@12.15.0':
-    resolution: {integrity: sha512-btOiyL7fL7W4uQGH0aqFai2TNC3IoKcZ7gNHBVbEFZt2dWrnrD0SufL3iGs3fLlmb4OtuU35uf4Zpr9V9Jh9mA==}
+  '@pnpm/exe.freebsd-x64@12.16.1':
+    resolution: {integrity: sha512-zTtunfi9mBhRXiXEJYfwiJj0tk7MgTSfqDSRh+Az9FZ9THazVIiQiVNS8jpcsftDOqu7LKNffQdjmgwHDThfUg==}
     cpu: [x64]
     os: [freebsd]
 
-  '@pnpm/exe.linux-arm64-musl@12.15.0':
-    resolution: {integrity: sha512-pNC38k+O+90FOjbPNSnw0E7apq1PKTmz3fFe1amn+lys/U5kL++uzir8bRiho8ONcyA3d9EU7wdqcY0DKkj+JA==}
+  '@pnpm/exe.linux-arm64-musl@12.16.1':
+    resolution: {integrity: sha512-BJ3mOmcmQgcUo92Ee/WfEOt1pRiv3y2MMAkhEiYHd85UiPpHTfFhv+SpCbALmfExzXk3UlaRtMYwHlkQymc4VA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-arm64@12.15.0':
-    resolution: {integrity: sha512-qML/8aCXslh8td/w4U+HJNqUcZ2+m6EfTbWScIzZRmyPsRFN+xB4LP1U/hymxc1iSJiKtG56HJx2fvUErWFIGw==}
+  '@pnpm/exe.linux-arm64@12.16.1':
+    resolution: {integrity: sha512-JaRd5gNxwdNGBBkrZFt8bknrK4YmHVJBW0JMhUQ0fJ0dEYp6C2GT9ExaCqOO8EwYEyqM+jpKgJIK+8WFaJy3ew==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-ppc64@12.15.0':
-    resolution: {integrity: sha512-tjRDUUl7RCJ6T/6eoNPxOqkwU4Mzi5RtTXmSAxujyz37OTwwsMU7Ps087Zk4gHcUvRSeyF40ZFsew3vtE+nmUA==}
+  '@pnpm/exe.linux-ppc64@12.16.1':
+    resolution: {integrity: sha512-FnSV0Jv40S1cMv7vFNWwvu0X567Lec4L4HCRead3CFcD6zQDNbGw81s8N5bcKPahtPD9ApVuhsbmFCx4rw6RMw==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-riscv64@12.15.0':
-    resolution: {integrity: sha512-bF1uBWEfbwaeryz6lIiaJ8AWD082otZfvzGX5l+6LZRpRwUEpJHUsJrORaYP5/cNMv5ZR2p6TvvcJcQzwtDzmw==}
+  '@pnpm/exe.linux-riscv64@12.16.1':
+    resolution: {integrity: sha512-C1Sww4FN5IttD4atRRhAKmQtSGWVp04ZAKNxO8pfu2bkRPwOW+7v+2DH1Xs1W+kZYYpO86BYDvUcadefF+AgaQ==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-s390x@12.15.0':
-    resolution: {integrity: sha512-zKMhIzsexYMToeLmqV5jPsvV/f9vwsJb2kUH2NFYzalbxImeBrlA4kL7GwF8gD4pagV6jYYcJb8RjbZIdjHptg==}
+  '@pnpm/exe.linux-s390x@12.16.1':
+    resolution: {integrity: sha512-kn2fautsTcxIMODoovQVqZyfpDRdNgGkoeVqNdrKqbeBBvrEl+fXLkmZiq5xDht1LMr4sYiCNcsMfNMT6JPFmg==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.linux-x64-musl@12.15.0':
-    resolution: {integrity: sha512-A9J0Jg0Rdx+qQU4qXtwyST5tto9IOu1zi4fDk35nbc6DWahggbcKtFvZPKFwL2qgUXGXOX//hXv6z/sp6emO8A==}
+  '@pnpm/exe.linux-x64-musl@12.16.1':
+    resolution: {integrity: sha512-PM6ccHCOe/O9SsTflTJTYWfwogJZa6EmUvpnwZgiPguJBddh20wDQKgxUPXf48rDsPm9vMsIij0uHswwwbXL8g==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@pnpm/exe.linux-x64@12.15.0':
-    resolution: {integrity: sha512-yc+QlZR+9+nr29J4fRzhMoapgxTBDndq/+peyoq1XUufnQFnfbXUMFudDIKzHi545linGqmOmXfn0NoufNgcOg==}
+  '@pnpm/exe.linux-x64@12.16.1':
+    resolution: {integrity: sha512-RK//8ZLcXGW8A2k8bQOXZDBN1Qu92zN4dYnG1bzj1zoQ1fkZ6jNzZ1AvXtsfGVma795CJtvoaF5bLXf4l/FIUw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@pnpm/exe.win32-arm64@12.15.0':
-    resolution: {integrity: sha512-fPXZxuY1VclkOga9bc53qNCXcegfeoBR8+Ue+AospDwKzuGGSHll0oDxkLfkmpjyRqpe7bH5DyQPYp/xSMaIVA==}
+  '@pnpm/exe.win32-arm64@12.16.1':
+    resolution: {integrity: sha512-Ox3kNNVxtGw6pK7SVejmeOUgHhUTZgAM7NQQ6cU7frPw3ix9+j7d2MGbRg3fyEFAaKWq8ZAZLTQGcDyLnAu+qA==}
     cpu: [arm64]
     os: [win32]
 
-  '@pnpm/exe.win32-x64@12.15.0':
-    resolution: {integrity: sha512-nrd+Tp1We1DGj4DGG5Bea9lZNh9y1PjlLBdEwdInS4D0h0UIDtM7JaGGGDJhNzIwcHASyihWI7HLV+dtG+fhYg==}
+  '@pnpm/exe.win32-x64@12.16.1':
+    resolution: {integrity: sha512-k+FhRJ0ttphFoFIVB1Sk4v76YJAulafmA/Ly57cysesUhhIzVlApeOShUz0jXubKx317TThlEfpQrukldnqORA==}
     cpu: [x64]
     os: [win32]
 
-  pnpm@12.15.0:
-    resolution: {integrity: sha512-s5UdbW/0qfE9x89WzSjSuOs328ycaOUuHhGRhz6p+CoBcoerULqtxczElPA2xnwOR+sTYIwvo29HcRth6hKOYQ==}
+  pnpm@12.16.1:
+    resolution: {integrity: sha512-CR0d7nknV1Zhsl2rPCrjHK/BxU1rce1qZgDPDByxBDSkR+rhQBXxsj4ua+3u1535SpMuIWTSgyKA3OP7MvZW0Q==}
     engines: {node: '>=18'}
     hasBin: true
 
 snapshots:
 
-  '@pnpm/exe.android-arm64@12.15.0':
+  '@pnpm/exe.android-arm64@12.16.1':
     optional: true
 
-  '@pnpm/exe.android-x64@12.15.0':
+  '@pnpm/exe.android-x64@12.16.1':
     optional: true
 
-  '@pnpm/exe.darwin-arm64@12.15.0':
+  '@pnpm/exe.darwin-arm64@12.16.1':
     optional: true
 
-  '@pnpm/exe.darwin-x64@12.15.0':
+  '@pnpm/exe.darwin-x64@12.16.1':
     optional: true
 
-  '@pnpm/exe.freebsd-x64@12.15.0':
+  '@pnpm/exe.freebsd-x64@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-arm64-musl@12.15.0':
+  '@pnpm/exe.linux-arm64-musl@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-arm64@12.15.0':
+  '@pnpm/exe.linux-arm64@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-ppc64@12.15.0':
+  '@pnpm/exe.linux-ppc64@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-riscv64@12.15.0':
+  '@pnpm/exe.linux-riscv64@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-s390x@12.15.0':
+  '@pnpm/exe.linux-s390x@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-x64-musl@12.15.0':
+  '@pnpm/exe.linux-x64-musl@12.16.1':
     optional: true
 
-  '@pnpm/exe.linux-x64@12.15.0':
+  '@pnpm/exe.linux-x64@12.16.1':
     optional: true
 
-  '@pnpm/exe.win32-arm64@12.15.0':
+  '@pnpm/exe.win32-arm64@12.16.1':
     optional: true
 
-  '@pnpm/exe.win32-x64@12.15.0':
+  '@pnpm/exe.win32-x64@12.16.1':
     optional: true
 
-  pnpm@12.15.0:
+  pnpm@12.16.1:
     optionalDependencies:
-      '@pnpm/exe.android-arm64': 12.15.0
-      '@pnpm/exe.android-x64': 12.15.0
-      '@pnpm/exe.darwin-arm64': 12.15.0
-      '@pnpm/exe.darwin-x64': 12.15.0
-      '@pnpm/exe.freebsd-x64': 12.15.0
-      '@pnpm/exe.linux-arm64': 12.15.0
-      '@pnpm/exe.linux-arm64-musl': 12.15.0
-      '@pnpm/exe.linux-ppc64': 12.15.0
-      '@pnpm/exe.linux-riscv64': 12.15.0
-      '@pnpm/exe.linux-s390x': 12.15.0
-      '@pnpm/exe.linux-x64': 12.15.0
-      '@pnpm/exe.linux-x64-musl': 12.15.0
-      '@pnpm/exe.win32-arm64': 12.15.0
-      '@pnpm/exe.win32-x64': 12.15.0
+      '@pnpm/exe.android-arm64': 12.16.1
+      '@pnpm/exe.android-x64': 12.16.1
+      '@pnpm/exe.darwin-arm64': 12.16.1
+      '@pnpm/exe.darwin-x64': 12.16.1
+      '@pnpm/exe.freebsd-x64': 12.16.1
+      '@pnpm/exe.linux-arm64': 12.16.1
+      '@pnpm/exe.linux-arm64-musl': 12.16.1
+      '@pnpm/exe.linux-ppc64': 12.16.1
+      '@pnpm/exe.linux-riscv64': 12.16.1
+      '@pnpm/exe.linux-s390x': 12.16.1
+      '@pnpm/exe.linux-x64': 12.16.1
+      '@pnpm/exe.linux-x64-musl': 12.16.1
+      '@pnpm/exe.win32-arm64': 12.16.1
+      '@pnpm/exe.win32-x64': 12.16.1
 
 ---
 lockfileVersion: '9.0'
@@ -214,7 +214,7 @@ importers:
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/node':
-        specifier: ^26.6.5
+        specifier: ^26.6.6
         version: 26.6.6
       '@types/react':
         specifier: 18.3.1
@@ -226,10 +226,10 @@ importers:
         specifier: ^30.1.3
         version: 30.1.3(@noble/hashes@2.4.0)
       oxfmt:
-        specifier: ^0.75.0
-        version: 0.75.0
+        specifier: ^0.76.0
+        version: 0.76.0
       oxlint:
-        specifier: ^1.89.0
+        specifier: ^1.91.0
         version: 1.91.0(oxlint-tsgolint@7.0.2005)
       oxlint-tsgolint:
         specifier: 7.x
@@ -727,13 +727,13 @@ importers:
         version: link:../../session/session-rdb
       '@testing-library/react':
         specifier: ^16.3.0
-        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
       '@types/react':
         specifier: ~18.3.1
-        version: 18.3.1
+        version: 18.3.31
       react-dom:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
@@ -1030,13 +1030,13 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/session/working-directory
       '@testing-library/react':
         specifier: ^16.3.0
-        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
       '@types/react':
         specifier: ~18.3.1
-        version: 18.3.1
+        version: 18.3.31
       js-yaml:
         specifier: ^4.1.0
         version: 4.3.2
@@ -1283,13 +1283,13 @@ importers:
     devDependencies:
       '@testing-library/react':
         specifier: ^16.1.0
-        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/react':
         specifier: ~18.3.1
-        version: 18.3.1
+        version: 18.3.31
       '@types/react-dom':
         specifier: ~18.3.0
-        version: 18.3.1
+        version: 18.3.7(@types/react@18.3.31)
       react-dom:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
@@ -1365,10 +1365,10 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/session/session-stats
       '@types/react':
         specifier: ~18.3.1
-        version: 18.3.1
+        version: 18.3.31
       '@types/react-dom':
         specifier: ~18.3.0
-        version: 18.3.1
+        version: 18.3.7(@types/react@18.3.31)
       react-dom:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
@@ -1453,7 +1453,7 @@ importers:
         version: link:../../../vendor/deepseek-harness/packages/util/values
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   packages/tooling/dsh-cordis-assets:
     dependencies:
@@ -2075,7 +2075,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.4.3)
+        version: 1.4.0(zod@4.6.7)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -2942,7 +2942,7 @@ importers:
         version: 7.8.6
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/browser-use/browser-use:
     dependencies:
@@ -8195,7 +8195,7 @@ importers:
         version: link:../../../vendor/schemastery
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/client-ui-action-cards:
     dependencies:
@@ -8375,7 +8375,7 @@ importers:
         version: 18.3.1
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/client-ui-creation-recommendations:
     dependencies:
@@ -8522,7 +8522,7 @@ importers:
         version: 18.3.1(react@18.3.1)
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/client-ui-plugin-recommendations:
     dependencies:
@@ -8885,7 +8885,7 @@ importers:
         version: 18.3.1
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/cua-bundle:
     dependencies:
@@ -8937,7 +8937,7 @@ importers:
         version: link:../../../vendor/schemastery
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/forge:
     dependencies:
@@ -9003,7 +9003,7 @@ importers:
         version: 10.2.1
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/forge-session:
     dependencies:
@@ -9045,7 +9045,7 @@ importers:
         version: 1.12.0
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/experimental/hook-protocol:
     dependencies:
@@ -9474,7 +9474,7 @@ importers:
         version: link:../../core/session
       '@tanstack/react-virtual':
         specifier: ^3.14.10
-        version: 3.14.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 3.14.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
         specifier: 18.x
         version: 18.3.1
@@ -9582,10 +9582,10 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: ^1.4.0
-        version: 1.4.0(zod@4.4.3)
+        version: 1.9.0(zod@4.6.7)
       '@botiverse/oar':
         specifier: 0.67.0
-        version: 0.67.0(patch_hash=65de2ca1966421e30893d8d4fed6a3d88e4247e131e7575fe791246e594538d6)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.4.3)
+        version: 0.67.0(patch_hash=65de2ca1966421e30893d8d4fed6a3d88e4247e131e7575fe791246e594538d6)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -9615,10 +9615,10 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.4.3)
+        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
       '@earendil-works/pi-coding-agent':
         specifier: ^1.3.0
-        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.4.3)
+        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
       cross-spawn:
         specifier: ^7.0.6
         version: 7.0.6
@@ -11127,7 +11127,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)
+        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
 
   vendor/deepseek-harness/packages/llm/llm-retry:
     dependencies:
@@ -12363,7 +12363,7 @@ importers:
         version: link:../../../vendor/schemastery
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/settings/settings:
     dependencies:
@@ -13134,7 +13134,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.4.3)
+        version: 1.4.0(zod@4.6.7)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -13704,7 +13704,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.4.3)
+        version: 1.4.0(zod@4.6.7)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -13809,7 +13809,7 @@ importers:
         version: link:../../util/brand
       zod:
         specifier: ^4.4.3
-        version: 4.4.3
+        version: 4.6.7
 
   vendor/deepseek-harness/packages/typert/registry:
     dependencies:
@@ -14363,6 +14363,11 @@ packages:
 
   '@agentclientprotocol/sdk@1.4.0':
     resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+
+  '@agentclientprotocol/sdk@1.9.0':
+    resolution: {integrity: sha512-saCOTPYBK1iqWqJFAYHXbg3+zCoFXyZZFoqQAwdTWkbrZZPpAETr80QOnYr2l+dzPwL0jpNhn3eDY8MoEIDbUA==}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
@@ -16065,124 +16070,124 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxfmt/binding-android-arm-eabi@0.75.0':
-    resolution: {integrity: sha512-zHJ7LcTN46/5mtoLxsUu14pdF9ixFwDURtmxZ0CeNwqom5qB5NRVqU6o2GRZ7QPdNBW8G6j9UTJzQ+EDevMH0w==}
+  '@oxfmt/binding-android-arm-eabi@0.76.0':
+    resolution: {integrity: sha512-z8x4kittQLPsrJWmfoIJyYqs2gNwceGShoUqAJdFRPw3K4kkkKCFHh3Cr4NFRvZb7DPfDS3+JfBjSm3OIyQaJQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [android]
 
-  '@oxfmt/binding-android-arm64@0.75.0':
-    resolution: {integrity: sha512-IdxsKZJvHZUvI7q6kLmzXdEFpFiBEDQw/WJtSp1QlzNXBw1JlLN3tY50WwWd4doPnq86XW4P+7BsQwu6meCW+w==}
+  '@oxfmt/binding-android-arm64@0.76.0':
+    resolution: {integrity: sha512-Zj9fEQhQSKGj8ZTB+X4q4ho4545xWf7qsvJpwREWnBz5BATEFYtStKRgiwYOZvxQ7ORlBEgSj7pmDzuljfV1mQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [android]
 
-  '@oxfmt/binding-darwin-arm64@0.75.0':
-    resolution: {integrity: sha512-vyiqZilO5jal/nXZ0143NyKcP6TkzjaQdVEWU/kwgyWqugAgIRgAbrnO3MOF+e6LkQu3CrtrkPoc3mrsZZY6cA==}
+  '@oxfmt/binding-darwin-arm64@0.76.0':
+    resolution: {integrity: sha512-jZy8GpUXaWpic5JPMAvLmaBz95Sx0naZl6hptBPLOMiYmZYiME7jAt6pv8o/tjQqPNWKb+7jKzZhrYx6UqM5MQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [darwin]
 
-  '@oxfmt/binding-darwin-x64@0.75.0':
-    resolution: {integrity: sha512-oua7eVqVe769mDam6ORcavygxTzG3ovo5QRQ1kJCPaEbnWXPYhtAiYDj8pajVmFjO7j8Elf3gInnWpTX0LLYtg==}
+  '@oxfmt/binding-darwin-x64@0.76.0':
+    resolution: {integrity: sha512-U59+a9lVpoRp9enRhTE9GssL3qB1k09CYagRzTfs3dfknopMYV0x0xHZv7Pls3SNMqHlyHR+ufmY76CYafQoLw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [darwin]
 
-  '@oxfmt/binding-freebsd-x64@0.75.0':
-    resolution: {integrity: sha512-NWkbezhg7mx2Ep94g/TysR3c1bsISsU4lQ6t5xI4841PAk0Kqcn1+UEe+BoFH2/UK2YegPXq+OF+0bUcSvUalA==}
+  '@oxfmt/binding-freebsd-x64@0.76.0':
+    resolution: {integrity: sha512-J1R3YJHPdQJ2RQvzMdTVDWyizhihGiRGGAeEZxtGp629j5pcT5ypSLSiBflopD7o7tmiMD+xlNfhIVmjcHKMVQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
 
-  '@oxfmt/binding-linux-arm-gnueabihf@0.75.0':
-    resolution: {integrity: sha512-CAHX87kJplTq2E0OWP7opG8gEVlHc7CeLEi4nMJOyx3psuqBKf84HZ3UIkX2guWEJ5UljU2zJF0o46XylywVVA==}
+  '@oxfmt/binding-linux-arm-gnueabihf@0.76.0':
+    resolution: {integrity: sha512-x9qTg6zHoqeyzmFVlIjSb9WlhZdoXaayMTeQeDeUEfKA484AgPJz7f9chLjDMONA6wUUX0FJxnVHsYgX5Zv0+g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
 
-  '@oxfmt/binding-linux-arm-musleabihf@0.75.0':
-    resolution: {integrity: sha512-jmxYOiQzx2fp+OwQb7717K1zI8AMKEykw04sfr95/mU8SIL/oKgQq8nXH42sEznEquBL2RU7nLY36eBnYFT+vg==}
+  '@oxfmt/binding-linux-arm-musleabihf@0.76.0':
+    resolution: {integrity: sha512-303gbamm7NDllTtkeaX+8F5Da+KcSBr64mqELQEFg9XgnjfLX3YBCHUcOfgIlVTSybesy43eoeKai8oGr0P6UA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
 
-  '@oxfmt/binding-linux-arm64-gnu@0.75.0':
-    resolution: {integrity: sha512-eimaiAhx08dbOg12Fj3PYhymXY8vRbaiJB505vDXMy6ohne3Y1qTS0e5KEwFMq3LmDjEO+16BX38c/oXFI/SAQ==}
+  '@oxfmt/binding-linux-arm64-gnu@0.76.0':
+    resolution: {integrity: sha512-j3UAXzCJoWX9bZLaICj6DfwkI/2fzja9RpiCIbIN+2CQAcKoY+5SH5pQUcECvn32mQm17NSPE9YqTAwYx1seZg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@oxfmt/binding-linux-arm64-musl@0.75.0':
-    resolution: {integrity: sha512-bjSONIG1ba2xugr9oHQau0E6oPFYOMjPaa5hK/wpVC/Q1pcgf2BZMKwbuA8/cWzhWX5QV/UdPzD+rw1kQHpikQ==}
+  '@oxfmt/binding-linux-arm64-musl@0.76.0':
+    resolution: {integrity: sha512-qFZqWVkEzuxWMtUkCtHxsnohXHnUMBQr/ZIxF0KmlCSt8de/bc1lbpVgpqjb3QxCADQHG/O1s3JcowcBF2sqdw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@oxfmt/binding-linux-ppc64-gnu@0.75.0':
-    resolution: {integrity: sha512-wDksWQXC/KZucISyqlhBtvpW+pyHh8z0Cjm6Qxiv22XlllM2Bx5gJGDnPYjV+H0lL+o1iqLlEli8jmBuRCLcjw==}
+  '@oxfmt/binding-linux-ppc64-gnu@0.76.0':
+    resolution: {integrity: sha512-ROiAid0UH2GN5lMMX2JTgKlOKx1rN+6a1WxIuBsU3j5A3MuB9U5XkREMW76XBbAImnH45mfOCFcSIwb+drcVYg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@oxfmt/binding-linux-riscv64-gnu@0.75.0':
-    resolution: {integrity: sha512-5JkNwViqaVuk4I+9+zgVrEYiHOAPXFxgDgP6iDnpdOBjm7XAHAOjSvolHZZAokWPx7CGOw8tKteXmn4WPIInaQ==}
+  '@oxfmt/binding-linux-riscv64-gnu@0.76.0':
+    resolution: {integrity: sha512-Oyd/9ObdM2RYkZ7yzF/GyvVdbNgJcRG8BFVwnAVo3ooqzaem4E2p5eTIGB09FecQD+Q5HQEANOTEnIZTO6rBAQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@oxfmt/binding-linux-riscv64-musl@0.75.0':
-    resolution: {integrity: sha512-1EVqRIE0eZLB08j3ZCVN47Ors7LCXGmOI+3xJYgyoFUKUerD3Glxb+Q1Bp3lK8NeT5R3ZdS9uhX/wobNBYZ6jw==}
+  '@oxfmt/binding-linux-riscv64-musl@0.76.0':
+    resolution: {integrity: sha512-86DOpmPDR5UzHSOB8y5HlOpYAIBtMx+6L72IyousNx54q1Kz61aykB4ScovFYivZUak+7Ww6tPBUjarluzYKLw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [riscv64]
     os: [linux]
     libc: [musl]
 
-  '@oxfmt/binding-linux-s390x-gnu@0.75.0':
-    resolution: {integrity: sha512-UJWRVNT6Yuw4ssLv2BwaBUWU1GWtByE+EnoHu8I+P1t8Kn+WozYU5WYOqb5aj8gbXJJ8gGZt+w40Hi/7L6iVLw==}
+  '@oxfmt/binding-linux-s390x-gnu@0.76.0':
+    resolution: {integrity: sha512-u6omjjFooKfnHLBI+3UtBVInAeuEhoM/RAIw/OiFop2QQgOan5zDfqPR6guMaylt68L60kV+by07Ibp87KDjrw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@oxfmt/binding-linux-x64-gnu@0.75.0':
-    resolution: {integrity: sha512-FHdvHhyz8ChBctBUvVGti49kSEwANd1PZQwlXUEoF9Ed4plxXxk/wWc0mfZmrze2lRgmME7ytDmVIOixYauQhg==}
+  '@oxfmt/binding-linux-x64-gnu@0.76.0':
+    resolution: {integrity: sha512-L0/hW1MdMrgsvuLGp9YEQOYOGj5xPHa8wVRtybdd5av03PV4qSpAq3pyfC7sn7UCA8ynRhMRTAa9Kr9nV4LGZg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@oxfmt/binding-linux-x64-musl@0.75.0':
-    resolution: {integrity: sha512-6MjtsF96s9mSBV0GEwUe4pOFPP2Mz7ahcHPAit0DSKL5fM6oMM7RG1zvYxwB7+SBkIxsWBRhhxuqmy7pibNwsA==}
+  '@oxfmt/binding-linux-x64-musl@0.76.0':
+    resolution: {integrity: sha512-JNk/7HaPDJjy5kih3vq6b71Qif3tHx1ZFACGBzeHeNzyKaIpar4eFGya89GR398K2rwX0eEVmEq1npBPlEkkmg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@oxfmt/binding-openharmony-arm64@0.75.0':
-    resolution: {integrity: sha512-1D6T6aL1Pj+U5GLxqwV1fKjUJ5+FFm+bn7UrqNDMveZmWs0jo/3vc+dzzuV/jF/FdVo12gowODk3SnAO2YOwLg==}
+  '@oxfmt/binding-openharmony-arm64@0.76.0':
+    resolution: {integrity: sha512-MDLrOQPXDuPKvPUCvpP3hC6kO72dsYxfpYiR08Nf5DiM75M0d8+D26JwT4uHDf0bcflvlGHcd58Hn2HpxkHUUQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
 
-  '@oxfmt/binding-win32-arm64-msvc@0.75.0':
-    resolution: {integrity: sha512-RX2eUmy7J/nM8+tnM3nzR8t1eqkwj1q8Kgo7beA+4DVgKYYHHyrEa3qEmthxw7Z+HqpCCEOWuoqa+jelo9/w2Q==}
+  '@oxfmt/binding-win32-arm64-msvc@0.76.0':
+    resolution: {integrity: sha512-2CcICDrQKqMAOFuzmts/8Ov5iKb+DW/QrW4MFsl2bnRg86uoiUvtqUkHqNSY19Shegc8pBHiXMSEHDjIg94o0A==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [win32]
 
-  '@oxfmt/binding-win32-ia32-msvc@0.75.0':
-    resolution: {integrity: sha512-UpKta0iSZmPLII0dYXYdbzdBTsGREUbSHLqgLdtKcqBvs40qjmUz+cgUcaU1smPx13DfbEG4XqnaSn5MoFN0og==}
+  '@oxfmt/binding-win32-ia32-msvc@0.76.0':
+    resolution: {integrity: sha512-NjZLJg+tQpMWVSyeWBBKCpib7H/uLq84ZzxCvY5eqHzSaItuzCECGA9MBiZwmW8fnkBIfppg49Ib//LSCGAp8Q==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ia32]
     os: [win32]
 
-  '@oxfmt/binding-win32-x64-msvc@0.75.0':
-    resolution: {integrity: sha512-pjiLiCk0QMCWxs0n5XiNU85YLAKA+wJxPjxlDVygmr4bP4glcfTU2nOpso5nR4Rdi2Pxv5YwakD4UE+eh7M0BQ==}
+  '@oxfmt/binding-win32-x64-msvc@0.76.0':
+    resolution: {integrity: sha512-0vCMaX/qloc7uaKBDRh+62SBW8EqmhS7c8/al+PxD594ao4lyEWdcoEmVoBgnCNVW07GDpg+9uPV7x6ta9mljw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
@@ -16820,8 +16825,17 @@ packages:
       react: 18.x
       react-dom: 18.x
 
+  '@tanstack/react-virtual@3.14.26':
+    resolution: {integrity: sha512-HUDlfsrYH6ko5xH56L62Mcl/uzT+AGVNMHFuDNqDJMdZWc1AQa2oeVKNUvZ/RWBZQ4TYtyQerFrNvLnp39h65A==}
+    peerDependencies:
+      react: 18.x
+      react-dom: 18.x
+
   '@tanstack/virtual-core@3.17.8':
     resolution: {integrity: sha512-BfEvehNpOT75r5Ksc5xW6NZuXujTfb7nlSEyVu4XHG3gdxNg1KqXruWbDewXOUaUYIo4oRbSfkjIajz4MAT8tA==}
+
+  '@tanstack/virtual-core@3.19.11':
+    resolution: {integrity: sha512-/5iHb0RHBvj8Di59FDs4ESNm45jls33aZAi4zccVXZjc/6ZvwQP6nzEYeT6weXjTf9E6/vrp2JhYWRyO+ZP13A==}
 
   '@testing-library/dom@10.4.2':
     resolution: {integrity: sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==}
@@ -16955,8 +16969,16 @@ packages:
   '@types/react-dom@18.3.1':
     resolution: {integrity: sha512-qW1Mfv8taImTthu4KoXgDfLuk4bydU6Q/TkADnDWWHwi4NX4BR+LWfTp2sVmTqRrsHvyDDTelgelxJ+SsejKKQ==}
 
+  '@types/react-dom@18.3.7':
+    resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
+    peerDependencies:
+      '@types/react': ^18.0.0
+
   '@types/react@18.3.1':
     resolution: {integrity: sha512-V0kuGBX3+prX+DQ/7r2qsv1NsdfnCLnTgnRJ1pYnxykBhGMz+qj+box5lq7XsO5mtZsBqpjwwTu/7wszPfMBcw==}
+
+  '@types/react@18.3.31':
+    resolution: {integrity: sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw==}
 
   '@types/regenerator-runtime@0.13.8':
     resolution: {integrity: sha512-jjKoBekfYDH331060tZhosdJVDnXIXx+T8Iw2h2T4HEds6Ddb2lr0JxD15+XPKlXwRHRNgZoY+4Fb2ykoqzHBg==}
@@ -19569,8 +19591,8 @@ packages:
     resolution: {integrity: sha512-f1i5S4wm+a5t6baY5mw/+LFLt95VpOwwcU56TlSGfd23c5DstR2k9RKj0vv16/7/ra+ptU09D83sNOL4fza1NA==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
-  oxfmt@0.75.0:
-    resolution: {integrity: sha512-/ZKvY5asfsVi9hdkOmRIumqOPu6kxlTgiJSZf54uq29kKew+Gu1FFAnEkGePyvLVW+MAYu41D6XggnzoElQzPw==}
+  oxfmt@0.76.0:
+    resolution: {integrity: sha512-Yo9RIn9lRWTm/U8obHbXUWc39lCpEFXlEggFoPx01zS18OCFi7mAwMmL05+p1AunuJgSkONffWyBHJzpMMCRuQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -20686,6 +20708,11 @@ packages:
     peerDependencies:
       react: 18.x
 
+  use-sync-external-store@1.7.0:
+    resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
+    peerDependencies:
+      react: 18.x
+
   utf8-byte-length@1.0.5:
     resolution: {integrity: sha512-Xn0w3MtiQ6zoz2vFyUVruaCL53O/DwUvkEeOvj+uulMm0BkUGYWmBYVyElqZaSLhY6ZD0ulfU3aBra2aVT4xfA==}
 
@@ -21110,6 +21137,9 @@ packages:
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
     engines: {node: '>=12.7.0'}
@@ -21135,9 +21165,13 @@ packages:
 
 snapshots:
 
-  '@agentclientprotocol/sdk@1.4.0(zod@4.4.3)':
+  '@agentclientprotocol/sdk@1.4.0(zod@4.6.7)':
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.7
+
+  '@agentclientprotocol/sdk@1.9.0(zod@4.6.7)':
+    dependencies:
+      zod: 4.6.7
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.263':
     optional: true
@@ -21178,12 +21212,12 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.263
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.263
 
-  '@anthropic-ai/sdk@0.129.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.129.0(zod@4.6.7)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 4.4.3
+      zod: 4.6.7
 
   '@anthropic-ai/sdk@0.93.0(zod@4.4.3)':
     dependencies:
@@ -21398,11 +21432,11 @@ snapshots:
 
   '@babel/runtime@7.29.10': {}
 
-  '@botiverse/oar@0.67.0(patch_hash=65de2ca1966421e30893d8d4fed6a3d88e4247e131e7575fe791246e594538d6)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.4.3)':
+  '@botiverse/oar@0.67.0(patch_hash=65de2ca1966421e30893d8d4fed6a3d88e4247e131e7575fe791246e594538d6)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)':
     dependencies:
-      '@agentclientprotocol/sdk': 1.4.0(zod@4.4.3)
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.4.3)
-      '@earendil-works/pi-coding-agent': 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.4.3)
+      '@agentclientprotocol/sdk': 1.9.0(zod@4.6.7)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
+      '@earendil-works/pi-coding-agent': 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
       cross-spawn: 7.0.6
       undici: 8.10.2
       which: 2.0.2
@@ -21504,9 +21538,9 @@ snapshots:
       '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.5
       '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.5
 
-  '@earendil-works/pi-agent-core@1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)':
+  '@earendil-works/pi-agent-core@1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)':
     dependencies:
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
       '@earendil-works/pi-schema': 1.5.0
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -21521,16 +21555,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)':
     dependencies:
-      '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 1.3.0
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@9.4.0)
       https-proxy-agent: 9.1.0(supports-color@9.4.0)
-      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.4.3)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -21546,16 +21580,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)':
     dependencies:
-      '@anthropic-ai/sdk': 0.129.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 1.3.0
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@9.4.0)
       https-proxy-agent: 9.1.0(supports-color@9.4.0)
-      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -21575,10 +21609,10 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-coding-agent@1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.4.3)':
+  '@earendil-works/pi-coding-agent@1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)':
     dependencies:
-      '@earendil-works/pi-agent-core': 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3)
+      '@earendil-works/pi-agent-core': 1.5.0(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.92)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
       '@earendil-works/pi-codemode': 1.5.0
       '@earendil-works/pi-mcp': 1.5.0
       '@earendil-works/pi-tui': 1.5.0
@@ -21934,14 +21968,14 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       regenerator-runtime: 0.14.1
 
-  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3))(supports-color@9.4.0)':
+  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@9.4.0)
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.22.1
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.32.2(supports-color@9.4.0)(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.32.2(supports-color@9.4.0)(zod@4.6.7)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -22247,11 +22281,11 @@ snapshots:
       eventsource-parser: 3.1.1
       jose: 6.2.15
       pkce-challenge: 5.0.1
-      zod: 4.4.3
+      zod: 4.6.7
 
   '@modelcontextprotocol/core@2.2.0':
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.7
 
   '@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.4.3)':
     dependencies:
@@ -22274,6 +22308,29 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
+
+  '@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7)':
+    dependencies:
+      '@hono/node-server': 2.1.6(hono@4.13.16)
+      ajv: 8.20.0
+      ajv-formats: 3.0.1
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      express: 5.3.0(supports-color@9.4.0)
+      express-rate-limit: 8.7.3(express@5.3.0(supports-color@9.4.0))(supports-color@9.4.0)
+      hono: 4.13.16
+      jose: 6.2.15
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.6.7
+      zod-to-json-schema: 3.25.2(zod@4.6.7)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
 
   '@napi-rs/canvas-android-arm64@1.1.0':
     optional: true
@@ -22671,61 +22728,61 @@ snapshots:
   '@oxc-transform/binding-win32-x64-msvc@0.154.0':
     optional: true
 
-  '@oxfmt/binding-android-arm-eabi@0.75.0':
+  '@oxfmt/binding-android-arm-eabi@0.76.0':
     optional: true
 
-  '@oxfmt/binding-android-arm64@0.75.0':
+  '@oxfmt/binding-android-arm64@0.76.0':
     optional: true
 
-  '@oxfmt/binding-darwin-arm64@0.75.0':
+  '@oxfmt/binding-darwin-arm64@0.76.0':
     optional: true
 
-  '@oxfmt/binding-darwin-x64@0.75.0':
+  '@oxfmt/binding-darwin-x64@0.76.0':
     optional: true
 
-  '@oxfmt/binding-freebsd-x64@0.75.0':
+  '@oxfmt/binding-freebsd-x64@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-arm-gnueabihf@0.75.0':
+  '@oxfmt/binding-linux-arm-gnueabihf@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-arm-musleabihf@0.75.0':
+  '@oxfmt/binding-linux-arm-musleabihf@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-arm64-gnu@0.75.0':
+  '@oxfmt/binding-linux-arm64-gnu@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-arm64-musl@0.75.0':
+  '@oxfmt/binding-linux-arm64-musl@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-ppc64-gnu@0.75.0':
+  '@oxfmt/binding-linux-ppc64-gnu@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-riscv64-gnu@0.75.0':
+  '@oxfmt/binding-linux-riscv64-gnu@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-riscv64-musl@0.75.0':
+  '@oxfmt/binding-linux-riscv64-musl@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-s390x-gnu@0.75.0':
+  '@oxfmt/binding-linux-s390x-gnu@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-x64-gnu@0.75.0':
+  '@oxfmt/binding-linux-x64-gnu@0.76.0':
     optional: true
 
-  '@oxfmt/binding-linux-x64-musl@0.75.0':
+  '@oxfmt/binding-linux-x64-musl@0.76.0':
     optional: true
 
-  '@oxfmt/binding-openharmony-arm64@0.75.0':
+  '@oxfmt/binding-openharmony-arm64@0.76.0':
     optional: true
 
-  '@oxfmt/binding-win32-arm64-msvc@0.75.0':
+  '@oxfmt/binding-win32-arm64-msvc@0.76.0':
     optional: true
 
-  '@oxfmt/binding-win32-ia32-msvc@0.75.0':
+  '@oxfmt/binding-win32-ia32-msvc@0.76.0':
     optional: true
 
-  '@oxfmt/binding-win32-x64-msvc@0.75.0':
+  '@oxfmt/binding-win32-x64-msvc@0.76.0':
     optional: true
 
   '@oxlint-tsgolint/darwin-arm64@7.0.2005':
@@ -23135,7 +23192,15 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
+  '@tanstack/react-virtual@3.14.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.11
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   '@tanstack/virtual-core@3.17.8': {}
+
+  '@tanstack/virtual-core@3.19.11': {}
 
   '@testing-library/dom@10.4.2':
     dependencies:
@@ -23157,6 +23222,26 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.1
       '@types/react-dom': 18.3.1
+
+  '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@babel/runtime': 7.29.10
+      '@testing-library/dom': 10.4.2
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.31
+      '@types/react-dom': 18.3.1
+
+  '@testing-library/react@16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@babel/runtime': 7.29.10
+      '@testing-library/dom': 10.4.2
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+    optionalDependencies:
+      '@types/react': 18.3.31
+      '@types/react-dom': 18.3.7(@types/react@18.3.31)
 
   '@trycua/cua-driver-darwin-arm64@0.28.0':
     optional: true
@@ -23240,7 +23325,7 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 18.19.130
       form-data: 4.0.6
 
   '@types/node@14.18.63': {}
@@ -23278,7 +23363,16 @@ snapshots:
     dependencies:
       '@types/react': 18.3.1
 
+  '@types/react-dom@18.3.7(@types/react@18.3.31)':
+    dependencies:
+      '@types/react': 18.3.31
+
   '@types/react@18.3.1':
+    dependencies:
+      '@types/prop-types': 15.7.15
+      csstype: 3.2.3
+
+  '@types/react@18.3.31':
     dependencies:
       '@types/prop-types': 15.7.15
       csstype: 3.2.3
@@ -25000,7 +25094,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.8.6
+      semver: 7.7.4
       serialize-error: 7.0.1
     optional: true
 
@@ -26066,7 +26160,7 @@ snapshots:
 
   node-abi@4.40.0:
     dependencies:
-      semver: 7.8.6
+      semver: 7.7.4
 
   node-addon-api@7.1.1: {}
 
@@ -26133,7 +26227,7 @@ snapshots:
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.8.6
+      semver: 7.7.4
 
   node-domexception@1.0.0: {}
 
@@ -26154,7 +26248,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.8.6
+      semver: 7.7.4
       tar: 7.5.22
       tinyglobby: 0.2.17
       undici: 6.29.1
@@ -26231,21 +26325,21 @@ snapshots:
       powershell-utils: 0.2.1
       wsl-utils: 1.0.1
 
-  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.4.3):
+  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.92
       '@smithy/signature-v4': 5.7.5
       undici: 8.10.2
       ws: 8.22.1
-      zod: 4.4.3
+      zod: 4.6.7
 
-  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.4.3):
+  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.92)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.92
       '@smithy/signature-v4': 5.7.5
       undici: 8.12.3
       ws: 8.22.1
-      zod: 4.4.3
+      zod: 4.6.7
 
   own-keys@1.0.2:
     dependencies:
@@ -26324,29 +26418,29 @@ snapshots:
       '@oxc-transform/binding-win32-ia32-msvc': 0.154.0
       '@oxc-transform/binding-win32-x64-msvc': 0.154.0
 
-  oxfmt@0.75.0:
+  oxfmt@0.76.0:
     dependencies:
       tinypool: 2.2.0
     optionalDependencies:
-      '@oxfmt/binding-android-arm-eabi': 0.75.0
-      '@oxfmt/binding-android-arm64': 0.75.0
-      '@oxfmt/binding-darwin-arm64': 0.75.0
-      '@oxfmt/binding-darwin-x64': 0.75.0
-      '@oxfmt/binding-freebsd-x64': 0.75.0
-      '@oxfmt/binding-linux-arm-gnueabihf': 0.75.0
-      '@oxfmt/binding-linux-arm-musleabihf': 0.75.0
-      '@oxfmt/binding-linux-arm64-gnu': 0.75.0
-      '@oxfmt/binding-linux-arm64-musl': 0.75.0
-      '@oxfmt/binding-linux-ppc64-gnu': 0.75.0
-      '@oxfmt/binding-linux-riscv64-gnu': 0.75.0
-      '@oxfmt/binding-linux-riscv64-musl': 0.75.0
-      '@oxfmt/binding-linux-s390x-gnu': 0.75.0
-      '@oxfmt/binding-linux-x64-gnu': 0.75.0
-      '@oxfmt/binding-linux-x64-musl': 0.75.0
-      '@oxfmt/binding-openharmony-arm64': 0.75.0
-      '@oxfmt/binding-win32-arm64-msvc': 0.75.0
-      '@oxfmt/binding-win32-ia32-msvc': 0.75.0
-      '@oxfmt/binding-win32-x64-msvc': 0.75.0
+      '@oxfmt/binding-android-arm-eabi': 0.76.0
+      '@oxfmt/binding-android-arm64': 0.76.0
+      '@oxfmt/binding-darwin-arm64': 0.76.0
+      '@oxfmt/binding-darwin-x64': 0.76.0
+      '@oxfmt/binding-freebsd-x64': 0.76.0
+      '@oxfmt/binding-linux-arm-gnueabihf': 0.76.0
+      '@oxfmt/binding-linux-arm-musleabihf': 0.76.0
+      '@oxfmt/binding-linux-arm64-gnu': 0.76.0
+      '@oxfmt/binding-linux-arm64-musl': 0.76.0
+      '@oxfmt/binding-linux-ppc64-gnu': 0.76.0
+      '@oxfmt/binding-linux-riscv64-gnu': 0.76.0
+      '@oxfmt/binding-linux-riscv64-musl': 0.76.0
+      '@oxfmt/binding-linux-s390x-gnu': 0.76.0
+      '@oxfmt/binding-linux-x64-gnu': 0.76.0
+      '@oxfmt/binding-linux-x64-musl': 0.76.0
+      '@oxfmt/binding-openharmony-arm64': 0.76.0
+      '@oxfmt/binding-win32-arm64-msvc': 0.76.0
+      '@oxfmt/binding-win32-ia32-msvc': 0.76.0
+      '@oxfmt/binding-win32-x64-msvc': 0.76.0
 
   oxlint-tsgolint@7.0.2005:
     optionalDependencies:
@@ -27625,6 +27719,10 @@ snapshots:
     dependencies:
       react: 18.3.1
 
+  use-sync-external-store@1.7.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+
   utf8-byte-length@1.0.5: {}
 
   util-deprecate@1.0.2: {}
@@ -27968,11 +28066,18 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
+  zod-to-json-schema@3.25.2(zod@4.6.7):
+    dependencies:
+      zod: 4.6.7
+    optional: true
+
   zod@4.4.3: {}
+
+  zod@4.6.7: {}
 
   zustand@4.5.7(@types/react@18.3.1)(immer@10.2.0)(react@18.3.1):
     dependencies:
-      use-sync-external-store: 1.6.0(react@18.3.1)
+      use-sync-external-store: 1.7.0(react@18.3.1)
     optionalDependencies:
       '@types/react': 18.3.1
       immer: 10.2.0

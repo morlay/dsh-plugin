@@ -398,6 +398,10 @@ export function apply(ctx: Context): void {
   ): Promise<string | undefined> => {
     // `@/…` 是本地文件（alias 管），不是包——`packageNameOf` 会把它切成 `@/vendor` 这种假包名。
     if (specifier.startsWith("@/")) return undefined;
+    // 样式引用交给 vite 的 CSS 管线内联：改写成联邦 URL 会让浏览器把 `text/css` 当 ESM 模块加载
+    // （`Failed to load module script: … MIME type "text/css"`）。联邦构建那侧有对应的内联（见
+    // `dsh-css-specifiers`）。
+    if (specifier.endsWith(".css")) return undefined;
     // `zlib` / `stream` 这类**裸名的 node 内置**不是包：接管成联邦地址只会换来一串 404。留给 alias
     // 的替身（名单同一份）。
     if (NODE_BUILTIN.test(specifier)) return undefined;
@@ -579,8 +583,11 @@ export function apply(ctx: Context): void {
     // **不发 304**：这边的响应最终要由上游包成 Fetch `Response`，而它不接受 304
     // （`Invalid response status code 304`）——请求会以异常告终。产物本来就不大，直接 200 全量。
     const etag = `"${bundled.rev}"`;
+    // 产物类型由文件扩展名决定：CSS 出口就是 CSS 文本，其余是 JS 模块。
+    const extension = target.slice(target.lastIndexOf(".") + 1).toLowerCase();
     res.writeHead(200, {
-      "content-type": "text/javascript; charset=utf-8",
+      "content-type":
+        extension === "css" ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8",
       "cache-control": cacheControl,
       etag,
     });

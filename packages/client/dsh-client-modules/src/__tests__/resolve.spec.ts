@@ -64,12 +64,30 @@ describe("exportTargetOf", () => {
     );
   });
 
-  test("没有 `exports` 时退回 `module` → `main`", async () => {
+  test("对象条件的 `import` 优先于 `require`（`zod@4` 的形状：index.js / index.cjs）", async () => {
+    const root = join(work, "object-conditions");
+    await makePackage(
+      root,
+      {
+        name: "object-conditions",
+        version: "1.0.0",
+        type: "module",
+        exports: {
+          ".": { types: "./index.d.cts", import: "./index.js", require: "./index.cjs" },
+        },
+      },
+      { "index.js": "export const z = 1;\n", "index.cjs": "module.exports = { z: 1 };\n" },
+    );
+    // 有 ESM 就走 ESM：不要为了跑 CJS 转换而去挑 `require` 那支。
+    await expect(exportTargetOf(root, undefined)).resolves.toBe(join(root, "index.js"));
+  });
+
+  test("没有 `exports` 时按打包器约定取 `module`（ESM）→ `main`", async () => {
     const root = join(work, "legacy");
     await makePackage(
       root,
       { name: "legacy", version: "1.0.0", main: "index.js", module: "esm/index.mjs" },
-      { "esm/index.mjs": "export {};\n" },
+      { "index.js": "module.exports = 1;\n", "esm/index.mjs": "export {};\n" },
     );
     await expect(exportTargetOf(root, undefined)).resolves.toBe(join(root, "esm/index.mjs"));
   });

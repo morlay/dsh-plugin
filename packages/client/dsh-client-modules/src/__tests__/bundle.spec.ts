@@ -9,9 +9,109 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "../bundle.ts";
+import { BUNDLER_REV, bundlePackage, clientModulesAlias, moduleKindOf, urlOf } from "../bundle.ts";
 
 const repoRoot = process.cwd();
+
+test("CSS 出口：产出 CSS 文本（url() 资产改写 + 落 assets），不生成 JS", async () => {
+  const pkg = join(work, "node_modules", "style-pkg");
+  await mkdir(join(pkg, "dist"), { recursive: true });
+  await writeFile(
+    join(pkg, "package.json"),
+    `${JSON.stringify({
+      name: "style-pkg",
+      version: "1.0.0",
+      exports: { "./theme.css": "./dist/theme.css" },
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(join(pkg, "dist", "theme.css"), ".icon { background: url(./dot.svg) }\n", "utf8");
+  await writeFile(join(pkg, "dist", "dot.svg"), "<svg/>\n", "utf8");
+
+  const bundled = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "style-pkg",
+    version: "1.0.0",
+    input: { "theme.css": join(pkg, "dist", "theme.css") },
+    watch: [pkg],
+  });
+  const files = [...(bundled?.files.keys() ?? [])];
+  expect(files).toContain("theme.css");
+  const asset = files.find((file) => file.startsWith("assets/dot-"));
+  expect(asset).toBeDefined();
+  const css = await readFile(join(cacheRoot, bundled?.files.get("theme.css") ?? ""), "utf8");
+  expect(css).toContain(`/@client-modules/style-pkg@1.0.0/${asset ?? ""}`);
+  await expect(stat(join(cacheRoot, "style-pkg@1.0.0", "theme.css.js"))).rejects.toThrow();
+  await expect(
+    readFile(join(cacheRoot, bundled?.files.get(asset ?? "") ?? ""), "utf8"),
+  ).resolves.toContain("<svg");
+});
+
+test("模块类型：扩展名 + 最近的 package.json（什么时候 ESM、什么时候 CJS）", async () => {
+  const root = join(work, "kinds");
+  await mkdir(join(root, "esm"), { recursive: true });
+  await writeFile(
+    join(root, "package.json"),
+    `${JSON.stringify({ name: "kinds", version: "1.0.0", type: "commonjs" })}\n`,
+    "utf8",
+  );
+  const touch = async (file: string): Promise<string> => {
+    const path = join(root, file);
+    await writeFile(path, "", "utf8");
+    return path;
+  };
+
+  // 扩展名就能定。
+  expect(await moduleKindOf(await touch("a.mjs"))).toBe("esm");
+  expect(await moduleKindOf(await touch("a.mts"))).toBe("esm");
+  expect(await moduleKindOf(await touch("a.cjs"))).toBe("cjs");
+  expect(await moduleKindOf(await touch("a.cts"))).toBe("cjs");
+  expect(await moduleKindOf(await touch("a.ts"))).toBe("source");
+  expect(await moduleKindOf(await touch("a.tsx"))).toBe("source");
+  expect(await moduleKindOf(await touch("a.css"))).toBe("style");
+  expect(await moduleKindOf(await touch("a.png"))).toBe("asset");
+
+  // `.js`：`type` 与**语法检测**（Node 的 `--experimental-detect-module`）。
+  expect(await moduleKindOf(await touch("a.js"))).toBe("cjs");
+  await writeFile(
+    join(root, "esm", "package.json"),
+    `${JSON.stringify({ name: "kinds-esm", version: "1.0.0", type: "module" })}\n`,
+    "utf8",
+  );
+  expect(await moduleKindOf(await touch("esm/a.js"))).toBe("esm");
+
+  const legacy = join(root, "legacy");
+  await mkdir(join(legacy, "esm"), { recursive: true });
+  await mkdir(join(legacy, "cjs"), { recursive: true });
+  await writeFile(
+    join(legacy, "package.json"),
+    `${JSON.stringify({
+      name: "kinds-legacy",
+      version: "1.0.0",
+      main: "cjs/index.js",
+      module: "esm/index.js",
+    })}\n`,
+    "utf8",
+  );
+  // 没有 `type`：看源码里有没有 ESM 语法。
+  await writeFile(join(legacy, "esm", "index.js"), "export const x = 1;\n", "utf8");
+  await writeFile(join(legacy, "cjs", "index.js"), "module.exports = 1;\n", "utf8");
+  expect(await moduleKindOf(join(legacy, "esm", "index.js"))).toBe("esm");
+  expect(await moduleKindOf(join(legacy, "cjs", "index.js"))).toBe("cjs");
+
+  // `type: "commonjs"` 时不做语法检测（Node 的规则：显式声明优先）。
+  const forced = join(root, "forced-cjs");
+  await mkdir(forced, { recursive: true });
+  await writeFile(
+    join(forced, "package.json"),
+    `${JSON.stringify({ name: "forced-cjs", version: "1.0.0", type: "commonjs" })}\n`,
+    "utf8",
+  );
+  await writeFile(join(forced, "index.js"), "export const x = 1;\n", "utf8");
+  expect(await moduleKindOf(join(forced, "index.js"))).toBe("cjs");
+});
 
 test("包级引用的出口按「是不是行」分：行 → client.js，普通 npm 包 → 根出口 index.js", () => {
   const tables = {
@@ -222,85 +322,38 @@ test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` �
   }
 });
 
-test("`main` 是 CJS、`module` 是 ESM 的双形态包：产物补出 default（Node 下那句 import 拿的就是 CJS 的 module.exports）", async () => {
-  // `rrule` 就是这个形态：`main`（CJS）与 `module`（ESM，没有 default）导出面不同。浏览器里取的是 `module`，
-  // 不补 default 的话，上游那句 `import rrulePackage from 'rrule'` 会报
-  // `does not provide an export named 'default'`。
-  const dual = join(work, "dual");
-  await mkdir(join(dual, "dist", "cjs"), { recursive: true });
-  await mkdir(join(dual, "dist", "esm"), { recursive: true });
+test("CJS/UMD 入口（webpack 包装、局部名与导出名不同）：具名导出与 default 同时产出", async () => {
+  // 三方包按 **node 的解析**取入口（`main`），老包（`rrule` / `@xterm/xterm` / `@xterm/addon-fit`）进来的
+  // 就是 CJS/UMD——导出面是**运行期**的，rolldown 只能给出 `export default module.exports`。消费方还要
+  // 具名导入（`import { Terminal } from '@xterm/xterm'`），所以入口求值后按键补成 `export const <键>`。
+  //
+  // 这里用 **webpack 风格 UMD**（`module.exports = factory()`）且局部名与导出名不同：产物里不能出现
+  // `export default { FitAddon }` 这种引用裸导出名的写法——局部作用域里没有它，浏览器会报
+  // `ReferenceError: FitAddon is not defined`（`@xterm/addon-fit@0.11.0` 真实踩到的就是这条）。
+  const cjs = join(work, "cjs-entry");
+  await mkdir(join(cjs, "dist"), { recursive: true });
   await writeFile(
-    join(dual, "package.json"),
-    `${JSON.stringify({
-      name: "dual",
-      version: "1.0.0",
-      main: "dist/cjs/index.js",
-      module: "dist/esm/index.js",
-    })}\n`,
+    join(cjs, "package.json"),
+    `${JSON.stringify({ name: "cjs-entry", version: "1.0.0", main: "dist/index.js" })}\n`,
     "utf8",
   );
   await writeFile(
-    join(dual, "dist", "cjs", "index.js"),
-    "module.exports = { alpha: 1, beta: 2 };\n",
-    "utf8",
-  );
-  await writeFile(
-    join(dual, "dist", "esm", "index.js"),
-    "export const alpha = 1;\nexport const beta = 2;\n",
-    "utf8",
-  );
-
-  const bundled = await bundlePackage({
-    cacheRoot,
-    repoRoot: work,
-    alias: clientModulesAlias({
-      repoRoot,
-      nodeStub: join(repoRoot, "packages/client/dsh-client-modules/app-boot/node-stub.cjs"),
-    }),
-    name: "dual",
-    version: "1.0.0",
-    input: { index: join(dual, "dist", "esm", "index.js") },
-    watch: [join(dual, "dist", "esm")],
-  });
-  const file = join(cacheRoot, bundled?.files.get("index") ?? "");
-  const code = await readFile(file, "utf8");
-  // rolldown 会把 `export default` 压成 `export { x as default }`，两种形态都算补上了。
-  expect(code).toMatch(/\bas default\b|export default/u);
-
-  const loaded = (await import(pathToFileURL(file).href)) as {
-    readonly default: { readonly alpha?: number };
-    readonly beta?: number;
-  };
-  // default 与 Node 下 CJS 的 `module.exports` 同形：键都在上面。
-  expect(loaded.default.alpha).toBe(1);
-  expect(loaded.beta).toBe(2);
-});
-
-test("双形态包的 ESM 入口自带 default 时不覆盖它（`jsbi` 那种：`export default JSBI`）", async () => {
-  // 补 default 只对"ESM 入口没有 default"的那种包。`jsbi` 的 `module` 里有 `export default JSBI`，若也套上
-  // 命名空间对象，`@js-temporal/polyfill` 的 `import e from "jsbi"` 就拿不到 JSBI 类，运行期报
-  // `e.BigInt is not a function`。
-  const dualDefault = join(work, "dual-default");
-  await mkdir(join(dualDefault, "dist", "cjs"), { recursive: true });
-  await mkdir(join(dualDefault, "dist", "esm"), { recursive: true });
-  await writeFile(
-    join(dualDefault, "package.json"),
-    `${JSON.stringify({
-      name: "dual-default",
-      version: "1.0.0",
-      main: "dist/cjs/index.js",
-      module: "dist/esm/index.js",
-    })}\n`,
-    "utf8",
-  );
-  await writeFile(
-    join(dualDefault, "dist", "cjs", "index.js"),
-    "module.exports = { other: 1 };\n",
-    "utf8",
-  );
-  await writeFile(
-    join(dualDefault, "dist", "esm", "index.js"),
-    "const marker = { own: true };\nexport const other = 1;\nexport default marker;\n",
+    join(cjs, "dist", "index.js"),
+    [
+      "!function (root, factory) {",
+      '  if (typeof exports === "object" && typeof module === "object") module.exports = factory();',
+      '  else if (typeof define === "function" && define.amd) define([], factory);',
+      "  else root.FitAddon = factory();",
+      "}(globalThis, function () {",
+      '  "use strict";',
+      "  var t = {};",
+      "  t.FitAddon = class FitAddon {};",
+      // zod@4 的 CJS 面就有这种键：`export const function = …` 是语法错误，必须被剔掉。
+      "  t.function = 1;",
+      "  return t;",
+      "});",
+      "",
+    ].join("\n"),
     "utf8",
   );
 
@@ -308,18 +361,210 @@ test("双形态包的 ESM 入口自带 default 时不覆盖它（`jsbi` 那种�
     cacheRoot,
     repoRoot: work,
     alias: [],
-    name: "dual-default",
+    name: "cjs-entry",
     version: "1.0.0",
-    input: { index: join(dualDefault, "dist", "esm", "index.js") },
-    watch: [join(dualDefault, "dist", "esm")],
+    input: { index: join(cjs, "dist", "index.js") },
+    watch: [join(cjs, "dist")],
   });
   const file = join(cacheRoot, bundled?.files.get("index") ?? "");
   const loaded = (await import(pathToFileURL(file).href)) as {
-    readonly default: { readonly own?: boolean; readonly other?: number };
+    readonly FitAddon?: unknown;
+    readonly default?: { readonly FitAddon?: unknown };
   };
-  // 包自己的 default（不是命名空间对象：命名空间上没有 `own`、倒是有 `other`）。
-  expect(loaded.default.own).toBe(true);
-  expect(loaded.default.other).toBeUndefined();
+  // 两种写法都成立：具名导入（浏览器里 `import { FitAddon }`）与 default（Node/CJS 的 `module.exports`）。
+  expect(typeof loaded.FitAddon).toBe("function");
+  expect(typeof loaded.default?.FitAddon).toBe("function");
+
+  // shim 只活在内存里（虚拟入口），缓存目录不落这个文件。
+  await expect(stat(join(cacheRoot, "cjs-entry@1.0.0", "index.cjs-shim.mjs"))).rejects.toThrow();
+  // 保留字不能出现在 `export const` 里（语法错误）。
+  expect(await readFile(file, "utf8")).not.toMatch(/export const function\b/u);
+});
+
+test("有 ESM 入口的包：不生成 CJS shim（`zod@4` 那种 import/require 双支）", async () => {
+  // 入口由清单的 `import` 条件选出（ESM），就交给 rolldown 直出；只有 node 求值确认是 CJS 的入口才包 shim。
+  const esm = join(work, "dual-esm");
+  await mkdir(join(esm, "dist"), { recursive: true });
+  await writeFile(
+    join(esm, "package.json"),
+    `${JSON.stringify({
+      name: "dual-esm",
+      version: "1.0.0",
+      type: "module",
+      exports: { ".": { import: "./dist/index.js", require: "./dist/index.cjs" } },
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(join(esm, "dist", "index.js"), "export const z = 1;\n", "utf8");
+  await writeFile(join(esm, "dist", "index.cjs"), "module.exports = { z: 1 };\n", "utf8");
+
+  const bundled = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "dual-esm",
+    version: "1.0.0",
+    input: { index: join(esm, "dist", "index.js") },
+    watch: [join(esm, "dist")],
+  });
+  expect([...(bundled?.files.keys() ?? [])]).toEqual(["index"]);
+  await expect(stat(join(cacheRoot, "dual-esm@1.0.0", "index.cjs-shim.mjs"))).rejects.toThrow();
+});
+
+test("ESM 入口：交给 rolldown 的具名导出，不补任何 default", async () => {
+  // node 的 `require(esm)` 会返回命名空间（`[object Module]`）。这种入口不该被当成 CJS 包补 default：
+  // rolldown 自己就能产出具名导出，硬补一个 `default = 命名空间` 只会多一个消费方不该依赖的面。
+  const esm = join(work, "esm-entry");
+  await mkdir(join(esm, "src"), { recursive: true });
+  await writeFile(
+    join(esm, "package.json"),
+    `${JSON.stringify({ name: "esm-entry", version: "1.0.0", type: "module", main: "src/index.js" })}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(esm, "src", "index.js"),
+    "const t = class {};\nexport { t as Terminal };\n",
+    "utf8",
+  );
+
+  const bundled = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "esm-entry",
+    version: "1.0.0",
+    input: { index: join(esm, "src", "index.js") },
+    watch: [join(esm, "src")],
+  });
+  const file = join(cacheRoot, bundled?.files.get("index") ?? "");
+  const code = await readFile(file, "utf8");
+  expect(code).not.toMatch(/export default/u);
+  const loaded = (await import(pathToFileURL(file).href)) as { readonly Terminal?: unknown };
+  expect(typeof loaded.Terminal).toBe("function");
+});
+
+test("exports 落点 + 扩展名/type：`.cjs` 才 shim，`.mjs` 与 `module` 字段指向的 `.js` 都不 shim", async () => {
+  // 条件决定"哪个文件"，扩展名/type 决定"那个文件是什么模块"。两边都处理到，才是完整判定。
+  const cond = join(work, "cond-entry");
+  await mkdir(join(cond, "dist"), { recursive: true });
+  await writeFile(
+    join(cond, "package.json"),
+    `${JSON.stringify({
+      name: "cond-entry",
+      version: "1.0.0",
+      exports: { ".": { import: "./dist/index.mjs", require: "./dist/index.cjs" } },
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(join(cond, "dist", "index.mjs"), "export const esm = 1;\n", "utf8");
+  await writeFile(join(cond, "dist", "index.cjs"), "module.exports = { cjs: 1 };\n", "utf8");
+
+  const asCjs = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "cond-entry",
+    version: "1.0.0",
+    input: { index: join(cond, "dist", "index.cjs") },
+    watch: [join(cond, "dist")],
+  });
+  expect(asCjs?.files.has("index")).toBe(true);
+  const cjsLoaded = (await import(
+    pathToFileURL(join(cacheRoot, asCjs?.files.get("index") ?? "")).href
+  )) as { readonly cjs?: number; readonly default?: { readonly cjs?: number } };
+  expect(cjsLoaded.cjs).toBe(1);
+  expect(cjsLoaded.default?.cjs).toBe(1);
+
+  // 换一个包名：缓存目录是**包级**的，同一个包的另一次构建不会删掉上一次的 shim。
+  const esmPkg = join(work, "cond-esm");
+  await mkdir(join(esmPkg, "dist"), { recursive: true });
+  await writeFile(
+    join(esmPkg, "package.json"),
+    `${JSON.stringify({
+      name: "cond-esm",
+      version: "1.0.0",
+      exports: { ".": { import: "./dist/index.mjs", require: "./dist/index.cjs" } },
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(join(esmPkg, "dist", "index.mjs"), "export const esm = 1;\n", "utf8");
+  await writeFile(join(esmPkg, "dist", "index.cjs"), "module.exports = { cjs: 1 };\n", "utf8");
+  const asEsm = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "cond-esm",
+    version: "1.0.0",
+    input: { index: join(esmPkg, "dist", "index.mjs") },
+    watch: [join(esmPkg, "dist")],
+  });
+  expect(asEsm?.files.has("index")).toBe(true);
+  // ESM 入口交给 rolldown 直出：没有 CJS shim 补出来的 default。
+  expect(await readFile(join(cacheRoot, asEsm?.files.get("index") ?? ""), "utf8")).not.toMatch(
+    /export default/u,
+  );
+
+  // 老包的 ESM 产物是 `.js`：`module` 字段指向的那份按 ESM 处理（`rrule` 的 dist/esm/index.js）。
+  const legacy = join(work, "legacy-module");
+  await mkdir(join(legacy, "esm"), { recursive: true });
+  await mkdir(join(legacy, "cjs"), { recursive: true });
+  await writeFile(
+    join(legacy, "package.json"),
+    `${JSON.stringify({
+      name: "legacy-module",
+      version: "1.0.0",
+      main: "cjs/index.js",
+      module: "esm/index.js",
+    })}\n`,
+    "utf8",
+  );
+  await writeFile(join(legacy, "esm", "index.js"), "export const esm = 1;\n", "utf8");
+  await writeFile(join(legacy, "cjs", "index.js"), "module.exports = { cjs: 1 };\n", "utf8");
+  const legacyEsm = await bundlePackage({
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: "legacy-module",
+    version: "1.0.0",
+    input: { index: join(legacy, "esm", "index.js") },
+    watch: [join(legacy, "esm")],
+  });
+  expect(legacyEsm?.files.has("index")).toBe(true);
+  expect(await readFile(join(cacheRoot, legacyEsm?.files.get("index") ?? ""), "utf8")).not.toMatch(
+    /export default/u,
+  );
+});
+
+test("扩展名即模块类型：`.mjs` / `.ts` 入口不生成 CJS shim", async () => {
+  // `.mjs` 是 ESM，`.ts` 是源码面：都不该进 "CJS 具名导出" 那条求值路径。
+  for (const [name, file, code, expected] of [
+    ["ext-mjs", "index.mjs", "const t = class {};\nexport { t as Terminal };\n", "Terminal"],
+    ["ext-ts", "index.ts", "export const x = 1;\n", "x"],
+  ] as const) {
+    const dir = join(work, name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      `${JSON.stringify({ name, version: "1.0.0", type: "module" })}\n`,
+      "utf8",
+    );
+    await writeFile(join(dir, file), code, "utf8");
+    const built = await bundlePackage({
+      cacheRoot,
+      repoRoot: work,
+      alias: [],
+      name,
+      version: "1.0.0",
+      input: { index: join(dir, file) },
+      watch: [dir],
+    });
+    expect([...(built?.files.keys() ?? [])]).toEqual(["index"]);
+    await expect(stat(join(cacheRoot, `${name}@1.0.0`, "index.cjs-shim.mjs"))).rejects.toThrow();
+    const loaded = (await import(
+      pathToFileURL(join(cacheRoot, built?.files.get("index") ?? "")).href
+    )) as Record<string, unknown>;
+    expect(loaded[expected]).toBeDefined();
+  }
 });
 
 test("纯 ESM 的包不补 default（不掩盖真实的导出缺失）", async () => {

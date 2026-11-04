@@ -23,6 +23,11 @@ export const patch: Step[] = [
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
+  // `rrule` 的联邦产物是它的 **ESM 面**（`module` 字段 → `dist/esm/index.js`，Node 的 ESM 解析在
+  // 无 `exports` 时也走 `main`，但打包器约定是 `module`）——ESM 入口没有 default，上游那句
+  // `import rrulePackage from 'rrule'` 跨联邦边界会报 `does not provide an export named 'default'`。
+  // 产物不替消费方造 default，改消费方按 ESM 的具名面写：命名空间导入，`rrulePackage.Weekday` 照旧。
+  { type: "git", patch: "rrule-namespace-import.patch" },
   // 宿主启动时那条运行时解析（`internalModules()`）只走 `node-addon-require-builtin`，而该 addon
   // 0.1.9 的 V8 指纹表只到 Electron 44.7（45 只有 alpha）。桌面壳给宿主的命令行恒带
   // `--expose-internals`，所以补上与 Loader/HMR 的 `requireInternal` 同一顺序：开关在就 `require`，

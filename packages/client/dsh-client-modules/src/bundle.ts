@@ -9,10 +9,10 @@
  * 两者产出的地址同构（`@client-modules/<pkg>@<version>/<file>`），所以运行时按 URL 取即可。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { findPackageJSON } from "node:module";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { clientAssetPlugin, NODE_BUILTIN } from "@morlay/dsh-cordis-assets/assets";
 import { cssInlinePlugins } from "@morlay/dsh-cordis-assets/styles";
@@ -62,7 +62,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "30";
+const BUNDLER_RULES = "36";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -97,7 +97,7 @@ export interface BundleOptions {
   name: string;
   /** 包版本（进缓存键与地址）。 */
   version: string;
-  /** 入口名 → 源码文件（我们的包：出口名；三方：`index`）。 */
+  /** 出口名 → 入口文件（由调用方的清单解析得到：`exports` 条件 / `module` / `main`）。 */
   input: Record<string, string>;
   /** 指纹的输入文件集（我们的包给 `src`；三方给它的入口）。 */
   watch: readonly string[];
@@ -328,156 +328,262 @@ export function browserProcessPlugin(meta: ClientBuildMeta = {}): PluginOption {
 }
 
 /**
- * 入口是否按**它所属包的声明**是 CJS（Node 的 ESM 解析会做 `default = module.exports` 的那一侧）。
- *
- * 判据只看声明，不看源码内容：
- * - `type: "module"` 的包 → 恒为 ESM（`.mjs` 同理）；
- * - 否则是"老约定"：`module` 字段指向的那份视为 ESM（打包器约定，Node 不认），其余 `.js` 视为 CJS、
- *   `.cjs` 恒为 CJS；`.ts` 这类源码交给语法（rolldown 自己判）。
- *
- * 以前这里是"读源码找 `module.exports =`"，那是猜：`exports.` 出现在注释里就会误判，而 `type: module` 的
- * 包即使有 CJS 写法也不该被当 CJS。
+ * `export const <名>` 用不了的键：JS 的保留字（`zod@4` 的 CJS 面有 `function` / `void` / `null`
+ * 这些键，原样拼出去就是 `SyntaxError`）。
  */
-async function declaresCjs(entry: string): Promise<boolean> {
-  if (entry.endsWith(".mjs")) return false;
-  if (entry.endsWith(".cjs")) return true;
-  if (!entry.endsWith(".js")) return false;
+const RESERVED_EXPORT_NAMES = new Set([
+  "await",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "eval",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "instanceof",
+  "interface",
+  "let",
+  "new",
+  "null",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "undefined",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+]);
+
+/** ESM 的顶层语法节点：`import` / `export` 声明。 */
+const ESM_STATEMENT_TYPES = new Set([
+  "ImportDeclaration",
+  "ExportNamedDeclaration",
+  "ExportDefaultDeclaration",
+  "ExportAllDeclaration",
+]);
+
+/**
+ * `.js` 且没有 `type` 时，按 **Node 的语法检测**判：有 ESM 语法（顶层 `import`/`export`）就是 ESM，
+ * 否则 CJS（Node 23+ 默认开启 `--experimental-detect-module`）。
+ *
+ * 用 rolldown 自带的解析器（`rolldown/parseAst`），不自己写词法扫描。
+ *
+ * @param entry - `.js` 入口的绝对路径。
+ * @returns 是否含 ESM 语法。
+ */
+async function hasModuleSyntax(entry: string): Promise<boolean> {
+  try {
+    const [{ parseAst }, source] = await Promise.all([
+      import("rolldown/parseAst"),
+      readFile(entry, "utf8"),
+    ]);
+    const program = parseAst(source, null, entry) as unknown as {
+      body: readonly { type: string }[];
+    };
+    return program.body.some((node) => ESM_STATEMENT_TYPES.has(node.type));
+  } catch {
+    // 解析不了（CJS 专有语法在 module 模式下报错等）：按 CJS 走，求值失败时保持原样。
+    return false;
+  }
+}
+
+/** 一个入口的模块类型。 */
+export type ModuleKind = "esm" | "cjs" | "source" | "style" | "asset";
+
+/**
+ * 一个入口的模块类型：**扩展名 + 最近的 `package.json`**，不猜源码。
+ *
+ * | 入口 | 类型 |
+ * | --- | --- |
+ * | `.mjs` / `.mts` | `esm` |
+ * | `.cjs` / `.cts` | `cjs` |
+ * | `.js` + `type: "module"` | `esm` |
+ * | `.js` + `module` 字段指向它 | `esm`（打包器约定） |
+ * | 其余 `.js` | `cjs` |
+ * | `.ts` / `.tsx` / `.jsx` | `source`（转译面，原样） |
+ * | `.css` | `style` |
+ * | 其他（图片 / 字体 / `.json` …） | `asset` |
+ *
+ * 这是 `exports` 条件（`import` / `require`）选出入口之后的**第二步**：条件决定"哪个文件"，这里决定
+ * "那个文件是什么模块"。只有 `cjs` 需要导出面适配，`esm` / `source` 一律原样。
+ *
+ * @param entry - 入口的绝对路径。
+ * @returns 模块类型。
+ */
+export async function moduleKindOf(entry: string): Promise<ModuleKind> {
+  const extension = extname(entry).toLowerCase();
+  if (extension === ".css") return "style";
+  if (extension === ".mjs" || extension === ".mts") return "esm";
+  if (extension === ".cjs" || extension === ".cts") return "cjs";
+  if (extension === ".ts" || extension === ".tsx" || extension === ".jsx") return "source";
+  if (extension !== ".js") return "asset";
   const manifestPath = await packageJsonNear(entry);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     type?: string;
-    module?: string;
   };
-  if (manifest.type === "module") return false;
-  const manifestModule = manifest.module;
-  if (manifestModule === undefined) return true;
-  return resolve(dirname(manifestPath), manifestModule) !== resolve(entry);
+  if (manifest.type === "module") return "esm";
+  if (manifest.type === "commonjs") return "cjs";
+  // 没有 `type`：Node 的规则是**语法检测**（`--experimental-detect-module`，Node 23+ 默认开启）。
+  return (await hasModuleSyntax(entry)) ? "esm" : "cjs";
 }
 
 /**
- * CJS 入口的**具名导出包装**（`react` 这类）。
+ * CJS 入口的**具名导出包装**（`react` / `@xterm/xterm` 这类）。
  *
- * `react` 的入口是 `module.exports = require('./cjs/react.development.js')`，rolldown 静态分析不出具名
- * 导出，产物只剩 `export default …`——而浏览器侧要 `import { Fragment } from "react"`，于是**整个 import
- * 阶段就失败**（入口一行都执行不了）。ESM 的导出必须**静态可枚举**（不能 `export * from` 一个运行期对象），
- * 所以这里求值入口拿到它的键，生成一份把它们写成 `export const` 的包装文件，拿包装文件当入口。
+ * rolldown 对 CJS 入口的产物的具名导出只能靠静态分析；`module.exports = require(…)` 与 UMD 包装它都分析
+ * 不出来，产物只剩 `export default …`——而浏览器侧要 `import { Fragment } from "react"`、`import { Terminal }
+ * from "@xterm/xterm"`，整个 import 阶段就失败。ESM 的导出必须**静态可枚举**，所以这里求值入口拿到它的键，
+ * 生成一份把它们写成 `export const` 的包装文件，拿包装文件当入口。
  *
- * @returns 包装文件路径；入口不是 CJS、或求值拿不到键时 undefined（保持原样）。
+ * 类型由 {@link moduleKindOf} 先按 **exports 落点 + 扩展名/type** 静态判定，只有 CJS 才进来；
+ * 这里求值一次只为**拿键**（`export const <键>` + `default = module.exports`）。ESM 原封不动。
+ *
+ * @returns 包装文件路径；入口不是 node 能求值的 CJS、或没有可静态导出的键时 undefined（保持原样）。
  */
 async function cjsShimOf(options: {
   name: string;
   exportName: string;
+  /** 具体文件：只用来求值判 CJS / 枚举键。 */
   entry: string;
-  outDir: string;
+  /** 产物里的 import 来源：说明符（交给 rolldown 按 `exports` 解析）或文件路径。 */
+  from: string;
   log?: (message: string) => void;
-}): Promise<string | undefined> {
-  if (!(await declaresCjs(options.entry))) return undefined;
-  let keys: string[];
+}): Promise<{ id: string; code: string } | undefined> {
+  let loaded: Record<string, unknown> | undefined;
   try {
-    // 求值才知道键：CJS 的导出面是**运行期**的（静态分析只能看到 `module.exports = require(…)`）。
-    const loaded = createRequire(options.entry)(options.entry) as
-      | Record<string, unknown>
-      | undefined;
-    keys = Object.keys(loaded ?? {});
+    // 类型已由 {@link moduleKindOf} 静态判定（只有 CJS 会走到这里）；这一句只为**拿键**：
+    // CJS 的导出面是运行期的（`module.exports = require(…)` / UMD 包装，静态分析看不到键）。
+    loaded = createRequire(options.entry)(options.entry) as Record<string, unknown> | undefined;
   } catch {
     // 求值有副作用、或本来就是不能在 node 里加载的东西：宁可只有 default 导出，也不要让构建挂掉。
     return undefined;
   }
-  const named = keys.filter((key) => key !== "default" && /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key));
-  if (named.length === 0) return undefined;
-  const file = join(options.outDir, `${options.exportName.replaceAll("/", "+")}.cjs-shim.mjs`);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(
-    file,
-    [
-      `import mod from ${JSON.stringify(options.entry)};`,
-      // 用**计算属性**读：`mod.jsxDEV` 这种静态属性访问会被 rolldown 按它对 CJS 命名空间的静态理解
-      // 摇成 `void 0`（`react/jsx-dev-runtime` 就那么被摇空了，页面报 `jsxDEV is not a function`）。
-      "const __cjs = mod ?? {};",
-      "export default __cjs;",
-      ...named.map((key) => `export const ${key} = __cjs[${JSON.stringify(key)}];`),
-      "",
-    ].join("\n"),
-    "utf8",
+  const keys = Object.keys(loaded ?? {});
+  const named = keys.filter(
+    (key) =>
+      key !== "default" &&
+      /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key) &&
+      !RESERVED_EXPORT_NAMES.has(key),
   );
+  if (named.length === 0) return undefined;
+
+  // **不落盘**：这是一份只喂给 rolldown 的入口，用虚拟模块（`\0` 前缀 + resolveId/load）即可。
+  // 落成文件反而要操心"放哪、相对路径怎么算、缓存目录里会不会残留"——入口用绝对路径，rolldown 在
+  // **构建期**把它读进来（内联进产物），产物里不会出现这个路径。
+  const id = `\0dsh-cjs-shim:${options.name}:${options.exportName}`;
+  const code = [
+    `import mod from ${JSON.stringify(options.from)};`,
+    // 用**计算属性**读：`mod.jsxDEV` 这种静态属性访问会被 rolldown 按它对 CJS 命名空间的静态理解
+    // 摇成 `void 0`（`react/jsx-dev-runtime` 就那么被摇空了，页面报 `jsxDEV is not a function`）。
+    "const __cjs = mod ?? {};",
+    "export default __cjs;",
+    ...named.map((key) => `export const ${key} = __cjs[${JSON.stringify(key)}];`),
+    "",
+  ].join("\n");
   options.log?.(
     `[bundle-cjs] ${options.name}/${options.exportName}: 补 ${String(named.length)} 个具名导出\n`,
   );
-  return file;
+  return { id, code };
 }
 
-/** 根出口的产物名（`urlOf` 对非 client 行写的就是它）。 */
-const ROOT_EXPORT = "index";
-
-/** 具名导出的合法标识符：补 default 时按它挑键（非标识符的导出名用不了简写）。 */
-const EXPORT_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
-
 /**
- * 这个入口是否需要「CJS 包的 ESM 便利入口」的 default 补偿。判据**只看 package.json 的声明**：
+ * CSS 出口的产物：**就是 CSS 文本**（不包装成 JS、不注入 `<style>`）。
  *
- * - `type: "module"` 的包：Node 与我们都按 `exports`（或 `main` 本身就是 ESM）解析，两边一致，不补；
- * - 其余是 CJS 包：`module` 只是打包器约定（视为 ESM），`main` 才是 CJS。这条链选 `module`（更小、没有
- *   webpack 垫片），而 Node 的 `import pkg from 'pkg'` 落到 `main`、default 是它的 `module.exports`——
- *   所以浏览器侧得补一个 default，否则消费方那句 default import 直接报
- *   `does not provide an export named 'default'`（`rrule` 就是这一例）。
- * - 有 `exports` 的包两边都按条件解析，不涉及这条约定；入口不是 `module` 的（选了 `main`）由
- *   {@link cjsShimOf} 处理。`main`/`module` 只描述根出口，子路径不在此列。
- */
-async function needsCjsInterop(entry: string, exportName: string): Promise<boolean> {
-  if (exportName !== ROOT_EXPORT) return false;
-  const manifestPath = await packageJsonNear(entry);
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
-    main?: string;
-    module?: string;
-    type?: string;
-    exports?: unknown;
-  };
-  if (manifest.type === "module" || manifest.exports !== undefined) return false;
-  const manifestModule = manifest.module;
-  if (manifestModule === undefined || manifest.main === undefined) return false;
-  const modulePath = resolve(dirname(manifestPath), manifestModule);
-  const moduleEntry = await realpath(modulePath).catch(() => modulePath);
-  const entryPath = await realpath(entry).catch(() => resolve(entry));
-  return moduleEntry === entryPath || modulePath === resolve(entry);
-}
-
-/**
- * 给「CJS 包的 ESM 便利入口」补 default：**看产物的真实导出面**（`chunk.exports`），不猜源码。
- * 已经有 default 的（`jsbi` 的 `export default JSBI`）原样保留——补成对象会把它顶掉，
- * `@js-temporal/polyfill` 那句 `import e from "jsbi"` 于是拿到命名空间、运行期 `e.BigInt is not a function`；
- * 没有的补成 `{ 具名导出… }`，与 CJS 的 `module.exports` 同形（`rrule` 的 `ALL_WEEKDAYS` / `rrulestr` 那批）。
- */
-function cjsInteropPlugin(exportName: string): Plugin {
-  return {
-    name: "dsh-cjs-interop",
-    generateBundle(_options, bundle) {
-      for (const chunk of Object.values(bundle)) {
-        if (chunk.type !== "chunk" || chunk.isEntry !== true || chunk.name !== exportName) continue;
-        if (chunk.exports.includes("default")) continue;
-        const named = chunk.exports.filter((name) => EXPORT_IDENTIFIER.test(name));
-        if (named.length === 0) continue;
-        chunk.code += `\nexport default { ${named.join(", ")} };\n`;
-      }
-    },
-  };
-}
-
-/**
- * CSS 入口的包装：**样式文件不能直接当入口**——vite 的库模式固定 `cssCodeSplit: false`，遇到
- * `rolldownOptions.input` 里有 `.css` 直接报错。包一层 side-effect import，让样式插件按它一贯的方式
- * 把它编成"注入 `<style>`"的模块。
+ * JS 里的 `import "x.css"` 是另一条路（`cssInlinePlugins` 在构建期内联成注入样式的模块），与本函数无关。
+ * 这里的 `url()` 指向包内资产：读到字节、按内容 hash 落到 `assets/`、改写成联邦地址——否则浏览器会按
+ * CSS 的相对路径去请求 `.pnpm` 里的文件，路由按清单服务就是 404。
  *
- * @returns 包装文件路径；入口不是 CSS 时 undefined。
+ * `lightningcss` 的 visitor 是同步回调，所以分两遍：第一遍只收集相对 `url()`，异步读资产/算 hash；
+ * 第二遍按映射改写（全程异步 IO）。
+ *
+ * @param options - 入口文件、出口名、缓存目录、包键、产物清单。
  */
-async function cssShimOf(options: {
-  exportName: string;
+async function bundleStyleOf(options: {
   entry: string;
+  exportName: string;
   outDir: string;
-}): Promise<string | undefined> {
-  if (!options.entry.endsWith(".css")) return undefined;
-  const file = join(options.outDir, `${options.exportName.replaceAll("/", "+")}.css-shim.mjs`);
+  key: string;
+  files: Record<string, string>;
+}): Promise<void> {
+  const { transform } = await import("lightningcss");
+  const source = await readFile(options.entry);
+  const relativeUrl = (ref: string): boolean =>
+    ref !== "" &&
+    !ref.startsWith("#") &&
+    !ref.startsWith("/") &&
+    !/^[a-z][a-z0-9+.-]*:/iu.test(ref);
+
+  const refs = new Set<string>();
+  transform({
+    filename: options.entry,
+    code: source,
+    minify: false,
+    visitor: {
+      Url(node) {
+        if (relativeUrl(node.url)) refs.add(node.url);
+      },
+    },
+  });
+
+  const mapping = new Map<string, string>();
+  for (const ref of refs) {
+    const absolute = join(dirname(options.entry), ref);
+    const bytes = await readFile(absolute).catch(() => undefined);
+    if (bytes === undefined) continue;
+    const extension = extname(absolute);
+    const name = `assets/${basename(absolute, extension)}-${createHash("sha256")
+      .update(bytes)
+      .digest("hex")
+      .slice(0, 8)}${extension}`;
+    mapping.set(ref, `${CLIENT_MODULES_PREFIX}/${options.key}/${name}`);
+    await mkdir(dirname(join(options.outDir, name)), { recursive: true });
+    await writeFile(join(options.outDir, name), bytes);
+    options.files[name] = `${options.key}/${name}`;
+  }
+
+  const result = transform({
+    filename: options.entry,
+    code: source,
+    minify: false,
+    visitor: {
+      Url(node) {
+        const rewritten = mapping.get(node.url);
+        return rewritten === undefined ? undefined : { ...node, url: rewritten };
+      },
+    },
+  });
+  const file = join(options.outDir, options.exportName);
   await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, `import ${JSON.stringify(options.entry)};\n`, "utf8");
-  return file;
+  await writeFile(file, result.code);
+  options.files[options.exportName] = `${options.key}/${options.exportName}`;
 }
 
 /**
@@ -587,7 +693,13 @@ async function bundlePackageOnce(
   const outDir = join(options.cacheRoot, key);
   const manifestPath = join(outDir, ".files.json");
   options.log?.(`[bundle-rev] ${options.name}: hash-start watch=${options.watch.join(",")}\n`);
-  const rev = `${BUNDLER_REV}:${await fingerprint(options.watch)}`;
+  // **包根路径**也进指纹（与出口无关，同一包的各个出口共享）：入口是包根下的相对位置，包跟着 app
+  // 换目录后路径变了，只算内容就会复用上一套产物——CJS shim 里的相对路径指向的入口已经不在了。
+  const rootRev = createHash("sha1")
+    .update(dirname(options.watch[0] ?? options.manifestOf ?? ""))
+    .digest("hex")
+    .slice(0, 8);
+  const rev = `${BUNDLER_REV}:${rootRev}:${await fingerprint(options.watch)}`;
   options.log?.(`[bundle-rev] ${options.name}: hash=${rev}\n`);
   const cached = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     rev?: string;
@@ -618,6 +730,23 @@ async function bundlePackageOnce(
       },
     },
     browserProcessPlugin(await clientBuildMeta(options.repoRoot)),
+    // 裸说明符的样式引用（`katex/dist/katex.min.css`）先解析成真实文件：否则外置插件会把它当
+    // 包边界、改写成联邦 URL，浏览器按 ESM import 一个 `text/css` 响应直接报 MIME 错误。
+    // 解析成文件后由 `cssInlinePlugins` 在**引用方**产物里内联（JS 里的 CSS import 行为不变）。
+    {
+      name: "dsh-css-specifiers",
+      resolveId(source: string, importer: string | undefined): string | undefined {
+        if (!source.endsWith(".css") || source.startsWith(".") || source.startsWith("/")) {
+          return undefined;
+        }
+        try {
+          return createRequire(importer ?? join(options.repoRoot, "package.json")).resolve(source);
+        } catch {
+          return undefined;
+        }
+      },
+    },
+
     cssInlinePlugins({
       name: key,
       assets: "threshold",
@@ -642,32 +771,54 @@ async function bundlePackageOnce(
     esmExternalRequirePlugin({
       // **外置名单 = 这条链认识的那些包**（包名 → 版本表的键），node 内置除外（它们走替身）。
       // 不是包的（相对路径、内置、虚拟模块）留在产物里内联。
+      // 入口就是本包：它不能被外置成自己的 URL（否则入口解析会拿到 external，构建直接失败）。
       external: [...resolvable.keys()]
-        .filter((name) => !NODE_BUILTIN.test(name))
+        .filter((name) => !NODE_BUILTIN.test(name) && name !== options.name)
         .map((name) => barePackageRegExp(name)),
     }),
   ];
   const startedAt = Date.now();
   options.log?.(`[bundle-build] ${options.name}: rolldown start\n`);
-  // 入口补偿：CJS 要带具名导出的包装；CSS 不能直接当入口（vite 的库模式 `cssCodeSplit: false`，
-  // 明确拒绝 `rolldownOptions.input` 里出现 CSS 文件），包一层 side-effect import 让样式插件处理它。
+  // 入口：调用方已经按清单解析好（`exports` 条件 / `module` / `main`），这里按模块类型决定直通 / CJS 包装 /
+  // CSS 产物。CSS 用虚拟空模块占位（rolldown 的入口管线只吃 JS 文件名），产物在构建后由 `bundleStyleOf` 写。
   const input: Record<string, string> = {};
-  // 「CJS 包的 ESM 便利入口」这一形态要补一个 default（判据见 `needsCjsInterop`），补的时机在产物生成之后。
-  let interopExport: string | undefined;
+  const entryShims = new Map<string, string>();
+  const styleEntries = new Map<string, string>();
   for (const [exportName, entry] of Object.entries(options.input)) {
-    if (await needsCjsInterop(entry, exportName)) interopExport = exportName;
-    input[exportName] =
-      (await cjsShimOf({
+    const kind = await moduleKindOf(entry);
+    if (kind === "cjs") {
+      const shim = await cjsShimOf({
         name: options.name,
         exportName,
         entry,
+        from: entry,
         ...(options.log === undefined ? {} : { log: options.log }),
-        outDir,
-      })) ??
-      (await cssShimOf({ exportName, entry, outDir })) ??
-      entry;
+      });
+      if (shim !== undefined) entryShims.set(shim.id, shim.code);
+      input[exportName] = shim?.id ?? entry;
+      continue;
+    }
+    if (kind === "style") {
+      styleEntries.set(exportName, entry);
+      const styleId = `\0dsh-style:${options.name}:${exportName}:entry`;
+      entryShims.set(styleId, "export {};\n");
+      input[exportName] = styleId;
+      continue;
+    }
+    input[exportName] = entry;
   }
-  if (interopExport !== undefined) plugins.push(cjsInteropPlugin(interopExport));
+  if (entryShims.size !== 0) {
+    plugins.push({
+      name: "dsh-entry-shims",
+      resolveId(source: string): string | undefined {
+        return entryShims.has(source) ? source : undefined;
+      },
+      load(source: string): string | undefined {
+        return entryShims.get(source);
+      },
+    });
+  }
+
   // **直接跑 rolldown**（不经过 `vite build`）：插件本来就是 rolldown 的接口，而 vite 在这条路上只提供了
   // lib 模式的入口/输出命名与 `worker.format`——那几项自己写更直接，且 `build.rolldownOptions` 里的
   // `transform` / `resolve` 也不会再被 vite 吞掉（对照表见债文档，那份债随这次改动一起销）。
@@ -742,8 +893,11 @@ async function bundlePackageOnce(
   // 目录会把另一个进程刚写的产物一起带走，表现为偶发 404。产物名本身带语义（出口名 / 资产 hash），直接
   // 覆盖即可；旧的字节留在盘上不碍事。
   await mkdir(outDir, { recursive: true });
+  const styleExports = new Set(styleEntries.keys());
   for (const item of items) {
     if (item.type !== "chunk") continue;
+    // CSS 出口的 JS 占位不落盘：它只是让 rolldown 完成入口解析。
+    if (item.isEntry && styleExports.has(item.name)) continue;
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），落盘要先把父目录建出来。
     await mkdir(dirname(join(outDir, item.fileName)), { recursive: true });
     await writeFile(join(outDir, item.fileName), item.code, "utf8");
@@ -759,6 +913,9 @@ async function bundlePackageOnce(
     await mkdir(dirname(join(outDir, asset.fileName)), { recursive: true });
     await writeFile(join(outDir, asset.fileName), asset.source ?? "");
     files[asset.fileName] = `${key}/${asset.fileName}`;
+  }
+  for (const [exportName, entry] of styleEntries) {
+    await bundleStyleOf({ entry, exportName, outDir, key, files });
   }
   await writeFile(manifestPath, `${JSON.stringify({ rev, files }, null, 2)}\n`, "utf8");
   // 指纹进地址用的表（{@link revs}）：**每次构建后更新**——同一会话里后构建的产物引用它时就能带上
