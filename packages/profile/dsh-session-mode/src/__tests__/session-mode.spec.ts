@@ -14,6 +14,10 @@ import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/se
 import * as plugin from "../index.ts";
 import { sessionModeEditableProjection } from "../index.ts";
 import type { Config, SessionMode, SessionModeRole } from "../modes.ts";
+import { pinDshHome } from "./dsh-home.ts";
+
+// 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
+pinDshHome();
 
 const contexts: Context[] = [];
 
@@ -122,6 +126,28 @@ function installFakeRegistry(ctx: Context, options: { composedPreset?: string } 
   return picked;
 }
 
+// 模式定义收敛到 `{dshHome}/modes/*.toml` 之后，行 config 只带 `default`：内置默认必须在**构造期校验之前**就位，
+// 否则装配会在 `modes must declare at least one mode` 上直接失败（整行不激活，GUI 起不来）。
+// 切模式 = 同一实例上的第二次 `apply`：旧的必须**同步**收干净，否则第二次注册会撞
+// `tool "describe_tool" is already registered in this scope`（线上 409 就是这条）。
+describe("同一实例重装", () => {
+  it("切模式（第二次 apply）不撞名", async () => {
+    const { ctx, agent } = await mount();
+
+    expect(() => { ctx.sessionModes.applyTo(agent, "chat"); }).not.toThrow();
+    expect(() => { ctx.sessionModes.applyTo(agent, "coding"); }).not.toThrow();
+  });
+});
+
+describe("行 config 不带 modes（生产形态）", () => {
+  it("内置默认 coding / chat / noop 就位，默认模式也是其中之一", async () => {
+    const { ctx } = await mount({ default: "coding", modes: {} });
+
+    expect(ctx.sessionModes.list().map((row) => row.id).sort()).toEqual(["chat", "coding", "noop"]);
+    expect(ctx.sessionModes.defaultId).toBe("coding");
+  });
+});
+
 // 一个 config 想装载就必须被拒绝：装配期校验（`configProblem`）在构造函数里抛。
 async function expectRefused(config: Config, reason: string): Promise<void> {
   const ctx = new Context();
@@ -138,9 +164,11 @@ async function assembled(ctx: Context, agent: Agent) {
 
 // 模型目录 = 注册表视图（收窄落在 `tools.restrict` 上，装配瀑布里不再带工具声明）。
 function visibleToolNames(ctx: Context, agent: Agent): string[] {
+  // `describe_tool` 是本插件在 PTC 下常驻的控制工具，不参与"模式收窄"的断言。
   return ctx.tools
     .schemas(agent)
     .map((tool) => tool.name)
+    .filter((name) => name !== "describe_tool")
     .toSorted();
 }
 
@@ -183,8 +211,8 @@ describe("会话模式的 persona", () => {
       modes: { ...CONFIG.modes, coding: { ...CONFIG.modes["coding"]!, allowTools: [] } },
     });
 
-    // 宿主平面装了三件（`read` / `web_search` / `send_message`）：留空就是一件都不砍。
-    expect(visibleToolNames(ctx, agent)).toEqual(["read", "send_message", "web_search"]);
+    // 宿主平面装了 `read` / `send_message` 这类常驻工具（`web` 是按需组，默认不放行），外加两个组控制工具。
+    expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
   });
 
   it("装配是幂等的：同一个模式反复装配不会重复注册", async () => {
@@ -540,8 +568,9 @@ describe("模式的角色与默认模型", () => {
 describe("默认模型住在模式定义里", () => {
   it("模式清单与默认模式是 volatile，默认模型跟着模式一起上页面", () => {
     expect(plugin.Config.dict?.["default"]?.meta.volatile).toBe(true);
-    expect(plugin.Config.dict?.["modes"]?.meta.volatile).toBe(true);
-    // 顶层不再有那份映射；`defaultModel` 不单独标 volatile（外层 modes 已经是）。
+    // 模式清单不再走 cordis 配置（内置默认 + `{dshHome}/modes/*.toml`），因此不是 volatile 字段。
+    expect(plugin.Config.dict?.["modes"]?.meta.volatile).not.toBe(true);
+    // 顶层不再有那份映射；`defaultModel` 不单独标 volatile。
     expect(plugin.Config.dict?.["models"]?.meta.volatile).not.toBe(true);
     expect(volatileForm(plugin.Config as never)).toBeDefined();
   });

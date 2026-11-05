@@ -20,6 +20,10 @@
 - 预演：`pnpm dlx @oxc-node/cli devpackages/typert-generator/src/cli.ts vendor/deepseek-harness target/dts [包名…]`。
 - 判据与用例在 [`src/__tests__/`](../../src/__tests__)（`generate.spec.ts`、`reflection.spec.ts`、
   `schema.spec.ts`、`upstream-fixtures.spec.ts` 与快照）。
+- **wire 上能否缺省一个 JSON 参数，看类型里有没有 `undefined`**：`options?: T` 与 `expectedRevision: number | undefined`
+  都算（与上游 `typert/generator` 的 `includesRemoteAbsence` 同判据）。只按签名里的 `?` 判会漏掉后者：客户端省略实参时
+  不写这个键（`api/gateway` 的 client 侧跳过 `undefined`），descriptor 少了 `acceptsUndefined` 就被判
+  `missing "…"`——agent 预设页的「设为新任务默认」曾整条报这个错。
 
 ## 取舍
 

@@ -27,8 +27,9 @@ prepare:
     just vendor prebuild
 
 # Computer Use 的 native 载荷（`native/bin/darwin-<arch>/current.json`）：上游把 `native/bin/` 加进了
-# .gitignore，源码树里 dev 走现场编译，而**装进 app 的闭包**只认这份发布产物。桌面打包前跑一次
-# （macOS + Xcode；`just custom bundle` 会在缺它时直接报错）。
+# .gitignore，源码树里 dev 走现场编译，而**装进 app 的闭包**只认这份发布产物。只有 profile 还挂
+# `@deepseek-ai/dsh-cua-bundle` 时才需要在打包前跑一次（macOS + Xcode；缺了它 `just custom bundle`
+# 会在闭包里拦下来）。
 native-cua:
     pnpm --filter @deepseek-ai/dsh-experimental-cua-macos run build:native
 
@@ -64,6 +65,11 @@ publish *args:
     pnpm -r --filter './packages/*/*' --workspace-concurrency=1 exec dshdev publish {{ args }}
 
 publish-npm: (publish '--registry https://registry.npmjs.org/')
+
+# 全仓声明树（`target/dts`）：构建与 typert 生成共用同一份缓存。**新加包后它不会自动重建**（完成标记还在），
+# 于是构建会报「声明缺失」——这时跑这一条，不要手工删标记（标记由生成动作自己写）。
+dts:
+    pnpm exec node devpackages/dts-prepare/src/cli.ts
 
 # 全仓声明（一步、两个 face）：生成到 target/dts，各包构建只按路径取自己的那份来合并。
 # 插件包构建：`@deepseek-ai/*` 经 exports 指到 src 后，tsdown 加载 config（→ @local/devkit → 上游源码）

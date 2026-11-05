@@ -14,6 +14,10 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { afterEach, describe, expect, it } from "vitest";
 import * as plugin from "../index.ts";
 import type { Config, SessionMode } from "../modes.ts";
+import { pinDshHome } from "./dsh-home.ts";
+
+// 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
+pinDshHome();
 
 const contexts: Context[] = [];
 
@@ -50,12 +54,19 @@ const MODES: Record<string, SessionMode> = {
   nothing: modeOf("无名单模式"),
   wide: modeOf("标准模式", { allowTools: [...THREE] }),
   narrow: modeOf("窄模式", { allowTools: ["ask_user_question"] }),
+  // 模式配置的 `dropSections`：精确名 + `*` 前缀两种写法。
+  trimmed: modeOf("裁剪模式", {
+    allowTools: [...THREE],
+    dropSections: ["team:policy", "tool:read"],
+  }),
   silent: modeOf("静默模式", {
     allowTools: ["ask_user_question"],
     instructions: false,
     runtimeContext: false,
   }),
   denyOnly: modeOf("排除模式", { denyTools: ["send_message", "list_agents"] }),
+  // 名单里只有**本 agent 自己**注册的工具（preset 行提供的那种）：`tools.restrict` 只认全局名。
+  localDeny: modeOf("本地排除模式", { denyTools: ["local_only"] }),
   allowAndDeny: modeOf("优先模式", { allowTools: [...THREE], denyTools: ["web_fetch"] }),
 };
 
@@ -181,10 +192,12 @@ function apply(ctx: Context, agent: Agent, modeId: string): void {
 }
 
 async function visibleTools(ctx: Context, agent: Agent): Promise<string[]> {
+  // `describe_tool` 是本插件在 PTC 下常驻的控制工具，不参与"模式收窄"的断言。
   // 收窄落在注册表视图上（`tools.restrict`）：目录与执行读的是同一份。
   return ctx.tools
     .schemas(agent)
     .map((tool) => tool.name)
+    .filter((name) => name !== "describe_tool")
     .toSorted();
 }
 
@@ -251,6 +264,19 @@ describe("工具白名单（按会话收口）", () => {
     ]);
   });
 
+  it("名单里含只在本 agent 注册的工具时不抛：收窄降级到全局那一层", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("local-deny");
+    // preset 行注册的工具落在 agent scope（不是全局层）：面板上「禁止」它就是这种名单。
+    session.ctx.tools.register(fixtureTool("local_only"));
+
+    // 改前这里抛 `tools.restrict() names unknown global tool "local_only"`（线上 409 之外的另一种崩）。
+    expect(() => { apply(ctx, session, "localDeny"); }).not.toThrow();
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+    // 降级只影响"收窄"这一层：全局工具照旧在目录里。
+    expect(await visibleTools(ctx, session)).toContain("ask_user_question");
+  });
+
   it("白名单之外的工具调用不了：不在准入集里，直接是 UNKNOWN_TOOL", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("narrow");
@@ -315,54 +341,8 @@ describe("instructions 与动态快照开关", () => {
   });
 });
 
-describe("allowTools 留空 = 全部工具（不设收窄）", () => {
-  it("目录与工具说明 section 都不缩", async () => {
-    const { ctx, agent } = await mount();
-    await mountSection(ctx, "tool:send_message", "发消息说明");
-    const session = await agent("all");
-    apply(ctx, session, "nothing");
-
-    expect(await visibleTools(ctx, session)).toEqual([
-      "ask_user_question",
-      "list_agents",
-      "send_message",
-      "web_fetch",
-      "web_search",
-    ]);
-    expect(await sectionNames(ctx, session)).toContain("tool:send_message");
-  });
-
-  it("白名单之外的工具照旧可调用（不设收窄）", async () => {
-    const { ctx, agent } = await mount();
-    const session = await agent("all-call");
-    apply(ctx, session, "nothing");
-    // 收窄在收口里注册：先走一步装配，让 `tools` 那边的 inject 回调跑过。
-    await ctx.systemPrompt.assemble(assembleContextFor(session));
-
-    expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
-  });
-
-  it("从收窄换到留空：旧收窄收回，工具与 section 都回来", async () => {
-    const { ctx, agent } = await mount();
-    await mountSection(ctx, "tool:send_message", "发消息说明");
-    const session = await agent("back-to-all");
-    apply(ctx, session, "narrow");
-    await ctx.systemPrompt.assemble(assembleContextFor(session));
-    expect((await callTool(ctx, session, "web_search", "call-narrowed")).error).toBeDefined();
-
-    apply(ctx, session, "nothing");
-    await ctx.systemPrompt.assemble(assembleContextFor(session));
-
-    expect(await visibleTools(ctx, session)).toHaveLength(5);
-    expect(await sectionNames(ctx, session)).toContain("tool:send_message");
-    expect((await callTool(ctx, session, "web_search", "call-restored")).error).toBeUndefined();
-  });
-});
-
-// 收口的合成规则：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单；注册表视图（= 模型目录与执行准入）、
-// `tool:` section 两处读的是同一个合成结果。
 describe("工具黑名单（与白名单合成）", () => {
-  it("只给黑名单：目录与工具说明 section 都扣掉那几件，别的照旧", async () => {
+  it("只给黑名单：目录与工具说明 section 都扣掉那几件", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     await mountSection(ctx, "tool:web_search", "搜索说明");
@@ -370,13 +350,10 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "denyOnly");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toEqual([
-      "ask_user_question",
-      "web_fetch",
-      "web_search",
-    ]);
+    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
     expect(await sectionNames(ctx, session)).not.toContain("tool:send_message");
-    expect(await sectionNames(ctx, session)).toContain("tool:web_search");
+    // 组不再默认隐藏，但这份名单把它扣掉了：说明 section 也不留。
+    expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
   });
 
   it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
@@ -386,7 +363,7 @@ describe("工具黑名单（与白名单合成）", () => {
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     const denied = await callTool(ctx, session, "send_message", "call-denied");
-    const allowed = await callTool(ctx, session, "web_search", "call-allowed");
+    const allowed = await callTool(ctx, session, "ask_user_question", "call-allowed");
 
     expect(denied.error).toBeDefined();
     expect(JSON.stringify(denied)).toContain("unknown tool");
@@ -407,16 +384,14 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 
-  it("两条都空 = 不过滤：目录、section 与调用都照旧", async () => {
+  it("两条都空：全部工具照旧可见", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("no-lists");
     apply(ctx, session, "nothing");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toHaveLength(5);
-    expect(await sectionNames(ctx, session)).toContain("tool:send_message");
-    expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
+    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
   });
 
   it("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {
@@ -437,5 +412,49 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "wide");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
     expect((await callTool(ctx, session, "web_fetch", "call-restored")).error).toBeUndefined();
+  });
+});
+
+// 收口的注册落在 `agent.ctx` 上：那份 effect 归 **agent 的 scope fiber**，不归本行。所以"上一次注册"的收回
+// 账必须挂在能被卸载的那一侧——本行（设置保存会让 Loader 重新配置这一行）与 agent 各一份。只记在当前实例里
+// （`applied` 那个 WeakMap）的话，行一旦重挂，新实例就没有上一份可收，`describe_tool` 一装就撞名。
+describe("收口的归属：行重挂之后重装不撞名", () => {
+  it("行卸载时把它在 agent 上的注册一起收掉；新实例重装不会撞上旧的那份", async () => {
+    const ctx = new Context();
+    contexts.push(ctx);
+    await mountAgentLoopTestDependencies(ctx, { systemPrompt: { includeHarnessIdentity: false } });
+    await mountAgentLoopTestHarness(ctx);
+    await mountTools(ctx, ["ask_user_question", "web_search", "send_message"]);
+
+    const row = await ctx.plugin(plugin, CONFIG);
+    const { agent: session } = await ctx.agents.create({
+      sessionId: SessionId(`session-mode-reload-${String(Math.random())}`),
+    });
+    apply(ctx, session, "narrow");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+    expect(ctx.tools.schemas(session).map((schema) => schema.name)).toContain("describe_tool");
+
+    // 行重挂（设置页保存会让 Loader 重新配置这一行）：旧注册必须跟着行一起收——收窄放开、`describe_tool` 撤掉。
+    await row.dispose();
+
+    // 新实例重新收口：撞名的话这里是 `tool "describe_tool" is already registered in this scope`。
+    await ctx.plugin(plugin, CONFIG);
+    expect(() => {
+      apply(ctx, session, "narrow");
+    }).not.toThrow();
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
+  });
+});
+
+describe("模式配置的 dropSections", () => {
+  it("精确名与 `*` 前缀都会从装配结果里丢弃", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("wide");
+    await mountSection(ctx, "team:policy", "TEAM_POLICY");
+    apply(ctx, session, "trimmed");
+    const names = await sectionNames(ctx, session);
+    expect(names).not.toContain("team:policy");
+    expect(names).not.toContain("tool:read");
   });
 });

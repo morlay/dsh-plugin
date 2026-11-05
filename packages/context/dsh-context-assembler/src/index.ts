@@ -43,12 +43,16 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config): void {
   const channel = new ContextAssembler(ctx);
   const keep = new Set(config.keep ?? DEFAULT_KEEP);
-  for (const name of config.suppress ?? DEFAULT_SUPPRESS) channel.suppressSection(name);
-  for (const [name, text] of Object.entries(config.replace ?? DEFAULT_REPLACE)) {
+  const suppress = config.suppress ?? DEFAULT_SUPPRESS;
+  const replace = config.replace ?? DEFAULT_REPLACE;
+  for (const name of suppress) channel.suppressSection(name);
+  for (const [name, text] of Object.entries(replace)) {
     channel.replaceSection(name, text);
   }
-
-  ctx.systemPrompt.section({ name: RULES_SECTION, order: RULES_ORDER, text: RULES_TEXT });
+  // 三段清单都显式留空 = 上游原版：不降级、不抑制、不换文案，规则声明也不注册。
+  if (keep.size > 0 || suppress.length > 0 || Object.keys(replace).length > 0) {
+    ctx.systemPrompt.section({ name: RULES_SECTION, order: RULES_ORDER, text: RULES_TEXT });
+  }
 
   ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
     const result = await next();
@@ -64,7 +68,8 @@ export function apply(ctx: Context, config: Config): void {
       }
       const text = channel.replacement(section.name) ?? section.text;
       if (text !== section.text) changed = true;
-      if (keep.has(section.name) || text.length === 0) {
+      // `keep` 显式留空 = 全部保留（只在有白名单时才把其余 section 降级成 reminder）。
+      if (keep.size === 0 || keep.has(section.name) || text.length === 0) {
         sections.push(text === section.text ? section : { ...section, text });
         continue;
       }

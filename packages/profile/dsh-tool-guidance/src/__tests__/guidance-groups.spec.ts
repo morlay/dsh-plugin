@@ -1,131 +1,102 @@
+// 单层工具组：key / 工具名唯一、每组有中文名与 guideline、injection 只能是 init | on-demand、
+// base 是唯一的常驻组，正文按可见工具过滤。
 import { describe, expect, it } from "vitest";
 import {
-  BASE_GROUP_KEY,
-  GROUP_KEYS,
   SHORT_TOOL_DESCRIPTIONS,
   TOOL_GROUPS,
+  TOOLS_SDK_INTERFACE,
   groupByKey,
   groupSkillBody,
+  renderToolKey,
+  renderToolsDeclaration,
   skillNameOf,
 } from "../guidance/groups.ts";
+import { assertGroupsUnique } from "../guidance/packs/index.ts";
 
-describe("组表", () => {
-  it("每个组都带中文名、skill 摘要与正文，且四组齐备", () => {
-    expect(groupByKey(BASE_GROUP_KEY).title).toBe("基础");
-    for (const key of GROUP_KEYS) {
-      const group = groupByKey(key);
-      expect(group.title.length).toBeGreaterThan(0);
-      expect(group.skillDescription.length).toBeGreaterThan(0);
-      expect(group.lines.length).toBeGreaterThan(0);
-      expect(group.tools.length).toBeGreaterThan(0);
-    }
-    expect(TOOL_GROUPS.map((group) => group.key)).toEqual([...GROUP_KEYS]);
-    expect(skillNameOf("flow")).toBe("tool-group-flow");
+describe("工具组表", () => {
+  it("key 与工具名都唯一", () => {
+    expect(() => {
+      assertGroupsUnique();
+    }).not.toThrow();
+    expect(() => {
+      assertGroupsUnique([
+        { ...TOOL_GROUPS[0]!, key: "dup", tools: [] },
+        { ...TOOL_GROUPS[0]!, key: "dup", tools: [] },
+      ]);
+    }).toThrow(/duplicate group key/);
   });
 
-  it("base 的身份用组 key 表达（常驻注入只认它，不再有 `injection` 字段）", () => {
-    expect(BASE_GROUP_KEY).toBe("base");
-    expect(TOOL_GROUPS.filter((group) => group.key === BASE_GROUP_KEY)).toHaveLength(1);
-    expect(groupByKey(BASE_GROUP_KEY).drops.length).toBeGreaterThan(0);
-  });
-
-  it("联网工具在 base 组：搜索与抓取是同一件事的两半", () => {
-    expect(groupByKey("base").tools).toContain("web_search");
-    expect(groupByKey("base").tools).toContain("web_fetch");
-    expect(GROUP_KEYS).not.toContain("web");
-  });
-
-  it("丢弃清单里一个 section 只归一个组", () => {
-    const owners = new Map<string, string[]>();
+  it("每组都有中文名、guideline，且 injection 合法", () => {
     for (const group of TOOL_GROUPS) {
-      for (const name of group.drops) {
-        owners.set(name, [...(owners.get(name) ?? []), group.key]);
-      }
-    }
-
-    expect([...owners].filter(([, groups]) => groups.length > 1)).toEqual([]);
-  });
-
-  it("协作规则随 team 组一起丢弃：要点已写进它的正文", () => {
-    expect(groupByKey("team").drops).toContain("team:policy");
-    expect(groupSkillBody(groupByKey("team"))).toContain("只在用户明确要求时才招募队友");
-  });
-
-  it("team 组只列团队插件独有的工具（同名工具归派发组）", () => {
-    const team = groupByKey("team");
-    const delegation = groupByKey("delegation");
-
-    expect(team.tools).toContain("spawn_teammate");
-    // 子代理控制行也提供这三个同名工具：它们的说明归派发组，不进 team 组。
-    for (const shared of ["send_message", "list_agents", "interrupt_agent"]) {
-      expect(delegation.tools).toContain(shared);
-      expect(team.tools).not.toContain(shared);
+      expect(group.title.length).toBeGreaterThan(0);
+      expect(group.guideline.length).toBeGreaterThan(0);
+      expect(["init", "on-demand"]).toContain(group.injection);
     }
   });
 
-  it("派发组讲子代理（不是队友）：同名工具的说明归它", () => {
-    const body = groupSkillBody(groupByKey("delegation"));
-
-    expect(body).toContain("- subagent：派发子代理");
-    expect(body).toContain("send_message：给子代理发消息");
-    expect(body).not.toContain("队友");
-  });
-
-  it("每个归组的工具都有中文短描述", () => {
-    const missing = TOOL_GROUPS.flatMap((group) => group.tools).filter(
-      (tool) => SHORT_TOOL_DESCRIPTIONS[tool] === undefined,
+  it("init 组就是那几个基础域，其余按需", () => {
+    const init = TOOL_GROUPS.filter((group) => group.injection === "init").map(
+      (group) => group.key,
     );
+    expect(init.sort()).toEqual(["ask", "code", "fs", "shell", "skill"]);
+    const lazy = TOOL_GROUPS.filter((group) => group.injection === "on-demand").map(
+      (group) => group.key,
+    );
+    expect(lazy.sort()).toEqual(["mcp", "plan", "swarm", "web-access"]);
+  });
 
+  it("每个工具都有中文短描述", () => {
+    const missing = TOOL_GROUPS.flatMap((group) => group.tools).filter(
+      ({ tool }) => (SHORT_TOOL_DESCRIPTIONS[tool] ?? "").length === 0,
+    );
     expect(missing).toEqual([]);
   });
 
-  it("短描述明显短于上游原描述的量级（只讲做什么）", () => {
-    for (const [toolName, description] of Object.entries(SHORT_TOOL_DESCRIPTIONS)) {
-      expect(description.length, toolName).toBeLessThanOrEqual(24);
-    }
+  it("组 skill 的名字带前缀", () => {
+    expect(skillNameOf("fs")).toBe("tool-group-fs");
   });
 });
 
-describe("组 skill 正文", () => {
-  it("是 markdown 列表：一行一条，直接讲怎么用", () => {
-    const body = groupSkillBody(groupByKey("base"));
+describe("groupSkillBody", () => {
+  it("按可见工具过滤正文行", () => {
+    const fs = groupByKey("fs");
+    const all = groupSkillBody(fs);
+    const onlyRead = groupSkillBody(fs, (tool) => tool === "read");
+    expect(onlyRead.length).toBeLessThan(all.length);
+    expect(onlyRead).toContain("read：");
+    expect(onlyRead).not.toContain("web_search：");
+  });
 
-    expect(body.split("\n").every((line) => line.startsWith("- "))).toBe(true);
-    expect(body).toContain("- read：读文本文件");
-    expect(body).not.toContain("【基础】");
+  it("未知组抛错", () => {
+    expect(() => groupByKey("nope")).toThrow(/unknown group/);
   });
 });
 
-describe("正文按可见工具修剪（base 常驻注入传的就是那份装配目录）", () => {
-  it("只装了提问与联网三件时，讲别的工具的行消失", () => {
-    // chat 形态：这个会话装配结果里就这三个工具。
-    const visible = (tool: string): boolean =>
-      ["ask_user_question", "web_search", "web_fetch"].includes(tool);
-    const body = groupSkillBody(groupByKey("base"), visible);
-    const lines = body.split("\n");
-
-    expect(lines.some((line) => line.includes("web_search："))).toBe(true);
-    expect(lines.some((line) => line.includes("web_fetch："))).toBe(true);
-    expect(lines.some((line) => line.includes("ask_user_question："))).toBe(true);
-    for (const gone of [
-      "read：",
-      "write：",
-      "edit：",
-      "glob：",
-      "grep：",
-      "bash：",
-      "后台任务",
-      "read_image：",
-    ]) {
-      expect(lines.some((line) => line.includes(gone))).toBe(false);
-    }
+// MCP 的工具名带 `-`：裸写成函数声明就是非法 TS，模型照抄会直接 SyntaxError。
+describe("工具签名块", () => {
+  it("合法标识符裸写，其余加引号", () => {
+    expect(renderToolKey("read")).toBe("read");
+    expect(renderToolKey("mcp__agent-browser__agent_browser_open")).toBe(
+      '"mcp__agent-browser__agent_browser_open"',
+    );
   });
 
-  it("不传谓词时是完整版（注册进官方目录的组用它）", () => {
-    const body = groupSkillBody(groupByKey("base"));
-    const lines = body.split("\n");
-
-    expect(lines.length).toBeGreaterThan(5);
-    expect(lines.some((line) => line.includes("read："))).toBe(true);
+  it("成员挂在可合并的接口上，非常规名字用索引访问", () => {
+    const text = renderToolsDeclaration([
+      { name: "read", args: "{ path: string }", output: "{ text: string }", doc: "读文本文件" },
+      { name: "mcp__agent-browser__open", args: "{ url: string }", output: "unknown" },
+    ]);
+    expect(text).toBe(
+      [
+        "declare global {",
+        `  interface ${TOOLS_SDK_INTERFACE} {`,
+        "    /** 读文本文件 */",
+        "    read(args: { path: string }): Promise<{ text: string }>",
+        '    "mcp__agent-browser__open"(args: { url: string }): Promise<unknown>',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    expect(text).not.toContain("function ");
   });
 });

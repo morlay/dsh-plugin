@@ -79,51 +79,12 @@ describe("host 平面的那几行", () => {
 });
 
 describe("模式定义", () => {
-  it("三个模式都不写 `presetsOnly`；`chat` 只写着 `allowTools` 三件，`coding` 收窄官方 Office 面", () => {
-    const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
-      | Record<
-          string,
-          {
-            presetsOnly?: readonly string[];
-            allowTools?: readonly string[];
-            denyTools?: readonly string[];
-            allowSkills?: readonly string[];
-            denySkills?: readonly string[];
-          }
-        >
-      | undefined;
+  // 模式定义已收敛到能力包的内置默认（`MODE_SOURCES`）与 `{dshHome}/modes/*.toml`：行 config 只带 `default`，
+  // 三个模式的扩展定义不在 patch 里——那几条事实的判据在 `packages/profile/dsh-session-mode/src/__tests__/mode-sources.spec.ts`。
+  it("行 config 只带 `default`，不铺模式定义", () => {
+    const config = sessionModeRows()[0]?.insert?.[0]?.config;
 
-    expect(Object.keys(modes ?? {}).sort()).toEqual(["chat", "coding", "noop"]);
-    for (const [id, mode] of Object.entries(modes ?? {})) {
-      // 不写 `presetsOnly`：不限制会话挂哪份 preset（用户选的 shipped preset 不被模式覆盖）。
-      expect(mode.presetsOnly, id).toBeUndefined();
-    }
-    // `coding` 不设工具白名单（用 preset 的全部工具），只排除两件：官方 Office 组合里的载荷查询，以及
-    // 插件管理工具（`plugin_manager`——装/卸/启停会改整个 profile 的行，模型不该在一个会话里随手动）。
-    // 技能面按名排除官方那三件（技能目录不列、`skill` 工具加载被拒）。
-    expect(modes?.["coding"]?.allowTools).toBeUndefined();
-    expect(modes?.["coding"]?.denyTools).toEqual(["load_workspace_dependencies", "plugin_manager"]);
-    expect(modes?.["coding"]?.allowSkills).toBeUndefined();
-    expect(modes?.["coding"]?.denySkills).toEqual(["office-docx", "office-pptx", "office-xlsx"]);
-    // `chat` 收成提问 + 联网三件，技能与工具名单都不再另配。
-    expect(modes?.["chat"]?.allowTools).toEqual(["ask_user_question", "web_search", "web_fetch"]);
-    expect(modes?.["chat"]?.denyTools).toBeUndefined();
-    expect(modes?.["chat"]?.denySkills).toBeUndefined();
-    // `noop` 什么都不配：名单留空 = 不设收窄，装配结果与"没有模式"一致。
-    expect(modes?.["noop"]).toMatchObject({ name: "原样模式", role: ["main", "subagent"] });
-    expect(Object.keys(modes?.["noop"] ?? {}).sort()).toEqual(["description", "name", "role"]);
-  });
-
-  it("policy 拦截进 config：`coding` 禁掉上游的「先读后改」与写路径的意图判定", () => {
-    const modes = sessionModeRows()[0]?.insert?.[0]?.config?.["modes"] as
-      | Record<string, { allowPolicies?: readonly string[]; denyPolicies?: readonly string[] }>
-      | undefined;
-
-    // 两条上游规则都进黑名单：改路径的免「先读后改」，写路径的免意图判定。
-    expect(modes?.["coding"]?.denyPolicies).toEqual(["fs/edit-intent", "fs/write-intent"]);
-    expect(modes?.["coding"]?.allowPolicies).toBeUndefined();
-    // `chat` 一条 policy 都不配：没有文件工具，两条都碰不到。
-    expect(modes?.["chat"]?.denyPolicies).toBeUndefined();
-    expect(modes?.["chat"]?.allowPolicies).toBeUndefined();
+    expect(config).toEqual({ default: "coding" });
+    expect(config?.["modes"]).toBeUndefined();
   });
 });

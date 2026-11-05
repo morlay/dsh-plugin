@@ -1,6 +1,5 @@
-// client 半：会话里那一个面（模式 chip，槽位 `conversation.input.left`，list + session scope）+ 配置面两处——
-// 本行自己那页（由 `@morlay/dsh-client-ui-primitives` 按 schema 自动生成，key = `<bundle 包名>#<行 id>`）与
-// 装本行的 bundle 那一页（`plugins.bundle.config`，key = bundle 包名，见 `./BundleConfigPage.tsx`）。
+// client 半：会话里那一个面（模式 chip，槽位 `conversation.input.left`，list + session scope）。bundle 配置页
+// 不再注册——模式与它的生效面（工具 / 技能 / policy / 系统提示词）改在侧边栏面板里按会话展示。
 
 import type { Context } from "@deepseek-ai/cordis";
 // Type-only：`ctx.remote` 的合并面（选模型的候选来自 LLM 目录）。
@@ -11,37 +10,34 @@ import type {} from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 // Type-only：`plugins.bundle.config` 的槽位声明（bundle 详情页的配置座位）。
 import type {} from "@deepseek-ai/dsh-client-ui-plugin-manager/client";
+// Type-only：右栏 tab 的类型注册面（`ctx.sidebarRightTabs`）与座位声明。
+import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
 import {
   CATALOG_NS,
   SESSION_MODE_CATALOG_REMOTE,
   type SessionModeCatalogRemote,
 } from "../catalog-remote.ts";
 import { POLICY_NAMES } from "../shared.ts";
-import {
-  BUNDLE_CONFIG_KEY,
-  createBundleConfigFace,
-  SESSION_MODE_NS,
-  unwrapService,
-  type HintsLike,
-  type HintsService,
-} from "./bundle-config.ts";
-import { BundleConfigPage } from "./BundleConfigPage.tsx";
-import { BUNDLE_NS, bundleEn, bundleZh, type BundleLocaleKey } from "./bundle-locales.ts";
+import { SESSION_MODE_NS, unwrapService, type HintsService } from "./hints.ts";
 import { loadLlmProviders, remoteNamespace, type ProviderModels } from "./llm-directory.ts";
+import { SessionModePanel } from "./SessionModePanel.tsx";
 import { SessionModeSeat } from "./SessionModeSeat.tsx";
 import { en, zh, type SessionModeLocaleKey } from "./locales.ts";
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {
   interface LocaleNamespaceMap {
-    // 会话里两个面的文案（本行配置页的文案在通用 schema 表单的字典里）。
+    // 会话里那个面（模式 chip）的文案。
     "session-mode": SessionModeLocaleKey;
-    // bundle 配置页（`plugins.bundle.config`）的文案。
-    "session-mode-bundle": BundleLocaleKey;
+    // bundle 配置页的字典：页面已不再注册，类型面留着给保留的文件。
+    "session-mode-bundle": import("./bundle-locales.ts").BundleLocaleKey;
   }
 }
 
 // 浏览器半插件的字典命名空间。
 const NS = "session-mode";
+
+// 右栏 tab 类型的 id（也是正文座位的 key）：包名是天然的唯一值。
+const PANEL_ID = "@morlay/dsh-session-mode";
 
 // 这一行里需要中文文案的字段（都在 `modes.<模式>.defaultModel` 里，所以按模板路径注册一次）。
 const FIELDS = ["provider", "model", "reasoningEffort"] as const;
@@ -63,7 +59,6 @@ interface PresetRosterReader {
 
 export type { SessionModeSeatProps } from "./SessionModeSeat.tsx";
 export type { SessionModeLocaleKey } from "./locales.ts";
-export type { BundleConfigPageProps } from "./BundleConfigPage.tsx";
 
 // 需要的服务：槽位与字典（会话列表经槽位的标准 props 到达组件，不必自己 inject）；bundle 那页另要配置表单与
 // schema 服务，见下面那段注册自己的 `ctx.inject`。
@@ -253,51 +248,72 @@ export function apply(ctx: Context): void {
     }, "session-mode: composer chip");
   });
 
-  // 装本行的 bundle 那一页（`plugins.bundle.config`，key = bundle 包名）：本行是那份配置的 owner，页面摆的就是
-  // `modes` 与 `default` 这几项——按模式折叠分组而不是按 schema 平铺，所以它自带表单，不用自动生成那页。
-  // 提示面的候选（选服务商 / 选模型的两个具名源）可能比本页晚到，所以这一页自己重投影的入口留在外面：
-  // 提示面一到（或它的候选变了）就刷一次，模型那两个字段不会静默退回手输。
-  let refreshPage: (() => void) | undefined;
-  // 提示面按**属性访问**取（`ctx.get(name)` 给的是追踪代理，调带 JS 私有字段的方法会抛），存下来给下面那一页用。
-  let hints: HintsLike | undefined;
-  ctx.inject(["schemaFormHints"], (scope) =>
+  // 右栏面板（`sidebar.right.pane.tab`）：只展示这个会话**选中的模式**与它当下生效的那一份。注册是两段式——
+  // 类型进 `sidebarRightTabs`，正文进 keyed 座位（key = 类型 id）——与上游各 tab 类型走同一条路。
+  ctx.inject(["sidebarRightTabs", "slots", "locale"], (scope) =>
     scope.effect(() => {
-      // 订阅也要用解包后的实例（服务实现用 JS 私有字段，代理上的调用会抛）。
-      const service = unwrapHintService(scope);
-      hints = service;
-      const off = service.subscribe(() => {
-        refreshPage?.();
-      });
-      return () => {
-        off();
-        hints = undefined;
-      };
-    }, "session-mode: bundle page candidates"),
-  );
-
-  ctx.inject(["slots", "locale", "configForms", "settingsSchema"], (scope) => {
-    scope.effect(() => {
-      const bundleT = scope.locale.bind(BUNDLE_NS);
-      const { face, refresh, dispose } = createBundleConfigFace(scope, bundleT, () => hints);
-      refreshPage = refresh;
-      const bundleDictionary = scope.locale.register(BUNDLE_NS, { zh: bundleZh, en: bundleEn });
-      const off = scope.slots.inject("plugins.bundle.config", () =>
-        scope.slots.register(
+      const panelT = scope.locale.bind(NS);
+      const offType = scope.sidebarRightTabs.register({
+        id: PANEL_ID,
+        kind: PANEL_ID,
+        priority: "extension",
+        title: () => panelT("panel"),
+        // 右栏 guide 页上的一条入口：没有它，用户只能等自动打开才看得到这一页。
+        guide: [
           {
-            name: "plugins.bundle.config",
-            key: BUNDLE_CONFIG_KEY,
-            locale: BUNDLE_NS,
-            inject: () => face,
+            id: PANEL_ID,
+            order: 20,
+            title: () => panelT("panel"),
+            description: () => panelT("panelDescription"),
           },
-          BundleConfigPage,
+        ],
+      });
+      const body = scope.slots.inject("sidebar.right.pane.tab", () =>
+        scope.slots.register(
+          { name: "sidebar.right.pane.tab", key: PANEL_ID, locale: NS },
+          SessionModePanel,
         ),
       );
       return () => {
-        off();
-        bundleDictionary();
-        refreshPage = undefined;
-        dispose();
+        body();
+        offType();
       };
-    }, "session-mode: bundle configuration page");
-  });
+    }, "session-mode: sidebar panel"),
+  );
+
+  // 和新建对话联动：当前会话一变（新建或切换）就把面板带到右栏。右栏没挂载（窄屏/未装那一行）时不动；
+  // 同一 pane 内按 kind 单页，重复调用只是把已有那一页选中。
+  ctx.inject(["sidebarRight", "uiSession"], (scope) =>
+    scope.effect(() => {
+      const current = scope.uiSession.adapter.current;
+      // `mounted` 是右栏当前显示的会话：首帧与切换过程中它还没指向新会话，这时 `openTab` 会以
+      // "no session surface is mounted" 抛错。所以两路都订阅——会话换了自己不写，等右栏挂到这个会话
+      // 再打开（同一 pane 内按 kind 单页，重复调用只是选中）。
+      const mounted = scope.sidebarRight.mounted;
+      let queued = false;
+      const sync = (): void => {
+        if (queued) return;
+        queued = true;
+        // 推迟到本轮订阅回调结束之后：`publishMain` 期间 surface 还在切换，同步写会抛。
+        queueMicrotask(() => {
+          queued = false;
+          const key = current.getSnapshot().key;
+          if (typeof key !== "string" || key.length === 0) return;
+          if (mounted.getSnapshot() !== key) return;
+          try {
+            scope.sidebarRight.openTab(PANEL_ID);
+          } catch {
+            // 挂载与卸载之间仍可能撞上：下一次订阅回调会再试，这里不当作错误。
+          }
+        });
+      };
+      const offCurrent = current.subscribe(sync);
+      const offMounted = mounted.subscribe(sync);
+      sync();
+      return () => {
+        offCurrent();
+        offMounted();
+      };
+    }, "session-mode: panel follows the session"),
+  );
 }

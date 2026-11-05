@@ -429,6 +429,28 @@ function signatureParametersOf(source: string, member: Node): string {
     .join(", ");
 }
 
+/** 参数在 wire 上能不能缺：上游判据是**类型**里含 `undefined`（`typert/generator` 的
+ * `includesRemoteAbsence`），不是签名里的 `?` —— `expectedRevision: number | undefined` 这种显式
+ * `undefined` 联合同样可缺省。客户端省略实参时不会写这个键（`api/gateway` 的 client 侧跳过
+ * `undefined`），descriptor 缺了这个标记整条调用被判 `missing "…"`。 */
+function acceptsUndefined(parameter: { type: Node | undefined; optional: boolean }): boolean {
+  return parameter.optional || includesUndefined(parameter.type);
+}
+
+function includesUndefined(node: Node | undefined): boolean {
+  if (node === undefined) return false;
+  switch (node["type"] as string) {
+    case "TSUndefinedKeyword":
+      return true;
+    case "TSParenthesizedType":
+      return includesUndefined(node["typeAnnotation"] as Node | undefined);
+    case "TSUnionType":
+      return (node["types"] as Node[]).some((part) => includesUndefined(part));
+    default:
+      return false;
+  }
+}
+
 /** 参数的 schema：可选参数（`options?`）在 wire 上是 `undefined | T`，`undefined` 排最前。 */
 function schemaOfParameter(
   parameter: { type: Node | undefined; optional: boolean; idType?: string },
@@ -896,7 +918,7 @@ export function renderRemoteClient(
                     // 可选参数在 wire 上可以缺：gateway 判断"这个字段能少"看的就是它（`api/gateway` 的
                     // `missing` 过滤）。只靠签名里的 `?` 不够——descriptor 里没这个标记，客户端省略
                     // 该字段时会被判成"缺了必填"（`wire field "…" failed boundary validation`）。
-                    ...(parameter.optional ? ["          acceptsUndefined: true,"] : []),
+                    ...(acceptsUndefined(parameter) ? ["          acceptsUndefined: true,"] : []),
                   ]
                 : [
                     `          wire: '${parameter.lookup}Id',`,
@@ -1190,7 +1212,7 @@ export function renderHostArtifact(
                     // 可选参数在 wire 上可以缺：gateway 判断"这个字段能少"看的就是它（`api/gateway` 的
                     // `missing` 过滤）。只靠签名里的 `?` 不够——descriptor 里没这个标记，客户端省略
                     // 该字段时会被判成"缺了必填"（`wire field "…" failed boundary validation`）。
-                    ...(parameter.optional ? ["          acceptsUndefined: true,"] : []),
+                    ...(acceptsUndefined(parameter) ? ["          acceptsUndefined: true,"] : []),
                   ]
                 : [
                     `          wire: '${parameter.lookup}Id',`,

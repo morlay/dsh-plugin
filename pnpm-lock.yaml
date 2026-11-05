@@ -267,9 +267,6 @@ importers:
       '@deepseek-ai/dsh-base':
         specifier: workspace:^
         version: link:../../vendor/deepseek-harness/packages/bundle/base
-      '@deepseek-ai/dsh-cua-bundle':
-        specifier: workspace:^
-        version: link:../../vendor/deepseek-harness/packages/experimental/cua-bundle
       '@deepseek-ai/dsh-experimental-agent-team-profile':
         specifier: workspace:^
         version: link:../../vendor/deepseek-harness/packages/experimental/agent-team-profile
@@ -300,6 +297,9 @@ importers:
       '@morlay/web-custom-profile':
         specifier: workspace:*
         version: link:../../packages/bundles/web-custom-profile
+      '@morlay/x-use-bundle':
+        specifier: workspace:*
+        version: link:../../packages/bundles/x-use-bundle
 
   devpackages/devkit:
     dependencies:
@@ -625,6 +625,19 @@ importers:
         specifier: workspace:*
         version: link:../../client/dsh-client-modules
 
+  packages/bundles/x-use-bundle:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/mcp/mcp-client
+    devDependencies:
+      '@local/devkit':
+        specifier: workspace:*
+        version: link:../../../devpackages/devkit
+
   packages/client/dsh-client-modules:
     dependencies:
       '@deepseek-ai/dsh-client-ui-theme':
@@ -922,6 +935,12 @@ importers:
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/api/remotes
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/storage/storage-domain
+      '@deepseek-ai/dsh-tool-executor-ptc':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/core/tool-executor-ptc
       '@deepseek-ai/dsh-tool-skill':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/skill/tool-skill
@@ -934,9 +953,15 @@ importers:
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
+      '@morlay/dsh-tool-guidance':
+        specifier: workspace:^
+        version: link:../dsh-tool-guidance
       react:
         specifier: 18.x
         version: 18.3.1
+      smol-toml:
+        specifier: ^1.9.0
+        version: 1.9.1
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -989,6 +1014,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-settings
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-right
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
@@ -1001,6 +1029,9 @@ importers:
       '@deepseek-ai/dsh-fs-observation-policy':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/fs/fs-observation-policy
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/llm/llm
@@ -1077,15 +1108,15 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/core/system-prompt
+      '@deepseek-ai/dsh-tool-executor-ptc':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/core/tool-executor-ptc
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/deepseek-harness/vendor/schemastery
         version: link:../../../vendor/deepseek-harness/vendor/schemastery
       '@morlay/dsh-context-assembler':
         specifier: workspace:*
         version: link:../../context/dsh-context-assembler
-      '@morlay/dsh-session-mode':
-        specifier: workspace:*
-        version: link:../dsh-session-mode
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -20236,6 +20267,10 @@ packages:
     resolution: {integrity: sha512-a2B9Y0KlNXl9u/vsW6sTIu9vGEpfKu2wRV6l1H3XEas/0gUIzGzBoP/IouTcUQbm9JWZLH3COxyn03TYlFax6w==}
     engines: {node: '>=10'}
 
+  smol-toml@1.9.1:
+    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
+    engines: {node: '>= 18'}
+
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
@@ -27103,6 +27138,8 @@ snapshots:
   simple-update-notifier@2.0.0:
     dependencies:
       semver: 7.8.6
+
+  smol-toml@1.9.1: {}
 
   source-map-js@1.2.2: {}
 

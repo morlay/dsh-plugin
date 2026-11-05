@@ -10,6 +10,9 @@
     provider: ollama
     model: deepseek-v4.1-flash:1017
     reasoningEffort: high
+- id: agent-preset-registry
+  config:
+    default: ptc
 - id: ui-chat
   config:
     transcriptView: verbose

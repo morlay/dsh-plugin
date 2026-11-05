@@ -17,12 +17,13 @@ export const ROWS: readonly unknown[] = [
   // （不配名单 = 官方四个 shipped 与还没绑 preset 的会话都用中文），所以这里不传 `localizedReturnGuidancePresets`。
   ...subagentRows(),
   {
-    // 注入通道（只装通道本体）：工作区指令与技能目录走**官方行**（会话挂着的 shipped preset 自带
-    // `@deepseek-ai/dsh-agent-instructions` 与 `@deepseek-ai/dsh-tool-skill`），本包只做装配结果上的文本转换。
-    // 按会话收口（工具名单与三个注入开关）归 `session-mode` 行自己，不需要单独一行。
-    insert: [contextChannel()],
+    // 注入通道：三段清单**显式留空** = 上游原版——不把 section 降级成 reminder、不抑制、不换文案。
+    // 通道本身仍要装：`@morlay/dsh-tool-guidance` 通过它的 `suppressSection` 丢掉被吸收进分组正文的上游说明
+    // （工具汉化与精简那一半），并按需加载用法分组。
+    insert: [{ ...contextChannel(), config: { keep: [], suppress: [], replace: {} } }],
   },
-  { insert: [toolGuidanceRow()] },
+  // 工具说明改为按组随 `<system-reminder>` 注入（init 组）+ 组 skill（on-demand）：分组要开。
+  { insert: [toolGuidanceRow({ groups: true })] },
 ];
 
 // patch 真源：生成物是包根那份 `cordis.patch.yml`，build 时由插件重写。

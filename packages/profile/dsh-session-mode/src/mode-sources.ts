@@ -32,6 +32,8 @@ export interface ModeSource {
   // 是否要技能目录（官方 `skill-catalog` 的注入）：**可选**，不写就按这个模式自己的工具名单推导（名单里含 `skill`
   // 就要，见 `modes.ts` 的 `derivedSkills`）。`coding` 留空名单 = 要；`chat` 的三件里没有 `skill` = 不要。
   readonly skills?: boolean;
+  // 这个模式下要丢弃的 system prompt section。
+  readonly dropSections?: readonly string[];
   readonly runtimeContext?: boolean;
   // 这个模式的默认模型（省略就跟全局 `agent-default-model`）。
   readonly defaultModel?: ModeModelSource;
@@ -77,8 +79,7 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: "coding",
     name: "编码模式",
-    description:
-      "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
+    description: "功能完整的编码 Agent：文件、Shell、检索、联网等工具常驻，其余用法说明按需加载。",
     persona: CODING_PERSONA,
     // 用户可选，也允许作为子代理的 mode（子代理默认继承父 mode，不看角色；这里是"可被指定"的候选集）。
     role: ["main", "subagent"],
@@ -117,8 +118,7 @@ export const MODE_SOURCES: readonly ModeSource[] = [
   {
     id: NOOP_MODE_ID,
     name: "原样模式",
-    description:
-      "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
+    description: "与上游一致：不加人格提示词、不收窄工具与技能、policy 规则全开、官方注入面照旧。",
     // 用户可选，也允许作为子代理的 mode：它不做任何过滤，给子代理当候选同样成立。
     role: ["main", "subagent"],
     // 其余字段一律不写：名单留空 = 不设收窄，`instructions` / `runtimeContext` 走 schema 默认 `true`，

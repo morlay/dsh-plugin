@@ -35,36 +35,20 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
     照旧交回上游结果；没配名单的模式、**另一个 agent** 的会话、认不出 agent 的直接调用都吃上游原样的结果与拒绝；
     切模式后同一次调用换一份判定；重复应用同一模式不注册新监听器；白名单未命中与 `deny` 优先的合成规则；
     未知名被 `configProblem` 拒绝；换模式就是换一份收口（各自的名单生效）。
-  - **volatile 落在 `default` 与 `modes` 上**：schema 上只有这两个字段带 volatile meta（顶层的 `models` 不带，
-    它是 `hidden()` 的报错用字段）——设置面能编辑的正是这两个；解析之后它们是稳定引用，下一次请求读到的就是
-    引用里的新值（引用符号的 home 是 cosmokit 的 `volatile.ts`）。
-- `src/client/__tests__/settings-page.spec.ts`：这一行的 volatile 字段经 host 投影后，字段树里应当有默认模式
-  （`default`）、模式清单（`modes.<id>.<字段>`，模式是成员行；四份名单都是数组，配过的值各占一项）与每个模式自己的
-  默认模型（没配时是 `modes.<id>` 下的可添加项，配了就有 `provider` / `model` / `reasoningEffort` 三个位子）——用真
-  `volatileForm` 与真 `Config`，只把 settings 的读写面换成替身。
-- 配置页的**渲染**在通用面测（[`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 的 schema 表单：
-  dict → 每个模式一组字段）；本包测两件事：schema 上那两处 volatile 标注仍在（上一条判据），以及 client 半的
-  字段文案只认领 `['modes','*','defaultModel',…]` 下那三个字段，两份 policy 名单的候选值只认领
+  - **volatile 只剩 `default`**：`default` 解析之后是稳定引用，下一次请求读到的就是引用里的新值（引用符号的
+    home 是 cosmokit 的 `volatile.ts`）。`modes` 不再走 cordis 配置（内置默认 + `{dshHome}/modes/*.toml`，
+    读写见 `mode-store.spec.ts`），退役的顶层 `models` 是 `hidden()` 的报错用字段——两个都不带 volatile meta
+    （用例在 `session-mode.spec.ts` 的「默认模型住在模式定义里」那一组）。
+- `src/client/__tests__/settings-decode.spec.ts`：host describe 的值是**深冻结**的，客户端解码（真 `Config` + 真
+  `volatileForm` 产物）不许把归一化结果写回输入——`modes` 这个 dict 与 `z.transform` 出的字段各有一条用例。
+- 配置页的**渲染**在通用面测（[`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 的 schema 表单）；
+  本包测两件事：schema 上那个 volatile 标注仍在（上一条判据），以及 client 半的字段文案只认领
+  `['modes','*','defaultModel',…]` 下那三个字段，两份 policy 名单的候选值只认领
   `['modes','*','allowPolicies'|'denyPolicies','*']`（`field-wording.spec.ts`）。
-- bundle 配置页那一份（`plugins.bundle.config`）自成一页，判据分三份：
-  - `bundle-config-registration.spec.ts`：注册进 `plugins.bundle.config` 且 key = bundle 包名（与
-    `bundles/session-mode-profile/package.json` 的 `name` 同源比对，改名时先红），字典是 `session-mode-bundle`，
-    注入面给出读数（`hooks.bundleConfig`）与动作。
-  - `bundle-config-stack.spec.ts`：接**真 settings 服务栈**（`ConfigForms` + describe 镜像 + schema 服务）跑两件事——
-    视图晚到时控制器读数自己跟上；提示面经 cordis 服务（追踪代理）拿到时，直接调代理上的方法会抛（实现用 JS 私有
-    字段），解包成原实例之后读得到候选。
-  - `bundle-config.spec.ts`：视图（模式清单折成卡片、id/标题/角色/摘要、每条模式的默认模型读数、`noop` 不可删、
-    默认模式选项、六组字段、`presetsOnly` 是标签输入且候选来自 `agent-presets` 具名源）、动作（新增模式连名称一起给、受保护的模式删不动、
-    一次保存写出全部 ops），以及两条跨字段校验（默认模式不在清单里、默认模型只给一半 → 保存被挡且页面上有对应消息）。
-  - `bundle-config-page.spec.tsx`（jsdom）：卡片默认收起、点开出现字段、`noop` 没有删除入口、添加入口是「模式」标题右边的
-    - 图标按钮（打开弹窗表单、底部不再有添加行）、编辑带着真实路径上报、
-      名单是标签输入（回车确认一个、粘贴一串拆成多个）、角色是两个 `Button`（`aria-pressed`，点一下写回去掉该项的数
-      组）、两个注入开关是 `Switch`、字段排法是「标签 / 控件 / 说明」同列且除首个外都带分隔线（`data-divider`）、
-      开关 / 三态 / 角色是右置行（左列标签与说明、控件贴最右）、删除要过确认弹窗（取消不删、确认才删，确认按钮挂错误色
-      class）、默认模型那一组是「`Switch` + 路由清单」（开关关时不画清单）、添加与保存各走一次动作。**控件本身的几何与
-      输入输出**（标签输入的回车 / 粘贴 / 移除 / 候选、图标按钮的无障碍名与方形几何、选择器的当前值、模型路由清单的分组与
-      单选、字段行的两种排法与徽标）在
-      [`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 的 `controls.spec.tsx` / `field-row.spec.tsx` 里测。
+- 面板（`SessionModePanel.spec.tsx`，jsdom）展示的是**当前会话选中的模式与它当下生效的那一份**（数据来自 host 的
+  生效态接口）：模式名、工具按组列、技能 / policy / 三个开关；没有会话时只给提示、不发请求；改开关只进本地草稿，
+  「应用到会话」才一次提交，会话有覆盖时提交基座是屏幕上那份 effective（不是模式默认）；「保存为默认」走独立的配置
+  写面。控件本身的几何与输入输出在 [`client/ui-primitives`](../../../../client/dsh-client-ui-primitives/README.md) 里测。
 - `src/__tests__/preset-plane.spec.ts`：**模式不限 preset（名单留空）、行清单归会话挂的那份**时的真装配（真 `Loader` + 真
   registry + 真上游行：行按 app 安装锚点解析，行清单用 shipped `standard` 同形的那几行）——新会话挂 `standard`、
   模式是 `coding`；chat 的目录正好是提问 + 联网三件（三件都真的注册着）、我们通道这一侧注入 0 条、官方那两条注入面
@@ -87,6 +71,12 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   入口）——目录只留白名单、`tool:<名字>` section 同源过滤、白名单外调用被拒（文案带模式名）、黑名单内的调用按另一句
   被拒（deny 优先）、**换个模式就是换一份**（旧 guard 收回，换回去的工具重新可用）、`instructions: false` 时通道被关、
   `runtimeContext: false` 只盖住本会话；没收过口的会话（行在它之后才激活）一律放行。
+  **收口的归属**也在这条线上一并钉住（「收口的归属：行重挂之后重装不撞名」）：行卸载（设置保存会让 Loader 重新配置
+  这一行）之后，旧实例在 agent 上的注册必须已经收干净——`describe_tool` 不在目录里、收窄放开；新实例重装不抛
+  `already registered in this scope`（见 [设计 注册的归属与收回](../designs/20260924-会话模式.md#注册的归属与收回)）。
+- **每条会装配本行的用例都要 `pinDshHome()`**（[`src/__tests__/dsh-home.ts`](../../src/__tests__/dsh-home.ts)，
+  在 spec 模块作用域调一次）：模式定义的真源是 `{dshHome}/modes/*.toml`，不指到空目录就会读开发机上真用户的覆盖，
+  把用例里写的 `config.modes` 顶掉（症状是一整片与改动无关的失败——名单、persona、开关、时钟全变样）。
 
 ## 2. 真装配探针（改装配形状时跑）
 

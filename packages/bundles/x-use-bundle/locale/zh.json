@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "浏览器与桌面操作（MCP）",
+    "description": "两行通用 dsh-mcp-client：分别挂 agent-browser 与 agent-desktop 的 stdio MCP server，工具以 mcp__agent-browser__* / mcp__agent-desktop__* 进入模型目录；命令走全局 PATH 里的 bin，没装则对应工具不出现。",
+    "detail": "docs/detail.md"
+  }
+}

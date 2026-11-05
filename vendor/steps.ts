@@ -154,8 +154,4 @@ export const prebuild: Step[] = [
   // 浏览器版本元数据（版本 / commit / dirty）：上游 `scripts/client-build-environment.ts` 定义、前端设置页与
   // 侧栏显示的就是它。跑一次上游生成器，产出 `<vendor>/.dsh-build/client-build-environment.json`。
   { type: "client-meta" },
-  // Computer Use 的 macOS 应用包：源码树 dev 走 `.build/prepared` 现场编译，而**装进 app 的闭包**只认
-  // `native/bin/darwin-<arch>/current.json`（上游 .gitignore 了 `native/bin/`）。不在这里产出，包能装上、
-  // 用户点开 CUA 才炸；非 macOS 跳过（CI 是 ubuntu）。
-  { type: "cua-native" },
 ];

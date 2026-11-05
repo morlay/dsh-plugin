@@ -81,9 +81,7 @@ describe("ts 2 schema", () => {
     expect(zod("Required<Config>", index)).toBe(
       "z.object({\n  'a': z.string().readonly(),\n  'b': z.number(),\n})",
     );
-    expect(zod('Omit<Config, "a">', index)).toBe(
-      "z.object({\n  'b': z.number().optional(),\n})",
-    );
+    expect(zod('Omit<Config, "a">', index)).toBe("z.object({\n  'b': z.number().optional(),\n})");
     expect(zod('Omit<Config, "a" | "b">', index)).toBe("z.object({\n\n})");
     expect(zod('Pick<Config, "a">', index)).toBe("z.object({\n  'a': z.string().readonly(),\n})");
     expect(zod('Pick<Config, "a" | "b">', index)).toBe(

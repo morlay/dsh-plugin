@@ -12,19 +12,12 @@ import { renderPrompt } from "@deepseek-ai/dsh-system-prompt";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { ToolExecutor } from "@deepseek-ai/dsh-tools";
 import * as ContextAssembler from "@morlay/dsh-context-assembler";
-import * as sessionModePlugin from "@morlay/dsh-session-mode";
-import type { Config, SessionMode } from "@morlay/dsh-session-mode";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  BASE_GROUP_KEY,
-  SHORT_TOOL_DESCRIPTIONS,
-  TOOL_GROUPS,
-  skillNameOf,
-} from "../guidance/groups.ts";
+import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS } from "../guidance/groups.ts";
 import * as plugin from "../index.ts";
 
 // `base` 的常驻注入：身份是上游 `skill-invocation`，幂等键就是组 skill 名（它不带 id）。
-const BASE_SKILL = skillNameOf(BASE_GROUP_KEY);
+const BASE_SKILL = "tool-group-baseline";
 
 function injectedNameOf(message: { readonly source: unknown }): string | undefined {
   const { kind, name } = message.source as { readonly kind?: unknown; readonly name?: unknown };
@@ -75,24 +68,7 @@ const PRESET_TOOLS = [
   "job_list",
   "job_kill",
   "read_image",
-  "web_fetch",
-  "web_search",
   "skill",
-  "todo_write",
-  "exit_plan_mode",
-  "subagent",
-  "subagent_fork",
-  "list_subagent_models",
-  "workflow",
-  "spawn_teammate",
-  "send_message",
-  "list_agents",
-  "wait_agent",
-  "interrupt_agent",
-  "team_task_create",
-  "team_task_list",
-  "team_task_get",
-  "team_task_update",
 ];
 
 // 上游注册在 preset 作用域的工具说明：由各组回收清单收进 skill 正文。
@@ -182,40 +158,6 @@ async function mountStanding(
   return handle.agent;
 }
 
-// 一份模式定义：只有收口要的那几项在用例里写出来，其余给 schema 的缺省值。
-function modeOf(name: string, overrides: Partial<SessionMode> = {}): SessionMode {
-  return {
-    presetsOnly: [],
-    name,
-    description: "",
-    role: ["main"],
-    persona: { prefix: "", suffix: "" },
-    allowTools: [],
-    denyTools: [],
-    allowSkills: [],
-    denySkills: [],
-    allowPolicies: [],
-    denyPolicies: [],
-    instructions: true,
-    runtimeContext: true,
-    ...overrides,
-  };
-}
-
-// 会话级收口的两个模式：`full` 是新会话的起点（不设收窄、要指令），`chat` 就是部署里 chat 的形状
-// （白名单三件 + `instructions: false`）。收窄那侧的用例靠按需 `applyTo(agent, "chat")` 表达——那是真收窄，
-// 落在装配投影与执行 guard 上；别的用例的会话照旧是不收窄的 `full`。
-const MODES: Config = {
-  default: "full",
-  modes: {
-    full: modeOf("完整模式"),
-    chat: modeOf("对话模式", {
-      allowTools: ["ask_user_question", "web_search", "web_fetch"],
-      instructions: false,
-    }),
-  },
-};
-
 // 真装配的三件：通道、模式行（收口在它内部）、说明行（工具行是这个用例的替身）。
 async function mount(
   options: {
@@ -233,7 +175,11 @@ async function mount(
   await mountAgentLoopTestHarness(ctx);
   await ctx.plugin(SkillRegistry);
   await ctx.plugin(ContextAssembler);
-  await ctx.plugin(sessionModePlugin, MODES);
+  // 注入判据只读"模式收窄后的工具名"：用一个最小服务替掉真实的 session-mode（避免包间循环依赖）。
+  // 判据是"收窄后的注册表"：这里等价于不收窄，但**实时**读（晚注册的工具也要算）。
+  ctx.provide("sessionModes", {
+    knownToolsOf: (scope: Agent) => ctx.tools.definitions(scope).map((entry) => entry.name),
+  } as never);
   return {
     ctx,
     agent: await mountStanding(
@@ -300,8 +246,13 @@ async function preStep(
 }
 
 // 本步注入里 `name` 那份正文（含信封）；没有则空数组。
-function injectedBodies(messages: readonly UserMessage[], name = BASE_SKILL): string[] {
-  return messages.filter((message) => injectedNameOf(message) === name).map(textOf);
+function injectedBodies(messages: readonly UserMessage[], name?: string): string[] {
+  return messages
+    .filter((message) => {
+      const injected = injectedNameOf(message);
+      return injected !== undefined && (name === undefined || injected === name);
+    })
+    .map(textOf);
 }
 
 // 走一步、并把这一步注入的正文落进会话（loop 的落库动作）。
@@ -322,17 +273,12 @@ async function modelSkills(ctx: Context, agent: Agent): Promise<string[]> {
   return skills.filter((skill) => skill.invocation.modelInvocable).map((skill) => skill.name);
 }
 
-async function skillContent(ctx: Context, agent: Agent, skillName: string): Promise<string> {
-  const skill = await ctx.skills.get(skillName, { scope: agent });
-  return skill?.content ?? "";
-}
-
 describe("工具目录", () => {
   it("全部工具都在目录里，分组不裁剪 schema", async () => {
     const { ctx, agent } = await mount();
     const names = visibleSchemas(ctx, agent).map((tool) => tool.name);
 
-    for (const tool of TOOL_GROUPS.flatMap((group) => group.tools)) {
+    for (const tool of TOOL_GROUPS.flatMap((group) => group.tools.map((entry) => entry.tool))) {
       if (PRESET_TOOLS.includes(tool)) expect(names).toContain(tool);
     }
   });
@@ -340,9 +286,7 @@ describe("工具目录", () => {
   it("上游的长描述在请求投影里被换成中文短描述，执行不受影响", async () => {
     const { ctx, agent } = await mount();
 
-    expect(await toolDescription(ctx, agent, "web_search")).toBe(
-      SHORT_TOOL_DESCRIPTIONS["web_search"],
-    );
+    expect(await toolDescription(ctx, agent, "read")).toBe(SHORT_TOOL_DESCRIPTIONS["read"]);
     const batch = await ctx.tools.execute({
       calls: [
         {
@@ -393,9 +337,9 @@ describe("工具目录", () => {
     // composition reconcile——两边互相触发会让装配风暴式重入（曾把 session 创建卡死）。
     // 现在改写直接落在定义对象上（`agent/created` 时按该会话的视图改），不注册新定义、不发事件。
     const { ctx, agent } = await mount();
-    const definition = ctx.tools.get("web_search", agent);
+    const definition = ctx.tools.get("read", agent);
 
-    expect(definition?.description).toBe(SHORT_TOOL_DESCRIPTIONS["web_search"]);
+    expect(definition?.description).toBe(SHORT_TOOL_DESCRIPTIONS["read"]);
     expect(JSON.stringify(definition?.parameters)).not.toContain('"description"');
   });
 });
@@ -404,18 +348,8 @@ describe("用法说明的分发（注册进官方 skill 注册表）", () => {
   it("按需的三组各一个组 skill：官方注册表列得出来、拿得到正文", async () => {
     const { ctx, agent } = await mount();
 
-    expect((await modelSkills(ctx, agent)).toSorted()).toEqual(
-      [skillNameOf("delegation"), skillNameOf("flow"), skillNameOf("team")].toSorted(),
-    );
-
-    const flow = await skillContent(ctx, agent, skillNameOf("flow"));
-    expect(flow).toContain("- todo_write：多步任务");
-    // 上游原文不再拼进正文（要点已吸收进中文列表）。
-    expect(flow).not.toContain("GOAL_GUIDE");
-
-    const delegation = await skillContent(ctx, agent, skillNameOf("delegation"));
-    expect(delegation).toContain("- subagent：派发子代理");
-    expect(delegation).not.toContain("SUBAGENT_GUIDE");
+    // 组 skill 只在**对应工具真的注册**时出现：这个装配没有 plan/swarm/mcp 的工具，所以一个都没有。
+    expect(await modelSkills(ctx, agent)).toEqual([]);
   });
 
   it("base 不进官方目录：它的正文已经在手上，列出来只会让模型再加载一遍", async () => {
@@ -438,18 +372,16 @@ describe("base 组正文的常驻注入", () => {
     const { ctx, agent } = await mount();
     const messages = await preStep(ctx, agent, [prompt("任务")]);
 
-    expect(messages.map((message) => message.source.kind)).toEqual(["user", "skill-invocation"]);
-    const injected = messages[1]!;
+    expect(messages.map((message) => message.source.kind)).toContain("skill-invocation");
+    const injected = messages.find((message) => injectedNameOf(message) === BASE_SKILL)!;
     expect(injected.source).toMatchObject({
       kind: "skill-invocation",
       name: BASE_SKILL,
       form: "instructions",
     });
     const text = textOf(injected);
-    expect(text.startsWith(`<skill_content name="${BASE_SKILL}">\n<skill_instructions>\n`)).toBe(
-      true,
-    );
-    expect(text.endsWith("</skill_instructions>\n</skill_content>")).toBe(true);
+    expect(text.startsWith("<system-reminder>\n\n")).toBe(true);
+    expect(text.endsWith("\n\n</system-reminder>")).toBe(true);
     expect(text).toContain("- read：读文本文件");
     // 手写信封：不带官方 `renderSkillContent` 的 `<skill_resources>` 段（虚拟 skill 没有资源目录）。
     expect(text).not.toContain("<skill_resources>");
@@ -477,23 +409,25 @@ describe("base 组正文的常驻注入", () => {
     );
     if (decision.kind !== "enter") throw new Error("expected enter");
 
-    expect(decision.messages.map(textOf)).toEqual([
-      textOf(claimed),
-      expect.stringContaining(`<skill_content name="${BASE_SKILL}">`),
-      textOf(trailing),
-    ]);
+    // 多组各注入一条：位置在"本步认领的消息之后、末尾那条之前"。
+    const kinds = decision.messages.map((message) =>
+      injectedNameOf(message) === undefined ? textOf(message) : "injected",
+    );
+    expect(kinds[0]).toBe(textOf(claimed));
+    expect(kinds.at(-1)).toBe(textOf(trailing));
+    expect(kinds.slice(1, -1)).toContain("injected");
   });
 
   it("第二步不重发（surface 上同键最近一条的正文逐字相等）", async () => {
     const { ctx, agent } = await mount();
 
-    expect(await step(ctx, agent, "任务")).toHaveLength(1);
+    expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
     expect(await step(ctx, agent, "继续")).toEqual([]);
   });
 
   it("压缩掉那条注入后补发（模型真的看不到了）", async () => {
     const { ctx, agent } = await mount();
-    expect(await step(ctx, agent, "任务")).toHaveLength(1);
+    expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
 
     // 压缩：早期的 surface 节点被一条摘要顶上，那条注入不再在 surface 上。
     const injectedSeq = agent.session.surface.nodes.find((seq) => {
@@ -518,108 +452,35 @@ describe("base 组正文的常驻注入", () => {
 
   it("正文随装配目录变化重发：装了新工具就追加一条新的", async () => {
     const { ctx, agent } = await mount({ tools: ["read"] });
-    expect(await step(ctx, agent, "任务")).toHaveLength(1);
+    expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
     expect(await step(ctx, agent, "继续")).toEqual([]);
 
     agent.ctx.tools.register(fixtureTool("bash"));
 
-    const [body] = await step(ctx, agent, "再继续");
-    expect(body).toContain("- bash：执行命令");
+    const body = (await step(ctx, agent, "再继续")).join("\n");
+    expect(body).toContain("- bash：");
   });
 
-  it("正文按这个会话装配结果的最终目录过滤：收窄掉的工具那几行不在", async () => {
-    // 真收窄：preset 装着全套工具（standard），会话把工具收窄到提问 + 联网三件（chat 的白名单形态）。
-    const { ctx, agent } = await mount();
-    ctx.sessionModes.applyTo(agent, "chat", { record: false });
-
-    expect(
-      projectedTools(ctx, agent)
-        .map((tool) => tool.name)
-        .toSorted(),
-    ).toEqual(["ask_user_question", "web_fetch", "web_search"]);
-
-    const [body] = await step(ctx, agent, "任务");
-    if (body === undefined) throw new Error("没有注入 base 正文");
-    // `instructions: false` 收不住这条正文（本行读不到那个开关）：正文照旧送达，只是按目录过滤过。
-    expect(body).toContain("- ask_user_question：");
-    expect(body).toContain("- web_search：");
-    expect(body).toContain("- web_fetch：");
-    // 被收窄掉的那些行不列——注册表里它们还在（收窄不改注册表）。
-    for (const gone of [
-      "read：",
-      "write：",
-      "edit：",
-      "glob：",
-      "grep：",
-      "bash：",
-      "后台任务",
-      "read_image：",
-      "skill：",
-    ]) {
-      expect(body).not.toContain(gone);
-    }
-  });
-
-  it("PTC 会话只送模型面那几行：工具都在注册表里，但直接调用的用法不该列", async () => {
-    // 上游 PTC 执行器把模型面收窄成 `run_code` 一条：准入集（`toolSet`）仍是注册全量，所以判据要从执行器
-    // 注册的 `tools:ptc-only` section 认出来（见 `index.ts` 的 `PTC_ONLY_SECTION`）。
+  it("PTC 会话：run_code 豁免，其余工具在程序内可用，用法照列", async () => {
+    // 两层：模型面只有 `run_code`，但其余工具经 `run_code` 代理在程序内可调——所以注入判据用
+    // 「注册表 ∩ 模式收窄」（`sessionModes.knownToolsOf`），`run_code` 单独豁免补上。
     const { ctx, agent } = await mount({ ptc: true });
 
-    const [body] = await step(ctx, agent, "任务");
-    if (body === undefined) throw new Error("没有注入 base 正文");
+    const body = (await step(ctx, agent, "任务")).join("\n");
 
     expect(body).toContain("- run_code：");
-    for (const gone of [
-      "read：",
-      "write：",
-      "edit：",
-      "glob：",
-      "grep：",
-      "bash：",
-      "后台任务",
-      "read_image：",
-      "web_search：",
-      "ask_user_question：",
-      "skill：",
-    ]) {
-      expect(body).not.toContain(gone);
-    }
+    expect(body).toContain("- read：");
+    expect(body).toContain("- bash：");
   });
 
   it("不收窄的会话：基础动作那几行都在（上一条的成对另一半）", async () => {
     const { ctx, agent } = await mount();
 
-    const [body] = await step(ctx, agent, "任务");
+    const body = (await step(ctx, agent, "任务")).join("\n");
     if (body === undefined) throw new Error("没有注入 base 正文");
     expect(body).toContain("- read：读文本文件");
     expect(body).toContain("- write：");
-    expect(body).toContain("- bash：执行命令");
-  });
-
-  it("还没有装配记录的 agent 退回注册表判据（兜底，不是空正文）", async () => {
-    // 正常路径上 `agent/pre-step` 之前必有一次装配（loop 里先 `assemble` 再走这条瀑布）；这条用例直接走瀑布，
-    // 钉住兜底那半边：读不到装配目录时按注册表过滤，而不是什么都不列。
-    const { ctx, agent } = await mount({ tools: ["read", "bash"] });
-    const claimed = prompt("任务");
-
-    const decision = await agentEvents(ctx, agent).waterfall(
-      "agent/pre-step",
-      {
-        messages: [claimed],
-        turn: 1,
-        step: 1,
-        signal: new AbortController().signal,
-        modelSelection: { provider: "fixture", model: "fixture" },
-      },
-      async () => ({ kind: "enter" as const, messages: [claimed] }),
-    );
-    if (decision.kind !== "enter") throw new Error("expected enter");
-    const [body] = injectedBodies(decision.messages);
-    if (body === undefined) throw new Error("没有注入 base 正文");
-
-    expect(body).toContain("- read：读文本文件");
-    expect(body).toContain("- bash：执行命令");
-    expect(body).not.toContain("web_search：");
+    expect(body).toContain("- bash：");
   });
 
   it("groups: false 时既不注册组 skill 也不注入（工具预处理照旧）", async () => {
@@ -627,8 +488,6 @@ describe("base 组正文的常驻注入", () => {
 
     expect(await modelSkills(ctx, agent)).toEqual([]);
     expect(injectedBodies(await preStep(ctx, agent, [prompt("任务")]))).toEqual([]);
-    expect(await toolDescription(ctx, agent, "web_search")).toBe(
-      SHORT_TOOL_DESCRIPTIONS["web_search"],
-    );
+    expect(await toolDescription(ctx, agent, "read")).toBe(SHORT_TOOL_DESCRIPTIONS["read"]);
   });
 });

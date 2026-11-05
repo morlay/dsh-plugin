@@ -147,6 +147,29 @@ describe("typert 产物生成", () => {
     expect(remoteTextOf(artifacts)).toContain("implementation: 'remoteExportList'");
   });
 
+  it("显式 `T | undefined` 的参数在 wire 上也能缺（判据是类型里的 undefined，不是签名里的 `?`）", async () => {
+    const { upstreamRoot, dtsRoot } = await fixture();
+    await writeFile(
+      join(upstreamRoot, "packages", "demo", "demo", "src", "index.ts"),
+      [
+        "export class Demo extends TypertRemoteService {",
+        "  constructor(ctx: Context) { super(ctx, 'demo') }",
+        "  /** Write one namespace. */",
+        "  @Remote",
+        "  async update(ns: string, expectedRevision: number | undefined): Promise<string> { return ns }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const artifacts = await generateTypert({ upstreamRoot, dtsRoot });
+    const host =
+      artifacts[0]?.files.find((file) => file.path.endsWith("typert.host.ts"))?.text ?? "";
+    const block = host.slice(host.indexOf("name: 'expectedRevision',"));
+    // 客户端省略这个实参时不会写这个键（`api/gateway` 的 client 侧跳过 undefined），gateway 放行缺省的
+    // 唯一依据就是这个标记；缺了它整条调用被判 `missing "expectedRevision"` —— agent 预设页的
+    // “设为新任务默认” 就是这么坏的。
+    expect(block.slice(0, 300)).toContain("acceptsUndefined: true,");
+  });
   it("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     const lib = join(upstreamRoot, "packages", "demo", "demo", "lib");

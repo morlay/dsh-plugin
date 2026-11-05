@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { BundleInfo, SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import z from "@deepseek-ai/schemastery";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NS, apply, inject } from "../schema-form/index.ts";
 import { fakeDescribe } from "../schema-form/testing/fake-describe.ts";
 import { FakeScope } from "../schema-form/testing/fake-scope.ts";
@@ -179,28 +179,6 @@ describe("装上本包的注册面", () => {
     });
   });
 
-  it("把可渲染的行注册到自己的配置入口（key = bundle#行 id，priority 让手写页遮住）", async () => {
-    const b = bench({
-      namespaces: [view("subagent-fork", z.object({ maxDepth: z.number() }))],
-      bundles: [bundle("@morlay/dsh-subagent", ["subagent-fork"])],
-    });
-
-    apply(b.ctx as never);
-    await vi.waitFor(() => {
-      expect(b.registrations).toHaveLength(1);
-    });
-
-    expect(b.registrations[0]).toMatchObject({
-      slot: "plugins.row.config",
-      options: {
-        key: "@morlay/dsh-subagent#subagent-fork",
-        priority: 100,
-        locale: NS,
-      },
-    });
-    expect(typeof b.registrations[0]?.component).toBe("function");
-  });
-
   it("schema 不是对象的行不占入口", async () => {
     const b = bench({
       namespaces: [view("odd", z.string())],
@@ -222,37 +200,6 @@ describe("装上本包的注册面", () => {
     await Promise.resolve();
 
     expect(b.registrations).toEqual([]);
-  });
-
-  it("行注册项在 page 视图才渲染表单，summary 不画东西", async () => {
-    const rendered: { ns: string }[] = [];
-    const b = bench({
-      namespaces: [view("row", z.object({ retry: z.number() }))],
-      bundles: [bundle("pkg", ["row"])],
-    });
-    apply(b.ctx as never);
-    await vi.waitFor(() => {
-      expect(b.registrations).toHaveLength(1);
-    });
-
-    const component = b.registrations[0]?.component as (props: Record<string, unknown>) => unknown;
-    const summary = component({
-      view: "summary",
-      renderFactorySlot: () => {
-        throw new Error("summary 不该渲染表单");
-      },
-    });
-    expect(summary).toBeNull();
-
-    component({
-      view: "page",
-      renderFactorySlot: (name: string, props: { ns: string }) => {
-        expect(name).toBe("settings.schema-form.form");
-        rendered.push({ ns: props.ns });
-        return null;
-      },
-    });
-    expect(rendered).toEqual([{ ns: "row" }]);
   });
 });
 

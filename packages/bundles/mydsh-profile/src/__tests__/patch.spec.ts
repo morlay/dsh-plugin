@@ -45,6 +45,15 @@ function withoutAgentTeamConflicts(value: unknown): unknown {
   );
 }
 
+// 按行 id 取本包声明的那一行的 `config`（行必须存在：没声明就是写错 id 了）。
+function rowConfigOf(rowId: string): Record<string, unknown> {
+  const row = ROWS.find((entry) => (entry as { readonly id?: string }).id === rowId) as
+    | { readonly config?: Record<string, unknown> }
+    | undefined;
+  if (row?.config === undefined) throw new Error(`本包没有声明 ${rowId}`);
+  return row.config;
+}
+
 // 上游那份 preset 的 `config`（真源：web-app 的 `presets/<id>.patch.yml`）。
 async function upstreamPresetConfig(id: string): Promise<PresetConfig> {
   const layers = yaml.load(await readFile(join(PRESET_DIR, `${id}.patch.yml`), "utf8"), {
@@ -79,6 +88,10 @@ describe("mydsh-profile 的 bundle patch", () => {
       const upstream = await upstreamPresetConfig(id);
       expect(presetConfigOf(`preset-${id}`)).toEqual(withoutAgentTeamConflicts(upstream));
     }
+  });
+
+  it("部署默认 preset 是 ptc", () => {
+    expect(rowConfigOf("agent-preset-registry")).toEqual({ default: "ptc" });
   });
 
   it("四份 preset 都不装与 agent-team 冲突的子代理工具行", () => {

@@ -1,6 +1,10 @@
 import { defineConfig } from "tsdown";
 import { cordisPlugin } from "@local/tsdown-plugin-cordis";
-import { bundlePatch, renderPatch, type PatchBundleOptions } from "@local/devkit/patch";
+import {
+  bundlePatch,
+  renderPatch,
+  type PatchBundleOptions,
+} from "@local/devkit/patch";
 import { webSearchRows } from "@morlay/dsh-web-search-ollama/rows";
 
 const ROWS: readonly unknown[] = [
@@ -10,9 +14,38 @@ const ROWS: readonly unknown[] = [
     id: "llm-pi-ai",
     config: {
       providers: {
+        amr: {
+          apiKeyEnv: "AMR_API_KEY",
+          displayName: "Open Design",
+          // Chat Completions 形态（Ollama 的 OpenAI 兼容端点）：实现最简单，配置也最少。
+          // `supportsMidConvo*` 在配置层拿不到 in-history（`catalog.ts` 的 gate 是 withhold），
+          // 系统提示词与工具的变化都走每步全量。
+          api: "openai-completions",
+          baseURL: "https://amr-link.open-design.ai/v1",
+          reasoning: "high",
+          // 图片上限按 llm-deepseek 的默认对齐：每张请求版本的原始字节目标 2 MiB（pi-ai 默认 1 MiB）。
+          requestImageMaxBytes: 2 * 1024 * 1024,
+          models: [
+            {
+              id: "deepseek-v4.1-flash",
+              name: "DeepSeek V4.1 Flash @ Open Design",
+              contextWindow: 1000000,
+              input: ["text", "image"],
+              reasoningEfforts: {
+                off: null,
+                low: "low",
+                high: "high",
+                max: "max",
+              },
+            },
+          ],
+        },
         ollama: {
           apiKeyEnv: "OLLAMA_API_KEY",
           displayName: "Ollama Cloud",
+          // Chat Completions 形态（Ollama 的 OpenAI 兼容端点）：实现最简单，配置也最少。
+          // `supportsMidConvo*` 在配置层拿不到 in-history（`catalog.ts` 的 gate 是 withhold），
+          // 系统提示词与工具的变化都走每步全量。
           api: "openai-completions",
           baseURL: "https://ollama.com/v1",
           reasoning: "high",

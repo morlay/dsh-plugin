@@ -1,7 +1,8 @@
 {
   "name": "@morlay/mydsh-profile",
   "version": "0.0.14",
-  "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图，外加统一声明的四份 agent preset（复制上游，删掉与 agent-team 冲突的子代理工具行）。",
+  "private": true,
+  "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图、默认 agent preset（PTC），外加统一声明的四份 agent preset（复制上游，删掉与 agent-team 冲突的子代理工具行）。",
   "keywords": [
     "bundle-entry",
     "dsh",
@@ -29,17 +30,6 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
-      "./locale/*.json": "./locale/*.json"
-    }
-  },
   "scripts": {
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
@@ -60,6 +50,17 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
     }
   }
 }

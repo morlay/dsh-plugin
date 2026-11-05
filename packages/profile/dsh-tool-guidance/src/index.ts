@@ -2,19 +2,26 @@ import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import type {} from "@deepseek-ai/dsh-skill";
-import { RUN_CODE_NAME, type ToolDefinition } from "@deepseek-ai/dsh-tools";
+import { RUN_CODE_NAME, projectToolSchema, type ToolDefinition } from "@deepseek-ai/dsh-tools";
+import { jsonSchemaToTs } from "@deepseek-ai/dsh-tool-executor-ptc";
 import type {} from "@morlay/dsh-context-assembler";
 import z from "@deepseek-ai/schemastery";
 import {
-  BASE_GROUP_KEY,
   SHORT_TOOL_DESCRIPTIONS,
   TOOL_GROUPS,
-  groupByKey,
   groupSkillBody,
+  renderToolsDeclaration,
   skillNameOf,
 } from "./guidance/groups.ts";
+import type { ToolGroup } from "./guidance/types.ts";
 
 export const name = "tool-guidance";
+
+// 常驻正文的幂等键：所有 `init` 组合并成这一条。
+export const BASELINE_KEY = "tool-group-baseline";
+
+// 上游 PTC 执行器注册的 section 名：`base` 正文靠它认出「模型面只有 run_code」。
+const PTC_ONLY_SECTION = "tools:ptc-only";
 
 export const inject = ["tools", "systemPrompt", "skills", "contextAssembler"];
 
@@ -37,6 +44,8 @@ export function apply(ctx: Context, config: Config): void {
   // 会话收窄（模式的 `allowTools` / `denyTools`）落在装配投影与执行 guard 上，注册表上什么都看不到——挂在
   // 全套工具的 preset 上的 chat 会话，注册表里 read / write / bash 一个不少。
   const visibleTools = new WeakMap<Agent, ReadonlySet<string>>();
+  // 这个会话是不是 PTC（装配时由 `tools:ptc-only` 认出来）。
+  const ptcAgents = new WeakSet<Agent>();
 
   if (groups) {
     // 被丢弃的上游说明：要点已吸收进组正文，原文不再进提示词。
@@ -44,15 +53,19 @@ export function apply(ctx: Context, config: Config): void {
       for (const section of group.drops) ctx.contextAssembler.suppressSection(section);
     }
 
+    // 组是否激活取决于**实际注册的工具**：组里没有任何工具在场时，它既没有正文也没有可加载的内容。
+    const registered = new Set(ctx.tools.definitions().map((definition) => definition.name));
+
     for (const group of TOOL_GROUPS) {
-      // `base` 不进官方目录：它的正文已经常驻在手上了，列一份出来只会让模型再花一轮加载重复正文。
-      if (group.key === BASE_GROUP_KEY) continue;
+      // `init` 组不进官方目录：它的正文已经常驻注入，列一份出来只会让模型再花一轮加载重复正文。
+      if (group.injection === "init") continue;
+      if (!group.tools.some(({ tool }) => registered.has(tool))) continue;
       // 注册进**官方的 skill 注册表**（`ctx.skills`）：目录与按需加载都由官方 `tool-skill` 那一行提供，
       // 本包不再自己发布目录、也不按会话修剪正文——正文里提到的工具是否在这个会话的目录里，由模式收窄决定。
       ctx.effect(() =>
         ctx.skills.register({
           name: skillNameOf(group.key),
-          description: group.skillDescription,
+          description: group.guideline,
           content: groupSkillBody(group),
           source: "runtime",
           invocation: { modelInvocable: true, userInvocable: true },
@@ -64,23 +77,58 @@ export function apply(ctx: Context, config: Config): void {
       const decision = await next();
       if (decision.kind === "reject" || decision.messages.length === 0) return decision;
 
-      // 幂等：surface 上同键最近一条的正文逐字相等就不送（压缩掉、正文变更时自然补发/重发）。
-      signal.throwIfAborted();
-      const key = skillNameOf(BASE_GROUP_KEY);
       // 正文按**这个会话装配结果里最终可见的工具目录**过滤：与模型手上的工具目录同源，收窄掉的工具不列。
-      const available = visibleTools.get(agent);
-      const text = renderSkillContent(
-        key,
-        groupSkillBody(
-          baseGroup,
-          available === undefined ? registeredIn(ctx, agent) : (tool) => available.has(tool),
-        ),
+      signal.throwIfAborted();
+      // 两层：模型面（`run_code`）与程序内（其余工具经 `run_code` 代理）。注入判据用**第二层**——
+      // 模式名单收窄之后的注册表集合（`sessionModes.knownToolsOf`），既不会漏掉被 PTC 投影掉的组，
+      // 也不会带上被 `denyTools` 禁掉的组。
+      const modes = ctx.get("sessionModes") as unknown as
+        | { knownToolsOf(agent: Agent): readonly string[] }
+        | undefined;
+      // 没有 `session-mode`（或它还没收口过）时退回注册表全量。
+      const known =
+        modes === undefined
+          ? ctx.tools.definitions(agent).map((definition) => definition.name)
+          : modes.knownToolsOf(agent);
+      // `run_code` 豁免：它是 PTC 的入口，不在注册表里，但程序内可用。
+      const ptc = ptcAgents.has(agent);
+      const visible = (tool: string): boolean =>
+        known.includes(tool) || (ptc && tool === "run_code");
+
+      // 所有 `init` 组**合并成一条**注入（幂等键固定）：多组各发一条会把对话流打散，
+      // 模型拿到的应该是一段连续的"这些工具怎么用"。
+      // 注入判据只有 `visible`：正文与类型都跟着组的可见工具走。
+      const definitions = new Map(
+        ctx.tools.definitions(agent).map((definition) => [definition.name, definition]),
       );
+      const sections: string[] = [
+        "`tools.*` 的签名：下面每个组都已给出完整的 d.ts 代码块，**直接按签名调用**，不要再用 `describe_tool` 查这些组。" +
+          "只有这里没列出的按需组（plan / swarm / mcp / web-access）才需要 `describe_tool({ group })`。" +
+          "程序里的变量名必须唯一（`const a = await tools.read(...)`、`const b = …`，或直接 `await tools.read(...)` 不赋值）：同一个名字声明两次会直接 SyntaxError。",
+      ];
+      for (const group of TOOL_GROUPS) {
+        if (group.injection !== "init") continue;
+        const body = groupSkillBody(group, visible);
+        if (body.length === 0) continue;
+        const type = renderGroupType(group, definitions, visible);
+        sections.push(
+          [
+            `<tool-definitions group="${group.key}">`,
+            "",
+            body,
+            ...(type.length === 0 ? [] : ["", "```ts", type, "```"]),
+            "",
+            "</tool-definitions>",
+          ].join("\n"),
+        );
+      }
+      if (sections.length === 0) return decision;
+      const key = BASELINE_KEY;
+      const text = renderReminder(sections.join("\n\n"));
       if (latestInjectText(agent, key) === text) return decision;
       signal.throwIfAborted();
 
-      // 落点：本步认领的用户消息**之后**——这个位置不随别的监听者的注册顺序漂移到列表末尾
-      // （末尾那个位置归官方 `tool-skill` 的目录、上游的 runtime context）。
+      // 落点：本步认领的用户消息**之后**。
       const claimedEnd = decision.messages.findLastIndex((message) => messages.includes(message));
       return {
         ...decision,
@@ -124,7 +172,8 @@ export function apply(ctx: Context, config: Config): void {
       const agent = context.agent;
       // 记名字集合（`base` 正文的过滤判据）。诊断式的无 agent 装配不记。
       if (agent !== undefined) {
-        const definitions = ctx.tools.definitions(agent, context.toolSet);
+        // 用**注册表全量**（不带 `toolSet`）：PTC 下准入集只剩 `run_code`，按它过滤会让 fs/shell 这些组一个都不注入。
+        const definitions = ctx.tools.definitions(agent);
         // 模型面 ≠ 准入集：执行器还会再投影一层，而那一层在装配瀑布**之后**（工具声明由 provider 在瀑布前
         // 算好，瀑布只拿到 sections / contexts）。PTC 就是这一层——它把模型面收窄成 `run_code` 一条，
         // 注册表与准入集里工具一个不少。信号是它注册的专属 section：`tools:ptc-only` 只有
@@ -132,6 +181,7 @@ export function apply(ctx: Context, config: Config): void {
         // 读**入参**那份（原始装配）：瀑布把同一份 value 传给每个监听，而通道会把非 keep 的 section
         // 降级成 reminder，`result` 里已经看不到执行器那两条。
         const ptc = assembly.sections.some((section) => section.name === PTC_ONLY_SECTION);
+        if (ptc && agent !== undefined) ptcAgents.add(agent);
         visibleTools.set(
           agent,
           ptc ? new Set([RUN_CODE_NAME]) : new Set(definitions.map((tool) => tool.name)),
@@ -164,29 +214,33 @@ export function apply(ctx: Context, config: Config): void {
   projectVisible();
 }
 
-const baseGroup = groupByKey(BASE_GROUP_KEY);
-
-// PTC 执行器在模型面只声明 `run_code` 一条：它注册的这条专属 section 是装配期唯一能看到的信号
-// （section 名来自 `@deepseek-ai/dsh-tool-executor-ptc` 的 `PTC_ONLY_INSTRUCTION`）。
-const PTC_ONLY_SECTION = "tools:ptc-only";
-
-// **兜底**判据 = 工具注册表（这一行装没装这个工具）：只有当 `visibleTools` 里还没有这个 agent 的记录时才用得上。
-// 为什么需要兜底：理论上 `agent/pre-step` 之前每个 agent 必有一次装配（loop 里先 `assemble` 再走这条瀑布），
-// 但直接调瀑布的路径（诊断、别的插件自造 pre-step）可能没有——退回注册表总比渲染一份全量正文或空正文强。
-function registeredIn(ctx: Context, agent: Agent): (tool: string) => boolean {
-  return (tool) => ctx.tools.get(tool, agent) !== undefined;
+// 一个组的 d.ts：组内可见工具的签名（参数/返回都由 JSON Schema 转成 TS）。
+function renderGroupType(
+  group: ToolGroup,
+  definitions: ReadonlyMap<string, ToolDefinition>,
+  visible: (tool: string) => boolean,
+): string {
+  const signatures = group.tools
+    .map((entry) => entry.tool)
+    .filter((name) => visible(name) && definitions.has(name))
+    .map((name) => {
+      const definition = definitions.get(name)!;
+      // `short` 就是模型看的一行中文：放在成员上做 doc 注释，读签名时不用再回头找列表。
+      const short = SHORT_TOOL_DESCRIPTIONS[name];
+      return {
+        name,
+        args: jsonSchemaToTs(projectToolSchema(definition as never, false).parameters),
+        output: jsonSchemaToTs(definition.output?.schema ?? {}),
+        ...(short === undefined ? {} : { doc: short }),
+      };
+    });
+  if (signatures.length === 0) return "";
+  return renderToolsDeclaration(signatures);
 }
 
-// `base` 正文的信封：与官方 `renderSkillContent` 同形的内容块，但**手写**、不带 `<skill_resources>` 段
-// ——运行时注册的虚拟 skill 没有资源目录，那一段只有 provider 提示的噪音。上游改信封时跟着改。
-function renderSkillContent(name: string, body: string): string {
-  return [
-    `<skill_content name="${name}">`,
-    "<skill_instructions>",
-    body,
-    "</skill_instructions>",
-    "</skill_content>",
-  ].join("\n");
+// 常驻正文的信封：与上游 `system-reminder` 同形（不是 `skill_content`——那不是"加载技能"）。
+function renderReminder(body: string): string {
+  return `<system-reminder>\n\n${body}\n\n</system-reminder>`;
 }
 
 // 常驻注入的身份用上游已有的 `skill-invocation`（与按需加载同形态），幂等键就是组 skill 名（它不带 id）。

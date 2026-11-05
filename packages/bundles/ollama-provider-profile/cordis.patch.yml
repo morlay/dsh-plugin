@@ -5,6 +5,25 @@
 - id: llm-pi-ai
   config:
     providers:
+      amr:
+        apiKeyEnv: AMR_API_KEY
+        displayName: Open Design
+        api: openai-completions
+        baseURL: https://amr-link.open-design.ai/v1
+        reasoning: high
+        requestImageMaxBytes: 2097152
+        models:
+          - id: deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash @ Open Design
+            contextWindow: 1000000
+            input:
+              - text
+              - image
+            reasoningEfforts:
+              "off": null
+              low: low
+              high: high
+              max: max
       ollama:
         apiKeyEnv: OLLAMA_API_KEY
         displayName: Ollama Cloud

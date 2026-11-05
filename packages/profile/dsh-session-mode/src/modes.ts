@@ -37,7 +37,7 @@ export interface SessionMode {
   // （persona / 工具名单 / policy 名单 / 三个开关 / `defaultModel`）在任意 preset 上都照常生效。
   // 有值时切到这个模式会让会话的 preset 落进名单：当前那份已经在名单里就原样不动，否则换成名单里的**第一个**
   // （`modes.ts` 只声明"允许哪些"，落在哪个由 `SessionModes.select` 决定）。多个模式可以共享同一份名单。
-  readonly presetsOnly: string[];
+  readonly presetsOnly?: readonly string[];
   // 模式的展示名（选择面归官方 roster；这里留着做事实文案）。
   readonly name: string;
   // 一句话说明这个模式干什么；空串表示没写。
@@ -75,10 +75,13 @@ export interface SessionMode {
   // 是否要动态快照（文件沙箱策略、审批策略那两条 snapshot section，以及 `standard` 那类 preset 声明的时钟
   // `time-context` 注入）。缺省要；`false` 表示这个模式不要它们——对话模式没有文件与 shell 工具，"能改工作区
   // 哪些文件、要不要走审批"对它全是噪音，它也不谈时间。
+  // 这个模式下要丢弃的 system prompt section（精确名或前缀）。
+  readonly dropSections?: string[];
   readonly runtimeContext: boolean;
   // 这个模式的默认模型；省略就跟全局 `agent-default-model`。**可选**：没配的模式在页面上不出现在这一行
   // （`defaultModel` 是它所在模式的一个可加字段）。
   readonly defaultModel?: SessionModeModel;
+
   // 退役字段：单个 `preset` 已换成白名单 `presetsOnly`。这里留着只为**报错**（见 `configProblem`），页面上不出现。
   readonly preset?: string;
 }
@@ -88,6 +91,12 @@ export interface SessionMode {
 export function derivedSkills(mode: Pick<SessionMode, "allowTools" | "denyTools">): boolean {
   const allowed = mode.allowTools.length === 0 || mode.allowTools.includes("skill");
   return allowed && !mode.denyTools.includes("skill");
+}
+
+// 一份模式定义 → 归一化后的形状（每个字段都有值）：内置默认与 `{dshHome}/modes/*.toml` 覆盖都走这条，
+// 否则缺字段的 mode 会在收口里读到 `undefined`（`allow.length` 之类）。
+export function normalizeMode(value: unknown): SessionMode {
+  return modeSchema(value as never) as SessionMode;
 }
 
 // 每个字段都带 default：schema 的产物因此没有 `undefined` 键（`exactOptionalPropertyTypes` 下"缺省的键"
@@ -134,7 +143,7 @@ const modelSchema = z.object({
 
 // 本包 config 的**源码形状**：装配层与设置页写的那个形状。
 export interface Config {
-  // 新会话（还没选过模式的会话）用哪个模式。必须是 `modes` 里的一个 id。
+  // 新会话（还没选过模式的会话）用哪个模式。必须是内置或目录里的一个 id。
   readonly default: string;
   // 模式清单：id → 定义（含各自的 `defaultModel`）。顺序即选择器里的顺序（`Object.entries` 的插入序）。
   readonly modes: Record<string, SessionMode>;
@@ -147,8 +156,9 @@ export interface Config {
 //
 // `default` 与 `modes` 都是 volatile：默认模式与整份模式清单（含各自的 `defaultModel`）都在行配置页上。
 export interface ResolvedConfig {
+  // 装配期注入（测试/高级用法）：用户配置的正确路径是 `{dshHome}/modes/*.toml`。
+  readonly modes?: Record<string, SessionMode>;
   readonly default: Volatile<string>;
-  readonly modes: Volatile<Record<string, SessionMode>>;
   // 退役的顶层字段：解析后仍在这儿（普通值，不 volatile），装配期据此发现"还配着值"并报错。
   readonly models: SessionModeModels;
 }
@@ -156,17 +166,6 @@ export interface ResolvedConfig {
 const modeSchema: z<SessionMode> = z.object({
   // 退役字段：这里留着只为**报错**（见 `configProblem`），页面上不出现（`hidden()`）。不给默认：没配就没这个键。
   preset: z.string().hidden(),
-  presetsOnly: z
-    .array(z.string())
-    // 候选是部署里注册的 agent preset（具名源 `agent-presets`）：字段只说"这是选几个"，不关心它从哪来。
-    .role("select", { source: "agent-presets" })
-    .default([])
-    .description(
-      localized({
-        zh: "这个模式只允许挂哪些 agent preset（它们的 id，官方或本部署自建的）：行清单由挂着的那份提供，几个模式可以共享同一份名单。留空表示**允许全部**——哪份 preset 都行，选这个模式也不动会话当前挂着的那份；有值时当前的已经在名单里就不动，否则换成名单里的第一个。模式自己的提示词、工具收口与开关照常生效。",
-        en: "Which agent presets this mode may ride on (their ids, shipped or deployment-owned): that preset supplies the row list, and several modes may share one list. Empty means **every preset is allowed** — selecting the mode then leaves the session's current preset alone; when set, the current one stays if it is listed, otherwise the session switches to the first entry. The mode's persona, tool narrowing, and switches apply either way.",
-      }),
-    ),
   name: z
     .string()
     .required()
@@ -273,6 +272,15 @@ const modeSchema: z<SessionMode> = z.object({
       en: "Whether the skill catalog applies (the official `skill-catalog` injection). The default derives it from this mode's own tool lists: it applies when `(empty allowTools ? every tool : allowTools) − denyTools` contains `skill`; `false` drops the official `skill-catalog` injection (`skill` tool visibility still belongs to `allowTools`).",
     }),
   ),
+  dropSections: z
+    .array(z.string())
+    .default([])
+    .description(
+      localized({
+        zh: "这个模式下要丢弃的 system prompt section：写 section 名（精确匹配）或以 `*` 结尾的前缀（如 `mcp-*`）。",
+        en: "System prompt sections to drop for this mode: exact names, or prefixes ending in `*`.",
+      }),
+    ),
   runtimeContext: z
     .boolean()
     .default(true)
@@ -297,6 +305,7 @@ const modeSchema: z<SessionMode> = z.object({
 });
 
 export const Config: z<Config, ResolvedConfig> = z.object({
+  modes: z.dict(modeSchema).default({}),
   default: z
     .string()
     .required()
@@ -304,20 +313,6 @@ export const Config: z<Config, ResolvedConfig> = z.object({
       localized({
         zh: "新会话（还没选过模式的会话）用哪个模式；必须是下面 `modes` 里的一个 id。",
         en: "Mode a session starts in before anyone picks one; must be an id in `modes`.",
-      }),
-    )
-    .volatile(),
-  modes: z
-    .dict(modeSchema)
-    .required()
-    .description(
-      localized({
-        zh:
-          "模式清单：id → 定义（persona / 工具名单 / 生效的 policy 规则 / 角色）。改它对**已运行会话**不自动生效" +
-          "——重挂后新建的会话、或重新应用模式的会话才用新定义。",
-        en:
-          "Mode roster: id to definition (persona, tool lists, effective policy rules, role). Edits do not follow " +
-          "into already-running sessions; sessions created after the row is remounted use the new definition.",
       }),
     )
     .volatile(),

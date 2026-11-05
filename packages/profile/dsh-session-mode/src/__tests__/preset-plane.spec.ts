@@ -30,7 +30,12 @@ import WorkingDirectory from "@deepseek-ai/dsh-working-directory";
 import * as contextPlugin from "@morlay/dsh-context-assembler";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as plugin from "../index.ts";
-import { sessionModeRows } from "../rows.ts";
+import { MODE_SOURCES } from "../mode-sources.ts";
+import { modeConfig, sessionModeRows } from "../rows.ts";
+import { pinDshHome } from "./dsh-home.ts";
+
+// 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
+pinDshHome();
 
 const contexts: Context[] = [];
 const dirs: string[] = [];
@@ -164,10 +169,14 @@ async function mount(options: {
     // 模式行：与装配入口渲染出来的那份 config 同源（`modeOverrides` 用来把"推导值"与"显式值"分开钉住）。
     const config = sessionModeRows()[0]?.insert?.[0]?.config;
     if (config === undefined) throw new Error("session-mode 行没有 config");
-    const modes = config["modes"] as Record<string, Record<string, unknown>>;
+    const modes = Object.fromEntries(
+      MODE_SOURCES.map((source) => [source.id, modeConfig(source) as Record<string, unknown>]),
+    ) as Record<string, Record<string, unknown>>;
     const overrides = options.modeOverrides ?? {};
     await ctx.plugin(plugin, {
       ...config,
+      // 这个 spec 钉的是 preset 平面，不是 PTC 装配：关掉 `tools_describe` 以免污染工具面断言。
+      ptc: false,
       modes: Object.fromEntries(
         Object.entries(modes).map(([id, mode]) => [id, { ...mode, ...overrides[id] }]),
       ),
@@ -233,7 +242,13 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages: input, turn: options.turn ?? 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
+    {
+      messages: input,
+      turn: options.turn ?? 1,
+      step: 1,
+      signal: new AbortController().signal,
+      modelSelection: { provider: "fixture", model: "fixture" },
+    },
     async () => ({ kind: "enter" as const, messages: input }),
   );
   if (decision.kind !== "enter") return [];
@@ -247,10 +262,14 @@ async function preStep(
 
 // 模型目录 = 注册表视图（收窄落在 `tools.restrict` 上，装配瀑布里不再带工具声明）。
 async function toolNames(ctx: Context, agent: Agent): Promise<string[]> {
-  return ctx.tools
-    .schemas(agent)
-    .map((tool) => tool.name)
-    .toSorted();
+  return (
+    ctx.tools
+      .schemas(agent)
+      .map((tool) => tool.name)
+      // `describe_tool` 是本插件常驻的控制工具，不参与"模式收窄"的断言。
+      .filter((name) => name !== "describe_tool")
+      .toSorted()
+  );
 }
 
 // 一次真的 `skill` 工具调用（官方的加载技能那件工具；`name` 是模型给的那个技能名）。
@@ -402,7 +421,7 @@ describe.each([
     const agent = await create();
 
     const tools = await toolNames(ctx, agent);
-    for (const name of ["read", "write", "edit", "web_search", "ask_user_question", "skill"]) {
+    for (const name of ["read", "write", "edit", "ask_user_question", "skill"]) {
       expect(tools, `coding 少了 ${name}`).toContain(name);
     }
 

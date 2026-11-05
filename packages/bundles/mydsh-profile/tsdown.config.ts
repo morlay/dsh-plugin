@@ -17,6 +17,9 @@ export const ROWS: readonly unknown[] = [
       reasoningEffort: "high",
     },
   },
+  // 部署默认 preset 是 `ptc`（程序化工具调用）：新会话挂的就是它。用户级 `selectedDefault`
+  // 仍优先于这里（registry 是 `selectedDefault ?? default`），本行只给部署默认值。
+  { id: "agent-preset-registry", config: { default: "ptc" } },
   { id: "ui-chat", config: { transcriptView: "verbose" } },
   // 向官方 DeepSeek 请求携带的会话日志（`dsh_session_log`）默认关掉。
   { id: "session-log-deepseek", config: { enabled: false } },

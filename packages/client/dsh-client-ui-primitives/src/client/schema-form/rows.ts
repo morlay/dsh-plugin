@@ -62,9 +62,6 @@ export interface RowRegistrationDeps {
   release(ns: string): void;
 }
 
-// 自动项的兜底优先级：手写卡片（默认 0）遮住它。
-const FALLBACK_PRIORITY = 100;
-
 // 自动注册的差分器：按 describe 与 bundle 清单把「该有的行」与「已在的行」对齐。
 export class RowRegistration {
   readonly #deps: RowRegistrationDeps;
@@ -106,21 +103,7 @@ export class RowRegistration {
       this.#live.delete(ns);
       this.#deps.release(ns);
     }
-    for (const [ns, plan] of wanted) {
-      if (this.#live.has(ns)) continue;
-      const entry = this.#deps.entryFor(ns);
-      if (entry === undefined) continue;
-      const dispose = this.#deps.slots.register(
-        {
-          name: "plugins.row.config",
-          key: plan.key,
-          priority: FALLBACK_PRIORITY,
-          locale: this.#deps.locale,
-        },
-        entry.component,
-      );
-      this.#live.set(ns, dispose);
-    }
+    // 行配置入口（`plugins.row.config`）随配置页一起移除：这里不再注册该 keyed slot 的项。
   }
 
   // 注销全部并释放控制器。

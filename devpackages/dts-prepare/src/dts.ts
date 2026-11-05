@@ -46,7 +46,7 @@ export async function emitDts(options: EmitDtsOptions): Promise<void> {
     const relativeEntry = entry.replace(/^\.\//u, "").replace(/\.(?:tsx?|mts|cts)$/u, ".d.ts");
     const file = join(dtsCwd, relativeEntry);
     if (!(await pathExists(file))) {
-      throw new Error(`声明缺失: ${file}（先跑 target/dts 的全仓声明生成）`);
+      throw new Error(`声明缺失: ${file}（先跑 just dts 重建全仓声明树：新加的包不会自动进缓存）`);
     }
     input[name] = file;
   }
@@ -146,6 +146,9 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
       console.warn(`[dts] ${face} face 有诊断，声明树按已产出的部分继续（产物生成不设门禁）`);
     }
   }
+  // 完成标记由生成动作自己写：`just dts` 重建完与构建期首次生成留下的是同一个事实，
+  // 分两处写就会出现"标记在、树是半成品/旧树"。
+  await writeFile(join(outDir, ".complete"), `${new Date().toISOString()}\n`, "utf8");
 }
 
 async function run(command: string, args: readonly string[], cwd: string): Promise<void> {
@@ -205,10 +208,8 @@ export async function ensureWorkspaceDts(root: string): Promise<void> {
     }
   }
   try {
-    if (!(await exists(doneMark))) {
-      await generateWorkspaceDts(root);
-      await writeFile(doneMark, `${new Date().toISOString()}\n`, "utf8");
-    }
+    // 完成标记由 `generateWorkspaceDts` 自己写——这里只决定"要不要生成"。
+    if (!(await exists(doneMark))) await generateWorkspaceDts(root);
   } finally {
     await rm(lockDir, { recursive: true, force: true });
   }

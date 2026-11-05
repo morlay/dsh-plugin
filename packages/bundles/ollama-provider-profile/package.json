@@ -29,17 +29,6 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json"
   },
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
-      "./locale/*.json": "./locale/*.json"
-    }
-  },
   "scripts": {
     "build": "pnpm exec tsdown",
     "prepublishOnly": "pnpm run build"
@@ -60,6 +49,18 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    }
+  },
+  "private": true,
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
     }
   }
 }

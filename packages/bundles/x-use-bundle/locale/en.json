@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Browser & Desktop Use (MCP)",
+    "description": "Two generic dsh-mcp-client rows mounting agent-browser's and agent-desktop's stdio MCP servers; tools arrive as mcp__agent-browser__* and mcp__agent-desktop__*. Commands resolve from the global PATH, so a missing binary simply leaves its tools out.",
+    "detail": "docs/detail.md"
+  }
+}

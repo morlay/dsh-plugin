@@ -24,6 +24,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./rows": "./src/rows.ts",
+    "./groups": "./src/guidance/groups.ts",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -36,6 +37,10 @@
       "./rows": {
         "types": "./dist/rows.d.mts",
         "default": "./dist/rows.mjs"
+      },
+      "./groups": {
+        "types": "./dist/groups.d.mts",
+        "default": "./dist/groups.mjs"
       },
       "./package.json": "./package.json",
       "./locale/*.json": "./locale/*.json"
@@ -52,9 +57,9 @@
     "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@morlay/dsh-context-assembler": "workspace:*",
-    "@morlay/dsh-session-mode": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0"
   },
@@ -63,6 +68,7 @@
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-skill": "workspace:^",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@morlay/dsh-context-assembler": "workspace:*"

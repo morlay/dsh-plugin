@@ -230,7 +230,10 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
   it("standard 装配引用的每个工具都在组表或豁免表里", async () => {
     const plugins = await standardPlugins();
     const { tools } = await inventory(await enabledDirectoriesOf(plugins));
-    const known = new Set([...TOOL_GROUPS.flatMap((group) => group.tools), ...OUT_OF_SCOPE_TOOLS]);
+    const known = new Set([
+      ...TOOL_GROUPS.flatMap((group) => group.tools.map((entry) => entry.tool)),
+      ...OUT_OF_SCOPE_TOOLS,
+    ]);
 
     expect(
       [...new Set([...tools, ...declaredToolNamesOf(plugins)])]
@@ -242,7 +245,10 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
   it("宿主平面（base bundle）装配引用的每个工具都在组表或豁免表里", async () => {
     const plugins = await basePlugins();
     const { tools } = await inventory(await enabledDirectoriesOf(plugins));
-    const known = new Set([...TOOL_GROUPS.flatMap((group) => group.tools), ...OUT_OF_SCOPE_TOOLS]);
+    const known = new Set([
+      ...TOOL_GROUPS.flatMap((group) => group.tools.map((entry) => entry.tool)),
+      ...OUT_OF_SCOPE_TOOLS,
+    ]);
 
     expect(
       [...new Set([...tools, ...declaredToolNamesOf(plugins)])]
