@@ -57,11 +57,11 @@ const ESM_ROUND = ["index.mjs", "rows.mjs", "client.mjs", "client.d.mts"] as con
 const created: string[] = [];
 
 async function makePackage(extra: Record<string, unknown> = {}): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "dsh-devkit-package-exports-"));
+  const directory = await mkdtemp(join(tmpdir(), "tsdown-plugin-cordis-package-exports-"));
   created.push(directory);
   await writeFile(
     join(directory, "package.json"),
-    `${JSON.stringify({ name: "@morlay/devkit-exports-fixture", private: true, type: "module", ...extra }, null, 2)}\n`,
+    `${JSON.stringify({ name: "@local/tsdown-plugin-cordis-exports-fixture", private: true, type: "module", ...extra }, null, 2)}\n`,
   );
   return directory;
 }

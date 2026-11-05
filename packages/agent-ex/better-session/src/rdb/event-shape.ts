@@ -1,0 +1,198 @@
+import type { SessionEvent } from "@morlay/dsh-session/contract";
+
+export type EventKind =
+  | "message"
+  | "thinking"
+  | "turn"
+  | "tool"
+  | "request"
+  | "config"
+  | "audit"
+  | "lifecycle"
+  | "inbox"
+  | "compaction"
+  | "llm"
+  | "subagent"
+  | "team"
+  | "workflow"
+  | "goal"
+  | "schedule"
+  | "todo"
+  | "web";
+
+export type EventRole = "user" | "assistant" | "tool";
+
+export function eventKind(event: { type: string; data?: unknown }): EventKind | "" {
+  switch (event.type) {
+    case "user/message":
+      return "message";
+    case "assistant/message": {
+      const content = (event.data as { message?: { content?: unknown[] } }).message?.content;
+      if (content?.some((block) => (block as { type?: string })?.type === "reasoning")) {
+        return "thinking";
+      }
+      return "message";
+    }
+    case "turn/start":
+    case "turn/end":
+    case "step/start":
+    case "step/end":
+    case "session/end-seed":
+      return "turn";
+    case "tool/call":
+    case "tool/result":
+    case "tool/ptc-dispatch-start":
+    case "tool/ptc-dispatch":
+    case "tool/code-dispatch-start":
+    case "tool/code-dispatch":
+      return "tool";
+    case "request/header":
+    case "request/context":
+      return "request";
+    case "model/selection":
+    case "permission/preset":
+    case "approval/policy":
+    case "sandbox/mode":
+    case "plan/mode":
+    case "agent-preset/selected":
+      return "config";
+    case "approval/asked":
+    case "approval/decided":
+    case "command/run":
+    case "command/done":
+    case "hook/invoked":
+    case "hook/result":
+    case "feedback/record":
+      return "audit";
+    case "session/title":
+    case "session/title-llm-request":
+    case "session-log-deepseek/delivery-accepted":
+      return "lifecycle";
+    case "agent/inbox/spliced":
+      return "inbox";
+    case "compaction/start":
+    case "compaction/end":
+    case "compaction/summary":
+    case "compaction/prune":
+      return "compaction";
+    case "llm/retry":
+    case "llm/retry-started":
+      return "llm";
+    case "subagent/descriptor":
+    case "subagent/model-selection-policy":
+      return "subagent";
+    case "team/member":
+    case "team/task":
+    case "team/message/queued":
+    case "team/message/delivered":
+      return "team";
+    case "tool-workflow/run-start":
+    case "tool-workflow/run-end":
+    case "tool-workflow/agent-start":
+    case "tool-workflow/agent-end":
+      return "workflow";
+    case "goal/change":
+      return "goal";
+    case "schedule/change":
+      return "schedule";
+    case "todo/write":
+      return "todo";
+    case "web/deepseek-search-llm-request":
+      return "web";
+    default:
+      return "";
+  }
+}
+
+export function eventDimensions(event: SessionEvent): {
+  kind: string;
+  role: string;
+  name: string;
+  actionId: string;
+} {
+  const kind = eventKind(event);
+
+  const type = event.type as string;
+  const data = event.data as Record<string, unknown>;
+  switch (type) {
+    case "user/message":
+      return { kind, role: "user", name: "", actionId: "" };
+    case "assistant/message":
+      return { kind, role: "assistant", name: "", actionId: "" };
+    case "tool/result": {
+      // V4 起结果消息自己带 `toolCallId`（不再包在 content 的一个 `tool-result` 块里）。
+      const message = data["message"] as { toolCallId?: string } | undefined;
+      return { kind, role: "tool", name: "", actionId: message?.toolCallId ?? "" };
+    }
+    case "tool/call":
+      return {
+        kind,
+        role: "",
+        name: typeof data["name"] === "string" ? data["name"] : "",
+        actionId: typeof data["callId"] === "string" ? data["callId"] : "",
+      };
+    case "tool/ptc-dispatch-start":
+    case "tool/ptc-dispatch":
+    case "tool/code-dispatch-start":
+    case "tool/code-dispatch":
+      return {
+        kind,
+        role: "",
+        name: "",
+        actionId: typeof data["subCallId"] === "string" ? data["subCallId"] : "",
+      };
+    case "command/run":
+    case "command/done":
+      return {
+        kind,
+        role: "",
+        name: type === "command/run" && typeof data["name"] === "string" ? data["name"] : "",
+        actionId: typeof data["commandId"] === "string" ? data["commandId"] : "",
+      };
+    case "approval/asked":
+    case "approval/decided":
+      return {
+        kind,
+        role: "",
+        name: "",
+        actionId: typeof data["id"] === "string" ? data["id"] : "",
+      };
+    case "hook/invoked":
+    case "hook/result":
+      return {
+        kind,
+        role: "",
+        name: "",
+        actionId: typeof data["handlerId"] === "string" ? data["handlerId"] : "",
+      };
+    case "llm/retry":
+    case "llm/retry-started":
+      return {
+        kind,
+        role: "",
+        name: "",
+        actionId: typeof data["retryId"] === "string" ? data["retryId"] : "",
+      };
+    case "tool-workflow/run-start":
+    case "tool-workflow/run-end":
+    case "tool-workflow/agent-start":
+    case "tool-workflow/agent-end":
+      return {
+        kind,
+        role: "",
+        name: "",
+        actionId: typeof data["runId"] === "string" ? data["runId"] : "",
+      };
+    case "todo/write":
+      return { kind, role: "", name: "todos", actionId: "" };
+    case "subagent/descriptor":
+      return {
+        kind,
+        role: "",
+        name: typeof data["label"] === "string" ? data["label"] : "",
+        actionId: "",
+      };
+    default:
+      return { kind, role: "", name: "", actionId: "" };
+  }
+}

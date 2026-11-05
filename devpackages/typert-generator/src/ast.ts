@@ -4,6 +4,7 @@ import { parseSync } from "oxc-parser";
 // 这一层只做"源码 / 声明 → AST"的机械活：解析、遍历、取 JSDoc。所有领域判断都在别处。
 
 /** oxc 的 AST 节点（ESTree 形态）：字段按需取，不做完整建模。 */
+// oxlint-disable-next-line typescript/no-explicit-any -- AST 是外部形状（oxc 的 ESTree），字段按需取、不做完整建模
 export type Node = Record<string, any>;
 
 export type ParsedFile = {

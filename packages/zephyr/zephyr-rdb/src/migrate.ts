@@ -1,0 +1,132 @@
+import {
+  addColumnSql,
+  createIndexSql,
+  createTableSql,
+  dropColumnSql,
+  type Dialect,
+  type TableShape,
+} from "./dialect.ts";
+import type { Catalog, ColumnDef } from "./defs.ts";
+import type { Database } from "./database/types.ts";
+import { shapeReader } from "./database/wrap.ts";
+import { fragment } from "./fragment.ts";
+
+// 一条结构变更（按顺序执行）。
+export interface SchemaChange {
+  readonly table: string;
+  readonly kind: "create-table" | "add-column" | "create-index" | "drop-column";
+  readonly statement: string;
+}
+
+export interface EnsureSchemaOptions {
+  // PostgreSQL 的 schema（省略即 `database.schema`，再缺省是 `public`）；SQLite 忽略。
+  schema?: string;
+  // 允许删掉定义里已经不存在、且确实多出来的列（默认关闭：升级不丢数据）。
+  allowDestructive?: boolean;
+  // 需要看到实际执行的语句时（排查 / 测试）。
+  onStatement?: (statement: string) => void;
+}
+
+// 结构差异（纯函数）：缺表建表、缺列补列、缺索引补索引。
+//
+// 默认只做「增」（缺表建表、缺列补列、缺索引补索引），不改类型、不删索引；删多出来的列只由
+// `allowDestructive: true` 显式打开（旧库升级默认不丢数据）。
+export function planSchema(
+  dialect: Dialect,
+  catalog: Catalog,
+  shapes: ReadonlyMap<string, TableShape | undefined>,
+  options: { schema?: string; allowDestructive?: boolean } = {},
+): SchemaChange[] {
+  const changes: SchemaChange[] = [];
+  for (const table of catalog) {
+    const shape = shapes.get(table.name);
+    if (shape === undefined) {
+      changes.push({
+        table: table.name,
+        kind: "create-table",
+        statement: createTableSql(dialect, table, options.schema),
+      });
+    } else {
+      for (const [name, column] of Object.entries(table.columns)) {
+        if (shape.columns.has(name)) continue;
+        changes.push({
+          table: table.name,
+          kind: "add-column",
+          statement: addColumnSql(
+            dialect,
+            table.name,
+            name,
+            assertAddable(table.name, name, column),
+            options.schema,
+          ),
+        });
+      }
+      if (options.allowDestructive === true) {
+        for (const name of shape.columns) {
+          if (table.columns[name] !== undefined) continue;
+          changes.push({
+            table: table.name,
+            kind: "drop-column",
+            statement: dropColumnSql(dialect, table.name, name, options.schema),
+          });
+        }
+      }
+    }
+    for (const [name, index] of Object.entries(table.indexes ?? {})) {
+      if (shape?.indexes.has(name) === true) continue;
+      changes.push({
+        table: table.name,
+        kind: "create-index",
+        statement: createIndexSql(dialect, table, name, index.columns, false, options.schema),
+      });
+    }
+    for (const [name, unique] of Object.entries(table.uniques ?? {})) {
+      if (shape?.indexes.has(name) === true) continue;
+      // 旧表上补唯一约束只能走唯一索引（不改表定义）。
+      changes.push({
+        table: table.name,
+        kind: "create-index",
+        statement: createIndexSql(dialect, table, name, unique.columns, true, options.schema),
+      });
+    }
+  }
+  return changes;
+}
+
+function assertAddable(table: string, name: string, column: ColumnDef): ColumnDef {
+  // 已有数据的表加 NOT NULL 列必须带默认值，否则方言会拒绝（或写入空值）。
+  if (column.notNull === true && column.default === undefined) {
+    throw new Error(
+      `zephyr-rdb: cannot add NOT NULL column '${table}.${name}' without a default to an existing table`,
+    );
+  }
+  return column;
+}
+
+// 让库结构与表定义对齐，并返回实际执行的语句。
+export async function ensureSchema(
+  database: Database,
+  catalog: Catalog,
+  options: EnsureSchemaOptions = {},
+): Promise<string[]> {
+  // schema 是连接上的事实：配置给了就用配置的，没给就跟着连接打开时的有效 schema。
+  const schema = options.schema ?? database.schema;
+  const shapes = new Map<string, TableShape | undefined>();
+  for (const table of catalog) {
+    shapes.set(
+      table.name,
+      await database.dialect.readShape(shapeReader(database), table.name, schema),
+    );
+  }
+  const changes = planSchema(database.dialect, catalog, shapes, {
+    ...options,
+    ...(schema === undefined ? {} : { schema }),
+  });
+  for (const change of changes) {
+    options.onStatement?.(change.statement);
+    await database.run(fragment(change.statement));
+  }
+  return changes.map((change) => change.statement);
+}
+
+export type { TableShape };

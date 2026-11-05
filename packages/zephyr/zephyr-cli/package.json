@@ -1,0 +1,68 @@
+{
+  "name": "@morlay/zephyr-cli",
+  "version": "0.0.1",
+  "private": true,
+  "description": "zephyr 的命令行：按 zephyr 装配清单注册命令，`dev` 起开发形态、`build` 产出静态面与运行时闭包、`preview` 跑产物；桌面命令由插件包追加。",
+  "keywords": [
+    "cli",
+    "dsh",
+    "dsh-plugin",
+    "vite",
+    "zephyr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "bin": {
+    "zephyr": "./src/cli.ts"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "bin": {
+      "zephyr": "./dist/cli.mjs"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@morlay/dsh-oxc-node": "workspace:^",
+    "@morlay/zephyr": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "vite": "^8.3.1"
+  },
+  "peerDependencies": {
+    "rolldown": "^1.2.14",
+    "vite": "^8.3.1"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2",
+    "node": ">=24.11.0"
+  }
+}

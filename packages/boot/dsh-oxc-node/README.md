@@ -12,9 +12,8 @@
 node --import <本包>/register.mjs <入口>
 ```
 
-- **壳**不直接依赖它：随包运行时（`<Resources>/runtime/loader`）里放着一份，壳按**路径**把它交给宿主
-  与子进程（见 `packages/desktop/dsh-desktop-shell/src/index.ts` 的 `loader`）；
-- **工具**（`@local/dshdev`）依赖它，并在备 runtime 时把这一份连同它的依赖层一起拷进
-  `<buildCache>/runtime/loader`（见 `devpackages/dshdev/src/cli/prepare-runtime.ts` 的 `prepareLoader`）。
+- **壳**（`@morlay/zephyr-desktop-shell`）按路径把它交给宿主与子进程（见该包 `src/main.ts` 的 `loader`）；
+- **启动器**（`zephyr-cli` 的 `preview`）与**桌面 dev**（`@morlay/zephyr-desktop-bundle` 的 `dev`）也用它加载闭包里的
+  `.ts`——两处都按变量动态 import `register.mjs`（它没有类型声明）。
 
-依赖方向因此是"**devpackages → packages**"：`@local/*` 只出现在工具链里，不落到任何发布包的运行时依赖上。
+依赖方向：只有壳、启动器、桌面工具与应用依赖它；能力包不依赖它——它们本身就是被加载的源码面。

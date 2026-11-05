@@ -1,0 +1,35 @@
+{
+  "name": "@morlay/dsh-session",
+  "version": "0.0.1",
+  "private": true,
+  "description": "会话核心：存储、投影、查询、token 计量与浏览器侧会话数据面；标题、检查点等子域在各自包里。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contract": "./src/contract/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts",
+    "./endpoint": "./src/endpoint/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-session-format-catalog": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
+    "@deepseek-ai/dsh-session-query": "workspace:^",
+    "@deepseek-ai/dsh-session-query-sqlite": "workspace:^",
+    "@deepseek-ai/dsh-session-stats": "workspace:^",
+    "@deepseek-ai/dsh-session-turn-outline": "workspace:^",
+    "@deepseek-ai/dsh-token-meter": "workspace:^",
+    "@morlay/dsh-storage": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "devDependencies": {},
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

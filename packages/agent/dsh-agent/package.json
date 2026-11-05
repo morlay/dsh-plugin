@@ -1,0 +1,49 @@
+{
+  "name": "@morlay/dsh-agent",
+  "version": "0.0.1",
+  "private": true,
+  "description": "agent 的运行时骨架：会话与 agent 的注册表、LLM 调用、系统提示词、工具注册表和 agent loop。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server/index.ts",
+    "./package.json": "./package.json",
+    "./contract": "./src/contract/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis-plugin-timer": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
+    "@deepseek-ai/dsh-agent-preset-registry": "workspace:^",
+    "@deepseek-ai/dsh-deepseek-llm-api-extensions": "workspace:^",
+    "@deepseek-ai/dsh-fs-local": "workspace:^",
+    "@deepseek-ai/dsh-launch-environment": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:^",
+    "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
+    "@deepseek-ai/dsh-llm-retry": "workspace:^",
+    "@deepseek-ai/dsh-mcp-client": "workspace:^",
+    "@deepseek-ai/dsh-mcp-resources": "workspace:^",
+    "@deepseek-ai/dsh-scope": "workspace:^",
+    "@deepseek-ai/dsh-subagent": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tool-working-directory": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/dsh-working-directory": "workspace:^",
+    "@morlay/dsh-fs": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-setting": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-session": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

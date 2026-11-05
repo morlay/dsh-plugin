@@ -1,0 +1,21 @@
+# Dev PostgreSQL instance for zephyr-rdb's PostgreSQL contract tests.
+#
+# `just -f packages/zephyr/zephyr-rdb/tool/pg/justfile test` starts this service, then runs
+# `src/__tests__/pg.spec.ts` against it.
+# The host port is intentionally non-default (25433) so it does not collide with a
+# developer's own local Postgres (or another dsh repo's instance).
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "25433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

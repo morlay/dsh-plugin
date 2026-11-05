@@ -2,12 +2,11 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { rolldown } from "rolldown";
 import type { Plugin } from "rolldown";
-import { clientAssetPlugin, NODE_BUILTIN } from "@morlay/dsh-cordis-assets/assets";
+import { clientAssetPlugin, NODE_BUILTIN } from "./assets.ts";
 import { cssInlinePlugins, type CssAssetPolicy } from "./css.ts";
 
-// 资产那套（mime 表、`?raw`、资产内联/落文件）的 home 在 `@morlay/dsh-client-modules/src/assets.ts`——
-// 运行期现场打包与这里的构建共用一份；下面只把名字转出来，外部 import 面不变。
-export { ASSET_MIME, clientAssetPlugin } from "@morlay/dsh-cordis-assets/assets";
+// 资产那套（mime 表、`?raw`、资产内联/落文件）在 `./assets.ts`；下面把名字转出去，消费方只认包出口。
+export { ASSET_MIME, clientAssetPlugin } from "./assets.ts";
 
 // `__ModuleLoader__.load` 手递的三段：banner / intro / footer（构建与现场打包共用）。
 const factoryBanner = (name: string): string =>
@@ -214,7 +213,9 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
     });
     const chunk = output.find((item) => item.type === "chunk");
     if (chunk === undefined || chunk.type !== "chunk")
-      throw new Error(`devkit: bundleClientFactory(${options.name}) produced no chunk`);
+      throw new Error(
+        `tsdown-plugin-cordis: bundleClientFactory(${options.name}) produced no chunk`,
+      );
     return chunk.code;
   } finally {
     await build.close();
@@ -255,7 +256,9 @@ export async function bundleClientLibrary(options: {
     });
     const chunk = output.find((item) => item.type === "chunk");
     if (chunk === undefined || chunk.type !== "chunk")
-      throw new Error(`devkit: bundleClientLibrary(${options.name}) produced no chunk`);
+      throw new Error(
+        `tsdown-plugin-cordis: bundleClientLibrary(${options.name}) produced no chunk`,
+      );
     return chunk.code;
   } finally {
     await build.close();
@@ -280,9 +283,11 @@ const BASELINE: (string | RegExp)[] = [
 ];
 
 // 「契约层」：可安全内联的纯函数 / 线格式模块——没有需要跨插件共享的运行时身份（无单例、Symbol、
-// instanceof 判定）；名单与上游 client 构建的 `INLINE_SAFE` 对齐（这些包没有模块表条目）。
+// instanceof 判定）；名单与上游 client 构建的 `INLINE_SAFE` 对齐（这些包没有模块表条目），上游另列的
+// `VENDORED_LIBRARY`（cosmokit / schemastery / cordis-plugin-timer，rescope 进来的框架库）我们也并进这份，
+// 本门只有一个判据、不再分两个常量。
 export const INLINE_SAFE =
-  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|deque|output-retention|typert-protocol|util-crypto|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-presets\/display$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$))/;
+  /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$)|@deepseek-ai\/cordis-plugin-timer$)/;
 
 // 判断一个模块是否留给平台/模块表（其余一律内联）。只信**显式列表**（baseline + 调用方给的行集）：
 // 「所有 `@deepseek-ai/*` 都是 client 行」的兜底会把 `.../remote`、`/display` 这类子路径也送进模块表，

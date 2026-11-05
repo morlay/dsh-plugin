@@ -19,9 +19,19 @@
  * 用法：随进程启动挂上（壳的入口 `import` 它；宿主用 `--import`），本模块只做注册、没有导出。
  */
 import { readFileSync } from "node:fs";
-import { registerHooks } from "node:module";
-import { fileURLToPath } from "node:url";
+import { createRequire, registerHooks } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { transformSync } from "oxc-transform";
+
+/** helper 包的根（`@oxc-project/runtime`）：ESM 变体在它 `src/helpers/esm/` 下。 */
+const helpersRoot = (() => {
+  try {
+    return dirname(createRequire(import.meta.url).resolve("@oxc-project/runtime/package.json"));
+  } catch {
+    return undefined;
+  }
+})();
 
 /** 排查用：`DSH_TS_DEBUG=1` 时把"挂上/转译了哪个"打到 stderr（平时安静）。 */
 const debug = process.env.DSH_TS_DEBUG === "1";
@@ -29,6 +39,13 @@ if (debug) process.stderr.write(`[ts-register] 已挂载 pid=${String(process.pi
 
 registerHooks({
   load(url, context, nextLoad) {
+    // 装饰器降级的 helper：上面把它指到了 `helpers/esm/*.js`，但那个包的 `type` 是 `commonjs`，
+    // Node 会按 CJS 解析这份 ESM 源码（`Unexpected token 'export'`）。这里显式声明它是 ESM。
+    if (url.startsWith("file:") && url.includes("/@oxc-project/runtime/src/helpers/esm/")) {
+      // oxlint-disable-next-line node/no-sync -- 钩子契约要求同步。
+      const source = readFileSync(fileURLToPath(url), "utf8");
+      return { format: "module", source, shortCircuit: true };
+    }
     if (!url.startsWith("file:") || !url.endsWith(".ts")) return nextLoad(url, context);
     if (debug) process.stderr.write(`[ts-register] 转译 ${url.slice(7)}\n`);
     const path = fileURLToPath(url);
@@ -60,13 +77,14 @@ registerHooks({
     // `@oxc-project/runtime`。这里把它解析成绝对 URL（按 loader 自己的解析面）——不能直接拼目录，
     // 那个包的 helper 名字经 `exports` 映射到 `src/helpers/*.js`。
     const code = result.code.replace(
-      /(["'])(@oxc-project\/runtime\/[^"']+)\1/gu,
-      (whole, quote, specifier) => {
-        try {
-          return `${quote}${import.meta.resolve(specifier)}${quote}`;
-        } catch {
-          return whole;
-        }
+      /(["'])(@oxc-project\/runtime\/helpers\/([^"']+))\1/gu,
+      (whole, quote, specifier, name) => {
+        // `node` 条件把 helper 解析成 **CJS 版**（那个包的 `type` 是 commonjs），而 ESM 版在
+        // `src/helpers/esm/` 下。直接引裸说明符会在纯 ESM 加载器（Electron、preview 的宿主）里报
+        // `SyntaxError: Unexpected token 'export'`——这正是「产物跑不起来」的真因。
+        if (helpersRoot === undefined) return whole;
+        const esm = pathToFileURL(join(helpersRoot, "src", "helpers", "esm", `${name}.js`)).href;
+        return `${quote}${esm}${quote}`;
       },
     );
     // `map` 可能是字符串，也可能是 sourcemap 对象——两种都要能带上（栈里才指向原文件）。

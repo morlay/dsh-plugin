@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,10 +7,10 @@ import { rolldown } from "rolldown";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bundleClientFactory } from "../cordis-client.ts";
 import { buildCordisConfig } from "../cordis-host.ts";
-import { cssInlinePlugins } from "@morlay/dsh-cordis-assets/styles";
+import { cssInlinePlugins } from "../css.ts";
 
 // 插件 id：与现场打包的 `name` 同义，写入注入 style tag 的 `data-plugin*` 属性。
-const PLUGIN_ID = "@morlay/devkit-css-fixture";
+const PLUGIN_ID = "@local/tsdown-plugin-cordis-css-fixture";
 
 const FIXTURE_ENTRY = `import classes from "./styles/Fixture.module.css";
 import inlined from "./styles/inline-only.css?inline";
@@ -40,7 +40,7 @@ interface Registered {
   factory: (require: (id: string) => unknown) => Record<string, unknown>;
 }
 
-// 在 jsdom 里执行注册脚本，取出 `__ModuleLoader__.load` 手递的工厂并调用：注入的 `<style>`
+// 在 happy-dom 里执行注册脚本，取出 `__ModuleLoader__.load` 手递的工厂并调用：注入的 `<style>`
 // 与 class 映射只在工厂执行时出现，纯文本断言看不到。
 function runFactory(code: string): Record<string, unknown> {
   const registered: Registered[] = [];
@@ -78,7 +78,7 @@ describe("client bundle CSS", () => {
 
   beforeAll(async () => {
     // 取 realpath：rolldown 报出的 id / watch 路径都是真实路径（macOS 的 /var → /private/var）。
-    directory = await realpath(await mkdtemp(join(tmpdir(), "devkit-css-")));
+    directory = await realpath(await mkdtemp(join(tmpdir(), "tsdown-plugin-cordis-css-")));
     await mkdir(join(directory, "styles"));
     await writeFile(join(directory, "styles", "Fixture.module.css"), MODULE_CSS);
     await writeFile(join(directory, "styles", "global.css"), GLOBAL_CSS);

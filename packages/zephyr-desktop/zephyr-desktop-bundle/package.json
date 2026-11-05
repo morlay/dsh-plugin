@@ -1,0 +1,72 @@
+{
+  "name": "@morlay/zephyr-desktop-bundle",
+  "version": "0.0.1",
+  "private": true,
+  "description": "zephyr 的桌面插件：给 CLI 追加 `desktop dev` 与 `desktop bundle`，把工作区打成静态、无签名的桌面应用。",
+  "keywords": [
+    "desktop",
+    "dsh",
+    "dsh-plugin",
+    "electron",
+    "zephyr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@morlay/dsh-oxc-node": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-cli": "workspace:^",
+    "@morlay/zephyr-desktop-shell": "workspace:^",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0"
+  },
+  "peerDependencies": {
+    "electron": ">=44",
+    "electron-builder": ">=26"
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    },
+    "electron-builder": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2",
+    "node": ">=24.11.0"
+  }
+}

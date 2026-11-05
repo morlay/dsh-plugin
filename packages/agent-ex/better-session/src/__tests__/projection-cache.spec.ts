@@ -1,0 +1,720 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+
+import {
+  SessionId,
+  SessionLogOffset,
+  SessionSeq,
+  type SessionEvent,
+  type SessionHeader,
+} from "@morlay/dsh-session/contract";
+import { SessionTurnOutline } from "@morlay/dsh-session";
+import type { StorageRepository } from "@morlay/better-session";
+import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
+import { createCtx, mountOnto, type MountedContext as Context } from "./support/base.ts";
+
+const dirs: string[] = [];
+afterEach(async () => {
+  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
+});
+
+function threeTurnLog(): SessionEvent[] {
+  const events: SessionEvent[] = [];
+  const push = (type: string, data: unknown, extra?: Record<string, unknown>): void => {
+    events.push({
+      type,
+      seq: SessionSeq(events.length),
+      time: events.length + 1,
+      data,
+      ...extra,
+    } as SessionEvent);
+  };
+  for (let turn = 1; turn <= 3; turn += 1) {
+    push("turn/start", { turn });
+    push("step/start", { turn, step: 1 });
+    push(
+      "user/message",
+      {
+        id: `u${String(turn)}`,
+        role: "user",
+        content: [{ type: "text", text: `turn ${String(turn)} input` }],
+        source: { kind: "user" },
+      },
+      { surfaceOp: "append" },
+    );
+    push(
+      "assistant/message",
+      {
+        turn,
+        step: 1,
+        message: {
+          id: `a${String(turn)}`,
+          role: "assistant",
+          content: [{ type: "text", text: `answer ${String(turn)}` }],
+          source: { kind: "model", provider: "mock", model: "mock" },
+        },
+        stream: [],
+      },
+      { surfaceOp: "append" },
+    );
+    push("step/end", { turn, step: 1 });
+    push("turn/end", { turn, reason: { kind: "completed" } });
+  }
+  return events;
+}
+
+interface Harness {
+  ctx: Context;
+
+  dbPath?: string;
+  cache: {
+    write(session: {
+      id: SessionId;
+      header: SessionHeader;
+      inheritedEventCount: SessionLogOffset;
+      snapshotEvents(): readonly SessionEvent[];
+    }): Promise<void>;
+    cachedSnapshot(
+      header: SessionHeader,
+      keys?: readonly string[],
+    ): { asOfSeq: number; values: Record<string, unknown> } | undefined;
+    coldSnapshot(
+      header: SessionHeader,
+      inheritedEventCount: SessionLogOffset,
+      events: readonly SessionEvent[],
+    ): { asOfSeq: number; values: Record<string, unknown> };
+  };
+  dispose: () => Promise<void>;
+}
+
+async function waitFor<T>(read: () => T | undefined, timeoutMs = 2000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = read();
+    if (value !== undefined) return value;
+    if (Date.now() > deadline)
+      throw new Error("timed out waiting for the projection cache service");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function harness(root?: string): Promise<Harness> {
+  const dir = root ?? (await mkdtemp(join(tmpdir(), "projection-cache-")));
+  if (root === undefined) dirs.push(dir);
+  const ctx = createCtx();
+  await ctx.plugin(SessionTurnOutline);
+  const dbPath = join(dir, "sessions.sqlite");
+  const fiber = await mountOnto(ctx, {
+    config: {
+      type: "sqlite",
+      path: dbPath,
+    },
+  });
+
+  const cache = await waitFor(
+    () => ctx.get("sessionProjectionCache") as Harness["cache"] | undefined,
+  );
+  return {
+    ctx,
+    dbPath,
+    cache,
+    dispose: () => fiber.dispose(),
+  };
+}
+
+function cachedTurns(harness: Harness, id: string): number[] | undefined {
+  const live = harness.ctx.sessions.get(SessionId(id));
+  const header = live?.header ?? meta(id);
+  const outline = harness.cache.cachedSnapshot(header)?.values["turnOutline"];
+  return Array.isArray(outline)
+    ? outline.map((entry) => (entry as { turn: number }).turn)
+    : undefined;
+}
+
+describe("投影检查点增量写回", () => {
+  it("只 upsert 变化的行、删掉消失的行，未变化的行原样不动", async () => {
+    const { ctx, dbPath, dispose } = await harness();
+    try {
+      const storage = (
+        ctx.sessionPersistence as unknown as { backend: { storage: StorageRepository } }
+      ).backend.storage;
+
+      // 检查点行经外键挂在会话行上，先让会话存在。
+      const handle = await ctx.sessionPersistence.create(meta("s1"));
+      await handle.append(oneTurnLog());
+      await handle.close();
+
+      await storage.putProjcache("s1", {
+        alpha: { ver: 1, seq: SessionSeq(1), val: "a1" },
+        beta: { ver: 1, seq: SessionSeq(2), val: "b1" },
+        gamma: { ver: 1, seq: SessionSeq(3), val: "g1" },
+      });
+
+      const snapshot = (): Array<{ rowid: number; fKey: string; fSeq: number; fVal: string }> => {
+        const db = new DatabaseSync(dbPath!);
+        try {
+          return db
+            .prepare(
+              "SELECT rowid, f_key AS fKey, f_seq AS fSeq, f_val AS fVal FROM t_session_projcache_row WHERE f_session_id = ? ORDER BY f_key",
+            )
+            .all("s1") as Array<{ rowid: number; fKey: string; fSeq: number; fVal: string }>;
+        } finally {
+          db.close();
+        }
+      };
+
+      const before = snapshot();
+      await storage.patchProjcache("s1", { beta: { ver: 1, seq: SessionSeq(9), val: "b2" } }, [
+        "gamma",
+      ]);
+      const after = snapshot();
+
+      // alpha 没变：一行都不该被碰（rowid 与值都不动）
+      expect(after.find((row) => row.fKey === "alpha")).toEqual(
+        before.find((row) => row.fKey === "alpha"),
+      );
+      // beta 变了：原地更新（rowid 不变）
+      expect(after.find((row) => row.fKey === "beta")).toMatchObject({ fSeq: 9, fVal: '"b2"' });
+      expect(after.find((row) => row.fKey === "beta")?.rowid).toBe(
+        before.find((row) => row.fKey === "beta")?.rowid,
+      );
+      // gamma 消失
+      expect(after.some((row) => row.fKey === "gamma")).toBe(false);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("session-rdb projection cache 写回时机", () => {
+  const rowsOf = (dbPath: string, id: string): string => {
+    const db = new DatabaseSync(dbPath);
+    try {
+      const rows = db
+        .prepare("select f_key, f_seq, f_val from t_session_projcache_row where f_session_id = ?")
+        .all(id) as Array<{ f_key: string; f_seq: number; f_val: string }>;
+      return rows
+        .map((row) => `${row.f_key}@${String(row.f_seq)}=${row.f_val}`)
+        .sort()
+        .join("|");
+    } finally {
+      db.close();
+    }
+  };
+
+  it("投影没有变化时不写库；有变化才有写回（不按事件条数攒批）", async () => {
+    const { ctx, dbPath, dispose } = await harness();
+    try {
+      const id = SessionId("no-change");
+      ctx.sessions.create(id, { meta: meta("no-change"), seed: threeTurnLog() });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      live.append("turn/start", { turn: 4 });
+
+      const settled = await waitFor(() => {
+        const rows = rowsOf(dbPath!, "no-change");
+        return rows.length > 0 ? rows : undefined;
+      });
+
+      // 一条不进任何已注册投影的事件：不该产生写回。
+      live.append("request/header", {
+        header: { config: { provider: "mock", model: "mock" } },
+        reason: "initial",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(rowsOf(dbPath!, "no-change")).toBe(settled);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("session-rdb projection cache replacement", () => {
+  it("header-only 读接受 ReadonlySet 形态的 keys（会话列表用它取标题）", async () => {
+    // 上游 `session/list` 传给缓存的是 `sessionProjections.summaryKeys()`——一个 `ReadonlySet`。这里之前只按
+    // 数组写了 `keys.includes()`，Set 上直接抛 TypeError；list 把那一行整列投影吞掉，侧边栏标题全变"未命名"。
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const id = SessionId("set-keys");
+      ctx.sessions.create(id, { meta: meta("set-keys") });
+      const live = ctx.sessions.get(id)!;
+      const titleEvent = {
+        title: "有标题的会话",
+        messageSeqs: [] as number[],
+        source: { kind: "fallback" },
+      };
+      (live as unknown as { append(type: string, data: unknown): void }).append(
+        "session/title",
+        titleEvent,
+      );
+      await ctx.sessions.flush(live);
+      // 标题随写路径一起刷新进镜像（不再有同步直读）。
+      await cache.write(live);
+
+      // 不带 title 的选择：不抛，也不补标题。
+      const withoutTitle = cache.cachedSnapshot(live.header, new Set(["todos"]) as never);
+      expect(withoutTitle?.values["title"]).toBeUndefined();
+
+      // 带 title 的选择：从 `t_sessions.f_title` 兜底读出标题。
+      const withTitle = cache.cachedSnapshot(live.header, new Set(["title"]) as never);
+      expect(withTitle?.values["title"]).toBe("有标题的会话");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("checkpoints a newly created session without an explicit write", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const id = SessionId("created");
+
+      ctx.sessions.create(id, {
+        meta: meta("created"),
+        seed: [
+          {
+            type: "permission/preset",
+            seq: SessionSeq(0),
+            time: 1,
+            data: { preset: "workspace-write" },
+          },
+        ] as never,
+      });
+      const live = ctx.sessions.get(id)!;
+      const snapshot = await waitFor(() => cache.cachedSnapshot(live.header));
+      expect(snapshot.values).toHaveProperty("turnOutline");
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("advances the checkpoint on turn/end without an explicit write", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const id = SessionId("turn-end");
+
+      ctx.sessions.create(id, { meta: meta("turn-end"), seed: threeTurnLog().slice(0, 6) });
+      const turns = await waitFor(() => {
+        const value = cachedTurns({ ctx, cache, dispose }, "turn-end");
+        return value !== undefined && value.length > 0 ? value : undefined;
+      });
+      expect(turns).toEqual([1]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("keeps the host list blank flag correct for a newly created session", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const passthrough = { parse: (value: unknown) => value } as never;
+      await ctx.sessionProjections.register({
+        key: "sessionListMetadata",
+        stateSchema: passthrough,
+        init: () => ({ blank: true, lastPromptAt: null }),
+        apply: (
+          state: { blank: boolean; lastPromptAt: number | null },
+          event: { type: string },
+        ) => ({
+          blank: state.blank && event.type !== "turn/start",
+          lastPromptAt: state.lastPromptAt,
+        }),
+        wire: { viewSchema: passthrough, view: (state: unknown) => state },
+        stateVersion: 1,
+      } as never);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const id = SessionId("blank");
+      const live = ctx.sessions.create(id, {
+        meta: meta("blank"),
+        seed: [
+          {
+            type: "permission/preset",
+            seq: SessionSeq(0),
+            time: 1,
+            data: { preset: "workspace-write" },
+          },
+        ] as never,
+      });
+
+      const blankOf = (): boolean => {
+        const snapshot = cache.cachedSnapshot(live.header);
+        const metadata = snapshot?.values["sessionListMetadata"] as { blank?: boolean } | undefined;
+        return metadata?.blank ?? false;
+      };
+      await waitFor(() => cache.cachedSnapshot(live.header)?.values["sessionListMetadata"]);
+      expect(blankOf()).toBe(true);
+
+      live.append("turn/start", { turn: 1 });
+      live.append("turn/end", { turn: 1, reason: { kind: "completed" } });
+      await waitFor(() => (blankOf() ? undefined : true));
+      expect(blankOf()).toBe(false);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("serves the title column when the checkpoint rows carry no title", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const id = SessionId("titled");
+
+      ctx.sessions.create(id, {
+        meta: meta("titled"),
+        seed: [
+          ...threeTurnLog(),
+          {
+            type: "session/title",
+            seq: SessionSeq(18),
+            time: 19,
+            data: { title: "直取标题", messageSeqs: [], source: "auto" },
+          } as never,
+        ],
+      });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      await waitFor(() => cache.cachedSnapshot(live.header));
+
+      const withTitle = cache.cachedSnapshot(live.header, ["title"]);
+      expect(withTitle?.values["title"]).toBe("直取标题");
+
+      const withoutTitle = cache.cachedSnapshot(live.header, ["turnOutline"]);
+      expect(withoutTitle?.values["title"]).toBeUndefined();
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("prunes stale snapshots whose watermark predates the stored log", async () => {
+    const root = await mkdtemp(join(tmpdir(), "projection-cache-stale-"));
+    dirs.push(root);
+    const staleCount = (dbPath: string): number => {
+      const db = new DatabaseSync(dbPath);
+      try {
+        return (
+          db.prepare("SELECT COUNT(*) AS c FROM t_session_projcache_row").get() as { c: number }
+        ).c;
+      } finally {
+        db.close();
+      }
+    };
+
+    const first = await harness(root);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const id = SessionId("stale");
+      first.ctx.sessions.create(id, { meta: meta("stale"), seed: threeTurnLog() });
+      const live = first.ctx.sessions.get(id)!;
+      await first.ctx.sessions.flush(live);
+      await waitFor(() => first.cache.cachedSnapshot(live.header));
+      expect(staleCount(first.dbPath!)).toBeGreaterThan(0);
+
+      const db = new DatabaseSync(first.dbPath!);
+      try {
+        db.exec("UPDATE t_session_projcache_row SET f_seq = -1");
+      } finally {
+        db.close();
+      }
+    } finally {
+      await first.dispose();
+    }
+
+    const second = await harness(root);
+    try {
+      await waitFor(() => (staleCount(second.dbPath!) === 0 ? true : undefined));
+      expect(second.cache.cachedSnapshot(meta("stale"))).toBeUndefined();
+    } finally {
+      await second.dispose();
+    }
+  });
+
+  it("serves checkpoints written by the live write path", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const id = SessionId("live");
+      ctx.sessions.create(id, { meta: meta("live"), seed: threeTurnLog() });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      await cache.write(live);
+      expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("live rewind drops the pre-truncation rows from the cache", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const id = SessionId("live");
+      ctx.sessions.create(id, { meta: meta("live"), seed: threeTurnLog() });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      await cache.write(live);
+      expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
+
+      await ctx.sessionBranch.rewind(id, 5);
+
+      const cached = cache.cachedSnapshot(live.header);
+      expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1]);
+
+      expect(cached?.asOfSeq).toBeLessThanOrEqual(live.seq - 1);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("cold rewind invalidates the cache instead of folding the log again", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const id = SessionId("cold");
+      const events = threeTurnLog();
+      const handle = await ctx.sessionPersistence.create(meta("cold"));
+      await handle.append(events);
+      await handle.close();
+
+      cache.coldSnapshot(meta("cold"), SessionLogOffset(0), events);
+      await waitFor(() => cachedTurns({ ctx, cache, dispose }, "cold"));
+      expect(cachedTurns({ ctx, cache, dispose }, "cold")).toEqual([1, 2, 3]);
+
+      await ctx.sessionBranch.rewind(id, 5);
+
+      // 失效：零 I/O 读不再返回截断前的旧值（重建交给读路径，rewind 不 fold 日志）
+      expect(cachedTurns({ ctx, cache, dispose }, "cold")).toBeUndefined();
+
+      // 读路径重建出截断后的正确值
+      const reader = await ctx.sessionPersistence.open(id, "read");
+      const truncated = (await reader.read()).events;
+      await reader.close();
+      cache.coldSnapshot(meta("cold"), SessionLogOffset(0), truncated);
+      await waitFor(() => cachedTurns({ ctx, cache, dispose }, "cold"));
+      expect(cachedTurns({ ctx, cache, dispose }, "cold")).toEqual([1]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("forkFrom leaves the parent checkpoint and gives the child its own identity", async () => {
+    const { ctx, cache, dbPath, dispose } = await harness();
+    try {
+      const parentId = SessionId("parent");
+      ctx.sessions.create(parentId, { meta: meta("parent"), seed: threeTurnLog() });
+      const parent = ctx.sessions.get(parentId)!;
+      await ctx.sessions.flush(parent);
+      await cache.write(parent);
+      expect(cachedTurns({ ctx, cache, dispose }, "parent")).toEqual([1, 2, 3]);
+
+      const childId = SessionId("child");
+      await ctx.sessionBranch.forkFrom(parentId, { atSeq: 5, childSessionId: childId });
+
+      expect(cachedTurns({ ctx, cache, dispose }, "parent")).toEqual([1, 2, 3]);
+
+      const child = await readStored(ctx, childId);
+      expect(child.header.isSeeded).toBe(true);
+      expect(child.inheritedEventCount).toBe(6);
+
+      const inherited = SessionLogOffset(child.inheritedEventCount);
+      const restored = cache.coldSnapshot(child.header, inherited, child.events);
+      expect(turnsOf(restored.values["turnOutline"])).toEqual([1]);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // 0.1.7 起 header-only 读只比对**生命周期**身份（formatVersion / createdAt / cwd / isSeeded）：
+      // 这里查询没有给 inherited cut，照样读到那份 checkpoint（旧口径要求 cut 相等，会读空）。
+      expect(turnsOf(cache.cachedSnapshot(child.header)?.values["turnOutline"])).toEqual([1]);
+
+      const db = new DatabaseSync(dbPath!);
+      try {
+        const head = db
+          .prepare("SELECT f_seed_length FROM t_sessions WHERE f_session_id = 'child'")
+          .get() as { f_seed_length: number };
+        expect(head.f_seed_length).toBe(6);
+        const row = db
+          .prepare(
+            "SELECT f_seq FROM t_session_projcache_row WHERE f_session_id = 'child' AND f_key = 'turnOutline'",
+          )
+          .get() as { f_seq: number };
+        expect(row.f_seq).toBeLessThanOrEqual(5);
+      } finally {
+        db.close();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("fork after a rewind seeds only the surviving prefix", async () => {
+    const { ctx, cache, dispose } = await harness();
+    try {
+      const parentId = SessionId("parent");
+      ctx.sessions.create(parentId, { meta: meta("parent"), seed: threeTurnLog() });
+      const parent = ctx.sessions.get(parentId)!;
+      await ctx.sessions.flush(parent);
+      await cache.write(parent);
+
+      await ctx.sessionBranch.rewind(parentId, 5);
+      expect(cachedTurns({ ctx, cache, dispose }, "parent")).toEqual([1]);
+
+      const childId = SessionId("child");
+      await ctx.sessionBranch.forkFrom(parentId, { atSeq: 5, childSessionId: childId });
+      const child = await readStored(ctx, childId);
+      const snapshot = cache.coldSnapshot(
+        child.header,
+        SessionLogOffset(child.inheritedEventCount),
+        child.events,
+      );
+
+      expect(turnsOf(snapshot.values["turnOutline"])).toEqual([1]);
+
+      expect(cachedTurns({ ctx, cache, dispose }, "parent")).toEqual([1]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("读镜像而不是回库（删掉介质里的行，快照不变）", async () => {
+    const { ctx, cache, dbPath, dispose } = await harness();
+    try {
+      const id = SessionId("live");
+      ctx.sessions.create(id, { meta: meta("live"), seed: threeTurnLog() });
+      const live = ctx.sessions.get(id)!;
+      await ctx.sessions.flush(live);
+      await cache.write(live);
+      expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
+
+      const db = new DatabaseSync(dbPath!);
+      try {
+        const row = db
+          .prepare(
+            "SELECT f_key, f_ver, f_seq, f_val FROM t_session_projcache_row " +
+              "WHERE f_session_id = 'live' AND f_key = 'turnOutline'",
+          )
+          .get() as { f_key: string; f_ver: number; f_seq: number; f_val: string };
+        db.prepare(
+          "DELETE FROM t_session_projcache_row WHERE f_session_id = 'live' AND f_key = 'turnOutline'",
+        ).run();
+        // 不再有同步直读：快照只读进程内镜像，删介质里的行不会影响它。
+        expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
+        db.prepare(
+          "INSERT INTO t_session_projcache_row (f_session_id, f_key, f_ver, f_seq, f_val) VALUES (?, ?, ?, ?, ?)",
+        ).run("live", row.f_key, row.f_ver, row.f_seq, row.f_val);
+      } finally {
+        db.close();
+      }
+      expect(cachedTurns({ ctx, cache, dispose }, "live")).toEqual([1, 2, 3]);
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+function turnsOf(outline: unknown): number[] | undefined {
+  return Array.isArray(outline)
+    ? outline.map((entry) => (entry as { turn: number }).turn)
+    : undefined;
+}
+
+async function readStored(
+  ctx: Context,
+  id: SessionId,
+): Promise<{
+  header: SessionHeader;
+  inheritedEventCount: number;
+  events: readonly SessionEvent[];
+}> {
+  const persistence = ctx.sessionPersistence as unknown as {
+    readFrom(
+      id: SessionId,
+      fromSeq: number,
+    ): Promise<{
+      meta: SessionHeader;
+      inheritedEventCount: number;
+      events: readonly SessionEvent[];
+    }>;
+  };
+  const stored = await persistence.readFrom(id, 0);
+  return {
+    header: stored.meta,
+    inheritedEventCount: stored.inheritedEventCount,
+    events: stored.events,
+  };
+}
+
+// 撤回写回失败的兜底：不能把撤回前的旧快照留在读路径上（否则要重启实例才正确）。
+describe("撤回后缓存写回失败的兜底", () => {
+  it("写回抛错时按新水位截断缓存，而不是保留撤回前的快照", async () => {
+    const h = await harness();
+    try {
+      h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });
+      const live = h.ctx.sessions.get(SessionId("s1"))!;
+      await h.ctx.sessions.flush(live);
+      await waitFor(() => h.cache.cachedSnapshot(live.header));
+      expect(cachedTurns(h, "s1")).toEqual([1, 2, 3]);
+
+      // 模拟「带报错信息的日志让上游 fold 抛错」：写回失败。
+      const projections = h.ctx.sessionProjections as unknown as {
+        checkpoint(session: unknown): unknown;
+      };
+      const original = projections.checkpoint.bind(projections);
+      let failed = false;
+      projections.checkpoint = (session: unknown) => {
+        if (!failed) {
+          failed = true;
+          throw new Error('session projection "turnOutline" cannot advance across missing seq 8');
+        }
+        return original(session);
+      };
+
+      await h.ctx.sessionBranch.rewind(SessionId("s1"), 11);
+
+      expect(failed).toBe(true);
+      // 兜底只保证「不再命中撤回前的快照」：行的水位若都超出新 head，缓存会被清空，
+      // 下一次读走全量 fold（正确但冷读一次）。这比把旧快照留在读路径上好。
+      const turns = cachedTurns(h, "s1");
+      expect(turns === undefined || turns.every((turn) => turn <= 2)).toBe(true);
+    } finally {
+      await h.dispose();
+    }
+  });
+});
+
+// flush 失败不该阻断检查点：检查点基于内存 log，落库失败只影响持久化，不影响撤回后页面显示的数据。
+describe("撤回后 flush 失败的兜底", () => {
+  it("flush 抛错时仍按内存 log 写回检查点", async () => {
+    const h = await harness();
+    try {
+      h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });
+      const live = h.ctx.sessions.get(SessionId("s1"))!;
+      await h.ctx.sessions.flush(live);
+      await waitFor(() => h.cache.cachedSnapshot(live.header));
+      expect(cachedTurns(h, "s1")).toEqual([1, 2, 3]);
+
+      const sessions = h.ctx.sessions as unknown as { flush(session: unknown): Promise<void> };
+      const original = sessions.flush.bind(sessions);
+      let calls = 0;
+      let failed = false;
+      sessions.flush = async (session: unknown) => {
+        if (session === live) {
+          calls += 1;
+          // 第一次是 rewind 开头的「先落库再截断」（失败会让撤回本身失败）；
+          // 第二次是检查点写回前的 flush——这里失败不该阻断检查点。
+          if (calls === 2) {
+            failed = true;
+            throw new Error("persist failed");
+          }
+        }
+        await original(session);
+      };
+
+      await h.ctx.sessionBranch.rewind(SessionId("s1"), 11);
+
+      expect(failed).toBe(true);
+      expect(cachedTurns(h, "s1")).toEqual([1, 2]);
+    } finally {
+      await h.dispose();
+    }
+  });
+});

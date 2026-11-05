@@ -1,0 +1,40 @@
+{
+  "name": "@morlay/session-mode",
+  "version": "0.0.1",
+  "private": true,
+  "description": "会话模式、工具说明分组与提示词通道：模式是一份数据、按会话收口；PTC 由运行时事实（工具目录里有 run_code）触发。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-ptc": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-skill": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^",
+    "@morlay/zephyr-ui": "workspace:^",
+    "smol-toml": "^1.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@morlay/better-session": "workspace:^",
+    "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-compaction": "workspace:^",
+    "@morlay/dsh-fs": "workspace:^",
+    "@morlay/dsh-session-persistence": "workspace:^",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "~18.3.1"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

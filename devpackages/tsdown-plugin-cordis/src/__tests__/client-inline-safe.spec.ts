@@ -1,11 +1,14 @@
 // 内联名单是上游 client 构建 `INLINE_SAFE` 的镜像：上游新增「契约层」子路径而这里没跟，运行期会
 // `missed the module table`（build-time externals drift），所以逐项比对上游那份正则，不靠人记得跟。
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { INLINE_SAFE } from "../cordis-client.ts";
 
-const UPSTREAM = join(process.cwd(), "vendor/deepseek-harness/packages/client/tsdown.client.ts");
+// 上游真源按**文件位置**取，不按 cwd：从包目录或仓库根跑测试都落在同一份上。
+const UPSTREAM = fileURLToPath(
+  new URL("../../../../vendor/deepseek-harness/packages/client/tsdown.client.ts", import.meta.url),
+);
 
 // 按顶层 `|` 切分正则备选（`(?:a|b)` 内部的竖线不算）。
 function branches(pattern: string): string[] {

@@ -1,6 +1,5 @@
-// cordis 插件包的打包机制：一个 tsdown 配置入口（`defineCordisPluginConfig`）+ 它用到的
-// client 入口处理、出口生成、样式处理与声明生成。与 devkit 的其余部分（tsconfig、patch 工具等）分开：
-// 前者是"怎么把一个 cordis 插件包打成产物"，后者是"这个仓库的通用开发工具"。
+// cordis 插件包的打包机制：一个 tsdown 配置入口（`cordisPlugin` / `buildCordisConfig`）+ 它用到的
+// client 入口处理、出口清单写回、样式与资产内联、依赖内外联规则。定位与接入状态见本包 `README.md`。
 export {
   buildCordisConfig,
   cordisPlugin,
@@ -15,7 +14,6 @@ export {
   type PackageExportsOptions,
 } from "./package-exports.ts";
 export { prebundleDependency, type PrebundledDependency } from "./prebundle.ts";
-export { standardDecoratorsPlugin, type StandardDecoratorsOptions } from "./standard-decorators.ts";
 export { compileCssModule, compileGlobalCss, compileStyleModule, cssInlinePlugins } from "./css.ts";
 export {
   bundleClientFactory,

@@ -11,4 +11,4 @@
 | `upstream-fixtures.spec.ts` | 对上游真产物形状的快照（逐类型 zod、三种方法的 descriptor） |
 
 上游同步链里它挂在 `vendor/steps.ts` 的 `prebuild` 阶段（`{ type: "typert" }`），步骤与跑法见
-[`dsh-plugin-upstream-sync` 技能](../../../../.agents/skills/dsh-plugin-upstream-sync/SKILL.md)。
+[`zephyr-upstream-sync` 技能](../../../../.agents/skills/zephyr-upstream-sync/SKILL.md)。

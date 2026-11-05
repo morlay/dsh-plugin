@@ -1,28 +1,54 @@
 // 上游同步的步骤清单：`patch` 改上游工作树，`prebuild` 生成源码面消费的产物、编译 native addon。
 // 用 TS 写就是为了每个阶段、每条步骤旁边写得下「为什么」。
 //
-// 执行器与步骤类型见 `scripts/upstream-sync/src/steps.ts`；两阶段的语义与各步骤类型的判据在
-// `dsh-plugin-upstream-sync` 技能里。
-import type { Step } from "../scripts/upstream-sync/src/steps.ts";
+// 执行器与步骤类型见 `.agents/skills/zephyr-upstream-sync/scripts/upstream-sync/src/steps.ts`；两阶段的语义与各步骤类型的判据在
+// `zephyr-upstream-sync` 技能里。
+import type { Step } from "../.agents/skills/zephyr-upstream-sync/scripts/upstream-sync/src/steps.ts";
 
 // 从 sync 的干净基线跑一次（不是每条步骤都幂等）。
 export const patch: Step[] = [
   // 上游的非产品面：文档站（依赖我们没装的 vitepress）、仓库脚本、测试快照、基准与 python 工具。
-  // 产品面（packages / vendor / native / apps）留下——`apps/cli` 被本仓库的工具与用例当 install anchor。
+  // 产品面（packages / vendor / native）留下。
   // 用 glob 形态（不存在就删 0 项）：这几样是"确保它不在"，不是"上游挪走即失败"的信号。
   { type: "rm", glob: "website" },
   { type: "rm", glob: "scripts" },
   { type: "rm", glob: "snapshots" },
   { type: "rm", glob: "benchmarks" },
   { type: "rm", glob: "python" },
-  // 指向上游不入库的测试快照的符号链接（断链）；本仓库不跑这条 acp e2e，删掉免得断链被遍历到。
-  // 同样用 glob 形态：快照不入库，`reset` 之后它也不会回来。
-  { type: "rm", glob: "apps/cli/tests/profiles/acp/cordis.yml" },
+  // **上游的"交付面"整棵摘掉**：`apps/*`（cli / desktop / desktop-host / web / plugin-market-generator）
+  // 与围绕它们的 `bundle/*`（web-app / sdk-* / acp-app / base / headless）、`packages/sdk/*`、
+  // `context/harness-dev-context`、`subagent/subagent-{dsh-sdk,codex}`。
+  //
+  // 理由：本仓的部署面是自己的 `apps/zephyr-custom`（清单在 `src/client`），这些包一个都不被引用；
+  // 留着它们要付三份成本——pnpm 解析（`apps/desktop` 会拖 electron）、typert 生成、`tsc` 全树扫描
+  // （根 tsconfig 的 `include` 是 `**\/*`）。摘掉后 workspace 从 421 个项目降到 411。
+  //
+  // 它们是**互相钉住**的一条链（`web-app` → `apps/web`、`sdk/client` → `apps/cli`、
+  // `harness-dev-context` → `web-app`、`subagent-codex` → `sdk/protocol`），所以必须整条一起删；
+  // 只删其中一段，`pnpm install` 会报"依赖了不在 workspace 的包"。
+  { type: "rm", glob: "apps" },
+  { type: "rm", glob: "packages/bundle" },
+  { type: "rm", glob: "packages/sdk" },
+  { type: "rm", glob: "packages/context/harness-dev-context" },
+  { type: "rm", glob: "packages/subagent/subagent-dsh-sdk" },
+  { type: "rm", glob: "packages/subagent/subagent-codex" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
+  // `rrule` 的联邦产物是它的 **ESM 面**（`module` 字段 → `dist/esm/index.js`），而 ESM 入口没有 default，
+  // 上游那句 `import rrulePackage from 'rrule'` 跨联邦边界就是
+  // `does not provide an export named 'default'`（真机表现：整页白屏，console 里只有 vite 的两行）。
+  // 产物不替消费方造 default（那会掩盖真实的导出缺失），改消费方按 ESM 的具名面写：
+  // 命名空间导入，`rrulePackage.Weekday` 之类的用法照旧。
+  { type: "git", patch: "rrule-namespace-import.patch" },
+  // `SOURCE_TSCONFIG_PATH` 惰性求值。上游在**模块顶层**用 `fileURLToPath(new URL(…, import.meta.url))`
+  // 算 tsconfig 路径；`import.meta.url` 在 vitest 的 happy-dom 环境里是 `http://localhost/…`，
+  // 于是任何 import 到 `subprocess-local` 的模块（含 `dsh-sandbox` 的装配行）都会抛
+  // `The URL must be of scheme file`——前后端同 spec 的装配测试因此做不了。
+  // 改成一个按需调用的小函数后，加载不再依赖 `import.meta.url` 的协议。
+  { type: "git", patch: "subprocess-lazy-tsconfig-path.patch" },
   // 认证移除：页面与资源都由自研 web 层（vite dev server）提供，这层 cookie 校验只剩阻碍——摘掉它
   // 之后所有 `/api/*` 一律 401（见 `remove-browser-auth.patch` 的说明）。
   { type: "git", patch: "remove-browser-auth.patch" },

@@ -1,0 +1,24 @@
+# zephyr-custom 示例工作区。
+#
+# 四条命令都由 `zephyr` CLI 承担：入口只交出清单（`src/server.ts`），工作区配置是
+# `zephyr.config.ts`，产物落在 `node_modules/.zephyr`。命令只在**这里**有一份
+# （不在 `package.json` 的 `scripts` 里再包一层）。
+
+# 开发形态：装配、HMR、端口与退出码都归 CLI。
+dev *args:
+    pnpm exec zephyr dev {{ args }}
+
+# 构建：静态面 + 运行时闭包 + 入口 bundle。
+build *args:
+    pnpm exec zephyr build {{ args }}
+
+# 预览：只吃已有产物（先跑 build）。
+preview *args:
+    pnpm exec zephyr preview {{ args }}
+
+desktop *args:
+    pnpm exec zephyr desktop dev {{ args }}
+
+# 桌面打包：缺省产出一个可执行目录（`--install` 再装进系统应用目录）。
+bundle *args:
+    pnpm exec zephyr desktop bundle {{ args }}

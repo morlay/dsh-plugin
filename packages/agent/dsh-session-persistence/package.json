@@ -1,0 +1,25 @@
+{
+  "name": "@morlay/dsh-session-persistence",
+  "version": "0.0.1",
+  "private": true,
+  "description": "会话落盘：自己实现持久化（不转发上游插件），让会话在进程之外可恢复。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./contract": "./src/contract/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/zephyr": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

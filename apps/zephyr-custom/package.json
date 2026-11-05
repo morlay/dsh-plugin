@@ -1,0 +1,58 @@
+{
+  "name": "zephyr-custom",
+  "version": "0.2.2",
+  "private": true,
+  "files": [
+    "icon.svg",
+    "src/client"
+  ],
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/agent-use": "workspace:^",
+    "@morlay/better-session": "workspace:^",
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-agent-instruction": "workspace:^",
+    "@morlay/dsh-agent-team": "workspace:^",
+    "@morlay/dsh-attachment": "workspace:^",
+    "@morlay/dsh-auth": "workspace:^",
+    "@morlay/dsh-command": "workspace:^",
+    "@morlay/dsh-compaction": "workspace:^",
+    "@morlay/dsh-conversation": "workspace:^",
+    "@morlay/dsh-job": "workspace:^",
+    "@morlay/dsh-oxc-node": "workspace:*",
+    "@morlay/dsh-permission": "workspace:^",
+    "@morlay/dsh-ptc": "workspace:^",
+    "@morlay/dsh-sandbox": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-session-persistence": "workspace:^",
+    "@morlay/dsh-setting": "workspace:^",
+    "@morlay/dsh-shell": "workspace:^",
+    "@morlay/dsh-skill": "workspace:^",
+    "@morlay/dsh-storage": "workspace:^",
+    "@morlay/dsh-upload": "workspace:^",
+    "@morlay/dsh-web-access": "workspace:^",
+    "@morlay/dsh-workspace": "workspace:^",
+    "@morlay/session-mode": "workspace:^",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:^",
+    "@morlay/zephyr-cli": "workspace:*",
+    "@morlay/zephyr-ui": "workspace:^",
+    "@oxc-project/runtime": "^0.123.0"
+  },
+  "devDependencies": {
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-attachment": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-session-persistence": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*",
+    "@morlay/zephyr-cli": "workspace:^",
+    "@morlay/zephyr-desktop-bundle": "workspace:^"
+  }
+}

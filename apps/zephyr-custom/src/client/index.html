@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSH Local Build</title>
+    <!-- vite 8 的客户端脚本（`/@vite/client`）读这个注入的全局；它不走源码转换，`define` 替换不到，
+         所以在任何模块脚本之前先声明。 -->
+    <script>
+      globalThis.__DEFINES__ = {};
+    </script>
+  </head>
+  <body>
+    <!-- 容器与上游一致：`#root`（`apps/web/index.html`）。挂载点换名字会让上游按 `#root` 写的样式失效。 -->
+    <div id="root"></div>
+    <!-- vite 的入口：它自己会把 index.ts 转译、解析依赖、并挂上 HMR。这里是 **root 相对**路径
+         （vite 的 root 就是这个目录）——HTML 里的 `src` 是 URL，不走 alias 解析。 -->
+    <script type="module" src="./app-boot.ts"></script>
+  </body>
+</html>

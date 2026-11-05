@@ -186,15 +186,15 @@ export async function buildCordisConfig(
           entry === CLIENT_ENTRY ? [`${entry}.d.cts`, `${entry}.d.mts`] : [`${entry}.d.mts`],
       ),
     },
-    // 双模式库（如 lexical 的 exports 带 development / production / node 条件）必须解析到与下面条件名
+    // 双模式库（`exports` 里带 development / production / node 条件的那种）必须解析到与下面条件名
     // 一致的静态变体：条件名按 NODE_ENV 选 production / development，且不含 node。
     //
-    // `transform.decorator.legacy: false` 是**发布线**的声明：dist 里的装饰器调用 registry 官方实现
-    // （TC39 标准协议），而仓库 tsconfig 开着 `experimentalDecorators`（开发线用，见 devkit 的 tsconfig），
-    // 不显式关掉 oxc 就会按 legacy 降级，产物与官方实现不兼容。
+    // **这里不覆盖装饰器语义**：装饰器按根 `tsconfig.json` 的 `experimentalDecorators` 走 legacy，
+    // 与仓里其余转译点同一条线（债见 `.agents/debts/20260923-装饰器降级散在四个转译点.md`）。在这里再声明
+    // 一遍就是第五处声明——本仓的写端装饰器（`Injectable` / `Remote` / `Slot`）返回的是 legacy 签名，
+    // 按标准语义转出来的产物与它们不兼容。
     inputOptions: {
       resolve: { conditionNames: spec.conditionNames },
-      transform: { decorator: { legacy: false } },
     },
     // 这里**不写 `define`**：`spec.define` 是浏览器产物的替换约定（`process.env` / `import.meta` 替成空壳），
     // 而 tsdown 的 define 对同一个 config 里的所有入口生效——host 半（Node / Electron 主进程）拿到它就成了
@@ -259,7 +259,7 @@ async function packageName(): Promise<string> {
  * 实现走 tsdown 的 `tsdownConfig` 钩子（等价 Vite 的 `config` 钩子）：返回的 partial 会深合并进用户配置，
  * 数组字段（`plugins`）按替换处理——所以这里把自身的 rolldown 插件一并带上。
  *
- * @param options - 与 {@link defineCordisPluginConfig} 相同。
+ * @param options - 与 {@link buildCordisConfig} 相同。
  * @returns tsdown 插件。
  */
 export function cordisPlugin(options?: CordisPluginOptions): TsdownPlugin {

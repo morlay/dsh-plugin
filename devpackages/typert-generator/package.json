@@ -9,8 +9,8 @@
     "./cli": "./src/cli.ts"
   },
   "dependencies": {
-    "oxc-parser": "^0.153.0",
-    "@local/dts-prepare": "workspace:*"
+    "@local/dts-prepare": "workspace:^",
+    "oxc-parser": "^0.153.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

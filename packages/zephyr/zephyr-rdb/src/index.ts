@@ -1,0 +1,114 @@
+export {
+  defineCatalog,
+  defineTable,
+  type Catalog,
+  type CheckDef,
+  type ColumnDef,
+  type ColumnTypeName,
+  type DeleteAction,
+  type IndexDef,
+  type Table,
+  type TableDef,
+  type UniqueDef,
+} from "./defs.ts";
+export {
+  addColumnSql,
+  columnSql,
+  createDialect,
+  createIndexSql,
+  createTableSql,
+  type Dialect,
+  type DialectName,
+  type TableShape,
+} from "./dialect.ts";
+export { concat, fragment, render, type Fragment } from "./fragment.ts";
+export {
+  and,
+  between,
+  column,
+  columnSql as columnRefSql,
+  eq,
+  exists,
+  expr,
+  excluded,
+  add,
+  countIf,
+  gt,
+  gte,
+  inList,
+  inSubquery,
+  isNotNull,
+  isNull,
+  jsonInt,
+  jsonText,
+  like,
+  localDay,
+  maxOf,
+  lt,
+  lte,
+  ne,
+  not,
+  notInList,
+  notInSubquery,
+  or,
+  operandSql,
+  raw,
+  toInt,
+  value,
+  type ColumnRef,
+  type Condition,
+  type ExprOperand,
+  type Operand,
+  type OperandInput,
+} from "./expr.ts";
+export {
+  count,
+  createTableHandle,
+  sum,
+  type Aggregate,
+  type ColumnName,
+  type ColumnValue,
+  type InsertRow,
+  type Projected,
+  type Projection,
+  type RowOf,
+  type SelectQuery,
+  type TableHandle,
+} from "./table/index.ts";
+export {
+  openDatabase,
+  shapeReader,
+  wrapDatabase,
+  type Database,
+  type OpenConfig,
+  type QueryEvent,
+  type SqlitePragmaName,
+} from "./database/index.ts";
+export {
+  ensureSchema,
+  planSchema,
+  type EnsureSchemaOptions,
+  type SchemaChange,
+} from "./migrate.ts";
+export {
+  aliasedTable,
+  cteSql,
+  except,
+  forUpdate,
+  intersect,
+  union,
+  withCtes,
+  type Cte,
+} from "./compound.ts";
+export { indexCatalog, type CatalogIndex } from "./catalog.ts";
+export { classifyError, DbError, type DbErrorKind } from "./error.ts";
+export { dropColumnSql, dropIndexSql } from "./dialect.ts";
+// 表达式/条件：业务侧用 `E.eq(table.f_id, id)` 这样写。
+export * as E from "./expr.ts";
+export {
+  MigrationRegistry,
+  runMigrations,
+  schemaMigrations,
+  type Migration,
+  type RunMigrationsOptions,
+} from "./migration.ts";

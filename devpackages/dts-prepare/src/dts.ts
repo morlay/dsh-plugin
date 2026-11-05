@@ -116,7 +116,8 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
       config,
       `${JSON.stringify(
         {
-          extends: join(root, "devpackages", "devkit", "tsconfig.json"),
+          // 根 `tsconfig.json` 就是仓库统一的 TS 口径（`devpackages/devkit` 已移除）。
+          extends: join(root, "tsconfig.json"),
           compilerOptions: {
             composite: false,
             incremental: false,
@@ -124,9 +125,30 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
             emitDeclarationOnly: true,
             // 只要声明、不要诊断：这一步是产物生成，不是类型门禁（门禁是两叶 + oxlint）。
             noCheck: true,
+            // 源文件之间用 `.ts` 扩展名互相引用（根 tsconfig 的 `allowImportingTsExtensions`），
+            // 生成的声明里要把它们改写掉。**只在这一层开**：放在根上会让 lint 的 `tsc` 报 TS2877
+            // （非相对路径的 `.ts` import 不会被改写）。
+            rewriteRelativeImportExtensions: true,
             noEmit: false,
             outDir,
             rootDir: under("."),
+            // 声明生成要能把推断类型**写成具名引用**（否则 `tsc` 报「inferred type cannot be named
+            // without a reference to `AdaptedClass` / `Required` from node_modules/…」）。把 zephyr 的
+            // 两个出口指回源码面，它们就落在 `rootDir` 里、名字可达。
+            // TS 7 已移除 `baseUrl`，substitution 也只允许一个 `*`——所以这里是显式两条。
+            paths: {
+              "@morlay/zephyr": [under("packages/zephyr/zephyr/src/index.ts")],
+              "@morlay/zephyr/compat": [under("packages/zephyr/zephyr/src/compat/index.ts")],
+              // 上游有些包的 schema 推断类型里含 cosmokit 的 `Dict`，而 pnpm 布局下会解析到**嵌套**那份
+              // （`llm-deepseek-account/node_modules/@deepseek-ai/cosmokit`），TS 就写不出具名引用。
+              // 统一指回仓库里那一份。
+              "@deepseek-ai/cosmokit": [
+                under("vendor/deepseek-harness/vendor/cosmokit/src/index.ts"),
+              ],
+              "@deepseek-ai/cosmokit/src/misc.ts": [
+                under("vendor/deepseek-harness/vendor/cosmokit/src/misc.ts"),
+              ],
+            },
           },
           include: FACES[face].include.map(under),
           exclude: FACES[face].exclude.map(under),

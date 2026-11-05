@@ -1,0 +1,25 @@
+import { defineTable } from "@morlay/zephyr-rdb";
+
+export const sessionEvents = defineTable({
+  name: "t_session_events",
+  columns: {
+    f_id: { type: "serial", primaryKey: true },
+    f_session_id: {
+      type: "text",
+      notNull: true,
+      references: { table: "t_sessions", column: "f_session_id", onDelete: "cascade" },
+    },
+    f_event_id: {
+      type: "text",
+      notNull: true,
+      references: { table: "t_events", column: "f_event_id", onDelete: "cascade" },
+    },
+    f_sequence: { type: "integer", notNull: true },
+    f_surface_op: { type: "text" },
+  },
+  uniques: {
+    uq_session_events_session_sequence: { columns: ["f_session_id", "f_sequence"] },
+  },
+
+  indexes: { idx_session_events_event_id: { columns: ["f_event_id"] } },
+});

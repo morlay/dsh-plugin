@@ -1,4 +1,4 @@
-upstream-sync-source := join(module_directory(), '../scripts/upstream-sync')
+upstream-sync-source := join(module_directory(), '../.agents/skills/zephyr-upstream-sync/scripts/upstream-sync')
 
 _deps:
     @cd {{ upstream-sync-source }} && pnpm install --reporter=silent

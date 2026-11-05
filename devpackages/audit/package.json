@@ -1,0 +1,14 @@
+{
+  "name": "@local/audit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "结构性判据：面边界、上游包唯一化、声明未用依赖。逐包跑、根上汇总。",
+  "bin": {
+    "dsh-audit-package": "./src/package-audit.ts",
+    "dsh-audit-report": "./src/summarize.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "oxc-parser": "^0.153.0"
+  }
+}

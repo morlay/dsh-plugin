@@ -12,7 +12,7 @@ import { clientBundleSpec, clientRowExternals, isClientExternal } from "../cordi
 
 // 最小工作区：`peerDependencies` 一种（该外置）、`dependencies` 两种（该内联）。
 async function fixture(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "devkit-client-externals-"));
+  const root = await mkdtemp(join(tmpdir(), "tsdown-plugin-cordis-client-externals-"));
   await writeFile(
     join(root, "package.json"),
     `${JSON.stringify({

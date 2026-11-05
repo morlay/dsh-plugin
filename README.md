@@ -1,21 +1,30 @@
 # DSH Plugin(s)
 
-DeepSeek Harness Plugin 自用开发插件集合：`@deepseek-ai/*` 只读，扩展只走 cordis 插件层（plugin / patch bundle / settings namespace）。
+DeepSeek Harness 的插件工作区：上游 `@deepseek-ai/*` 只读，扩展只走 cordis 插件层（plugin / settings namespace / 本地 patch），
+不改上游源码。
 
-一个工作区 profile = `dsh.profile.bundles` 顺序应用的一串 bundle patch；每个 bundle 聚合一个领域——它插的行与那些行要的配置值住在同一个包里（面向模型的功能行清单归会话挂着的 shipped preset，本部署不自建 preset），能力包只发布实现与装配数据（`rows`）出口。布局与装配的 home 是[系统设计](.agents/designs/20260917-系统设计.md)，上下文边界与术语归属见[上下文地图](.agents/GLOSSARY-MAP.md)。
+设计与落点：[系统设计](.agents/designs/20260917-系统设计.md)（沿它的层索引进到各层设计）；术语归属：[定义权地图](.agents/GLOSSARY-MAP.md)；
+记录树与技能清单：[`.agents/README.md`](.agents/README.md)。
 
-## 包
+## 结构
 
-装配入口是 `bundles/` 的五个 bundle；能力包（`packages/<family>/<pkg>`，family 只是目录分组）由它们展开，各包的门面与用法在它自己的 `README.md`：
+| 目录                         | 是什么                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/zephyr/*`          | 框架层：`zephyr`（cordis 的强类型 DSL）、`zephyr-app`（宿主 + 浏览器框架）、`zephyr-cli`（启动器）、`zephyr-ui`、`zephyr-rdb` |
+| `packages/agent/*`           | 能力层：每个域一个包，四块职能（`contract` / `endpoint` / `server` / `ui`），另有 BFF `dsh-conversation`                      |
+| `packages/agent-ex/*`        | 扩展层：替换默认实现或追加能力（`better-session` / `session-mode` / `configurable-sandbox` / `agent-use`）                    |
+| `packages/zephyr-desktop/*`  | 桌面：Electron 壳与往命令树追加 `desktop dev` / `desktop bundle` 的插件                                                       |
+| `packages/boot/dsh-oxc-node` | 全仓唯一的 TS loader 入口（module hooks，ESM only）                                                                           |
+| `apps/zephyr-custom/`        | 示例工作区：provider 清单与 `zephyr.config.ts`（装配面）                                                                      |
+| `devpackages/*`              | 本地工具（不发布）：audit / dts-prepare / typert-generator / tsdown-plugin-cordis                                             |
+| `vendor/deepseek-harness/`   | 上游 side workspace：按 `DEEPSEEK_HARNESS_VERSION` 锁定的只读源码副本                                                         |
 
-| 包                                                                            | 版本                                                                                                                                                  | 周下载                                                                                                                                               | 18 个月下载                                                                                                                                                            |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [better-session](packages/bundles/better-session/README.md)                   | [![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)                   | [![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)                   | [![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fbetter-session)](https://www.npmjs.com/package/@morlay/better-session)                   |
-| [session-mode-profile](packages/bundles/session-mode-profile/README.md)       | [![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)       | [![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)       | [![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fsession-mode-profile)](https://www.npmjs.com/package/@morlay/session-mode-profile)       |
-| [sandbox-profile](packages/bundles/sandbox-profile/README.md)                 | [![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)                 | [![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)                 | [![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fsandbox-profile)](https://www.npmjs.com/package/@morlay/sandbox-profile)                 |
-| [ollama-provider-profile](packages/bundles/ollama-provider-profile/README.md) | [![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile) | [![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile) | [![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Follama-provider-profile)](https://www.npmjs.com/package/@morlay/ollama-provider-profile) |
-| [mydsh-profile](packages/bundles/mydsh-profile/README.md)                     | [![NPM Version](https://img.shields.io/npm/v/%2540morlay%252Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)                     | [![NPM Downloads](https://img.shields.io/npm/dw/%40morlay%2Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)                     | [![NPM Downloads (18 months)](https://img.shields.io/npm/d18m/%2540morlay%252Fmydsh-profile)](https://www.npmjs.com/package/@morlay/mydsh-profile)                     |
+各包的门面与用法在它自己的 `README.md`。本仓库只有四个包没有标 `private`（`@morlay/zephyr`、`@morlay/zephyr-rdb`、
+`@morlay/zephyr-desktop-shell`、`@morlay/dsh-oxc-node`），其余为 private、不发布；发布一律走 CI（见 [`AGENTS.md`](AGENTS.md)）。
 
-非发布部分：示例工作区 [`apps/dsh-custom-next`](apps/dsh-custom-next/justfile)（装配声明在这里）、共享开发配置 [`devpackages/devkit`](devpackages/devkit/tsconfig.json)、上游 side workspace [`vendor/`](.agents/skills/dsh-plugin-upstream-sync/SKILL.md)。
+## 命令
 
-agent 工作指引见 [AGENTS.md](AGENTS.md)，记录树的布局与命名见 [`.agents/README.md`](.agents/README.md)；命令与版本见 [justfile](justfile) / [mise.toml](mise.toml)。
+常用入口见 [`justfile`](justfile)（`just --list`）：`just test` / `just lint` / `just build` / `just audit`；组装验证 `just custom build`；
+上游同步与版本见 [`mise.toml`](mise.toml) 与 [`zephyr-upstream-sync`](.agents/skills/zephyr-upstream-sync/SKILL.md)。
+
+agent 工作指引见 [AGENTS.md](AGENTS.md)，记录树的布局与命名见 [`.agents/README.md`](.agents/README.md)。

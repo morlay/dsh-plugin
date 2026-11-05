@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { rewriteCssUrls } from "@morlay/dsh-cordis-assets/styles";
+import { rewriteCssUrls } from "../css.ts";
 
 const CSS = [
   "/* 掩膜图：`@supports` 内层 + `mask` 简写，正则最容易漏的形状 */",

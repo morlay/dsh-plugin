@@ -1,0 +1,63 @@
+{
+  "name": "@morlay/zephyr-desktop-shell",
+  "version": "0.0.1",
+  "description": "zephyr 桌面应用的 Electron 壳：自定义协议出页面、窗口与生命周期也做成装配行；由 @morlay/zephyr-desktop-bundle 打进应用目录。",
+  "keywords": [
+    "desktop",
+    "dsh",
+    "dsh-plugin",
+    "electron",
+    "zephyr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "main": "./dist/main.mjs",
+  "exports": {
+    ".": "./src/index.ts",
+    "./main": "./src/main.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "main": "./dist/main.mjs",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:^",
+    "@morlay/dsh-oxc-node": "workspace:^",
+    "@morlay/zephyr": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/zephyr-cli": "workspace:^",
+    "@types/node": "^26.5.0"
+  },
+  "peerDependencies": {
+    "electron": ">=44"
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  }
+}

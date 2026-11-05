@@ -1,0 +1,30 @@
+{
+  "name": "@morlay/dsh-shell",
+  "version": "0.0.1",
+  "private": true,
+  "description": "shell 面：子进程运行时、shell 环境注册表与执行器契约——要起进程的能力都从这里走。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./package.json": "./package.json",
+    "./ui": "./src/ui/index.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-api-terminal-controller": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:^",
+    "@deepseek-ai/dsh-shell": "workspace:^",
+    "@deepseek-ai/dsh-shell-env": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^",
+    "@deepseek-ai/dsh-subprocess-local": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

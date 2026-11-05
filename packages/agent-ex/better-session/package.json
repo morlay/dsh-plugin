@@ -1,0 +1,36 @@
+{
+  "name": "@morlay/better-session",
+  "version": "0.0.1",
+  "private": true,
+  "description": "会话的 RDB 持久化、分支数据面与就地编辑编排（宿主半）：替换官方 jsonl 落盘，提供 rewind / retry / fork 与编辑 / 撤回的编排面。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./ui": "./src/ui/index.ts"
+  },
+  "dependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-conversation": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-session-persistence": "workspace:^",
+    "@morlay/dsh-storage": "workspace:^",
+    "@morlay/dsh-workspace": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^",
+    "@morlay/zephyr-rdb": "workspace:^",
+    "@morlay/zephyr-ui": "workspace:^",
+    "fflate": "^0.8.2",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@morlay/better-session": "workspace:^",
+    "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-compaction": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}

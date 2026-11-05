@@ -1,0 +1,313 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { createDeveloperMessage } from "@morlay/dsh-agent/contract";
+import { SessionId, SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
+import { afterAll, describe, expect, it } from "vitest";
+import { SessionPersistenceRdb, repairReadView, type Backend } from "@morlay/better-session";
+import {
+  disposeAll,
+  mount as mountHarness,
+  type MountedContext as Context,
+} from "./support/base.ts";
+import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
+
+afterAll(disposeAll);
+
+async function mount(path = ":memory:"): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
+  const { ctx, dispose } = await mountHarness({ config: { type: "sqlite", path } });
+  return { ctx, dispose };
+}
+
+function persistenceOf(ctx: Context): SessionPersistenceRdb {
+  return ctx.sessionPersistence as SessionPersistenceRdb;
+}
+
+function backendOf(ctx: Context): Backend {
+  return persistenceOf(ctx).backend;
+}
+
+// 记录后端事件行查询的次数：接缝观测，用来证明读取路径没有重复拉全量。
+function countEventRows(ctx: Context): { rows: number } {
+  const backend = backendOf(ctx);
+  const counts = { rows: 0 };
+  const original = backend.reads.getEventRows.bind(backend);
+  backend.reads.getEventRows = async (id, fromSequence) => {
+    counts.rows += 1;
+    return original(id, fromSequence);
+  };
+  return counts;
+}
+
+async function persistOneTurn(ctx: Context, id: string): Promise<void> {
+  const handle = await ctx.sessionPersistence.create(meta(id));
+  try {
+    await handle.append(oneTurnLog());
+  } finally {
+    await handle.close();
+  }
+}
+
+function surfaceEvent(seq: number, text: string, surfaceOp?: unknown): SessionEvent {
+  return {
+    type: "user/message",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      id: `m${String(seq)}`,
+      role: "user",
+      content: [{ type: "text", text }],
+      source: { kind: "user" },
+    },
+    ...(surfaceOp === undefined ? {} : { surfaceOp }),
+  } as unknown as SessionEvent;
+}
+
+// 上游 agent-loop 在工具集增删时写的 surface 事件（此处只有移除，故不带 `headerSeq`）。
+function developerRemoval(seq: number, surfaceOp?: unknown): SessionEvent {
+  return {
+    type: "developer/message",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      turn: 1,
+      step: 1,
+      message: createDeveloperMessage({
+        source: { kind: "tool-registry" },
+        content: [{ type: "tool-removal", toolName: "load_workspace_dependencies" }],
+      }),
+    },
+    ...(surfaceOp === undefined ? {} : { surfaceOp }),
+  } as unknown as SessionEvent;
+}
+
+// 一段含 replace 与 metering 的日志：seq 1/2 被 seq 3（replace 1..2）折叠，
+// seq 3 又被 metering 之后的 seq 5（replace 3..3）折叠。
+function replaceHeavyLog(): SessionEvent[] {
+  return [
+    surfaceEvent(0, "a", "append"),
+    surfaceEvent(1, "b", "append"),
+    surfaceEvent(2, "c", "append"),
+    surfaceEvent(3, "bc", { op: "replace", startSeq: 1, endSeq: 2 }),
+    {
+      type: "compaction/summary",
+      seq: SessionSeq(4),
+      time: 4,
+      data: { shadowedRange: { start: 0, end: 0 }, shadowedSeqs: [] },
+    } as unknown as SessionEvent,
+    surfaceEvent(5, "z", { op: "replace", startSeq: 3, endSeq: 3 }),
+  ];
+}
+
+describe("session 行的写放大", () => {
+  it("header 没变时，append 不再 UPDATE 一次 session 行", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rdb-header-idem-"));
+    const path = join(dir, "sessions.sqlite");
+    const { ctx, dispose } = await mount(path);
+    try {
+      const id = SessionId("header-idem");
+      const handle = await ctx.sessionPersistence.create(meta(id));
+      await handle.append(oneTurnLog());
+
+      // 探针：只在 header 列真的出现在 UPDATE 的 SET 里时才计数（head 推进不算）。
+      const db = new DatabaseSync(path);
+      try {
+        db.exec("CREATE TABLE probe_header_update (n INTEGER)");
+        db.exec("INSERT INTO probe_header_update VALUES (0)");
+        db.exec(`
+          CREATE TRIGGER probe_header_update_trigger
+          AFTER UPDATE OF f_version, f_cwd, f_parent_session, f_seed_length, f_origin,
+            f_delegation_depth, f_agent_preset ON t_sessions
+          BEGIN
+            UPDATE probe_header_update SET n = n + 1;
+          END
+        `);
+      } finally {
+        db.close();
+      }
+
+      await handle.append(
+        oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent),
+      );
+      await handle.close();
+
+      const probe = new DatabaseSync(path);
+      try {
+        expect((probe.prepare("SELECT n FROM probe_header_update").get() as { n: number }).n).toBe(
+          0,
+        );
+      } finally {
+        probe.close();
+      }
+    } finally {
+      await dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("一批 append 只写一次 session 行（head 与 revision 合并成一次 UPDATE）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rdb-row-writes-"));
+    const path = join(dir, "sessions.sqlite");
+    const { ctx, dispose } = await mount(path);
+    try {
+      const id = SessionId("row-writes");
+      const handle = await ctx.sessionPersistence.create(meta(id));
+      await handle.append(oneTurnLog());
+
+      const db = new DatabaseSync(path);
+      try {
+        db.exec("CREATE TABLE probe_session_updates (n INTEGER)");
+        db.exec("INSERT INTO probe_session_updates VALUES (0)");
+        db.exec(`
+          CREATE TRIGGER probe_session_updates_trigger
+          AFTER UPDATE ON t_sessions
+          BEGIN
+            UPDATE probe_session_updates SET n = n + 1;
+          END
+        `);
+      } finally {
+        db.close();
+      }
+
+      await handle.append(
+        oneTurnLog().map((event) => ({ ...event, seq: SessionSeq(event.seq + 6) }) as SessionEvent),
+      );
+      await handle.close();
+
+      const probe = new DatabaseSync(path);
+      try {
+        expect(
+          (probe.prepare("SELECT n FROM probe_session_updates").get() as { n: number }).n,
+        ).toBe(1);
+      } finally {
+        probe.close();
+      }
+    } finally {
+      await dispose();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("写即落库（flush 只是等上游排空）", () => {
+  it("append 返回后，另一个只读句柄不调 flush 也能读到全部事件", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      const id = SessionId("write-through");
+      const writer = await ctx.sessionPersistence.create(meta(id));
+      try {
+        await writer.append(oneTurnLog());
+      } finally {
+        await writer.close();
+      }
+
+      // 刻意不调用任何 flush：读写都走库，append 的事务提交后事件就该在库里。
+      const reader = await ctx.sessionPersistence.open(id, "read");
+      try {
+        const { events } = await reader.read();
+        expect(events.map((event) => event.seq)).toEqual(oneTurnLog().map((event) => event.seq));
+      } finally {
+        await reader.close();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("读路径", () => {
+  // load 是会话打开（cold read）的入口：它自己再开一条读取路径就等于把最贵的读付两遍。
+  it("load 只读一遍事件", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      await persistOneTurn(ctx, "s1");
+      const counts = countEventRows(ctx);
+
+      const inspected = await persistenceOf(ctx).load(SessionId("s1"));
+
+      expect(inspected.events).toHaveLength(oneTurnLog().length);
+      expect(counts.rows).toBe(1);
+    } finally {
+      await dispose();
+    }
+  });
+
+  // 读视图修复的溯源要在一次扫描里建好索引：replace 的 sourceEventSeqs 与 metering 的
+  // shadowedSeqs 从同一份 surface 序列里取（原先每个 replace 各扫一遍全量事件）。
+  it("repairReadView 折叠出 replace 的溯源与 metering 的阴影序列", () => {
+    const events = replaceHeavyLog();
+    repairReadView(events);
+
+    expect((events[3] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
+      1, 2,
+    ]);
+    expect(
+      (events[4] as unknown as { data: { shadowedSeqs?: number[] } }).data.shadowedSeqs,
+    ).toEqual([3]);
+    expect((events[5] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([3]);
+  });
+
+  // replace 的溯源按当前 surface 节点算，而 `developer/message` 也是 surface 节点：漏掉它，覆盖到它的
+  // replace 会被当成非法区间降级成 append，模型可见历史随之错位。
+  it("replace 的溯源包含 developer/message 节点", () => {
+    const events = [
+      developerRemoval(0, "append"),
+      surfaceEvent(1, "hi", "append"),
+      surfaceEvent(2, "replaced", { op: "replace", startSeq: 0, endSeq: 1 }),
+    ];
+
+    repairReadView(events);
+
+    expect((events[2] as unknown as { surfaceOp?: unknown }).surfaceOp).toEqual({
+      op: "replace",
+      startSeq: 0,
+      endSeq: 1,
+    });
+    expect((events[2] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
+      0, 1,
+    ]);
+  });
+
+  // rewind 的边界 / 窗口探测只要类型：查询不能连带把整个事件 JSON（f_data）拖回来。
+  it("rewind 的类型查询只取 fSequence / fType 两列", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      await persistOneTurn(ctx, "s1");
+      const backend = backendOf(ctx);
+
+      const at = await backend.reads.getEventTypeAt(SessionId("s1"), 1);
+      const before = await backend.reads.getEventTypesBefore(SessionId("s1"), 5, 2);
+
+      expect(at).toBe("user/message");
+      expect(before.map((row) => row.fType)).toEqual(["step/end", "assistant/message"]);
+      for (const row of before) {
+        expect(Object.keys(row).sort()).toEqual(["fSequence", "fType"]);
+      }
+    } finally {
+      await dispose();
+    }
+  });
+
+  // 工具清单变化的会话必须能读回：上游 agent-loop 在工具增删时写 `developer/message`（surface 事件），
+  // 读视图曾按「非 surface 事件」清掉它的 `surfaceOp`，随后的 `validateStoredEvents` fail loud——
+  // 一次 resume 后的工具变化就足以让整条历史会话打不开。
+  it("含工具清单变更事件的会话可加载", async () => {
+    const { ctx, dispose } = await mount();
+    try {
+      const base = oneTurnLog();
+      const handle = await ctx.sessionPersistence.create(meta("s-tools-changed"));
+      await handle.append(base);
+      await handle.append([developerRemoval(base.length, "append")]);
+      await handle.close();
+
+      const inspected = await persistenceOf(ctx).load(SessionId("s-tools-changed"));
+
+      expect(inspected.events.find((event) => event.type === "developer/message")?.surfaceOp).toBe(
+        "append",
+      );
+    } finally {
+      await dispose();
+    }
+  });
+});

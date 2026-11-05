@@ -1,19 +1,55 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "node"],
-  "ignorePatterns": ["target/**", "lib/**", "**/dist/**", "**/src/vendor/**"],
+  "ignorePatterns": ["target/**", "vendor/**", "lib/**", "**/dist/**", "**/src/vendor/**"],
   "options": {
     "typeAware": true,
     "typeCheck": true
   },
   "rules": {
-    "node/no-sync": "error"
+    "node/no-sync": "error",
+    "typescript/no-explicit-any": "error"
   },
   "overrides": [
     {
-      "files": ["**/src/__tests__/schema-fixture.ts"],
+      "files": ["**/src/ui/**", "**/src/client/**"],
+      "excludeFiles": ["**/__tests__/**"],
       "rules": {
-        "typescript/no-implied-eval": "off"
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@morlay/dsh-agent",
+                  "@morlay/dsh-agent-loop",
+                  "@morlay/dsh-agent-team",
+                  "@morlay/dsh-auth",
+                  "@morlay/dsh-command",
+                  "@morlay/dsh-conversation",
+                  "@morlay/dsh-fs",
+                  "@morlay/dsh-job",
+                  "@morlay/dsh-permission",
+                  "@morlay/dsh-ptc",
+                  "@morlay/dsh-sandbox",
+                  "@morlay/dsh-session",
+                  "@morlay/dsh-session-persistence",
+                  "@morlay/dsh-setting",
+                  "@morlay/dsh-shell",
+                  "@morlay/dsh-skill",
+                  "@morlay/dsh-storage",
+                  "@morlay/dsh-upload",
+                  "@morlay/dsh-workspace",
+                  "@morlay/better-session",
+                  "@morlay/session-mode",
+                  "@morlay/zephyr-app"
+                ],
+                "allowTypeImports": true,
+                "message": "浏览器半别引包根：包根出宿主实现（service / 上游实现类），会把宿主树拖进前端 bundle；改引该包的 /contract、/endpoint 或 /ui 子面（类型导入不受限）"
+              }
+            ]
+          }
+        ]
       }
     }
   ]
