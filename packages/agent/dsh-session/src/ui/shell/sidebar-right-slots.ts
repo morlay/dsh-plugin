@@ -30,7 +30,12 @@ export class SidebarRightSlots extends fromCordis(SidebarRight, UiSidebarRightPl
   private readonly shortcuts = inject(Shortcuts);
 
   override async onInit(ctx: Context): Promise<void> {
+    // 上游 `ui-sidebar-right` 的 `inject` 里也有 `contextMenus`（右栏条目支持右键菜单）。
+    const contextMenus = (
+      ctx as unknown as { root: { reflect: { get(name: string, strict?: boolean): unknown } } }
+    ).root.reflect.get("contextMenus", false);
     await this.mount(ctx, undefined, {
+      contextMenus,
       slots: this.slots,
       layout: this.layout,
       locale: this.locale,

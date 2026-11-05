@@ -109,10 +109,11 @@ describe("schedule/* 的宿主面", { timeout: 30_000 }, () => {
     expect(typeof value).toBe("object");
   });
 
-  it("list 对没有计划表的会话回空表", async () => {
+  it("list 在没有任务的宿主上回空页", async () => {
     const { handlers } = await boot();
-    const value = okOf(await handlers.invoke("schedule/list", { request: { sessionId: "s-none" } }));
-    expect(value).toEqual([]);
+    // 上游 `ScheduleListRequest` 是宿主级分页（`active` / `limit` / `offset`），不再按会话查。
+    const value = okOf(await handlers.invoke("schedule/list", { request: {} }));
+    expect(value).toMatchObject({ items: [], total: 0, shown: 0 });
   });
 
   it("history 对不认识的计划回上游的结构化失败", async () => {
@@ -123,23 +124,24 @@ describe("schedule/* 的宿主面", { timeout: 30_000 }, () => {
     expect(errorOf(result)).toBeDefined();
   });
 
-  it("delete 对不认识的计划回**非变更结果**（上游语义：`deleted: false` + `schedule_not_found`）", async () => {
+  // 上游把「改」与「删」合成 `edit({ id, action, … })`，端点也从 `delete` + `update` 变成一条 `edit`。
+  it("edit(delete) 对不认识的计划回**非变更结果**（`schedule_not_found`）", async () => {
     const { handlers } = await boot();
     const value = okOf(
-      await handlers.invoke("schedule/delete", {
-        request: { sessionId: "s-none", id: "nope" },
+      await handlers.invoke("schedule/edit", {
+        request: { id: "nope", action: "delete" },
       }),
     );
-    expect(value).toMatchObject({ id: "nope", deleted: false, code: "schedule_not_found" });
+    expect(value).toMatchObject({ id: "nope", code: "schedule_not_found" });
   });
 
-  it("update 对不认识的计划回**非变更结果**（上游语义：`updated: false` + `schedule_not_found`）", async () => {
+  it("edit(update) 对不认识的计划回**非变更结果**（`schedule_not_found`）", async () => {
     const { handlers } = await boot();
     const value = okOf(
-      await handlers.invoke("schedule/update", {
-        request: { sessionId: "s-none", id: "nope", expected: {} },
+      await handlers.invoke("schedule/edit", {
+        request: { id: "nope", action: "update", patch: { title: "x" } },
       }),
     );
-    expect(value).toMatchObject({ id: "nope", updated: false, code: "schedule_not_found" });
+    expect(value).toMatchObject({ id: "nope", code: "schedule_not_found" });
   });
 });

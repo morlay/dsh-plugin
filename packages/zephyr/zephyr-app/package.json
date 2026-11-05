@@ -27,6 +27,7 @@
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
     "@deepseek-ai/dsh-client-ui-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",

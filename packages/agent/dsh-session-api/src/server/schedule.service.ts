@@ -4,18 +4,17 @@
 // 服务上，并把 `schedule/list` 注册到宿主 wire（`RemoteHandlers`，与 `session`、`skills` 同一套）。
 import {
   ScheduleService,
-  type ScheduleDeleteRequest,
-  type ScheduleDeleteResult,
   type ScheduleDeliveryHistoryRequest,
   type ScheduleDeliveryHistoryResult,
   type ScheduleDeleteInactiveResult,
   type ScheduleCatalogEntry,
   type ScheduleListRequest,
   type ScheduleRecord,
-  type ScheduleUpdateRequest,
-  type ScheduleUpdateResult,
+  // 上游把「改」与「删」合成一个 `edit`（`action: 'update' | 'delete'`），旧的 `delete` / `update`
+  // 两个方法已不存在——端点也随之合一。
+  type ScheduleEditRequest,
+  type ScheduleEditResult,
 } from "@deepseek-ai/dsh-schedule";
-import { SessionId } from "@deepseek-ai/dsh-session";
 import { AgentDirectory } from "@morlay/dsh-agent";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { StorageDomain } from "@morlay/dsh-storage";
@@ -34,25 +33,21 @@ import { SessionStore } from "@morlay/dsh-session";
 const SCHEDULE_LIST_ENDPOINT = "schedule/list";
 const SCHEDULE_CATALOG_ENDPOINT = "schedule/catalog";
 const SCHEDULE_HISTORY_ENDPOINT = "schedule/history";
-const SCHEDULE_DELETE_ENDPOINT = "schedule/delete";
+const SCHEDULE_EDIT_ENDPOINT = "schedule/edit";
 const SCHEDULE_DELETE_INACTIVE_ENDPOINT = "schedule/deleteInactive";
-const SCHEDULE_UPDATE_ENDPOINT = "schedule/update";
 
 /**
- * 取 `schedule/list` 的命名参数（wire 上是 `{ request: { sessionId } }`）。
+ * 取 `schedule/list` 的命名参数。
+ *
+ * 上游 `ScheduleListRequest` 现在是**纯分页/过滤**（`active` / `limit` / `offset`），不再带会话身份：
+ * 任务表是宿主级的。所以这里原样透传，缺省即"全部分页"。
  * @param args - 宿主 handler 收到的命名参数。
  * @returns 品牌化后的请求。
  */
 function scheduleListRequestOf(args: Readonly<Record<string, unknown>>): ScheduleListRequest {
   const request = args["request"];
-  if (typeof request !== "object" || request === null || !("sessionId" in request)) {
-    throw new Error("schedule/list: 缺少 request.sessionId");
-  }
-  const sessionId = request.sessionId;
-  if (typeof sessionId !== "string" || sessionId.length === 0) {
-    throw new Error("schedule/list: request.sessionId 必须是非空字符串");
-  }
-  return { sessionId: SessionId(sessionId) };
+  if (typeof request !== "object" || request === null) return {};
+  return request as ScheduleListRequest;
 }
 
 /**
@@ -99,18 +94,11 @@ export class ScheduleRow extends fromCordis(ScheduleService, ScheduleService) {
     this.handlers.register(SCHEDULE_HISTORY_ENDPOINT, async (args) =>
       await asRemoteResult<ScheduleDeliveryHistoryResult>(async () =>
         await this.schedule().history(requestOf<ScheduleDeliveryHistoryRequest>(args, SCHEDULE_HISTORY_ENDPOINT))));
-    // unary 的 wire 不带信号：上游这两个方法接一个可选的 `AbortSignal`。
-    this.handlers.register(SCHEDULE_DELETE_ENDPOINT, async (args) =>
-      await asRemoteResult<ScheduleDeleteResult>(async () =>
-        await this.schedule().delete(
-          requestOf<ScheduleDeleteRequest>(args, SCHEDULE_DELETE_ENDPOINT),
-          new AbortController().signal,
-        )));
-    this.handlers.register(SCHEDULE_UPDATE_ENDPOINT, async (args) =>
-      await asRemoteResult<ScheduleUpdateResult>(async () =>
-        await this.schedule().update(
-          requestOf<ScheduleUpdateRequest>(args, SCHEDULE_UPDATE_ENDPOINT),
-          new AbortController().signal,
+    // unary 的 wire 不带信号：上游 `edit(request, actorSessionId?, signal?)` 的后两个都可选。
+    this.handlers.register(SCHEDULE_EDIT_ENDPOINT, async (args) =>
+      await asRemoteResult<ScheduleEditResult>(async () =>
+        await this.schedule().edit(
+          requestOf<ScheduleEditRequest>(args, SCHEDULE_EDIT_ENDPOINT),
         )));
   }
 

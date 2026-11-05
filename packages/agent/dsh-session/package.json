@@ -22,6 +22,7 @@
     "@deepseek-ai/dsh-client-ui-attachment": "workspace:*",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
     "@deepseek-ai/dsh-client-ui-commands": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:*",
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:*",

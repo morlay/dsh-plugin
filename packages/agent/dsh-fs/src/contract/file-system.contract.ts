@@ -43,6 +43,13 @@ export abstract class FileSystem {
 
   abstract readonly listDir: FileSystemService["listDir"];
 
+  /** 按补丁改文件（上游新增的三条写面：改、删、移）。 */
+  abstract readonly patchText: FileSystemService["patchText"];
+
+  abstract readonly deleteFile: FileSystemService["deleteFile"];
+
+  abstract readonly moveFile: FileSystemService["moveFile"];
+
   abstract readonly writeText: FileSystemService["writeText"];
 
   abstract readonly editText: FileSystemService["editText"];

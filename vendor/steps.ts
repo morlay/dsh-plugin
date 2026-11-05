@@ -32,17 +32,17 @@ export const patch: Step[] = [
   { type: "rm", glob: "packages/context/harness-dev-context" },
   { type: "rm", glob: "packages/subagent/subagent-dsh-sdk" },
   { type: "rm", glob: "packages/subagent/subagent-codex" },
-  // `cordis-client-runner` 的 `src/client/timer.d.ts` 是上游发布产物的残留（对应 `.ts` 已不存在，
-  // 也没有任何源码 import 它）。它把 `Context.timer` 声明成 `ClientTimerService`，而 host 侧
-  // `cordis-plugin-timer` 把同一个 `Context.timer` 声明成 `TimerService`——本仓 host 与 client 在
-  // 同一个 program 里，两处 `extends Pick<…>` 会撞 TS2320。删掉这份孤儿声明，`Context.timer` 只由
-  // host 侧那份定义。
-  { type: "rm", path: "packages/extensions/cordis-client-runner/src/client/timer.d.ts" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
+  // `rrule` 的联邦产物是它的 **ESM 面**（`module` 字段 → `dist/esm/index.js`），而 ESM 入口没有 default，
+  // 上游那句 `import rrulePackage from 'rrule'` 跨联邦边界就是
+  // `does not provide an export named 'default'`（真机表现：整页白屏，console 里只有 vite 的两行）。
+  // 产物不替消费方造 default（那会掩盖真实的导出缺失），改消费方按 ESM 的具名面写：
+  // 命名空间导入，`rrulePackage.Weekday` 之类的用法照旧。
+  { type: "git", patch: "rrule-namespace-import.patch" },
   // `SOURCE_TSCONFIG_PATH` 惰性求值。上游在**模块顶层**用 `fileURLToPath(new URL(…, import.meta.url))`
   // 算 tsconfig 路径；`import.meta.url` 在 vitest 的 happy-dom 环境里是 `http://localhost/…`，
   // 于是任何 import 到 `subprocess-local` 的模块（含 `dsh-sandbox` 的装配行）都会抛

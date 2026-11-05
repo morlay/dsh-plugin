@@ -44,3 +44,4 @@ export { SidebarRightTabs } from "./sidebar-right-tabs.ts";
 export { SettingsSchema } from "./settings-schema.ts";
 // `localStorage` / `sessionStorage` 的代理（同步内存真源 + IndexedDB 异步落盘）。
 export { installStorageShim, type StorageShim, type StorageShimResult } from "./storage-shim.ts";
+export { ContextMenus } from "./context-menus.contract.ts";

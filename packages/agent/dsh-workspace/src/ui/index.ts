@@ -6,3 +6,4 @@ export { WorkspaceSlots } from "./workspace-slots.ts";
 export { UiWorkspace } from "./ui-workspace.token.ts";
 export { DirectoryPickerNativeSlots } from "./directory-picker-native-slots.ts";
 export { provideWorkspaceSlots, provideWorkspaceUi } from "./workspace.provide.ts";
+export { ContextMenuSlots } from "./context-menu-slots.ts";

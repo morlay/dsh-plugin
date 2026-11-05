@@ -38,7 +38,13 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
   override async onInit(ctx: Context): Promise<void> {
     // `ui-workspace` 的 inject 声明：`workspaces`（由 `workspace-controller` 行提供）、
     // `locale` / `layout` / `shortcuts` / `remoteAccess`（我们的契约）、`remote.directoryPicker`（远程子面）。
+    // 行内菜单的结构化接口：`ContextMenuSlots` 在自己的行 ctx 上 `ctx.provide('contextMenus', …)`，
+    // 清单里它排在前面。**不写进 `inject`**：它是上游的行内服务、没有实现类可注入。
+    const contextMenus = (
+      ctx as unknown as { root: { reflect: { get(name: string, strict?: boolean): unknown } } }
+    ).root.reflect.get("contextMenus", false);
     await this.mount(ctx, undefined, {
+      contextMenus,
       sessions: this.sessions,
       slots: this.slots,
       remote: this.remote,

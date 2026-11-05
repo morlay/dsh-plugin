@@ -862,6 +862,7 @@ export async function dependencyEntry(
   const parsed = JSON.parse(await readFile(manifest, "utf8").catch(() => "{}")) as {
     version?: string;
   };
+  if (name === "rrule") console.log("[diag] rrule entry:", entry, "from:", from);
   return { entry, version: parsed.version ?? "0.0.0" };
 }
 

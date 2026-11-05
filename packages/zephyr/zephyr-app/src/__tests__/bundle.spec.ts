@@ -7,7 +7,7 @@
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "@morlay/zephyr-app/testing";
 
@@ -236,4 +236,129 @@ test("清单里解析不到的依赖不算可外置候选，也不该让预编�
     manifestOf: join(root, "package.json"),
   });
   expect([...(built?.files.keys() ?? [])]).toEqual(["index"]);
+});
+
+// ── 入口的**模块类型**决定要不要做 CJS 具名导出包装 ────────────────────────────────────────────
+//
+// rolldown 对 CJS 入口产物的具名导出只能靠静态分析：`module.exports = require(…)` 与 UMD 包装都分析
+// 不出来，产物只剩 `export default …`——而浏览器侧要 `import { Fragment } from "react"`，整个 import
+// 阶段就失败。反过来，给**本来就是 ESM** 的入口硬补 default，又会多一个消费方不该依赖的面
+// （而且掩盖真实的导出缺失）。这几条按"出口落点 + 扩展名/type"两个维度各钉一次。
+
+/** 按给定清单与入口打一次包（不装 nodeStub / alias：这些用例只验出口形态）。 */
+async function bundleFixture(pkg: {
+  name: string;
+  version?: string;
+  manifest: Record<string, unknown>;
+  files: Record<string, string>;
+  entry: string;
+  watch: string;
+}) {
+  const dir = join(work, pkg.name);
+  for (const [relative, content] of Object.entries(pkg.files)) {
+    await mkdir(dirname(join(dir, relative)), { recursive: true });
+    await writeFile(join(dir, relative), content, "utf8");
+  }
+  await writeFile(
+    join(dir, "package.json"),
+    `${JSON.stringify({ name: pkg.name, version: pkg.version ?? "1.0.0", ...pkg.manifest })}\n`,
+    "utf8",
+  );
+  const bundled = await bundlePackage({
+    nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
+    cacheRoot,
+    repoRoot: work,
+    alias: [],
+    name: pkg.name,
+    version: pkg.version ?? "1.0.0",
+    input: { index: join(dir, pkg.entry) },
+    watch: [join(dir, pkg.watch)],
+  });
+  return { bundled, file: join(cacheRoot, bundled?.files.get("index") ?? "") };
+}
+
+test("CJS/UMD 入口：具名导出与 default 同时产出，保留字不写进 `export const`", async () => {
+  // 老包（`rrule` / `@xterm/xterm` / `@xterm/addon-fit`）的导出面是**运行期**的。这里用 webpack 风格
+  // UMD 且局部名与导出名不同：产物里不能出现引用裸导出名的写法，否则浏览器 `ReferenceError`。
+  const { file } = await bundleFixture({
+    name: "cjs-umd",
+    manifest: { main: "dist/index.js" },
+    entry: "dist/index.js",
+    watch: "dist",
+    files: {
+      "dist/index.js": [
+        "!function (root, factory) {",
+        '  if (typeof exports === "object" && typeof module === "object") module.exports = factory();',
+        "  else root.FitAddon = factory();",
+        "}(globalThis, function () {",
+        '  "use strict";',
+        "  var t = {};",
+        "  t.FitAddon = class FitAddon {};",
+        // zod@4 的 CJS 面就有这种键：`export const function = …` 是语法错误，必须被剔掉。
+        "  t.function = 1;",
+        "  return t;",
+        "});",
+        "",
+      ].join("\n"),
+    },
+  });
+  const loaded = (await import(pathToFileURL(file).href)) as {
+    readonly FitAddon?: unknown;
+    readonly default?: { readonly FitAddon?: unknown };
+  };
+  expect(typeof loaded.FitAddon, "具名导入（浏览器里最常见的那种）").toBe("function");
+  expect(typeof loaded.default?.FitAddon, "default（CJS 的 `module.exports`）").toBe("function");
+  expect(await readFile(file, "utf8")).not.toMatch(/export const function\b/u);
+  // shim 只活在内存里（虚拟入口），缓存目录不落这个文件。
+  await expect(stat(join(cacheRoot, "cjs-umd@1.0.0", "index.cjs-shim.mjs"))).rejects.toThrow();
+});
+
+test("ESM 入口：交给 rolldown 的具名导出，不补任何 default", async () => {
+  const { file } = await bundleFixture({
+    name: "esm-entry",
+    manifest: { type: "module", main: "src/index.js" },
+    entry: "src/index.js",
+    watch: "src",
+    files: { "src/index.js": "const t = class {};\nexport { t as Terminal };\n" },
+  });
+  const code = await readFile(file, "utf8");
+  expect(code, "ESM 不该被当成 CJS 补 default").not.toMatch(/export default/u);
+  const loaded = (await import(pathToFileURL(file).href)) as { readonly Terminal?: unknown };
+  expect(typeof loaded.Terminal).toBe("function");
+});
+
+test("`module` 字段指向的 `.js` 按 ESM 处理（`rrule` 的 `dist/esm/index.js` 就是这种）", async () => {
+  // 老包没有 `type`、同时给 `main`（CJS）与 `module`（ESM）——出口落点决定"哪个文件"，
+  // 扩展名/type 决定"那个文件是什么模块"。选到 ESM 那份就**不能**再 shim。
+  const { file } = await bundleFixture({
+    name: "legacy-module",
+    manifest: { main: "cjs/index.js", module: "esm/index.js" },
+    entry: "esm/index.js",
+    watch: "esm",
+    files: {
+      "esm/index.js": "export const Weekday = class Weekday {};\n",
+      "cjs/index.js": "module.exports = { Weekday: class Weekday {} };\n",
+    },
+  });
+  expect(await readFile(file, "utf8")).not.toMatch(/export default/u);
+});
+
+test("扩展名即模块类型：`.mjs` / `.ts` 入口都不进 CJS 那条求值路径", async () => {
+  const mjs = await bundleFixture({
+    name: "mjs-entry",
+    manifest: { type: "module" },
+    entry: "dist/index.mjs",
+    watch: "dist",
+    files: { "dist/index.mjs": "export const esm = 1;\n" },
+  });
+  expect(await readFile(mjs.file, "utf8")).not.toMatch(/export default/u);
+
+  const ts = await bundleFixture({
+    name: "ts-entry",
+    manifest: {},
+    entry: "src/index.ts",
+    watch: "src",
+    files: { "src/index.ts": "export const source = 1;\n" },
+  });
+  expect(await readFile(ts.file, "utf8")).not.toMatch(/export default/u);
 });

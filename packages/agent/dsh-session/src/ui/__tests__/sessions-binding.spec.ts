@@ -145,12 +145,13 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
               follow: (request: unknown, signal: AbortSignal) => sessionRemote.follow(request, signal),
               control: async function* control(): AsyncGenerator<unknown> {
                 yield { type: "baseline", value: { projections: {} } };
+                // 上游 `SessionManager.handleControlFrame` 认的是
+                // `{ sessionId, seq, changes: [{ key, val }] }`（早先是 `{ type: 'projection', key, value }`）。
                 yield {
-                  type: "projection",
+                  type: "delta",
                   sessionId: "s1",
-                  key: "permissions",
-                  value: { currentValue: "danger-full-access" },
                   seq: 1,
+                  changes: [{ key: "permissions", val: { currentValue: "danger-full-access" } }],
                 };
                 await new Promise<void>(() => {});
               },

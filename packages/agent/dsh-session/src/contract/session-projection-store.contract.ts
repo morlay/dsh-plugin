@@ -37,4 +37,7 @@ export abstract class SessionProjectionStore {
   abstract readonly hydrate: SessionProjectionRegistry["hydrate"];
 
   abstract readonly summaryKeys: SessionProjectionRegistry["summaryKeys"];
+
+  /** 投影事件变化的订阅口（上游按它把 `session/event` 的投影变化喂给订阅者）。 */
+  abstract readonly onEventChanged: SessionProjectionRegistry["onEventChanged"];
 }
