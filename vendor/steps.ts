@@ -8,16 +8,30 @@ import type { Step } from "../scripts/upstream-sync/src/steps.ts";
 // 从 sync 的干净基线跑一次（不是每条步骤都幂等）。
 export const patch: Step[] = [
   // 上游的非产品面：文档站（依赖我们没装的 vitepress）、仓库脚本、测试快照、基准与 python 工具。
-  // 产品面（packages / vendor / native / apps）留下——`apps/cli` 被本仓库的工具与用例当 install anchor。
+  // 产品面（packages / vendor / native）留下。
   // 用 glob 形态（不存在就删 0 项）：这几样是"确保它不在"，不是"上游挪走即失败"的信号。
   { type: "rm", glob: "website" },
   { type: "rm", glob: "scripts" },
   { type: "rm", glob: "snapshots" },
   { type: "rm", glob: "benchmarks" },
   { type: "rm", glob: "python" },
-  // 指向上游不入库的测试快照的符号链接（断链）；本仓库不跑这条 acp e2e，删掉免得断链被遍历到。
-  // 同样用 glob 形态：快照不入库，`reset` 之后它也不会回来。
-  { type: "rm", glob: "apps/cli/tests/profiles/acp/cordis.yml" },
+  // **上游的"交付面"整棵摘掉**：`apps/*`（cli / desktop / desktop-host / web / plugin-market-generator）
+  // 与围绕它们的 `bundle/*`（web-app / sdk-* / acp-app / base / headless）、`packages/sdk/*`、
+  // `context/harness-dev-context`、`subagent/subagent-{dsh-sdk,codex}`。
+  //
+  // 理由：本仓的部署面是自己的 `apps/dsh-custom-next`（清单在 `src/client`），这些包一个都不被引用；
+  // 留着它们要付三份成本——pnpm 解析（`apps/desktop` 会拖 electron）、typert 生成、`tsc` 全树扫描
+  // （根 tsconfig 的 `include` 是 `**\/*`）。摘掉后 workspace 从 421 个项目降到 411。
+  //
+  // 它们是**互相钉住**的一条链（`web-app` → `apps/web`、`sdk/client` → `apps/cli`、
+  // `harness-dev-context` → `web-app`、`subagent-codex` → `sdk/protocol`），所以必须整条一起删；
+  // 只删其中一段，`pnpm install` 会报"依赖了不在 workspace 的包"。
+  { type: "rm", glob: "apps" },
+  { type: "rm", glob: "packages/bundle" },
+  { type: "rm", glob: "packages/sdk" },
+  { type: "rm", glob: "packages/context/harness-dev-context" },
+  { type: "rm", glob: "packages/subagent/subagent-dsh-sdk" },
+  { type: "rm", glob: "packages/subagent/subagent-codex" },
   // `cordis-client-runner` 的 `src/client/timer.d.ts` 是上游发布产物的残留（对应 `.ts` 已不存在，
   // 也没有任何源码 import 它）。它把 `Context.timer` 声明成 `ClientTimerService`，而 host 侧
   // `cordis-plugin-timer` 把同一个 `Context.timer` 声明成 `TimerService`——本仓 host 与 client 在

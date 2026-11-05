@@ -50,8 +50,9 @@ export class OllamaProviderProfileModule {}
     apiKeyEnv: OLLAMA_API_KEY
 ```
 
-官方插件的适配 Provider（`LlmPiAi` / `Web`）来自 `@morlay/dsh-base` / `@morlay/dsh-web-app` 的 `fromCordis` 包装：
-它们带 `static providerName`（上游插件名），因此行 id 从插件名派生，只覆盖 config、不 insert——行本身由上游 patch 提供。
+官方插件的适配 Provider（`LlmPiAi` / `Web`）是本仓 `@morlay/dsh-setting` / `@morlay/dsh-web-access` 里的
+`fromCordis` 包装：它们带 `static providerName`（上游插件名），因此行 id 从插件名派生，只覆盖 config、
+不 insert——行本身由上游 patch 提供。
 
 ## 元数据形状
 
