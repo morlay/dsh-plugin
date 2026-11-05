@@ -70,7 +70,6 @@ overrides:
   # `link:vendor/*`）；本仓库根是上一级，路径要多带一层目录。
   "@deepseek-ai/cosmokit": "link:vendor/deepseek-harness/vendor/cosmokit"
   "@deepseek-ai/schemastery": "link:vendor/deepseek-harness/vendor/schemastery"
-  extract-zip>yauzl: "3.4.0"
   # 上游靠 minimumReleaseAge 政策把 pi-ai / lexical / pkg 这些钉在打补丁的精确版本（见其
   # minimumReleaseAgeExclude）；我们关掉了该政策（`minimumReleaseAge: 0`），所以自己钉版本——
   # 否则 patch 打不到解析结果上（pnpm 直接报未使用）。

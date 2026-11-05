@@ -84,7 +84,7 @@
     "@deepseek-ai/dsh-client-connection": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-alpha.3 < 0.2.3",
+    "dsh": ">= 0.2.2-rc.1 < 0.2.3",
     "node": ">=24.11.0"
   }
 }
