@@ -457,7 +457,79 @@ const BUILTIN: Record<string, (args: Node[], context: EmitContext) => string> = 
   // TS 内置工具类型：`Partial` / `Readonly` 直接把对象类型的字段逐个改修饰符（wire 面就是那个形状）。
   Partial: (args, context) => mappedObject(args[0], context, { optional: true }),
   Readonly: (args, context) => mappedObject(args[0], context, { readonly: true }),
+  // `Omit<T, K>` 是「去掉几个键」，wire 面上就是少几个字段：按 K 的字面量把成员滤掉。
+  // K 不是可静态求值的字面量联合（`keyof T` 之类）时报错——与 `standard` 表之外一律 fail 同一口径。
+  Omit: (args, context) => selectedObject(args[0], args[1], context, "omit"),
+  // `Pick<T, K>` 是反面：只留 K 点名的键。
+  Pick: (args, context) => selectedObject(args[0], args[1], context, "pick"),
 };
+
+/**
+ * `Omit<T, K>` / `Pick<T, K>`：按 K 点名的键过滤对象类型的成员。
+ * @param mode - `omit` 去掉这些键，`pick` 只留这些键。
+ */
+function selectedObject(
+  node: Node | undefined,
+  keys: Node | undefined,
+  context: EmitContext,
+  mode: "omit" | "pick",
+): string {
+  const literal = objectLiteralOf(node, context);
+  if (literal === undefined) return zodOf(node, context);
+  const selected = literalKeysOf(keys);
+  if (selected === undefined) {
+    throw new Error(`${mode === "omit" ? "Omit" : "Pick"} 的键不是可静态求值的字面量联合：${describeNode(keys)}`);
+  }
+  return objectOf(
+    literal
+      .filter((member) => {
+        const name = propertyNameOf(member);
+        if (name === undefined) return mode === "omit";
+        return mode === "omit" ? !selected.has(name) : selected.has(name);
+      })
+      .map((member) => ({ node: member, file: context.file })),
+    context,
+  );
+}
+
+/** 成员键名（`Identifier` 或字符串字面量）。 */
+function propertyNameOf(member: Node): string | undefined {
+  const key = member["key"] as Node | undefined;
+  if (key === undefined) return undefined;
+  if (key["type"] === "Identifier") return key["name"] as string;
+  const value = key["value"];
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * 把 `'a' | 'b'` 求成键集合。
+ * @returns 求不出来（含 `keyof` 之类的非字面量）时 `undefined`。
+ */
+function literalKeysOf(node: Node | undefined): Set<string> | undefined {
+  const out = new Set<string>();
+  const visit = (current: Node | undefined): boolean => {
+    if (current === undefined) return false;
+    if (current["type"] === "TSLiteralType") {
+      const literal = current["literal"] as Node | undefined;
+      const value = literal?.["value"];
+      if (typeof value !== "string") return false;
+      out.add(value);
+      return true;
+    }
+    if (current["type"] === "TSUnionType") {
+      return (current["types"] as Node[]).every((each) => visit(each));
+    }
+    return false;
+  };
+  return visit(node) ? out : undefined;
+}
+
+/** 报错里给一眼能看懂的节点描述（不引整个 AST）。 */
+function describeNode(node: Node | undefined): string {
+  if (node === undefined) return "<missing>";
+  const name = nameOf(node);
+  return name ?? String(node["type"]);
+}
 
 /** 对对象类型的每个字段施加修饰符（`Partial<T>` / `Readonly<T>`）。 */
 function mappedObject(

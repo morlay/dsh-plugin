@@ -1,0 +1,14 @@
+{
+  "name": "@morlay/dsh-agent-contract",
+  "version": "0.0.1",
+  "private": true,
+  "description": "agent 域的装配契约：per-agent 贡献面与标记。零上游依赖——各 agent 包共用它，不因为一个标记背上 dsh-agent 的整条依赖链。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@morlay/zephyr": "workspace:*"
+  }
+}

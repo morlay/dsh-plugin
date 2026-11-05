@@ -1,0 +1,48 @@
+{
+  "unit": {
+    "name": "workspace",
+    "version": 2
+  },
+  "global": {
+    "initialized": true,
+    "workspaceIds": [
+      "eb4924bf-0d6c-4b8b-a6b0-9abf559dca32",
+      "c37174e2-eec4-42fa-a011-002f3474b252",
+      "937a43a9-3a9a-41ea-8792-4756413933f9"
+    ],
+    "archivedSessionIds": [],
+    "pinnedSessionIds": []
+  },
+  "tables": {
+    "workspaces": {
+      "937a43a9-3a9a-41ea-8792-4756413933f9": {
+        "path": "/private/var/folders/r0/jnrxjtyd3t91_tm25_lks6j40000gp/T/dsh-sidebar-tree-lxq6hq",
+        "title": "dsh-sidebar-tree-lxq6hq",
+        "sessionIds": [
+          "s-blank",
+          "s-engaged"
+        ],
+        "createdAt": "2026-10-30T10:02:45.748Z",
+        "updatedAt": "2026-10-30T10:02:45.748Z"
+      },
+      "c37174e2-eec4-42fa-a011-002f3474b252": {
+        "path": "/private/var/folders/r0/jnrxjtyd3t91_tm25_lks6j40000gp/T/dsh-main-flow-T94Bi6",
+        "title": "dsh-main-flow-T94Bi6",
+        "sessionIds": [
+          "session-1"
+        ],
+        "createdAt": "2026-11-02T01:55:09.326Z",
+        "updatedAt": "2026-11-02T01:55:09.373Z"
+      },
+      "eb4924bf-0d6c-4b8b-a6b0-9abf559dca32": {
+        "path": "/private/var/folders/r0/jnrxjtyd3t91_tm25_lks6j40000gp/T/dsh-main-flow-R6lgda",
+        "title": "dsh-main-flow-R6lgda",
+        "sessionIds": [
+          "session-1"
+        ],
+        "createdAt": "2026-11-02T01:55:21.540Z",
+        "updatedAt": "2026-11-02T01:55:21.583Z"
+      }
+    }
+  }
+}

@@ -1,17 +1,15 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // 装饰器用 TypeScript 的 legacy 模式：cordis 的 `Service` 子类（含 vendor 里的上游插件）都是这么写的。
+  // 不写这条时 oxc 会去最近的 tsconfig 找 `experimentalDecorators`，而 vendor 被根 tsconfig `exclude`
+  // ——转译直接抛「decorators require experimentalDecorators」。写在这里是**转译配置**，不是类型配置。
+  oxc: { decorator: { legacy: true } },
   test: {
-    include: [
-      // `packages/**` 含装配入口（`packages/bundles/*`，patch 与生成物同形、共享行内容一致的守护测试）。
-      // `src/client/__tests__/**` 是 client 面（浏览器半）的测试：按 face 与宿主面的测试分开住。
-      "packages/**/src/__tests__/**/*.spec.ts",
-      "packages/**/src/__tests__/**/*.spec.tsx",
-      "packages/**/src/client/__tests__/**/*.spec.ts",
-      "packages/**/src/client/__tests__/**/*.spec.tsx",
-      // 共享工具链（@local/devkit）的测试与被它服务的包同形：src/__tests__/*.spec.ts。
-      "devpackages/**/src/__tests__/**/*.spec.ts",
-    ],
-    exclude: ["**/node_modules/**", "target/**"],
+    include: ["**/__tests__/*.spec.tsx", "**/__tests__/*.spec.ts"],
+    exclude: ["**/node_modules/**", "target/**", "_packages/**"],
+    // 单测里的等待不应该超过 3s：超时即失败，暴露真实原因，而不是把失败拖成 5s 的 vitest 默认超时。
+    testTimeout: 3000,
+    isolate: true,
   },
 });

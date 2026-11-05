@@ -1,5 +1,33 @@
 {
-  "extends": ["@local/devkit/tsconfig.json"],
-  "files": [],
-  "references": [{ "path": "./tsconfig.host.json" }, { "path": "./tsconfig.client.json" }]
+  "compilerOptions": {
+    // —— 仓库统一的 TS 口径（原先由 `devpackages/devkit` 的 base config 提供，该包已移除）——
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "composite": true,
+    // 与 `composite` 一起开（上游 `tsconfig.base.json` 同样是两项并写）：`tsc -b` 的增量缓存在各 config
+    // 旁那份 `*.tsbuildinfo` 里（gitignore），references 的叶才谈得上「只重编变了的」。
+    "incremental": true,
+    "sourceMap": false,
+    "declaration": true,
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "experimentalDecorators": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "outDir": "target/dts",
+  },
+  "include": ["**/*"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/*",
+    "target/**",
+  ],
 }

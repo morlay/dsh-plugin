@@ -18,11 +18,23 @@ export const patch: Step[] = [
   // 指向上游不入库的测试快照的符号链接（断链）；本仓库不跑这条 acp e2e，删掉免得断链被遍历到。
   // 同样用 glob 形态：快照不入库，`reset` 之后它也不会回来。
   { type: "rm", glob: "apps/cli/tests/profiles/acp/cordis.yml" },
+  // `cordis-client-runner` 的 `src/client/timer.d.ts` 是上游发布产物的残留（对应 `.ts` 已不存在，
+  // 也没有任何源码 import 它）。它把 `Context.timer` 声明成 `ClientTimerService`，而 host 侧
+  // `cordis-plugin-timer` 把同一个 `Context.timer` 声明成 `TimerService`——本仓 host 与 client 在
+  // 同一个 program 里，两处 `extends Pick<…>` 会撞 TS2320。删掉这份孤儿声明，`Context.timer` 只由
+  // host 侧那份定义。
+  { type: "rm", path: "packages/extensions/cordis-client-runner/src/client/timer.d.ts" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },
   // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
   { type: "git", patch: "source-loader.patch" },
+  // `SOURCE_TSCONFIG_PATH` 惰性求值。上游在**模块顶层**用 `fileURLToPath(new URL(…, import.meta.url))`
+  // 算 tsconfig 路径；`import.meta.url` 在 vitest 的 happy-dom 环境里是 `http://localhost/…`，
+  // 于是任何 import 到 `subprocess-local` 的模块（含 `dsh-sandbox` 的装配行）都会抛
+  // `The URL must be of scheme file`——前后端同 spec 的装配测试因此做不了。
+  // 改成一个按需调用的小函数后，加载不再依赖 `import.meta.url` 的协议。
+  { type: "git", patch: "subprocess-lazy-tsconfig-path.patch" },
   // 认证移除：页面与资源都由自研 web 层（vite dev server）提供，这层 cookie 校验只剩阻碍——摘掉它
   // 之后所有 `/api/*` 一律 401（见 `remove-browser-auth.patch` 的说明）。
   { type: "git", patch: "remove-browser-auth.patch" },

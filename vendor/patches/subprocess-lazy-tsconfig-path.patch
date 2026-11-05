@@ -1,0 +1,26 @@
+diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
+index 381219bab0..3c4dcf4e2a 100644
+--- a/packages/subprocess/subprocess-local/src/runner-launch.ts
++++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
+@@ -19,7 +19,11 @@ export const WINDOWS_RUNNER_SELECTION = 'windows' as const
+ /** Non-empty command tuple used to launch the private runner entry. */
+ export type RunnerInvocation = [string, ...string[]]
+ 
+-const SOURCE_TSCONFIG_PATH = fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url))
++// 本地 patch（patches/subprocess-lazy-tsconfig-path.patch）：**惰性求值**。
++// 模块顶层算 `import.meta.url` 会在 `import.meta.url` 不是 `file:` 的运行时里直接抛
++// （vitest 的 happy-dom 环境是 `http://localhost/…`），于是任何 import 到本模块的代码都无法加载。
++const sourceTscConfigPath = (): string =>
++  fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url))
+ const RUNNER_CONTROL_ENV_PREFIXES = ['NODE_', 'TSX_'] as const
+ 
+ /**
+@@ -81,7 +85,7 @@ export function runnerEnvironment(
+     ...env,
+     [SUBPROCESS_RUNNER_ENV]: selection,
+     SYSTEMD_LOG_TARGET: 'null',
+-    ...entry?.endsWith('.ts') === true ? { TSX_TSCONFIG_PATH: SOURCE_TSCONFIG_PATH } : {},
++    ...entry?.endsWith('.ts') === true ? { TSX_TSCONFIG_PATH: sourceTscConfigPath() } : {},
+   }
+ }
+ 

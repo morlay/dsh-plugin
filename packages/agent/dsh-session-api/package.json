@@ -1,0 +1,44 @@
+{
+  "name": "@morlay/dsh-session-api",
+  "version": "0.0.1",
+  "description": "会话的 API 面：会话组的宿主端点行（需要 agent 域的能力，所以单独成包，让 dsh-session 保持不反向依赖 agent）。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./server": "./src/server/index.ts"
+  },
+  "dependencies": {
+    "@morlay/dsh-agent-contract": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-file-reference-local": "workspace:*",
+    "@deepseek-ai/dsh-schedule": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-reference": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-attachment": "workspace:*",
+    "@morlay/dsh-fs": "workspace:*",
+    "@morlay/dsh-sandbox": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/dsh-upload": "workspace:*",
+    "@morlay/dsh-working-directory": "workspace:*",
+    "@morlay/dsh-workspace": "workspace:*",
+    "@morlay/zephyr": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
+    "@deepseek-ai/dsh-host-directory-picker": "workspace:*",
+    "@morlay/dsh-auth": "workspace:*",
+    "@morlay/dsh-command": "workspace:*",
+    "@morlay/dsh-permission": "workspace:*",
+    "@morlay/dsh-persistence": "workspace:*",
+    "@morlay/dsh-session-persistence": "workspace:*",
+    "@morlay/dsh-setting": "workspace:*",
+    "@morlay/dsh-shell": "workspace:*",
+    "@morlay/dsh-skill": "workspace:*",
+    "@morlay/dsh-storage": "workspace:*",
+    "@morlay/dsh-workspace": "workspace:*"
+  }
+}

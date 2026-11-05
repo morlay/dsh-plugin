@@ -1,0 +1,25 @@
+{
+  "name": "@morlay/dsh-session-title",
+  "version": "0.0.1",
+  "description": "会话标题：从首条提示或 LLM 生成一句话标题，让侧栏与列表有可读名字。",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-session-title": "workspace:*",
+    "@deepseek-ai/dsh-session-title-first-prompt-llm": "workspace:*",
+    "@morlay/dsh-agent": "workspace:*",
+    "@morlay/dsh-session": "workspace:*",
+    "@morlay/zephyr": "workspace:*"
+  },
+  "devDependencies": {
+    "@morlay/dsh-session-title": "workspace:*",
+    "@morlay/zephyr-app": "workspace:*"
+  },
+  "engines": {
+    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+  }
+}
