@@ -20,6 +20,14 @@
 机制、抑制面的取舍与代价见[设计 抑制官方注入面](./.agents/designs/20260929-抑制官方注入面.md)与
 [设计 会话模式](./.agents/designs/20260924-会话模式.md)。
 
+**按需工具组：常驻组之外默认不放行**（[`src/tool-groups.ts`](./src/tool-groups.ts)，组归属的 home 是
+[`src/shared.ts`](./src/shared.ts) 的 `toolGroupOf` / `isResidentToolGroup`）：文件、Shell、技能、流程（反馈）、计划、
+协作、调度这几组的工具一直在目录里；其余组默认不进目录——联网与工作流各自一组，每个 MCP server 一组
+（`mcp__<server>__<tool>`）。模式不设白名单时会话里多两个常驻控制工具 `tool_group_list`（列组名、数量与前三个工具名）
+与 `tool_group_load`（放行一组，接受 `mcp:<server>` / `group:<id>`，前缀可省），加载后该组工具在下一步可见。工具
+可见性变化由 loop 记成 `developer` 消息——路由支持 `toolUpdate` 时随历史追加，不重写请求前缀。设了 `allowTools`
+的模式不做按需（那些模式的意图本来就是"只留这几件"）；模式里显式写进 `denyTools` 的组仍然优先于放行。
+
 本包不装配任何行：装配入口在 [`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)
 （它插 `session-mode`、通道、工具说明与 subagent 那几行）。
 
@@ -57,12 +65,17 @@
         # presetsOnly: [standard, minimal]   # 可选白名单：切模式时把会话的 preset 落进名单（已在名单里就不动，否则换成第一个）；不写 = 不限制
 ```
 
-页面上改这份配置有两个入口（读写都是同一份 `config.modes`）：插件管理页里**本 bundle 的详情页**
-（`plugins.bundle.config`，key 是 bundle 包名）——"新会话的默认模式 + 每个模式一张可折叠卡片"，卡片里按六组分
-字段，支持增删模式（`noop` 不给删）；以及这一行自己的**行配置页**（`plugins.row.config`，key
-`@morlay/session-mode-profile#session-mode`，由通用 schema 表单按 volatile 字段自动生成，是行式的结构视图）。
-两处都是暂存式写入（改完点保存，唯一的写盘点），改动等 Loader 重挂这一行才对**新会话**生效。形态与取舍见
-[设计 bundle 配置页](./.agents/designs/20261002-bundle配置页.md)。
+本包**不注册插件页的配置面**（bundle 配置页已撤）：会话当下生效的那一份走 host 的
+`GET /session-mode?sessionId=<id>`——模式名与说明、persona、运行期可见的工具、合成后的技能与 policy 名单、
+三个注入开关。右侧栏的 `sidebar.right.pane.tab` 面板读这条面：只展示**这个会话选中的模式**，面板按**折叠组**排（通用配置 / 系统提示词 / 工具 / 技能 / policy），内边距与滚动对齐上游右栏内容；
+工具、技能、policy 逐条给出 **id 与描述**（全量目录，不只是名字），工具还按组（MCP 的每个 server 一组、其余按用途）提供整组开关；组级选择写成一条**组引用**
+（`mcp:<server>` 或 `group:<id>`），不用把组内工具逐个列进 `denyTools`。组行在组内判定不一致时显示**混合**
+（这一档不可选）；点「默认 / 允许 / 禁止」都是对整组的批量改写，所以组里某条被设成禁止之后，总能靠组行的
+「默认」退回模式默认。每项可改的值都是会话级覆盖，host 立即重装这份收口，并标出来源是**会话覆盖**
+还是**模式默认**。
+底部三个动作：**保存为默认**（写回该模式）、**另存为**（弹窗输入名字，以当前生效配置新建一个模式）、
+**删除**（弹窗确认，部署默认模式不可删；使用它的会话回到默认模式）。
+入口两处：右栏 guide 页上的条目，以及会话新建/切换时自动打开这一页。
 
 `skills` **不写就由这个模式自己的工具名单推导**：`(allowTools 留空 ? 全部 : allowTools) − denyTools` 里含 `skill`
 就要技能目录（`allowTools` 留空即"全部"，所以只有 `denyTools` 能把它推成 `false`）。本部署三个模式都不写它：

@@ -183,8 +183,13 @@ describe("会话模式的 persona", () => {
       modes: { ...CONFIG.modes, coding: { ...CONFIG.modes["coding"]!, allowTools: [] } },
     });
 
-    // 宿主平面装了三件（`read` / `web_search` / `send_message`）：留空就是一件都不砍。
-    expect(visibleToolNames(ctx, agent)).toEqual(["read", "send_message", "web_search"]);
+    // 宿主平面装了 `read` / `send_message` 这类常驻工具（`web` 是按需组，默认不放行），外加两个组控制工具。
+    expect(visibleToolNames(ctx, agent)).toEqual([
+      "read",
+      "send_message",
+      "tool_group_list",
+      "tool_group_load",
+    ]);
   });
 
   it("装配是幂等的：同一个模式反复装配不会重复注册", async () => {

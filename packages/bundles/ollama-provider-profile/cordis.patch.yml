@@ -8,8 +8,10 @@
       ollama:
         apiKeyEnv: OLLAMA_API_KEY
         displayName: Ollama Cloud
-        api: openai-completions
-        baseURL: https://ollama.com/v1
+        api: anthropic-messages
+        baseURL: https://ollama.com
+        headers:
+          Authorization: !!js "process.env.OLLAMA_API_KEY ? 'Bearer ' + process.env.OLLAMA_API_KEY : ''"
         reasoning: high
         requestImageMaxBytes: 2097152
         models:

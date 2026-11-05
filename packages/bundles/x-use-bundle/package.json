@@ -1,0 +1,68 @@
+{
+  "name": "@morlay/x-use-bundle",
+  "version": "0.0.1",
+  "description": "通用 MCP 接法的一次装齐：agent-browser 与 agent-desktop 各一行 dsh-mcp-client，工具以 mcp__agent-browser__* / mcp__agent-desktop__* 进入模型目录；命令走全局 PATH 里的 bin，没装则该功能自然不可用。",
+  "keywords": [
+    "agent-browser",
+    "agent-desktop",
+    "bundle-entry",
+    "dsh",
+    "dsh-bundle",
+    "dsh-plugin",
+    "mcp"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morlay/dsh-plugin.git"
+  },
+  "files": [
+    "locale/*.json",
+    "docs",
+    "dist",
+    "icon.svg",
+    "src",
+    "cordis.patch.yml",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsdown",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-mcp-client": "workspace:^"
+  },
+  "devDependencies": {
+    "@local/devkit": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "icon": "./icon.svg",
+  "engines": {
+    "dsh": ">= 0.2.2-rc.1 < 0.2.3"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

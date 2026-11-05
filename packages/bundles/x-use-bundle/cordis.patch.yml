@@ -1,0 +1,18 @@
+# 本文件由 packages/bundles/x-use-bundle/tsdown.config.ts 生成，请勿手工编辑
+- insert:
+    - id: mcp-agent-browser
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: agent-browser
+        transport: stdio
+        command: agent-browser
+        args:
+          - mcp
+    - id: mcp-agent-desktop
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: agent-desktop
+        transport: stdio
+        command: agent-desktop
+        args:
+          - mcp

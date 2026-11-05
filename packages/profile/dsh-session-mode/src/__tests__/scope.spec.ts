@@ -315,19 +315,20 @@ describe("instructions 与动态快照开关", () => {
   });
 });
 
-describe("allowTools 留空 = 全部工具（不设收窄）", () => {
-  it("目录与工具说明 section 都不缩", async () => {
+describe("allowTools 留空：常驻组照旧，按需组默认不放行", () => {
+  it("常驻工具的目录与说明都不缩；按需组不在目录里", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("all");
     apply(ctx, session, "nothing");
 
+    // 留空不再等于"全部可见"：`web` 是按需组，默认被收窄；两个控制工具常驻。
     expect(await visibleTools(ctx, session)).toEqual([
       "ask_user_question",
       "list_agents",
       "send_message",
-      "web_fetch",
-      "web_search",
+      "tool_group_list",
+      "tool_group_load",
     ]);
     expect(await sectionNames(ctx, session)).toContain("tool:send_message");
   });
@@ -342,27 +343,35 @@ describe("allowTools 留空 = 全部工具（不设收窄）", () => {
     expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
   });
 
-  it("从收窄换到留空：旧收窄收回，工具与 section 都回来", async () => {
+  it("从收窄换到留空：旧收窄收回，常驻工具与 section 都回来", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("back-to-all");
     apply(ctx, session, "narrow");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
-    expect((await callTool(ctx, session, "web_search", "call-narrowed")).error).toBeDefined();
+    expect((await callTool(ctx, session, "send_message", "call-narrowed")).error).toBeDefined();
 
     apply(ctx, session, "nothing");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toHaveLength(5);
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "list_agents",
+      "send_message",
+      "tool_group_list",
+      "tool_group_load",
+    ]);
     expect(await sectionNames(ctx, session)).toContain("tool:send_message");
-    expect((await callTool(ctx, session, "web_search", "call-restored")).error).toBeUndefined();
+    expect((await callTool(ctx, session, "send_message", "call-restored")).error).toBeUndefined();
+    // 留空不等于放行按需组：`web` 要 `tool_group_load` 才有。
+    expect((await callTool(ctx, session, "web_search", "call-ondemand")).error).toBeDefined();
   });
 });
 
 // 收口的合成规则：最终可用 = (白名单留空 ? 全部 : 白名单) − 黑名单；注册表视图（= 模型目录与执行准入）、
 // `tool:` section 两处读的是同一个合成结果。
 describe("工具黑名单（与白名单合成）", () => {
-  it("只给黑名单：目录与工具说明 section 都扣掉那几件，别的照旧", async () => {
+  it("只给黑名单：目录与工具说明 section 都扣掉那几件", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     await mountSection(ctx, "tool:web_search", "搜索说明");
@@ -372,11 +381,12 @@ describe("工具黑名单（与白名单合成）", () => {
 
     expect(await visibleTools(ctx, session)).toEqual([
       "ask_user_question",
-      "web_fetch",
-      "web_search",
+      "tool_group_list",
+      "tool_group_load",
     ]);
     expect(await sectionNames(ctx, session)).not.toContain("tool:send_message");
-    expect(await sectionNames(ctx, session)).toContain("tool:web_search");
+    // 按需组的说明与目录同源：默认不在目录，它那条 `tool:` section 也不留。
+    expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
   });
 
   it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
@@ -386,7 +396,7 @@ describe("工具黑名单（与白名单合成）", () => {
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
     const denied = await callTool(ctx, session, "send_message", "call-denied");
-    const allowed = await callTool(ctx, session, "web_search", "call-allowed");
+    const allowed = await callTool(ctx, session, "ask_user_question", "call-allowed");
 
     expect(denied.error).toBeDefined();
     expect(JSON.stringify(denied)).toContain("unknown tool");
@@ -407,14 +417,20 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 
-  it("两条都空 = 不过滤：目录、section 与调用都照旧", async () => {
+  it("两条都空：常驻组照旧，按需组仍不放行", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("no-lists");
     apply(ctx, session, "nothing");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toHaveLength(5);
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "list_agents",
+      "send_message",
+      "tool_group_list",
+      "tool_group_load",
+    ]);
     expect(await sectionNames(ctx, session)).toContain("tool:send_message");
     expect((await callTool(ctx, session, "send_message", "call-free")).error).toBeUndefined();
   });

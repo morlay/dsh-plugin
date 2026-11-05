@@ -51,6 +51,12 @@
 - insert:
     - id: context-assembler
       name: "@morlay/dsh-context-assembler"
+      config:
+        keep: []
+        suppress: []
+        replace: {}
 - insert:
     - id: tool-guidance
       name: "@morlay/dsh-tool-guidance"
+      config:
+        groups: false

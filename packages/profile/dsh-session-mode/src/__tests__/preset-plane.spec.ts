@@ -233,7 +233,13 @@ async function preStep(
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
   const decision = await agentEvents(ctx, agent).waterfall(
     "agent/pre-step",
-    { messages: input, turn: options.turn ?? 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: "fixture", model: "fixture" } },
+    {
+      messages: input,
+      turn: options.turn ?? 1,
+      step: 1,
+      signal: new AbortController().signal,
+      modelSelection: { provider: "fixture", model: "fixture" },
+    },
     async () => ({ kind: "enter" as const, messages: input }),
   );
   if (decision.kind !== "enter") return [];
@@ -402,7 +408,7 @@ describe.each([
     const agent = await create();
 
     const tools = await toolNames(ctx, agent);
-    for (const name of ["read", "write", "edit", "web_search", "ask_user_question", "skill"]) {
+    for (const name of ["read", "write", "edit", "ask_user_question", "skill"]) {
       expect(tools, `coding 少了 ${name}`).toContain(name);
     }
 

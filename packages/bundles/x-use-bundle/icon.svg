@@ -1,0 +1,24 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="5.6" y="7.4" width="24.8" height="21.2" rx="4.2" stroke="url(#window)" stroke-width="3" />
+  <path d="M5.6 14.4h24.8" stroke="url(#bar)" stroke-width="3" />
+  <path d="M10.2 11.2h.02M13.6 11.2h.02M17 11.2h.02" stroke="url(#dots)" stroke-width="3" stroke-linecap="round" />
+  <path d="m19.4 18.6 8.2 3.6-3.6 1.2-1.2 3.6-3.4-8.4Z" stroke="url(#cursor)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+  <defs>
+    <linearGradient id="window" x1="5.6" y1="7.4" x2="30.4" y2="28.6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9FD0FF" />
+      <stop offset="1" stop-color="#2F6FD0" />
+    </linearGradient>
+    <linearGradient id="bar" x1="5.6" y1="14.4" x2="30.4" y2="14.4" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CFE6FF" />
+      <stop offset="1" stop-color="#5B95E8" />
+    </linearGradient>
+    <linearGradient id="dots" x1="10.2" y1="11.2" x2="17" y2="11.2" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4F1FF" />
+      <stop offset="1" stop-color="#7FB0F0" />
+    </linearGradient>
+    <linearGradient id="cursor" x1="19.4" y1="18.6" x2="27.6" y2="27" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#BFE2FF" />
+      <stop offset="1" stop-color="#3B7BDC" />
+    </linearGradient>
+  </defs>
+</svg>
