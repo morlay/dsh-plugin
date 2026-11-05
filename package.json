@@ -29,7 +29,7 @@
     "react-dom": "18.3.1",
     "rolldown": "1.x",
     "tsdown": "0.23.x",
-    "typescript": "7.x",
+    "typescript": "7.1.0-beta",
     "vite": "8.x",
     "vite-tsconfig-paths": "6.x",
     "vitest": "5.x",
