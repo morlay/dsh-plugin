@@ -225,8 +225,43 @@ describe("SessionEditor edit", () => {
       expect(result.sessionId).toBe(SessionIdBrand("live"));
       expect(followups).toHaveLength(1);
 
-      expect(live.snapshotEvents()).toEqual([]);
+      // 首轮编辑只丢轮次与正文，第一条 turn/start 之前的会话前导（这里是 request/header）保留
+      expect(live.snapshotEvents().map((event) => event.type)).toEqual(["request/header"]);
       disposeAgents();
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("keeps the session preamble when editing the first turn of a cold session", async () => {
+    const { ctx, editor, dispose } = await harness();
+    try {
+      const preamble = {
+        type: "agent-preset/selected",
+        seq: SessionSeq(0),
+        time: 1,
+        data: { agentPreset: "blank" },
+      } as unknown as SessionEvent;
+      const first = oneTurnLog().map(
+        (event) => ({ ...event, seq: event.seq + 1, time: event.time + 1 }) as SessionEvent,
+      );
+      await createPersisted(ctx, "src", [preamble, ...first]);
+
+      await editor.edit({
+        action: "edit",
+        sessionId: SessionIdBrand("src"),
+        eventSeq: 2,
+        blockIndex: 0,
+        text: "改过的第一轮问题",
+        cascade: "truncate",
+      });
+
+      // 首轮（boundary -1）编辑同样保留第一条 turn/start 之前的会话前导，而不是清空重开
+      const handle = await ctx.sessionPersistence.open(SessionIdBrand("src"), "read");
+      const { events } = await handle.read();
+      await handle.close();
+      expect(events.map((event) => event.type)).toEqual(["agent-preset/selected"]);
+      expect(events[0]?.data).toEqual({ agentPreset: "blank" });
     } finally {
       await dispose();
     }

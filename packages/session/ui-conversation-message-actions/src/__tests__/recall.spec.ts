@@ -40,6 +40,27 @@ function textOf(event: SessionEvent): string | undefined {
   return (event.data as { content?: Array<{ text?: string }> }).content?.[0]?.text;
 }
 
+// 会话前导：新建会话时先落库的会话级配置（权限 / 沙箱 / 审批 / 预设），都在第一条 turn/start 之前。
+function preamble(): SessionEvent[] {
+  return [
+    { type: "permission/preset", seq: SessionSeq(0), time: 1, data: { preset: "readonly" } },
+    { type: "sandbox/mode", seq: SessionSeq(1), time: 2, data: { mode: "workspace-write" } },
+    { type: "approval/policy", seq: SessionSeq(2), time: 3, data: { policy: "never" } },
+    {
+      type: "agent-preset/selected",
+      seq: SessionSeq(3),
+      time: 4,
+      data: { agentPreset: "blank" },
+    },
+  ] as unknown as SessionEvent[];
+}
+
+function shifted(events: readonly SessionEvent[], by: number): SessionEvent[] {
+  return events.map(
+    (event) => ({ ...event, seq: event.seq + by, time: event.time + by }) as SessionEvent,
+  );
+}
+
 describe("SessionEditor recall", () => {
   it("内存 log 落后于存储时，撤回目标与边界仍按存储判定", async () => {
     const { ctx, editor, dispose } = await harness();
@@ -95,19 +116,33 @@ describe("SessionEditor recall", () => {
     }
   });
 
-  it("recalls the first turn's user message: clears the whole log (boundary -1)", async () => {
+  it("recalls the first turn's user message but keeps the session preamble (boundary -1)", async () => {
     const { ctx, editor, dispose } = await harness();
     try {
-      await createPersisted(ctx, "src", oneTurnLog());
+      await createPersisted(ctx, "src", [...preamble(), ...shifted(oneTurnLog(), 4)]);
 
       await editor.recall({
         action: "recall",
         sessionId: SessionIdBrand("src"),
-        eventSeq: 1,
+        eventSeq: 5,
       });
 
+      // 首轮撤回只丢轮次结构与轮正文；第一条 turn/start 之前的会话前导（预设 / 权限 / 沙箱 / 审批）是
+      // 会话级配置，重写回保留前缀之后
       const rows = await eventRows(ctx, SessionIdBrand("src"));
-      expect(rows).toEqual([]);
+      expect(rows.map((r) => r.fSequence)).toEqual([0, 1, 2, 3]);
+      expect(rows.map((r) => r.fType)).toEqual([
+        "permission/preset",
+        "sandbox/mode",
+        "approval/policy",
+        "agent-preset/selected",
+      ]);
+
+      const after = await rdb(ctx).load(SessionIdBrand("src"));
+      expect(after.events.some((e) => e.type === "user/message")).toBe(false);
+      expect(after.events.find((e) => e.type === "agent-preset/selected")?.data).toEqual({
+        agentPreset: "blank",
+      });
     } finally {
       await dispose();
     }
@@ -259,7 +294,8 @@ describe("SessionEditor recall", () => {
       releaseIdle();
       const result = await recalling;
       expect(result.sessionId).toBe(SessionIdBrand("busy"));
-      expect(live.snapshotEvents()).toEqual([]);
+      // 首轮撤回只丢轮次与正文，第一条 turn/start 之前的会话前导（这里是 request/header）保留
+      expect(live.snapshotEvents().map((event) => event.type)).toEqual(["request/header"]);
       disposeAgents();
     } finally {
       await dispose();

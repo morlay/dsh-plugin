@@ -172,7 +172,8 @@ export function downstreamUsers(turns: readonly ClosedTurn[], start: number): Us
 }
 
 // 同轮内第一条 user 退到前一轮的 turn/end（撤回整轮）：留着本轮的 turn/start，之后的重放会按
-// `phase.turn + 1` 再开一轮、本轮成空轮。该轮里这条消息之前写下的配置事件由 recallOperation 重写保留。
+// `phase.turn + 1` 再开一轮、本轮成空轮。该轮里这条消息之前写下的配置事件由 recallOperation 重写保留；
+// 首轮没有前轮时退到 -1，第一条 turn/start 之前的会话前导同样由它补回。
 export function recallBoundary(
   events: readonly SessionEvent[],
   turns: readonly ClosedTurn[],
