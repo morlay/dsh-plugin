@@ -136,7 +136,15 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
       )}\n`,
     );
     console.log(`[dts] ${face} face -> ${outDir}`);
-    await run("pnpm", ["exec", "tsc", "-p", config], root);
+    try {
+      await run("pnpm", ["exec", "tsc", "-p", config], root);
+    } catch {
+      // 这一步是**产物生成**，不是类型门禁（门禁是两叶 + oxlint）：`noCheck` 只跳过语义检查，tsc 7 在
+      // declaration emit 阶段仍会报可命名性诊断（TS2883：推断类型引用了 `@types/react` / cosmokit 里
+      // 无法命名的类型），并因此不落那几个文件的声明。诊断已经原样打在终端上；构建不为它停下——
+      // 真有入口声明缺失，取声明的一侧（`emitDts`）会按路径报「声明缺失」，不会静默产出残缺声明。
+      console.warn(`[dts] ${face} face 有诊断，声明树按已产出的部分继续（产物生成不设门禁）`);
+    }
   }
 }
 

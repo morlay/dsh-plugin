@@ -18,6 +18,14 @@ export const patch: Step[] = [
   // 指向上游不入库的测试快照的符号链接（断链）；本仓库不跑这条 acp e2e，删掉免得断链被遍历到。
   // 同样用 glob 形态：快照不入库，`reset` 之后它也不会回来。
   { type: "rm", glob: "apps/cli/tests/profiles/acp/cordis.yml" },
+  // vendor 树自带 pnpm-workspace.yaml + pnpm-lock.yaml 时，pnpm 会把它当成**嵌套 workspace** 单独
+  // 安装、单开一个 store：同一个第三方包（典型是 `@types/react`）在 vendor 与根各有一份**物理副本**。
+  // TypeScript 按文件路径判模块身份，声明生成（`target/dts`，见 `@local/dts-prepare`）会把 vendor
+  // 那份的 `Element` / `ForwardRefExoticComponent` 推断进我们组件的声明，报 TS2883（无法命名）并且
+  // **该文件的声明不落盘**——`just build` 随即在 `emitDts` 报「声明缺失」。删掉这两份声明让它并入
+  // 根 workspace（overrides 已覆盖它原来那两条 cosmokit / schemastery 的 link），全仓只装一个 store。
+  { type: "rm", path: "pnpm-workspace.yaml" },
+  { type: "rm", path: "pnpm-lock.yaml" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },

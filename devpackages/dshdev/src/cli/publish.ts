@@ -2,8 +2,9 @@ import { logOf } from "@local/devkit/log";
 // CI 的**发布步骤**（发布一律走 CI；本地别跑它）。
 //
 // 由 `pnpm -r --filter './packages/*/*' --workspace-concurrency=1 exec dshdev publish` 在每个包目录下唤起，
-// 只处理**当前包**：只发布 `@morlay/*`（上游由 deepseek-harness 自己发）、已发布过的跳过、按版本算 dist-tag。
-import { execFile, spawn } from "node:child_process";
+// 只处理**当前包**：只发布 `@morlay/*`（上游由 deepseek-harness 自己发）、已发布过的跳过（发布那一刻被
+// registry 以「不能覆盖已发布版本」拒绝也算已发布）、按版本算 dist-tag。
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -22,30 +23,45 @@ export function distTagOf(version: string): string {
   return prerelease.split(".")[0] === "alpha" ? "alpha" : "next";
 }
 
-// 捕获 stdout/stderr 地跑子进程：非零退出不抛，交给调用方按退出码判断。
+// 捕获 stdout/stderr 地跑子进程：非零退出不抛，交给调用方按退出码与输出判断。
 async function capture(
   command: string,
   args: string[],
-): Promise<{ status: number | null; stderr: string }> {
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
   try {
-    const { stderr } = await execFileAsync(command, args, { encoding: "utf8" });
-    return { status: 0, stderr };
+    const { stdout, stderr } = await execFileAsync(command, args, { encoding: "utf8" });
+    return { status: 0, stdout, stderr };
   } catch (error: unknown) {
-    const failure = error as { code?: unknown; stderr?: unknown };
+    const failure = error as { code?: unknown; stdout?: unknown; stderr?: unknown };
     return {
       status: typeof failure.code === "number" ? failure.code : null,
+      stdout: typeof failure.stdout === "string" ? failure.stdout : "",
       stderr: typeof failure.stderr === "string" ? failure.stderr : "",
     };
   }
 }
 
-// 继承 stdio 地跑子进程（发布日志直接进当前终端），返回退出码。
-function runInherited(command: string, args: string[]): Promise<number | null> {
-  return new Promise((done) => {
-    const child = spawn(command, args, { stdio: "inherit" });
-    child.on("error", () => done(null));
-    child.on("close", (code) => done(code));
-  });
+/**
+ * 发布结果的三态判定。
+ *
+ * `already-published` 是**成功**：版本已经在 registry 上，重发既不该失败也不该改任何东西——并发下
+ * 另一个 job 先发完是常态。npm 系 registry 对「覆盖已发布版本」回 403 + "cannot publish over the
+ * previously published versions"（pnpm 包一层 `ERR_PNPM_FAILED_TO_PUBLISH`），不是 409；两种都认。
+ */
+export function publishOutcome(result: {
+  status: number | null;
+  stderr: string;
+}): "published" | "already-published" | "failed" {
+  if (result.status === 0) return "published";
+  if (result.status === 409) return "already-published";
+  if (
+    /cannot publish over the previously published versions|EPUBLISHCONFLICT|previously published/iu.test(
+      result.stderr,
+    )
+  ) {
+    return "already-published";
+  }
+  return "failed";
 }
 
 /**
@@ -93,7 +109,7 @@ export async function runPublish(options: {
 
   const tag = distTagOf(version);
   log.info(`to publish: ${name}@${version} (tag: ${tag})`);
-  const status = await runInherited("pnpm", [
+  const published = await capture("pnpm", [
     "publish",
     "--access=public",
     `--tag=${tag}`,
@@ -101,6 +117,25 @@ export async function runPublish(options: {
     "--registry",
     registry,
   ]);
-  // 409 = 并发下已被别的 job 发过，不算失败。
-  return status === 0 || status === 409 ? 0 : (status ?? 1);
+  if (published.stdout.length > 0) process.stdout.write(published.stdout);
+  if (published.stderr.length > 0) process.stderr.write(published.stderr);
+  const outcome = publishOutcome(published);
+  if (outcome === "published") return 0;
+  if (outcome === "already-published") {
+    log.info(`skip ${name}: ${version} already published（registry 拒绝重复发布）`);
+    return 0;
+  }
+  // 文案变了也认「版本已在」这个事实：分类只是快路径，最终以 registry 的查询为准。
+  const recheck = await capture("pnpm", [
+    "view",
+    `${name}@${version}`,
+    "version",
+    "--registry",
+    registry,
+  ]);
+  if (recheck.status === 0) {
+    log.info(`skip ${name}: ${version} already published`);
+    return 0;
+  }
+  return published.status ?? 1;
 }
