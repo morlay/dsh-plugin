@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createPostgresTestDatabase,
-  type PostgresTestDatabase,
-} from "../testing.ts";
+import { createPostgresTestDatabase, type PostgresTestDatabase } from "../testing.ts";
 import {
   count,
   defineCatalog,
@@ -10,7 +7,9 @@ import {
   ensureSchema,
   fragment,
   openDatabase,
+  runMigrations,
   sum,
+  type Database,
 } from "../index.ts";
 
 const items = defineTable({
@@ -62,10 +61,11 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
 
       const table = database.table("t_items");
       const partTable = database.table("t_parts");
-      const [created] = await table.insert(
-        { f_owner: "a", f_count: 1, f_at: 1_788_852_417_123 },
-        ["f_id", "f_owner", "f_at"],
-      );
+      const [created] = await table.insert({ f_owner: "a", f_count: 1, f_at: 1_788_852_417_123 }, [
+        "f_id",
+        "f_owner",
+        "f_at",
+      ]);
       expect(created).toMatchObject({ f_owner: "a" });
       // 64 位整数读回来是 BigInt：超过 2^53 的 uint64 / int64 不会丢精度。
       expect(created?.f_at).toBe(1_788_852_417_123n);
@@ -111,6 +111,82 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
       expect(Number(after?.n)).toBe(2);
     } finally {
       await database.close();
+      await testDatabase.drop();
+    }
+  });
+
+  it("自定义 schema：DDL / 读写 / 迁移账本 / 结构探测都在同一处，public 不留副本", async () => {
+    const testDatabase: PostgresTestDatabase = await createPostgresTestDatabase();
+    const catalog = defineCatalog([items, parts]);
+    const config = {
+      dialect: "postgres" as const,
+      connectionString: testDatabase.connectionString,
+      schema: "dsh_test",
+      catalog,
+    };
+    const migration = {
+      id: "20261109-pg-schema-probe",
+      up: async (tx: Database) => {
+        await tx.table("t_items").insert({ f_owner: "migrated" });
+      },
+    };
+
+    const database = await openDatabase(config);
+    try {
+      await database.run(fragment('CREATE SCHEMA IF NOT EXISTS "dsh_test"'));
+
+      // 结构：建表与索引都限定到配置的 schema，且重复对齐是幂等的。
+      const statements = await ensureSchema(database, [items, parts]);
+      expect(statements.length).toBeGreaterThan(0);
+      expect(statements.every((statement) => statement.includes('"dsh_test".'))).toBe(true);
+      expect(await ensureSchema(database, [items, parts])).toEqual([]);
+
+      // 读写：句柄不依赖连接串的 search_path，直接落在配置的 schema。
+      const table = database.table("t_items");
+      await table.insert({ f_owner: "a", f_count: 1 });
+      const owners = await collect(table.select({ owner: table.column("f_owner") }));
+      expect(owners).toEqual([{ owner: "a" }]);
+
+      // 迁移账本：建表、读、记账都在同一 schema，重跑只跑没记过的。
+      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual([
+        migration.id,
+      ]);
+      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual([]);
+      const ledger = await database.read<{ f_id: string }>(
+        fragment('SELECT f_id FROM "dsh_test"."t_schema_migrations"'),
+      );
+      expect(ledger.map((row) => row.f_id)).toEqual([migration.id]);
+
+      // 结构探测跟着配置的 schema（旧数据迁移靠它判旧表在不在）。
+      expect(await database.objectNames()).toEqual(
+        expect.arrayContaining(["t_items", "t_schema_migrations"]),
+      );
+
+      // 表与账本都在 dsh_test，public 不留副本。
+      const placements = await database.read<{ table_schema: string; table_name: string }>(
+        fragment(
+          "SELECT table_schema, table_name FROM information_schema.tables " +
+            "WHERE table_name IN ('t_items', 't_parts', 't_schema_migrations') ORDER BY table_name",
+        ),
+      );
+      expect(placements.map((row) => `${row.table_schema}.${row.table_name}`)).toEqual([
+        "dsh_test.t_items",
+        "dsh_test.t_parts",
+        "dsh_test.t_schema_migrations",
+      ]);
+    } finally {
+      await database.close();
+    }
+
+    // 再次打开：结构已对齐、迁移已记账，数据还在。
+    const reopened = await openDatabase(config);
+    try {
+      expect(await ensureSchema(reopened, [items, parts])).toEqual([]);
+      expect(await runMigrations(reopened, { catalog, migrations: [migration] })).toEqual([]);
+      const [total] = await collect(reopened.table("t_items").select({ n: count() }));
+      expect(Number(total?.n)).toBe(2);
+    } finally {
+      await reopened.close();
       await testDatabase.drop();
     }
   });

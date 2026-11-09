@@ -115,8 +115,13 @@ function postgresDialect(): Dialect {
   };
 }
 
-/** 一列的定义 SQL（`"name" TEXT NOT NULL ...`）。 */
-export function columnSql(dialect: Dialect, name: string, column: ColumnDef): string {
+/** 一列的定义 SQL（`"name" TEXT NOT NULL ...`）；外键引用跟着表名一起落在同一 schema。 */
+export function columnSql(
+  dialect: Dialect,
+  name: string,
+  column: ColumnDef,
+  schema?: string,
+): string {
   assertIdentifier("column", name);
   const parts = [dialect.quote(name), dialect.columnType(column)];
   if (column.type === "serial" && dialect.name === "sqlite")
@@ -131,7 +136,7 @@ export function columnSql(dialect: Dialect, name: string, column: ColumnDef): st
     assertIdentifier("table", table);
     assertIdentifier("column", referenced);
     parts.push(
-      `REFERENCES ${dialect.tableName(table)}(${dialect.quote(referenced)})` +
+      `REFERENCES ${dialect.tableName(table, schema)}(${dialect.quote(referenced)})` +
         (onDelete === undefined ? "" : ` ON DELETE ${onDelete.toUpperCase()}`),
     );
   }
@@ -156,7 +161,7 @@ function literal(dialect: Dialect, value: string | number, type: ColumnDef["type
 /** 建表语句（IF NOT EXISTS；列与表级约束都由定义算出来）。 */
 export function createTableSql(dialect: Dialect, table: TableDef, schema?: string): string {
   const parts = Object.entries(table.columns).map(([name, column]) =>
-    columnSql(dialect, name, column),
+    columnSql(dialect, name, column, schema),
   );
   const primaryKey =
     table.primaryKey === undefined
@@ -188,18 +193,24 @@ export function createIndexSql(
   name: string,
   columns: readonly string[],
   unique = false,
+  schema?: string,
 ): string {
   assertIdentifier("index", name);
   return (
     `CREATE ${unique ? "UNIQUE " : ""}INDEX IF NOT EXISTS ${dialect.quote(name)} ` +
-    `ON ${dialect.tableName(table.name)} (${columns.map((column) => dialect.quote(column)).join(", ")})`
+    `ON ${dialect.tableName(table.name, schema)} (${columns.map((column) => dialect.quote(column)).join(", ")})`
   );
 }
 
 /** 删列（只在显式允许破坏性变更时用）。 */
-export function dropColumnSql(dialect: Dialect, table: string, name: string): string {
+export function dropColumnSql(
+  dialect: Dialect,
+  table: string,
+  name: string,
+  schema?: string,
+): string {
   assertIdentifier("column", name);
-  return `ALTER TABLE ${dialect.tableName(table)} DROP COLUMN ${dialect.quote(name)}`;
+  return `ALTER TABLE ${dialect.tableName(table, schema)} DROP COLUMN ${dialect.quote(name)}`;
 }
 
 /** 删索引（只在显式允许破坏性变更时用）。 */
@@ -214,6 +225,7 @@ export function addColumnSql(
   table: string,
   name: string,
   column: ColumnDef,
+  schema?: string,
 ): string {
-  return `ALTER TABLE ${dialect.tableName(table)} ADD COLUMN ${columnSql(dialect, name, column)}`;
+  return `ALTER TABLE ${dialect.tableName(table, schema)} ADD COLUMN ${columnSql(dialect, name, column, schema)}`;
 }

@@ -21,12 +21,10 @@ export async function openDatabase<const C extends Catalog = Catalog>(
   const catalog = withCatalog(config);
   const executor =
     config.dialect === "sqlite" ? openSqlite(config) : openPostgres(config);
-  return createDatabase(
-    createDialect(config.dialect),
-    executor,
-    catalog,
-    config.onQuery,
-  ) as Database<C>;
+  return createDatabase(createDialect(config.dialect), executor, catalog, {
+    schema: config.dialect === "postgres" ? config.schema : undefined,
+    onQuery: config.onQuery,
+  }) as Database<C>;
 }
 
 async function* iterateWrapped<T>(
@@ -44,8 +42,14 @@ export function createDatabase(
   dialect: Dialect,
   executor: Executor,
   catalog: CatalogIndex,
-  onQuery?: (event: QueryEvent) => void,
+  options: {
+    schema?: string | undefined;
+    onQuery?: ((event: QueryEvent) => void) | undefined;
+  } = {},
 ): Database {
+  const { onQuery } = options;
+  // PostgreSQL 的目标 schema 只在这里定一次（缺省 public）；SQLite 没有 schema 概念。
+  const schema = dialect.name === "postgres" ? (options.schema ?? "public") : undefined;
   const observe = async <T>(
     query: Fragment,
     run: (text: string, params: readonly unknown[]) => Promise<T>,
@@ -75,6 +79,7 @@ export function createDatabase(
   const database: Database = {
     dialect,
     catalog,
+    schema,
     table: (source: TableDef | string) => {
       const definition = typeof source === "string" ? catalog.get(source) : source;
       if (definition === undefined) {
@@ -104,7 +109,7 @@ export function createDatabase(
     transaction(fn) {
       // catalog 跟着事务走：事务里按表名取句柄与外面一致。
       return executor.transaction((scoped) =>
-        fn(createDatabase(dialect, scoped, catalog, onQuery)),
+        fn(createDatabase(dialect, scoped, catalog, { schema, onQuery })),
       );
     },
     objectNames: () => objectNames(database),

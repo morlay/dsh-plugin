@@ -10,6 +10,7 @@ export function returningClause(returning?: readonly string[]): Fragment | strin
 
 export function insertOf(
   table: TableDef,
+  target: string,
   row: Record<string, unknown>,
   mode: "insert" | "ignore" | "upsert",
   conflict?: readonly string[],
@@ -19,26 +20,30 @@ export function insertOf(
   const columns = Object.keys(row).filter((name) => table.columns[name] !== undefined);
   if (columns.length === 0) throw new Error(`rdbkit: insert into "${table.name}" has no columns`);
   const sql =
-    `INSERT INTO "${table.name}" (${columns.map((name) => `"${name}"`).join(", ")}) ` +
+    `INSERT INTO ${target} (${columns.map((name) => `"${name}"`).join(", ")}) ` +
     `VALUES (${columns.map(() => "?").join(", ")})`;
   const base = fragment(
     sql,
     columns.map((name) => row[name]),
   );
   if (mode === "insert") return concat([base, returningClause(returning)], " ");
-  const target = (conflict ?? []).map((name) => `"${name}"`).join(", ");
-  if (mode === "ignore") return concat([base, `ON CONFLICT (${target}) DO NOTHING`], " ");
+  const conflictTarget = (conflict ?? []).map((name) => `"${name}"`).join(", ");
+  if (mode === "ignore") return concat([base, `ON CONFLICT (${conflictTarget}) DO NOTHING`], " ");
   const updates =
     (update ?? []).length === 0
       ? "DO NOTHING"
       : `DO UPDATE SET ${(update ?? [])
           .map((name) => `"${name}" = excluded."${name}"`)
           .join(", ")}`;
-  return concat([base, `ON CONFLICT (${target}) ${updates}`, returningClause(returning)], " ");
+  return concat(
+    [base, `ON CONFLICT (${conflictTarget}) ${updates}`, returningClause(returning)],
+    " ",
+  );
 }
 
 export function insertManyOf(
   table: TableDef,
+  target: string,
   rows: readonly Record<string, unknown>[],
   options: { conflict?: readonly string[]; update?: readonly string[] } = {},
 ): Fragment {
@@ -54,7 +59,7 @@ export function insertManyOf(
   }
   const tuple = `(${columns.map(() => "?").join(", ")})`;
   const sql =
-    `INSERT INTO "${table.name}" (${columns.map((name) => `"${name}"`).join(", ")}) ` +
+    `INSERT INTO ${target} (${columns.map((name) => `"${name}"`).join(", ")}) ` +
     `VALUES ${rows.map(() => tuple).join(", ")}`;
   const insert = fragment(
     sql,
@@ -65,14 +70,13 @@ export function insertManyOf(
 
 export function insertFromSelectOf(
   table: TableDef,
+  target: string,
   columns: readonly string[],
   source: Fragment,
   options: { conflict?: readonly string[]; update?: readonly string[] } = {},
 ): Fragment {
   if (columns.length === 0) throw new Error(`rdbkit: insert into "${table.name}" has no columns`);
-  const head = text(
-    `INSERT INTO "${table.name}" (${columns.map((name) => `"${name}"`).join(", ")})`,
-  );
+  const head = text(`INSERT INTO ${target} (${columns.map((name) => `"${name}"`).join(", ")})`);
   return concat([head, source, conflictClause(options)], " ");
 }
 
@@ -95,20 +99,25 @@ export function conflictClause(options: {
 
 export function upsertExprOf(
   table: TableDef,
+  target: string,
   row: Record<string, unknown>,
   conflict: readonly string[],
   assignments: Record<string, Operand>,
 ): Fragment {
-  const base = insertOf(table, row, "insert");
-  const target = conflict.map((name) => `"${name}"`).join(", ");
+  const base = insertOf(table, target, row, "insert");
+  const conflictTarget = conflict.map((name) => `"${name}"`).join(", ");
   const sets = Object.entries(assignments).map(([name, ref]) =>
     concat([text(`"${name}" =`), operandSql(ref)], " "),
   );
-  return concat([base, text(`ON CONFLICT (${target}) DO UPDATE SET`), concat(sets, ", ")], " ");
+  return concat(
+    [base, text(`ON CONFLICT (${conflictTarget}) DO UPDATE SET`), concat(sets, ", ")],
+    " ",
+  );
 }
 
 export function updateOf(
   table: TableDef,
+  target: string,
   patch: Record<string, unknown>,
   condition?: Condition,
   returning?: readonly string[],
@@ -124,17 +133,18 @@ export function updateOf(
         : param(value);
     return concat([text(`"${name}" =`), assigned], " ");
   });
-  const head = concat([text(`UPDATE "${table.name}" SET`), concat(sets, ", ")], " ");
+  const head = concat([text(`UPDATE ${target} SET`), concat(sets, ", ")], " ");
   const body = condition === undefined ? head : concat([head, text("WHERE"), condition], " ");
   return concat([body, returningClause(returning)], " ");
 }
 
 export function deleteOf(
   table: TableDef,
+  target: string,
   condition?: Condition,
   returning?: readonly string[],
 ): Fragment {
-  const head = text(`DELETE FROM "${table.name}"`);
+  const head = text(`DELETE FROM ${target}`);
   const body = condition === undefined ? head : concat([head, text("WHERE"), condition], " ");
   return concat([body, returningClause(returning)], " ");
 }

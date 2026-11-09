@@ -35,7 +35,7 @@
 
 SQLite 与 PostgreSQL 共用同一个后端实现（`src/backend-rdb.ts`），所以本包的契约与接管用例只在 SQLite 上跑：
 同一份逻辑不按方言重复测。**方言能力**（`PRAGMA` 库身份、`objectNames`、`VACUUM`、聚合的 int8、JSON 提取、
-本地日、事务串行与保存点）由 `@morlay/rdbkit` 自己的 `pg.spec.ts` / `transaction.spec.ts` /
+本地日、事务串行与保存点、自定义 schema 的渲染与落位）由 `@morlay/rdbkit` 自己的 `pg.spec.ts` / `transaction.spec.ts` /
 `expr-functions.spec.ts` / `database-introspect.spec.ts` 覆盖（`TEST_PG_URL` 下真跑，未设置时 `describe.skipIf`
 自动跳过）。按根规范，这类起真实服务的探针只在**人工排查**时跑。
 

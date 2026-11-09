@@ -14,6 +14,11 @@ export interface Database<C extends Catalog = Catalog> {
   readonly dialect: Dialect;
   /** 装配层注册的 catalog（按表名解析；没注册时只能传定义）。 */
   readonly catalog: CatalogIndex;
+  /**
+   * 生成 SQL 的目标 schema：PostgreSQL 恒有值（配置缺省 `public`），SQLite 是 `undefined`。
+   * DDL、DML、迁移账本与结构探测都从这里取，不各自猜。
+   */
+  readonly schema: string | undefined;
   /** 按表名取（catalog 里有定义时保留强类型）。 */
   table<K extends C[number]["name"] & string>(
     name: K,

@@ -122,6 +122,9 @@ export function selectQuery<T>(
     return undefined;
   };
 
+  // 表名按连接的方言算（PostgreSQL 带 schema）：FROM / JOIN 与其余引用保持同一处。
+  const targetOf = (definition: TableDef): string =>
+    database.dialect.tableName(definition.name, database.schema);
   const toFragment = (): Fragment => {
     const items = Object.entries(projection).map(([alias, entry]) =>
       entry.kind === "column"
@@ -133,13 +136,13 @@ export function selectQuery<T>(
     const parts: (Fragment | string)[] = [
       state.distinct ? text("SELECT DISTINCT") : text("SELECT"),
       concat(items, ", "),
-      text(`FROM "${table.name}"`),
+      text(`FROM ${targetOf(table)}`),
     ];
     for (const join of state.joins) {
       const target =
         join.alias === undefined
-          ? `"${join.table.name}"`
-          : `"${join.table.name}" AS "${join.alias}"`;
+          ? targetOf(join.table)
+          : `${targetOf(join.table)} AS "${join.alias}"`;
       if (join.kind === "cross") {
         parts.push(text(`CROSS JOIN ${target}`));
         continue;

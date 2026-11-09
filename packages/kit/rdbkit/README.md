@@ -84,10 +84,22 @@ await database.setSqlitePragma("user_version", 4); // 写库身份（值只允�
 ```
 
 
+## PostgreSQL schema
+
+连接配置里的 `schema` 是**唯一事实来源**：结构探测、DDL、表句柄的读写、迁移账本与 `objectNames` 都从
+`Database.schema` 取，一律渲染成 `"<schema>"."<表>"`（SQLite 没有 schema 概念，照旧不带前缀）。省略即
+`public`，不依赖连接串的 `search_path`。schema 本身要由部署方先建好（`CREATE SCHEMA ...`），rdbkit 不替你建。
+
+```ts
+const database = await openDatabase({ dialect: "postgres", connectionString, schema: "dsh_test" });
+await ensureSchema(database, catalog); // CREATE TABLE "dsh_test"."t_sessions" ...
+await runMigrations(database, { catalog, migrations }); // 账本也在 dsh_test
+```
+
 ## 迁移
 
 结构（建表 / 补列 / 补索引）由 `ensureSchema` 从表定义算差异；**数据迁移**走注册表，账本是内置的
-`t_schema_migrations`：
+`t_schema_migrations`（与业务表同 schema，见上节）：
 
 ```ts
 const migrations = new MigrationRegistry().register({

@@ -8,6 +8,8 @@ import type { Database } from "./types.ts";
 export function wrapDatabase(
   dialectName: DialectName,
   ports: {
+    /** 宿主连接的目标 schema（PostgreSQL；省略即 `public`，与 rdbkit 默认一致）。 */
+    schema?: string | undefined;
     iterate(text: string, params: readonly unknown[]): AsyncIterable<unknown>;
     run(text: string, params: readonly unknown[]): Promise<void>;
     /** 宿主自己管事务时提供：把当前事务的执行面做成 scoped `Database`（对应 Go 的 `Tx(ctx, fn)`）。 */
@@ -30,6 +32,7 @@ export function wrapDatabase(
       },
     },
     indexCatalog([]),
+    { schema: ports.schema },
   );
   return ports.transaction === undefined
     ? database

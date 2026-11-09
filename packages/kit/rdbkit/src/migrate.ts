@@ -19,7 +19,7 @@ export interface SchemaChange {
 }
 
 export interface EnsureSchemaOptions {
-  /** PostgreSQL 的 schema（默认 `public`）；SQLite 忽略。 */
+  /** PostgreSQL 的 schema（省略即 `database.schema`，再缺省是 `public`）；SQLite 忽略。 */
   schema?: string;
   /** 允许删掉定义里已经不存在、且确实多出来的列（默认关闭：升级不丢数据）。 */
   allowDestructive?: boolean;
@@ -64,6 +64,7 @@ export function planSchema(
             table.name,
             name,
             assertAddable(table.name, name, column),
+            options.schema,
           ),
         });
       }
@@ -73,7 +74,7 @@ export function planSchema(
           changes.push({
             table: table.name,
             kind: "drop-column",
-            statement: dropColumnSql(dialect, table.name, name),
+            statement: dropColumnSql(dialect, table.name, name, options.schema),
           });
         }
       }
@@ -83,7 +84,7 @@ export function planSchema(
       changes.push({
         table: table.name,
         kind: "create-index",
-        statement: createIndexSql(dialect, table, name, index.columns),
+        statement: createIndexSql(dialect, table, name, index.columns, false, options.schema),
       });
     }
     for (const [name, unique] of Object.entries(table.uniques ?? {})) {
@@ -92,7 +93,7 @@ export function planSchema(
       changes.push({
         table: table.name,
         kind: "create-index",
-        statement: createIndexSql(dialect, table, name, unique.columns, true),
+        statement: createIndexSql(dialect, table, name, unique.columns, true, options.schema),
       });
     }
   }
@@ -115,14 +116,19 @@ export async function ensureSchema(
   catalog: Catalog,
   options: EnsureSchemaOptions = {},
 ): Promise<string[]> {
+  // schema 是连接上的事实：配置给了就用配置的，没给就跟着连接打开时的有效 schema。
+  const schema = options.schema ?? database.schema;
   const shapes = new Map<string, TableShape | undefined>();
   for (const table of catalog) {
     shapes.set(
       table.name,
-      await database.dialect.readShape(shapeReader(database), table.name, options.schema),
+      await database.dialect.readShape(shapeReader(database), table.name, schema),
     );
   }
-  const changes = planSchema(database.dialect, catalog, shapes, options);
+  const changes = planSchema(database.dialect, catalog, shapes, {
+    ...options,
+    ...(schema === undefined ? {} : { schema }),
+  });
   for (const change of changes) {
     options.onStatement?.(change.statement);
     await database.run(fragment(change.statement));

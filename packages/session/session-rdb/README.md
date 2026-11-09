@@ -22,11 +22,14 @@ provider 面），并接管 `ctx.sessionQuery`（全文检索 disabled）、`ctx
     preparedSessionCacheSize: 1 # 冷会话观察缓存容量（条数，最小 1）
 ```
 
-PostgreSQL 同理：`type: postgres` + `connectionString`（可加 `schema`，默认 `public`）。字段、默认值、装配默认值的
-来源与「改配置由 Loader 重挂这一行生效」见[设计总览](./.agents/designs/20260917-设计总览.md)的「配置门面」。
+PostgreSQL 同理：`type: postgres` + `connectionString`（可加 `schema`，默认 `public`）。**`schema` 是唯一事实
+来源**：结构对齐、迁移账本（`t_schema_migrations`）、结构探测与所有业务读写都渲染成 `"<schema>"."<表>"`，不看
+连接串的 `search_path`（schema 本身要预先建好）。字段、默认值、装配默认值的来源与「改配置由 Loader 重挂这一行
+生效」见[设计总览](./.agents/designs/20260917-设计总览.md)的「配置门面」。
 
-PG 的方言能力（连接、`PRAGMA` 库身份、聚合的 int8、JSON 提取、本地日、事务串行）由 `@morlay/rdbkit` 自己的
-`pg.spec.ts` 等用例验证；本包的契约与接管用例只在 SQLite 上跑（两个方言共用同一个后端实现，同一份逻辑不重复测）。
+PG 的方言能力（连接、`PRAGMA` 库身份、聚合的 int8、JSON 提取、本地日、事务串行、自定义 schema）由
+`@morlay/rdbkit` 自己的 `pg.spec.ts` 等用例验证；本包的契约与接管用例只在 SQLite 上跑（两个方言共用同一个后端
+实现，同一份逻辑不重复测）。
 本地跑 rdbkit 的 PG 用例时用它的 dev 实例起库（`just pg up`，端口 25433），再设
 `TEST_PG_URL=postgres://postgres:postgres@localhost:25433/postgres`。
 

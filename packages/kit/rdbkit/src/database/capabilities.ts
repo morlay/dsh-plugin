@@ -29,7 +29,8 @@ export async function objectNames(database: Database): Promise<string[]> {
           "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'",
         )
       : fragment(
-          "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()",
+          "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = COALESCE(?, current_schema())",
+          [database.schema ?? null],
         );
   const rows = await database.read<{ name: string }>(query);
   return rows.map((row) => row.name);

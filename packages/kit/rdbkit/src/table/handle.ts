@@ -83,6 +83,8 @@ export function createTableHandle<T extends TableDef>(
   definition: T,
 ): TableHandle<T> {
   const name = definition.name;
+  // 目标表名按连接的方言算一次（PostgreSQL 带 schema，SQLite 就是表名）。
+  const target = database.dialect.tableName(name, database.schema);
   const handle: TableHandleBase<T> = {
     name,
     definition,
@@ -101,32 +103,34 @@ export function createTableHandle<T extends TableDef>(
       ) as never,
     async insert(row, returning) {
       return await database.write<RowOf<T>>(
-        insertOf(definition, row, "insert", undefined, undefined, returning),
+        insertOf(definition, target, row, "insert", undefined, undefined, returning),
       );
     },
     async insertIgnore(row, conflict) {
-      await database.run(insertOf(definition, row, "ignore", conflict));
+      await database.run(insertOf(definition, target, row, "ignore", conflict));
     },
     async insertFromSelect(columns, source, options) {
-      await database.run(insertFromSelectOf(definition, columns, source, options));
+      await database.run(insertFromSelectOf(definition, target, columns, source, options));
     },
     async insertMany(rows, options) {
-      await database.run(insertManyOf(definition, rows, options));
+      await database.run(insertManyOf(definition, target, rows, options));
     },
     async upsert(row, conflict, update) {
-      await database.run(insertOf(definition, row, "upsert", conflict, update));
+      await database.run(insertOf(definition, target, row, "upsert", conflict, update));
     },
     async update(patch, condition, returning) {
-      return await database.write<RowOf<T>>(updateOf(definition, patch, condition, returning));
+      return await database.write<RowOf<T>>(
+        updateOf(definition, target, patch, condition, returning),
+      );
     },
     async upsertExpr(row, conflict, assignments) {
-      await database.run(upsertExprOf(definition, row, conflict, assignments));
+      await database.run(upsertExprOf(definition, target, row, conflict, assignments));
     },
     async delete(condition, returning) {
       if (returning !== undefined && returning.length > 0) {
-        return await database.write<RowOf<T>>(deleteOf(definition, condition, returning));
+        return await database.write<RowOf<T>>(deleteOf(definition, target, condition, returning));
       }
-      await database.run(deleteOf(definition, condition));
+      await database.run(deleteOf(definition, target, condition));
       return [];
     },
   };
