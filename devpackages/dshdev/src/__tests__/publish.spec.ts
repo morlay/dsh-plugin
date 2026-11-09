@@ -3,9 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { distTagOf, runPublish } from "../cli/publish.ts";
+import { distTagOf, publishOutcome, runPublish } from "../cli/publish.ts";
 
-// 发布这一步要跑真 pnpm：把子进程换成可观测的替身，判「怎么起它」而不是起没起。
+// 发布这一步要跑真 pnpm：把子进程换成可观测的替身，判「怎么起它」与「结果怎么判」。
 const spawnMock = vi.hoisted(() => vi.fn());
 const execFileMock = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ spawn: spawnMock, execFile: execFileMock }));
@@ -39,25 +39,44 @@ function fakeView(steps: ViewStep[]): void {
   });
 }
 
-/** `pnpm publish` 的替身：只给退出码（输出直接进终端，没有捕获文本）。 */
-function fakePublish(exitCode: number): void {
+interface PipeStream extends EventEmitter {
+  setEncoding(encoding: string): PipeStream;
+}
+
+function pipeStream(): PipeStream {
+  const stream = new EventEmitter() as PipeStream;
+  stream.setEncoding = () => stream;
+  return stream;
+}
+
+/** `pnpm publish` 的替身：stdin/stdout 继承、stderr 走管道，按需回放文本与退出码。 */
+function fakePublish(exitCode: number, output: { stderr?: string } = {}): void {
   spawnMock.mockImplementation(() => {
-    const child = new EventEmitter();
-    process.nextTick(() => child.emit("close", exitCode));
+    const child = new EventEmitter() as EventEmitter & { stderr: PipeStream };
+    child.stderr = pipeStream();
+    process.nextTick(() => {
+      if (output.stderr !== undefined) child.stderr.emit("data", output.stderr);
+      child.emit("close", exitCode);
+    });
     return child;
   });
 }
 
+const REPUBLISH_403 =
+  "Error: ERR_PNPM_FAILED_TO_PUBLISH\n\n  × Failed to publish package @morlay/dsh-oxc-node@0.2.12 (status 403 Forbidden): " +
+  '{"success":false,"error":"You cannot publish over the previously published versions: 0.2.12."}';
+
 const directories: string[] = [];
 
-async function cwdOf(): Promise<string> {
+async function directoryOf(manifest: Record<string, unknown>): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "dshdev-publish-"));
   directories.push(directory);
-  await writeFile(
-    join(directory, "package.json"),
-    JSON.stringify({ name: "@morlay/foo", version: "1.0.0" }),
-  );
+  await writeFile(join(directory, "package.json"), JSON.stringify(manifest));
   return directory;
+}
+
+async function cwdOf(): Promise<string> {
+  return await directoryOf({ name: "@morlay/foo", version: "1.0.0" });
 }
 
 beforeEach(() => {
@@ -78,9 +97,39 @@ describe("distTagOf", () => {
   });
 });
 
+describe("publishOutcome", () => {
+  it("treats a zero exit as published", () => {
+    expect(publishOutcome({ status: 0, stderr: "" })).toBe("published");
+  });
+
+  it("treats 409 as already published (another job won the race)", () => {
+    expect(publishOutcome({ status: 409, stderr: "" })).toBe("already-published");
+  });
+
+  it("treats npm's 403 'cannot publish over the previously published versions' as already published", () => {
+    expect(publishOutcome({ status: 1, stderr: REPUBLISH_403 })).toBe("already-published");
+  });
+
+  it("treats EPUBLISHCONFLICT as already published", () => {
+    expect(
+      publishOutcome({ status: 1, stderr: "npm ERR! code EPUBLISHCONFLICT: cannot publish over" }),
+    ).toBe("already-published");
+  });
+
+  it("keeps real failures as failures", () => {
+    expect(
+      publishOutcome({
+        status: 1,
+        stderr: "status 403 Forbidden: You do not have permission to publish this package.",
+      }),
+    ).toBe("failed");
+    expect(publishOutcome({ status: null, stderr: "" })).toBe("failed");
+  });
+});
+
 describe("runPublish", () => {
-  it("pnpm publish 继承当前终端：stdin 是 TTY，OTP 提示与进度都看得见", async () => {
-    fakeView([{ code: 1 }, { code: 0, stdout: "1.0.0\n" }]);
+  it("stdin 与 stdout 都继承当前终端：pnpm 的 OTP 要求两者都是 TTY", async () => {
+    fakeView([{ code: 1 }]);
     fakePublish(0);
 
     await expect(
@@ -102,12 +151,23 @@ describe("runPublish", () => {
       "--registry",
       "https://registry.npmjs.org/",
     ]);
-    expect(options).toEqual({ stdio: "inherit" });
+    expect(options).toEqual({ stdio: ["inherit", "inherit", "pipe"] });
   });
 
-  it("发布失败但 registry 上已有该版本时算成功（以查询为准，不靠 stderr 文案）", async () => {
+  it("403「不能覆盖已发布版本」当场算已发布，不再问 registry（view 可能命中旧缓存）", async () => {
+    fakeView([{ code: 1 }]);
+    fakePublish(1, { stderr: REPUBLISH_403 });
+
+    await expect(
+      runPublish({ cwd: await cwdOf(), registry: "https://registry.npmjs.org/", branch: "main" }),
+    ).resolves.toBe(0);
+    // 只有发布前那次 view（确认还没发过），没有发后复查。
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("文案变了也认事实：发布失败后 registry 上查得到就算成功", async () => {
     fakeView([{ code: 1 }, { code: 0, stdout: "1.0.0\n" }]);
-    fakePublish(1);
+    fakePublish(1, { stderr: "something changed" });
 
     await expect(
       runPublish({ cwd: await cwdOf(), registry: "https://registry.npmjs.org/", branch: "main" }),
@@ -116,7 +176,7 @@ describe("runPublish", () => {
 
   it("registry 上也没有该版本时把退出码交回去", async () => {
     fakeView([{ code: 1 }, { code: 1 }]);
-    fakePublish(1);
+    fakePublish(1, { stderr: "status 403 Forbidden: no permission" });
 
     await expect(
       runPublish({ cwd: await cwdOf(), registry: "https://registry.npmjs.org/", branch: "main" }),
@@ -133,12 +193,19 @@ describe("runPublish", () => {
   });
 
   it("不改 @morlay/* 之外的包", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "dshdev-publish-"));
-    directories.push(directory);
-    await writeFile(
-      join(directory, "package.json"),
-      JSON.stringify({ name: "@deepseek-ai/dsh-llm", version: "1.0.0" }),
-    );
+    const directory = await directoryOf({ name: "@deepseek-ai/dsh-llm", version: "1.0.0" });
+
+    await expect(runPublish({ cwd: directory })).resolves.toBe(0);
+    expect(spawnMock).not.toHaveBeenCalled();
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it("跳过标了 private 的包（不查 registry、也不发布）", async () => {
+    const directory = await directoryOf({
+      name: "@morlay/mydsh-profile",
+      version: "0.0.15",
+      private: true,
+    });
 
     await expect(runPublish({ cwd: directory })).resolves.toBe(0);
     expect(spawnMock).not.toHaveBeenCalled();
