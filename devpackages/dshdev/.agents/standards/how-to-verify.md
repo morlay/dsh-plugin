@@ -44,6 +44,9 @@ uplink、peer 是 operator，以及注入脚本 `openStream` 的上行转发与�
 - **Windows 目标的运行时载荷分支**：`prepare-runtime` 的 Windows 分支（zip 解包、复制 `node.exe`、`bin/` 复制而非
   符号链接）需要造 zip fixture，本机（unix）跑不到，测试里以 `it.skipIf(process.platform === "win32")` 明示；
   跨平台打包本身被显式拒绝（见[设计 桌面化工具](../designs/20260917-桌面化工具.md)「随包运行时载荷」）。
+- **发布步骤连真 registry / 真 OTP**：`publish.spec.ts` 用子进程替身盯住 `cli/publish.ts` 的契约——`pnpm publish`
+  必须以 `stdio: "inherit"` 起（否则 stdin 不是 TTY，本地发布在 OTP 处直接 `ERR_PNPM_OTP_NON_INTERACTIVE`，提示也
+  看不见），失败后「版本已在」以 `pnpm view` 的查询为准。真发布只在 CI（token 认证）；本地按发布纪律不跑。
 
 ## 起 dev 与跑 e2e 的规矩
 
