@@ -4,7 +4,6 @@ import {
   PTC_SDK_SKELETON,
   renderSkeleton,
   replaceToolsSdk,
-  renderDescribe,
   renderTools,
   type PtcToolSchema,
 } from "../ptc-sdk.ts";
@@ -77,21 +76,6 @@ describe("renderTools", () => {
   });
 });
 
-describe("renderDescribe", () => {
-  const groups = new Map<string, readonly PtcToolSchema[]>([
-    ["fs", [READ]],
-    ["web", []],
-  ]);
-
-  it("不带参数给分组清单", () => {
-    expect(renderDescribe(groups)).toBe("fs\nweb");
-  });
-
-  it("带参数只给该组声明", () => {
-    expect(renderDescribe(groups, "fs")).toContain("read(args:");
-    expect(renderDescribe(groups, "nope")).toBe("");
-  });
-});
 
 describe("replaceToolsSdk", () => {
   const sections = [

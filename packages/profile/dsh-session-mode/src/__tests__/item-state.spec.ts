@@ -97,7 +97,8 @@ function visibleTools(ctx: Context, agent: Agent): string[] {
 describe("会话级三态改的是真实工具面", () => {
   it("禁止一个工具后它立刻不可见，回到默认后恢复", async () => {
     const { ctx, agent } = await mount();
-    expect(visibleTools(ctx, agent)).toEqual(["bash", "read"]);
+    // `send_message` 属于按需组（swarm）：它不常驻注入正文，但在能力面上与常驻工具完全等价。
+    expect(visibleTools(ctx, agent)).toEqual(["bash", "read", "send_message"]);
 
     await ctx.sessionModes.applyConfig(
       agent.session.id,
@@ -106,13 +107,13 @@ describe("会话级三态改的是真实工具面", () => {
         denyTools: ["read"],
       },
     );
-    expect(visibleTools(ctx, agent)).toEqual(["bash"]);
+    expect(visibleTools(ctx, agent)).toEqual(["bash", "send_message"]);
 
     await ctx.sessionModes.applyConfig(agent.session.id, {
       ...asModeConfig(ctx.sessionModes.modeOfSession(agent.session), true),
       denyTools: [],
     });
-    expect(visibleTools(ctx, agent)).toEqual(["bash", "read"]);
+    expect(visibleTools(ctx, agent)).toEqual(["bash", "read", "send_message"]);
   });
 
   it("模式默认禁掉一组后，三态可以单独把它放回来", async () => {
@@ -378,8 +379,8 @@ async function mountPtc(): Promise<{ ctx: Context; agent: Agent }> {
   return { ctx, agent };
 }
 
-describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
-  it("group=fs 时返回 tools 上的 fs 组成员声明", async () => {
+describe("describe_tool：PTC 程序里现取某组 d.ts", () => {
+  it("问常驻组（fs）时点名说明签名已在系统提示里", async () => {
     const { ctx, agent } = await mountPtc();
     const batch = await ctx.tools.execute({
       calls: [
@@ -394,7 +395,8 @@ describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
       signal: new AbortController().signal,
     });
     const text = JSON.stringify(batch.results[0]?.result ?? {});
-    expect(text).toContain("read(args:");
+    expect(text).toContain("常驻组");
+    expect(text).toContain("不需要 describe");
   });
 
   it("MCP 那种带 `-` 的工具名写成引号键，并提示用索引访问", async () => {
@@ -419,7 +421,7 @@ describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
     expect(text).toContain('tools[\\"名字\\"](args)');
   });
 
-  it("不带 group 时返回分组清单", async () => {
+  it("不带 group 时只列按需组，常驻组不列", async () => {
     const { ctx, agent } = await mountPtc();
     const batch = await ctx.tools.execute({
       calls: [
@@ -434,6 +436,7 @@ describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
       signal: new AbortController().signal,
     });
     const text = JSON.stringify(batch.results[0]?.result ?? {});
-    expect(text).toContain("fs");
+    expect(text).toContain("mcp:agent-browser");
+    expect(text).not.toContain("fs —");
   });
 });

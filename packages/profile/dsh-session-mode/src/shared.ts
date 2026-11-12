@@ -105,18 +105,39 @@ export function toolGroupOf(name: string): string {
   return "other";
 }
 
-// 常驻的组：这些组的工具默认就在目录里（对应 guidance 的 `injection: "init"` 那几个域）。
-// 常驻判据来自 guidance 的 `injection`：`init` 与认不出的组常驻，`on-demand` 的组默认不进目录。
-export function isResidentToolGroup(group: string): boolean {
-  if (group === "onDemand" || group === "other") return true;
-  if (group.startsWith("mcp:")) return false;
+// 按需的组：正文不常驻注入，模型要用它们时走 `describe_tool({ group })` 现取。
+// **它只回答"说明怎么送达"，不回答"工具能不能调"**：按需组与常驻组的工具在能力面上完全等价，
+// 收窄只归模式的 `allowTools` / `denyTools`。
+//
+// 判据来自 guidance 的 `injection`（那份数据的 home 在 `packages/profile/dsh-tool-guidance`）：
+// `mcp:<server>` 这类动态组在静态表里没有定义，一律按需；认不出的组名按常驻处理。
+export function isOnDemandToolGroup(group: string): boolean {
+  if (group === "onDemand" || group === "other") return false;
+  if (group.startsWith("mcp:")) return true;
   try {
-    return groupByKey(group).injection === "init";
+    return groupByKey(group).injection === "on-demand";
   } catch {
-    return true;
+    return false;
   }
 }
 
+// 一条 section 名 → 它属于哪个工具组（认不出的返回 undefined）。
+// 三类形状：`tool:<工具名>` 是单个工具的说明；`mcp:<server>` 是 MCP server 自己带的 instructions；
+// `mcp-resource-servers` 是 MCP 资源三件的服务器清单。
+export function sectionGroupOf(section: string): string | undefined {
+  if (section.startsWith("mcp:")) return section;
+  if (section.startsWith("tool:")) return toolGroupOf(section.slice("tool:".length));
+  // 官方 `mcp-resources` 的清单 section 名字就是这个，没有前缀。
+  if (section === "mcp-resource-servers") return "mcp";
+  return undefined;
+}
+
+// 这条 section 是不是"按需组的说明"：是的话它只经 `describe_tool({ group })` 现取，不进系统提示。
+// **它只回答"说明放在哪"，与工具能不能调无关**——按需组的工具在能力面上与常驻组完全等价。
+export function isOnDemandSection(section: string): boolean {
+  const group = sectionGroupOf(section);
+  return group !== undefined && isOnDemandToolGroup(group);
+}
 export function toolGroupLabel(group: string): string {
   // MCP server 的特殊性：组 id 自带 server 名，显示成 `MCP · <server>`。
   if (group.startsWith("mcp:")) return `MCP · ${group.slice("mcp:".length)}`;

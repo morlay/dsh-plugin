@@ -66,19 +66,6 @@ export function renderTools(schemas: readonly PtcToolSchema[]): string {
   return `${lead}${hint}${["```ts", declaration, "```"].join("\n")}`;
 }
 
-// `describe_tool()` 的结果：不带参数返回分组清单，带参数返回该组的声明片段。
-export function renderDescribe(
-  groups: ReadonlyMap<string, readonly PtcToolSchema[]>,
-  group?: string,
-): string {
-  if (group === undefined) {
-    return [...groups.keys()].sort().join("\n");
-  }
-  const schemas = groups.get(group);
-  if (schemas === undefined) return "";
-  return renderTools(schemas);
-}
-
 // PTC 装配下把上游那份全量 `tools:sdk` 换成稳定骨架；别的 section 原样保留。
 export function replaceToolsSdk<T extends { readonly name: string; readonly text: string }>(
   sections: readonly T[],

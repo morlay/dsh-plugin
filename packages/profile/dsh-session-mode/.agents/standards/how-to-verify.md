@@ -71,6 +71,10 @@ pnpm exec vitest run packages/profile/dsh-session-mode packages/context/dsh-cont
   入口）——目录只留白名单、`tool:<名字>` section 同源过滤、白名单外调用被拒（文案带模式名）、黑名单内的调用按另一句
   被拒（deny 优先）、**换个模式就是换一份**（旧 guard 收回，换回去的工具重新可用）、`instructions: false` 时通道被关、
   `runtimeContext: false` 只盖住本会话；没收过口的会话（行在它之后才激活）一律放行。
+  **能力面与展示面分离**的判据也在这份里，两两成对：「按需组的工具照样可调用」与「按需组的说明不进系统提示」
+  （`tool:<工具名>` / `mcp:<server>` / `mcp-resource-servers` 被摘掉，常驻组的照旧留着）；
+  「`describe_tool` 的清单里每个名字都真的可调用」与「按需组被摘掉的正文由 `describe_tool` 送达」
+  （MCP server 自己的 instructions 出现在 describe 结果里）。
   **收口的归属**也在这条线上一并钉住（「收口的归属：行重挂之后重装不撞名」）：行卸载（设置保存会让 Loader 重新配置
   这一行）之后，旧实例在 agent 上的注册必须已经收干净——`describe_tool` 不在目录里、收窄放开；新实例重装不抛
   `already registered in this scope`（见 [设计 注册的归属与收回](../designs/20260924-会话模式.md#注册的归属与收回)）。

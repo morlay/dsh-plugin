@@ -207,6 +207,37 @@ async function sectionNames(ctx: Context, agent: Agent): Promise<string[]> {
   );
 }
 
+// 一次工具调用的**规范值**（`describe_tool` 这类返回文本的工具用它读输出）。
+// 返回的是工具声明的 `{ text }`，不是序列化后的信封：后者会把换行转义成字面 `\n`，
+// 拿它去按行匹配 d.ts 会一条都匹配不到。
+async function callToolValue(
+  ctx: Context,
+  agent: Agent,
+  name: string,
+  args: unknown,
+  callId: string,
+): Promise<{ text?: string }> {
+  const batch = await ctx.tools.execute({
+    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: JSON.stringify(args) }],
+    agent,
+    signal: new AbortController().signal,
+  });
+  // 规范值在 `value` 上（`content` 是渲染出来的模型面内容）。
+  const result = batch.results[0]?.result;
+  const value = result !== undefined && "value" in result ? result.value : undefined;
+  return (value ?? {}) as { text?: string };
+}
+
+// 同上，只要正文。
+async function callToolText(
+  ctx: Context,
+  agent: Agent,
+  name: string,
+  args: unknown,
+  callId: string,
+): Promise<string> {
+  return (await callToolValue(ctx, agent, name, args, callId)).text ?? "";
+}
 async function callTool(ctx: Context, agent: Agent, name: string, callId: string) {
   // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
   const batch = await ctx.tools.execute({
@@ -292,6 +323,92 @@ describe("工具白名单（按会话收口）", () => {
     expect(allowed.error).toBeUndefined();
   });
 
+  it("按需组的工具照样可调用：组只决定说明怎么送达，不决定能不能调", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-call");
+    // `nothing` 两条名单都空 = 不设收窄。
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    // web-access 是 `on-demand` 组（正文不常驻注入），它的工具必须照样能调。
+    expect(await visibleTools(ctx, session)).toContain("web_search");
+    expect((await callTool(ctx, session, "web_search", "call-ondemand")).error).toBeUndefined();
+  });
+
+  it("带 `when` 条件的工具：准入集之外不列进 describe_tool 清单", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("when-gated");
+    // 一个带 `when` 的工具：条件为假时它既不可执行，也不该出现在清单里。
+    session.ctx.tools.register(
+      defineTool({
+        name: "todo_write",
+        description: "待办",
+        parameters: {},
+        output: {
+          schema: { type: "string" },
+          render: (_args, value) => [{ type: "text", text: value }],
+        },
+        execute: async () => "ok",
+      }),
+      { when: () => false },
+    );
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    // 模拟 agent loop 的调用形状：先把这一步的准入集算出来，再带着它调工具。
+    const toolSet = await ctx.tools.resolve({
+      agent: session,
+      modelSelection: { provider: "p", model: "m" } as never,
+      signal: new AbortController().signal,
+    });
+    const batch = await ctx.tools.execute({
+      calls: [
+        { type: "tool-call", id: ToolCallId("describe-when"), name: "describe_tool", arguments: "{}" },
+      ],
+      agent: session,
+      toolSet,
+      signal: new AbortController().signal,
+    });
+    toolSet.dispose();
+    const listed = JSON.stringify(batch.results[0]?.result ?? {});
+    // plan 组里只有关着条件的 todo_write：准入集之外，所以这个组根本不该出现在清单里。
+    expect(listed).not.toContain("plan —");
+  });
+  it("`describe_tool` 的清单里每个名字都真的可调用", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("describe-consistency");
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    const listed = await callToolText(ctx, session, "describe_tool", {}, "describe-list");
+    // 清单只列按需组：`init` 组（ask）不列，`on-demand` 组（web-access / swarm）列。
+    expect(listed).toContain("web-access");
+    expect(listed).toContain("swarm");
+    expect(listed).not.toContain("ask —");
+
+    // 逐个组取签名，再逐个名字验证可调用——这是"展示面 = 可调用面"的核心判据。
+    let verified = 0;
+    for (const group of ["web-access", "swarm"]) {
+      const declaration = await callToolText(
+        ctx,
+        session,
+        "describe_tool",
+        { group },
+        `describe-${group}`,
+      );
+      const names = [...declaration.matchAll(/^\s+"?([A-Za-z0-9_-]+)"?\(args:/gm)].map(
+        (match) => match[1]!,
+      );
+      expect(names.length).toBeGreaterThan(0);
+      for (const name of names) {
+        const call = await callTool(ctx, session, name, `${name}-call`);
+        expect(call.error).toBeUndefined();
+        verified += 1;
+      }
+    }
+    // 防退化：一个名字都没匹配到时上面两个断言仍会通过，这条挡住那种空转。
+    expect(verified).toBeGreaterThan(0);
+  });
   it("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch");
@@ -350,9 +467,15 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "denyOnly");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
+    // 黑名单只扣掉它点名的那两件：按需组（web-access）的工具照旧可见——组只决定说明怎么送达。
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "web_fetch",
+      "web_search",
+    ]);
     expect(await sectionNames(ctx, session)).not.toContain("tool:send_message");
-    // 组不再默认隐藏，但这份名单把它扣掉了：说明 section 也不留。
+    // `web_search` 属于按需组（web-access）：工具本身可调用，但它的说明只在 `describe_tool` 里现取，
+    // 不进系统提示——这正是"按需"的含义。
     expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
   });
 
@@ -391,7 +514,14 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "nothing");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
+    // 两条名单都空 = 不设收窄：全部工具可见，按需组的工具也不例外。
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "list_agents",
+      "send_message",
+      "web_fetch",
+      "web_search",
+    ]);
   });
 
   it("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {
@@ -447,6 +577,49 @@ describe("收口的归属：行重挂之后重装不撞名", () => {
   });
 });
 
+describe("按需组的说明不进系统提示", () => {
+  it("MCP server 的 instructions 与资源清单都靠 describe_tool 现取", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-sections");
+    // 上游 `mcp-client` 把 server 自己的 instructions 注册成 `mcp:<server>`，`mcp-resources` 注册成
+    // `mcp-resource-servers`：两条都属于按需组，不该留在系统提示里。
+    await mountSection(ctx, "mcp:agent-browser", "### MCP server: agent-browser");
+    await mountSection(ctx, "mcp-resource-servers", "## MCP resource servers");
+    // 派发指引（官方 `tool-subagent` 注册的 `tool:subagent`）同样归 swarm 组 —— 按需，不进 sp。
+    await mountSection(ctx, "tool:subagent", "Start independent delegations with `subagent`");
+    apply(ctx, session, "nothing");
+
+    const names = await sectionNames(ctx, session);
+    expect(names).not.toContain("mcp:agent-browser");
+    expect(names).not.toContain("mcp-resource-servers");
+    expect(names).not.toContain("tool:subagent");
+  });
+
+  it("常驻组的说明照旧留在系统提示里（成对判据）", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("resident-sections");
+    await mountSection(ctx, "tool:ask_user_question", "问答说明");
+    apply(ctx, session, "nothing");
+
+    expect(await sectionNames(ctx, session)).toContain("tool:ask_user_question");
+  });
+});
+describe("按需组的正文靠 describe_tool 送达", () => {
+  it("MCP server 自己带的 instructions 出现在 describe 结果里", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-texts");
+    // 一个 MCP server 的工具 + 它自己的 instructions（上游 `mcp-client` 注册成 `mcp:<server>`）。
+    session.ctx.tools.register(fixtureTool("mcp__srv__do"));
+    await mountSection(ctx, "mcp:srv", "### MCP server: srv");
+    apply(ctx, session, "nothing");
+    // 装配一次：按需组的 section 在这一步被摘下来记账。
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    const text = await callToolText(ctx, session, "describe_tool", { group: "mcp:srv" }, "d-srv");
+    expect(text).toContain("MCP server: srv");
+    expect(text).toContain("mcp__srv__do");
+  });
+});
 describe("模式配置的 dropSections", () => {
   it("精确名与 `*` 前缀都会从装配结果里丢弃", async () => {
     const { ctx, agent } = await mount();
