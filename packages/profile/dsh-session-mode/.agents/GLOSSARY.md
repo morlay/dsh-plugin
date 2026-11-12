@@ -10,15 +10,17 @@
 ## 术语
 
 **模式**：
-`session-mode` 行的 `config.modes` 里的一份定义：persona + 工具名单 + policy 名单 + 三个开关 + 可选的默认模型。
-它是**会话级扩展**，不是 Cordis 子树、也不持有行清单（那归会话挂着的 shipped preset）。当前模式是一条会话事实
-（事件 `session-mode/selected` + 投影 `sessionMode`）。
+一份定义：persona + 工具名单 + 技能名单 + policy 名单 + 三个开关 + 可选的默认模型。它有三层来源，逐层覆盖——
+内置默认（`src/mode-sources.ts`）、模式默认（`{dshHome}/modes/<id>.toml`）、会话覆盖（`storageDomain` 的
+`session_mode` 域）；合成只有一处（`definitionFor`）。它是**会话级扩展**，不是 Cordis 子树、也不持有行清单
+（那归会话挂着的 shipped preset）。当前模式是一条会话事实（事件 `session-mode/selected` + 投影 `sessionMode`）。
 _避免使用_：profile（那是装配层的一份 bundle）
 
 **收口**：
 本包按会话把模式落到这个 agent 上的那一层（`src/scope.ts` 的 `SessionScope`，模式行内部持有、**不发布服务**）：
 工具名单合成、装配投影与执行层 guard、三个开关都按会话生效——名单合成规则（`allowTools` 留空 = 不设收窄、
 同名时黑名单优先）住 `ADR-allowTools留空即不设收窄`。
+收口只按两份名单合成工具面；工具组的 `injection` 不参与能力判定（见下面「按需组」）。
 _避免使用_：白名单收窄（收口不只有白名单）；`ctx.sessionToolScope`（已不存在）
 
 **抑制面**：
@@ -34,6 +36,13 @@ _避免使用_：白名单收窄（收口不只有白名单）；`ctx.sessionToo
 **skills 推导**：
 `skills` 不写时的缺省：由这个模式自己的工具名单推导——名单含 `skill` 就要技能目录。它只管**注入面**；
 `skill` 工具本身能不能用归 `allowTools`。
+
+**按需组**：
+`injection: "on-demand"` 的工具组（计划、协作、联网、每个 MCP server）。它们的说明**不进系统提示**——装配期被摘掉，
+摘下来的正文由 `describe_tool({ group })` 现取时送达；工具本身照样可调用。判据的 home 是
+[`src/shared.ts`](../src/shared.ts) 的 `isOnDemandToolGroup` / `isOnDemandSection`，`injection` 那份数据归
+[`@morlay/dsh-tool-guidance`](../../dsh-tool-guidance/.agents/GLOSSARY.md)。
+_避免使用_：按需加载（那是工具组 skill 的加载，不是这里说的任何事）；"按需组默认不放行"（能力面不受它管）
 
 **persona**：
 模式的两段提示词文本，注册成**该 agent 的 scope** 上的 `deployment:persona-prefix` / `-suffix` section（缺省是空串，

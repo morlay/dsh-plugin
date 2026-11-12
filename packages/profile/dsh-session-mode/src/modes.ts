@@ -154,7 +154,8 @@ export interface Config {
 
 // schema 解析之后的形状：volatile 字段被换成**稳定引用**，读它要过 `.get()`（设置页改的就是同一份）。
 //
-// `default` 与 `modes` 都是 volatile：默认模式与整份模式清单（含各自的 `defaultModel`）都在行配置页上。
+// 只有 `default` 是 volatile：模式清单的真源是 `{dshHome}/modes/*.toml`（内置默认 + 用户文件），不走行配置——
+// 于是它解析后是普通值，改了等 Loader 重挂这一行。
 export interface ResolvedConfig {
   // 装配期注入（测试/高级用法）：用户配置的正确路径是 `{dshHome}/modes/*.toml`。
   readonly modes?: Record<string, SessionMode>;
@@ -290,8 +291,7 @@ const modeSchema: z<SessionMode> = z.object({
         en: "Whether the runtime snapshot (sandbox and approval policy) and the clock injection (`time-context`, declared by presets such as `standard`) apply.",
       }),
     ),
-  // 这个模式的默认模型。不标 `volatile`：`modes` 本身就是 volatile，整棵子树都在页面上——再标一层会被
-  // schemastery 拒（`validateVolatileSchema` 不许 volatile 套 volatile）。
+  // 这个模式的默认模型。不标 `volatile`：它是模式定义的一部分，而模式定义的真源在 `{dshHome}/modes/*.toml`。
   defaultModel: modelSchema // `default(null)` 是"没配就没有这个键"：schemastery 对缺省的对象字段会造一个空对象，那样每个模式都会
     // 凭空多出一行；给了 null 反而让它保持缺失（页面按非必填处理，从候选加成）。
     // 类型上放行一次：`null` 在这里只是"没有这个键"的写法，schema 的输入形状不接受它。
