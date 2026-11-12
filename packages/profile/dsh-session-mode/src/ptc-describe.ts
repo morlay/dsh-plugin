@@ -6,7 +6,7 @@
 
 import { jsonSchemaToTs } from "@deepseek-ai/dsh-tool-executor-ptc";
 import { SHORT_TOOL_DESCRIPTIONS } from "@morlay/dsh-tool-guidance/groups";
-import { toolGroupOf } from "./shared.ts";
+import { isOnDemandToolGroup, toolGroupOf } from "./shared.ts";
 import { renderTools, type PtcToolSchema } from "./ptc-sdk.ts";
 
 /** 一条工具的静态描述（描述文本 + 宽松的 args/output 类型）。 */
@@ -82,16 +82,29 @@ function summaryOf(group: string): string {
   return GROUP_SUMMARY[group] ?? "其它";
 }
 
-// 工具的执行体：不带 group 给「分组 + 一句话说明」，带 group 给该组的 d.ts 片段。
+// 工具的执行体：不带 group 给「按需组清单 + 一句话说明」，带 group 给该组的 d.ts 片段。
+//
+// 清单只列**按需组**：常驻组的签名已经随系统提示注入，再列一次只是让模型重复取同一份签名。
+// 三种取不到的分支都给一句点名的话，不返回空串——空串对模型等于静默失败，它会以为是自己拼错了组名。
 export function describeTools(entries: readonly DescribeEntry[], group?: string): string {
   const groups = groupEntries(entries);
+  const onDemand = [...groups.keys()].filter(isOnDemandToolGroup).sort();
   if (group === undefined) {
-    return [...groups.keys()]
-      .sort()
-      .map((name) => `${name} — ${summaryOf(name)}`)
-      .join("\n");
+    if (onDemand.length === 0) {
+      return "当前会话没有按需组：能用工具的签名都已随系统提示注入，直接按那些签名调用即可。";
+    }
+    return onDemand.map((name) => `${name} — ${summaryOf(name)}`).join("\n");
   }
-  const declaration = renderTools(groups.get(group) ?? []);
-  const section = sectionOfGroup(group);
-  return section.length === 0 ? declaration : `${section}\n\n${declaration}`;
+  if (isOnDemandToolGroup(group)) {
+    if (!groups.has(group)) {
+      return `${group} 这个按需组当前没有可用工具（可能被模式名单收窄掉了）。可取组：${onDemand.join(" | ") || "（无）"}`;
+    }
+    const declaration = renderTools(groups.get(group) ?? []);
+    const section = sectionOfGroup(group);
+    return section.length === 0 ? declaration : `${section}\n\n${declaration}`;
+  }
+  if (groups.has(group)) {
+    return `${group} 是常驻组，签名已经随系统提示注入，不需要 describe；直接按系统提示里的 d.ts 调用即可。`;
+  }
+  return `没有 ${group} 这个组。可取组：${onDemand.join(" | ") || "（当前会话没有按需组）"}`;
 }

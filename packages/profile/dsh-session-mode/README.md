@@ -20,13 +20,17 @@
 机制、抑制面的取舍与代价见[设计 抑制官方注入面](./.agents/designs/20260929-抑制官方注入面.md)与
 [设计 会话模式](./.agents/designs/20260924-会话模式.md)。
 
-**按需工具组：常驻组之外默认不放行**（[`src/tool-groups.ts`](./src/tool-groups.ts)，组归属的 home 是
-[`src/shared.ts`](./src/shared.ts) 的 `toolGroupOf` / `isResidentToolGroup`）：文件、Shell、技能、流程（反馈）、计划、
-协作、调度这几组的工具一直在目录里；其余组默认不进目录——联网与工作流各自一组，每个 MCP server 一组
-（`mcp__<server>__<tool>`）。模式不设白名单时会话里多两个常驻控制工具 `tool_group_list`（列组名、数量与前三个工具名）
-与 `tool_group_load`（放行一组，接受 `mcp:<server>` / `group:<id>`，前缀可省），加载后该组工具在下一步可见。工具
-可见性变化由 loop 记成 `developer` 消息——路由支持 `toolUpdate` 时随历史追加，不重写请求前缀。设了 `allowTools`
-的模式不做按需（那些模式的意图本来就是"只留这几件"）；模式里显式写进 `denyTools` 的组仍然优先于放行。
+**工具组只决定"说明怎么送达"，不决定"工具能不能调"**（组归属的 home 是 [`src/shared.ts`](./src/shared.ts) 的
+`toolGroupOf` / `isOnDemandToolGroup`，`injection` 那份数据归 `@morlay/dsh-tool-guidance`）：
+
+| 档 | 哪些组 | 正文怎么到模型 | 能力面 |
+| --- | --- | --- | --- |
+| `init`（常驻） | 文件、Shell、技能、提问、代码执行 | 随系统提示注入正文与 d.ts | 与按需组完全等价 |
+| `on-demand`（按需） | 计划、协作、联网、每个 MCP server（`mcp:<server>`） | 不注入；模型用 `describe_tool({ group })` 现取 | 与常驻组完全等价 |
+
+按需只省系统前缀里的字节。**能不能调只由 `allowTools` / `denyTools` 决定**——两份名单留空就是不设收窄，
+按需组的工具照样可以 `await tools.xxx(...)`。`describe_tool` 的数据源是当前会话可见的工具视图，清单只列按需组，
+所以它列出的每个名字都保证可调用；问一个常驻组会被告知"签名已在系统提示里"，问一个不存在的组会拿到可取组清单。
 
 本包不装配任何行：装配入口在 [`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)
 （它插 `session-mode`、通道、工具说明与 subagent 那几行）。

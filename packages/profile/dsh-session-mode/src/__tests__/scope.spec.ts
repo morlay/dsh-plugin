@@ -207,6 +207,21 @@ async function sectionNames(ctx: Context, agent: Agent): Promise<string[]> {
   );
 }
 
+// 一次工具调用的文本结果（`describe_tool` 这类返回文本的工具用它读输出）。
+async function callToolText(
+  ctx: Context,
+  agent: Agent,
+  name: string,
+  args: unknown,
+  callId: string,
+): Promise<string> {
+  const batch = await ctx.tools.execute({
+    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: JSON.stringify(args) }],
+    agent,
+    signal: new AbortController().signal,
+  });
+  return JSON.stringify(batch.results[0]?.result ?? {});
+}
 async function callTool(ctx: Context, agent: Agent, name: string, callId: string) {
   // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
   const batch = await ctx.tools.execute({
@@ -292,6 +307,45 @@ describe("工具白名单（按会话收口）", () => {
     expect(allowed.error).toBeUndefined();
   });
 
+  it("按需组的工具照样可调用：组只决定说明怎么送达，不决定能不能调", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-call");
+    // `nothing` 两条名单都空 = 不设收窄。
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    // web-access 是 `on-demand` 组（正文不常驻注入），它的工具必须照样能调。
+    expect(await visibleTools(ctx, session)).toContain("web_search");
+    expect((await callTool(ctx, session, "web_search", "call-ondemand")).error).toBeUndefined();
+  });
+
+  it("`describe_tool` 的清单里每个名字都真的可调用", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("describe-consistency");
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    const listed = await callToolText(ctx, session, "describe_tool", {}, "describe-list");
+    // 清单只列按需组：`init` 组（ask）不列，`on-demand` 组（web-access / swarm）列。
+    expect(listed).toContain("web-access");
+    expect(listed).toContain("swarm");
+    expect(listed).not.toContain("ask —");
+
+    // 逐个组取签名，再逐个名字验证可调用——这是"展示面 = 可调用面"的核心判据。
+    for (const group of ["web-access", "swarm"]) {
+      const declaration = await callToolText(
+        ctx,
+        session,
+        "describe_tool",
+        { group },
+        `describe-${group}`,
+      );
+      for (const [, name] of declaration.matchAll(/^\s+"?([A-Za-z0-9_-]+)"?\(args:/gm)) {
+        const call = await callTool(ctx, session, name!, `${name}-call`);
+        expect(call.error).toBeUndefined();
+      }
+    }
+  });
   it("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch");
@@ -350,10 +404,14 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "denyOnly");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
+    // 黑名单只扣掉它点名的那两件：按需组（web-access）的工具照旧可见——组只决定说明怎么送达。
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "web_fetch",
+      "web_search",
+    ]);
     expect(await sectionNames(ctx, session)).not.toContain("tool:send_message");
-    // 组不再默认隐藏，但这份名单把它扣掉了：说明 section 也不留。
-    expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
+    expect(await sectionNames(ctx, session)).toContain("tool:web_search");
   });
 
   it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
@@ -391,7 +449,14 @@ describe("工具黑名单（与白名单合成）", () => {
     apply(ctx, session, "nothing");
     await ctx.systemPrompt.assemble(assembleContextFor(session));
 
-    expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
+    // 两条名单都空 = 不设收窄：全部工具可见，按需组的工具也不例外。
+    expect(await visibleTools(ctx, session)).toEqual([
+      "ask_user_question",
+      "list_agents",
+      "send_message",
+      "web_fetch",
+      "web_search",
+    ]);
   });
 
   it("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {

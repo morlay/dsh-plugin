@@ -105,15 +105,19 @@ export function toolGroupOf(name: string): string {
   return "other";
 }
 
-// 常驻的组：这些组的工具默认就在目录里（对应 guidance 的 `injection: "init"` 那几个域）。
-// 常驻判据来自 guidance 的 `injection`：`init` 与认不出的组常驻，`on-demand` 的组默认不进目录。
-export function isResidentToolGroup(group: string): boolean {
-  if (group === "onDemand" || group === "other") return true;
-  if (group.startsWith("mcp:")) return false;
+// 按需的组：正文不常驻注入，模型要用它们时走 `describe_tool({ group })` 现取。
+// **它只回答"说明怎么送达"，不回答"工具能不能调"**：按需组与常驻组的工具在能力面上完全等价，
+// 收窄只归模式的 `allowTools` / `denyTools`。
+//
+// 判据来自 guidance 的 `injection`（那份数据的 home 在 `packages/profile/dsh-tool-guidance`）：
+// `mcp:<server>` 这类动态组在静态表里没有定义，一律按需；认不出的组名按常驻处理。
+export function isOnDemandToolGroup(group: string): boolean {
+  if (group === "onDemand" || group === "other") return false;
+  if (group.startsWith("mcp:")) return true;
   try {
-    return groupByKey(group).injection === "init";
+    return groupByKey(group).injection === "on-demand";
   } catch {
-    return true;
+    return false;
   }
 }
 
