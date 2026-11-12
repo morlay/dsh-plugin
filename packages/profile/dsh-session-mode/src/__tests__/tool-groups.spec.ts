@@ -1,6 +1,13 @@
 // 工具分组、按需判据与名单里的组引用：纯函数层面的判据。
 import { describe, expect, it } from "vitest";
-import { deniedByList, isOnDemandToolGroup, isProtectedTool, toolGroupOf } from "../shared.ts";
+import {
+  deniedByList,
+  isOnDemandSection,
+  isOnDemandToolGroup,
+  isProtectedTool,
+  sectionGroupOf,
+  toolGroupOf,
+} from "../shared.ts";
 
 describe("按需判据", () => {
   it("只回答「正文要不要常驻注入」，与工具能不能调无关", () => {
@@ -18,6 +25,33 @@ describe("按需判据", () => {
     expect(isOnDemandToolGroup("other")).toBe(false);
     expect(isOnDemandToolGroup("onDemand")).toBe(false);
     expect(isOnDemandToolGroup("no-such-group")).toBe(false);
+  });
+});
+
+describe("按需 section 判据", () => {
+  it("三类 section 形状都认得出归属", () => {
+    // 单个工具的说明。
+    expect(sectionGroupOf("tool:web_search")).toBe("web-access");
+    expect(sectionGroupOf("tool:bash")).toBe("shell");
+    // MCP server 自己带的 instructions。
+    expect(sectionGroupOf("mcp:agent-browser")).toBe("mcp:agent-browser");
+    // MCP 资源三件的服务器清单（官方 mcp-resources 注册的这个名字，没有前缀）。
+    expect(sectionGroupOf("mcp-resource-servers")).toBe("mcp");
+    // 不是工具说明的 section。
+    expect(sectionGroupOf("deployment:persona-prefix")).toBeUndefined();
+  });
+
+  it("按需组的 section 一律不进系统提示，常驻组的照进", () => {
+    // 按需组：工具说明、MCP server instructions、资源清单。
+    expect(isOnDemandSection("tool:web_search")).toBe(true);
+    expect(isOnDemandSection("tool:subagent")).toBe(true);
+    expect(isOnDemandSection("mcp:agent-browser")).toBe(true);
+    expect(isOnDemandSection("mcp-resource-servers")).toBe(true);
+    // 常驻组。
+    expect(isOnDemandSection("tool:bash")).toBe(false);
+    expect(isOnDemandSection("tool:read")).toBe(false);
+    // 与工具组无关的 section 不归它管。
+    expect(isOnDemandSection("deployment:persona-prefix")).toBe(false);
   });
 });
 

@@ -207,7 +207,28 @@ async function sectionNames(ctx: Context, agent: Agent): Promise<string[]> {
   );
 }
 
-// 一次工具调用的文本结果（`describe_tool` 这类返回文本的工具用它读输出）。
+// 一次工具调用的**规范值**（`describe_tool` 这类返回文本的工具用它读输出）。
+// 返回的是工具声明的 `{ text }`，不是序列化后的信封：后者会把换行转义成字面 `\n`，
+// 拿它去按行匹配 d.ts 会一条都匹配不到。
+async function callToolValue(
+  ctx: Context,
+  agent: Agent,
+  name: string,
+  args: unknown,
+  callId: string,
+): Promise<{ text?: string }> {
+  const batch = await ctx.tools.execute({
+    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: JSON.stringify(args) }],
+    agent,
+    signal: new AbortController().signal,
+  });
+  // 规范值在 `value` 上（`content` 是渲染出来的模型面内容）。
+  const result = batch.results[0]?.result;
+  const value = result !== undefined && "value" in result ? result.value : undefined;
+  return (value ?? {}) as { text?: string };
+}
+
+// 同上，只要正文。
 async function callToolText(
   ctx: Context,
   agent: Agent,
@@ -215,12 +236,7 @@ async function callToolText(
   args: unknown,
   callId: string,
 ): Promise<string> {
-  const batch = await ctx.tools.execute({
-    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: JSON.stringify(args) }],
-    agent,
-    signal: new AbortController().signal,
-  });
-  return JSON.stringify(batch.results[0]?.result ?? {});
+  return (await callToolValue(ctx, agent, name, args, callId)).text ?? "";
 }
 async function callTool(ctx: Context, agent: Agent, name: string, callId: string) {
   // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
@@ -371,6 +387,7 @@ describe("工具白名单（按会话收口）", () => {
     expect(listed).not.toContain("ask —");
 
     // 逐个组取签名，再逐个名字验证可调用——这是"展示面 = 可调用面"的核心判据。
+    let verified = 0;
     for (const group of ["web-access", "swarm"]) {
       const declaration = await callToolText(
         ctx,
@@ -379,11 +396,18 @@ describe("工具白名单（按会话收口）", () => {
         { group },
         `describe-${group}`,
       );
-      for (const [, name] of declaration.matchAll(/^\s+"?([A-Za-z0-9_-]+)"?\(args:/gm)) {
-        const call = await callTool(ctx, session, name!, `${name}-call`);
+      const names = [...declaration.matchAll(/^\s+"?([A-Za-z0-9_-]+)"?\(args:/gm)].map(
+        (match) => match[1]!,
+      );
+      expect(names.length).toBeGreaterThan(0);
+      for (const name of names) {
+        const call = await callTool(ctx, session, name, `${name}-call`);
         expect(call.error).toBeUndefined();
+        verified += 1;
       }
     }
+    // 防退化：一个名字都没匹配到时上面两个断言仍会通过，这条挡住那种空转。
+    expect(verified).toBeGreaterThan(0);
   });
   it("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
     const { ctx, agent } = await mount();

@@ -72,6 +72,10 @@ describe("PTC 装配：tools:sdk 换成稳定骨架", () => {
     const text = String(assembly.sections.find((row) => row.name === "tools:sdk")?.text ?? "");
     expect(text).toContain("describe_tool(args: { group?:");
     expect(text).not.toContain("interface ToolArgsMap");
+    // `group?` 的候选集与 `describe_tool({})` 的清单同源：只列按需组。
+    // `send_message` 归 swarm（按需），`read` 归 fs（常驻）——后者不该出现在候选里。
+    expect(text).toContain('"swarm"');
+    expect(text).not.toContain('"fs"');
   });
 });
 
