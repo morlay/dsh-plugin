@@ -12,6 +12,7 @@
 | `ui-chat`               | 对话视图展开                                              |
 | `session-log-deepseek`  | 关掉官方 DeepSeek 请求携带的会话日志（`enabled: false`） |
 | `agent-preset-registry` | 部署默认 preset 是 `ptc`（用户级 `selectedDefault` 仍优先） |
+| `agent-team`           | 新会话默认开 Agent Teams（`defaultEnabled: true`，任务板上限 256） |
 
 ## agent preset
 

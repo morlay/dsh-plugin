@@ -19,3 +19,7 @@
 - id: session-log-deepseek
   config:
     enabled: false
+- id: agent-team
+  config:
+    maxTasks: 256
+    defaultEnabled: true
