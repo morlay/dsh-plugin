@@ -23,14 +23,16 @@
 **工具组只决定"说明怎么送达"，不决定"工具能不能调"**（组归属的 home 是 [`src/shared.ts`](./src/shared.ts) 的
 `toolGroupOf` / `isOnDemandToolGroup`，`injection` 那份数据归 `@morlay/dsh-tool-guidance`）：
 
-| 档 | 哪些组 | 正文怎么到模型 | 能力面 |
+| 档 | 哪些组 | 说明怎么到模型 | 能力面 |
 | --- | --- | --- | --- |
 | `init`（常驻） | 文件、Shell、技能、提问、代码执行 | 随系统提示注入正文与 d.ts | 与按需组完全等价 |
-| `on-demand`（按需） | 计划、协作、联网、每个 MCP server（`mcp:<server>`） | 不注入；模型用 `describe_tool({ group })` 现取 | 与常驻组完全等价 |
+| `on-demand`（按需） | 计划、协作、联网、每个 MCP server（`mcp:<server>`） | **不进系统提示**；模型用 `describe_tool({ group })` 现取 | 与常驻组完全等价 |
 
-按需只省系统前缀里的字节。**能不能调只由 `allowTools` / `denyTools` 决定**——两份名单留空就是不设收窄，
-按需组的工具照样可以 `await tools.xxx(...)`。`describe_tool` 的数据源是当前会话可见的工具视图，清单只列按需组，
-所以它列出的每个名字都保证可调用；问一个常驻组会被告知"签名已在系统提示里"，问一个不存在的组会拿到可取组清单。
+按需组省下的是系统前缀里的字节：它们的 section（`tool:<工具名>`、`mcp:<server>` 自己带的 instructions、
+`mcp-resource-servers` 的服务器清单）在装配结果里被摘掉，正文由 `describe_tool` 送达。
+**能不能调只由 `allowTools` / `denyTools` 决定**——两份名单留空就是不设收窄，按需组的工具照样可以 `await tools.xxx(...)`。
+`describe_tool` 的数据源是当前会话可见的工具视图（含这一步的准入集），清单只列按需组，所以它列出的每个名字都保证
+可调用；问一个常驻组会被告知"签名已在系统提示里"，问一个不存在的组会拿到可取组清单。
 
 本包不装配任何行：装配入口在 [`@morlay/session-mode-profile`](../../bundles/session-mode-profile/README.md)
 （它插 `session-mode`、通道、工具说明与 subagent 那几行）。

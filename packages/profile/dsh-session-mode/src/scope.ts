@@ -25,7 +25,14 @@ import { defineTool, projectToolSchema, type ToolDefinition } from "@deepseek-ai
 import { renderSkeleton, replaceToolsSdk } from "./ptc-sdk.ts";
 import { describeTools } from "./ptc-describe.ts";
 import { perAgentAccount, type PerAgentAccount } from "./per-agent.ts";
-import { isOnDemandToolGroup, isProtectedTool, refGroup, toolGroupOf } from "./shared.ts";
+import {
+  isOnDemandSection,
+  isOnDemandToolGroup,
+  isProtectedTool,
+  refGroup,
+  sectionGroupOf,
+  toolGroupOf,
+} from "./shared.ts";
 // 技能目录那条消息的 `source` 形状由官方 `tool-skill` 行声明（`MessageSourceMap` 的合并扩展）：这里只借它的类型，
 // 认它仍是按 `kind` 字符串读——运行期不依赖那一行在场。
 import type {} from "@deepseek-ai/dsh-tool-skill";
@@ -203,6 +210,9 @@ export class SessionScope {
   private readonly applied = new WeakMap<Agent, Applied>();
   // 会话当前的工具面（名字全集、基础黑名单与 restrict 句柄）。
   private readonly faces = new WeakMap<Agent, ToolFace>();
+  // 按需组的 section 正文（上一次装配时从结果里摘下来的）：`describe_tool` 要送达的就是这一段。
+  // 键是组名，值是这一组里那些 section 的正文（MCP server 的 instructions、工具的用法段）。
+  private readonly onDemandTexts = new WeakMap<Agent, ReadonlyMap<string, readonly string[]>>();
   // 全量工具目录（第一次收口前抓，之后复用）：面板要的 id + 描述。
   private readonly catalogs = new WeakMap<
     Agent,
@@ -212,15 +222,33 @@ export class SessionScope {
 
   constructor(ctx: Context) {
     this.ctx = ctx;
-    // 装配期过滤：这里只认已经 `apply` 过的会话；没登记过的（没装模式那层的部署）一律放行。
+    // 装配期过滤。两条规则与会话无关，对每次装配都成立：
+    //
+    // 1. **按需组的说明不进系统提示**：`injection: "on-demand"` 的组（含每个 MCP server）讲怎么用的那段，
+    //    只在模型用 `describe_tool({ group })` 现取时才送达——这正是"按需"的含义。它们照样注册在 section
+    //    表里（`describe_tool` 读得到），只是不进装配结果。
+    //
+    // 2. 已经 `apply` 过的会话再叠模式自己的那几条（工具名单 gate、`dropSections`、动态快照）。没登记过的
+    //    （没装模式那层的部署）只走第 1 条。
     ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
       const agent = context.agent;
       const applied = agent === undefined ? undefined : this.applied.get(agent);
-      if (applied === undefined) return next();
-
-      const gate = applied.gate;
+      const gate = applied?.gate;
       const result = await next();
+      // 按需组的说明在这里被丢掉，但它们的正文（MCP server 自己带的 instructions、工具的用法段）
+      // 仍是 `describe_tool({ group })` 要送达的内容：先记进本会话的账，再从装配结果里删。
+      const onDemand = new Map<string, string[]>();
       const filtered = result.sections.filter((section) => {
+        if (isOnDemandSection(section.name)) {
+          if (section.text.length > 0) {
+            const group = sectionGroupOf(section.name) ?? "other";
+            const texts = onDemand.get(group);
+            if (texts === undefined) onDemand.set(group, [section.text]);
+            else texts.push(section.text);
+          }
+          return false;
+        }
+        if (applied === undefined) return true;
         // 工具自己的说明 section 与工具目录同源：目录里没有的工具，它的说明也不该留在提示词里。
         // 动态快照关掉时，harness 的平台说明（实现检出路径与 Web GUI 朝向）也不该留在提示词里。
         if (!applied.runtimeContext && RUNTIME_SECTIONS.has(section.name)) return false;
@@ -247,6 +275,7 @@ export class SessionScope {
         }
         return true;
       });
+      if (agent !== undefined) this.onDemandTexts.set(agent, onDemand);
       return {
         ...result,
         // PTC 装配：上游 `tools:sdk` 会把全部工具铺成一张大表（工具一变、system 前缀就变）。
@@ -328,7 +357,6 @@ export class SessionScope {
       this.faces.set(agent, face);
       // `describe_tool` 常驻：PTC 程序里随时可以取某一组的 d.ts。
       disposers.push(scope.tools.register(this.toolsDescribeTool(scope)));
-      this.restrict(scope, gate, face);
       this.restrict(scope, gate, face);
       if (skillGate !== undefined) {
         disposers.push(
@@ -518,6 +546,7 @@ export class SessionScope {
   // 数据源是**发起调用的那个 agent 的可见工具视图**（`restrict` 之后），所以清单里出现的每个名字都保证
   // 在程序里可调用；常驻组不在清单里（它们的签名已随系统提示注入）。
   private toolsDescribeTool(scope: Context): ToolDefinition {
+    const onDemandTexts = this.onDemandTexts;
     return defineTool({
       name: "describe_tool",
       // PTC 下工具描述不注入（说明随 describe 结果返回），这里强制置空。
@@ -541,6 +570,7 @@ export class SessionScope {
             ? scope.tools.definitions()
             : scope.tools.definitions(agent, exec.toolSet);
         // 每个工具的说明 section（`tool:<name>`）随 describe 一起返回，不占 system。
+        // 常驻组的 section 还在表里；按需组的已经从装配结果里摘掉了，读装配期记下的那一份。
         const prompt = scope.get("systemPrompt") as unknown as
           | { sections?: { get(name: string): { text: unknown } | undefined } }
           | undefined;
@@ -548,6 +578,8 @@ export class SessionScope {
           const section = prompt?.sections?.get(`tool:${name}`);
           return typeof section?.text === "string" ? section.text : undefined;
         };
+        const onDemandOf = (group: string): readonly string[] =>
+          (agent === undefined ? undefined : onDemandTexts.get(agent))?.get(group) ?? [];
         const entries = definitions.map((definition) => ({
           name: definition.name,
           description: definition.description ?? "",
@@ -558,7 +590,9 @@ export class SessionScope {
           section: sectionOf(definition.name),
         }));
         const group = typeof args.group === "string" ? args.group : undefined;
-        return { text: describeTools(entries, group) };
+        return {
+          text: describeTools(entries, group, (name) => onDemandOf(name)),
+        };
       },
     });
   }

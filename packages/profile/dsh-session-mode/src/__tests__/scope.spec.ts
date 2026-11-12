@@ -450,7 +450,9 @@ describe("工具黑名单（与白名单合成）", () => {
       "web_search",
     ]);
     expect(await sectionNames(ctx, session)).not.toContain("tool:send_message");
-    expect(await sectionNames(ctx, session)).toContain("tool:web_search");
+    // `web_search` 属于按需组（web-access）：工具本身可调用，但它的说明只在 `describe_tool` 里现取，
+    // 不进系统提示——这正是"按需"的含义。
+    expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
   });
 
   it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
@@ -551,6 +553,49 @@ describe("收口的归属：行重挂之后重装不撞名", () => {
   });
 });
 
+describe("按需组的说明不进系统提示", () => {
+  it("MCP server 的 instructions 与资源清单都靠 describe_tool 现取", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-sections");
+    // 上游 `mcp-client` 把 server 自己的 instructions 注册成 `mcp:<server>`，`mcp-resources` 注册成
+    // `mcp-resource-servers`：两条都属于按需组，不该留在系统提示里。
+    await mountSection(ctx, "mcp:agent-browser", "### MCP server: agent-browser");
+    await mountSection(ctx, "mcp-resource-servers", "## MCP resource servers");
+    // 派发指引（官方 `tool-subagent` 注册的 `tool:subagent`）同样归 swarm 组 —— 按需，不进 sp。
+    await mountSection(ctx, "tool:subagent", "Start independent delegations with `subagent`");
+    apply(ctx, session, "nothing");
+
+    const names = await sectionNames(ctx, session);
+    expect(names).not.toContain("mcp:agent-browser");
+    expect(names).not.toContain("mcp-resource-servers");
+    expect(names).not.toContain("tool:subagent");
+  });
+
+  it("常驻组的说明照旧留在系统提示里（成对判据）", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("resident-sections");
+    await mountSection(ctx, "tool:ask_user_question", "问答说明");
+    apply(ctx, session, "nothing");
+
+    expect(await sectionNames(ctx, session)).toContain("tool:ask_user_question");
+  });
+});
+describe("按需组的正文靠 describe_tool 送达", () => {
+  it("MCP server 自己带的 instructions 出现在 describe 结果里", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("on-demand-texts");
+    // 一个 MCP server 的工具 + 它自己的 instructions（上游 `mcp-client` 注册成 `mcp:<server>`）。
+    session.ctx.tools.register(fixtureTool("mcp__srv__do"));
+    await mountSection(ctx, "mcp:srv", "### MCP server: srv");
+    apply(ctx, session, "nothing");
+    // 装配一次：按需组的 section 在这一步被摘下来记账。
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    const text = await callToolText(ctx, session, "describe_tool", { group: "mcp:srv" }, "d-srv");
+    expect(text).toContain("MCP server: srv");
+    expect(text).toContain("mcp__srv__do");
+  });
+});
 describe("模式配置的 dropSections", () => {
   it("精确名与 `*` 前缀都会从装配结果里丢弃", async () => {
     const { ctx, agent } = await mount();

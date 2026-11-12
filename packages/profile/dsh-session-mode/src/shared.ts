@@ -121,6 +121,23 @@ export function isOnDemandToolGroup(group: string): boolean {
   }
 }
 
+// 一条 section 名 → 它属于哪个工具组（认不出的返回 undefined）。
+// 三类形状：`tool:<工具名>` 是单个工具的说明；`mcp:<server>` 是 MCP server 自己带的 instructions；
+// `mcp-resource-servers` 是 MCP 资源三件的服务器清单。
+export function sectionGroupOf(section: string): string | undefined {
+  if (section.startsWith("mcp:")) return section;
+  if (section.startsWith("tool:")) return toolGroupOf(section.slice("tool:".length));
+  // 官方 `mcp-resources` 的清单 section 名字就是这个，没有前缀。
+  if (section === "mcp-resource-servers") return "mcp";
+  return undefined;
+}
+
+// 这条 section 是不是"按需组的说明"：是的话它只经 `describe_tool({ group })` 现取，不进系统提示。
+// **它只回答"说明放在哪"，与工具能不能调无关**——按需组的工具在能力面上与常驻组完全等价。
+export function isOnDemandSection(section: string): boolean {
+  const group = sectionGroupOf(section);
+  return group !== undefined && isOnDemandToolGroup(group);
+}
 export function toolGroupLabel(group: string): string {
   // MCP server 的特殊性：组 id 自带 server 名，显示成 `MCP · <server>`。
   if (group.startsWith("mcp:")) return `MCP · ${group.slice("mcp:".length)}`;
