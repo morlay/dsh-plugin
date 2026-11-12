@@ -47,6 +47,13 @@
 - id: ui-settings-account
   disabled: true
 
+# 上游 0.2.2-rc.2 把账号通知拆成独立的一行（`ui-account-notifications`）：它 inject `accountUi`——正是上面
+# 停掉那一行提供的服务，不停它就会停在 pending，桌面档的"装配健康"判据（`tool/verify-desktop-account-plane.mts`）
+# 会直接判死。本部署没有账号，通知面也不该有。
+
+- id: ui-account-notifications
+  disabled: true
+
 # 顶替上面那行不可省的那件事：注册 settings namespace（同样的 `settings.configure({ auto: false })`，
 # 不渲染账号页/侧栏菜单/引导层）。实现见 [`../src/settings-namespace.ts`](../src/settings-namespace.ts)。
 

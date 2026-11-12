@@ -66,7 +66,9 @@ describe("子代理的委派范围说明", () => {
     const started = await ctx.subagents.startActivation({
       provider: "spawn",
       label: "写简报",
-      request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
+      // 上游 0.2.2-rc.2 起任务字段直接铺在 spec 上（不再是 `request` 包一层）。
+      prompt: [{ type: "text", text: "写一份简报" }],
+      parent,
       signal: new AbortController().signal,
       delivery: "parent",
     });
@@ -89,7 +91,8 @@ describe("子代理的委派范围说明", () => {
     const activation = await ctx.subagents.startActivation({
       provider: "spawn",
       label: "一次性",
-      request: { prompt: [{ type: "text", text: "干活" }], parent },
+      prompt: [{ type: "text", text: "干活" }],
+      parent,
       signal: new AbortController().signal,
       delivery: "caller",
     });

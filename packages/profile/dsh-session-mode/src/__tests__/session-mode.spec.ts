@@ -792,7 +792,8 @@ describe("子代理继承父模式", () => {
 
     const child = await ctx.agents.create({
       sessionId: SessionId(`session-mode-child-${String(Date.now())}-${String(Math.random())}`),
-      parentAgent: parent,
+      // 上游 0.2.2-rc.2 起 `CreateAgentOptions` 不再收 `parentAgent`：父关系只由 `meta.parentSession` 表达，
+      // 我们的继承判据读的也正是 `session.header.parentSession`。
       meta: { parentSession: parent.id, origin: "subagent" },
     });
 

@@ -1,21 +1,23 @@
 diff --git a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
-index fa573578e1..7b4ef9c8f1 100644
+index 44fdbbdbe0..fcca0180c9 100644
 --- a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
 +++ b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
-@@ -1,10 +1,10 @@
+@@ -1,4 +1,4 @@
 -import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 +import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
  import type { CSSProperties, ReactNode, Ref } from 'react'
  import clsx from 'clsx'
  import { writeClipboard } from '../clipboard.ts'
- import { CodeToolbar, type CodeToolbarLabels } from '../CodeToolbar.tsx'
+@@ -8,7 +8,7 @@ import {
+ } from './diff-fence.ts'
+ import type { DiffRow } from './diff-fence.ts'
  import {
 -  StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,
 +  StreamingHighlightSession, grammarLoadCount, highlightToHtml, startSettledHighlight, subscribeGrammarLoaded,
  } from './highlight.ts'
  import type { HighlightSpan, StreamingHighlightFrame } from './highlight.ts'
  import { useViewportHighlighting } from './useViewportHighlighting.ts'
-@@ -57,6 +57,26 @@ const SHIKI_PRE_PROPS = {
+@@ -68,6 +68,26 @@ const SHIKI_PRE_PROPS = {
  /** Completed-line group size; React reconciles groups while the DOM remains line-for-line identical. */
  const STREAMING_LINE_GROUP_SIZE = 32
  
@@ -39,13 +41,13 @@ index fa573578e1..7b4ef9c8f1 100644
 +  return lines
 +}
 +
- function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
-   return (
-     <Fragment key={index}>
-@@ -147,11 +167,47 @@ export function CodeBlock({
+ /** Line class per row kind; context rows keep the block's default ink. */
+ const DIFF_ROW_CLASS: Record<DiffRow['kind'], string | undefined> = {
+   add: css.diffAdd,
+@@ -199,11 +219,48 @@ export function CodeBlock({
      }
      return body
-   }, [streaming, highlighting, trimmed, lang, loaded])
+   }, [streaming, highlighting, diffRows, trimmed, lang, loaded])
 +  const lineCount = useMemo(() => countLines(trimmed), [trimmed])
 +  // Settled fences past the synchronous budget tokenize across frames. The
 +  // reader keeps the plain tree until the whole fence is ready, so no single
@@ -56,7 +58,8 @@ index fa573578e1..7b4ef9c8f1 100644
 +    lines: readonly HighlightSpan[][]
 +  } | null>(null)
 +  useEffect(() => {
-+    if (!highlighting || streaming === true || lineCount <= SYNC_HIGHLIGHT_MAX_LINES) return
++    // A diff fence draws row tokens of its own; the single-grammar job does not apply.
++    if (!highlighting || diffRows !== undefined || streaming === true || lineCount <= SYNC_HIGHLIGHT_MAX_LINES) return
 +    const job = startSettledHighlight(trimmed, lang)
 +    /* v8 ignore next -- an unknown or still-loading grammar keeps the plain arm and re-runs when it lands. */
 +    if (job === undefined) return
@@ -76,54 +79,54 @@ index fa573578e1..7b4ef9c8f1 100644
 +      if (frame !== 0) cancelAnimationFrame(frame)
 +    }
 +    // `loaded` re-runs the job once a lazy grammar lands; the count itself is opaque here.
-+  }, [highlighting, streaming, trimmed, lang, lineCount, loaded])
++  }, [highlighting, diffRows, streaming, trimmed, lang, lineCount, loaded])
 +  const chunkedBody = chunked !== null && streaming !== true && chunked.code === trimmed && chunked.lang === lang
 +    ? (
 +      <pre {...SHIKI_PRE_PROPS}><code>{chunked.lines.map((line, index) => renderLine(line, index))}</code></pre>
 +    )
 +    : undefined
    const html = useMemo(
--    () => (highlighting && streaming !== true && streamedBody === undefined
-+    () => (highlighting && streaming !== true && streamedBody === undefined && lineCount <= SYNC_HIGHLIGHT_MAX_LINES
+-    () => (diffRows === undefined && highlighting && streaming !== true && streamedBody === undefined
++    () => (diffRows === undefined && highlighting && streaming !== true && streamedBody === undefined && lineCount <= SYNC_HIGHLIGHT_MAX_LINES
        ? highlightToHtml(trimmed, lang)
        : undefined),
--    [streaming, highlighting, streamedBody, trimmed, lang, loaded],
-+    [streaming, highlighting, streamedBody, trimmed, lang, loaded, lineCount],
+-    [diffRows, streaming, highlighting, streamedBody, trimmed, lang, loaded],
++    [diffRows, streaming, highlighting, streamedBody, trimmed, lang, loaded, lineCount],
    )
    const [copied, setCopied] = useState(false)
    const [localWrapped, setWrapped] = useState(true)
-@@ -174,15 +230,17 @@ export function CodeBlock({
-   // shiki's own docs.
-   const body = streamedBody !== undefined
-     ? streamedBody
--    : html === undefined
--      ? (
--        <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
--          <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
--        ))}</code></pre>
--      )
--      : (
--        <div dangerouslySetInnerHTML={{ __html: html }} />
--      )
-+    : chunkedBody !== undefined
-+      ? chunkedBody
-+      : html === undefined
-+        ? (
-+          <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
-+            <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
-+          ))}</code></pre>
-+        )
-+        : (
-+          <div dangerouslySetInnerHTML={{ __html: html }} />
-+        )
+@@ -230,15 +287,17 @@ export function CodeBlock({
+     )
+     : streamedBody !== undefined
+       ? streamedBody
+-      : html === undefined
+-        ? (
+-          <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
+-            <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
+-          ))}</code></pre>
+-        )
+-        : (
+-          <div dangerouslySetInnerHTML={{ __html: html }} />
+-        )
++      : chunkedBody !== undefined
++        ? chunkedBody
++        : html === undefined
++          ? (
++            <pre className={css.plain}><code>{sourceLines === undefined ? trimmed : sourceLines.map((line, index) => (
++              <Fragment key={index}>{index > 0 && '\n'}<span className="line">{line}</span></Fragment>
++            ))}</code></pre>
++          )
++          : (
++            <div dangerouslySetInnerHTML={{ __html: html }} />
++          )
  
    return (
-     <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, toolbarLabels !== undefined && css.card, className)}
+     <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, diffRows !== undefined && !lineNumbers && css.diffFence, toolbarLabels !== undefined && css.card, className)}
 diff --git a/packages/client/ui-primitives/src/markdown/highlight.ts b/packages/client/ui-primitives/src/markdown/highlight.ts
-index fcb6be90e2..94d02e2357 100644
+index 5e4eedd2c4..987114cdff 100644
 --- a/packages/client/ui-primitives/src/markdown/highlight.ts
 +++ b/packages/client/ui-primitives/src/markdown/highlight.ts
-@@ -429,9 +429,134 @@ export function highlightToHtml(code: string, lang: string | undefined): string
+@@ -470,9 +470,134 @@ export function highlightToHtml(code: string, lang: string | undefined): string
    const resolved = grammarForHint(lang)
    if (resolved === undefined) return undefined
    if (!ensureGrammar(resolved)) return undefined

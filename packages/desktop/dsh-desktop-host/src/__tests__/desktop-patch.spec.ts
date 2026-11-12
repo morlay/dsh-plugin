@@ -68,6 +68,8 @@ const upstream = await upstreamModules();
 // 本部署不要账号 UI：停上游那一行，由 profile 档的空壳行补上它的 settings namespace 注册。
 const ACCOUNT_ROWS: Readonly<Record<string, string>> = {
   "ui-settings-account": "@deepseek-ai/dsh-client-ui-settings-account",
+  // 上游 0.2.2-rc.2 新增的账号通知面：inject `accountUi`（上面那一行提供），不停会停在 pending。
+  "ui-account-notifications": "@deepseek-ai/dsh-client-ui-account-notifications",
 };
 
 // 桌面档**必须**停的产品遥测面：两行只在 profile 名为 `desktop` 时激活，靠构建期环境变量
@@ -101,7 +103,7 @@ describe("桌面 overlay 的停用清单", () => {
     // 停用必须在 overlay：写在 bundle 层会被后来应用的层盖回去（实测），而 overlay 排最后。
     // 停的是"账号 UI"那一行——它同时是 settings namespace 的 owner，所以由 profile 档补一个空壳注册。
     expect(disabledIds(patch).sort()).toEqual(
-      ["ui-settings-account", ...Object.keys(TELEMETRY_ROWS)].sort(),
+      [...Object.keys(ACCOUNT_ROWS), ...Object.keys(TELEMETRY_ROWS)].sort(),
     );
   });
 
@@ -111,6 +113,7 @@ describe("桌面 overlay 的停用清单", () => {
     );
     expect(clientModules.sort()).toEqual([
       "@deepseek-ai/dsh-client-product-analytics",
+      "@deepseek-ai/dsh-client-ui-account-notifications",
       "@deepseek-ai/dsh-client-ui-settings-account",
     ]);
   });

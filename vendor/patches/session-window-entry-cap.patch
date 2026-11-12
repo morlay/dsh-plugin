@@ -83,7 +83,7 @@ index bc825f08fd..9df68761d6 100644
  
    /**
 diff --git a/packages/api/session-controller/src/client/sessions/session.ts b/packages/api/session-controller/src/client/sessions/session.ts
-index 9cb61e55bf..718a5e55bc 100644
+index 60194de5eb..271d90d22f 100644
 --- a/packages/api/session-controller/src/client/sessions/session.ts
 +++ b/packages/api/session-controller/src/client/sessions/session.ts
 @@ -61,6 +61,22 @@ const JUMP_PAGE_OPTIONS = {
@@ -109,7 +109,7 @@ index 9cb61e55bf..718a5e55bc 100644
  interface PendingHistory {
    beforeSeq: SessionLogOffset
    hasMore: boolean
-@@ -708,6 +724,7 @@ export class Session implements SessionFace {
+@@ -781,6 +797,7 @@ export class Session implements SessionFace {
      if (visible.some(entry => entry.event.type === 'turn/start')) this.firstPromptPendingTurn = false
      if (projections !== undefined) this.projections.seed(projections)
      this.eventSource.replace(visible, hasMore)
@@ -117,9 +117,9 @@ index 9cb61e55bf..718a5e55bc 100644
      // A new follow baseline replaces confirmed optimistic inputs with Host-owned rows.
      // Receipt-backed inputs are accepted, not failed, even if their history is outside this window.
      if (projections !== undefined) {
-@@ -768,6 +785,21 @@ export class Session implements SessionFace {
-     this.baseSeq = entries[0] === undefined ? this.baseSeq : SessionLogOffset(entries[0].event.seq)
+@@ -842,6 +859,21 @@ export class Session implements SessionFace {
      this.hasMore = hasMore
+     this.historyWasPartial ||= hasMore
      this.eventSource.prepend(entries, hasMore)
 +    this.capWindow()
 +  }
@@ -139,7 +139,7 @@ index 9cb61e55bf..718a5e55bc 100644
    }
  
    /** Append one stream-validated live event. */
-@@ -776,6 +808,7 @@ export class Session implements SessionFace {
+@@ -850,6 +882,7 @@ export class Session implements SessionFace {
      const awaitingFirstTurn = this.firstPromptPendingTurn
      if (event.type === 'turn/start') this.firstPromptPendingTurn = false
      this.eventSource.append(entry)

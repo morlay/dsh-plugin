@@ -70,7 +70,7 @@
     "@deepseek-ai/dsh-web": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.1 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
   },
   "dsh": {
     "client": {

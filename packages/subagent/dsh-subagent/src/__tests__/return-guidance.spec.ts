@@ -79,7 +79,9 @@ async function textsAfterDelegation(booted: Awaited<ReturnType<typeof boot>>): P
   const started = await ctx.subagents.startActivation({
     provider: "spawn",
     label: "写简报",
-    request: { prompt: [{ type: "text", text: "写一份简报" }], parent },
+    // 上游 0.2.2-rc.2 起任务字段直接铺在 spec 上（不再是 `request` 包一层）。
+    prompt: [{ type: "text", text: "写一份简报" }],
+    parent,
     signal: new AbortController().signal,
     // 回报指引只在"通知父智能体"的派发上加：`delivery: 'caller'` 那条不给指引（上游新版语义）。
     delivery: "parent",
@@ -97,11 +99,11 @@ describe("continuable 子代理的回报指引", () => {
       const texts = await textsAfterDelegation(await boot({ composedPreset: preset }));
 
       expect(
-        texts.some((text) => text.includes("你的父智能体 id 是")),
+        texts.some((text) => text.includes("你的最终答案会在父智能体仍在线时自动送达")),
         preset,
       ).toBe(true);
       expect(
-        texts.some((text) => text.includes("Your parent agent id is")),
+        texts.some((text) => text.includes("Your final answer is delivered automatically")),
         preset,
       ).toBe(false);
     }
@@ -110,8 +112,8 @@ describe("continuable 子代理的回报指引", () => {
   it("没配名单、会话还没绑 preset（headless / 没装 registry）也用中文", async () => {
     const texts = await textsAfterDelegation(await boot());
 
-    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(true);
-    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
+    expect(texts.some((text) => text.includes("你的最终答案会在父智能体仍在线时自动送达"))).toBe(true);
+    expect(texts.some((text) => text.includes("Your final answer is delivered automatically"))).toBe(false);
   });
 
   it("配了名单才限制：名单里的 preset 用中文指引", async () => {
@@ -119,8 +121,8 @@ describe("continuable 子代理的回报指引", () => {
       await boot({ presets: ["mode-switch"], composedPreset: "mode-switch" }),
     );
 
-    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(true);
-    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(false);
+    expect(texts.some((text) => text.includes("你的最终答案会在父智能体仍在线时自动送达"))).toBe(true);
+    expect(texts.some((text) => text.includes("Your final answer is delivered automatically"))).toBe(false);
   });
 
   it("配了名单时名单外的 preset 用上游英文（限制是显式选择）", async () => {
@@ -128,7 +130,7 @@ describe("continuable 子代理的回报指引", () => {
       await boot({ presets: ["mode-switch"], composedPreset: "standard" }),
     );
 
-    expect(texts.some((text) => text.includes("Your parent agent id is"))).toBe(true);
-    expect(texts.some((text) => text.includes("你的父智能体 id 是"))).toBe(false);
+    expect(texts.some((text) => text.includes("Your final answer is delivered automatically"))).toBe(true);
+    expect(texts.some((text) => text.includes("你的最终答案会在父智能体仍在线时自动送达"))).toBe(false);
   });
 });

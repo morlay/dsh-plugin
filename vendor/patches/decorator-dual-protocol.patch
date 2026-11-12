@@ -1,8 +1,8 @@
 diff --git a/packages/typert/protocol/src/index.ts b/packages/typert/protocol/src/index.ts
-index e2af8932b6..71ee6cbf38 100644
+index 7972cd5ef6..6f93a2024f 100644
 --- a/packages/typert/protocol/src/index.ts
 +++ b/packages/typert/protocol/src/index.ts
-@@ -177,15 +177,25 @@ export interface RemoteMethodOptions<WireArgs extends readonly unknown[] = never
+@@ -181,15 +181,25 @@ export interface RemoteMethodOptions<WireArgs extends readonly unknown[] = never
  }
  
  /** A decorator whose `resources` readers were checked against the decorated method's parameters. */
@@ -36,7 +36,7 @@ index e2af8932b6..71ee6cbf38 100644
  
  interface RemoteInitializerContext<This extends object> {
    readonly private: boolean
-@@ -293,22 +303,47 @@ export function Remote(name: string): RemoteMethodDecorator
+@@ -297,22 +307,47 @@ export function Remote(name: string): RemoteMethodDecorator
  export function Remote<This extends object, Args extends unknown[], Result>(
    options: NoInfer<RemoteMethodOptions<RemoteWireArgs<Args>>>,
  ): RemoteTypedMethodDecorator<This, Args, Result>
@@ -47,7 +47,7 @@ index e2af8932b6..71ee6cbf38 100644
 +  methodExportOrOptions: string | RemoteMethodOptions | object,
 +  propertyKey?: string | symbol,
 +  descriptor?: PropertyDescriptor,
-+): void
++): RemoteMethodDecorator
  export function Remote<This extends object, Args extends unknown[], Result>(
 -  methodExportOrOptions: string | RemoteMethodOptions | ((this: This, ...args: Args) => Result),
 -  context?: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
@@ -87,7 +87,7 @@ index e2af8932b6..71ee6cbf38 100644
    addMarkerInitializer(context, { kind: 'direct' })
  }
  
-@@ -350,8 +385,20 @@ function remoteDecorator(
+@@ -354,8 +389,20 @@ function remoteDecorator(
  ): RemoteMethodDecorator {
    return function <This extends object, Args extends unknown[], Result>(
      _method: (this: This, ...args: Args) => Result,

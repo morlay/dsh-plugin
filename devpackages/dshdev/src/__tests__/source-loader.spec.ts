@@ -113,11 +113,16 @@ describe("源码面的转译器注入", () => {
         { kind: "node-script", executable: process.execPath },
         4096,
       );
-      expect(argv.slice(0, 2)).toEqual(["--import", loader]);
+      // 上游 0.2.2-rc.2 给 `node-script` 的 argv 前面还加了 `--experimental-vm-modules`（VM Script 导入拦截
+      // 要用），loader 那对不再固定在前两位，改成按位置断言。
+      const importIndex = argv.indexOf("--import");
+      expect(argv).toContain("--experimental-vm-modules");
+      expect(importIndex).toBeGreaterThanOrEqual(0);
+      expect(argv[importIndex + 1]).toBe(loader);
       const { stdout } = await runNode(
         process.execPath,
         [
-          ...argv.slice(0, 2),
+          ...argv.slice(0, importIndex + 2),
           "--input-type=module",
           "-e",
           `const module = await import(${JSON.stringify(pathToFileURL(file).href)}); process.stdout.write(module.box.read())`,

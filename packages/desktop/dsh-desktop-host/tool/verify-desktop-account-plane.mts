@@ -36,12 +36,14 @@ const DESKTOP_PATCH = fileURLToPath(new URL("../config/desktop.cordis.patch.yml"
 // 凭据解析探针用的临时值（只进进程环境，不写任何 store）。
 const PROBE_API_KEY = "probe-ollama-api-key";
 
-// 桌面档不该有的账号/登录面：登录实现、它的事务面、它的模型路由、它的 client 面。
+// 桌面档不该有的账号/登录面：登录实现、它的模型路由、它的 client 面（设置页账号页与账号通知）。
+// 上游 0.2.2-rc.2 把登录实现由 `dsh-deepseek-account-platform` 换成 `dsh-deepseek-account`，
+// 删掉了 `dsh-api-account-controller`，并新增了 `dsh-client-ui-account-notifications`。
 const ACCOUNT_MODULES = [
-  "@deepseek-ai/dsh-deepseek-account-platform",
-  "@deepseek-ai/dsh-api-account-controller",
+  "@deepseek-ai/dsh-deepseek-account",
   "@deepseek-ai/dsh-llm-deepseek-account",
   "@deepseek-ai/dsh-client-ui-settings-account",
+  "@deepseek-ai/dsh-client-ui-account-notifications",
 ];
 
 // 桌面档必须还在的：设置面（模型页承载 API key 路径）与我们的模型路由。

@@ -223,6 +223,62 @@ async function rewriteDependencies(
 }
 
 /**
+ * 一个第三方依赖在上游所有包清单里被声明最多的那个 range（同一趟同步内保持一致）。
+ *
+ * 用途见 {@link ensureGeneratedArtifactDeps}：生成物 import 的包要在包清单里有版本，而"哪个版本"不该由本
+ * 仓库另立一个常量——取上游自己声明最多的那份，跟上游钉的版本一起漂移。
+ *
+ * @param dir - 上游根目录。
+ * @param name - 依赖名（如 `zod`）。
+ * @returns 出现次数最多的 range；上游一份都没声明时 undefined。
+ */
+async function commonDependencyRange(dir: string, name: string): Promise<string | undefined> {
+  const counts = new Map<string, number>();
+  for (const pkgDir of await packageDirs(dir)) {
+    let manifest: { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> };
+    try {
+      manifest = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8")) as typeof manifest;
+    } catch {
+      continue;
+    }
+    for (const section of [manifest.dependencies, manifest.peerDependencies]) {
+      const range = section?.[name];
+      if (range !== undefined) counts.set(range, (counts.get(range) ?? 0) + 1);
+    }
+  }
+  return [...counts].sort((left, right) => right[1] - left[1])[0]?.[0];
+}
+
+/**
+ * **生成物依赖补齐**：`prebuild` 写出的 `lib/typert.*.ts` import `zod`，包清单里却没有它时补上。
+ *
+ * pnpm 的隔离布局只给**清单里声明过**的依赖建链接；产物从自己的目录解析不到就会在运行期炸（upstream 的
+ * loader 报 `Cannot find package 'zod'`）。上游 39 份产物里只有 `@deepseek-ai/dsh-web` 漏了声明——
+ * 它自己 workspace 靠根提升侥幸能跑，我们没有那份提升，所以在 `exports` 步骤把它补回去。
+ *
+ * @param manifest - 该包的清单（就地改）。
+ * @param zodRange - 上游声明最多的 `zod` range。
+ * @returns 是否补了依赖。
+ */
+function ensureGeneratedArtifactDeps(
+  manifest: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  },
+  zodRange: string | undefined,
+): boolean {
+  if (zodRange === undefined) return false;
+  const declared =
+    manifest.dependencies?.zod ??
+    manifest.peerDependencies?.zod ??
+    manifest.devDependencies?.zod;
+  if (declared !== undefined) return false;
+  manifest.dependencies = { ...manifest.dependencies, zod: zodRange };
+  return true;
+}
+
+/**
  * `exports` 里"每个条件都指同一个文件"的对象压成字符串。
  *
  * `{"types": "./src/index.ts", "default": "./src/index.ts"}` → `"./src/index.ts"`——`exports` 的字符串写法
@@ -248,6 +304,9 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
   let dependenciesMoved = 0;
   let entryFieldsDropped = 0;
   let exportsCollapsed = 0;
+  let artifactDepsAdded = 0;
+  const generatedExports = Object.keys(options.generated);
+  const zodRange = await commonDependencyRange(dir, "zod");
   for (const pkgDir of await packageDirs(dir)) {
     const manifestPath = join(pkgDir, "package.json");
     if (!(await pathExists(manifestPath))) continue;
@@ -370,6 +429,16 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
       devDropped += 1;
       dependenciesMoved += deps.moved;
     }
+    // 有生成物出口的包，产物 import 的 `zod` 必须在清单里（判据见 `ensureGeneratedArtifactDeps`）。
+    if (
+      generatedExports.some((exportName) =>
+        Object.hasOwn(exportsField as Record<string, unknown>, exportName),
+      ) &&
+      ensureGeneratedArtifactDeps(manifest, zodRange)
+    ) {
+      changed = true;
+      artifactDepsAdded += 1;
+    }
 
     if (changed) {
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -380,7 +449,8 @@ export async function rewriteExports(dir: string, options: ExportsOptions): Prom
     `[steps] exports -> src: ${touched.length} 个包改写，` +
       `${filesRewritten} 个包的 files 改指源码面，` +
       `${devDropped} 个包删了 devDependencies（其中挪回 dependencies ${dependenciesMoved} 条），` +
-      `${entryFieldsDropped} 处冗余 main/types 删除，${exportsCollapsed} 个出口的条件对象压成字符串`,
+      `${entryFieldsDropped} 处冗余 main/types 删除，${exportsCollapsed} 个出口的条件对象压成字符串，` +
+      `${artifactDepsAdded} 个包补了生成物依赖（zod）`,
   );
   if (unmapped.length > 0) {
     const unique = [...new Set(unmapped)];

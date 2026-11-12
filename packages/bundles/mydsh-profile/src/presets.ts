@@ -1,8 +1,8 @@
-// 复制自上游 web-app 的四份 shipped preset（`vendor/deepseek-harness/packages/bundle/web-app/presets/`），
-// 由本包按行 id 覆盖 `config.plugins`（整段替换，不合并后续内置变更）。唯一改动：
-// `delegation` 组里与 agent-team 同名的子代理工具行（`tool-subagent-control` / `tool-subagent` /
-// `tool-subagent-fork`）已删除——Agent Teams 用同名工具接管直连委派，两套并存会互相遮蔽。
-// 上游升级时逐行对齐：`src/__tests__/patch.spec.ts` 拿这四份与 vendor 原文件比对。
+// 复制自上游 web-app 的四份 shipped preset（vendor/deepseek-harness/packages/bundle/web-app/presets/），
+// 由本包按行 id 覆盖 config.plugins（整段替换，不合并后续内置变更）。唯一改动：
+// delegation 组里与 agent-team 同名的子代理工具行（tool-subagent-control / tool-subagent /
+// tool-subagent-fork）已删除——Agent Teams 用同名工具接管直连委派，两套并存会互相遮蔽。
+// 上游升级时逐行对齐：src/__tests__/patch.spec.ts 拿这四份与 vendor 原文件比对。
 export const agentPresetRows = (): readonly unknown[] => [
   {
     id: "preset-standard",
@@ -67,6 +67,14 @@ export const agentPresetRows = (): readonly unknown[] => [
         {
           id: "skill-filesystem",
           name: "@deepseek-ai/dsh-skill-filesystem",
+          config: {
+            customSkillDirs: [
+              {
+                __jsExpr:
+                  "process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')",
+              },
+            ],
+          },
         },
         {
           id: "tool-skill",
@@ -169,6 +177,10 @@ export const agentPresetRows = (): readonly unknown[] => [
         {
           id: "present",
           name: "@deepseek-ai/dsh-tool-present",
+        },
+        {
+          id: "tool-office",
+          name: "@deepseek-ai/dsh-tool-office",
         },
         {
           id: "tool-plugin-manager",
@@ -358,6 +370,10 @@ export const agentPresetRows = (): readonly unknown[] => [
           name: "@deepseek-ai/dsh-tool-present",
         },
         {
+          id: "tool-office",
+          name: "@deepseek-ai/dsh-tool-office",
+        },
+        {
           id: "tool-plugin-manager",
           name: "@deepseek-ai/dsh-plugin-manager/tools",
           disabled: true,
@@ -485,7 +501,8 @@ export const agentPresetRows = (): readonly unknown[] => [
           id: "persona",
           name: "@deepseek-ai/dsh-persona",
           config: {
-            prefix: "You are a coding agent powered by the {{model}} model.",
+            prefix:
+              "You are a coding agent powered by the {{model}} model. You help the user customize DeepSeek Harness itself.",
           },
         },
         {

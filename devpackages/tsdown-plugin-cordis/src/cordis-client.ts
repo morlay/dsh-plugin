@@ -284,7 +284,7 @@ const BASELINE: (string | RegExp)[] = [
 // `VENDORED_LIBRARY`（cosmokit / schemastery / cordis-plugin-timer，rescope 进来的框架库）我们也并进这份，
 // 本门只有一个判据、不再分两个常量。
 export const INLINE_SAFE =
-  /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$)|@deepseek-ai\/cordis-plugin-timer$)/;
+  /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/registry$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-spill-policy\/notice$|@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$)|@deepseek-ai\/cordis-plugin-timer$)/;
 
 // 判断一个模块是否留给平台/模块表（其余一律内联）。只信**显式列表**（baseline + 调用方给的行集）：
 // 「所有 `@deepseek-ai/*` 都是 client 行」的兜底会把 `.../remote`、`/display` 这类子路径也送进模块表，

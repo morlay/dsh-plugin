@@ -33,7 +33,7 @@
 优先级高于这里的部署默认。会话模式是叠加在它之上的会话级扩展，见
 [设计 官方AgentPreset恢复与会话级扩展](../../../.agents/designs/20260928-官方AgentPreset恢复与会话级扩展.md)。
 
-官方 Office 面**不归本包**：那几件里能停的行（`office-to-pdf`）也不停，技能与载荷工具由桌面宿主的代码挂载
+官方 Office 面**不归本包**：那几件里能停的行（上游 0.2.2-rc.2 起是 `office-kit` / `skill-office`）也不停，技能与载荷工具由桌面宿主的代码挂载
 （不是 entry 行，profile 层按 id 停不掉，写进来只会拿到 `entry not found`）。整个 Office 面按会话收口在
 [`@morlay/dsh-session-mode`](../session-mode-profile/README.md) 的 `coding` 模式名单里（`denySkills` /
 `denyTools`）：技能目录不列、`skill` 工具加载与那个载荷查询被判。

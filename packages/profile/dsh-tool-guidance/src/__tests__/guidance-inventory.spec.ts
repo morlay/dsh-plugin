@@ -44,10 +44,16 @@ async function basePlugins(): Promise<unknown> {
 // 不在分组表里的工具：装配里停掉的行，或已评估过、**有意不归本包管**的那批。新增项必须写清理由，
 // 否则覆盖性断言会失败。
 // - MCP 资源三件：本部署按需接入 MCP server 才有意义，工具说明留上游原文（用户明确不管这一批）。
+// - Office 三件（上游 0.2.2-rc.2 的 `tool-office` 新增）：本部署不装配 Office 面——那几条行由桌面宿主
+//   自己挂，会话侧按 `coding` 模式名单收口（`@morlay/dsh-session-mode` 的 `denyTools`），
+//   所以它们既不需要中文说明、也不需要归组。
 const OUT_OF_SCOPE_TOOLS: readonly string[] = [
   "list_mcp_resources",
   "list_mcp_resource_templates",
   "read_mcp_resource",
+  "office_convert",
+  "office_recalculate",
+  "office_render",
 ];
 
 // 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
