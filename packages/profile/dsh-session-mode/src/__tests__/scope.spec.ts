@@ -319,6 +319,45 @@ describe("工具白名单（按会话收口）", () => {
     expect((await callTool(ctx, session, "web_search", "call-ondemand")).error).toBeUndefined();
   });
 
+  it("带 `when` 条件的工具：准入集之外不列进 describe_tool 清单", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("when-gated");
+    // 一个带 `when` 的工具：条件为假时它既不可执行，也不该出现在清单里。
+    session.ctx.tools.register(
+      defineTool({
+        name: "todo_write",
+        description: "待办",
+        parameters: {},
+        output: {
+          schema: { type: "string" },
+          render: (_args, value) => [{ type: "text", text: value }],
+        },
+        execute: async () => "ok",
+      }),
+      { when: () => false },
+    );
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    // 模拟 agent loop 的调用形状：先把这一步的准入集算出来，再带着它调工具。
+    const toolSet = await ctx.tools.resolve({
+      agent: session,
+      modelSelection: { provider: "p", model: "m" } as never,
+      signal: new AbortController().signal,
+    });
+    const batch = await ctx.tools.execute({
+      calls: [
+        { type: "tool-call", id: ToolCallId("describe-when"), name: "describe_tool", arguments: "{}" },
+      ],
+      agent: session,
+      toolSet,
+      signal: new AbortController().signal,
+    });
+    toolSet.dispose();
+    const listed = JSON.stringify(batch.results[0]?.result ?? {});
+    // plan 组里只有关着条件的 todo_write：准入集之外，所以这个组根本不该出现在清单里。
+    expect(listed).not.toContain("plan —");
+  });
   it("`describe_tool` 的清单里每个名字都真的可调用", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("describe-consistency");

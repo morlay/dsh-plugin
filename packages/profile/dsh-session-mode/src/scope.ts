@@ -533,9 +533,13 @@ export class SessionScope {
       },
       async execute(args, exec) {
         // 没有 agent 的调用（诊断式）退回到全局视图：那种装配本来就没有按会话收窄。
+        // 带上 `exec.toolSet`：带 `when` 条件的工具（例如只有计划模式下才准入的 `exit_plan_mode`）
+        // 只有在这一步的准入集里才可执行，漏掉它就会把「现在调不了」的工具列进清单。
         const agent = exec.agent;
         const definitions =
-          agent === undefined ? scope.tools.definitions() : scope.tools.definitions(agent);
+          agent === undefined
+            ? scope.tools.definitions()
+            : scope.tools.definitions(agent, exec.toolSet);
         // 每个工具的说明 section（`tool:<name>`）随 describe 一起返回，不占 system。
         const prompt = scope.get("systemPrompt") as unknown as
           | { sections?: { get(name: string): { text: unknown } | undefined } }
