@@ -1,6 +1,6 @@
 {
   "name": "@morlay/rdbkit",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Schema-first RDB kit for DeepSeek Harness plugins: one table definition drives the DDL, the typed table handles and the startup migration for SQLite and PostgreSQL alike; business code only ever sees an injected Database.",
   "keywords": [
     "dsh",

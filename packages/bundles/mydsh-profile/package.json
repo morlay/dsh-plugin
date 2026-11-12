@@ -1,6 +1,6 @@
 {
   "name": "@morlay/mydsh-profile",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "private": true,
   "description": "我的 dsh 个人配置项：界面语言、欢迎提示版本、默认模型与对话视图、默认 agent preset（PTC），外加统一声明的四份 agent preset（复制上游，删掉与 agent-team 冲突的子代理工具行）。",
   "keywords": [

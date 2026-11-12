@@ -1,6 +1,6 @@
 {
   "name": "@morlay/x-use-bundle",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "通用 MCP 接法的一次装齐：agent-browser 与 agent-desktop 各一行 dsh-mcp-client，工具以 mcp__agent-browser__* / mcp__agent-desktop__* 进入模型目录；命令走全局 PATH 里的 bin，没装则该功能自然不可用。",
   "keywords": [
     "agent-browser",
