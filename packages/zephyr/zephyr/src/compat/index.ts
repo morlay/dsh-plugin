@@ -7,4 +7,4 @@ export {
   type ToCordisOptions,
 } from "./to-cordis.ts";
 export { fromCordis, type AdaptedClass, type AdaptedRow } from "./from-cordis.ts";
-export { kAdapted, kFace } from "../token.ts";
+export { kAdapted, kFace } from "@morlay/zephyr";

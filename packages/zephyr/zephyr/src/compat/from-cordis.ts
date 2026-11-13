@@ -1,6 +1,6 @@
 // `fromCordis`：把上游 cordis 插件包成 Provider（只做类型面桥接）。
 import type { Context as CordisContext } from "@deepseek-ai/cordis";
-import type { Awaitable, Context, TokenClass } from "../injection.ts";
+import type { Awaitable, Context, TokenClass } from "@morlay/zephyr";
 import {
   hasTokenMeta,
   Injectable,
@@ -9,7 +9,7 @@ import {
   kFace,
   kMounted,
   tokenMetaOf,
-} from "../token.ts";
+} from "@morlay/zephyr";
 
 /**
  * 给上游一个 ctx 代理：deps 里的名字在**读取时**替换，其余原样转发。

@@ -1,8 +1,7 @@
 // `toCordis`：把 Provider 转成 cordis 插件对象（dsh 行入口用它）。
-import type { Context as CordisContext } from "../injection.ts";
-import type { Context, Newable } from "../injection.ts";
-import { kProvider, rowNameOf } from "../token.ts";
-import { mountRow } from "../bootstrap.ts";
+import type { Context as CordisContext, Context, Newable } from "@morlay/zephyr";
+import { kProvider, rowNameOf } from "@morlay/zephyr";
+import { mountRow } from "@morlay/zephyr";
 
 /** `toCordis` 的产物：一个普通的 cordis 插件对象。 */
 export interface CordisPluginEntry {
@@ -41,4 +40,4 @@ export function toCordis(
   return options.Config === undefined ? entry : { ...entry, Config: options.Config };
 }
 
-export { kProvider, providerOfPlugin } from "../token.ts";
+export { kProvider, providerOfPlugin } from "@morlay/zephyr";

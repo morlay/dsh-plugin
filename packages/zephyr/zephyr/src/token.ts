@@ -5,6 +5,12 @@ import type { TokenClass } from "./injection.ts";
 interface TokenMeta {
   readonly token: Function | object;
   readonly name: string;
+  /**
+   * 令牌的**原始**名字（没被 `hyphenate` 转换过）：类令牌是类名，Symbol 令牌是它的 key/description。
+   *
+   * 报错文案要用它——只打派生名（`config-forms`）会让人以为是字面量拼写，查不到源码里的 `ConfigForms`。
+   */
+  readonly label: string;
   readonly multi: boolean;
   /**
    * 上游服务名的别名（`@Injectable({ name })`）。
@@ -16,6 +22,18 @@ interface TokenMeta {
   readonly alias?: string;
   /** 是不是 `InjectionToken`（没有实现类，只能由上游在 mount 期按名字发布）。 */
   readonly value?: boolean;
+}
+
+/**
+ * 令牌的原始名字（不转换大小写）。
+ * @param token - 类令牌或 Symbol 令牌。
+ * @returns 原始名字。
+ */
+function labelOf(token: Function | object | symbol): string {
+  if (typeof token === "symbol") {
+    return Symbol.keyFor(token) ?? token.description ?? token.toString();
+  }
+  return (token as { name?: string }).name ?? "";
 }
 
 /** 注入占位：字段初始化时写入，装配阶段换成实例。 */
@@ -71,6 +89,7 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
       registered.set(target, {
         token: options.token,
         name: owned.name,
+        label: owned.label,
         multi: options.multi === true || owned.multi,
         ...(owned.alias === undefined ? {} : { alias: owned.alias }),
         ...(owned.value === true ? { value: true } : {}),
@@ -87,6 +106,7 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
     const meta: TokenMeta = {
       token: inherited?.token ?? target,
       name: inherited?.name ?? hyphenate(target.name),
+      label: inherited?.label ?? target.name,
       multi: options.multi === true,
       ...(alias === undefined ? {} : { alias }),
     };
@@ -106,7 +126,7 @@ export const InjectionToken = function InjectionToken<T>(
   options: { readonly multi?: boolean } = {},
 ): TokenClass<T> {
   const token = class {} as unknown as TokenClass<T>;
-  const meta: TokenMeta = { token, name, multi: options.multi === true, value: true };
+  const meta: TokenMeta = { token, name, label: name, multi: options.multi === true, value: true };
   registered.set(token, meta);
   if (!meta.multi) byName.set(name, token);
   return token;
@@ -195,6 +215,8 @@ export function tokenMetaOf(token: Function | object): TokenMeta {
   const derived: TokenMeta = {
     token,
     name: hyphenate((token as { name?: string }).name ?? ""),
+    // Symbol 令牌没有 `name`：用 `Symbol.keyFor` / `description` 拿它的原始名字。
+    label: labelOf(token),
     multi: false,
   };
   registered.set(token, derived);

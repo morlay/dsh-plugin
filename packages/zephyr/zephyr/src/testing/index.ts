@@ -2,4 +2,4 @@
 //
 // 这些是 DI 核心的内部表示（不是装配 API），所以不进包门面；测试要读它们就走这里。
 // 旧写法 `@morlay/zephyr/src/token.ts`（开发面深引）与此同源——新代码走这个出口。
-export { injectPlaceholderOf, kFace, tokenMetaOf } from "../token.ts";
+export { injectPlaceholderOf, kFace, tokenMetaOf } from "@morlay/zephyr";

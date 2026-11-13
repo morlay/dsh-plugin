@@ -147,6 +147,11 @@ export async function bootstrapApplication<const L extends ProviderList>(
   //
   // 必须是逐行而不是「全填完再挂」：适配行的契约面在它自己的 onInit（`mount`）之后才拿到，
   // 后面的行在前面的行 onInit 之后注入，才拿得到上游面而不是空壳。
+  // **空清单**与"缺某个提供者"是两件事：前者是"没有任何行被装配"，此时不该报
+  // "没有提供者：xxx"——那会把排查引到令牌上。
+  if (rows.length === 0) {
+    throw new Error("前端装配清单为空：没有装配任何行");
+  }
   const fibers: Array<{ dispose(): Promise<void> }> = [];
   try {
     for (const row of orderByDependencies(rows)) {
@@ -251,7 +256,15 @@ export async function mountRow(
       const meta = tokenMetaOf(placeholder.token);
       const resolved = read(meta.name);
       if (resolved === undefined && placeholder.mode === "one") {
-        throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
+        // 报错要用**原始 label**（`ConfigForms` / Symbol 的 key），只打派生名（`config-forms`）会让人
+        // 以为是字面量拼写、在源码里搜不到；注册名与上游别名不同才补打。
+        const where = `${instance.constructor.name} 的 ${key}`;
+        const lines = [`没有提供者：${meta.label}（${where} 需要它）`];
+        if (meta.name !== meta.label) lines.push(`  注册名：${meta.name}`);
+        if (meta.alias !== undefined && meta.alias !== meta.name) {
+          lines.push(`  上游别名：${meta.alias}`);
+        }
+        throw new Error(lines.join("\n"));
       }
       (instance as Record<string, unknown>)[key] = resolved;
     }
