@@ -4,7 +4,7 @@
 // （成员 roster 与任务板面板由它自己的 `TeamAction` 渲染）。**不重写组件**——上游那份照用。
 //
 // 它按名字读四件：`sessions` / `uiWorkspace` / `slots` / `locale`。全是本仓已有的契约面。
-import * as ClientUiAgentTeam from "@deepseek-ai/dsh-experimental-client-ui-agent-team/client";
+import * as ClientUiAgentTeam from "@deepseek-ai/dsh-client-ui-agent-team/client";
 import { SessionController, UiSession } from "@morlay/dsh-conversation/ui";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
 import { inject, Injectable, type Context } from "@morlay/zephyr";

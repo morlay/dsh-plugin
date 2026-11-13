@@ -783,7 +783,6 @@ describe("子代理继承父模式", () => {
 
     const child = await ctx.agents.create({
       sessionId: SessionId(`session-mode-child-${String(Date.now())}-${String(Math.random())}`),
-      parentAgent: parent,
       meta: { parentSession: parent.id, origin: "subagent" },
     });
 

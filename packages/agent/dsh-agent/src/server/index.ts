@@ -14,5 +14,5 @@ export { LlmEndpoint } from "./llm-endpoint.service.ts";
 export { LlmAdapter, MessageId, ToolCallId } from "@deepseek-ai/dsh-llm";
 
 // 上游 subagent 的公开词（契约与端点都从这里取）。
-export type { SubagentPromptRequest } from "@deepseek-ai/dsh-subagent";
+export type { SubagentPromptRequest, SubagentPromptRequestId } from "@deepseek-ai/dsh-subagent";
 export type SubagentRuntime = InstanceType<typeof import("@deepseek-ai/dsh-subagent").default>;

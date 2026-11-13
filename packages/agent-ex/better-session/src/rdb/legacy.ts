@@ -4,7 +4,10 @@ import {
   type SessionHeader,
   type SessionId,
 } from "@morlay/dsh-session/contract";
-import { createSessionFormatCatalogWithChildren } from "@morlay/dsh-session/contract";
+import {
+  createSessionFormatCatalogWithChildren,
+  type SessionFormatCatalog,
+} from "@morlay/dsh-session/contract";
 import type { EventRow, SessionRow } from "./backend.ts";
 import { normalizeToCurrentShape, repairRequestHeaders } from "./log/repair.ts";
 import { rowToMeta } from "./log/rows.ts";
@@ -49,7 +52,7 @@ function physicalEvent(row: EventRow): Record<string, unknown> {
 // 读旧格式用的 catalog：v3→v4 这条边要求显式子会话证据，本仓库声明**无子会话证据**——v3 的目录事实由父会话
 // 自己在成功路径上写成 `subagent/catalog` 事件，迁移的 child evidence 只是补偿入口；见
 // ADR-跟随上游session-format-v4。
-export const restoreCatalog = createSessionFormatCatalogWithChildren([]);
+export const restoreCatalog: SessionFormatCatalog = createSessionFormatCatalogWithChildren([]);
 
 export function convertLegacyRows(
   row: SessionRow,

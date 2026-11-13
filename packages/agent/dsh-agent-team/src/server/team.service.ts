@@ -8,8 +8,8 @@
 //   `list_agents` / `wait_agent` / `interrupt_agent` / `team_task_*` 那一套。
 //
 // 工具**按会话**注册：上游 `apply` 在 `agent/created` 上判断这个 agent 是不是 Team 成员，是才装工具。
-import TeamService from "@deepseek-ai/dsh-experimental-agent-team";
-import * as ToolAgentTeamPlugin from "@deepseek-ai/dsh-experimental-tool-agent-team";
+import TeamService from "@deepseek-ai/dsh-agent-team";
+import * as ToolAgentTeamPlugin from "@deepseek-ai/dsh-tool-agent-team";
 import { AgentDirectory, SystemPrompt, ToolRegistry } from "@morlay/dsh-agent";
 import { SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";

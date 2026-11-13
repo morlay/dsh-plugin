@@ -459,6 +459,46 @@ export class SessionQueryRdb extends SessionQuery {
     return this.leaseOn(sessionId, entry, live, projections);
   }
 
+  /**
+   * 点观测（`inspectSession`）：不发布、不恢复 cold Session，只在切面上同步读一次。
+   *
+   * live 会话读内存里那一份（`observeSession` 已先 flush，库与内存一致）；cold 会话用
+   * `sessions.prepare` 造一份**未入 store** 的 Session。`read` 不得修改或保留 Session——
+   * 观察租约在读完之后释放，调用方只保留返回值（上游 `SessionQueryEngine.inspectSession` 的语义）。
+   */
+  inspectSession = async <T>(
+    sessionId: SessionId,
+    read: (session: Session) => T,
+    signal?: AbortSignal,
+  ): Promise<T> => {
+    const observation = await this.observeSession(sessionId, {
+      projectionMode: "none",
+      ...(signal === undefined ? {} : { signal }),
+    });
+    try {
+      signal?.throwIfAborted();
+      const live = this.sessions.get(sessionId);
+      if (live !== undefined) return read(live);
+      try {
+        return read(
+          this.sessions.prepare(observation.header.id, {
+            seed: [...observation.events],
+            meta: observation.header,
+            inheritedEventCount: observation.inheritedEventCount,
+            eventState: "detached",
+          }),
+        );
+      } catch (error) {
+        // 准备与读取之间会话被 attach：live 那一份是更新的来源，改读它（上游同一处理）。
+        const attached = this.sessions.get(sessionId);
+        if (attached !== undefined) return read(attached);
+        throw error;
+      }
+    } finally {
+      observation[Symbol.dispose]();
+    }
+  };
+
   // 条目上的 detached Session 按需建：投影折叠要它，只读 header / 游标的消费方不必付这份代价。
   private sessionOf(entry: PreparedEntry): Session {
     entry.session ??= Session.create(

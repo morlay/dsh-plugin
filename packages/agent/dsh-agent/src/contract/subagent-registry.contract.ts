@@ -18,7 +18,17 @@ export abstract class SubagentRegistry {
 
   abstract readonly startActivation: SubagentRuntime["startActivation"];
 
-  abstract readonly drainChildren: SubagentRuntime["drainChildren"];
+  /** 这一层子代理树的根（上游按 caller 往上找）。 */
+  abstract readonly rootOf: SubagentRuntime["rootOf"];
+
+  /** 树里的成员名（诊断与按名寻址）。 */
+  abstract readonly namesOf: SubagentRuntime["namesOf"];
+
+  /** 把一个名字解析成会话身份（名字只在树内唯一）。 */
+  abstract readonly resolveName: SubagentRuntime["resolveName"];
+
+  /** 等整棵树上的工作收尾（父等子、子等孙）。 */
+  abstract readonly waitForTreeWork: SubagentRuntime["waitForTreeWork"];
 
   abstract readonly drainDescendants: SubagentRuntime["drainDescendants"];
 
@@ -26,11 +36,8 @@ export abstract class SubagentRegistry {
 
   abstract readonly interrupt: SubagentRuntime["interrupt"];
 
-  abstract readonly interruptByParent: SubagentRuntime["interruptByParent"];
-
-  abstract readonly list: SubagentRuntime["list"];
-
-  abstract readonly listChildren: SubagentRuntime["listChildren"];
+  /** 用户侧的打断（与父侧打断分开：权限不同）。 */
+  abstract readonly interruptByUser: SubagentRuntime["interruptByUser"];
 
   abstract readonly listDescendants: SubagentRuntime["listDescendants"];
 
@@ -41,6 +48,4 @@ export abstract class SubagentRegistry {
   abstract readonly sendMessage: SubagentRuntime["sendMessage"];
 
   abstract readonly typertRemote: SubagentRuntime["typertRemote"];
-
-  abstract readonly waitForChildren: SubagentRuntime["waitForChildren"];
 }

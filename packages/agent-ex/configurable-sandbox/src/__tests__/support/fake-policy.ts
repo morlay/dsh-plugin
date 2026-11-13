@@ -23,4 +23,7 @@ export class FakePolicy extends SandboxPolicy {
   });
 
   overrideOf = () => undefined;
+
+  // 上游新增：按会话登记一个额外可写根，返回清理函数。测试替身不区分会话，注册即无操作。
+  registerWritableRoot = (): (() => void) => () => {};
 }

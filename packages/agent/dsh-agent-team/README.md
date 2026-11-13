@@ -13,10 +13,10 @@ import { provideAgentTeam } from "@morlay/dsh-agent-team/server";
 
 `provideAgentTeam()` 的清单两行（顺序即清单内顺序）：
 
-| 行                   | 上游                                            | 做什么                                                                                                               |
-| -------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `TeamServiceDefault` | `@deepseek-ai/dsh-experimental-agent-team`      | 团队服务（成员、任务板、消息）                                                                                       |
-| `ToolAgentTeam`      | `@deepseek-ai/dsh-experimental-tool-agent-team` | 模型面那套工具：`spawn_teammate` / `send_message` / `list_agents` / `wait_agent` / `interrupt_agent` / `team_task_*` |
+| 行                   | 上游                               | 做什么                                                                                                               |
+| -------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `TeamServiceDefault` | `@deepseek-ai/dsh-agent-team`      | 团队服务（成员、任务板、消息）                                                                                       |
+| `ToolAgentTeam`      | `@deepseek-ai/dsh-tool-agent-team` | 模型面那套工具：`spawn_teammate` / `send_message` / `list_agents` / `wait_agent` / `interrupt_agent` / `team_task_*` |
 
 ## 依赖
 

@@ -11,13 +11,25 @@ import { asRemoteResult } from "@morlay/zephyr-app";
 import { SubagentRegistry } from "@morlay/dsh-agent";
 import {
   SubagentsEndpoint,
-  type SubagentInterruptByParentRequest,
-  type SubagentInterruptByParentValue,
+  type SubagentInterruptByUserRequest,
+  type SubagentInterruptByUserValue,
   type SubagentPromptRequest,
   type SubagentPromptValue,
 } from "@morlay/dsh-agent/endpoint";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
-import type { SubagentPromptRequest as UpstreamPromptRequest } from "@morlay/dsh-agent/contract";
+import type {
+  SubagentPromptRequest as UpstreamPromptRequest,
+  SubagentPromptRequestId,
+} from "@morlay/dsh-agent/contract";
+
+/**
+ * wire 上的裸字符串 → 上游的请求身份。
+ * @param value - wire 上的 `requestId`（调用方铸好的消息身份）。
+ * @returns 带 `session-request-id` 品牌的同一字符串。
+ */
+function asPromptRequestId(value: string): SubagentPromptRequestId {
+  return value as SubagentPromptRequestId;
+}
 
 /** `subagents` 组的宿主实现。 */
 @RemoteGroup()
@@ -35,33 +47,29 @@ export class SubagentsEndpointDefault extends SubagentsEndpoint implements OnIni
     request: SubagentPromptRequest,
   ): Promise<RemoteResultWire<SubagentPromptValue>> {
     return await asRemoteResult(async () => {
-      // wire 上是裸字符串，上游要品牌身份：在边界铸一次（会话身份与请求身份都在这里转换）。
+      // wire 上是裸字符串，上游要品牌身份：在边界逐字段铸一次（会话身份与请求身份都在这里转换）。
       // `requestId` 的品牌只由上游定义（`SubagentPromptRequestId = Branded<'session-request-id'>`，
-      // 没有导出的工厂），所以整条请求按上游形状交给它——这一处 `as` 是 wire → 上游类型的边界转换。
-      const upstream = {
-        ...request,
-        parentSessionId: SessionId(request.parentSessionId),
+      // 没有导出的工厂），所以这一处用一个具名的品牌铸造函数，而不是整条对象 `as`。
+      // 逐字段展开而不是 `...request`：`exactOptionalPropertyTypes` 下，wire 上"可能有 undefined"
+      // 的可选字段不能直接摊进上游的 `?` 字段。
+      const upstream: UpstreamPromptRequest = {
+        requestId: asPromptRequestId(request.requestId),
         childSessionId: SessionId(request.childSessionId),
-      } as UpstreamPromptRequest;
+        delivery: request.delivery,
+        content: request.content,
+        ...(request.clientTimeZone === undefined ? {} : { clientTimeZone: request.clientTimeZone }),
+      };
       // unary 的 wire 不带信号：上游 `prompt(request, signal)` 要一个（它随激活一起取消）。
       return await this.subagents.prompt(upstream, new AbortController().signal);
     });
   }
 
-  override async interruptByParent(
-    request: SubagentInterruptByParentRequest,
-  ): Promise<RemoteResultWire<SubagentInterruptByParentValue>> {
+  override async interruptByUser(
+    request: SubagentInterruptByUserRequest,
+  ): Promise<RemoteResultWire<SubagentInterruptByUserValue>> {
     return await asRemoteResult(async () => {
-      if (request.mode !== "continuable") {
-        throw new Error(
-          `subagents/interruptByParent: mode 必须是 "continuable"（收到 ${String(request.mode)}）`,
-        );
-      }
-      return this.subagents.interruptByParent(
-        SessionId(request.childSessionId),
-        SessionId(request.parentSessionId),
-        request.mode,
-      );
+      // 上游只收一个品牌化的子会话身份；权限判定（user 侧）在它内部做。
+      return this.subagents.interruptByUser(SessionId(request.childSessionId));
     });
   }
 }

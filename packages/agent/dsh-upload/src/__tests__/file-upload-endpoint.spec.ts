@@ -95,10 +95,6 @@ class FakeAgentDirectory extends AgentDirectory {
 
   readonly announce: AgentDirectory["announce"] = unused;
 
-  readonly isOwnedBy: AgentDirectory["isOwnedBy"] = () => false;
-
-  readonly roots: AgentDirectory["roots"] = () => [];
-
   readonly get: AgentDirectory["get"] = (sessionId) => {
     const agent = currentAgent;
     return String(sessionId) === SESSION && agent !== undefined ? agent : undefined;

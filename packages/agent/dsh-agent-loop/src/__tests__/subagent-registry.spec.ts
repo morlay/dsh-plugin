@@ -1,23 +1,19 @@
-/**
- * subagent 域的真装配：真 `SubagentRuntime` + 真 sandbox/working-directory + 真 agent 栈，
- * 只把 `AppEnv` 换成临时目录（外部运行环境）。
- *
- * 行为断言落在该契约最有判别力的一处：`resolveMaxDepth` 的三条分支
- * （显式值 > 配置默认 > provider 自理）。
- */
+// `subagent` 域的装配：`SubagentRegistryDefault` 接管上游 `SubagentRuntime`，
+// `resolveMaxDepth` 的三条分支（默认 / 显式 / provider 自管）都落在这里。
+//
+// 归本包：`SubagentRegistry` 的契约与适配行都在 `dsh-agent-loop`；装配里要的沙箱与工作目录是
+// **下游**（agent-loop → sandbox 是生产边），反方向不成立，所以 spec 住这边。
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bootstrapApplication } from "@morlay/zephyr";
-import { RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { provideAgent } from "@morlay/dsh-agent";
 import { FsSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
-import { WorkingDirectoryDefault } from "@morlay/dsh-agent";
+import { WorkingDirectoryDefault, provideAgent, SubagentRegistry } from "@morlay/dsh-agent";
 import { SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { SubagentRegistry } from "@morlay/dsh-agent";
-import { provideSubagent } from "@morlay/dsh-agent-loop";
+import { provideSubagent } from "../index.ts";
 
 let root = "";
 
@@ -46,7 +42,7 @@ async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplica
       { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
       FsSandbox,
       WorkingDirectoryDefault,
-      // `provideSubagent` 现在带 `remote.subagents` 的宿主面（要一张 wire handler 表）。
+      // `provideSubagent` 带 `remote.subagents` 的宿主面（要一张 wire handler 表）。
       RemoteHandlersDefault,
       ...provideSubagent(),
     ],

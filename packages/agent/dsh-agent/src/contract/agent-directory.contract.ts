@@ -40,10 +40,6 @@ export abstract class AgentDirectory {
 
   abstract readonly announce: AgentRegistryService["announce"];
 
-  abstract readonly isOwnedBy: AgentRegistryService["isOwnedBy"];
-
-  abstract readonly roots: AgentRegistryService["roots"];
-
   abstract get(
     id: Parameters<AgentRegistryService["get"]>[0],
   ): ReturnType<AgentRegistryService["get"]>;

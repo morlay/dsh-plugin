@@ -6,12 +6,6 @@ settings:
 
 importers:
 
-  trim-deps:
-    dependencies:
-      oxc-parser:
-        specifier: ^0.155.0
-        version: 0.155.0
-
   upstream-sync:
     dependencies:
       '@oxc-node/core':

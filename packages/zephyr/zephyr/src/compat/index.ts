@@ -6,5 +6,5 @@ export {
   type CordisPluginEntry,
   type ToCordisOptions,
 } from "./to-cordis.ts";
-export { fromCordis, type AdaptedRow } from "./from-cordis.ts";
+export { fromCordis, type AdaptedClass, type AdaptedRow } from "./from-cordis.ts";
 export { kAdapted, kFace } from "../token.ts";

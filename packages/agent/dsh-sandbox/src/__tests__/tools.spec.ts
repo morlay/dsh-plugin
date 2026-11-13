@@ -7,7 +7,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ToolRegistry } from "@morlay/dsh-agent";
-import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { AgentDirectoryDefault } from "@morlay/dsh-agent";
 import { provideFsTools } from "../fs-tools.provide.ts";
 import { provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
@@ -50,9 +49,6 @@ async function boot(): Promise<App> {
       // 工具行按能力域分装：`bash` / 文件 / 检索在 sandbox，`working_directory` 在 agent。
       ...provideFsTools(),
       ...provideEnvTools(),
-      // 循环期：本 spec 要真 agent 才能解析工具面。
-      ToolExecutorNative,
-      { provide: AgentLoopDefault, config: { agents: [] } },
     ],
     timeoutMs: 30_000,
   } as never);

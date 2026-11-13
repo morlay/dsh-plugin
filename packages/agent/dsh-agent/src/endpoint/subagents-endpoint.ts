@@ -15,31 +15,20 @@ export const SUBAGENTS_GROUP = "subagents";
 
 /** wire 上的端点名（上游 descriptor 的 `namespace/method`）。 */
 export const SUBAGENTS_PROMPT_ENDPOINT = "subagents/prompt";
-export const SUBAGENTS_INTERRUPT_BY_PARENT_ENDPOINT = "subagents/interruptByParent";
+export const SUBAGENTS_INTERRUPT_BY_USER_ENDPOINT = "subagents/interruptByUser";
 
-/**
- * 一条 prompt 的内容片段（上游 `PromptContentPart` 的三态）。
- *
- * 图片由宿主在准入时落盘；文件只传**回执 id**（浏览器造不出持久的附件引用）。
- */
-export type SubagentPromptContentPart =
-  | { readonly type: "text"; readonly text: string }
-  | {
-      readonly type: "image";
-      readonly mediaType: string;
-      readonly data: string;
-      readonly name?: string;
-    }
-  | { readonly type: "file"; readonly receiptId: string };
+// 内容片段的形状不在这里复制：上游 `SubagentPromptRequest["content"]` 就是它的唯一真源（纯类型引用）。
+import type { SubagentPromptRequest as UpstreamSubagentPromptRequest } from "@deepseek-ai/dsh-subagent";
+
+/** 一条 prompt 的内容片段（上游 `PromptContentPart`：text / image 两态，图片由宿主准入时落盘）。 */
+export type SubagentPromptContentPart = UpstreamSubagentPromptRequest["content"][number];
 
 /** `subagents/prompt` 的请求（上游 `SubagentPromptRequest`，wire 上是 `{ request }`）。 */
 export interface SubagentPromptRequest {
   /** 调用方先铸好的消息身份（落在被接受的那条消息上）。 */
   readonly requestId: string;
-  readonly parentSessionId: string;
+  /** 目标子会话（上游不再从请求里读父会话：树关系由宿主侧按会话解析）。 */
   readonly childSessionId: string;
-  /** 持续地址判别式：浏览器侧的控制地址只认这一个值。 */
-  readonly mode: "continuable";
   /** 这条消息排到下一轮还是投给最近的 step。 */
   readonly delivery: "queue" | "steer";
   readonly content: readonly SubagentPromptContentPart[];
@@ -52,15 +41,13 @@ export interface SubagentPromptValue {
   readonly messageId: string;
 }
 
-/** `subagents/interruptByParent` 的请求（上游是**三个命名参数**，不是 `{ request }`）。 */
-export interface SubagentInterruptByParentRequest {
+/** `subagents/interruptByUser` 的请求（上游是**一个命名参数** `childSessionId`，不是 `{ request }`）。 */
+export interface SubagentInterruptByUserRequest {
   readonly childSessionId: string;
-  readonly parentSessionId: string;
-  readonly mode: "continuable";
 }
 
-/** `subagents/interruptByParent` 的回执（上游 `SubagentInterruptReceipt`：只表示取消信号被受理）。 */
-export interface SubagentInterruptByParentValue {
+/** `subagents/interruptByUser` 的回执（上游 `SubagentInterruptReceipt`：只表示取消信号被受理）。 */
+export interface SubagentInterruptByUserValue {
   readonly accepted: true;
 }
 
@@ -78,14 +65,14 @@ export class SubagentsEndpoint {
   }
 
   /**
-   * 按「直接父地址」中断一个活着的子代理（父 agent 离线也可用）。
-   * @param _request - 子会话、父会话与判别式。
+   * 用户侧中断一个活着的子代理。
+   * @param _request - 目标子会话。
    * @returns 取消信号已受理（不代表目标已静止）。
    */
-  @RemoteMethod()
-  async interruptByParent(
-    _request: SubagentInterruptByParentRequest,
-  ): Promise<RemoteResultWire<SubagentInterruptByParentValue>> {
-    throw new Error("subagents/interruptByParent：契约类未实现（宿主侧要在子类里实现它）");
+  @RemoteMethod({ parameters: ["childSessionId"] })
+  async interruptByUser(
+    _request: SubagentInterruptByUserRequest,
+  ): Promise<RemoteResultWire<SubagentInterruptByUserValue>> {
+    throw new Error("subagents/interruptByUser：契约类未实现（宿主侧要在子类里实现它）");
   }
 }

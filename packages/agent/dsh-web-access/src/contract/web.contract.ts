@@ -25,4 +25,10 @@ export abstract class Web {
   abstract readonly fetchReady: WebRuntimeService["fetchReady"];
 
   abstract readonly searchReady: WebRuntimeService["searchReady"];
+
+  /** 当前可用的搜索 / 抓取 provider（诊断与选择器用）。 */
+  abstract readonly listProviders: WebRuntimeService["listProviders"];
+
+  /** 上游基类挂的 remote 绑定（gateway 靠它发现端点）。 */
+  abstract readonly typertRemote: WebRuntimeService["typertRemote"];
 }

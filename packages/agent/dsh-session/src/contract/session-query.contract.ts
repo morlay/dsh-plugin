@@ -130,4 +130,6 @@ export abstract class SessionQuery {
   abstract readEvent(
     ...args: Parameters<SessionQueryEngine["readEvent"]>
   ): ReturnType<SessionQueryEngine["readEvent"]>;
+
+  abstract inspectSession: SessionQueryEngine["inspectSession"];
 }

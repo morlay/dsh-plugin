@@ -65,14 +65,6 @@ class FakeAgentDirectory extends AgentDirectory {
     return this.notWired();
   }
 
-  get isOwnedBy(): AgentDirectory["isOwnedBy"] {
-    return this.notWired();
-  }
-
-  get roots(): AgentDirectory["roots"] {
-    return this.notWired();
-  }
-
   get turnBoundaryOf(): AgentDirectory["turnBoundaryOf"] {
     return this.notWired();
   }

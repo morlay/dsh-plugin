@@ -10,6 +10,8 @@ export type { SessionFormatHeader } from "@deepseek-ai/dsh-session-format";
 export { sessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
 /** 从日志文件名认出它是第几代格式（认不出给 `undefined`，纯函数）。 */
 export { parseSessionFormatLogFilename } from "@deepseek-ai/dsh-session-format";
+/** 一份格式目录：若干代格式与迁移链组成的可读旧日志的目录。 */
+export type { SessionFormatCatalog } from "@deepseek-ai/dsh-session-format";
 /** 把「本代格式 + 各代迁移」组成一个可读旧日志的格式目录（纯函数）。 */
 export { createSessionFormatCatalogWithChildren } from "@deepseek-ai/dsh-session-format-catalog";
 /** 本仓当前这一份格式目录实例。 */

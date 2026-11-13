@@ -22,4 +22,4 @@ export * from "./mcp-client.decorator.ts";
 export * as Events from "./events.ts";
 
 // 子代理的**请求形状**（上游 `dsh-subagent` 的公开类型）：属 agent 域的契约面，下游从这里取。
-export type { SubagentPromptRequest } from "@deepseek-ai/dsh-subagent";
+export type { SubagentPromptRequest, SubagentPromptRequestId } from "@deepseek-ai/dsh-subagent";

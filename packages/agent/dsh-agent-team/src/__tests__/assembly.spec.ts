@@ -52,9 +52,12 @@ describe("Agent Teams 的装配", () => {
   it("两行都装得上，服务面是上游 TeamService 的实例", async () => {
     const app = await bootstrapApplication({ providers: providers() as never, timeoutMs: 60_000 });
     opened.push(app);
-    const teams = app.get(TeamServiceDefault) as unknown as { membership?: unknown };
-    // 适配行的契约面由上游实例兑现——不是空壳。
-    expect(typeof teams.membership).toBe("function");
+    // 适配行的契约面由上游实例兑现——不是空壳（`TeamService` 的成员名上游会动，
+    // 所以判「它确实是我们契约的实现」，不锁具体成员）。
+    // 上游 `TeamService` 是 cordis `Service` 子类：服务名就是它注册的名字（成员名上游会动，
+    // 所以判「注册名对得上」，不锁具体成员）。
+    const teams = app.get(TeamServiceDefault) as { name?: string };
+    expect(teams.name).toBe("agentTeams");
     expect(app.get(ToolAgentTeam)).toBeDefined();
   });
 

@@ -27,10 +27,9 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
-    "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.1-rc.1 < 0.2.2"
+    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
   }
 }

@@ -45,6 +45,13 @@ const UNASSEMBLED_TOOLS: readonly string[] = [
   "session_event_trace",
   "session_search",
   "session_trace",
+  // Office 技能加载后才出现的三条（`document/tool-office`）：本部署不装那条技能行。
+  "office_convert",
+  "office_recalculate",
+  "office_render",
+  // 终端面板（`experimental/terminal-panel`）：本部署不装那条实验行。
+  "user_terminal_list",
+  "user_terminal_read",
 ];
 
 // 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
@@ -62,6 +69,8 @@ const UNGATED_SECTIONS: readonly string[] = [
   // computer-use / browser-use 两条实验行的说明：本部署不装它们。
   "browser-use:stagehand-native",
   "computer-use:cua-driver-native",
+  // 终端面板（`experimental/terminal-panel`）的说明：本部署不装那条实验行。
+  "tool:pty-panel",
 ];
 
 // 每个组声明丢弃自己那批上游说明；平台噪音与未装配工具的说明由通道的默认清单丢弃。

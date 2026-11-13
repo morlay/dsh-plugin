@@ -40,4 +40,7 @@ export abstract class SandboxPolicy {
   abstract readonly overrideOf: SandboxPolicyService["overrideOf"];
 
   abstract readonly additionalWritableRoots: SandboxPolicyService["additionalWritableRoots"];
+
+  /** 运行期追加一个可写根（返回撤销它自己的 disposer）。 */
+  abstract readonly registerWritableRoot: SandboxPolicyService["registerWritableRoot"];
 }
