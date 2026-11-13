@@ -17,6 +17,7 @@ import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { CliError } from "@morlay/zephyr-cli";
 import { packagedBootstrap } from "./desktop-dirs.ts";
 import type { ElectronBuilderConfig } from "./electron-builder.ts";
+import { assertRuntimeSmoke, resourcesDirOf } from "./runtime-smoke.ts";
 
 const run = promisify(execFile);
 
@@ -87,7 +88,48 @@ export class PackagerDefault extends Packager {
       `electron-builder 归档（asar）→ ${config.directories.output}`,
       () => module.build?.({ config, dir: true }) ?? Promise.resolve([]),
     );
-    return { appDir: outputs[0] ?? (await discoverAppDir(config.directories.output)) };
+    const appDir = outputs[0] ?? (await discoverAppDir(config.directories.output));
+    const runtimeDir = join(await resourcesDirOf(appDir), "runtime");
+    // **闭包直接 deploy 到产物里**（不 cp 整个 node_modules）：deploy 只装一次、且 pnpm 的相对链原样保留。
+    // 用 cp 的两个问题：慢（按应用的闭包近 1G），以及默认会把链接目标解析成绝对路径——装出来的
+    // 应用因此指回构建机的源码树，冒烟在 `.app` 内直接报「逃逸链接」。
+    await this.step(input.logFile, `部署运行时闭包（pnpm deploy → ${runtimeDir}）`, async () => {
+      await rm(runtimeDir, { recursive: true, force: true });
+      await run(
+        "pnpm",
+        [
+          "--filter",
+          input.appPackage,
+          "--config.inject-workspace-packages=true",
+          "deploy",
+          "--prod",
+          // **不跑安装脚本**：原生包（koffi / better-sqlite3 之类）在发布物里带预编译产物，打包期再
+          // 跑一次 install 既慢又会在没有工具链的机器上直接失败（实测 koffi 的 cnoke 退出 1）。
+          "--ignore-scripts",
+          "--config.strictDepBuilds=false",
+          runtimeDir,
+        ],
+        { cwd: await workspaceRootOf(), maxBuffer: 64 * 1024 * 1024 },
+      );
+    });
+    // deploy 只产出「包自己文件 + node_modules」；构建产物（单文件入口）由这里补进去。
+    await this.step(input.logFile, "复制构建产物进闭包（entry.mjs）", async () => {
+      await cp(join(input.profileDir, "entry.mjs"), join(runtimeDir, "entry.mjs"), {
+        verbatimSymlinks: true,
+      });
+    });
+    // 装完先证明它自包含：不自包含的包装出来是「双击没反应」。
+    await this.step(input.logFile, "打包期冒烟：闭包自包含 + 入口能被 loader 加载", async () => {
+      await this.note(input.logFile, `[bundle] 冒烟对象：${runtimeDir}`);
+      const report = await assertRuntimeSmoke(runtimeDir);
+      const escaping = report.links.filter((link) => !link.inside).length;
+      await this.note(
+        input.logFile,
+        `[bundle] 闭包链接：${String(report.links.length)} 个，逃逸 ${String(escaping)} 个`,
+      );
+      return runtimeDir;
+    });
+    return { appDir };
   }
 
   /**

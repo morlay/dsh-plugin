@@ -17,15 +17,29 @@ zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例
 
 壳的两种形态与吵闹程度**都由外部环境决定**，中间逻辑（菜单、装配、宿主）不为某个形态改分支：
 
-| 变量                                     | 取值               | 作用                                                                                             |
-| ---------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
-| `ZEPHYR_DESKTOP_MODE`                    | `dev` / `packaged` | dev：窗口只当浏览器，页面走工作区 dev server；packaged：页面与宿主都在随包产物里                 |
-| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`          | 调试面：渲染进程 console 转发 + DevTools + 菜单里的 Reload / DevTools 项（`desktop dev` 默认 1） |
-| `ZEPHYR_DESKTOP_NO_SANDBOX`              | `1`                | 受限环境（容器/无 GPU）下关沙箱并停用硬件加速，必须在 ready 之前                                 |
-| `ZEPHYR_DESKTOP_URL`                     | URL                | dev 形态加载哪个页面                                                                             |
-| `ZEPHYR_DESKTOP_WORKSPACE` / `_DATA_DIR` | 路径               | 宿主清单需要的部署值                                                                             |
+| 变量                                     | 取值                       | 作用                                                                                             |
+| ---------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `ZEPHYR_DESKTOP_MODE`                    | `dev` / `packaged`         | dev：窗口只当浏览器，页面走工作区 dev server；packaged：页面与宿主都在随包产物里                 |
+| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`                  | 调试面：渲染进程 console 转发 + DevTools + 菜单里的 Reload / DevTools 项（`desktop dev` 默认 1） |
+| `ZEPHYR_DESKTOP_NO_SANDBOX`              | `1`                        | 受限环境（容器/无 GPU）下关沙箱并停用硬件加速，必须在 ready 之前                                 |
+| `ZEPHYR_DESKTOP_URL`                     | URL                        | dev 形态加载哪个页面                                                                             |
+| `ZEPHYR_DESKTOP_WORKSPACE` / `_DATA_DIR` | 路径                       | 宿主清单需要的部署值                                                                             |
+| `ZEPHYR_DESKTOP_DATA_DIR_SPEC`           | `workspace` / `xdg` / 路径 | 数据根的原始写法（`desktop dev` 递进来；启动行原样报出来，壳不推断）                             |
 
 调试面的实现只有一处：[`src/debug.ts`](./src/debug.ts)（`log` / `renderer` 受开关控制，`fail` 不受）。
+
+## 启动时的路径行
+
+壳在**把 mode 交给应用之前**打一行（stderr，不受调试面开关控制）：
+
+```text
+[desktop-shell] mode=… workspace=… profileDir=… dataDir=… dataDirSpec=… userData=… packaged=…
+```
+
+字段与 CLI 侧的 `[cli-mode]` / `[app-env]` 同名同序，两行并排就能看出三形态（`desktop dev`、打包后的 app、
+`zephyr dev`）各自的装配根与缓存根为什么不同。`userData` 取 Electron 的 `app.getPath("userData")`（拿不到写 `?`），
+`packaged` 是 `ZEPHYR_DESKTOP_PACKAGED=1` 的判定结果。这一行只说壳算出的值，不改解析。
+实现在 [`src/deployment-line.ts`](./src/deployment-line.ts)。
 
 ## 纯逻辑出口
 

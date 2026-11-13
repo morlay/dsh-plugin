@@ -20,7 +20,7 @@
     "@morlay/zephyr-app": "workspace:^",
     "@morlay/zephyr-ui": "workspace:^",
     "smol-toml": "^1.9.0",
-    "zod": "4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@morlay/better-session": "workspace:^",

@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import type { ProviderList } from "@morlay/zephyr";
 import type { CliModeValues, ZephyrDesktopConfig } from "@morlay/zephyr-cli";
 import { shellDebugOf } from "./debug.ts";
+import { deploymentLineOf } from "./deployment-line.ts";
 import type { ElectronLike, ElectronWindow } from "./electron-like.ts";
 import { reportEvent, reportFailure } from "./failure.ts";
 import { DESKTOP_IPC } from "./ipc.ts";
@@ -142,6 +143,7 @@ async function start(): Promise<void> {
   // dev 形态：窗口只是一个浏览器，页面与资源全走工作区的 dev server（vite）。
   // 这条路上不装 TS loader、不装配宿主——宿主在 `zephyr dev` 那个进程里，壳不该跑两份。
   if (dev) {
+    await reportDeployment();
     await openWindow(desktop, process.env.ZEPHYR_DESKTOP_URL ?? "http://127.0.0.1:3080/");
     return;
   }
@@ -155,8 +157,9 @@ async function start(): Promise<void> {
   // **与宿主共用同一份 `@morlay/zephyr`**：从闭包里解析（`runtime/node_modules`）。壳自己那份会在
   // 同进程里形成第二套服务令牌表——症状是 `service "remote-descriptor" has been registered at <root>`。
   const { bootstrapApplication } = await importZephyr(runtimeDir);
+  const mode = await reportDeployment();
   hostApp = await bootstrapApplication({
-    providers: [...(await reportEvent("start：装配宿主清单").then(hostProviders))],
+    providers: [...(await reportEvent("start：装配宿主清单").then(() => hostProviders(mode)))],
     timeoutMs: 60_000,
   });
 
@@ -318,6 +321,47 @@ function resourcesPath(): string {
 }
 
 /**
+ * 报一次壳侧的部署路径（**把 mode 交给应用之前**）：三形态（`desktop dev` / 打包后的 app /
+ * `zephyr dev`）各自的装配根与缓存根不同，同名包因此可能解析到不同版本。这一行与 CLI 侧的
+ * `[cli-mode]` 同字段，并排放就能对比；这里只说本层算出的值，不改解析。
+ *
+ * 两条都是**既有的**通道：stderr（终端里与 CLI 的行并排）与事件日志（打包形态没有 stderr，只剩文件）。
+ * @returns 交给应用的部署值（与打出来的是同一个对象）。
+ */
+async function reportDeployment(): Promise<CliModeValues> {
+  const mode = shellMode();
+  const line = deploymentLineOf({
+    form: dev ? "dev" : "packaged",
+    mode,
+    userData: currentUserData(),
+    packaged: isPackaged(),
+  });
+  process.stderr.write(`${line}\n`);
+  await reportEvent(line);
+  return mode;
+}
+
+/**
+ * 同进程的宿主看到的 `ZEPHYR_DESKTOP_PACKAGED` 是否为 `1`（打包形态在模块求值时打上）。
+ * @returns 是否打包形态。
+ */
+function isPackaged(): boolean {
+  return process.env.ZEPHYR_DESKTOP_PACKAGED === "1";
+}
+
+/**
+ * Electron 此刻认的 `userData`（启动行要打它：与部署值递进来的那个可能不同）。
+ * @returns 绝对路径；`app.getPath` 拿不到就是 `undefined`（启动行里写 `?`）。
+ */
+function currentUserData(): string | undefined {
+  try {
+    return electron.app.getPath("userData");
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 读部署值里的 userData（Electron 的 profile：页面存储、窗口状态、快捷键、粘住的页面端口）。
  *
  * 缺了就是装配错误：这个值只有 `zephyr-desktop-bundle` 一处能算（见目录契约），壳不自己拼。
@@ -371,9 +415,10 @@ async function importZephyr(runtimeDir: string): Promise<{
 
 /**
  * 宿主行（应用清单）：打包形态读闭包里的入口。
+ * @param mode - 壳侧的部署值（本函数不改它，原样交给入口）。
  * @returns 提供清单。
  */
-async function hostProviders(): Promise<ProviderList> {
+async function hostProviders(mode: CliModeValues): Promise<ProviderList> {
   // 宿主入口在 **asar 之外**的 `Resources/runtime`（闭包根，与壳的工作目录同一处）。
   const entry =
     process.env.ZEPHYR_DESKTOP_HOST_ENTRY ?? join(resourcesPath(), "runtime", "entry.mjs");
@@ -385,7 +430,7 @@ async function hostProviders(): Promise<ProviderList> {
   // 入口可以导出**清单**或 **(mode) => 清单**：部署值（工作区、数据目录）只有它知道怎么用。
   const providers =
     typeof exported === "function"
-      ? (exported as (mode: CliModeValues) => ProviderList)(shellMode())
+      ? (exported as (mode: CliModeValues) => ProviderList)(mode)
       : exported;
   if (!Array.isArray(providers)) {
     throw new Error(`${entry} 没有导出 provider 清单（默认导出 / providers / (mode) => 清单）。`);
@@ -406,7 +451,9 @@ function shellMode(): CliModeValues {
       workspace: fromEnv,
       profileDir: fromEnv,
       dataDir: requireDataDir(),
-      dataDirSpec: "workspace",
+      // 原始写法由 CLI 递进来（`desktop dev` 知道用户写的是 `--data-dir xdg` 还是 `workspace`）；
+      // 没给时退回历史缺省值，壳不自己推断。
+      dataDirSpec: process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC ?? "workspace",
       configFile: "",
     };
   }

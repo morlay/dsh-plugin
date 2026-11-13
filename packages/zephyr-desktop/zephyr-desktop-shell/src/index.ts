@@ -20,4 +20,5 @@ export { menuTemplateOf, type MenuItemSpec, type MenuTemplateInput } from "./men
 export { navigationPlanOf, type NavigationPlan } from "./navigation.ts";
 export { focusWindowOf, type FocusOutcome, type FocusTarget } from "./single-instance.ts";
 export { shellDebugOf, type ShellDebug } from "./debug.ts";
+export { deploymentLineOf, type DeploymentLineInput } from "./deployment-line.ts";
 export type { ElectronLike, ElectronWebContents, ElectronWindow } from "./electron-like.ts";

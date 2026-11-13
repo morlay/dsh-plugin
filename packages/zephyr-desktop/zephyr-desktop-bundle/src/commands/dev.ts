@@ -105,6 +105,9 @@ export class DesktopDevCommand extends Command {
         ZEPHYR_DESKTOP_USER_DATA: userData,
         ZEPHYR_DESKTOP_WORKSPACE: this.mode.workspace,
         ZEPHYR_DESKTOP_DATA_DIR: this.mode.dataDir,
+        // 数据根的**原始写法**（workspace / xdg / 绝对路径）：壳把它如实报进启动行，
+        // 同名包解析到不同版本时，才看得出缓存根是按哪种口径算的。
+        ZEPHYR_DESKTOP_DATA_DIR_SPEC: this.mode.dataDirSpec,
         // 宿主入口：dev 形态是工作区的服务端入口（源码面），由 loader 转译。
         // 必须用**同一个** `port` 变量（dev server 拿到的 `PORT` 也是它）；写 `mode.port ?? 3080`
         // 会在随机端口下把壳指向 3080，表现为 `ERR_CONNECTION_REFUSED`。

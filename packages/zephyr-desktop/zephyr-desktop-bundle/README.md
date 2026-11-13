@@ -32,6 +32,16 @@ export default {
 打包时还会写一个 `bootstrap.mjs`（`main` 的第一跳）：Finder 启动没有环境变量，而 `userData` 只能在 ready
 之前设——启动器在那一刻算出部署值交给壳。
 
+宿主闭包**不在 electron-builder 里复制**：打包之后用 `pnpm deploy` 直接装到
+`Contents/Resources/runtime`（比 `cp` 整个闭包快一个量级：实测 12.1s vs 33.9s，且 pnpm 的相对链原样保留），
+再把构建产物 `entry.mjs` 补进去；deploy 带 `--ignore-scripts`，原生包用发布物里自带的预编译产物。
+
+打完会跑一次**打包期冒烟**（`src/runtime-smoke.ts`）：`node_modules/@morlay/*` 的 symlink 允许（pnpm 的
+顶层本来就是相对链指进闭包内 `.pnpm`），但 realpath 必须落在 `Resources/runtime` 内——**逃逸的链接**才红；
+清单依赖（加壳与 loader 两项）必须能从闭包解析（只给子路径导出的包按清单存在性算「装好了」）；
+`entry.mjs` 必须在闭包自己的 loader 下加载得起来。任一不成立直接抛 `CliError`（写进 `bundle.log`，含
+「链接 N 个、逃逸 M 个」）——不自包含的包装出来只会是「双击没反应」；这里不补装、不逐个实体化依赖。
+
 ## 桌面用户数据（`userDataDir`）
 
 Electron 的 `userData` 是浏览器 profile：页面存储、窗口状态、快捷键配置，以及粘住的页面端口

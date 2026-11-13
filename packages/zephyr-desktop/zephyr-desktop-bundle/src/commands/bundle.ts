@@ -79,6 +79,26 @@ export class BundleCommand extends Command {
    * @returns 退出码。
    */
   async run(input: CommandInput): Promise<number> {
+    try {
+      return await this.bundleAll(input);
+    } catch (error) {
+      // 打包链（含 electron-builder 与打包期冒烟）任何一步失败都必须让 CLI **非 0**。
+      // electron-builder 跑在同一个进程里、退出码由 Node 最后读 `process.exitCode`：这里立即写一次，
+      // 并在 `beforeExit` 阶段重申一次——否则失败可能被后续异步代码盖回 0（实测踩过：日志红了、退出码 0）。
+      process.exitCode = 1;
+      process.once("beforeExit", () => {
+        process.exitCode = 1;
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 真正的打包流程（构建 → 身份与图标 → 配置推导 → 打包 → 可选安装）。
+   * @param input - 参数（目前只有 `--install`）。
+   * @returns 退出码。
+   */
+  private async bundleAll(input: CommandInput): Promise<number> {
     const layout = this.resolved.layout;
     // **无条件先构建**：包里装的是构建产物（`entry.mjs`、`dist/`），而"有没有现成产物"判断不出它是否
     // 与当前源码一致——用旧产物打出来的包会带着已经改掉的代码（实测踩过：改了宿主装配面，bundle 却

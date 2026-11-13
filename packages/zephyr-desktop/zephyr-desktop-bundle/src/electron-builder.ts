@@ -3,9 +3,8 @@
 // 三件事在这里定死：
 //   1. 产物落在 `.zephyr/app/`（与 dist / runtime 同级，整目录可删）；
 //   2. asar 打开，只有 native（`*.node`）拆到 `app.asar.unpacked`；
-//   3. 宿主闭包**就在 asar 里**（app 目录 = 按应用依赖 deploy 的结果）：asar 补丁让 fs 与 import
-//      照常读它，打包形态的 AppEnv 因此指向 `app.asar` 本身；静态面走 `extraResources`（asar 外）。
-import { cp } from "node:fs/promises";
+//   3. **运行时不在这里复制**：宿主闭包由 `PackagerDefault` 直接 `pnpm deploy` 到
+//      `Resources/runtime`（快，且保留 pnpm 的相对链），这里只放静态面与身份文件。
 import { join } from "node:path";
 import type { PreparedIcons } from "./icons.ts";
 import type { ResolvedConfig } from "@morlay/zephyr-cli";
@@ -31,14 +30,6 @@ export interface ElectronBuilderConfig {
   readonly directories: { readonly output: string };
   readonly files: readonly string[];
   readonly extraResources: readonly { readonly from: string; readonly to: string }[];
-  /** 打包后把宿主闭包放到 `Resources/runtime`（真目录：壳要 `chdir` 进去）。 */
-  readonly afterPack: (context: {
-    readonly appOutDir: string;
-    readonly packager: {
-      readonly platform: { readonly name: string };
-      readonly appInfo: { readonly productFilename: string };
-    };
-  }) => Promise<void>;
   readonly mac: {
     readonly category: string;
     readonly identity: null;
@@ -86,25 +77,9 @@ export function electronBuilderConfigOf(input: ElectronBuilderInput): ElectronBu
     // 壳的 `node_modules` 由 electron-builder 按 `package.json` 的 dependencies 自己收集（app 目录是
     // `pnpm --filter 壳 deploy` 的产物，依赖图完整）。
     files: ["dist/**", "bootstrap.mjs", "entry.mjs", "package.json"],
-    /**
-     * 打包后把**宿主闭包**放到 `Contents/Resources/runtime`（asar 之外的**真目录**）。
-     *
-     * 两个原因：electron-builder 的默认忽略规则会跳过其中的 node_modules（走 `extraResources` 只会
-     * 得到一个空目录）；更关键的是**壳要 `chdir` 到它**——应用拿 `process.cwd()` 当装配根，而
-     * `chdir` 进不了 asar（它不是真目录）。
-     */
-    afterPack: async (context) => {
-      const resources =
-        context.packager.platform.name === "mac"
-          ? join(
-              context.appOutDir,
-              `${context.packager.appInfo.productFilename}.app`,
-              "Contents",
-              "Resources",
-            )
-          : join(context.appOutDir, "resources");
-      await cp(input.layout.runtime, join(resources, "runtime"), { recursive: true });
-    },
+    // 宿主闭包**不在这里**：`PackagerDefault` 在打包之后直接 `pnpm deploy` 到 `Resources/runtime`
+    // （真目录，壳要 `chdir` 进去；asar 里不行）。走 deploy 而不是 `cp` 的两个理由：快，且 pnpm 的
+    // 相对链原样保留——`cp` 默认会把链接目标解析成绝对路径，装出来的应用就指回构建机的源码树。
     // 静态面与身份文件放 asar 外：按路径读它们的东西（宿主、将来按路径取页面的消费者）不必依赖 asar 补丁。
     // 页面链现在走宿主自己的 vite（见设计「桌面功能面」第七节的债）：这份 `dist` 目前没有读者。
     extraResources: [
