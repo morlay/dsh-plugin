@@ -51,7 +51,7 @@ export function fakeBuildSteps(): BuildSteps & { readonly calls: BuildInput[] } 
   const record = async (input: BuildInput): Promise<void> => {
     calls.push(input);
   };
-  return { calls, client: record, runtime: record, entry: record };
+  return { calls, client: record, runtime: record, entry: record, prebundle: record };
 }
 
 /**

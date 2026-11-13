@@ -9,7 +9,7 @@ import { CliMode, type CliModeValues } from "../mode.ts";
 import { fakeBuildSteps, resolvedFor, tempWorkspace } from "../testing/index.ts";
 
 describe("build 命令（装配级）", () => {
-  it("把三步交给步骤替身，并按步汇总", async () => {
+  it("把四步交给步骤替身，并按步汇总", async () => {
     const workspace = await tempWorkspace({});
     const resolved = resolvedFor({ workspace });
     const mode: CliModeValues = {
@@ -42,8 +42,8 @@ describe("build 命令（装配级）", () => {
       expect(command).toBeDefined();
       const code = await command?.run({ params: {}, rest: [], mode });
       expect(code).toBe(0);
-      // 三步各一次（顺序由 runBuild 保证）
-      expect(steps.calls).toHaveLength(3);
+      // 四步各一次（顺序由 runBuild 保证）：静态面 / 运行时闭包 / 入口 bundle / 前端预编译
+      expect(steps.calls).toHaveLength(4);
       expect(lines.join("\n")).toContain("静态面");
       expect(lines.join("\n")).toContain("完成");
     } finally {

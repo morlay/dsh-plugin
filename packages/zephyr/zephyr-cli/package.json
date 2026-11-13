@@ -51,7 +51,8 @@
   },
   "dependencies": {
     "@morlay/dsh-oxc-node": "workspace:^",
-    "@morlay/zephyr": "workspace:^"
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
