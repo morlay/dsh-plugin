@@ -19,6 +19,7 @@
  * 用法：随进程启动挂上（壳的入口 `import` 它；宿主用 `--import`），本模块只做注册、没有导出。
  */
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createRequire, registerHooks } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -53,6 +54,10 @@ registerHooks({
     const original = readFileSync(path, "utf8");
     // oxlint-disable-next-line node/no-sync -- 钩子契约要求同步。
     const result = transformSync(path, original, {
+      // **cwd 指到没有 tsconfig 的目录**：oxc 会就近读 tsconfig 拿 `experimentalDecorators`，
+      // 那与下面的 `decorator.legacy` 是同一件事，于是逐文件打印 CONFIGURATION_FIELD_CONFLICT。
+      // 指到 tmpdir 后它读不到仓库根那份，冲突消失；legacy 仍由本选项显式给（对 node_modules 里的 .ts 也成立）。
+      cwd: tmpdir(),
       sourcemap: false,
       // `es2022`：装饰器要在这里降级（`esnext` 会把 `@dec` 原样留着，而 Node 不认它——报出来是一句没头没尾
       // 的 `SyntaxError: Invalid or unexpected token`）；顶层 await 在 es2022 就有，保得住。

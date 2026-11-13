@@ -53,3 +53,10 @@ loader 只有 `register.mjs` 一个文件：它拥有「把 `.ts` 变成 Node �
 ## 八、开放问题
 
 - 「依赖版本线 + loader 冒烟」要不要挂进 `just lint` / CI？现在只有本文件的口头判据，靠人记。
+
+## 九、装饰器告警：cwd 指向没有 tsconfig 的目录（取舍）
+
+- **现象**：每个文件一行 `CONFIGURATION_FIELD_CONFLICT`——根 `tsconfig.json` 的 `experimentalDecorators: true` 与 transform 的 `decorator.legacy` 声明同一件事。
+- **选择 B（已实现）**：保留 `decorator: { legacy: true }`，给 transform 的 options 加 `cwd: tmpdir()`，让 oxc 就近读不到仓库根那份 tsconfig；legacy 仍由选项显式给，对 `node_modules` 里的 `.ts`（祖先链没有 tsconfig）同样成立。
+- **为什么不选 A（去掉 legacy 靠 tsconfig）**：`node_modules` 下的 `.ts` 没有祖先 tsconfig，去掉选项后它们的 legacy 装饰器不再降级——这正是原本要显式写 legacy 的理由。
+- **cwd 的风险**：`cwd` 只影响 transform 选项里**相对路径**的解析；本 loader 传的都是绝对路径（`filename`/`source`），所以无影响。冒烟两条都在：①`dsh-agent/src/index.ts` 能加载、②`node_modules/@morlay/zephyr/src/token.ts`（带装饰器）能加载；两条 stderr 里 `CONFIGURATION_FIELD_CONFLICT` 计数都是 **0**。

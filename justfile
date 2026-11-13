@@ -46,14 +46,16 @@ fmt:
 lint:
     pnpm exec oxlint .
 
-# 结构性判据：面边界 / 上游包唯一化 / 声明未用依赖。有违规退出 1。
+# **逐包跑、根上汇总**：单包的判据（面边界、声明未用、本包用到的上游「面」、值边与双断言）由
+# `pnpm -r exec` 在各包目录里做；唯一化是跨包的（同一上游包的同一个面只能有一个本地 owner），
+# 由汇总器判。
 #
-# **逐包跑、根上汇总**：单包的判据（面边界、声明未用、本包用到的上游「面」）由 `pnpm -r exec` 在
-# 各包目录里做；唯一化是跨包的（同一上游包的同一个面只能有一个本地 owner），由汇总器判。
+# **走 pnpm 的 task graph**：包列表由 pnpm 的递归决定，**不另找一份**——`find`/`xargs` 那种绕行会把
+# "workspace 有环、pnpm 拒跑"变成"汇总器读到空输入"，判据假绿；汇总器对空输入直接退出 1 兜底。
+#
+# 结构性判据（面边界 / 唯一化 / 声明未用 / 扩展边界 / 类型纪律）：有违规退出 1。
 audit *args:
-    # 逐包跑：**不经过 pnpm 的 task graph**——workspace 有循环依赖时它会直接拒跑，汇总器读到空输入
-    # 就会"三项全绿"（判据假绿）。包列表用 find 拿，与 pnpm 的依赖图无关。
-    @bash -c 'root="$PWD"; for dir in $(find packages -mindepth 3 -maxdepth 3 -name package.json -not -path "*/node_modules/*" | xargs -n1 dirname | sort); do (cd "$dir" && node "$root/devpackages/audit/src/package-audit.ts"); done | pnpm exec dsh-audit-report {{args}}'
+    pnpm -r --filter './packages/*/*' exec node "{{ justfile_directory() }}/devpackages/audit/src/package-audit.ts" | pnpm exec dsh-audit-report {{args}}
 
 # 发布一律走 CI（见 `AGENTS.md` 红线：严禁本地 publish）。这一条只把红线说出来。
 publish:

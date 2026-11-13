@@ -7,15 +7,17 @@
 //
 // 目录遍历交给 pnpm（`--filter './packages/*/*'`），这里不自己找包。
 import { readdir, readFile, stat } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "oxc-parser";
 import {
   bridgeReason,
   isAllowedContractValueEdge,
   isContractOrEndpointFace,
+  isParentSpecifier,
   isTestPath,
   isUpstreamPackageRoot,
   keepReason,
+  subentryFaceOf,
 } from "./rules.ts";
 
 /** AST 节点（ESTree 形态）。 */
@@ -54,6 +56,8 @@ interface FileImports {
   readonly valueEdges: readonly string[];
   /** `(x as unknown) as T` 的处数（双断言）。 */
   readonly doubleAssert: number;
+  /** 以 `../` 开头的说明符（子入口面纪律：这些面只许 `./` 与包名/出口）。 */
+  readonly parentSpecs: readonly string[];
 }
 
 /**
@@ -74,6 +78,7 @@ async function importsOf(file: string): Promise<FileImports> {
       literals,
       valueEdges: [],
       doubleAssert: 0,
+      parentSpecs: [],
     };
   }
   const { program } = await parse(file, text);
@@ -81,6 +86,7 @@ async function importsOf(file: string): Promise<FileImports> {
   const dynamicSpecs = new Set<string>();
   const literals = new Set<string>();
   const valueEdges: string[] = [];
+  const parentSpecs: string[] = [];
   let doubleAssert = 0;
   const textOf = (node: unknown): string | undefined => {
     if (node === null || typeof node !== "object") return undefined;
@@ -96,6 +102,7 @@ async function importsOf(file: string): Promise<FileImports> {
       const spec = textOf(node["source"]);
       if (spec !== undefined) {
         staticSpecs.add(spec);
+        if (isParentSpecifier(spec)) parentSpecs.push(spec);
         // 值边：声明本身不是 `type`，且至少一个说明符不是 `type`；`import "x"` 这类副作用导入也算。
         const declarationKind = node["importKind"] ?? node["exportKind"];
         const specifiers =
@@ -132,7 +139,10 @@ async function importsOf(file: string): Promise<FileImports> {
     }
     if (node.type === "ImportExpression") {
       const spec = textOf(node["source"]);
-      if (spec !== undefined) dynamicSpecs.add(spec);
+      if (spec !== undefined) {
+        dynamicSpecs.add(spec);
+        if (isParentSpecifier(spec)) parentSpecs.push(spec);
+      }
       return;
     }
     if (node.type === "CallExpression") {
@@ -149,7 +159,15 @@ async function importsOf(file: string): Promise<FileImports> {
       if (spec !== undefined) literals.add(spec);
     }
   });
-  return { file, static: staticSpecs, dynamic: dynamicSpecs, literals, valueEdges, doubleAssert };
+  return {
+    file,
+    static: staticSpecs,
+    dynamic: dynamicSpecs,
+    literals,
+    valueEdges,
+    doubleAssert,
+    parentSpecs,
+  };
 }
 
 /**
@@ -329,7 +347,22 @@ if (group === "agent-ex") {
   }
 }
 
-// 5) 契约 / 端点面：上游包根的值边（`import type` / `export type` 不算）。判据见类型约束设计的判据 6。
+// 5) 子入口面（`src/<面>/**` 五个面）：禁**跨面**的相对导入——这些面是包的子出口，兄弟面的契约与令牌
+//    必须走包出口（`@morlay/<包>/contract`）；用 `../contract/` 够过去，同包的不同出口产物里就会各内联
+//    一份契约类/令牌（多份实例，令牌身份对不上）。面内的 `../` 合法；`__tests__` 豁免。基线见 `./rules.ts`。
+const subentryParentImports: string[] = [];
+for (const entry of imports) {
+  const face = subentryFaceOf(entry.file);
+  if (face === undefined || isTestPath(entry.file)) continue;
+  const faceRoot = join(cwd, "src", face);
+  for (const spec of entry.parentSpecs) {
+    const target = resolve(dirname(entry.file), spec);
+    if (target === faceRoot || target.startsWith(faceRoot + sep)) continue;
+    subentryParentImports.push(relative(cwd, entry.file) + "  " + spec);
+  }
+}
+
+// 6) 契约 / 端点面：上游包根的值边（`import type` / `export type` 不算）。判据见类型约束设计的判据 6。
 //    白名单在 `./rules.ts` 的 `CONTRACT_VALUE_EDGE_ALLOWLIST`（当前为空：先出报告）。
 const contractValueEdges: string[] = [];
 for (const entry of imports) {
@@ -342,7 +375,7 @@ for (const entry of imports) {
   }
 }
 
-// 6) 双断言 `as unknown as`：只许边界桥（白名单在 `./rules.ts`），测试不受限。判据见类型约束设计的判据 7。
+// 7) 双断言 `as unknown as`：只许边界桥（白名单在 `./rules.ts`），测试不受限。判据见类型约束设计的判据 7。
 const doubleAssertions: string[] = [];
 for (const entry of imports) {
   if (entry.doubleAssert === 0) continue;
@@ -356,6 +389,7 @@ console.log(
     exViolations,
     contractValueEdges,
     doubleAssertions,
+    subentryParentImports,
     // `--write` 要写回的就是这个目录。
     dir: cwd,
     // 包所在组（`packages/<group>/<name>`）：框架层（zephyr）共用上游 client 包是设计，不是冲突。

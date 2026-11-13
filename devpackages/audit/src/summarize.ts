@@ -3,7 +3,7 @@
 // `--write` 时把「声明未用」的依赖直接从各包 `package.json` 删掉（原 `trim-deps` 的职责，已收敛进来）。
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { baselineVerdict, TYPE_DISCIPLINE_BASELINE } from "./rules.ts";
+import { baselineVerdict, SUBENTRY_BASELINE, TYPE_DISCIPLINE_BASELINE } from "./rules.ts";
 
 /** 一条未用依赖。 */
 interface UnusedDep {
@@ -24,6 +24,8 @@ interface PackageReport {
   readonly contractValueEdges?: readonly string[];
   /** 白名单外的双断言（类型纪律判据 7）。 */
   readonly doubleAssertions?: readonly string[];
+  /** 子入口面里以 `../` 开头的导入（面纪律：只许 `./` 与包名/出口）。 */
+  readonly subentryParentImports?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -35,10 +37,14 @@ const reportsAll: PackageReport[] = input
   .map((line) => JSON.parse(line) as PackageReport);
 const reports = reportsAll.filter((report) => report.skipped !== true);
 
-// **空输入不能算通过**：pnpm 的 task graph 在 workspace 有循环依赖时会直接拒跑，
-// 汇总器读到空输入仍会打印三项 ✓（判据假绿）。这里如实报错。
+// **空输入不能算通过**：pnpm 的 task graph 在 workspace 有循环依赖时会直接拒跑，汇总器读到空输入仍会打印
+// 全绿（判据假绿）。走 pnpm 递归之后这一层是最后一道兜底——"没有报告"与"全被跳过"都按没跑起来处理。
 if (reportsAll.length === 0) {
-  console.error("✗ 没有任何包报告：判据没跑起来（检查 workspace 循环依赖 / 包列表）");
+  console.error("✗ 没有任何包报告：判据没跑起来（检查 pnpm 递归是否被 workspace 循环依赖挡住）");
+  process.exit(1);
+}
+if (reports.length === 0) {
+  console.error("✗ 全部包都被跳过（没有一个带 src/ 的包）：判据没跑起来");
   process.exit(1);
 }
 
@@ -138,6 +144,9 @@ const contractValueEdges = reports.flatMap((entry) =>
 const doubleAssertions = reports.flatMap((entry) =>
   (entry.doubleAssertions ?? []).map((line) => `${entry.pkg}  ${line}`),
 );
+const subentryParentImports = reports.flatMap((entry) =>
+  (entry.subentryParentImports ?? []).map((line) => `${entry.pkg}  ${line}`),
+);
 
 report("面边界（root→server/ui、ui→host、server→ui）", faces);
 report("上游包唯一化（同一上游包的同一个面只该有一个本地 owner）", conflicts);
@@ -145,6 +154,14 @@ report("声明未用（依赖清单 vs 源码/scripts/清单其它字段）", un
   hint: write ? "（已删除）" : "（`just audit --write` 一键删）",
 });
 report("扩展边界（agent-ex 只许 contract / testing / endpoint，且扩展之间零依赖）", exViolations);
+reportAgainstBaseline(
+  "子入口面禁跨面相对导入（src/{ui,client,server,compat,testing} 里共享契约走包出口；面内 ../ 合法、__tests__ 豁免）",
+  subentryParentImports,
+  {
+    current: subentryParentImports.length,
+    baseline: SUBENTRY_BASELINE["parent-import"],
+  },
+);
 reportAgainstBaseline(
   "契约 / 端点面上游值边（包根值导入；`import type` / `export type` 不算）",
   contractValueEdges,

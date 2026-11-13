@@ -202,3 +202,63 @@ export function baselineVerdict(current: number, baseline: number): BaselineVerd
   if (current < baseline) return "improvable";
   return "ok";
 }
+
+// ── 子入口面（`src/compat/**`、`src/testing/**` …）的相对导入纪律
+//
+// 子入口面是包的**子出口**：对外是一层门面，对内不该伸手进兄弟目录。所以这些面里只许 `./` 与
+// 包名/出口，跨目录的 `../` 一律禁——否则"面"退化成目录结构的一部分，改文件布局就破面向外契约。
+
+/**
+ * 被约束的子入口面目录名（`src/<面>/**`）。
+ *
+ * 五个面各是一个**子出口**：`ui` / `client`（浏览器半）、`server`（宿主半）、`compat` / `testing`
+ * （兼容层与测试面）。它们之间共享的契约与令牌必须走**包出口**（`@morlay/<包>/contract`），不能靠
+ * `../contract/…` 够过去——否则同一个出口的产物里会各内联一份契约类/令牌（多份实例，令牌身份也对不上）。
+ */
+export const SUBENTRY_FACES = ["ui", "client", "server", "compat", "testing"] as const;
+
+/**
+ * 这个文件落在哪个子入口面里。
+ * @param file 文件路径（Windows 分隔符也认）。
+ * @returns 面名；不在任何子入口面里则 `undefined`。
+ */
+export function subentryFaceOf(file: string): string | undefined {
+  const normalized = file.split("\\").join("/");
+  return SUBENTRY_FACES.find(
+    (face) =>
+      normalized.includes("/src/" + face + "/") || normalized.startsWith("src/" + face + "/"),
+  );
+}
+
+/**
+ * 这个文件是否落在某个子入口面里。
+ * @param file 文件路径（可含任意前缀，Windows 分隔符也认）。
+ */
+export function isSubentryFaceFile(file: string): boolean {
+  return subentryFaceOf(file) !== undefined;
+}
+
+/**
+ * 说明符是不是往父目录走（`../` / `../../` / `..`）。
+ *
+ * 只是**候选**：面内的 `../`（解析后仍在同一个 `src/<面>/` 下）是合法的——判据按解析结果定，
+ * 由调用方用面根比对。
+ * @param specifier 说明符原文。
+ */
+export function isParentSpecifier(specifier: string): boolean {
+  return specifier === ".." || specifier.startsWith("../");
+}
+
+/**
+ * 子入口面相对导入的**存量基线**（过渡：收敛后删，改回 0 容忍）。
+ *
+ * 177 是五个子入口面（`ui` / `client` / `server` / `compat` / `testing`）里业务代码**跨面**相对导入的处数
+ * （`../` 解析后落在同一个 `src/<面>/` 之外的；面内的 `../` 不算——那有 144 处，是合法的）。
+ * 大户是 `zephyr-app`（测试面装整应用）、`ui` → `../contract/` 与 `server` → `../contract/` 这类"够兄弟目录"的写法。
+ *
+ * 先把这笔债记下来、只挡增量；清到 0 时删掉这条常量与 `summarize.ts` 的对应判据，改回 0 容忍。
+ */
+export const SUBENTRY_BASELINE = {
+  /** 子入口面里**跨出面**的相对导入（`__tests__` 豁免；面内 `../` 不算）。 */
+  "parent-import": 177,
+} as const;

@@ -4,6 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   baselineVerdict,
   bridgeReason,
+  isParentSpecifier,
+  isSubentryFaceFile,
+  SUBENTRY_BASELINE,
+  SUBENTRY_FACES,
+  subentryFaceOf,
   isAllowedContractValueEdge,
   isContractOrEndpointFace,
   isTestPath,
@@ -106,6 +111,40 @@ describe("keepReason 冒烟（别让规则文件的两段互相踩）", () => {
 
   it("什么都没用到就能删", () => {
     expect(keepReason({ ...base, name: "@local/z" })).toBeUndefined();
+  });
+});
+
+describe("子入口面（相对导入纪律）", () => {
+  it("面判定认五个子入口面", () => {
+    for (const face of ["ui", "client", "server", "compat", "testing"]) {
+      expect(SUBENTRY_FACES).toContain(face);
+      expect(isSubentryFaceFile("packages/agent/dsh-x/src/" + face + "/index.ts"), face).toBe(true);
+      expect(subentryFaceOf("packages/agent/dsh-x/src/" + face + "/a/b.ts"), face).toBe(face);
+    }
+    expect(isSubentryFaceFile("src/testing/index.ts")).toBe(true);
+    // 不是子入口面的目录
+    expect(isSubentryFaceFile("packages/zephyr/zephyr/src/index.ts")).toBe(false);
+    expect(isSubentryFaceFile("packages/zephyr/zephyr/src/contract/index.ts")).toBe(false);
+    // 名字像但不是那个目录
+    expect(isSubentryFaceFile("packages/zephyr/zephyr/src/compatibility/x.ts")).toBe(false);
+    expect(isSubentryFaceFile("packages/zephyr/zephyr/src/ui-kit/x.ts")).toBe(false);
+  });
+
+  it("Windows 风格路径同样命中", () => {
+    expect(isSubentryFaceFile("packages\\zephyr\\zephyr\\src\\compat\\x.ts")).toBe(true);
+  });
+
+  it("只认往父目录走的说明符", () => {
+    expect(isParentSpecifier("../index.ts")).toBe(true);
+    expect(isParentSpecifier("../../client/x.ts")).toBe(true);
+    expect(isParentSpecifier("..")).toBe(true);
+    expect(isParentSpecifier("./index.ts")).toBe(false);
+    expect(isParentSpecifier("@morlay/zephyr")).toBe(false);
+    expect(isParentSpecifier("@morlay/zephyr/compat")).toBe(false);
+  });
+
+  it("子入口面的基线是正数（0 就该删基线了）", () => {
+    expect(SUBENTRY_BASELINE["parent-import"]).toBeGreaterThan(0);
   });
 });
 
