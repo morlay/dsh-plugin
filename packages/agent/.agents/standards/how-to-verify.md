@@ -4,13 +4,13 @@
 
 ## 命令
 
-| 场景     | 命令                                                                                                       |
-| -------- | ---------------------------------------------------------------------------------------------------------- |
-| 单包改动 | `pnpm exec vitest run packages/agent/<包>`                                                                 |
-| 本层回归 | `pnpm exec vitest run packages/agent`（当前 144 files / 837 tests，9 skipped，约 70s）                     |
-| 静态检查 | `pnpm exec oxlint packages/agent`（当前 0 errors）                                                         |
-| 结构判据 | `just audit`（面边界 / 上游包唯一化 / 声明未用 / 扩展边界；逐包跑，见 `justfile`）                         |
-| 构建     | `just build`（当前被包级环挡住：见[债务 包级依赖图有故意的环](../debts/20261030-包级依赖图有故意的环.md)） |
+| 场景     | 命令                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------- |
+| 单包改动 | `pnpm exec vitest run packages/agent/<包>`                                                  |
+| 本层回归 | `pnpm exec vitest run packages/agent`（当前 144 files / 837 tests，9 skipped，约 70s）      |
+| 静态检查 | `pnpm exec oxlint packages/agent`（当前 0 errors）                                          |
+| 结构判据 | `just audit`（面边界 / 上游包唯一化 / 声明未用 / 扩展边界；逐包跑，见 `justfile`）          |
+| 构建     | `just build`（全包；包级图无环——判据是 `pnpm -r --filter './packages/*/*' exec true` 通过） |
 
 ## 本层特有判据
 

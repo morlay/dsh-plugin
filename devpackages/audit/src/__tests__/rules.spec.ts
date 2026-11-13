@@ -32,6 +32,19 @@ describe("bridgeReason（双断言白名单）", () => {
     }
   });
 
+  it("Electron 边界桥只覆盖 desktop 壳的 app.ts", () => {
+    expect(bridgeReason("packages/zephyr-desktop/zephyr-desktop-shell/src/app.ts")).toContain(
+      "Electron",
+    );
+    // 同一个包里的其它文件不是这个桥（main.ts 里的断言要照报）
+    expect(
+      bridgeReason("packages/zephyr-desktop/zephyr-desktop-shell/src/main.ts"),
+    ).toBeUndefined();
+    expect(
+      bridgeReason("packages/zephyr-desktop/zephyr-desktop-bundle/src/app.ts"),
+    ).toBeUndefined();
+  });
+
   it("域内断言不在白名单：rdb/log/repair.ts 与业务服务都要报", () => {
     expect(bridgeReason("packages/agent-ex/better-session/src/rdb/log/repair.ts")).toBeUndefined();
     expect(

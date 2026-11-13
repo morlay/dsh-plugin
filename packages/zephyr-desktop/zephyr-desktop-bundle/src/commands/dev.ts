@@ -5,32 +5,19 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
-import { CliError, CliMode, Command, type CommandInput, type ParamSpecs } from "@morlay/zephyr-cli";
-
-/** 页面端口缺省值与 `WebServer` 一致（壳内的宿主就是它）。 */
-const DEFAULT_PORT = 3080;
-
-/**
- * 探一个空闲端口。
- *
- * 桌面同时开两个工作区、或者上一个 dev server 没退干净，固定端口就会撞；桌面形态因此**默认随机**
- * （`--port` 显式给了才用固定值）。
- * @returns 空闲端口。
- */
-async function freePort(): Promise<number> {
-  const net = await import("node:net");
-  return new Promise<number>((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address !== null ? address.port : DEFAULT_PORT;
-      server.close(() => resolve(port));
-    });
-  });
-}
+import {
+  CliError,
+  CliMode,
+  Command,
+  type CommandInput,
+  type ParamSpecs,
+  Workspace,
+} from "@morlay/zephyr-cli";
+import { appDataHomeOf, appRootOf, userDataDirOf } from "../desktop-dirs.ts";
+import { stickyPort } from "../page-port.ts";
 
 /** `zephyr desktop dev`。 */
 @Injectable({ multi: true })
@@ -43,6 +30,8 @@ export class DesktopDevCommand extends Command {
 
   private readonly mode = inject(CliMode);
 
+  private readonly resolved = inject(Workspace);
+
   private readonly logger = inject(Logger);
 
   /**
@@ -51,10 +40,18 @@ export class DesktopDevCommand extends Command {
   async run(_input: CommandInput): Promise<number> {
     const electron = resolveElectron();
     const shellMain = resolveShellMain();
+    // 部署值先备好：userData 不在产物根里，端口偏好也记在它下面。
+    const userData = await this.ensureUserData();
     // 页面与资源走 **dev server**（vite）：壳只当浏览器。壳内跑宿主那条路（单进程、无 vite）
     // 在第三方 CJS 包（zustand / immer）上会大面积 404——那是打包形态才需要验证的事。
-    // 缺省随机（避免与别的 dev server / 工作区抢端口）；`--port` 给了才固定。
-    const port = this.mode.port ?? (await freePort());
+    // 端口**粘住**上次用过的那个：origin 就是页面存储的身份，换了等于换一个浏览器；
+    // 被别的进程占着才重探（`--port` 显式给的优先，且不写回）。
+    const port = this.mode.port ?? (await stickyPort(userData));
+    this.logger.info(
+      "[desktop dev] 页面端口：%s（%s）",
+      String(port),
+      this.mode.port === undefined ? "粘住的端口，origin 因此稳定" : "--port 指定",
+    );
     const server = this.startDevServer(port);
     /**
      * 收尾：先收壳、再收 dev server，最后**自己退出**。
@@ -100,8 +97,7 @@ export class DesktopDevCommand extends Command {
         ZEPHYR_DESKTOP_DEBUG: process.env.ZEPHYR_DESKTOP_DEBUG ?? "1",
         // 与 dev server 子进程同一条约定：Node 侧的 TS 加载走本仓库的 loader。
         ...(loader === undefined ? {} : { NODE_OPTIONS: `--import ${loader}` }),
-        // userData 收到产物目录里（`node_modules` 下，可写且不进版本库）：默认位置在受限环境下不可写。
-        ZEPHYR_DESKTOP_USER_DATA: await this.ensureUserData(),
+        ZEPHYR_DESKTOP_USER_DATA: userData,
         ZEPHYR_DESKTOP_WORKSPACE: this.mode.workspace,
         ZEPHYR_DESKTOP_DATA_DIR: this.mode.dataDir,
         // 宿主入口：dev 形态是工作区的服务端入口（源码面），由 loader 转译。
@@ -127,21 +123,48 @@ export class DesktopDevCommand extends Command {
   }
 
   /**
-   * 产物根（`node_modules/.zephyr`）：壳的 userData 也放这里。
+   * 确保壳的 userData 目录存在（Electron 的 `setPath` 不会替你建目录）。
+   *
+   * 默认值 `<appData>/<desktop.id>/dev/electron`（**不住产物根**：`runBuild` 会整目录删掉
+   * `node_modules/.zephyr`）；**显式 `ZEPHYR_DESKTOP_USER_DATA` 优先**——多工作区并行、临时 profile
+   * 都靠它，不靠自动隔离。
    * @returns 绝对路径。
+   * @throws CliError 显式值为空且配置里没有 `desktop.id`（目录按它算）。
    */
-  private workspaceCache(): string {
-    return join(this.mode.workspace, "node_modules", ".zephyr");
+  private async ensureUserData(): Promise<string> {
+    const fromEnv = process.env.ZEPHYR_DESKTOP_USER_DATA;
+    const explicit = fromEnv === undefined || fromEnv === "" ? undefined : fromEnv;
+    const dir =
+      explicit ??
+      userDataDirOf(
+        appRootOf({
+          appDataHome: appDataHomeOf(process.env, process.platform, homedir()),
+          desktopId: this.desktopIdOf(),
+          form: "dev",
+        }),
+      );
+    await mkdir(dir, { recursive: true });
+    this.logger.info(
+      "[desktop dev] userData：%s（%s）",
+      dir,
+      explicit === undefined ? "缺省 <appData>/<desktop.id>/dev/electron" : "显式指定",
+    );
+    return dir;
   }
 
   /**
-   * 确保壳的 userData 目录存在（Electron 的 setPath 不会替你建目录）。
-   * @returns 绝对路径。
+   * 桌面身份的应用 id（应用根的第一段）。
+   * @returns 反向域名 id。
+   * @throws CliError 配置里没有 `desktop` 段。
    */
-  private async ensureUserData(): Promise<string> {
-    const dir = join(this.workspaceCache(), "electron-user-data");
-    await mkdir(dir, { recursive: true });
-    return dir;
+  private desktopIdOf(): string {
+    const desktopId = this.resolved.config.desktop?.id;
+    if (desktopId === undefined) {
+      throw new CliError(
+        "桌面形态需要 desktop.id：userData 的应用根按它算（或用 ZEPHYR_DESKTOP_USER_DATA 显式指定）。",
+      );
+    }
+    return desktopId;
   }
 
   /**

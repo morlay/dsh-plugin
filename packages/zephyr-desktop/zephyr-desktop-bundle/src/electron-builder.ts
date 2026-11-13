@@ -85,7 +85,7 @@ export function electronBuilderConfigOf(input: ElectronBuilderInput): ElectronBu
     // **逐项列，不用通配**（通配实测会漏件）：入口、壳产出的字节、清单。
     // 壳的 `node_modules` 由 electron-builder 按 `package.json` 的 dependencies 自己收集（app 目录是
     // `pnpm --filter 壳 deploy` 的产物，依赖图完整）。
-    files: ["dist/**", "entry.mjs", "package.json"],
+    files: ["dist/**", "bootstrap.mjs", "entry.mjs", "package.json"],
     /**
      * 打包后把**宿主闭包**放到 `Contents/Resources/runtime`（asar 之外的**真目录**）。
      *
@@ -105,9 +105,10 @@ export function electronBuilderConfigOf(input: ElectronBuilderInput): ElectronBu
           : join(context.appOutDir, "resources");
       await cp(input.layout.runtime, join(resources, "runtime"), { recursive: true });
     },
-    // 静态面放在 asar 外：宿主与自定义协议按路径读它们，不必依赖 asar 补丁。
+    // 静态面与身份文件放 asar 外：按路径读它们的东西（宿主、将来按路径取页面的消费者）不必依赖 asar 补丁。
+    // 页面链现在走宿主自己的 vite（见设计「桌面功能面」第七节的债）：这份 `dist` 目前没有读者。
     extraResources: [
-      // 静态面留在 asar 外：自定义协议按路径读它（`.node` 之外不需要走 asar）。
+      // 静态面留在 asar 外（`.node` 之外不需要走 asar）。
       { from: input.layout.dist, to: "dist" },
       // 窗口尺寸与应用身份要在壳里读得到：环境变量只覆盖 dev 形态，打包形态靠这份文件。
       { from: join(input.layout.root, "desktop.json"), to: "desktop.json" },

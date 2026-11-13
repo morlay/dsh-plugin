@@ -15,12 +15,16 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { CliError } from "@morlay/zephyr-cli";
+import { packagedBootstrap } from "./desktop-dirs.ts";
 import type { ElectronBuilderConfig } from "./electron-builder.ts";
 
 const run = promisify(execFile);
 
 /** 壳的包名（`dist/` 从这里取）。 */
 const SHELL_PACKAGE = "@morlay/zephyr-desktop-shell";
+
+/** 打包形态的启动器文件名（app 目录里，`main` 指它）。 */
+const BOOTSTRAP_FILE = "bootstrap.mjs";
 
 /** 一次打包的结果。 */
 export interface PackResult {
@@ -126,7 +130,10 @@ export class PackagerDefault extends Packager {
         }
       },
     );
-    await this.step(input.logFile, "改写闭包入口为壳的引导", async () => {
+    await this.step(input.logFile, "写打包形态的启动器（部署值 → 壳）并改入口", async () => {
+      // 启动器是第一跳：Finder 启动没有环境变量，而 `userData` 只能在 ready 之前 `setPath`。
+      // 算法只有 `desktop-dirs.ts` 一处（壳不自己拼 appData），这里只把源码落到 app 目录。
+      await writeFile(join(input.appDir, BOOTSTRAP_FILE), packagedBootstrap(), "utf8");
       const manifestPath = join(input.appDir, "package.json");
       const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
         main?: string;
@@ -140,7 +147,7 @@ export class PackagerDefault extends Packager {
       // `electron.app` 于是是 `undefined`（症状：启动即崩 `Cannot read properties of undefined (reading 'setPath')`）。
       // 版本已由 `electronVersion` 显式给出，不依赖它算。
       await rm(join(input.appDir, "node_modules", "electron"), { recursive: true, force: true });
-      manifest.main = "./dist/main.mjs";
+      manifest.main = `./${BOOTSTRAP_FILE}`;
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     });
   }

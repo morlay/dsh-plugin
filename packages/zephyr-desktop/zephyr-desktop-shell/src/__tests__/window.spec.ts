@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { windowFrameOf, windowOptionsOf } from "../window.ts";
+import { DEFAULT_WINDOW_SIZE, windowFrameOf, windowOptionsOf } from "../window.ts";
 
 describe("窗口外观（无标题栏）", () => {
   it("macOS：hiddenInset + 红绿灯内缩 + 侧栏材质", () => {
@@ -38,6 +38,22 @@ describe("窗口选项", () => {
     expect(options).toMatchObject({ width: 900, height: 700, minWidth: 800, minHeight: 600 });
   });
 
+  it("有上次关窗的状态：位置与尺寸都从它来（配置尺寸只管第一次启动）", () => {
+    const options = windowOptionsOf(
+      { id: "ai.x", name: "X", window: { width: 900, height: 700 } },
+      "darwin",
+      { state: { bounds: { x: 40, y: 60, width: 1000, height: 640 }, maximized: false } },
+    );
+    expect(options).toMatchObject({ x: 40, y: 60, width: 1000, height: 640 });
+  });
+
+  it("没有状态就不给位置（让 Electron 自己居中）", () => {
+    const options = windowOptionsOf(undefined, "darwin");
+    expect(options.x).toBeUndefined();
+    expect(options.y).toBeUndefined();
+    expect(DEFAULT_WINDOW_SIZE).toEqual({ width: 1280, height: 800 });
+  });
+
   it("渲染进程不拿 node 权限；有 preload 才挂桥", () => {
     // sandbox 关：ESM preload 与它不兼容（隔离由 contextIsolation + nodeIntegration:false 保证）。
     expect(windowOptionsOf(undefined, "darwin").webPreferences).toEqual({
@@ -45,8 +61,8 @@ describe("窗口选项", () => {
       nodeIntegration: false,
       sandbox: false,
     });
-    expect(windowOptionsOf(undefined, "darwin", "/x/preload.mjs").webPreferences.preload).toBe(
-      "/x/preload.mjs",
-    );
+    expect(
+      windowOptionsOf(undefined, "darwin", { preload: "/x/preload.mjs" }).webPreferences.preload,
+    ).toBe("/x/preload.mjs");
   });
 });

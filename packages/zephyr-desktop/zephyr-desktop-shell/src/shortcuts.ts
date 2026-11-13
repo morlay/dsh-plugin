@@ -12,7 +12,7 @@ import type {
   ShortcutRevision,
 } from "@deepseek-ai/dsh-client-shortcuts/protocol";
 import { DESKTOP_IPC } from "./ipc.ts";
-import type { ElectronLike } from "./provide.ts";
+import type { ElectronLike } from "./electron-like.ts";
 
 /** 一个窗口实例（类型从 `ElectronLike` 派生）。 */
 export type ShellWindow = InstanceType<ElectronLike["BrowserWindow"]>;

@@ -76,7 +76,6 @@
 
 - 不实现 `workspace/list`：列表靠 `follow` 的 baseline。
 - 债务 [建会话时 workspace 挂载失败不回滚 agent](../../../dsh-conversation/.agents/debts/20261030-建会话时-workspace-挂载失败不回滚-agent.md)。
-- 债务 [包级依赖图有故意的环](../../../.agents/debts/20261030-包级依赖图有故意的环.md)（`dsh-sandbox` 的 spec 拉 `dsh-agent-loop`）。
 
 ## 八、开放问题
 

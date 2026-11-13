@@ -129,6 +129,11 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     match: /(^|[\\/])src[\\/]rdb[\\/].*(rows|read-path|backend|log-import|migration)[^\\/]*\.ts$/u,
     reason: "rdb 行映射：另一头是 SQL 行（列值 → 域对象）",
   },
+  {
+    // 只覆盖 desktop 壳的这个文件：Electron 只在**它的**进程里存在，别包的 `src/app.ts` 不是这个桥。
+    match: /(^|[\\/])zephyr-desktop-shell[\\/]src[\\/]app\.ts$/u,
+    reason: "Electron 边界桥：Electron 内置模块、进程对象与 IPC 参数都没有本仓类型面",
+  },
 ];
 
 /**
@@ -164,7 +169,7 @@ export function isAllowedContractValueEdge(specifier: string): boolean {
 /**
  * 两条类型纪律判据的**存量基线**（过渡：收敛后删，改回 0 容忍）。
  *
- * 为什么要有：这两条的存量是**已接受的债**（记基线时：契约面值边 56 处、白名单外双断言 172 处），
+ * 为什么要有：这两条的存量是**已接受的债**（当前：契约面值边 56 处、白名单外双断言 169 处），
  * 0 容忍会把 `just audit` 长期弄红，判据就没人看了。基线只挡**增量**——超出才红，等于打印当前数，
  * 低于提示下调。
  *
@@ -174,8 +179,13 @@ export function isAllowedContractValueEdge(specifier: string): boolean {
 export const TYPE_DISCIPLINE_BASELINE = {
   /** 契约 / 端点面的上游包根值边（T5 收敛）。 */
   "contract-value-edge": 56,
-  /** 边界桥白名单外的 `as unknown as`（T4 收敛）。 */
-  "double-assertion": 172,
+  /**
+   * 边界桥白名单外的 `as unknown as`（T4 收敛）。
+   *
+   * 169 已扣掉 desktop 壳 `src/app.ts` 的 4 处 Electron 边界桥（Electron 内置模块 / 进程对象 /
+   * IPC 参数没有本仓类型面，见 `BRIDGES` 最后一条）——那 4 处此前计在 172 里，进白名单后随之下调。
+   */
+  "double-assertion": 169,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */

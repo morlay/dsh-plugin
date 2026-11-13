@@ -1,7 +1,7 @@
 {
   "name": "@morlay/zephyr-desktop-shell",
   "version": "0.0.1",
-  "description": "zephyr 桌面应用的 Electron 壳：自定义协议出页面、窗口与生命周期也做成装配行；由 @morlay/zephyr-desktop-bundle 打进应用目录。",
+  "description": "zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例、导航判据、preload 桥与生命周期都在一个进程里；由 @morlay/zephyr-desktop-bundle 打进应用目录。",
   "keywords": [
     "desktop",
     "dsh",
