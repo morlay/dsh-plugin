@@ -11,6 +11,9 @@ export * from "./conversation-client.contract.ts";
 // `SessionControllerCovered` 与 `api-session.contract` 重复，不在此重复导出。
 export {
   SessionController,
+  type SessionCatalog,
+  type SessionCatalogState,
+  type SessionRetainHandle,
   type SessionScope,
   type SessionView,
 } from "./session-controller.contract.ts";

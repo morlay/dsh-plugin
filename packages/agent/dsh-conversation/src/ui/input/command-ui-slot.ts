@@ -10,7 +10,7 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 // 上游 ui-commands 的适配基类在 command 域（那边 owning）：本行只补会话侧的注入。
 import { CommandUiRow } from "@morlay/dsh-command/ui";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { InputTriggers } from "./input.token.ts";
 import { COMMANDS_REMOTE_KEY } from "@morlay/dsh-command/endpoint";
 

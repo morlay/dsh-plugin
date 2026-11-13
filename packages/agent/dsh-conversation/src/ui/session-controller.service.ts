@@ -10,7 +10,7 @@ import { ClientSessions } from "@deepseek-ai/dsh-api-session-controller/src/clie
 import { inject, Injectable, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { CommandRunner } from "@morlay/dsh-command/endpoint";
 import { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
-import { SessionController } from "../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { LiveSessionRemotes } from "./remote-session.ts";
 import { SESSION_GROUP } from "@morlay/dsh-session/endpoint";
 

@@ -6,6 +6,9 @@
   secret-mask / subagent / trajectory / workflow-run / deliverables 的行由各域自己提供）、客户端 `SessionController`、
   以及 `provideSessions` / `provideSessionShell` / `provideSessionSlots` / `provideSessionShellSlots` /
   `provideSessionInputSlots` 五个装配面。
+- 设置面分**两条清单**（顺序是硬约束）：`provideSettingHost()` 只装入口行（`configForms` /
+  `settingsSchema` 的真实现），**必须在链之前**；`provideSettingUi()` 装页面位置与输入区的模型选择器，
+  **必须在链之后**（它读 `configForms` 的面）。
 - 端点聚合（`@morlay/dsh-conversation/server`）：会话端点（上游 `SessionController` 那一族）、会话引用、
   文件引用，以及 `toolResults/watch` 的宿主行。
 

@@ -11,7 +11,7 @@
 import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote, type RemoteCall } from "./support/fake-remote.ts";
 

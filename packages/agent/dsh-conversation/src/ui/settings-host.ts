@@ -12,7 +12,13 @@ export class SettingsHost extends fromCordis(ConfigForms, UiSettingsPlugin) {
   private readonly remote = inject(Remote);
 
   override async onInit(ctx: Context): Promise<void> {
-    await this.remote.$mount(SETTINGS_REMOTE);
+    // **失败点前移**：挂不上远端就整行走不完 apply，`ConfigForms` 不会注册，症状最后表现为
+    // 「没有提供者：ConfigForms」——离真正的原因很远。这里带上下文抛，指向端点而不是令牌。
+    try {
+      await this.remote.$mount(SETTINGS_REMOTE);
+    } catch (error) {
+      throw new Error(`设置远端 ${SETTINGS_REMOTE.package} 挂载失败`, { cause: error });
+    }
     await this.mount(ctx, undefined, {
       remote: this.remote,
       [SETTINGS_REMOTE_KEY]: this.remote,

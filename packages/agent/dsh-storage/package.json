@@ -12,10 +12,10 @@
   "dependencies": {
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-storage-json": "workspace:^",
     "@morlay/zephyr": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-storage-json": "workspace:^",
     "@morlay/dsh-storage": "workspace:^",
     "@morlay/zephyr-app": "workspace:^",
     "zod": "4.6.6"

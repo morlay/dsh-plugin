@@ -3,7 +3,7 @@ import * as UiWorkflowRunPlugin from "@deepseek-ai/dsh-client-ui-workflow-run/cl
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Slots } from "@morlay/zephyr-app/client";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
 import { UiConversation } from "./conversation.token.ts";
 

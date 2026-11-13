@@ -3,7 +3,7 @@ import * as UiReferencePlugin from "@deepseek-ai/dsh-client-ui-reference/client"
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiConversation } from "../conversation/conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { InputTriggers } from "../input/input.token.ts";

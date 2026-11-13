@@ -14,7 +14,7 @@ import {
   Remote,
   Slots,
 } from "@morlay/zephyr-app/client";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiConversation } from "./conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { UiSession } from "../ui-session.token.ts";

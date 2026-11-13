@@ -11,7 +11,7 @@ import { bootstrapApplication, Injectable, type App, type Context } from "@morla
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 
 /** 一行目录（上游 `session/list` 的 `{ items }`，必需字段齐全）。 */

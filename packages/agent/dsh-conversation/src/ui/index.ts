@@ -2,7 +2,17 @@
 //
 // 这一面原本在 `@morlay/dsh-session/ui`：界面属于对话域，所以整块搬到了这里（数据面留在 `dsh-session`）。
 // 装配面只从这里取 `provideXxx`：清单顺序有语义（先 store 后槽位），别在应用里重排。
-export * from "../contract/session-controller.contract.ts";
+// 契约面走**包出口**（`./contract`）而不是相对路径：预编译时 `ui.js` 才会 external `contract.js`，
+// 不把 `class SessionController` 再定义一份（两份定义 = 两个令牌身份，跨包按令牌注入就会找不到）。
+export {
+  SessionController,
+  type SessionCatalog,
+  type SessionCatalogState,
+  type SessionControllerCovered,
+  type SessionRetainHandle,
+  type SessionScope,
+  type SessionView,
+} from "@morlay/dsh-conversation/contract";
 export * from "./session-controller.service.ts";
 export * from "./sessions.provide.ts";
 export { SessionLayout } from "./session-layout.ts";
@@ -10,7 +20,15 @@ export { UiSession } from "./ui-session.token.ts";
 export { SidebarRight, SidebarRightTabs } from "./ports.ts";
 export * from "./conversation/index.ts";
 // 两端共用的 client 契约在 **contract** 面（别的域只引 contract，不引本包的 ui）。
-export * from "../contract/conversation-client.contract.ts";
+export type {
+  ChatNodeOwnerProps,
+  ChatNodeViewProps,
+  ChatViewSlotProps,
+  UserContentAttachment,
+  UserContentData,
+  UserMessageNode,
+  UserTextFacts,
+} from "@morlay/dsh-conversation/contract";
 export * from "./input/index.ts";
 export {
   provideSessionInputSlots,

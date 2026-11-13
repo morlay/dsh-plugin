@@ -15,7 +15,7 @@ import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { Connection } from "@morlay/zephyr-app/client";
 

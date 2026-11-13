@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   SessionController,
   type SessionCatalogState,
-} from "../../contract/session-controller.contract.ts";
+} from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
 

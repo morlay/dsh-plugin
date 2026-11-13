@@ -7,7 +7,7 @@ import * as UiSidebarRightPlugin from "@deepseek-ai/dsh-client-ui-sidebar-right/
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Layout, Locale, Resources, Shortcuts, Slots } from "@morlay/zephyr-app/client";
-import { SessionController } from "../../contract/session-controller.contract.ts";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiSession } from "../ui-session.token.ts";
 import { SidebarRight } from "../ports.ts";
 
