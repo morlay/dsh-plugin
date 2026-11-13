@@ -6,6 +6,8 @@
 放行那类文件（转译本身当然能做，只是那层策略不放）。这里自己注册 hooks、直接调 `oxc-transform`，
 于是"源码面"（`exports` 指向 `src/*.ts` 的包）在壳与宿主里都能直接加载。
 
+**依赖版本线**：`oxc-transform` 与 `@oxc-project/runtime` 必须同一条 minor（当前都 `0.154.x`）——同步入口的名字（`transformSync`）与 helper 的形态都随版本线动，降级 / 升级要同笔改 `register.mjs`。判据与取舍见[loader 与 oxc 版本线](./.agents/designs/20261114-loader与oxc版本线.md)。
+
 ## 用法
 
 ```
