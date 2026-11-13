@@ -166,6 +166,7 @@ overrides:
   typescript: 7.1.0-beta
   react: 18.x
   react-dom: 18.x
+  zod: 4.6.x
   '@earendil-works/pi-ai': 1.3.0
 
 patchedDependencies:
@@ -260,6 +261,9 @@ importers:
       '@morlay/dsh-agent-instruction':
         specifier: workspace:^
         version: link:../../packages/agent/dsh-agent-instruction
+      '@morlay/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../packages/agent/dsh-agent-loop
       '@morlay/dsh-agent-team':
         specifier: workspace:^
         version: link:../../packages/agent/dsh-agent-team
@@ -339,9 +343,6 @@ importers:
         specifier: ^0.123.0
         version: 0.123.0
     devDependencies:
-      '@morlay/dsh-agent-loop':
-        specifier: workspace:^
-        version: link:../../packages/agent/dsh-agent-loop
       '@morlay/zephyr-desktop-bundle':
         specifier: workspace:^
         version: link:../../packages/zephyr-desktop/zephyr-desktop-bundle
@@ -395,8 +396,8 @@ importers:
         specifier: ^26.6.5
         version: 26.6.6
       zod:
-        specifier: 4.4.3
-        version: 4.4.3
+        specifier: 4.6.x
+        version: 4.6.7
 
   packages/agent-ex/agent-use:
     dependencies:
@@ -510,8 +511,8 @@ importers:
         specifier: ^1.9.0
         version: 1.9.1
       zod:
-        specifier: 4.4.3
-        version: 4.4.3
+        specifier: 4.6.x
+        version: 4.6.7
     devDependencies:
       '@morlay/better-session':
         specifier: workspace:^
@@ -1383,13 +1384,13 @@ importers:
       '@deepseek-ai/dsh-storage-domain':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/storage/storage-domain
+      '@deepseek-ai/dsh-storage-json':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/storage/storage-json
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../../zephyr/zephyr
     devDependencies:
-      '@deepseek-ai/dsh-storage-json':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/storage/storage-json
       '@morlay/dsh-storage':
         specifier: workspace:^
         version: 'link:'
@@ -1397,7 +1398,7 @@ importers:
         specifier: workspace:^
         version: link:../../zephyr/zephyr-app
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   packages/agent/dsh-upload:
@@ -1669,6 +1670,9 @@ importers:
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../zephyr-app
       rolldown:
         specifier: ^1.2.14
         version: 1.2.16
@@ -1897,7 +1901,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/remote-access:
@@ -1921,7 +1925,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/remotes:
@@ -2176,7 +2180,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/settings-controller:
@@ -2206,7 +2210,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/terminal-controller:
@@ -2269,7 +2273,7 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/workspace-controller:
@@ -2314,7 +2318,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/workspace-files:
@@ -2359,7 +2363,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/attachment/attachment:
@@ -2599,7 +2603,7 @@ importers:
         specifier: ^2.9.0
         version: 2.9.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/boot/plugin-market:
@@ -2668,7 +2672,7 @@ importers:
         specifier: ^7.8.5
         version: 7.8.6
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/browser-use/browser-use:
@@ -2713,7 +2717,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/file-upload:
@@ -2746,7 +2750,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/crypto
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/hmr:
@@ -2854,7 +2858,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/resources:
@@ -3526,7 +3530,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-deliverables:
@@ -4321,7 +4325,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-plugin-market:
@@ -5407,7 +5411,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-sidebar-terminal:
@@ -5758,7 +5762,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-user-questions:
@@ -5995,7 +5999,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/compaction/command-compact:
@@ -6235,7 +6239,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/context/time-context:
@@ -6265,7 +6269,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/context/tmux-context:
@@ -6292,7 +6296,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent:
@@ -6328,7 +6332,7 @@ importers:
         specifier: workspace:*
         version: link:../../workspace/workspace
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent-default-model:
@@ -6391,7 +6395,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent-tool-presentation:
@@ -6622,7 +6626,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/deliverables/deliverable-file-references:
@@ -6718,7 +6722,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/document/tool-office:
@@ -6790,7 +6794,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/values
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/api-speech-to-text:
@@ -6808,7 +6812,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/auto-review:
@@ -6985,7 +6989,7 @@ importers:
         specifier: ^4.23.13
         version: 4.23.15
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/claude-code-mods:
@@ -7042,7 +7046,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-action-cards:
@@ -7180,7 +7184,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-creation-recommendations:
@@ -7210,7 +7214,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-forge:
@@ -7336,7 +7340,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-plugin-recommendations:
@@ -7381,7 +7385,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-stats:
@@ -7528,7 +7532,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cot-translation-bundle:
@@ -7588,7 +7592,7 @@ importers:
         specifier: ^2.9.0
         version: 2.9.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cua:
@@ -7699,7 +7703,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cua-bundle:
@@ -7748,7 +7752,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/forge:
@@ -7817,7 +7821,7 @@ importers:
         specifier: ^10.0.1
         version: 10.2.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/forge-session:
@@ -7859,7 +7863,7 @@ importers:
         specifier: ^1.12.0
         version: 1.12.0
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/hook-protocol:
@@ -8135,7 +8139,7 @@ importers:
         specifier: ^8.18.3
         version: 8.22.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/liveshare-protocol:
@@ -8216,7 +8220,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/ptc-runtime-python:
@@ -8402,7 +8406,7 @@ importers:
         specifier: ^4.23.13
         version: 4.23.15
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/subagent-oar:
@@ -8891,7 +8895,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/extensions/cordis-client-runner:
@@ -8960,7 +8964,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/extensions/tool-cordis:
@@ -9041,7 +9045,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/feedback/message-feedback:
@@ -9071,7 +9075,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/fs/fs:
@@ -9308,7 +9312,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/goal/goal-round-driver:
@@ -9521,7 +9525,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/host/product-telemetry-otel:
@@ -9608,7 +9612,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/crypto
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/permission-presets:
@@ -9650,7 +9654,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/tool-ask-user:
@@ -9701,7 +9705,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/user-questions:
@@ -9734,7 +9738,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/jobs/jobs:
@@ -9848,7 +9852,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/llm/llm-deepseek:
@@ -10037,7 +10041,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/llm/plugin-package-inventory-deepseek:
@@ -10100,7 +10104,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/lsp/lsp:
@@ -10247,7 +10251,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/mcp/mcp-resources:
@@ -10304,7 +10308,7 @@ importers:
         specifier: workspace:*
         version: link:../../interaction/user-questions
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/preset/agent-preset:
@@ -10367,7 +10371,7 @@ importers:
         specifier: ^4.3.2
         version: 4.3.2
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/preset/persona:
@@ -10502,7 +10506,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/sandbox/sandbox-windows-acl:
@@ -10583,7 +10587,7 @@ importers:
         specifier: 0.5.1
         version: 0.5.1
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/schedule/tool-schedule:
@@ -10964,7 +10968,7 @@ importers:
         specifier: workspace:*
         version: link:../../core/session
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-projection-cache:
@@ -10988,7 +10992,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-stats:
@@ -11006,7 +11010,7 @@ importers:
         specifier: workspace:*
         version: link:../session-projection
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-telemetry:
@@ -11081,7 +11085,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-title-first-prompt-llm:
@@ -11147,7 +11151,7 @@ importers:
         specifier: workspace:*
         version: link:../session-projection
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/tool-working-directory:
@@ -11192,7 +11196,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/settings/settings:
@@ -11660,7 +11664,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/sandbox-ssh:
@@ -11678,7 +11682,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/ssh:
@@ -11723,7 +11727,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/ssh-helper-runtime:
@@ -11840,7 +11844,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/storage/storage:
@@ -11861,7 +11865,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/storage/storage-json:
@@ -11963,7 +11967,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/subagent-acp:
@@ -12038,7 +12042,7 @@ importers:
         specifier: ^1.31.0
         version: 1.32.2(supports-color@9.4.0)(zod@4.6.6)
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/subagent-fork-in-process:
@@ -12104,7 +12108,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/tool-subagent-control:
@@ -12221,7 +12225,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/team/tool-agent-team:
@@ -12611,7 +12615,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/typert/generator:
@@ -12653,7 +12657,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/brand
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/typert/registry:
@@ -12665,7 +12669,7 @@ importers:
         specifier: workspace:*
         version: link:../protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/util/atomic-write:
@@ -12686,7 +12690,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/cordis
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/packages/util/code-language:
@@ -13097,7 +13101,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.6
+        specifier: 4.6.x
         version: 4.6.6
 
   vendor/deepseek-harness/vendor/cordis:
@@ -13221,12 +13225,12 @@ packages:
   '@agentclientprotocol/sdk@1.4.0':
     resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.x
 
   '@agentclientprotocol/sdk@1.9.0':
     resolution: {integrity: sha512-saCOTPYBK1iqWqJFAYHXbg3+zCoFXyZZFoqQAwdTWkbrZZPpAETr80QOnYr2l+dzPwL0jpNhn3eDY8MoEIDbUA==}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.x
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.263':
     resolution: {integrity: sha512-H4eLd4Tkx3rJkt739CHb+9AcaKiiOpibU4tYsmma47mV+2zAPjUyFxpuE2N57VSmpAgbLQxu44du0TFN+UH5dg==}
@@ -13278,13 +13282,13 @@ packages:
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
       '@modelcontextprotocol/sdk': ^1.29.0
-      zod: ^4.0.0
+      zod: 4.6.x
 
   '@anthropic-ai/sdk@0.129.0':
     resolution: {integrity: sha512-MH7LB20kNpGLUpPTe2OG5XvL/KhX8HUO9XyBaFjgFk6TLS4Xjt0VPIuMKywe7POKKPslX+QxSlVok9e+8kG5Nw==}
     hasBin: true
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.x
     peerDependenciesMeta:
       zod:
         optional: true
@@ -13293,7 +13297,7 @@ packages:
     resolution: {integrity: sha512-q9vaSZQVFx6B/gPxetGYfLXSJD5v0sOmh0OpZDq7yCrTSA+Rscvrtyol7JJTW40wEpQB4U1B4JXzxQitbQ3CAA==}
     hasBin: true
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.6.x
     peerDependenciesMeta:
       zod:
         optional: true
@@ -14102,7 +14106,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
+      zod: 4.6.x
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -17857,7 +17861,7 @@ packages:
       '@smithy/signature-v4': '>=5.4.0 <6'
       undici: '>=5 <9'
       ws: ^8.21.0
-      zod: ^3.25 || ^4.0
+      zod: 4.6.x
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-node':
         optional: true
@@ -19244,10 +19248,7 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: ^3.25.28 || ^4
-
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+      zod: 4.6.x
 
   zod@4.6.6:
     resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
@@ -25407,8 +25408,6 @@ snapshots:
     dependencies:
       zod: 4.6.7
     optional: true
-
-  zod@4.4.3: {}
 
   zod@4.6.6: {}
 
