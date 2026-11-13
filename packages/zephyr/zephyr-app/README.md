@@ -56,6 +56,12 @@ ConfigForms（必需前置：SettingsHost 或 ConfigFormsInMemory）
 
 `ViteHandoff` 契约的 `hmrUpgrade(req, socket, head)` 交给 vite 的 ws（vite 8 的 `server.ws` 运行时是 `ws.WebSocketServer`，类型层用最小断言）。`ClientModulesDefault.install()` 在 `HMR_PATH` 上注册 upgrade 路由，卸载时撤销。
 
+## 缓存
+
+运行期缓存只落在 `<dataDir>/cache/<namespace>`：`client-modules`（联邦预编译产物）与 `vite`（依赖预构建），
+入口是 `AppEnv.cacheDirOf(namespace)`——消费方不拼缓存根。整个 `<dataDir>/cache` 可以随时删（删了只慢一次）。
+取舍与命名空间清单见[目录契约](./.agents/designs/20261114-目录契约.md)。
+
 ## 验证
 
 - `pnpm exec vitest run packages/zephyr/zephyr-app/src` —— 两条端到端装配用例是判据：

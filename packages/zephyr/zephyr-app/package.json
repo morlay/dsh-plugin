@@ -13,6 +13,8 @@
     "./client/app-boot/boot-page": "./src/client/app-boot/boot-page.ts",
     "./client/base.css": "./src/client/app-boot/base.css",
     "./build": "./src/build/zephyr-client-vite.ts",
+    "./federation/prebundle": "./src/federation/prebundle.ts",
+    "./federation/prebundle-plan": "./src/federation/prebundle-plan.ts",
     "./node": "./src/node.ts"
   },
   "scripts": {
@@ -51,10 +53,5 @@
   "peerDependencies": {
     "react": "^18.3.1",
     "rolldown": "^1.2.14"
-  },
-  "dsh": {
-    "client": {
-      "platform": "web"
-    }
   }
 }
