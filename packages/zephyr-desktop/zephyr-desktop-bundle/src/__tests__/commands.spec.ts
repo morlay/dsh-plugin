@@ -4,6 +4,7 @@ import {
   CliLogger,
   CliMode,
   Command,
+  flagOf,
   Workspace,
   type CliModeValues,
 } from "@morlay/zephyr-cli";
@@ -51,4 +52,18 @@ describe("桌面插件的命令面", () => {
       await app.dispose();
     }
   });
+
+  it("desktop dev 声明 --user-data-dir（并行工作区、端口冲突时的出口都指向它）", () => {
+    const dev = desktopDevParamsOf();
+    expect(flagOf("userDataDir")).toBe("user-data-dir");
+    expect(dev["userDataDir"]).toMatchObject({ kind: "string" });
+  });
 });
+
+/**
+ * `desktop dev` 的参数表（命令实例不需要装配就能读声明）。
+ * @returns 键 → 参数声明。
+ */
+function desktopDevParamsOf(): Record<string, unknown> {
+  return new DesktopDevCommand().params as Record<string, unknown>;
+}

@@ -17,7 +17,7 @@ import {
   Workspace,
 } from "@morlay/zephyr-cli";
 import { appDataHomeOf, appRootOf, userDataDirOf } from "../desktop-dirs.ts";
-import { stickyPort } from "../page-port.ts";
+import { portConflictHint, portFor, type PortSource } from "../page-port.ts";
 
 /** `zephyr desktop dev`。 */
 @Injectable({ multi: true })
@@ -26,7 +26,13 @@ export class DesktopDevCommand extends Command {
 
   readonly description = "在 Electron 壳里跑工作区（开发形态：宿主在壳内，页面走 dev server）";
 
-  readonly params: ParamSpecs = {};
+  readonly params: ParamSpecs = {
+    userDataDir: {
+      kind: "string",
+      description:
+        "壳的 userData 目录（缺省 <appData>/<desktop.id>/dev/electron；并行跑多个工作区时用它区分）",
+    },
+  };
 
   private readonly mode = inject(CliMode);
 
@@ -37,21 +43,20 @@ export class DesktopDevCommand extends Command {
   /**
    * @returns 壳进程的退出码。
    */
-  async run(_input: CommandInput): Promise<number> {
+  async run(input: CommandInput): Promise<number> {
     const electron = resolveElectron();
     const shellMain = resolveShellMain();
     // 部署值先备好：userData 不在产物根里，端口偏好也记在它下面。
-    const userData = await this.ensureUserData();
+    const userData = await this.ensureUserData(explicitUserDataDir(input));
     // 页面与资源走 **dev server**（vite）：壳只当浏览器。壳内跑宿主那条路（单进程、无 vite）
     // 在第三方 CJS 包（zustand / immer）上会大面积 404——那是打包形态才需要验证的事。
-    // 端口**粘住**上次用过的那个：origin 就是页面存储的身份，换了等于换一个浏览器；
-    // 被别的进程占着才重探（`--port` 显式给的优先，且不写回）。
-    const port = this.mode.port ?? (await stickyPort(userData));
-    this.logger.info(
-      "[desktop dev] 页面端口：%s（%s）",
-      String(port),
-      this.mode.port === undefined ? "粘住的端口，origin 因此稳定" : "--port 指定",
-    );
+    // 端口**粘住**上次用过的那个：origin 就是页面存储的身份，被外部进程占着就报错，不自动换。
+    const choice = await portFor({ userData, explicit: this.mode.port });
+    if (choice.kind === "conflict") {
+      throw new CliError(portConflictHint({ port: choice.port, userData }));
+    }
+    this.logPortChoice(choice.port, choice.source, userData);
+    const port = choice.port;
     const server = this.startDevServer(port);
     /**
      * 收尾：先收壳、再收 dev server，最后**自己退出**。
@@ -126,14 +131,19 @@ export class DesktopDevCommand extends Command {
    * 确保壳的 userData 目录存在（Electron 的 `setPath` 不会替你建目录）。
    *
    * 默认值 `<appData>/<desktop.id>/dev/electron`（**不住产物根**：`runBuild` 会整目录删掉
-   * `node_modules/.zephyr`）；**显式 `ZEPHYR_DESKTOP_USER_DATA` 优先**——多工作区并行、临时 profile
-   * 都靠它，不靠自动隔离。
+   * `node_modules/.zephyr`）；**显式值优先**：`--user-data-dir` > `ZEPHYR_DESKTOP_USER_DATA` > 默认。
+   * @param fromFlag - `--user-data-dir` 的值（没有就是 `undefined`）。
    * @returns 绝对路径。
    * @throws CliError 显式值为空且配置里没有 `desktop.id`（目录按它算）。
    */
-  private async ensureUserData(): Promise<string> {
+  private async ensureUserData(fromFlag: string | undefined): Promise<string> {
     const fromEnv = process.env.ZEPHYR_DESKTOP_USER_DATA;
-    const explicit = fromEnv === undefined || fromEnv === "" ? undefined : fromEnv;
+    const explicit =
+      fromFlag !== undefined && fromFlag !== ""
+        ? fromFlag
+        : fromEnv === undefined || fromEnv === ""
+          ? undefined
+          : fromEnv;
     const dir =
       explicit ??
       userDataDirOf(
@@ -150,6 +160,22 @@ export class DesktopDevCommand extends Command {
       explicit === undefined ? "缺省 <appData>/<desktop.id>/dev/electron" : "显式指定",
     );
     return dir;
+  }
+
+  /**
+   * 打一行端口来源（origin 会不会变，看这一行）。
+   * @param port - 选中的端口。
+   * @param source - 端口从哪来。
+   * @param userData - userData 目录（提示文件位置）。
+   */
+  private logPortChoice(port: number, source: PortSource, userData: string): void {
+    const why = {
+      remembered: "沿用上次，origin 不变",
+      fresh: `首次选择，记在 ${join(userData, "page-port")}，origin 不变下次`,
+      corrupt: "端口记录损坏，已重新选择（页面存储将另起）",
+      explicit: "--port 显式指定并已写回：origin 已变，页面存储将另起",
+    } satisfies Record<PortSource, string>;
+    this.logger.info("[desktop dev] 页面端口：%s（%s）", String(port), why[source]);
   }
 
   /**
@@ -205,6 +231,16 @@ export class DesktopDevCommand extends Command {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
+}
+
+/**
+ * `--user-data-dir` 的显式值（比环境变量更具体，所以排在它前面）。
+ * @param input - 命令输入（参数表）。
+ * @returns 路径，或 `undefined`（没给）。
+ */
+function explicitUserDataDir(input: CommandInput): string | undefined {
+  const value = input.params["userDataDir"];
+  return typeof value === "string" && value !== "" ? value : undefined;
 }
 
 /**

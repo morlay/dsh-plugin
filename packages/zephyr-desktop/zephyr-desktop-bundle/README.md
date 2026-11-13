@@ -43,8 +43,18 @@ Electron 的 `userData` 是浏览器 profile：页面存储、窗口状态、快
 | bundle / preview | `<appData>/<desktop.id>/electron`     |
 | test             | 临时目录（用例自己给）                |
 
-显式 `ZEPHYR_DESKTOP_USER_DATA` 优先（多工作区并行、临时 profile 都靠它）；不做按工作区哈希的自动隔离。
-它与**数据根**（宿主侧的会话、设置、凭证）是两份数据，删一边不该动另一边。
+显式值优先：`--user-data-dir <目录>`（flag）> `ZEPHYR_DESKTOP_USER_DATA`（环境变量）> 上面的缺省值；
+不做按工作区哈希的自动隔离（多工作区并行就传 `--user-data-dir`）。它与**数据根**（宿主侧的会话、设置、
+凭证）是两份数据，删一边不该动另一边。
+
+## 页面端口（origin 就是页面存储的身份）
+
+`desktop dev` 把端口记在 `<userData>/page-port`，下次优先用它——origin 不变，页面存储才留得住：
+
+- 记住的端口空着 → 沿用；
+- 被**外部进程**占着 → **报错不换**，提示三条出口（关掉占用进程 / `--port <新端口>` / `--user-data-dir <目录>`）；自动换端口等于把页面存储另起一份；
+- 只有**第一次**与**记录损坏**才重新选并写回；
+- `--port` 显式值优先并写回（日志会说明「origin 已变，页面存储将另起」）。
 
 **不签名**：`mac.identity: null` 是配置事实（不是环境变量开关）——产物给自己/内测用，签名只会引入
 钥匙串与证书依赖。图标：配了 `desktop.icon`（svg / png）就由 `prepareIcons` 生成三平台图标（macOS 出 `.icns`，win / linux 用 512 png），没配就用 Electron 默认的。

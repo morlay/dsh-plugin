@@ -1,8 +1,7 @@
-// 页面端口：**origin 就是存储身份**，所以端口要粘住（契约第 6 条 / T9）。
+// 页面端口：**origin 就是存储身份**，所以端口要粘住，而且**不许悄悄换**。
 //
-// 页面存储（`localStorage` 与页面 shim 的 IndexedDB）按 origin 分区：端口每次随机 = 每次换一个浏览器 =
-// 前端缓存每次读不到。这里把上次用过的端口记在 `<userData>/page-port`（与 userData 同生命周期：
-// 删它等于让用户丢一次页面存储，所以不能放可整删的缓存目录）。
+// 页面存储（`localStorage` 与页面 shim 的 IndexedDB）按 origin 分区：端口一换就是换一个浏览器。
+// 因此规则是「记住的那个端口被外部进程占着 → 报错并给出口」，只有「第一次」与「记录损坏」才重新选。
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -19,11 +18,23 @@ const MIN_PORT = 1024;
 /** 可用端口的上界。 */
 const MAX_PORT = 65535;
 
-/** 探测与选取端口的外界动作（测试换替身，平时就是本文件的实现）。 */
-export interface PortActions {
-  /** 端口现在能不能绑。 */
+/** 端口从哪来。 */
+export type PortSource = "remembered" | "fresh" | "corrupt" | "explicit";
+
+/** 端口选择的结果：要么定下端口，要么与外部占用冲突（冲突时**不自动换**）。 */
+export type PortChoice =
+  | { readonly kind: "ok"; readonly port: number; readonly source: PortSource }
+  | { readonly kind: "conflict"; readonly port: number };
+
+/** 选择端口的输入。 */
+export interface PortInput {
+  /** `userData` 目录（端口文件在这里）。 */
+  readonly userData: string;
+  /** `--port` 的显式值：它就是新的 origin 归属，会被**写回**。 */
+  readonly explicit?: number | undefined;
+  /** 端口现在能不能绑（测试可换替身）。 */
   readonly probe?: (port: number) => Promise<boolean>;
-  /** 重新探一个空闲端口（只作首次兜底）。 */
+  /** 重新探一个空闲端口（只在首次 / 记录损坏时用）。 */
   readonly pick?: () => Promise<number>;
 }
 
@@ -46,11 +57,11 @@ export function parsePort(raw: string | undefined): number | undefined {
  * @returns 端口，或 `undefined`（没有 / 坏内容）。
  */
 export async function preferredPortOf(userData: string): Promise<number | undefined> {
-  return parsePort(await readFile(join(userData, PAGE_PORT_FILE), "utf8").catch(() => undefined));
+  return (await portRecordOf(userData)).port;
 }
 
 /**
- * 记下这次用的端口（写不了就算了：下次重新探一个）。
+ * 记下这个端口（写不了就算了：下次重新探一个）。
  * @param userData - `userData` 目录。
  * @param port - 端口。
  * @returns 写完成。
@@ -60,6 +71,51 @@ export async function rememberPort(userData: string, port: number): Promise<void
   await writeFile(join(userData, PAGE_PORT_FILE), `${String(port)}\n`, "utf8").catch(
     () => undefined,
   );
+}
+
+/**
+ * 这次该用哪个端口。
+ *
+ * 三条规矩：① `--port` 显式值优先，**写回**（用户显式选的 origin 就是新的归属）；② 记住的端口空着
+ * 就用它；③ 被外部进程占着就报冲突（返回 `conflict`，由调用方抛可操作的错误），**不自动换**——换了
+ * 等于把页面存储另起一份。只有「没有记录」与「记录损坏」才重新选并写回。
+ * @param input - `userData`、显式值与替身动作。
+ * @returns 选好的端口，或冲突。
+ */
+export async function portFor(input: PortInput): Promise<PortChoice> {
+  const probe = input.probe ?? isPortFree;
+  const pick = input.pick ?? freePort;
+  if (input.explicit !== undefined) {
+    await rememberPort(input.userData, input.explicit);
+    return { kind: "ok", port: input.explicit, source: "explicit" };
+  }
+  const record = await portRecordOf(input.userData);
+  if (record.port !== undefined) {
+    if (await probe(record.port)) return { kind: "ok", port: record.port, source: "remembered" };
+    return { kind: "conflict", port: record.port };
+  }
+  const port = await pick();
+  await rememberPort(input.userData, port);
+  return { kind: "ok", port, source: record.corrupt ? "corrupt" : "fresh" };
+}
+
+/**
+ * 端口冲突时给用户的可操作提示（三条出口，都写明代价）。
+ * @param input - 被占的端口与 `userData` 目录。
+ * @returns 多行提示。
+ */
+export function portConflictHint(input: {
+  readonly port: number;
+  readonly userData: string;
+}): string {
+  const file = join(input.userData, PAGE_PORT_FILE);
+  return [
+    `页面端口 ${String(input.port)}（记在 ${file}）被别的进程占着。`,
+    "不自动换端口：换了 origin，页面存储（localStorage / IndexedDB）会另起一份。三条出口：",
+    `  · 关掉占用它的进程：lsof -nP -iTCP:${String(input.port)} -sTCP:LISTEN`,
+    `  · 换端口重起：zephyr desktop dev --port <新端口>（origin 会变，页面存储另起一份）`,
+    `  · 换一份 userData（并行多个工作区时就这么办）：zephyr desktop dev --user-data-dir <目录>`,
+  ].join("\n");
 }
 
 /**
@@ -78,7 +134,7 @@ export async function isPortFree(port: number): Promise<boolean> {
 }
 
 /**
- * 探一个空闲端口（**只作首次兜底**：它会让 origin 变化）。
+ * 探一个空闲端口（**只在首次 / 记录损坏时用**：它会让 origin 变化）。
  * @returns 端口。
  */
 export async function freePort(): Promise<number> {
@@ -94,19 +150,13 @@ export async function freePort(): Promise<number> {
 }
 
 /**
- * 这次的页面端口：**上次用过的那个**（origin 因此不变），被占用才重新探一个并写回。
- *
- * `--port` 显式给了就不走这里（显式值不写回——它是一次性的，不该把端口偏好搬走）。
- * @param userData - `userData` 目录（端口文件在这里）。
- * @param actions - 探测与选取动作（测试可换替身）。
- * @returns 端口。
+ * 读端口记录：区分「没有文件」与「文件在但坏了」。
+ * @param userData - `userData` 目录。
+ * @returns 端口（可能没有）与「是否损坏」。
  */
-export async function stickyPort(userData: string, actions: PortActions = {}): Promise<number> {
-  const probe = actions.probe ?? isPortFree;
-  const pick = actions.pick ?? freePort;
-  const preferred = await preferredPortOf(userData);
-  if (preferred !== undefined && (await probe(preferred))) return preferred;
-  const port = await pick();
-  await rememberPort(userData, port);
-  return port;
+async function portRecordOf(userData: string): Promise<{ port?: number; corrupt: boolean }> {
+  const raw = await readFile(join(userData, PAGE_PORT_FILE), "utf8").catch(() => undefined);
+  if (raw === undefined) return { corrupt: false };
+  const port = parsePort(raw);
+  return port === undefined ? { corrupt: true } : { port, corrupt: false };
 }
