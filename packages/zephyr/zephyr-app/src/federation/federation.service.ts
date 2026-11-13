@@ -7,20 +7,18 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { AppEnv } from "../app-env/app-env.contract.ts";
-import {
-  exportNameOfFileName,
-  exportTargetOf,
-  fileInPackage,
-  manifestOf,
-} from "../internal/resolve.ts";
+import { exportTargetOf, fileInPackage, manifestOf } from "../internal/resolve.ts";
 import {
   BUNDLER_REV,
+  CLIENT_MODULES_CACHE_NAMESPACE,
+  contentRev,
   CLIENT_MODULES_PREFIX,
   bundlePackage,
   clientModulesAlias,
   dependencyEntry,
 } from "./bundle.ts";
 import { parseFederationUrl } from "./parse-url.ts";
+import { createRequire } from "node:module";
 import { watchOf } from "./watch.ts";
 import { Federation, type FederationConfig } from "./federation.contract.ts";
 
@@ -71,6 +69,17 @@ export class FederationDefault extends Federation {
 
   private readonly appEnv = inject(AppEnv);
 
+  /**
+   * 联邦缓存的根：**只**落在 `<cacheDir>/client-modules` 这一层命名空间下。
+   *
+   * 直接写 `cacheDir` 会让包名目录（`@scope+name@version`）散落在缓存根上，与别的用途混在一起；
+   * 命名空间化之后，缓存根下只有可枚举的几个目录，整目录删也只影响一个用途。
+   * @returns 该用途的缓存根。
+   */
+  private get cacheRoot(): string {
+    return this.appEnv.cacheDirOf(CLIENT_MODULES_CACHE_NAMESPACE);
+  }
+
   private readonly logger = inject(Logger);
 
   /** `depsUrl` 解析到的包根（`<name>@<version>` → root）：`serve` 时复用，不再重新解析。 */
@@ -89,15 +98,20 @@ export class FederationDefault extends Federation {
     if (file.startsWith("assets/") || file.startsWith("chunks/")) {
       return await this.replyFile(key, file, req, res);
     }
-    const exportName = exportNameOfFileName(file);
-    // **缓存优先**：prebundle 已经产出过这个出口（`<cache>/<pkg>@<ver>/.files.json`）就直接回文件。
-    // 这条分支不需要包根、也不需要入口解析——缓存里有产物，说明当初就解析成功过。早先版本先解析再回，
-    // 于是「缓存命中但没有 root 记录」的请求（第三方传递依赖，如 `zustand@4.5.7/vanilla.js`）一律 404。
-    if (await this.cached(key, exportName)) {
+    // 只去掉 `.js` 后缀，**保留目录段**：`shim/with-selector.js` → `shim/with-selector`。
+    // 截成 `with-selector` 会让解析退到主入口（现象：缓存里是 66KB 的 shim/index.js）。
+    const exportName = file.endsWith(".js") ? file.slice(0, -3) : file;
+    // **入口先解析**：缓存是否新鲜要用「和构建同一套输入」算指纹（`watchOf(root, entry)`），
+    // 而输入集取决于入口。解析不到入口时退回旧口径（只看规则版本），保持"缓存命中但包根未知"
+    // 那条路（第三方传递依赖）仍然能服务。
+    const entry = await this.entryOf(name, root, exportName);
+    const watch = entry === undefined ? undefined : watchOf(root, entry);
+    const expectedRev = watch === undefined ? undefined : await contentRev(watch);
+    // **缓存优先**：prebundle 已经产出过这个出口（`<cache>/client-modules/<pkg>@<ver>/.files.json`）就直接回文件。
+    if (await this.cached(key, exportName, expectedRev)) {
       const repliedFromCache = await this.replyFile(key, exportName, req, res);
       if (repliedFromCache) return true;
     }
-    const entry = await this.entryOf(name, root, exportName);
     if (entry === undefined) {
       console.error(`[federation-miss] ${name}@${urlVersion}/${exportName} root=${String(root)}`);
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
@@ -109,7 +123,7 @@ export class FederationDefault extends Federation {
       return true;
     }
     const bundled = await bundlePackage({
-      cacheRoot: this.appEnv.cacheDir,
+      cacheRoot: this.cacheRoot,
       repoRoot: this.appEnv.values.profileDir,
       // 与 dev 侧同一套解析约定：`@/…` → 仓库根、`node:*` → 求值安全的替身（CJS 形态，rolldown 直出）。
       alias: clientModulesAlias({
@@ -122,7 +136,8 @@ export class FederationDefault extends Federation {
       name,
       version,
       input: { [exportName]: entry },
-      watch: watchOf(root, entry),
+      watch: watch ?? watchOf(root, entry),
+      appManifest: this.appEnv.profileManifest,
       log: (message) => this.logger.debug(message),
       ...(root === undefined ? {} : { manifestOf: join(root, "package.json") }),
       // 产物内部解析到的外部依赖也记进包根表（浏览器随后按地址来取时要用）。
@@ -184,13 +199,18 @@ export class FederationDefault extends Federation {
 
   /** 包名 → 包根（node 原生解析；基准是行包清单与装配根清单）。 */
   private async rootOf(name: string, from?: string): Promise<string | undefined> {
-    // 先看装配根的 `node_modules`（依赖解析的第一站，pnpm 的软链也在这里）。
-    const direct = join(this.appEnv.values.profileDir, "node_modules", name, "package.json");
-    try {
-      await readFile(direct, "utf8");
-      return dirname(direct);
-    } catch {
-      // 落到 node 的解析链。
+    // **引用方优先**：pnpm 下同一个名字可能同时存在多份（`use-sync-external-store` 的 1.6.0 与 1.7.0），
+    // 先解析引用方看到的那份，才能拿到**实际被引用的版本**；直接拼仓库根可能命中陈旧的提升副本。
+    if (from !== undefined) {
+      // `findPackageJSON` 是**同步**的（ESM 解析、不受 `exports` 限制），这里包一层 try 即可。
+      const fromImporter = (() => {
+        try {
+          return findPackageJSON(name, pathToFileURL(from));
+        } catch {
+          return undefined;
+        }
+      })();
+      if (fromImporter !== undefined) return dirname(fromImporter);
     }
     const bases = [
       // 引用方的清单优先：pnpm 严格布局下，传递依赖只在自己的 node_modules 里可见。
@@ -223,8 +243,57 @@ export class FederationDefault extends Federation {
     exportName: string,
   ): Promise<string | undefined> {
     if (root === undefined) {
+      // 包根未知时也要按子路径解析：`dependencyEntry` 走 ESM 解析（尊重 exports 与文件路径），
+      // 先试 `${name}/${exportName}`（`shim/with-selector` 这种），失败才退回主入口。
+      if (exportName !== "index") {
+        const subpath = await dependencyEntry(
+          this.appEnv.profileManifest,
+          `${name}/${exportName}` as never,
+        ).catch(() => undefined);
+        if (subpath?.entry !== undefined) return subpath.entry;
+      }
       return (await dependencyEntry(this.appEnv.profileManifest, name).catch(() => undefined))
         ?.entry;
+    }
+    // **子路径先用原生解析**：`createRequire(<包清单>).resolve(specifier)` 尊重 `exports` 条件与子路径
+    // （`use-sync-external-store/shim/with-selector` 这类），不再靠我们猜扩展名。
+    // 子路径就是文件（无 exports 的包）：按扩展名探测，命中即返回。
+    if (exportName.includes("/")) {
+      for (const candidate of [
+        exportName,
+        `${exportName}.js`,
+        `${exportName}.cjs`,
+        `${exportName}.mjs`,
+      ]) {
+        const file = join(root, candidate);
+        if (
+          await readFile(file, "utf8").then(
+            () => true,
+            () => false,
+          )
+        )
+          return file;
+      }
+    }
+    if (exportName !== "index") {
+      const native = (() => {
+        try {
+          const resolver = createRequire(join(root, "package.json"));
+          // 带扩展名的资源出口（`brand-font.css`）与无扩展名的 JS 出口都要试：
+          // `serve` 拿到的 `exportName` 已去掉扩展名，直接 resolve 会落空。
+          for (const candidate of [exportName, `${exportName}.css`]) {
+            try {
+              return resolver.resolve(candidate);
+            } catch {
+              continue;
+            }
+          }
+          return undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+      if (native !== undefined) return native;
     }
     // 出口名的回退：`index` → 根出口；其余先按名找，再按我们的约定找 `./client-module`。
     return (
@@ -240,19 +309,28 @@ export class FederationDefault extends Federation {
    * @param exportName - 出口名（`vanilla` / `index` …）。
    * @returns 判断结果。
    */
-  private async cached(key: string, exportName: string): Promise<boolean> {
-    const raw = await readFile(join(this.appEnv.cacheDir, key, ".files.json"), "utf8").catch(
+  private async cached(
+    key: string,
+    exportName: string,
+    expectedRev: string | undefined,
+  ): Promise<boolean> {
+    const raw = await readFile(join(this.cacheRoot, key, ".files.json"), "utf8").catch(
       () => undefined,
     );
     if (raw === undefined) return false;
     const manifest = JSON.parse(raw) as { rev?: string; files?: Record<string, string> };
-    // 构建规则世代变了就作废（地址里带同一个 `?v=`）。
-    if (manifest.rev !== undefined && !manifest.rev.startsWith(BUNDLER_REV)) return false;
+    if (manifest.rev === undefined) return false;
+    // **有入口时按完整指纹判**（规则版本 + 源码内容）：workspace 包的版本号是固定的 `0.0.1`，
+    // 只比规则版本会让"同版本改了源码"继续复用旧产物（症状：模块里没有新加的导出）。
+    // 没有入口时（第三方传递依赖、包根未知）退回规则版本口径——registry 版本的内容不可变。
+    if (expectedRev === undefined) {
+      if (!manifest.rev.startsWith(BUNDLER_REV)) return false;
+    } else if (manifest.rev !== expectedRev) {
+      return false;
+    }
     const relative = manifest.files?.[exportName];
     if (relative === undefined) return false;
-    return (
-      (await readFile(join(this.appEnv.cacheDir, relative)).catch(() => undefined)) !== undefined
-    );
+    return (await readFile(join(this.cacheRoot, relative)).catch(() => undefined)) !== undefined;
   }
 
   /** 按清单里的相对路径回一个文件（资产/块/出口产物同一套）。 */
@@ -264,10 +342,10 @@ export class FederationDefault extends Federation {
   ): Promise<boolean> {
     // 产物清单的键是 `<pkg>@<ver>/<file>`（资产/块也在这个前缀下）；文件本身在缓存根。
     const manifest = JSON.parse(
-      await readFile(join(this.appEnv.cacheDir, key, ".files.json"), "utf8").catch(() => "{}"),
+      await readFile(join(this.cacheRoot, key, ".files.json"), "utf8").catch(() => "{}"),
     ) as { files?: Record<string, string> };
     const relative = manifest.files?.[file] ?? `${key}/${file}`;
-    const bytes = await readFile(join(this.appEnv.cacheDir, relative)).catch(() => undefined);
+    const bytes = await readFile(join(this.cacheRoot, relative)).catch(() => undefined);
     if (bytes === undefined) return false;
     // 用**真实文件名**判 MIME（清单键 `client`/`index` 没有扩展名）。
     const extension = relative.slice(relative.lastIndexOf(".") + 1).toLowerCase();

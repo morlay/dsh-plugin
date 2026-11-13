@@ -25,6 +25,7 @@ export { WebStartupDefault } from "../web/web-startup.service.ts";
 export { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "../federation/bundle.ts";
 export { parseFederationUrl } from "../federation/parse-url.ts";
 export { watchOf } from "../federation/watch.ts";
+export { contentRev } from "../federation/bundle.ts";
 export { exportTargetOf, fileInPackage, packageRootOf } from "../internal/resolve.ts";
 export {
   FEDERATION_PREFIX,

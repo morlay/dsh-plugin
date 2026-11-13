@@ -51,6 +51,11 @@ export async function startViteDev(
   ctx: Context,
   options: {
     repoRoot: string;
+    /**
+     * vite 的缓存目录（`AppEnv.cacheDirOf("vite")`）：不放 `repoRoot/node_modules/.vite`——
+     * 打包形态的 `repoRoot` 是安装包里的只读闭包，写不进去。
+     */
+    cacheDir: string;
     /** 页面与入口所在目录（`AppEnv.appBootDir`：应用自己的 `src/client`）。 */
     appRoot: string;
     base: string;
@@ -132,7 +137,7 @@ export async function startViteDev(
     },
     // 服务的工作目录（vite 的 `cacheDir`/`fs.allow` 都以它与本 root 为基准）：显式传，别让它取进程 cwd
     // ——宿主可能从任意目录起。
-    cacheDir: join(repoRoot, "node_modules", ".vite"),
+    cacheDir: options.cacheDir,
     resolve: {
       // `@/…` → 仓库根、`node:*` → 求值安全的空替身（与联邦构建同一套约定，替身形态见 `src/node-stub/`）。
       alias: clientModulesAlias({

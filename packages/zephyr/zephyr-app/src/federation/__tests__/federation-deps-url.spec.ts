@@ -49,4 +49,10 @@ describe("FederationDefault.depsUrl", () => {
   it("解析不到的包返回 undefined（不编地址）", async () => {
     expect(await federation.depsUrl("no-such-fixture")).toBeUndefined();
   });
+  it("CSS 子路径也走联邦地址（brand-font.css）", async () => {
+    const url = await federation.depsUrl("@deepseek-ai/dsh-client-ui-theme/brand-font.css");
+    expect(url).toBeDefined();
+    expect(url).toContain("/brand-font.css");
+    expect(url).toMatch(/^\/_zephyr\/@modules\/@deepseek-ai\+dsh-client-ui-theme@/);
+  });
 });

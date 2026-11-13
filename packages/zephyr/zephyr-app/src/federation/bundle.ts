@@ -32,8 +32,11 @@ import { FEDERATION_PREFIX } from "../internal/hmr-path.ts";
 
 export const CLIENT_MODULES_PREFIX = FEDERATION_PREFIX;
 
-/** 统一缓存目录（与 vite 的 `.vite` 并列，跨进程共用）。当前无消费方：缓存根以 `AppEnv.cacheDir` 为准。 */
-export const CLIENT_MODULES_CACHE = join("node_modules", ".dsh-client-modules");
+/**
+ * 联邦缓存的**命名空间**（`<AppEnv.cacheDir>/client-modules`）：预编译产物与清单都落在这里，
+ * 缓存根下不再直接散落 `<pkg>@<ver>` 目录。
+ */
+export const CLIENT_MODULES_CACHE_NAMESPACE = "client-modules";
 
 /**
  * 客户端资源链的**解析约定**（dev 的 vite server 与联邦构建各持一份，规则相同）。
@@ -97,7 +100,7 @@ export interface BundleOptions {
    * 而浏览器取产物时已经没有引用方了。
    */
   readonly onResolved?: (name: string, version: string, root: string) => void;
-  /** 缓存根（{@link CLIENT_MODULES_CACHE}）。 */
+  /** 缓存根：由调用方给（通常是 `AppEnv.cacheDirOf(CLIENT_MODULES_CACHE_NAMESPACE)`）。 */
   cacheRoot: string;
   /** 仓库根（vite 的 root）。 */
   repoRoot: string;
@@ -125,6 +128,13 @@ export interface BundleOptions {
    * 同一个名字可以是不同版本），全局一张表必然猜错。回调是同步的，所以先对这个包的依赖面预建一张小表。
    */
   manifestOf?: string;
+  /**
+   * **应用**清单（`<workspace>/package.json`）：它的 dependencies 也进 external 表。
+   *
+   * 被预编译包自己没声明 `react-dom` 这类 peer 时，产物会整包内联它、连带内联它自己的 react——
+   * 页面里就有多份运行时（`ReactCurrentDispatcher` 多处出现）。
+   */
+  appManifest?: string;
   /** **行**的包名集合（loader 给的 `dsh.client` + client 半）：决定包级引用的出口名。 */
   clientRows?: ReadonlySet<string>;
   /** 编译设置（rolldown 的 `tsconfig`）：解析根那份 tsconfig 的路径；缺省时交给 rolldown 就近找。 */
@@ -157,6 +167,18 @@ export function cacheKeyOf(name: string, version: string): string {
  * 每个包的源码**读一遍**（几百个包 × 每个包几十个文件），首屏全耗在算指纹上。
  */
 const fingerprints = new Map<string, { stamp: string; rev: string }>();
+
+/**
+ * 一个包当前的**内容指纹**（`BUNDLER_REV:源码指纹`）。
+ *
+ * 缓存是否新鲜**只认这一个串**：路由侧的"缓存快路径"与构建侧的"命中判断"必须用同一份，
+ * 否则同版本（workspace 包版本是固定的 `0.0.1`）改了源码还会继续复用旧产物。
+ * @param watch - 指纹的输入文件集（见 `watchOf`）。
+ * @returns 指纹串。
+ */
+export async function contentRev(watch: readonly string[]): Promise<string> {
+  return `${BUNDLER_REV}:${await fingerprint(watch)}`;
+}
 
 async function fingerprint(paths: readonly string[]): Promise<string> {
   const key = paths.join("|");
@@ -241,12 +263,41 @@ const resolvableCache = new Map<
  * @param manifestPath - 本包清单的绝对路径。
  * @returns 包名 → 版本。
  */
+/**
+ * 页面图根会用到的**共享运行时**清单（react / react-dom / zephyr / tanstack）。
+ *
+ * 不硬编码"某个包必须 external"，而是**按图根解析**：能解析到它的 `package.json` 才算数，
+ * 这样应用换版本/没装某库时不会凭空造出一条外置。
+ * @param appManifest - 应用清单的绝对路径。
+ * @returns 清单路径数组（解析不到的跳过）。
+ */
+export function sharedRuntimeManifests(appManifest: string | undefined): string[] {
+  if (appManifest === undefined) return [];
+  const requireOf = createRequire(appManifest);
+  const names = ["react", "react-dom", "@morlay/zephyr", "@morlay/zephyr-app"];
+  const out: string[] = [];
+  for (const name of names) {
+    try {
+      out.push(requireOf.resolve(`${name}/package.json`));
+    } catch {
+      // 没装或没导出 package.json：跳过。
+    }
+  }
+  return out;
+}
+
 export async function resolvableVersionsFor(
   key: string,
   manifestPath: string | undefined,
   onResolved?: (name: string, version: string, root: string) => void,
+  /** 额外参与 external 表的清单（应用清单 + 共享运行时）：同名先者胜。 */
+  sharedManifests: readonly string[] = [],
 ): Promise<Map<string, string>> {
-  const cached = resolvableCache.get(key);
+  // **缓存键必须含清单路径**：同一个"包 + 版本"会被不同清单各解析一次
+  // （应用视角 vs 包自身视角），只按 `key` 缓存会把先建的那张表复用给后者——
+  // 外置名单于是缺项，依赖被内联（`@morlay/zephyr` 在 `zephyr-app/client.js` 里出现第二份）。
+  const memoKey = `${key}::${manifestPath ?? ""}::${sharedManifests.join(",")}`;
+  const cached = resolvableCache.get(memoKey);
   if (cached !== undefined) {
     const hit = await cached;
     if (onResolved !== undefined) {
@@ -260,9 +311,31 @@ export async function resolvableVersionsFor(
       resolved.push([name, version, root]);
       onResolved?.(name, version, root);
     });
+    // 应用清单 + 共享运行时的依赖也进 external 表（先者胜）：被预编译包自己没声明
+    // `react-dom` 这类 peer 时，产物会整包内联它、再内联它自己的 react——页面里就有多份运行时。
+    for (const shared of sharedManifests) {
+      // **共享运行时自身也要进表**：只并它的 dependencies 不够——`react-dom` 从来没被别的包声明过
+      // （它只在应用的 devDependencies 里），于是"并进来的依赖"里没有它自己，产物照样整包内联。
+      const self = JSON.parse(await readFile(shared, "utf8").catch(() => "{}")) as {
+        name?: string;
+        version?: string;
+      };
+      if (self.name !== undefined && self.version !== undefined && !versions.has(self.name)) {
+        versions.set(self.name, self.version);
+        resolved.push([self.name, self.version, dirname(shared)]);
+        onResolved?.(self.name, self.version, dirname(shared));
+      }
+      const extra = await resolvableVersionsOf(shared, (name, version, root) => {
+        resolved.push([name, version, root]);
+        onResolved?.(name, version, root);
+      }).catch(() => new Map<string, string>());
+      for (const [name, version] of extra) {
+        if (!versions.has(name)) versions.set(name, version);
+      }
+    }
     return { versions, resolved };
   })();
-  resolvableCache.set(key, computed);
+  resolvableCache.set(memoKey, computed);
   return (await computed).versions;
 }
 
@@ -487,33 +560,31 @@ export async function moduleKindOf(entry: string): Promise<ModuleKind> {
 }
 
 /**
+ * CSS 入口的包装：**样式文件不能直接当入口**——vite 的库模式固定 `cssCodeSplit: false`，遇到
+ * `rolldownOptions.input` 里有 `.css` 直接报错。包一层 side-effect import，让样式插件按它一贯的方式
+ * 把它编成"注入 `<style>`"的模块。
+ *
+ * @returns 包装文件路径；入口不是 CSS 时 undefined。
+ */
+/**
  * CJS 入口的**具名导出包装**（`react` / `@xterm/xterm` 这类）。
  *
  * rolldown 对 CJS 入口产物的具名导出只能靠静态分析；`module.exports = require(…)` 与 UMD 包装它都分析
  * 不出来，产物只剩 `export default …`——而浏览器侧要 `import { Fragment } from "react"`，整个 import
  * 阶段就失败。ESM 的导出必须**静态可枚举**，所以这里求值入口拿到它的键，生成一份把它们写成
  * `export const` 的包装模块，拿包装模块当入口。
- *
- * 类型由 {@link moduleKindOf} 先按 **exports 落点 + 扩展名/type** 静态判定，只有 CJS 才进来；
- * 这里求值一次只为**拿键**（`export const <键>` + `default = module.exports`）。ESM 原封不动。
- * @returns 虚拟模块 id 与源码；入口不是 node 能求值的 CJS、或没有可静态导出的键时 undefined（保持原样）。
  */
 async function cjsShimOf(options: {
   name: string;
   exportName: string;
-  /** 具体文件：只用来求值判 CJS / 枚举键。 */
   entry: string;
-  /** 产物里的 import 来源：说明符（交给 rolldown 按 `exports` 解析）或文件路径。 */
   from: string;
   log?: (message: string) => void;
 }): Promise<{ id: string; code: string } | undefined> {
   let loaded: Record<string, unknown> | undefined;
   try {
-    // 类型已由 {@link moduleKindOf} 静态判定（只有 CJS 会走到这里）；这一句只为**拿键**：
-    // CJS 的导出面是运行期的（`module.exports = require(…)` / UMD 包装，静态分析看不到键）。
     loaded = createRequire(options.entry)(options.entry) as Record<string, unknown> | undefined;
   } catch {
-    // 求值有副作用、或本来就是不能在 node 里加载的东西：宁可只有 default 导出，也不要让构建挂掉。
     return undefined;
   }
   const named = Object.keys(loaded ?? {}).filter(
@@ -523,15 +594,9 @@ async function cjsShimOf(options: {
       !RESERVED_EXPORT_NAMES.has(key),
   );
   if (named.length === 0) return undefined;
-
-  // **不落盘**：这是一份只喂给 rolldown 的入口，用虚拟模块（`\0` 前缀 + resolveId/load）即可。
-  // 落成文件反而要操心"放哪、相对路径怎么算、缓存目录里会不会残留"——入口用绝对路径，rolldown 在
-  // **构建期**把它读进来（内联进产物），产物里不会出现这个路径。
   const id = `\0dsh-cjs-shim:${options.name}:${options.exportName}`;
   const code = [
     `import mod from ${JSON.stringify(options.from)};`,
-    // 用**计算属性**读：`mod.jsxDEV` 这种静态属性访问会被 rolldown 按它对 CJS 命名空间的静态理解
-    // 摇成 `void 0`（`react/jsx-dev-runtime` 就那么被摇空了，页面报 `jsxDEV is not a function`）。
     "const __cjs = mod ?? {};",
     "export default __cjs;",
     ...named.map((key) => `export const ${key} = __cjs[${JSON.stringify(key)}];`),
@@ -544,12 +609,29 @@ async function cjsShimOf(options: {
 }
 
 /**
- * CSS 入口的包装：**样式文件不能直接当入口**——vite 的库模式固定 `cssCodeSplit: false`，遇到
- * `rolldownOptions.input` 里有 `.css` 直接报错。包一层 side-effect import，让样式插件按它一贯的方式
- * 把它编成"注入 `<style>`"的模块。
+ * 把 CSS 里的**裸 `@import`** 改写成联邦地址（相对路径与 http(s) 原样）。
  *
- * @returns 包装文件路径；入口不是 CSS 时 undefined。
+ * 为什么必须在这里做：`cssShimOf` 只把 CSS 文本塞进产物，`@import "pkg/x.css"` 里的裸说明符
+ * 浏览器会按页面相对去请求（`/pkg/x.css` → 404）。样式里的跨包引用只能在这里落成绝对地址。
+ * @param css - 原始 CSS 文本。
+ * @param versions - 包名到版本的解析表。
+ * @returns 改写后的 CSS。
  */
+export function rewriteCssImports(css: string, versions: Map<string, string>): string {
+  return css.replace(
+    /@import\s+(?:url\(\s*)?["']?([^"') \s;]+)["']?\s*\)?/gu,
+    (whole, specifier: string) => {
+      if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier))
+        return whole;
+      const pkg = packageNameOf(specifier);
+      const version = versions.get(pkg);
+      if (version === undefined) return whole;
+      const file = specifier === pkg ? "index.css" : specifier.slice(pkg.length + 1);
+      return whole.replace(specifier, () => depsUrlOf(pkg, version, file));
+    },
+  );
+}
+
 async function cssShimOf(options: {
   exportName: string;
   entry: string;
@@ -687,7 +769,7 @@ async function bundlePackageOnce(
   const outDir = join(options.cacheRoot, key);
   const manifestPath = join(outDir, ".files.json");
   options.log?.(`[bundle-rev] ${options.name}: hash-start watch=${options.watch.join(",")}\n`);
-  const rev = `${BUNDLER_REV}:${await fingerprint(options.watch)}`;
+  const rev = await contentRev(options.watch);
   options.log?.(`[bundle-rev] ${options.name}: hash=${rev}\n`);
   const cached = JSON.parse(await readFile(manifestPath, "utf8").catch(() => "{}")) as {
     rev?: string;
@@ -717,6 +799,9 @@ async function bundlePackageOnce(
       resolved.push([dep, depVersion, depRoot]);
       options.onResolved?.(dep, depVersion, depRoot);
     },
+    [options.appManifest, ...sharedRuntimeManifests(options.appManifest)].filter(
+      (value): value is string => value !== undefined,
+    ),
   );
   const plugins: (PluginOption | Plugin)[] = [
     // alias：rolldown 的 `resolve.alias` 只吃"字符串 → 字符串"的对象，而我们的 alias 带正则
@@ -786,7 +871,17 @@ async function bundlePackageOnce(
         continue;
       }
     }
-    input[exportName] = (await cssShimOf({ exportName, entry, outDir })) ?? entry;
+    const cssEntry =
+      entry.endsWith(".css") && /@import\s/u.test(await readFile(entry, "utf8").catch(() => ""))
+        ? await (async () => {
+            const css = rewriteCssImports(await readFile(entry, "utf8"), resolvable);
+            await mkdir(outDir, { recursive: true });
+            const rewritten = join(outDir, `${exportName.replaceAll("/", "+")}.imports.css`);
+            await writeFile(rewritten, css, "utf8");
+            return rewritten;
+          })()
+        : entry;
+    input[exportName] = (await cssShimOf({ exportName, entry: cssEntry, outDir })) ?? entry;
   }
   if (entryShims.size !== 0) {
     plugins.push({
@@ -799,10 +894,9 @@ async function bundlePackageOnce(
       },
     });
   }
-  // **直接跑 rolldown**（不经过 `vite build`）：插件本来就是 rolldown 的接口，而 vite 在这条路上只提供了
-  // lib 模式的入口/输出命名与 `worker.format`——那几项自己写更直接，且 `build.rolldownOptions` 里的
-  // `transform` / `resolve` 也不会再被 vite 吞掉（对照表见债文档，那份债随这次改动一起销）。
   const bundle = await rolldown({
+    // 浏览器平台：按 exports 条件的 browser/import 选入口，并按浏览器语义处理 CJS。
+    platform: "browser",
     input,
     plugins,
     // 外置/官方包祖先链里没有 tsconfig：显式指一份（`resolve.tsconfigFilename`），否则它们的
@@ -829,6 +923,9 @@ async function bundlePackageOnce(
     },
   });
   const { output: items } = await bundle.generate({
+    // CJS→ESM 的互操作交回 rolldown（不再手写具名导出包装）：named 让 CJS 的键成为具名导出，
+    // interop auto 让 `module.exports = require(… )` 这类入口同时保留 default 与具名导出。
+    exports: "named",
     format: "es",
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
     entryFileNames: "[name].js",

@@ -41,7 +41,8 @@ const request = { method: "GET", url: "/", headers: {} } as unknown as IncomingM
 
 /** 直接往缓存里摆一份产物 + 清单（模拟 `bundlePackage` 的输出），验证路由的服务面。 */
 async function seedPackage(cache: string, key: string): Promise<void> {
-  const dir = join(cache, key);
+  // 命名空间：联邦产物一律落在 `<cacheDir>/client-modules` 下（见 `AppEnv.cacheDirOf`）。
+  const dir = join(cache, "client-modules", key);
   await mkdir(join(dir, "assets"), { recursive: true });
   await writeFile(join(dir, "client.js"), "export const ok = 1;\n", "utf8");
   await writeFile(join(dir, "assets", "logo-abc.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
@@ -122,5 +123,39 @@ describe("FederationDefault.serve", () => {
     expect(status()).toBe(200);
     expect(headers()["content-type"]).toBe("image/png");
     expect(headers()["cache-control"]).toContain("immutable");
+  });
+  it("CJS 子路径：shim/with-selector 的具名导出可见（cjsShimOf 在真实路径生效）", async () => {
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/usync-fixture@1.0.0/shim/with-selector.js",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status()).toBe(200);
+    expect(body()).toContain("useSyncExternalStoreWithSelector");
+  });
+  it("CSS 子路径出口：brand-font.css 走联邦地址可服务（不是 404）", async () => {
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/css-fixture@1.0.0/brand-font.css",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status()).toBe(200);
+    expect(body()).toContain("--brand-font");
+  });
+  it("无 exports 的包子路径：shim/with-selector 落到文件而不是主入口", async () => {
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/usync-plain-fixture@1.7.0/shim/with-selector.js",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status()).toBe(200);
+    expect(body()).toContain("useSyncExternalStoreWithSelector");
+    expect(body()).not.toContain("main entry point is not supported");
   });
 });

@@ -26,6 +26,8 @@ export class ViteHandoffDefault extends ViteHandoff {
   protected async onInit(ctx: Context): Promise<void> {
     const options = {
       repoRoot: this.appEnv.values.profileDir,
+      // 缓存落在数据根下的命名空间里（`<cacheDir>/vite`）：打包形态的 `profileDir` 只读。
+      cacheDir: this.appEnv.cacheDirOf("vite"),
       appRoot: this.appEnv.appBootDir,
       base: "/",
       // **只收窄"当文件"的范围**：`include: []` 时全部预构建，页面仍由 vite 服务。

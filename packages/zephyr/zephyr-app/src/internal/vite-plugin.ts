@@ -101,7 +101,11 @@ export function dshClientPlugin(options: ClientPluginOptions): Plugin {
       // 解析基准：虚拟模块（`\0…`）**不是**文件系统路径——`createRequire` 拿到它会直接抛
       // （行清单里的包名 import 就走在虚拟模块里）。以 `/` 开头的是仓库根相对路径。
       const bare = packageNameOf(source);
-      if (bare !== "" && isDevFile(bare, devFilePatterns())) {
+      // **资源类说明符不走「当文件」那条**：`clientHalfOf` 只认 `src/client/**` 的源码脚本，
+      // `.css` / 字体 / 图片子路径必然落空 → 退回 vite → 地址不带 `/_zephyr` 前缀（404）。
+      // 资源一律交给 prebundle 地址，由 `serve` + `cssShimOf` 产出样式。
+      const assetLike = /\.(css|scss|less|woff2?|ttf|otf|png|jpe?g|gif|svg)$/u.test(source);
+      if (!assetLike && bare !== "" && isDevFile(bare, devFilePatterns())) {
         // **名单点名的包当文件**：给出它的 client 半源码路径，vite 只当普通模块编译与缓存（HMR 照常）。
         const fromFile = importer.startsWith("\0")
           ? undefined

@@ -5,8 +5,6 @@ import { Injectable } from "@morlay/zephyr";
 
 @Injectable()
 export abstract class ConfigForms {
-  static readonly providerName = "configForms";
-
   abstract get<T>(entryId: string): ConfigForm<T>;
 
   /**
@@ -15,7 +13,10 @@ export abstract class ConfigForms {
    * `ui-conversation` 在读：关闭时它不注册 trajectory（轨迹）视图。宿主没有设置面时恒为 `false`。
    */
   abstract readonly developerTools: {
-    readonly enabled: { getSnapshot(): boolean; subscribe(listener: () => void): () => void };
+    readonly enabled: {
+      getSnapshot(): boolean;
+      subscribe(listener: () => void): () => void;
+    };
     setEnabled(enabled: boolean): Promise<void>;
   };
 }
