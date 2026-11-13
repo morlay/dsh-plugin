@@ -15,7 +15,7 @@ import {
   SessionRemoteBinding,
   SessionRemoteDefault,
 } from "@morlay/zephyr-app/client";
-import { provideSettingUi } from "@morlay/dsh-conversation/ui";
+import { provideSettingHost, provideSettingUi } from "@morlay/dsh-conversation/ui";
 import {
   providePermissionUi,
   provideApproval,
@@ -33,26 +33,29 @@ import { provideBetterSessionUi } from "@morlay/better-session/ui";
 /**
  * 应用侧 client 清单：框架链 + 业务链 + 各域前端行。
  *
- * 顺序 = 依赖（提供方在前）；三处跨包硬约束用注释钉住，别"看起来能跑"就重排：
- * - `provideSettingHost()` **必须在** `provideClientChain()` **之前**：它提供的 `configForms` 是链的
- *   必需前置（链内的 `Locale` / `Theme` 按契约要它），缺了链根本起不来；
- * - `provideTheme()` **必须紧跟**链之后（晚于 `configForms`）：`ui-theme` 在 apply 期同步读
- *   `ctx.configForms`，读不到只订阅一次 `undefined`、不重试；
- * - `provideLayout()` **必须跟在 `provideTheme()` 之后**：链不再自带渲染面，而 `ui-layout` 在 apply 期
- *   同步读 `ctx.theme`，漏装或不按序装的表现是"界面一片空白"而不是报错；
- * - `provideModelSelectionSlots()` **必须** 在会话界面与 `provideCommandUi()` 之后（要 `sessions` / `slots` /
- *   `locale` / `remote` 就位）。
- * @param features - 叠加在 framework 链上的清单变换（测试用它把连接指向随机端口；应用本身不需要）。
+ * 顺序**不是**手写的硬约束：`bootstrapApplication` 按 `inject` 声明做拓扑排序（`bootstrap.ts` 的
+ * `orderByDependencies`），提供者一定排在消费者之前；清单里的位置只是**同层基准**（排序保持原序），
+ * 写出来是为了读得懂。下面只记「谁提供、谁消费」，不记「必须排在哪」：
+ * - `provideSettingHost()` 提供 `configForms`（链内 `Locale` / `Theme` 都 `inject(ConfigForms)`）；
+ *   它与 `provideSettingUi()`（页面位置 + 模型选择器）拆开是**职责**：一个是面，一个是页面；
+ * - `provideTheme()` 消费 `configForms`、`provideLayout()` 消费 `theme`——同一条边，同样由排序保证；
+ * - `provideSettingUi()` 里的模型选择器消费 `sessions` / `slots` / `locale` / `remote`。
+ * @param features - 叠加在 framework 链上的清单变换（把连接指向别的宿主时用；应用本身不传）。
  * @returns provider 清单。
  */
 export function appClientProviders(...features: ProviderFeature[]): ProviderEntry[] {
   return [
-    // 连接行单独先挂（链里其余行从 `without` 剔掉它）：
-    // 设置入口行的上游（`ui-settings` 的 `SettingsDescribeMirror`）在 **apply 期**就调 `remote.describe`，
-    // 而 `Remote` 的传输要到它自己被激活之后才拿到 `Connection` 实例——连接排在设置行后面时，
-    // 那次调用会退回 `location.origin` 建 mux（非浏览器宿主直接连错地址，症状是"数据永远是空的"）。
+    // 连接行单独先挂（链里的同名行用 `without` 剔掉，避免注册两次）：`Remote` 注入 `Connection`、
+    // 设置入口行注入 `Remote`，先后由拓扑排序保证。反序的代价：`SettingsDescribeMirror` 在 apply 期
+    // 就调 `remote.describe`，拿不到 `Connection` 时那次调用会退回 `location.origin` 建 mux
+    // （非浏览器宿主直接连错地址，症状是"数据永远是空的"）。
     ...provideClientConnection(...features),
     ...provideClientRemote(),
+
+    // 设置面的**入口行**（`configForms` / `settingsSchema` 的真实现）：链内 `Locale` / `Theme` 都
+    // `inject(ConfigForms)`，拓扑排序会把本行排到它们之前。放在链前只是同层基准（读起来顺），
+    // 不是硬约束；本行自己 `inject(Remote)`，同样由排序保证在 remote 之后。
+    ...provideSettingHost(),
 
     // framework 链的其余行（slots / locale / 渲染面 …）：连接与 remote 已单独装过，按实现类剔除。
     ...provideClientChain(
@@ -63,10 +66,10 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
       without(SessionRemoteBinding),
     ),
 
-    // 渲染面与设置面板的位置（`ui-theme` → `ui-layout` 在 apply 期同步读，顺序即依赖）：
-    // - `provideTheme()`：主题服务（`configForms` 已由最前面的设置行给出）；
-    // - `provideLayout()`：链**不再**自带渲染面（布局在 apply 期读 `ctx.theme`），必须在这里装；
-    // - `provideSettingSlots()`：通用页 + 模型页的位置（要上面两者的 `configForms`）。
+    // 渲染面（`Theme` 注入 `configForms`、`Layout` 注入 `theme`：同一条边，由排序保证提供者在消费者前）：
+    // - `provideTheme()`：主题服务；
+    // - `provideLayout()`：链**不再**自带渲染面，布局要在这里装（漏装是"界面一片空白"，不是报错）；
+    //   设置页的位置（通用页 + 模型页）由 `provideSettingUi()` 注册，见那一段。
     ...provideTheme(),
     ...provideLayout(),
 
@@ -94,12 +97,14 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
 
     // 附件上传运行时（`fileUpload`）：行的 home 在 upload 域，它装进会话界面的输入区。
     ...provideFileUploadUi(),
-    // 设置面（`configForms` 真实现 + 页面位置 + 模型选择器）：**必须在链之后**（链内 `Locale` / `Theme`
-    // 按 `configForms` 面解析），且模型选择器要 `sessions` / `commandUi`——所以整段排在命令面与输入区之后。
+    // 设置的**页面位置与模型选择器**：与入口行 `provideSettingHost()` 是职责拆分（面在前、页面在后），
+    // 不是顺序约束；这里的位置只是同层基准——`configForms` 由排序保证先于消费者就位，
+    // 模型选择器消费 `sessions` / `commandUi`。
     ...provideSettingUi(),
 
-    // 权限面板。**必须排在设置之后**：它的 `describeFace` 来自设置行的共享 mirror；
-    // 排在前面的后果不是报错，而是"确认按钮点了不发写入"（`view === undefined` 直接早退）。
+    // 权限面板：`UiPermission` 注入 `configForms` / `settingsSchema`（都由链前的 `provideSettingHost()`
+    // 提供，排序保证）以及 `sessions` / `commandUi`；这里的位置只是同层基准。缺那份面不是报错，
+    // 而是"确认按钮点了不发写入"（`view === undefined` 直接早退）。
     // `provideApproval()` 紧跟：批准弹层复用同一个权限面。
     ...providePermissionUi(),
     ...provideApproval(),

@@ -15,6 +15,7 @@
     "@morlay/better-session": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-instruction": "workspace:^",
+    "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-agent-team": "workspace:^",
     "@morlay/dsh-attachment": "workspace:^",
     "@morlay/dsh-auth": "workspace:^",
@@ -44,7 +45,6 @@
   },
   "devDependencies": {
     "@morlay/dsh-agent": "workspace:*",
-    "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-attachment": "workspace:*",
     "@morlay/dsh-sandbox": "workspace:*",
     "@morlay/dsh-session-persistence": "workspace:*",
