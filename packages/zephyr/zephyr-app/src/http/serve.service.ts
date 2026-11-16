@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { inject, Injectable, Logger, type Context, type OnInit } from "@morlay/zephyr";
 import { AppEnv } from "../app-env/app-env.contract.ts";
 import { Federation } from "../federation/federation.contract.ts";
-import { ViteHandoff } from "../vite-handoff/vite-handoff.contract.ts";
+import { ClientAssets } from "../client-assets/client-assets.contract.ts";
 import { WebServe } from "./serve.contract.ts";
 
 /** 仓库路径（打包形态下不存在，放过去只会让人在几百条请求里猜）。 */
@@ -15,7 +15,7 @@ const REPO_PATH = /^\/(?:packages|vendor|apps|devpackages|node_modules)(?:\/|$)/
 export class ServeDefault extends WebServe implements OnInit {
   private readonly appEnv = inject(AppEnv);
 
-  private readonly vite = inject(ViteHandoff);
+  private readonly assets = inject(ClientAssets);
 
   private readonly federation = inject(Federation);
 
@@ -73,9 +73,9 @@ export class ServeDefault extends WebServe implements OnInit {
       await this.replyPage(req, res);
       return;
     }
-    if (this.vite.serve(req, res)) return;
+    if (await this.assets.serve(req, res)) return;
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-    res.end("client-modules: vite 没有这条路由\n");
+    res.end("client-modules: 前端资产没有这条路由\n");
   }
 
   /** `/@fs/…/node_modules/<pkg>/…` → 302 到联邦地址（解析不到就交给 vite）。 */
@@ -107,7 +107,7 @@ export class ServeDefault extends WebServe implements OnInit {
     // 入口脚本走 `/@fs/<绝对路径>`（vite 的 root 收在 app-boot，相对路径要靠 root 解析）。
     const entryUrl = `/@fs${join(this.appEnv.appBootDir, "index.ts")}`;
     let injected = html.replace(/(src=)"\.\/index\.ts"/, `$1"${entryUrl}"`);
-    if (this.vite.hmr) {
+    if (this.assets.hmr) {
       injected = injected.replace(
         "</head>",
         `  <script type="module" src="/@vite/client"></script>\n  </head>`,

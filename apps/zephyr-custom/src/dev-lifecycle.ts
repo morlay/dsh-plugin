@@ -1,21 +1,22 @@
-// 开发形态的生命周期：把框架的 `ServerHmr`（vite 的变更监听 + 空闲判据）接到 CLI 的重载口上。
+// 开发形态的生命周期：把框架的 `DevHmr`（换树时机）接到 CLI 的重载口上。
 //
-// 为什么要适配而不用 CLI 直接认 `ServerHmr`：CLI 不该知道 vite，也不该依赖 `@morlay/zephyr-app`
-// 的 internal；它只认「可以重载了」这件事。拆旧树、装配新树、卡住就退出——那些护栏在 CLI 里，
-// 因为它们与具体框架无关。
+// 为什么要适配而不用 CLI 直接认 `DevHmr`：CLI 不该知道前端资产是 vite 还是静态目录，也不该依赖
+// `@morlay/zephyr-app` 的实现行；它只认「可以重载了」这件事。拆旧树、装配新树、卡住就退出——
+// 那些护栏在 CLI 里，因为它们与具体框架无关。
+//
+// **这里不做变更桥接**：哪些文件变了归 `ClientAssets`（谁服务前端资产谁认得出「服务端那半变了」），
+// `DevHmr` 的实现自己向它订阅；应用侧只把「业务层空不空闲」与「换树的动作」交出去。
 import { inject, Injectable } from "@morlay/zephyr";
 import { DevLifecycle, type DevLifecycleHooks } from "@morlay/zephyr-cli";
-import { ServerHmr } from "@morlay/zephyr-app";
-import { ViteHandoff } from "@morlay/zephyr-app";
+import { DevHmr } from "@morlay/zephyr-app";
 import { AgentDirectory } from "@morlay/dsh-agent";
 import { JobRegistry } from "@morlay/dsh-job";
 
-/** 把 vite 的变更监听接到 CLI 的重载口。 */
+/** 把 `DevHmr` 接到 CLI 的重载口。 */
 @Injectable()
 export class CustomDevLifecycle extends DevLifecycle {
-  private readonly hmr = inject.optional(ServerHmr);
-
-  private readonly handoff = inject.optional(ViteHandoff);
+  /** 开发形态才有：非 dev 形态没人装 `DevHmr`，这里就是 `undefined`（CLI 那侧也就不会有重载）。 */
+  private readonly hmr = inject.optional(DevHmr);
 
   private readonly agents = inject.optional(AgentDirectory);
 
@@ -25,15 +26,10 @@ export class CustomDevLifecycle extends DevLifecycle {
    * @param hooks - CLI 提供的重载动作。
    */
   install(hooks: DevLifecycleHooks): void {
-    const hmr = this.hmr;
-    const handoff = this.handoff;
-    // 非 dev 形态（或装了替身）没有这两个行：静默不装，CLI 那侧就不会有重载。
-    if (hmr === undefined || handoff === undefined) return;
-    hmr.install({
+    this.hmr?.install({
       isIdle: () => this.isIdle(),
-      reload: (files) => hooks.restart(files),
+      restart: (files) => hooks.restart(files),
     });
-    handoff.onServerSourceChange((file) => hmr.notify(file));
   }
 
   /**

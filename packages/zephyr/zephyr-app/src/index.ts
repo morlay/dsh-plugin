@@ -17,6 +17,10 @@ export * from "./api-gateway/remote-handlers.contract.ts";
 export * from "./credentials/credentials.contract.ts";
 export * from "./contract-coverage.ts";
 export * from "./client-modules/client-modules.contract.ts";
+// 两条**空契约**：前端资产怎么出、开发态何时换树。**只出契约**——dev 的实现（`ViteClientAssets`）
+// 与 `ViteHandoffDefault` 同一条规矩走 `./node`；prod 的实现由 T2/T3 随开发运行时与产物布局落地。
+export * from "./client-assets/client-assets.contract.ts";
+export * from "./dev-hmr/dev-hmr.contract.ts";
 export { provideApiGateway } from "./api-gateway/provide.ts";
 export { provideMuxServer } from "./api-gateway/provide.ts";
 

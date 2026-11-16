@@ -32,7 +32,7 @@
 | `src/client/client.provide.ts`      | 客户端清单（`appClientProviders()`）。没有 barrel：`app-boot.ts` 直接从这里取。                                                 |
 | `src/zephyr.provide.ts`             | **装配清单的唯一 home**：`customProvidersOf(rows, { dataDir })`，数组顺序就是装配顺序。                                         |
 | `src/server.ts`                     | **服务端入口**：导出 `(mode) => 清单`。生命周期（装配 / 重载 / 端口 / 退出码）归 `zephyr` CLI，这里不放。                       |
-| `src/dev-lifecycle.ts`              | 把框架的 `ServerHmr` 接到 CLI 的重载口上（什么时候可以换树由应用说，换树由 CLI 做）。                                           |
+| `src/dev-lifecycle.ts`              | 把框架的 `DevHmr` 接到 CLI 的重载口上（什么时候可以换树由应用说，换树由 CLI 做；变更来源归 `ClientAssets`）。                   |
 | `zephyr.config.ts`                  | 工作区配置：`server.entry`（清单）/ `client.entry`（**页面 `index.html`**，+ `vite` 片段）/ `desktop` / `dataDir`。唯一配置面。 |
 | `zephyr.config.ts` 的 `client.vite` | 构建用的解析规则片段：`zephyrClientViteConfig()`（`@morlay/zephyr-app/build`）（alias / define / 装饰器），产物位置由 CLI 给。  |
 

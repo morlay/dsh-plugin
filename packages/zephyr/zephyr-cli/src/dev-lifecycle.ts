@@ -1,6 +1,6 @@
 // 开发形态的生命周期口：**HMR 属于应用，重启属于 CLI**。
 //
-// CLI 不知道 vite、也不知道 `ServerHmr`（那是 zephyr-app 的 internal），它只提供这个可选注入点：
+// CLI 不知道 vite、也不知道 `DevHmr` 的具体实现（那归开发运行时），它只提供这个可选注入点：
 // 应用（或框架包）把「什么时候可以换树、源码变了要重载」告诉 CLI，换树的动作由 CLI 做——
 // 因为「先拆后起、卡住就退出」这两条护栏是 CLI 的职责，不该每个应用抄一遍。
 import { Injectable } from "@morlay/zephyr";
