@@ -11,8 +11,6 @@ import { AppEnv } from "../app-env/app-env.contract.ts";
 class FieldsOnlyEnv extends AppEnv {
   readonly values = { dataDir: "/data", profileDir: "/profile", defaultWorkingDirectory: "/work" };
   readonly cacheDir = join("/data", "cache");
-  readonly packageRoot = "/package";
-  readonly appBootDir = "/profile/src/client";
   readonly profileManifest = "/profile/package.json";
 }
 

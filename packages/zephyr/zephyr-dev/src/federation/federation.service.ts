@@ -6,7 +6,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
-import { AppEnv, Federation, type FederationConfig } from "@morlay/zephyr-app";
+import { AppEnv } from "@morlay/zephyr-app";
+import { Federation, type FederationConfig } from "./federation.contract.ts";
 import { exportTargetOf, fileInPackage, manifestOf } from "../internal/resolve.ts";
 import { nodeStubPathOf } from "../internal/package-root.ts";
 import {
@@ -215,7 +216,7 @@ export class FederationDefault extends Federation {
     const bases = [
       // 引用方的清单优先：pnpm 严格布局下，传递依赖只在自己的 node_modules 里可见。
       ...(from === undefined ? [] : [from]),
-      join(this.appEnv.packageRoot, "package.json"),
+      // 装配根的清单（`<profileDir>/package.json`）：闭包里它就是部署面的依赖图。
       this.appEnv.profileManifest,
     ];
     for (const base of bases) {

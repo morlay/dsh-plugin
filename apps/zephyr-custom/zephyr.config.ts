@@ -3,7 +3,7 @@
 // 它描述的是「这个工作区是什么」，不是「CLI 有哪些命令」：`dev` / `build` / `preview` 永远存在，
 // 桌面命令由插件追加（本工作区暂未装桌面插件）。
 import { provideDesktopBundle } from "@morlay/zephyr-desktop-bundle";
-import { zephyrClientViteConfig } from "@morlay/zephyr-app/build";
+import { zephyrClientViteConfig } from "@morlay/zephyr-dev/build";
 import type { ZephyrConfig } from "@morlay/zephyr-cli";
 
 export default {

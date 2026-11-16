@@ -36,7 +36,6 @@ describe("AppEnvDefault：装配面的配置真的生效", () => {
       profileDir: "/profile",
       dataDir: "/profile/storages",
     });
-    expect(env.appBootDir).toBe("/profile/src/client");
     expect(env.profileManifest).toBe("/profile/package.json");
     // 运行 cache 落在数据根下（`{DSH_HOME}/cache`），不跟着装配面走。
     expect(env.cacheDir).toBe("/profile/storages/cache");
@@ -92,8 +91,7 @@ describe("AppEnvDefault：装配面的配置真的生效", () => {
 class LegacyFieldsEnv extends AppEnv {
   readonly values: AppEnvValues = { dataDir: "/data", profileDir: "/profile" };
   readonly cacheDir = "/data/cache";
-  readonly packageRoot = "/package";
-  readonly appBootDir = "/profile/src/client";
+
   readonly profileManifest = "/profile/package.json";
 }
 

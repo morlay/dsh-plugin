@@ -40,8 +40,8 @@
     "@morlay/zephyr": "workspace:*",
     "@morlay/zephyr-app": "workspace:^",
     "@morlay/zephyr-cli": "workspace:*",
-    "@morlay/zephyr-ui": "workspace:^",
-    "@oxc-project/runtime": "^0.123.0"
+    "@morlay/zephyr-dev": "workspace:^",
+    "@morlay/zephyr-ui": "workspace:^"
   },
   "devDependencies": {
     "@morlay/dsh-agent": "workspace:*",
@@ -53,6 +53,7 @@
     "@morlay/zephyr": "workspace:*",
     "@morlay/zephyr-app": "workspace:*",
     "@morlay/zephyr-cli": "workspace:^",
-    "@morlay/zephyr-desktop-bundle": "workspace:^"
+    "@morlay/zephyr-desktop-bundle": "workspace:^",
+    "@morlay/zephyr-dev": "workspace:^"
   }
 }

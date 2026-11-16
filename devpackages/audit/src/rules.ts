@@ -91,7 +91,8 @@ export function keepReason(input: {
 
   // ⑥ 生成物里才出现的运行时：rolldown 给装饰器注入的 helper 来自 `@oxc-project/runtime`
   //    （`helpers/decorate`），AST 里一个 import 都没有——它的消费方是**产物**，不是源码。
-  //    `zephyr-app` 声明它，是让联邦的外置名单认识这份 helper（删了 helper 会被内联进产物）。
+  //    声明它的地方只有一个：`packages/boot/dsh-oxc-node`（本仓库的 TS 运行时入口，
+  //    `oxc-transform` 与它必须同版本线）。框架包不声明它：那是 node 侧的补强，不进运行时契约。
   if (name === "@oxc-project/runtime") return "生成物运行时（rolldown 注入的 helper，AST 不可见）";
 
   return undefined;

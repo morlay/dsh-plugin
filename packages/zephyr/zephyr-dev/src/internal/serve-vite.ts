@@ -14,7 +14,7 @@ import { dshClientPlugin } from "./vite-plugin.ts";
 import { packageRootOf } from "./resolve.ts";
 import { nodeStubEsmPathOf } from "./package-root.ts";
 import { addZephyrPrefix, attachUrlRewriting, stripZephyrPrefix } from "./hmr-path.ts";
-import { HMR_PATH } from "@morlay/zephyr-app/internal";
+import { HMR_PATH } from "./hmr-path.ts";
 
 /** vite 期望的 http server 类型（`server.hmr.server`）：HMR 的 WebSocket 挂在它的 `upgrade` 上。 */
 type HmrServer = NonNullable<

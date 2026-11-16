@@ -1,5 +1,5 @@
 import { provide } from "@morlay/zephyr";
-import { provideHttp } from "@morlay/zephyr-app";
+import { provideHttp } from "../http/provide.ts";
 import { ClientModulesDefault } from "./client-modules.service.ts";
 import { ViteClientAssets } from "../client-assets/vite-client-assets.service.ts";
 import { provideFederation } from "../federation/index.ts";

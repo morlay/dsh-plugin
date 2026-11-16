@@ -1,5 +1,5 @@
 /**
- * `WebServer` 的三件事（一套装配跑完）：路由表与 fallback / upgrade、gzip、出站 URL 重写接线。
+ * `WebServer` 的两件事（一套装配跑完）：路由表与 fallback / upgrade、gzip。
  *
  * 这三件原本是三个文件、各起一次服务——它们共享同一份 `WebServer` 装配，分开只是重复支付启动成本，
  * 并不会让失败定位更清楚（每条断言仍然只读自己那条路由）。
@@ -11,14 +11,15 @@ import { connect } from "node:net";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  FEDERATION_PREFIX,
-  HMR_PATH,
   WebServer,
   WebServerDefault,
   WebStartup,
   WebStartupDefault,
-  attachUrlRewriting,
 } from "@morlay/zephyr-app/testing";
+
+/** 一条前缀路由与一条 upgrade 路由（`WebServer` 的机制，与具体业务前缀无关）。 */
+const PREFIX = "/_test/@modules";
+const UPGRADE = "/_test/hmr";
 
 // 随机端口：`WebStartupDefault` 读 `process.env.PORT`（缺省 3080），并行跑的 web spec 会互相抢。
 process.env.PORT ??= "0";
@@ -43,7 +44,7 @@ beforeAll(async () => {
   // 路由只在装配后注册一次：各用例读同一份路由表（「注册即记录」见第一条用例）。
   webServer.register({
     kind: "prefix",
-    path: FEDERATION_PREFIX,
+    path: PREFIX,
     handler: (_q, s) => {
       s.end("federation");
     },
@@ -51,7 +52,7 @@ beforeAll(async () => {
   webServer.registerFallback((_q, s) => {
     s.end("fallback");
   });
-  webServer.registerUpgrade({ path: HMR_PATH, handler: () => {} });
+  webServer.registerUpgrade({ path: UPGRADE, handler: () => {} });
   webServer.register({
     kind: "exact",
     path: "/text",
@@ -78,17 +79,6 @@ beforeAll(async () => {
       s.end("raw");
     },
   });
-  webServer.register({
-    kind: "exact",
-    path: "/mod",
-    handler: (_q, s) => {
-      attachUrlRewriting(s);
-      s.writeHead(200, { "content-type": "application/javascript" });
-      s.write('import a from "/@fs/tmp/a.ts";');
-      s.write('import b from "/@id/__x00__rows";');
-      s.end('export default "/@vite/client";');
-    },
-  });
 });
 
 afterAll(async () => {
@@ -99,15 +89,15 @@ describe("路由表与 fallback / upgrade", { timeout: 10_000 }, () => {
   it("注册即记录：prefix / fallback / upgrade 都出现在 routesOf()", () => {
     expect(webServer.routesOf()).toEqual(
       expect.arrayContaining([
-        { kind: "prefix", path: FEDERATION_PREFIX },
+        { kind: "prefix", path: PREFIX },
         { kind: "fallback", path: "*" },
-        { kind: "upgrade", path: HMR_PATH },
+        { kind: "upgrade", path: UPGRADE },
       ]),
     );
   });
 
   it("prefix 命中", async () => {
-    const response = await fetch(`${base}${FEDERATION_PREFIX}/pkg@1/index.js`);
+    const response = await fetch(`${base}${PREFIX}/pkg@1/index.js`);
     expect(await response.text()).toBe("federation");
   });
 
@@ -151,15 +141,6 @@ describe("gzip", { timeout: 10_000 }, () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-encoding")).toBeNull();
     expect(await response.text()).toBe("raw");
-  });
-});
-
-describe("出站 URL 重写的接线", { timeout: 10_000 }, () => {
-  it("流式 write 的分片与 end 的分片都改写", async () => {
-    const response = await fetch(`${base}/mod`);
-    expect(await response.text()).toBe(
-      'import a from "/_zephyr/@fs/tmp/a.ts";import b from "/_zephyr/@id/__x00__rows";export default "/_zephyr/@vite/client";',
-    );
   });
 });
 

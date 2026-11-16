@@ -1,34 +1,46 @@
 # @morlay/zephyr-app
 
-宿主与浏览器两半的**装配面**：http/web-server、connection、client 行清单与按需联邦产物（`/_zephyr/@modules/<pkg>@<ver>/<export>`）、页面骨架（`app-boot`），以及浏览器半的官方 client 链。
+**运行时**（宿主与浏览器双态）：web server 与路由表、connection、remote、api-gateway、`AppEnv` 部署参数、client 行清单，以及浏览器半的官方 client 链。
 
 运行期语义全归 cordis（见 [`@morlay/zephyr` 的接口定义](../zephyr/.agents/designs/20261104-zephyr-是-cordis-plugin-的语法糖.md)）：本包只提供契约、`XxxDefault` 实现与**域装配函数**，不持有自己的服务表或作用域。
+
+**开发态的一切不在这里**：vite、联邦预编译、页面兜底（`/@fs` 与 HMR 注入）、服务端换树，连 `@oxc-project/runtime` 这种 node 侧补强也不在——它们住 [`@morlay/zephyr-dev`](../zephyr-dev/README.md) 与 [`@morlay/dsh-oxc-node`](../../boot/dsh-oxc-node/README.md)。
+
+判据是**依赖清单**，不是注释：`src/__tests__/dev-deps-absent.spec.ts` 断言 `dependencies` / `devDependencies` / `peerDependencies` 里都没有 vite / chokidar / lightningcss / rolldown / `@oxc-project/runtime`。
 
 ## 用法
 
 ```ts
-// 宿主（node）：一行装配
-import { provideWeb } from "@morlay/zephyr-app";
-import { provideClientModules } from "@morlay/zephyr-app/node";
+// 宿主（node）：运行时一行装配
+import { provideWeb, provideAppEnv } from "@morlay/zephyr-app";
 
-const app = await bootstrapApplication({ providers: [...provideWeb(), ...provideClientModules()] });
+const app = await bootstrapApplication({ providers: [...provideAppEnv(), ...provideWeb()] });
 
 // 浏览器：入口归应用，框架只提供「怎么装、怎么挂」
 await bootstrapClient({ providers: [...provideClientChain(), ...provideSessions()] });
 ```
 
 - 每个域导出一个 `provideXxx(...features)`；外部只调它，不手写 provider 清单。
-- 契约 + `XxxDefault`：宿主面见 `src/{web,connection,rows,federation,http,api-gateway}/`，浏览器链见 `src/client/<domain>/`。
-- 行清单由装配方经 `ClientRows` 契约给（`clientPackagesOf` 从入口的 provider 清单推导）。
-- 路径全部来自 `AppEnv` 契约（`dataDir` / `profileDir` / `defaultWorkingDirectory`），不读环境变量、不向上找目录。
+- 契约 + `XxxDefault`：宿主面见 `src/{web,api-gateway,app-env,connection,remote,remote-access,typert}/`，浏览器链见 `src/client/<domain>/`。
+- 路径全部来自 `AppEnv` 契约（`dataDir` / `profileDir` / `defaultWorkingDirectory` / `profileManifest` / `cacheDir`），不读环境变量、不向上找目录。
   它是**装配方必须给的**（`provideAppEnv(configure(AppEnvDefault, {...}))`）；`process.cwd()` 只在 `AppEnvDefault` 的构造里出现一次，
   其余代码一律读 `AppEnv` 给的派生值。
   `profileDir` 是**装配根**（`package.json`、依赖解析、产物根），`defaultWorkingDirectory` 是**新会话 / agent 的起始目录**——
   打包形态下前者是包内只读的 `Resources/runtime`，agent 不该在那儿干活，所以两者不能合并成一条路径。
-- **dev 的判据是一条正向白名单**：`devFiles`（glob，默认 `@morlay/*`）点名的包**当文件**逐文件走 vite（改它要 HMR），其余一律 prebundle（`@client-modules/…`）。想把上游也放进文件链就往名单里加——但要先接受它的循环 re-export 会被逐文件 ES 解析拒绝。
-- **remote 面不在装配方的配置里**：谁装了某个 remote 的宿主行，谁在自己的 `provideXxx()` 里用 `remoteDescriptor("<namespace>")` 登记一条（多值令牌 `RemoteDescriptor`）；`ClientModulesDefault` 用 `inject.all(RemoteDescriptor)` 聚合后 `$mount`。新增一个 remote 只改提供方，装配面零改动。
-- 客户端产物按请求预编译、落盘缓存，详见 [.agents/designs/20261013-客户端资源的联邦式预编译.md](./.agents/designs/20261013-客户端资源的联邦式预编译.md)。
-- 已知债：[.agents/debts/20261013-vite与宿主同进程.md](./.agents/debts/20261013-vite与宿主同进程.md)。
+- **`AppEnv` 只放两种形态都成立的事实**：开发态专属的路径（页面骨架在哪、vite 的 root）不在这里，
+  由 `zephyr-dev` 从 `profileDir` 自己推。
+- **remote 面不在装配方的配置里**：谁装了某个 remote 的宿主行，谁在自己的 `provideXxx()` 里用 `remoteDescriptor("<namespace>")` 登记一条（多值令牌 `RemoteDescriptor`）；开发运行时的 `ClientModulesDefault` 用 `inject.all(RemoteDescriptor)` 聚合后 `$mount`。新增一个 remote 只改提供方，装配面零改动。
+
+## 两条空契约
+
+形态问题不进运行时，这里只声明缝，实现在谁那儿归谁：
+
+| 契约           | 签名                                                                        | dev 的实现                          | prod 的实现         |
+| -------------- | --------------------------------------------------------------------------- | ----------------------------------- | ------------------- |
+| `ClientAssets` | `serve(req, res)` / `transformHtml(html)` / `hmr` / `onServerSourceChange` | `zephyr-dev` 的 `ViteClientAssets` | 静态目录（T3 落地） |
+| `DevHmr`       | `install({ isIdle?, restart })`                                             | `zephyr-dev` 的 `ServerHmr`        | 不装                |
+
+**只声明、不含实现**。生产形态装的是 T3 随产物布局落地的静态目录投递——同样不引构建链。
 
 ## 装配顺序（client 半）
 
@@ -52,23 +64,20 @@ ConfigForms（必需前置：SettingsHost 或 ConfigFormsInMemory）
 
 长期观测（不是调试探针），都走 `inject(Logger)`（`Logger` 的值就是 cordis 的 `ctx.logger`）：
 
-- `ClientModulesDefault` 在装配收尾打印路由表（`[routes] <kind> <path>`）——只有它知道路由是否都注册完了。
+- `ClientModulesDefault`（在 `zephyr-dev`）在装配收尾打印路由表（`[routes] <kind> <path>`）——只有它知道路由是否都注册完了。
 - `ConnectionDefault` 在 `rpc.intercept` 上包一层，打印 `[rpc] <channel>`。
 - `LoggerExporterDefault` 把 `ctx.logger` 接到 stdout（cordis 默认只把消息留在内存里）；严重级别落 stderr。
 
-## HMR
-
-`ViteHandoff` 契约的 `hmrUpgrade(req, socket, head)` 交给 vite 的 ws（vite 8 的 `server.ws` 运行时是 `ws.WebSocketServer`，类型层用最小断言）。`ClientModulesDefault.install()` 在 `HMR_PATH` 上注册 upgrade 路由，卸载时撤销。
-
-## 缓存
-
-运行期缓存只落在 `<dataDir>/cache/<namespace>`：`client-modules`（联邦预编译产物）与 `vite`（依赖预构建），
-入口是 `AppEnv.cacheDirOf(namespace)`——消费方不拼缓存根。整个 `<dataDir>/cache` 可以随时删（删了只慢一次）。
-取舍与命名空间清单见[目录契约](./.agents/designs/20261114-目录契约.md)。
-
 ## 验证
 
-- `pnpm exec vitest run packages/zephyr/zephyr-app/src` —— 两条端到端装配用例是判据：
-  - 宿主：`src/__tests__/api-gateway.spec.ts`（真 http + 真 WebSocket 升级）；
-  - 浏览器：`src/client/__tests__/render.smoke.spec.ts`（happy-dom 里装官方链 → layout 注册 `root` → mount 出 AppFrame）。
-- `pnpm exec oxlint packages/zephyr/zephyr-app/src`（type-aware，含 `typeCheck`）。
+```bash
+pnpm exec vitest run packages/zephyr/zephyr-app/src
+pnpm exec oxlint packages/zephyr/zephyr-app/src   # type-aware，含 typeCheck
+```
+
+两条端到端用例是主判据：
+
+- 宿主：`src/__tests__/api-gateway.spec.ts`（真 http + 真 WebSocket 升级）；
+- 浏览器：`src/client/__tests__/render.smoke.spec.ts`（happy-dom 里装官方链 → layout 注册 `root` → mount 出 AppFrame）。
+
+`src/__tests__/dev-deps-absent.spec.ts` 守着「运行时不带开发态」。

@@ -1,15 +1,10 @@
 // 装配：`prefix /_zephyr/@modules` → Federation；`fallback` → WebServe；`upgrade /_zephyr/hmr` → vite 的 ws；
 // remote 按**提供者登记的** `RemoteDescriptor` 装（不再有应用侧清单）。
 import { inject, Injectable, Logger, type Context } from "@morlay/zephyr";
-import {
-  Federation,
-  Remote,
-  RemoteDescriptor,
-  WebServe,
-  WebServer,
-  mountRemotes,
-} from "@morlay/zephyr-app";
-import { FEDERATION_PREFIX, HMR_PATH } from "@morlay/zephyr-app/internal";
+import { Remote, RemoteDescriptor, WebServer, mountRemotes } from "@morlay/zephyr-app";
+import { WebServe } from "../http/serve.contract.ts";
+import { FEDERATION_PREFIX, HMR_PATH } from "../internal/hmr-path.ts";
+import { Federation } from "../federation/federation.contract.ts";
 import { ClientModules } from "./client-modules.contract.ts";
 import { ViteHandoff } from "../vite-handoff/vite-handoff.contract.ts";
 

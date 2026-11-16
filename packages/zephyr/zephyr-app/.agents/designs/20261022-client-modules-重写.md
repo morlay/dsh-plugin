@@ -3,14 +3,14 @@
 状态：已实现——宿主侧只有契约 + `XxxDefault` + 域装配函数；路由、页面兜底与 remote 装载由 `ClientModules` 收口。
 范围：`packages/zephyr/zephyr-app/` 的宿主半（`src/{app-env,web,http,vite-handoff,client-modules,internal}/`）与它的入口形状（`.` / `./node` / `./client`）。
 非目标：联邦产物的构建规则（[设计 客户端资源的联邦式预编译](./20261013-客户端资源的联邦式预编译.md)）、`/api` 前缀（[设计 connection 的 /api 前缀](./20261109-connection的api前缀.md)）、命令与四阶段（zephyr-cli）、浏览器半的渲染。
-关联：[设计 客户端资源的联邦式预编译](./20261013-客户端资源的联邦式预编译.md)、[债务 vite dev server 与宿主同进程](./../debts/20261013-vite与宿主同进程.md)、[ADR-不fork上游前端组件只做插槽扩展](../../../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)。
+关联：[设计 客户端资源的联邦式预编译](./20261013-客户端资源的联邦式预编译.md)、[债务 vite dev server 与宿主同进程](../../zephyr-dev/.agents/debts/20261013-vite与宿主同进程.md)、[ADR-不fork上游前端组件只做插槽扩展](../../../../../.agents/adrs/20261001-不fork上游前端组件只做插槽扩展.md)。
 
 ## 一、决定
 
 | #   | 议题     | 决定                                                                                                               | 一句话理由                                               |
 | --- | -------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | 1   | 入口形状 | 主出口只出契约与 `provideXxx`；宿主清单实现走 `./node`；浏览器半走 `./client`                                      | 宿主进程加载包入口时不能带进 CSS / React                 |
-| 2   | 路径     | 所有路径由 `AppEnv` 给（`dataDir` / `profileDir` / `cacheDir` / `packageRoot` / `appBootDir` / `profileManifest`） | 部署参数只有装配面知道值，业务不读环境变量、不向上找目录 |
+| 2   | 路径     | 部署参数由 `AppEnv` 给（`dataDir` / `profileDir` / `cacheDir` / `profileManifest`）；开发态专属路径（页面骨架、vite 的 root）由 `zephyr-dev` 从 `profileDir` 自己推 | 部署参数只有装配面知道值，业务不读环境变量、不向上找目录；而"页面在哪"是形态知识，不属于运行时契约 |
 | 3   | 路由     | 一种注册面三种形状：`register`（prefix / exact）、`registerFallback`、`registerUpgrade`；`routesOf()` 可读         | 路由表是「谁接管了哪个前缀」的唯一事实                   |
 | 4   | 装配收口 | `ClientModules.install()` 一次注册 prefix → 联邦、fallback → 页面、upgrade → HMR，返回逆序撤销函数                 | 三条路由的顺序有语义（先具体、后兜底）                   |
 | 5   | remote   | remote 由**提供者登记**的多值令牌 `RemoteDescriptor` 装载，装配面不写清单                                          | 能力包自己声明要用哪些 remote                            |
@@ -20,10 +20,10 @@
 ## 二、现状事实
 
 - **入口**：`packages/zephyr/zephyr-app/src/index.ts`（契约与 `provideXxx`）、`src/node.ts`（`./node`，宿主清单实现）、`src/client/index.ts`（`./client`）。`package.json` 的 `exports` 还有 `./testing`、`./build`、`./remote`、`./client/remote` 等面。
-- **AppEnv**：`src/app-env/app-env.contract.ts` 定义形状，`app-env.service.ts` 的 `AppEnvDefault` 给缺省值（`dataDir = <cwd>/.dsh-store`、`cacheDir = <dataDir>/cache`、`packageRoot` / `appBootDir` / `profileManifest` 从包位置与 `profileDir` 推）。
+- **AppEnv**：`zephyr-app/src/app-env/app-env.contract.ts` 定义形状，`AppEnvDefault` 给缺省值（`dataDir = <cwd>/.dsh-store`、`cacheDir = <dataDir>/cache`、`profileManifest` 从 `profileDir` 推）。
 - **WebServer**：`src/web/web-server.contract.ts`。`register` / `registerUpgrade` 返回撤销函数；`routesOf()` 是方法（abstract 属性在运行时没有原型痕迹，面代理取不到）。
-- **ClientModules**：`src/client-modules/client-modules.service.ts` 的 `install` 注册 `FEDERATION_PREFIX` → `Federation.serve`、`registerFallback` → `WebServe.handle`、`HMR_PATH` 的空 upgrade（真正的握手由 vite 在同一个 http server 上的监听器完成），然后打印 `routesOf()`；`onInit` 在 `RemoteDescriptor` 与 `Remote` 都在时调 `mountRemotes`。
-- **页面**：`src/http/serve.service.ts`（`/` 与 `/index.html` 走 `appBootDir` 的骨架、`/@fs` 下的 `node_modules` 请求 302 到联邦地址、其余交 `ViteHandoff`）；页面响应头 `cache-control: no-cache`。
+- **ClientModules**（T2 起在 `zephyr-dev`）：`client-modules.service.ts` 的 `install` 注册 `FEDERATION_PREFIX` → `Federation.serve`、`registerFallback` → `WebServe.handle`、`HMR_PATH` 的空 upgrade（真正的握手由 vite 在同一个 http server 上的监听器完成），然后打印 `routesOf()`；`onInit` 在 `RemoteDescriptor` 与 `Remote` 都在时调 `mountRemotes`。
+- **页面**（T2 起在 `zephyr-dev` 的 `src/http/serve.service.ts`）：`/` 与 `/index.html` 走应用 `src/client` 的骨架、`/@fs` 下的 `node_modules` 请求 302 到联邦地址、其余交 `ViteHandoff`；页面响应头 `cache-control: no-cache`。
 - **dev 重载**：`src/internal/server-hmr.ts` 的 `ServerHmr`（等空闲：`MuxServer.inFlight()` 加调用方的 `isIdle`；变化合并成一次重载；`pollMs` 缺省 200、`maxWaitMs` 缺省 60s）。装配面把它接到 CLI 的 `DevLifecycle.install({ restart })`（例：`apps/zephyr-custom/src/dev-lifecycle.ts`）。
 - **vite 交接**：`src/vite-handoff/vite-handoff.service.ts` 起 middleware 模式的 dev server，`transformHtml` 注入入口 script，`onServerSourceChange` 只报服务端那半。
 
@@ -78,7 +78,7 @@
 
 - 不实现 `/api` 前缀的语义（归 `ConnectionDefault`，见[它的设计](./20261109-connection的api前缀.md)）。
 - 不做浏览器半的渲染与槽位（归 `zephyr-ui` 与各 client 行）。
-- 已知债：[vite dev server 与宿主同进程](./../debts/20261013-vite与宿主同进程.md)。
+- 已知债：[vite dev server 与宿主同进程](../../zephyr-dev/.agents/debts/20261013-vite与宿主同进程.md)。
 
 ## 八、开放问题
 

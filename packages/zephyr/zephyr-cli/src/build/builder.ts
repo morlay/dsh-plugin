@@ -16,8 +16,8 @@ import { InjectionToken } from "@morlay/zephyr";
 import type { ResolvedConfig } from "../config/contract.ts";
 import { CliError } from "../errors.ts";
 import type { ZephyrLayout } from "../layout.ts";
-import { prebundleAll, type PrebundleTarget } from "@morlay/zephyr-app/federation/prebundle";
-import { planPrebundle } from "@morlay/zephyr-app/federation/prebundle-plan";
+import { prebundleAll, type PrebundleTarget } from "@morlay/zephyr-dev/federation/prebundle";
+import { planPrebundle } from "@morlay/zephyr-dev/federation/prebundle-plan";
 import { resolveDataDir } from "../data-dir.ts";
 
 const execFileAsync = promisify(execFile);

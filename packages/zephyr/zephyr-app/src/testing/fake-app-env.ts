@@ -21,9 +21,5 @@ export class FakeAppEnv extends AppEnv {
 
   readonly cacheDir = join(FakeAppEnv.root, "cache");
 
-  readonly packageRoot = FakeAppEnv.root;
-
-  readonly appBootDir = join(FakeAppEnv.root, "boot");
-
   readonly profileManifest = join(FakeAppEnv.root, "package.json");
 }

@@ -9,7 +9,6 @@ import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 
 /** fixtures 根（`fixture-row` / `fixture-cjs` 等假包住在这里）。 */
 export const FIXTURES = new URL("../fixtures/", import.meta.url).pathname;
-const PACKAGE_ROOT = new URL("../../../../", import.meta.url).pathname;
 
 /** fake 环境：`profileDir` 指向 fixtures（里面有 `fixture-row` / `fixture-cjs` 两个假包）。 */
 @Injectable()
@@ -32,9 +31,7 @@ export class FakeAppEnv extends AppEnv {
 
   readonly cacheDir = FakeAppEnv.cache ?? join(tmpdir(), "dsh-fed-cache");
 
-  readonly packageRoot = PACKAGE_ROOT;
 
-  readonly appBootDir = join(PACKAGE_ROOT, "src", "client", "app-boot");
 
   readonly profileManifest = join(FIXTURES, "package.json");
 }

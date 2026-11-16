@@ -116,10 +116,16 @@ describe("fileInPackage", () => {
   });
 });
 
-test("packageRootOf 认得**没有 `.` 出口**的包（@oxc-project/runtime 只有 ./helpers/*）", async () => {
-  // 从本包自己的清单出发解析：它是这条链声明的运行期依赖（rolldown 注入装饰器 helper 用的那个包）。
+/**
+ * `packageRootOf` 认得**没有 `.` 出口**的包。
+ *
+ * 例子用 `@oxc-project/runtime`（它只有 `./helpers/*`，主入口压根不声明）：声明它的地方只有一个，
+ * `packages/boot/dsh-oxc-node`——本仓库的 TS 运行时入口。框架包不声明它（那是 node 侧补强，
+ * 不进运行时契约），所以这里按**那个包**的清单解析。
+ */
+test("packageRootOf 认得没有 `.` 出口的包（@oxc-project/runtime 只有 ./helpers/*）", async () => {
   const found = await packageRootOf(
-    join(process.cwd(), "packages", "zephyr", "zephyr-app", "package.json"),
+    join(process.cwd(), "packages", "boot", "dsh-oxc-node", "package.json"),
     "@oxc-project/runtime",
   );
   expect(found?.root).toContain("@oxc-project/runtime");

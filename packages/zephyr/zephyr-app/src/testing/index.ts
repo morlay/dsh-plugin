@@ -10,8 +10,6 @@ export { provideApiGateway } from "../api-gateway/provide.ts";
 export { provideMuxServer } from "../api-gateway/provide.ts";
 export { AppEnv, type AppEnvValues } from "../app-env/app-env.contract.ts";
 export { FakeAppEnv } from "./fake-app-env.ts";
-export { Federation } from "../federation/federation.contract.ts";
-export { FederationDefault } from "../federation/federation.service.ts";
 export { AppEnvDefault } from "../app-env/app-env.service.ts";
 export { provideAppEnv } from "../app-env/provide.ts";
 export { provideConnection } from "../connection/provide.ts";
@@ -22,20 +20,7 @@ export { WebServer } from "../web/web-server.contract.ts";
 export { WebServerDefault } from "../web/web-server.service.ts";
 export { WebStartup } from "../web/web-startup.contract.ts";
 export { WebStartupDefault } from "../web/web-startup.service.ts";
-export { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "../federation/bundle.ts";
-export { parseFederationUrl } from "../federation/parse-url.ts";
-export { watchOf } from "../federation/watch.ts";
-export { contentRev } from "../federation/bundle.ts";
-export { exportTargetOf, fileInPackage, packageRootOf } from "../internal/resolve.ts";
-export {
-  FEDERATION_PREFIX,
-  HMR_PATH,
-  addZephyrPrefix,
-  attachUrlRewriting,
-  rewriteUrls,
-  stripZephyrPrefix,
-} from "../internal/hmr-path.ts";
-export { globToRegExp, isDevFile } from "../rows/dev-files.ts";
+export { WebRuntimeService } from "../web/web-runtime.service.ts";
 export { mountFullApp, type FullApp, type MountFullAppOptions } from "./full-app.ts";
 export { cleanupDataDirs, tempDataDir } from "./temp-data-dir.ts";
 export { LocalRemote } from "./local-remote.ts";

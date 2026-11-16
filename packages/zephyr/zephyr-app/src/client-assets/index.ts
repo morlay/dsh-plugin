@@ -1,4 +1,3 @@
-// 域 index：契约 + dev 实现。本包自己的 `provideClientModules()` 直接用实现文件；
-// 对外的路口是 `./node`（与 `vite-handoff` 同一条规矩：dev 的东西不进主出口）。
+// 域 index：**只出契约**。dev 的实现（`ViteClientAssets`）住在 `@morlay/zephyr-dev`——
+// 它要 vite 与 `ViteHandoff`，而那两样是构建链，不是运行时。
 export * from "./client-assets.contract.ts";
-export * from "./vite-client-assets.service.ts";

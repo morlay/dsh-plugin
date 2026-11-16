@@ -1,7 +1,8 @@
 // 装配面：**只认 provider 清单**。业务能力一律来自各包的 `provideXxx()`；装配面自己只剩下三样东西：
 //   1. 需要部署值的域（`provideXxx(configure(实现类, {...}))`，路径/档位这类只有启动器知道的事实）；
 //   2. 应用级的两个 Provider（`deploymentProviders` 末尾，需要应用配置）；
-//   3. framework 链（`@morlay/zephyr-app` 的 `provideXxx()`）。
+//   3. framework 链：运行时（`@morlay/zephyr-app` 的 `provideXxx()`）
+//      与开发/构建面（`@morlay/zephyr-dev/node` 的 `provideClientModules()` / `provideServerHmr()`）。
 //
 // 装配面**不写补洞行**：客户端会调而宿主没有的端点，缺什么就把对应域装起来。
 //
@@ -20,10 +21,9 @@ import {
   provideMuxServer,
   provideRemoteAccess,
   provideTypert,
-  provideServerHmr,
   provideWeb,
 } from "@morlay/zephyr-app";
-import { FederationDefault, provideClientModules } from "@morlay/zephyr-app/node";
+import { FederationDefault, provideClientModules, provideServerHmr } from "@morlay/zephyr-dev/node";
 import { provideAgent } from "@morlay/dsh-agent";
 import { provideLlmRemote } from "@morlay/dsh-agent/server";
 import { provideAgentInstruction } from "@morlay/dsh-agent-instruction";
@@ -144,7 +144,10 @@ export function customProvidersOf(options: CustomProvidersOptions = {}): Provide
 }
 
 /**
- * framework 链：宿主与前端面（`@morlay/zephyr-app`）。
+ * framework 链：运行时（`@morlay/zephyr-app`）+ 开发与构建面（`@morlay/zephyr-dev`）。
+ *
+ * 两者的分界：**运行时**是"应用起来之后怎么服务"（web / connection / 联邦产物的路由）；
+ * **开发运行时**是"产物怎么产出"（vite、联邦预编译、换树）。生产形态只装前者。
  * @returns provider 条目。
  */
 function frameworkProviders(): ProviderEntry[] {

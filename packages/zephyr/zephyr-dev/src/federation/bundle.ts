@@ -27,7 +27,7 @@ function barePackageRegExp(name: string): RegExp {
 
 /** 统一前缀：三方与我们的包共用同一个命名空间。 */
 /** 联邦前缀：与 `hmr-path.ts` 的 `FEDERATION_PREFIX` 同一份（导出给纯函数用）。 */
-import { FEDERATION_PREFIX } from "@morlay/zephyr-app/internal";
+import { FEDERATION_PREFIX } from "../internal/hmr-path.ts";
 import { federationTsconfigPath } from "../internal/package-root.ts";
 
 export const CLIENT_MODULES_PREFIX = FEDERATION_PREFIX;

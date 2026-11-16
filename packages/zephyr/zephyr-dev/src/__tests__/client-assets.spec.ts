@@ -14,11 +14,11 @@ import { ClientAssets } from "@morlay/zephyr-app";
 import {
   AppEnvDefault,
   provideAppEnv,
-  ServeDefault,
   WebRuntimeService,
   WebServerDefault,
   WebStartupDefault,
 } from "@morlay/zephyr-app/testing";
+import { ServeDefault } from "../http/serve.service.ts";
 import { ViteClientAssets } from "../client-assets/vite-client-assets.service.ts";
 import { FederationDefault } from "../federation/federation.service.ts";
 import { ViteHandoffDefault } from "../vite-handoff/vite-handoff.service.ts";

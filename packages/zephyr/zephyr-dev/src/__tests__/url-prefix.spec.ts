@@ -5,7 +5,7 @@
  * 而 vite 的 `base` 不能改成 `/_zephyr/`（会给绝对 URL 再补一层，联邦链全断）——只能宿主层重写。
  */
 import { describe, expect, it } from "vitest";
-import { FEDERATION_PREFIX, HMR_PATH } from "@morlay/zephyr-app/internal";
+import { FEDERATION_PREFIX, HMR_PATH } from "../internal/hmr-path.ts";
 import {
   addZephyrPrefix,
   rewriteUrls,

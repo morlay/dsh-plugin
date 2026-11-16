@@ -2,9 +2,10 @@ import { watch } from "chokidar";
 import { join } from "node:path";
 // vite 的默认 handoff：懒建一次 dev server，参数全部从契约取（AppEnv / WebServer / Federation）。
 import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { AppEnv, Federation, WebServer, WebStartup } from "@morlay/zephyr-app";
+import { AppEnv, WebServer, WebStartup } from "@morlay/zephyr-app";
+import { Federation } from "../federation/federation.contract.ts";
 import { startViteDev, type ViteHandoff as StartedViteDev } from "../internal/serve-vite.ts";
-import { devPackageRoot } from "../internal/package-root.ts";
+import { appBootDirOf, devPackageRoot } from "../internal/package-root.ts";
 import { ViteHandoff } from "./vite-handoff.contract.ts";
 
 @Injectable()
@@ -26,7 +27,7 @@ export class ViteHandoffDefault extends ViteHandoff {
       repoRoot: this.appEnv.values.profileDir,
       // 缓存落在数据根下的命名空间里（`<cacheDir>/vite`）：打包形态的 `profileDir` 只读。
       cacheDir: this.appEnv.cacheDirOf("vite"),
-      appRoot: this.appEnv.appBootDir,
+      appRoot: appBootDirOf(this.appEnv.values.profileDir),
       base: "/",
       // **只收窄"当文件"的范围**：`include: []` 时全部预构建，页面仍由 vite 服务。
       devFiles: this.federation.config.dev.include,

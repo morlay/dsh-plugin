@@ -4,7 +4,8 @@ export * from "./home-paths.ts";
 //
 // 三条边界：
 // 1. **服务实现（`*Default`）不从这里出** —— 它们是装配内部的东西，测试走 `./testing`；
-// 2. **`internal/` 不从这里出** —— URL 前缀、vite 插件、模块解析都是框架内部机制；
+// 2. **开发态的一切不从这里出** —— `Federation` / `ClientModules` / `ViteHandoff` / 页面兜底
+//    都是开发运行时的事，住 `@morlay/zephyr-dev`；这里只有**两条空契约**（`ClientAssets` / `DevHmr`）；
 // 3. **浏览器半不从这里出** —— 见 `./client`（宿主进程加载包入口时不能带进 CSS/React）。
 //
 // 装配单位是 **provider 清单**：每个域导出一个 `provideXxx(...features)`，装配面只写
@@ -16,9 +17,9 @@ export * from "./app-env/app-env.contract.ts";
 export * from "./api-gateway/remote-handlers.contract.ts";
 export * from "./credentials/credentials.contract.ts";
 export * from "./contract-coverage.ts";
-export * from "./client-modules/client-modules.contract.ts";
-// 两条**空契约**：前端资产怎么出、开发态何时换树。**只出契约**——dev 的实现（`ViteClientAssets`）
-// 与 `ViteHandoffDefault` 同一条规矩走 `./node`；prod 的实现由 T2/T3 随开发运行时与产物布局落地。
+// 两条**空契约**：前端资产怎么出、开发态何时换树。**只声明、不含实现**——dev 的实现
+// （`ViteClientAssets` / `ServerHmr` / `ViteHandoffDefault`）住在 `@morlay/zephyr-dev`；
+// prod 的实现由 T3 随产物布局落地（静态目录投递，同样不引构建链）。
 export * from "./client-assets/client-assets.contract.ts";
 export * from "./dev-hmr/dev-hmr.contract.ts";
 export { provideApiGateway } from "./api-gateway/provide.ts";
@@ -32,22 +33,16 @@ export { provideRemoteAccess } from "./remote-access/provide.ts";
 export { RemoteAccess } from "./remote-access/remote-access.contract.ts";
 export { provideTypert } from "./typert/provide.ts";
 export { provideWeb } from "./web/provide.ts";
-export { provideServerHmr } from "./web/server-hmr.provide.ts";
-export { ServerHmr, type ServerHmrOptions } from "./internal/server-hmr.ts";
-export { provideHttp } from "./http/provide.ts";
-// 装配面用 `configure(FederationDefault, { dev, devFiles })` 设定预构建的开关与范围；
-// 实现（与 vite 交接、联邦预编译）走 `./node`：主出口不带构建链。
-export type { FederationConfig } from "./federation/federation.contract.ts";
 export * from "./connection/contract.ts";
-export * from "./federation/federation.contract.ts";
-export * from "./http/serve.contract.ts";
 export * from "./remote/remote.contract.ts";
 export * from "./api-remotes/remote-descriptor.contract.ts";
+// remote 的**装载机制**（按提供者登记的清单逐个 `$mount`）：它只认 `Remote` 的 `$mount`，
+// 是运行时事实，所以留在本包；`ClientModulesDefault`（在 `zephyr-dev`）是它的消费方。
+export { mountRemotes, type RemotesContext } from "./api-remotes/mount.ts";
 export * from "./remote/remote-result.ts";
 export * from "./remote-access/remote-access.contract.ts";
 export * from "./typert/typert.contract.ts";
 export * from "./typert/gateway.contract.ts";
-export * from "./vite-handoff/vite-handoff.contract.ts";
 export * from "./web/web-server.contract.ts";
 export * from "./web/web-startup.contract.ts";
 // 设置项的**注册机制**：schema 注册表 + `@Setting` 装饰器。各域用它注册自己的设置项，
@@ -59,5 +54,3 @@ export * from "./ui-settings-preferences.service.ts";
 export * from "./setting-schema.service.ts";
 // `Setting` 装饰器与 `settingRow` 模板属**设置机制的使用方**，已搬到 `@morlay/dsh-setting`；
 // 这里只留注册表（`SettingSchema`，本包自己的 ui 也在用）。
-
-/** 宿主侧的装配清单（`app.get(...)` 之前的一切都在它里面）走 `./node`。 */

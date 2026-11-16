@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 
-import { Federation } from "@morlay/zephyr-app";
+import { Federation } from "../federation.contract.ts";
 import { BUNDLER_REV } from "../bundle.ts";
 import { FederationDefault } from "@morlay/zephyr-dev/testing";
 import { FakeAppEnv, FIXTURES, temporaryCache } from "./support/fake-app-env.ts";
