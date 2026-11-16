@@ -1,8 +1,9 @@
-// 「对话管理」页面：已归档会话的搜索、归档 / 取消归档、导出、删除，以及导入为新会话与整理数据
-// （孤儿回收 + 统计重算）与 token 用量统计。
+// 「对话管理」页面：已归档会话的搜索、归档 / 取消归档、导出、删除与覆盖导入，以及导入为新会话、
+// 整理数据（孤儿回收 + 统计重算）与 token 用量统计。
 //
-// 页面只读注入面（`t` + `ConversationManagerFace`），wire 与下载细节归 controller；分页、搜索与子代理过滤
-// 都下推给宿主（前端分页等于每次拉全量）。
+// 页面只读注入面（`t` + `ConversationManagerFace`），wire 与下载细节归 controller；列表的取数、
+// 搜索防抖、分页、在途与失败保留旧行归 `useRowsQuery`，动作的提示 / 失败 / 在途归 `useActionFeedback`，
+// 失败与成功都经同一套反馈面呈现，页面只渲染并把动作接到面上。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -16,35 +17,38 @@ import {
   Stack,
   Tag,
   Text,
+  VisuallyHidden,
   relativeTime,
 } from "@morlay/zephyr-ui";
 import type {
+  SessionConsistencyValue,
   SessionOrganizeValue,
-  SessionRowsItem,
-  SessionRowsRequest,
-  SessionUsageBucket,
+  SessionRepairAction,
   SessionUsageRange,
-  SessionUsageSessionRow,
-  SessionUsageTotals,
   SessionUsageValue,
 } from "@morlay/better-session/endpoint";
+import { useActionFeedback } from "../shared/action-feedback.ts";
+import { Feedback } from "../shared/feedback.tsx";
 import frameCss from "./conversation-manager-page.module.css";
 import { ConversationManagerRequestError } from "./conversation-manager.controller.ts";
-import type { ConversationManagerFace } from "./conversation-manager.controller.ts";
-import { formatCount, formatPercent, formatTokens } from "./format.ts";
-import type { ConversationManagerKey } from "./locales.ts";
-
-// 一页的行数（会话列表）。
-const PAGE_SIZE = 20;
-
-// 统计视图按会话列出时的行数上限。
-const USAGE_SESSION_ROWS = 20;
-
-type Translate = (key: ConversationManagerKey, params?: Record<string, unknown>) => string;
+import type {
+  ConversationImportStage,
+  ConversationManagerFace,
+  ConversationWorkspaceOption,
+} from "./conversation-manager.controller.ts";
+import { ConsistencyPanel } from "./consistency-panel.tsx";
+import { failureCopy, failureText } from "./failure.ts";
+import { FilterChip } from "./filter-chip.tsx";
+import { RepairModal } from "./repair-modal.tsx";
+import type { ConversationManagerTranslate } from "./locales.ts";
+import { useRowsQuery } from "./rows-query.ts";
+import type { ConversationRow } from "./rows-query.ts";
+import { UsageView } from "./usage-view.tsx";
+import type { UsageTab } from "./usage-view.tsx";
 
 // 页面 props：本包字典的翻译座 + 注入的动作。
 export interface ConversationManagerPageProps extends ConversationManagerFace {
-  t: Translate;
+  t: ConversationManagerTranslate;
 }
 
 // 整理数据的三段状态：确认 → 运行（阻塞界面）→ 收尾。
@@ -53,23 +57,19 @@ type OrganizePhase = "idle" | "confirm" | "running";
 // 一层视图：会话列表 / 用量统计。
 type PageView = "sessions" | "usage";
 
-// 统计视图的二层维度。
-type UsageTab = "overview" | "models" | "sessions";
+// 文件选择的意图：导入为新会话，或覆盖某一行的会话。
+type FileIntent =
+  | { readonly kind: "new" }
+  | { readonly kind: "replace"; readonly row: ConversationRow };
 
-interface ConversationRow {
-  id: string;
-  title: string;
-  // 所属工作区标题；不在任何工作区里的会话用未分组文案。
-  workspace: string;
-  // 只有已归档的行允许取消归档与删除（宿主侧同样守卫）。
-  archived: boolean;
-  // 子代理派生会话：默认不显示（既不可删也不可取消归档）。
-  subagent: boolean;
-  updatedAt: number;
+// 正在等确认的覆盖导入（文件已选好，等用户确认才发请求）。
+interface PendingReplace {
+  readonly row: ConversationRow;
+  readonly file: File;
 }
 
 // 行上显示的紧凑相对时间。
-function timeLabel(updatedAt: number, now: number, t: Translate): string {
+function timeLabel(updatedAt: number, now: number, t: ConversationManagerTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now);
   switch (unit) {
     case "now":
@@ -87,86 +87,42 @@ function timeLabel(updatedAt: number, now: number, t: Translate): string {
   }
 }
 
-// 宿主错误码 → 可读文案；没有码时保留原文。
-function failureText(error: unknown, t: Translate): string {
-  const code = error instanceof ConversationManagerRequestError ? error.code : undefined;
-  if (code === "SESSION_NOT_ARCHIVED") return t("failure.notArchived");
-  if (code === "SESSION_LIVE") return t("failure.live");
-  if (code === "SESSION_NOT_FOUND") return t("failure.missing");
-  return t("failure.other", { reason: error instanceof Error ? error.message : String(error) });
-}
-
-// 过滤 chip：上游一级页面那套（28px 胶囊，选中那档带填充 + 主标签色）。语义是**筛选**：
-// `role="group"` 的组里每个 chip 用 `aria-pressed` 说选中，不是 tab 条。
-function FilterChip({
-  active,
-  label,
-  tab,
-  onSelect,
-}: {
-  active: boolean;
-  label: string;
-  // `data-tab` 标注（沟通与 e2e 按它定位那一个 chip）。
-  tab?: string;
-  onSelect: () => void;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      className={
-        active ? frameCss.filterTab + " " + String(frameCss.filterTabActive) : frameCss.filterTab
-      }
-      aria-pressed={active}
-      {...(tab === undefined ? {} : { "data-tab": tab })}
-      onClick={onSelect}
-    >
-      {label}
-    </button>
-  );
-}
-
-// 整屏居中的状态态：列表还没就绪 / 一份会话都没有 / 读列表失败。
+// 整屏居中的状态态：列表还没就绪 / 读列表失败——这两种时候页面没有别的内容可看。
 function PageStatus({
   t,
   status,
   text,
   spinner = false,
-  failure = false,
+  onRetry,
 }: {
-  t: Translate;
-  status: "loading" | "empty" | "failure";
+  t: ConversationManagerTranslate;
+  status: "loading" | "failure";
   text: string;
-  spinner?: boolean;
-  failure?: boolean;
+  spinner?: boolean | undefined;
+  // 读失败时唯一的自救入口：没有它，用户只能切视图或改搜索词才碰巧重试。
+  onRetry?: (() => void) | undefined;
 }): ReactNode {
   return (
     <section className={frameCss.page} aria-label={t("title")}>
       <div className={frameCss.listPane}>
         <div className={frameCss.status} data-status={status}>
           <div className={frameCss.statusBody}>
-            {spinner ? <Spinner label={t("loading")} /> : null}
-            <p
-              className={
-                failure
-                  ? frameCss.statusText + " " + String(frameCss.statusFailure)
-                  : frameCss.statusText
-              }
-              {...(failure ? { role: "alert" } : {})}
-            >
-              {text}
-            </p>
+            {spinner ? <Spinner label={text} /> : null}
+            {status === "failure" ? (
+              <Feedback
+                tone="failure"
+                source="rows"
+                text={text}
+                {...(onRetry === undefined ? {} : { retry: { label: t("retry"), onRetry } })}
+              />
+            ) : (
+              <p className={frameCss.statusText}>{text}</p>
+            )}
           </div>
         </div>
       </div>
     </section>
   );
-}
-
-interface RowsPage {
-  items: readonly SessionRowsItem[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 export function ConversationManagerPage({
@@ -175,17 +131,21 @@ export function ConversationManagerPage({
   archive,
   unarchive,
   remove,
+  bulkDelete,
   exportZip,
+  exportFiltered,
   importZip,
+  listWorkspaces,
+  copyToWorkspace,
   organizeData,
   loadUsage,
+  checkConsistency,
+  repairSession,
 }: ConversationManagerPageProps): ReactNode {
-  const [rowsPage, setRowsPage] = useState<RowsPage | null>(null);
-  const [rowsFailure, setRowsFailure] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [settledQuery, setSettledQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [showSubagents, setShowSubagents] = useState(false);
+  const rowsQuery = useRowsQuery({ listRows }, t);
+  const copy = useMemo(() => failureCopy(t), [t]);
+  const describeFailure = useCallback((error: unknown) => failureText(error, copy), [copy]);
+  const feedback = useActionFeedback(describeFailure);
   const [view, setView] = useState<PageView>("sessions");
   const [usageTab, setUsageTab] = useState<UsageTab>("overview");
   const [usageRange, setUsageRange] = useState<SessionUsageRange>("day");
@@ -194,114 +154,257 @@ export function ConversationManagerPage({
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConversationRow | null>(null);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
+  // 多选的 id 集：行重拉后只保留仍在当前页里的那些（已删的行不该继续被选中）。
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set<string>());
+  const [replacing, setReplacing] = useState<PendingReplace | null>(null);
   const [organizePhase, setOrganizePhase] = useState<OrganizePhase>("idle");
-  const [importing, setImporting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [consistency, setConsistency] = useState<SessionConsistencyValue | null>(null);
+  const [consistencyLoading, setConsistencyLoading] = useState(false);
+  // 正在等确认修复的会话（两个日志修法都从这个弹窗发起）。
+  const [repairing, setRepairing] = useState<ConversationRow | null>(null);
+  // 正在等确认的跨工作区复制：源会话、可选的目标工作区（null 表示还在读）、当前选择。
+  const [copySource, setCopySource] = useState<ConversationRow | null>(null);
+  const [copyWorkspaces, setCopyWorkspaces] = useState<
+    readonly ConversationWorkspaceOption[] | null
+  >(null);
+  const [copyWorkspaceId, setCopyWorkspaceId] = useState("");
+  const [importStage, setImportStage] = useState<ConversationImportStage | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const reloadRows = useCallback(async (): Promise<void> => {
-    const request: SessionRowsRequest = {
-      ...(settledQuery === "" ? {} : { query: settledQuery }),
-      ...(showSubagents ? { includeSubagents: true } : {}),
-      page,
-      pageSize: PAGE_SIZE,
-    };
-    try {
-      setRowsPage(await listRows(request));
-      setRowsFailure(null);
-    } catch (error: unknown) {
-      setRowsFailure(failureText(error, t));
-    }
-  }, [listRows, t, settledQuery, showSubagents, page]);
+  const fileIntent = useRef<FileIntent>({ kind: "new" });
+  // 统计请求身份：只有最后发出的那次响应能落到界面上。
+  const usageRequest = useRef(0);
+  // 动作成功后焦点的落点：行会被重拉，按钮不是稳定的位置。
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [focusToken, setFocusToken] = useState(0);
+  const now = Date.now();
 
   useEffect(() => {
-    void reloadRows();
-  }, [reloadRows]);
+    if (focusToken === 0) return;
+    headingRef.current?.focus();
+  }, [focusToken]);
 
-  // 搜索下推到宿主：输入停一下再请求（每次按键都打宿主没必要）。
+  const focusHeading = useCallback(() => {
+    setFocusToken((token) => token + 1);
+  }, []);
+
+  // 当前页的行 id：行被删掉后从选择里剔除（否则批量条上的计数与动作指向不存在的行）。
+  const rowIds = useMemo(() => new Set(rowsQuery.rows.map((row) => row.id)), [rowsQuery.rows]);
   useEffect(() => {
-    if (query === settledQuery) return;
-    const timer = window.setTimeout(() => {
-      setSettledQuery(query);
-      setPage(1);
-    }, 250);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [query, settledQuery]);
+    setSelected((previous) => {
+      if (previous.size === 0) return previous;
+      const next = new Set([...previous].filter((id) => rowIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [rowIds]);
 
-  const ungrouped = t("ungrouped");
+  const toggleSelect = (id: string): void => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
-  // 当前页的行：标题、工作区归属、归档标记与最后活动时间都随行给出（归属由宿主算）。
-  const rows = useMemo<ConversationRow[]>(
-    () =>
-      (rowsPage?.items ?? []).map((record) => ({
-        id: record.sessionId,
-        title: record.title ?? record.sessionId,
-        workspace: record.workspace ?? ungrouped,
-        archived: record.archived,
-        subagent: record.origin === "subagent",
-        updatedAt: record.updatedAt,
-      })),
-    [rowsPage, ungrouped],
-  );
+  const reloadRows = (): void => {
+    void rowsQuery.reload();
+  };
 
-  // 一个动作的收尾：成败都收掉弹窗，失败把原因落到页面上的提示行；成功即重拉列表。
-  const run = (action: Promise<unknown>, settle?: () => void): void => {
-    setFailure(null);
-    setNotice(null);
-    void action.then(
-      () => {
-        settle?.();
-        void reloadRows();
+  // 一个行内动作：失败落到提示行，成功即重拉列表并把焦点收回标题。
+  const runRowAction = (action: Promise<unknown>): void => {
+    feedback.run(action, {
+      onSuccess: () => {
+        reloadRows();
+        focusHeading();
       },
-      (error: unknown) => {
-        settle?.();
-        setFailure(failureText(error, t));
+    });
+  };
+
+  // 批量删除：整批一次请求，逐条结果聚合成一条提示（失败的项带原因）；成功的行由重拉消失。
+  const runBulkDelete = (ids: readonly string[]): void => {
+    const action = bulkDelete(ids).then((value) => {
+      const failed = value.items.filter((item) => !item.ok);
+      const deleted = value.items.length - failed.length;
+      const details = failed
+        .map((item) =>
+          t("bulk.failed", {
+            title: item.sessionId,
+            reason: failureText(new ConversationManagerRequestError("", item.code), copy),
+          }),
+        )
+        .join("；");
+      feedback.notify(
+        t("bulk.done", { deleted, failed: failed.length }) + (details === "" ? "" : " " + details),
+      );
+      return value;
+    });
+    feedback.run(action, {
+      onSuccess: () => {
+        setSelected(new Set<string>());
+        reloadRows();
+        focusHeading();
+      },
+      onSettled: () => {
+        setBulkConfirming(false);
+      },
+    });
+  };
+
+  // 批量导出：按当前筛选结果各下载一份；成败聚合成一句提示（失败条只有域码）。
+  const runExportFiltered = (): void => {
+    const action = exportFiltered(rowsQuery.filters).then((value) => {
+      const failed = value.items.filter((item) => !item.ok);
+      feedback.notify(
+        t("exportFiltered.done", {
+          exported: value.items.length - failed.length,
+          failed: failed.length,
+        }),
+      );
+      return value;
+    });
+    feedback.run(action, {
+      onSuccess: () => {
+        focusHeading();
+      },
+    });
+  };
+
+  const pickFile = (intent: FileIntent): void => {
+    fileIntent.current = intent;
+    fileRef.current?.click();
+  };
+
+  // 导入：阶段变化落到提示行；成功提示与重拉由动作反馈统一收尾。
+  const importFile = (file: File, options: { sessionId?: string; success: string }): void => {
+    setImportStage("reading");
+    feedback.run(
+      importZip(file, {
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        onStage: (stage) => {
+          setImportStage(stage);
+        },
+      }),
+      {
+        success: options.success,
+        onSettled: () => {
+          setImportStage(null);
+        },
+        onSuccess: () => {
+          reloadRows();
+          focusHeading();
+        },
       },
     );
   };
 
+  // 跨工作区复制：先读工作区列表（owner 在 workspace 域），确认后由宿主的 fork + attach 组合完成。
+  const openCopy = (row: ConversationRow): void => {
+    setCopySource(row);
+    setCopyWorkspaces(null);
+    setCopyWorkspaceId("");
+    feedback.clear();
+    void listWorkspaces().then(
+      (options) => {
+        setCopyWorkspaces(options);
+      },
+      (error: unknown) => {
+        setCopySource(null);
+        feedback.reject(describeFailure(error));
+      },
+    );
+  };
+
+  const runCopy = (row: ConversationRow, workspaceId: string): void => {
+    const workspace = copyWorkspaces?.find((option) => option.workspaceId === workspaceId);
+    const copied = copyToWorkspace(row.id, workspaceId).then((value) => {
+      feedback.notify(t("copy.done", { workspace: workspace?.title ?? workspaceId }));
+      return value;
+    });
+    feedback.run(copied, {
+      onSettled: () => {
+        setCopySource(null);
+      },
+      onSuccess: () => {
+        reloadRows();
+        focusHeading();
+      },
+    });
+  };
+
   const startOrganize = (): void => {
     setOrganizePhase("running");
-    setFailure(null);
-    setNotice(null);
+    feedback.clear();
     void organizeData().then(
       (result: SessionOrganizeValue) => {
         setOrganizePhase("idle");
-        setNotice(
+        feedback.notify(
           t("organize.done", {
             sessions: result.orphanSessions,
             events: result.orphanEvents,
             rebuilt: result.rebuiltSessions,
           }),
         );
-        void reloadRows();
+        reloadRows();
+        focusHeading();
       },
       (error: unknown) => {
         setOrganizePhase("idle");
-        setFailure(failureText(error, t));
+        feedback.reject(describeFailure(error));
       },
     );
   };
 
+  // 体检只读：报告落到面板上；失败走同一条失败通道（报告保留上一次的结果）。
+  const runConsistency = (): void => {
+    setConsistencyLoading(true);
+    feedback.clear();
+    void checkConsistency().then(
+      (report) => {
+        setConsistency(report);
+        setConsistencyLoading(false);
+      },
+      (error: unknown) => {
+        setConsistencyLoading(false);
+        feedback.reject(describeFailure(error));
+      },
+    );
+  };
+
+  // 修复：结果带着保留 / 丢弃条数，成功后重拉列表（坏会话修好了也还在列表里，但读得出来）。
+  const runRepair = (row: ConversationRow, action: SessionRepairAction): void => {
+    const repaired = repairSession(row.id, action).then((value) => {
+      feedback.notify(t("repair.done", { kept: value.keptEvents, dropped: value.droppedEvents }));
+      return value;
+    });
+    feedback.run(repaired, {
+      onSuccess: () => {
+        reloadRows();
+        focusHeading();
+      },
+      onSettled: () => {
+        setRepairing(null);
+      },
+    });
+  };
+
   // 统计是按时间范围在宿主侧聚合的：进入统计视图拉一次，换范围再拉一次；维度切换本地折叠。
   const requestUsage = (range: SessionUsageRange): void => {
+    const requestId = ++usageRequest.current;
     setUsageRange(range);
     setUsageLoading(true);
     setUsageError(null);
     void loadUsage(range)
       .then(
         (report) => {
-          setUsage(report);
+          if (requestId === usageRequest.current) setUsage(report);
         },
         (error: unknown) => {
-          setUsageError(failureText(error, t));
+          if (requestId === usageRequest.current) setUsageError(describeFailure(error));
         },
       )
       .finally(() => {
-        setUsageLoading(false);
+        if (requestId === usageRequest.current) setUsageLoading(false);
       });
   };
 
@@ -310,24 +413,29 @@ export function ConversationManagerPage({
     if (usage === null && !usageLoading) requestUsage(usageRange);
   };
 
-  if (rowsPage === null) {
-    return rowsFailure === null ? (
+  if (!rowsQuery.ready) {
+    return rowsQuery.failure === null ? (
       <PageStatus t={t} status="loading" text={t("loading")} spinner />
     ) : (
-      <PageStatus t={t} status="failure" text={rowsFailure} failure />
+      <PageStatus t={t} status="failure" text={rowsQuery.failure} onRetry={reloadRows} />
     );
   }
 
-  const now = Date.now();
-  const total = rowsPage.total;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const confirmed = confirming;
-
-  // 一份会话都没有（也没在搜索）：标题行与搜索行都没有可做的事，整个面板让给这个状态。
-  if (total === 0 && settledQuery === "") {
-    return <PageStatus t={t} status="empty" text={t("empty")} />;
-  }
+  const rows = rowsQuery.rows;
+  const currentPage = rowsQuery.currentPage;
+  const pageCount = rowsQuery.pageCount;
+  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
+  const toggleSelectAll = (): void => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (allSelected) {
+        for (const row of rows) next.delete(row.id);
+      } else {
+        for (const row of rows) next.add(row.id);
+      }
+      return next;
+    });
+  };
 
   return (
     <section className={frameCss.page} data-view={view} aria-label={t("title")}>
@@ -335,20 +443,43 @@ export function ConversationManagerPage({
         <div className={frameCss.pageScroll} data-scroll="page">
           <div className={frameCss.pageContent}>
             <div className={frameCss.pageHeading}>
-              <h1>{t("title")}</h1>
+              <h1 ref={headingRef} tabIndex={-1}>
+                {t("title")}
+              </h1>
               <div className={frameCss.headingActions}>
                 <Button
                   variant="outline"
                   size="sm"
                   data-action="import"
-                  disabled={importing}
-                  aria-busy={importing}
-                  aria-label={importing ? t("importing") : t("import")}
+                  disabled={importStage !== null}
+                  aria-busy={importStage !== null}
+                  aria-label={importStage === null ? t("import") : t("importing")}
                   onClick={() => {
-                    fileRef.current?.click();
+                    pickFile({ kind: "new" });
                   }}
                 >
-                  {importing ? t("importing") : t("import")}
+                  {importStage === null ? t("import") : t("importing")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-action="export-filtered"
+                  disabled={rows.length === 0 || feedback.busy}
+                  aria-label={t("exportFiltered")}
+                  onClick={runExportFiltered}
+                >
+                  {t("exportFiltered")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-action="consistency"
+                  disabled={consistencyLoading}
+                  aria-busy={consistencyLoading ? "true" : undefined}
+                  aria-label={t("consistency.button")}
+                  onClick={runConsistency}
+                >
+                  {t("consistency.button")}
                 </Button>
                 <Button
                   variant="outline"
@@ -357,8 +488,7 @@ export function ConversationManagerPage({
                   disabled={organizePhase !== "idle"}
                   aria-label={t("organize.button")}
                   onClick={() => {
-                    setFailure(null);
-                    setNotice(null);
+                    feedback.clear();
                     setOrganizePhase("confirm");
                   }}
                 >
@@ -375,21 +505,13 @@ export function ConversationManagerPage({
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = "";
                 if (file === undefined) return;
-                setImporting(true);
-                setFailure(null);
-                setNotice(null);
-                void importZip(file)
-                  .then(
-                    () => {
-                      setNotice(t("imported"));
-                    },
-                    (error: unknown) => {
-                      setFailure(failureText(error, t));
-                    },
-                  )
-                  .finally(() => {
-                    setImporting(false);
-                  });
+                const intent = fileIntent.current;
+                if (intent.kind === "replace") {
+                  // 覆盖会整段替换该会话的日志：先确认，确认前不发请求。
+                  setReplacing({ row: intent.row, file });
+                  return;
+                }
+                importFile(file, { success: t("imported") });
               }}
             />
             <div className={frameCss.filters}>
@@ -424,11 +546,74 @@ export function ConversationManagerPage({
                   data-filter="subagents"
                 >
                   <FilterChip
-                    active={showSubagents}
+                    active={rowsQuery.showSubagents}
                     label={t("showSubagents")}
+                    onSelect={rowsQuery.toggleSubagents}
+                  />
+                </div>
+              </div>
+            )}
+            {view === "usage" ? null : (
+              <div className={frameCss.filters}>
+                <div
+                  className={frameCss.filterTabs}
+                  role="group"
+                  aria-label={t("filter.time")}
+                  data-filter="time"
+                >
+                  <FilterChip
+                    active={rowsQuery.timeFilter === "all"}
+                    label={t("filter.time.all")}
+                    tab="all"
                     onSelect={() => {
-                      setShowSubagents(!showSubagents);
-                      setPage(1);
+                      rowsQuery.setTimeFilter("all");
+                    }}
+                  />
+                  <FilterChip
+                    active={rowsQuery.timeFilter === "7d"}
+                    label={t("filter.time.7d")}
+                    tab="7d"
+                    onSelect={() => {
+                      rowsQuery.setTimeFilter("7d");
+                    }}
+                  />
+                  <FilterChip
+                    active={rowsQuery.timeFilter === "30d"}
+                    label={t("filter.time.30d")}
+                    tab="30d"
+                    onSelect={() => {
+                      rowsQuery.setTimeFilter("30d");
+                    }}
+                  />
+                </div>
+                <div
+                  className={frameCss.filterTabs}
+                  role="group"
+                  aria-label={t("filter.archived")}
+                  data-filter="archived"
+                >
+                  <FilterChip
+                    active={rowsQuery.archivedFilter === "all"}
+                    label={t("filter.archived.all")}
+                    tab="all"
+                    onSelect={() => {
+                      rowsQuery.setArchivedFilter("all");
+                    }}
+                  />
+                  <FilterChip
+                    active={rowsQuery.archivedFilter === "only"}
+                    label={t("filter.archived.only")}
+                    tab="only"
+                    onSelect={() => {
+                      rowsQuery.setArchivedFilter("only");
+                    }}
+                  />
+                  <FilterChip
+                    active={rowsQuery.archivedFilter === "unarchived"}
+                    label={t("filter.archived.unarchived")}
+                    tab="unarchived"
+                    onSelect={() => {
+                      rowsQuery.setArchivedFilter("unarchived");
                     }}
                   />
                 </div>
@@ -440,24 +625,20 @@ export function ConversationManagerPage({
                   data-filter="search"
                   type="search"
                   icon={<IconSearchOutlineRegular />}
-                  value={query}
+                  value={rowsQuery.query}
                   placeholder={t("search")}
                   aria-label={t("search")}
                   onChange={(event) => {
-                    setQuery(event.currentTarget.value);
-                    setPage(1);
+                    rowsQuery.setQuery(event.currentTarget.value);
                   }}
                 />
-                {query === "" ? null : (
+                {rowsQuery.query === "" ? null : (
                   <Button
                     variant="ghost"
                     size="sm"
                     className={frameCss.searchClear}
                     aria-label={t("clearSearch")}
-                    onClick={() => {
-                      setQuery("");
-                      setPage(1);
-                    }}
+                    onClick={rowsQuery.clearQuery}
                   >
                     <IconCloseOutlineRegular />
                   </Button>
@@ -473,27 +654,118 @@ export function ConversationManagerPage({
                 onTab={setUsageTab}
                 range={usageRange}
                 onRange={requestUsage}
+                onRetry={() => {
+                  requestUsage(usageRange);
+                }}
                 onlySubagents={usageOnlySubagents}
                 onOnlySubagents={setUsageOnlySubagents}
                 t={t}
               />
             ) : (
-              <div className={frameCss.list}>
-                {notice === null ? null : (
-                  <Text data-notice="result" as="p" size="md" tone="tertiary">
-                    {notice}
-                  </Text>
+              <div
+                className={frameCss.list}
+                data-list=""
+                data-search-stage={rowsQuery.searchStage}
+                aria-busy={rowsQuery.loading ? "true" : undefined}
+              >
+                {importStage === null ? null : (
+                  <Feedback
+                    tone="notice"
+                    source="import"
+                    busy
+                    text={t(importStage === "reading" ? "import.reading" : "import.committing")}
+                  />
                 )}
-                {failure === null ? null : (
-                  <Text data-failure="result" role="alert" as="p" size="md" tone="danger">
-                    {failure}
-                  </Text>
+                <ConsistencyPanel report={consistency} loading={consistencyLoading} t={t} />
+                {feedback.notice === null ? null : (
+                  <Feedback tone="notice" source="result" text={feedback.notice} />
                 )}
-                {total === 0 ? (
-                  <div className={frameCss.listStatus} data-status="empty-search">
-                    <p className={frameCss.statusText}>{t("emptySearch")}</p>
+                {feedback.failure === null ? null : (
+                  <Feedback tone="failure" source="result" text={feedback.failure} />
+                )}
+                {rowsQuery.failure === null ? null : (
+                  <Feedback
+                    tone="failure"
+                    source="reload"
+                    text={rowsQuery.failure}
+                    retry={{ label: t("retry"), onRetry: reloadRows }}
+                  />
+                )}
+                <VisuallyHidden>
+                  <span role="status" data-announce="rows">
+                    {rowsQuery.announcement ?? ""}
+                  </span>
+                </VisuallyHidden>
+                {rows.length === 0 ? (
+                  <div
+                    className={frameCss.listStatus}
+                    data-status={rowsQuery.settledQuery === "" ? "empty" : "empty-search"}
+                  >
+                    <p className={frameCss.statusText}>
+                      {rowsQuery.settledQuery === "" ? t("empty") : t("emptySearch")}
+                    </p>
+                    {rowsQuery.settledQuery === "" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={importStage !== null}
+                        onClick={() => {
+                          pickFile({ kind: "new" });
+                        }}
+                      >
+                        {t("import")}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
+                {rows.length === 0 ? null : (
+                  <Row
+                    as="div"
+                    gap={8}
+                    justify="between"
+                    fixed
+                    data-bulk={selected.size === 0 ? "idle" : "active"}
+                  >
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        aria-label={t("selectAll")}
+                        onChange={toggleSelectAll}
+                      />
+                      <Text size="sm" tone="tertiary">
+                        {t("selectAll")}
+                      </Text>
+                    </label>
+                    {selected.size === 0 ? null : (
+                      <Row gap={8} fixed>
+                        <Text size="sm" tone="tertiary">
+                          {t("bulk.selected", { count: selected.size })}
+                        </Text>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-action="bulk-remove"
+                          disabled={feedback.busy}
+                          onClick={() => {
+                            setBulkConfirming(true);
+                          }}
+                        >
+                          {t("bulk.removeNamed", { count: selected.size })}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelected(new Set<string>());
+                          }}
+                        >
+                          {t("bulk.clear")}
+                        </Button>
+                      </Row>
+                    )}
+                  </Row>
+                )}
                 {rows.length === 0 ? null : (
                   <Stack as="ul" gap={4} plain>
                     {rows.map((row) => (
@@ -509,6 +781,15 @@ export function ConversationManagerPage({
                         data-archived={row.archived ? "true" : "false"}
                         data-subagent={row.subagent ? "true" : "false"}
                       >
+                        <input
+                          type="checkbox"
+                          data-select={row.id}
+                          checked={selected.has(row.id)}
+                          aria-label={t("selectNamed", { title: row.title })}
+                          onChange={() => {
+                            toggleSelect(row.id);
+                          }}
+                        />
                         <Stack gap={2} grow>
                           <Row gap={8} grow>
                             <Text size="md" truncate>
@@ -527,9 +808,10 @@ export function ConversationManagerPage({
                               variant="outline"
                               size="sm"
                               data-action="unarchive"
+                              disabled={feedback.busy}
                               aria-label={t("unarchiveNamed", { title: row.title })}
                               onClick={() => {
-                                run(unarchive(row.id));
+                                runRowAction(unarchive(row.id));
                               }}
                             >
                               {t("unarchive")}
@@ -539,9 +821,10 @@ export function ConversationManagerPage({
                               variant="outline"
                               size="sm"
                               data-action="archive"
+                              disabled={feedback.busy}
                               aria-label={t("archiveNamed", { title: row.title })}
                               onClick={() => {
-                                run(archive(row.id));
+                                runRowAction(archive(row.id));
                               }}
                             >
                               {t("archive")}
@@ -551,9 +834,10 @@ export function ConversationManagerPage({
                             variant="outline"
                             size="sm"
                             data-action="export"
+                            disabled={feedback.busy}
                             aria-label={t("exportNamed", { title: row.title })}
                             onClick={() => {
-                              run(exportZip(row.id));
+                              runRowAction(exportZip(row.id));
                             }}
                           >
                             {t("export")}
@@ -561,12 +845,52 @@ export function ConversationManagerPage({
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={!row.archived}
+                            data-action="repair"
+                            disabled={feedback.busy}
+                            aria-label={t("repairNamed", { title: row.title })}
+                            onClick={() => {
+                              setRepairing(row);
+                            }}
+                          >
+                            {t("repair")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-action="copy"
+                            disabled={feedback.busy}
+                            aria-label={t("copyNamed", { title: row.title })}
+                            onClick={() => {
+                              openCopy(row);
+                            }}
+                          >
+                            {t("copyWorkspace")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-action="replace"
+                            disabled={feedback.busy || importStage !== null}
+                            aria-label={t("importReplaceNamed", { title: row.title })}
+                            onClick={() => {
+                              pickFile({ kind: "replace", row });
+                            }}
+                          >
+                            {t("importReplace")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             data-action="remove"
+                            disabled={feedback.busy}
+                            aria-disabled={row.archived ? undefined : "true"}
                             aria-label={t("removeNamed", { title: row.title })}
                             onClick={() => {
-                              setFailure(null);
-                              setNotice(null);
+                              // 未归档的会话不能删除：按钮可聚焦，点了给理由，不用无理由的原生 disabled。
+                              if (!row.archived) {
+                                feedback.reject(t("failure.notArchived"));
+                                return;
+                              }
                               setConfirming(row);
                             }}
                           >
@@ -579,6 +903,8 @@ export function ConversationManagerPage({
                 )}
                 {rows.length === 0 ? null : (
                   <Row
+                    as="nav"
+                    aria-label={t("page.nav")}
                     data-pagination=""
                     data-page-current={currentPage}
                     data-page-total={pageCount}
@@ -591,7 +917,7 @@ export function ConversationManagerPage({
                       size="sm"
                       disabled={currentPage <= 1}
                       onClick={() => {
-                        setPage(currentPage - 1);
+                        rowsQuery.goToPage(currentPage - 1);
                       }}
                     >
                       {t("page.previous")}
@@ -604,7 +930,7 @@ export function ConversationManagerPage({
                       size="sm"
                       disabled={currentPage >= pageCount}
                       onClick={() => {
-                        setPage(currentPage + 1);
+                        rowsQuery.goToPage(currentPage + 1);
                       }}
                     >
                       {t("page.next")}
@@ -617,17 +943,19 @@ export function ConversationManagerPage({
         </div>
       </div>
       <Modal
-        open={confirmed !== null}
+        open={confirming !== null}
         onClose={() => {
           setConfirming(null);
         }}
         title={t("confirmTitle")}
         closeLabel={t("close")}
+        tone="warning"
         description={t("confirmDescription")}
         footer={
           <>
             <Button
               variant="ghost"
+              disabled={feedback.busy}
               onClick={() => {
                 setConfirming(null);
               }}
@@ -636,10 +964,21 @@ export function ConversationManagerPage({
             </Button>
             <Button
               variant="primary"
+              tone="danger"
+              data-tone="danger"
+              disabled={feedback.busy}
+              aria-busy={feedback.busy}
               onClick={() => {
-                if (confirmed === null) return;
-                run(remove(confirmed.id), () => {
-                  setConfirming(null);
+                const target = confirming;
+                if (target === null) return;
+                feedback.run(remove(target.id), {
+                  onSettled: () => {
+                    setConfirming(null);
+                  },
+                  onSuccess: () => {
+                    reloadRows();
+                    focusHeading();
+                  },
                 });
               }}
             >
@@ -649,12 +988,164 @@ export function ConversationManagerPage({
         }
       />
       <Modal
+        open={bulkConfirming}
+        onClose={() => {
+          setBulkConfirming(false);
+        }}
+        title={t("bulk.confirmTitle")}
+        closeLabel={t("close")}
+        tone="warning"
+        description={t("bulk.confirmDescription")}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={feedback.busy}
+              onClick={() => {
+                setBulkConfirming(false);
+              }}
+            >
+              {t("confirmCancel")}
+            </Button>
+            <Button
+              variant="primary"
+              tone="danger"
+              data-tone="danger"
+              disabled={feedback.busy}
+              aria-busy={feedback.busy}
+              onClick={() => {
+                runBulkDelete([...selected]);
+              }}
+            >
+              {t("bulk.confirmAccept")}
+            </Button>
+          </>
+        }
+      />
+      <Modal
+        open={replacing !== null}
+        onClose={() => {
+          setReplacing(null);
+        }}
+        title={t("importReplaceTitle")}
+        closeLabel={t("close")}
+        tone="warning"
+        description={t("importReplaceDescription")}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={feedback.busy}
+              onClick={() => {
+                setReplacing(null);
+              }}
+            >
+              {t("confirmCancel")}
+            </Button>
+            <Button
+              variant="primary"
+              tone="danger"
+              data-tone="danger"
+              disabled={feedback.busy}
+              aria-busy={feedback.busy}
+              onClick={() => {
+                const target = replacing;
+                if (target === null) return;
+                setReplacing(null);
+                importFile(target.file, {
+                  sessionId: target.row.id,
+                  success: t("importReplaced"),
+                });
+              }}
+            >
+              {t("importReplaceAccept")}
+            </Button>
+          </>
+        }
+      />
+      <Modal
+        open={copySource !== null}
+        onClose={() => {
+          setCopySource(null);
+        }}
+        title={t("copy.title")}
+        closeLabel={t("close")}
+        description={t("copy.description")}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={feedback.busy}
+              onClick={() => {
+                setCopySource(null);
+              }}
+            >
+              {t("confirmCancel")}
+            </Button>
+            <Button
+              variant="primary"
+              data-action="copy-confirm"
+              disabled={feedback.busy || copyWorkspaceId === ""}
+              aria-busy={feedback.busy}
+              onClick={() => {
+                const source = copySource;
+                if (source === null || copyWorkspaceId === "") return;
+                runCopy(source, copyWorkspaceId);
+              }}
+            >
+              {t("copy.confirm")}
+            </Button>
+          </>
+        }
+      >
+        {copyWorkspaces === null ? (
+          <Text as="p" size="sm" tone="tertiary">
+            {t("copy.loading")}
+          </Text>
+        ) : (
+          <label className={frameCss.copyField}>
+            <Text size="sm" tone="tertiary">
+              {t("copy.workspace")}
+            </Text>
+            <select
+              data-copy-workspace=""
+              aria-label={t("copy.workspace")}
+              value={copyWorkspaceId}
+              onChange={(event) => {
+                setCopyWorkspaceId(event.currentTarget.value);
+              }}
+            >
+              <option value="">{t("copy.placeholder")}</option>
+              {copyWorkspaces.map((workspace) => (
+                <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                  {workspace.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </Modal>
+      <RepairModal
+        title={repairing === null ? null : repairing.title}
+        busy={feedback.busy}
+        onCancel={() => {
+          setRepairing(null);
+        }}
+        onAction={(action) => {
+          const target = repairing;
+          if (target === null) return;
+          runRepair(target, action);
+        }}
+        t={t}
+      />
+      <Modal
         open={organizePhase === "confirm"}
         onClose={() => {
           setOrganizePhase("idle");
         }}
         title={t("organize.title")}
         closeLabel={t("close")}
+        tone="warning"
         description={t("organize.description")}
         footer={
           <>
@@ -686,376 +1177,11 @@ export function ConversationManagerPage({
           <Text as="p" size="md">
             {t("organize.running")}
           </Text>
+          <Text as="p" size="sm" tone="tertiary">
+            {t("organize.uncancellable")}
+          </Text>
         </Stack>
       </Modal>
     </section>
-  );
-}
-
-// 时间范围选项：默认本日，其后是本周（周一起算）与最近 N 天，「全部」放在最后。
-const USAGE_RANGES: readonly SessionUsageRange[] = ["day", "week", "7d", "30d", "90d", "all"];
-
-// 范围按钮的文案。
-function rangeLabel(range: SessionUsageRange, t: Translate): string {
-  switch (range) {
-    case "all":
-      return t("usage.range.all");
-    case "day":
-      return t("usage.range.day");
-    case "week":
-      return t("usage.range.week");
-    case "7d":
-      return t("usage.range.days", { n: 7 });
-    case "30d":
-      return t("usage.range.days", { n: 30 });
-    case "90d":
-      return t("usage.range.days", { n: 90 });
-  }
-}
-
-// 一个用量单项：标签在上、值在下；单项之间横向排布。
-interface UsageMetric {
-  key: string;
-  label: string;
-  // 原始值：token 数、计数，或百分点（`percent` 项）。
-  value: number;
-  kind: "tokens" | "count" | "percent";
-}
-
-// 缓存命中率（百分点）：缓存输入占总输入（含缓存）的比例。
-function cacheHitPercent(totals: SessionUsageTotals): number {
-  const total = totals.inputTokens + totals.cacheReadTokens;
-  if (total <= 0) return 0;
-  return (totals.cacheReadTokens / total) * 100;
-}
-
-// 显示口径的单项：输入（含缓存）、缓存输入、命中率、输出、推理，以及活动计数（没有合计项）。
-// 活动计数在按模型的行上不显示（事件没有模型归属）。
-function usageMetrics(
-  totals: SessionUsageTotals,
-  t: Translate,
-  options: { withActivity?: boolean } = {},
-): UsageMetric[] {
-  return [
-    {
-      key: "input",
-      label: t("usage.inputWithCache"),
-      value: totals.inputTokens + totals.cacheReadTokens,
-      kind: "tokens",
-    },
-    {
-      key: "cacheInput",
-      label: t("usage.cacheInput"),
-      value: totals.cacheReadTokens,
-      kind: "tokens",
-    },
-    {
-      key: "cacheRate",
-      label: t("usage.cacheRate"),
-      value: cacheHitPercent(totals),
-      kind: "percent",
-    },
-    { key: "output", label: t("usage.output"), value: totals.outputTokens, kind: "tokens" },
-    {
-      key: "reasoning",
-      label: t("usage.reasoning"),
-      value: totals.reasoningTokens,
-      kind: "tokens",
-    },
-    ...(options.withActivity === false
-      ? []
-      : [
-          { key: "turns", label: t("usage.turns"), value: totals.turns, kind: "count" as const },
-          { key: "steps", label: t("usage.steps"), value: totals.steps, kind: "count" as const },
-          {
-            key: "userInputs",
-            label: t("usage.userInputs"),
-            value: totals.userInputs,
-            kind: "count" as const,
-          },
-          {
-            key: "toolCalls",
-            label: t("usage.toolCalls"),
-            value: totals.toolCalls,
-            kind: "count" as const,
-          },
-        ]),
-  ];
-}
-
-// 折叠行的排序口径（不显示）：输入（含缓存）+ 输出。
-function sortWeight(totals: SessionUsageTotals): number {
-  return totals.inputTokens + totals.cacheReadTokens + totals.outputTokens;
-}
-
-interface UsageListRow {
-  key: string;
-  label: string;
-  totals: SessionUsageTotals;
-  // 子代理派生会话的行（按会话维度才有此维度）。
-  subagent?: boolean;
-}
-
-function emptyTotals(): SessionUsageTotals {
-  return {
-    turns: 0,
-    steps: 0,
-    userInputs: 0,
-    toolCalls: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    reasoningTokens: 0,
-    totalTokens: 0,
-  };
-}
-
-// 把桶按一个键折叠成行并按用量降序（按模型维度用它：人类的桶与子代理的桶折进同一行）。
-function foldBuckets(
-  buckets: readonly SessionUsageBucket[],
-  keyOf: (bucket: SessionUsageBucket) => string,
-): UsageListRow[] {
-  const folded = new Map<string, SessionUsageTotals>();
-  for (const bucket of buckets) {
-    const key = keyOf(bucket);
-    const previous = folded.get(key) ?? emptyTotals();
-    folded.set(key, {
-      turns: previous.turns,
-      steps: previous.steps,
-      userInputs: previous.userInputs,
-      toolCalls: previous.toolCalls,
-      inputTokens: previous.inputTokens + bucket.inputTokens,
-      outputTokens: previous.outputTokens + bucket.outputTokens,
-      cacheReadTokens: previous.cacheReadTokens + bucket.cacheReadTokens,
-      reasoningTokens: previous.reasoningTokens + bucket.reasoningTokens,
-      totalTokens: previous.totalTokens + bucket.totalTokens,
-    });
-  }
-  const rows: UsageListRow[] = [...folded].map(([key, totals]) => ({ key, label: key, totals }));
-  return rows.sort((left, right) => sortWeight(right.totals) - sortWeight(left.totals));
-}
-
-// 一行用量：label 在上（子代理行另带标记），下面是横向排布的单项。
-function UsageRow({
-  rowKey,
-  label,
-  totals,
-  t,
-  subagent,
-  withActivity = true,
-}: {
-  rowKey: string;
-  label: string;
-  totals: SessionUsageTotals;
-  t: Translate;
-  subagent?: boolean;
-  withActivity?: boolean;
-}): ReactNode {
-  return (
-    <Stack
-      as="li"
-      gap={6}
-      boxed
-      pad="row"
-      fixed
-      data-usage-key={rowKey}
-      {...(subagent === undefined ? {} : { "data-subagent": subagent ? "true" : "false" })}
-    >
-      <Row gap={8} grow>
-        <Text size="sm" tone="tertiary" truncate>
-          {label}
-        </Text>
-        {subagent === true ? <Tag tone="quiet">{t("subagent")}</Tag> : null}
-      </Row>
-      <Row gap="wide" wrap>
-        {usageMetrics(totals, t, { withActivity }).map((metric) => (
-          <Stack
-            key={metric.key}
-            data-usage-cell={metric.key}
-            data-usage-value={metric.value}
-            gap={2}
-          >
-            <Text size="sm" tone="tertiary">
-              {metric.label}
-            </Text>
-            <Text size="lg" weight="medium" tabular>
-              {metric.kind === "percent"
-                ? formatPercent(metric.value)
-                : metric.kind === "count"
-                  ? formatCount(metric.value)
-                  : formatTokens(metric.value)}
-            </Text>
-          </Stack>
-        ))}
-      </Row>
-    </Stack>
-  );
-}
-
-function UsageList({
-  rows,
-  t,
-  withActivity = true,
-}: {
-  rows: readonly UsageListRow[];
-  t: Translate;
-  withActivity?: boolean;
-}): ReactNode {
-  if (rows.length === 0) {
-    return (
-      <Text data-usage-status="empty" as="p" size="md" tone="tertiary">
-        {t("usage.empty")}
-      </Text>
-    );
-  }
-  return (
-    <Stack as="ul" gap={4} plain>
-      {rows.map((row) => (
-        <UsageRow
-          key={row.key}
-          rowKey={row.key}
-          label={row.label}
-          totals={row.totals}
-          t={t}
-          {...(row.subagent === undefined ? {} : { subagent: row.subagent })}
-          withActivity={withActivity}
-        />
-      ))}
-    </Stack>
-  );
-}
-
-// 总览：全部与「其中子代理」两行，与列表行同形。
-function UsageOverview({ report, t }: { report: SessionUsageValue; t: Translate }): ReactNode {
-  return (
-    <Stack as="ul" gap={4} plain>
-      <UsageRow rowKey="all" label={t("usage.all")} totals={report.totals} t={t} />
-      <UsageRow rowKey="subagent" label={t("usage.subagentOnly")} totals={report.subagent} t={t} />
-    </Stack>
-  );
-}
-
-// 统计视图：时间范围过滤 + 二层维度切换（总览 / 按模型 / 按会话）。
-function UsageView({
-  report,
-  loading,
-  error,
-  tab,
-  onTab,
-  range,
-  onRange,
-  onlySubagents,
-  onOnlySubagents,
-  t,
-}: {
-  report: SessionUsageValue | null;
-  loading: boolean;
-  error: string | null;
-  tab: UsageTab;
-  onTab: (tab: UsageTab) => void;
-  range: SessionUsageRange;
-  onRange: (range: SessionUsageRange) => void;
-  onlySubagents: boolean;
-  onOnlySubagents: (next: boolean) => void;
-  t: Translate;
-}): ReactNode {
-  const items: UsageTab[] = ["overview", "models", "sessions"];
-  const labels: Record<UsageTab, string> = {
-    overview: t("usage.overview"),
-    models: t("usage.models"),
-    sessions: t("usage.sessions"),
-  };
-  const rows: readonly UsageListRow[] =
-    report === null || tab === "overview"
-      ? []
-      : tab === "models"
-        ? foldBuckets(
-            report.buckets,
-            (bucket) =>
-              (bucket.provider ?? t("usage.unknownModel")) +
-              " / " +
-              (bucket.model ?? t("usage.unknownModel")),
-          )
-        : report.sessions
-            // 子代理会话单个用量小，混排时会被行数上限挤掉：给一个只看它们的开关。
-            .filter((row: SessionUsageSessionRow) => !onlySubagents || row.subagent)
-            .map((row) => ({
-              key: row.sessionId,
-              label: row.title ?? row.sessionId,
-              totals: row,
-              subagent: row.subagent,
-            }))
-            .sort((left, right) => sortWeight(right.totals) - sortWeight(left.totals))
-            .slice(0, USAGE_SESSION_ROWS);
-  return (
-    <Stack data-usage-view={tab} data-usage-range={range} gap={12} fixed>
-      <div
-        className={frameCss.filterTabs}
-        role="group"
-        aria-label={t("usage.range")}
-        data-filter="usage-range"
-      >
-        {USAGE_RANGES.map((option) => (
-          <FilterChip
-            key={option}
-            active={option === range}
-            label={rangeLabel(option, t)}
-            tab={option}
-            onSelect={() => {
-              onRange(option);
-            }}
-          />
-        ))}
-      </div>
-      <div
-        className={frameCss.filterTabs}
-        role="group"
-        aria-label={t("usage.dimension")}
-        data-filter="usage-tabs"
-      >
-        {items.map((item) => (
-          <FilterChip
-            key={item}
-            active={item === tab}
-            label={labels[item]}
-            tab={item}
-            onSelect={() => {
-              onTab(item);
-            }}
-          />
-        ))}
-      </div>
-      {tab === "sessions" ? (
-        <div
-          className={frameCss.filterTabs}
-          role="group"
-          aria-label={t("filter.subagents")}
-          data-filter="usage-subagents"
-        >
-          <FilterChip
-            active={onlySubagents}
-            label={t("usage.onlySubagents")}
-            onSelect={() => {
-              onOnlySubagents(!onlySubagents);
-            }}
-          />
-        </div>
-      ) : null}
-      {loading ? (
-        <Text data-usage-status="loading" as="p" size="md" tone="tertiary">
-          {t("usage.loading")}
-        </Text>
-      ) : null}
-      {error === null ? null : (
-        <Text data-usage-status="error" role="alert" as="p" size="md" tone="danger">
-          {error}
-        </Text>
-      )}
-      {report === null ? null : tab === "overview" ? (
-        <UsageOverview report={report} t={t} />
-      ) : (
-        <UsageList rows={rows} t={t} withActivity={tab === "sessions"} />
-      )}
-    </Stack>
   );
 }

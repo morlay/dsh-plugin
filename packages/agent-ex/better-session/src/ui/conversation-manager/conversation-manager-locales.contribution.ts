@@ -3,13 +3,9 @@
 import { inject } from "@morlay/zephyr";
 import { Locale, Slot, SlotContribution } from "@morlay/zephyr-app/client";
 import { NS, en, zh } from "./locales.ts";
-import type { ConversationManagerKey } from "./locales.ts";
+import type { ConversationManagerTranslate } from "./locales.ts";
 
-/** 本包字典的翻译座：`t` 的键集合就是字典的键集合。 */
-export type ConversationManagerTranslate = (
-  key: ConversationManagerKey,
-  params?: Record<string, unknown>,
-) => string;
+export type { ConversationManagerTranslate };
 
 // 字典面按结构使用：字典名只在本包注册，不扩张上游的 namespace 类型表。
 interface Dictionaries {

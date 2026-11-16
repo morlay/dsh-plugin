@@ -1,0 +1,23 @@
+/* 统一反馈面：一行文案 + 可选的重试入口；列表、统计、消息行里保持同一个形状。 */
+.feedback {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 0;
+  text-align: start;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.failure .text {
+  color: var(--dsw-alias-state-error-primary);
+}

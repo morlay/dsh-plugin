@@ -6,15 +6,15 @@ export * from "./contract/index.ts";
 export { asRdbStore } from "./contract/session-rdb-store.contract.ts";
 
 // 默认实现（同进程端口）：会话落盘 / storage KV 后端接管 / 分支 / 查询 / 编辑编排。
-export { SessionPersistenceRdb, type RdbConfig } from "./rdb-store.service.ts";
-export { SessionQueryRdb } from "./session-query.service.ts";
-export { SessionEditorDefault } from "./session-editor.service.ts";
-export { SessionBranchRdb } from "./rdb/branch/index.ts";
-export { SessionProjectionCacheRdb } from "./rdb/storage-takeover/projection-cache.service.ts";
+export { SessionPersistenceRdb, type RdbConfig } from "./admin/store.ts";
+export { SessionQueryRdb } from "./admin/query.ts";
+export { SessionEditorDefault } from "./editor/service.ts";
+export { SessionBranchRdb } from "./data/store/branch/index.ts";
+export { SessionProjectionCacheRdb } from "./storage/projection-cache.service.ts";
 
 // 实现细节与纯函数：编辑计划、日志编解码、读视图修复、KV 域接管。
 // 从源包搬来的 spec 直接引用这几件（源包的 `artifact.ts` / `backend.ts` 就是同一个位置）。
-export * from "./plan.ts";
+export * from "./editor/plan.ts";
 export {
   findSurfaceRepairs,
   needsShapeAdoption,
@@ -25,29 +25,35 @@ export {
   repairOrphanInboxSplices,
   repairReadView,
   syncMeteringRanges,
-} from "./rdb/log/repair.ts";
-export { scanRows, titleOfEventData, toJsonlArtifact } from "./rdb/log/export.ts";
-export { rowToEvent, rowToMeta } from "./rdb/log/rows.ts";
-export { eventDimensions } from "./rdb/event-shape.ts";
-export { SESSION_PERSISTENCE_SQLITE_APPLICATION_ID } from "./rdb/version.ts";
-export type { StorageRepository } from "./rdb/storage-takeover/types.ts";
-export type { Backend, EventRow, SessionRow } from "./rdb/backend.ts";
-export { WriteGuard } from "./rdb/write-guard.ts";
+} from "./data/store/read-view/index.ts";
+export { scanRows, titleOfEventData, toJsonlArtifact } from "./data/store/log/export.ts";
+export { rowToEvent, rowToMeta } from "./data/store/log/rows.ts";
+export { eventDimensions } from "./data/event-shape.ts";
+export { SESSION_PERSISTENCE_SQLITE_APPLICATION_ID } from "./data/version.ts";
+export type { StorageRepository } from "./storage/types.ts";
+export type { Backend, EventRow, SessionRow } from "./data/backend.ts";
+export { WriteGuard } from "./data/write-guard.ts";
 export {
   SessionBranchRdbProvider,
   locateTurnEnd,
   truncateLiveSession,
   liveEventsOf,
   replaceLiveSessionLog,
-} from "./rdb/branch/index.ts";
-export type { BranchPort } from "./rdb/branch/port.ts";
-export { openRdbBackend } from "./rdb/db/open.ts";
-export { DEFAULT_BUSY_TIMEOUT_MS, SCHEMA_VERSION, type JournalMode } from "./rdb/version.ts";
-export { SessionDeletionError } from "./rdb/deletion-error.ts";
-export { parseJsonlArtifact, parseImportZip } from "./rdb/log-import.ts";
-export { StorageTakeoverDefault } from "./rdb/storage-takeover/storage-takeover.service.ts";
+} from "./data/store/branch/index.ts";
+export type { BranchPort } from "./data/store/branch/port.ts";
+export { openRdbBackend } from "./data/store/open.ts";
+export { DEFAULT_BUSY_TIMEOUT_MS, SCHEMA_VERSION, type JournalMode } from "./data/version.ts";
+export {
+  SessionStoreError,
+  dbErrorOf,
+  failureCodeOf,
+  sessionStoreError,
+  type SessionStoreFailure,
+} from "./data/errors.ts";
+export { parseJsonlArtifact, parseImportZip } from "./admin/import-export/parse.ts";
+export { StorageTakeoverDefault } from "./storage/storage-takeover.service.ts";
 export {
   importStorages,
   PROJCACHE_UNIT_VERSIONS,
   WORKSPACE_UNIT_VERSIONS,
-} from "./rdb/storage-takeover/import-storages.ts";
+} from "./storage/import-storages.ts";

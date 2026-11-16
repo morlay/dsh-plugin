@@ -6,7 +6,7 @@
 
 **决定**
 
-在 handle 旁边定义平行契约 `SessionBranch`（`src/contract/session-branch.contract.ts`，服务名别名 `sessionBranch`）——`readBranchPrefix` / `readRawEvents` / `forkFrom` / `rewind`，由本包的 `SessionBranchRdb` 实现，内部 `SessionBranchRdbProvider` 只经 `BranchPort`（`src/rdb/branch/port.ts`）接触库。
+在 handle 旁边定义平行契约 `SessionBranch`（`src/contract/session-branch.contract.ts`，服务名别名 `sessionBranch`）——`readBranchPrefix` / `readRawEvents` / `forkFrom` / `rewind`，由本包的 `SessionBranchRdb` 实现，内部 `SessionBranchRdbProvider` 只经 `BranchPort`（`src/data/store/branch/port.ts`）接触库。
 
 **考虑过的选项**
 

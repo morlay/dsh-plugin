@@ -342,3 +342,86 @@ function combine(keyword: "AND" | "OR", conditions: readonly Condition[]): Condi
 
 export const and = (...conditions: readonly Condition[]): Condition => combine("AND", conditions);
 export const or = (...conditions: readonly Condition[]): Condition => combine("OR", conditions);
+
+// ---- 窗口函数与 keyset 分页（两方言同一份语法，值走绑定参数）----
+
+export interface WindowOrder {
+  readonly column: OperandInput;
+  readonly direction?: "asc" | "desc";
+}
+
+export interface WindowOptions {
+  // `PARTITION BY` 的键（列 / 值 / 表达式）。
+  readonly partitionBy?: readonly OperandInput[];
+  readonly orderBy?: readonly WindowOrder[];
+}
+
+// `OVER (PARTITION BY … ORDER BY …)`；两段都可省（省了就退化成整表窗口）。
+function overClause(options: WindowOptions): Fragment {
+  const parts: Fragment[] = [];
+  if (options.partitionBy !== undefined && options.partitionBy.length > 0) {
+    parts.push(concat([text("PARTITION BY"), concat(options.partitionBy.map(fragmentOf), ", ")]));
+  }
+  if (options.orderBy !== undefined && options.orderBy.length > 0) {
+    parts.push(
+      concat([
+        text("ORDER BY"),
+        concat(
+          options.orderBy.map((order) =>
+            concat([fragmentOf(order.column), text((order.direction ?? "asc").toUpperCase())]),
+          ),
+          ", ",
+        ),
+      ]),
+    );
+  }
+  return parts.length === 0
+    ? fragment("")
+    : concat([text("OVER ("), concat(parts, " "), text(")")], "");
+}
+
+function windowCall<T>(name: string, args: Fragment, options: WindowOptions): ExprOperand<T> {
+  const head = concat([text(`${name}(`), args, text(")")], "");
+  return {
+    kind: "expr",
+    sql: "",
+    params: [],
+    fragment: concat([head, overClause(options)], " "),
+  };
+}
+
+// 分区内行号（从 1 开始）：取每组前 N、或配合 keyset 分页。
+export function rowNumber(options: WindowOptions = {}): ExprOperand<number> {
+  return windowCall<number>("ROW_NUMBER", fragment(""), options);
+}
+
+// 名次：并列同名次，下一名跳号（`ROW_NUMBER` 不跳）。
+export function rank(options: WindowOptions = {}): ExprOperand<number> {
+  return windowCall<number>("RANK", fragment(""), options);
+}
+
+// 上一行的值（可按分区）：`offset` 默认 1，`fallback` 是越界时的值（绑定参数）。
+export function lag<T = unknown>(
+  input: OperandInput,
+  options: WindowOptions & { offset?: number; fallback?: unknown } = {},
+): ExprOperand<T | null> {
+  const args = [fragmentOf(input)];
+  if (options.offset !== undefined) args.push(fragment("?", [options.offset]));
+  if (options.fallback !== undefined) args.push(param(options.fallback));
+  return windowCall<T | null>("LAG", concat(args, ", "), options);
+}
+
+// keyset 分页的定位条件：`("a", "b") > (?, ?)`——从上一页最后一行之后接着取。
+// 行值比较两方言都支持；列按同一方向（默认 ASC）排。
+export function keysetAfter(
+  columns: readonly (string | ColumnRef)[],
+  values: readonly unknown[],
+): Condition {
+  if (columns.length === 0 || columns.length !== values.length) {
+    throw new Error("zephyr-rdb: keysetAfter needs the same number of columns and values");
+  }
+  const refs = columns.map((column) =>
+    typeof column === "string" ? `"${column}"` : columnSql(column),
+  );
+  return fragment(`(${refs.join(", ")}) > (${values.map(() => "?").join(", ")})`, values);
+}

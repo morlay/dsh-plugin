@@ -34,6 +34,7 @@ describe("P1：join 变体 / CTE / UNION / 行锁 / 查询观测", () => {
     expect(render(union(left, right), "sqlite")).toEqual({
       text: 'SELECT "f_id" FROM "t_items" WHERE "f_count" > ? UNION SELECT "f_id" FROM "t_items" WHERE "f_count" > ?',
       params: [1, 2],
+      readBigInts: false,
     });
     expect(render(union(left, right, { all: true }), "postgres").text).toContain("UNION ALL");
 
@@ -46,7 +47,11 @@ describe("P1：join 变体 / CTE / UNION / 行锁 / 查询观测", () => {
     );
 
     // 行锁只有 PostgreSQL 认：SQLite 渲染时整段丢掉（参数也不留）。
-    expect(render(forUpdate({ skipLocked: true }), "sqlite")).toEqual({ text: "", params: [] });
+    expect(render(forUpdate({ skipLocked: true }), "sqlite")).toEqual({
+      text: "",
+      params: [],
+      readBigInts: false,
+    });
     expect(render(forUpdate({ skipLocked: true }), "postgres").text).toBe("FOR UPDATE SKIP LOCKED");
   });
 

@@ -284,6 +284,9 @@ export interface MountOptions {
   readonly projections?: boolean;
   // 挂完之后往 ctx 上塞服务（源 spec 的 `ctx.provide(...)` 前置用法）。
   readonly provide?: (ctx: MountedContext) => void;
+  // 建行**之前**发布服务：本包的可选能力走 `inject.optional(契约令牌)`，回填注入发生在建行时，
+  // 所以"要在装配期就被拿到的替身"必须在这里发（`provide` 是挂完之后，喂不到注入）。
+  readonly before?: (ctx: MountedContext) => void;
   // 是否挂投影检查点行：默认挂。多个实例共用一个库文件的并发写用例要关掉——它的自动写会把
   // 事件落库提前到每个 tick，跨实例抢 SQLite 写锁（那类用例量的是持久化本身，不是缓存）。
   readonly projectionCache?: boolean;
@@ -345,6 +348,7 @@ export async function mountOnto(
     ...(options.root === undefined ? {} : { dataDir: options.root }),
     ctx,
     config: new Map<object, unknown>([[SessionPersistenceRdb, options.config]]),
+    ...(options.before === undefined ? {} : { before: options.before }),
   });
 
   const persistence = mounted.tryGet(SessionPersistence) as SessionPersistenceRdb;

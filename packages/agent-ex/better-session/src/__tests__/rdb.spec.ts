@@ -1,3 +1,5 @@
+// 为什么留在根 `__tests__/`：落盘核心的契约套件（`runCoordinatorContract` / `runPersistenceContract`）钉上游口径，加上崩溃、迁移与读视图修复语义，超单一面 spec 的范围。
+
 import { randomUUID } from "node:crypto";
 import { CompactionId, compactCheckpointSource } from "@morlay/dsh-compaction";
 import {

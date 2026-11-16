@@ -26,10 +26,10 @@
 
 ## 怎么写
 
-- **条件 → SQL 只有一个 home**：`src/rdb/query-filters.ts` 的 `sessionFilterCondition` / `eventFilterCondition`。
+- **条件 → SQL 只有一个 home**：`src/admin/filters.ts` 的 `sessionFilterCondition` / `eventFilterCondition`（`nullableInList` 也在这里）。
   加新的筛选条件只改这里，别在 service 里再写一遍 `Array.filter`。
-- **列引用也只有一个 home**：`src/rdb/storage-takeover/read-model.ts` 的 `columns`（`sessions.table(db)` 那一处）。
-  `SessionPersistenceRdb` 只转发 `sessionFilterColumns()` / `eventFilterColumns()`，不自己取表。
+- **列引用也只有一个 home**：`src/data/store/read-model.ts` 的 `columns`（`sessions.table(db)` 那一处）。
+  `SessionPersistenceRdb`（`src/data/store/persistence-core.ts`）只转发 `sessionFilterColumns()` / `eventFilterColumns()`，不自己取表。
 - **`null` 单独走 `IS NULL`**：`NULL` 与任何值都不相等，塞进 `IN (...)` 会静默丢行（`nullableInList` 处理这一点）。
 - **窄列优先**：能只要坐标就别 `SELECT *`；`f_data` 是最大的一列，取它之前先问「这行判据真的需要事件体吗」。
 - **live 会话先 flush 再读库**：`ctx.sessions.flush` 是公开同步点，flush 之后库读与内存读等价；

@@ -26,7 +26,7 @@
 | 子入口面相对导入      | 五个面（`ui`/`client`/`server`/`compat`/`testing`）里禁**跨面**的 `../`：共享契约与令牌走包出口（`@morlay/<包>/contract`），否则同包各出口产物各内联一份契约类/令牌；面内 `../` 合法、`__tests__` 豁免 | 面清单 `SUBENTRY_FACES`                                                                 |
 
 白名单的判据是「**桥的另一头是什么外部形状**」，不是「这个文件里断言多」：域内断言（例如
-`better-session/src/rdb/log/repair.ts`）不进白名单。要放宽先改 `rules.ts`，再同步
+`better-session/src/admin/repair.ts`）不进白名单。要放宽先改 `rules.ts`，再同步
 `src/__tests__/rules.spec.ts`。
 
 ## 基线是过渡

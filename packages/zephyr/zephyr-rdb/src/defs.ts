@@ -3,8 +3,8 @@ import type { Database } from "./database/types.ts";
 // 表定义就是数据库结构的唯一来源：DDL、启动迁移、类型化的表句柄都从它算出来，
 // 所以再加一张表 / 一列时不需要另写迁移 SQL，也不需要在 sqlite 与 postgres 各写一遍。
 
-// 列类型：只保留跨方言能一一映射的那几种。
-export type ColumnTypeName = "serial" | "integer" | "bigint" | "text" | "boolean";
+// 列类型：只保留跨方言能一一映射的那几种（`json` 在 SQLite 存 TEXT、PostgreSQL 用 JSONB）。
+export type ColumnTypeName = "serial" | "integer" | "bigint" | "text" | "boolean" | "json";
 
 // 外键的删除动作（与 SQL 的 ON DELETE 同名）。
 export type DeleteAction = "cascade" | "set null" | "restrict" | "no action";
@@ -17,6 +17,8 @@ export interface ColumnDef {
   primaryKey?: boolean;
   default?: string | number;
   unique?: boolean;
+  // 受检 text：只允许这些取值（DDL 上是 CHECK 约束，写入时构造期校验，读回来是 string）。
+  values?: readonly string[];
   references?: {
     table: string;
     column: string;
@@ -35,6 +37,8 @@ export interface UniqueDef {
 
 export interface IndexDef {
   columns: string[];
+  // 部分索引的条件（`CREATE INDEX … WHERE <where>`，两方言都支持）；给了它只索引满足条件的行。
+  where?: string;
 }
 
 // 一张表的完整定义。
@@ -68,6 +72,15 @@ export function defineTable<const T extends TableDef>(def: T): Table<T> {
       throw new Error(
         `zephyr-rdb: table '${def.name}' column '${name}' must match [a-z][a-z0-9_]*`,
       );
+    }
+    const column = def.columns[name]!;
+    if (column.values !== undefined && column.type !== "text") {
+      throw new Error(
+        `zephyr-rdb: column '${def.name}.${name}' declares values on a ${column.type} column; only text can be enumerated`,
+      );
+    }
+    if (column.values !== undefined && column.values.length === 0) {
+      throw new Error(`zephyr-rdb: column '${def.name}.${name}' declares an empty values list`);
     }
   }
   // 定义即操作钩子：`users.table(db)` 等价于 `db.table(users)`，业务侧不需要记两套写法。

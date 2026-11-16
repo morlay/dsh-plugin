@@ -3,6 +3,8 @@
 // 跨面引用不会在装配期报错（同一个包里路径都能解析），但它会把 node-only 运行时
 // （`node:sqlite` / `node:fs` / `createRequire`）拖进浏览器包，或把 React / `.css` 拖进 Node——
 // 两种都是启动时才炸。判据是源码里的 import 语句，不跑起来就得红。
+//
+// 为什么留在根 `__tests__/`：判据是 `src/` 全树的面边界（宿主半与浏览器半互不引用），不属于任何单个面。
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";

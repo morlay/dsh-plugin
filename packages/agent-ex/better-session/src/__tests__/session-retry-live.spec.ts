@@ -5,6 +5,8 @@
 //
 // 为什么用假模型：真模型要 key、且回复不可复现；这里要的是**真 agent loop + 真库**那条链，模型内容无关。
 // 装配走 `support/host.ts` 的 `startHarnessWithAgent()`：它与整包装配同一份清单，只是多挂 agent 行。
+//
+// 为什么留在根 `__tests__/`：e2e——真 agent loop + 真库走 `sessionEditor/retry` 的 wire 路径，跨 editor / endpoint / server 三面。
 import { type StreamChunk, type UserMessage } from "@morlay/dsh-agent";
 import { LlmAdapter } from "@morlay/dsh-agent/server";
 import { MessageId } from "@morlay/dsh-agent/contract";

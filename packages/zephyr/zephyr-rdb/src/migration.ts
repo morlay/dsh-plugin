@@ -1,11 +1,13 @@
 import type { Catalog, TableDef } from "./defs.ts";
 import { defineTable } from "./defs.ts";
+import { eq } from "./expr.ts";
+import { fragment } from "./fragment.ts";
 import type { Database } from "./database/types.ts";
-import { ensureSchema } from "./migrate.ts";
+import { ensureSchema, SCHEMA_MIGRATIONS_TABLE } from "./migrate.ts";
 
 // 内置迁移账本：一条已执行的数据迁移一行（`f_id` 唯一）。
 export const schemaMigrations = defineTable({
-  name: "t_schema_migrations",
+  name: SCHEMA_MIGRATIONS_TABLE,
   columns: {
     f_id: { type: "text", primaryKey: true, notNull: true },
     f_applied_at: { type: "bigint", notNull: true },
@@ -44,10 +46,25 @@ export interface RunMigrationsOptions {
   migrations: readonly Migration[] | MigrationRegistry;
 }
 
+// PostgreSQL 的迁移互斥键（字符串常量走 `hashtext`，跨实例认同一个键）。
+const MIGRATION_LOCK_SQL = "SELECT pg_advisory_xact_lock(hashtext('zephyr_rdb_migrations'))";
+
+// 在迁移锁内跑一段：PostgreSQL 拿事务级 advisory lock（同一时刻只有一方在跑），
+// SQLite 的 `BEGIN IMMEDIATE` 自己就是写锁。锁与事务同生共死，不会漏放。
+async function withMigrationLock<T>(
+  database: Database,
+  body: (scoped: Database) => Promise<T>,
+): Promise<T> {
+  return database.transaction(async (tx) => {
+    if (tx.dialect.supports("advisory-lock")) await tx.run(fragment(MIGRATION_LOCK_SQL));
+    return body(tx);
+  });
+}
+
 // 先按 catalog 对齐结构（建表 / 补列 / 补索引），再执行未应用的数据迁移。
 //
-// 账本是本包内置的 `t_schema_migrations`：每条迁移在**同一个事务**里执行并记账，
-// 失败即回滚，重跑时只跑没记过的。返回本次实际执行了哪些 `id`。
+// 每条迁移在自己的事务里执行并记账（失败即回滚、不记账、重跑只跑没记过的）；账本在锁内**重新读**，
+// 所以两个实例同时启动时只有一方执行。返回本次实际执行了哪些 `id`。
 export async function runMigrations(
   database: Database,
   options: RunMigrationsOptions,
@@ -57,19 +74,24 @@ export async function runMigrations(
       ? options.migrations.list()
       : [...options.migrations];
   const catalog: Catalog = [...(options.catalog ?? []), schemaMigrations as TableDef];
-  await ensureSchema(database, catalog);
 
-  const ledger = database.table(schemaMigrations);
-  const applied = new Set<string>();
-  for await (const row of ledger.select({ id: ledger.f_id })) applied.add(row.id);
+  // 结构对齐也在锁内：两个实例同时补列 / 建索引会撞「duplicate column」。
+  await withMigrationLock(database, (tx) => ensureSchema(tx, catalog));
 
   const executed: string[] = [];
   for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
-    const appliedNow = await database.transaction(async (tx) => {
+    const appliedNow = await withMigrationLock(database, async (tx) => {
+      const ledger = tx.table(schemaMigrations);
+      // 锁内重新读账本：另一个实例可能刚跑过这条。
+      for await (const row of ledger
+        .select({ id: ledger.f_id })
+        .where(eq(ledger.f_id, migration.id))) {
+        void row;
+        return false;
+      }
       const result = await migration.up(tx);
       if (result === false) return false;
-      await tx.table(schemaMigrations).insert({ f_id: migration.id, f_applied_at: Date.now() });
+      await ledger.insert({ f_id: migration.id, f_applied_at: Date.now() });
       return true;
     });
     if (appliedNow) executed.push(migration.id);

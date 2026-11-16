@@ -8,7 +8,7 @@
 // **不传 `Config`**：`toCordis` 的 `Config` 要的是 cordis 的 schema（`~standard.validate`），而本包的
 // `static Config` 是普通的规范化函数——交给 `toCordis` 会在 cordis 的 `resolveConfig` 里炸。
 import { toCordis } from "@morlay/zephyr/compat";
-import { SessionPersistenceRdb } from "./rdb-store.service.ts";
+import { SessionPersistenceRdb } from "./admin/store.ts";
 
 // 会话落盘的行入口：`ctx.plugin(SessionPersistenceRdbRow, { type: "sqlite", path })`。
 export const SessionPersistenceRdbRow = toCordis(SessionPersistenceRdb);

@@ -3,7 +3,9 @@
 // 这条契约在生产里曾经**没有任何实现**（全仓只有 `inject.optional` 的消费点）：于是 `retry` 只截断日志、
 // 不重放，界面上就是「点重试没反应」。这里钉住两件事：
 //   - 有目录时：`followup` 收到该回合的用户输入，响应的 `queuedTurns` 非 0；
-//   - 没目录时：只重写日志，不抛（退化路径仍可用）。
+//   - 没目录时：没有重放入口就不许截断——显式失败带码，日志保持原样。
+//
+// 为什么留在根 `__tests__/`：e2e——真宿主上 editor 编排 × agent 目录 × 端点 wire，跨 editor / endpoint / server 三面。
 import { SessionId } from "@morlay/dsh-session/contract";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 import { afterEach, describe, expect, it } from "vitest";
@@ -26,6 +28,11 @@ function valueOf<T>(result: unknown): T {
   const shaped = result as RemoteResultWire<T>;
   if (!shaped.ok) throw new Error(`端点失败：${shaped.error.code} ${shaped.error.message}`);
   return shaped.value;
+}
+
+function errorCodeOf(result: unknown): string | undefined {
+  const shaped = result as RemoteResultWire<unknown>;
+  return shaped.ok ? undefined : shaped.error.code;
 }
 
 const seqsOf = (events: readonly { seq: unknown }[]): number[] =>
@@ -83,10 +90,10 @@ describe("SessionAgentControl：agent 目录面", () => {
     },
   );
 
-  it("没目录：retry 只重写日志、不抛（退化路径）", { timeout: 60_000 }, async () => {
+  it("没目录：retry 不截断日志、显式失败带码（没有重放入口）", { timeout: 60_000 }, async () => {
     const host = await startHost({ withoutAgents: true });
     opened.push(host);
-    // 没有目录面就没有「正在跑的 agent」：这里只验日志被重写、调用不失败。
+    // 没有目录面就没有「正在跑的 agent」：重放的那条用户输入无处可去，动作整条失败。
     const live = host.ctx.sessions.create(SessionId("retry-cold"), {
       meta: meta("retry-cold", "/work"),
       // 没有目录时先要过「有没有可解析的模型配置」这一关，种子得带上请求头。
@@ -101,17 +108,17 @@ describe("SessionAgentControl：agent 目录面", () => {
       ],
     });
     await host.ctx.sessions.flush(live);
+    const before = await host.eventsOf("retry-cold");
 
     const result = await host.handlers.invoke("sessionEditor/retry", {
       request: { sessionId: "retry-cold", turn: 2, cascade: "truncate" },
     });
 
-    expect(valueOf<EditorValue>(result).queuedTurns).toBe(0);
-    await waitFor(
-      () => host.eventsOf("retry-cold"),
-      (events) => events.length === 6,
-      "没有目录时日志也没有被重写",
-    );
+    expect(errorCodeOf(result)).toBe("SESSION_EDITOR_REPLAY_UNAVAILABLE");
+    // 日志保持原样：没有重放入口时不许先截断（第二个回合还在）。
+    const after = await host.eventsOf("retry-cold");
+    expect(seqsOf(after)).toEqual(seqsOf(before));
+    expect(after.some((event) => event.type === "turn/start" && event.data.turn === 2)).toBe(true);
     expect(host.agentDirectory.followups).toHaveLength(0);
   });
 });

@@ -1,9 +1,11 @@
 import type { TableDef } from "../defs.ts";
-import { concat, fragment, only, text, type Fragment } from "../fragment.ts";
+import { assertSupported } from "../dialect.ts";
+import { concat, fragment, only, readBigInts, text, type Fragment } from "../fragment.ts";
 import { and, columnSql, type ColumnRef, type Condition, type ExprOperand } from "../expr.ts";
 import { forUpdate as forUpdateSql, withCtes, type Cte } from "../compound.ts";
 import type { Database } from "../database/types.ts";
 import type { Aggregate, Projection } from "./types.ts";
+import { normalizeValue } from "./normalize.ts";
 
 // 表达式的片段：方言相关的表达式自带片段，普通的按 `sql` + 绑定参数编。
 function exprFragment(expression: ExprOperand): Fragment {
@@ -63,6 +65,16 @@ export interface SelectQuery<T> extends AsyncIterable<T> {
 // `groupBy` 的入参：列名、带表名的列引用或表达式。
 export type GroupByItem = string | ColumnRef | ExprOperand;
 
+// 分页参数只能是自然数：负数在 SQLite 上是「无限制」、NaN 会被驱动当成坏绑定值，两者都静默出错。
+function assertCount(kind: "limit" | "offset", value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      "zephyr-rdb: " + kind + " must be a non-negative safe integer, got " + String(value),
+    );
+  }
+  return value;
+}
+
 export function selectQuery<T>(
   database: Database,
   table: TableDef,
@@ -86,17 +98,14 @@ export function selectQuery<T>(
     offset?: number | undefined;
   } = { joins: [], ctes: [], distinct: false, order: [], group: [] };
 
-  // 结果行的值归一：`bigint` 列统一成 JS `bigint`。
-  // SQLite 的 INTEGER 由驱动给 number，PostgreSQL 的 int8 已经是 BigInt（见 `bigintTypes`）——
-  // 读出来的类型不能跟着驱动走，否则同一份表定义在两种方言下值类型不同。
+  // 结果行的值归一：`bigint` 与 `boolean` 统一成声明给调用方的 JS 类型。
+  // SQLite 的 INTEGER 由驱动给 number（BOOLEAN 也一样给 0/1），PostgreSQL 的 int8 已经是 BigInt、
+  // BOOLEAN 已经是 true/false——读出来的类型不能跟着驱动走，否则同一份表定义在两种方言下值类型不同。
   const normalize = (row: Record<string, unknown>): T => {
     for (const [alias, entry] of Object.entries(projection)) {
       if (entry.kind !== "column") continue;
       const owner = entry.table === undefined ? table : tableOf(entry.table);
-      if (owner?.columns[entry.name]?.type !== "bigint") continue;
-      const value = row[alias];
-      if (value === null || value === undefined || typeof value === "bigint") continue;
-      row[alias] = BigInt(value as number | string);
+      row[alias] = normalizeValue(owner?.columns[entry.name], row[alias]);
     }
     return row as T;
   };
@@ -107,6 +116,14 @@ export function selectQuery<T>(
       if ((join.alias ?? join.table.name) === name) return join.table;
     }
     return undefined;
+  };
+
+  // 投影里的列是不是 bigint：决定整条语句要不要按 BigInt 读（SQLite 的开关是语句级）。
+  const isBigintColumn = (alias: string): boolean => {
+    const entry = projection[alias];
+    if (entry === undefined || entry.kind !== "column") return false;
+    const owner = entry.table === undefined ? table : tableOf(entry.table);
+    return owner?.columns[entry.name]?.type === "bigint";
   };
 
   // 表引用按连接的方言算（PostgreSQL 带 schema）：FROM / JOIN 与其余引用保持同一处。
@@ -161,10 +178,16 @@ export function selectQuery<T>(
       });
       parts.push(text("ORDER BY"), concat(orderParts, ", "));
     }
+    // SQLite 不认「只有 OFFSET」的写法（near "OFFSET": syntax error），PG 认；SQLite 侧补一个无上限 LIMIT。
+    if (state.offset !== undefined && state.limit === undefined) {
+      parts.push(only("sqlite", text("LIMIT -1")));
+    }
     if (state.limit !== undefined) parts.push(fragment("LIMIT ?", [state.limit]));
     if (state.offset !== undefined) parts.push(fragment("OFFSET ?", [state.offset]));
     if (state.lock !== undefined) parts.push(state.lock);
-    return withCtes(state.ctes, concat(parts, " "));
+    const statement = withCtes(state.ctes, concat(parts, " "));
+    // 投影里有 bigint 列时整条语句按 BigInt 读；其它 INTEGER 列（integer / boolean）由归一还原。
+    return Object.keys(projection).some(isBigintColumn) ? readBigInts(statement) : statement;
   };
 
   const query: SelectQuery<T> = {
@@ -181,6 +204,8 @@ export function selectQuery<T>(
       return query;
     },
     forUpdate(options) {
+      // SQLite 没有行锁：缺能力立刻抛 `unsupported`，不静默丢弃。
+      assertSupported(database.dialect, "row-lock", "FOR UPDATE");
       state.lock = forUpdateSql(options);
       return query;
     },
@@ -201,11 +226,11 @@ export function selectQuery<T>(
       return query;
     },
     limit(count) {
-      state.limit = count;
+      state.limit = assertCount("limit", count);
       return query;
     },
     offset(count) {
-      state.offset = count;
+      state.offset = assertCount("offset", count);
       return query;
     },
     toFragment,

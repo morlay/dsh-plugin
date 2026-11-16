@@ -17,11 +17,15 @@ export {
   createDialect,
   createIndexSql,
   createTableSql,
+  assertSupported,
+  type ColumnShape,
   type Dialect,
+  type DialectCapability,
   type DialectName,
+  type IndexShape,
   type TableShape,
 } from "./dialect.ts";
-export { concat, fragment, render, type Fragment } from "./fragment.ts";
+export { concat, fragment, readBigInts, render, type Fragment } from "./fragment.ts";
 export {
   and,
   between,
@@ -41,6 +45,8 @@ export {
   isNull,
   jsonInt,
   jsonText,
+  keysetAfter,
+  lag,
   like,
   localDay,
   maxOf,
@@ -53,6 +59,8 @@ export {
   or,
   operandSql,
   raw,
+  rank,
+  rowNumber,
   toInt,
   value,
   type ColumnRef,
@@ -60,6 +68,8 @@ export {
   type ExprOperand,
   type Operand,
   type OperandInput,
+  type WindowOptions,
+  type WindowOrder,
 } from "./expr.ts";
 export {
   count,
@@ -76,19 +86,30 @@ export {
   type TableHandle,
 } from "./table/index.ts";
 export {
+  fingerprintHex,
+  identityFingerprint,
+  IDENTITY_MISMATCH_CODE,
+  identityMismatchError,
   openDatabase,
   shapeReader,
   wrapDatabase,
   type Database,
+  type LibraryIdentity,
   type OpenConfig,
   type QueryEvent,
+  type QueryOptions,
   type SqlitePragmaName,
+  type StoredIdentity,
 } from "./database/index.ts";
 export {
   ensureSchema,
   planSchema,
   type EnsureSchemaOptions,
   type SchemaChange,
+  type SchemaDrift,
+  type SchemaDriftKind,
+  type SchemaPlan,
+  type SchemaResult,
 } from "./migrate.ts";
 export {
   aliasedTable,
@@ -101,7 +122,13 @@ export {
   type Cte,
 } from "./compound.ts";
 export { indexCatalog, type CatalogIndex } from "./catalog.ts";
-export { classifyError, DbError, type DbErrorKind } from "./error.ts";
+export {
+  classifyError,
+  CLOSED_CODE,
+  DbError,
+  UNSUPPORTED_CODE,
+  type DbErrorKind,
+} from "./error.ts";
 export { dropColumnSql, dropIndexSql } from "./dialect.ts";
 // 表达式/条件：业务侧用 `E.eq(table.f_id, id)` 这样写。
 export * as E from "./expr.ts";

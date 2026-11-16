@@ -6,7 +6,7 @@
 
 **决定**
 
-`SessionPersistenceRdb` `extends SessionPersistence`（`packages/agent/dsh-session-persistence/src/contract/session-persistence.contract.ts`），用既有的 SQL 存储原语（`Backend` / `BackendTx` / `WriteGuard`）实现五个方法，由 `RdbSessionHandle`（`src/rdb/handles.ts`）实现 handle 契约：
+`SessionPersistenceRdb` `extends SessionPersistence`（`packages/agent/dsh-session-persistence/src/contract/session-persistence.contract.ts`），用既有的 SQL 存储原语（`Backend` / `BackendTx` / `WriteGuard`）实现五个方法，由 `RdbSessionHandle`（`src/data/store/handles.ts`）实现 handle 契约：
 
 - `create`：注册 pending（本进程可见、未物化），返回写 handle；
 - `open`：`read` 不取所有权；`write` 原子抢占单写者所有权（`RdbBackendTracker.claimWrite`），失败释放声明；

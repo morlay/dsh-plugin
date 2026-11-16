@@ -23,6 +23,7 @@ import type { UserTextFacts } from "@morlay/dsh-conversation/contract";
 import type { InjectFace, PropsRenderFactories } from "@morlay/zephyr-ui";
 import { memo, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { Feedback } from "../shared/feedback.tsx";
 import { MessageIconActions } from "../vendor/dsh-client-ui-chat/client/chat/MessageIconActions.tsx";
 import type { EditableMessageBlock, SessionEditorFace } from "./session-editor.contract.ts";
 
@@ -112,6 +113,10 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
   const recallTexts = contentParts(data.content).texts;
   const [confirmingRecall, setConfirmingRecall] = useState<EditableMessageBlock | null>(null);
   const [confirmingRetry, setConfirmingRetry] = useState(false);
+  // 动作失败要落在消息行上：只写 logger 的话，用户看到的与「点了没反应」完全一样。
+  const [actionFailed, setActionFailed] = useState(false);
+  // 在途：确认按钮不可重复触发（撤回会截断日志，重试会重放回合，都不能发两次）。
+  const [acting, setActing] = useState(false);
 
   const turnLocation =
     node.location.kind === "turn" || node.location.kind === "step" ? node.location.turn : undefined;
@@ -152,6 +157,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
         <Modal
           open
           onClose={() => {
+            if (acting) return;
             setConfirmingRecall(null);
           }}
           title={editorT("edit.title")}
@@ -161,6 +167,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
             <Row gap={8} justify="end">
               <Button
                 variant="outline"
+                disabled={acting}
                 onClick={() => {
                   setConfirmingRecall(null);
                 }}
@@ -169,10 +176,20 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
               </Button>
               <Button
                 variant="primary"
+                disabled={acting}
+                aria-busy={acting}
                 onClick={() => {
                   const target = confirmingRecall;
-                  setConfirmingRecall(null);
-                  void recall(target, recallTexts);
+                  setActionFailed(false);
+                  setActing(true);
+                  void recall(target, recallTexts)
+                    .then((applied) => {
+                      if (!applied) setActionFailed(true);
+                    })
+                    .finally(() => {
+                      setActing(false);
+                      setConfirmingRecall(null);
+                    });
                 }}
               >
                 {editorT("edit.confirm")}
@@ -185,6 +202,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
         <Modal
           open
           onClose={() => {
+            if (acting) return;
             setConfirmingRetry(false);
           }}
           title={editorT("retry.title")}
@@ -194,6 +212,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
             <Row gap={8} justify="end">
               <Button
                 variant="outline"
+                disabled={acting}
                 onClick={() => {
                   setConfirmingRetry(false);
                 }}
@@ -202,9 +221,19 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
               </Button>
               <Button
                 variant="primary"
+                disabled={acting}
+                aria-busy={acting}
                 onClick={() => {
-                  setConfirmingRetry(false);
-                  void retry(turn, "truncate");
+                  setActionFailed(false);
+                  setActing(true);
+                  void retry(turn, "truncate")
+                    .then((applied) => {
+                      if (!applied) setActionFailed(true);
+                    })
+                    .finally(() => {
+                      setActing(false);
+                      setConfirmingRetry(false);
+                    });
                 }}
               >
                 {editorT("retry.confirm")}
@@ -213,6 +242,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           }
         />
       )}
+      {actionFailed ? (
+        <Feedback tone="failure" source="action" text={editorT("action.failed")} />
+      ) : null}
       <UserStyleBubble
         content={data.content}
         {...(data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels })}

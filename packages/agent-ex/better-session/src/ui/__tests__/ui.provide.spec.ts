@@ -7,7 +7,7 @@
 import { bootstrapApplication } from "@morlay/zephyr";
 import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
 import { Locale, Remote } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
 import { provideBetterSessionUi } from "../better-session.provide.ts";
@@ -25,6 +25,11 @@ const sessionsStub = {
 const workspaceStub = {
   archiveSession: async () => undefined,
   unarchiveSession: async () => undefined,
+};
+
+// 工作区列表的客户端快照（管理页的「复制到工作区」选择项读它；owner 在 workspace 域）。
+const workspaceListStub = {
+  list: { getSnapshot: () => ({ items: [] }), subscribe: () => () => {} },
 };
 
 // 字典面：本包在视图 `onInit` 里注册两份字典，这里只记下注册过的 namespace。
@@ -47,6 +52,7 @@ describe("浏览器半的装配面", () => {
         { provide: Remote as never, useValue: remoteStub },
         { provide: SessionController as never, useValue: sessionsStub },
         { provide: UiWorkspace as never, useValue: workspaceStub },
+        { provide: WorkspaceController as never, useValue: workspaceListStub },
         { provide: Locale as never, useValue: localeStub },
         ...provideBetterSessionUi(),
       ],

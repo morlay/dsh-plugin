@@ -1,3 +1,5 @@
+// 为什么留在根 `__tests__/`：标题既由 data 面写路径维护（`t_sessions` 列 + rewind 收回），又经 storage 面投影检查点直取（`cachedSnapshot`），跨两面。
+
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

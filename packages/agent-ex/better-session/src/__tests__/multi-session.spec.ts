@@ -1,3 +1,5 @@
+// 为什么留在根 `__tests__/`：多会话在同一 live 存储上并发（冷路径复核），接缝在实例与存储之间，不属于任何单个面。
+
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

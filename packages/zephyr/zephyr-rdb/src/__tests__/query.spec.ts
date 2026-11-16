@@ -62,16 +62,29 @@ describe("投影查询（业务不写 SQL）", () => {
 
   it("片段是惰性迭代器：可重复消费，占位符只由参数节点生成", () => {
     const condition = eq(column("f_name"), value("ada"));
-    expect(render(condition, "sqlite")).toEqual({ text: '"f_name" = ?', params: ["ada"] });
-    expect(render(condition, "postgres")).toEqual({ text: '"f_name" = $1', params: ["ada"] });
+    expect(render(condition, "sqlite")).toEqual({
+      text: '"f_name" = ?',
+      params: ["ada"],
+      readBigInts: false,
+    });
+    expect(render(condition, "postgres")).toEqual({
+      text: '"f_name" = $1',
+      params: ["ada"],
+      readBigInts: false,
+    });
     // 可重复消费：每次调用重新生成，不是一次性迭代器。
-    expect(render(condition, "sqlite")).toEqual({ text: '"f_name" = ?', params: ["ada"] });
+    expect(render(condition, "sqlite")).toEqual({
+      text: '"f_name" = ?',
+      params: ["ada"],
+      readBigInts: false,
+    });
 
     // 多条件组合一律加括号（AND/OR 混用时优先级不靠读 SQL 的人来判断）。
     const combined = and(condition, inList(column("f_id"), [1, 2]));
     expect(render(combined, "postgres")).toEqual({
       text: '("f_name" = $1 AND "f_id" IN ($2, $3))',
       params: ["ada", 1, 2],
+      readBigInts: false,
     });
   });
 });

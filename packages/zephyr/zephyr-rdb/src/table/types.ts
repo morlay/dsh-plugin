@@ -1,8 +1,17 @@
 import type { ColumnDef, TableDef } from "../defs.ts";
 import type { ColumnRef, ExprOperand, Operand } from "../expr.ts";
 
+// 结构化 JSON 值（JSON 列的读写类型）。
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 // 一列对外的 TS 值类型：文本 → string、布尔 → boolean、64 位整数（`bigint`）→ JS `bigint`（精确，
-// 对应 Go 的 int64 / uint64；不能用 number，超过 `2^53` 会丢精度）、其余 → number。
+// 对应 Go 的 int64 / uint64；不能用 number，超过 `2^53` 会丢精度）、JSON → 结构化值、其余 → number。
 // 非 NOT NULL 允许 null。
 export type ColumnValue<C extends ColumnDef> = C["type"] extends "text"
   ? string
@@ -10,7 +19,9 @@ export type ColumnValue<C extends ColumnDef> = C["type"] extends "text"
     ? boolean
     : C["type"] extends "bigint"
       ? bigint
-      : number;
+      : C["type"] extends "json"
+        ? JsonValue
+        : number;
 
 export type RowOf<T extends TableDef> = {
   [K in keyof T["columns"]]: T["columns"][K] extends { notNull: true }

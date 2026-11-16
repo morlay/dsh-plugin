@@ -1,6 +1,8 @@
 // 并发写：同一份存储上两个实例写同一会话必须 fail-loud（写者位点守卫），不是静默丢事件。
 //
 // 位点守卫的口径是「open 之后有人动过这条会话」：open 时记下磁盘 head，append 时再比一次。
+//
+// 为什么留在根 `__tests__/`：判据是两个实例在同一份库上争写（多实例接缝）；单实例的守卫在 `data/__tests__/write-guard.spec.ts`。
 import { SessionId } from "@morlay/dsh-session/contract";
 import { afterEach, describe, expect, it } from "vitest";
 import { makeRoot, removeRoot, startAt, type Instance } from "./support/host.ts";
@@ -62,6 +64,35 @@ describe("并发写", () => {
       await handle.close();
 
       const after = await second.persistence.open(SessionId("aligned"), "read");
+      const events = (await after.read()).events;
+      await after.close();
+      expect(events).toHaveLength(12);
+    } finally {
+      await first.dispose();
+      await second.dispose();
+    }
+  });
+
+  it("另一个实例提交之后，rewind 被写者位点守卫拒绝（不是静默截掉那段）", async () => {
+    const { first, second } = await twoInstances();
+    try {
+      const seed = await first.persistence.create(meta("rewound", "/work"));
+      await seed.append(oneTurnLogStepFirst());
+      await seed.close();
+
+      // second 打开写句柄（认领 head = 5），之后 first 又提交了一轮（head 变 11）。
+      const reader = await second.persistence.open(SessionId("rewound"), "write");
+      await reader.close();
+      const writer = await first.persistence.open(SessionId("rewound"), "write");
+      await writer.append(secondTurn());
+      await writer.close();
+
+      // second 仍按 seq 5 撤回：它的位点已经过期，必须拒绝，而不是把 first 的事件当尾部删掉。
+      await expect(second.branch.rewind(SessionId("rewound"), 5)).rejects.toThrow(
+        /another writer/u,
+      );
+
+      const after = await first.persistence.open(SessionId("rewound"), "read");
       const events = (await after.read()).events;
       await after.close();
       expect(events).toHaveLength(12);

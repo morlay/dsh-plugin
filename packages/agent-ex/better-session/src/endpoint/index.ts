@@ -3,6 +3,8 @@
 //
 // 与 `contract/` 的分界：那里是**进程内端口**（随包根导出）；这里是**远程面**与两端共用的值/类型。
 // 浏览器半（`./ui`）只从这里取，不引包根——包根聚合了宿主实现。
+// 域码是两端共用的**稳定面**（浏览器半的文案映射按码分派）：形状家在 `contract/`，这里转出一份。
+export type { SessionStoreFailure } from "../contract/session-failure.contract.ts";
 export * from "./branch.ts";
 export * from "./session-admin-endpoint.ts";
 export * from "./session-editor-endpoint.ts";

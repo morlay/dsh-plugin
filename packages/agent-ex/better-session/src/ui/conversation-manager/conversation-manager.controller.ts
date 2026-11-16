@@ -5,9 +5,14 @@
 import { inject, Injectable } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
 import type {
+  SessionBulkDeleteValue,
+  SessionConsistencyValue,
+  SessionExportManyValue,
   SessionOrganizeValue,
+  SessionRepairAction,
+  SessionRepairValue,
   SessionRowsItem,
   SessionRowsRequest,
   SessionUsageRange,
@@ -32,16 +37,45 @@ export interface ConversationManagerRowsPage {
   readonly pageSize: number;
 }
 
+// 工作区选择项（复制到工作区用）：id 与标题都取 workspace 域自己的列表。
+export interface ConversationWorkspaceOption {
+  readonly workspaceId: string;
+  readonly title: string;
+}
+
+// 导入的阶段：读文件（浏览器侧编码成 base64）→ 写会话（宿主侧新建或整段替换）。
+// 页面按阶段给提示；长任务没有取消面，阶段只是让用户知道走到了哪一步。
+export type ConversationImportStage = "reading" | "committing";
+
+export interface ConversationImportOptions {
+  // 给了就覆盖该会话的日志（整段替换）；不给就是新建一个会话。
+  readonly sessionId?: string;
+  // 阶段变化时回调，页面据此换提示文案。
+  readonly onStage?: (stage: ConversationImportStage) => void;
+}
+
 // 页面从注入面拿到的动作（属性语法：页面解构后直接调用，不绑 this）。
 export interface ConversationManagerFace {
   listRows: (query?: SessionRowsRequest) => Promise<ConversationManagerRowsPage>;
   archive: (sessionId: string) => Promise<void>;
   unarchive: (sessionId: string) => Promise<void>;
   remove: (sessionId: string) => Promise<void>;
+  bulkDelete: (sessionIds: readonly string[]) => Promise<SessionBulkDeleteValue>;
   exportZip: (sessionId: string) => Promise<void>;
-  importZip: (file: File) => Promise<string>;
+  // 按当前筛选结果批量导出：命中集逐页收全，再逐条落成下载。
+  exportFiltered: (query?: SessionRowsRequest) => Promise<SessionExportManyValue>;
+  importZip: (file: File, options?: ConversationImportOptions) => Promise<string>;
+  // 工作区选择项与跨工作区复制（复制 = fork + workspace 的 attach，源会话保留）。
+  listWorkspaces: () => Promise<readonly ConversationWorkspaceOption[]>;
+  copyToWorkspace: (
+    sessionId: string,
+    workspaceId: string,
+  ) => Promise<{ readonly sessionId: string; readonly workspaceId: string }>;
   organizeData: () => Promise<SessionOrganizeValue>;
   loadUsage: (range: SessionUsageRange) => Promise<SessionUsageValue>;
+  // 体检（只报不修）与坏会话的三个修法。
+  checkConsistency: () => Promise<SessionConsistencyValue>;
+  repairSession: (sessionId: string, action: SessionRepairAction) => Promise<SessionRepairValue>;
 }
 
 // 带宿主错误码的失败：页面据此选本地化文案。
@@ -72,6 +106,9 @@ function unwrap<T>(outcome: unknown): T {
   }
   return wire.value as T;
 }
+
+// 批量导出时收 id 的一页大小：与端点的 pageSize 上限同一个数。
+const EXPORT_PAGE_SIZE = 200;
 
 // 选中的 zip 读成 base64：remote 只走 JSON，二进制要自己编码。
 async function zipBase64(file: File): Promise<string> {
@@ -120,6 +157,9 @@ export class ConversationManagerController {
 
   private readonly workspace = inject(UiWorkspace);
 
+  // 工作区列表的 owner 是 workspace 域（本包不反查会话库里的投影）。
+  private readonly workspaces = inject(WorkspaceController);
+
   private readonly sessions = inject(SessionController);
 
   readonly face: ConversationManagerFace = {
@@ -131,10 +171,16 @@ export class ConversationManagerController {
       await this.workspace.unarchiveSession(SessionId(sessionId));
     },
     remove: (sessionId) => this.remove(sessionId),
+    bulkDelete: (sessionIds) => this.bulkDelete(sessionIds),
     exportZip: (sessionId) => this.exportZip(sessionId),
-    importZip: (file) => this.importZip(file),
+    exportFiltered: (query) => this.exportFiltered(query ?? {}),
+    importZip: (file, options) => this.importZip(file, options),
+    listWorkspaces: () => this.listWorkspaces(),
+    copyToWorkspace: (sessionId, workspaceId) => this.copyToWorkspace(sessionId, workspaceId),
     organizeData: () => this.organizeData(),
     loadUsage: (range) => this.loadUsage(range),
+    checkConsistency: () => this.checkConsistency(),
+    repairSession: (sessionId, action) => this.repairSession(sessionId, action),
   };
 
   private async listRows(query: SessionRowsRequest): Promise<ConversationManagerRowsPage> {
@@ -150,6 +196,16 @@ export class ConversationManagerController {
     await this.refresh();
   }
 
+  // 批量删除：整批一次请求，结果逐条交回（失败的项带码）；动作成功后重拉列表。
+  private async bulkDelete(sessionIds: readonly string[]): Promise<SessionBulkDeleteValue> {
+    const value = unwrap<SessionBulkDeleteValue>(await this.endpoint.bulkDelete({ sessionIds }));
+    if (!Array.isArray(value.items)) {
+      throw new ConversationManagerRequestError("批量删除响应不可用", undefined);
+    }
+    await this.refresh();
+    return value;
+  }
+
   private async exportZip(sessionId: string): Promise<void> {
     const value = unwrap<{ filename: string; zip: string }>(
       await this.endpoint.export({ sessionId }),
@@ -157,16 +213,95 @@ export class ConversationManagerController {
     downloadBlob(zipBlob(value.zip), value.filename);
   }
 
-  private async importZip(file: File): Promise<string> {
+  // 批量导出：先按筛选把命中集的 id 收全（列表一页一页翻），再一次性交给宿主逐条导出。
+  private async exportFiltered(query: SessionRowsRequest): Promise<SessionExportManyValue> {
+    const sessionIds = await this.filteredIds(query);
+    if (sessionIds.length === 0) return { items: [] };
+    const value = unwrap<SessionExportManyValue>(await this.endpoint.exportMany({ sessionIds }));
+    if (!Array.isArray(value.items)) {
+      throw new ConversationManagerRequestError("批量导出响应不可用", undefined);
+    }
+    for (const item of value.items) {
+      // 失败条只有码：页面按整批提示聚合成一句话，不逐条弹。
+      if (!item.ok || item.zip === undefined || item.filename === undefined) continue;
+      downloadBlob(zipBlob(item.zip), item.filename);
+    }
+    return value;
+  }
+
+  // 命中集的 id：端点的每页上限是 200，筛选结果可能不止一页。
+  private async filteredIds(query: SessionRowsRequest): Promise<string[]> {
+    const ids: string[] = [];
+    for (let page = 1; ; page += 1) {
+      const value = unwrap<ConversationManagerRowsPage>(
+        await this.endpoint.rows({ ...query, page, pageSize: EXPORT_PAGE_SIZE }),
+      );
+      if (!Array.isArray(value.items)) {
+        throw new ConversationManagerRequestError("会话列表响应不可用", undefined);
+      }
+      for (const item of value.items) ids.push(item.sessionId);
+      if (value.items.length === 0 || ids.length >= value.total) return ids;
+    }
+  }
+
+  private async importZip(file: File, options: ConversationImportOptions = {}): Promise<string> {
+    options.onStage?.("reading");
+    const zip = await zipBase64(file);
+    options.onStage?.("committing");
     const value = unwrap<{ sessionId: string }>(
-      await this.endpoint.import({ zip: await zipBase64(file) }),
+      await this.endpoint.import({
+        zip,
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      }),
     );
     await this.refresh();
     return value.sessionId;
   }
 
+  // 工作区列表：浏览器侧的快照（workspace 域维护），只取 id 与标题给选择项。
+  private async listWorkspaces(): Promise<readonly ConversationWorkspaceOption[]> {
+    return this.workspaces.list.getSnapshot().items.map((workspace) => ({
+      workspaceId: String(workspace.workspaceId),
+      title: workspace.title,
+    }));
+  }
+
+  private async copyToWorkspace(
+    sessionId: string,
+    workspaceId: string,
+  ): Promise<{ readonly sessionId: string; readonly workspaceId: string }> {
+    const value = unwrap<{ sessionId: string; workspaceId: string }>(
+      await this.endpoint.copyToWorkspace({ sessionId, workspaceId }),
+    );
+    if (typeof value.sessionId !== "string") {
+      throw new ConversationManagerRequestError("复制响应不可用", undefined);
+    }
+    await this.refresh();
+    return value;
+  }
+
   private async organizeData(): Promise<SessionOrganizeValue> {
     const value = unwrap<SessionOrganizeValue>(await this.endpoint.organize());
+    await this.refresh();
+    return value;
+  }
+
+  private async checkConsistency(): Promise<SessionConsistencyValue> {
+    const value = unwrap<SessionConsistencyValue>(await this.endpoint.consistency());
+    if (!Array.isArray(value.issues)) {
+      throw new ConversationManagerRequestError("体检响应不可用", undefined);
+    }
+    return value;
+  }
+
+  private async repairSession(
+    sessionId: string,
+    action: SessionRepairAction,
+  ): Promise<SessionRepairValue> {
+    const value = unwrap<SessionRepairValue>(await this.endpoint.repair({ sessionId, action }));
+    if (typeof value.keptEvents !== "number") {
+      throw new ConversationManagerRequestError("修复响应不可用", undefined);
+    }
     await this.refresh();
     return value;
   }

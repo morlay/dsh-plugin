@@ -1,11 +1,11 @@
 import { provide } from "@morlay/zephyr";
-import { SessionBranchRdb } from "../rdb/branch/index.ts";
-import { SessionProjectionCacheRdb } from "../rdb/storage-takeover/projection-cache.service.ts";
-import { StorageTakeoverDefault } from "../rdb/storage-takeover/storage-takeover.service.ts";
-import { SessionPersistenceRdb } from "../rdb-store.service.ts";
+import { SessionBranchRdb } from "../data/store/branch/index.ts";
+import { SessionProjectionCacheRdb } from "../storage/projection-cache.service.ts";
+import { StorageTakeoverDefault } from "../storage/storage-takeover.service.ts";
+import { SessionPersistenceRdb } from "../admin/store.ts";
 import { SessionEditorEndpointDefault } from "./session-editor-endpoint.service.ts";
-import { SessionEditorDefault } from "../session-editor.service.ts";
-import { SessionQueryRdb } from "../session-query.service.ts";
+import { SessionEditorDefault } from "../editor/service.ts";
+import { SessionQueryRdb } from "../admin/query.ts";
 import { SessionAdminEndpointDefault } from "./session-admin-endpoint.service.ts";
 import { SessionAgentControlDefault } from "./session-agent-control.service.ts";
 

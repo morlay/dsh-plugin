@@ -1,6 +1,6 @@
 # RDB 复用边界与 Remote 端点形状（better-session 的宿主半）
 
-状态：**已实现**——`pnpm exec vitest run packages/agent-ex/better-session` 38 文件 / 377 通过；`pnpm exec oxlint packages/agent-ex/better-session` 干净。
+状态：**已实现**——`pnpm exec vitest run packages/agent-ex/better-session` 全绿（计数以命令输出为准，记录里不抄）；`pnpm exec oxlint packages/agent-ex/better-session` 干净。
 范围：`@morlay/better-session` 宿主半的两个判断——**RDB 后端复用哪些既有面、只加什么**，以及 **wire 只有 remote、两组端点各自的形状**。
 非目标：浏览器半（`./ui`，见 [设计 20260929-对话管理页](./20260929-对话管理页.md)）；读路径口径（[如何写读路径](../standards/rdb-读路径.md)）；会话数据层语义（归 `packages/agent/dsh-session` 与 `packages/agent/dsh-session-persistence`）。
 关联：词义见[会话数据面术语表](../../../../agent/dsh-session/.agents/GLOSSARY.md)（会话 / live / cold）与[会话编辑术语表](../GLOSSARY.md)（会话编辑组 / 会话管理组）；[ADR-实现上游 SessionHandle 模型](../adrs/20260917-实现上游SessionHandle模型.md)、[ADR-分支面作为与上游 SessionHandle 平行的 provider 抽象](../adrs/20260917-分支面作为与上游SessionHandle平行的provider抽象.md)。
@@ -31,10 +31,10 @@
 
 **本包新增（增量）**
 
-1. `src/rdb/**`：11 张表的表定义（`entities/v3/**`：`sessions` / `events` / `session-events` / `session-counts` / `session-usage` / `event-usage` / `session-projcache-rows` / `storage-units` / `storage-records` / `persistence-state` / `schema-meta`）、读写路径（`read-path.ts` / `write-path.ts` / `live-routing.ts`）、迁移（`migrations.ts` / `legacy.ts`）、导入导出（`log/export.ts` / `log-import.ts`）、整理（`organize()` 的实现路径）、SQLite / PostgreSQL 开口（`db/open.ts`）。
+1. 数据面与管理面：10 张在用的表定义（`src/data/entities/v3/**`：`sessions` / `events` / `session-events` / `session-counts` / `session-usage` / `event-usage` / `session-projcache-rows` / `storage-units` / `storage-records` / `persistence-state`；清单只有 `sqliteTableDefs` 一份，方言由 rdbkit 渲染）、读写路径（`src/data/store/read-path.ts` / `store/write-path.ts` / `store/live-routing.ts`）、迁移（`src/data/store/migrations.ts` / `store/read-view/legacy.ts`）、导入导出（`src/data/store/log/export.ts` / `src/admin/import-export/**`）、整理（`src/admin/maintenance.ts` 的 `organize()` 路径）、一致性校验（`src/admin/consistency.ts`）、域错误（`src/data/errors.ts`）、SQLite / PostgreSQL 开口（`src/data/store/open.ts`）。
 2. `SessionRdbStore` 能力面：`branchPort()` / `readModel()` / `headerOf()` / 条件读（`selectSessionRows` / `selectEventRows`）/ `load` / `readFrom` / `append` / `listRows` / `deleteSession` / `importZip` / `organize` / `usageReport` / `archivedSessionIds` / `storageRepository` / `close`。
-3. `branchPort()`（`src/rdb/branch/port.ts`）：分支只需「读前缀、截断、复用映射、确认位点」这几个动词，每个都有真实调用方，不是把服务方法表抄一遍。
-4. handle 实现（`src/rdb/handles.ts` 的 `RdbSessionHandle` / `RdbBackendTracker`）与写者位点守卫（`src/rdb/write-guard.ts`）：pending 可见性、单写者所有权、flush 屏障、位点过期拒绝写入。
+3. `branchPort()`（`src/data/store/branch/port.ts`）：分支只需「读前缀、截断、复用映射、确认位点」这几个动词，每个都有真实调用方，不是把服务方法表抄一遍。
+4. handle 实现（`src/data/store/handles.ts` 的 `RdbSessionHandle` / `RdbBackendTracker`）与写者位点守卫（`src/data/write-guard.ts`）：pending 可见性、单写者所有权、flush 屏障、位点过期拒绝写入。
 5. 两组端点契约（`src/endpoint/**`）与宿主实现（`src/server/**`）。
 
 **wire 的两组**
@@ -49,15 +49,33 @@
 - 会话 id 在 wire 上是裸 `string`，进业务前铸一次 `SessionId`：契约类型用 `string`，端口（`SessionBranch` / `SessionEditor`）用 branded `SessionId`。
 - `SessionRowsItem` 没有 `subagent` 字段：子代理过滤是**请求**参数（`includeSubagents`），行上的子代理标记由页面按 `origin === "subagent"` 判——少一个恒为 `false` 的字段就少一处不一致。
 
+**wire 上的码（按组）**
+
+只有一张码表，home 在 `src/data/errors.ts` 的 `SessionStoreFailure`：`SessionStoreError` 带它、`cause` 链到库层 `DbError`；端点只转发 `code`，客户端按码分派、不解析文案。
+
+| 组                               | 码                                                                                                                                                                              | 触发                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `sessionEditor`                  | `SESSION_EDITOR_REPLAY_UNAVAILABLE`                                                                                                                                             | 有用户输入要重放，而装配里没有重放入口                           |
+| `sessionEditor` / `sessionAdmin` | `SESSION_NOT_FOUND`                                                                                                                                                             | 目标会话不存在（导出 / 删除 / 分支源）                           |
+| `sessionAdmin`                   | `SESSION_NOT_ARCHIVED` / `SESSION_LIVE`                                                                                                                                         | 删除只接受已归档且不在运行中的会话                               |
+| `sessionAdmin`                   | `SESSION_IMPORT_LIVE` / `SESSION_IMPORT_TOO_LARGE` / `SESSION_IMPORT_NOT_ARCHIVE` / `SESSION_IMPORT_NO_ARTIFACT` / `SESSION_IMPORT_MALFORMED_LOG` / `SESSION_IMPORT_INCOMPLETE` | 导入通道的各类拒绝（目标有写句柄、包过大、形状不对、不是归档态） |
+| `sessionAdmin`                   | `SESSION_ORGANIZE_LIVE`                                                                                                                                                         | 整理被运行中的会话挡住（调用方先停会话）                         |
+| `sessionAdmin`                   | `SESSION_ROWS_INVALID_PAGE` / `SESSION_USAGE_INVALID_RANGE`                                                                                                                     | 列表页码 / 用量范围的入参不合法                                  |
+| 落盘与库层（经端点透出）         | `SESSION_CONCURRENT_WRITER` / `SESSION_EVENT_REJECTED` / `SESSION_FLUSH_FAILED` / `SESSION_STORAGE_INCOMPATIBLE`                                                                | 位点冲突、事件体被上游校验拒、flush 屏障失败、库版本或身份不符   |
+| 查询面                           | `SESSION_QUERY_SESSION_NOT_FOUND` / `SESSION_QUERY_EVENT_NOT_FOUND` / `SESSION_QUERY_INVALID_WINDOW` / `SESSION_QUERY_READ_WINDOW_MAX` / `SESSION_QUERY_SEARCH_DISABLED`        | 查询目标不存在与查询参数不合法                                   |
+
+- 导入通道的码也在同一张表里：`sessionAdmin` 的六条 `SESSION_IMPORT_*` 与 `SessionImportError` 的码没有分家。
+- `SessionBranchError` / `SessionQueryError` / `SessionEditorReplayUnavailableError` / `SessionImportError` 的码都已收进同一张表，抛出点沿用各自的类（错误类型的分层见[完整设计](./20261120-完整设计.md)第一节决定 7）。
+
 ## 三、模块边界与接口
 
-| 模块                          | 拥有（职责与不变量）                                                           | 不拥有（明确排除）                                                 | 依赖方向                                                                      | 接缝 / 适配器                                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `SessionPersistenceRdb`       | handle 契约的五个方法、行级能力面、live 写路由的接线、库的打开与身份           | 分支语义、查询语义、编辑编排；wire                                 | 依赖 `SessionPersistence` 契约、`SessionStore`、`SessionAgentControl`（可选） | `SessionPersistence` 令牌；`asRdbStore()` 探测；`src/rdb/**` 为内部实现                                                   |
-| `src/rdb/**`（表与读写路径）  | 表定义与迁移、事件行与桥接行、统计与用量表、KV 域落库（`storage-takeover/**`） | 「会话现在是什么」的对外回答（归查询行）；编辑计划（归 `plan.ts`） | 依赖 `@morlay/zephyr-rdb`（表句柄、条件、方言）                               | 读写路径只经 `Backend` 面（`src/rdb/backend.ts`）                                                                         |
-| `src/endpoint/**`             | 两个 remote 组的契约、两端共用的形状、分支原语与配平算法                       | 宿主实现；wire 传输                                                | 被 `./server` 与 `./ui` 同时依赖                                              | `@RemoteGroup` / `@RemoteMethod` + `RemoteResultWire`                                                                     |
-| `src/server/**`               | 端点实现（转发）、装配函数 `provideBetterSession()`                            | 领域判断（全部落回实现类）                                         | 依赖契约与实现类                                                              | `registerRemoteGroup`                                                                                                     |
-| `src/rdb/storage-takeover/**` | `rdb` storage 后端、投影检查点、`storages/*.json` 的一次性导入                 | 会话表的读写（归 `src/rdb/**` 的其余部分）                         | 依赖 `SessionPersistence`（拿同一个库的句柄）与 `ctx.storage`                 | `storage.backend.register` + `provide`（见 [设计 20261109-投影检查点…](./20261109-投影检查点与storage接管的两个名字.md)） |
+| 模块                          | 拥有（职责与不变量）                                                 | 不拥有（明确排除）                                                            | 依赖方向                                                                      | 接缝 / 适配器                                                                                                             |
+| ----------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `SessionPersistenceRdb`       | handle 契约的五个方法、行级能力面、live 写路由的接线、库的打开与身份 | 分支语义、查询语义、编辑编排；wire                                            | 依赖 `SessionPersistence` 契约、`SessionStore`、`SessionAgentControl`（可选） | `SessionPersistence` 令牌；`asRdbStore()` 探测；`src/{data,admin,storage}/**` 为内部实现                                  |
+| `src/data/**`（表与读写路径） | 表定义与迁移、事件行与桥接行（KV 域落库归 `src/storage/**`）         | 「会话现在是什么」的对外回答（归查询行）；编辑计划（归 `src/editor/plan.ts`） | 依赖 `@morlay/zephyr-rdb`（表句柄、条件、方言）                               | 读写路径只经 `Backend` 面（`src/data/backend.ts`）                                                                        |
+| `src/endpoint/**`             | 两个 remote 组的契约、两端共用的形状、分支原语与配平算法             | 宿主实现；wire 传输                                                           | 被 `./server` 与 `./ui` 同时依赖                                              | `@RemoteGroup` / `@RemoteMethod` + `RemoteResultWire`                                                                     |
+| `src/server/**`               | 端点实现（转发）、装配函数 `provideBetterSession()`                  | 领域判断（全部落回实现类）                                                    | 依赖契约与实现类                                                              | `registerRemoteGroup`                                                                                                     |
+| `src/storage/**`              | `rdb` storage 后端、投影检查点、`storages/*.json` 的一次性导入       | 会话表的读写（归 `src/data/**`）                                              | 依赖 `SessionPersistence`（拿同一个库的句柄）与 `ctx.storage`                 | `storage.backend.register` + `provide`（见 [设计 20261109-投影检查点…](./20261109-投影检查点与storage接管的两个名字.md)） |
 
 **接口**（调用方要知道的）：
 
@@ -78,16 +96,16 @@
 
 ## 五、验收判据
 
-| #   | 判据（Done when）                                                  | 测试面（接缝）                            | 证据（命令 / 用例名）                                                                                                                                                                                             |
-| --- | ------------------------------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 包出口按包名解析得到，且 root 不导出装配函数与 `Events`            | `exports`                                 | `src/__tests__/exports.spec.ts`「包根出契约 + 默认实现（装配函数在 ./server，root 不 import server/）」「会话事件由域包提供（一份权威定义，订阅方从这里取）」                                                     |
-| 2   | 落盘契约（所有权 / flush 屏障 / revision / 撕裂尾部）在 RDB 上成立 | `runPersistenceContract`                  | `src/__tests__/persistence-contract.spec.ts` 跑 `@morlay/dsh-session-persistence/testing` 的套件 + 本文件「readFrom 从指定 seq 起读」                                                                             |
-| 3   | 两个实例的基准位点过期时拒绝写入，不是覆盖                         | `WriteGuard`                              | `src/__tests__/concurrency.spec.ts`「两个实例都 open 了写句柄，先写的那个提交之后，后写的被写者位点守卫拒绝」；`write-guard.spec.ts` 八条                                                                         |
-| 4   | 后端身份的判据：同一份配置在同一数据根上重开仍是同一 revision 基   | `storeIdentity` + `stat`                  | `src/__tests__/persistence.spec.ts`「stat 只给 header 与 revision，list 把已落库的会话都列出来」；`multi-instance.spec.ts`「keeps the whole stored header across instances: the agent preset survives a restart」 |
-| 5   | 两组端点的入参与返回值在 wire 上成立                               | `registerRemoteGroup` + `handlers.invoke` | `src/__tests__/endpoint.spec.ts`（`sessionEditor` 组 / `sessionAdmin` 组）                                                                                                                                        |
-| 6   | 删除的三条拒绝理由各带码；整理三项计数；行列表分页                 | `SessionRdbStore`                         | `src/__tests__/admin.spec.ts`「删除只允许已归档且不在运行中的会话，三条拒绝理由各自有码」「organize 回收孤儿并重算派生统计，返回三项计数」「listRows 给完整语料（含 cwd / 时间 / 归档标记）并支持分页」           |
-| 7   | 落盘真在文件里（进程外可恢复），坏库拒绝打开                       | `db/open.ts`                              | `src/__tests__/persistence.spec.ts`「删掉库文件后重启：会话不在了」「落盘在数据根下的 sqlite 文件里」；`recovery.spec.ts`「库里的结构版本不认识时拒绝打开」「默认配置落在 <数据根>/sessions/sessions.sqlite」     |
-| 8   | 整包回归                                                           | 全包                                      | `pnpm exec vitest run packages/agent-ex/better-session` → 38 files / 377 passed                                                                                                                                   |
+| #   | 判据（Done when）                                                  | 测试面（接缝）                            | 证据（命令 / 用例名）                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 包出口按包名解析得到，且 root 不导出装配函数与 `Events`            | `exports`                                 | `src/__tests__/exports.spec.ts`「包根出契约 + 默认实现（装配函数在 ./server，root 不 import server/）」「会话事件由域包提供（一份权威定义，订阅方从这里取）」                                                          |
+| 2   | 落盘契约（所有权 / flush 屏障 / revision / 撕裂尾部）在 RDB 上成立 | `runPersistenceContract`                  | `src/__tests__/persistence-contract.spec.ts` 跑 `@morlay/dsh-session-persistence/testing` 的套件 + 本文件「readFrom 从指定 seq 起读」                                                                                  |
+| 3   | 两个实例的基准位点过期时拒绝写入，不是覆盖                         | `WriteGuard`                              | `src/__tests__/concurrency.spec.ts`「两个实例都 open 了写句柄，先写的那个提交之后，后写的被写者位点守卫拒绝」；`write-guard.spec.ts` 八条                                                                              |
+| 4   | 后端身份的判据：同一份配置在同一数据根上重开仍是同一 revision 基   | `storeIdentity` + `stat`                  | `src/data/__tests__/persistence.spec.ts`「stat 只给 header 与 revision，list 把已落库的会话都列出来」；`multi-instance.spec.ts`「keeps the whole stored header across instances: the agent preset survives a restart」 |
+| 5   | 两组端点的入参与返回值在 wire 上成立                               | `registerRemoteGroup` + `handlers.invoke` | `src/endpoint/__tests__/endpoint.spec.ts`（`sessionEditor` 组 / `sessionAdmin` 组）                                                                                                                                    |
+| 6   | 删除的三条拒绝理由各带码；整理三项计数；行列表分页                 | `SessionRdbStore`                         | `src/admin/__tests__/admin.spec.ts`「删除只允许已归档且不在运行中的会话，三条拒绝理由各自有码」「organize 回收孤儿并重算派生统计，返回三项计数」「listRows 给完整语料（含 cwd / 时间 / 归档标记）并支持分页」          |
+| 7   | 落盘真在文件里（进程外可恢复），坏库拒绝打开                       | `data/store/open.ts`                      | `src/data/__tests__/persistence.spec.ts`「删掉库文件后重启：会话不在了」「落盘在数据根下的 sqlite 文件里」；`recovery.spec.ts`「库里的结构版本不认识时拒绝打开」「默认配置落在 <数据根>/sessions/sessions.sqlite」     |
+| 8   | 整包回归                                                           | 全包                                      | `pnpm exec vitest run packages/agent-ex/better-session` 全绿（计数以命令输出为准）                                                                                                                                     |
 
 ## 六、取舍
 

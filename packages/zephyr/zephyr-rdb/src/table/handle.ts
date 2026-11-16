@@ -11,6 +11,7 @@ import {
   type UpdatePatch,
 } from "./types.ts";
 import { selectQuery, type SelectQuery } from "./select.ts";
+import { normalizeReturning } from "./normalize.ts";
 import {
   deleteOf,
   insertFromSelectOf,
@@ -102,8 +103,13 @@ export function createTableHandle<T extends TableDef>(
           ) as Projection),
       ) as never,
     async insert(row, returning) {
-      return await database.write<RowOf<T>>(
-        insertOf(definition, target, row, "insert", undefined, undefined, returning),
+      // RETURNING 与投影查询给同一套值类型：两边都过同一个归一 home。
+      return normalizeReturning(
+        definition,
+        returning,
+        await database.write<RowOf<T>>(
+          insertOf(definition, target, row, "insert", undefined, undefined, returning),
+        ),
       );
     },
     async insertIgnore(row, conflict) {
@@ -119,8 +125,10 @@ export function createTableHandle<T extends TableDef>(
       await database.run(insertOf(definition, target, row, "upsert", conflict, update));
     },
     async update(patch, condition, returning) {
-      return await database.write<RowOf<T>>(
-        updateOf(definition, target, patch, condition, returning),
+      return normalizeReturning(
+        definition,
+        returning,
+        await database.write<RowOf<T>>(updateOf(definition, target, patch, condition, returning)),
       );
     },
     async upsertExpr(row, conflict, assignments) {
@@ -128,7 +136,11 @@ export function createTableHandle<T extends TableDef>(
     },
     async delete(condition, returning) {
       if (returning !== undefined && returning.length > 0) {
-        return await database.write<RowOf<T>>(deleteOf(definition, target, condition, returning));
+        return normalizeReturning(
+          definition,
+          returning,
+          await database.write<RowOf<T>>(deleteOf(definition, target, condition, returning)),
+        );
       }
       await database.run(deleteOf(definition, target, condition));
       return [];

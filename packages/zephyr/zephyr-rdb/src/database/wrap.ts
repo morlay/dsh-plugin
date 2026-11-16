@@ -4,6 +4,12 @@ import { indexCatalog } from "../catalog.ts";
 import { createDatabase } from "./create.ts";
 import type { Database } from "./types.ts";
 
+async function collectRows(rows: AsyncIterable<unknown>): Promise<unknown[]> {
+  const result: unknown[] = [];
+  for await (const row of rows) result.push(row);
+  return result;
+}
+
 // 把「已有执行面」包成本包的 `Database`（宿主自己管连接与事务时用）。
 export function wrapDatabase(
   dialectName: DialectName,
@@ -12,6 +18,8 @@ export function wrapDatabase(
     schema?: string | undefined;
     iterate(text: string, params: readonly unknown[]): AsyncIterable<unknown>;
     run(text: string, params: readonly unknown[]): Promise<void>;
+    // 写通道（宿主自己有串行语义时提供）；省略时用 `iterate` 收行，排队语义归宿主。
+    write?(text: string, params: readonly unknown[]): Promise<unknown[]>;
     // 宿主自己管事务时提供：把当前事务的执行面做成 scoped `Database`（对应 Go 的 `Tx(ctx, fn)`）。
     transaction?: <T>(fn: (scoped: Database) => Promise<T>) => Promise<T>;
     close?(): Promise<void>;
@@ -21,6 +29,8 @@ export function wrapDatabase(
     createDialect(dialectName),
     {
       iterate: (text, params) => ports.iterate(text, params),
+      write: (text, params) =>
+        ports.write?.(text, params) ?? collectRows(ports.iterate(text, params)),
       run: (text, params) => ports.run(text, params),
       transaction: () => {
         throw new Error(

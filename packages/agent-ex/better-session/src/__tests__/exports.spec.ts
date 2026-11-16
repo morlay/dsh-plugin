@@ -1,6 +1,8 @@
 // 包出口：三条面都要按包名解析得到（`./ui` 由浏览器半落地后补一条）。
 //
 // 用**包名** import 就是把 `exports` 本身当接缝：出口写错、漏了一条、文件改名，这条立刻红。
+//
+// 为什么留在根 `__tests__/`：判据是包 `exports` 三条口径的解析，横跨整个包而不属于任何一面。
 import { describe, expect, it } from "vitest";
 import * as root from "@morlay/better-session";
 import * as endpoint from "@morlay/better-session/endpoint";

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // 页面闭环：列表、搜索下推、分页、子代理过滤、三种整屏状态，以及动作按钮只经注入面。
 // 组件 spec 直喂 props（框架座位由本文件提供替身），几何在浏览器里核对，这里钉住结构与标注。
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConversationManagerPage } from "../conversation-manager-page.tsx";
@@ -95,7 +95,13 @@ async function renderPage(options: {
     unarchive: vi.fn(async () => undefined),
     remove: vi.fn(async () => undefined),
     exportZip: vi.fn(async () => undefined),
+    exportFiltered: vi.fn(async () => ({ items: [] })),
     importZip: vi.fn(async () => "session-new"),
+    listWorkspaces: vi.fn(async () => [{ workspaceId: "w-target", title: "目标工作区" }]),
+    copyToWorkspace: vi.fn(async (sessionId: string, workspaceId: string) => ({
+      sessionId: "copy-of-" + sessionId,
+      workspaceId,
+    })),
     organizeData: vi.fn(async () => ({
       stoppedAgents: 0,
       orphanSessions: 0,
@@ -104,6 +110,17 @@ async function renderPage(options: {
       vacuumed: true,
     })),
     loadUsage: vi.fn(async () => EMPTY_REPORT),
+    checkConsistency: vi.fn(async () => ({
+      ok: true,
+      checked: { sessions: 0, events: 0, bridges: 0, usageRows: 0, countRows: 0 },
+      issues: [],
+    })),
+    repairSession: vi.fn(async () => ({
+      sessionId: "session-a",
+      action: "rewrite",
+      keptEvents: 0,
+      droppedEvents: 0,
+    })),
     ...options.faces,
   };
   const Page = ConversationManagerPage as unknown as (props: Record<string, unknown>) => ReactNode;
@@ -150,11 +167,94 @@ describe("对话管理页：列表与搜索", () => {
     expect(screen.getByText(zh.emptySearch)).toBeTruthy();
   });
 
-  it("一份会话都没有时整屏居中，不画框架", async () => {
+  it("刷新失败时保留旧行、错误可见且可重试", async () => {
+    let fail = false;
+    const listRows = async (query: Record<string, unknown> = {}) => {
+      if (fail) throw new ConversationManagerRequestError("boom", "SESSION_QUERY_FAILED");
+      return await backendRows([A, B, C], [B.sessionId, C.sessionId])(query);
+    };
+    const bench = await renderPage({ archived: [], listRows });
+    expect(rowTexts()).toHaveLength(3);
+
+    fail = true;
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "B" } });
+    await waitFor(() => {
+      expect(bench.container.querySelector('[data-failure="reload"]')).not.toBeNull();
+    });
+    // 失败不能吞掉已经读到的行：用户要看到的是「旧数据 + 失败提示」。
+    expect(rowTexts()).toHaveLength(3);
+
+    fail = false;
+    const banner = bench.container.querySelector('[data-failure="reload"]') as HTMLElement;
+    fireEvent.click(within(banner).getByRole("button", { name: zh.retry }));
+    await waitFor(() => {
+      expect(bench.container.querySelector('[data-failure="reload"]')).toBeNull();
+    });
+  });
+
+  it("慢的旧响应不覆盖新响应：只有最后发出的那次落到界面", async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    const listRows = () =>
+      new Promise((resolve) => {
+        pending.push(resolve);
+      });
+    const pageOf = (rows: readonly Row[]) => ({
+      items: rows.map((row) => ({
+        sessionId: row.sessionId,
+        title: row.title,
+        origin: row.origin ?? null,
+        cwd: null,
+        createdAt: 0,
+        updatedAt: row.updatedAt ?? 0,
+        archived: false,
+        workspace: null,
+      })),
+      total: rows.length,
+      page: 1,
+      pageSize: 20,
+    });
+
+    const bench = await renderPage({ archived: [], listRows, skipReady: true });
+    await waitFor(() => {
+      expect(bench.faces.listRows).toHaveBeenCalledTimes(1);
+    });
+    pending[0]?.(pageOf([A, B, C]));
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(3);
+    });
+
+    // 两次搜索各发一次请求，都先挂住（防抖窗口 250ms）。
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "B" } });
+    await waitFor(
+      () => {
+        expect(bench.faces.listRows).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 3_000 },
+    );
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "C" } });
+    await waitFor(
+      () => {
+        expect(bench.faces.listRows).toHaveBeenCalledTimes(3);
+      },
+      { timeout: 3_000 },
+    );
+
+    // 后发先至：第三次（命中 C）先回，第二次（命中 B）后回——界面必须停在 C 上。
+    pending[2]?.(pageOf([C]));
+    pending[1]?.(pageOf([B]));
+    await waitFor(() => {
+      expect(rowTexts()).toHaveLength(1);
+    });
+    expect(rowTexts()[0]).toContain("会话 C");
+  });
+
+  it("一份会话都没有时保留框架与导入入口（空态不能吞掉自救动作）", async () => {
     const bench = await renderPage({ archived: [], sessions: [] });
     expect(bench.container.querySelector('[data-status="empty"]')).not.toBeNull();
     expect(screen.getByText(zh.empty)).toBeTruthy();
-    expect(bench.container.querySelector("h1")).toBeNull();
+    // 空库时唯一能自救的动作就在标题行与空态里：标题必须还在，导入入口必须可点。
+    expect(bench.container.querySelector("h1")).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: zh.import }).length).toBeGreaterThan(0);
   });
 
   it("默认不显示子代理会话，勾选后显示并带标记", async () => {
@@ -193,6 +293,65 @@ describe("对话管理页：列表与搜索", () => {
     });
   });
 
+  it("末页被删空时页码回落到最后一页，不停在空页上", async () => {
+    const many: Row[] = Array.from({ length: 25 }, (_unused, index) => ({
+      sessionId: "s" + String(index),
+      title: "会话 " + String(index),
+    }));
+    const pageOf = (total: number, items: readonly Row[]) => ({
+      items: items.map((row) => ({
+        sessionId: row.sessionId,
+        title: row.title,
+        origin: null,
+        cwd: null,
+        createdAt: 0,
+        updatedAt: 0,
+        archived: false,
+        workspace: null,
+      })),
+      total,
+      page: 1,
+      pageSize: 20,
+    });
+    let calls = 0;
+    const listRows = vi.fn(async (query: Record<string, unknown> = {}) => {
+      calls += 1;
+      if (calls === 1) return pageOf(25, many.slice(0, 20));
+      // 第 2 页的请求回来时那一页已被删空，总数退到 20。
+      if (query["page"] === 2) return { items: [], total: 20, page: 2, pageSize: 20 };
+      return pageOf(20, many.slice(0, 20));
+    });
+    const bench = await renderPage({ archived: [], sessions: many, listRows });
+    expect(screen.getByText("第 1 / 2 页")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: zh["page.next"] }));
+    await waitFor(() => {
+      expect(
+        bench.container.querySelector("[data-pagination]")?.getAttribute("data-page-current"),
+      ).toBe("1");
+    });
+    expect(
+      bench.container.querySelector("[data-pagination]")?.getAttribute("data-page-total"),
+    ).toBe("1");
+    expect(rowTexts()).toHaveLength(20);
+  });
+
+  it("翻页后列表变化有播报", async () => {
+    const many: Row[] = Array.from({ length: 25 }, (_unused, index) => ({
+      sessionId: "s" + String(index),
+      title: "会话 " + String(index),
+    }));
+    const bench = await renderPage({ archived: [], sessions: many });
+    const announced = (): string =>
+      bench.container.querySelector('[data-announce="rows"]')?.textContent ?? "";
+    expect(announced()).toContain("第 1 / 2 页");
+
+    fireEvent.click(screen.getByRole("button", { name: zh["page.next"] }));
+    await waitFor(() => {
+      expect(announced()).toContain("第 2 / 2 页，共 25 条会话。");
+    });
+  });
+
   it("读列表失败时整屏失败态并带 role=alert", async () => {
     const bench = await renderPage({
       archived: [],
@@ -214,11 +373,13 @@ describe("对话管理页：动作", () => {
     const bench = await renderPage({ archived: [C.sessionId] });
     expect(screen.getAllByText(zh.archived)).toHaveLength(1);
 
-    const disabled = (name: string): boolean =>
-      (screen.getByRole("button", { name }) as HTMLButtonElement).disabled;
+    // 未归档的行不能删除，但按钮仍然可聚焦（点了给理由，见下一条用例）。
+    const ariaDisabled = (name: string): string | null =>
+      screen.getByRole("button", { name }).getAttribute("aria-disabled");
 
     expect(screen.queryByRole("button", { name: "取消归档 会话 A" })).toBeNull();
-    expect(disabled("删除 会话 A")).toBe(true);
+    expect(ariaDisabled("删除 会话 A")).toBe("true");
+    expect(ariaDisabled("删除 会话 C")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "归档 会话 A" }));
     await waitFor(() => {
       expect(bench.faces.archive).toHaveBeenCalledWith("s1");
@@ -229,6 +390,56 @@ describe("对话管理页：动作", () => {
     await waitFor(() => {
       expect(bench.faces.unarchive).toHaveBeenCalledWith("s3");
     });
+  });
+
+  it("未归档会话的删除按钮可聚焦，点击给出理由而不是无理由禁用", async () => {
+    const bench = await renderPage({ archived: [C.sessionId] });
+    const removeA = screen.getByRole("button", { name: "删除 会话 A" });
+    expect((removeA as HTMLButtonElement).disabled).toBe(false);
+    expect(removeA.getAttribute("aria-disabled")).toBe("true");
+
+    removeA.focus();
+    expect(document.activeElement).toBe(removeA);
+
+    fireEvent.click(removeA);
+    await waitFor(() => {
+      expect(screen.getByText(zh["failure.notArchived"])).toBeTruthy();
+    });
+    expect(bench.faces.remove).not.toHaveBeenCalled();
+  });
+
+  it("删除确认按钮用危险语义，在途不可重复触发", async () => {
+    const gate = Promise.withResolvers<void>();
+    const bench = await renderPage({
+      archived: [C.sessionId],
+      faces: { remove: vi.fn(() => gate.promise) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "删除 会话 C" }));
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: zh.confirmAccept });
+    expect(confirm.getAttribute("data-tone")).toBe("danger");
+
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    });
+    expect(confirm.getAttribute("aria-busy")).toBe("true");
+
+    fireEvent.click(confirm);
+    gate.resolve();
+    await waitFor(() => {
+      expect(bench.faces.remove).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("删除成功后焦点落在列表标题，不回给已重拉的行按钮", async () => {
+    await renderPage({ archived: [C.sessionId] });
+    fireEvent.click(screen.getByRole("button", { name: "删除 会话 C" }));
+    fireEvent.click(await screen.findByRole("button", { name: zh.confirmAccept }));
+    await waitFor(() => {
+      expect(document.activeElement?.tagName).toBe("H1");
+    });
+    expect((document.activeElement as HTMLElement).textContent).toBe(zh.title);
   });
 
   it("删除先弹确认，未确认前不请求", async () => {
@@ -278,11 +489,142 @@ describe("对话管理页：动作", () => {
     const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
     fireEvent.change(input, { target: { files: [file] } });
     await waitFor(() => {
-      expect(bench.faces.importZip).toHaveBeenCalledWith(file);
+      // 导入面多了可选的阶段回调：文件不变，第二个参数带上阶段回调。
+      expect(bench.faces.importZip).toHaveBeenCalledWith(
+        file,
+        expect.objectContaining({ onStage: expect.any(Function) }),
+      );
     });
     await waitFor(() => {
       expect(screen.getByText(zh.imported)).toBeTruthy();
     });
+  });
+
+  it("导入在途给阶段提示与不可取消说明", async () => {
+    const gate = Promise.withResolvers<string>();
+    let pushStage: ((stage: "reading" | "committing") => void) | undefined;
+    const bench = await renderPage({
+      archived: [],
+      faces: {
+        importZip: vi.fn(
+          (_file: File, options?: { onStage?: (stage: "reading" | "committing") => void }) => {
+            pushStage = options?.onStage;
+            return gate.promise;
+          },
+        ),
+      },
+    });
+    const input = bench.container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing file input");
+    const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(zh["import.reading"])).toBeTruthy();
+    });
+    act(() => {
+      pushStage?.("committing");
+    });
+    await waitFor(() => {
+      expect(screen.getByText(zh["import.committing"])).toBeTruthy();
+    });
+    // 不可取消写在提示里：长任务没有取消面。
+    expect(screen.getByText(zh["import.committing"]).textContent).toContain("不能取消");
+    // 在途时导入入口不可重复触发。
+    expect((screen.getByRole("button", { name: zh.importing }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+
+    gate.resolve("session-new");
+    await waitFor(() => {
+      expect(screen.queryByText(zh["import.committing"])).toBeNull();
+    });
+  });
+
+  it("覆盖导入先确认：确认前不发请求，确认后带目标会话", async () => {
+    const bench = await renderPage({ archived: [C.sessionId] });
+    fireEvent.click(screen.getByRole("button", { name: "覆盖导入 会话 C" }));
+    const input = bench.container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing file input");
+    const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain(zh.importReplaceTitle);
+    expect(bench.faces.importZip).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: zh.importReplaceAccept }));
+    await waitFor(() => {
+      expect(bench.faces.importZip).toHaveBeenCalledWith(
+        file,
+        expect.objectContaining({ sessionId: "s3" }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText(zh.importReplaced)).toBeTruthy();
+    });
+  });
+
+  it("覆盖导入的确认按钮用危险语义，在途不可再触发", async () => {
+    const gate = Promise.withResolvers<string>();
+    const bench = await renderPage({
+      archived: [C.sessionId],
+      faces: { importZip: vi.fn(() => gate.promise) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "覆盖导入 会话 C" }));
+    const input = bench.container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing file input");
+    const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: zh.importReplaceAccept });
+    expect(confirm.getAttribute("data-tone")).toBe("danger");
+    fireEvent.click(confirm);
+
+    // 确认后弹窗收掉，行内的覆盖入口在导入结束前保持禁用：同一份文件不会发两次。
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", { name: "覆盖导入 会话 C" }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "覆盖导入 会话 C" }));
+    expect(bench.faces.importZip).toHaveBeenCalledTimes(1);
+
+    gate.resolve("s3");
+    await waitFor(() => {
+      expect(screen.getByText(zh.importReplaced)).toBeTruthy();
+    });
+  });
+
+  it("成功提示落在 role=status，失败原因落在 role=alert", async () => {
+    const bench = await renderPage({
+      archived: [C.sessionId],
+      faces: {
+        remove: vi.fn(async () => {
+          throw new ConversationManagerRequestError("not archived", "SESSION_NOT_ARCHIVED");
+        }),
+      },
+    });
+    const input = bench.container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing file input");
+    const file = new File([new Uint8Array([1])], "session.zip", { type: "application/zip" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText(zh.imported)).toBeTruthy();
+    });
+    expect(bench.container.querySelector('[data-notice="result"]')?.getAttribute("role")).toBe(
+      "status",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "删除 会话 C" }));
+    fireEvent.click(await screen.findByRole("button", { name: zh.confirmAccept }));
+    await waitFor(() => {
+      expect(screen.getByText(zh["failure.notArchived"])).toBeTruthy();
+    });
+    expect(bench.container.querySelector('[data-failure="result"]')?.getAttribute("role")).toBe(
+      "alert",
+    );
   });
 
   it("行内导出调用注入面", async () => {
@@ -290,6 +632,50 @@ describe("对话管理页：动作", () => {
     fireEvent.click(screen.getByRole("button", { name: "导出 会话 C" }));
     await waitFor(() => {
       expect(bench.faces.exportZip).toHaveBeenCalledWith("s3");
+    });
+  });
+
+  it("会话在别处运行时给可读文案与建议（不是原始错误）", async () => {
+    const bench = await renderPage({
+      archived: [C.sessionId],
+      faces: {
+        exportZip: vi.fn(async () => {
+          throw new ConversationManagerRequestError(
+            'session "s3" was appended by another writer at seq 6',
+            "SESSION_CONCURRENT_WRITER",
+          );
+        }),
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "导出 会话 C" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(zh["failure.concurrent"])).toBeTruthy();
+    });
+    // 用户看到的是「该会话在别处运行 + 建议」，不是库里的位点细节。
+    const failure = bench.container.querySelector('[data-failure="result"]') as HTMLElement;
+    expect(failure.textContent).not.toContain("another writer");
+  });
+
+  it("按筛选结果批量导出：当前的搜索与归档筛选原样交给动作面", async () => {
+    const bench = await renderPage({ archived: [B.sessionId] });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "会话" } });
+    const group = bench.container.querySelector('[data-filter="archived"]') as HTMLElement;
+    fireEvent.click(within(group).getByRole("button", { name: zh["filter.archived.only"] }));
+    // 先让列表按新筛选重拉一次，再导出：动作面拿到的必须与列表同一组条件。
+    await waitFor(() => {
+      expect(bench.faces.listRows).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "会话", archived: "only" }),
+      );
+    });
+
+    fireEvent.click(within(bench.container).getByRole("button", { name: zh.exportFiltered }));
+
+    await waitFor(() => {
+      expect(bench.faces.exportFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ query: "会话", archived: "only" }),
+      );
     });
   });
 
@@ -501,6 +887,26 @@ describe("对话管理页：token 用量统计", () => {
       expect(screen.getByText("操作失败：boom")).toBeTruthy();
     });
   });
+
+  it("统计失败给重试入口，点了重拉当前范围", async () => {
+    let fail = true;
+    const loadUsage = vi.fn(async () => {
+      if (fail) throw new ConversationManagerRequestError("boom", undefined);
+      return REPORT;
+    });
+    await renderPage({ archived: [], faces: { loadUsage } });
+    fireEvent.click(screen.getByRole("button", { name: zh["view.usage"] }));
+
+    const retry = await screen.findByRole("button", { name: zh.retry });
+    fail = false;
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(loadUsage).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(zh["usage.all"])).toBeTruthy();
+    });
+  });
 });
 
 describe("对话管理页：框架与状态态", () => {
@@ -538,6 +944,12 @@ describe("对话管理页：框架与状态态", () => {
       expect(rowTexts()).toHaveLength(3);
     });
     expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+  });
+
+  it("分页条是带 aria-label 的导航", async () => {
+    const bench = await renderPage({ archived: [C.sessionId] });
+    const nav = screen.getByRole("navigation", { name: zh["page.nav"] });
+    expect(nav).toBe(bench.container.querySelector("[data-pagination]"));
   });
 
   it("读取中：状态占满面板并居中，此时不画标题行与搜索行", async () => {

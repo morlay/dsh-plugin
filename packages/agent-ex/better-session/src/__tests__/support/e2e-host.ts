@@ -1,9 +1,10 @@
 // 全链路用例的**宿主半**装配：真 cordis ctx + 真会话库（临时目录 sqlite）+ 真投影注册表 / 检查点 /
 // 分支 / 持久化 + 真编辑编排与 wire 端点。
 //
-// 只有**模型 / agent 环的响应**是替身（`AgentDirectoryStub`）：本包不依赖 agent 域包，而编辑编排的
-//「先停 agent、再把用户输入排进重放队列」要一个目录面。替身实现的是上游 `AgentRegistry` 的最小子集
-// （`get` / `list`），真正的适配行是本包的 `SessionAgentControlDefault`（按服务名 `agents` 读它）。
+// 两处替身都属于**别的域**：模型 / agent 环的响应（`AgentDirectoryStub`：本包不依赖 agent 域包，而编辑
+// 编排的「先停 agent、再把用户输入排进重放队列」要一个目录面，替身实现上游 `AgentRegistry` 的最小子集
+// `get` / `list`），与工作区记录（`FakeWorkspaceRegistry`：成员归属是 workspace 域的事，跨工作区复制
+// 只组合它的 `attach`）。本包自己的数据面与装配全是真的。
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,15 +17,25 @@ import {
   type SessionHeader,
 } from "@morlay/dsh-session/contract";
 import { SessionTurnOutline } from "@morlay/dsh-session";
+import { WorkspaceRegistry } from "@morlay/dsh-workspace";
+import { FakeWorkspaceRegistry } from "@morlay/dsh-workspace/testing";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionPersistenceRdb } from "@morlay/better-session";
 import {
+  SessionAdminEndpointDefault,
   SessionAgentControlDefault,
   SessionEditorEndpointDefault,
 } from "@morlay/better-session/server";
 import { SessionEditor, SessionEditorDefault } from "@morlay/better-session";
-import { createCtx, mountRows, publish, type MountedContext, type RowEntry } from "./base.ts";
+import {
+  createCtx,
+  mountRows,
+  publish,
+  publishToken,
+  type MountedContext,
+  type RowEntry,
+} from "./base.ts";
 import { mountOnto } from "./base.ts";
 
 /** 替身目录里那个「活着的 agent」：真会话 + 记录 followup / cancel。 */
@@ -131,6 +142,8 @@ export interface Host {
   readonly editor: SessionEditorDefault;
   /** `agents` 替身（模型 / agent 环的响应）。 */
   readonly agentDirectory: AgentDirectoryStub;
+  /** `workspaceRegistry` 替身：工作区记录不归本包，跨工作区复制只调它的 `attach`。 */
+  readonly workspaces: FakeWorkspaceRegistry;
   /** 库里读一份日志（读库，不读内存）。 */
   eventsOf(id: string): Promise<readonly SessionEvent[]>;
   /** 库里读一份 header。 */
@@ -151,6 +164,8 @@ const endpointRows: readonly RowEntry[] = [
   SessionEditorDefault as RowEntry,
   RemoteHandlersDefault as RowEntry,
   SessionEditorEndpointDefault as RowEntry,
+  // 对话管理页的动作面也走真 wire：L3 的批量删除 / 过滤 / 搜索都经它到真库。
+  SessionAdminEndpointDefault as RowEntry,
 ];
 
 /**
@@ -164,6 +179,10 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
   const ctx = createCtx();
   // 真 turnOutline 投影：撤回 / 分叉用例要看检查点水位，没有注册的投影就没有可折的单元。
   await ctx.plugin(SessionTurnOutline);
+  // 工作区域：本包注入 `WorkspaceRegistry` 令牌（跨工作区复制 = fork + 它的 attach）。工作区记录不在这里
+  // 造，用例要哪几个目录就在注册表上 `create` 哪几个。发布在建行之前：注入在装配期回填。
+  const workspaces = new FakeWorkspaceRegistry();
+  publishToken(ctx, WorkspaceRegistry, workspaces);
   const fiber = await mountOnto(ctx, { root, config: { type: "sqlite", path: dbPath } });
 
   const agentDirectory = new AgentDirectoryStub();
@@ -189,6 +208,7 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
     handlers,
     editor,
     agentDirectory,
+    workspaces,
     async eventsOf(id) {
       const reader = await persistence.open(SessionId(id), "read");
       try {

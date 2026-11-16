@@ -20,6 +20,7 @@ export const zh = {
   "retry.description": "将重新生成第 {turn} 轮的回复，并抛弃该回合之后的内容。",
   "retry.confirm": "确认重试",
   cancel: "取消",
+  "action.failed": "操作失败：会话编辑没有生效，请重试。",
 } satisfies Record<string, string>;
 
 // 消息动作字典的 key 集合。
@@ -38,6 +39,7 @@ export const en = {
     "Regenerates the reply of turn {turn} and discards everything after that turn.",
   "retry.confirm": "Retry",
   cancel: "Cancel",
+  "action.failed": "The edit was not applied. Please try again.",
 } satisfies Record<SessionEditorKey, string>;
 
 /** 本包字典绑定后的翻译座：键集合就是字典的键集合。 */

@@ -1,6 +1,8 @@
 // 落盘契约：上游 `SessionPersistence` 的那 20 条语义（handle 模型、所有权、flush 屏障、revision、撕裂尾部）。
 //
 // 源包用这份契约测试守它自己的后端；本包把它接到 RDB 实现上，判据因此与上游同口径。
+//
+// 为什么留在根 `__tests__/`：契约套件——口径由上游 `runPersistenceContract` 定，不属于本包任何一面。
 import { SessionId } from "@morlay/dsh-session/contract";
 import { asRdbStore } from "@morlay/better-session";
 import {

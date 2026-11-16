@@ -1,3 +1,5 @@
+// 为什么留在根 `__tests__/`：多实例同库并发（真库 + 整包装配），接缝在实例之间，不属于任何单个面。
+
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

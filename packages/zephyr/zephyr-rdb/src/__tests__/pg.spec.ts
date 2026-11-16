@@ -45,7 +45,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
       catalog: defineCatalog([items, parts]),
     });
     try {
-      const statements = await ensureSchema(database, [items, parts]);
+      const { statements } = await ensureSchema(database, [items, parts]);
       expect(
         statements.some((statement) =>
           statement.includes('CREATE TABLE IF NOT EXISTS "public"."t_items"'),
@@ -57,7 +57,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
         ),
       ).toBe(true);
       // 幂等
-      expect(await ensureSchema(database, [items, parts])).toEqual([]);
+      expect((await ensureSchema(database, [items, parts])).statements).toEqual([]);
 
       const table = database.table("t_items");
       const partTable = database.table("t_parts");
@@ -136,10 +136,10 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
       await database.run(fragment('CREATE SCHEMA IF NOT EXISTS "dsh_test"'));
 
       // 结构：建表与索引都限定到配置的 schema，且重复对齐是幂等的。
-      const statements = await ensureSchema(database, [items, parts]);
+      const { statements } = await ensureSchema(database, [items, parts]);
       expect(statements.length).toBeGreaterThan(0);
       expect(statements.every((statement) => statement.includes('"dsh_test".'))).toBe(true);
-      expect(await ensureSchema(database, [items, parts])).toEqual([]);
+      expect((await ensureSchema(database, [items, parts])).statements).toEqual([]);
 
       // 读写：句柄不依赖连接串的 search_path，直接落在配置的 schema。
       const table = database.table("t_items");
@@ -181,7 +181,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
     // 再次打开：结构已对齐、迁移已记账，数据还在。
     const reopened = await openDatabase(config);
     try {
-      expect(await ensureSchema(reopened, [items, parts])).toEqual([]);
+      expect((await ensureSchema(reopened, [items, parts])).statements).toEqual([]);
       expect(await runMigrations(reopened, { catalog, migrations: [migration] })).toEqual([]);
       const [total] = await collect(reopened.table("t_items").select({ n: count() }));
       expect(Number(total?.n)).toBe(2);

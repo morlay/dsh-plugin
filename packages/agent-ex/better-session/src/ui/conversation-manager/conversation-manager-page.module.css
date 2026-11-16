@@ -217,6 +217,23 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+/* 复制到工作区的选择项：标签在上、原生 select 在下（只有一个下拉，不值得自定义控件）。 */
+.copyField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.copyField select {
+  height: 32px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  font: inherit;
+}
+
 /* 列表区里的空态（搜索结果为空这类）：框架照旧在，只在列表位置上居中那行字。 */
 .listStatus {
   display: grid;

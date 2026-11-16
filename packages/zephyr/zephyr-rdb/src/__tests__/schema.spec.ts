@@ -70,13 +70,13 @@ describe("ensureSchema 只做增", () => {
   it("建表、补列、补索引，并且重复执行是幂等的", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
-      const first = await ensureSchema(database, catalog);
+      const { statements: first } = await ensureSchema(database, catalog);
       expect(first.some((sql) => sql.startsWith('CREATE TABLE IF NOT EXISTS "t_items"'))).toBe(
         true,
       );
 
-      // 第二次：结构已对齐，不再执行任何语句。
-      expect(await ensureSchema(database, catalog)).toEqual([]);
+      // 第二次：结构已对齐，不再执行任何语句，也没有漂移。
+      expect(await ensureSchema(database, catalog)).toEqual({ statements: [], drift: [] });
 
       // 定义里多一列：只在旧表上补这一列。
       const extended = defineCatalog([
@@ -87,7 +87,8 @@ describe("ensureSchema 只做增", () => {
         catalog[1]!,
       ]);
       const applied = await ensureSchema(database, extended);
-      expect(applied).toEqual(['ALTER TABLE "t_items" ADD COLUMN "f_note" TEXT']);
+      expect(applied.statements).toEqual(['ALTER TABLE "t_items" ADD COLUMN "f_note" TEXT']);
+      expect(applied.drift).toEqual([]);
 
       const columns = await database.read<{ name: string }>(
         fragment('PRAGMA table_info("t_items")'),
@@ -120,9 +121,9 @@ describe("ensureSchema 只做增", () => {
       await ensureSchema(database, catalog);
       // 定义里没有 f_legacy：默认保留（升级不丢数据）。
       await database.run(fragment('ALTER TABLE "t_items" ADD COLUMN "f_legacy" TEXT'));
-      expect(await ensureSchema(database, catalog)).toEqual([]);
+      expect((await ensureSchema(database, catalog)).statements).toEqual([]);
       const dropped = await ensureSchema(database, catalog, { allowDestructive: true });
-      expect(dropped).toEqual(['ALTER TABLE "t_items" DROP COLUMN "f_legacy"']);
+      expect(dropped.statements).toEqual(['ALTER TABLE "t_items" DROP COLUMN "f_legacy"']);
     } finally {
       await database.close();
     }
@@ -145,6 +146,36 @@ describe("SQLite 连接调优选项", () => {
       const [mmap] = await database.read<{ mmap_size: number }>(fragment("PRAGMA mmap_size"));
       expect(cache?.cache_size).toBe(-65536);
       expect(mmap?.mmap_size).toBe(268435456);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
+describe("部分索引", () => {
+  const events = defineTable({
+    name: "t_events",
+    columns: {
+      f_id: { type: "serial", primaryKey: true },
+      f_active: { type: "boolean", notNull: true, default: 1 },
+    },
+    indexes: { idx_events_active: { columns: ["f_id"], where: '"f_active" = 1' } },
+  });
+
+  it("DDL 带 WHERE：建表与补建索引都保留条件", async () => {
+    const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
+    try {
+      const result = await ensureSchema(database, [events]);
+      expect(result.statements).toContain(
+        'CREATE INDEX IF NOT EXISTS "idx_events_active" ON "t_events" ("f_id") WHERE "f_active" = 1',
+      );
+      const [created] = await database.read<{ sql: string }>(
+        fragment("SELECT sql FROM sqlite_master WHERE name = 'idx_events_active'"),
+      );
+      expect(created?.sql).toContain('WHERE "f_active" = 1');
+
+      // 幂等：结构已对齐时不再建一次。
+      expect(await ensureSchema(database, [events])).toEqual({ statements: [], drift: [] });
     } finally {
       await database.close();
     }
@@ -196,7 +227,7 @@ describe("PostgreSQL 自定义 schema", () => {
         { columns: new Set(["f_id", "f_owner", "f_active"]), indexes: new Set<string>() },
       ],
     ]);
-    const statements = planSchema(postgres, catalog, existing, { schema: "dsh_test" }).map(
+    const statements = planSchema(postgres, catalog, existing, { schema: "dsh_test" }).changes.map(
       (change) => change.statement,
     );
     expect(statements).toContain(
@@ -236,7 +267,7 @@ describe("PostgreSQL 自定义 schema", () => {
 
   it("ensureSchema 与结构探测缺省用连接上的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
-    const applied = await ensureSchema(database, [items]);
+    const { statements: applied } = await ensureSchema(database, [items]);
     expect(
       applied.some((statement) =>
         statement.includes('CREATE TABLE IF NOT EXISTS "dsh_test"."t_items"'),

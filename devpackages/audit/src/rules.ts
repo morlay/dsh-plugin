@@ -186,7 +186,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 168 已扣掉 desktop 壳 `src/app.ts` 的 4 处 Electron 边界桥（Electron 内置模块 / 进程对象 /
    * IPC 参数没有本仓类型面，见 `BRIDGES` 最后一条）——那 4 处此前计在 172 里，进白名单后随之下调。
    */
-  "double-assertion": 168,
+  "double-assertion": 164,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */

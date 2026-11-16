@@ -81,7 +81,8 @@ describe("关联 / 聚合 / 条件（两方言同一套构建）", () => {
         .distinct()) {
         actives.push(row.active);
       }
-      expect(actives).toEqual([1]);
+      // boolean 列读回声明给调用方的 JS 类型（SQLite 存 INTEGER，驱动给 1；归一把它收成 true）。
+      expect(actives).toEqual([true]);
 
       // between / not / raw / inList
       const picked: number[] = [];

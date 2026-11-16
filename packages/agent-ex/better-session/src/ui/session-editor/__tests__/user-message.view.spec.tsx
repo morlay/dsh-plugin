@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // 入口门控：编辑（撤回）只要求存在可编辑文本块——轮外消息也能撤回；重试只对已闭合轮次开放。
 // 两个入口都先弹确认再把操作交给注入的动作面。
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserMessageNodeView } from "../user-message.view.tsx";
@@ -77,7 +77,40 @@ function renderNode(node: unknown, spies: Spies): void {
 }
 
 describe("UserMessageNodeView 的入口门控", () => {
-  it("有文本块的 user 消息：确认后把该块交给 recall", () => {
+  it("动作失败时在消息行上给可读反馈，而不是什么都没发生", async () => {
+    const spies = faces();
+    spies.recall.mockResolvedValueOnce(false);
+    renderNode(nodeOf({}), spies);
+
+    fireEvent.click(screen.getByLabelText("编辑"));
+    fireEvent.click(screen.getByText("撤回并编辑"));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(zh["action.failed"]);
+  });
+
+  it("动作在途时确认按钮禁用并标 aria-busy，不可重复触发", async () => {
+    const gate = Promise.withResolvers<boolean>();
+    const spies = faces();
+    spies.recall.mockReturnValue(gate.promise);
+    renderNode(nodeOf({}), spies);
+
+    fireEvent.click(screen.getByLabelText("编辑"));
+    const confirm = screen.getByText("撤回并编辑") as HTMLButtonElement;
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      expect(confirm.disabled).toBe(true);
+    });
+    expect(confirm.getAttribute("aria-busy")).toBe("true");
+
+    fireEvent.click(confirm);
+    gate.resolve(true);
+    await waitFor(() => {
+      expect(spies.recall).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("有文本块的 user 消息：确认后把该块交给 recall", async () => {
     const spies = faces();
     renderNode(nodeOf({}), spies);
 
@@ -86,6 +119,10 @@ describe("UserMessageNodeView 的入口门控", () => {
 
     fireEvent.click(screen.getByText("撤回并编辑"));
     expect(spies.recall).toHaveBeenCalledTimes(1);
+    // 确认后弹窗保持到动作结束（在途不可重复触发），所以数动作行之前先等它收掉。
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
     expect(spies.recall.mock.calls[0]?.[0]).toMatchObject({
       kind: "user",
       eventSeq: 4,
