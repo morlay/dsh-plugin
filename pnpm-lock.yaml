@@ -336,12 +336,12 @@ importers:
       '@morlay/zephyr-cli':
         specifier: workspace:*
         version: link:../../packages/zephyr/zephyr-cli
+      '@morlay/zephyr-dev':
+        specifier: workspace:^
+        version: link:../../packages/zephyr/zephyr-dev
       '@morlay/zephyr-ui':
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-ui
-      '@oxc-project/runtime':
-        specifier: ^0.123.0
-        version: 0.123.0
     devDependencies:
       '@morlay/zephyr-desktop-bundle':
         specifier: workspace:^
@@ -495,6 +495,9 @@ importers:
       '@morlay/dsh-skill':
         specifier: workspace:^
         version: link:../../agent/dsh-skill
+      '@morlay/dsh-storage':
+        specifier: workspace:^
+        version: link:../../agent/dsh-storage
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../../zephyr/zephyr
@@ -1636,24 +1639,9 @@ importers:
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../zephyr
-      '@oxc-project/runtime':
-        specifier: ^0.153.0
-        version: 0.153.0
-      chokidar:
-        specifier: ^4.0.3
-        version: 4.0.3
-      lightningcss:
-        specifier: ^1.30.0
-        version: 1.33.0
       react:
         specifier: 18.x
         version: 18.3.1
-      rolldown:
-        specifier: ^1.2.14
-        version: 1.2.16
-      vite:
-        specifier: ^8.3.1
-        version: 8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
     devDependencies:
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
@@ -1673,6 +1661,9 @@ importers:
       '@morlay/zephyr-app':
         specifier: workspace:^
         version: link:../zephyr-app
+      '@morlay/zephyr-dev':
+        specifier: workspace:^
+        version: link:../zephyr-dev
       rolldown:
         specifier: ^1.2.14
         version: 1.2.16
@@ -1683,6 +1674,31 @@ importers:
       vite:
         specifier: ^8.3.1
         version: 8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/zephyr/zephyr-dev:
+    dependencies:
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../zephyr-app
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
+      lightningcss:
+        specifier: ^1.30.0
+        version: 1.33.0
+      rolldown:
+        specifier: ^1.2.14
+        version: 1.2.16
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.6(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.5.0
+        version: 26.6.6
 
   packages/zephyr/zephyr-rdb:
     dependencies:
@@ -14615,14 +14631,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@oxc-project/runtime@0.123.0':
-    resolution: {integrity: sha512-wRf0z8saz9tHLcK3YeTeBmwISrpy4bBimvKxUmryiIhbt+ZJb0nwwJNL3D8xpeWbNfZlGSlzRBZbfcbApIGZJw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-
-  '@oxc-project/runtime@0.153.0':
-    resolution: {integrity: sha512-rXJvtlsVG4xJNq64hiaUTIatE7jbBgpa6l4QgmEa2jLgT3ULH9scUBkpsC9N1DfmqixLEyT6DuK6OSXozziIlw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-
   '@oxc-project/runtime@0.154.0':
     resolution: {integrity: sha512-cBQNGoh659BNgvA8OC/e4BNDtFkv03dJaYdkp2adgOQNtISNAPQ+nB4S8XvWtNk7Xl+0g+7aa+iRGR25Xycd1Q==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -20682,10 +20690,6 @@ snapshots:
   '@oxc-parser/binding-win32-x64-msvc@0.158.0':
     optional: true
 
-  '@oxc-project/runtime@0.123.0': {}
-
-  '@oxc-project/runtime@0.153.0': {}
-
   '@oxc-project/runtime@0.154.0': {}
 
   '@oxc-project/types@0.153.0': {}
@@ -21202,7 +21206,7 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 18.19.130
+      '@types/node': 26.6.6
       form-data: 4.0.6
 
   '@types/node@14.18.63': {}
