@@ -2,6 +2,7 @@
 // 右栏面板：按会话拉生效态、按折叠组呈现全量目录、三态改动攒成草稿一次提交；
 // 逐字段「恢复默认」走 `setModePatch(id, null)`；工具段的「只看可调用」是纯展示层过滤。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect, useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModeConfig } from "../../endpoint/mode-config.ts";
 import type { SessionModeActiveState } from "../../endpoint/session-mode-shapes.ts";
@@ -453,4 +454,99 @@ describe("会话模式面板", () => {
       expect(screen.getByText("标准模式")).toBeDefined();
     });
   });
+
+  it("投影变化触发重拉", async () => {
+    // 别处切了模式（`sessionMode`）或换了 preset（`agentPreset`）：面板要跟着重拉。
+    const loads: string[] = [];
+    const value = state();
+    const store = fakeStore(value);
+    (store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }).loadActive =
+      async (id: string) => {
+        loads.push(id);
+        return value;
+      };
+
+    // 一个能推值的 `useSessions` 替身：投影值变了，selector 的结果就变。
+    let projection: Record<string, unknown> = { sessionMode: "coding", agentPreset: "ptc" };
+    const listeners = new Set<() => void>();
+    interface Snapshot {
+      byId: Record<string, { projectionValues?: Record<string, unknown> }>;
+    }
+    const snapshot = (): Snapshot => ({
+      byId: { s1: { projectionValues: projection } },
+    });
+    // 上游 `useSessions` 是快照 selector hook：这里按同样的语义实现（订阅 → 重新渲染）。
+    const useProjections = (selector: (state: Snapshot) => unknown): unknown => {
+      const [, force] = useState(0);
+      useEffect(() => {
+        const listener = (): void => {
+          force((n) => n + 1);
+        };
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      }, []);
+      return selector(snapshot());
+    };
+
+    render(
+      <SessionModePanelBody
+        sessionId="s1"
+        store={store}
+        useSessions={useProjections}
+        panelId="p"
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("编码模式")).toBeDefined();
+    });
+    expect(loads).toEqual(["s1"]);
+
+    // 别处切了模式：投影变了，面板重拉一次。
+    projection = { sessionMode: "chat", agentPreset: "ptc" };
+    for (const listener of listeners) listener();
+    await waitFor(() => {
+      expect(loads).toEqual(["s1", "s1"]);
+    });
+
+    // 换了 preset：同样重拉。
+    projection = { sessionMode: "chat", agentPreset: "minimal" };
+    for (const listener of listeners) listener();
+    await waitFor(() => {
+      expect(loads).toEqual(["s1", "s1", "s1"]);
+    });
+  });
+
+  it("换一个 sessionId 重拉", async () => {
+    // 会话切换是重拉的另一个来源：`sessionId` 变了就要拉那个会话的生效态。
+    const loads: string[] = [];
+    const store = fakeStore(state());
+    (store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }).loadActive =
+      async (id: string) => {
+        loads.push(id);
+        return state(
+          id === "s2"
+            ? { mode: { id: "chat", name: "对话模式", description: "" } }
+            : undefined,
+        );
+      };
+
+    const { rerender } = render(
+      <SessionModePanelBody sessionId="s1" store={store} panelId="p" />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("编码模式")).toBeDefined();
+    });
+    expect(loads).toEqual(["s1"]);
+
+    rerender(<SessionModePanelBody sessionId="s2" store={store} panelId="p" />);
+
+    // 拉了新会话的那一份，而且面板显示的是**它**的模式。
+    await waitFor(() => {
+      expect(screen.getByText("对话模式")).toBeDefined();
+    });
+    expect(loads).toEqual(["s1", "s2"]);
+  });
 });
+

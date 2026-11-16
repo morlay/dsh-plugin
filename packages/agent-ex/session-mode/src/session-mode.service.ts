@@ -26,7 +26,7 @@ import {
 } from "./endpoint/session-mode-shapes.ts";
 import { deniedByList, toolGroupLabel, toolGroupOf } from "./guidance/tool-groups.ts";
 
-import { DEFAULT_MODE, MODE_SOURCES } from "./mode-sources.ts";
+import { DEFAULT_MODE, MODE_SOURCES, NOOP_MODE_ID } from "./mode-sources.ts";
 import { configProblem, normalizeMode, policyInForce, type ModeInput } from "./modes.ts";
 import { installPersona } from "./persona.ts";
 import { loadModeOverrides, removeMode, writeMode } from "./mode-store.ts";
@@ -292,7 +292,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
             ),
       catalog: await this.buildCatalog(agent, base, effective),
       editable: this.editableOf(session),
-      deletable: id !== this.defaultId && this.definitions.size > 1,
+      // 保留 id（`noop`）与部署默认都不可删：前者删了要重启才恢复，后者删了这条行就没有默认可落。
+      deletable: id !== this.defaultId && id !== NOOP_MODE_ID && this.definitions.size > 1,
     };
   }
 

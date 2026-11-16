@@ -3,7 +3,7 @@
 // 折叠组对齐上游右栏内容（20/24/40 内边距、整列滚动），一次只开一组；工具 / 技能 / policy 用
 // 「默认 / 允许 / 禁止」三态切换（工具按组折叠、组内逐条）；每项标出来源（会话覆盖 / 模式默认），
 // 被覆盖的项旁给「恢复默认」——它发的是 `setModePatch(id, null)`，只清这个字段的会话覆盖。
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { inject } from "@morlay/zephyr";
 import { SlotView } from "@morlay/zephyr-app/client";
 import {
@@ -104,9 +104,24 @@ interface PanelProps extends SessionModeViewProps {
   readonly t?: SessionModeTranslate | undefined;
 }
 
+// 没有会话状态读面时（测试、没装会话行的宿主）：两路投影读不到，面板只按 `sessionId` 重拉。
+const NO_SESSIONS: NonNullable<SessionModeViewProps["useSessions"]> = () => undefined;
+
+// 从会话目录快照里读一条投影值（上游 `useSessions` 的 selector 入参）。
+function projectionOf(
+  snapshot: { byId: Record<string, { projectionValues?: Record<string, unknown> }> },
+  sessionId: string | undefined,
+  key: string,
+): unknown {
+  return sessionId === undefined
+    ? undefined
+    : snapshot.byId[sessionId]?.projectionValues?.[key];
+}
+
 export function SessionModePanelBody({
   sessionId,
   store,
+  useSessions,
   panelId,
   t = fallbackTranslate,
 }: PanelProps): ReactNode {
@@ -123,11 +138,30 @@ export function SessionModePanelBody({
   // 删除当前模式的二次确认。
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // `t` 不在依赖里：容器每次 render 都会 `bind` 出一个新函数，进依赖会把 effect 变成每次渲染都重拉。
-  // 它的**返回值**只跟当前语言走，语言的切换由上游整页刷新处理。
+  // 两路会话投影：别处切了模式（`sessionMode`）或换了 preset（`agentPreset`），面板显示旧态就是误导。
+  // 与 chip 读的是同一份事实，所以两边不会分叉。
+  const sessions = useSessions ?? NO_SESSIONS;
+  const sessionMode = sessions((snapshot) =>
+    projectionOf(snapshot, sessionId, "sessionMode"),
+  ) as string | null | undefined;
+  const agentPreset = sessions((snapshot) =>
+    projectionOf(snapshot, sessionId, "agentPreset"),
+  ) as string | null | undefined;
+  // 上一份生效态属于哪个会话：换了会话就先丢掉它（见下面 effect 里的第一段）。
+  const loadedFor = useRef<string | undefined>(undefined);
+
+  // `t` 与 `sessions` 不在依赖里：容器每次 render 都会 `bind` 出一个新函数，进依赖会把 effect 变成每次
+  // 渲染都重拉（`useSessions` 是快照 selector hook，不是数据本身）。
   useEffect(() => {
     if (sessionId === undefined) return;
     let alive = true;
+    // 会话切换：上一份生效态与草稿都属于**那个**会话，留着会让面板显示别的会话的模式、甚至把上一个
+    // 会话的草稿提交到新会话上。同一个会话内的投影变化只重拉，不清屏。
+    if (loadedFor.current !== sessionId) {
+      loadedFor.current = sessionId;
+      setActive(undefined);
+      setDraft(EMPTY_DRAFT);
+    }
     setError(undefined);
     store.loadActive(sessionId).then(
       (value) => {
@@ -140,7 +174,7 @@ export function SessionModePanelBody({
     return () => {
       alive = false;
     };
-  }, [sessionId, store]);
+  }, [sessionId, store, sessionMode, agentPreset]);
 
   // 三种「还没读到」的态各占整块：没有会话 / 读失败 / 正在读。读失败不能伪装成空列表或一直转圈。
   if (sessionId === undefined) {

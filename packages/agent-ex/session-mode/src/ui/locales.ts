@@ -3,6 +3,8 @@
 export const zh = {
   seatHint: "选择这个会话的模式",
   lockedHint: "这个会话已经开始：换模式请新开一个会话",
+  // chip 切换失败：错误只挂 tooltip 时，鼠标一移开就没人知道刚才那次点没生效。
+  seatFailed: "切换模式失败",
   noDescription: "（无说明）",
   panel: "会话模式",
   panelDescription: "当前会话的模式与生效面：工具、技能、政策与注入开关。",
@@ -66,6 +68,7 @@ export const zh = {
 export const en: Record<keyof typeof zh, string> = {
   seatHint: "Pick the mode for this session",
   lockedHint: "This session has started: start a new one to pick a mode",
+  seatFailed: "Mode switch failed",
   noDescription: "(no description)",
   panel: "Session mode",
   panelDescription:

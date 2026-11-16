@@ -983,3 +983,46 @@ describe("会话级覆盖的持久化", () => {
     expect(after?.session).toEqual({ instructions: false });
   });
 });
+// 端点 `applyConfig` 的返回值只说明"这次写成功了"，**不说明工具面真的换了**：收口是另一条路
+// （`installFor` → `scope.apply` → `tools.restrict`）。这条钉的是两者一致。
+describe("应用覆盖后的工具面", () => {
+  it("应用覆盖后 agent 的可见工具变了", async () => {
+    const { ctx, agent } = await storageMount();
+    const sessionId = agent.session.id;
+    // 起点：coding 的白名单是 read / web_search，目录里就是这两件。
+    expect(visibleToolNames(ctx, agent)).toEqual(["read", "web_search"]);
+
+    // 一份**收窄**的覆盖：只留 read。判据读 `ctx.tools.schemas(agent)`——那是模型真正看到的目录。
+    const narrowed = { ...ctx.sessionModes.definition("coding"), allowTools: ["read"] };
+    const state = await ctx.sessionModes.applyConfig(sessionId, narrowed);
+
+    // 返回的生效态只是回声；真正的判据是目录跟着变了。
+    expect(state?.config.allowTools).toEqual(["read"]);
+    expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
+
+    // 成对判据：摘掉覆盖后回到模式默认的那两件（重装是幂等的，收口不是一次性的）。
+    await ctx.sessionModes.setModePatch(sessionId, { allowTools: null });
+    expect(visibleToolNames(ctx, agent)).toEqual(["read", "web_search"]);
+  });
+});
+
+describe("哪些模式可删", () => {
+  it("noop 与部署默认都不可删", async () => {
+    // 生产形态：行 config 只带 `default`，三个内置模式就位（coding 是部署默认）。
+    const { ctx, agent } = await mount({ default: "coding", modes: {} });
+    const sessionId = agent.session.id;
+
+    // 部署默认：会话停在 coding 上，不可删。
+    expect((await ctx.sessionModes.activeState(sessionId))?.deletable).toBe(false);
+
+    // 保留 id：切到 noop，同样不可删（它的判据不是"默认模式"，是保留 id）。
+    await ctx.sessionModes.select(sessionId, "noop");
+    const onNoop = await ctx.sessionModes.activeState(sessionId);
+    expect(onNoop?.mode.id).toBe("noop");
+    expect(onNoop?.deletable).toBe(false);
+
+    // 成对判据：清单里既不是默认、也不是保留 id 的那个模式可删。
+    await ctx.sessionModes.select(sessionId, "chat");
+    expect((await ctx.sessionModes.activeState(sessionId))?.deletable).toBe(true);
+  });
+});
