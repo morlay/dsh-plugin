@@ -60,3 +60,9 @@
 | 支撑                                                 | `src/__tests__/support/**`（base + 扩展）                | 见上表                                                       |
 
 `vitest.config.ts` 的 `include` 两条来源：`**/__tests__/*.spec.ts(x)` 与 `**/src/ui/**/*.spec.ts(x)`。不为全链路单独建一层集中目录——它属于「带 UI 的」那一行，跟被测模块同目录。
+
+## 数据根与隔离
+
+- 文件库：数据根由用例自己 `mkdtemp(join(tmpdir(), <前缀>-))`（`storage-takeover.spec.ts` 的 `tempDir(prefix)` 会把目录登记进 `dirs`，`afterEach` 统一 `rm -r`）。
+- `:memory:`：单连接用例用它；需要两个实例共享同一份库（`multi-instance` / `busy-timeout` / 存储接管）才落文件。
+- 不用 `beforeAll` 建库或建根：用例之间不共享数据，否则顺序与并行都会互相影响。验收命令见 [如何验证](./how-to-verify.md) 的「测试数据与隔离」。

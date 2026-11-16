@@ -14,6 +14,11 @@ export type { WorkspaceDomainState } from "@deepseek-ai/dsh-workspace";
 /**
  * 契约面：上游 `WorkspaceRegistry` 的全部公开成员，与上游同名同签名。
  *
+ * `@Injectable({ name: "workspaceRegistry" })` 是**上游名别名**（上游 `WorkspaceRegistry` 是 cordis
+ * `Service`，构造里 `super(ctx, 'workspaceRegistry')` 把自己注册在根 store 上）：它记下"这个名字就是
+ * 上游的注册名"，让**调用时按名读**的消费方从令牌元数据取名，不必在调用点手抄字符串。
+ * 装配期不按别名发第二份（`Workspace` 是适配行，面由上游自己发布），所以与上游不撞名。
+ *
  * 下面的覆盖守卫在编译期核对，漏一个就报出成员名。
  */
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
@@ -21,7 +26,7 @@ export type WorkspaceRegistryCovered = AssertTrue<
   AssertCovered<WorkspaceRegistryService, WorkspaceRegistry>
 >;
 
-@Injectable()
+@Injectable({ name: "workspaceRegistry" })
 export abstract class WorkspaceRegistry {
   abstract readonly archivedSessionIds: WorkspaceRegistryService["archivedSessionIds"];
 

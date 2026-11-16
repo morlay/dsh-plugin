@@ -45,8 +45,8 @@ import { rowToEvent, rowToMeta } from "../data/store/log/rows.ts";
 import { eventFilterCondition, sessionFilterCondition } from "./filters.ts";
 import { SessionProjectionStore, SessionQuery, SessionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { WorkspaceRegistry } from "@morlay/dsh-workspace";
-import { inject, Injectable } from "@morlay/zephyr";
+import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
+import { readWorkspaceRegistry } from "./workspace-registry.read.ts";
 
 import { createObserveCache } from "./observe-cache.ts";
 
@@ -64,17 +64,25 @@ import { availabilityOf, currentSurfaceSeqs, searchDocumentOf } from "./filters.
  * 可选服务一律 `inject.optional`（契约令牌，不按字符串名字取）：测试装配与 headless 下投影注册表可能缺席，
  * 缺席时观测仍给出日志与游标，只是没有 `projections`——上游语义也是"注册表没装就没有快照"。
  * 代价与 `admin/store.ts` 同一个：提供者要排在会话行之前（zephyr 的 `optional` 参与装配排序）。
+ *
+ * **工作区注册表是这条规矩的例外**：它那一行（`Workspace`）反过来注入本行的持久化，静态
+ * `inject.optional` 会成环并把 workspace 行排到本行之前（理由与后果见 `workspace-registry.read.ts`），
+ * 所以它按名**在调用时读**。
  */
 @Injectable()
-export class SessionQueryRdb extends SessionQuery {
-  // 工作区注册表的归档集合：它与页面上的归档动作同源。
-  private readonly workspaces = inject.optional(WorkspaceRegistry);
-
+export class SessionQueryRdb extends SessionQuery implements OnInit {
   private readonly sessions = inject(SessionStore);
 
   private readonly persistence = inject(SessionPersistence);
 
   private readonly projections = inject.optional(SessionProjectionStore);
+
+  // 工作区注册表（归档集合与页面上的归档动作同源）按名在调用时读：见文件头的例外说明。
+  private ctx: Context | undefined;
+
+  onInit(ctx: Context): void {
+    this.ctx = ctx;
+  }
 
   // 冷会话观察缓存：按 `(persistenceIdentity, revision)` 命中，容量来自落盘行。
 
@@ -133,7 +141,7 @@ export class SessionQueryRdb extends SessionQuery {
   // 测试装配）就退回持久化里的归档标记——"官方列表不含已归档"是这一层的语义，不能因为一个可选服务没到
   // 就把归档会话又列出来。
   private async archivedSessionIds(): Promise<ReadonlySet<string>> {
-    const registry = this.workspaces;
+    const registry = readWorkspaceRegistry(this.ctx);
     if (registry !== undefined) return new Set<string>(registry.archivedSessionIds);
     return await asRdbStore(this.persistence).archivedSessionIds();
   }

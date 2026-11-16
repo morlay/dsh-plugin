@@ -18,7 +18,12 @@ import { SessionAgentControlDefault } from "./session-agent-control.service.ts";
  *
  * 顺序即依赖：
  * - 持久化最前：storage 接管、投影检查点、分支、查询、编辑全都读它；
- * - storage 接管紧随：它按 `sessionPersistence.storageRepository()` 拿**同一个库**的句柄；
+ * - storage 接管紧随：它按 `sessionPersistence.storageRepository()` 拿**同一个库**的句柄。它必须在
+ *   **任何会 open storage 域的行**之前（目前是 `Workspace`：上游 workspace 插件在自己的 init 里就
+ *   `storageDomain.open("workspace")`，那时 `rdb` 还没注册就是
+ *   `storage backend 'rdb' is not registered (registered: none)`）。装配序由内核按注入边排，
+ *   所以本包的会话行**不静态注入** `WorkspaceRegistry`——那会与 `Workspace` 成环、把 workspace 行
+ *   插到这几行之前（见 `admin/workspace-registry.read.ts`）；
  * - 投影检查点排在接管之后：检查点行与 KV 域落同一个库（撤回按水位截断缓存要跨得起来）；
  * - 两组端点最后：它们只转发到上面那些实现。
  */

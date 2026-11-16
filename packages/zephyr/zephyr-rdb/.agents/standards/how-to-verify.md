@@ -53,3 +53,14 @@ PostgreSQL 那一半的契约测试只在环境里有真库时跑：
 - **`bigint` 的用例要覆盖三条读路径**：表句柄的投影、`RETURNING`、`read(readBigInts(fragment(...)))`（见[债务 值归一只走了一条读路径](../debts/20261103-值归一只走了一条读路径.md)）。只测句柄会漏掉手写片段那条路径。
 - **schema 的用例不需要真库**：`schema.spec.ts` / `schema-drift.spec.ts` 的渲染与漂移判定用假 shape 或 SQLite；`pg.spec.ts` / `schema-drift.spec.ts` 的 PG 段才盯落位；改渲染规则时别把两条混成一条。
 - **能力矩阵两侧都要钉**：`capability-matrix.spec.ts` 既断言 `supports` 的逐项判定，也断言缺能力时抛 `unsupported`（不是静默丢弃）。
+
+## 测试数据与隔离
+
+结论：`:memory:` 优先；需要两连接共享或要读 `PRAGMA` / 库文件时，用 `mkdtemp` 的临时库并在 `afterEach` 删除。
+
+| 判据                                                                | 怎么查                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 不用 `beforeAll` 建库（用例之间不共享库状态）                       | `grep -rn 'beforeAll' packages/zephyr/zephyr-rdb/src/__tests__` 应为 0    |
+| 落文件的用例用临时目录                                              | `grep -rn 'mkdtemp\\                                                      | tmpdir()' packages/zephyr/zephyr-rdb/src/**tests**` 覆盖全部写文件用例（`database-introspect` 已有） |
+| `:memory:` 只用于单连接用例；跨连接读同一份库必须走文件 + `tempDir` | 评审：一个用例里出现两次 `openDatabase` 时看路径                          |
+| 固定路径不得作为数据根                                              | `grep -rn 'path: "[^:]' src/__tests__` 的命中必须是业务字段值，不是库文件 |

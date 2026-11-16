@@ -3,10 +3,13 @@
 // 上游契约的口径是 handle 模型（create / open / flush / stat / list）；分支与管理面要的是行级读写，
 // 所以同一个实例再实现一份 SessionRdbStore 的能力面（asRdbStore 探测）。数据面在 data/store/persistence-core.ts。
 //
-// 可选能力一律用**契约令牌** `inject.optional` 取（归档面 / 分支面 / 工作区注册表），不按字符串名字取：
+// 可选能力一律用**契约令牌** `inject.optional` 取（归档面 / 分支面），不按字符串名字取：
 // 名字是一层可以被拼错的间接引用，令牌有类型面、也参与装配排序（zephyr 的 `optional` 语义：
 // 「可能没有提供者」，不是「可以不按依赖序」）。代价是**提供者必须排在会话行之前**——手动
 // `ctx.plugin(...)` 晚挂载的宿主拿不到它，各调用点都有退化路径（见 archivedSessionIds 与 copyToWorkspace）。
+//
+// **工作区注册表是这条规矩的例外**：它那一行（`Workspace`）反过来注入本行，静态 `inject.optional`
+// 会成环并把 workspace 行排到本行之前（理由与后果见 `workspace-registry.read.ts`），所以它按名**在调用时读**。
 //
 // **装配期错误的约定**（本文件与 query.ts 一致）：清单里缺本包依赖的服务是装配错误，抛裸 `Error` 并以
 // `session-rdb: ` 开头（它不是域失败，不该占一个 wire 域码）；只有运行期失败才带 `SessionStoreError` 的域码。
@@ -20,7 +23,8 @@ import {
   type OnInit,
   type OnDispose,
 } from "@morlay/zephyr";
-import { WorkspaceId, WorkspaceRegistry } from "@morlay/dsh-workspace";
+import { WorkspaceId } from "@morlay/dsh-workspace";
+import { readWorkspaceRegistry } from "./workspace-registry.read.ts";
 import { SessionAgentControl } from "../contract/session-agent-control.contract.ts";
 import { SessionArchiveRegistry } from "../contract/session-archive-registry.contract.ts";
 import type {
@@ -68,9 +72,6 @@ export class SessionPersistenceRdb
 
   // 归档面：装配里没有它时，列表退回持久化里的归档标记，删除不做「先取消归档」。
   private readonly archiveState = inject.optional(SessionArchiveRegistry);
-
-  // 工作区注册表：跨工作区复制只读它的路径并调它的 `attach`（成员归属是 workspace 的记录）。
-  private readonly workspaces = inject.optional(WorkspaceRegistry);
 
   // 本行的 ctx：分支行要**在调用时**读（见 branchOf）。
   private ctx: Context | undefined;
@@ -235,7 +236,7 @@ export class SessionPersistenceRdb
     workspaceId: string,
   ): Promise<SessionCopyWorkspaceResult> {
     await this.opened;
-    const registry = this.workspaces;
+    const registry = readWorkspaceRegistry(this.ctx);
     if (registry === undefined) {
       throw new Error(
         "session-rdb: 装配里没有 WorkspaceRegistry，跨工作区复制要用它的 attach（工作区记录不归本包）",
