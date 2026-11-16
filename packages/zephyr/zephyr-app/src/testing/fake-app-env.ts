@@ -15,6 +15,8 @@ export class FakeAppEnv extends AppEnv {
   readonly values: AppEnvValues = {
     dataDir: FakeAppEnv.root,
     profileDir: FakeAppEnv.root,
+    // 起始目录也指向临时根：用例里没有任何理由让 agent 在仓库目录里干活。
+    defaultWorkingDirectory: FakeAppEnv.root,
   };
 
   readonly cacheDir = join(FakeAppEnv.root, "cache");

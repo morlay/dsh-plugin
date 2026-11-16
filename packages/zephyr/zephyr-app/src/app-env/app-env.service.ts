@@ -1,4 +1,9 @@
-// 默认值：dataDir = `<profileDir>/.dsh-store`，profileDir = 当前运行目录，dev=true，当文件名单 = `@morlay/*`。
+// 默认值：profileDir = 当前运行目录，dataDir = `<profileDir>/.dsh-store`，
+// defaultWorkingDirectory = 当前运行目录（与 profileDir 同一个兜底，但语义不同，见契约注释）。
+//
+// **读 cwd 在本仓库的这条链上只有下面构造里这一处**：cwd 是「我在哪个目录」的唯一事实来源，
+// 其余代码（含各域、各上游行）只读 `AppEnv` 给的派生值。装配面要换目录就给值，
+// 不要自己去读 cwd——那等于把同一事实抄成两份，抄漏一处就是路径分叉。
 //
 // 配置从**构造参数**进来：`configure(AppEnvDefault, values)` 绑到子类后，zephyr 用
 // `new impl(config)` 建实例（`attach.ts` 的 `construct`），配置只有落在构造参数上才收得到。
@@ -11,7 +16,13 @@ import { AppEnv } from "./app-env.contract.ts";
 
 @Injectable()
 export class AppEnvDefault extends AppEnv {
-  readonly values: AppEnvValues;
+  /**
+   * 比契约更窄：**本类的 `values` 一定带 `defaultWorkingDirectory`**（构造里必然填，缺省 cwd）。
+   *
+   * 契约上它是可选的（各包手写的替身只给两条路径也成立），所以窄这一层是给这里加守卫：
+   * 谁把构造里那一行删了，编译就报错，而不是让消费方悄悄落到基类 getter 的兜底上。
+   */
+  readonly values: AppEnvValues & { readonly defaultWorkingDirectory: string };
 
   // `../../package.json`：本文件在 `src/app-env/` 下，往上两层才是**包根**（`src/` 的上一层）。
   // 契约里的 `packageRoot` 是包根——`node-stub` 这类路径都按 `<packageRoot>/src/…` 拼。
@@ -39,10 +50,14 @@ export class AppEnvDefault extends AppEnv {
    */
   constructor(values: Partial<AppEnvValues> = {}) {
     super();
+    // cwd 只读这一次：其余路径从它（或装配面给的覆盖）派生。写成两行的话，cwd 在构造期间被
+    // chdir 改掉就会分叉成两个根——同一事实两个来源，正是这一票要消灭的东西。
+    const cwd = process.cwd();
+    const profileDir = values.profileDir ?? cwd;
     this.values = {
-      profileDir: process.cwd(),
-      dataDir: join(process.cwd(), ".dsh-store"),
-      ...values,
+      profileDir,
+      defaultWorkingDirectory: values.defaultWorkingDirectory ?? cwd,
+      dataDir: values.dataDir ?? join(profileDir, ".dsh-store"),
     };
     this.appBootDir = join(this.values.profileDir, "src", "client");
     this.profileManifest = join(this.values.profileDir, "package.json");

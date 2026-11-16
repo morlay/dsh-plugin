@@ -27,6 +27,7 @@ export class FakeAppEnv extends AppEnv {
   readonly values: AppEnvValues = {
     profileDir: FIXTURES,
     dataDir: join(tmpdir(), "dsh-federation-test"),
+    defaultWorkingDirectory: FIXTURES,
   };
 
   readonly cacheDir = FakeAppEnv.cache ?? join(tmpdir(), "dsh-fed-cache");

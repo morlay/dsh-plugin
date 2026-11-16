@@ -9,7 +9,7 @@ import { AppEnv } from "../app-env/app-env.contract.ts";
 /** 只覆盖字段的最小测试实现（与各包 `FakeAppEnv` 同形）。 */
 @Injectable()
 class FieldsOnlyEnv extends AppEnv {
-  readonly values = { dataDir: "/data", profileDir: "/profile" };
+  readonly values = { dataDir: "/data", profileDir: "/profile", defaultWorkingDirectory: "/work" };
   readonly cacheDir = join("/data", "cache");
   readonly packageRoot = "/package";
   readonly appBootDir = "/profile/src/client";

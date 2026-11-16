@@ -20,7 +20,11 @@ await bootstrapClient({ providers: [...provideClientChain(), ...provideSessions(
 - 每个域导出一个 `provideXxx(...features)`；外部只调它，不手写 provider 清单。
 - 契约 + `XxxDefault`：宿主面见 `src/{web,connection,rows,federation,http,api-gateway}/`，浏览器链见 `src/client/<domain>/`。
 - 行清单由装配方经 `ClientRows` 契约给（`clientPackagesOf` 从入口的 provider 清单推导）。
-- 路径全部来自 `AppEnv` 契约（`dataDir` / `profileDir` / `dev` / `devFiles`），不读环境变量、不向上找目录。它是**装配方必须给的**（`provideAppEnv(configure(AppEnvDefault, {...}))`）。
+- 路径全部来自 `AppEnv` 契约（`dataDir` / `profileDir` / `defaultWorkingDirectory`），不读环境变量、不向上找目录。
+  它是**装配方必须给的**（`provideAppEnv(configure(AppEnvDefault, {...}))`）；`process.cwd()` 只在 `AppEnvDefault` 的构造里出现一次，
+  其余代码一律读 `AppEnv` 给的派生值。
+  `profileDir` 是**装配根**（`package.json`、依赖解析、产物根），`defaultWorkingDirectory` 是**新会话 / agent 的起始目录**——
+  打包形态下前者是包内只读的 `Resources/runtime`，agent 不该在那儿干活，所以两者不能合并成一条路径。
 - **dev 的判据是一条正向白名单**：`devFiles`（glob，默认 `@morlay/*`）点名的包**当文件**逐文件走 vite（改它要 HMR），其余一律 prebundle（`@client-modules/…`）。想把上游也放进文件链就往名单里加——但要先接受它的循环 re-export 会被逐文件 ES 解析拒绝。
 - **remote 面不在装配方的配置里**：谁装了某个 remote 的宿主行，谁在自己的 `provideXxx()` 里用 `remoteDescriptor("<namespace>")` 登记一条（多值令牌 `RemoteDescriptor`）；`ClientModulesDefault` 用 `inject.all(RemoteDescriptor)` 聚合后 `$mount`。新增一个 remote 只改提供方，装配面零改动。
 - 客户端产物按请求预编译、落盘缓存，详见 [.agents/designs/20261013-客户端资源的联邦式预编译.md](./.agents/designs/20261013-客户端资源的联邦式预编译.md)。
