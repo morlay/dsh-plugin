@@ -48,5 +48,8 @@ overrides:
   "typescript": "7.1.0-beta"
   react: "18.x"
   react-dom: "18.x"
-  zod: "4.6.x"
+  # 对齐上游：vendor 里 80 处声明全部精确钉在 4.6.6，范围收成同一个串才不会并存两份实例。
+  # 上游 @deepseek-ai/dsh-storage-domain 的 ZodType 类型面认的是 4.6.6 那份，
+  # 本仓解析到 4.6.7 时「拿自己的 zod 造 schema 交给上游域层」会结构类型对不上。
+  zod: "4.6.6"
   "@earendil-works/pi-ai": "1.3.0"

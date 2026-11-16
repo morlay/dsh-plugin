@@ -166,7 +166,7 @@ overrides:
   typescript: 7.1.0-beta
   react: 18.x
   react-dom: 18.x
-  zod: 4.6.x
+  zod: 4.6.6
   '@earendil-works/pi-ai': 1.3.0
 
 patchedDependencies:
@@ -396,8 +396,8 @@ importers:
         specifier: ^26.6.5
         version: 26.6.6
       zod:
-        specifier: 4.6.x
-        version: 4.6.7
+        specifier: 4.6.6
+        version: 4.6.6
 
   packages/agent-ex/agent-use:
     dependencies:
@@ -514,8 +514,8 @@ importers:
         specifier: ^1.9.0
         version: 1.9.1
       zod:
-        specifier: 4.6.x
-        version: 4.6.7
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@morlay/better-session':
         specifier: workspace:^
@@ -1401,7 +1401,7 @@ importers:
         specifier: workspace:^
         version: link:../../zephyr/zephyr-app
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   packages/agent/dsh-upload:
@@ -1819,7 +1819,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.6.7)
+        version: 1.4.0(zod@4.6.6)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -1917,7 +1917,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/remote-access:
@@ -1941,7 +1941,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/remotes:
@@ -2196,7 +2196,7 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/settings-controller:
@@ -2226,7 +2226,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/terminal-controller:
@@ -2289,7 +2289,7 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/workspace-controller:
@@ -2334,7 +2334,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/api/workspace-files:
@@ -2379,7 +2379,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/attachment/attachment:
@@ -2619,7 +2619,7 @@ importers:
         specifier: ^2.9.0
         version: 2.9.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/boot/plugin-market:
@@ -2688,7 +2688,7 @@ importers:
         specifier: ^7.8.5
         version: 7.8.6
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/browser-use/browser-use:
@@ -2733,7 +2733,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/file-upload:
@@ -2766,7 +2766,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/crypto
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/hmr:
@@ -2874,7 +2874,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/resources:
@@ -3546,7 +3546,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-deliverables:
@@ -4341,7 +4341,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-plugin-market:
@@ -5427,7 +5427,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-sidebar-terminal:
@@ -5778,7 +5778,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/client/ui-user-questions:
@@ -6015,7 +6015,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/compaction/command-compact:
@@ -6255,7 +6255,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/context/time-context:
@@ -6285,7 +6285,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/context/tmux-context:
@@ -6312,7 +6312,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent:
@@ -6348,7 +6348,7 @@ importers:
         specifier: workspace:*
         version: link:../../workspace/workspace
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent-default-model:
@@ -6411,7 +6411,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/core/agent-tool-presentation:
@@ -6642,7 +6642,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/deliverables/deliverable-file-references:
@@ -6738,7 +6738,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/document/tool-office:
@@ -6810,7 +6810,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/values
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/api-speech-to-text:
@@ -6828,7 +6828,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/auto-review:
@@ -7005,7 +7005,7 @@ importers:
         specifier: ^4.23.13
         version: 4.23.15
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/claude-code-mods:
@@ -7062,7 +7062,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-action-cards:
@@ -7200,7 +7200,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-creation-recommendations:
@@ -7230,7 +7230,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-forge:
@@ -7356,7 +7356,7 @@ importers:
         specifier: 18.x
         version: 18.3.1(react@18.3.1)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-plugin-recommendations:
@@ -7401,7 +7401,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/client-ui-stats:
@@ -7548,7 +7548,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cot-translation-bundle:
@@ -7608,7 +7608,7 @@ importers:
         specifier: ^2.9.0
         version: 2.9.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cua:
@@ -7719,7 +7719,7 @@ importers:
         specifier: 18.x
         version: 18.3.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/cua-bundle:
@@ -7768,7 +7768,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/forge:
@@ -7837,7 +7837,7 @@ importers:
         specifier: ^10.0.1
         version: 10.2.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/forge-session:
@@ -7879,7 +7879,7 @@ importers:
         specifier: ^1.12.0
         version: 1.12.0
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/hook-protocol:
@@ -8155,7 +8155,7 @@ importers:
         specifier: ^8.18.3
         version: 8.22.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/liveshare-protocol:
@@ -8236,7 +8236,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/ptc-runtime-python:
@@ -8422,17 +8422,17 @@ importers:
         specifier: ^4.23.13
         version: 4.23.15
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/experimental/subagent-oar:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: ^1.4.0
-        version: 1.9.0(zod@4.6.7)
+        version: 1.9.0(zod@4.6.6)
       '@botiverse/oar':
         specifier: 0.67.0
-        version: 0.67.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
+        version: 0.67.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.6)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -8462,10 +8462,10 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
+        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.6)
       '@earendil-works/pi-coding-agent':
         specifier: ^1.3.0
-        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
+        version: 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.6)
       cross-spawn:
         specifier: ^7.0.6
         version: 7.0.6
@@ -8911,7 +8911,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/extensions/cordis-client-runner:
@@ -8980,7 +8980,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/extensions/tool-cordis:
@@ -9061,7 +9061,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/feedback/message-feedback:
@@ -9091,7 +9091,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/fs/fs:
@@ -9328,7 +9328,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/goal/goal-round-driver:
@@ -9541,7 +9541,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/host/product-telemetry-otel:
@@ -9628,7 +9628,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/crypto
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/permission-presets:
@@ -9670,7 +9670,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/tool-ask-user:
@@ -9721,7 +9721,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/interaction/user-questions:
@@ -9754,7 +9754,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/jobs/jobs:
@@ -9868,7 +9868,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/llm/llm-deepseek:
@@ -10028,7 +10028,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@earendil-works/pi-ai':
         specifier: 1.3.0
-        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
+        version: 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)
 
   vendor/deepseek-harness/packages/llm/llm-retry:
     dependencies:
@@ -10057,7 +10057,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/llm/plugin-package-inventory-deepseek:
@@ -10120,7 +10120,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/lsp/lsp:
@@ -10267,7 +10267,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/mcp/mcp-resources:
@@ -10324,7 +10324,7 @@ importers:
         specifier: workspace:*
         version: link:../../interaction/user-questions
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/preset/agent-preset:
@@ -10387,7 +10387,7 @@ importers:
         specifier: ^4.3.2
         version: 4.3.2
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/preset/persona:
@@ -10522,7 +10522,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/sandbox/sandbox-windows-acl:
@@ -10603,7 +10603,7 @@ importers:
         specifier: 0.5.1
         version: 0.5.1
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/schedule/tool-schedule:
@@ -10984,7 +10984,7 @@ importers:
         specifier: workspace:*
         version: link:../../core/session
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-projection-cache:
@@ -11008,7 +11008,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-stats:
@@ -11026,7 +11026,7 @@ importers:
         specifier: workspace:*
         version: link:../session-projection
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-telemetry:
@@ -11101,7 +11101,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/session-title-first-prompt-llm:
@@ -11167,7 +11167,7 @@ importers:
         specifier: workspace:*
         version: link:../session-projection
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/session/tool-working-directory:
@@ -11212,7 +11212,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/settings/settings:
@@ -11680,7 +11680,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/sandbox-ssh:
@@ -11698,7 +11698,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/ssh:
@@ -11743,7 +11743,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/ssh/ssh-helper-runtime:
@@ -11860,7 +11860,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/storage/storage:
@@ -11881,7 +11881,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/storage/storage-json:
@@ -11983,14 +11983,14 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/subagent-acp:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.6.7)
+        version: 1.4.0(zod@4.6.6)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -12058,7 +12058,7 @@ importers:
         specifier: ^1.31.0
         version: 1.32.2(supports-color@9.4.0)(zod@4.6.6)
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/subagent-fork-in-process:
@@ -12124,7 +12124,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/subagent/tool-subagent-control:
@@ -12241,7 +12241,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/team/tool-agent-team:
@@ -12569,7 +12569,7 @@ importers:
     dependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
-        version: 1.4.0(zod@4.6.7)
+        version: 1.4.0(zod@4.6.6)
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
@@ -12631,7 +12631,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/schemastery
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/typert/generator:
@@ -12673,7 +12673,7 @@ importers:
         specifier: workspace:*
         version: link:../../util/brand
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/typert/registry:
@@ -12685,7 +12685,7 @@ importers:
         specifier: workspace:*
         version: link:../protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/util/atomic-write:
@@ -12706,7 +12706,7 @@ importers:
         specifier: workspace:~
         version: link:../../../vendor/cordis
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/packages/util/code-language:
@@ -13117,7 +13117,7 @@ importers:
         specifier: workspace:*
         version: link:../../typert/protocol
       zod:
-        specifier: 4.6.x
+        specifier: 4.6.6
         version: 4.6.6
 
   vendor/deepseek-harness/vendor/cordis:
@@ -13241,12 +13241,12 @@ packages:
   '@agentclientprotocol/sdk@1.4.0':
     resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
     peerDependencies:
-      zod: 4.6.x
+      zod: 4.6.6
 
   '@agentclientprotocol/sdk@1.9.0':
     resolution: {integrity: sha512-saCOTPYBK1iqWqJFAYHXbg3+zCoFXyZZFoqQAwdTWkbrZZPpAETr80QOnYr2l+dzPwL0jpNhn3eDY8MoEIDbUA==}
     peerDependencies:
-      zod: 4.6.x
+      zod: 4.6.6
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.263':
     resolution: {integrity: sha512-H4eLd4Tkx3rJkt739CHb+9AcaKiiOpibU4tYsmma47mV+2zAPjUyFxpuE2N57VSmpAgbLQxu44du0TFN+UH5dg==}
@@ -13298,13 +13298,13 @@ packages:
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
       '@modelcontextprotocol/sdk': ^1.29.0
-      zod: 4.6.x
+      zod: 4.6.6
 
   '@anthropic-ai/sdk@0.129.0':
     resolution: {integrity: sha512-MH7LB20kNpGLUpPTe2OG5XvL/KhX8HUO9XyBaFjgFk6TLS4Xjt0VPIuMKywe7POKKPslX+QxSlVok9e+8kG5Nw==}
     hasBin: true
     peerDependencies:
-      zod: 4.6.x
+      zod: 4.6.6
     peerDependenciesMeta:
       zod:
         optional: true
@@ -13313,7 +13313,7 @@ packages:
     resolution: {integrity: sha512-q9vaSZQVFx6B/gPxetGYfLXSJD5v0sOmh0OpZDq7yCrTSA+Rscvrtyol7JJTW40wEpQB4U1B4JXzxQitbQ3CAA==}
     hasBin: true
     peerDependencies:
-      zod: 4.6.x
+      zod: 4.6.6
     peerDependenciesMeta:
       zod:
         optional: true
@@ -14122,7 +14122,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: 4.6.x
+      zod: 4.6.6
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -17869,7 +17869,7 @@ packages:
       '@smithy/signature-v4': '>=5.4.0 <6'
       undici: '>=5 <9'
       ws: ^8.21.0
-      zod: 4.6.x
+      zod: 4.6.6
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-node':
         optional: true
@@ -19256,13 +19256,10 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: 4.6.x
+      zod: 4.6.6
 
   zod@4.6.6:
     resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
-
-  zod@4.6.7:
-    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
@@ -19289,13 +19286,13 @@ packages:
 
 snapshots:
 
-  '@agentclientprotocol/sdk@1.4.0(zod@4.6.7)':
+  '@agentclientprotocol/sdk@1.4.0(zod@4.6.6)':
     dependencies:
-      zod: 4.6.7
+      zod: 4.6.6
 
-  '@agentclientprotocol/sdk@1.9.0(zod@4.6.7)':
+  '@agentclientprotocol/sdk@1.9.0(zod@4.6.6)':
     dependencies:
-      zod: 4.6.7
+      zod: 4.6.6
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.263':
     optional: true
@@ -19336,12 +19333,12 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.263
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.263
 
-  '@anthropic-ai/sdk@0.129.0(zod@4.6.7)':
+  '@anthropic-ai/sdk@0.129.0(zod@4.6.6)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 4.6.7
+      zod: 4.6.6
 
   '@anthropic-ai/sdk@0.93.0(zod@4.6.6)':
     dependencies:
@@ -19541,11 +19538,11 @@ snapshots:
 
   '@babel/runtime@7.29.13': {}
 
-  '@botiverse/oar@0.67.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)':
+  '@botiverse/oar@0.67.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.6)':
     dependencies:
-      '@agentclientprotocol/sdk': 1.9.0(zod@4.6.7)
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
-      '@earendil-works/pi-coding-agent': 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)
+      '@agentclientprotocol/sdk': 1.9.0(zod@4.6.6)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.6)
+      '@earendil-works/pi-coding-agent': 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.6)
       cross-spawn: 7.0.6
       undici: 8.10.2
       which: 2.0.2
@@ -19610,9 +19607,9 @@ snapshots:
       '@deepseek-ai/libreoffice-kit-win32-x64': 0.2.3
       koffi: 3.1.1
 
-  '@earendil-works/pi-agent-core@1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)':
+  '@earendil-works/pi-agent-core@1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)':
     dependencies:
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)
       '@earendil-works/pi-schema': 1.5.0
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -19627,16 +19624,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)':
+  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.10.2)(ws@8.22.1)(zod@4.6.6)':
     dependencies:
-      '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
+      '@anthropic-ai/sdk': 0.129.0(zod@4.6.6)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 1.3.0
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(supports-color@9.4.0)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@9.4.0)
       https-proxy-agent: 9.1.0(supports-color@9.4.0)
-      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.6)
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -19652,16 +19649,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)':
+  '@earendil-works/pi-ai@1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)':
     dependencies:
-      '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
+      '@anthropic-ai/sdk': 0.129.0(zod@4.6.6)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 1.3.0
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)
+      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(supports-color@9.4.0)
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0(supports-color@9.4.0)
       https-proxy-agent: 9.1.0(supports-color@9.4.0)
-      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
+      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -19681,10 +19678,10 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-coding-agent@1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.7)':
+  '@earendil-works/pi-coding-agent@1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(ws@8.22.1)(zod@4.6.6)':
     dependencies:
-      '@earendil-works/pi-agent-core': 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
-      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7)
+      '@earendil-works/pi-agent-core': 1.5.0(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)
+      '@earendil-works/pi-ai': 1.3.0(patch_hash=4e1c90fd00aea42989664504668633033c1962e53c07860901edb4f72d843765)(@aws-sdk/credential-provider-node@3.972.93)(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(@smithy/signature-v4@5.7.5)(supports-color@9.4.0)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6)
       '@earendil-works/pi-codemode': 1.5.0
       '@earendil-works/pi-mcp': 1.5.0
       '@earendil-works/pi-tui': 1.5.0
@@ -19958,14 +19955,14 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
       regenerator-runtime: 0.14.1
 
-  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7))(supports-color@9.4.0)':
+  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6))(supports-color@9.4.0)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@9.4.0)
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.22.1
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.32.2(supports-color@9.4.0)(zod@4.6.7)
+      '@modelcontextprotocol/sdk': 1.32.2(supports-color@9.4.0)(zod@4.6.6)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -20271,11 +20268,11 @@ snapshots:
       eventsource-parser: 3.1.1
       jose: 6.2.15
       pkce-challenge: 5.0.1
-      zod: 4.6.7
+      zod: 4.6.6
 
   '@modelcontextprotocol/core@2.2.0':
     dependencies:
-      zod: 4.6.7
+      zod: 4.6.6
 
   '@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.6)':
     dependencies:
@@ -20298,29 +20295,6 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.6)
     transitivePeerDependencies:
       - supports-color
-
-  '@modelcontextprotocol/sdk@1.32.2(supports-color@9.4.0)(zod@4.6.7)':
-    dependencies:
-      '@hono/node-server': 2.1.6(hono@4.13.16)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.3.0(supports-color@9.4.0)
-      express-rate-limit: 8.7.3(express@5.3.0(supports-color@9.4.0))(supports-color@9.4.0)
-      hono: 4.13.16
-      jose: 6.2.15
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.6.7
-      zod-to-json-schema: 3.25.2(zod@4.6.7)
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
 
   '@napi-rs/canvas-android-arm64@1.1.0':
     optional: true
@@ -23908,21 +23882,21 @@ snapshots:
       powershell-utils: 0.2.1
       wsl-utils: 1.0.1
 
-  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.7):
+  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.10.2)(ws@8.22.1)(zod@4.6.6):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.93
       '@smithy/signature-v4': 5.7.5
       undici: 8.10.2
       ws: 8.22.1
-      zod: 4.6.7
+      zod: 4.6.6
 
-  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.7):
+  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.93)(@smithy/signature-v4@5.7.5)(undici@8.12.3)(ws@8.22.1)(zod@4.6.6):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.93
       '@smithy/signature-v4': 5.7.5
       undici: 8.12.3
       ws: 8.22.1
-      zod: 4.6.7
+      zod: 4.6.6
 
   own-keys@1.0.2:
     dependencies:
@@ -25408,14 +25382,7 @@ snapshots:
     dependencies:
       zod: 4.6.6
 
-  zod-to-json-schema@3.25.2(zod@4.6.7):
-    dependencies:
-      zod: 4.6.7
-    optional: true
-
   zod@4.6.6: {}
-
-  zod@4.6.7: {}
 
   zustand@4.5.7(@types/react@18.3.1)(immer@10.2.0)(react@18.3.1):
     dependencies:
