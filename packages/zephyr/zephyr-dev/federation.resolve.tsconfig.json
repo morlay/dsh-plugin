@@ -1,0 +1,18 @@
+{
+  // rolldown 的**模块解析**输入（`resolve.tsconfigFilename`）：外置/官方包住在 `node_modules/.pnpm/…`，
+  // 祖先链里没有 tsconfig，靠这份解析它们的 import。
+  //
+  // 这里**带了**与项目 tsconfig 同义的 legacy 装饰器开关（`experimentalDecorators`）；构建链的
+  // `transform.decorator = { legacy: true }` 也开同一语义——两处同时存在会让 rolldown 报
+  // `[CONFIGURATION_FIELD_CONFLICT]`（已知告警，保留现场待清理）。
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "allowImportingTsExtensions": true,
+    "experimentalDecorators": true,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "jsx": "react-jsx",
+    "skipLibCheck": true
+  }
+}

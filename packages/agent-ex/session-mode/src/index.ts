@@ -19,6 +19,7 @@ export * from "./endpoint/tool-group-ref.ts";
 export * from "./modes.ts";
 export * from "./mode-sources.ts";
 export * from "./mode-store.ts";
+export * from "./session-mode-store.ts";
 export * from "./persona.ts";
 export * from "./per-agent.ts";
 export * from "./defaults.ts";

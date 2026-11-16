@@ -2,12 +2,13 @@
 // 把一份模式定义落到该会话上（persona + 收口 + 默认模型兜底）。
 import type { Agent } from "@morlay/dsh-agent/contract";
 import { modelSelectionProjectionDefinition } from "@morlay/dsh-agent/contract";
+import { StorageDomain } from "@morlay/dsh-storage/contract";
 import type { Session } from "@morlay/dsh-session/contract";
 import type { ProjectionHandle } from "@morlay/dsh-session/contract";
 import { AgentDirectory } from "@morlay/dsh-agent";
 import { SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
+import { inject, Injectable, Logger, type Context, type OnInit } from "@morlay/zephyr";
 import { SessionMode } from "./contract/session-mode.contract.ts";
 import { SessionScope } from "./contract/session-scope.contract.ts";
 import type { ModeConfig } from "./endpoint/mode-config.ts";
@@ -29,6 +30,7 @@ import { DEFAULT_MODE, MODE_SOURCES } from "./mode-sources.ts";
 import { configProblem, normalizeMode, policyInForce, type ModeInput } from "./modes.ts";
 import { installPersona } from "./persona.ts";
 import { loadModeOverrides, removeMode, writeMode } from "./mode-store.ts";
+import { SessionModeOverrides, type SessionModeOverride } from "./session-mode-store.ts";
 import {
   agentPresetProjection,
   appendSelected,
@@ -88,7 +90,22 @@ export class SessionModeDefault extends SessionMode implements OnInit {
 
   private readonly installs = new WeakMap<Agent, Installed>();
 
-  private readonly overrides = new WeakMap<Agent, ModeConfig>();
+  // 会话级覆盖：**字段级**的一份（缺的字段跟模式默认），键是会话而不是 agent——它是会话的事实，
+  // 恢复会话要能读回来，所以生命周期不跟着 agent 走。
+  private readonly overrides = new Map<SessionId, SessionModeOverride>();
+
+  // 已经读过存储的会话（hydrate 一次，之后的读面只读内存）。
+  private readonly hydrated = new Set<SessionId>();
+
+  // 进行中的 hydrate：同一次打开面板可能并发问两次，读盘只该发生一次。
+  private readonly hydrating = new Map<SessionId, Promise<void>>();
+
+  // 存储域是**可选**的：headless 测试装配与没装存储的部署照样起得来（那就不持久化）。
+  private readonly storageDomain = inject.optional(StorageDomain);
+
+  private readonly logger = inject.optional(Logger);
+
+  private store: SessionModeOverrides | undefined;
 
   private stateHandle: ProjectionHandle<string | null> | undefined;
 
@@ -119,6 +136,13 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   }
 
   async onInit(ctx: Context): Promise<void> {
+    const domain = this.storageDomain;
+    if (domain !== undefined) {
+      const store = new SessionModeOverrides(domain, (message) => this.logger?.warn(message));
+      this.store = store;
+      // 句柄归这一行：卸载时自己关（存储域行的 `closeAll` 是另一条路，别指望它排在我们后面）。
+      ctx.effect(() => () => store.close());
+    }
     // 用户自己的模式定义覆盖同 id 的模板（`noop` 是保留关键字，不能被覆盖）。
     for (const [id, value] of Object.entries(await loadModeOverrides())) {
       if (id === "noop") continue;
@@ -248,10 +272,12 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   async activeState(sessionId: SessionId): Promise<SessionModeActiveState | undefined> {
     const session = this.sessions.get(sessionId);
     if (session === undefined) return undefined;
+    // 面板的读面就是 hydrate 的触发点：不是每个会话都会打开面板，恢复到没人看的会话不该白读一次盘。
+    await this.hydrate(sessionId);
     const agent = this.agents.get(sessionId);
     const id = this.modeOf(session);
     const base = this.definition(id);
-    const override = agent === undefined ? undefined : this.overrides.get(agent);
+    const override = this.overrides.get(sessionId);
     const effective = this.effectiveOf(agent, id);
     return {
       mode: { id, name: base.name, description: base.description },
@@ -274,15 +300,19 @@ export class SessionModeDefault extends SessionMode implements OnInit {
     sessionId: SessionId,
     patch: SessionModePatch,
   ): Promise<SessionModeActiveState | undefined> {
+    const session = this.sessions.get(sessionId);
+    if (session === undefined) return undefined;
     const agent = this.agents.get(sessionId);
-    if (agent === undefined) return undefined;
-    const next: Record<string, unknown> = { ...this.overrides.get(agent) };
+    // 补丁是在**已有覆盖**上改：先把存储里那份读回来，否则一次逐字段回退会顺手抹掉别的字段。
+    await this.hydrate(sessionId);
+    const next: Record<string, unknown> = { ...this.overrides.get(sessionId) };
     for (const [key, value] of Object.entries(patch)) {
       if (value === null) Reflect.deleteProperty(next, key);
       else next[key] = value;
     }
-    this.overrides.set(agent, next as unknown as ModeConfig);
-    this.installFor(agent);
+    // 清到空就是没有覆盖：删掉整条记录，别留一条空壳。
+    await this.persist(sessionId, Object.keys(next).length === 0 ? undefined : next);
+    if (agent !== undefined) this.installFor(agent);
     return this.activeState(sessionId);
   }
 
@@ -299,7 +329,9 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   ): Promise<SessionModeActiveState | undefined> {
     const agent = this.agents.get(sessionId);
     if (agent === undefined) return undefined;
-    this.overrides.set(agent, structuredClone(config));
+    // **先落存储，成功之后才改内存**：写失败时整次调用失败，会话仍停在旧覆盖上（不留半份）。
+    // 反过来（先改内存再写盘、失败回滚）要记住旧值并在失败路径上复原，多一条只在出错时才跑的路径。
+    await this.persist(sessionId, structuredClone(config));
     this.installFor(agent);
     return this.activeState(sessionId);
   }
@@ -314,7 +346,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
     const next = normalizeMode(config as unknown as ModeInput);
     this.definitions.set(modeId, next);
     await writeMode(modeId, plainMode(next));
-    this.overrides.delete(agent);
+    // 覆盖已经等于新的默认了：整条记录与内存那份一起删。
+    await this.persist(sessionId, undefined);
     this.installFor(agent, modeId);
     return this.activeState(sessionId);
   }
@@ -322,7 +355,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   async saveAsDefault(sessionId: SessionId): Promise<SessionModeActiveState | undefined> {
     const agent = this.agents.get(sessionId);
     if (agent === undefined) return undefined;
-    if (this.overrides.get(agent) === undefined) return this.activeState(sessionId);
+    await this.hydrate(sessionId);
+    if (this.overrides.get(sessionId) === undefined) return this.activeState(sessionId);
     const modeId = this.modeOf(agent.session);
     // 写回的是**当前生效配置**（模式定义 + 会话覆盖），不是覆盖那几项：写盘的定义要是完整的一份。
     const effective = this.effectiveOf(agent, modeId);
@@ -357,19 +391,71 @@ export class SessionModeDefault extends SessionMode implements OnInit {
     if (remaining.length === 0) throw new Error("至少要留一个模式。");
     this.definitions.delete(modeId);
     await removeMode(modeId);
-    this.overrides.delete(agent);
+    await this.persist(sessionId, undefined);
     if (this.selectedOf(agent.session) === modeId) appendSelected(agent.session, this.defaultId);
     this.installFor(agent, this.defaultId);
     return this.defaultId;
   }
 
+  // 这个会话的覆盖**只读一次盘**：`hydrated` 记已经读过的会话，`hydrating` 兜住并发的两次首次调用。
+  private async hydrate(sessionId: SessionId): Promise<void> {
+    if (this.hydrated.has(sessionId)) return;
+    const store = this.store;
+    if (store === undefined) {
+      // 没有存储域：这个会话就是没有覆盖，内存里那份（本次进程写进去的）继续有效。
+      this.hydrated.add(sessionId);
+      return;
+    }
+    const pending = this.hydrating.get(sessionId);
+    if (pending !== undefined) {
+      await pending;
+      return;
+    }
+    const reading = store
+      .read(sessionId)
+      .then((record) => {
+        // 读与写并发时以后写的为准：hydrate 落地前已经写进去的那份不被磁盘上的旧值盖掉。
+        if (record !== undefined && !this.overrides.has(sessionId)) {
+          this.overrides.set(sessionId, record);
+          // 读回来的覆盖要真的生效：会话建立时装的是模式默认那一份，这里补一次重装（重装是幂等的）。
+          const agent = this.agents.get(sessionId);
+          if (agent !== undefined) this.installFor(agent);
+        }
+        this.hydrated.add(sessionId);
+      })
+      .finally(() => {
+        this.hydrating.delete(sessionId);
+      });
+    this.hydrating.set(sessionId, reading);
+    await reading;
+  }
+
+  // 一次覆盖的落点：`undefined` = 删掉整条记录，否则整条替换；内存跟着走——**存储先成功**。
+  //
+  // 两条路都不留半份：写失败时内存保持原样（调用方看到的是整次失败），删失败时同样。
+  private async persist(
+    sessionId: SessionId,
+    record: SessionModeOverride | undefined,
+  ): Promise<void> {
+    if (record === undefined) {
+      await this.store?.remove(sessionId);
+      this.overrides.delete(sessionId);
+      this.hydrated.add(sessionId);
+      return;
+    }
+    await this.store?.write(sessionId, record);
+    this.overrides.set(sessionId, record);
+    this.hydrated.add(sessionId);
+  }
+
   // 这个会话**实际生效**的模式定义：模式配置 + 会话覆盖（覆盖是字段级的，缺的字段跟模式默认）。
   private effectiveOf(agent: Agent | undefined, modeId: string): ModeConfig {
     const base = this.definition(modeId);
-    const override = agent === undefined ? undefined : this.overrides.get(agent);
-    return override === undefined
-      ? structuredClone(base)
-      : { ...structuredClone(base), ...override };
+    const override = agent === undefined ? undefined : this.overrides.get(agent.session.id);
+    if (override === undefined) return structuredClone(base);
+    // 字段级的覆盖：记录里没有的字段跟模式默认。`defaultModel` 是可省略字段，展开时是"没有"而不是 `undefined`，
+    // 所以这里按 `ModeConfig` 收一次口——它只在内部当"完整的一份"用。
+    return { ...structuredClone(base), ...override } as ModeConfig;
   }
 
   // 装配或换掉该 agent 的那一份（同一模式重复 applyTo 会重装一次，收口本身是幂等的）。

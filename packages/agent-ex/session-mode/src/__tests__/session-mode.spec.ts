@@ -1,7 +1,14 @@
 // 真 cordis ctx 的宽形状由 support/mount 提供（vendor 的类型增强不在本仓 TS program 里）。
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mountSessionModeApp } from "./support/mount-app.ts";
-import { sessionModeTestProviders } from "./support/session-mode-providers.ts";
+import {
+  sessionModeTestProviders,
+  type SessionModeTestOptions,
+} from "./support/session-mode-providers.ts";
+import { bootStorage, counting, memoryDomain, type MemoryDomain } from "./support/storage.ts";
 import { SessionId } from "@morlay/dsh-session/contract";
 import type { LlmCallConfig } from "@morlay/dsh-agent/contract";
 import { ToolCallId, assembleContextFor, type Agent } from "@morlay/dsh-agent/contract";
@@ -11,7 +18,9 @@ import type { TestContext } from "./support/context.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import {
+  SESSION_MODE_TABLE,
   SessionModeDefault,
+  sessionModeDomainSpec,
   sessionModeEditableProjection,
   type ModeConfig,
   type SessionModeProviderConfig,
@@ -26,12 +35,17 @@ const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
 const contexts: TestContext[] = [];
 const mounted: { dispose(): Promise<void> }[][] = [];
 
+// 真存储栈的临时目录（本文件末尾那组持久化用例建的）。
+const storageRoots: string[] = [];
+
 afterEach(async () => {
   for (const rows of mounted.splice(0))
     await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
   for (const app of apps.splice(0)) await app.dispose();
   for (const ctx of contexts.splice(0))
     await (ctx as unknown as { dispose(): Promise<void> }).dispose();
+  // 装配先卸、目录后删：存储后端还开着的时候删目录会让它报错。
+  for (const root of storageRoots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
 // 归一化之后的形状（schema 填好了每个字段）——`apply` 收到的就是它。
@@ -102,17 +116,25 @@ async function mountHostPlane(ctx: TestContext, toolNames: readonly string[]): P
   );
 }
 
-async function mount(config: SessionModeProviderConfig = CONFIG) {
+async function mount(
+  config: SessionModeProviderConfig = CONFIG,
+  options: SessionModeTestOptions = {},
+  sessionId: SessionId = SessionId(`session-mode-${String(Date.now())}-${String(Math.random())}`),
+) {
   // 一次 `bootstrapApplication`：骨架 + 会话 + 循环 + 模式行（收口的输入就是模式定义）。
+  // `options` 里的 `storage` 决定这一套装配有没有存储域（不写就是 headless 形态，没有持久化）。
   const { app, ctx } = await mountSessionModeApp({
-    systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
+    ...options,
+    systemPrompt: {
+      includeHarnessIdentity: false,
+      personaPrefix: "部署级提示词。",
+      ...options.systemPrompt,
+    },
     modes: config as unknown as Record<string, unknown>,
   });
   apps.push(app);
   await mountHostPlane(ctx, ["read", "web_search", "send_message"]);
-  const handle = await ctx.agents.create({
-    sessionId: SessionId(`session-mode-${String(Date.now())}-${String(Math.random())}`),
-  });
+  const handle = await ctx.agents.create({ sessionId });
   return { ctx, agent: handle.agent };
 }
 
@@ -802,5 +824,162 @@ describe("子代理继承父模式", () => {
     });
 
     expect(ctx.sessionModes.modeOf(orphan.agent.session)).toBe("coding");
+  });
+});
+// ── 会话级覆盖的持久化（`session_mode` 域） ──────────────────────────────────────
+//
+// 装配用**真存储栈**（真 hub + 真域行 + 真 json 后端，临时目录），只在最外面套一层计数：
+// 判「读盘几次」需要看到 `get`，但写入路径与介质全是真的。
+interface StorageMount {
+  readonly ctx: TestContext;
+  readonly agent: Agent;
+  /** 每次 `get` 读到的键（计数那一层记的）。 */
+  readonly reads: string[];
+  /** 最后一次拿到的表句柄（真句柄，`size` 就是介质里的条数）。 */
+  readonly table: () => { readonly size: number } | undefined;
+  /** 症替身的观测面（不计数那一支用它注入写失败）。 */
+  readonly memory: MemoryDomain;
+}
+
+/**
+ * 装一套带存储的会话。
+ *
+ * 每一次调用都是一套**全新装配**：同一个存储根目录 + 同一个会话 id 就是「进程重启」。
+ * @param options - `root` / `sessionId` 复用上一次的介质与会话；`memory: true` 换成可注入写失败的域替身。
+ * @returns 装配结果与观测面。
+ */
+async function storageMount(
+  options: {
+    readonly root?: string;
+    readonly sessionId?: SessionId;
+    readonly memory?: boolean;
+  } = {},
+): Promise<StorageMount> {
+  const root = options.root ?? (await mkdtemp(join(tmpdir(), "session-mode-spec-")));
+  if (options.root === undefined) storageRoots.push(root);
+  const sessionId =
+    options.sessionId ??
+    SessionId(`session-mode-store-${String(Date.now())}-${String(Math.random())}`);
+  const memory = memoryDomain();
+  if (options.memory === true) {
+    // 替身：可注入写失败，判"整次调用失败、内存不留半份"。
+    const mounted = await mount(CONFIG, { storage: { domain: memory.domain } }, sessionId);
+    return { ...mounted, reads: [], table: () => undefined, memory };
+  }
+  // 真栈：真 hub + 真域行 + 真 json 后端，外面套一层只记 `get` 的计数。
+  const { app, storage } = await bootStorage(root);
+  apps.push(app);
+  const counter = counting(storage);
+  const mounted = await mount(CONFIG, { storage: { domain: counter.domain } }, sessionId);
+  return { ...mounted, reads: counter.reads, table: () => counter.tables.at(-1), memory };
+}
+
+describe("会话级覆盖的持久化", () => {
+  it("覆盖从存储读回；第二次 activeState 不再读盘", async () => {
+    const first = await storageMount();
+    const sessionId = first.agent.session.id;
+    await first.ctx.sessionModes.applyConfig(sessionId, {
+      ...first.ctx.sessionModes.definition("coding"),
+      denyTools: ["web_search"],
+    });
+
+    // 换一套装配（同一份介质 + 同一个会话）= 进程重启：覆盖从存储读回来。
+    const root = storageRoots.at(-1) ?? "";
+    const restarted = await storageMount({ root, sessionId });
+    const reread = await restarted.ctx.sessionModes.activeState(sessionId);
+
+    // 首次 activeState 触发一次 hydrate：恰好读一次介质。
+    expect(restarted.reads).toEqual([sessionId]);
+    expect(reread?.session?.denyTools).toEqual(["web_search"]);
+    expect(reread?.overriddenFields).toContain("denyTools");
+
+    // 第二次 activeState 读内存：介质不再被碰。
+    await restarted.ctx.sessionModes.activeState(sessionId);
+    expect(restarted.reads).toEqual([sessionId]);
+  });
+
+  it("patch 传 null 只清这一个字段", async () => {
+    const { ctx, agent } = await storageMount();
+    const sessionId = agent.session.id;
+    // 两条**字段级**覆盖（`applyConfig` 写的是整份，判"只清一个"看不出差别）。
+    await ctx.sessionModes.setModePatch(sessionId, { denyTools: ["web_search"] });
+    await ctx.sessionModes.setModePatch(sessionId, { instructions: false });
+    expect((await ctx.sessionModes.activeState(sessionId))?.overriddenFields).toEqual([
+      "denyTools",
+      "instructions",
+    ]);
+
+    const after = await ctx.sessionModes.setModePatch(sessionId, { denyTools: null });
+
+    // 只摘掉 `denyTools`：另一个被覆盖的字段原样留着。
+    expect(after?.session).toEqual({ instructions: false });
+    expect(after?.overriddenFields).toEqual(["instructions"]);
+    expect(after?.config.instructions).toBe(false);
+    expect(after?.config.denyTools).toEqual([]);
+  });
+
+  it("清到空的字段删掉整条记录", async () => {
+    const { ctx, agent, table } = await storageMount();
+    const sessionId = agent.session.id;
+    await ctx.sessionModes.setModePatch(sessionId, { instructions: false });
+    expect(table()?.size).toBe(1);
+
+    const after = await ctx.sessionModes.setModePatch(sessionId, { instructions: null });
+
+    expect(after?.session).toBeUndefined();
+    expect(after?.overriddenFields).toEqual([]);
+    // 整条记录被删掉：介质里不留空壳。
+    expect(table()?.size).toBe(0);
+  });
+
+  it("坏记录不阻断装配：按没有覆盖处理，行照常起", async () => {
+    // 先往介质里塞一条形状不合法的记录（模拟手改过 / 旧版本写下的）。
+    const root = await mkdtemp(join(tmpdir(), "session-mode-spec-"));
+    storageRoots.push(root);
+    const corrupt = SessionId("session-mode-corrupt");
+    const seeding = await bootStorage(root);
+    const domain = await seeding.storage.open(sessionModeDomainSpec);
+    await domain.table(SESSION_MODE_TABLE).put(corrupt, { instructions: "not-a-boolean" });
+    await domain.close();
+    await seeding.app.dispose();
+
+    // 整套装配照常起来（域层的 schema 是照单全收的那一个），读面把坏记录当「没有覆盖」。
+    const bad = await storageMount({ root, sessionId: corrupt });
+    const state = await bad.ctx.sessionModes.activeState(corrupt);
+
+    expect(state?.session).toBeUndefined();
+    expect(state?.overriddenFields).toEqual([]);
+    expect(state?.config.instructions).toBe(true);
+  });
+
+  it("没有存储域时行照样起：覆盖只在内存里", async () => {
+    // headless 形态（装配里没有 `StorageDomain`）：这一行靠 `inject.optional` 起来，写面照常工作。
+    const { ctx, agent } = await mount();
+
+    const after = await ctx.sessionModes.setModePatch(agent.session.id, { instructions: false });
+
+    expect(after?.session).toEqual({ instructions: false });
+    expect(after?.config.instructions).toBe(false);
+  });
+
+  it("存储写失败时 applyConfig 抛错且覆盖没变", async () => {
+    const { ctx, agent, memory } = await storageMount({ memory: true });
+    const sessionId = agent.session.id;
+    await ctx.sessionModes.setModePatch(sessionId, { instructions: false });
+    const before = await ctx.sessionModes.activeState(sessionId);
+
+    memory.failures.failWrites = true;
+    await expect(
+      ctx.sessionModes.applyConfig(sessionId, {
+        ...ctx.sessionModes.definition("coding"),
+        denyTools: ["web_search"],
+      }),
+    ).rejects.toThrow("存储写失败");
+
+    // 内存里没有半份：覆盖还是旧的那一份。
+    memory.failures.failWrites = false;
+    const after = await ctx.sessionModes.activeState(sessionId);
+    expect(after?.session).toEqual(before?.session);
+    expect(after?.session).toEqual({ instructions: false });
   });
 });

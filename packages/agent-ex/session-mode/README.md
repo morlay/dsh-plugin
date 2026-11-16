@@ -64,6 +64,20 @@ preset 平面与模式收口的设计见 [preset 平面与模式收口](./.agent
 为什么只搬这么两处、源包那套薄壳 fork 为什么在这里不成立，见
 [设计 子代理接管面](./.agents/designs/20261106-subagent接管面只搬两处文案.md)。
 
+## 会话级覆盖存在哪
+
+「应用到会话」写的是**字段级**覆盖（`ModeConfig` 的一个子集），落在 `session_mode` 存储域里，按
+`SessionId` 一条记录（`src/session-mode-store.ts`）。域层不判记录，判据在读面：形状不对的记录按
+「没有覆盖」处理并 warn 一条，不阻断启动。
+
+- **读**：`activeState(sessionId)` 首次调用时 hydrate 一次（每个会话一次），之后只读内存。
+  不挂在会话恢复上——不是每个会话都会打开面板，恢复到没人看的会话等于白读一次盘。
+- **写**：`applyConfig` 先落存储、成功之后才改内存（写失败则整次调用失败，会话停在旧覆盖上）；
+  `saveConfig` / `deleteMode` 把这个会话的记录删掉。
+- **清字段**：`setModePatch(id, null)` 摘掉该字段的会话覆盖，清到空时整条记录一起删。
+- **没有存储域**：`StorageDomain` 是可选注入，headless 测试与没装存储的部署照样起得来（覆盖只在内存里）。
+  存储域行由装配面装（`provideStorage` + 一个后端行），不在 `provideSessionMode()` 的清单里。
+
 ## 设计
 
 - 模式不绑定 preset：行清单由会话挂着的 agent preset 提供，`allowTools` / `denyTools` 只在这之上收窄。

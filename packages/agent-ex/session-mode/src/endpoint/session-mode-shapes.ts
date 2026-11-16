@@ -51,7 +51,8 @@ export interface SessionModeDirectory {
 export interface SessionModeActiveState {
   readonly mode: { readonly id: string; readonly name: string; readonly description: string };
   readonly config: ModeConfig;
-  readonly session: ModeConfig | undefined;
+  // 这个会话覆盖了哪些字段（**字段级**子集：没有的字段跟模式默认）。
+  readonly session: Readonly<Partial<ModeConfig>> | undefined;
   readonly overriddenFields: readonly string[];
   readonly catalog: SessionModeDirectory;
   // 还能不能换模式（空白窗口）：面板据此把选择器画成只读。

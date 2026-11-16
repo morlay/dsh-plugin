@@ -15,6 +15,9 @@ import { ToolGuidance } from "./tool-guidance.service.ts";
  * **headless 面**：通道 → 收口 → 工具说明 → 模式本体。
  *
  * 不含端点行（那是 wire，要 `remote-handlers`）；headless 的测试与纯宿主部署装这一份就够。
+ *
+ * **不含存储域行**：`StorageDomain` 由装配面装（`provideStorage` + 一个后端行）。模式本体的注入是
+ * `inject.optional(StorageDomain)`，所以这一面在存储缺席时照样起得来——只是会话覆盖不落盘。
  */
 export const provideSessionMode = provide([
   ...provideContextAssembler(),
