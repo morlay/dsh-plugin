@@ -1658,9 +1658,6 @@ importers:
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../zephyr
-      '@morlay/zephyr-app':
-        specifier: workspace:^
-        version: link:../zephyr-app
       '@morlay/zephyr-dev':
         specifier: workspace:^
         version: link:../zephyr-dev
