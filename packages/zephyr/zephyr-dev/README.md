@@ -14,14 +14,22 @@ zephyr-cli → zephyr-dev → zephyr-app → zephyr
 `just audit` / `just build` 直接拒跑（`ERR_PNPM_TASK_CYCLE`）。运行时不带构建链这条边界是靠**依赖清单**守的，
 不是靠 `external` 表：判据见 `zephyr-app/src/__tests__/dev-deps-absent.spec.ts`。
 
-## 两个面
+## 门面（三个，别在自己的装配面里手写它们）
 
-| 出口                                             | 内容                                                                                                                   | 谁用                           |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `@morlay/zephyr-dev`                             | 不需要装配的那一半：`bundlePackage` / `prebundleAll` / `planPrebundle` / 路由空间常量 / URL 前缀改写 / 解析规则        | `zephyr-cli` 的构建步骤、测试  |
-| `@morlay/zephyr-dev/node`                        | 装配行：`provideClientModules()` / `provideServerHmr()` / `provideHttp()` / `FederationDefault` / `ViteHandoffDefault` | 工作区的装配面（`apps/**`）    |
-| `@morlay/zephyr-dev/build`                       | `zephyrClientViteConfig()`：静态面构建用的 vite 配置片段                                                               | 应用的 `zephyr.config.ts`      |
-| `@morlay/zephyr-dev/federation/prebundle(-plan)` | 构建期前端预编译（目标枚举 + 逐条产出）                                                                                | `zephyr-cli` 的 `build` 第四步 |
+| 门面                | 出口             | 干什么                                                                | 谁用                        |
+| ------------------- | ---------------- | --------------------------------------------------------------------- | --------------------------- |
+| `devProviders(mode)` | `./node`        | 开发运行时的那几行（vite 旁路 + 联邦 + 页面兜底 + 换树时机）           | 工作区的装配面（`apps/**`） |
+| `startDev(options)`  | `./node`        | 把**已装配的树**起成一个 dev 会话（端口 / 地址 / 幂等 close）         | `zephyr dev`               |
+| `compile(options)`   | 主出口           | 应用 client 图 → `client_modules/` 里的联邦产物（build 第四步的算法） | `zephyr-cli` 的 `build`    |
+
+## 出口
+
+| 出口                                             | 内容                                                                                                                                                                    | 谁用                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `@morlay/zephyr-dev`                             | 不需要装配的那一半：`compile` / `cacheRootOf` / `bundlePackage` / `prebundleAll` / `planPrebundle` / 路由空间常量 / URL 前缀改写 / 解析规则                       | `zephyr-cli` 的构建步骤、测试 |
+| `@morlay/zephyr-dev/node`                        | 装配行与启动面：`devProviders()` / `startDev()` / `provideClientModules()` / `provideServerHmr()` / `provideHttp()` / `FederationDefault` / `ViteHandoffDefault` | 工作区的装配面（`apps/**`）   |
+| `@morlay/zephyr-dev/build`                       | `zephyrClientViteConfig()`：静态面构建用的 vite 配置片段                                                                                                               | 应用的 `zephyr.config.ts`     |
+| `@morlay/zephyr-dev/federation/prebundle(-plan)` | 构建期前端预编译的**实现**（`compile()` 的零件；通常直接用 `compile()`）                                                                                              | 测试、诊断                    |
 
 装配行单独一个出口的理由：它们 `inject` 宿主运行时（`AppEnv` / `WebServer` / `Federation` / `ClientAssets`），
 从主出口出来会把 vite 的模块图带进每个只想要 `bundlePackage` 的地方。
@@ -40,13 +48,25 @@ zephyr-cli → zephyr-dev → zephyr-app → zephyr
 **换树**（服务端 HMR）归 `ServerHmr`（`DevHmr` 的实现）：变更**来源**从 `ClientAssets.onServerSourceChange` 订阅
 （谁服务前端资产谁知道哪些文件该触发换树），等业务空闲后调 `hooks.restart`。
 
+**启动**归 `startDev(options)`：它**接收已装配的树**（不是自己 bootstrap 一棵只含 dev 行的树）。
+理由是「`zephyr dev` 只有一棵树」——清单 = `devProviders(mode)` + 应用 `server.ts` 的清单，换树（`dispose` 后带 `?v=` 重新
+import 清单）归 CLI，部署事实只有 `AppEnv` 一处。它只回 `{ port, url, close() }`，行树不外露；`close()` 幂等。
+
+`devProviders(mode)` 的 `mode` 只有**一个字段** `packaged`：打包形态把 `dev.include` 清空（全部预编译），其余形态
+`@morlay/*` 当文件走 vite。别在这里加第二、第三个形态开关——`packaged` 是过渡脚手架，T5 之后随静态前端一起删。
+
 ## 构建流程
 
 ```text
 zephyr.config.ts（应用）  →  client.vite = zephyrClientViteConfig({ repoRoot })
-zephyr build（CLI）      →  prebundleAll(planPrebundle(应用 client 入口的静态 import 图))
+zephyr build（CLI）      →  compile({ workspace, appName, dataDirSpec, cacheRoot })
+                          →  内部：planPrebundle(应用 client 入口的静态 import 图) → prebundleAll
                           →  产物落 <dataDir>/cache/client-modules/<pkg>@<ver>/*
 ```
+
+`compile()` 的判据（**一字不改**从 CLI 搬来）：清单为空、缺 `REQUIRED_PREBUNDLE` 里的已知包，都是构建失败（抛错并带上
+应用 / 入口 / 数据根写法 / 产物落点）；逐条打包的失败汇总进 `CompileResult.failures`，由 CLI 翻成 `CliError`。
+`shiki` 现在仍缺——`just custom build` 因此会红，**这是预期的**。
 
 预编译与 dev 期**同一条算法**（`bundlePackage`），差异只在「什么时候跑」：dev 按请求跑，build 一次跑完。
 产物与地址一一对应（`/_zephyr/@modules/<pkg>@<ver>/<file>`），所以生产态可以只做文件投递。
@@ -63,6 +83,8 @@ zephyr build（CLI）      →  prebundleAll(planPrebundle(应用 client 入口�
 pnpm exec vitest run packages/zephyr/zephyr-dev/src
 ```
 
-判据在 `src/__tests__/`：`bundle.spec`（产物与外部依赖）、`resolve.spec`（按 `exports` 找入口）、
-`dev-files.spec`（当文件名单）、`vite-plugin.spec`（说明符分流）、`url-prefix.spec`（URL 空间收敛）、
+判据在 `src/__tests__/`：`dev-start.spec`（首页 200、`close()` 后端口释放、部署事实错配当场报错）、
+`compile.spec`（空清单 / 缺已知包各报一次点名错误）、`dev-providers.spec`（`packaged` 的两个名单与行清单）、
+`bundle.spec`（产物与外部依赖）、`resolve.spec`（按 `exports` 找入口）、`dev-files.spec`（当文件名单）、
+`vite-plugin.spec`（说明符分流）、`url-prefix.spec`（URL 空间收敛）、
 `url-rewriting-wire.spec`（出站改写接到 `WebServer` 上）、`server-source.spec`（哪些文件算服务端源码）。

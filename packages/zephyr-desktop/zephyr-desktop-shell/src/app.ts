@@ -455,6 +455,8 @@ function shellMode(): CliModeValues {
       // 没给时退回历史缺省值，壳不自己推断。
       dataDirSpec: process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC ?? "workspace",
       configFile: "",
+      // 形态事实由**壳**递给宿主（装配面因此不必自己读 env）：dev 形态这里是 `false`。
+      packaged: false,
     };
   }
   // 打包：**装配面是 `Resources/runtime`（真目录，asar 之外）**——闭包的 `package.json`、`src/client`、
@@ -471,6 +473,8 @@ function shellMode(): CliModeValues {
     dataDir,
     dataDirSpec: "xdg",
     configFile: "",
+    // 打包形态：壳在模块求值时打的 `ZEPHYR_DESKTOP_PACKAGED=1` 就是这一条的唯一来源。
+    packaged: isPackaged(),
   };
 }
 

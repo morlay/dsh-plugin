@@ -16,6 +16,8 @@ export default function serverProviders(mode: CliModeValues) {
     ...customProvidersOf({
       workspace: mode.workspace,
       dataDir: mode.dataDir,
+      // 形态是**部署值**（启动器判定，CliMode.packaged）：装配面不读 env（设计第九节）。
+      packaged: mode.packaged === true,
     }),
     CustomDevLifecycle,
   ];

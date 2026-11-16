@@ -109,6 +109,9 @@ async function execute(
     configFile: resolved.configFile,
     ...(scanned.port === undefined ? {} : { port: scanned.port }),
     ...(scanned.host === undefined ? {} : { host: scanned.host }),
+    // 打包形态由**启动器**判定（这里从进程环境读一次），装配面因此不必读 env（设计第九节）。
+    // 它是壳与宿主之间的进程内约定：壳在模块求值时打上 ZEPHYR_DESKTOP_PACKAGED=1。
+    packaged: process.env.ZEPHYR_DESKTOP_PACKAGED === "1",
   };
   const providers: ProviderList = [
     ...(resolved.config.plugins ?? []),

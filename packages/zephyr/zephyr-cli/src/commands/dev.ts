@@ -1,9 +1,12 @@
 // `zephyr dev`：起开发形态。
 //
-// 命令本身很薄：读应用清单 → 装配 → 把重载口交给应用 → 等信号。**HMR 属于应用**（它对 vite 与
-// 行树的关系最有把握），而「先拆后起、卡住就退出」这两条护栏属于 CLI——它们是流程事实，
-// 不该每个应用抄一遍。
+// 命令本身很薄：读应用清单 → 装配一棵树 → **`startDev()` 起会话** → 把重载口交给应用 → 等信号。
+// 三件事各归各家：装配归 CLI（它知道清单从哪个文件来）、启动与收尾归 `@morlay/zephyr-dev` 的
+// `startDev()`（端口、地址、幂等 close 是开发运行时的事实）、换树护栏归 CLI（「先拆后起、卡住就退出」
+// 是流程事实，不该每个应用抄一遍）。
+import { join } from "node:path";
 import { bootstrapApplication, inject, Injectable, Logger, type App } from "@morlay/zephyr";
+import { startDev, type DevSession } from "@morlay/zephyr-dev/node";
 import { Command, type CommandInput } from "../command.ts";
 import { loadServerProviders } from "../server-entry.ts";
 import { DevLifecycle } from "../dev-lifecycle.ts";
@@ -17,6 +20,12 @@ const DISPOSE_TIMEOUT_MS = 20_000;
 
 /** 装配的预算：同上，但更宽——首次装配要解析整棵依赖图。 */
 const BOOTSTRAP_TIMEOUT_MS = 60_000;
+
+/** 一棵起好的树 + 它的会话（换树时两者一起换）。 */
+interface Running {
+  readonly app: App;
+  readonly session: DevSession;
+}
 
 /** `zephyr dev`。 */
 @Injectable({ multi: true })
@@ -38,29 +47,31 @@ export class DevCommand extends Command {
    */
   async run(_input: CommandInput): Promise<number> {
     let version = 0;
-    let app = await this.start(version);
-    const lifecycle = app.tryGet(DevLifecycle);
+    let running = await this.start(version);
+    const lifecycle = running.app.tryGet(DevLifecycle);
     await lifecycle?.install({
       restart: async (files) => {
         this.logger.warn("[dev] 开始重载：先拆旧树（端口即将关闭）：%s", files.join(", "));
         const startedAt = Date.now();
-        await withDeadline(app.dispose(), DISPOSE_TIMEOUT_MS, "旧树 dispose");
+        // 收树用 `session.close()` 而不是 `app.dispose()`：撤路由、停 vite、释放端口是同一步，
+        // 会话是那条路径的唯一入口（`app` 仍要留着重新装配用）。
+        await withDeadline(running.session.close(), DISPOSE_TIMEOUT_MS, "旧树 dispose");
         version += 1;
-        app = await this.start(version);
+        running = await this.start(version);
         this.logger.info("[dev] 重载完成，用时 %dms", Date.now() - startedAt);
       },
     });
     await waitForSignal();
-    await app.dispose();
+    await running.session.close();
     return 0;
   }
 
   /**
-   * 装配一棵树。
+   * 装配一棵树并起会话（端口、地址、幂等 close 全在 `startDev()` 里）。
    * @param version - 缓存失效用的版本（重载时必须换，否则 import 拿回同一个模块）。
-   * @returns 装配结果。
+   * @returns 树与会话。
    */
-  private async start(version: number): Promise<App> {
+  private async start(version: number): Promise<Running> {
     const providers = await loadServerProviders(this.resolved.serverEntry, this.mode, version);
     const app = await withDeadline(
       bootstrapApplication({ providers, timeoutMs: BOOTSTRAP_TIMEOUT_MS }),
@@ -68,7 +79,28 @@ export class DevCommand extends Command {
       "bootstrapApplication",
     );
     this.logger.info("[dev] 已装配 %d 行", providers.length);
-    return app;
+    const session = await startDev({
+      app,
+      repoRoot: this.mode.workspace,
+      cacheDir: this.cacheDirOf(),
+      appRoot: join(this.mode.profileDir, "src", "client"),
+      dataDir: this.mode.dataDir,
+      ...(this.mode.port === undefined ? {} : { port: this.mode.port }),
+      ...(this.mode.host === undefined ? {} : { host: this.mode.host }),
+    });
+    return { app, session };
+  }
+
+  /**
+   * vite 的缓存目录：与树里的 `AppEnv.cacheDirOf("vite")` 是同一个地方。
+   *
+   * 这里重算一次是因为 `startDev()` 要拿它**核对**装配根（两个值对不上就当场报错）——
+   * 不重算就等于「核对自己」，那一步永远绿。规则只有一条（`<dataDir>/cache/<namespace>`），
+   * 漂移由 `startDev()` 的 `assertFacts` 兜住。
+   * @returns 绝对路径。
+   */
+  private cacheDirOf(): string {
+    return join(this.mode.dataDir, "cache", "vite");
   }
 }
 

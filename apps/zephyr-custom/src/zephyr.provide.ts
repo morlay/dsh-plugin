@@ -2,7 +2,7 @@
 //   1. 需要部署值的域（`provideXxx(configure(实现类, {...}))`，路径/档位这类只有启动器知道的事实）；
 //   2. 应用级的两个 Provider（`deploymentProviders` 末尾，需要应用配置）；
 //   3. framework 链：运行时（`@morlay/zephyr-app` 的 `provideXxx()`）
-//      与开发/构建面（`@morlay/zephyr-dev/node` 的 `provideClientModules()` / `provideServerHmr()`）。
+//      与开发运行时的那**一条**（`@morlay/zephyr-dev/node` 的 `devProviders()`）。
 //
 // 装配面**不写补洞行**：客户端会调而宿主没有的端点，缺什么就把对应域装起来。
 //
@@ -23,7 +23,7 @@ import {
   provideTypert,
   provideWeb,
 } from "@morlay/zephyr-app";
-import { FederationDefault, provideClientModules, provideServerHmr } from "@morlay/zephyr-dev/node";
+import { devProviders } from "@morlay/zephyr-dev/node";
 import { provideAgent } from "@morlay/dsh-agent";
 import { provideLlmRemote } from "@morlay/dsh-agent/server";
 import { provideAgentInstruction } from "@morlay/dsh-agent-instruction";
@@ -91,6 +91,12 @@ export interface CustomProvidersOptions {
   readonly workspace?: string;
   /** 数据根。省略即 `<装配根>/.dsh-store`。 */
   readonly dataDir?: string;
+  /**
+   * 打包形态（**部署值，由启动器给**：`server.ts` 从 `CliMode.packaged` 转手）。
+   *
+   * 装配面不读 `process.env`（设计第九节）：形态只有启动器知道，这里只收结论。
+   */
+  readonly packaged?: boolean;
 }
 
 // 路径只在装配面算一次：`AppEnv.dataDir` 与各层的子目录都从它拼，避免两处硬编码漂移。
@@ -113,7 +119,7 @@ export function customProvidersOf(options: CustomProvidersOptions = {}): Provide
     // 认凭据的行放在最前：`connection` 行 mount 时就要 `Credentials` 的**面**（适配行的面在它自己的
     // mount 之后才绑上，排在后面就会拿到空壳——症状是 `credentials.modifyRecord is not a function`）。
     ...credentialsProviders(),
-    ...frameworkProviders(),
+    ...frameworkProviders(options.packaged === true),
     // 存储 hub 要排在会话域之前：会话的投影缓存 `onInit` 里就 `open` storage domain。
     ...storageProviders(dataDir),
     // 会话的**核心**行（store / 投影 / 查询 / 持久化 / 缓存 / 计量）：agent 域要它们的面。
@@ -150,27 +156,18 @@ export function customProvidersOf(options: CustomProvidersOptions = {}): Provide
  * **开发运行时**是"产物怎么产出"（vite、联邦预编译、换树）。生产形态只装前者。
  * @returns provider 条目。
  */
-function frameworkProviders(): ProviderEntry[] {
+function frameworkProviders(packaged: boolean): ProviderEntry[] {
   return [
     ...provideWeb(),
-    // 开发态的服务端 HMR（生产形态不需要：那时源码不变）。入口负责 `install({ reload })`。
-    ...provideServerHmr(),
     ...provideConnection(),
     ...provideTypert(),
     ...provideRemoteAccess(),
     ...provideApiGateway(),
     ...provideMuxServer(),
     ...provideLoggerExporter(),
-    // **预构建的开关与范围归 Federation**：形态只决定"哪些包当文件走 vite"，不影响功能。
-    ...provideClientModules(
-      configure(FederationDefault, {
-        // **只有这一个开关**：打包形态（`ZEPHYR_DESKTOP_PACKAGED=1`）把名单清空 = 全部预构建；
-        // 其余形态只把 `@morlay/*` 当文件走 vite（改它们靠 HMR）。功能不受影响。
-        dev: {
-          include: process.env.ZEPHYR_DESKTOP_PACKAGED === "1" ? [] : ["@morlay/*"],
-        },
-      }),
-    ),
+    // **开发运行时的那几行收成一条**（`zephyr-dev` 的 `devProviders()`）：vite 旁路、联邦、页面兜底、
+    // 服务端 HMR 全在它里面。形态（打包与否）只决定"哪些包当文件走 vite"，不影响功能。
+    ...devProviders({ packaged }),
   ];
 }
 

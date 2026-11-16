@@ -23,6 +23,17 @@ export interface CliModeValues {
   readonly port?: number;
   /** `--host` 给了就是它。 */
   readonly host?: string;
+  /**
+   * 打包形态（桌面壳的随包产物）：**由启动器判定**，装配面不读环境变量。
+   *
+   * 它只有一个消费者——`devProviders({ packaged })` 决定「哪些包当文件走 vite」。
+   * 从 `command` / `profileDir` / `dataDirSpec` 都推不出来（打包与 dev 的 `command` 都是
+   * `["desktop","dev"]`，`dataDirSpec` 两种形态都可以是 `xdg`），所以它是一个独立事实、由知道它的那一方填。
+   *
+   * **过渡脚手架**：T5 之后打包形态走 `productionProviders()`（静态前端、不起 vite），
+   * 那时这个字段与 `devProviders` 的 `packaged` 参数一起删。
+   */
+  readonly packaged?: boolean;
 }
 
 /** 形态值令牌。 */

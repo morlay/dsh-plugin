@@ -16,8 +16,7 @@ import { InjectionToken } from "@morlay/zephyr";
 import type { ResolvedConfig } from "../config/contract.ts";
 import { CliError } from "../errors.ts";
 import type { ZephyrLayout } from "../layout.ts";
-import { prebundleAll, type PrebundleTarget } from "@morlay/zephyr-dev/federation/prebundle";
-import { planPrebundle } from "@morlay/zephyr-dev/federation/prebundle-plan";
+import { cacheRootOf, compile } from "@morlay/zephyr-dev";
 import { resolveDataDir } from "../data-dir.ts";
 
 const execFileAsync = promisify(execFile);
@@ -250,50 +249,30 @@ export async function resetRuntime(layout: ZephyrLayout): Promise<void> {
 }
 
 /**
- * 入口：把 `server.entry` 打成单文件，preview 与桌面壳都跑它。
- * @param input - 工作区配置与布局。
- */
-/**
- * 第四步：前端预编译。
+ * 第四步：前端预编译——`compile()` 的**薄壳**。
  *
- * 目标清单来自**应用 client 入口的静态 import 图**（`planPrebundle`）+ `clientModules.include`
- * 过滤：不从 `dist` 反推——build 的静态面走 vite/rollup 常规打包，产物里没有联邦地址（反推永远为空）。
+ * 算法全在 `@morlay/zephyr-dev` 的 `compile()`（哪里枚举清单、断言哪几个已知包、失败怎么汇总，
+ * 都只有一份）；这里只剩两件 CLI 自己的事：
+ *   1. 把**部署值**算成 `compile()` 的输入（数据根三态 → `cacheRoot`）；
+ *   2. 把它的结果翻成 `CliError`（退出码与「下一步该改什么」是命令行的事）。
  * @param input - 工作区配置与布局。
  */
 export async function buildPrebundle(input: BuildInput): Promise<void> {
-  const appManifest = join(input.resolved.workspace, "package.json");
-  const appRequire = createRequireOf(appManifest);
-  const clientEntry = join(input.resolved.workspace, "src", "client", "app-boot.ts");
-  const plan = await planPrebundle({ entry: clientEntry, appManifest });
-  const REQUIRED = ["@morlay/zephyr-app", "@morlay/dsh-conversation", "shiki"];
-  if (plan.targets.length === 0) {
-    throw new CliError(`前端预编译清单为空：从 ${clientEntry} 的静态 import 图里没枚举到任何目标`);
-  }
-  const missing = REQUIRED.filter(
-    (name) => !plan.targets.some((target: PrebundleTarget) => target.name === name),
-  );
-  if (missing.length > 0) {
-    throw new CliError(`前端预编译清单缺已知包：${missing.join(", ")}`);
-  }
   const dataDir = resolveDataDir({
     spec: input.resolved.config.dataDir ?? "workspace",
     profileDir: input.resolved.workspace,
     appName: input.resolved.appName,
   });
-  const cacheRoot = cacheRootOf(dataDir);
-  const nodeStub = join(
-    dirname(appRequire.resolve("@morlay/zephyr-app/package.json")),
-    "src",
-    "node-stub",
-    "node-stub.cjs",
-  );
-  const targets: PrebundleTarget[] = [...plan.targets];
-  const result = await prebundleAll({
-    targets,
-    cacheRoot,
-    repoRoot: input.resolved.workspace,
-    nodeStub,
-    appManifest,
+  const result = await compile({
+    workspace: input.resolved.workspace,
+    appName: input.resolved.appName,
+    dataDirSpec: input.resolved.config.dataDir ?? "workspace",
+    cacheRoot: cacheRootOf(dataDir),
+  }).catch((error: unknown) => {
+    // 判据错误（空清单 / 缺已知包）原文已经说清了是什么，只换类型不换措辞。
+    throw error instanceof CliError
+      ? error
+      : new CliError(error instanceof Error ? error.message : String(error));
   });
   if (result.failures.length > 0) {
     const detail = result.failures
@@ -307,15 +286,14 @@ export async function buildPrebundle(input: BuildInput): Promise<void> {
   }
 }
 
-/**
- * 前端预编译的缓存根（与 `AppEnv.cacheDirOf("client-modules")` 同口径）。
- * @param dataDir - 数据根。
- * @returns 缓存根。
- */
-export function cacheRootOf(dataDir: string): string {
-  return join(dataDir, "cache", "client-modules");
-}
+// 前端预编译的缓存根：home 在 `@morlay/zephyr-dev`（dev 与 build 共用同一条规则），
+// 这里只**再导出**一次——CLI 侧算部署值的地方不必再多跨一次包。
+export { cacheRootOf };
 
+/**
+ * 入口：把 `server.entry` 打成单文件，preview 与桌面壳都跑它。
+ * @param input - 工作区配置与布局。
+ */
 export async function bundleEntry(input: BuildInput): Promise<void> {
   const rolldown = (await import("rolldown")) as {
     build: (options: unknown) => Promise<unknown>;

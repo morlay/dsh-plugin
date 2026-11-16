@@ -8,4 +8,6 @@ export * from "./client-assets/vite-client-assets.service.ts";
 export * from "./client-modules/index.ts";
 export * from "./http/index.ts";
 export * from "./dev-hmr/provide.ts";
+export * from "./dev/provide.ts";
+export * from "./dev/start.ts";
 export * from "./internal/server-hmr.ts";

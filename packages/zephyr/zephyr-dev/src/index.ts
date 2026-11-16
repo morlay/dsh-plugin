@@ -6,6 +6,7 @@
 //
 // 依赖方向：`zephyr-cli → zephyr-dev → zephyr-app → zephyr`。**单向**：app 不认识 dev，
 // 否则 `pnpm -r` 的任务图成环（`just audit` / `just build` 直接拒跑）。
+export * from "./build/compile.ts";
 export * from "./federation/bundle.ts";
 export * from "./federation/parse-url.ts";
 export * from "./federation/prebundle.ts";

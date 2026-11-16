@@ -19,12 +19,20 @@ export interface PrebundleTarget {
   readonly manifestOf?: string;
 }
 
+/** 一条预编译失败：目标 + 原因（原因原文来自打包器，不加工）。 */
+export interface PrebundleFailure {
+  /** 失败的目标。 */
+  readonly target: PrebundleTarget;
+  /** 失败原因（打包器给的那句话）。 */
+  readonly reason: string;
+}
+
 /** 预编译结果：成功的条数与失败明细（失败不抛，交给调用方决定红）。 */
 export interface PrebundleResult {
   /** 成功条数。 */
   readonly built: number;
   /** 失败明细。 */
-  readonly failures: readonly { readonly target: PrebundleTarget; readonly reason: string }[];
+  readonly failures: readonly PrebundleFailure[];
 }
 
 /**
@@ -43,7 +51,7 @@ export async function prebundleAll(options: {
   readonly appManifest?: string;
   readonly log?: (message: string) => void;
 }): Promise<PrebundleResult> {
-  const failures: { target: PrebundleTarget; reason: string }[] = [];
+  const failures: PrebundleFailure[] = [];
   let built = 0;
   for (const target of options.targets) {
     try {
