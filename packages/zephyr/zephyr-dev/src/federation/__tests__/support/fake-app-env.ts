@@ -31,8 +31,6 @@ export class FakeAppEnv extends AppEnv {
 
   readonly cacheDir = FakeAppEnv.cache ?? join(tmpdir(), "dsh-fed-cache");
 
-
-
   readonly profileManifest = join(FIXTURES, "package.json");
 }
 

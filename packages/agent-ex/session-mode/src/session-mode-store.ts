@@ -18,7 +18,9 @@ const SESSION_MODE_DOMAIN = "session_mode";
 export const SESSION_MODE_TABLE = "overrides";
 
 /** 每个字段在记录里的形状：`ModeConfig` 有哪些字段，这张表就有哪些键（漏一个是编译期错误）。 */
-const FIELD_SHAPES: Readonly<Record<keyof ModeConfig, "strings" | "string" | "boolean" | "roles" | "persona" | "model">> = {
+const FIELD_SHAPES: Readonly<
+  Record<keyof ModeConfig, "strings" | "string" | "boolean" | "roles" | "persona" | "model">
+> = {
   presetsOnly: "strings",
   name: "string",
   description: "string",
@@ -92,7 +94,9 @@ function parseOverride(stored: unknown): SessionModeOverride | undefined {
   if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return undefined;
   const record: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(stored)) {
-    const shape = (FIELD_SHAPES as Record<string, (typeof FIELD_SHAPES)[keyof typeof FIELD_SHAPES]>)[key];
+    const shape = (
+      FIELD_SHAPES as Record<string, (typeof FIELD_SHAPES)[keyof typeof FIELD_SHAPES]>
+    )[key];
     if (shape === undefined || !fitsShape(shape, value)) return undefined;
     record[key] = value;
   }
@@ -163,7 +167,9 @@ export class SessionModeOverrides {
     const record = parseOverride(stored);
     if (record === undefined) {
       // 坏记录（形状不对、或是一条空记录）按「没有覆盖」处理：这个会话回落模式默认。
-      this.warn(`session-mode: 会话 ${id} 的覆盖记录不合法，按没有覆盖处理：${JSON.stringify(stored)}`);
+      this.warn(
+        `session-mode: 会话 ${id} 的覆盖记录不合法，按没有覆盖处理：${JSON.stringify(stored)}`,
+      );
     }
     return record;
   }

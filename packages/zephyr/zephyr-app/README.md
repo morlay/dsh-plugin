@@ -35,10 +35,10 @@ await bootstrapClient({ providers: [...provideClientChain(), ...provideSessions(
 
 形态问题不进运行时，这里只声明缝，实现在谁那儿归谁：
 
-| 契约           | 签名                                                                        | dev 的实现                          | prod 的实现         |
-| -------------- | --------------------------------------------------------------------------- | ----------------------------------- | ------------------- |
+| 契约           | 签名                                                                       | dev 的实现                         | prod 的实现         |
+| -------------- | -------------------------------------------------------------------------- | ---------------------------------- | ------------------- |
 | `ClientAssets` | `serve(req, res)` / `transformHtml(html)` / `hmr` / `onServerSourceChange` | `zephyr-dev` 的 `ViteClientAssets` | 静态目录（T3 落地） |
-| `DevHmr`       | `install({ isIdle?, restart })`                                             | `zephyr-dev` 的 `ServerHmr`        | 不装                |
+| `DevHmr`       | `install({ isIdle?, restart })`                                            | `zephyr-dev` 的 `ServerHmr`        | 不装                |
 
 **只声明、不含实现**。生产形态装的是 T3 随产物布局落地的静态目录投递——同样不引构建链。
 

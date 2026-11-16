@@ -42,9 +42,7 @@ function projectionOf(
   sessionId: string | undefined,
   key: string,
 ): unknown {
-  return sessionId === undefined
-    ? undefined
-    : snapshot.byId[sessionId]?.projectionValues?.[key];
+  return sessionId === undefined ? undefined : snapshot.byId[sessionId]?.projectionValues?.[key];
 }
 
 /** composer 里的模式选择器。 */
@@ -86,9 +84,9 @@ export function SessionModeSeat({
 
   // 两个会话事实都读投影（与服务端拒绝切换读同一份事实）：现在选的是哪个模式、还能不能换。
   const sessions = useSessions ?? NO_SESSIONS;
-  const selected = sessions((snapshot) =>
-    projectionOf(snapshot, sessionId, "sessionMode"),
-  ) as string | undefined;
+  const selected = sessions((snapshot) => projectionOf(snapshot, sessionId, "sessionMode")) as
+    | string
+    | undefined;
   const editable = sessions((snapshot) =>
     projectionOf(snapshot, sessionId, "sessionModeEditable"),
   ) as boolean | undefined;

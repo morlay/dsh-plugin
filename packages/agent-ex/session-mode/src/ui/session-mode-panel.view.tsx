@@ -113,9 +113,7 @@ function projectionOf(
   sessionId: string | undefined,
   key: string,
 ): unknown {
-  return sessionId === undefined
-    ? undefined
-    : snapshot.byId[sessionId]?.projectionValues?.[key];
+  return sessionId === undefined ? undefined : snapshot.byId[sessionId]?.projectionValues?.[key];
 }
 
 export function SessionModePanelBody({
@@ -141,12 +139,14 @@ export function SessionModePanelBody({
   // 两路会话投影：别处切了模式（`sessionMode`）或换了 preset（`agentPreset`），面板显示旧态就是误导。
   // 与 chip 读的是同一份事实，所以两边不会分叉。
   const sessions = useSessions ?? NO_SESSIONS;
-  const sessionMode = sessions((snapshot) =>
-    projectionOf(snapshot, sessionId, "sessionMode"),
-  ) as string | null | undefined;
-  const agentPreset = sessions((snapshot) =>
-    projectionOf(snapshot, sessionId, "agentPreset"),
-  ) as string | null | undefined;
+  const sessionMode = sessions((snapshot) => projectionOf(snapshot, sessionId, "sessionMode")) as
+    | string
+    | null
+    | undefined;
+  const agentPreset = sessions((snapshot) => projectionOf(snapshot, sessionId, "agentPreset")) as
+    | string
+    | null
+    | undefined;
   // 上一份生效态属于哪个会话：换了会话就先丢掉它（见下面 effect 里的第一段）。
   const loadedFor = useRef<string | undefined>(undefined);
 
@@ -536,9 +536,7 @@ export function SessionModePanelBody({
                             }));
                           }}
                           t={t}
-                          source={
-                            entryOverridden(entry) ? t("fromSession") : t("fromMode")
-                          }
+                          source={entryOverridden(entry) ? t("fromSession") : t("fromMode")}
                           restoreLabel={t("restoreDefault")}
                           onRestore={
                             entryOverridden(entry)
@@ -680,11 +678,7 @@ export function SessionModePanelBody({
               {/* 「另存为」要用户给新模式的 code / name（`store.saveAs` 的三个参数），那个输入面还没做。
                   禁用行必须给出**理由**（`disabledReason` 会读成该行的 description 并弹 tooltip），
                   否则用户只会当成 bug。 */}
-              <MenuItemButton
-                disabled
-                disabledReason={t("saveAsNeedsName")}
-                onSelect={() => {}}
-              >
+              <MenuItemButton disabled disabledReason={t("saveAsNeedsName")} onSelect={() => {}}>
                 {t("saveAs")}
               </MenuItemButton>
               <MenuItemButton

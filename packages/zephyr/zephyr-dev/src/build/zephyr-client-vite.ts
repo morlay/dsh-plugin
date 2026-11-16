@@ -19,7 +19,6 @@ export interface ZephyrClientViteOptions {
  * @returns 绝对路径。
  */
 
-
 /**
  * 生成 vite 配置片段：`define` / `oxc` 装饰器 / `@/` 与 `node:*` 的别名。
  *

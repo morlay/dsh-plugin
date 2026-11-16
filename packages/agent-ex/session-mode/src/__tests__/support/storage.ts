@@ -4,11 +4,7 @@
 // 一个可注入写失败的域替身（`memoryDomain`，判"存储写失败"那条用它）。
 import { join } from "node:path";
 import { StorageDomain } from "@morlay/dsh-storage/contract";
-import {
-  StorageJsonDefault,
-  provideStorage,
-  provideStorageJson,
-} from "@morlay/dsh-storage";
+import { StorageJsonDefault, provideStorage, provideStorageJson } from "@morlay/dsh-storage";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
 
 /** 一套真存储栈：`app` 用来卸载，`storage` 就是域令牌的实现。 */

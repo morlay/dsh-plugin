@@ -16,12 +16,12 @@ zephyr-cli → zephyr-dev → zephyr-app → zephyr
 
 ## 两个面
 
-| 出口                                   | 内容                                                                                                            | 谁用                               |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `@morlay/zephyr-dev`                   | 不需要装配的那一半：`bundlePackage` / `prebundleAll` / `planPrebundle` / 路由空间常量 / URL 前缀改写 / 解析规则 | `zephyr-cli` 的构建步骤、测试     |
-| `@morlay/zephyr-dev/node`              | 装配行：`provideClientModules()` / `provideServerHmr()` / `provideHttp()` / `FederationDefault` / `ViteHandoffDefault` | 工作区的装配面（`apps/**`）       |
-| `@morlay/zephyr-dev/build`             | `zephyrClientViteConfig()`：静态面构建用的 vite 配置片段                                        | 应用的 `zephyr.config.ts`                    |
-| `@morlay/zephyr-dev/federation/prebundle(-plan)` | 构建期前端预编译（目标枚举 + 逐条产出）                                                  | `zephyr-cli` 的 `build` 第四步              |
+| 出口                                             | 内容                                                                                                                   | 谁用                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `@morlay/zephyr-dev`                             | 不需要装配的那一半：`bundlePackage` / `prebundleAll` / `planPrebundle` / 路由空间常量 / URL 前缀改写 / 解析规则        | `zephyr-cli` 的构建步骤、测试  |
+| `@morlay/zephyr-dev/node`                        | 装配行：`provideClientModules()` / `provideServerHmr()` / `provideHttp()` / `FederationDefault` / `ViteHandoffDefault` | 工作区的装配面（`apps/**`）    |
+| `@morlay/zephyr-dev/build`                       | `zephyrClientViteConfig()`：静态面构建用的 vite 配置片段                                                               | 应用的 `zephyr.config.ts`      |
+| `@morlay/zephyr-dev/federation/prebundle(-plan)` | 构建期前端预编译（目标枚举 + 逐条产出）                                                                                | `zephyr-cli` 的 `build` 第四步 |
 
 装配行单独一个出口的理由：它们 `inject` 宿主运行时（`AppEnv` / `WebServer` / `Federation` / `ClientAssets`），
 从主出口出来会把 vite 的模块图带进每个只想要 `bundlePackage` 的地方。

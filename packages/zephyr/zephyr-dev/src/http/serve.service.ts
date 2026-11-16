@@ -105,9 +105,7 @@ export class ServeDefault extends WebServe implements OnInit {
 
   private async replyPage(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (this.authorizeIndex !== undefined && !this.authorizeIndex(req, res)) return;
-    const html = await readFile(join(this.bootDir, "index.html"), "utf8").catch(
-      () => undefined,
-    );
+    const html = await readFile(join(this.bootDir, "index.html"), "utf8").catch(() => undefined);
     if (html === undefined) {
       this.logger.warn(`[serve] 页面骨架读不到：${join(this.bootDir, "index.html")}`);
       res.writeHead(404);

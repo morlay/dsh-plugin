@@ -6,11 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { FEDERATION_PREFIX, HMR_PATH } from "../internal/hmr-path.ts";
-import {
-  addZephyrPrefix,
-  rewriteUrls,
-  stripZephyrPrefix,
-} from "@morlay/zephyr-dev/testing";
+import { addZephyrPrefix, rewriteUrls, stripZephyrPrefix } from "@morlay/zephyr-dev/testing";
 
 describe("vite URL 空间的前缀收敛", () => {
   it("入站：`/_zephyr/@fs/…` strip 回 vite 的 `/@fs/…`", () => {

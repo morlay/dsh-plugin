@@ -2,13 +2,15 @@
 //
 // headless 一条：骨架 + 会话 + 投影 + 执行器 + 循环本体 + 通道/收口/工具说明/模式。
 // **不装 wire**（端点行要 `remote-handlers`，headless 不依赖 remote）。
-import { configure, without, type ProviderFeature, type ProviderEntry, type ProviderList } from "@morlay/zephyr";
-import { loopTestProviders } from "@morlay/dsh-agent-loop/testing";
 import {
-  StorageJsonDefault,
-  provideStorage,
-  provideStorageJson,
-} from "@morlay/dsh-storage";
+  configure,
+  without,
+  type ProviderFeature,
+  type ProviderEntry,
+  type ProviderList,
+} from "@morlay/zephyr";
+import { loopTestProviders } from "@morlay/dsh-agent-loop/testing";
+import { StorageJsonDefault, provideStorage, provideStorageJson } from "@morlay/dsh-storage";
 import { StorageDomain } from "@morlay/dsh-storage/contract";
 import { provideSessionMode } from "../../session-mode.provide.ts";
 import { ContextChannel } from "../../context-assembler.provide.ts";

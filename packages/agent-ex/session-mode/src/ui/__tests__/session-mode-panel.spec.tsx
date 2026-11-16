@@ -99,8 +99,9 @@ describe("会话模式面板", () => {
   it("没有会话时给一句空态，不发请求", () => {
     let loads = 0;
     const store = fakeStore(state());
-    (store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> })
-      .loadActive = async () => {
+    (
+      store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }
+    ).loadActive = async () => {
       loads += 1;
       return state();
     };
@@ -460,11 +461,12 @@ describe("会话模式面板", () => {
     const loads: string[] = [];
     const value = state();
     const store = fakeStore(value);
-    (store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }).loadActive =
-      async (id: string) => {
-        loads.push(id);
-        return value;
-      };
+    (
+      store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }
+    ).loadActive = async (id: string) => {
+      loads.push(id);
+      return value;
+    };
 
     // 一个能推值的 `useSessions` 替身：投影值变了，selector 的结果就变。
     let projection: Record<string, unknown> = { sessionMode: "coding", agentPreset: "ptc" };
@@ -522,19 +524,16 @@ describe("会话模式面板", () => {
     // 会话切换是重拉的另一个来源：`sessionId` 变了就要拉那个会话的生效态。
     const loads: string[] = [];
     const store = fakeStore(state());
-    (store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }).loadActive =
-      async (id: string) => {
-        loads.push(id);
-        return state(
-          id === "s2"
-            ? { mode: { id: "chat", name: "对话模式", description: "" } }
-            : undefined,
-        );
-      };
+    (
+      store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }
+    ).loadActive = async (id: string) => {
+      loads.push(id);
+      return state(
+        id === "s2" ? { mode: { id: "chat", name: "对话模式", description: "" } } : undefined,
+      );
+    };
 
-    const { rerender } = render(
-      <SessionModePanelBody sessionId="s1" store={store} panelId="p" />,
-    );
+    const { rerender } = render(<SessionModePanelBody sessionId="s1" store={store} panelId="p" />);
     await waitFor(() => {
       expect(screen.getByText("编码模式")).toBeDefined();
     });
@@ -549,4 +548,3 @@ describe("会话模式面板", () => {
     expect(loads).toEqual(["s1", "s2"]);
   });
 });
-

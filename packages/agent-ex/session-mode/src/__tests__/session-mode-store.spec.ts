@@ -7,11 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { StorageDomain } from "@morlay/dsh-storage/contract";
-import {
-  StorageJsonDefault,
-  provideStorage,
-  provideStorageJson,
-} from "@morlay/dsh-storage";
+import { StorageJsonDefault, provideStorage, provideStorageJson } from "@morlay/dsh-storage";
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
