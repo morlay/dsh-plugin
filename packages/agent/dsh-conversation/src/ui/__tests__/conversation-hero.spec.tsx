@@ -20,10 +20,7 @@ import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import {
-  SessionController,
-  type SessionCatalogState,
-} from "@morlay/dsh-conversation/contract";
+import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
 

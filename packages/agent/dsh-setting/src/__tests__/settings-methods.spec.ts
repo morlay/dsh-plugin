@@ -31,13 +31,7 @@ describe("settings 组的方法名", () => {
   it("`SETTINGS_METHODS` 的键集合等于上游 descriptor 的 `settings` 方法集", () => {
     const upstream = settingsMethodsOf(SETTINGS_REMOTE);
     // 先钉住"解析确实拿到了这 5 个"（解析失手会得到空数组，那样下面的对齐会假绿）。
-    expect(upstream).toEqual([
-      "describe",
-      "mutate",
-      "openSettingsDocument",
-      "replace",
-      "update",
-    ]);
+    expect(upstream).toEqual(["describe", "mutate", "openSettingsDocument", "replace", "update"]);
     expect(Object.keys(SETTINGS_METHODS).sort()).toEqual(upstream);
   });
 

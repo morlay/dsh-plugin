@@ -10,10 +10,7 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport, Remote, SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
-import {
-  SessionController,
-  type SessionCatalogState,
-} from "@morlay/dsh-conversation/contract";
+import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
 

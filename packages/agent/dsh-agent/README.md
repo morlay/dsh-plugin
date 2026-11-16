@@ -6,6 +6,8 @@ agent 的运行时骨架：会话与 agent 的注册表、LLM 调用、系统提
 
 - 导出：`AgentDirectory` / `Llm` / `SystemPrompt` / `ToolRegistry` / `AgentLoop` / `AgentDefaultModel` / `LaunchEnvironment` 七个契约与各自的默认实现。
 - 装配：`provideAgent()`（包根，含 `TimerDefault`）；其余域从这里取契约，不复制实现。
+- `WorkingDirectory.defaultDirectory`（新会话的起始目录）不给时取 `AppEnv.defaultWorkingDirectory`：
+  环境事实只有一个来源，装配面要另给值就 `configure(WorkingDirectoryDefault, { defaultDirectory })`。
 - 域内只有一条行、没有第二个消费者的留在这里，不单开包：`TimerDefault`（令牌就是上游 `TimerService`）与 `LaunchEnvironmentDefault`（读者是上游 `launchEnvironmentOf`，不在本包的 `provideAgent()` 清单里）。
 
 ## 设计

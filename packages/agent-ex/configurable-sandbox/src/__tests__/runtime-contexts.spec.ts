@@ -13,6 +13,7 @@ import {
   SandboxRuntimeContexts,
 } from "@morlay/configurable-sandbox";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { FakeAppEnv } from "@morlay/zephyr-app/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { FakePolicy } from "./support/fake-policy.ts";
 import { FakeSandboxFile } from "./support/fake-sandbox-file.ts";
@@ -61,9 +62,17 @@ async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "configurable-sandbox-rt-"));
   roots.push(root);
   FakePolicy.root = join(root, "ws");
+  // 规则层的缺省 cwd 来自 AppEnv（不读进程 cwd）：起始目录指到本用例的 workspace。
+  FakeAppEnv.root = FakePolicy.root;
   FakeSandboxFile.text = `access = ["rw /tmp/extra"]`;
   const app = await bootstrapApplication({
-    providers: [FakeSandboxFile, SandboxRulesDefault, FakePolicy, SandboxRuntimeContexts],
+    providers: [
+      FakeAppEnv,
+      FakeSandboxFile,
+      SandboxRulesDefault,
+      FakePolicy,
+      SandboxRuntimeContexts,
+    ],
     timeoutMs: 10_000,
   });
   opened.push(app);

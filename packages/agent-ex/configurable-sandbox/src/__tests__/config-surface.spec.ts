@@ -1,8 +1,12 @@
 // `{DSH_HOME}/sandbox.toml` 的读取：合法文件 / 文件缺失 / 坏文件 / 字段不认识。
 //
 // 判据是「坏配置不阻断启动」：四种坏法一个口径——整份配置按"没有规则"处理，宿主照常起来。
+import { FakeAppEnv } from "@morlay/zephyr-app/testing";
 import { describe, expect, it } from "vitest";
 import { loadRules } from "./support/fake-sandbox-file.ts";
+
+// 规则层的缺省 `cwd` 取自 `AppEnv.defaultWorkingDirectory`：绝对且不存在的路径，正常用例不碰真实磁盘。
+FakeAppEnv.root = "/sandbox-default-cwd";
 
 describe("sandbox.toml", () => {
   it("合法文件：六个字段都读到，规则源按前缀分桶", async () => {

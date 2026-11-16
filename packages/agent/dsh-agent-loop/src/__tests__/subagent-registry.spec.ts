@@ -10,10 +10,31 @@ import { FsSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { WorkingDirectoryDefault, provideAgent, SubagentRegistry } from "@morlay/dsh-agent";
 import { SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
-import { bootstrapApplication } from "@morlay/zephyr";
-import { RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { bootstrapApplication, Injectable } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { provideSubagent } from "../index.ts";
+
+/**
+ * 运行环境替身：`WorkingDirectoryDefault` 的起始目录与沙箱兜底根都取自它
+ * （环境事实只有一个来源：不读进程 cwd）。
+ */
+@Injectable()
+class FakeAppEnv extends AppEnv {
+  readonly values: AppEnvValues = {
+    dataDir: root,
+    profileDir: root,
+    defaultWorkingDirectory: root,
+  };
+
+  readonly cacheDir = join(root, "cache");
+
+  readonly packageRoot = root;
+
+  readonly appBootDir = join(root, "boot");
+
+  readonly profileManifest = join(root, "package.json");
+}
 
 let root = "";
 
@@ -38,6 +59,7 @@ async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplica
       ...provideSessionProjection(),
 
       SessionStoreDefault,
+      FakeAppEnv,
       ...provideAgent(),
       { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
       FsSandbox,

@@ -7,6 +7,8 @@
 - 导出：`WorkspaceRegistry` / `DirectoryPickerBackend` 契约与 `WorkspaceControllerRow` / `DirectoryPickerControllerRow` / `SessionWorkspaceHost` 三个 host 行；浏览器半在 `./ui`。
 - 契约面还出 `WorkspaceId` 品牌铸造（值）与 `WorkspaceRegistryCovered` 覆盖守卫。
 - 装配函数：宿主 `provideWorkspace()` / `provideWorkspaceFiles()`（`./server`）、浏览器半 `provideWorkspaceUi()`（`./ui`）；本包不拥有装配清单。
+- 「起始目录」只从 `AppEnv.defaultWorkingDirectory` 读：`DefaultWorkspace` 把它登记成默认工作区，
+  `SessionWorkspaceHost` 在请求没带 cwd 时用它——两处都不读进程 cwd。
 
 ## 设计
 

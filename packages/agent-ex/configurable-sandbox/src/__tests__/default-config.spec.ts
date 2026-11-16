@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxFile, SandboxRules, SandboxRulesDefault } from "@morlay/configurable-sandbox";
 import { bootstrapApplication } from "@morlay/zephyr";
+import { FakeAppEnv } from "@morlay/zephyr-app/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { SandboxFileDefault } from "../sandbox-file.service.ts";
 
@@ -29,8 +30,9 @@ async function emptyHome(): Promise<string> {
 describe("默认 sandbox.toml", () => {
   it("文件不存在时创建，内容能解析出源部署那八条规则", async () => {
     const home = await emptyHome();
+    FakeAppEnv.root = home;
     const app = await bootstrapApplication({
-      providers: [SandboxFileDefault, SandboxRulesDefault],
+      providers: [FakeAppEnv, SandboxFileDefault, SandboxRulesDefault],
       timeoutMs: 5_000,
     });
     try {
@@ -56,8 +58,9 @@ describe("默认 sandbox.toml", () => {
     const mine = 'access = """\nrw /only-this\n"""\n';
     await (await import("node:fs/promises")).writeFile(path, mine, "utf8");
 
+    FakeAppEnv.root = home;
     const app = await bootstrapApplication({
-      providers: [SandboxFileDefault, SandboxRulesDefault],
+      providers: [FakeAppEnv, SandboxFileDefault, SandboxRulesDefault],
       timeoutMs: 5_000,
     });
     try {

@@ -5,6 +5,7 @@
 // 挑一半字段生效比一条都不生效更难查。
 import { parse } from "smol-toml";
 import { inject, Injectable, Logger, type Context, type OnInit } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
 import { SandboxFile } from "./contract/sandbox-file.contract.ts";
 import { SandboxRules, type SandboxSettings } from "./contract/sandbox-rules.contract.ts";
 import { ruleSourceOf, type RuleSource } from "./rules.ts";
@@ -24,13 +25,21 @@ function emptySource(): RuleSource {
   return { allowWrite: [], readOnly: [], deny: [] };
 }
 
-function defaults(): SandboxSettings {
+/**
+ * 缺省规则。
+ *
+ * `cwd`（相对路径的解析基准）由调用方给 `AppEnv` 的起始目录——环境事实只有那一个来源。
+ * 每次新建：模块级常量会被多个实例（多个 app）共享，前一个用例的规则会漏到后一个。
+ * @param cwd - 相对路径的解析基准。
+ * @returns 一份全新的缺省设置。
+ */
+function defaults(cwd: string): SandboxSettings {
   return {
     access: [],
     runnerCommand: [],
     runnerFailureSignatures: [],
     probeTimeoutMs: 5_000,
-    cwd: process.cwd(),
+    cwd,
     diffBasisMaxBytes: 10 * 1024 * 1024,
   };
 }
@@ -49,6 +58,8 @@ function strings(value: unknown, field: string): readonly string[] {
  * TOML 里最顺手的写法是块标量（`access = """\nrw /tmp\n"""`，一行一条），源部署的 patch 就是那个形状；
  * 只认数组会让那份配置整份被当成坏文件退到空规则——症状是沙箱静默只剩工作区可写。
  * 空行丢弃（块标量首尾的空行是写法带来的，不是规则）。
+ * @param value - 文档里的 `access` 字段。
+ * @returns 一条条规则文本。
  */
 function accessEntries(value: unknown): readonly string[] {
   if (typeof value === "string") {
@@ -82,7 +93,16 @@ export class SandboxRulesDefault extends SandboxRules implements OnInit {
 
   private readonly logger = inject(Logger);
 
-  private readonly state: SandboxSettings = defaults();
+  /**
+   * `cwd` 缺省的来源：`AppEnv.defaultWorkingDirectory`。
+   *
+   * 注入而不是在缺省值里读 `process.cwd()`：环境事实只有一个来源，
+   * 打包形态下进程 cwd 不是用户的项目目录。
+   */
+  private readonly appEnv = inject(AppEnv);
+
+  // 惰性建：字段初始化器那一刻 `inject(AppEnv)` 还只是占位，读不到真值。
+  private state: SandboxSettings | undefined;
 
   private readonly rules: RuleSource = emptySource();
 
@@ -91,11 +111,12 @@ export class SandboxRulesDefault extends SandboxRules implements OnInit {
     if (raw === undefined) return;
     const loaded = this.load(raw);
     if (loaded === undefined) return;
-    Object.assign(this.state, loaded.settings);
+    Object.assign(this.settings(), loaded.settings);
     Object.assign(this.rules, loaded.source);
   }
 
   settings(): SandboxSettings {
+    this.state ??= defaults(this.appEnv.defaultWorkingDirectory);
     return this.state;
   }
 
@@ -117,7 +138,7 @@ export class SandboxRulesDefault extends SandboxRules implements OnInit {
       return this.degraded(`has unknown field(s) ${unknown.join(", ")}`);
     }
 
-    const base = defaults();
+    const base = this.settings();
     let settings: SandboxSettings;
     try {
       settings = {

@@ -13,11 +13,40 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { provideAgent, WorkingDirectoryDefault } from "@morlay/dsh-agent";
-import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { RemoteHandlers, provideApiGateway, provideTypert } from "@morlay/zephyr-app";
+import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
+import {
+  AppEnv,
+  RemoteHandlers,
+  provideApiGateway,
+  provideTypert,
+  type AppEnvValues,
+} from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentLoopDefault, ToolExecutorNative } from "../index.ts";
 import { provideSubagentEndpoints } from "../server/index.ts";
+
+/** 起始目录与沙箱兜底根的来源（环境事实只有一个来源：不读进程 cwd）。 */
+const ROOT = "/dsh-subagents-endpoint";
+
+/**
+ * 运行环境替身：这几条用例不落盘，目录只用来满足 `AppEnv` 契约。
+ */
+@Injectable()
+class FakeAppEnv extends AppEnv {
+  readonly values: AppEnvValues = {
+    dataDir: ROOT,
+    profileDir: ROOT,
+    defaultWorkingDirectory: ROOT,
+  };
+
+  readonly cacheDir = `${ROOT}/cache`;
+
+  readonly packageRoot = ROOT;
+
+  readonly appBootDir = `${ROOT}/boot`;
+
+  readonly profileManifest = `${ROOT}/package.json`;
+}
 
 const opened: App[] = [];
 
@@ -25,7 +54,7 @@ afterEach(async () => {
   for (const app of opened.splice(0)) await app.dispose().catch(() => {});
 }, 20_000);
 
-/** 起带 `remote.subagents` 的真栈（沙箱根用进程 cwd：这几条用例不落盘）。 */
+/** 起带 `remote.subagents` 的真栈（沙箱根用固定目录：这几条用例不落盘）。 */
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
@@ -35,14 +64,12 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
 
       SessionStoreDefault,
+      FakeAppEnv,
       ...provideAgent(),
       // 循环期：要真 agent 工厂。
       ToolExecutorNative,
       { provide: AgentLoopDefault, config: { agents: [] } },
-      {
-        provide: SandboxPolicyDefault,
-        config: { mode: "workspace-write", workspaceRoot: process.cwd() },
-      },
+      { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: ROOT } },
       FsSandbox,
       WorkingDirectoryDefault,
       ...provideSubagentEndpoints(),

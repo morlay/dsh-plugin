@@ -21,7 +21,12 @@ runnerCommand = []
 ```
 
 六个字段都能写，缺的按默认值：`access`（`[]`）、`runnerCommand`（`[]`）、`runnerFailureSignatures`（`[]`）、
-`probeTimeoutMs`（`5000`）、`cwd`（`process.cwd()`）、`diffBasisMaxBytes`（`10 MiB`）。
+`probeTimeoutMs`（`5000`）、`cwd`（`AppEnv.defaultWorkingDirectory`，即新会话的起始目录）、
+`diffBasisMaxBytes`（`10 MiB`）。
+
+`cwd` 的缺省取 `AppEnv` 而不是进程 cwd：环境事实只有一个来源（见
+[`20261113-开发构建与产物布局`](../../zephyr/.agents/designs/20261113-开发构建与产物布局.md) 第九节），
+打包形态下进程 cwd 不是用户的项目目录。本包因此**要求装配里有 `AppEnv`**。
 
 改配置文件要**重启**才生效（没有配置页，也没有热重载）。写坏一份 toml 不会让宿主起不来：
 整份配置按"没有规则"处理并 `logger.warn` 一条点名（文件路径 + 坏在哪）。坏法包括：不是 TOML、字段类型不对、

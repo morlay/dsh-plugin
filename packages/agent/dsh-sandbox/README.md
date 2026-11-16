@@ -6,6 +6,8 @@
 
 - 导出：`Sandbox` / `SandboxPolicy` 契约与五个行（提供者、策略、bash、fs、观察策略）。
 - 装配：`SandboxModule`。
+- `SandboxPolicy.workspaceRoot`（`workspace-write` 的兜底根）不给时取 `AppEnv.defaultWorkingDirectory`：
+  环境事实只有一个来源，装配面要另给值就 `configure(SandboxPolicyDefault, { workspaceRoot })`。
 
 ## 设计
 
