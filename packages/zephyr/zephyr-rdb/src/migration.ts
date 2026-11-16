@@ -3,7 +3,7 @@ import { defineTable } from "./defs.ts";
 import { eq } from "./expr.ts";
 import { fragment } from "./fragment.ts";
 import type { Database } from "./database/types.ts";
-import { ensureSchema, SCHEMA_MIGRATIONS_TABLE } from "./migrate.ts";
+import { ensureSchema, SCHEMA_MIGRATIONS_TABLE, type SchemaDrift } from "./migrate.ts";
 
 // 内置迁移账本：一条已执行的数据迁移一行（`f_id` 唯一）。
 export const schemaMigrations = defineTable({
@@ -46,6 +46,15 @@ export interface RunMigrationsOptions {
   migrations: readonly Migration[] | MigrationRegistry;
 }
 
+// `runMigrations` 的结果：本次实际执行了哪些数据迁移（按执行顺序），以及结构对齐报告的漂移。
+//
+// `drift` 是 `ensureSchema` 的原样转出：orphan 表与「改列类型 / 可空 / 默认值」这类差异只在这里被
+// 交回调用方（只报告、不自动修），执行的 DDL 仍只在 `statements` 那侧发生。
+export interface RunMigrationsResult {
+  readonly executed: readonly string[];
+  readonly drift: readonly SchemaDrift[];
+}
+
 // PostgreSQL 的迁移互斥键（字符串常量走 `hashtext`，跨实例认同一个键）。
 const MIGRATION_LOCK_SQL = "SELECT pg_advisory_xact_lock(hashtext('zephyr_rdb_migrations'))";
 
@@ -64,11 +73,11 @@ async function withMigrationLock<T>(
 // 先按 catalog 对齐结构（建表 / 补列 / 补索引），再执行未应用的数据迁移。
 //
 // 每条迁移在自己的事务里执行并记账（失败即回滚、不记账、重跑只跑没记过的）；账本在锁内**重新读**，
-// 所以两个实例同时启动时只有一方执行。返回本次实际执行了哪些 `id`。
+// 所以两个实例同时启动时只有一方执行。返回本次实际执行了哪些 `id`，以及结构对齐的漂移清单。
 export async function runMigrations(
   database: Database,
   options: RunMigrationsOptions,
-): Promise<readonly string[]> {
+): Promise<RunMigrationsResult> {
   const migrations =
     options.migrations instanceof MigrationRegistry
       ? options.migrations.list()
@@ -76,7 +85,7 @@ export async function runMigrations(
   const catalog: Catalog = [...(options.catalog ?? []), schemaMigrations as TableDef];
 
   // 结构对齐也在锁内：两个实例同时补列 / 建索引会撞「duplicate column」。
-  await withMigrationLock(database, (tx) => ensureSchema(tx, catalog));
+  const { drift } = await withMigrationLock(database, (tx) => ensureSchema(tx, catalog));
 
   const executed: string[] = [];
   for (const migration of migrations) {
@@ -96,5 +105,5 @@ export async function runMigrations(
     });
     if (appliedNow) executed.push(migration.id);
   }
-  return executed;
+  return { executed, drift };
 }

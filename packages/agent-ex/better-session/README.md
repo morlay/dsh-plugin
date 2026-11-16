@@ -25,27 +25,38 @@
   （只对已闭合轮次开放）**两个**动作。分叉不在这一行：它属于回合末尾（上游 `TurnTailNodeView` 的
   `onBranch`）。两个动作经 `sessionEditor` 组打到宿主；成功后重建该会话的窗口，不整页重载。
 - **对话管理页**：`sidebar.panellist` 的 nav 行与 `main` 的 `conversations` key 成对注册——视图 chip
-  （会话 / 统计）切换会话视图（搜索 / 分页 / 子代理、时间与归档筛选 / 归档 / 取消归档 / 导出 / 导出筛选结果 /
-  覆盖导入 / 复制到工作区 / 单条与批量删除 / 导入为会话 / 整理数据 / 数据体检 / 单会话修复）与用量统计视图。
+  （会话 / 统计）切换会话视图（搜索 / 分页 / 子代理、时间与归档筛选 / 归档 / 取消归档 / 批量归档 / 导出 /
+  导出筛选结果 / 覆盖导入 / 复制到工作区 / 单条与批量删除 / 导入为会话 / 批量导入 / 事件定位 / 整理数据 /
+  数据体检 / 单会话修复）与用量统计视图。
   列表、删除（含批量）、导入、导出（含按筛选结果批量导出）、复制到工作区、整理、体检、修复与用量走
-  `sessionAdmin` 组；归档与取消归档仍委托 `uiWorkspace`。
+  `sessionAdmin` 组；归档、取消归档与批量归档仍委托 `uiWorkspace`（批量归档是页面逐条调用再聚合结果，
+  本包不加第二个归档入口）。
   标题行的「数据体检」（`data-action="consistency"`）把报告落到面板上（不一致项逐条 `data-issue`，只报不修）；
   行上的「修复」（`data-action="repair"`）先开确认弹窗，再选丢坏尾部 / 整段重写（危险语义）；删除走既有删除入口。
+  - 时间 chip 的窗口是**本地自然日**：近 7 / 30 天 = 今天本地零点往前 6 / 29 天（`rows-query.ts` 的
+    `localDayWindowStart`，与宿主统计的本地日同一口径），不是「此刻减 N × 24 小时」的滚动窗口。
   - `sessionAdmin/rows` 的过滤参数：`updatedAfter` / `updatedBefore`（与行的 `updatedAt` 同列）、`origin`
     （`human` / `subagent`，与 `includeSubagents` 同时给时 `origin` 优先）、`archived`（`only` / `unarchived`），
     与 `query` 进同一个 WHERE。返回的 `searchStage` 是**实际**走的搜索段：标题先前缀（对 `lower(f_title)`
     做范围比较 `>= ? AND < ?`（SQLite）/ `like(lower(f_title), 'x%')`（PG），与全文段同一个大小写口径），
     没命中才退全文 `%x%`。前缀段现在用不上索引（SQLite 的计划是整表扫），见
     [标题前缀搜索用不上 idx_sessions_title](./.agents/debts/20261120-标题前缀搜索用不上idx_sessions_title.md)。
-  - `sessionAdmin/bulkDelete` 一次请求、逐条结果：`{ items: [{ sessionId, ok, code? }] }`；未归档 / 运行中 /
-    不存在各自带域码，整批不回滚。
+  - 批量删除：`sessionAdmin/bulkDelete` 一次请求、逐条结果：`{ items: [{ sessionId, ok, code? }] }`；未归档 /
+    运行中 / 不存在各自带域码，整批不回滚。页面上的多选条有两个动作（`data-bulk` 为 `active` 时出现）：
+    「批量删除」（`data-action="bulk-remove"`，危险确认）与「批量归档」（`data-action="bulk-archive"` →
+    确认弹窗 `data-action="bulk-archive-confirm"`）。批量归档不进本包：页面逐条调 `uiWorkspace` 的归档动作
+    （归档的 owner 在 workspace 域，经 storage 接管写穿到会话行的 `f_archived_at`），失败条聚合成一条提示
+    （「已归档 N 条会话，M 条失败」+ 失败项的会话与原因），结算后清空选择并重拉。
   - `sessionAdmin/locate`：会话内定位事件。`fromSeq` / `toSeq` 是**闭区间**（省略即整段日志），
     越界（`toSeq` 超过日志最后一条 seq）、两端颠倒、不是非负整数都显式失败
     （`SESSION_QUERY_INVALID_WINDOW`）——不做静默夹取，「看的是哪一段」不该变成猜测。条件全部下推到 SQL：
     文本 `LIKE %text%`（大小写不敏感）、`types` / `role` / `name`、事件时间的闭区间。只回 seq 与行上的维度
     （type / role / name / time）加**命中片段**（优先事件语义文本，坏行退回原文；命中点两侧各 40 字符，
     没有文本条件时截 80 字符），不搬事件体——所以**坏会话照样能定位**（排障先看坏在哪一行，再 `repair`）。
-    `total` 是命中总数（不受 `limit` 影响；`limit` 默认 50、上限 200）。
+    `total` 是命中总数（不受 `limit` 影响；`limit` 默认 50、上限 200）。页面入口是行上的「定位」
+    （`data-action="locate"`）：弹窗里文本 / 类型 / 角色 / 工具名四栏 + 时间两栏（换成本地时区的毫秒下推，
+    空栏不出现）；结果区 `data-locate="results"` 带 `data-locate-window="<from>-<to>"`，命中逐条
+    `data-locate-hit="<seq>"`。只读——命中列表里没有动作按钮，修法走 `repair`。
   - `sessionAdmin/repair`：坏会话的三种修法，逐会话、只碰目标会话，都要求显式调用。可读边界 = 从头逐行读时
     第一条解析不出来或序号断号的行。`drop-tail` 只丢边界之后的尾部（之前的原样保留，head 跟着收，统计按剩下
     的日志重算），**被丢的事件行只删桥接行、事件行留成孤儿**，由 `organize` 的 `collectOrphans` 回收；
@@ -62,8 +73,10 @@
     `exportMany({ sessionIds })` 每条一份 zip（内容仍是上游 format 的 JSONL，文件名 `<sessionId>.zip`），
     不存在的会话带 `SESSION_NOT_FOUND`；`importMany({ zips })` 每条落成新会话，包里没有上游 format artifact
     的带 `SESSION_IMPORT_NO_ARTIFACT`——整批不回滚。页面入口是标题行的「导出筛选结果」
-    （`data-action="export-filtered"`：按当前搜索与筛选逐页收全 id，再一次 `exportMany`，逐条落成下载）；
-    批量导入只到契约与端点，页面上没有批量导入按钮。
+    （`data-action="export-filtered"`：按当前搜索与筛选逐页收全 id，再一次 `exportMany`，逐条落成下载）。
+    批量导入的页面入口是同一个文件输入（`multiple`）：选一个文件仍走单条导入（「导入为会话」/ 覆盖导入，
+    带 `reading` → `committing` 阶段提示），选多个 zip 一次走 `sessionAdmin/importMany`，好包各落成一条新会话、
+    坏包按**选中的文件名**给原因（聚合提示「已导入 N 个会话，M 个失败」）——整批不回滚。
   - `sessionAdmin/copyToWorkspace`：跨工作区复制 = 本包 `fork` + workspace 域的 `attach`。子会话的 `cwd`
     换成目标工作区路径，源会话原样保留（复制不是移动）；工作区不在注册表给 `SESSION_COPY_WORKSPACE_NOT_FOUND`，
     attach 失败撤掉刚派生的子会话并给 `SESSION_COPY_ATTACH_FAILED`。行上入口是「复制到工作区」

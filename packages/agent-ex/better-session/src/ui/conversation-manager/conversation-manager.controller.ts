@@ -10,6 +10,9 @@ import type {
   SessionBulkDeleteValue,
   SessionConsistencyValue,
   SessionExportManyValue,
+  SessionImportManyValue,
+  SessionLocateRequest,
+  SessionLocateValue,
   SessionOrganizeValue,
   SessionRepairAction,
   SessionRepairValue,
@@ -65,6 +68,10 @@ export interface ConversationManagerFace {
   // 按当前筛选结果批量导出：命中集逐页收全，再逐条落成下载。
   exportFiltered: (query?: SessionRowsRequest) => Promise<SessionExportManyValue>;
   importZip: (file: File, options?: ConversationImportOptions) => Promise<string>;
+  // 批量导入：多选 zip 一次请求（`sessionAdmin/importMany`），逐条结果交回页面聚合。
+  importMany: (files: readonly File[]) => Promise<SessionImportManyValue>;
+  // 事件定位（只读）：条件下推到宿主，回 seq 窗口与命中片段。
+  locateEvents: (sessionId: string, query: ConversationLocateQuery) => Promise<SessionLocateValue>;
   // 工作区选择项与跨工作区复制（复制 = fork + workspace 的 attach，源会话保留）。
   listWorkspaces: () => Promise<readonly ConversationWorkspaceOption[]>;
   copyToWorkspace: (
@@ -77,6 +84,9 @@ export interface ConversationManagerFace {
   checkConsistency: () => Promise<SessionConsistencyValue>;
   repairSession: (sessionId: string, action: SessionRepairAction) => Promise<SessionRepairValue>;
 }
+
+// 事件定位的条件：会话身份走第一个参数（与 `sessionAdmin/locate` 的请求同形去掉它）。
+export type ConversationLocateQuery = Omit<SessionLocateRequest, "sessionId">;
 
 // 带宿主错误码的失败：页面据此选本地化文案。
 export class ConversationManagerRequestError extends Error {
@@ -165,16 +175,18 @@ export class ConversationManagerController {
   readonly face: ConversationManagerFace = {
     listRows: (query) => this.listRows(query ?? {}),
     archive: async (sessionId) => {
-      await this.workspace.archiveSession(SessionId(sessionId));
+      await this.delegate(() => this.workspace.archiveSession(SessionId(sessionId)));
     },
     unarchive: async (sessionId) => {
-      await this.workspace.unarchiveSession(SessionId(sessionId));
+      await this.delegate(() => this.workspace.unarchiveSession(SessionId(sessionId)));
     },
     remove: (sessionId) => this.remove(sessionId),
     bulkDelete: (sessionIds) => this.bulkDelete(sessionIds),
     exportZip: (sessionId) => this.exportZip(sessionId),
     exportFiltered: (query) => this.exportFiltered(query ?? {}),
     importZip: (file, options) => this.importZip(file, options),
+    importMany: (files) => this.importMany(files),
+    locateEvents: (sessionId, query) => this.locateEvents(sessionId, query),
     listWorkspaces: () => this.listWorkspaces(),
     copyToWorkspace: (sessionId, workspaceId) => this.copyToWorkspace(sessionId, workspaceId),
     organizeData: () => this.organizeData(),
@@ -242,6 +254,46 @@ export class ConversationManagerController {
       for (const item of value.items) ids.push(item.sessionId);
       if (value.items.length === 0 || ids.length >= value.total) return ids;
     }
+  }
+
+  // 归档委托 workspace 域：它的失败面是自己的域码（`rpcError.code`），折成我们这一层的可读原因。
+  // 只映射语义重合的那一条（未知会话 = 会话不存在）；其余码保留原文，不硬翻译跨域的词。
+  private async delegate(action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+    } catch (error: unknown) {
+      const rpc = (error as { rpcError?: { code?: string; message?: string } } | null)?.rpcError;
+      if (rpc?.code === "session/not-found") {
+        throw new ConversationManagerRequestError(
+          rpc.message ?? "session not found",
+          "SESSION_NOT_FOUND",
+        );
+      }
+      throw error;
+    }
+  }
+
+  // 批量导入：一次请求带上全部包（remote 只走 JSON，逐条 base64），结果逐条交回页面聚合。
+  private async importMany(files: readonly File[]): Promise<SessionImportManyValue> {
+    const zips = await Promise.all(files.map((file) => zipBase64(file)));
+    const value = unwrap<SessionImportManyValue>(await this.endpoint.importMany({ zips }));
+    if (!Array.isArray(value.items)) {
+      throw new ConversationManagerRequestError("批量导入响应不可用", undefined);
+    }
+    await this.refresh();
+    return value;
+  }
+
+  // 事件定位：只读的行的读，条件下推；窗口合法性由宿主判，这里不重复一套。
+  private async locateEvents(
+    sessionId: string,
+    query: ConversationLocateQuery,
+  ): Promise<SessionLocateValue> {
+    const value = unwrap<SessionLocateValue>(await this.endpoint.locate({ sessionId, ...query }));
+    if (!Array.isArray(value.items)) {
+      throw new ConversationManagerRequestError("事件定位响应不可用", undefined);
+    }
+    return value;
   }
 
   private async importZip(file: File, options: ConversationImportOptions = {}): Promise<string> {

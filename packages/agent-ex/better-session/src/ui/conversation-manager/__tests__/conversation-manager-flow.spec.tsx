@@ -1,10 +1,8 @@
 // @vitest-environment happy-dom
 // L3：真装配（宿主 wire + 真库 + mock 模型目录）+ 真端点客户端 + 真页面。
 // 只替换模型的输出；页面动作走真 remote 到真库，断言落在「库里的行 / 页面上的行」。
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConversationManagerPage } from "../conversation-manager-page.tsx";
 import { zh } from "../locales.ts";
 import {
   archiveSessionsInDb,
@@ -14,6 +12,7 @@ import {
   startManagerFlow,
   type ManagerFlow,
 } from "../../../__tests__/support/manager-flow.ts";
+import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
 
 afterEach(cleanup);
 
@@ -42,13 +41,6 @@ afterEach(() => {
   delete target.revokeObjectURL;
 });
 
-const t = ((key: keyof typeof zh, args?: Record<string, unknown>) => {
-  const template: string = zh[key] ?? key;
-  return args === undefined
-    ? template
-    : template.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(args[name]));
-}) as never;
-
 const flows: ManagerFlow[] = [];
 
 afterEach(async () => {
@@ -61,10 +53,7 @@ async function start(): Promise<ManagerFlow> {
   return flow;
 }
 
-function renderPage(flow: ManagerFlow): HTMLElement {
-  const Page = ConversationManagerPage as unknown as (props: Record<string, unknown>) => ReactNode;
-  return render(<Page t={t} {...flow.face} />).container;
-}
+const renderPage = renderManagerPage;
 
 describe("L3 对话管理页：多选批量删除", () => {
   it("勾选两行后一次删除，两条都从库里消失、列表重拉为空", async () => {
@@ -88,6 +77,41 @@ describe("L3 对话管理页：多选批量删除", () => {
     expect(screen.queryByText("乙会话")).toBeNull();
     expect(await flow.host.headerOf("bulk-a")).toBeUndefined();
     expect(await flow.host.headerOf("bulk-b")).toBeUndefined();
+    // 逐条结算的聚合文案：两条都删掉，没有失败项。
+    await waitFor(() => {
+      expect(container.querySelector('[data-notice="result"]')?.textContent).toContain(
+        "已删除 2 条会话，0 条未删除。",
+      );
+    });
+  });
+});
+
+describe("L3 对话管理页：批量删除的逐条结算", () => {
+  it("一条已归档一条未归档：删掉能删的，提示里带出未删那条的会话与原因", async () => {
+    const flow = await start();
+    await seedTitledSession(flow.host, "mix-archived", "能删的会话");
+    await seedTitledSession(flow.host, "mix-unarchived", "不能删的会话");
+    await archiveSessionsInDb(flow.host, ["mix-archived"]);
+    const container = renderPage(flow);
+
+    await screen.findByText("能删的会话");
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 能删的会话" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 不能删的会话" }));
+    fireEvent.click(within(container).getByRole("button", { name: /批量删除/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: zh["bulk.confirmAccept"] }));
+
+    // 聚合文案：删掉几条、几条未删 + 未删那条的会话与原因（宿主给的域码折成的可读文案）。
+    await waitFor(() => {
+      expect(container.querySelector('[data-notice="result"]')).not.toBeNull();
+    });
+    const notice = container.querySelector('[data-notice="result"]')?.textContent ?? "";
+    expect(notice).toContain("已删除 1 条会话，1 条未删除。");
+    expect(notice).toContain("mix-unarchived");
+    expect(notice).toContain(zh["failure.notArchived"]);
+    // 库里的结果：能删的没了，不能删的还在。
+    expect(await flow.host.headerOf("mix-archived")).toBeUndefined();
+    expect(await flow.host.headerOf("mix-unarchived")).toBeDefined();
   });
 });
 

@@ -150,6 +150,28 @@ describe("对话管理动作面", () => {
     }
   });
 
+  it("归档失败时把 workspace 的未知会话折成会话不存在（页面据此给可读原因）", async () => {
+    const { face, dispose } = await controllerWith(async () => ROWS, {
+      workspace: {
+        archiveSession: async () => {
+          throw Object.assign(
+            new Error("workspace session archive failed: session/not-found: gone"),
+            {
+              name: "WorkspaceArchiveError",
+              rpcError: { code: "session/not-found", message: 'session "gone" not found' },
+            },
+          );
+        },
+        unarchiveSession: async () => undefined,
+      },
+    });
+    try {
+      await expect(face.archive("gone")).rejects.toMatchObject({ code: "SESSION_NOT_FOUND" });
+    } finally {
+      await dispose();
+    }
+  });
+
   it("删除打 sessionAdmin/delete 并刷新会话列表", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
@@ -343,6 +365,72 @@ describe("对话管理动作面", () => {
       await dispose();
       delete target.createObjectURL;
       delete target.revokeObjectURL;
+    }
+  });
+
+  it("批量导入：多个 zip 一次请求，逐条结果交回并刷新", async () => {
+    const sessions = { refresh: vi.fn(async () => undefined) };
+    const { face, calls, dispose } = await controllerWith(
+      async () => ({
+        ok: true,
+        value: {
+          items: [
+            { ok: true, sessionId: "new-1", filename: "session.v3.jsonl" },
+            { ok: false, code: "SESSION_IMPORT_NO_ARTIFACT" },
+          ],
+        },
+      }),
+      { sessions },
+    );
+    try {
+      const files = [
+        new File([new Uint8Array([1])], "a.zip", { type: "application/zip" }),
+        new File([new Uint8Array([2])], "b.zip", { type: "application/zip" }),
+      ];
+      const result = await face.importMany(files);
+      expect(calls.map((call) => call.endpoint)).toEqual(["sessionAdmin/importMany"]);
+      const request = calls[0]?.args["request"] as { zips: string[] };
+      expect(request.zips).toHaveLength(2);
+      // remote 只走 JSON：每个包都是不带 data-url 头的 base64。
+      expect(request.zips.every((zip) => !zip.includes(","))).toBe(true);
+      expect(result.items).toHaveLength(2);
+      expect(sessions.refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("事件定位：会话与条件一次带到 sessionAdmin/locate，窗口与命中原样交回", async () => {
+    const { face, calls, dispose } = await controllerWith(async () => ({
+      ok: true,
+      value: {
+        sessionId: "s1",
+        items: [
+          {
+            seq: 3,
+            type: "tool/call",
+            role: null,
+            name: "read",
+            time: 3,
+            snippet: "read notes.md",
+          },
+        ],
+        total: 1,
+        window: { fromSeq: 0, toSeq: 7 },
+      },
+    }));
+    try {
+      const value = await face.locateEvents("s1", { name: "read", fromTime: 1 });
+      expect(calls).toEqual([
+        {
+          endpoint: "sessionAdmin/locate",
+          args: { request: { sessionId: "s1", name: "read", fromTime: 1 } },
+        },
+      ]);
+      expect(value.window).toEqual({ fromSeq: 0, toSeq: 7 });
+      expect(value.items[0]?.snippet).toContain("read");
+    } finally {
+      await dispose();
     }
   });
 

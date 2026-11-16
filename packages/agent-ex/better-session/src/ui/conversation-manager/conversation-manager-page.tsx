@@ -37,6 +37,7 @@ import type {
   ConversationWorkspaceOption,
 } from "./conversation-manager.controller.ts";
 import { ConsistencyPanel } from "./consistency-panel.tsx";
+import { LocateModal } from "./locate-modal.tsx";
 import { failureCopy, failureText } from "./failure.ts";
 import { FilterChip } from "./filter-chip.tsx";
 import { RepairModal } from "./repair-modal.tsx";
@@ -135,6 +136,8 @@ export function ConversationManagerPage({
   exportZip,
   exportFiltered,
   importZip,
+  importMany,
+  locateEvents,
   listWorkspaces,
   copyToWorkspace,
   organizeData,
@@ -155,6 +158,7 @@ export function ConversationManagerPage({
   const [usageError, setUsageError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConversationRow | null>(null);
   const [bulkConfirming, setBulkConfirming] = useState(false);
+  const [bulkArchiving, setBulkArchiving] = useState(false);
   // 多选的 id 集：行重拉后只保留仍在当前页里的那些（已删的行不该继续被选中）。
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set<string>());
   const [replacing, setReplacing] = useState<PendingReplace | null>(null);
@@ -163,6 +167,8 @@ export function ConversationManagerPage({
   const [consistencyLoading, setConsistencyLoading] = useState(false);
   // 正在等确认修复的会话（两个日志修法都从这个弹窗发起）。
   const [repairing, setRepairing] = useState<ConversationRow | null>(null);
+  // 正在定位事件的会话（只读入口，条件是弹窗里的事）。
+  const [locating, setLocating] = useState<ConversationRow | null>(null);
   // 正在等确认的跨工作区复制：源会话、可选的目标工作区（null 表示还在读）、当前选择。
   const [copySource, setCopySource] = useState<ConversationRow | null>(null);
   const [copyWorkspaces, setCopyWorkspaces] = useState<
@@ -217,6 +223,34 @@ export function ConversationManagerPage({
       onSuccess: () => {
         reloadRows();
         focusHeading();
+      },
+    });
+  };
+
+  // 批量归档：**不进本包**（归档的 owner 在 workspace 域），页面逐条调注入的归档动作，
+  // 逐条收集失败再聚合成一条提示（哪一条没归档成功、为什么）。
+  const runBulkArchive = (ids: readonly string[]): void => {
+    const action = Promise.allSettled(ids.map((id) => archive(id))).then((results) => {
+      const failed = results.flatMap((result, index) =>
+        result.status === "rejected" ? [{ id: String(ids[index]), reason: result.reason }] : [],
+      );
+      const details = failed
+        .map((item) => t("bulk.failed", { title: item.id, reason: describeFailure(item.reason) }))
+        .join("；");
+      feedback.notify(
+        t("bulkArchive.done", { archived: results.length - failed.length, failed: failed.length }) +
+          (details === "" ? "" : " " + details),
+      );
+      return results;
+    });
+    feedback.run(action, {
+      onSuccess: () => {
+        setSelected(new Set<string>());
+        reloadRows();
+        focusHeading();
+      },
+      onSettled: () => {
+        setBulkArchiving(false);
       },
     });
   };
@@ -296,6 +330,43 @@ export function ConversationManagerPage({
         },
       },
     );
+  };
+
+  // 批量导入：多个 zip 一次交给宿主（`sessionAdmin/importMany`），逐条结果聚合成一条提示；
+  // 失败的条目按**选中的文件名**给原因（宿主只回 package 里的 artifact 名，认不回用户选的是哪一个）。
+  const importFiles = (files: readonly File[]): void => {
+    setImportStage("reading");
+    const action = importMany(files).then((value) => {
+      const failed = value.items.flatMap((item, index) =>
+        item.ok
+          ? []
+          : [
+              {
+                name: files[index]?.name ?? t("importMany.package", { n: index + 1 }),
+                reason: failureText(new ConversationManagerRequestError("", item.code), copy),
+              },
+            ],
+      );
+      const details = failed
+        .map((item) => t("bulk.failed", { title: item.name, reason: item.reason }))
+        .join("；");
+      feedback.notify(
+        t("importMany.done", {
+          imported: value.items.length - failed.length,
+          failed: failed.length,
+        }) + (details === "" ? "" : " " + details),
+      );
+      return value;
+    });
+    feedback.run(action, {
+      onSettled: () => {
+        setImportStage(null);
+      },
+      onSuccess: () => {
+        reloadRows();
+        focusHeading();
+      },
+    });
   };
 
   // 跨工作区复制：先读工作区列表（owner 在 workspace 域），确认后由宿主的 fork + attach 组合完成。
@@ -500,15 +571,22 @@ export function ConversationManagerPage({
               ref={fileRef}
               type="file"
               accept=".zip,application/zip"
+              multiple
               hidden
               onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
+                const files = [...(event.currentTarget.files ?? [])];
                 event.currentTarget.value = "";
+                const file = files[0];
                 if (file === undefined) return;
                 const intent = fileIntent.current;
                 if (intent.kind === "replace") {
                   // 覆盖会整段替换该会话的日志：先确认，确认前不发请求。
                   setReplacing({ row: intent.row, file });
+                  return;
+                }
+                // 多选 zip = 一次批量导入；单个文件仍走单条导入（阶段回调与提示不变）。
+                if (files.length > 1) {
+                  importFiles(files);
                   return;
                 }
                 importFile(file, { success: t("imported") });
@@ -745,6 +823,17 @@ export function ConversationManagerPage({
                         <Button
                           variant="outline"
                           size="sm"
+                          data-action="bulk-archive"
+                          disabled={feedback.busy}
+                          onClick={() => {
+                            setBulkArchiving(true);
+                          }}
+                        >
+                          {t("bulk.archiveNamed", { count: selected.size })}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           data-action="bulk-remove"
                           disabled={feedback.busy}
                           onClick={() => {
@@ -853,6 +942,18 @@ export function ConversationManagerPage({
                             }}
                           >
                             {t("repair")}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-action="locate"
+                            disabled={feedback.busy}
+                            aria-label={t("locateNamed", { title: row.title })}
+                            onClick={() => {
+                              setLocating(row);
+                            }}
+                          >
+                            {t("locate")}
                           </Button>
                           <Button
                             variant="outline"
@@ -983,6 +1084,39 @@ export function ConversationManagerPage({
               }}
             >
               {t("confirmAccept")}
+            </Button>
+          </>
+        }
+      />
+      <Modal
+        open={bulkArchiving}
+        onClose={() => {
+          setBulkArchiving(false);
+        }}
+        title={t("bulkArchive.confirmTitle")}
+        closeLabel={t("close")}
+        description={t("bulkArchive.confirmDescription")}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={feedback.busy}
+              onClick={() => {
+                setBulkArchiving(false);
+              }}
+            >
+              {t("confirmCancel")}
+            </Button>
+            <Button
+              variant="primary"
+              data-action="bulk-archive-confirm"
+              disabled={feedback.busy}
+              aria-busy={feedback.busy}
+              onClick={() => {
+                runBulkArchive([...selected]);
+              }}
+            >
+              {t("bulkArchive.confirmAccept")}
             </Button>
           </>
         }
@@ -1135,6 +1269,15 @@ export function ConversationManagerPage({
           const target = repairing;
           if (target === null) return;
           runRepair(target, action);
+        }}
+        t={t}
+      />
+      <LocateModal
+        target={locating === null ? null : { id: locating.id, title: locating.title }}
+        onLocate={locateEvents}
+        describeFailure={describeFailure}
+        onClose={() => {
+          setLocating(null);
         }}
         t={t}
       />

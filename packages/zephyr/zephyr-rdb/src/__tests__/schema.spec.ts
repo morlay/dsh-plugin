@@ -282,9 +282,10 @@ describe("PostgreSQL 自定义 schema", () => {
   it("迁移账本的建表 / 读 / 记账都在配置的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
     const migrations = [{ id: "20261109-probe", up: async () => {} }];
-    expect(await runMigrations(database, { catalog: [items], migrations })).toEqual([
-      "20261109-probe",
-    ]);
+    expect(await runMigrations(database, { catalog: [items], migrations })).toEqual({
+      executed: ["20261109-probe"],
+      drift: [],
+    });
     const sql = statements.map((statement) => statement.text);
     expect(
       sql.some((text) =>

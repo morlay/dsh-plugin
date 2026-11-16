@@ -1,15 +1,19 @@
 // 全链路用例的**宿主半**装配：真 cordis ctx + 真会话库（临时目录 sqlite）+ 真投影注册表 / 检查点 /
 // 分支 / 持久化 + 真编辑编排与 wire 端点。
 //
-// 两处替身都属于**别的域**：模型 / agent 环的响应（`AgentDirectoryStub`：本包不依赖 agent 域包，而编辑
-// 编排的「先停 agent、再把用户输入排进重放队列」要一个目录面，替身实现上游 `AgentRegistry` 的最小子集
-// `get` / `list`），与工作区记录（`FakeWorkspaceRegistry`：成员归属是 workspace 域的事，跨工作区复制
-// 只组合它的 `attach`）。本包自己的数据面与装配全是真的。
+// 两处替身都属于**别的域**：模型 / agent 环的响应（`AgentDirectoryStub`：替身实现上游 `AgentRegistry` 的
+// 最小子集 `get` / `list`，编辑编排的「先停 agent、再把用户输入排进重放队列」要一个目录面），与工作区
+// 记录（`FakeWorkspaceRegistry`：成员归属是 workspace 域的事，跨工作区复制只组合它的 `attach`）。
+// 本包自己的数据面与装配全是真的。
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AssistantMessage, UserMessage } from "@morlay/dsh-agent/contract";
+import {
+  AgentDirectory,
+  type AssistantMessage,
+  type UserMessage,
+} from "@morlay/dsh-agent/contract";
 import {
   Session,
   SessionId,
@@ -27,15 +31,8 @@ import {
   SessionAgentControlDefault,
   SessionEditorEndpointDefault,
 } from "@morlay/better-session/server";
-import { SessionEditor, SessionEditorDefault } from "@morlay/better-session";
-import {
-  createCtx,
-  mountRows,
-  publish,
-  publishToken,
-  type MountedContext,
-  type RowEntry,
-} from "./base.ts";
+import { SessionAgentControl, SessionEditor, SessionEditorDefault } from "@morlay/better-session";
+import { createCtx, mountRows, publishToken, type MountedContext, type RowEntry } from "./base.ts";
 import { mountOnto } from "./base.ts";
 
 /** 替身目录里那个「活着的 agent」：真会话 + 记录 followup / cancel。 */
@@ -142,6 +139,8 @@ export interface Host {
   readonly editor: SessionEditorDefault;
   /** `agents` 替身（模型 / agent 环的响应）。 */
   readonly agentDirectory: AgentDirectoryStub;
+  /** 本包的控制面：它的目录来自**契约令牌**注入（不是按服务名现读）。 */
+  readonly control: SessionAgentControl;
   /** `workspaceRegistry` 替身：工作区记录不归本包，跨工作区复制只调它的 `attach`。 */
   readonly workspaces: FakeWorkspaceRegistry;
   /** 库里读一份日志（读库，不读内存）。 */
@@ -187,17 +186,18 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
 
   const agentDirectory = new AgentDirectoryStub();
   // 顺序 = 依赖：目录面 → agent 目录适配行 → 编辑编排（装配期注入适配行）→ wire 端点。
-  // 目录面在 `before` 里发布：消费它的行在**装配期**就读这个名字。
+  // 目录面在 `before` 里按**契约令牌**发布：消费它的行在装配期注入的就是这一份（`inject.optional`）。
   const wired = await mountRows(endpointRows, {
     dataDir: root,
     ctx,
     before: (row) => {
-      if (options.withoutAgents !== true) publish(row, "agents", agentDirectory);
+      if (options.withoutAgents !== true) publishToken(row, AgentDirectory, agentDirectory);
     },
   });
   // 面的取法与消费方一致：按契约令牌拿，不按行的构造面拿。
   const handlers = wired.get(RemoteHandlers);
   const editor = wired.get(SessionEditor) as SessionEditorDefault;
+  const control = wired.get(SessionAgentControl);
 
   const persistence = fiber.persistence;
   return {
@@ -208,6 +208,7 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
     handlers,
     editor,
     agentDirectory,
+    control,
     workspaces,
     async eventsOf(id) {
       const reader = await persistence.open(SessionId(id), "read");

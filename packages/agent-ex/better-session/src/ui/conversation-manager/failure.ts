@@ -49,6 +49,8 @@ export function failureText(error: unknown, copy: FailureCopy): string {
     case "SESSION_IMPORT_LIVE":
       return copy.importLive;
     case "SESSION_IMPORT_INVALID_PACKAGE":
+    // 包里没有上游 format 的 artifact：对用户是同一件事（选的不是会话导出包）。
+    case "SESSION_IMPORT_NO_ARTIFACT":
       return copy.importInvalidPackage;
     case "SESSION_IMPORT_TOO_LARGE":
       return copy.importTooLarge;

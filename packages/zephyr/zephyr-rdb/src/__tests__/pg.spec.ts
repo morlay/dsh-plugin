@@ -148,10 +148,14 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
       expect(owners).toEqual([{ owner: "a" }]);
 
       // 迁移账本：建表、读、记账都在同一 schema，重跑只跑没记过的。
-      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual([
-        migration.id,
-      ]);
-      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual([]);
+      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual({
+        executed: [migration.id],
+        drift: [],
+      });
+      expect(await runMigrations(database, { catalog, migrations: [migration] })).toEqual({
+        executed: [],
+        drift: [],
+      });
       const ledger = await database.read<{ f_id: string }>(
         fragment('SELECT f_id FROM "dsh_test"."t_schema_migrations"'),
       );
@@ -182,7 +186,10 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
     const reopened = await openDatabase(config);
     try {
       expect((await ensureSchema(reopened, [items, parts])).statements).toEqual([]);
-      expect(await runMigrations(reopened, { catalog, migrations: [migration] })).toEqual([]);
+      expect(await runMigrations(reopened, { catalog, migrations: [migration] })).toEqual({
+        executed: [],
+        drift: [],
+      });
       const [total] = await collect(reopened.table("t_items").select({ n: count() }));
       expect(Number(total?.n)).toBe(2);
     } finally {

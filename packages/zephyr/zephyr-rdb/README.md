@@ -155,15 +155,26 @@ const migrations = new MigrationRegistry().register({
   },
 });
 
-await runMigrations(database, { catalog, migrations }); // 先对齐结构，再按 id 顺序跑没记过的
+const { executed, drift } = await runMigrations(database, { catalog, migrations });
+// 先对齐结构，再按 id 顺序跑没记过的；executed 是本次跑的迁移 id，drift 是结构对齐的漂移
 ```
 
 每条迁移在**同一个事务**里执行并记账，失败即回滚、不记账，重跑只跑没记过的。并发迁移由方言保证：PostgreSQL
 先拿事务级 `advisory lock`，SQLite 靠 `BEGIN IMMEDIATE` 的写锁——同一时刻只有一方在跑。
 
-`ensureSchema` 返回 `{ statements, drift }`：`statements` 是实际执行的语句，`drift` 是「同名不同形」的清单。
-可自动修的（索引列变了、索引唯一性变了、唯一约束缺失）会重建索引并进 `drift`（`fix: "auto"`）；只报告的
-（列类型 / 可空 / 默认值变了）进 `drift`（`fix: "manual"`），不改表。
+两个出口是**同一个形状**，各带一份 `drift`：
+
+| 入口            | 本次做了什么                                               | 漂移                             |
+| --------------- | ---------------------------------------------------------- | -------------------------------- |
+| `ensureSchema`  | `{ statements, drift }`：实际执行的 DDL 语句               | 「同名不同形」与 orphan 表的清单 |
+| `runMigrations` | `{ executed, drift }`：本次实际执行的迁移 id（按执行顺序） | 结构对齐那一步的原样转出         |
+
+`drift` 里的每条都带 `kind` 与 `fix`：可自动修的（索引列变了、索引唯一性变了、唯一约束缺失）已在
+`ensureSchema` 里重建索引，进 `drift` 时 `fix: "auto"`；只报告的（列类型 / 可空 / 默认值变了）进
+`drift`（`fix: "manual"`），不改表。**「库里有、catalog 没有」的表列为 `kind: "orphan"`、`fix: "manual"`**
+（差集已排除视图、迁移账本 `t_schema_migrations` 与方言自有表如 `sqlite_*`）：只报告、不生成 DDL，
+`allowDestructive` 也不会删它——DDL 的破坏性动作由人决定。所以打开库的人拿 `runMigrations` 的一次返回
+就能同时知道「跑了哪些迁移」与「库里多了什么」，不必自己再调一遍 `planSchema`。
 
 ## 表达式（`E`）
 

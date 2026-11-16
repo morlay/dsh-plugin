@@ -18,6 +18,28 @@ export const PAGE_SIZE = 20;
 // 时间筛选：全部 / 最近 7 个自然日 / 最近 30 个自然日（映射成宿主的 updatedAfter）。
 export type ConversationTimeFilter = "all" | "7d" | "30d";
 
+// 本地自然日的零点：与宿主统计（`data/usage.ts` 的 `localDayKey` 口径）同一条边界——host 本地时区的 00:00。
+function localDayStart(now: number): Date {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+/**
+ * 时间筛选的下界：「最近 N 个自然日」的起点（含今天共 N 天）= 今天零点往前 N-1 天。
+ *
+ * 用日历日回退（不是减 N × 24h）：跨夏令时切换时「N-1 天前的零点」才是本地零点；与宿主
+ * `resolveUsageSince` 的 `7d` / `30d` 同一口径，统计与会话列表因此圈的是同一段日子。
+ * @param now - 当前时刻（毫秒）。
+ * @param days - 自然日天数（至少 1）。
+ * @returns 窗口起点（毫秒，本地零点）。
+ */
+export function localDayWindowStart(now: number, days: number): number {
+  const start = localDayStart(now);
+  start.setDate(start.getDate() - (Math.max(days, 1) - 1));
+  return start.getTime();
+}
+
 // 归档筛选：全部 / 只看已归档 / 只看未归档。
 export type ConversationArchivedFilter = "all" | "only" | "unarchived";
 
@@ -101,8 +123,9 @@ export function useRowsQuery(
 
   const days = timeFilter === "7d" ? 7 : timeFilter === "30d" ? 30 : 0;
   // 时间窗在筛选变化时钉住（不是在每次请求时重算）：列表与批量导出用的是同一个窗口。
+  // 下界是**本地自然日的零点**（近 7 天 = 今天零点往前 6 天），不是此刻往前 N × 24h。
   const updatedAfter = useMemo(
-    () => (days === 0 ? undefined : Date.now() - days * 86_400_000),
+    () => (days === 0 ? undefined : localDayWindowStart(Date.now(), days)),
     [days],
   );
   const filters = useMemo<SessionRowsRequest>(

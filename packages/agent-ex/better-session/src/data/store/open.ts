@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, open as openFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
-  ensureSchema,
   fingerprintHex,
   openDatabase as openRdbkitDatabase,
   runMigrations,
   type Database,
   type LibraryIdentity,
+  type SchemaDrift,
 } from "@morlay/zephyr-rdb";
 import type { Backend } from "../backend.ts";
 import { catalog, persistenceState } from "../entities/index.ts";
@@ -87,11 +87,12 @@ export async function openRdbBackend(config: BackendConfig): Promise<Backend> {
     await inWrite(async (scoped) => {
       // 库身份是事务的第一步：初始化失败时连身份戳也不留在库里。
       await claimLibrary(scoped, config);
-      await ensureSchema(scoped, catalog);
-      await runMigrations(scoped, {
+      // 结构对齐由 `runMigrations` 自己做（它还多管迁移账本）：这里只取它交回的漂移。
+      const { drift } = await runMigrations(scoped, {
         catalog,
         migrations: sessionMigrations(),
       });
+      warnManualDrift(drift);
       await backfillUsageTables(scoped);
 
       const state = persistenceState.table(scoped);
@@ -130,6 +131,20 @@ export async function openRdbBackend(config: BackendConfig): Promise<Backend> {
     await database.close();
     throw error;
   }
+}
+
+// 结构漂移的消费口径：库里有、catalog 没有的表（orphan），以及改列类型 / 可空 / 默认值这类差异，
+// **只报告不自动修**——记一条汇总 warn（列出表名 / 列名），不阻塞打开：DDL 的破坏性动作由人决定。
+// 可自动修的漂移（索引重建 / 补唯一约束）在 `runMigrations` 里已经修好，不进这条 warn。
+function warnManualDrift(drift: readonly SchemaDrift[]): void {
+  const manual = drift.filter((entry) => entry.fix === "manual");
+  if (manual.length === 0) return;
+  console.warn(
+    "session-rdb: 库结构与表定义有 " +
+      String(manual.length) +
+      " 处漂移，只报告不自动修（改列 / 删表由人决定）：" +
+      manual.map((entry) => entry.detail).join("; "),
+  );
 }
 
 /** 库文件身份：`file:dev:ino:birthtimeNs:store:<storeId>`（符号链接指向同一 inode 时身份相同）。 */

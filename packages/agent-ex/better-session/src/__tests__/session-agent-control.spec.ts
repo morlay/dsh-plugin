@@ -90,6 +90,23 @@ describe("SessionAgentControl：agent 目录面", () => {
     },
   );
 
+  it("目录按契约令牌注入（不按服务名 `agents` 现读）", { timeout: 60_000 }, async () => {
+    const host = await startHost();
+    opened.push(host);
+    // 装配里**只有契约令牌**上有目录：按上游服务名现读的话这里会拿到 undefined。
+    expect(host.ctx.get("agents", false)).toBeUndefined();
+
+    const live = host.ctx.sessions.create(SessionId("token-injected"), {
+      meta: meta("token-injected", "/work"),
+      seed: twoTurnLog(),
+    });
+    await host.ctx.sessions.flush(live);
+    const agent = host.agentDirectory.attach(live);
+
+    expect(host.control.list().map((entry) => entry.id)).toEqual([agent.id]);
+    expect(host.control.get(agent.id)?.session).toBe(live);
+  });
+
   it("没目录：retry 不截断日志、显式失败带码（没有重放入口）", { timeout: 60_000 }, async () => {
     const host = await startHost({ withoutAgents: true });
     opened.push(host);

@@ -45,7 +45,7 @@ describe("迁移并发锁（SQLite）", () => {
         runMigrations(first, { catalog, migrations }),
         runMigrations(second, { catalog, migrations }),
       ]);
-      expect([...left, ...right]).toEqual(["20261121-slow"]);
+      expect([...left.executed, ...right.executed]).toEqual(["20261121-slow"]);
       expect(runs).toBe(1);
       expect(await ledgerIds(first)).toEqual(["20261121-slow"]);
     } finally {
@@ -81,7 +81,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("迁移并发锁（PostgreSQL）", () 
         runMigrations(first, { catalog, migrations }),
         runMigrations(second, { catalog, migrations }),
       ]);
-      expect([...left, ...right]).toEqual(["20261121-pg-slow"]);
+      expect([...left.executed, ...right.executed]).toEqual(["20261121-pg-slow"]);
       expect(runs).toBe(1);
       expect(await ledgerIds(first)).toEqual(["20261121-pg-slow"]);
     } finally {

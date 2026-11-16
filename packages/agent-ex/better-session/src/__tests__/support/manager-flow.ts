@@ -1,16 +1,19 @@
 // 对话管理页的 L3 装配：宿主半（`startHost`：真 wire + 真库 + mock 模型目录）+
 // 浏览器半（真端点客户端 + 真 controller）。页面由用例直接渲染，`face` 从这里拿。
 //
-// 替身只有三件：workspace 的归档动作（本用例的归档标记直接打在库里）、工作区列表的客户端快照
-// （工作区记录的 owner 在 workspace 域，跨工作区复制只读它的列表）与上游 composer 的刷新面。
+// 替身只剩两件：工作区列表的客户端快照（工作区记录的 owner 在 workspace 域，跨工作区复制只读它的列表）
+// 与上游 composer 的刷新面。**归档不在这里造假**：`archiveSession` 走 storage 接管那条真写穿
+// （workspace 域的 global → `syncSessionFlags` → 会话行的 `f_archived_at`），与生产同一条路。
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { asRdbStore } from "@morlay/better-session";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { WorkspaceController } from "@morlay/dsh-workspace/ui";
+import type { WorkspaceDomainState } from "@morlay/dsh-workspace/contract";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
-import type { SessionEvent } from "@morlay/dsh-session/contract";
+import { SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
 import { meta, turnLog } from "@morlay/dsh-session/testing";
 import { mountRows, type MountedRows, type RowEntry } from "./base.ts";
 import { startHost, type Host } from "./e2e-host.ts";
@@ -31,16 +34,70 @@ export interface ManagerFlow {
   readonly host: Host;
   readonly face: ConversationManagerFace;
   readonly targetWorkspace: ManagerTargetWorkspace;
+  /** 库里已归档的会话 id：经 storage 接管读 workspace 域（与页面过滤读的是同一份标记）。 */
+  archivedSessionIds(): Promise<readonly string[]>;
   dispose(): Promise<void>;
 }
 
 const TARGET_WORKSPACE_TITLE = "目标工作区";
 
-// 归档动作的替身：本用例的归档状态直接写库（归档的 owner 在 workspace 域，不在这条链上）。
-const workspaceStub = {
-  archiveSession: async (): Promise<void> => undefined,
-  unarchiveSession: async (): Promise<void> => undefined,
+// 归档集合的初值：workspace 域第一次落 global 时的那份空状态（`initialized` 是域的既有字段）。
+const EMPTY_WORKSPACE_STATE: WorkspaceDomainState = {
+  initialized: true,
+  workspaceIds: [],
+  archivedSessionIds: [],
+  pinnedSessionIds: [],
 };
+
+const WORKSPACE_DOMAIN = "workspace";
+
+// workspace 域的 global 文档（归档 / 钉住两个集合在这里）。
+async function workspaceState(host: Host): Promise<WorkspaceDomainState> {
+  const state = await (
+    await asRdbStore(host.persistence).storageRepository()
+  ).readDomainGlobal(WORKSPACE_DOMAIN);
+  return (state ?? EMPTY_WORKSPACE_STATE) as WorkspaceDomainState;
+}
+
+// 改归档集合：写 workspace 域的 global，由 storage 接管写穿到会话行（`syncSessionFlags`）。
+async function writeArchived(
+  host: Host,
+  mutate: (archived: readonly string[]) => readonly string[],
+): Promise<void> {
+  const repository = await asRdbStore(host.persistence).storageRepository();
+  const state = await workspaceState(host);
+  const archived = mutate(state.archivedSessionIds.map(String));
+  await repository.writeDomainGlobal(WORKSPACE_DOMAIN, { ...state, archivedSessionIds: archived });
+}
+
+// 上游 registry 只接受**已知**会话：未知 id 给 `session/not-found`（`WorkspaceArchiveError` 的形状）。
+function unknownSession(sessionId: string): Error {
+  const message = `session "${sessionId}" not found`;
+  return Object.assign(
+    new Error(`workspace session archive failed: session/not-found: ${message}`),
+    {
+      name: "WorkspaceArchiveError",
+      rpcError: { code: "session/not-found", message },
+    },
+  );
+}
+
+// 归档面：workspace 域的那一个动作，写的是真写穿；未知会话与上游 registry 一样拒绝。
+function archiveFace(host: Host) {
+  return {
+    archiveSession: async (sessionId: string): Promise<void> => {
+      if ((await asRdbStore(host.persistence).headerOf(sessionId)) === undefined) {
+        throw unknownSession(sessionId);
+      }
+      await writeArchived(host, (archived) =>
+        archived.includes(sessionId) ? archived : [...archived, sessionId],
+      );
+    },
+    unarchiveSession: async (sessionId: string): Promise<void> => {
+      await writeArchived(host, (archived) => archived.filter((id) => id !== sessionId));
+    },
+  };
+}
 
 // 上游 composer 的刷新面：动作成功后 controller 会调它。
 const sessionControllerStub = {
@@ -88,7 +145,7 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
   const rows: readonly RowEntry[] = [
     { provide: RemoteHandlers as never, useValue: host.handlers },
     { provide: SessionController as never, useValue: sessionControllerStub },
-    { provide: UiWorkspace as never, useValue: workspaceStub },
+    { provide: UiWorkspace as never, useValue: archiveFace(host) },
     { provide: WorkspaceController as never, useValue: workspaceListStub },
     LocalRemote,
     SessionAdminEndpointClient,
@@ -100,6 +157,7 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
     host,
     face: controller.face,
     targetWorkspace,
+    archivedSessionIds: async () => (await workspaceState(host)).archivedSessionIds.map(String),
     async dispose() {
       await app.dispose();
       await host.dispose();
@@ -135,20 +193,81 @@ export async function seedTitledSession(host: Host, id: string, title: string): 
 }
 
 /**
- * 直接打归档标记（归档动作归 workspace 域；这里只造删除的前置状态）。
+ * 造归档前置状态（删除只对已归档的会话开放）：走 workspace 域的归档集合，
+ * 由 storage 接管写穿到会话行——与页面上的归档按钮同一条路，只是不带页面。
  *
  * @param host - 宿主装配。
  * @param ids - 要标记为已归档的会话 id。
  */
 export async function archiveSessionsInDb(host: Host, ids: readonly string[]): Promise<void> {
-  const sqlite = await openInitializedSqlite(host.dbPath, "wal");
-  try {
-    for (const id of ids) {
-      sqlite.prepare("UPDATE t_sessions SET f_archived_at = 1 WHERE f_session_id = ?").run(id);
-    }
-  } finally {
-    sqlite.close();
-  }
+  await writeArchived(host, (archived) => [...new Set([...archived, ...ids])]);
+}
+
+/**
+ * 删一个会话（真删除路径：只允许已归档且不在运行中的会话）。
+ *
+ * @param host - 宿主装配。
+ * @param id - 会话 id。
+ */
+export async function deleteSessionInDb(host: Host, id: string): Promise<void> {
+  await asRdbStore(host.persistence).deleteSession(id);
+}
+
+/**
+ * 落一条带标题的会话，并把整段日志的事件时间钉在 `at`（列表的 `updatedAt` 取最后活动时间）。
+ *
+ * @param host - 宿主装配。
+ * @param id - 会话 id。
+ * @param title - 列表里看到的标题。
+ * @param at - 事件时刻（毫秒）；决定这一行在时间筛选里属于哪一天。
+ */
+export async function seedSessionAt(
+  host: Host,
+  id: string,
+  title: string,
+  at: number,
+): Promise<void> {
+  const handle = await host.persistence.create(meta(id));
+  await handle.append(
+    titledLog(title, id).map((event) => ({ ...event, time: at }) as SessionEvent),
+  );
+  await handle.close();
+}
+
+/**
+ * 落一条带标题的会话，日志里有一个名为 `toolName` 的 `tool/call`（定位用例按工具名命中它）。
+ *
+ * @param host - 宿主装配。
+ * @param id - 会话 id。
+ * @param title - 列表里看到的标题。
+ * @param toolName - 工具名（事件行的 `f_name` 列）。
+ * @returns 那条 `tool/call` 的 seq。
+ */
+export async function seedToolSession(
+  host: Host,
+  id: string,
+  title: string,
+  toolName: string,
+): Promise<number> {
+  const log = titledLog(title, id);
+  // tool/call 不是 surface 事件（不能带 surfaceOp）：它按普通事件落库，维度列里带上工具名。
+  const call = {
+    type: "tool/call",
+    data: { callId: id + "-call", name: toolName, input: { path: "notes.md" } },
+  } as unknown as SessionEvent;
+  // 插在用户输入之后（与它同一时刻），整段重编号：seq 必须从 0 连续（桥接表的序号就是日志位置）。
+  const shape = log.flatMap((event) =>
+    event.type === "user/message"
+      ? [event, { ...call, time: event.time } as SessionEvent]
+      : [event],
+  );
+  const events = shape.map(
+    (event, index) => ({ ...event, seq: SessionSeq(index) }) as SessionEvent,
+  );
+  const handle = await host.persistence.create(meta(id));
+  await handle.append(events);
+  await handle.close();
+  return events.findIndex((event) => event.type === "tool/call");
 }
 
 /**

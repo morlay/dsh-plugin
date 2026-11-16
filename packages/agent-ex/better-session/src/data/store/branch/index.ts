@@ -1,6 +1,10 @@
 // 分支行：把持久化后端的行级端口接到 SessionBranch 契约上，并负责 live 会话的内存 log 失效。
 //
 // 前缀读取与 fork / rewind 在 provider / fork / rewind 里；这里只有契约行与装配。
+//
+// 投影注册表按**契约令牌**取（`inject.optional(SessionProjectionStore)`，读注入值本身是延迟的：
+// 装配顺序由清单的拓扑排序保证）。其余三条**故意**仍按服务名在调用时现读，理由逐条写在 `lookup` 上：
+// 它们要么读上游的 private 字段、要么读本包扩展的方法、要么晚挂载且令牌与上游契约不匹配。
 import {
   SessionLogOffset,
   type Session,
@@ -15,7 +19,7 @@ import {
   type ForkFromOptions,
 } from "@morlay/better-session/endpoint";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { SessionStore } from "@morlay/dsh-session";
+import { SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
 import { inject, Injectable, Logger, type Context, type OnInit } from "@morlay/zephyr";
 import { SessionAgentControl } from "../../../contract/session-agent-control.contract.ts";
 import { SessionBranch } from "../../../contract/session-branch.contract.ts";
@@ -41,12 +45,14 @@ export class SessionBranchRdb extends SessionBranch implements OnInit {
 
   private readonly sessions = inject(SessionStore);
 
+  private readonly projections = inject.optional(SessionProjectionStore);
+
   private readonly agents = inject.optional(SessionAgentControl);
 
   private readonly logger = inject(Logger);
 
-  // 可选能力（投影注册表 / token-meter / agent 目录）在**调用时**按名字读：装配里可能晚于本行挂载，
-  // 装配期回填的那份引用不会随之更新。
+  // `lookup` 的读面（agent 目录 / token-meter / 投影检查点）：它们在**调用时**按名字现读，
+  // 因为晚挂载的服务在装配期回填的那份引用不会随之更新。
   private row: Context | undefined;
 
   private readonly warned = new Set<string>();
@@ -142,6 +148,13 @@ export class SessionBranchRdb extends SessionBranch implements OnInit {
   }
 
   // 可选能力按名字在**调用时**读：晚挂载的服务也要看得到。
+  //
+  // 只剩三条走这里，各自的原因不同（都不该被"统一成契约令牌"抹平）：
+  // - `agents`：`getAgent` 要的是上游 `Agent` 的 **private 面**（`requestHeaderLogged` 与 `inbox`），
+  //   `AgentDirectory` 契约上只有 `get` / `list`；测试装配（`mountRows`）里替身也是在装配之后才发布的。
+  // - `tokenMeter`：复位读的是上游 private 字段 `states`（`WeakMap`），任何契约都不覆盖它。
+  // - `sessionProjectionCache`：晚挂载（装配顺序在清单靠后），且本包实现是 `implements` 上游契约
+  //   而不是继承它（令牌与 `SessionProjectionCache` 不等），另外复位要用本包扩展的 `truncateTo`。
   private lookup<T>(name: string): T | undefined {
     return (this.row as unknown as { get(n: string, s?: boolean): unknown } | undefined)?.get(
       name,
@@ -151,7 +164,7 @@ export class SessionBranchRdb extends SessionBranch implements OnInit {
 
   private resetDeps(): DerivedStateResetDeps {
     return {
-      projections: () => this.lookup("sessionProjections"),
+      projections: () => this.projections,
       tokenMeter: () => this.lookup("tokenMeter"),
       warnOnce: (key, message) => {
         if (this.warned.has(key)) return;

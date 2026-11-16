@@ -138,4 +138,5 @@ export {
   schemaMigrations,
   type Migration,
   type RunMigrationsOptions,
+  type RunMigrationsResult,
 } from "./migration.ts";

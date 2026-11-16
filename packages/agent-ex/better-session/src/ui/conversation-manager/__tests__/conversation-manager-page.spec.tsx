@@ -97,6 +97,15 @@ async function renderPage(options: {
     exportZip: vi.fn(async () => undefined),
     exportFiltered: vi.fn(async () => ({ items: [] })),
     importZip: vi.fn(async () => "session-new"),
+    importMany: vi.fn(async (files: readonly File[]) => ({
+      items: files.map((file) => ({ ok: true, filename: file.name })),
+    })),
+    locateEvents: vi.fn(async () => ({
+      sessionId: "s1",
+      items: [],
+      total: 0,
+      window: { fromSeq: 0, toSeq: 0 },
+    })),
     listWorkspaces: vi.fn(async () => [{ workspaceId: "w-target", title: "目标工作区" }]),
     copyToWorkspace: vi.fn(async (sessionId: string, workspaceId: string) => ({
       sessionId: "copy-of-" + sessionId,
@@ -633,6 +642,117 @@ describe("对话管理页：动作", () => {
     await waitFor(() => {
       expect(bench.faces.exportZip).toHaveBeenCalledWith("s3");
     });
+  });
+
+  it("批量归档先确认：确认前不发请求，确认后逐条调归档动作并把失败聚合成一条提示", async () => {
+    const bench = await renderPage({ archived: [] });
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 会话 A" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 会话 B" }));
+    fireEvent.click(screen.getByRole("button", { name: "归档 2 条会话" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain(zh["bulkArchive.confirmTitle"]);
+    expect(bench.faces.archive).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: zh["bulkArchive.confirmAccept"] }));
+
+    await waitFor(() => {
+      expect(bench.faces.archive).toHaveBeenCalledTimes(2);
+    });
+    expect(bench.faces.archive).toHaveBeenCalledWith("s1");
+    expect(bench.faces.archive).toHaveBeenCalledWith("s2");
+    await waitFor(() => {
+      expect(screen.getByText("已归档 2 条会话，0 条失败。")).toBeTruthy();
+    });
+  });
+
+  it("批量归档逐条结算：失败那条的会话与原因进同一条提示", async () => {
+    const bench = await renderPage({
+      archived: [],
+      faces: {
+        archive: vi.fn(async (sessionId: string) => {
+          if (sessionId === "s2") {
+            throw new ConversationManagerRequestError(
+              'session "s2" not found',
+              "SESSION_NOT_FOUND",
+            );
+          }
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 会话 A" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 会话 B" }));
+    fireEvent.click(screen.getByRole("button", { name: "归档 2 条会话" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: zh["bulkArchive.confirmAccept"] }));
+
+    await waitFor(() => {
+      expect(bench.container.querySelector('[data-notice="result"]')).not.toBeNull();
+    });
+    const notice = bench.container.querySelector('[data-notice="result"]')?.textContent ?? "";
+    expect(notice).toContain("已归档 1 条会话，1 条失败。");
+    expect(notice).toContain("s2");
+    expect(notice).toContain(zh["failure.missing"]);
+  });
+
+  it("多选 zip 走一次批量导入，单个文件仍走单条导入", async () => {
+    const bench = await renderPage({ archived: [] });
+    const input = bench.container.querySelector('input[type="file"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing file input");
+    const files = [
+      new File([new Uint8Array([1])], "a.zip", { type: "application/zip" }),
+      new File([new Uint8Array([2])], "b.zip", { type: "application/zip" }),
+    ];
+    fireEvent.change(input, { target: { files } });
+    await waitFor(() => {
+      expect(bench.faces.importMany).toHaveBeenCalledWith(files);
+    });
+    expect(bench.faces.importZip).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("已导入 2 个会话，0 个失败。")).toBeTruthy();
+    });
+
+    // 单个文件：还是单条导入那条路（阶段回调与「已导入为新会话」文案不变）。
+    fireEvent.change(input, { target: { files: [files[0]] } });
+    await waitFor(() => {
+      expect(bench.faces.importZip).toHaveBeenCalledTimes(1);
+    });
+    expect(bench.faces.importMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("定位弹窗把时间两栏换成毫秒下推，命中列表只读", async () => {
+    const bench = await renderPage({
+      archived: [],
+      faces: {
+        locateEvents: vi.fn(async () => ({
+          sessionId: "s1",
+          items: [
+            { seq: 2, type: "user/message", role: "user", name: null, time: 1, snippet: "深水区" },
+          ],
+          total: 1,
+          window: { fromSeq: 0, toSeq: 5 },
+        })),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "在 会话 A 里定位事件" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(zh["locate.fromTime"]), {
+      target: { value: "2026-03-10T00:00" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(zh["locate.name"]), {
+      target: { value: "read" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: zh["locate.run"] }));
+
+    await waitFor(() => {
+      expect(bench.faces.locateEvents).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ name: "read", fromTime: new Date("2026-03-10T00:00").getTime() }),
+      );
+    });
+    const results = dialog.querySelector('[data-locate="results"]');
+    expect(results?.getAttribute("data-locate-window")).toBe("0-5");
+    expect(dialog.querySelector('[data-locate-hit="2"]')?.textContent).toContain("深水区");
+    expect(results?.querySelector("button")).toBeNull();
   });
 
   it("会话在别处运行时给可读文案与建议（不是原始错误）", async () => {

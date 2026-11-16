@@ -35,7 +35,9 @@ export const provideBetterSession = provide([
   SessionBranchRdb,
   SessionQueryRdb,
   // 运行中 agent 的目录面：编辑编排「先停 agent、再把用户输入排进重放队列」靠它。
-  // 必须排在编辑行**之前**：编辑行装配期注入的这份引用不会随晚挂载的行更新。
+  // 这一行按**契约令牌**注入上游目录（`inject.optional(AgentDirectory)`），所以它必须在同一份
+  // bootstrap 清单里，并且由那份清单的**拓扑排序**排在目录适配行之后——`inject.optional` 也参与
+  // 排序（它不是"可以不按依赖序"）。目录缺席时注入得到 `undefined`，本行退化成"只重写日志"。
   SessionAgentControlDefault,
   SessionEditorDefault,
   // wire 端点跟着这一面走：它们只转发到上面的实现，分开装只会多一个漏装的机会。
