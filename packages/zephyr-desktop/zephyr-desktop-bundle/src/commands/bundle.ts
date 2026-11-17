@@ -110,6 +110,7 @@ export class BundleCommand extends Command {
       // `client_modules/` + `src/` + 闭包）由 `PackagerDefault` 复制进 `Resources/runtime`。
       appDir: join(layout.root, "shell-app"),
       profileDir: layout.root,
+      workspace: this.resolved.workspace,
       // 步骤日志落盘：被打断或卡住时，最后一行就是停在哪。
       logFile: join(layout.root, "bundle.log"),
     });

@@ -41,6 +41,7 @@ export {
   buildRuntime,
   defaultBuildSteps,
   resetClosure,
+  appPackageNameOf,
   runBuild,
   smokeClosure,
   type BuildInput,

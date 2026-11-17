@@ -12,12 +12,23 @@
 //
 // 宿主的那一份（`build` 的 `<outputDir>`：`bootstrap.mjs` / `client_modules/` / `src/` / 闭包 /
 // `package.json`）在打包之后整份复制进 `Resources/runtime`——它是自包含的一份应用，壳在那里 `chdir`。
-import { access, appendFile, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  appendFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
-import { CliError } from "@morlay/zephyr-cli";
+import { appPackageNameOf, CliError } from "@morlay/zephyr-cli";
 import { packagedBootstrap } from "./desktop-dirs.ts";
 import type { ElectronBuilderConfig } from "./electron-builder.ts";
 import { assertRuntimeSmoke, resourcesDirOf } from "./runtime-smoke.ts";
@@ -42,6 +53,8 @@ export interface PackInput {
   readonly appDir: string;
   /** 宿主的那一份（`build` 的 `<outputDir>`：`bootstrap.mjs` + `client_modules/` + 闭包 + 源码面入口）。 */
   readonly profileDir: string;
+  /** workspace 根：闭包**直接 deploy 到 `Resources/runtime`**（不再复制那 900MB）。 */
+  readonly workspace: string;
   /** 步骤日志文件（每步一行，含耗时）：卡住时从这里看最后一条。 */
   readonly logFile: string;
 }
@@ -91,8 +104,8 @@ export class PackagerDefault extends Packager {
     );
     const appDir = outputs[0] ?? (await discoverAppDir(config.directories.output));
     const runtimeDir = join(await resourcesDirOf(appDir), "runtime");
-    await this.step(input.logFile, `复制宿主产物 → ${runtimeDir}`, () =>
-      copyRuntime(input.profileDir, runtimeDir),
+    await this.step(input.logFile, `装宿主产物 → ${runtimeDir}`, () =>
+      copyRuntime(input, runtimeDir),
     );
     // 装完先证明它自包含：不自包含的包装出来是「双击没反应」。
     await this.step(input.logFile, "打包期冒烟：闭包自包含 + 入口能被 loader 加载", async () => {
@@ -233,38 +246,64 @@ export class PackagerDefault extends Packager {
 /** 宿主产物里的两项文件（装配入口与清单）。 */
 const RUNTIME_FILES = ["bootstrap.mjs", "package.json"] as const;
 
-/** 宿主产物里的三个目录（前端静态面、闭包、源码面入口）。 */
-const RUNTIME_DIRS = ["client_modules", "node_modules", "src"] as const;
+/** 宿主产物里的目录（前端静态面、源码面入口）——闭包不在这里：它由 `pnpm deploy` 直接装进目标。 */
+const RUNTIME_DIRS = ["client_modules", "src"] as const;
 
 /**
- * 把宿主产物**按清单复制**进 `Resources/runtime`。
+ * 把宿主产物装进 `Resources/runtime`：**闭包直接 deploy 到目标**，其余（前端静态面与源码面入口）按清单复制。
  *
- * 为什么逐项而不是整份 `cp(profileDir, …)`：`<outputDir>` 里还躺着打包自己的中间物
- * （`shell-app/`、`.app`、`bundle.log`、`desktop.json`），而 `Resources/runtime` 就在其中——
- * 整份复制等于把产物目录往它自己的子目录里拷（Node 直接 `ERR_FS_CP_EINVAL`）。
- * 清单本身就是「一份可分发的应用」的定义（设计决定 4），照它复制不需要第二份规则。
- * @param profileDir - 宿主产物根（`zephyr build` 的 `<outputDir>`）。
+ * 为什么不再整份复制：`build` 的闭包是 900MB 级（`node_modules` 一份），复制一次要 20 秒量级、磁盘上还躺着
+ * 两份同内容。而 `pnpm deploy` 本来就是「按清单装出一份可分发的应用」的那条规则——直接把它指到最终位置，
+ * 就少一次搬运，也少一份副本（`build` 那份仍留给 dev / preview 用）。
+ *
+ * 为什么其余的还要逐项复制：`<outputDir>` 里还躺着打包自己的中间物（`shell-app/`、`.app`、`bundle.log`），
+ * 而 `Resources/runtime` 就在其中——整份复制等于把产物目录往它自己的子目录里拷（Node 直接
+ * `ERR_FS_CP_EINVAL`）。清单本身就是「一份可分发的应用」的定义（设计决定 4）。
+ * @param input - app 目录、workspace 根与宿主产物根。
  * @param runtimeDir - 目标（`Resources/runtime`）。
  */
-async function copyRuntime(profileDir: string, runtimeDir: string): Promise<void> {
+async function copyRuntime(input: PackInput, runtimeDir: string): Promise<void> {
   const absent: string[] = [];
   for (const name of [...RUNTIME_FILES, ...RUNTIME_DIRS]) {
-    if (!(await exists(join(profileDir, name)))) absent.push(name);
+    if (!(await exists(join(input.profileDir, name)))) absent.push(name);
   }
   if (absent.length > 0) {
     throw new CliError(
-      `宿主产物不齐（${profileDir}）：缺 ${absent.join("、")}（先跑 zephyr build）。`,
+      `宿主产物不齐（${input.profileDir}）：缺 ${absent.join("、")}（先跑 zephyr build）。`,
     );
   }
   await rm(runtimeDir, { recursive: true, force: true });
   await mkdir(runtimeDir, { recursive: true });
+  // 闭包：`deploy` 只接受空目录。**装到 `target` 内的暂存目录再 rename 进来**——直接 deploy 进 `.app` 会在
+  // 写 `.pnpm` 里的文件时 `EPERM`（实测 `write …/Resources/runtime/node_modules/.pnpm/…: Operation not
+  // permitted`；同一路径下 mkdir / hardlink / clonefile 都正常，是 deploy 自己那套写法的限制）。
+  // 暂存与目标同设备，`rename` 是原子移动：既没有那 900MB 的复制，也不受 `.app` 内那条限制影响。
+  const staging = await mkdtemp(join(dirname(input.profileDir), ".zephyr-bundle-deploy-"));
+  try {
+    await run(
+      "pnpm",
+      [
+        "--filter",
+        await appPackageNameOf(input.workspace),
+        "--config.inject-workspace-packages=true",
+        "deploy",
+        "--prod",
+        "--config.strictDepBuilds=false",
+        staging,
+      ],
+      { cwd: input.workspace, maxBuffer: 64 * 1024 * 1024 },
+    );
+    await rename(join(staging, "node_modules"), join(runtimeDir, "node_modules"));
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
   // `verbatimSymlinks` 是必须的：pnpm 的相对链要原样保留，否则 `cp` 会把链接解析成绝对路径，
   // 装出来的应用指回构建机的源码树（冒烟会直接报「逃逸链接」）。
   for (const name of RUNTIME_FILES) {
-    await cp(join(profileDir, name), join(runtimeDir, name), { verbatimSymlinks: true });
+    await cp(join(input.profileDir, name), join(runtimeDir, name), { verbatimSymlinks: true });
   }
   for (const name of RUNTIME_DIRS) {
-    await cp(join(profileDir, name), join(runtimeDir, name), {
+    await cp(join(input.profileDir, name), join(runtimeDir, name), {
       recursive: true,
       verbatimSymlinks: true,
     });

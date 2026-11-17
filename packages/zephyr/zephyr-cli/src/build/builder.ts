@@ -371,7 +371,7 @@ export async function resetClosure(layout: ZephyrLayout): Promise<void> {
  * @param workspace - 应用工作区。
  * @returns 包名（读不到清单时退回目录名）。
  */
-async function appPackageNameOf(workspace: string): Promise<string> {
+export async function appPackageNameOf(workspace: string): Promise<string> {
   const raw = await readFile(join(workspace, "package.json"), "utf8").catch(() => undefined);
   if (raw === undefined) return basename(workspace);
   return (JSON.parse(raw) as { name?: string }).name ?? basename(workspace);
