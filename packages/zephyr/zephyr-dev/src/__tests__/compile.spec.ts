@@ -12,11 +12,18 @@
 // 1. **不可达的坏产物不算缺口**：宿主面产物留在目录里是取舍（设计决定 12），页面永远不加载它，
 //    它缺东西不该让构建红——判据只看可达子集。
 // 2. **缺口要点名到「地址 + 引用方」**：只报一条地址，排查的人还得自己去 grep 谁引的。
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { compile, reachableModulesOf, REQUIRED_PREBUNDLE } from "../build/compile.ts";
+import {
+  compile,
+  fallbackToRuntime,
+  reachableModulesOf,
+  REQUIRED_PREBUNDLE,
+  supplementTargetsOf,
+} from "../build/compile.ts";
+import { nodeStubPathOf } from "../internal/package-root.ts";
 
 /** 夹具根（两个目录各有自己的 `src/client/app-boot.ts`）。 */
 const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
@@ -94,7 +101,10 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
       artifacts: new Map([
         [ENTRY, `import { a } from "${direct}";`],
         // 动态 import 也是边：语言包 / grammar 只在运行时按需加载。
-        [direct, `export const a = 1;\nconst later = () => import("${lazy}");\nconst b = later;\nexport { b };`],
+        [
+          direct,
+          `export const a = 1;\nconst later = () => import("${lazy}");\nconst b = later;\nexport { b };`,
+        ],
         [lazy, `const gone = () => import("${missing}");\nexport { gone };`],
         [hostOnly, `import "${missingFromHost}";`],
       ]),
@@ -144,5 +154,168 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
 
     expect(graph.reachable).toEqual([ENTRY]);
     expect(graph.gaps).toEqual([{ url: ENTRY, importers: [] }]);
+  });
+});
+/** 共享运行时聚合产物的地址（虚拟包：名字与版本是实现的公开事实，这里写字面量当独立真值）。 */
+const RUNTIME = `${PREFIX}/@zephyr+shared-runtime@0.0.0/index.js`;
+
+/**
+ * 一次性夹具：在 tmpdir 里铺一个工作区 + 一个静态目录。
+ * @param files - 相对路径 → 内容（相对 tmp 根）。
+ * @returns 工作区与静态目录的绝对路径。
+ */
+async function fixtureOf(
+  files: Record<string, string>,
+): Promise<{ workspace: string; outDir: string }> {
+  const root = await mkdtemp(join(tmpdir(), "zephyr-fallback-"));
+  for (const [relative, content] of Object.entries(files)) {
+    const file = join(root, relative);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content, "utf8");
+  }
+  return { workspace: join(root, "workspace"), outDir: join(root, "out") };
+}
+
+/** 产物清单（`.files.json` 的原文）：产物地址从 `files` 的每一项算出来。 */
+function manifestOf(files: Record<string, string>): string {
+  return JSON.stringify({ rev: "fixture", files }, null, 2);
+}
+
+describe("fallbackToRuntime（共享运行时兜底）", () => {
+  it("产物引用没有出产物的地址：改写到聚合产物地址，聚合产物转发成员的具名导出", async () => {
+    const missing = moduleUrlOf("fx-runtime", "1.0.0", "ui.js");
+    const fixture = await fixtureOf({
+      "workspace/package.json": JSON.stringify({
+        name: "fx-app",
+        version: "0.0.0",
+        dependencies: { "fx-runtime": "1.0.0" },
+      }),
+      // 成员包：装着、能从应用清单解析到（`export * from "fx-runtime"` 才编得出来）。
+      "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
+        name: "fx-runtime",
+        version: "1.0.0",
+        exports: { ".": "./index.js" },
+      }),
+      "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
+      // 成员的产物：它自己在盘上（改写的对象是引用它的那份产物，不是它）。
+      "out/fx-runtime@1.0.0/.files.json": manifestOf({ index: "fx-runtime@1.0.0/index.js" }),
+      "out/fx-runtime@1.0.0/index.js": "export const runtimeMember = 1;\n",
+      // 引用方：它要的 `fx-runtime/ui.js` 没有产物（这正是会 404 的那条）。
+      "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
+      "out/fx-app@0.0.0/client.js": `import { runtimeMember } from "${missing}?v=deadbeef";\nconsole.log(runtimeMember);\n`,
+    });
+
+    const result = await fallbackToRuntime({
+      outDir: fixture.outDir,
+      addresses: [missing],
+      appManifest: join(fixture.workspace, "package.json"),
+      repoRoot: fixture.workspace,
+      nodeStub: nodeStubPathOf(),
+    });
+
+    expect(result.runtime).toBe(RUNTIME);
+    expect(result.members).toEqual(["fx-runtime"]);
+    expect(result.rewritten).toEqual([missing]);
+    // 引用方被改写：地址落到聚合产物、带着构建器指纹，且不再指向那条缺产物地址。
+    const client = await readFile(join(fixture.outDir, "fx-app@0.0.0/client.js"), "utf8");
+    expect(client).toContain(`from "${RUNTIME}?v=`);
+    expect(client).not.toContain("ui.js");
+    // 聚合产物落盘，并且**转发**成员的具名导出（`export *`：具名平铺、没有 default 位）。
+    const runtime = await readFile(
+      join(fixture.outDir, "@zephyr+shared-runtime@0.0.0/index.js"),
+      "utf8",
+    );
+    expect(runtime).toContain("/_zephyr/@modules/fx-runtime@1.0.0/index.js");
+    expect(runtime).not.toContain("export default");
+    expect(runtime).not.toContain("export{default");
+  });
+
+  it("共享运行时被 default 导入：构建失败，并指出写它的源文件", async () => {
+    const missing = moduleUrlOf("fx-runtime", "1.0.0", "ui.js");
+    const fixture = await fixtureOf({
+      "workspace/package.json": JSON.stringify({
+        name: "fx-app",
+        version: "0.0.0",
+        dependencies: { "fx-runtime": "1.0.0" },
+      }),
+      "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
+        name: "fx-runtime",
+        version: "1.0.0",
+        exports: { ".": "./index.js" },
+      }),
+      "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
+      // 源文件里就是那条禁用写法（夹具里的独立真值）。
+      "workspace/src/client/bad-default.ts":
+        'import React from "react";\nexport const element = React;\n',
+      "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
+      "out/fx-app@0.0.0/client.js": `import React from "${missing}?v=deadbeef";\nconsole.log(React);\n`,
+    });
+
+    const error = await fallbackToRuntime({
+      outDir: fixture.outDir,
+      addresses: [missing],
+      appManifest: join(fixture.workspace, "package.json"),
+      sourceOf: (url) =>
+        url.endsWith("/fx-app@0.0.0/client.js")
+          ? join(fixture.workspace, "src/client/bad-default.ts")
+          : undefined,
+      repoRoot: fixture.workspace,
+      nodeStub: nodeStubPathOf(),
+    }).then(
+      () => undefined,
+      (rejected: unknown) => rejected as Error,
+    );
+
+    expect(error?.message).toContain("共享运行时只允许具名导入");
+    expect(error?.message).toContain("bad-default.ts");
+  });
+});
+
+describe("supplementTargetsOf（有副本的一律按副本出独立产物）", () => {
+  it("同名多版本各按自己的副本补目标、不合并；连副本都解析不到的才留给兜底", async () => {
+    // 两份副本的包根（相对工作区：pnpm 严格布局下同名多版本各占一个目录）。
+    const oldCopy = "node_modules/.pnpm/katex@0.16.0/node_modules/katex";
+    const newCopy = "node_modules/.pnpm/katex@0.18.0/node_modules/katex";
+    const files: Record<string, string> = {
+      "workspace/package.json": JSON.stringify({ name: "fx-app", version: "0.0.0" }),
+    };
+    for (const [copy, version] of [
+      [oldCopy, "0.16.0"],
+      [newCopy, "0.18.0"],
+    ] as const) {
+      files[`workspace/${copy}/package.json`] = JSON.stringify({
+        name: "katex",
+        version,
+        exports: { ".": "./index.js" },
+      });
+      files[`workspace/${copy}/index.js`] = `export const version = "${version}";\n`;
+    }
+    const fixture = await fixtureOf(files);
+    const known = [oldCopy, newCopy].map((copy, index) => ({
+      name: "katex",
+      version: index === 0 ? "0.16.0" : "0.18.0",
+      exportName: "index",
+      entry: join(fixture.workspace, copy, "index.js"),
+      manifestOf: join(fixture.workspace, copy, "package.json"),
+    }));
+    const ghost = moduleUrlOf("ghost", "0.0.0", "index.js");
+
+    const extra = await supplementTargetsOf({
+      addresses: [
+        moduleUrlOf("katex", "0.16.0", "index.js"),
+        moduleUrlOf("katex", "0.18.0", "index.js"),
+        ghost,
+      ],
+      known,
+      appManifest: join(fixture.workspace, "package.json"),
+    });
+
+    // 两份副本各出一条目标：版本各是各的，包根也各是各的（合并会让其中一个版本的地址永远 404）。
+    expect(extra.map((target) => [target.version, dirname(target.entry)])).toEqual([
+      ["0.16.0", join(fixture.workspace, oldCopy)],
+      ["0.18.0", join(fixture.workspace, newCopy)],
+    ]);
+    // 连副本都解析不到的（ghost）：补不出目标，交给兜底。
+    expect(extra.some((target) => target.name === "ghost")).toBe(false);
   });
 });
