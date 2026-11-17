@@ -9,7 +9,7 @@
  * 两者产出的地址同构（`@client-modules/<pkg>@<version>/<file>`），所以运行时按 URL 取即可。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { findPackageJSON } from "node:module";
 import { dirname, extname, join, relative, sep } from "node:path";
@@ -74,7 +74,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "23";
+const BUNDLER_RULES = "24";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -386,6 +386,34 @@ export async function resolvableVersionsOf(
   return versions;
 }
 
+/**
+ * 会被编成 **JS 产物**的入口扩展名：源码面（`js` / `ts` 家族）与 **CSS**。
+ *
+ * CSS 也算：样式在这条链里被编成"注入 `<style>` 的模块"（见 `cssInlinePlugins`），产物是 JS——
+ * 落在 `.css` 地址上会被按 `text/css` 服务，浏览器拒绝当模块加载。
+ */
+const SCRIPT_EXTENSIONS = new Set(["js", "mjs", "cjs", "jsx", "ts", "tsx", "mts", "cts", "css"]);
+
+/**
+ * **产物形态**：出口名 → 磁盘上的产物文件名（= 地址末段）。
+ *
+ * 一条规则两个消费者：{@link urlOf} 生成地址、`entryFileNames` 决定磁盘名。两者不同形就是 404，而这类
+ * 404 在构建期看不出来（`pkg/src/client/resources.ts` 与 `base.css` 两个现场）。
+ *
+ * | 入口形态 | 产物 |
+ * | --- | --- |
+ * | JS / TS 源码、CSS（注入样式表的 JS 模块） | `<出口名>.js` |
+ * | 资产（图片 / 字体这些原字节复制的文件） | 原样（扩展名不换） |
+ * @param exportName - 出口名（`index` / `vanilla` / `client/base.css` / `assets/logo.png`）。
+ * @returns 产物文件名。
+ */
+export function productFileNameOf(exportName: string): string {
+  const extension = extname(exportName).toLowerCase().replace(/^\./u, "");
+  return extension === "" || SCRIPT_EXTENSIONS.has(extension)
+    ? entryFileNameOf(exportName)
+    : exportName;
+}
+
 export function urlOf(
   specifier: string,
   tables: { versions?: ReadonlyMap<string, string>; clientRows?: ReadonlySet<string> },
@@ -400,18 +428,13 @@ export function urlOf(
   //   出口名，那张表是按 `exports` 里有没有 `./client` 猜的——于是没有该键的行（`@deepseek-ai/dsh-api-*`）
   //   被打成 `index.js`（宿主半）。
   // - **普通 npm 包**（三方、被依赖的）→ `index.js`：出口按 npm 语义（包的根出口）。
-  // **子路径引用**（`pkg/sub`）保留子路径——但**扩展名要统一**：产物名一律 `<出口名>.js`（`entryFileNames`），
-  // 所以只带包内路径的引用（`zustand/vanilla`）要补 `.js`，否则 URL 一半带（`index.js`）、一半不带（`vanilla`），
-  // 而磁盘上的文件名全都带。本来就有扩展名的（`katex/dist/katex.min.css`）原样。
+  // **产物形态只由出口名定**（{@link productFileNameOf}），这里不另立一套扩展名规则——
+  // 地址末段 = 磁盘上的产物文件名，两者同形才不会 404（`client/resources.ts` →
+  // `client/resources.ts.js`，`assets/logo.png` 原样）。
   const subpath = specifier === bare ? "" : specifier.slice(bare.length + 1);
-  // 扩展名统一走 {@link entryFileNameOf} 那条约定：本来有扩展名的（`katex/dist/katex.min.css`）原样，
-  // 其余按"出口产物文件名 = `<出口名>.js`"补上。
-  const file =
-    subpath !== ""
-      ? /\.[a-z0-9]+$/iu.test(subpath)
-        ? subpath
-        : entryFileNameOf(subpath)
-      : entryFileNameOf(tables.clientRows?.has(bare) === true ? "client-module" : "index");
+  const file = productFileNameOf(
+    subpath !== "" ? subpath : tables.clientRows?.has(bare) === true ? "client-module" : "index",
+  );
   return depsUrlOf(specifier, version, `${file}?v=${BUNDLER_REV}`);
 }
 
@@ -771,6 +794,26 @@ async function withBuildSlot<T>(work: () => Promise<T>): Promise<T> {
 /** 排队中/在跑的包级构建（键是缓存目录名）。 */
 const building = new Map<string, Promise<Bundled | undefined>>();
 
+/**
+ * **资产原字节复制**：名字就是出口名（扩展名不换），并记进产物清单。
+ *
+ * 它们的地址末段就是 `<出口名>` 那一段（见 {@link productFileNameOf}）；交给 rolldown 的话落的是
+ * `assets/<name>-<hash>.<ext>`——不同形就是 404，而这类 404 构建期看不出来。
+ * @param options - 产物目录、缓存键、资产（出口名 + 源文件）与清单。
+ */
+async function copyRawAssets(options: {
+  readonly outDir: string;
+  readonly key: string;
+  readonly assets: readonly (readonly [string, string])[];
+  readonly files: Record<string, string>;
+}): Promise<void> {
+  for (const [exportName, entry] of options.assets) {
+    await mkdir(dirname(join(options.outDir, exportName)), { recursive: true });
+    await copyFile(entry, join(options.outDir, exportName));
+    options.files[exportName] = `${options.key}/${exportName}`;
+  }
+}
+
 async function bundlePackageOnce(
   options: BundleOptions,
   key: string,
@@ -861,6 +904,7 @@ async function bundlePackageOnce(
         .map((name) => barePackageRegExp(name)),
     }),
   ];
+
   const startedAt = Date.now();
   options.log?.(`[bundle-build] ${options.name}: rolldown start\n`);
   // 入口补偿：按**模块类型**决定直通 / CJS 具名导出包装 / CSS 包装。
@@ -869,8 +913,17 @@ async function bundlePackageOnce(
   // 「含 `exports.` 子串」会把注释里的 `re-exports.` 也当成 CJS，反过来给纯 ESM 加 `import mod from …`
   // 而构建失败；而 `.js` 没有 `type` 时到底是哪种，只有语法检测答得准。
   const input: Record<string, string> = {};
+  /** 产物**原样保留**的出口（资产）：原字节复制，不进 rolldown。 */
+  const rawAssets: Array<[string, string]> = [];
   const entryShims = new Map<string, string>();
   for (const [exportName, entry] of Object.entries(options.input)) {
+    // **产物形态由出口名定**（与 {@link urlOf} 同一条函数 {@link productFileNameOf}）：原样保留的就是资产
+    // ——原字节复制、不进 rolldown（图片 / 字体被当模块打包后落的是 `assets/<name>-<hash>.png`，与地址
+    // 末段的 `<出口名>` 不同形，就是 404）。反过来说，进 rolldown 的产物名一律 `<出口名>.js`。
+    if (productFileNameOf(exportName) === exportName) {
+      rawAssets.push([exportName, entry]);
+      continue;
+    }
     if ((await moduleKindOf(entry)) === "cjs") {
       const shim = await cjsShimOf({
         name: options.name,
@@ -907,6 +960,12 @@ async function bundlePackageOnce(
         return entryShims.get(source);
       },
     });
+  }
+  // **只有资产时没有可编的入口**：`input` 为空就是一次空构建，而资产不需要打包——落盘 + 清单直接返回。
+  if (Object.keys(input).length === 0) {
+    await copyRawAssets({ outDir, key, assets: rawAssets, files });
+    await writeFile(manifestPath, `${JSON.stringify({ rev, files, resolved }, null, 2)}\n`, "utf8");
+    return { rev, files: new Map(Object.entries(files)) };
   }
   const bundle = await rolldown({
     // 浏览器平台：按 exports 条件的 browser/import 选入口，并按浏览器语义处理 CJS。
@@ -954,6 +1013,7 @@ async function bundlePackageOnce(
     // 取值 `false` 而不是对象：对象只控 legal / annotation / jsdoc 三类，挡不住这种普通行注释。
     comments: false,
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
+    // **`<出口名>.js` 与 {@link productFileNameOf} 是同一件事**：地址末段就是这里定的名字。
     entryFileNames: "[name].js",
     // 拆出来的块落**自己的前缀**（与资产 `assets/` 并列）：它们不是"包的出口"——出口名要回源码里找目标，
     // 而块没有源码对应（`src/chunk-abc.js` 不存在）。与出口共用一段 URL，服务端就只能把它当出口、落空。
@@ -1002,6 +1062,7 @@ async function bundlePackageOnce(
   // 目录会把另一个进程刚写的产物一起带走，表现为偶发 404。产物名本身带语义（出口名 / 资产 hash），直接
   // 覆盖即可；旧的字节留在盘上不碍事。
   await mkdir(outDir, { recursive: true });
+  await copyRawAssets({ outDir, key, assets: rawAssets, files });
   for (const item of items) {
     if (item.type !== "chunk") continue;
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），落盘要先把父目录建出来。

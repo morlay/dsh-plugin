@@ -47,7 +47,7 @@ test("地址带 `?v=`（构建世代；与 vite 同名的参数）", () => {
   expect(urlOf("react", tables)).toBe(`/_zephyr/@modules/react@18.3.1/index.js?v=${BUNDLER_REV}`);
 });
 
-test("子路径引用保留子路径；扩展名与产物一致（没有扩展名的补 `.js`，有的原样）", () => {
+test("子路径引用保留子路径；末段是**产物文件名**（JS 产物补 `.js`，资产原样）", () => {
   const tables = {
     versions: new Map([
       ["@oxc-project/runtime", "0.153.0"],
@@ -58,8 +58,10 @@ test("子路径引用保留子路径；扩展名与产物一致（没有扩展�
   expect(urlOf("@oxc-project/runtime/helpers/decorate", tables)).toBe(
     `/_zephyr/@modules/@oxc-project+runtime@0.153.0/helpers/decorate.js?v=${BUNDLER_REV}`,
   );
+   // **CSS 入口也是 JS 产物**：样式被编成「注入 <style> 的模块」，落在 .css 地址上会被按 text/css
+  // 服务、浏览器拒绝当模块加载。以前这里按「有扩展名就原样」给地址、磁盘上却是 `.css.js`——两个现场之一。
   expect(urlOf("katex/dist/katex.min.css", tables)).toBe(
-    `/_zephyr/@modules/katex@0.16.47/dist/katex.min.css?v=${BUNDLER_REV}`,
+    `/_zephyr/@modules/katex@0.16.47/dist/katex.min.css.js?v=${BUNDLER_REV}`,
   );
 });
 
@@ -455,5 +457,107 @@ describe("入口按浏览器条件解析", () => {
   test("import 与 module 都不作数：回退到 `main`", async () => {
     const found = await entryOf("fallback-main");
     expect(found?.entry).toBe(join(work, "node_modules", "fallback-main", "dist", "index.cjs"));
+  });
+});
+// ── 地址末段 = 磁盘产物文件名 ──────────────────────────────────────────────────────────────────
+//
+// 一条规则，两个消费者：`urlOf` 生成地址、`entryFileNames` 决定磁盘名。两者不同形就是 404
+// （`pkg/src/client/resources.ts` 与 `base.css` 两个现场），而这类 404 在构建期看不出来。
+//
+// 产物形态定名字：**JS 产物是 `<出口名>.js`**（含 CSS 入口——它在产物里就是一个注入样式表的 JS
+// 模块，落在 `.css` 地址上会被按 `text/css` 服务、浏览器拒绝当模块加载），**资产原样保留扩展名**
+// （图片 / 字体这类被原字节复制的文件，名字与来源同形）。
+describe("地址末段 = 磁盘产物文件名", () => {
+  let work: string;
+  let cacheRoot: string;
+  let bundled: Map<string, string>;
+
+  /** 说明符 → 它对应的**出口名**（枚举侧的口径：包根是 `index`，子路径原样）。 */
+  const specifiers: readonly (readonly [string, string])[] = [
+    ["address-file", "index"],
+    ["address-file/vanilla", "vanilla"],
+    ["address-file/client/resources.ts", "client/resources.ts"],
+    ["address-file/client/base.css", "client/base.css"],
+    ["address-file/assets/logo.png", "assets/logo.png"],
+  ];
+
+  beforeAll(async () => {
+    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-address-")));
+    cacheRoot = join(work, ".cache");
+    const dir = join(work, "address-file");
+    const sources: Record<string, string> = {
+      "src/index.ts": "export const index = 1;\n",
+      "src/vanilla.ts": "export const vanilla = 1;\n",
+      "src/client/resources.ts": "export const resources = 1;\n",
+      // CSS 入口：产物是"注入样式表"的 JS 模块，名字仍是出口名。
+      "src/client/base.css": ":root { --base: 1px; }\n",
+      // 资产：原字节复制，名字原样（扩展名不换成 `.js`）。
+      "assets/logo.png": "\u0089PNG\r\n\u001a\n",
+    };
+    for (const [relative, text] of Object.entries(sources)) {
+      await mkdir(dirname(join(dir, relative)), { recursive: true });
+      await writeFile(join(dir, relative), text, "utf8");
+    }
+    await writeFile(
+      join(dir, "package.json"),
+      `${JSON.stringify({
+        name: "address-file",
+        version: "4.5.6",
+        // 清单形状与枚举侧的说明符一一对应（判据只看地址与磁盘名，不重新解析）。
+        exports: {
+          ".": "./src/index.ts",
+          "./vanilla": "./src/vanilla.ts",
+          "./client/resources.ts": "./src/client/resources.ts",
+          "./client/base.css": "./src/client/base.css",
+          "./assets/logo.png": "./assets/logo.png",
+        },
+      })}\n`,
+      "utf8",
+    );
+    const result = await bundlePackage({
+      nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
+      cacheRoot,
+      repoRoot: work,
+      alias: [],
+      name: "address-file",
+      version: "4.5.6",
+      // 与枚举侧同形：出口名就是说明符里那一段（包根是 `index`）。
+      input: {
+        index: join(dir, "src", "index.ts"),
+        vanilla: join(dir, "src", "vanilla.ts"),
+        "client/resources.ts": join(dir, "src", "client", "resources.ts"),
+        "client/base.css": join(dir, "src", "client", "base.css"),
+        "assets/logo.png": join(dir, "assets", "logo.png"),
+      },
+      watch: [dir],
+    });
+    bundled = result?.files ?? new Map<string, string>();
+  });
+
+  afterAll(async () => {
+    await rm(work, { recursive: true, force: true });
+  });
+
+  test("包根 / 子路径 / 带扩展名的子路径 / 资源：地址末段与磁盘上的文件名逐项相等", async () => {
+    const tables = { versions: new Map([["address-file", "4.5.6"]]) };
+    for (const [specifier, exportName] of specifiers) {
+      const address = urlOf(specifier, tables);
+      const relative = bundled.get(exportName);
+      expect(relative, `${specifier} 没有产物`).toBeDefined();
+      const file = join(cacheRoot, relative ?? "");
+      // 地址末段 == 磁盘上的文件名（去掉 `?v=` 之后的那一段）。
+      expect((address.split("?")[0] ?? "").split("/").pop(), `${specifier} 的地址末段`).toBe(
+        (relative ?? "").split("/").pop(),
+      );
+      // 再钉一次"盘上真有这个文件"：地址对了、文件不在，还是 404。
+      await expect(stat(file)).resolves.toBeDefined();
+    }
+  });
+
+  test("资产原样保留扩展名：字节与来源一致，不写进 `assets/<name>-<hash>`", async () => {
+    const relative = bundled.get("assets/logo.png") ?? "";
+    expect(relative.split("/").pop()).toBe("logo.png");
+    expect(await readFile(join(cacheRoot, relative), "utf8")).toBe("\u0089PNG\r\n\u001a\n");
+    expect([...bundled.keys()].some((name) => /^assets\/logo-.*\.png$/u.test(name))).toBe(false);
   });
 });
