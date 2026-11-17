@@ -69,6 +69,8 @@ describe("部署值：打包形态的启动器", () => {
     expect(source).toContain('process.env.ZEPHYR_DESKTOP_USER_DATA = join(root, "electron")');
     expect(source).toContain("if (process.env.ZEPHYR_DESKTOP_DATA_DIR === undefined)");
     expect(source).toContain("process.env.ZEPHYR_DESKTOP_DATA_DIR = root");
+    // 写法也要递：不递的话壳按缺省说成 workspace，日志与 deployment-line 与实际落点不一致。
+    expect(source).toContain('process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC = "xdg"');
   });
 
   it("部署值取自 appData 与应用 id（Resources/desktop.json），最后加载壳的入口", () => {

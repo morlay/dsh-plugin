@@ -78,6 +78,12 @@ if (process.env.ZEPHYR_DESKTOP_USER_DATA === undefined) {
 if (process.env.ZEPHYR_DESKTOP_DATA_DIR === undefined) {
   process.env.ZEPHYR_DESKTOP_DATA_DIR = root;
 }
+// **同时把写法递过去**：root 就是 xdg 在 darwin/win32 上的落点（app.getPath("appData")/<id>），
+// 而壳那边 dataDirSpec 的缺省是 workspace——不递的话，路径对、日志与 deployment-line 里的写法错
+// （显示成「数据跟着工作区走」，实际落在应用数据目录）。写法只有启动器这一处算法，所以也在这里定。
+if (process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC === undefined) {
+  process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC = "xdg";
+}
 await import("./dist/main.mjs");
 `;
 }
