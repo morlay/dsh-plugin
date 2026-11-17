@@ -1275,6 +1275,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-theme':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-theme
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/settings/settings
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../../zephyr/zephyr

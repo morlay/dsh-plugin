@@ -86,7 +86,9 @@ export function settingRow<T extends new (...args: any[]) => object>(Base: T): T
           : rowConfig;
       await (this as unknown as SettingRowBase).mount(ctx, config, this.settingDeps());
       if (options?.config !== undefined) {
-        this.schemas.register(options.ns, options.config.toJSON());
+        // 注册**活 schema** + **行 config**（装配层）：设置页的视图按「schema 默认 → base → 用户层」
+        // 算生效值。少了 base，装配里 `configure` 配好的 provider 在页面上永远是「未配置」。
+        this.schemas.register(options.ns, options.config, rowConfig);
       }
     }
   }

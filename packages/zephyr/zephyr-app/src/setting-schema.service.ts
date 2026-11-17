@@ -1,11 +1,21 @@
 // 各命名空间的**配置 schema**（序列化后的 schemastery，UI 用 `new Schema(json)` 重建表单）。
 //
 // 源头是 provider 行自己的上游 `Config`：`llm-deepseek-api-key` / `llm-pi-ai` 两条行在 `onInit` 里
-// 注册自己的 `Config.toJSON()`。这里不抄 provider 清单——注册表是空的就说明那条 provider 没装。
+// 注册自己的 schema。这里不抄 provider 清单——注册表是空的就说明那条 provider 没装。
 //
-// 注册时顺带从 schema 里读出**默认值树**：视图的 `value` 是「schema 默认值 ⊕ 用户值」，默认值只有一个
+// 注册项除了 schema 本身还带两样东西：
+// - **行 config**（`base`）：装配层 `configure(实现类, patch)` 给的差异值。设置页的视图要按
+//   「schema 默认 → base → 用户层」三层算生效值，否则装配配好的 provider 在页面上永远是「未配置」。
+// - **活 schema**：脱敏（`role('secret')` 字段）要走活的 schemastery 节点，序列化后的 JSON 走不动。
+//
+// 默认值树仍从序列化结果里读：视图的 `value` 是「schema 默认值 ⊕ base ⊕ 用户值」，默认值只有一个
 // home（schema 自己），不在这里再手写一份。
 import { Injectable } from "@morlay/zephyr";
+
+/** 一个可序列化的配置 schema（上游 `Config` 的形状）。 */
+export interface ConfigSchema {
+  toJSON(): unknown;
+}
 
 /** 序列化后的 schemastery 节点（`schema.toJSON()` 的 `refs` 里的一个条目）。 */
 interface SchemaNode {
@@ -15,10 +25,12 @@ interface SchemaNode {
   readonly dict?: Readonly<Record<string, unknown>>;
 }
 
-/** 一条注册项：给 UI 的序列化 schema + 它声明的默认值树。 */
+/** 一条注册项：给 UI 的序列化 schema、它声明的默认值树、装配层的行 config 与活 schema。 */
 interface SchemaEntry {
   readonly json: unknown;
+  readonly live: ConfigSchema;
   readonly defaults: Readonly<Record<string, unknown>>;
+  readonly base: Readonly<Record<string, unknown>>;
 }
 
 /** 配置 schema 注册表：命名空间 → schemastery 的 JSON。 */
@@ -29,10 +41,17 @@ export class SettingSchema {
   /**
    * 注册一个命名空间的 schema（同一命名空间后注册的覆盖先前的，与 provider 行的挂载顺序一致）。
    * @param ns - 上游命名空间（与 `listConfigurableProviders()` 的 `settingsNs` 同名）。
-   * @param schema - `Config.toJSON()` 的结果。
+   * @param schema - 该行的上游 `Config`（活 schema，序列化与脱敏都从它来）。
+   * @param base - 装配层给这一行的 patch（`configure(实现类, …)` 的值）；省略即没有装配层。
    */
-  register(ns: string, schema: unknown): void {
-    this.schemas.set(ns, { json: schema, defaults: defaultsOf(schema) });
+  register(ns: string, schema: ConfigSchema, base?: Readonly<Record<string, unknown>>): void {
+    const json = schema.toJSON();
+    this.schemas.set(ns, {
+      json,
+      live: schema,
+      defaults: defaultsOf(json),
+      base: base === undefined ? {} : structuredClone(base),
+    });
   }
 
   /**
@@ -42,6 +61,24 @@ export class SettingSchema {
    */
   get(ns: string): unknown {
     return this.schemas.get(ns)?.json;
+  }
+
+  /**
+   * 取一个命名空间的**活** schema（脱敏要按它的 `role('secret')` 走）。
+   * @param ns - 上游命名空间。
+   * @returns 活 schema；没注册时 `undefined`。
+   */
+  liveOf(ns: string): ConfigSchema | undefined {
+    return this.schemas.get(ns)?.live;
+  }
+
+  /**
+   * 取一个命名空间的装配层（行 config）。
+   * @param ns - 上游命名空间。
+   * @returns 装配层；没注册或没有 patch 时是 `{}`。
+   */
+  baseOf(ns: string): Readonly<Record<string, unknown>> {
+    return this.schemas.get(ns)?.base ?? {};
   }
 
   /**

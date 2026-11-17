@@ -1,7 +1,11 @@
 // `settings` 组的宿主实现：把配置文档投影成 UI（`ui-settings-*`）要的形状。
 //
 // 形状照上游 descriptor（`SettingsDescribeValue` / `SettingsNamespaceView`）：`value` 是**生效值**
-// （schema 默认值 → 用户层），`user` 只放用户自己写的那一份。没有 base 分层、没有密钥脱敏——本装配不做这些。
+// （schema 默认值 → **行 config（base）** → 用户层），`base` 是装配层 `configure(实现类, …)` 给的那一份，
+// `user` 只放用户自己写的那一份。
+//
+// 三层都按 schema 的 `role('secret')` 脱敏，`secrets` 如实给出每个密钥位「有没有值」：密钥只写不读，
+// UI 靠它渲染「已设置 / 未设置」，读回的永远是抹掉之后的树。
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import {
@@ -12,7 +16,8 @@ import {
   type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 import { Setting, type SettingDocument } from "@morlay/zephyr-app";
-import { SettingSchema } from "@morlay/zephyr-app";
+import { SettingSchema, type ConfigSchema } from "@morlay/zephyr-app";
+import { redactSecrets, type RedactedSecret } from "@deepseek-ai/dsh-settings";
 import { mergeTree } from "../setting.service.ts";
 
 /** 一条路径操作（UI 的 `mutate` 载荷）。 */
@@ -26,11 +31,15 @@ interface NamespaceView {
   readonly ns: string;
   /** 序列化后的 schemastery（UI `new Schema(json)` 重建表单）；**不能是 `null`**。 */
   readonly schema: unknown;
+  /** 生效值：schema 默认 ⊕ base ⊕ 用户层（密钥字段已抹掉）。 */
   readonly value: unknown;
-  /** 用户自己写的那一份（`settings.json` 里的原值）；没有就是缺省。 */
+  /** 装配层（行 config）：`configure(实现类, …)` 给的那一份，没有就是 `{}`。 */
+  readonly base: unknown;
+  /** 用户自己写的那一份（`settings.json` 里的原值，密钥已抹掉）；没有就是缺省。 */
   readonly user?: unknown;
   readonly applies: "live";
-  readonly secrets: readonly unknown[];
+  /** 每个 schema 声明的密钥位与「有没有值」（只有 `set`，没有值本身）。 */
+  readonly secrets: readonly RedactedSecret[];
   readonly revision: number;
 }
 
@@ -155,11 +164,14 @@ export class SettingEndpointDefault implements OnInit {
   }
 
   /**
-   * 一个命名空间的视图：`value` 是生效值，`user` 只有用户写过的层。
+   * 一个命名空间的视图：`value` 是生效值，`base` 只有装配层，`user` 只有用户写过的层。
    *
    * `value` **必须**合并 schema 默认值：客户端 `ui-theme` 的 `ThemeRuntime.adopt` 直接把它当完整配置读
    * （`normalizeFontFamily(value.textFontFamily.split(','))`），缺字段就是浏览器里的
    * `Cannot read properties of undefined (reading 'split')`——写通了、读塌了、刷新回到默认值。
+   *
+   * `value` 还要合并**装配层**（行 config）：模型页按 `value` 的 `settingsPath` 判「这个 provider 配没配」，
+   * 少了 base，装配里 `configure` 配好的 provider 在页面上永远是「未配置」、只能从「添加」里重配一份。
    * @param ns - 命名空间。
    * @param user - 用户层（文档里的原值；没写过就是 `undefined`）。
    * @returns UI 读的视图。
@@ -169,35 +181,61 @@ export class SettingEndpointDefault implements OnInit {
       typeof user === "object" && user !== null && !Array.isArray(user)
         ? (user as SettingDocument)
         : undefined;
+    const schema = this.schemas.liveOf(ns);
+    const base = this.schemas.baseOf(ns);
+    const value = effectiveValueOf(this.schemas.defaultsOf(ns), base, userLayer);
+    const redacted = redactOf(schema, value);
     return {
       autoGenerate: false,
       ns,
       schema: this.schemas.get(ns) ?? { type: "object", dict: {} },
-      value: effectiveValueOf(this.schemas.defaultsOf(ns), userLayer),
-      ...(userLayer === undefined ? {} : { user: userLayer }),
+      value: redacted.value,
+      base: redactOf(schema, base).value,
+      ...(userLayer === undefined ? {} : { user: redactOf(schema, userLayer).value }),
       applies: "live",
-      secrets: [],
+      secrets: redacted.secrets,
       revision: this.revisions.get(ns) ?? 0,
     };
   }
 }
 
 /**
- * 一个命名空间的**生效值**：schema 默认 → base → user 三层合并。
+ * 按 schema 的 `role('secret')` 抹掉一个值里的密钥字段。
  *
- * 当前装配没有 base 层，所以它是「schema 默认值 ⊕ 用户值」；这里**独立推导**（不是把 `user` 直接当
- * `value` 传下去），`user` 仍然只表示「用户显式改过的层」——
+ * 上游 `redactSecrets` 的入参是**活的 schemastery 节点**；注册表存的正是它，只是这里的类型面只声明了
+ * `toJSON()`（设置域不把 schemastery 的类型拉进来）。没有注册活 schema 的命名空间（理论上不会出现）原样返回。
+ * @param schema - 该命名空间的活 schema。
+ * @param value - 要抹的值。
+ * @returns 抹掉密钥的值与密钥位清单。
+ */
+function redactOf(
+  schema: ConfigSchema | undefined,
+  value: unknown,
+): { value: unknown; secrets: readonly RedactedSecret[] } {
+  if (schema === undefined) return { value, secrets: [] };
+  return redactSecrets(schema as never, value);
+}
+
+/**
+ * 一个命名空间的**生效值**：schema 默认 → base（装配层）→ user 三层合并。
+ *
+ * 这里**独立推导**（不是把 `user` 直接当 `value` 传下去），`user` 仍然只表示「用户显式改过的层」——
  * `ui-settings-models` 的 `removable`、`config-form` 的 `draft.user` 都按这个语义判断。
  * @param defaults - schema 声明的默认值树。
+ * @param rowConfig - 装配层（行 config）。
  * @param user - 用户层（可能是 `undefined`）。
  * @returns 合并后的生效值。
  */
 function effectiveValueOf(
   defaults: Readonly<Record<string, unknown>>,
+  rowConfig: Readonly<Record<string, unknown>>,
   user: SettingDocument | undefined,
 ): SettingDocument {
-  const base = structuredClone(defaults) as SettingDocument;
-  return user === undefined ? base : mergeTree(base, user);
+  const layers = mergeTree(
+    structuredClone(defaults) as SettingDocument,
+    structuredClone(rowConfig) as SettingDocument,
+  );
+  return user === undefined ? layers : mergeTree(layers, user);
 }
 
 /**

@@ -270,18 +270,13 @@ function settingsProviders(): ProviderEntry[] {
       configure(LlmPiAi, {
         providers: {
           ollama: {
-            // 走凭证服务读 `OLLAMA_API_KEY`（别把密钥写进配置）。
+            // 走凭证服务读 `OLLAMA_API_KEY`（别把密钥写进配置）：上游按 `apiKeyEnv` 取出密钥、作为
+            // 请求的 `apiKey` 交给 pi-ai，Authorization 由它自己发。**不要**再手写 `headers.Authorization`：
+            // 那等于把密钥抄进行 config，而设置页的视图（`settings/describe` 的 base 层）要把它下发到浏览器。
             apiKeyEnv: "OLLAMA_API_KEY",
             displayName: "Ollama Cloud",
             api: "anthropic-messages",
             baseURL: "https://ollama.com",
-            // 与 `apiKeyEnv` 同一个 key：`apiKeyEnv` 决定"用哪个凭证"，这一条是把它带进请求头。
-            headers: {
-              Authorization:
-                process.env.OLLAMA_API_KEY === undefined
-                  ? ""
-                  : `Bearer ${process.env.OLLAMA_API_KEY}`,
-            },
             reasoning: "high",
             requestImageMaxBytes: 2_097_152,
             models: [

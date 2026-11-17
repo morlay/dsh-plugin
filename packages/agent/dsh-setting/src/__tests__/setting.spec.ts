@@ -9,7 +9,7 @@ import {
   ThemeSettingsSchema,
   type ThemeSettings,
 } from "@deepseek-ai/dsh-client-ui-theme/src/theme-settings.ts";
-import { bootstrapApplication, type App, inject, Injectable } from "@morlay/zephyr";
+import { bootstrapApplication, type App, inject, Injectable, type ProviderEntry } from "@morlay/zephyr";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
@@ -22,9 +22,11 @@ class FakeRegisteredSetting {
   private readonly schemas = inject(SettingSchema);
 
   onInit(): void {
-    // 注册的是 **schemastery 的序列化**（`toJSON(): { uid, refs }`），UI 用 `new Schema(json)` 还原。
-    // 这里用最小形状（`refs` 非空即够）——真实的 provider 行由各自域注册。
-    this.schemas.register("fake-provider", { uid: 1, refs: { 1: { type: "object" } } });
+    // 注册的是**活 schema**（注册表要 `toJSON()` 算默认值、要节点结构脱敏）。这里用最小形状
+    // （`refs` 非空即够）——真实的 provider 行由各自域注册。
+    this.schemas.register("fake-provider", {
+      toJSON: () => ({ uid: 1, refs: { 1: { type: "object" } } }),
+    });
   }
 }
 
@@ -58,11 +60,15 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
-async function boot(existing?: string): Promise<{ app: App; root: string }> {
+async function boot(
+  existing?: string,
+  extra: readonly ProviderEntry[] = [],
+): Promise<{ app: App; root: string }> {
   const root = existing ?? (await mkdtemp(join(tmpdir(), "dsh-setting-")));
   if (existing === undefined) roots.push(root);
   const app = await bootstrapApplication({
     providers: [
+      ...extra,
       // 类令牌用 `useFactory` 给实例（`useValue` 只对 `InjectionToken` 生效）。
       { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
       // 只装设置模块自己的东西：`describe` 的枚举源头是 **schema 注册表**，
@@ -87,7 +93,11 @@ interface DescribeView {
   readonly ns: string;
   readonly schema: unknown;
   readonly value: unknown;
+  /** 装配层（行 config），没有就是 `{}`。 */
+  readonly base: unknown;
   readonly user?: unknown;
+  /** schema 声明的密钥位与「有没有值」。 */
+  readonly secrets: readonly { readonly path: readonly string[]; readonly set: boolean }[];
   readonly revision: number;
 }
 
@@ -362,6 +372,97 @@ describe("上游按 `ctx.settings` 取配置面", () => {
           enabled: true,
         },
       );
+    },
+  );
+});
+
+// 视图的**三层**与**密钥脱敏**：设置页要能看见装配层配好的 provider（否则模型页永远显示「未配置」），
+// 同时密钥只写不读——`value`/`base`/`user` 里都不出现密钥值，`secrets` 只说位置与「有没有值」。
+//
+// 假行同时给出两样东西：活的节点结构（`type`/`dict`/`meta.role`，脱敏按它走）与 `toJSON()`
+// （默认值树与 UI 的表单 schema 按它走）。真实的 provider 行在 `@morlay/dsh-agent` 的用例里。
+const LAYERED_SCHEMA = {
+  type: "object",
+  dict: {
+    apiKey: { type: "string", meta: { role: "secret" } },
+    providers: {
+      type: "dict",
+      inner: { type: "object", dict: { baseURL: { type: "string" } } },
+    },
+  },
+  toJSON: () => ({
+    uid: 1,
+    refs: {
+      "1": { type: "object", dict: { apiKey: "2", providers: "3" } },
+      "2": { type: "string", meta: { role: "secret" } },
+      "3": { type: "dict" },
+    },
+  }),
+};
+
+/** 一条带**装配层**（行 config）与密钥槽的注册行。 */
+@Injectable()
+class FakeLayeredSetting {
+  private readonly schemas = inject(SettingSchema);
+
+  onInit(): void {
+    this.schemas.register("fake-layered", LAYERED_SCHEMA, {
+      apiKey: "deployment-key",
+      providers: { ollama: { baseURL: "https://ollama.com" } },
+    });
+  }
+}
+
+describe("视图的三层（schema 默认 → 装配层 → 用户层）", () => {
+  it(
+    "装配层进 `value` 与 `base`，密钥只写不读",
+    { timeout: 20_000 },
+    async () => {
+      const { app } = await boot(undefined, [FakeLayeredSetting]);
+      const described = unwrap<unknown>(
+        await app.get(RemoteHandlers).invoke("settings/describe", {}),
+      );
+      if (!isDescribeValue(described))
+        throw new Error("settings/describe 的返回值不是 describe 值");
+      const view = described.namespaces.find((entry) => entry.ns === "fake-layered");
+      if (view === undefined) throw new Error("settings/describe 里没有 fake-layered 的视图");
+
+      // 生效值里有装配层：模型页按 `value` 的 `settingsPath` 判「这个 provider 配没配」。
+      expect(view.value).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
+      // `base` 就是装配层（行 config），同样脱敏。
+      expect(view.base).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
+      // 用户没写过：`user` 不能拿装配层冒充。
+      expect(view.user).toBeUndefined();
+      // 密钥只写不读：值里没有它，位置与「有没有值」由 `secrets` 说。
+      expect(view.secrets).toEqual([{ path: ["apiKey"], set: true }]);
+    },
+  );
+
+  it(
+    "用户层与装配层并存：`user` 只放用户写的那份，`value` 三层合并",
+    { timeout: 20_000 },
+    async () => {
+      const { app } = await boot(undefined, [FakeLayeredSetting]);
+      app.get(Setting).replace("fake-layered", {
+        providers: { openai: { baseURL: "https://api.openai.com/v1" } },
+      });
+
+      const described = unwrap<unknown>(
+        await app.get(RemoteHandlers).invoke("settings/describe", {}),
+      );
+      if (!isDescribeValue(described))
+        throw new Error("settings/describe 的返回值不是 describe 值");
+      const view = described.namespaces.find((entry) => entry.ns === "fake-layered");
+      expect(view?.user).toEqual({
+        providers: { openai: { baseURL: "https://api.openai.com/v1" } },
+      });
+      // 用户的 provider 与装配层的 provider 并存（dict 逐键合并，不是整段覆盖）。
+      expect(view?.value).toEqual({
+        providers: {
+          ollama: { baseURL: "https://ollama.com" },
+          openai: { baseURL: "https://api.openai.com/v1" },
+        },
+      });
     },
   );
 });

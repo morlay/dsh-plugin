@@ -19,6 +19,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-api-settings-controller": "workspace:^",
     "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
   },

@@ -17,6 +17,7 @@ export class UiThemeSchema implements OnInit {
   private readonly schemas = inject(SettingSchema);
 
   onInit(): void {
-    this.schemas.register(THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema.toJSON());
+    // 传**活 schema**（不是 `toJSON()`）：注册表要用它算默认值树，并在 `describe` 时按 `role('secret')` 脱敏。
+    this.schemas.register(THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema);
   }
 }

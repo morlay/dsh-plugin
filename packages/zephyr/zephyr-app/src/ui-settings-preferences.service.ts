@@ -18,6 +18,6 @@ export class UiSettingsPreferences extends fromCordis(UiSettingsPlugin) {
     // **命名空间要显式登记**：本装配的 `settings/describe` 按 `SettingSchema` 的注册表列 namespace
     // （没有上游那套靠 cordis loader 自动收集的机制）。少了这一行，`ui-settings` 不出现在设置里，
     // 客户端的 `configForms.developerTools.enabled` 落回 `false`，轨迹视图就被过滤掉。
-    this.schemas.register("ui-settings", UiSettingsPlugin.Config.toJSON());
+    this.schemas.register("ui-settings", UiSettingsPlugin.Config);
   }
 }
