@@ -7,12 +7,18 @@
  * 分组按**语义**：地址是纯函数（不构建）；缓存语义每条都要一次真实构建（构建本身就是被测动作）；
  * 入口形态共享**一个 fixture 包、一次构建、多个出口**（每条断言只读自己的产物，失败定位不受影响）。
  */
-import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { BUNDLER_REV, bundlePackage, clientModulesAlias, urlOf } from "@morlay/zephyr-dev/testing";
+import {
+  BUNDLER_REV,
+  bundlePackage,
+  clientModulesAlias,
+  dependencyEntry,
+  urlOf,
+} from "@morlay/zephyr-dev/testing";
 
 const repoRoot = process.cwd();
 
@@ -362,5 +368,92 @@ describe("入口形态（一次构建、多出口）", () => {
   test("扩展名即模块类型：`.mjs` / `.ts` 入口都不进 CJS 那条求值路径", async () => {
     expect(await readFile(fileOf("mjs"), "utf8")).not.toMatch(/export default/u);
     expect(await readFile(fileOf("ts"), "utf8")).not.toMatch(/export default/u);
+  });
+});
+// ── 出口入口按**浏览器条件**解析 ────────────────────────────────────────────────────────────────
+//
+// 产物跑在浏览器里：一个出口的入口按 `browser` → `import` → `module` → `main` 解析，并校验文件
+// **真实存在**。走到 `require` 那一支拿到的是 UMD/CJS 的字节（`katex` 就是 `dist/katex.js`），
+// 既不是浏览器那份、又要额外求值包装才打得出来。
+//
+// 这三条只读清单与盘上的文件（不跑打包）：判的是"哪一支被选中"，与转译无关。
+describe("入口按浏览器条件解析", () => {
+  let work: string;
+
+  /** 造一个包（清单 + 若干文件）：判据只看清单与文件存在性。 */
+  async function putPackage(
+    manifest: { name: string } & Record<string, unknown>,
+    files: readonly string[],
+  ): Promise<void> {
+    const root = join(work, "node_modules", manifest.name);
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    for (const file of files) {
+      await mkdir(dirname(join(root, file)), { recursive: true });
+      await writeFile(join(root, file), "export const x = 1;\n", "utf8");
+    }
+  }
+
+  beforeAll(async () => {
+    // mkdtemp 给的可能是软链路径（macOS 的 /var → /private/var），而解析结果是 realpath——先对齐。
+    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-condition-")));
+    await writeFile(join(work, "importer.mjs"), "export {};\n", "utf8");
+    // 双面入口：require 与 import 各一支。
+    await putPackage(
+      {
+        name: "dual",
+        version: "1.2.3",
+        exports: { ".": { require: "./dist/index.cjs", import: "./dist/index.mjs" } },
+      },
+      ["dist/index.mjs", "dist/index.cjs"],
+    );
+    // import 那支指向的文件**不在盘上**：回退到 `module`（老包同时给 main 与 module）。
+    await putPackage(
+      {
+        name: "fallback-module",
+        version: "2.0.0",
+        exports: { ".": { import: "./dist/missing.mjs", require: "./dist/index.cjs" } },
+        module: "./esm/index.mjs",
+        main: "./dist/index.cjs",
+      },
+      ["esm/index.mjs", "dist/index.cjs"],
+    );
+    // 连 `module` 也没有：回退到 `main`（exports 里只有 import 一支，且目标不存在）。
+    await putPackage(
+      {
+        name: "fallback-main",
+        version: "3.0.0",
+        exports: { ".": { import: "./dist/missing.mjs" } },
+        main: "./dist/index.cjs",
+      },
+      ["dist/index.cjs"],
+    );
+  });
+
+  afterAll(async () => {
+    await rm(work, { recursive: true, force: true });
+  });
+
+  /** 从夹具根（`work/importer.mjs`）解析一个说明符。 */
+  async function entryOf(
+    specifier: string,
+  ): Promise<{ entry: string; version: string } | undefined> {
+    return await dependencyEntry(join(work, "importer.mjs"), specifier);
+  }
+
+  test("`exports` 同时给 require 与 import：取 **import** 那份（浏览器那份）", async () => {
+    const found = await entryOf("dual");
+    expect(found?.entry).toBe(join(work, "node_modules", "dual", "dist", "index.mjs"));
+    expect(found?.version).toBe("1.2.3");
+  });
+
+  test("import 条件指向的文件不存在：回退到 `module`", async () => {
+    const found = await entryOf("fallback-module");
+    expect(found?.entry).toBe(join(work, "node_modules", "fallback-module", "esm", "index.mjs"));
+  });
+
+  test("import 与 module 都不作数：回退到 `main`", async () => {
+    const found = await entryOf("fallback-main");
+    expect(found?.entry).toBe(join(work, "node_modules", "fallback-main", "dist", "index.cjs"));
   });
 });
