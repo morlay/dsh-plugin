@@ -2,23 +2,23 @@
 //
 // 生命周期（装配、重载、端口、退出码）归 `zephyr`：入口是导出（或 `(mode) => 清单` 的函数），
 // 这样 dev / build / preview 三条路用的是同一份清单，差别只在 `CliMode` 里的部署值。
+//
+// `CliModeValues` 是**类型**导入：产物里的 `src/server.ts` 是源码面，闭包里的 loader 会剥掉类型，
+// 运行期不需要 `@morlay/zephyr-cli` 在场（它只在仓库里、由 devDependencies 给 tsc 看）。
 import type { CliModeValues } from "@morlay/zephyr-cli";
-import { CustomDevLifecycle } from "./dev-lifecycle.ts";
 import { customProvidersOf } from "./zephyr.provide.ts";
 
 /**
  * 本工作区的清单。
- * @param mode - 本次运行的部署参数（数据目录从它来，不再读全局 env）。
+ * @param mode - 本次运行的部署参数（路径全部从它来，不再读全局 env）。
  * @returns provider 清单。
  */
 export default function serverProviders(mode: CliModeValues) {
   return [
     ...customProvidersOf({
-      workspace: mode.workspace,
+      profileDir: mode.profileDir,
       dataDir: mode.dataDir,
-      // 形态是**部署值**（启动器判定，CliMode.packaged）：装配面不读 env（设计第九节）。
-      packaged: mode.packaged === true,
+      defaultWorkingDirectory: mode.defaultWorkingDirectory ?? mode.profileDir,
     }),
-    CustomDevLifecycle,
   ];
 }

@@ -1,8 +1,10 @@
 // 装配面：**只认 provider 清单**。业务能力一律来自各包的 `provideXxx()`；装配面自己只剩下三样东西：
 //   1. 需要部署值的域（`provideXxx(configure(实现类, {...}))`，路径/档位这类只有启动器知道的事实）；
 //   2. 应用级的两个 Provider（`deploymentProviders` 末尾，需要应用配置）；
-//   3. framework 链：运行时（`@morlay/zephyr-app` 的 `provideXxx()`）
-//      与开发运行时的那**一条**（`@morlay/zephyr-dev/node` 的 `devProviders()`）。
+//   3. framework 链：运行时（`@morlay/zephyr-app` 的 `provideXxx()`）。
+//
+// **开发态与生产态的那几行不在这里**：形态由启动器注入（`zephyr dev` 叠 `devProviders()`，
+// build 把 `productionProviders()` 写进 `bootstrap.mjs`），应用源码零形态痕迹。
 //
 // 装配面**不写补洞行**：客户端会调而宿主没有的端点，缺什么就把对应域装起来。
 //
@@ -23,7 +25,6 @@ import {
   provideTypert,
   provideWeb,
 } from "@morlay/zephyr-app";
-import { devProviders } from "@morlay/zephyr-dev/node";
 import { provideAgent } from "@morlay/dsh-agent";
 import { provideLlmRemote } from "@morlay/dsh-agent/server";
 import { provideAgentInstruction } from "@morlay/dsh-agent-instruction";
@@ -34,6 +35,7 @@ import { ToolExecutorNative } from "@morlay/dsh-agent-loop/server";
 import { provideCommand } from "@morlay/dsh-command/server";
 import { provideCommandCompact, provideCompactionBasic } from "@morlay/dsh-compaction";
 import { provideJob } from "@morlay/dsh-job/server";
+import { provideJobIdleGuard } from "@morlay/dsh-job";
 import { type PermissionMode } from "@morlay/dsh-permission";
 import { providePermissionFor } from "@morlay/dsh-permission/server";
 
@@ -72,54 +74,35 @@ import { provideWorkingDirectory } from "@morlay/dsh-agent/server";
 import { resolve } from "node:path";
 
 /**
- * 装配根：**由部署值给**（`CliMode.workspace`），不读 `process.cwd()`。
+ * 部署参数：**三项路径全由启动器给**（不读 `process.cwd()`、不向上找目录）。
  *
- * dev 形态它指向应用工作区；打包形态指向 `Resources/runtime`（闭包）。两个形态的差别就只有这一个
- * 目录与数据根——这正是 `AppEnv` 存在的理由。
- */
-let appRoot = process.cwd();
-
-/**
- * 部署参数：目前只有一个可覆盖项——数据根。
- *
- * 默认是 `<cwd>/.dsh-store`（`just custom web` 在 app 目录跑）。**测试要传 tmpdir**：
- * 会话库、设置文档、凭据都落在它下面，指到真实目录就会在别人的开发库上读写
- * （实测过一次：测试把仓库里的 `.dsh-store` 写成了 2.6G 并清掉了一份真数据）。
+ * 三者是三个事实，别合并：`profileDir` 是装配根（依赖解析从它出发）、`defaultWorkingDirectory`
+ * 是「用户从哪启动的」（agent、沙箱、终端都在这儿干活）、`dataDir` 是数据根。
+ * 打包形态下它们互不相同：前两项一个在应用包内、一个在用户的项目目录。
  */
 export interface CustomProvidersOptions {
-  /** 装配根（工作区）。省略即 `process.cwd()`（单跑脚本时的兜底）。 */
-  readonly workspace?: string;
-  /** 数据根。省略即 `<装配根>/.dsh-store`。 */
-  readonly dataDir?: string;
-  /**
-   * 打包形态（**部署值，由启动器给**：`server.ts` 从 `CliMode.packaged` 转手）。
-   *
-   * 装配面不读 `process.env`（设计第九节）：形态只有启动器知道，这里只收结论。
-   */
-  readonly packaged?: boolean;
-}
-
-// 路径只在装配面算一次：`AppEnv.dataDir` 与各层的子目录都从它拼，避免两处硬编码漂移。
-function dataDirOf(options: CustomProvidersOptions): string {
-  return options.dataDir ?? resolve(appRoot, ".dsh-store");
+  /** 装配根（`AppEnv.profileDir`）：dev 是工作区，打包形态是随包的 `Resources/runtime`。 */
+  readonly profileDir: string;
+  /** 数据根（`AppEnv.dataDir`，绝对路径）。 */
+  readonly dataDir: string;
+  /** 新会话 / agent 的起始目录（`AppEnv.defaultWorkingDirectory`）。 */
+  readonly defaultWorkingDirectory: string;
 }
 // 权限档位也只在这里读一次：它同时写沙箱模式与批准策略两个开关。
 const permissionMode = (process.env.DSH_PERMISSION_MODE ?? "workspace-write") as PermissionMode;
 
 /**
  * 入口清单：每组是一个装配单元，按依赖顺序（提供方在前）拼起来。
- * @param options - 部署参数（目前只有 `dataDir`；测试传 tmpdir）。
+ * @param options - 部署参数（三项路径，由启动器给）。
  * @returns 完整的 provider 清单。
  */
-export function customProvidersOf(options: CustomProvidersOptions = {}): ProviderEntry[] {
-  // 装配根只在这里落一次：下面读 `appRoot` 的地方（AppEnv、sandbox、workingDirectory）都拿它。
-  appRoot = options.workspace ?? appRoot;
-  const dataDir = dataDirOf(options);
+export function customProvidersOf(options: CustomProvidersOptions): ProviderEntry[] {
+  const { dataDir } = options;
   return [
     // 认凭据的行放在最前：`connection` 行 mount 时就要 `Credentials` 的**面**（适配行的面在它自己的
     // mount 之后才绑上，排在后面就会拿到空壳——症状是 `credentials.modifyRecord is not a function`）。
     ...credentialsProviders(),
-    ...frameworkProviders(options.packaged === true),
+    ...frameworkProviders(),
     // 存储 hub 要排在会话域之前：会话的投影缓存 `onInit` 里就 `open` storage domain。
     ...storageProviders(dataDir),
     // 会话的**核心**行（store / 投影 / 查询 / 持久化 / 缓存 / 计量）：agent 域要它们的面。
@@ -145,18 +128,18 @@ export function customProvidersOf(options: CustomProvidersOptions = {}): Provide
     // 所以排在它们之后（排前面时上游读到的 `ctx.workspaceRegistry` 是适配行的壳）。
     ...sessionEndpointProviders(),
     ...toolProviders(),
-    ...deploymentProviders(dataDir),
+    ...deploymentProviders(options),
   ];
 }
 
 /**
- * framework 链：运行时（`@morlay/zephyr-app`）+ 开发与构建面（`@morlay/zephyr-dev`）。
+ * framework 链：**运行时**（`@morlay/zephyr-app`）——"应用起来之后怎么服务"（web / connection / typert …）。
  *
- * 两者的分界：**运行时**是"应用起来之后怎么服务"（web / connection / 联邦产物的路由）；
- * **开发运行时**是"产物怎么产出"（vite、联邦预编译、换树）。生产形态只装前者。
+ * 开发运行时与生产装配都**不在这里**：形态由启动器注入（设计 §四）——`zephyr dev` 把
+ * `devProviders()` 叠在清单之前，build 把 `productionProviders()` 写进 `bootstrap.mjs`。
  * @returns provider 条目。
  */
-function frameworkProviders(packaged: boolean): ProviderEntry[] {
+function frameworkProviders(): ProviderEntry[] {
   return [
     ...provideWeb(),
     ...provideConnection(),
@@ -165,9 +148,6 @@ function frameworkProviders(packaged: boolean): ProviderEntry[] {
     ...provideApiGateway(),
     ...provideMuxServer(),
     ...provideLoggerExporter(),
-    // **开发运行时的那几行收成一条**（`zephyr-dev` 的 `devProviders()`）：vite 旁路、联邦、页面兜底、
-    // 服务端 HMR 全在它里面。形态（打包与否）只决定"哪些包当文件走 vite"，不影响功能。
-    ...devProviders({ packaged }),
   ];
 }
 
@@ -340,9 +320,9 @@ function agentProviders(): ProviderEntry[] {
   ];
 }
 
-/** 任务面：job。 */
+/** 任务面：job（外加开发态换树要用的「job 忙不忙」判据）。 */
 function taskProviders(): ProviderEntry[] {
-  return [...provideJob()];
+  return [...provideJob(), ...provideJobIdleGuard()];
 }
 
 /** 工作区 / 目录选择（host 面）。 */
@@ -372,13 +352,20 @@ function toolProviders(): ProviderEntry[] {
  * 需要部署值的域 + 本应用自己的 Provider（路径与档位只在这一处给，包内只留默认值）。
  * @returns provider 清单。
  */
-function deploymentProviders(dataDir: string): ProviderEntry[] {
+function deploymentProviders(paths: CustomProvidersOptions): ProviderEntry[] {
+  const { dataDir, defaultWorkingDirectory, profileDir } = paths;
   return [
     ...provideShell(),
+    // 沙箱的根与「从哪开始」是同一件事的两个面：缺省都指向启动器给的起始目录。
     ...provideSandbox(
-      configure(SandboxPolicyDefault, { mode: permissionMode, workspaceRoot: appRoot }),
+      configure(SandboxPolicyDefault, {
+        mode: permissionMode,
+        workspaceRoot: defaultWorkingDirectory,
+      }),
     ),
-    ...provideWorkingDirectory(configure(WorkingDirectoryDefault, { defaultDirectory: appRoot })),
+    ...provideWorkingDirectory(
+      configure(WorkingDirectoryDefault, { defaultDirectory: defaultWorkingDirectory }),
+    ),
     // 右栏的终端：上游 `TerminalController` 的 `static inject` 要 `sandboxPolicy` / `workingDirectory`，
     // 而适配行是**同步 `new`**（`super(ctx, name)` 当场做 inject 检查），所以必须排在它们之后。
     ...provideTerminal(),
@@ -388,9 +375,10 @@ function deploymentProviders(dataDir: string): ProviderEntry[] {
     // `configure(实现类, patch)` 叠加——feature 不能写进清单本身。
     ...provideAppEnv(
       configure(AppEnvDefault, {
-        // cwd 就是解析根（`just web` 在仓库根/启动器目录跑，node 的解析链从它出发）。
-        profileDir: appRoot,
+        // 三项都是启动器给的部署值：装配根（依赖解析的基准）、数据根、起始目录。
+        profileDir,
         dataDir,
+        defaultWorkingDirectory,
       }),
     ),
   ];

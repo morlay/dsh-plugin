@@ -333,19 +333,19 @@ importers:
       '@morlay/zephyr-app':
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-app
-      '@morlay/zephyr-cli':
-        specifier: workspace:*
-        version: link:../../packages/zephyr/zephyr-cli
-      '@morlay/zephyr-dev':
-        specifier: workspace:^
-        version: link:../../packages/zephyr/zephyr-dev
       '@morlay/zephyr-ui':
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-ui
     devDependencies:
+      '@morlay/zephyr-cli':
+        specifier: workspace:^
+        version: link:../../packages/zephyr/zephyr-cli
       '@morlay/zephyr-desktop-bundle':
         specifier: workspace:^
         version: link:../../packages/zephyr-desktop/zephyr-desktop-bundle
+      '@morlay/zephyr-dev':
+        specifier: workspace:^
+        version: link:../../packages/zephyr/zephyr-dev
 
   devpackages/audit:
     dependencies:
@@ -1658,12 +1658,12 @@ importers:
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../zephyr-app
       '@morlay/zephyr-dev':
         specifier: workspace:^
         version: link:../zephyr-dev
-      rolldown:
-        specifier: ^1.2.14
-        version: 1.2.16
     devDependencies:
       '@types/node':
         specifier: ^26.5.0
