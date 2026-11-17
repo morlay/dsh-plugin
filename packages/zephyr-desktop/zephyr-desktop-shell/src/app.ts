@@ -17,8 +17,11 @@ import { pathToFileURL } from "node:url";
 import type { CliModeValues, ZephyrDesktopConfig } from "@morlay/zephyr-cli";
 import { shellDebugOf } from "./debug.ts";
 import { deploymentLineOf } from "./deployment-line.ts";
+import { devToolsOf } from "./dev-tools.ts";
+import { devModeOf } from "./dev-mode.ts";
 import type { ElectronLike, ElectronWindow } from "./electron-like.ts";
 import { reportEvent, reportFailure } from "./failure.ts";
+import { nodeInspectorOf } from "./inspector.ts";
 import { DESKTOP_IPC } from "./ipc.ts";
 import { menuTemplateOf } from "./menu.ts";
 import { navigationPlanOf } from "./navigation.ts";
@@ -49,7 +52,7 @@ const dev = process.env.ZEPHYR_DESKTOP_MODE === "dev";
 // 打包形态给同进程的宿主打标记：应用据此把 `dev.include` 清空（全部预构建）。
 if (!dev) process.env.ZEPHYR_DESKTOP_PACKAGED = "1";
 
-/** 调试面在 userData 就绪之后算（标记文件在它下面），见下面的 `shellDebugOf(...)`。 */
+/** 调试面是开发者模式的只读投影（标记文件在 userData 下面），见下面的 `shellDebugOf(devMode)`。 */
 
 // **目录名用应用的 id**（`ai.deepseek.zephyr.custom`），不用显示名：显示名会变，id 不变；而且显示名
 // 里的空格进路径只会带来麻烦。两层：
@@ -65,14 +68,20 @@ const userData = await requireUserData();
 electron.app.setPath("userData", userData);
 
 // 开发者模式：环境变量 / `--debug` / userData 下的 `debug` 标记文件（任一条成立就开）。
-// 打包形态从 Finder 启动没有环境变量，所以后两条是它的入口；标记文件也让「这次想看 DevTools」
-// 不必每次带参数——`touch "<userData>/debug"` 之后重启即生效。
-const debug = shellDebugOf(process.env, {
-  argv: process.argv,
-  marker: await readFile(join(userData, "debug"), "utf8").then(
-    () => true,
-    () => false,
-  ),
+// 三源合并与持久化都在 `dev-mode.ts`——菜单是它唯一的运行期写口；打包形态从 Finder 启动既没有环境
+// 变量也没有参数，所以后两条是它的入口。`ShellDebug` 只是它的只读投影：菜单里一开，日志立刻就吵。
+const devMode = await devModeOf({ userData, env: process.env, argv: process.argv });
+const debug = shellDebugOf(devMode);
+
+// 开发面动作：`DevMode` 与 `InspectorPort` 的接线——关模式收 Inspector、退出收 Inspector、打不开标灰。
+// 状态一变就重画菜单（不重开窗口）。
+const devTools = devToolsOf({
+  devMode,
+  inspector: nodeInspectorOf(),
+  report: reportEvent,
+  onChange: () => {
+    installMenu();
+  },
 });
 
 // 受限环境（容器 / 无 GPU / 无沙箱权限）里 Electron 的 GPU 与沙箱进程会 FATAL 退出。
@@ -146,6 +155,8 @@ async function start(): Promise<void> {
     initialSize(),
   );
   installMenu();
+  // 打包形态看不见 stderr：开发者模式是开是关决定菜单里有什么，必须落文件。
+  await reportEvent("开发者模式", devMode.enabled ? "开" : "关");
   // **唯一的退出路径**：最后一个窗口关掉 → 收桥 → 收宿主树 → 退出。
   electron.app.on("window-all-closed", () => void quit());
   await reportEvent("start：环境与桥就绪");
@@ -188,21 +199,43 @@ async function start(): Promise<void> {
 async function quit(): Promise<void> {
   if (quitting) return;
   quitting = true;
+  // 先收调试端口：进程退出后 `lsof` 里不该还剩这条监听。
+  await devTools.dispose();
   shortcuts?.dispose();
   await hostApp?.dispose().catch(async (error: unknown) => reportFailure("收起宿主", error));
   electron.app.quit();
 }
 
 /**
- * 装产品菜单（裁剪默认菜单：打包形态没有 Reload / DevTools）。
+ * 装产品菜单（裁剪默认菜单：开发者模式关着时没有 Reload / DevTools / Inspector）。
+ *
+ * 每次状态变化都重建一次：菜单是开发者模式与 Inspector 的**唯一**显示面，重建比改单项安全。
  */
 function installMenu(): void {
   const template = menuTemplateOf({
     platform: process.platform,
     appName: desktopIdentity?.name ?? electron.app.getName(),
-    debug: debug.enabled,
+    debug: devTools.enabled,
+    inspector: devTools.inspector,
+    on: {
+      toggleDevMode: () => void devTools.toggleDevMode(),
+      toggleInspector: () => void devTools.toggleInspector(),
+      copyInspectorAddress: () => {
+        copyInspectorAddress();
+      },
+    },
   });
   electron.Menu.setApplicationMenu(electron.Menu.buildFromTemplate(template));
+}
+
+/**
+ * 把 Inspector 地址放进剪贴板（菜单项只在有地址时可点，这里再挡一次：没有就不动剪贴板）。
+ */
+function copyInspectorAddress(): void {
+  const address = devTools.inspector.address;
+  if (address === undefined) return;
+  electron.clipboard.writeText(address);
+  void reportEvent("已复制主进程 Inspector 地址", address);
 }
 
 /**

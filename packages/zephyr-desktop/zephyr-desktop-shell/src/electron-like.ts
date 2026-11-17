@@ -77,6 +77,10 @@ export interface ElectronLike {
     buildFromTemplate(template: readonly unknown[]): unknown;
     setApplicationMenu(menu: unknown): void;
   };
+  /** 剪贴板：菜单里「复制 Inspector 地址」用（地址要能粘进 Chrome DevTools）。 */
+  readonly clipboard: {
+    writeText(text: string): void;
+  };
   /** 系统外壳：外部链接交给系统浏览器，不在应用内开无策略的窗口。 */
   readonly shell: {
     openExternal(url: string): Promise<void>;

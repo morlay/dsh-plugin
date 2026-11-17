@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { menuTemplateOf, type MenuItemSpec } from "../menu.ts";
+import { menuTemplateOf, type MenuActions, type MenuItemSpec } from "../menu.ts";
 
 const APP = "Zephyr Custom";
 const PLATFORMS = ["darwin", "win32", "linux"] as const;
@@ -11,6 +11,14 @@ function rolesOf(items: readonly MenuItemSpec[]): string[] {
     .filter((role): role is string => role !== undefined);
 }
 
+/** 模板里所有文案（含子菜单）。 */
+function labelsOf(items: readonly MenuItemSpec[]): string[] {
+  return items.flatMap((item) => [
+    ...(item.label === undefined ? [] : [item.label]),
+    ...(item.submenu === undefined ? [] : labelsOf(item.submenu)),
+  ]);
+}
+
 /** 模板里所有没有 role 也没有子菜单的项（产品自造的项）。 */
 function customItemsOf(items: readonly MenuItemSpec[]): MenuItemSpec[] {
   return items.flatMap((item) => [
@@ -19,6 +27,22 @@ function customItemsOf(items: readonly MenuItemSpec[]): MenuItemSpec[] {
       : [item]),
     ...(item.submenu === undefined ? [] : customItemsOf(item.submenu)),
   ]);
+}
+
+/**
+ * @param template - 顶层菜单。
+ * @returns 视图菜单的子项。
+ */
+function viewMenuOf(template: readonly MenuItemSpec[]): readonly MenuItemSpec[] {
+  return template.find((item) => item.label === "视图")?.submenu ?? [];
+}
+
+/**
+ * @param template - 顶层菜单。
+ * @returns 「开发者模式」那一项。
+ */
+function devModeItemOf(template: readonly MenuItemSpec[]): MenuItemSpec | undefined {
+  return viewMenuOf(template).find((item) => item.label === "开发者模式");
 }
 
 describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
@@ -36,24 +60,56 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
     }
   });
 
-  it("调试面关（打包形态）：三平台都没有 Reload 与 DevTools", () => {
+  it("开发者模式关（打包形态无参数启动）：没有 Reload / DevTools，也没有 Inspector 两项", () => {
     for (const platform of PLATFORMS) {
-      const roles = rolesOf(menuTemplateOf({ platform, appName: APP, debug: false }));
+      const template = menuTemplateOf({ platform, appName: APP, debug: false });
+      const roles = rolesOf(template);
       expect(roles).not.toContain("reload");
       expect(roles).not.toContain("forceReload");
       expect(roles).not.toContain("toggleDevTools");
+      const labels = labelsOf(template);
+      expect(labels).not.toContain("打开主进程 Inspector");
+      expect(labels).not.toContain("复制 Inspector 地址");
     }
   });
 
-  it("调试面开：才有 Reload 与 DevTools", () => {
+  it("开发者模式开：才有 Reload 与 DevTools", () => {
     const roles = rolesOf(menuTemplateOf({ platform: "darwin", appName: APP, debug: true }));
     expect(roles).toContain("reload");
     expect(roles).toContain("toggleDevTools");
   });
 
-  it("每一项要么是分隔线、要么是 role、要么是子菜单（本地化与快捷键由 Electron 给）", () => {
+  it("视图菜单底部是「开发者模式」勾选项：checked 跟随状态，点它调动作", () => {
+    const clicks: string[] = [];
+    const on: MenuActions = {
+      toggleDevMode: () => clicks.push("dev"),
+      toggleInspector: () => clicks.push("inspector"),
+      copyInspectorAddress: () => clicks.push("copy"),
+    };
     for (const platform of PLATFORMS) {
-      expect(customItemsOf(menuTemplateOf({ platform, appName: APP, debug: false }))).toEqual([]);
+      const item = devModeItemOf(menuTemplateOf({ platform, appName: APP, debug: false, on }));
+      expect(item?.label).toBe("开发者模式");
+      expect(item?.type).toBe("checkbox");
+      expect(item?.checked).toBe(false);
+      expect(item?.accelerator).toBe("CmdOrCtrl+Shift+D");
+      item?.click?.();
+    }
+    expect(devModeItemOf(menuTemplateOf({ platform: "darwin", appName: APP, debug: true }))?.checked).toBe(
+      true,
+    );
+    expect(clicks).toEqual(["dev", "dev", "dev"]);
+  });
+
+  it("产品自造项只有「开发者模式」与开发项里的那两条（其余交给 role：本地化与快捷键由 Electron 给）", () => {
+    for (const platform of PLATFORMS) {
+      expect(customItemsOf(menuTemplateOf({ platform, appName: APP, debug: false })).map((i) => i.label)).toEqual([
+        "开发者模式",
+      ]);
+      expect(customItemsOf(menuTemplateOf({ platform, appName: APP, debug: true })).map((i) => i.label)).toEqual([
+        "打开主进程 Inspector",
+        "复制 Inspector 地址",
+        "开发者模式",
+      ]);
     }
   });
 

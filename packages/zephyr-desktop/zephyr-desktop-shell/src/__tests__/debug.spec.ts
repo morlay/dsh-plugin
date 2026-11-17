@@ -20,20 +20,11 @@ function captureStderr(): () => string {
   return () => writes.join("");
 }
 
-describe("壳的调试面", () => {
-  it("三个来源任一成立就打开（环境变量 / --debug / debug 标记文件）", () => {
-    expect(shellDebugOf({}).enabled).toBe(false);
-    expect(shellDebugOf({ ZEPHYR_DESKTOP_DEBUG: "0" }).enabled).toBe(false);
-    expect(shellDebugOf({ ZEPHYR_DESKTOP_DEBUG: "1" }).enabled).toBe(true);
-    // 打包形态从 Finder 启动没有环境变量：这两条是它的入口。
-    expect(shellDebugOf({}, { argv: ["Zephyr Custom", "--debug"] }).enabled).toBe(true);
-    expect(shellDebugOf({}, { argv: ["Zephyr Custom"] }).enabled).toBe(false);
-    expect(shellDebugOf({}, { marker: true }).enabled).toBe(true);
-  });
-
+describe("壳的调试面（开发者模式的只读投影）", () => {
   it("关着时 log / renderer 静默，fail 照样输出（错误不该被开关吞掉）", () => {
     const read = captureStderr();
-    const debug = shellDebugOf({});
+    const debug = shellDebugOf({ enabled: false });
+    expect(debug.enabled).toBe(false);
     debug.log("生命周期");
     debug.renderer("渲染进程");
     expect(read()).toBe("");
@@ -43,10 +34,26 @@ describe("壳的调试面", () => {
 
   it("打开时三类都带各自前缀", () => {
     const read = captureStderr();
-    const debug = shellDebugOf({ ZEPHYR_DESKTOP_DEBUG: "1" });
+    const debug = shellDebugOf({ enabled: true });
+    expect(debug.enabled).toBe(true);
     debug.log("已加载 http://127.0.0.1:3080/");
     debug.renderer("[vite] connected.");
     expect(read()).toContain("[shell] 已加载");
     expect(read()).toContain("[renderer] [vite] connected.");
+  });
+
+  it("跟着来源走：来源一转，投影立刻改口（不重建就能生效）", () => {
+    const read = captureStderr();
+    const source = { enabled: false };
+    const debug = shellDebugOf(source);
+    debug.log("开之前");
+    source.enabled = true;
+    debug.log("开之后");
+    source.enabled = false;
+    debug.log("又关掉");
+    expect(read()).toContain("开之后");
+    expect(read()).not.toContain("开之前");
+    // 关掉之后立刻又安静（同一个投影，没有第二份状态）。
+    expect(read()).not.toContain("又关掉");
   });
 });
