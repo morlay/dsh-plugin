@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { BUNDLER_REV } from "@morlay/zephyr-dev/testing";
+
 import { Federation } from "../federation.contract.ts";
 import { FederationDefault } from "@morlay/zephyr-dev/testing";
-import { FakeAppEnv, temporaryCache } from "./support/fake-app-env.ts";
+import { FakeAppEnv, FIXTURES, temporaryCache } from "./support/fake-app-env.ts";
 
 /** 最小 res 桩：记录状态码、content-type 与 body（Buffer 也要接）。 */
 function stubResponse(): {
@@ -160,6 +162,55 @@ describe("FederationDefault.serve", () => {
     expect(status()).toBe(200);
     expect(body(), "是那份语法模块").toContain("source.ts");
     expect(body(), "不是同名包的字节").not.toContain("TYPESCRIPT-COMPILER");
+  });
+
+  it("缓存命中也重放包根表：运行期按名拼的出口现场构建，不是 404", async () => {
+    // 现场：`@shikijs/langs/toml` 只出现在**运行期拼出来的地址**里（源码面没有静态 import），
+    // 而那个包在 pnpm 严格布局下不在应用自己的 node_modules 里——本会话没构建过它时，
+    // 包根表只能从上一轮产物清单（`.files.json` 的 `resolved`）里重放出来。
+    const root = join(FIXTURES, "packages", "consumer", "node_modules", "runtime-langs-fixture");
+    const dir = join(cache, "client-modules", "fixture-consumer@1.0.0");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "index.js"), "export const ok = 1;\n", "utf8");
+    await writeFile(
+      join(dir, ".files.json"),
+      JSON.stringify({
+        // 规则世代对得上（只有它可比：包根未知时 `expectedRev` 是 undefined）。
+        rev: `${BUNDLER_REV}:fixture`,
+        files: { index: "fixture-consumer@1.0.0/index.js" },
+        resolved: [["runtime-langs-fixture", "1.0.0", root]],
+      }),
+      "utf8",
+    );
+    // 先命中一次缓存（这一步应当把 `resolved` 重放进包根表）。
+    const warm = stubResponse();
+    await federation.serve("/_zephyr/@modules/fixture-consumer@1.0.0/index.js", request, warm.res);
+    expect(warm.status()).toBe(200);
+    // 再取那个「运行期按名」的出口：必须现场构建出来。
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/runtime-langs-fixture@1.0.0/toml.js",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status(), "不是 404（unresolved entry）").toBe(200);
+    expect(body()).toContain("source.toml");
+  });
+
+  it("冷请求：按 pnpm 的虚拟存储布局定位包根（`.pnpm/<pkg>@<ver>/node_modules/<pkg>`）", async () => {
+    // 现场：`@shikijs/langs` 住在别人的 node_modules 里，应用清单解析不到；而冷请求（本会话没建过
+    // 任何产物）**没有引用方**可用、也没有上一轮清单的 `resolved` 可重放——只能按 URL 里的版本去
+    // 存储布局里定位。这条不预热、直接取，判的是 cold 就是 200。
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/runtime-langs-store@2.0.0/toml.js",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status(), "冷请求不是 404（unresolved entry）").toBe(200);
+    expect(body()).toContain("source.toml");
   });
 
   it("无 exports 的包子路径：shim/with-selector 落到文件而不是主入口", async () => {

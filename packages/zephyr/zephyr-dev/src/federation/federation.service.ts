@@ -90,8 +90,14 @@ export class FederationDefault extends Federation {
     const target = parseFederationUrl(url);
     if (target === undefined) return false;
     const { name, urlVersion, file } = target;
+    const rootKey = `${name.replaceAll("/", "+")}@${urlVersion}`;
     const root =
-      this.roots.get(`${name.replaceAll("/", "+")}@${urlVersion}`) ?? (await this.rootOf(name));
+      this.roots.get(rootKey) ??
+      (await this.rootOf(name)) ??
+      // 冷请求（本会话没建过任何产物、也没有引用方）：只剩 URL 里的版本可用，按 pnpm 的存储布局定位。
+      (await this.storeRootOf(name, urlVersion));
+    // 定位到的包根记下来：同一个包的后续请求不必再解析一遍。
+    if (root !== undefined) this.roots.set(rootKey, root);
     const version =
       (root === undefined ? undefined : (await manifestOf(root))?.version) ?? urlVersion;
     const key = `${name.replaceAll("/", "+")}@${version}`;
@@ -109,7 +115,15 @@ export class FederationDefault extends Federation {
     const watch = entry === undefined ? undefined : watchOf(root, entry);
     const expectedRev = watch === undefined ? undefined : await contentRev(watch);
     // **缓存优先**：prebundle 已经产出过这个出口（`<cache>/client-modules/<pkg>@<ver>/.files.json`）就直接回文件。
-    if (await this.cached(key, exportName, expectedRev)) {
+    const hit = await this.cachedManifest(key, exportName, expectedRev);
+    if (hit !== undefined) {
+      // **命中也要重放包根表**：产物里的联邦地址是构建期写死的，而浏览器逐个按地址来取时，
+      // 那些「运行期按名拼出来的说明符」（`@shikijs/langs/<lang>`）本会话从没构建过——没有
+      // `resolved` 重放，`rootOf` 从应用清单出发解析不到它们（pnpm 严格布局下它们不在应用自己的
+      // `node_modules` 里），请求就成了一条 404。
+      for (const [dep, depVersion, depRoot] of hit.resolved ?? []) {
+        this.roots.set(`${dep.replaceAll("/", "+")}@${depVersion}`, depRoot);
+      }
       const repliedFromCache = await this.replyFile(key, exportName, req, res);
       if (repliedFromCache) return true;
     }
@@ -275,33 +289,76 @@ export class FederationDefault extends Federation {
   }
 
   /**
+   * 按 **pnpm 的虚拟存储布局**定位包根：`<dir>/node_modules/.pnpm/<name>@<ver>/node_modules/<name>`。
+   *
+   * 冷请求能用的事实只有 URL 里的版本——没有引用方（浏览器直接按地址来取），也没有上一轮产物的
+   * `resolved` 可重放。而「运行期按名拼出来的说明符」（`@shikijs/langs/<lang>`）恰好住在这种布局里：
+   * 应用清单解析不到它们，存储里有。
+   * @param name - 包名。
+   * @param version - URL 里的版本。
+   * @returns 包根；存储里没有时 undefined。
+   */
+  private async storeRootOf(name: string, version: string): Promise<string | undefined> {
+    const encoded = `${name.replaceAll("/", "+")}@${version}`;
+    for (let dir = this.appEnv.values.profileDir; ; dir = dirname(dir)) {
+      const candidate = join(
+        dir,
+        "node_modules",
+        ".pnpm",
+        encoded,
+        "node_modules",
+        name,
+        "package.json",
+      );
+      if (await readFile(candidate, "utf8").then(() => true, () => false)) {
+        return dirname(candidate);
+      }
+      const parent = dirname(dir);
+      if (parent === dir) return undefined;
+      dir = parent;
+    }
+  }
+
+  /**
    * 缓存里有没有这个出口的产物（且世代对得上）。
+   *
+   * 回的是**产物清单**而不是布尔：命中时调用方要把 `resolved`（外部依赖的包根表）重放回
+   * {@link roots}，否则本会话没构建过的包会解析不到（见 `serve` 里的说明）。
    * @param key - `<pkg>@<ver>`（已编码）。
    * @param exportName - 出口名（`vanilla` / `index` …）。
-   * @returns 判断结果。
+   * @param expectedRev - 期望指纹（包根未知时 undefined：只比规则版本）。
+   * @returns 产物清单；未命中时 undefined。
    */
-  private async cached(
+  private async cachedManifest(
     key: string,
     exportName: string,
     expectedRev: string | undefined,
-  ): Promise<boolean> {
+  ): Promise<
+    | { rev?: string; files?: Record<string, string>; resolved?: Array<[string, string, string]> }
+    | undefined
+  > {
     const raw = await readFile(join(this.cacheRoot, key, ".files.json"), "utf8").catch(
       () => undefined,
     );
-    if (raw === undefined) return false;
-    const manifest = JSON.parse(raw) as { rev?: string; files?: Record<string, string> };
-    if (manifest.rev === undefined) return false;
+    if (raw === undefined) return undefined;
+    const manifest = JSON.parse(raw) as {
+      rev?: string;
+      files?: Record<string, string>;
+      resolved?: Array<[string, string, string]>;
+    };
+    if (manifest.rev === undefined) return undefined;
     // **有入口时按完整指纹判**（规则版本 + 源码内容）：workspace 包的版本号是固定的 `0.0.1`，
     // 只比规则版本会让"同版本改了源码"继续复用旧产物（症状：模块里没有新加的导出）。
     // 没有入口时（第三方传递依赖、包根未知）退回规则版本口径——registry 版本的内容不可变。
     if (expectedRev === undefined) {
-      if (!manifest.rev.startsWith(BUNDLER_REV)) return false;
+      if (!manifest.rev.startsWith(BUNDLER_REV)) return undefined;
     } else if (manifest.rev !== expectedRev) {
-      return false;
+      return undefined;
     }
     const relative = manifest.files?.[exportName];
-    if (relative === undefined) return false;
-    return (await readFile(join(this.cacheRoot, relative)).catch(() => undefined)) !== undefined;
+    if (relative === undefined) return undefined;
+    const present = await readFile(join(this.cacheRoot, relative)).catch(() => undefined);
+    return present === undefined ? undefined : manifest;
   }
 
   /** 按清单里的相对路径回一个文件（资产/块/出口产物同一套）。 */
