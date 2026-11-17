@@ -24,6 +24,8 @@ import { readFile, realpath } from "node:fs/promises";
 import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parseAst } from "rolldown/parseAst";
+import { cssImportSpecifiersOf } from "../cordis-assets/styles.ts";
 import { browserEntryOf } from "./bundle.ts";
 import type { PrebundleTarget } from "./prebundle.ts";
 
@@ -57,69 +59,128 @@ const DESCEND = /^(?:@morlay\/|@deepseek-ai\/dsh-client)/u;
 /** 每个包最多记几个引用方：解析包根时按顺序试（第一个解析得开的就是它实际被引用的那一份）。 */
 const MAX_IMPORTERS = 4;
 
-/** 静态 import 语句的正则（跳过 import type）。 */
-const STATIC_FROM =
-  /(?:^|\n)\s*(?:import|export)\s+(?!type\b)[^;]*?from\s*["']([^"'.][^"']*)["']/gu;
+/** 一个文件里的说明符：`bare` 进 records（解析得到的才是包），`relative` 继续跟下去。 */
+export interface Specifiers {
+  readonly bare: readonly string[];
+  readonly relative: readonly string[];
+}
 
-/** 副作用 import 的正则。 */
-const SIDE_EFFECT = /(?:^|\n)\s*import\s*["']([^"'.][^"']*)["']/gu;
+/** AST 节点的最小面（不引 oxc 的类型包：这里只读 `type` 与它的 `source`）。 */
+interface AstNode {
+  readonly type: string;
+  readonly source?: unknown;
+  readonly importKind?: unknown;
+  readonly exportKind?: unknown;
+}
 
-/** 动态 import 的正则（`import("pkg")`）：grammar / 语言包这类按需加载的说明符。 */
-const DYNAMIC_IMPORT = /import\s*\(\s*["']([^"'.][^"']*)["']\s*\)/gu;
+/**
+ * 遍历 AST 的每个节点（`parent` 与 `type` 不进递归：一个指回去、一个是标识）。
+ * @param node - 任意节点 / 数组。
+ * @param visit - 每遇到一个带 `type` 的对象调一次。
+ */
+function walkAst(node: unknown, visit: (node: AstNode) => void): void {
+  if (Array.isArray(node)) {
+    for (const item of node) walkAst(item, visit);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+  const record = node as Record<string, unknown>;
+  const type = record["type"];
+  // 只把用得到的那几个字段交出去（AST 节点的 `parent` / `range` 我们不碰）。
+  if (typeof type === "string") {
+    visit({
+      type,
+      source: record["source"],
+      importKind: record["importKind"],
+      exportKind: record["exportKind"],
+    });
+  }
+  for (const [key, value] of Object.entries(record)) {
+    if (key === "type" || key === "parent") continue;
+    walkAst(value, visit);
+  }
+}
 
-/** 相对导入的正则（继续跟下去）。 */
-const RELATIVE_FROM = /from\s*["'](\.{1,2}\/[^"']+)["']/gu;
+/**
+ * 一个**脚本**里的说明符（AST，`rolldown/parseAst`）：
+ *
+ * - `ImportDeclaration` 的 `source`（**含副作用 import**：`specifiers` 为空的那类）；
+ * - `ExportNamedDeclaration` / `ExportAllDeclaration` 带 `source` 的；
+ * - `ImportExpression`（动态 `import()`，只认字面量）；
+ * - `import type` / `export type` 跳过（`importKind` / `exportKind` 是 `type`）。
+ *
+ * 不扫文本：注释、模板字符串、文档片段里的"示例 import"不该进清单（正则扫得到，解析器扫不到）。
+ * @param source - 源码。
+ * @param file - 文件名（解析器按它认 TS / JSX；报错也点它）。
+ * @returns 裸说明符与相对说明符。
+ * @throws Error 解析失败（点出文件名 —— 这类文件本来也编不出来）。
+ */
+export function specifiersOf(source: string, file: string): Specifiers {
+  let program: unknown;
+  try {
+    // `lang` 必须显式给：`parseAst` 不按 filename 推 TS / JSX（只按它报错定位）。
+    program = parseAst(source, { lang: langOf(file), sourceType: "unambiguous" }, file);
+  } catch (error) {
+    throw new Error(
+      `说明符解析失败（${file}）：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const bare: string[] = [];
+  const relative: string[] = [];
+  walkAst(program, (node) => {
+    const specifier = specifierOfNode(node);
+    if (specifier === undefined) return;
+    (specifier.startsWith(".") ? relative : bare).push(specifier);
+  });
+  return { bare, relative };
+}
 
-/** 样式里的 `@import`：裸说明符要进清单，相对路径要继续跟下去（与脚本里的 import 同一张图）。 */
-const CSS_IMPORT = /@import\s+(?:url\(\s*)?["']?([^"') \s;]+)["']?\s*\)?/gu;
+/**
+ * 文件扩展名 → 解析器的 `lang`（`parseAst` 不会按 filename 推这个）。
+ * @param file - 文件名。
+ * @returns `js` / `jsx` / `ts` / `tsx`。
+ */
+function langOf(file: string): "js" | "jsx" | "ts" | "tsx" {
+  if (file.endsWith(".tsx")) return "tsx";
+  if (file.endsWith(".jsx")) return "jsx";
+  if (/\.[cm]?ts$/u.test(file)) return "ts";
+  return "js";
+}
 
-/** 相对引用的样式文件（`import "./x.css"`）：**样式也算模块**，它的 `@import` 同样要读。 */
-const RELATIVE_STYLE = /["'](\.{1,2}\/[^"']+\.css)["']/gu;
+/**
+ * 一个 AST 节点带的说明符（不是说明符节点就答 `undefined`）。
+ * @param node - AST 节点。
+ * @returns 说明符；`import type` / 非字面量的动态 import 都答 `undefined`。
+ */
+function specifierOfNode(node: AstNode): string | undefined {
+  if (node.type === "ImportExpression") {
+    // 动态 `import()`：只认字面量（`import(\`./x\${y}\`)` 这种算不出来，跳过）。
+    return typeof node.source === "object" && node.source !== null && (node.source as AstNode).type === "Literal"
+      ? stringOf((node.source as { value?: unknown }).value)
+      : undefined;
+  }
+  if (node.importKind === "type" || node.exportKind === "type") return undefined;
+  const isDeclaration = node.type === "ImportDeclaration" || node.type === "ExportNamedDeclaration" || node.type === "ExportAllDeclaration";
+  if (!isDeclaration) return undefined;
+  const source = node.source;
+  if (typeof source !== "object" || source === null) return undefined;
+  return stringOf((source as { value?: unknown }).value);
+}
+
+/**
+ * 说明符节点里的字符串值。
+ * @param value - `source.value`。
+ * @returns 字符串；不是字符串时 undefined。
+ */
+function stringOf(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
 
 /** BFS 要跟的文件：脚本与样式。 */
 function isFollowable(file: string): boolean {
   return /\.[cm]?[jt]sx?$/u.test(file) || file.endsWith(".css");
 }
 
-/**
- * 从源码里取**静态** import 的裸说明符。
- * @param text - 源码。
- * @returns 说明符列表。
- */
-export function bareImportsOf(text: string): string[] {
-  const out: string[] = [];
-  for (const match of text.matchAll(STATIC_FROM)) {
-    const specifier = match[1];
-    if (specifier !== undefined) out.push(specifier);
-  }
-  for (const match of text.matchAll(SIDE_EFFECT)) {
-    const specifier = match[1];
-    if (specifier !== undefined) out.push(specifier);
-  }
-  // 动态 import 的裸说明符也收：grammar / 语言包只在运行时按需加载，光看静态图会漏（shiki 就是）。
-  for (const match of text.matchAll(DYNAMIC_IMPORT)) {
-    const specifier = match[1];
-    if (specifier !== undefined) out.push(specifier);
-  }
-  return out;
-}
-
-/**
- * 样式文本里的 `@import` **裸说明符**（相对路径与 http(s) 由 {@link RELATIVE_STYLE} 那条跟）。
- * @param text - 样式文本。
- * @returns 说明符列表。
- */
-function cssImportsOf(text: string): string[] {
-  const out: string[] = [];
-  for (const match of text.matchAll(CSS_IMPORT)) {
-    const specifier = match[1];
-    if (specifier === undefined) continue;
-    if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier))
-      continue;
-    out.push(specifier);
-  }
-  return out;
-}
 
 /**
  * 裸说明符 → 包名。
@@ -274,10 +335,12 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
     if (file === undefined || seenFiles.has(file) || !isFollowable(file)) continue;
     seenFiles.add(file);
     const text = await readFile(file, "utf8").catch(() => "");
-    // 样式与脚本的裸说明符同一个去处：样式里的 `@import` 也是「页面会去取的那份产物」。
-    const specifiers = (
-      file.endsWith(".css") ? cssImportsOf(text) : bareImportsOf(text)
-    ).filter((specifier) => !specifier.startsWith("node:"));
+    // 说明符来自**解析器**：脚本走 AST（`parseAst`），样式走闪电（`@import` 由它读）。
+    // 两者的裸说明符同一个去处：样式里的 `@import` 也是「页面会去取的那份产物」。
+    const found = file.endsWith(".css")
+      ? cssImportSpecifiersOf(text, file)
+      : specifiersOf(text, file);
+    const specifiers = found.bare.filter((specifier) => !specifier.startsWith("node:"));
     for (const specifier of specifiers) {
       const name = packageNameOfSpecifier(specifier);
       const root = await rootOfFrom(name, file, rootCache);
@@ -302,17 +365,14 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
         if (entry !== undefined) pending.push(entry);
       }
     }
-    for (const match of text.matchAll(RELATIVE_FROM)) {
-      const relative = match[1];
-      if (relative === undefined) continue;
+    // 相对引用继续跟：样式就是磁盘上的名字（扩展名不猜）；脚本在源码树里不带扩展名，试 `.ts` / `.tsx`。
+    for (const relative of found.relative) {
+      if (relative.endsWith(".css")) {
+        pending.push(join(dirname(file), relative));
+        continue;
+      }
       const base = join(dirname(file), relative).replace(/\.[cm]?[jt]sx?$/u, "");
       pending.push(base + ".ts", base + ".tsx");
-    }
-    // 相对引用的样式文件（`import "./base.css"` 与样式里的 `@import "./x.css"`）：按原路径跟，
-    // 扩展名不猜——它本来就是磁盘上的名字。
-    for (const match of text.matchAll(RELATIVE_STYLE)) {
-      const relative = match[1];
-      if (relative !== undefined) pending.push(join(dirname(file), relative));
     }
     // 下潜：把下潜范围内、第一次见到的包的浏览器面入口推进 BFS。**以这个引用方为解析基准**——
     // 它看得见哪个副本，就用哪个副本（pnpm 严格布局下同名多版本是常态）。

@@ -12,8 +12,8 @@
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { planPrebundle } from "../prebundle-plan.ts";
+import { describe, expect, it, test } from "vitest";
+import { planPrebundle, specifiersOf } from "../prebundle-plan.ts";
 
 /** 写一个文件（父目录不存在就建）。 */
 async function put(path: string, content: string): Promise<void> {
@@ -383,5 +383,55 @@ describe("planPrebundle（样式在图上）", () => {
     const targets = plan.targets.map((target) => `${target.name}/${target.exportName}`);
     expect(targets).toContain("@morlay/css-host/brand-font.css");
     expect(targets).toContain("css-dep/brand-font.css");
+  });
+});
+// ── 说明符来自 AST（不扫文本） ──────────────────────────────────────────────────────────────────
+//
+// 约束：清单的输入是**解析器的结论**——注释、模板字符串、文档片段里的"示例 import"不是说明符；
+// `import type` 不是运行期依赖（它不进产物）。
+describe("specifiersOf（说明符来自 AST）", () => {
+  const file = "/tmp/specifier-fixture.ts";
+
+  test("import / 副作用 import / export from / 动态 import 都收，import type 跳过", () => {
+    const found = specifiersOf(
+      [
+        'import { a } from "pkg/static";',
+        'import "pkg/side-effect";',
+        'export { b } from "pkg/reexport";',
+        'export * from "pkg/star";',
+        'export const load = async () => await import("pkg/dynamic");',
+        'import type { T } from "pkg/types-only";',
+        'import { type U } from "pkg/inline-type";',
+        'import "./local";',
+        'import "./style.css";',
+        "",
+      ].join("\n"),
+      file,
+    );
+    expect([...found.bare].sort()).toEqual([
+      "pkg/dynamic",
+      "pkg/inline-type",
+      "pkg/reexport",
+      "pkg/side-effect",
+      "pkg/star",
+      "pkg/static",
+    ]);
+    expect(found.relative).toEqual(["./local", "./style.css"]);
+  });
+
+  test("注释与模板字符串里的假 import 压根不进（不是「解析不到被丢弃」）", () => {
+    const found = specifiersOf(
+      [
+        '// import "ghost/line";',
+        '/* import "ghost/block"; */',
+        "export const snippet = `",
+        'import "ghost/template";',
+        "`;",
+        "",
+      ].join("\n"),
+      file,
+    );
+    expect(found.bare).toEqual([]);
+    expect(found.relative).toEqual([]);
   });
 });

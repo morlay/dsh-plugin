@@ -18,7 +18,6 @@ import {
   clientModulesAlias,
   dependencyEntry,
   exportTargetOf,
-  productFileNameOf,
   urlOf,
 } from "@morlay/zephyr-dev/testing";
 
@@ -734,11 +733,11 @@ describe("两条链的入口是同一份规则", () => {
     }
   });
 });
-// ── 样式里的跨包 `@import` 落成联邦地址 ──────────────────────────────────────────────────────────
+// ── 样式里的跨包 `@import` 在**构建期展开** ──────────────────────────────────────────────────────
 //
-// 约束：注入的 `<style>` 文本里不留裸说明符——浏览器会按页面相对去取它（一条 404）；跨包引用只能是
-// 联邦地址，且末段与产物文件名同形（设计决定 4）。
-describe("CSS 的 @import 落成联邦地址", () => {
+// 约束：`@import "pkg/x.css"` 是包引用，展开成内容才会生效（指向地址 = 浏览器按样式表解析那份 JS 产物，
+// 规则被忽略）；展开进来的 `url(./x.woff2)` 按**那份 CSS 自己的目录**解析，走既有资产策略。
+describe("CSS 的 @import 在构建期展开", () => {
   let work: string;
   let cacheRoot: string;
   /** 这次构建的**全部产物正文**：样式被拆成共享 chunk，注入的 `<style>` 文本不保证在入口产物里。 */
@@ -747,16 +746,33 @@ describe("CSS 的 @import 落成联邦地址", () => {
   beforeAll(async () => {
     work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-css-import-")));
     cacheRoot = join(work, ".cache");
-    // 被 `@import` 的包：它的 CSS 出口自成一个产物（地址里的版本从宿主的依赖面解析）。
+    // 被引用的包：`@font-face` + 两种相对 `url()`（大的出资产、小的内联成 data URI）。
     const dep = join(work, "node_modules", "css-dep");
-    await mkdir(dep, { recursive: true });
+    await mkdir(join(dep, "fonts"), { recursive: true });
     await writeFile(
       join(dep, "package.json"),
       `${JSON.stringify({ name: "css-dep", version: "1.0.0", exports: { "./brand-font.css": "./brand-font.css" } })}\n`,
       "utf8",
     );
-    await writeFile(join(dep, "brand-font.css"), ":root { --dep: 1; }\n", "utf8");
-    // 宿主包：入口 CSS 只有一行裸 `@import`。
+    await writeFile(
+      join(dep, "brand-font.css"),
+      [
+        "@font-face {",
+        '  font-family: "Dep";',
+        "  font-weight: 400;",
+        '  src: url(./fonts/big-font.woff2) format("woff2");',
+        "}",
+        ".dot {",
+        "  background-image: url(./dot.png);",
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    // 大于内联阈值（4KB）→ 产出 `assets/…`；小于阈值 → data URI。
+    await writeFile(join(dep, "fonts", "big-font.woff2"), "x".repeat(5000), "utf8");
+    await writeFile(join(dep, "dot.png"), "png", "utf8");
+    // 宿主：一行裸 `@import` 加自己的规则；同一份 CSS 也被一个 JS 模块相对引用（走插件那条路）。
     const host = join(work, "node_modules", "@morlay", "css-host");
     await mkdir(join(host, "src"), { recursive: true });
     await writeFile(
@@ -774,8 +790,6 @@ describe("CSS 的 @import 落成联邦地址", () => {
       '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n',
       "utf8",
     );
-    // 同一份 CSS 还被一个 **JS 模块相对引用**：注入的样式于是走插件那条路（`styleModule`），
-    // 而不是入口的预改写——两条路的产物正文都要是联邦地址。
     await writeFile(join(host, "src", "index.ts"), 'import "./brand-font.css";\nexport const host = 1;\n', "utf8");
     const built = await bundlePackage({
       nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
@@ -811,16 +825,21 @@ describe("CSS 的 @import 落成联邦地址", () => {
     return "";
   }
 
-  test("注入的 <style> 文本里是联邦地址（不是裸说明符），末段 = 产物文件名", () => {
+  test("展开成内容：有 @font-face，且不再有 @import 形态的包引用（裸的或地址的都没有）", () => {
     const css = injectedCssOf(products);
     expect(css, "样式文本不该是空的（否则这条断言恒真）").toContain("--host");
-    expect(css).toContain("/_zephyr/@modules/css-dep@1.0.0/brand-font.css.js");
-    expect(css).not.toMatch(/@import\s+"css-dep\//u);
-    const address = /@import\s+"([^"]+)"/u.exec(css)?.[1] ?? "";
-    expect(address.split("/").pop(), "末段与 productFileNameOf 逐字相等").toBe(
-      productFileNameOf("brand-font.css"),
+    expect(css).toContain("@font-face");
+    expect(css).toMatch(/@font-face\s*\{[^}]*font-family:\s*"?Dep"?/u);
+    expect(css).not.toMatch(/@import\s+(?:url\(\s*)?["']?css-dep\//u);
+    expect(css).not.toMatch(/@import[^;]*_zephyr/u);
+  });
+
+  test("展开进来的相对 url() 按**那份 CSS 的目录**解析：大的出资产地址、小的内联成 data URI", () => {
+    const css = injectedCssOf(products);
+    expect(css, "大文件按 threshold 产出 assets/…").toMatch(
+      /\/_zephyr\/@modules\/@morlay\+css-host@2\.0\.0\/assets\/big-font-[A-Za-z0-9_-]+\.woff2/u,
     );
-    // 任何形态的产物里都不许再出现裸说明符（浏览器官网把它当页面相对路径）。
-    for (const code of products) expect(code).not.toContain('"css-dep/brand-font.css"');
+    expect(css, "小文件内联成 data URI").toContain("data:image/png;base64,");
+    expect(css, "相对路径不再留在产物里").not.toContain("url(./fonts/big-font.woff2)");
   });
 });

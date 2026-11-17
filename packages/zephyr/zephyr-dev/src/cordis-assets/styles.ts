@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, resolve as resolvePath } from "node:path";
-import { transform, type Visitor } from "lightningcss";
+import { bundleAsync, transform, type Visitor } from "lightningcss";
 import type { Plugin } from "rolldown";
 
 // 虚拟 id 与上游 client 构建（vendor 的 tsdown.client.ts）同前缀同后缀：两条链的语义一致，
@@ -237,6 +237,106 @@ export type CssAssetPolicy = "inline" | "threshold";
 /** 内联阈值（与 vite 的 `assetsInlineLimit` 同一个量级）：超过它就产出独立资产文件。 */
 export const INLINE_LIMIT = 4096;
 
+/** 跨包 `@import` 展开的深度上限：成环或链条过长时如实报错，而不是把构建拖死。 */
+const MAX_CSS_IMPORT_DEPTH = 8;
+
+/** 一个样式文件里的 `@import`：`bare` 是包引用（要展开），`relative` 是本包内的文件（继续跟）。 */
+export interface CssImportSpecifiers {
+  readonly bare: readonly string[];
+  readonly relative: readonly string[];
+}
+
+/**
+ * 一个样式文件里的 `@import` 说明符（**由闪电解析**，不扫文本）。
+ *
+ * 为什么要这份：枚举要沿样式继续走图（`@import "pkg/x.css"` 指向的包出口得进清单，相对引用得继续跟），
+ * 而「哪些是 `@import`」只有解析器答得准（注释、字符串里的 `@import` 不算）。
+ * @param css - 样式文本。
+ * @param file - 来源文件（解析相对路径与报错定位用）。
+ * @returns 裸说明符与相对说明符。
+ */
+export function cssImportSpecifiersOf(css: string, file: string): CssImportSpecifiers {
+  const bare: string[] = [];
+  const relative: string[] = [];
+  transform({
+    filename: file,
+    code: Buffer.from(css),
+    visitor: {
+      Rule(rule) {
+        if (rule.type !== "import") return undefined;
+        const specifier = rule.value.url;
+        if (specifier === undefined) return undefined;
+        (specifier.startsWith(".") || specifier.startsWith("/") ? relative : bare).push(specifier);
+        return undefined;
+      },
+    },
+  });
+  return { bare, relative };
+}
+
+/**
+ * 样式文件 → **内联展开后的 CSS 文本**：`@import` 交给闪电（`bundleAsync`）按图展开——相对路径它按来源
+ * 文件解析，跨包说明符交给 `resolveImport`（联邦链用它按包出口解析到那份副本的真实文件）。
+ *
+ * 每份文件的 `url()` 在**它自己的** `read` 那一趟改写（{@link rewriteCssUrls}）：内联进来的样式于是不会
+ * 拿入口文件的目录当基准，资产策略（内联 / 产出 `assets/…`）也各按各的来源算。
+ * @param options - 入口文件、跨包说明符的解析、资产策略与 `emit`。
+ * @returns 可交给 `styleModule` 的 CSS 文本（`@import` 已展开）。
+ * @throws Error `@import` 成环或展开过深（消息里带整条链）。
+ */
+export async function bundleCssFile(options: {
+  readonly file: string;
+  readonly importTargetOf: (specifier: string, from: string) => Promise<string | undefined>;
+  readonly assets?: CssAssetPolicy;
+  readonly emit?: (name: string, bytes: Uint8Array) => string;
+}): Promise<string> {
+  /** 展开图的父子边：环检测与深度都从这条链上读。 */
+  const parents = new Map<string, string>();
+  const chainOf = (file: string): string[] => {
+    const chain = [file];
+    for (
+      let cursor = parents.get(file);
+      cursor !== undefined;
+      cursor = parents.get(cursor)
+    ) {
+      chain.unshift(cursor);
+    }
+    return chain;
+  };
+  const result = await bundleAsync({
+    filename: options.file,
+    // 压缩交给外层那一趟（与 `cssModules` 同一趟），这里保持可读。
+    minify: false,
+    resolver: {
+      async resolve(specifier, originatingFile) {
+        // 相对 / 绝对：我们按来源文件解析（闪电把这两个也交过来）。
+        if (specifier.startsWith(".")) return resolvePath(dirname(originatingFile), specifier);
+        // 绝对路径与 `http(s)`：不是仓库里的文件，留成地址（浏览器自己去取）。
+        if (specifier.startsWith("/") || /^https?:/u.test(specifier)) return { external: specifier };
+        const target = await options.importTargetOf(specifier, originatingFile);
+        // 解析不到（不是这条链认识的包）：原样留着，浏览器如实报错比静默吞掉好定位。
+        if (target === undefined) return { external: specifier };
+        const chain = chainOf(originatingFile);
+        if (chain.includes(target)) {
+          throw new Error(`@import 成环：${[...chain, target].join(" → ")}`);
+        }
+        if (chain.length >= MAX_CSS_IMPORT_DEPTH) {
+          throw new Error(
+            `@import 展开过深（超过 ${String(MAX_CSS_IMPORT_DEPTH)} 层）：${[...chain, target].join(" → ")}`,
+          );
+        }
+        parents.set(target, originatingFile);
+        return target;
+      },
+      // 每份文件按**它自己**的目录处理 `url()`。
+      async read(file) {
+        return await rewriteCssUrls(await readFile(file, "utf8"), file, options.assets, options.emit);
+      },
+    },
+  });
+  return result.code.toString();
+}
+
 export function cssInlinePlugins(options: {
   name: string;
   assets?: CssAssetPolicy;
@@ -250,12 +350,12 @@ export function cssInlinePlugins(options: {
    */
   assetUrl?: (fileName: string) => string;
   /**
-   * 样式文本里**跨包引用**的改写（`@import "pkg/x.css"`）：交给调用方。
+   * 样式里的**跨包说明符**（`@import "pkg/x.css"`）解析到那份副本的真实文件：展开（{@link bundleCssFile}）
+   * 与「哪些出口要进清单」（{@link cssImportSpecifiersOf}）都靠它。
    *
-   * 裸说明符在浏览器里是**页面相对**路径（一条 404），所以联邦链必须把它落成绝对地址；
-   * dev / tsdown 链的产物自包含，不给这个钩子。
+   * 不给就是纯样式链（dev / tsdown 的产物自包含，`@import` 由闪电按相对路径处理）。
    */
-  rewriteImports?: (css: string, from: string) => string;
+  importTargetOf?: (specifier: string, from: string) => Promise<string | undefined>;
 }): Plugin[] {
   // **资产占位**：`this.emitFile` 返回的是**引用 id**（rollup 的内部串，形如 `VRAku6fjghkApIISiBWPzg`），
   // 不是文件名——文件名要到 `generateBundle` 才拿得到。以前把这个 id 直接当 URL 写进 CSS，于是资产在盘上、
@@ -266,9 +366,23 @@ export function cssInlinePlugins(options: {
     pendingAssets.set(placeholder, { name, bytes });
     return placeholder;
   };
-  /** 样式文本的收尾改写：`url()` 已在 transform 里替换过，这里做跨包 `@import`。 */
-  const finalCss = (css: string, file: string): string =>
-    options.rewriteImports === undefined ? css : options.rewriteImports(css, file);
+  const emitAsset = (name: string, bytes: Uint8Array): string => placeholderFor(name, bytes);
+  /**
+   * 样式文本的**展开**：有跨包解析面就走闪电的 `bundleAsync`（`@import` 就地内联、每份文件的 `url()`
+   * 按自己的目录归位），否则只做 `url()` 的资产改写。
+   */
+  const preparedCss = async (from: string): Promise<string> => {
+    if (options.importTargetOf === undefined) {
+      return await rewriteCssUrls(await readFile(from, "utf8"), from, options.assets, emitAsset);
+    }
+    return await bundleCssFile({
+      file: from,
+      importTargetOf: options.importTargetOf,
+      ...(options.assets === undefined ? {} : { assets: options.assets }),
+      emit: emitAsset,
+    });
+  };
+
   const styleModule = (
     file: string,
     css: string,
@@ -332,29 +446,20 @@ export function cssInlinePlugins(options: {
       },
       async load(virtualId: string) {
         if (!virtualId.startsWith(MODULES_PREFIX)) return null;
-        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
-          placeholderFor(assetName, bytes);
         const file = unwrap(virtualId, MODULES_PREFIX);
         // 虚拟 id 让真实样式文件落在 rolldown 的 watch 图之外，这里补回来。
         this.addWatchFile(file);
-        const source = await readFile(file);
-        // `url()` 的替换挂到**这一趟**：在它之前改文本会被 lightningcss 自己重写成裸 hash。
-        const replacements = await urlReplacements(
-          source.toString(),
-          file,
-          options.assets,
-          emitAsset,
-        );
+        // `url()` 的替换与跨包 `@import` 的展开都在这一步（每份文件按自己的目录解析）。
+        const prepared = await preparedCss(file);
         const { code, exports } = transform({
           filename: file,
-          code: source,
+          code: Buffer.from(prepared),
           cssModules: { pattern: "[hash]_[local]" },
           minify: options.minify ?? true,
-          visitor: urlVisitor(replacements),
         });
         const classMap: Record<string, string> = {};
         for (const [local, entry] of Object.entries(exports ?? {})) classMap[local] = entry.name;
-        return styleModule(file, finalCss(code.toString(), file), classMap);
+        return styleModule(file, code.toString(), classMap);
       },
     },
     {
@@ -371,22 +476,13 @@ export function cssInlinePlugins(options: {
         if (!virtualId.startsWith(INLINE_PREFIX)) return null;
         const file = unwrap(virtualId, INLINE_PREFIX);
         this.addWatchFile(file);
-        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
-          placeholderFor(assetName, bytes);
-        const source = await readFile(file);
-        const replacements = await urlReplacements(
-          source.toString(),
-          file,
-          options.assets,
-          emitAsset,
-        );
+        const prepared = await preparedCss(file);
         const { code } = transform({
           filename: file,
-          code: source,
+          code: Buffer.from(prepared),
           minify: options.minify ?? true,
-          visitor: urlVisitor(replacements),
         });
-        return `export default ${JSON.stringify(finalCss(code.toString(), file))};`;
+        return `export default ${JSON.stringify(code.toString())};`;
       },
     },
     {
@@ -402,22 +498,13 @@ export function cssInlinePlugins(options: {
         if (!virtualId.startsWith(GLOBAL_PREFIX)) return null;
         const file = unwrap(virtualId, GLOBAL_PREFIX);
         this.addWatchFile(file);
-        const emitAsset = (assetName: string, bytes: Uint8Array): string =>
-          placeholderFor(assetName, bytes);
-        const source = await readFile(file);
-        const replacements = await urlReplacements(
-          source.toString(),
-          file,
-          options.assets,
-          emitAsset,
-        );
+        const prepared = await preparedCss(file);
         const { code } = transform({
           filename: file,
-          code: source,
+          code: Buffer.from(prepared),
           minify: options.minify ?? true,
-          visitor: urlVisitor(replacements),
         });
-        return styleModule(file, finalCss(code.toString(), file));
+        return styleModule(file, code.toString());
       },
     },
   ];

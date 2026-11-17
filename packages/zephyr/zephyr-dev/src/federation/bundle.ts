@@ -121,7 +121,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "28";
+const BUNDLER_RULES = "29";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -686,30 +686,18 @@ async function cjsShimOf(options: {
 }
 
 /**
- * 把样式里的**裸 `@import`** 落成联邦地址（相对路径与 http(s) 原样）。
+ * 样式里的**跨包说明符**（`@import "pkg/x.css"`）→ 那份副本的**真实文件**（交给闪电去展开）。
  *
- * 约束：注入的 `<style>` 文本里不能留裸说明符——浏览器会按页面相对去取它，那是页面上的 404。
- * 地址末段由 {@link productFileNameOf} 定（决定 4：CSS 产物是 `<出口名>.css.js`），
- * 所以不带 `?v=`：样式不参与模块实例判等，`?v=` 只会让地址与脚本面不同形。
- * @param css - 样式文本。
- * @param versions - 包名到版本的解析表。
- * @returns 改写后的样式文本。
+ * 不是包引用（相对 / 绝对 / `http(s)`）或解析不到的答 `undefined`：展开那边会把它当外部引用留着，
+ * 浏览器如实报错比静默吞掉好定位。
+ * @param specifier - 说明符（`pkg/x.css`）。
+ * @param from - 引用它的那份样式文件（解析基准：pnpm 严格布局下每个引用方看得见的副本不同）。
+ * @returns 入口绝对路径；不是包引用或解析不到时 undefined。
  */
-export function rewriteCssImports(css: string, versions: ReadonlyMap<string, string>): string {
-  return css.replace(
-    /@import\s+(?:url\(\s*)?["']?([^"') \s;]+)["']?\s*\)?/gu,
-    (whole, specifier: string) => {
-      if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier))
-        return whole;
-      const pkg = packageNameOf(specifier) || specifier;
-      const version = versions.get(pkg);
-      // 解析不到版本的（不是这条链认识的包）原样留着：让浏览器如实报错，比静默吞掉好定位。
-      if (version === undefined) return whole;
-      // 出口名就是说明符里那一段；包级引用是包根出口（`index`）。
-      const exportName = specifier === pkg ? "index" : specifier.slice(pkg.length + 1);
-      return whole.replace(specifier, () => depsUrlOf(pkg, version, productFileNameOf(exportName)));
-    },
-  );
+export async function resolveCssImport(specifier: string, from: string): Promise<string | undefined> {
+  if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier)) return undefined;
+  const resolved = await dependencyEntry(from, specifier);
+  return resolved?.entry;
 }
 
 /**
@@ -941,9 +929,9 @@ async function bundlePackageOnce(
       // 资产地址要是**联邦地址**：`assets/…` 只相对页面，而这条链的资产由我们自己的路由按
       // `/_zephyr/@modules/<pkg>@<ver>/assets/…` 服务（清单是唯一真相）。
       assetUrl: (file) => `${CLIENT_MODULES_PREFIX}/${key}/${file}`,
-      // 跨包 `@import` 也要落成联邦地址：裸说明符在浏览器里是**页面相对**路径（页面上的 404）。
-      // 版本从**本包视角**的解析表来（不同副本的依赖树不同，全局一张表必然猜错）。
-      rewriteImports: (css) => rewriteCssImports(css, resolvable),
+      // 跨包 `@import` 是**包引用**：交给闪电在构建期就地展开（指向地址只会让浏览器按样式表解析那份
+      // JS 产物，规则被忽略）。解析按引用方走，资产按各自的目录归位。
+      importTargetOf: async (specifier, from) => await resolveCssImport(specifier, from),
     }),
     clientAssetPlugin({ assets: "threshold", nodeStub: options.nodeStub }),
     // **外置名单 = 逐条说明符**（`node:*` 除外——它走 `clientAssetPlugin` 的浏览器替身）。
