@@ -145,6 +145,25 @@ async function packageRootOf(
 }
 
 /**
+ * 按**引用方目录**解析包根（带缓存：同一目录的解析结果相同）。
+ * @param name - 包名。
+ * @param importer - 引用它的文件。
+ * @param cache - 解析结果缓存（键是 `包名::引用方目录`）。
+ * @returns 包根；解析不到时 `undefined`。
+ */
+async function rootOfFrom(
+  name: string,
+  importer: string,
+  cache: Map<string, PackageRoot | undefined>,
+): Promise<PackageRoot | undefined> {
+  const key = `${name}::${dirname(importer)}`;
+  if (cache.has(key)) return cache.get(key);
+  const root = await packageRootOf(name, [importer]);
+  cache.set(key, root);
+  return root;
+}
+
+/**
  * 从一份清单出发按 node 的解析找入口（尊重 `exports` 的条件与子路径）。
  * @param manifest - 解析基准（包自己的清单）。
  * @param specifier - 说明符（`pkg` 或 `pkg/sub`）。
@@ -197,9 +216,26 @@ function browserEntriesOf(root: PackageRoot, name: string): string[] {
 export async function planPrebundle(options: PrebundlePlanOptions): Promise<PrebundlePlan> {
   const pending = [options.entry];
   const seenFiles = new Set<string>();
-  /** 包名 → 引用方与**实际见到的说明符**（后者决定出哪些出口）。 */
-  const packages = new Map<string, { importers: string[]; specifiers: Set<string> }>();
-  /** 已经下潜过的包（同一个包只进一次 BFS）。 */
+  /**
+   * 一条记录 = **一份真实副本**（它的包根清单）。
+   *
+   * 键必须是清单路径而不是包名：pnpm 的严格布局下同名多版本各有一份（`katex` 0.16 与 0.18 同时存在），
+   * 按包名键会把它们塌成一条——产物里只出一个版本，另一个版本的地址永远 404，而构建是绿的。
+   */
+  const records = new Map<
+    string,
+    {
+      readonly name: string;
+      readonly version: string;
+      /** 这份副本的包根清单（键就是它，读出来省得再解析一次）。 */
+      readonly manifestOf: string;
+      readonly importers: string[];
+      readonly specifiers: Set<string>;
+    }
+  >();
+  /** `包名::引用方目录` → 解析结果（同一目录的解析结果相同，别对每个说明符都走一遍查找）。 */
+  const rootCache = new Map<string, PackageRoot | undefined>();
+  /** 已经下潜过的包名（下潜读源码只做一次：client 入口是哪个文件与版本无关）。 */
   const descended = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
@@ -209,10 +245,21 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
     const specifiers = bareImportsOf(text).filter((specifier) => !specifier.startsWith("node:"));
     for (const specifier of specifiers) {
       const name = packageNameOfSpecifier(specifier);
-      const record = packages.get(name) ?? { importers: [], specifiers: new Set<string>() };
+      const root = await rootOfFrom(name, file, rootCache);
+      // **解析不到就不是包**：正则会从 CSS 片段、模板字符串、文档里扫出假包名。判据是解析事实，不是名字长得像。
+      if (root === undefined) continue;
+      const version = await versionOf(root.manifest);
+      if (version === undefined) continue;
+      const record = records.get(root.manifest) ?? {
+        name,
+        version,
+        manifestOf: root.manifest,
+        importers: [],
+        specifiers: new Set<string>(),
+      };
       record.specifiers.add(specifier);
       if (record.importers.length < MAX_IMPORTERS) record.importers.push(file);
-      packages.set(name, record);
+      records.set(root.manifest, record);
     }
     for (const match of text.matchAll(RELATIVE_FROM)) {
       const relative = match[1];
@@ -230,26 +277,19 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
     }
   }
   const include = options.include ?? [];
-  const wanted = [...packages.keys()].filter(
-    (name) =>
+  const wanted = [...records.values()].filter(
+    (record) =>
       include.length === 0 ||
       include.some((pattern) => {
         const prefix = pattern.replace(/\*+$/u, "");
-        return prefix === "" ? true : name.startsWith(prefix);
+        return prefix === "" ? true : record.name.startsWith(prefix);
       }),
   );
   const targets: PrebundleTarget[] = [];
   const failures: { name: string; reason: string }[] = [];
-  for (const name of wanted) {
-    const record = packages.get(name);
-    if (record === undefined) continue;
-    const root = await packageRootOf(name, record.importers);
-    // **脏数据过滤**：正则扫源码会扫出假包名（CSS 片段、模板字符串里的 JSX、文档里的
-    // `@deepseek-ai/<pkg>/remote`）。判据是「解析得到包根 + 清单里有 version」——满足才算一个包，
-    // 否则**丢弃**，不进 failures（failures 是「该有却没有」，不是「这行不是 import」）。
-    if (root === undefined) continue;
-    const version = await versionOf(root.manifest);
-    if (version === undefined) continue;
+  for (const record of wanted) {
+    const { name, version } = record;
+    const manifestOf = record.manifestOf;
     const planned = new Set<string>();
     for (const specifier of record.specifiers) {
       const subpath = specifier.slice(name.length).replace(/^\//u, "");
@@ -258,12 +298,12 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       // ——必须与 `urlOf` 生成的地址同形，否则产物在盘上、地址却落在空处。
       const exportName = subpath === "" ? "index" : subpath;
       if (planned.has(exportName)) continue;
-      const entry = entryOf(root.manifest, specifier);
+      const entry = entryOf(manifestOf, specifier);
       if (entry === undefined) continue;
       planned.add(exportName);
-      targets.push({ name, version, exportName, entry, manifestOf: root.manifest });
+      targets.push({ name, version, exportName, entry, manifestOf });
     }
-    // 只有**下潜过**的包才谈得上「该有却没有」：其余的（三方、假名）解析不出出口是预期结果。
+    // 只有**下潜过**的包才谈得上「该有却没有」：其余的（三方包）解析不出出口是预期结果。
     if (planned.size === 0 && descended.has(name)) {
       failures.push({ name, reason: "没有任何可用的出口" });
     }

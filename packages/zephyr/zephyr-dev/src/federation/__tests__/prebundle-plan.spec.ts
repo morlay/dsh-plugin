@@ -216,3 +216,54 @@ describe("planPrebundle（枚举规则）", () => {
     expect(langs.some((target) => target.exportName === "rust")).toBe(false);
   });
 });
+
+/**
+ * 造一份「同名多版本」夹具（pnpm 的严格布局下这是常态：不同引用方各看到一份）。
+ *
+ *   <root>/src/client/app-boot.ts          引两个我们的包（下潜范围）的 `./client` 出口
+ *   <root>/node_modules/@morlay/holder-one/  src/client/index.ts → import dep-multi（1.0.0）
+ *   <root>/node_modules/@morlay/holder-two/  src/client/index.ts → import dep-multi（2.0.0）
+ *
+ * 两个 holder 必须在**下潜范围**里：多版本只有沿着源码 import 图走才会被看见。
+ * @returns 工作区根。
+ */
+async function makeMultiVersionFixture(): Promise<string> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-multi-")));
+  await putManifest(root, { name: "multi-fixture", version: "0.0.0", exports: {} });
+  await put(
+    join(root, "src", "client", "app-boot.ts"),
+    ['import "@morlay/holder-one/client";', 'import "@morlay/holder-two/client";', ""].join("\n"),
+  );
+  for (const [holder, version] of [
+    ["@morlay/holder-one", "1.0.0"],
+    ["@morlay/holder-two", "2.0.0"],
+  ] as const) {
+    const holderRoot = join(root, "node_modules", ...holder.split("/"));
+    await putManifest(holderRoot, {
+      name: holder,
+      version: "0.0.0",
+      exports: { ".": "./src/index.ts", "./client": "./src/client/index.ts" },
+    });
+    await put(join(holderRoot, "src", "index.ts"), "export default 1;\n");
+    await put(join(holderRoot, "src", "client", "index.ts"), 'import "dep-multi";\n');
+    const multiRoot = join(holderRoot, "node_modules", "dep-multi");
+    await putManifest(multiRoot, {
+      name: "dep-multi",
+      version,
+      exports: { ".": "./index.mjs" },
+    });
+    await put(join(multiRoot, "index.mjs"), "export default 1;\n");
+  }
+  return root;
+}
+
+describe("planPrebundle（多版本）", () => {
+  it("同名多版本各出一份：按副本而不是按包名去重", async () => {
+    const root = await makeMultiVersionFixture();
+    const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
+    const multi = plan.targets.filter((target) => target.name === "dep-multi");
+    // 按包名去重会把这两份塌成一份：产物里只出一个版本，另一个版本的地址永远 404（页面白屏）。
+    expect(multi.map((target) => target.version).sort()).toEqual(["1.0.0", "2.0.0"]);
+    expect(new Set(multi.map((target) => target.manifestOf)).size).toBe(2);
+  });
+});

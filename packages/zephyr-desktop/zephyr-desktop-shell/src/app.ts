@@ -49,8 +49,7 @@ const dev = process.env.ZEPHYR_DESKTOP_MODE === "dev";
 // 打包形态给同进程的宿主打标记：应用据此把 `dev.include` 清空（全部预构建）。
 if (!dev) process.env.ZEPHYR_DESKTOP_PACKAGED = "1";
 
-/** 调试面（日志 + DevTools + 菜单里的开发者项）：`desktop dev` 默认开，可用 `ZEPHYR_DESKTOP_DEBUG=0` 关掉。 */
-const debug = shellDebugOf();
+/** 调试面在 userData 就绪之后算（标记文件在它下面），见下面的 `shellDebugOf(...)`。 */
 
 // **目录名用应用的 id**（`ai.deepseek.zephyr.custom`），不用显示名：显示名会变，id 不变；而且显示名
 // 里的空格进路径只会带来麻烦。两层：
@@ -64,6 +63,17 @@ const desktopIdentity = await readDesktop();
 // 兜底——两处各算一次，早晚对不上）。
 const userData = await requireUserData();
 electron.app.setPath("userData", userData);
+
+// 开发者模式：环境变量 / `--debug` / userData 下的 `debug` 标记文件（任一条成立就开）。
+// 打包形态从 Finder 启动没有环境变量，所以后两条是它的入口；标记文件也让「这次想看 DevTools」
+// 不必每次带参数——`touch "<userData>/debug"` 之后重启即生效。
+const debug = shellDebugOf(process.env, {
+  argv: process.argv,
+  marker: await readFile(join(userData, "debug"), "utf8").then(
+    () => true,
+    () => false,
+  ),
+});
 
 // 受限环境（容器 / 无 GPU / 无沙箱权限）里 Electron 的 GPU 与沙箱进程会 FATAL 退出。
 // 这两个开关必须在 ready 之前设；由 `desktop dev` 通过环境变量显式打开，打包形态不受影响。
@@ -165,8 +175,8 @@ async function start(): Promise<void> {
 
   // **与 desktop dev 一模一样的跑法**：宿主自己起 vite，页面从 http 进。唯一的差别是装配面
   // （`Resources/runtime` 而不是工作区）与数据根（用户数据目录而不是工作区）。
-  const port = process.env.PORT ?? "3080";
-  const url = `http://127.0.0.1:${port}/`;
+  // 地址优先用宿主回写的实际值：期望端口被占时 `WebServer` 会顺延，写死 3080 就会打开一个空端口。
+  const url = process.env.ZEPHYR_SERVER_URL ?? `http://127.0.0.1:${process.env.PORT ?? "3080"}/`;
   await reportEvent("start：等宿主就绪", url);
   await openWindow(desktop, url);
 }
@@ -260,10 +270,13 @@ async function openWindow(desktop: ZephyrDesktopConfig | undefined, url: string)
   });
   installNavigationGuards(window, new URL(url).origin);
   // 渲染进程的 console：白屏的唯一现场（模块 404 / 语法错 / CSP 都只在这里说）。
+  // **同时落 `shell-entry.log`**：打包形态的 stderr 没人看得到，而白屏正是「双击没反应」的那一类。
   if (debug.enabled) {
     window.webContents.on("console-message", (...args: never[]) => {
       const detail = args as unknown as [{ message?: string }, number, string];
-      debug.renderer(String(detail[2] ?? detail[0]?.message ?? ""));
+      const text = String(detail[2] ?? detail[0]?.message ?? "");
+      debug.renderer(text);
+      void reportEvent("renderer", text);
     });
   }
   if (windowState?.maximized === true) window.maximize();
