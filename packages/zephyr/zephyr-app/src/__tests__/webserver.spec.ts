@@ -7,7 +7,8 @@
  * `ws-probe` 那条守的是**默认 provider 入口**（`WebStartupDefault`），单独一个 app：它验的是
  * 「不写 Startup 也能起来」，不能被自定义 Startup 顶替。
  */
-import { connect } from "node:net";
+import { createServer } from "node:http";
+import { connect, type AddressInfo } from "node:net";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -154,6 +155,33 @@ describe("webserver listen（单 Provider 入口）", { timeout: 10_000 }, () =>
       expect(defaultApp.get(WebServer).port).toBeGreaterThan(0);
     } finally {
       await defaultApp.dispose();
+    }
+  });
+});
+
+describe("端口协商", () => {
+  it("期望端口被占用时顺延到下一个能用的端口，并报出实际地址", async () => {
+    // 先占住一个随机端口（不指定具体值：并行跑的用例也在抢端口）。
+    const blocker = createServer();
+    await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
+    const taken = (blocker.address() as AddressInfo).port;
+    /** 期望端口 = 刚被占住的那个。 */
+    @Injectable()
+    class StartupTaken extends WebStartup {
+      readonly values = { host: "127.0.0.1", port: taken, trustedHosts: [] };
+    }
+    const portApp = await bootstrapApplication({
+      providers: [StartupTaken, WebServerDefault],
+      timeoutMs: 6_000,
+    });
+    try {
+      const portWeb = portApp.get(WebServer);
+      // 被占不是启动失败：换一个端口起来，并把实际值交给调用方（它据此拼访问地址）。
+      expect(portWeb.port).not.toBe(taken);
+      expect(portWeb.port).toBeGreaterThan(taken);
+    } finally {
+      await portApp.dispose();
+      await new Promise<void>((resolve) => blocker.close(() => resolve()));
     }
   });
 });

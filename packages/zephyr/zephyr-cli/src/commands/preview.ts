@@ -38,6 +38,9 @@ export class PreviewCommand extends Command {
     await installSourceLoader();
     const app = await bootFromArtifact(this.resolved.layout.bootstrap, this.mode);
     this.logger.info("[preview] 已起在产物上：%s", this.resolved.layout.root);
+    // 访问地址：期望端口被占时宿主会顺延，实际值由 `bootstrap.mjs` 回写到同进程环境（`ZEPHYR_SERVER_URL`）。
+    const url = process.env.ZEPHYR_SERVER_URL;
+    if (url !== undefined && url !== "") this.logger.info("[preview] 访问地址 %s", url);
     await waitForSignal();
     await app.dispose();
     return 0;

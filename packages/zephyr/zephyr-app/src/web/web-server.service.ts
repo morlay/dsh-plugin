@@ -120,17 +120,14 @@ export class WebServerDefault extends WebServer implements OnInit, OnDispose {
       }
     });
     this.http = server;
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(requestedPort, this.host, () => {
-        const address = server.address();
-        if (typeof address === "object" && address !== null) this.port = address.port;
-        // 启动后把**可点的地址**打出来：端口取 0（随机）时调用方只能从日志里知道该访问哪。
-        // 它是一次性事实（listen 完成那一刻），所以用 info 而不是 debug。
-        this.logger.info("监听 http://%s:%d", this.host, this.port);
-        resolve();
-      });
+    // **端口冲突不是错误**：期望端口被占时顺延（见 `listenWithFallback`），并把实际地址打出来。
+    // 否则 `zephyr preview` 第二次启动就直接 EADDRINUSE 退出，用户只看到一句 node 的错误码。
+    this.port = await listenWithFallback(server, requestedPort, this.host, (requested, actual) => {
+      this.logger.warn("端口 %d 被占用，改用 %d", requested, actual);
     });
+    // 启动后把**可点的地址**打出来：端口顺延或取 0（随机）时，调用方只能从这行知道该访问哪。
+    // 它是一次性事实（listen 完成那一刻），所以用 info 而不是 debug。
+    this.logger.info("监听 http://%s:%d", this.host, this.port);
   }
 
   onDispose(): Promise<void> {
@@ -231,3 +228,55 @@ function gzipIfAcceptable(req: IncomingMessage, res: ServerResponse): ServerResp
 
   return res;
 }
+
+/**
+ * 在期望端口上起监听；被占用就顺延（+1…+100）。
+ *
+ * 为什么顺延而不是报错：同一个应用常常要同时起两份（对照两个分支、两个工作区），固定端口让第二份
+ * 直接起不来；「换一个端口 + 把地址打出来」是用户能直接用的结果。上限之内仍失败才抛：那时更可能是
+ * 配置写错了。
+ * @param server - http server（还没 listen）。
+ * @param requested - 期望端口。
+ * @param host - 监听地址。
+ * @param onFallback - 每顺延一次调一次（期望端口与实际尝试的端口）。
+ * @returns 实际监听的端口。
+ * @throws 非 `EADDRINUSE` 的错误，或顺延到上限仍失败。
+ */
+async function listenWithFallback(
+  server: Server,
+  requested: number,
+  host: string,
+  onFallback: (requested: number, actual: number) => void,
+): Promise<number> {
+  const MAX_OFFSET = 100;
+  for (let offset = 0; offset <= MAX_OFFSET; offset += 1) {
+    const port = requested + offset;
+    try {
+      return await new Promise<number>((resolve, reject) => {
+        const cleanup = (): void => {
+          server.off("error", onError);
+          server.off("listening", onListening);
+        };
+        const onError = (error: unknown): void => {
+          cleanup();
+          reject(error);
+        };
+        const onListening = (): void => {
+          cleanup();
+          const address = server.address();
+          resolve(typeof address === "object" && address !== null ? address.port : port);
+        };
+        server.once("error", onError);
+        server.once("listening", onListening);
+        server.listen(port, host);
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EADDRINUSE" || offset === MAX_OFFSET) throw error;
+      onFallback(requested, port + 1);
+    }
+  }
+  // 循环要么返回要么抛；这一行只为类型完整。
+  throw new Error(`端口 ${String(requested)}–${String(requested + MAX_OFFSET)} 全部被占用`);
+}
+
