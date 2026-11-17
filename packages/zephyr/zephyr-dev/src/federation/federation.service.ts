@@ -1,14 +1,12 @@
 // 联邦产物（`/_zephyr/@modules/...`）：按请求产出、按包缓存。
 // 重写自旧 `plugin.ts` 的 `serveFederation`：不再依赖 `apply` 的闭包，所有输入来自 `AppEnv` / `WebServer`。
 import { readFile } from "node:fs/promises";
-import { findPackageJSON } from "node:module";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { AppEnv } from "@morlay/zephyr-app";
 import { Federation, type FederationConfig } from "./federation.contract.ts";
-import { fileInPackage, manifestOf } from "../internal/resolve.ts";
+import { fileInPackage, manifestOf, packageRootOf } from "../internal/resolve.ts";
 import { nodeStubPathOf } from "../internal/package-root.ts";
 import {
   BUNDLER_REV,
@@ -91,15 +89,24 @@ export class FederationDefault extends Federation {
     if (target === undefined) return false;
     const { name, urlVersion, file } = target;
     const rootKey = `${name.replaceAll("/", "+")}@${urlVersion}`;
+    // **包根只用 Node 的解析规则**：先问「本会话见过的包」（它们是引用方），再问应用清单。
+    // 不猜包管理器的布局（`.pnpm` 那类）：换 yarn / npm 就不成立，而 Node 的解析跨包管理器成立。
     const root =
       this.roots.get(rootKey) ??
-      (await this.rootOf(name)) ??
-      // 冷请求（本会话没建过任何产物、也没有引用方）：只剩 URL 里的版本可用，按 pnpm 的存储布局定位。
-      (await this.storeRootOf(name, urlVersion));
+      (await this.importerRootOf(name)) ??
+      (await this.rootOf(name));
     // 定位到的包根记下来：同一个包的后续请求不必再解析一遍。
     if (root !== undefined) this.roots.set(rootKey, root);
-    const version =
-      (root === undefined ? undefined : (await manifestOf(root))?.version) ?? urlVersion;
+    const resolvedManifest = root === undefined ? undefined : await manifestOf(root);
+    // 版本只用来**校验**（不参与定位）：地址里那段与清单对不上就是构建期与请求期的事实分叉了。
+    if (resolvedManifest?.version !== undefined && resolvedManifest.version !== urlVersion) {
+      return this.miss(
+        res,
+        req,
+        `${name}@${urlVersion}/${file} — 解析到的副本是 ${resolvedManifest.version}（${String(root)}），与地址里的版本不一致`,
+      );
+    }
+    const version = resolvedManifest?.version ?? urlVersion;
     const key = `${name.replaceAll("/", "+")}@${version}`;
     // 产物里的资产/块：按清单（`.files.json`）取，文件名带内容 hash → 长缓存。
     if (file.startsWith("assets/") || file.startsWith("chunks/")) {
@@ -127,15 +134,17 @@ export class FederationDefault extends Federation {
       const repliedFromCache = await this.replyFile(key, exportName, req, res);
       if (repliedFromCache) return true;
     }
-    if (entry === undefined) {
-      console.error(`[federation-miss] ${name}@${urlVersion}/${exportName} root=${String(root)}`);
-      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-      res.end(
-        req.method === "HEAD"
-          ? undefined
-          : `unresolved entry: ${name}@${urlVersion}/${exportName}\n`,
+    if (root === undefined) {
+      // **不静默 404**：包根解析不到是「构建期写了一条地址、运行时却没有人能解释它」，
+      // 报清楚从哪儿解析过、要去看什么；404 会让排查的人以为是文件没打。
+      return this.miss(
+        res,
+        req,
+        `${name}@${urlVersion}/${file} — 从引用方（本会话见过的 ${String(this.roots.size)} 个包）与应用清单 ${this.appEnv.profileManifest} 都解析不到包根`,
       );
-      return true;
+    }
+    if (entry === undefined) {
+      return this.miss(res, req, `${name}@${urlVersion}/${exportName} — 包根解析到了，但这个出口解析不出入口`);
     }
     const bundled = await bundlePackage({
       cacheRoot: this.cacheRoot,
@@ -212,43 +221,20 @@ export class FederationDefault extends Federation {
     return `${CLIENT_MODULES_PREFIX}/${name.replaceAll("/", "+")}@${version}/${file}?v=${BUNDLER_REV}`;
   }
 
-  /** 包名 → 包根（node 原生解析；基准是行包清单与装配根清单）。 */
+  /**
+   * 包名 → 包根：**Node 的 ESM 解析**，与枚举（`planPrebundle`）、解析面（`internal/resolve`）
+   * 同一份实现（{@link packageRootOf}）——不再有第二套规则。
+   *
+   * 不拼 `createRequire`：那是 CJS 的条件与路径语义（虚拟模块 id、`/@…` 都不是文件路径，且 `exports`
+   * 只写 `"./index.js"` 的包会一律 `ERR_PACKAGE_PATH_NOT_EXPORTED`）；也不猜包管器的布局（`.pnpm` 那类
+   * 换 yarn / npm 就不成立）。
+   * @param name - 包名。
+   * @param from - 解析基准（引用方的清单/文件）；缺省用应用清单。
+   * @returns 包根；解析不到时 undefined。
+   */
   private async rootOf(name: string, from?: string): Promise<string | undefined> {
-    // **引用方优先**：pnpm 下同一个名字可能同时存在多份（`use-sync-external-store` 的 1.6.0 与 1.7.0），
-    // 先解析引用方看到的那份，才能拿到**实际被引用的版本**；直接拼仓库根可能命中陈旧的提升副本。
-    if (from !== undefined) {
-      // `findPackageJSON` 是**同步**的（ESM 解析、不受 `exports` 限制），这里包一层 try 即可。
-      const fromImporter = (() => {
-        try {
-          return findPackageJSON(name, pathToFileURL(from));
-        } catch {
-          return undefined;
-        }
-      })();
-      if (fromImporter !== undefined) return dirname(fromImporter);
-    }
-    const bases = [
-      // 引用方的清单优先：pnpm 严格布局下，传递依赖只在自己的 node_modules 里可见。
-      ...(from === undefined ? [] : [from]),
-      // 装配根的清单（`<profileDir>/package.json`）：闭包里它就是部署面的依赖图。
-      this.appEnv.profileManifest,
-    ];
-    for (const base of bases) {
-      // **不拼 `<name>/package.json` 去 `createRequire`**：现代包（`mdast-util-gfm` 这类 syntax-tree
-      // 系、`mdast-util-phrasing` 同族）的 `exports` 只写 `"./index.js"`，那样解析一律
-      // `ERR_PACKAGE_PATH_NOT_EXPORTED`——明明装着也答不上来，于是插件只能 `return null`，整条链退回
-      // vite 的文件服务（浏览器里出现 `/@fs/…/node_modules/.pnpm/…`，正是「该 prebundle 的包」漏成了文件）。
-      // `findPackageJSON` 走 ESM 解析、直接找包清单，不受 `exports` 限制；解析面与 `internal/resolve`
-      // 的 `packageRootOf` 同源。
-      let found: string | undefined;
-      try {
-        found = findPackageJSON(name, pathToFileURL(base).href);
-      } catch {
-        continue;
-      }
-      if (found !== undefined) return dirname(found);
-    }
-    return undefined;
+    const found = await packageRootOf(from ?? this.appEnv.profileManifest, name);
+    return found?.root;
   }
   /**
    * 出口名 → 入口文件：**出口 → 入口只有一份规则**（`browserEntryOf`：`exports` 的浏览器条件 +
@@ -289,34 +275,42 @@ export class FederationDefault extends Federation {
   }
 
   /**
-   * 按 **pnpm 的虚拟存储布局**定位包根：`<dir>/node_modules/.pnpm/<name>@<ver>/node_modules/<name>`。
+   * 从**引用方**解析包根（Node 的解析规则）：本会话已经见过的那些包，逐个拿它们自己的清单当基准。
    *
-   * 冷请求能用的事实只有 URL 里的版本——没有引用方（浏览器直接按地址来取），也没有上一轮产物的
-   * `resolved` 可重放。而「运行期按名拼出来的说明符」（`@shikijs/langs/<lang>`）恰好住在这种布局里：
-   * 应用清单解析不到它们，存储里有。
+   * 为什么引用方优先：pnpm 的严格布局下传递依赖只对**声明它的那个包**可见，而冷请求里「谁引用它」
+   * 的唯一来源就是本会话已经服务过的包（它们的产物里写着这条地址）。
+   *
+   * 「从引用方解析」这件事只有一份实现（{@link packageRootOf}，内部是 Node 的 ESM 解析栈）：不拼
+   * `createRequire(...).resolve('<name>/package.json')`——它要求包把 `./package.json` 写进 `exports`
+   * （`@shikijs/langs` 就没写），同一个语义却会失配。
    * @param name - 包名。
-   * @param version - URL 里的版本。
-   * @returns 包根；存储里没有时 undefined。
+   * @returns 包根；从所有引用方都解析不到时 undefined。
    */
-  private async storeRootOf(name: string, version: string): Promise<string | undefined> {
-    const encoded = `${name.replaceAll("/", "+")}@${version}`;
-    for (let dir = this.appEnv.values.profileDir; ; dir = dirname(dir)) {
-      const candidate = join(
-        dir,
-        "node_modules",
-        ".pnpm",
-        encoded,
-        "node_modules",
-        name,
-        "package.json",
-      );
-      if (await readFile(candidate, "utf8").then(() => true, () => false)) {
-        return dirname(candidate);
-      }
-      const parent = dirname(dir);
-      if (parent === dir) return undefined;
-      dir = parent;
+  private async importerRootOf(name: string): Promise<string | undefined> {
+    for (const importer of new Set(this.roots.values())) {
+      // 与枚举/解析面同一份：`packageRootOf` 内部就是 Node 的 ESM 解析栈（`findPackageJSON`）。
+      const found = await packageRootOf(join(importer, "package.json"), name);
+      if (found !== undefined) return found.root;
     }
+    return undefined;
+  }
+
+  /**
+   * 一条**带上下文**的解析失败：写日志，也回给浏览器（**500**，不是 404）。
+   *
+   * 404 说的是「这个文件不存在」，而这里的真相是「构建期写了一条地址，运行期没有基准能解释它」——
+   * 两者要改的东西不同，状态码与正文因此都要分开。
+   * @param res - 响应。
+   * @param req - 请求（HEAD 不回正文）。
+   * @param detail - 现场（地址、解析基准、版本）。
+   * @returns true（已应答）。
+   */
+  private miss(res: ServerResponse, req: IncomingMessage, detail: string): true {
+    const message = `federation-miss: ${detail}`;
+    console.error(`${message}\n`);
+    res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+    res.end(req.method === "HEAD" ? undefined : `${message}\n`);
+    return true;
   }
 
   /**

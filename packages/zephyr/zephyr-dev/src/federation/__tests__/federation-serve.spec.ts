@@ -105,12 +105,18 @@ describe("FederationDefault.serve", () => {
     expect(body()).toContain("jsxDEV");
   });
 
-  it("未命中：404（不再回空模块）", async () => {
-    const { res, status } = stubResponse();
-    const handled = await federation.serve("/_zephyr/@modules/nope@1.0.0/index.js", request, res);
+  it("包根解析不到：带上下文的错（不是静默 404）", async () => {
+    // 404 说的是「文件不存在」，而这里是「构建期写了一条地址、运行期没有基准能解释它」：
+    // 正文要点名地址与解析基准，否则排查的人会去翻产物目录。
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve("/_zephyr/@modules/ghost-pkg@1.0.0/index.js", request, res);
     expect(handled).toBe(true);
-    expect(status()).toBe(404);
+    expect(status()).toBe(500);
+    expect(body()).toContain("federation-miss:");
+    expect(body()).toContain("ghost-pkg@1.0.0/index.js");
+    expect(body()).toContain("解析不到包根");
   });
+
 
   it("资产：按扩展名给 MIME 且长缓存", async () => {
     // 摆在最后：这一步只按清单服务文件、不触发构建，但会覆盖同一 key 的 `.files.json`。
@@ -198,13 +204,13 @@ describe("FederationDefault.serve", () => {
     expect(body()).toContain("source.toml");
   });
 
-  it("冷请求：按 pnpm 的虚拟存储布局定位包根（`.pnpm/<pkg>@<ver>/node_modules/<pkg>`）", async () => {
-    // 现场：`@shikijs/langs` 住在别人的 node_modules 里，应用清单解析不到；而冷请求（本会话没建过
-    // 任何产物）**没有引用方**可用、也没有上一轮清单的 `resolved` 可重放——只能按 URL 里的版本去
-    // 存储布局里定位。这条不预热、直接取，判的是 cold 就是 200。
+  it("冷请求：按 Node 的解析规则从应用根找到包根（普通 node_modules 布局）", async () => {
+    // 现场：`@shikijs/langs/toml.js` 这种「运行期按名拼」的地址，冷请求（本会话没建过任何产物）
+    // 没有引用方、也没有上一轮清单的 `resolved`——唯一能用的解析基准是应用清单，且只走 Node 的
+    // 解析（不猜包管理器布局）。这条不预热、直接取，判的是 cold 就是 200。
     const { res, status, body } = stubResponse();
     const handled = await federation.serve(
-      "/_zephyr/@modules/runtime-langs-store@2.0.0/toml.js",
+      "/_zephyr/@modules/runtime-langs@1.0.0/toml.js",
       request,
       res,
     );
