@@ -390,8 +390,8 @@ async function openWindow(desktop: ZephyrDesktopConfig | undefined, url: string)
   }
   if (windowState?.maximized === true) window.maximize();
   window.once("ready-to-show", () => window.show());
-  // 调试面打开时带 DevTools：白屏时 Network / Console 是唯一能看全的地方。
-  if (debug.enabled) window.webContents.openDevTools({ mode: "detach" });
+  // **不自动开 DevTools**：它是独立窗口，只有排查白屏时才需要；开着开发者模式就把所有窗口都拖上一个
+  // DevTools，正常使用时只是噪音。菜单里已有 `toggleDevTools`（视图菜单，开发者模式开着才出现），随时能开。
   try {
     await reportEvent("窗口：加载页面", url);
     await window.loadURL(url);
