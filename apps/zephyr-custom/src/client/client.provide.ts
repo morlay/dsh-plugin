@@ -29,6 +29,7 @@ import { provideDeliverablesUi } from "@morlay/dsh-conversation/ui";
 import { provideFileUploadUi } from "@morlay/dsh-upload/ui";
 import { provideSessionModeUi } from "@morlay/session-mode/ui";
 import { provideBetterSessionUi } from "@morlay/better-session/ui";
+import { provideDesktopPanelUi } from "@morlay/zephyr-desktop-panel/ui";
 
 /**
  * 应用侧 client 清单：框架链 + 业务链 + 各域前端行。
@@ -119,5 +120,8 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
     // 所以必须排在 `provideSessionSlots()` 与 `provideSessionShellSlots()` 之后。
     ...provideSessionModeUi(),
     ...provideBetterSessionUi(),
+    // 桌面形态的内嵌浏览器面板（右栏一页）：网页容器由壳的主进程建，这里只是入口与地址栏。
+    // 非桌面宿主里没有 `__DSH_BROWSER_PANE__`，正文退化成一块空占位（不报错）。
+    ...provideDesktopPanelUi(),
   ];
 }
