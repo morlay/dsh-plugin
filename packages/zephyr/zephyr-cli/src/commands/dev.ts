@@ -75,7 +75,10 @@ export class DevCommand extends Command {
     // 收尾也给上限：某个行卡住时（历史上是 http server 等 keep-alive 连接）不该让 Ctrl+C 变成挂起。
     await withDeadline(running.session.close(), DISPOSE_TIMEOUT_MS, "退出收尾");
     this.logger.info("[dev] 已退出");
-    return 0;
+    // 收尾已经完成（树拆干净、端口已释放），但第三方长驻句柄还在（vite 的 ws、子进程——见
+    // `zephyr-dev/.agents/debts/20261117-dev-收尾后的残留句柄.md`）。不显式退出的话事件循环不空，
+    // 用户看到的就是「按了 Ctrl+C 却退不出」。
+    process.exit(0);
   }
 
   /**
