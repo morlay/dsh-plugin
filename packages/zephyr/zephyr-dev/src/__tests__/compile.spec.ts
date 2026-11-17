@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  artifactAddressOf,
   assertReachableComplete,
   compile,
   fallbackToRuntime,
@@ -273,16 +274,17 @@ describe("fallbackToRuntime（共享运行时兜底）", () => {
 });
 
 describe("supplementTargetsOf（有副本的一律按副本出独立产物）", () => {
-  it("同名多版本各按自己的副本补目标、不合并；连副本都解析不到的才留给兜底", async () => {
-    // 两份副本的包根（相对工作区：pnpm 严格布局下同名多版本各占一个目录）。
-    const oldCopy = "node_modules/.pnpm/katex@0.16.0/node_modules/katex";
-    const newCopy = "node_modules/.pnpm/katex@0.18.0/node_modules/katex";
+  it("多版本各按自己的副本补目标、不合并；连副本都解析不到的才留给兜底", async () => {
+    // pnpm 严格布局：`katex@0.16` 只挂在 `micromark-extension-math` 下面，`katex@0.18` 在图根那一份里。
+    const nested = "node_modules/.pnpm/micromark-extension-math@3.1.0/node_modules";
+    const rootCopy = "node_modules/.pnpm/katex@0.18.10/node_modules/katex";
+    const nestedCopy = `${nested}/katex`;
     const files: Record<string, string> = {
       "workspace/package.json": JSON.stringify({ name: "fx-app", version: "0.0.0" }),
     };
     for (const [copy, version] of [
-      [oldCopy, "0.16.0"],
-      [newCopy, "0.18.0"],
+      [rootCopy, "0.18.10"],
+      [nestedCopy, "0.16.0"],
     ] as const) {
       files[`workspace/${copy}/package.json`] = JSON.stringify({
         name: "katex",
@@ -291,32 +293,56 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
       });
       files[`workspace/${copy}/index.js`] = `export const version = "${version}";\n`;
     }
+    // 引用方（它自己已在产物里）：传递依赖的副本只从它的清单解析得到。
+    files[`workspace/${nested}/micromark-extension-math/package.json`] = JSON.stringify({
+      name: "micromark-extension-math",
+      version: "3.1.0",
+      dependencies: { katex: "^0.16.0" },
+      exports: { ".": "./index.js" },
+    });
+    files[`workspace/${nested}/micromark-extension-math/index.js`] = "export const math = 1;\n";
     const fixture = await fixtureOf(files);
-    const known = [oldCopy, newCopy].map((copy, index) => ({
-      name: "katex",
-      version: index === 0 ? "0.16.0" : "0.18.0",
+    const importer = {
+      name: "micromark-extension-math",
+      version: "3.1.0",
       exportName: "index",
-      entry: join(fixture.workspace, copy, "index.js"),
-      manifestOf: join(fixture.workspace, copy, "package.json"),
-    }));
-    const ghost = moduleUrlOf("ghost", "0.0.0", "index.js");
+      entry: join(fixture.workspace, nested, "micromark-extension-math/index.js"),
+      manifestOf: join(fixture.workspace, nested, "micromark-extension-math/package.json"),
+    };
+    const rootTarget = {
+      name: "katex",
+      version: "0.18.10",
+      exportName: "index",
+      entry: join(fixture.workspace, rootCopy, "index.js"),
+      manifestOf: join(fixture.workspace, rootCopy, "package.json"),
+    };
 
     const extra = await supplementTargetsOf({
-      addresses: [
-        moduleUrlOf("katex", "0.16.0", "index.js"),
-        moduleUrlOf("katex", "0.18.0", "index.js"),
-        ghost,
+      gaps: [
+        // 图根那一份副本：从已知目标里认出来。
+        { url: moduleUrlOf("katex", "0.18.10", "index.js"), importers: [] },
+        // 引用方下面那一份：只能从引用方的清单解析。
+        {
+          url: moduleUrlOf("katex", "0.16.0", "index.js"),
+          importers: [artifactAddressOf(importer)],
+        },
+        // 连副本都没有的：补不出目标，交给兜底。
+        { url: moduleUrlOf("ghost", "0.0.0", "index.js"), importers: [] },
       ],
-      known,
+      known: [rootTarget, importer],
       appManifest: join(fixture.workspace, "package.json"),
     });
 
-    // 两份副本各出一条目标：版本各是各的，包根也各是各的（合并会让其中一个版本的地址永远 404）。
+    // 两条地址各自的副本都被认了出来（版本各是各的、包根也各是各的：合并会让其中一个永远 404）。
     expect(extra.map((target) => [target.version, dirname(target.entry)])).toEqual([
-      ["0.16.0", join(fixture.workspace, oldCopy)],
-      ["0.18.0", join(fixture.workspace, newCopy)],
+      ["0.18.10", join(fixture.workspace, rootCopy)],
+      ["0.16.0", join(fixture.workspace, nestedCopy)],
     ]);
-    // 连副本都解析不到的（ghost）：补不出目标，交给兜底。
+    // 传递依赖那一条：**解析基准是引用方**（所以认得出 0.16 那份），但清单要是**这份副本自己的**
+    // ——外置版本表与包组都按它分，拿引用方的清单顶上会把同一份副本拆成两个组。
+    expect(extra[1]?.manifestOf).toContain(
+      "micromark-extension-math@3.1.0/node_modules/katex/package.json",
+    );
     expect(extra.some((target) => target.name === "ghost")).toBe(false);
   });
 });

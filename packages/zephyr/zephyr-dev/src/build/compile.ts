@@ -15,8 +15,10 @@
 //     打包器原话——宁可构建红，也不要发一份会白屏的应用。
 //   · 收尾两步：可达却缺产物的地址**有副本的按副本补一条目标**再编（决定 9，多版本各出各的），剩下的残余
 //     统一指向**共享运行时聚合产物**（决定 8）；聚合产物只许具名导入，出现 default 导入即构建失败（决定 10）。
-import { copyFile, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   browserEntryOf,
   BUNDLER_REV,
@@ -27,6 +29,7 @@ import {
   productFileNameOf,
 } from "../federation/bundle.ts";
 import {
+  groupTargetsByPackage,
   prebundleAll,
   type PrebundleFailure,
   type PrebundleTarget,
@@ -151,27 +154,35 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
   const failures: PrebundleFailure[] = [...result.failures];
   // 决定 9：**有副本的一律按副本出独立产物**。可达却没有产物的地址里，凡是"包名 + 版本"认得出副本的，
   // 各补一条目标再编（迭代到固定点）——它们不进兜底，否则同名多版本会被合并成一条地址。
-  const graph = await reachabilityOf(options.outDir, entryUrlOf(app));
-  let gaps = graph.gaps.map((gap) => gap.url);
+  let graph = await reachabilityOf(options.outDir, entryUrlOf(app));
   const tried = new Set<string>();
   for (let round = 0; round < SUPPLEMENT_ROUNDS; round += 1) {
-    const addresses = gaps.filter((url) => !tried.has(url));
-    if (addresses.length === 0) break;
-    for (const url of addresses) tried.add(url);
-    const extra = await supplementTargetsOf({ addresses, known: targets, appManifest });
+    const gaps = graph.gaps.filter((gap) => !tried.has(gap.url));
+    if (gaps.length === 0) break;
+    for (const gap of gaps) tried.add(gap.url);
+    const extra = await supplementTargetsOf({ gaps, known: targets, appManifest });
     if (extra.length === 0) break;
-    targets.push(...extra);
+    // **整组重编**：清单与缓存目录都是按包一份（`groupTargetsByPackage`），只把新出口丢进去重编，
+    // 指纹变了清单就从头写——这一组先前编好的出口会从清单里消失（文件还在盘上，路由却看不见它），
+    // 于是缺口在下一轮又冒出来，来回震荡。所以同组的已知出口要一起带上。
+    const batch = [...targets, ...extra];
+    const affected = groupTargetsByPackage(batch)
+      .filter((group) => group.targets.some((target) => extra.includes(target)))
+      .flatMap((group) => group.targets);
     const again = await prebundleAll({
-      targets: extra,
+      targets: affected,
       cacheRoot: options.outDir,
       repoRoot: options.workspace,
       nodeStub: nodeStubPathOf(),
       appManifest,
     });
-    built += again.built;
+    // 只数**这次补出来的**：同组的已知出口是重编，不是新增。
+    built += extra.length;
     failures.push(...again.failures);
-    gaps = (await reachabilityOf(options.outDir, entryUrlOf(app))).gaps.map((gap) => gap.url);
+    targets.push(...extra);
+    graph = await reachabilityOf(options.outDir, entryUrlOf(app));
   }
+  const gaps = graph.gaps.map((gap) => gap.url);
   // 决定 8：剩下的残余统一指向共享运行时聚合产物（编不出来就抛）。
   const sources = new Map(targets.map((target) => [artifactAddressOf(target), target.entry]));
   const fallback = await fallbackToRuntime({
@@ -488,8 +499,8 @@ export function moduleAddressOf(url: string): ModuleAddress | undefined {
 
 /** 补目标（决定 9）的输入。 */
 export interface SupplementOptions {
-  /** 可达、但盘上没有产物的地址。 */
-  readonly addresses: readonly string[];
+  /** 可达、但盘上没有产物的地址（带引用方：传递依赖只有从引用方那一份副本才解析得到）。 */
+  readonly gaps: readonly ModuleGap[];
   /** 已经出过产物的目标：它们的 `manifestOf` 指出**哪份副本**（同名多版本各认各的）。 */
   readonly known: readonly PrebundleTarget[];
   /** 应用清单：计划里没有的包（转译器注入、peer），从这里解析副本。 */
@@ -509,12 +520,12 @@ export interface SupplementOptions {
 export async function supplementTargetsOf(options: SupplementOptions): Promise<PrebundleTarget[]> {
   const out: PrebundleTarget[] = [];
   const seen = new Set<string>();
-  for (const url of options.addresses) {
-    const address = moduleAddressOf(url);
+  for (const gap of options.gaps) {
+    const address = moduleAddressOf(gap.url);
     if (address === undefined) continue;
     const key = `${address.name}@${address.version}/${address.exportName}`;
     if (seen.has(key)) continue;
-    const target = await copyTargetOf(address, options);
+    const target = await copyTargetOf(address, gap, options);
     if (target === undefined) continue;
     seen.add(key);
     out.push(target);
@@ -532,10 +543,28 @@ export async function supplementTargetsOf(options: SupplementOptions): Promise<P
  */
 async function copyTargetOf(
   address: ModuleAddress,
+  gap: ModuleGap,
   options: SupplementOptions,
 ): Promise<PrebundleTarget | undefined> {
   const subpath = address.exportName === "index" ? undefined : address.exportName;
   const specifier = subpath === undefined ? address.name : `${address.name}/${subpath}`;
+  // **第一档：引用方的副本**（决定 2 的解析基准）。传递依赖只在引用方那一份里看得见——
+  // `katex@0.16` 只挂在 `micromark-extension-math` 下面，从应用清单一辈子解析不到它。
+  for (const importer of gap.importers) {
+    const source = options.known.find((target) => artifactAddressOf(target) === importer);
+    if (source?.manifestOf === undefined) continue;
+    const dependency = await dependencyEntry(source.manifestOf, specifier);
+    // 版本要**跟地址对上**：补出来的产物落在另一条地址上，缺口照样在。
+    if (dependency === undefined || dependency.version !== address.version) continue;
+    return {
+      name: address.name,
+      version: address.version,
+      exportName: address.exportName,
+      entry: dependency.entry,
+      manifestOf: await packageManifestOf(address.name, dependency.entry, source.manifestOf),
+    };
+  }
+  // **第二档：已出过产物的同版本副本**（多版本各认各的）。
   for (const known of options.known) {
     if (known.name !== address.name || known.version !== address.version) continue;
     if (known.manifestOf === undefined) continue;
@@ -549,6 +578,7 @@ async function copyTargetOf(
       manifestOf: known.manifestOf,
     };
   }
+  // **第三档：应用清单**（peer / 转译器注入：装在图根，但没有任何一份副本引用过它）。
   const dependency = await dependencyEntry(options.appManifest, specifier);
   // 版本对不上就**不补**：补出来的产物落在另一条地址上，缺口还在（那时它才谈得上兜底）。
   if (dependency === undefined || dependency.version !== address.version) return undefined;
@@ -557,8 +587,31 @@ async function copyTargetOf(
     version: address.version,
     exportName: address.exportName,
     entry: dependency.entry,
-    manifestOf: options.appManifest,
+    manifestOf: await packageManifestOf(address.name, dependency.entry, options.appManifest),
   };
+}
+
+/**
+ * 入口文件 → **它自己那个包**的清单。
+ *
+ * `manifestOf` 是"这份副本的清单"：外置依赖的版本表从它建、包组（缓存目录与清单）也按它分。
+ * 拿引用方的清单顶上去，补出来的目标就会跟同一份副本的其它出口分到两个组——两组各写一份清单，
+ * 后写的那份把先写的出口挤掉，缺口在两轮之间来回震荡。
+ * @param name - 包名。
+ * @param entry - 入口文件绝对路径。
+ * @param fallback - 找不到时退回的清单（调用方的解析基准）。
+ * @returns 清单绝对路径（软链已解开：`bundlePackage` 要按真实位置向上找兄弟依赖）。
+ */
+async function packageManifestOf(name: string, entry: string, fallback: string): Promise<string> {
+  const found = (() => {
+    try {
+      return findPackageJSON(name, pathToFileURL(entry).href);
+    } catch {
+      return undefined;
+    }
+  })();
+  if (found === undefined) return fallback;
+  return await realpath(found).catch(() => found);
 }
 
 /** 一次兜底的结果。 */
