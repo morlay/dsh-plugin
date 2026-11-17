@@ -18,6 +18,7 @@ interface FakeView {
   loading: boolean;
   back: boolean;
   windowOpen?: (details: { readonly url: string }) => { readonly action: string };
+  readonly listeners: Map<string, (...args: never[]) => void>;
 }
 
 /** 假 electron：只记调用。 */
@@ -30,6 +31,7 @@ function fakeElectron(): BrowserPaneElectronLike & {
   class View {
     readonly webPreferences: Record<string, unknown>;
     readonly record = { url: "", bounds: RECT, closed: false };
+    readonly listeners = new Map<string, (...args: never[]) => void>();
     title = "";
     loading = false;
     back = false;
@@ -46,7 +48,9 @@ function fakeElectron(): BrowserPaneElectronLike & {
       getTitle: (): string => this.title,
       canGoBack: (): boolean => this.back,
       isLoading: (): boolean => this.loading,
-      on: (): void => undefined,
+      on: (event: string, listener: (...args: never[]) => void): void => {
+        this.listeners.set(event, listener);
+      },
       setWindowOpenHandler: (handler: (details: { readonly url: string }) => { readonly action: string }): void => {
         this.windowOpen = handler;
       },
@@ -134,6 +138,42 @@ describe("面板适配器（假 electron）", () => {
     const port = webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
     await port.open({ id: "browser", url: "https://example.com/", bounds: RECT });
     expect(electron.views[0]?.windowOpen?.({ url: "https://example.org/" })).toEqual({ action: "deny" });
+  });
+
+  it("状态变化只从主进程推（onChange），四条事件都接上", async () => {
+    const electron = fakeElectron();
+    const changed: string[] = [];
+    const port = webContentsPaneViewOf({
+      electron,
+      host: { add: () => undefined, remove: () => undefined },
+      onChange: (id) => changed.push(id),
+    });
+    await port.open({ id: "browser", url: "https://example.com/", bounds: RECT });
+    const listeners = electron.views[0]?.listeners;
+    expect([...(listeners?.keys() ?? [])].sort()).toEqual([
+      "did-navigate",
+      "did-start-loading",
+      "did-stop-loading",
+      "page-title-updated",
+    ]);
+    listeners?.get("did-navigate")?.();
+    listeners?.get("page-title-updated")?.();
+    expect(changed).toEqual(["browser", "browser"]);
+  });
+
+  it("页面要开新窗口：http(s) 交系统浏览器，然后仍拒；非法协议不外抛", async () => {
+    const electron = fakeElectron();
+    const opened: string[] = [];
+    const port = webContentsPaneViewOf({
+      electron,
+      host: { add: () => undefined, remove: () => undefined },
+      openExternal: (url) => opened.push(url),
+    });
+    await port.open({ id: "browser", url: "https://example.com/", bounds: RECT });
+    const handler = electron.views[0]?.windowOpen;
+    expect(handler?.({ url: "https://example.org/a" })).toEqual({ action: "deny" });
+    expect(handler?.({ url: "javascript:alert(1)" })).toEqual({ action: "deny" });
+    expect(opened).toEqual(["https://example.org/a"]);
   });
 
   it("close 销毁 view 并从窗口摘掉；关一个没开的不报错", async () => {

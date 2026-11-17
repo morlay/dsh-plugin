@@ -283,6 +283,16 @@ function installBrowserPane(window: ShellWindow): void {
         window.contentView.removeChildView(view);
       },
     },
+    // 状态只有这一条来源：主进程推，渲染侧不自推。
+    onChange: (id) => {
+      window.webContents.send(DESKTOP_IPC.browserChanged, { id, state: routes.state(id) });
+    },
+    // 面板里 `target=_blank` / 跨站链接：交系统浏览器（与主窗口同一处置），面板自身不弹第二块。
+    openExternal: (url) => {
+      void electron.shell.openExternal(url).catch(async (error: unknown) => {
+        await reportFailure("打开外部链接", error);
+      });
+    },
   });
   const routes: BrowserPaneRoutes = browserPaneRoutesOf({
     port,

@@ -3,6 +3,7 @@
 // 权限面全在这里，而且是**默认拒绝**：面板里的页面是外网内容，它不该拿到摄像头、通知、剪贴板、下载，
 // 也不该有 preload（壳的桥一个都不给）。要开口子必须按 origin 单独加，不是在这里留通用开关。
 import type { BrowserPanePort, PaneOpenInput, PaneRect, PaneState } from "./browser-pane.ts";
+import { browserUrlAllowed } from "./browser-url.ts";
 
 /** 面板的 session 分区名：**持久化**的独立命名空间，与主页面互不可见。 */
 export const BROWSER_PANE_PARTITION = "persist:zephyr-browser";
@@ -105,6 +106,10 @@ const PANE_WEB_PREFERENCES: BrowserPaneWebPreferences = {
 export function webContentsPaneViewOf(input: {
   readonly electron: BrowserPaneElectronLike;
   readonly host: BrowserPaneHostLike;
+  /** 状态变了（url / title / loading）：**只**由主进程推给渲染进程，渲染侧不自己推导。 */
+  readonly onChange?: (id: string) => void;
+  /** 页面要开新窗口（`target=_blank` 或脚本）：http(s) 交系统浏览器，其余丢弃。 */
+  readonly openExternal?: (url: string) => void;
 }): BrowserPanePort {
   const panes = new Map<string, BrowserPaneViewLike>();
   const configure = (): BrowserPaneSessionLike => {
@@ -127,8 +132,16 @@ export function webContentsPaneViewOf(input: {
       if (panes.has(request.id)) return;
       const view = new input.electron.WebContentsView({ webPreferences: PANE_WEB_PREFERENCES });
       view.setBounds(request.bounds);
-      // 页面要开新窗口：一律拒（外链归系统浏览器，这条与主窗口同一条判据）。
-      view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      // 状态的四条来源：导航完成、标题变化、加载起止。都只做一件事——提醒调用方推一次 state。
+      const changed = (): void => input.onChange?.(request.id);
+      for (const event of ["did-navigate", "page-title-updated", "did-start-loading", "did-stop-loading"]) {
+        view.webContents.on(event, changed);
+      }
+      // 页面要开新窗口：http(s) 交**系统浏览器**（与主窗口同一条处置），然后一律拒——面板只有一块。
+      view.webContents.setWindowOpenHandler((details) => {
+        if (browserUrlAllowed(details.url)) input.openExternal?.(details.url);
+        return { action: "deny" };
+      });
       panes.set(request.id, view);
       input.host.add(view);
       if (request.url !== undefined && request.url !== "") await view.webContents.loadURL(request.url);

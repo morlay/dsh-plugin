@@ -18,4 +18,6 @@ export const DESKTOP_IPC = {
   browserNavigate: "dsh-desktop:browser-navigate",
   browserClose: "dsh-desktop:browser-close",
   browserState: "dsh-desktop:browser-state",
+  /** 面板状态（主进程 → 渲染进程）：url / title / canGoBack / loading 只有这一条来源。 */
+  browserChanged: "dsh-desktop:browser-changed",
 } as const;
