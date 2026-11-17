@@ -7,6 +7,15 @@
 import type { LaunchEnvironmentSnapshot } from "@deepseek-ai/dsh-launch-environment";
 import { Injectable } from "@morlay/zephyr";
 
+/**
+ * 启动快照的最小读面：一个变量名 → 它的值。
+ *
+ * 需要它的地方（如 provider 头里的 `${NAME}` 引用）只读一个名字，不关心值来自哪一层。
+ */
+export interface LaunchEnvironmentLookup {
+  get(name: string): { readonly value: string } | undefined;
+}
+
 @Injectable()
 export abstract class LaunchEnvironment {
   /** 启动快照：没有装配行时是 `undefined`（消费方按「未提供」处理）。 */

@@ -277,6 +277,10 @@ function settingsProviders(): ProviderEntry[] {
             displayName: "Ollama Cloud",
             api: "anthropic-messages",
             baseURL: "https://ollama.com",
+            // 这条网关认 `Authorization: Bearer`，而 pi-ai 的 Anthropic 实现把 key 发成 `x-api-key`。
+            // 头里写**环境引用**（`LlmPiAi` 在挂载前从启动环境快照解析成真值）：装配层（`settings/describe`
+            // 的 base）只会拿到引用字符串，密钥不进行 config、也不下发浏览器。
+            headers: { Authorization: "Bearer ${OLLAMA_API_KEY}" },
             reasoning: "high",
             requestImageMaxBytes: 2_097_152,
             models: [

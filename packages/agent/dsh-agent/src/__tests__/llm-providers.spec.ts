@@ -16,6 +16,7 @@ import {
   RemoteHandlersDefault,
 } from "@morlay/zephyr-app";
 import { provideSetting } from "@morlay/dsh-setting/server";
+import { LaunchEnvironment } from "../contract/launch-environment.contract.ts";
 import { afterAll, expect, it } from "vitest";
 import { LlmDefault } from "../llm.service.ts";
 import { LlmPiAi } from "../llm-pi-ai.service.ts";
@@ -69,6 +70,13 @@ it(
     const app = await bootstrapApplication({
       providers: [
         { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+        // 启动环境快照：provider 头里的 `${OLLAMA_API_KEY}` 引用按它解析。
+        {
+          provide: LaunchEnvironment,
+          useFactory: () => ({
+            snapshot: { get: (name: string) => (name === "OLLAMA_API_KEY" ? { value: "sk-deployment-secret" } : undefined) },
+          }),
+        },
         ...provideSetting(),
         // agent 核心在配置域之前：provider 行要 `Llm` 的面。
         LlmDefault,
@@ -80,6 +88,7 @@ it(
                 displayName: "Ollama Cloud",
                 api: "anthropic-messages",
                 baseURL: "https://ollama.com",
+                headers: { Authorization: "Bearer ${OLLAMA_API_KEY}" },
               },
             },
           }),
@@ -104,8 +113,11 @@ it(
     // `base` 只放装配层：用户层没写过，所以 `user` 缺省。
     expect(view.base).toMatchObject({ providers: { ollama } });
     expect(view.user).toBeUndefined();
-    // 密钥不进配置：装配层没有把 `OLLAMA_API_KEY` 抄进任何字段（凭证由 `apiKeyEnv` 在请求期解析）。
-    expect(JSON.stringify(view)).not.toContain("Bearer ");
+    // 密钥不进配置：装配层的 header 只是**环境引用**，真值在挂载前解析、只存在于运行期 config。
+    expect(view.base).toMatchObject({
+      providers: { ollama: { headers: { Authorization: "Bearer ${OLLAMA_API_KEY}" } } },
+    });
+    expect(JSON.stringify(result)).not.toContain("sk-deployment-secret");
     expect(view.secrets).toEqual([]);
   },
 );
