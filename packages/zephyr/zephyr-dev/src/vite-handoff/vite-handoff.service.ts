@@ -2,7 +2,7 @@ import { watch } from "chokidar";
 import { join } from "node:path";
 // vite 的默认 handoff：懒建一次 dev server，参数全部从契约取（AppEnv / WebServer / Federation）。
 import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { AppEnv, WebServer, WebStartup } from "@morlay/zephyr-app";
+import { AppEnv, WebServer } from "@morlay/zephyr-app";
 import { Federation } from "../federation/federation.contract.ts";
 import { startViteDev, type ViteHandoff as StartedViteDev } from "../internal/serve-vite.ts";
 import { appBootDirOf, devPackageRoot } from "../internal/package-root.ts";
@@ -11,8 +11,6 @@ import { ViteHandoff } from "./vite-handoff.contract.ts";
 @Injectable()
 export class ViteHandoffDefault extends ViteHandoff {
   private readonly appEnv = inject(AppEnv);
-
-  private readonly startup = inject(WebStartup);
 
   private readonly federation = inject(Federation);
 
@@ -36,9 +34,11 @@ export class ViteHandoffDefault extends ViteHandoff {
       ...(this.webServer.server === undefined
         ? {}
         : { httpServer: this.webServer.server as unknown as { on(...args: never[]): unknown } }),
-      ...(this.startup.values.port === undefined || this.startup.values.port === 0
-        ? {}
-        : { pagePort: this.startup.values.port }),
+      // HMR 的 WebSocket 要与页面**同源同端口**：这里只能是**实际监听端口**（`WebServer.port`）。
+      // 期望端口（`WebStartup.values.port`，来自 `--port` / `PORT`）在被占用时会被宿主顺延——顺延后
+      // 两者不等，客户端就会去连一个没人监听的端口（页面 console 满屏 ws 连接失败、HMR 整个失效）。
+      // 0 表示还没 listen 完：这时不传，交给 `serve-vite` 从 `httpServer.address()` 读（或让 vite 用页面端口）。
+      ...(this.webServer.port === 0 ? {} : { pagePort: this.webServer.port }),
       depsUrl: async (specifier: string, importer?: string) =>
         await this.federation.depsUrl(specifier, importer),
     };
