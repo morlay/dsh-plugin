@@ -138,6 +138,9 @@ export class WebServerDefault extends WebServer implements OnInit, OnDispose {
         resolve();
         return;
       }
+      // **先断在途连接**：`close()` 只停止接受新连接，它会等现有连接自己结束——浏览器开着页面
+      // （HMR 的 ws、keep-alive）时永远等不到，`zephyr dev` 于是按了 Ctrl+C 也退不出去。
+      server.closeAllConnections();
       server.close(() => resolve());
     });
   }

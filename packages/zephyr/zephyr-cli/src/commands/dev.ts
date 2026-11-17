@@ -70,8 +70,11 @@ export class DevCommand extends Command {
     };
     detach = attach();
     await waitForSignal();
+    this.logger.info("[dev] 收到退出信号，开始收尾");
     detach?.();
-    await running.session.close();
+    // 收尾也给上限：某个行卡住时（历史上是 http server 等 keep-alive 连接）不该让 Ctrl+C 变成挂起。
+    await withDeadline(running.session.close(), DISPOSE_TIMEOUT_MS, "退出收尾");
+    this.logger.info("[dev] 已退出");
     return 0;
   }
 
