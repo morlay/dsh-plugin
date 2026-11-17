@@ -1,19 +1,79 @@
+diff --git a/packages/ptc-runtime/ptc-runtime-node/src/worker.ts b/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
+index d350e27a0a..7285a46ca8 100644
+--- a/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
++++ b/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
+@@ -20,6 +20,25 @@ import { readProgramResult, PROGRAM_PROTOCOL_VERSION, type ProgramBootData, type
+ 
+ const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
+ 
++/**
++ * 本地 patch（patches/source-loader.patch）：源码面子进程的 loader，由部署侧注入（`DSH_SOURCE_LOADER`，
++ * 本仓库是 `@morlay/dsh-oxc-node`）。上游只给子进程 `--experimental-vm-modules` 并清空环境变量，于是
++ * `process.ts` 落到 Node 内建 strip-only 模式，撞上 vendor 的 `.ts` 参数属性
++ * （`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`）。
++ * @returns 追加到 argv 的 `--import` 参数。
++ * @throws {Error} 没注入时抛：这是部署配置缺一格，不是可以静默回落的默认值。
++ */
++function sourceLoaderArgs(): string[] {
++  const loader = process.env.DSH_SOURCE_LOADER
++  if (loader === undefined || loader === '') {
++    throw new Error(
++      'DSH_SOURCE_LOADER is not set: the deployment must point it at the source-plane TypeScript loader ' +
++        '(for example @morlay/dsh-oxc-node)',
++    )
++  }
++  return ['--import', loader]
++}
++
+ interface Evaluation {
+   settled: boolean
+   completion: Promise<ReturnType<typeof readProgramResult>> | undefined
+@@ -281,7 +300,9 @@ export class ProgramWorker {
+     if (this.closed) return
+     const packaged = this.config.launch.kind === 'embedded'
+     const heapFlag = `--max-old-space-size=${this.config.maxOldGenerationSizeMb}`
+-    const argv = [executable, ...packaged ? [] : [heapFlag],
++    // 本地 patch（patches/source-loader.patch）：`node-script` 形态跑的是源码面 `process.ts`，那个子进程
++    // **必须**带部署注入的 loader；`env` 在下面会被重建成近乎空的表，所以 loader 只能走 argv。
++    const argv = [executable, ...packaged ? [] : [heapFlag, ...sourceLoaderArgs()],
+       ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes)]
+     const policy = this.policy
+     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
 diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
-index 381219bab0..d50fdde29d 100644
+index 1a052ded7c..c02472066e 100644
 --- a/packages/subprocess/subprocess-local/src/runner-launch.ts
 +++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
-@@ -33,10 +33,13 @@ export function spawnRunnerInvocation(): RunnerInvocation {
-   if (extname(fileURLToPath(import.meta.url)) !== '.ts') {
-     return [process.execPath, fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-subprocess-local/runner'))]
+@@ -35,12 +35,32 @@ export function spawnRunnerInvocation(): RunnerInvocation {
    }
-+  // 本地 patch（patches/source-loader.patch）：源码面的转译器由部署侧注入——开发面是工作区的
-+  // `@local/devkit/ts-loader`，打包产物是随包那份；两者都没注入时才回落到上游默认的 `tsx/esm`
-+  // （本仓库不声明 tsx，随包产物里也没有它，`import.meta.resolve` 会直接抛）。
    return [
      process.execPath,
++    // 本地 patch（patches/source-loader.patch）：源码面的转译器**只由部署侧注入**（`DSH_SOURCE_LOADER`，
++    // 本仓库是 `@morlay/dsh-oxc-node`）。上游原本回落到 `tsx/esm`，本仓库既不声明它、随包产物里也没有
++    // （闭包按 `--prod` 装，devDependencies 被剔）——那条回落只会把「部署少注入一格」变成一句
++    // `Cannot find package tsx`。缺了就当场说清。
      '--import',
 -    import.meta.resolve('tsx/esm'),
-+    process.env.DSH_SOURCE_LOADER ?? import.meta.resolve('tsx/esm'),
++    requireSourceLoader(),
      fileURLToPath(new URL('./bin.ts', import.meta.url)),
    ]
  }
+ 
++/**
++ * 部署侧注入的源码面 loader（`DSH_SOURCE_LOADER`）。
++ * @returns loader 的模块说明符或绝对路径。
++ * @throws {Error} 没注入时抛：这是部署配置缺一格，不是可以静默回落的默认值。
++ */
++function requireSourceLoader(): string {
++  const loader = process.env.DSH_SOURCE_LOADER
++  if (loader === undefined || loader === '') {
++    throw new Error(
++      'DSH_SOURCE_LOADER is not set: the deployment must point it at the source-plane TypeScript loader ' +
++        '(for example @morlay/dsh-oxc-node)',
++    )
++  }
++  return loader
++}
++
+ /**
+  * Check the concrete runner executable and entry paths without executing a probe mode.
+  * @param invocation - resolved executable and runner-entry arguments.

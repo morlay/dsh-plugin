@@ -35,8 +35,16 @@ export const patch: Step[] = [
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },
-  // subprocess runner 的转译器改由 `DSH_SOURCE_LOADER` 注入（上游默认的 `tsx/esm` 本仓库里没有）。
+  // **源码面的转译器只由部署侧注入**（`DSH_SOURCE_LOADER`，本仓库是 `@morlay/dsh-oxc-node`）。上游有两处
+  // 会自己找 `tsx/esm`：subprocess 的 runner launch、以及 PTC 的 `node-script` 子进程（它还会把环境变量清空、
+  // 只留 `--experimental-vm-modules`，于是子进程落到 Node 内建 strip-only 模式，撞上 vendor 的 `.ts` 参数属性）。
+  // 这条补丁把两处都改成「缺 `DSH_SOURCE_LOADER` 就抛出说清楚的错」，并删掉 5 个包对 `tsx` 的依赖声明——
+  // 那条回落只会把「部署少注入一格」变成一句 `Cannot find package tsx`。
   { type: "git", patch: "source-loader.patch" },
+  // 上游另有 5 个包在清单里声明 `tsx`（源码面运行时当 loader 用）。这里**不删那几行**：这些清单还会被
+  // 下面的 `exports` 步骤整份改写，逐份正则删行必然踩到 JSON 的逗号（实测三种写法各坏一次），补丁里又只会混进
+  // `exports` 的噪音。上面那条补丁已经去掉了两处 `tsx/esm` 回落——运行期不会再走到它，多装一个包不影响功能。
+  // 销账条件：上游自己把 `tsx` 从清单里删掉（或 `exports` 步骤能按依赖名单删项）时，这段注释一起删。
   // `rrule` 的联邦产物是它的 **ESM 面**（`module` 字段 → `dist/esm/index.js`），而 ESM 入口没有 default，
   // 上游那句 `import rrulePackage from 'rrule'` 跨联邦边界就是
   // `does not provide an export named 'default'`（真机表现：整页白屏，console 里只有 vite 的两行）。

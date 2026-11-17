@@ -3,7 +3,7 @@
 // 两段解析是必须的：**要读配置才知道有哪些命令**（插件就在配置里），而配置在哪又得先从 argv 里
 // 看出来。所以第一段只认全局 flag（不碰位置参数），第二段在拿到命令树之后再完整解析。
 import { stat as statOf } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { bootstrapApplication, type ProviderList } from "@morlay/zephyr";
 import { Command } from "./command.ts";
 import { loadConfig } from "./config/load.ts";
@@ -13,6 +13,7 @@ import { resolveDataDir } from "./data-dir.ts";
 import type { CliModeValues } from "./mode.ts";
 import { helpOf, parseParams, type ParamSpecs } from "./params.ts";
 import { provideCli } from "./provide.ts";
+import { installSourceLoaderEnv } from "./source-loader.ts";
 import { buildCommandTree, childNamesOf, resolveCommand, type CommandNode } from "./tree.ts";
 
 /** 装配上限：超时即失败，不返回半个应用。 */
@@ -86,6 +87,10 @@ async function execute(
     readonly stderr: (line: string) => void;
   },
 ): Promise<number> {
+  // **源码面的 TS 运行时注入**（`DSH_SOURCE_LOADER`）：宿主里那些子进程（subprocess 的 runner、PTC 的
+  // `node-script` worker）跑的是源码面 `.ts`，`patches/source-loader.patch` 把它留成部署接缝。
+  // 这一个进程里注入一次，所有派生进程继承。
+  installSourceLoaderEnv();
   const scanned = scanGlobals(argv);
   const workspaceArg = await workspaceOf(scanned.positionals, io.cwd);
   const resolved = await loadConfig({
@@ -100,6 +105,10 @@ async function execute(
     commandTokens[0] === "build" || commandTokens[0] === "preview"
       ? resolved.layout.root
       : resolved.workspace;
+  // 子进程载体（PTC / subprocess runner）跑的是源码面的 `.ts`：loader 必须在宿主启动前就位。
+  // 解析基准是 loader 包**自己**（`import.meta.resolve`）：它注册 hooks、与部署根无关，
+  // dev 与 build/preview 用同一份也能转译任意 `.ts`。
+  installSourceLoaderEnv();
   const mode: CliModeValues = {
     command: commandTokens,
     workspace: resolved.workspace,
