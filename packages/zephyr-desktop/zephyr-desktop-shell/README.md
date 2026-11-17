@@ -20,7 +20,7 @@ zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例
 | 变量                                     | 取值                       | 作用                                                                                             |
 | ---------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `ZEPHYR_DESKTOP_MODE`                    | `dev` / `packaged`         | dev：窗口只当浏览器，页面走工作区 dev server；packaged：页面与宿主都在随包产物里                 |
-| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`                  | 开发者模式的启动来源之一：`1` 即开（另有 `--debug` 与 userData 下的 `debug` 标记）              |
+| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`                  | 开发者模式的启动来源之一：`1` 即开（另有 `--zephyr-debug` 与 userData 下的 `debug` 标记）        |
 | `ZEPHYR_DESKTOP_NO_SANDBOX`              | `1`                        | 受限环境（容器/无 GPU）下关沙箱并停用硬件加速，必须在 ready 之前                                 |
 | `ZEPHYR_DESKTOP_URL`                     | URL                        | dev 形态加载哪个页面                                                                             |
 | `ZEPHYR_DESKTOP_WORKSPACE` / `_DATA_DIR` | 路径                       | 宿主清单需要的部署值                                                                             |
@@ -31,9 +31,12 @@ zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例
 
 ## 开发者模式与主进程 Inspector
 
-开发者模式是一个**可切的运行时状态**，不是只读开关：三个启动来源（`ZEPHYR_DESKTOP_DEBUG=1` / `--debug` /
-`<userData>/debug` 标记文件）任一成立即为开；之后的运行期写口只有菜单里那一项（视图 → 开发者模式，
-`⌘⇧D` / `Ctrl+Shift+D`），点一次即时生效并写标记（关掉就删）。
+开发者模式是一个**可切的运行时状态**，不是只读开关：三个启动来源（`ZEPHYR_DESKTOP_DEBUG=1` /
+`--zephyr-debug` / `<userData>/debug` 标记文件）任一成立即为开；之后的运行期写口只有菜单里那一项
+（视图 → 开发者模式，`⌘⇧D` / `Ctrl+Shift+D`），点一次即时生效并写标记（关掉就删）。
+
+启动参数叫 `--zephyr-debug` 而不是 `--debug`：Electron 会先拿 Node 的开关表过一遍 argv，`--debug` 撞上
+已废弃的 `node --debug`，进程在入口求值前就以 `[DEP0062]` 退出（真机读数），那条来源等于不存在。
 
 打开之后视图菜单多出 Reload / DevTools /「打开主进程 Inspector」（勾选）/「复制 Inspector 地址」：
 Inspector 只绑 `127.0.0.1`，缺省 9229、被占则顺延，**真实**地址进 `shell-entry.log` 与剪贴板（粘进

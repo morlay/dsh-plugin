@@ -1,7 +1,7 @@
 // 壳的**开发者模式**：一个可切的运行时状态，不是只读值。
 //
 // 为什么可变：打包形态从 Finder 双击启动时既没有环境变量也没有启动参数，「打包后能开」只能靠应用内入口。
-// 三源合并（`ZEPHYR_DESKTOP_DEBUG=1` / `--debug` / userData 下的 `debug` 标记）、持久化与订阅都收在
+// 三源合并（`ZEPHYR_DESKTOP_DEBUG=1` / `--zephyr-debug` / userData 下的 `debug` 标记）、持久化与订阅都收在
 // 这一处——删掉它，这三件事会散到 `app.ts` 与 `menu.ts` 各写一遍。
 //
 // 标记文件是**唯一**的持久化形态（不是配置项）：`touch <userData>/debug` 与菜单里点一下是同一件事。
@@ -11,13 +11,22 @@ import { join } from "node:path";
 /** userData 下那个标记文件的名字（内容不重要，在就是开）。 */
 export const DEV_MODE_MARKER = "debug";
 
+/**
+ * 启动参数那条来源。
+ *
+ * 为什么不是 `--debug`：Electron 会先拿 Node 的开关表过一遍 argv，`--debug` 撞上已废弃的
+ * `node --debug`——进程在入口求值前就以 `[DEP0062]` 退出（真机读数），那条来源等于不存在。
+ * 换名之后与 `ZEPHYR_DESKTOP_*` 的环境变量前缀也对得上。
+ */
+export const DEV_MODE_ARG = "--zephyr-debug";
+
 /** 造开发者模式要的部署值。 */
 export interface DevModeInput {
   /** userData：标记文件写在这里（位置不归壳算，由 `zephyr-desktop-bundle` 递进来）。 */
   readonly userData: string;
   /** 环境变量（缺省 `process.env`）：`ZEPHYR_DESKTOP_DEBUG=1` 即开。 */
   readonly env?: NodeJS.ProcessEnv;
-  /** 启动参数（缺省 `process.argv`）：含 `--debug` 即开。 */
+  /** 启动参数（缺省 `process.argv`）：含 {@link DEV_MODE_ARG} 即开。 */
   readonly argv?: readonly string[];
 }
 
@@ -53,7 +62,7 @@ export async function devModeOf(input: DevModeInput): Promise<DevMode> {
   const listeners = new Set<(enabled: boolean) => void>();
   let enabled =
     (await existsOf(marker)) ||
-    (input.argv ?? process.argv).includes("--debug") ||
+    (input.argv ?? process.argv).includes(DEV_MODE_ARG) ||
     (input.env ?? process.env).ZEPHYR_DESKTOP_DEBUG === "1";
   return {
     get enabled(): boolean {

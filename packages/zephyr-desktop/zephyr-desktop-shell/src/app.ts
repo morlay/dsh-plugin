@@ -67,7 +67,7 @@ const desktopIdentity = await readDesktop();
 const userData = await requireUserData();
 electron.app.setPath("userData", userData);
 
-// 开发者模式：环境变量 / `--debug` / userData 下的 `debug` 标记文件（任一条成立就开）。
+// 开发者模式：环境变量 / `--zephyr-debug` / userData 下的 `debug` 标记文件（任一条成立就开）。
 // 三源合并与持久化都在 `dev-mode.ts`——菜单是它唯一的运行期写口；打包形态从 Finder 启动既没有环境
 // 变量也没有参数，所以后两条是它的入口。`ShellDebug` 只是它的只读投影：菜单里一开，日志立刻就吵。
 const devMode = await devModeOf({ userData, env: process.env, argv: process.argv });

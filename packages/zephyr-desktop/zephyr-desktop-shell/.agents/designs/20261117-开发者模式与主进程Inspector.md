@@ -1,6 +1,6 @@
 # 桌面开发者模式与主进程 Inspector
 
-状态：设计已对齐（Q1=A / Q2=A），未实现。
+状态：设计已对齐（Q1=A / Q2=A），已实现（`feat(zephyr-desktop-shell): 开发者模式与主进程 Inspector`）。
 范围：`packages/zephyr-desktop/zephyr-desktop-shell/src/`（调试面、菜单、窗口），以及它读写的 userData 标记。
 非目标：跨 realm 的 CDP inspector（上游 `@deepseek-ai/dsh-experimental-inspector` 那套：Host Worker + 多 realm + Client 只读 Sources）——我们只有一个主进程和一个页面，需要的是「DevTools + 主进程 Node inspector」。
 关联：[桌面两包与单进程壳](../designs/20261110-桌面两包与单进程壳.md) · [desktop 功能面](../../zephyr-desktop-bundle/.agents/designs/20261114-desktop功能面.md)
@@ -9,12 +9,11 @@
 
 | #   | 议题           | 决定                                                                                                              | 一句话理由                                                                 |
 | --- | -------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 1   | 开发者模式     | **可变的运行时状态**（不是只读值）：来源三合一（`ZEPHYR_DESKTOP_DEBUG=1` / `--debug` / userData 下的 `debug` 标记），运行期可切，切换即写标记 | Finder 双击启动没有环境变量也没有参数，「打包后能开」只能靠应用内入口        |
+| 1   | 开发者模式     | **可变的运行时状态**（不是只读值）：来源三合一（`ZEPHYR_DESKTOP_DEBUG=1` / `--zephyr-debug` / userData 下的 `debug` 标记），运行期可切，切换即写标记 | Finder 双击启动没有环境变量也没有参数，「打包后能开」只能靠应用内入口        |
 | 2   | 接口           | `DevMode`：`enabled` / `set(enabled)` / `onChange(listener)`，持久化在它里面；`ShellDebug` 保留为它的只读投影（日志、渲染 console 用） | 三源合并、持久化、订阅收在一处；删掉它，这些会散到 `app.ts` 与 `menu.ts`   |
-| 3   | 入口           | 视图菜单一个勾选项（`⌘⇧D` / `Ctrl+Shift+D`），点了即时生效并写标记；`--debug` 与标记文件仍可作为启动来源 | 一个入口，三个来源；菜单是它的唯一写口                                     |
-| 4   | Inspector 接缝 | `InspectorPort`：`open(options?): { port }` / `close()` / `readonly open`；适配器 `NodeInspector`
+| 3   | 入口           | 视图菜单一个勾选项（`⌘⇧D` / `Ctrl+Shift+D`），点了即时生效并写标记；`--zephyr-debug` 与标记文件仍可作为启动来源 | 一个入口，三个来源；菜单是它的唯一写口                                     |
+| 4   | Inspector 接缝 | `InspectorPort`：`open(options?): { port, host, address }` / `close()` / `readonly opened` / `readonly address`（原文写 `readonly open`，与 `open()` 同名不可兼得，落地取名 `opened`）；适配器 `NodeInspector`（`node:inspector`） | 运行期可开可关；只绑 `127.0.0.1`；测试用假适配器，不必真开端口 |
 
-（`node:inspector`） | 运行期可开可关；只绑 `127.0.0.1`；测试用假适配器，不必真开端口 |
 | 5   | Inspector 端口 | 缺省 `9229`，被占则顺延（与 `WebServer` 同一条规矩），地址打到 `shell-entry.log` 并可从菜单复制 | 同一台机器上常同时开多份；端口冲突不该是错误                                |
 | 6   | 菜单           | 开发者模式开：视图菜单出现 Reload / DevTools / 「打开主进程 Inspector」（勾选）/「复制 Inspector 地址」；关：收起并关掉 Inspector | 两个能力并列、各有开关，互不绑架                                            |
 
@@ -44,8 +43,14 @@
 | 3 | 打开 Inspector：端口可连、只绑 `127.0.0.1`、地址出现在返回值与日志行 | 真 `NodeInspector` 起一个随机端口连一次；假适配器测菜单文案 |
 | 4 | 关开发者模式：Inspector 关闭、端口释放 | 同上，断言 `open === false` 且端口不再监听 |
 | 5 | 退出：不残留监听 | 进程退出后 `lsof` 无记录（人工门 + 日志） |
+| 6 | 命令行带 `--zephyr-debug` 启动：开发者模式为开、菜单里出现开发项 | 注入 argv 的纯用例（`DevMode.enabled === true`）+ 真机跑一次（`shell-entry.log` 里 `开发者模式 开`） |
 
 ## 五、取舍与债
+
+- **启动参数叫 `--zephyr-debug` 而不是 `--debug`**：Electron 会先拿 Node 的开关表过一遍 argv，
+  `--debug` 撞上已废弃的 `node --debug`，进程在入口求值前就退（真机读数：
+  `electron: [DEP0062] \`node --debug\` and \`node --debug-brk\` are invalid`）。换名之后与
+  `ZEPHYR_DESKTOP_*` 的环境变量前缀也对得上；三条来源与「菜单是唯一运行期写口」都不变。
 
 - **只做 DevTools + 主进程 inspector**：不做上游那套跨 realm CDP（Host Worker + Client 只读 Sources）。我们的问题规模不需要它；将来若要在页面里断点调试 Client 代码，那是另一份设计。
 - **端口顺延而不是固定**：地址要能复制给 Chrome DevTools，因此必须回写真实端口（与 `WebServer` 同一条规矩）。
