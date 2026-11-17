@@ -342,6 +342,9 @@ importers:
       '@morlay/zephyr-app':
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-app
+      '@morlay/zephyr-desktop-panel':
+        specifier: workspace:^
+        version: link:../../packages/zephyr-desktop/zephyr-desktop-panel
       '@morlay/zephyr-ui':
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-ui
@@ -1563,6 +1566,25 @@ importers:
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.6
+
+  packages/zephyr-desktop/zephyr-desktop-panel:
+    dependencies:
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+      react:
+        specifier: 18.x
+        version: 18.3.1
+    devDependencies:
+      '@testing-library/react':
+        specifier: ^16.3.0
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.1
 
   packages/zephyr-desktop/zephyr-desktop-shell:
     dependencies:
