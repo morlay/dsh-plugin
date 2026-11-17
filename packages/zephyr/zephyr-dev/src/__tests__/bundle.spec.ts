@@ -561,3 +561,75 @@ describe("地址末段 = 磁盘产物文件名", () => {
     expect([...bundled.keys()].some((name) => /^assets\/logo-.*\.png$/u.test(name))).toBe(false);
   });
 });
+// ── 外置只对**能按 exports 解析到入口**的说明符生效 ──────────────────────────────────────────────
+//
+// 外置意味着「浏览器会按这条地址再取一次」；取不到的东西不该变成地址。判据是**解析得到入口**，
+// 不是「包名匹配」：`包名 + 源码路径`（`pkg/src/x.ts`）这类说明符在清单里没有对应出口，
+// 变成地址就是一条构建期看不见的 404——把那段代码内联进当前产物才是它该有的去处。
+describe("外置只认能解析到入口的说明符", () => {
+  let work: string;
+  let cacheRoot: string;
+  let code: string;
+
+  beforeAll(async () => {
+    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-external-")));
+    cacheRoot = join(work, ".cache");
+    // 被引用的包：**没有 `exports`**，只有 `main`——`src/secret.ts` 不是出口，只是包内的一段源码。
+    const plain = join(work, "node_modules", "plain-pkg");
+    await mkdir(join(plain, "src"), { recursive: true });
+    await writeFile(
+      join(plain, "package.json"),
+      `${JSON.stringify({ name: "plain-pkg", version: "1.0.0", main: "index.js" })}\n`,
+      "utf8",
+    );
+    await writeFile(join(plain, "index.js"), "export const root = 1;\n", "utf8");
+    await writeFile(
+      join(plain, "src", "secret.ts"),
+      'export const marker = "INLINED_MARKER";\n',
+      "utf8",
+    );
+    // 引用方：包根引用走外置，`src/secret.ts` 只能内联。
+    const dependent = join(work, "node_modules", "dependent");
+    await mkdir(join(dependent, "src"), { recursive: true });
+    await writeFile(
+      join(dependent, "package.json"),
+      `${JSON.stringify({ name: "dependent", version: "1.0.0", dependencies: { "plain-pkg": "^1.0.0" } })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(dependent, "src", "index.ts"),
+      [
+        'import { root } from "plain-pkg";',
+        'import { marker } from "plain-pkg/src/secret.ts";',
+        "export const combined = String(root) + marker;",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const built = await bundlePackage({
+      nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
+      cacheRoot,
+      repoRoot: work,
+      alias: [],
+      name: "dependent",
+      version: "1.0.0",
+      input: { index: join(dependent, "src", "index.ts") },
+      watch: [join(dependent, "src")],
+      manifestOf: join(dependent, "package.json"),
+    });
+    code = await readFile(join(cacheRoot, built?.files.get("index") ?? ""), "utf8");
+  });
+
+  afterAll(async () => {
+    await rm(work, { recursive: true, force: true });
+  });
+
+  test("包根引用仍外置成它的地址（能解析到入口的不受影响）", () => {
+    expect(code).toContain("plain-pkg@1.0.0/index.js");
+  });
+
+  test("「包名 + 源码路径」不外置成地址，且那段代码被内联进产物", () => {
+    expect(code).not.toContain("plain-pkg@1.0.0/src/");
+    expect(code).toContain("INLINED_MARKER");
+  });
+});

@@ -26,9 +26,56 @@ import {
   resolveInPackage,
 } from "../internal/resolve.ts";
 
-/** 裸包名 → `^名(/|$)`：既覆盖子路径引用，也不会把 `node:fs`、`./x` 误判成包。 */
-function barePackageRegExp(name: string): RegExp {
-  return new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?:/|$)`, "u");
+/**
+ * 一个包**能按 exports 解析到入口**的说明符（外置名单就是它）。
+ *
+ * 外置意味着「浏览器会按这条地址再取一次」——取不到的东西不该变成地址。三条判据缺一不可：
+ * - 说明符必须是清单里的**出口**（`exports` 的键；`module` / `main` 只覆盖包根）；
+ * - 那个出口要**解析得到入口文件**（{@link browserEntryOf} 的存在性校验）；
+ * - 通配出口（`./src/*`）没有可枚举的实例，只能按模式放行，具体文件交给解析器。
+ *
+ * 反过来说，`包名 + 源码路径`（`pkg/src/x.ts`、清单里没有这个出口）**不外置**：它该内联进引用方
+ * 的产物里，而不是变成一条构建期看不见的 404。
+ * @param name - 包名。
+ * @param root - 这份副本的包根。
+ * @returns 精确说明符与通配模式（喂给外置插件）。
+ */
+async function externalizableSpecifiersOf(
+  name: string,
+  root: string,
+): Promise<Array<string | RegExp>> {
+  const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8").catch(() => "{}")) as {
+    exports?: unknown;
+  };
+  const table = manifest.exports;
+  // `exports` 的三种形状：以 `.` 开头的键映射、条件对象本身（即根出口）、没有 `exports`（老包，按 `module`/`main`）。
+  const isSubpathMap =
+    table !== undefined &&
+    table !== null &&
+    typeof table === "object" &&
+    Object.keys(table).some((key) => key === "." || key.startsWith("./"));
+  const out: Array<string | RegExp> = [];
+  if (!isSubpathMap) {
+    if ((await browserEntryOf(root)) !== undefined) out.push(name);
+    return out;
+  }
+  for (const key of Object.keys(table as Record<string, unknown>)) {
+    // 清单本身不是浏览器产物：`pkg/package.json` 变成一个地址只会多一条取不到的文件。
+    if (key === "./package.json") continue;
+    if (key === ".") {
+      if ((await browserEntryOf(root)) !== undefined) out.push(name);
+      continue;
+    }
+    if (!key.startsWith("./")) continue;
+    const subpath = key.slice(2);
+    if (subpath.includes("*")) {
+      const source = `${name}/${subpath}`.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replaceAll("\\*", ".*");
+      out.push(new RegExp(`^${source}$`, "u"));
+      continue;
+    }
+    if ((await browserEntryOf(root, subpath)) !== undefined) out.push(`${name}/${subpath}`);
+  }
+  return out;
 }
 
 /** 统一前缀：三方与我们的包共用同一个命名空间。 */
@@ -74,7 +121,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "24";
+const BUNDLER_RULES = "25";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -860,6 +907,16 @@ async function bundlePackageOnce(
       (value): value is string => value !== undefined,
     ),
   );
+  // **外置名单**：按每份副本自己的清单逐条算出"能解析到入口的说明符"（同一份副本只算一次）。
+  const copies = new Map<string, { readonly name: string; readonly root: string }>();
+  for (const [name, , root] of resolved) {
+    if (NODE_BUILTIN.test(name)) continue;
+    copies.set(`${name}\u0000${root}`, { name, root });
+  }
+  const external = (
+    await Promise.all([...copies.values()].map((copy) => externalizableSpecifiersOf(copy.name, copy.root)))
+  ).flat();
+
   const plugins: (PluginOption | Plugin)[] = [
     // alias：rolldown 的 `resolve.alias` 只吃"字符串 → 字符串"的对象，而我们的 alias 带正则
     // （`^@/`）——用一个最小插件表达，放在最前面（它相当于 vite 里 `enforce: "pre"` 的那一层）。
@@ -883,26 +940,19 @@ async function bundlePackageOnce(
       assetUrl: (file) => `${CLIENT_MODULES_PREFIX}/${key}/${file}`,
     }),
     clientAssetPlugin({ assets: "threshold", nodeStub: options.nodeStub }),
-    // 外置**全部裸说明符**（`node:*` 除外——它走 `clientAssetPlugin` 的浏览器替身）。
+    // **外置名单 = 逐条说明符**（`node:*` 除外——它走 `clientAssetPlugin` 的浏览器替身）。
     //
     // 这件事交给这个内置插件而不是顶层 `external`：CJS 模块 `require` 一个外置依赖时，rolldown 默认保留
     // `require` 语义（产物里是运行期必抛的 `__require(...)`——浏览器没有 `require`），而这个插件把这类
     // require 转成 ESM import。它**必须独占**外置名单：顶层 `external` 一旦也列了同一个模块，它就整块跳过，
     // 产物里又留下 `require`。
-    // **外置名单 = 包名**：凡是"一个包"（有自己的 `package.json`）就独立成联邦产物，地址由 `output.paths`
-    // 交给 `urlOf`；不是包的（相对路径、内置、虚拟模块）留在产物里内联。
     //
-    // 名单就是手里那张"包名 → 版本"表的键——它本来就是"这条链认识哪些包"这份事实。写成 `^名(/|$)`：
-    // 既覆盖子路径引用（`katex/dist/katex.min.css`），又不会把 `node:fs`、`./x` 误判成包。
+    // 名单不是"包名"：`包名 + 源码路径`（`pkg/src/x.ts`）在清单里没有出口，外置它就是一条构建期看不见的
+    // 404。逐条按 `exports` 解析（{@link externalizableSpecifiersOf}），解析得到的才外置成地址，其余的
+    // 内联进当前产物。
     //
     // 名单只有这一个 home：顶层 `external` 不能再列同一个模块（插件会整块跳过，产物里留下 `__require`）。
-    esmExternalRequirePlugin({
-      // **外置名单 = 这条链认识的那些包**（包名 → 版本表的键），node 内置除外（它们走替身）。
-      // 不是包的（相对路径、内置、虚拟模块）留在产物里内联。
-      external: [...resolvable.keys()]
-        .filter((name) => !NODE_BUILTIN.test(name))
-        .map((name) => barePackageRegExp(name)),
-    }),
+    esmExternalRequirePlugin({ external }),
   ];
 
   const startedAt = Date.now();
