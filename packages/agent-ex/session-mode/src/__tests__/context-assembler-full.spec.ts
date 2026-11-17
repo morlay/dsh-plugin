@@ -1,7 +1,6 @@
 import { BasicCompactionEngine } from "@morlay/dsh-compaction";
 import {
   CONTEXT_WINDOW_EXCEEDED_CODE,
-  agentEvents,
   assembleContextFor,
   createMessage,
   createUserMessage,
@@ -23,6 +22,7 @@ import { truncateLiveSession } from "@morlay/better-session";
 import type { TestContext } from "./support/context.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { mountSessionModeApp } from "./support/mount-app.ts";
+import { dispatchPreStep } from "./support/pre-step.ts";
 // 其余符号（disposeRows / newContext / mountRows / type / type）随 `mount.ts` 一起退休：改用 `bootstrapApplication` + `app.get`。
 
 // 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
@@ -108,19 +108,22 @@ async function assemble(ctx: TestContext, agent: Parameters<typeof assembleConte
   return ctx.systemPrompt.assemble(assembleContextFor(agent));
 }
 
+// 走真实的 pre-step 水瀑：先 assemble（reminder 在那里捕获），再让装配行按步注入。
 async function preStep(
   ctx: TestContext,
   agent: Parameters<typeof assembleContextFor>[0],
   input: UserMessage[],
 ) {
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
-  const decision = await agentEvents(ctx, agent).waterfall(
-    "agent/pre-step",
+  const decision = await dispatchPreStep(
+    ctx,
     {
+      agent,
       messages: input,
       turn: 1,
       step: 1,
       signal: new AbortController().signal,
+      // 这一步捕获的模型选择（上游 `agent/pre-step` payload 的第六个字段）。
       modelSelection: { provider: "fixture", model: "fixture" },
     },
     async () => ({ kind: "enter" as const, messages: input }),

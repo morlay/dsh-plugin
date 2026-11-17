@@ -2,7 +2,6 @@ import { bootstrapApplication } from "@morlay/zephyr";
 import { sessionModeTestProviders } from "./support/session-mode-providers.ts";
 import {
   ToolCallId,
-  agentEvents,
   assembleContextFor,
   createUserMessage,
   type Agent,
@@ -16,6 +15,7 @@ import { defineTool } from "@morlay/dsh-agent/contract";
 import type { ToolExecutor } from "@morlay/dsh-agent/contract";
 
 import type { TestContext } from "./support/context.ts";
+import { dispatchPreStep } from "./support/pre-step.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS } from "@morlay/session-mode";
 // 其余符号（bridgeUpstreamNames / disposeRows / mountProvider / type / type）随 `mount.ts` 一起退休：改用 `bootstrapApplication` + `app.get`。
@@ -253,13 +253,15 @@ async function preStep(
   messages: UserMessage[],
 ): Promise<UserMessage[]> {
   await ctx.systemPrompt.assemble(assembleContextFor(agent));
-  const decision = await agentEvents(ctx, agent).waterfall(
-    "agent/pre-step",
+  const decision = await dispatchPreStep(
+    ctx,
     {
+      agent,
       messages,
       turn: 1,
       step: 1,
       signal: new AbortController().signal,
+      // 这一步捕获的模型选择（上游 `agent/pre-step` payload 的第六个字段）。
       modelSelection: { provider: "fixture", model: "fixture" },
     },
     async () => ({ kind: "enter" as const, messages }),
@@ -418,9 +420,10 @@ describe("base 组正文的常驻注入", () => {
     const trailing = prompt("末尾那条（别的监听者追加的）");
     await ctx.systemPrompt.assemble(assembleContextFor(agent));
 
-    const decision = await agentEvents(ctx, agent).waterfall(
-      "agent/pre-step",
+    const decision = await dispatchPreStep(
+      ctx,
       {
+        agent,
         messages: [claimed],
         turn: 1,
         step: 1,

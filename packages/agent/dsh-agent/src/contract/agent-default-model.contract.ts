@@ -12,6 +12,15 @@ import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 export { modelSelectionProjectionDefinition } from "@deepseek-ai/dsh-agent";
 
 /**
+ * 能力词汇：一次模型选择的完整取值（provider、model 与可省略的推理强度）。
+ *
+ * 摆在契约面上的理由：它不是某一条调用路径的私有形状，而是**跨接缝的同一个词**——`agent/pre-step` 的
+ * payload 带的是"这一步捕获的那次选择"（重试沿用同一个值），会话里的 `modelSelection` 投影也以它为单位。
+ * 下游（如 `session-mode`）照这个词写自己的事件参数表，就不再各写一份 `{ provider, model }`。
+ */
+export type { ModelSelection } from "@deepseek-ai/dsh-agent";
+
+/**
  * 契约面：上游 `AgentDefaultModelConfig` 的**全部**公开成员。
  *
  * 成员一个都不能少——上游插件按 `ctx.agentDefaultModel.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。

@@ -4,7 +4,8 @@
 // 声明成 Provider 的**字段**（`readonly assemble$ = new SystemPromptAssemble()`）：框架在填充注入后对每个
 // `EventEmitter` 字段调 `onInit(ctx)`，不需要额外的接线。
 import type { Agent } from "@morlay/dsh-agent/contract";
-import type { MessageSource } from "@morlay/dsh-agent/contract";
+import type { LlmFailure, MessageSource, ModelSelection } from "@morlay/dsh-agent/contract";
+import type { ResolvedRetryPolicy } from "@morlay/dsh-agent/contract";
 import type { UserMessage } from "@morlay/dsh-agent/contract";
 import type {
   AssembleContext,
@@ -53,12 +54,16 @@ export class SystemPromptAssemble extends EventEmitter<
 }
 
 // 一步开始前的消息表（瀑布）：官方那几行的每步注入都在这里。
+//
+// 六个字段与上游 `Events['agent/pre-step']` 的 payload 一一对应（少一个，消费方就只能在类型外绕道）。
 export interface PreStepPayload {
   readonly agent: Agent;
   readonly messages: UserMessage[];
   readonly turn: number;
   readonly step: number;
   readonly signal: AbortSignal;
+  /** 这一步捕获的模型选择：重试沿用同一个值，省略推理强度时走适配器默认。 */
+  readonly modelSelection: Readonly<ModelSelection>;
 }
 
 export class AgentPreStep extends EventEmitter<[PreStepPayload], Promise<PreStepDecision>> {
@@ -68,8 +73,16 @@ export class AgentPreStep extends EventEmitter<[PreStepPayload], Promise<PreStep
 }
 
 // 一次模型请求失败（瀑布）：返回 `retry` 表示接管重试。
+//
+// 七个字段与上游 `Events['agent/request-error']` 的 payload 一一对应：失败本身（`provider` / `failure`）、
+// 它发生在哪一步（`turn` / `step`）、以及当时生效的重试策略——判定"这一次该不该接管"要用到它们。
 export interface RequestErrorPayload {
   readonly agent: Agent;
+  readonly turn: number;
+  readonly step: number;
+  readonly provider: string;
+  readonly failure: LlmFailure;
+  readonly retryPolicy: ResolvedRetryPolicy | undefined;
   readonly signal: AbortSignal;
 }
 
