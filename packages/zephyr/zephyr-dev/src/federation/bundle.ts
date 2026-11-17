@@ -929,6 +929,13 @@ async function bundlePackageOnce(
         process: "{ env: {} }",
       },
     },
+    // `[CONFIGURATION_FIELD_CONFLICT]`（`experimentalDecorators` 被 `transform.decorator.legacy` 覆盖）：
+    // 两处声明同一件事是**有意**的（`resolve.tsconfigFilename` 只影响模块解析，外置包的装饰器要靠这里），
+    // 这条提示没有信息量，也不随代码变化——过滤掉；其余日志照原样交给默认处理。
+    onLog: (level, log, defaultHandler) => {
+      if (log.code === "CONFIGURATION_FIELD_CONFLICT") return;
+      defaultHandler(level, log);
+    },
   });
   const { output: items } = await bundle.generate({
     // CJS→ESM 的互操作交回 rolldown（不再手写具名导出包装）：named 让 CJS 的键成为具名导出，
