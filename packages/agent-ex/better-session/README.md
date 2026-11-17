@@ -15,8 +15,11 @@
   统一决定**，DDL / DML / 迁移账本 / 结构探测都渲染成 `"schema"."表"`，不依赖连接串里的
   `search_path`——所以配了 `schema` 就在这里配，别在连接串上另写一份。
 - 库身份：`SESSION_PERSISTENCE_SQLITE_APPLICATION_ID` 是**库身份指纹**（`identityFingerprint("dsh-session") | 0`），
-  落在 SQLite 的 `PRAGMA application_id`；指纹或版本对不上的库被显式拒绝
-  （`SESSION_STORAGE_INCOMPATIBLE`），不做静默迁移。机制与读写面见 `@morlay/zephyr-rdb` 的[库身份](../../zephyr/zephyr-rdb/README.md)一节。
+  落在 SQLite 的 `PRAGMA application_id`（写入只收有符号 int32，读回是同一段 32 位的无符号表示，
+  比较前两侧归一）。版本对不上、或 `application_id` 是**别的** id 的库被显式拒绝
+  （`SESSION_STORAGE_INCOMPATIBLE`）。唯一的例外是本仓更早版本写的旧身份 `0x44534850`（ASCII "DSHP"）：
+  那是自己的旧库，打开时就地升级成当前指纹（一次迁移，写在打开事务里，不要求删库）。
+  机制与读写面见 `@morlay/zephyr-rdb` 的[库身份](../../zephyr/zephyr-rdb/README.md)一节。
 
 浏览器半在 `./ui`：`provideBetterSessionUi()` 装两件事。
 

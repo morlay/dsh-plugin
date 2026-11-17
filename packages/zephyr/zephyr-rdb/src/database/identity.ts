@@ -48,6 +48,8 @@ async function readSqliteIdentity(database: Database): Promise<StoredIdentity | 
 
 async function writeSqliteIdentity(database: Database, identity: LibraryIdentity): Promise<void> {
   // PRAGMA 不支持绑定参数：值只来自指纹（int32）与版本（int32），内联是安全的。
+  // `| 0` 不是修饰：`PRAGMA application_id` 只收 int32 文本，写入无符号的 4214930297 会被 SQLite
+  // 静默写成 0（身份就没了）。读侧再按无符号口径归一（`>>> 0`），两侧比较前必须同口径。
   const fingerprint = identityFingerprint(identity.name) | 0;
   await database.run(fragment(`PRAGMA application_id = ${String(fingerprint)}`));
   await database.run(fragment(`PRAGMA user_version = ${String(identity.version)}`));

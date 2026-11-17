@@ -11,6 +11,7 @@ import {
 } from "@morlay/zephyr-rdb";
 import type { Backend } from "../backend.ts";
 import { catalog, persistenceState } from "../entities/index.ts";
+import { applicationIdOfFingerprint, classifyStoredApplicationId } from "./identity.ts";
 import { sessionMigrations } from "./migrations.ts";
 import { createReadModel } from "./read-model.ts";
 import { createStorageRepository } from "./storage-repository.ts";
@@ -155,6 +156,8 @@ async function fileIdentity(path: string, storeId: string): Promise<string> {
 
 // 库身份：本构建只认「dsh-session @ SCHEMA_VERSION」。未认领的库只有在**空库**时才被认领，
 // 有表却没身份就是旧库或别人的库（拒绝并要求显式迁移，破坏性动作由人决定）。
+// 唯一例外是本仓更早版本写的旧身份（0x44534850 "DSHP"）：那是**自己的旧库**，就地升级，
+// 不要求用户删库；其它不认识的 id 照样拒绝。
 async function claimLibrary(database: Database, config: BackendConfig): Promise<void> {
   const identity: LibraryIdentity = { name: SESSION_LIBRARY_NAME, version: SCHEMA_VERSION };
   const where = config.type === "sqlite" ? config.path : config.connectionString;
@@ -186,20 +189,30 @@ async function claimLibrary(database: Database, config: BackendConfig): Promise<
     await database.writeIdentity(identity);
     return;
   }
-  if (stored.fingerprint !== fingerprintHex(identity.name) || stored.version !== identity.version) {
+  // 指纹按归一后的 32 位比：写入是有符号 int32，读回是无符号口径，两侧直接比会误判。
+  const storedApplicationId = applicationIdOfFingerprint(stored.fingerprint);
+  const storedKind = classifyStoredApplicationId(storedApplicationId);
+  if (storedKind !== "current" || stored.version !== identity.version) {
     if (config.type === "sqlite") {
+      // 本库更早版本写的旧身份：就地升级（一次迁移、写在打开事务里——失败时库连身份戳都不变）。
+      // 排在版本 0 的判定之前：旧身份本来就不带结构版本，认它比「未认领」优先。
+      if (storedKind === "legacy") {
+        await database.writeIdentity(identity);
+        return;
+      }
       if (stored.version === 0) {
         throw new SessionStoreError(
           "SESSION_STORAGE_INCOMPATIBLE",
           "session database at " + where + " has an unversioned schema or application identity",
         );
       }
+      // 文案里的 id 按 int32 写：就是库浏览器 / PRAGMA application_id 直接读到的那个值。
       throw new SessionStoreError(
         "SESSION_STORAGE_INCOMPATIBLE",
         "session database at " +
           where +
           " has application id " +
-          String(Number.parseInt(stored.fingerprint, 16)) +
+          String(storedApplicationId | 0) +
           ", expected " +
           String(SESSION_PERSISTENCE_SQLITE_APPLICATION_ID),
       );
