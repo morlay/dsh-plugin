@@ -16,16 +16,18 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+// **按包出口取**（`@morlay/zephyr-dev/testing`），不写 `../build/compile.ts` 这类跨目录相对路径：
+// 子出口面里的相对 `../` 会让"面"退化成目录结构的一部分。
 import {
   artifactAddressOf,
   assertReachableComplete,
   compile,
   fallbackToRuntime,
+  memberAddressesOf,
   reachableModulesOf,
   REQUIRED_PREBUNDLE,
   supplementTargetsOf,
-} from "../build/compile.ts";
-import { nodeStubPathOf } from "../internal/package-root.ts";
+} from "@morlay/zephyr-dev/testing";
 
 /** 夹具根（两个目录各有自己的 `src/client/app-boot.ts`）。 */
 const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
@@ -159,23 +161,25 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
   });
 });
 /** 共享运行时聚合产物的地址（虚拟包：名字与版本是实现的公开事实，这里写字面量当独立真值）。 */
-const RUNTIME = `${PREFIX}/@zephyr+shared-runtime@0.0.0/index.js`;
+const RUNTIME = PREFIX + "/@zephyr+shared-runtime@0.0.0/index.js";
 
 /**
  * 一次性夹具：在 tmpdir 里铺一个工作区 + 一个静态目录。
  * @param files - 相对路径 → 内容（相对 tmp 根）。
- * @returns 工作区与静态目录的绝对路径。
+ * @returns 工作区、静态目录与 `node:*` 的浏览器替身（判据这条链不碰它，给一个真实存在的文件即可）。
  */
 async function fixtureOf(
   files: Record<string, string>,
-): Promise<{ workspace: string; outDir: string }> {
+): Promise<{ workspace: string; outDir: string; nodeStub: string }> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-fallback-"));
+  const nodeStub = join(root, "node-stub.cjs");
+  await writeFile(nodeStub, "module.exports = {};\n", "utf8");
   for (const [relative, content] of Object.entries(files)) {
     const file = join(root, relative);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, content, "utf8");
   }
-  return { workspace: join(root, "workspace"), outDir: join(root, "out") };
+  return { workspace: join(root, "workspace"), outDir: join(root, "out"), nodeStub };
 }
 
 /** 产物清单（`.files.json` 的原文）：产物地址从 `files` 的每一项算出来。 */
@@ -183,28 +187,51 @@ function manifestOf(files: Record<string, string>): string {
   return JSON.stringify({ rev: "fixture", files }, null, 2);
 }
 
+/**
+ * 一个装着 `fx-runtime@1.0.0` 的夹具工作区：它够格当聚合产物的成员（能从应用清单解析到入口）。
+ * @returns 相对 tmp 根的文件表。
+ */
+function appWorkspaceFiles(): Record<string, string> {
+  return {
+    "workspace/package.json": JSON.stringify({
+      name: "fx-app",
+      version: "0.0.0",
+      dependencies: { "fx-runtime": "1.0.0" },
+    }),
+    "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
+      name: "fx-runtime",
+      version: "1.0.0",
+      exports: { ".": "./index.js" },
+    }),
+    "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
+  };
+}
+
+/**
+ * 引用方的产物：清单 + 一段引用代码。
+ * @param code - 产物正文。
+ * @returns 相对 tmp 根的文件表。
+ */
+function clientOf(code: string): Record<string, string> {
+  return {
+    "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
+    "out/fx-app@0.0.0/client.js": code,
+  };
+}
+
+/** 引用方的产物地址（用例里当"引用方"的独立真值）。 */
+const CLIENT = moduleUrlOf("fx-app", "0.0.0", "client.js");
+
 describe("fallbackToRuntime（共享运行时兜底）", () => {
   it("产物引用没有出产物的地址：改写到聚合产物地址，聚合产物转发成员的具名导出", async () => {
-    const missing = moduleUrlOf("fx-runtime", "1.0.0", "ui.js");
+    const missing = moduleUrlOf("fx-runtime", "1.0.0", "index.js");
     const fixture = await fixtureOf({
-      "workspace/package.json": JSON.stringify({
-        name: "fx-app",
-        version: "0.0.0",
-        dependencies: { "fx-runtime": "1.0.0" },
-      }),
-      // 成员包：装着、能从应用清单解析到（`export * from "fx-runtime"` 才编得出来）。
-      "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
-        name: "fx-runtime",
-        version: "1.0.0",
-        exports: { ".": "./index.js" },
-      }),
-      "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
-      // 成员的产物：它自己在盘上（改写的对象是引用它的那份产物，不是它）。
-      "out/fx-runtime@1.0.0/.files.json": manifestOf({ index: "fx-runtime@1.0.0/index.js" }),
-      "out/fx-runtime@1.0.0/index.js": "export const runtimeMember = 1;\n",
-      // 引用方：它要的 `fx-runtime/ui.js` 没有产物（这正是会 404 的那条）。
-      "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
-      "out/fx-app@0.0.0/client.js": `import { runtimeMember } from "${missing}?v=deadbeef";\nconsole.log(runtimeMember);\n`,
+      ...appWorkspaceFiles(),
+      ...clientOf(
+        'import { runtimeMember } from "' +
+          missing +
+          '?v=deadbeef";\nconsole.log(runtimeMember);\n',
+      ),
     });
 
     const result = await fallbackToRuntime({
@@ -212,64 +239,96 @@ describe("fallbackToRuntime（共享运行时兜底）", () => {
       addresses: [missing],
       appManifest: join(fixture.workspace, "package.json"),
       repoRoot: fixture.workspace,
-      nodeStub: nodeStubPathOf(),
+      nodeStub: fixture.nodeStub,
     });
 
     expect(result.runtime).toBe(RUNTIME);
     expect(result.members).toEqual(["fx-runtime"]);
     expect(result.rewritten).toEqual([missing]);
-    // 引用方被改写：地址落到聚合产物、带着构建器指纹，且不再指向那条缺产物地址。
+    // 引用方被改写：落到聚合产物、带着构建器指纹，且不再指向那条缺产物的地址。
     const client = await readFile(join(fixture.outDir, "fx-app@0.0.0/client.js"), "utf8");
-    expect(client).toContain(`from "${RUNTIME}?v=`);
-    expect(client).not.toContain("ui.js");
-    // 聚合产物落盘，并且**转发**成员的具名导出（`export *`：具名平铺、没有 default 位）。
+    expect(client).toContain('from "' + RUNTIME + "?v=");
+    expect(client).not.toContain(missing);
+    // 聚合产物落盘，成员地址表就是它正文里 `export * from` 的那几段（具名平铺、没有 default 位）。
     const runtime = await readFile(
       join(fixture.outDir, "@zephyr+shared-runtime@0.0.0/index.js"),
       "utf8",
     );
-    expect(runtime).toContain("/_zephyr/@modules/fx-runtime@1.0.0/index.js");
+    expect(memberAddressesOf(runtime)).toEqual([missing]);
     expect(runtime).not.toContain("export default");
     expect(runtime).not.toContain("export{default");
   });
 
-  it("共享运行时被 default 导入：构建失败，并指出写它的源文件", async () => {
-    const missing = moduleUrlOf("fx-runtime", "1.0.0", "ui.js");
+  it("共享运行时被 default 导入：构建失败，并给出引用方产物与成员的两个地址", async () => {
+    const member = moduleUrlOf("fx-runtime", "1.0.0", "index.js");
     const fixture = await fixtureOf({
-      "workspace/package.json": JSON.stringify({
-        name: "fx-app",
-        version: "0.0.0",
-        dependencies: { "fx-runtime": "1.0.0" },
-      }),
-      "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
-        name: "fx-runtime",
-        version: "1.0.0",
-        exports: { ".": "./index.js" },
-      }),
-      "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
-      // 源文件里就是那条禁用写法（夹具里的独立真值）。
-      "workspace/src/client/bad-default.ts":
-        'import React from "react";\nexport const element = React;\n',
-      "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
-      "out/fx-app@0.0.0/client.js": `import React from "${missing}?v=deadbeef";\nconsole.log(React);\n`,
+      ...appWorkspaceFiles(),
+      ...clientOf('import React from "' + member + '?v=deadbeef";\nconsole.log(React);\n'),
     });
 
     const error = await fallbackToRuntime({
       outDir: fixture.outDir,
-      addresses: [missing],
+      addresses: [member],
       appManifest: join(fixture.workspace, "package.json"),
-      sourceOf: (url) =>
-        url.endsWith("/fx-app@0.0.0/client.js")
-          ? join(fixture.workspace, "src/client/bad-default.ts")
-          : undefined,
       repoRoot: fixture.workspace,
-      nodeStub: nodeStubPathOf(),
+      nodeStub: fixture.nodeStub,
     }).then(
       () => undefined,
       (rejected: unknown) => rejected as Error,
     );
 
     expect(error?.message).toContain("共享运行时只允许具名导入");
-    expect(error?.message).toContain("bad-default.ts");
+    // 两个地址都在：被默认导入的成员地址 + 写这条导入的引用方产物地址（不是桩出来的"源文件"）。
+    expect(error?.message).toContain(member);
+    expect(error?.message).toContain(CLIENT);
+    expect(error?.message).toContain("React");
+  });
+
+  it("版本对不上、或出口解析不到：不成为聚合产物成员（不吞多版本、不退化到包根）", async () => {
+    // 应用清单里是 katex 0.18.10，地址指的是 0.16.47 那一份副本：拿 0.18 的导出面顶上去就是吞多版本。
+    const otherVersion = moduleUrlOf("katex", "0.16.47", "index.js");
+    // 包根解析得到、但 `ui` 这个出口解析不到：退化成包根成员，平铺出来的导出名与引用方要的对不上。
+    const unknownExport = moduleUrlOf("fx-runtime", "1.0.0", "ui.js");
+    const fixture = await fixtureOf({
+      "workspace/package.json": JSON.stringify({
+        name: "fx-app",
+        version: "0.0.0",
+        dependencies: { katex: "0.18.10", "fx-runtime": "1.0.0" },
+      }),
+      "workspace/node_modules/katex/package.json": JSON.stringify({
+        name: "katex",
+        version: "0.18.10",
+        exports: { ".": "./index.js" },
+      }),
+      "workspace/node_modules/katex/index.js": 'export const version = "0.18.10";\n',
+      "workspace/node_modules/fx-runtime/package.json": JSON.stringify({
+        name: "fx-runtime",
+        version: "1.0.0",
+        exports: { ".": "./index.js" },
+      }),
+      "workspace/node_modules/fx-runtime/index.js": "export const runtimeMember = 1;\n",
+      ...clientOf(
+        'import "' +
+          otherVersion +
+          '?v=deadbeef";\nimport { nope } from "' +
+          unknownExport +
+          '?v=deadbeef";\n',
+      ),
+    });
+
+    const result = await fallbackToRuntime({
+      outDir: fixture.outDir,
+      addresses: [otherVersion, unknownExport],
+      appManifest: join(fixture.workspace, "package.json"),
+      repoRoot: fixture.workspace,
+      nodeStub: fixture.nodeStub,
+    });
+
+    // 一个成员都没有 → 不造空产物、也不改写：它们留在缺口里，由失败面报红（决定 13）。
+    expect(result).toEqual({ runtime: "", members: [], rewritten: [] });
+    const client = await readFile(join(fixture.outDir, "fx-app@0.0.0/client.js"), "utf8");
+    expect(client).toContain(otherVersion);
+    expect(client).toContain(unknownExport);
   });
 });
 
@@ -317,6 +376,9 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
       manifestOf: join(fixture.workspace, rootCopy, "package.json"),
     };
 
+    // 连副本都解析不到的地址（哪个 node_modules 里都没有它）。
+    const ghost = moduleUrlOf("ghost", "0.0.0", "index.js");
+
     const extra = await supplementTargetsOf({
       gaps: [
         // 图根那一份副本：从已知目标里认出来。
@@ -327,7 +389,7 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
           importers: [artifactAddressOf(importer)],
         },
         // 连副本都没有的：补不出目标，交给兜底。
-        { url: moduleUrlOf("ghost", "0.0.0", "index.js"), importers: [] },
+        { url: ghost, importers: [] },
       ],
       known: [rootTarget, importer],
       appManifest: join(fixture.workspace, "package.json"),
@@ -344,6 +406,18 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
       "micromark-extension-math@3.1.0/node_modules/katex/package.json",
     );
     expect(extra.some((target) => target.name === "ghost")).toBe(false);
+    // **两份都出了产物 ⇒ 兜底一次都不该被触发**：只剩 ghost 那条进兜底，而它连副本都没有、也不成成员，
+    // 于是 runtime 为空（不造空产物），留在缺口里由失败面报红（决定 13）。
+    const resolved = new Set(extra.map((target) => artifactAddressOf(target)));
+    const fallback = await fallbackToRuntime({
+      outDir: fixture.outDir,
+      addresses: [ghost],
+      appManifest: join(fixture.workspace, "package.json"),
+      repoRoot: fixture.workspace,
+      nodeStub: fixture.nodeStub,
+    });
+    expect(resolved.size).toBe(2);
+    expect(fallback).toEqual({ runtime: "", members: [], rewritten: [] });
   });
 });
 describe("assertReachableComplete（兜底之后仍缺即红）", () => {

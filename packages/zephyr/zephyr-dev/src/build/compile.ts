@@ -83,10 +83,6 @@ export interface CompileResult {
   readonly failures: readonly PrebundleFailure[];
   /** 页面骨架的落点（`<outDir>/index.html`）。 */
   readonly page: string;
-  /** 共享运行时聚合产物的地址（不含 `?v=`）；没有兜底时为空串。 */
-  readonly runtime: string;
-  /** 被兜底改写到聚合产物的地址。 */
-  readonly fallbacks: readonly string[];
 }
 
 /** 应用清单里的两项（它们决定应用入口的地址）。 */
@@ -150,7 +146,6 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
     nodeStub: nodeStubPathOf(),
     appManifest,
   });
-  let built = result.built;
   const failures: PrebundleFailure[] = [...result.failures];
   // 决定 9：**有副本的一律按副本出独立产物**。可达却没有产物的地址里，凡是"包名 + 版本"认得出副本的，
   // 各补一条目标再编（迭代到固定点）——它们不进兜底，否则同名多版本会被合并成一条地址。
@@ -176,20 +171,16 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
       nodeStub: nodeStubPathOf(),
       appManifest,
     });
-    // 只数**这次补出来的**：同组的已知出口是重编，不是新增。
-    built += extra.length;
     failures.push(...again.failures);
     targets.push(...extra);
     graph = await reachabilityOf(options.outDir, entryUrlOf(app));
   }
   const gaps = graph.gaps.map((gap) => gap.url);
-  // 决定 8：剩下的残余统一指向共享运行时聚合产物（编不出来就抛）。
-  const sources = new Map(targets.map((target) => [artifactAddressOf(target), target.entry]));
-  const fallback = await fallbackToRuntime({
+  // 决定 8：剩下的残余统一指向共享运行时聚合产物（编不出来、或被 default 导入就抛）。
+  await fallbackToRuntime({
     outDir: options.outDir,
     addresses: gaps,
     appManifest,
-    sourceOf: (url) => sources.get(url),
     repoRoot: options.workspace,
     nodeStub: nodeStubPathOf(),
   });
@@ -207,12 +198,13 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
   // 绝对路径**），dev 的缓存命中要靠它重放，产物不需要——写进去就是分发一份构建机路径。
   await stripResolvedFromManifests(options.outDir);
   const page = await writePage({ pageEntry, outDir: options.outDir, app });
+  // 失败按**产物地址**去重：同组重编会把同一条失败再记一遍；`built` 也只数真的出了产物的目标
+  // （补目标的重编里有失败时，`extra.length` 不能当成功算）。
+  const failed = new Map(failures.map((failure) => [artifactAddressOf(failure.target), failure]));
   return {
-    built,
-    failures,
+    built: targets.filter((target) => !failed.has(artifactAddressOf(target))).length,
+    failures: [...failed.values()],
     page,
-    runtime: fallback.runtime,
-    fallbacks: fallback.rewritten,
   };
 }
 
@@ -632,8 +624,6 @@ export interface FallbackOptions {
   readonly addresses: readonly string[];
   /** 成员说明符的解析基准（应用清单：共享运行时按图根解析）。 */
   readonly appManifest: string;
-  /** 产物地址 → 写它的源文件（default 导入要指出源文件；缺省时只报地址）。 */
-  readonly sourceOf?: (url: string) => string | undefined;
   /** 仓库根（rolldown 的 cwd 与 alias 基准）。 */
   readonly repoRoot: string;
   /** `node:*` 的浏览器替身。 */
@@ -662,39 +652,51 @@ export async function fallbackToRuntime(options: FallbackOptions): Promise<Fallb
   if (addresses.length === 0) return { runtime: "", members: [], rewritten: [] };
   const members = await runtimeMembersOf(addresses, options.appManifest);
   if (members.length === 0) return { runtime: "", members: [], rewritten: [] };
-  const runtime = `${CLIENT_MODULES_PREFIX}/${cacheKeyOf(SHARED_RUNTIME_NAME, SHARED_RUNTIME_VERSION)}/index.js`;
+  // 地址只按**产物形态**算一处（{@link artifactAddressOf}）：手拼 `…/index.js` 就是决定 4 的第二个消费者。
+  const runtime = artifactAddressOf({
+    name: SHARED_RUNTIME_NAME,
+    version: SHARED_RUNTIME_VERSION,
+    exportName: "index",
+    entry: "",
+  });
   await buildSharedRuntime(options, members);
+  // 决定 10 在**改写之前**判：改写之后这些地址都成了聚合产物地址，就分不清是谁把 default 架在共享运行时上了。
+  // 会落到聚合产物上的地址 = 聚合产物的成员地址表 + 兜底地址（成员之外的那些改写后指向同一个模块）。
+  const membersOfRuntime = memberAddressesOf(await readRuntime(options.outDir, runtime));
+  const violations = await defaultsOfRuntime({
+    outDir: options.outDir,
+    addresses: [...membersOfRuntime, ...addresses],
+  });
+  if (violations.length > 0) {
+    const detail = violations
+      .map(
+        (violation) =>
+          `  ${violation.url} 里 default 导入了 ${violation.target}（本地名 ${violation.local}）`,
+      )
+      .join("\n");
+    throw new Error(
+      `共享运行时只允许具名导入：聚合产物 ${runtime} 会承载的地址上出现了 default 导入。\n${detail}\n` +
+        "一份模块只有一个 default，两个共享运行时不可能都占它——改成具名导入（`import { x } from …`）。",
+    );
+  }
   const rewritten = await rewriteToRuntime(
     options.outDir,
     addresses,
     `${runtime}?v=${BUNDLER_REV}`,
   );
-  const violations = await defaultsOfRuntime({
-    outDir: options.outDir,
-    runtime,
-    ...(options.sourceOf === undefined ? {} : { sourceOf: options.sourceOf }),
-  });
-  if (violations.length > 0) {
-    const detail = violations
-      .map((violation) => {
-        const source = violation.source === undefined ? "" : `（源文件 ${violation.source}）`;
-        return `  ${violation.url} 里的 default 导入 ${violation.local}${source}`;
-      })
-      .join("\n");
-    throw new Error(
-      `共享运行时只允许具名导入：聚合产物 ${runtime} 出现了 default 导入。\n${detail}\n` +
-        "一份模块只有一个 default，两个共享运行时不可能都占它——改成具名导入（`import { x } from …`）。",
-    );
-  }
   return { runtime, members, rewritten };
 }
 
 /**
  * 兜底地址 → 聚合产物的**成员说明符**：地址反解成 `pkg` 或 `pkg/sub`，能按应用清单解析到入口的才算成员。
  *
- * 成员只收"能装到副本"的那些（peer、转译器注入、上游传递运行时）：连副本都解析不到的地址没有成员可平铺。
+ * 两条边界与 {@link supplementTargetsOf} **对齐**（否则兜底就成了吞多版本的袋子）：
+ * - **版本必须与地址里那一段一致**：成员是"这一份副本"的导出面，版本对不上却拿它平铺，等于把两个版本的
+ *   同名包塞进同一个模块；
+ * - **子路径不退化**：地址是 `pkg/sub` 就只认 `pkg/sub`——退化成包根，平铺出来的导出名与引用方要的东西
+ *   对不上（`import { jsx } from "react/jsx-runtime"` 在 `react` 的根出口里没有）。
  * @param addresses - 兜底地址。
- * @param appManifest - 应用清单（解析基准）。
+ * @param appManifest - 应用清单（解析基准：共享运行时按图根解析）。
  * @returns 成员说明符（去重、保持首次出现顺序）。
  */
 async function runtimeMembersOf(
@@ -705,17 +707,44 @@ async function runtimeMembersOf(
   for (const url of addresses) {
     const address = moduleAddressOf(url);
     if (address === undefined) continue;
-    const subpath = address.exportName === "index" ? undefined : address.exportName;
-    for (const specifier of subpath === undefined
-      ? [address.name]
-      : [`${address.name}/${subpath}`, address.name]) {
-      if (out.includes(specifier)) break;
-      if ((await dependencyEntry(appManifest, specifier)) === undefined) continue;
-      out.push(specifier);
-      break;
-    }
+    const specifier =
+      address.exportName === "index" ? address.name : `${address.name}/${address.exportName}`;
+    if (out.includes(specifier)) continue;
+    const dependency = await dependencyEntry(appManifest, specifier);
+    if (dependency === undefined || dependency.version !== address.version) continue;
+    out.push(specifier);
   }
   return out;
+}
+
+/**
+ * 聚合产物的**成员地址表**：它正文里每条 `export * from "<地址>"` 后面那一段（`?v=` 不算地址）。
+ *
+ * 为什么不另存一张表：聚合产物的正文就是"它承载了谁"的唯一真相——成员表与产物字节同源，才谈得上
+ * 用它对产物做判据（决定 10）。
+ * @param code - 聚合产物正文。
+ * @returns 成员地址（按出现顺序）。
+ */
+export function memberAddressesOf(code: string): string[] {
+  const out: string[] = [];
+  for (const match of code.matchAll(/export\s*\*\s*from\s*["']([^"']+)["']/gu)) {
+    const url = match[1];
+    if (url !== undefined) out.push(addressOf(url));
+  }
+  return out;
+}
+
+/**
+ * 聚合产物地址 → 它的正文（盘上没有这个产物时给空串：调用方据此得到空成员表）。
+ * @param outDir - 静态目录。
+ * @param runtime - 聚合产物地址（不含 `?v=`）。
+ * @returns 正文。
+ */
+async function readRuntime(outDir: string, runtime: string): Promise<string> {
+  return await readFile(
+    join(outDir, runtime.slice(`${CLIENT_MODULES_PREFIX}/`.length)),
+    "utf8",
+  ).catch(() => "");
 }
 
 /**
@@ -794,12 +823,12 @@ async function rewriteToRuntime(
 
 /** 一处 default 导入违例（设计决定 10）。 */
 export interface DefaultImportViolation {
-  /** 引用方的产物地址。 */
+  /** **引用方**的产物地址（谁写了这条 default 导入）。 */
   readonly url: string;
+  /** 被默认导入的地址（聚合产物的成员地址，或即将被改写到聚合产物的兜底地址）。 */
+  readonly target: string;
   /** 被赋给 default 的本地名（`import React from …` 里的 `React`）。 */
   readonly local: string;
-  /** 写这条导入的源文件（能反查到时才有）。 */
-  readonly source: string | undefined;
 }
 
 /** 产物里的 `import <子句> from "<源>"`（静态导入；动态 `import()` 没有 default 绑定）。 */
@@ -822,18 +851,19 @@ function defaultBindingOf(clause: string): string | undefined {
 }
 
 /**
- * 决定 10：**共享运行时只许具名导入**——产物里出现对聚合产物的 default 导入即算违例。
+ * 决定 10：**共享运行时只许具名导入**——产物里出现对"会落到聚合产物上的地址"的 default 导入即算违例。
  *
- * 判据是"对聚合产物的导入"而不是"对某个成员包的导入"：成员各有自己的产物与地址，它们的 default
- * 是它们自己的事；只有聚合产物那**一个** default 位是不能分的。
- * @param options - 产物目录、聚合产物地址与"地址 → 源文件"的反查。
- * @returns 违例清单。
+ * 判据的地址表由调用方给（{@link memberAddressesOf} 的成员表 + 兜底地址）：聚合产物把成员的具名导出
+ * 平铺成**一个**模块，而一份模块只有一个 default 位——两个共享运行时不可能都占它。所以这里判的是
+ * "这条 default 最终落在聚合产物上"，不是"对某个成员包（各有自己的默认导出）的 default"。
+ * @param options - 产物目录与会落到聚合产物上的地址。
+ * @returns 违例清单（引用方产物地址 + 被默认导入的地址 + 本地名）。
  */
 export async function defaultsOfRuntime(options: {
   readonly outDir: string;
-  readonly runtime: string;
-  readonly sourceOf?: (url: string) => string | undefined;
+  readonly addresses: readonly string[];
 }): Promise<DefaultImportViolation[]> {
+  const wanted = new Set(options.addresses.map((url) => addressOf(url)));
   const out: DefaultImportViolation[] = [];
   for (const artifact of await artifactsOf(options.outDir)) {
     if (artifact.code === "") continue;
@@ -841,10 +871,11 @@ export async function defaultsOfRuntime(options: {
       const clause = match[1];
       const source = match[2];
       if (clause === undefined || source === undefined) continue;
-      if (addressOf(source) !== options.runtime) continue;
+      const target = addressOf(source);
+      if (!wanted.has(target)) continue;
       const local = defaultBindingOf(clause);
       if (local === undefined) continue;
-      out.push({ url: artifact.url, local, source: options.sourceOf?.(artifact.url) });
+      out.push({ url: artifact.url, target, local });
     }
   }
   return out;
