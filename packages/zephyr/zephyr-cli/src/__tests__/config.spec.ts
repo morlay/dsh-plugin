@@ -4,11 +4,10 @@ import { CliError } from "../errors.ts";
 import { tempWorkspace } from "../testing/index.ts";
 
 const CONFIG = `export default {
-  server: { entry: './src/server.ts' },
+  server: { entry: './src/server.ts', outputDir: 'out' },
   client: { entry: './src/client/index.html' },
   desktop: { id: 'ai.deepseek.zephyr.custom-next', name: 'Zephyr Custom' },
   dataDir: 'xdg',
-  build: { outDir: 'out' },
 };
 `;
 
@@ -21,6 +20,19 @@ describe("工作区配置", () => {
     expect(resolved.clientEntry).toBe(`${workspace}/src/client/index.html`);
     expect(resolved.layout.root).toBe(`${workspace}/out`);
     expect(resolved.appName).toBe("Zephyr Custom");
+  });
+
+  it("没写 server.outputDir 就落 target/<应用名>", async () => {
+    const workspace = await tempWorkspace({
+      "zephyr.config.ts": `export default {
+  server: { entry: './src/server.ts' },
+  client: { entry: './src/client/index.html' },
+  desktop: { id: 'ai.deepseek.zephyr.demo', name: 'Demo' },
+};
+`,
+    });
+    const resolved = await loadConfig({ cwd: workspace });
+    expect(resolved.layout.root).toBe(`${workspace}/target/Demo`);
   });
 
   it("没有配置就是错误，不回落（清单是唯一装配面）", async () => {

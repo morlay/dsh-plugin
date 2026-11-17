@@ -560,12 +560,13 @@ export async function moduleKindOf(entry: string): Promise<ModuleKind> {
 }
 
 /**
- * CSS 入口的包装：**样式文件不能直接当入口**——vite 的库模式固定 `cssCodeSplit: false`，遇到
- * `rolldownOptions.input` 里有 `.css` 直接报错。包一层 side-effect import，让样式插件按它一贯的方式
- * 把它编成"注入 `<style>`"的模块。
+ * rolldown 给**内联的 CJS 模块**打的那行路径注释（`// ../../packages/…/x.cjs`）。
  *
- * @returns 包装文件路径；入口不是 CSS 时 undefined。
+ * 判定要窄：只认「整行就一个 `//` + 相对路径 + 已知扩展名」。放宽会把源码里真的注释也删掉，
+ * 而这是产物整形，不该动语义。
  */
+const PATH_COMMENT = /^\/\/ (?:\.\.[/\\])+[^\n]*\.[cm]?[jt]s$/u;
+
 /**
  * CJS 入口的**具名导出包装**（`react` / `@xterm/xterm` 这类）。
  *
@@ -632,6 +633,13 @@ export function rewriteCssImports(css: string, versions: Map<string, string>): s
   );
 }
 
+/**
+ * CSS 入口的包装：**样式文件不能直接当入口**——vite 的库模式固定 `cssCodeSplit: false`，遇到
+ * `rolldownOptions.input` 里有 `.css` 直接报错。包一层 side-effect import，让样式插件按它一贯的方式
+ * 把它编成"注入 `<style>`"的模块。
+ * @param options - 出口名、CSS 入口与产物目录。
+ * @returns 包装文件路径；入口不是 CSS 时 undefined。
+ */
 async function cssShimOf(options: {
   exportName: string;
   entry: string;
@@ -927,6 +935,11 @@ async function bundlePackageOnce(
     // interop auto 让 `module.exports = require(… )` 这类入口同时保留 default 与具名导出。
     exports: "named",
     format: "es",
+    // **不保留注释**：rolldown 给内联的 CJS 模块会打一行 `// <相对源文件路径>`
+    // （`node:*` 的替身就是 `.cjs`，于是产物里出现 `// ../../packages/zephyr/zephyr-dev/src/node-stub/…`）。
+    // 那是**构建机的目录布局**：产物要整目录分发，里面不该有构建仓库的路径。
+    // 取值 `false` 而不是对象：对象只控 legal / annotation / jsdoc 三类，挡不住这种普通行注释。
+    comments: false,
     // 出口名可以含 `/`（子路径出口：`helpers/decorate`），rolldown 会建父目录。
     entryFileNames: "[name].js",
     // 拆出来的块落**自己的前缀**（与资产 `assets/` 并列）：它们不是"包的出口"——出口名要回源码里找目标，
@@ -935,6 +948,23 @@ async function bundlePackageOnce(
     // 资产统一落在 `assets/` 下、带内容 hash：路由按这个前缀把它们当文件吐，
     // 出口产物与资产不混在一个命名空间里。
     assetFileNames: "assets/[name]-[hash][extname]",
+    // **产物里不留构建机路径**：rolldown 给内联的 CJS 模块打一行 `// <相对源文件路径>`，而 `node:*`
+    // 的替身就是 `.cjs`——产物里于是出现 `// ../../packages/zephyr/zephyr-dev/src/node-stub/…`。
+    // 那是**构建机的目录布局**：产物要整目录分发（一条判据就是「产物里 grep 不到构建器的包名」），
+    // 里面不该有仓库路径。`comments: false` 挡不住这一行（它不是 legal / annotation / jsdoc 三类），
+    // 只能在 `renderChunk` 里按形状删。
+    plugins: [
+      {
+        name: "dsh-strip-path-comments",
+        renderChunk(code: string) {
+          const kept = code
+            .split("\n")
+            .filter((line) => !PATH_COMMENT.test(line.trim()))
+            .join("\n");
+          return kept === code ? null : { code: kept, map: null };
+        },
+      },
+    ],
     // 外置说明符 → 联邦地址（`/_zephyr/@modules/<pkg>@<ver>/…`）。
     paths: (id: string) =>
       urlOf(id, {

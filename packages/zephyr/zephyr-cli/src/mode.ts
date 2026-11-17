@@ -15,6 +15,13 @@ export interface CliModeValues {
   readonly profileDir: string;
   /** 已解析的数据目录（`$DSH_HOME`），绝对路径。 */
   readonly dataDir: string;
+  /**
+   * 新会话 / agent 的起始目录（从哪个项目目录开始干活）。
+   *
+   * **与 `profileDir` 是两件事**：打包形态的 `profileDir` 是只读的 `Resources/runtime`，
+   * agent 不该在那儿干活；这个值才是「用户从哪启动的」。省略时由 `AppEnv` 回落到 `profileDir`。
+   */
+  readonly defaultWorkingDirectory?: string;
   /** 数据目录的原始写法（`workspace` / `xdg` / 绝对路径）。 */
   readonly dataDirSpec: string;
   /** 配置文件绝对路径。 */

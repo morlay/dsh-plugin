@@ -3,6 +3,7 @@
 // 这条钉的是"等空闲"本身：有在途调用时重载，那条请求会拿到半新半旧的对象图。
 // 第二条轴是**契约形态**：`ServerHmr` 是 `DevHmr` 的实现，`install` 之后 `notify` 要能调到
 // hooks 里的 `restart`，并且变更来源走 `ClientAssets.onServerSourceChange`（不在这里重复桥一遍）。
+// 第三条轴是**忙碌判据的来源**：域登记的 `IdleGuard` 说忙就等（装配面不交这份知识）。
 import { ServerHmr } from "../internal/server-hmr.ts";
 import { ClientAssets, DevHmr } from "@morlay/zephyr-app";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +18,8 @@ function hmrWith(inFlight: () => number): ServerHmr {
     mux: { inFlight },
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
     clientAssets: { onServerSourceChange: () => () => {} },
+    // 各域的忙碌判据：本文件在需要时自己塞实现（默认一条都没有 = 空闲）。
+    guards: [],
   });
   return hmr;
 }
@@ -70,7 +73,7 @@ describe("ServerHmr", () => {
     const hmr = hmrWith(() => busy);
     const { assets, fire } = assetsThatReport();
     Object.assign(hmr as unknown as Record<string, unknown>, { clientAssets: assets });
-    hmr.install({ restart, isIdle: () => busy === 0 });
+    hmr.install({ restart });
     fire("b.ts");
     await wait(POLL_MS * 4);
     expect(restart, "忙的时候不许换树").not.toHaveBeenCalled();
@@ -104,11 +107,12 @@ describe("ServerHmr", () => {
     await restartedTimes(restart, 1);
   });
 
-  it("业务层说忙也要等（`isIdle`）", async () => {
+  it("域登记的 `IdleGuard` 说忙也要等", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 0);
     let idle = false;
-    hmr.install({ restart, isIdle: () => idle });
+    Object.assign(hmr as unknown as Record<string, unknown>, { guards: [{ isIdle: () => idle }] });
+    hmr.install({ restart });
     hmr.notify("a.ts");
     await wait(POLL_MS * 4);
     expect(restart, "agent 还在跑时不许换树").not.toHaveBeenCalled();

@@ -13,8 +13,7 @@ import type { ParamSpecs } from "../params.ts";
 export class BuildCommand extends Command {
   readonly path = ["build"];
 
-  readonly description =
-    "产出静态面与运行时闭包（缺省 node_modules/.zephyr；preview 与桌面打包都吃它）";
+  readonly description = "产出一份可分发应用（server.outputDir；preview 与桌面打包都吃它）";
 
   readonly params: ParamSpecs = {};
 
@@ -40,7 +39,7 @@ export class BuildCommand extends Command {
         step.detail === undefined ? "" : `  ${step.detail}`,
       );
     }
-    this.logger.info("[build] 完成：%s", summary.dist);
+    this.logger.info("[build] 完成：%s", summary.outputDir);
     return 0;
   }
 }

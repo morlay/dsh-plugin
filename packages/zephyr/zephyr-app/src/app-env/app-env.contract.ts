@@ -4,7 +4,7 @@
 // 业务包要落盘路径这类部署值，正确做法是装配面 `configure(X, { root })` 喂进去，而不是读全局 env。
 //
 // 这里只放**两种形态都成立**的事实：数据根、装配根、起始目录、缓存根。
-// 开发态专属的路径（页面骨架在哪、按包的产物缓存落在哪一层）不在这里——它们住 `@morlay/zephyr-dev`。
+// 开发态专属的路径（页面骨架在哪、按包的产物缓存落在哪一层）不在这里——它们住开发运行时那个包。
 import { join } from "node:path";
 import { Injectable } from "@morlay/zephyr";
 
@@ -53,7 +53,7 @@ export abstract class AppEnv {
    * 这里认识具体名字就等于把某个形态的知识塞进运行时契约。
    *
    * 具体方法而不是抽象成员：各包的 `FakeAppEnv` 只覆盖字段，不该为一条路径规则各写一遍实现。
-   * @param namespace - 用途（调用方自己定义，如 `@morlay/zephyr-dev` 的 `client-modules`）。
+   * @param namespace - 用途（调用方自己定义，如前端产物链的 `client-modules`）。
    * @returns 该用途的缓存根。
    */
   cacheDirOf(namespace: string): string {

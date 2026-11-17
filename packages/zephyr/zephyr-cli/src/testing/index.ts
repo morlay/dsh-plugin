@@ -31,27 +31,28 @@ export async function tempWorkspace(files: Readonly<Record<string, string>>): Pr
 export function resolvedFor(options: {
   readonly workspace: string;
   readonly appName?: string;
-  readonly outDir?: string;
+  readonly outputDir?: string;
 }): ResolvedConfig {
-  const layout = layoutOf(options.workspace, options.outDir);
+  const appName = options.appName ?? "zephyr-app";
+  const layout = layoutOf(options.workspace, options.outputDir, appName);
   return {
-    config: { server: { entry: "./src/server.ts" }, client: { entry: "./src/client/index.tsx" } },
+    config: { server: { entry: "./src/server.ts" }, client: { entry: "./src/client/index.html" } },
     configFile: join(options.workspace, "zephyr.config.ts"),
     workspace: options.workspace,
     layout,
     serverEntry: join(options.workspace, "src/server.ts"),
-    clientEntry: join(options.workspace, "src/client/index.tsx"),
-    appName: options.appName ?? "zephyr-app",
+    clientEntry: join(options.workspace, "src/client/index.html"),
+    appName,
   };
 }
 
-/** 记录调用的三步替身：不做任何外部动作。 */
+/** 记录调用的三步替身（前端静态目录 / 运行时闭包 / 生产态装配）：不做任何外部动作。 */
 export function fakeBuildSteps(): BuildSteps & { readonly calls: BuildInput[] } {
   const calls: BuildInput[] = [];
   const record = async (input: BuildInput): Promise<void> => {
     calls.push(input);
   };
-  return { calls, client: record, runtime: record, entry: record, prebundle: record };
+  return { calls, client: record, runtime: record, entry: record };
 }
 
 /**

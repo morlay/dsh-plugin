@@ -2,17 +2,29 @@ import { describe, expect, it } from "vitest";
 import { layoutOf } from "../layout.ts";
 
 describe("产物布局", () => {
-  it("三样可整体删除的东西收进 node_modules/.zephyr", () => {
-    const layout = layoutOf("/w");
-    expect(layout.root).toBe("/w/node_modules/.zephyr");
-    expect(layout.dist).toBe("/w/node_modules/.zephyr/dist");
-    expect(layout.runtime).toBe("/w/node_modules/.zephyr/runtime");
-    expect(layout.cache).toBe("/w/node_modules/.zephyr/cache");
-    expect(layout.entry).toBe("/w/node_modules/.zephyr/runtime/entry.mjs");
+  it("缺省落 target/<应用名>，五样东西各有其位", () => {
+    const layout = layoutOf("/w", undefined, "Zephyr Custom");
+    expect(layout.root).toBe("/w/target/Zephyr Custom");
+    expect(layout.clientModules).toBe("/w/target/Zephyr Custom/client_modules");
+    expect(layout.nodeModules).toBe("/w/target/Zephyr Custom/node_modules");
+    expect(layout.serverEntry).toBe("/w/target/Zephyr Custom/src/server.ts");
+    expect(layout.bootstrap).toBe("/w/target/Zephyr Custom/bootstrap.mjs");
+    expect(layout.manifest).toBe("/w/target/Zephyr Custom/package.json");
   });
 
-  it("配置可以换产物根", () => {
-    expect(layoutOf("/w", "out").root).toBe("/w/out");
-    expect(layoutOf("/w", "/abs/out").root).toBe("/abs/out");
+  it("没给应用名就用工作区目录名", () => {
+    expect(layoutOf("/w/my-app").root).toBe("/w/my-app/target/my-app");
+  });
+
+  it("server.outputDir 换产物根（相对配置文件或绝对）", () => {
+    expect(layoutOf("/w", "out", "Demo").root).toBe("/w/out");
+    expect(layoutOf("/w", "/abs/out", "Demo").root).toBe("/abs/out");
+  });
+
+  it("旧的 dist / runtime / entry / cache 不再是布局的一部分（可分发的一份应用里没有它们）", () => {
+    const layout = layoutOf("/w", undefined, "Demo") as unknown as Record<string, unknown>;
+    for (const gone of ["dist", "runtime", "entry", "cache"]) {
+      expect(layout[gone], gone).toBeUndefined();
+    }
   });
 });

@@ -6,6 +6,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Injectable } from "@morlay/zephyr";
 
+/**
+ * 联邦产物的地址前缀：`/_zephyr/@modules/<pkg>@<ver>/<file>`（开发态与生产态同一段）。
+ *
+ * 它是**地址空间**的事实，归契约：生产态的实现（静态目录投递）与页面兜底都按同一段认路径，
+ * 各写一份就等于把一个地址两处定义。
+ */
+export const CLIENT_MODULES_PREFIX = "/_zephyr/@modules";
+
 @Injectable()
 export abstract class ClientAssets {
   /**

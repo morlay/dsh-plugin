@@ -95,16 +95,18 @@ async function execute(
   const commandTokens =
     workspaceArg === undefined ? scanned.positionals : scanned.positionals.slice(0, -1);
   const dataDirSpec = scanned.dataDir ?? resolved.config.dataDir ?? "workspace";
-  // 形态决定装配根：build/preview 跑在闭包上，dev（以及插件自己的命令）跑在源码树上。
+  // 形态决定装配根：build/preview 跑在产物上（`<outputDir>`），dev（以及插件自己的命令）跑在源码树上。
   const profileDir =
     commandTokens[0] === "build" || commandTokens[0] === "preview"
-      ? resolved.layout.runtime
+      ? resolved.layout.root
       : resolved.workspace;
   const mode: CliModeValues = {
     command: commandTokens,
     workspace: resolved.workspace,
     profileDir,
     dataDir: resolveDataDir({ spec: dataDirSpec, profileDir, appName: resolved.appName }),
+    // 起始目录是「用户从哪个目录起的」，与装配根分开（打包形态两者不同，见 `CliModeValues`）。
+    defaultWorkingDirectory: io.cwd,
     dataDirSpec,
     configFile: resolved.configFile,
     ...(scanned.port === undefined ? {} : { port: scanned.port }),

@@ -27,7 +27,6 @@ export { provideCli, type ProvideCliOptions } from "./provide.ts";
 export { CONFIG_FILENAME, loadConfig } from "./config/load.ts";
 export { Workspace, type ResolvedConfig, type ZephyrConfig } from "./config/contract.ts";
 export type {
-  ZephyrBuildConfig,
   ZephyrClientConfig,
   ZephyrDesktopConfig,
   ZephyrServerConfig,
@@ -35,17 +34,19 @@ export type {
 export { layoutOf, type ZephyrLayout } from "./layout.ts";
 export { resolveDataDir, type DataDirContext, type DataDirSpec } from "./data-dir.ts";
 export {
+  assembleEntry,
+  bootstrapSourceOf,
   BuildSteps,
   buildClient,
   buildRuntime,
-  bundleEntry,
   defaultBuildSteps,
+  resetClosure,
   runBuild,
+  smokeClosure,
   type BuildInput,
   type BuildStep,
   type BuildSummary,
 } from "./build/builder.ts";
-export { DevLifecycle, type DevLifecycleHooks } from "./dev-lifecycle.ts";
 export { loadServerProviders, type ServerProviders } from "./server-entry.ts";
 export { CliLogger, isLogLevel, LOG_LEVELS, type LogLevel } from "./logger.ts";
 export { GLOBAL_PARAMS, runCli, type CliStreams, type RunOptions } from "./run.ts";

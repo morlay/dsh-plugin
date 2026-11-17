@@ -9,6 +9,14 @@ import type { ZephyrLayout } from "../layout.ts";
 export interface ZephyrServerConfig {
   /** 相对配置文件或绝对路径。 */
   readonly entry: string;
+  /**
+   * 产物根：相对配置文件或绝对路径；缺省 `target/<应用名>/`。
+   *
+   * 产物是「可分发的一份应用」（设计决定 3）：落哪归应用配置，与 vite 的 `build.outDir` 同一习惯。
+   * 它的形状见 {@link ZephyrLayout}：`client_modules/` / `node_modules/` / `src/server.ts` /
+   * `bootstrap.mjs` / `package.json`。
+   */
+  readonly outputDir?: string;
 }
 
 /** 客户端入口：**页面那一个文件**（vite 的 `root` 是它的目录、`input` 是它自己）。 */
@@ -44,12 +52,6 @@ export interface ZephyrDesktopConfig {
   };
 }
 
-/** 构建产物位置。 */
-export interface ZephyrBuildConfig {
-  /** 产物根，缺省 `node_modules/.zephyr`；相对配置文件或绝对。 */
-  readonly outDir?: string;
-}
-
 /**
  * 一份工作区配置。
  *
@@ -62,7 +64,6 @@ export interface ZephyrConfig {
   readonly desktop?: ZephyrDesktopConfig;
   /** 数据目录三态：`workspace`（缺省，`<profileDir>/.dsh-store`）/ `xdg` / 绝对路径。 */
   readonly dataDir?: string;
-  readonly build?: ZephyrBuildConfig;
   /** 追加到 CLI 命令树的插件清单。 */
   readonly plugins?: ProviderList;
 }
@@ -81,7 +82,7 @@ export interface ResolvedConfig {
   /** 客户端入口绝对路径（页面 `index.html`）。 */
   readonly clientEntry: string;
 
-  /** 应用名（`xdg` 数据目录用；取 `desktop.name` 或工作区目录名）。 */
+  /** 应用名（产物根的缺省目录名与 `xdg` 数据目录都用它；取 `desktop.name` 或工作区目录名）。 */
   readonly appName: string;
 }
 

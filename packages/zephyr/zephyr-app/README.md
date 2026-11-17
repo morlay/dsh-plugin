@@ -4,7 +4,7 @@
 
 运行期语义全归 cordis（见 [`@morlay/zephyr` 的接口定义](../zephyr/.agents/designs/20261104-zephyr-是-cordis-plugin-的语法糖.md)）：本包只提供契约、`XxxDefault` 实现与**域装配函数**，不持有自己的服务表或作用域。
 
-**开发态的一切不在这里**：vite、联邦预编译、页面兜底（`/@fs` 与 HMR 注入）、服务端换树，连 `@oxc-project/runtime` 这种 node 侧补强也不在——它们住 [`@morlay/zephyr-dev`](../zephyr-dev/README.md) 与 [`@morlay/dsh-oxc-node`](../../boot/dsh-oxc-node/README.md)。
+**开发态的一切不在这里**：vite、联邦预编译、页面兜底（`/@fs` 与 HMR 注入）、服务端换树，连 `@oxc-project/runtime` 这种 node 侧补强也不在——它们住**开发运行时与构建器**那个包 [`@morlay/zephyr-dev`](../zephyr-dev/README.md)（命令行工具的依赖）与 [`@morlay/dsh-oxc-node`](../../boot/dsh-oxc-node/README.md)。
 
 判据是**依赖清单**，不是注释：`src/__tests__/dev-deps-absent.spec.ts` 断言 `dependencies` / `devDependencies` / `peerDependencies` 里都没有 vite / chokidar / lightningcss / rolldown / `@oxc-project/runtime`。
 
@@ -28,19 +28,20 @@ await bootstrapClient({ providers: [...provideClientChain(), ...provideSessions(
   `profileDir` 是**装配根**（`package.json`、依赖解析、产物根），`defaultWorkingDirectory` 是**新会话 / agent 的起始目录**——
   打包形态下前者是包内只读的 `Resources/runtime`，agent 不该在那儿干活，所以两者不能合并成一条路径。
 - **`AppEnv` 只放两种形态都成立的事实**：开发态专属的路径（页面骨架在哪、vite 的 root）不在这里，
-  由 `zephyr-dev` 从 `profileDir` 自己推。
+  由开发运行时从 `profileDir` 自己推。
 - **remote 面不在装配方的配置里**：谁装了某个 remote 的宿主行，谁在自己的 `provideXxx()` 里用 `remoteDescriptor("<namespace>")` 登记一条（多值令牌 `RemoteDescriptor`）；开发运行时的 `ClientModulesDefault` 用 `inject.all(RemoteDescriptor)` 聚合后 `$mount`。新增一个 remote 只改提供方，装配面零改动。
 
-## 两条空契约
+## 三条空契约
 
 形态问题不进运行时，这里只声明缝，实现在谁那儿归谁：
 
-| 契约           | 签名                                                                       | dev 的实现                         | prod 的实现         |
-| -------------- | -------------------------------------------------------------------------- | ---------------------------------- | ------------------- |
-| `ClientAssets` | `serve(req, res)` / `transformHtml(html)` / `hmr` / `onServerSourceChange` | `zephyr-dev` 的 `ViteClientAssets` | 静态目录（T3 落地） |
-| `DevHmr`       | `install({ isIdle?, restart })`                                            | `zephyr-dev` 的 `ServerHmr`        | 不装                |
+| 契约           | 签名                                                                       | dev 的实现                            | prod 的实现                                            |
+| -------------- | -------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------ |
+| `ClientAssets` | `serve(req, res)` / `transformHtml(html)` / `hmr` / `onServerSourceChange` | 开发运行时的 vite 实现                | `StaticClientAssets`（读 `client_modules/`，只投文件） |
+| `DevHmr`       | `install({ restart })`（「忙不忙」由 `IdleGuard` 汇总，不在这里传）        | 开发运行时的 `ServerHmr`              | 不装                                                   |
+| `IdleGuard`    | `isIdle()`（**多值**令牌）                                                 | 各域自己装（`dsh-agent` / `dsh-job`） | 不装                                                   |
 
-**只声明、不含实现**。生产形态装的是 T3 随产物布局落地的静态目录投递——同样不引构建链。
+`ClientAssets` 的两端分在两头：dev 实现要 vite（构建链，在开发运行时那个包），prod 实现 `StaticClientAssets` 只投文件（在本包，见 `src/client-assets/`）。
 
 ## 装配顺序（client 半）
 
@@ -64,7 +65,7 @@ ConfigForms（必需前置：SettingsHost 或 ConfigFormsInMemory）
 
 长期观测（不是调试探针），都走 `inject(Logger)`（`Logger` 的值就是 cordis 的 `ctx.logger`）：
 
-- `ClientModulesDefault`（在 `zephyr-dev`）在装配收尾打印路由表（`[routes] <kind> <path>`）——只有它知道路由是否都注册完了。
+- 开发运行时的路由装配在收尾打印路由表（`[routes] <kind> <path>`）——只有它知道路由是否都注册完了。
 - `ConnectionDefault` 在 `rpc.intercept` 上包一层，打印 `[rpc] <channel>`。
 - `LoggerExporterDefault` 把 `ctx.logger` 接到 stdout（cordis 默认只把消息留在内存里）；严重级别落 stderr。
 

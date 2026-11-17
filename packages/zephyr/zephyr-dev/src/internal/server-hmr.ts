@@ -7,12 +7,13 @@
 // 为什么必须等空闲：有在途调用时换树，那条请求会拿到半新半旧的对象图（前半段用旧实例、后半段用新实例）。
 // "空闲"的判据分两层：
 //   - **传输层**：`MuxServer.inFlight()` 为 0（没有 unary 在跑、没有开着的流）；
-//   - **业务层**：调用方给的 `isIdle` 也说空闲（例如没有正在跑的 agent turn）。
+//   - **各域**：登记到 `IdleGuard` 的每一条都说空闲（agent 没有开着的 turn、后台任务都收了尾）。
+//     装配面不交这份知识——某个令牌算不算「忙」只有那个域自己知道。
 //
 // 变更**来源**不在这里：谁服务前端资产（dev 的 vite）谁知道哪些文件该触发换树，
 // 所以订阅的是 `ClientAssets.onServerSourceChange`，本行只负责"等空闲、换树"。
 import { inject, Injectable, Logger, type OnDispose } from "@morlay/zephyr";
-import { ClientAssets, DevHmr, MuxServer, type DevHmrHooks } from "@morlay/zephyr-app";
+import { ClientAssets, DevHmr, IdleGuard, MuxServer, type DevHmrHooks } from "@morlay/zephyr-app";
 
 /** 调度参数（装配面经 `configure` 或构造参数给）。 */
 export interface ServerHmrOptions {
@@ -40,6 +41,14 @@ export class ServerHmr extends DevHmr implements OnDispose {
    * 契约的**必需**前置只对 `ServeDefault` 成立——没有资产就没有页面，但没有资产照样可以换树。
    */
   private readonly clientAssets = inject.optional(ClientAssets);
+
+  /**
+   * 各域的忙碌判据：一条都没有就是空闲（生产形态没人装实现，那条路上也不会换树）。
+   *
+   * 不判空数组以外的东西：`inject.all` 在没装实现时给空数组；没走容器直接 `new` 的实例上它是
+   * 占位对象，所以下面判 `Array.isArray`——与 `clientAssets` 那条同一个理由。
+   */
+  private readonly guards = inject.all(IdleGuard);
 
   /** 这一轮累积的待重载文件（同一批变化合并）。 */
   private readonly pending = new Set<string>();
@@ -114,7 +123,7 @@ export class ServerHmr extends DevHmr implements OnDispose {
     const tick = (): void => {
       this.timer = undefined;
       if (this.pending.size === 0 || this.hooks === undefined) return;
-      const busy = this.mux.inFlight() > 0 || this.hooks.isIdle?.() === false;
+      const busy = this.isBusy();
       if (busy && Date.now() < deadline) {
         this.timer = setTimeout(tick, pollMs);
         return;
@@ -130,6 +139,16 @@ export class ServerHmr extends DevHmr implements OnDispose {
       });
     };
     this.timer = setTimeout(tick, pollMs);
+  }
+
+  /**
+   * 现在能不能换树：传输层与各域都说空闲才行。
+   * @returns 忙为 `true`。
+   */
+  private isBusy(): boolean {
+    if (this.mux.inFlight() > 0) return true;
+    const guards = this.guards;
+    return Array.isArray(guards) && guards.some((guard) => guard.isIdle() === false);
   }
 
   /**

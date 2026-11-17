@@ -1,23 +1,24 @@
-// 构建：**三步**——静态面、运行时闭包、入口 bundle。
+// 构建：**三步**——前端静态目录、运行时闭包、生产态装配。
 //
-// 三步都是外部动作（vite / pnpm / rolldown）。它们不装配任何清单：构建的输入是「布局 + 解析规则」，
-// 不是运行期行树——装一棵树只为拿一个构建器，会顺手把服务起起来、把库打开，代价与收益不成比例。
+// 三步都是外部动作（联邦预编译 / pnpm / 复制与写文件）。它们不装配任何清单：构建的输入是
+// 「布局 + 解析规则」，不是运行期行树——装一棵树只为拿一个构建器，会顺手把服务起起来、
+// 把库打开，代价与收益不成比例。
 //
-// 解析规则（alias / define / 装饰器）住框架层，由应用在 `client.vite` 指的配置文件里转手一次；
-// CLI 只负责把 `outDir` 与入口喂给 vite。
+// **不打包 node 侧**（设计决定 8）：闭包里本来就有 loader（`@morlay/dsh-oxc-node`），
+// `src/server.ts` 原样复制过去、由 loader 直接跑，少一次 rolldown，也让 stack trace 指向真实文件。
+//
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire as createRequireOf } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { InjectionToken } from "@morlay/zephyr";
+import { compile } from "@morlay/zephyr-dev";
 import type { ResolvedConfig } from "../config/contract.ts";
 import { CliError } from "../errors.ts";
 import type { ZephyrLayout } from "../layout.ts";
-import { cacheRootOf, compile } from "@morlay/zephyr-dev";
-import { resolveDataDir } from "../data-dir.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,8 +28,6 @@ export interface BuildInput {
   readonly resolved: ResolvedConfig;
   /** 产物布局。 */
   readonly layout: ZephyrLayout;
-  /** `--no-prebundle`：跳过第四步（快速迭代用；preview 会因此报错）。 */
-  readonly prebundle?: boolean;
 }
 
 /** 一步的结果。 */
@@ -44,18 +43,18 @@ export interface BuildStep {
 /** 一次构建的结果。 */
 export interface BuildSummary {
   readonly steps: readonly BuildStep[];
-  readonly dist: string;
-  readonly runtime: string;
-  readonly entry: string;
+  /** 产物根（整目录可分发）。 */
+  readonly outputDir: string;
 }
 
 /** 三步的集合：命令只负责编排与汇总，动作在这里（单测替换成替身即可判编排）。 */
 export interface BuildSteps {
+  /** 第一步：应用 client 图 → `client_modules/`（含 `index.html`）。 */
   readonly client: (input: BuildInput) => Promise<void>;
+  /** 第二步：`pnpm deploy --prod` → `node_modules/`。 */
   readonly runtime: (input: BuildInput) => Promise<void>;
+  /** 第三步：复制 `src/server.ts`、写清单与 `bootstrap.mjs`、删 `src/client`。 */
   readonly entry: (input: BuildInput) => Promise<void>;
-  /** 第四步：前端预编译（把静态面里出现的联邦产物一次打出来）。 */
-  readonly prebundle: (input: BuildInput) => Promise<void>;
 }
 
 /** 三步的值令牌。 */
@@ -66,8 +65,7 @@ export function defaultBuildSteps(): BuildSteps {
   return {
     client: buildClient,
     runtime: buildRuntime,
-    entry: bundleEntry,
-    prebundle: buildPrebundle,
+    entry: assembleEntry,
   };
 }
 
@@ -75,35 +73,29 @@ export function defaultBuildSteps(): BuildSteps {
  * 按顺序跑三步并汇总。
  * @param input - 工作区配置与布局。
  * @param steps - 三步的实现（缺省是真实动作）。
- * @returns 每步的耗时与产出位置。
+ * @returns 每步的耗时与产物根。
  */
 export async function runBuild(
   input: BuildInput,
   steps: BuildSteps = defaultBuildSteps(),
 ): Promise<BuildSummary> {
   const collected: BuildStep[] = [];
+  // 产物整目录重建（设计决定 3）：上一次留下的东西一律不留，连着跑两次结果一致。
   await rm(input.layout.root, { recursive: true, force: true });
-  await mkdir(input.layout.dist, { recursive: true });
-  await mkdir(input.layout.cache, { recursive: true });
+  await mkdir(input.layout.clientModules, { recursive: true });
 
   for (const [name, action] of [
-    ["静态面", steps.client],
+    ["前端静态目录", steps.client],
     ["运行时闭包", steps.runtime],
-    ["入口 bundle", steps.entry],
-    ...(input.prebundle === false ? [] : ([["前端预编译", steps.prebundle]] as const)),
+    ["生产态装配", steps.entry],
   ] as const) {
     const startedAt = Date.now();
     await action(input);
     collected.push({ name, ms: Date.now() - startedAt, detail: detailOf(name, input) });
   }
-  // 三步都完成才冒烟：入口 bundle 是第三步的产物，前两步跑完时它还不存在。
+  // 三步都完成才冒烟：`bootstrap.mjs` 是第三步的产物，前两步跑完时它还不存在。
   await smokeClosure(input.layout);
-  return {
-    steps: collected,
-    dist: input.layout.dist,
-    runtime: input.layout.runtime,
-    entry: input.layout.entry,
-  };
+  return { steps: collected, outputDir: input.layout.root };
 }
 
 /**
@@ -113,161 +105,24 @@ export async function runBuild(
  * @returns 位置。
  */
 function detailOf(name: string, input: BuildInput): string {
-  if (name === "静态面") return input.layout.dist;
-  if (name === "运行时闭包") return input.layout.runtime;
-  return input.layout.entry;
+  if (name === "前端静态目录") return input.layout.clientModules;
+  if (name === "运行时闭包") return input.layout.nodeModules;
+  return input.layout.bootstrap;
 }
 
 /**
- * 静态面：`vite build`。
+ * 第一步：前端产物 → `<outputDir>/client_modules`（静态目录，设计决定 5）。
  *
- * 给了 `client.vite` 就用应用侧那份配置文件——解析规则（alias / define / 装饰器）住框架层，
- * 由应用转手，CLI 不复制它们。`outDir` 与入口仍由 CLI 给：那是「产物落在哪」的约定。
+ * 算法全在 `@morlay/zephyr-dev` 的 `compile()`（枚举清单、断言已知包、打包与落盘都只有一份）；
+ * 这里只把**产物落点**给它——dev 与 build 是同一语义、只换目录（设计决定 7）。
  * @param input - 工作区配置与布局。
  */
 export async function buildClient(input: BuildInput): Promise<void> {
-  const vite = (await import("vite")) as { build: (config: unknown) => Promise<unknown> };
-  const inline = (input.resolved.config.client.vite ?? {}) as {
-    readonly build?: { readonly rollupOptions?: Record<string, unknown> };
-  };
-  await vite.build({
-    // 不读项目里的 `vite.config.*`：配置只有一份（`zephyr.config.ts` 的 `client.vite`）。
-    configFile: false,
-    ...inline,
-    root: dirname(input.resolved.clientEntry),
-    cacheDir: input.layout.cache,
-    logLevel: "warn",
-    plugins: input.resolved.config.client.plugins ?? [],
-    build: {
-      ...inline.build,
-      outDir: input.layout.dist,
-      emptyOutDir: true,
-      // 入口就是页面：vite 在这条路上产出 index.html 并把模块脚本注入进去。
-      rollupOptions: {
-        ...inline.build?.rollupOptions,
-        input: input.resolved.clientEntry,
-      },
-    },
-  });
-}
-
-/**
- * 运行时闭包：`pnpm deploy --prod` 到 `runtime/`。
- *
- * `strictDepBuilds=false`：deploy 会在目标目录重装一次，工作区里批准的构建脚本不会自动跟过去；
- * 不放开这一条，闭包会停在 `ERR_PNPM_IGNORED_BUILDS` 上。
- * @param input - 工作区配置与布局。
- */
-export async function buildRuntime(input: BuildInput): Promise<void> {
-  const manifest = JSON.parse(
-    await readFile(join(input.resolved.workspace, "package.json"), "utf8"),
-  ) as { name?: string };
-  const name = manifest.name ?? basename(input.resolved.workspace);
-  // `pnpm deploy` 要求目标目录**不存在或为空**（否则 `ERR_PNPM_DEPLOY_DIR_NOT_EMPTY`）：
-  // 上一次构建留下的闭包必须先清掉，连续构建才是幂等的。
-  await resetRuntime(input.layout);
-  try {
-    await execFileAsync(
-      "pnpm",
-      [
-        "--filter",
-        name,
-        // workspace 依赖按**内容**装进闭包（不留一条指回源码的 `file:` 链接）：命令行覆盖
-        // `pnpm-workspace.yaml` 的 `linkWorkspacePackages: true`，配置文件一行不动。
-        "--config.inject-workspace-packages=true",
-        "deploy",
-        "--prod",
-        // deploy 会在目标目录重装一次，工作区里批准的构建脚本不会自动跟过去。
-        "--config.strictDepBuilds=false",
-        input.layout.runtime,
-      ],
-      { cwd: input.resolved.workspace },
-    );
-  } catch (error) {
-    throw new CliError(
-      `运行时闭包失败（pnpm --filter ${name} deploy --prod）：${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/**
- * 闭包冒烟：**把闭包复制到仓库外**再用 loader 加载 `entry.mjs`。
- *
- * 必须在仓外：在仓库内加载时，Node 会顺着目录往上找到工作区自己的 `node_modules`，
- * 把"闭包里缺这个包"变成"仓库里有"——这正是 bundle 之后才炸的那类静默失败。
- * 闭包不存在就跳过：装配级用例（`runBuild` 配假 steps）与 `--ignore-scripts` 之类的空跑都没有真闭包，
- * 那一步冒烟没有意义——「没东西可冒烟」不等于「冒烟失败」。
- * @param layout - 产物布局。
- * @returns `skipped`（没有闭包或没有入口）或 `ok`（真加载过）。
- */
-export async function smokeClosure(layout: ZephyrLayout): Promise<"skipped" | "ok"> {
-  const present = await Promise.all(
-    [layout.runtime, layout.entry].map((path) =>
-      stat(path).then(
-        () => true,
-        () => false,
-      ),
-    ),
-  );
-  if (present.includes(false)) return "skipped";
-  const sandbox = await mkdtemp(join(tmpdir(), "zephyr-closure-"));
-  try {
-    await cp(layout.runtime, sandbox, { recursive: true, verbatimSymlinks: true });
-    const loader = createRequireOf(import.meta.url).resolve("@morlay/dsh-oxc-node");
-    const entry = pathToFileURL(join(sandbox, "entry.mjs")).href;
-    await execFileAsync(
-      process.execPath,
-      ["--import", loader, "--input-type=module", "-e", `await import(${JSON.stringify(entry)})`],
-      {
-        cwd: sandbox,
-        // 摘掉工作区的 `nodeOptions`（`--import @oxc-node/core/register`）：那份 loader 只装在仓库里，
-        // 闭包里没有它；闭包的 loader 由上面的 `--import` 显式给。
-        env: { ...process.env, NODE_OPTIONS: "" },
-        timeout: 180_000,
-        maxBuffer: 8 * 1024 * 1024,
-      },
-    );
-    return "ok";
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new CliError(
-      `运行时闭包不自包含（${layout.runtime} 复制到仓库外就加载不起来）：\n` +
-        `${detail.split("\n").slice(0, 8).join("\n")}\n` +
-        "多半是某个包 import 了没声明成 dependencies 的包（devDependencies 会被 --prod 剔掉）。",
-    );
-  } finally {
-    await rm(sandbox, { recursive: true, force: true });
-  }
-}
-
-/**
- * 清空运行时闭包目录（deploy 只接受空目录）。
- * @param layout - 产物布局。
- */
-export async function resetRuntime(layout: ZephyrLayout): Promise<void> {
-  await rm(layout.runtime, { recursive: true, force: true });
-}
-
-/**
- * 第四步：前端预编译——`compile()` 的**薄壳**。
- *
- * 算法全在 `@morlay/zephyr-dev` 的 `compile()`（哪里枚举清单、断言哪几个已知包、失败怎么汇总，
- * 都只有一份）；这里只剩两件 CLI 自己的事：
- *   1. 把**部署值**算成 `compile()` 的输入（数据根三态 → `cacheRoot`）；
- *   2. 把它的结果翻成 `CliError`（退出码与「下一步该改什么」是命令行的事）。
- * @param input - 工作区配置与布局。
- */
-export async function buildPrebundle(input: BuildInput): Promise<void> {
-  const dataDir = resolveDataDir({
-    spec: input.resolved.config.dataDir ?? "workspace",
-    profileDir: input.resolved.workspace,
-    appName: input.resolved.appName,
-  });
   const result = await compile({
     workspace: input.resolved.workspace,
     appName: input.resolved.appName,
-    dataDirSpec: input.resolved.config.dataDir ?? "workspace",
-    cacheRoot: cacheRootOf(dataDir),
+    outDir: input.layout.clientModules,
+    pageEntry: input.resolved.clientEntry,
   }).catch((error: unknown) => {
     // 判据错误（空清单 / 缺已知包）原文已经说清了是什么，只换类型不换措辞。
     throw error instanceof CliError
@@ -286,22 +141,221 @@ export async function buildPrebundle(input: BuildInput): Promise<void> {
   }
 }
 
-// 前端预编译的缓存根：home 在 `@morlay/zephyr-dev`（dev 与 build 共用同一条规则），
-// 这里只**再导出**一次——CLI 侧算部署值的地方不必再多跨一次包。
-export { cacheRootOf };
-
 /**
- * 入口：把 `server.entry` 打成单文件，preview 与桌面壳都跑它。
+ * 第二步：运行时闭包 `pnpm deploy --prod` → `<outputDir>/node_modules`。
+ *
+ * `strictDepBuilds=false`：deploy 会在目标目录重装一次，工作区里批准的构建脚本不会自动跟过去；
+ * 不放开这一条，闭包会停在 `ERR_PNPM_IGNORED_BUILDS` 上。
+ *
+ * **为什么 deploy 到临时目录再并进来**：`pnpm deploy` 要求目标目录不存在或为空
+ * （否则 `ERR_PNPM_DEPLOY_DIR_NOT_EMPTY`），而 `<outputDir>` 根上要放 `package.json`、
+ * `src/`、`client_modules/`、`bootstrap.mjs`——它不是空目录，也不能为了 deploy 先清空。
+ * 于是 deploy 到 `<outputDir>/../.zephyr-deploy-<随机>`，再把它产出的 **`node_modules`** 搬进
+ * `<outputDir>/node_modules`。deploy 还会写一份包自己的文件副本（`package.json` / `src/`），
+ * 那些**不搬**：清单与源码面入口由第三步显式写，两处都写就多一个 home。
  * @param input - 工作区配置与布局。
  */
-export async function bundleEntry(input: BuildInput): Promise<void> {
-  const rolldown = (await import("rolldown")) as {
-    build: (options: unknown) => Promise<unknown>;
+export async function buildRuntime(input: BuildInput): Promise<void> {
+  const name = await appPackageNameOf(input.resolved.workspace);
+  const staging = await mkdtemp(join(dirname(input.layout.root), ".zephyr-deploy-"));
+  try {
+    await execFileAsync(
+      "pnpm",
+      [
+        "--filter",
+        name,
+        // workspace 依赖按**内容**装进闭包（不留一条指回源码的 `file:` 链接）：命令行覆盖
+        // `pnpm-workspace.yaml` 的 `linkWorkspacePackages: true`，配置文件一行不动。
+        "--config.inject-workspace-packages=true",
+        "deploy",
+        "--prod",
+        // deploy 会在目标目录重装一次，工作区里批准的构建脚本不会自动跟过去。
+        "--config.strictDepBuilds=false",
+        staging,
+      ],
+      { cwd: input.resolved.workspace, maxBuffer: 64 * 1024 * 1024 },
+    );
+    await resetClosure(input.layout);
+    await cp(join(staging, "node_modules"), input.layout.nodeModules, {
+      recursive: true,
+      verbatimSymlinks: true,
+    });
+  } catch (error) {
+    throw new CliError(
+      `运行时闭包失败（pnpm --filter ${name} deploy --prod）：${error instanceof Error ? error.message : String(error)}`,
+    );
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 第三步：生产态装配——复制源码面入口、写清单与 `bootstrap.mjs`、删前端源码。
+ *
+ * 三件事都是「产物定型」：`src/server.ts` 原样复制（它 import 的 `@morlay/*` 从
+ * `<outputDir>/node_modules` 解析），`bootstrap.mjs` 把部署值（产物根、形态）写死，
+ * `src/client` 删掉（前端已在 `client_modules/` 里，留着等于分发源码，设计 §八）。
+ * @param input - 工作区配置与布局。
+ */
+export async function assembleEntry(input: BuildInput): Promise<void> {
+  const serverDir = dirname(input.layout.serverEntry);
+  await mkdir(serverDir, { recursive: true });
+  await copyWorkspaceSources(dirname(input.resolved.serverEntry), serverDir);
+  await writeFile(input.layout.manifest, await manifestOf(input), "utf8");
+  await writeFile(input.layout.bootstrap, bootstrapSourceOf(), "utf8");
+  // 前端源码已在 `client_modules/` 的产物里：留着等于分发源码（设计 §八）。
+  await rm(join(input.layout.root, "src", "client"), { recursive: true, force: true });
+}
+
+/**
+ * 应用清单（产物里的那份）：`type: module` + 应用自己的元信息 + 依赖清单。
+ *
+ * 依赖清单原样保留：闭包里装的就是它们（`pnpm deploy --prod` 按同一份清单算的），
+ * 少一份读的人就得回去翻源码树。
+ * @param input - 工作区配置与布局。
+ * @returns 序列化后的清单。
+ */
+async function manifestOf(input: BuildInput): Promise<string> {
+  const raw = await readFile(join(input.resolved.workspace, "package.json"), "utf8");
+  const source = JSON.parse(raw) as Record<string, unknown>;
+  const manifest = {
+    name: source["name"],
+    version: source["version"],
+    private: true,
+    type: "module",
+    dependencies: source["dependencies"],
   };
-  await rolldown.build({
-    input: input.resolved.serverEntry,
-    output: { file: input.layout.entry, format: "esm" },
-    // 第三方留在闭包里，只有工作区自己的源码进 bundle。
-    external: (id: string) => !id.startsWith(".") && !id.startsWith("/"),
-  });
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+/**
+ * 把服务端入口**同目录**的工作区源码一起复制过去。
+ *
+ * 只复制 `src/server.ts` 会让产物里的相对 import（`./zephyr.provide.ts` 这类）落空——
+ * 闭包装的是第三方与 workspace 包，不装应用自己的源码。
+ * @param source - 源码目录（应用 `src/`）。
+ * @param target - 产物里的目标目录（`<outputDir>/src`）。
+ */
+async function copyWorkspaceSources(source: string, target: string): Promise<void> {
+  for (const item of await readdir(source, { withFileTypes: true })) {
+    if (!item.isFile()) continue;
+    if (!/\.[cm]?[jt]sx?$/u.test(item.name)) continue;
+    await cp(join(source, item.name), join(target, item.name), { verbatimSymlinks: true });
+  }
+}
+
+/**
+ * `bootstrap.mjs`：生产态装配（设计 §八 的那一份，**不引开发运行时那个包**）。
+ *
+ * 为什么生成而不是写进应用源码：生产态的行（静态目录投递）由 `zephyr-app` 提供；而应用源码不该
+ * 知道自己在生产态。生成这个文件 = 把形态判断从源码挪到构建产物。
+ *
+ * 部署值分两半（设计 §八）：构建期确定的（`profileDir` / 产物根 / 形态）在这里写死；
+ * 可变的（`--data-dir` / `--port` / `--cwd`）由启动参数给。
+ *
+ * **必须走 `fileURLToPath`**：产物目录可能含空格（应用名进路径，如 `Zephyr Custom`），
+ * 而 `new URL(...).pathname` 会把空格转义成 `%20`——那样读的是另一个不存在的目录。
+ * @returns 源码（ESM）。
+ */
+export function bootstrapSourceOf(): string {
+  return [
+    "// 由 zephyr build 生成，不是源码。",
+    'import { dirname } from "node:path";',
+    'import { fileURLToPath } from "node:url";',
+    'import providers from "./src/server.ts";',
+    "",
+    "// 装配根：本文件所在的目录（**不带尾斜杠**：它会成为 `AppEnv.profileDir`，各处按它拼路径）。",
+    "const PROFILE_DIR = dirname(fileURLToPath(import.meta.url));",
+    'const CLIENT_MODULES_DIR = fileURLToPath(new URL("./client_modules/", import.meta.url));',
+    "// 启动参数 --cwd 覆盖；缺省是进程 cwd（从哪个项目目录启动，就在哪儿干活）。",
+    "const DEFAULT_WORKING_DIRECTORY = process.cwd();",
+    "process.chdir(DEFAULT_WORKING_DIRECTORY);",
+    "",
+    "export default async function (mode) {",
+    '  const { bootstrapApplication } = await import("@morlay/zephyr");',
+    '  const { productionProviders } = await import("@morlay/zephyr-app");',
+    "  return bootstrapApplication({",
+    "    providers: [",
+    "      ...productionProviders({ clientModulesDir: CLIENT_MODULES_DIR }),",
+    "      // 部署值并进 mode 交给应用清单：AppEnv 由它装（两处都装会重复注册）。",
+    "      ...providers({",
+    "        ...mode,",
+    "        profileDir: PROFILE_DIR,",
+    "        defaultWorkingDirectory: DEFAULT_WORKING_DIRECTORY,",
+    "      }),",
+    "    ],",
+    "  });",
+    "}",
+    "",
+  ].join("\n");
+}
+
+/**
+ * 闭包冒烟：**把整个产物复制到仓外**再用闭包里的 loader 起 `bootstrap.mjs`。
+ *
+ * 必须在仓外：在仓库内加载时，Node 会顺着目录往上找到工作区自己的 `node_modules`，
+ * 把"闭包里缺这个包"变成"仓库里有"——这正是"只有打包时才炸"的那类静默失败。
+ * 产物不齐就跳过：装配级用例（`runBuild` 配假 steps）没有真闭包，那一步冒烟没有意义——
+ * 「没东西可冒烟」不等于「冒烟失败」。
+ * @param layout - 产物布局。
+ * @returns `skipped`（没有闭包或没有装配文件）或 `ok`（真加载过）。
+ */
+export async function smokeClosure(layout: ZephyrLayout): Promise<"skipped" | "ok"> {
+  const present = await Promise.all(
+    [layout.nodeModules, layout.bootstrap, layout.serverEntry].map((path) =>
+      stat(path).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  );
+  if (present.includes(false)) return "skipped";
+  const sandbox = await mkdtemp(join(tmpdir(), "zephyr-closure-"));
+  try {
+    await cp(layout.root, sandbox, { recursive: true, verbatimSymlinks: true });
+    // loader 从**闭包**里解析：产物自带启动器（见设计「二、现状事实」最后一条）。
+    const loader = createRequireOf(join(sandbox, "package.json")).resolve("@morlay/dsh-oxc-node");
+    const entry = pathToFileURL(join(sandbox, "bootstrap.mjs")).href;
+    await execFileAsync(
+      process.execPath,
+      ["--import", loader, "--input-type=module", "-e", `await import(${JSON.stringify(entry)})`],
+      {
+        cwd: sandbox,
+        // 摘掉工作区的 nodeOptions（--import @oxc-node/core/register）：那份 loader 只装在仓库里，
+        // 闭包里没有它；闭包的 loader 由上面的 --import 显式给。
+        env: { ...process.env, NODE_OPTIONS: "" },
+        timeout: 180_000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+    return "ok";
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CliError(
+      `产物不自包含（${layout.root} 复制到仓库外就加载不起来）：\n` +
+        `${detail.split("\n").slice(0, 8).join("\n")}\n` +
+        "多半是某个包 import 了没声明成 dependencies 的包（devDependencies 会被 --prod 剔掉）。",
+    );
+  } finally {
+    await rm(sandbox, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 清空运行时闭包目录（deploy 只接受空目录）。
+ * @param layout - 产物布局。
+ */
+export async function resetClosure(layout: ZephyrLayout): Promise<void> {
+  await rm(layout.nodeModules, { recursive: true, force: true });
+}
+
+/**
+ * 应用包名（`pnpm --filter <名字> deploy` 用）。
+ * @param workspace - 应用工作区。
+ * @returns 包名（读不到清单时退回目录名）。
+ */
+async function appPackageNameOf(workspace: string): Promise<string> {
+  const raw = await readFile(join(workspace, "package.json"), "utf8").catch(() => undefined);
+  if (raw === undefined) return basename(workspace);
+  return (JSON.parse(raw) as { name?: string }).name ?? basename(workspace);
 }

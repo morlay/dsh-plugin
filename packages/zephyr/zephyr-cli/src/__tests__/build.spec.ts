@@ -9,13 +9,13 @@ import { CliMode, type CliModeValues } from "../mode.ts";
 import { fakeBuildSteps, resolvedFor, tempWorkspace } from "../testing/index.ts";
 
 describe("build 命令（装配级）", () => {
-  it("把四步交给步骤替身，并按步汇总", async () => {
+  it("把三步交给步骤替身，并按步汇总", async () => {
     const workspace = await tempWorkspace({});
     const resolved = resolvedFor({ workspace });
     const mode: CliModeValues = {
       command: ["build"],
       workspace,
-      profileDir: resolved.layout.runtime,
+      profileDir: resolved.layout.root,
       dataDir: `${workspace}/.dsh-store`,
       dataDirSpec: "workspace",
       configFile: resolved.configFile,
@@ -42,9 +42,9 @@ describe("build 命令（装配级）", () => {
       expect(command).toBeDefined();
       const code = await command?.run({ params: {}, rest: [], mode });
       expect(code).toBe(0);
-      // 四步各一次（顺序由 runBuild 保证）：静态面 / 运行时闭包 / 入口 bundle / 前端预编译
-      expect(steps.calls).toHaveLength(4);
-      expect(lines.join("\n")).toContain("静态面");
+      // 三步各一次（顺序由 runBuild 保证）：前端静态目录 / 运行时闭包 / 生产态装配
+      expect(steps.calls).toHaveLength(3);
+      expect(lines.join("\n")).toContain("前端静态目录");
       expect(lines.join("\n")).toContain("完成");
     } finally {
       await app.dispose();

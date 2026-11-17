@@ -6,11 +6,11 @@
 
 ## 用法
 
-| 命令                      | 作用                                                                                                                       |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `zephyr dev [工作区]`     | 装配应用清单（含 vite HMR），服务端源码变了就整棵换树                                                                      |
-| `zephyr build [工作区]`   | `vite build` → `node_modules/.zephyr/dist`；`pnpm deploy` → `runtime`；入口打成 `runtime/entry.mjs`                        |
-| `zephyr preview [工作区]` | 只吃已有产物（缺就报错），跑 `runtime/entry.mjs`——**当前受 [债务](./.agents/debts/20261110-闭包里的包仍是源码面.md) 阻塞** |
+| 命令                      | 作用                                                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zephyr dev [工作区]`     | 装配应用清单（含 vite HMR），服务端源码变了就整棵换树                                                                                                            |
+| `zephyr build [工作区]`   | 产出一份**可分发应用**到 `server.outputDir`（缺省 `target/<应用名>/`）：`client_modules/` + `node_modules/` + `src/server.ts` + `bootstrap.mjs` + `package.json` |
+| `zephyr preview [工作区]` | 只吃已有产物（缺 `bootstrap.mjs` / `client_modules/` 就报错，不回退重建），跑 `bootstrap.mjs`                                                                    |
 
 全局选项：`--config <路径>`、`--data-dir <workspace|xdg|绝对路径>`、`--port <n>`、`--host <h>`、
 `--log-level <debug|info|warn|error|silent>`。
@@ -73,9 +73,18 @@ export class EchoCommand extends Command {
 
 ## 产物
 
-`node_modules/.zephyr/` 下三样可整体删除的东西：`dist`（静态面）、`runtime`（闭包 + `entry.mjs`）、
-` cache`。根放在 `node_modules` 下是刻意的：那本来就是「装出来、可重建、不进版本库」的域（与 vite 的
-`.vite` 同级），工作区根不会被产物污染。
+`server.outputDir`（缺省 `target/<应用名>/`）**就是一份可分发的应用**，整目录可删、可整体拷走：
+
+```text
+<outputDir>/
+  client_modules/   静态前端（index.html + 按包联邦产物 + .files.json）
+  node_modules/     宿主闭包（pnpm deploy --prod，含 loader）
+  src/server.ts     源码面入口（闭包里的 loader 直接跑它，不打单文件）
+  bootstrap.mjs     生产态装配（部署值内联在这里）
+  package.json      应用清单
+```
+
+构建**每轮整目录重建**：`<outputDir>` 里没有跨轮复用的缓存目录，因此也没有「缓存与产物两份字节」的问题。
 
 ## 设计
 

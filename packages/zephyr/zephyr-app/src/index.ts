@@ -5,7 +5,7 @@ export * from "./home-paths.ts";
 // 三条边界：
 // 1. **服务实现（`*Default`）不从这里出** —— 它们是装配内部的东西，测试走 `./testing`；
 // 2. **开发态的一切不从这里出** —— `Federation` / `ClientModules` / `ViteHandoff` / 页面兜底
-//    都是开发运行时的事，住 `@morlay/zephyr-dev`；这里只有**两条空契约**（`ClientAssets` / `DevHmr`）；
+//    都是开发运行时的事，住开发运行时那个包；这里只有**三条空契约**（`ClientAssets` / `DevHmr` / `IdleGuard`）；
 // 3. **浏览器半不从这里出** —— 见 `./client`（宿主进程加载包入口时不能带进 CSS/React）。
 //
 // 装配单位是 **provider 清单**：每个域导出一个 `provideXxx(...features)`，装配面只写
@@ -17,11 +17,11 @@ export * from "./app-env/app-env.contract.ts";
 export * from "./api-gateway/remote-handlers.contract.ts";
 export * from "./credentials/credentials.contract.ts";
 export * from "./contract-coverage.ts";
-// 两条**空契约**：前端资产怎么出、开发态何时换树。**只声明、不含实现**——dev 的实现
-// （`ViteClientAssets` / `ServerHmr` / `ViteHandoffDefault`）住在 `@morlay/zephyr-dev`；
-// prod 的实现由 T3 随产物布局落地（静态目录投递，同样不引构建链）。
+// 三条**空契约**：前端资产怎么出、开发态何时换树、换树前谁还算忙。**只声明、不含实现**——
+// dev 的实现住在开发运行时那个包；prod 的实现是静态目录投递（`StaticClientAssets`，不引构建链）。
 export * from "./client-assets/client-assets.contract.ts";
 export * from "./dev-hmr/dev-hmr.contract.ts";
+export * from "./idle-guard/idle-guard.contract.ts";
 export { provideApiGateway } from "./api-gateway/provide.ts";
 export { provideMuxServer } from "./api-gateway/provide.ts";
 
@@ -33,11 +33,15 @@ export { provideRemoteAccess } from "./remote-access/provide.ts";
 export { RemoteAccess } from "./remote-access/remote-access.contract.ts";
 export { provideTypert } from "./typert/provide.ts";
 export { provideWeb } from "./web/provide.ts";
+// **生产态**的装配行（`bootstrap.mjs` 调它）：静态目录投递。不引开发运行时那个包。
+export { productionProviders, type ProductionOptions } from "./production.provide.ts";
+export { StaticClientAssets } from "./client-assets/static-client-assets.service.ts";
+export { ServeStatic } from "./web/serve-static.service.ts";
 export * from "./connection/contract.ts";
 export * from "./remote/remote.contract.ts";
 export * from "./api-remotes/remote-descriptor.contract.ts";
 // remote 的**装载机制**（按提供者登记的清单逐个 `$mount`）：它只认 `Remote` 的 `$mount`，
-// 是运行时事实，所以留在本包；`ClientModulesDefault`（在 `zephyr-dev`）是它的消费方。
+// 是运行时事实，所以留在本包；开发运行时的路由装配是它的消费方。
 export { mountRemotes, type RemotesContext } from "./api-remotes/mount.ts";
 export * from "./remote/remote-result.ts";
 export * from "./remote-access/remote-access.contract.ts";

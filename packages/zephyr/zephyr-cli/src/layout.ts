@@ -1,38 +1,51 @@
-// 产物布局：`node_modules/.zephyr/{dist,runtime,cache}`。
+// 产物布局：`<outputDir>/` 就是**一份可分发**的应用（设计决定 3、4）。
 //
-// 三样东西的共同点是「可以整目录删掉」：静态面（dist）、运行时闭包（runtime）、构建缓存（cache）。
-// 根放在 **node_modules 下**：那本来就是「装出来、可重建、不进版本库」的域（与 vite 的 `.vite` 同级），
-// 工作区根因此不会被产物污染，也不需要在 `.gitignore` 里再加一条。
-import { join, resolve } from "node:path";
+// 五样东西，缺一不成「拷到别处还能起」：
+//   client_modules/   静态前端（index.html + 按包联邦产物 + .files.json），纯文件、无服务
+//   node_modules/     pnpm deploy --prod 的闭包（含 `@morlay/dsh-oxc-node` 这个 loader）
+//   src/server.ts     源码面入口（由 loader 直接跑，不再打 entry.mjs 单文件）
+//   bootstrap.mjs     生产态装配（build 生成；部署值内联在这里）
+//   package.json      应用清单（部署面）
+//
+// 根由 `server.outputDir` 给（相对配置文件或绝对），缺省 `target/<应用名>/`：落哪归应用配置，
+// 与 vite 的 `build.outDir` 同一习惯。**整目录可删、可整体拷贝**：构建每轮整目录重建，
+// 没有要跨轮复用的中间物。
+import { basename, join, resolve } from "node:path";
 
 /** 一次构建的全部路径。 */
 export interface ZephyrLayout {
-  /** 产物根（缺省 `node_modules/.zephyr`，可被配置覆盖）。 */
+  /** 产物根：`<outputDir>`（整目录可删、可分发）。 */
   readonly root: string;
-  /** 静态面：`index.html` + 资源 + 各包联邦产物。 */
-  readonly dist: string;
-  /** 运行时闭包（`pnpm deploy` 的结果）+ `entry.mjs`。 */
-  readonly runtime: string;
-  /** 构建缓存（rolldown / vite）。 */
-  readonly cache: string;
-  /** 预览与桌面壳都跑它。 */
-  readonly entry: string;
+  /** 静态前端：`index.html` + 按包联邦产物（`<pkg>@<ver>/*.js` + `.files.json`）。 */
+  readonly clientModules: string;
+  /** 宿主闭包（`pnpm deploy --prod` 的结果，含 loader）。 */
+  readonly nodeModules: string;
+  /** 源码面入口（从应用的 `src/server.ts` 复制；它 import 的包从闭包解析）。 */
+  readonly serverEntry: string;
+  /** 生产态装配：preview 与桌面壳都跑它。 */
+  readonly bootstrap: string;
+  /** 应用清单（部署面：`type` / `dependencies`）。 */
+  readonly manifest: string;
 }
 
 /**
- * 按工作区与可选的产出根算出布局。
- * @param workspace - 工作区绝对路径。
- * @param outDir - 配置里的 `build.outDir`（相对工作区或绝对）；缺省 `node_modules/.zephyr`。
+ * 按工作区与配置算出布局。
+ * @param workspace - 工作区绝对路径（配置文件所在目录）。
+ * @param outputDir - 配置里的 `server.outputDir`（相对工作区或绝对）；缺省 `target/<应用名>`。
+ * @param appName - 应用名（缺省目录名的最后一段）。
  * @returns 布局。
  */
-export function layoutOf(workspace: string, outDir?: string): ZephyrLayout {
+export function layoutOf(workspace: string, outputDir?: string, appName?: string): ZephyrLayout {
   const root =
-    outDir === undefined ? join(workspace, "node_modules", ".zephyr") : resolve(workspace, outDir);
+    outputDir === undefined
+      ? join(workspace, "target", appName ?? basename(workspace))
+      : resolve(workspace, outputDir);
   return {
     root,
-    dist: join(root, "dist"),
-    runtime: join(root, "runtime"),
-    cache: join(root, "cache"),
-    entry: join(root, "runtime", "entry.mjs"),
+    clientModules: join(root, "client_modules"),
+    nodeModules: join(root, "node_modules"),
+    serverEntry: join(root, "src", "server.ts"),
+    bootstrap: join(root, "bootstrap.mjs"),
+    manifest: join(root, "package.json"),
   };
 }

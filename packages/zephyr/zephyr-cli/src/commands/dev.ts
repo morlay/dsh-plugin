@@ -1,15 +1,15 @@
 // `zephyr dev`：起开发形态。
 //
-// 命令本身很薄：读应用清单 → 装配一棵树 → **`startDev()` 起会话** → 把重载口交给应用 → 等信号。
+// 命令本身很薄：读应用清单 → 叠上 `devProviders()` 装配一棵树 → **`startDev()` 起会话** → 接上树里的 `DevHmr` → 等信号。
 // 三件事各归各家：装配归 CLI（它知道清单从哪个文件来）、启动与收尾归 `@morlay/zephyr-dev` 的
 // `startDev()`（端口、地址、幂等 close 是开发运行时的事实）、换树护栏归 CLI（「先拆后起、卡住就退出」
 // 是流程事实，不该每个应用抄一遍）。
 import { join } from "node:path";
 import { bootstrapApplication, inject, Injectable, Logger, type App } from "@morlay/zephyr";
-import { startDev, type DevSession } from "@morlay/zephyr-dev/node";
+import { devProviders, startDev, type DevSession } from "@morlay/zephyr-dev/node";
+import { DevHmr } from "@morlay/zephyr-app";
 import { Command, type CommandInput } from "../command.ts";
 import { loadServerProviders } from "../server-entry.ts";
-import { DevLifecycle } from "../dev-lifecycle.ts";
 import { CliError } from "../errors.ts";
 import { CliMode } from "../mode.ts";
 import type { ParamSpecs } from "../params.ts";
@@ -48,20 +48,29 @@ export class DevCommand extends Command {
   async run(_input: CommandInput): Promise<number> {
     let version = 0;
     let running = await this.start(version);
-    const lifecycle = running.app.tryGet(DevLifecycle);
-    await lifecycle?.install({
-      restart: async (files) => {
-        this.logger.warn("[dev] 开始重载：先拆旧树（端口即将关闭）：%s", files.join(", "));
-        const startedAt = Date.now();
-        // 收树用 `session.close()` 而不是 `app.dispose()`：撤路由、停 vite、释放端口是同一步，
-        // 会话是那条路径的唯一入口（`app` 仍要留着重新装配用）。
-        await withDeadline(running.session.close(), DISPOSE_TIMEOUT_MS, "旧树 dispose");
-        version += 1;
-        running = await this.start(version);
-        this.logger.info("[dev] 重载完成，用时 %dms", Date.now() - startedAt);
-      },
-    });
+    let detach: (() => void) | undefined;
+    // 换树口只在开发形态存在（生产形态不装开发运行时，`DevHmr` 就没人提供）。
+    const attach = (): (() => void) | undefined => {
+      // `install` 允许不返回撤销函数（没有变更来源时无事可撤）：统一成「有或没有」。
+      const detached = running.app.tryGet(DevHmr)?.install({ restart });
+      return typeof detached === "function" ? detached : undefined;
+    };
+    // 换树：拆旧树 → 起新树 → **在新树上重装**——新树是另一个 `DevHmr` 实例，旧的随旧树 dispose 了，
+    // 不重装就只有第一次重载生效。
+    const restart = async (files: readonly string[]): Promise<void> => {
+      this.logger.warn("[dev] 开始重载：先拆旧树（端口即将关闭）：%s", files.join(", "));
+      const startedAt = Date.now();
+      // 收树用 `session.close()` 而不是 `app.dispose()`：撤路由、停 vite、释放端口是同一步，
+      // 会话是那条路径的唯一入口（`app` 仍要留着重新装配用）。
+      await withDeadline(running.session.close(), DISPOSE_TIMEOUT_MS, "旧树 dispose");
+      version += 1;
+      running = await this.start(version);
+      detach = attach();
+      this.logger.info("[dev] 重载完成，用时 %dms", Date.now() - startedAt);
+    };
+    detach = attach();
     await waitForSignal();
+    detach?.();
     await running.session.close();
     return 0;
   }
@@ -72,13 +81,21 @@ export class DevCommand extends Command {
    * @returns 树与会话。
    */
   private async start(version: number): Promise<Running> {
-    const providers = await loadServerProviders(this.resolved.serverEntry, this.mode, version);
+    // **形态由启动器注入**（设计 §四）：dev 的那几行叠在应用清单**之前**，应用源码因此不写
+    // `mode.dev ? … : …`；build 把生产态那几行写进 `bootstrap.mjs`。
+    const declared = await loadServerProviders(this.resolved.serverEntry, this.mode, version);
+    const devMode = this.mode.packaged === undefined ? {} : { packaged: this.mode.packaged };
+    const providers = [...devProviders(devMode), ...declared];
     const app = await withDeadline(
       bootstrapApplication({ providers, timeoutMs: BOOTSTRAP_TIMEOUT_MS }),
       BOOTSTRAP_TIMEOUT_MS,
       "bootstrapApplication",
     );
-    this.logger.info("[dev] 已装配 %d 行", providers.length);
+    this.logger.info(
+      "[dev] 已装配 %d 行（含 dev 行 %d）",
+      providers.length,
+      providers.length - declared.length,
+    );
     const session = await startDev({
       app,
       repoRoot: this.mode.workspace,

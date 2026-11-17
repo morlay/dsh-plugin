@@ -14,7 +14,7 @@ const SHAPE_HINT = [
   "工作区配置长这样：",
   "  export default {",
   "    server: { entry: './src/server.ts' },",
-  "    client: { entry: './src/client/index.tsx' },",
+  "    client: { entry: './src/client/index.html' },",
   "    desktop: { id: 'ai.example.app', name: 'Example' },",
   "    dataDir: 'workspace',",
   "    plugins: [...provideDesktopBundle({ })],",
@@ -44,7 +44,8 @@ export async function loadConfig(options: {
   const config = assertConfig(module.default, configFile);
   const workspace = dirname(configFile);
   const appName = config.desktop?.name ?? workspace.split(/[\\/]/u).at(-1) ?? "zephyr-app";
-  const layout = layoutOf(workspace, config.build?.outDir);
+  // 产物根归配置（设计决定 3）：相对配置文件或绝对，缺省 `target/<应用名>`。
+  const layout = layoutOf(workspace, config.server.outputDir, appName);
   return {
     config,
     configFile,

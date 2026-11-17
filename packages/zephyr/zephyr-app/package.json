@@ -2,6 +2,11 @@
   "name": "@morlay/zephyr-app",
   "version": "0.0.1",
   "private": true,
+  "files": [
+    "src",
+    "!**/__tests__",
+    "!**/.agents"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

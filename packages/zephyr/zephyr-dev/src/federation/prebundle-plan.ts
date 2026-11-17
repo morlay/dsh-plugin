@@ -4,19 +4,32 @@
 // （那是 dev 期 dshClientPlugin 的改写结果），从 dist 反推永远得到空清单。
 //
 // 取舍（v1）：只认**静态** import（import … from / export … from / 副作用 import "x"，import type 跳过），
-// 用正则扫描而不是 rolldown 的 parseAst——v1 目标是"清单不为空且覆盖已知包"，动态 import 与
-// tsconfig paths 留给后续版本（见包级设计）。
-import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+// 用正则扫描而不是 rolldown 的 parseAst。动态 `import("…")` 也收：grammar / 语言包只在运行时按需加载，
+// 光看静态图会漏（`@shikijs/langs/typescript` 就是）。
+//
+// 两条基准事实（改动都从这里来）：
+// 1. **解析基准是引用方**，不是应用清单：`shiki` 只装在
+//    `@deepseek-ai/dsh-client-ui-primitives/node_modules` 里，从应用清单出发根本解析不到它——
+//    不是因为不在盘上（`pnpm deploy` 会沿依赖图把它装进闭包），而是因为应用清单没声明它。
+//    所以包根按「它第一次被哪个文件引用」向上找，与 `federation.service` 的 `rootOf` 同源
+//    （`node:module` 的 `findPackageJSON`）。
+// 2. **下潜范围**是 `@morlay/*` 与上游 client 面 `@deepseek-ai/dsh-client*`：shiki 的真实来源链是
+//    `@morlay/zephyr-ui` → `dsh-client-ui-primitives` → `src/markdown/highlight.ts` 的 `import "shiki/core"`，
+//    不下潜到第二段就停在 `@morlay` 边界上。
+//
+// 目标按**实际见到的说明符**出，不按 `exports` 全枚举：`@shikijs/langs` 有 361 个子路径，
+// 全枚举会把清单撑爆、构建时间爆炸；源码里写的是 `@shikijs/langs/typescript`，那就只出 `typescript` 这一个出口。
+// 同一个包的不同子路径仍各自出 target（`shiki/core` 与包根是不同入口）。
+import { readFile, realpath } from "node:fs/promises";
+import { createRequire, findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { PrebundleTarget } from "./prebundle.ts";
 
 /** 枚举输入。 */
 export interface PrebundlePlanOptions {
   /** 应用 client 入口（app-boot.ts）绝对路径。 */
   readonly entry: string;
-  /** 应用的 package.json（解析基准）。 */
-  readonly appManifest: string;
   /** clientModules.include（glob）；空或缺省 = 图里全部包。 */
   readonly include?: readonly string[];
 }
@@ -25,15 +38,23 @@ export interface PrebundlePlanOptions {
 export interface PrebundlePlan {
   /** 待预编译目标。 */
   readonly targets: readonly PrebundleTarget[];
-  /** 解析不到入口的包（不静默，交给调用方判红）。 */
+  /** 该有却没有的包（下潜过的包一个出口都解析不出来；不静默，交给调用方判红）。 */
   readonly failures: readonly { readonly name: string; readonly reason: string }[];
 }
 
-/** 包内被视为「client 面」的出口（按顺序逐个试）。 */
+/** 包内被视为「浏览器面」的出口（下潜时按顺序逐个试，解析得开才进 BFS）。 */
 const CLIENT_EXPORTS = ["./client", "./ui", "./client-module", "./index"];
 
-/** 动态 grammar 家族：它们的 `exports` 子路径（`./*`）要逐个预编译，不能只取 client 面。 */
-const DYNAMIC_FAMILY = /^(shiki|@shikijs\/)/u;
+/**
+ * 要**下潜读源码**的包。
+ *
+ * `@morlay/*` 是我们的包（它们的 `exports` 直接指 TS 源码）；`@deepseek-ai/dsh-client*` 是上游的
+ * client 面——shiki 就在这条链的末端。其余包只记说明符，不读它们的源码（三方包的体积与源码形态不可控）。
+ */
+const DESCEND = /^(?:@morlay\/|@deepseek-ai\/dsh-client)/u;
+
+/** 每个包最多记几个引用方：解析包根时按顺序试（第一个解析得开的就是它实际被引用的那一份）。 */
+const MAX_IMPORTERS = 4;
 
 /** 静态 import 语句的正则（跳过 import type）。 */
 const STATIC_FROM =
@@ -82,24 +103,116 @@ export function packageNameOfSpecifier(specifier: string): string {
     : (specifier.split("/")[0] ?? specifier);
 }
 
+/** 一个包的解析结果：真实包根与它的清单（外置依赖的版本表从这里建）。 */
+interface PackageRoot {
+  /** 包根（软链已解开）。 */
+  readonly root: string;
+  /** 清单绝对路径。 */
+  readonly manifest: string;
+}
+
+/**
+ * 包名 → 包根：按**引用方**解析（node 的规则），第一个解析得开的引用方说了算。
+ *
+ * 用 `findPackageJSON` 而不是 `createRequire(appManifest).resolve(name + "/package.json")`：
+ * 后者的基准是应用清单，从它出发看不到「只在别人 node_modules 里」的包（shiki 就是），而且
+ * 现代包的 `exports` 常常不暴露 `./package.json`——明明装着也解析不出来。这条面与
+ * `federation.service` 的 `rootOf` / `internal/resolve` 的 `packageRootOf` 同源。
+ *
+ * 软链解到真实路径：随后 `createRequire(清单)` 要按真实位置向上找它的兄弟依赖（pnpm 把同一个包的
+ * 依赖摆在 `.pnpm/<pkg>@<ver>/node_modules` 里，软链路径那一侧的上级目录里没有）。
+ * @param name - 包名。
+ * @param importers - 引用过它的文件（按 BFS 顺序，第一个可能是脏数据源）。
+ * @returns 包根；都解析不到时 `undefined`。
+ */
+async function packageRootOf(
+  name: string,
+  importers: readonly string[],
+): Promise<PackageRoot | undefined> {
+  for (const importer of importers) {
+    const found = (() => {
+      try {
+        return findPackageJSON(name, pathToFileURL(importer).href);
+      } catch {
+        return undefined;
+      }
+    })();
+    if (found === undefined) continue;
+    const manifest = await realpath(found).catch(() => found);
+    return { root: dirname(manifest), manifest };
+  }
+  return undefined;
+}
+
+/**
+ * 从一份清单出发按 node 的解析找入口（尊重 `exports` 的条件与子路径）。
+ * @param manifest - 解析基准（包自己的清单）。
+ * @param specifier - 说明符（`pkg` 或 `pkg/sub`）。
+ * @returns 入口绝对路径；解析不到时 `undefined`。
+ */
+function entryOf(manifest: string, specifier: string): string | undefined {
+  try {
+    return createRequire(manifest).resolve(specifier);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 包清单里的 `version`（不是包就不算）。
+ * @param manifest - 清单绝对路径。
+ * @returns 版本号；读不到或没有 `version` 时 `undefined`。
+ */
+async function versionOf(manifest: string): Promise<string | undefined> {
+  const parsed = JSON.parse(await readFile(manifest, "utf8").catch(() => "{}")) as {
+    version?: unknown;
+  };
+  return typeof parsed.version === "string" ? parsed.version : undefined;
+}
+
+/**
+ * 一个包的**浏览器面**入口：下潜时读哪些文件。
+ *
+ * 按 `exports` 的 `./client` / `./ui` / `./client-module` / `./index` 逐个试，解析得开的全收——
+ * 一个包的 client 半与宿主半可能都要看（根引用与子路径引用在不同引用方里并存）。
+ * @param root - 包根。
+ * @param name - 包名。
+ * @returns 入口文件（只收 JS/TS，CSS 不进 BFS）。
+ */
+function browserEntriesOf(root: PackageRoot, name: string): string[] {
+  const out: string[] = [];
+  for (const subpath of CLIENT_EXPORTS) {
+    const specifier = subpath === "./index" ? name : `${name}/${subpath.slice(2)}`;
+    const entry = entryOf(root.manifest, specifier);
+    if (entry !== undefined && /\.[cm]?[jt]sx?$/u.test(entry)) out.push(entry);
+  }
+  return out;
+}
+
 /**
  * 枚举待预编译目标。
- * @param options - 入口、清单与 include。
- * @returns 目标清单与失败明细。
+ * @param options - 入口与 include。
+ * @returns 目标清单与该有却没有的包。
  */
 export async function planPrebundle(options: PrebundlePlanOptions): Promise<PrebundlePlan> {
-  const appRequire = createRequire(options.appManifest);
   const pending = [options.entry];
   const seenFiles = new Set<string>();
-  const packages = new Set<string>();
+  /** 包名 → 引用方与**实际见到的说明符**（后者决定出哪些出口）。 */
+  const packages = new Map<string, { importers: string[]; specifiers: Set<string> }>();
+  /** 已经下潜过的包（同一个包只进一次 BFS）。 */
+  const descended = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
     if (file === undefined || seenFiles.has(file) || !/\.[cm]?[jt]sx?$/u.test(file)) continue;
     seenFiles.add(file);
     const text = await readFile(file, "utf8").catch(() => "");
-    for (const specifier of bareImportsOf(text)) {
-      if (specifier.startsWith("node:")) continue;
-      packages.add(packageNameOfSpecifier(specifier));
+    const specifiers = bareImportsOf(text).filter((specifier) => !specifier.startsWith("node:"));
+    for (const specifier of specifiers) {
+      const name = packageNameOfSpecifier(specifier);
+      const record = packages.get(name) ?? { importers: [], specifiers: new Set<string>() };
+      record.specifiers.add(specifier);
+      if (record.importers.length < MAX_IMPORTERS) record.importers.push(file);
+      packages.set(name, record);
     }
     for (const match of text.matchAll(RELATIVE_FROM)) {
       const relative = match[1];
@@ -107,60 +220,53 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       const base = join(dirname(file), relative).replace(/\.[cm]?[jt]sx?$/u, "");
       pending.push(base + ".ts", base + ".tsx");
     }
+    // 下潜：把下潜范围内、第一次见到的包的浏览器面入口推进 BFS。**以这个引用方为解析基准**——
+    // 它看得见哪个副本，就用哪个副本（pnpm 严格布局下同名多版本是常态）。
+    for (const name of new Set(specifiers.map(packageNameOfSpecifier))) {
+      if (!DESCEND.test(name) || descended.has(name)) continue;
+      descended.add(name);
+      const root = await packageRootOf(name, [file]);
+      if (root !== undefined) pending.push(...browserEntriesOf(root, name));
+    }
   }
   const include = options.include ?? [];
-  const wanted =
-    include.length === 0
-      ? [...packages]
-      : [...packages].filter((name) =>
-          include.some((pattern) => {
-            const prefix = pattern.replace(/\*+$/u, "");
-            return prefix === "" ? true : name.startsWith(prefix);
-          }),
-        );
+  const wanted = [...packages.keys()].filter(
+    (name) =>
+      include.length === 0 ||
+      include.some((pattern) => {
+        const prefix = pattern.replace(/\*+$/u, "");
+        return prefix === "" ? true : name.startsWith(prefix);
+      }),
+  );
   const targets: PrebundleTarget[] = [];
   const failures: { name: string; reason: string }[] = [];
   for (const name of wanted) {
-    const manifestOf = (() => {
-      try {
-        return appRequire.resolve(name + "/package.json");
-      } catch {
-        return undefined;
-      }
-    })();
-    if (manifestOf === undefined) {
-      failures.push({ name, reason: "解析不到 package.json" });
-      continue;
-    }
-    const version = (JSON.parse(await readFile(manifestOf, "utf8")) as { version?: string })
-      .version;
-    if (version === undefined) {
-      failures.push({ name, reason: "清单里没有 version" });
-      continue;
-    }
-    const exportsTable = DYNAMIC_FAMILY.test(name)
-      ? Object.keys(
-          (JSON.parse(await readFile(manifestOf, "utf8")) as { exports?: Record<string, unknown> })
-            .exports ?? {},
-        ).filter((key) => key.startsWith("./") && key !== "./package.json")
-      : [];
-    const subpaths = exportsTable.length > 0 ? exportsTable : CLIENT_EXPORTS;
-    let planned = false;
-    for (const subpath of subpaths) {
-      const exportName = subpath === "./index" ? "index" : subpath.slice(2).replace(/\/$/u, "");
-      const specifier = subpath === "./index" ? name : name + "/" + exportName;
-      const entry = (() => {
-        try {
-          return appRequire.resolve(specifier);
-        } catch {
-          return undefined;
-        }
-      })();
+    const record = packages.get(name);
+    if (record === undefined) continue;
+    const root = await packageRootOf(name, record.importers);
+    // **脏数据过滤**：正则扫源码会扫出假包名（CSS 片段、模板字符串里的 JSX、文档里的
+    // `@deepseek-ai/<pkg>/remote`）。判据是「解析得到包根 + 清单里有 version」——满足才算一个包，
+    // 否则**丢弃**，不进 failures（failures 是「该有却没有」，不是「这行不是 import」）。
+    if (root === undefined) continue;
+    const version = await versionOf(root.manifest);
+    if (version === undefined) continue;
+    const planned = new Set<string>();
+    for (const specifier of record.specifiers) {
+      const subpath = specifier.slice(name.length).replace(/^\//u, "");
+      // 出口名就是引用里那一段：包级引用是 `index`（地址 `…/index.js`），
+      // `shiki/core` 是 `core`、`@morlay/zephyr-app/client/base.css` 是 `client/base.css`
+      // ——必须与 `urlOf` 生成的地址同形，否则产物在盘上、地址却落在空处。
+      const exportName = subpath === "" ? "index" : subpath;
+      if (planned.has(exportName)) continue;
+      const entry = entryOf(root.manifest, specifier);
       if (entry === undefined) continue;
-      targets.push({ name, version, exportName, entry, manifestOf });
-      planned = true;
+      planned.add(exportName);
+      targets.push({ name, version, exportName, entry, manifestOf: root.manifest });
     }
-    if (!planned) failures.push({ name, reason: "没有可用的 client 出口" });
+    // 只有**下潜过**的包才谈得上「该有却没有」：其余的（三方、假名）解析不出出口是预期结果。
+    if (planned.size === 0 && descended.has(name)) {
+      failures.push({ name, reason: "没有任何可用的出口" });
+    }
   }
   return { targets, failures };
 }

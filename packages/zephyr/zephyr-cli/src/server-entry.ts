@@ -15,7 +15,7 @@ export type ServerProviders = ProviderList | ((mode: CliModeValues) => ProviderL
 /**
  * 读一个服务端入口，把它归一成清单。
  *
- * @param entry - 入口绝对路径（源码树或闭包里的 `entry.mjs`）。
+ * @param entry - 入口绝对路径（源码树里的 `src/server.ts`，或产物里复制过去的那一份）。
  * @param mode - 本次运行的部署参数（函数形态的入参）。
  * @param version - 缓存失效用的版本号；重载时必须换，否则 import 拿回同一个模块。
  * @returns 提供清单。
