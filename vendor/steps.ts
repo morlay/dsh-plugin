@@ -82,6 +82,13 @@ export const patch: Step[] = [
   //   字符串节点 162 万个，其中 `"chunk"` 3 万、模型名 1.8 万、provider 1.8 万、`"。执行。执行。执行"`
   //   这类累积文本副本 2.6 万——都是逐帧留下的。
   { type: "git", patch: "session-window-entry-cap.patch" },
+  // 会话 log 记录时，字符串可能是从大 buffer 上切出来的（截断的工具结果、拼接的流式文本、截过的
+  // 提示词）：V8 的 slice 串指向父串，事件进 log 长期保留后，父串整块都回收不掉。
+  // `snapshotJsonValue` 只拷结构、字符串原样带过去，所以在入 log 前补一次 `structuredClone`，
+  // 让 log 里的字符串各持一份字节（V8 里即 `SLICED_ONE_BYTE_STRING_TYPE` →
+  // `SEQ_ONE_BYTE_STRING_TYPE`，父串随即可回收）。只改两个记录入口（`snapshotAppend` 与插件记录），
+  // 读取面与格式不变；代价是每次 append 多一遍整树拷贝（见 `session-log-string-flatten.patch`）。
+  { type: "git", patch: "session-log-string-flatten.patch" },
   // 长会话的卡顿主因是**已挂载的行数**：聊天流没有虚拟化，折叠只改 CSS（行仍在 DOM），
   // 于是每一帧的布局与绘制都按整个已加载窗口的规模付钱。给行加 `content-visibility: auto`，
   // 让离屏行跳过自身的布局与绘制——DOM 仍在（锚点、`hidden="until-found"` 搜索、折叠测量都不动），

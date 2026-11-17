@@ -1,0 +1,52 @@
+diff --git a/packages/core/session/src/index.ts b/packages/core/session/src/index.ts
+index ea6c337f55..d2bf812b88 100644
+--- a/packages/core/session/src/index.ts
++++ b/packages/core/session/src/index.ts
+@@ -517,6 +517,25 @@ export function pluginRecordOf(event: SessionEvent): PluginRecord | undefined {
+   return { type, seq: event.seq, time: event.time, data: event.data }
+ }
+ 
++/**
++ * Copy one payload about to enter the log, giving the log strings of its own.
++ *
++ * {@link snapshotJsonValue} copies the structure but keeps string values as they are, so a
++ * string sliced out of a large buffer — a truncated tool result, a joined stream, a cut
++ * prompt — keeps that whole buffer alive for as long as the log lives. A structured clone
++ * rebuilds every string, releasing the parent the event no longer needs. The cost is one
++ * extra pass over the payload per append, paid to keep long sessions bounded.
++ * @param value - payload about to enter the log.
++ * @param subject - what is being recorded, for the rejection message.
++ * @returns the detached snapshot whose strings own their bytes.
++ * @throws {Error} when the payload is not losslessly JSON-serializable.
++ */
++function snapshotLogPayload<T>(value: T, subject: string): T {
++  const snapshot = snapshotJsonValue(value)
++  if (snapshot === undefined) throw new Error(`${subject} carries non-JSON-serializable data`)
++  return structuredClone(snapshot)
++}
++
+ /** Copy live append inputs before sequence assignment. */
+ function snapshotAppend(
+   type: SessionEventType,
+@@ -526,8 +545,7 @@ function snapshotAppend(
+ ) {
+   const surfaceOp = opts?.surfaceOp
+   const sourceEventSeqs = opts?.sourceEventSeqs
+-  const dataSnapshot = snapshotJsonValue(data)
+-  if (dataSnapshot === undefined) throw new Error(`${subject} carries non-JSON-serializable data`)
++  const dataSnapshot = snapshotLogPayload(data, subject)
+   const surface = snapshotJsonValue({
+     ...sourceEventSeqs === undefined ? {} : { sourceEventSeqs },
+     ...surfaceOp === undefined ? {} : { surfaceOp },
+@@ -928,10 +946,7 @@ export class Session {
+    */
+   #appendRecord(type: PluginRecordType, data: unknown): SessionSeq {
+     this.publicationEntry()
+-    const dataSnapshot = snapshotJsonValue(data)
+-    if (dataSnapshot === undefined) {
+-      throw new Error(`plugin record "${type}" carries non-JSON-serializable data`)
+-    }
++    const dataSnapshot = snapshotLogPayload(data, `plugin record "${type}"`)
+     const entry = this.publicationEntry()
+     const record: unknown = deepFreeze({
+       type,
