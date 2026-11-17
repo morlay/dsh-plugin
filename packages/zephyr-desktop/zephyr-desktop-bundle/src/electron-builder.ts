@@ -73,18 +73,16 @@ export function electronBuilderConfigOf(input: ElectronBuilderInput): ElectronBu
     // 按 Electron 的 ABI 再编一遍既不对，也会往 `~/.electron-gyp` 写东西。
     npmRebuild: false,
     directories: { output: join(input.layout.root, "app") },
-    // **逐项列，不用通配**（通配实测会漏件）：入口、壳产出的字节、清单。
+    // **逐项列，不用通配**（通配实测会漏件）：壳产出的字节、启动器、清单。
     // 壳的 `node_modules` 由 electron-builder 按 `package.json` 的 dependencies 自己收集（app 目录是
     // `pnpm --filter 壳 deploy` 的产物，依赖图完整）。
-    files: ["dist/**", "bootstrap.mjs", "entry.mjs", "package.json"],
-    // 宿主闭包**不在这里**：`PackagerDefault` 在打包之后直接 `pnpm deploy` 到 `Resources/runtime`
-    // （真目录，壳要 `chdir` 进去；asar 里不行）。走 deploy 而不是 `cp` 的两个理由：快，且 pnpm 的
-    // 相对链原样保留——`cp` 默认会把链接目标解析成绝对路径，装出来的应用就指回构建机的源码树。
-    // 静态面与身份文件放 asar 外：按路径读它们的东西（宿主、将来按路径取页面的消费者）不必依赖 asar 补丁。
-    // 页面链现在走宿主自己的 vite（见设计「桌面功能面」第七节的债）：这份 `dist` 目前没有读者。
+    // 宿主的产物**不在这里**：它在 `<outputDir>`（`bootstrap.mjs` / `client_modules/` / `src/` / 闭包），
+    // 由 `PackagerDefault` 复制进 `Resources/runtime`（真目录，壳要 `chdir` 进去）。
+    files: ["dist/**", "bootstrap.mjs", "package.json"],
+    // 宿主的那一份（产物五样）**不在这里**：`PackagerDefault` 在打包之后把 `<outputDir>` 复制进
+    // `Resources/runtime`（真目录，壳要 `chdir` 进去；asar 里不行）。
+    // 身份文件放 asar 外：按路径读它的东西（壳、启动器）不必依赖 asar 补丁。
     extraResources: [
-      // 静态面留在 asar 外（`.node` 之外不需要走 asar）。
-      { from: input.layout.dist, to: "dist" },
       // 窗口尺寸与应用身份要在壳里读得到：环境变量只覆盖 dev 形态，打包形态靠这份文件。
       { from: join(input.layout.root, "desktop.json"), to: "desktop.json" },
     ],

@@ -24,7 +24,7 @@ async function runtimeFixture(input: {
     }),
     "utf8",
   );
-  await writeFile(join(runtimeDir, "entry.mjs"), "export default [];\n", "utf8");
+  await writeFile(join(runtimeDir, "bootstrap.mjs"), "export default [];\n", "utf8");
   const scope = join(runtimeDir, "node_modules", "@morlay");
   await mkdir(scope, { recursive: true });
   for (const name of input.packages) {
@@ -167,15 +167,19 @@ describe("打包期冒烟：找到产物里的闭包", () => {
     for (const layout of [join("Contents", "Resources"), "resources"]) {
       const appDir = await mkdtemp(join(tmpdir(), "dsh-app-"));
       await mkdir(join(appDir, layout, "runtime"), { recursive: true });
-      await writeFile(join(appDir, layout, "runtime", "entry.mjs"), "export default [];\n", "utf8");
+      await writeFile(
+        join(appDir, layout, "runtime", "bootstrap.mjs"),
+        "export default [];\n",
+        "utf8",
+      );
       await expect(runtimeDirInAppOf(appDir)).resolves.toBe(join(appDir, layout, "runtime"));
     }
   });
 
-  it("有 Resources 但没有闭包入口：抛 CliError 指向缺 entry.mjs 的目录", async () => {
+  it("有 Resources 但没有装配文件：抛 CliError 指向缺 bootstrap.mjs 的目录", async () => {
     const appDir = await mkdtemp(join(tmpdir(), "dsh-app-"));
     await mkdir(join(appDir, "Contents", "Resources", "runtime"), { recursive: true });
-    await expect(runtimeDirInAppOf(appDir)).rejects.toThrow(/entry\.mjs/u);
+    await expect(runtimeDirInAppOf(appDir)).rejects.toThrow(/bootstrap\.mjs/u);
   });
 
   it("两种布局都没有：抛 CliError 说清试过哪两个 Resources", async () => {

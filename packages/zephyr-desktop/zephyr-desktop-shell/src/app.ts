@@ -11,9 +11,9 @@
 import * as electronBuiltin from "electron";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ProviderList } from "@morlay/zephyr";
 import type { CliModeValues, ZephyrDesktopConfig } from "@morlay/zephyr-cli";
 import { shellDebugOf } from "./debug.ts";
 import { deploymentLineOf } from "./deployment-line.ts";
@@ -154,14 +154,14 @@ async function start(): Promise<void> {
   await reportEvent("start：工作目录", runtimeDir);
   await reportEvent("start：装配宿主（与 dev 同一套）");
 
-  // **与宿主共用同一份 `@morlay/zephyr`**：从闭包里解析（`runtime/node_modules`）。壳自己那份会在
-  // 同进程里形成第二套服务令牌表——症状是 `service "remote-descriptor" has been registered at <root>`。
-  const { bootstrapApplication } = await importZephyr(runtimeDir);
+  // **宿主自带装配**：产物里的 `bootstrap.mjs` 就是它（`zephyr build` 生成，`(mode) => App`）。
+  // 壳不再自己 `bootstrapApplication`——那会让「装配根、部署值、productionProviders 的叠法」在
+  // 壳与产物里各写一份；两份一旦漂移，症状是打包形态起来之后指回构建机的源码树。
+  // 它的 `src/server.ts` 是**源码面**（TS），所以先装闭包里的 loader 再加载它。
+  await installLoader(runtimeDir);
   const mode = await reportDeployment();
-  hostApp = await bootstrapApplication({
-    providers: [...(await reportEvent("start：装配宿主清单").then(() => hostProviders(mode)))],
-    timeoutMs: 60_000,
-  });
+  await reportEvent("start：装配宿主清单");
+  hostApp = await bootHost(runtimeDir, mode);
 
   // **与 desktop dev 一模一样的跑法**：宿主自己起 vite，页面从 http 进。唯一的差别是装配面
   // （`Resources/runtime` 而不是工作区）与数据根（用户数据目录而不是工作区）。
@@ -393,49 +393,37 @@ function requireDataDir(): string {
 }
 
 /**
- * 从闭包里加载 `@morlay/zephyr`（与宿主同一份）。
+ * 装闭包里的 TS 运行时入口：宿主的源码面入口（`src/server.ts`）要靠它加载。
+ *
+ * 从 **`runtime` 的清单**解析而不是壳自己：闭包里就带着这个 loader（`zephyr build` 装进去的），
+ * 壳那份是 asar 内的另一份——同进程里两套模块实例会各自注册 hooks。
  * @param runtimeDir - 闭包根（`Resources/runtime`）。
- * @returns 该模块的命名空间（只用到 `bootstrapApplication`）。
+ * @throws Error 闭包里没有 loader（产物不齐）。
  */
-async function importZephyr(runtimeDir: string): Promise<{
-  bootstrapApplication: (options: {
-    providers: ProviderList;
-    timeoutMs: number;
-  }) => Promise<{ dispose(): Promise<void> }>;
-}> {
+async function installLoader(runtimeDir: string): Promise<void> {
   const requireFromRuntime = createRequire(join(runtimeDir, "package.json"));
-  const entry = requireFromRuntime.resolve("@morlay/zephyr");
-  return (await import(pathToFileURL(entry).href)) as {
-    bootstrapApplication: (options: {
-      providers: ProviderList;
-      timeoutMs: number;
-    }) => Promise<{ dispose(): Promise<void> }>;
-  };
+  const loader = requireFromRuntime.resolve("@morlay/dsh-oxc-node");
+  await import(pathToFileURL(loader).href);
 }
 
 /**
- * 宿主行（应用清单）：打包形态读闭包里的入口。
+ * 产物里的装配入口：`bootstrap.mjs` 的默认导出就是 `(mode) => App`（`zephyr build` 生成）。
+ * @param runtimeDir - 闭包根（`Resources/runtime`）。
  * @param mode - 壳侧的部署值（本函数不改它，原样交给入口）。
- * @returns 提供清单。
+ * @returns 已装配的宿主树（`dispose` 收整棵树）。
  */
-async function hostProviders(mode: CliModeValues): Promise<ProviderList> {
+async function bootHost(
+  runtimeDir: string,
+  mode: CliModeValues,
+): Promise<{ dispose(): Promise<void> }> {
   // 宿主入口在 **asar 之外**的 `Resources/runtime`（闭包根，与壳的工作目录同一处）。
-  const entry =
-    process.env.ZEPHYR_DESKTOP_HOST_ENTRY ?? join(resourcesPath(), "runtime", "entry.mjs");
-  const module = (await import(pathToFileURL(entry).href)) as {
-    default?: unknown;
-    providers?: unknown;
-  };
-  const exported = module.providers ?? module.default;
-  // 入口可以导出**清单**或 **(mode) => 清单**：部署值（工作区、数据目录）只有它知道怎么用。
-  const providers =
-    typeof exported === "function"
-      ? (exported as (mode: CliModeValues) => ProviderList)(mode)
-      : exported;
-  if (!Array.isArray(providers)) {
-    throw new Error(`${entry} 没有导出 provider 清单（默认导出 / providers / (mode) => 清单）。`);
+  const entry = process.env.ZEPHYR_DESKTOP_HOST_ENTRY ?? join(runtimeDir, "bootstrap.mjs");
+  const module = (await import(pathToFileURL(entry).href)) as { default?: unknown };
+  const boot = module.default;
+  if (typeof boot !== "function") {
+    throw new Error(`${entry} 没有导出装配函数（应当是 zephyr build 生成的 (mode) => App）。`);
   }
-  return providers;
+  return (boot as (mode: CliModeValues) => Promise<{ dispose(): Promise<void> }>)(mode);
 }
 
 /**
@@ -454,13 +442,15 @@ function shellMode(): CliModeValues {
       // 原始写法由 CLI 递进来（`desktop dev` 知道用户写的是 `--data-dir xdg` 还是 `workspace`）；
       // 没给时退回历史缺省值，壳不自己推断。
       dataDirSpec: process.env.ZEPHYR_DESKTOP_DATA_DIR_SPEC ?? "workspace",
+      // dev 形态：起始目录就是应用工作区（用户在那里跑 `desktop dev`）。
+      defaultWorkingDirectory: fromEnv,
       configFile: "",
       // 形态事实由**壳**递给宿主（装配面因此不必自己读 env）：dev 形态这里是 `false`。
       packaged: false,
     };
   }
   // 打包：**装配面是 `Resources/runtime`（真目录，asar 之外）**——闭包的 `package.json`、`src/client`、
-  // `node_modules`、`entry.mjs` 都在那里。必须是真目录：应用拿 `process.cwd()` 当装配根，而 `chdir`
+  // `node_modules`、`bootstrap.mjs` 都在那里。必须是真目录：`chdir` 要进得去，而 `chdir`
   // 进不了 asar。**数据根在用户目录**（只读位置写不进去，也不能是 `/`）。
   const workspace = join(resourcesPath(), "runtime");
   // 数据根由启动器（打包形态的第一跳）给出：`<appData>/<desktop.id>` 这一层，下面有 `electron/`
@@ -472,6 +462,9 @@ function shellMode(): CliModeValues {
     profileDir: workspace,
     dataDir,
     dataDirSpec: "xdg",
+    // 起始目录**不能**是装配根（`Resources/runtime` 在应用包内、只读）：桌面形态从用户主目录开始，
+    // 之后由界面里选的工作目录接管。
+    defaultWorkingDirectory: homedir(),
     configFile: "",
     // 打包形态：壳在模块求值时打的 `ZEPHYR_DESKTOP_PACKAGED=1` 就是这一条的唯一来源。
     packaged: isPackaged(),

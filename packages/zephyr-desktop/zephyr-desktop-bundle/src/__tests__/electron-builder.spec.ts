@@ -10,7 +10,7 @@ import { electronBuilderConfigOf } from "../electron-builder.ts";
  */
 function resolvedFor(withDesktop = true): ResolvedConfig {
   const workspace = "/w";
-  const layout = layoutOf(workspace);
+  const layout = layoutOf(workspace, undefined, "Demo");
   return {
     config: {
       server: { entry: "./src/server.ts" },
@@ -36,10 +36,10 @@ describe("electron-builder 配置推导", () => {
     });
     expect(config.appId).toBe("ai.example.demo");
     expect(config.productName).toBe("Demo");
-    expect(config.directories.output).toBe("/w/node_modules/.zephyr/app");
+    expect(config.directories.output).toBe("/w/target/Demo/app");
   });
 
-  it("asar 打开，native 拆出去；静态面与闭包放在 asar 外的 Resources", () => {
+  it("asar 打开，native 拆出去；宿主那一份不在这里（PackagerDefault 复制到 Resources/runtime）", () => {
     const resolved = resolvedFor();
     const config = electronBuilderConfigOf({
       resolved,
@@ -50,10 +50,10 @@ describe("electron-builder 配置推导", () => {
     // 不签名是配置事实：换台机器、换个钥匙串都不该改变这个行为。
     expect(config.mac.identity).toBeNull();
     expect(config.asarUnpack).toEqual(["**/*.node"]);
-    // 闭包在 asar 里（`files: profile/**`），extraResources 只剩静态面与身份。
+    // 宿主的那一份（`bootstrap.mjs` / `client_modules/` / 闭包）不进 electron-builder 的清单：
+    // 打包之后由 `PackagerDefault` 整份复制到 `Resources/runtime`——它是自包含的一份应用。
     expect(config.extraResources).toEqual([
-      { from: "/w/node_modules/.zephyr/dist", to: "dist" },
-      { from: "/w/node_modules/.zephyr/desktop.json", to: "desktop.json" },
+      { from: "/w/target/Demo/desktop.json", to: "desktop.json" },
     ]);
   });
 

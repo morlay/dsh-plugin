@@ -34,21 +34,21 @@ function demoResolved(workspace: string): ResolvedConfig {
 }
 
 /**
- * 造一份「构建已经完成」的闭包。
+ * 造一份「构建已经完成」的产物。
  *
- * 真构建的三个步骤跑完必然有 `runtime/entry.mjs`（框架的 build 期冒烟会去加载它）；用例用替身步骤，
- * 所以这里把那份产物补上，避免把「替身步骤没产物」当成被测行为。
+ * 真构建跑完必然有 `bootstrap.mjs` 与 `client_modules/`（框架的 build 期冒烟会去加载它）；
+ * 用例用替身步骤，所以这里把那份产物补上，避免把「替身步骤没产物」当成被测行为。
  * @param resolved - 解析结果。
  * @returns 造完成。
  */
 async function seedClosure(resolved: ResolvedConfig): Promise<void> {
-  await mkdir(resolved.layout.runtime, { recursive: true });
+  await mkdir(resolved.layout.clientModules, { recursive: true });
   await writeFile(
-    join(resolved.layout.runtime, "package.json"),
-    JSON.stringify({ name: "demo", dependencies: {} }),
+    resolved.layout.manifest,
+    JSON.stringify({ name: "demo", type: "module", dependencies: {} }),
     "utf8",
   );
-  await writeFile(resolved.layout.entry, "export default [];\n", "utf8");
+  await writeFile(resolved.layout.bootstrap, "export default [];\n", "utf8");
 }
 
 /**
@@ -84,7 +84,7 @@ async function mount(resolved: ResolvedConfig, packager: ProviderEntry = FakePac
   const mode: CliModeValues = {
     command: ["desktop", "bundle"],
     workspace: resolved.workspace,
-    profileDir: resolved.layout.runtime,
+    profileDir: resolved.layout.root,
     dataDir: join(resolved.workspace, ".dsh-store"),
     dataDirSpec: "workspace",
     configFile: resolved.configFile,
@@ -113,8 +113,8 @@ describe("desktop bundle（装配级）", () => {
       const code = await command?.run({ params: {}, rest: [], mode });
       expect(code).toBe(0);
       const packager = app.get(Packager) as FakePackager;
-      // 构建的四步（静态面 / 运行时闭包 / 入口 bundle / 前端预编译）各一次 = 构建跑了一轮
-      expect(steps.calls).toHaveLength(4);
+      // 构建的三步各一次（前端静态目录 / 运行时闭包 / 生产态装配）= 构建跑了一轮
+      expect(steps.calls).toHaveLength(3);
       expect(packager.packs[0]?.appId).toBe("ai.example.demo");
       await expect(access(join(resolved.layout.root, "desktop.json"))).resolves.toBeUndefined();
       expect(packager.installs).toHaveLength(0);
@@ -126,9 +126,9 @@ describe("desktop bundle（装配级）", () => {
   it("每次 bundle 都先重建（包里的产物必须与源码一致）", async () => {
     const workspace = await tempWorkspace({});
     const resolved = demoResolved(workspace);
-    // 已经有旧产物也照样重建：旧 `entry.mjs` 可能对应已经改掉的源码。
-    await mkdir(resolved.layout.runtime, { recursive: true });
-    await writeFile(resolved.layout.entry, "export default {};", "utf8");
+    // 已经有旧产物也照样重建：旧产物可能对应已经改掉的源码。
+    await mkdir(resolved.layout.root, { recursive: true });
+    await writeFile(resolved.layout.bootstrap, "export default {};", "utf8");
     const { app, mode, command, steps } = await mount(resolved);
     try {
       await command?.run({ params: {}, rest: [], mode });

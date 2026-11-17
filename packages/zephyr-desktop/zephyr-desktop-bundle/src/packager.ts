@@ -7,8 +7,11 @@
 //   <app>/
 //   ├── dist/            壳的产物（deploy 自带，壳的 `files` 里有 `dist`）
 //   ├── node_modules/    壳的依赖（含 `@morlay/dsh-oxc-node` → `oxc-transform`）
-//   ├── profile/         宿主闭包（`build` 的 `runtime/`）
-//   └── package.json     入口改写为 `./dist/main.mjs`
+//   ├── bootstrap.mjs    打包形态的启动器（部署值 → 壳，见 `desktop-dirs.ts`）
+//   └── package.json     入口改写为 `./bootstrap.mjs`
+//
+// 宿主的那一份（`build` 的 `<outputDir>`：`bootstrap.mjs` / `client_modules/` / `src/` / 闭包 /
+// `package.json`）在打包之后整份复制进 `Resources/runtime`——它是自包含的一份应用，壳在那里 `chdir`。
 import { access, appendFile, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -37,10 +40,8 @@ export interface PackResult {
 export interface PackInput {
   /** app 目录（electron-builder 的 projectDir）。 */
   readonly appDir: string;
-  /** 宿主闭包（`build` 的 `runtime/`，含 `entry.mjs`）。 */
+  /** 宿主的那一份（`build` 的 `<outputDir>`：`bootstrap.mjs` + `client_modules/` + 闭包 + 源码面入口）。 */
   readonly profileDir: string;
-  /** 应用包名（deploy 的 filter）：闭包要按**应用**的依赖算，宿主才找得到自己的包。 */
-  readonly appPackage: string;
   /** 步骤日志文件（每步一行，含耗时）：卡住时从这里看最后一条。 */
   readonly logFile: string;
 }
@@ -90,34 +91,9 @@ export class PackagerDefault extends Packager {
     );
     const appDir = outputs[0] ?? (await discoverAppDir(config.directories.output));
     const runtimeDir = join(await resourcesDirOf(appDir), "runtime");
-    // **闭包直接 deploy 到产物里**（不 cp 整个 node_modules）：deploy 只装一次、且 pnpm 的相对链原样保留。
-    // 用 cp 的两个问题：慢（按应用的闭包近 1G），以及默认会把链接目标解析成绝对路径——装出来的
-    // 应用因此指回构建机的源码树，冒烟在 `.app` 内直接报「逃逸链接」。
-    await this.step(input.logFile, `部署运行时闭包（pnpm deploy → ${runtimeDir}）`, async () => {
-      await rm(runtimeDir, { recursive: true, force: true });
-      await run(
-        "pnpm",
-        [
-          "--filter",
-          input.appPackage,
-          "--config.inject-workspace-packages=true",
-          "deploy",
-          "--prod",
-          // **不跑安装脚本**：原生包（koffi / better-sqlite3 之类）在发布物里带预编译产物，打包期再
-          // 跑一次 install 既慢又会在没有工具链的机器上直接失败（实测 koffi 的 cnoke 退出 1）。
-          "--ignore-scripts",
-          "--config.strictDepBuilds=false",
-          runtimeDir,
-        ],
-        { cwd: await workspaceRootOf(), maxBuffer: 64 * 1024 * 1024 },
-      );
-    });
-    // deploy 只产出「包自己文件 + node_modules」；构建产物（单文件入口）由这里补进去。
-    await this.step(input.logFile, "复制构建产物进闭包（entry.mjs）", async () => {
-      await cp(join(input.profileDir, "entry.mjs"), join(runtimeDir, "entry.mjs"), {
-        verbatimSymlinks: true,
-      });
-    });
+    await this.step(input.logFile, `复制宿主产物 → ${runtimeDir}`, () =>
+      copyRuntime(input.profileDir, runtimeDir),
+    );
     // 装完先证明它自包含：不自包含的包装出来是「双击没反应」。
     await this.step(input.logFile, "打包期冒烟：闭包自包含 + 入口能被 loader 加载", async () => {
       await this.note(input.logFile, `[bundle] 冒烟对象：${runtimeDir}`);
@@ -161,17 +137,7 @@ export class PackagerDefault extends Packager {
       // 不写这个，electron-builder 会向上找到工作区、跑一遍 pnpm 收集（几十秒到几分钟，还可能改包）。
       await writeFile(join(input.appDir, "pnpm-workspace.yaml"), "packages: []\n", "utf8");
     });
-    await this.step(
-      input.logFile,
-      `宿主闭包就绪（afterPack 会放到 Resources/runtime）`,
-      async () => {
-        if (!(await exists(join(input.profileDir, "entry.mjs")))) {
-          throw new CliError(
-            `宿主闭包里没有 entry.mjs：${input.profileDir}（先跑 zephyr build）。`,
-          );
-        }
-      },
-    );
+
     await this.step(input.logFile, "写打包形态的启动器（部署值 → 壳）并改入口", async () => {
       // 启动器是第一跳：Finder 启动没有环境变量，而 `userData` 只能在 ready 之前 `setPath`。
       // 算法只有 `desktop-dirs.ts` 一处（壳不自己拼 appData），这里只把源码落到 app 目录。
@@ -253,6 +219,47 @@ export class PackagerDefault extends Packager {
     await rm(target, { recursive: true, force: true });
     await cp(result.appDir, target, { recursive: true, verbatimSymlinks: true });
     return target;
+  }
+}
+
+/** 宿主产物里的两项文件（装配入口与清单）。 */
+const RUNTIME_FILES = ["bootstrap.mjs", "package.json"] as const;
+
+/** 宿主产物里的三个目录（前端静态面、闭包、源码面入口）。 */
+const RUNTIME_DIRS = ["client_modules", "node_modules", "src"] as const;
+
+/**
+ * 把宿主产物**按清单复制**进 `Resources/runtime`。
+ *
+ * 为什么逐项而不是整份 `cp(profileDir, …)`：`<outputDir>` 里还躺着打包自己的中间物
+ * （`shell-app/`、`.app`、`bundle.log`、`desktop.json`），而 `Resources/runtime` 就在其中——
+ * 整份复制等于把产物目录往它自己的子目录里拷（Node 直接 `ERR_FS_CP_EINVAL`）。
+ * 清单本身就是「一份可分发的应用」的定义（设计决定 4），照它复制不需要第二份规则。
+ * @param profileDir - 宿主产物根（`zephyr build` 的 `<outputDir>`）。
+ * @param runtimeDir - 目标（`Resources/runtime`）。
+ */
+async function copyRuntime(profileDir: string, runtimeDir: string): Promise<void> {
+  const absent: string[] = [];
+  for (const name of [...RUNTIME_FILES, ...RUNTIME_DIRS]) {
+    if (!(await exists(join(profileDir, name)))) absent.push(name);
+  }
+  if (absent.length > 0) {
+    throw new CliError(
+      `宿主产物不齐（${profileDir}）：缺 ${absent.join("、")}（先跑 zephyr build）。`,
+    );
+  }
+  await rm(runtimeDir, { recursive: true, force: true });
+  await mkdir(runtimeDir, { recursive: true });
+  // `verbatimSymlinks` 是必须的：pnpm 的相对链要原样保留，否则 `cp` 会把链接解析成绝对路径，
+  // 装出来的应用指回构建机的源码树（冒烟会直接报「逃逸链接」）。
+  for (const name of RUNTIME_FILES) {
+    await cp(join(profileDir, name), join(runtimeDir, name), { verbatimSymlinks: true });
+  }
+  for (const name of RUNTIME_DIRS) {
+    await cp(join(profileDir, name), join(runtimeDir, name), {
+      recursive: true,
+      verbatimSymlinks: true,
+    });
   }
 }
 

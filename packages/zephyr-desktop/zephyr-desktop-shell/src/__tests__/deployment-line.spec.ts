@@ -45,9 +45,9 @@ describe("壳的启动顺序", () => {
     // 唯一的发生点：`reportDeployment()` 里调 `deploymentLineOf`，两个形态各调它一次。
     expect(source).toContain("deploymentLineOf({");
     expect(source.match(/reportDeployment\(\)/gu)).toHaveLength(3);
-    // 交出去的那个 mode 就是打印过的那个：`hostProviders(mode)` 在打印之后。
+    // 交出去的那个 mode 就是打印过的那个：`bootHost(runtimeDir, mode)` 在打印之后。
     const printed = source.indexOf("const mode = await reportDeployment();");
-    const handed = source.indexOf("hostProviders(mode)");
+    const handed = source.indexOf("bootHost(runtimeDir, mode)");
     expect(printed).toBeGreaterThan(0);
     expect(handed).toBeGreaterThan(printed);
     // userData 用的是 Electron 自己认的那个（不是部署值回读）。

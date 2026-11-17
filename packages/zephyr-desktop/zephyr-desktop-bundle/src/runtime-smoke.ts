@@ -5,7 +5,7 @@
 //   ① `node_modules/@morlay/*` 的 symlink **允许**（pnpm 的顶层本来就是相对链指进闭包内的 `.pnpm`），
 //      但 realpath 必须落在 `Resources/runtime` 内——**逃逸的链接**（绝对路径 / 指回源码 / 出闭包）才红；
 //   ② 闭包清单里的依赖（加两项壳 / loader 必需）都能从闭包解析；
-//   ③ 入口 `entry.mjs` 能在闭包自己的 loader 下被加载（静态缺链在这一步暴露）。
+//   ③ 装配文件 `bootstrap.mjs` 能在闭包自己的 loader 下被加载（静态缺链在这一步暴露）。
 // 失败一律 `CliError`；**不在这里补装或逐个实体化**——那只会把 deploy 的问题盖住。
 import { spawn } from "node:child_process";
 import { readFile, readdir, readlink, realpath, stat } from "node:fs/promises";
@@ -68,7 +68,7 @@ export async function runtimeSmokeOf(
   // 每个 `@morlay/*` 自己声明的依赖也要能从**它的真身**解析：懒加载的包（例如 storage-json 那种
   // 「只有用到时才 import」）不会在入口加载里暴露，但装出来一样是缺包。
   missing.push(...(await missingInScopedOf(runtimeDir)));
-  const loadFailure = await load(runtimeDir, join(runtimeDir, "entry.mjs"));
+  const loadFailure = await load(runtimeDir, join(runtimeDir, "bootstrap.mjs"));
   return {
     links,
     missing: [...new Set(missing)],
@@ -103,7 +103,7 @@ export async function assertRuntimeSmoke(
     problems.push(`从闭包解析不到：${report.missing.join("、")}`);
   }
   if (report.loadFailure !== undefined) {
-    problems.push(`入口 entry.mjs 加载失败：${report.loadFailure}`);
+    problems.push(`装配文件 bootstrap.mjs 加载失败：${report.loadFailure}`);
   }
   if (problems.length === 0) return report;
   throw new CliError(
@@ -130,18 +130,18 @@ export async function resourcesDirOf(appDir: string): Promise<string> {
 }
 
 /**
- * 打包产物里的闭包目录：`<Resources>/runtime`（真目录：壳要 `chdir` 进去）。
+ * 打包产物里的宿主目录：`<Resources>/runtime`（真目录：壳要 `chdir` 进去）。
  * @param appDir - 打包产出的应用目录。
- * @returns 闭包目录。
- * @throws CliError 两种布局都找不到 `entry.mjs`。
+ * @returns 宿主目录。
+ * @throws CliError 两种布局都找不到 `bootstrap.mjs`。
  */
 export async function runtimeDirInAppOf(appDir: string): Promise<string> {
   const runtimeDir = join(await resourcesDirOf(appDir), "runtime");
   try {
-    await readFile(join(runtimeDir, "entry.mjs"));
+    await readFile(join(runtimeDir, "bootstrap.mjs"));
     return runtimeDir;
   } catch {
-    throw new CliError(`打包产物里的运行时闭包缺 entry.mjs：${runtimeDir}。`);
+    throw new CliError(`打包产物里的宿主目录缺 bootstrap.mjs：${runtimeDir}。`);
   }
 }
 
@@ -271,9 +271,9 @@ async function resolveFromManifest(
 }
 
 /**
- * 在闭包自己的 loader 下加载入口（子进程：不把宿主拖进打包进程）。
- * @param runtimeDir - 闭包根。
- * @param entry - `entry.mjs` 的绝对路径。
+ * 在闭包自己的 loader 下加载装配文件（子进程：不把宿主拖进打包进程）。
+ * @param runtimeDir - 宿主目录。
+ * @param entry - `bootstrap.mjs` 的绝对路径。
  * @returns 失败说明，成功为 `undefined`。
  */
 async function loadEntry(runtimeDir: string, entry: string): Promise<string | undefined> {

@@ -3,7 +3,7 @@
 // 为什么这里允许「顺手 build」而行 `preview` 不许：bundle 的产物本身就包含构建结果（静态面进
 // Resources、闭包进 profile），没有构建就没有包；而 preview 的用途是**验证已有产物**。
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
 import {
@@ -18,22 +18,6 @@ import {
 import { electronBuilderConfigOf } from "../electron-builder.ts";
 import { prepareIcons } from "../icons.ts";
 import { Packager } from "../packager.ts";
-
-/**
- * 应用的包名（`pnpm --filter <名字> deploy` 用）。
- * @param workspace - 应用工作区。
- * @returns 包名。
- * @throws CliError 读不到 `package.json` 或没有 `name`。
- */
-async function appPackageNameOf(workspace: string): Promise<string> {
-  const raw = await readFile(join(workspace, "package.json"), "utf8").catch(() => undefined);
-  if (raw === undefined) {
-    // 工作区没有清单（装配级测试的临时目录就是这样）：退回目录名，deploy 交给包装层去判。
-    return basename(workspace);
-  }
-  const manifest = JSON.parse(raw) as { name?: string };
-  return manifest.name ?? basename(workspace);
-}
 
 /**
  * Electron 版本：`electron` 是壳的 peer，由仓库里装的那份决定。
@@ -100,9 +84,9 @@ export class BundleCommand extends Command {
    */
   private async bundleAll(input: CommandInput): Promise<number> {
     const layout = this.resolved.layout;
-    // **无条件先构建**：包里装的是构建产物（`entry.mjs`、`dist/`），而"有没有现成产物"判断不出它是否
-    // 与当前源码一致——用旧产物打出来的包会带着已经改掉的代码（实测踩过：改了宿主装配面，bundle 却
-    // 打了上一份 `entry.mjs`）。所以每次 bundle 都重建，代价是几分钟，换的是"包与源码一致"。
+    // **无条件先构建**：包里装的是构建产物（`bootstrap.mjs`、`client_modules/`、闭包），而"有没有现成产物"
+    // 判断不出它是否与当前源码一致——用旧产物打出来的包会带着已经改掉的代码（实测踩过：改了宿主装配面，
+    // bundle 却打了上一份产物）。所以每次 bundle 都重建，代价是几分钟，换的是"包与源码一致"。
     await runBuild({ resolved: this.resolved, layout }, this.steps);
     await mkdir(layout.root, { recursive: true });
     await writeFile(
@@ -122,11 +106,10 @@ export class BundleCommand extends Command {
       ...(Object.keys(icons).length === 0 ? {} : { icons }),
     });
     const result = await this.packager.pack(config, {
-      // app 目录由 `pnpm --filter 壳 deploy` 现装（依赖合法进 asar）；宿主闭包从 `runtime/` 复制过去。
+      // app 目录由 `pnpm --filter 壳 deploy` 现装（依赖合法进 asar）；宿主的那一份（`bootstrap.mjs` +
+      // `client_modules/` + `src/` + 闭包）由 `PackagerDefault` 复制进 `Resources/runtime`。
       appDir: join(layout.root, "shell-app"),
-      profileDir: layout.runtime,
-      // 闭包按**应用**的依赖算（壳额外要的包已写进应用清单）。
-      appPackage: await appPackageNameOf(this.resolved.workspace),
+      profileDir: layout.root,
       // 步骤日志落盘：被打断或卡住时，最后一行就是停在哪。
       logFile: join(layout.root, "bundle.log"),
     });
