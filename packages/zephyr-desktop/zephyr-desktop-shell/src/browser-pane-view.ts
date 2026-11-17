@@ -118,8 +118,10 @@ export function webContentsPaneViewOf(input: {
     session.setPermissionCheckHandler(panePermissionCheckHandlerOf());
     // 下载一律取消：面板是「看网页」，不是「往磁盘落东西」。
     session.on("will-download", (...args: never[]) => {
-      const [event] = args as unknown as [{ preventDefault(): void }];
-      event.preventDefault();
+      // `never[]` 是自定最小面里的兜底签名：首参在真 Electron 里是下载事件，单断言就够（`never` 可收窄到
+      // 任意类型），不必绕 `as unknown as`（那是双断言，audit 白名单只给边界桥）。
+      const event = args[0] as { preventDefault(): void } | undefined;
+      event?.preventDefault();
     });
     return session;
   };
