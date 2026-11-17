@@ -70,6 +70,17 @@ const DYNAMIC_IMPORT = /import\s*\(\s*["']([^"'.][^"']*)["']\s*\)/gu;
 /** 相对导入的正则（继续跟下去）。 */
 const RELATIVE_FROM = /from\s*["'](\.{1,2}\/[^"']+)["']/gu;
 
+/** 样式里的 `@import`：裸说明符要进清单，相对路径要继续跟下去（与脚本里的 import 同一张图）。 */
+const CSS_IMPORT = /@import\s+(?:url\(\s*)?["']?([^"') \s;]+)["']?\s*\)?/gu;
+
+/** 相对引用的样式文件（`import "./x.css"`）：**样式也算模块**，它的 `@import` 同样要读。 */
+const RELATIVE_STYLE = /["'](\.{1,2}\/[^"']+\.css)["']/gu;
+
+/** BFS 要跟的文件：脚本与样式。 */
+function isFollowable(file: string): boolean {
+  return /\.[cm]?[jt]sx?$/u.test(file) || file.endsWith(".css");
+}
+
 /**
  * 从源码里取**静态** import 的裸说明符。
  * @param text - 源码。
@@ -89,6 +100,23 @@ export function bareImportsOf(text: string): string[] {
   for (const match of text.matchAll(DYNAMIC_IMPORT)) {
     const specifier = match[1];
     if (specifier !== undefined) out.push(specifier);
+  }
+  return out;
+}
+
+/**
+ * 样式文本里的 `@import` **裸说明符**（相对路径与 http(s) 由 {@link RELATIVE_STYLE} 那条跟）。
+ * @param text - 样式文本。
+ * @returns 说明符列表。
+ */
+function cssImportsOf(text: string): string[] {
+  const out: string[] = [];
+  for (const match of text.matchAll(CSS_IMPORT)) {
+    const specifier = match[1];
+    if (specifier === undefined) continue;
+    if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier))
+      continue;
+    out.push(specifier);
   }
   return out;
 }
@@ -243,10 +271,13 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
   const descended = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
-    if (file === undefined || seenFiles.has(file) || !/\.[cm]?[jt]sx?$/u.test(file)) continue;
+    if (file === undefined || seenFiles.has(file) || !isFollowable(file)) continue;
     seenFiles.add(file);
     const text = await readFile(file, "utf8").catch(() => "");
-    const specifiers = bareImportsOf(text).filter((specifier) => !specifier.startsWith("node:"));
+    // 样式与脚本的裸说明符同一个去处：样式里的 `@import` 也是「页面会去取的那份产物」。
+    const specifiers = (
+      file.endsWith(".css") ? cssImportsOf(text) : bareImportsOf(text)
+    ).filter((specifier) => !specifier.startsWith("node:"));
     for (const specifier of specifiers) {
       const name = packageNameOfSpecifier(specifier);
       const root = await rootOfFrom(name, file, rootCache);
@@ -264,12 +295,24 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       record.specifiers.add(specifier);
       if (record.importers.length < MAX_IMPORTERS) record.importers.push(file);
       records.set(root.manifest, record);
+      // **样式出口本身也要读**：`@import` 指向的包出口只在这份 CSS 里看得见（脚本的 import 里没有
+      // 它），不读就漏出清单——改写出来的地址于是 404。
+      if (specifier.endsWith(".css")) {
+        const entry = await entryOf(root.manifest, specifier);
+        if (entry !== undefined) pending.push(entry);
+      }
     }
     for (const match of text.matchAll(RELATIVE_FROM)) {
       const relative = match[1];
       if (relative === undefined) continue;
       const base = join(dirname(file), relative).replace(/\.[cm]?[jt]sx?$/u, "");
       pending.push(base + ".ts", base + ".tsx");
+    }
+    // 相对引用的样式文件（`import "./base.css"` 与样式里的 `@import "./x.css"`）：按原路径跟，
+    // 扩展名不猜——它本来就是磁盘上的名字。
+    for (const match of text.matchAll(RELATIVE_STYLE)) {
+      const relative = match[1];
+      if (relative !== undefined) pending.push(join(dirname(file), relative));
     }
     // 下潜：把下潜范围内、第一次见到的包的浏览器面入口推进 BFS。**以这个引用方为解析基准**——
     // 它看得见哪个副本，就用哪个副本（pnpm 严格布局下同名多版本是常态）。

@@ -18,6 +18,7 @@ import {
   clientModulesAlias,
   dependencyEntry,
   exportTargetOf,
+  productFileNameOf,
   urlOf,
 } from "@morlay/zephyr-dev/testing";
 
@@ -731,5 +732,95 @@ describe("两条链的入口是同一份规则", () => {
         expected,
       );
     }
+  });
+});
+// ── 样式里的跨包 `@import` 落成联邦地址 ──────────────────────────────────────────────────────────
+//
+// 约束：注入的 `<style>` 文本里不留裸说明符——浏览器会按页面相对去取它（一条 404）；跨包引用只能是
+// 联邦地址，且末段与产物文件名同形（设计决定 4）。
+describe("CSS 的 @import 落成联邦地址", () => {
+  let work: string;
+  let cacheRoot: string;
+  /** 这次构建的**全部产物正文**：样式被拆成共享 chunk，注入的 `<style>` 文本不保证在入口产物里。 */
+  let products: string[];
+
+  beforeAll(async () => {
+    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-css-import-")));
+    cacheRoot = join(work, ".cache");
+    // 被 `@import` 的包：它的 CSS 出口自成一个产物（地址里的版本从宿主的依赖面解析）。
+    const dep = join(work, "node_modules", "css-dep");
+    await mkdir(dep, { recursive: true });
+    await writeFile(
+      join(dep, "package.json"),
+      `${JSON.stringify({ name: "css-dep", version: "1.0.0", exports: { "./brand-font.css": "./brand-font.css" } })}\n`,
+      "utf8",
+    );
+    await writeFile(join(dep, "brand-font.css"), ":root { --dep: 1; }\n", "utf8");
+    // 宿主包：入口 CSS 只有一行裸 `@import`。
+    const host = join(work, "node_modules", "@morlay", "css-host");
+    await mkdir(join(host, "src"), { recursive: true });
+    await writeFile(
+      join(host, "package.json"),
+      `${JSON.stringify({
+        name: "@morlay/css-host",
+        version: "2.0.0",
+        dependencies: { "css-dep": "^1.0.0" },
+        exports: { "./brand-font.css": "./src/brand-font.css" },
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(host, "src", "brand-font.css"),
+      '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n',
+      "utf8",
+    );
+    // 同一份 CSS 还被一个 **JS 模块相对引用**：注入的样式于是走插件那条路（`styleModule`），
+    // 而不是入口的预改写——两条路的产物正文都要是联邦地址。
+    await writeFile(join(host, "src", "index.ts"), 'import "./brand-font.css";\nexport const host = 1;\n', "utf8");
+    const built = await bundlePackage({
+      nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
+      cacheRoot,
+      repoRoot: work,
+      alias: [],
+      name: "@morlay/css-host",
+      version: "2.0.0",
+      input: {
+        "brand-font.css": join(host, "src", "brand-font.css"),
+        index: join(host, "src", "index.ts"),
+      },
+      watch: [join(host, "src")],
+      manifestOf: join(host, "package.json"),
+    });
+    products = await Promise.all(
+      [...(built?.files.values() ?? [])].map(async (relative) =>
+        readFile(join(cacheRoot, relative), "utf8"),
+      ),
+    );
+  });
+
+  afterAll(async () => {
+    await rm(work, { recursive: true, force: true });
+  });
+
+  /** 注入的样式文本（`const css = "…";` 那一段；可能落在拆出来的 chunk 里）。 */
+  function injectedCssOf(texts: readonly string[]): string {
+    for (const code of texts) {
+      const literal = /const css = ("(?:[^"\\]|\\.)*");/u.exec(code)?.[1];
+      if (literal !== undefined) return JSON.parse(literal) as string;
+    }
+    return "";
+  }
+
+  test("注入的 <style> 文本里是联邦地址（不是裸说明符），末段 = 产物文件名", () => {
+    const css = injectedCssOf(products);
+    expect(css, "样式文本不该是空的（否则这条断言恒真）").toContain("--host");
+    expect(css).toContain("/_zephyr/@modules/css-dep@1.0.0/brand-font.css.js");
+    expect(css).not.toMatch(/@import\s+"css-dep\//u);
+    const address = /@import\s+"([^"]+)"/u.exec(css)?.[1] ?? "";
+    expect(address.split("/").pop(), "末段与 productFileNameOf 逐字相等").toBe(
+      productFileNameOf("brand-font.css"),
+    );
+    // 任何形态的产物里都不许再出现裸说明符（浏览器官网把它当页面相对路径）。
+    for (const code of products) expect(code).not.toContain('"css-dep/brand-font.css"');
   });
 });

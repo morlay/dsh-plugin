@@ -249,6 +249,13 @@ export function cssInlinePlugins(options: {
    * （`/@client-modules/<pkg>@<ver>/assets/x.png`），由调用方给。
    */
   assetUrl?: (fileName: string) => string;
+  /**
+   * 样式文本里**跨包引用**的改写（`@import "pkg/x.css"`）：交给调用方。
+   *
+   * 裸说明符在浏览器里是**页面相对**路径（一条 404），所以联邦链必须把它落成绝对地址；
+   * dev / tsdown 链的产物自包含，不给这个钩子。
+   */
+  rewriteImports?: (css: string, from: string) => string;
 }): Plugin[] {
   // **资产占位**：`this.emitFile` 返回的是**引用 id**（rollup 的内部串，形如 `VRAku6fjghkApIISiBWPzg`），
   // 不是文件名——文件名要到 `generateBundle` 才拿得到。以前把这个 id 直接当 URL 写进 CSS，于是资产在盘上、
@@ -259,6 +266,9 @@ export function cssInlinePlugins(options: {
     pendingAssets.set(placeholder, { name, bytes });
     return placeholder;
   };
+  /** 样式文本的收尾改写：`url()` 已在 transform 里替换过，这里做跨包 `@import`。 */
+  const finalCss = (css: string, file: string): string =>
+    options.rewriteImports === undefined ? css : options.rewriteImports(css, file);
   const styleModule = (
     file: string,
     css: string,
@@ -344,7 +354,7 @@ export function cssInlinePlugins(options: {
         });
         const classMap: Record<string, string> = {};
         for (const [local, entry] of Object.entries(exports ?? {})) classMap[local] = entry.name;
-        return styleModule(file, code.toString(), classMap);
+        return styleModule(file, finalCss(code.toString(), file), classMap);
       },
     },
     {
@@ -376,7 +386,7 @@ export function cssInlinePlugins(options: {
           minify: options.minify ?? true,
           visitor: urlVisitor(replacements),
         });
-        return `export default ${JSON.stringify(code.toString())};`;
+        return `export default ${JSON.stringify(finalCss(code.toString(), file))};`;
       },
     },
     {
@@ -407,7 +417,7 @@ export function cssInlinePlugins(options: {
           minify: options.minify ?? true,
           visitor: urlVisitor(replacements),
         });
-        return styleModule(file, code.toString());
+        return styleModule(file, finalCss(code.toString(), file));
       },
     },
   ];

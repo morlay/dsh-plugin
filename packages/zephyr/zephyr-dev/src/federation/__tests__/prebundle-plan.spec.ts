@@ -338,3 +338,50 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
     expect(names).not.toContain("from-require-side");
   });
 });
+/**
+ * 造一份「**样式在图上**」夹具：脚本 import 一个包的 CSS 出口，那份 CSS 里再裸 `@import` 另一个包。
+ *
+ *   <root>/src/client/app-boot.ts                 import "@morlay/css-host/brand-font.css"
+ *   <root>/node_modules/@morlay/css-host/src/brand-font.css
+ *                                                 @import "css-dep/brand-font.css"（只有一行）
+ *   <root>/node_modules/css-dep/brand-font.css    被 `@import` 的那个包出口
+ *
+ * `css-dep` 只被**样式**提到：不读 `.css` 的枚举看不见它，清单里就没有它的产物，改写完地址照样 404。
+ * @returns 工作区根。
+ */
+async function makeStyleGraphFixture(): Promise<string> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-css-")));
+  await put(join(root, "package.json"), `${JSON.stringify({ name: "css-fixture", version: "0.0.0", exports: {} })}\n`);
+  await put(
+    join(root, "src", "client", "app-boot.ts"),
+    'import "@morlay/css-host/brand-font.css";\n',
+  );
+  const host = join(root, "node_modules", "@morlay", "css-host");
+  await put(
+    join(host, "package.json"),
+    `${JSON.stringify({
+      name: "@morlay/css-host",
+      version: "1.0.0",
+      dependencies: { "css-dep": "^1.0.0" },
+      exports: { "./brand-font.css": "./src/brand-font.css" },
+    })}\n`,
+  );
+  await put(join(host, "src", "brand-font.css"), '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n');
+  const dep = join(root, "node_modules", "css-dep");
+  await put(
+    join(dep, "package.json"),
+    `${JSON.stringify({ name: "css-dep", version: "1.0.0", exports: { "./brand-font.css": "./brand-font.css" } })}\n`,
+  );
+  await put(join(dep, "brand-font.css"), ":root { --dep: 1; }\n");
+  return root;
+}
+
+describe("planPrebundle（样式在图上）", () => {
+  it("CSS 里的裸 @import 指向的包出口进清单（不然改写出来的地址是 404）", async () => {
+    const root = await makeStyleGraphFixture();
+    const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
+    const targets = plan.targets.map((target) => `${target.name}/${target.exportName}`);
+    expect(targets).toContain("@morlay/css-host/brand-font.css");
+    expect(targets).toContain("css-dep/brand-font.css");
+  });
+});
