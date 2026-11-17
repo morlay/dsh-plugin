@@ -180,7 +180,8 @@ async function scan(directories: readonly string[]): Promise<{
 }
 
 describe("覆盖性：标准模式的工具与说明都必须归组", () => {
-  it("standard 装配引用的每个工具都在组表或豁免表里", async () => {
+  // 扫全仓目录的装配级用例：rc.3 的上游包更多，3s 的默认上限不够（不是断言失败，是规模）。
+  it("standard 装配引用的每个工具都在组表或豁免表里", { timeout: 20_000 }, async () => {
     const { tools } = await inventory(await allDirectories());
     const known = new Set([
       ...TOOL_GROUPS.flatMap((group) => group.tools.map((entry) => entry.tool)),

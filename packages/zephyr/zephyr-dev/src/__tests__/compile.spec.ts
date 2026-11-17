@@ -56,7 +56,8 @@ describe("compile（判据）", () => {
     expect(error?.message).toContain(options.outDir);
   });
 
-  it("缺 REQUIRED 已知包：逐个点名，并在构建前就失败", async () => {
+  // 枚举要按引用方逐个解析包根（rc.3 的上游包更多），3s 的默认上限不够（不是断言失败，是规模）。
+  it("缺 REQUIRED 已知包：逐个点名，并在构建前就失败", { timeout: 20_000 }, async () => {
     const error = await compile(await optionsOf("compile-partial")).then(
       () => undefined,
       (rejected: unknown) => rejected as Error,
