@@ -1560,7 +1560,10 @@ export function packageRelative(file: string): string {
   const marker = `${sep}packages${sep}`;
   const index = file.lastIndexOf(marker);
   const tail = index < 0 ? file : file.slice(index + marker.length);
-  return tail.replace(/\.[jt]sx?$/u, "");
+  // 先剥 `.d.ts` 的 `.d`：声明树里是 `x.d.ts`、源码树里是 `x.ts`，只剥 `.ts` 会得到 `x.d` 与 `x` 两个键，
+  // 于是从声明文件出发查别名表永远查不到（真表现：`引用解析失败：WorkspaceTypes.WorkspaceId`，
+  // 而那个文件里明明写着这行 import）。
+  return tail.replace(/\.d\.[jt]sx?$/u, "").replace(/\.[jt]sx?$/u, "");
 }
 
 /** 相对说明符 → 绝对路径（`.ts` / `.tsx` / `/index.ts` 依次试）。 */

@@ -68,9 +68,20 @@ export async function buildSchemaIndex(
       ) {
         // 同名类型可能出现在同包的多个声明文件里（`src/types.ts` 是定义、`src/control.ts` 可能只是一段
         // 再导出）：保留**带出口子路径**的那份，`typeSymbol` 才指得准（registry 按它找 schema）。
+        //
+        // **同名也可能来自不同的包**：上游 `@deepseek-ai/dsh-workspace` 与本仓的等价副本（契约面为了不
+        // 把宿主包拉进 ui 的 import 图，会再声明一次同名品牌类型）。裸名键只留**上游**那份——本仓的那份
+        // 展开结果与它等价，而上游那份的文件在别名表里有条目（本仓文件按需扫描，不一定在）。
         const previous = index.get(name);
-        if (previous !== undefined && (previous.owner.includes("/") || !owner.includes("/")))
+        const preferUpstream =
+          owner.startsWith("@deepseek-ai/") && previous?.owner.startsWith("@deepseek-ai/") !== true;
+        if (
+          previous !== undefined &&
+          !preferUpstream &&
+          (previous.owner.includes("/") || !owner.includes("/"))
+        ) {
           continue;
+        }
         index.set(name, {
           name,
           file,
@@ -79,6 +90,7 @@ export async function buildSchemaIndex(
           // 反射里 `types[].declaration` 用的是声明原文，从 `export` 起算。
           text: parsed.source.slice(statement["start"] as number, declaration["end"] as number),
         });
+
       }
     }
   }
@@ -652,9 +664,12 @@ function referenceOf(node: Node, context: EmitContext): string {
   // 顺着包的出口表指回真实声明；找不到再退回按名字查索引。
   const throughAlias = viaAlias(name, context);
   const declared = throughAlias ?? context.index.get(name);
+
   // 与上游同规则：解析不了就**报错**，不静默降级（上游 `standard` 表之外的引用一律 fail）。
   if (declared === undefined) {
-    throw new Error(`引用解析失败：${name}（没有声明，或不在导入别名 / 包出口表里）`);
+    throw new Error(
+      `引用解析失败：${name}（文件 ${context.file === undefined ? "?" : relativeKey(context.file)}；没有声明，或不在导入别名 / 包出口表里）`,
+    );
   }
   if (context.stack.has(name)) {
     // 递归：类型提到顶层具名，引用处走 `z.lazy` 自引用（先占位再展开，展开里再遇到自己就走这条）。
