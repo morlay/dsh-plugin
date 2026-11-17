@@ -62,6 +62,11 @@ export const patch: Step[] = [
   // 在渲染期间发现快照变化并报「Cannot update a component while rendering a different component」。
   // 写入批处理到微任务（结构性更新走微任务本来就是这一层的纪律）。
   { type: "git", patch: "session-retention-batched.patch" },
+  // 日志字符串钉住父 buffer：`snapshotJsonValue` 复制结构但保留字符串原值——一条从大 buffer 里切出来的
+  // 字符串（截断的工具结果、拼接的流、切过的 prompt）会让那个 buffer 活到日志被回收为止，长会话因此只增不减。
+  // 追加时再 `structuredClone` 一次，让字符串自己拥有字节、父 buffer 随即可回收；代价是每次 append 多一遍复制，
+  // 换的是长会话有界。
+  { type: "git", patch: "session-log-string-flatten.patch" },
   // `connection/src/client/rpc.ts` 按值用到 `RpcId`，而 `client/api.ts` / `client/index.ts` 又把它**从这里**
   // 再导出（类型面）。类型被当值处理时（我们这边 `verbatimModuleSyntax: false`）这条链断在 `client/rpc.ts`：
   // `api/remotes` 的 client 面 `export type { …, RpcId, … } from '@deepseek-ai/dsh-client-connection/client'`
