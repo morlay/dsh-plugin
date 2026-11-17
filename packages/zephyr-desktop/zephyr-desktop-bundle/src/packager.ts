@@ -117,6 +117,14 @@ export class PackagerDefault extends Packager {
       await rm(input.appDir, { recursive: true, force: true });
       await mkdir(input.appDir, { recursive: true });
     });
+    await this.step(input.logFile, `重建壳包（${SHELL_PACKAGE} 的 dist）`, async () => {
+      // 壳的 `dist/` 是 deploy 从**壳包自己的 `files`** 里带出来的：源码改了却没 build，打出来的包里
+      // 还是旧壳（症状：新加的启动路径不生效，日志里仍是上一条链的报错）。与 `bundle` 无条件先建应用
+      // 产物同一个理由——包必须与源码一致；这一步只要几秒。
+      await run("pnpm", ["--filter", SHELL_PACKAGE, "run", "build"], {
+        cwd: await workspaceRootOf(),
+      });
+    });
     await this.step(
       input.logFile,
       `pnpm --filter ${SHELL_PACKAGE} deploy → ${input.appDir}`,
