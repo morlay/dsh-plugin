@@ -21,9 +21,9 @@ import { esmExternalRequirePlugin, type PluginOption } from "vite";
 import {
   encodePackageName,
   entryFileNameOf,
+  exportTargetOf,
   fileInPackage,
   packageNameOf,
-  resolveInPackage,
 } from "../internal/resolve.ts";
 
 /**
@@ -121,7 +121,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "26";
+const BUNDLER_RULES = "27";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -444,8 +444,8 @@ const SCRIPT_EXTENSIONS = new Set(["js", "mjs", "cjs", "jsx", "ts", "tsx", "mts"
 /**
  * **产物形态**：出口名 → 磁盘上的产物文件名（= 地址末段）。
  *
- * 一条规则两个消费者：{@link urlOf} 生成地址、`entryFileNames` 决定磁盘名。两者不同形就是 404，而这类
- * 404 在构建期看不出来（`pkg/src/client/resources.ts` 与 `base.css` 两个现场）。
+ * 一条规则两个消费者：{@link urlOf} 生成地址、`entryFileNames` 决定磁盘名——两者不同形就是一条构建期
+ * 看不出来的 404（来由见 `.agents/designs/20261117-浏览器产物的模块解析与清单.md` 决定 4）。
  *
  * | 入口形态 | 产物 |
  * | --- | --- |
@@ -1142,116 +1142,18 @@ async function bundlePackageOnce(
 }
 
 /**
- * **浏览器**那一侧的条件集（设计决定 3 的前两档）：`browser` → `import` → `default`。
+ * 一个出口的**浏览器入口**：条件顺位与「文件存在才选中」在 `internal/resolve` 的 {@link exportTargetOf}
+ * （与 dev 服务面同一份算法），这里只补**物理回退**。
  *
- * `default` 跟着这一档走是因为它常被用来嵌 `import` 的内层（`{ import: { types, default } }` 是
- * zustand 那种形状），只在条件表里留 `browser`/`import` 会把这一整类出口丢掉。
- */
-const BROWSER_CONDITIONS = ["browser", "import", "default"] as const;
-
-/**
- * **退路**条件集：`require` → `node` → `default`。
- *
- * 它排在 `module` / `main` **之后**（见 {@link browserEntryOf}）：设计给的顺序是
- * `browser → import → module → main`，`require` 那一支是"没别的可用时才拿的字节"。
- * 但也不能没有——清单只给 `require` 的现代包（`exports` 里没有 `import`/`default` 的）不该解析不出来。
- * `types` 不进来：拿声明文件去打包得到的是 PARSE_ERROR，不是模块。
- */
-const FALLBACK_CONDITIONS = ["require", "node", "default"] as const;
-
-/**
- * 把 `exports` 的一支展开成**有序候选文件**：条件对象按给定条件集展开，数组按声明顺序。
- *
- * 展开成"候选"而不是"取第一个"：选中的那一支**文件可能不存在**（清单写错、产物没打），
- * 存在性校验在 {@link browserEntryOf} 里做，落空就顺位——`import` 指向不存在的文件时回退
- * `module` / `main` 正是这条。
- * @param entry - `exports` 里的一支（字符串 / 条件对象 / 数组）。
- * @param conditions - 这一档认的条件（按优先级）。
- * @param out - 追加到的候选表。
- */
-function entryCandidatesOf(entry: unknown, conditions: readonly string[], out: string[]): void {
-  if (typeof entry === "string") {
-    out.push(entry);
-    return;
-  }
-  if (Array.isArray(entry)) {
-    for (const item of entry) entryCandidatesOf(item, conditions, out);
-    return;
-  }
-  if (entry === null || typeof entry !== "object") return;
-  const record = entry as Record<string, unknown>;
-  for (const key of conditions) {
-    if (key in record) entryCandidatesOf(record[key], conditions, out);
-  }
-}
-
-/**
- * 包内路径 → 它**真实存在**的文件；越出包根或不存在都答 `undefined`。
- *
- * 清单里写的是 `./dist/index.mjs` 这种**精确**路径，但老包的 `main` 常省扩展名（`main: "index"`）——
- * 所以按 node 的 CJS 惯例补 `.js` / `/index.js` 再试，别的（`.mjs`、`.css`、图片）不做推断。
- * @param root - 包根。
- * @param target - 清单里的目标（可带 `./`）。
- * @returns 绝对路径；不存在或越界时 undefined。
- */
-async function existingFileOf(root: string, target: string): Promise<string | undefined> {
-  const pkg = { name: "", version: "", root };
-  const relative = target.replace(/^\.\//u, "");
-  for (const candidate of [relative, `${relative}.js`, `${relative}/index.js`]) {
-    const file = resolveInPackage(pkg, candidate);
-    if (file === undefined) continue;
-    if (await stat(file).then(
-      (info) => info.isFile(),
-      () => false,
-    ))
-      return file;
-  }
-  return undefined;
-}
-
-/**
- * 一个出口的**入口**：按 `browser` → `import` → `module` → `main` 解析，并校验文件真实存在。
- *
- * 三件事缺一不可：
- * - **条件顺序**是浏览器视角（见 {@link ENTRY_CONDITIONS}）：走到 `require` 那一支就是拿错了字节；
- * - **存在性**：清单是手写的，指向不存在的文件时该顺位到下一个条件，而不是把 404 带进产物；
- * - **物理回退**：清单没覆盖的子路径按约定位置找（`picomatch/posix` 就是 `posix.js`）——那是 node 的
- *   CJS 语义，不这么做就没了一整类老包的入口。
+ * 物理回退是 node 的 CJS 语义：清单没覆盖的子路径按约定位置找（`picomatch/posix` 就是 `posix.js`）——
+ * 不这么做就没了一整类老包的入口。
  * @param root - 包根。
  * @param subpath - 出口名（`client`、`dist/katex.min.css`）；省略表示包根出口。
  * @returns 入口绝对路径；解析不出来时 undefined。
  */
 export async function browserEntryOf(root: string, subpath?: string): Promise<string | undefined> {
-  const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8").catch(() => "{}")) as {
-    exports?: unknown;
-    module?: unknown;
-    main?: unknown;
-  };
-  const key = subpath === undefined ? "." : `./${subpath}`;
-  const table = manifest.exports;
-  // `exports` 的三种形状（与 `internal/resolve` 的 `exportTargetOf` 同源）：以 `.` 开头的键映射、
-  // **条件对象本身**（它就是根出口）、没有 `exports`（老包）。
-  const isSubpathMap =
-    table !== undefined &&
-    table !== null &&
-    typeof table === "object" &&
-    Object.keys(table).some((name) => name === "." || name.startsWith("./"));
-  const entry = isSubpathMap ? (table as Record<string, unknown>)[key] : key === "." ? table : undefined;
-  const candidates: string[] = [];
-  // 第一档：浏览器那一侧的条件。
-  entryCandidatesOf(entry, BROWSER_CONDITIONS, candidates);
-  // 第二档：`module` → `main`。只对**根出口**是退路（子路径没有这两个字段可依）。
-  if (key === ".") {
-    for (const field of [manifest.module, manifest.main]) {
-      if (typeof field === "string") candidates.push(field);
-    }
-  }
-  // 第三档：退路条件（`require` 那一支）。
-  entryCandidatesOf(entry, FALLBACK_CONDITIONS, candidates);
-  for (const candidate of candidates) {
-    const file = await existingFileOf(root, candidate);
-    if (file !== undefined) return file;
-  }
+  const target = await exportTargetOf(root, subpath);
+  if (target !== undefined) return target;
   return subpath === undefined ? undefined : await fileInPackage(root, subpath);
 }
 

@@ -17,6 +17,7 @@ import {
   bundlePackage,
   clientModulesAlias,
   dependencyEntry,
+  exportTargetOf,
   urlOf,
 } from "@morlay/zephyr-dev/testing";
 
@@ -58,8 +59,7 @@ test("子路径引用保留子路径；末段是**产物文件名**（JS 产物�
   expect(urlOf("@oxc-project/runtime/helpers/decorate", tables)).toBe(
     `/_zephyr/@modules/@oxc-project+runtime@0.153.0/helpers/decorate.js?v=${BUNDLER_REV}`,
   );
-   // **CSS 入口也是 JS 产物**：样式被编成「注入 <style> 的模块」，落在 .css 地址上会被按 text/css
-  // 服务、浏览器拒绝当模块加载。以前这里按「有扩展名就原样」给地址、磁盘上却是 `.css.js`——两个现场之一。
+  // CSS 入口也是 JS 产物（注入样式表的模块），所以末段是 `.css.js`（设计决定 4：末段 = 产物文件名）。
   expect(urlOf("katex/dist/katex.min.css", tables)).toBe(
     `/_zephyr/@modules/katex@0.16.47/dist/katex.min.css.js?v=${BUNDLER_REV}`,
   );
@@ -374,11 +374,9 @@ describe("入口形态（一次构建、多出口）", () => {
 });
 // ── 出口入口按**浏览器条件**解析 ────────────────────────────────────────────────────────────────
 //
-// 产物跑在浏览器里：一个出口的入口按 `browser` → `import` → `module` → `main` 解析，并校验文件
-// **真实存在**。走到 `require` 那一支拿到的是 UMD/CJS 的字节（`katex` 就是 `dist/katex.js`），
-// 既不是浏览器那份、又要额外求值包装才打得出来。
-//
-// 这三条只读清单与盘上的文件（不跑打包）：判的是"哪一支被选中"，与转译无关。
+// 约束：一个出口的入口 = `browser` → `import` → `module` → `main` 里第一个**真实存在**的文件
+// （来由见 `.agents/designs/20261117-浏览器产物的模块解析与清单.md` 决定 3）。这几条只读清单与盘上
+// 的文件、不跑打包：判的是"哪一支被选中"。
 describe("入口按浏览器条件解析", () => {
   let work: string;
 
@@ -461,12 +459,9 @@ describe("入口按浏览器条件解析", () => {
 });
 // ── 地址末段 = 磁盘产物文件名 ──────────────────────────────────────────────────────────────────
 //
-// 一条规则，两个消费者：`urlOf` 生成地址、`entryFileNames` 决定磁盘名。两者不同形就是 404
-// （`pkg/src/client/resources.ts` 与 `base.css` 两个现场），而这类 404 在构建期看不出来。
-//
-// 产物形态定名字：**JS 产物是 `<出口名>.js`**（含 CSS 入口——它在产物里就是一个注入样式表的 JS
-// 模块，落在 `.css` 地址上会被按 `text/css` 服务、浏览器拒绝当模块加载），**资产原样保留扩展名**
-// （图片 / 字体这类被原字节复制的文件，名字与来源同形）。
+// 约束：`urlOf` 给出的地址末段与 `entryFileNames` 落盘的文件名必须逐字相等（两个消费者、一条规则；
+// 来由见设计决定 4）。产物形态定名字：**JS 产物是 `<出口名>.js`**（含 CSS 入口），**资产原样保留
+// 扩展名**（图片 / 字体这类原字节复制的文件）。
 describe("地址末段 = 磁盘产物文件名", () => {
   let work: string;
   let cacheRoot: string;
@@ -563,9 +558,8 @@ describe("地址末段 = 磁盘产物文件名", () => {
 });
 // ── 外置只对**能按 exports 解析到入口**的说明符生效 ──────────────────────────────────────────────
 //
-// 外置意味着「浏览器会按这条地址再取一次」；取不到的东西不该变成地址。判据是**解析得到入口**，
-// 不是「包名匹配」：`包名 + 源码路径`（`pkg/src/x.ts`）这类说明符在清单里没有对应出口，
-// 变成地址就是一条构建期看不见的 404——把那段代码内联进当前产物才是它该有的去处。
+// 约束：只有解析得到入口的说明符才外置成地址（外置 = 浏览器会按这条地址再取一次）；解析不到的
+// `包名 + 源码路径`（`pkg/src/x.ts`）内联进当前产物（来由见设计决定 5）。
 describe("外置只认能解析到入口的说明符", () => {
   let work: string;
   let cacheRoot: string;
@@ -631,5 +625,111 @@ describe("外置只认能解析到入口的说明符", () => {
   test("「包名 + 源码路径」不外置成地址，且那段代码被内联进产物", () => {
     expect(code).not.toContain("plain-pkg@1.0.0/src/");
     expect(code).toContain("INLINED_MARKER");
+  });
+});
+// ── 入口条件只有一份规则（两条链对照） ──────────────────────────────────────────────────────────
+//
+// 约束：`exports` 的条件展开与「文件存在才选中」的顺位只有**一份**实现——dev 服务面（`exportTargetOf`）
+// 与构建面（`dependencyEntry` → `browserEntryOf`）对同一个包给出同一入口（来由见设计决定 3）。
+describe("两条链的入口是同一份规则", () => {
+  let work: string;
+
+  /** 一条案例：一个包的清单与文件、一个说明符，以及**该选中的入口**（相对包根）。 */
+  interface Case {
+    readonly pkg: string;
+    readonly manifest: { readonly name: string } & Record<string, unknown>;
+    readonly files: readonly string[];
+    readonly specifier: string;
+    readonly subpath: string | undefined;
+    readonly entry: string;
+  }
+
+  const cases: readonly Case[] = [
+    {
+      // 双面入口：import 那份。
+      pkg: "dual",
+      manifest: {
+        name: "dual",
+        version: "1.0.0",
+        exports: { ".": { require: "./dist/index.cjs", import: "./dist/index.mjs" } },
+      },
+      files: ["dist/index.mjs", "dist/index.cjs"],
+      specifier: "dual",
+      subpath: undefined,
+      entry: "dist/index.mjs",
+    },
+    {
+      // `exports` 只给 require、另有 main：顺位是 `module` / `main` **先于** require 那一档。
+      pkg: "require-only",
+      manifest: {
+        name: "require-only",
+        version: "1.0.0",
+        exports: { ".": { require: "./dist/index.cjs" } },
+        main: "./dist/main.js",
+      },
+      files: ["dist/index.cjs", "dist/main.js"],
+      specifier: "require-only",
+      subpath: undefined,
+      entry: "dist/main.js",
+    },
+    {
+      // 没有 `exports` 的老包：`module` 先于 `main`。
+      pkg: "legacy",
+      manifest: {
+        name: "legacy",
+        version: "1.0.0",
+        module: "./esm/index.mjs",
+        main: "./index.js",
+      },
+      files: ["esm/index.mjs", "index.js"],
+      specifier: "legacy",
+      subpath: undefined,
+      entry: "esm/index.mjs",
+    },
+    {
+      // 子路径：按它自己的 `exports` 键解析，条件顺位同上。
+      pkg: "deep",
+      manifest: {
+        name: "deep",
+        version: "1.0.0",
+        exports: { "./sub": { require: "./lib/sub.cjs", import: "./lib/sub.mjs" } },
+      },
+      files: ["lib/sub.mjs", "lib/sub.cjs"],
+      specifier: "deep/sub",
+      subpath: "sub",
+      entry: "lib/sub.mjs",
+    },
+  ];
+
+  beforeAll(async () => {
+    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-entry-rule-")));
+    await writeFile(join(work, "importer.mjs"), "export {};\n", "utf8");
+    for (const item of cases) {
+      const root = join(work, "node_modules", item.pkg);
+      await mkdir(root, { recursive: true });
+      await writeFile(join(root, "package.json"), `${JSON.stringify(item.manifest, null, 2)}\n`, "utf8");
+      for (const file of item.files) {
+        await mkdir(dirname(join(root, file)), { recursive: true });
+        await writeFile(join(root, file), "export const x = 1;\n", "utf8");
+      }
+    }
+  });
+
+  afterAll(async () => {
+    await rm(work, { recursive: true, force: true });
+  });
+
+  test("同一个包在两条链上得到同一入口，且是条件顺位该选的那一份", async () => {
+    for (const item of cases) {
+      const root = join(work, "node_modules", item.pkg);
+      const expected = join(root, item.entry);
+      // 构建面：`dependencyEntry` → `browserEntryOf`。
+      const built = await dependencyEntry(join(work, "importer.mjs"), item.specifier);
+      expect(built?.entry, `${item.pkg} 的构建面入口`).toBe(expected);
+      // dev 服务面：`exportTargetOf`。
+      await expect(exportTargetOf(root, item.subpath), `${item.pkg} 的 dev 面入口`).resolves.toBe(
+        expected,
+      );
+    }
   });
 });

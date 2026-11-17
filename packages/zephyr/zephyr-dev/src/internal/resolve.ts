@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { findPackageJSON } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
@@ -103,30 +103,93 @@ export function parsePluginAddress(url: string): PluginAddress | undefined {
 }
 
 /**
- * 条件导出里挑**运行期**入口：`import` > `default` > `require` > `types`。
+ * 入口条件的**优先档**：浏览器视角 `browser` → `import` → `default`。
  *
- * 条件是**可嵌套**的（`zustand` 的 `./vanilla` 出口就是
- * `{ import: { types, default }, default: { types, default } }`），所以命中条件后要继续往里挑——
- * 只看顶层字符串会跳过 `import` 落到 `default`，拿到 CJS 那支（`vanilla.js` 而不是 `esm/vanilla.mjs`），
- * 产物里就只剩 `export default require_…`，消费方要的具名导出一个都没有。
+ * `default` 跟着这一档走，是因为它常被用来嵌 `import` 的内层（`{ import: { types, default } }` 是
+ * zustand 那种形状）——只认前两个键会丢掉一整类出口。
  */
-function pickCondition(entry: unknown): string | undefined {
-  if (typeof entry === "string") return entry;
-  // **数组**形态（`@oxc-project/runtime` 的每个出口都是 `[{ node, import, default }, "./src/…"]`）：
-  // node 的语义是"依次尝试"，这里取第一个答得上来的。
-  if (Array.isArray(entry)) {
-    for (const item of entry) {
-      const picked = pickCondition(item);
-      if (picked !== undefined) return picked;
-    }
-    return undefined;
+const ENTRY_CONDITIONS = ["browser", "import", "default"] as const;
+
+/**
+ * 入口条件的**退路档**：`require` → `node` → `default`，排在 `module` / `main` **之后**
+ * （见 {@link entryCandidatesFor}）：那一档是"没别的可用时才拿的字节"（UMD/CJS 那份）。
+ * `types` 不进任何一档：拿声明文件去打包得到的是 PARSE_ERROR，不是模块。
+ */
+const ENTRY_FALLBACK_CONDITIONS = ["require", "node", "default"] as const;
+
+/**
+ * `exports` 的一支 → **有序候选文件**：条件对象按条件集展开，数组按声明顺序。
+ *
+ * 展开成候选而不是"取第一个"：选中的那一支**文件可能不存在**（清单写错、产物没打），存在性校验在
+ * {@link firstExistingOf} 里做，落空就顺位到下一个条件。
+ * @param entry - `exports` 里的一支（字符串 / 条件对象 / 数组）。
+ * @param conditions - 这一档认的条件（按优先级）。
+ * @param out - 追加到的候选表。
+ */
+function entryCandidatesOf(entry: unknown, conditions: readonly string[], out: string[]): void {
+  if (typeof entry === "string") {
+    out.push(entry);
+    return;
   }
-  if (entry === null || typeof entry !== "object") return undefined;
+  // **数组**形态（`@oxc-project/runtime` 的每个出口都是 `[{ node, import, default }, "./src/…"]`）：
+  // node 的语义是"依次尝试"，所以按声明顺序全收进候选表。
+  if (Array.isArray(entry)) {
+    for (const item of entry) entryCandidatesOf(item, conditions, out);
+    return;
+  }
+  if (entry === null || typeof entry !== "object") return;
   const record = entry as Record<string, unknown>;
-  for (const key of ["import", "default", "require", "types"]) {
-    if (!(key in record)) continue;
-    const picked = pickCondition(record[key]);
-    if (picked !== undefined) return picked;
+  for (const key of conditions) {
+    if (key in record) entryCandidatesOf(record[key], conditions, out);
+  }
+}
+
+/**
+ * 一个出口的**入口候选**（有序）：`exports` 的优先档 → `module` / `main`（只有根出口有它们）→ 退路档。
+ *
+ * 展开与顺位**只有这一份**：dev 服务面（{@link exportTargetOf}）与构建面（`bundle.ts` 的
+ * `browserEntryOf`）都从这里取值——各写一套的后果是同一个包在两条链上选到不同的入口，
+ * 产物里于是有两份字节，共用缓存时还会互相当作失效。
+ * @param options - `exports` 里那一支、清单（为 `module` / `main`）、以及是不是根出口。
+ * @returns 候选（相对的包内路径，尚未校验存在性）。
+ */
+export function entryCandidatesFor(options: {
+  readonly entry: unknown;
+  readonly manifest: { readonly module?: unknown; readonly main?: unknown };
+  readonly rootExport: boolean;
+}): string[] {
+  const out: string[] = [];
+  entryCandidatesOf(options.entry, ENTRY_CONDITIONS, out);
+  if (options.rootExport) {
+    for (const field of [options.manifest.module, options.manifest.main]) {
+      if (typeof field === "string") out.push(field);
+    }
+  }
+  entryCandidatesOf(options.entry, ENTRY_FALLBACK_CONDITIONS, out);
+  return out;
+}
+
+/**
+ * 候选里**第一个真实存在**的文件：越出包根或不存在都跳过。
+ *
+ * 清单写的是 `./dist/index.mjs` 这种精确路径，但老包的 `main` 常省扩展名（`main: "index"`）——
+ * 所以按 node 的 CJS 惯例补 `.js` / `/index.js` 再试；别的（`.mjs`、`.css`、图片）不做推断。
+ * @param root - 包根。
+ * @param candidates - {@link entryCandidatesFor} 给的候选（可带 `./`）。
+ * @returns 绝对路径；都不存在时 undefined。
+ */
+export async function firstExistingOf(
+  root: string,
+  candidates: readonly string[],
+): Promise<string | undefined> {
+  const pkg = { name: "", version: "", root };
+  for (const candidate of candidates) {
+    const relative = candidate.replace(/^\.\//u, "");
+    for (const probe of [relative, `${relative}.js`, `${relative}/index.js`]) {
+      const file = resolveInPackage(pkg, probe);
+      if (file === undefined) continue;
+      if (await stat(file).then((info) => info.isFile(), () => false)) return file;
+    }
   }
   return undefined;
 }
@@ -226,48 +289,50 @@ export async function packageRootOf(from: string, name: string): Promise<Package
   return root === undefined ? undefined : await owningPackageOf(join(root, "package.json"));
 }
 
+/** 入口解析用到的清单字段（其余字段这里不看）。 */
+interface EntryManifest {
+  readonly exports?: unknown;
+  readonly module?: unknown;
+  readonly main?: unknown;
+}
+
 /**
- * 按包清单的 `exports` 解析子路径（`./client` → `./src/client/index.ts`）。
+ * 按包清单的 `exports` 解析一个出口的**入口**（`./client` → `./src/client/index.ts`）。
  *
  * 不能自己拼 `src/<subpath>`：出口名与文件名**不同构**（`./client` 指向 `src/client/index.ts`、
  * `./remote` 指向 `lib/typert.remote-client.ts` 这类都由清单说了算）。
+ *
+ * 条件顺位与「文件存在才选中」走 {@link entryCandidatesFor} + {@link firstExistingOf}——**与构建面
+ * 同一份算法**（`bundle.ts` 的 `browserEntryOf` 只是再加一层物理回退）。
+ * @param root - 包根。
+ * @param subpath - 出口名（`client`、`dist/katex.min.css`）；省略表示包根出口。
+ * @returns 入口绝对路径；清单没覆盖这个出口、或文件不存在时 undefined。
  */
 export async function exportTargetOf(
   root: string,
   subpath: string | undefined,
 ): Promise<string | undefined> {
-  try {
-    const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
-      exports?: Record<string, unknown>;
-      main?: string;
-      module?: string;
-    };
-    const key = subpath === undefined ? "." : `./${subpath}`;
-    // `exports` 的三种形状（都要认）：
-    // · 以 `.` 开头的键映射（标准）→ 取 `exports["."]` / `exports["./sub"]`；
-    // · **条件对象本身**（`{ development, default }`，`mdast-util-*` 就是这形状）→ 它**就是**根出口；
-    // · 没有 `exports` → 按 node 规则退回 `module` → `main`（老包如 `fortune-sheet`）。
-    const table = manifest.exports;
-    const isSubpathMap =
-      table !== undefined &&
-      Object.keys(table).some((name) => name === "." || name.startsWith("./"));
-    const entry =
-      (isSubpathMap ? table?.[key] : key === "." ? table : undefined) ??
-      (key === "." ? (manifest.module ?? manifest.main) : undefined);
-    const target =
-      typeof entry === "string"
-        ? entry
-        : entry === null || typeof entry !== "object"
-          ? undefined
-          : // 条件按**运行期**优先级挑：`import`（ESM 入口，`"type": "module"` 的包都走它）→
-            // `default` → `require`。`types` 是类型声明（`index.d.ts`），拿它去打包会得到 3460 个
-            // PARSE_ERROR——rolldown 把声明文件当 JS 解析，所以它只能垫底。
-            pickCondition(entry as Record<string, unknown>);
-    if (typeof target !== "string") return undefined;
-    return resolveInPackage({ name: "", version: "", root }, target.replace(/^\.\//u, ""));
-  } catch {
-    return undefined;
-  }
+  const manifest = await readFile(join(root, "package.json"), "utf8")
+    .then((text) => JSON.parse(text) as EntryManifest)
+    .catch(() => ({}) as EntryManifest);
+  const key = subpath === undefined ? "." : `./${subpath}`;
+  // `exports` 的三种形状（都要认）：
+  // · 以 `.` 开头的键映射（标准）→ 取 `exports["."]` / `exports["./sub"]`；
+  // · **条件对象本身**（`{ development, default }`，`mdast-util-*` 就是这形状）→ 它**就是**根出口；
+  // · 没有 `exports` → 退回 `module` → `main`（老包如 `fortune-sheet`）。
+  const table = manifest.exports;
+  const isSubpathMap =
+    table !== undefined &&
+    table !== null &&
+    typeof table === "object" &&
+    Object.keys(table).some((name) => name === "." || name.startsWith("./"));
+  const entry = isSubpathMap
+    ? (table as Record<string, unknown>)[key]
+    : key === "."
+      ? table
+      : undefined;
+  const candidates = entryCandidatesFor({ entry, manifest, rootExport: key === "." });
+  return await firstExistingOf(root, candidates);
 }
 
 /** 包清单里我们用到的那些字段（其余原样留着，调用方按需读）。 */
