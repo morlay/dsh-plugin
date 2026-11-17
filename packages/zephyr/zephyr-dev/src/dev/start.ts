@@ -110,10 +110,13 @@ function assertFacts(options: DevOptions, appEnv: AppEnv, devFiles: readonly str
 }
 
 /**
- * 启动记录：一行说清「谁在哪个地址上服务哪个工作区」（debug 级——info 级的地址由 `WebRuntimeService` 打）。
+ * 启动记录：先说**访问地址**（info 级，用户要的第一句话），细节放 debug。
  *
- * 期望值与实际值不一致时给一条 warn：`--port` / `--host` 是命令行的值，而监听值来自 `WebStartup`
- * （`process.env.PORT` / `HOST`）。两者不一致时页面在**另一个**端口上，这条是唯一能立刻定位的线索。
+ * 地址只能在这里报：dev 的装配里没有 `provideWeb()`（那是 preview / 打包形态的行），
+ * 所以 `WebRuntimeService` 那句 origin 在 dev 链上不成立——起会话的这一处才是「谁在哪个地址上」的 home。
+ *
+ * 期望值与实际值不一致时给一条 warn：`--port` / `--host` 是命令行的值，而实际监听值可能被顺延
+ * （端口被占）。两者不一致时页面在**另一个**端口上，这条是唯一能立刻定位的线索。
  * @param app - 行树（取 logger）。
  * @param options - 调用方给的事实。
  * @param url - 真实地址。
@@ -121,6 +124,7 @@ function assertFacts(options: DevOptions, appEnv: AppEnv, devFiles: readonly str
  */
 function report(app: App, options: DevOptions, url: string, devFiles: readonly string[]): void {
   const logger = app.get(Logger);
+  logger.info("[dev] 访问地址 %s", url);
   logger.debug(
     "[dev] 会话就绪 %s（工作区=%s 页面=%s 数据根=%s 缓存=%s 当文件名单=%s）",
     url,
