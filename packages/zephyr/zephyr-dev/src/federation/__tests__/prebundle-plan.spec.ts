@@ -267,3 +267,74 @@ describe("planPrebundle（多版本）", () => {
     expect(new Set(multi.map((target) => target.manifestOf)).size).toBe(2);
   });
 });
+/**
+ * 造一份「**双面入口**」夹具（设计决定 3：入口按浏览器条件解析，不是 `require` 条件）。
+ *
+ *   <root>/src/client/app-boot.ts            引 @morlay/dual-root 与 @morlay/dual-client/client
+ *   <root>/node_modules/@morlay/dual-root/   exports['.'] 同时给 require / import
+ *   <root>/node_modules/@morlay/dual-client/ exports['./client'] 同样双面，两条分支各引一个
+ *                                            **只有那条路才看得见**的包（下潜读哪份，清单里就有哪个）
+ *
+ * 两条分支都用 `.ts`：判据是「**哪个文件**被选中」，不是扩展名或语法。
+ * @returns 工作区根。
+ */
+async function makeDualEntryFixture(): Promise<string> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-dual-")));
+  await put(join(root, "package.json"), `${JSON.stringify({ name: "dual-fixture", version: "0.0.0", exports: {} })}\n`);
+  await put(
+    join(root, "src", "client", "app-boot.ts"),
+    ['import "@morlay/dual-root";', 'import "@morlay/dual-client/client";', ""].join("\n"),
+  );
+  // 目标侧：包根出口双面。
+  const dualRoot = join(root, "node_modules", "@morlay", "dual-root");
+  await put(
+    join(dualRoot, "package.json"),
+    `${JSON.stringify({
+      name: "@morlay/dual-root",
+      version: "1.0.0",
+      exports: { ".": { require: "./dist/root.cjs", import: "./dist/root.mjs" } },
+    })}\n`,
+  );
+  await put(join(dualRoot, "dist", "root.mjs"), 'export const variant = "import";\n');
+  await put(join(dualRoot, "dist", "root.cjs"), 'module.exports = { variant: "require" };\n');
+  // 下潜侧：`./client` 双面，两条分支各引一个只在它那边出现的包。
+  const dualClient = join(root, "node_modules", "@morlay", "dual-client");
+  await put(
+    join(dualClient, "package.json"),
+    `${JSON.stringify({
+      name: "@morlay/dual-client",
+      version: "1.0.0",
+      exports: {
+        "./client": { require: "./src/client/legacy.ts", import: "./src/client/modern.ts" },
+      },
+    })}\n`,
+  );
+  await put(join(dualClient, "src", "client", "modern.ts"), 'import "from-import-side";\n');
+  await put(join(dualClient, "src", "client", "legacy.ts"), 'import "from-require-side";\n');
+  for (const name of ["from-import-side", "from-require-side"]) {
+    await put(
+      join(root, "node_modules", name, "package.json"),
+      `${JSON.stringify({ name, version: "1.0.0", exports: { ".": "./index.mjs" } })}\n`,
+    );
+    await put(join(root, "node_modules", name, "index.mjs"), "export default 1;\n");
+  }
+  return root;
+}
+
+describe("planPrebundle（入口按浏览器条件解析）", () => {
+  it("`exports['.']` 双面：target.entry 落在 **import** 那份", async () => {
+    const root = await makeDualEntryFixture();
+    const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
+    const target = plan.targets.find((item) => item.name === "@morlay/dual-root");
+    // `createRequire().resolve` 会拿 `dist/root.cjs`（UMD/CJS 的字节）——产物跑在浏览器里，那不是它的字节。
+    expect(target?.entry).toBe(join(root, "node_modules", "@morlay", "dual-root", "dist", "root.mjs"));
+  });
+
+  it("下潜也读 import 那份：只有它引到的包才进清单", async () => {
+    const root = await makeDualEntryFixture();
+    const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
+    const names = plan.targets.map((target) => target.name);
+    expect(names).toContain("from-import-side");
+    expect(names).not.toContain("from-require-side");
+  });
+});

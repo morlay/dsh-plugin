@@ -21,9 +21,10 @@
 // 全枚举会把清单撑爆、构建时间爆炸；源码里写的是 `@shikijs/langs/typescript`，那就只出 `typescript` 这一个出口。
 // 同一个包的不同子路径仍各自出 target（`shiki/core` 与包根是不同入口）。
 import { readFile, realpath } from "node:fs/promises";
-import { createRequire, findPackageJSON } from "node:module";
+import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { browserEntryOf } from "./bundle.ts";
 import type { PrebundleTarget } from "./prebundle.ts";
 
 /** 枚举输入。 */
@@ -164,17 +165,19 @@ async function rootOfFrom(
 }
 
 /**
- * 从一份清单出发按 node 的解析找入口（尊重 `exports` 的条件与子路径）。
- * @param manifest - 解析基准（包自己的清单）。
+ * 一个说明符在**这份副本**里的入口：规则只有一份（`bundle.ts` 的 {@link browserEntryOf}）。
+ *
+ * 不能用 `createRequire(manifest).resolve(specifier)`：那是 `require` 条件，双面入口的包会拿到
+ * UMD/CJS 那份（`katex` 的 `dist/katex.js`）——枚举选哪一份、产物就编哪一份字节，两处各写一套规则
+ * 迟早漂（dev 服务面与 build 面于是各拿一份，缓存还会互相判失效）。
+ * @param manifest - 解析基准（这份副本自己的清单）。
  * @param specifier - 说明符（`pkg` 或 `pkg/sub`）。
  * @returns 入口绝对路径；解析不到时 `undefined`。
  */
-function entryOf(manifest: string, specifier: string): string | undefined {
-  try {
-    return createRequire(manifest).resolve(specifier);
-  } catch {
-    return undefined;
-  }
+async function entryOf(manifest: string, specifier: string): Promise<string | undefined> {
+  const bare = packageNameOfSpecifier(specifier);
+  const subpath = specifier === bare ? undefined : specifier.slice(bare.length + 1);
+  return await browserEntryOf(dirname(manifest), subpath);
 }
 
 /**
@@ -198,11 +201,12 @@ async function versionOf(manifest: string): Promise<string | undefined> {
  * @param name - 包名。
  * @returns 入口文件（只收 JS/TS，CSS 不进 BFS）。
  */
-function browserEntriesOf(root: PackageRoot, name: string): string[] {
+async function browserEntriesOf(root: PackageRoot, name: string): Promise<string[]> {
   const out: string[] = [];
   for (const subpath of CLIENT_EXPORTS) {
     const specifier = subpath === "./index" ? name : `${name}/${subpath.slice(2)}`;
-    const entry = entryOf(root.manifest, specifier);
+    // 下潜与出目标用**同一个**入口（{@link entryOf}）：读 `.cjs` 那份就只看得见 require 树上的依赖。
+    const entry = await entryOf(root.manifest, specifier);
     if (entry !== undefined && /\.[cm]?[jt]sx?$/u.test(entry)) out.push(entry);
   }
   return out;
@@ -273,7 +277,7 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       if (!DESCEND.test(name) || descended.has(name)) continue;
       descended.add(name);
       const root = await packageRootOf(name, [file]);
-      if (root !== undefined) pending.push(...browserEntriesOf(root, name));
+      if (root !== undefined) pending.push(...(await browserEntriesOf(root, name)));
     }
   }
   const include = options.include ?? [];
@@ -298,7 +302,7 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       // ——必须与 `urlOf` 生成的地址同形，否则产物在盘上、地址却落在空处。
       const exportName = subpath === "" ? "index" : subpath;
       if (planned.has(exportName)) continue;
-      const entry = entryOf(manifestOf, specifier);
+      const entry = await entryOf(manifestOf, specifier);
       if (entry === undefined) continue;
       planned.add(exportName);
       targets.push({ name, version, exportName, entry, manifestOf });
