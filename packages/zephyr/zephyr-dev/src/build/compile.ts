@@ -9,9 +9,11 @@
 //     build 传 `<outputDir>/client_modules`——**同一语义、只换目录**（设计决定 7）。
 //   · 页面上那一个 `index.html` 也在这里落盘：入口 script 改写成应用入口的**联邦地址**，
 //     于是 `outDir` 是一份纯静态目录（设计决定 5、9）。
+//   · 判据按「**从页面入口可达**」算（{@link reachableModulesOf}）：不可达的产物留在目录里不参与判据，
+//     可达链上的缺口一处一处点名（设计决定 12、13）。
 import { copyFile, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BUNDLER_REV, depsUrlOf } from "../federation/bundle.ts";
+import { BUNDLER_REV, CLIENT_MODULES_PREFIX, depsUrlOf } from "../federation/bundle.ts";
 import {
   prebundleAll,
   type PrebundleFailure,
@@ -157,7 +159,7 @@ export async function writePage(options: {
   readonly app: PrebundleTarget;
 }): Promise<string> {
   const html = await readFile(options.pageEntry, "utf8");
-  const entryUrl = `${depsUrlOf(options.app.name, options.app.version, "client.js")}?v=${BUNDLER_REV}`;
+  const entryUrl = entryUrlOf(options.app);
   const rewritten = html.replace(
     /(<script\b[^>]*\btype="module"[^>]*\bsrc=")(\.{1,2}\/[^"]*)(")/u,
     (_whole: string, head: string, _src: string, tail: string) => `${head}${entryUrl}${tail}`,
@@ -171,6 +173,18 @@ export async function writePage(options: {
   await copyFile(options.pageEntry, page);
   await writeFile(page, rewritten, "utf8");
   return page;
+}
+
+/**
+ * 页面入口的联邦地址（含 `?v=`）：页面骨架里那一条 script 的 src。
+ *
+ * 只此一处生成它：可达性判据要从**同一条地址**出发，两处各拼一遍迟早会拼成两个不同的串
+ * （`?v=` 一个带一个不带，BFS 就从一条盘上不存在的地址开始）。
+ * @param app - 应用入口目标（名字与版本进地址）。
+ * @returns 入口地址。
+ */
+export function entryUrlOf(app: PrebundleTarget): string {
+  return `${depsUrlOf(app.name, app.version, "client.js")}?v=${BUNDLER_REV}`;
 }
 
 /**
@@ -202,6 +216,104 @@ async function stripResolvedFromManifests(outDir: string): Promise<void> {
     const trimmed = { rev: manifest.rev, files: manifest.files };
     await writeFile(path, `${JSON.stringify(trimmed, null, 2)}\n`, "utf8");
   }
+}
+
+/** 可达性判据的输入。 */
+export interface ReachabilityInput {
+  /** 页面入口地址（{@link entryUrlOf}，可带 `?v=`）：BFS 的起点。 */
+  readonly entry: string;
+  /** 静态目录里的产物：地址 → 字节。地址**不含** `?v=`（查询串是缓存世代，不是地址的一部分）。 */
+  readonly artifacts: ReadonlyMap<string, string>;
+}
+
+/** 一处缺口：**可达**、但静态目录里没有对应产物（浏览器取它就是 404）。 */
+export interface ModuleGap {
+  /** 缺失的地址。 */
+  readonly url: string;
+  /** 引用它的产物地址（BFS 顺序；入口自己没有产物时为空）。 */
+  readonly importers: readonly string[];
+}
+
+/** 判据的读数。 */
+export interface Reachability {
+  /** 从入口可达的地址（BFS 顺序，含入口本身；**含**那些没有产物的地址）。 */
+  readonly reachable: readonly string[];
+  /** 可达集合里的缺口（按首次到达顺序）。 */
+  readonly gaps: readonly ModuleGap[];
+}
+
+/**
+ * 产物里的模块说明符：静态 `from "…"`（`import` 与 `export … from`）、副作用 `import "…"`、
+ * 动态 `import("…")`。只认这三种「模块位」，不按子串抓地址——产物里还有注释、chunk 名、
+ * `new URL(…)` 这类字符串，按子串抓会把它们也算成边。
+ */
+const MODULE_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/gu;
+
+/**
+ * 地址的身份：去掉查询串与哈希（`?v=<构建器指纹>` 一次会话内一致，但不是地址的一部分）。
+ * @param url - 引用里写的或清单里算出来的地址。
+ * @returns 不含查询串的地址。
+ */
+function addressOf(url: string): string {
+  const cut = url.search(/[?#]/u);
+  return cut === -1 ? url : url.slice(0, cut);
+}
+
+/**
+ * 一段产物里的联邦地址（说明符位上的绝对路径；相对路径、`http(s)`、裸名都不算）。
+ * @param code - 产物字节。
+ * @returns 地址列表（按出现顺序，保留重复）。
+ */
+function federationUrlsIn(code: string): string[] {
+  const prefix = `${CLIENT_MODULES_PREFIX}/`;
+  const out: string[] = [];
+  for (const match of code.matchAll(MODULE_SPECIFIER)) {
+    const specifier = match[1];
+    if (specifier === undefined || !specifier.startsWith(prefix)) continue;
+    out.push(addressOf(specifier));
+  }
+  return out;
+}
+
+/**
+ * 判据 12：**从页面入口可达**的地址集合，以及它上面的缺口。
+ *
+ * 为什么不看目录里有什么：静态目录里躺着宿主面的产物（页面永远不加载它们），而「目录里有垃圾」
+ * 与「页面会 404」是两件事——只有可达链上的地址才参与判据（设计决定 12）。不可达的产物留在目录里，
+ * 不删（那是另一条取舍）。
+ *
+ * 纯函数：不读盘、不碰 runtime，所以规则可以用手写产物钉住。
+ * @param input - 入口地址与产物快照。
+ * @returns 可达集合与缺口。
+ */
+export function reachableModulesOf(input: ReachabilityInput): Reachability {
+  /** BFS 队列（只收第一次见到的地址，顺序就是首次到达顺序）。 */
+  const pending: string[] = [addressOf(input.entry)];
+  const queued = new Set<string>(pending);
+  const importersOf = new Map<string, string[]>();
+  const reachable: string[] = [];
+  const gaps: ModuleGap[] = [];
+  for (let index = 0; index < pending.length; index += 1) {
+    const url = pending[index];
+    if (url === undefined) continue;
+    reachable.push(url);
+    const code = input.artifacts.get(url);
+    if (code === undefined) {
+      // 没有产物就没有下一条边：这里如实记缺口，别再往下猜。
+      gaps.push({ url, importers: importersOf.get(url) ?? [] });
+      continue;
+    }
+    for (const referenced of federationUrlsIn(code)) {
+      const importers = importersOf.get(referenced) ?? [];
+      // 同一个产物可能把同一个说明符写两遍（静态 import + 动态 import）：引用方只记一次。
+      if (!importers.includes(url)) importers.push(url);
+      importersOf.set(referenced, importers);
+      if (queued.has(referenced)) continue;
+      queued.add(referenced);
+      pending.push(referenced);
+    }
+  }
+  return { reachable, gaps };
 }
 
 /**
