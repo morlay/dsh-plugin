@@ -8,6 +8,11 @@
 // `src/server.ts` 原样复制过去、由 loader 直接跑，少一次 rolldown，也让 stack trace 指向真实文件。
 //
 import { execFile } from "node:child_process";
+// 删产物目录的公共参数：`target/<应用名>/node_modules` 是 pnpm 的 `.pnpm` 树（几万个小文件 + 大量 symlink），
+// `fs.rm` 在这种规模上偶发 `ENOTEMPTY`（并发删除的竞态），并发跑两次构建时更明显。`maxRetries` 就是为它准备的：
+// 不重试的后果不是「删不掉」而是「删一半」——下一次 deploy 装进半成品闭包，冒烟报「缺某个包」，与源码无关
+// （现场：一次 `just custom build` 报 Cannot find package '@morlay/zephyr'，原样重跑即绿）。
+const REMOVE_PRODUCT = { recursive: true, force: true, maxRetries: 5, retryDelay: 200 } as const;
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire as createRequireOf } from "node:module";
 import { tmpdir } from "node:os";
@@ -81,7 +86,7 @@ export async function runBuild(
 ): Promise<BuildSummary> {
   const collected: BuildStep[] = [];
   // 产物整目录重建（设计决定 3）：上一次留下的东西一律不留，连着跑两次结果一致。
-  await rm(input.layout.root, { recursive: true, force: true });
+  await rm(input.layout.root, REMOVE_PRODUCT);
   await mkdir(input.layout.clientModules, { recursive: true });
 
   for (const [name, action] of [
@@ -351,7 +356,7 @@ export async function smokeClosure(layout: ZephyrLayout): Promise<"skipped" | "o
  * @param layout - 产物布局。
  */
 export async function resetClosure(layout: ZephyrLayout): Promise<void> {
-  await rm(layout.nodeModules, { recursive: true, force: true });
+  await rm(layout.nodeModules, REMOVE_PRODUCT);
 }
 
 /**
