@@ -25,9 +25,11 @@ interface FakeView {
 function fakeElectron(): BrowserPaneElectronLike & {
   readonly views: FakeView[];
   readonly handlers: { request?: unknown; check?: unknown; download?: unknown };
+  readonly partitions: string[];
 } {
   const views: FakeView[] = [];
   const handlers: { request?: unknown; check?: unknown; download?: unknown } = {};
+  const partitions: string[] = [];
   class View {
     readonly webPreferences: Record<string, unknown>;
     readonly record = { url: "", bounds: RECT, closed: false };
@@ -68,9 +70,12 @@ function fakeElectron(): BrowserPaneElectronLike & {
   return {
     views,
     handlers,
+    partitions,
     WebContentsView: View as unknown as BrowserPaneElectronLike["WebContentsView"],
     session: {
-      fromPartition: () => ({
+      fromPartition: (partition: string) => {
+        partitions.push(partition);
+        return {
         setPermissionRequestHandler: (handler: unknown) => {
           handlers.request = handler;
         },
@@ -78,9 +83,10 @@ function fakeElectron(): BrowserPaneElectronLike & {
           handlers.check = handler;
         },
         on: (event: string, listener: (...args: never[]) => void) => {
-          if (event === "will-download") handlers.download = listener;
-        },
-      }),
+            if (event === "will-download") handlers.download = listener;
+          },
+        };
+      },
     },
   };
 }
@@ -109,6 +115,26 @@ describe("面板 view 的权限面", () => {
     expect(panePermissionCheckHandlerOf()(undefined, "clipboard-read", "https://example.com")).toBe(false);
     expect(panePermissionRequestHandlerOf().length).toBe(3);
     void granted;
+  });
+});
+
+describe("面板的 session 钩子", () => {
+  it("权限钩子与下载钩子装在面板**自己的分区**上（不是主窗口那个）", () => {
+    const electron = fakeElectron();
+    webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
+    expect(electron.partitions).toEqual([BROWSER_PANE_PARTITION]);
+    expect(electron.handlers.request).toBeDefined();
+    expect(electron.handlers.check).toBeDefined();
+    expect(electron.handlers.download).toBeDefined();
+  });
+
+  it("下载一律取消（will-download → preventDefault），落不了盘", () => {
+    const electron = fakeElectron();
+    webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
+    const prevented: boolean[] = [];
+    const handler = electron.handlers.download as (...args: never[]) => void;
+    handler({ preventDefault: () => prevented.push(true) } as never);
+    expect(prevented).toEqual([true]);
   });
 });
 
