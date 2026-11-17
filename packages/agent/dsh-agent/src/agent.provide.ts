@@ -7,6 +7,7 @@ import { LlmRetry } from "./llm-retry.service.ts";
 import { LaunchEnvironmentDefault } from "./launch-environment.service.ts";
 import { TimerDefault } from "./timer.service.ts";
 import { ToolRegistryDefault } from "./tool-registry.service.ts";
+import { AgentIdleGuard } from "./agent-idle-guard.service.ts";
 
 // **agent 的骨架装配面**。
 //
@@ -27,6 +28,8 @@ export const provideAgent = provide(
     TimerDefault,
     LaunchEnvironmentDefault,
     LlmRetry,
+    // 开发态换树前的「agent 忙不忙」：登记在注册表之后（它 inject 注册表）。
+    AgentIdleGuard,
   ],
   [
     configure(SystemPromptDefault, { personaPrefix: "" }),

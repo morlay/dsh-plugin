@@ -5,6 +5,8 @@ export * from "./job-registry.service.ts";
 export * from "./job-controller.service.ts";
 export * from "./server/index.ts";
 export * from "./server/tool-jobs.service.ts";
+export { provideJobIdleGuard } from "./job-idle-guard.provide.ts";
+export { JobIdleGuard } from "./job-idle-guard.service.ts";
 
 // 与本包契约同名的上游符号：显式导出本包的，覆盖上游那份（TS 显式优先，运行时也只出我们的契约）。
 export { JobRegistry } from "./contract/job-registry.contract.ts";
