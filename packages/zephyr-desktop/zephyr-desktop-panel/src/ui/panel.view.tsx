@@ -6,9 +6,10 @@
 // - 矩形变化（挂载 / 缩放 / 右栏开合）就报给主进程，它照着摆；
 // - 卸载（关 tab）与窗口关闭都 `close`：view 要销毁，不残留 webContents。
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { SlotView } from "@morlay/zephyr-app/client";
+import { inject, Injectable, type OnInit } from "@morlay/zephyr";
+import { Slots } from "@morlay/zephyr-app/client";
 import { browserPaneOf, panelBoundsOf, type PaneState } from "./panel-bridge.ts";
-import { PANEL_ID, SidebarRightPaneTabSlot } from "./panel-slots.ts";
+import { PANEL_ID } from "./panel-slots.ts";
 
 const BAR_STYLE = {
   display: "flex",
@@ -108,10 +109,26 @@ export function DesktopPanelBody(props: {
   );
 }
 
-/** 右栏的浏览器面板（位置上的那一页）。 */
-@SlotView()
-export class DesktopPanelView extends SidebarRightPaneTabSlot {
-  render(): ReactNode {
-    return <DesktopPanelBody bridge={browserPaneOf()} />;
+/**
+ * 右栏的浏览器面板（位置上的那一页）。
+ *
+ * **不声明 slot**：位置 `sidebar.right.pane.tab` 的声明权归 tab 机制，本包只贡献自己那个 key 的视图——
+ * 声明两次会得到 `service "sidebar.right.pane.tab" has been registered`（真实现场：整页装配失败）。
+ */
+@Injectable()
+export class DesktopPanelView implements OnInit {
+  private readonly slots = inject(Slots);
+
+  private off: (() => void) | undefined;
+
+  onInit(): void {
+    this.off = this.slots.registerDynamic(
+      { name: "sidebar.right.pane.tab", key: PANEL_ID },
+      () => <DesktopPanelBody bridge={browserPaneOf()} />,
+    );
+  }
+
+  onDispose(): void {
+    this.off?.();
   }
 }

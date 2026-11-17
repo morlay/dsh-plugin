@@ -1,10 +1,7 @@
-// 本包占的位置：右栏面板那一页（keyed + session scope）。
+// 本包占的位置：右栏面板那一页（keyed 座位）。
 //
-// 位置名只写在这里——贡献处用 `extends` 关联类型，不重复写字符串。
-import { SlotProvider, SlotViewBase } from "@morlay/zephyr-app/client";
-
+// **位置由声明方拥有**：`sidebar.right.pane.tab` 已由右栏的 tab 机制声明（`@SlotProvider` 只能声明一次，
+// 再声明一次就是「service 已被注册」——真实现场：页面装配直接失败）。本包只是贡献一个 key 的视图，
+// 所以走运行时的 `Slots.registerDynamic`，不碰声明。
 /** 右栏面板那一页的 id（keyed 位置的 key）：包名是天然的唯一值。 */
 export const PANEL_ID = "@morlay/zephyr-desktop-panel";
-
-@SlotProvider({ name: "sidebar.right.pane.tab", multi: true, scoped: true, key: PANEL_ID })
-export abstract class SidebarRightPaneTabSlot extends SlotViewBase {}
