@@ -185,6 +185,50 @@ describe("recallBoundary", () => {
   });
 });
 
+// 把日志里的用户消息换成带来源凭据的（重放要原样带给下一轮）。
+function withSource(
+  events: readonly SessionEvent[],
+  source: Record<string, unknown>,
+): SessionEvent[] {
+  return events.map((event) =>
+    event.type === "user/message"
+      ? ({ ...event, data: { ...event.data, source } } as unknown as SessionEvent)
+      : event,
+  );
+}
+
+const USER_SOURCE = { kind: "user", rpcId: "rpc-1", clientTimeZone: "Asia/Shanghai" };
+
+describe("重放保住来源凭据", () => {
+  it("retry 排进队列的用户输入原样带走 source（身份换新）", () => {
+    const events = withSource(turnLog(0, 1), USER_SOURCE);
+    const turns = closedTurns(events);
+    const plan = retryPlan({ sessionId: "s1", turn: 1, cascade: "truncate" }, turns);
+
+    expect(plan.queuedUsers).toHaveLength(1);
+    expect(plan.queuedUsers[0]?.source).toEqual(USER_SOURCE);
+    // 队列条目要新身份：与日志里被重放的那条撞 MessageId 会让待处理列表拒绝这次拼接。
+    expect(plan.queuedUsers[0]?.id).not.toBe(turns[0]?.user?.data.id);
+  });
+
+  it("编辑后的用户输入同样保住 source", () => {
+    const events = withSource(turnLog(0, 1), USER_SOURCE);
+    const plan = editPlan(editRequest(2, 0, "改过"), closedTurns(events));
+
+    expect(plan.queuedUsers[0]?.source).toEqual(USER_SOURCE);
+    expect(plan.queuedUsers[0]?.content).toEqual([{ type: "text", text: "改过" }]);
+  });
+
+  it("reroll 与下游级联重放同样保住 source", () => {
+    const events = withSource([...turnLog(0, 1), ...turnLog(6, 2)], USER_SOURCE);
+    const cascade = editPlan(editRequest(2, 0, "改过", "preserve"), closedTurns(events));
+    const rerolled = rerollPlan({ sessionId: "s1" }, closedTurns(events));
+
+    expect(cascade.queuedUsers.map((user) => user.source)).toEqual([USER_SOURCE, USER_SOURCE]);
+    expect(rerolled.queuedUsers.map((user) => user.source)).toEqual([USER_SOURCE]);
+  });
+});
+
 describe("keptOutsideTurn / openTurnCloser", () => {
   it("保留前缀与目标之间、不属于轮次正文的事件（配置 / 上下文注入）", () => {
     const header = {
@@ -200,6 +244,27 @@ describe("keptOutsideTurn / openTurnCloser", () => {
     const withUser = [...events, ...turnLog(2, 1).slice(1)];
 
     const kept = keptOutsideTurn(withUser, 0, 3);
+
+    expect(kept.map((event) => event.type)).toEqual(["request/header"]);
+  });
+
+  it("不搬收件箱快照：拼接与消费都是队列中间态，重放由 queuedUsers 重新 followup", () => {
+    const spliced = (seq: number, data: unknown) =>
+      ({ type: "agent/inbox/spliced", seq, time: seq, data }) as unknown as SessionEvent;
+    const events = [
+      { type: "turn/start", seq: 0, time: 0, data: { turn: 1 } } as unknown as SessionEvent,
+      spliced(1, { target: "next-turn", start: 0, inserted: [{ id: "u1" }] }),
+      spliced(2, { target: "next-turn", start: 0, removedCount: 1, inserted: [] }),
+      {
+        type: "request/header",
+        seq: 3,
+        time: 3,
+        data: { header: { config: { provider: "p", model: "m" } } },
+      } as unknown as SessionEvent,
+      ...turnLog(4, 1).slice(1),
+    ];
+
+    const kept = keptOutsideTurn(events, 0, 4);
 
     expect(kept.map((event) => event.type)).toEqual(["request/header"]);
   });

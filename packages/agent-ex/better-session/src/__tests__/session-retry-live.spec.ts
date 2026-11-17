@@ -11,7 +11,7 @@ import { type StreamChunk, type UserMessage } from "@morlay/dsh-agent";
 import { LlmAdapter } from "@morlay/dsh-agent/server";
 import { MessageId } from "@morlay/dsh-agent/contract";
 import { SessionStore } from "@morlay/dsh-session";
-import { SessionId } from "@morlay/dsh-session/contract";
+import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
@@ -60,6 +60,22 @@ async function logTexts(harness: HarnessWithAgent, sessionId: string): Promise<s
   } finally {
     await handle.close();
   }
+}
+
+/** 库里那份日志的事件（判据要看类型与 data，不看内部坐标）。 */
+async function logEvents(harness: HarnessWithAgent, sessionId: string) {
+  const handle = await harness.app.get(SessionPersistence).open(SessionId(sessionId), "read");
+  try {
+    const read = await handle.read(0, undefined);
+    return read.events as readonly SessionEvent[];
+  } finally {
+    await handle.close();
+  }
+}
+
+/** 一条用户/队列消息里的纯文本。 */
+function textOf(message: { readonly content?: readonly unknown[] }): string {
+  return (message.content ?? []).map((block) => (block as { text?: string }).text ?? "").join("");
 }
 
 function send(agent: { send: (...args: never[]) => unknown }, id: string, text: string): void {
@@ -127,4 +143,73 @@ describe("重试在真 agent 下", { timeout: 180_000 }, () => {
       "点重试不能让进程因未捕获拒绝退出",
     ).toEqual([]);
   });
+
+  it(
+    "重试同一条输入只拼接一次，且落库的 user/message 保住来源凭据",
+    { timeout: 120_000 },
+    async () => {
+      const harness = await boot();
+      (
+        harness.app.ctx.get("llm", false) as {
+          registerAdapter(p: readonly string[], a: unknown): void;
+        }
+      ).registerAdapter(["mockp"], new FakeAdapter());
+      const sessionId = String(harness.app.get(SessionStore).prepare().id);
+      const agent = (await harness.agent.create(
+        SessionId(sessionId),
+        { provider: "mockp", model: "mockp" },
+        { cwd: harness.root },
+      )) as unknown as {
+        session: unknown;
+        followup(message: unknown): void;
+        whenIdle(): Promise<void>;
+      };
+
+      agent.followup({
+        id: MessageId("probe-input"),
+        role: "user",
+        content: [{ type: "text", text: "被重放的输入" }],
+        source: { kind: "user", rpcId: "rpc-source-1", clientTimeZone: "Asia/Shanghai" },
+      });
+      await agent.whenIdle();
+      await harness.app.get(SessionStore).flush(agent.session as never);
+
+      const result = await harness.app.get(RemoteHandlers).invoke("sessionEditor/retry", {
+        request: { sessionId, turn: 1, cascade: "truncate" },
+      });
+      expect(result, `retry 失败：${JSON.stringify(result)}`).toMatchObject({
+        ok: true,
+        value: { queuedTurns: 1 },
+      });
+      await agent.whenIdle().catch(() => undefined);
+      await harness.app.get(SessionStore).flush(agent.session as never);
+
+      const events = await logEvents(harness, sessionId);
+      const spliced = events.filter(
+        (event): event is SessionEvent<"agent/inbox/spliced"> =>
+          event.type === "agent/inbox/spliced",
+      );
+      const inserted = spliced.filter((event) =>
+        event.data.inserted.some((message) => textOf(message) === "被重放的输入"),
+      );
+      // ① 同一条输入只被拼接一次（修前：原始那条被当「轮外事实」重写回来 + 重放的新克隆 = 2 条）。
+      expect(inserted).toHaveLength(1);
+      // ② 队列的消费快照不再落在第一个 turn/start 之前（修前：重写回来的 claim 在 turn/start 前面）。
+      const firstTurnStart = events.findIndex((event) => event.type === "turn/start");
+      const claimBeforeTurn = spliced.filter(
+        (event) => events.indexOf(event) < firstTurnStart && (event.data.removedCount ?? 0) > 0,
+      );
+      expect(claimBeforeTurn).toEqual([]);
+      // ③ 进历史的 user/message 保住来源凭据（修前：source 只剩 {kind:"user"}）。
+      const users = events.filter(
+        (event): event is SessionEvent<"user/message"> =>
+          event.type === "user/message" && textOf(event.data) === "被重放的输入",
+      );
+      expect(users.at(-1)?.data.source).toMatchObject({
+        kind: "user",
+        rpcId: "rpc-source-1",
+        clientTimeZone: "Asia/Shanghai",
+      });
+    },
+  );
 });

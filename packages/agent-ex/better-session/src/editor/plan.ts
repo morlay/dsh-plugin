@@ -49,6 +49,10 @@ function userText(message: UserMessage): string {
     .join("\n");
 }
 
+// 重放用的用户消息：身份换新（它在队列里是新条目，不能与保留前缀里的同一 MessageId 在待处理列表撞车），
+// 但**来源（source）必须原样带走**——`rpcId` / `clientTimeZone` / `principal` 是「谁、在什么时区发的」的
+// 唯一凭据：抹成 `{kind:"user"}` 会让重放后的 `user/message` 失去可追溯性，客户端按 `rpcId` 认回声、
+// 上游 `hasPromptRequest` 按 `rpcId` 认账，两处都会失配。
 function cloneUser(
   message: UserMessage,
   content: readonly ContentBlock[] = structuredClone(message.content) as ContentBlock[],
@@ -57,7 +61,7 @@ function cloneUser(
     id: randomUUID(),
     role: "user",
     content: Object.freeze(content),
-    source: Object.freeze({ kind: "user" }),
+    source: Object.freeze(structuredClone(message.source)),
   }) as UserMessage;
 }
 
@@ -393,6 +397,11 @@ const TURN_STRUCTURE_EVENT_TYPES: ReadonlySet<string> = new Set([
   "step/end",
 ]);
 
+// 收件箱快照（`agent/inbox/spliced`）不是「轮外事实」：它记的是队列在某一瞬间的拼接/消费坐标，
+// 与轮次结构无关。把它原样重写回日志会凭空造出「同一条输入拼接两次」和「消费坐标落在 turn/start 之前」
+// 的历史；重放要保留的输入由 `plan.queuedUsers` 重新 `followup`，这里一律不再搬。
+const QUEUE_SNAPSHOT_EVENT_TYPES: ReadonlySet<string> = new Set(["agent/inbox/spliced"]);
+
 // 压缩事务的四件套由 restoreCompactions 统一重排与重算跨事件引用，不参与普通保留。
 const COMPACTION_BRACKET_TYPES: ReadonlySet<string> = new Set([
   "compaction/start",
@@ -420,6 +429,7 @@ export function keptOutsideTurn(
       event.seq >= keepFrom &&
       event.seq < targetSeq &&
       !TURN_STRUCTURE_EVENT_TYPES.has(event.type) &&
+      !QUEUE_SNAPSHOT_EVENT_TYPES.has(event.type) &&
       !COMPACTION_BRACKET_TYPES.has(event.type) &&
       !isCompactionCheckpoint(event) &&
       !isTurnBodyEvent(event),
