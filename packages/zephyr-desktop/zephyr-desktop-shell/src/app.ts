@@ -22,6 +22,17 @@ import { devModeOf } from "./dev-mode.ts";
 import type { ElectronLike, ElectronWindow } from "./electron-like.ts";
 import { reportEvent, reportFailure } from "./failure.ts";
 import { nodeInspectorOf } from "./inspector.ts";
+import {
+  browserPaneRoutesOf,
+  type BrowserPaneRoutes,
+  type PaneOpenInput,
+  type PaneRect,
+} from "./browser-pane.ts";
+import {
+  BROWSER_PANE_PARTITION,
+  webContentsPaneViewOf,
+  type BrowserPaneElectronLike,
+} from "./browser-pane-view.ts";
 import { DESKTOP_IPC } from "./ipc.ts";
 import { menuTemplateOf } from "./menu.ts";
 import { navigationPlanOf } from "./navigation.ts";
@@ -102,6 +113,9 @@ let primaryWindow: ShellWindow | undefined;
 
 /** 进行中的选择：同一窗口重复点击复用同一个对话框，不叠开。 */
 let pendingPick: Promise<string | null> | undefined;
+
+/** 内嵌浏览器面板的收尾（关窗 / 退出时把 view 都关掉，不残留 webContents）。 */
+let closeBrowserPanes: (() => Promise<void>) | undefined;
 
 /** 宿主树（打包形态才有；关窗后要连它一起收）。 */
 let hostApp: { dispose(): Promise<void> } | undefined;
@@ -199,8 +213,9 @@ async function start(): Promise<void> {
 async function quit(): Promise<void> {
   if (quitting) return;
   quitting = true;
-  // 先收调试端口：进程退出后 `lsof` 里不该还剩这条监听。
+  // 先收调试端口与面板：进程退出后 `lsof` 里不该还剩这条监听 / 这条连接。
   await devTools.dispose();
+  await closeBrowserPanes?.();
   shortcuts?.dispose();
   await hostApp?.dispose().catch(async (error: unknown) => reportFailure("收起宿主", error));
   electron.app.quit();
@@ -248,6 +263,56 @@ function initialSize(): { readonly width: number; readonly height: number } {
     width: window?.width ?? DEFAULT_WINDOW_SIZE.width,
     height: window?.height ?? DEFAULT_WINDOW_SIZE.height,
   };
+}
+
+/**
+ * 装内嵌浏览器面板：主进程建 view（`WebContentsView` + 独立分区），渲染进程只发五个意图。
+ *
+ * 判据全在 {@link browserPaneRoutesOf} 里（协议白名单、pane 在不在、重复 open 不叠），这里只做准入：
+ * **只有本窗口的 renderer 能发**（与目录选择器同一条判据）。
+ * @param window - 本窗口（view 挂在它的 `contentView` 上）。
+ */
+function installBrowserPane(window: ShellWindow): void {
+  const port = webContentsPaneViewOf({
+    electron: electron as unknown as BrowserPaneElectronLike,
+    host: {
+      add: (view) => {
+        window.contentView.addChildView(view);
+      },
+      remove: (view) => {
+        window.contentView.removeChildView(view);
+      },
+    },
+  });
+  const routes: BrowserPaneRoutes = browserPaneRoutesOf({
+    port,
+    partition: BROWSER_PANE_PARTITION,
+  });
+  closeBrowserPanes = async (): Promise<void> => {
+    await Promise.all(port.opened.map((id) => routes.close(id)));
+  };
+  const owned = (senderId: number | undefined): boolean =>
+    senderId !== undefined && window.owns(senderId);
+  electron.ipcMain.handle(DESKTOP_IPC.browserOpen, async (event, ...args: unknown[]) =>
+    owned(event.senderId)
+      ? routes.open(args[0] as PaneOpenInput)
+      : { ok: false, reason: "不是本窗口的请求" },
+  );
+  electron.ipcMain.handle(DESKTOP_IPC.browserBounds, async (event, ...args: unknown[]) =>
+    owned(event.senderId) ? routes.setBounds(args[0] as string, args[1] as PaneRect) : false,
+  );
+  electron.ipcMain.handle(DESKTOP_IPC.browserNavigate, async (event, ...args: unknown[]) =>
+    owned(event.senderId)
+      ? routes.navigate(args[0] as string, args[1] as string)
+      : { ok: false, reason: "不是本窗口的请求" },
+  );
+  electron.ipcMain.handle(DESKTOP_IPC.browserClose, async (event, ...args: unknown[]) => {
+    if (!owned(event.senderId)) return;
+    await routes.close(args[0] as string);
+  });
+  electron.ipcMain.handle(DESKTOP_IPC.browserState, async (event, ...args: unknown[]) =>
+    owned(event.senderId) ? routes.state(args[0] as string) : undefined,
+  );
 }
 
 /**
@@ -302,6 +367,7 @@ async function openWindow(desktop: ZephyrDesktopConfig | undefined, url: string)
     });
   });
   installNavigationGuards(window, new URL(url).origin);
+  installBrowserPane(window);
   // 渲染进程的 console：白屏的唯一现场（模块 404 / 语法错 / CSP 都只在这里说）。
   // **同时落 `shell-entry.log`**：打包形态的 stderr 没人看得到，而白屏正是「双击没反应」的那一类。
   if (debug.enabled) {

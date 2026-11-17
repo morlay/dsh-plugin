@@ -1,6 +1,11 @@
 // 壳对 `electron` 的最小声明面：**壳不静态依赖 electron 的类型**（它是可选 peer，也只在 Electron 里存在）。
 //
 // 新增原生能力时先在这里加成员：能加到这里，就说明壳只用到了这个面。
+import type {
+  BrowserPaneSessionLike,
+  BrowserPaneViewLike,
+  BrowserPaneWebPreferences,
+} from "./browser-pane-view.ts";
 import type { WorkArea, WindowBounds } from "./window-state.ts";
 
 /** 一个窗口（`BrowserWindow` 的子集）。 */
@@ -22,6 +27,11 @@ export interface ElectronWindow {
   getNormalBounds(): WindowBounds;
   /** 这个 webContents id 是不是本窗口的（IPC 的准入判据）。 */
   owns(senderId: number): boolean;
+  /** 窗口的内容层：内嵌浏览器面板的 view 挂在这里（子 view 列表）。 */
+  readonly contentView: {
+    addChildView(view: unknown): void;
+    removeChildView(view: unknown): void;
+  };
   readonly webContents: ElectronWebContents;
 }
 
@@ -55,6 +65,14 @@ export interface ElectronLike {
     disableHardwareAcceleration(): void;
   };
   readonly BrowserWindow: new (options: unknown) => ElectronWindow;
+  /** 内嵌浏览器面板：主进程创建的网页容器（适配器在 `browser-pane-view.ts`）。 */
+  readonly WebContentsView: new (options: {
+    readonly webPreferences: BrowserPaneWebPreferences;
+  }) => BrowserPaneViewLike;
+  /** session 分区：面板与主页面不同分区（cookie / storage 互不可见）。 */
+  readonly session: {
+    fromPartition(partition: string): BrowserPaneSessionLike;
+  };
   readonly dialog: {
     showOpenDialog(
       window: unknown,

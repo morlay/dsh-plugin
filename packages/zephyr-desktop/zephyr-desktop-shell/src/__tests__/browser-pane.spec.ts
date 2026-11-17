@@ -4,6 +4,14 @@ import { browserUrlAllowed } from "../browser-url.ts";
 
 const RECT: PaneRect = { x: 10, y: 20, width: 400, height: 300 };
 
+/**
+ * @param result - 路由的返回。
+ * @returns 被拒时的原因（放行时是空串）。
+ */
+function reasonOf(result: { readonly ok: true } | { readonly ok: false; readonly reason: string }): string {
+  return result.ok ? "" : result.reason;
+}
+
 /** 假适配器：只记调用，不碰 Electron（真适配器由真机验）。 */
 function fakePort(): BrowserPanePort & {
   readonly calls: string[];
@@ -84,7 +92,7 @@ describe("面板的 IPC 路由（假适配器）", () => {
     await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT });
     const rejected = await routes.navigate("browser", "javascript:alert(1)");
     expect(rejected.ok).toBe(false);
-    expect(rejected.reason).toContain("http");
+    expect(reasonOf(rejected)).toContain("http");
     expect(routes.state("browser")?.url).toBe("https://example.com/");
     // 一开始就给非法地址：不建 pane。
     const other = fakePort();

@@ -12,4 +12,10 @@ export const DESKTOP_IPC = {
   shortcutsInput: "dsh-desktop:shortcuts-input",
   /** 按当前配置关窗（渲染进程 → 主进程）。 */
   shortcutsCloseWindow: "dsh-desktop:shortcuts-close-window",
+  /** 内嵌浏览器面板（渲染进程 → 主进程）：开 / 摆位置 / 导航 / 关 / 读状态。 */
+  browserOpen: "dsh-desktop:browser-open",
+  browserBounds: "dsh-desktop:browser-bounds",
+  browserNavigate: "dsh-desktop:browser-navigate",
+  browserClose: "dsh-desktop:browser-close",
+  browserState: "dsh-desktop:browser-state",
 } as const;
