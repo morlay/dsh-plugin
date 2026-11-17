@@ -26,5 +26,8 @@
   },
   // `**/*` 默认不进点目录：技能自带的执行器（`.agents/skills/**`）要显式加进来，否则它们没有类型面。
   "include": ["**/*", ".agents/skills/**/*.ts"],
-  "exclude": ["**/node_modules/**", "**/dist/*", "target/**"]
+  // `**/target/**`：产物目录（`zephyr build` 的 `<outputDir>`，含 `pnpm deploy` 的闭包与源码面副本）。
+  // 只写 `target/**` 会漏掉 `apps/*/target/`——那里的 `.ts` 一旦进 program，类型检查与 tsgolint 都会被
+  // 几百份第三方源码拖垮（症状是 `Expected file … to be in program` 之类的 panic）。
+  "exclude": ["**/node_modules/**", "**/dist/*", "**/target/**"]
 }
