@@ -8,19 +8,19 @@ import { pathToFileURL } from "node:url";
 import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { AppEnv } from "@morlay/zephyr-app";
 import { Federation, type FederationConfig } from "./federation.contract.ts";
-import { exportTargetOf, fileInPackage, manifestOf } from "../internal/resolve.ts";
+import { fileInPackage, manifestOf } from "../internal/resolve.ts";
 import { nodeStubPathOf } from "../internal/package-root.ts";
 import {
   BUNDLER_REV,
   CLIENT_MODULES_CACHE_NAMESPACE,
   contentRev,
   CLIENT_MODULES_PREFIX,
+  browserEntryOf,
   bundlePackage,
   clientModulesAlias,
   dependencyEntry,
 } from "./bundle.ts";
 import { parseFederationUrl } from "./parse-url.ts";
-import { createRequire } from "node:module";
 import { watchOf } from "./watch.ts";
 
 /** 从某个文件向上找最近的 `package.json`（node 解析的基准就是它所在的包）。 */
@@ -236,8 +236,18 @@ export class FederationDefault extends Federation {
     }
     return undefined;
   }
-
-  /** 出口名 → 入口文件（我们的包按 `exports`，三方按 node 的解析）。 */
+  /**
+   * 出口名 → 入口文件：**出口 → 入口只有一份规则**（`browserEntryOf`：`exports` 的浏览器条件 +
+   * 存在性校验 + 物理回退），与枚举侧（`prebundle-plan`）同一份。
+   *
+   * 不能按**包名**解析（`createRequire(<包清单>).resolve(exportName)`）：出口名与 npm 包名可以撞——
+   * `@shikijs/langs` 的出口 `./typescript` 会解析到无关的 `typescript` 包（整份 TS 编译器），它的默认
+   * 导出没有 `scopeName`，shiki 构造 Registry 时就 `Cannot read properties of undefined (reading 'split')`。
+   * @param name - 包名。
+   * @param root - 包根（未知时按引用方解析说明符）。
+   * @param exportName - 出口名（`index` = 根出口）。
+   * @returns 入口绝对路径；解析不出来时 undefined。
+   */
   private async entryOf(
     name: string,
     root: string | undefined,
@@ -249,57 +259,17 @@ export class FederationDefault extends Federation {
       if (exportName !== "index") {
         const subpath = await dependencyEntry(
           this.appEnv.profileManifest,
-          `${name}/${exportName}` as never,
+          `${name}/${exportName}`,
         ).catch(() => undefined);
         if (subpath?.entry !== undefined) return subpath.entry;
       }
       return (await dependencyEntry(this.appEnv.profileManifest, name).catch(() => undefined))
         ?.entry;
     }
-    // **子路径先用原生解析**：`createRequire(<包清单>).resolve(specifier)` 尊重 `exports` 条件与子路径
-    // （`use-sync-external-store/shim/with-selector` 这类），不再靠我们猜扩展名。
-    // 子路径就是文件（无 exports 的包）：按扩展名探测，命中即返回。
-    if (exportName.includes("/")) {
-      for (const candidate of [
-        exportName,
-        `${exportName}.js`,
-        `${exportName}.cjs`,
-        `${exportName}.mjs`,
-      ]) {
-        const file = join(root, candidate);
-        if (
-          await readFile(file, "utf8").then(
-            () => true,
-            () => false,
-          )
-        )
-          return file;
-      }
-    }
-    if (exportName !== "index") {
-      const native = (() => {
-        try {
-          const resolver = createRequire(join(root, "package.json"));
-          // 带扩展名的资源出口（`brand-font.css`）与无扩展名的 JS 出口都要试：
-          // `serve` 拿到的 `exportName` 已去掉扩展名，直接 resolve 会落空。
-          for (const candidate of [exportName, `${exportName}.css`]) {
-            try {
-              return resolver.resolve(candidate);
-            } catch {
-              continue;
-            }
-          }
-          return undefined;
-        } catch {
-          return undefined;
-        }
-      })();
-      if (native !== undefined) return native;
-    }
     // 出口名的回退：`index` → 根出口；其余先按名找，再按我们的约定找 `./client-module`。
     return (
-      (await exportTargetOf(root, exportName === "index" ? undefined : exportName)) ??
-      (await exportTargetOf(root, "client-module")) ??
+      (await browserEntryOf(root, exportName === "index" ? undefined : exportName)) ??
+      (await browserEntryOf(root, "client-module")) ??
       (await fileInPackage(root, exportName))
     );
   }

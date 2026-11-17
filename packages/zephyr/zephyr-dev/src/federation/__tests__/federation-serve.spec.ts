@@ -146,6 +146,22 @@ describe("FederationDefault.serve", () => {
     expect(status()).toBe(200);
     expect(body()).toContain("--brand-font");
   });
+  it("出口名与某个包同名时按 exports 解析：拿到的是那份语法，不是同名包的字节", async () => {
+    // 现场：`@shikijs/langs` 的出口名 `typescript` 与 npm 包 `typescript` 同名。按**包名**解析会拿到
+    // 整份 TS 编译器（默认导出是它的 `module.exports`，没有 `scopeName`），shiki 在构造 Registry 时炸
+    // `Cannot read properties of undefined (reading 'split')`；出口 → 入口只能按 `exports` 解析。
+    const { res, status, body } = stubResponse();
+    const handled = await federation.serve(
+      "/_zephyr/@modules/langs-fixture@1.0.0/typescript.js",
+      request,
+      res,
+    );
+    expect(handled).toBe(true);
+    expect(status()).toBe(200);
+    expect(body(), "是那份语法模块").toContain("source.ts");
+    expect(body(), "不是同名包的字节").not.toContain("TYPESCRIPT-COMPILER");
+  });
+
   it("无 exports 的包子路径：shim/with-selector 落到文件而不是主入口", async () => {
     const { res, status, body } = stubResponse();
     const handled = await federation.serve(
