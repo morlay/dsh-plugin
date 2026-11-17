@@ -1,0 +1,16 @@
+diff --git a/packages/client/ui-theme/src/theme-settings.ts b/packages/client/ui-theme/src/theme-settings.ts
+index af7d1d22b6..a66c68c756 100644
+--- a/packages/client/ui-theme/src/theme-settings.ts
++++ b/packages/client/ui-theme/src/theme-settings.ts
+@@ -160,7 +160,10 @@ const GENERIC_FAMILIES = new Set([
+  * @param value - user-entered or stored font list.
+  * @returns the normalized list, or `''` when no family name remains.
+  */
+-export function normalizeFontFamily(value: string): string {
++export function normalizeFontFamily(value: string | undefined): string {
++  // 首启 / 旧文档里的 settings 段可能只有 `preference`（没有三个字体字段）：这里不做保护的话，
++  // `adopt()` 在异步路径上抛 `Cannot read properties of undefined`，表现为一条无人接的 rejection。
++  if (typeof value !== 'string') return ''
+   return value.split(',')
+     .map(name => name.replace(/["'\\<>\u0000-\u001f\u007f]/gu, '').replace(/\s+/gu, ' ').trim())
+     .filter(name => name !== '')

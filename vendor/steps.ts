@@ -57,6 +57,11 @@ export const patch: Step[] = [
   // "Cannot update a component while rendering a different component"（`DocumentTitle` 订阅了 store）。
   // 把首次同步推到微任务。
   { type: "git", patch: "model-selection-deferred-sync.patch" },
+  // 首启 / 旧文档的 settings 段可能只有 `preference`（没有三个字体字段），而 `durableFontFamilies` 直接对
+  // 可能为 `undefined` 的字段调 `normalizeFontFamily`——它在异步的 `adopt()` 里抛错，表现为一条无人接的
+  // rejection（`vitest` 记成 unhandled error，全库退出码因此非 0）。给归一化加一层「不是字符串就返回空串」，
+  // 与上游自己那句「hand-edited documents may hold raw input」的注释一致。
+  { type: "git", patch: "theme-font-family-undefined.patch" },
   // 渲染窗口内的 store 写入：`publishRetention` 会在渲染期被调到（`ui-model-selection` 的 inject 工厂在
   // 渲染期 materialize 会话 scope → retain），同步写 sessions store 会让 React 的 `useSyncExternalStore`
   // 在渲染期间发现快照变化并报「Cannot update a component while rendering a different component」。
