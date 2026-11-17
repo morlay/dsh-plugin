@@ -1,5 +1,5 @@
 diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
-index 381219bab0..3c4dcf4e2a 100644
+index 1a052ded7c..e26646f396 100644
 --- a/packages/subprocess/subprocess-local/src/runner-launch.ts
 +++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
 @@ -19,7 +19,11 @@ export const WINDOWS_RUNNER_SELECTION = 'windows' as const
@@ -15,7 +15,41 @@ index 381219bab0..3c4dcf4e2a 100644
  const RUNNER_CONTROL_ENV_PREFIXES = ['NODE_', 'TSX_'] as const
  
  /**
-@@ -81,7 +85,7 @@ export function runnerEnvironment(
+@@ -35,12 +39,32 @@ export function spawnRunnerInvocation(): RunnerInvocation {
+   }
+   return [
+     process.execPath,
++    // 本地 patch（patches/source-loader.patch）：源码面的转译器**只由部署侧注入**（`DSH_SOURCE_LOADER`，
++    // 本仓库是 `@morlay/dsh-oxc-node`）。上游原本回落到 `tsx/esm`，本仓库既不声明它、随包产物里也没有
++    // （闭包按 `--prod` 装，devDependencies 被剔）——那条回落只会把「部署少注入一格」变成一句
++    // `Cannot find package tsx`。缺了就当场说清。
+     '--import',
+-    import.meta.resolve('tsx/esm'),
++    requireSourceLoader(),
+     fileURLToPath(new URL('./bin.ts', import.meta.url)),
+   ]
+ }
+ 
++/**
++ * 部署侧注入的源码面 loader（`DSH_SOURCE_LOADER`）。
++ * @returns loader 的模块说明符或绝对路径。
++ * @throws {Error} 没注入时抛：这是部署配置缺一格，不是可以静默回落的默认值。
++ */
++function requireSourceLoader(): string {
++  const loader = process.env.DSH_SOURCE_LOADER
++  if (loader === undefined || loader === '') {
++    throw new Error(
++      'DSH_SOURCE_LOADER is not set: the deployment must point it at the source-plane TypeScript loader ' +
++        '(for example @morlay/dsh-oxc-node)',
++    )
++  }
++  return loader
++}
++
+ /**
+  * Check the concrete runner executable and entry paths without executing a probe mode.
+  * @param invocation - resolved executable and runner-entry arguments.
+@@ -81,7 +105,7 @@ export function runnerEnvironment(
      ...env,
      [SUBPROCESS_RUNNER_ENV]: selection,
      SYSTEMD_LOG_TARGET: 'null',

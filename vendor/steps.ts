@@ -35,14 +35,15 @@ export const patch: Step[] = [
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },
-  // **源码面的转译器只由部署侧注入**（`DSH_SOURCE_LOADER`，本仓库是 `@morlay/dsh-oxc-node`）。上游有两处
-  // 会自己找 `tsx/esm`：subprocess 的 runner launch、以及 PTC 的 `node-script` 子进程（它还会把环境变量清空、
-  // 只留 `--experimental-vm-modules`，于是子进程落到 Node 内建 strip-only 模式，撞上 vendor 的 `.ts` 参数属性）。
-  // 这条补丁把两处都改成「缺 `DSH_SOURCE_LOADER` 就抛出说清楚的错」，并删掉 5 个包对 `tsx` 的依赖声明——
-  // 那条回落只会把「部署少注入一格」变成一句 `Cannot find package tsx`。
-  // 它还有一段**桌面部署**的接缝：`DSH_PTC_ELECTRON_RUN_AS_NODE=1` 时把 `ELECTRON_RUN_AS_NODE` 透给 PTC
+  // **源码面的转译器只由部署侧注入**（`DSH_SOURCE_LOADER`，本仓库是 `@morlay/dsh-oxc-node`）。上游会自己找
+  // `tsx/esm` 的地方有两处，分别落在两个补丁里（一个文件一个补丁，避免同一文件被两份补丁各改一段）：
+  // - subprocess 的 runner launch → 并在下面的 `subprocess-lazy-tsconfig-path.patch`（它本来就改那个文件）；
+  // - PTC 的 `node-script` 子进程 → 本补丁（它还会清空环境变量、只留 `--experimental-vm-modules`，于是
+  //   子进程落到 Node 内建 strip-only 模式，撞上 vendor 的 `.ts` 参数属性）。
+  // 两处都是「缺 `DSH_SOURCE_LOADER` 就抛出说清楚的错」，不再回落到 `tsx`。
+  // 本补丁还带一段**桌面部署**接缝：`DSH_PTC_ELECTRON_RUN_AS_NODE=1` 时把 `ELECTRON_RUN_AS_NODE` 透给 PTC
   // 子进程。桌面形态的 `launch.executable` 是 Electron 本体（`process.execPath`），不带这个变量子进程按
-  // **应用**启动、不按 Node，上面那个 loader 参数根本不生效（表现：进程活着、协议不说话、20s 超时）。
+  // **应用**启动、不按 Node，loader 参数根本不生效（表现：进程活着、协议不说话、20s 超时）。
   { type: "git", patch: "source-loader.patch" },
   // 上游另有 5 个包在清单里声明 `tsx`（源码面运行时当 loader 用）。这里**不删那几行**：这些清单还会被
   // 下面的 `exports` 步骤整份改写，逐份正则删行必然踩到 JSON 的逗号（实测三种写法各坏一次），补丁里又只会混进
