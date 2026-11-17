@@ -7,7 +7,7 @@
 // **不打包 node 侧**（设计决定 8）：闭包里本来就有 loader（`@morlay/dsh-oxc-node`），
 // `src/server.ts` 原样复制过去、由 loader 直接跑，少一次 rolldown，也让 stack trace 指向真实文件。
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire as createRequireOf } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -181,10 +181,17 @@ export async function buildRuntime(input: BuildInput): Promise<void> {
       { cwd: input.resolved.workspace, maxBuffer: 64 * 1024 * 1024 },
     );
     await resetClosure(input.layout);
-    await cp(join(staging, "node_modules"), input.layout.nodeModules, {
-      recursive: true,
-      verbatimSymlinks: true,
-    });
+    // **搬目录用 rename，不用 cp**：staging 就在 `target/` 下、与产物同设备，`rename` 是原子迁移（900MB 秒级）；
+    // `cp` 要在 pnpm 的 `.pnpm` 树上逐个 lstat 几万个条目，既慢又会撞 dangling 链接/时序（真实现场：
+    // 间歇报 `ENOENT`，三次各缺一个不同的文件，单独 deploy 却每次都成功）。
+    // 跨设备（EXDEV）才回退 `cp`：那种情况才需要真拷贝。
+    const source = join(staging, "node_modules");
+    try {
+      await rename(source, input.layout.nodeModules);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+      await cp(source, input.layout.nodeModules, { recursive: true, verbatimSymlinks: true });
+    }
   } catch (error) {
     throw new CliError(
       `运行时闭包失败（pnpm --filter ${name} deploy --prod）：${error instanceof Error ? error.message : String(error)}`,
