@@ -3,7 +3,7 @@
 // 两段解析是必须的：**要读配置才知道有哪些命令**（插件就在配置里），而配置在哪又得先从 argv 里
 // 看出来。所以第一段只认全局 flag（不碰位置参数），第二段在拿到命令树之后再完整解析。
 import { stat as statOf } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { bootstrapApplication, type ProviderList } from "@morlay/zephyr";
 import { Command } from "./command.ts";
 import { loadConfig } from "./config/load.ts";

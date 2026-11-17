@@ -40,6 +40,9 @@ export const patch: Step[] = [
   // 只留 `--experimental-vm-modules`，于是子进程落到 Node 内建 strip-only 模式，撞上 vendor 的 `.ts` 参数属性）。
   // 这条补丁把两处都改成「缺 `DSH_SOURCE_LOADER` 就抛出说清楚的错」，并删掉 5 个包对 `tsx` 的依赖声明——
   // 那条回落只会把「部署少注入一格」变成一句 `Cannot find package tsx`。
+  // 它还有一段**桌面部署**的接缝：`DSH_PTC_ELECTRON_RUN_AS_NODE=1` 时把 `ELECTRON_RUN_AS_NODE` 透给 PTC
+  // 子进程。桌面形态的 `launch.executable` 是 Electron 本体（`process.execPath`），不带这个变量子进程按
+  // **应用**启动、不按 Node，上面那个 loader 参数根本不生效（表现：进程活着、协议不说话、20s 超时）。
   { type: "git", patch: "source-loader.patch" },
   // 上游另有 5 个包在清单里声明 `tsx`（源码面运行时当 loader 用）。这里**不删那几行**：这些清单还会被
   // 下面的 `exports` 步骤整份改写，逐份正则删行必然踩到 JSON 的逗号（实测三种写法各坏一次），补丁里又只会混进

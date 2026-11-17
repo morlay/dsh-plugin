@@ -19,6 +19,11 @@ await import(loaderPackage).catch(async (error: unknown) => {
 // 就位，所以放在这里（壳的 `app.ts` 与宿主的装配都晚于这一行）。
 process.env.DSH_SOURCE_LOADER ??= import.meta.resolve(loaderPackage);
 
+// 桌面部署的第二个接缝：PTC 的子进程用 `process.execPath` 起（在 Electron 里那是**应用本体**），不带
+// `ELECTRON_RUN_AS_NODE` 就会按应用启动——loader 参数与 `process.ts` 都被当成应用参数，落到 strip-only
+// 解析。上游为防身份外泄会滤掉这个变量，所以只在显式开关下由补丁透传（见 `patches/source-loader.patch`）。
+process.env.DSH_PTC_ELECTRON_RUN_AS_NODE ??= "1";
+
 // 业务入口（动态：必须在 loader 之后）。源码里写 `.ts`，产物里 tsdown 会改写成 `app.mjs`。
 await import("./app.ts").catch(async (error: unknown) => {
   await reportFailure("加载入口", error);

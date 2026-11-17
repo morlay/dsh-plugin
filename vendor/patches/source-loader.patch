@@ -1,5 +1,5 @@
 diff --git a/packages/ptc-runtime/ptc-runtime-node/src/worker.ts b/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
-index d350e27a0a..7285a46ca8 100644
+index d350e27a0a..0067163e1f 100644
 --- a/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
 +++ b/packages/ptc-runtime/ptc-runtime-node/src/worker.ts
 @@ -20,6 +20,25 @@ import { readProgramResult, PROGRAM_PROTOCOL_VERSION, type ProgramBootData, type
@@ -39,10 +39,23 @@ index d350e27a0a..7285a46ca8 100644
        ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes)]
      const policy = this.policy
      this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
+@@ -294,6 +315,11 @@ export class ProgramWorker {
+       env.DSH_PTC_RUNTIME_NODE = '1'
+       env.NODE_OPTIONS = `${heapFlag} --experimental-vm-modules`
+     }
++    // 本地 patch（patches/source-loader.patch）：桌面部署拿 Electron 本体当 Node 用（`launch.executable`
++    // 就是 `process.execPath`），子进程必须继续以 Node 身份启动——否则它按**应用**启动，把 `--import` 与
++    // `process.ts` 当应用参数，落到内建 strip-only 解析。只在这个部署开关下透传：上游滤掉它是为了
++    // 不让任意子进程继承 Electron 身份，桌面壳显式打开才生效。
++    if (process.env.DSH_PTC_ELECTRON_RUN_AS_NODE === '1') env.ELECTRON_RUN_AS_NODE = '1'
+     const handle = this.ctx.subprocess.spawn({ argv: this.confined?.argv ?? argv, cwd, env, stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', control: 'pipe' }, graceMs: this.config.graceMs })
+     this.handle = handle
+     if (!handle.control || !handle.stdout || !handle.stderr) throw new Error('subprocess provider did not supply the requested control and output pipes')
 diff --git a/packages/subprocess/subprocess-local/src/runner-launch.ts b/packages/subprocess/subprocess-local/src/runner-launch.ts
-index 1a052ded7c..c02472066e 100644
+index 1a052ded7c..e26646f396 100644
 --- a/packages/subprocess/subprocess-local/src/runner-launch.ts
 +++ b/packages/subprocess/subprocess-local/src/runner-launch.ts
+ /**
 @@ -35,12 +35,32 @@ export function spawnRunnerInvocation(): RunnerInvocation {
    }
    return [
@@ -77,3 +90,5 @@ index 1a052ded7c..c02472066e 100644
  /**
   * Check the concrete runner executable and entry paths without executing a probe mode.
   * @param invocation - resolved executable and runner-entry arguments.
+ }
+ 
