@@ -11,6 +11,8 @@
 //     于是 `outDir` 是一份纯静态目录（设计决定 5、9）。
 //   · 判据按「**从页面入口可达**」算（{@link reachableModulesOf}）：不可达的产物留在目录里不参与判据，
 //     可达链上的缺口一处一处点名（设计决定 12、13）。
+//   · 兜底之后仍有缺口 → **构建失败**（{@link assertReachableComplete}）：点名地址 / 引用方 / 副本 /
+//     打包器原话——宁可构建红，也不要发一份会白屏的应用。
 //   · 收尾两步：可达却缺产物的地址**有副本的按副本补一条目标**再编（决定 9，多版本各出各的），剩下的残余
 //     统一指向**共享运行时聚合产物**（决定 8）；聚合产物只许具名导入，出现 default 导入即构建失败（决定 10）。
 import { copyFile, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -183,6 +185,13 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
   // 构建中间物不进静态目录：CSS 入口的 shim（`*.css-shim.mjs`）与改写过的 `*.imports.css`
   // 只在这条链内部被 rolldown 读一次，留着就破坏「目录里每个文件都有一个可达地址」。
   await removeBuildScaffolding(options.outDir);
+  // 决定 13：兜底之后**重算一次读数**（改写改的是产物字节，可达集合会变），可达集合里还有缺口就红。
+  // 不可达的产物留在目录里不动（决定 12）：判据只看可达子集。
+  assertReachableComplete({
+    reachable: await reachabilityOf(options.outDir, entryUrlOf(app)),
+    failures,
+    where,
+  });
   // 产物侧的清单只留 `rev` + `files`：`resolved` 是「外置依赖解析到哪个包根」的构建期表（**构建机的
   // 绝对路径**），dev 的缓存命中要靠它重放，产物不需要——写进去就是分发一份构建机路径。
   await stripResolvedFromManifests(options.outDir);
@@ -788,6 +797,53 @@ export async function defaultsOfRuntime(options: {
   return out;
 }
 
+/**
+ * 决定 13：兜底之后，**可达集合**里仍有编不出来的地址 → 构建失败，点名现场。
+ *
+ * 为什么宁可红：白屏在生产环境里没有任何线索。一条构建期错误能同时给出四样——地址、谁引的、解析到
+ * 哪份副本、打包器的原话——四样凑齐才叫「一次定位而不是猜」。
+ *
+ * 不可达的坏产物不进来：宿主面产物留在目录里是取舍（决定 12），页面根本不加载它。
+ * @param options - 判据读数、失败明细与出错现场。
+ * @throws Error 有缺口时（逐条点名）。
+ */
+export function assertReachableComplete(options: {
+  readonly reachable: Reachability;
+  readonly failures: readonly PrebundleFailure[];
+  readonly where: string;
+}): void {
+  if (options.reachable.gaps.length === 0) return;
+  // 缺口地址 → 那条**预编译失败**（副本与打包器原话都在它身上）。地址按产物形态算，与路由同一份。
+  const failed = new Map(
+    options.failures.map((failure) => [artifactAddressOf(failure.target), failure]),
+  );
+  const lines = options.reachable.gaps.map((gap) => {
+    const failure = failed.get(gap.url);
+    const copy =
+      failure === undefined
+        ? "无副本（连副本都解析不到，或清单里根本没有这个出口）"
+        : `${failure.target.name}@${failure.target.version}`;
+    const reason =
+      failure === undefined ? "（没有对应的预编译目标，打包器没经手过它）" : failure.reason;
+    const importers =
+      gap.importers.length === 0
+        ? "（没有引用方：页面入口自己就没有产物）"
+        : gap.importers.join(" ← ");
+    return [
+      `  ${gap.url}`,
+      `    引用方 ${importers}`,
+      `    副本 ${copy}`,
+      `    打包器 ${reason}`,
+    ].join("\n");
+  });
+  throw new Error(
+    [
+      `前端产物从页面入口可达的地址里仍有缺口（${String(options.reachable.gaps.length)} 条）：`,
+      ...lines,
+      `  ${options.where}`,
+    ].join("\n"),
+  );
+}
 /**
  * 失败时那行上下文：哪个应用、从哪个入口枚举、产物落哪。
  *

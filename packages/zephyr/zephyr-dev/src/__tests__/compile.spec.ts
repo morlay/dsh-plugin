@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  assertReachableComplete,
   compile,
   fallbackToRuntime,
   reachableModulesOf,
@@ -317,5 +318,66 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
     ]);
     // 连副本都解析不到的（ghost）：补不出目标，交给兜底。
     expect(extra.some((target) => target.name === "ghost")).toBe(false);
+  });
+});
+describe("assertReachableComplete（兜底之后仍缺即红）", () => {
+  it("不可达的坏产物不参与判据；可达的坏地址报错，并点名地址与引用方", async () => {
+    const broken = moduleUrlOf("pkg-a", "1.0.0", "index.js");
+    const missing = moduleUrlOf("pkg-c", "3.0.0", "index.js");
+    // 宿主面产物：页面不加载它，它引用的东西缺了也不该让构建红（决定 12）。
+    const hostOnly = moduleUrlOf("host-only", "1.0.0", "index.js");
+    const graph = reachableModulesOf({
+      entry: ENTRY,
+      artifacts: new Map([
+        [ENTRY, `import { a } from "${broken}";`],
+        [broken, `import { c } from "${missing}?v=deadbeef";`],
+        [hostOnly, `import "${moduleUrlOf("gone", "0.0.0", "index.js")}";`],
+      ]),
+    });
+
+    // 只有不可达的坏产物时：不抛（目录里有垃圾 ≠ 页面会 404）。
+    expect(() =>
+      assertReachableComplete({
+        reachable: reachableModulesOf({
+          entry: ENTRY,
+          artifacts: new Map([[ENTRY, "export const a = 1;"]]),
+        }),
+        failures: [],
+        where: "夹具",
+      }),
+    ).not.toThrow();
+
+    const error = (() => {
+      try {
+        assertReachableComplete({
+          reachable: graph,
+          failures: [
+            {
+              target: {
+                name: "pkg-c",
+                version: "3.0.0",
+                exportName: "index",
+                entry: "/tmp/pkg-c/index.js",
+                manifestOf: "/tmp/pkg-c/package.json",
+              },
+              reason: "原生模块 .node 编不了",
+            },
+          ],
+          where: "应用 fx · 入口 /tmp/fx/src/client/app-boot.ts",
+        });
+        return undefined;
+      } catch (thrown) {
+        return thrown as Error;
+      }
+    })();
+
+    // 四样凑齐才算「一次定位」：地址 / 引用方 / 副本 / 打包器原话。
+    expect(error?.message).toContain("仍有缺口");
+    expect(error?.message).toContain(missing);
+    expect(error?.message).toContain(broken);
+    expect(error?.message).toContain("pkg-c@3.0.0");
+    expect(error?.message).toContain("原生模块 .node 编不了");
+    // 不可达的那条不在读数里。
+    expect(error?.message).not.toContain(hostOnly);
   });
 });
