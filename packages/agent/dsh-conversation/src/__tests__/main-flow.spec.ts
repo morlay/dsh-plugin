@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { provideAgent } from "@morlay/dsh-agent";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
-import { commandWireName, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandEndpointClient } from "@morlay/dsh-command/ui";
 import { provideCommand } from "@morlay/dsh-command/server";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
@@ -25,7 +25,7 @@ import { provideStorage } from "@morlay/dsh-storage";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { configure, bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues, RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
+import { AppEnv, type AppEnvValues, provideApiGateway } from "@morlay/zephyr-app";
 import { describe } from "vitest";
 import { expect, test } from "./support/fixtures.ts";
 import { provideTypert, TypertGateway } from "@morlay/zephyr-app";
@@ -37,7 +37,8 @@ import { provideAttachment } from "@morlay/dsh-attachment";
 import { provideUpload } from "@morlay/dsh-upload";
 import { provideWorkingDirectory, WorkingDirectoryDefault } from "@morlay/dsh-agent";
 import { Connection, RemoteAccess } from "@morlay/zephyr-app";
-import { publishingTo } from "@morlay/zephyr-app/testing";
+import { Remote } from "@morlay/zephyr-app/contract";
+import { LocalRemote, publishingTo } from "@morlay/zephyr-app/testing";
 
 /** 指向临时目录的运行环境（每个用例一份数据根）。 */
 /** working-directory 的默认目录：本 spec 只要求它存在（`SkillCatalog` 读它）。 */
@@ -155,10 +156,26 @@ async function boot(root: string): Promise<App> {
       ...provideSandbox(),
       // 端点行 inject 了 agent 域与工作区的适配行契约：必须排在它们之后，否则拿到的是空壳。
       ...provideApiSession(),
+      // 客户端半：`LocalRemote` 是进程内传输——形状与线上一致，只把"怎么到达宿主"换成函数调用。
+      // 契约的客户端形态（`CommandEndpointClient`）不进清单：它与宿主实现同一个令牌
+      // （`command-endpoint`），同装配里两份会撞；测试按需 new 一个并挂上 `remote`。
+      LocalRemote,
     ],
     timeoutMs: 30_000,
   });
   return app;
+}
+
+/**
+ * 契约的客户端形态：只挂 `remote`，不进装配。
+ *
+ * 宿主实现（`CommandEndpointDefault`）与它在同一个令牌上，同一装配里两份会撞
+ * （`service "command-endpoint" has been registered`），所以客户端实例在这里现造。
+ * @param app - 装配结果（`remote` 走它的 `LocalRemote`）。
+ * @returns 可以直接 `execute(…)` 的客户端。
+ */
+function commandClientOf(app: App): CommandEndpointClient {
+  return Object.assign(new CommandEndpointClient(), { remote: app.get(Remote) });
 }
 
 /** 会话的某个投影当前值。 */
@@ -202,7 +219,6 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
             peer,
           } as never)) as never,
       };
-      const handlers = app.get(RemoteHandlers);
       const realRoot = await realpath(tmpdir);
 
       // ① 先把目录登记成工作区（会话创建只认已注册的工作区：默认工作区是启动目录，不按 cwd 懒创建）。
@@ -245,12 +261,12 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
         .find((one) => one.sessionIds.map(String).includes(String(sessionId)));
       expect(workspace, "工作区必须收到这条会话（否则侧栏只显示工作区、没有会话行）").toBeDefined();
 
-      // ④ 改权限：走上游 chip 唯一的那一行命令。
-      const executed = (await handlers.invoke(commandWireName("execute"), {
-        sessionId,
+      // ④ 改权限：走上游 chip 唯一的那一行命令（经契约的客户端形态，不拼 wire 名）。
+      const executed = await commandClientOf(app).execute({
+        sessionId: String(sessionId),
         name: "permission",
         input: "danger-full-access",
-      })) as CommandExecuteValue;
+      });
       expect(executed.result.kind, "/permission 应成功结算").toBe("success");
       expect(
         projectionOf(app, String(sessionId), "permissions"),

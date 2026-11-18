@@ -4,7 +4,7 @@
 // 契约是普通类：客户端形态（`@RemoteClient()`）与宿主形态各自继承它。
 // **它不继承 `RemoteClientBase`**：那个基类带一个 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
 // 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务。
-import { RemoteGroup, RemoteMethod, remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
+import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 import type { CommandEntry } from "@morlay/dsh-command/endpoint";
 
 /** `commands/list` 的请求。 */
@@ -70,15 +70,6 @@ export class CommandEndpoint {
   }
 }
 
-/**
- * 从契约方法名派生 wire 名（RemoteDescriptor 没有 endpoint 字段，wire 名 = namespace/method）。
- * @param method - 契约上的方法名（list / execute）。
- * @returns wire 名（commands/list / commands/execute）。
- * @throws 契约上没有这个方法时。
- */
-export function commandWireName(method: string): string {
-  const { descriptors } = remoteDescriptorsOf(CommandEndpoint);
-  const found = descriptors.find((item) => item.method === method);
-  if (found === undefined) throw new Error("CommandEndpoint 没有方法 " + method);
-  return found.namespace + "/" + found.method;
-}
+// wire 名**没有**第二个 home：方法名的唯一来源是上面的 `@RemoteMethod(...)` 实参，wire 名由
+// `remoteDescriptorsOf(CommandEndpoint)` 在客户端形态（`@RemoteClient()`）里派生。调用点因此
+// 只写契约方法（`client.execute(…)`），不写字符串、也不需要「把方法名翻成 wire 名」的辅助函数。

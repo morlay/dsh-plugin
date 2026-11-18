@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideAgent } from "@morlay/dsh-agent";
-import { commandWireName, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandEndpointClient } from "@morlay/dsh-command/ui";
 import { provideCommand } from "@morlay/dsh-command/server";
 import { providePermissionFor } from "@morlay/dsh-permission/server";
 import { BashSandbox, SandboxDefault, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
@@ -24,10 +24,10 @@ import { SessionProjectionStore } from "@morlay/dsh-session";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import {
   AppEnv,
-  RemoteHandlers,
   RemoteHandlersDefault,
   type AppEnvValues,
 } from "@morlay/zephyr-app";
+import { Remote } from "@morlay/zephyr-app/contract";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
@@ -68,7 +68,6 @@ afterEach(async () => {
  */
 async function boot(): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
-  handlers: RemoteHandlers;
   sessionId: string;
 }> {
   const app = await bootstrapApplication({
@@ -89,7 +88,8 @@ async function boot(): Promise<{
       ToolExecutorNative,
       { provide: AgentLoopDefault, config: { agents: [] } },
       RemoteHandlersDefault,
-      // 客户端半：目录走契约的客户端形态读（`client.catalog()`），不再拼 wire 名。
+      // 客户端半：目录走契约的客户端形态（`client.catalog()`），命令的客户端实例按需现造
+      // （它与宿主实现同一个令牌，同装配里两份会撞）。
       LocalRemote,
     ],
     timeoutMs: 20_000,
@@ -99,7 +99,16 @@ async function boot(): Promise<{
   await app
     .get(AgentLoop)
     .create(sessionId, { provider: "deepseek-official", model: "deepseek-flash" }, { cwd: root });
-  return { app, handlers: app.get(RemoteHandlers), sessionId };
+  return { app, sessionId };
+}
+
+/**
+ * 契约的客户端形态：只挂 `remote`，不进装配（宿主实现与它同一个令牌）。
+ * @param app - 装配结果（`remote` 走它的 `LocalRemote`）。
+ * @returns 可以直接 `execute(…)` 的客户端。
+ */
+function commandClientOf(app: Awaited<ReturnType<typeof bootstrapApplication>>): CommandEndpointClient {
+  return Object.assign(new CommandEndpointClient(), { remote: app.get(Remote) });
 }
 
 /** 会话的 `permissions` 投影（宿主侧注册表里的当前值）。 */
@@ -116,17 +125,17 @@ function permissionOf(
 
 describe("权限 chip 的宿主侧", () => {
   it("`/permission danger-full-access` 真的把会话档位切过去", { timeout: 30_000 }, async () => {
-    const { app, handlers, sessionId } = await boot();
+    const { app, sessionId } = await boot();
     // 起点：装配给的默认档位。
     expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "workspace-write" });
 
     // chip 点确认后发的那一行（上游 `submit` 就是 `live.command('/permission <preset>')`）。
     // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
-    const executed = (await handlers.invoke(commandWireName("execute"), {
+    const executed = await commandClientOf(app).execute({
       sessionId,
       name: "permission",
       input: "danger-full-access",
-    })) as CommandExecuteValue;
+    });
     expect(executed.result.kind, "/permission 应成功结算").toBe("success");
 
     // 会话档位变了……
@@ -138,12 +147,12 @@ describe("权限 chip 的宿主侧", () => {
   });
 
   it("不带 preset 的 `/permission` 只回报当前档位，不改它", { timeout: 30_000 }, async () => {
-    const { app, handlers, sessionId } = await boot();
-    const executed = (await handlers.invoke(commandWireName("execute"), {
+    const { app, sessionId } = await boot();
+    const executed = await commandClientOf(app).execute({
       sessionId,
       name: "permission",
       input: " ",
-    })) as CommandExecuteValue;
+    });
     expect(executed.result.kind).toBe("success");
     expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "workspace-write" });
   });
