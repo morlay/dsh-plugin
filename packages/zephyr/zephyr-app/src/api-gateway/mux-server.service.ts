@@ -13,7 +13,7 @@ import { API_REMOTE_FORWARDED_EVENTS } from "@deepseek-ai/dsh-api-remotes";
 import { inject, Injectable, Logger, type OnDispose } from "@morlay/zephyr";
 import { RemoteHandlers } from "./remote-handlers.contract.ts";
 import { WebServer } from "../web/web-server.contract.ts";
-import { TypertGateway } from "../typert/gateway.contract.ts";
+import { TypertGateway, type InvokeRemoteRequest } from "../typert/gateway.contract.ts";
 import { Typert } from "../typert/typert.contract.ts";
 
 /** mux 的路径（与客户端 `muxTransport` 一致）。 */
@@ -34,9 +34,14 @@ const FORWARDED_CHANNELS: readonly string[] = API_REMOTE_FORWARDED_EVENTS.map(
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /** 客户端发来的一帧（只用到文本帧的这几种）。 */
+/** 上游分派要的 peer 面（`InvokeRemoteRequest` 的那一项）。 */
+type PeerScope = InvokeRemoteRequest["peer"];
+
 interface ClientFrame {
   readonly opcode: number;
   readonly payload: Buffer;
+  /** 这一帧在缓冲里占的字节数（报头 + 掩码 + 载荷）：调用方据此前移缓冲。 */
+  readonly consumed: number;
 }
 
 /** 从累积缓冲里切出一帧；不够一帧时返回 `undefined`。 */
@@ -68,15 +73,7 @@ function readFrame(buffer: Buffer): ClientFrame | undefined {
       payload[index] = (payload[index] ?? 0) ^ (buffer[maskOffset + (index % 4)] ?? 0);
     }
   }
-  const frame: ClientFrame = { opcode, payload };
-  // 用不可枚举的余量表达「消费了多少字节」，避免再包一层返回类型。
-  Object.defineProperty(frame, "consumed", { value: offset + length });
-  return frame;
-}
-
-/** 一帧消费掉的字节数。 */
-function consumedOf(frame: ClientFrame): number {
-  return (frame as unknown as { consumed: number }).consumed;
+  return { opcode, payload, consumed: offset + length };
 }
 
 /** 服务端发一帧文本（不掩码）。 */
@@ -142,9 +139,7 @@ export class MuxServer implements OnDispose {
     if (Object.hasOwn(this, "typertOverride")) return this.typertOverride;
     // `inject` 是惰性 Proxy，**读属性时才抛**（没有提供者的接缝测试）；探一下让抛错落在本 try 内。
     try {
-      const registry = this.typertRegistration as unknown as
-        | { remotes: { get(key: string): { mode?: string } | undefined } }
-        | undefined;
+      const registry = this.typertRegistration;
       void registry?.remotes;
       return registry;
     } catch {
@@ -159,6 +154,13 @@ export class MuxServer implements OnDispose {
    * 不是外部调用者。`remote-access` 对 `owner` 走 baseline 直接放行；写成 `browser` 就必须
    * 注册一条 `registerPolicy('browser', …)`，否则每个端点都抛
    * `remote access: session/list: access denied (no-allow)`——装配成功但一个端点都调不动。
+   */
+  /**
+   * 上游分派要的调用方身份（`PeerScope` 的**子面**）：本装配真的有这四项。
+   *
+   * `ctx` / `dispose` 不提供——这条通道是宿主自己的界面（没有按 peer 隔离的上下文，也没有 per-peer
+   * 的可释放资源）；上游读它们时拿到 `undefined`，与改动前一样。所以分派处是一次**收窄**
+   * （`as PeerScope`），而不是把整个 peer 说成 `unknown`。
    */
   private readonly peer = {
     id: "host",
@@ -237,7 +239,7 @@ export class MuxServer implements OnDispose {
       for (;;) {
         const frame = readFrame(buffer);
         if (frame === undefined) return;
-        buffer = buffer.subarray(consumedOf(frame));
+        buffer = buffer.subarray(frame.consumed);
         if (frame.opcode === 0x8) {
           socket.end();
           return;
@@ -411,16 +413,12 @@ export class MuxServer implements OnDispose {
 
     if (descriptor?.mode !== "stream") return undefined;
     const separator = endpoint.indexOf("/");
-    return (
-      this.gateway as unknown as {
-        stream(request: unknown): Promise<AsyncIterable<unknown>>;
-      }
-    ).stream({
+    return this.gateway.stream({
       namespace: endpoint.slice(0, separator),
       method: endpoint.slice(separator + 1),
       args,
       signal: controller.signal,
-      peer: this.peer,
+      peer: this.peer as PeerScope,
       // 上行：双向流（终端）靠它收客户端的键入。只下行的流读了也不会有人推，行为不变。
       uplink,
     });
@@ -445,12 +443,12 @@ export class MuxServer implements OnDispose {
       if (!/没有实现/.test(String(error))) throw error;
     }
     const separator = endpoint.indexOf("/");
-    return await (this.gateway as { invoke(request: unknown): Promise<unknown> }).invoke({
+    return await this.gateway.invoke({
       namespace: endpoint.slice(0, separator),
       method: endpoint.slice(separator + 1),
       args,
-      peer: this.peer,
-    } as never);
+      peer: this.peer as PeerScope,
+    });
   }
 
   /**

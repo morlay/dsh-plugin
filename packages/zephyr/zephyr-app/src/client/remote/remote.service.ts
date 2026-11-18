@@ -267,6 +267,10 @@ export class RemoteDefault extends Remote {
   ): AsyncIterable<Item> & { dispose(): Promise<void> } {
     // `RemoteStream` 的迭代项是 `RemoteStreamItem<Item>`（帧外层带 `type` / `generation`）；
     // 消费方（`TerminalView` / `SessionEventStream`）就是按那个形状读的，契约上的 `Item` 是占位。
+    // 契约声明的是「裸帧」（`AsyncIterable<Item>`），上游 `RemoteStream` 产出的是**带外层的帧**
+    // （`RemoteStreamItem<Item>`：`type` / `generation`）。把契约改成上游那个形状要连带改
+    // 三个包的 `$stream` 替身（dsh-conversation ×3、dsh-workspace ×1），那是别的域的在制品，
+    // 所以这里只留**一处**收窄断言，并把这件事记在票 07 的收尾项里（面统一后这行会消失）。
     return new RemoteStream<Item>(
       { generation: this.connection.generation },
       options,
