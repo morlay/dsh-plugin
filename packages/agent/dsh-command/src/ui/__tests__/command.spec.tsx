@@ -59,7 +59,7 @@ async function commandApp(): Promise<{ app: Awaited<ReturnType<typeof bootstrapA
 // `CommandEndpointDefault`（宿主行）与 `CommandEndpointClient`（客户端行）——两者都 `extends CommandEndpoint`，
 // 令牌名相同，cordis 的扁平 store 只允许注册一次（`service "command-endpoint" has been registered`）。
 // 真实部署里前端在浏览器、后端在宿主，各自一个 bootstrap；旧 zephyr 的"行作用域"在新模型里已删除。
-// 后续验法：两个 app + 假 transport，或拆成 wire 层 + ui 层两段各自装配。
+// 要验它需要：两个 app + 假 transport，或拆成 wire 层 + ui 层两段各自装配。
 describe.skip("commands 从 ui 走到底", () => {
   it("注册一条命令后：store 列得出、执行走到它的 handler", async () => {
     const { app } = await commandApp();
