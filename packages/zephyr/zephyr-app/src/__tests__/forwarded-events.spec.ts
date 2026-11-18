@@ -28,7 +28,10 @@ afterAll(async () => {
  * @param args - 载荷。
  */
 function emit(event: string, ...args: unknown[]): void {
-  (app.ctx as unknown as { emit(name: string, ...payload: unknown[]): void }).emit(event, ...args);
+  // 事件名来自 vendor 的表（运行期就是 string），cordis 的 `Events` 强类型面在这里用不上：
+  // 动态成员读走 `Reflect.get`（一次收窄，不再把整个 ctx 说成 `unknown`）。
+  const dispatch = Reflect.get(app.ctx, "emit") as (name: string, ...payload: unknown[]) => void;
+  dispatch.call(app.ctx, event, ...args);
 }
 
 describe("转发事件桥", { timeout: 20_000 }, () => {

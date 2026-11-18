@@ -64,7 +64,7 @@ const settingsPlugin = {
  * @returns 服务值，或 `undefined`。
  */
 function named(app: App, name: string): unknown {
-  return (app.ctx as unknown as { get(n: string, strict?: boolean): unknown }).get(name, false);
+  return app.ctx.get(name, false);
 }
 
 /** 右侧面板行：单契约，注册表靠 mount 的上游注册名绑定到令牌。 */

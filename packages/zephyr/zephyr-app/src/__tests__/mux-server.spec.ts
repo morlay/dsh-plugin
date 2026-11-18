@@ -97,7 +97,7 @@ function muxOf(overrides: Record<string, unknown> = {}): {
     handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   }[] = [];
   const server = new MuxServer();
-  Object.assign(server as unknown as Record<string, unknown>, {
+  Object.assign(server, {
     handlers,
     webServer: {
       registerUpgrade: (route: { path: string }) => {

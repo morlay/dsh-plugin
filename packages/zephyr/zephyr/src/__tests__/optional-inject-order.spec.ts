@@ -22,10 +22,8 @@ abstract class Registry {
 class FakeService {
   static readonly init: unique symbol = Symbol("service.init");
 
-  constructor(ctx: never, name: string) {
-    (
-      ctx as unknown as { reflect: { provide(name: string, value: unknown): void } }
-    ).reflect.provide(name, this);
+  constructor(ctx: Context, name: string) {
+    ctx.reflect.provide(name, this);
   }
 
   list(): readonly string[] {

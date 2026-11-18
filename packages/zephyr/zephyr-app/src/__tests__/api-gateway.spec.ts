@@ -88,10 +88,7 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
         peer: unknown;
       }): Promise<unknown>;
     };
-    const serviceCtx = (app.ctx as unknown as { get(n: string, s?: boolean): unknown }).get(
-      "typertGateway",
-      false,
-    );
+    const serviceCtx = app.ctx.get("typertGateway", false);
     const peer = {
       id: "spec-peer",
       ctx: serviceCtx,

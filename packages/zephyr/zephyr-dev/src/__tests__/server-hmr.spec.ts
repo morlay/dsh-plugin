@@ -14,7 +14,7 @@ const POLL_MS = 5;
 /** 造一个只带 `inFlight` 的 MuxServer 替身（外加一个不报变更的 `ClientAssets`）。 */
 function hmrWith(inFlight: () => number): ServerHmr {
   const hmr = new ServerHmr({ pollMs: POLL_MS });
-  Object.assign(hmr as unknown as Record<string, unknown>, {
+  Object.assign(hmr, {
     mux: { inFlight },
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
     clientAssets: { onServerSourceChange: () => () => {} },
@@ -72,7 +72,7 @@ describe("ServerHmr", () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => busy);
     const { assets, fire } = assetsThatReport();
-    Object.assign(hmr as unknown as Record<string, unknown>, { clientAssets: assets });
+    Object.assign(hmr, { clientAssets: assets });
     hmr.install({ restart });
     fire("b.ts");
     await wait(POLL_MS * 4);
@@ -111,7 +111,7 @@ describe("ServerHmr", () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 0);
     let idle = false;
-    Object.assign(hmr as unknown as Record<string, unknown>, { guards: [{ isIdle: () => idle }] });
+    Object.assign(hmr, { guards: [{ isIdle: () => idle }] });
     hmr.install({ restart });
     hmr.notify("a.ts");
     await wait(POLL_MS * 4);
@@ -137,7 +137,7 @@ describe("ServerHmr", () => {
   it("等太久也重载（超时兜底：改动不能永远不生效）", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 1);
-    Object.assign(hmr as unknown as Record<string, unknown>, {
+    Object.assign(hmr, {
       options: { pollMs: POLL_MS, maxWaitMs: 20 },
     });
     hmr.install({ restart });

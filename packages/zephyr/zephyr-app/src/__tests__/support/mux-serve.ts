@@ -26,7 +26,7 @@ export async function serveMux(overrides: { typert?: unknown; gateway?: unknown 
   /** 升级后的连接：`server.close()` 不收它们，得自己掐。 */
   const upgraded = new Set<Duplex>();
   const mux = new MuxServer();
-  Object.assign(mux as unknown as Record<string, unknown>, {
+  Object.assign(mux, {
     handlers,
     webServer: {
       registerUpgrade: (route: { path: string }) => {

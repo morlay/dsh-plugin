@@ -27,10 +27,8 @@ class LocaleRow {
 class FakeService {
   static readonly init: unique symbol = Symbol("service.init");
 
-  constructor(ctx: never, name: string) {
-    (
-      ctx as unknown as { reflect: { provide(name: string, value: unknown): void } }
-    ).reflect.provide(name, this);
+  constructor(ctx: Context, name: string) {
+    ctx.reflect.provide(name, this);
   }
 }
 
@@ -64,10 +62,7 @@ describe("fromCordis", () => {
     const app = await bootstrapApplication({ providers: [LocaleRow, GreeterRow] });
     try {
       expect(app.get<Greeter>(Greeter).greet(), "契约面就是上游发布的服务").toBe("你好");
-      const stored = (app.ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(
-        "locale",
-        false,
-      );
+      const stored = app.ctx.get("locale", false);
       expect(stored, "deps 不进 cordis store").toBeUndefined();
     } finally {
       await app.dispose();
@@ -342,11 +337,9 @@ describe("fromCordis", () => {
 
       readonly child: unknown;
 
-      constructor(ctx: never) {
+      constructor(ctx: Context) {
         super(ctx, "extending-service");
-        this.child = (ctx as unknown as { extend(meta: unknown): unknown }).extend({
-          name: "child",
-        });
+        this.child = ctx.extend({ name: "child" });
       }
 
       greetFromChild(): string {
@@ -506,9 +499,7 @@ describe("fromCordis", () => {
       name: string | undefined;
 
       onInit(ctx: Context): void {
-        const root = (ctx as unknown as { root: { get(name: string, strict?: boolean): unknown } })
-          .root;
-        this.name = (root.get("root-visible", false) as { hi(): string } | undefined)?.hi();
+        this.name = (ctx.root.get("root-visible", false) as { hi(): string } | undefined)?.hi();
       }
     }
 
@@ -611,7 +602,8 @@ describe("fromCordis", () => {
 
       constructor(ctx: never) {
         super(ctx, "greeting-service");
-        const locale = (ctx as unknown as { locale: { hello: string } }).locale;
+        // `locale` 不在本仓的 `Context` 面上（它来自上游服务的 deps 替换）：动态成员读走 `Reflect.get`。
+        const locale = Reflect.get(ctx, "locale") as { hello: string };
         this.hello = locale.hello;
       }
     }

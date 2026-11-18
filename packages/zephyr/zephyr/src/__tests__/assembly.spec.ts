@@ -52,15 +52,13 @@ describe("装配的最小闭环", () => {
     @Injectable()
     class Row implements OnInit {
       onInit(ctx: Context): void {
-        (ctx as unknown as { provide(name: string, value: unknown): void }).provide("own-service", {
-          ok: true,
-        });
+        ctx.provide("own-service", { ok: true });
       }
     }
 
     const app = await bootstrapApplication({ providers: [Row] });
     try {
-      const read = (app.ctx as unknown as { get(name: string): unknown }).get("own-service");
+      const read = app.ctx.get("own-service");
       expect(read, "行 ctx 与 app.ctx 是同一棵树里的 cordis ctx").toEqual({ ok: true });
     } finally {
       await app.dispose();
@@ -424,7 +422,7 @@ describe("装配的最小闭环", () => {
 
       onInit(ctx: Context): void {
         this.seen = ctx;
-        (ctx as unknown as { provide(name: string, value: unknown): void }).provide("own", 1);
+        ctx.provide("own", 1);
       }
     }
 
@@ -433,7 +431,7 @@ describe("装配的最小闭环", () => {
       const row = app.get<Row>(Row);
       expect(row.seen, "onInit 拿到的是行 ctx，不是 app.ctx").not.toBe(app.ctx);
       // 行 ctx 沿 fiber 链向上找：Provider 实例注册在根，行内读得到。
-      const fromRow = (row.seen as unknown as { get(name: string): unknown }).get("row");
+      const fromRow = row.seen?.get("row");
       expect(fromRow, "行 ctx 能读到同一棵树上注册的 Provider 实例").toBe(row);
     } finally {
       await app.dispose();
@@ -461,7 +459,7 @@ describe("`@Injectable({ name })` 的别名", () => {
 
     const app = await bootstrapApplication({ providers: [Aliased, Plain] });
     try {
-      const store = app.ctx as unknown as { get(name: string, strict?: boolean): unknown };
+      const store = app.ctx;
       // 派生名（类名连字符化）与别名都指向同一个实例。
       expect(store.get("aliased")).toBe(app.get(Aliased));
       expect(store.get("upstreamName"), "上游按这个名字严格读").toBe(app.get(Aliased));
