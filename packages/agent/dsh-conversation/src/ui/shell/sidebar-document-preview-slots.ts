@@ -28,10 +28,19 @@ export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlu
 
   private readonly resources = inject(Resources);
 
-  /** tab 类型注册表：令牌带上游注册名 `sidebarRightTabs`，与 `ctx.get('sidebarRightTabs')` 同一份实例。 */
+  /**
+   * tab 类型注册表：令牌带上游注册名 `sidebarRightTabs`，与 `ctx.get('sidebarRightTabs')` 同一份实例。
+   *
+   * **这条边靠行序**：注册表是 `SidebarRightSlots` 在 mount 里按名字发布的（值令牌没有实现类，
+   * 装配器在该行挂完之后才把它认进令牌表），所以 `provideSessionShellSlots()` 里发布方必须排在本行之前。
+   */
   private readonly sidebarRightTabs = inject(SidebarRightTabs);
 
-  /** 拖拽面：本仓 `ui-file-drag` 那一行（`FileDragDefault`）的真身，上游按 `ctx.fileDrag` 读它。 */
+  /**
+   * 拖拽面：本仓 `ui-file-drag` 那一行（`FileDragDefault`）的真身，上游按 `ctx.fileDrag` 读它。
+   *
+   * 这条边进依赖图（类令牌有提供者），所以**不靠行序**：那一行排在清单哪里都行。
+   */
   private readonly fileDrag = inject(FileDragDefault);
 
   override async onInit(ctx: Context): Promise<void> {
