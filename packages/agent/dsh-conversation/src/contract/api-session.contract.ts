@@ -123,7 +123,7 @@ type FileReferenceUpstream = InstanceType<typeof FileReferenceServicePlugin>;
  * 上游把契约（`abstract class FileReferenceService`）与本地实现分成两个包，我们只引用实现；
  * 候选逻辑一行不写，所以这里只有它对外的一个方法。
  */
-@Injectable()
+@Injectable({ name: "fileReferences" })
 export abstract class FileReferenceService {
   /** 按前缀列出候选路径（`list(prefix, cwd, signal)`）。 */
   abstract readonly list: FileReferenceUpstream["list"];

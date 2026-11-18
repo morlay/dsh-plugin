@@ -5,7 +5,7 @@
 // 用 `async` 方法覆盖，属性形态会撞 TS2425。
 // 实现由本应用的 `WorkspaceControllerDefault` 给（数据面走 「工作区组」 的 follow 流）。
 import type { IWorkspaces } from "@deepseek-ai/dsh-api-workspace-controller/client";
-import { Injectable, InjectionToken } from "@morlay/zephyr";
+import { Injectable } from "@morlay/zephyr";
 // 覆盖守卫是**纯类型**，从 client 出口取：`@morlay/zephyr-app` 包根是宿主面（链到 node 侧），
 // 浏览器半（`src/ui`）从包根取会把宿主模块拖进前端 bundle。
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
@@ -19,9 +19,8 @@ export type WorkspaceControllerCovered = AssertTrue<
  * 服务名令牌：上游 `ui-workspace` 按 `ctx.workspaces` 读这一面。
  * 不显式给令牌的话，名字会按类名派生成 `workspace-controller`，上游读不到。
  */
-export const WorkspaceControllerToken = InjectionToken<IWorkspaces>("workspaces");
 
-@Injectable({ token: WorkspaceControllerToken })
+@Injectable({ name: "workspaces" })
 export abstract class WorkspaceController {
   /**
    * 上游注册名：`ctx.workspaces`。
