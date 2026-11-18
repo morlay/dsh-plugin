@@ -12,6 +12,7 @@ import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 import { CommandUiRow } from "@morlay/dsh-command/ui";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { InputTriggers } from "./input.token.ts";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 import { namespaceOf } from "../remote-namespace.ts";
 
 @Injectable()
@@ -34,7 +35,9 @@ export class CommandUiSlot extends CommandUiRow {
       sessions: this.sessions,
       remote: this.remote,
       // 键名 = remote. + 组名（上游按这个 cordis 服务名读；commands 是我们自己声明的组，上游不会发它）。
-      ["remote.commands"]: namespaceOf(this.remote, "commands"),
+      // 键名规则只有一个 home（`remoteNamespaceKey`）；`commands` 是我们自己声明的组、上游不会发它，
+      // 所以这条 deps 不能删——删了命令面板静默为空。
+      [remoteNamespaceKey("commands")]: namespaceOf(this.remote, "commands"),
       locale: this.locale,
       slots: this.slots,
     });
