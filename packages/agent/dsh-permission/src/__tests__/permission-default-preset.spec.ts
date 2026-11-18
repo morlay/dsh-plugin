@@ -14,10 +14,11 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { provideSetting } from "@morlay/dsh-setting/server";
 import { SubprocessDefault } from "@morlay/dsh-shell";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
+import { RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { PERMISSION_PRESETS_CATALOG_ENDPOINT } from "../endpoint/permission-presets-endpoint.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
 const apps: App[] = [];
 const roots: string[] = [];
@@ -76,6 +77,8 @@ async function boot(
       ...provideSetting(),
       ...providePermissionFor("workspace-write"),
       RemoteHandlersDefault,
+      // 客户端半：目录走契约的客户端形态读（`client.catalog()`），不再拼 wire 名。
+      LocalRemote,
     ],
     timeoutMs: 20_000,
   });
@@ -83,14 +86,11 @@ async function boot(
   return { app, handlers: app.get(RemoteHandlers), root };
 }
 
-/** `permissionPresets/catalog` 的 `defaultPreset`（wire 是 `{ ok, value }`）。 */
-async function catalogDefaultOf(handlers: RemoteHandlers): Promise<unknown> {
-  const result = (await handlers.invoke(PERMISSION_PRESETS_CATALOG_ENDPOINT, {})) as {
-    ok?: unknown;
-    value?: { defaultPreset?: unknown };
-  };
-  expect(result.ok, "permissionPresets/catalog 应成功").toBe(true);
-  return result.value?.defaultPreset;
+/** `permissionPresets` 目录的 `defaultPreset`（契约客户端：`client.catalog()`，wire 回来是 `{ ok, value }`）。 */
+async function catalogDefaultOf(app: App): Promise<unknown> {
+  const result = await app.get(PermissionPresetsEndpointClient).catalog();
+  if (!result.ok) throw new Error("permissionPresets/catalog 失败：" + result.error.message);
+  return result.value.defaultPreset;
 }
 
 describe("默认权限档位的读写", () => {
@@ -98,9 +98,9 @@ describe("默认权限档位的读写", () => {
     "读到的默认档位就是装配给的值，并已写进设置文档（设置行拿得到这一档）",
     { timeout: 20_000 },
     async () => {
-      const { handlers } = await boot();
+      const { app, handlers } = await boot();
 
-      expect(await catalogDefaultOf(handlers)).toBe("workspace-write");
+      expect(await catalogDefaultOf(app)).toBe("workspace-write");
 
       const described = (await handlers.invoke("settings/describe", {})) as {
         ok?: unknown;
@@ -134,6 +134,6 @@ describe("默认权限档位的读写", () => {
     expect(document.permission?.defaultPreset).toBe("danger-full-access");
 
     const second = await boot(first.root);
-    expect(await catalogDefaultOf(second.handlers)).toBe("danger-full-access");
+    expect(await catalogDefaultOf(second.app)).toBe("danger-full-access");
   });
 });

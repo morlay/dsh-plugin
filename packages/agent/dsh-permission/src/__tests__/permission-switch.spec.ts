@@ -28,8 +28,9 @@ import {
   RemoteHandlersDefault,
   type AppEnvValues,
 } from "@morlay/zephyr-app";
+import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { PERMISSION_PRESETS_CATALOG_ENDPOINT } from "../endpoint/permission-presets-endpoint.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
 let root = "";
 
@@ -88,6 +89,8 @@ async function boot(): Promise<{
       ToolExecutorNative,
       { provide: AgentLoopDefault, config: { agents: [] } },
       RemoteHandlersDefault,
+      // 客户端半：目录走契约的客户端形态读（`client.catalog()`），不再拼 wire 名。
+      LocalRemote,
     ],
     timeoutMs: 20_000,
   });
@@ -129,10 +132,9 @@ describe("权限 chip 的宿主侧", () => {
     // 会话档位变了……
     expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "danger-full-access" });
     // ……而"新会话的默认档位"不受影响（它由设置文档管，不随当前会话切换）。
-    const catalog = (await handlers.invoke(PERMISSION_PRESETS_CATALOG_ENDPOINT, {})) as {
-      value?: { defaultPreset?: string };
-    };
-    expect(catalog.value?.defaultPreset).toBe("workspace-write");
+    const catalog = await app.get(PermissionPresetsEndpointClient).catalog();
+    if (!catalog.ok) throw new Error("permissionPresets/catalog 失败：" + catalog.error.message);
+    expect(catalog.value.defaultPreset).toBe("workspace-write");
   });
 
   it("不带 preset 的 `/permission` 只回报当前档位，不改它", { timeout: 30_000 }, async () => {

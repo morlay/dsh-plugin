@@ -7,12 +7,14 @@
 import type { AskUserQuestionAnswer } from "@deepseek-ai/dsh-user-questions/types";
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
-/** wire 上的端点名（上游 descriptor 的 `namespace/method`）。 */
-export const USER_QUESTIONS_ANSWER_ENDPOINT = "userQuestions/answer";
-
 /**
  * 流式端点名：`attachWait` 逐帧回 `{ remainingMs }`，不在 `registerRemoteGroup` 的 unary 表里，
  * 由宿主侧 `RemoteHandlers.registerStream` 单独注册。
+ *
+ * 这里是它**唯一**的 home，而它仍是手写字符串：这条流式方法没有在契约类上声明
+ * （`@RemoteMethod({ mode: "stream" })` 会被 `registerRemoteGroup` 当成要注册的方法，
+ * 与 `server/user-questions-endpoint.service.ts` 那处 `registerStream` 撞成「已经注册过」）。
+ * 等那条注册点改成 `@Remote()` 装饰（另一票）时，这个常量随它一起删。
  */
 export const USER_QUESTIONS_ATTACH_WAIT_ENDPOINT = "userQuestions/attachWait";
 

@@ -1,6 +1,8 @@
 /**
  * 权限 / inbox 两条远端端点的局部闭环：真 `RemoteHandlers` + 真上游服务（`UserQuestionService`、
- * `PermissionPresetService`），经 `@RemoteGroup` 注册后按 wire 上的 `namespace/method` 调用。
+ * `PermissionPresetService`），经 `@RemoteGroup` 注册后由契约的客户端形态调用（`client.catalog()` /
+ * `client.answer(...)`）——spec 里不拼 wire 名，名字的 home 只有契约类。`attachWait` 是流式，
+ * 只能按注册点那个端点名开流（客户端形态的转发只覆盖 unary）。
  *
  * 断言落在**真队列**与**真预设表**上：`attachWait` 挂到的是 `askTimed` 造出来的那条前台等待
  * （首帧 `remainingMs`），`answer` 的 `false` 来自上游对「这个 call 已不在可作答集合里」的判定，
@@ -23,13 +25,12 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
-import { PERMISSION_PRESETS_CATALOG_ENDPOINT } from "../endpoint/permission-presets-endpoint.ts";
-import {
-  USER_QUESTIONS_ANSWER_ENDPOINT,
-  USER_QUESTIONS_ATTACH_WAIT_ENDPOINT,
-} from "../endpoint/user-questions-endpoint.ts";
+import { USER_QUESTIONS_ATTACH_WAIT_ENDPOINT } from "../endpoint/user-questions-endpoint.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
+import { UserQuestionsEndpointClient } from "../ui/user-questions-endpoint-client.ts";
 
 let root = "";
 
@@ -89,6 +90,9 @@ async function boot(): Promise<{
       ToolExecutorNative,
       { provide: AgentLoopDefault, config: { agents: [] } },
       RemoteHandlersDefault,
+      // 客户端半：spec 用契约的客户端形态调端点（`client.catalog()` / `client.answer(...)`），
+      // 转发落回本进程的 handler 表——与线上同形，只是换了传输。
+      LocalRemote,
     ],
     timeoutMs: 20_000,
   });
@@ -105,8 +109,8 @@ describe("权限 / inbox 的宿主端点", () => {
     "`permissionPresets/catalog` 返回 providePermission 的真预设表",
     { timeout: 20_000 },
     async () => {
-      const { handlers } = await boot();
-      const result = await handlers.invoke(PERMISSION_PRESETS_CATALOG_ENDPOINT, {});
+      const { app } = await boot();
+      const result = await app.get(PermissionPresetsEndpointClient).catalog();
       expect(result).toMatchObject({
         ok: true,
         value: {
@@ -171,8 +175,8 @@ describe("权限 / inbox 的宿主端点", () => {
     "`userQuestions/answer` 的 false 来自上游队列判定（未知 call 不可作答）",
     { timeout: 20_000 },
     async () => {
-      const { handlers, sessionId } = await boot();
-      const result = await handlers.invoke(USER_QUESTIONS_ANSWER_ENDPOINT, {
+      const { app, sessionId } = await boot();
+      const result = await app.get(UserQuestionsEndpointClient).answer({
         agent: sessionId,
         callId: "call-unknown",
         answer: { answers: [{ id: "q1", selected: ["ok"] }] },

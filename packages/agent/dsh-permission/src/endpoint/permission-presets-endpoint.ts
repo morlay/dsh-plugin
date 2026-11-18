@@ -7,9 +7,6 @@
 import type { PermissionCatalog } from "@deepseek-ai/dsh-permission-presets/types";
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
-/** wire 上的端点名。 */
-export const PERMISSION_PRESETS_CATALOG_ENDPOINT = "permissionPresets/catalog";
-
 /** `permissionPresets` 组：预设目录。 */
 @RemoteGroup({ name: "permissionPresets" })
 export class PermissionPresetsEndpoint {
