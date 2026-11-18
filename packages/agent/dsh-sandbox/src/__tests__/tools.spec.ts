@@ -14,11 +14,13 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { provideShell } from "@morlay/dsh-shell/server";
 
 import {
+  AgentScopedRows,
+  AgentScopedRowsDefault,
   WorkingDirectoryDefault,
   provideEnvTools,
   provideWorkingDirectory,
 } from "@morlay/dsh-agent";
-import { bootstrapApplication, type App, configure } from "@morlay/zephyr";
+import { bootstrapApplication, type App, type Context, configure } from "@morlay/zephyr";
 import { afterEach, describe, expect, it } from "vitest";
 
 const opened: App[] = [];
@@ -46,6 +48,8 @@ async function boot(): Promise<App> {
         configure(SandboxPolicyDefault, { mode: "workspace-write", workspaceRoot: root }),
       ),
       ...provideWorkingDirectory(configure(WorkingDirectoryDefault, { defaultDirectory: root })),
+      // per-agent 行的装行能力：这四条工具行都声明了 `@AgentScoped()`（工具按 agent 注册）。
+      AgentScopedRowsDefault,
       // 工具行按能力域分装：`bash` / 文件 / 检索在 sandbox，`working_directory` 在 agent。
       ...provideFsTools(),
       ...provideEnvTools(),
@@ -57,13 +61,18 @@ async function boot(): Promise<App> {
 }
 
 describe("env-tool 域", () => {
-  it("四条工具行都真的登记了工具", { timeout: 30_000 }, async () => {
+  it("四条工具行都真的登记了工具（装进某个 agent 的 scope 之后）", { timeout: 30_000 }, async () => {
     const app = await boot();
-    const tools = app.get(ToolRegistry);
+    // 这四条行都声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
+    expect(app.get(ToolRegistry).definitions()).toEqual([]);
 
-    expect(tools.get("bash")).toBeDefined();
-    expect(tools.get("read")).toBeDefined();
-    expect(tools.get("glob")).toBeDefined();
-    expect(tools.get("working_directory")).toBeDefined();
+    const scope = (app.ctx as Context).extend();
+    await app.get(AgentScopedRows).install(scope);
+
+    const names = app.get(ToolRegistry).definitions().map((tool) => tool.name);
+    expect(names).toContain("bash");
+    expect(names).toContain("read");
+    expect(names).toContain("glob");
+    expect(names).toContain("working_directory");
   });
 });

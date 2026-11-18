@@ -5,10 +5,11 @@
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolBashPlugin from "@deepseek-ai/dsh-tool-bash";
-import { SystemPrompt, ToolRegistry, WorkingDirectory } from "@morlay/dsh-agent";
+import { AgentScoped, SystemPrompt, ToolRegistry, WorkingDirectory } from "@morlay/dsh-agent";
 import { ShellEnv, ShellExecutor } from "@morlay/dsh-shell";
 import { SandboxPolicy } from "./contract/index.ts";
 
+@AgentScoped()
 @Injectable()
 export class ToolBash extends fromCordis(ToolBashPlugin) {
   tools = inject(ToolRegistry);

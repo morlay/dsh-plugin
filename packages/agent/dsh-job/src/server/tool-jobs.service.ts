@@ -3,8 +3,9 @@ import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolJobsPlugin from "@deepseek-ai/dsh-tool-jobs";
 import { JobRegistry } from "../contract/job-registry.contract.ts";
-import { ToolRegistry, SystemPrompt as SystemPromptContract } from "@morlay/dsh-agent";
+import { AgentScoped, ToolRegistry, SystemPrompt as SystemPromptContract } from "@morlay/dsh-agent";
 
+@AgentScoped()
 @Injectable()
 export class ToolJobs extends fromCordis(ToolJobsPlugin) {
   tools = inject(ToolRegistry);

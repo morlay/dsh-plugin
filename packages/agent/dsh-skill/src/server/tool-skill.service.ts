@@ -6,7 +6,9 @@ import { AgentDirectory } from "@morlay/dsh-agent";
 import { Skill } from "../contract/skill.contract.ts";
 import { ToolRegistry } from "@morlay/dsh-agent";
 import { WorkingDirectory } from "@morlay/dsh-agent";
+import { AgentScoped } from "@morlay/dsh-agent";
 
+@AgentScoped()
 @Injectable()
 export class ToolSkill extends fromCordis(ToolSkillPlugin) {
   agents = inject(AgentDirectory);

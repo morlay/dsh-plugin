@@ -2,9 +2,10 @@
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolWorkingDirectoryPlugin from "@deepseek-ai/dsh-tool-working-directory";
-import { ToolRegistry } from "@morlay/dsh-agent";
+import { AgentScoped, ToolRegistry } from "@morlay/dsh-agent";
 import { WorkingDirectory } from "@morlay/dsh-agent";
 
+@AgentScoped()
 @Injectable()
 export class ToolWorkingDirectory extends fromCordis(ToolWorkingDirectoryPlugin) {
   tools = inject(ToolRegistry);

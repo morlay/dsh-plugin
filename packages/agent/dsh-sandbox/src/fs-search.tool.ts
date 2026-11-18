@@ -4,11 +4,13 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolFsSearchPlugin from "@deepseek-ai/dsh-tool-fs-search";
 import { Subprocess } from "@morlay/dsh-shell";
 import {
+  AgentScoped,
   SystemPrompt as SystemPromptContract,
   ToolRegistry,
   WorkingDirectory,
 } from "@morlay/dsh-agent";
 
+@AgentScoped()
 @Injectable()
 export class ToolFsSearch extends fromCordis(ToolFsSearchPlugin) {
   tools = inject(ToolRegistry);

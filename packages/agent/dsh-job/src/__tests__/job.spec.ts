@@ -4,10 +4,15 @@
 // 而不是「令牌能解析」这一条——契约面是空的，能解析本身不说明什么。
 import { JobId } from "@deepseek-ai/dsh-jobs";
 import { ToolRegistry } from "@morlay/dsh-agent";
-import { SystemPromptDefault, ToolRegistryDefault } from "@morlay/dsh-agent";
+import {
+  AgentScopedRows,
+  AgentScopedRowsDefault,
+  SystemPromptDefault,
+  ToolRegistryDefault,
+} from "@morlay/dsh-agent";
 import { JobRegistry } from "@morlay/dsh-job";
 import { provideJob } from "@morlay/dsh-job/server";
-import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { bootstrapApplication, type App, type Context } from "@morlay/zephyr";
 import { provideTypert, provideApiGateway } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -26,6 +31,8 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
       SystemPromptDefault,
       ToolRegistryDefault,
+      // per-agent 行的装行能力：`ToolJobs` 声明了 `@AgentScoped()`。
+      AgentScopedRowsDefault,
       ...provideJob(),
     ],
     timeoutMs: 10_000,
@@ -41,9 +48,14 @@ describe("job 域", () => {
     expect(jobs.list()).toEqual([]);
   });
 
-  it("这个域的工具行随模块一起装：`job_list` 在工具注册表里", async () => {
+  it("这个域的工具行按 agent 装：装进某个 scope 之后 `job_list` 才登记", async () => {
     const app = await boot();
-    expect(app.get(ToolRegistry).get("job_list")).toBeDefined();
+    // `ToolJobs` 声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
+    expect(app.get(ToolRegistry).definitions()).toEqual([]);
+
+    const scope = (app.ctx as Context).extend();
+    await app.get(AgentScopedRows).install(scope);
+    expect(app.get(ToolRegistry).definitions().map((tool) => tool.name)).toContain("job_list");
   });
 
   it("查不到的 id 直接失败，不静默给空值", async () => {

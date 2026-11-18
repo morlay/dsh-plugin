@@ -3,9 +3,10 @@ import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolFsPlugin from "@deepseek-ai/dsh-tool-fs";
 import { FileSystem } from "@morlay/dsh-fs";
-import { SystemPrompt, ToolRegistry, WorkingDirectory } from "@morlay/dsh-agent";
+import { AgentScoped, SystemPrompt, ToolRegistry, WorkingDirectory } from "@morlay/dsh-agent";
 import { SandboxPolicy } from "./contract/index.ts";
 
+@AgentScoped()
 @Injectable()
 export class ToolFs extends fromCordis(ToolFsPlugin) {
   tools = inject(ToolRegistry);

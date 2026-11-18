@@ -1,5 +1,5 @@
 // `fromCordis`：把上游 cordis 插件包成 Provider（只做类型面桥接）。
-import type { Context as CordisContext } from "@deepseek-ai/cordis";
+import { getTraceable, type Context as CordisContext } from "@deepseek-ai/cordis";
 import type { Awaitable, Context, TokenClass } from "@morlay/zephyr";
 import {
   hasTokenMeta,
@@ -146,6 +146,51 @@ function mergeConfig(base: unknown, patch: unknown): Record<string, unknown> | u
       isPlainObject(previous) && isPlainObject(value) ? mergeConfig(previous, value) : value;
   }
   return merged;
+}
+
+/**
+ * 装这一行的那个 ctx（装配器写在行 ctx 的 `kRowOwner` 上）；直接 `mount(ctx)` 时回落 `ctx.root`。
+ * @param ctx - 行 ctx。
+ * @returns owner ctx。
+ */
+function rowOwnerOf(ctx: CordisContext): CordisContext {
+  return (
+    (ctx as unknown as { [kRowOwner]?: CordisContext })[kRowOwner] ??
+    (ctx as unknown as { root?: CordisContext }).root ??
+    ctx
+  );
+}
+
+/**
+ * per-agent 行的 deps：把「服务实例」换成**装这一行的那一层**的代理。
+ *
+ * 上游插件用 `ctx.tools.register(...)` / `ctx.tools.setExecutor(...)` 时，作用域取自**服务实例自己的
+ * ctx**；直接把它传进去，注册就落在应用根，第二个 agent 再装同一个工具名就撞
+ * （`tool "skill" is already registered (for a per-agent variant, register through that agent's
+ * `agent.ctx` instead)`）。所以按 agent 装配的行，deps 里凡是这一层 store 里存在的服务，都用
+ * `getTraceable(owner, service)` 包一层——上游拿到的就是「这个 agent 的服务面」。
+ * @param owner - 装这一行的 ctx。
+ * @param deps - 上游声明的依赖（名字 → 值）。
+ * @returns 按 owner 收口后的 deps。
+ */
+function scopedDeps(
+  owner: CordisContext,
+  deps: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (deps === undefined) return undefined;
+  const root = (owner as unknown as { root?: CordisContext }).root ?? owner;
+  // 应用根的行不需要这一层：那份实例的作用域本来就是根。
+  if (owner === root) return deps;
+  const reflect = owner.reflect as unknown as { get(name: string, strict?: boolean): unknown };
+  const traced: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(deps)) {
+    const service = reflect.get(name, false);
+    traced[name] =
+      typeof service === "object" && service !== null
+        ? (getTraceable(owner, service) as unknown)
+        : value;
+  }
+  return traced;
 }
 
 /**
@@ -358,12 +403,9 @@ export function fromCordis(
         // 用根（跨行读得到，`remoteAccess` / `sessions` 这类读法很常见）；`@AgentScoped()` 的行用
         // 该 agent 的 `agentCtx`（同 agent 的兄弟行读得到，别的 agent 与根读不到）。直接
         // `mount(ctx)`、没经装配器时回落 `ctx.root`，与既有行为一致。
-        const owner =
-          (cordis as unknown as { [kRowOwner]?: CordisContext })[kRowOwner] ??
-          (cordis as unknown as { root?: CordisContext }).root ??
-          cordis;
+        const owner = rowOwnerOf(cordis);
         const instance = new upstream(
-          withDeps(owner, deps, () => {}),
+          withDeps(owner, scopedDeps(owner, deps), () => {}),
           effective,
         );
         // 有的上游把注册放在 `[Service.init]()` 里（异步）：等它结束，`mount` 之后拿到的才是可用实例。
@@ -384,11 +426,12 @@ export function fromCordis(
       // 记下它 provide 的名字，按名字取面，而不是拿契约名去 store 里猜。
       const provided: Array<{ name: string; value: unknown }> = [];
       const childFibers: Array<PromiseLike<unknown>> = [];
+      const owner = rowOwnerOf(cordis);
       const applied = await callApply(
         upstream,
         withDeps(
           cordis,
-          deps,
+          scopedDeps(owner, deps),
           (name, value) => provided.push({ name, value }),
           (fiber) => childFibers.push(fiber),
         ),

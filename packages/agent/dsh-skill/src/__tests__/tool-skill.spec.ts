@@ -3,7 +3,12 @@
 //
 // 判据是「工具真的登记进了工具注册表」：上游插件在 apply 里登记 `skill` 这一个工具，
 // 本仓的行只负责把它要的依赖交进去。工具的定义（`name` / `schema`）在上游，这里不复制一份。
-import { SystemPromptDefault, ToolRegistryDefault } from "@morlay/dsh-agent";
+import {
+  AgentScopedRows,
+  AgentScopedRowsDefault,
+  SystemPromptDefault,
+  ToolRegistryDefault,
+} from "@morlay/dsh-agent";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,6 +63,8 @@ async function boot(): Promise<App> {
       AgentDirectoryDefault,
       ToolRegistryDefault,
       ...provideWorkingDirectory(configure(WorkingDirectoryDefault, { defaultDirectory: root })),
+      // per-agent 行的装行能力：装了 `@AgentScoped()` 行的最小装配也要有它（agent 骨架里带一条）。
+      AgentScopedRowsDefault,
       ToolSkill,
     ],
     timeoutMs: 20_000,
@@ -67,8 +74,17 @@ async function boot(): Promise<App> {
 }
 
 describe("skill 域的技能工具行", () => {
-  it("装完这一行，`skill` 工具在工具注册表里", { timeout: 20_000 }, async () => {
+  it("这一行按 agent 装配：装进某个 scope 才登记 `skill`，应用根上没有它", { timeout: 20_000 }, async () => {
     const app = await boot();
-    expect(app.get(ToolRegistry).get("skill")).toBeDefined();
+    // 行声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
+    expect(app.get(ToolRegistry).definitions(), "应用根上不该有它").toEqual([]);
+
+    const scope = (app.ctx as Context).extend();
+    // 装进这个 scope 不抛 = 上游 `ctx.tools.register` 在这个 agent 的服务面上成功了；
+    // 若还传的是根那份实例，第二个 scope 再装就会撞名。
+    await app.get(AgentScopedRows).install(scope);
+    // 装进这个 scope 之后工具才出现，且没抛「already registered」——说明登记落在这个 agent 的
+    // 服务面（上游 `ctx.tools.register` 的作用域取自传进去的那份代理）。
+    expect(app.get(ToolRegistry).definitions().map((tool) => tool.name)).toContain("skill");
   });
 });
