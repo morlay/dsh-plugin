@@ -5,7 +5,6 @@
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
 /** wire 上的端点名。 */
-export const SKILLS_LIST_ENDPOINT = "skills/list";
 
 /** 一条用户可调用的技能（上游 `SkillEntry`）。 */
 export interface SkillEntry {

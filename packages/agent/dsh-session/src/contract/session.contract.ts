@@ -1,7 +1,7 @@
 // session seam 的契约：令牌就是我们自己的抽象类，按服务语义命名（不做 `XxxContract` 后缀）。
 import type { SessionStore as SessionStoreService } from "@deepseek-ai/dsh-session";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：会话日志本身（会话对象、事件与 header、它们的身份与坐标）。上游按 `@deepseek-ai/dsh-session`
 // 的包根与 `/types` 两个入口散着出，这里按「一份会话日志」归成一处：扩展/替换实现只引它，不引上游。

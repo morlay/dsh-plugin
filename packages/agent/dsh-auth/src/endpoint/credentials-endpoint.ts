@@ -9,19 +9,15 @@ import type { CredentialInfo } from "@deepseek-ai/dsh-credentials/types";
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
 /** wire 上的组名。 */
-export const CREDENTIALS_GROUP = "credentials" as const;
 
 /** 组在 `Remote` 面上的 deps 键（`remote.credentials`）。 */
 export const CREDENTIALS_REMOTE_KEY = "remote.credentials" as const;
 
 /** wire 端点名。 */
-export const CREDENTIALS_DESCRIBE_ENDPOINT = "credentials/describe";
 
 /** wire 端点名。 */
-export const CREDENTIALS_SET_ENDPOINT = "credentials/set";
 
 /** wire 端点名。 */
-export const CREDENTIALS_UNSET_ENDPOINT = "credentials/unset";
 
 /** `credentials/describe` 的命名参数（descriptor 的参数名是 `refs`）。 */
 export interface CredentialsDescribeRequest {

@@ -1,7 +1,7 @@
 // 工具注册表契约：令牌按服务语义命名（上游注册名 `tools`）。
 import type ToolRuntime from "@deepseek-ai/dsh-tools";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：一条工具定义（注册进注册表的东西）与它到模型 schema 的投影。
 /** 一条工具定义：名字、描述、参数 schema 与处理函数。 */

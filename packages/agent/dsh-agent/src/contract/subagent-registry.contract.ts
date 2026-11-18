@@ -1,7 +1,7 @@
 // subagent 运行时契约：令牌按服务语义命名（上游注册名 `subagents`）。
 import type { SubagentRuntime } from "../server/index.ts";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `SubagentRuntime` 的**全部**公开成员。

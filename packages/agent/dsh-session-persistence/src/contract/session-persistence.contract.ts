@@ -4,7 +4,7 @@
 // 实现由适配行或本包的手写实现提供。
 import type { SessionPersistence as UpstreamPersistence } from "@deepseek-ai/dsh-session-persistence";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：句柄的读写面、落盘快照与它们的坐标。上游把契约与默认实现（jsonl）放在一个包里，
 // 这里只转出**词汇**——替换实现（RDB / 别的后端）要实现的就是这些形状。

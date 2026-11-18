@@ -7,7 +7,7 @@ import { SandboxProvider } from "@deepseek-ai/dsh-sandbox";
 /** 能力词汇：一次受限执行要的 argv（程序 + 参数 + cwd），是 `confine` 的入参。 */
 export type { ConfinedArgv } from "@deepseek-ai/dsh-sandbox";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `SandboxProvider` 的全部公开成员，与上游同名同签名。

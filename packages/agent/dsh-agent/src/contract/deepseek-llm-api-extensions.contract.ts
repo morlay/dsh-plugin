@@ -4,7 +4,7 @@
 // 请求体），`fromCordis` 把上游实例接管到这个令牌上，所以契约面按上游实例的公开成员投影。
 import type DeepSeekLlmApiExtensionRegistry from "@deepseek-ai/dsh-deepseek-llm-api-extensions";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `DeepSeekLlmApiExtensionRegistry` 的**全部**公开成员。

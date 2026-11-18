@@ -1,7 +1,7 @@
 // 沙箱策略契约：令牌按服务语义命名（上游注册名 `sandboxPolicy`）。
 import type { SandboxPolicyService } from "@deepseek-ai/dsh-sandbox-policy";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：策略本身（模式与可写根）、它的求值结果与路径规范化。上游 `@deepseek-ai/dsh-sandbox`
 // 既出端口也出这些值，这里只取「策略」那半边——消费方按策略判放行，不必自己引上游。

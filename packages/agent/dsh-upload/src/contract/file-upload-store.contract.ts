@@ -1,7 +1,7 @@
 // `fileUploads`：浏览器上传的宿主服务面（上游 `FileUploads` 经 `fromCordis` 接管）。
 import type { FileUploads } from "@deepseek-ai/dsh-client-file-upload";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `FileUploads` 的**全部**公开成员。

@@ -20,37 +20,21 @@ export const SESSION_GROUP = "session" as const;
 export const SESSION_REMOTE_KEY = "remote.session" as const;
 
 /** wire 上的端点名（与上游 descriptor 一致）。 */
-export const SESSION_RENAME_ENDPOINT = "session/rename";
 /** wire 上的端点名。 */
-export const SESSION_SELECT_MODEL_ENDPOINT = "session/selectModel";
 /** wire 上的端点名。 */
-export const SESSION_FORK_ENDPOINT = "session/fork";
 /** wire 上的端点名。 */
-export const SESSION_SEARCH_ENDPOINT = "session/search";
 /** wire 上的端点名。 */
-export const SESSION_MODEL_CATALOG_ENDPOINT = "session/modelCatalog";
 /** wire 上的端点名。 */
-export const SESSION_INITIALIZE_DEFAULT_MODEL_ENDPOINT = "session/initializeDefaultModel";
 /** wire 上的端点名。 */
-export const SESSION_CAN_OPEN_WORKSPACE_PATH_ENDPOINT = "session/canOpenWorkspacePath";
 /** wire 上的端点名。 */
-export const SESSION_WORKSPACE_PATH_APPLICATIONS_ENDPOINT = "session/workspacePathApplications";
 /** wire 上的端点名。 */
-export const SESSION_PROMPT_ENDPOINT = "session/prompt";
 /** wire 上的端点名。 */
-export const SESSION_CANCEL_ENDPOINT = "session/cancel";
 /** wire 上的端点名。 */
-export const SESSION_UPDATE_QUEUE_ENDPOINT = "session/updateQueue";
 /** wire 上的端点名。 */
-export const SESSION_LIST_ENDPOINT = "session/list";
 /** wire 上的端点名。 */
-export const SESSION_CREATE_ENDPOINT = "session/create";
 /** wire 上的端点名。 */
-export const SESSION_PAGE_ENDPOINT = "session/page";
 /** wire 上的端点名。 */
-export const SESSION_FOLLOW_ENDPOINT = "session/follow";
 /** wire 上的端点名（Host 级投影状态流）。 */
-export const SESSION_CONTROL_ENDPOINT = "session/control";
 
 /** 一个模型选择（上游 `ModelSelection`）。 */
 export interface SessionModelSelection {

@@ -3,9 +3,10 @@
 // **上游的真面不是一个 cordis Service**：`storage-domain` 行把自己的 `DomainFacility` 挂到
 // `storage.mount("domain", facility)` 上，消费方按 `ctx.storage.domain.<member>` 取用。
 // 所以这里的契约面 = `DomainFacility` 的公开成员，成员一个都不能少（缺一个消费方读到 `undefined`）。
-import { DomainFacility, DomainSpec } from "@deepseek-ai/dsh-storage-domain";
+import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
+import type { DomainSpec } from "@deepseek-ai/dsh-storage-domain";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable()
 export abstract class StorageDomain {

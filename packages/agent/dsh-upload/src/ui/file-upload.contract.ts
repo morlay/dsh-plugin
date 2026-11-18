@@ -8,7 +8,7 @@
 // （值令牌会被"上游 mount 期按名字发布"放过，坏在这一步是静默的——粘贴无反应正是这么来的）。
 import type { FileUploadService } from "@deepseek-ai/dsh-client-file-upload/client";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 覆盖守卫：上游 `FileUploadService` 有而契约没列出的成员，编译期必须为空。 */
 export type FileUploadCovered = AssertTrue<AssertCovered<FileUploadService, FileUpload>>;

@@ -1,7 +1,7 @@
 // LLM 运行时契约：令牌按服务语义命名（上游注册名 `llm`）。
-import { LlmRuntime } from "../index.ts";
+import type { LlmRuntime } from "../index.ts";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：一次模型调用进出的消息、内容块与它们的身份。上游把它们散在 `@deepseek-ai/dsh-llm` 的
 // message / types / brand 三个模块里，这里按「LLM 消息」归成一处。

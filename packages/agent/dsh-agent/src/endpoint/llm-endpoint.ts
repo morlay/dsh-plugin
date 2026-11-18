@@ -1,7 +1,7 @@
 // `llm` 组的 wire 面：请求与响应形状（两端共用，**没有实现**）。
 //
 // 组名与方法名只在 `server/` 的 `@RemoteGroup` / `@RemoteMethod` 上出现一次；这里只定义载荷。
-import { LlmModelDiscoveryRequest, LlmDiscoveredModel, LlmProviderInfo } from "../index.ts";
+import type { LlmModelDiscoveryRequest, LlmDiscoveredModel, LlmProviderInfo } from "../index.ts";
 
 /** `llm/listProviders` 的返回值：每条路由的展示元数据。 */
 export type LlmListProvidersValue = readonly LlmProviderInfo[];

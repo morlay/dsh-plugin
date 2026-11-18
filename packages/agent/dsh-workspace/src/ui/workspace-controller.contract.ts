@@ -8,7 +8,7 @@ import type { IWorkspaces } from "@deepseek-ai/dsh-api-workspace-controller/clie
 import { Injectable, InjectionToken } from "@morlay/zephyr";
 // 覆盖守卫是**纯类型**，从 client 出口取：`@morlay/zephyr-app` 包根是宿主面（链到 node 侧），
 // 浏览器半（`src/ui`）从包根取会把宿主模块拖进前端 bundle。
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type WorkspaceControllerCovered = AssertTrue<

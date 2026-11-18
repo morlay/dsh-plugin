@@ -1,7 +1,7 @@
 // 后台任务契约：令牌按服务语义命名（上游注册名 `jobs`）。
 import type JobRegistryService from "@deepseek-ai/dsh-jobs";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `JobRegistry` 的**全部**公开成员。

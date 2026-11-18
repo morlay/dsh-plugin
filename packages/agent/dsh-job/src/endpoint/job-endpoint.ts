@@ -10,12 +10,8 @@ import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 
 /** 组名（上游 descriptor：`namespace: 'job'`）。 */
-export const JOB_GROUP = "job";
 
 /** wire 上的端点名（上游 descriptor 的 `namespace/method`）。 */
-export const JOB_LIST_ENDPOINT = "job/list";
-export const JOB_FOLLOW_ENDPOINT = "job/follow";
-export const JOB_KILL_ENDPOINT = "job/kill";
 
 /** 一条后台任务的投影（上游 `JobView`）。 */
 export interface JobViewWire {
@@ -91,7 +87,7 @@ export interface JobKillValue {
 }
 
 /** `job` 组：花名册流、单任务输出流、人工取消。 */
-@RemoteGroup({ name: JOB_GROUP })
+@RemoteGroup({ name: "job" })
 export class JobEndpoint {
   /**
    * 镜像一个会话能看见的任务花名册（流，整份替换）。

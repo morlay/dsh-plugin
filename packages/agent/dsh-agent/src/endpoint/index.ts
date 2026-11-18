@@ -6,7 +6,6 @@
 export { TYPERT_REMOTE as LLM_REMOTE } from "@deepseek-ai/dsh-llm/remote";
 
 /** wire 上的组名。 */
-export const LLM_GROUP = "llm" as const;
 
 /** 组在 `Remote` 面上的 deps 键（`remote.llm`）。 */
 export const LLM_REMOTE_KEY = "remote.llm" as const;

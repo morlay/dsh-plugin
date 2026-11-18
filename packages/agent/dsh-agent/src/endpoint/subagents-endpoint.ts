@@ -11,11 +11,8 @@ import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 
 /** 组名（上游 descriptor：`namespace: 'subagents'`）。 */
-export const SUBAGENTS_GROUP = "subagents";
 
 /** wire 上的端点名（上游 descriptor 的 `namespace/method`）。 */
-export const SUBAGENTS_PROMPT_ENDPOINT = "subagents/prompt";
-export const SUBAGENTS_INTERRUPT_BY_USER_ENDPOINT = "subagents/interruptByUser";
 
 // 内容片段的形状不在这里复制：上游 `SubagentPromptRequest["content"]` 就是它的唯一真源（纯类型引用）。
 import type { SubagentPromptRequest as UpstreamSubagentPromptRequest } from "@deepseek-ai/dsh-subagent";
@@ -52,7 +49,7 @@ export interface SubagentInterruptByUserValue {
 }
 
 /** `subagents` 组：子代理续话（prompt）与按父地址中断。 */
-@RemoteGroup({ name: SUBAGENTS_GROUP })
+@RemoteGroup({ name: "subagents" })
 export class SubagentsEndpoint {
   /**
    * 给一个已存在的子代理续一条人类消息。

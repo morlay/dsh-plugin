@@ -3,7 +3,7 @@
 // 与上游 `CredentialsController` 的三条 wire 义务对齐：批量读的**字段投影**（只带 `CredentialInfo`
 // 声明的字段）、引用名语法、以及「没有任何读取路径回传密钥值」。
 import { credentialRef } from "../index.ts";
-import { CredentialInfo } from "@deepseek-ai/dsh-credentials";
+import type { CredentialInfo } from "@deepseek-ai/dsh-credentials";
 import { Credentials } from "@morlay/zephyr-app";
 import { inject, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";

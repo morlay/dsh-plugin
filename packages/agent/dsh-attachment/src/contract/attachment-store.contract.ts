@@ -1,7 +1,7 @@
 // 附件存储契约：令牌按服务语义命名（上游注册名 `attachments`）。
 import type AttachmentStoreService from "@deepseek-ai/dsh-attachment";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `AttachmentStore` 的**全部**公开成员（文件与图片两半）。

@@ -9,7 +9,7 @@
 // 组合 `ClientSessions` 提供。
 import type { Context } from "@morlay/zephyr";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
 

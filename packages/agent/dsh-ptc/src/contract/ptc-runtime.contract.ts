@@ -1,7 +1,7 @@
 // PTC 运行时契约：令牌按服务语义命名（上游注册名 `ptcRuntime`）。
 import type NodePtcRuntimeService from "@deepseek-ai/dsh-ptc-runtime-node";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：把 JSON Schema 转成 TypeScript 类型字面量（PTC 的程序里给模型看的那种，纯函数）。 */
 export { jsonSchemaToTs } from "@deepseek-ai/dsh-tool-executor-ptc";

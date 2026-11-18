@@ -1,7 +1,7 @@
 // 压缩引擎契约：令牌按服务语义命名（上游注册名 `compaction`）。
 import { CompactionEngine } from "@deepseek-ai/dsh-compaction";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `CompactionEngine` 的**全部**公开成员。

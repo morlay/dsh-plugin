@@ -1,6 +1,6 @@
 // 文件系统契约：令牌按服务语义命名（上游注册名 `fs`）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { FileSystem as FileSystemService } from "@deepseek-ai/dsh-fs";
 
 // 能力词汇：文件面的失败类型与那一行的配置形状。消费方要 `instanceof FsError` 分派、要按 Config

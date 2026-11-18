@@ -1,7 +1,7 @@
 // sessionProjectionCache 契约：列表页的投影快照读面（只有读面与写穿，没有构造与生命周期钩子）。
 import type { SessionProjectionCache as SessionProjectionCacheService } from "@deepseek-ai/dsh-session-projection-cache";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：检查点的身份（会话 + 水位 + 继承事件数），缓存行按它对齐。 */
 export type { CheckpointIdentity } from "@deepseek-ai/dsh-session-projection-cache";

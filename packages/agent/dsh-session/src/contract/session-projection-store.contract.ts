@@ -1,7 +1,7 @@
 // session-projection seam 的契约：令牌按服务语义命名（上游注册名 `sessionProjections`）。
 import type { SessionProjectionRegistry } from "@deepseek-ai/dsh-session-projection";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：一次投影登记的句柄（读某个会话的投影状态、或卸掉这次登记）。 */
 export type { ProjectionHandle } from "@deepseek-ai/dsh-session-projection";

@@ -4,7 +4,6 @@
 // 宿主行随会话端点一起归对话域。
 
 /** wire 上的组名。 */
-export const TOOL_RESULTS_GROUP = "toolResults" as const;
 
 /** 组在 `Remote` 面上的 deps 键（`remote.toolResults`）。 */
 export const TOOL_RESULTS_REMOTE_KEY = "remote.toolResults" as const;

@@ -4,7 +4,7 @@
 // `ui-directory-picker-browse` 是另一行，要按名字拿到它，就必须由 `ui-workspace` 行把它发布成一个令牌。
 // 令牌住应用层：它是「这一页装哪几行上游 UI」的接线，不属于任何单个上游包。
 import { InjectionToken } from "@morlay/zephyr";
-import { UiWorkspace as UiWorkspaceFace } from "@deepseek-ai/dsh-client-ui-workspace/client";
+import type { UiWorkspace as UiWorkspaceFace } from "@deepseek-ai/dsh-client-ui-workspace/client";
 
 /** `ctx.uiWorkspace` 的令牌（服务名与上游一致：`uiWorkspace`）。 */
 export const UiWorkspace = new InjectionToken<UiWorkspaceFace>("uiWorkspace");

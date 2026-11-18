@@ -1,7 +1,7 @@
 // 默认模型契约：令牌按服务语义命名（上游注册名 `agentDefaultModel`）。
 import type AgentDefaultModelConfig from "@deepseek-ai/dsh-agent-default-model";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 能力词汇：模型选择的投影定义（`modelSelection` 的纯 fold）：登记到 `sessionProjections` 就有这一面。

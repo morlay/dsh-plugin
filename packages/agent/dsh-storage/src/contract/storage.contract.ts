@@ -1,6 +1,6 @@
 // storage 聚合面契约：令牌按服务语义命名（上游注册名 `storage`）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { Storage as StorageHub } from "@deepseek-ai/dsh-storage";
 
 // 能力词汇：后端这一面（后端的读写面、KV 单元与门面的形状、失败类型、服务名约定）。

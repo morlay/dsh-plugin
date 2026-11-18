@@ -5,7 +5,7 @@
 // 那条插件在运行时读到的就是 `undefined`。
 import type WorkspaceRegistryService from "@deepseek-ai/dsh-workspace";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 一份工作区记录：路径、标题、挂上的会话与置顶/归档标记。 */
 export type { WorkspaceRecord } from "@deepseek-ai/dsh-workspace";
 /** 工作区存储域的整体状态（注册表整份落盘的那一坨）。 */

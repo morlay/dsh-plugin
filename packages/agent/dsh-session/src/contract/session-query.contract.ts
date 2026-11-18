@@ -38,7 +38,7 @@ export {
   materializeSessionResultFilters,
 } from "@deepseek-ai/dsh-session-query";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `SessionQueryEngine` 的**全部**公开成员（浏览 / 搜索 / 列表 / 读取）。

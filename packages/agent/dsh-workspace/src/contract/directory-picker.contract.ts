@@ -5,7 +5,7 @@
 import type { DirectoryPickerCapability } from "@deepseek-ai/dsh-host-directory-picker";
 import type NativeDirectoryPicker from "@deepseek-ai/dsh-host-directory-picker-native";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `NativeDirectoryPicker` 的全部公开成员。

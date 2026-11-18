@@ -3,7 +3,7 @@
 // 签名面向**使用方**，但标识用 `SessionId` 品牌而不是裸 `string`：品牌在**边界**转换一次
 // （`endpoint/` 收 wire 上的字符串，转成 `SessionId` 后进入内部），里面就都是同一个类型。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { AgentRegistry as AgentRegistryService } from "@deepseek-ai/dsh-agent";
 
 /** 能力词汇：一个活着的 agent 本身（会话 + inbox + 模型选择），注册表里存的就是它。 */

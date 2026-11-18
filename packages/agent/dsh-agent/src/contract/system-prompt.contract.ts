@@ -1,6 +1,6 @@
 // 系统提示契约：令牌按服务语义命名（上游注册名 `systemPrompt`）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { SystemPrompt as SystemPromptService } from "@deepseek-ai/dsh-system-prompt";
 
 // 能力词汇：装配结果（分节与上下文）、它们的排序名，以及两个约定小节名。消费方拿它们拼提示词、

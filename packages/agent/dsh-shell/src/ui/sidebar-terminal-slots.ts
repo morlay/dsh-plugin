@@ -5,46 +5,58 @@
 // 放在这一行里建：整条链只有右栏的终端 tab 用它。
 import * as UiSidebarTerminalPlugin from "@deepseek-ai/dsh-client-ui-sidebar-terminal/client";
 import { ClientTerminals } from "@deepseek-ai/dsh-api-terminal-controller/client";
-import { TYPERT_REMOTE as TERMINAL_REMOTE } from "@deepseek-ai/dsh-api-terminal-controller/remote";
-import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import {
   Locale,
-  Remote,
   Shortcuts,
   SidebarRight,
   SidebarRightTabs,
   Slots,
   Theme,
 } from "@morlay/zephyr-app/client";
-import { TerminalRemoteService } from "../endpoint/index.ts";
+import { TerminalEndpointClient } from "./terminal-endpoint-client.ts";
 
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
 @Injectable()
 export class WebTerminalsDefault implements OnInit {
   // `inject` 是**字段初始化器**：装配期按字段上的占位对象换成实例。写在方法体里拿到的是占位对象
-  // （类型上装作是 `Remote`，运行期 `$mount` 直接 `is not a function`）。
-  private readonly remote = inject(Remote);
+  // （类型上装作是终端面，调用时直接 `is not a function`）。
+  private readonly terminal = inject(TerminalEndpointClient);
 
-  /** `remote.terminal`：按上游嵌套服务名建的令牌（`upstream` 是空对象，不能读它）。 */
-  private readonly terminal = inject(TerminalRemoteService);
+  /** `onInit` 里建出来的 `webTerminals`（上游按这个名字读它，见 `SidebarTerminalSlots` 的 deps）。 */
+  private webTerminals: ClientTerminals | undefined;
 
+  /**
+   * 建好的 `webTerminals`。
+   *
+   * `onInit` 之后才有：装配顺序（`RemoteMountsDefault` → 本行 → `SidebarTerminalSlots`）保证消费方
+   * 读到时它已经在了；不在就抛，不让 `undefined` 漂到上游去。
+   * @returns 终端视图与进程清理面。
+   */
+  get terminals(): ClientTerminals {
+    if (this.webTerminals === undefined) {
+      throw new Error("WebTerminalsDefault.onInit 还没跑：装配顺序里本行排在了消费方之后");
+    }
+    return this.webTerminals;
+  }
+
+  /**
+   * 建 `webTerminals`（上游 client 半的入口实例）。
+   * @param ctx - 本行 ctx：服务随本行卸载（`super(ctx, 'webTerminals')` 注册在它上面）。
+   * @returns 装配完成。
+   */
   async onInit(ctx: Context): Promise<void> {
-    // 走契约（`inject(Remote)`）：`$mount` 在契约上，不需要按名字读服务。
-    // 「终端组」走**按上游嵌套服务名建的令牌**（`TerminalRemoteService`，名字 `remote.terminal`）——
-    // 不能读 `remote.upstream`：那是空对象（`remote.service.ts:297`），读出来永远 `undefined`。
-
-    // 浏览器里没人跑全局的 remotes 清单（`provideClientModules` 只在宿主装）：每个域自己 `$mount`
-    // 自己那份 `TYPERT_REMOTE`。少了这一步 「终端组」 永远是 `undefined`。
-    await this.remote.$mount(TERMINAL_REMOTE);
-    // `ClientTerminals` 是 cordis `Service` 子类：构造里 `super(ctx, 'webTerminals')` 把自己注册进 store。
-    // 传**本行 ctx**（不是 `ctx.root`）：子能读父，所以 `ui-sidebar-terminal` 照样读得到 `webTerminals`，
-    // 而服务生命周期随本行卸载（挂根上就漏了）。
-    const terminals = new ClientTerminals(ctx as never, this.terminal as never);
-    ctx.effect(() => () => {
-      void (terminals as unknown as { dispose?: () => unknown }).dispose?.();
-    });
+    // 时序守卫：`terminal` 那一面由 `RemoteMountsDefault.onInit` 的 `$mount` 登记，它必须排在本行之前。
+    // 排到后面时在这里就报，别等到打开终端 tab 才在调用处炸成
+    // `Cannot read properties of undefined (reading 'environment')`。
+    if (!this.terminal.mounted) {
+      throw new Error("RemoteMountsDefault 必须排在 WebTerminalsDefault 之前");
+    }
+    // 传**本行 ctx**（不是 `ctx.root`）：子能读父，而服务生命周期随本行卸载（挂根上就漏了）。
+    // 跨行的读取（`SidebarTerminalSlots` 装上游终端标签）由它显式取实例传给 deps，不按名字读 store。
+    // 清理在上游构造里（同一个 ctx 的 `effect`），这里不重复挂。
+    this.webTerminals = new ClientTerminals(ctx as never, this.terminal);
   }
 }
 
@@ -64,12 +76,10 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
   /** `sidebarRightTabs` 有真面令牌（`SidebarRightTabsFace`），走注入。 */
   private readonly sidebarRightTabs = inject(SidebarRightTabs);
 
+  /** 上游按 cordis 服务名读 `webTerminals`：从建它的那一行**显式取实例**，不按名字读 store。 */
+  private readonly webTerminals = inject(WebTerminalsDefault);
+
   override async onInit(ctx: Context): Promise<void> {
-    // 剩下两处仍按名字读，各有明确前置（不是「先留着」）：
-    // - `sidebarRight`：令牌 `SidebarRight` 现在是 `InjectionToken<unknown>`（票 03 第 3 类同根），
-    //   等 `owner-zephyr-casts` 补真面后改 `inject`；
-    // - `webTerminals`：本文件另一行 `new ClientTerminals(...)` 注册的服务，还没有令牌，待补。
-    const read = (name: string): unknown => ctx.get(name);
     await this.mount(ctx, undefined, {
       slots: this.slots,
       locale: this.locale,
@@ -77,7 +87,7 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
       shortcuts: this.shortcuts,
       sidebarRight: this.sidebarRight,
       sidebarRightTabs: this.sidebarRightTabs,
-      webTerminals: read("webTerminals"),
+      webTerminals: this.webTerminals.terminals,
     });
   }
 }

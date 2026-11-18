@@ -10,7 +10,7 @@ import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 export const TERMINAL_GROUP = "terminal";
 
 /** `terminal` 组：会话的交互式终端（起进程、写输入、逐帧订阅输出）。 */
-@RemoteGroup({ name: TERMINAL_GROUP })
+@RemoteGroup({ name: "terminal" })
 export class TerminalEndpoint {
   /**
    * 挂上终端的逐帧面。

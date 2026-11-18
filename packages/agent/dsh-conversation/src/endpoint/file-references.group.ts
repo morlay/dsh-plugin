@@ -4,7 +4,6 @@
 // 归对话域（会话界面的一部分）。
 
 /** wire 上的组名。 */
-export const FILE_REFERENCES_GROUP = "fileReferences" as const;
 
 /** 组在 `Remote` 面上的 deps 键（`remote.fileReferences`）。 */
 export const FILE_REFERENCES_REMOTE_KEY = "remote.fileReferences" as const;
