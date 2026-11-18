@@ -2,27 +2,9 @@
 //
 // 只认白名单：其它未知类型保持 fail loud（那是「数据来自更新的 harness」的信号，不能吞掉）。
 import type { UserMessage } from "@morlay/dsh-agent/contract";
-import type { SessionEvent, SessionEventMap, SessionEventType } from "@morlay/dsh-session/contract";
+import { withEventType } from "@morlay/dsh-session/contract";
+import type { SessionEvent, SessionEventType } from "@morlay/dsh-session/contract";
 
-/**
- * 把一条事件的 `type` 与 `data` **成对**换掉。
- *
- * 「`event.type` 与 `event.data` 相配」这件事在联合类型上表达不出来，所以配对由**调用方**在这里给出：
- * `T` 与 `SessionEventMap[T]` 一起传，断言只在本函数内发生一次——比在每个改写点各写一条 `as unknown as` 收口。
- * @param event - 原事件（`seq` / `time` / 信封字段都保留）。
- * @param type - 新类型。
- * @param data - 新类型对应的数据。
- * @returns 换过 type/data 的事件。
- */
-function withType<T extends SessionEventType>(
-  event: SessionEvent,
-  type: T,
-  data: SessionEventMap[T],
-): SessionEvent<T> {
-  // 展开一条**联合**事件时 `type` 各支冲突，TS 连可比性都不给（不是「再收窄一下」能解决的），所以这里用一次
-  // 双断言收口：配对已由签名证明，断言只负责让「联合 → 具体 K」这一步过编译。这是本文件唯一的收口点。
-  return { ...event, type, data } as unknown as SessionEvent<T>;
-}
 
 export function repairAssistantSettlement(events: SessionEvent[]): void {
   for (const event of events) {
@@ -73,19 +55,19 @@ export function renameLegacyPtcEvents(events: SessionEvent[]): void {
     const event = events[index]!;
     const renamedType = PTC_EVENT_RENAMES[event.type];
     if (renamedType !== undefined) {
-      events[index] = withType(event, renamedType, event.data);
+      events[index] = withEventType(event, renamedType, event.data);
       continue;
     }
     if (event.type === "agent-preset/selected") {
       if (event.data.agentPreset === "code") {
-        events[index] = withType(event, event.type, { ...event.data, agentPreset: "ptc" });
+        events[index] = withEventType(event, event.type, { ...event.data, agentPreset: "ptc" });
       }
       continue;
     }
     if (event.type === "user/message") {
       const renamed = renamePtcMessageSource(event.data);
       if (renamed !== event.data) {
-        events[index] = withType(event, event.type, renamed);
+        events[index] = withEventType(event, event.type, renamed);
       }
       continue;
     }
