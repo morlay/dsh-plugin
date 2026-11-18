@@ -144,7 +144,7 @@ function renderPanel(sessions: SessionController, captured: Captured): ReturnTyp
       if (name !== "conversation.content") return null;
       const content = input as { hero?: boolean; phase?: string };
       captured.content.push(content);
-      const panelInput = { ...contentProps, ...content } as unknown as ConversationContentProps;
+      const panelInput = { ...contentProps, ...content } as ConversationContentProps;
       return <ConversationContent {...panelInput} />;
     },
   } as unknown as ConversationSlotProps;

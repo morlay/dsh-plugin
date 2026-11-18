@@ -5,7 +5,7 @@
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { TYPERT_REMOTE } from "@deepseek-ai/dsh-api-session-controller/remote";
 import { afterEach, describe, expect, it } from "vitest";
-import { muxTransport } from "@morlay/zephyr-app/client";
+import { muxTransport, RemoteDefault } from "@morlay/zephyr-app/client";
 import { Remote } from "@morlay/zephyr-app/client";
 import { provideClientRemote } from "@morlay/zephyr-app/client";
 import { ClientConnectionDefault } from "@morlay/zephyr-app/client";
@@ -13,6 +13,7 @@ import { provideClientConnection } from "@morlay/zephyr-app/client";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { closeMux, serveMux } from "./support/mux-serve.ts";
+import { namespaceOf } from "../remote-namespace.ts";
 
 const closers: (() => Promise<void>)[] = [];
 
@@ -63,23 +64,24 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
       timeoutMs: 15_000,
     });
     try {
-      const remote = app.get(Remote) as unknown as {
-        $mount(c: unknown): Promise<() => Promise<void>>;
-        useTransport(t: unknown): void;
-        $on(channel: string, listener: (...args: never[]) => void): () => void;
-        session: { list(): Promise<unknown>; create(request: unknown): Promise<unknown> };
-      };
+      const remote = app.get(Remote);
 
-      remote.useTransport(
+      // `useTransport` 是 `RemoteDefault`（本装配的实现）的成员，契约不列它：按实现类收窄一次。
+      (remote as RemoteDefault).useTransport(
         muxTransport(
           () => ({ openWebSocket: (path: string) => new WebSocket(`${url}${path}`) }) as never,
         ),
       );
       await remote.$mount(TYPERT_REMOTE);
 
+      // `session` 是 `$mount` 之后才挂上的 namespace 面（契约不列）：与本包业务代码同一个读法。
+      const face = namespaceOf(remote, "session") as
+        | { list(): Promise<unknown>; create(request: unknown): Promise<unknown> }
+        | undefined;
+      if (face === undefined) throw new Error("`$mount` 之后 remote.session 必须存在");
       // wire 层统一给 `RemoteResult`（上游客户端按 `result.ok` 分流）。
-      await expect(remote.session.list()).resolves.toEqual({ ok: true, value: { items: [] } });
-      await expect(remote.session.create({})).resolves.toEqual({
+      await expect(face.list()).resolves.toEqual({ ok: true, value: { items: [] } });
+      await expect(face.create({})).resolves.toEqual({
         ok: true,
         value: { sessionId: "s1" },
       });
@@ -89,19 +91,14 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
 
       // store 那一段：`SessionControllerDefault` 订阅同样的频道，`upsert` 之后快照里该有这一行。
       // （DOM 渲染由 `app-assembly.spec` 在 happy-dom 里覆盖；这里到 store 为止。）
-      const sessions = app.get(SessionController) as unknown as {
-        refresh(): Promise<unknown>;
-        list: {
-          getSnapshot(): { ids: readonly string[]; byId: Record<string, { title?: string }> };
-        };
-      };
+      const sessions = app.get(SessionController);
       await sessions.refresh();
       handlers.publish("api-session/added", rowOf("s2", "会话二"));
       await new Promise((resolve) => setTimeout(resolve, 50));
       const rowsNow = sessions.list.getSnapshot();
       expect(rowsNow.ids).toContain("s2");
       // 标题走 `title` 投影块（上游列表行读的就是这个键）。
-      expect(rowsNow.byId["s2"]?.title).toBe("会话二");
+      expect((rowsNow.byId["s2"] as { title?: string } | undefined)?.title).toBe("会话二");
     } finally {
       await app.dispose().catch(() => {});
     }

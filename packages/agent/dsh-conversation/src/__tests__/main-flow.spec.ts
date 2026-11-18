@@ -45,8 +45,13 @@ function tmpdirForWorkingDirectory(): string {
   return process.cwd();
 }
 
-/** 连接替身：`media-references` 行要它（生成文件路由）；本 spec 不触发下载。 */
-function fakeConnection(): Connection {
+/**
+ * 连接替身：`media-references` 行要它（生成文件路由）；本 spec 不触发下载。
+ *
+ * 返回类型不写 `Connection`：写它就得断言（字面量只是"本 spec 用到的那些成员"）。谁要契约面由容器判，
+ * 少给一个成员会在装配时当场炸，而不是在这里静默地过一遍断言。
+ */
+function fakeConnection() {
   return {
     interactions: "none",
     generation: { getSnapshot: () => ({ id: 1, host: { home: "" } }), subscribe: () => () => {} },
@@ -64,11 +69,11 @@ function fakeConnection(): Connection {
     },
     reconnect: () => {},
     start: () => ({ stop: () => {} }),
-  } as unknown as Connection;
+  };
 }
 
-/** 准入替身：全放行（上游 `@Remote` 分派前读 `decide`）。 */
-function allowAllAccess(): RemoteAccess {
+/** 准入替身：全放行（上游 `@Remote` 分派前读 `decide`；返回类型同上，不写契约类型就不必断言）。 */
+function allowAllAccess() {
   return {
     decide: () => ({ allowed: true }),
     allows: () => true,
@@ -79,7 +84,7 @@ function allowAllAccess(): RemoteAccess {
     snapshotFor: () => ({}),
     follow: () => () => {},
     invalidate: () => {},
-  } as unknown as RemoteAccess;
+  };
 }
 
 @Injectable()
@@ -211,7 +216,7 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
       // 上游 `session/list` 的协议是 `{ items: [{ id, cwd }] }`（不是自研端点的 `{ ids, byId }`）。
       // 上游 `sessions/list` 的行是 `SessionSummary`（身份字段是 `sessionId`）；`cwd` 不在行上，
       // 目录归属要看工作区的 `sessionIds`（下一步）。
-      const listed = (await host.snapshotForRemote()) as unknown as {
+      const listed = (await host.snapshotForRemote()) as {
         items?: readonly { sessionId?: string; blank?: boolean }[];
       };
       const rows = listed.items ?? [];

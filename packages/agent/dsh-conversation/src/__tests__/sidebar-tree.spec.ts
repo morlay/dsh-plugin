@@ -80,7 +80,7 @@ describe("侧栏会话树的数据判据", () => {
             }),
           ),
         ),
-      } as unknown as ListValue;
+      } as ListValue;
       expect(Object.keys(listed.byId).sort()).toEqual(["s-blank", "s-engaged"]);
       expect(listed.byId["s-engaged"]?.blank, "有 turn/start 的会话必须是非 blank").toBe(false);
       expect(listed.byId["s-blank"]?.blank, "只有 seed 的会话是 blank").toBe(true);

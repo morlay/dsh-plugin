@@ -33,13 +33,14 @@ describe("交付物域", { timeout: 180_000 }, () => {
     const app = host.app;
 
     // `fetch.register` 是那四条路由唯一的注册入口：它不在，`ui-deliverables` 的 `apply` 就炸。
-    const connection = app.get(Connection) as unknown as {
-      readonly fetch?: { readonly register?: unknown };
-    };
-    expect(
-      typeof connection.fetch?.register,
-      "connection.fetch.register 缺了，交付物路由无处注册",
-    ).toBe("function");
+    // `fetch` 不在 `Connection` 契约上（上游上传行按名字读 `ctx.connection.fetch`，路由注册在那里）。
+    // 这条断言问的正是"运行期有没有它"，所以按运行期形状读，不做类型断言。
+    const fetchFace: unknown = Reflect.get(app.get(Connection), "fetch");
+    const register: unknown =
+      typeof fetchFace === "object" && fetchFace !== null
+        ? Reflect.get(fetchFace, "register")
+        : undefined;
+    expect(typeof register, "connection.fetch.register 缺了，交付物路由无处注册").toBe("function");
 
     // 两行都拿到了契约面（= `mount` 跑过）。
     expect(app.get(WorkspaceChangesDefault)).toBeDefined();

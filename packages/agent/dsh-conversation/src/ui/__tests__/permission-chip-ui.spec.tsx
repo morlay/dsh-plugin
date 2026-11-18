@@ -22,6 +22,7 @@ import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { RemoteShell } from "./support/fake-remote.ts";
 
 afterEach(cleanup);
 
@@ -101,17 +102,7 @@ async function boot(): Promise<{
     providers: [
       { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
       { provide: CommandRunner, useFactory: () => runner },
-      {
-        provide: Remote,
-        useFactory: () =>
-          ({
-            session: undefined,
-            $on: () => () => {},
-            $mount: async () => () => {},
-            whenMounted: async () => {},
-            whenNamespace: async () => undefined,
-          }) as unknown as Remote,
-      },
+      { provide: Remote, useFactory: () => new RemoteShell({ session: undefined }) },
       ...provideSessionsStore(),
     ],
     timeoutMs: 20_000,
@@ -238,5 +229,5 @@ function renderChip(sessions: SessionController): void {
     t: ((key: string) =>
       (accessZh as Record<string, string>)[key] ?? key) as PermissionSelectProps["t"],
   };
-  render(<PermissionSelect {...(props as unknown as PermissionSelectProps)} />);
+  render(<PermissionSelect {...(props as PermissionSelectProps)} />);
 }

@@ -74,8 +74,8 @@ class FakeConnection extends Connection {
   readonly start = () => ({ stop: () => {} });
 }
 
-/** 准入替身：全放行。 */
-function allowAllAccess(): RemoteAccess {
+/** 准入替身：全放行（返回类型不写契约类型：写了就得断言，见 `main-flow.spec` 同一处理）。 */
+function allowAllAccess() {
   return {
     allows: () => true,
     decide: () => ({ allowed: true }),
@@ -90,7 +90,7 @@ function allowAllAccess(): RemoteAccess {
     // `{ service, serviceKey, namespace }` 校验——空对象过不了，整个 `session/list` 抛
     // `Service "remote-access" has an inconsistent typertRemote binding`。
     // 真实现由 `bindTypertRemote` 产出，替身没有那层绑定，就该缺这个键。
-  } as unknown as RemoteAccess;
+  };
 }
 
 const apps: App[] = [];

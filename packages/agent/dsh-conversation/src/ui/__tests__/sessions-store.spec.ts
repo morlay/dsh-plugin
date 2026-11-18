@@ -205,9 +205,7 @@ describe("列表里没有的 id 不产生 binding", () => {
       // 上游 `binding` 只认**已物化的 scope**（`scopes.get(id)?.binding`）：没 retain 过就是 undefined。
       // 这条钉的是「不编造 binding」——编造会让 `ui-session` 把不存在的会话当 main。
       expect(sessions.binding("s2")).toBeUndefined();
-      (sessions as unknown as { retain(t: never, o: unknown): void }).retain("s1" as never, {
-        source: "gateway",
-      });
+      sessions.retain(SessionId("s1"), { source: "gateway" });
       expect(sessions.binding("s1")).toBeDefined();
     },
   );

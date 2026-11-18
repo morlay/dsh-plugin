@@ -13,6 +13,7 @@ import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
+import { RemoteShell } from "./support/fake-remote.ts";
 
 /** 一行目录（上游 `session/list` 的 `{ items }`，必需字段齐全）。 */
 const ROWS = {
@@ -74,17 +75,8 @@ async function boot(): Promise<{ app: App; sessions: SessionController }> {
     providers: [
       { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
       // `sessions` 行要 `Remote`（转发面与 `$on`）；本 spec 不走 wire，给个只带订阅面的壳。
-      {
-        provide: Remote,
-        useFactory: () =>
-          ({
-            session: undefined,
-            $on: () => () => {},
-            $mount: async () => () => {},
-            whenMounted: async () => {},
-            whenNamespace: async () => undefined,
-          }) as unknown as Remote,
-      },
+      // `session` 面显式给 `undefined`：钉住"会话组没挂上"时上游那一路不炸（`?` / 存在性判断）。
+      { provide: Remote, useFactory: () => new RemoteShell({ session: undefined }) },
       ConversationRow,
       ...provideSessionsStore(),
     ],

@@ -18,7 +18,8 @@ export async function serveMux(): Promise<{
     handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   }[] = [];
   const mux = new MuxServer();
-  Object.assign(mux as unknown as Record<string, unknown>, {
+  // `Object.assign` 的返回类型是"目标 & 来源"，来源字段不必先断言成索引签名。
+  Object.assign(mux, {
     handlers,
     webServer: {
       registerUpgrade: (route: { path: string }) => {
@@ -51,7 +52,7 @@ export async function serveMux(): Promise<{
       socket.destroy();
       return;
     }
-    route.handler(req, socket as unknown as Duplex, head);
+    route.handler(req, socket, head);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();

@@ -110,10 +110,8 @@ class FakeRemote extends Remote {
   }
 
   $stream(): AsyncIterable<unknown> & { dispose(): Promise<void> } {
-    const empty = (async function* () {})() as unknown as AsyncIterable<unknown> & {
-      dispose(): Promise<void>;
-    };
-    return Object.assign(empty, { dispose: async () => {} });
+    // 空流 + `dispose`：`Object.assign` 的返回类型就是那个交集，不必再断言。
+    return Object.assign((async function* () {})(), { dispose: async (): Promise<void> => {} });
   }
 }
 

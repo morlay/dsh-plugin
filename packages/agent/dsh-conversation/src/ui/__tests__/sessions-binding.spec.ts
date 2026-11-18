@@ -17,6 +17,7 @@ import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
+import { RemoteShell } from "./support/fake-remote.ts";
 import { Connection } from "@morlay/zephyr-app/client";
 
 const opened: App[] = [];
@@ -165,11 +166,11 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
   const app = await bootstrapApplication({
     providers: [
       { provide: SessionRemote, useFactory: () => sessionRemote },
-      // `sessions` 行还 inject 了 `Remote`（转发面）；本 spec 不走 wire，给个只带 `session` 的壳。
+      // `sessions` 行还 inject 了 `Remote`（转发面）；本 spec 不走 wire，只给 `session` 这一条 face。
       {
         provide: Remote,
         useFactory: () =>
-          ({
+          new RemoteShell({
             // `startFollow` 按 `remote.session.follow` 的存在性收窄：给同一个替身。
             // `control` 是投影状态流（上游 `session/control`）：推一帧 baseline + 一帧增量。
             session: {
@@ -188,14 +189,7 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
                 await new Promise<void>(() => {});
               },
             },
-            // `onInit` 里订阅了推送（`$on`）：本 spec 没有推送面，给一个退订函数即可。
-            $on: () => () => {},
-            $mount: async () => () => {},
-            // `startFollow` 等挂载前的等待：本 spec 直接视为已挂载。
-            whenMounted: async () => {},
-            whenNamespace: async () => undefined,
-            wireEvents: () => () => {},
-          }) as unknown as Remote,
+          }),
       },
       { provide: CommandRunner, useFactory: () => new RecordingCommandRunner() },
       // 投影读面由框架提供：它自己订阅 `remote.session.control`（本 spec 的 fake 已给）。
@@ -209,37 +203,22 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
   return { app, runner: app.get(CommandRunner) as RecordingCommandRunner };
 }
 
-/** `sessions` 服务的形状（只取被测成员）。 */
-interface Sessions {
-  list: { getSnapshot(): { ids: readonly string[]; byId: Record<string, unknown>; phase: string } };
-  binding(id: string):
-    | {
-        session?: {
-          command(
-            line: string,
-          ): Promise<
-            | { ok: true; value: { matched: boolean } }
-            | { ok: false; error: { code: string; message: string } }
-          >;
-        };
-      }
-    | undefined;
-}
-
 describe("sessions 行的目录与 binding", () => {
   it(
     "`refresh()` 后目录有行，`binding(id).session.command` 能提交一行命令",
     { timeout: 20_000 },
     async () => {
       const { app, runner } = await boot();
-      const service = app.get(SessionController) as unknown as Sessions;
+      const service = app.get(SessionController);
 
       expect(service.list.getSnapshot().ids).toEqual(["s1", "s2"]);
       // 上游 `binding` 读已物化的 scope（`scopes.get(id)?.binding`）：先 retain 才会有。
-      (service as unknown as { retain(t: never, o: unknown): void }).retain("s1" as never, {
-        source: "gateway",
-      });
-      const binding = service.binding("s1");
+      service.retain(SessionId("s1"), { source: "gateway" });
+      // 契约面把 `binding` 标成 `unknown`（本装配不承诺上游 `SessionBinding` 的完整面）：
+      // 这里按上游真形状收窄一次，断言读的就是 `binding().session.command`。
+      const binding = service.binding("s1") as
+        | { session?: { command(line: string): Promise<unknown> } }
+        | undefined;
       expect(binding, "有目录行就必须有 binding（否则权限 chip 早退）").toBeDefined();
       expect(typeof binding?.session?.command, "`session.command` 必须是函数").toBe("function");
 
@@ -257,14 +236,22 @@ describe("sessions 行的目录与 binding", () => {
     { timeout: 20_000 },
     async () => {
       const { app, runner } = await boot();
-      const service = app.get(SessionController) as unknown as Sessions;
-      (service as unknown as { retain(t: never, o: unknown): void }).retain("s1" as never, {
-        source: "gateway",
-      });
+      const service = app.get(SessionController);
+      service.retain(SessionId("s1"), { source: "gateway" });
       // 注册表认得这条命令（`matched` 为真）但处理器结算成失败——例如 preset 名不在目录里。
       runner.outcome = { kind: "error", text: 'unknown preset "read-only"' };
 
-      const result = await service.binding("s1")?.session?.command("/permission read-only");
+      const binding = service.binding("s1") as
+        | {
+            session?: {
+              command(line: string): Promise<
+                | { ok: true; value: { matched: boolean } }
+                | { ok: false; error: { code: string; message: string } }
+              >;
+            };
+          }
+        | undefined;
+      const result = await binding?.session?.command("/permission read-only");
       expect(result?.ok, "处理器报错必须让调用方看得见").toBe(false);
       expect(result?.ok === false ? result.error.message : "").toContain("unknown preset");
     },
@@ -275,11 +262,9 @@ describe("sessions 行的目录与 binding", () => {
     { timeout: 20_000 },
     async () => {
       const { app } = await boot();
-      const service = app.get(SessionController) as unknown as Sessions;
+      const service = app.get(SessionController);
       // 目录行存在 → 建 binding 时就会开 follow（`startFollow`）。
-      (service as unknown as { retain(t: never, o: unknown): void }).retain("s1" as never, {
-        source: "gateway",
-      });
+      service.retain(SessionId("s1"), { source: "gateway" });
       const binding = service.binding("s1") as {
         eventSource?: { getSnapshot(): { entries: readonly { type?: string }[] } };
       };
@@ -302,11 +287,9 @@ describe("sessions 行的目录与 binding", () => {
 
   it("投影增量帧会更新 `faceOf`（chip 文案因此跟着变）", { timeout: 20_000 }, async () => {
     const { app } = await boot();
-    const service = app.get(SessionController) as unknown as Sessions;
-    (service as unknown as { retain(t: never, o: unknown): void }).retain("s1" as never, {
-      source: "gateway",
-    });
-    const binding = service.binding("s1") as unknown as {
+    const service = app.get(SessionController);
+    service.retain(SessionId("s1"), { source: "gateway" });
+    const binding = service.binding("s1") as {
       session?: {
         projections: {
           faceOf(key: string): { getSnapshot(): unknown; subscribe(fn: () => void): () => void };
@@ -324,7 +307,7 @@ describe("sessions 行的目录与 binding", () => {
 
   it("目录里没有的 id 不给 binding（主区因此能停在 hero）", { timeout: 20_000 }, async () => {
     const { app } = await boot();
-    const service = app.get(SessionController) as unknown as Sessions;
+    const service = app.get(SessionController);
     expect(service.binding("nope")).toBeUndefined();
   });
 });

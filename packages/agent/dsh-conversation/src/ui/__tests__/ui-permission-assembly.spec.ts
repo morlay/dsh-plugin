@@ -28,6 +28,7 @@ import { PermissionPresetsEndpointDefault } from "@morlay/dsh-permission/server"
 import { Permission } from "@morlay/dsh-permission";
 import { afterEach, describe, expect, it } from "vitest";
 import { providePermissionUi } from "../permission-ui.provide.ts";
+import { namespaceOf } from "../remote-namespace.ts";
 import { PERMISSION_PRESETS_REMOTE } from "@morlay/dsh-permission/endpoint";
 
 const opened: App[] = [];
@@ -81,10 +82,9 @@ class FakeSessions extends SessionController {
     return { getSnapshot: () => ({ retainedBy: {} }), subscribe: () => () => {} };
   }
 
-  scopeOf(
-    ctx: Parameters<SessionController["scopeOf"]>[0],
-  ): ReturnType<SessionController["scopeOf"]> {
-    return ctx as unknown as ReturnType<SessionController["scopeOf"]>;
+  /** 装配期不给作用域（本 spec 不看它）。 */
+  scopeOf(): undefined {
+    return undefined;
   }
 
   scope(): undefined {
@@ -103,16 +103,9 @@ class FakeSessions extends SessionController {
     throw new Error("装配期不 retain");
   }
 
-  using<T>(
-    target: Parameters<SessionController["using"]>[0],
-    options: Parameters<SessionController["using"]>[1],
-    operation: Parameters<SessionController["using"]>[2] extends (reference: infer R) => unknown
-      ? (reference: R) => T | Promise<T>
-      : never,
-  ): Promise<T> {
-    void target;
-    void options;
-    return Promise.resolve(operation as unknown as T);
+  /** 装配期不 using：照契约给"明确失败"，别让它悄悄返回 undefined。 */
+  using<T>(): Promise<T> {
+    throw new Error("装配期不 using");
   }
 
   async create(): Promise<never> {
@@ -158,7 +151,7 @@ async function boot(): Promise<App> {
             }),
             getSnapshot: () => ({}),
             subscribe: () => () => {},
-          }) as unknown as ConfigForms,
+          }),
       },
       { provide: Connection, useFactory: () => new FakeConnection() },
       { provide: SessionController, useFactory: () => new FakeSessions() },
@@ -171,13 +164,13 @@ async function boot(): Promise<App> {
             register: () => () => {},
             decorate: () => () => {},
             dismiss: () => {},
-          }) as unknown as CommandUi,
+          }),
       },
       {
         provide: SessionRemoteBinding,
-        useFactory: () => ({ onInit: async () => {} }) as unknown as SessionRemoteBinding,
+        useFactory: () => ({ onInit: async () => {} }),
       },
-      { provide: RemoteAccess, useFactory: () => ({ can: () => true }) as unknown as RemoteAccess },
+      { provide: RemoteAccess, useFactory: () => ({ can: () => true }) },
       {
         provide: Locale,
         useFactory: () =>
@@ -185,7 +178,7 @@ async function boot(): Promise<App> {
             register: () => () => {},
             subscribe: () => () => {},
             bind: () => (key: string) => key,
-          }) as unknown as Locale,
+          }),
       },
       {
         provide: Shortcuts,
@@ -193,12 +186,12 @@ async function boot(): Promise<App> {
           ({
             catalog: { getSnapshot: () => [], subscribe: () => () => {} },
             register: () => () => {},
-          }) as unknown as Shortcuts,
+          }),
       },
       {
         provide: SettingsSchema,
         useFactory: () =>
-          ({ schemas: new Map(), register: () => {} }) as unknown as typeof SettingsSchema,
+          ({ schemas: new Map(), register: () => {} }),
       },
       // 宿主侧：`permissionPresets/catalog` 的实现 + 它要的 `Permission` 面（只给 catalog）。
       {
@@ -218,7 +211,7 @@ async function boot(): Promise<App> {
               ],
               defaultPreset: "workspace-write",
             }),
-          }) as unknown as Permission,
+          }),
       },
       PermissionPresetsEndpointDefault,
       // 被测面：权限的浏览器半。
@@ -252,7 +245,7 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
                 }),
                 getSnapshot: () => ({}),
                 subscribe: () => () => {},
-              }) as unknown as ConfigForms,
+              }),
           },
           { provide: Connection, useFactory: () => new FakeConnection() },
         ],
@@ -261,9 +254,7 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
       opened.push(app);
       const remote = app.get(Remote);
       await remote.$mount(PERMISSION_PRESETS_REMOTE);
-      const face = (remote as unknown as Record<string, unknown>)["permissionPresets"] as
-        | { catalog?: unknown }
-        | undefined;
+      const face = namespaceOf(remote, "permissionPresets");
       expect(face, "`$mount` 之后 remote.permissionPresets 必须存在").toBeDefined();
       expect(typeof face?.catalog, "`catalog` 必须是函数").toBe("function");
     },
@@ -287,9 +278,7 @@ describe("remote 的 $mount（真 RemoteDefault）", () => {
       opened.push(app);
       const remote = app.get(Remote);
       await remote.$mount(PERMISSION_PRESETS_REMOTE);
-      const face = (remote as unknown as Record<string, unknown>)["permissionPresets"] as
-        | { catalog?: unknown }
-        | undefined;
+      const face = namespaceOf(remote, "permissionPresets");
       expect(face, "`RemoteDefault.$mount` 之后必须有这条 face").toBeDefined();
       expect(typeof face?.catalog).toBe("function");
     },
@@ -303,12 +292,12 @@ describe("UiPermission 的装配", () => {
     async () => {
       const app = await boot();
       // `$mount` 之后命名空间必须在：上游 `PermissionCatalogDirectory` 的构造里直接读它。
-      const remote = app.get(Remote) as unknown as Record<string, unknown>;
+      const remote = app.get(Remote);
       expect(
-        remote["permissionPresets"],
+        namespaceOf(remote, "permissionPresets"),
         "`$mount` 之后 remote.permissionPresets 必须存在",
       ).toBeDefined();
-      const face = remote["permissionPresets"] as { catalog(): Promise<unknown> };
+      const face = namespaceOf(remote, "permissionPresets") as { catalog(): Promise<unknown> };
       const result = (await face.catalog()) as {
         ok?: boolean;
         value?: { options?: readonly { value?: string }[] };
@@ -324,10 +313,10 @@ describe("UiPermission 的装配", () => {
 
   it("两条 face 都跟着 `$mount` 就位（摊平后不能丢任何一条）", { timeout: 20_000 }, async () => {
     const app = await boot();
-    const remote = app.get(Remote) as unknown as Record<string, unknown>;
+    const remote = app.get(Remote);
     // 装配没抛错本身也是一条判据：`fromCordis` 会逐条核对 `'remote.permissionPresets'` /
     // `'remote.settings'`，缺一个当场失败。
-    expect(remote["permissionPresets"]).toBeDefined();
-    expect(remote["settings"], "`settings` 这组也要 `$mount` 过").toBeDefined();
+    expect(namespaceOf(remote, "permissionPresets")).toBeDefined();
+    expect(namespaceOf(remote, "settings"), "`settings` 这组也要 `$mount` 过").toBeDefined();
   });
 });

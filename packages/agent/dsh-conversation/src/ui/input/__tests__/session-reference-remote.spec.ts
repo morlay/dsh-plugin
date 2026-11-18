@@ -13,9 +13,11 @@ import {
   provideClientRemote,
   mockTransport,
   Remote,
+  RemoteDefault,
 } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { SessionReferenceRemoteBinding } from "../session-reference-remote.ts";
+import { namespaceOf } from "../../remote-namespace.ts";
 
 const opened: App[] = [];
 
@@ -23,16 +25,13 @@ afterEach(async () => {
   for (const app of opened.splice(0)) await app.dispose().catch(() => {});
 });
 
-/** `remote.<namespace>` 在契约上是动态面：按运行期形状取用。 */
-interface RemoteFace {
-  useTransport(transport: unknown): void;
-  sessionReferenceResolver?: {
-    candidates(
-      agent: string,
-      query: string,
-      signal?: AbortSignal,
-    ): Promise<{ ok: boolean; value?: readonly { sessionId?: string; mention?: string }[] }>;
-  };
+/** `remote.sessionReferenceResolver` 的调用面（namespace 在契约上是动态面：按运行期形状收窄一次）。 */
+interface SessionReferenceFace {
+  candidates(
+    agent: string,
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<{ ok: boolean; value?: readonly { sessionId?: string; mention?: string }[] }>;
 }
 
 describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () => {
@@ -50,10 +49,11 @@ describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () =>
       timeoutMs: 8_000,
     });
     opened.push(app);
-    const remote = app.get(Remote) as unknown as RemoteFace;
+    const remote = app.get(Remote);
     // `session-controller` 的那份 descriptor 由 `ClientRemoteModule` 自己挂；这里只替传输。
     const calls: { endpoint: string; args: unknown }[] = [];
-    remote.useTransport(
+    // `useTransport` 是 `RemoteDefault`（本装配的实现）的成员，契约不列它：按实现类收窄一次。
+    (remote as RemoteDefault).useTransport(
       mockTransport({
         "sessionReferenceResolver/candidates": (payload) => {
           calls.push({ endpoint: "sessionReferenceResolver/candidates", args: payload.args });
@@ -61,7 +61,9 @@ describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () =>
         },
       }),
     );
-    const face = remote.sessionReferenceResolver;
+    const face = namespaceOf(remote, "sessionReferenceResolver") as
+      | SessionReferenceFace
+      | undefined;
     expect(
       face,
       "descriptor 没挂上时这里就是 undefined（ui-reference 的 TypeError 来源）",

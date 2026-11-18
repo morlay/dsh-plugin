@@ -146,25 +146,27 @@ function permissionOf(
   return values?.permissions?.currentValue;
 }
 
-/** `binding().session.command` 的调用面（上游 chip 读的就是它）。 */
-interface ChipFace {
-  binding(id: string):
-    | {
-        session?: { command(line: string): Promise<{ ok: boolean; value?: { matched: boolean } }> };
-      }
-    | undefined;
-  refresh(): Promise<void>;
-}
+/** `binding().session.command` 的调用面（上游 chip 读的就是它；契约面把 `binding` 标成 `unknown`）。 */
+type ChipBinding =
+  | {
+      session?: {
+        command(line: string): Promise<{ ok: boolean; value?: { matched: boolean } }>;
+      };
+    }
+  | undefined;
 
 /**
- * 物化 scope：上游 `binding(id)` 只给已 `retain` 过的会话。
- * @param sessions - 会话服务。
+ * 物化 scope 并取那一行的 binding。
+ *
+ * 上游 `binding(id)` 只给已 `retain` 过的会话（`scopes.get(id)?.binding`），所以先 `retain` 一次——
+ * 契约面把 `binding` 的返回标成 `unknown`（本装配不承诺上游 `SessionBinding` 的完整面），这里收窄一次。
+ * @param sessions - 会话服务（契约面）。
  * @param id - 会话身份。
+ * @returns 那一行的 binding 读面。
  */
-function retain(sessions: ChipFace, id: string): void {
-  (sessions as unknown as { retain(t: never, o: unknown): void }).retain(id as never, {
-    source: "gateway",
-  });
+function bindingOf(sessions: SessionController, id: string): ChipBinding {
+  sessions.retain(SessionId(id), { source: "gateway" });
+  return sessions.binding(id) as ChipBinding;
 }
 
 // 已知阻塞（第一版不支持）：这条用例在**同一个 `bootstrapApplication`** 里同时装
@@ -178,14 +180,12 @@ describe.skip("权限 chip 从 ui 走到底", () => {
     { timeout: 30_000 },
     async () => {
       const { app, sessionId } = await boot();
-      const sessions = app.get(SessionController) as unknown as ChipFace;
-      // 先拉一次目录，`binding()` 才有行可查（装配期的 `onInit` 早于我们塞 rows）；
-      // 再 `retain` 一次物化 scope——上游 `binding()` 读的是已物化的 scope。
+      const sessions = app.get(SessionController);
+      // 先拉一次目录，`binding()` 才有行可查（装配期的 `onInit` 早于我们塞 rows）。
       await sessions.refresh();
-      retain(sessions, sessionId);
 
       expect(permissionOf(app, sessionId), "装配给的默认档位").toBe("workspace-write");
-      const binding = sessions.binding(sessionId);
+      const binding = bindingOf(sessions, sessionId);
       // 只判类型、不持有引用：`command` 是绑定在 session 上的方法，取出来单独断言会丢 `this`。
       expect(typeof binding?.session?.command, "chip 依赖的 `session.command` 必须是函数").toBe(
         "function",
@@ -206,10 +206,9 @@ describe.skip("权限 chip 从 ui 走到底", () => {
     { timeout: 30_000 },
     async () => {
       const { app, sessionId } = await boot();
-      const sessions = app.get(SessionController) as unknown as ChipFace;
+      const sessions = app.get(SessionController);
       await sessions.refresh();
-      retain(sessions, sessionId);
-      const result = await sessions.binding(sessionId)?.session?.command("/no-such-command arg");
+      const result = await bindingOf(sessions, sessionId)?.session?.command("/no-such-command arg");
       expect(result?.ok).toBe(false);
       expect(permissionOf(app, sessionId), "失败的调用不该改档位").toBe("workspace-write");
     },

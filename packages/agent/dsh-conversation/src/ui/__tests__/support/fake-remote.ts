@@ -118,3 +118,42 @@ export class FakeRemote extends Remote {
     return Object.assign(iterable, { dispose: async (): Promise<void> => {} });
   }
 }
+/**
+ * 最小替身：契约成员照实实现（没被用例覆盖的"明确失败"），namespace 面按构造参数挂。
+ *
+ * 给**不测 wire** 的装配型 spec 用——它们只需要 `$on` / `$mount` / `whenMounted` 这几条存在，
+ * 以及"会话组还没挂上"（`session: undefined`）这一路。namespace 在真实现里是运行期的动态属性
+ * （契约面不列），这里按名字挂同一份，读法与真实现一致（`remote.<namespace>`）。
+ */
+export class RemoteShell extends Remote {
+  /** 本仓的替身没有上游实例（真实现里它只给框架的转发用）。 */
+  readonly upstream: Record<string, unknown> = {};
+
+  /**
+   * @param namespaces - 要挂的 namespace 面；没挂的那一组读出来是 `undefined`。
+   */
+  constructor(namespaces: Record<string, unknown> = {}) {
+    super();
+    Object.assign(this, namespaces);
+  }
+
+  async $mount(): Promise<() => Promise<void>> {
+    return async () => {};
+  }
+
+  async invoke(): Promise<unknown> {
+    throw new Error("RemoteShell 没有实现 invoke：本 spec 不走 wire");
+  }
+
+  async whenMounted(): Promise<void> {}
+
+  async whenNamespace(_namespace: string): Promise<void> {}
+
+  $on(): () => void {
+    return () => {};
+  }
+
+  $stream(): AsyncIterable<unknown> & { dispose(): Promise<void> } {
+    throw new Error("RemoteShell 没有实现 $stream：本 spec 不走流");
+  }
+}
