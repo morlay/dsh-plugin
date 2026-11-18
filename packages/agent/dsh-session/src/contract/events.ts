@@ -1,7 +1,7 @@
 // 会话域的事件：名字 + 参数表 + 返回类型都收在类里，订阅/发布走 `EventEmitter`。
 //
-// 为什么要包一层：上游用 `ctx.emit("session/created", …)` / `ctx.on("session/event", …)` 这种字符串
-// 形式，拼错要到运行期才发现，payload 形状也没有一个 home。这里的类与上游 `SessionEventMap` **同名同形**，
+// 为什么要包一层：上游用字符串事件名派发与订阅（`session/created` / `session/event` …），拼错要到
+// 运行期才发现，payload 形状也没有一个 home。这里的类与上游 `SessionEventMap` **同名同形**，
 // 所以订阅我们的事件、与上游的派发是同一个 cordis 事件。
 //
 // 域内所有订阅会话事件的包都从这里取，不各自再定义一份——`session/flush` 的签名曾经在别的包里写成

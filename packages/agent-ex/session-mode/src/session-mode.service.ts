@@ -1,6 +1,6 @@
 // 会话模式的默认实现：模式清单（config 的纯数据 + `{dshHome}/modes/*.toml` 覆盖）、按会话的选择、
 // 把一份模式定义落到该会话上（persona + 收口 + 默认模型兜底）。
-import type { Agent } from "@morlay/dsh-agent/contract";
+import type { Agent, LlmCallConfig } from "@morlay/dsh-agent/contract";
 import { modelSelectionProjectionDefinition } from "@morlay/dsh-agent/contract";
 import { StorageDomain } from "@morlay/dsh-storage/contract";
 import type { Session } from "@morlay/dsh-session/contract";
@@ -486,7 +486,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
     const mode = this.effectiveOf(agent, modeId);
     const account = this.scope.account(agent);
     account.add(installPersona(agent, mode.persona));
-    account.add(this.installDefaultModel(agent, modeId));
+    // 默认模型兜底不在这里挂：它由 `ScopedAgentRequest` 这个 per-agent 行订阅在本 agent 的
+    // `agent/request` 上（模式在请求时现读，换模式不必重装监听）。
     this.scope.apply(agent, {
       name: mode.name,
       allowTools: mode.allowTools,
@@ -533,23 +534,26 @@ export class SessionModeDefault extends SessionMode implements OnInit {
     return parent === undefined ? undefined : this.modeOf(parent.session);
   }
 
-  // 默认模型兜底：只在会话尚无任何模型事实时接管这一请求的路由（配置事实，不写会话事件）。
-  private installDefaultModel(agent: Agent, modeId: string): () => void {
-    const agentCtx = agent.ctx as unknown as Context;
-    return agentCtx.on("agent/request", async (_payload: unknown, next: () => Promise<unknown>) => {
-      const resolved = (await next()) as Record<string, unknown>;
-      const model = this.definition(modeId).defaultModel;
-      if (model === undefined) return resolved;
-      const pending = this.pendingModel?.stateOf(agent.session).pending;
-      if (pending !== undefined && pending !== null) return resolved;
-      if (agent.session.requestHeader() !== undefined) return resolved;
-      return {
-        ...resolved,
-        provider: model.provider,
-        model: model.model,
-        ...(model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort }),
-      };
-    }) as unknown as () => void;
+  /**
+   * 默认模型兜底：只在会话尚无任何模型事实时接管这一请求的路由（配置事实，不写会话事件）。
+   *
+   * 挂点由 per-agent 那一行（`ScopedAgentRequest`）提供：订阅装在 agent 的 scope 上，这里只算结果。
+   * @param agent - 这是哪个 agent 的请求（模式按会话现读，换模式不需要重装监听）。
+   * @param resolved - 上游（其他监听者）给出的配置。
+   * @returns 最终配置。
+   */
+  applyDefaultModel(agent: Agent, resolved: LlmCallConfig): LlmCallConfig {
+    const model = this.effectiveOf(agent, this.resolveModeId(agent)).defaultModel;
+    if (model === undefined) return resolved;
+    const pending = this.pendingModel?.stateOf(agent.session).pending;
+    if (pending !== undefined && pending !== null) return resolved;
+    if (agent.session.requestHeader() !== undefined) return resolved;
+    return {
+      ...resolved,
+      provider: model.provider,
+      model: model.model,
+      ...(model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort }),
+    };
   }
 
   // 一条 policy 规则在**这次调用**里还生效吗（`true` = 交给上游）。认不出 agent 时一律按"没配"读。

@@ -6,4 +6,4 @@
 // - `AgentScopedRows`：装行能力的令牌（agent 创建处注入它，每个 agent 调一次）。
 //
 // 分类键是 symbol，且**不导出**。
-export { AgentScoped, AgentScopedRows } from "../agent-scope.ts";
+export { AgentScoped, AgentScopedRows, agentOfScope } from "../agent-scope.ts";

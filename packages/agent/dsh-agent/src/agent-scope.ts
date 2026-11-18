@@ -5,6 +5,9 @@
 //
 // scope 键**不导出**：它只是装配器内部的分类键，消费方不该碰——能碰就得有人记住"哪些 scope 存在"，
 // 那又成了第二个 home。对外只有 `@AgentScoped()`。
+import type { Context as CordisContext } from "@deepseek-ai/cordis";
+import type { Agent } from "@deepseek-ai/dsh-agent";
+import { scopeOf } from "@deepseek-ai/dsh-scope";
 import { inject, Injectable, ScopedRows, type Context } from "@morlay/zephyr";
 
 /**
@@ -22,6 +25,19 @@ const ScopeAgent = Symbol.for("morlay.dsh-agent.scope.agent");
  */
 export function AgentScoped(): ClassDecorator {
   return Injectable({ scope: ScopeAgent });
+}
+
+/**
+ * 这个 ctx 属于哪个 agent。
+ *
+ * agent 的 scope 键**就是 agent 本身**（上游 `createScope(loopCtx, agent)`），所以按 agent 装配的行
+ * 在自己的 `onInit(ctx)` 里就能拿到它——不需要框架把 agent 显式传进来，也不需要按名字读。
+ * @param ctx - 行 ctx（per-agent 行拿到的是这个 agent 的 scope 里的 ctx）。
+ * @returns agent，或 `undefined`（不在任何 agent 的 scope 里）。
+ */
+export function agentOfScope(ctx: Context): Agent | undefined {
+  // 向上收窄一次：`scopeOf` 的类型是 `object | undefined`，运行期就是那个 agent。
+  return scopeOf(ctx as CordisContext) as Agent | undefined;
 }
 
 /**

@@ -10,6 +10,7 @@ import { SessionScopeDefault } from "./session-scope.service.ts";
 import { SubagentGuidance } from "./subagent/subagent-guidance.service.ts";
 import { SessionModeEndpointDefault } from "./server/session-mode-endpoint.service.ts";
 import { ToolGuidance } from "./tool-guidance.service.ts";
+import { ScopedAgentRequest, ScopedToolGuidance } from "./per-agent-rows.ts";
 
 /**
  * **headless 面**：通道 → 收口 → 工具说明 → 模式本体。
@@ -26,6 +27,9 @@ export const provideSessionMode = provide([
   ToolGuidance,
   SubagentGuidance,
   SessionModeDefault,
+  // 按 agent 装配的两行（每个 agent 的 scope 各一份）：这个 agent 的工具投影与默认模型兜底。
+  ScopedToolGuidance,
+  ScopedAgentRequest,
 ]);
 
 /**

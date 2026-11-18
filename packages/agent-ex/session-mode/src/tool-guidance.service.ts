@@ -168,16 +168,12 @@ export class ToolGuidance implements OnInit {
     projectAll();
     this.changed$.on(() => projectAll());
 
-    // 每个会话：建好时改一遍，并跟这个会话自己的 `tools/change`。
+    // 每个会话建好时先改一遍。
     //
-    // 监听挂在 **`agent.ctx`** 上（随会话收回）：团队、schedule 这类行在建好会话**之后**才把工具注册进
-    // agent scope，全局那条 `tools/change` 看不到它们。`agent.ctx` 的类型面是 cordis 的 `Context`
-    // （缺 `on`），这里按我们的 `Context` 收口一次。
-    this.created$.on(({ agent }) => {
-      projectAll(agent);
-      const scoped = agent.ctx as unknown as Context;
-      scoped.effect(() => scoped.on("tools/change", () => projectAll(agent)));
-    });
+    // 跟这个会话自己的 `tools/change` 不在这里挂：团队、schedule 这类行在建好会话**之后**才把工具注册进
+    // agent scope，全局那条 `tools/change` 看不到它们——那条订阅归 `ScopedToolGuidance`（per-agent 行），
+    // 它的事件字段绑在这个 agent 的 scope 上。
+    this.created$.on(({ agent }) => projectAll(agent));
 
     // 装配时补一次（晚注册的工具）。改的是定义对象，所以对**下一次**请求生效。
     //
