@@ -11,8 +11,7 @@ import {
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
 import { WorkspaceController } from "./workspace-controller.contract.ts";
-import { LiveWorkspaceRemote } from "./remote-workspace.ts";
-import { WORKSPACE_GROUP } from "../endpoint/index.ts";
+import { WorkspaceEndpointClient } from "./workspace-endpoint-client.ts";
 
 /** 一条 follow 帧（上游 `WorkspaceFollowFrame` 的判别式联合）。 */
 type FollowFrame =
@@ -49,10 +48,21 @@ type FollowFrame =
 export class WorkspaceControllerDefault extends WorkspaceController implements OnInit, OnDispose {
   private readonly remote = inject(Remote);
 
-  private readonly model = new ClientWorkspaceModel(new LiveWorkspaceRemote(() => this.remote));
+  /** `workspace` 组的远端端点：模型的每个命令与那条 follow 流都走它。 */
+  private readonly endpoint = inject(WorkspaceEndpointClient);
+
+  /**
+   * 数据面：`ClientWorkspaceModel` 的 `remote` 参数要一个**真实例**。
+   *
+   * 不能在字段初始化时造：那一刻 `inject` 的字段还是占位符（`resolvePending` 之后才换成真身），
+   * 捕获进来就成了「每个命令都 `this.remote.create is not a function`」。所以推迟到 `onInit`。
+   */
+  private model: ClientWorkspaceModel | undefined;
 
   /** 工作区目录（`ui-workspace` 的 `useWorkspaces` 读它）：模型本身就是 `WorkspaceSource`。 */
-  readonly list: WorkspaceController["list"] = this.model;
+  get list(): WorkspaceController["list"] {
+    return this.modelOf();
+  }
 
   /** 这条行自己的取消信号（follow 流跟着它一起收尾）。 */
   private readonly lifetime = new AbortController();
@@ -63,7 +73,14 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
    * 宿主没挂 `workspace` 这一组时保持 `pending` 空态（不假装 ready）。
    */
   onInit(): void {
+    this.model = new ClientWorkspaceModel(this.endpoint);
     void this.consume();
+  }
+
+  /** 数据面；`onInit` 之前访问是装配错误，直接说清楚。 */
+  private modelOf(): ClientWorkspaceModel {
+    if (this.model === undefined) throw new Error("[workspaces] 行还没 onInit：装配顺序错了");
+    return this.model;
   }
 
   onDispose(): void {
@@ -72,13 +89,10 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
 
   private async consume(): Promise<void> {
     // 会话与工作区是两次独立的 `$mount`：必须按名字等，不能等「第一个 mount」。
-    await this.remote.whenNamespace("workspace");
-    const face = (this.remote as unknown as Record<string, unknown>)[WORKSPACE_GROUP] as {
-      follow(signal: AbortSignal): AsyncIterable<FollowFrame>;
-    } | null;
-    if (face === null || face === undefined) return;
+    // 名字从契约的客户端形态取（组名的 home 在 `@RemoteGroup`）。
+    await this.remote.whenNamespace(this.endpoint.name);
     try {
-      for await (const frame of face.follow(this.lifetime.signal)) this.accept(frame);
+      for await (const frame of this.endpoint.follow(this.lifetime.signal)) this.accept(frame);
     } catch (error) {
       if (this.lifetime.signal.aborted) return;
       // 事实型观测：哪条流、什么错误；不写「工作区加载失败」这种总结。
@@ -91,27 +105,27 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     switch (frame.type) {
       case "baseline":
       case "replace":
-        this.model.replaceBaseline(frame.value);
+        this.modelOf().replaceBaseline(frame.value);
         return;
       case "upsert":
-        this.model.upsertView(frame.workspace);
+        this.modelOf().upsertView(frame.workspace);
         return;
       case "remove":
-        this.model.removeView(frame.workspaceId);
+        this.modelOf().removeView(frame.workspaceId);
         return;
       case "order":
-        this.model.replaceOrder(frame.workspaceIds);
+        this.modelOf().replaceOrder(frame.workspaceIds);
         return;
       case "archived":
-        this.model.replaceArchived(frame.archivedSessionIds);
+        this.modelOf().replaceArchived(frame.archivedSessionIds);
         return;
       case "pinned":
-        this.model.replacePinned(frame.pinnedSessionIds);
+        this.modelOf().replacePinned(frame.pinnedSessionIds);
     }
   }
 
   async create(input: { path: string }): ReturnType<WorkspaceController["create"]> {
-    const result = await this.model.create(input);
+    const result = await this.modelOf().create(input);
     if (!result.ok) throw new WorkspaceCreateError(result.error);
     return result.value.workspace;
   }
@@ -119,7 +133,7 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
   async initializeDefault(
     signal?: AbortSignal,
   ): ReturnType<WorkspaceController["initializeDefault"]> {
-    const result = await this.model.initializeDefault(signal);
+    const result = await this.modelOf().initializeDefault(signal);
     if (!result.ok) throw new WorkspaceCreateError(result.error);
     return result.value?.workspace;
   }
@@ -128,7 +142,7 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     workspaceId: Parameters<WorkspaceController["rename"]>[0],
     title: Parameters<WorkspaceController["rename"]>[1],
   ): ReturnType<WorkspaceController["rename"]> {
-    const result = await this.model.rename(workspaceId, title);
+    const result = await this.modelOf().rename(workspaceId, title);
     if (!result.ok) throw commandError("rename", result.error);
     return result.value.workspace;
   }
@@ -136,7 +150,7 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
   async delete(
     workspaceId: Parameters<WorkspaceController["delete"]>[0],
   ): ReturnType<WorkspaceController["delete"]> {
-    const result = await this.model.delete(workspaceId);
+    const result = await this.modelOf().delete(workspaceId);
     if (!result.ok) throw commandError("delete", result.error);
   }
 
@@ -144,7 +158,7 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     workspaceId: Parameters<WorkspaceController["insertBefore"]>[0],
     beforeWorkspaceId?: Parameters<WorkspaceController["insertBefore"]>[1],
   ): ReturnType<WorkspaceController["insertBefore"]> {
-    const result = await this.model.insertBefore(workspaceId, beforeWorkspaceId);
+    const result = await this.modelOf().insertBefore(workspaceId, beforeWorkspaceId);
     if (!result.ok) throw commandError("reorder", result.error);
   }
 
@@ -152,28 +166,28 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     sessionId: Parameters<WorkspaceController["archiveSession"]>[0],
     options?: Parameters<WorkspaceController["archiveSession"]>[1],
   ): ReturnType<WorkspaceController["archiveSession"]> {
-    const result = await this.model.archiveSession(sessionId, options);
+    const result = await this.modelOf().archiveSession(sessionId, options);
     if (!result.ok) throw new WorkspaceArchiveError(result.error);
   }
 
   async unarchiveSession(
     sessionId: Parameters<WorkspaceController["unarchiveSession"]>[0],
   ): ReturnType<WorkspaceController["unarchiveSession"]> {
-    const result = await this.model.unarchiveSession(sessionId);
+    const result = await this.modelOf().unarchiveSession(sessionId);
     if (!result.ok) throw commandError("session unarchive", result.error);
   }
 
   async pinSession(
     sessionId: Parameters<WorkspaceController["pinSession"]>[0],
   ): ReturnType<WorkspaceController["pinSession"]> {
-    const result = await this.model.pinSession(sessionId);
+    const result = await this.modelOf().pinSession(sessionId);
     if (!result.ok) throw commandError("session pin", result.error);
   }
 
   async unpinSession(
     sessionId: Parameters<WorkspaceController["unpinSession"]>[0],
   ): ReturnType<WorkspaceController["unpinSession"]> {
-    const result = await this.model.unpinSession(sessionId);
+    const result = await this.modelOf().unpinSession(sessionId);
     if (!result.ok) throw commandError("session unpin", result.error);
   }
 
@@ -182,7 +196,11 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     sessionId: Parameters<WorkspaceController["insertSessionBefore"]>[1],
     beforeSessionId?: Parameters<WorkspaceController["insertSessionBefore"]>[2],
   ): ReturnType<WorkspaceController["insertSessionBefore"]> {
-    const result = await this.model.insertSessionBefore(workspaceId, sessionId, beforeSessionId);
+    const result = await this.modelOf().insertSessionBefore(
+      workspaceId,
+      sessionId,
+      beforeSessionId,
+    );
     if (!result.ok) throw commandError("move", result.error);
     return result.value.workspace;
   }

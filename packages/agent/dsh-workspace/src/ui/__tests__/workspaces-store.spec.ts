@@ -11,6 +11,7 @@ import { mockTransport } from "@morlay/zephyr-app/client";
 import { describe, expect, it } from "vitest";
 import { WorkspaceController } from "../workspace-controller.contract.ts";
 import { WorkspaceControllerDefault } from "../workspace-controller.service.ts";
+import { WorkspaceEndpointClient } from "../workspace-endpoint-client.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
 
 type MockHandlers = Parameters<typeof mockTransport>[0];
@@ -31,7 +32,9 @@ async function boot(
 }> {
   FakeRemote.next = { handlers, streams };
   const app = await bootstrapApplication({
-    providers: [FakeRemote, WorkspaceControllerDefault],
+    // 顺序即依赖：`WorkspaceControllerDefault` 注入契约的客户端形态（少了那一行装配期就报
+    // 「没有提供者：workspace-endpoint」）。
+    providers: [FakeRemote, WorkspaceEndpointClient, WorkspaceControllerDefault],
     timeoutMs: 15_000,
   });
   return { app, workspaces: app.get(WorkspaceController) };
