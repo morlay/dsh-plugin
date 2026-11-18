@@ -49,6 +49,17 @@ export interface Context extends CordisContext {
   /** 反射层：`ctx.get` / `ctx.provide` 的底座（cordis 里是模块增强挂的）。 */
   readonly reflect: ReflectService;
   /**
+   * 按名字读服务（cordis 用 `mixin` 挂上来的，见 `vendor/…/cordis/src/reflect.ts`）。
+   *
+   * 这里显式声明一次：不声明的话每次读按名字的服务都得 `(ctx as unknown as { get(...) }).get(...)`
+   * ——那两个包里这类断言有十几处。返回 `unknown` 而不是上游的 `any`：调用方本来就该自己收窄，
+   * 别让 `any` 顺着断言传下去。
+   * @param name - 服务名。
+   * @param strict - 缺省 `true`（读不到就抛）；`false` 读不到给 `undefined`。
+   * @returns 该服务的实例（未收窄）。
+   */
+  get(name: string, strict?: boolean): unknown;
+  /**
    * 事件面：cordis 的 `emit` / `on` / `waterfall` 等**不在 `context.ts` 的类里**，而在
    * `events.ts` / `fiber.ts` 的 `declare module './context.ts'` 增强里；`vendor` 不进 program 时
    * 那些增强不生效，运行期却确实有这些方法。这里按 cordis 的实际形状补上（业务代码不直接用它们，

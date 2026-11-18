@@ -19,7 +19,7 @@ export class WebTerminalsDefault implements OnInit {
     // 「终端组」 要取**真服务**：`inject(Remote)` 给的是适配行实例，而它只绑契约上声明的成员
     // （`Remote` 契约不列 namespace）——从它读 `terminal` 是 `undefined`，终端的第一次
     // `remote.environment(...)` 就会炸成 `Cannot read properties of undefined (reading 'environment')`。
-    const remote = (ctx as unknown as { get(name: string): unknown }).get("remote") as {
+    const remote = ctx.get("remote") as {
       readonly terminal: TerminalRemote;
       $mount(contribution: unknown): Promise<() => Promise<void>>;
     };
@@ -28,7 +28,7 @@ export class WebTerminalsDefault implements OnInit {
     await remote.$mount(TERMINAL_REMOTE);
     // `ClientTerminals` 是 cordis `Service` 子类：构造里 `super(ctx, 'webTerminals')` 把自己注册进 store。
     // 用**根 ctx** 建，兄弟行（`ui-sidebar-terminal`）按名字才读得到。
-    const root = (ctx as unknown as { root: Context }).root;
+    const root = ctx.root;
     const terminals = new ClientTerminals(
       root as never,
       (remote as unknown as Record<string, unknown>)[TERMINAL_GROUP] as never,
@@ -53,7 +53,7 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
     // 同 `SidebarFilesSlots`：上游要的 `sidebarRight.commandTarget` / `sidebarRightTabs` 不在我们的
     // 契约里，从真 cordis 服务取（`get(name)` 不传 strict 就是非严格读）。
     const read = (name: string): unknown =>
-      (ctx as unknown as { get(n: string): unknown }).get(name);
+      ctx.get(name);
     await this.mount(ctx, undefined, {
       slots: this.slots,
       locale: this.locale,
