@@ -58,12 +58,16 @@ export { ConfigFormsInMemory } from "./settings/config-forms.fake.ts";
 export * from "./layout/layout.contract.ts";
 export {
   InputTriggers,
+  type InputTriggersFace,
   Sessions,
+  type SessionsFace,
   SidebarRight,
   type SidebarRightFace,
   SidebarRightTabs,
   UiConversation,
+  type UiConversationFace,
   UiSession,
+  type UiSessionFace,
 } from "./cross-row.tokens.ts";
 export { SettingsSchema } from "./settings-schema.ts";
 // `localStorage` / `sessionStorage` 的代理（同步内存真源 + IndexedDB 异步落盘）。

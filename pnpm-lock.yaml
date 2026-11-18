@@ -1674,6 +1674,15 @@ importers:
         specifier: 18.x
         version: 18.3.1
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-conversation
+      '@deepseek-ai/dsh-client-ui-input-trigger':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-input-trigger
+      '@deepseek-ai/dsh-client-ui-session':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-session
       '@deepseek-ai/dsh-client-ui-sidebar-right':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-right
