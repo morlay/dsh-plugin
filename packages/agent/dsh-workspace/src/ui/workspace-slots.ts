@@ -43,8 +43,7 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
   /** 行内右键菜单：上游在它自己的行 ctx 上发布，装配期由 `adoptNamedServices` 映射成同名令牌。 */
   private readonly contextMenus = inject(ContextMenus);
 
-  /** 这一行自己发布过没有（发布侧幂等守卫；行重挂时新实例会按新的 `kFace` 重新发布）。 */
-  private publishedUiWorkspace = false;
+
 
   /** 会话目录读面（`sessions`）：合同在会话域的端点面，UI 只要读它。 */
   private readonly sessions = inject(SessionController);
@@ -72,9 +71,14 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
     // 读（`ctx.uiWorkspace`）时看不到，所以要把它显式发布到根 ctx。`kFace` 就是那份上游实例。
     const uiWorkspace = this[kFace];
     // 发布按上游协议名走 `reflect.provide`：上游插件按 `ctx.uiWorkspace` 读，而它们的行看不到这一行的
-    // fiber。幂等按**这一行自己**判（`onInit` 只跑一次；重挂时新实例重新发布，同名服务由 cordis 覆盖）。
-    if (uiWorkspace !== undefined && !this.publishedUiWorkspace) {
-      this.publishedUiWorkspace = true;
+    // fiber。
+    //
+    // 幂等**必须查根上有没有这个服务**，不能用本行实例字段：`cordis` 的 `reflect.provide` 对同名服务
+    // 直接抛 `service "uiWorkspace" has been registered at <fiber>`，而这一行重挂（或上游自己也发过）
+    // 时那个名字已经在根上——用实例字段就会在第二次发布时撞。
+    // 这一次按名字读是**查重**（与 `adoptNamedServices` 同性质），见 `how-to-write.md`「禁止按名字读服务」的例外清单。
+    const published = ctx.root.reflect.get("uiWorkspace", false);
+    if (uiWorkspace !== undefined && published === undefined) {
       ctx.root.reflect.provide("uiWorkspace", uiWorkspace);
     }
   }
