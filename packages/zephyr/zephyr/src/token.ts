@@ -111,7 +111,13 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
       ...(alias === undefined ? {} : { alias }),
     };
     registered.set(target, meta);
-    if (!meta.multi) byName.set(meta.name, meta.token);
+    if (!meta.multi) {
+      byName.set(meta.name, meta.token);
+      // **别名也要进 `byName`**：`@Injectable({ name })` 声明的「上游服务名」靠 `tokenNamed(名字)` 被
+      // `adoptNamedServices` 采纳（上游按名字发布的服务要在装配期映射成令牌）。只存 `meta.alias` 的话，
+      // 那条映射永远查不到——于是消费方只能退回按名字读，或者造一个 `InjectionToken(name)` 当名字载体。
+      if (meta.alias !== undefined) byName.set(meta.alias, meta.token);
+    }
   };
 }
 
