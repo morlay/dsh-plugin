@@ -350,10 +350,22 @@ if (group === "agent-ex") {
 // 5) 子入口面（`src/<面>/**` 五个面）：禁**跨面**的相对导入——这些面是包的子出口，兄弟面的契约与令牌
 //    必须走包出口（`@morlay/<包>/contract`）；用 `../contract/` 够过去，同包的不同出口产物里就会各内联
 //    一份契约类/令牌（多份实例，令牌身份对不上）。面内的 `../` 合法；`__tests__` 豁免。基线见 `./rules.ts`。
+// **出口文件本身豁免**：`src/<面>/index.ts` 如果被 `package.json` 的 `exports` 声明为这个包的出口，
+// 它引面外的契约是**它的职责**（把散落在各面的共享契约收拢成一个出口，正是为了不让子入口面去够兄弟目录）。
+// 不豁免的话「开一个 `./contract` 出口」这个正确做法会被判成违规。
+const exportEntryFiles = new Set(
+  Object.values(
+    (manifest.exports ?? {}) as Record<string, string | { readonly default?: string }>,
+  )
+    .map((v) => (typeof v === "string" ? v : v.default))
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => resolve(cwd, v)),
+);
 const subentryParentImports: string[] = [];
 for (const entry of imports) {
   const face = subentryFaceOf(entry.file);
   if (face === undefined || isTestPath(entry.file)) continue;
+  if (exportEntryFiles.has(entry.file)) continue;
   const faceRoot = join(cwd, "src", face);
   for (const spec of entry.parentSpecs) {
     const target = resolve(dirname(entry.file), spec);

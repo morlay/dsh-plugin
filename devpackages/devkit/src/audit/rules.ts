@@ -332,5 +332,5 @@ export function isParentSpecifier(specifier: string): boolean {
  */
 export const SUBENTRY_BASELINE = {
   /** 子入口面里**跨出面**的相对导入（`__tests__` 豁免；面内 `../` 不算）。 */
-  "parent-import": 150,
+  "parent-import": 127,
 } as const;
