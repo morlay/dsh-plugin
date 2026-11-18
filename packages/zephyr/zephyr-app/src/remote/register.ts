@@ -3,7 +3,12 @@
 // 声明在类上（组名 + 方法名），注册在这里（一次调用），所以服务端不必手写
 // `handlers.register("commands/list", …)` 这种字符串——名字只有一个 home：契约。
 import type { RemoteHandlers } from "../api-gateway/remote-handlers.contract.ts";
-import { remoteGroupNameOf, remoteMethodsOf, remoteStreamMethodsOf } from "./decorators.ts";
+import {
+  remoteGroupNameOf,
+  remoteMethodParametersOf,
+  remoteMethodsOf,
+  remoteStreamMethodsOf,
+} from "./decorators.ts";
 
 /** wire 的命名参数 → 方法实参：有 `request` 那一层就剥掉，否则整个 args 就是请求。 */
 function requestOf(args: Readonly<Record<string, unknown>>): unknown {
@@ -24,12 +29,19 @@ export function registerRemoteGroup(handlers: RemoteHandlers, instance: object):
     );
   }
   const streamMethods = new Set(remoteStreamMethodsOf(instance.constructor));
+  const declaredParameters = remoteMethodParametersOf(instance.constructor);
   const disposers = remoteMethodsOf(instance.constructor).map((method) => {
     // 动态成员读：方法名来自运行期元数据，`Reflect.get` 是它的正常入口（不经过类型断言）。
     const handler: unknown = Reflect.get(instance, method);
     if (typeof handler !== "function") {
       throw new Error(`${instance.constructor.name}.${method} 标了 @Remote 但没有实现`);
     }
+    // 方法实参：契约上按 `parameters` 声明了**多个**命名参数的方法（`upload(agent, request)`）按声明顺序
+    // 逐个取——descriptor 的位置语义，只有这样它才拿得到整份 args 里的每一项；单参数 / 未声明的走
+    // `requestOf`（`{ request }` 剥一层，没有那一层就整个 args 当请求）。
+    const names = declaredParameters[method];
+    const argsOf = (args: Readonly<Record<string, unknown>>): readonly unknown[] =>
+      names !== undefined && names.length > 1 ? names.map((name) => args[name]) : [requestOf(args)];
     const endpoint = `${group}/${method}`;
     if (streamMethods.has(method)) {
       // 流式方法的签名有两种（与上游一致）：`follow(request, signal)` 与 `control(signal)`。
@@ -44,10 +56,10 @@ export function registerRemoteGroup(handlers: RemoteHandlers, instance: object):
       );
     }
     return handlers.register(endpoint, async (args) => {
-      // unary：wire 的调用形状是 `{ request }`；没有这一层时把整个 args 当请求，返回值原样透传。
-      return await (handler as (request: unknown) => Promise<unknown>).call(
+      // unary：实参按 `argsOf` 展开（见上），返回值原样透传（裸值协议）。
+      return await (handler as (...params: unknown[]) => Promise<unknown>).call(
         instance,
-        requestOf(args),
+        ...argsOf(args),
       );
     });
   });

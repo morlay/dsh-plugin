@@ -41,6 +41,10 @@ export interface RemoteMethodOptions {
    * 省略时统一叫 `request`——那是宿主侧 `registerRemoteGroup` 的 `requestOf(args)` 读的键。
    * 只有「上游按位置传一个标量」的方法才需要另写（`commands/list` 上游是
    * `remote.commands.list(sessionId)`，wire 上就该是 `{ sessionId }` 而不是 `{ request: sessionId }`）。
+   *
+   * **多个名字**（`fileUploads/upload` 是 `(agent, request)`）在宿主侧也是按位置传参：
+   * `registerRemoteGroup` 逐个取 `args[名字]` 当实参。单参数不用它——那种方法拿到的是整个 args
+   * （或剥掉 `request` 那一层之后的对象），见 `register.ts` 的 `requestOf`。
    */
   readonly parameters?: readonly string[];
 }
