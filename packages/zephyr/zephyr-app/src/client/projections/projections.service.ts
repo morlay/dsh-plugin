@@ -9,6 +9,7 @@
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Remote } from "../../remote/remote.contract.ts";
 import { Connection } from "../../connection/contract.ts";
+import { remoteNamespaceOf } from "../remote/dynamic-face.ts";
 import { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";
 
 /** 一帧控制流（`session/control` 的 `SessionControlFrame`）。 */
@@ -145,8 +146,8 @@ export class ProjectionsDefault extends Projections implements OnInit, OnDispose
   /** 开一条 `session/control` 流（幂等：先停旧的）。 */
   private open(): void {
     this.stopStream?.();
-    const namespace = (this.remote as unknown as Record<string, unknown>)["session"];
-    const control = (namespace as { control?: unknown } | undefined)?.control;
+    const namespace = remoteNamespaceOf(this.remote, "session");
+    const control = namespace?.control;
     if (typeof control !== "function") {
       // 不静默：没有这条流，界面上所有"宿主算出来的值"都不会更新。
       console.warn(

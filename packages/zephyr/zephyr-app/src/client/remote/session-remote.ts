@@ -4,6 +4,7 @@
 import { inject } from "@morlay/zephyr";
 import { Remote as RemoteContract } from "../../remote/remote.contract.ts";
 import { Remote, RemoteGroup } from "../../remote/decorators.ts";
+import { remoteMethodOf } from "./dynamic-face.ts";
 
 /** 契约：`remote.session` 这一组。 */
 @RemoteGroup({ name: "session" })
@@ -18,7 +19,10 @@ export abstract class SessionRemote {
   abstract readPage(request: unknown, throughSeq: number, signal: AbortSignal): Promise<unknown>;
 }
 
-/** 实现：只声明依赖，方法体为空（转发由 `@Remote()` 生成）。 */
+/**
+ * 实现：转发生成不出来时自己写——`@RemoteGroup` 只给**没实现**的方法补转发，而这三个方法要
+ * 在读不到上游 namespace 时明确抛错（静默 `undefined` 会让「谁都没请求过」这种事实消失）。
+ */
 @RemoteGroup()
 export class SessionRemoteDefault extends SessionRemote {
   /** 依赖在**属性**上 inject：进 `dependencies`，拓扑排序才保证 `Remote` 先就位。 */
@@ -26,37 +30,18 @@ export class SessionRemoteDefault extends SessionRemote {
 
   @Remote()
   async create(request: unknown): Promise<unknown> {
-    const face = (
-      this.remote as unknown as { session?: { create?: (r: unknown) => Promise<unknown> } }
-    ).session;
-    if (face?.create === undefined) {
-      throw new Error("SessionRemoteDefault.create：remote.session 还没有登记（$mount 没跑？）");
-    }
-    return face.create(request);
+    return await remoteMethodOf(this.remote, "session", "create")(request);
   }
 
   @Remote()
   async readPage(request: unknown, throughSeq: number, signal: AbortSignal): Promise<unknown> {
-    const face = (
-      this.remote as unknown as {
-        session?: { readPage?: (r: unknown, seq: number, s: AbortSignal) => Promise<unknown> };
-      }
-    ).session;
-    if (face?.readPage === undefined) {
-      throw new Error("SessionRemoteDefault.readPage：remote.session 还没有登记（$mount 没跑？）");
-    }
-    return face.readPage(request, throughSeq, signal);
+    return await remoteMethodOf(this.remote, "session", "readPage")(request, throughSeq, signal);
   }
 
   @Remote()
   async list(): Promise<unknown> {
     // 走 `remote.session.list`（descriptor 登记后由 Proxy 提供的调用面）——
     // 这里**不能**是 `return undefined` 的桩：那会让「谁都没请求过 list」这种事实彻底静默。
-    const face = (this.remote as unknown as { session?: { list?: () => Promise<unknown> } })
-      .session;
-    if (face?.list === undefined) {
-      throw new Error("SessionRemoteDefault.list：remote.session 还没有登记（$mount 没跑？）");
-    }
-    return face.list();
+    return await remoteMethodOf(this.remote, "session", "list")();
   }
 }
