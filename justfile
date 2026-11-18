@@ -55,18 +55,32 @@ lint:
 #
 # 结构性判据（面边界 / 唯一化 / 声明未用 / 扩展边界 / 类型纪律）：有违规退出 1。
 audit *args:
-    pnpm -r --filter './packages/*/*' exec node "{{ justfile_directory() }}/devpackages/audit/src/package-audit.ts" | pnpm exec dsh-audit-report {{args}}
-
-# 发布一律走 CI（见 `AGENTS.md` 红线：严禁本地 publish）。这一条只把红线说出来。
-publish:
-    @echo "发布走 CI：本地不发布（AGENTS.md 红线）" && exit 1
+    pnpm exec devkit audit {{args}}
 
 # 各包构建（tsdown）：发布前的产物由它生成（`just lint` / `just test` 不依赖它）。
 build *args:
-    pnpm -r --filter './packages/*/*' run build {{ args }}
+    pnpm exec devkit build {{ args }}
 
+# 全仓声明树：生成并落位到各包的 dist（构建与类型图生成共用一份）。
+dts:
+    pnpm exec node devpackages/dts-prepare/src/cli.ts
+
+# 发布（GitHub Packages）：CI 专用，本地直接跑退 1（见 AGENTS.md 的两条通道）。
+publish *args:
+    @if [ -z "${GITHUB_ACTIONS:-}" ]; then echo "发布走 CI：本地不发布（见 AGENTS.md）" >&2; exit 1; fi
+    pnpm exec node devpackages/devkit/src/release/publish.ts --registry https://npm.pkg.github.com/ {{args}}
+
+# 发布（npmjs）：本地手动，唯一入口。
+publish-npm *args:
+    pnpm exec node devpackages/devkit/src/release/publish.ts --registry https://registry.npmjs.org/ {{args}}
+
+# 只 bump 发布集合（zephyr 家族同版）；private 包不动。
 version *args:
-    pnpm -r --filter './packages/*/*' version {{ args }}
+    @for dir in packages/*/*; do \
+      if [ -f "$dir/package.json" ] && ! node -e "process.exit(require('./$dir/package.json').private === true ? 0 : 1)"; then \
+        (cd "$dir" && pnpm version {{args}} --no-git-tag-version); \
+      fi; \
+    done
 
 test *args:
     pnpm exec vitest run {{ args }}
