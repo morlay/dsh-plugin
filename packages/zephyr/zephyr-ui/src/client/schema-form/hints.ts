@@ -90,6 +90,7 @@ export abstract class SchemaFormHints implements SchemaFormHintsFace {
 // 时 `bootstrapApplication` 的类型参数直接报 `__missingProviders`，运行期也拒绝装配。
 // 判据见 `__tests__/hints-injection.spec.ts`。
 export function schemaFormHintsOf(ctx: Context): SchemaFormHints | undefined {
+  // 按名字读（例外见 `.agents/standards/how-to-write.md`「禁止按名字读服务」第 6 条：运行期自注册服务的探测）。
   const found = ctx.root.reflect.get(SERVICE_NAME, false);
   return typeof found === "object" && found !== null ? (found as SchemaFormHints) : undefined;
 }

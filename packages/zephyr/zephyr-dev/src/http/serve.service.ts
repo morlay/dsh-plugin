@@ -43,6 +43,7 @@ export class ServeDefault extends WebServe implements OnInit {
    * @param ctx - 本行上下文。
    */
   onInit(ctx: Context): void {
+    // 按名字读（例外见 `.agents/standards/how-to-write.md`「禁止按名字读服务」第 5 条：晚绑定 + host 侧才有的成员）。
     const host = ctx.get("connection", false) as
       | { authorizeIndex?(req: IncomingMessage, res: ServerResponse, secure?: boolean): boolean }
       | undefined;

@@ -117,8 +117,31 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
 它们是 cordis 的老写法——名字是字符串、没有类型、拼错要到运行期才发现，而且读回来只能是 `any`/`unknown`，
 调用方只能 `as unknown as` 收窄。
 
-**唯一允许的位置**：框架层实现内部（`zephyr/src/bootstrap.ts` 的 `adoptNamedServices`、`zephyr/src/compat/from-cordis.ts`
-的适配桥）——那里做的就是「名字 → 令牌」的采纳，是这条规则的反面。
+**唯一允许的位置**（清单是**封闭**的：新增一处要先按下面的「判据」判一遍，判成「改不动」才写进来）：
+
+1. `zephyr/src/bootstrap.ts` 的 `adoptNamedServices` —— 「名字 → 令牌」的采纳本身，就是这条规则的反面。
+2. `zephyr/src/compat/from-cordis.ts` 的适配桥 —— deps 的读面替换与上游 `provide` 的记录。
+3. `zephyr/src/bootstrap.ts` 的 `mountRow` —— **单行装配**（per-agent / 工具侧现装一行）没有令牌表：
+   依赖是从**装它的那个 ctx** 上按 provider 元数据里的名字读的（`ctx.get(meta.name, false)`）。
+   读得到根上发布的服务，也读得到这个 agent 自己那层——这正是「scope 上按调用方读」那件事，
+   而单行装配没有清单可以让它 `inject`。判成正当：名字来自 `tokenMetaOf(provider).name`（同一个 home），
+   不是手写字符串。
+4. `zephyr-app/src/connection/connection.service.ts`（`ctx.get("connection", false)` 与
+   `ctx.inject(["connection"], (scoped) => scoped.get("connection", false))`）—— **晚绑定 + 要上游实例本身**：
+   上游是函数插件（`apply` 里 `new HostConnectionService(...)` 再 `ctx.provide`），发布的时刻在
+   `mount` 返回之后（实测立刻读是 `undefined`），而 `inject` 的填充期**早于**它；并且这里要的是那个
+   **上游实例**（给它的 `generation` 装兜底 observable、拿它的共享 fetch 分派器），不是我们的契约面——
+   `inject.optional(Connection)` 两件都做不到（拿到的是契约代理，且那时还没有）。
+5. `zephyr-dev/src/http/serve.service.ts`（`ctx.get("connection", false)`）—— 同上（晚绑定），
+   而且读的是 **host 侧才有的** `authorizeIndex`（页面响应的准入），它不在「浏览器侧连接面」契约里。
+6. `zephyr-ui/src/client/schema-form/hints.ts` / `index.ts`（`ctx.root.reflect.get(SERVICE_NAME, false)`）
+   —— **运行期自注册服务的探测**：本包是内联库、不是装配行，提示面由它在 `apply` 里 `reflect.provide`
+   出来，装配清单里没有以它为令牌的条目；两次读的用途是「另一份副本装过没有」的**存在性探测**，
+   `inject` 的「填充期必须有提供者」这条语义在这里不成立。判据见 `hints-injection.spec.ts`。
+
+其中两族有测试守着：`hints-injection.spec.ts`（含「`inject` 在这里不成立」的判据）、
+`api-gateway.spec.ts`（`connection` 晚绑定那条链的装配）。`serve.service.ts` 的准入那一段**没有**
+用例——它只有一个调用点，改它时要自己验（浏览器 cookie 没下发时 `/api/remote.mux` 的 upgrade 会被 401）。
 
 ### 该用什么
 
@@ -136,7 +159,9 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
 grep -rn '\.get("[a-zA-Z]\|reflect\.get(' packages --include='*.ts' --include='*.tsx' | grep -v __tests__ | grep -v 'zephyr/zephyr/src/\(bootstrap\|compat\)'
 ```
 
-**期望输出为空**（框架层那两个文件例外）。
+**期望只剩上面例外清单里的那几处**（当前 5 处：`connection.service.ts` ×2、`serve.service.ts` ×1、
+`schema-form/hints.ts` ×1、`schema-form/index.ts` ×1；`bootstrap.ts` / `compat/` 已被 grep 排除）。
+新出现的行一律按「改不动的才进清单」判，别直接加进来。
 
 
 ### `reflect.provide` 的例外（只有一种）

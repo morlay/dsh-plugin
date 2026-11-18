@@ -43,6 +43,7 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
     await this.mount(ctx, undefined, { credentials: this.credentials });
     // 上游是函数插件（`apply` 里 `new HostConnectionService` 再 `ctx.provide`）：没有 `providerInstance`，
     // 行内发布的 `connection` 就是那个服务实例——`ctx.get` 是拿它的唯一入口（cordis store 是唯一注册表）。
+    // 按名字读（例外见 `.agents/standards/how-to-write.md`「禁止按名字读服务」第 4 条：晚绑定 + 要上游实例本身）。
     const instance = ctx.get("connection", false);
     observeRpc(instance, this.logger);
     // 上游 `ClientRemoteService.$host` 无条件读 `connection.generation.getSnapshot()`：
