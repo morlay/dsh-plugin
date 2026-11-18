@@ -85,4 +85,11 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
   `MISSING_EXPORT`（`node:*` 具名导出在替身里不存在），修法在上层换说明符或改值转出——本包不加分面去绕。
 - **不引入全局共享状态**：运行上下文只由配置构造（`AppEnv` 这类值在装配入口显式给）；不在模块作用域存可变单例、不读进程级环境变量做隐式配置。
 - **声明式边界**：业务包只写 `@Injectable()` + 字段注入 + `provide([...])` + `fromCordis`；命令式读取（`ctx.get` / 手工 `provide` / `ctx.inject`）只允许出现在框架与聚合层的适配代码里。
+- **`reflect.provide(name, value)` 在装配期是一等形态——但只在装配期**：`bootstrapApplication` 会在每一行
+  `onInit` 之后（`src/bootstrap.ts` 的 `adoptNamedServices`）与全部装配完之后各扫一次 cordis store，把
+  `name → 令牌` 对上补进令牌表，所以「装配期按名字发布」的实例，`inject(Token)` 一样拿得到（上游在自己 `apply`
+  里按名字发布的服务就靠这两次扫描接上）。**缺口只在「晚于装配期」**：两次扫描之后才 `provide` 的名字不会被
+  采纳，那时的 `inject(Token)` 拿不到——要晚发布，就得给它一个令牌/DSL 形态，而不是靠名字。
+  两种正当用法（都出现过，别再各判一遍）：**上游发 → 我们采纳**（适配行、`sidebarRightTabs` 这类无行的能力）；
+  **我们发 → 上游按名字读**（`storage.backend.rdb` 这类上游协议 key，名字由上游的拼法函数给出，没有令牌可选）。
 - **装配错在启动前暴露**：令牌没有提供者时，装配阶段就失败并报出「谁需要谁」；编译期 `ProvidersCoverage` 再挡一次。
