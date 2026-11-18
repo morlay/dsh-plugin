@@ -22,10 +22,7 @@ export function publishingTo(contract: object, name: string): new () => OnInit {
     private readonly value = inject(contract as never);
 
     onInit(ctx: Context): void {
-      (ctx as unknown as { root: { provide(key: string, impl: unknown): void } }).root.provide(
-        name,
-        this.value,
-      );
+      ctx.root.provide(name, this.value);
     }
   }
   return ServiceNamePublisher;

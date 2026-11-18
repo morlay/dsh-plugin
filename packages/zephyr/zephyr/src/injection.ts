@@ -60,6 +60,29 @@ export interface Context extends CordisContext {
    */
   get(name: string, strict?: boolean): unknown;
   /**
+   * 发布一个服务名（cordis 的 store 是唯一注册表，是 `get` 的写面对）。
+   *
+   * 与 `get` 同一个理由：这份增强是否在 program 里取决于编译了哪些文件——不在这里声明一次，
+   * 按名字发布服务的每处都要 `(ctx as unknown as { provide(...) })`。
+   * @param name - 服务名（可以带点，如 `remote.session`）。
+   * @param value - 服务实例。
+   * @returns 撤销发布的函数。
+   */
+  provide(name: string, value?: unknown): () => void;
+  /**
+   * 等一组服务就绪再跑回调（cordis 的 `ctx.inject`，与上面的增强同一来源）。
+   *
+   * 已经存在的服务立即回调，稍后出现的等到出现——两种时机都由 cordis 的 fiber 保证。
+   * `deps` 的类型放宽到「名字数组或名字 → config 的表」：两者都是 cordis 的 `Inject` 形状。
+   * @param deps - 依赖的服务名。
+   * @param callback - 就绪后的回调（收到挂上这些依赖的子 ctx）；返回值是撤销函数。
+   * @returns fiber（可 await）。
+   */
+  inject(
+    deps: readonly string[] | Readonly<Record<string, unknown>>,
+    callback: (scoped: Context) => (() => void) | void,
+  ): Fiber & PromiseLike<Fiber>;
+  /**
    * 事件面：cordis 的 `emit` / `on` / `waterfall` 等**不在 `context.ts` 的类里**，而在
    * `events.ts` / `fiber.ts` 的 `declare module './context.ts'` 增强里；`vendor` 不进 program 时
    * 那些增强不生效，运行期却确实有这些方法。这里按 cordis 的实际形状补上（业务代码不直接用它们，

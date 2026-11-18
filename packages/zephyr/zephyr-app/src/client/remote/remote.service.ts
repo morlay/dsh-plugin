@@ -71,13 +71,12 @@ export class RemoteDefault extends Remote {
    * 注册到**根**：读它们的那些行在别的分支上，沿 fiber 链只能看到 root。
    */
   onInit(ctx: Context): void {
-    const root = (ctx as unknown as { root: { provide(name: string, value: unknown): void } }).root;
-    this.rootCtx = root;
+    this.rootCtx = ctx.root;
     this.publishNamespace("session");
   }
 
   /** 根 ctx（`onInit` 时记下；`$mount` 之后要往它上面发布嵌套名）。 */
-  private rootCtx: { provide(name: string, value: unknown): void } | undefined;
+  private rootCtx: Context | undefined;
 
   /**
    * 把某个 namespace 的调用面发布成嵌套服务名（`remote.<namespace>`）。

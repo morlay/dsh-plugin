@@ -43,7 +43,7 @@ export class ServeDefault extends WebServe implements OnInit {
    * @param ctx - 本行上下文。
    */
   onInit(ctx: Context): void {
-    const host = (ctx as unknown as { get?(name: string): unknown }).get?.("connection") as
+    const host = ctx.get("connection", false) as
       | { authorizeIndex?(req: IncomingMessage, res: ServerResponse, secure?: boolean): boolean }
       | undefined;
     if (host?.authorizeIndex === undefined) return;

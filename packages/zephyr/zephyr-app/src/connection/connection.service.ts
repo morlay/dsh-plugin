@@ -43,7 +43,7 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
     await this.mount(ctx, undefined, { credentials: this.credentials });
     // 上游是函数插件（`apply` 里 `new HostConnectionService` 再 `ctx.provide`）：没有 `providerInstance`，
     // 行内发布的 `connection` 就是那个服务实例——`ctx.get` 是拿它的唯一入口（cordis store 是唯一注册表）。
-    const instance = (ctx as unknown as { get?: (n: string) => unknown }).get?.("connection");
+    const instance = ctx.get("connection", false);
     observeRpc(instance, this.logger);
     // 上游 `ClientRemoteService.$host` 无条件读 `connection.generation.getSnapshot()`：
     // 未连接时上游给的是 `undefined`，一渲染就炸。这里把 `generation` 收敛成**总是 observable**。
@@ -70,15 +70,8 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
     // **必须等 `connection` 出现再挂**：上游在 `apply` 里 `new HostConnectionService(...)` 才发布它，
     // 那个时机在 `mount` 返回之后（实测 `mount` 之后立刻 `ctx.get("connection")` 是 undefined）。
     // `ctx.inject` 对"已经存在的服务"是立即回调，对"稍后出现的"是等到出现——两种时机都正确。
-    (
-      ctx as unknown as {
-        inject(
-          names: readonly string[],
-          callback: (scoped: unknown) => (() => void) | void,
-        ): unknown;
-      }
-    ).inject(["connection"], (scoped) => {
-      const live = (scoped as { get?: (n: string) => unknown }).get?.("connection");
+    ctx.inject(["connection"], (scoped) => {
+      const live = scoped.get("connection", false);
       const shared = (
         live as { createSharedFetchHandler?: (channel: "/api") => HostFetchHandler } | undefined
       )?.createSharedFetchHandler?.("/api");
