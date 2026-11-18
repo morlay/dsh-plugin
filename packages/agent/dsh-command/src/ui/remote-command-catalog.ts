@@ -2,7 +2,7 @@
 //
 // 它只依赖 `CommandEndpointClient`（契约的客户端形态），不碰宿主实现——换传输也不影响这一层。
 import type { SessionId } from "@morlay/dsh-session/endpoint";
-import { CommandCatalog, type CommandEntry } from "@morlay/dsh-command/endpoint";
+import { CommandCatalog, type CommandEntry } from "@morlay/dsh-command/contract";
 import { inject, Injectable } from "@morlay/zephyr";
 import { CommandEndpointClient } from "./command-endpoint-client.ts";
 

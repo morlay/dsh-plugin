@@ -1,7 +1,7 @@
 // 上游 descriptor → 我们的 `CommandEntry`：`commands/list` 的响应项与 `CommandCatalog` 的返回项是同一个
 // 形状，映射只写这一份（wire 实现与同进程实现都用它）。
 import type { CommandDescriptor } from "@morlay/dsh-command/server";
-import type { CommandEntry } from "@morlay/dsh-command/endpoint";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 
 /**
  * 一条命令的对外形状。

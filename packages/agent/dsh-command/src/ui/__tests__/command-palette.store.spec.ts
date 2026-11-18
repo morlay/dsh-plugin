@@ -1,8 +1,9 @@
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { describe, expect, it } from "vitest";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
-import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/endpoint";
-import type { CommandEntry, CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/contract";
+import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 import { CommandPaletteStore } from "@morlay/dsh-command/ui";
 
 const ENTRIES: readonly CommandEntry[] = [

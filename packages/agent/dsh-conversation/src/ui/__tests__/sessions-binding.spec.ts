@@ -10,7 +10,7 @@
 // 不需要浏览器：`SessionRemote` 与 `CommandRunner` 都是契约类，用假实现替掉即可（本 spec 的被测面是
 // `SessionControllerDefault` 自己的目录/binding 逻辑，不是 wire）。
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { CommandRunner } from "@morlay/dsh-command/endpoint";
+import { CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";

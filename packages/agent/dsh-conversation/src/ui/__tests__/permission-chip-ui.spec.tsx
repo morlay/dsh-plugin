@@ -13,7 +13,8 @@
 import { PermissionSelect } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/PermissionSelect.tsx";
 import type { PermissionSelectProps } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/PermissionSelect.tsx";
 import { accessZh } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/locales.ts";
-import { CommandRunner, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandRunner } from "@morlay/dsh-command/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";

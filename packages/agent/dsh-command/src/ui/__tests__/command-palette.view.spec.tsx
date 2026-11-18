@@ -8,8 +8,9 @@ import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { act } from "react";
 import { describe, expect, it } from "vitest";
-import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/endpoint";
-import type { CommandEntry, CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/contract";
+import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 import { CommandPaletteStore } from "@morlay/dsh-command/ui";
 import { CommandPaletteView } from "@morlay/dsh-command/ui";
 

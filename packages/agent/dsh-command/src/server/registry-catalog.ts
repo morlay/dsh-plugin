@@ -9,8 +9,8 @@
 import { inject, Injectable } from "@morlay/zephyr";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { AgentDirectory } from "@morlay/dsh-agent";
-import { CommandCatalog } from "@morlay/dsh-command/endpoint";
-import type { CommandEntry } from "@morlay/dsh-command/endpoint";
+import { CommandCatalog } from "@morlay/dsh-command/contract";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 // 相对引用：本包根出口会带进 `./server` 的装配模块，走包名会把依赖绕成环。
 import { CommandRegistryDefault } from "../command-registry.service.ts";
 import { commandEntryOf } from "./command-entry-of.ts";

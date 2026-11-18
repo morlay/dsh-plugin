@@ -5,7 +5,7 @@
 // **它不继承 `RemoteClientBase`**：那个基类带一个 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
 // 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务。
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
-import type { CommandEntry } from "@morlay/dsh-command/endpoint";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 
 /** `commands/list` 的请求。 */
 export interface CommandListRequest {

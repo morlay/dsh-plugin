@@ -9,7 +9,7 @@
 // 契约服务不声明它们——声明了，每个只关心目录的替身都得再实现一遍空流。
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
 import type { SessionRemotes } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/remotes.ts";
-import type { CommandRunner } from "@morlay/dsh-command/endpoint";
+import type { CommandRunner } from "@morlay/dsh-command/contract";
 import type { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { namespaceOf } from "./remote-namespace.ts";
 

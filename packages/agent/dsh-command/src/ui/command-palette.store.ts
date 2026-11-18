@@ -4,8 +4,8 @@
 // 绑定（可能是走 remote 的实现，也可能是测试里的假实现），所以这个模块能单独跑起来。
 import { inject, Injectable } from "@morlay/zephyr";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/endpoint";
-import type { CommandEntry } from "@morlay/dsh-command/endpoint";
+import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/contract";
+import type { CommandEntry } from "@morlay/dsh-command/contract";
 
 /** 一个会话的命令弹层状态。 */
 export interface CommandPaletteState {

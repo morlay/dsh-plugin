@@ -8,7 +8,7 @@
 // 手写这套（本文件的历史）漏一条就是一类 bug，且只能靠"点某个按钮没反应"发现。
 import { ClientSessions } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/service.ts";
 import { inject, Injectable, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
-import { CommandRunner } from "@morlay/dsh-command/endpoint";
+import { CommandRunner } from "@morlay/dsh-command/contract";
 import { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import {
   SessionController,
