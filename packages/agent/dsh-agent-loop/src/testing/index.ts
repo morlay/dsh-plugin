@@ -4,11 +4,8 @@
 export { headlessLoopProviders } from "./providers.ts";
 export {
   loopTestProviders,
-  mountLoopTestDependencies,
-  mountLoopTestHarness,
   type Agent,
   type LoopHarness,
   type LoopTestOptions,
 } from "./agent-loop-harness.ts";
-export { disposeRows, mountProvider, mountProviders, type MountedRow } from "./mount.ts";
 export { PresetGroup, PresetLoader } from "./preset-plane.ts";
