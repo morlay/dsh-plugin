@@ -24,6 +24,7 @@ import {
   type SessionModeRow,
   type SessionModeTriState,
 } from "./endpoint/session-mode-shapes.ts";
+import { AgentCreated } from "./events.ts";
 import { deniedByList, toolGroupLabel, toolGroupOf } from "./guidance/tool-groups.ts";
 
 import { DEFAULT_MODE, MODE_SOURCES, NOOP_MODE_ID } from "./mode-sources.ts";
@@ -105,6 +106,9 @@ export class SessionModeDefault extends SessionMode implements OnInit {
 
   private readonly logger = inject.optional(Logger);
 
+  // 会话一建立就装上：早于它的第一次装配，persona 因此一定在装配之前注册好。
+  private readonly created$ = new AgentCreated();
+
   private store: SessionModeOverrides | undefined;
 
   private stateHandle: ProjectionHandle<string | null> | undefined;
@@ -167,8 +171,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
       modelSelectionProjectionDefinition,
     )) as unknown as ProjectionHandle<{ readonly pending: unknown }>;
 
-    // 会话一建立就装上：早于它的第一次装配，persona 因此一定在装配之前注册好。
-    ctx.on("agent/created", ({ agent }: { agent: Agent }) => {
+    // 会话一建立就装上（同 `tool-guidance` 的范本：订阅走 `AgentCreated` 令牌，不写事件名字符串）。
+    this.created$.on(({ agent }) => {
       this.installFor(agent);
     });
     // 按模式的 policy 拦截：这三条 waterfall 上游 `fs-observation-policy` 独占决策槽，只能 `prepend` 抢在它前面。
