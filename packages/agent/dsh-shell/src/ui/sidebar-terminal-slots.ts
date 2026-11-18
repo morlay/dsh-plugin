@@ -15,20 +15,24 @@ import { TERMINAL_GROUP } from "../endpoint/index.ts";
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
 @Injectable()
 export class WebTerminalsDefault implements OnInit {
+  // `inject` 是**字段初始化器**：装配期按字段上的占位对象换成实例。写在方法体里拿到的是占位对象
+  // （类型上装作是 `Remote`，运行期 `$mount` 直接 `is not a function`）。
+  private readonly remote = inject(Remote);
+
   async onInit(ctx: Context): Promise<void> {
     // 走契约（`inject(Remote)`）：`$mount` / `whenMounted` 都在契约上，不需要按名字读服务。
     // 「终端组」取的是**上游 namespace 的原始对象**——`@RemoteContract` 没为 terminal 建契约（这条链只有
     // 右栏的终端 tab 用它，为一个消费方建契约是过度），所以走契约声明的口子 `remote.upstream[组名]`。
-    const remote = inject(Remote);
+
     // 浏览器里没人跑全局的 remotes 清单（`provideClientModules` 只在宿主装）：每个域自己 `$mount`
     // 自己那份 `TYPERT_REMOTE`。少了这一步 「终端组」 永远是 `undefined`。
-    await remote.$mount(TERMINAL_REMOTE);
+    await this.remote.$mount(TERMINAL_REMOTE);
     // `ClientTerminals` 是 cordis `Service` 子类：构造里 `super(ctx, 'webTerminals')` 把自己注册进 store。
     // 用**根 ctx** 建，兄弟行（`ui-sidebar-terminal`）按名字才读得到。
     const root = ctx.root;
     const terminals = new ClientTerminals(
       root as never,
-      remote.upstream[TERMINAL_GROUP] as never,
+      this.remote.upstream[TERMINAL_GROUP] as never,
     );
     ctx.effect(() => () => {
       void (terminals as unknown as { dispose?: () => unknown }).dispose?.();
