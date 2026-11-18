@@ -8,6 +8,7 @@ import { LaunchEnvironmentDefault } from "./launch-environment.service.ts";
 import { TimerDefault } from "./timer.service.ts";
 import { ToolRegistryDefault } from "./tool-registry.service.ts";
 import { AgentIdleGuard } from "./agent-idle-guard.service.ts";
+import { AgentScopedRowsDefault } from "./agent-scope.ts";
 
 // **agent 的骨架装配面**。
 //
@@ -30,6 +31,8 @@ export const provideAgent = provide(
     LlmRetry,
     // 开发态换树前的「agent 忙不忙」：登记在注册表之后（它 inject 注册表）。
     AgentIdleGuard,
+    // per-agent 装配的装行能力：agent 创建处注入它，每个 agent 的 `agentCtx` 上调一次。
+    AgentScopedRowsDefault,
   ],
   [
     configure(SystemPromptDefault, { personaPrefix: "" }),

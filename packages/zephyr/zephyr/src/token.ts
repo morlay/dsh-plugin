@@ -22,6 +22,13 @@ interface TokenMeta {
   readonly alias?: string;
   /** 是不是 `InjectionToken`（没有实现类，只能由上游在 mount 期按名字发布）。 */
   readonly value?: boolean;
+  /**
+   * 装配 scope：缺省（`undefined`）是应用根。
+   *
+   * 值是**声明方**定的分类键（symbol）：装配器据此把行分派到别处装，而不是装进应用根。
+   * 这里只存不解释——"这个 scope 是什么意思"是声明方的词汇，装配器不认识。
+   */
+  readonly scope?: symbol;
 }
 
 /**
@@ -90,6 +97,13 @@ export interface InjectableOptions {
    * 实现类继承契约时会带上它。
    */
   readonly name?: string;
+  /**
+   * 装配 scope：缺省不写就是应用根。
+   *
+   * 值是**声明方**定的分类键（symbol）：装配器把带 scope 的行交还给宿主，在宿主指定的 ctx 上装
+   * （agent 域的那条路是 `@AgentScoped()`）。装配器自己不解释这个值。
+   */
+  readonly scope?: symbol;
 }
 
 /**
@@ -101,30 +115,41 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
   return (target) => {
     if (options.token !== undefined) {
       const owned = tokenMetaOf(options.token);
-      registered.set(target, {
-        token: options.token,
-        name: owned.name,
-        label: owned.label,
-        multi: options.multi === true || owned.multi,
-        ...(owned.alias === undefined ? {} : { alias: owned.alias }),
-        ...(owned.value === true ? { value: true } : {}),
-      });
+      registered.set(
+        target,
+        withScope(
+          {
+            token: options.token,
+            name: owned.name,
+            label: owned.label,
+            multi: options.multi === true || owned.multi,
+            ...(owned.alias === undefined ? {} : { alias: owned.alias }),
+            ...(owned.value === true ? { value: true } : {}),
+          },
+          options.scope,
+        ),
+      );
       return;
     }
     const inherited = findRegistered(Object.getPrototypeOf(target));
     if (inherited !== undefined && !options.multi) {
       // 实现类继承契约：同一个令牌，不另立身份，也不重复登记名字。
-      registered.set(target, inherited);
+      // scope 是**实现类自己**的装配位置，不写就沿用契约的（契约通常是 root）：所以带 scope 时复制
+      // 一份，绝不就地改共享的元数据——那会让契约的 scope 跟着变。
+      registered.set(target, withScope(inherited, options.scope));
       return;
     }
     const alias = options.name ?? inherited?.alias;
-    const meta: TokenMeta = {
-      token: inherited?.token ?? target,
-      name: inherited?.name ?? hyphenate(target.name),
-      label: inherited?.label ?? target.name,
-      multi: options.multi === true,
-      ...(alias === undefined ? {} : { alias }),
-    };
+    const meta: TokenMeta = withScope(
+      {
+        token: inherited?.token ?? target,
+        name: inherited?.name ?? hyphenate(target.name),
+        label: inherited?.label ?? target.name,
+        multi: options.multi === true,
+        ...(alias === undefined ? {} : { alias }),
+      },
+      options.scope ?? inherited?.scope,
+    );
     registered.set(target, meta);
     if (!meta.multi) {
       byName.set(meta.name, meta.token);
@@ -134,6 +159,20 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
       if (meta.alias !== undefined) byName.set(meta.alias, meta.token);
     }
   };
+}
+
+/**
+ * 把 `@Injectable` 声明的 scope 合到元数据上。
+ *
+ * 没写 scope 就沿用原值；值相同就复用同一个对象（契约与实现类共享元数据是常态）。写了不同的就
+ * **复制**——元数据是共享的，就地改会让契约跟着变。
+ * @param meta - 原元数据。
+ * @param scope - 声明的 scope（可能为空）。
+ * @returns 合过 scope 的元数据。
+ */
+function withScope(meta: TokenMeta, scope: symbol | undefined): TokenMeta {
+  if (scope === undefined || meta.scope === scope) return meta;
+  return { ...meta, scope };
 }
 
 /**

@@ -3,9 +3,7 @@ import { LocalJobRegistry } from "@deepseek-ai/dsh-jobs-local";
 import { Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { JobRegistry } from "./contract/job-registry.contract.ts";
-import { AgentScoped } from "@morlay/dsh-agent";
 
-@AgentScoped()
 @Injectable()
 export class JobRegistryDefault extends fromCordis(JobRegistry, LocalJobRegistry) {
   override async onInit(ctx: Context): Promise<void> {

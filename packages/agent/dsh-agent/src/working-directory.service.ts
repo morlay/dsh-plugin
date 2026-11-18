@@ -3,7 +3,7 @@ import { WorkingDirectoryService } from "@deepseek-ai/dsh-working-directory";
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { AppEnv } from "@morlay/zephyr-app";
-import { SystemPrompt, AgentScoped } from "@morlay/dsh-agent";
+import { SystemPrompt } from "@morlay/dsh-agent";
 import { FileSystem } from "@morlay/dsh-fs";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { WorkingDirectory } from "@morlay/dsh-agent";
@@ -19,7 +19,6 @@ export interface WorkingDirectoryConfig {
   readonly defaultDirectory?: string;
 }
 
-@AgentScoped()
 @Injectable()
 export class WorkingDirectoryDefault extends fromCordis(WorkingDirectory, WorkingDirectoryService) {
   fs = inject(FileSystem);

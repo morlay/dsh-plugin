@@ -8,7 +8,7 @@ export * from "./agent-default-model.contract.ts";
 export * from "./launch-environment.contract.ts";
 export * from "./llm.contract.ts";
 export * from "./tool-registry.contract.ts";
-// per-agent 分层的声明面（`AgentProviderGroup` / `@AgentScoped()`）：边界由 agent 声明。
+// per-agent 装配的声明面（`@AgentScoped()` / `AgentScopedRows`）：边界由 agent 声明（scope 键不导出）。
 export * from "./agent-scope.ts";
 export * from "./system-prompt.contract.ts";
 export * from "./working-directory.contract.ts";

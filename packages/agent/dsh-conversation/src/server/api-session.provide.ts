@@ -10,7 +10,6 @@
 import SessionControllerPlugin from "@deepseek-ai/dsh-api-session-controller";
 import FileReferenceServicePlugin from "@deepseek-ai/dsh-file-reference-local";
 import { AgentDefaultModel, AgentDirectory, Llm } from "@morlay/dsh-agent";
-import { AgentScoped } from "@morlay/dsh-agent";
 import { AttachmentStore } from "@morlay/dsh-attachment";
 import { FileSystem } from "@morlay/dsh-fs";
 import { SessionProjectionStore } from "@morlay/dsh-session";
@@ -34,7 +33,6 @@ import {
   FileReferenceService,
   SessionControllerService,
 } from "../contract/api-session.contract.ts";
-import { AgentProviderGroup } from "@morlay/dsh-agent";
 
 /**
  * 上游 `SessionController`（`session` 组的全部端点）。
@@ -179,7 +177,6 @@ export class ApiSessionControllerHost extends fromCordis(
  * 上游把契约（\`abstract class FileReferenceService\`）与本地实现分成两个包；我们**只引用实现**，
  * 候选逻辑一行不写。端点由 \`SessionFileReferences\` 那一行提供。
  */
-@AgentScoped()
 @Injectable()
 export class FileReferenceServiceRow extends fromCordis(
   FileReferenceService,
@@ -206,19 +203,9 @@ export class FileReferenceServiceRow extends fromCordis(
  * 两步：先装子插件要用的 `fileReferences` 服务（上游 `LocalFileReferenceService`，我们只引用实现），
  * 再装会话组的端点行。见债：子插件的装配口径。
  */
-/**
- * 本域按 agent 分层的条目：各域声明自己的，装配面只装 group（单一职责）。
- *
- * 这些插件**仍装在 root**：它们内部用 `agent.ctx` / `scopeOf(ctx)` 把状态按 agent 分开，
- * 需要的是"全局一份 + 分层"，不是"每个 agent 一份实例"。
- */
-@Injectable({ multi: true })
-export class SessionApiAgentGroup extends AgentProviderGroup {
-  readonly entries = [FileReferenceServiceRow];
-}
-
 export const provideApiSession = provide([
-  SessionApiAgentGroup,
+  // 装配位置**这一票不动**（仍在应用根）：它内部按 `scopeOf(ctx)` 分层。按 scope 装配要连着
+  // `WorkflowDirectory` 那串消费方一起量，见设计记录的「迁移面」。
   FileReferenceServiceRow,
   ApiSessionControllerHost,
   // 这个 remote 的能力来自上面那条宿主行：由提供者登记（装配面不再维护清单）。

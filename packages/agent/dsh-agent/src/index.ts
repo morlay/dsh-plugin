@@ -36,6 +36,9 @@ export * from "./system-prompt.service.ts";
 export * from "./timer.service.ts";
 export * from "./tool-registry.service.ts";
 
+// per-agent 装配的默认实现（装行能力）：随包根导出，装配面把它放进骨架清单。
+export * from "./agent-scope.ts";
+
 // 骨架实现：子代理注册表、MCP 资源、LLM API 扩展注册表、工作目录与它的工具行。
 export * from "./subagent-registry.service.ts";
 export * from "./mcp-resources.service.ts";

@@ -43,6 +43,9 @@ export {
   type ValueProvider,
 } from "./provider.ts";
 export { bootstrapApplication, mountRow, type App, type BootstrapOptions } from "./bootstrap.ts";
+// 按 scope 装配：Provider 自己声明 scope（`@Injectable({ scope })`），装配器按它分派、按 scope 分组
+// 交还给宿主。scope 的含义由声明方定，装配器只认 symbol。
+export { ScopedRows } from "./scoped-rows.ts";
 export { Debugger, DebuggerDefault, type DebugSnapshot } from "./debugger.ts";
 export { Logger } from "./logger.ts";
 export { EventEmitter, type EventOptions, type Next } from "./event-emitter.ts";

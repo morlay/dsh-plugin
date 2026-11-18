@@ -3,6 +3,7 @@
 // 运行期语义全归 cordis：服务注册走 `ctx.provide(name, value)`，依赖读取走 `ctx.get(name)`，
 // 生命周期走 `ctx.effect`。这里只做三件事：实例化、回填注入、按清单顺序挂 onInit。
 import { Context as CordisContext } from "@deepseek-ai/cordis/src/context.ts";
+import { ScopedRows } from "./scoped-rows.ts";
 import type { Context, Lifecycle, Newable, TokenClass } from "./injection.ts";
 import type { ProvidersCoverage } from "./coverage.ts";
 import { Debugger, DebuggerDefault, type DebugSnapshot } from "./debugger.ts";
@@ -66,8 +67,18 @@ export async function bootstrapApplication<const L extends ProviderList>(
   // 诊断快照：装配过程一直在写，`app.get(Debugger).diagnostics()` 读到的就是最终结果。
   let snapshot: DebugSnapshot = { rows: [], names: [], tokens: [] };
   const declared = options.providers.map((entry) => entryOf(entry));
+  // 按 scope 分两份：带 scope 的行**不装应用根**，交给宿主在它指定的 ctx 上装（agent 域就是每个
+  // agent 的 `agentCtx`）。清单顺序就是同一 scope 下的装配顺序。
+  const scoped = options.providers.flatMap((entry) => {
+    const scope = scopeOfEntry(entry);
+    return scope === undefined ? [] : [{ scope, provider: entryOf(entry), config: configOf(entry) }];
+  });
   const entries: ProviderList = [
-    ...options.providers,
+    ...options.providers.filter((entry) => scopeOfEntry(entry) === undefined),
+    // 装行能力本身是装配器的产物，不在调用方的清单里：只有没显式给替身时才追加。
+    ...(declared.includes(ScopedRows as unknown as ReturnType<typeof entryOf>)
+      ? []
+      : [{ provide: ScopedRows as unknown as object, useValue: new ScopedRowsDefault(scoped) }]),
     // 默认条目只在清单里**没有**该令牌时追加：装配面要替换（测试替身、`without`）时以清单为准。
     ...(declared.includes(Debugger as unknown as ReturnType<typeof entryOf>)
       ? []
@@ -161,25 +172,17 @@ export async function bootstrapApplication<const L extends ProviderList>(
         state: "started",
       };
       rowState.push(state);
-      // 类型桥：cordis 的 ctx 运行时就有 `logger` / 事件面，缺的只是模块增强的类型。
-      fillInjections(instance, instances, multi, ctx as unknown as Context);
-      // 每一行都包一个 fiber：即使没有 `onInit`，`onDispose` 也要由 cordis 的卸载顺序管。
-      const fiber = ctx.plugin({
-        name: row.name,
-        apply: async (child: CordisContext) => {
-          await instance.onInit?.(child as unknown as Context);
-          return typeof instance.onDispose === "function"
-            ? () => instance.onDispose?.()
-            : undefined;
-        },
-      });
       try {
-        await fiber;
+        // 「装一行」：填充注入（查令牌表）→ 包 fiber → 事件字段绑本行 ctx → `onInit`。
+        fibers.push(
+          await mountInstance(ctx, row.name, instance, (meta, mode) =>
+            mode === "all" ? (multi.get(meta.token) ?? []) : instances.get(meta.token),
+          ),
+        );
       } catch (error) {
         if (error instanceof Error) state.reason = error.message;
         throw error;
       }
-      fibers.push(fiber);
       bindFace(ctx, row, instances);
       // 这一行可能在 mount 里按名字发布了服务（`ctx.reflect.provide`）：立刻采纳，
       // 后面几行的注入才拿得到。
@@ -232,8 +235,10 @@ export async function bootstrapApplication<const L extends ProviderList>(
 /**
  * 单行装配：实例化一个 Provider、按它的字段注入从 ctx 取依赖、挂 `onInit`。
  *
- * `toCordis` 的插件对象用它；`bootstrapApplication` 的多行装配走自己的清单流程。
- * @param ctx - 行 ctx（cordis 子 ctx）。
+ * `toCordis` 的插件对象用它，per-agent 装配也用它（`AgentScopedRows.install`）；它与
+ * `bootstrapApplication` 的多行装配走**同一个** `mountInstance`——注入怎么填、事件绑哪个 ctx、
+ * `onInit` 何时跑，只有一处实现。
+ * @param ctx - 装到哪个 ctx（行 ctx 的父）。
  * @param provider - Provider 类。
  * @param config - 行配置（经 `Config` 规范化后交给构造函数）。
  * @returns 实例与卸载函数。
@@ -247,32 +252,52 @@ export async function mountRow(
   const normalized = typeof normalizer === "function" ? normalizer(config) : config;
   const ctor = provider as unknown as new (config?: unknown) => unknown;
   const instance = normalized === undefined ? new ctor() : new ctor(normalized);
-  const read = (name: string): unknown =>
-    (ctx as unknown as { get(name: string): unknown }).get(name);
-  if (typeof instance === "object" && instance !== null) {
-    for (const key of Object.keys(instance)) {
-      const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
-      if (placeholder === undefined) continue;
-      const meta = tokenMetaOf(placeholder.token);
-      const resolved = read(meta.name);
-      if (resolved === undefined && placeholder.mode === "one") {
-        // 报错要用**原始 label**（`ConfigForms` / Symbol 的 key），只打派生名（`config-forms`）会让人
-        // 以为是字面量拼写、在源码里搜不到；注册名与上游别名不同才补打。
-        const where = `${instance.constructor.name} 的 ${key}`;
-        const lines = [`没有提供者：${meta.label}（${where} 需要它）`];
-        if (meta.name !== meta.label) lines.push(`  注册名：${meta.name}`);
-        if (meta.alias !== undefined && meta.alias !== meta.name) {
-          lines.push(`  上游别名：${meta.alias}`);
-        }
-        throw new Error(lines.join("\n"));
-      }
-      (instance as Record<string, unknown>)[key] = resolved;
-    }
-  }
+  const mounted = await mountInstance(
+    ctx as unknown as CordisContext,
+    rowNameOf(provider),
+    instance,
+    // 单行装配没有令牌表：依赖从**装它的那个 ctx** 上读（per-agent 时就是 agent 的 scope，
+    // 读得到根上发布的服务，也读得到这个 agent 自己那层）。
+    (meta) => (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(meta.name, false),
+  );
+  return { instance, dispose: mounted.dispose };
+}
+
+/**
+ * 注入解析：给定令牌与注入形态，给出实例。
+ *
+ * 两种来源长在这里的签名里：多行装配从令牌表查（`instances` / `multi`），单行装配从 ctx 读。
+ * 「找不到」一律以 `undefined` 表达，报错由 `mountInstance` 统一抛（文案只有一份）。
+ */
+type RowResolver = (meta: ReturnType<typeof tokenMetaOf>, mode: "one" | "optional" | "all") => unknown;
+
+/**
+ * 装一行的**唯一实现**：填充注入 → 包一个 fiber → 事件字段绑本行 ctx → `onInit`。
+ *
+ * 两件事必须绑在一起：注入要查**装配器手里的那份表**（多行装配才有），事件要绑**这一行自己
+ * 的 ctx**（`EventEmitter` 的 `bus` 就是它）——后者决定订阅落在哪个 scope：装进 `agentCtx` 的行，
+ * 订阅就落在这个 agent 上，不需要谁显式把 ctx 传下去。
+ * @param parent - 行的父 ctx（`ctx.plugin` 的接收者）。
+ * @param name - 行名（诊断与 fiber 名）。
+ * @param instance - 行实例（已构造）。
+ * @param resolve - 注入解析。
+ * @returns 卸载面。
+ */
+async function mountInstance(
+  parent: CordisContext,
+  name: string,
+  instance: unknown,
+  resolve: RowResolver,
+): Promise<{ dispose(): Promise<void> }> {
+  fillRow(instance, resolve);
   const lifecycle = instance as Lifecycle;
-  const fiber = ctx.plugin({
-    name: rowNameOf(provider),
+  // 每一行都包一个 fiber：即使没有 `onInit`，`onDispose` 也要由 cordis 的卸载顺序管。
+  const fiber = parent.plugin({
+    name,
     apply: async (child: CordisContext) => {
+      // 事件作为**字段**时也要拿到本行 ctx：`@Injectable()` 的类上写
+      // `readonly flush$ = new SessionFlush()`，`onInit` 不会自己跑——在这里统一绑定。
+      bindEvents(instance, child as unknown as Context);
       await lifecycle.onInit?.(child as unknown as Context);
       return typeof lifecycle.onDispose === "function" ? () => lifecycle.onDispose?.() : undefined;
     },
@@ -283,10 +308,48 @@ export async function mountRow(
     await (fiber as unknown as { dispose(): Promise<void> }).dispose();
     throw error;
   }
-  return {
-    instance,
-    dispose: async () => await (fiber as unknown as { dispose(): Promise<void> }).dispose(),
-  };
+  return { dispose: async () => await (fiber as unknown as { dispose(): Promise<void> }).dispose() };
+}
+
+/**
+ * 把实例上的注入占位换成真实服务。
+ * @param instance - 实例。
+ * @param resolve - 注入解析。
+ */
+function fillRow(instance: unknown, resolve: RowResolver): void {
+  if (typeof instance !== "object" || instance === null) return;
+  for (const key of Object.keys(instance)) {
+    const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
+    if (placeholder === undefined) continue;
+    const meta = tokenMetaOf(placeholder.token);
+    assertShape(meta, placeholder.mode, instance);
+    const resolved = resolve(meta, placeholder.mode);
+    if (resolved === undefined && placeholder.mode === "one") {
+      // 报错要用**原始 label**（`ConfigForms` / Symbol 的 key），只打派生名（`config-forms`）会让人
+      // 以为是字面量拼写、在源码里搜不到；注册名与上游别名不同才补打。
+      const where = `${instance.constructor.name} 的 ${key}`;
+      const lines = [`没有提供者：${meta.label}（${where} 需要它）`];
+      if (meta.name !== meta.label) lines.push(`  注册名：${meta.name}`);
+      if (meta.alias !== undefined && meta.alias !== meta.name) {
+        lines.push(`  上游别名：${meta.alias}`);
+      }
+      throw new Error(lines.join("\n"));
+    }
+    (instance as Record<string, unknown>)[key] = resolved;
+  }
+}
+
+/**
+ * 事件字段绑到这一行的 ctx 上。
+ * @param instance - 行实例。
+ * @param ctx - 本行的 ctx（`ctx.plugin` 给的子 ctx）。
+ */
+function bindEvents(instance: unknown, ctx: Context): void {
+  if (typeof instance !== "object" || instance === null) return;
+  for (const key of Object.keys(instance)) {
+    const value = (instance as Record<string, unknown>)[key];
+    if (value instanceof EventEmitter) value.onInit(ctx);
+  }
 }
 
 /**
@@ -395,6 +458,23 @@ function adoptNamedServices(ctx: CordisContext, instances: Map<object, unknown>)
 }
 
 /**
+ * 这条清单条目声明的装配 scope（没有 scope 就是应用根）。
+ *
+ * **只认得出形态的条目**：认不出的（裸 cordis 插件、乱塞的对象）一律 `undefined`——它们该由
+ * `assertDslEntry` 用「必须经 fromCordis / toCordis 转换」那条文案报出来，不能在半路先崩。
+ * @param entry - 清单条目。
+ * @returns 声明的 scope，或 `undefined`（应用根）。
+ */
+function scopeOfEntry(entry: ProviderEntry): symbol | undefined {
+  if (typeof entry === "function") return tokenMetaOf(entry as object).scope;
+  if (entry === null || typeof entry !== "object") return undefined;
+  if (providerOfPlugin(entry) !== undefined) return tokenMetaOf(entryOf(entry) as object).scope;
+  return "provide" in entry
+    ? tokenMetaOf((entry as { readonly provide: object }).provide).scope
+    : undefined;
+}
+
+/**
  * 装配清单只收 DSL 形态：Provider 类、`{ provide }` 条目、`toCordis()` 的插件对象。
  *
  * 裸 cordis 插件（`{ name, apply }`）必须先用 `fromCordis()` 包成 Provider——否则它的
@@ -452,12 +532,6 @@ function instantiate(entry: ProviderEntry, impl: Newable<unknown>): unknown {
 }
 
 /**
- * 把一个实例上的注入占位换成真实服务。
- * @param instance - 实例。
- * @param instances - 单值服务表。
- * @param multi - 多值服务表。
- */
-/**
  * 只校验：每个必需注入都能在这个清单里找到提供者（不改任何值）。
  * @param instance - 实例。
  * @param instances - 单值服务表。
@@ -496,34 +570,34 @@ function assertShape(meta: ReturnType<typeof tokenMetaOf>, mode: string, instanc
 }
 
 /**
- * 把实例上的注入占位换成真实服务。
- * @param instance - 实例。
- * @param instances - 单值服务表。
- * @param multi - 多值服务表。
+ * 按 scope 分组的行：装配器交给宿主的装行能力。
+ *
+ * 行清单在装配期就固定了（Provider 自己声明的 scope），这里只按 scope 分桶、按清单顺序装——
+ * 同一个 ctx 上后装的行读得到先装的行的服务，与清单顺序同义。
  */
-function fillInjections(
-  instance: unknown,
-  instances: ReadonlyMap<object, unknown>,
-  multi: ReadonlyMap<object, unknown[]>,
-  ctx: Context,
-): void {
-  if (typeof instance !== "object" || instance === null) return;
-  for (const key of Object.keys(instance)) {
-    const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
-    if (placeholder === undefined) continue;
-    const meta = tokenMetaOf(placeholder.token);
-    assertShape(meta, placeholder.mode, instance);
-    const resolved =
-      placeholder.mode === "all" ? (multi.get(meta.token) ?? []) : instances.get(meta.token);
-    if (resolved === undefined && placeholder.mode === "one") {
-      throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
+class ScopedRowsDefault extends ScopedRows {
+  private readonly byScope = new Map<symbol, Array<{ provider: Newable<unknown>; config?: unknown }>>();
+
+  constructor(
+    rows: readonly {
+      readonly scope: symbol;
+      readonly provider: Newable<unknown>;
+      readonly config?: unknown;
+    }[],
+  ) {
+    super();
+    for (const { scope, provider, config } of rows) {
+      const bucket = this.byScope.get(scope) ?? [];
+      bucket.push({ provider, config });
+      this.byScope.set(scope, bucket);
     }
-    (instance as Record<string, unknown>)[key] = resolved;
   }
-  // 事件作为**字段**时也要拿到本行 ctx：`@Injectable()` 的类上写
-  // `readonly flush$ = new SessionFlush()`，`onInit` 不会自己跑——在这里统一绑定。
-  for (const key of Object.keys(instance)) {
-    const value = (instance as Record<string, unknown>)[key];
-    if (value instanceof EventEmitter) value.onInit(ctx);
+
+  get scopes(): readonly symbol[] {
+    return [...this.byScope.keys()];
+  }
+
+  async install(scope: symbol, ctx: Context): Promise<void> {
+    for (const row of this.byScope.get(scope) ?? []) await mountRow(ctx, row.provider, row.config);
   }
 }

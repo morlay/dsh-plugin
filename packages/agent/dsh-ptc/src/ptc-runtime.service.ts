@@ -6,9 +6,7 @@ import { Subprocess } from "@morlay/dsh-shell";
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { PtcRuntime } from "./contract/ptc-runtime.contract.ts";
-import { AgentScoped } from "@morlay/dsh-agent";
 
-@AgentScoped()
 @Injectable()
 export class PtcRuntimeDefault extends fromCordis(PtcRuntime, NodePtcRuntimeService) {
   fs = inject(FileSystem);
