@@ -2,7 +2,8 @@
 //
 // 它的 inject 是 7 个名字：`slots` / `sessions` / `fileUpload` / `uiSession` / `uiWorkspace` /
 // `locale` / `configForms`。其中 `uiSession`、`uiWorkspace` 是另外两行内部的服务（走令牌发布），
-// `fileUpload` 目前只用于通过依赖校验（附件上传仍在本仓的 `FileUploadStoreDefault` 里，客户端运行时另排期）。
+// `fileUpload` 是 upload 域的运行时（`@morlay/dsh-upload/ui` 的契约）：上游的
+// `ConversationController` 靠它把粘贴/拖入的图片暂存到宿主（`uploadImage`）。
 import * as UiConversationPlugin from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";

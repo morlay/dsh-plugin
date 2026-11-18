@@ -2,5 +2,5 @@
 // `fileUpload` 归 upload 域。放这里就会让别的域反向依赖对话聚合层。
 export { UiConversation } from "@morlay/zephyr-app/client";
 
-// `FileUpload` 的令牌归 upload 域（服务由那一域的运行时提供），这里转出，行与本文件其余令牌一起用。
+// `FileUpload` 的**契约**归 upload 域（服务由那一域的运行时提供），这里转出，行与本文件其余令牌一起用。
 export { FileUpload } from "@morlay/dsh-upload/ui";
