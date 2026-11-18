@@ -10,10 +10,40 @@ import { ClientSessions } from "@deepseek-ai/dsh-api-session-controller/src/clie
 import { inject, Injectable, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { CommandRunner } from "@morlay/dsh-command/endpoint";
 import { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
-import { SessionController } from "@morlay/dsh-conversation/contract";
+import {
+  SessionController,
+  type SessionCatalogState,
+  type SessionRetainHandle,
+  type SessionScope,
+  type SessionView,
+} from "@morlay/dsh-conversation/contract";
 import { LiveSessionRemotes } from "./remote-session.ts";
 import { namespaceOf } from "./remote-namespace.ts";
+import { asUpstreamContext } from "./upstream-context.ts";
 import { SESSION_GROUP } from "@morlay/dsh-session/endpoint";
+
+/** 上游 `session/control` 的帧形状（本行只把它转交给 `ClientSessions.handleControlFrame`）。 */
+type ControlFrame = Parameters<ClientSessions["handleControlFrame"]>[0];
+
+/**
+ * 上游保留句柄 → 契约句柄。
+ *
+ * 差别只有一条：上游用 `[Symbol.dispose]()` 释放，契约面声明的是 `dispose()`（两者都幂等）。
+ * `binding` 保持**惰性**（上游是 getter，释放后抛）——提前求值会把"释放后读"变成"保留时就炸"。
+ * @param reference - 上游 `ClientSessions.retain` 给的句柄。
+ * @returns 契约面的句柄。
+ */
+function retainHandleOf(reference: ReturnType<ClientSessions["retain"]>): SessionRetainHandle {
+  return {
+    sessionId: reference.sessionId,
+    get binding(): unknown {
+      return reference.binding;
+    },
+    ready: reference.ready,
+    release: () => reference.release(),
+    dispose: () => reference.release(),
+  };
+}
 
 @Injectable()
 export class SessionControllerDefault extends SessionController implements OnInit, OnDispose {
@@ -39,7 +69,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
     // 行 ctx 就是它。它自己那句 `reflect.provide('sessions', this)` 落在 cordis store 上：
     // 服务名是上游自己的，我们的契约令牌另有身份（`session-controller`），两者不抢同一条目。
     this.inner = new ClientSessions(
-      ctx,
+      asUpstreamContext(ctx),
       new LiveSessionRemotes(
         () => this.sessionRemote,
         () => {
@@ -64,15 +94,27 @@ export class SessionControllerDefault extends SessionController implements OnIni
     // 不接这条线的话侧栏不会跟着 added/removed/status 更新（列表停在首帧）。
     const sessions = this.inner;
     const offs = [
-      this.remote.$on("api-session/added", (summary: never) => {
-        sessions.handleSessionAdded(summary);
-      }),
-      this.remote.$on("api-session/removed", (id: never) => {
-        sessions.handleSessionRemoved(id);
-      }),
-      this.remote.$on("api-session/status", (id: never, running: never) => {
-        sessions.handleSessionStatus(id, running);
-      }),
+      this.remote.$on(
+        "api-session/added",
+        (summary: Parameters<ClientSessions["handleSessionAdded"]>[0]) => {
+          sessions.handleSessionAdded(summary);
+        },
+      ),
+      this.remote.$on(
+        "api-session/removed",
+        (id: Parameters<ClientSessions["handleSessionRemoved"]>[0]) => {
+          sessions.handleSessionRemoved(id);
+        },
+      ),
+      this.remote.$on(
+        "api-session/status",
+        (
+          id: Parameters<ClientSessions["handleSessionStatus"]>[0],
+          running: Parameters<ClientSessions["handleSessionStatus"]>[1],
+        ) => {
+          sessions.handleSessionStatus(id, running);
+        },
+      ),
     ];
     // 会话内的事件帧交给 `ClientSessions.handleControlFrame`（它管会话的生命周期面）。
     // **与 `Projections` 那条流并存**：`Projections.open()` 只把帧折进投影 store，
@@ -84,11 +126,11 @@ export class SessionControllerDefault extends SessionController implements OnIni
       if (controller.signal.aborted) return;
       try {
         const face = namespaceOf(this.remote, SESSION_GROUP) as
-          | { control?(signal: AbortSignal): AsyncIterable<unknown> }
+          | { control?(signal: AbortSignal): AsyncIterable<ControlFrame> }
           | undefined;
         if (typeof face?.control !== "function") return;
         for await (const frame of face.control(controller.signal)) {
-          sessions.handleControlFrame(frame as never);
+          sessions.handleControlFrame(frame);
         }
       } catch (error) {
         if (!controller.signal.aborted)
@@ -112,8 +154,33 @@ export class SessionControllerDefault extends SessionController implements OnIni
     return this.inner;
   }
 
+  /**
+   * 目录读面：上游 `SnapshotStore<SessionListState>` → 契约的 `SessionCatalog`。
+   *
+   * 两处差别都在**取值**上，不在数据上：上游 `phase` 是 `'pending' | 'ready'`（`SessionListPhase`，
+   * 拉取失败走 `state`/`error` 那条轴，没有 `failed` 相位），契约面用 `'loading'` 表达"还没拉完"。
+   * 行（`ids` / `byId` / `projectionsBySession`）是同一份快照，不复制。
+   */
   get list(): SessionController["list"] {
-    return this.sessions.list as unknown as SessionController["list"];
+    const store = this.sessions.list;
+    // 快照对象**按来源身份缓存**：`useSyncExternalStore` 一类的消费方要求同一状态给出同一个引用。
+    let source: ReturnType<typeof store.getSnapshot> | undefined;
+    let view: SessionCatalogState | undefined;
+    return {
+      getSnapshot: () => {
+        const state = store.getSnapshot();
+        if (state === source && view !== undefined) return view;
+        source = state;
+        view = {
+          ids: state.ids,
+          byId: state.byId,
+          phase: state.phase === "pending" ? "loading" : state.phase,
+          projectionsBySession: state.projectionsBySession,
+        };
+        return view;
+      },
+      subscribe: (listener) => store.subscribe(listener),
+    };
   }
 
   get searchResultLimit(): SessionController["searchResultLimit"] {
@@ -153,19 +220,21 @@ export class SessionControllerDefault extends SessionController implements OnIni
   }
 
   scopeOf(ctx: Context): ReturnType<SessionController["scopeOf"]> {
-    return this.sessions.scopeOf(ctx);
+    return this.sessions.scopeOf(asUpstreamContext(ctx));
   }
 
   scope(id: Parameters<SessionController["scope"]>[0]): ReturnType<SessionController["scope"]> {
-    return this.sessions.scope(id) as unknown as ReturnType<SessionController["scope"]>;
+    // 收窄断言：契约的 `SessionScope` 是"本装配真正给出的成员"子集（见契约注释），运行时对象就是
+    // 上游的 `AgentContext`——**不换对象**：`sessionOf` 靠 ctx 上的标签反查会话，包一层就断链。
+    return this.sessions.scope(id) as unknown as SessionScope | undefined;
   }
 
   sessionOf(
     ctx: Parameters<SessionController["sessionOf"]>[0],
   ): ReturnType<SessionController["sessionOf"]> {
-    return this.sessions.sessionOf(ctx as unknown as never) as unknown as ReturnType<
-      SessionController["sessionOf"]
-    >;
+    // 同上：`SessionView` 是上游 `SessionFace` 的读面子集，成员签名不同（`projections.faceOf` 上游要 key），
+    // 但对象是同一个——消费方拿它读快照、订阅，不认身份差异。
+    return this.sessions.sessionOf(asUpstreamContext(ctx)) as unknown as SessionView | undefined;
   }
 
   get(id: string): unknown {
@@ -184,17 +253,15 @@ export class SessionControllerDefault extends SessionController implements OnIni
     target: Parameters<SessionController["retain"]>[0],
     options: Parameters<SessionController["retain"]>[1],
   ): ReturnType<SessionController["retain"]> {
-    return this.sessions.retain(target, options) as unknown as ReturnType<
-      SessionController["retain"]
-    >;
+    return retainHandleOf(this.sessions.retain(target, options));
   }
 
   using<T>(
     target: Parameters<SessionController["using"]>[0],
     options: Parameters<SessionController["using"]>[1],
-    operation: Parameters<SessionController["using"]>[2],
+    operation: (reference: SessionRetainHandle) => T | Promise<T>,
   ): Promise<T> {
-    // 引用类型的名义差异（我们的 `SessionRetainHandle` 对上上游 `SessionReference`）：运行时同形，边界处断言一次。
-    return this.sessions.using(target as never, options as never, operation as never) as Promise<T>;
+    // 句柄面按契约转一次：上游只有 `release()` 与 `[Symbol.dispose]`，契约面声明的是 `release()` / `dispose()`。
+    return this.sessions.using(target, options, (reference) => operation(retainHandleOf(reference)));
   }
 }
