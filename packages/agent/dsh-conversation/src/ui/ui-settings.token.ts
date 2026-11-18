@@ -1,7 +1,7 @@
 // 设置相关的跨行服务令牌：`settingsSchema`（`ui-settings` 行提供）。
 //
 // 这里只做**再导出**：令牌的 home 在 `@morlay/zephyr-app/client`（谁定义谁给面），本域不另立一份。
-// 曾经那份 `CommandUi` 值令牌已删：命令 UI 的真契约在
+// 命令 UI 的真契约在
 // `@morlay/dsh-command/ui`（`CommandUi` 抽象类，实现是上游 `ui-commands` 那一行），这里那份是
 // 同名不同身份的第二个令牌，且零消费者——两份令牌 = 两次注册，注入端拿到的会是空。
 

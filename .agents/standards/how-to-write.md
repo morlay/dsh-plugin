@@ -9,7 +9,7 @@
 | ---------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | 类型与规则 | `just lint`                              | oxlint `typeAware` + `typeCheck`（[`.oxlintrc.json`](../../.oxlintrc.json)），全仓                  |
 | 面边界     | `just audit`                             | root / ui / server 互相越界即红                                                                     |
-| 依赖声明   | `just audit`（`--write` 一键删）         | 声明却没有用到的依赖即红；「必须保留」的判据只在 [`rules.ts`](../../devpackages/audit/src/rules.ts) |
+| 依赖声明   | `just audit`（`--write` 一键删）         | 声明却没有用到的依赖即红；「必须保留」的判据只在 [`rules.ts`](../../devpackages/devkit/src/audit/rules.ts) |
 | 扩展边界   | `just audit`                             | `packages/agent-ex/*` 的入口越界与扩展间互相依赖                                                    |
 | 出口能出活 | `just build`                             | 有 `build` 脚本的包（5 个）产物与 `exports` 对得上                                                  |
 | 格式       | `just fmt` / `pnpm exec oxfmt --check .` | 换行、引号、表格对齐                                                                                |
@@ -37,7 +37,7 @@
 ## 面边界
 
 包内四个面：`root`（包根的 `index.ts` 与同目录的一文件一类型）、`server`、`ui`、共享面
-（`contract` / `endpoint`）。越界由 [`package-audit.ts`](../../devpackages/audit/src/package-audit.ts) 判：
+（`contract` / `endpoint`）。越界由 [`package-audit.ts`](../../devpackages/devkit/src/audit/package-audit.ts) 判：
 
 | 从 → 到                        | 允许                                                | 判据（越界即红）                             |
 | ------------------------------ | --------------------------------------------------- | -------------------------------------------- |
@@ -59,7 +59,7 @@
   的契约进 `peerDependencies`）；只在测试里用的进 `devDependencies`。
 - **声明未用就是死依赖**：`just audit` 报「声明未用」；AST 看不见的五类（自引用、`@types/*`、
   清单的 scripts 字段、清单其它字段、生成物运行时）由 `keepReason` 保下，想放宽先改
-  [`rules.ts`](../../devpackages/audit/src/rules.ts) 与它的 `rules.spec.ts`。
+  [`rules.ts`](../../devpackages/devkit/src/audit/rules.ts) 与它的 `rules.spec.ts`。
 - **包内测试走包名**（`@morlay/<包>/<面>`）：测试是唯一每次 CI 都跑的消费方，它顺带守住 `exports`。
   自引用因此要在 `devDependencies` 里写自己的包名（`keepReason` ② 认这个理由）。
 - **上游依赖不进装配面**：应用只声明它自己 import 的包与按字符串引用的包（`remoteDescriptor("<包名>")`
@@ -67,21 +67,29 @@
 
 ## 包出口
 
-- **`exports` 手写，指源码**：工作区内直连 `src/**`，出口 `.` 指包根的 `index.ts`；**package.json
-  出口每个包都有**（`import.meta.resolve("<包名>/package.json")` 靠它）。
+- **发布形态**：有 TS 源码入口的包统一产物包（`dist` + `.d.mts`）；`@morlay/dsh-oxc-node` 保持手写
+  `register.mjs` 单文件；`devpackages/**` 私有、只出源码。发布集合、版本与通道见[设计 npm 发布线](../designs/20261118-npm发布线.md)。
+- **清单由构建写回，不手写**：`exports` 与 `publishConfig.exports` 由 `devkit build` 在 `build:done`
+  里按入口与产物写回——顶层指源码（工作区内直连 `src/**`），发布态指 `dist` 产物；手改会被下一次
+  `just build` 覆盖。生成规则见[设计 构建与审计](../../devpackages/devkit/.agents/designs/20261118-构建与审计.md)。
+  **package.json 出口每个包都有**（`import.meta.resolve("<包名>/package.json")` 靠它）。
 - **按面开出口，不凑数**：出口键写成 `"./<面>"`，面名是 contract / endpoint / server / ui / testing；
   谁有消费方谁开，没有消费方的面不开（多一条出口就是把同一份东西列两遍）。testing 面只给测试用。
-- **加面 = 加文件 + 加 `exports`**：`src/<面>.ts`（或 `src/<面>/index.ts`）与 `exports` 同笔改，
-  有 `build` 脚本的包再补 `tsdown.config.ts` 的 `entry`（没有该文件时 tsdown 按 `exports` 推断）。
+- **加面 = 加文件 + 清单**：`src/<面>.ts`（或 `src/<面>/index.ts`）与入口声明同笔改；有 `build` 脚本的包
+  再补 `tsdown.config.ts` 的 `entry`（没有该文件时 tsdown 按 `exports` 推断）。清单由构建写回，手改无效。
   判据：`just build` 后产物目录里有同名文件，且包内测试按包名解析得到。
-- **一个包可以开浏览器面（`./client`）**：面里放能在浏览器跑的语汇与运行期（cordis 在浏览器是合法
-  运行期）；node 专属实现与宿主 service 留在包根——包根只出宿主面时，浏览器半只引它的
-  `./contract` / `./endpoint`（见[面边界](#面边界)）。
-- **`publishConfig.exports` 只在 `private: false` 的包上有意义**：它是**整体替换**，漏一个键就是发布包
-  少一个面。当前可发布包四个：`@morlay/zephyr`（`.` / client / compat / testing 四个面）、
-  `@morlay/zephyr-desktop-shell`、`@morlay/dsh-oxc-node`、`@morlay/zephyr-rdb`。
-- **`engines.dsh` 与 `mise.toml` 同源**：范围必须容纳 [`mise.toml`](../../mise.toml) 的
-  `DEEPSEEK_HARNESS_VERSION`，跨 major.minor 就换新范围。判据：
+- **浏览器半只有两种出口**：`./ui` 是**纯 ESM** 面（zephyr 前端装配用）；`./client` 只给 dsh 插件
+  （`dsh.bundle` 且有前端的包），发布态按「库 + 工厂」两条条件。两者并存，不互相替代；node 专属实现
+  与宿主 service 留在包根——包根只出宿主面时，浏览器半只引它的 `./contract` / `./endpoint`（见[面边界](#面边界)）。
+- **`./cordis-register` 只给 bundle 包，且只进 `publishConfig.exports`**：默认导出该包的一个 cordis 插件
+  （`toCordis` 组合多行）；顶层 `exports` 不含它，workspace 里误引即解析失败——开发态只走 `provideXxx()` 清单。
+- **`dsh.bundle` 指 patch**：bundle 包写 `"dsh.bundle": { "patch": "./cordis.patch.yml" }`，patch 由
+  `tsdown.config.ts` 声明的行清单生成（首行「由 … 生成，请勿手工编辑」）。
+- **`publishConfig.exports` 只在 `private: false` 的包上有意义**：它是**整体替换**，键集合必须覆盖顶层
+  `exports` 每个键（外加 `./package.json` 与只发布态入口），漏一个键就是发布包少一个面；`private: true`
+  的包只写 `exports`，不写 `publishConfig` / `engines.dsh`。
+- **`engines.dsh` 只写在 `private: false` 的包上**：范围与 [`mise.toml`](../../mise.toml) 的
+  `DEEPSEEK_HARNESS_VERSION` 同源，跨 major.minor 就换新范围。判据：
   `grep -h '"dsh"' packages/*/*/package.json` 与 `mise.toml` 对照。
 - **应用图标随包走**：`icon.svg` 在应用包根、`files` 里带上，`zephyr.config.ts` 的 `desktop.icon`
   指向它（当前唯一实例是 [`apps/zephyr-custom`](../../apps/zephyr-custom/zephyr.config.ts)）。
@@ -95,7 +103,7 @@
 - **另有两份非口径的 tsconfig，新增第三份要在文件头写清用途**：
   [`devpackages/typert-generator/tsconfig.json`](../../devpackages/typert-generator/tsconfig.json)（包内自检）
   与
-  [zephyr-app 的 federation 解析用 tsconfig](../../packages/zephyr/zephyr-app/federation.resolve.tsconfig.json)
+  [zephyr-app 的 federation 解析用 tsconfig](../../packages/zephyr/zephyr-dev/federation.resolve.tsconfig.json)
   （rolldown 的模块解析输入，不是编译）。
 - **声明树是产物，不进 git**：`target/dts` 由
   [`@local/dts-prepare`](../../devpackages/dts-prepare/src/dts.ts) 的 `ensureWorkspaceDts` 生成，是
@@ -107,7 +115,7 @@
 
 - **有实现类的服务就用契约类当令牌**：`@Injectable() abstract class`，名字是类名的连字符化形（同时是
   cordis 服务名与 dsh 行 id，见 [`token.ts`](../../packages/zephyr/zephyr/src/token.ts)）。
-- **`InjectionToken<T>` 只用于「没有实现类、由上游行在 mount 期按名字发布」的服务**（如 `uiWorkspace`）
+- **`InjectionToken<T>` 只用于「没有实现类、由上游行在 mount 期按名字发布」的服务**——若有实现类，用 `@Injectable({ name })` 抽象类（`uiWorkspace` 已从令牌改成抽象类，见 `dsh-workspace/src/ui/ui-workspace.token.ts`）
   与纯值配置；类型参数写真实类型，不写 `unknown`。
 - **依赖写成字段注入**：`inject(Token)` / `inject.optional()` / `inject.all()`；不写 `static inject`
   数组、不按字符串 `ctx.get("名字")` 取服务。装配语法（`provide` / `without` / `configure` /
@@ -144,5 +152,5 @@
 | 注入到页面 / preload 的脚本（浏览器里跑）         | `console`                                                                                                                      | 原样保留，代码里写明理由                                                                              |
 
 - **键名用 `.` 分层、不带空格**（`seed.bundles`）；**值走参数不拼文本**：cordis 的 `meta` 是 logger
-  实例级的，结构化字段只能作 `%o` 参数传（[`trace.ts`](../../packages/zephyr/zephyr-app/src/internal/trace.ts)）。
+  实例级的，结构化字段只能作 `%o` 参数传（[`trace.ts`](../../packages/zephyr/zephyr-dev/src/internal/trace.ts)）。
 - 判据：`grep -rn 'ctx.logger(' packages` 与 `grep -rn 'traceOf(' packages` 对得上；新增日志不新开出口。
