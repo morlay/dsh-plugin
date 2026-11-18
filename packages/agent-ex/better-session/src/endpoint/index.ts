@@ -8,6 +8,6 @@ export type { SessionStoreFailure } from "../contract/session-failure.contract.t
 export * from "./branch.ts";
 export * from "./session-admin-endpoint.ts";
 export * from "./session-editor-endpoint.ts";
-// 分支面的两类导出：契约（数据层原语，实现方在 `./server`）与配平算法（两端都要的纯函数）。
-export * from "../contract/session-branch.contract.ts";
+// 分支面的配平算法（两端都要的纯函数）在这里；**契约本身**（`SessionBranch` 等数据层原语）走
+// `@morlay/better-session/contract`——在这里转出等于给同一批符号造第二个 home。
 export * from "./balance.ts";

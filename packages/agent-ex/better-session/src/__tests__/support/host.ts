@@ -10,7 +10,7 @@ import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { loopTestProviders } from "@morlay/dsh-agent-loop/testing";
 import { SessionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { SessionBranch } from "@morlay/better-session/endpoint";
+import { SessionBranch } from "@morlay/better-session/contract";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { StorageTakeoverDefault } from "@morlay/better-session";
