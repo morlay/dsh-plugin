@@ -12,6 +12,7 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import type { InvokeRemoteRequest } from "../typert/gateway.contract.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   AppEnvDefault,
@@ -80,18 +81,12 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
   });
 
   it("invoke 走到上游分派（最小栈里以「服务不存在」失败，证明请求走通了）", async () => {
-    const gateway = app.get(TypertGateway) as unknown as {
-      invoke(request: {
-        namespace: string;
-        method: string;
-        args: Record<string, unknown>;
-        peer: unknown;
-      }): Promise<unknown>;
-    };
-    const serviceCtx = app.ctx.get("typertGateway", false);
-    const peer = {
-      id: "spec-peer",
-      ctx: serviceCtx,
+    const gateway = app.get(TypertGateway);
+    // `PeerScope` 就是上游 `invoke` 要的那个面；只有 `id` 是品牌类型（`dsh-brand`），
+    // 字面量在这里收窄一次——其余成员按类型检查，不再把整条请求说成 `unknown`。
+    const peer: InvokeRemoteRequest["peer"] = {
+      id: "spec-peer" as InvokeRemoteRequest["peer"]["id"],
+      ctx: app.ctx,
       principal: { kind: "owner" },
       interactions: "answer",
       signal: new AbortController().signal,
