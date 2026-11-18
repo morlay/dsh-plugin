@@ -1,5 +1,8 @@
 // `fromCordis`：把上游 cordis 插件包成 Provider（只做类型面桥接）。
-import { getTraceable, type Context as CordisContext } from "@deepseek-ai/cordis";
+import type { Context as CordisContext } from "@deepseek-ai/cordis";
+// `getTraceable` 不在 cordis 的包根导出面里（`index.ts` 只转了一部分），它在 `src/utils.ts`——
+// 包 `exports` 有 `./src/*`，所以按那个入口引。
+import { getTraceable } from "@deepseek-ai/cordis/src/utils.ts";
 import type { Awaitable, Context, TokenClass } from "@morlay/zephyr";
 import {
   hasTokenMeta,
@@ -181,14 +184,19 @@ function scopedDeps(
   const root = (owner as unknown as { root?: CordisContext }).root ?? owner;
   // 应用根的行不需要这一层：那份实例的作用域本来就是根。
   if (owner === root) return deps;
-  const reflect = owner.reflect as unknown as { get(name: string, strict?: boolean): unknown };
+  // `reflect` 是 cordis 的**模块增强**挂上去的（`vendor/…/cordis/src/events.ts` 里
+  // `interface Context { reflect }`）；我们的 `tsc` program 不加载那份增强，所以这里按单层断言读——
+  // 运行期它就在 `ctx` 上（`ctx.get` / `ctx.provide` 的底座）。
+  const reflect = (owner as { reflect?: { get(name: string, strict?: boolean): unknown } }).reflect;
+  if (reflect === undefined) return deps;
+  // `getTraceable` 的参数类型是**它自己那份** cordis 的 `Context`（`vendor/…/vendor/cordis`），
+  // 与 `@deepseek-ai/cordis` 导出的 `Context` 是两个副本（audit 的「上游唯一化」那条的另一面）。
+  // 这里按**函数签名**断言一次（结构化，不做对象断言），运行期它只读 `ctx` 上的 trace 符号。
+  const trace = getTraceable as (ctx: unknown, value: unknown) => unknown;
   const traced: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(deps)) {
     const service = reflect.get(name, false);
-    traced[name] =
-      typeof service === "object" && service !== null
-        ? (getTraceable(owner, service) as unknown)
-        : value;
+    traced[name] = typeof service === "object" && service !== null ? trace(owner, service) : value;
   }
   return traced;
 }
