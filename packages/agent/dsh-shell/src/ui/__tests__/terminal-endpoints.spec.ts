@@ -119,7 +119,9 @@ describe("terminal 组的客户端面", () => {
     const { app } = await boot([TerminalEndpointClient]);
     const client = app.get(TerminalEndpointClient);
     expect(client.mounted).toBe(false);
-    await expect(client.environment("session-1" as SessionArgument, undefined)).rejects.toThrow(
+    // 转发是**同步**抛：face() 缺面时错就抛在调用处（defineForwarder 不回落 unary invoke），
+    // 调用方按 try/catch 处理即可；不会静默成 undefined，也不会漂成 this.remote.x is not a function。
+    expect(() => client.environment("session-1" as SessionArgument, undefined)).toThrow(
       /RemoteMountsDefault 必须排在/,
     );
   });
