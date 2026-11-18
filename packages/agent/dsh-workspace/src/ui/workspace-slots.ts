@@ -42,6 +42,9 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
   /** 行内右键菜单：上游在它自己的行 ctx 上发布，装配期由 `adoptNamedServices` 映射成同名令牌。 */
   private readonly contextMenus = inject(ContextMenus);
 
+  /** 兄弟行是否已经发布过 `uiWorkspace`（发布侧幂等守卫用；注入填充早于 `onInit`，与运行时读等价）。 */
+  private readonly publishedUiWorkspace = inject.optional(UiWorkspace);
+
   override async onInit(ctx: Context): Promise<void> {
     // `ui-workspace` 的 inject 声明：`workspaces`（由 `workspace-controller` 行提供）、
     // `locale` / `layout` / `shortcuts` / `remoteAccess`（我们的契约）、`remote.directoryPicker`（远程子面）。
@@ -69,15 +72,10 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
     // 上游 `apply` 里 `new UiWorkspaceService(ctx, 'uiWorkspace')` 注册在**行 ctx** 上：兄弟行按名字
     // 读（`ctx.uiWorkspace`）时看不到，所以要把它显式发布到根 ctx。`kFace` 就是那份上游实例。
     const uiWorkspace = this[kFace];
-    if (uiWorkspace !== undefined) {
-      const { reflect } = ctx.root as unknown as {
-        reflect: {
-          get(name: string, strict?: boolean): unknown;
-          provide(name: string, value: unknown): void;
-        };
-      };
-      if (reflect.get("uiWorkspace", false) === undefined)
-        reflect.provide("uiWorkspace", uiWorkspace);
+    // 守卫读的是**我们自己的令牌**（`inject.optional`），发布仍按上游协议名走 `reflect.provide`——
+    // 按名字读只会拿回 `any`，而这里需要的只是「有没有」。
+    if (uiWorkspace !== undefined && this.publishedUiWorkspace === undefined) {
+      ctx.root.reflect.provide("uiWorkspace", uiWorkspace);
     }
   }
 }
