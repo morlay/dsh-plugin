@@ -15,7 +15,7 @@
 //     打包器原话——宁可构建红，也不要发一份会白屏的应用。
 //   · 收尾两步：可达却缺产物的地址**有副本的按副本补一条目标**再编（决定 9，多版本各出各的），剩下的残余
 //     统一指向**共享运行时聚合产物**（决定 8）；聚合产物只许具名导入，出现 default 导入即构建失败（决定 10）。
-import { copyFile, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -94,10 +94,13 @@ interface AppManifest {
 /**
  * 补目标（决定 9）最多迭代几轮。
  *
- * 一轮只补「这一轮看得见的缺口」：补出来的产物自己会引用新的依赖，缺口表因此可能变长。四轮足够覆盖
- * 「产物 → 它的依赖 → 依赖的依赖」这类链；再多说明规则本身不稳定，那时该红，而不是无限补。
+ * 一轮只补「这一轮看得见的缺口」：补出来的产物自己会引用新的依赖，缺口表因此可能变长。
+ *
+ * 上限按**实测**给：冷构建（`apps/zephyr-custom`）要 4 轮才收敛（47 → 11 → 15 → 3 条缺口，每轮补一批），
+ * 再加一个浏览器半的包就要第 5 轮。留一倍余量，用满还不收敛说明图的深度本身超出了这套补法——那时
+ * 缺口会如实留在失败面里（并在报错里写明"补目标已用满 N 轮"），不静默、也不无限补。
  */
-const SUPPLEMENT_ROUNDS = 4;
+const SUPPLEMENT_ROUNDS = 8;
 
 /**
  * 判据读数（从磁盘）：静态目录快照 + 从页面入口出发的 BFS。
@@ -147,11 +150,16 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
     appManifest,
   });
   const failures: PrebundleFailure[] = [...result.failures];
+  // 入口产物是**构建自身的前提**：先确认它在盘上，再谈可达缺口（入口不进缺口判据，见 reachableModulesOf）。
+  await assertEntryProduct({ outDir: options.outDir, app });
   // 决定 9：**有副本的一律按副本出独立产物**。可达却没有产物的地址里，凡是"包名 + 版本"认得出副本的，
   // 各补一条目标再编（迭代到固定点）——它们不进兜底，否则同名多版本会被合并成一条地址。
   let graph = await reachabilityOf(options.outDir, entryUrlOf(app));
+
   const tried = new Set<string>();
+  let rounds = 0;
   for (let round = 0; round < SUPPLEMENT_ROUNDS; round += 1) {
+    rounds = round + 1;
     const gaps = graph.gaps.filter((gap) => !tried.has(gap.url));
     if (gaps.length === 0) break;
     for (const gap of gaps) tried.add(gap.url);
@@ -176,6 +184,8 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
     graph = await reachabilityOf(options.outDir, entryUrlOf(app));
   }
   const gaps = graph.gaps.map((gap) => gap.url);
+  // 补目标的每一轮都会重编若干包组：**再确认一次**入口产物还在（产物目录是共享的，别让某次重编把它带走）。
+  await assertEntryProduct({ outDir: options.outDir, app });
   // 决定 8：剩下的残余统一指向共享运行时聚合产物（编不出来、或被 default 导入就抛）。
   await fallbackToRuntime({
     outDir: options.outDir,
@@ -189,11 +199,13 @@ export async function compile(options: CompileOptions): Promise<CompileResult> {
   await removeBuildScaffolding(options.outDir);
   // 决定 13：兜底之后**重算一次读数**（改写改的是产物字节，可达集合会变），可达集合里还有缺口就红。
   // 不可达的产物留在目录里不动（决定 12）：判据只看可达子集。
-  assertReachableComplete({
-    reachable: await reachabilityOf(options.outDir, entryUrlOf(app)),
-    failures,
-    where,
-  });
+  const reachable = await reachabilityOf(options.outDir, entryUrlOf(app));
+  // 轮次用满还不收敛：把这句写进报错，别让「补了两轮就没动」看起来像规则本身没问题。
+  const exhausted =
+    rounds >= SUPPLEMENT_ROUNDS && reachable.gaps.length > 0
+      ? `${where}\n  补目标已用满 ${String(SUPPLEMENT_ROUNDS)} 轮仍不收敛：图的深度超出了这套补法的上限`
+      : where;
+  assertReachableComplete({ reachable, failures, where: exhausted });
   // 产物侧的清单只留 `rev` + `files`：`resolved` 是「外置依赖解析到哪个包根」的构建期表（**构建机的
   // 绝对路径**），dev 的缓存命中要靠它重放，产物不需要——写进去就是分发一份构建机路径。
   await stripResolvedFromManifests(options.outDir);
@@ -373,9 +385,14 @@ function federationUrlsIn(code: string): string[] {
  * 与「页面会 404」是两件事——只有可达链上的地址才参与判据（设计决定 12）。不可达的产物留在目录里，
  * 不删（那是另一条取舍）。
  *
+ * **入口不进缺口**：页面入口的产物由**入口 bundle 直接落盘**（页面骨架引用的就是那一条），它的存在性是
+ * 构建自身的前提、不是"页面会 404 的地址"——两者的处置也不同（前者该红在构建上，后者才进缺口判据）。
+ * 把它当缺口报，必然得到「无引用方 / 无副本 / 没经手过」这种误导性的三句话（它本来就不在枚举清单里）。
+ * 入口产物在不在，由 {@link assertEntryProduct} 单独守。
+ *
  * 纯函数：不读盘、不碰 runtime，所以规则可以用手写产物钉住。
  * @param input - 入口地址与产物快照。
- * @returns 可达集合与缺口。
+ * @returns 可达集合与缺口（缺口里不含入口自身）。
  */
 export function reachableModulesOf(input: ReachabilityInput): Reachability {
   /** BFS 队列（只收第一次见到的地址，顺序就是首次到达顺序）。 */
@@ -390,8 +407,9 @@ export function reachableModulesOf(input: ReachabilityInput): Reachability {
     reachable.push(url);
     const code = input.artifacts.get(url);
     if (code === undefined) {
-      // 没有产物就没有下一条边：这里如实记缺口，别再往下猜。
-      gaps.push({ url, importers: importersOf.get(url) ?? [] });
+      // 没有产物就没有下一条边：如实记缺口，别再往下猜。入口是例外（见上方注释）：它由入口 bundle 落盘，
+      // 缺了是构建自身的错，{@link assertEntryProduct} 会给出专属的那条错误。
+      if (index > 0) gaps.push({ url, importers: importersOf.get(url) ?? [] });
       continue;
     }
     for (const referenced of federationUrlsIn(code)) {
@@ -438,16 +456,28 @@ export function artifactAddressOf(target: PrebundleTarget): string {
  *
  * 清单 `.files.json` 是"这个包的产物里有什么"的唯一真相（路由按它服务），所以快照也从它来——
  * 不扫目录猜"哪些文件是产物"。
+ *
+ * **读不出就抛**：清单读不了 / 不是 JSON 时，"这个包没有产物"是个假结论，会把它的每条地址都算成缺口，
+ * 报出来的却是一串「无副本、没经手过」的误导话。宁可红在"清单读不出来"这一句上。
  * @param outDir - 静态目录。
  * @returns 产物列表（顺序按目录遍历）。
+ * @throws Error 某个包的清单读不出来或不是 JSON。
  */
 export async function artifactsOf(outDir: string): Promise<Artifact[]> {
   const out: Artifact[] = [];
   for (const entry of await readdir(outDir, { withFileTypes: true, recursive: true })) {
     if (!entry.isFile() || entry.name !== ".files.json") continue;
-    const manifest = JSON.parse(
-      await readFile(join(entry.parentPath, entry.name), "utf8").catch(() => "{}"),
-    ) as { files?: Record<string, string> };
+    const manifestPath = join(entry.parentPath, entry.name);
+    const raw = await readFile(manifestPath, "utf8").catch((error: unknown) => {
+      throw new Error(`产物清单读不出来：${manifestPath}（${String(error)}）`);
+    });
+    const manifest = (() => {
+      try {
+        return JSON.parse(raw) as { files?: Record<string, string> };
+      } catch (error) {
+        throw new Error(`产物清单不是 JSON：${manifestPath}（${String(error)}）`);
+      }
+    })();
     for (const relative of Object.values(manifest.files ?? {})) {
       const file = join(outDir, relative);
       // 只有 JS 产物里有 import 语句；资产是原字节，读成文本没有意义（也不该被当模块跟下去）。
@@ -881,6 +911,38 @@ export async function defaultsOfRuntime(options: {
   return out;
 }
 
+/**
+ * 页面入口的产物必须在盘上（构建自身的前提）。
+ *
+ * 它与「可达缺口」是两件事：入口地址由**入口 bundle 直接落盘**，不在预编译清单里、也没有引用方，
+ * 所以把它塞进缺口判据只会得到「无引用方 / 无副本 / 没经手过」这三句废话。它的存在性单独守——
+ * 缺了是**构建自己没写出产物**（或产物目录被清掉），报错要能直接指到那个文件。
+ * @param options - 静态目录与入口目标。
+ * @returns 入口产物的绝对路径。
+ * @throws Error 入口产物不在盘上。
+ */
+export async function assertEntryProduct(options: {
+  readonly outDir: string;
+  readonly app: PrebundleTarget;
+}): Promise<string> {
+  const file = join(
+    options.outDir,
+    cacheKeyOf(options.app.name, options.app.version),
+    productFileNameOf(options.app.exportName),
+  );
+  const found = await stat(file).catch(() => undefined);
+  if (found?.isFile() !== true) {
+    throw new Error(
+      [
+        `页面入口的产物没落盘：${file}`,
+        `  入口地址 ${entryUrlOf(options.app)} 是页面骨架唯一引用的那一条——它不在，页面必然白屏。`,
+        "  这是**构建自身**的失败（入口 bundle 没写出产物，或产物目录被清掉），不是可达缺口：",
+        "  入口没有引用方、也不在预编译清单里，那三句话（无引用方 / 无副本 / 没经手过）对它没有意义。",
+      ].join("\n"),
+    );
+  }
+  return file;
+}
 /**
  * 决定 13：兜底之后，**可达集合**里仍有编不出来的地址 → 构建失败，点名现场。
  *

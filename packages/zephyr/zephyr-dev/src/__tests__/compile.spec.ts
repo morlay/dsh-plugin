@@ -20,6 +20,8 @@ import { describe, expect, it } from "vitest";
 // 子出口面里的相对 `../` 会让"面"退化成目录结构的一部分。
 import {
   artifactAddressOf,
+  artifactsOf,
+  assertEntryProduct,
   assertReachableComplete,
   compile,
   fallbackToRuntime,
@@ -154,11 +156,75 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
     expect(graph.gaps).toEqual([]);
   });
 
-  it("入口自己没有产物：也算一处缺口（没有引用方）", () => {
+  it("入口不进缺口：它是构建自身的前提，不是「页面会 404 的地址」", () => {
     const graph = reachableModulesOf({ entry: ENTRY, artifacts: new Map() });
 
+    // 可达集合仍然从入口开始（它就是页面唯一引用的那一条）……
     expect(graph.reachable).toEqual([ENTRY]);
-    expect(graph.gaps).toEqual([{ url: ENTRY, importers: [] }]);
+    // ……但不进缺口：入口产物由**入口 bundle 直接落盘**，既没有引用方、也不在预编译清单里。
+    // 把它混进缺口判据只会得到「无引用方 / 无副本 / 没经手过」三句对入口毫无信息量的话；
+    // 它的存在性由 `assertEntryProduct` 单独守（构建自身的前提，缺了就是构建没写出产物）。
+    expect(graph.gaps).toEqual([]);
+  });
+});
+describe("assertEntryProduct（入口产物是构建自身的前提）", () => {
+  /** 入口目标（与 `appTargetOf` 同形：出口名 `client`，产物 `client.js`）。 */
+  function appOf(workspace: string): Parameters<typeof assertEntryProduct>[0]["app"] {
+    return {
+      name: "fx-app",
+      version: "0.0.0",
+      exportName: "client",
+      entry: join(workspace, "src/client/app-boot.ts"),
+    };
+  }
+
+  it("入口产物不在盘上：报「没落盘」并指到文件，而不是当成缺口", async () => {
+    const fixture = await fixtureOf({});
+
+    const error = await assertEntryProduct({
+      outDir: fixture.outDir,
+      app: appOf(fixture.workspace),
+    }).then(
+      () => undefined,
+      (rejected: unknown) => rejected as Error,
+    );
+
+    expect(error?.message).toContain("页面入口的产物没落盘");
+    // 直接指到那个文件：排查的人不用再去拼目录名与产物文件名。
+    expect(error?.message).toContain(join("fx-app@0.0.0", "client.js"));
+    // 缺口判据那套**逐条格式**（缩进的「引用方 / 副本 / 打包器」三段）不该套到入口上。
+    expect(error?.message).not.toContain("\n    引用方 ");
+    expect(error?.message).not.toContain("\n    副本 ");
+    expect(error?.message).not.toContain("\n    打包器 ");
+  });
+
+  it("入口产物在盘上：通过，并返回它的绝对路径", async () => {
+    const fixture = await fixtureOf({
+      "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
+      "out/fx-app@0.0.0/client.js": "export const app = 1;\n",
+    });
+
+    await expect(
+      assertEntryProduct({ outDir: fixture.outDir, app: appOf(fixture.workspace) }),
+    ).resolves.toBe(join(fixture.outDir, "fx-app@0.0.0", "client.js"));
+  });
+});
+
+describe("artifactsOf（清单是唯一真相：读不出就红）", () => {
+  it("清单不是 JSON：抛错并指到那份清单，不静默当成「这个包没产物」", async () => {
+    // 静默当空会把它的每条地址都算成缺口，报出来的却是一串「无副本、没经手过」的误导话。
+    const fixture = await fixtureOf({
+      "out/fx-app@0.0.0/.files.json": "{ 坏掉的 json",
+      "out/fx-app@0.0.0/client.js": "export const app = 1;\n",
+    });
+
+    const error = await artifactsOf(fixture.outDir).then(
+      () => undefined,
+      (rejected: unknown) => rejected as Error,
+    );
+
+    expect(error?.message).toContain("产物清单不是 JSON");
+    expect(error?.message).toContain(join("fx-app@0.0.0", ".files.json"));
   });
 });
 /** 共享运行时聚合产物的地址（虚拟包：名字与版本是实现的公开事实，这里写字面量当独立真值）。 */
