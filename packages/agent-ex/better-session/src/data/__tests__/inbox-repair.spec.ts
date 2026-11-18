@@ -6,7 +6,7 @@ import { SessionPersistenceRdb as SessionPersistenceSqlite } from "@morlay/bette
 import { meta } from "@morlay/dsh-session/testing";
 import { orphanInboxSpliceSeqs, repairOrphanInboxSplices } from "@morlay/better-session";
 import { createCtx, mountOnto } from "../../__tests__/support/base.ts";
-import { MessageId } from "@morlay/dsh-agent/contract";
+import { MessageId, createUserMessage } from "@morlay/dsh-agent/contract";
 
 function splice(
   seq: number,
@@ -23,12 +23,19 @@ function splice(
       target,
       start: SessionSeq(start),
       removedCount: removed,
+      // `inserted` 里的项是**真消息**（上游 `Inbox` 会按消息面读），不是只有 id 的占位：
+      // 盘上那条 `Cannot use 'in' operator to search for 'plugin' in undefined` 就是这条形状写歪暴露的。
       ...(inserted.length > 0
-        ? { inserted: inserted.map((item) => ({ id: MessageId(item.id) })) }
+        ? {
+            inserted: inserted.map((item) => ({
+              ...createUserMessage({ content: [{ type: "text", text: item.id }], source: { kind: "user" } }),
+              id: MessageId(item.id),
+            })),
+          }
         : {}),
     },
-    // 上游 agent 域的拼装事件（`agent/inbox/spliced`）：形状由 agent 域定，这里按它的公开面装，
-    // 差额见阶段 2 回报的「夹具坏数据」清单。
+    // 卡点（票 03 第 7 类）：`inserted` 已是**真消息**，剩下的差额在上游 `agent/inbox/spliced` 的 data
+    // 其余字段（`version` 等）——没摸清前不猜，留着这条断言。
   } as unknown as SessionEvent;
 }
 
