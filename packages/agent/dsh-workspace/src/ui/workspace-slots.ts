@@ -43,8 +43,8 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
   /** 行内右键菜单：上游在它自己的行 ctx 上发布，装配期由 `adoptNamedServices` 映射成同名令牌。 */
   private readonly contextMenus = inject(ContextMenus);
 
-  /** 兄弟行是否已经发布过 `uiWorkspace`（发布侧幂等守卫用；注入填充早于 `onInit`，与运行时读等价）。 */
-  private readonly publishedUiWorkspace = inject.optional(UiWorkspace);
+  /** 这一行自己发布过没有（发布侧幂等守卫；行重挂时新实例会按新的 `kFace` 重新发布）。 */
+  private publishedUiWorkspace = false;
 
   /** 会话目录读面（`sessions`）：合同在会话域的端点面，UI 只要读它。 */
   private readonly sessions = inject(SessionController);
@@ -71,9 +71,10 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
     // 上游 `apply` 里 `new UiWorkspaceService(ctx, 'uiWorkspace')` 注册在**行 ctx** 上：兄弟行按名字
     // 读（`ctx.uiWorkspace`）时看不到，所以要把它显式发布到根 ctx。`kFace` 就是那份上游实例。
     const uiWorkspace = this[kFace];
-    // 守卫读的是**我们自己的令牌**（`inject.optional`），发布仍按上游协议名走 `reflect.provide`——
-    // 按名字读只会拿回 `any`，而这里需要的只是「有没有」。
-    if (uiWorkspace !== undefined && this.publishedUiWorkspace === undefined) {
+    // 发布按上游协议名走 `reflect.provide`：上游插件按 `ctx.uiWorkspace` 读，而它们的行看不到这一行的
+    // fiber。幂等按**这一行自己**判（`onInit` 只跑一次；重挂时新实例重新发布，同名服务由 cordis 覆盖）。
+    if (uiWorkspace !== undefined && !this.publishedUiWorkspace) {
+      this.publishedUiWorkspace = true;
       ctx.root.reflect.provide("uiWorkspace", uiWorkspace);
     }
   }
