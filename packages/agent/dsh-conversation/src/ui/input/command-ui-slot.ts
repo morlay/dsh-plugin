@@ -12,6 +12,7 @@ import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 import { CommandUiRow } from "@morlay/dsh-command/ui";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { InputTriggers } from "./input.token.ts";
+import { namespaceOf } from "../remote-namespace.ts";
 import { COMMANDS_REMOTE_KEY } from "@morlay/dsh-command/endpoint";
 
 @Injectable()
@@ -33,7 +34,7 @@ export class CommandUiSlot extends CommandUiRow {
       inputTriggers: this.inputTriggers,
       sessions: this.sessions,
       remote: this.remote,
-      [COMMANDS_REMOTE_KEY]: (this.remote as unknown as Record<string, unknown>)["commands"],
+      [COMMANDS_REMOTE_KEY]: namespaceOf(this.remote, "commands"),
       locale: this.locale,
       slots: this.slots,
     });

@@ -12,6 +12,7 @@ import { CommandRunner } from "@morlay/dsh-command/endpoint";
 import { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { LiveSessionRemotes } from "./remote-session.ts";
+import { namespaceOf } from "./remote-namespace.ts";
 import { SESSION_GROUP } from "@morlay/dsh-session/endpoint";
 
 @Injectable()
@@ -82,9 +83,9 @@ export class SessionControllerDefault extends SessionController implements OnIni
     void this.remote.whenMounted().then(async () => {
       if (controller.signal.aborted) return;
       try {
-        const face = (this.remote as unknown as Record<string, unknown>)[
-          SESSION_GROUP
-        ] as unknown as { control?(signal: AbortSignal): AsyncIterable<unknown> } | undefined;
+        const face = namespaceOf(this.remote, SESSION_GROUP) as
+          | { control?(signal: AbortSignal): AsyncIterable<unknown> }
+          | undefined;
         if (typeof face?.control !== "function") return;
         for await (const frame of face.control(controller.signal)) {
           sessions.handleControlFrame(frame as never);

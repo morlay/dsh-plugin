@@ -19,6 +19,7 @@ import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
 // 远端身份只从 `./endpoint`（client-safe）取：包根带三个宿主 service，浏览器半引不得。
 import { PERMISSION_PRESETS_REMOTE } from "@morlay/dsh-permission/endpoint";
 import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
+import { namespaceOf } from "./remote-namespace.ts";
 
 @Injectable()
 export class UiPermission extends fromCordis(UiPermissionPlugin) {
@@ -47,11 +48,10 @@ export class UiPermission extends fromCordis(UiPermissionPlugin) {
     // 而 cordis 服务名视图给的是包装层，上面读不到这些属性（实测 `ctx.remote.permissionPresets`
     // 是 undefined，报错点漂成 `reading 'catalog'`）。这里把两条 face 与四个方法显式给出。
     const remote = this.remote;
-    const namespaces = remote as unknown as Record<string, unknown>;
     // `Remote` 契约本身不列 namespace（见 `remote.contract.ts`），这里按名字取两条 face。
     const remoteForUi = {
-      permissionPresets: namespaces["permissionPresets"],
-      settings: namespaces["settings"],
+      permissionPresets: namespaceOf(remote, "permissionPresets"),
+      settings: namespaceOf(remote, "settings"),
       $on: (channel: string, listener: (...args: never[]) => unknown): (() => void) =>
         remote.$on(channel, listener),
       $mount: (contribution: unknown): Promise<() => Promise<void>> => remote.$mount(contribution),
