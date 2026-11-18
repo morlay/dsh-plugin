@@ -9,6 +9,7 @@ import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { DirectoryPickerBackend } from "@morlay/dsh-workspace";
 import { afterEach, describe, expect, it } from "vitest";
 import { DirectoryPickerControllerRow } from "../server/directory-picker.host.ts";
+import { DirectoryPickerEndpointRow } from "../server/directory-picker-endpoint.service.ts";
 
 @Injectable()
 class FakeNativePicker extends DirectoryPickerBackend {
@@ -36,7 +37,13 @@ afterEach(async () => {
 
 async function boot(): Promise<{ handlers: RemoteHandlers; picker: FakeNativePicker }> {
   const app = await bootstrapApplication({
-    providers: [RemoteHandlersDefault, FakeNativePicker, DirectoryPickerControllerRow],
+    // 两行：适配行装上游 controller，端点行继承契约把它注册到 wire 上。
+    providers: [
+      RemoteHandlersDefault,
+      FakeNativePicker,
+      DirectoryPickerControllerRow,
+      DirectoryPickerEndpointRow,
+    ],
     timeoutMs: 10_000,
   });
   opened.push(app);

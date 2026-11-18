@@ -2,6 +2,7 @@ import { provide } from "@morlay/zephyr";
 import { remoteDescriptor } from "@morlay/zephyr-app";
 import { DefaultWorkspace } from "../default-workspace.service.ts";
 import { DirectoryPickerControllerRow } from "./directory-picker.host.ts";
+import { DirectoryPickerEndpointRow } from "./directory-picker-endpoint.service.ts";
 import { DirectoryPickerNative } from "../directory-picker.service.ts";
 import { SessionWorkspaceHost } from "./session-workspace.host.ts";
 import { WorkspaceBroadcaster } from "../workspace-broadcaster.service.ts";
@@ -12,7 +13,9 @@ import { Workspace } from "../workspace.service.ts";
 export const provideWorkspace = provide([
   Workspace,
   DirectoryPickerNative,
+  // 「装上游」与「接 wire」是两行：前者发布上游面，后者继承契约、把三个动词注册到 wire 上。
   DirectoryPickerControllerRow,
+  DirectoryPickerEndpointRow,
   // `workspace/follow` 的帧来源：命令与「会话 attach」都往它推。
   WorkspaceBroadcaster,
   // `remote.workspace` 的宿主面：上游 `WorkspaceController` + 本仓的 wire 路由表。

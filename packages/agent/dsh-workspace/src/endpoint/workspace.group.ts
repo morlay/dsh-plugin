@@ -1,23 +1,41 @@
 // `workspace` 组的**两端共用面**：组名、方法名与每个方法的请求/响应形状。
 //
 // 形状照上游 `api/workspace-controller` 的 descriptor 抄（`namespace: 'workspace'`），但声明在我们这里：
-// `endpoint/` 是两端共用的面。类型从上游的 `/client` 子出口取（`import type`，运行期零边——那个子出口
-// 是浏览器面，与 `ui/` 已有的取法一致）。
+// `endpoint/` 是两端共用的面。类型从上游的 `/types`（请求与应答的 wire 形状）与 `/client`（客户端调用面）
+// 子出口取，全是 `import type`：运行期零边。
 //
 // 组名只有一个 home：下面契约类上的 `@RemoteGroup({ name: "workspace" })`。消费方从契约读
 // （`remoteGroupNameOf`）或直接调客户端形态的方法，不另存一份字符串。
 import type { WorkspaceRemote } from "@deepseek-ai/dsh-api-workspace-controller/client";
-import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import type {
+  WorkspaceArchiveValue,
+  WorkspaceCreateValue,
+  WorkspaceDeleteValue,
+  WorkspaceFollowFrame,
+  WorkspaceOrderValue,
+  WorkspacePinValue,
+  WorkspaceValue,
+} from "@deepseek-ai/dsh-api-workspace-controller/types";
+import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
 /** 组在 `Remote` 面上的 deps 键（`remote.workspace`）。 */
 export const WORKSPACE_REMOTE_KEY = "remote.workspace" as const;
 
 /**
+ * 一条命令的应答。
+ *
+ * 同一条 wire 端点，两端拿到的是**两层的不同东西**：宿主回**裸值**（失败是异常，与上游 `@Remote` 同协议），
+ * 客户端 `remote.<组>` 的调用面再把它包成 `RemoteResult`。契约两端共用，所以这里写两者的上界；
+ * 两侧实现各自收窄到自己那一半——宿主（`server/workspace-controller.host.ts`）回裸值，
+ * `WorkspaceEndpointClient` 回 `RemoteResult`。
+ */
+type Reply<T> = T | RemoteResultWire<T>;
+
+/**
  * `workspace` 组：工作区的建档 / 改名 / 删除 / 排序、会话的归档与置顶，外加一条目录状态流。
  *
  * 每个 unary 的 wire 参数叫 `request`（与宿主侧 `registerRemoteGroup` 的 `requestOf` 同一约定），
- * 返回值是上游的 `RemoteResult`（客户端按 `result.ok` 解）；`follow` 是流式，`initializeDefault`
- * 带取消信号。
+ * 应答是 {@link Reply}；`follow` 是流式，`initializeDefault` 带取消信号。
  */
 @RemoteGroup({ name: "workspace" })
 export class WorkspaceEndpoint {
@@ -29,7 +47,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async create(
     _request: Parameters<WorkspaceRemote["create"]>[0],
-  ): ReturnType<WorkspaceRemote["create"]> {
+  ): Promise<Reply<WorkspaceCreateValue>> {
     throw new Error("workspace/create：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -39,9 +57,7 @@ export class WorkspaceEndpoint {
    * @returns 改后的工作区投影。
    */
   @RemoteMethod()
-  async rename(
-    _request: Parameters<WorkspaceRemote["rename"]>[0],
-  ): ReturnType<WorkspaceRemote["rename"]> {
+  async rename(_request: Parameters<WorkspaceRemote["rename"]>[0]): Promise<Reply<WorkspaceValue>> {
     throw new Error("workspace/rename：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -53,7 +69,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async delete(
     _request: Parameters<WorkspaceRemote["delete"]>[0],
-  ): ReturnType<WorkspaceRemote["delete"]> {
+  ): Promise<Reply<WorkspaceDeleteValue>> {
     throw new Error("workspace/delete：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -65,7 +81,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async insertBefore(
     _request: Parameters<WorkspaceRemote["insertBefore"]>[0],
-  ): ReturnType<WorkspaceRemote["insertBefore"]> {
+  ): Promise<Reply<WorkspaceOrderValue>> {
     throw new Error("workspace/insertBefore：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -77,7 +93,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async insertSessionBefore(
     _request: Parameters<WorkspaceRemote["insertSessionBefore"]>[0],
-  ): ReturnType<WorkspaceRemote["insertSessionBefore"]> {
+  ): Promise<Reply<WorkspaceValue>> {
     throw new Error("workspace/insertSessionBefore：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -89,7 +105,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async archiveSession(
     _request: Parameters<WorkspaceRemote["archiveSession"]>[0],
-  ): ReturnType<WorkspaceRemote["archiveSession"]> {
+  ): Promise<Reply<WorkspaceArchiveValue>> {
     throw new Error("workspace/archiveSession：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -101,7 +117,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async unarchiveSession(
     _request: Parameters<WorkspaceRemote["unarchiveSession"]>[0],
-  ): ReturnType<WorkspaceRemote["unarchiveSession"]> {
+  ): Promise<Reply<WorkspaceArchiveValue>> {
     throw new Error("workspace/unarchiveSession：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -113,7 +129,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async pinSession(
     _request: Parameters<WorkspaceRemote["pinSession"]>[0],
-  ): ReturnType<WorkspaceRemote["pinSession"]> {
+  ): Promise<Reply<WorkspacePinValue>> {
     throw new Error("workspace/pinSession：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -125,7 +141,7 @@ export class WorkspaceEndpoint {
   @RemoteMethod()
   async unpinSession(
     _request: Parameters<WorkspaceRemote["unpinSession"]>[0],
-  ): ReturnType<WorkspaceRemote["unpinSession"]> {
+  ): Promise<Reply<WorkspacePinValue>> {
     throw new Error("workspace/unpinSession：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -135,17 +151,17 @@ export class WorkspaceEndpoint {
    * @returns 新工作区的投影，或「首次初始化不适用」时的 `undefined`。
    */
   @RemoteMethod()
-  async initializeDefault(_signal?: AbortSignal): ReturnType<WorkspaceRemote["initializeDefault"]> {
+  async initializeDefault(_signal?: AbortSignal): Promise<Reply<WorkspaceValue | undefined>> {
     throw new Error("workspace/initializeDefault：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 工作区目录的状态流：一帧 baseline，之后逐条增量，直到取消。
    * @param _signal - wire 的取消信号（流承载关闭时 abort）。
-   * @returns 逐帧面（上游 `RemoteStreamHandle`）。
+   * @returns 逐帧面：宿主给 `AsyncIterable`，客户端面是它的 `RemoteStreamHandle`。
    */
   @RemoteMethod({ mode: "stream" })
-  follow(_signal?: AbortSignal): ReturnType<WorkspaceRemote["follow"]> {
+  follow(_signal?: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {
     throw new Error("workspace/follow：契约类未实现（宿主侧要在子类里实现它）");
   }
 }

@@ -16,6 +16,7 @@ import { provideTypert } from "@morlay/zephyr-app";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
 import { WorkspaceFilesDefault } from "../server/workspace-files.service.ts";
+import { WorkspaceFilesEndpointRow } from "../server/workspace-files-endpoint.service.ts";
 
 const SESSION = "s1";
 
@@ -78,7 +79,9 @@ async function boot(): Promise<{ handlers: RemoteHandlers; root: string }> {
       FsSandbox,
       // 真会话存储：会话的 header.cwd 指向这次用例的目录，作用域解析把它当 workspace 根。
       SessionStoreDefault,
+      // 两行：适配行装上游 `WorkspaceFiles`，端点行继承契约把它注册到 wire 上。
       WorkspaceFilesDefault,
+      WorkspaceFilesEndpointRow,
     ],
     timeoutMs: 20_000,
   });

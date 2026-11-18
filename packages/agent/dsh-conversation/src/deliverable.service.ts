@@ -49,8 +49,9 @@ export class DeliverablesHostDefault extends fromCordis(DeliverablesHostPlugin) 
 
   private readonly sessionController = inject(SessionControllerService);
 
-  // `workspaceFiles` 没有本仓自己的契约类：沙箱那行的适配行（`WorkspaceFilesDefault`）就是它的令牌，
-  // 注入拿到的契约面是上游实例本身。
+  // 这里要的是**上游服务面**（`WorkspaceFiles` 的读/列/观察），它由沙箱那行的适配行
+  // `WorkspaceFilesDefault` 发布：注入这个令牌拿到的是上游实例本身。wire 那一侧的契约类是
+  // `WorkspaceFilesEndpoint`（`@morlay/dsh-workspace/endpoint`），与本行无关。
   private readonly workspaceFiles = inject(WorkspaceFilesDefault);
 
   private readonly fs = inject(FileSystem);

@@ -7,6 +7,11 @@
 // 另一个入口是「会话挂到工作区」（`SessionWorkspaceHost.attach`）：它不走 workspace 命令，
 // 所以由它调 `broadcastUpsert`。
 import { workspaceView } from "@deepseek-ai/dsh-api-workspace-controller/src/feed.ts";
+import type {
+  WorkspaceBaseline,
+  WorkspaceFollowFrame,
+  WorkspaceFollowIncrement,
+} from "@deepseek-ai/dsh-api-workspace-controller/types";
 import { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { inject, Injectable } from "@morlay/zephyr";
 import { WorkspaceRegistry } from "./contract/workspace.contract.ts";
@@ -16,10 +21,10 @@ export class WorkspaceBroadcaster {
   private readonly registry = inject(WorkspaceRegistry);
 
   /** 活跃的 follow 流：帧从命令完成后推给它们。 */
-  private readonly followers = new Set<(frame: unknown) => void>();
+  private readonly followers = new Set<(frame: WorkspaceFollowIncrement) => void>();
 
   /** 一帧 `baseline`：注册表的当前全量（列表顺序即 `registry.list()` 的顺序）。 */
-  baseline(): unknown {
+  baseline(): WorkspaceBaseline {
     return {
       items: this.registry.list().map((workspace) => workspaceView(workspace)),
       archivedSessionIds: [...this.registry.archivedSessionIds],
@@ -33,10 +38,10 @@ export class WorkspaceBroadcaster {
    * 用队列 + 唤醒而不是 `for await` 上游 generator：增量来自**命令**（见文件头）。
    * @param signal - 客户端取消信号。
    */
-  async *follow(signal: AbortSignal): AsyncGenerator<unknown> {
-    const queue: unknown[] = [];
+  async *follow(signal: AbortSignal): AsyncGenerator<WorkspaceFollowFrame> {
+    const queue: WorkspaceFollowIncrement[] = [];
     let wake: (() => void) | undefined;
-    const push = (frame: unknown): void => {
+    const push = (frame: WorkspaceFollowIncrement): void => {
       queue.push(frame);
       wake?.();
       wake = undefined;
@@ -67,7 +72,7 @@ export class WorkspaceBroadcaster {
   }
 
   /** 广播一帧增量给所有活跃的 follow 流（先取快照：推送中途退订不影响本轮）。 */
-  broadcast(frame: unknown): void {
+  broadcast(frame: WorkspaceFollowIncrement): void {
     for (const push of Array.from(this.followers)) push(frame);
   }
 
