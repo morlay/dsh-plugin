@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { CompactionId, compactCheckpointSource } from "@morlay/dsh-compaction";
 import {
+  MessageId,
   ToolCallId,
   createMessage,
   createToolResultMessage,
@@ -21,6 +22,7 @@ import type {
   SessionEvent,
   SurfaceEvent,
   SurfaceEventType,
+  SurfaceOp,
 } from "@morlay/dsh-session/contract";
 import {
   SessionPersistenceRdb as SessionPersistenceSqlite,
@@ -464,13 +466,13 @@ describe("rowToEvent", () => {
       fCreatedAt: 1,
       fData: JSON.stringify({
         turn: 1,
-        shadowedRange: { start: 1, end: 2 },
+        shadowedRange: { start: SessionSeq(1), end: SessionSeq(2) },
         shadowedTokenCount: 9,
       }),
       fSurfaceOp: null,
     };
     expect(rowToEvent(row).data).toMatchObject({
-      shadowedRange: { start: 1, end: 2 },
+      shadowedRange: { start: SessionSeq(1), end: SessionSeq(2) },
       shadowedTokenCount: 9,
     });
   });
@@ -480,7 +482,9 @@ describe("findSurfaceRepairs", () => {
   function toolResult(
     seq: number,
     text: string,
-    extra: Partial<SessionEvent> = {},
+    // 只允许表面操作这一位：`Partial<SessionEvent>` 会把整条 union 的可选字段都摊开，
+    // 展开到字面量上时 `exactOptionalPropertyTypes` 立刻红。
+    extra: { surfaceOp: SurfaceOp },
     messageId?: string,
   ): SessionEvent {
     const message = createToolResultMessage({
@@ -496,10 +500,10 @@ describe("findSurfaceRepairs", () => {
         turn: 1,
         step: 1,
 
-        message: messageId === undefined ? message : { ...message, id: messageId },
+        message: messageId === undefined ? message : { ...message, id: MessageId(messageId) },
       },
       ...extra,
-    } as unknown as SessionEvent;
+    };
   }
 
   it("degrades an invalid tool/result replace to append (the reported load failure)", () => {
@@ -509,9 +513,12 @@ describe("findSurfaceRepairs", () => {
         type: "user/message",
         seq: SessionSeq(1),
         time: 2,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
       {
         type: "assistant/message",
@@ -528,7 +535,7 @@ describe("findSurfaceRepairs", () => {
           stream: [] as const,
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
       {
         type: "turn/end",
@@ -561,9 +568,12 @@ describe("findSurfaceRepairs", () => {
         type: "user/message",
         seq: SessionSeq(1),
         time: 2,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
       {
         type: "assistant/message",
@@ -582,7 +592,7 @@ describe("findSurfaceRepairs", () => {
           stream: [] as const,
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
       original,
       replacement,
@@ -599,9 +609,12 @@ describe("findSurfaceRepairs", () => {
         type: "user/message",
         seq: SessionSeq(0),
         time: 1,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(1),
@@ -617,8 +630,8 @@ describe("findSurfaceRepairs", () => {
           stream: [] as const,
         },
 
-        surfaceOp: { op: "replace", startSeq: 9, endSeq: 1 },
-      } as unknown as SessionEvent,
+        surfaceOp: { op: "replace", startSeq: SessionSeq(9), endSeq: SessionSeq(1) },
+      },
     ];
     const repairs = findSurfaceRepairs(events);
     expect([...repairs.degradeToAppend]).toEqual([1]);
@@ -626,11 +639,16 @@ describe("findSurfaceRepairs", () => {
 
   it("marks surface-eligible events missing surfaceOp and clears it on non-eligible events", () => {
     const events: SessionEvent[] = [
+      // 盘上存着的坏数据：表面事件缺 surfaceOp、非表面事件带着 surfaceOp。类型上都不成立，
+      // 这两条正是修复器要处理的输入（判据见回报的「夹具坏数据」清单）。
       {
         type: "user/message",
         seq: SessionSeq(0),
         time: 1,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
       } as unknown as SessionEvent,
       {
         type: "turn/end",
@@ -653,9 +671,12 @@ describe("findSurfaceRepairs", () => {
         type: "user/message",
         seq: SessionSeq(0),
         time: 1,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(1),
@@ -671,7 +692,8 @@ describe("findSurfaceRepairs", () => {
           stream: [] as const,
         },
 
-        surfaceOp: { op: "replace", startSeq: "1", endSeq: 0 },
+        // 盘上存着的坏数据：seq 是字符串（旧格式残留）。
+        surfaceOp: { op: "replace", startSeq: "1", endSeq: SessionSeq(0) },
       } as unknown as SessionEvent,
     ];
     const repairs = findSurfaceRepairs(events);
@@ -690,7 +712,7 @@ describe("findSurfaceRepairs", () => {
           source: { kind: "user" },
         }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
       {
         type: "assistant/message",
@@ -707,7 +729,7 @@ describe("findSurfaceRepairs", () => {
           stream: [] as const,
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
       {
         type: "turn/end",
@@ -720,15 +742,15 @@ describe("findSurfaceRepairs", () => {
         seq: SessionSeq(6),
         time: 7,
         data: {
-          turn: 1,
-          summary: "compacted",
-          shadowedRange: { start: 1, end: 999 },
-          shadowedSeqs: [1, 3],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "compacted" }],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(999) },
+          shadowedSeqs: [SessionSeq(1), SessionSeq(3)],
           shadowedTokenCount: 5,
           provider: "mock",
           model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(7),
@@ -737,8 +759,8 @@ describe("findSurfaceRepairs", () => {
           content: [{ type: "text", text: "compacted" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 999 },
-      } as unknown as SessionEvent,
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(999) },
+      },
     ];
     const repairs = findSurfaceRepairs(events);
     expect([...repairs.clampEnd]).toEqual([[7, 3]]);
@@ -752,15 +774,15 @@ describe("findSurfaceRepairs", () => {
         seq: SessionSeq(0),
         time: 1,
         data: {
-          turn: 1,
-          summary: "compacted",
-          shadowedRange: { start: 40, end: 999 },
-          shadowedSeqs: [40, 41],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "compacted" }],
+          shadowedRange: { start: SessionSeq(40), end: SessionSeq(999) },
+          shadowedSeqs: [SessionSeq(40), SessionSeq(41)],
           shadowedTokenCount: 5,
           provider: "mock",
           model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(1),
@@ -769,8 +791,8 @@ describe("findSurfaceRepairs", () => {
           content: [{ type: "text", text: "compacted" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
-        surfaceOp: { op: "replace", startSeq: 40, endSeq: 999 },
-      } as unknown as SessionEvent,
+        surfaceOp: { op: "replace", startSeq: SessionSeq(40), endSeq: SessionSeq(999) },
+      },
     ];
     const repairs = findSurfaceRepairs(events);
     expect([...repairs.degradeToAppend]).toEqual([1]);
@@ -820,10 +842,10 @@ describe("read-view repair", () => {
         seq: SessionSeq(0),
         time: 1,
         data: {
-          turn: 1,
-          summary: "compacted",
-          shadowedRange: { start: 1, end: 999 },
-          shadowedSeqs: [1, 3],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "compacted" }],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(999) },
+          shadowedSeqs: [SessionSeq(1), SessionSeq(3)],
           shadowedTokenCount: 5,
           provider: "mock",
           model: "mock",
@@ -837,7 +859,7 @@ describe("read-view repair", () => {
           content: [{ type: "text", text: "compacted" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 3 },
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(3) },
       },
       {
         type: "user/message",
@@ -883,11 +905,11 @@ describe("read-view repair", () => {
         seq: SessionSeq(0),
         time: 1,
         data: {
-          turn: 1,
-          summary: "compacted",
-          shadowedRange: { start: 1, end: 1 },
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "compacted" }],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
 
-          shadowedSeqs: [1, 3],
+          shadowedSeqs: [SessionSeq(1), SessionSeq(3)],
           shadowedTokenCount: 5,
           provider: "mock",
           model: "mock",
@@ -901,7 +923,7 @@ describe("read-view repair", () => {
           content: [{ type: "text", text: "compacted" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
         }),
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 1 },
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(1) },
       },
     ] as unknown as SessionEvent[];
     syncMeteringRanges(events);
@@ -917,9 +939,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(8),
         time: 2,
-        data: { content: [{ type: "text", text: "hi" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "hi" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "turn/end",
         seq: SessionSeq(9),
@@ -930,9 +955,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(40),
         time: 4,
-        data: { content: [{ type: "text", text: "checkpoint" }], source: { kind: "user" } },
-        surfaceOp: { op: "replace", startSeq: 7, endSeq: 9 },
-      } as unknown as SessionEvent,
+        data: createUserMessage({
+          content: [{ type: "text", text: "checkpoint" }],
+          source: { kind: "user" },
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(7), endSeq: SessionSeq(9) },
+      },
     ];
     recomputeReplaceProvenance(events);
     const checkpoint = events[3] as SessionEvent & { sourceEventSeqs?: number[] };
@@ -951,9 +979,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(10),
         time: 1,
-        data: { content: [{ type: "text", text: "old" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "old" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(11),
@@ -961,16 +992,15 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 1,
-          message: {
-            id: "a",
-            stream: [] as const,
+          message: createMessage({
             role: "assistant",
             content: [{ type: "text", text: "old" }],
             source: { kind: "model", provider: "m", model: "m" },
-          },
+          }),
+          stream: [],
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "turn/end",
         seq: SessionSeq(12),
@@ -981,9 +1011,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(20),
         time: 4,
-        data: { content: [{ type: "text", text: "checkpoint" }], source: { kind: "user" } },
-        surfaceOp: { op: "replace", startSeq: 10, endSeq: 12 },
-      } as unknown as SessionEvent,
+        data: createUserMessage({
+          content: [{ type: "text", text: "checkpoint" }],
+          source: { kind: "user" },
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(10), endSeq: SessionSeq(12) },
+      },
     ];
     recomputeReplaceProvenance(events);
     const checkpoint = events[3] as SessionEvent & { sourceEventSeqs?: number[] };
@@ -997,9 +1030,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(1),
         time: 1,
-        data: { content: [{ type: "text", text: "a" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "a" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(2),
@@ -1007,35 +1043,39 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 1,
-          message: {
-            id: "a",
-            stream: [] as const,
+          message: createMessage({
             role: "assistant",
             content: [{ type: "text", text: "b" }],
             source: { kind: "model", provider: "m", model: "m" },
-          },
+          }),
+          stream: [],
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "compaction/summary",
         seq: SessionSeq(3),
         time: 3,
         data: {
-          turn: 1,
-          summary: "…",
-          shadowedRange: { start: 1, end: 2 },
-          shadowedSeqs: [1, 2],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "…" }],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(2) },
+          shadowedSeqs: [SessionSeq(1), SessionSeq(2)],
           shadowedTokenCount: 9,
+          provider: "mock",
+          model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(4),
         time: 4,
-        data: { content: [{ type: "text", text: "checkpoint" }], source: { kind: "user" } },
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 2 },
-      } as unknown as SessionEvent,
+        data: createUserMessage({
+          content: [{ type: "text", text: "checkpoint" }],
+          source: { kind: "user" },
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(2) },
+      },
     ];
     recomputeReplaceProvenance(events);
     const checkpoint = events[3] as SessionEvent & { sourceEventSeqs?: number[] };
@@ -1048,42 +1088,56 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(1),
         time: 1,
-        data: { content: [{ type: "text", text: "a" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "a" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(659),
         time: 2,
-        data: { content: [{ type: "text", text: "late" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "late" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(2),
         time: 3,
-        data: { content: [{ type: "text", text: "b" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "b" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "compaction/summary",
         seq: SessionSeq(3),
         time: 4,
         data: {
-          turn: 1,
-          summary: "…",
-          shadowedRange: { start: 1, end: 2 },
-          shadowedSeqs: [1, 659, 2],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "…" }],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(2) },
+          shadowedSeqs: [SessionSeq(1), SessionSeq(659), SessionSeq(2)],
           shadowedTokenCount: 9,
+          provider: "mock",
+          model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(4),
         time: 5,
-        data: { content: [{ type: "text", text: "checkpoint" }], source: { kind: "user" } },
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 2 },
-      } as unknown as SessionEvent,
+        data: createUserMessage({
+          content: [{ type: "text", text: "checkpoint" }],
+          source: { kind: "user" },
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(2) },
+      },
     ];
     recomputeReplaceProvenance(events);
     const checkpoint = events[4] as SessionEvent & { sourceEventSeqs?: number[] };
@@ -1096,9 +1150,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(1),
         time: 1,
-        data: { content: [{ type: "text", text: "a" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "a" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(2),
@@ -1106,16 +1163,15 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 1,
-          message: {
-            id: "a",
-            stream: [] as const,
+          message: createMessage({
             role: "assistant",
             content: [{ type: "text", text: "b" }],
             source: { kind: "model", provider: "m", model: "m" },
-          },
+          }),
+          stream: [],
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "turn/end",
         seq: SessionSeq(3),
@@ -1136,7 +1192,7 @@ describe("recomputeReplaceProvenance", () => {
           }),
         },
         surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(2) },
-      } as unknown as SessionEvent,
+      },
     ];
     recomputeReplaceProvenance(events);
     const replacement = events[3] as SessionEvent & { sourceEventSeqs?: number[] };
@@ -1149,9 +1205,12 @@ describe("recomputeReplaceProvenance", () => {
         type: "user/message",
         seq: SessionSeq(0),
         time: 1,
-        data: { content: [{ type: "text", text: "old" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "old" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(1),
@@ -1159,16 +1218,15 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 1,
-          message: {
-            id: "a1",
-            stream: [] as const,
+          message: createMessage({
             role: "assistant",
             content: [{ type: "text", text: "old" }],
             source: { kind: "model", provider: "m", model: "m" },
-          },
+          }),
+          stream: [],
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(2),
@@ -1176,67 +1234,73 @@ describe("recomputeReplaceProvenance", () => {
         data: {
           turn: 1,
           step: 2,
-          message: {
-            id: "a2",
-            stream: [] as const,
+          message: createMessage({
             role: "assistant",
             content: [{ type: "text", text: "straggler" }],
             source: { kind: "model", provider: "m", model: "m" },
-          },
+          }),
+          stream: [],
         },
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "compaction/summary",
         seq: SessionSeq(3),
         time: 5,
         data: {
-          turn: 1,
-          summary: "s1",
-          shadowedRange: { start: 0, end: 1 },
-          shadowedSeqs: [0, 1],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "s1" }],
+          shadowedRange: { start: SessionSeq(0), end: SessionSeq(1) },
+          shadowedSeqs: [SessionSeq(0), SessionSeq(1)],
           shadowedTokenCount: 10,
+          provider: "mock",
+          model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(4),
         time: 6,
-        data: {
+        data: createUserMessage({
           content: [{ type: "text", text: "checkpoint" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
-        },
-        surfaceOp: { op: "replace", startSeq: 0, endSeq: 1 },
-      } as unknown as SessionEvent,
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(0), endSeq: SessionSeq(1) },
+      },
       {
         type: "user/message",
         seq: SessionSeq(5),
         time: 7,
-        data: { content: [{ type: "text", text: "next" }], source: { kind: "user" } },
+        data: createUserMessage({
+          content: [{ type: "text", text: "next" }],
+          source: { kind: "user" },
+        }),
         surfaceOp: "append",
-      } as unknown as SessionEvent,
+      },
       {
         type: "compaction/summary",
         seq: SessionSeq(6),
         time: 9,
         data: {
-          turn: 1,
-          summary: "s2",
-          shadowedRange: { start: 4, end: 5 },
-          shadowedSeqs: [4, 2, 5],
+          compactionId: CompactionId("compaction-1"),
+          summary: [{ type: "text", text: "s2" }],
+          shadowedRange: { start: SessionSeq(4), end: SessionSeq(5) },
+          shadowedSeqs: [SessionSeq(4), SessionSeq(2), SessionSeq(5)],
           shadowedTokenCount: 20,
+          provider: "mock",
+          model: "mock",
         },
-      } as unknown as SessionEvent,
+      },
       {
         type: "user/message",
         seq: SessionSeq(7),
         time: 10,
-        data: {
+        data: createUserMessage({
           content: [{ type: "text", text: "checkpoint" }],
           source: compactCheckpointSource(CompactionId("compaction-1")),
-        },
-        surfaceOp: { op: "replace", startSeq: 4, endSeq: 5 },
-      } as unknown as SessionEvent,
+        }),
+        surfaceOp: { op: "replace", startSeq: SessionSeq(4), endSeq: SessionSeq(5) },
+      },
     ];
     recomputeReplaceProvenance(events);
     const checkpoint = events[7] as unknown as { sourceEventSeqs?: number[] };
@@ -1754,7 +1818,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
           }),
         },
 
-        surfaceOp: { op: "replace", startSeq: 1, endSeq: 1 },
+        surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(1) },
       },
       {
         type: "turn/end",
@@ -1812,7 +1876,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
         time: 4,
         data: null,
         ignorable: true,
-      } as unknown as SessionEvent,
+      },
       {
         type: "assistant/message",
         seq: SessionSeq(4),
@@ -2019,8 +2083,8 @@ describe("surface field round-trip", () => {
     expect(preserved).toHaveLength(2);
     expect((preserved[0]! as SurfaceEvent).surfaceOp).toEqual({
       op: "replace",
-      startSeq: 0,
-      endSeq: 0,
+      startSeq: SessionSeq(0),
+      endSeq: SessionSeq(0),
     });
     expect((preserved[0]! as SurfaceEvent).sourceEventSeqs).toBeUndefined();
     expect((preserved[1] as SessionEvent<SurfaceEventType>).surfaceOp).toBeUndefined();

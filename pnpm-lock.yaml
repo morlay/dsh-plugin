@@ -1220,6 +1220,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/core/session

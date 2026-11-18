@@ -6,6 +6,7 @@ import { SessionPersistenceRdb as SessionPersistenceSqlite } from "@morlay/bette
 import { meta } from "@morlay/dsh-session/testing";
 import { orphanInboxSpliceSeqs, repairOrphanInboxSplices } from "@morlay/better-session";
 import { createCtx, mountOnto } from "../../__tests__/support/base.ts";
+import { MessageId } from "@morlay/dsh-agent/contract";
 
 function splice(
   seq: number,
@@ -16,14 +17,18 @@ function splice(
 ): SessionEvent {
   return {
     type: "agent/inbox/spliced",
-    seq: seq as never,
+    seq: SessionSeq(seq),
     time: seq,
     data: {
       target,
-      start,
+      start: SessionSeq(start),
       removedCount: removed,
-      ...(inserted.length > 0 ? { inserted } : {}),
+      ...(inserted.length > 0
+        ? { inserted: inserted.map((item) => ({ id: MessageId(item.id) })) }
+        : {}),
     },
+    // 上游 agent 域的拼装事件（`agent/inbox/spliced`）：形状由 agent 域定，这里按它的公开面装，
+    // 差额见阶段 2 回报的「夹具坏数据」清单。
   } as unknown as SessionEvent;
 }
 
@@ -107,13 +112,13 @@ describe("loadStored repairs orphan inbox splices", () => {
           seq: SessionSeq(1),
           time: 2,
           data: {
-            id: "u1",
+            id: MessageId("u1"),
             role: "user",
             content: [{ type: "text", text: "hi" }],
             source: { kind: "user" },
           },
           surfaceOp: "append",
-        } as unknown as SessionEvent,
+        },
         { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
         {
           type: "assistant/message",
@@ -123,14 +128,15 @@ describe("loadStored repairs orphan inbox splices", () => {
             turn: 1,
             step: 1,
             message: {
-              id: "a1",
+              id: MessageId("a1"),
               role: "assistant",
               content: [{ type: "text", text: "hello" }],
               source: { kind: "model", provider: "mock", model: "mock" },
             },
+            stream: [],
           },
           surfaceOp: "append",
-        } as unknown as SessionEvent,
+        },
         { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
         {
           type: "turn/end",
@@ -149,13 +155,13 @@ describe("loadStored repairs orphan inbox splices", () => {
           seq: SessionSeq(10),
           time: 10,
           data: {
-            id: "u2",
+            id: MessageId("u2"),
             role: "user",
             content: [{ type: "text", text: "go on" }],
             source: { kind: "user" },
           },
           surfaceOp: "append",
-        } as unknown as SessionEvent,
+        },
         { type: "step/start", seq: SessionSeq(11), time: 11, data: { turn: 2, step: 1 } },
       ];
       const m = meta("bad");

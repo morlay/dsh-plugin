@@ -5,6 +5,7 @@
 // - `oneTurnLogStepFirst()`：`turnLog(0, 1)` 派生，step/start 在 user/message **之前**
 //   （端点那一侧用 seq 2 = user/message 定位一条用户消息）。
 // 合并任一份都会动到既有断言，所以是两个名字，不要合并。
+import { MessageId } from "@deepseek-ai/dsh-llm/brand";
 import { SESSION_FORMAT_VERSION, Session, SessionId, SessionSeq } from "@deepseek-ai/dsh-session";
 import type {
   SessionEvent,
@@ -43,13 +44,13 @@ export function userMessage(seq: number, id: string, text: string, time = seq): 
     seq: SessionSeq(seq),
     time,
     data: {
-      id,
+      id: MessageId(id),
       role: "user",
       content: [{ type: "text", text }],
       source: { kind: "user" },
     },
     surfaceOp: "append",
-  } as unknown as SessionEvent;
+  };
 }
 
 /**
@@ -78,7 +79,7 @@ export function assistantMessage(
       turn,
       step,
       message: {
-        id,
+        id: MessageId(id),
         role: "assistant",
         content: [{ type: "text", text }],
         source: { kind: "model", provider: "mock", model: "mock" },
@@ -86,7 +87,7 @@ export function assistantMessage(
       stream: [],
     },
     surfaceOp: "append",
-  } as unknown as SessionEvent;
+  };
 }
 
 /**
@@ -109,7 +110,7 @@ export function turnLog(
       seq: SessionSeq(base),
       time: base,
       data: { turn },
-    } as unknown as SessionEvent,
+    },
   ];
   let seq = base + 1;
   let step = 1;
@@ -119,7 +120,7 @@ export function turnLog(
       seq: SessionSeq(seq++),
       time: base,
       data: { turn, step },
-    } as unknown as SessionEvent);
+    });
     events.push(userMessage(seq++, user.id, user.text, base));
     events.push(
       assistantMessage(seq++, turn, step, `${user.id}-a`, `answer to ${user.text}`, base),
@@ -129,7 +130,7 @@ export function turnLog(
       seq: SessionSeq(seq++),
       time: base,
       data: { turn, step },
-    } as unknown as SessionEvent);
+    });
     step += 1;
   }
   if (closed) {
@@ -138,7 +139,7 @@ export function turnLog(
       seq: SessionSeq(seq++),
       time: base,
       data: { turn, reason: { kind: "completed" } },
-    } as unknown as SessionEvent);
+    });
   }
   return events;
 }
@@ -155,13 +156,13 @@ export function oneTurnLog(): SessionEvent[] {
       seq: SessionSeq(1),
       time: 2,
       data: {
-        id: "one-turn-user",
+        id: MessageId("one-turn-user"),
         role: "user",
         content: [{ type: "text", text: "hi" }],
         source: { kind: "user" },
       },
       surfaceOp: "append",
-    } as unknown as SessionEvent,
+    },
     { type: "step/start", seq: SessionSeq(2), time: 3, data: { turn: 1, step: 1 } },
     {
       type: "assistant/message",
@@ -171,7 +172,7 @@ export function oneTurnLog(): SessionEvent[] {
         turn: 1,
         step: 1,
         message: {
-          id: "one-turn-assistant",
+          id: MessageId("one-turn-assistant"),
           role: "assistant",
           content: [{ type: "text", text: "hello" }],
           source: {
@@ -192,7 +193,7 @@ export function oneTurnLog(): SessionEvent[] {
         ],
       },
       surfaceOp: "append",
-    } as unknown as SessionEvent,
+    },
     { type: "step/end", seq: SessionSeq(4), time: 5, data: { turn: 1, step: 1 } },
     {
       type: "turn/end",

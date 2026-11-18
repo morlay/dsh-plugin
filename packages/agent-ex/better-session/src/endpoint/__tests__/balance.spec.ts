@@ -1,27 +1,27 @@
 // 保留前缀的配平不变量：rewind / fork 之后紧接着追加新的 step/start，悬空的旧 step/start 会让它报错。
 import { balanceRewindPrefix, rewindKeepLength } from "@morlay/better-session/endpoint";
-import type { SessionEvent } from "@morlay/dsh-session/contract";
+import { SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
 import { describe, expect, it } from "vitest";
 
 function stepStart(seq: number, turn: number, step: number): SessionEvent {
-  return { type: "step/start", seq, time: seq, data: { turn, step } } as unknown as SessionEvent;
+  return { type: "step/start", seq: SessionSeq(seq), time: seq, data: { turn, step } };
 }
 
 function stepEnd(seq: number, turn: number, step: number): SessionEvent {
-  return { type: "step/end", seq, time: seq, data: { turn, step } } as unknown as SessionEvent;
+  return { type: "step/end", seq: SessionSeq(seq), time: seq, data: { turn, step } };
 }
 
 function turnStart(seq: number, turn: number): SessionEvent {
-  return { type: "turn/start", seq, time: seq, data: { turn } } as unknown as SessionEvent;
+  return { type: "turn/start", seq: SessionSeq(seq), time: seq, data: { turn } };
 }
 
 function turnEnd(seq: number, turn: number): SessionEvent {
   return {
     type: "turn/end",
-    seq,
+    seq: SessionSeq(seq),
     time: seq,
     data: { turn, reason: { kind: "completed" } },
-  } as unknown as SessionEvent;
+  };
 }
 
 function seqsOf(events: readonly SessionEvent[]): number[] {
