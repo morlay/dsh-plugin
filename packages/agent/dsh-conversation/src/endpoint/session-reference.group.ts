@@ -7,5 +7,3 @@
 /** 组在 `Remote` 面上的 deps 键（`remote.sessionReferenceResolver`）。 */
 export const SESSION_REFERENCE_REMOTE_KEY = "remote.sessionReferenceResolver" as const;
 
-/** 组内的方法名。 */
-export const SESSION_REFERENCE_METHODS = { candidates: "candidates" } as const;

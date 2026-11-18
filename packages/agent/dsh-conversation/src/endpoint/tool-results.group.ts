@@ -12,9 +12,6 @@ import type {
 } from "@deepseek-ai/dsh-client-ui-trajectory";
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
-/** 组在 `Remote` 面上的 deps 键（`remote.toolResults`）。 */
-export const TOOL_RESULTS_REMOTE_KEY = "remote.toolResults" as const;
-
 /**
  * `toolResults` 组：一条工具结果流。
  *

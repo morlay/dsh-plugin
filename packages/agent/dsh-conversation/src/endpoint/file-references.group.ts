@@ -8,5 +8,3 @@
 /** 组在 `Remote` 面上的 deps 键（`remote.fileReferences`）。 */
 export const FILE_REFERENCES_REMOTE_KEY = "remote.fileReferences" as const;
 
-/** 组内的方法名。 */
-export const FILE_REFERENCES_METHODS = { list: "list" } as const;
