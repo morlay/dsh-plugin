@@ -3,9 +3,8 @@
 // 判据来自一个真实漏检：前缀段原来用原列做范围比较（SQLite 的 BINARY 排序 / PG 的 LIKE），
 // 库里 `Report B` 这类首字母大写的标题落不进前缀段；而前缀段一有命中就不再退全文，
 // 于是它干脆不出现。这里先锁语义（L1 条件构造 + L2 真装配 + 真库），索引优化是另一笔债。
-import type { SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { meta, turnLog } from "@morlay/dsh-session/testing";
+import { meta, titleEvent, turnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/better-session";
 import { E, render } from "@morlay/zephyr-rdb";
 import { afterEach, describe, expect, it } from "vitest";
@@ -84,15 +83,7 @@ async function start(): Promise<Harness> {
 async function seedTitled(harness: Harness, id: string, title: string): Promise<void> {
   const handle = await harness.app.get(SessionPersistence).create(meta(id));
   const log = turnLog(0, 1, { users: [{ id: id + "-u", text: title }] });
-  await handle.append([
-    ...log,
-    {
-      type: "session/title",
-      seq: log.length,
-      time: log.length,
-      data: { title, messageSeqs: [], source: "auto" },
-    } as unknown as SessionEvent,
-  ]);
+  await handle.append([...log, titleEvent(log.length, title)]);
   await handle.close();
 }
 

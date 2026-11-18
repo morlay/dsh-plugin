@@ -230,6 +230,59 @@ export function secondTurn(startSeq = 6): SessionEvent[] {
 }
 
 /**
+ * 一条标题事件（`session/title`）：标题服务的**日志面**（`f_title` 列只从它折）。
+ *
+ * 字段按上游契约给全：`messageSeqs` 是铸过品牌的序号、`source` 是**联合字面量**（`fallback` 自动兜底 /
+ * `user` 显式改名）。手写 `{ title, messageSeqs: [], source: "auto" }` 那种裸字符串不是契约里的形状。
+ * @param seq - 事件序号（也用作 `time`）。
+ * @param title - 标题文本。
+ * @param options - `messageSeqs`：用来生成标题的用户消息序号；`source`：来源（默认 `fallback`）。
+ * @returns `session/title` 事件。
+ */
+export function titleEvent(
+  seq: number,
+  title: string,
+  options: { readonly messageSeqs?: readonly number[]; readonly source?: "fallback" | "user" } = {},
+): SessionEvent {
+  return {
+    type: "session/title",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      title,
+      messageSeqs: (options.messageSeqs ?? []).map((item) => SessionSeq(item)),
+      source: { kind: options.source ?? "fallback" },
+    },
+  };
+}
+/**
+ * 一条 `request/header` 事件：请求头快照（log-only，不参与表面）。
+ *
+ * `reason` 是**必填**的联合字面量（`initial` / `resume` / `change` / `series`）——手写的夹具常把它漏掉，
+ * 那是缺字段，不是「可以不填」。
+ * @param seq - 事件序号（也用作 `time`）。
+ * @param options - 路由（默认 mock）与追加原因（默认 `initial`）。
+ * @returns `request/header` 事件。
+ */
+export function headerEvent(
+  seq: number,
+  options: {
+    readonly provider?: string;
+    readonly model?: string;
+    readonly reason?: "initial" | "resume" | "change" | "series";
+  } = {},
+): SessionEvent {
+  return {
+    type: "request/header",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      header: { config: { provider: options.provider ?? "mock", model: options.model ?? "mock" } },
+      reason: options.reason ?? "initial",
+    },
+  };
+}
+/**
  * 往一份**活会话**里追加一批事件（保留 `surfaceOp` 与来源序号）。
  * @param session - 目标会话。
  * @param events - 要追加的事件。

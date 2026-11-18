@@ -17,6 +17,7 @@ import { startHarness } from "../../__tests__/support/host.ts";
 import { openInitializedSqlite } from "../../__tests__/support/sqlite.ts";
 import { zipOf } from "../../__tests__/support/zip.ts";
 import {
+  headerEvent,
   meta,
   oneTurnLog,
   oneTurnLogStepFirst,
@@ -89,15 +90,7 @@ async function corruptEvent(entry: Wired, id: string, seq: number): Promise<void
 // 「没有可用的重放入口」这条路径要先过「能不能重放」的模型配置检查（装配里已有目录行，见
 // `SessionAgentControlDefault`）：给种子补一条请求头，判据才落在「没有重放入口」这个码上。
 function withModelConfig(log: readonly SessionEvent[]): SessionEvent[] {
-  return [
-    ...log,
-    {
-      type: "request/header",
-      seq: log.length,
-      time: log.length,
-      data: { header: { config: { provider: "mock", model: "mock" } }, reason: "initial" },
-    } as unknown as SessionEvent,
-  ];
+  return [...log, headerEvent(log.length)];
 }
 
 describe("sessionEditor 组", () => {

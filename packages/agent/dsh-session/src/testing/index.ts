@@ -7,10 +7,12 @@
 export {
   appendLog,
   assistantMessage,
+  headerEvent,
   meta,
   oneTurnLog,
   oneTurnLogStepFirst,
   secondTurn,
+  titleEvent,
   turnLog,
   twoTurnLog,
   userMessage,

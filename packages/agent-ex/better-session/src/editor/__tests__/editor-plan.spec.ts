@@ -17,7 +17,7 @@ import {
   rerollPlan,
 } from "@morlay/better-session";
 import { describe, expect, it } from "vitest";
-import { turnLog } from "@morlay/dsh-session/testing";
+import { headerEvent, turnLog } from "@morlay/dsh-session/testing";
 
 // 编辑请求按契约的形状给（动作由调用哪个方法定，请求里没有 action 字段）。
 function editRequest(
@@ -43,12 +43,7 @@ describe("closedTurns", () => {
   });
 
   it("第一个 turn/start 之前的事件不属于任何回合", () => {
-    const prelude = {
-      type: "request/header",
-      seq: 0,
-      time: 0,
-      data: { header: {} },
-    } as unknown as SessionEvent;
+    const prelude = headerEvent(0);
     const shifted = turnLog(1, 1);
 
     const turns = closedTurns([prelude, ...shifted]);
@@ -231,12 +226,7 @@ describe("重放保住来源凭据", () => {
 
 describe("keptOutsideTurn / openTurnCloser", () => {
   it("保留前缀与目标之间、不属于轮次正文的事件（配置 / 上下文注入）", () => {
-    const header = {
-      type: "request/header",
-      seq: 1,
-      time: 1,
-      data: { header: { config: { provider: "p", model: "m" } } },
-    } as unknown as SessionEvent;
+    const header = headerEvent(1, { provider: "p", model: "m" });
     const events = [
       { type: "turn/start", seq: 0, time: 0, data: { turn: 1 } } as unknown as SessionEvent,
       header,
@@ -255,12 +245,7 @@ describe("keptOutsideTurn / openTurnCloser", () => {
       { type: "turn/start", seq: 0, time: 0, data: { turn: 1 } } as unknown as SessionEvent,
       spliced(1, { target: "next-turn", start: 0, inserted: [{ id: "u1" }] }),
       spliced(2, { target: "next-turn", start: 0, removedCount: 1, inserted: [] }),
-      {
-        type: "request/header",
-        seq: 3,
-        time: 3,
-        data: { header: { config: { provider: "p", model: "m" } } },
-      } as unknown as SessionEvent,
+      headerEvent(3, { provider: "p", model: "m" }),
       ...turnLog(4, 1).slice(1),
     ];
 

@@ -829,6 +829,7 @@ describe("read-view repair", () => {
         time: 3,
         data: { turn: 1, reason: { kind: "completed" } },
       },
+      // 故意不合法输入：盘上坏行：这条 `assistant/message` 故意不带 `stream`——`repairAssistantSettlement` 要补的就是它（fail-closed 判据的输入）。
     ] as unknown as SessionEvent[];
     repairAssistantSettlement(events);
     expect((events[0]!.data as unknown as { stream: unknown }).stream).toEqual([]);
@@ -886,6 +887,7 @@ describe("read-view repair", () => {
         },
         surfaceOp: "append",
       },
+      // 故意不合法输入：盘上坏行：计量事件故意缺 `shadowedRange` / `shadowedSeqs`——`syncMeteringRanges` 要按相邻事件补的就是它们（fail-closed 判据的输入）。
     ] as unknown as SessionEvent[];
     syncMeteringRanges(events);
     expect((events[0]!.data as unknown as { shadowedRange: unknown }).shadowedRange).toEqual({
@@ -925,6 +927,7 @@ describe("read-view repair", () => {
         }),
         surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(1) },
       },
+      // 故意不合法输入：盘上坏行：计量事件故意缺 `shadowedRange` / `shadowedSeqs`——`syncMeteringRanges` 要按相邻事件补的就是它们（fail-closed 判据的输入）。
     ] as unknown as SessionEvent[];
     syncMeteringRanges(events);
     expect((events[0]!.data as unknown as { shadowedSeqs: unknown }).shadowedSeqs).toEqual([1, 3]);
@@ -1826,6 +1829,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
         time: 7,
         data: { turn: 1, reason: { kind: "completed" } },
       },
+      // 故意不合法输入：盘上坏行：这批日志故意缺字段——持久化侧的容错用例要的就是「写得进去、读得回来」的坏输入。
     ] as unknown as SessionEvent[];
     await rdb(b.ctx).createAndAppend(m, log);
 
@@ -1900,6 +1904,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
         time: 7,
         data: { turn: 1, reason: { kind: "completed" } },
       },
+      // 故意不合法输入：盘上坏行：这批日志故意缺字段——持久化侧的容错用例要的就是「写得进去、读得回来」的坏输入。
     ] as unknown as SessionEvent[];
     await rdb(b.ctx).createAndAppend(m, log);
 

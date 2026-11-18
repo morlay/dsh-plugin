@@ -1,9 +1,8 @@
 // 会话行查询的判据：两段式搜索顺序、过滤条件进同一个 WHERE、分页夹取（L1，纯函数与 SQL 渲染），
 // 以及真装配 + 真库上的前缀段的索引代价、过滤下推与两段式回退（L2）。
 import { join } from "node:path";
-import type { SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { meta, oneTurnLog, turnLog, twoTurnLog } from "@morlay/dsh-session/testing";
+import { meta, oneTurnLog, titleEvent, turnLog, twoTurnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/better-session";
 import { E, render } from "@morlay/zephyr-rdb";
 import { afterEach, describe, expect, it } from "vitest";
@@ -89,15 +88,7 @@ async function seedTitled(harness: Harness, id: string, title: string): Promise<
   const handle = await harness.app.get(SessionPersistence).create(meta(id));
   const log = turnLog(0, 1, { users: [{ id: id + "-u", text: title }] });
   // 标题是日志里的事件（写路径只从 session/title 折列）：给会话一条，列表才有可搜的 f_title。
-  await handle.append([
-    ...log,
-    {
-      type: "session/title",
-      seq: log.length,
-      time: log.length,
-      data: { title, messageSeqs: [], source: "auto" },
-    } as unknown as SessionEvent,
-  ]);
+  await handle.append([...log, titleEvent(log.length, title)]);
   await handle.close();
 }
 

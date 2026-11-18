@@ -14,7 +14,7 @@ import { RemoteHandlers } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
 import { SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
-import { meta, turnLog } from "@morlay/dsh-session/testing";
+import { meta, titleEvent, turnLog } from "@morlay/dsh-session/testing";
 import { mountRows, type MountedRows, type RowEntry } from "./base.ts";
 import { startHost, type Host } from "./e2e-host.ts";
 import { openInitializedSqlite } from "./sqlite.ts";
@@ -168,15 +168,7 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
 // 一条会话：日志 + 标题事件（写路径只从 session/title 折 f_title 列）。
 function titledLog(title: string, id: string): SessionEvent[] {
   const log = turnLog(0, 1, { users: [{ id: id + "-u", text: title }] });
-  return [
-    ...log,
-    {
-      type: "session/title",
-      seq: log.length,
-      time: log.length,
-      data: { title, messageSeqs: [], source: "auto" },
-    } as unknown as SessionEvent,
-  ];
+  return [...log, titleEvent(log.length, title)];
 }
 
 /**
