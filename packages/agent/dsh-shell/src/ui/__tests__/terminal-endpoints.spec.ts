@@ -17,9 +17,9 @@ import {
   RemoteDefault,
 } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { RemoteMountsDefault } from "../ui/remote-mounts.service.ts";
-import { WebTerminalsDefault } from "../ui/sidebar-terminal-slots.ts";
-import { TerminalEndpointClient } from "../ui/terminal-endpoint-client.ts";
+import { RemoteMountsDefault } from "../remote-mounts.service.ts";
+import { WebTerminalsDefault } from "../sidebar-terminal-slots.ts";
+import { TerminalEndpointClient } from "../terminal-endpoint-client.ts";
 
 const apps: App[] = [];
 

@@ -29,38 +29,51 @@ export class TerminalEndpointClient extends TerminalEndpoint implements Terminal
     return remoteNamespaceOf(this.remote, TERMINAL_GROUP) !== undefined;
   }
 
+  // 流式方法（`attach` / `retain` / `watch`）同步返回逐帧面；一元方法用 `async`，缺面时报的是
+  // **rejection** 而不是同步抛出（调用方按 `TerminalRemote` 的返回类型等 Promise）。
+
   override attach(...args: Parameters<TerminalRemote["attach"]>): ReturnType<TerminalRemote["attach"]> {
     return this.face().attach(...args);
   }
 
-  override close(...args: Parameters<TerminalRemote["close"]>): ReturnType<TerminalRemote["close"]> {
-    return this.face().close(...args);
+  override async close(
+    ...args: Parameters<TerminalRemote["close"]>
+  ): ReturnType<TerminalRemote["close"]> {
+    return await this.face().close(...args);
   }
 
-  override create(...args: Parameters<TerminalRemote["create"]>): ReturnType<TerminalRemote["create"]> {
-    return this.face().create(...args);
+  override async create(
+    ...args: Parameters<TerminalRemote["create"]>
+  ): ReturnType<TerminalRemote["create"]> {
+    return await this.face().create(...args);
   }
 
-  override environment(
+  override async environment(
     ...args: Parameters<TerminalRemote["environment"]>
   ): ReturnType<TerminalRemote["environment"]> {
-    return this.face().environment(...args);
+    return await this.face().environment(...args);
   }
 
-  override list(...args: Parameters<TerminalRemote["list"]>): ReturnType<TerminalRemote["list"]> {
-    return this.face().list(...args);
+  override async list(
+    ...args: Parameters<TerminalRemote["list"]>
+  ): ReturnType<TerminalRemote["list"]> {
+    return await this.face().list(...args);
   }
 
-  override rename(...args: Parameters<TerminalRemote["rename"]>): ReturnType<TerminalRemote["rename"]> {
-    return this.face().rename(...args);
+  override async rename(
+    ...args: Parameters<TerminalRemote["rename"]>
+  ): ReturnType<TerminalRemote["rename"]> {
+    return await this.face().rename(...args);
   }
 
   override retain(...args: Parameters<TerminalRemote["retain"]>): ReturnType<TerminalRemote["retain"]> {
     return this.face().retain(...args);
   }
 
-  override shells(...args: Parameters<TerminalRemote["shells"]>): ReturnType<TerminalRemote["shells"]> {
-    return this.face().shells(...args);
+  override async shells(
+    ...args: Parameters<TerminalRemote["shells"]>
+  ): ReturnType<TerminalRemote["shells"]> {
+    return await this.face().shells(...args);
   }
 
   override watch(...args: Parameters<TerminalRemote["watch"]>): ReturnType<TerminalRemote["watch"]> {
