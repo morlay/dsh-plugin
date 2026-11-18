@@ -9,7 +9,7 @@ import { TYPERT_REMOTE as TERMINAL_REMOTE } from "@deepseek-ai/dsh-api-terminal-
 import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Locale, Remote, Shortcuts, Slots, Theme } from "@morlay/zephyr-app/client";
+import { Locale, Remote, Shortcuts, SidebarRightTabs, Slots, Theme } from "@morlay/zephyr-app/client";
 import { TERMINAL_GROUP } from "../endpoint/index.ts";
 
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
@@ -50,18 +50,22 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
 
   private readonly shortcuts = inject(Shortcuts);
 
+  /** `sidebarRightTabs` 有真面令牌（`SidebarRightTabsFace`），走注入。 */
+  private readonly sidebarRightTabs = inject(SidebarRightTabs);
+
   override async onInit(ctx: Context): Promise<void> {
-    // 同 `SidebarFilesSlots`：上游要的 `sidebarRight.commandTarget` / `sidebarRightTabs` 不在我们的
-    // 契约里，从真 cordis 服务取（`get(name)` 不传 strict 就是非严格读）。
-    const read = (name: string): unknown =>
-      ctx.get(name);
+    // 剩下两处仍按名字读，各有明确前置（不是「先留着」）：
+    // - `sidebarRight`：令牌 `SidebarRight` 现在是 `InjectionToken<unknown>`（票 03 第 3 类同根），
+    //   等 `owner-zephyr-casts` 补真面后改 `inject`；
+    // - `webTerminals`：本文件另一行 `new ClientTerminals(...)` 注册的服务，还没有令牌，待补。
+    const read = (name: string): unknown => ctx.get(name);
     await this.mount(ctx, undefined, {
       slots: this.slots,
       locale: this.locale,
       theme: this.theme,
       shortcuts: this.shortcuts,
       sidebarRight: read("sidebarRight"),
-      sidebarRightTabs: read("sidebarRightTabs"),
+      sidebarRightTabs: this.sidebarRightTabs,
       webTerminals: read("webTerminals"),
     });
   }
