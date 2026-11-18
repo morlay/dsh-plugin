@@ -92,4 +92,83 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
   采纳，那时的 `inject(Token)` 拿不到——要晚发布，就得给它一个令牌/DSL 形态，而不是靠名字。
   两种正当用法（都出现过，别再各判一遍）：**上游发 → 我们采纳**（适配行、`sidebarRightTabs` 这类无行的能力）；
   **我们发 → 上游按名字读**（`storage.backend.rdb` 这类上游协议 key，名字由上游的拼法函数给出，没有令牌可选）。
+- **`inject` 定的是「怎么读」，「谁先」由「清单里有没有以它为令牌的行」决定**：`orderByDependencies`
+  只按令牌找行（`src/bootstrap.ts` 的 `byToken`），所以同一个 `inject(Token)` 有两种顺序语义：
+  - **有一行以它为令牌**——`{ provide: Token, … }` 条目、`@Injectable()` 的实现类行、`fromCordis(契约, 上游)`
+    的适配行（令牌就是契约，面在 `bindFace` 里换上）——依赖边成立，拓扑排序把提供方排在消费者之前，
+    **清单里怎么写都行**。
+  - **值令牌没有行**——`InjectionToken`，或抽象面由某个上游行在 `onInit` 里 `reflect.provide(name, …)`
+    发布、清单里没有以它为令牌的条目——**没有依赖边**，`inject(Token)` 只是把读法从 `ctx.get(name)` 换成
+    类型面，**顺序仍靠清单行序**：消费者排在发布方之前，装配期报「没有提供者：<名字>」（`ctx.get(name)`
+    时代是 `onInit` 里读不到——同一个前提，只是报错更早、更指得出是谁）。
+    例：`sidebarRightTabs`（值令牌，注册表由 `packages/agent/dsh-conversation/src/ui/shell/sidebar-right-slots.ts`
+    那行 `mount` 时发布，所以 `provideSessionShellSlots()` 里发布方排在消费行之前是**前提**）与 `fileDrag`
+    （类令牌 `FileDragDefault`，清单里就是一行，排哪都行）。
+    与上一条是同一件事的两面：上一条管「**晚于装配期**发布的不被采纳」，这一条管「**装配期内但晚于消费者**
+    发布的值令牌要靠行序」。
+  - **判据（两种，任选其一）**：① 读清单——这个令牌有没有一行以它为 `provide:` / 实现类 / 适配行的契约？
+    有就是依赖图，没有就是行序。② 运行期——把一个消费者挪到发布方之前重跑装配：有边的会自己排回来
+    （照常起来），没边的报「没有提供者：<名字>」。
 - **装配错在启动前暴露**：令牌没有提供者时，装配阶段就失败并报出「谁需要谁」；编译期 `ProvidersCoverage` 再挡一次。
+
+## 禁止按名字读服务（cordis 老写法）
+
+**任何业务代码都不许按名字读服务**：`ctx.get("name")` / `ctx.reflect.get("name")` / `ctx.reflect.provide("name", v)` 全部禁止。
+它们是 cordis 的老写法——名字是字符串、没有类型、拼错要到运行期才发现，而且读回来只能是 `any`/`unknown`，
+调用方只能 `as unknown as` 收窄。
+
+**唯一允许的位置**：框架层实现内部（`zephyr/src/bootstrap.ts` 的 `adoptNamedServices`、`zephyr/src/compat/from-cordis.ts`
+的适配桥）——那里做的就是「名字 → 令牌」的采纳，是这条规则的反面。
+
+### 该用什么
+
+| 场景 | 写法 |
+| --- | --- |
+| 本行需要某服务 | `inject(Token)`（字段初始化，填充期解析） |
+| 可能没有 | `inject.optional(Token)` |
+| 装配完成后才探测 | `app.get(Token)`（`bootstrapApplication` 的返回值，不是 `ctx.get`） |
+| **按调用方的 ctx 读**（`systemPrompt.context()` 这类「scope 取自调用方」的上游语义） | `ctx.serviceOf(Token)`（框架面提供；内部走 `tokenMetaOf(Token).name`，**断言只活在那一处**） |
+| 上游只按名字发布、我们没有令牌 | 先**补令牌**（在拥有该服务的域定义），让 `adoptNamedServices` 接上；补了令牌也只有**读法**变了，顺序仍靠行序（见「边界」里 `inject` 的两种顺序语义） |
+
+### 判据
+
+```sh
+grep -rn '\.get("[a-zA-Z]\|reflect\.get(' packages --include='*.ts' --include='*.tsx' | grep -v __tests__ | grep -v 'zephyr/zephyr/src/\(bootstrap\|compat\)'
+```
+
+**期望输出为空**（框架层那两个文件例外）。
+
+
+### `reflect.provide` 的例外（只有一种）
+
+**上一节那条「装配期的 `reflect.provide` 是一等形态」要按这一条收窄**：它只适用于「**我们发 → 上游按名字读**」
+的对接——即名字是**上游协议的拼法函数给出来的**（`storageBackendServiceKey(RDB_STORAGE_BACKEND)` 这种），
+我们没有别的选择。
+
+其余情况下「发布服务」都走令牌：清单里的 `{ provide: Token, useValue }`、`@Injectable()` 的 Provider 类、
+或多值 `provide([...])`。
+
+判据：`grep -rn 'reflect\.provide(' packages | grep -v '_test\|__tests__' | grep -v 'zephyr/zephyr/src/\\(bootstrap\\|compat\\)'`
+——期望**只剩**那类「上游协议 key」的发布（当前 3 处，各带理由）。
+
+### 依赖必须显式声明，杜绝动态
+
+**没有「按任意 ctx 查服务」这条退路**——包括 `ctx.get(name)`、`ctx.reflect.get(name)`，以及任何把它们包一层的
+`serviceOf(ctx, Token)` 之类。一条都不做。
+
+依赖关系只有一种表达：**显式声明**
+- 本行依赖：`inject(Token)` / `inject.optional(Token)`（字段初始化，填充期解析，缺提供者在装配阶段就报）；
+- 清单条目：`{ provide: Token, useValue }`；
+- scope 上的依赖：**和 agent scope 一样做额外声明**（`@AgentScoped()` 那种形态），不靠运行时按名字取。
+
+**遇到「必须按调用方 ctx 读」的诉求时，先问三个问题**（三个都比 `serviceOf` 好）：
+1. 这个依赖能不能**显式声明**？（多数情况可以，只是当初为了少写一行才走的动态）
+2. 这个**双向依赖**能不能拆成单向？（注册表模式：后初始化的一方把钩子**注册到**先初始化的一方，而不是反过来读）
+3. 上游那个「按调用方 ctx」的语义，能不能**换成我们声明的 scope 令牌**？
+
+判据：
+```sh
+grep -rn 'serviceOf|\\.get("[a-zA-Z]|reflect\\.get(' packages --include='*.ts' --include='*.tsx' \
+  | grep -v __tests__ | grep -v 'zephyr/zephyr/src/\\(bootstrap\\|compat\\)'
+```
+——**期望为空**（`scoped.get(` 属上游 session scope 的 API，不计；但要在调用点注明）。
