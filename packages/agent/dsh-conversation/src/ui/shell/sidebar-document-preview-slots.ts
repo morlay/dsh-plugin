@@ -5,8 +5,16 @@
 import * as UiDocumentPreviewPlugin from "@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { ConfigForms, Locale, Remote, Resources, Slots } from "@morlay/zephyr-app/client";
+import {
+  ConfigForms,
+  FileDragDefault,
+  Locale,
+  Remote,
+  Resources,
+  Slots,
+} from "@morlay/zephyr-app/client";
 import { WORKSPACE_FILES_REMOTE_KEY } from "@morlay/dsh-workspace/endpoint";
+import { SidebarRightTabs } from "../ports.ts";
 
 @Injectable()
 export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlugin) {
@@ -20,18 +28,21 @@ export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlu
 
   private readonly resources = inject(Resources);
 
+  /** tab 类型注册表：令牌带上游注册名 `sidebarRightTabs`，与 `ctx.get('sidebarRightTabs')` 同一份实例。 */
+  private readonly sidebarRightTabs = inject(SidebarRightTabs);
+
+  /** 拖拽面：本仓 `ui-file-drag` 那一行（`FileDragDefault`）的真身，上游按 `ctx.fileDrag` 读它。 */
+  private readonly fileDrag = inject(FileDragDefault);
+
   override async onInit(ctx: Context): Promise<void> {
-    // `sidebarRightTabs` / `fileDrag` 从真 cordis 服务取（与另外两个右栏行同一个理由：
-    // 上游要的成员不在我们的契约上）。
-    const read = (name: string): unknown => ctx.get(name);
     await this.mount(ctx, undefined, {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,
       configForms: this.configForms,
       resources: this.resources,
-      sidebarRightTabs: read("sidebarRightTabs"),
-      fileDrag: read("fileDrag"),
+      sidebarRightTabs: this.sidebarRightTabs,
+      fileDrag: this.fileDrag,
       // 带点的名字按字面键给。
       [WORKSPACE_FILES_REMOTE_KEY]: this.remote,
     });
