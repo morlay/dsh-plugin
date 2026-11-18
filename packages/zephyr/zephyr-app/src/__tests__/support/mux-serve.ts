@@ -63,9 +63,9 @@ export async function serveMux(overrides: { typert?: unknown; gateway?: unknown 
       socket.destroy();
       return;
     }
-    upgraded.add(socket as unknown as Duplex);
-    socket.once("close", () => upgraded.delete(socket as unknown as Duplex));
-    route.handler(req, socket as unknown as Duplex, head);
+    upgraded.add(socket);
+    socket.once("close", () => upgraded.delete(socket));
+    route.handler(req, socket, head);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();

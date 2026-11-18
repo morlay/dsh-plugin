@@ -115,7 +115,9 @@ function muxOf(overrides: Record<string, unknown> = {}): {
   const socket = new FakeDuplex();
   const request = {
     headers: { "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==" },
-  } as unknown as IncomingMessage;
+  } as IncomingMessage;
+  // `FakeDuplex` 只实现 mux 真用到的那几个成员（`write` / `end` / `destroy` + 事件），
+  // 不是 `node:stream` 的 `Duplex` 子类：这里收窄一次，替身保持最小面。
   routes[0]?.handler(request, socket as unknown as Duplex, Buffer.alloc(0));
   return { server, handlers, socket };
 }
