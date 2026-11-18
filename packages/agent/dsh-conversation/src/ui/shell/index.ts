@@ -6,14 +6,9 @@
 import { provide, type ProviderList } from "@morlay/zephyr";
 import { SidebarDocumentPreviewSlots } from "./sidebar-document-preview-slots.ts";
 import { SidebarRightSlots } from "./sidebar-right-slots.ts";
-// 终端标签那一对行的 home 是 shell 域（上游 ui-sidebar-terminal + terminal-controller 的 client 半）：
-// 行在那边，这里只装配。
-import {
-  RemoteMountsDefault,
-  SidebarTerminalSlots,
-  TerminalEndpointClient,
-  WebTerminalsDefault,
-} from "@morlay/dsh-shell/ui";
+// 终端那四行的 home 是 shell 域（上游 ui-sidebar-terminal + terminal-controller 的 client 半）：
+// 行与**顺序**都在那边，这里只装配（`...provideShellUi()`）。
+import { provideShellUi } from "@morlay/dsh-shell/ui";
 import { SidebarSlots } from "./sidebar-slots.ts";
 // 「文件夹」标签与 file 资源 provider 的 home 是 workspace 域（上游是 api/workspace-files）：
 // 行在那边，这里只装配。
@@ -31,31 +26,28 @@ export { SidebarSlots } from "./sidebar-slots.ts";
 export { SidebarFilesSlots, WorkspaceFilesResource } from "@morlay/dsh-workspace/ui";
 
 /**
- * 会话壳的三行：左侧栏、右侧面板、右栏的「文件夹」标签（顺序有依赖，见各文件注释）。
+ * 会话壳的行：左侧栏、右侧面板、终端链、右栏的「文件夹」标签与文件预览。
  *
- * `SidebarFilesSlots` / `SidebarTerminalSlots` 要在 `SidebarRightSlots` 之后：它们往 `sidebarRightTabs`
- * 注册 tab 类型，而那个注册表由右栏那一行建出来；`WebTerminalsDefault` 还要排在终端那一行之前
- * （它建的 `webTerminals` 是终端行的依赖）。
+ * 终端那四行**整个从 shell 域展开**（`...provideShellUi()`）：清单只有一个 home，这里不重抄。
+ * 那四行内部有顺序（`TerminalEndpointClient` → `RemoteMountsDefault` → `WebTerminalsDefault` →
+ * `SidebarTerminalSlots`：前者被后者字段注入 / 后者 `onInit` 里按 `remote.terminal` 那一面读），
+ * 顺序由那边维护——上次 `TerminalEndpointClient` 漏进清单就是「两份清单」的症状。
  *
- * `RemoteMountsDefault` 要排在 `WebTerminalsDefault` **之前**：它把终端组的 descriptor `$mount` 上
- * （`remote.terminal` 那一面由此存在），`WebTerminalsDefault` 的 `onInit` 有顺序守卫——排到后面装配期就报。
- * `TerminalEndpointClient` 再排在它前面：`WebTerminalsDefault` 的字段注入它，缺这一行装配期直接报
- * 「没有提供者：terminal-endpoint」。
+ * 本文件自己排的两条顺序：`SidebarRightSlots` 要在所有**往 `sidebarRightTabs` 注册 tab 类型**的行之前
+ * （那个注册表由它建出来）；`WorkspaceFilesResource` 在 `SidebarFilesSlots` 之后、
+ * `SidebarDocumentPreviewSlots` 之前（预览的 `useResource('file')` 靠它）。
  * @returns provider 清单。
  */
 export function provideSessionShellSlots(): ProviderList {
   return provide([
     SidebarSlots,
     SidebarRightSlots,
-    TerminalEndpointClient,
-    RemoteMountsDefault,
-    WebTerminalsDefault,
+    ...provideShellUi(),
     SidebarFilesSlots,
     // `file` 资源 provider：排在 `files` 之后（它读那份 「工作区文件组」），
     // 又要排在预览之前（预览的 `useResource('file')` 靠它）。
     WorkspaceFilesResource,
     // 文件预览：claim 文件树里点出来的 `dsh-resource://file/…`。
     SidebarDocumentPreviewSlots,
-    SidebarTerminalSlots,
   ])();
 }
