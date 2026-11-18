@@ -11,7 +11,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ModeConfig } from "@morlay/session-mode";
 import { Injectable } from "@morlay/zephyr";
 import { ContextAssembler, type AssemblerEntries } from "../contract/context-assembler.contract.ts";
-// 其余符号（disposeRows / newContext / mountRows / type / type）随 `mount.ts` 一起退休：改用 `bootstrapApplication` + `app.get`。
+// 装配入口是 `bootstrapApplication` + `app.get(Token)`：一次 bootstrap 拿到真 cordis 根 ctx（`App.ctx`），
+// 卸载走 `app.dispose()`。为什么不再有「逐行挂」的第二套内核：它与 `bootstrapApplication` 里的装配重复，
+// 而且总会新起一个根 ctx，与「复用同一个 ctx」的用法冲突。
 import { pinDshHome } from "./support/dsh-home.ts";
 import { mountSessionModeApp } from "./support/mount-app.ts";
 

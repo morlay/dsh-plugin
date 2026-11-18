@@ -23,7 +23,9 @@ import type { TestContext } from "./support/context.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { mountSessionModeApp } from "./support/mount-app.ts";
 import { dispatchPreStep } from "./support/pre-step.ts";
-// 其余符号（disposeRows / newContext / mountRows / type / type）随 `mount.ts` 一起退休：改用 `bootstrapApplication` + `app.get`。
+// 装配入口是 `bootstrapApplication` + `app.get(Token)`：一次 bootstrap 拿到真 cordis 根 ctx（`App.ctx`），
+// 卸载走 `app.dispose()`。为什么不再有「逐行挂」的第二套内核：它与 `bootstrapApplication` 里的装配重复，
+// 而且总会新起一个根 ctx，与「复用同一个 ctx」的用法冲突。
 
 // 通道注入的条目：幂等键在 source 的 `id` 上（kind 会随注入方声明而不同）。
 function entryIdOf(message: { readonly source: unknown }): string | undefined {
