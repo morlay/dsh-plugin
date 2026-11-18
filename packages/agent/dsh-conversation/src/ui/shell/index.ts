@@ -8,7 +8,12 @@ import { SidebarDocumentPreviewSlots } from "./sidebar-document-preview-slots.ts
 import { SidebarRightSlots } from "./sidebar-right-slots.ts";
 // 终端标签那一对行的 home 是 shell 域（上游 ui-sidebar-terminal + terminal-controller 的 client 半）：
 // 行在那边，这里只装配。
-import { RemoteMountsDefault, SidebarTerminalSlots, WebTerminalsDefault } from "@morlay/dsh-shell/ui";
+import {
+  RemoteMountsDefault,
+  SidebarTerminalSlots,
+  TerminalEndpointClient,
+  WebTerminalsDefault,
+} from "@morlay/dsh-shell/ui";
 import { SidebarSlots } from "./sidebar-slots.ts";
 // 「文件夹」标签与 file 资源 provider 的 home 是 workspace 域（上游是 api/workspace-files）：
 // 行在那边，这里只装配。
@@ -16,7 +21,12 @@ import { SidebarFilesSlots, WorkspaceFilesResource } from "@morlay/dsh-workspace
 
 export { SidebarDocumentPreviewSlots } from "./sidebar-document-preview-slots.ts";
 export { SidebarRightSlots } from "./sidebar-right-slots.ts";
-export { RemoteMountsDefault, SidebarTerminalSlots, WebTerminalsDefault } from "@morlay/dsh-shell/ui";
+export {
+  RemoteMountsDefault,
+  SidebarTerminalSlots,
+  TerminalEndpointClient,
+  WebTerminalsDefault,
+} from "@morlay/dsh-shell/ui";
 export { SidebarSlots } from "./sidebar-slots.ts";
 export { SidebarFilesSlots, WorkspaceFilesResource } from "@morlay/dsh-workspace/ui";
 
@@ -29,12 +39,15 @@ export { SidebarFilesSlots, WorkspaceFilesResource } from "@morlay/dsh-workspace
  *
  * `RemoteMountsDefault` 要排在 `WebTerminalsDefault` **之前**：它把终端组的 descriptor `$mount` 上
  * （`remote.terminal` 那一面由此存在），`WebTerminalsDefault` 的 `onInit` 有顺序守卫——排到后面装配期就报。
+ * `TerminalEndpointClient` 再排在它前面：`WebTerminalsDefault` 的字段注入它，缺这一行装配期直接报
+ * 「没有提供者：terminal-endpoint」。
  * @returns provider 清单。
  */
 export function provideSessionShellSlots(): ProviderList {
   return provide([
     SidebarSlots,
     SidebarRightSlots,
+    TerminalEndpointClient,
     RemoteMountsDefault,
     WebTerminalsDefault,
     SidebarFilesSlots,

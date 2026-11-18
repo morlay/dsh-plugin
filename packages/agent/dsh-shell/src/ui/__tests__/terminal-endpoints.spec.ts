@@ -18,7 +18,8 @@ import {
 } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { RemoteMountsDefault } from "../remote-mounts.service.ts";
-import { WebTerminalsDefault } from "../sidebar-terminal-slots.ts";
+import { provideShellUi } from "../shell.provide.ts";
+import { SidebarTerminalSlots, WebTerminalsDefault } from "../sidebar-terminal-slots.ts";
 import { TerminalEndpointClient } from "../terminal-endpoint-client.ts";
 
 const apps: App[] = [];
@@ -136,5 +137,17 @@ describe("webTerminals 的装配", () => {
     await expect(boot([TerminalEndpointClient, WebTerminalsDefault])).rejects.toThrow(
       /RemoteMountsDefault 必须排在 WebTerminalsDefault 之前/,
     );
+  });
+});
+describe("provideShellUi 的行清单", () => {
+  it("顺序 = 依赖序：客户端 → 挂载 → webTerminals → 标签", { timeout: 20_000 }, () => {
+    // 跑真装配才发现的坑：少了 `TerminalEndpointClient` 这一行，浏览器里报
+    // 「没有提供者：terminal-endpoint（WebTerminalsDefault 需要它）」，而 tsc 看不见 provider 清单。
+    expect(provideShellUi()).toEqual([
+      TerminalEndpointClient,
+      RemoteMountsDefault,
+      WebTerminalsDefault,
+      SidebarTerminalSlots,
+    ]);
   });
 });

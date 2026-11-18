@@ -4,4 +4,5 @@
 // 这几行装配（行注册进会话界面已声明的位置，但 home 在 shell）。
 export { RemoteMountsDefault } from "./remote-mounts.service.ts";
 export { SidebarTerminalSlots, WebTerminalsDefault } from "./sidebar-terminal-slots.ts";
+export { TerminalEndpointClient } from "./terminal-endpoint-client.ts";
 export { provideShellUi } from "./shell.provide.ts";
