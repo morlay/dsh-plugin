@@ -8,6 +8,7 @@ import * as UiWorkspacePlugin from "@deepseek-ai/dsh-client-ui-workspace/client"
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis, kFace } from "@morlay/zephyr/compat";
 import {
+  ContextMenus,
   Layout,
   Locale,
   Remote,
@@ -38,14 +39,14 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
 
   private readonly workspaces = inject(WorkspaceController);
 
+  /** 行内右键菜单：上游在它自己的行 ctx 上发布，装配期由 `adoptNamedServices` 映射成同名令牌。 */
+  private readonly contextMenus = inject(ContextMenus);
+
   override async onInit(ctx: Context): Promise<void> {
     // `ui-workspace` 的 inject 声明：`workspaces`（由 `workspace-controller` 行提供）、
     // `locale` / `layout` / `shortcuts` / `remoteAccess`（我们的契约）、`remote.directoryPicker`（远程子面）。
-    // 行内菜单的结构化接口：`ContextMenuSlots` 在自己的行 ctx 上 `ctx.provide('contextMenus', …)`，
-    // 清单里它排在前面。**不写进 `inject`**：它是上游的行内服务、没有实现类可注入。
-    const contextMenus = (
-      ctx as unknown as { root: { reflect: { get(name: string, strict?: boolean): unknown } } }
-    ).root.reflect.get("contextMenus", false);
+    // 行内菜单的结构化接口：`ContextMenuSlots` 在自己的行 ctx 上发布，装配期被映射成 `ContextMenus` 令牌，
+    // 所以读侧走 `inject(ContextMenus)`（按名字 `reflect.get` 只会拿回 `any`）。
     // **按名字读会话控制器**（不 inject 那个令牌）：`SessionController` 的 home 在对话域，而对话域反过来
     // 依赖 workspace 的宿主面——直接 import 就会成环。装配面把 `provideSessions()` 排在
     // `provideWorkspaceSlots()` 之前，这一行 mount 时它已经发布了（与上面读 `contextMenus` 同一手法）。
@@ -53,7 +54,7 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
       ctx as unknown as { root: { reflect: { get(name: string, strict?: boolean): unknown } } }
     ).root.reflect.get("session-controller", false);
     await this.mount(ctx, undefined, {
-      contextMenus,
+      contextMenus: this.contextMenus,
       sessions,
       slots: this.slots,
       remote: this.remote,

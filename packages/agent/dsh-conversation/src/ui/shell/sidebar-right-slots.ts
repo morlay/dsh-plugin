@@ -6,7 +6,14 @@
 import * as UiSidebarRightPlugin from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Layout, Locale, Resources, Shortcuts, Slots } from "@morlay/zephyr-app/client";
+import {
+  ContextMenus,
+  Layout,
+  Locale,
+  Resources,
+  Shortcuts,
+  Slots,
+} from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiSession } from "../ui-session.token.ts";
 import { SidebarRight } from "../ports.ts";
@@ -29,13 +36,13 @@ export class SidebarRightSlots extends fromCordis(SidebarRight, UiSidebarRightPl
 
   private readonly shortcuts = inject(Shortcuts);
 
+  /** 行内右键菜单（上游在自己的行 ctx 上发布，装配期映射成同名令牌）。 */
+  private readonly contextMenus = inject(ContextMenus);
+
   override async onInit(ctx: Context): Promise<void> {
-    // 上游 `ui-sidebar-right` 的 `inject` 里也有 `contextMenus`（右栏条目支持右键菜单）。
-    const contextMenus = (
-      ctx as unknown as { root: { reflect: { get(name: string, strict?: boolean): unknown } } }
-    ).root.reflect.get("contextMenus", false);
+    // 上游 `ui-sidebar-right` 的 `inject` 里也有 `contextMenus`（右栏条目支持右键菜单）：走令牌，不按名字读。
     await this.mount(ctx, undefined, {
-      contextMenus,
+      contextMenus: this.contextMenus,
       slots: this.slots,
       layout: this.layout,
       locale: this.locale,
