@@ -54,6 +54,21 @@ export function tokenNamed(name: string): Function | object | undefined {
   return byName.get(name);
 }
 
+/**
+ * 运行期的替身 → 契约面：**本文件唯一一处**收窄。
+ *
+ * 为什么收不了在别处：DI 的接缝本身长这样——`inject()` 在装配前返回的是占位对象、
+ * `InjectionToken` 造的是空类，两者都不是契约实例；而字段与令牌的类型**必须**是契约面
+ * （调用方才能直接 `this.foo.bar()`、`inject(Foo)` 才能推出 `Foo` 的实例类型）。
+ * 类型系统表达不了「这个值稍后会被换成 `T`」，所以这一跳留在这里、只留一次；
+ * 其余地方（`provider` / `bootstrap` / 适配行）一律用真类型，不许借它绕过检查。
+ * @param value - 运行期替身（占位对象或空类）。
+ * @returns 同一个值，按契约面使用。
+ */
+function asContractFace<T>(value: object): T {
+  return value as unknown as T;
+}
+
 /** 注入占位符（内部类型）。 */
 export interface InjectPlaceholder {
   readonly [kInject]: {
@@ -131,7 +146,7 @@ export const InjectionToken = function InjectionToken<T>(
   name: string,
   options: { readonly multi?: boolean } = {},
 ): TokenClass<T> {
-  const token = class {} as unknown as TokenClass<T>;
+  const token = asContractFace<TokenClass<T>>(class {});
   const meta: TokenMeta = { token, name, label: name, multi: options.multi === true, value: true };
   registered.set(token, meta);
   if (!meta.multi) byName.set(name, token);
@@ -155,15 +170,15 @@ export interface Required<T> {
  * @returns 注入占位（类型上是契约实例 + 必需标记）。
  */
 export function inject<T>(token: TokenClass<T>): T & Required<T> {
-  return placeholder(token, "one") as unknown as T & Required<T>;
+  return asContractFace<T & Required<T>>(placeholder(token, "one"));
 }
 
 inject.optional = function optional<T>(token: TokenClass<T>): T | undefined {
-  return placeholder(token, "optional") as unknown as T | undefined;
+  return asContractFace<T | undefined>(placeholder(token, "optional"));
 };
 
 inject.all = function all<T>(token: TokenClass<T>): T[] {
-  return placeholder(token, "all") as unknown as T[];
+  return asContractFace<T[]>(placeholder(token, "all"));
 };
 
 /**
