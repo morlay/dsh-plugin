@@ -321,7 +321,8 @@ export class SessionPersistenceRdb
   // 派生状态失效钩子交回本行。互相依赖的服务不能按装配序注入（谁先装配谁拿不到对方），所以这一条
   // 只能**在调用时按令牌名读**；名字从令牌元数据取，不在调用点手抄字符串。
   private branchOf(): SessionBranch | undefined {
-    const found = this.ctx?.reflect.get(tokenMetaOf(SessionBranch).name, false);
+    // `ctx.get` 是 `reflect.get` 的封装：语义相同，但返回 `unknown`（不是 `any`），逼着这里保留那次收窄。
+    const found = this.ctx?.get(tokenMetaOf(SessionBranch).name, false);
     return typeof found === "object" && found === null
       ? undefined
       : (found as SessionBranch | undefined);

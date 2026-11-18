@@ -23,7 +23,8 @@ export function readWorkspaceRegistry(ctx: Context | undefined): WorkspaceRegist
   const meta = tokenMetaOf(WorkspaceRegistry);
   for (const name of [meta.name, meta.alias]) {
     if (name === undefined) continue;
-    const found = ctx.reflect.get(name, false);
+    // `ctx.get` 是 `reflect.get` 的封装：语义相同但返回 `unknown`，收窄必须显式写在下面。
+    const found = ctx.get(name, false);
     if (found !== undefined && found !== null) return found as WorkspaceRegistry;
   }
   return undefined;
