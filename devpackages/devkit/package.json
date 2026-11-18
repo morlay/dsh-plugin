@@ -1,0 +1,21 @@
+{
+  "name": "@local/devkit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "构建期与审计工具：devkit build 管打包与发布态清单，devkit audit 管结构性判据。",
+  "bin": {
+    "devkit": "./src/cli.ts"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./build": "./src/build/index.ts",
+    "./audit": "./src/audit/index.ts"
+  },
+  "dependencies": {
+    "lightningcss": "^1.33.0",
+    "oxc-parser": "^0.153.0",
+    "rolldown": "1.x",
+    "@local/dts-prepare": "workspace:^"
+  }
+}

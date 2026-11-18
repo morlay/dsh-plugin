@@ -185,7 +185,7 @@ const countOf = (lines: readonly string[]): number =>
 // 生产面：硬门禁。测试域：**另一条**判据（只降不升）。两条分开报——合成一条时测试域的存量会把
 // 生产面的增量淹掉，生产面那条「只挡增量」就失效了。
 reportAgainstBaseline(
-  "双断言白名单（`as unknown as` 只许边界桥；白名单见 devpackages/audit/src/rules.ts）",
+  "双断言白名单（`as unknown as` 只许边界桥；白名单见 devpackages/devkit/src/audit/rules.ts）",
   doubleAssertions,
   {
     current: countOf(doubleAssertions),

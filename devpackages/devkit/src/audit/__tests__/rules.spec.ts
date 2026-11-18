@@ -50,6 +50,16 @@ describe("bridgeReason（双断言白名单）", () => {
     ).toBeUndefined();
   });
 
+  it("对话域的 cordis Context 桥只覆盖那一个转换文件", () => {
+    expect(
+      bridgeReason("packages/agent/dsh-conversation/src/ui/upstream-context.ts"),
+    ).toContain("cordis Context");
+    // 同一个包里业务代码的**收窄**断言照报：契约读面比上游窄这笔账记在契约面，不靠白名单消化。
+    expect(
+      bridgeReason("packages/agent/dsh-conversation/src/ui/session-controller.service.ts"),
+    ).toBeUndefined();
+  });
+
   it("域内断言不在白名单：rdb/log/repair.ts 与业务服务都要报", () => {
     expect(bridgeReason("packages/agent-ex/better-session/src/rdb/log/repair.ts")).toBeUndefined();
     expect(

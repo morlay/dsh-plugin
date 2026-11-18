@@ -145,6 +145,15 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     reason: "Electron 边界桥：Electron 内置模块、进程对象与 IPC 参数都没有本仓类型面",
   },
   {
+    // 本仓 `Context` ↔ cordis `Context` 的转换点：zephyr 的 `Context` 是 cordis `Context` 的**扩展面**，
+    // 在 `exactOptionalPropertyTypes` 下"补得更多"反而不可赋值（同一成员两边一个可选、一个必有）。
+    // 另一头是 cordis 的 `Context` 类型（上游 `ClientSessions` 的构造与 `scopeOf` / `sessionOf` 的入参），
+    // 运行期是同一个对象；同一条边在 zephyr 的 `compat/to-cordis.ts` / `from-cordis.ts` 里也各断言一次，
+    // 那两处归 zephyr 域。只在**这一个文件**里有这一条边，所以只白名单这个文件。
+    match: /(^|[\\/])dsh-conversation[\\/]src[\\/]ui[\\/]upstream-context\.ts$/u,
+    reason: "cordis Context 兼容桥：本仓 Context / SessionScope → 上游 cordis Context（运行期同一对象）",
+  },
+  {
     // 旧格式落盘：`better-session` 的读视图要把**历史 JSON 产物**（v3 及更早，字段名/形状与当前不同）
     // 读成当前的 `SessionHeader` / `SessionEvent[]`。另一头是**盘上已经存在的字节**，不是本仓能重写的域对象。
     // 为什么不能靠迁移解决：迁移链（`@deepseek-ai/dsh-session-format-*`）只在**导入/升级**时跑，且要求整份
@@ -188,8 +197,8 @@ export function isAllowedContractValueEdge(specifier: string): boolean {
 /**
  * 类型纪律判据的**存量基线**（过渡：收敛后删，改回 0 容忍）。
  *
- * 为什么要有：这几条的存量是**已接受的债**（当前：契约面值边 56 处；白名单外双断言 152 处，
- * 另有**测试域**同一判据 284 处记在 `"double-assertion-test"`），0 容忍会把 `just audit` 长期弄红，
+ * 为什么要有：这几条的存量是**已接受的债**（当前：契约面值边 56 处；白名单外双断言 85 处，
+ * 另有**测试域**同一判据 237 处记在 `"double-assertion-test"`），0 容忍会把 `just audit` 长期弄红，
  * 判据就没人看了。基线只挡**增量**——超出才红，等于打印当前数，低于提示下调。
  *
  * 删基线的判据：`just audit` 打出来的当前数降到 0（T5 清完契约面值边、T4 清完双断言），
@@ -206,7 +215,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 阶段 2 又下调 8 处：`dsh-session/src/testing/log.ts` 的会话事件夹具用品牌构造器装成了合法事件
    * （那一份在 `src/testing/` 下，算**生产面**）。
    */
-  "double-assertion": 144,
+  "double-assertion": 69,
   /**
    * **测试域**（`__tests__/**`）的同一条双断言判据：只降不升。
    *
@@ -217,7 +226,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 边界桥白名单对两边同样适用（`bridgeReason()` 先于分类判）：另一头是外部形状（cordis Context /
    * SQL 行 / 上游私有内存）的断言在测试里也是正当的，不因为它落在 `__tests__` 里就变成可以随便写。
    */
-  "double-assertion-test": 284,
+  "double-assertion-test": 201,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */
@@ -292,5 +301,5 @@ export function isParentSpecifier(specifier: string): boolean {
  */
 export const SUBENTRY_BASELINE = {
   /** 子入口面里**跨出面**的相对导入（`__tests__` 豁免；面内 `../` 不算）。 */
-  "parent-import": 168,
+  "parent-import": 144,
 } as const;
