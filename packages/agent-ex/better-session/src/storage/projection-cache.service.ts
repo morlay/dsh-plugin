@@ -18,7 +18,12 @@ import type {
   ProjectionSnapshot,
   SessionProjectionMap,
 } from "@morlay/dsh-session/contract";
-import { SessionProjectionCache, SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
+import {
+  Events as SessionEvents,
+  SessionProjectionCache,
+  SessionProjectionStore,
+  SessionStore,
+} from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import {
   inject,
@@ -93,12 +98,23 @@ export class SessionProjectionCacheRdb implements SessionProjectionCache, OnInit
 
   private repository: StorageRepository | undefined;
 
-  private row: Context | undefined;
+  /**
+   * 会话的生命周期事件：声明成字段，装配时框架对每个 `EventEmitter` 字段调 `onInit(ctx)`。
+   *
+   * 事件名与参数表都在这三个类里（与上游 `ctx.emit("session/event", …)` 同名），这里不再裸写字符串。
+   */
+  private readonly eventAppended$ = new SessionEvents.SessionEventAppended();
+
+  private readonly sessionCreated$ = new SessionEvents.SessionCreated();
+
+  private readonly sessionDisposed$ = new SessionEvents.SessionDisposed();
+
+  /** 写路径的三条订阅（`onDispose` 里收回：它们挂在本应用 ctx 上，不随行自动清）。 */
+  private readonly writePathStops: (() => boolean)[] = [];
 
   private disposed = false;
 
-  async onInit(ctx: Context): Promise<void> {
-    this.row = ctx;
+  async onInit(_ctx: Context): Promise<void> {
     const store = asRdbStore(this.persistence);
     let repository: StorageRepository;
     try {
@@ -137,6 +153,7 @@ export class SessionProjectionCacheRdb implements SessionProjectionCache, OnInit
   onDispose(): void {
     this.disposed = true;
     this.queued.clear();
+    for (const stop of this.writePathStops.splice(0)) stop();
   }
 
   private lookup(id: SessionId): StoredProjcacheEntry | undefined {
@@ -330,18 +347,18 @@ export class SessionProjectionCacheRdb implements SessionProjectionCache, OnInit
   }
 
   private installWritePath(): void {
-    this.row?.on("session/event", (session: Session) => {
-      this.scheduleWrite(session, "event");
-    });
-
-    this.row?.on("session/created", (session: Session) => {
-      void this.flushSoft(session, "create");
-    });
-
-    this.row?.on("session/disposed", (session: Session) => {
-      void this.flushSoft(session, "detach");
-      this.queued.delete(session.id);
-    });
+    this.writePathStops.push(
+      this.eventAppended$.on((session) => {
+        this.scheduleWrite(session, "event");
+      }),
+      this.sessionCreated$.on((session) => {
+        void this.flushSoft(session, "create");
+      }),
+      this.sessionDisposed$.on((session) => {
+        void this.flushSoft(session, "detach");
+        this.queued.delete(session.id);
+      }),
+    );
   }
 
   // 同一 tick 的多条事件合成一次：flush 一次、checkpoint 取一次、diff 一次。
