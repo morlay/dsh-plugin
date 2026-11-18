@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createDeveloperMessage } from "@morlay/dsh-agent/contract";
-import { SessionId, SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
+import { CompactionId } from "@morlay/dsh-compaction";
+import {
+  SessionId,
+  SessionSeq,
+  type SessionEvent,
+  type SurfaceOp,
+} from "@morlay/dsh-session/contract";
 import { afterAll, describe, expect, it } from "vitest";
 import { SessionPersistenceRdb, repairReadView, type Backend } from "@morlay/better-session";
 import {
@@ -11,7 +17,7 @@ import {
   mount as mountHarness,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
-import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
+import { meta, oneTurnLog, userMessage } from "@morlay/dsh-session/testing";
 
 afterAll(disposeAll);
 
@@ -49,23 +55,20 @@ async function persistOneTurn(ctx: Context, id: string): Promise<void> {
   }
 }
 
-function surfaceEvent(seq: number, text: string, surfaceOp?: unknown): SessionEvent {
-  return {
-    type: "user/message",
-    seq: SessionSeq(seq),
-    time: seq,
-    data: {
-      id: `m${String(seq)}`,
-      role: "user",
-      content: [{ type: "text", text }],
-      source: { kind: "user" },
-    },
-    ...(surfaceOp === undefined ? {} : { surfaceOp }),
-  } as unknown as SessionEvent;
+// 表面事件的 surfaceOp 是契约字段（SurfaceOp），不是可以留成 unknown 的自由值。
+function surfaceEvent(
+  seq: number,
+  text: string,
+  surfaceOp: SurfaceOp = "append",
+): SessionEvent<"user/message"> {
+  return { ...userMessage(seq, `m${String(seq)}`, text), surfaceOp };
 }
 
 // 上游 agent-loop 在工具集增删时写的 surface 事件（此处只有移除，故不带 `headerSeq`）。
-function developerRemoval(seq: number, surfaceOp?: unknown): SessionEvent {
+function developerRemoval(
+  seq: number,
+  surfaceOp: SurfaceOp = "append",
+): SessionEvent<"developer/message"> {
   return {
     type: "developer/message",
     seq: SessionSeq(seq),
@@ -78,8 +81,8 @@ function developerRemoval(seq: number, surfaceOp?: unknown): SessionEvent {
         content: [{ type: "tool-removal", toolName: "load_workspace_dependencies" }],
       }),
     },
-    ...(surfaceOp === undefined ? {} : { surfaceOp }),
-  } as unknown as SessionEvent;
+    surfaceOp,
+  };
 }
 
 // 一段含 replace 与 metering 的日志：seq 1/2 被 seq 3（replace 1..2）折叠，
@@ -89,14 +92,25 @@ function replaceHeavyLog(): SessionEvent[] {
     surfaceEvent(0, "a", "append"),
     surfaceEvent(1, "b", "append"),
     surfaceEvent(2, "c", "append"),
-    surfaceEvent(3, "bc", { op: "replace", startSeq: 1, endSeq: 2 }),
+    surfaceEvent(3, "bc", { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(2) }),
+    // compaction 域的形状由 `@morlay/dsh-compaction` 的声明合并并进 `SessionEventMap`（它是本包的
+    // devDependency，类型增强因此在这个程序里生效）：锁归属、摘要正文、被遮蔽的区间与计价、写摘要那次
+    // 调用的路由都是必填——缺任何一个都不是这条事件。
     {
       type: "compaction/summary",
       seq: SessionSeq(4),
       time: 4,
-      data: { shadowedRange: { start: 0, end: 0 }, shadowedSeqs: [] },
-    } as unknown as SessionEvent,
-    surfaceEvent(5, "z", { op: "replace", startSeq: 3, endSeq: 3 }),
+      data: {
+        compactionId: CompactionId("compaction-1"),
+        summary: [{ type: "text", text: "compacted" }],
+        shadowedRange: { start: SessionSeq(0), end: SessionSeq(0) },
+        shadowedSeqs: [],
+        shadowedTokenCount: 0,
+        provider: "mock",
+        model: "mock",
+      },
+    },
+    surfaceEvent(5, "z", { op: "replace", startSeq: SessionSeq(3), endSeq: SessionSeq(3) }),
   ];
 }
 
@@ -239,13 +253,9 @@ describe("读路径", () => {
     const events = replaceHeavyLog();
     repairReadView(events);
 
-    expect((events[3] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
-      1, 2,
-    ]);
-    expect(
-      (events[4] as unknown as { data: { shadowedSeqs?: number[] } }).data.shadowedSeqs,
-    ).toEqual([3]);
-    expect((events[5] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([3]);
+    expect(events[3]).toMatchObject({ sourceEventSeqs: [1, 2] });
+    expect(events[4]).toMatchObject({ type: "compaction/summary", data: { shadowedSeqs: [3] } });
+    expect(events[5]).toMatchObject({ sourceEventSeqs: [3] });
   });
 
   // replace 的溯源按当前 surface 节点算，而 `developer/message` 也是 surface 节点：漏掉它，覆盖到它的
@@ -254,19 +264,19 @@ describe("读路径", () => {
     const events = [
       developerRemoval(0, "append"),
       surfaceEvent(1, "hi", "append"),
-      surfaceEvent(2, "replaced", { op: "replace", startSeq: 0, endSeq: 1 }),
+      surfaceEvent(2, "replaced", {
+        op: "replace",
+        startSeq: SessionSeq(0),
+        endSeq: SessionSeq(1),
+      }),
     ];
 
     repairReadView(events);
 
-    expect((events[2] as unknown as { surfaceOp?: unknown }).surfaceOp).toEqual({
-      op: "replace",
-      startSeq: 0,
-      endSeq: 1,
+    expect(events[2]).toMatchObject({
+      surfaceOp: { op: "replace", startSeq: 0, endSeq: 1 },
+      sourceEventSeqs: [0, 1],
     });
-    expect((events[2] as unknown as { sourceEventSeqs?: number[] }).sourceEventSeqs).toEqual([
-      0, 1,
-    ]);
   });
 
   // rewind 的边界 / 窗口探测只要类型：查询不能连带把整个事件 JSON（f_data）拖回来。

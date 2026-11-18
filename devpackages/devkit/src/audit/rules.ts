@@ -236,7 +236,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 边界桥白名单对两边同样适用（`bridgeReason()` 先于分类判）：另一头是外部形状（cordis Context /
    * SQL 行 / 上游私有内存）的断言在测试里也是正当的，不因为它落在 `__tests__` 里就变成可以随便写。
    */
-  "double-assertion-test": 201,
+  "double-assertion-test": 168,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */

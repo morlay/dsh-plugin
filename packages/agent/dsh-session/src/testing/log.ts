@@ -40,7 +40,12 @@ export function meta(id: string, cwd?: string): SessionHeader {
  * @param time - 事件时间（默认与 seq 相同）。
  * @returns `user/message` 事件（带 `surfaceOp: "append"`）。
  */
-export function userMessage(seq: number, id: string, text: string, time = seq): SessionEvent {
+export function userMessage(
+  seq: number,
+  id: string,
+  text: string,
+  time = seq,
+): SessionEvent<"user/message"> {
   return {
     type: "user/message",
     seq: SessionSeq(seq),

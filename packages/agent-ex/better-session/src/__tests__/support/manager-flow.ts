@@ -13,8 +13,9 @@ import type { WorkspaceDomainState } from "@morlay/dsh-workspace/contract";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { ToolCallId } from "@morlay/dsh-agent/contract";
 import { SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
-import { meta, titleEvent, turnLog } from "@morlay/dsh-session/testing";
+import { eventOf, meta, titleEvent, turnLog } from "@morlay/dsh-session/testing";
 import { mountRows, type MountedRows, type RowEntry } from "./base.ts";
 import { startHost, type Host } from "./e2e-host.ts";
 import { openInitializedSqlite } from "./sqlite.ts";
@@ -242,20 +243,28 @@ export async function seedToolSession(
   toolName: string,
 ): Promise<number> {
   const log = titledLog(title, id);
-  // tool/call 不是 surface 事件（不能带 surfaceOp）：它按普通事件落库，维度列里带上工具名。
-  const call = {
-    type: "tool/call",
-    data: { callId: id + "-call", name: toolName, input: { path: "notes.md" } },
-  } as unknown as SessionEvent;
+  // tool/call 不是 surface 事件（不能带 surfaceOp）：按事件契约给全 turn/step/callId/name/arguments，
+  // 维度列（f_name）从 name 折出来。
+  const userIndex = log.findIndex((event) => event.type === "user/message");
+  if (userIndex < 0) throw new Error("titledLog 里应当有 user/message");
+  const user = log[userIndex]!;
   // 插在用户输入之后（与它同一时刻），整段重编号：seq 必须从 0 连续（桥接表的序号就是日志位置）。
-  const shape = log.flatMap((event) =>
-    event.type === "user/message"
-      ? [event, { ...call, time: event.time } as SessionEvent]
-      : [event],
-  );
-  const events = shape.map(
-    (event, index) => ({ ...event, seq: SessionSeq(index) }) as SessionEvent,
-  );
+  const call = {
+    ...eventOf("tool/call", userIndex + 1, {
+      turn: 1,
+      step: 1,
+      callId: ToolCallId(id + "-call"),
+      name: toolName,
+      arguments: JSON.stringify({ path: "notes.md" }),
+    }),
+    time: user.time,
+  };
+  const shape = [
+    ...log.slice(0, userIndex + 1),
+    call,
+    ...log.slice(userIndex + 1),
+  ] as SessionEvent[];
+  const events = shape.map((event, index) => ({ ...event, seq: SessionSeq(index) }));
   const handle = await host.persistence.create(meta(id));
   await handle.append(events);
   await handle.close();

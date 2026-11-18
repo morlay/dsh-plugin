@@ -12,6 +12,7 @@ import {
   type SessionHeader,
   type SurfaceEvent,
 } from "@morlay/dsh-session/contract";
+import { CompactionId } from "@morlay/dsh-compaction";
 import { TokenMeter } from "@morlay/dsh-session/server";
 import { SessionBranchError } from "@morlay/better-session/endpoint";
 import {
@@ -25,7 +26,14 @@ import {
   mount as mountHarness,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
-import { appendLog, meta, oneTurnLog } from "@morlay/dsh-session/testing";
+import {
+  appendLog,
+  assistantMessage,
+  eventOf,
+  meta,
+  oneTurnLog,
+  userMessage,
+} from "@morlay/dsh-session/testing";
 
 afterAll(disposeAll);
 
@@ -81,6 +89,27 @@ function twoTurnLog(): SessionEvent[] {
       }) as SessionEvent,
   );
   return [...first, ...second];
+}
+
+// 一个压缩事务的计量事件（log-only，不是表面事件）：被遮蔽的表层区间、计价与写摘要那次调用的路由都是契约必填。
+function compactionSummary(
+  seq: number,
+  shadowed: { start: number; end: number },
+): SessionEvent<"compaction/summary"> {
+  return {
+    type: "compaction/summary",
+    seq: SessionSeq(seq),
+    time: seq,
+    data: {
+      compactionId: CompactionId(`compaction-${String(seq)}`),
+      summary: [{ type: "text", text: "compacted" }],
+      shadowedRange: { start: SessionSeq(shadowed.start), end: SessionSeq(shadowed.end) },
+      shadowedSeqs: [SessionSeq(shadowed.start), SessionSeq(shadowed.end)],
+      shadowedTokenCount: 100,
+      provider: "mock",
+      model: "mock",
+    },
+  };
 }
 
 async function createPersisted(
@@ -574,35 +603,11 @@ describe("rewind", () => {
     try {
       const openTail: SessionEvent[] = [
         { type: "turn/start", seq: SessionSeq(12), time: 12, data: { turn: 3 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(13),
-          time: 13,
-          data: {
-            id: "turn3-user",
-            role: "user",
-            content: [{ type: "text", text: "go on" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(13, "turn3-user", "go on", 13),
         { type: "step/start", seq: SessionSeq(14), time: 14, data: { turn: 3, step: 1 } },
-        {
-          type: "assistant/message",
-          seq: SessionSeq(15),
-          time: 15,
-          data: {
-            turn: 3,
-            step: 1,
-            message: {
-              id: "turn3-assistant",
-              role: "assistant",
-              content: [{ type: "text", text: "partial" }],
-              source: { kind: "model", provider: "mock", model: "mock" },
-            },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        // 助手消息走夹具工厂：id 铸品牌、stream 挂在 data 上（上游 assistant/message 的契约），
+        // 手写对象容易把 stream 塞进 message 里。
+        assistantMessage(15, 3, 1, "turn3-assistant", "partial", 15),
       ];
       await createPersisted(ctx, "s1", [...twoTurnLog(), ...openTail]);
 
@@ -656,18 +661,7 @@ describe("rewind", () => {
       const openTail: SessionEvent[] = [
         { type: "turn/start", seq: SessionSeq(12), time: 12, data: { turn: 3 } },
         { type: "step/start", seq: SessionSeq(13), time: 13, data: { turn: 3, step: 1 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(14),
-          time: 14,
-          data: {
-            id: "turn3-user",
-            role: "user",
-            content: [{ type: "text", text: "go on" }],
-            source: { kind: "user" },
-          } as unknown as SessionEvent,
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(14, "turn3-user", "go on", 14),
         {
           type: "assistant/message",
           seq: SessionSeq(15),
@@ -744,34 +738,10 @@ describe("rewind", () => {
       const openTail: SessionEvent[] = [
         { type: "turn/start", seq: SessionSeq(12), time: 12, data: { turn: 3 } },
         { type: "step/start", seq: SessionSeq(13), time: 13, data: { turn: 3, step: 1 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(14),
-          time: 14,
-          data: {
-            id: "turn3-user",
-            role: "user",
-            content: [{ type: "text", text: "go on" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
-        {
-          type: "assistant/message",
-          seq: SessionSeq(15),
-          time: 15,
-          data: {
-            turn: 3,
-            step: 1,
-            message: {
-              id: "turn3-assistant",
-              role: "assistant",
-              content: [{ type: "text", text: "partial" }],
-              source: { kind: "model", provider: "mock", model: "mock" },
-            },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(14, "turn3-user", "go on", 14),
+        // 助手消息走夹具工厂：id 铸品牌、stream 挂在 data 上（上游 assistant/message 的契约），
+        // 手写对象容易把 stream 塞进 message 里。
+        assistantMessage(15, 3, 1, "turn3-assistant", "partial", 15),
         { type: "step/end", seq: SessionSeq(16), time: 16, data: { turn: 3, step: 1 } },
       ];
       await createPersisted(ctx, "s1", [...twoTurnLog(), ...openTail]);
@@ -790,42 +760,19 @@ describe("rewind", () => {
   it("rewind keeps a surviving replace loadable (range intact, provenance recomputed)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
-      const compacted = [
+      const compacted: SessionEvent[] = [
         ...twoTurnLog().slice(0, 6),
-        { type: "turn/start", seq: SessionSeq(6), time: 6, data: { turn: 2 } },
-        { type: "step/start", seq: SessionSeq(7), time: 7, data: { turn: 2, step: 1 } },
+        eventOf("turn/start", 6, { turn: 2 }),
+        eventOf("step/start", 7, { turn: 2, step: 1 }),
+        compactionSummary(8, { start: 1, end: 3 }),
         {
-          type: "compaction/summary",
-          seq: SessionSeq(8),
-          time: 8,
-          data: {
-            turn: 2,
-            summary: "compacted",
-            shadowedRange: { start: 1, end: 3 },
-            shadowedTokenCount: 100,
-          },
+          ...userMessage(9, "compacted", "compacted", 9),
+          surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(3) },
+          sourceEventSeqs: [SessionSeq(1), SessionSeq(3)],
         },
-        {
-          type: "user/message",
-          seq: SessionSeq(9),
-          time: 9,
-          data: {
-            id: "compacted",
-            role: "user",
-            content: [{ type: "text", text: "compacted" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: { op: "replace", startSeq: 1, endSeq: 3 },
-          sourceEventSeqs: [1, 3].map((n) => SessionSeq(n)),
-        } as unknown as SessionEvent,
-        { type: "step/end", seq: SessionSeq(10), time: 10, data: { turn: 2, step: 1 } },
-        {
-          type: "turn/end",
-          seq: SessionSeq(11),
-          time: 11,
-          data: { turn: 2, reason: { kind: "completed" } },
-        },
-      ] as unknown as SessionEvent[];
+        eventOf("step/end", 10, { turn: 2, step: 1 }),
+        eventOf("turn/end", 11, { turn: 2, reason: { kind: "completed" } }),
+      ];
       await createPersisted(ctx, "s1", compacted);
 
       await provider.rewind(SessionId("s1"), 5);
@@ -844,45 +791,22 @@ describe("rewind", () => {
   it("rewind to a boundary before a surviving replace keeps the replace loadable", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
-      const compacted = [
+      const compacted: SessionEvent[] = [
         ...twoTurnLog().slice(0, 6),
-        { type: "turn/start", seq: SessionSeq(6), time: 6, data: { turn: 2 } },
-        { type: "step/start", seq: SessionSeq(7), time: 7, data: { turn: 2, step: 1 } },
+        eventOf("turn/start", 6, { turn: 2 }),
+        eventOf("step/start", 7, { turn: 2, step: 1 }),
+        compactionSummary(8, { start: 1, end: 3 }),
         {
-          type: "compaction/summary",
-          seq: SessionSeq(8),
-          time: 8,
-          data: {
-            turn: 2,
-            summary: "compacted",
-            shadowedRange: { start: 1, end: 3 },
-            shadowedTokenCount: 100,
-          },
+          ...userMessage(9, "compacted", "compacted", 9),
+          surfaceOp: { op: "replace", startSeq: SessionSeq(1), endSeq: SessionSeq(3) },
+          sourceEventSeqs: [SessionSeq(1), SessionSeq(3)],
         },
-        {
-          type: "user/message",
-          seq: SessionSeq(9),
-          time: 9,
-          data: {
-            id: "compacted",
-            role: "user",
-            content: [{ type: "text", text: "compacted" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: { op: "replace", startSeq: 1, endSeq: 3 },
-          sourceEventSeqs: [1, 3].map((n) => SessionSeq(n)),
-        } as unknown as SessionEvent,
-        { type: "step/end", seq: SessionSeq(10), time: 10, data: { turn: 2, step: 1 } },
-        {
-          type: "turn/end",
-          seq: SessionSeq(11),
-          time: 11,
-          data: { turn: 2, reason: { kind: "completed" } },
-        },
+        eventOf("step/end", 10, { turn: 2, step: 1 }),
+        eventOf("turn/end", 11, { turn: 2, reason: { kind: "completed" } }),
         ...twoTurnLog()
           .slice(6)
-          .map((e) => ({ ...e, seq: e.seq + 6, time: e.time + 100 })),
-      ] as unknown as SessionEvent[];
+          .map((e) => ({ ...e, seq: SessionSeq(e.seq + 6), time: e.time + 100 })),
+      ];
       await createPersisted(ctx, "s1", compacted);
 
       await provider.rewind(SessionId("s1"), 11);
@@ -911,49 +835,11 @@ describe("rewind", () => {
       const turn2: SessionEvent[] = [
         { type: "turn/start", seq: SessionSeq(6), time: 7, data: { turn: 2 } },
         { type: "step/start", seq: SessionSeq(7), time: 8, data: { turn: 2, step: 1 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(8),
-          time: 9,
-          data: {
-            id: "t2-u1",
-            role: "user",
-            content: [{ type: "text", text: "q1" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
-        {
-          type: "assistant/message",
-          seq: SessionSeq(9),
-          time: 10,
-          data: {
-            turn: 2,
-            step: 1,
-            message: {
-              id: "t2-a1",
-              role: "assistant",
-              content: [{ type: "text", text: "a1" }],
-              source: { kind: "model", provider: "mock", model: "mock" },
-            },
-            stream: [],
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(8, "t2-u1", "q1", 9),
+        assistantMessage(9, 2, 1, "t2-a1", "a1", 10),
         { type: "step/end", seq: SessionSeq(10), time: 11, data: { turn: 2, step: 1 } },
         { type: "step/start", seq: SessionSeq(11), time: 12, data: { turn: 2, step: 2 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(12),
-          time: 13,
-          data: {
-            id: "t2-fup",
-            role: "user",
-            content: [{ type: "text", text: "followup" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(12, "t2-fup", "followup", 13),
         { type: "step/end", seq: SessionSeq(13), time: 14, data: { turn: 2, step: 2 } },
         {
           type: "turn/end",
@@ -982,35 +868,8 @@ describe("rewind", () => {
 
       const continuation: SessionEvent[] = [
         { type: "step/start", seq: SessionSeq(11), time: 16, data: { turn: 2, step: 3 } },
-        {
-          type: "user/message",
-          seq: SessionSeq(12),
-          time: 17,
-          data: {
-            id: "t2-fup-edited",
-            role: "user",
-            content: [{ type: "text", text: "followup edited" }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
-        {
-          type: "assistant/message",
-          seq: SessionSeq(13),
-          time: 18,
-          data: {
-            turn: 2,
-            step: 3,
-            message: {
-              id: "t2-a2",
-              role: "assistant",
-              content: [{ type: "text", text: "a2" }],
-              source: { kind: "model", provider: "mock", model: "mock" },
-            },
-            stream: [],
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent,
+        userMessage(12, "t2-fup-edited", "followup edited", 17),
+        assistantMessage(13, 2, 3, "t2-a2", "a2", 18),
         { type: "step/end", seq: SessionSeq(14), time: 19, data: { turn: 2, step: 3 } },
         {
           type: "turn/end",
@@ -1080,18 +939,7 @@ describe("rewind", () => {
         } as SessionEvent,
       ];
       for (let seq = 14; seq < foldedWatermark; seq += 1) {
-        continuation.push({
-          type: "user/message",
-          seq: SessionSeq(seq),
-          time: 600 + seq,
-          data: {
-            id: `rewound-fill-${seq}`,
-            role: "user",
-            content: [{ type: "text", text: `fill ${seq}` }],
-            source: { kind: "user" },
-          },
-          surfaceOp: "append",
-        } as unknown as SessionEvent);
+        continuation.push(userMessage(seq, `rewound-fill-${seq}`, `fill ${seq}`, 600 + seq));
       }
       continuation.push(
         {
