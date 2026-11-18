@@ -3,7 +3,9 @@
 // 类型面上没有那些成员——所以这一读法收在本文件，调用方不再各写一次 `as unknown as Record<…>`。
 //
 // 读面只有两个：一个 namespace 的方法表（装配观测用）、一个具体方法（转发用）。
-import type { Remote } from "../../remote/remote.contract.ts";
+// 包出口（`./remote`）而不是相对路径：`Remote` 是两半共用的契约，浏览器面经出口取它
+// （type-only，运行期不留边）。
+import type { Remote } from "@morlay/zephyr-app/remote";
 
 /**
  * 一个 namespace 的方法表（`remote.<namespace>` 那一面）。

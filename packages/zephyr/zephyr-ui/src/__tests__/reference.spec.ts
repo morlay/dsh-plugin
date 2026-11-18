@@ -6,8 +6,8 @@ import {
   isLocalReference,
   parseReference,
   parseReferenceToken,
-} from "../reference.ts";
-import type { Reference } from "../reference.ts";
+} from "../client/reference.ts";
+import type { Reference } from "../client/reference.ts";
 
 function referencesOf(text: string): readonly (Reference & { readonly slice: string })[] {
   return findReferences(text).map((span) => ({

@@ -54,10 +54,10 @@ export {
   isLocalReference,
   parseReference,
   parseReferenceToken,
-} from "../reference.ts";
-export type { Reference, ReferenceSpan } from "../reference.ts";
-export { ReferenceMarkdown, referenceMentions } from "../reference-markdown.tsx";
-export type { ReferenceActions, ReferenceMarkdownProps } from "../reference-markdown.tsx";
+} from "./reference.ts";
+export type { Reference, ReferenceSpan } from "./reference.ts";
+export { ReferenceMarkdown, referenceMentions } from "./reference-markdown.tsx";
+export type { ReferenceActions, ReferenceMarkdownProps } from "./reference-markdown.tsx";
 
 // `apply` 需要的**服务名**（cordis 服务，不是包名）：样式与引用那半不要服务，schema 表单那半要槽位、字典、
 // 配置表单与 schema 服务。本包不是装配行，这份清单不交给 Loader；它写成常量，调用方（内联本包的 client 行）

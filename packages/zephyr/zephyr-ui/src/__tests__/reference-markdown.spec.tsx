@@ -3,8 +3,8 @@
 // 普通文本 / 代码不受影响。
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReferenceMarkdown, referenceMentions } from "../reference-markdown.tsx";
-import type { Reference } from "../reference.ts";
+import { ReferenceMarkdown, referenceMentions } from "../client/reference-markdown.tsx";
+import type { Reference } from "../client/reference.ts";
 
 // vitest 未开 globals，@testing-library/react 的自动清理不会生效，这里显式收尾。
 afterEach(cleanup);
