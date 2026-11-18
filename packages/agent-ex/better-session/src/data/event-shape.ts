@@ -22,7 +22,8 @@ export type EventKind =
 
 export type EventRole = "user" | "assistant" | "tool";
 
-export function eventKind(event: { type: string; data?: unknown }): EventKind | "" {
+/** 事件分类：只服务同文件的 `eventDimensions`，不进公开面（零外部调用）。 */
+function eventKind(event: { type: string; data?: unknown }): EventKind | "" {
   switch (event.type) {
     case "user/message":
       return "message";
