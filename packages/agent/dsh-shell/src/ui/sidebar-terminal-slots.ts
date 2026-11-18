@@ -9,20 +9,17 @@ import { TYPERT_REMOTE as TERMINAL_REMOTE } from "@deepseek-ai/dsh-api-terminal-
 import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Locale, Shortcuts, Slots, Theme } from "@morlay/zephyr-app/client";
+import { Locale, Remote, Shortcuts, Slots, Theme } from "@morlay/zephyr-app/client";
 import { TERMINAL_GROUP } from "../endpoint/index.ts";
 
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
 @Injectable()
 export class WebTerminalsDefault implements OnInit {
   async onInit(ctx: Context): Promise<void> {
-    // 「终端组」 要取**真服务**：`inject(Remote)` 给的是适配行实例，而它只绑契约上声明的成员
-    // （`Remote` 契约不列 namespace）——从它读 `terminal` 是 `undefined`，终端的第一次
-    // `remote.environment(...)` 就会炸成 `Cannot read properties of undefined (reading 'environment')`。
-    const remote = ctx.get("remote") as {
-      readonly terminal: TerminalRemote;
-      $mount(contribution: unknown): Promise<() => Promise<void>>;
-    };
+    // 走契约（`inject(Remote)`）：`$mount` / `whenMounted` 都在契约上，不需要按名字读服务。
+    // 「终端组」取的是**上游 namespace 的原始对象**——`@RemoteContract` 没为 terminal 建契约（这条链只有
+    // 右栏的终端 tab 用它，为一个消费方建契约是过度），所以走契约声明的口子 `remote.upstream[组名]`。
+    const remote = inject(Remote);
     // 浏览器里没人跑全局的 remotes 清单（`provideClientModules` 只在宿主装）：每个域自己 `$mount`
     // 自己那份 `TYPERT_REMOTE`。少了这一步 「终端组」 永远是 `undefined`。
     await remote.$mount(TERMINAL_REMOTE);
@@ -31,7 +28,7 @@ export class WebTerminalsDefault implements OnInit {
     const root = ctx.root;
     const terminals = new ClientTerminals(
       root as never,
-      (remote as unknown as Record<string, unknown>)[TERMINAL_GROUP] as never,
+      remote.upstream[TERMINAL_GROUP] as never,
     );
     ctx.effect(() => () => {
       void (terminals as unknown as { dispose?: () => unknown }).dispose?.();
