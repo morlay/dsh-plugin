@@ -5,5 +5,5 @@ export * from "./credentials.service.ts";
 
 // 上游 `@deepseek-ai/dsh-credentials` **一个符号都不透传**：本包只出自己的契约（`Authorization`）与两个
 // 默认实现（`AuthorizationDefault` / `CredentialsDefault`）。上游那些名字（`CredentialProvider` /
-// `parseCredentialKey` / `credentialRef` …）本仓没有消费方；将来要用的人直接引上游包，
+// `parseCredentialKey` / `credentialRef` …）本仓没有消费方；要用的直接引上游包，
 // 别再把整包挂到本包门面上。

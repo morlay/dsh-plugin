@@ -1,7 +1,7 @@
 // `@Command()`：命令贡献的登记写法（`@Command()` + `implements CommandContribution`，不手写 `register`）。
 //
 // **每类一个具体装饰器**：这里只做「命令」这一类的登记，不参数化注册表、不留通用入口——
-// `@Tool` / `@Skill` / `@Policy` 将来各写一份（形态真的完全一致时再谈提取，并记 ADR）。
+// `@Tool` / `@Skill` / `@Policy` 三个装饰器**各自一份**：形态真的完全一致时才谈提取（提取前先记 ADR）。
 //
 // 手法与 `configure` 相同：装饰器返回**子类**。`inject()` 是构造期的字段占位，zephyr 只解析
 // 实例**自有**字段，所以要拿到注册表就得自己构造实例；登记发生在装配期（provider 的 `onInit`），
