@@ -7,6 +7,7 @@
 export {
   appendLog,
   assistantMessage,
+  eventOf,
   headerEvent,
   meta,
   oneTurnLog,

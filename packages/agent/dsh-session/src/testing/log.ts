@@ -9,6 +9,8 @@ import { MessageId } from "@deepseek-ai/dsh-llm/brand";
 import { SESSION_FORMAT_VERSION, Session, SessionId, SessionSeq } from "@deepseek-ai/dsh-session";
 import type {
   SessionEvent,
+  SessionEventMap,
+  SessionEventType,
   SessionHeader,
   SurfaceEventType,
   SurfaceIntent,
@@ -281,6 +283,24 @@ export function headerEvent(
       reason: options.reason ?? "initial",
     },
   };
+}
+/**
+ * 装一条**非表面**事件（`turn/start` / `turn/end` / `step/start` / `step/end` 这类只带 `data` 的）。
+ *
+ * `type` 与 `data` 在这里是**配对**的泛型（`K` ↔ `SessionEventMap[K]`），所以不需要为「字面量被推成 `string`」
+ * 或者「`seq` 是裸数字」再补断言——返回面留着具体的 `K`，交给调用处的 `SessionEvent[]` 上下文去校验。
+ * 表面事件（`user/message` 等）不走这里：它们还要 `surfaceOp`，用 `userMessage` / `assistantMessage` 那些工厂。
+ * @param type - 事件类型（字面量，收窄到非表面类型）。
+ * @param seq - 事件序号（也用作 `time`）。
+ * @param data - 该类型的数据。
+ * @returns 事件对象（`type` 与 `data` 配好对）。
+ */
+export function eventOf<K extends Exclude<SessionEventType, SurfaceEventType>>(
+  type: K,
+  seq: number,
+  data: SessionEventMap[K],
+) {
+  return { type, seq: SessionSeq(seq), time: seq, data };
 }
 /**
  * 往一份**活会话**里追加一批事件（保留 `surfaceOp` 与来源序号）。

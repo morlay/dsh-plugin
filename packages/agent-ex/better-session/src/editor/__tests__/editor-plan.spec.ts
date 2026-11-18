@@ -17,7 +17,7 @@ import {
   rerollPlan,
 } from "@morlay/better-session";
 import { describe, expect, it } from "vitest";
-import { headerEvent, turnLog } from "@morlay/dsh-session/testing";
+import { headerEvent, turnLog, eventOf } from "@morlay/dsh-session/testing";
 
 // 编辑请求按契约的形状给（动作由调用哪个方法定，请求里没有 action 字段）。
 function editRequest(
@@ -227,10 +227,7 @@ describe("重放保住来源凭据", () => {
 describe("keptOutsideTurn / openTurnCloser", () => {
   it("保留前缀与目标之间、不属于轮次正文的事件（配置 / 上下文注入）", () => {
     const header = headerEvent(1, { provider: "p", model: "m" });
-    const events = [
-      { type: "turn/start", seq: 0, time: 0, data: { turn: 1 } } as unknown as SessionEvent,
-      header,
-    ];
+    const events = [eventOf("turn/start", 0, { turn: 1 }), header];
     const withUser = [...events, ...turnLog(2, 1).slice(1)];
 
     const kept = keptOutsideTurn(withUser, 0, 3);
@@ -242,7 +239,7 @@ describe("keptOutsideTurn / openTurnCloser", () => {
     const spliced = (seq: number, data: unknown) =>
       ({ type: "agent/inbox/spliced", seq, time: seq, data }) as unknown as SessionEvent;
     const events = [
-      { type: "turn/start", seq: 0, time: 0, data: { turn: 1 } } as unknown as SessionEvent,
+      eventOf("turn/start", 0, { turn: 1 }),
       spliced(1, { target: "next-turn", start: 0, inserted: [{ id: "u1" }] }),
       spliced(2, { target: "next-turn", start: 0, removedCount: 1, inserted: [] }),
       headerEvent(3, { provider: "p", model: "m" }),
@@ -326,13 +323,8 @@ describe("precedingContentIndex", () => {
   it("跳过没有用户输入 / 助手正文的空回合", () => {
     const events = [
       ...turnLog(0, 1),
-      { type: "turn/start", seq: 6, time: 6, data: { turn: 2 } } as unknown as SessionEvent,
-      {
-        type: "turn/end",
-        seq: 7,
-        time: 7,
-        data: { turn: 2, reason: { kind: "completed" } },
-      } as unknown as SessionEvent,
+      eventOf("turn/start", 6, { turn: 2 }),
+      eventOf("turn/end", 7, { turn: 2, reason: { kind: "completed" } }),
     ];
 
     expect(precedingContentIndex(closedTurns(events), 1)).toBe(0);
