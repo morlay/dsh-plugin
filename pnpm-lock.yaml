@@ -1689,6 +1689,9 @@ importers:
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/credentials/credentials
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: 'link:'
       '@types/node':
         specifier: ^26.5.0
         version: 26.6.6

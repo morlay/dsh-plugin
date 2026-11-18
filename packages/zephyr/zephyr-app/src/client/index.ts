@@ -27,7 +27,7 @@ export { ProjectionValueStore, type ProjectionFace } from "./projections/project
 export * from "./remote/session-remote.client.ts";
 // `@Remote`（方法装饰器）**不在这里导出**：`Remote` 这个名字是上游装载面契约。
 // 需要它的业务包从子路径拿：`@morlay/zephyr-app/client/remote`。
-export { RemoteGroup, remoteGroupNameOf } from "../remote/decorators.ts";
+export { RemoteGroup, remoteGroupNameOf } from "@morlay/zephyr-app/remote/decorators";
 export {
   Slot,
   SlotContribution,
