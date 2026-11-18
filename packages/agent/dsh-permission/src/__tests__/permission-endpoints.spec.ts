@@ -2,7 +2,8 @@
  * 权限 / inbox 两条远端端点的局部闭环：真 `RemoteHandlers` + 真上游服务（`UserQuestionService`、
  * `PermissionPresetService`），经 `@RemoteGroup` 注册后由契约的客户端形态调用（`client.catalog()` /
  * `client.answer(...)`）——spec 里不拼 wire 名，名字的 home 只有契约类。`attachWait` 是流式，
- * 只能按注册点那个端点名开流（客户端形态的转发只覆盖 unary）。
+ * 客户端形态的转发只覆盖 unary，所以它在 handler 表上开流；端点名同样**从契约编译出来**
+ * （`remoteDescriptorsOf`），不是手抄的字符串。
  *
  * 断言落在**真队列**与**真预设表**上：`attachWait` 挂到的是 `askTimed` 造出来的那条前台等待
  * （首帧 `remainingMs`），`answer` 的 `false` 来自上游对「这个 call 已不在可作答集合里」的判定，
@@ -25,14 +26,30 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
-import { USER_QUESTIONS_ATTACH_WAIT_ENDPOINT } from "../endpoint/user-questions-endpoint.ts";
+import { UserQuestionsEndpoint } from "../endpoint/user-questions-endpoint.ts";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 import { UserQuestionsEndpointClient } from "../ui/user-questions-endpoint-client.ts";
 
 let root = "";
+
+/**
+ * `userQuestions/attachWait` 的 wire 端点名：**从契约编译出来**（`remoteDescriptorsOf` 读
+ * `@RemoteGroup` / `@RemoteMethod({ mode: "stream" })`），spec 不手抄字符串。
+ * @returns 那一条流式端点的 `<组名>/<方法名>`。
+ */
+function attachWaitEndpoint(): string {
+  const stream = remoteDescriptorsOf(UserQuestionsEndpoint).descriptors.find(
+    (descriptor) => descriptor.mode === "stream",
+  );
+  if (stream === undefined) {
+    throw new Error("契约上没有声明流式的 attachWait：userQuestions 组少了一条流");
+  }
+  return `${stream.namespace}/${stream.method}`;
+}
 
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "dsh-permission-endpoints-"));
@@ -129,7 +146,7 @@ describe("权限 / inbox 的宿主端点", () => {
   it("`userQuestions/attachWait` 没有前台等待时立即结束（无帧）", { timeout: 20_000 }, async () => {
     const { handlers, sessionId } = await boot();
     const source = handlers.stream(
-      USER_QUESTIONS_ATTACH_WAIT_ENDPOINT,
+      attachWaitEndpoint(),
       { agent: sessionId, callId: "call-none" },
       new AbortController().signal,
     );
@@ -157,7 +174,7 @@ describe("权限 / inbox 的宿主端点", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       const source = handlers.stream(
-        USER_QUESTIONS_ATTACH_WAIT_ENDPOINT,
+        attachWaitEndpoint(),
         { agent: sessionId, callId },
         new AbortController().signal,
       );

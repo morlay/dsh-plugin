@@ -7,17 +7,6 @@
 import type { AskUserQuestionAnswer } from "@deepseek-ai/dsh-user-questions/types";
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
-/**
- * 流式端点名：`attachWait` 逐帧回 `{ remainingMs }`，不在 `registerRemoteGroup` 的 unary 表里，
- * 由宿主侧 `RemoteHandlers.registerStream` 单独注册。
- *
- * 这里是它**唯一**的 home，而它仍是手写字符串：这条流式方法没有在契约类上声明
- * （`@RemoteMethod({ mode: "stream" })` 会被 `registerRemoteGroup` 当成要注册的方法，
- * 与 `server/user-questions-endpoint.service.ts` 那处 `registerStream` 撞成「已经注册过」）。
- * 等那条注册点改成 `@Remote()` 装饰（另一票）时，这个常量随它一起删。
- */
-export const USER_QUESTIONS_ATTACH_WAIT_ENDPOINT = "userQuestions/attachWait";
-
 /** `userQuestions/answer` 的命名参数（键名照上游 descriptor 的 `parameters[].name`）。 */
 export interface UserQuestionsAnswerRequest {
   /** 会话身份（descriptor 的 `agent` 参数，wire 名 `agentId`）。 */
@@ -36,7 +25,13 @@ export interface UserQuestionsAttachWaitRequest {
   readonly callId: string;
 }
 
-/** `userQuestions` 组：作答与「挂到前台等待」两条。 */
+/**
+ * `userQuestions` 组：作答与「挂到前台等待」两条。
+ *
+ * 两条的 wire 名（`userQuestions/answer` / `userQuestions/attachWait`）都在这里：组名在
+ * `@RemoteGroup` 上，方法名就是方法名。宿主侧 `registerRemoteGroup` 一次注册两条——
+ * `mode: "stream"` 的那条自动走 `registerStream`，不再有手写的端点名常量。
+ */
 @RemoteGroup({ name: "userQuestions" })
 export class UserQuestionsEndpoint {
   /**
@@ -47,5 +42,19 @@ export class UserQuestionsEndpoint {
   @RemoteMethod()
   async answer(_request: UserQuestionsAnswerRequest): Promise<RemoteResultWire<boolean>> {
     throw new Error("userQuestions/answer：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 挂到一条前台提问的等待上：逐帧给剩余毫秒，直到这次提问结束或被取消。
+   * @param _request - 会话身份与工具调用。
+   * @param _signal - wire 的取消信号（流承载关闭时 abort）。
+   * @returns 逐帧的 `{ remainingMs }`。
+   */
+  @RemoteMethod({ mode: "stream" })
+  attachWait(
+    _request: UserQuestionsAttachWaitRequest,
+    _signal: AbortSignal,
+  ): AsyncIterable<{ remainingMs: number }> {
+    throw new Error("userQuestions/attachWait：契约类未实现（宿主侧要在子类里实现它）");
   }
 }

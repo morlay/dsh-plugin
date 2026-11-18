@@ -19,4 +19,17 @@ import { UserQuestionsEndpoint } from "../endpoint/user-questions-endpoint.ts";
 export class UserQuestionsEndpointClient extends UserQuestionsEndpoint {
   /** 转发目标：`remote.invoke("<group>/<method>", { request })`。 */
   protected readonly remote = inject(Remote);
+
+  /**
+   * `attachWait` 是**流**，而 `@RemoteClient()` 的转发只走 `remote.invoke`（unary，回一个 Promise），
+   * 拿不到逐帧面——所以这里明确说不支持，而不是让自动生成的那条转发返回一个「看着像
+   * `AsyncIterable` 的 Promise」。要开这条流走 `remote.$stream(...)`（上游 `$mount` 之后的
+   * `remote.userQuestions.attachWait` 才是逐帧句柄）。
+   * @returns 永不返回（这条客户端形态给不了流）。
+   */
+  override attachWait(): never {
+    throw new Error(
+      "userQuestions/attachWait 是流式：客户端的 unary 转发给不了逐帧面（用 remote.$stream）",
+    );
+  }
 }
