@@ -10,11 +10,11 @@ import { addableAt, fieldKey } from "../schema-form/controller.ts";
 import type { SchemaFormState } from "../schema-form/controller.ts";
 import { editorLines, type EditorLine } from "../schema-form/lines.ts";
 import { zh } from "../schema-form/locales.ts";
+import { translateOf } from "../schema-form/testing/translate-stub.ts";
 import { projectNode, readPath, walkFields, type FieldNode } from "../schema-form/schema-node.ts";
-import type { SchemaFormTranslate } from "../schema-form/slot-contract.ts";
 
-const t = ((key: string) =>
-  (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
+
+const t = translateOf(zh);
 const resolveText = (text: string | Readonly<Record<string, string>>): string =>
   typeof text === "string" ? text : (text["zh"] ?? "");
 

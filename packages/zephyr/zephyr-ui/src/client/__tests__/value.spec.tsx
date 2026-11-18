@@ -13,7 +13,8 @@ import { isMultiline } from "../schema-form/value.tsx";
 import { zh } from "../schema-form/locales.ts";
 import { projectNode, type FieldNode } from "../schema-form/schema-node.ts";
 import { stubResizeObserver } from "../schema-form/testing/resize-observer-stub.ts";
-import type { SchemaFieldOwnerProps, SchemaFormTranslate } from "../schema-form/slot-contract.ts";
+import { translateOf } from "../schema-form/testing/translate-stub.ts";
+import type { SchemaFieldOwnerProps } from "../schema-form/slot-contract.ts";
 import {
   InlineValue,
   SchemaFieldDefault,
@@ -26,15 +27,7 @@ afterEach(cleanup);
 // 值的显示态挂着「被截断才给全文」的那层包装：它要 ResizeObserver（happy-dom 没有这个 API）。
 stubResizeObserver();
 
-const t = ((key: string, params?: Record<string, unknown>) => {
-  const template = (zh as unknown as Record<string, string>)[key] ?? key;
-  return params === undefined
-    ? template
-    : template.replace(/\{(\w+)\}/g, (_match, name: string) => {
-        const value = params[name];
-        return typeof value === "string" || typeof value === "number" ? String(value) : "";
-      });
-}) as unknown as SchemaFormTranslate;
+const t = translateOf(zh);
 
 function actions(): SchemaFormActions {
   return {

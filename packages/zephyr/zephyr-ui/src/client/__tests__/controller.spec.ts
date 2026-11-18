@@ -13,9 +13,10 @@ import { SchemaFormHintsDefault } from "../schema-form/hints.ts";
 import type { SelectSpec } from "../schema-form/hints.ts";
 import { discriminatedConfig } from "../schema-form/testing/discriminated-config.ts";
 import { zh } from "../schema-form/locales.ts";
-import type { SchemaFormTranslate } from "../schema-form/slot-contract.ts";
+
 import { fakeDescribe } from "../schema-form/testing/fake-describe.ts";
 import { FakeScope } from "../schema-form/testing/fake-scope.ts";
+import { translateOf } from "../schema-form/testing/translate-stub.ts";
 
 // host 发来的命名空间视图：schema 走一遍 `toJSON()`（与真实流一致）。
 function view(
@@ -35,15 +36,7 @@ function view(
   } as SettingsNamespaceView;
 }
 
-const t = ((key: string, params?: Record<string, unknown>) => {
-  const template = (zh as unknown as Record<string, string>)[key] ?? key;
-  return params === undefined
-    ? template
-    : template.replace(/\{(\w+)\}/g, (_match, name: string) => {
-        const value = params[name];
-        return typeof value === "string" || typeof value === "number" ? String(value) : "";
-      });
-}) as unknown as SchemaFormTranslate;
+const t = translateOf(zh);
 
 // 控制器：rehydrate 与校验都用真 schema（与 `ctx.settingsSchema` 同语义）。
 function mounted(

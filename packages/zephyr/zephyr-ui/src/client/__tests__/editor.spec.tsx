@@ -17,6 +17,7 @@ import {
   type SchemaFormState,
 } from "../schema-form/controller.ts";
 import { zh } from "../schema-form/locales.ts";
+import { translateOf } from "../schema-form/testing/translate-stub.ts";
 import css from "../schema-form/schema-form.module.css";
 import { SchemaForm } from "../schema-form/SchemaForm.tsx";
 import { projectNode, walkFields, type FieldNode } from "../schema-form/schema-node.ts";
@@ -26,7 +27,7 @@ import { notifyResize, stubResizeObserver } from "../schema-form/testing/resize-
 import type {
   SchemaFieldOwnerProps,
   SchemaFormComponentProps,
-  SchemaFormTranslate,
+
 } from "../schema-form/slot-contract.ts";
 
 afterEach(cleanup);
@@ -55,8 +56,7 @@ function sized(el: HTMLElement, box: { content: number; visible: number }): void
   });
 }
 
-const t = ((key: string) =>
-  (zh as unknown as Record<string, string>)[key] ?? key) as unknown as SchemaFormTranslate;
+const t = translateOf(zh);
 const resolveText = (text: string | Readonly<Record<string, string>>): string =>
   typeof text === "string" ? text : (text["zh"] ?? text["en"] ?? "");
 
