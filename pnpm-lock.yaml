@@ -189,9 +189,9 @@ importers:
 
   .:
     devDependencies:
-      '@local/audit':
+      '@local/devkit':
         specifier: workspace:^
-        version: link:devpackages/audit
+        version: link:devpackages/devkit
       '@local/dts-prepare':
         specifier: workspace:^
         version: link:devpackages/dts-prepare
@@ -359,11 +359,17 @@ importers:
         specifier: workspace:^
         version: link:../../packages/zephyr/zephyr-dev
 
-  devpackages/audit:
+  devpackages/devkit:
     dependencies:
+      lightningcss:
+        specifier: ^1.33.0
+        version: 1.33.0
       oxc-parser:
         specifier: ^0.153.0
         version: 0.153.0
+      rolldown:
+        specifier: 1.x
+        version: 1.2.16
 
   devpackages/dts-prepare:
     dependencies:
@@ -373,24 +379,6 @@ importers:
       rolldown-plugin-dts:
         specifier: 0.28.x
         version: 0.28.8(rolldown@1.2.16)(typescript@7.1.0-beta)
-      typescript:
-        specifier: 7.1.0-beta
-        version: 7.1.0-beta
-
-  devpackages/tsdown-plugin-cordis:
-    dependencies:
-      '@local/dts-prepare':
-        specifier: workspace:^
-        version: link:../dts-prepare
-      lightningcss:
-        specifier: ^1.33.0
-        version: 1.33.0
-      rolldown:
-        specifier: 1.x
-        version: 1.2.16
-      tsdown:
-        specifier: 0.23.x
-        version: 0.23.5(tsx@4.23.15)(typescript@7.1.0-beta)
       typescript:
         specifier: 7.1.0-beta
         version: 7.1.0-beta
@@ -1220,6 +1208,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/api/session-controller
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/llm/llm
