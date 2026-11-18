@@ -9,6 +9,9 @@ import { RemoteHandlers } from "../api-gateway/remote-handlers.contract.ts";
 import { Remote } from "../remote/remote.contract.ts";
 
 /** 客户端半：`remote.upstream.<group>.<method>(request)` → `handlers.invoke("<group>/<method>", { request })`。 */
+/** 一个 namespace 的调用面：`remote.<namespace>.<method>(request)`。 */
+type NamespaceFace = Record<string, (request?: unknown) => Promise<unknown>>;
+
 /** 一条远端方法描述（`TYPERT_REMOTE.descriptors` 的最小子集）。 */
 interface LocalDescriptor {
   readonly namespace?: string;
@@ -45,19 +48,17 @@ export class LocalRemote extends Remote {
     for (const descriptor of descriptors) {
       const namespace = String(descriptor.namespace);
       const method = String(descriptor.method);
-      const slot = this as unknown as Record<
-        string,
-        Record<string, (request?: unknown) => Promise<unknown>>
-      >;
-      const face = slot[namespace] ?? {};
+      // 上游把 namespace 挂在 **service 实例自己**身上（`remote.<ns>`），这里照做：
+      // 动态成员读改写走 `Reflect`，不再把 `this` 断言成一张表。
+      const face: NamespaceFace =
+        (Reflect.get(this, namespace) as NamespaceFace | undefined) ?? {};
       face[method] = async (request?: unknown): Promise<unknown> =>
         this.handlers.invoke(`${namespace}/${method}`, { request });
-      slot[namespace] = face;
+      Reflect.set(this, namespace, face);
       added.push(namespace);
     }
     return async () => {
-      const slot = this as unknown as Record<string, unknown>;
-      for (const namespace of added) delete slot[namespace];
+      for (const namespace of added) Reflect.deleteProperty(this, namespace);
     };
   }
 

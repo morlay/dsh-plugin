@@ -72,7 +72,16 @@ function metaOf(target: unknown): ViewMeta | undefined {
  */
 export function positionNameOf(position: ViewClass): string {
   const meta = metaOf(position);
-  return meta?.options.name ?? (position as unknown as { name: string }).name;
+  return meta?.options.name ?? classNameOf(position);
+}
+
+/**
+ * 类的名字（`ViewClass` 只声明构造面，`name` / `prototype` 在静态面上）。
+ * @param cls - 类（或任何按类用的值）。
+ * @returns 类名；不是函数时给空串。
+ */
+export function classNameOf(cls: unknown): string {
+  return typeof cls === "function" ? cls.name : "";
 }
 
 /** 渲染期上下文：渲染器在 `renderRoot` 时提供。 */
@@ -112,16 +121,29 @@ function seatOf(position: ViewClass, many: boolean): SeatRef {
   return element;
 }
 
-/** `View.seat(X)`：声明一个子位置并渲染它。 */
-function seat(position: ViewClass): SeatRef {
-  return seatOf(position, false);
+/** `View.seat` / `View.seat.all`：声明子位置并渲染它。 */
+interface SeatDeclaration {
+  /** 声明一个子位置并渲染它。 */
+  (position: ViewClass): SeatRef;
+  /** 声明一条 list 子位置并渲染它。 */
+  all(position: ViewClass): SeatRef;
 }
 
-/** `View.seat.all(X)`：声明一条 list 子位置并渲染它。 */
-seat.all = (position: ViewClass): SeatRef => seatOf(position, true);
+const seat: SeatDeclaration = Object.assign(
+  (position: ViewClass): SeatRef => seatOf(position, false),
+  { all: (position: ViewClass): SeatRef => seatOf(position, true) },
+);
+
+/** `@View` 的装饰器面（位置 / 贡献都走它）。 */
+interface ViewDecorator {
+  /** 标一个位置或一个视图。 */
+  (options?: ViewOptions): (target: unknown) => void;
+  /** 子位置声明工具（声明与渲染同一份）。 */
+  seat: SeatDeclaration;
+}
 
 /** 装饰器 + 位置工具。 */
-export const View = Object.assign(
+export const View: ViewDecorator = Object.assign(
   (options: ViewOptions = {}) =>
     (target: unknown): unknown => {
       const ctor = target as new () => object;
@@ -146,10 +168,7 @@ export const View = Object.assign(
       return wired;
     },
   { seat },
-) as unknown as {
-  (options?: ViewOptions): (target: unknown) => void;
-  seat: { (position: ViewClass): SeatRef; all(position: ViewClass): SeatRef };
-};
+);
 
 /**
  * 给视图类补上 `onInit`（把贡献注册到它的位置）与 `slots`/`viewProps` 字段。
@@ -192,16 +211,26 @@ function withRegistration(ctor: new () => object): new () => object {
   };
   // 装配类指回原类：`metaOf`/`viewRegistrationOf` 靠它找到 `@View` 元数据。
   Object.defineProperty(registered, kOriginal, { value: ctor, configurable: true });
-  return registered as unknown as new () => object;
+  return registered;
 }
 
 /** 把一个视图类包成 React 组件（每次渲染读实例，注入在构造期就位）。 */
 function viewComponentOf(ctor: new () => object): ComponentType<object> {
   return (props) => {
-    const instance = instanceOf(ctor);
-    (instance as { viewProps?: unknown }).viewProps = props;
-    return (instance as unknown as { render(): ReactElement }).render();
+    // `@View` 已经把这两样接上了（`withRegistration` 给 `viewProps`，类自己实现 `render`）：
+    // 从 `object` 收窄到「视图实例」是这一次单断言，渲染路径上不再各断一次。
+    const instance = instanceOf(ctor) as ViewInstance;
+    instance.viewProps = props;
+    return instance.render();
   };
+}
+
+/** 装配后的视图实例：字段注入已就位，`viewProps` 与 `render` 由视图类提供。 */
+interface ViewInstance {
+  /** 上游位置渲染时传下来的 owner props。 */
+  viewProps?: unknown;
+  /** 视图内容。 */
+  render(): ReactElement;
 }
 
 /**
@@ -281,7 +310,8 @@ export function viewRegistrationOf(cls: unknown):
   const own = meta.options.name;
   // `cls` 可能是装配类（`withRegistration` 返回的子类）：先还原到原类，再取它的父类当位置。
   const original = (cls as { [kOriginal]?: unknown })[kOriginal] ?? cls;
-  const position = Object.getPrototypeOf(original) as unknown as ViewClass;
+  // 父类就是位置类：`getPrototypeOf` 的返回是「任意」，直接按构造面声明（单点收窄，不经过 unknown）。
+  const position: ViewClass = Object.getPrototypeOf(original);
   return {
     name: own ?? positionNameOf(position),
     component,

@@ -134,6 +134,8 @@ export abstract class SlotViewBase implements OnInit {
 
 /** 视图基类要实现的唯一方法。 */
 export interface SlotViewImpl {
+  /** 上游位置渲染时传下来的 owner props（包装组件每次渲染都写一次）。 */
+  viewProps?: unknown;
   render(): ReactNode;
 }
 
@@ -219,7 +221,7 @@ export function SlotView(): ClassDecorator {
       const instance = appOf(target) as SlotViewImpl;
       // owner props 透传给视图（`render()` 里用 `this.viewProps` 读）：上游 `AppFrame` 的
       // 位置渲染会带位置专属的 props，丢掉它们会让视图渲染成空内容。
-      (instance as unknown as { viewProps: unknown }).viewProps = props;
+      instance.viewProps = props;
       // `render()` 已经返回 React 元素：直接交回即可。
       // 之前用 `createElement(render.bind(...))` 是把方法当成新组件类型，React 每次渲染都当作新 type
       // 卸载重建，子树里的内容会被整体替换掉。

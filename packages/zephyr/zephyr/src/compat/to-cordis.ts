@@ -31,7 +31,7 @@ export function toCordis(
     name: rowNameOf(provider),
     [kProvider]: provider,
     async apply(ctx: CordisContext, config?: unknown): Promise<() => Promise<void>> {
-      const mounted = await mountRow(ctx as unknown as Context, provider, config);
+      const mounted = await mountRow(ctx as Context, provider, config);
       return async () => {
         await mounted.dispose();
       };

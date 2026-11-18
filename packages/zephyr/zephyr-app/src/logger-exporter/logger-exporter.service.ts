@@ -10,20 +10,30 @@ interface ExporterFace {
   export(message: { name?: string; level?: number; args: readonly unknown[] }): void;
 }
 
-/** `inject(Logger)` 的值就是 cordis 的 `LoggerService`：契约面只声明了 severity 方法，exporter 要从原类型取。 */
-interface LoggerWithExporter extends Logger {
-  exporter(exporter: ExporterFace): void;
+/**
+ * 取 logger 上的 `exporter`（cordis `LoggerService` 的成员，契约 `Logger` 只声明 severity 方法）。
+ *
+ * 按成员在不在判：没有 exporter 的 logger（替身、精简装配）直接给 `undefined`，调用方跳过即可。
+ * @param logger - `inject(Logger)` 拿到的实例。
+ * @returns 已绑定 `this` 的 `exporter`，或 `undefined`。
+ */
+function exporterOf(logger: object): ((exporter: ExporterFace) => void) | undefined {
+  const value: unknown = Reflect.get(logger, "exporter");
+  return typeof value === "function"
+    ? (value as (exporter: ExporterFace) => void).bind(logger)
+    : undefined;
 }
 
 @Injectable()
 export class LoggerExporterDefault {
-  private readonly logger = inject(Logger) as unknown as LoggerWithExporter;
+  private readonly logger = inject(Logger);
 
   protected onInit(): void {
-    if (typeof this.logger.exporter !== "function") return;
+    const exportWith = exporterOf(this.logger);
+    if (exportWith === undefined) return;
     // 装配观测点（路由表、RPC 拦截）属于运行期契约，不是调试探针：所有级别都落 stdout，
     // 严重级别（cordis 的 ERROR=0）落 stderr。cordis 的 level 越小越严重，别再按"越大越严重"过滤。
-    this.logger.exporter({
+    exportWith({
       export: (message) => {
         const level = message.level ?? 1;
         // 用 node 的 `format` 展开 `%s`/`%o` 这类占位符（cordis 的 message.args 就是 printf 参数）。

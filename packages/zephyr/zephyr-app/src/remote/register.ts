@@ -25,7 +25,8 @@ export function registerRemoteGroup(handlers: RemoteHandlers, instance: object):
   }
   const streamMethods = new Set(remoteStreamMethodsOf(instance.constructor));
   const disposers = remoteMethodsOf(instance.constructor).map((method) => {
-    const handler = (instance as unknown as Record<string, unknown>)[method];
+    // 动态成员读：方法名来自运行期元数据，`Reflect.get` 是它的正常入口（不经过类型断言）。
+    const handler: unknown = Reflect.get(instance, method);
     if (typeof handler !== "function") {
       throw new Error(`${instance.constructor.name}.${method} 标了 @Remote 但没有实现`);
     }

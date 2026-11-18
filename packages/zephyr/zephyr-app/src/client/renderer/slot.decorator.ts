@@ -2,7 +2,7 @@
 //
 // 它同时是 `@Injectable()`：声明了 slot 贡献的类就是一行 provider，不需要再叠一个装饰器。
 // 应用逻辑由装饰器接管（包在 `onInit` 外层），调用方不再手写 `applySlotDeclaration`。
-import { Injectable, inject, type Context, type OnInit } from "@morlay/zephyr";
+import { Injectable, inject, type OnInit } from "@morlay/zephyr";
 import { Slots } from "./slots.contract.ts";
 
 /**
@@ -65,17 +65,16 @@ export interface SlotFactoryRegistration {
 
 const kSlotDeclaration = Symbol.for("zephyr.slot-declaration");
 
-interface DeclaringConstructor {
+/** 声明挂载点：`@Slot` 把声明写在类上（构造面 + 那个 symbol 键）。 */
+interface DeclaringConstructor extends Function {
   readonly [kSlotDeclaration]?: SlotDeclaration;
-  prototype: {
-    onInit?: (ctx: Context) => void;
-    slots?: Slots;
-  };
 }
 
 /** 读一行的声明（没声明过就是 `undefined`）。 */
 export function slotDeclarationOf(instance: object): SlotDeclaration | undefined {
-  return (instance.constructor as unknown as DeclaringConstructor)[kSlotDeclaration];
+  // `instance.constructor` 是 `Function`：收窄到「类 + 声明键」是**一次**单断言，
+  // 读声明的地方都走这里，不再各断一次。
+  return (instance.constructor as DeclaringConstructor)[kSlotDeclaration];
 }
 
 /**
@@ -148,11 +147,23 @@ export abstract class SlotContribution implements OnInit {
   protected readonly slots = inject(Slots);
 
   onInit(): void {
-    const declaration = (this.constructor as unknown as DeclaringConstructor)[kSlotDeclaration];
+    const declaration = slotDeclarationOf(this);
     if (declaration !== undefined) {
-      applySlotDeclaration(this.slots, declaration, this as unknown as SlotContributionMethods);
+      applySlotDeclaration(this.slots, declaration, contributionFaceOf(this));
     }
   }
+}
+
+/**
+ * 把一行的实例当**贡献面**用（带注入的贡献方法写在子类上，五个全是可选项）。
+ *
+ * `SlotContributionMethods` 的成员全可选，所以「实例 → 这个面」是收窄一次的单断言：
+ * 应用侧因此不必到处按成员存在与否断言实例的形状。
+ * @param instance - 贡献行的实例。
+ * @returns 贡献面（一项都没实现也合法）。
+ */
+export function contributionFaceOf(instance: object): SlotContributionMethods {
+  return instance as SlotContributionMethods;
 }
 
 /**

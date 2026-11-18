@@ -50,6 +50,18 @@ interface GroupMeta {
   readonly options: RemoteGroupOptions;
 }
 
+/**
+ * 挂着 remote 元数据的构造面：类（`Function`）+ 三个 symbol 键。
+ *
+ * 装饰器的 `target` / `target.constructor` 都是 `Function`：收窄到「带这三个键的类」是一次
+ * 单断言（`Function` 是它的宽面），元数据读写因此不再各断一次。
+ */
+interface RemoteMetaCarrier extends Function {
+  readonly [kRemoteMethod]?: readonly string[];
+  readonly [kRemoteStreamMethod]?: readonly string[];
+  readonly [kRemoteMethodParameters]?: Readonly<Record<string, readonly string[]>>;
+}
+
 /** 沿原型链收集 `@RemoteGroup` 元数据（实现类 → 契约类）。 */
 function groupMetasOf(target: unknown): readonly { meta: GroupMeta; cls: unknown }[] {
   const found: { meta: GroupMeta; cls: unknown }[] = [];
@@ -168,16 +180,15 @@ export function remoteDescriptorsOf(cls: unknown): { descriptors: readonly Remot
 /** 组装饰器：契约只标元数据；实现把上游那一组面暴露成自己的方法。 */
 export function RemoteGroup(options: RemoteGroupOptions = {}): ClassDecorator {
   return (target) => {
-    const ctor = target as unknown as new () => object;
-    Object.defineProperty(ctor, kRemoteGroup, {
+    Object.defineProperty(target, kRemoteGroup, {
       value: { options } satisfies GroupMeta,
       configurable: true,
     });
-    Injectable()(ctor);
+    Injectable()(target);
     // 组里声明过的每个方法：本类没实现时生成转发（调用时走上游那一组面
     // `remote.<group>.<method>(...)`）。契约类因此可以直接当客户端用。
-    for (const name of remoteMethodsOf(ctor)) {
-      defineForwarder(ctor, name);
+    for (const name of remoteMethodsOf(target)) {
+      defineForwarder(target, name);
     }
   };
 }
@@ -191,11 +202,7 @@ export function RemoteGroup(options: RemoteGroupOptions = {}): ClassDecorator {
  */
 export function Remote(options: RemoteMethodOptions = {}): MethodDecorator {
   return (target, propertyKey) => {
-    const ctor = target.constructor as unknown as {
-      [kRemoteMethod]?: string[];
-      [kRemoteStreamMethod]?: string[];
-      [kRemoteMethodParameters]?: Readonly<Record<string, readonly string[]>>;
-    };
+    const ctor = target.constructor as RemoteMetaCarrier;
     const name = options.name ?? String(propertyKey);
     Object.defineProperty(ctor, kRemoteMethod, {
       value: [...(ctor[kRemoteMethod] ?? []), name],
@@ -243,7 +250,8 @@ export function remoteMethodParametersOf(
  * **不走 `remote.<group>`**：那个面只对 `$mount` 过的上游 namespace 存在，我们自己声明的组
  * （`commands`）不在上游 `TYPERT_REMOTE` 里，读到的永远是 `undefined`。
  */
-function defineForwarder(ctor: new () => object, method: string): void {
+function defineForwarder(ctor: Function, method: string): void {
+  // 装饰器给的是**构造面**：原型要从静态面取（`Function.prototype` 的静态类型是 `any`，这里收窄一次）。
   const proto = (ctor as { prototype: Record<string, unknown> }).prototype;
   if (Object.getOwnPropertyDescriptor(proto, method)?.value !== undefined) return;
   Object.defineProperty(proto, method, {
@@ -300,10 +308,9 @@ function defineForwarder(ctor: new () => object, method: string): void {
  */
 export function RemoteClient(): ClassDecorator {
   return (target) => {
-    const ctor = target as unknown as new () => object;
-    Injectable()(ctor);
-    for (const name of remoteMethodsOf(ctor)) {
-      defineForwarder(ctor, name);
+    Injectable()(target);
+    for (const name of remoteMethodsOf(target)) {
+      defineForwarder(target, name);
     }
   };
 }

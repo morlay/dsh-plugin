@@ -90,10 +90,12 @@ export function provide<const L extends ProviderList>(
   // 退化成 `ProviderEntry[]` 会让所有注入判成"缺提供者"。feature 会增删条目，类型层沿用 `L`
   // 保守处理（与「`without()` 剔掉的条目仍算提供过」同一口径）。
   return (...features) =>
-    [...defaults, ...features].reduce<ProviderList>(
-      (current, feature) => feature.apply(current),
+    [...defaults, ...features].reduce<L>(
+      // feature 会增删条目，运行期不再保证是 `L`——类型层按「清单字面量」保守处理（见上）。
+      // 单断言是**收窄**（`L extends ProviderList`），不是「随便塞」。
+      (current, feature) => feature.apply(current) as L,
       list,
-    ) as unknown as L;
+    );
 }
 
 /**
@@ -152,7 +154,7 @@ export function configOf(entry: ProviderEntry): Record<string, unknown> | undefi
  * @returns 服务名。
  */
 export function entryNameOf(entry: ProviderEntry): string {
-  return tokenMetaOf(entryOf(entry) as unknown as object).name;
+  return tokenMetaOf(entryOf(entry)).name;
 }
 
 /**
