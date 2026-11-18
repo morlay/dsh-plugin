@@ -162,7 +162,7 @@ export class SessionEditorDefault extends SessionEditor implements OnInit {
     if (replay !== undefined && plan.queuedUsers.length > 0) {
       const lastSeedTurn = seedSuffix.findLast((event) => event.type === "turn/start")?.data.turn;
       if (lastSeedTurn !== undefined) {
-        const phase = (replay as unknown as { phase?: { lastTurn?: number } }).phase;
+        const phase = replay.phase;
         if (phase !== undefined) phase.lastTurn = lastSeedTurn;
       }
       for (const message of plan.queuedUsers) replay.followup(message);
