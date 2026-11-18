@@ -146,6 +146,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
   onDispose(): void {
     // `ClientSessions` 自己在 `rootCtx.effect` 里做了 dispose（含 manager 的静默期），这里只清引用。
     this.inner = undefined;
+    this.catalog = undefined;
   }
 
   /** 上游实例；`onInit` 之前访问是装配错误，直接说清楚。 */
@@ -162,8 +163,20 @@ export class SessionControllerDefault extends SessionController implements OnIni
    * 行（`ids` / `byId` / `projectionsBySession`）是同一份快照，不复制。
    */
   get list(): SessionController["list"] {
+    // 读面本身也**只造一次**：`subscribe` / `getSnapshot` 的身份得稳定（`useSyncExternalStore` 的依赖）。
+    this.catalog ??= this.catalogView();
+    return this.catalog;
+  }
+
+  /** 契约面的目录读面（`get list` 造一次就存在这里）。 */
+  private catalog: SessionController["list"] | undefined;
+
+  /**
+   * 造一次目录读面，快照按**来源身份**缓存。
+   * @returns 契约面的 `SessionCatalog`。
+   */
+  private catalogView(): SessionController["list"] {
     const store = this.sessions.list;
-    // 快照对象**按来源身份缓存**：`useSyncExternalStore` 一类的消费方要求同一状态给出同一个引用。
     let source: ReturnType<typeof store.getSnapshot> | undefined;
     let view: SessionCatalogState | undefined;
     return {
