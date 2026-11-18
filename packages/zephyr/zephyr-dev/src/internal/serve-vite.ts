@@ -46,33 +46,36 @@ export interface ViteHandoff {
  * （`on`/`off`/`send`），没有 `handleUpgrade`/`emit('connection')` 这两个 `ws` 的成员。
  * `server.ws` 的运行时值就是它，所以这里按 `ws` 的最小面断言一次。
  */
+/** `startViteDev` 的选项（handoff 那一层按它拼，不再用「先拼对象再断言成参数类型」的写法）。 */
+export interface ViteDevOptions {
+  repoRoot: string;
+  /**
+   * vite 的缓存目录（`AppEnv.cacheDirOf("vite")`）：不放 `repoRoot/node_modules/.vite`——
+   * 打包形态的 `repoRoot` 是安装包里的只读闭包，写不进去。
+   */
+  cacheDir: string;
+  /** 页面与入口所在目录（`AppEnv.appBootDir`：应用自己的 `src/client`）。 */
+  appRoot: string;
+  base: string;
+  /** 页面响应的前置认证（host 的 `connection.authorizeIndex`，负责下发浏览器 cookie）。 */
+  authorizeIndex?: (req: IncomingMessage, res: ServerResponse) => boolean;
+  /**
+   * **当文件**的包名（glob，如 `@morlay/*`）：命中走 vite 逐文件（改它要 HMR）；其余一律 prebundle
+   * （见 {@link ClientPluginOptions.devFiles}）。
+   */
+  devFiles?: readonly string[];
+  /** 裸说明符 → 联邦地址（三方与"非开发模块"都由它接管，见 `ClientPluginOptions.depsUrl`）。 */
+  depsUrl: (specifier: string, importer?: string) => Promise<string | undefined>;
+  /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
+  httpServer?: HmrServer | undefined;
+  /** 页面所在的端口（配置值）：`address()` 在 listen 完成前是 null，不能靠它推。 */
+  pagePort?: number | undefined;
+}
+
 /** 一次 HMR 握手：交给 vite 的 ws 服务完成升级，再按 `ws` 的约定把新连接接回它的 connection 事件。 */
 export async function startViteDev(
   ctx: Context,
-  options: {
-    repoRoot: string;
-    /**
-     * vite 的缓存目录（`AppEnv.cacheDirOf("vite")`）：不放 `repoRoot/node_modules/.vite`——
-     * 打包形态的 `repoRoot` 是安装包里的只读闭包，写不进去。
-     */
-    cacheDir: string;
-    /** 页面与入口所在目录（`AppEnv.appBootDir`：应用自己的 `src/client`）。 */
-    appRoot: string;
-    base: string;
-    /** 页面响应的前置认证（host 的 `connection.authorizeIndex`，负责下发浏览器 cookie）。 */
-    authorizeIndex?: (req: IncomingMessage, res: ServerResponse) => boolean;
-    /**
-     * **当文件**的包名（glob，如 `@morlay/*`）：命中走 vite 逐文件（改它要 HMR）；其余一律 prebundle
-     * （见 {@link ClientPluginOptions.devFiles}）。
-     */
-    devFiles?: readonly string[];
-    /** 裸说明符 → 联邦地址（三方与"非开发模块"都由它接管，见 `ClientPluginOptions.depsUrl`）。 */
-    depsUrl: (specifier: string, importer?: string) => Promise<string | undefined>;
-    /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
-    httpServer?: HmrServer | undefined;
-    /** 页面所在的端口（配置值）：`address()` 在 listen 完成前是 null，不能靠它推。 */
-    pagePort?: number | undefined;
-  },
+  options: ViteDevOptions,
 ): Promise<ViteHandoff> {
   const trace = traceOf(ctx, "vite");
   const { repoRoot, base } = options;
@@ -227,7 +230,8 @@ export async function startViteDev(
     hmr: options.httpServer !== undefined,
     // `ViteDevServer` 的 `restart()` 会换实例：用 getter 现取，不然拿到的是旧的那个。
     get watcher(): NonNullable<ViteHandoff["watcher"]> | undefined {
-      return server.watcher as unknown as ViteHandoff["watcher"];
+      // chokidar 的 `FSWatcher` 直接满足契约里那个最小面（`on` / `off` 带事件名）。
+      return server.watcher;
     },
   };
 }

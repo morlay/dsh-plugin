@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { AppEnv, WebServer } from "@morlay/zephyr-app";
 import { Federation } from "../federation/federation.contract.ts";
-import { startViteDev, type ViteHandoff as StartedViteDev } from "../internal/serve-vite.ts";
+import type { Server as HttpServer } from "node:http";
+import {
+  startViteDev,
+  type ViteDevOptions,
+  type ViteHandoff as StartedViteDev,
+} from "../internal/serve-vite.ts";
 import { appBootDirOf, devPackageRoot } from "../internal/package-root.ts";
 import { ViteHandoff } from "./vite-handoff.contract.ts";
 
@@ -21,7 +26,7 @@ export class ViteHandoffDefault extends ViteHandoff {
   private starting: Promise<StartedViteDev> | undefined;
 
   protected async onInit(ctx: Context): Promise<void> {
-    const options = {
+    const options: ViteDevOptions = {
       repoRoot: this.appEnv.values.profileDir,
       // 缓存落在数据根下的命名空间里（`<cacheDir>/vite`）：打包形态的 `profileDir` 只读。
       cacheDir: this.appEnv.cacheDirOf("vite"),
@@ -29,11 +34,12 @@ export class ViteHandoffDefault extends ViteHandoff {
       base: "/",
       // **只收窄"当文件"的范围**：`include: []` 时全部预构建，页面仍由 vite 服务。
       devFiles: this.federation.config.dev.include,
-      // HMR 的 WebSocket 挂在宿主的 http server 上（同源同端口）；vite 只读它的 `on('upgrade')`，
-      // 类型上按最小面断言一次（我们的 `HttpHost` 与 vite 的 `HmrServer` 不共享名义类型）。
+      // HMR 的 WebSocket 挂在宿主的 http server 上（同源同端口）；vite 只读它的 `on('upgrade')`。
+      // 我们的 `HttpHost` 是 node `http.Server` 的**子面**（`on` / `close` / `address` / `listen`），
+      // 而 vite 的字段要那个名义类型：这里收窄一次（单断言，不是「把类型关掉」）。
       ...(this.webServer.server === undefined
         ? {}
-        : { httpServer: this.webServer.server as unknown as { on(...args: never[]): unknown } }),
+        : { httpServer: this.webServer.server as HttpServer }),
       // HMR 的 WebSocket 要与页面**同源同端口**：这里只能是**实际监听端口**（`WebServer.port`）。
       // 期望端口（`WebStartup.values.port`，来自 `--port` / `PORT`）在被占用时会被宿主顺延——顺延后
       // 两者不等，客户端就会去连一个没人监听的端口（页面 console 满屏 ws 连接失败、HMR 整个失效）。
@@ -42,10 +48,7 @@ export class ViteHandoffDefault extends ViteHandoff {
       depsUrl: async (specifier: string, importer?: string) =>
         await this.federation.depsUrl(specifier, importer),
     };
-    this.starting = startViteDev(
-      ctx as never,
-      options as unknown as Parameters<typeof startViteDev>[1],
-    );
+    this.starting = startViteDev(ctx, options);
     // 「挂住」不该无声：30s 没起来就明确报错（dev server 挂起时装配会一直等着）。
     this.started = await Promise.race([
       this.starting,

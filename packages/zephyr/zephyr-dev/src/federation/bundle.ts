@@ -587,9 +587,8 @@ async function hasModuleSyntax(entry: string): Promise<boolean> {
       import("rolldown/parseAst"),
       readFile(entry, "utf8"),
     ]);
-    const program = parseAst(source, null, entry) as unknown as {
-      body: readonly { type: string }[];
-    };
+    // `parseAst` 的声明就是 oxc 的 `Program`（`body` 的每一项都有 `type`）：不需要再断言形状。
+    const program = parseAst(source, null, entry);
     return program.body.some((node) => ESM_STATEMENT_TYPES.has(node.type));
   } catch {
     // 解析不了（CJS 专有语法在 module 模式下报错等）：按 CJS 走，求值失败时保持原样。
