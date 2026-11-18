@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideAgent } from "@morlay/dsh-agent";
-import { COMMAND_EXECUTE_ENDPOINT, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { commandWireName, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { provideCommand } from "@morlay/dsh-command/server";
 import { providePermissionFor } from "@morlay/dsh-permission/server";
 import { BashSandbox, SandboxDefault, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
@@ -119,7 +119,7 @@ describe("权限 chip 的宿主侧", () => {
 
     // chip 点确认后发的那一行（上游 `submit` 就是 `live.command('/permission <preset>')`）。
     // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
-    const executed = (await handlers.invoke(COMMAND_EXECUTE_ENDPOINT, {
+    const executed = (await handlers.invoke(commandWireName("execute"), {
       sessionId,
       name: "permission",
       input: "danger-full-access",
@@ -137,7 +137,7 @@ describe("权限 chip 的宿主侧", () => {
 
   it("不带 preset 的 `/permission` 只回报当前档位，不改它", { timeout: 30_000 }, async () => {
     const { app, handlers, sessionId } = await boot();
-    const executed = (await handlers.invoke(COMMAND_EXECUTE_ENDPOINT, {
+    const executed = (await handlers.invoke(commandWireName("execute"), {
       sessionId,
       name: "permission",
       input: " ",

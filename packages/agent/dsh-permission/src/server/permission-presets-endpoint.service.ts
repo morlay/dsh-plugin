@@ -1,5 +1,5 @@
 // `permissionPresets` 组的**宿主侧实现**：转发到上游 `PermissionPresetService.catalog()`。
-import { PermissionCatalog } from "@deepseek-ai/dsh-permission-presets";
+import type { PermissionCatalog } from "@deepseek-ai/dsh-permission-presets";
 import { inject, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import {

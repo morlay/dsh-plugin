@@ -5,7 +5,7 @@
 // 这样"契约漏了成员"不靠记忆、不靠人眼，也就不用担心 `fromCordis` 装上一个面不全的契约。
 //
 // `fromCordis(契约类, 上游实现类)` 双参是硬要求：装任何上游实现之前，先说清它的面。
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { Injectable } from "@morlay/zephyr";
 // 四个上游行只用来取**实例类型**（`InstanceType<typeof ...>`，全是类型位置）：
 // 写成 `import type` 才是真的"只取类型"——值导入会被打包图收边，把上游宿主行拖进浏览器 bundle。

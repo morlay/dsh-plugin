@@ -1,7 +1,7 @@
 // session-title seam 的契约：令牌按服务语义命名（上游注册名 `sessionTitle`）。
 import type SessionTitleService from "@deepseek-ai/dsh-session-title";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // `foldSessionTitle`（从会话日志折标题的纯函数）**不在这里**：它在上游宿主包根上，按值转出会给
 // 契约面收一条运行时边，契约面被 ui 引用，宿主行（连带 `@deepseek-ai/dsh-session` 根）就会进浏览器

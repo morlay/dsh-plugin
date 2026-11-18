@@ -4,11 +4,8 @@
 // 契约是普通类：客户端形态（`@RemoteClient()`）与宿主形态各自继承它。
 // **它不继承 `RemoteClientBase`**：那个基类带一个 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
 // 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务。
-import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import { RemoteGroup, RemoteMethod, remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import type { CommandEntry } from "@morlay/dsh-command/endpoint";
-
-/** wire 上的端点名（与上游 descriptor 一致）。 */
-export const COMMAND_LIST_ENDPOINT = "commands/list";
 
 /** `commands/list` 的请求。 */
 export interface CommandListRequest {
@@ -22,9 +19,6 @@ export interface CommandListRequest {
  * 包一层 `{ commands }` 会让它报 `list is not iterable`。
  */
 export type CommandListValue = readonly CommandEntry[];
-
-/** wire 上的端点名。 */
-export const COMMAND_EXECUTE_ENDPOINT = "commands/execute";
 
 /** `commands/execute` 的请求。 */
 export interface CommandExecuteRequest {
@@ -74,4 +68,17 @@ export class CommandEndpoint {
   async execute(_request: CommandExecuteRequest): Promise<CommandExecuteValue> {
     throw new Error("commands/execute：契约类未实现（宿主侧要在子类里实现它）");
   }
+}
+
+/**
+ * 从契约方法名派生 wire 名（RemoteDescriptor 没有 endpoint 字段，wire 名 = namespace/method）。
+ * @param method - 契约上的方法名（list / execute）。
+ * @returns wire 名（commands/list / commands/execute）。
+ * @throws 契约上没有这个方法时。
+ */
+export function commandWireName(method: string): string {
+  const { descriptors } = remoteDescriptorsOf(CommandEndpoint);
+  const found = descriptors.find((item) => item.method === method);
+  if (found === undefined) throw new Error("CommandEndpoint 没有方法 " + method);
+  return found.namespace + "/" + found.method;
 }

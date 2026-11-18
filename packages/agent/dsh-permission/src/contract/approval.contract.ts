@@ -1,7 +1,7 @@
 // 用户批准契约：令牌按服务语义命名（上游注册名 `approval`）。
 import type { ApprovalService } from "@deepseek-ai/dsh-user-approval";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：批准策略的两档（`ask` 每次问人 / `never` 不问直接放行）。 */
 export type { ApprovalPolicy } from "@deepseek-ai/dsh-user-approval";

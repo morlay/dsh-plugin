@@ -1,5 +1,5 @@
 // 权限档位：一个档位同时写沙箱模式与批准策略两个开关（契约类型住包根，server 面的装配函数引用它）。
-import { PresetSpec } from "@deepseek-ai/dsh-permission-presets";
+import type { PresetSpec } from "@deepseek-ai/dsh-permission-presets";
 
 /** 权限档位：一个档位同时写沙箱模式与批准策略两个开关。 */
 export type PermissionMode = PresetSpec["sandbox"];

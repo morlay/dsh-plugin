@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { provideAgent } from "@morlay/dsh-agent";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
-import { COMMAND_EXECUTE_ENDPOINT, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { commandWireName, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { provideCommand } from "@morlay/dsh-command/server";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { SessionProjectionStore, SessionStore } from "@morlay/dsh-session";
@@ -246,7 +246,7 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
       expect(workspace, "工作区必须收到这条会话（否则侧栏只显示工作区、没有会话行）").toBeDefined();
 
       // ④ 改权限：走上游 chip 唯一的那一行命令。
-      const executed = (await handlers.invoke(COMMAND_EXECUTE_ENDPOINT, {
+      const executed = (await handlers.invoke(commandWireName("execute"), {
         sessionId,
         name: "permission",
         input: "danger-full-access",
