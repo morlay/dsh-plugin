@@ -39,7 +39,7 @@ import type {
   ProjectionCheckpointRow,
   StorageRepository,
   StoredProjcacheEntry,
-} from "./types.ts";
+} from "../contract/storage-repository.contract.ts";
 
 /** 服务名（上游按驼峰读；`@Injectable({ name })` 的别名就是它）。 */
 export const SESSION_PROJECTION_CACHE_SERVICE = "sessionProjectionCache";

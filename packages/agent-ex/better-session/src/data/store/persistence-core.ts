@@ -209,7 +209,7 @@ export abstract class RdbPersistenceCore extends SessionPersistence {
   }
 
   // storage 接管要的库句柄：等后端打开，再把它的 storage 面交出去。
-  async storageRepository(): Promise<import("../../storage/types.ts").StorageRepository> {
+  async storageRepository(): Promise<import("@morlay/better-session/contract").StorageRepository> {
     await this.opened;
     return this.backendOf().storage;
   }

@@ -200,7 +200,7 @@ export interface SessionRdbStore {
 
   // storage 接管要的库句柄：与后台是**同一个库**（KV 域与会话表同库，事务才能跨着用）。
   // 后端打开之后才有值，所以是异步口。
-  storageRepository(): Promise<import("../storage/types.ts").StorageRepository>;
+  storageRepository(): Promise<import("./storage-repository.contract.ts").StorageRepository>;
 
   // 卸载时关掉后端。
   close(): Promise<void>;

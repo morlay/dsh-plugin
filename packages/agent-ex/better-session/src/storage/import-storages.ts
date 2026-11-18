@@ -11,7 +11,7 @@ import type {
   StorageRepository,
   WorkspaceDomainState,
   WorkspaceRecord,
-} from "./types.ts";
+} from "../contract/storage-repository.contract.ts";
 
 interface ImportedProjcache {
   sessionId: SessionId;

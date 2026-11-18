@@ -30,7 +30,7 @@ export { scanRows, titleOfEventData, toJsonlArtifact } from "./data/store/log/ex
 export { rowToEvent, rowToMeta } from "./data/store/log/rows.ts";
 export { eventDimensions } from "./data/event-shape.ts";
 export { SESSION_PERSISTENCE_SQLITE_APPLICATION_ID } from "./data/version.ts";
-export type { StorageRepository } from "./storage/types.ts";
+export type { StorageRepository } from "./contract/storage-repository.contract.ts";
 export type { Backend, EventRow, SessionRow } from "./data/backend.ts";
 export { WriteGuard } from "./data/write-guard.ts";
 export {

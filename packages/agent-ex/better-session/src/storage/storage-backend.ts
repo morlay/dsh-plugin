@@ -5,7 +5,7 @@ import type {
   KvUnitDescriptor,
   StorageBackend,
 } from "@morlay/dsh-storage/contract";
-import type { StorageRepository } from "./types.ts";
+import type { StorageRepository } from "../contract/storage-repository.contract.ts";
 
 export const RDB_STORAGE_BACKEND = "rdb";
 
