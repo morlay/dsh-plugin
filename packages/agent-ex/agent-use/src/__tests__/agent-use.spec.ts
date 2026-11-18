@@ -21,14 +21,14 @@ describe("agent-use 的两条 MCP 客户端行", () => {
   it("两条同装：都能取到，且不是同一个实例", async () => {
     const app = await bootstrapApplication({
       providers: [
-        { provide: ToolRegistry as never, useValue: toolRegistryStub },
+        { provide: ToolRegistry, useValue: toolRegistryStub },
         ...provideAgentUse(),
       ],
       timeoutMs: 8_000,
     });
     try {
-      const browser = app.get(AgentBrowserUse as never) as AgentBrowserUse;
-      const desktop = app.get(AgentDesktopUse as never) as AgentDesktopUse;
+      const browser = app.get(AgentBrowserUse);
+      const desktop = app.get(AgentDesktopUse);
       expect(browser).toBeInstanceOf(AgentBrowserUse);
       expect(desktop).toBeInstanceOf(AgentDesktopUse);
       expect(browser).not.toBe(desktop);
@@ -53,7 +53,7 @@ describe("agent-use 的两条 MCP 客户端行", () => {
   it("configure 改 args：装出来的配置真的变了，没改的字段仍是默认值", async () => {
     const app = await bootstrapApplication({
       providers: [
-        { provide: ToolRegistry as never, useValue: toolRegistryStub },
+        { provide: ToolRegistry, useValue: toolRegistryStub },
         ...provideAgentUse(
           configure(AgentBrowserUse, {
             args: ["mcp", "--headed"],
@@ -89,7 +89,7 @@ describe("agent-use 的两条 MCP 客户端行", () => {
     // 命令指向必然不存在的可执行文件：ENOENT 由上游按 failOnStartupError: false 吞掉。
     const app = await bootstrapApplication({
       providers: [
-        { provide: ToolRegistry as never, useValue: toolRegistryStub },
+        { provide: ToolRegistry, useValue: toolRegistryStub },
         ...provideAgentUse(
           configure(AgentBrowserUse, {
             command: "dsh-agent-use-missing-browser-bin",

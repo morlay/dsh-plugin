@@ -143,10 +143,10 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
     },
   };
   const rows: readonly RowEntry[] = [
-    { provide: RemoteHandlers as never, useValue: host.handlers },
-    { provide: SessionController as never, useValue: sessionControllerStub },
-    { provide: UiWorkspace as never, useValue: archiveFace(host) },
-    { provide: WorkspaceController as never, useValue: workspaceListStub },
+    { provide: RemoteHandlers, useValue: host.handlers },
+    { provide: SessionController, useValue: sessionControllerStub },
+    { provide: UiWorkspace, useValue: archiveFace(host) },
+    { provide: WorkspaceController, useValue: workspaceListStub },
     LocalRemote,
     SessionAdminEndpointClient,
     ConversationManagerController,

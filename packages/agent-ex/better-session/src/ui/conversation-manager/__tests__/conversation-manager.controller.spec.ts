@@ -39,20 +39,20 @@ async function controllerWith(
   };
   const app = await bootstrapApplication({
     providers: [
-      { provide: Remote as never, useValue: remote },
+      { provide: Remote, useValue: remote },
       {
-        provide: UiWorkspace as never,
+        provide: UiWorkspace,
         useValue: options.workspace ?? {
           archiveSession: async () => undefined,
           unarchiveSession: async () => undefined,
         },
       },
       {
-        provide: SessionController as never,
+        provide: SessionController,
         useValue: options.sessions ?? { refresh: async () => undefined },
       },
       {
-        provide: WorkspaceController as never,
+        provide: WorkspaceController,
         useValue: options.workspaces ?? workspaceListStub(),
       },
       SessionAdminEndpointClient,

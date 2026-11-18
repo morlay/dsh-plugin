@@ -49,11 +49,11 @@ describe("浏览器半的装配面", () => {
     const app = await bootstrapApplication({
       providers: [
         ...provideRenderer(),
-        { provide: Remote as never, useValue: remoteStub },
-        { provide: SessionController as never, useValue: sessionsStub },
-        { provide: UiWorkspace as never, useValue: workspaceStub },
-        { provide: WorkspaceController as never, useValue: workspaceListStub },
-        { provide: Locale as never, useValue: localeStub },
+        { provide: Remote, useValue: remoteStub },
+        { provide: SessionController, useValue: sessionsStub },
+        { provide: UiWorkspace, useValue: workspaceStub },
+        { provide: WorkspaceController, useValue: workspaceListStub },
+        { provide: Locale, useValue: localeStub },
         ...provideBetterSessionUi(),
       ],
       timeoutMs: 8_000,

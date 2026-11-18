@@ -72,9 +72,9 @@ async function storeWith(
   const { remote, calls } = fakeRemote(outcome);
   const app = await bootstrapApplication({
     providers: [
-      { provide: Remote as never, useValue: remote },
-      { provide: SessionController as never, useValue: sessions },
-      { provide: Locale as never, useValue: localeStub },
+      { provide: Remote, useValue: remote },
+      { provide: SessionController, useValue: sessions },
+      { provide: Locale, useValue: localeStub },
       SessionEditorEndpointClient,
       SessionEditorStore,
     ],

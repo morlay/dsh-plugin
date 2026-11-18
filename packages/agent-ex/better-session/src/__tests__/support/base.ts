@@ -76,7 +76,9 @@ export type MountedContext = Context & {
 /** 一份行：Provider 类，或直接给值（`{ provide: 令牌, useValue }`）。 */
 export type RowEntry =
   | (new (config?: never) => unknown)
-  | { readonly provide: object; readonly useValue: unknown };
+  // `provide` 收成**令牌面**（`TokenClass<unknown>`）而不是 `object`：这一位只放令牌，
+  // 放错东西（实例、字面量）时当场报错；令牌具体是什么由契约自己管，这里不需要知道。
+  | { readonly provide: TokenClass<unknown>; readonly useValue: unknown };
 
 /** `mountRows` 的选项。 */
 export interface MountRowsOptions {
@@ -329,10 +331,10 @@ export async function mountOnto(
         new SessionProjectionRegistry(ctx as never));
 
   const rows: RowEntry[] = [
-    { provide: SessionStore as unknown as object, useValue: sessionStore },
+    { provide: SessionStore, useValue: sessionStore },
     ...(projections === undefined
       ? []
-      : [{ provide: SessionProjectionStore as unknown as object, useValue: projections }]),
+      : [{ provide: SessionProjectionStore, useValue: projections }]),
     // 顺序 = 依赖：持久化最前（其余行都读它）；storage 接管紧随（它拿同一个库的句柄），
     // 检查点排在接管之后（检查点行与 KV 域落同一个库）。
     SessionPersistenceRdb as RowEntry,

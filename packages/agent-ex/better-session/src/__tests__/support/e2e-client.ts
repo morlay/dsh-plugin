@@ -96,9 +96,9 @@ export async function startClient(handlers: RemoteHandlers): Promise<Client> {
   const composer = new ComposerStub();
   const rows = [
     // 传输与两个上游面的替身：值条目，没有生命周期。
-    { provide: RemoteHandlers as never, useValue: handlers },
-    { provide: SessionController as never, useValue: composer },
-    { provide: Locale as never, useValue: localeStub },
+    { provide: RemoteHandlers, useValue: handlers },
+    { provide: SessionController, useValue: composer },
+    { provide: Locale, useValue: localeStub },
     LocalRemote,
     SessionEditorEndpointClient,
     SessionEditorStore,
