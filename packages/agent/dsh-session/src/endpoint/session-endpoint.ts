@@ -9,12 +9,11 @@
 // 引宿主包（`@deepseek-ai/*`）会把宿主半拖进浏览器打包图。字段一个不少，名字归我们。
 import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
 
-// 组名与它在 `Remote` 面上的 deps 键：两个都是**两端共用的值**，只在这里定义一次。
-// ui 侧给上游插件传 deps 时用 `[SESSION_REMOTE_KEY]: remote`（键值就是 `remote.session`），
-// 不把字面量散回调用点。
-
-/** wire 上的组名。 */
-export const SESSION_GROUP = "session" as const;
+// 组名只有一个 home：下面契约类上的 `@RemoteGroup({ name: "session" })`。消费方从契约读
+// （`remoteGroupNameOf`）或直接调客户端形态的方法，不另存一份字符串。
+//
+// 组在 `Remote` 面上的 deps 键是**两端共用的值**，只在这里定义一次：ui 侧给上游插件传 deps 时用
+// `[SESSION_REMOTE_KEY]: remote`（键值就是 `remote.session`），不把字面量散回调用点。
 
 /** 组在 `Remote` 面上的 deps 键（`remote.session`）。 */
 export const SESSION_REMOTE_KEY = "remote.session" as const;

@@ -1,5 +1,6 @@
 // 会话目录的装配清单：数据面与 client 半分开导出。
 import { provide } from "@morlay/zephyr";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { provideProjections } from "@morlay/zephyr-app/client";
 import { SessionReferenceRemoteBinding } from "./input/session-reference-remote.ts";
 import { SessionControllerDefault } from "./session-controller.service.ts";
@@ -16,7 +17,13 @@ import { SessionControllerDefault } from "./session-controller.service.ts";
  * **同时发布框架层的 `Sessions` 令牌**（同一个实例）：技能、模型选择这些域的 UI 行要读会话目录，
  * 它们只认框架令牌，不反向依赖对话聚合层。
  */
-export const provideSessionsStore = provide([...provideProjections(), SessionControllerDefault]);
+export const provideSessionsStore = provide([
+  ...provideProjections(),
+  // `session` 组的客户端面：`SessionControllerDefault` 的 `control` 流走它。
+  // 排在它前面——少这一行，装配期就报「没有提供者：session-endpoint」。
+  SessionEndpointClient,
+  SessionControllerDefault,
+]);
 
 /**
  * 会话目录的 client 半：数据面 + descriptor 绑定。

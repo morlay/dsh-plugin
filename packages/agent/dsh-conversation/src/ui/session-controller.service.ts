@@ -17,10 +17,9 @@ import {
   type SessionScope,
   type SessionView,
 } from "@morlay/dsh-conversation/contract";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { LiveSessionRemotes } from "./remote-session.ts";
-import { namespaceOf } from "./remote-namespace.ts";
 import { asUpstreamContext } from "./upstream-context.ts";
-import { SESSION_GROUP } from "@morlay/dsh-session/endpoint";
 
 /** 上游 `session/control` 的帧形状（本行只把它转交给 `ClientSessions.handleControlFrame`）。 */
 type ControlFrame = Parameters<ClientSessions["handleControlFrame"]>[0];
@@ -51,6 +50,9 @@ export class SessionControllerDefault extends SessionController implements OnIni
 
   /** `session` 面的真身：契约服务（装配期就有，不等 `$mount`）。 */
   private readonly sessionRemote = inject(SessionRemote);
+
+  /** `session` 组的远端端点：`control` 这一条流走它（组名与帧形状的 home 在契约类上）。 */
+  private readonly sessionEndpoint = inject(SessionEndpointClient);
 
   /** `commands.execute` 的真身：我们的命令执行器。 */
   /**
@@ -124,12 +126,14 @@ export class SessionControllerDefault extends SessionController implements OnIni
     // 那时开会以一条错误结束，而这条流之后没有别的时机再被重开。
     void this.remote.whenMounted().then(async () => {
       if (controller.signal.aborted) return;
+      if (!this.sessionEndpoint.mounted) return;
       try {
-        const face = namespaceOf(this.remote, SESSION_GROUP) as
-          | { control?(signal: AbortSignal): AsyncIterable<ControlFrame> }
-          | undefined;
-        if (typeof face?.control !== "function") return;
-        for await (const frame of face.control(controller.signal)) {
+        // 契约面把帧声明成裸 `sessionId` + 不透明值（跨端值不引宿主包）；上游 `handleControlFrame`
+        // 要的是 branded 的同一份帧——同一条 wire 的两种声明，这里按上游那一份转一次。
+        const frames = this.sessionEndpoint.control(
+          controller.signal,
+        ) as unknown as AsyncIterable<ControlFrame>;
+        for await (const frame of frames) {
           sessions.handleControlFrame(frame);
         }
       } catch (error) {

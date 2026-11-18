@@ -10,7 +10,8 @@
     "./testing": "./src/testing/index.ts",
     "./package.json": "./package.json",
     "./server": "./src/server/index.ts",
-    "./endpoint": "./src/endpoint/index.ts"
+    "./endpoint": "./src/endpoint/index.ts",
+    "./ui": "./src/ui/index.ts"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:~",
