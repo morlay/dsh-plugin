@@ -6,9 +6,6 @@
 import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
-/** wire 上的组名（`remote.<组名>`）。组名只有这一处，装饰器与读取面都从它取。 */
-export const TERMINAL_GROUP = "terminal";
-
 /** `terminal` 组：会话的交互式终端（起进程、写输入、逐帧订阅输出）。 */
 @RemoteGroup({ name: "terminal" })
 export class TerminalEndpoint {
