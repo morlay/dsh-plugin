@@ -23,8 +23,7 @@ export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlu
   override async onInit(ctx: Context): Promise<void> {
     // `sidebarRightTabs` / `fileDrag` 从真 cordis 服务取（与另外两个右栏行同一个理由：
     // 上游要的成员不在我们的契约上）。
-    const read = (name: string): unknown =>
-      (ctx as unknown as { get(n: string): unknown }).get(name);
+    const read = (name: string): unknown => ctx.get(name);
     await this.mount(ctx, undefined, {
       slots: this.slots,
       locale: this.locale,

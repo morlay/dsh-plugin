@@ -106,9 +106,7 @@ export class ApiSessionControllerHost extends fromCordis(
     // 服务端也要登记**调用描述**：`MuxServer` 靠 `typert.remotes.get(endpoint)?.mode` 判断
     // 一个端点是不是流式（流必须走 gateway 的 stream 载具）。只在客户端 `$mount` 的话，
     // 服务端看到的 `mode` 永远是 `undefined`，流式端点会被当 unary 打开并被上游拒。
-    (this.depTypert.remotes as unknown as { register(contribution: unknown): unknown }).register(
-      SESSION_CONTROLLER_REMOTE,
-    );
+    this.depTypert.remotes.register(SESSION_CONTROLLER_REMOTE);
     await this.mount(ctx, undefined, {
       agentDefaultModel: this.depDefaultModel,
       agents: this.depAgents,
