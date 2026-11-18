@@ -7,30 +7,35 @@
 //
 // 它**不是**几何证据：真尺寸与定位只能在浏览器里量（本包 `.agents/standards/how-to-verify.md` 记了这条与探针的
 // 用法），所以用例的判据是「hover 出气泡、气泡里是全文」，不拿替身去断言气泡的实际尺寸。
+//
+// 替身**实现 DOM 的 `ResizeObserver` 接口**（形状与浏览器一致：`observe` / `unobserve` / `disconnect`，
+// 回调收到 `(entries, observer)`），不是为了应付类型——用例把替身装进 `globalThis` 之后，
+// 消费方按真实接口用它，替身少一个成员就会在运行期炸在别处。
 
 interface StubObserver {
   readonly targets: Set<Element>;
   readonly notify: ResizeObserverCallback;
+  readonly observer: ResizeObserver;
 }
 
 const live = new Set<StubObserver>();
 
 export function stubResizeObserver(): void {
-  class ResizeObserverStub {
+  class ResizeObserverStub implements ResizeObserver {
     #notify: ResizeObserverCallback;
     #targets = new Set<Element>();
     #live: StubObserver;
 
     constructor(notify: ResizeObserverCallback) {
       this.#notify = notify;
-      this.#live = { targets: this.#targets, notify };
+      this.#live = { targets: this.#targets, notify, observer: this };
       live.add(this.#live);
     }
 
-    // 注册即回调一次（真实的 ResizeObserver 也会在首帧给一次初始尺寸）。
-    observe(target: Element): void {
+    /** 注册观察（真实的 `ResizeObserver` 也会在首帧给一次初始尺寸）。 */
+    observe(target: Element, _options?: ResizeObserverOptions): void {
       this.#targets.add(target);
-      this.#notify([entry(target)], this as unknown as ResizeObserver);
+      this.#notify([entry(target)], this);
     }
 
     unobserve(target: Element): void {
@@ -49,15 +54,18 @@ export function stubResizeObserver(): void {
 export function notifyResize(): void {
   for (const observer of live) {
     const entries = [...observer.targets].map((target) => entry(target));
-    if (entries.length > 0) {
-      observer.notify(entries, undefined as unknown as ResizeObserver);
-    }
+    if (entries.length > 0) observer.notify(entries, observer.observer);
   }
 }
 
 function entry(target: Element): ResizeObserverEntry {
+  const box: ResizeObserverSize = { blockSize: 0, inlineSize: 0 };
   return {
     target,
-    borderBoxSize: [{ blockSize: 0, inlineSize: 0 }],
-  } as unknown as ResizeObserverEntry;
+    // jsdom 不做布局：几何一律给 0（替身只为触发回调，不当尺寸证据）。
+    contentRect: { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) },
+    borderBoxSize: [box],
+    contentBoxSize: [box],
+    devicePixelContentBoxSize: [box],
+  };
 }

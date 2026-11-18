@@ -1,4 +1,4 @@
-import type { Nodes, Root } from "mdast";
+import type { Root } from "mdast";
 import type {
   CompileContext,
   Extension as MdastExtension,
@@ -31,6 +31,19 @@ import type {
 declare module "micromark-util-types" {
   interface TokenTypeMap {
     reference: "reference";
+  }
+}
+
+// 我们自己的 mdast 节点（`exitReference` 造它、`convertLinks` 把链接换成它）：
+// 注册进 `RootContentMap` 之后 `Nodes` 就含它，`enter()` 不必再把节点说成 `Nodes`。
+declare module "mdast" {
+  /** 一个内联引用节点；引用字段在 `exitReference` 里从 token 序列化后填。 */
+  interface ReferenceNode {
+    type: "reference";
+  }
+
+  interface RootContentMap {
+    reference: ReferenceNode;
   }
 }
 
@@ -140,7 +153,7 @@ export function formatReferenceMention(reference: Reference): string {
 export function findReferences(text: string): readonly ReferenceSpan[] {
   const spans: ReferenceSpan[] = [];
   if (text === "" || !TRIGGERS.some((trigger) => text.includes(trigger))) return spans;
-  collectReferences(parseReferenceDocument(text) as unknown as MarkdownNode, spans);
+  collectReferences(parseReferenceDocument(text), spans);
   return spans;
 }
 
@@ -151,33 +164,49 @@ function parseReferenceDocument(text: string): Root {
   });
 }
 
+/**
+ * 我们要读的节点面（mdast 的节点与我们在 `exitReference` 里造的那个都满足它）。
+ *
+ * `position` / `children` 写成「可能显式 `undefined`」：mdast 的声明就是这样
+ * （`position?: Position | undefined`），`exactOptionalPropertyTypes` 下两者不是一回事。
+ */
 interface MarkdownNode {
   type: string;
-  value?: string;
-  url?: string;
-  children?: MarkdownNode[];
-  position?: { start: MarkdownPoint; end: MarkdownPoint };
-  protocol?: string;
-  origin?: string;
-  path?: string;
-  title?: string;
-  lineStart?: number;
-  lineEnd?: number;
-  column?: number;
+  value?: string | undefined;
+  url?: string | undefined;
+  children?: MarkdownNode[] | undefined;
+  position?: MarkdownPosition | undefined;
+  protocol?: string | undefined;
+  origin?: string | undefined;
+  path?: string | undefined;
+  /** mdast 的 `Definition.title` 可能是 `null`（没有标题），按「空」读。 */
+  title?: string | null | undefined;
+  lineStart?: number | undefined;
+  lineEnd?: number | undefined;
+  column?: number | undefined;
 }
 
 interface MarkdownPoint {
   readonly line: number;
   readonly column: number;
-  readonly offset: number;
+  /** 字符偏移（`unist` 的 `Point.offset` 是可选成员：解析器一定给，别处不一定）。 */
+  readonly offset?: number | undefined;
+}
+
+/** 一段位置（`unist` 的 `Position`）。 */
+interface MarkdownPosition {
+  readonly start: MarkdownPoint;
+  readonly end: MarkdownPoint;
 }
 
 function collectReferences(node: MarkdownNode, spans: ReferenceSpan[]): void {
-  const position = node.position;
-  if (node.type === "reference" && position !== undefined) {
+  if (node.type === "reference") {
     const reference = referenceOfNode(node);
-    if (reference !== undefined) {
-      spans.push({ start: position.start.offset, end: position.end.offset, reference });
+    // 区间要按字符偏移给：`offset` 缺了（不是解析器产出的节点）就映射不回原文，跳过。
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (reference !== undefined && start !== undefined && end !== undefined) {
+      spans.push({ start, end, reference });
     }
   }
   for (const child of node.children ?? []) collectReferences(child, spans);
@@ -190,7 +219,7 @@ function referenceOfNode(node: MarkdownNode): Reference | undefined {
     protocol,
     ...(node.origin === undefined ? {} : { origin: node.origin }),
     ...(node.path === undefined ? {} : { path: node.path }),
-    ...(node.title === undefined ? {} : { title: node.title }),
+    ...(typeof node.title === "string" ? { title: node.title } : {}),
     ...(node.lineStart === undefined ? {} : { lineStart: node.lineStart }),
     ...(node.lineEnd === undefined ? {} : { lineEnd: node.lineEnd }),
     ...(node.column === undefined ? {} : { column: node.column }),
@@ -414,12 +443,12 @@ function isSkillCode(code: Code): boolean {
 }
 
 function enterReference(this: CompileContext, token: Token): undefined {
-  this.enter({ type: "reference" } as unknown as Nodes, token);
+  this.enter({ type: "reference" }, token);
   return undefined;
 }
 
 function exitReference(this: CompileContext, token: Token): undefined {
-  const node = this.stack[this.stack.length - 1] as unknown as MarkdownNode | undefined;
+  const node: MarkdownNode | undefined = this.stack[this.stack.length - 1];
   const raw = this.sliceSerialize(token);
   const reference = parseBareReference(raw);
   if (node !== undefined) {
@@ -435,7 +464,7 @@ function exitReference(this: CompileContext, token: Token): undefined {
 }
 
 const transformLinks: Transform = function (tree) {
-  convertLinks(tree as unknown as MarkdownNode);
+  convertLinks(tree);
 };
 
 function convertLinks(parent: MarkdownNode): void {
@@ -470,20 +499,23 @@ function referenceNodeOf(
 function startsAfterAt(previous: MarkdownNode | undefined, start: MarkdownPoint): boolean {
   if (previous?.type !== "text" || previous.value?.endsWith("@") !== true) return false;
   const position = previous.position;
-  if (position === undefined || position.end.offset !== start.offset) return false;
+  if (position === undefined) return false;
+  const end = position.end.offset;
+  const from = position.start.offset;
+  if (end === undefined || from === undefined || start.offset === undefined) return false;
 
-  return position.end.offset - position.start.offset === previous.value.length;
+  return end === start.offset && end - from === previous.value.length;
 }
 
-function atStart(position: { start: MarkdownPoint; end: MarkdownPoint }): {
-  start: MarkdownPoint;
-  end: MarkdownPoint;
-} {
+function atStart(position: MarkdownPosition): MarkdownPosition {
+  const start = position.start;
+  const offset = start.offset;
   return {
     start: {
-      line: position.start.line,
-      column: position.start.column - 1,
-      offset: position.start.offset - 1,
+      line: start.line,
+      column: start.column - 1,
+      // offset 有就往前挪一格；缺了就没有可挪的区间。
+      ...(offset === undefined ? {} : { offset: offset - 1 }),
     },
     end: position.end,
   };

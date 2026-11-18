@@ -149,11 +149,13 @@ function metaOf(schema: SchemaNode): FieldMeta {
 
 // 外层 meta 与内层 meta 合并：外层的 undefined 不覆盖内层（transform 的 inner 带着自己的角色）。
 function mergeMeta(inner: FieldMeta, outer: FieldMeta): FieldMeta {
-  const merged: Record<string, unknown> = { ...inner };
+  const merged: FieldMeta = { ...inner };
   for (const [key, value] of Object.entries(outer)) {
-    if (value !== undefined) merged[key] = value;
+    // 外层的 undefined 不覆盖内层（transform 的 inner 带着自己的角色）。
+    if (value === undefined) continue;
+    Object.assign(merged, { [key]: value });
   }
-  return merged as unknown as FieldMeta;
+  return merged;
 }
 
 // 节点自己的路径末段：动态段保持占位，根节点为空串。
