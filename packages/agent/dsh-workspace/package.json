@@ -20,7 +20,6 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-api-session-controller": "workspace:^",
     "@deepseek-ai/dsh-api-workspace-controller": "workspace:^",
     "@deepseek-ai/dsh-api-workspace-files": "workspace:^",
     "@deepseek-ai/dsh-client-ui-context-menu": "workspace:^",
