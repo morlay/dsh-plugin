@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { AssistantMessage, ContentBlock, UserMessage } from "@morlay/dsh-agent/contract";
+import type {
+  AssistantMessage,
+  ContentBlock,
+  MessageSource,
+  UserMessage,
+} from "@morlay/dsh-agent/contract";
 import { SessionSeq } from "@morlay/dsh-session/contract";
 import type { SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionBranchError } from "../endpoint/branch.ts";
@@ -335,15 +340,23 @@ function compactionTypeOf(event: SessionEvent): string | undefined {
 // 当前格式的 source 是 `compact-checkpoint`（`@deepseek-ai/dsh-compaction/checkpoint` 的
 // `isCompactCheckpointSource`）；v3 时代的旧日志是 `plugin: "compact"`，session-rdb 读路径不归一它，
 // 所以两种形状都要认。
+/** 旧代（v3）压缩插件写的来源：`{ kind: "plugin", plugin: "compact" }`。 */
+function isLegacyCompactionSource(
+  source: MessageSource,
+): source is Extract<MessageSource, { kind: "plugin" }> {
+  // `"plugin" in source` 自己就把联合收到了 plugin 那一支，不需要断言。
+  return "plugin" in source && source.plugin === "compact";
+}
+
 function isCompactionCheckpoint(event: SessionEvent): boolean {
   if (event.type !== "user/message") return false;
-  const op = (event as unknown as { surfaceOp?: unknown }).surfaceOp;
+  // `surfaceOp` 只长在表面事件上：用 `in` 收窄，比「先断言成 { surfaceOp?: unknown }」少一次消音。
+  const op = "surfaceOp" in event ? event.surfaceOp : undefined;
   if (typeof op !== "object" || op === null) return false;
-  const source = event.data.source as unknown as { kind?: unknown; plugin?: unknown };
-  return (
-    source.kind === "compact-checkpoint" ||
-    (source.kind === "plugin" && source.plugin === "compact")
-  );
+  const source = event.data.source;
+  // 当前格式的来源（`compact-checkpoint`）由压缩包自己的谓词认；这里只多认旧代的 plugin 形状。
+  const kind: string = source.kind;
+  return kind === "compact-checkpoint" || isLegacyCompactionSource(source);
 }
 
 function compactionBrackets(events: readonly SessionEvent[]): CompactionBracket[] {
@@ -459,11 +472,9 @@ export function openTurnCloser(
 }
 
 function replacementRange(event: SessionEvent): { start: number; end: number } | undefined {
-  const op = (
-    event as unknown as { surfaceOp?: { op?: unknown; startSeq?: unknown; endSeq?: unknown } }
-  ).surfaceOp;
-  if (op?.op !== "replace") return undefined;
-  if (typeof op.startSeq !== "number" || typeof op.endSeq !== "number") return undefined;
+  const op = "surfaceOp" in event ? event.surfaceOp : undefined;
+  // `SurfaceOp` 是 `"append" | { op: "replace", … }`：先把字符串那支排掉，剩下的才谈区间。
+  if (op === undefined || typeof op === "string") return undefined;
   return { start: op.startSeq, end: op.endSeq };
 }
 

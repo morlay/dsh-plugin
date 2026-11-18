@@ -125,9 +125,9 @@ export function isTestPath(file: string): boolean {
 /**
  * 边界桥白名单：`as unknown as` 唯一合法的地方。返回理由；`undefined` 表示不在白名单。
  *
- * 判据是「桥的另一头是什么**外部形状**」，不是「这个文件里断言多」。三类：装配入口（cordis Context）、
- * cordis 兼容桥、rdb 行映射（SQL 行）。**域内**的断言一律不白名单——`rdb/log/repair.ts` 的另一头是
- * 域对象，不是外部形状，所以它不在表里。
+ * 判据是「桥的另一头是什么**外部形状**」，不是「这个文件里断言多」。四类：装配入口（cordis Context）、
+ * cordis 兼容桥、rdb 行映射（SQL 行）、旧格式落盘（v3 及更早的 JSON）。**域内**的断言一律不白名单——
+ * `rdb/log/repair.ts` 的另一头是域对象，不是外部形状，所以它不在表里。
  */
 const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = [
   { match: /(^|[\\/])src[\\/]bootstrap\.ts$/u, reason: "装配入口：另一头是 cordis Context" },
@@ -143,6 +143,15 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     // 只覆盖 desktop 壳的这个文件：Electron 只在**它的**进程里存在，别包的 `src/app.ts` 不是这个桥。
     match: /(^|[\\/])zephyr-desktop-shell[\\/]src[\\/]app\.ts$/u,
     reason: "Electron 边界桥：Electron 内置模块、进程对象与 IPC 参数都没有本仓类型面",
+  },
+  {
+    // 旧格式落盘：`better-session` 的读视图要把**历史 JSON 产物**（v3 及更早，字段名/形状与当前不同）
+    // 读成当前的 `SessionHeader` / `SessionEvent[]`。另一头是**盘上已经存在的字节**，不是本仓能重写的域对象。
+    // 为什么不能靠迁移解决：迁移链（`@deepseek-ai/dsh-session-format-*`）只在**导入/升级**时跑，且要求整份
+    // 产物过严格校验——读路径要处理的是「不保证过校验的旧文件」（用户机器上的存量），只能就地按结构收窄。
+    match: /(^|[\\/])src[\\/]data[\\/]store[\\/]read-view[\\/]legacy\.ts$/u,
+    reason:
+      "旧格式落盘：另一头是 v3 及更早的 JSON 产物（旧字段/旧形状 → 当前 SessionHeader / SessionEvent[]）",
   },
 ];
 
@@ -197,7 +206,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 阶段 2 又下调 8 处：`dsh-session/src/testing/log.ts` 的会话事件夹具用品牌构造器装成了合法事件
    * （那一份在 `src/testing/` 下，算**生产面**）。
    */
-  "double-assertion": 152,
+  "double-assertion": 147,
   /**
    * **测试域**（`__tests__/**`）的同一条双断言判据：只降不升。
    *
