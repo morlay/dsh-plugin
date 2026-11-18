@@ -9,6 +9,9 @@ import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 export { Session } from "@deepseek-ai/dsh-session";
 /** 一条会话事件（按 `type` 收窄的联合）。 */
 export type { SessionEvent } from "@deepseek-ai/dsh-session";
+// 事件表的类型面：`SessionEventMap[K]` / `K extends SessionEventType` 是「type 与 data 相配」的唯一表达方式，
+// 消费方（读视图 / 编辑编排）要能直接引用它们；这里只放**类型**，不新增值边。
+export type { SessionEventMap, SessionEventType } from "@deepseek-ai/dsh-session";
 /** 会话 header：身份、格式版本、cwd、父会话与种子水位。 */
 export type { SessionHeader } from "@deepseek-ai/dsh-session";
 /** 事件坐标的游标：既可以是 seq，也可以是 `-1`（空日志的起点）。 */

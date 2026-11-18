@@ -1,7 +1,28 @@
 // 旧代形状归一：消息形状、PTC 改名、自造事件的 ignorable 信封（读与写两个方向共用）。
 //
 // 只认白名单：其它未知类型保持 fail loud（那是「数据来自更新的 harness」的信号，不能吞掉）。
-import type { SessionEvent } from "@morlay/dsh-session/contract";
+import type { UserMessage } from "@morlay/dsh-agent/contract";
+import type { SessionEvent, SessionEventMap, SessionEventType } from "@morlay/dsh-session/contract";
+
+/**
+ * 把一条事件的 `type` 与 `data` **成对**换掉。
+ *
+ * 「`event.type` 与 `event.data` 相配」这件事在联合类型上表达不出来，所以配对由**调用方**在这里给出：
+ * `T` 与 `SessionEventMap[T]` 一起传，断言只在本函数内发生一次——比在每个改写点各写一条 `as unknown as` 收口。
+ * @param event - 原事件（`seq` / `time` / 信封字段都保留）。
+ * @param type - 新类型。
+ * @param data - 新类型对应的数据。
+ * @returns 换过 type/data 的事件。
+ */
+function withType<T extends SessionEventType>(
+  event: SessionEvent,
+  type: T,
+  data: SessionEventMap[T],
+): SessionEvent<T> {
+  // 展开一条**联合**事件时 `type` 各支冲突，TS 连可比性都不给（不是「再收窄一下」能解决的），所以这里用一次
+  // 双断言收口：配对已由签名证明，断言只负责让「联合 → 具体 K」这一步过编译。这是本文件唯一的收口点。
+  return { ...event, type, data } as unknown as SessionEvent<T>;
+}
 
 export function repairAssistantSettlement(events: SessionEvent[]): void {
   for (const event of events) {
@@ -32,51 +53,39 @@ export function repairRequestHeaders(events: SessionEvent[]): void {
   }
 }
 
-const PTC_EVENT_RENAMES: Record<string, string> = {
+const PTC_EVENT_RENAMES: Record<string, SessionEventType> = {
   "tool/code-dispatch-start": "tool/ptc-dispatch-start",
   "tool/code-dispatch": "tool/ptc-dispatch",
 };
 
-function renamePtcMessageSource(message: unknown): unknown {
-  if (typeof message !== "object" || message === null || Array.isArray(message)) return message;
-  const record = message as Record<string, unknown>;
-  const source = record["source"];
-  if (typeof source !== "object" || source === null || Array.isArray(source)) return message;
-  const sourceRecord = source as Record<string, unknown>;
-  if (sourceRecord["kind"] !== "plugin" || sourceRecord["plugin"] !== "tools-code-mode") {
-    return message;
-  }
-  return { ...record, source: { ...sourceRecord, plugin: "tools-ptc" } };
-}
-
-interface LegacyPtcEvent {
-  type: string;
-  data: unknown;
-  [key: string]: unknown;
+// 旧代 PTC 插件写的来源是 `{ kind: "plugin", plugin: "tools-code-mode" }`；改名成现在的 `tools-ptc`。
+function renamePtcMessageSource(message: UserMessage): UserMessage {
+  const source = message.source;
+  // 盘上来的数据不可信：`agent/inbox/spliced` 的 `inserted` 项可能只有一个 `{ id }`，`source` 整个缺，
+  // 所以运行时守卫不能省（`typeof undefined` 是 `"undefined"`，走早返回）。
+  if (typeof source !== "object" || source === null) return message;
+  if (!("plugin" in source) || source.plugin !== "tools-code-mode") return message;
+  return { ...message, source: { ...source, plugin: "tools-ptc" } };
 }
 
 export function renameLegacyPtcEvents(events: SessionEvent[]): void {
   for (let index = 0; index < events.length; index++) {
-    const event = events[index]! as LegacyPtcEvent;
+    const event = events[index]!;
     const renamedType = PTC_EVENT_RENAMES[event.type];
     if (renamedType !== undefined) {
-      events[index] = { ...event, type: renamedType } as unknown as SessionEvent;
+      events[index] = withType(event, renamedType, event.data);
       continue;
     }
     if (event.type === "agent-preset/selected") {
-      const data = event.data as Record<string, unknown>;
-      if (data["agentPreset"] === "code") {
-        events[index] = {
-          ...event,
-          data: { ...data, agentPreset: "ptc" },
-        } as unknown as SessionEvent;
+      if (event.data.agentPreset === "code") {
+        events[index] = withType(event, event.type, { ...event.data, agentPreset: "ptc" });
       }
       continue;
     }
     if (event.type === "user/message") {
       const renamed = renamePtcMessageSource(event.data);
       if (renamed !== event.data) {
-        events[index] = { ...event, data: renamed } as unknown as SessionEvent;
+        events[index] = withType(event, event.type, renamed);
       }
       continue;
     }
