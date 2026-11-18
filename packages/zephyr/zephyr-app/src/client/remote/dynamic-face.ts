@@ -38,7 +38,20 @@ export function remoteMethodOf(
 ): (...args: unknown[]) => Promise<unknown> {
   const handler = remoteNamespaceOf(remote, namespace)?.[method];
   if (typeof handler !== "function") {
-    throw new Error(`remote.${namespace}.${method} 还没有登记（$mount 没跑？）`);
+    throw new Error(`${remoteNamespaceKey(namespace)}.${method} 还没有登记（$mount 没跑？）`);
   }
   return handler as (...args: unknown[]) => Promise<unknown>;
 }
+
+/**
+ * `remote.<group>` 这个 **cordis 服务名**（上游按它读 `ctx.remote.commands` 这类）。
+ *
+ * 我们自己声明的组（`@RemoteGroup` 的类）不在上游 `TYPERT_REMOTE` 里，所以那个名字得由我们
+ * 通过 deps 发布；键名就是这个函数算的。名字规则只活在这里，别处不写 `"remote." + group`。
+ * @param group - 组名（`commands`）。
+ * @returns cordis 服务名（`remote.commands`）。
+ */
+export function remoteNamespaceKey(group: string): string {
+  return `remote.${group}`;
+}
+
