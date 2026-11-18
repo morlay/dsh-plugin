@@ -2,7 +2,7 @@
   "name": "@local/dts-prepare",
   "version": "0.1.0",
   "private": true,
-  "description": "全仓声明树（target/dts）的生成与并发保护：构建（tsdown-plugin-cordis）与类型图生成（typert-generator）共用它，所以锁只在这一处。",
+  "description": "全仓声明树（target/dts）的生成与并发保护：构建（devkit）与类型图生成（typert-generator）共用它，所以锁只在这一处。",
   "type": "module",
   "exports": {
     ".": "./src/dts.ts",
