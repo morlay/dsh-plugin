@@ -44,6 +44,5 @@ export {
 } from "./provider.ts";
 export { bootstrapApplication, mountRow, type App, type BootstrapOptions } from "./bootstrap.ts";
 export { Debugger, DebuggerDefault, type DebugSnapshot } from "./debugger.ts";
-export { type AssertCovered, type AssertTrue, type Uncovered } from "./contract-coverage.ts";
 export { Logger } from "./logger.ts";
 export { EventEmitter, type EventOptions, type Next } from "./event-emitter.ts";
