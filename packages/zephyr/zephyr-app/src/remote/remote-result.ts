@@ -28,11 +28,21 @@ export function failureOf(error: unknown): RemoteFailureWire {
   const shaped = typeof error === "object" && error !== null ? error : undefined;
   const code = shaped !== undefined && "code" in shaped ? shaped.code : undefined;
   const details = shaped !== undefined && "details" in shaped ? shaped.details : undefined;
-  return {
+  const failure: RemoteFailureWire = {
     code: typeof code === "string" ? code : "gateway/invoke-failed",
     message,
     details: details ?? {},
   };
+  // 上游消费面按 `String(error)` 兜底（`model.ts`：`error instanceof Error ? error.message : String(error)`），
+  // 而折过的失败面**不是** `Error`——不给它 `toString`，用户看到的就是 `[object Object]`，真因被藏住
+  // （终端 tab 那条 `posix_openpt failed` 就是这么丢的）。
+  // 不可枚举：wire 上仍然只有 `code` / `message` / `details` 三个字段，序列化不变。
+  Object.defineProperty(failure, "toString", {
+    value: (): string => `${failure.code}: ${failure.message}`,
+    enumerable: false,
+    configurable: true,
+  });
+  return failure;
 }
 
 /**
