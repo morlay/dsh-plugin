@@ -12,7 +12,12 @@ import { bootStorage, counting, memoryDomain, type MemoryDomain } from "./suppor
 import { SessionId } from "@morlay/dsh-session/contract";
 import type { LlmCallConfig } from "@morlay/dsh-agent/contract";
 import { ToolCallId, assembleContextFor, type Agent } from "@morlay/dsh-agent/contract";
-import { FsVersion, type FsWriteIntent } from "@morlay/dsh-fs/contract";
+import {
+  FsEditIntentEvent,
+  FsVersion,
+  FsWriteIntentEvent,
+  type FsWriteIntent,
+} from "@morlay/dsh-fs/contract";
 import { defineTool } from "@morlay/dsh-agent/contract";
 import type { TestContext } from "./support/context.ts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -604,11 +609,17 @@ function withPolicies(
 // 改在"没观察过"时抛 `FS_NOT_OBSERVED`（上游就是用 throw 表达这条拒绝）。它把自己被问过几次记下来。
 function installPolicyStub(ctx: TestContext): { asked: string[] } {
   const asked: string[] = [];
-  ctx.on("fs/write-intent", () => {
+  // 走令牌（与生产同一形态）：`onWaterfall` 最终仍是 `ctx.on(name, …)`，所以上面那个拦 `ctx.on` 的探针照样有牙。
+  // 两条都**不调 `next`**（独占决策槽）、**不加 `prepend`**（要排在模式行的拦截之后）。
+  const writeIntent$ = new FsWriteIntentEvent();
+  writeIntent$.onInit(ctx);
+  writeIntent$.onWaterfall(() => {
     asked.push("write");
     return Promise.resolve<FsWriteIntent>({ kind: "replaceIfVersion", version: FsVersion("v1") });
   });
-  ctx.on("fs/edit-intent", () => {
+  const editIntent$ = new FsEditIntentEvent();
+  editIntent$.onInit(ctx);
+  editIntent$.onWaterfall(() => {
     asked.push("edit");
     throw new Error("FS_NOT_OBSERVED");
   });
@@ -617,7 +628,9 @@ function installPolicyStub(ctx: TestContext): { asked: string[] } {
 
 // 一次真的 waterfall 调用：`actor` 用工具那副形状——工具把自己的 exec 传进来（这里只关心它上面挂着的 `agent`）。
 async function editIntent(ctx: TestContext, actor: object): Promise<unknown> {
-  return await ctx.waterfall("fs/edit-intent", {} as never, actor, () => undefined);
+  const editIntent$ = new FsEditIntentEvent();
+  editIntent$.onInit(ctx);
+  return await editIntent$.waterfall({} as never, actor, () => undefined);
 }
 
 async function writeIntent(ctx: TestContext, actor: object): Promise<unknown> {
