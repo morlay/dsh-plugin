@@ -22,6 +22,7 @@ export {
   // 设计给用户的新出口，只是让两个入口共用同一份模块级状态。
   hasTokenMeta,
   injectPlaceholderOf,
+  stub,
   kAdapted,
   kFace,
   kMounted,

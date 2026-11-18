@@ -161,6 +161,23 @@ inject.all = function all<T>(token: TokenClass<T>): T[] {
 };
 
 /**
+ * 造一个契约的**部分替身**：装配 / 测试里只实现被用到的那几个成员。
+ *
+ * `partial` 按 `T` 检查（成员名写错、签名不对当场报错），返回面是完整的 `T`——于是装配位不再需要
+ * `X as never`（把令牌说成 `never`，等于关掉检查）或 `{…} as unknown as X`（双断言）。
+ * 泛型从**令牌**取（`stub(Locale, {…})`）而不是写成 `stub<Locale>(…)`：`InjectionToken<Face>` 的类型是
+ * 构造面，`stub<UiWorkspace>(…)` 的 `T` 会推成令牌本身，而不是它指向的面。
+ * @param token - 契约令牌（只用来推 `T`，运行期不读）。
+ * @param partial - 契约的部分实现：写哪些成员就检查哪些。
+ * @returns 类型上是完整契约，运行期就是 `partial`。
+ */
+export function stub<T>(token: TokenClass<T>, partial: Partial<T>): T {
+  // 唯一一处断言：`Partial<T>` → `T` 是**收窄**（`T` 本来就可赋给 `Partial<T>`），不是双断言。
+  void token;
+  return partial as T;
+}
+
+/**
  * 一个注入点的占位对象。
  * @param token - 契约。
  * @param mode - 单值 / 可选 / 多值。
