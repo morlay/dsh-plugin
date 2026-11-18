@@ -19,24 +19,23 @@ function splice(
     type: "agent/inbox/spliced",
     seq: SessionSeq(seq),
     time: seq,
+    // 按上游 `agent/inbox/spliced` 的真形状装（`core/agent/src/types.ts:110-116`）：`start` 是**裸 number**
+    // （上游这里没有品牌化）、`inserted` 必填、`removedCount` 在 0 时不写、`outcome` 本用例不用。
     data: {
       target,
-      start: SessionSeq(start),
-      removedCount: removed,
+      start,
+      ...(removed === 0 ? {} : { removedCount: removed }),
       // `inserted` 里的项是**真消息**（上游 `Inbox` 会按消息面读），不是只有 id 的占位：
       // 盘上那条 `Cannot use 'in' operator to search for 'plugin' in undefined` 就是这条形状写歪暴露的。
-      ...(inserted.length > 0
-        ? {
-            inserted: inserted.map((item) => ({
-              ...createUserMessage({ content: [{ type: "text", text: item.id }], source: { kind: "user" } }),
-              id: MessageId(item.id),
-            })),
-          }
-        : {}),
+      inserted: inserted.map((item) => ({
+        ...createUserMessage({ content: [{ type: "text", text: item.id }], source: { kind: "user" } }),
+        id: MessageId(item.id),
+      })),
     },
+    // 形状与上游一致后不再需要断言；若这里又红，说明还有别的字段差额（列出来，别硬凑）。
     // 卡点（票 03 第 7 类）：`inserted` 已是**真消息**，剩下的差额在上游 `agent/inbox/spliced` 的 data
     // 其余字段（`version` 等）——没摸清前不猜，留着这条断言。
-  } as unknown as SessionEvent;
+  };
 }
 
 describe("orphanInboxSpliceSeqs", () => {
