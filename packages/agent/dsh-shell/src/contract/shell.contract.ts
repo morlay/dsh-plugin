@@ -11,7 +11,7 @@ import { ShellExecutor as ShellExecutorService } from "@deepseek-ai/dsh-shell";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type ShellExecutorCovered = AssertTrue<AssertCovered<ShellExecutorService, ShellExecutor>>;
 
-@Injectable()
+@Injectable({ name: "shell" })
 export abstract class ShellExecutor {
   abstract readonly sandboxMode: ShellExecutorService["sandboxMode"];
 

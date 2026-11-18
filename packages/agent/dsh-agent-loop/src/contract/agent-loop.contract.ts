@@ -7,7 +7,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type AgentLoopCovered = AssertTrue<AssertCovered<AgentLoopService, AgentLoop>>;
 
-@Injectable()
+@Injectable({ name: "agentLoop" })
 export abstract class AgentLoop {
   abstract readonly config: AgentLoopService["config"];
 

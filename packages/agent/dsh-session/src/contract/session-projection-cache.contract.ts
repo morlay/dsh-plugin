@@ -17,7 +17,7 @@ export type SessionProjectionCacheCovered = AssertTrue<
   AssertCovered<SessionProjectionCacheService, SessionProjectionCache>
 >;
 
-@Injectable()
+@Injectable({ name: "sessionProjectionCache" })
 export abstract class SessionProjectionCache {
   abstract readonly config: SessionProjectionCacheService["config"];
 

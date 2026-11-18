@@ -20,7 +20,7 @@ export type { Config as FileSystemConfig } from "@deepseek-ai/dsh-fs-local";
 export type FileSystemCovered = AssertTrue<AssertCovered<FileSystemService, FileSystem>>;
 
 // 令牌只承载语义，成员由上面那份 `Pick` 合并进来（同一组签名只写一遍）。
-@Injectable()
+@Injectable({ name: "fs" })
 export abstract class FileSystem {
   abstract readonly watch: FileSystemService["watch"];
 

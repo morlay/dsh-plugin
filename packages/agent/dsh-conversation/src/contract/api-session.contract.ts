@@ -22,7 +22,7 @@ type SessionControllerUpstream = InstanceType<typeof SessionControllerPlugin>;
  *
  * 27 个成员逐个列；`typertRemote` 是 `TypertRemoteService` 基类挂的绑定（gateway 靠它发现端点）。
  */
-@Injectable()
+@Injectable({ name: "fileReferences" })
 export abstract class SessionControllerService {
   /** 上游基类挂的 remote 绑定（`{ service, serviceKey, namespace }`）：gateway 的发现依据。 */
   abstract readonly typertRemote: SessionControllerUpstream["typertRemote"];

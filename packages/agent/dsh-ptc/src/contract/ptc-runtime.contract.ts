@@ -16,7 +16,7 @@ export { jsonSchemaToTs } from "@deepseek-ai/dsh-tool-executor-ptc";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type PtcRuntimeCovered = AssertTrue<AssertCovered<NodePtcRuntimeService, PtcRuntime>>;
 
-@Injectable()
+@Injectable({ name: "ptcRuntime" })
 export abstract class PtcRuntime {
   abstract readonly executionInstructions: NodePtcRuntimeService["executionInstructions"];
 

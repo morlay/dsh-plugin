@@ -22,7 +22,7 @@ export { PERSONA_SUFFIX_SECTION } from "@deepseek-ai/dsh-system-prompt";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type SystemPromptCovered = AssertTrue<AssertCovered<SystemPromptService, SystemPrompt>>;
 
-@Injectable()
+@Injectable({ name: "systemPrompt" })
 export abstract class SystemPrompt {
   abstract readonly section: SystemPromptService["section"];
 

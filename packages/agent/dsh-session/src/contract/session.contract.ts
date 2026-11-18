@@ -38,7 +38,7 @@ export { SESSION_FORMAT_VERSION } from "@deepseek-ai/dsh-session";
 export type SessionStoreCovered = AssertTrue<AssertCovered<SessionStoreService, SessionStore>>;
 
 /** 会话存储：建立 / 读取 / 分叉 / 落盘。 */
-@Injectable()
+@Injectable({ name: "sessions" })
 export abstract class SessionStore {
   abstract readonly create: SessionStoreService["create"];
 
