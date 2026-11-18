@@ -20,7 +20,7 @@ import { WorkspaceEndpoint } from "../endpoint/index.ts";
 
 /** `workspace` 组的客户端契约实例（`ClientWorkspaceModel` 的 `remote` 参数就是它）。 */
 @RemoteClient()
-export class WorkspaceEndpointClient extends WorkspaceEndpoint implements WorkspaceRemote {
+export class WorkspaceEndpointClient extends WorkspaceEndpoint {
   /** 调用面的来源：`remote.<组名>` 由 `Remote` 按 descriptor 回落，本类不持有上游实例。 */
   protected readonly remote = inject(Remote);
 
@@ -35,66 +35,6 @@ export class WorkspaceEndpointClient extends WorkspaceEndpoint implements Worksp
   }
 
   // 一元方法用 `async`：缺面时报的是 **rejection** 而不是同步抛出（调用方按上游的返回类型等 Promise）。
-
-  override async create(
-    ...args: Parameters<WorkspaceRemote["create"]>
-  ): ReturnType<WorkspaceRemote["create"]> {
-    return await this.face().create(...args);
-  }
-
-  override async rename(
-    ...args: Parameters<WorkspaceRemote["rename"]>
-  ): ReturnType<WorkspaceRemote["rename"]> {
-    return await this.face().rename(...args);
-  }
-
-  override async delete(
-    ...args: Parameters<WorkspaceRemote["delete"]>
-  ): ReturnType<WorkspaceRemote["delete"]> {
-    return await this.face().delete(...args);
-  }
-
-  override async insertBefore(
-    ...args: Parameters<WorkspaceRemote["insertBefore"]>
-  ): ReturnType<WorkspaceRemote["insertBefore"]> {
-    return await this.face().insertBefore(...args);
-  }
-
-  override async insertSessionBefore(
-    ...args: Parameters<WorkspaceRemote["insertSessionBefore"]>
-  ): ReturnType<WorkspaceRemote["insertSessionBefore"]> {
-    return await this.face().insertSessionBefore(...args);
-  }
-
-  override async archiveSession(
-    ...args: Parameters<WorkspaceRemote["archiveSession"]>
-  ): ReturnType<WorkspaceRemote["archiveSession"]> {
-    return await this.face().archiveSession(...args);
-  }
-
-  override async unarchiveSession(
-    ...args: Parameters<WorkspaceRemote["unarchiveSession"]>
-  ): ReturnType<WorkspaceRemote["unarchiveSession"]> {
-    return await this.face().unarchiveSession(...args);
-  }
-
-  override async pinSession(
-    ...args: Parameters<WorkspaceRemote["pinSession"]>
-  ): ReturnType<WorkspaceRemote["pinSession"]> {
-    return await this.face().pinSession(...args);
-  }
-
-  override async unpinSession(
-    ...args: Parameters<WorkspaceRemote["unpinSession"]>
-  ): ReturnType<WorkspaceRemote["unpinSession"]> {
-    return await this.face().unpinSession(...args);
-  }
-
-  override async initializeDefault(
-    ...args: Parameters<WorkspaceRemote["initializeDefault"]>
-  ): ReturnType<WorkspaceRemote["initializeDefault"]> {
-    return await this.face().initializeDefault(...args);
-  }
 
   // 流式方法同步返回逐帧面（上游 `RemoteStreamHandle`：`AsyncIterable` + `send` / `end` / `dispose`）。
 

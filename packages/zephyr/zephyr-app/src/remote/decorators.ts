@@ -261,12 +261,27 @@ function defineForwarder(ctor: Function, method: string): void {
   Object.defineProperty(proto, method, {
     value: function forwarded(
       this: {
+        /** 子类可覆盖：`$mount` 之后的调用面（按 descriptor 拼命名参数、包 `RemoteResult`、给流句柄）。 */
+        face?: () => Record<PropertyKey, unknown> | undefined;
         remote?: {
           invoke?: (endpoint: string, args: Readonly<Record<string, unknown>>) => Promise<unknown>;
         };
       },
       ...args: never[]
     ): unknown {
+      // **先走 `face()`**：它拿的是 `$mount` 之后那一面，命名参数 / `RemoteResult` 封装 / 流句柄都在那儿。
+      // 只在子类没提供 `face()` 时才回落到 unary `invoke`——否则每个多参/流式的组都得手写十几个
+      // 一模一样的 `return await this.face().<方法>(...args)`。
+      if (typeof this.face === "function") {
+        // **不回落**：`face()` 抛「还没挂载」时那个错就该抛出去（调用方等的是 rejection），
+        // 回落到 unary `invoke` 只会变成 `this.remote.x is not a function` —— 错得更远。
+        const face = this.face();
+        const impl = face?.[method];
+        if (typeof impl !== "function") {
+          throw new Error(`remote.<组名>.${method} 不在调用面上：契约与 descriptor 不一致`);
+        }
+        return (impl as (...params: never[]) => unknown).apply(face, args);
+      }
       const group = remoteGroupNameOf(this.constructor);
       const invoke = this.remote?.invoke;
       // 宿主没接这一层（离线 / 精简装配）时返回 `undefined`：调用方按空态处理。

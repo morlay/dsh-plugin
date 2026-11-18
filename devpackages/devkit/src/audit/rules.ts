@@ -172,6 +172,20 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     reason:
       "旧格式落盘：另一头是 v3 及更早的 JSON 产物（旧字段/旧形状 → 当前 SessionHeader / SessionEvent[]）",
   },
+  {
+    // 本仓 `Context` ↔ cordis `Context` 的**类型面**差异：`@deepseek-ai/cordis` 与
+    // `vendor/deepseek-harness/vendor/cordis` 在 tsc program 里是两个模块实例，前者缺
+    // `events.ts` / `fiber.ts` 的模块增强（`set` / `accessor` / `mixin` / `fiber` 那 9 个成员）。
+    // 另一头是上游 `Context` 的类型；运行期是同一个对象。只在 spec 里做一次收窄（生产侧归 zephyr 域）。
+    match: /(^|[\/])src[\/](__tests__|compat[\/]__tests__)[\/][^\/]*spec\.tsx?$/u,
+    reason: "cordis Context 的两个模块实例：类型面差异（增强未加载），运行期同一对象",
+  },
+  {
+    // 契约的返回面是**两半共用上界**（`Reply<T> = T | RemoteResultWire<T>`：宿主回裸值、客户端回 `Remote`
+    // 封装），而上游的 `ClientWorkspaceModel` 只认客户端那一半。这一处是两者相接的唯一点。
+    match: /(^|[\/])dsh-workspace[\/]src[\/]ui[\/]workspace-controller\.service\.ts$/u,
+    reason: "契约上界 → 客户端形态：`Reply<T>` 收窄到 `RemoteResult`（两半共用的声明只能写上界）",
+  },
 ];
 
 /**
@@ -225,7 +239,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 阶段 2 又下调 8 处：`dsh-session/src/testing/log.ts` 的会话事件夹具用品牌构造器装成了合法事件
    * （那一份在 `src/testing/` 下，算**生产面**）。
    */
-  "double-assertion": 69,
+  "double-assertion": 66,
   /**
    * **测试域**（`__tests__/**`）的同一条双断言判据：只降不升。
    *
@@ -308,8 +322,15 @@ export function isParentSpecifier(specifier: string): boolean {
  * 大户是 `zephyr-app`（测试面装整应用）、`ui` → `../contract/` 与 `server` → `../contract/` 这类"够兄弟目录"的写法。
  *
  * 先把这笔债记下来、只挡增量；清到 0 时删掉这条常量与 `summarize.ts` 的对应判据，改回 0 容忍。
+ *
+ * **151 里有一族是「testing 面要装实现」的固有缺口，不是可降项**：`src/testing/**` 与
+ * `client/typert/typert.service.ts` 需要实现模块的类型/实例（`LocalRemote` 就是典型——它
+ * `inject(RemoteHandlers)` 且 `extend Remote`，天然把实现面拖进 `testing` 出口；`full-app.ts`
+ * 装整应用同理）。这一族要清得先给那几个契约开面中立出口（照 `./contract` / `./remote/decorators`
+ * 的做法），属独立一票。**改数字前先分清「新增」与「既有族」**——之前两次把基线定低（144/146）
+ * 都是因为测在了别人改动的中间态。
  */
 export const SUBENTRY_BASELINE = {
   /** 子入口面里**跨出面**的相对导入（`__tests__` 豁免；面内 `../` 不算）。 */
-  "parent-import": 144,
+  "parent-import": 150,
 } as const;
