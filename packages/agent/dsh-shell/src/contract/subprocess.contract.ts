@@ -1,7 +1,7 @@
 // 子进程运行时契约：令牌按服务语义命名（上游注册名 `subprocess`）。
 import type { SubprocessRuntime } from "@deepseek-ai/dsh-subprocess";
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `SubprocessRuntime` 的全部公开成员，与上游同名同签名。

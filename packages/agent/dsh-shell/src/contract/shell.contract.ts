@@ -1,6 +1,6 @@
 // shell 执行器契约：令牌按服务语义命名（上游注册名 `shell`）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import { ShellExecutor as ShellExecutorService } from "@deepseek-ai/dsh-shell";
 
 /**
