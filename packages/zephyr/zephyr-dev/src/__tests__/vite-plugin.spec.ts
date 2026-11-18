@@ -33,6 +33,13 @@ type ResolveId = (
   importer?: string,
 ) => Promise<{ id: string; external?: boolean | "absolute" } | string | null | undefined>;
 
+/** 插件的 `resolveId` 钩子（vite 的 hook 可以是对象形态，测试只按函数形态调用）。 */
+function resolveIdOf(plugin: { resolveId?: unknown }): ResolveId {
+  const hook = plugin.resolveId;
+  if (typeof hook !== "function") throw new Error("插件没有 resolveId 钩子");
+  return hook as ResolveId;
+}
+
 describe("vite 插件：dev 的裸说明符归哪条链", () => {
   let work: string;
   let importer: string;
@@ -113,7 +120,7 @@ describe("vite 插件：dev 的裸说明符归哪条链", () => {
 
   test("名单点名的包 → 源码文件（client 半），不进 prebundle", async () => {
     const { plugin, calls } = pluginWith(["@morlay/*"]);
-    const resolved = await (plugin.resolveId as unknown as ResolveId)("@morlay/dev-row", importer);
+    const resolved = await resolveIdOf(plugin)("@morlay/dev-row", importer);
     // 按**真实路径**比：workspace 包在 node_modules 里是软链，解不解链都指向同一份源码。
     expect(await realpath(resolved as string)).toBe(await realpath(workspaceRowEntry));
     expect(calls).toEqual([]);
@@ -122,14 +129,14 @@ describe("vite 插件：dev 的裸说明符归哪条链", () => {
   test("仓库里但没点名的包（上游）→ prebundle，哪怕它的源码就在仓库内", async () => {
     const { plugin, calls } = pluginWith(["@morlay/*"]);
     await expect(
-      (plugin.resolveId as unknown as ResolveId)("@deepseek-ai/up-row", importer),
+      resolveIdOf(plugin)("@deepseek-ai/up-row", importer),
     ).resolves.toEqual({ id: "fed:@deepseek-ai/up-row", external: true });
     expect(calls).toEqual(["@deepseek-ai/up-row"]);
   });
 
   test("三方 → prebundle", async () => {
     const { plugin } = pluginWith(["@morlay/*"]);
-    await expect((plugin.resolveId as unknown as ResolveId)("react", importer)).resolves.toEqual({
+    await expect(resolveIdOf(plugin)("react", importer)).resolves.toEqual({
       id: "fed:react",
       external: true,
     });
@@ -138,7 +145,7 @@ describe("vite 插件：dev 的裸说明符归哪条链", () => {
   test("空名单 → 所有包都 prebundle", async () => {
     const { plugin } = pluginWith([]);
     await expect(
-      (plugin.resolveId as unknown as ResolveId)("@morlay/dev-row", importer),
+      resolveIdOf(plugin)("@morlay/dev-row", importer),
     ).resolves.toEqual({
       id: "fed:@morlay/dev-row",
       external: true,
