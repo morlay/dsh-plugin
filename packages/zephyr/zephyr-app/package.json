@@ -44,6 +44,7 @@
     "@morlay/zephyr": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@types/node": "^26.5.0"
   },

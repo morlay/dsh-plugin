@@ -7,7 +7,7 @@ export * from "./provide.ts";
 export * from "./bootstrap-client.ts";
 // 契约覆盖判据（`AssertCovered` / `AssertTrue`）：**只有类型**，浏览器半的契约也用它守「上游有而契约没列的成员」。
 // 从包根进 = 拖宿主图（`home-paths` / 装配链），所以浏览器半从这里取。
-export * from "../contract-coverage.ts";
+export type { AssertCovered, AssertTrue, Uncovered } from "../contract-coverage.ts";
 export * from "../connection/contract.ts";
 export { provideClientConnection } from "./connection/provide.ts";
 export { ClientConnectionDefault } from "./connection/connection.service.ts";
@@ -60,6 +60,7 @@ export {
   InputTriggers,
   Sessions,
   SidebarRight,
+  type SidebarRightFace,
   SidebarRightTabs,
   UiConversation,
   UiSession,

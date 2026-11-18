@@ -361,6 +361,9 @@ importers:
 
   devpackages/devkit:
     dependencies:
+      '@local/dts-prepare':
+        specifier: workspace:^
+        version: link:../dts-prepare
       lightningcss:
         specifier: ^1.33.0
         version: 1.33.0
@@ -1671,6 +1674,9 @@ importers:
         specifier: 18.x
         version: 18.3.1
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-right
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/credentials/credentials
