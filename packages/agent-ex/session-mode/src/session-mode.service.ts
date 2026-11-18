@@ -24,6 +24,11 @@ import {
   type SessionModeRow,
   type SessionModeTriState,
 } from "./endpoint/session-mode-shapes.ts";
+import {
+  FsDeleteIntentEvent,
+  FsEditIntentEvent,
+  FsWriteIntentEvent,
+} from "@morlay/dsh-fs/contract";
 import { AgentCreated } from "./events.ts";
 import { deniedByList, toolGroupLabel, toolGroupOf } from "./guidance/tool-groups.ts";
 
@@ -109,6 +114,13 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   // 会话一建立就装上：早于它的第一次装配，persona 因此一定在装配之前注册好。
   private readonly created$ = new AgentCreated();
 
+  // 三条意图瀑布（写 / 改 / 删）：令牌在 `@morlay/dsh-fs/contract`，与上游派发同名同形。
+  private readonly writeIntent$ = new FsWriteIntentEvent();
+
+  private readonly editIntent$ = new FsEditIntentEvent();
+
+  private readonly deleteIntent$ = new FsDeleteIntentEvent();
+
   private store: SessionModeOverrides | undefined;
 
   private stateHandle: ProjectionHandle<string | null> | undefined;
@@ -176,14 +188,19 @@ export class SessionModeDefault extends SessionMode implements OnInit {
       this.installFor(agent);
     });
     // 按模式的 policy 拦截：这三条 waterfall 上游 `fs-observation-policy` 独占决策槽，只能 `prepend` 抢在它前面。
-    for (const policy of POLICY_NAMES) {
-      ctx.on(
-        policy,
-        (_target: unknown, actor: unknown, next: () => unknown) =>
-          this.decidePolicy(policy, actor, next as () => Promise<unknown>),
-        { prepend: true },
-      );
-    }
+    // 三条各一个令牌（`onWaterfall` 比 `on` 多一个 `next`，两者类型位不同，用错在编译期就报）。
+    this.writeIntent$.onWaterfall(
+      (_target, actor, next) => this.decidePolicy("fs/write-intent", actor, next),
+      { prepend: true },
+    );
+    this.editIntent$.onWaterfall(
+      (_target, actor, next) => this.decidePolicy("fs/edit-intent", actor, next),
+      { prepend: true },
+    );
+    this.deleteIntent$.onWaterfall(
+      (_target, actor, next) => this.decidePolicy("fs/delete-intent", actor, next),
+      { prepend: true },
+    );
   }
 
   list(): SessionModeRow[] {
@@ -548,7 +565,8 @@ export class SessionModeDefault extends SessionMode implements OnInit {
   private async decidePolicy<T>(
     policy: PolicyName,
     actor: unknown,
-    next: () => Promise<T>,
+    // 瀑布的 `next` 在上游是同步的（`Next<T> = () => T`），也允许实现返回 Promise。
+    next: () => T | Promise<T>,
   ): Promise<T | undefined> {
     if (this.policyOf(policy, actor)) return await next();
     try {
