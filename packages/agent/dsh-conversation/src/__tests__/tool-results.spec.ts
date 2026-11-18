@@ -16,12 +16,29 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
 import { provideTypert } from "@morlay/zephyr-app";
+import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import { afterEach, describe, expect, it } from "vitest";
+import { ToolResultsEndpoint } from "../endpoint/tool-results.group.ts";
 import { ToolResultsDefault } from "../server/tool-results.service.ts";
+import { ToolResultsEndpointRow } from "../server/tool-results-endpoint.service.ts";
 import { FakeAppEnv } from "./support/fake-app-env.ts";
 
 const SESSION = "s1";
 const SEQ = 7;
+
+/**
+ * `toolResults/watch` 的 wire 端点名：从契约编译出来（`remoteDescriptorsOf`），spec 不手抄字符串。
+ * @returns 那一条流式端点的 `<组名>/<方法名>`。
+ */
+function watchEndpoint(): string {
+  const stream = remoteDescriptorsOf(ToolResultsEndpoint).descriptors.find(
+    (descriptor) => descriptor.mode === "stream",
+  );
+  if (stream === undefined) {
+    throw new Error("契约上没有声明流式的 watch：toolResults 组少了一条流");
+  }
+  return `${stream.namespace}/${stream.method}`;
+}
 
 const opened: App[] = [];
 const roots: string[] = [];
@@ -45,7 +62,9 @@ async function boot(): Promise<App> {
       ...provideSession(),
       ...provideSessionProjection(),
       FakeAppEnv,
+      // 两行：适配行装上游 `SessionToolResults`，端点行继承契约把它注册到 wire 上。
       ToolResultsDefault,
+      ToolResultsEndpointRow,
     ],
     timeoutMs: 20_000,
   });
@@ -64,7 +83,7 @@ describe("toolResults/watch 的宿主面", { timeout: 30_000 }, () => {
     const stream = app
       .get(RemoteHandlers)
       .stream(
-        "toolResults/watch",
+        watchEndpoint(),
         { request: { sessionId: SESSION, seq: SEQ } },
         controller.signal,
       );

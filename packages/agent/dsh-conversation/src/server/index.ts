@@ -13,8 +13,9 @@ export { SessionReferenceDefault } from "./session-reference.service.ts";
 export { provideSessionRemote } from "./session-remote.provide.ts";
 // 本域宿主面的**聚合入口**（一个面一个装配函数）：数据面 + 引用解析 + 会话端点。
 export { provideConversationServer } from "./conversation-server.provide.ts";
-// `toolResults/watch` 的宿主行（上游 `ui-trajectory` 的 host 入口）：端点属对话域。
+// `toolResults` 组的两行（上游 `ui-trajectory` 的 host 入口 + 继承契约的 wire 端点）：端点属对话域。
 export { ToolResultsDefault } from "./tool-results.service.ts";
+export { ToolResultsEndpointRow } from "./tool-results-endpoint.service.ts";
 // `ui-open-in-app` 的 host 半：三条 HTTP 路由（浏览器那次「打开方式」是 HTTP 读，不是 remote 方法）。
 export { OpenInAppHost, OpenInAppHostRow } from "./open-in-app.service.ts";
 

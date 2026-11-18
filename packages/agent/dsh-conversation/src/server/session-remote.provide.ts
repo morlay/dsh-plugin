@@ -7,6 +7,7 @@ import {
 } from "@morlay/dsh-session/server";
 import { OpenInAppHostRow } from "./open-in-app.service.ts";
 import { ToolResultsDefault } from "./tool-results.service.ts";
+import { ToolResultsEndpointRow } from "./tool-results-endpoint.service.ts";
 
 // 上游 wire 的宿主行：`remote.session`（`SessionController`），
 // 外加 `remote.toolResults`（`ui-trajectory` 的 host 入口）与 `remote.fileReferences`（输入框 `@` 的文件候选）。
@@ -22,7 +23,9 @@ export const provideSessionRemote = provide([
   // `session` 组与 `fileReferences` 组的端点由 `provideApiSession()` 提供（上游实现）。
   // 它**不在这里**：`api-session.provide.ts` 依赖 agent / attachment 等域的实现包，直接 import 会与本
   // 文件形成循环（`provideApiSession is not iterable`）。装配面显式并列装上这两份清单即可。
+  // 「装上游」与「接 wire」是两行：前者发布 `SessionToolResults` 的 `watch`，后者继承契约把它注册到 wire 上。
   ToolResultsDefault,
+  ToolResultsEndpointRow,
   // 「打开方式」的 HTTP 端点（`/open-in-app/apps|icon|open`）：不装它，界面上按钮在、点开是空的。
   OpenInAppHostRow,
 ]);
