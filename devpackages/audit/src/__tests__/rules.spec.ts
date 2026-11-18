@@ -163,8 +163,13 @@ describe("基线（只挡增量）", () => {
     expect(baselineVerdict(0, 56)).toBe("improvable");
   });
 
-  it("基线常量覆盖两条判据，且都是正数（0 就该删基线了）", () => {
+  it("基线常量覆盖每条判据，且都是正数（0 就该删基线了）", () => {
     expect(TYPE_DISCIPLINE_BASELINE["contract-value-edge"]).toBeGreaterThan(0);
     expect(TYPE_DISCIPLINE_BASELINE["double-assertion"]).toBeGreaterThan(0);
+    // 测试域是**独立**的一条：分开计数，否则测试域的存量会把生产面的增量淹掉。
+    expect(TYPE_DISCIPLINE_BASELINE["double-assertion-test"]).toBeGreaterThan(0);
+    expect(TYPE_DISCIPLINE_BASELINE["double-assertion-test"]).not.toBe(
+      TYPE_DISCIPLINE_BASELINE["double-assertion"],
+    );
   });
 });

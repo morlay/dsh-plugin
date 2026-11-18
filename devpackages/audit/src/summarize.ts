@@ -22,8 +22,10 @@ interface PackageReport {
   readonly exViolations?: readonly string[];
   /** 契约 / 端点面的上游包根值边（类型纪律判据 6）。 */
   readonly contractValueEdges?: readonly string[];
-  /** 白名单外的双断言（类型纪律判据 7）。 */
+  /** 白名单外的双断言（类型纪律判据 7，生产面：硬门禁）。 */
   readonly doubleAssertions?: readonly string[];
+  /** 同一判据的测试域计数（`__tests__/**`，只降不升）：与生产面分开计数、分开报。 */
+  readonly testDoubleAssertions?: readonly string[];
   /** 子入口面里以 `../` 开头的导入（面纪律：只许 `./` 与包名/出口）。 */
   readonly subentryParentImports?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
@@ -144,6 +146,9 @@ const contractValueEdges = reports.flatMap((entry) =>
 const doubleAssertions = reports.flatMap((entry) =>
   (entry.doubleAssertions ?? []).map((line) => `${entry.pkg}  ${line}`),
 );
+const testDoubleAssertions = reports.flatMap((entry) =>
+  (entry.testDoubleAssertions ?? []).map((line) => `${entry.pkg}  ${line}`),
+);
 const subentryParentImports = reports.flatMap((entry) =>
   (entry.subentryParentImports ?? []).map((line) => `${entry.pkg}  ${line}`),
 );
@@ -171,17 +176,30 @@ reportAgainstBaseline(
   },
 );
 // 双断言的条目是「文件 + 处数」：标题给**处数**（判据的单位），明细给文件。
-const doubleAssertTotal = doubleAssertions.reduce((sum, line) => {
-  const matched = /(\d+) 处$/u.exec(line);
-  return sum + (matched === null ? 1 : Number(matched[1]));
-}, 0);
+const countOf = (lines: readonly string[]): number =>
+  lines.reduce((sum, line) => {
+    const matched = /(\d+) 处$/u.exec(line);
+    return sum + (matched === null ? 1 : Number(matched[1]));
+  }, 0);
+
+// 生产面：硬门禁。测试域：**另一条**判据（只降不升）。两条分开报——合成一条时测试域的存量会把
+// 生产面的增量淹掉，生产面那条「只挡增量」就失效了。
 reportAgainstBaseline(
   "双断言白名单（`as unknown as` 只许边界桥；白名单见 devpackages/audit/src/rules.ts）",
   doubleAssertions,
   {
-    current: doubleAssertTotal,
+    current: countOf(doubleAssertions),
     baseline: TYPE_DISCIPLINE_BASELINE["double-assertion"],
     hint: "（" + String(doubleAssertions.length) + " 个文件）",
+  },
+);
+reportAgainstBaseline(
+  "测试域双断言（`__tests__/**` 的 `as unknown as`：同一套边界桥白名单，只降不升）",
+  testDoubleAssertions,
+  {
+    current: countOf(testDoubleAssertions),
+    baseline: TYPE_DISCIPLINE_BASELINE["double-assertion-test"],
+    hint: "（" + String(testDoubleAssertions.length) + " 个文件）",
   },
 );
 

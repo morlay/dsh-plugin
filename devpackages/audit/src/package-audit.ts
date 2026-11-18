@@ -375,12 +375,21 @@ for (const entry of imports) {
   }
 }
 
-// 7) 双断言 `as unknown as`：只许边界桥（白名单在 `./rules.ts`），测试不受限。判据见类型约束设计的判据 7。
+// 7) 双断言 `as unknown as`：只许边界桥（白名单在 `./rules.ts`）。判据见类型约束设计的判据 7。
+//
+//    **两份计数、两条判据**：生产面是硬门禁（`doubleAssertions`），测试域只降不升
+//    （`testDoubleAssertions`，基线 `TYPE_DISCIPLINE_BASELINE["double-assertion-test"]`）。
+//    为什么不合成一条：测试域的存量是生产面的两倍多（实测 342 vs 160），合起来生产面的增量
+//    会被测试域的噪声淹掉——「只挡增量」就变成了「谁大谁说话」。
+//    边界桥白名单对两边**同样**适用：另一头是外部形状（cordis Context / SQL 行 / 上游私有内存）的
+//    断言在测试里也是正当的，不因为在 `__tests__` 里就变成可以随便双断言。
 const doubleAssertions: string[] = [];
+const testDoubleAssertions: string[] = [];
 for (const entry of imports) {
   if (entry.doubleAssert === 0) continue;
-  if (isTestPath(entry.file) || bridgeReason(entry.file) !== undefined) continue;
-  doubleAssertions.push(relative(cwd, entry.file) + "  " + String(entry.doubleAssert) + " 处");
+  if (bridgeReason(entry.file) !== undefined) continue;
+  const line = relative(cwd, entry.file) + "  " + String(entry.doubleAssert) + " 处";
+  (isTestPath(entry.file) ? testDoubleAssertions : doubleAssertions).push(line);
 }
 
 console.log(
@@ -389,6 +398,8 @@ console.log(
     exViolations,
     contractValueEdges,
     doubleAssertions,
+    // 测试域的同一判据（分开计数、分开报）：见 §7 的注释。
+    testDoubleAssertions,
     subentryParentImports,
     // `--write` 要写回的就是这个目录。
     dir: cwd,

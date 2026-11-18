@@ -108,7 +108,16 @@ export function isContractOrEndpointFace(file: string): boolean {
   return /(^|[\\/])src[\\/](contract|endpoint)[\\/]/u.test(file);
 }
 
-/** 测试代码不受双断言白名单限制（测试里装整个应用是正当的）。 */
+/**
+ * 是不是测试代码（`__tests__/**`）。
+ *
+ * 双断言判据按它分成**两条**：生产面是硬门禁（`"double-assertion"`），测试域只降不升
+ * （`"double-assertion-test"`）。两边各记各的基线、各报各的数——测试域的存量比生产面大一个量级，
+ * 合成一条会把生产面的增量淹掉。
+ *
+ * **边界桥白名单对测试域同样适用**（`bridgeReason()` 先判）：另一头是外部形状的断言不因为它在
+ * 测试里就变成正当的。测试只在面边界 / 唯一化 / 扩展边界这几条上豁免（那里装整个应用是正当的）。
+ */
 export function isTestPath(file: string): boolean {
   return /(^|[\\/])__tests__[\\/]/u.test(file);
 }
@@ -168,14 +177,14 @@ export function isAllowedContractValueEdge(specifier: string): boolean {
 }
 
 /**
- * 两条类型纪律判据的**存量基线**（过渡：收敛后删，改回 0 容忍）。
+ * 类型纪律判据的**存量基线**（过渡：收敛后删，改回 0 容忍）。
  *
- * 为什么要有：这两条的存量是**已接受的债**（当前：契约面值边 56 处、白名单外双断言 168 处），
- * 0 容忍会把 `just audit` 长期弄红，判据就没人看了。基线只挡**增量**——超出才红，等于打印当前数，
- * 低于提示下调。
+ * 为什么要有：这几条的存量是**已接受的债**（当前：契约面值边 56 处；白名单外双断言 160 处，
+ * 另有**测试域**同一判据 342 处记在 `"double-assertion-test"`），0 容忍会把 `just audit` 长期弄红，
+ * 判据就没人看了。基线只挡**增量**——超出才红，等于打印当前数，低于提示下调。
  *
- * 删基线的判据：`just audit` 打出来的当前数降到 0（T5 清完契约面值边、T4 清完白名单外的双断言），
- * 然后删掉这里的两条常量与 `summarize.ts` 的 `reportAgainstBaseline`，两条判据改回 `report()` 的 0 容忍。
+ * 删基线的判据：`just audit` 打出来的当前数降到 0（T5 清完契约面值边、T4 清完双断言），
+ * 然后删掉这里的常量与 `summarize.ts` 的 `reportAgainstBaseline`，判据改回 `report()` 的 0 容忍。
  */
 export const TYPE_DISCIPLINE_BASELINE = {
   /** 契约 / 端点面的上游包根值边（T5 收敛）。 */
@@ -187,6 +196,17 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * IPC 参数没有本仓类型面，见 `BRIDGES` 最后一条）——那 4 处此前计在 172 里，进白名单后随之下调。
    */
   "double-assertion": 160,
+  /**
+   * **测试域**（`__tests__/**`）的同一条双断言判据：只降不升。
+   *
+   * 为什么单独一条：测试域的存量（实测 342 处）是生产面（160 处）的两倍多，两边合成一条时
+   * 生产面的增量会被测试域的噪声淹掉，生产面那条「只挡增量」也就失效了。分成两条之后：生产面是
+   * **硬门禁**（红就是红），测试域只挡增量、跟着每个阶段**逐档下调**。
+   *
+   * 边界桥白名单对两边同样适用（`bridgeReason()` 先于分类判）：另一头是外部形状（cordis Context /
+   * SQL 行 / 上游私有内存）的断言在测试里也是正当的，不因为它落在 `__tests__` 里就变成可以随便写。
+   */
+  "double-assertion-test": 342,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */
