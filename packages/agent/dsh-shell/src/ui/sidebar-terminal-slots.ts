@@ -9,7 +9,15 @@ import { TYPERT_REMOTE as TERMINAL_REMOTE } from "@deepseek-ai/dsh-api-terminal-
 import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Locale, Remote, Shortcuts, SidebarRightTabs, Slots, Theme } from "@morlay/zephyr-app/client";
+import {
+  Locale,
+  Remote,
+  Shortcuts,
+  SidebarRight,
+  SidebarRightTabs,
+  Slots,
+  Theme,
+} from "@morlay/zephyr-app/client";
 import { TerminalRemoteService } from "../endpoint/index.ts";
 
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
@@ -50,6 +58,9 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
 
   private readonly shortcuts = inject(Shortcuts);
 
+  /** `SidebarRight` 现在有真面（`SidebarRightFace = Context["sidebarRight"]`），走注入。 */
+  private readonly sidebarRight = inject(SidebarRight);
+
   /** `sidebarRightTabs` 有真面令牌（`SidebarRightTabsFace`），走注入。 */
   private readonly sidebarRightTabs = inject(SidebarRightTabs);
 
@@ -64,7 +75,7 @@ export class SidebarTerminalSlots extends fromCordis(UiSidebarTerminalPlugin) {
       locale: this.locale,
       theme: this.theme,
       shortcuts: this.shortcuts,
-      sidebarRight: read("sidebarRight"),
+      sidebarRight: this.sidebarRight,
       sidebarRightTabs: this.sidebarRightTabs,
       webTerminals: read("webTerminals"),
     });
