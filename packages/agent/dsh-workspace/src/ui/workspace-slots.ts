@@ -6,7 +6,7 @@
 // `contextMenus` 同一口径，也与 `SessionQueryRdb` 读 `agents` 同一套用法）。
 import * as UiWorkspacePlugin from "@deepseek-ai/dsh-client-ui-workspace/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { fromCordis, kFace } from "@morlay/zephyr/compat";
+import { fromCordis } from "@morlay/zephyr/compat";
 import {
   ContextMenus,
   Layout,
@@ -67,19 +67,5 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
       // 带点的名字要按**字面键**给出（`fromCordis` 的 deps 校验逐字匹配）。
       [DIRECTORY_PICKER_REMOTE_KEY]: this.remote,
     });
-    // 上游 `apply` 里 `new UiWorkspaceService(ctx, 'uiWorkspace')` 注册在**行 ctx** 上：兄弟行按名字
-    // 读（`ctx.uiWorkspace`）时看不到，所以要把它显式发布到根 ctx。`kFace` 就是那份上游实例。
-    const uiWorkspace = this[kFace];
-    // 发布按上游协议名走 `reflect.provide`：上游插件按 `ctx.uiWorkspace` 读，而它们的行看不到这一行的
-    // fiber。
-    //
-    // 幂等**必须查根上有没有这个服务**，不能用本行实例字段：`cordis` 的 `reflect.provide` 对同名服务
-    // 直接抛 `service "uiWorkspace" has been registered at <fiber>`，而这一行重挂（或上游自己也发过）
-    // 时那个名字已经在根上——用实例字段就会在第二次发布时撞。
-    // 这一次按名字读是**查重**（与 `adoptNamedServices` 同性质），见 `how-to-write.md`「禁止按名字读服务」的例外清单。
-    const published = ctx.root.reflect.get("uiWorkspace", false);
-    if (uiWorkspace !== undefined && published === undefined) {
-      ctx.root.reflect.provide("uiWorkspace", uiWorkspace);
-    }
   }
 }
