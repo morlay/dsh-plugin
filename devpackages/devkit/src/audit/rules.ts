@@ -154,6 +154,16 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     reason: "cordis Context 兼容桥：本仓 Context / SessionScope → 上游 cordis Context（运行期同一对象）",
   },
   {
+    // 第三方声明面比运行期**窄**的两处，收在一个 testing 文件里：用例仍按运行期形态写，
+    // 收窄只在 `schemastery-limits.ts` 一处（**用例里那些「局部替身」的断言不在这里放行**）。
+    // 另一头是 vendor 里的第三方类型声明：`@deepseek-ai/schemastery` 的 `Schema.description()` 只写
+    // `string`（运行期与我们的 `FieldMeta.description` 都收本地化字典），`.default(value)` 的形参
+    // 不收 `null`（而 schema 里「默认空」就写成 `null`）。vendor 只读，改了上游同步就丢。
+    match: /(^|[\\/])zephyr-ui[\\/]src[\\/]client[\\/]schema-form[\\/]testing[\\/]schemastery-limits\.ts$/u,
+    reason:
+      "schemastery 声明面比运行期窄：`description()` 只写 string（运行期收字典）、`default()` 不收 null",
+  },
+  {
     // 旧格式落盘：`better-session` 的读视图要把**历史 JSON 产物**（v3 及更早，字段名/形状与当前不同）
     // 读成当前的 `SessionHeader` / `SessionEvent[]`。另一头是**盘上已经存在的字节**，不是本仓能重写的域对象。
     // 为什么不能靠迁移解决：迁移链（`@deepseek-ai/dsh-session-format-*`）只在**导入/升级**时跑，且要求整份

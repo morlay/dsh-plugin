@@ -17,6 +17,7 @@ import {
   type SchemaFormState,
 } from "../schema-form/controller.ts";
 import { zh } from "../schema-form/locales.ts";
+import { localizedDescription } from "../schema-form/testing/schemastery-limits.ts";
 import { translateOf } from "../schema-form/testing/translate-stub.ts";
 import css from "../schema-form/schema-form.module.css";
 import { SchemaForm } from "../schema-form/SchemaForm.tsx";
@@ -184,7 +185,7 @@ describe("行式编辑器", () => {
 
   it("schema 的说明画成注释行（在字段行上方）", () => {
     // `description()` 的类型签名只写 string，meta 实际接受字典（与源码同一处放行）。
-    const localized = { zh: "重试次数", en: "retries" } as unknown as string;
+    const localized = localizedDescription({ zh: "重试次数", en: "retries" });
     const schema = z.object({ retry: z.number().description(localized) });
     const { props } = bench(schema, { retry: 1 });
     const { container } = render(<SchemaForm {...props} />);
@@ -896,7 +897,7 @@ describe("与真控制器一起跑", () => {
   });
 
   it("被截断的行内文本 hover 出全文：注释与值都给官方提示气泡", () => {
-    const localized = { zh: "很长的一段说明", en: "long" } as unknown as string;
+    const localized = localizedDescription({ zh: "很长的一段说明", en: "long" });
     const schema = z.object({ note: z.string().description(localized) });
     const { props } = bench(schema, { note: "一个很长的值" });
     const { container } = render(<SchemaForm {...props} />);

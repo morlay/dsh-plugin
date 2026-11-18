@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SchemaDraftModel, type ValidationFailure } from "../schema-form/draft.ts";
 import { projectNode } from "../schema-form/schema-node.ts";
 import { FakeScope } from "../schema-form/testing/fake-scope.ts";
+import { nullDefault } from "../schema-form/testing/schemastery-limits.ts";
 
 type Section = Record<string, unknown>;
 
@@ -326,7 +327,7 @@ it("字段的默认值是 `null`（会话模式的 `defaultModel` 那种写法�
     z.object({
       defaultModel: z
         .object({ provider: z.string(), model: z.string() })
-        .default(null as unknown as never),
+        .default(nullDefault()),
     }),
   );
 

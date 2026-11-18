@@ -68,6 +68,15 @@ describe("bridgeReason（双断言白名单）", () => {
     expect(bridgeReason("packages/zephyr/zephyr/src/token.ts")).toBeUndefined();
   });
 
+  it("schemastery 的声明面收窄点只覆盖那一个 testing 文件", () => {
+    expect(
+      bridgeReason("packages/zephyr/zephyr-ui/src/client/schema-form/testing/schemastery-limits.ts"),
+    ).toContain("schemastery");
+    // 用例里那些「局部替身」的断言照报：白名单只放行第三方声明面的那一处收窄。
+    expect(
+      bridgeReason("packages/zephyr/zephyr-ui/src/client/__tests__/editor.spec.tsx"),
+    ).toBeUndefined();
+  });
   it("同名不同包也认（只按 `src/` 之后那一段判）", () => {
     expect(bridgeReason("packages/agent/dsh-x/src/bootstrap.ts")).toContain("cordis Context");
     expect(bridgeReason("src/bootstrap.ts")).toContain("cordis Context");
