@@ -26,6 +26,7 @@ import { provideSkillUi } from "@morlay/dsh-skill/ui";
 import { provideConversationUi, provideSessions } from "@morlay/dsh-conversation/ui";
 import { provideWorkspaceUi } from "@morlay/dsh-workspace/ui";
 import { provideDeliverablesUi } from "@morlay/dsh-conversation/ui";
+import { provideAgentTeamUi } from "@morlay/dsh-agent-team/ui";
 import { provideFileUploadUi } from "@morlay/dsh-upload/ui";
 import { provideSessionModeUi } from "@morlay/session-mode/ui";
 import { provideBetterSessionUi } from "@morlay/better-session/ui";
@@ -120,6 +121,11 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
     // 所以必须排在 `provideSessionSlots()` 与 `provideSessionShellSlots()` 之后。
     ...provideSessionModeUi(),
     ...provideBetterSessionUi(),
+    // Agent Teams 的浏览器半：模型选择那一行的「团队模式」开关（`conversation.input.model.options`）
+    // + 团队消息卡（`conversation.chat.commandview` 的 `team`）+ 关闭确认（`shell.overlay`）。
+    // 宿主半 `provideAgentTeam()` 已在 `zephyr.provide.ts` 里（`agentTeams` 服务 + 团队工具行），
+    // 这里只补 UI——两者缺一，模型选择里就看不到那个开关。
+    ...provideAgentTeamUi(),
     // 桌面形态的内嵌浏览器面板（右栏一页）：网页容器由壳的主进程建，这里只是入口与地址栏。
     // 非桌面宿主里没有 `__DSH_BROWSER_PANE__`，正文退化成一块空占位（不报错）。
     ...provideDesktopPanelUi(),
