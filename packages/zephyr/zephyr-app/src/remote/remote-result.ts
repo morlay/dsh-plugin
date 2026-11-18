@@ -10,6 +10,15 @@ export interface RemoteFailureWire {
   readonly code: string;
   readonly message: string;
   readonly details: unknown;
+  /**
+   * 人读的一行（`${code}: ${message}`）。
+   *
+   * 上游消费面按 `error instanceof Error ? error.message : String(error)` 兜底，失败面不是 `Error`，
+   * 所以它**必须**自带字符串化——否则用户看到的是 `[object Object]`（终端那条 `posix_openpt failed`
+   * 就是这样丢的）。不可枚举：wire 上仍只有上面三个字段。
+   * @returns 一行失败描述。
+   */
+  toString(): string;
 }
 
 /** 上游 wire 上的结果面。 */
