@@ -27,6 +27,7 @@ export {
   kFace,
   kMounted,
   kProvider,
+  kRowOwner,
   providerOfPlugin,
   rowNameOf,
   tokenMetaOf,

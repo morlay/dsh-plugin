@@ -16,6 +16,7 @@ import {
   kAdapted,
   kFace,
   kMounted,
+  kRowOwner,
   providerOfPlugin,
   rowNameOf,
   tokenMetaOf,
@@ -66,6 +67,9 @@ export async function bootstrapApplication<const L extends ProviderList>(
   const ctx = new CordisContext();
   // 诊断快照：装配过程一直在写，`app.get(Debugger).diagnostics()` 读到的就是最终结果。
   let snapshot: DebugSnapshot = { rows: [], names: [], tokens: [] };
+  // 令牌表：单值 / 多值。per-agent 的装行能力要能在装每一行时读它（应用根的服务对它可见）。
+  const instances = new Map<object, unknown>();
+  const multi = new Map<object, unknown[]>();
   const declared = options.providers.map((entry) => entryOf(entry));
   // 按 scope 分两份：带 scope 的行**不装应用根**，交给宿主在它指定的 ctx 上装（agent 域就是每个
   // agent 的 `agentCtx`）。清单顺序就是同一 scope 下的装配顺序。
@@ -78,7 +82,12 @@ export async function bootstrapApplication<const L extends ProviderList>(
     // 装行能力本身是装配器的产物，不在调用方的清单里：只有没显式给替身时才追加。
     ...(declared.includes(ScopedRows as unknown as ReturnType<typeof entryOf>)
       ? []
-      : [{ provide: ScopedRows as unknown as object, useValue: new ScopedRowsDefault(scoped) }]),
+      : [
+          {
+            provide: ScopedRows as unknown as object,
+            useValue: new ScopedRowsDefault(scoped, instances, multi),
+          },
+        ]),
     // 默认条目只在清单里**没有**该令牌时追加：装配面要替换（测试替身、`without`）时以清单为准。
     ...(declared.includes(Debugger as unknown as ReturnType<typeof entryOf>)
       ? []
@@ -96,8 +105,6 @@ export async function bootstrapApplication<const L extends ProviderList>(
         ]),
   ];
   const rowState: { name: string; state: "started" | "failed"; reason?: string }[] = [];
-  const instances = new Map<object, unknown>();
-  const multi = new Map<object, unknown[]>();
   const rows: Array<{
     readonly name: string;
     readonly token: object;
@@ -248,10 +255,7 @@ export async function mountRow(
   provider: Newable<unknown>,
   config?: unknown,
 ): Promise<{ readonly instance: unknown; dispose(): Promise<void> }> {
-  const normalizer = (provider as { Config?: (input?: unknown) => unknown }).Config;
-  const normalized = typeof normalizer === "function" ? normalizer(config) : config;
-  const ctor = provider as unknown as new (config?: unknown) => unknown;
-  const instance = normalized === undefined ? new ctor() : new ctor(normalized);
+  const instance = createRow(provider, config);
   const mounted = await mountInstance(
     ctx as unknown as CordisContext,
     rowNameOf(provider),
@@ -261,6 +265,21 @@ export async function mountRow(
     (meta) => (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(meta.name, false),
   );
   return { instance, dispose: mounted.dispose };
+}
+
+/**
+ * 按 Provider 的 `Config` 造一个行实例。
+ *
+ * 单行装配（`mountRow`）与 per-agent 装配共用它——「怎么把清单条目变成一个实例」只有一处。
+ * @param provider - Provider 类。
+ * @param config - 行配置（`Config` 规范化后交给构造函数）。
+ * @returns 实例。
+ */
+function createRow(provider: Newable<unknown>, config?: unknown): unknown {
+  const normalizer = (provider as { Config?: (input?: unknown) => unknown }).Config;
+  const normalized = typeof normalizer === "function" ? normalizer(config) : config;
+  const ctor = provider as unknown as new (config?: unknown) => unknown;
+  return normalized === undefined ? new ctor() : new ctor(normalized);
 }
 
 /**
@@ -295,10 +314,13 @@ async function mountInstance(
   const fiber = parent.plugin({
     name,
     apply: async (child: CordisContext) => {
+      // 行 ctx 顺手记下**装它的那个 ctx**：事件绑行 ctx（scope 精确到这一行），适配行注册服务时用父 ctx
+      // 当 owner fiber（同 scope 的兄弟行才读得到，见 `kRowOwner`）。
+      const row = (child as unknown as Context).extend({ [kRowOwner]: parent });
       // 事件作为**字段**时也要拿到本行 ctx：`@Injectable()` 的类上写
       // `readonly flush$ = new SessionFlush()`，`onInit` 不会自己跑——在这里统一绑定。
-      bindEvents(instance, child as unknown as Context);
-      await lifecycle.onInit?.(child as unknown as Context);
+      bindEvents(instance, row);
+      await lifecycle.onInit?.(row);
       return typeof lifecycle.onDispose === "function" ? () => lifecycle.onDispose?.() : undefined;
     },
   });
@@ -572,11 +594,16 @@ function assertShape(meta: ReturnType<typeof tokenMetaOf>, mode: string, instanc
 /**
  * 按 scope 分组的行：装配器交给宿主的装行能力。
  *
- * 行清单在装配期就固定了（Provider 自己声明的 scope），这里只按 scope 分桶、按清单顺序装——
- * 同一个 ctx 上后装的行读得到先装的行的服务，与清单顺序同义。
+ * 行清单在装配期就固定了（Provider 自己声明的 scope），这里按 scope 分桶、按清单顺序装。
+ * **注入查的是「这一层」的令牌表**（应用根现有条目 + 这一层已经装上的行）：按名字读不到适配行的
+ * 服务（上游自己注册的名字与契约派生名不同），也读不到兄弟行刚装上的那一份——这正是多行装配
+ * 一直用令牌表的原因。同一个 ctx 上后装的行读得到先装的行的服务，与清单顺序同义。
  */
 class ScopedRowsDefault extends ScopedRows {
-  private readonly byScope = new Map<symbol, Array<{ provider: Newable<unknown>; config?: unknown }>>();
+  private readonly byScope = new Map<
+    symbol,
+    Array<{ provider: Newable<unknown>; config?: unknown }>
+  >();
 
   constructor(
     rows: readonly {
@@ -584,6 +611,9 @@ class ScopedRowsDefault extends ScopedRows {
       readonly provider: Newable<unknown>;
       readonly config?: unknown;
     }[],
+    /** 应用根的令牌表（per-agent 行读得到根上的服务）。 */
+    private readonly appInstances: ReadonlyMap<object, unknown>,
+    private readonly appMulti: ReadonlyMap<object, unknown[]>,
   ) {
     super();
     for (const { scope, provider, config } of rows) {
@@ -598,6 +628,28 @@ class ScopedRowsDefault extends ScopedRows {
   }
 
   async install(scope: symbol, ctx: Context): Promise<void> {
-    for (const row of this.byScope.get(scope) ?? []) await mountRow(ctx, row.provider, row.config);
+    const instances = new Map<object, unknown>(this.appInstances);
+    const multi = new Map<object, unknown[]>(this.appMulti);
+    for (const plan of this.byScope.get(scope) ?? []) {
+      const instance = createRow(plan.provider, plan.config);
+      const meta = tokenMetaOf(plan.provider as unknown as object);
+      if (meta.multi) {
+        const list = multi.get(meta.token) ?? [];
+        list.push(instance);
+        multi.set(meta.token, list);
+      } else {
+        instances.set(meta.token, instance);
+      }
+      const row = {
+        name: rowNameOf(plan.provider),
+        token: meta.token as object,
+        instance: instance as Lifecycle & object,
+      };
+      await mountInstance(ctx as CordisContext, row.name, instance, (target, mode) =>
+        mode === "all" ? (multi.get(target.token) ?? []) : instances.get(target.token),
+      );
+      // 适配行的契约面在 `onInit` 之后才有：立刻换进这一层的表，后面的行才拿得到。
+      bindFace(ctx as CordisContext, row, instances);
+    }
   }
 }

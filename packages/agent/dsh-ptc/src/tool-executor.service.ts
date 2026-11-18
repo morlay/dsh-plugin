@@ -14,14 +14,17 @@
 // 上游类按 cordis ctx 语义写，`fromCordis` 的 `mount` 把 deps 放进这一行的作用域，
 // 上游才读得到 `ctx.tools` / `ctx.systemPrompt` / `ctx.ptcRuntime`。
 //
-// **一个 scope 只能有一个执行器**（上游 `setExecutor` 抛 `Only one tool executor may be registered`）：
-// 本行是**根作用域**的部署默认执行器，装上它就等于把部署的执行器选成 PTC——所以装配面不能再装 native 那一行。
+// **一个 scope 只能有一个执行器**（上游 `setExecutor` 抛 `Only one tool executor may be registered in each
+// scope`）：这一行声明了 `@AgentScoped()`，执行器装进**每个 agent 的 scope**——上游的 `setExecutor` /
+// `selectExecutor` 本来就按 `scopeOf(ctx)` 分层，agent 选最近的自己那一份，root 的 native 不影响它。
 import * as PtcExecutorPlugin from "@deepseek-ai/dsh-tool-executor-ptc";
 import { SystemPrompt, ToolRegistry } from "@morlay/dsh-agent";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { PtcRuntime } from "./contract/ptc-runtime.contract.ts";
+import { AgentScoped } from "@morlay/dsh-agent";
 
+@AgentScoped()
 @Injectable()
 export class ToolExecutorPtc extends fromCordis(PtcExecutorPlugin) {
   tools = inject(ToolRegistry);

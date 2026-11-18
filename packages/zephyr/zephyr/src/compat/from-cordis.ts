@@ -8,6 +8,7 @@ import {
   kAdapted,
   kFace,
   kMounted,
+  kRowOwner,
   tokenMetaOf,
 } from "@morlay/zephyr";
 
@@ -352,10 +353,15 @@ export function fromCordis(
         // `Service` 子类的注册发生在构造里（`super(ctx, name)`），直接 new 比走 cordis 的
         // 插件调度更确定：后者把构造排到队列里，`mount` 返回时可能还没注册。
         // 构造里读依赖同样要走 deps 替换（否则 `static inject` 的访问检查直接抛）。
-        // **注册落点用根 ctx**：`super(ctx, name)` 把 owner fiber 记成传进来的 ctx，兄弟行沿 fiber
-        // 链到 root 才找得到；用行 ctx 构造的话，服务只在这一行的 fiber 上，别处读它就是
-        // `cannot get property "x" without inject`（`remoteAccess` / `sessions` 这类跨行读法很常见）。
-        const owner = (cordis as unknown as { root?: CordisContext }).root ?? cordis;
+        // **注册落点用「装这一行的那个 ctx」（`kRowOwner`）**：`super(ctx, name)` 把 owner fiber 记成
+        // 传进来的 ctx，兄弟行要沿 fiber 链找到它。装配器装到哪一层，服务就属于哪一层——应用根的行
+        // 用根（跨行读得到，`remoteAccess` / `sessions` 这类读法很常见）；`@AgentScoped()` 的行用
+        // 该 agent 的 `agentCtx`（同 agent 的兄弟行读得到，别的 agent 与根读不到）。直接
+        // `mount(ctx)`、没经装配器时回落 `ctx.root`，与既有行为一致。
+        const owner =
+          (cordis as unknown as { [kRowOwner]?: CordisContext })[kRowOwner] ??
+          (cordis as unknown as { root?: CordisContext }).root ??
+          cordis;
         const instance = new upstream(
           withDeps(owner, deps, () => {}),
           effective,

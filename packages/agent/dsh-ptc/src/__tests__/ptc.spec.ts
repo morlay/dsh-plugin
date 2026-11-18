@@ -2,18 +2,26 @@
 //
 // 判据是「运行时真的接管了令牌，并且它要的四个依赖都在同一个装配里」：PTC 的调用面要活会话与
 // 真实进程，装配面能守的是这几条线的接线。
+//
+// 两行都声明了 `@AgentScoped()`（运行时**按 agent 一份**），所以断言走 `AgentScopedRows.install`：
+// 装进某个 scope 的 ctx 之后从那个 ctx 读——这正是 agent 创建处做的事。
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import NodePtcRuntimeService from "@deepseek-ai/dsh-ptc-runtime-node";
-import { SystemPromptDefault, ToolRegistryDefault } from "@morlay/dsh-agent";
+import {
+  AgentScopedRows,
+  AgentScopedRowsDefault,
+  SystemPromptDefault,
+  ToolRegistryDefault,
+} from "@morlay/dsh-agent";
 import { FileSystem } from "@morlay/dsh-fs";
 import { PtcRuntime, providePtc } from "@morlay/dsh-ptc";
 import { provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { Subprocess } from "@morlay/dsh-shell";
 import { provideShell } from "@morlay/dsh-shell/server";
-import { bootstrapApplication, type App, configure } from "@morlay/zephyr";
+import { bootstrapApplication, type App, configure, type Context } from "@morlay/zephyr";
 import { afterEach, describe, expect, it } from "vitest";
 
 const opened: App[] = [];
@@ -38,6 +46,8 @@ async function boot(): Promise<App> {
       // 执行器那一行要注册表与提示词面：它把模型面收成 `run_code`，两条 section 也注册在提示词上。
       SystemPromptDefault,
       ToolRegistryDefault,
+      // per-agent 行的装行能力：任何装了 `@AgentScoped()` 行的装配都要有它（agent 骨架里也带一条）。
+      AgentScopedRowsDefault,
       ...providePtc(),
     ],
     timeoutMs: 30_000,
@@ -46,10 +56,23 @@ async function boot(): Promise<App> {
   return app;
 }
 
+/**
+ * 造一个「某个 agent 的 scope」：从应用根派生，于是读得到根上的依赖（fs / subprocess / sandbox）。
+ * @param app - 装配结果。
+ * @returns 派生的 scope ctx。
+ */
+function freshScope(app: App): Context {
+  return (app.ctx as Context).extend();
+}
+
 describe("ptc 域", () => {
   it("令牌由上游 `NodePtcRuntimeService` 兑现", { timeout: 30_000 }, async () => {
     const app = await boot();
-    expect(app.get(PtcRuntime)).toBeInstanceOf(NodePtcRuntimeService);
+    const scope = freshScope(app);
+    await app.get(AgentScopedRows).install(scope);
+    // 上游把自己注册成 `ptcRuntime`（它的 `static inject` 就用这个名字读依赖）：
+    // 装进这个 scope 之后，读得到的是那一份真实例。
+    expect(scope.get("ptcRuntime")).toBeInstanceOf(NodePtcRuntimeService);
   });
 
   it(
@@ -57,9 +80,11 @@ describe("ptc 域", () => {
     { timeout: 30_000 },
     async () => {
       const app = await boot();
+      const scope = freshScope(app);
+      await app.get(AgentScopedRows).install(scope);
       expect(app.get(FileSystem)).toBeDefined();
       expect(app.get(Subprocess)).toBeDefined();
-      expect(app.tryGet(PtcRuntime)).toBeDefined();
+      expect(scope.get("ptcRuntime")).toBeInstanceOf(NodePtcRuntimeService);
     },
   );
 });

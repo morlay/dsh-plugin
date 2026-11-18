@@ -328,6 +328,15 @@ export const kMounted = Symbol.for("morlay.zephyr.mounted");
 export const kProvider = Symbol.for("morlay.zephyr.provider");
 
 /**
+ * 行 ctx 上记的「装这一行的那个 ctx」（父级）。
+ *
+ * 装配器在行 ctx 上写它：**事件**绑在行 ctx 上（scope 精确到这一行），而适配行注册**服务**时用父 ctx
+ * 当 owner fiber——同一个 scope 里的兄弟行沿 fiber 链才读得到，别的 scope 读不到。缺省（直接
+ * `mount(ctx)`、没经装配器）回落 `ctx.root`，与既有行为一致。
+ */
+export const kRowOwner = Symbol.for("morlay.zephyr.row-owner");
+
+/**
  * 插件对象背后是不是 Provider（装配清单据此识别）。
  * @param value - 待判断的值。
  * @returns Provider 类，或 `undefined`。
