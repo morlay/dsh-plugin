@@ -4,7 +4,7 @@
 //   客户端 `{ type:'open', streamId, endpoint:'<ns>/<method>', payload }`
 //   宿主   `{ type:'item', streamId, value }`（结果）→ `{ type:'end' }`
 // 这里只抽象成 `invoke()`：实现可以是 mux（生产）、内存（测试）。
-import type { Connection } from "../../connection/contract.ts";
+import type { Connection } from "@morlay/zephyr-app/contract";
 
 /** 一次 remote 调用。 */
 export interface RemoteTransport {

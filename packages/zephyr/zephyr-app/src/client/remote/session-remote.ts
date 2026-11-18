@@ -2,7 +2,7 @@
 //
 // 与上游的对齐全在 `@RemoteGroup`/`@Remote` 的转发里（通用模块），业务只调契约方法。
 import { inject } from "@morlay/zephyr";
-import { Remote as RemoteContract } from "../../remote/remote.contract.ts";
+import { Remote as RemoteContract } from "@morlay/zephyr-app/contract";
 import { Remote, RemoteGroup } from "../../remote/decorators.ts";
 import { remoteMethodOf } from "./dynamic-face.ts";
 

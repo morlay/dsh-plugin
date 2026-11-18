@@ -14,7 +14,7 @@
 import { bootstrapApplication, type App, type ProviderEntry } from "@morlay/zephyr";
 import { BootPage } from "./app-boot/boot-page.ts";
 import { UiRenderer } from "./renderer/ui-renderer.contract.ts";
-import { Remote } from "../remote/remote.contract.ts";
+import { Remote } from "@morlay/zephyr-app/contract";
 
 /** 装配输入。 */
 export interface BootstrapClientOptions {

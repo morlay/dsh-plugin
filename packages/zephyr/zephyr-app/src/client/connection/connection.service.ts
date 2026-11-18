@@ -4,7 +4,7 @@
 // 上游实现把它们和认证、全局 transport 钩子缠在一起，且实测 `ctx.provide` 没进我们的作用域——
 // 与其猜，不如按契约自己实现：同源 HTTP + WebSocket，`rpc.open` 走 fetch。
 import { Injectable, type OnInit } from "@morlay/zephyr";
-import { Connection } from "../../connection/contract.ts";
+import { Connection } from "@morlay/zephyr-app/contract";
 
 /** RPC 载体：`open(channel, endpoint, payload)` 走同源 HTTP POST。 */
 interface RpcFace {

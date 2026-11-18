@@ -1,6 +1,6 @@
 // 远端访问决策契约（上游 `RemoteAccessService` 的服务面）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type RemoteAccessService from "@deepseek-ai/dsh-api-remote-access";
 
 @Injectable()

@@ -6,7 +6,7 @@
 //
 // 对 `@deepseek-ai/dsh-credentials` 只有 **type-only** 依赖（仅为推导签名），无运行时耦合。
 import type { CredentialProvider } from "@deepseek-ai/dsh-credentials";
-import { AssertCovered, AssertTrue } from "../contract-coverage.ts";
+import type { AssertCovered, AssertTrue } from "../contract-coverage.ts";
 import { Injectable } from "@morlay/zephyr";
 
 /**

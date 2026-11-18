@@ -7,8 +7,8 @@
 //
 // 少了这一层，每个领域都要自己 for-await 一条流、自己写 seq 比较——就会各自写出"偶尔回退"的时序 bug。
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
-import { Remote } from "../../remote/remote.contract.ts";
-import { Connection } from "../../connection/contract.ts";
+import { Remote } from "@morlay/zephyr-app/contract";
+import { Connection } from "@morlay/zephyr-app/contract";
 import { remoteNamespaceOf } from "../remote/dynamic-face.ts";
 import { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";
 

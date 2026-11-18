@@ -7,13 +7,13 @@ export * from "./provide.ts";
 export * from "./bootstrap-client.ts";
 // 契约覆盖判据（`AssertCovered` / `AssertTrue`）：**只有类型**，浏览器半的契约也用它守「上游有而契约没列的成员」。
 // 从包根进 = 拖宿主图（`home-paths` / 装配链），所以浏览器半从这里取。
-export type { AssertCovered, AssertTrue, Uncovered } from "../contract-coverage.ts";
-export * from "../connection/contract.ts";
+export type { AssertCovered, AssertTrue, Uncovered } from "@morlay/zephyr-app/contract";
+export * from "@morlay/zephyr-app/contract";
 export { provideClientConnection } from "./connection/provide.ts";
 export { ClientConnectionDefault } from "./connection/connection.service.ts";
-export * from "../remote/remote.contract.ts";
+export * from "@morlay/zephyr-app/contract";
 // unary 的结果封装（纯类型）：界面拿远程方法的返回形状时用它，不必经宿主面 `@morlay/zephyr-app/remote`。
-export type { RemoteFailureWire, RemoteResultWire } from "../remote/remote-result.ts";
+export type { RemoteFailureWire, RemoteResultWire } from "@morlay/zephyr-app/contract";
 export * from "./remote/session-remote.ts";
 export * from "./remote/remote-transport.ts";
 export * from "./remote/provide.ts";

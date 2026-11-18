@@ -3,7 +3,7 @@
 // **覆盖守卫**：上游服务面有而本契约没列出的成员，编译期必须为空——契约少一条，
 // 上游 `ApiSessionController` 会在用到它的那一刻读到 `undefined`（装的时候什么都看不出来）。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type TypertRegistry from "@deepseek-ai/dsh-typert-registry";
 
 @Injectable()

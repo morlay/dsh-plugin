@@ -16,7 +16,7 @@ export { provideAppEnv } from "./app-env/provide.ts";
 export * from "./app-env/app-env.contract.ts";
 export * from "./api-gateway/remote-handlers.contract.ts";
 export * from "./credentials/credentials.contract.ts";
-export * from "./contract-coverage.ts";
+export type { AssertCovered, AssertTrue, Uncovered } from "./contract-coverage.ts";
 // 三条**空契约**：前端资产怎么出、开发态何时换树、换树前谁还算忙。**只声明、不含实现**——
 // dev 的实现住在开发运行时那个包；prod 的实现是静态目录投递（`StaticClientAssets`，不引构建链）。
 export * from "./client-assets/client-assets.contract.ts";

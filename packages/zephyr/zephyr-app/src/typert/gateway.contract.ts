@@ -8,7 +8,7 @@
 // 不实现的东西（上游 `api/gateway` 里另外几块）：`/api` 的 HTTP 路由与 `admitConnection` 的准入。
 // 那条路要 `BrowserAuth`（launch token + 签名 cookie），而我们的载体是自研 mux，准入由它自己做。
 import { Injectable } from "@morlay/zephyr";
-import { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type { TypertGateway as UpstreamGateway } from "@deepseek-ai/dsh-api-gateway";
 
 /**

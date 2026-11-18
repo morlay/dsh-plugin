@@ -4,7 +4,7 @@
 // 中间靠 `api-gateway` 的 HTTP 通道（`/api/remote.mux`）连起来。
 import { TYPERT_REMOTE } from "@deepseek-ai/dsh-api-session-controller/remote";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
-import { Remote } from "../../remote/remote.contract.ts";
+import { Remote } from "@morlay/zephyr-app/contract";
 
 @Injectable()
 export class SessionRemoteBinding implements OnInit {

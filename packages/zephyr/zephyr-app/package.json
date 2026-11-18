@@ -12,6 +12,7 @@
     ".": "./src/index.ts",
     "./package.json": "./package.json",
     "./client": "./src/client/index.ts",
+    "./contract": "./src/contract/index.ts",
     "./remote": "./src/remote/index.ts",
     "./testing": "./src/testing/index.ts",
     "./client/remote": "./src/client/remote/index.ts",

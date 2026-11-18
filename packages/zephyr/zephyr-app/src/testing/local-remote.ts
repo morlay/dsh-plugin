@@ -6,7 +6,7 @@
 // `upstream` 是动态代理，不写死任何 namespace —— 装了哪些 `@RemoteGroup` 就能走哪些组。
 import { inject, Injectable } from "@morlay/zephyr";
 import { RemoteHandlers } from "../api-gateway/remote-handlers.contract.ts";
-import { Remote } from "../remote/remote.contract.ts";
+import { Remote } from "@morlay/zephyr-app/contract";
 
 /** 客户端半：`remote.upstream.<group>.<method>(request)` → `handlers.invoke("<group>/<method>", { request })`。 */
 /** 一个 namespace 的调用面：`remote.<namespace>.<method>(request)`。 */

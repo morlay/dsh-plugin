@@ -5,9 +5,9 @@
 // 这里按契约直接实现：`$mount` 只登记 descriptor，`remote.<ns>` 由 Proxy 按 descriptor 组请求，
 // 请求走 `connection.rpc.open('/api', '<ns>/<method>', args)`（与上游同一条 wire 通道）。
 import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { Connection } from "../../connection/contract.ts";
-import { Remote } from "../../remote/remote.contract.ts";
-import { failureOf } from "../../remote/remote-result.ts";
+import { Connection } from "@morlay/zephyr-app/contract";
+import { Remote } from "@morlay/zephyr-app/contract";
+import { failureOf } from "@morlay/zephyr-app/contract";
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
 import { muxTransport, type RemoteTransport } from "./remote-transport.ts";
 

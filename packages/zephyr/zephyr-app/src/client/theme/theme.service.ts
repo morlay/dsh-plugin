@@ -2,7 +2,7 @@ import * as ThemePlugin from "@deepseek-ai/dsh-client-ui-theme/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale } from "../locale/locale.contract.ts";
-import { Remote } from "../../remote/remote.contract.ts";
+import { Remote } from "@morlay/zephyr-app/contract";
 import { Slots } from "../renderer/slots.contract.ts";
 import { ConfigForms } from "../settings/config-forms.contract.ts";
 import { Theme } from "./theme.contract.ts";
