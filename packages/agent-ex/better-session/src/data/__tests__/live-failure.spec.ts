@@ -1,3 +1,4 @@
+import { Events } from "@morlay/dsh-session";
 import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { describe, expect, it } from "vitest";
 import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
@@ -57,7 +58,11 @@ describe("live 会话的持久化失败态", () => {
       const error = logs.find((entry) => entry.type === "error");
       expect(error?.message).toContain("will not be persisted");
 
-      ctx.emit("session/event", live, oneTurnLog()[0] as SessionEvent);
+      // 走令牌而不是事件名字符串：`EventEmitter` 依赖装配期注入的 ctx（`onInit` 填 `bus`），
+      // 所以这里按它自己的生命周期把 ctx 交给它，再 emit。
+      const appended = new Events.SessionEventAppended();
+      appended.onInit(ctx);
+      appended.emit(live, oneTurnLog()[0] as SessionEvent);
       await waitFor(() => logs.some((entry) => entry.message.includes("dropping events")));
       expect(logs.map((entry) => entry.message).join("\n")).toContain("dropping events");
 
