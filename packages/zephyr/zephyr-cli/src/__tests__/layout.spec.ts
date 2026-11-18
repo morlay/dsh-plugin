@@ -22,9 +22,10 @@ describe("产物布局", () => {
   });
 
   it("旧的 dist / runtime / entry / cache 不再是布局的一部分（可分发的一份应用里没有它们）", () => {
-    const layout = layoutOf("/w", undefined, "Demo") as unknown as Record<string, unknown>;
+    const layout = layoutOf("/w", undefined, "Demo");
     for (const gone of ["dist", "runtime", "entry", "cache"]) {
-      expect(layout[gone], gone).toBeUndefined();
+      // 「不再是布局的一部分」= 连键都没有（比「值为 undefined」更强）。
+      expect(Object.hasOwn(layout, gone), gone).toBe(false);
     }
   });
 });

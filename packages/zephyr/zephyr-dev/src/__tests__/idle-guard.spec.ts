@@ -2,7 +2,7 @@
 //
 // 本包不声明 `IdleGuard`（契约在 `@morlay/zephyr-app`），所以这条用例走真装配：
 // 装一条实现，断言 `ServerHmr` 通过 `inject.all` 收到它，并在它说忙时把换树按住。
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
+import { bootstrapApplication, Injectable, stub } from "@morlay/zephyr";
 import { IdleGuard, MuxServer } from "@morlay/zephyr-app";
 import { describe, expect, it, vi } from "vitest";
 import { ServerHmr } from "../internal/server-hmr.ts";
@@ -25,10 +25,7 @@ class FakeGuard extends IdleGuard {
 }
 
 /** 传输层替身：没有在途调用。 */
-const MUX = {
-  provide: MuxServer,
-  useValue: { inFlight: () => 0 },
-} as unknown as never;
+const MUX = { provide: MuxServer, useValue: stub(MuxServer, { inFlight: () => 0 }) };
 
 describe("IdleGuard 的装配面", () => {
   it("域登记的那条被 `ServerHmr` 收下：它说忙就不换树", async () => {

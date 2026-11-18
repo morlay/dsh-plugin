@@ -65,7 +65,7 @@ function mounted(
     t,
     validate: (schema, value) => {
       try {
-        (schema as unknown as (input: unknown) => unknown)(value);
+        Reflect.apply(schema as Function, undefined, [value]);
         return undefined;
       } catch (error) {
         return failureOf(error);

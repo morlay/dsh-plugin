@@ -277,7 +277,7 @@ describe("装配的最小闭环", () => {
     }
 
     const app = await bootstrapApplication({
-      providers: [{ provide: Config as unknown as object, useValue: { port: 4321 } }, ReadsConfig],
+      providers: [{ provide: Config, useValue: { port: 4321 } }, ReadsConfig],
     });
     try {
       expect(app.get(ReadsConfig).config.port).toBe(4321);
