@@ -1,7 +1,7 @@
 {
   "name": "@morlay/zephyr-ui",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.2.0-alpha.0",
+  "private": false,
   "description": "对话 UI 与设置页共用的基础面：官方基础组件的统一出口、布局原语、控件、按 schema 生成的行配置页，以及 host 与 client 共用的引用解析与渲染。普通库，不是装配行。",
   "keywords": [
     "client",
@@ -14,12 +14,31 @@
     "type": "git",
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/client/index.ts",
     "./reference": "./src/index.ts",
     "./brand-font.css": "./src/styles/brand-font.css",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./reference": {
+        "types": "./dist/reference.d.mts",
+        "default": "./dist/reference.mjs"
+      },
+      "./brand-font.css": "./src/styles/brand-font.css",
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
@@ -44,6 +63,6 @@
     "@types/mdast": "^4.0.4"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

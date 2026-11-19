@@ -1,7 +1,7 @@
 {
   "name": "@morlay/zephyr-cli",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.2.0-alpha.0",
+  "private": false,
   "description": "zephyr 的命令行：按 zephyr 装配清单注册命令，`dev` 起开发形态、`build` 产出静态面与运行时闭包、`preview` 跑产物；桌面命令由插件包追加。",
   "keywords": [
     "cli",
@@ -45,10 +45,6 @@
       "./package.json": "./package.json"
     }
   },
-  "scripts": {
-    "build": "pnpm exec tsdown",
-    "prepublishOnly": "pnpm run build"
-  },
   "dependencies": {
     "@morlay/dsh-oxc-node": "workspace:^",
     "@morlay/zephyr": "workspace:^",
@@ -63,7 +59,7 @@
     "vite": "^8.3.1"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3",
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3",
     "node": ">=24.11.0"
   }
 }

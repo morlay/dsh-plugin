@@ -1,8 +1,13 @@
 {
   "name": "@morlay/dsh-session",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "会话核心：存储、投影、查询、token 计量与浏览器侧会话数据面；标题、检查点等子域在各自包里。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -12,6 +17,35 @@
     "./server": "./src/server/index.ts",
     "./endpoint": "./src/endpoint/index.ts",
     "./ui": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./endpoint": {
+        "types": "./dist/endpoint.d.mts",
+        "default": "./dist/endpoint.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -33,6 +67,6 @@
   },
   "devDependencies": {},
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

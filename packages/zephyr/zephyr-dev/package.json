@@ -1,7 +1,7 @@
 {
   "name": "@morlay/zephyr-dev",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.2.0-alpha.0",
+  "private": false,
   "description": "zephyr 的开发运行时与构建器：前端动态构建 / HMR、后端换树、联邦预编译与产物落盘；在 @morlay/zephyr-app 的运行时之上扩展。",
   "keywords": [
     "build",
@@ -31,9 +31,34 @@
     "./federation/prebundle": "./src/federation/prebundle.ts",
     "./federation/prebundle-plan": "./src/federation/prebundle-plan.ts"
   },
-  "scripts": {
-    "build": "pnpm exec tsdown",
-    "prepublishOnly": "pnpm run build"
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./node": {
+        "types": "./dist/node.d.mts",
+        "default": "./dist/node.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./build": {
+        "types": "./dist/build.d.mts",
+        "default": "./dist/build.mjs"
+      },
+      "./federation/prebundle": {
+        "types": "./dist/federation/prebundle.d.mts",
+        "default": "./dist/federation/prebundle.mjs"
+      },
+      "./federation/prebundle-plan": {
+        "types": "./dist/federation/prebundle-plan.d.mts",
+        "default": "./dist/federation/prebundle-plan.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@morlay/zephyr": "workspace:^",
@@ -45,5 +70,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.5.0"
+  },
+  "engines": {
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

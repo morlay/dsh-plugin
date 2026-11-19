@@ -1,12 +1,26 @@
 {
   "name": "@morlay/dsh-attachment",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "附件存储后端：会话里的图片与文件在此落盘、回读，存储根跟随 DSH_HOME 与配置。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-attachment": "workspace:^",
@@ -18,6 +32,6 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

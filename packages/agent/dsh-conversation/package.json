@@ -1,8 +1,13 @@
 {
   "name": "@morlay/dsh-conversation",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "对话域（BFF）：会话界面（ui 面）+ 端点聚合（会话端点 / 会话引用 / 文件引用 / 日程）。只依赖 dsh-* 能力包与 zephyr*。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,6 +16,31 @@
     "./package.json": "./package.json",
     "./server": "./src/server/index.ts",
     "./ui": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./endpoint": {
+        "types": "./dist/endpoint.d.mts",
+        "default": "./dist/endpoint.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-gateway": "workspace:^",
@@ -73,5 +103,8 @@
     "@morlay/dsh-storage": "workspace:^",
     "@morlay/dsh-upload": "workspace:^",
     "@morlay/dsh-workspace": "workspace:^"
+  },
+  "engines": {
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

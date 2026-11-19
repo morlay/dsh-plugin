@@ -40,10 +40,10 @@ export default {
   },
 };
 
-// patch 的行声明：本包**替换**上游的两条默认实现——上下文装配与工具说明分组由这里的行接管。
-// 行 id 是上游默认行的 id（装配清单里的键），不是我们的类名。
+// patch 的行声明：只 insert 本包的行。
+// 不再 disable 上游默认行——上下文装配与工具说明是上游概念（agent-instructions / system-prompt），
+// 没有叫 context-assembler / tool-guidance 的上游行 id，禁了只会得到一条「entry not found」警告且静默无效
+// （见票据 04「行 id 核对」）。
 export const rows = [
-  { id: "context-assembler", disabled: true },
-  { id: "tool-guidance", disabled: true },
   { insert: [{ id: "session-mode", name: "@morlay/session-mode/dsh-bundle" }] },
 ] as const;

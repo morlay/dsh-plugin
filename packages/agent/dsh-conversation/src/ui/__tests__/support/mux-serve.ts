@@ -12,7 +12,7 @@ export async function serveMux(): Promise<{
   handlers: RemoteHandlersDefault;
   server: Server;
   /** 往「转发事件源」推一帧（上游 `\$events` 流的 `emit` / `waterfall` 帧）。 */
-  push(frame: unknown): void;
+  push: (frame: unknown) => void;
 }> {
   const handlers = new RemoteHandlersDefault();
   /** 事件源队列（测试侧 `push` 往里塞帧）。 */

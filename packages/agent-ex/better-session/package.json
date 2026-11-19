@@ -1,6 +1,6 @@
 {
   "name": "@morlay/better-session",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "会话的 RDB 持久化、分支数据面与就地编辑编排（宿主半）：替换官方 jsonl 落盘，提供 rewind / retry / fork 与编辑 / 撤回的编排面。",
   "files": [

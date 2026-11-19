@@ -1,13 +1,31 @@
 {
   "name": "@morlay/dsh-sandbox",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "沙箱面：提供者与策略，加上 bash、文件两套受限执行与文件观察策略，给 shell 与 fs 一条共同边界。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
     "./contract": "./src/contract/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-bash-sandbox": "workspace:^",
@@ -27,9 +45,11 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

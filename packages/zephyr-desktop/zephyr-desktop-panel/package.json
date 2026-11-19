@@ -1,7 +1,7 @@
 {
   "name": "@morlay/zephyr-desktop-panel",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "桌面形态的内嵌浏览器面板（浏览器半）：右栏 tab、地址栏与面板矩形上报；真正的网页容器由壳的主进程创建（WebContentsView），这里只经 __DSH_BROWSER_PANE__ 发意图。",
   "keywords": [
     "browser",
@@ -13,11 +13,29 @@
     "type": "git",
     "url": "https://github.com/morlay/dsh-plugin.git"
   },
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./ui": "./src/ui/index.ts",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@morlay/zephyr": "workspace:^",
@@ -31,6 +49,6 @@
     "react": "^18.3.1"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

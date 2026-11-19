@@ -1,8 +1,13 @@
 {
   "name": "@morlay/dsh-upload",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "附件上传面：先给宿主一个只登记解析器的最小实现，真正的上传与解析另排期。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -10,6 +15,27 @@
     "./endpoint": "./src/endpoint/index.ts",
     "./package.json": "./package.json",
     "./ui": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./endpoint": {
+        "types": "./dist/endpoint.d.mts",
+        "default": "./dist/endpoint.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-client-file-upload": "workspace:^",
@@ -24,6 +50,6 @@
     "@morlay/dsh-upload": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

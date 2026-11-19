@@ -1,8 +1,13 @@
 {
   "name": "@morlay/dsh-fs",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "文件系统契约（`FileSystem`）本身，让工具与沙箱共用一个读写面。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,8 +16,15 @@
   },
   "publishConfig": {
     "exports": {
-      ".": "./src/index.ts",
-      "./contract": "./src/contract/index.ts"
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./package.json": "./package.json"
     }
   },
   "dependencies": {
@@ -24,6 +36,6 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

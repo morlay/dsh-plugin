@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { muxTransport } from "@morlay/zephyr-app/client";
 import { serveMux } from "./support/mux-serve.ts";
 import { eventSource } from "./support/event-source.ts";
-import { subscribedOnce } from "./support/subscribed.ts";
 import { within } from "./support/within.ts";
 
 /** 连一条 mux（node 22+ 内置 `WebSocket`）。 */

@@ -1,8 +1,9 @@
 {
   "name": "@morlay/zephyr-app",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.2.0-alpha.0",
+  "private": false,
   "files": [
+    "dist",
     "src",
     "!**/__tests__",
     "!**/.agents"
@@ -11,18 +12,49 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
-    "./client": "./src/client/index.ts",
     "./contract": "./src/contract/index.ts",
     "./remote": "./src/remote/index.ts",
     "./remote/decorators": "./src/remote/decorators.ts",
     "./testing": "./src/testing/index.ts",
     "./client/remote": "./src/client/remote/index.ts",
     "./client/app-boot/boot-page": "./src/client/app-boot/boot-page.ts",
-    "./client/base.css": "./src/client/app-boot/base.css"
+    "./client/base.css": "./src/client/app-boot/base.css",
+    "./client": "./src/client/index.ts"
   },
-  "scripts": {
-    "build": "pnpm exec tsdown",
-    "prepublishOnly": "pnpm run build"
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./remote": {
+        "types": "./dist/remote.d.mts",
+        "default": "./dist/remote.mjs"
+      },
+      "./remote/decorators": {
+        "types": "./dist/remote/decorators.d.mts",
+        "default": "./dist/remote/decorators.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "./client/remote": {
+        "types": "./dist/client/remote.d.mts",
+        "default": "./dist/client/remote.mjs"
+      },
+      "./client/app-boot/boot-page": {
+        "types": "./dist/client/app-boot/boot-page.d.mts",
+        "default": "./dist/client/app-boot/boot-page.mjs"
+      },
+      "./client": "./dist/client.mjs",
+      "./package.json": "./package.json",
+      "./client/base.css": "./src/client/app-boot/base.css"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-gateway": "workspace:^",
@@ -56,5 +88,8 @@
   },
   "peerDependencies": {
     "react": "^18.3.1"
+  },
+  "engines": {
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

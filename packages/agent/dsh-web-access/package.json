@@ -1,8 +1,13 @@
 {
   "name": "@morlay/dsh-web-access",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "联网访问：搜索与抓取两个后端、一个 `Web` 契约，以及给模型的 web 工具行。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,7 +16,15 @@
   },
   "publishConfig": {
     "exports": {
-      "./server": "./src/server/index.ts"
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./package.json": "./package.json"
     }
   },
   "dependencies": {
@@ -27,6 +40,6 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

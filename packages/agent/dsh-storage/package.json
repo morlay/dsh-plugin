@@ -1,13 +1,31 @@
 {
   "name": "@morlay/dsh-storage",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "存储 hub 与 domain 契约：后端可换，消费方只认这一个面。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
     "./contract": "./src/contract/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@deepseek-ai/dsh-storage": "workspace:^",
@@ -21,6 +39,6 @@
     "zod": "4.6.6"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

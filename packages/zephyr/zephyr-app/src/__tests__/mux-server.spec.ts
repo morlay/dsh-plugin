@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 import { MuxServer } from "../api-gateway/mux-server.service.ts";
 import { RemoteHandlersDefault } from "../api-gateway/remote-handlers.service.ts";
 import { eventSource } from "./support/event-source.ts";
-import { subscribedOnce } from "./support/subscribed.ts";
 
 /** 服务端写回的一帧（只看 JSON 那些，握手响应不算）。 */
 interface OutFrame {

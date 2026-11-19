@@ -1,6 +1,6 @@
 {
   "name": "@morlay/session-mode",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "会话模式、工具说明分组与提示词通道：模式是一份数据、按会话收口；PTC 由运行时事实（工具目录里有 run_code）触发。",
   "files": [
@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-fs": "workspace:^",
     "@morlay/dsh-ptc": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
     "@morlay/dsh-skill": "workspace:^",
@@ -61,7 +62,6 @@
     "@morlay/better-session": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-compaction": "workspace:^",
-    "@morlay/dsh-fs": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
     "@testing-library/react": "^16.3.0",
     "@types/react": "~18.3.1"

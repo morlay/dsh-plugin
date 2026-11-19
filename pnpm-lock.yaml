@@ -489,6 +489,9 @@ importers:
       '@morlay/dsh-agent':
         specifier: workspace:^
         version: link:../../agent/dsh-agent
+      '@morlay/dsh-fs':
+        specifier: workspace:^
+        version: link:../../agent/dsh-fs
       '@morlay/dsh-ptc':
         specifier: workspace:^
         version: link:../../agent/dsh-ptc
@@ -529,9 +532,6 @@ importers:
       '@morlay/dsh-compaction':
         specifier: workspace:^
         version: link:../../agent/dsh-compaction
-      '@morlay/dsh-fs':
-        specifier: workspace:^
-        version: link:../../agent/dsh-fs
       '@morlay/dsh-session-persistence':
         specifier: workspace:^
         version: link:../../agent/dsh-session-persistence
@@ -1085,6 +1085,9 @@ importers:
       '@deepseek-ai/dsh-permission-presets':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/permission-presets
+      '@deepseek-ai/dsh-tool-ask-user':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/interaction/tool-ask-user
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/user-approval
@@ -1116,12 +1119,18 @@ importers:
         specifier: workspace:^
         version: link:../../zephyr/zephyr-app
     devDependencies:
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/test-support/tool-testkit
       '@morlay/dsh-agent-loop':
         specifier: workspace:^
         version: link:../dsh-agent-loop
       '@morlay/dsh-permission':
         specifier: workspace:^
         version: 'link:'
+      '@morlay/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../dsh-session-persistence
 
   packages/agent/dsh-ptc:
     dependencies:
@@ -1205,6 +1214,12 @@ importers:
         specifier: workspace:^
         version: link:../../zephyr/zephyr-app
     devDependencies:
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/test-support/tool-testkit
       '@morlay/dsh-sandbox':
         specifier: workspace:^
         version: 'link:'

@@ -16,7 +16,7 @@ import {
   ToolRegistryDefault,
 } from "@morlay/dsh-agent";
 import { FileSystem } from "@morlay/dsh-fs";
-import { PtcRuntime, providePtc } from "@morlay/dsh-ptc";
+import { providePtc } from "@morlay/dsh-ptc";
 import { provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { Subprocess } from "@morlay/dsh-shell";

@@ -1,6 +1,6 @@
 {
   "name": "@morlay/agent-use",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "agent 的浏览器/桌面使用能力（MCP 客户端行）：把 agent-browser 与 agent-desktop 接进工具面。",
   "files": [
