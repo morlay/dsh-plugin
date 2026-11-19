@@ -41,9 +41,39 @@ export class ConversationSlots extends fromCordis(
       sessions: this.sessions,
       fileUpload: this.fileUpload,
       uiSession: this.uiSession,
-      uiWorkspace: this.uiWorkspace,
+      uiWorkspace: reportedUiWorkspace(this.uiWorkspace),
       locale: this.locale,
       configForms: this.configForms,
     });
   }
+}
+
+/**
+ * 给上游一份「打开失败会说话」的 `uiWorkspace` 面。
+ *
+ * 上游 hero 的「选择工作区」在 `ConversationContent` 里是「void selectWorkspace(id).catch(回退 pending)」——
+ * 失败被吞掉，界面上只剩「点了没反应」（宿主零请求、控制台零输出，这次排查的成本全在这里）。
+ * 这里只包**会拒绝**的那一个入口：拒绝原样抛给调用方（语义不变），另外先打一条带原因的日志。
+ * @param face - `uiWorkspace` 契约实例（上游服务）。
+ * @returns 同一个面：`openWorkspace` 换成带报告的转发，其余成员随原型链原样可见。
+ */
+function reportedUiWorkspace(face: UiWorkspace): UiWorkspace {
+  return new Proxy(face, {
+    get: (target, property, receiver) => {
+      const value: unknown = Reflect.get(target, property, receiver);
+      if (property !== "openWorkspace" || typeof value !== "function") return value;
+      return (...args: never[]): unknown => {
+        const opening: unknown = Reflect.apply(value, target, args);
+        if (opening instanceof Promise) {
+          void opening.catch((reason: unknown) => {
+            console.error(
+              "[ui-conversation] 打开工作区失败（上游 hero 会把这条错误吞掉）：",
+              reason,
+            );
+          });
+        }
+        return opening;
+      };
+    },
+  });
 }
