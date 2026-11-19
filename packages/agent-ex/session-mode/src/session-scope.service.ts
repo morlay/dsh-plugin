@@ -24,6 +24,7 @@ import {
 import { groupDescriptorOf } from "./guidance/groups.ts";
 import {
   PTC_ONLY_SECTION,
+  groupRef,
   groupTools,
   isProtectedTool,
   refGroup,
@@ -122,9 +123,14 @@ function skillNameOf(arguments_: unknown): string | undefined {
 
 // 一个 agent 当前装着的那一份（行级订阅按它查表）。
 interface Applied {
-  readonly gate: NameGate | undefined;
+  // 装配期过滤用的名单：按需组放行之后要跟着重算，所以不是只读。
+  gate: NameGate | undefined;
+  // 模式给的那份名单（不含按需组叠加）：放行一组时用它重算 `gate`。
+  readonly baseGate: NameGate | undefined;
   readonly skillGate: NameGate | undefined;
   readonly definition: SessionScopeDefinition;
+  // 这个会话的 agent 作用域：放行一组时要在同一层重算收窄（不再二次做边界 cast）。
+  readonly scope: Context;
   readonly known: readonly string[];
   readonly dispose: () => void;
 }
@@ -228,6 +234,9 @@ export class SessionScopeDefault extends SessionScope implements OnInit {
           entries: () => this.describeEntriesOf(agent),
           sectionOf: (name) => this.sectionTextOf(agent, name),
           groupOf: groupDescriptorOf,
+          onDescribe: (group) => {
+            this.activateGroup(agent, group);
+          },
         }) as never,
       ) as unknown as () => void,
     );
@@ -267,8 +276,10 @@ export class SessionScopeDefault extends SessionScope implements OnInit {
     // `restrict` 那一侧按同一份 `face.groups` 判，两处同源。
     this.applied.set(agent, {
       gate: this.gateWithOnDemand(gate, face, activated),
+      baseGate: gate,
       skillGate,
       definition,
+      scope,
       known,
       dispose: () => account.release(),
     });
@@ -374,6 +385,21 @@ export class SessionScopeDefault extends SessionScope implements OnInit {
       );
     }
     return true;
+  }
+
+  // `describe_tool` 取到某一组就把它放行：按需组默认被 `gateWithOnDemand` 挡在目录外，
+  // 「发现面」放行了而「执行面」没跟上，模型就拿到签名也调不到（`tools.subagent is not a function`）。
+  // 本次程序里的绑定表在开跑前已经构造好，放行从下一次 `run_code` 起生效。
+  private activateGroup(agent: Agent, group: string): void {
+    const applied = this.applied.get(agent);
+    const face = this.faces.get(agent);
+    const activated = this.activatedGroups.get(agent);
+    if (applied === undefined || face === undefined || activated === undefined) return;
+    const ref = groupRef(group);
+    if (!face.groups.has(ref) || activated.has(ref)) return;
+    activated.add(ref);
+    applied.gate = this.gateWithOnDemand(applied.baseGate, face, activated);
+    this.restrict(applied.scope, applied.baseGate, face, activated);
   }
 
   // 按当前已放行的组重算工具面：模式白名单与基础黑名单原样，未放行那一组的工具进 deny。

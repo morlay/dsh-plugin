@@ -256,16 +256,42 @@ async function sectionNames(ctx: TestContext, agent: Agent): Promise<string[]> {
   );
 }
 
-async function callTool(ctx: TestContext, agent: Agent, name: string, callId: string) {
+async function callTool(
+  ctx: TestContext,
+  agent: Agent,
+  name: string,
+  callId: string,
+  args: Readonly<Record<string, unknown>> = {},
+) {
   // 程序化调用走批量形状（上游 0.2.1-rc.2 起 `execute` 只收批量）；这里每次就一件。
   const batch = await ctx.tools.execute({
-    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: "{}" }],
+    calls: [{ type: "tool-call", id: ToolCallId(callId), name, arguments: JSON.stringify(args) }],
     agent,
     signal: new AbortController().signal,
   });
   const result = batch.results[0]?.result;
   return { error: result !== undefined && "error" in result ? result.error : undefined };
 }
+
+describe("按需组（describe 即放行）", () => {
+  it("无名单模式下按需组的工具默认不进目录，describe 取过之后才可见、可调", async () => {
+    const { ctx, agent } = await mount();
+    const session = await agent("nothing");
+    apply(ctx, session, "nothing");
+    await ctx.systemPrompt.assemble(assembleContextFor(session));
+
+    // swarm 是 `injection: "on-demand"` 的组：没取过就既不进目录、也调不到。
+    expect(await visibleTools(ctx, session)).not.toContain("send_message");
+    expect((await callTool(ctx, session, "send_message", "call-send-before")).error).toBeDefined();
+
+    expect(
+      (await callTool(ctx, session, "describe_tool", "call-describe", { group: "swarm" })).error,
+    ).toBeUndefined();
+
+    expect(await visibleTools(ctx, session)).toContain("send_message");
+    expect((await callTool(ctx, session, "send_message", "call-send-after")).error).toBeUndefined();
+  });
+});
 
 describe("工具白名单（按会话收口）", () => {
   it("只留白名单里的工具，host 层多出来的进不了目录", async () => {

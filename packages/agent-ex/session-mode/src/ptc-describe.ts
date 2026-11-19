@@ -95,6 +95,8 @@ export function describeToolDefinition(input: {
   readonly sectionOf: (name: string) => string | undefined;
   // 某个组的描述（标题 / 判据 / 正文）；动态组由实现回落到它那一族。
   readonly groupOf?: (group: string) => GroupDescriptor | undefined;
+  // 取到某一组时把它放行（按需组默认不可见，「取签名」与「能调用」必须是同一件事）。
+  readonly onDescribe?: (group: string) => void;
 }): {
   readonly name: "describe_tool";
   readonly description: string;
@@ -128,6 +130,7 @@ export function describeToolDefinition(input: {
         ...entry,
         section: input.sectionOf(entry.name),
       }));
+      if (group !== undefined) input.onDescribe?.(group);
       return { text: describeTools(entries, group, input.groupOf) };
     },
   };
