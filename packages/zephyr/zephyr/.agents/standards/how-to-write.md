@@ -136,9 +136,9 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
    `current.ctx` 是**上游 agent 的 ctx**（prompt 组装回调里拿到的那个），它的 `approval` 是上游在 agent 装配期发的；
    我们的令牌绑不到别人的 ctx（`EventEmitter` / 字段注入都只能绑本行）。与第 4 条同类（晚绑定），只是作用域是 agent 而非应用根。
    读回来只用一次（渲染审批上下文），改成 `inject` 需要上游在 prompt 组装面给出显式成员——那是上游改造，不现实。
-5. `zephyr-dev/src/http/serve.service.ts`（`ctx.get("connection", false)`）—— 同上（晚绑定），
+6. `zephyr-dev/src/http/serve.service.ts`（`ctx.get("connection", false)`）—— 同上（晚绑定），
    而且读的是 **host 侧才有的** `authorizeIndex`（页面响应的准入），它不在「浏览器侧连接面」契约里。
-6. `zephyr-ui/src/client/schema-form/hints.ts` / `index.ts`（`ctx.root.reflect.get(SERVICE_NAME, false)`）
+7. `zephyr-ui/src/client/schema-form/hints.ts` / `index.ts`（`ctx.root.reflect.get(SERVICE_NAME, false)`）
    —— **运行期自注册服务的探测**：本包是内联库、不是装配行，提示面由它在 `apply` 里 `reflect.provide`
    出来，装配清单里没有以它为令牌的条目；两次读的用途是「另一份副本装过没有」的**存在性探测**，
    `inject` 的「填充期必须有提供者」这条语义在这里不成立。判据见 `hints-injection.spec.ts`。
