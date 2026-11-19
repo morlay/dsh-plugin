@@ -28,6 +28,7 @@ import { provideWorkspaceUi } from "@morlay/dsh-workspace/ui";
 import { provideDeliverablesUi } from "@morlay/dsh-conversation/ui";
 import { provideAgentTeamUi } from "@morlay/dsh-agent-team/ui";
 import { provideFileUploadUi } from "@morlay/dsh-upload/ui";
+import { provideJobUi } from "@morlay/dsh-job/ui";
 import { provideSessionModeUi } from "@morlay/session-mode/ui";
 import { provideBetterSessionUi } from "@morlay/better-session/ui";
 import { provideDesktopPanelUi } from "@morlay/zephyr-desktop-panel/ui";
@@ -110,6 +111,12 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
     // `provideApproval()` 紧跟：批准弹层复用同一个权限面。
     ...providePermissionUi(),
     ...provideApproval(),
+
+    // 后台任务的浏览器半：数据面（`jobs`，挂 `job` 那组 remote）+ 会话头部的任务列表
+    // （`conversation.session.header.actions` 的 `job-list`）。宿主半 `provideJob()` 已在
+    // `zephyr.provide.ts` 里（注册表 + `job_list` 一族工具行）；缺这一半时模型能起后台任务，
+    // 界面上却看不见、也没法 kill。
+    ...provideJobUi(),
 
     // 其它领域的会话内卡片。都挂在会话界面已经声明的位置上（`conversation.*` / `sidebarRight`），
     // 所以必须排在 `provideSessionSlots()` 之后；彼此之间互不依赖。

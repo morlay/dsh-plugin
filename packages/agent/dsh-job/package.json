@@ -8,10 +8,12 @@
     ".": "./src/index.ts",
     "./endpoint": "./src/endpoint/index.ts",
     "./server": "./src/server/index.ts",
+    "./ui": "./src/ui/index.ts",
     "./package.json": "./package.json"
   },
   "dependencies": {
     "@deepseek-ai/dsh-api-job-controller": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
     "@deepseek-ai/dsh-jobs": "workspace:^",
     "@deepseek-ai/dsh-jobs-local": "workspace:^",
     "@deepseek-ai/dsh-tool-jobs": "workspace:^",

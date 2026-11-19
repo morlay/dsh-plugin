@@ -4,9 +4,20 @@
 
 ## 用法
 
-- 导出：`Jobs` 契约与 `JobsDefault`、`ToolJobs`（`job_list` / `job_output` / `job_kill` 工具行）。
-- 装配：`JobModule`（注册表 + 后台任务工具行）。
+- 契约（`./contract`，包根转出）：`JobRegistry`（上游服务名 `jobs`）。它只活在 **Node 树**里。
+- 宿主半（`./server`）：`provideJob()`——注册表行 + `job_list` / `job_output` / `job_kill` 三条工具行 +
+  `remote.job` 的宿主面（`JobEndpointDefault` 是 `./endpoint` 那份契约的实现）。
+- 浏览器半（`./ui`）：`provideJobUi()`——两行。
+  - `JobsClient`：`ctx.jobs` 数据面（本会话可见的 roster、按 job 的观察流、人工 kill；上游
+    `@deepseek-ai/dsh-api-job-controller/client`），自己 `$mount` `job` 那组 remote；
+  - `JobListSlots`：会话头部的任务列表（`conversation.session.header.actions` 的 `job-list`：状态、耗时、
+    进度、展开后的实时输出面板、两次点击的 kill；上游 `@deepseek-ai/dsh-client-ui-jobs/client`）。
+
+  **两半都要装**：只装宿主半时模型照样能起后台任务，界面上却没有入口、也没法 kill（跑着的东西看不见）。
+
+- `provideJobIdleGuard()`：job 域忙不忙（开发态换树按它按住；开着的任务会让换树等）。
 
 ## 设计
 
-包内子域怎么分、契约与行各放哪，见[包内子域拆分与注册抽象](../.agents/designs/20261028-包内子域拆分与注册抽象.md)。
+包内子域怎么分、契约与行各放哪，见[包内子域拆分与注册抽象](../.agents/designs/20261028-包内子域拆分与注册抽象.md)；
+上游 client 半的装配口径见[上游基础装配](../.agents/designs/20261113-上游基础装配.md)。

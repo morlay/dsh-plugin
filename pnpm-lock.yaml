@@ -1045,6 +1045,9 @@ importers:
       '@deepseek-ai/dsh-api-job-controller':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/api/job-controller
+      '@deepseek-ai/dsh-client-ui-jobs':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-jobs
       '@deepseek-ai/dsh-jobs':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/jobs/jobs
