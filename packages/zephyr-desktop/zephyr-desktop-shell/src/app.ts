@@ -36,7 +36,7 @@ import {
 import { DESKTOP_IPC } from "./ipc.ts";
 import { menuTemplateOf } from "./menu.ts";
 import { navigationPlanOf } from "./navigation.ts";
-import { loginShellEnv, mergeMissingEnv } from "./shell-env.ts";
+import { inheritShellEnv, loginShellEnv } from "./shell-env.ts";
 import { installShortcuts } from "./shortcuts.ts";
 import { focusWindowOf } from "./single-instance.ts";
 import { DEFAULT_WINDOW_SIZE, windowOptionsOf } from "./window.ts";
@@ -151,10 +151,11 @@ if (!electron.app.requestSingleInstanceLock()) {
  * @returns 装配完成后无返回（生命周期跟着窗口与 app 走）。
  */
 async function start(): Promise<void> {
-  // 先补外部环境（GUI 启动的 PATH 往往缺 homebrew 等）：壳里派生出去的终端 / git / pnpm 依赖它。
-  // 只补白名单（PATH / locale / XDG），且**不打印键名**：登录 shell 里还有一堆凭证。
-  const filled = mergeMissingEnv(process.env, await loginShellEnv());
-  debug.log(`已补登录 shell 环境：${String(filled.length)} 项`);
+  // 先整份继承登录 shell 的环境（GUI 启动的 PATH 只有系统默认值，rc 里 export 的键也读不到）：
+  // 壳里派生出去的终端 / git / pnpm 与各 provider 的 key 都依赖它。**不打印键名**：
+  // 登录 shell 里还有一堆凭证，日志只记变化了几项。
+  const inherited = inheritShellEnv(process.env, await loginShellEnv());
+  debug.log(`已继承登录 shell 环境：${String(inherited.length)} 项`);
   installDirectoryPicker();
   // 快捷键桥：页面侧的 `provideShortcuts()` 依赖它（缺了那一行构造失败）。
   shortcuts = installShortcuts({

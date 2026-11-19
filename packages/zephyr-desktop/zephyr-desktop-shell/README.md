@@ -8,7 +8,7 @@ zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例
 主进程入口（`dist/main.mjs`）按顺序做四件事：
 
 1. 单实例：拿不到锁就聚焦已有窗口并退出（第二份宿主会抢同一个数据根）；
-2. 补登录 shell 环境、装快捷键桥与产品菜单（开发者模式关着时没有 Reload / DevTools / Inspector 项）；
+2. 整份继承登录 shell 的环境（GUI 启动只有 launchd 的最小环境）、装快捷键桥与产品菜单（开发者模式关着时没有 Reload / DevTools / Inspector 项）；
 3. 开窗口（选项来自 `desktop.window`，位置与尺寸来自上次关窗的状态）；页面从**壳自己的 http 源**进——
    dev 形态是工作区的 dev server，打包形态是宿主同进程里起的 vite；
 4. 关窗时存窗口状态、收桥与宿主树，然后退出。
