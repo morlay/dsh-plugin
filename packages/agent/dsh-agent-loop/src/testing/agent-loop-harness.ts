@@ -6,13 +6,17 @@
 import { configure, provide, type ProviderList } from "@morlay/zephyr";
 import { SystemPromptDefault, provideAgent } from "@morlay/dsh-agent";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { AgentLoopDefault, ToolExecutorNative } from "../index.ts";
+import { AgentLoopDefault, AgentSessionEvents, ToolExecutorNative } from "../index.ts";
 
 /** 上游 `Agent` 的类型面（vendor 的模块增强，本仓 program 看不到整份形状）。 */
 export type Agent = import("@morlay/dsh-agent/contract").Agent;
 
 /** 循环本体那一份（默认 `agents: []`）。 */
-const loopRow = provide([AgentLoopDefault], [configure(AgentLoopDefault, { agents: [] })]);
+// 与真装配同一份「补发会话事件」行：少了它，测试里的注入会每步重发（上游的判据靠它）。
+const loopRow = provide(
+  [AgentLoopDefault, AgentSessionEvents],
+  [configure(AgentLoopDefault, { agents: [] })],
+);
 
 /** 装配选项（与上游 testkit 的三个选项同义）。 */
 export interface LoopTestOptions {

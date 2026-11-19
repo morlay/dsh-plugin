@@ -1,5 +1,6 @@
 import { configure, provide } from "@morlay/zephyr";
 import { AgentLoopDefault } from "./agent-loop.service.ts";
+import { AgentSessionEvents } from "./agent-session-events.service.ts";
 import { provideSessionCheckpointPolicy } from "./server/checkpoint-policy.provide.ts";
 import { provideToolOutput } from "./server/tool-output.provide.ts";
 import { provideToolPolicy } from "./server/tool-policy.provide.ts";
@@ -17,6 +18,8 @@ export const provideAgentLoop = provide(
   [
     // `AgentLoopDefault` 必须在清单里：`configure` 只替换**既有**条目，不新增。
     AgentLoopDefault,
+    // 会话事件补发到 agent scope：上游的「注入不重发」判据靠它（见该文件头）。
+    AgentSessionEvents,
     ToolExecutorNative,
     ...provideSessionCheckpointPolicy(),
     ...provideToolOutput(),

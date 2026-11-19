@@ -136,6 +136,11 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     reason: "cordis 兼容桥：上游 ctx / 服务 → 本仓契约",
   },
   {
+    // agent scope 的事件补发：要 cordis Context 的 `events` / `effect`，本仓的 `Context` 面没有它们。
+    match: /(^|[\\/])src[\\/]agent-session-events\.service\.ts$/u,
+    reason: "agent scope 的事件派发：另一头是 cordis Context",
+  },
+  {
     match: /(^|[\\/])src[\\/]rdb[\\/].*(rows|read-path|backend|log-import|migration)[^\\/]*\.ts$/u,
     reason: "rdb 行映射：另一头是 SQL 行（列值 → 域对象）",
   },

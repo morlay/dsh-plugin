@@ -4,6 +4,7 @@ export { provideAgentLoop } from "./agent-loop.provide.ts";
 export { provideSubagent } from "./subagent.provide.ts";
 
 export * from "./agent-loop.service.ts";
+export * from "./agent-session-events.service.ts";
 export * from "./tool-executor.service.ts";
 export * from "./checkpoint-policy.service.ts";
 export * from "./spill-local.service.ts";
