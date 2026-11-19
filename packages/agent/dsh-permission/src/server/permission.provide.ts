@@ -6,6 +6,7 @@ import { PermissionDefault } from "../permission.service.ts";
 import { UserQuestionQueueDefault } from "../user-question-queue.service.ts";
 import { UserQuestionsEndpointDefault } from "./user-questions-endpoint.service.ts";
 import { PermissionPresetsEndpointDefault } from "./permission-presets-endpoint.service.ts";
+import { ToolAskUser } from "./tool-ask-user.service.ts";
 
 /**
  * 权限域的五行。默认档位 `workspace-write`。
@@ -27,6 +28,14 @@ export const providePermission = provide([
   PermissionPresetsEndpointDefault,
   remoteDescriptor(() => import("@deepseek-ai/dsh-permission-presets/remote")),
 ]);
+
+/**
+ * 模型面向的 `ask_user_question` 工具行（per-agent）：提问落在本包的 `userQuestions` 队列上。
+ *
+ * 与 `providePermission()` 分开：队列是应用根的服务，工具行按 agent 装——只有装了队列的那一侧
+ * 才有提问可问，两者由装配面各自决定装不装。
+ */
+export const provideAskUserTool = provide([ToolAskUser]);
 
 /**
  * 按**档位**装配：一个档位同时写沙箱模式与批准策略两个开关（装配面只传 mode）。
