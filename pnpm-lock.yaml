@@ -1085,6 +1085,9 @@ importers:
       '@deepseek-ai/dsh-permission-presets':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/permission-presets
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/tool-ask-user
@@ -1682,6 +1685,9 @@ importers:
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/core/scope
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/typert/registry
