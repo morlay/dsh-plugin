@@ -15,21 +15,35 @@
     "./server": "./src/server/index.ts",
     "./ui": "./src/ui/index.ts",
     "./package.json": "./package.json",
-    "./dsh-bundle": "./src/dsh-bundle.ts",
-    "./client": "./src/ui/index.ts"
+    "./dsh-bundle": "./src/dsh-bundle.ts"
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
-      "./endpoint": "./dist/endpoint.mjs",
-      "./server": "./dist/server.mjs",
-      "./ui": "./dist/ui.mjs",
-      "./dsh-bundle": "./dist/dsh-bundle.mjs",
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./endpoint": {
+        "types": "./dist/endpoint.d.mts",
+        "default": "./dist/endpoint.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./dsh-bundle": {
+        "types": "./dist/dsh-bundle.d.mts",
+        "default": "./dist/dsh-bundle.mjs"
+      },
       "./package.json": "./package.json",
       "./client": {
-        "import": "./dist/client.mjs",
         "default": "./dist/client.cjs"
-      }
+      },
+      "./cordis.patch.yml": "./dist/cordis.patch.yml"
     }
   },
   "dependencies": {
@@ -58,5 +72,21 @@
   },
   "engines": {
     "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-file-drag",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ]
+    },
+    "bundle": {
+      "patch": "./dist/cordis.patch.yml"
+    }
   }
 }

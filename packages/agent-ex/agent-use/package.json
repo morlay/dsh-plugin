@@ -16,9 +16,16 @@
   },
   "publishConfig": {
     "exports": {
-      ".": "./dist/index.mjs",
-      "./dsh-bundle": "./dist/dsh-bundle.mjs",
-      "./package.json": "./package.json"
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./dsh-bundle": {
+        "types": "./dist/dsh-bundle.d.mts",
+        "default": "./dist/dsh-bundle.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./dist/cordis.patch.yml"
     }
   },
   "dependencies": {
@@ -27,5 +34,10 @@
   },
   "engines": {
     "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dist/cordis.patch.yml"
+    }
   }
 }

@@ -21,7 +21,7 @@ function implOf(entry: ProviderEntry): { impl: Newable<unknown>; config?: unknow
 
 // dsh 行入口：宿主侧（server / host）的行合成一个 cordis 插件；client 是独立出口，不进这里。
 export default {
-  name: "@morlay/configurable-sandbox",
+  name: "configurable-sandbox",
   async apply(ctx: Context): Promise<void> {
     for (const entry of providers()) {
       const { impl, config } = implOf(entry);
@@ -29,3 +29,8 @@ export default {
     }
   },
 };
+
+// patch 的行声明：dsh Loader 按它装配本包的行入口（`name` 指到 `./dsh-bundle` 子出口）。
+export const rows = [
+  { insert: [{ id: "configurable-sandbox", name: "@morlay/configurable-sandbox/dsh-bundle" }] },
+] as const;

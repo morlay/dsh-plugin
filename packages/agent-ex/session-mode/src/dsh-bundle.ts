@@ -31,7 +31,7 @@ function implOf(entry: ProviderEntry): { impl: Newable<unknown>; config?: unknow
 
 // dsh 行入口：宿主侧（server / host）的行合成一个 cordis 插件；client 是独立出口，不进这里。
 export default {
-  name: "@morlay/session-mode",
+  name: "session-mode",
   async apply(ctx: Context): Promise<void> {
     for (const entry of providers()) {
       const { impl, config } = implOf(entry);
@@ -39,3 +39,11 @@ export default {
     }
   },
 };
+
+// patch 的行声明：本包**替换**上游的两条默认实现——上下文装配与工具说明分组由这里的行接管。
+// 行 id 是上游默认行的 id（装配清单里的键），不是我们的类名。
+export const rows = [
+  { id: "context-assembler", disabled: true },
+  { id: "tool-guidance", disabled: true },
+  { insert: [{ id: "session-mode", name: "@morlay/session-mode/dsh-bundle" }] },
+] as const;

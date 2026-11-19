@@ -24,7 +24,7 @@ function implOf(entry: ProviderEntry): { impl: Newable<unknown>; config?: unknow
 
 // dsh 行入口：宿主侧（server / host）的行合成一个 cordis 插件；client 是独立出口，不进这里。
 export default {
-  name: "@morlay/better-session",
+  name: "better-session",
   async apply(ctx: Context): Promise<void> {
     for (const entry of providers()) {
       const { impl, config } = implOf(entry);
@@ -32,3 +32,13 @@ export default {
     }
   },
 };
+
+// patch 的行声明：本包**替换**上游的默认实现——jsonl 落盘、json KV 后端、sqlite 查询、KV 版投影缓存
+// 全部关掉，由上面那些 rdb 行接管。行 id 是上游默认行的 id（装配清单里的键），不是我们的类名。
+export const rows = [
+  { id: "session-persistence-jsonl", disabled: true },
+  { id: "storage-json", disabled: true },
+  { id: "session-query-sqlite", disabled: true },
+  { id: "session-projection-cache", disabled: true },
+  { insert: [{ id: "better-session", name: "@morlay/better-session/dsh-bundle" }] },
+] as const;

@@ -24,6 +24,10 @@
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
       },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
       "./endpoint": {
         "types": "./dist/endpoint.d.mts",
         "default": "./dist/endpoint.mjs"
@@ -71,7 +75,19 @@
   },
   "dsh": {
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-directory-picker-native",
+        "@deepseek-ai/dsh-client-ui-file-drag",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar-files",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
     },
     "bundle": {
       "patch": "./dist/cordis.patch.yml"
