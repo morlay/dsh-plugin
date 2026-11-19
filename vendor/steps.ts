@@ -61,6 +61,10 @@ export const patch: Step[] = [
   // `The URL must be of scheme file`——前后端同 spec 的装配测试因此做不了。
   // 改成一个按需调用的小函数后，加载不再依赖 `import.meta.url` 的协议。
   { type: "git", patch: "subprocess-lazy-tsconfig-path.patch" },
+  // 同一处报错的**取证**补丁：`emitDisposed` 把监听器的异常收成一句 message，栈因此丢失——
+  // 而 `agent/disposed` 的监听器不止 subagent 一个（上面那条判空打完后报错仍在，说明另有其人）。
+  // 这里只把栈附到原来那两行 warn 后面，不改控制流。销账条件：定位到具体监听器并修好后删掉。
+  { type: "git", patch: "agent-disposed-stack.patch" },
   // 认证移除：页面与资源都由自研 web 层（vite dev server）提供，这层 cookie 校验只剩阻碍——摘掉它
   // 之后所有 `/api/*` 一律 401（见 `remove-browser-auth.patch` 的说明）。
   { type: "git", patch: "remove-browser-auth.patch" },

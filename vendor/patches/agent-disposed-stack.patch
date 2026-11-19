@@ -1,0 +1,21 @@
+diff --git a/packages/core/agent/src/index.ts b/packages/core/agent/src/index.ts
+index 374be30180..404365cbbb 100644
+--- a/packages/core/agent/src/index.ts
++++ b/packages/core/agent/src/index.ts
+@@ -530,10 +530,14 @@ export class AgentRegistry extends Service {
+       try {
+         const returned: unknown = callback(...args)
+         void Promise.resolve(returned).catch((error: unknown) => {
+-          this.ctx.logger.warn(`agent "${entry.id}": agent/disposed listener rejected: ${String(error)}`)
++          // 本地 patch（agent-disposed-stack.patch）：被吞掉的监听器异常只剩一句 message，
++          // 栈是唯一能指出「哪一行、哪个监听器」的东西。
++          const stack = error instanceof Error && error.stack !== undefined ? `\n${error.stack}` : ''
++          this.ctx.logger.warn(`agent "${entry.id}": agent/disposed listener rejected: ${String(error)}${stack}`)
+         })
+       } catch (error: unknown) {
+-        this.ctx.logger.warn(`agent "${entry.id}": agent/disposed listener threw: ${String(error)}`)
++        const stack = error instanceof Error && error.stack !== undefined ? `\n${error.stack}` : ''
++        this.ctx.logger.warn(`agent "${entry.id}": agent/disposed listener threw: ${String(error)}${stack}`)
+       }
+     }
+   }

@@ -24,6 +24,47 @@ function exporterOf(logger: object): ((exporter: ExporterFace) => void) | undefi
     : undefined;
 }
 
+/**
+ * 这一级要不要附调用栈：警告（1）与错误（0）默认附；`ZEPHYR_LOG_STACKS=0` 关掉。
+ *
+ * 附栈的理由：被吞掉的失败（监听器抛错、被 catch 成一行文案的异常）只剩一句 message，
+ * 没有栈就看不出「谁在什么路径上触发的」——补在这里是唯一不用改上游代码的地方。
+ */
+const STACKS_BY_DEFAULT = process.env.ZEPHYR_LOG_STACKS !== "0";
+
+/**
+ * 调用方栈（跳过本文件里固定的几帧）。
+ * @param skip - 从 `new Error()` 的栈里跳过的帧数（含第一行 `Error`）。
+ * @returns 每帧一行的缩进文本；拿不到栈时为空串。
+ */
+export function callerStackOf(skip: number): string {
+  const stack = new Error().stack;
+  if (stack === undefined) return "";
+  return stack
+    .split("\n")
+    .slice(skip)
+    .filter((line) => line.trim() !== "")
+    .map((line) => `  ${line.trim()}`)
+    .join("\n");
+}
+
+/**
+ * 一条日志的最终文本：格式化 +（警告/错误时）调用栈。
+ * @param args - cordis 的 printf 参数。
+ * @param level - cordis 的级别（0 最严重）。
+ * @param stacks - 是否允许附栈（默认取环境开关）。
+ * @returns 要写出的一行或多行文本（不含结尾换行）。
+ */
+export function logLineOf(
+  args: readonly unknown[],
+  level: number,
+  stacks: boolean = STACKS_BY_DEFAULT,
+): string {
+  // 用 node 的 `format` 展开 `%s`/`%o` 这类占位符（cordis 的 message.args 就是 printf 参数）。
+  const text = format(...(args as [unknown, ...unknown[]]));
+  return level <= 1 && stacks ? `${text}\n${callerStackOf(3)}` : text;
+}
+
 @Injectable()
 export class LoggerExporterDefault {
   private readonly logger = inject(Logger);
@@ -36,9 +77,8 @@ export class LoggerExporterDefault {
     exportWith({
       export: (message) => {
         const level = message.level ?? 1;
-        // 用 node 的 `format` 展开 `%s`/`%o` 这类占位符（cordis 的 message.args 就是 printf 参数）。
-        const text = format(...(message.args as [unknown, ...unknown[]]));
-        (level === 0 ? process.stderr : process.stdout).write(`${text}\n`);
+        const line = logLineOf(message.args, level);
+        (level === 0 ? process.stderr : process.stdout).write(`${line}\n`);
       },
     });
   }
