@@ -19,7 +19,7 @@ export interface CordisClientOptions {
   name: string;
   // client 入口；默认 `./src/client/index.ts`
   entry?: string;
-  // 追加 external（默认 react 系列 + `@deepseek-ai/*`）
+  // 追加 external（精确 specifier 或正则；默认已含 baseline 与 `dsh.client.external`）
   externals?: (string | RegExp)[];
   // 产出 client 半的类型声明（宿主 face 通过它引用 client 契约，不进源码）；默认开启
   dts?: boolean;
@@ -74,30 +74,25 @@ export async function clientBundleSpec(
   };
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[/\\^$*+?.()|[\]{}]/gu, "\\$&");
-}
-
 /**
- * 消费方清单里**要 external 的包**：`peerDependencies` 的那些。
+ * 消费方清单里**显式声明要外置的 specifier**：`dsh.client.external`。
  *
- * 判据就一条——**按声明位置分流**：`peerDependencies` 由宿主/运行时提供，client 产物里保留 import
- * （模块表有它的身份，内联反而会二次注册）；`dependencies` 的代码随产物内联（模块表里没有它们，
- * 外置必然 `missed the module table`）。
+ * 判据只有一条——**显式声明**：baseline 之外要外置的模块表行必须在这里点名（精确 specifier，不做
+ * 归一化）；没点名的**一律内联**，包括我们自己的 `@morlay/*`。内联是默认：模块表只有 shell 种子的那些键，
+ * 内联至少保证产物自包含。
  *
- * 这套规则**只用于 CJS 产物**：那是模块表（`__ModuleLoader__.load` 工厂）的形态，谁内联谁外置有硬约束。
- * ESM 产物不做这套处理——它交给 vite / node 的 resolver。
+ * 这套规则**只用于 CJS 产物**：那是模块表（`__ModuleLoader__.load` 工厂）的形态。
  *
  * @param cwd - 消费方包目录，缺省 `process.cwd()`。
- * @returns 每条一个 `^包名(?:/|$)` 的正则。
+ * @returns 声明的 specifier（空数组表示只吃 baseline）。
  */
-export async function clientRowExternals(cwd = process.cwd()): Promise<RegExp[]> {
+export async function clientRowExternals(cwd = process.cwd()): Promise<string[]> {
   const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
-    peerDependencies?: Record<string, string>;
+    dsh?: { client?: { external?: unknown } };
   };
-  return Object.keys(manifest.peerDependencies ?? {})
-    .sort()
-    .map((name) => new RegExp(`^${escapeRegExp(name)}(?:/|$)`));
+  const declared = manifest.dsh?.client?.external;
+  if (!Array.isArray(declared)) return [];
+  return declared.filter((name): name is string => typeof name === "string").sort();
 }
 
 // client 入口的 entry 名（同一个 tsdown config 里与 host 入口并存）。
@@ -195,12 +190,25 @@ export async function bundleClientFactory(options: ClientFactoryOptions): Promis
     transform: { define: spec.define },
     // 内置模块**不能** external：`platform: 'browser'` 下 rolldown 默认把 node 内置标成 external，
     // 浏览器 require 它们必然失败。显式放行 → 走 clientAssetPlugin 的替身。
-    external: (id: string) => !NODE_BUILTIN.test(id) && isClientExternal(id, spec.externals),
+    external: (id: string) => {
+      // 可折叠的源码子路径交给 `foldSourceSubpath` 改写，这里不作判定。
+      if (foldablePackageOf(id) !== undefined) return false;
+      const platform = platformSubpathOf(id);
+      if (platform !== undefined) {
+        throw new Error(
+          `client bundle: "${id}" 是平台模块 ${platform} 的子路径——模块表按精确键解析，答不了它；` +
+            `内联又会造出第二份实例。请从 ` +
+            `"${platform}"` +
+            ` 的包根导入该符号。`,
+        );
+      }
+      return !NODE_BUILTIN.test(id) && isClientExternal(id, spec.externals);
+    },
     // `treeshake` 显式开：两条线（现场打包与发布）共用这一支，产物都该只留用到的代码。
     treeshake: { moduleSideEffects: "no-external" },
     // 样式内联进字节：产物是自包含单文件，样式不能留在外部（见 cssInlinePlugins）。
     // 资产同样内联：单文件没有放资产的位置（发布线也是这一支，见债务「CSS 大图资产化」）。
-    plugins: [...stylePlugins(options), clientAssetPlugin()],
+    plugins: [foldSourceSubpath(), ...stylePlugins(options), clientAssetPlugin()],
   });
   try {
     const { output } = await build.generate({
@@ -265,18 +273,52 @@ function isExternal(id: string, externals: (string | RegExp)[]): boolean {
   return externals.some((e) => (typeof e === "string" ? id === e : e.test(id)));
 }
 
-// 平台 baseline：主应用种子或静态表提供的模块（React / cordis / 共享原语）。
-const BASELINE: (string | RegExp)[] = [
+// 平台 baseline：shell 种进冻结模块表的键（与上游 `PLATFORM_MODULES` 逐项一致）。
+// **精确 specifier**：模块表按精确键解析，子路径既不能被它应答、也不该被内联（会造出第二份身份）。
+const BASELINE: string[] = [
   "react",
   "react/jsx-runtime",
   "react-dom",
   "react-dom/client",
-  /^@deepseek-ai\/cordis(\/|$)/,
-  /^@deepseek-ai\/dsh-client-store(\/|$)/,
-  /^@deepseek-ai\/dsh-client-ui-slots(\/|$)/,
-  /^@deepseek-ai\/dsh-client-ui-primitives(\/|$)/,
-  /^@deepseek-ai\/dsh-client-ui-dockkit(\/|$)/,
+  "zod",
+  "@tanstack/react-virtual",
+  "@deepseek-ai/cordis",
+  "@deepseek-ai/dsh-client-store",
+  "@deepseek-ai/dsh-client-ui-slots",
+  "@deepseek-ai/dsh-client-ui-primitives",
+  "@deepseek-ai/dsh-client-ui-dockkit",
 ];
+
+// baseline 模块的**子路径**（自身不是 baseline 键的才算）：模块表应答不了，内联又会和第二份身份打架。
+function platformSubpathOf(id: string): string | undefined {
+  if (BASELINE.includes(id)) return undefined;
+  return BASELINE.find((name) => id.startsWith(`${name}/`));
+}
+
+// 上游包**源码子路径**（`@deepseek-ai/cordis/src/utils.ts` 这类）在浏览器里只有一个可用的答案：
+// 它就是那个包的同一份实现，而模块表只认包名键。cordis 的根出口 `export *` 覆盖了 `src/*` 的全部符号，
+// 所以按包名折叠；其余包不做猜测。
+const SOURCE_SUBPATH = /^(@deepseek-ai\/cordis)\/src\/.*$/u;
+
+// 源码子路径可折回的包名；不可折回时返回 `undefined`。
+function foldablePackageOf(id: string): string | undefined {
+  return SOURCE_SUBPATH.exec(id)?.[1];
+}
+
+// 把源码子路径**改写**成包名并标外部：产物里写 `require("@deepseek-ai/cordis")`，模块表答得上，
+// 语义仍是同一份实现。`external: true` 只标外部不改说明符，所以必须走 `resolveId`。
+function foldSourceSubpath(): Plugin {
+  return {
+    name: "devkit-fold-source-subpath",
+    resolveId: {
+      order: "pre",
+      handler(source: string) {
+        const folded = foldablePackageOf(source);
+        return folded === undefined ? null : { id: folded, external: true };
+      },
+    },
+  };
+}
 
 // 「契约层」：可安全内联的纯函数 / 线格式模块——没有需要跨插件共享的运行时身份（无单例、Symbol、
 // instanceof 判定）；名单与上游 client 构建的 `INLINE_SAFE` 对齐（这些包没有模块表条目），上游另列的
