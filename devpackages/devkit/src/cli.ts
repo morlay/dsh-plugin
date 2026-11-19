@@ -4,7 +4,7 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildPackage, planOf } from "./build/compile.ts";
 import { writeBuildManifest } from "./build/package-exports.ts";
 
@@ -65,6 +65,19 @@ async function build(args: readonly string[]): Promise<number> {
     const plan = await planOf(dir);
     if (Object.keys(plan.entries).length === 0) continue;
     const artifacts = await buildPackage(dir, plan);
+    // bundle 包的行声明在 `dsh-bundle.ts` 里（`rows`）；读不到就是空清单。
+    const bundleRows =
+      plan.bundle === true && plan.entries["dsh-bundle"] !== undefined
+        ? ((
+            (await import(pathToFileURL(join(dir, plan.entries["dsh-bundle"])).href)) as {
+              rows?: readonly {
+                id: string;
+                disabled?: boolean;
+                config?: Record<string, unknown>;
+              }[];
+            }
+          ).rows ?? [])
+        : [];
     const entries =
       plan.client === undefined ? plan.entries : { ...plan.entries, client: plan.client.source };
     await writeBuildManifest(dir, {
@@ -72,7 +85,7 @@ async function build(args: readonly string[]): Promise<number> {
       artifacts,
       ...(plan.client === undefined ? {} : { clientEntry: "client" }),
       declarationFiles: (entry) => (entry === "client" ? [] : [entry + ".d.mts"]),
-      ...(plan.bundle === true ? { bundle: { rows: [] } } : {}),
+      ...(plan.bundle === true ? { bundle: { rows: bundleRows } } : {}),
       publishOnly: plan.publishOnly,
     });
     process.stdout.write(`built ${relative(root, dir)}\n`);

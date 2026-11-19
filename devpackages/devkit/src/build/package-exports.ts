@@ -4,15 +4,23 @@
 // 分档：`private: true` 只写 `exports`（源码直连），不写 `publishConfig` / `engines.dsh`；发布包另写
 // 发布态清单与 `engines.dsh`，`./dsh-bundle` 这类只发布态入口不进顶层 `exports`。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-/** 一条 bundle 行声明：id、是否禁用、行配置。 */
-export interface BundleRow {
-  readonly id: string;
-  readonly disabled?: boolean;
-  readonly config?: Readonly<Record<string, unknown>>;
-}
+/** 一条 bundle 行声明：改现有行（id / disabled / config），或插入新行（insert）。 */
+export type BundleRow =
+  | {
+      readonly id: string;
+      readonly disabled?: boolean;
+      readonly config?: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly insert: readonly {
+        readonly id: string;
+        readonly name: string;
+        readonly config?: Readonly<Record<string, unknown>>;
+      }[];
+    };
 
 export interface PackageExportsOptions {
   // 入口名 → 源码路径（`index` 是包根出口 `.`）。
@@ -123,6 +131,14 @@ export async function writePackageManifest(
 // bundle 行清单 → `cordis.patch.yml`：首行固定「由 … 生成」，行内只写声明的键。
 function renderPatch(name: string, rows: readonly BundleRow[]): string {
   const body = rows.map((row) => {
+    if ("insert" in row) {
+      const lines = ["- insert:"];
+      for (const item of row.insert) {
+        lines.push(`    - id: ${item.id}`, `      name: ${JSON.stringify(item.name)}`);
+        if (item.config !== undefined) lines.push(`      config: ${JSON.stringify(item.config)}`);
+      }
+      return lines.join("\n");
+    }
     const lines = [`- id: ${row.id}`];
     if (row.disabled !== undefined) lines.push(`  disabled: ${String(row.disabled)}`);
     if (row.config !== undefined) lines.push(`  config: ${JSON.stringify(row.config)}`);
@@ -206,12 +222,18 @@ async function writeManifest(
       typeof manifest["dsh"] === "object" && manifest["dsh"] !== null
         ? (manifest["dsh"] as Record<string, unknown>)
         : {};
-    manifest["dsh"] = { ...current, client: { platform: "web" } };
+    // 手写的 `inject` 等字段保留，只补平台。
+    const currentClient =
+      typeof current["client"] === "object" && current["client"] !== null
+        ? (current["client"] as Record<string, unknown>)
+        : {};
+    manifest["dsh"] = { ...current, client: { ...currentClient, platform: "web" } };
   }
 
   // bundle 的行声明先落 patch，再按文件存在性补出口（数据包手写 patch 的路径也走这里）。
   if (options.bundle !== undefined && !isPrivate) {
     // patch 是发布态产物：落 dist，顶层 exports 不列。
+    await mkdir(join(cwd, "dist"), { recursive: true });
     await writeFile(join(cwd, "dist", "cordis.patch.yml"), renderPatch(name, options.bundle.rows));
     published[PATCH_EXPORT] = "./dist/cordis.patch.yml";
   } else if (await exists(join(cwd, "cordis.patch.yml"))) {

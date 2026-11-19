@@ -53,7 +53,7 @@ afterEach(async () => {
 });
 
 describe("client 出口", () => {
-  it("发布态 `import` 指 ESM 库、`default` 兜底指 CJS 工厂", async () => {
+  it("发布态只有 CJS 工厂（dsh 读字节的那份），顶层 exports 不含", async () => {
     const directory = await makePackage();
     await writeBuildManifest(directory, {
       entries: ENTRIES,
@@ -62,10 +62,8 @@ describe("client 出口", () => {
     });
     const manifest = await manifestOf(directory);
     const published = (manifest["publishConfig"] as { exports?: Record<string, unknown> }).exports;
-    expect(published?.["./client"]).toEqual({
-      import: "./dist/client.mjs",
-      default: "./dist/client.cjs",
-    });
+    expect(published?.["./client"]).toEqual({ default: "./dist/client.cjs" });
+    expect((manifest["exports"] as Record<string, unknown>)["."]).toBe("./src/index.ts");
   });
 });
 
@@ -116,12 +114,15 @@ describe("bundle patch", () => {
       artifacts: ARTIFACTS,
       bundle: { rows: [{ id: "session-store", disabled: true, config: { backend: "rdb" } }] },
     });
-    const patch = await readFile(join(directory, "cordis.patch.yml"), "utf8");
+    const patch = await readFile(join(directory, "dist", "cordis.patch.yml"), "utf8");
     expect(patch).toContain("- id: session-store");
     expect(patch).toContain("disabled: true");
     expect(patch).toContain('config: {"backend":"rdb"}');
     const manifest = await manifestOf(directory);
-    expect(manifest["dsh"]).toEqual({ bundle: { patch: "./cordis.patch.yml" } });
+    expect(manifest["dsh"]).toEqual({ bundle: { patch: "./dist/cordis.patch.yml" } });
+    // patch 是发布产物：只在发布态清单里。
+    expect((manifest["exports"] as Record<string, unknown>)["."]).toBe("./src/index.ts");
+    expect((manifest["exports"] as Record<string, unknown>)["./cordis.patch.yml"]).toBeUndefined();
   });
 });
 
@@ -135,13 +136,18 @@ describe("writePackageManifest（数据包）", () => {
       await writePackageManifest(directory);
     });
     const manifest = await manifestOf(directory);
-    const faces = {
+    // patch 是发布产物（只进发布态）；locale 就在包根，顶层照列。
+    expect(manifest["exports"]).toEqual({
       "./package.json": "./package.json",
-      "./cordis.patch.yml": "./cordis.patch.yml",
       "./locale/*.json": "./locale/*.json",
-    };
-    expect(manifest["exports"]).toEqual(faces);
-    expect(manifest["publishConfig"]).toEqual({ exports: faces });
+    });
+    expect(manifest["publishConfig"]).toEqual({
+      exports: {
+        "./package.json": "./package.json",
+        "./cordis.patch.yml": "./cordis.patch.yml",
+        "./locale/*.json": "./locale/*.json",
+      },
+    });
     expect(manifest["engines"]).toEqual({ dsh: ">= 0.2.1-alpha.5 < 0.2.2" });
   });
 });
