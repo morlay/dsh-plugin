@@ -33,14 +33,21 @@ import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { ToolExecutorNative } from "@morlay/dsh-agent-loop/server";
 import { provideCommand } from "@morlay/dsh-command/server";
-import { provideCommandCompact, provideCompactionBasic } from "@morlay/dsh-compaction";
+import {
+  provideCommandCompact,
+  provideCompactionBasic,
+} from "@morlay/dsh-compaction";
 import { provideJob } from "@morlay/dsh-job/server";
 import { provideJobIdleGuard } from "@morlay/dsh-job";
 import { type PermissionMode } from "@morlay/dsh-permission";
 import { providePermissionFor } from "@morlay/dsh-permission/server";
 
 import { providePtc } from "@morlay/dsh-ptc";
-import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/dsh-sandbox";
+import {
+  SandboxPolicyDefault,
+  provideFsTools,
+  provideSandbox,
+} from "@morlay/dsh-sandbox";
 import { provideWorkspaceFiles } from "@morlay/dsh-workspace/server";
 // 工具行（bash / 文件 / 检索 / 工作目录）归 agent：契约面是 ToolRegistry。
 import { provideEnvTools } from "@morlay/dsh-agent/server";
@@ -54,9 +61,15 @@ import {
 import { SessionQuerySqlite } from "@morlay/dsh-session";
 import { SessionPersistenceRdb } from "@morlay/better-session";
 import { provideBetterSession } from "@morlay/better-session/server";
-import { provideSessionMode, provideSessionModeEndpoints } from "@morlay/session-mode";
+import {
+  provideSessionMode,
+  provideSessionModeEndpoints,
+} from "@morlay/session-mode";
 import { UiSettingsPreferences, UiThemeSchema } from "@morlay/zephyr-app";
-import { provideSessionTitle, provideSessionTitleLlm } from "@morlay/dsh-conversation/server";
+import {
+  provideSessionTitle,
+  provideSessionTitleLlm,
+} from "@morlay/dsh-conversation/server";
 import { provideLlmProviders } from "@morlay/dsh-agent";
 import { LlmPiAi } from "@morlay/dsh-agent";
 import { provideSetting } from "@morlay/dsh-setting/server";
@@ -67,7 +80,10 @@ import { provideAgentUse } from "@morlay/agent-use";
 import { provideAgentTeam } from "@morlay/dsh-agent-team/server";
 import { provideDeliverables } from "@morlay/dsh-conversation/server";
 import { provideUpload } from "@morlay/dsh-upload/server";
-import { provideToolWeb, provideWebAccess } from "@morlay/dsh-web-access/server";
+import {
+  provideToolWeb,
+  provideWebAccess,
+} from "@morlay/dsh-web-access/server";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { WorkingDirectoryDefault } from "@morlay/dsh-agent";
 import { provideWorkingDirectory } from "@morlay/dsh-agent/server";
@@ -89,14 +105,17 @@ export interface CustomProvidersOptions {
   readonly defaultWorkingDirectory: string;
 }
 // 权限档位也只在这里读一次：它同时写沙箱模式与批准策略两个开关。
-const permissionMode = (process.env.DSH_PERMISSION_MODE ?? "workspace-write") as PermissionMode;
+const permissionMode = (process.env.DSH_PERMISSION_MODE ??
+  "workspace-write") as PermissionMode;
 
 /**
  * 入口清单：每组是一个装配单元，按依赖顺序（提供方在前）拼起来。
  * @param options - 部署参数（三项路径，由启动器给）。
  * @returns 完整的 provider 清单。
  */
-export function customProvidersOf(options: CustomProvidersOptions): ProviderEntry[] {
+export function customProvidersOf(
+  options: CustomProvidersOptions,
+): ProviderEntry[] {
   const { dataDir } = options;
   return [
     // 认凭据的行放在最前：`connection` 行 mount 时就要 `Credentials` 的**面**（适配行的面在它自己的
@@ -270,17 +289,10 @@ function settingsProviders(): ProviderEntry[] {
       configure(LlmPiAi, {
         providers: {
           ollama: {
-            // 走凭证服务读 `OLLAMA_API_KEY`（别把密钥写进配置）：上游按 `apiKeyEnv` 取出密钥、作为
-            // 请求的 `apiKey` 交给 pi-ai，Authorization 由它自己发。**不要**再手写 `headers.Authorization`：
-            // 那等于把密钥抄进行 config，而设置页的视图（`settings/describe` 的 base 层）要把它下发到浏览器。
             apiKeyEnv: "OLLAMA_API_KEY",
             displayName: "Ollama Cloud",
-            api: "anthropic-messages",
-            baseURL: "https://ollama.com",
-            // 这条网关认 `Authorization: Bearer`，而 pi-ai 的 Anthropic 实现把 key 发成 `x-api-key`。
-            // 头里写**环境引用**（`LlmPiAi` 在挂载前从启动环境快照解析成真值）：装配层（`settings/describe`
-            // 的 base）只会拿到引用字符串，密钥不进行 config、也不下发浏览器。
-            headers: { Authorization: "Bearer ${OLLAMA_API_KEY}" },
+            api: "openai-completions",
+            baseURL: "https://ollama.com/v1",
             reasoning: "high",
             requestImageMaxBytes: 2_097_152,
             models: [
@@ -289,7 +301,12 @@ function settingsProviders(): ProviderEntry[] {
                 name: "DeepSeek V4.1 Flash 1017 @ Ollama Cloud",
                 contextWindow: 1_000_000,
                 input: ["text", "image"],
-                reasoningEfforts: { off: null, low: "low", high: "high", max: "max" },
+                reasoningEfforts: {
+                  off: null,
+                  low: "low",
+                  high: "high",
+                  max: "max",
+                },
               },
             ],
           },
@@ -363,7 +380,9 @@ function deploymentProviders(paths: CustomProvidersOptions): ProviderEntry[] {
       }),
     ),
     ...provideWorkingDirectory(
-      configure(WorkingDirectoryDefault, { defaultDirectory: defaultWorkingDirectory }),
+      configure(WorkingDirectoryDefault, {
+        defaultDirectory: defaultWorkingDirectory,
+      }),
     ),
     // 右栏的终端：上游 `TerminalController` 的 `static inject` 要 `sandboxPolicy` / `workingDirectory`，
     // 而适配行是**同步 `new`**（`super(ctx, name)` 当场做 inject 检查），所以必须排在它们之后。
