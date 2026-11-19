@@ -7,7 +7,7 @@ import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiSession } from "../ui-session.token.ts";
 import { UiConversation } from "./conversation.token.ts";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
-import { remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { groupNameOf } from "@morlay/zephyr-app/remote";
 import { ToolResultsEndpoint } from "../../endpoint/tool-results.group.ts";
 
 /**
@@ -16,9 +16,7 @@ import { ToolResultsEndpoint } from "../../endpoint/tool-results.group.ts";
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 function toolResultsGroup(): string {
-  const group = remoteGroupNameOf(ToolResultsEndpoint);
-  if (group === undefined) throw new Error("ToolResultsEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(ToolResultsEndpoint);
 }
 
 @Injectable()
