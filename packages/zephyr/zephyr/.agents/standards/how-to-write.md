@@ -132,6 +132,10 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
    `mount` 返回之后（实测立刻读是 `undefined`），而 `inject` 的填充期**早于**它；并且这里要的是那个
    **上游实例**（给它的 `generation` 装兜底 observable、拿它的共享 fetch 分派器），不是我们的契约面——
    `inject.optional(Connection)` 两件都做不到（拿到的是契约代理，且那时还没有）。
+5. `configurable-sandbox/src/runtime-contexts.service.ts`（`current.ctx.get("approval", false)`）—— **别人的 scope**：
+   `current.ctx` 是**上游 agent 的 ctx**（prompt 组装回调里拿到的那个），它的 `approval` 是上游在 agent 装配期发的；
+   我们的令牌绑不到别人的 ctx（`EventEmitter` / 字段注入都只能绑本行）。与第 4 条同类（晚绑定），只是作用域是 agent 而非应用根。
+   读回来只用一次（渲染审批上下文），改成 `inject` 需要上游在 prompt 组装面给出显式成员——那是上游改造，不现实。
 5. `zephyr-dev/src/http/serve.service.ts`（`ctx.get("connection", false)`）—— 同上（晚绑定），
    而且读的是 **host 侧才有的** `authorizeIndex`（页面响应的准入），它不在「浏览器侧连接面」契约里。
 6. `zephyr-ui/src/client/schema-form/hints.ts` / `index.ts`（`ctx.root.reflect.get(SERVICE_NAME, false)`）
@@ -193,7 +197,10 @@ grep -rn '\.get("[a-zA-Z]\|reflect\.get(' packages --include='*.ts' --include='*
 
 判据：
 ```sh
-grep -rn 'serviceOf|\\.get("[a-zA-Z]|reflect\\.get(' packages --include='*.ts' --include='*.tsx' \
-  | grep -v __tests__ | grep -v 'zephyr/zephyr/src/\\(bootstrap\\|compat\\)'
+grep -rnE 'serviceOf|\.get\("[a-zA-Z]|reflect\.get\(' packages --include='*.ts' --include='*.tsx' \
+  | grep -v __tests__ | grep -vE 'zephyr/zephyr/src/(bootstrap|compat)'
 ```
-——**期望为空**（`scoped.get(` 属上游 session scope 的 API，不计；但要在调用点注明）。
+——**期望只剩上面例外清单里那几处**（`scoped.get(` 属上游 session scope 的 API，不计；但要在调用点注明）。
+
+**`-E` 是必需的**：这条判据用 BRE 写时 `|` 是**字面量**而不是「或」——那样它找的是「`serviceOf|…` 这个整体字面量」，
+**恒 0 命中（假绿）**。判据里的正则一律用 `-E`；review 时要专门看一眼「判据自己写错导致永远绿」。
