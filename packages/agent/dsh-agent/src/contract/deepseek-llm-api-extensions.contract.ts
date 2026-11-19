@@ -1,4 +1,4 @@
-// DeepSeek LLM API 扩展注册表契约：令牌按服务语义命名。
+// DeepSeek LLM API 扩展注册表契约：令牌按服务语义命名（上游注册名 `deepseekLlmApiExtensions`）。
 //
 // 上游不是 cordis `Service`：它是一份**注册表对象**（`register` 登记、`prepare` 在请求前把扩展折叠进
 // 请求体），`fromCordis` 把上游实例接管到这个令牌上，所以契约面按上游实例的公开成员投影。
@@ -17,7 +17,7 @@ export type DeepseekLlmApiExtensionsCovered = AssertTrue<
   AssertCovered<DeepSeekLlmApiExtensionRegistry, DeepseekLlmApiExtensions>
 >;
 
-@Injectable()
+@Injectable({ name: "deepseekLlmApiExtensions" })
 export abstract class DeepseekLlmApiExtensions {
   abstract readonly register: DeepSeekLlmApiExtensionRegistry["register"];
 

@@ -12,7 +12,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type WebCovered = AssertTrue<AssertCovered<WebRuntimeService, Web>>;
 
-@Injectable()
+@Injectable({ name: "web" })
 export abstract class Web {
   abstract readonly registerSearchProvider: WebRuntimeService["registerSearchProvider"];
 

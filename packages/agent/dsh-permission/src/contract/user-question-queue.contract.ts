@@ -18,7 +18,7 @@ export type UserQuestionsCovered = AssertTrue<
   AssertCovered<Omit<UserQuestionService, "typertRemote">, UserQuestionQueue>
 >;
 
-@Injectable()
+@Injectable({ name: "userQuestions" })
 export abstract class UserQuestionQueue {
   abstract readonly ask: UserQuestionService["ask"];
 

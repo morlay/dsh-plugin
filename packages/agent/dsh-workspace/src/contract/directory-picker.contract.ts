@@ -20,7 +20,7 @@ export type DirectoryPickerBackendCovered = AssertTrue<
   AssertCovered<NativeDirectoryPicker, DirectoryPickerBackendFace>
 >;
 
-@Injectable()
+@Injectable({ name: "directoryPicker" })
 export abstract class DirectoryPickerBackend {
   /** 这个 backend 交互形态（`native` 或 `browse`）。 */
   abstract capability(): DirectoryPickerCapability;

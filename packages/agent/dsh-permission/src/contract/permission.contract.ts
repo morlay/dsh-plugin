@@ -1,4 +1,4 @@
-// 权限预设契约：令牌按服务语义命名（上游注册名 `permission`）。
+// 权限预设契约：令牌按服务语义命名（上游注册名 `permissionPresets`）。
 import type PermissionPresetService from "@deepseek-ai/dsh-permission-presets";
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
@@ -18,7 +18,7 @@ export type PermissionCovered = AssertTrue<
   AssertCovered<Omit<PermissionPresetService, "typertRemote">, Permission>
 >;
 
-@Injectable()
+@Injectable({ name: "permissionPresets" })
 export abstract class Permission {
   abstract readonly names: PermissionPresetService["names"];
 

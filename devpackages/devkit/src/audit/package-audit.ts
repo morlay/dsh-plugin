@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // **单包**的结构性检查（由 `pnpm -r exec` 在包目录里跑）：只判本包能判的，输出一行 JSON 给汇总器。
 //
-//   - 面边界：本包内相对 import 的落点（root/ui/server 不许互相越界）；
+//   - 面边界：本包内相对 import 的落点（root/ui/server 不许互相越界；contract / endpoint 这两个
+//     shared 面**不得**反向依赖 ui / server——契约面一旦拖进实现，消费方就被迫连宿主一起装）；
 //   - 声明未用：本包声明却没用到的 `@deepseek-ai/*`；
 //   - 上游面：本包用到的上游包的 **面**（`pkg#host` / `pkg#client` / `pkg#remote`）——唯一化要跨包汇总。
 //
@@ -243,6 +244,9 @@ for (const [index, file] of files.entries()) {
       faces.push(`server→ui  ${relative(cwd, file)} => ${target}`);
     else if (face === "root" && (tface === "server" || tface === "ui"))
       faces.push(`root→face  ${relative(cwd, file)} => ${target}`);
+    else if (face === "shared" && (tface === "server" || tface === "ui"))
+      // 契约 / 端点面只声明形状：往 server / ui 反向依赖，等于让「只想要一份声明」的消费方连实现一起装。
+      faces.push(`shared→face  ${relative(cwd, file)} => ${target}`);
   }
 }
 

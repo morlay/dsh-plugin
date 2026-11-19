@@ -3,7 +3,8 @@
 //
 // 上游把这个服务建在 `ui-workspace` 那一行内部（`new UiWorkspaceService(ctx, …)`），名字只在行作用域；
 // `ui-directory-picker-browse` 是另一行，要按名字拿到它，就必须由 `ui-workspace` 行把它发布成一个
-// **契约**。令牌住应用层：它是「这一页装哪几行上游 UI」的接线，不属于任何单个上游包。
+// **契约**。令牌住契约面（跨包消费方从 `@morlay/dsh-workspace/contract` 取，`./ui` 也照旧转出它）——
+// 契约面不反向依赖 ui 面。
 //
 // 形态与 agent 骨架的其它契约一致：**抽象类 + `@Injectable({ name })`**，不用 `InjectionToken` 表达
 // 服务面（值令牌没有成员可查、也没有覆盖守卫）。服务名与上游一致（`uiWorkspace`）。

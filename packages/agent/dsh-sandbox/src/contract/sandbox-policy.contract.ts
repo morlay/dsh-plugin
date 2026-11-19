@@ -29,7 +29,7 @@ export { writableRoots } from "@deepseek-ai/dsh-sandbox";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type SandboxPolicyCovered = AssertTrue<AssertCovered<SandboxPolicyService, SandboxPolicy>>;
 
-@Injectable()
+@Injectable({ name: "sandboxPolicy" })
 export abstract class SandboxPolicy {
   abstract readonly defaultMode: SandboxPolicyService["defaultMode"];
 

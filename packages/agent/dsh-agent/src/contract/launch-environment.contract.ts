@@ -4,6 +4,9 @@
 // `LaunchEnvironmentSnapshot` 与 `ctx.launchEnvironment` 槽（消费方用 `launchEnvironmentOf(ctx)` 读）。
 // 所以这里没有「覆盖上游服务全部成员」这回事——契约只有一条：**把那个快照原样交出去**，
 // 消费方注入 `LaunchEnvironment` 就能读到与 `launchEnvironmentOf(ctx)` 同一个值。
+//
+// 所以**不写** `@Injectable({ name: "launchEnvironment" })`：那个名字上是**快照值**（`ctx.get(…)` 读它），
+// 按别名再发一份会把服务实例压在同一个槽上——之后 `launchEnvironmentOf(ctx)` 取到的就不是快照了。
 import type { LaunchEnvironmentSnapshot } from "@deepseek-ai/dsh-launch-environment";
 import { Injectable } from "@morlay/zephyr";
 

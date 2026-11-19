@@ -14,7 +14,7 @@ export type WorkingDirectoryCovered = AssertTrue<
   AssertCovered<WorkingDirectoryService, WorkingDirectory>
 >;
 
-@Injectable()
+@Injectable({ name: "workingDirectory" })
 export abstract class WorkingDirectory {
   abstract readonly get: WorkingDirectoryService["get"];
 

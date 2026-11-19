@@ -18,7 +18,7 @@ export type { Agent } from "@deepseek-ai/dsh-agent";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type AgentDirectoryCovered = AssertTrue<AssertCovered<AgentRegistryService, AgentDirectory>>;
 
-@Injectable()
+@Injectable({ name: "agents" })
 export abstract class AgentDirectory {
   abstract readonly currentInitiator: AgentRegistryService["currentInitiator"];
 

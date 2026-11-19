@@ -1,4 +1,4 @@
-// 技能注册表契约：令牌按服务语义命名（上游注册名 `skill`）。
+// 技能注册表契约：令牌按服务语义命名（上游注册名 `skills`）。
 import type SkillRegistryService from "@deepseek-ai/dsh-skill";
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
@@ -12,7 +12,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type SkillCovered = AssertTrue<AssertCovered<SkillRegistryService, Skill>>;
 
-@Injectable()
+@Injectable({ name: "skills" })
 export abstract class Skill {
   abstract readonly registerProvider: SkillRegistryService["registerProvider"];
 

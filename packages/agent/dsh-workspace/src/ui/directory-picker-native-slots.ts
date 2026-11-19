@@ -10,7 +10,7 @@
 import { NativeDirectoryFlow } from "@deepseek-ai/dsh-client-ui-directory-picker-native/src/client/flow.ts";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Slots } from "@morlay/zephyr-app/client";
-import { UiWorkspace } from "./ui-workspace.token.ts";
+import { UiWorkspace } from "@morlay/dsh-workspace/contract";
 
 /** 占用项的注入面（与上游 `NativeFlowInjected` 同形）。 */
 interface NativeFlowFace {

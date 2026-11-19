@@ -22,7 +22,7 @@ type SessionControllerUpstream = InstanceType<typeof SessionControllerPlugin>;
  *
  * 27 个成员逐个列；`typertRemote` 是 `TypertRemoteService` 基类挂的绑定（gateway 靠它发现端点）。
  */
-@Injectable({ name: "fileReferences" })
+@Injectable({ name: "sessionController" })
 export abstract class SessionControllerService {
   /** 上游基类挂的 remote 绑定（`{ service, serviceKey, namespace }`）：gateway 的发现依据。 */
   abstract readonly typertRemote: SessionControllerUpstream["typertRemote"];
@@ -138,7 +138,7 @@ export type FileReferenceCovered = AssertTrue<
 type SessionFileReferencesUpstream = InstanceType<typeof SessionFileReferencesPlugin>;
 
 /** `sessionFileReferences`：`fileReferences/list` 端点（wire 命名空间 `fileReferences`）。 */
-@Injectable()
+@Injectable({ name: "sessionFileReferences" })
 export abstract class SessionFileReferencesService {
   /** 上游基类挂的 remote 绑定：gateway 靠它发现端点。 */
   abstract readonly typertRemote: SessionFileReferencesUpstream["typertRemote"];
@@ -156,7 +156,7 @@ export type SessionFileReferencesCovered = AssertTrue<
 type SessionSkillCatalogUpstream = InstanceType<typeof SessionSkillCatalogPlugin>;
 
 /** `sessionSkillCatalog`：技能目录（wire 命名空间 `skills`）。 */
-@Injectable()
+@Injectable({ name: "sessionSkillCatalog" })
 export abstract class SessionSkillCatalogService {
   /** 上游基类挂的 remote 绑定：gateway 靠它发现端点。 */
   abstract readonly typertRemote: SessionSkillCatalogUpstream["typertRemote"];

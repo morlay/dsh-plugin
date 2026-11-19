@@ -3,6 +3,8 @@
 // 为什么单独一条接缝：会话创建需要 workspace 的路径，并在建好后把会话挂到 workspace 上（更新 `sessionIds`），
 // 而 `@morlay/dsh-session` **不能**依赖 `@morlay/dsh-workspace`（后者已依赖前者，反向会成环）。
 // 这里只声明「解析目标 + 事后挂载」两件事，实现由 workspace 那一侧提供，装配层把它们接起来。
+//
+// 本仓自有的端口：上游没有对应的服务名，所以不带 `@Injectable({ name })`。
 import type { SessionId } from "@deepseek-ai/dsh-session";
 import { Injectable } from "@morlay/zephyr";
 

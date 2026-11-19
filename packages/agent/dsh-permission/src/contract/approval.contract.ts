@@ -14,7 +14,7 @@ export type { ApprovalPolicy } from "@deepseek-ai/dsh-user-approval";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type ApprovalCovered = AssertTrue<AssertCovered<ApprovalService, Approval>>;
 
-@Injectable()
+@Injectable({ name: "approval" })
 export abstract class Approval {
   abstract readonly config: ApprovalService["config"];
 

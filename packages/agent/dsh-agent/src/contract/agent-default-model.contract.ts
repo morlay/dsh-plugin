@@ -31,7 +31,7 @@ export type AgentDefaultModelCovered = AssertTrue<
   AssertCovered<AgentDefaultModelConfig, AgentDefaultModel>
 >;
 
-@Injectable()
+@Injectable({ name: "agentDefaultModel" })
 export abstract class AgentDefaultModel {
   abstract readonly currentSelection: AgentDefaultModelConfig["currentSelection"];
 

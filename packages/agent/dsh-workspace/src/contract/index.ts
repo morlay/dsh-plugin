@@ -2,5 +2,5 @@
 export * from "./directory-picker.contract.ts";
 export * from "./workspace.contract.ts";
 export * from "./workspace-id.ts";
-// 浏览器半也要被别的 ui 消费的契约：放 contract，ui 自己再引用。
-export { UiWorkspace } from "../ui/ui-workspace.token.ts";
+// 浏览器半也要被别的 ui 消费的契约：住契约面，ui 面从这里（或 `./ui`）引用。
+export * from "./ui-workspace.contract.ts";

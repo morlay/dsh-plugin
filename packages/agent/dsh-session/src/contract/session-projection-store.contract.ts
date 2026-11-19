@@ -17,7 +17,7 @@ export type SessionProjectionStoreCovered = AssertTrue<
 >;
 
 /** 投影注册表：按会话状态键登记投影，并读取当前快照。 */
-@Injectable()
+@Injectable({ name: "sessionProjections" })
 export abstract class SessionProjectionStore {
   abstract readonly register: SessionProjectionRegistry["register"];
 

@@ -28,7 +28,7 @@ export { freezeMessage } from "@deepseek-ai/dsh-llm";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type LlmCovered = AssertTrue<AssertCovered<LlmRuntime, Llm>>;
 
-@Injectable()
+@Injectable({ name: "llm" })
 export abstract class Llm {
   abstract readonly typertRemote: LlmRuntime["typertRemote"];
 

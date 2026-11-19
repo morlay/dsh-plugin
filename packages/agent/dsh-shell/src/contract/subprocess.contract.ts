@@ -11,7 +11,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type SubprocessCovered = AssertTrue<AssertCovered<SubprocessRuntime, Subprocess>>;
 
-@Injectable()
+@Injectable({ name: "subprocess" })
 export abstract class Subprocess {
   abstract readonly resolveExecutable: SubprocessRuntime["resolveExecutable"];
 

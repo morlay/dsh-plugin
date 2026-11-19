@@ -18,7 +18,7 @@ export { projectToolSchema } from "@deepseek-ai/dsh-tools";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type ToolRegistryCovered = AssertTrue<AssertCovered<ToolRuntime, ToolRegistry>>;
 
-@Injectable()
+@Injectable({ name: "tools" })
 export abstract class ToolRegistry {
   abstract readonly register: ToolRuntime["register"];
 

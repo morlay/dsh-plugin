@@ -1,5 +1,8 @@
 // subagent 运行时契约：令牌按服务语义命名（上游注册名 `subagents`）。
-import type { SubagentRuntime } from "../server/index.ts";
+//
+// 上游类直接取自它自己的包：契约面不经过 `../server`（那是 wire 面），否则契约一旦被引用就把
+// 宿主侧实现拖进依赖图。
+import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
@@ -12,7 +15,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type SubagentsCovered = AssertTrue<AssertCovered<SubagentRuntime, SubagentRegistry>>;
 
-@Injectable()
+@Injectable({ name: "subagents" })
 export abstract class SubagentRegistry {
   abstract readonly resolveMaxDepth: SubagentRuntime["resolveMaxDepth"];
 

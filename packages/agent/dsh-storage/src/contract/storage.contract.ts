@@ -29,7 +29,7 @@ export { storageBackendServiceKey } from "@deepseek-ai/dsh-storage";
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type StorageCovered = AssertTrue<AssertCovered<StorageHub, Storage>>;
 
-@Injectable()
+@Injectable({ name: "storage" })
 export abstract class Storage {
   abstract readonly backend: StorageHub["backend"];
 

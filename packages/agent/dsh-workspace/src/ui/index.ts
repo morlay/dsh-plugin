@@ -3,7 +3,8 @@ export { WorkspaceController } from "./workspace-controller.contract.ts";
 export { WorkspaceControllerDefault } from "./workspace-controller.service.ts";
 export { WorkspaceRemoteBinding } from "./workspace-remote.binding.ts";
 export { WorkspaceSlots } from "./workspace-slots.ts";
-export { UiWorkspace } from "./ui-workspace.token.ts";
+// 契约的 home 在契约面（`src/contract/ui-workspace.contract.ts`）：这里只是照旧转出，跨面取它走包出口。
+export { UiWorkspace } from "@morlay/dsh-workspace/contract";
 export { DirectoryPickerNativeSlots } from "./directory-picker-native-slots.ts";
 export { provideWorkspaceUi } from "./workspace.provide.ts";
 export { ContextMenuSlots } from "./context-menu-slots.ts";

@@ -163,7 +163,7 @@ const subentryParentImports = reports.flatMap((entry) =>
   (entry.subentryParentImports ?? []).map((line) => `${entry.pkg}  ${line}`),
 );
 
-report("面边界（root→server/ui、ui→host、server→ui）", faces);
+report("面边界（root→server/ui、ui→host、server→ui、contract/endpoint→server/ui）", faces);
 report("上游包唯一化（同一上游包的同一个面只该有一个本地 owner）", conflicts);
 report("声明未用（依赖清单 vs 源码/scripts/清单其它字段）", unused, {
   hint: write ? "（已删除）" : "（`just audit --write` 一键删）",

@@ -90,11 +90,12 @@ describe("SessionAgentControl：agent 目录面", () => {
     },
   );
 
-  it("目录按契约令牌注入（不按服务名 `agents` 现读）", { timeout: 60_000 }, async () => {
+  it("目录按契约令牌注入（令牌与上游名 `agents` 指向同一实例）", { timeout: 60_000 }, async () => {
     const host = await startHost();
     opened.push(host);
-    // 装配里**只有契约令牌**上有目录：按上游服务名现读的话这里会拿到 undefined。
-    expect(host.ctx.get("agents", false)).toBeUndefined();
+    // 目录挂在契约令牌名下，并按 `@Injectable({ name: "agents" })` 的别名再挂一份上游名（`publishToken`
+    // 与 `bootstrap.ts` 同一机制）：两个名字是**同一个实例**，消费方仍按令牌注入。
+    expect(host.ctx.get("agents", false)).toBe(host.agentDirectory);
 
     const live = host.ctx.sessions.create(SessionId("token-injected"), {
       meta: meta("token-injected", "/work"),

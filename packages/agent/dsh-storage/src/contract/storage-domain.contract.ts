@@ -1,14 +1,15 @@
 // storage-domain 契约：令牌按服务语义命名（上游注册名 `storageDomain`）。
 //
-// **上游的真面不是一个 cordis Service**：`storage-domain` 行把自己的 `DomainFacility` 挂到
-// `storage.mount("domain", facility)` 上，消费方按 `ctx.storage.domain.<member>` 取用。
+// **上游的真面不是一个 cordis Service**：`storage-domain` 行的 `apply` 里既
+// `domainCtx.provide('storageDomain', facility)`，又把同一份 facility 挂到 `storage.mount("domain", …)` 上——
+// 两个名字指向同一个实例（`ctx.storageDomain` / `ctx.storage.domain`）。
 // 所以这里的契约面 = `DomainFacility` 的公开成员，成员一个都不能少（缺一个消费方读到 `undefined`）。
 import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
 import type { DomainSpec } from "@deepseek-ai/dsh-storage-domain";
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
-@Injectable()
+@Injectable({ name: "storageDomain" })
 export abstract class StorageDomain {
   /**
    * 按 spec 打开一个 domain（`spec.name` 为键）。
