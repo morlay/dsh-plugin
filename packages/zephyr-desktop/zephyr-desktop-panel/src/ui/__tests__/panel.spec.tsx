@@ -2,7 +2,12 @@
 // 判据：面板只发意图、只收主进程推的 state；矩形跟着布局走；关掉（卸载）就把 view 关掉并退订。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { browserPaneOf, panelBoundsOf, type BrowserPaneBridgeLike, type PaneChange } from "../panel-bridge.ts";
+import {
+  browserPaneOf,
+  panelBoundsOf,
+  type BrowserPaneBridgeLike,
+  type PaneChange,
+} from "../panel-bridge.ts";
 import { PANEL_ID } from "../panel-slots.ts";
 import { DesktopPanelBody } from "../panel.view.tsx";
 
@@ -40,7 +45,9 @@ function fakeBridge(): BrowserPaneBridgeLike & {
     },
     navigate: async (id, url) => {
       calls.push(`navigate:${id}:${url}`);
-      return url.startsWith("http") ? { ok: true } : { ok: false, reason: "面板只打开 http / https 地址" };
+      return url.startsWith("http")
+        ? { ok: true }
+        : { ok: false, reason: "面板只打开 http / https 地址" };
     },
     close: async (id) => {
       calls.push(`close:${id}`);
@@ -61,7 +68,9 @@ describe("面板矩形（panelBoundsOf）", () => {
   });
 
   it("取整到像素（子像素进 view 会抖）", () => {
-    const element = { getBoundingClientRect: () => ({ x: 10.4, y: 20.6, width: 300.5, height: 200.4 }) };
+    const element = {
+      getBoundingClientRect: () => ({ x: 10.4, y: 20.6, width: 300.5, height: 200.4 }),
+    };
     expect(panelBoundsOf(element as never)).toEqual({ x: 10, y: 21, width: 301, height: 200 });
   });
 });

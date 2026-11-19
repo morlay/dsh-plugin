@@ -13,12 +13,12 @@
 
 `settings/describe` 的一个命名空间视图有四个数据位，各有各的语义：
 
-| 位 | 是什么 |
-| --- | --- |
-| `value` | 生效值：schema 默认值 ⊕ **装配层**（行 config）⊕ 用户层（`settings.json`） |
-| `base` | 装配层：`configure(实现类, patch)` 给的那一份（`@Setting` 的 `settingRow` 在 `onInit` 注册 schema 时一并交出） |
-| `user` | 只有用户自己写过的层；没写过就没有这个键 |
-| `secrets` | schema 声明为 `role('secret')` 的每个位置与「有没有值」；三层里的密钥值都已被抹掉 |
+| 位        | 是什么                                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `value`   | 生效值：schema 默认值 ⊕ **装配层**（行 config）⊕ 用户层（`settings.json`）                                     |
+| `base`    | 装配层：`configure(实现类, patch)` 给的那一份（`@Setting` 的 `settingRow` 在 `onInit` 注册 schema 时一并交出） |
+| `user`    | 只有用户自己写过的层；没写过就没有这个键                                                                       |
+| `secrets` | schema 声明为 `role('secret')` 的每个位置与「有没有值」；三层里的密钥值都已被抹掉                              |
 
 `base` 这一层不能省：模型页按 `value` 的 `settingsPath` 判「这个 provider 配没配」，缺了它，装配里配好的
 provider（如 `llm-pi-ai` 的路由）在设置页永远是「未配置」、只能从「添加」里重配一份。

@@ -122,10 +122,9 @@ export class DesktopPanelView implements OnInit {
   private off: (() => void) | undefined;
 
   onInit(): void {
-    this.off = this.slots.registerDynamic(
-      { name: "sidebar.right.pane.tab", key: PANEL_ID },
-      () => <DesktopPanelBody bridge={browserPaneOf()} />,
-    );
+    this.off = this.slots.registerDynamic({ name: "sidebar.right.pane.tab", key: PANEL_ID }, () => (
+      <DesktopPanelBody bridge={browserPaneOf()} />
+    ));
   }
 
   onDispose(): void {

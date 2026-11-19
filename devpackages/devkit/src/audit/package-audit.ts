@@ -354,9 +354,7 @@ if (group === "agent-ex") {
 // 它引面外的契约是**它的职责**（把散落在各面的共享契约收拢成一个出口，正是为了不让子入口面去够兄弟目录）。
 // 不豁免的话「开一个 `./contract` 出口」这个正确做法会被判成违规。
 const exportEntryFiles = new Set(
-  Object.values(
-    (manifest.exports ?? {}) as Record<string, string | { readonly default?: string }>,
-  )
+  Object.values((manifest.exports ?? {}) as Record<string, string | { readonly default?: string }>)
     .map((v) => (typeof v === "string" ? v : v.default))
     .filter((v): v is string => typeof v === "string")
     .map((v) => resolve(cwd, v)),

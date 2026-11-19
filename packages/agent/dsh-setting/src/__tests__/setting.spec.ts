@@ -9,7 +9,13 @@ import {
   ThemeSettingsSchema,
   type ThemeSettings,
 } from "@deepseek-ai/dsh-client-ui-theme/src/theme-settings.ts";
-import { bootstrapApplication, type App, inject, Injectable, type ProviderEntry } from "@morlay/zephyr";
+import {
+  bootstrapApplication,
+  type App,
+  inject,
+  Injectable,
+  type ProviderEntry,
+} from "@morlay/zephyr";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
@@ -414,29 +420,24 @@ class FakeLayeredSetting {
 }
 
 describe("视图的三层（schema 默认 → 装配层 → 用户层）", () => {
-  it(
-    "装配层进 `value` 与 `base`，密钥只写不读",
-    { timeout: 20_000 },
-    async () => {
-      const { app } = await boot(undefined, [FakeLayeredSetting]);
-      const described = unwrap<unknown>(
-        await app.get(RemoteHandlers).invoke("settings/describe", {}),
-      );
-      if (!isDescribeValue(described))
-        throw new Error("settings/describe 的返回值不是 describe 值");
-      const view = described.namespaces.find((entry) => entry.ns === "fake-layered");
-      if (view === undefined) throw new Error("settings/describe 里没有 fake-layered 的视图");
+  it("装配层进 `value` 与 `base`，密钥只写不读", { timeout: 20_000 }, async () => {
+    const { app } = await boot(undefined, [FakeLayeredSetting]);
+    const described = unwrap<unknown>(
+      await app.get(RemoteHandlers).invoke("settings/describe", {}),
+    );
+    if (!isDescribeValue(described)) throw new Error("settings/describe 的返回值不是 describe 值");
+    const view = described.namespaces.find((entry) => entry.ns === "fake-layered");
+    if (view === undefined) throw new Error("settings/describe 里没有 fake-layered 的视图");
 
-      // 生效值里有装配层：模型页按 `value` 的 `settingsPath` 判「这个 provider 配没配」。
-      expect(view.value).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
-      // `base` 就是装配层（行 config），同样脱敏。
-      expect(view.base).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
-      // 用户没写过：`user` 不能拿装配层冒充。
-      expect(view.user).toBeUndefined();
-      // 密钥只写不读：值里没有它，位置与「有没有值」由 `secrets` 说。
-      expect(view.secrets).toEqual([{ path: ["apiKey"], set: true }]);
-    },
-  );
+    // 生效值里有装配层：模型页按 `value` 的 `settingsPath` 判「这个 provider 配没配」。
+    expect(view.value).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
+    // `base` 就是装配层（行 config），同样脱敏。
+    expect(view.base).toEqual({ providers: { ollama: { baseURL: "https://ollama.com" } } });
+    // 用户没写过：`user` 不能拿装配层冒充。
+    expect(view.user).toBeUndefined();
+    // 密钥只写不读：值里没有它，位置与「有没有值」由 `secrets` 说。
+    expect(view.secrets).toEqual([{ path: ["apiKey"], set: true }]);
+  });
 
   it(
     "用户层与装配层并存：`user` 只放用户写的那份，`value` 三层合并",

@@ -13,7 +13,8 @@ import type {
   FsWriteIntent,
   FsWriteOutcome,
 } from "@morlay/dsh-fs/contract";
-import { FileSystemConfig as UpstreamFsConfig, LocalFileSystem } from "@morlay/dsh-fs";
+import type { FileSystemConfig as UpstreamFsConfig } from "@morlay/dsh-fs";
+import { LocalFileSystem } from "@morlay/dsh-fs";
 import type { SandboxExecutionPolicy, SandboxMode } from "@morlay/dsh-sandbox/contract";
 import { SandboxPolicy } from "@morlay/dsh-sandbox";
 import { FileSystem } from "@morlay/dsh-fs";

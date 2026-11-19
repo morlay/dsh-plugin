@@ -17,14 +17,14 @@ zephyr 桌面应用的 Electron 壳：窗口与状态、产品菜单、单实例
 
 壳的两种形态与吵闹程度**都由外部环境决定**，中间逻辑（菜单、装配、宿主）不为某个形态改分支：
 
-| 变量                                     | 取值                       | 作用                                                                                             |
-| ---------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `ZEPHYR_DESKTOP_MODE`                    | `dev` / `packaged`         | dev：窗口只当浏览器，页面走工作区 dev server；packaged：页面与宿主都在随包产物里                 |
-| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`                  | 开发者模式的启动来源之一：`1` 即开（另有 `--zephyr-debug` 与 userData 下的 `debug` 标记）        |
-| `ZEPHYR_DESKTOP_NO_SANDBOX`              | `1`                        | 受限环境（容器/无 GPU）下关沙箱并停用硬件加速，必须在 ready 之前                                 |
-| `ZEPHYR_DESKTOP_URL`                     | URL                        | dev 形态加载哪个页面                                                                             |
-| `ZEPHYR_DESKTOP_WORKSPACE` / `_DATA_DIR` | 路径                       | 宿主清单需要的部署值                                                                             |
-| `ZEPHYR_DESKTOP_DATA_DIR_SPEC`           | `workspace` / `xdg` / 路径 | 数据根的原始写法（`desktop dev` 递进来；启动行原样报出来，壳不推断）                             |
+| 变量                                     | 取值                       | 作用                                                                                      |
+| ---------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| `ZEPHYR_DESKTOP_MODE`                    | `dev` / `packaged`         | dev：窗口只当浏览器，页面走工作区 dev server；packaged：页面与宿主都在随包产物里          |
+| `ZEPHYR_DESKTOP_DEBUG`                   | `1` / `0`                  | 开发者模式的启动来源之一：`1` 即开（另有 `--zephyr-debug` 与 userData 下的 `debug` 标记） |
+| `ZEPHYR_DESKTOP_NO_SANDBOX`              | `1`                        | 受限环境（容器/无 GPU）下关沙箱并停用硬件加速，必须在 ready 之前                          |
+| `ZEPHYR_DESKTOP_URL`                     | URL                        | dev 形态加载哪个页面                                                                      |
+| `ZEPHYR_DESKTOP_WORKSPACE` / `_DATA_DIR` | 路径                       | 宿主清单需要的部署值                                                                      |
+| `ZEPHYR_DESKTOP_DATA_DIR_SPEC`           | `workspace` / `xdg` / 路径 | 数据根的原始写法（`desktop dev` 递进来；启动行原样报出来，壳不推断）                      |
 
 调试面（`log` / `renderer` 受开关控制，`fail` 不受）是**开发者模式的只读投影**，实现在
 [`src/debug.ts`](./src/debug.ts)；三源合并与运行期切换在下一节。
@@ -43,12 +43,12 @@ Inspector 只绑 `127.0.0.1`，缺省 9229、被占则顺延，**真实**地址�
 Chrome DevTools）；打不开（端口全占）就标灰并记一行，不弹窗也不退出。关掉开发者模式与退出应用都会关掉
 它，不留监听。
 
-| 模块                                          | 拥有                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------- |
-| [`src/dev-mode.ts`](./src/dev-mode.ts)         | 三源合并、运行期切换、持久化与订阅（`DevMode`）                  |
-| [`src/inspector.ts`](./src/inspector.ts)       | 开关主进程调试端口与地址（`InspectorPort` + `node:inspector`）  |
-| [`src/dev-tools.ts`](./src/dev-tools.ts)       | 两者接线：关模式收端口、打不开标灰、退出收端口                    |
-| [`src/debug.ts`](./src/debug.ts)               | `ShellDebug`：上面那个状态的只读投影（日志与渲染 console）        |
+| 模块                                     | 拥有                                                           |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| [`src/dev-mode.ts`](./src/dev-mode.ts)   | 三源合并、运行期切换、持久化与订阅（`DevMode`）                |
+| [`src/inspector.ts`](./src/inspector.ts) | 开关主进程调试端口与地址（`InspectorPort` + `node:inspector`） |
+| [`src/dev-tools.ts`](./src/dev-tools.ts) | 两者接线：关模式收端口、打不开标灰、退出收端口                 |
+| [`src/debug.ts`](./src/debug.ts)         | `ShellDebug`：上面那个状态的只读投影（日志与渲染 console）     |
 
 设计：[开发者模式与主进程 Inspector](./.agents/designs/20261117-开发者模式与主进程Inspector.md)。
 **不做**跨 realm 的 CDP（上游那套 Host Worker + Client 只读 Sources）：我们只有一个主进程和一个页面。

@@ -84,12 +84,17 @@ export function nodeInspectorOf(): InspectorPort {
     },
     async open(options: InspectorOptions = {}): Promise<InspectorSession> {
       if (session !== undefined) return session;
-      const port = await freePortOf(options.port ?? DEFAULT_INSPECTOR_PORT, options.attempts ?? DEFAULT_ATTEMPTS);
+      const port = await freePortOf(
+        options.port ?? DEFAULT_INSPECTOR_PORT,
+        options.attempts ?? DEFAULT_ATTEMPTS,
+      );
       try {
         // `wait` 给 false：壳不等调试器接上（没有调试器时也不该卡住启动与菜单）。
         nodeInspector.open(port, LOOPBACK, false);
       } catch (error) {
-        throw new Error(`主进程 Inspector 在 ${LOOPBACK}:${String(port)} 上起不来。`, { cause: error });
+        throw new Error(`主进程 Inspector 在 ${LOOPBACK}:${String(port)} 上起不来。`, {
+          cause: error,
+        });
       }
       const websocketUrl = nodeInspector.url();
       if (websocketUrl === undefined) {

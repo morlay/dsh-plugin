@@ -28,7 +28,10 @@ function splice(
       // `inserted` 里的项是**真消息**（上游 `Inbox` 会按消息面读），不是只有 id 的占位：
       // 盘上那条 `Cannot use 'in' operator to search for 'plugin' in undefined` 就是这条形状写歪暴露的。
       inserted: inserted.map((item) => ({
-        ...createUserMessage({ content: [{ type: "text", text: item.id }], source: { kind: "user" } }),
+        ...createUserMessage({
+          content: [{ type: "text", text: item.id }],
+          source: { kind: "user" },
+        }),
         id: MessageId(item.id),
       })),
     },

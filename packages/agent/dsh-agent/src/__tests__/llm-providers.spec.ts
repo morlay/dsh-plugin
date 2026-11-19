@@ -74,7 +74,10 @@ it(
         {
           provide: LaunchEnvironment,
           useFactory: () => ({
-            snapshot: { get: (name: string) => (name === "OLLAMA_API_KEY" ? { value: "sk-deployment-secret" } : undefined) },
+            snapshot: {
+              get: (name: string) =>
+                name === "OLLAMA_API_KEY" ? { value: "sk-deployment-secret" } : undefined,
+            },
           }),
         },
         ...provideSetting(),

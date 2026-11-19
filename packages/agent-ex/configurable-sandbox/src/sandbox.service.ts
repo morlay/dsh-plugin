@@ -8,10 +8,8 @@ import type { ConfinedArgv } from "@morlay/dsh-sandbox/contract";
 
 /** 基类 `confine` 的第二个参数类型：按覆盖签名推导，避免与契约别名在可选字段上的差异。 */
 type SandboxConfinePolicy = Parameters<LocalSandboxProvider["confine"]>[1];
-import {
-  LocalSandboxConfig as UpstreamSandboxConfig,
-  LocalSandboxProvider,
-} from "@morlay/dsh-sandbox";
+import type { LocalSandboxConfig as UpstreamSandboxConfig } from "@morlay/dsh-sandbox";
+import { LocalSandboxProvider } from "@morlay/dsh-sandbox";
 import { Sandbox } from "@morlay/dsh-sandbox";
 import { inject, Injectable, Logger, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";

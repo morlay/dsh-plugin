@@ -128,9 +128,10 @@ describe("vite 插件：dev 的裸说明符归哪条链", () => {
 
   test("仓库里但没点名的包（上游）→ prebundle，哪怕它的源码就在仓库内", async () => {
     const { plugin, calls } = pluginWith(["@morlay/*"]);
-    await expect(
-      resolveIdOf(plugin)("@deepseek-ai/up-row", importer),
-    ).resolves.toEqual({ id: "fed:@deepseek-ai/up-row", external: true });
+    await expect(resolveIdOf(plugin)("@deepseek-ai/up-row", importer)).resolves.toEqual({
+      id: "fed:@deepseek-ai/up-row",
+      external: true,
+    });
     expect(calls).toEqual(["@deepseek-ai/up-row"]);
   });
 
@@ -144,9 +145,7 @@ describe("vite 插件：dev 的裸说明符归哪条链", () => {
 
   test("空名单 → 所有包都 prebundle", async () => {
     const { plugin } = pluginWith([]);
-    await expect(
-      resolveIdOf(plugin)("@morlay/dev-row", importer),
-    ).resolves.toEqual({
+    await expect(resolveIdOf(plugin)("@morlay/dev-row", importer)).resolves.toEqual({
       id: "fed:@morlay/dev-row",
       external: true,
     });

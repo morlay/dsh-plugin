@@ -280,7 +280,10 @@ describe("planPrebundle（多版本）", () => {
  */
 async function makeDualEntryFixture(): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-dual-")));
-  await put(join(root, "package.json"), `${JSON.stringify({ name: "dual-fixture", version: "0.0.0", exports: {} })}\n`);
+  await put(
+    join(root, "package.json"),
+    `${JSON.stringify({ name: "dual-fixture", version: "0.0.0", exports: {} })}\n`,
+  );
   await put(
     join(root, "src", "client", "app-boot.ts"),
     ['import "@morlay/dual-root";', 'import "@morlay/dual-client/client";', ""].join("\n"),
@@ -327,7 +330,9 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const target = plan.targets.find((item) => item.name === "@morlay/dual-root");
     // `createRequire().resolve` 会拿 `dist/root.cjs`（UMD/CJS 的字节）——产物跑在浏览器里，那不是它的字节。
-    expect(target?.entry).toBe(join(root, "node_modules", "@morlay", "dual-root", "dist", "root.mjs"));
+    expect(target?.entry).toBe(
+      join(root, "node_modules", "@morlay", "dual-root", "dist", "root.mjs"),
+    );
   });
 
   it("下潜也读 import 那份：只有它引到的包才进清单", async () => {
@@ -351,7 +356,10 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
  */
 async function makeStyleGraphFixture(): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-css-")));
-  await put(join(root, "package.json"), `${JSON.stringify({ name: "css-fixture", version: "0.0.0", exports: {} })}\n`);
+  await put(
+    join(root, "package.json"),
+    `${JSON.stringify({ name: "css-fixture", version: "0.0.0", exports: {} })}\n`,
+  );
   await put(
     join(root, "src", "client", "app-boot.ts"),
     'import "@morlay/css-host/brand-font.css";\n',
@@ -366,7 +374,10 @@ async function makeStyleGraphFixture(): Promise<string> {
       exports: { "./brand-font.css": "./src/brand-font.css" },
     })}\n`,
   );
-  await put(join(host, "src", "brand-font.css"), '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n');
+  await put(
+    join(host, "src", "brand-font.css"),
+    '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n',
+  );
   const dep = join(root, "node_modules", "css-dep");
   await put(
     join(dep, "package.json"),

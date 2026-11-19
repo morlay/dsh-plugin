@@ -40,8 +40,10 @@ describe("provider 头里的环境引用", () => {
       },
     });
     // 装配层的 base 读的是这份 config：它必须仍是引用字符串，密钥不能进它。
-    expect((config as { providers: { ollama: { headers: { Authorization: string } } } })
-      .providers.ollama.headers.Authorization).toBe("Bearer ${OLLAMA_API_KEY}");
+    expect(
+      (config as { providers: { ollama: { headers: { Authorization: string } } } }).providers.ollama
+        .headers.Authorization,
+    ).toBe("Bearer ${OLLAMA_API_KEY}");
   });
 
   it("取不到（或空值）就把这个头摘掉，不发明细量", () => {

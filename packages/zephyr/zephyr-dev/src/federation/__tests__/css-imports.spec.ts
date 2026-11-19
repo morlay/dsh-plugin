@@ -142,7 +142,7 @@ describe("cssImportSpecifiersOf（样式的说明符由解析器读）", () => {
         '/* @import "ghost/comment.css"; */',
         '@import "pkg/a.css";',
         '@import "./b.css" screen;',
-        '.x { content: \'@import "ghost/string.css"\'; }',
+        ".x { content: '@import \"ghost/string.css\"'; }",
         "",
       ].join("\n"),
       file,

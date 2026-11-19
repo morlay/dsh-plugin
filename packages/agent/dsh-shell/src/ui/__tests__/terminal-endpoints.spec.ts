@@ -49,7 +49,9 @@ type SessionArgument = Parameters<TerminalRemote["environment"]>[0];
  */
 async function boot(
   providers: readonly unknown[],
-  streams: Readonly<Record<string, (payload: { readonly args?: unknown }) => AsyncIterable<unknown>>> = {},
+  streams: Readonly<
+    Record<string, (payload: { readonly args?: unknown }) => AsyncIterable<unknown>>
+  > = {},
 ): Promise<{
   app: App;
   seen: { endpoint: string; args: unknown }[];
@@ -76,7 +78,9 @@ async function boot(
   );
   const app = await bootstrapApplication({
     providers: [
-      ...provideClientConnection(configure(ClientConnectionDefault, { origin: "http://127.0.0.1:1" })),
+      ...provideClientConnection(
+        configure(ClientConnectionDefault, { origin: "http://127.0.0.1:1" }),
+      ),
       ...provideClientRemote(),
       ...(providers as never[]),
     ],
@@ -111,7 +115,9 @@ describe("terminal 组的客户端面", () => {
     const frames: unknown[] = [];
     for await (const frame of handle) frames.push(frame);
     expect(frames).toEqual([{ type: "snapshot", sequence: 1, screen: "", info: {} }]);
-    expect(seenStreams).toEqual([{ endpoint: "terminal/attach", args: { agentId: "session-1", id: "tt-1" } }]);
+    expect(seenStreams).toEqual([
+      { endpoint: "terminal/attach", args: { agentId: "session-1", id: "tt-1" } },
+    ]);
     expect(typeof handle.send, "上行写入面在（终端要能输入）").toBe("function");
   });
 

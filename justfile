@@ -40,11 +40,12 @@ clean-dist:
 fmt:
     pnpm exec oxfmt .
 
-# 静态检查：oxlint（含 type-aware 规则）。
-# 文档与记录树的三条硬规矩（判据见 `.agents/standards/describing-facts.md`、`.agents/GLOSSARY-MAP.md`）
-# 是评审时的约定，没有独立的检查命令。
+# 静态检查：oxlint（含 type-aware 规则）+ oxfmt --check（格式与文件结尾换行）。
+# 能机器判的都在这里；`.agents/standards/*` 只写规矩本身，不再重复「怎么查」。
+# 文档与记录树里**机器判不了**的那部分（措辞有没有过期、事实有没有重复）见 `just audit` 的对应判据。
 lint:
     pnpm exec oxlint .
+    pnpm exec oxfmt --check .
 
 # **逐包跑、根上汇总**：单包的判据（面边界、声明未用、本包用到的上游「面」、值边与双断言）由
 # `pnpm -r exec` 在各包目录里做；唯一化是跨包的（同一上游包的同一个面只能有一个本地 owner），

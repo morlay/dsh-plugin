@@ -1,7 +1,16 @@
-import { mountRow, providerOfPlugin, type Context, type Newable, type ProviderEntry } from "@morlay/zephyr";
+import {
+  mountRow,
+  providerOfPlugin,
+  type Context,
+  type Newable,
+  type ProviderEntry,
+} from "@morlay/zephyr";
 import { provideBetterSession, provideSessionBalance } from "@morlay/better-session/server";
 
-const providers = (): readonly ProviderEntry[] => [...provideBetterSession(), ...provideSessionBalance()];
+const providers = (): readonly ProviderEntry[] => [
+  ...provideBetterSession(),
+  ...provideSessionBalance(),
+];
 
 function implOf(entry: ProviderEntry): { impl: Newable<unknown>; config?: unknown } {
   if (typeof entry === "function") return { impl: entry };

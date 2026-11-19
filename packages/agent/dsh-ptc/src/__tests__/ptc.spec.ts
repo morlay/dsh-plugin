@@ -62,7 +62,7 @@ async function boot(): Promise<App> {
  * @returns 派生的 scope ctx。
  */
 function freshScope(app: App): Context {
-  return (app.ctx as Context).extend();
+  return (app.ctx as unknown as Context).extend();
 }
 
 describe("ptc 域", () => {

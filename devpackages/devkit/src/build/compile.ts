@@ -97,7 +97,12 @@ export async function buildPackage(cwd: string, plan: BuildPlan): Promise<BuildA
     // host 面声明：从 dts-prepare 的全仓声明树按入口聚合到 dist（client 不出声明）。
     const root = await repoRootOf(cwd);
     const dtsRoot = dtsRootOf(root);
-    if (await stat(dtsRoot).then(() => true, () => false)) {
+    if (
+      await stat(dtsRoot).then(
+        () => true,
+        () => false,
+      )
+    ) {
       await emitDts({ cwd, root, dtsRoot, entries: plan.entries, outDir: "dist" });
     }
     // bundle 且有 ui 的包：额外出 client 半——CJS 工厂给读字节的加载方。

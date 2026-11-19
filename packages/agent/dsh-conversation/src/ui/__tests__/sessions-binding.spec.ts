@@ -244,7 +244,9 @@ describe("sessions 行的目录与 binding", () => {
       const binding = service.binding("s1") as
         | {
             session?: {
-              command(line: string): Promise<
+              command(
+                line: string,
+              ): Promise<
                 | { ok: true; value: { matched: boolean } }
                 | { ok: false; error: { code: string; message: string } }
               >;

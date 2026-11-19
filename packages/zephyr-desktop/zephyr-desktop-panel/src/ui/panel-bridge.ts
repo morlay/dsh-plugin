@@ -27,7 +27,11 @@ export interface PaneChange {
 
 /** preload 桥的形状（`window.__DSH_BROWSER_PANE__`）。 */
 export interface BrowserPaneBridgeLike {
-  open(input: { readonly id: string; readonly url?: string; readonly bounds: PaneRect }): Promise<unknown>;
+  open(input: {
+    readonly id: string;
+    readonly url?: string;
+    readonly bounds: PaneRect;
+  }): Promise<unknown>;
   bounds(id: string, bounds: PaneRect): Promise<unknown>;
   navigate(id: string, url: string): Promise<unknown>;
   close(id: string): Promise<unknown>;
@@ -40,7 +44,9 @@ export interface BrowserPaneBridgeLike {
  * @param host - 默认当前 window（测试可注入）。
  * @returns 桥，或 `undefined`。
  */
-export function browserPaneOf(host: { readonly __DSH_BROWSER_PANE__?: BrowserPaneBridgeLike } = globalThis as never): BrowserPaneBridgeLike | undefined {
+export function browserPaneOf(
+  host: { readonly __DSH_BROWSER_PANE__?: BrowserPaneBridgeLike } = globalThis as never,
+): BrowserPaneBridgeLike | undefined {
   return host.__DSH_BROWSER_PANE__;
 }
 
@@ -49,7 +55,9 @@ export function browserPaneOf(host: { readonly __DSH_BROWSER_PANE__?: BrowserPan
  * @param element - 面板的占位元素（`null` 表示还没挂上）。
  * @returns 面板矩形，或 `undefined`（元素不在就什么都不报）。
  */
-export function panelBoundsOf(element: { getBoundingClientRect(): DOMRect } | null): PaneRect | undefined {
+export function panelBoundsOf(
+  element: { getBoundingClientRect(): DOMRect } | null,
+): PaneRect | undefined {
   if (element === null) return undefined;
   const rect = element.getBoundingClientRect();
   return {

@@ -50,13 +50,11 @@ export interface BrowserPaneElectronLike {
 /** 分区上的两个权限钩子（下载另走 `will-download`）。 */
 export interface BrowserPaneSessionLike {
   setPermissionRequestHandler(
-    handler: (
-      contents: unknown,
-      permission: string,
-      callback: (granted: boolean) => void,
-    ) => void,
+    handler: (contents: unknown, permission: string, callback: (granted: boolean) => void) => void,
   ): void;
-  setPermissionCheckHandler(handler: (contents: unknown, permission: string, origin: string) => boolean): void;
+  setPermissionCheckHandler(
+    handler: (contents: unknown, permission: string, origin: string) => boolean,
+  ): void;
   on(event: string, listener: (...args: never[]) => void): void;
 }
 
@@ -136,7 +134,12 @@ export function webContentsPaneViewOf(input: {
       view.setBounds(request.bounds);
       // 状态的四条来源：导航完成、标题变化、加载起止。都只做一件事——提醒调用方推一次 state。
       const changed = (): void => input.onChange?.(request.id);
-      for (const event of ["did-navigate", "page-title-updated", "did-start-loading", "did-stop-loading"]) {
+      for (const event of [
+        "did-navigate",
+        "page-title-updated",
+        "did-start-loading",
+        "did-stop-loading",
+      ]) {
         view.webContents.on(event, changed);
       }
       // 页面要开新窗口：http(s) 交**系统浏览器**（与主窗口同一条处置），然后一律拒——面板只有一块。
@@ -146,7 +149,8 @@ export function webContentsPaneViewOf(input: {
       });
       panes.set(request.id, view);
       input.host.add(view);
-      if (request.url !== undefined && request.url !== "") await view.webContents.loadURL(request.url);
+      if (request.url !== undefined && request.url !== "")
+        await view.webContents.loadURL(request.url);
     },
     setBounds(id: string, bounds: PaneRect): void {
       panes.get(id)?.setBounds(bounds);

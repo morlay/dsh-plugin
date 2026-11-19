@@ -63,7 +63,17 @@ function entry(target: Element): ResizeObserverEntry {
   return {
     target,
     // jsdom 不做布局：几何一律给 0（替身只为触发回调，不当尺寸证据）。
-    contentRect: { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) },
+    contentRect: {
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      toJSON: () => ({}),
+    },
     borderBoxSize: [box],
     contentBoxSize: [box],
     devicePixelContentBoxSize: [box],

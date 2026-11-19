@@ -7,10 +7,7 @@ import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiConversation } from "../conversation/conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { InputTriggers } from "../input/input.token.ts";
-import {
-  fileReferencesGroupName,
-  sessionReferenceGroupName,
-} from "../../endpoint/index.ts";
+import { fileReferencesGroupName, sessionReferenceGroupName } from "../../endpoint/index.ts";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()

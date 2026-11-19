@@ -1,15 +1,36 @@
 {
   "name": "@morlay/session-mode",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "会话模式、工具说明分组与提示词通道：模式是一份数据、按会话收口；PTC 由运行时事实（工具目录里有 run_code）触发。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./endpoint": "./src/endpoint/index.ts",
     "./server": "./src/server/index.ts",
     "./ui": "./src/ui/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./dsh-bundle": "./src/dsh-bundle.ts",
+    "./client": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./endpoint": "./dist/endpoint.mjs",
+      "./server": "./dist/server.mjs",
+      "./ui": "./dist/ui.mjs",
+      "./dsh-bundle": "./dist/dsh-bundle.mjs",
+      "./package.json": "./package.json",
+      "./client": {
+        "import": "./dist/client.mjs",
+        "default": "./dist/client.cjs"
+      }
+    }
   },
   "dependencies": {
     "@morlay/dsh-agent": "workspace:^",
@@ -36,6 +57,6 @@
     "zod": "^4.6.6"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

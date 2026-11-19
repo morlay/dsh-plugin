@@ -76,7 +76,9 @@ export class WorkspaceControllerDefault extends WorkspaceController implements O
     // 契约的返回面写的是**两半共用的上界**（`Reply<T> = T | RemoteResultWire<T>`：宿主回裸值、客户端回
     // `Remote` 封装），而上游 `ClientWorkspaceModel` 只认客户端那一半——这里按它收窄一次。
     // 这一处是本仓唯一需要这个收窄的地方（契约类的方法面本身就是 `WorkspaceRemote` 的参数表）。
-    this.model = new ClientWorkspaceModel(this.endpoint as unknown as ConstructorParameters<typeof ClientWorkspaceModel>[0]);
+    this.model = new ClientWorkspaceModel(
+      this.endpoint as unknown as ConstructorParameters<typeof ClientWorkspaceModel>[0],
+    );
     void this.consume();
   }
 

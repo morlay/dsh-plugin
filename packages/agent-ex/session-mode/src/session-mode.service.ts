@@ -552,7 +552,13 @@ export class SessionModeDefault extends SessionMode implements OnInit {
       ...resolved,
       provider: model.provider,
       model: model.model,
-      ...(model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort }),
+      // `LlmCallConfig` 的 `reasoningEffort` 是品牌类型（`ReasoningEffortId`），而模式配置里存的是裸
+      // `string`——`exactOptionalPropertyTypes` 下两者不兼容，这里按目标类型断言一次（值本来就是那个字符串）。
+      ...(model.reasoningEffort === undefined
+        ? {}
+        : {
+            reasoningEffort: model.reasoningEffort as NonNullable<LlmCallConfig["reasoningEffort"]>,
+          }),
     };
   }
 

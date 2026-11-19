@@ -23,7 +23,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * @param lookup - 启动环境快照；没有该行时按「取不到」处理。
  * @returns 解析后的值；任一引用取不到时 `undefined`（这个头不发，而不是发一个字面量）。
  */
-function resolveValue(value: string, lookup: LaunchEnvironmentLookup | undefined): string | undefined {
+function resolveValue(
+  value: string,
+  lookup: LaunchEnvironmentLookup | undefined,
+): string | undefined {
   let missing = false;
   const resolved = value.replace(REFERENCE, (_match, name: string) => {
     const hit = lookup?.get(name)?.value;

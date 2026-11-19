@@ -53,9 +53,14 @@ describe("job 域", () => {
     // `ToolJobs` 声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
     expect(app.get(ToolRegistry).definitions()).toEqual([]);
 
-    const scope = (app.ctx as Context).extend();
+    const scope = (app.ctx as unknown as Context).extend();
     await app.get(AgentScopedRows).install(scope);
-    expect(app.get(ToolRegistry).definitions().map((tool) => tool.name)).toContain("job_list");
+    expect(
+      app
+        .get(ToolRegistry)
+        .definitions()
+        .map((tool) => tool.name),
+    ).toContain("job_list");
   });
 
   it("查不到的 id 直接失败，不静默给空值", async () => {

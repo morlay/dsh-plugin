@@ -7,7 +7,16 @@
  * 分组按**语义**：地址是纯函数（不构建）；缓存语义每条都要一次真实构建（构建本身就是被测动作）；
  * 入口形态共享**一个 fixture 包、一次构建、多个出口**（每条断言只读自己的产物，失败定位不受影响）。
  */
-import { appendFile, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -707,7 +716,11 @@ describe("两条链的入口是同一份规则", () => {
     for (const item of cases) {
       const root = join(work, "node_modules", item.pkg);
       await mkdir(root, { recursive: true });
-      await writeFile(join(root, "package.json"), `${JSON.stringify(item.manifest, null, 2)}\n`, "utf8");
+      await writeFile(
+        join(root, "package.json"),
+        `${JSON.stringify(item.manifest, null, 2)}\n`,
+        "utf8",
+      );
       for (const file of item.files) {
         await mkdir(dirname(join(root, file)), { recursive: true });
         await writeFile(join(root, file), "export const x = 1;\n", "utf8");
@@ -790,7 +803,11 @@ describe("CSS 的 @import 在构建期展开", () => {
       '@import "css-dep/brand-font.css";\n:root { --host: 1; }\n',
       "utf8",
     );
-    await writeFile(join(host, "src", "index.ts"), 'import "./brand-font.css";\nexport const host = 1;\n', "utf8");
+    await writeFile(
+      join(host, "src", "index.ts"),
+      'import "./brand-font.css";\nexport const host = 1;\n',
+      "utf8",
+    );
     const built = await bundlePackage({
       nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
       cacheRoot,

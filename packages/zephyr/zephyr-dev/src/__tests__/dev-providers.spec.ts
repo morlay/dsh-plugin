@@ -25,8 +25,11 @@ function implOf(entry: ProviderEntry): unknown {
  * @returns `dev.include`。
  */
 function includeOf(mode: Parameters<typeof devProviders>[0]): readonly string[] {
-  const entry = devProviders(mode).find((item: ProviderEntry) => implOf(item) === FederationDefault);
-  const config = (entry as { config?: { dev?: { include?: readonly string[] } } } | undefined)?.config;
+  const entry = devProviders(mode).find(
+    (item: ProviderEntry) => implOf(item) === FederationDefault,
+  );
+  const config = (entry as { config?: { dev?: { include?: readonly string[] } } } | undefined)
+    ?.config;
   expect(config, "清单里必须有 FederationDefault 这一条（dev 的预构建范围归它）").toBeDefined();
   return config?.dev?.include ?? [];
 }

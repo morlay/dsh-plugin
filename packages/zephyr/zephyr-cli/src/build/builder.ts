@@ -7,7 +7,17 @@
 // **不打包 node 侧**（设计决定 8）：闭包里本来就有 loader（`@morlay/dsh-oxc-node`），
 // `src/server.ts` 原样复制过去、由 loader 直接跑，少一次 rolldown，也让 stack trace 指向真实文件。
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { createRequire as createRequireOf } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -300,7 +310,7 @@ export function bootstrapSourceOf(): string {
     "  // **实际监听地址回写同进程环境**：期望端口被占时 `WebServer` 会顺延（换一个能用的端口），",
     "  // preview 与桌面壳都要按**实际**端口打开页面——否则窗口指向一个没人监听的端口。",
     "  const web = app.get(WebServer);",
-    '  if (web !== undefined) process.env.ZEPHYR_SERVER_URL = `http://${web.host}:${web.port}/`;',
+    "  if (web !== undefined) process.env.ZEPHYR_SERVER_URL = `http://${web.host}:${web.port}/`;",
     "  return app;",
     "}",
     "",

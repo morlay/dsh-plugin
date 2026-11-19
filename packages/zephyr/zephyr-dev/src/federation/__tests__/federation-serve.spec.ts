@@ -109,14 +109,17 @@ describe("FederationDefault.serve", () => {
     // 404 说的是「文件不存在」，而这里是「构建期写了一条地址、运行期没有基准能解释它」：
     // 正文要点名地址与解析基准，否则排查的人会去翻产物目录。
     const { res, status, body } = stubResponse();
-    const handled = await federation.serve("/_zephyr/@modules/ghost-pkg@1.0.0/index.js", request, res);
+    const handled = await federation.serve(
+      "/_zephyr/@modules/ghost-pkg@1.0.0/index.js",
+      request,
+      res,
+    );
     expect(handled).toBe(true);
     expect(status()).toBe(500);
     expect(body()).toContain("federation-miss:");
     expect(body()).toContain("ghost-pkg@1.0.0/index.js");
     expect(body()).toContain("解析不到包根");
   });
-
 
   it("资产：按扩展名给 MIME 且长缓存", async () => {
     // 摆在最后：这一步只按清单服务文件、不触发构建，但会覆盖同一 key 的 `.files.json`。

@@ -18,7 +18,8 @@ import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app
  */
 export function sessionReferenceGroupName(): string {
   const group = remoteGroupNameOf(SessionReferenceEndpoint);
-  if (group === undefined) throw new Error("SessionReferenceEndpoint 没有 @RemoteGroup：组名取不到");
+  if (group === undefined)
+    throw new Error("SessionReferenceEndpoint 没有 @RemoteGroup：组名取不到");
   return group;
 }
 

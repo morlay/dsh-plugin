@@ -60,4 +60,3 @@ export function remoteMethodOf(
 export function remoteNamespaceKey(group: string): string {
   return `remote.${group}`;
 }
-

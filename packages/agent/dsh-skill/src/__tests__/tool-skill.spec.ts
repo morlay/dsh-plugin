@@ -74,17 +74,26 @@ async function boot(): Promise<App> {
 }
 
 describe("skill 域的技能工具行", () => {
-  it("这一行按 agent 装配：装进某个 scope 才登记 `skill`，应用根上没有它", { timeout: 20_000 }, async () => {
-    const app = await boot();
-    // 行声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
-    expect(app.get(ToolRegistry).definitions(), "应用根上不该有它").toEqual([]);
+  it(
+    "这一行按 agent 装配：装进某个 scope 才登记 `skill`，应用根上没有它",
+    { timeout: 20_000 },
+    async () => {
+      const app = await boot();
+      // 行声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
+      expect(app.get(ToolRegistry).definitions(), "应用根上不该有它").toEqual([]);
 
-    const scope = (app.ctx as Context).extend();
-    // 装进这个 scope 不抛 = 上游 `ctx.tools.register` 在这个 agent 的服务面上成功了；
-    // 若还传的是根那份实例，第二个 scope 再装就会撞名。
-    await app.get(AgentScopedRows).install(scope);
-    // 装进这个 scope 之后工具才出现，且没抛「already registered」——说明登记落在这个 agent 的
-    // 服务面（上游 `ctx.tools.register` 的作用域取自传进去的那份代理）。
-    expect(app.get(ToolRegistry).definitions().map((tool) => tool.name)).toContain("skill");
-  });
+      const scope = (app.ctx as unknown as Context).extend();
+      // 装进这个 scope 不抛 = 上游 `ctx.tools.register` 在这个 agent 的服务面上成功了；
+      // 若还传的是根那份实例，第二个 scope 再装就会撞名。
+      await app.get(AgentScopedRows).install(scope);
+      // 装进这个 scope 之后工具才出现，且没抛「already registered」——说明登记落在这个 agent 的
+      // 服务面（上游 `ctx.tools.register` 的作用域取自传进去的那份代理）。
+      expect(
+        app
+          .get(ToolRegistry)
+          .definitions()
+          .map((tool) => tool.name),
+      ).toContain("skill");
+    },
+  );
 });

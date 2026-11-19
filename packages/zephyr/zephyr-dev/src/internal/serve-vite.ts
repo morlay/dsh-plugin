@@ -73,10 +73,7 @@ export interface ViteDevOptions {
 }
 
 /** 一次 HMR 握手：交给 vite 的 ws 服务完成升级，再按 `ws` 的约定把新连接接回它的 connection 事件。 */
-export async function startViteDev(
-  ctx: Context,
-  options: ViteDevOptions,
-): Promise<ViteHandoff> {
+export async function startViteDev(ctx: Context, options: ViteDevOptions): Promise<ViteHandoff> {
   const trace = traceOf(ctx, "vite");
   const { repoRoot, base } = options;
   /**

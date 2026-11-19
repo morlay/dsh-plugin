@@ -141,17 +141,16 @@ async function boot(): Promise<App> {
       // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
       {
         provide: ConfigForms,
-        useFactory: () =>
-          ({
-            describe: () => ({
-              getSnapshot: () => ({ view: undefined }),
-              subscribe: () => () => {},
-              ensure: async () => {},
-              acceptView: () => {},
-            }),
-            getSnapshot: () => ({}),
+        useFactory: () => ({
+          describe: () => ({
+            getSnapshot: () => ({ view: undefined }),
             subscribe: () => () => {},
+            ensure: async () => {},
+            acceptView: () => {},
           }),
+          getSnapshot: () => ({}),
+          subscribe: () => () => {},
+        }),
       },
       { provide: Connection, useFactory: () => new FakeConnection() },
       { provide: SessionController, useFactory: () => new FakeSessions() },
@@ -159,12 +158,11 @@ async function boot(): Promise<App> {
       // 这里给一个**真契约**的空面（不是 `undefined`：上游分支会读 `decorate` / `dismiss`）。
       {
         provide: CommandUi,
-        useFactory: () =>
-          ({
-            register: () => () => {},
-            decorate: () => () => {},
-            dismiss: () => {},
-          }),
+        useFactory: () => ({
+          register: () => () => {},
+          decorate: () => () => {},
+          dismiss: () => {},
+        }),
       },
       {
         provide: SessionRemoteBinding,
@@ -173,45 +171,41 @@ async function boot(): Promise<App> {
       { provide: RemoteAccess, useFactory: () => ({ can: () => true }) },
       {
         provide: Locale,
-        useFactory: () =>
-          ({
-            register: () => () => {},
-            subscribe: () => () => {},
-            bind: () => (key: string) => key,
-          }),
+        useFactory: () => ({
+          register: () => () => {},
+          subscribe: () => () => {},
+          bind: () => (key: string) => key,
+        }),
       },
       {
         provide: Shortcuts,
-        useFactory: () =>
-          ({
-            catalog: { getSnapshot: () => [], subscribe: () => () => {} },
-            register: () => () => {},
-          }),
+        useFactory: () => ({
+          catalog: { getSnapshot: () => [], subscribe: () => () => {} },
+          register: () => () => {},
+        }),
       },
       {
         provide: SettingsSchema,
-        useFactory: () =>
-          ({ schemas: new Map(), register: () => {} }),
+        useFactory: () => ({ schemas: new Map(), register: () => {} }),
       },
       // 宿主侧：`permissionPresets/catalog` 的实现 + 它要的 `Permission` 面（只给 catalog）。
       {
         provide: Permission,
-        useFactory: () =>
-          ({
-            catalog: () => ({
-              options: [
-                { value: "read-only", name: "read-only" },
-                { value: "workspace-write", name: "workspace-write" },
-                { value: "danger-full-access", name: "danger-full-access" },
-              ],
-              defaultOptions: [
-                { value: "read-only", name: "read-only" },
-                { value: "workspace-write", name: "workspace-write" },
-                { value: "danger-full-access", name: "danger-full-access" },
-              ],
-              defaultPreset: "workspace-write",
-            }),
+        useFactory: () => ({
+          catalog: () => ({
+            options: [
+              { value: "read-only", name: "read-only" },
+              { value: "workspace-write", name: "workspace-write" },
+              { value: "danger-full-access", name: "danger-full-access" },
+            ],
+            defaultOptions: [
+              { value: "read-only", name: "read-only" },
+              { value: "workspace-write", name: "workspace-write" },
+              { value: "danger-full-access", name: "danger-full-access" },
+            ],
+            defaultPreset: "workspace-write",
           }),
+        }),
       },
       PermissionPresetsEndpointDefault,
       // 被测面：权限的浏览器半。
@@ -235,17 +229,16 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
           // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
           {
             provide: ConfigForms,
-            useFactory: () =>
-              ({
-                describe: () => ({
-                  getSnapshot: () => ({ view: undefined }),
-                  subscribe: () => () => {},
-                  ensure: async () => {},
-                  acceptView: () => {},
-                }),
-                getSnapshot: () => ({}),
+            useFactory: () => ({
+              describe: () => ({
+                getSnapshot: () => ({ view: undefined }),
                 subscribe: () => () => {},
+                ensure: async () => {},
+                acceptView: () => {},
               }),
+              getSnapshot: () => ({}),
+              subscribe: () => () => {},
+            }),
           },
           { provide: Connection, useFactory: () => new FakeConnection() },
         ],

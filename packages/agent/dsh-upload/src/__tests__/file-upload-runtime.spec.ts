@@ -112,7 +112,10 @@ async function boot(): Promise<{
 describe("ctx.fileUpload 的注册落点（深层 fiber 按名字读得到）", () => {
   it("会话 scope 那种 ctx 上 fileUpload 严格读得到，且带着上传方法", async () => {
     const { reader } = await boot();
-    expect(reader.strict, "按名字读不到 = 会话界面里 this.ctx.fileUpload 抛 cannot get property").toBeDefined();
+    expect(
+      reader.strict,
+      "按名字读不到 = 会话界面里 this.ctx.fileUpload 抛 cannot get property",
+    ).toBeDefined();
     expect(typeof reader.strict?.uploadImage).toBe("function");
     expect(typeof reader.strict?.upload).toBe("function");
   });

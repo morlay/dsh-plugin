@@ -65,12 +65,17 @@
 
 ## 交付与发布
 
-- **发布走 CI，本地不发布**：`just publish` 只打印红线并退出 1；CI 是
-  [`.github/workflows/release.yml`](../../.github/workflows/release.yml)，`main` / `next` 推送触发。
+- **发布线（集合、形态、版本、通道、验收）的 home 是[设计 npm 发布线](../designs/20261118-npm发布线.md)**；这里只写验证入口。
+- **两条通道**：GitHub Packages 只走 CI——[`.github/workflows/release.yml`](../../.github/workflows/release.yml) 在
+  `main` / `next` 推送时自动发未发布的新版本；npmjs 只经本地 `just publish-npm`（[ADR-npmjs 发布走本地命令](../adrs/20261118-npmjs发布走本地命令.md)）。其他形式的 `pnpm publish` 一律禁止。
+- **发布前先构建**：`just dts` → `just build`（清单与产物是发布的前提，不是发布命令的副作用）；
+  `just publish-npm --dry-run` 先看包名、版本与 dist-tag。
 - **`check` job 是唯一的质量门**：`just prepare` → `just lint` → `just test`（注入 `TEST_PG_URL`）→
   `just build`。这四条与本地判据同一套命令。
+- **dist-tag 随版本号走**：稳定版 → `latest`；`-alpha.*` → `alpha`；其余预发布 → `next`；预发布绝不落 `latest`。
 - **bump 前确认版本号没被占用**：撞上已占用的号时表现为「提交了、包没更新」——改版本前先
   `pnpm view <pkg>@<新版本> version` 确认，或跳到未占用的号段。
+- **`@local/*` 不发布**：`devpackages/**` 全部 `private`，构建时内联进产物，发布清单里不出现它们。
 
 ## 失败怎么处理
 

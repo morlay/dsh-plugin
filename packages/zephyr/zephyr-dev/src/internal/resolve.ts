@@ -188,7 +188,13 @@ export async function firstExistingOf(
     for (const probe of [relative, `${relative}.js`, `${relative}/index.js`]) {
       const file = resolveInPackage(pkg, probe);
       if (file === undefined) continue;
-      if (await stat(file).then((info) => info.isFile(), () => false)) return file;
+      if (
+        await stat(file).then(
+          (info) => info.isFile(),
+          () => false,
+        )
+      )
+        return file;
     }
   }
   return undefined;

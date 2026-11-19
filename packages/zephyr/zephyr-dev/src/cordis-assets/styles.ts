@@ -294,11 +294,7 @@ export async function bundleCssFile(options: {
   const parents = new Map<string, string>();
   const chainOf = (file: string): string[] => {
     const chain = [file];
-    for (
-      let cursor = parents.get(file);
-      cursor !== undefined;
-      cursor = parents.get(cursor)
-    ) {
+    for (let cursor = parents.get(file); cursor !== undefined; cursor = parents.get(cursor)) {
       chain.unshift(cursor);
     }
     return chain;
@@ -312,7 +308,8 @@ export async function bundleCssFile(options: {
         // 相对 / 绝对：我们按来源文件解析（闪电把这两个也交过来）。
         if (specifier.startsWith(".")) return resolvePath(dirname(originatingFile), specifier);
         // 绝对路径与 `http(s)`：不是仓库里的文件，留成地址（浏览器自己去取）。
-        if (specifier.startsWith("/") || /^https?:/u.test(specifier)) return { external: specifier };
+        if (specifier.startsWith("/") || /^https?:/u.test(specifier))
+          return { external: specifier };
         const target = await options.importTargetOf(specifier, originatingFile);
         // 解析不到（不是这条链认识的包）：原样留着，浏览器如实报错比静默吞掉好定位。
         if (target === undefined) return { external: specifier };
@@ -330,7 +327,12 @@ export async function bundleCssFile(options: {
       },
       // 每份文件按**它自己**的目录处理 `url()`。
       async read(file) {
-        return await rewriteCssUrls(await readFile(file, "utf8"), file, options.assets, options.emit);
+        return await rewriteCssUrls(
+          await readFile(file, "utf8"),
+          file,
+          options.assets,
+          options.emit,
+        );
       },
     },
   });

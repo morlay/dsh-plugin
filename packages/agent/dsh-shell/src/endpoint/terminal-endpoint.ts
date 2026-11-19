@@ -45,7 +45,9 @@ export class TerminalEndpoint {
    * @returns 环境值。
    */
   @RemoteMethod()
-  environment(..._args: Parameters<TerminalRemote["environment"]>): ReturnType<TerminalRemote["environment"]> {
+  environment(
+    ..._args: Parameters<TerminalRemote["environment"]>
+  ): ReturnType<TerminalRemote["environment"]> {
     throw new Error("契约类未实现");
   }
 

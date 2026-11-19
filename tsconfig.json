@@ -16,7 +16,7 @@
     "experimentalDecorators": true,
     "strict": true,
     "jsx": "react-jsx",
-    "verbatimModuleSyntax": false,
+    "verbatimModuleSyntax": true,
     "isolatedModules": false,
     "noUncheckedSideEffectImports": true,
     "skipLibCheck": true,

@@ -1,18 +1,31 @@
 {
   "name": "@morlay/agent-use",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
   "description": "agent 的浏览器/桌面使用能力（MCP 客户端行）：把 agent-browser 与 agent-desktop 接进工具面。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./dsh-bundle": "./src/dsh-bundle.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./dsh-bundle": "./dist/dsh-bundle.mjs",
+      "./package.json": "./package.json"
+    }
   },
   "dependencies": {
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/zephyr": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.2 < 0.2.3"
+    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
   }
 }

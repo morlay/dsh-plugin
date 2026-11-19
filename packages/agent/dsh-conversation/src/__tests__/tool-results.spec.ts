@@ -82,11 +82,7 @@ describe("toolResults/watch 的宿主面", { timeout: 30_000 }, () => {
     const controller = new AbortController();
     const stream = app
       .get(RemoteHandlers)
-      .stream(
-        watchEndpoint(),
-        { request: { sessionId: SESSION, seq: SEQ } },
-        controller.signal,
-      );
+      .stream(watchEndpoint(), { request: { sessionId: SESSION, seq: SEQ } }, controller.signal);
     expect(stream).toBeDefined();
     const frames: unknown[] = [];
     for await (const frame of stream as AsyncIterable<unknown>) {

@@ -61,18 +61,25 @@ async function boot(): Promise<App> {
 }
 
 describe("env-tool 域", () => {
-  it("四条工具行都真的登记了工具（装进某个 agent 的 scope 之后）", { timeout: 30_000 }, async () => {
-    const app = await boot();
-    // 这四条行都声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
-    expect(app.get(ToolRegistry).definitions()).toEqual([]);
+  it(
+    "四条工具行都真的登记了工具（装进某个 agent 的 scope 之后）",
+    { timeout: 30_000 },
+    async () => {
+      const app = await boot();
+      // 这四条行都声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
+      expect(app.get(ToolRegistry).definitions()).toEqual([]);
 
-    const scope = (app.ctx as Context).extend();
-    await app.get(AgentScopedRows).install(scope);
+      const scope = (app.ctx as unknown as Context).extend();
+      await app.get(AgentScopedRows).install(scope);
 
-    const names = app.get(ToolRegistry).definitions().map((tool) => tool.name);
-    expect(names).toContain("bash");
-    expect(names).toContain("read");
-    expect(names).toContain("glob");
-    expect(names).toContain("working_directory");
-  });
+      const names = app
+        .get(ToolRegistry)
+        .definitions()
+        .map((tool) => tool.name);
+      expect(names).toContain("bash");
+      expect(names).toContain("read");
+      expect(names).toContain("glob");
+      expect(names).toContain("working_directory");
+    },
+  );
 });

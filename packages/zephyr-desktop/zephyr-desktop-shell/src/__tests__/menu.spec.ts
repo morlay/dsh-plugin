@@ -94,22 +94,20 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
       expect(item?.accelerator).toBe("CmdOrCtrl+Shift+D");
       item?.click?.();
     }
-    expect(devModeItemOf(menuTemplateOf({ platform: "darwin", appName: APP, debug: true }))?.checked).toBe(
-      true,
-    );
+    expect(
+      devModeItemOf(menuTemplateOf({ platform: "darwin", appName: APP, debug: true }))?.checked,
+    ).toBe(true);
     expect(clicks).toEqual(["dev", "dev", "dev"]);
   });
 
   it("产品自造项只有「开发者模式」与开发项里的那两条（其余交给 role：本地化与快捷键由 Electron 给）", () => {
     for (const platform of PLATFORMS) {
-      expect(customItemsOf(menuTemplateOf({ platform, appName: APP, debug: false })).map((i) => i.label)).toEqual([
-        "开发者模式",
-      ]);
-      expect(customItemsOf(menuTemplateOf({ platform, appName: APP, debug: true })).map((i) => i.label)).toEqual([
-        "打开主进程 Inspector",
-        "复制 Inspector 地址",
-        "开发者模式",
-      ]);
+      expect(
+        customItemsOf(menuTemplateOf({ platform, appName: APP, debug: false })).map((i) => i.label),
+      ).toEqual(["开发者模式"]);
+      expect(
+        customItemsOf(menuTemplateOf({ platform, appName: APP, debug: true })).map((i) => i.label),
+      ).toEqual(["打开主进程 Inspector", "复制 Inspector 地址", "开发者模式"]);
     }
   });
 

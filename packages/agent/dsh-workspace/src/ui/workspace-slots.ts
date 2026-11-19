@@ -44,8 +44,6 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
   /** 行内右键菜单：上游在它自己的行 ctx 上发布，装配期由 `adoptNamedServices` 映射成同名令牌。 */
   private readonly contextMenus = inject(ContextMenus);
 
-
-
   /** 会话目录读面（`sessions`）：合同在会话域的端点面，UI 只要读它。 */
   private readonly sessions = inject(SessionController);
 

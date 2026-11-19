@@ -20,10 +20,7 @@ const toolRegistryStub = {
 describe("agent-use 的两条 MCP 客户端行", () => {
   it("两条同装：都能取到，且不是同一个实例", async () => {
     const app = await bootstrapApplication({
-      providers: [
-        { provide: ToolRegistry, useValue: toolRegistryStub },
-        ...provideAgentUse(),
-      ],
+      providers: [{ provide: ToolRegistry, useValue: toolRegistryStub }, ...provideAgentUse()],
       timeoutMs: 8_000,
     });
     try {

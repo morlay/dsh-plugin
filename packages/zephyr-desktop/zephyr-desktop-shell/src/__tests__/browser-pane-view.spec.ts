@@ -53,7 +53,9 @@ function fakeElectron(): BrowserPaneElectronLike & {
       on: (event: string, listener: (...args: never[]) => void): void => {
         this.listeners.set(event, listener);
       },
-      setWindowOpenHandler: (handler: (details: { readonly url: string }) => { readonly action: string }): void => {
+      setWindowOpenHandler: (
+        handler: (details: { readonly url: string }) => { readonly action: string },
+      ): void => {
         this.windowOpen = handler;
       },
     };
@@ -76,13 +78,13 @@ function fakeElectron(): BrowserPaneElectronLike & {
       fromPartition: (partition: string) => {
         partitions.push(partition);
         return {
-        setPermissionRequestHandler: (handler: unknown) => {
-          handlers.request = handler;
-        },
-        setPermissionCheckHandler: (handler: unknown) => {
-          handlers.check = handler;
-        },
-        on: (event: string, listener: (...args: never[]) => void) => {
+          setPermissionRequestHandler: (handler: unknown) => {
+            handlers.request = handler;
+          },
+          setPermissionCheckHandler: (handler: unknown) => {
+            handlers.check = handler;
+          },
+          on: (event: string, listener: (...args: never[]) => void) => {
             if (event === "will-download") handlers.download = listener;
           },
         };
@@ -94,7 +96,10 @@ function fakeElectron(): BrowserPaneElectronLike & {
 describe("面板 view 的权限面", () => {
   it("独立分区 + 沙箱 + 无 preload + 无 node 集成", async () => {
     const electron = fakeElectron();
-    const port = webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
+    const port = webContentsPaneViewOf({
+      electron,
+      host: { add: () => undefined, remove: () => undefined },
+    });
     await port.open({ id: "browser", url: "https://example.com/", bounds: RECT });
     const options = electron.views[0]?.webPreferences ?? {};
     expect(BROWSER_PANE_PARTITION.startsWith("persist:")).toBe(true);
@@ -112,7 +117,9 @@ describe("面板 view 的权限面", () => {
     panePermissionRequestHandlerOf()(undefined, "notifications", (value) => granted.push(value));
     expect(granted).toEqual([false, false]);
     expect(panePermissionCheckHandlerOf()(undefined, "media", "https://example.com")).toBe(false);
-    expect(panePermissionCheckHandlerOf()(undefined, "clipboard-read", "https://example.com")).toBe(false);
+    expect(panePermissionCheckHandlerOf()(undefined, "clipboard-read", "https://example.com")).toBe(
+      false,
+    );
     expect(panePermissionRequestHandlerOf().length).toBe(3);
     void granted;
   });
@@ -161,9 +168,14 @@ describe("面板适配器（假 electron）", () => {
 
   it("页面要开新窗口一律拒（外链仍归系统浏览器）", async () => {
     const electron = fakeElectron();
-    const port = webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
+    const port = webContentsPaneViewOf({
+      electron,
+      host: { add: () => undefined, remove: () => undefined },
+    });
     await port.open({ id: "browser", url: "https://example.com/", bounds: RECT });
-    expect(electron.views[0]?.windowOpen?.({ url: "https://example.org/" })).toEqual({ action: "deny" });
+    expect(electron.views[0]?.windowOpen?.({ url: "https://example.org/" })).toEqual({
+      action: "deny",
+    });
   });
 
   it("状态变化只从主进程推（onChange），四条事件都接上", async () => {

@@ -151,7 +151,8 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     // 运行期是同一个对象；同一条边在 zephyr 的 `compat/to-cordis.ts` / `from-cordis.ts` 里也各断言一次，
     // 那两处归 zephyr 域。只在**这一个文件**里有这一条边，所以只白名单这个文件。
     match: /(^|[\\/])dsh-conversation[\\/]src[\\/]ui[\\/]upstream-context\.ts$/u,
-    reason: "cordis Context 兼容桥：本仓 Context / SessionScope → 上游 cordis Context（运行期同一对象）",
+    reason:
+      "cordis Context 兼容桥：本仓 Context / SessionScope → 上游 cordis Context（运行期同一对象）",
   },
   {
     // 第三方声明面比运行期**窄**的两处，收在一个 testing 文件里：用例仍按运行期形态写，
@@ -159,7 +160,8 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     // 另一头是 vendor 里的第三方类型声明：`@deepseek-ai/schemastery` 的 `Schema.description()` 只写
     // `string`（运行期与我们的 `FieldMeta.description` 都收本地化字典），`.default(value)` 的形参
     // 不收 `null`（而 schema 里「默认空」就写成 `null`）。vendor 只读，改了上游同步就丢。
-    match: /(^|[\\/])zephyr-ui[\\/]src[\\/]client[\\/]schema-form[\\/]testing[\\/]schemastery-limits\.ts$/u,
+    match:
+      /(^|[\\/])zephyr-ui[\\/]src[\\/]client[\\/]schema-form[\\/]testing[\\/]schemastery-limits\.ts$/u,
     reason:
       "schemastery 声明面比运行期窄：`description()` 只写 string（运行期收字典）、`default()` 不收 null",
   },

@@ -6,6 +6,8 @@
 // 1. **事件字段绑的是"装这一行时用的那个 ctx"**——行的事件令牌 `bus` 就是传入的 ctx，订阅随之落在
 //    那个 ctx 的 scope 里（不需要谁把 ctx 显式传下去）；
 // 2. **scope 决定位置**——带 scope 的行不出现在应用根，只能经 `ScopedRows.install` 装到某个 ctx 上。
+// 这份 `Context` 是**类 + 模块增强**（`fiber` / `set` / `accessor` 都在它上面），
+// 而裸包名 `@deepseek-ai/cordis` 导出的是类型面、不能 `new`——所以按 `src/context.ts` 引。
 import { Context as CordisContext } from "@deepseek-ai/cordis/src/context.ts";
 import {
   bootstrapApplication,
@@ -20,6 +22,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 /** 声明方定的分类键（装配器只认 symbol，不解释它的含义）。 */
 const ScopeDemo = Symbol.for("test.scope.demo");
+
+// `ctx.emit("test/ping")` 走 cordis 的 `Context.emit`，签名收 `keyof Events`——给那个模块路径补一条。
+// 注意模块路径要与本文件的 import 一致（裸包名与 `src/events.ts` 是两个模块实例）。
+declare module "@deepseek-ai/cordis/src/events.ts" {
+  interface Events {
+    "test/ping": [];
+  }
+}
 
 /** 无参事件：谁在自己的 scope 上派发，只有那个 scope 的订阅者收到。 */
 class Ping extends EventEmitter {
@@ -77,7 +87,7 @@ function freshContext(): Context {
   const ctx = new CordisContext();
   contexts.push(ctx);
   // 单断言收窄：我们的 `Context` 是 cordis ctx 的子类型（只补了运行时本来就有的成员）。
-  return ctx as Context;
+  return ctx as unknown as Context;
 }
 
 describe("按 scope 装配", () => {
@@ -109,10 +119,12 @@ describe("按 scope 装配", () => {
     const scopedCtx = freshContext();
     await app.get(ScopedRows).install(ScopeDemo, scopedCtx);
 
-    app.ctx.emit("test/ping");
+    (app.ctx as unknown as { emit(name: string): void }).emit("test/ping");
     expect(scopedSeen, "根上的派发不进这个 scope").toEqual([]);
 
-    scopedCtx.emit("test/ping");
+    // 我们的 `Context` 类型面没加载 cordis 的 `Events` 增强，`emit` 的参数是 `never`；
+    // 运行期它就是同一个对象——按「有 emit 的形状」收窄一次。
+    (scopedCtx as unknown as { emit(name: string): void }).emit("test/ping");
     expect(scopedSeen, "本 scope 的派发收得到").toEqual(["scoped"]);
   });
 });

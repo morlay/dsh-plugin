@@ -28,7 +28,6 @@ import { notifyResize, stubResizeObserver } from "../schema-form/testing/resize-
 import type {
   SchemaFieldOwnerProps,
   SchemaFormComponentProps,
-
 } from "../schema-form/slot-contract.ts";
 
 afterEach(cleanup);

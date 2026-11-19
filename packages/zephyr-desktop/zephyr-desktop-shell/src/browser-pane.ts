@@ -140,7 +140,8 @@ export function browserPaneRoutesOf(input: BrowserPaneRoutesInput): BrowserPaneR
       return true;
     },
     async navigate(id: string, url: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-      if (!browserUrlAllowed(url)) return { ok: false, reason: `面板只打开 http / https 地址：${url}` };
+      if (!browserUrlAllowed(url))
+        return { ok: false, reason: `面板只打开 http / https 地址：${url}` };
       if (!opened(id)) return { ok: false, reason: `面板 ${id} 没有打开` };
       await input.port.navigate(id, url);
       return { ok: true };

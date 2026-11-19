@@ -7,7 +7,6 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-
 /** 一条 bundle 行声明：id、是否禁用、行配置。 */
 export interface BundleRow {
   readonly id: string;
@@ -74,8 +73,6 @@ interface BuildRun {
   outDir: string;
   // 清单只落一次：判定「齐了」之后的写入不能再被后来的回调重复触发。
 }
-
-
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -159,7 +156,9 @@ async function writeManifest(
   // 只发布态入口不改顶层值，发布态另写 `publishConfig`。
   const previous = manifest["exports"];
   const dev: Record<string, unknown> =
-    typeof previous === "object" && previous !== null ? { ...(previous as Record<string, unknown>) } : {};
+    typeof previous === "object" && previous !== null
+      ? { ...(previous as Record<string, unknown>) }
+      : {};
   // 只发布态面不进顶层：client 是 dsh 读字节的那份，patch 是发布产物。
   delete dev["./client"];
   delete dev[PATCH_EXPORT];
@@ -310,7 +309,9 @@ export function writeBuildManifest(
     {
       entries: options.entries,
       ...(options.clientEntry === undefined ? {} : { clientEntry: options.clientEntry }),
-      ...(options.declarationFiles === undefined ? {} : { declarationFiles: options.declarationFiles }),
+      ...(options.declarationFiles === undefined
+        ? {}
+        : { declarationFiles: options.declarationFiles }),
       ...(options.publishOnly === undefined ? {} : { publishOnly: options.publishOnly }),
       ...(options.bundle === undefined ? {} : { bundle: options.bundle }),
     },

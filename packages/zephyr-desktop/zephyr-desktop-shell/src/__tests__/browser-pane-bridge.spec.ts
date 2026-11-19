@@ -5,7 +5,10 @@ import { browserPaneBridgeOf, type BrowserPaneIpcLike } from "../browser-pane-br
 const RECT = { x: 0, y: 0, width: 300, height: 200 };
 
 /** 假 ipcRenderer：记通道与参数，并能让测试自己触发推送。 */
-function fakeIpc(): BrowserPaneIpcLike & { readonly calls: string[]; push(payload: unknown): void } {
+function fakeIpc(): BrowserPaneIpcLike & {
+  readonly calls: string[];
+  push(payload: unknown): void;
+} {
   const calls: string[] = [];
   const listeners = new Map<string, (...args: unknown[]) => void>();
   return {

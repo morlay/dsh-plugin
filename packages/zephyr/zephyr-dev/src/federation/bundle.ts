@@ -44,7 +44,9 @@ async function externalizableSpecifiersOf(
   name: string,
   root: string,
 ): Promise<Array<string | RegExp>> {
-  const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8").catch(() => "{}")) as {
+  const manifest = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8").catch(() => "{}"),
+  ) as {
     exports?: unknown;
   };
   const table = manifest.exports;
@@ -69,7 +71,9 @@ async function externalizableSpecifiersOf(
     if (!key.startsWith("./")) continue;
     const subpath = key.slice(2);
     if (subpath.includes("*")) {
-      const source = `${name}/${subpath}`.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replaceAll("\\*", ".*");
+      const source = `${name}/${subpath}`
+        .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+        .replaceAll("\\*", ".*");
       out.push(new RegExp(`^${source}$`, "u"));
       continue;
     }
@@ -693,8 +697,12 @@ async function cjsShimOf(options: {
  * @param from - 引用它的那份样式文件（解析基准：pnpm 严格布局下每个引用方看得见的副本不同）。
  * @returns 入口绝对路径；不是包引用或解析不到时 undefined。
  */
-export async function resolveCssImport(specifier: string, from: string): Promise<string | undefined> {
-  if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier)) return undefined;
+export async function resolveCssImport(
+  specifier: string,
+  from: string,
+): Promise<string | undefined> {
+  if (specifier.startsWith(".") || specifier.startsWith("/") || /^https?:/u.test(specifier))
+    return undefined;
   const resolved = await dependencyEntry(from, specifier);
   return resolved?.entry;
 }
@@ -904,7 +912,9 @@ async function bundlePackageOnce(
     copies.set(`${name}\u0000${root}`, { name, root });
   }
   const external = (
-    await Promise.all([...copies.values()].map((copy) => externalizableSpecifiersOf(copy.name, copy.root)))
+    await Promise.all(
+      [...copies.values()].map((copy) => externalizableSpecifiersOf(copy.name, copy.root)),
+    )
   ).flat();
 
   const plugins: (PluginOption | Plugin)[] = [

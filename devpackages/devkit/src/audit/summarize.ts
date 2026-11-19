@@ -165,7 +165,7 @@ report("声明未用（依赖清单 vs 源码/scripts/清单其它字段）", un
 });
 report("扩展边界（agent-ex 只许 contract / testing / endpoint，且扩展之间零依赖）", exViolations);
 report(
-  "deps 键不写字面量（`\"remote.xxx\"` 一律由 `remoteNamespaceKey(组名)` 给出；只盯 `export const` 会漏掉字面量）",
+  'deps 键不写字面量（`"remote.xxx"` 一律由 `remoteNamespaceKey(组名)` 给出；只盯 `export const` 会漏掉字面量）',
   remoteLiterals,
 );
 reportAgainstBaseline(

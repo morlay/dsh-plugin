@@ -325,9 +325,7 @@ it("字段的默认值是 `null`（会话模式的 `defaultModel` 那种写法�
   const { instance } = model(
     scope,
     z.object({
-      defaultModel: z
-        .object({ provider: z.string(), model: z.string() })
-        .default(nullDefault()),
+      defaultModel: z.object({ provider: z.string(), model: z.string() }).default(nullDefault()),
     }),
   );
 

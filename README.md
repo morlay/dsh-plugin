@@ -16,11 +16,11 @@ DeepSeek Harness 的插件工作区：上游 `@deepseek-ai/*` 只读，扩展只
 | `packages/zephyr-desktop/*`  | 桌面：Electron 壳与往命令树追加 `desktop dev` / `desktop bundle` 的插件                                                       |
 | `packages/boot/dsh-oxc-node` | 全仓唯一的 TS loader 入口（module hooks，ESM only）                                                                           |
 | `apps/zephyr-custom/`        | 示例工作区：provider 清单与 `zephyr.config.ts`（装配面）                                                                      |
-| `devpackages/*`              | 本地工具（不发布）：audit / dts-prepare / typert-generator / tsdown-plugin-cordis                                             |
+| `devpackages/*`              | 本地工具（不发布）：devkit（build + audit）/ dts-prepare / typert-generator                                                   |
 | `vendor/deepseek-harness/`   | 上游 side workspace：按 `DEEPSEEK_HARNESS_VERSION` 锁定的只读源码副本                                                         |
 
-各包的门面与用法在它自己的 `README.md`。本仓库只有四个包没有标 `private`（`@morlay/zephyr`、`@morlay/zephyr-rdb`、
-`@morlay/zephyr-desktop-shell`、`@morlay/dsh-oxc-node`），其余为 private、不发布；发布一律走 CI（见 [`AGENTS.md`](AGENTS.md)）。
+各包的门面与用法在它自己的 `README.md`。`packages/**` 全部发布（`devpackages/**` 与 `apps/**` 不发布）；
+GitHub Packages 走 CI，npmjs 只经本地 `just publish-npm`（见 [`AGENTS.md`](AGENTS.md) 与[设计 npm 发布线](.agents/designs/20261118-npm发布线.md)）。
 
 ## 命令
 

@@ -19,7 +19,8 @@ import {
  */
 export function permissionPresetsGroupName(): string {
   const group = remoteGroupNameOf(PermissionPresetsEndpoint);
-  if (group === undefined) throw new Error("PermissionPresetsEndpoint 没有 @RemoteGroup：组名取不到");
+  if (group === undefined)
+    throw new Error("PermissionPresetsEndpoint 没有 @RemoteGroup：组名取不到");
   return group;
 }
 

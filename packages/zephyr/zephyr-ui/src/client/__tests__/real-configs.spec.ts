@@ -13,7 +13,6 @@ import { zh } from "../schema-form/locales.ts";
 import { translateOf } from "../schema-form/testing/translate-stub.ts";
 import { projectNode, readPath, walkFields, type FieldNode } from "../schema-form/schema-node.ts";
 
-
 const t = translateOf(zh);
 const resolveText = (text: string | Readonly<Record<string, string>>): string =>
   typeof text === "string" ? text : (text["zh"] ?? "");

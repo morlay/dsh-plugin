@@ -90,7 +90,6 @@ export async function buildSchemaIndex(
           // 反射里 `types[].declaration` 用的是声明原文，从 `export` 起算。
           text: parsed.source.slice(statement["start"] as number, declaration["end"] as number),
         });
-
       }
     }
   }

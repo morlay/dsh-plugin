@@ -279,6 +279,8 @@ export class SessionControllerDefault extends SessionController implements OnIni
     operation: (reference: SessionRetainHandle) => T | Promise<T>,
   ): Promise<T> {
     // 句柄面按契约转一次：上游只有 `release()` 与 `[Symbol.dispose]`，契约面声明的是 `release()` / `dispose()`。
-    return this.sessions.using(target, options, (reference) => operation(retainHandleOf(reference)));
+    return this.sessions.using(target, options, (reference) =>
+      operation(retainHandleOf(reference)),
+    );
   }
 }

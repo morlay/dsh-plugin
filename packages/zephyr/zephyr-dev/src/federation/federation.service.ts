@@ -92,9 +92,7 @@ export class FederationDefault extends Federation {
     // **包根只用 Node 的解析规则**：先问「本会话见过的包」（它们是引用方），再问应用清单。
     // 不猜包管理器的布局（`.pnpm` 那类）：换 yarn / npm 就不成立，而 Node 的解析跨包管理器成立。
     const root =
-      this.roots.get(rootKey) ??
-      (await this.importerRootOf(name)) ??
-      (await this.rootOf(name));
+      this.roots.get(rootKey) ?? (await this.importerRootOf(name)) ?? (await this.rootOf(name));
     // 定位到的包根记下来：同一个包的后续请求不必再解析一遍。
     if (root !== undefined) this.roots.set(rootKey, root);
     const resolvedManifest = root === undefined ? undefined : await manifestOf(root);
@@ -144,7 +142,11 @@ export class FederationDefault extends Federation {
       );
     }
     if (entry === undefined) {
-      return this.miss(res, req, `${name}@${urlVersion}/${exportName} — 包根解析到了，但这个出口解析不出入口`);
+      return this.miss(
+        res,
+        req,
+        `${name}@${urlVersion}/${exportName} — 包根解析到了，但这个出口解析不出入口`,
+      );
     }
     const bundled = await bundlePackage({
       cacheRoot: this.cacheRoot,

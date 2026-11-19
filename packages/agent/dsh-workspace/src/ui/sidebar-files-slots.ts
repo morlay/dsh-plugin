@@ -8,7 +8,14 @@ import * as UiSidebarFilesPlugin from "@deepseek-ai/dsh-client-ui-sidebar-files/
 import { TYPERT_REMOTE as WORKSPACE_FILES_REMOTE } from "@deepseek-ai/dsh-api-workspace-files/remote";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Locale, Remote, Shortcuts, SidebarRight, SidebarRightTabs, Slots } from "@morlay/zephyr-app/client";
+import {
+  Locale,
+  Remote,
+  Shortcuts,
+  SidebarRight,
+  SidebarRightTabs,
+  Slots,
+} from "@morlay/zephyr-app/client";
 import { workspaceFilesGroupName } from "../endpoint/index.ts";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 

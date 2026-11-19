@@ -38,7 +38,9 @@ async function findPackages(root: string, filter: string | undefined): Promise<s
   const found: string[] = [];
   for (const family of await readdir(join(root, "packages"), { withFileTypes: true })) {
     if (!family.isDirectory()) continue;
-    for (const entry of await readdir(join(root, "packages", family.name), { withFileTypes: true })) {
+    for (const entry of await readdir(join(root, "packages", family.name), {
+      withFileTypes: true,
+    })) {
       if (!entry.isDirectory()) continue;
       const dir = join(root, "packages", family.name, entry.name);
       const raw = await readFile(join(dir, "package.json"), "utf8").catch(() => undefined);
@@ -80,9 +82,13 @@ async function build(args: readonly string[]): Promise<number> {
 
 async function audit(args: readonly string[]): Promise<number> {
   // 逐包扫描的输出经管道交给汇总器；两个进程的 stderr 都直接给终端。
-  const scan = spawn("pnpm", ["-r", "--filter", "./packages/*/*", "exec", "node", join(here, "audit/package-audit.ts")], {
-    stdio: ["ignore", "pipe", "inherit"],
-  });
+  const scan = spawn(
+    "pnpm",
+    ["-r", "--filter", "./packages/*/*", "exec", "node", join(here, "audit/package-audit.ts")],
+    {
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
   const report = spawn("node", [join(here, "audit/summarize.ts"), ...args], {
     stdio: ["pipe", "inherit", "inherit"],
   });

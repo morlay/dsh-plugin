@@ -5,7 +5,6 @@ import type { UserMessage } from "@morlay/dsh-agent/contract";
 import { withEventType } from "@morlay/dsh-session/contract";
 import type { SessionEvent, SessionEventType } from "@morlay/dsh-session/contract";
 
-
 export function repairAssistantSettlement(events: SessionEvent[]): void {
   for (const event of events) {
     if (event.type !== "assistant/message" && event.type !== "assistant/attempt") continue;

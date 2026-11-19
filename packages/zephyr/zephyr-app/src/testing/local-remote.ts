@@ -50,8 +50,7 @@ export class LocalRemote extends Remote {
       const method = String(descriptor.method);
       // 上游把 namespace 挂在 **service 实例自己**身上（`remote.<ns>`），这里照做：
       // 动态成员读改写走 `Reflect`，不再把 `this` 断言成一张表。
-      const face: NamespaceFace =
-        (Reflect.get(this, namespace) as NamespaceFace | undefined) ?? {};
+      const face: NamespaceFace = (Reflect.get(this, namespace) as NamespaceFace | undefined) ?? {};
       face[method] = async (request?: unknown): Promise<unknown> =>
         this.handlers.invoke(`${namespace}/${method}`, { request });
       Reflect.set(this, namespace, face);

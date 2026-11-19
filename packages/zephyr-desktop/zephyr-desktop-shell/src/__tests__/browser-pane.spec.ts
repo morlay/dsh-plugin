@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { browserPaneRoutesOf, type BrowserPanePort, type PaneRect, type PaneState } from "../browser-pane.ts";
+import {
+  browserPaneRoutesOf,
+  type BrowserPanePort,
+  type PaneRect,
+  type PaneState,
+} from "../browser-pane.ts";
 import { browserUrlAllowed } from "../browser-url.ts";
 
 const RECT: PaneRect = { x: 10, y: 20, width: 400, height: 300 };
@@ -8,7 +13,9 @@ const RECT: PaneRect = { x: 10, y: 20, width: 400, height: 300 };
  * @param result - 路由的返回。
  * @returns 被拒时的原因（放行时是空串）。
  */
-function reasonOf(result: { readonly ok: true } | { readonly ok: false; readonly reason: string }): string {
+function reasonOf(
+  result: { readonly ok: true } | { readonly ok: false; readonly reason: string },
+): string {
   return result.ok ? "" : result.reason;
 }
 
@@ -78,7 +85,9 @@ describe("面板的 IPC 路由（假适配器）", () => {
   it("开 → 报矩形 → 导航：调用按 id 落到同一个 pane", async () => {
     const port = fakePort();
     const routes = browserPaneRoutesOf({ port, partition: "persist:zephyr-browser" });
-    expect(await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT })).toEqual({ ok: true });
+    expect(await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT })).toEqual(
+      { ok: true },
+    );
     expect(port.opened).toEqual(["browser"]);
     routes.setBounds("browser", { ...RECT, width: 500 });
     expect(port.boundsOf("browser")?.width).toBe(500);
@@ -97,7 +106,9 @@ describe("面板的 IPC 路由（假适配器）", () => {
     // 一开始就给非法地址：不建 pane。
     const other = fakePort();
     const otherRoutes = browserPaneRoutesOf({ port: other, partition: "persist:zephyr-browser" });
-    expect(await otherRoutes.open({ id: "b", url: "file:///etc/passwd", bounds: RECT })).toMatchObject({
+    expect(
+      await otherRoutes.open({ id: "b", url: "file:///etc/passwd", bounds: RECT }),
+    ).toMatchObject({
       ok: false,
     });
     expect(other.opened).toEqual([]);

@@ -11,8 +11,10 @@
 ## 红线
 
 - 上游 `@deepseek-ai/*` **不可修改**（`vendor/**` 与 node_modules 只读；扩展走 zephyr；本地 patch 是例外，见上游同步技能）。
-- **发布走 CI**：严禁本地私自 `pnpm publish`（包括用 `--registry` 指向 GitHub Packages 的发布）。
-  版本 bump 提交后由 CI 发布；本地只构建验证。
+- **两条发布通道**：GitHub Packages 发布只走 CI（版本 bump 提交后自动发未发布的新版本）；npmjs 发布只经本地
+  `just publish-npm`（[ADR-npmjs 发布走本地命令](./.agents/adrs/20261118-npmjs发布走本地命令.md)）。
+  其他形式的 `pnpm publish` 一律禁止，包括用 `--registry` 指向任一 registry 的本地发布。发布集合、形态与验收见
+  [设计 npm 发布线](./.agents/designs/20261118-npm发布线.md)。
 
 ## 记录与 home
 

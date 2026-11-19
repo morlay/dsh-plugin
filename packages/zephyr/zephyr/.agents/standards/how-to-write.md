@@ -149,13 +149,13 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
 
 ### 该用什么
 
-| 场景 | 写法 |
-| --- | --- |
-| 本行需要某服务 | `inject(Token)`（字段初始化，填充期解析） |
-| 可能没有 | `inject.optional(Token)` |
-| 装配完成后才探测 | `app.get(Token)`（`bootstrapApplication` 的返回值，不是 `ctx.get`） |
-| **按调用方的 ctx 读**（`systemPrompt.context()` 这类「scope 取自调用方」的上游语义） | `ctx.serviceOf(Token)`（框架面提供；内部走 `tokenMetaOf(Token).name`，**断言只活在那一处**） |
-| 上游只按名字发布、我们没有令牌 | 先**补令牌**（在拥有该服务的域定义），让 `adoptNamedServices` 接上；补了令牌也只有**读法**变了，顺序仍靠行序（见「边界」里 `inject` 的两种顺序语义） |
+| 场景                                                                                 | 写法                                                                                                                                                 |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 本行需要某服务                                                                       | `inject(Token)`（字段初始化，填充期解析）                                                                                                            |
+| 可能没有                                                                             | `inject.optional(Token)`                                                                                                                             |
+| 装配完成后才探测                                                                     | `app.get(Token)`（`bootstrapApplication` 的返回值，不是 `ctx.get`）                                                                                  |
+| **按调用方的 ctx 读**（`systemPrompt.context()` 这类「scope 取自调用方」的上游语义） | `ctx.serviceOf(Token)`（框架面提供；内部走 `tokenMetaOf(Token).name`，**断言只活在那一处**）                                                         |
+| 上游只按名字发布、我们没有令牌                                                       | 先**补令牌**（在拥有该服务的域定义），让 `adoptNamedServices` 接上；补了令牌也只有**读法**变了，顺序仍靠行序（见「边界」里 `inject` 的两种顺序语义） |
 
 ### 判据
 
@@ -166,7 +166,6 @@ grep -rn '\.get("[a-zA-Z]\|reflect\.get(' packages --include='*.ts' --include='*
 **期望只剩上面例外清单里的那几处**（当前 5 处：`connection.service.ts` ×2、`serve.service.ts` ×1、
 `schema-form/hints.ts` ×1、`schema-form/index.ts` ×1；`bootstrap.ts` / `compat/` 已被 grep 排除）。
 新出现的行一律按「改不动的才进清单」判，别直接加进来。
-
 
 ### `reflect.provide` 的例外（只有一种）
 
@@ -186,20 +185,24 @@ grep -rn '\.get("[a-zA-Z]\|reflect\.get(' packages --include='*.ts' --include='*
 `serviceOf(ctx, Token)` 之类。一条都不做。
 
 依赖关系只有一种表达：**显式声明**
+
 - 本行依赖：`inject(Token)` / `inject.optional(Token)`（字段初始化，填充期解析，缺提供者在装配阶段就报）；
 - 清单条目：`{ provide: Token, useValue }`；
 - scope 上的依赖：**和 agent scope 一样做额外声明**（`@AgentScoped()` 那种形态），不靠运行时按名字取。
 
 **遇到「必须按调用方 ctx 读」的诉求时，先问三个问题**（三个都比 `serviceOf` 好）：
+
 1. 这个依赖能不能**显式声明**？（多数情况可以，只是当初为了少写一行才走的动态）
 2. 这个**双向依赖**能不能拆成单向？（注册表模式：后初始化的一方把钩子**注册到**先初始化的一方，而不是反过来读）
 3. 上游那个「按调用方 ctx」的语义，能不能**换成我们声明的 scope 令牌**？
 
 判据：
+
 ```sh
 grep -rnE 'serviceOf|\.get\("[a-zA-Z]|reflect\.get\(' packages --include='*.ts' --include='*.tsx' \
   | grep -v __tests__ | grep -vE 'zephyr/zephyr/src/(bootstrap|compat)'
 ```
+
 ——**期望只剩上面例外清单里那几处**（`scoped.get(` 属上游 session scope 的 API，不计；但要在调用点注明）。
 
 **`-E` 是必需的**：这条判据用 BRE 写时 `|` 是**字面量**而不是「或」——那样它找的是「`serviceOf|…` 这个整体字面量」，

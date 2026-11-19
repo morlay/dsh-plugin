@@ -89,9 +89,9 @@ export function devToolsOf(input: DevToolsInput): DevTools {
       // 先收端口再改状态：菜单重画（`onChange`）那一刻看到的就已经是关掉的样子。
       if (!next) await closeInspector("开发者模式关闭：已收起主进程 Inspector");
       failed = false;
-      await input.devMode.set(next).catch((error: unknown) =>
-        input.report("写开发者模式标记", messageOf(error)),
-      );
+      await input.devMode
+        .set(next)
+        .catch((error: unknown) => input.report("写开发者模式标记", messageOf(error)));
     },
     async toggleInspector(): Promise<void> {
       if (input.inspector.opened) {

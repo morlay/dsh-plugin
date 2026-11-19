@@ -75,7 +75,9 @@ export async function bootstrapApplication<const L extends ProviderList>(
   // agent 的 `agentCtx`）。清单顺序就是同一 scope 下的装配顺序。
   const scoped = options.providers.flatMap((entry) => {
     const scope = scopeOfEntry(entry);
-    return scope === undefined ? [] : [{ scope, provider: entryOf(entry), config: configOf(entry) }];
+    return scope === undefined
+      ? []
+      : [{ scope, provider: entryOf(entry), config: configOf(entry) }];
   });
   const entries: ProviderList = [
     ...options.providers.filter((entry) => scopeOfEntry(entry) === undefined),
@@ -262,9 +264,10 @@ export async function mountRow(
     instance,
     // 单行装配没有令牌表：依赖从**装它的那个 ctx** 上读（per-agent 时就是 agent 的 scope，
     // 读得到根上发布的服务，也读得到这个 agent 自己那层）。
-    (meta) => (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(meta.name, false),
+    (meta) =>
+      (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(meta.name, false),
   );
-  return { instance, dispose: mounted.dispose };
+  return { instance, dispose: () => mounted.dispose() };
 }
 
 /**
@@ -288,7 +291,10 @@ function createRow(provider: Newable<unknown>, config?: unknown): unknown {
  * 两种来源长在这里的签名里：多行装配从令牌表查（`instances` / `multi`），单行装配从 ctx 读。
  * 「找不到」一律以 `undefined` 表达，报错由 `mountInstance` 统一抛（文案只有一份）。
  */
-type RowResolver = (meta: ReturnType<typeof tokenMetaOf>, mode: "one" | "optional" | "all") => unknown;
+type RowResolver = (
+  meta: ReturnType<typeof tokenMetaOf>,
+  mode: "one" | "optional" | "all",
+) => unknown;
 
 /**
  * 装一行的**唯一实现**：填充注入 → 包一个 fiber → 事件字段绑本行 ctx → `onInit`。
@@ -330,7 +336,9 @@ async function mountInstance(
     await (fiber as unknown as { dispose(): Promise<void> }).dispose();
     throw error;
   }
-  return { dispose: async () => await (fiber as unknown as { dispose(): Promise<void> }).dispose() };
+  return {
+    dispose: async () => await (fiber as unknown as { dispose(): Promise<void> }).dispose(),
+  };
 }
 
 /**
@@ -645,11 +653,11 @@ class ScopedRowsDefault extends ScopedRows {
         token: meta.token as object,
         instance: instance as Lifecycle & object,
       };
-      await mountInstance(ctx as CordisContext, row.name, instance, (target, mode) =>
+      await mountInstance(ctx as unknown as CordisContext, row.name, instance, (target, mode) =>
         mode === "all" ? (multi.get(target.token) ?? []) : instances.get(target.token),
       );
       // 适配行的契约面在 `onInit` 之后才有：立刻换进这一层的表，后面的行才拿得到。
-      bindFace(ctx as CordisContext, row, instances);
+      bindFace(ctx as unknown as CordisContext, row, instances);
     }
   }
 }

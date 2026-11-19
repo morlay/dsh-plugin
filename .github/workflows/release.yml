@@ -33,6 +33,7 @@ jobs:
       - uses: jdx/mise-action@v5
 
       - run: just prepare
+      - run: just dts
       - run: just lint
       - run: just test
         env:
@@ -46,11 +47,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - run: just prepare
+      - run: just dts
+      - run: just build
 
       - name: Login to GitHub Packages
-        run: pnpm exec dshdev login
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+          echo "@morlay:registry=https://npm.pkg.github.com/" >> ~/.npmrc
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to GitHub Packages
         run: just publish

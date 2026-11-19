@@ -22,11 +22,7 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import {
-  AppEnv,
-  RemoteHandlersDefault,
-  type AppEnvValues,
-} from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -107,7 +103,9 @@ async function boot(): Promise<{
  * @param app - 装配结果（`remote` 走它的 `LocalRemote`）。
  * @returns 可以直接 `execute(…)` 的客户端。
  */
-function commandClientOf(app: Awaited<ReturnType<typeof bootstrapApplication>>): CommandEndpointClient {
+function commandClientOf(
+  app: Awaited<ReturnType<typeof bootstrapApplication>>,
+): CommandEndpointClient {
   return Object.assign(new CommandEndpointClient(), { remote: app.get(Remote) });
 }
 

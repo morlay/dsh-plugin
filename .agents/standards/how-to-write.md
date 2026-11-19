@@ -5,14 +5,14 @@
 
 ## 判据一览
 
-| 判据       | 命令                                     | 判什么                                                                                              |
-| ---------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 类型与规则 | `just lint`                              | oxlint `typeAware` + `typeCheck`（[`.oxlintrc.json`](../../.oxlintrc.json)），全仓                  |
-| 面边界     | `just audit`                             | root / ui / server 互相越界即红                                                                     |
+| 判据       | 命令                                     | 判什么                                                                                                     |
+| ---------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 类型与规则 | `just lint`                              | oxlint `typeAware` + `typeCheck`（[`.oxlintrc.json`](../../.oxlintrc.json)），全仓                         |
+| 面边界     | `just audit`                             | root / ui / server 互相越界即红                                                                            |
 | 依赖声明   | `just audit`（`--write` 一键删）         | 声明却没有用到的依赖即红；「必须保留」的判据只在 [`rules.ts`](../../devpackages/devkit/src/audit/rules.ts) |
-| 扩展边界   | `just audit`                             | `packages/agent-ex/*` 的入口越界与扩展间互相依赖                                                    |
-| 出口能出活 | `just build`                             | 有 `build` 脚本的包（5 个）产物与 `exports` 对得上                                                  |
-| 格式       | `just fmt` / `pnpm exec oxfmt --check .` | 换行、引号、表格对齐                                                                                |
+| 扩展边界   | `just audit`                             | `packages/agent-ex/*` 的入口越界与扩展间互相依赖                                                           |
+| 出口能出活 | `just build`                             | 有 `build` 脚本的包（5 个）产物与 `exports` 对得上                                                         |
+| 格式       | `just fmt` / `pnpm exec oxfmt --check .` | 换行、引号、表格对齐                                                                                       |
 
 ## 分层与依赖方向
 

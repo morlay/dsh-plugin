@@ -155,12 +155,17 @@ function langOf(file: string): "js" | "jsx" | "ts" | "tsx" {
 function specifierOfNode(node: AstNode): string | undefined {
   if (node.type === "ImportExpression") {
     // 动态 `import()`：只认字面量（`import(\`./x\${y}\`)` 这种算不出来，跳过）。
-    return typeof node.source === "object" && node.source !== null && (node.source as AstNode).type === "Literal"
+    return typeof node.source === "object" &&
+      node.source !== null &&
+      (node.source as AstNode).type === "Literal"
       ? stringOf((node.source as { value?: unknown }).value)
       : undefined;
   }
   if (node.importKind === "type" || node.exportKind === "type") return undefined;
-  const isDeclaration = node.type === "ImportDeclaration" || node.type === "ExportNamedDeclaration" || node.type === "ExportAllDeclaration";
+  const isDeclaration =
+    node.type === "ImportDeclaration" ||
+    node.type === "ExportNamedDeclaration" ||
+    node.type === "ExportAllDeclaration";
   if (!isDeclaration) return undefined;
   const source = node.source;
   if (typeof source !== "object" || source === null) return undefined;
@@ -180,7 +185,6 @@ function stringOf(value: unknown): string | undefined {
 function isFollowable(file: string): boolean {
   return /\.[cm]?[jt]sx?$/u.test(file) || file.endsWith(".css");
 }
-
 
 /**
  * 裸说明符 → 包名。

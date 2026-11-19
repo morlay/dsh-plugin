@@ -10,6 +10,7 @@ node_modules/
 
 
 .dsh-store/
+.dsh-home/
 .pnpm-store/
 .scratch/
 .turbo/
