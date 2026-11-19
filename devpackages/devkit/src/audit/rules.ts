@@ -245,7 +245,7 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 阶段 2 又下调 8 处：`dsh-session/src/testing/log.ts` 的会话事件夹具用品牌构造器装成了合法事件
    * （那一份在 `src/testing/` 下，算**生产面**）。
    */
-  "double-assertion": 66,
+  "double-assertion": 65,
   /**
    * **测试域**（`__tests__/**`）的同一条双断言判据：只降不升。
    *
