@@ -2,7 +2,7 @@
 //
 // 这条判据只有运行期才看得见：装错了就是第二个注册当场抛（装配期），或者自研端点仍然 404。
 import { describe, expect, it } from "vitest";
-import { shareRpcChannels } from "../connection/connection.service.ts";
+import { shareRpcChannels } from "../connection.service.ts";
 import type { Logger } from "@morlay/zephyr";
 
 /** 静音日志（本 spec 只看注册行为）。 */

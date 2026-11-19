@@ -23,6 +23,7 @@ export * from "./client-assets/client-assets.contract.ts";
 export * from "./dev-hmr/dev-hmr.contract.ts";
 export * from "./idle-guard/idle-guard.contract.ts";
 export { provideApiGateway } from "./api-gateway/provide.ts";
+export { RemoteQuestions, type ScopedAgentRef } from "./api-gateway/remote-questions.contract.ts";
 export { provideMuxServer } from "./api-gateway/provide.ts";
 
 export { RemoteHandlersDefault } from "./api-gateway/remote-handlers.service.ts";

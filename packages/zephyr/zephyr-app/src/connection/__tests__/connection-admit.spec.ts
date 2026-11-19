@@ -2,7 +2,7 @@
 // 403 是 Host / Origin 信任检查（它挡的是别的站点借道本机端口），与本机不设认证无关，必须原样保留。
 import { describe, expect, it } from "vitest";
 import type { Logger } from "@morlay/zephyr";
-import { admitLocalPeer } from "../connection/connection.service.ts";
+import { admitLocalPeer } from "../connection.service.ts";
 
 /** 上游发布给浏览器的那份 owner peer（`connection.browserPeer`）。 */
 const BROWSER_PEER = { id: "browser-peer" };

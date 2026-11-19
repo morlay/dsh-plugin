@@ -11,10 +11,11 @@
 //   （去掉 `agent` / `signal`）后投给浏览器，浏览器的 `ctx.remote.$on(...)` 返回值经 unary 端点
 //   `$events/result` 回到这里，再喂回那条 waterfall。
 import { API_REMOTE_FORWARDED_EVENTS } from "@deepseek-ai/dsh-api-remotes";
-import { carrierKeyOf } from "@deepseek-ai/dsh-scope";
+import { carrierKeyOf, scopeTarget } from "@deepseek-ai/dsh-scope";
 import { homedir } from "node:os";
 import { inject, Injectable, Logger, type Context } from "@morlay/zephyr";
 import { TypertGateway } from "../typert/gateway.contract.ts";
+import { RemoteQuestions, type ScopedAgentRef } from "./remote-questions.contract.ts";
 
 /** 一条 waterfall 请求里我们要的 agent 面（上游 `Agent` 的这两个成员）。 */
 interface ScopedAgent {
@@ -33,6 +34,8 @@ interface InvocationDispatch {
 
 /** 一条单向通知，交给 gateway 的那份记录。 */
 interface EmitDispatch {
+  /** 上游 `assertRemoteEventFrame` 认这个判别位，缺了整条消费循环会抛错并关掉源。 */
+  readonly type: "emit";
   readonly event: string;
   readonly args: readonly unknown[];
 }
@@ -110,20 +113,49 @@ class ForwardQueue {
  * 等浏览器经 `$events/result` 回值。
  */
 @Injectable()
-export class RemoteEventsSource {
+export class RemoteEventsSource extends RemoteQuestions {
   private readonly gateway = inject(TypertGateway);
 
   private readonly logger = inject(Logger);
 
+  /** 行 ctx：没有客户端时用它在进程内派发事件（应答者可能就在本进程里）。 */
+  private ctx: Context | undefined;
+
+  /** 登记的撤销函数：只在**本行卸载**时调（不用 `ctx.effect`——它的清理时机在装配期就会触发一次）。 */
+  private disposeEvents: (() => Promise<void>) | undefined;
+
   onInit(ctx: Context): void {
-    ctx.effect(() => {
-      const dispose = this.gateway.registerRemoteEvents((signal) => this.sourceOf(ctx, signal), {
-        home: homedir(),
-      });
-      return () => {
-        void dispose();
-      };
+    this.ctx = ctx;
+    this.disposeEvents = this.gateway.registerRemoteEvents((signal) => this.sourceOf(ctx, signal), {
+      home: homedir(),
     });
+  }
+
+  onDispose(): void {
+    void this.disposeEvents?.();
+    this.disposeEvents = undefined;
+  }
+
+  /**
+   * 派发一条要答复的请求。
+   *
+   * **只有一条路**：在行 ctx 上发 cordis 的 `waterfall`，由 {@link RemoteEventsSource.sourceOf}
+   * 挂的监听器接住并投给浏览器。浏览器与进程内应答者因此走同一条链——之前这里还额外把请求直接
+   * 推进队列，同一条请求就会投两遍（界面弹两张卡、宿主收两个答复）。
+   *
+   * 没有客户端接的时候，监听器按上游语义走 `next()`，落到这里的兜底 `next`：
+   * 立即以「没有应答者」失败，而不是永远挂着。
+   * @param event - 事件名。
+   * @param request - 请求本体（`agent` 由这里补上，监听器要用它做 carrier 校验）。
+   * @param agent - 请求所属的 agent（同时作为 scope carrier）。
+   * @returns 应答者给出的答案。
+   */
+  async ask(event: string, request: object, agent: ScopedAgentRef): Promise<unknown> {
+    const ctx = this.ctx;
+    if (ctx === undefined) throw new Error("转发事件源还没 mount");
+    return await ctx.waterfall(scopeTarget(agent, agent), event, { ...request, agent }, () =>
+      Promise.reject(new Error("no user-questions answerer accepted the request")),
+    );
   }
 
   /**
@@ -138,7 +170,7 @@ export class RemoteEventsSource {
       const event = entry.event;
       if (entry.mode === "emit") {
         return ctx.on(event, ((...args: readonly unknown[]) => {
-          const frame: EmitDispatch = { event, args };
+          const frame: EmitDispatch = { type: "emit", event, args };
           queue.push(frame);
         }) as never);
       }

@@ -2,8 +2,8 @@
 //
 // 不起服务、不装 DI：桥只读 `connection.rpc.intercept` 与 `handlers` 两个面，替身就这两个。
 import { describe, expect, it } from "vitest";
-import { RemoteHandlersRpcBridge } from "../api-gateway/remote-handlers.rpc-bridge.ts";
-import { RemoteHandlersDefault } from "../api-gateway/remote-handlers.service.ts";
+import { RemoteHandlersRpcBridge } from "../remote-handlers.rpc-bridge.ts";
+import { RemoteHandlersDefault } from "../remote-handlers.service.ts";
 
 /** 注册项上的处理器（末两位是 wire 的取消信号与 peer：本 spec 不读它们）。 */
 type CapturedHandler = (

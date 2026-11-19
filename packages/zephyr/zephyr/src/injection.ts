@@ -93,6 +93,15 @@ export interface Context extends CordisContext {
   serial<R>(event: string, ...args: unknown[]): Promise<R>;
   bail<R>(event: string, ...args: unknown[]): R;
   waterfall<R>(event: string, ...args: unknown[]): R;
+  /**
+   * 带派发接收者的形态：cordis 的事件面第一个参数位是「监听器的 this」，对象/函数时被取走
+   * （见 cordis 的 `EventsService._resolve`），监听器的过滤也按它判定——scope carrier 就挂在这里。
+   * @param thisArg - 监听器的 this（也就决定哪些监听器被调用）。
+   * @param event - 事件名。
+   * @param args - 监听器参数，最后一个是 next。
+   * @returns 最外层监听器的返回值。
+   */
+  waterfall<R>(thisArg: object, event: string, ...args: unknown[]): R;
   on<A extends unknown[], R>(
     event: string,
     listener: (...args: A) => R,

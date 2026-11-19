@@ -245,6 +245,61 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     });
     expect(seen).toEqual([["api-session/added", [{ id: "s9" }]]]);
   });
+
+  it("只有订阅、没有流时也要建连并补开 `$events`（unary 走 HTTP 之后没人建 socket）", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      const created = new FakeSocket();
+      sockets.push(created);
+      return created;
+    } as never);
+    const transport = muxTransport();
+
+    transport.subscribe?.(() => {});
+    expect(sockets, "订阅就是建连的理由").toHaveLength(1);
+    sockets[0]?.open();
+    expect(sockets[0]?.framesSent()).toEqual([
+      { type: "open", streamId: "$events", endpoint: "$events", payload: { args: {} } },
+    ]);
+  });
+
+  it("只有要答复事件时也要建连并补开 `$events`", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      const created = new FakeSocket();
+      sockets.push(created);
+      return created;
+    } as never);
+    const transport = muxTransport();
+
+    transport.answer?.(async () => ({ kind: "next" }));
+    expect(sockets).toHaveLength(1);
+    sockets[0]?.open();
+    expect(sockets[0]?.framesSent()).toEqual([
+      { type: "open", streamId: "$events", endpoint: "$events", payload: { args: {} } },
+    ]);
+  });
+
+  it("socket 断开之后再订阅：重建连，并在新 socket 上补开 `$events`", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      const created = new FakeSocket();
+      sockets.push(created);
+      return created;
+    } as never);
+    const transport = muxTransport();
+
+    transport.subscribe?.(() => {});
+    sockets[0]?.open();
+    // 宿主重启 / 网络中断：订阅还要能重新拉起来，而不是从此收不到推送。
+    sockets[0]?.close();
+    transport.subscribe?.(() => {});
+    expect(sockets, "断开之后必须重建").toHaveLength(2);
+    sockets[1]?.open();
+    expect(sockets[1]?.framesSent()).toEqual([
+      { type: "open", streamId: "$events", endpoint: "$events", payload: { args: {} } },
+    ]);
+  });
 });
 
 /**

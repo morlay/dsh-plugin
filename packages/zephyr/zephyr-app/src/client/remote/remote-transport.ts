@@ -128,6 +128,16 @@ export function muxTransport(
   /** 待发帧（socket 还在 CONNECTING 时排队，open 后一次性发）。 */
   const queued: string[] = [];
 
+  /**
+   * 已经开过 `$events` 的那一代 socket。
+   *
+   * 按**这一代的句柄**认，而不是按一个布尔量：订阅与要答复的人各自都会调一次「保证事件流在场」，
+   * 建连本身也会补开一次，布尔量拦不住重入（`ensure` 里补开 → 外层再发一帧），宿主会收到两条
+   * `$events` 流、同一条 waterfall 被投两边；而换了一代 socket 之后又必须重发，否则推送与
+   * 审批/提问从此收不到。句柄比较两种情形都自然成立。
+   */
+  let eventsOpenedOn: WebSocket | undefined;
+
   /** 发一帧：已 open 直接发，否则排队。 */
   const send = (text: string): void => {
     const ws = ensure();
@@ -314,11 +324,34 @@ export function muxTransport(
     return socket;
   };
 
+  /**
+   * 有人订阅/要答复时保证事件流在场。
+   *
+   * unary 走 HTTP 之后**没有任何调用会顺手建 socket**：页面里靠 `workspace/follow` 这类流式方法
+   * 把连接带起来，但只调 unary 的场景（以及测试）就永远连不上，`$events` 不开、推送与审批/提问
+   * 全收不到。这里建连，失败只记一笔（纯 unary 的替身没有 socket 工厂，不该因此炸装配）。
+   */
+  const connectEventsSafe = (): void => {
+    try {
+      openEvents();
+    } catch (error) {
+      console.debug("[remote] 事件流建连失败（本次装配没有 socket 载体）：", String(error));
+    }
+  };
+
   /** `$events` 流的 id（上游常量 `REMOTE_EVENT_STREAM_ENDPOINT`）。 */
   const EVENT_STREAM = "$events";
 
-  /** 开一条事件流（幂等：宿主按 streamId 认，重复开只是多一条流，所以调用方先看有没有人订）。 */
+  /**
+   * 开一条事件流：**这一代 socket 上只发一次**。
+   *
+   * 宿主按 streamId 认流，重复 `open` 会多出一条同 id 的流（推送重复投递、waterfall 请求被投多次），
+   * 所以先按 {@link eventsOpenedOn} 记账再发；换代（重连）后句柄不同，自然重发。
+   */
   const openEvents = (): void => {
+    const ws = ensure();
+    if (eventsOpenedOn === ws) return;
+    eventsOpenedOn = ws;
     send(
       JSON.stringify({
         type: "open",
@@ -397,8 +430,7 @@ export function muxTransport(
       // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `Connection` 还是占位符，
       // 建出的 socket 会连到错地址、随即断开（`failInFlight` 会把在途流全判死）。
       // 建连由**第一次流式调用**触发（`ensure()`），那条路在 open 后会补开 `$events`。
-      const live = socket;
-      if (live !== undefined && live.readyState === 1) openEvents();
+      connectEventsSafe();
       return () => {
         eventDeliver = undefined;
       };
@@ -406,9 +438,8 @@ export function muxTransport(
     invoke: callUnary,
     answer(handle) {
       answerHandler = handle;
-      // 同 `subscribe`：已经连上就补开，没连上等第一次流式调用。
-      const live = socket;
-      if (live !== undefined && live.readyState === 1) openEvents();
+      // 同 `subscribe`：要答复事件的人在场，就必须有事件流。
+      connectEventsSafe();
       return () => {
         if (answerHandler === handle) answerHandler = undefined;
       };
