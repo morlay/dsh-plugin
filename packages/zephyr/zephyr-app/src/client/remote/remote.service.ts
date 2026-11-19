@@ -16,6 +16,7 @@ import {
   type RemoteOutcome,
   type RemoteTransport,
 } from "./remote-transport.ts";
+import { ClientAgentScopes } from "./agent-scopes.contract.ts";
 
 /**
  * 一份绑定到底是什么（`$mount` 失败时报给人看）。
@@ -58,6 +59,9 @@ export class RemoteDefault extends Remote {
    * `this` 交给 listener（上游 `ctx.sessions.scopeOf(this)` 靠它认会话）。
    */
   private readonly typert = inject.optional(Typert);
+
+  /** 会话域给的 id → 作用域解析面（可选：只装 wire 的装配没有会话域）。 */
+  private readonly agentScopes = inject.optional(ClientAgentScopes);
 
   /** `namespace/method` → 该方法的参数声明（wire 上要**命名参数**，不能发数组）。 */
   private readonly descriptors = new Map<string, readonly RemoteParameter[]>();
@@ -271,20 +275,9 @@ export class RemoteDefault extends Remote {
   private async answerInvocation(invocation: RemoteInvocation): Promise<RemoteOutcome> {
     const listeners = [...(this.listeners.get(invocation.event) ?? [])];
     if (listeners.length === 0 || invocation.signal.aborted) return { kind: "next" };
-    let target: object | undefined;
-    try {
-      const adapter = this.typert?.contexts.getClient("agent");
-      const resolved = adapter?.resolve(invocation.agentId) as
-        | { readonly value?: object }
-        | undefined;
-      target = resolved === undefined ? undefined : "value" in resolved ? resolved.value : resolved;
-    } catch (error) {
-      console.warn(
-        "[remote] 转发事件找不到 agent 作用域（%s）：%s",
-        invocation.agentId,
-        String(error),
-      );
-    }
+    // 先问会话域（它知道 id ↔ 作用域），再退回上游的 client context 适配面。
+    const target =
+      this.agentScopes?.scopeOf(invocation.agentId) ?? this.scopeFromTypert(invocation);
     if (target === undefined) return { kind: "next" };
     const request = { ...invocation.request, agent: target, signal: invocation.signal };
     const NEXT = Symbol("remote.next");
@@ -304,6 +297,35 @@ export class RemoteDefault extends Remote {
           message: error instanceof Error ? error.message : String(error),
         },
       };
+    }
+  }
+
+  /**
+   * 上游那条解析路：`typert.contexts` 的 client 适配面（只有装了上游 client 会话域时才有）。
+   *
+   * 我们自己的会话域走 {@link ClientAgentScopes}；这里是给"上游那份装配"留的回落。
+   * @param invocation - 宿主发来的请求。
+   * @returns 客户端作用域，或 `undefined`（没法解析就按"没人认这条请求"处理）。
+   */
+  private scopeFromTypert(invocation: RemoteInvocation): object | undefined {
+    try {
+      const adapter = this.typert?.contexts.getClient("agent") as
+        | { resolve?: (id: string) => unknown }
+        | undefined;
+      const resolved = adapter?.resolve?.(invocation.agentId);
+      if (resolved === undefined || resolved === null) return undefined;
+      const value =
+        typeof resolved === "object" && "value" in resolved
+          ? (resolved as { readonly value?: object }).value
+          : resolved;
+      return typeof value === "object" ? value : undefined;
+    } catch (error) {
+      console.warn(
+        "[remote] 转发事件找不到 agent 作用域（%s）：%s",
+        invocation.agentId,
+        String(error),
+      );
+      return undefined;
     }
   }
 

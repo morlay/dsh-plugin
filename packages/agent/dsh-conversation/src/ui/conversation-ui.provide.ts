@@ -1,4 +1,5 @@
 import { type ProviderList } from "@morlay/zephyr";
+import { AgentScopesDefault } from "./agent-scopes.service.ts";
 import { provideSessionShellSlots } from "./shell/index.ts";
 import { SubagentsRemoteBinding } from "./subagents-remote.binding.ts";
 import {
@@ -22,6 +23,9 @@ import {
  */
 export function provideConversationUi(): ProviderList {
   return [
+    // 转发请求（审批、用户提问）到浏览器只剩 `agentId`：这张表把它解析回会话作用域，
+    // 否则 listener 认不出会话、直接 `next()`——界面上是一张卡都不弹。
+    AgentScopesDefault,
     // `remote.subagents` 的那份 descriptor 要有人挂：会话界面的子代理入口全读它。
     SubagentsRemoteBinding,
     ...provideSessionShell(),
