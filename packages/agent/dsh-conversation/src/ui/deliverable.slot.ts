@@ -11,7 +11,8 @@ import { ConfigForms, Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 // 交付物行住在 deliverables 域（上游 `ui-deliverables` 归这里）；它注册进的是**会话界面**的槽位，
 // 那两个端口与对话装配令牌由会话域的 ui 面导出（deliverables → session 单向）。
 import { SidebarRight, SidebarRightTabs, UiConversation } from "@morlay/dsh-conversation/ui";
-import { SESSION_REMOTE_KEY } from "@morlay/dsh-session/endpoint";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class DeliverablesSlots extends fromCordis(UiDeliverablesPlugin) {
@@ -35,7 +36,7 @@ export class DeliverablesSlots extends fromCordis(UiDeliverablesPlugin) {
       locale: this.locale,
       uiConversation: this.uiConversation,
       remote: this.remote,
-      [SESSION_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
       sidebarRightTabs: this.sidebarRightTabs,
       sidebarRight: this.sidebarRight,
       configForms: this.configForms,

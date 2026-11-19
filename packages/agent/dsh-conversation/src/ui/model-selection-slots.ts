@@ -14,7 +14,8 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Remote, Sessions, Slots } from "@morlay/zephyr-app/client";
 import { CommandUi } from "@morlay/dsh-command/ui";
 
-import { SESSION_REMOTE_KEY } from "@morlay/dsh-session/endpoint";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class ModelSelectionSlots extends fromCordis(UiModelSelectionPlugin) {
@@ -34,7 +35,7 @@ export class ModelSelectionSlots extends fromCordis(UiModelSelectionPlugin) {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,
-      [SESSION_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
       commandUi: this.commandUi,
     });
   }

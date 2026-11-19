@@ -20,7 +20,8 @@ import {
 import { SessionController } from "@morlay/dsh-session/endpoint";
 import { WorkspaceController } from "@morlay/dsh-workspace/ui";
 import { UiWorkspace } from "./ui-workspace.token.ts";
-import { DIRECTORY_PICKER_REMOTE_KEY } from "../endpoint/index.ts";
+import { directoryPickerGroupName } from "../endpoint/index.ts";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
@@ -65,7 +66,7 @@ export class WorkspaceSlots extends fromCordis(UiWorkspace, UiWorkspacePlugin) {
       remoteAccess: this.remoteAccess,
       workspaces: this.workspaces,
       // 带点的名字要按**字面键**给出（`fromCordis` 的 deps 校验逐字匹配）。
-      [DIRECTORY_PICKER_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(directoryPickerGroupName())]: this.remote,
     });
   }
 }

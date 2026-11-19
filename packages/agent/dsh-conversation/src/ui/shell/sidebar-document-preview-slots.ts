@@ -13,7 +13,8 @@ import {
   Resources,
   Slots,
 } from "@morlay/zephyr-app/client";
-import { WORKSPACE_FILES_REMOTE_KEY } from "@morlay/dsh-workspace/endpoint";
+import { workspaceFilesGroupName } from "@morlay/dsh-workspace/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 import { SidebarRightTabs } from "../ports.ts";
 
 @Injectable()
@@ -53,7 +54,7 @@ export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlu
       sidebarRightTabs: this.sidebarRightTabs,
       fileDrag: this.fileDrag,
       // 带点的名字按字面键给。
-      [WORKSPACE_FILES_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(workspaceFilesGroupName())]: this.remote,
     });
   }
 }

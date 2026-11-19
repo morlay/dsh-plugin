@@ -19,7 +19,8 @@ import { UiConversation } from "./conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { UiSession } from "../ui-session.token.ts";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
-import { SESSION_REMOTE_KEY } from "@morlay/dsh-session/endpoint";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class ChatSlots extends fromCordis(UiChatPlugin) {
@@ -56,7 +57,7 @@ export class ChatSlots extends fromCordis(UiChatPlugin) {
       configForms: this.configForms,
       remote: this.remote,
       // 带点的名字按**字面键**给出（`fromCordis` 的 deps 校验逐字匹配）。
-      [SESSION_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
       sidebarRight: this.sidebarRight,
       connection: this.connection,
       // 字面键：上游按 `ctx.fileDrag` 读它。

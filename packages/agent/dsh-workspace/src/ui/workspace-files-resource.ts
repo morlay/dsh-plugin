@@ -7,7 +7,8 @@ import * as UiWorkspaceFilesPlugin from "@deepseek-ai/dsh-api-workspace-files/cl
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Remote, Resources } from "@morlay/zephyr-app/client";
-import { WORKSPACE_FILES_REMOTE_KEY } from "../endpoint/index.ts";
+import { workspaceFilesGroupName } from "../endpoint/index.ts";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class WorkspaceFilesResource extends fromCordis(UiWorkspaceFilesPlugin) {
@@ -20,7 +21,7 @@ export class WorkspaceFilesResource extends fromCordis(UiWorkspaceFilesPlugin) {
       resources: this.resources,
       remote: this.remote,
       // 带点的名字按字面键给（`withDeps` 只按 `Object.hasOwn` 替换）。
-      [WORKSPACE_FILES_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(workspaceFilesGroupName())]: this.remote,
     });
   }
 }

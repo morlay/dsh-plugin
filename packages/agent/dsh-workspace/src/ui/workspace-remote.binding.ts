@@ -3,7 +3,7 @@
 // 放在应用层而不是框架包：框架（`zephyr-app`）不该知道业务 namespace 有哪些；
 // 应用装配决定「这一页用哪几组 remote」，逐组 `$mount`。
 import { TYPERT_REMOTE } from "@deepseek-ai/dsh-api-workspace-controller/remote";
-import { WORKSPACE_REMOTE_KEY } from "../endpoint/index.ts";
+import { workspaceGroupName } from "../endpoint/index.ts";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
 
@@ -15,7 +15,7 @@ export class WorkspaceRemoteBinding implements OnInit {
     try {
       await this.remote.$mount(TYPERT_REMOTE);
     } catch (error) {
-      throw new Error(`挂载${WORKSPACE_REMOTE_KEY} 失败：${(error as Error).message}`, {
+      throw new Error(`挂载 remote.${workspaceGroupName()} 失败：${(error as Error).message}`, {
         cause: error,
       });
     }

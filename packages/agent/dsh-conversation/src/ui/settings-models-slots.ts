@@ -8,7 +8,8 @@ import { LLM_REMOTE } from "@morlay/dsh-agent/endpoint";
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
 import { CREDENTIALS_REMOTE_KEY } from "@morlay/dsh-auth/endpoint";
 import { LLM_REMOTE_KEY } from "@morlay/dsh-agent/endpoint";
-import { SESSION_REMOTE_KEY } from "@morlay/dsh-session/endpoint";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
 
 @Injectable()
@@ -33,7 +34,7 @@ export class SettingsModelsSlots extends fromCordis(UiSettingsModelsPlugin) {
       [CREDENTIALS_REMOTE_KEY]: this.remote,
       [LLM_REMOTE_KEY]: this.remote,
       [SETTINGS_REMOTE_KEY]: this.remote,
-      [SESSION_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
       configForms: this.configForms,
       settingsSchema: this.settingsSchema,
     });

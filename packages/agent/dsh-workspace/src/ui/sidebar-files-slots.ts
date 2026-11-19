@@ -9,7 +9,8 @@ import { TYPERT_REMOTE as WORKSPACE_FILES_REMOTE } from "@deepseek-ai/dsh-api-wo
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Remote, Shortcuts, SidebarRight, SidebarRightTabs, Slots } from "@morlay/zephyr-app/client";
-import { WORKSPACE_FILES_REMOTE_KEY } from "../endpoint/index.ts";
+import { workspaceFilesGroupName } from "../endpoint/index.ts";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class SidebarFilesSlots extends fromCordis(UiSidebarFilesPlugin) {
@@ -43,7 +44,7 @@ export class SidebarFilesSlots extends fromCordis(UiSidebarFilesPlugin) {
       sidebarRight: this.sidebarRight,
       sidebarRightTabs: this.sidebarRightTabs,
       // 带点的名字按字面键给：`withDeps` 只按 `Object.hasOwn` 替换。
-      [WORKSPACE_FILES_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(workspaceFilesGroupName())]: this.remote,
     });
   }
 }
