@@ -1,5 +1,6 @@
 import { type ProviderList } from "@morlay/zephyr";
 import { provideSessionShellSlots } from "./shell/index.ts";
+import { SubagentsRemoteBinding } from "./subagents-remote.binding.ts";
 import {
   provideSessionInputSlots,
   provideSessionShell,
@@ -21,6 +22,8 @@ import {
  */
 export function provideConversationUi(): ProviderList {
   return [
+    // `remote.subagents` 的那份 descriptor 要有人挂：会话界面的子代理入口全读它。
+    SubagentsRemoteBinding,
     ...provideSessionShell(),
     ...provideSessionShellSlots(),
     ...provideSessionSlots(),

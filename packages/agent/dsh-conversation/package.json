@@ -77,6 +77,7 @@
     "@deepseek-ai/dsh-session-reference": "workspace:^",
     "@deepseek-ai/dsh-session-title": "*",
     "@deepseek-ai/dsh-session-title-first-prompt-llm": "*",
+    "@deepseek-ai/dsh-subagent": "workspace:^",
     "@deepseek-ai/dsh-workspace-changes": "*",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-attachment": "workspace:^",
