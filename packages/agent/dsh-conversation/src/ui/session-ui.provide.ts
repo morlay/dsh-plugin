@@ -3,6 +3,7 @@ import {
   AttachmentSlots,
   ChatSlots,
   FileActionsSlots,
+  MessageQuotesSlot,
   OpenInAppSlots,
   SecretMaskSlot,
   SubagentSlots,
@@ -28,6 +29,9 @@ export const provideSessionSlots = provide([
   ToolSlots,
   AttachmentSlots,
   ChatSlots,
+  // 选中引用：两个槽位（`conversation.chat.text-interaction` / `conversation.user.text.node`）都由
+  // 上面那两行声明，所以排在 `ConversationSlots` / `ChatSlots` 之后。
+  MessageQuotesSlot,
   SecretMaskSlot,
   SubagentSlots,
   TrajectorySlot,

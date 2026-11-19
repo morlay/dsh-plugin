@@ -181,7 +181,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
         // 要的是 branded 的同一份帧——同一条 wire 的两种声明，这里按上游那一份转一次。
         const frames = this.sessionEndpoint.control(
           controller.signal,
-        ) as unknown as AsyncIterable<ControlFrame>;
+        ) as AsyncIterable<ControlFrame>;
         for await (const frame of frames) {
           sessions.handleControlFrame(frame);
         }

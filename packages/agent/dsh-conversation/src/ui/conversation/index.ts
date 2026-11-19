@@ -1,6 +1,7 @@
 // 会话界面（session 域的前端实现）：主视图、内容渲染、输入区、会话内卡片。
 export { ConversationSlots } from "./conversation-slots.ts";
 export { ChatSlots } from "./chat-slots.ts";
+export { MessageQuotesSlot } from "./message-quotes-slot.ts";
 export { ToolSlots } from "./tool-slots.ts";
 export { AttachmentSlots } from "./attachment-slots.ts";
 export { FileActions, FileActionsSlots } from "./file-actions-slots.ts";

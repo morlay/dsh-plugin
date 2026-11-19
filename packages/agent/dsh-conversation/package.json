@@ -43,6 +43,7 @@
     "@deepseek-ai/dsh-client-ui-workflow-run": "workspace:^",
     "@deepseek-ai/dsh-file-reference-local": "workspace:^",
     "@deepseek-ai/dsh-host-open-in-app": "workspace:^",
+    "@deepseek-ai/dsh-message-quotes": "workspace:^",
     "@deepseek-ai/dsh-session-reference": "workspace:^",
     "@deepseek-ai/dsh-session-title": "*",
     "@deepseek-ai/dsh-session-title-first-prompt-llm": "*",
