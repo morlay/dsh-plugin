@@ -33,21 +33,14 @@ import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { ToolExecutorNative } from "@morlay/dsh-agent-loop/server";
 import { provideCommand } from "@morlay/dsh-command/server";
-import {
-  provideCommandCompact,
-  provideCompactionBasic,
-} from "@morlay/dsh-compaction";
+import { provideCommandCompact, provideCompactionBasic } from "@morlay/dsh-compaction";
 import { provideJob } from "@morlay/dsh-job/server";
 import { provideJobIdleGuard } from "@morlay/dsh-job";
 import { type PermissionMode } from "@morlay/dsh-permission";
 import { providePermissionFor } from "@morlay/dsh-permission/server";
 
 import { providePtc } from "@morlay/dsh-ptc";
-import {
-  SandboxPolicyDefault,
-  provideFsTools,
-  provideSandbox,
-} from "@morlay/dsh-sandbox";
+import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/dsh-sandbox";
 import { provideWorkspaceFiles } from "@morlay/dsh-workspace/server";
 // 工具行（bash / 文件 / 检索 / 工作目录）归 agent：契约面是 ToolRegistry。
 import { provideEnvTools } from "@morlay/dsh-agent/server";
@@ -61,15 +54,9 @@ import {
 import { SessionQuerySqlite } from "@morlay/dsh-session";
 import { SessionPersistenceRdb } from "@morlay/better-session";
 import { provideBetterSession } from "@morlay/better-session/server";
-import {
-  provideSessionMode,
-  provideSessionModeEndpoints,
-} from "@morlay/session-mode";
+import { provideSessionMode, provideSessionModeEndpoints } from "@morlay/session-mode";
 import { UiSettingsPreferences, UiThemeSchema } from "@morlay/zephyr-app";
-import {
-  provideSessionTitle,
-  provideSessionTitleLlm,
-} from "@morlay/dsh-conversation/server";
+import { provideSessionTitle, provideSessionTitleLlm } from "@morlay/dsh-conversation/server";
 import { provideLlmProviders } from "@morlay/dsh-agent";
 import { LlmPiAi } from "@morlay/dsh-agent";
 import { provideSetting } from "@morlay/dsh-setting/server";
@@ -80,10 +67,7 @@ import { provideAgentUse } from "@morlay/agent-use";
 import { provideAgentTeam } from "@morlay/dsh-agent-team/server";
 import { provideDeliverables } from "@morlay/dsh-conversation/server";
 import { provideUpload } from "@morlay/dsh-upload/server";
-import {
-  provideToolWeb,
-  provideWebAccess,
-} from "@morlay/dsh-web-access/server";
+import { provideToolWeb, provideWebAccess } from "@morlay/dsh-web-access/server";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { WorkingDirectoryDefault } from "@morlay/dsh-agent";
 import { provideWorkingDirectory } from "@morlay/dsh-agent/server";
@@ -105,17 +89,14 @@ export interface CustomProvidersOptions {
   readonly defaultWorkingDirectory: string;
 }
 // 权限档位也只在这里读一次：它同时写沙箱模式与批准策略两个开关。
-const permissionMode = (process.env.DSH_PERMISSION_MODE ??
-  "workspace-write") as PermissionMode;
+const permissionMode = (process.env.DSH_PERMISSION_MODE ?? "workspace-write") as PermissionMode;
 
 /**
  * 入口清单：每组是一个装配单元，按依赖顺序（提供方在前）拼起来。
  * @param options - 部署参数（三项路径，由启动器给）。
  * @returns 完整的 provider 清单。
  */
-export function customProvidersOf(
-  options: CustomProvidersOptions,
-): ProviderEntry[] {
+export function customProvidersOf(options: CustomProvidersOptions): ProviderEntry[] {
   const { dataDir } = options;
   return [
     // 认凭据的行放在最前：`connection` 行 mount 时就要 `Credentials` 的**面**（适配行的面在它自己的
