@@ -17,6 +17,7 @@ import {
   type SessionScope,
   type SessionView,
 } from "@morlay/dsh-conversation/contract";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
 import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { LiveSessionRemotes } from "./remote-session.ts";
 import { asUpstreamContext } from "./upstream-context.ts";
@@ -119,15 +120,63 @@ export class SessionControllerDefault extends SessionController implements OnIni
       ),
     ];
     // 会话内的事件帧交给 `ClientSessions.handleControlFrame`（它管会话的生命周期面）。
-    // **与 `Projections` 那条流并存**：`Projections.open()` 只把帧折进投影 store，
-    // 会话侧的内容/状态要靠 `handleControlFrame`——去掉这一条，17 条 spec 会一起红。
+    // **与 `Projections` 那条流并存**：`Projections.open()` 只把帧折进**它自己**的投影 store，
+    // 而 `binding().session.projections`（模型选择、权限 chip 读的都是它）只吃这一条线。
+    //
+    // 换代必须**重开**：连接一换，旧 socket 上的流就断了，而这条流之后没有别的时机再开
+    // （`Projections` 那边也是这么做的）。不重开的症状：界面上所有"宿主算出来的值"冻在旧值，
+    // 刷新（= 新装配）才好——模型选择切了没反应就是这个形态。
+    this.stopGeneration = this.connection?.generation.subscribe(() => {
+      this.openControl();
+    });
+    this.openControl();
+    ctx.effect(() => () => {
+      this.stopControl();
+      this.stopGeneration?.();
+      this.stopGeneration = undefined;
+      for (const off of offs) off();
+    });
+  }
+
+  onDispose(): void {
+    // `ClientSessions` 自己在 `rootCtx.effect` 里做了 dispose（含 manager 的静默期），这里只清引用。
+    this.stopControl();
+    this.stopGeneration?.();
+    this.stopGeneration = undefined;
+    this.inner = undefined;
+    this.catalog = undefined;
+  }
+
+  /** 停掉当前这条 `session/control` 流（换代重开与卸载共用）。 */
+  private stopControl(): void {
+    this.stopStream?.();
+    this.stopStream = undefined;
+  }
+
+  /** 连接代订阅的退订函数。 */
+  private stopGeneration: (() => void) | undefined;
+
+  /** 当前这条 `session/control` 流的停止函数。 */
+  private stopStream: (() => void) | undefined;
+
+  /**
+   * 开一条 `session/control` 流（幂等：先停旧的）。
+   *
+   * 等的是**这个 namespace**（不是"第一次 `$mount`"）：组是各行分别挂的，
+   * 先挂上的那个与 `session` 组无关；按名字等才不受装配顺序影响。
+   */
+  private openControl(): void {
+    this.stopControl();
+    const sessions = this.inner;
+    if (sessions === undefined) return;
     const controller = new AbortController();
-    // 等 `session` namespace 挂上再开流：装配期它还没登记（或挂到未就绪的 typert gateway 上），
-    // 那时开会以一条错误结束，而这条流之后没有别的时机再被重开。
-    void this.remote.whenMounted().then(async () => {
-      if (controller.signal.aborted) return;
-      if (!this.sessionEndpoint.mounted) return;
+    this.stopStream = () => {
+      controller.abort();
+    };
+    void (async (): Promise<void> => {
       try {
+        await this.remote.whenNamespace(sessionGroupName());
+        if (controller.signal.aborted) return;
         // 契约面把帧声明成裸 `sessionId` + 不透明值（跨端值不引宿主包）；上游 `handleControlFrame`
         // 要的是 branded 的同一份帧——同一条 wire 的两种声明，这里按上游那一份转一次。
         const frames = this.sessionEndpoint.control(
@@ -140,17 +189,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
         if (!controller.signal.aborted)
           console.warn("[sessions] session/control 流结束：%s", String(error));
       }
-    });
-    ctx.effect(() => () => {
-      controller.abort(new Error("sessions row disposed"));
-      for (const off of offs) off();
-    });
-  }
-
-  onDispose(): void {
-    // `ClientSessions` 自己在 `rootCtx.effect` 里做了 dispose（含 manager 的静默期），这里只清引用。
-    this.inner = undefined;
-    this.catalog = undefined;
+    })();
   }
 
   /** 上游实例；`onInit` 之前访问是装配错误，直接说清楚。 */

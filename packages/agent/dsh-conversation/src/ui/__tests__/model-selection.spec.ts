@@ -13,8 +13,20 @@
  * 替身只有两处：`Remote`（传输层，mock server 给固定帧）与 `sessions` / `locale`（兄弟域的端口）。
  * 上游那一行、它建的 `ctx.modelDirectories`、`ModelDirectory` 都是真实现。
  */
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { Locale, mockTransport, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
+import { bootstrapApplication, inject, Injectable, type Context } from "@morlay/zephyr";
+import {
+  Connection,
+  Locale,
+  mockTransport,
+  provideRenderer,
+  Remote,
+  SessionRemote,
+  Slots,
+} from "@morlay/zephyr-app/client";
+import { CommandUi } from "@morlay/dsh-command/ui";
+import { SessionId } from "@morlay/dsh-session/endpoint";
+import { SessionController } from "../../contract/index.ts";
+import { provideSessionsStore } from "../sessions.provide.ts";
 
 import { describe, expect, it } from "vitest";
 import { ModelSelectionSlots } from "../model-selection-slots.ts";
@@ -50,13 +62,33 @@ interface Call {
 class FakeRemote extends Remote {
   static calls: Call[] = [];
 
-  static next: { catalog?: unknown; select?: unknown } = {};
+  /**
+   * 下一个实例的宿主应答。`baselineValues` 是 `session/control` 基线里该会话的投影值
+   * （缺省给含 `modelSelection` 的那份；给 `{}` 可模拟「目录先建、投影键还没到」）。
+   */
+  static next: { catalog?: unknown; select?: unknown; baselineValues?: Record<string, unknown> } =
+    {};
 
-  /** `remote.session` 上本行要用到的两个方法（上游那一行只调这两个）。 */
+  /** `remote.session` 上本行要用到的面：两个 unary + 两条流（`control` 由会话行消费）。 */
   private readonly face: {
     modelCatalog(): Promise<unknown>;
     selectModel(request: unknown): Promise<unknown>;
+    follow(request: unknown, signal: AbortSignal): AsyncIterable<unknown>;
+    control(signal: AbortSignal): AsyncIterable<unknown>;
   };
+
+  /**
+   * 每个 `control` 订阅者一条**自己的**队列。
+   *
+   * 真宿主是广播（`SessionControlController.streams` 逐条 push）：本行与 `Projections` 行各开一条流，
+   * 两边都该收到同一帧。共用一条队列会让帧只落到其中一个订阅者手里——那是替身的错，不是被测代码的错。
+   */
+  private readonly subscribers = new Set<{
+    readonly pending: unknown[];
+    wake?: (() => void) | undefined;
+    /** 这条流被"掐断"（模拟换代时旧 socket 断掉）：循环退出，之后不再收帧。 */
+    ended?: boolean;
+  }>();
 
   readonly upstream: Record<string, unknown>;
 
@@ -84,12 +116,94 @@ class FakeRemote extends Remote {
       },
       selectModel: (request: unknown) =>
         transport.invoke("session/selectModel", { args: { request } }),
+      follow: () => (async function* () {})(),
+      control: (signal: AbortSignal) => this.controlFrames(signal),
     };
     this.transport = transport;
     this.upstream = { session: this.face };
     // `Remote` 契约的 `session` 是可选成员（`dsh-session` 的 declaration merging 声明它由 `$mount` 后才有值）：
     // 替身在这里挂同一份面，上游那一行不区分「真 Proxy / 替身」。
     Object.defineProperty(this, "session", { value: this.face, enumerable: true });
+  }
+
+  /**
+   * 可控的 `session/control` 流：先给一条基线（客户端投影 store 的种子），之后按 `pushFrame` 逐帧吐。
+   * @param signal - 订阅方（会话行）的中断信号。
+   * @returns 帧流。
+   */
+  private async *controlFrames(signal: AbortSignal): AsyncIterable<unknown> {
+    this.opens += 1;
+    const subscriber: {
+      readonly pending: unknown[];
+      wake?: (() => void) | undefined;
+      ended?: boolean;
+    } = { pending: [] };
+    this.subscribers.add(subscriber);
+    // 基线与真宿主同形：宿主 `snapshot(session).values` 里每个已注册投影都有一项（含 `modelSelection`）。
+    // 少了这个键，上游 `ModelDirectory.syncInputs` 会判 `projected === undefined` → 永远 `loading`。
+    yield {
+      type: "baseline",
+      value: {
+        projections: {
+          s1: {
+            asOfSeq: -1,
+            values: FakeRemote.next.baselineValues ?? {
+              modelSelection: { lastUsed: null, next: null },
+            },
+          },
+        },
+      },
+    };
+    while (!signal.aborted && subscriber.ended !== true) {
+      const frame = subscriber.pending.shift();
+      if (frame !== undefined) {
+        yield frame;
+        continue;
+      }
+      await new Promise<void>((resolve) => {
+        subscriber.wake = resolve;
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+      subscriber.wake = undefined;
+    }
+    this.subscribers.delete(subscriber);
+  }
+
+  /**
+   * 往 control 流推一帧（模拟宿主广播）。
+   * @param frame - 一帧 `SessionControlFrame`。
+   */
+  /** 当前打开的 `control` 订阅数（用例据此确认"流已开、推帧不会丢"）。 */
+  get subscriberCount(): number {
+    return this.subscribers.size;
+  }
+
+  /**
+   * 累计开过几条 `control` 流。
+   *
+   * 换代后旧流被 abort、新流开起来，`subscriberCount` 会先涨后落（旧流退出有延迟）：
+   * 判"有没有重开"要看累计数，不看瞬时数。
+   */
+  opens = 0;
+
+  /**
+   * 掐断所有在途的 `control` 流（换代时旧 socket 断掉的效果）。
+   *
+   * 不掐断的话，替身上的"旧流"在换代后照样收帧，用例就分不出"有没有重开"。
+   */
+  dropStreams(): void {
+    for (const subscriber of this.subscribers) {
+      subscriber.ended = true;
+      subscriber.wake?.();
+    }
+    this.subscribers.clear();
+  }
+
+  pushFrame(frame: unknown): void {
+    for (const subscriber of this.subscribers) {
+      subscriber.pending.push(frame);
+      subscriber.wake?.();
+    }
   }
 
   async $mount(): Promise<() => Promise<void>> {
@@ -115,99 +229,91 @@ class FakeRemote extends Remote {
   }
 }
 
-/** 会话目录替身：只有上游那一行真读的三个成员（`scope` / `binding` / `subagentAddress`）。 */
-class FakeSessions {
-  readonly list = {
-    getSnapshot: () => ({
-      ids: ["s1"],
-      byId: {},
-      phase: "ready" as const,
-      projectionsBySession: {},
-    }),
-    subscribe: () => () => {},
-  };
+/**
+ * 把 `remote.session` 发布成**嵌套服务名**。
+ *
+ * 上游 `ModelDirectoryResolver` 的 `static inject` 里写着 `'remote.session'`，cordis 按名字去 store 读；
+ * 真实现是 `RemoteDefault.$mount` 时 `publishNamespace` 发布的。替身不经过那条路，这里补同一份。
+ */
+@Injectable()
+class PublishSessionNamespace {
+  private readonly remote = inject(FakeRemote);
 
-  /** 本装配没有子代理：上游那一行据此判断「这个会话能不能用模型 RPC」。 */
-  subagentAddress(): undefined {
-    return undefined;
+  onInit(ctx: Context): void {
+    ctx.reflect.provide("remote.session", Reflect.get(this.remote, "session"));
   }
+}
 
-  scope(): unknown {
-    return {
-      sessionId: "s1" as never,
-      effect: () => () => {},
-      get: () => undefined,
-      on: () => () => {},
-      emit: () => {},
-      off: () => {},
-      inject: () => undefined,
-    };
-  }
+/** 连接替身：`generation` 可推进，用来验「换代后重开 `session/control`」。 */
+@Injectable()
+class FakeConnection extends Connection {
+  readonly interactions = "none" as const;
 
-  // 其余成员这条用例不读：照契约给「明确失败」，避免假件悄悄返回 undefined。
-  create(): never {
-    throw new Error("FakeSessions.create 未实现");
-  }
+  private id = 1;
 
-  readonly searchResultLimit = 0;
+  private readonly listeners = new Set<() => void>();
 
-  search(): never {
-    throw new Error("FakeSessions.search 未实现");
-  }
-
-  fork(): never {
-    throw new Error("FakeSessions.fork 未实现");
-  }
-
-  async refresh(): Promise<never> {
-    throw new Error("FakeSessions.refresh 未实现");
-  }
-
-  scopeOf(): undefined {
-    return undefined;
-  }
-
-  async refreshProjections(): Promise<never> {
-    throw new Error("FakeSessions.refreshProjections 未实现");
-  }
-
-  sessionOf(): undefined {
-    return undefined;
-  }
-
-  get(): undefined {
-    return undefined;
-  }
-
-  retainInfo() {
-    return { getSnapshot: () => undefined, subscribe: () => () => {} };
-  }
-
-  retain(): never {
-    throw new Error("FakeSessions.retain 未实现");
-  }
-
-  async using(): Promise<never> {
-    throw new Error("FakeSessions.using 未实现");
-  }
-
-  /** 稳定的一份 binding：上游 `ctx.modelDirectories` 按 binding 的**对象身份**缓存每会话目录。 */
-  private readonly bindingOf = {
-    session: {
-      projections: {
-        // `modelSelection` 的持久投影（本仓会话数据面目前给的是恒空 observable，见回报；
-        // 这里给「还没选过」的真实形状，让目录能走到 ready）。
-        faceOf: () => ({
-          getSnapshot: () => ({ lastUsed: null, next: null }),
-          subscribe: () => () => {},
-        }),
-      },
-      getSnapshot: () => ({ blank: true }),
+  readonly generation = {
+    getSnapshot: () => ({ id: this.id, host: { home: "" } }),
+    subscribe: (listener: () => void) => {
+      this.listeners.add(listener);
+      return () => {
+        this.listeners.delete(listener);
+      };
     },
   };
 
-  binding(): unknown {
-    return this.bindingOf;
+  /** 推进一代（模拟重连：旧 socket 上的流全断）。 */
+  bump(): void {
+    this.id += 1;
+    // 监听者在回调里可能退订：按快照迭代（`Set` 的迭代器会看到删除）。
+    for (const listener of Array.from(this.listeners)) listener();
+  }
+
+  readonly isLoopback = true;
+
+  readonly state = { getSnapshot: () => "connected" as const, subscribe: () => () => {} };
+
+  readonly openWebSocket = (): WebSocket => {
+    throw new Error("本 spec 不走 socket");
+  };
+
+  readonly registerGenerationSource = () => () => {};
+
+  readonly rpc = {};
+
+  reconnect(): void {}
+
+  readonly start = () => ({ stop: () => {} });
+}
+
+/** 目录读的替身（`SessionRemote` 契约）：客户端会话行拉目录走它。 */
+@Injectable()
+class FakeSessionRemote extends SessionRemote {
+  async list(): Promise<unknown> {
+    return {
+      items: [
+        {
+          sessionId: "s1",
+          id: "s1",
+          title: "只有这一条",
+          displayTitle: "只有这一条",
+          cwd: "/tmp",
+          running: false,
+          retainedBy: {},
+          blank: false,
+          updatedAt: 0,
+        },
+      ],
+    };
+  }
+
+  async create(): Promise<unknown> {
+    return { sessionId: "s1" };
+  }
+
+  async readPage(): Promise<unknown> {
+    return { records: [], hasMore: false };
   }
 }
 
@@ -239,17 +345,41 @@ async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
  * 起这一行：真 `Slots`（`provideRenderer`）+ 真上游行 + 两个端口替身。
  * @returns 应用、`Slots` 与卸载函数。
  */
-async function boot(): Promise<{
+async function boot(options: { baselineValues?: Record<string, unknown> } = {}): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   slots: Slots;
   dispose: () => Promise<void>;
 }> {
   FakeRemote.calls = [];
-  FakeRemote.next = {};
+  FakeRemote.next = { ...options };
   const app = await bootstrapApplication({
-    providers: [...provideRenderer(), FakeRemote, FakeSessions, FakeLocale, ModelSelectionSlots],
+    providers: [
+      ...provideRenderer(),
+      FakeRemote,
+      // 真客户端会话行：`control` 流由它消费、投影面由它维护——本用例判的就是这一层。
+      { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
+      ...provideSessionsStore(),
+      PublishSessionNamespace,
+      FakeConnection,
+      FakeLocale,
+      // `/model` 弹层注册进命令 UI：座位不用它，但本行注入它，缺了装配期就报。
+      {
+        provide: CommandUi,
+        useFactory: () => ({
+          register: () => () => {},
+          decorate: () => () => {},
+          dismiss: () => {},
+        }),
+      },
+      ModelSelectionSlots,
+    ],
     timeoutMs: 8_000,
   });
+  // 座位是**按会话**注册的（`scope: 'session'`）：目录行要求会话有 scope 与 binding，
+  // 所以先把这条会话拉进目录并 retain 物化 scope（与真机上侧栏选会话同一步）。
+  const sessions = app.get(SessionController);
+  await sessions.refresh();
+  sessions.retain(SessionId("s1"), { source: "gateway" });
   return { app, slots: app.get(Slots), dispose: () => app.dispose() };
 }
 
@@ -259,6 +389,8 @@ interface SeatInjected {
   readonly directory: {
     getSnapshot(): {
       readonly status: string;
+      /** 目录当前选中的模型（座位显示的就是它）。 */
+      readonly current?: { readonly provider: string; readonly model: string } | null;
       readonly groups: readonly {
         readonly id: string;
         readonly models: readonly { readonly id: string }[];
@@ -298,17 +430,18 @@ async function seatOf(slots: Slots): Promise<{ injected: SeatInjected; undo: () 
   return { injected: entry!.inject!("s1" as never), undo };
 }
 
-// 已知阻塞（第一版）：上游在 cordis **内部**建的 ctx 上按名字读依赖，`deps` 覆盖不到。
+// 这一组的**被测面**是「数据一到，座位就跟」：
 //
-// 这里的上游（`api/session-controller` 的 `Sessions`）`static inject` 里有 `agentDefaultModel`
-// 等服务，而它是在上游 `apply` 里经 `ctx.plugin(...)` 激活的——cordis 构造插件实例时用的是**它自己**
-// 建的 fiber ctx，不是 `mount()` 的 deps 代理，所以 `this.ctx.agentDefaultModel` 走严格读直接抛
-// `cannot get property "agentDefaultModel" without inject`。
+// - 座位（上游 `conversation.input.model`）读的是**每会话一份**的 `ModelDirectory`，
+//   它的 `current` 来自 `binding().session.projections.faceOf('modelSelection')`；
+// - 那条投影面只由客户端会话行（`SessionControllerDefault`）消费的 `session/control` 流喂养；
+// - 所以「切了模型没反应、刷新才好」只可能断在三处之一：流没开、帧没喂、目录不跟。
+//   四条用例分别钉：座位注册、目录来源与选中载荷、帧到座位、以及**换代后重开流**。
 //
-// deps 的边界（zephyr design 第五节）：只在**上游 `apply` 现场按名字读**时生效；上游把 ctx 交给 cordis
-// 内部（`ctx.plugin(带 static inject 的类)`）时读的是 store。正解是**给装配清单补上对应行**
-// （让服务真的在 store 里），而不是往 deps 里塞；补不出来的（纯上游内部服务）记已知限制。
-describe.skip("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
+// 替身的边界：`FakeRemote` 只实现 `remote.session` 上本行用到的面（两个 unary + 两条流），
+// `control` 是**广播**式的（与宿主 `SessionControlController` 同形：每个订阅者都收到每一帧），
+// 并且能被 `dropStreams()` 掐断——换代时旧 socket 上的流就是这么断的。
+describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
   it("`conversation.input.model` 座位注册出来（输入框旁的选择器就靠它上屏）", async () => {
     const { slots, dispose } = await boot();
     try {
@@ -359,6 +492,124 @@ describe.skip("模型选择器那一行接上了没有", { timeout: 15_000 }, ()
           provider: "a",
           model: "m2",
         });
+      } finally {
+        undo();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("宿主推来 `modelSelection` 投影帧后，座位**立即**显示新模型（不许等刷新）", async () => {
+    const { app, slots, dispose } = await boot();
+    try {
+      const { injected, undo } = await seatOf(slots);
+      try {
+        injected.load();
+        await until(() => injected.directory.getSnapshot().status === "ready");
+        expect(injected.directory.getSnapshot().current, "帧之前显示的是目录默认").toMatchObject({
+          provider: "a",
+          model: "m1",
+        });
+        const remote = app.get(Remote) as FakeRemote;
+        await until(() => remote.subscriberCount > 0);
+        // 宿主 `agent.model.select` 落的就是这一条事件 → `session/control` 的这一帧。
+        remote.pushFrame({
+          type: "projection",
+          sessionId: "s1",
+          seq: 1,
+          changes: [
+            {
+              key: "modelSelection",
+              val: { lastUsed: null, next: { provider: "b", model: "x1" } },
+            },
+          ],
+        });
+        await until(() => injected.directory.getSnapshot().current?.model === "x1");
+        expect(
+          injected.directory.getSnapshot().current,
+          "投影帧到了座位却不跟 = 用户看到的就是「切了没反应，刷新才好」",
+        ).toMatchObject({ provider: "b", model: "x1" });
+      } finally {
+        undo();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("座位先建、投影键后到：目录也要跟上（不是只认建目录那一刻的快照）", async () => {
+    // 这一条钉的是候选 A 的机理：基线与帧都来得**晚于**目录构造时，
+    // 目录持有的 `binding.session.projections.faceOf('modelSelection')` 会不会跟着更新。
+    const { app, slots, dispose } = await boot({ baselineValues: {} });
+    try {
+      const { injected, undo } = await seatOf(slots);
+      try {
+        injected.load();
+        // 此刻投影键还没到：目录只能停在 loading（上游语义：缺键 = 还不知道选了什么）。
+        await until(() => injected.directory.getSnapshot().status === "ready", 300);
+        const remote = app.get(Remote) as FakeRemote;
+        await until(() => remote.subscriberCount > 0);
+        remote.pushFrame({
+          type: "projection",
+          sessionId: "s1",
+          seq: 1,
+          changes: [
+            {
+              key: "modelSelection",
+              val: { lastUsed: null, next: { provider: "b", model: "x1" } },
+            },
+          ],
+        });
+        await until(() => injected.directory.getSnapshot().status === "ready");
+        expect(
+          injected.directory.getSnapshot().current,
+          "投影键晚到，目录也必须跟上（否则「刷新才有效」）",
+        ).toMatchObject({ provider: "b", model: "x1" });
+      } finally {
+        undo();
+      }
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("换连接代之后重开 `session/control`：重连过的界面也要跟着宿主更新", async () => {
+    const { app, slots, dispose } = await boot();
+    try {
+      const { injected, undo } = await seatOf(slots);
+      try {
+        injected.load();
+        await until(() => injected.directory.getSnapshot().status === "ready");
+        const remote = app.get(Remote) as FakeRemote;
+        await until(() => remote.subscriberCount > 0);
+        const opened = remote.opens;
+
+        // 换代：旧 socket 上的流全断（真机上就是重连 / HMR）。
+        remote.dropStreams();
+        app.get(FakeConnection).bump();
+        await until(() => remote.opens > opened);
+        expect(
+          remote.opens,
+          "换代后必须重开 control 流（不重开 = 重连过的界面冻在旧值，刷新才好）",
+        ).toBeGreaterThan(opened);
+
+        remote.pushFrame({
+          type: "projection",
+          sessionId: "s1",
+          seq: 2,
+          changes: [
+            {
+              key: "modelSelection",
+              val: { lastUsed: null, next: { provider: "a", model: "m2" } },
+            },
+          ],
+        });
+        await until(() => injected.directory.getSnapshot().current?.model === "m2");
+        expect(
+          injected.directory.getSnapshot().current,
+          "重开的流也要把帧喂到座位（否则重连之后模型选择又不动了）",
+        ).toMatchObject({ provider: "a", model: "m2" });
       } finally {
         undo();
       }
