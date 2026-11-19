@@ -7,3 +7,5 @@ export * from "../connection/contract.ts";
 export * from "../contract-coverage.ts";
 export * from "../remote/remote-result.ts";
 export * from "../remote/remote.contract.ts";
+// 两端共用的运行时注册表契约（宿主：descriptor 登记与分派；浏览器：`contexts` 把 `agentId` 换回作用域）。
+export { Typert } from "../typert/typert.contract.ts";

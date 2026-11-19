@@ -9,7 +9,10 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import { API_REMOTE_FORWARDED_EVENTS } from "@deepseek-ai/dsh-api-remotes";
+import {
+  REMOTE_EVENT_STREAM_ENDPOINT,
+  REMOTE_EVENT_STREAM_PAYLOAD,
+} from "@deepseek-ai/dsh-api-gateway/src/stream-protocol.ts";
 import { inject, Injectable, Logger, type OnDispose } from "@morlay/zephyr";
 import { RemoteHandlers } from "./remote-handlers.contract.ts";
 import { WebServer } from "../web/web-server.contract.ts";
@@ -18,17 +21,6 @@ import { Typert } from "../typert/typert.contract.ts";
 
 /** mux 的路径（与客户端 `muxTransport` 一致）。 */
 const MUX_PATH = "/api/remote.mux";
-
-/**
- * 客户端可订阅的**转发事件频道**：直接用上游那份 allowlist，不在框架里抄业务清单。
- *
- * 上游 `API_REMOTE_FORWARDED_EVENTS` 是这件事的唯一 home（Host 的转发循环与消费侧
- * `ctx.remote.$on` 的键面都读它）。框架只关心"转发哪些频道"，不关心有哪些业务事件；
- * 少抄一份也少一处漂移。
- */
-const FORWARDED_CHANNELS: readonly string[] = API_REMOTE_FORWARDED_EVENTS.map(
-  (entry) => entry.event,
-);
 
 /** RFC 6455 的握手固定串。 */
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -302,34 +294,38 @@ export class MuxServer implements OnDispose {
     if (message.type !== "open") return;
 
     const endpoint = message.endpoint ?? "";
-    if (endpoint === "$events") {
-      // 事件流：把路由表上的每一帧转成 `item`，连接断开时退订。
-      // 事实型观测：订阅时的 streamId 与频道名列表本身，不是「订阅了几个」这种总结。
-      this.logger.debug("[mux] subscribe streamId=%s channels=%j", streamId, [
-        ...FORWARDED_CHANNELS,
-      ]);
-      const offs = new Map<string, () => void>();
-      for (const channel of FORWARDED_CHANNELS) {
-        offs.set(
-          channel,
-          this.handlers.subscribe(channel, (...args) => {
-            // 监听器是**同步**从 cordis 事件处理器里调的（见 `ForwardedEventsBridge`）：序列化或写帧一抛，
-            // 异常就落进发布方的调用栈（agent loop 的异步路径），升级成进程退出。这里一律吞成一条日志。
-            try {
-              writeText(
-                socket,
-                JSON.stringify({ type: "item", streamId, value: { channel, args } }),
-              );
-            } catch (error) {
-              this.logger.warn("[mux] 转发事件 %s 失败：%s", channel, String(error));
-            }
-          }),
-        );
-      }
-      socket.once("close", () => {
-        for (const off of offs.values()) off();
-        offs.clear();
-      });
+    if (endpoint === REMOTE_EVENT_STREAM_ENDPOINT) {
+      // 事件流：**交给上游 gateway 的转发事件源**，不在这里自己拼频道表。
+      //
+      // 那条流产两种帧：`emit`（单向通知：`api-session/*` 这些）与 `waterfall`（**要答复的请求**：
+      // `approval/request`、用户提问）。前者原样转发即可，后者要求浏览器回一个结果——
+      // 自拼频道表只能做单向，还会把带 `agent` / `signal` 的参数 JSON 化（`Converting circular
+      // structure to JSON`），于是审批请求永远没有通道，工具升级沙箱时上游直接 fail closed。
+      // 浏览器的答复走 unary 端点 `$events/result`（见 `invokeWithFallback` 的上游回落）。
+      const controller = new AbortController();
+      live.set(streamId, controller);
+      this.liveStreams.add(controller);
+      const uplink = createUplink();
+      uplinks.set(streamId, uplink);
+      void (async () => {
+        try {
+          const source = await this.gateway.wireStream.open(
+            REMOTE_EVENT_STREAM_ENDPOINT,
+            REMOTE_EVENT_STREAM_PAYLOAD,
+            uplink,
+            this.peer as PeerScope,
+            controller.signal,
+          );
+          await this.pump(socket, streamId, source, controller);
+        } catch (error) {
+          this.logger.warn("[mux] 事件流失败：%s", String(error));
+        } finally {
+          live.delete(streamId);
+          uplinks.delete(streamId);
+          this.liveStreams.delete(controller);
+          uplink.end();
+        }
+      })();
       return;
     }
     const separator = endpoint.indexOf("/");

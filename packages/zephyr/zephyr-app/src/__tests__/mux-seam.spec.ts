@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { muxTransport } from "@morlay/zephyr-app/client";
 import { serveMux } from "./support/mux-serve.ts";
+import { eventSource } from "./support/event-source.ts";
 import { subscribedOnce } from "./support/subscribed.ts";
 import { within } from "./support/within.ts";
 
@@ -31,8 +32,10 @@ describe("mux 接缝（真 http + 真 WebSocket）", { timeout: 15_000 }, () => 
     expect(value).toEqual({ ids: [], byId: {} });
   });
 
-  it("`$events` 订阅后，`publish` 的帧能到客户端的 `deliver`", async () => {
-    const { url, handlers, close } = await serveMux();
+  // 事件流由上游 gateway 供给：宿主侧的转发事件源写什么，客户端 `subscribe` 就该收到什么。
+  it("`$events` 订阅后，转发事件源的帧能到客户端的 `deliver`", async () => {
+    const source = eventSource();
+    const { url, close } = await serveMux({ gateway: source.gateway });
     closers.push(close);
 
     const transport = transportOf(url);
@@ -47,18 +50,18 @@ describe("mux 接缝（真 http + 真 WebSocket）", { timeout: 15_000 }, () => 
     });
 
     // 先发一次 unary：建连 + 补发 `$events` 的 open 帧。
-    handlers.register("session/ping", async () => "pong");
-    // 服务端订阅到目标频道才算就位（open 帧的处理是异步的，不能靠猜时长）。
-    const positioned = subscribedOnce(handlers, "api-session/added");
-    await transport.invoke("session/ping", { args: {} });
-    await within(positioned, 1_000, "`$events` 在服务端订阅就位");
-    handlers.publish("api-session/added", { id: "s1", title: "会话一" });
-    await within(frameArrived, 1_000, "publish 的帧到客户端的 deliver");
+    void transport.invoke("session/ping", { args: {} }).catch(() => {});
+    source.push({ type: "ready", clientId: "c1", host: { home: "" } });
+    source.push({
+      type: "emit",
+      event: "api-session/added",
+      args: [{ id: "s1", title: "会话一" }],
+    });
+    await within(frameArrived, 2_000, "转发事件源的帧到客户端的 deliver");
 
     expect(received).toEqual([["api-session/added", [{ id: "s1", title: "会话一" }]]]);
   });
 });
-
 // 两条协议行为都是这轮才补上的，且**错了两边都不报错**：
 // - 流迭代提前结束时不发 `cancel`，宿主那条流永远不结（终端下次 attach 抢不到 controller，
 //   `writable` 一直是 false，界面上"能看不能输入"）；

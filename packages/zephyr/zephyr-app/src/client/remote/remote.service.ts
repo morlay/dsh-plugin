@@ -9,7 +9,13 @@ import { Connection } from "@morlay/zephyr-app/contract";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { failureOf } from "@morlay/zephyr-app/contract";
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
-import { muxTransport, type RemoteTransport } from "./remote-transport.ts";
+import { Typert } from "@morlay/zephyr-app/contract";
+import {
+  muxTransport,
+  type RemoteInvocation,
+  type RemoteOutcome,
+  type RemoteTransport,
+} from "./remote-transport.ts";
 
 /**
  * 一份绑定到底是什么（`$mount` 失败时报给人看）。
@@ -46,6 +52,12 @@ type NamespaceFace = Record<string, (...args: never[]) => unknown>;
 export class RemoteDefault extends Remote {
   /** 传输层：socket 工厂归它（浏览器 / 非浏览器由它的 `origin` 决定）。 */
   private readonly connection = inject(Connection);
+
+  /**
+   * agent 作用域解析：转发的请求只带 `agentId`，要换成客户端的 agent ctx 才能把
+   * `this` 交给 listener（上游 `ctx.sessions.scopeOf(this)` 靠它认会话）。
+   */
+  private readonly typert = inject.optional(Typert);
 
   /** `namespace/method` → 该方法的参数声明（wire 上要**命名参数**，不能发数组）。 */
   private readonly descriptors = new Map<string, readonly RemoteParameter[]>();
@@ -214,8 +226,8 @@ export class RemoteDefault extends Remote {
     });
   }
 
-  /** 频道 → 监听者（宿主推送到达时由 transport 派发）。 */
-  private readonly listeners = new Map<string, Set<(...args: never[]) => void>>();
+  /** 频道 → 监听者（宿主推送到达时由 transport 派发；可答复频道的返回值就是答案）。 */
+  private readonly listeners = new Map<string, Set<(...args: never[]) => unknown>>();
 
   /**
    * 订阅一个推送频道（上游行为：按 channel 分发；本实现维护本地表）。
@@ -223,7 +235,7 @@ export class RemoteDefault extends Remote {
    * @param listener - 回调。
    * @returns 退订函数。
    */
-  $on(channel: string, listener: (...args: never[]) => void): () => void {
+  $on(channel: string, listener: (...args: never[]) => unknown): () => void {
     // 第一次订阅时把 transport 的 events 流接到 `deliver`（幂等）。
     this.wireEvents();
     const set = this.listeners.get(channel) ?? new Set();
@@ -237,11 +249,62 @@ export class RemoteDefault extends Remote {
 
   private eventsWired = false;
 
-  /** 把 transport 的推送流接到 `deliver`（只接一次）。 */
+  /** 把 transport 的推送流接到 `deliver` 与「可答复请求」的处理器（只接一次）。 */
   private wireEvents(): void {
     if (this.eventsWired) return;
     this.eventsWired = true;
     this.transport.subscribe?.((channel, ...args) => this.deliver(channel, ...(args as never[])));
+    this.transport.answer?.((invocation) => this.answerInvocation(invocation));
+  }
+
+  /**
+   * 回答一条**要答复**的转发请求（审批、用户提问）：按注册顺序走 listener，第一个给出答案的算数。
+   *
+   * 语义照上游 `waterfall`：listener 的第二参是 `next()`，调它（或什么都不返回）等于"我不认这条"，
+   * 继续问下一个；返回值即答案（`outcome.kind === 'result'`）。
+   *
+   * `this` 必须是**该 agent 的作用域 ctx**：上游 `ui-approval` 用 `ctx.sessions.scopeOf(this)` 找会话，
+   * 拿到 `undefined` 就直接 `next()`（卡片永远不弹）。所以要先把 `agentId` 解析成客户端的 agent ctx。
+   * @param invocation - 宿主发来的请求。
+   * @returns 本次结论。
+   */
+  private async answerInvocation(invocation: RemoteInvocation): Promise<RemoteOutcome> {
+    const listeners = [...(this.listeners.get(invocation.event) ?? [])];
+    if (listeners.length === 0 || invocation.signal.aborted) return { kind: "next" };
+    let target: object | undefined;
+    try {
+      const adapter = this.typert?.contexts.getClient("agent");
+      const resolved = adapter?.resolve(invocation.agentId) as
+        | { readonly value?: object }
+        | undefined;
+      target = resolved === undefined ? undefined : "value" in resolved ? resolved.value : resolved;
+    } catch (error) {
+      console.warn(
+        "[remote] 转发事件找不到 agent 作用域（%s）：%s",
+        invocation.agentId,
+        String(error),
+      );
+    }
+    if (target === undefined) return { kind: "next" };
+    const request = { ...invocation.request, agent: target, signal: invocation.signal };
+    const NEXT = Symbol("remote.next");
+    try {
+      for (const listener of listeners) {
+        const call = listener as (...args: unknown[]) => unknown;
+        const answer = await call.call(target, request, () => NEXT);
+        if (answer === NEXT || answer === undefined) continue;
+        return { kind: "result", value: answer };
+      }
+      return { kind: "next" };
+    } catch (error) {
+      return {
+        kind: "rejected",
+        error: {
+          name: error instanceof Error ? error.name : "Error",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
   }
 
   /**

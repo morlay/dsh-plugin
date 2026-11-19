@@ -1,13 +1,14 @@
 // `MuxServer` 的局部闭环：假 `req` + 假 `Duplex`，不起服务、不跑 e2e。
 //
 // 覆盖三件事：握手（`Sec-WebSocket-Accept`）、`open → invoke → item/end`、
-// `$events` 订阅后 `publish` 能把一帧写回同一条 socket。
+// `$events` 订阅后，上游 gateway 转发事件源写的帧原样回到同一条 socket。
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { MuxServer } from "../api-gateway/mux-server.service.ts";
 import { RemoteHandlersDefault } from "../api-gateway/remote-handlers.service.ts";
+import { eventSource } from "./support/event-source.ts";
 import { subscribedOnce } from "./support/subscribed.ts";
 
 /** 服务端写回的一帧（只看 JSON 那些，握手响应不算）。 */
@@ -118,7 +119,7 @@ function muxOf(overrides: Record<string, unknown> = {}): {
   } as IncomingMessage;
   // `FakeDuplex` 只实现 mux 真用到的那几个成员（`write` / `end` / `destroy` + 事件），
   // 不是 `node:stream` 的 `Duplex` 子类：这里收窄一次，替身保持最小面。
-  routes[0]?.handler(request, socket as unknown as Duplex, Buffer.alloc(0));
+  routes[0]?.handler(request, socket as never, Buffer.alloc(0));
   return { server, handlers, socket };
 }
 
@@ -356,9 +357,11 @@ describe("MuxServer", { timeout: 5_000 }, () => {
     await drained(server);
   });
 
-  it("$events 订阅后，五条会话频道都能把一帧写回同一条 socket", async () => {
-    const { handlers, socket } = muxOf();
-    const positioned = subscribedOnce(handlers, "api-session/added");
+  // 事件流由上游 gateway 供给（`api-remotes` + `typertGateway`），mux 只负责把它写的帧原样转发：
+  // 通知（`emit`）与**要答复的请求**（`waterfall`，审批 / 提问）都走这一条。
+  it("$events 订阅后，转发事件源的帧原样写回同一条 socket", async () => {
+    const source = eventSource();
+    const { socket } = muxOf({ gateway: source.gateway });
     socket.feed(
       clientFrame(
         JSON.stringify({
@@ -369,30 +372,12 @@ describe("MuxServer", { timeout: 5_000 }, () => {
         }),
       ),
     );
-    await positioned;
-    // 上游 `session-controller/src/remote-events.ts` 声明的 5 条；少一条客户端就收不到那类变化。
-    handlers.publish("api-session/added", { id: "s1", title: "会话一" });
-    handlers.publish("api-session/removed", "s1");
-    handlers.publish("api-session/status", "s1", true);
-    handlers.publish("api-session/activity", "s1", 1_700_000_000_000);
-    handlers.publish("api-session/error", "s1", "provider 挂了");
-    await socket.jsonFrames(5);
-    expect(socket.json().map((frame) => frame.value?.channel)).toEqual([
-      "api-session/added",
-      "api-session/removed",
-      "api-session/status",
-      "api-session/activity",
-      "api-session/error",
-    ]);
-  });
-
-  // 转发事件是**同步**从 cordis 事件处理器里发出来的（`ForwardedEventsBridge`）：序列化一抛，异常就落进
-  // 发布方（agent loop 的异步路径）里，Node 默认会把它当未捕获拒绝退出进程。
-  it("转发事件带不可序列化的载荷：publish 不能把序列化错误抛回发布方", () => {
-    const { handlers, socket } = muxOf();
-    socket.feed(clientFrame(JSON.stringify({ type: "open", streamId: "$e", endpoint: "$events" })));
-    // 上游 token 计数是 BigInt：`JSON.stringify` 遇它直接抛 TypeError。
-    expect(() => handlers.publish("api-session/status", { tokens: 10n })).not.toThrow();
+    const ready = { type: "ready", clientId: "c1", host: { home: "http://host" } };
+    const emit = { type: "emit", event: "api-session/added", args: [{ id: "s1" }] };
+    source.push(ready);
+    source.push(emit);
+    await socket.jsonFrames(2);
+    expect(socket.json().map((frame) => frame.value)).toEqual([ready, emit]);
   });
 
   it("流式 handler 同步抛错：回 error 帧，不是未捕获拒绝", async () => {

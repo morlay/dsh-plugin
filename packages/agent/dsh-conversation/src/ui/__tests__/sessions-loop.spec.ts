@@ -23,7 +23,7 @@ afterEach(async () => {
 
 describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () => {
   it("host 注册的 handler 能被客户端调用，事件也能推回来", async () => {
-    const { url, handlers, server } = await serveMux();
+    const { url, handlers, server, push } = await serveMux();
     // host 侧：这是**mock server** 的两条实现（本用例只验 transport ↔ server ↔ store）。
     // 形状按上游 wire：`session/list` 是 `{ items: SessionSummary[] }`，标题经 `title` 投影下发。
     const rows = new Map<string, string>();
@@ -41,7 +41,7 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
     }));
     handlers.register("session/create", async () => {
       rows.set("s1", "会话一");
-      handlers.publish("api-session/added", rowOf("s1", "会话一"));
+      push({ type: "emit", event: "api-session/added", args: [rowOf("s1", "会话一")] });
       return { sessionId: "s1" };
     });
     closers.push(async () => await closeMux(server));
@@ -93,7 +93,7 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
       // （DOM 渲染由 `app-assembly.spec` 在 happy-dom 里覆盖；这里到 store 为止。）
       const sessions = app.get(SessionController);
       await sessions.refresh();
-      handlers.publish("api-session/added", rowOf("s2", "会话二"));
+      push({ type: "emit", event: "api-session/added", args: [rowOf("s2", "会话二")] });
       await new Promise((resolve) => setTimeout(resolve, 50));
       const rowsNow = sessions.list.getSnapshot();
       expect(rowsNow.ids).toContain("s2");

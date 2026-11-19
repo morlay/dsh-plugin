@@ -31,7 +31,40 @@ export interface RemoteTransport {
    * @returns 退订函数。
    */
   subscribe?(deliver: (channel: string, ...args: unknown[]) => void): () => void;
+
+  /**
+   * 注册**要答复**的转发事件（上游 `waterfall` 帧：审批、用户提问）。
+   *
+   * 与 {@link RemoteTransport.subscribe} 的区别是返回值：这里每个请求都要给一个结果，
+   * 传输层负责把它送回宿主（上游 wire 是 unary 端点 `$events/result`）。
+   * @param handle - 收到一条请求时调用它，返回本次的结论。
+   * @returns 退订函数。
+   */
+  answer?(handle: (invocation: RemoteInvocation) => Promise<RemoteOutcome>): () => void;
 }
+
+/** 一段宿主发来的转发事件参数（上游 `waterfall` 帧的客户端面）。 */
+export interface RemoteInvocation {
+  /** 原始事件名（`approval/request`）。 */
+  readonly event: string;
+  /** 宿主给这次请求的关联 id（答复时带回去）。 */
+  readonly eventId: string;
+  /** 请求所属的 agent（客户端据此找到对应的会话作用域）。 */
+  readonly agentId: string;
+  /** 已投影成 JSON 安全的请求（**没有** `agent` / `signal`）。 */
+  readonly request: Readonly<Record<string, unknown>>;
+  /** 这条请求的取消信号（宿主撤回、或载体换代时 abort）。 */
+  readonly signal: AbortSignal;
+}
+
+/** 一条请求的结论（上游 `TypertRemoteEventOutcome` 的线上形状）。 */
+export type RemoteOutcome =
+  | { readonly kind: "result"; readonly value?: unknown }
+  | { readonly kind: "next" }
+  | {
+      readonly kind: "rejected";
+      readonly error: { readonly name: string; readonly message: string };
+    };
 
 /**
  * 一条逻辑流的客户端面：下行逐帧 + **上行**（`send` / `end`）。
@@ -76,6 +109,15 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
   let seq = 0;
 
   let eventDeliver: ((channel: string, ...args: unknown[]) => void) | undefined;
+
+  /** 可答复事件的处理者（`waterfall` 帧：审批 / 提问）。 */
+  let answerHandler: ((invocation: RemoteInvocation) => Promise<RemoteOutcome>) | undefined;
+
+  /** 宿主在 `ready` 帧给的本条事件流的客户端身份（答复时要带回去）。 */
+  let clientId: string | undefined;
+
+  /** 在途的可答复请求（宿主撤回时按 `eventId` abort）。 */
+  const deliveries = new Map<string, AbortController>();
 
   /** 待发帧（socket 还在 CONNECTING 时排队，open 后一次性发）。 */
   const queued: string[] = [];
@@ -158,9 +200,85 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
         const id = frame.streamId;
         if (id === EVENT_STREAM) {
           if (frame.type !== "item") return;
-          const value = frame.value as { channel?: string; args?: readonly unknown[] } | undefined;
-          if (typeof value?.channel !== "string") return;
-          eventDeliver?.(value.channel, ...((value.args ?? []) as unknown[]));
+          // 上游 `$events` 流的帧形状（`api/gateway/src/stream-protocol.ts`）：
+          //   `{type:'ready', clientId, host}` → `{type:'emit', event, args}`
+          //   `{type:'waterfall', event, eventId, agentId, request}` → `{type:'cancel', eventId}`
+          const value = frame.value as
+            | {
+                readonly type?: string;
+                readonly clientId?: string;
+                readonly event?: string;
+                readonly args?: readonly unknown[];
+                readonly eventId?: string;
+                readonly agentId?: string;
+                readonly request?: Record<string, unknown>;
+              }
+            | undefined;
+          if (typeof value?.type !== "string") return;
+          if (value.type === "ready") {
+            clientId = value.clientId;
+            return;
+          }
+          if (value.type === "cancel") {
+            const eventId = value.eventId;
+            if (typeof eventId === "string") deliveries.get(eventId)?.abort();
+            return;
+          }
+          if (value.type === "emit") {
+            if (typeof value.event !== "string") return;
+            eventDeliver?.(value.event, ...((value.args ?? []) as unknown[]));
+            return;
+          }
+          if (value.type !== "waterfall") return;
+          if (
+            typeof value.event !== "string" ||
+            typeof value.eventId !== "string" ||
+            typeof value.agentId !== "string"
+          )
+            return;
+          const handler = answerHandler;
+          if (handler === undefined) return;
+          const eventId = value.eventId;
+          const controller = new AbortController();
+          deliveries.set(eventId, controller);
+          void (async () => {
+            let outcome: RemoteOutcome = { kind: "next" };
+            try {
+              outcome = await handler({
+                event: value.event as string,
+                eventId,
+                agentId: value.agentId as string,
+                request: value.request ?? {},
+                signal: controller.signal,
+              });
+            } catch (error) {
+              outcome = {
+                kind: "rejected",
+                error: {
+                  name: error instanceof Error ? error.name : "Error",
+                  message: error instanceof Error ? error.message : String(error),
+                },
+              };
+            } finally {
+              deliveries.delete(eventId);
+            }
+            // 答复走 unary 端点（上游 `REMOTE_EVENT_RESULT_ENDPOINT`）：载荷是
+            // `{ clientId, eventId, outcome }`，宿主侧按这三项把答案喂回那条 waterfall。
+            try {
+              await callUnary("$events/result", {
+                args: {
+                  clientId,
+                  eventId,
+                  outcome:
+                    outcome.kind === "result" && outcome.value === undefined
+                      ? { kind: "result" }
+                      : outcome,
+                },
+              });
+            } catch (error) {
+              console.error("[remote] 转发事件答复失败：", error);
+            }
+          })();
           return;
         }
         if (id === undefined) return;
@@ -201,21 +319,33 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
       console.error("[remote] mux socket error：", event);
     });
     // 连上之后补开 events 流（只开一次）。
-    if (eventDeliver !== undefined) {
-      send(
-        JSON.stringify({
-          type: "open",
-          streamId: EVENT_STREAM,
-          endpoint: EVENT_STREAM,
-          payload: { args: {} },
-        }),
-      );
-    }
+    if (eventDeliver !== undefined || answerHandler !== undefined) openEvents();
     return socket;
   };
 
   /** `$events` 流的 id（上游常量 `REMOTE_EVENT_STREAM_ENDPOINT`）。 */
   const EVENT_STREAM = "$events";
+
+  /** 开一条事件流（幂等：宿主按 streamId 认，重复开只是多一条流，所以调用方先看有没有人订）。 */
+  const openEvents = (): void => {
+    send(
+      JSON.stringify({
+        type: "open",
+        streamId: EVENT_STREAM,
+        endpoint: EVENT_STREAM,
+        payload: { args: {} },
+      }),
+    );
+  };
+
+  /** 一条 unary 调用（`invoke` 与「转发事件答复」共用）。 */
+  const callUnary = (endpoint: string, payload: object): Promise<unknown> => {
+    const streamId = `s${(seq += 1)}`;
+    return new Promise<unknown>((resolve, reject) => {
+      pending.set(streamId, { resolve, reject });
+      send(JSON.stringify({ type: "open", streamId, endpoint, payload }));
+    });
+  };
 
   return {
     subscribe(deliver) {
@@ -226,26 +356,21 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
       // 所有推送（`api-session/added` 等）全部收不到，表现为"新建的会话不进目录、
       // 权限与模型切换点了没反应"。
       const live = socket;
-      if (live !== undefined && live.readyState === 1) {
-        live.send(
-          JSON.stringify({
-            type: "open",
-            streamId: EVENT_STREAM,
-            endpoint: EVENT_STREAM,
-            payload: { args: {} },
-          }),
-        );
-      }
+      if (live !== undefined && live.readyState === 1) openEvents();
       return () => {
         eventDeliver = undefined;
       };
     },
-    invoke(endpoint, payload) {
-      const streamId = `s${(seq += 1)}`;
-      return new Promise<unknown>((resolve, reject) => {
-        pending.set(streamId, { resolve, reject });
-        send(JSON.stringify({ type: "open", streamId, endpoint, payload }));
-      });
+    invoke: callUnary,
+    answer(handle) {
+      answerHandler = handle;
+      // 同 `subscribe`：`$on` 可能早于第一次 `invoke`，那时 socket 还没建，靠建连时那次补开；
+      // 但如果 socket 已经开着（订阅晚于其他调用），这里必须主动开一条。
+      const live = socket;
+      if (live !== undefined && live.readyState === 1) openEvents();
+      return () => {
+        if (answerHandler === handle) answerHandler = undefined;
+      };
     },
     openStream(endpoint, payload, signal) {
       const streamId = `s${(seq += 1)}`;

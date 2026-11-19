@@ -126,7 +126,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     socket.receive({
       type: "item",
       streamId: "$events",
-      value: { channel: "api-session/added", args: [{ id: "s1" }] },
+      value: { type: "emit", event: "api-session/added", args: [{ id: "s1" }] },
     });
     expect(seen).toEqual([["api-session/added", [{ id: "s1" }]]]);
 
@@ -156,7 +156,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     socket.receive({
       type: "item",
       streamId: "$events",
-      value: { channel: "api-session/added", args: [{ id: "s9" }] },
+      value: { type: "emit", event: "api-session/added", args: [{ id: "s9" }] },
     });
     expect(seen).toEqual([["api-session/added", [{ id: "s9" }]]]);
     socket.receive({ type: "item", streamId: "s1", value: { writable: true, namespaces: [] } });
@@ -216,5 +216,140 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     sockets[1]?.receive({ type: "item", streamId: "s2", value: { ids: [], byId: {} } });
     sockets[1]?.receive({ type: "end", streamId: "s2" });
     await expect(second).resolves.toEqual({ ids: [], byId: {} });
+  });
+});
+
+/**
+ * 可答复的转发事件（**审批**与**用户提问**走的就是这条）。
+ *
+ * 用户故事：工具要升级沙箱（或模型要提问）→ 宿主发起一条 waterfall → 浏览器收到请求并作答 →
+ * 宿主拿到那个答案、工具继续跑。缺任何一段，用户看到的都是
+ * `requires approval, but no approval channel is available`（请求根本没有通道）。
+ *
+ * 这几条钉的是**协议**：`ready` 帧先给 clientId，`waterfall` 帧带 `agentId` 与已投影的
+ * `request`（**不带** `agent` / `signal`——它们不可 JSON 化，带上就是
+ * `Converting circular structure to JSON`），答复走 unary 端点 `$events/result`。
+ */
+describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, () => {
+  /** 等条件成立（帧分派是微任务链）。 */
+  async function until(check: () => boolean, timeoutMs = 1_000): Promise<void> {
+    for (let waited = 0; !check() && waited < timeoutMs; waited += 10) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  it("收到审批请求 → 处理者拿到已投影的请求 → 答复回到宿主", async () => {
+    const socket = new FakeSocket();
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      return socket;
+    } as never);
+    const transport = muxTransport();
+
+    const seen: unknown[] = [];
+    transport.answer?.(async (invocation) => {
+      seen.push({
+        event: invocation.event,
+        eventId: invocation.eventId,
+        agentId: invocation.agentId,
+        request: invocation.request,
+      });
+      return { kind: "result", value: "allowed-once" };
+    });
+    // 建连由第一次调用触发（生产里 `settings/describe` 总早于事件订阅）。
+    void transport.invoke("settings/describe", { args: {} });
+    socket.open();
+
+    // 事件流先开，宿主回一条 ready（客户端据此记住自己的身份）。
+    expect(socket.framesSent(), "订阅可答复事件后必须开 `$events` 流").toContainEqual({
+      type: "open",
+      streamId: "$events",
+      endpoint: "$events",
+      payload: { args: {} },
+    });
+    socket.receive({
+      type: "item",
+      streamId: "$events",
+      value: { type: "ready", clientId: "c1", host: { home: "http://host" } },
+    });
+    socket.receive({
+      type: "item",
+      streamId: "$events",
+      value: {
+        type: "waterfall",
+        event: "approval/request",
+        eventId: "e1",
+        agentId: "a1",
+        request: { toolName: "bash", reason: "需要写文件" },
+      },
+    });
+
+    await until(() => seen.length > 0);
+    expect(seen, "请求必须原样到达处理者").toEqual([
+      {
+        event: "approval/request",
+        eventId: "e1",
+        agentId: "a1",
+        request: { toolName: "bash", reason: "需要写文件" },
+      },
+    ]);
+    await until(() =>
+      socket
+        .framesSent()
+        .some((frame) => (frame as { endpoint?: string }).endpoint === "$events/result"),
+    );
+    const answer = socket
+      .framesSent()
+      .find((frame) => (frame as { endpoint?: string }).endpoint === "$events/result");
+    expect(answer, "答复必须带 clientId / eventId / outcome 回宿主").toMatchObject({
+      type: "open",
+      endpoint: "$events/result",
+      payload: {
+        args: {
+          clientId: "c1",
+          eventId: "e1",
+          outcome: { kind: "result", value: "allowed-once" },
+        },
+      },
+    });
+  });
+
+  it("宿主撤回请求（`cancel` 帧）：处理者手里的信号被 abort", async () => {
+    const socket = new FakeSocket();
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      return socket;
+    } as never);
+    const transport = muxTransport();
+
+    let signal: AbortSignal | undefined;
+    transport.answer?.(async (invocation) => {
+      signal = invocation.signal;
+      // 一直等到被取消（宿主撤回）为止。
+      await new Promise<void>((resolve) => {
+        invocation.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+      return { kind: "next" };
+    });
+    void transport.invoke("settings/describe", { args: {} });
+    socket.open();
+    socket.receive({
+      type: "item",
+      streamId: "$events",
+      value: { type: "ready", clientId: "c1", host: { home: "http://host" } },
+    });
+    socket.receive({
+      type: "item",
+      streamId: "$events",
+      value: {
+        type: "waterfall",
+        event: "user-questions/request",
+        eventId: "e2",
+        agentId: "a1",
+        request: { questions: [] },
+      },
+    });
+    await until(() => signal !== undefined);
+    socket.receive({ type: "item", streamId: "$events", value: { type: "cancel", eventId: "e2" } });
+    await until(() => signal?.aborted === true);
+    expect(signal?.aborted, "撤回的请求不能再让界面等下去").toBe(true);
   });
 });

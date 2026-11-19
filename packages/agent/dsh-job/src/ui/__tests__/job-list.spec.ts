@@ -1,19 +1,17 @@
 /**
- * 后台任务的浏览器半**装上了没有**。
+ * 用户故事：**会话里跑着后台任务时，会话头部有「后台任务」入口，能看见它们、也能 kill。**
  *
- * 判据是会话头部动作位里的那条注册项（`conversation.session.header.actions` 的 `job-list`）。
- * 宿主半（注册表 + `job_list` 一族工具行 + `remote.job` 的宿主面）是另一棵树上的事：缺了这半边，
- * 模型照样能起后台任务，界面上却没有入口、也没有 kill——「跑着的东西看不见」。
+ * 判据落在两个后果上：
+ * 1. 模型起了一个后台任务（宿主侧 `job_list` / `job` 那族工具已经在跑），界面上出现入口——
+ *    对应 `conversation.session.header.actions` 里 `id: 'job-list'` 的那一格；
+ * 2. 这条入口的数据来源真的挂上了：`job` 那组 remote 由本行 `$mount`（不挂则列表永远空）。
  *
- * 这条 spec 同时钉三件事：
- * 1. `JobsClient.onInit` 真的把 `job` 那组 `TYPERT_REMOTE` 挂上了（上游 `apply` 里 `const { job } = remote`
- *    是属性读，挂上之前是空）；
- * 2. 挂上之后，任务列表确实注册进了头部动作位；
- * 3. **反向**：只装数据面（`JobsClient`）而不装列表（`JobListSlots`）时，头部动作位是空的——否则
- *    "装了"这件事就无从判断。
+ * 反向用例同样重要：只装数据面（`JobsClient`）而不装列表（`JobListSlots`）时，头部动作位是空的
+ * ——否则「装上了」这件事无从判断，用户看到的就是「后台在跑，界面上什么都没有」。
  *
  * 替身的边界：`FakeRemote` 复刻 `RemoteDefault` 的两处关键行为——`$mount` 按 descriptor 发布
- * `remote.<namespace>` 服务名，以及 `remote.<namespace>` 这个**属性读**（真实现是 Proxy 回落）。
+ * `remote.<namespace>` 服务名，以及 `remote.<namespace>` 这个**属性读**（真实现是 Proxy 回落）；
+ * 渲染不在本 spec 的判据里（任务行、输出面板由上游 `JobListAction` 负责，我们不重写组件）。
  */
 import { bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
@@ -166,8 +164,8 @@ function jobActionIds(slots: Slots): readonly (string | undefined)[] {
   return entries.map((entry) => entry.options?.id);
 }
 
-describe("会话头部的后台任务列表", () => {
-  it("装 provideJobUi()：job 那组 remote 被挂上，列表注册进头部动作位", async () => {
+describe("用户故事：后台任务在界面上可见、可 kill", () => {
+  it("模型起了后台任务之后：头部有任务入口，且它的数据面已挂上", async () => {
     const { slots, remote } = await boot();
     expect(remote.mounted, "JobsClient 必须自己 `$mount` job 那组 descriptor").toContain("job");
     await until(() => jobActionIds(slots).length > 0);
@@ -177,7 +175,7 @@ describe("会话头部的后台任务列表", () => {
     ).toEqual(["job-list"]);
   });
 
-  it("反向：只装数据面不装列表，头部动作位是空的", async () => {
+  it("反向：只装数据面不装列表时，用户看不到任何入口", async () => {
     const { slots } = await boot([JobsClient]);
     // 等一轮异步装配，确认不是"还没跑到"。
     await until(() => false, 200);

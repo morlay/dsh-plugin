@@ -6,13 +6,18 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { MuxServer, RemoteHandlersDefault } from "@morlay/zephyr-app";
 
-/** 起一个 mux server，返回它的 url、路由表与关闭句柄。 */
+/** 起一个 mux server，返回它的 url、路由表、事件源入口与关闭句柄。 */
 export async function serveMux(): Promise<{
   url: string;
   handlers: RemoteHandlersDefault;
   server: Server;
+  /** 往「转发事件源」推一帧（上游 `\$events` 流的 `emit` / `waterfall` 帧）。 */
+  push(frame: unknown): void;
 }> {
   const handlers = new RemoteHandlersDefault();
+  /** 事件源队列（测试侧 `push` 往里塞帧）。 */
+  const queue: unknown[] = [];
+  let wake: (() => void) | undefined;
   const routes: {
     path: string;
     handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
@@ -37,6 +42,25 @@ export async function serveMux(): Promise<{
       invoke: async () => {
         throw new Error("[remote] 没有实现");
       },
+      // `\$events` 这条流由 gateway 的转发事件源供给（宿主侧是 `api-remotes` + `typertGateway`）。
+      // 本夹具用一个可推帧的队列替身：断言「宿主推什么，客户端就收到什么」。
+      wireStream: {
+        open: async (): Promise<AsyncIterable<unknown>> => ({
+          async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
+            for (;;) {
+              const next = queue.shift();
+              if (next !== undefined) {
+                yield next;
+                continue;
+              }
+              await new Promise<void>((resolve) => {
+                wake = resolve;
+              });
+            }
+          },
+        }),
+        failure: () => ({ code: "gateway/invoke-failed", message: "x", details: {} }),
+      },
     },
   });
   mux.onInit();
@@ -57,7 +81,17 @@ export async function serveMux(): Promise<{
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (typeof address !== "object" || address === null) throw new Error("没有监听端口");
-  return { url: `ws://127.0.0.1:${address.port}`, handlers, server };
+  return {
+    url: `ws://127.0.0.1:${address.port}`,
+    handlers,
+    server,
+    push: (frame: unknown) => {
+      queue.push(frame);
+      const resume = wake;
+      wake = undefined;
+      resume?.();
+    },
+  };
 }
 
 /** 关掉 server（不给 socket 留悬挂连接，测试才不会卡 10s）。 */
