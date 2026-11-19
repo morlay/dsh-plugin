@@ -15,7 +15,7 @@ import type { WorkspaceRemote } from "@deepseek-ai/dsh-api-workspace-controller/
 import { inject } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
 import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
-import { RemoteClient, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { RemoteClient, groupNameOf } from "@morlay/zephyr-app/remote";
 import { WorkspaceEndpoint } from "../endpoint/index.ts";
 
 /** `workspace` 组的客户端契约实例（`ClientWorkspaceModel` 的 `remote` 参数就是它）。 */
@@ -67,10 +67,6 @@ export class WorkspaceEndpointClient extends WorkspaceEndpoint {
    * @returns wire 上的组名（`workspace`）。
    */
   private groupName(): string {
-    const name = remoteGroupNameOf(this.constructor);
-    if (name === undefined) {
-      throw new Error("WorkspaceEndpointClient 没有 @RemoteGroup：组名读不到");
-    }
-    return name;
+    return groupNameOf(this.constructor);
   }
 }

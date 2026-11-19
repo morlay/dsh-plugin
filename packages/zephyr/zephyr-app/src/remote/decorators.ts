@@ -92,6 +92,25 @@ export function remoteGroupNameOf(cls: unknown): string | undefined {
 }
 
 /**
+ * 契约类的 wire 组名（`@RemoteGroup({ name })` 的实参）。
+ *
+ * 与 {@link remoteGroupNameOf} 的区别：那个返回 `string | undefined`（给「可选」的场景用），
+ * 这个**取不到就抛**——deps 的键不能是空组名（`remoteNamespaceKey(undefined)` 会变成 `remote.`）。
+ * 各域的 `xxxGroupName()` 就是它的一行包装（那些函数是契约文件对外的名字，保留）。
+ * @param cls - 组契约类（或它的实例构造面）。
+ * @returns wire 组名。
+ * @throws 契约类漏了 `@RemoteGroup`：装配期就该发现，不能等到 deps 里出现 `remote.`。
+ */
+export function groupNameOf(cls: unknown): string {
+  const group = remoteGroupNameOf(cls);
+  if (group === undefined) {
+    const name = (cls as { name?: string } | undefined)?.name ?? String(cls);
+    throw new Error(`${name} 没有 @RemoteGroup：组名取不到`);
+  }
+  return group;
+}
+
+/**
  * 一组组内方法的声明（契约上每个 `@Remote()` 方法一条）。
  * @param cls - 组契约类。
  * @returns 方法名列表。

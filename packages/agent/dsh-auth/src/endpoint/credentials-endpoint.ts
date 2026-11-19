@@ -9,7 +9,7 @@ import type { CredentialInfo } from "@deepseek-ai/dsh-credentials/types";
 import {
   RemoteGroup,
   RemoteMethod,
-  remoteGroupNameOf,
+  groupNameOf,
   type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 
@@ -19,9 +19,7 @@ import {
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function credentialsGroupName(): string {
-  const group = remoteGroupNameOf(CredentialsEndpoint);
-  if (group === undefined) throw new Error("CredentialsEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(CredentialsEndpoint);
 }
 
 /** wire 端点名。 */

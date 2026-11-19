@@ -16,7 +16,7 @@ import type {
   WorkspaceFileText,
   WorkspaceFileWatchFrame,
 } from "@deepseek-ai/dsh-api-workspace-files";
-import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { groupNameOf, RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
 /**
  * 组名（`workspaceFiles`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
@@ -24,9 +24,7 @@ import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function workspaceFilesGroupName(): string {
-  const group = remoteGroupNameOf(WorkspaceFilesEndpoint);
-  if (group === undefined) throw new Error("WorkspaceFilesEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(WorkspaceFilesEndpoint);
 }
 
 /**

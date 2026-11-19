@@ -8,7 +8,7 @@ import type { AskUserQuestionAnswer } from "@deepseek-ai/dsh-user-questions/type
 import {
   RemoteGroup,
   RemoteMethod,
-  remoteGroupNameOf,
+  groupNameOf,
   type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 
@@ -18,9 +18,7 @@ import {
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function userQuestionsGroupName(): string {
-  const group = remoteGroupNameOf(UserQuestionsEndpoint);
-  if (group === undefined) throw new Error("UserQuestionsEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(UserQuestionsEndpoint);
 }
 
 /** `userQuestions/answer` 的命名参数（键名照上游 descriptor 的 `parameters[].name`）。 */

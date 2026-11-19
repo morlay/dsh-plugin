@@ -11,7 +11,7 @@ import type { TerminalRemote } from "@deepseek-ai/dsh-api-terminal-controller/cl
 import { inject } from "@morlay/zephyr";
 import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
 import { Remote } from "@morlay/zephyr-app/client";
-import { RemoteClient, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { RemoteClient, groupNameOf } from "@morlay/zephyr-app/remote";
 import { TerminalEndpoint } from "../endpoint/index.ts";
 
 /** `terminal` 组的客户端契约实例（`ClientTerminals` 的 `remote` 参数就是它）。 */
@@ -51,10 +51,6 @@ export class TerminalEndpointClient extends TerminalEndpoint {
    * @returns wire 上的组名（`terminal`）。
    */
   private groupName(): string {
-    const name = remoteGroupNameOf(this.constructor);
-    if (name === undefined) {
-      throw new Error("TerminalEndpointClient 没有 @RemoteGroup：组名读不到");
-    }
-    return name;
+    return groupNameOf(this.constructor);
   }
 }

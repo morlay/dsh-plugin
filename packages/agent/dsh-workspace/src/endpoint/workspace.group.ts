@@ -19,7 +19,7 @@ import type {
 import {
   RemoteGroup,
   RemoteMethod,
-  remoteGroupNameOf,
+  groupNameOf,
   type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 
@@ -29,9 +29,7 @@ import {
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function workspaceGroupName(): string {
-  const group = remoteGroupNameOf(WorkspaceEndpoint);
-  if (group === undefined) throw new Error("WorkspaceEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(WorkspaceEndpoint);
 }
 
 /**

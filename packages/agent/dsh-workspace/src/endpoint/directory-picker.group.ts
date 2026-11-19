@@ -5,7 +5,7 @@
 // 客户端形态不在本仓：这一组的客户端面由上游 `@deepseek-ai/dsh-api-workspace-controller#directoryPicker`
 // 的 `$mount` 面提供（`ui/` 按 `remote.<组>` 调），所以这里只有宿主侧要实现的声明。
 import type { DirectoryListing } from "@deepseek-ai/dsh-api-workspace-controller/types";
-import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { groupNameOf, RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
 /**
  * 组名（`directoryPicker`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
@@ -13,9 +13,7 @@ import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function directoryPickerGroupName(): string {
-  const group = remoteGroupNameOf(DirectoryPickerEndpoint);
-  if (group === undefined) throw new Error("DirectoryPickerEndpoint 没有 @RemoteGroup：组名取不到");
-  return group;
+  return groupNameOf(DirectoryPickerEndpoint);
 }
 
 /**

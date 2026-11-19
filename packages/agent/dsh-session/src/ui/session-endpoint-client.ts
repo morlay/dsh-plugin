@@ -13,7 +13,7 @@
 import { inject } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
 import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
-import { RemoteClient, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
+import { RemoteClient, groupNameOf } from "@morlay/zephyr-app/remote";
 import { SessionEndpoint } from "../endpoint/index.ts";
 import type {
   SessionControlFrame,
@@ -78,10 +78,6 @@ export class SessionEndpointClient extends SessionEndpoint {
    * @returns wire 上的组名（`session`）。
    */
   private groupName(): string {
-    const name = remoteGroupNameOf(this.constructor);
-    if (name === undefined) {
-      throw new Error("SessionEndpointClient 没有 @RemoteGroup：组名读不到");
-    }
-    return name;
+    return groupNameOf(this.constructor);
   }
 }

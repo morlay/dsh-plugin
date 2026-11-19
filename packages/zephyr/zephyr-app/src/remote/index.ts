@@ -7,6 +7,7 @@ export {
   Remote as RemoteMethod,
   RemoteClient,
   RemoteGroup,
+  groupNameOf,
   remoteGroupNameOf,
   remoteDescriptorsOf,
   remoteMethodParametersOf,
