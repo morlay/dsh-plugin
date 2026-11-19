@@ -233,7 +233,9 @@ export class SessionScopeDefault extends SessionScope implements OnInit {
         describeToolDefinition({
           entries: () => this.describeEntriesOf(agent),
           sectionOf: (name) => this.sectionTextOf(agent, name),
-          groupOf: groupDescriptorOf,
+          // 组正文按**这个会话此刻可见的工具**过滤：组里写了没装的行（上游已改名/已移除的工具）不注入。
+          groupOf: (key) =>
+            groupDescriptorOf(key, (tool) => this.tools.get(tool, agent as never) !== undefined),
           onDescribe: (group) => {
             this.activateGroup(agent, group);
           },

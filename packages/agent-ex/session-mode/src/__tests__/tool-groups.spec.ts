@@ -40,7 +40,7 @@ describe("工具按用途分组", () => {
     expect(toolGroupOf("ask_user_question")).toBe("ask");
     expect(toolGroupOf("plan_mode")).toBe("other");
     expect(toolGroupOf("schedule_task")).toBe("other");
-    expect(toolGroupOf("spawn_teammate")).toBe("swarm");
+    expect(toolGroupOf("subagent")).toBe("swarm");
     expect(toolGroupOf("wait_agent")).toBe("swarm");
     expect(toolGroupOf("interrupt_agent")).toBe("swarm");
     expect(toolGroupOf("workflow")).toBe("swarm");

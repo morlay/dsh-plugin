@@ -29,10 +29,6 @@ export const SWARM_GROUP: ToolGroup = {
     },
 
     {
-      when: "spawn_teammate",
-      text: "spawn_teammate：派发队友（可指定后台与模型）；装了 Agent Teams 时用这套替代 subagent。",
-    },
-    {
       when: "wait_agent",
       text: "wait_agent：等队友回复（只观察调用之后的变更，不唤醒）；没有其他人会产生变更时立即返回，唤醒或超时后重新 list。",
     },
@@ -41,7 +37,8 @@ export const SWARM_GROUP: ToolGroup = {
       text: "team_task_list：共享任务板按 list → get → 用当前 revision claim → 做事 → complete 走；任务就绪不会自动唤醒负责人。",
     },
     {
-      when: "spawn_teammate",
+      // 团队模式才有的约束：挂在团队工具上（`spawn_teammate` 在上游 v0.2.1-rc.2 已移除，派生用 `subagent`）。
+      when: "wait_agent",
       text: "只在用户明确要求时才招募队友；Lead 必须等齐所需队友后才能给出最终答复。",
     },
   ],
@@ -51,7 +48,6 @@ export const SWARM_GROUP: ToolGroup = {
     { tool: "subagent_fork", short: "派发继承当前上下文的子代理" },
     { tool: "list_subagent_models", short: "查看子代理可用的模型" },
     { tool: "workflow", short: "用脚本编排多个子代理" },
-    { tool: "spawn_teammate", short: "招募一个队友" },
     { tool: "send_message", short: "给队友发消息" },
     { tool: "list_agents", short: "列出可协作的代理" },
     { tool: "wait_agent", short: "等待队友回复" },

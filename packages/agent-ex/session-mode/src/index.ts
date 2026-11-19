@@ -48,6 +48,9 @@ export {
 } from "./guidance/groups.ts";
 export type { GroupLine, ToolGroup } from "./guidance/groups.ts";
 export * from "./guidance/tool-groups.ts";
+// 只导出分组渲染这一处入口（`groups.ts` 里的 `ToolGuidance` 与 `tool-guidance.service` 的同名成员撞名）。
+export { groupDescriptorOf } from "./guidance/groups.ts";
+export type { GroupDescriptor } from "./guidance/groups.ts";
 
 // 子代理两处文案的接管：运行时上下文的 name / 正文与回报指引。
 export * from "./subagent/delegation-context.ts";

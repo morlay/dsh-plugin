@@ -37,11 +37,19 @@ export const sessionModeProjection = {
 // 本部署只装 ptc 那一份行清单，没有官方 roster 的多 preset 选择面：值取自会话 header（恢复 / fork 时带过来的
 // 那一份），没有就是部署的那一个 id。上游 `@deepseek-ai/dsh-agent-preset-registry` 的同名单元做的就是这件事，
 // 我们不引那个包（它整套是给多 preset 选择面用的）。
+//
+// **子代理不兜底**：它们没有自己的 preset 选择（行随父与部署的同一份清单），兜底会让上游冷恢复
+// （`applyChildComposition`）以为「这个子代理有一份已保存的 preset」，进而要求 `agentPresets` 服务——
+// 本部署不装 roster，于是给 idle 子代理发消息直接失败
+// （`selecting a child agent preset requires the agent-presets service`）。
 export function agentPresetProjection(defaultPreset: string) {
   return {
     key: "agentPreset",
     stateSchema: z.union([z.string(), z.null()]),
-    init: (header: { readonly agentPreset?: string }) => header.agentPreset ?? defaultPreset,
+    init: (header: { readonly agentPreset?: string; readonly parentSession?: unknown }) =>
+      header.parentSession === undefined
+        ? (header.agentPreset ?? defaultPreset)
+        : (header.agentPreset ?? null),
     apply: (state: string | null) => state,
     wire: {
       viewSchema: z.union([z.string(), z.null()]),

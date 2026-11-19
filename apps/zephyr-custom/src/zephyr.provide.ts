@@ -310,7 +310,8 @@ function agentProviders(): ProviderEntry[] {
     ...provideCommand(),
     // 执行器只有一个：本部署选 PTC，剔掉 native 那条。
     ...provideAgentLoop(without(ToolExecutorNative)),
-    // Agent Teams：团队服务（`agentTeams`）+ 它那套工具（`spawn_teammate` / `team_task_*` …）。
+    // Agent Teams：团队服务（`agentTeams`）+ 它那套工具（`team_task_*` / `send_message` / `list_agents` …）；
+    // 派生队友用上游 `subagent` / `subagent_fork`（`spawn_teammate` 在 v0.2.1-rc.2 已移除）。
     // 它要 `subagents` 服务，所以排在 `provideSubagent()` 之后；上游普通 `subagent` / `subagent_fork`
     // **不禁**——两套并存由这个装配面决定（上游那套 profile 会禁掉它们换 Team，本部署不跟）。
     ...provideAgentTeam(),

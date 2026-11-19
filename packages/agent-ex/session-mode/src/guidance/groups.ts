@@ -52,7 +52,10 @@ export interface GroupDescriptor {
   readonly body: string;
 }
 
-export function groupDescriptorOf(key: string): GroupDescriptor | undefined {
+export function groupDescriptorOf(
+  key: string,
+  visible: (tool: string) => boolean = () => true,
+): GroupDescriptor | undefined {
   const isMcp = key.startsWith("mcp:");
   const group = TOOL_GROUPS.find((candidate) => candidate.key === (isMcp ? "mcp" : key));
   if (group === undefined) return undefined;
@@ -60,7 +63,9 @@ export function groupDescriptorOf(key: string): GroupDescriptor | undefined {
     // 动态组的标题要带上 server 名，否则清单里一排 "MCP 资源" 分不清是哪个 server。
     title: isMcp ? `MCP · ${key.slice("mcp:".length)}` : group.title,
     guideline: group.guideline,
-    body: groupSkillBody(group),
+    // **按当前可见工具过滤**：组里列了一个这个会话根本没有的工具（上游改名或部署没装那一行），
+    // 它的用法行就不该注入——否则模型会照着说明去调一个不存在的工具。
+    body: groupSkillBody(group, visible),
   };
 }
 

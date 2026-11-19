@@ -4,8 +4,9 @@
 //
 // 两半的分工：
 // - `TeamService` 是 cordis `Service` 子类（`super(ctx, 'agentTeams')`），由适配行 `mount` 时 `new` 出来；
-// - `tool-agent-team` 是**函数插件**（`export function apply`），注册 `spawn_teammate` / `send_message` /
-//   `list_agents` / `wait_agent` / `interrupt_agent` / `team_task_*` 那一套。
+// - `tool-agent-team` 是**函数插件**（`export function apply`），注册 `send_message` / `list_agents` /
+//   `wait_agent` / `interrupt_agent` / `team_task_*` 那一套；派生队友用上游 `subagent` / `subagent_fork`
+//   （`spawn_teammate` 在 v0.2.1-rc.2 已移除）。
 //
 // 工具**按会话**注册：上游 `apply` 在 `agent/created` 上判断这个 agent 是不是 Team 成员，是才装工具。
 import TeamService from "@deepseek-ai/dsh-agent-team";
