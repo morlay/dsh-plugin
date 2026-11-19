@@ -30,6 +30,10 @@ interface PackageReport {
   readonly subentryParentImports?: readonly string[];
   /** deps 键里的 `"remote.xxx"` 字面量（判据见 `dynamic-face.ts` 的 `remoteNamespaceKey`）。 */
   readonly remoteLiterals?: readonly string[];
+  /** `publishConfig.exports` 漏掉的顶层出口键（整体替换语义，漏一个就是发布包少一个面）。 */
+  readonly publishExportGaps?: readonly string[];
+  /** 注释里会过期的措辞（原来 / 曾经 / 已废弃 / 被 X 取代）。 */
+  readonly staleNotes?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -144,6 +148,12 @@ const exViolations = reports.flatMap((report) =>
 const remoteLiterals = reports.flatMap((report) =>
   (report.remoteLiterals ?? []).map((line) => `${report.pkg}  ${line}`),
 );
+const publishExportGaps = reports.flatMap((report) =>
+  (report.publishExportGaps ?? []).map((line) => `${report.pkg}  ${line}`),
+);
+const staleNotes = reports.flatMap((report) =>
+  (report.staleNotes ?? []).map((line) => `${report.pkg}  ${line}`),
+);
 
 const contractValueEdges = reports.flatMap((entry) =>
   (entry.contractValueEdges ?? []).map((line) => `${entry.pkg}  ${line}`),
@@ -168,6 +178,14 @@ report(
   'deps 键不写字面量（`"remote.xxx"` 一律由 `remoteNamespaceKey(组名)` 给出；只盯 `export const` 会漏掉字面量）',
   remoteLiterals,
 );
+// 存量 15 处：都是「清单由 `devkit build` 写回、但那个包还没跑过 build」的产物——
+// 跑一次 `just build` 会补上。在补上之前这条判据**只挡增量**（与其它基线判据同一套规矩）。
+reportAgainstBaseline(
+  "`publishConfig.exports` 覆盖顶层 `exports` 的每个键（整体替换，漏一个就是发布包少一个面）",
+  publishExportGaps,
+  { current: publishExportGaps.length, baseline: 15 },
+);
+
 reportAgainstBaseline(
   "子入口面禁跨面相对导入（src/{ui,client,server,compat,testing} 里共享契约走包出口；面内 ../ 合法、__tests__ 豁免）",
   subentryParentImports,

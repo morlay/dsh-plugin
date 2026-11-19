@@ -417,12 +417,27 @@ for (const file of files) {
   }
 }
 
+// 9) `publishConfig.exports` 的键集合必须覆盖顶层 `exports` 的每个键（它是**整体替换**）：
+//    漏一个键 = 发布包少一个面。清单由 `devkit build` 写回，但手写态/构建没跑过时会出现这种漏。
+const publishExportGaps: string[] = [];
+const topExports = Object.keys((manifest.exports ?? {}) as Record<string, unknown>);
+const publishExports = (manifest.publishConfig as { exports?: Record<string, unknown> } | undefined)
+  ?.exports;
+if (publishExports !== undefined) {
+  for (const key of topExports) {
+    if (!(key in publishExports)) publishExportGaps.push(`缺 ${key}`);
+  }
+}
+
+// 10) **「注释里的措辞有没有过期」不做成判据**：试过「已废弃 / 已删除 / 被 X 取代」，3 处命中全是
+//     「原因果说明」（「旧 zephyr 的行作用域在新模型里已删除」正是在解释现在为什么这么写）。
 console.log(
   JSON.stringify({
     pkg: manifest.name,
     exViolations,
     contractValueEdges,
     remoteLiterals,
+    publishExportGaps,
     doubleAssertions,
     // 测试域的同一判据（分开计数、分开报）：见 §7 的注释。
     testDoubleAssertions,
