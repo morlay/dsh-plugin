@@ -28,6 +28,8 @@ interface PackageReport {
   readonly testDoubleAssertions?: readonly string[];
   /** 子入口面里以 `../` 开头的导入（面纪律：只许 `./` 与包名/出口）。 */
   readonly subentryParentImports?: readonly string[];
+  /** deps 键里的 `"remote.xxx"` 字面量（判据见 `dynamic-face.ts` 的 `remoteNamespaceKey`）。 */
+  readonly remoteLiterals?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -139,6 +141,9 @@ const reportAgainstBaseline = (
 const exViolations = reports.flatMap((report) =>
   (report.exViolations ?? []).map((line) => `${report.pkg}  ${line}`),
 );
+const remoteLiterals = reports.flatMap((report) =>
+  (report.remoteLiterals ?? []).map((line) => `${report.pkg}  ${line}`),
+);
 
 const contractValueEdges = reports.flatMap((entry) =>
   (entry.contractValueEdges ?? []).map((line) => `${entry.pkg}  ${line}`),
@@ -159,6 +164,10 @@ report("声明未用（依赖清单 vs 源码/scripts/清单其它字段）", un
   hint: write ? "（已删除）" : "（`just audit --write` 一键删）",
 });
 report("扩展边界（agent-ex 只许 contract / testing / endpoint，且扩展之间零依赖）", exViolations);
+report(
+  "deps 键不写字面量（`\"remote.xxx\"` 一律由 `remoteNamespaceKey(组名)` 给出；只盯 `export const` 会漏掉字面量）",
+  remoteLiterals,
+);
 reportAgainstBaseline(
   "子入口面禁跨面相对导入（src/{ui,client,server,compat,testing} 里共享契约走包出口；面内 ../ 合法、__tests__ 豁免）",
   subentryParentImports,

@@ -404,11 +404,27 @@ for (const entry of imports) {
   (isTestPath(entry.file) ? testDoubleAssertions : doubleAssertions).push(line);
 }
 
+// 8) deps 键不写字面量：`"remote.xxx"` 一律由 `remoteNamespaceKey(组名)` 给出。
+//    只盯 `export const` 的判据会漏掉字面量——它们是同一件事的第二种写法，同样是「第二个 home」。
+//    判据的家在 `zephyr-app/src/client/remote/dynamic-face.ts` 的 `remoteNamespaceKey` 注释里。
+const remoteLiterals: string[] = [];
+for (const file of files) {
+  if (isTestPath(file) || file.endsWith(".css")) continue;
+  // 两个「名字怎么算」的定义处豁免：`dynamic-face.ts` 的 `remoteNamespaceKey` 是名字的算处，
+  // `remote.service.ts` 的 `publishNamespace` 是注册侧的另一半（`"remote." + namespace` 就在它里面）。
+  if (/(^|[\\/])(dynamic-face|remote\.service)\.ts$/u.test(file)) continue;
+  const text = await readFile(file, "utf8");
+  for (const match of text.matchAll(/["']remote\.[A-Za-z][\w.]*["']/gu)) {
+    remoteLiterals.push(relative(cwd, file) + "  " + match[0]);
+  }
+}
+
 console.log(
   JSON.stringify({
     pkg: manifest.name,
     exViolations,
     contractValueEdges,
+    remoteLiterals,
     doubleAssertions,
     // 测试域的同一判据（分开计数、分开报）：见 §7 的注释。
     testDoubleAssertions,
