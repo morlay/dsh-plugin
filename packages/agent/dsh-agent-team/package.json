@@ -2,7 +2,7 @@
   "name": "@morlay/dsh-agent-team",
   "version": "0.0.1",
   "private": true,
-  "description": "Agent Teams：接管上游 TeamService（服务名 agentTeams）与它那套团队工具（spawn_teammate / send_message / list_agents / wait_agent / team_task_*），让 Lead 能派发队友、共享任务板并等待结果。",
+  "description": "Agent Teams：接管上游 TeamService（服务名 agentTeams）与它那套团队工具（send_message / list_agents / wait_agent / interrupt_agent / team_task_*），让 Lead 能派发队友、共享任务板并等待结果。派生用上游的 subagent / subagent_fork（spawn_teammate 已在 v0.2.1-rc.2 移除）。",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -28,6 +28,7 @@
     "@morlay/dsh-session": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
     "@morlay/dsh-shell": "workspace:^",
+    "@morlay/session-mode": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
   },
   "engines": {

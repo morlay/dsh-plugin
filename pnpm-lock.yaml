@@ -758,6 +758,9 @@ importers:
       '@morlay/dsh-shell':
         specifier: workspace:^
         version: link:../dsh-shell
+      '@morlay/session-mode':
+        specifier: workspace:^
+        version: link:../../agent-ex/session-mode
 
   packages/agent/dsh-attachment:
     dependencies:
