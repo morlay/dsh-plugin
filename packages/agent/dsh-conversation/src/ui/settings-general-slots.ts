@@ -12,7 +12,8 @@ import {
   Slots,
 } from "@morlay/zephyr-app/client";
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
-import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
+import { settingsGroupName } from "@morlay/dsh-setting/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class SettingsGeneralSlots extends fromCordis(UiSettingsGeneralPlugin) {
@@ -37,7 +38,7 @@ export class SettingsGeneralSlots extends fromCordis(UiSettingsGeneralPlugin) {
       locale: this.locale,
       connection: this.connection,
       remote: this.remote,
-      [SETTINGS_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(settingsGroupName())]: this.remote,
       configForms: this.configForms,
       shortcuts: this.shortcuts,
       modules: MODULES_PLACEHOLDER,

@@ -4,14 +4,20 @@
 // 模型设置页）从这里取，不再直连 `@deepseek-ai/dsh-llm`。放在 endpoint 而不是 contract：
 // contract 只放抽象类 / 类型 / 纯函数，remote 令牌与 deps 键是两端共用的**值**。
 import type { LlmRuntime } from "@deepseek-ai/dsh-llm";
-import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
 
 export { TYPERT_REMOTE as LLM_REMOTE } from "@deepseek-ai/dsh-llm/remote";
 
-// wire 上的组名。
-
-/** 组在 `Remote` 面上的 deps 键（`remote.llm`）。 */
-export const LLM_REMOTE_KEY = "remote.llm" as const;
+/**
+ * 组名（`llm`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
+ */
+export function llmGroupName(): string {
+  const group = remoteGroupNameOf(LlmEndpoint);
+  if (group === undefined) throw new Error("LlmEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
 
 /**
  * `llm` 组：模型目录与「替某个设置命名空间去问 provider」。

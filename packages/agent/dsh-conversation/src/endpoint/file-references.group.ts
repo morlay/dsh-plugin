@@ -9,12 +9,18 @@
 // 方法签名从上游宿主面（`SessionFileReferences`）推（`Parameters<…>` / `ReturnType<…>`）：形状本来就在
 // 那里定义，抄一遍只会多一份会漂的声明。
 import type { SessionFileReferences } from "@deepseek-ai/dsh-api-session-controller";
-import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
 
-// wire 上的组名。
-
-/** 组在 `Remote` 面上的 deps 键（`remote.fileReferences`）。 */
-export const FILE_REFERENCES_REMOTE_KEY = "remote.fileReferences" as const;
+/**
+ * 组名（`fileReferences`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
+ */
+export function fileReferencesGroupName(): string {
+  const group = remoteGroupNameOf(FileReferencesEndpoint);
+  if (group === undefined) throw new Error("FileReferencesEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
 
 /**
  * `fileReferences` 组：某个 agent 工作目录下的文件 / 目录候选。

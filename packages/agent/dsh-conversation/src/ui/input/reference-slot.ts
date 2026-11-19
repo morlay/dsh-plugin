@@ -7,7 +7,11 @@ import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiConversation } from "../conversation/conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { InputTriggers } from "../input/input.token.ts";
-import { FILE_REFERENCES_REMOTE_KEY, SESSION_REFERENCE_REMOTE_KEY } from "../../endpoint/index.ts";
+import {
+  fileReferencesGroupName,
+  sessionReferenceGroupName,
+} from "../../endpoint/index.ts";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class ReferenceSlot extends fromCordis(UiReferencePlugin) {
@@ -31,8 +35,8 @@ export class ReferenceSlot extends fromCordis(UiReferencePlugin) {
       locale: this.locale,
       sessions: this.sessions,
       remote: this.remote,
-      [FILE_REFERENCES_REMOTE_KEY]: this.remote,
-      [SESSION_REFERENCE_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(fileReferencesGroupName())]: this.remote,
+      [remoteNamespaceKey(sessionReferenceGroupName())]: this.remote,
       sidebarRight: this.sidebarRight,
       slots: this.slots,
       uiConversation: this.uiConversation,

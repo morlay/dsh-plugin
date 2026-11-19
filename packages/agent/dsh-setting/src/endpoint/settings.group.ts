@@ -8,26 +8,22 @@
 // 方法签名从上游宿主面（`SettingsController`）推（`Parameters<…>` / `ReturnType<…>`）：形状本来就在
 // 那里定义，抄一遍只会多一份会漂的声明。
 import type { SettingsController } from "@deepseek-ai/dsh-api-settings-controller";
-import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
-
-// wire 上的组名。
-
-/** 组在 `Remote` 面上的 deps 键（`remote.settings`）。 */
-export const SETTINGS_REMOTE_KEY = "remote.settings" as const;
+import { RemoteGroup, RemoteMethod, remoteGroupNameOf } from "@morlay/zephyr-app/remote";
 
 /**
- * 组内的方法名（照上游 descriptor：`settings/describe` / `mutate` / `openSettingsDocument` /
- * `replace` / `update`）。
- *
- * **`set` / `unset` 不在这里**：那是 `credentials` 组的方法（凭证读写），归 `dsh-auth` 的端点面。
+ * 组名（`settings`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
-export const SETTINGS_METHODS = {
-  describe: "describe",
-  mutate: "mutate",
-  openSettingsDocument: "openSettingsDocument",
-  replace: "replace",
-  update: "update",
-} as const;
+export function settingsGroupName(): string {
+  const group = remoteGroupNameOf(SettingsEndpoint);
+  if (group === undefined) throw new Error("SettingsEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
+
+// 方法名**不留常量表**：唯一 home 是下面契约类方法上的 `@RemoteMethod()` 实参（方法名即 wire 名），
+// 调用方直接调客户端形态的方法；要枚举时用 `remoteDescriptorsOf(SettingsEndpoint).descriptors`。
+// **`set` / `unset` 不在这里**：那是 `credentials` 组的方法（凭证读写），归 `dsh-auth` 的端点面。
 
 /**
  * `settings` 组：配置页的读面、写面与「打开设置文档」。

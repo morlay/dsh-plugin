@@ -18,7 +18,8 @@ import {
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
 // 远端身份只从 `./endpoint`（client-safe）取：包根带三个宿主 service，浏览器半引不得。
 import { PERMISSION_PRESETS_REMOTE } from "@morlay/dsh-permission/endpoint";
-import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
+import { settingsGroupName } from "@morlay/dsh-setting/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 import { namespaceOf } from "./remote-namespace.ts";
 
 @Injectable()
@@ -68,7 +69,7 @@ export class UiPermission extends fromCordis(UiPermissionPlugin) {
       locale: this.locale,
       remote: remoteForUi,
       "remote.permissionPresets": remoteForUi.permissionPresets,
-      [SETTINGS_REMOTE_KEY]: remoteForUi.settings,
+      [remoteNamespaceKey(settingsGroupName())]: remoteForUi.settings,
       configForms: this.configForms,
       settingsSchema: this.settingsSchema,
     });

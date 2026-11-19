@@ -5,7 +5,8 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { ConfigForms, Remote } from "@morlay/zephyr-app/client";
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
-import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
+import { settingsGroupName } from "@morlay/dsh-setting/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class SettingsHost extends fromCordis(ConfigForms, UiSettingsPlugin) {
@@ -21,7 +22,7 @@ export class SettingsHost extends fromCordis(ConfigForms, UiSettingsPlugin) {
     }
     await this.mount(ctx, undefined, {
       remote: this.remote,
-      [SETTINGS_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(settingsGroupName())]: this.remote,
     });
   }
 }

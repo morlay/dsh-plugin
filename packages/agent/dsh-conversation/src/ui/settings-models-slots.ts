@@ -6,11 +6,11 @@ import { ConfigForms, Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 import { SettingsSchema } from "./ui-settings.token.ts";
 import { LLM_REMOTE } from "@morlay/dsh-agent/endpoint";
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
-import { CREDENTIALS_REMOTE_KEY } from "@morlay/dsh-auth/endpoint";
-import { LLM_REMOTE_KEY } from "@morlay/dsh-agent/endpoint";
+import { credentialsGroupName } from "@morlay/dsh-auth/endpoint";
+import { llmGroupName } from "@morlay/dsh-agent/endpoint";
 import { sessionGroupName } from "@morlay/dsh-session/endpoint";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
-import { SETTINGS_REMOTE_KEY } from "@morlay/dsh-setting/endpoint";
+import { settingsGroupName } from "@morlay/dsh-setting/endpoint";
 
 @Injectable()
 export class SettingsModelsSlots extends fromCordis(UiSettingsModelsPlugin) {
@@ -31,9 +31,9 @@ export class SettingsModelsSlots extends fromCordis(UiSettingsModelsPlugin) {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,
-      [CREDENTIALS_REMOTE_KEY]: this.remote,
-      [LLM_REMOTE_KEY]: this.remote,
-      [SETTINGS_REMOTE_KEY]: this.remote,
+      [remoteNamespaceKey(credentialsGroupName())]: this.remote,
+      [remoteNamespaceKey(llmGroupName())]: this.remote,
+      [remoteNamespaceKey(settingsGroupName())]: this.remote,
       [remoteNamespaceKey(sessionGroupName())]: this.remote,
       configForms: this.configForms,
       settingsSchema: this.settingsSchema,

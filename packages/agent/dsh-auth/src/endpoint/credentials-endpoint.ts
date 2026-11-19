@@ -6,12 +6,23 @@
 // 只取类型：走上游的 `types` 子路径 + `import type`（值导入会给端点面收一条到宿主根的边，
 // 而 `./endpoint` 被浏览器半引用，必须 client-safe）。
 import type { CredentialInfo } from "@deepseek-ai/dsh-credentials/types";
-import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
+import {
+  RemoteGroup,
+  RemoteMethod,
+  remoteGroupNameOf,
+  type RemoteResultWire,
+} from "@morlay/zephyr-app/remote";
 
-/** wire 上的组名。 */
-
-/** 组在 `Remote` 面上的 deps 键（`remote.credentials`）。 */
-export const CREDENTIALS_REMOTE_KEY = "remote.credentials" as const;
+/**
+ * 组名（`credentials`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
+ */
+export function credentialsGroupName(): string {
+  const group = remoteGroupNameOf(CredentialsEndpoint);
+  if (group === undefined) throw new Error("CredentialsEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
 
 /** wire 端点名。 */
 
