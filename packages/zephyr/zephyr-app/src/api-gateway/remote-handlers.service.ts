@@ -7,6 +7,12 @@ import {
   type RemoteStreamHandler,
 } from "./remote-handlers.contract.ts";
 
+/** 没有上行面时给处理器的空序列（只下行的流读了它只会结束）。 */
+const EMPTY_UPLINK: AsyncIterable<unknown> = {
+  // oxlint-disable-next-line require-yield -- 空流就是它的语义。
+  async *[Symbol.asyncIterator](): AsyncGenerator<never> {},
+};
+
 @Injectable()
 export class RemoteHandlersDefault extends RemoteHandlers {
   private readonly handlers = new Map<string, RemoteHandler>();
@@ -43,8 +49,9 @@ export class RemoteHandlersDefault extends RemoteHandlers {
     endpoint: string,
     args: Readonly<Record<string, unknown>>,
     signal: AbortSignal,
+    uplink: AsyncIterable<unknown> = EMPTY_UPLINK,
   ): AsyncIterable<unknown> | undefined {
-    return this.streams.get(endpoint)?.(args, signal);
+    return this.streams.get(endpoint)?.(args, signal, uplink);
   }
 
   async invoke(endpoint: string, args: Readonly<Record<string, unknown>>): Promise<unknown> {

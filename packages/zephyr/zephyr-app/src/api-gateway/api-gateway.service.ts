@@ -7,7 +7,6 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import { Connection } from "../connection/contract.ts";
 import { RemoteAccess } from "../remote-access/remote-access.contract.ts";
 import { Typert } from "../typert/typert.contract.ts";
-import { WebServer } from "../web/web-server.contract.ts";
 import { TypertGateway, type InvokeRemoteRequest } from "../typert/gateway.contract.ts";
 
 /**
@@ -44,8 +43,6 @@ export class ApiGatewayDefault extends fromCordis(TypertGateway, ApiGatewayPlugi
    */
   connection = inject.optional(Connection);
 
-  webServer = inject.optional(WebServer);
-
   typert = inject(Typert);
 
   /**
@@ -61,7 +58,10 @@ export class ApiGatewayDefault extends fromCordis(TypertGateway, ApiGatewayPlugi
       // **只交存在的面**：`mount` 按"deps 里有没有这个键"喂上游的 `ctx.inject`，交一个
       // `undefined` 它不会等，随即在 `connection.rpc` 上炸。
       ...(this.connection === undefined ? {} : { connection: this.connection }),
-      ...(this.webServer === undefined ? {} : { webServer: this.webServer }),
+      // **不交 `webServer`**：上游拿到它就会自己注册 `/api/remote.mux` 的 upgrade，
+      // 而 `WebServer` 的 upgrade 分派先注册先赢——两份并存时上游那份赢，自研路由表的
+      // 流式端点（`RemoteHandlers.registerStream`）就永远等不到 open。
+      // 协议实现仍复用上游的 `RemoteStreamMuxServer`，见 `MuxServer`。
       typert: this.typert,
       // **显式声明不可用**（值是 `undefined`）：`mount` 的校验按"键是否存在"判断，
       // 这样"本装配没有 remoteAccess"是明确的决定，而不是漏写。

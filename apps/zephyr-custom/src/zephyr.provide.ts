@@ -19,6 +19,7 @@ import {
   provideApiGateway,
   provideAppEnv,
   provideConnection,
+  provideMuxServer,
   provideLoggerExporter,
   provideRemoteAccess,
   provideTypert,
@@ -145,6 +146,9 @@ function frameworkProviders(): ProviderEntry[] {
     ...provideTypert(),
     ...provideRemoteAccess(),
     ...provideApiGateway(),
+    // `/api/remote.mux` 的 upgrade：上游 api-gateway 不再自己注册（两份并存时先注册的先赢），
+    // 由这一行接管并复用上游的 `RemoteStreamMuxServer`；没有它，浏览器的流式与 `$events` 全都没有载体。
+    ...provideMuxServer(),
     ...provideLoggerExporter(),
   ];
 }

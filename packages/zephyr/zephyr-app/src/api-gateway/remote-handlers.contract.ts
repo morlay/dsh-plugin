@@ -11,10 +11,15 @@ import { Injectable } from "@morlay/zephyr";
 /** 一个 Remote 方法的处理器。 */
 export type RemoteHandler = (args: Readonly<Record<string, unknown>>) => Promise<unknown>;
 
-/** 一个流式 Remote 方法的处理器：逐帧产出，`signal` 被取消时应当结束。 */
+/**
+ * 一个流式 Remote 方法的处理器：逐帧产出，`signal` 被取消时应当结束。
+ *
+ * `uplink` 是**双向流**的上行面（终端的键入走它）：只下行的流不必读它。
+ */
 export type RemoteStreamHandler = (
   args: Readonly<Record<string, unknown>>,
   signal: AbortSignal,
+  uplink: AsyncIterable<unknown>,
 ) => AsyncIterable<unknown>;
 
 /** 事件监听者（宿主推给客户端的 `api-session/*` 之类）。 */
@@ -33,7 +38,7 @@ export abstract class RemoteHandlers {
   /**
    * 注册一个**流式** Remote 方法（`workspace/follow` 这类）。
    * @param endpoint - `<namespace>/<method>`。
-   * @param handler - 收到命名参数与取消信号后逐帧产出。
+   * @param handler - 收到命名参数、取消信号与上行帧后逐帧产出。
    * @returns 注销函数。
    */
   abstract registerStream(endpoint: string, handler: RemoteStreamHandler): () => void;
@@ -53,12 +58,14 @@ export abstract class RemoteHandlers {
    * @param endpoint - `<namespace>/<method>`。
    * @param args - 命名参数。
    * @param signal - 取消信号（客户端发 `cancel` / socket 断开时 abort）。
+   * @param uplink - 客户端上行帧；缺省给一个空序列（只下行的流读了不会有人推）。
    * @returns 帧序列。
    */
   abstract stream(
     endpoint: string,
     args: Readonly<Record<string, unknown>>,
     signal: AbortSignal,
+    uplink?: AsyncIterable<unknown>,
   ): AsyncIterable<unknown> | undefined;
 
   /**

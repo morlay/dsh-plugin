@@ -88,16 +88,16 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(app.get(Typert)).toBeDefined();
   });
 
-  it("交回 connection / webServer 之后，upgrade 只有上游那一条 /api/remote.mux", () => {
+  it("不交 webServer：上游不再注册 /api/remote.mux（mux 由自研那一行接管）", () => {
     expect(app.tryGet(WebServer), "WebServer 应由 provideWeb() 提供").toBeDefined();
     const upgrades = app
       .get(WebServer)
       .routesOf()
       .filter((route) => route.kind === "upgrade")
       .map((route) => route.path);
-    // 名单里唯一的一条就是上游在 ctx.inject(['connection','webServer']) 里注册的那条；
-    // 少一条 = 它没拿到 webServer，多一条 = 同一路径又挂了一个 upgrade。
-    expect(upgrades).toEqual(["/api/remote.mux"]);
+    // 上游拿到 webServer 就会自己注册同路径的 upgrade——两份并存时先注册的先赢，
+    // 自研分流（自研路由表的流式端点）就永远接不到连接。这里钉住「不给它 webServer」。
+    expect(upgrades, "upgrade 只该由自研的 mux 行注册（本最小栈不装它，所以是空的）").toEqual([]);
   });
 
   it("invoke 走到上游分派（最小栈里以「服务不存在」失败，证明请求走通了）", async () => {
