@@ -188,13 +188,13 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     // 一起放行（review 抓到过——测试域基线 168→102 的降幅大部分是它吞掉的，不是真收干净）。
     // 只有这两个文件里那 5 处是真的「本仓 `Context` ↔ cordis `Context`」的类型面差异。
     match:
-      /(^|[\/])zephyr[\/]zephyr[\/]src[\/](__tests__[\/]scoped-rows|compat[\/]__tests__[\/]from-cordis)\.spec\.ts$/u,
+      /(^|[/])zephyr[/]zephyr[/]src[/](__tests__[/]scoped-rows|compat[/]__tests__[/]from-cordis)\.spec\.ts$/u,
     reason: "cordis Context 的两个模块实例：类型面差异（增强未加载），运行期同一对象",
   },
   {
     // 契约的返回面是**两半共用上界**（`Reply<T> = T | RemoteResultWire<T>`：宿主回裸值、客户端回 `Remote`
     // 封装），而上游的 `ClientWorkspaceModel` 只认客户端那一半。这一处是两者相接的唯一点。
-    match: /(^|[\/])dsh-workspace[\/]src[\/]ui[\/]workspace-controller\.service\.ts$/u,
+    match: /(^|[/])dsh-workspace[/]src[/]ui[/]workspace-controller\.service\.ts$/u,
     reason: "契约上界 → 客户端形态：`Reply<T>` 收窄到 `RemoteResult`（两半共用的声明只能写上界）",
   },
 ];

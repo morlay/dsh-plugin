@@ -1,0 +1,10 @@
+# verdaccio 配置（上游片）：只放 `uplinks`，独立挂载——改这里 `docker compose restart` 即生效，
+# 编排与基础片里不出现上游地址。
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+    timeout: 30s
+    maxage: 10m
+    max_fails: 5
+    fail_timeout: 5m
+    cache: true

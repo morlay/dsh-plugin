@@ -1,5 +1,5 @@
 // 构建面：入口从包的 `exports` 推导，用 rolldown 打 host 面；清单由 `writeBuildManifest` 写回。
-// 声明不在这里产出（`just dts` 落位），运行时零依赖 tsdown。
+// 声明是构建的一部分（全仓声明树由 dts-prepare 的进程锁生成一次，再按入口聚合），运行时零依赖 tsdown。
 export { buildPackage, planOf, type BuildArtifacts, type BuildPlan } from "./compile.ts";
 export {
   writeBuildManifest,

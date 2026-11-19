@@ -1,6 +1,6 @@
 // 包清单（`exports` / `publishConfig.exports`）由构建从产物推导并写回 `package.json`，不手写：
-// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态两条条件各指一份产物——
-// `import` 指 **ESM 库**、`default` 兜底指 **CJS 工厂**（理由见 `pickLibrary` / `pickFactory`）。
+// 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态只出一份 **CJS 工厂**——
+// 那是 `__ModuleLoader__.load` 的注册脚本，挂在该出口的 `default` 条件上（见 `pickFactory`）。
 // 分档：`private: true` 只写 `exports`（源码直连），不写 `publishConfig` / `engines.dsh`；发布包另写
 // 发布态清单与 `engines.dsh`，`./dsh-bundle` 这类只发布态入口不进顶层 `exports`。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
@@ -25,7 +25,7 @@ export type BundleRow =
 export interface PackageExportsOptions {
   // 入口名 → 源码路径（`index` 是包根出口 `.`）。
   readonly entries: Record<string, string>;
-  // client 半的入口名；有它时该出口按 **库 + 工厂**两条条件写（见 `pickLibrary` / `pickFactory`）。
+  // client 半的入口名；有它时该出口按 **CJS 工厂**写（见 `pickFactory`）。
   readonly clientEntry?: string;
   // 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。
   readonly hidden?: readonly string[];
@@ -38,7 +38,7 @@ export interface PackageExportsOptions {
   // 额外写 Node / Electron 的传统入口 `main` / `module`（都指包根出口的产物）：这类消费方不看
   // `exports`——Electron 以包目录为 app 启动时按 `main` 找主进程入口，缺了它退回 `index.js` 并报错。
   readonly legacy?: boolean;
-  // 声明文件名的来源。声明由 `just dts`（`dts-prepare`）预先生成并落位，所以由调用方按同一套命名规则给出；
+  // 声明文件名的来源。声明由 `buildPackage` 在构建里产出（`<入口>.d.mts`），所以由调用方按同一套命名规则给出；
   // 缺省时发布态出口不带 `types`。
   readonly declarationFiles?: (entry: string) => readonly string[];
 }
@@ -46,6 +46,9 @@ export interface PackageExportsOptions {
 const PACKAGE_JSON_EXPORT = "./package.json";
 const PATCH_EXPORT = "./cordis.patch.yml";
 const LOCALE_EXPORT = "./locale/*.json";
+
+// 有产物形态的源码出口：其余（样式、资产、通配资源）不打包，两种清单里都按源码路径写。
+const MODULE_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 
 // 构建环境里的上游版本常量（`mise.toml` 的 `DEEPSEEK_HARNESS_VERSION`）：插件包的 dsh 要求由它推导。
 const HARNESS_VERSION_ENV = "DEEPSEEK_HARNESS_VERSION";
@@ -94,12 +97,6 @@ async function exists(path: string): Promise<boolean> {
 // host 面取 ESM 产物——扩展名按产物实际落点，不猜。
 function pick(files: readonly string[]): string | undefined {
   return files.find((file) => file.endsWith(".mjs") || file.endsWith(".js"));
-}
-
-// client 面取 **ESM 库**产物：`./client` 的 `import` 条件是给按 ESM 解析的消费方的一份普通库，
-// 包内相对引用与样式都已内联成单文件。
-function pickLibrary(files: readonly string[]): string | undefined {
-  return files.find((file) => file.endsWith(".mjs"));
 }
 
 // client 面另取 **CJS 工厂**产物，挂在 `./client` 的 `default` 上：那是 `__ModuleLoader__.load` 的
@@ -212,6 +209,15 @@ async function writeManifest(
         : { types: artifact(declarations), default: artifact(runtime) };
   }
 
+  // 没有产物形态的面（样式、资产、通配的资源出口）不打包，但发布态也得有一个键：原样带着 `src` 的
+  // 路径发出去（`files` 里有 `src`）。只看「源码不是模块」的那一类，漏产物是构建的事，不能在这里被
+  // 抄成源码路径糊过去。
+  for (const [key, value] of Object.entries(dev)) {
+    if (Object.hasOwn(published, key)) continue;
+    if (typeof value !== "string" || MODULE_SOURCE.test(value)) continue;
+    published[key] = value;
+  }
+
   dev[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   published[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   if (clientDev !== undefined) {
@@ -316,6 +322,8 @@ export function writeBuildManifest(
     readonly clientEntry?: string;
     readonly declarationFiles?: (entry: string) => readonly string[];
     readonly publishOnly?: readonly string[];
+    readonly hidden?: readonly string[];
+    readonly bin?: Record<string, string>;
     readonly bundle?: { readonly rows: readonly BundleRow[] };
   },
 ): Promise<void> {
@@ -335,6 +343,8 @@ export function writeBuildManifest(
         ? {}
         : { declarationFiles: options.declarationFiles }),
       ...(options.publishOnly === undefined ? {} : { publishOnly: options.publishOnly }),
+      ...(options.hidden === undefined ? {} : { hidden: options.hidden }),
+      ...(options.bin === undefined ? {} : { bin: options.bin }),
       ...(options.bundle === undefined ? {} : { bundle: options.bundle }),
     },
     { entries, outDir: "dist" },

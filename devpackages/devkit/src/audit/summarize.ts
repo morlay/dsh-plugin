@@ -32,8 +32,6 @@ interface PackageReport {
   readonly remoteLiterals?: readonly string[];
   /** `publishConfig.exports` 漏掉的顶层出口键（整体替换语义，漏一个就是发布包少一个面）。 */
   readonly publishExportGaps?: readonly string[];
-  /** 注释里会过期的措辞（原来 / 曾经 / 已废弃 / 被 X 取代）。 */
-  readonly staleNotes?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -150,9 +148,6 @@ const remoteLiterals = reports.flatMap((report) =>
 );
 const publishExportGaps = reports.flatMap((report) =>
   (report.publishExportGaps ?? []).map((line) => `${report.pkg}  ${line}`),
-);
-const staleNotes = reports.flatMap((report) =>
-  (report.staleNotes ?? []).map((line) => `${report.pkg}  ${line}`),
 );
 
 const contractValueEdges = reports.flatMap((entry) =>

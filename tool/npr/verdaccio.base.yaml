@@ -1,0 +1,24 @@
+# verdaccio 配置（基础片）：storage、包规则、发布与日志。上游在 verdaccio.uplinks.yaml——
+# 两片在容器启动时被 `cat` 拼成一份，**顶层键不许重复**（本文件不给 `uplinks`）。
+storage: /verdaccio/storage
+
+packages:
+  # 本地认领 `@morlay` 一个 scope：**故意不写 `proxy`**，不写就完全不查上游（没发过即 404，不回退）。
+  # 这是「本地模拟发布」能确定性的前提。
+  "@morlay/*":
+    access: $all
+    publish: $all
+    unpublish: $all
+  # 其余一律走上游 npmjs（缓存到同一个 storage）。
+  "**":
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: npmjs
+
+publish:
+  # npmjs 抖动时不影响本地发布（本地 scope 本来不查上游，属兜底）。
+  allow_offline: true
+
+log:
+  level: warn

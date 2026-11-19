@@ -11,7 +11,7 @@
 | 面边界     | `just audit`                             | root / ui / server 互相越界即红                                                                            |
 | 依赖声明   | `just audit`（`--write` 一键删）         | 声明却没有用到的依赖即红；「必须保留」的判据只在 [`rules.ts`](../../devpackages/devkit/src/audit/rules.ts) |
 | 扩展边界   | `just audit`                             | `packages/agent-ex/*` 的入口越界与扩展间互相依赖                                                           |
-| 出口能出活 | `just build`                             | 有 `build` 脚本的包（5 个）产物与 `exports` 对得上                                                         |
+| 出口能出活 | `just build`                             | 每个有 TS 源码入口的包（`exports` 的值指 `./src/*`）产物与 `exports` 对得上                                |
 | 格式       | `just fmt` / `pnpm exec oxfmt --check .` | 换行、引号、表格对齐                                                                                       |
 
 ## 分层与依赖方向
@@ -60,6 +60,11 @@
 - **声明未用就是死依赖**：`just audit` 报「声明未用」；AST 看不见的五类（自引用、`@types/*`、
   清单的 scripts 字段、清单其它字段、生成物运行时）由 `keepReason` 保下，想放宽先改
   [`rules.ts`](../../devpackages/devkit/src/audit/rules.ts) 与它的 `rules.spec.ts`。
+- **转译器注入的 helper 不声明、由构建内联**：rolldown 的 oxc 降级 legacy 装饰器时会现写一条
+  `@oxc-project/runtime/helpers/*` 的 import，源码里没有它。它由 `devkit build` 打进产物（产物里只剩
+  那几个 helper 函数），发布包**不声明**它——声明了就得跟着 rolldown 的 oxc 版本线走，而消费方装不到它
+  就是启动即 `Cannot find package`。判据（`dist` 里没有这条裸导入 + 干净 node 进程能加载）见
+  [devkit 如何验证](../../devpackages/devkit/.agents/standards/how-to-verify.md)。
 - **包内测试走包名**（`@morlay/<包>/<面>`）：测试是唯一每次 CI 都跑的消费方，它顺带守住 `exports`。
   自引用因此要在 `devDependencies` 里写自己的包名（`keepReason` ② 认这个理由）。
 - **上游依赖不进装配面**：应用只声明它自己 import 的包与按字符串引用的包（`remoteDescriptor("<包名>")`
@@ -75,16 +80,19 @@
   **package.json 出口每个包都有**（`import.meta.resolve("<包名>/package.json")` 靠它）。
 - **按面开出口，不凑数**：出口键写成 `"./<面>"`，面名是 contract / endpoint / server / ui / testing；
   谁有消费方谁开，没有消费方的面不开（多一条出口就是把同一份东西列两遍）。testing 面只给测试用。
-- **加面 = 加文件 + 清单**：`src/<面>.ts`（或 `src/<面>/index.ts`）与入口声明同笔改；有 `build` 脚本的包
-  再补 `tsdown.config.ts` 的 `entry`（没有该文件时 tsdown 按 `exports` 推断）。清单由构建写回，手改无效。
+- **加面 = 加文件 + 清单**：`src/<面>.ts`（或 `src/<面>/index.ts`）与入口声明同笔改。入口由 `devkit build`
+  从 `exports` 推导——**没有第二份入口清单**（包内不再有 `tsdown.config.ts`，也不再挂 `build` 脚本）。
+  清单由构建写回，手改无效。
   判据：`just build` 后产物目录里有同名文件，且包内测试按包名解析得到。
 - **浏览器半只有两种出口**：`./ui` 是**纯 ESM** 面（zephyr 前端装配用）；`./client` 只给 dsh 插件
   （`dsh.bundle` 且有前端的包），发布态按「库 + 工厂」两条条件。两者并存，不互相替代；node 专属实现
   与宿主 service 留在包根——包根只出宿主面时，浏览器半只引它的 `./contract` / `./endpoint`（见[面边界](#面边界)）。
 - **`./cordis-register` 只给 bundle 包，且只进 `publishConfig.exports`**：默认导出该包的一个 cordis 插件
   （`toCordis` 组合多行）；顶层 `exports` 不含它，workspace 里误引即解析失败——开发态只走 `provideXxx()` 清单。
-- **`dsh.bundle` 指 patch**：bundle 包写 `"dsh.bundle": { "patch": "./cordis.patch.yml" }`，patch 由
-  `tsdown.config.ts` 声明的行清单生成（首行「由 … 生成，请勿手工编辑」）。
+- **`dsh.bundle` 指产物里的 patch**：bundle 包写 `"dsh.bundle": { "patch": "./dist/cordis.patch.yml" }`——
+  patch 是构建产物（实际发布物是 `dist/cordis.patch.yml`，发布态另有 `./cordis.patch.yml` 出口指同一文件），
+  不是包根下的源文件；行清单声明在包的 `src/dsh-bundle.ts` 的 `rows`（首行「由 … 生成，请勿手工编辑」）。
+  判据：`just build` 后 `dist/cordis.patch.yml` 存在，清单里的 `dsh.bundle.patch` 指向它。
 - **`publishConfig.exports` 只在 `private: false` 的包上有意义**：它是**整体替换**，键集合必须覆盖顶层
   `exports` 每个键（外加 `./package.json` 与只发布态入口），漏一个键就是发布包少一个面；`private: true`
   的包只写 `exports`，不写 `publishConfig` / `engines.dsh`。

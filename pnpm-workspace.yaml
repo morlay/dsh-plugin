@@ -19,6 +19,17 @@ autoInstallPeers: true
 # 从此只有这一处，不需要各处写 `--import`，也不需要 tsx。
 nodeOptions: "--import @oxc-node/core/register"
 
+# `@morlay` 这个 scope 默认指向**本地模拟 registry**（`tool/npr` 的 verdaccio，宿主机 7677）：
+# 手滑跑一条 `pnpm publish` 也只会发到本机，不会碰到真 registry。
+#
+# **必须写在 workspace 里**：本机 `~/.npmrc` 有 `@morlay:registry=https://registry.npmjs.org/`，
+# scope 级映射会盖掉命令行 `--registry`（pnpm 12 实测）——不声明的话，指向本地的发布会被悄悄送到 npmjs。
+# 真要发 npmjs 时由 `just publish-npm --registry https://registry.npmjs.org/` 里的
+# `--config.@morlay:registry=<url>` 逐次覆盖（见 devpackages/devkit/src/release/publish.ts）。
+registries:
+  http://127.0.0.1:7677/:
+    scopes: ["@morlay"]
+
 allowBuilds:
   "@deepseek-ai/dsh-subprocess-local": true
   "@deepseek-ai/dsh-subprocess-local@file:vendor/deepseek-harness/packages/subprocess/subprocess-local": true

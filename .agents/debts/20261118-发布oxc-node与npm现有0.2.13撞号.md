@@ -1,7 +1,7 @@
 # 发布 @morlay/dsh-oxc-node 与 npm 现有 0.2.13 撞号
 
-状态：未销账——首发前必须解决
-位置：`packages/boot/dsh-oxc-node/package.json`（版本 `0.2.9`）；npm 上 `@morlay/dsh-oxc-node` 的 `latest` 是 `0.2.13`
+状态：未销账——号已定（首发版本 `0.2.14-alpha.0`，高于 `0.2.13`），剩下的一半要等首发发出去、`pnpm view` 能解析才算完
+位置：`packages/boot/dsh-oxc-node/package.json`（版本 `0.2.14-alpha.0`，原 `0.2.9`）；npm 上 `@morlay/dsh-oxc-node` 的 `latest` 是 `0.2.13`
 
 **现象**
 

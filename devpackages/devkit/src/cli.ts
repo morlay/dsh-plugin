@@ -87,6 +87,8 @@ async function build(args: readonly string[]): Promise<number> {
       declarationFiles: (entry) => (entry === "client" ? [] : [entry + ".d.mts"]),
       ...(plan.bundle === true ? { bundle: { rows: bundleRows } } : {}),
       publishOnly: plan.publishOnly,
+      hidden: plan.hidden,
+      ...(plan.bin === undefined ? {} : { bin: plan.bin }),
     });
     process.stdout.write(`built ${relative(root, dir)}\n`);
   }

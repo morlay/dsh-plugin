@@ -106,6 +106,27 @@ describe("只发布态入口", () => {
   });
 });
 
+describe("没有产物形态的出口", () => {
+  it("样式 / 资产出口原样进发布态，源码面的漏产物不被抄成源码路径", async () => {
+    const directory = await makePackage({
+      exports: {
+        ".": "./src/index.ts",
+        "./brand-font.css": "./src/styles/brand-font.css",
+        "./missing": "./src/missing.ts",
+      },
+    });
+    await writeBuildManifest(directory, {
+      entries: { index: "./src/index.ts", missing: "./src/missing.ts" },
+      artifacts: { index: ["index.mjs"] },
+    });
+    const manifest = await manifestOf(directory);
+    const published = (manifest["publishConfig"] as { exports?: Record<string, unknown> }).exports;
+    expect(published?.["./brand-font.css"]).toBe("./src/styles/brand-font.css");
+    expect(published?.["."]).toBe("./dist/index.mjs");
+    expect(published?.["./missing"]).toBeUndefined();
+  });
+});
+
 describe("bundle patch", () => {
   it("行声明的 id / disabled / config 落成 patch，清单写 dsh.bundle.patch", async () => {
     const directory = await makePackage();

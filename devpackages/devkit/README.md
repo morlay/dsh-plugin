@@ -25,9 +25,10 @@ pnpm exec devkit audit [--write]         # 逐包判据 + 根上汇总；--write
 ## 构建面
 
 - **构建**：rolldown 打 ESM，依赖外置、`@local/*` 内联；CSS/资产内联，ui 面可直接被消费。
-- **声明不进构建**：由 `just dts`（`dts-prepare`）生成并落位；构建只写清单与 patch。
+- **声明在构建里**：全仓声明树由 `dts-prepare` 的目录锁在 `devkit build` 内生成一次（多包并行也只生成一次，
+  其余等锁），随后按入口聚合成 `dist/<入口>.d.mts`；`just dts` 只是手动重建入口。
 - **清单写回**：顶层 `exports` 以现有清单为底、按入口更新（保留手写面）；`publishConfig.exports` 与 `engines.dsh` 只对 `private: false` 的包写。
-- **bundle**：含 `./dsh-bundle`（源 `src/dsh-bundle.ts`）的包生成 `cordis.patch.yml`，清单写 `dsh.bundle.patch`；行清单声明在 `dsh-bundle.ts`。
+- **bundle**：含 `./dsh-bundle`（源 `src/dsh-bundle.ts`）的包生成 **`dist/cordis.patch.yml`**，清单写 `dsh.bundle.patch = "./dist/cordis.patch.yml"`，并在 `publishConfig.exports` 里加 `./cordis.patch.yml` → `./dist/cordis.patch.yml`（顶层 `exports` 不加这条）；行清单声明在 `dsh-bundle.ts` 的 `rows`。
 
 ## 审计面
 

@@ -68,6 +68,15 @@
 - **发布线（集合、形态、版本、通道、验收）的 home 是[设计 npm 发布线](../designs/20261118-npm发布线.md)**；这里只写验证入口。
 - **两条通道**：GitHub Packages 只走 CI——[`.github/workflows/release.yml`](../../.github/workflows/release.yml) 在
   `main` / `next` 推送时自动发未发布的新版本；npmjs 只经本地 `just publish-npm`（[ADR-npmjs 发布走本地命令](../adrs/20261118-npmjs发布走本地命令.md)）。其他形式的 `pnpm publish` 一律禁止。
+- **本地模拟 registry 是默认地址**：`just publish-npm` 不带 `--registry` 时发到
+  [`tool/npr`](../../tool/npr/README.md) 的 verdaccio（`http://127.0.0.1:7677/`）——手滑跑一条只会发到本机。
+  **真发 npmjs 必须显式写地址**：`just publish-npm --registry https://registry.npmjs.org/`。
+  演练：`docker compose -f tool/npr/compose.yml up -d` → `just publish-npm --dry-run` → `just publish-npm`；
+  同名同版本换内容用 `--force-republish`（`unpublish --force` 再 `publish`，只对 loopback registry 开放，
+  真 registry 上那是真删除）。
+- **registry 由 scope 映射兜底**：[`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) 的 `registries` 把
+  `@morlay` 指向本地；scope 级映射会盖掉命令行 `--registry`，所以 `publish.ts` 逐次用
+  `--config.@morlay:registry=<url>` 覆盖。加通道或换地址时先确认这一条没被绕过。
 - **发布前先构建**：`just dts` → `just build`（清单与产物是发布的前提，不是发布命令的副作用）；
   `just publish-npm --dry-run` 先看包名、版本与 dist-tag。
 - **`check` job 是唯一的质量门**：`just prepare` → `just lint` → `just test`（注入 `TEST_PG_URL`）→

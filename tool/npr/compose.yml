@@ -1,0 +1,42 @@
+# 本地模拟 registry（verdaccio）：只在本机跑，不碰真 registry。
+# 起停：`docker compose -f tool/npr/compose.yml up -d` / `down -v`（`-v` 连存储卷一起删）。
+# 配置分两片：base（storage / packages / publish / log）+ uplinks（上游），启动时 `cat` 拼成一份
+# `--config`——verdaccio 的配置没有 include/extends，这样改上游只碰一个文件、重启即生效。
+# 两片文件的**顶层键不能重复**，否则拼出来的 YAML 有重复键。
+
+name: npr
+
+services:
+  verdaccio:
+    image: verdaccio/verdaccio:7.1.2
+    container_name: npr-verdaccio
+    ports:
+      # 容器内固定 4873；宿主机 7677（换端口只改这一行 + 客户端 URL）。
+      - "127.0.0.1:7677:4873"
+    environment:
+      # compose 的 `listen` 在 docker 里被忽略，要用这两个变量（镜像 ENTRYPOINT 读它们）。
+      VERDACCIO_PORT: "4873"
+      VERDACCIO_ADDRESS: "0.0.0.0"
+    volumes:
+      # 命名卷：包目录 + `.verdaccio-db.json`（包清单与 JWT secret）要一起留着。
+      - verdaccio-storage:/verdaccio/storage
+      - ./verdaccio.base.yaml:/verdaccio/conf/base.yaml:ro
+      - ./verdaccio.uplinks.yaml:/verdaccio/conf/uplinks.yaml:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        cat /verdaccio/conf/base.yaml /verdaccio/conf/uplinks.yaml > /tmp/config.yaml
+        exec verdaccio --config /tmp/config.yaml --listen "$$VERDACCIO_PROTOCOL://$$VERDACCIO_ADDRESS:$$VERDACCIO_PORT"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:4873/-/ping || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  verdaccio-storage:
+    name: npr-verdaccio-storage

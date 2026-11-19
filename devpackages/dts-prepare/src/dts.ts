@@ -145,6 +145,11 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
               "@deepseek-ai/cosmokit": [
                 under("vendor/deepseek-harness/vendor/cosmokit/src/index.ts"),
               ],
+              // 同一类问题：`ctx.sessions` 的面里含 `SessionStore`，pnpm 布局下有的包按自己的
+              // `node_modules/@deepseek-ai/dsh-session` 解析，声明里就写不出具名引用（TS2883）。
+              "@deepseek-ai/dsh-session": [
+                under("vendor/deepseek-harness/packages/core/session/src/index.ts"),
+              ],
               "@deepseek-ai/cosmokit/src/misc.ts": [
                 under("vendor/deepseek-harness/vendor/cosmokit/src/misc.ts"),
               ],
