@@ -412,7 +412,14 @@ for (const file of files) {
   // `remote.service.ts` 的 `publishNamespace` 是注册侧的另一半（`"remote." + namespace` 就在它里面）。
   if (/(^|[\\/])(dynamic-face|remote\.service)\.ts$/u.test(file)) continue;
   const text = await readFile(file, "utf8");
-  for (const match of text.matchAll(/["']remote\.[A-Za-z][\w.]*["']/gu)) {
+  // **先剥注释再判**：注释里引这个名字（「上游等 `remote.agentTeams` 这个名字」）是说明，不是字面量。
+  // review 抓到过反面：为了过判据去改文档措辞，而不是让判据剥注释。
+  const code = text
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .split("\n")
+    .map((line) => line.replace(/(^|[^:])\/\/.*$/u, "$1"))
+    .join("\n");
+  for (const match of code.matchAll(/["']remote\.[A-Za-z][\w.]*["']/gu)) {
     remoteLiterals.push(relative(cwd, file) + "  " + match[0]);
   }
 }

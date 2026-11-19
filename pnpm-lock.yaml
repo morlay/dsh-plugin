@@ -739,9 +739,6 @@ importers:
       '@morlay/dsh-session-persistence':
         specifier: workspace:^
         version: link:../dsh-session-persistence
-      '@morlay/dsh-workspace':
-        specifier: workspace:^
-        version: link:../dsh-workspace
       '@morlay/zephyr':
         specifier: workspace:^
         version: link:../../zephyr/zephyr
@@ -755,9 +752,6 @@ importers:
       '@morlay/dsh-agent-team':
         specifier: workspace:^
         version: 'link:'
-      '@morlay/dsh-conversation':
-        specifier: workspace:^
-        version: link:../dsh-conversation
       '@morlay/dsh-sandbox':
         specifier: workspace:^
         version: link:../dsh-sandbox
