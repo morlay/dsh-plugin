@@ -16,7 +16,6 @@ import {
   type RemoteOutcome,
   type RemoteTransport,
 } from "./remote-transport.ts";
-import { ClientAgentScopes } from "./agent-scopes.contract.ts";
 
 /**
  * 一份绑定到底是什么（`$mount` 失败时报给人看）。
@@ -60,8 +59,15 @@ export class RemoteDefault extends Remote {
    */
   private readonly typert = inject.optional(Typert);
 
-  /** 会话域给的 id → 作用域解析面（可选：只装 wire 的装配没有会话域）。 */
-  private readonly agentScopes = inject.optional(ClientAgentScopes);
+  /**
+   * 行 ctx（`onInit` 记下）。
+   *
+   * 答复请求时要用它**按名字晚绑定**读会话域的「id → 作用域」适配面（见写作规范里"禁止按名字读
+   * 服务"的例外条款）：写成 `inject` 会成环——会话域的适配行依赖 `SessionController`，而
+   * `SessionController` 又依赖本行；环上的 fiber 永远停在 pending，症状是客户端连 `session/list`
+   * 都不发。晚绑定读不进依赖图。
+   */
+  private rowCtx: Context | undefined;
 
   /** `namespace/method` → 该方法的参数声明（wire 上要**命名参数**，不能发数组）。 */
   private readonly descriptors = new Map<string, readonly RemoteParameter[]>();
@@ -88,6 +94,7 @@ export class RemoteDefault extends Remote {
    */
   onInit(ctx: Context): void {
     this.rootCtx = ctx.root;
+    this.rowCtx = ctx;
     this.publishNamespace("session");
   }
 
@@ -276,8 +283,7 @@ export class RemoteDefault extends Remote {
     const listeners = [...(this.listeners.get(invocation.event) ?? [])];
     if (listeners.length === 0 || invocation.signal.aborted) return { kind: "next" };
     // 先问会话域（它知道 id ↔ 作用域），再退回上游的 client context 适配面。
-    const target =
-      this.agentScopes?.scopeOf(invocation.agentId) ?? this.scopeFromTypert(invocation);
+    const target = this.clientScopeOf(invocation.agentId) ?? this.scopeFromTypert(invocation);
     if (target === undefined) return { kind: "next" };
     const request = { ...invocation.request, agent: target, signal: invocation.signal };
     const NEXT = Symbol("remote.next");
@@ -301,9 +307,23 @@ export class RemoteDefault extends Remote {
   }
 
   /**
+   * 会话域给的解析面：`agentId` → 客户端作用域。
+   *
+   * 读不到（没装会话域、或它还没激活）就返回 `undefined`，调用方按"没人认这条请求"处理。
+   * @param agentId - 宿主给的 agent id。
+   * @returns 客户端作用域，或 `undefined`。
+   */
+  private clientScopeOf(agentId: string): object | undefined {
+    const scopes = this.rowCtx?.get("client-agent-scopes", false) as
+      | { scopeOf?(id: string): object | undefined }
+      | undefined;
+    return scopes?.scopeOf?.(agentId);
+  }
+
+  /**
    * 上游那条解析路：`typert.contexts` 的 client 适配面（只有装了上游 client 会话域时才有）。
    *
-   * 我们自己的会话域走 {@link ClientAgentScopes}；这里是给"上游那份装配"留的回落。
+   * 我们自己的会话域走 {@link useAgentScopes} 推过来的解析面；这里是给"上游那份装配"留的回落。
    * @param invocation - 宿主发来的请求。
    * @returns 客户端作用域，或 `undefined`（没法解析就按"没人认这条请求"处理）。
    */
