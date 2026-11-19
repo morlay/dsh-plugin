@@ -179,7 +179,11 @@ const BRIDGES: readonly { readonly match: RegExp; readonly reason: string }[] = 
     // `vendor/deepseek-harness/vendor/cordis` 在 tsc program 里是两个模块实例，前者缺
     // `events.ts` / `fiber.ts` 的模块增强（`set` / `accessor` / `mixin` / `fiber` 那 9 个成员）。
     // 另一头是上游 `Context` 的类型；运行期是同一个对象。只在 spec 里做一次收窄（生产侧归 zephyr 域）。
-    match: /(^|[\/])src[\/](__tests__|compat[\/]__tests__)[\/][^\/]*spec\.tsx?$/u,
+    // **精确到文件**，不用 `src/__tests__/**` 通配：那条通配会把全仓所有测试文件的 `as unknown as`
+    // 一起放行（review 抓到过——测试域基线 168→102 的降幅大部分是它吞掉的，不是真收干净）。
+    // 只有这两个文件里那 5 处是真的「本仓 `Context` ↔ cordis `Context`」的类型面差异。
+    match:
+      /(^|[\/])zephyr[\/]zephyr[\/]src[\/](__tests__[\/]scoped-rows|compat[\/]__tests__[\/]from-cordis)\.spec\.ts$/u,
     reason: "cordis Context 的两个模块实例：类型面差异（增强未加载），运行期同一对象",
   },
   {
@@ -252,7 +256,10 @@ export const TYPE_DISCIPLINE_BASELINE = {
    * 边界桥白名单对两边同样适用（`bridgeReason()` 先于分类判）：另一头是外部形状（cordis Context /
    * SQL 行 / 上游私有内存）的断言在测试里也是正当的，不因为它落在 `__tests__` 里就变成可以随便写。
    */
-  "double-assertion-test": 102,
+  // 170 是**收紧白名单之后**的真实数：原来的 `src/__tests__/**` 通配吞掉了 68 处（review 抓到的），
+  // 它们本来就是各包测试域的存量，不是「本仓 Context ↔ cordis Context」那一类边界桥。
+  // 白名单只留 `zephyr` 的两个装配 spec（那 5 处才是真的类型面差异）。
+  "double-assertion-test": 170,
 } as const;
 
 /** 当前数与基线比出来的三种结果。 */
