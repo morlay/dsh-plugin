@@ -1,6 +1,16 @@
-// `settings` 组的**两端共用面**：组名、deps 键、方法名（与上游 `api/settings-controller` 的描述符一致）。
+// `settings` 组的**两端共用面**：组名、deps 键、方法名与每个方法的请求/应答形状（与上游
+// `api/settings-controller` 的描述符一致）。
+//
+// 组名与方法名的家是下面契约类上的 `@RemoteGroup({ name })` / `@RemoteMethod()`：宿主侧
+// （`server/settings-endpoint.service.ts`）继承它实现方法。客户端形态不在本仓：这一组的客户端面由上游
+// `@deepseek-ai/dsh-api-settings-controller#settings` 的 `$mount` 面提供。
+//
+// 方法签名从上游宿主面（`SettingsController`）推（`Parameters<…>` / `ReturnType<…>`）：形状本来就在
+// 那里定义，抄一遍只会多一份会漂的声明。
+import type { SettingsController } from "@deepseek-ai/dsh-api-settings-controller";
+import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
-/** wire 上的组名。 */
+// wire 上的组名。
 
 /** 组在 `Remote` 面上的 deps 键（`remote.settings`）。 */
 export const SETTINGS_REMOTE_KEY = "remote.settings" as const;
@@ -18,3 +28,80 @@ export const SETTINGS_METHODS = {
   replace: "replace",
   update: "update",
 } as const;
+
+/**
+ * `settings` 组：配置页的读面、写面与「打开设置文档」。
+ *
+ * 每个 unary 的 wire 参数就是方法的命名参数（与宿主侧 `registerRemoteGroup` 的同一约定）。
+ */
+@RemoteGroup({ name: "settings" })
+export class SettingsEndpoint {
+  /**
+   * 配置页的一次读：可写性、文档存在与否、每个 namespace 的红acted 视图。
+   * @returns 配置页要的那一份快照。
+   */
+  @RemoteMethod()
+  async describe(): Promise<ReturnType<SettingsController["describe"]>> {
+    throw new Error("settings/describe：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 往某个 namespace 的 user 段合并一个 patch。
+   * @param _ns - namespace 键。
+   * @param _patch - 要合并的字段。
+   * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
+   * @returns 写完之后该 namespace 的红acted 视图。
+   */
+  @RemoteMethod()
+  async update(
+    _ns: Parameters<SettingsController["update"]>[0],
+    _patch: Parameters<SettingsController["update"]>[1],
+    _expectedRevision: Parameters<SettingsController["update"]>[2],
+  ): ReturnType<SettingsController["update"]> {
+    throw new Error("settings/update：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 整体替换某个 namespace 的 user 段。
+   * @param _ns - namespace 键。
+   * @param _section - 完整的新 user 段。
+   * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
+   * @returns 写完之后该 namespace 的红acted 视图。
+   */
+  @RemoteMethod()
+  async replace(
+    _ns: Parameters<SettingsController["replace"]>[0],
+    _section: Parameters<SettingsController["replace"]>[1],
+    _expectedRevision: Parameters<SettingsController["replace"]>[2],
+  ): ReturnType<SettingsController["replace"]> {
+    throw new Error("settings/replace：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 按路径编辑某个 namespace 的 user 段（按**已存储**的那一份解析，不按调用方上次读到的）。
+   * @param _ns - namespace 键。
+   * @param _ops - 按顺序应用的编辑。
+   * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
+   * @returns 写完之后该 namespace 的红acted 视图。
+   */
+  @RemoteMethod()
+  async mutate(
+    _ns: Parameters<SettingsController["mutate"]>[0],
+    _ops: Parameters<SettingsController["mutate"]>[1],
+    _expectedRevision: Parameters<SettingsController["mutate"]>[2],
+  ): ReturnType<SettingsController["mutate"]> {
+    throw new Error("settings/mutate：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 把 provider 拥有的设置文档落盘并在原生编辑器里打开。
+   * @param _signal - 调用方生命周期；abort 终止准备或原生命令。
+   * @returns 原生打开器接受文档后的确认。
+   */
+  @RemoteMethod()
+  async openSettingsDocument(
+    _signal: Parameters<SettingsController["openSettingsDocument"]>[0],
+  ): ReturnType<SettingsController["openSettingsDocument"]> {
+    throw new Error("settings/openSettingsDocument：契约类未实现（宿主侧要在子类里实现它）");
+  }
+}
