@@ -24,6 +24,9 @@ export default {
   },
   // dev 落在工作区的 .dsh-store；打包形态用 `--data-dir=xdg` 或在这里改成 "xdg"。
   dataDir: "workspace",
+  // HMR 的两半（客户端 vite 热更 / 服务端换树）缺省都开：排查时只写要关的那一半，
+  // 临时切换用环境变量 `ZEPHYR_HMR_CLIENT=0` / `ZEPHYR_HMR_SERVER=0`（优先于这里）。
+  dev: { hmr: { server: false } },
   // 桌面命令由插件追加：`desktop dev` / `desktop bundle`。
   plugins: [...provideDesktopBundle()],
 } satisfies ZephyrConfig;

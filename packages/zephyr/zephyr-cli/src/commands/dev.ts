@@ -90,8 +90,14 @@ export class DevCommand extends Command {
     // **形态由启动器注入**（设计 §四）：dev 的那几行叠在应用清单**之前**，应用源码因此不写
     // `mode.dev ? … : …`；build 把生产态那几行写进 `bootstrap.mjs`。
     const declared = await loadServerProviders(this.resolved.serverEntry, this.mode, version);
-    const devMode = this.mode.packaged === undefined ? {} : { packaged: this.mode.packaged };
-    const providers = [...devProviders(devMode), ...declared];
+    const providers = [
+      // 形态与 HMR 两半的开关：前者判「哪些包当文件走 vite」，后者按 `dev.hmr` 配置 ⊕ 环境变量装行。
+      ...devProviders({
+        ...(this.mode.packaged === undefined ? {} : { packaged: this.mode.packaged }),
+        hmr: this.resolved.hmr,
+      }),
+      ...declared,
+    ];
     const app = await withDeadline(
       bootstrapApplication({ providers, timeoutMs: BOOTSTRAP_TIMEOUT_MS }),
       BOOTSTRAP_TIMEOUT_MS,

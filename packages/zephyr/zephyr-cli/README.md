@@ -39,11 +39,17 @@ export default {
     name: "Zephyr Custom",
     window: { width: 1280, height: 800 },
   },
+  // dev 形态的开关：HMR 的两半（客户端 vite 热更 / 服务端换树），缺省都开——只写要关的那一半
+  dev: { hmr: { server: false } },
   dataDir: "workspace",
   // 插件是**内联展开**的清单条目：装的什么、命令从哪来，一眼看得到
   plugins: [...provideDesktopBundle()],
 } satisfies ZephyrConfig;
 ```
+
+**临时关掉 HMR 不必改文件**：`ZEPHYR_HMR_CLIENT` / `ZEPHYR_HMR_SERVER` 覆盖配置里的同名开关
+（`0|false|off|no` 关，`1|true|on|yes` 开），例如 `ZEPHYR_HMR_SERVER=0 just dev`。
+优先级：环境变量 > 配置 > 缺省（开）；取值写错当场报错（不静默忽略）。
 
 ## 写一条命令
 

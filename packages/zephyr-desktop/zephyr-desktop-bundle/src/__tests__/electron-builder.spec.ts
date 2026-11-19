@@ -23,6 +23,7 @@ function resolvedFor(withDesktop = true): ResolvedConfig {
     serverEntry: "/w/src/server.ts",
     clientEntry: "/w/src/client/index.tsx",
     appName: "Demo",
+    hmr: { client: true, server: true },
   };
 }
 

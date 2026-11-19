@@ -43,6 +43,7 @@ export function resolvedFor(options: {
     serverEntry: join(options.workspace, "src/server.ts"),
     clientEntry: join(options.workspace, "src/client/index.html"),
     appName,
+    hmr: { client: true, server: true },
   };
 }
 

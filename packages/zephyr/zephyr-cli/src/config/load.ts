@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CliError } from "../errors.ts";
 import { layoutOf } from "../layout.ts";
-import type { ResolvedConfig, ZephyrConfig } from "./contract.ts";
+import type { HmrSwitches, ResolvedConfig, ZephyrConfig } from "./contract.ts";
 
 /** 配置文件名。 */
 export const CONFIG_FILENAME = "zephyr.config.ts";
@@ -32,6 +32,12 @@ const SHAPE_HINT = [
 export async function loadConfig(options: {
   readonly cwd: string;
   readonly configFile?: string;
+  /**
+   * 环境变量的面（缺省 `process.env`）。
+   *
+   * 只有**显式开关**从这里读（HMR 的两个），测试因此不必改进程环境。
+   */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }): Promise<ResolvedConfig> {
   const configFile =
     options.configFile === undefined
@@ -54,6 +60,8 @@ export async function loadConfig(options: {
     serverEntry: absolutize(workspace, config.server.entry),
     clientEntry: absolutize(workspace, config.client.entry),
     appName,
+    // 配置写一次、环境变量临时覆盖：合成只有这一处（见 `HmrSwitches`）。
+    hmr: hmrOf(config, options.env ?? process.env),
   };
 }
 
@@ -108,4 +116,51 @@ function assertConfig(value: unknown, configFile: string): ZephyrConfig {
  */
 function absolutize(workspace: string, target: string): string {
   return isAbsolute(target) ? target : resolve(workspace, target);
+}
+
+/** 两个 HMR 的显式开关（环境变量名即 home：命令与文档都按这里写）。 */
+const HMR_ENV = {
+  client: "ZEPHYR_HMR_CLIENT",
+  server: "ZEPHYR_HMR_SERVER",
+} as const;
+
+/** 认作「关」的写法。 */
+const SWITCH_OFF = new Set(["0", "false", "off", "no"]);
+
+/** 认作「开」的写法。 */
+const SWITCH_ON = new Set(["1", "true", "on", "yes"]);
+
+/**
+ * HMR 的两半生效值：环境变量 > 配置 > 缺省（开）。
+ * @param config - 工作区配置。
+ * @param env - 环境变量的面。
+ * @returns 两半的生效值（取值非法时由 {@link switchOf} 抛 `CliError`）。
+ */
+function hmrOf(
+  config: ZephyrConfig,
+  env: Readonly<Record<string, string | undefined>>,
+): HmrSwitches {
+  const configured = config.dev?.hmr;
+  return {
+    client: switchOf(HMR_ENV.client, env[HMR_ENV.client], configured?.client),
+    server: switchOf(HMR_ENV.server, env[HMR_ENV.server], configured?.server),
+  };
+}
+
+/**
+ * 一个开关的生效值。
+ * @param name - 环境变量名（报错要指出是哪个）。
+ * @param raw - 环境变量原值。
+ * @param fallback - 配置里的值（没写就是开）。
+ * @returns 生效值。
+ * @throws CliError 取值不在两组合法写法里。
+ */
+function switchOf(name: string, raw: string | undefined, fallback: boolean | undefined): boolean {
+  const text = raw?.trim().toLowerCase() ?? "";
+  if (text === "") return fallback ?? true;
+  if (SWITCH_OFF.has(text)) return false;
+  if (SWITCH_ON.has(text)) return true;
+  throw new CliError(
+    `${name} 只接受 ${[...SWITCH_OFF, ...SWITCH_ON].join(" | ")}（或不设），收到 ${JSON.stringify(raw)}`,
+  );
 }
