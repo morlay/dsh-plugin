@@ -222,8 +222,13 @@ export class PackagerDefault extends Packager {
   async install(result: PackResult): Promise<string> {
     const target = join(installRoot(), result.appDir.split("/").at(-1) ?? "app");
     await mkdir(installRoot(), { recursive: true });
+    // **先删目标再复制**：`ditto` / `cp` 对已存在的目录都是**合并**语义——目标端独有的旧文件一个都不会走。
+    // 于是旧包、旧闭包、旧布局（上一代产物里的 `entry.mjs` / `src/client`）会与新产物混成一棵树，
+    // 症状是「同一份源码，装出来的应用里少了东西」（实测：旧 `client_modules` 留着 132 个上一版模块、
+    // 旧 `node_modules` 留着 11 个仓库里已删的包）。删掉再装，安装结果 = 产物的逐字节副本。
+    await rm(target, { recursive: true, force: true });
     if (process.platform === "darwin") {
-      // macOS 上覆盖安装用 `ditto`：按原样保留 framework 的符号链接与元数据，且不需要先删旧包。
+      // macOS 上用 `ditto`：按原样保留 framework 的符号链接与元数据（签名的 .app 也靠它整份搬）。
       // `maxBuffer` 放大：`ditto` 往 stderr 打进度/警告，默认 1MB 会炸出
       // "stderr maxBuffer length exceeded"（看起来像安装失败，其实已经拷完了）。
       await run("ditto", [result.appDir, target], { maxBuffer: 64 * 1024 * 1024 }).catch(
@@ -237,7 +242,6 @@ export class PackagerDefault extends Packager {
       );
       return target;
     }
-    await rm(target, { recursive: true, force: true });
     await cp(result.appDir, target, { recursive: true, verbatimSymlinks: true });
     return target;
   }
