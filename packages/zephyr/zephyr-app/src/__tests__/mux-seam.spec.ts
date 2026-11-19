@@ -2,8 +2,9 @@
 //
 // 不启动应用、不开浏览器：两个组件各自真实运行，只在同一进程里握手。
 // 这样「帧格式 / streamId / `$events` 分流」这些**接缝**才真的被验证过（各自的单测只覆盖自己那半）。
+import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { muxTransport } from "@morlay/zephyr-app/client";
+import { muxTransport, type RemoteFetch } from "@morlay/zephyr-app/client";
 import { serveMux } from "./support/mux-serve.ts";
 import { eventSource } from "./support/event-source.ts";
 import { within } from "./support/within.ts";
@@ -21,21 +22,64 @@ afterEach(async () => {
 }, 5_000);
 
 describe("mux 接缝（真 http + 真 WebSocket）", { timeout: 15_000 }, () => {
-  it("一次 unary 调用：open → invoke → item → end", async () => {
-    const { url, handlers, close } = await serveMux();
-    closers.push(close);
-    handlers.register("session/list", async () => ({ ids: [], byId: {} }));
+  // unary 的 wire 是 `/api` 的 HTTP RPC（mux 只承载流式方法）：这条走**真 http server**，
+  // 断言请求信封（`client-request`）与结果解码（`server-response.result.value`）这两端。
+  it("一次 unary 调用：HTTP `POST /api/<endpoint>` → `server-response`", async () => {
+    const seen: { path?: string | undefined; body: Record<string, unknown> }[] = [];
+    const server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+        seen.push({ path: request.url, body });
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            type: "server-response",
+            rpcId: body.rpcId,
+            result: { ok: true, value: { ids: [], byId: {} } },
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    closers.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const address = server.address();
+    if (typeof address !== "object" || address === null) throw new Error("没有监听端口");
+    const origin = `http://127.0.0.1:${String(address.port)}`;
+    // 页面侧 `location.origin` 在 node 里没有：注入的 `fetch` 负责补全同源地址。
+    // 传输层给的是绝对地址（非浏览器宿主回落本机 origin）：用 `new URL` 归一，相对与绝对都能吃。
+    // 传输层给的是绝对地址（非浏览器宿主回落本机 origin，不带测试 server 的端口）：
+    // 只取路径，接到本用例真正监听的 origin 上。
+    const fetchOf: RemoteFetch = (input, init) =>
+      fetch(`${origin}${new URL(String(input), origin).pathname}`, init);
 
-    const transport = transportOf(url);
-    const value = await transport.invoke("session/list", { args: {} });
-    expect(value).toEqual({ ids: [], byId: {} });
+    const transport = muxTransport(undefined, fetchOf);
+    await expect(transport.invoke("session/list", { args: {} })).resolves.toEqual({
+      ids: [],
+      byId: {},
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.path).toBe("/api/session/list");
+    expect(seen[0]?.body).toMatchObject({
+      type: "client-request",
+      method: "session/list",
+      payload: { args: {} },
+    });
   });
 
   // 事件流由上游 gateway 供给：宿主侧的转发事件源写什么，客户端 `subscribe` 就该收到什么。
   it("`$events` 订阅后，转发事件源的帧能到客户端的 `deliver`", async () => {
     const source = eventSource();
-    const { url, close } = await serveMux({ gateway: source.gateway });
+    const { url, handlers, close } = await serveMux({ gateway: source.gateway });
     closers.push(close);
+    // 建连用的那条流：一条不产帧的 follow（只看 `$events` 的分流）。
+    handlers.registerStream("workspace/follow", async function* (_args, signal) {
+      yield { type: "baseline" };
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    });
 
     const transport = transportOf(url);
     const received: [string, unknown[]][] = [];
@@ -48,8 +92,11 @@ describe("mux 接缝（真 http + 真 WebSocket）", { timeout: 15_000 }, () => 
       onFrame?.();
     });
 
-    // 先发一次 unary：建连 + 补发 `$events` 的 open 帧。
-    void transport.invoke("session/ping", { args: {} }).catch(() => {});
+    // 建连由**流**触发（unary 走 HTTP，不再建 mux）：开一条流，`$events` 的 open 帧随之补发。
+    const controller = new AbortController();
+    const stream = transport.openStream("workspace/follow", { args: {} }, controller.signal);
+    const iterator = stream[Symbol.asyncIterator]();
+    void iterator.next();
     source.push({ type: "ready", clientId: "c1", host: { home: "" } });
     source.push({
       type: "emit",

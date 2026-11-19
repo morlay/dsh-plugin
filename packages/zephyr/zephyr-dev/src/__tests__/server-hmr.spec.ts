@@ -5,7 +5,9 @@
 // hooks 里的 `restart`，并且变更来源走 `ClientAssets.onServerSourceChange`（不在这里重复桥一遍）。
 // 第三条轴是**忙碌判据的来源**：域登记的 `IdleGuard` 说忙就等（装配面不交这份知识）。
 import { ServerHmr } from "../internal/server-hmr.ts";
+import { provideServerHmr } from "../dev-hmr/provide.ts";
 import { ClientAssets, DevHmr } from "@morlay/zephyr-app";
+import { bootstrapApplication } from "@morlay/zephyr";
 import { describe, expect, it, vi } from "vitest";
 
 /** 调度器的轮询周期：等待"该发生的发生了 / 不该发生的没发生"都按它的倍数算，不写死毫秒。 */
@@ -144,6 +146,31 @@ describe("ServerHmr", () => {
     hmr.notify("a.ts");
     await restartedTimes(restart, 1);
   });
+
+  it(
+    "装配面不装 MuxServer 时换树行照样装得上，按各域 IdleGuard 判空闲",
+    { timeout: 5_000 },
+    async () => {
+      // 应用清单的 wire 载体交回上游之后不再装 MuxServer：传输层那条判据跟着消失，
+      // 剩下的空闲判据是各域登记的 IdleGuard。
+      const app = await bootstrapApplication({
+        providers: [...provideServerHmr()],
+        timeoutMs: 5_000,
+      });
+      try {
+        const restart = vi.fn(async (_files: readonly string[]) => {});
+        // 换树行就是 `DevHmr` 的实现（同一个令牌）：`notify` 只在实现上，走它触发这一轮。
+        const hmr = app.get(ServerHmr);
+        expect(app.get(DevHmr), "`DevHmr` 必须解析到那一行").toBe(hmr);
+        hmr.install({ restart });
+        hmr.notify("a.ts");
+        await restartedTimes(restart, 1);
+        expect(restart.mock.calls[0]?.[0]).toEqual(["a.ts"]);
+      } finally {
+        await app.dispose();
+      }
+    },
+  );
 
   it("重载期间又变了：那批会再排一轮，不会丢", async () => {
     const seen: string[][] = [];

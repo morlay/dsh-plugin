@@ -1,19 +1,55 @@
 /**
- * `muxTransport` 的**局部闭环**：用一个可控的假 WebSocket 喂帧。
+ * `muxTransport` 的**局部闭环**：用一个可控的假 WebSocket + 假 `fetch` 喂帧。
  *
  * 这是 `mockTransport` 覆盖不到的那一段——建连、排队、`open`/`item`/`error`/`end` 帧解析、
- * `$events` 分流。真实浏览器里的问题只能在这里复现，e2e 不该当第一层调试手段。
+ * `$events` 分流，以及 unary 那条 HTTP RPC。真实浏览器里的问题只能在这里复现，
+ * e2e 不该当第一层调试手段。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { muxTransport } from "../remote-transport.ts";
+import { muxTransport, type RemoteFetch } from "../remote-transport.ts";
 import { FakeSocket } from "./fake-socket.ts";
 
+/** 一次被记录下来的 unary 请求。 */
+interface FetchCall {
+  readonly url: string;
+  readonly body: {
+    readonly type?: string;
+    readonly rpcId?: string;
+    readonly method?: string;
+    readonly payload?: unknown;
+  };
+}
+
+/**
+ * 假 HTTP 载体：记录每次请求，按 endpoint 回上游的 `server-response` 信封。
+ * @param answer - endpoint（`session/list` 这类）→ 结果，或直接给一个失败信封。
+ * @returns 可注入的 `fetch` 与它收到的请求
+ */
+function fakeFetch(
+  answer: (
+    endpoint: string,
+  ) => { readonly ok: true; readonly value: unknown } | { readonly ok: false },
+): { readonly fetchOf: RemoteFetch; readonly calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  const fetchOf: RemoteFetch = async (input, init) => {
+    const url = String(input);
+    const body = JSON.parse(typeof init.body === "string" ? init.body : "") as FetchCall["body"];
+    calls.push({ url, body });
+    const result = answer(url.replace(/^\/api\//, ""));
+    return new Response(JSON.stringify({ type: "server-response", rpcId: body.rpcId, result }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  return { fetchOf, calls };
+}
+
 /** 把全局 `WebSocket` 换成给定实例（生产实现直接 `new WebSocket(...)`）。 */
-function transportOf(socket: FakeSocket) {
+function transportOf(socket: FakeSocket, fetchOf?: RemoteFetch) {
   vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
     return socket;
   } as never);
-  return muxTransport();
+  return muxTransport(undefined, fetchOf);
 }
 
 afterEach(() => {
@@ -21,35 +57,82 @@ afterEach(() => {
 });
 
 describe("muxTransport", { timeout: 5_000 }, () => {
-  it("未 open 时先把 open 帧排队，open 之后才真的发出去", async () => {
-    const socket = new FakeSocket();
-    const transport = transportOf(socket);
+  it("unary 走 HTTP `/api/<endpoint>`：上游的请求信封与结果解码", async () => {
+    const { fetchOf, calls } = fakeFetch(() => ({ ok: true, value: { ids: [], byId: {} } }));
+    const transport = transportOf(new FakeSocket(), fetchOf);
 
-    const pending = transport.invoke("session/list", { args: {} });
-    expect(socket.sent, "socket 还没 open，不该发出任何帧").toEqual([]);
-
-    socket.open();
-    expect(socket.sent.map((text) => JSON.parse(text))).toEqual([
-      { type: "open", streamId: "s1", endpoint: "session/list", payload: { args: {} } },
-    ]);
-
-    socket.receive({ type: "item", streamId: "s1", value: { ids: [], byId: {} } });
-    socket.receive({ type: "end", streamId: "s1" });
-    await expect(pending).resolves.toEqual({ ids: [], byId: {} });
+    await expect(transport.invoke("session/list", { args: {} })).resolves.toEqual({
+      ids: [],
+      byId: {},
+    });
+    expect(calls).toHaveLength(1);
+    // 非浏览器宿主回落本机 origin，url 是绝对地址：按路径后缀认。
+    expect(String(calls[0]?.url), "unary 的 wire 是 /api 的 HTTP RPC，不是 mux").toMatch(
+      /\/api\/session\/list$/u,
+    );
+    expect(calls[0]?.body).toMatchObject({
+      type: "client-request",
+      method: "session/list",
+      payload: { args: {} },
+    });
+    expect(typeof calls[0]?.body.rpcId, "rpcId 由发起方铸、宿主原样回").toBe("string");
   });
 
-  it("error 帧把 Promise 拒掉，并带上宿主的消息", async () => {
-    const socket = new FakeSocket();
-    const transport = transportOf(socket);
+  it("HTTP 失败信封（`result.ok === false`）抛带 code 的错误", async () => {
+    const { fetchOf } = fakeFetch(() => ({ ok: false }));
+    const transport = transportOf(new FakeSocket(), fetchOf);
+    // 失败信封缺 error 字段时也要有可读的消息（不吞成 undefined）。
+    await expect(transport.invoke("session/create", { args: {} })).rejects.toThrow(/调用失败/);
+  });
 
-    const pending = transport.invoke("session/create", { args: {} });
-    socket.open();
-    socket.receive({
-      type: "error",
-      streamId: "s1",
-      error: { code: "gateway/bad-request", message: "boom", details: {} },
+  it("socket 断开：在途**流**失败而不是挂着，下一次开流在新 socket 上照常发出", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
+      const created = new FakeSocket();
+      sockets.push(created);
+      return created;
+    } as never);
+    const transport = muxTransport();
+
+    const first = transport.openStream(
+      "workspace/follow",
+      { args: {} },
+      new AbortController().signal,
+    );
+    const firstIterator = first[Symbol.asyncIterator]();
+    const firstNext = firstIterator.next();
+    sockets[0]?.open();
+    sockets[0]?.close();
+    await expect(firstNext).rejects.toThrow(/连接已断开/);
+
+    const second = transport.openStream(
+      "workspace/follow",
+      { args: {} },
+      new AbortController().signal,
+    );
+    const secondIterator = second[Symbol.asyncIterator]();
+    const secondNext = secondIterator.next();
+    // 旧 socket 已 close：必须重建，不能在死 socket 上发。
+    expect(sockets).toHaveLength(2);
+    sockets[1]?.open();
+    expect(sockets[1]?.framesSent()).toEqual([
+      { type: "open", streamId: "s2", endpoint: "workspace/follow", payload: { args: {} } },
+    ]);
+    sockets[1]?.receive({ type: "item", streamId: "s2", value: { type: "baseline" } });
+    await expect(secondNext).resolves.toEqual({ value: { type: "baseline" }, done: false });
+    await secondIterator.return?.(undefined);
+  });
+
+  it("unary 不碰 socket：未建连也能成功，且 mux 上一条帧都没有", async () => {
+    const socket = new FakeSocket();
+    const { fetchOf } = fakeFetch(() => ({ ok: true, value: { ids: [], byId: {} } }));
+    const transport = transportOf(socket, fetchOf);
+
+    await expect(transport.invoke("settings/mutate", { args: { args: 1 } })).resolves.toEqual({
+      ids: [],
+      byId: {},
     });
-    await expect(pending).rejects.toThrow("boom");
+    expect(socket.sent, "unary 走 HTTP：不该为它建连、也不该发 open 帧").toEqual([]);
   });
 
   it("openStream：item 逐帧到达，end 结束迭代", async () => {
@@ -110,18 +193,25 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(socket.framesSent()).toContainEqual({ type: "cancel", streamId: "s1" });
   });
 
-  it("$events 帧按 channel 分发给订阅者，且不污染 unary 的 pending", async () => {
+  it("`$events` 帧按 channel 分发给订阅者", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const seen: [string, unknown[]][] = [];
     // `subscribe` 在契约里是可选的（mock 实现也提供），mux 实现一定有。
     transport.subscribe?.((channel, ...args) => seen.push([channel, args]));
 
-    const pending = transport.invoke("session/list", { args: {} });
+    // 建连由**流**触发（unary 已不走 socket）。
+    const controller = new AbortController();
+    const stream = transport.openStream("workspace/follow", { args: {} }, controller.signal);
+    const iterator = stream[Symbol.asyncIterator]();
+    void iterator.next();
     socket.open();
-    // 订阅之后 open 的帧里应包含 `$events` 的 open（与 unary 的 open 并列）。
-    const opened = socket.sent.map((text) => JSON.parse(text) as { streamId: string });
-    expect(opened.map((frame) => frame.streamId)).toContain("$events");
+    expect(socket.framesSent(), "订阅后建连要开 `$events`").toContainEqual({
+      type: "open",
+      streamId: "$events",
+      endpoint: "$events",
+      payload: { args: {} },
+    });
 
     socket.receive({
       type: "item",
@@ -129,29 +219,24 @@ describe("muxTransport", { timeout: 5_000 }, () => {
       value: { type: "emit", event: "api-session/added", args: [{ id: "s1" }] },
     });
     expect(seen).toEqual([["api-session/added", [{ id: "s1" }]]]);
-
-    socket.receive({ type: "item", streamId: "s1", value: { ids: ["s1"], byId: {} } });
-    socket.receive({ type: "end", streamId: "s1" });
-    await expect(pending).resolves.toEqual({ ids: ["s1"], byId: {} });
   });
 
-  it("**先 invoke、后 subscribe** 时也要补开 `$events`（否则推送永远收不到）", async () => {
+  it("**先开流、后 subscribe** 时也要补开 `$events`（否则推送永远收不到）", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
-    // 真实时序：第一次 `invoke`（`settings/describe` 之类）早于 `$on` 的注册。
-    const pending = transport.invoke("settings/describe", { args: {} });
+    const controller = new AbortController();
+    const stream = transport.openStream("workspace/follow", { args: {} }, controller.signal);
+    const iterator = stream[Symbol.asyncIterator]();
+    void iterator.next();
     socket.open();
-    const before = socket.sent.map((text) => JSON.parse(text) as { streamId: string });
-    expect(
-      before.map((frame) => frame.streamId),
-      "建连时还没订阅，不该有 $events",
-    ).not.toContain("$events");
+    const before = socket.framesSent().map((frame) => (frame as { streamId?: string }).streamId);
+    expect(before, "建连时还没订阅，不该有 $events").not.toContain("$events");
 
     const seen: [string, unknown[]][] = [];
     transport.subscribe?.((channel, ...args) => seen.push([channel, args]));
     // 订阅发生在建连**之后**：必须立刻补一帧 open，否则宿主的推送一条也到不了。
-    const after = socket.sent.map((text) => JSON.parse(text) as { streamId: string });
-    expect(after.filter((frame) => frame.streamId === "$events").length, "晚注册也要补开").toBe(1);
+    const after = socket.framesSent().map((frame) => (frame as { streamId?: string }).streamId);
+    expect(after.filter((id) => id === "$events").length, "晚注册也要补开").toBe(1);
 
     socket.receive({
       type: "item",
@@ -159,63 +244,6 @@ describe("muxTransport", { timeout: 5_000 }, () => {
       value: { type: "emit", event: "api-session/added", args: [{ id: "s9" }] },
     });
     expect(seen).toEqual([["api-session/added", [{ id: "s9" }]]]);
-    socket.receive({ type: "item", streamId: "s1", value: { writable: true, namespaces: [] } });
-    socket.receive({ type: "end", streamId: "s1" });
-    await expect(pending).resolves.toEqual({ writable: true, namespaces: [] });
-  });
-
-  // 载体断开时**在途调用必须失败**：挂着的 Promise 会把上游 `ConfigFormController` 的串行写队列
-  // （`tail` 等前一次结算）堵死，之后所有写请求连帧都发不出去、也不报错——设置面板「点了没反应」就是这个。
-  it("socket 断开：在途调用失败而不是挂着，下一次调用在新 socket 上照常发出", async () => {
-    const sockets: FakeSocket[] = [];
-    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
-      const created = new FakeSocket();
-      sockets.push(created);
-      return created;
-    } as never);
-    const transport = muxTransport();
-
-    const first = transport.invoke("settings/mutate", { args: {} });
-    sockets[0]?.open();
-    sockets[0]?.close();
-    await expect(first).rejects.toThrow(/连接已断开/);
-
-    const second = transport.invoke("settings/mutate", { args: {} });
-    // 旧 socket 已 close：必须重建，不能在死 socket 上发。
-    expect(sockets).toHaveLength(2);
-    sockets[1]?.open();
-    expect(sockets[1]?.framesSent()).toEqual([
-      { type: "open", streamId: "s2", endpoint: "settings/mutate", payload: { args: {} } },
-    ]);
-    sockets[1]?.receive({ type: "item", streamId: "s2", value: { ok: true } });
-    sockets[1]?.receive({ type: "end", streamId: "s2" });
-    await expect(second).resolves.toEqual({ ok: true });
-  });
-
-  // 被拒掉的调用不能再在下一个 socket 上补发：否则「调用方以为失败、宿主其实执行了」的幽灵写。
-  it("socket 断开：排队帧随在途调用一起丢弃，不在重连后补发", async () => {
-    const sockets: FakeSocket[] = [];
-    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
-      const created = new FakeSocket();
-      sockets.push(created);
-      return created;
-    } as never);
-    const transport = muxTransport();
-
-    // socket 还在 CONNECTING：open 帧进排队
-    const first = transport.invoke("settings/mutate", { args: { args: 1 } });
-    sockets[0]?.close();
-    await expect(first).rejects.toThrow(/连接已断开/);
-
-    const second = transport.invoke("session/list", { args: {} });
-    sockets[1]?.open();
-    // 新 socket 上只有新调用的帧（`$events` 未订阅时也没有它）。
-    expect(sockets[1]?.framesSent()).toEqual([
-      { type: "open", streamId: "s2", endpoint: "session/list", payload: { args: {} } },
-    ]);
-    sockets[1]?.receive({ type: "item", streamId: "s2", value: { ids: [], byId: {} } });
-    sockets[1]?.receive({ type: "end", streamId: "s2" });
-    await expect(second).resolves.toEqual({ ids: [], byId: {} });
   });
 });
 
@@ -228,7 +256,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
  *
  * 这几条钉的是**协议**：`ready` 帧先给 clientId，`waterfall` 帧带 `agentId` 与已投影的
  * `request`（**不带** `agent` / `signal`——它们不可 JSON 化，带上就是
- * `Converting circular structure to JSON`），答复走 unary 端点 `$events/result`。
+ * `Converting circular structure to JSON`），答复走 unary 端点 `$events/result`（HTTP RPC）。
  */
 describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, () => {
   /** 等条件成立（帧分派是微任务链）。 */
@@ -238,12 +266,10 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
     }
   }
 
-  it("收到审批请求 → 处理者拿到已投影的请求 → 答复回到宿主", async () => {
+  it("收到审批请求 → 处理者拿到已投影的请求 → 答复经 HTTP 回到宿主", async () => {
     const socket = new FakeSocket();
-    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
-      return socket;
-    } as never);
-    const transport = muxTransport();
+    const { fetchOf, calls } = fakeFetch(() => ({ ok: true, value: undefined }));
+    const transport = transportOf(socket, fetchOf);
 
     const seen: unknown[] = [];
     transport.answer?.(async (invocation) => {
@@ -255,8 +281,11 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
       });
       return { kind: "result", value: "allowed-once" };
     });
-    // 建连由第一次调用触发（生产里 `settings/describe` 总早于事件订阅）。
-    void transport.invoke("settings/describe", { args: {} });
+    // 建连由**流**触发（unary 走 HTTP，不再建 mux）。
+    const controller = new AbortController();
+    const stream = transport.openStream("workspace/follow", { args: {} }, controller.signal);
+    const iterator = stream[Symbol.asyncIterator]();
+    void iterator.next();
     socket.open();
 
     // 事件流先开，宿主回一条 ready（客户端据此记住自己的身份）。
@@ -292,22 +321,19 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
         request: { toolName: "bash", reason: "需要写文件" },
       },
     ]);
-    await until(() =>
-      socket
-        .framesSent()
-        .some((frame) => (frame as { endpoint?: string }).endpoint === "$events/result"),
-    );
-    const answer = socket
-      .framesSent()
-      .find((frame) => (frame as { endpoint?: string }).endpoint === "$events/result");
+    // 非浏览器宿主没有 `location`，传输层回落到本机 origin：断言按路径后缀认，不钉死前缀。
+    await until(() => calls.some((call) => String(call.url).endsWith("/api/$events/result")));
+    const answer = calls.find((call) => String(call.url).endsWith("/api/$events/result"));
     expect(answer, "答复必须带 clientId / eventId / outcome 回宿主").toMatchObject({
-      type: "open",
-      endpoint: "$events/result",
-      payload: {
-        args: {
-          clientId: "c1",
-          eventId: "e1",
-          outcome: { kind: "result", value: "allowed-once" },
+      body: {
+        type: "client-request",
+        method: "$events/result",
+        payload: {
+          args: {
+            clientId: "c1",
+            eventId: "e1",
+            outcome: { kind: "result", value: "allowed-once" },
+          },
         },
       },
     });
@@ -315,10 +341,8 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
 
   it("宿主撤回请求（`cancel` 帧）：处理者手里的信号被 abort", async () => {
     const socket = new FakeSocket();
-    vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
-      return socket;
-    } as never);
-    const transport = muxTransport();
+    const { fetchOf } = fakeFetch(() => ({ ok: true, value: undefined }));
+    const transport = transportOf(socket, fetchOf);
 
     let signal: AbortSignal | undefined;
     transport.answer?.(async (invocation) => {
@@ -329,7 +353,10 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
       });
       return { kind: "next" };
     });
-    void transport.invoke("settings/describe", { args: {} });
+    const controller = new AbortController();
+    const stream = transport.openStream("workspace/follow", { args: {} }, controller.signal);
+    const iterator = stream[Symbol.asyncIterator]();
+    void iterator.next();
     socket.open();
     socket.receive({
       type: "item",

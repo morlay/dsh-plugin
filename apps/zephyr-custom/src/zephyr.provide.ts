@@ -20,7 +20,6 @@ import {
   provideAppEnv,
   provideConnection,
   provideLoggerExporter,
-  provideMuxServer,
   provideRemoteAccess,
   provideTypert,
   provideWeb,
@@ -37,7 +36,7 @@ import { provideCommandCompact, provideCompactionBasic } from "@morlay/dsh-compa
 import { provideJob } from "@morlay/dsh-job/server";
 import { provideJobIdleGuard } from "@morlay/dsh-job";
 import { type PermissionMode } from "@morlay/dsh-permission";
-import { providePermissionFor } from "@morlay/dsh-permission/server";
+import { provideAskUserTool, providePermissionFor } from "@morlay/dsh-permission/server";
 
 import { providePtc } from "@morlay/dsh-ptc";
 import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/dsh-sandbox";
@@ -146,7 +145,6 @@ function frameworkProviders(): ProviderEntry[] {
     ...provideTypert(),
     ...provideRemoteAccess(),
     ...provideApiGateway(),
-    ...provideMuxServer(),
     ...provideLoggerExporter(),
   ];
 }
@@ -339,6 +337,10 @@ function toolProviders(): ProviderEntry[] {
     // 工具行按能力域分装：`bash` 在 shell 域，文件/检索/工作目录在 agent。
     ...provideFsTools(),
     ...provideEnvTools(),
+    // 模型面向的 ask_user_question：它读 userQuestions 队列（下面 deploymentProviders() 里的
+    // providePermissionFor() 装）。带 scope 的行不在应用根装配，所以这一行与那份队列在清单里的
+    // 先后不影响它拿到队列。
+    ...provideAskUserTool(),
     ...provideWebAccess(),
     ...provideToolWeb(),
     // `llm/*` 的 wire 面：由 agent 域的 `provideLlmRemote()` 出（顺便登记它的 remote 面）。

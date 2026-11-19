@@ -379,6 +379,31 @@ describe("MuxServer", { timeout: 5_000 }, () => {
     expect(socket.json().map((frame) => frame.value)).toEqual([ready, emit]);
   });
 
+  it("$events/result 交给上游 wire 分派，而不是当成 Remote 方法", async () => {
+    const source = eventSource();
+    const { socket } = muxOf({ gateway: source.gateway });
+    const payload = {
+      args: { clientId: "c1", eventId: "e1", outcome: { kind: "next" } },
+    };
+    socket.feed(
+      clientFrame(
+        JSON.stringify({
+          type: "open",
+          streamId: "r1",
+          endpoint: "$events/result",
+          payload,
+        }),
+      ),
+    );
+    await socket.jsonFrames(2);
+    // 载荷原样交给上游：解包与校验都在它那一侧，mux 不碰形状。
+    expect(source.dispatched).toEqual([{ endpoint: "$events/result", payload }]);
+    expect(socket.json()).toEqual([
+      { type: "item", streamId: "r1" },
+      { type: "end", streamId: "r1" },
+    ]);
+  });
+
   it("流式 handler 同步抛错：回 error 帧，不是未捕获拒绝", async () => {
     const { handlers, socket } = muxOf();
     handlers.registerStream("demo/boom", () => {

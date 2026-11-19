@@ -6,8 +6,9 @@
  * 3. 一次 `invoke` 能走到上游分派（没有 `SessionController` 的最小栈里以「服务不存在」失败——
  *    但那已经证明请求走通了）。
  *
- * 三件事读的是同一份装配（`typert` + `remoteAccess` + `connection` + `api-gateway` + `mux-server`），
- * 原来分居三个文件、各 bootstrap 一次；合起来只付一次装配成本。
+ * 三件事读的是同一份装配（`typert` + `remoteAccess` + `connection` + `api-gateway`），
+ * 原来分居三个文件、各 bootstrap 一次；合起来只付一次装配成本。wire 载体（`/api/remote.mux`）
+ * 在这一份里**只有上游那一条**：自研 mux 不进这份清单，否则同一路径两个 upgrade。
  */
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -21,7 +22,6 @@ import {
   provideApiGateway,
   provideAppEnv,
   provideConnection,
-  provideMuxServer,
   provideRemoteAccess,
   provideTypert,
   provideWeb,
@@ -42,7 +42,6 @@ beforeAll(async () => {
       ...provideRemoteAccess(),
       ...provideConnection(),
       ...provideApiGateway(),
-      ...provideMuxServer(),
       CredentialsInMemory,
       ...provideAppEnv(
         configure(AppEnvDefault, {
@@ -59,6 +58,23 @@ afterAll(async () => {
   await app.dispose();
 });
 
+/**
+ * 一个 owner peer（本机界面通道的那份身份）。
+ * @param app - 起好的应用（peer 的 ctx 指它）。
+ * @returns 上游 `invoke` / `dispatchRpc` 要的 peer 面。
+ */
+function ownerPeer(app: App): InvokeRemoteRequest["peer"] {
+  return {
+    // 只有 `id` 是品牌类型（`dsh-brand`）：字面量在这里收窄一次，其余成员按类型检查。
+    id: "spec-peer" as InvokeRemoteRequest["peer"]["id"],
+    ctx: app.ctx,
+    principal: { kind: "owner" },
+    interactions: "answer",
+    signal: new AbortController().signal,
+    dispose: async (): Promise<void> => {},
+  };
+}
+
 describe("api-gateway 装配面", { timeout: 20_000 }, () => {
   it("装上之后，`typertGateway` 按名字可解析且面齐", () => {
     const gateway = app.get(TypertGateway);
@@ -72,26 +88,21 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(app.get(Typert)).toBeDefined();
   });
 
-  it("api-gateway 注册的 /api 升级出现在 routesOf()", () => {
+  it("交回 connection / webServer 之后，upgrade 只有上游那一条 /api/remote.mux", () => {
     expect(app.tryGet(WebServer), "WebServer 应由 provideWeb() 提供").toBeDefined();
-    const routes = app.get(WebServer).routesOf();
-    expect(routes.some((route) => route.kind === "upgrade" && route.path.startsWith("/api"))).toBe(
-      true,
-    );
+    const upgrades = app
+      .get(WebServer)
+      .routesOf()
+      .filter((route) => route.kind === "upgrade")
+      .map((route) => route.path);
+    // 名单里唯一的一条就是上游在 ctx.inject(['connection','webServer']) 里注册的那条；
+    // 少一条 = 它没拿到 webServer，多一条 = 同一路径又挂了一个 upgrade。
+    expect(upgrades).toEqual(["/api/remote.mux"]);
   });
 
   it("invoke 走到上游分派（最小栈里以「服务不存在」失败，证明请求走通了）", async () => {
     const gateway = app.get(TypertGateway);
-    // `PeerScope` 就是上游 `invoke` 要的那个面；只有 `id` 是品牌类型（`dsh-brand`），
-    // 字面量在这里收窄一次——其余成员按类型检查，不再把整条请求说成 `unknown`。
-    const peer: InvokeRemoteRequest["peer"] = {
-      id: "spec-peer" as InvokeRemoteRequest["peer"]["id"],
-      ctx: app.ctx,
-      principal: { kind: "owner" },
-      interactions: "answer",
-      signal: new AbortController().signal,
-      dispose: async (): Promise<void> => {},
-    };
+    const peer = ownerPeer(app);
     const outcome = await gateway
       .invoke({ namespace: "session", method: "list", args: {}, peer })
       .then((value) => ({ ok: true, value }))
@@ -102,5 +113,51 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
       }));
     expect(outcome).toBeDefined();
     expect(outcome.ok, "最小栈里没有 SessionController：应当走通并如实失败").toBe(false);
+  });
+  it("`/api` 的 HTTP 请求先过 Host / Origin 信任检查（跨站 Origin 回 403）", async () => {
+    const webServer = app.get(WebServer);
+    const url = `http://127.0.0.1:${String(webServer.port)}/api/session/list`;
+    const body = JSON.stringify({
+      type: "client-request",
+      rpcId: "fence-probe",
+      method: "session/list",
+      payload: { args: {} },
+    });
+    const post = (headers: Record<string, string>): Promise<Response> =>
+      fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body,
+      });
+
+    // 上游的信任围栏只有拿到**原始请求头**才成立：换成 `Request` 之后 `origin` / `sec-*`
+    // 都在 forbidden header 名单里被丢掉，围栏就永远看不见它们。
+    const crossSite = await post({ origin: "http://evil.example" });
+    expect(crossSite.status, "跨站 Origin 必须被挡在分派之前").toBe(403);
+    const sameOrigin = await post({ origin: `http://127.0.0.1:${String(webServer.port)}` });
+    expect(sameOrigin.status, "本机页面的请求照常进分派").not.toBe(403);
+  });
+
+  it("$events/result 走上游 wire 分派（不是 Remote 方法）", async () => {
+    const gateway = app.get(TypertGateway);
+    const outcome = await gateway.dispatchWire(
+      "$events/result",
+      // 一个不存在的客户端：分派本身走通，由上游判定「没有对应的活跃事件流」。
+      {
+        args: {
+          clientId: "no-such-client",
+          eventId: "no-such-event",
+          outcome: { kind: "next" },
+        },
+      },
+      new AbortController().signal,
+      ownerPeer(app),
+    );
+
+    expect(outcome.ok).toBe(false);
+    const text = JSON.stringify(outcome);
+    // 判据：进的是上游那条答复路径（`remoteEventClients` 查不到），而不是当成方法去找。
+    expect(text).toContain("no active event stream");
+    expect(text).not.toContain("no active Remote method exports this endpoint");
   });
 });

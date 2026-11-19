@@ -12,7 +12,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
-import { AppEnvDefault, RemoteHandlersDefault, provideAppEnv } from "@morlay/zephyr-app";
+import {
+  AppEnvDefault,
+  RemoteHandlersDefault,
+  provideAppEnv,
+  provideTypert,
+} from "@morlay/zephyr-app";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
@@ -40,6 +45,9 @@ async function assemble(): Promise<App> {
       ...provideSession(),
       ...provideSessionProjection(),
       RemoteHandlersDefault,
+      // workspace 域现在挂上游 `WorkspaceController`（`static inject = ['remoteAccess','typert','workspaceRegistry']`）：
+      // 注册表是它的构造前提（`typert.resources.register('workspace', …)`），这一份清单要跟着装。
+      ...provideTypert(),
       // 生产装配的第 119 行：KV 域路由到 `rdb`。
       ...provideStorage(configure(StorageDomainDefault, { backend: "rdb" })),
       // 生产装配的第 122 行（会话核心）：`StorageTakeoverDefault` 在这一份里注册 `rdb`。

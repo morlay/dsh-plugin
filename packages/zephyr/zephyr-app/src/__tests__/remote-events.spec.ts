@@ -53,6 +53,10 @@ class FakeGateway extends TypertGateway {
     this.registered.push(source as () => AsyncIterable<Frame>);
     return async () => {};
   }
+
+  async dispatchWire(): Promise<{ readonly ok: true; readonly value: undefined }> {
+    throw new Error("本 spec 不走 wire 分派");
+  }
 }
 
 const opened: App[] = [];

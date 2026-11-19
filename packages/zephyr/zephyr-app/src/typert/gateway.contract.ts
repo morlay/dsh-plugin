@@ -10,6 +10,7 @@
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type { TypertGateway as UpstreamGateway } from "@deepseek-ai/dsh-api-gateway";
+import type { ConnectionRpcResult } from "@deepseek-ai/dsh-client-connection";
 
 /**
  * 一次 Remote 调用（上游 `InvokeRemoteRequest`）。
@@ -107,9 +108,29 @@ export abstract class TypertGateway {
    * @returns 卸载函数。
    */
   abstract registerRemoteEvents(
-    source: (...args: never[]) => AsyncIterable<unknown>,
+    source: (signal: AbortSignal) => AsyncIterable<unknown>,
     host: unknown,
   ): () => Promise<void>;
+
+  /**
+   * 把一条 **wire 载荷**直接交给上游分派（自研载体的入口）。
+   *
+   * `$events/result`（浏览器的答复：批准 / 提问）不是任何服务上的 Remote 方法——上游把它挂在
+   * `connection.rpc` 的拦截器上，由 `/api` 的共享 fetch 处理器触发。我们的载体是自研 mux，
+   * 不走那条 HTTP 路，所以由这一条把原始载荷交给上游同一处分派；少了它，答复只能落到
+   * `invoke` 上并报「no active Remote method exports this endpoint」，那条 waterfall 永远不结算。
+   * @param endpoint - wire 端点（当前只有 `$events/result` 走这条路）。
+   * @param payload - wire 载荷（未解包的原始值，形如 `{ args }`）。
+   * @param signal - 取消信号。
+   * @param peer - 调用所代表的 peer（`$events/result` 要求 owner 且 `interactions: "answer"`）。
+   * @returns 上游的 wire 结果：成功带值，失败带 code / message / details。
+   */
+  abstract dispatchWire(
+    endpoint: string,
+    payload: unknown,
+    signal: AbortSignal,
+    peer: InvokeRemoteRequest["peer"],
+  ): Promise<ConnectionRpcResult<unknown>>;
 }
 
 /** 覆盖守卫：上游 `TypertGateway` 有而本契约没列出的成员，编译期必须为空。 */

@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import {
+  REMOTE_EVENT_RESULT_ENDPOINT,
   REMOTE_EVENT_STREAM_ENDPOINT,
   REMOTE_EVENT_STREAM_PAYLOAD,
 } from "@deepseek-ai/dsh-api-gateway/src/stream-protocol.ts";
@@ -326,6 +327,31 @@ export class MuxServer implements OnDispose {
           uplink.end();
         }
       })();
+      return;
+    }
+    // 事件答复（浏览器的 `approval/request` / 提问回值）：**不是任何服务的方法**——上游把它挂在
+    // `connection.rpc` 的拦截器上，只有 `dispatchRpc` 会结算那条 waterfall。走 `invoke` 会报
+    // 「no active Remote method exports this endpoint」，卡片点了也永远不解。
+    if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
+      // 答复是一次短请求，不登记进在途流（HMR 的忙判据只看真正挂住的流与 unary）。
+      const abort = new AbortController();
+      try {
+        const outcome = await this.gateway.dispatchWire(
+          endpoint,
+          message.payload,
+          abort.signal,
+          this.peer as PeerScope,
+        );
+        if (!outcome.ok) {
+          this.fail(socket, streamId, outcome.error.code, outcome.error.message);
+          return;
+        }
+        writeText(socket, JSON.stringify({ type: "item", streamId, value: outcome.value }));
+        writeText(socket, JSON.stringify({ type: "end", streamId }));
+      } catch (error) {
+        this.logger.warn("[mux] %s 分派失败：%s", endpoint, String(error));
+        this.fail(socket, streamId, "gateway/invoke-failed", String(error));
+      }
       return;
     }
     const separator = endpoint.indexOf("/");

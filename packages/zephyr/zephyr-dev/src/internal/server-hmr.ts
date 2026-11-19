@@ -6,7 +6,8 @@
 //
 // 为什么必须等空闲：有在途调用时换树，那条请求会拿到半新半旧的对象图（前半段用旧实例、后半段用新实例）。
 // "空闲"的判据分两层：
-//   - **传输层**：`MuxServer.inFlight()` 为 0（没有 unary 在跑、没有开着的流）；
+//   - **传输层**：装了这一行的装配里 `MuxServer.inFlight()` 为 0（没有 unary 在跑、没有开着的流），
+//     没装时这条判据缺席；
 //   - **各域**：登记到 `IdleGuard` 的每一条都说空闲（agent 没有开着的 turn、后台任务都收了尾）。
 //     装配面不交这份知识——某个令牌算不算「忙」只有那个域自己知道。
 //
@@ -30,7 +31,11 @@ export interface ServerHmrOptions {
  */
 @Injectable()
 export class ServerHmr extends DevHmr implements OnDispose {
-  private readonly mux = inject(MuxServer);
+  /**
+   * 传输层的忙碌判据：wire 载体交回上游之后应用清单不再装 `MuxServer`，这条判据就缺席，
+   * 此时只剩各域登记的 `IdleGuard`（见 {@link isBusy}）。
+   */
+  private readonly mux = inject.optional(MuxServer);
 
   private readonly logger = inject(Logger);
 
@@ -146,7 +151,8 @@ export class ServerHmr extends DevHmr implements OnDispose {
    * @returns 忙为 `true`。
    */
   private isBusy(): boolean {
-    if (this.mux.inFlight() > 0) return true;
+    const mux = this.mux;
+    if (mux !== undefined && typeof mux.inFlight === "function" && mux.inFlight() > 0) return true;
     const guards = this.guards;
     return Array.isArray(guards) && guards.some((guard) => guard.isIdle() === false);
   }

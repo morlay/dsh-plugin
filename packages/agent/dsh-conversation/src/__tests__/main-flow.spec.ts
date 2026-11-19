@@ -62,7 +62,13 @@ function fakeConnection() {
       throw new Error("本 spec 不建 socket");
     },
     registerGenerationSource: () => () => {},
-    rpc: { register: () => () => {}, call: async () => undefined },
+    // `intercept` 是上游 `api-gateway` 注册 `/api` rpc 拦截用的那条（拿到 `connection` 就会调）。
+    rpc: {
+      register: () => () => {},
+      call: async () => undefined,
+      intercept: () => async () => {},
+      handle: () => async () => {},
+    },
     fetch: {
       register: () => () => {},
       requestBodyMode: () => "streaming",

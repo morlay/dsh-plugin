@@ -15,9 +15,16 @@ export async function serveMux(): Promise<{
   push: (frame: unknown) => void;
 }> {
   const handlers = new RemoteHandlersDefault();
-  /** 事件源队列（测试侧 `push` 往里塞帧）。 */
-  const queue: unknown[] = [];
-  let wake: (() => void) | undefined;
+  /** 每条流一个队列（测试侧 `push` 往 `$events` 塞帧）。 */
+  const queues = new Map<string, unknown[]>();
+  const wakes = new Map<string, () => void>();
+  const queueOf = (endpoint: string): unknown[] => {
+    const existing = queues.get(endpoint);
+    if (existing !== undefined) return existing;
+    const created: unknown[] = [];
+    queues.set(endpoint, created);
+    return created;
+  };
   const routes: {
     path: string;
     handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
@@ -42,32 +49,70 @@ export async function serveMux(): Promise<{
       invoke: async () => {
         throw new Error("[remote] 没有实现");
       },
+      // 浏览器答复（"$events/result"）的入口：替身收下即算结算。
+      dispatchWire: async () => ({ ok: true as const, value: undefined }),
       // `\$events` 这条流由 gateway 的转发事件源供给（宿主侧是 `api-remotes` + `typertGateway`）。
       // 本夹具用一个可推帧的队列替身：断言「宿主推什么，客户端就收到什么」。
       wireStream: {
-        open: async (): Promise<AsyncIterable<unknown>> => ({
-          async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
-            for (;;) {
-              const next = queue.shift();
-              if (next !== undefined) {
-                yield next;
-                continue;
+        // **按 endpoint 分队列**：`session/control` 这类流与 `$events` 是两条独立的流，
+        // 共用一个队列会让先打开的流把事件帧吞掉（症状：推送永远收不到）。
+        open: async (endpoint: string): Promise<AsyncIterable<unknown>> => {
+          const list = queueOf(endpoint);
+          const ready =
+            endpoint === "$events"
+              ? [{ type: "ready", clientId: "fixture", host: { home: "/tmp" } }]
+              : [];
+          return {
+            async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
+              for (const frame of ready) yield frame;
+              for (;;) {
+                const next = list.shift();
+                if (next !== undefined) {
+                  yield next;
+                  continue;
+                }
+                await new Promise<void>((resolve) => {
+                  wakes.set(endpoint, resolve);
+                });
               }
-              await new Promise<void>((resolve) => {
-                wake = resolve;
-              });
-            }
-          },
-        }),
+            },
+          };
+        },
         failure: () => ({ code: "gateway/invoke-failed", message: "x", details: {} }),
       },
     },
   });
   mux.onInit();
 
-  const server = createServer((_req, res) => {
-    res.writeHead(404);
-    res.end();
+  // 两级 wire：unary 走 `/api/<endpoint>` 的 HTTP RPC（上游的 client-request 信封），
+  // 流式与事件流走 `/api/remote.mux` 的 upgrade。夹具把两面都挂在同一个 server 上。
+  const server = createServer((req, res) => {
+    const path = (req.url ?? "").split("?")[0] ?? "/";
+    if (req.method !== "POST" || !path.startsWith("/api/")) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const endpoint = path.slice("/api/".length);
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    req.on("end", () => {
+      void (async () => {
+        const envelope = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          readonly rpcId?: string;
+          readonly payload?: { readonly args?: Record<string, unknown> };
+        };
+        const result = await handlers.invoke(endpoint, envelope.payload?.args ?? {}).then(
+          (value) => ({ ok: true, value }),
+          (error: unknown) => ({
+            ok: false,
+            error: { code: "gateway/invoke-failed", message: String(error), details: {} },
+          }),
+        );
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ type: "server-response", rpcId: envelope.rpcId, result }));
+      })();
+    });
   });
   server.on("upgrade", (req, socket, head) => {
     const path = (req.url ?? "").split("?")[0] ?? "/";
@@ -86,9 +131,9 @@ export async function serveMux(): Promise<{
     handlers,
     server,
     push: (frame: unknown) => {
-      queue.push(frame);
-      const resume = wake;
-      wake = undefined;
+      queueOf("$events").push(frame);
+      const resume = wakes.get("$events");
+      wakes.delete("$events");
       resume?.();
     },
   };

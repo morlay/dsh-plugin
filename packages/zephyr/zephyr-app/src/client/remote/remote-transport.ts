@@ -93,17 +93,23 @@ interface StreamSink {
 /** mux 的路径（上游 `REMOTE_STREAM_MUX_PATH`）。 */
 const MUX_PATH = "/api/remote.mux";
 
+/** 一次 HTTP 请求（同 `fetch` 的签名）：测试注入用，生产是页面自己的 `fetch`。 */
+export type RemoteFetch = (input: string | URL, init: RequestInit) => Promise<Response>;
+
 /**
- * 生产实现：走 `/api/remote.mux` 的 WebSocket 多路复用。
+ * 生产实现：`/api/remote.mux` 的 WebSocket 承载**流式**方法，unary 走 `/api` 的 HTTP RPC。
  *
- * 一条 unary 调用 = `open` → 收 `item` → 收 `end`；出错时宿主发 `error` 帧。
- * @param connectionOf - 传输层（保留参数：将来若要自定义 socket 工厂，从这里取）。
- *   当前实现直接用浏览器原生 `WebSocket` + `location`，不依赖上游的 `openWebSocket`。
+ * 两条 wire 是上游分的：mux 只接受 `mode === 'stream'` 的方法（unary 打开会被拒），
+ * unary 的请求信封是 `{type:'client-request', rpcId, method, payload}`。
+ * @param connectionOf - 传输层（只在这里取 socket 工厂）。
+ * @param fetchOf - HTTP 载体；缺省用页面的 `fetch`（测试注入替身）。
  * @returns 传输实现。
  */
-export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
+export function muxTransport(
+  connectionOf?: () => Connection,
+  fetchOf?: RemoteFetch,
+): RemoteTransport {
   let socket: WebSocket | undefined;
-  const pending = new Map<string, { resolve(value: unknown): void; reject(error: Error): void }>();
   /** 逻辑流的下行队列（`openStream` 开的那几条）。 */
   const streams = new Map<string, StreamSink>();
   let seq = 0;
@@ -138,8 +144,6 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
    * @param error - 给每个在途调用/流的失败原因。
    */
   const failInFlight = (error: Error): void => {
-    for (const waiter of pending.values()) waiter.reject(error);
-    pending.clear();
     for (const sink of streams.values()) sink.fail(error);
     streams.clear();
     // 排队帧属于刚刚被拒掉的那些调用：不能在下一个 socket 上补发（那会变成「调用方以为失败、
@@ -166,7 +170,7 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
     live.addEventListener("close", () => {
       if (socket !== live) return;
       socket = undefined;
-      console.debug("[remote] mux 断开，在途调用 %d / 流 %d", pending.size, streams.size);
+      console.debug("[remote] mux 断开，在途流 %d", streams.size);
       failInFlight(new Error("remote 连接已断开：在途调用未完成（宿主重启或网络中断）"));
     });
     socket.addEventListener("open", () => {
@@ -297,20 +301,7 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
             streams.delete(id);
             sink.end();
           }
-          return;
         }
-        const waiter = pending.get(id);
-        if (waiter === undefined) return;
-        if (frame.type === "item") {
-          waiter.resolve(frame.value);
-          return;
-        }
-        if (frame.type === "error") {
-          pending.delete(id);
-          waiter.reject(new Error(frame.error?.message ?? "remote 调用失败"));
-          return;
-        }
-        if (frame.type === "end") pending.delete(id);
       } catch (error) {
         console.error("[remote] mux 处理帧失败：", error);
       }
@@ -338,23 +329,74 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
     );
   };
 
-  /** 一条 unary 调用（`invoke` 与「转发事件答复」共用）。 */
-  const callUnary = (endpoint: string, payload: object): Promise<unknown> => {
-    const streamId = `s${(seq += 1)}`;
-    return new Promise<unknown>((resolve, reject) => {
-      pending.set(streamId, { resolve, reject });
-      send(JSON.stringify({ type: "open", streamId, endpoint, payload }));
+  /**
+   * 一条 unary 调用（`invoke` 与「转发事件答复」共用）：走 HTTP `POST /api/<endpoint>`。
+   *
+   * 上游 mux 只承载**流式**方法（unary 打开会被拒：`unary Remote methods cannot be opened through
+   * the stream carrier`）；unary 的 wire 是 `connection.rpc` 那条 HTTP RPC
+   * （`{type:'client-request', rpcId, method, payload}` → `{type:'server-response', rpcId, result}`），
+   * 与本仓宿主 `connection` 行交给上游的分派器同一条路。
+   * @param endpoint - `<namespace>/<method>`。
+   * @param payload - wire 载荷（`{ args: <命名参数> }`）。
+   * @param signal - 取消信号（转发事件答复不传）。
+   * @returns 宿主结果（失败抛带 `code` / `details` 的错误）。
+   */
+  const callUnary = async (
+    endpoint: string,
+    payload: object,
+    signal?: AbortSignal,
+  ): Promise<unknown> => {
+    // 浏览器里就是当前页面的 origin；非浏览器宿主（node 测试、headless）没有 `location`，
+    // 而这个部署只服务本机宿主，回落本机地址而不是拿相对 URL 去 `fetch`（那会直接抛
+    // `Failed to parse URL`，症状是「测试里所有 unary 调用都挂」）。
+    const base = typeof location === "undefined" ? "http://127.0.0.1" : location.origin;
+    const doFetch: RemoteFetch = fetchOf ?? ((input, init) => globalThis.fetch(input, init));
+    const rpcId = crypto.randomUUID();
+    const response = await doFetch(`${base}/api/${endpoint}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "client-request", rpcId, method: endpoint, payload }),
+      ...(signal === undefined ? {} : { signal }),
     });
+    if (!response.ok)
+      throw new Error(`transport failure for /api/${endpoint}: HTTP ${response.status}`);
+    const envelope = (await response.json()) as {
+      readonly rpcId?: string;
+      readonly result?:
+        | { readonly ok: true; readonly value?: unknown }
+        | {
+            readonly ok: false;
+            readonly error?: {
+              readonly code?: string;
+              readonly message?: string;
+              readonly details?: unknown;
+            };
+          };
+    };
+    if (envelope.rpcId !== rpcId)
+      throw new Error(
+        `rpcId mismatch for ${endpoint}: sent ${rpcId}, got ${String(envelope.rpcId)}`,
+      );
+    const result = envelope.result;
+    if (result === undefined)
+      throw new Error(`transport failure for /api/${endpoint}: 响应没有 result`);
+    if (!result.ok) {
+      const error = result.error ?? {};
+      throw Object.assign(new Error(error.message ?? `${endpoint} 调用失败`), {
+        code: error.code,
+        details: error.details,
+      });
+    }
+    return result.value;
   };
 
   return {
     subscribe(deliver) {
       // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `Connection` 还是占位符。
       eventDeliver = deliver;
-      // 但**已经连上时必须立刻补开**：`ensure()` 只在建连那一刻发一次 `$events` 的 open 帧，
-      // 而第一次 `invoke` 往往早于 `$on`（`settings/describe` 之类），于是这条流永远不建立——
-      // 所有推送（`api-session/added` 等）全部收不到，表现为"新建的会话不进目录、
-      // 权限与模型切换点了没反应"。
+      // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `Connection` 还是占位符，
+      // 建出的 socket 会连到错地址、随即断开（`failInFlight` 会把在途流全判死）。
+      // 建连由**第一次流式调用**触发（`ensure()`），那条路在 open 后会补开 `$events`。
       const live = socket;
       if (live !== undefined && live.readyState === 1) openEvents();
       return () => {
@@ -364,8 +406,7 @@ export function muxTransport(connectionOf?: () => Connection): RemoteTransport {
     invoke: callUnary,
     answer(handle) {
       answerHandler = handle;
-      // 同 `subscribe`：`$on` 可能早于第一次 `invoke`，那时 socket 还没建，靠建连时那次补开；
-      // 但如果 socket 已经开着（订阅晚于其他调用），这里必须主动开一条。
+      // 同 `subscribe`：已经连上就补开，没连上等第一次流式调用。
       const live = socket;
       if (live !== undefined && live.readyState === 1) openEvents();
       return () => {

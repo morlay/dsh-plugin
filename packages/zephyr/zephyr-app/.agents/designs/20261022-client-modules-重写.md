@@ -24,20 +24,20 @@
 - **WebServer**：`src/web/web-server.contract.ts`。`register` / `registerUpgrade` 返回撤销函数；`routesOf()` 是方法（abstract 属性在运行时没有原型痕迹，面代理取不到）。
 - **ClientModules**（T2 起在 `zephyr-dev`）：`client-modules.service.ts` 的 `install` 注册 `FEDERATION_PREFIX` → `Federation.serve`、`registerFallback` → `WebServe.handle`、`HMR_PATH` 的空 upgrade（真正的握手由 vite 在同一个 http server 上的监听器完成），然后打印 `routesOf()`；`onInit` 在 `RemoteDescriptor` 与 `Remote` 都在时调 `mountRemotes`。
 - **页面**（T2 起在 `zephyr-dev` 的 `src/http/serve.service.ts`）：`/` 与 `/index.html` 走应用 `src/client` 的骨架、`/@fs` 下的 `node_modules` 请求 302 到联邦地址、其余交 `ViteHandoff`；页面响应头 `cache-control: no-cache`。
-- **dev 重载**：`src/internal/server-hmr.ts` 的 `ServerHmr`（等空闲：`MuxServer.inFlight()` 加调用方的 `isIdle`；变化合并成一次重载；`pollMs` 缺省 200、`maxWaitMs` 缺省 60s）。装配面把它接到 CLI 的 `DevLifecycle.install({ restart })`（例：`apps/zephyr-custom/src/dev-lifecycle.ts`）。
+- **dev 重载**：`src/internal/server-hmr.ts` 的 `ServerHmr`（等空闲：装了这一行的装配里 `MuxServer.inFlight()`、再加上各域登记的 `IdleGuard`；变化合并成一次重载；`pollMs` 缺省 200、`maxWaitMs` 缺省 60s）。装配面把它接到 CLI 的 `DevLifecycle.install({ restart })`（例：`apps/zephyr-custom/src/dev-lifecycle.ts`）。
 - **vite 交接**：`src/vite-handoff/vite-handoff.service.ts` 起 middleware 模式的 dev server，`transformHtml` 注入入口 script，`onServerSourceChange` 只报服务端那半。
 
 ## 三、模块边界与接口
 
-| 模块                                            | 拥有（职责与不变量）                                             | 不拥有（明确排除）                                                | 依赖方向                  | 接缝 / 适配器                                                |
-| ----------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------ |
-| `AppEnv`（`src/app-env/`）                      | 部署参数与派生路径的唯一来源                                     | 端口与数据目录的**取值策略**（CLI 的 `CliMode` 给）；宿主外部环境 | 无                        | 契约 + `AppEnvDefault`；测试用 `src/testing/fake-app-env.ts` |
-| `WebServer`（`src/web/web-server.contract.ts`） | http 宿主的启停、路由注册与快照                                  | 各前缀的语义（谁注册谁负责）                                      | ← node http               | 契约 + 实现；`@hono/node-server` 只提供 `HttpHost` 面        |
-| `WebServe`（`src/http/`）                       | 页面骨架、`/@fs` 与 `node_modules` 请求的去向、兜底交 vite       | 前端页面路由；联邦构建                                            | ← `AppEnv`、`ViteHandoff` | 契约 `WebServe.handle`                                       |
-| `ViteHandoff`（`src/vite-handoff/`）            | vite dev server 的启停、`serve`、`transformHtml`、服务端源码变更 | HMR 的传输实现（vite 自己）；行的重载动作                         | ← vite                    | 契约；无 vite 的形态给替身                                   |
-| `Federation`（`src/federation/`）               | 联邦产物的构建与按 URL 服务                                      | 见[联邦设计](./20261013-客户端资源的联邦式预编译.md)              | ← `internal/`             | 契约 `serve` / `depsUrl`                                     |
-| `ClientModules`（`src/client-modules/`）        | 路由注册顺序、remote 装载、收尾诊断                              | 各路由背后的实现；remote 的清单                                   | ← 上面五个契约            | 契约 `install()`                                             |
-| `ServerHmr`（`src/internal/server-hmr.ts`）     | 变化合并、空闲判据（传输层 + 业务层）、重载一次                  | 重载怎么做（`DevLifecycle` 的 `restart`）                         | ← `MuxServer`             | 值 + `install(options)`                                      |
+| 模块                                            | 拥有（职责与不变量）                                             | 不拥有（明确排除）                                                | 依赖方向                           | 接缝 / 适配器                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
+| `AppEnv`（`src/app-env/`）                      | 部署参数与派生路径的唯一来源                                     | 端口与数据目录的**取值策略**（CLI 的 `CliMode` 给）；宿主外部环境 | 无                                 | 契约 + `AppEnvDefault`；测试用 `src/testing/fake-app-env.ts` |
+| `WebServer`（`src/web/web-server.contract.ts`） | http 宿主的启停、路由注册与快照                                  | 各前缀的语义（谁注册谁负责）                                      | ← node http                        | 契约 + 实现；`@hono/node-server` 只提供 `HttpHost` 面        |
+| `WebServe`（`src/http/`）                       | 页面骨架、`/@fs` 与 `node_modules` 请求的去向、兜底交 vite       | 前端页面路由；联邦构建                                            | ← `AppEnv`、`ViteHandoff`          | 契约 `WebServe.handle`                                       |
+| `ViteHandoff`（`src/vite-handoff/`）            | vite dev server 的启停、`serve`、`transformHtml`、服务端源码变更 | HMR 的传输实现（vite 自己）；行的重载动作                         | ← vite                             | 契约；无 vite 的形态给替身                                   |
+| `Federation`（`src/federation/`）               | 联邦产物的构建与按 URL 服务                                      | 见[联邦设计](./20261013-客户端资源的联邦式预编译.md)              | ← `internal/`                      | 契约 `serve` / `depsUrl`                                     |
+| `ClientModules`（`src/client-modules/`）        | 路由注册顺序、remote 装载、收尾诊断                              | 各路由背后的实现；remote 的清单                                   | ← 上面五个契约                     | 契约 `install()`                                             |
+| `ServerHmr`（`src/internal/server-hmr.ts`）     | 变化合并、空闲判据（传输层 + 业务层）、重载一次                  | 重载怎么做（`DevLifecycle` 的 `restart`）                         | ← `MuxServer`（可选）、`IdleGuard` | 值 + `install(options)`                                      |
 
 **接口**：`ClientModules.install(): Promise<() => Promise<void>>`（逆序撤销）；`WebServer.register` / `registerUpgrade` / `registerFallback` 各返回撤销函数；`ViteHandoff.serve` 返回「是否已应答」；`Federation.serve` 返回「是否接管」。
 不变量：撤销顺序与注册顺序相反；页面只由 fallback 接管；`routesOf()` 在装配收尾才完整。

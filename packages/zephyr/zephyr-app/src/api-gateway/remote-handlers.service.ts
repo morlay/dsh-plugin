@@ -35,6 +35,10 @@ export class RemoteHandlersDefault extends RemoteHandlers {
     };
   }
 
+  has(endpoint: string): boolean {
+    return this.handlers.has(endpoint);
+  }
+
   stream(
     endpoint: string,
     args: Readonly<Record<string, unknown>>,

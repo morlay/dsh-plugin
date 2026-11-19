@@ -4,3 +4,4 @@ export * from "./mux-server.service.ts";
 // 契约与实现同域。
 export * from "./remote-handlers.contract.ts";
 export * from "./remote-handlers.service.ts";
+export * from "./remote-handlers.rpc-bridge.ts";

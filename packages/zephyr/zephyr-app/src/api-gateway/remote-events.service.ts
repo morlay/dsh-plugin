@@ -1,31 +1,189 @@
-// 转发事件的**来源**：上游 `@deepseek-ai/dsh-api-remotes` 的 apply 经 `fromCordis` 照装。
+// 转发事件的**来源**：由本行自己实现（不再照装上游 `@deepseek-ai/dsh-api-remotes` 的 apply）。
 //
-// 它把「哪些 cordis 事件要转给浏览器」那张表（`API_REMOTE_FORWARDED_EVENTS`）里的每个事件接到
-// `typertGateway.registerRemoteEvents` 上。**两类事件不是一回事**：
+// 为什么自己实现：上游那份把 `queue.push` 的返回值当「源还在不在」的判据，队列一旦结束就静默
+// 降级成 `next()`——表现是「转发源登记了、`$events` 流也 ready，但每次提问/审批都按『无人应答』结束」，
+// 而且这条生命周期是 vendor 内部的隐藏状态，装配侧补不出来。这里只照它的**协议**（帧形状、`resolve`/
+// `reject` 语义）重写，转发名单仍读上游的 `API_REMOTE_FORWARDED_EVENTS`（一份名单，不抄第二份）。
 //
+// 两类事件不是一回事：
 // - `emit`：单向通知（`api-session/added` 这些），参数原样进 wire；
 // - `waterfall`：**要答复的请求**（`approval/request`、用户提问）。宿主把请求投影成 JSON 安全的形状
-//   （去掉 `agent` / `signal`）后投给浏览器，浏览器的 `ctx.remote.$on(`approval/request`)` 返回值
-//   经 unary 端点 `$events/result` 回到这里，再喂回那条 waterfall。
-//
-// 少了这一行：浏览器一条转发事件都收不到，且 `approval/request` 这类请求永远没有通道——
-// 工具请求升级沙箱时上游直接 fail closed（`requires approval, but no approval channel is available`），
-// 用户的批准按钮根本不会出现。
-import * as ApiRemotesPlugin from "@deepseek-ai/dsh-api-remotes";
-import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { fromCordis } from "@morlay/zephyr/compat";
+//   （去掉 `agent` / `signal`）后投给浏览器，浏览器的 `ctx.remote.$on(...)` 返回值经 unary 端点
+//   `$events/result` 回到这里，再喂回那条 waterfall。
+import { API_REMOTE_FORWARDED_EVENTS } from "@deepseek-ai/dsh-api-remotes";
+import { carrierKeyOf } from "@deepseek-ai/dsh-scope";
+import { homedir } from "node:os";
+import { inject, Injectable, Logger, type Context } from "@morlay/zephyr";
 import { TypertGateway } from "../typert/gateway.contract.ts";
 
-/** 转发事件的来源行（宿主半）。 */
+/** 一条 waterfall 请求里我们要的 agent 面（上游 `Agent` 的这两个成员）。 */
+interface ScopedAgent {
+  readonly id: string;
+  readonly ctx: object;
+}
+
+/** 一条要答复的请求，交给 gateway 的那份记录。 */
+interface InvocationDispatch {
+  readonly event: string;
+  readonly request: Record<string, unknown>;
+  readonly context: { readonly value: object; readonly subject: object; readonly agentId: string };
+  readonly resolve: (outcome: { readonly kind: string; readonly value?: unknown }) => void;
+  readonly reject: (error: unknown) => void;
+}
+
+/** 一条单向通知，交给 gateway 的那份记录。 */
+interface EmitDispatch {
+  readonly event: string;
+  readonly args: readonly unknown[];
+}
+
+/** 判别：带 `context` 的是要答复的请求，其余是单向通知（与 gateway 的 `'context' in dispatch` 同判据）。 */
+function isInvocation(value: unknown): value is InvocationDispatch {
+  return typeof value === "object" && value !== null && "context" in value;
+}
+
+/**
+ * 宿主 → 浏览器的帧队列：可拉取、可中止。
+ *
+ * 中止时把**在途请求**全部按原因拒绝，别让它们在浏览器那边永远挂着（宿主重启后旧请求没人认领）。
+ */
+class ForwardQueue {
+  private readonly buffer: unknown[] = [];
+
+  private waiter: (() => void) | undefined;
+
+  private done = false;
+
+  /**
+   * 推一帧。
+   * @param frame - 一条通知或一条要答复的请求。
+   * @returns 队列是否还活着（已结束时调用方应当 `next()`）。
+   */
+  push(frame: unknown): boolean {
+    if (this.done) return false;
+    this.buffer.push(frame);
+    this.waiter?.();
+    return true;
+  }
+
+  /**
+   * 结束队列：清空缓冲、拒绝在途请求、唤醒等待者。
+   * @param reason - 给在途请求的失败原因。
+   */
+  end(reason: unknown): void {
+    if (this.done) return;
+    this.done = true;
+    for (const frame of this.buffer.splice(0)) {
+      if (isInvocation(frame)) frame.reject(reason);
+    }
+    this.waiter?.();
+    this.waiter = undefined;
+  }
+
+  /**
+   * 逐帧读出；`signal` 中止时结束队列并退出。
+   * @param signal - 这次登记的寿命。
+   * @returns 帧序列。
+   */
+  async *iterate(signal: AbortSignal): AsyncGenerator<unknown> {
+    const abort = (): void => this.end(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      while (!this.done && !signal.aborted) {
+        while (this.buffer.length > 0) yield this.buffer.shift();
+        await new Promise<void>((resolve) => {
+          this.waiter = resolve;
+        });
+        this.waiter = undefined;
+      }
+    } finally {
+      signal.removeEventListener("abort", abort);
+      this.end(signal.reason ?? new Error("forwarded Remote event source ended"));
+    }
+  }
+}
+
+/**
+ * 转发事件的来源行（宿主半）。
+ *
+ * 一行两件事：照上游的名单把 `ctx` 上的事件接成帧；把要答复的请求挂到 gateway 的 `remoteEventClients`，
+ * 等浏览器经 `$events/result` 回值。
+ */
 @Injectable()
-export class RemoteEventsSource extends fromCordis(ApiRemotesPlugin) {
+export class RemoteEventsSource {
   private readonly gateway = inject(TypertGateway);
 
-  override async onInit(ctx: Context): Promise<void> {
-    // **挂在根上**：事件源是全宿主的一份，它要听见的是各处的 `ctx.emit`（会话存储、审批服务都在自己那一层发）。
-    // cordis 的事件只向上流，挂在行 ctx 上的监听器收不到根（或兄弟行）发出的事件——症状正是
-    // 「浏览器一条转发事件都收不到」。
-    // 上游 apply 里只读 `ctx.typertGateway`：按 deps 交进去（它自己的静态 inject 声明也是这个名字）。
-    await this.mount(ctx.root, undefined, { typertGateway: this.gateway });
+  private readonly logger = inject(Logger);
+
+  onInit(ctx: Context): void {
+    ctx.effect(() => {
+      const dispose = this.gateway.registerRemoteEvents((signal) => this.sourceOf(ctx, signal), {
+        home: homedir(),
+      });
+      return () => {
+        void dispose();
+      };
+    });
+  }
+
+  /**
+   * 一次登记的帧源：按上游名单挂监听器，返回可中止的帧序列。
+   * @param ctx - 挂监听器的那一层（根：事件只向上流，行 ctx 收不到兄弟行发出的）。
+   * @param signal - 这次登记的寿命。
+   * @returns 帧序列。
+   */
+  private sourceOf(ctx: Context, signal: AbortSignal): AsyncIterable<unknown> {
+    const queue = new ForwardQueue();
+    const disposers = API_REMOTE_FORWARDED_EVENTS.map((entry) => {
+      const event = entry.event;
+      if (entry.mode === "emit") {
+        return ctx.on(event, ((...args: readonly unknown[]) => {
+          const frame: EmitDispatch = { event, args };
+          queue.push(frame);
+        }) as never);
+      }
+      return ctx.on(event, function (
+        this: unknown,
+        request: unknown,
+        next: () => unknown,
+      ): unknown {
+        const carrier = carrierKeyOf(this);
+        if (carrier === undefined) return next();
+        const agent = (request as { readonly agent?: ScopedAgent }).agent;
+        if (agent === undefined || agent !== carrier) {
+          throw new TypeError(`forwarded scoped event ${event} must carry its Agent directly`);
+        }
+        const settled = Promise.withResolvers<unknown>();
+        const delegate = (): void => {
+          void Promise.resolve().then(next).then(settled.resolve, settled.reject);
+        };
+        const dispatch: InvocationDispatch = {
+          event,
+          // gateway 自己按 `source.context.subject` 投影（它还要用 `request.agent` 做归属校验），
+          // 这里交**原始请求**，不要提前把 `agent` 抹掉。
+          request: request as Record<string, unknown>,
+          context: { value: agent.ctx, subject: agent, agentId: agent.id },
+          resolve: (outcome) => {
+            if (outcome.kind === "result") {
+              settled.resolve(outcome.value);
+              return;
+            }
+            delegate();
+          },
+          reject: settled.reject,
+        };
+        if (!queue.push(dispatch)) delegate();
+        return settled.promise;
+      } as never);
+    });
+    return {
+      async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
+        try {
+          yield* queue.iterate(signal);
+        } finally {
+          for (const dispose of disposers) dispose();
+        }
+      },
+    };
   }
 }

@@ -39,6 +39,16 @@ export abstract class RemoteHandlers {
   abstract registerStream(endpoint: string, handler: RemoteStreamHandler): () => void;
 
   /**
+   * 一个端点在这张表里有没有 **unary** 实现。
+   *
+   * **同步**判据：上游共享 `/api` 通道的拦截器按它决定认不认领一条请求，判据不能等一次异步查找。
+   * 流式端点**不算**：拦截器一次只回一个值，流式端点由 mux 载具承载。
+   * @param endpoint - `<namespace>/<method>`。
+   * @returns 注册为 unary 为 `true`（注册过流式、或没注册，都是 `false`）。
+   */
+  abstract has(endpoint: string): boolean;
+
+  /**
    * 取一个已注册的流式方法（没注册就是 `undefined`，调用方按 unary 处理）。
    * @param endpoint - `<namespace>/<method>`。
    * @param args - 命名参数。

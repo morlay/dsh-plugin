@@ -47,6 +47,8 @@ export async function serveMux(overrides: { typert?: unknown; gateway?: unknown 
             invoke: async () => {
               throw new Error("[remote] 没有实现");
             },
+            // 浏览器答复（`$events/result`）的入口：替身收下即算结算。
+            dispatchWire: async () => ({ ok: true as const, value: undefined }),
           },
         }),
   });

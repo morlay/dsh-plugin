@@ -57,10 +57,15 @@ class FakeConnection extends Connection {
 
   readonly registerGenerationSource = () => () => {};
 
-  /** 上传行往 `rpc` 上注册下载端点：形状与契约不同，本 spec 只需这两个方法存在。 */
+  /**
+   * 上传行往 `rpc` 上注册下载端点；上游 `api-gateway` 拿到 `connection` 后注册 `/api` 的 rpc 拦截。
+   * 形状与契约不同，本 spec 只需这几个方法存在（不发起调用，也不建 socket）。
+   */
   readonly rpc = {
     register: () => () => {},
     call: async () => undefined,
+    intercept: () => async () => {},
+    handle: () => async () => {},
   } as unknown as Connection["rpc"];
 
   readonly fetch = {

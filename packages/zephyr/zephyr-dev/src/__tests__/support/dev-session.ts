@@ -9,7 +9,6 @@ import { bootstrapApplication, Injectable, type App, without } from "@morlay/zep
 import { AppEnv, type AppEnvValues, WebStartup } from "@morlay/zephyr-app";
 import {
   provideApiGateway,
-  provideMuxServer,
   provideTypert,
   provideWeb,
   WebStartupDefault,
@@ -58,10 +57,9 @@ export async function mountDev(
       // 端口/地址写在值行里（`WebStartupDefault` 读环境变量，并行用例会互相抢 3080）。
       ...provideWeb(without(WebStartupDefault)),
       { provide: WebStartup, useValue: { values: { port: 0, host: "127.0.0.1" } } },
-      // 宿主运行时：dev 行要 WebServer（端口）与 MuxServer（服务端 HMR 的传输层空闲判据）。
+      // 宿主运行时：dev 行要 WebServer（端口）；wire 载体由上游 api-gateway 注册（要 webServer）。
       ...provideTypert(),
       ...provideApiGateway(),
-      ...provideMuxServer(),
       ...devProviders({ packaged: false, ...mode }),
     ],
     timeoutMs: 60_000,

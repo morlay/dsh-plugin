@@ -67,9 +67,13 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
       const remote = app.get(Remote);
 
       // `useTransport` 是 `RemoteDefault`（本装配的实现）的成员，契约不列它：按实现类收窄一次。
+      // 两级 wire：流式与事件流走 socket（`url`），unary 走 HTTP（同一个 server 的 `/api`）。
+      const httpOrigin = url.replace(/^ws/u, "http");
       (remote as RemoteDefault).useTransport(
         muxTransport(
           () => ({ openWebSocket: (path: string) => new WebSocket(`${url}${path}`) }) as never,
+          (input, init) =>
+            fetch(`${httpOrigin}${new URL(String(input), httpOrigin).pathname}`, init),
         ),
       );
       await remote.$mount(TYPERT_REMOTE);
