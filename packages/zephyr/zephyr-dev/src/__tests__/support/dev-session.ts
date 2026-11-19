@@ -31,9 +31,12 @@ export interface DevFixture {
 
 /**
  * 装配一棵 dev 行树：端口取 0（并行 spec 不抢端口），数据根在 tmpdir。
+ * @param mode - `devProviders` 的开关（形态与两半 HMR；缺省非打包、HMR 全开）。
  * @returns 行树与四个部署事实。
  */
-export async function mountDev(): Promise<DevFixture> {
+export async function mountDev(
+  mode: Omit<Parameters<typeof devProviders>[0], "packaged"> = {},
+): Promise<DevFixture> {
   const dataDir = await mkdtemp(join(tmpdir(), "zephyr-dev-start-"));
   const repoRoot = DEV_FIXTURE;
   const cacheDir = join(dataDir, "cache", "vite");
@@ -59,7 +62,7 @@ export async function mountDev(): Promise<DevFixture> {
       ...provideTypert(),
       ...provideApiGateway(),
       ...provideMuxServer(),
-      ...devProviders({ packaged: false }),
+      ...devProviders({ packaged: false, ...mode }),
     ],
     timeoutMs: 60_000,
   });

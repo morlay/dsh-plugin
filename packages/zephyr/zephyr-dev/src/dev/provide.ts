@@ -11,11 +11,21 @@ import { configure, type ProviderList } from "@morlay/zephyr";
 import { provideClientModules } from "../client-modules/provide.ts";
 import { FederationDefault } from "../federation/federation.service.ts";
 import { provideServerHmr } from "../dev-hmr/provide.ts";
+import { ViteHandoffDefault } from "../vite-handoff/vite-handoff.service.ts";
 
-/** 形态：**只有打包与否这一个事实**（枚举要两个以上取值才需要，这里只有一个）。 */
+/** dev 行的开关：形态（打包与否）与两半 HMR。 */
 export interface DevProviderMode {
   /** 打包形态：`dev.include` 清空（全部预编译）；否则 `@morlay/*` 当文件走 vite。 */
   readonly packaged?: boolean;
+  /**
+   * HMR 的两半开关（缺省都开）：客户端（vite 热更）与服务端（等空闲后换树）。
+   *
+   * 取值由装配面合成（CLI 的 `ResolvedConfig.hmr`：配置 ⊕ 环境变量），这里只按结果装行。
+   */
+  readonly hmr?: {
+    readonly client?: boolean;
+    readonly server?: boolean;
+  };
 }
 
 /**
@@ -29,7 +39,10 @@ export function devProviders(mode: DevProviderMode = {}): ProviderList {
       configure(FederationDefault, {
         dev: { include: mode.packaged === true ? [] : ["@morlay/*"] },
       }),
+      // 客户端 HMR 关掉：vite 不建 ws、页面不注入客户端（页面仍由 vite 出，只是不再自己热更）。
+      ...(mode.hmr?.client === false ? [configure(ViteHandoffDefault, { hmr: false })] : []),
     ),
-    ...provideServerHmr(),
+    // 服务端 HMR 关掉：**不装换树行**（`DevHmr` 没人提供，CLI 的 `tryGet` 自然就是空）。
+    ...(mode.hmr?.server === false ? [] : provideServerHmr()),
   ];
 }

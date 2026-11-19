@@ -13,8 +13,25 @@ import {
 import { appBootDirOf, devPackageRoot } from "../internal/package-root.ts";
 import { ViteHandoff } from "./vite-handoff.contract.ts";
 
+/** vite dev server 的开关（装配面经 `configure(ViteHandoffDefault, …)` 给）。 */
+export interface ViteHandoffOptions {
+  /**
+   * 客户端 HMR：`false` 时不挂 HMR 的 WebSocket（vite 的 `server.hmr = false`），
+   * 并让 {@link ViteHandoff.hmr} 为 `false`——页面据此不注入 `/@vite/client`（见 `ServeDefault.replyPage`）。
+   * 缺省开。
+   */
+  readonly hmr?: boolean;
+}
+
 @Injectable()
 export class ViteHandoffDefault extends ViteHandoff {
+  /**
+   * @param options - 见 {@link ViteHandoffOptions}。
+   */
+  constructor(private readonly options: ViteHandoffOptions = {}) {
+    super();
+  }
+
   private readonly appEnv = inject(AppEnv);
 
   private readonly federation = inject(Federation);
@@ -34,6 +51,8 @@ export class ViteHandoffDefault extends ViteHandoff {
       base: "/",
       // **只收窄"当文件"的范围**：`include: []` 时全部预构建，页面仍由 vite 服务。
       devFiles: this.federation.config.dev.include,
+      // 客户端 HMR 的手动开关：关掉时 vite 不建 ws，页面也不注入客户端（排查问题时页面不再自己变）。
+      hmr: this.options.hmr !== false,
       // HMR 的 WebSocket 挂在宿主的 http server 上（同源同端口）；vite 只读它的 `on('upgrade')`。
       // 我们的 `HttpHost` 是 node `http.Server` 的**子面**（`on` / `close` / `address` / `listen`），
       // 而 vite 的字段要那个名义类型：这里收窄一次（单断言，不是「把类型关掉」）。

@@ -8,7 +8,7 @@
 import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { startDev, type DevSession } from "../dev/start.ts";
-import { mountDev } from "./support/dev-session.ts";
+import { mountDev, type DevFixture } from "./support/dev-session.ts";
 
 let session: DevSession | undefined;
 
@@ -82,6 +82,22 @@ describe("startDev", () => {
     expect(await pageOf(session)).toBe(200);
   }, 20_000);
 
+  it("客户端 HMR 关掉：页面不注入 /@vite/client（开着时才注入）", async () => {
+    // 两半在同一夹具上对照：注入与否只能由「开关」解释，不能由夹具差异解释。
+    const hmrOn = await mountDev();
+    const onSession = await startOf(hmrOn);
+    const onHtml = await (await fetch(onSession.url)).text();
+    await onSession.close();
+
+    const hmrOff = await mountDev({ hmr: { client: false } });
+    session = await startOf(hmrOff);
+    const offHtml = await (await fetch(session.url)).text();
+
+    expect(onHtml, "开着时页面带 HMR 客户端").toContain("/@vite/client");
+    expect(offHtml, "关掉后页面不该再让浏览器去连 ws").not.toContain("/@vite/client");
+    expect(offHtml, "页面仍由 vite 出（只是不再自己热更）").toContain("/@fs/");
+  }, 20_000);
+
   it("部署事实对不上时当场报错（不把错配的根带到运行时）", async () => {
     const fixture = await mountDev();
     await expect(
@@ -97,6 +113,23 @@ describe("startDev", () => {
     await fixture.app.dispose();
   }, 20_000);
 });
+
+/**
+ * 用夹具起一个会话（四个部署事实都来自夹具，端口取系统分配的）。
+ * @param fixture - 装配好的 dev 环境。
+ * @returns 会话。
+ */
+async function startOf(fixture: DevFixture): Promise<DevSession> {
+  return await startDev({
+    app: fixture.app,
+    repoRoot: fixture.repoRoot,
+    cacheDir: fixture.cacheDir,
+    appRoot: fixture.appRoot,
+    dataDir: fixture.dataDir,
+    port: 0,
+    host: "127.0.0.1",
+  });
+}
 
 /**
  * 取首页状态码。

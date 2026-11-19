@@ -66,6 +66,11 @@ export interface ViteDevOptions {
   devFiles?: readonly string[];
   /** 裸说明符 → 联邦地址（三方与"非开发模块"都由它接管，见 `ClientPluginOptions.depsUrl`）。 */
   depsUrl: (specifier: string, importer?: string) => Promise<string | undefined>;
+  /**
+   * 客户端 HMR：`false` 时**不挂** HMR 的 WebSocket（`server.hmr = false`），页面也不该注入客户端。
+   * 缺省开。
+   */
+  hmr?: boolean;
   /** 宿主进程的 http server：HMR 的 WebSocket 要挂在它的 `upgrade` 上。 */
   httpServer?: HmrServer | undefined;
   /** 页面所在的端口（配置值）：`address()` 在 listen 完成前是 null，不能靠它推。 */
@@ -156,15 +161,19 @@ export async function startViteDev(ctx: Context, options: ViteDevOptions): Promi
       // `upgrade` 监听，自己做 `sec-websocket-protocol: vite-hmr` 与 path 的匹配（`shouldHandle`）。
       // 我们**不再**自己接 `/_zephyr/hmr` 的 upgrade：`server.ws` 是 `NormalizedHotChannel`，没有 `handleUpgrade`
       // （真正的 `wss` 是 vite 内部的 `noServer` 实例），自己转一次只会把 socket 断掉。
-      ...(options.httpServer === undefined
-        ? {}
-        : {
-            hmr: {
-              server: options.httpServer,
-              path: HMR_PATH,
-              ...(pagePort === undefined ? {} : { clientPort: pagePort }),
-            },
-          }),
+      // 关掉客户端 HMR 时 **显式给 `hmr: false`**：vite 据此不建 ws。页面那边的 `/@vite/client`
+      // 由 `ClientAssets.hmr` 决定（见 `ServeDefault.replyPage`），不靠 vite 的 `transformIndexHtml`。
+      ...(options.hmr === false
+        ? { hmr: false }
+        : options.httpServer === undefined
+          ? {}
+          : {
+              hmr: {
+                server: options.httpServer,
+                path: HMR_PATH,
+                ...(pagePort === undefined ? {} : { clientPort: pagePort }),
+              },
+            }),
       // 仓库源码都在 root（app-boot）之外：`/@fs/<绝对路径>` 要能读到，allow 里放仓库根。
       fs: { strict: false, allow: [repoRoot, appRoot] },
     },
@@ -224,7 +233,8 @@ export async function startViteDev(ctx: Context, options: ViteDevOptions): Promi
     serve,
     transformHtml: async (html: string) =>
       addZephyrPrefix(await server.transformIndexHtml(`${base}/`, html)),
-    hmr: options.httpServer !== undefined,
+    // 通道真挂着才算有 HMR：关掉开关与没有同源 http server 是同一件事（页面都不该注入客户端）。
+    hmr: options.hmr !== false && options.httpServer !== undefined,
     // `ViteDevServer` 的 `restart()` 会换实例：用 getter 现取，不然拿到的是旧的那个。
     get watcher(): NonNullable<ViteHandoff["watcher"]> | undefined {
       // chokidar 的 `FSWatcher` 直接满足契约里那个最小面（`on` / `off` 带事件名）。

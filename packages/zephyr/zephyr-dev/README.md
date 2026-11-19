@@ -52,8 +52,15 @@ zephyr-cli → zephyr-dev → zephyr-app → zephyr
 理由是「`zephyr dev` 只有一棵树」——清单 = `devProviders(mode)` + 应用 `server.ts` 的清单，换树（`dispose` 后带 `?v=` 重新
 import 清单）归 CLI，部署事实只有 `AppEnv` 一处。它只回 `{ port, url, close() }`，行树不外露；`close()` 幂等。
 
-`devProviders(mode)` 的 `mode` 只有**一个字段** `packaged`：打包形态把 `dev.include` 清空（全部预编译），其余形态
-`@morlay/*` 当文件走 vite。别在这里加第二、第三个形态开关——`packaged` 是过渡脚手架，T5 之后随静态前端一起删。
+`devProviders(mode)` 的 `mode` 有两个字段：
+
+- `packaged`（形态）：打包形态把 `dev.include` 清空（全部预编译），其余形态 `@morlay/*` 当文件走 vite。
+  **过渡脚手架**，T5 之后随静态前端一起删。
+- `hmr`（两半开关，缺省都开）：`{ client: false }` → 不挂 HMR 的 ws、页面不注入 `/@vite/client`；
+  `{ server: false }` → 清单里不装 `ServerHmr`（换树不发生）。生效值由装配面给（`zephyr-cli` 的
+  `ResolvedConfig.hmr`：`zephyr.config.ts` 的 `dev.hmr` ⊕ 环境变量 `ZEPHYR_HMR_CLIENT` / `ZEPHYR_HMR_SERVER`）。
+
+别再加第三个开关：形态只有一个（`packaged`，过渡），HMR 只有两半（client / server）。
 
 ## 构建流程
 

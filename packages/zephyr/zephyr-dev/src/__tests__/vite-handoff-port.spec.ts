@@ -10,15 +10,22 @@ import { WebServer, WebStartup } from "@morlay/zephyr-app";
 import { AppEnvDefault, provideAppEnv, WebServerDefault } from "@morlay/zephyr-app/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Federation } from "../federation/federation.contract.ts";
+import { ViteHandoff } from "../vite-handoff/vite-handoff.contract.ts";
+import { provideViteHandoff } from "../vite-handoff/provide.ts";
 import { ViteHandoffDefault } from "../vite-handoff/vite-handoff.service.ts";
 
 /** 假 `startViteDev` 收到的 options（`vi.mock` 的工厂要能在提升后读到它）。 */
-const received = vi.hoisted(() => [] as { pagePort?: number }[]);
+const received = vi.hoisted(() => [] as { pagePort?: number; hmr?: boolean }[]);
 
 vi.mock("../internal/serve-vite.ts", () => ({
-  startViteDev: async (_ctx: unknown, options: { pagePort?: number }) => {
+  startViteDev: async (_ctx: unknown, options: { pagePort?: number; hmr?: boolean }) => {
     received.push(options);
-    return { hmr: true, serve: () => false, transformHtml: async (html: string) => html };
+    // 替身也照契约给 `hmr`：关掉时它是 `false`（页面因此不注入客户端）。
+    return {
+      hmr: options.hmr !== false,
+      serve: () => false,
+      transformHtml: async (html: string) => html,
+    };
   },
 }));
 
@@ -78,6 +85,31 @@ describe("vite handoff 的 HMR 端口", () => {
       expect(received, "startViteDev 必须被调一次").toHaveLength(1);
       // vite 的 `clientPort` 由它来（`serve-vite` 直接透传）：传 3080 就是一条连不上的 ws。
       expect(received[0]?.pagePort, "HMR 的 clientPort").toBe(3081);
+    } finally {
+      await app.dispose();
+    }
+  });
+
+  it("关掉客户端 HMR：不透传 `hmr` 之外的接线，且契约面报 false", async () => {
+    const app = await bootstrapApplication({
+      providers: [
+        ...provideAppEnv(
+          configure(AppEnvDefault, {
+            profileDir: join(tmpdir(), "dsh-vite-handoff-port"),
+            dataDir: join(tmpdir(), "dsh-vite-handoff-port"),
+          }),
+        ),
+        FakeStartup,
+        FakeWebServer,
+        FakeFederation,
+        ...provideViteHandoff(configure(ViteHandoffDefault, { hmr: false })),
+      ],
+      timeoutMs: 10_000,
+    });
+    try {
+      expect(received, "startViteDev 必须被调一次").toHaveLength(1);
+      expect(received[0]?.hmr, "关掉时把 false 交给 vite（不建 ws）").toBe(false);
+      expect(app.get(ViteHandoff).hmr, "页面据此不注入 /@vite/client").toBe(false);
     } finally {
       await app.dispose();
     }
