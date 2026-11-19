@@ -1011,6 +1011,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-workspace
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/test-support/tool-testkit
       '@morlay/dsh-agent-loop':
         specifier: workspace:^
         version: link:../dsh-agent-loop
@@ -1088,9 +1091,6 @@ importers:
       '@deepseek-ai/dsh-permission-presets':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/permission-presets
-      '@deepseek-ai/dsh-scope':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/core/scope
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/tool-ask-user

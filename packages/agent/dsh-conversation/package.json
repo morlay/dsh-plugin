@@ -94,11 +94,13 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-auth": "workspace:^",
     "@morlay/dsh-command": "workspace:^",
     "@morlay/dsh-permission": "workspace:^",
+    "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
     "@morlay/dsh-shell": "workspace:^",
     "@morlay/dsh-storage": "workspace:^",
