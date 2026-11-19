@@ -5,7 +5,23 @@
 //   `userQuestions/attachWait`  **stream**，参数 `agent` / `callId`，逐帧给 `{ remainingMs }`
 // 依据：`vendor/deepseek-harness/packages/interaction/user-questions/lib/typert.remote-client.ts:40-140`。
 import type { AskUserQuestionAnswer } from "@deepseek-ai/dsh-user-questions/types";
-import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
+import {
+  RemoteGroup,
+  RemoteMethod,
+  remoteGroupNameOf,
+  type RemoteResultWire,
+} from "@morlay/zephyr-app/remote";
+
+/**
+ * 组名（`userQuestions`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
+ */
+export function userQuestionsGroupName(): string {
+  const group = remoteGroupNameOf(UserQuestionsEndpoint);
+  if (group === undefined) throw new Error("UserQuestionsEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
 
 /** `userQuestions/answer` 的命名参数（键名照上游 descriptor 的 `parameters[].name`）。 */
 export interface UserQuestionsAnswerRequest {

@@ -7,7 +7,8 @@ import { SessionController } from "@morlay/dsh-conversation/ui";
 import { UiConversation } from "@morlay/dsh-conversation/ui";
 import { UiSession } from "@morlay/dsh-conversation/ui";
 // 远端身份只从 `./endpoint`（client-safe）取：包根带三个宿主 service，浏览器半引不得。
-import { USER_QUESTIONS_REMOTE } from "@morlay/dsh-permission/endpoint";
+import { USER_QUESTIONS_REMOTE, userQuestionsGroupName } from "@morlay/dsh-permission/endpoint";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class UserQuestionsSlots extends fromCordis(UiUserQuestionsPlugin) {
@@ -28,7 +29,7 @@ export class UserQuestionsSlots extends fromCordis(UiUserQuestionsPlugin) {
     await this.mount(ctx, undefined, {
       sessions: this.sessions,
       remote: this.remote,
-      "remote.userQuestions": this.remote,
+      [remoteNamespaceKey(userQuestionsGroupName())]: this.remote,
       uiSession: this.uiSession,
       slots: this.slots,
       locale: this.locale,

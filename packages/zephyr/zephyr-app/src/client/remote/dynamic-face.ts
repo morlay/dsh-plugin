@@ -48,6 +48,12 @@ export function remoteMethodOf(
  *
  * 我们自己声明的组（`@RemoteGroup` 的类）不在上游 `TYPERT_REMOTE` 里，所以那个名字得由我们
  * 通过 deps 发布；键名就是这个函数算的。名字规则只活在这里，别处不写 `"remote." + group`。
+ *
+ * **deps 键一律由它给出**：`[remoteNamespaceKey(xxxGroupName())]: remote`——组名从契约类上的
+ * `@RemoteGroup` 读（`remoteGroupNameOf`，各域导出的 `xxxGroupName()` 取不到就当场抛）。
+ * 不写字面量、也不存常量：字面量是同一件事的第二个 home，而只盯 `export const` 的判据会漏掉它。
+ * 判据：`grep -rn '"remote\.[a-zA-Z]' packages --include='*.ts' | grep -v __tests__ | grep -v dynamic-face`
+ * 应为 0。
  * @param group - 组名（`commands`）。
  * @returns cordis 服务名（`remote.commands`）。
  */

@@ -10,6 +10,9 @@ import * as UiOpenInAppPlugin from "@deepseek-ai/dsh-client-ui-open-in-app/clien
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { ContextMenus, Layout, Locale, Remote, Shortcuts, Slots } from "@morlay/zephyr-app/client";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { workspaceFilesGroupName } from "@morlay/dsh-workspace/endpoint";
 import { SessionControllerDefault } from "../session-controller.service.ts";
 import { SidebarRight, SidebarRightTabs } from "../ports.ts";
 
@@ -52,8 +55,8 @@ export class OpenInAppSlots extends fromCordis(OpenInApp, UiOpenInAppPlugin) {
       locale: this.locale,
       remote: this.remote,
       // 带点的名字是**字面键**：点号在名字里，不是两级属性。
-      "remote.session": this.remote,
-      "remote.workspaceFiles": this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
+      [remoteNamespaceKey(workspaceFilesGroupName())]: this.remote,
       shortcuts: this.shortcuts,
       layout: this.layout,
     });

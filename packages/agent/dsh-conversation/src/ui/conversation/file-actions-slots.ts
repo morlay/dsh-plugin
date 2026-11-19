@@ -6,6 +6,9 @@ import * as UiFileActionsPlugin from "@deepseek-ai/dsh-client-ui-file-actions/cl
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { ContextMenus, Locale, Remote, Slots } from "@morlay/zephyr-app/client";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
+import { sessionGroupName } from "@morlay/dsh-session/endpoint";
+import { workspaceFilesGroupName } from "@morlay/dsh-workspace/endpoint";
 
 /**
  * \`fileActions\` 的契约：与 \`OpenInApp\` 同理——这一行只注册菜单项，不提供服务。
@@ -30,8 +33,8 @@ export class FileActionsSlots extends fromCordis(FileActions, UiFileActionsPlugi
       locale: this.locale,
       remote: this.remote,
       // 带点的名字是**字面键**。
-      "remote.session": this.remote,
-      "remote.workspaceFiles": this.remote,
+      [remoteNamespaceKey(sessionGroupName())]: this.remote,
+      [remoteNamespaceKey(workspaceFilesGroupName())]: this.remote,
     });
   }
 }

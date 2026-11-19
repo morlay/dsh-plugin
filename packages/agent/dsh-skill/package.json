@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
     "./ui": "./src/ui/index.ts",
     "./package.json": "./package.json",
     "./server": "./src/server/index.ts"

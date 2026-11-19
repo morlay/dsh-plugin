@@ -2,7 +2,23 @@
 //
 // 宿主侧在 `server/skill-endpoint.service.ts` 实现它，浏览器侧按它消费（`ui/` 的 `@RemoteClient()`）。
 // 契约是普通类，不引宿主包——形状照上游 descriptor（`namespace: 'skills'`）抄，字段一个不少。
-import { RemoteGroup, RemoteMethod, type RemoteResultWire } from "@morlay/zephyr-app/remote";
+import {
+  RemoteGroup,
+  RemoteMethod,
+  remoteGroupNameOf,
+  type RemoteResultWire,
+} from "@morlay/zephyr-app/remote";
+
+/**
+ * 组名（`skills`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * @returns wire 组名。
+ * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
+ */
+export function skillsGroupName(): string {
+  const group = remoteGroupNameOf(SkillEndpoint);
+  if (group === undefined) throw new Error("SkillEndpoint 没有 @RemoteGroup：组名取不到");
+  return group;
+}
 
 /** wire 上的端点名。 */
 

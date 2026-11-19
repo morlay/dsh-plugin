@@ -2,6 +2,8 @@
 import * as UiSkillPlugin from "@deepseek-ai/dsh-client-ui-skill/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
+import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
+import { skillsGroupName } from "@morlay/dsh-skill/endpoint";
 import {
   InputTriggers,
   Locale,
@@ -35,7 +37,7 @@ export class SkillSlots extends fromCordis(UiSkillPlugin) {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,
-      "remote.skills": this.remote,
+      [remoteNamespaceKey(skillsGroupName())]: this.remote,
       sidebarRight: this.sidebarRight,
       uiConversation: this.uiConversation,
     });
