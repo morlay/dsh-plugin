@@ -1,17 +1,20 @@
-// 只服务 `/api/remote.mux` 的 http server：把 `MuxServer` 的 upgrade 路由挂上去。
+// 只服务 `/api/remote.mux` 的 http server：**直接用上游的协议实现**，分派点按本夹具的需要给。
 //
 // 用真 `http` + 真 `WebSocket`（node 侧）：这条缝的两端都是协议，不是平台，
 // 所以不需要浏览器就能验「客户端 transport ↔ 服务端帧分发」。
-import { createServer, type IncomingMessage, type Server } from "node:http";
-import type { Duplex } from "node:stream";
-import { MuxServer, RemoteHandlersDefault } from "@morlay/zephyr-app";
+//
+// 这里不装框架那一行（`MuxServer`）：夹具要的是「宿主推什么、客户端就收到什么」，把准入、DI、
+// upload 分派都拉进来只会让判据停在别处。协议的复用面是上游的 `RemoteStreamMuxServer`。
+import { createServer, type Server } from "node:http";
+import { RemoteStreamMuxServer } from "@deepseek-ai/dsh-api-gateway/src/stream-server.ts";
+import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 
 /** 起一个 mux server，返回它的 url、路由表、事件源入口与关闭句柄。 */
 export async function serveMux(): Promise<{
   url: string;
   handlers: RemoteHandlersDefault;
   server: Server;
-  /** 往「转发事件源」推一帧（上游 `\$events` 流的 `emit` / `waterfall` 帧）。 */
+  /** 往「转发事件源」推一帧（上游 `$events` 流的 `emit` / `waterfall` 帧）。 */
   push: (frame: unknown) => void;
 }> {
   const handlers = new RemoteHandlersDefault();
@@ -25,64 +28,59 @@ export async function serveMux(): Promise<{
     queues.set(endpoint, created);
     return created;
   };
-  const routes: {
-    path: string;
-    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
-  }[] = [];
-  const mux = new MuxServer();
-  // `Object.assign` 的返回类型是"目标 & 来源"，来源字段不必先断言成索引签名。
-  Object.assign(mux, {
-    handlers,
-    webServer: {
-      registerUpgrade: (route: { path: string }) => {
-        routes.push(route as never);
-        return () => {};
-      },
-    },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-    disposeRoute: undefined,
-    // 本夹具不装 DI：`typert` 没有提供者，显式关掉流式分流（否则读到的是未填充的注入占位）。
-    typertOverride: undefined,
-    // gateway 同理：路由表没命中的端点（`session/control` 这类流）回落时不能拿到注入占位，
-    // 给一个明确"没有实现"的替身，报错点才停在协议层而不是 `invoke is not a function`。
-    gateway: {
-      invoke: async () => {
-        throw new Error("[remote] 没有实现");
-      },
-      // 浏览器答复（"$events/result"）的入口：替身收下即算结算。
-      dispatchWire: async () => ({ ok: true as const, value: undefined }),
-      // `\$events` 这条流由 gateway 的转发事件源供给（宿主侧是 `api-remotes` + `typertGateway`）。
-      // 本夹具用一个可推帧的队列替身：断言「宿主推什么，客户端就收到什么」。
-      wireStream: {
-        // **按 endpoint 分队列**：`session/control` 这类流与 `$events` 是两条独立的流，
-        // 共用一个队列会让先打开的流把事件帧吞掉（症状：推送永远收不到）。
-        open: async (endpoint: string): Promise<AsyncIterable<unknown>> => {
-          const list = queueOf(endpoint);
-          const ready =
-            endpoint === "$events"
-              ? [{ type: "ready", clientId: "fixture", host: { home: "/tmp" } }]
-              : [];
-          return {
-            async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
-              for (const frame of ready) yield frame;
-              for (;;) {
-                const next = list.shift();
-                if (next !== undefined) {
-                  yield next;
-                  continue;
-                }
-                await new Promise<void>((resolve) => {
-                  wakes.set(endpoint, resolve);
-                });
+  /** 客户端上行（`terminal/attach` 那类双向流才用）。 */
+  const uplinks = new Map<string, unknown[]>();
+  const peer = {
+    id: "fixture",
+    signal: new AbortController().signal,
+    interactions: "answer",
+    principal: { kind: "owner" },
+    // 上游 mux 用 `peer.ctx.effect` 把 socket 绑到 peer 的作用域上：缺了它 socket 会被立刻关掉。
+    ctx: { effect: () => () => {} },
+  };
+  const mux = new RemoteStreamMuxServer(
+    async (endpoint, payload, uplink) => {
+      const args = (payload as { args?: Record<string, unknown> } | undefined)?.args ?? {};
+      const own = handlers.stream(endpoint, args, new AbortController().signal, uplink);
+      if (own !== undefined) return own;
+      if (endpoint === "$events") {
+        const list = queueOf(endpoint);
+        return {
+          async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
+            yield { type: "ready", clientId: "fixture", host: { home: "/tmp" } };
+            for (;;) {
+              const next = list.shift();
+              if (next !== undefined) {
+                yield next;
+                continue;
               }
-            },
-          };
+              await new Promise<void>((resolve) => {
+                wakes.set(endpoint, resolve);
+              });
+            }
+          },
+        };
+      }
+      const items = uplinks.get(endpoint) ?? [];
+      uplinks.set(endpoint, items);
+      return {
+        async *[Symbol.asyncIterator](): AsyncGenerator<unknown> {
+          for (;;) {
+            const next = items.shift();
+            if (next !== undefined) {
+              yield next;
+              continue;
+            }
+            await new Promise<void>((resolve) => {
+              wakes.set(endpoint, resolve);
+            });
+          }
         },
-        failure: () => ({ code: "gateway/invoke-failed", message: "x", details: {} }),
-      },
+      };
     },
-  });
-  mux.onInit();
+    () => ({ code: "gateway/invoke-failed", message: "x", details: {} }),
+    { heartbeatIntervalMs: 2_000, streamInboxBytes: 262_144, compression: false },
+  );
 
   // 两级 wire：unary 走 `/api/<endpoint>` 的 HTTP RPC（上游的 client-request 信封），
   // 流式与事件流走 `/api/remote.mux` 的 upgrade。夹具把两面都挂在同一个 server 上。
@@ -116,12 +114,11 @@ export async function serveMux(): Promise<{
   });
   server.on("upgrade", (req, socket, head) => {
     const path = (req.url ?? "").split("?")[0] ?? "/";
-    const route = routes.find((entry) => entry.path === path);
-    if (route === undefined) {
+    if (path !== "/api/remote.mux") {
       socket.destroy();
       return;
     }
-    route.handler(req, socket, head);
+    mux.handleUpgrade(req, socket, head, peer);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
