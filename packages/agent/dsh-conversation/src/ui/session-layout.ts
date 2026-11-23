@@ -22,12 +22,11 @@ export class SessionLayout extends fromCordis(UiSession, UiSessionPlugin) {
     // 上游 `apply` 读 `ctx.sessions` / `ctx.remoteAccess` / `ctx.slots`（+ `inject` 声明的 `remote`）：
     // 全部按 deps 交进去（`fromCordis` 的读面替换）。
     try {
-      await this.mount(ctx, undefined, {
-        sessions: this.sessions,
-        remoteAccess: this.remoteAccess,
-        slots: this.slots,
-        remote: this.remote,
-      });
+      // **不交 deps**：上游 `ui-session` 会把子服务 `uiSession.sessionStatus` 挂到实例上，那一步要求
+      // 实例的 ctx 是**真 ctx**（deps 代理会让子服务名在代理之外解析，读它时抛
+      // `cannot get property "uiSession.sessionStatus" without inject`）。它要的四个名字
+      // （`sessions` / `slots` / `remote` / `remoteAccess`）都在 store 里，靠名字满足即可。
+      await this.mount(ctx);
     } catch (error) {
       // 带阶段的错误：不然上游 `apply` 里的失败会被错误边界吞成空白页。
       throw new Error(`SessionLayout.mount 失败：${(error as Error).message}`, { cause: error });

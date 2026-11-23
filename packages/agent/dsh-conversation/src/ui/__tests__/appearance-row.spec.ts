@@ -16,7 +16,7 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { ConfigForms, Connection, Remote, mockTransport } from "@morlay/zephyr-app/client";
+import { ConfigForms, ClientConnection, Remote, mockTransport } from "@morlay/zephyr-app/client";
 // `RemoteDefault` 只有模块入口导出（`@morlay/zephyr-app/client` 的 barrel 不带实现类）。
 import { RemoteDefault } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -55,7 +55,7 @@ class FakeAppEnv extends AppEnv {
  * 传输接缝的最小连接面：本 spec 的 wire 走 `mockTransport`，连接只用来满足 `RemoteDefault` 的注入
  * （真实现要浏览器 WebSocket）。
  */
-class FakeConnection extends Connection {
+class FakeConnection extends ClientConnection {
   readonly interactions = "none" as const;
 
   readonly generation = {
@@ -107,7 +107,7 @@ async function boot(): Promise<{ app: App; wire: WireCall[]; configForms: Config
       // `settings/describe` 的枚举源头是 provider 目录：真 `Llm` + 两条 provider 行。
       ...provideAgent(),
       ...provideSetting(),
-      { provide: Connection, useFactory: () => new FakeConnection() },
+      { provide: ClientConnection, useFactory: () => new FakeConnection() },
       RemoteHandlersDefault,
       RemoteDefault,
       SettingsHost,

@@ -35,6 +35,8 @@ export function workspaceOf(path: string, onAttach?: (sessionId: string) => void
     },
     insertSessionBefore: async (): Promise<void> => {},
     detachSession: async (): Promise<void> => {},
+    // 上游 0.2.3：按 `sessionIds` 顺序返回已索引的 header，不做持久化 I/O（这里没有索引，返回空）。
+    getSessionHeaders: () => [],
     status: async (): Promise<"ok" | "missing-dir"> => "ok",
   };
 }

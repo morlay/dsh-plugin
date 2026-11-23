@@ -8,7 +8,7 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import {
   ConfigForms,
-  Connection,
+  ClientConnection,
   FileDragDefault,
   Locale,
   Remote,
@@ -42,7 +42,7 @@ export class ChatSlots extends fromCordis(UiChatPlugin) {
 
   private readonly sidebarRight = inject(SidebarRight);
 
-  private readonly connection = inject(Connection);
+  private readonly connection = inject(ClientConnection);
 
   private readonly fileDrag = inject(FileDragDefault);
 

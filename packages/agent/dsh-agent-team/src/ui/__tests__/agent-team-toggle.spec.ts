@@ -13,7 +13,13 @@
  * 替身的边界：`FakeRemote.$mount` 复刻 `RemoteDefault.publishNamespace` 的**唯一关键行为**——
  * 按 descriptor 把 `remote.<namespace>` 发布成服务名（不发布，上游的 `ctx.inject` 就等不到）。
  */
-import { bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
+import {
+  bootstrapApplication,
+  Injectable,
+  rootContextKey,
+  type App,
+  type Context,
+} from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentTeamUi } from "../agent-team.ui.ts";
@@ -49,7 +55,7 @@ class FakeRemote extends Remote {
     const descriptors =
       (contribution as { descriptors?: readonly Descriptor[] } | undefined)?.descriptors ?? [];
     const disposed: Array<() => void> = [];
-    const root = this.ctx?.root ?? this.ctx;
+    const root = this.ctx === undefined ? undefined : this.ctx[rootContextKey];
     for (const descriptor of descriptors) {
       const namespace = String(descriptor.namespace);
       if (this.mounted.includes(namespace)) continue;

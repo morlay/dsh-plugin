@@ -8,6 +8,7 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import {
   ConfigForms,
   FileDragDefault,
+  fixedSyncedConfig,
   Locale,
   Remote,
   Resources,
@@ -45,7 +46,8 @@ export class SidebarDocumentPreviewSlots extends fromCordis(UiDocumentPreviewPlu
   private readonly fileDrag = inject(FileDragDefault);
 
   override async onInit(ctx: Context): Promise<void> {
-    await this.mount(ctx, undefined, {
+    // 上游 0.2.3 起这份 client 的 `Config` 由 Host 同步（`office` / `excel` 两档上限）：没通道时给"未配置"。
+    await this.mount(ctx, fixedSyncedConfig(["office", "excel"]), {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,

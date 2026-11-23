@@ -35,4 +35,7 @@ export abstract class Permission {
   abstract readonly optionOf: PermissionPresetService["optionOf"];
 
   abstract readonly set: PermissionPresetService["set"];
+
+  /** 直接写预设（上游 0.2.3 新增：与界面开关同一条写入口）。 */
+  abstract readonly setPreset: PermissionPresetService["setPreset"];
 }

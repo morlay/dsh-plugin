@@ -36,11 +36,12 @@
     "@deepseek-ai/dsh-authorization": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-credentials-local": "workspace:^",
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {},
   "engines": {
-    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
   }
 }

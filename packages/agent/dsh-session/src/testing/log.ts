@@ -5,7 +5,9 @@
 // - `oneTurnLogStepFirst()`：`turnLog(0, 1)` 派生，step/start 在 user/message **之前**
 //   （端点那一侧用 seq 2 = user/message 定位一条用户消息）。
 // 合并任一份都会动到既有断言，所以是两个名字，不要合并。
-import { MessageId } from "@deepseek-ai/dsh-llm/brand";
+// 上游 0.2.3 去掉了 `@deepseek-ai/dsh-llm/brand` 子路径导出。消息 id 的类型从会话事件自己派生：
+// 上游 llm 的 `/host` 面已经有唯一 owner（`@morlay/dsh-agent`），fixtures 不再为这个名字引它。
+// 品牌是纯编译期标记（上游 `brandString` 的实现就是 `value as T`）。
 import { SESSION_FORMAT_VERSION, Session, SessionId, SessionSeq } from "@deepseek-ai/dsh-session";
 import type {
   SessionEvent,
@@ -15,6 +17,12 @@ import type {
   SurfaceEventType,
   SurfaceIntent,
 } from "@deepseek-ai/dsh-session";
+
+/** 消息 id 的类型（品牌只在编译期；从 `user/message` 事件的数据面派生，不另引上游包）。 */
+type MessageId = SessionEvent<"user/message">["data"]["id"];
+
+/** 把一个裸字符串铸成消息 id（与上游 `brandString` 同一步：品牌只在编译期）。 */
+const messageIdOf = (id: string): MessageId => id as MessageId;
 
 /**
  * 造一份会话 header。
@@ -51,7 +59,7 @@ export function userMessage(
     seq: SessionSeq(seq),
     time,
     data: {
-      id: MessageId(id),
+      id: messageIdOf(id),
       role: "user",
       content: [{ type: "text", text }],
       source: { kind: "user" },
@@ -86,7 +94,7 @@ export function assistantMessage(
       turn,
       step,
       message: {
-        id: MessageId(id),
+        id: messageIdOf(id),
         role: "assistant",
         content: [{ type: "text", text }],
         source: { kind: "model", provider: "mock", model: "mock" },
@@ -163,7 +171,7 @@ export function oneTurnLog(): SessionEvent[] {
       seq: SessionSeq(1),
       time: 2,
       data: {
-        id: MessageId("one-turn-user"),
+        id: messageIdOf("one-turn-user"),
         role: "user",
         content: [{ type: "text", text: "hi" }],
         source: { kind: "user" },
@@ -179,7 +187,7 @@ export function oneTurnLog(): SessionEvent[] {
         turn: 1,
         step: 1,
         message: {
-          id: MessageId("one-turn-assistant"),
+          id: messageIdOf("one-turn-assistant"),
           role: "assistant",
           content: [{ type: "text", text: "hello" }],
           source: {

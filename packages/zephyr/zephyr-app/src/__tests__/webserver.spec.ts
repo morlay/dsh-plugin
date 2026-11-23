@@ -86,6 +86,34 @@ afterAll(async () => {
   await app.dispose();
 });
 
+describe("auth: required 的路由（上游 0.2.3 的 owner Peer 档）", { timeout: 10_000 }, () => {
+  it("没有连接面时拒绝（403），不会把 handler 当公开路由跑", async () => {
+    // 这条装配只有 WebServer：`Connection` 缺席 → 准入无从判定，必须拒绝而不是放行。
+    const strict = await bootstrapApplication({
+      providers: [Startup0, WebServerDefault],
+      timeoutMs: 6_000,
+    });
+    try {
+      const server = strict.get(WebServer);
+      let called = 0;
+      server.register({
+        kind: "exact",
+        path: "/_test/owner-only",
+        auth: "required",
+        handler: (_q, s) => {
+          called += 1;
+          s.end("ok");
+        },
+      });
+      const response = await fetch(`http://127.0.0.1:${String(server.port)}/_test/owner-only`);
+      expect(response.status).toBe(403);
+      expect(called).toBe(0);
+    } finally {
+      await strict.dispose();
+    }
+  });
+});
+
 describe("路由表与 fallback / upgrade", { timeout: 10_000 }, () => {
   it("注册即记录：prefix / fallback / upgrade 都出现在 routesOf()", () => {
     expect(webServer.routesOf()).toEqual(

@@ -46,6 +46,12 @@ export abstract class SubagentRegistry {
 
   abstract readonly prompt: SubagentRuntime["prompt"];
 
+  /** 某一层子代理树的容量：在跑数与上限（上游 0.2.3 新增）。 */
+  abstract readonly capacityOf: SubagentRuntime["capacityOf"];
+
+  /** 当前配置的子代理并发上限（上游 0.2.3 新增的 volatile 配置读口）。 */
+  abstract readonly maxActiveSubagents: SubagentRuntime["maxActiveSubagents"];
+
   abstract readonly registerProvider: SubagentRuntime["registerProvider"];
 
   abstract readonly sendMessage: SubagentRuntime["sendMessage"];

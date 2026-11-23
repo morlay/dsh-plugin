@@ -38,6 +38,7 @@ export {
 export { provideSessionShellSlots } from "./shell/index.ts";
 // 本域浏览器面的**聚合入口**（一个面一个装配函数）：布局 + 侧栏骨架 + 会话界面 + 输入区。
 export { provideConversationUi } from "./conversation-ui.provide.ts";
+export { provideSessionStatusUi } from "./session-ui.provide.ts";
 export * from "./subagents-remote.binding.ts";
 
 // 设置面板（模型选择 / 通用 / 外观）：界面属于会话域，数据面在 `@morlay/dsh-setting`。

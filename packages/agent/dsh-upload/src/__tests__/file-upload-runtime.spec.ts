@@ -7,13 +7,39 @@
 // 这个 spec 用**同一形状**的 ctx 复现那条读法（no-op 子插件 + `fiber.ctx.extend`，与 `createScope` 一致）。
 import { FileUpload } from "../ui/file-upload.contract.ts";
 import { provideFileUploadUi } from "../ui/file-upload.provide.ts";
-import { Connection, Remote, RemoteDefault } from "@morlay/zephyr-app/client";
+import { ClientConnection, Remote, RemoteDefault } from "@morlay/zephyr-app/client";
+import { Connection } from "@morlay/zephyr-app/contract";
 import { bootstrapApplication, inject, Injectable, type App, type Context } from "@morlay/zephyr";
 import { afterEach, describe, expect, it } from "vitest";
 
-/** 假连接面：`Remote` 行构造期只用到这一面的形状（本 spec 不建连）。 */
+/** 假连接面（**宿主面**）：上传行构造期会往宿主登记一条流式路由。 */
 @Injectable()
-class FakeConnection extends Connection {
+class FakeHostConnection extends Connection {
+  readonly rpc: Connection["rpc"] = {
+    handle: () => async () => {},
+    intercept: () => async () => {},
+  } as Connection["rpc"];
+
+  readonly fetch: Connection["fetch"] = {
+    register:
+      (_route: Parameters<Connection["fetch"]["register"]>[0]): (() => Promise<void>) =>
+      async () => {},
+  };
+
+  createSharedFetchHandler(): never {
+    throw new Error("spec: 不建共享分派器");
+  }
+
+  admit(_request: never): never {
+    throw new Error("spec: 不接连接");
+  }
+
+  readonly browserPeer = {} as Connection["browserPeer"];
+}
+
+/** 假连接面（**浏览器面**）：`Remote` 行构造期只用到这一面的形状（本 spec 不建连）。 */
+@Injectable()
+class FakeConnection extends ClientConnection {
   readonly interactions = "none" as const;
 
   readonly generation = {
@@ -30,7 +56,11 @@ class FakeConnection extends Connection {
 
   readonly rpc = {};
 
-  readonly fetch = { register: (): (() => void) => () => {} };
+  readonly fetch = {
+    register:
+      (_route: Parameters<Connection["fetch"]["register"]>[0]): (() => void) =>
+      () => {},
+  };
 
   readonly openWebSocket = (): never => {
     throw new Error("spec: 不建连");
@@ -40,7 +70,7 @@ class FakeConnection extends Connection {
     // spec：没有长连接可重连。
   }
 
-  readonly registerGenerationSource = (): (() => void) => () => {};
+  readonly registerGenerationSource = (): (() => Promise<void>) => async () => {};
 
   readonly start = (): { stop(): void } => ({ stop: () => {} });
 }
@@ -98,7 +128,13 @@ async function boot(): Promise<{
   remote: Remote & RemoteWithFileUploads;
 }> {
   const app = await bootstrapApplication({
-    providers: [FakeConnection, RemoteDefault, FileUploadReader, ...provideFileUploadUi()],
+    providers: [
+      FakeConnection,
+      FakeHostConnection,
+      RemoteDefault,
+      FileUploadReader,
+      ...provideFileUploadUi(),
+    ],
     timeoutMs: 10_000,
   });
   opened.push(app);

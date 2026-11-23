@@ -34,6 +34,17 @@ export type UiSessionFace = ZephyrContext["uiSession"];
 /** `ctx.uiSession`（会话界面服务；右侧面板等行要读它）。 */
 export const UiSession = new InjectionToken<UiSessionFace>("uiSession");
 
+/** `ctx.uiSession.sessionStatus` 的面（上游 `ui-session-status` 行的状态服务：未读标记的来源）。 */
+export type UiSessionStatusFace = ZephyrContext["uiSession"]["sessionStatus"];
+
+/**
+ * `ctx.uiSession.sessionStatus`（上游 `ui-session-status` 行发布的**子服务**）。
+ *
+ * 令牌名就是上游的子服务名：`fromCordis` 按它从 store 取面；消费方 `inject(UiSessionStatus)` 后
+ * 由 `mount` 的 deps **替换**上游那次按名读——不靠全局名字，也不靠装配顺序里的隐式约定。
+ */
+export const UiSessionStatus = new InjectionToken<UiSessionStatusFace>("uiSession.sessionStatus");
+
 /** `ctx.sidebarRight` 的面（上游 `SidebarRightController` 实例：右侧面板的对外动作面）。 */
 export type SidebarRightFace = ZephyrContext["sidebarRight"];
 

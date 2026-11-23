@@ -9,7 +9,7 @@
 import { ClientSessions } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/service.ts";
 import { inject, Injectable, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { CommandRunner } from "@morlay/dsh-command/contract";
-import { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import { ClientConnection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import {
   SessionController,
   type SessionCatalogState,
@@ -63,7 +63,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
   private readonly commandRunner = inject.optional(CommandRunner);
 
   /** 连接面：**可选**——只测数据面的装配没有它，按单代跑（上游流生命周期的重连因此不触发）。 */
-  private readonly connection = inject.optional(Connection);
+  private readonly connection = inject.optional(ClientConnection);
 
   private inner: ClientSessions | undefined;
 

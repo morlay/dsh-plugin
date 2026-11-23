@@ -3,8 +3,8 @@
 // 契约只有四个成员：`interactions` / `openWebSocket` / `rpc` / `start`。
 // 上游实现把它们和认证、全局 transport 钩子缠在一起，且实测 `ctx.provide` 没进我们的作用域——
 // 与其猜，不如按契约自己实现：同源 HTTP + WebSocket，`rpc.open` 走 fetch。
-import { Injectable, type OnInit } from "@morlay/zephyr";
-import { Connection } from "@morlay/zephyr-app/contract";
+import { Injectable, type Context, type OnInit } from "@morlay/zephyr";
+import { ClientConnection } from "@morlay/zephyr-app/contract";
 
 /** RPC 载体：`open(channel, endpoint, payload)` 走同源 HTTP POST。 */
 interface RpcFace {
@@ -25,7 +25,7 @@ export interface ClientConnectionOptions {
 }
 
 @Injectable()
-export class ClientConnectionDefault extends Connection implements OnInit {
+export class ClientConnectionDefault extends ClientConnection implements OnInit {
   readonly interactions = "answer" as const;
 
   private readonly options: ClientConnectionOptions;
@@ -61,7 +61,21 @@ export class ClientConnectionDefault extends Connection implements OnInit {
 
   readonly openWebSocket = (path: string): WebSocket => {
     const origin = this.origin;
-    return new WebSocket(`${origin.replace(/^http/, "ws")}${path}`);
+    this.lastSocketPath = path;
+    this.setState("connecting");
+    const socket = new WebSocket(`${origin.replace(/^http/, "ws")}${path}`);
+    this.lastSocket = socket;
+    socket.addEventListener("open", () => {
+      if (this.lastSocket === socket) this.setState("connected");
+    });
+    // 断开与失败都算"没连上"：宿主关了之后侧栏不该还显示「已连接」。
+    socket.addEventListener("close", () => {
+      if (this.lastSocket === socket) this.setState("disconnected");
+    });
+    socket.addEventListener("error", () => {
+      if (this.lastSocket === socket) this.setState("disconnected");
+    });
+    return socket;
   };
 
   readonly rpc: RpcFace = {
@@ -78,23 +92,54 @@ export class ClientConnectionDefault extends Connection implements OnInit {
     intercept: () => () => {},
   };
 
+  /** 当前连接状态：由**真实 socket 生命周期**驱动（open / close / error）。 */
+  private snapshot: "connected" | "connecting" | "disconnected" = "connecting";
+
+  private readonly listeners = new Set<() => void>();
+
+  /** 最后一次建连的路径：`reconnect()` 用它重开一条。 */
+  private lastSocketPath: string | undefined;
+
   /**
-   * 连接恢复状态：本实现的传输是「每次 RPC 直连 fetch」，没有长连接与退避循环，
-   * 所以在页面上恒为已连接。上游设置页拿它渲染"重连"入口，形状对齐即可。
+   * 连接恢复状态（上游设置页与侧栏的「重连」入口读它）。
+   *
+   * 值域与上游同形，来源是真实的 mux socket：`open` → `connected`，`close` / `error` → `disconnected`。
+   * 之前这里恒 `connected`，所以宿主断了前端没有任何反应。
    */
   readonly state = {
-    // 值域是上游的 `ConnectionState`（`'connected' | 'disconnected' | 'connecting'`）。
-    // 这里恒 `'connected'`：本实现的传输是每次 RPC 直连 fetch，没有可断的长连接。
-    getSnapshot: (): "connected" => "connected",
-    subscribe: (): (() => void) => () => {},
+    getSnapshot: (): "connected" | "connecting" | "disconnected" => this.snapshot,
+    subscribe: (listener: () => void): (() => void) => {
+      this.listeners.add(listener);
+      return () => {
+        this.listeners.delete(listener);
+      };
+    },
   };
 
-  /** 没有长连接可重连：空实现（设置页的「重连」按钮点了不做事）。 */
-  reconnect(): void {}
+  /** 换状态并通知订阅者（同值不通知：快照身份要稳定）。 */
+  private setState(next: "connected" | "connecting" | "disconnected"): void {
+    if (this.snapshot === next) return;
+    this.snapshot = next;
+    for (const listener of this.listeners) listener();
+  }
+
+  /**
+   * 立刻重连：把当前 socket 断开，传输层（`muxTransport`）会在下一次调用 `openWebSocket` 时重开。
+   * @returns 无。
+   */
+  reconnect(): void {
+    this.setState("connecting");
+    this.lastSocket?.close();
+  }
+
+  /** 当前由本行建出的 socket（`reconnect` 要能把它掐掉）。 */
+  private lastSocket: WebSocket | undefined;
 
   readonly start = (): { stop(): void } => ({ stop: () => {} });
 
-  onInit(): void {
-    // 纯传输面：没有需要装配的东西。
+  onInit(ctx: Context): void {
+    // 浏览器进程里 `connection` 就该是这一面（上游浏览器行按这个名严格读）。混合装配里宿主面先在时
+    // 让位给它——那种装配不真实，本仓只有测试会这么拼。
+    if (ctx.get("connection", false) === undefined) ctx.provide("connection", this);
   }
 }

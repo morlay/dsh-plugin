@@ -6,6 +6,7 @@ import { SessionPersistenceRdb } from "../admin/store.ts";
 import { SessionEditorEndpointDefault } from "./session-editor-endpoint.service.ts";
 import { SessionEditorDefault } from "../editor/service.ts";
 import { SessionQueryRdb } from "../admin/query.ts";
+import { SessionListMetadataProjection } from "./session-list-metadata.projection.ts";
 import { SessionAdminEndpointDefault } from "./session-admin-endpoint.service.ts";
 import { SessionAgentControlDefault } from "./session-agent-control.service.ts";
 
@@ -39,6 +40,8 @@ export const provideBetterSession = provide([
   SessionProjectionCacheRdb,
   SessionBranchRdb,
   SessionQueryRdb,
+  // 列表元数据投影（`blank` / `lastPromptAt`）：查询实现换成本包之后，这份注册得由装配面补（见该文件）。
+  SessionListMetadataProjection,
   // 运行中 agent 的目录面：编辑编排「先停 agent、再把用户输入排进重放队列」靠它。
   // 这一行按**契约令牌**注入上游目录（`inject.optional(AgentDirectory)`），所以它必须在同一份
   // bootstrap 清单里，并且由那份清单的**拓扑排序**排在目录适配行之后——`inject.optional` 也参与

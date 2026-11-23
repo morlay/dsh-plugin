@@ -3,6 +3,7 @@
 // slots / locale 是外部框架面，这里用最小替身记录**注册事实**——Factory 的 children 声明、字典注册与
 // 提示面的幂等（inline 后每个消费行的产物里各带一份这份代码，都会调 apply）。
 
+import { rootContextKey } from "@morlay/zephyr";
 import { describe, expect, it } from "vitest";
 import { NS, apply, inject } from "../schema-form/index.ts";
 import { SchemaFormHintsDefault, SERVICE_NAME, schemaFormHintsOf } from "../schema-form/hints.ts";
@@ -69,8 +70,8 @@ function bench(options: { services?: readonly string[] } = {}) {
       validate: () => undefined,
     },
   };
-  // 服务挂在 root 上：替身把 root 指回自己。
-  (ctx as Record<string, unknown>).root = ctx;
+  // 服务挂在根 ctx 上：替身把根符号（`ctx[rootContextKey]`）指回自己。
+  (ctx as Record<PropertyKey, unknown>)[rootContextKey] = ctx;
   return { ctx, registrations, factories, dictionaries, provided };
 }
 

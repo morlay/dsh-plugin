@@ -5,7 +5,7 @@ import McpResourceRuntime from "@deepseek-ai/dsh-mcp-resources";
 import { ToolRegistry } from "./index.ts";
 
 @Injectable()
-export class McpResources extends fromCordis(McpResourceRuntime, McpResourceRuntime) {
+export class McpResources extends fromCordis(McpResourceRuntime) {
   tools = inject(ToolRegistry);
 
   override async onInit(ctx: Context): Promise<void> {

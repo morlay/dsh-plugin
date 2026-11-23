@@ -25,6 +25,7 @@ import { provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import {
   AppEnv,
+  ClientConnection,
   Connection,
   RemoteAccess,
   TypertGateway,
@@ -33,13 +34,13 @@ import {
 } from "@morlay/zephyr-app";
 import { provideTypert } from "@morlay/zephyr-app";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { publishingTo } from "@morlay/zephyr-app/testing";
+import { FakeConnectionHost, publishingTo } from "@morlay/zephyr-app/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { provideApiSession } from "../server/api-session.provide.ts";
 
 /** 连接替身：上传行要它（生成下载地址）；本 spec 不触发上传。 */
 @Injectable()
-class FakeConnection extends Connection {
+class FakeConnection extends ClientConnection {
   readonly interactions = "none" as const;
 
   readonly generation = {
@@ -66,7 +67,7 @@ class FakeConnection extends Connection {
     call: async () => undefined,
     intercept: () => async () => {},
     handle: () => async () => {},
-  } as unknown as Connection["rpc"];
+  } as unknown as ClientConnection["rpc"];
 
   readonly fetch = {
     register: () => () => {},
@@ -139,7 +140,10 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
       { provide: RemoteAccess, useFactory: () => allowAllAccess() },
       publishingTo(RemoteAccess, "remoteAccess"),
-      { provide: Connection, useFactory: () => new FakeConnection() },
+      { provide: ClientConnection, useFactory: () => new FakeConnection() },
+      // 上游浏览器行按 `ctx.connection` 严格读：把浏览器面按那个名字发布。
+      // 装了 upload 行：它构造期往**宿主**连接登记路由，所以宿主面也要有。
+      { provide: Connection, useFactory: () => new FakeConnectionHost() },
       SubprocessDefault,
       // 被测面：上游会话端点（`session` 组的全部方法）。
       ...provideApiSession(),

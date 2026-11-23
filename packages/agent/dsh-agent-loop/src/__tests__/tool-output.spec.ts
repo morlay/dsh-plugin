@@ -3,7 +3,7 @@
 //
 // 断言落在这一组唯一有返回值的行为上：`saveText` 真的把正文落成文件，并给出字节数与定位串。
 // 其余两行（落盘策略、结果裁剪）没有自己的契约面，装得上、依赖满足即为它们的判据。
-import { LocalSpillStore } from "@deepseek-ai/dsh-spill-local";
+import { SpillLocal } from "@morlay/dsh-agent-loop";
 import { SystemPromptDefault, ToolRegistryDefault } from "@morlay/dsh-agent";
 import { SessionStore, SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection, provideTokenMeter } from "@morlay/dsh-session/server";
@@ -37,7 +37,8 @@ async function boot(): Promise<App> {
 describe("tool-output 域", () => {
   it("落盘行把正文写成文件，并给出字节数与定位串", { timeout: 20_000 }, async () => {
     const app = await boot();
-    const spill = app.get(LocalSpillStore);
+    // 令牌是**行**（`SpillLocal`）：上游类只是它包装的实现，不再是令牌。
+    const spill = app.get(SpillLocal);
 
     // 会话身份由真存储铸出来（本包不依赖 `@deepseek-ai/dsh-session` 的品牌工厂）。
     const session = app.get(SessionStore).create();

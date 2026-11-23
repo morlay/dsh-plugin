@@ -1,8 +1,8 @@
 // Agent Teams 的浏览器半：上游 `client-ui-agent-team` 经 `fromCordis` 接管。
 //
-// 它做三件事：注册 `agent-team` 字典、往 `conversation.session.header.actions` 挂一个 Team 动作
-// （成员 roster 与任务板面板由它自己的 `TeamAction` 渲染）、把**模型菜单里的「启用智能体团队协作」开关**
-// 注册进 `conversation.input.model.options`。**不重写组件**——上游那份照用。
+// 它做三件事：注册 `agent-team` 字典、往 `conversation.chat.commandview` 挂团队命令行、把
+// **模型菜单里的「启用智能体团队协作」开关**注册进 `conversation.input.model.options`（共享任务板在
+// `conversation.session.panel.section` 的 `shared-tasks` 下）。**不重写组件**——上游那份照用。
 //
 // 它按名字读 `locale` / `slots` / `remote`（+ `remote.agentTeams`）。
 //

@@ -10,6 +10,7 @@ interface WebServerFace {
   readonly protocol: string;
   /** 底层 http server（`listen`/`close`/`on("upgrade")` 可用；不限定实现）。 */
   readonly server: HttpHost | undefined;
+  /** 注册一条 HTTP 路由（`auth: "required"` 的路由由本服务做准入并把 peer 交给 handler）。 */
   readonly register: (route: WebRoute) => () => void;
   readonly registerUpgrade: (route: WebUpgradeRoute) => () => void;
   readonly registerFallback: (
@@ -36,7 +37,9 @@ export interface RegisteredRoute {
   readonly path: string;
 }
 
-@Injectable()
+// 上游按驼峰名 `webServer` 读它（`connection` 的信任围栏、bundle 的装配行）：派生名 `web-server` 之外
+// 再发布一份别名——与 `SessionPersistence` / `Setting` 同一口径。
+@Injectable({ name: "webServer" })
 export abstract class WebServer implements WebServerFace {
   abstract readonly host: WebServerFace["host"];
 

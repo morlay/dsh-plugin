@@ -93,6 +93,8 @@
     "@testing-library/react": "*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-session-panel": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-session-status": "workspace:^",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
     "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
@@ -108,6 +110,6 @@
     "@morlay/dsh-workspace": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
   }
 }

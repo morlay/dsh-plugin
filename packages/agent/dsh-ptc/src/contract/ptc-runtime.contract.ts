@@ -37,4 +37,7 @@ export abstract class PtcRuntime {
   abstract readonly timeout: NodePtcRuntimeService["timeout"];
 
   abstract readonly retainsState: NodePtcRuntimeService["retainsState"];
+
+  /** 注册每个新环境执行一次的初始化源码（上游 0.2.3 新增；返回注销函数）。 */
+  abstract readonly registerEnvironmentInitializer: NodePtcRuntimeService["registerEnvironmentInitializer"];
 }

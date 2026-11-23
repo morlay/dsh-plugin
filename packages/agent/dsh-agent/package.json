@@ -59,7 +59,6 @@
     "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-subagent": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tool-working-directory": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/dsh-working-directory": "workspace:^",
@@ -71,9 +70,10 @@
   },
   "devDependencies": {
     "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-auth": "workspace:^",
     "@morlay/dsh-session": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
   }
 }

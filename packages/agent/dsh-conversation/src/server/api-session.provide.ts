@@ -16,6 +16,7 @@ import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionQuery } from "@morlay/dsh-session";
 import { SessionStore, SessionWorkspace } from "@morlay/dsh-session";
 import { SESSION_CONTROLLER_REMOTE } from "./session-controller.remote.ts";
+import { SessionStatusHost } from "./session-status.service.ts";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { FileUploadStore } from "@morlay/dsh-upload";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
@@ -208,6 +209,8 @@ export const provideApiSession = provide([
   // `WorkflowDirectory` 那串消费方一起量，见设计记录的「迁移面」。
   FileReferenceServiceRow,
   ApiSessionControllerHost,
+  // 「会话已读状态」的宿主半：浏览器半那几条 `sessionStatus/follow` 的 endpoint 由它导出。
+  SessionStatusHost,
   // 这个 remote 的能力来自上面那条宿主行：由提供者登记（装配面不再维护清单）。
   remoteDescriptor(() => import("@deepseek-ai/dsh-api-session-controller/remote")),
 ]);

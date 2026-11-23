@@ -8,9 +8,10 @@ export * from "./contract/index.ts";
 
 /** headless 装配：目录 / 模型 / 提示词 / 工具注册表（不带 wire）。 */
 export { provideAgent } from "./agent.provide.ts";
-/** headless 装配：工作目录行与它的工具行。 */
+/** headless 装配：工作目录行。 */
 export { provideWorkingDirectory } from "./server/working-directory.provide.ts";
-export { provideEnvTools } from "./server/tools.provide.ts";
+// `working_directory` 工具行随上游 `tool-working-directory` 包一起下线（0.2.3：模型不再改目录，
+// 改由宿主侧 `ctx.workingDirectory.set` / SDK `setWorkingDirectory`）。
 
 // 上游 llm 的**门面**：消费方不直接引 `@deepseek-ai/dsh-llm`，一律从本包取。
 // **只转类型**：值面（`LlmAdapter` / `MessageId` / `ToolCallId`）会加载上游运行时，出在 `./server`。
@@ -39,12 +40,11 @@ export * from "./tool-registry.service.ts";
 // per-agent 装配的默认实现（装行能力）：随包根导出，装配面把它放进骨架清单。
 export * from "./agent-scope.ts";
 
-// 骨架实现：子代理注册表、MCP 资源、LLM API 扩展注册表、工作目录与它的工具行。
+// 骨架实现：子代理注册表、MCP 资源、LLM API 扩展注册表、工作目录。
 export * from "./subagent-registry.service.ts";
 export * from "./mcp-resources.service.ts";
 export * from "./deepseek-llm-api-extensions.service.ts";
 export * from "./working-directory.service.ts";
-export * from "./working-directory.tool.ts";
 // LLM provider 的**配置行**（两家 provider：DeepSeek API key / pi-ai）：属 agent 的装配。
 export { LlmDeepseek } from "./llm-deepseek.service.ts";
 export { LlmPiAi } from "./llm-pi-ai.service.ts";

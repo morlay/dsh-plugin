@@ -35,10 +35,6 @@ export const FS_GROUP: ToolGroup = {
       when: "grep",
       text: "grep：按内容搜索（不要用 shell grep / rg）；需要上下文再 read 命中的文件。",
     },
-    {
-      when: "working_directory",
-      text: "working_directory：查会话当前工作目录，或传 cd 切到某个已存在的目录——切完相对路径都按它解析；已开的 shell 与在跑进程留在自己的目录里，不受这次切换影响。",
-    },
     { when: "read_image", text: "read_image：看图。" },
   ],
   drops: [
@@ -58,7 +54,6 @@ export const FS_GROUP: ToolGroup = {
     { tool: "apply_patch", short: "用一个补丁批量增删改移多个文件" },
     { tool: "glob", short: "按模式查找文件路径" },
     { tool: "grep", short: "按正则搜索文件内容" },
-    { tool: "working_directory", short: "查看当前工作目录，或用 cd 切换" },
     { tool: "read_image", short: "读取图片内容" },
     { tool: "str_replace_editor", short: "查看 / 创建 / 精确替换文件" },
   ],

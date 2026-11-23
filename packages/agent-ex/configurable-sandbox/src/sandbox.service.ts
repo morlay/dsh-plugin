@@ -41,13 +41,13 @@ export function upstreamConfigOf(settings: SandboxSettings) {
 // 官方提供者 + 规则追加。构造面与官方一致（`(ctx, config)`），规则从 deps 注入的读面取。
 export class ConfigurableSandboxProvider extends LocalSandboxProvider {
   // `#` 私有：与包在外面的 Provider 字段不会撞名（TS 的 `private` 会）。
-  readonly #rules: SandboxRules;
+  private readonly rules: SandboxRules;
 
-  readonly #compiled = new Map<string, CompiledRules>();
+  private readonly compiled = new Map<string, CompiledRules>();
 
   constructor(ctx: UpstreamSandboxContext, config: UpstreamSandboxConfig) {
     super(ctx, config);
-    this.#rules = (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(
+    this.rules = (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(
       RULES_DEP,
     ) as SandboxRules;
   }
@@ -58,7 +58,7 @@ export class ConfigurableSandboxProvider extends LocalSandboxProvider {
     signal?: AbortSignal,
   ): Promise<ConfinedArgv> {
     const confined = await super.confine(argv, policy, signal);
-    const rules = this.#rulesFor(policy.workspaceRoot);
+    const rules = this.rulesFor(policy.workspaceRoot);
     // `rw` 只在 `workspace-write` 下生效：显式选定的只读边界不因额外可写根放松。
     const effective = policy.mode === "workspace-write" ? rules : withoutAllowRoots(rules);
     if (isEmptyRules(effective)) return confined;
@@ -66,11 +66,11 @@ export class ConfigurableSandboxProvider extends LocalSandboxProvider {
   }
 
   // 规则源是启动时读一次的那份：按工作区缓存编译结果。
-  #rulesFor(workspaceRoot: string): CompiledRules {
-    const cached = this.#compiled.get(workspaceRoot);
+  private rulesFor(workspaceRoot: string): CompiledRules {
+    const cached = this.compiled.get(workspaceRoot);
     if (cached !== undefined) return cached;
-    const compiled = compileRules(this.#rules.source(), workspaceRoot);
-    this.#compiled.set(workspaceRoot, compiled);
+    const compiled = compileRules(this.rules.source(), workspaceRoot);
+    this.compiled.set(workspaceRoot, compiled);
     return compiled;
   }
 }
@@ -86,11 +86,11 @@ export class ConfigurableSandbox extends fromCordis(Sandbox, ConfigurableSandbox
     await this.mount(ctx, upstreamConfigOf(this.rulesSource.settings()), {
       [RULES_DEP]: this.rulesSource,
     });
-    this.#warnAboutDegradedRules(this.rulesSource.source());
+    this.warnAboutDegradedRules(this.rulesSource.source());
   }
 
   // 装配期告警：平台表达不了的条目点名说明（不静默失效）。
-  #warnAboutDegradedRules(rules: RuleSource): void {
+  private warnAboutDegradedRules(rules: RuleSource): void {
     const grants = rules.allowWrite.length > 0;
     const readOnly = rules.readOnly.length > 0;
     const denials = rules.deny.length > 0;

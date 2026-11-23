@@ -8,7 +8,7 @@
 // 少了这一层，每个领域都要自己 for-await 一条流、自己写 seq 比较——就会各自写出"偶尔回退"的时序 bug。
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/contract";
-import { Connection } from "@morlay/zephyr-app/contract";
+import { ClientConnection } from "@morlay/zephyr-app/contract";
 import { remoteNamespaceOf } from "../remote/dynamic-face.ts";
 import { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";
 
@@ -71,7 +71,7 @@ export class ProjectionsDefault extends Projections implements OnInit, OnDispose
    * 连接面：**可选**。有它才跟连接代换代（换连接 = 旧值作废）；
    * 只装数据面的场景（会话目录的单元测试、纯 node）没有它，按单代跑。
    */
-  private readonly connection = inject.optional(Connection);
+  private readonly connection = inject.optional(ClientConnection);
 
   private readonly stores = new Map<string, ProjectionValueStore>();
 

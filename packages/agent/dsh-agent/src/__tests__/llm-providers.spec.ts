@@ -15,6 +15,7 @@ import {
   RemoteHandlers,
   RemoteHandlersDefault,
 } from "@morlay/zephyr-app";
+import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideSetting } from "@morlay/dsh-setting/server";
 import { LaunchEnvironment } from "../contract/launch-environment.contract.ts";
 import { afterAll, expect, it } from "vitest";
@@ -81,6 +82,9 @@ it(
           }),
         },
         ...provideSetting(),
+        // DeepSeek 的两条路由（api-key / account）都从 `ctx.deepseekAuth` 取凭据（上游 0.2.3）：
+        // 这是它们的显式依赖，装配里要有这一行。
+        ...provideAuth(),
         // agent 核心在配置域之前：provider 行要 `Llm` 的面。
         LlmDefault,
         ...provideLlmProviders(

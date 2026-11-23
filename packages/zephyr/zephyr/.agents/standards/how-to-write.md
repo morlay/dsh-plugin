@@ -57,6 +57,10 @@ class SessionStatsDefault extends fromCordis(SessionStatsPlugin) {
 ```
 
 - `fromCordis(契约, 上游)` / `fromCordis(上游)` / `fromCordis(契约)` 三形态：契约面来自上游发布的服务；单参是上游时令牌从包名派生；单参是契约时是纯实现行。
+- **令牌只有"继承契约"一条来源**：适配行 `extends fromCordis(契约, 上游)`，令牌就是契约（`InjectionToken` 造的也是类，同样能 `extends`）。
+  - **禁止** `@Injectable({ token: … })` / `{ token }` 这种"手工指定令牌"的写法——`InjectableOptions` 里没有这个选项，写了就编译不过。
+  - **令牌不能是上游类**：`fromCordis(UpstreamClass, UpstreamClass)` 会 `extends` 上游类、跑它的构造（`Service` 子类会拿 `undefined` 当 ctx）。上游类只是被包装的实现：要契约就写 `contract/` 里的抽象类，或单参 `fromCordis(UpstreamClass)`。
+  - 需要"每行一个令牌"（动态类，如 `@McpClient(…)`）时用**组合**（借 `fromCordis` 产物的 `mount`），不要继承它再改写令牌。
 - `mount(ctx, config?, deps?)` 的 **deps 只在读取时替换**，不注册进 cordis：上游在 `apply` 现场按名字读的东西从 deps 给；上游把 ctx 交给 cordis 内部（`ctx.plugin(带 static inject 的类)`）时它读的是 store，deps 不生效——那类依赖必须由清单里的行提供。
 - **`onInit` 里必须 `mount`**：忘了 `mount` 的适配行在装配期就报错（契约面为空），不会把空壳漏给消费方。
 - `toCordis(Provider, { Config? })` 只用于「按 cordis 行装配」的部署与搬过来的 spec（例：`packages/agent-ex/better-session/src/cordis.ts`）。生产装配面走 `provideXxx()`，不需要行入口。

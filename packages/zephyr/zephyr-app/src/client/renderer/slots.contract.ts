@@ -44,7 +44,14 @@ export abstract class Slots {
    * 装配器那种「key 只有运行时才知道」的注册走 `registerDynamic`。
    */
   abstract register<K extends keyof SlotMap>(
-    options: Omit<Parameters<SlotRegistry["register"]>[0], "name"> & { readonly name: K },
+    options: Omit<Parameters<SlotRegistry["register"]>[0], "name"> & {
+      readonly name: K;
+      /**
+       * list 槽位的条目 id（上游 `register` 的**另一个重载**才带它：`Parameters<…>[0]` 只取到第一个
+       * 重载，所以这里显式补上）。运行时对 `kind: 'list'` 的位置是必填的。
+       */
+      readonly id?: string;
+    },
     component: SlotComponent<never>,
   ): () => void;
 

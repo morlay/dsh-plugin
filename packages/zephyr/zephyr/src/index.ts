@@ -8,6 +8,11 @@ export type {
   OnInit,
   TokenClass,
 } from "./injection.ts";
+/**
+ * 根上下文的符号键（上游 0.2.3 起 `ctx.root` 属性换成 `ctx[Context.root]`）。
+ * 用法：`ctx[rootContextKey]`——类型由 cordis 的 `Context` 继承面给出，不是辅助函数。
+ */
+export { rootContextKey } from "./injection.ts";
 export {
   Injectable,
   InjectionToken,

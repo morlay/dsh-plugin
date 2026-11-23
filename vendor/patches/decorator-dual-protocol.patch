@@ -110,14 +110,14 @@ index e2af8932b6..71ee6cbf38 100644
    }
  }
 diff --git a/vendor/cordis/src/registry.ts b/vendor/cordis/src/registry.ts
-index 478cf036cb..bf2042035e 100644
+index fe988a2b14..71b9a51d45 100644
 --- a/vendor/cordis/src/registry.ts
 +++ b/vendor/cordis/src/registry.ts
 @@ -34,8 +34,32 @@ export type InjectKey = keyof {
-  * @param config — optional intercept config applied for that service.
+  * @param config — optional intercept metadata injected for that service.
   * @returns the class or method decorator.
   */
--export function Inject<K extends InjectKey>(name: K, config?: Context[K] extends { [symbols.config]: infer T } ? T : never) {
+-export function Inject<K extends InjectKey>(name: K, config?: Context[K] extends { [symbols.metadata]: infer T } ? T : never) {
 -  return function (value: any, decorator: ClassDecoratorContext<any> | ClassMethodDecoratorContext<any>) {
 +// 本地 patch（patches/decorator-dual-protocol.patch）：类型面同时收两种协议——标准（TC39）的
 +// `(value, context)`，以及 legacy 类装饰器只收到 `(target)` 那条（实现里 `decorator === undefined`
@@ -129,7 +129,7 @@ index 478cf036cb..bf2042035e 100644
 +
 +export function Inject<K extends InjectKey>(
 +  name: K,
-+  config?: Context[K] extends { [symbols.config]: infer T } ? T : never,
++  config?: Context[K] extends { [symbols.metadata]: infer T } ? T : never,
 +): InjectDecorator {
 +  return function (value: any, decorator?: ClassDecoratorContext<any> | ClassMethodDecoratorContext<any>) {
 +    // 本地 patch（patches/decorator-dual-protocol.patch）：legacy 装饰器协议下类装饰器只收到

@@ -12,6 +12,7 @@ import {
 } from "@morlay/dsh-agent";
 import { JobRegistry } from "@morlay/dsh-job";
 import { provideJob } from "@morlay/dsh-job/server";
+import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication, type App, type Context } from "@morlay/zephyr";
 import { provideTypert, provideApiGateway } from "@morlay/zephyr-app";
 import { afterEach, describe, expect, it } from "vitest";
@@ -29,6 +30,9 @@ async function boot(): Promise<App> {
       ...provideTypert(),
       // `typertGateway` 的实现是上游 `api/gateway` 的 `TypertGatewayService`（我们不再自己写）。
       ...provideApiGateway(),
+      // 上游 `system-prompt` 的 `[Service.init]` 里要 `sessionProjections.register(...)`（0.2.3 起）：
+      // 投影注册表是它的显式依赖。
+      ...provideSessionProjection(),
       SystemPromptDefault,
       ToolRegistryDefault,
       // per-agent 行的装行能力：`ToolJobs` 声明了 `@AgentScoped()`。

@@ -125,45 +125,32 @@ class FakeAttachmentStore extends AttachmentStore {
   ): error is AttachmentError => error instanceof AttachmentError;
 }
 
-/** 假连接面：只兑现上游构造期用到的那一处——往宿主登记一条 streaming 路由。 */
+/** 假连接面（**宿主面**）：只兑现上游构造期用到的那一处——往宿主登记一条 streaming 路由。 */
 @Injectable()
 class FakeConnection extends Connection {
   readonly routes: { readonly path: string }[] = [];
 
-  readonly interactions = "none" as const;
-
-  readonly generation = {
-    getSnapshot: () => ({ id: 0, host: { home: "/tmp" } }),
-    subscribe: () => () => {},
-  };
-
-  readonly isLoopback = true;
-
-  readonly state = {
-    getSnapshot: () => undefined,
-    subscribe: () => () => {},
-  };
-
-  readonly rpc = {};
-
-  readonly fetch = {
-    register: (route: { readonly path: string }): (() => void) => {
-      this.routes.push(route);
+  readonly fetch: Connection["fetch"] = {
+    register: (route: never): (() => void) => {
+      this.routes.push(route as { readonly path: string });
       return () => {};
     },
-  };
+  } as Connection["fetch"];
 
-  readonly openWebSocket = (): never => {
-    throw new Error("spec: 不建连");
-  };
+  readonly rpc: Connection["rpc"] = {
+    handle: () => async () => {},
+    intercept: () => async () => {},
+  } as Connection["rpc"];
 
-  reconnect(): void {
-    // spec：没有长连接可重连。
+  createSharedFetchHandler(): never {
+    throw new Error("spec: 不建共享分派器");
   }
 
-  readonly registerGenerationSource = (): (() => void) => () => {};
+  admit(_request: never): never {
+    throw new Error("spec: 不接连接");
+  }
 
-  readonly start = (): { stop(): void } => ({ stop: () => {} });
+  readonly browserPeer = {} as Connection["browserPeer"];
 }
 
 const opened: App[] = [];
@@ -187,7 +174,7 @@ async function boot(): Promise<{ app: App; connection: FakeConnection }> {
     timeoutMs: 10_000,
   });
   opened.push(app);
-  // 按**契约**取：`FakeConnection` 的令牌是它继承的 `Connection`（`app.get` 认令牌、不认实现类）。
+  // 按**契约**取：`FakeConnection` 的令牌是它继承的 `ClientConnection`（`app.get` 认令牌、不认实现类）。
   return { app, connection: app.get(Connection) as FakeConnection };
 }
 

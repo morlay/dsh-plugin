@@ -8,7 +8,7 @@
 //
 //   { provide: RemoteAccess, useFactory: () => allowAllAccess() },
 //   publishingTo(RemoteAccess, "remoteAccess"),
-import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
+import { inject, Injectable, rootContextKey, type Context, type OnInit } from "@morlay/zephyr";
 
 /**
  * 造一个「把契约实例发布成上游名字」的 provider。
@@ -22,7 +22,7 @@ export function publishingTo(contract: object, name: string): new () => OnInit {
     private readonly value = inject(contract as never);
 
     onInit(ctx: Context): void {
-      ctx.root.provide(name, this.value);
+      ctx[rootContextKey].provide(name, this.value);
     }
   }
   return ServiceNamePublisher;

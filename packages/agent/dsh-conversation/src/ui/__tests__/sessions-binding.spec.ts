@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { RemoteShell } from "./support/fake-remote.ts";
-import { Connection } from "@morlay/zephyr-app/client";
+import { ClientConnection } from "@morlay/zephyr-app/client";
 
 const opened: App[] = [];
 
@@ -132,7 +132,7 @@ class RecordingCommandRunner extends CommandRunner {
  * 本 spec 只有一个稳定代，换代回调永不触发。
  */
 @Injectable()
-class FakeConnection extends Connection {
+class FakeConnection extends ClientConnection {
   readonly interactions = "none" as const;
 
   readonly generation = {
@@ -193,7 +193,7 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
       },
       { provide: CommandRunner, useFactory: () => new RecordingCommandRunner() },
       // 投影读面由框架提供：它自己订阅 `remote.session.control`（本 spec 的 fake 已给）。
-      { provide: Connection, useFactory: () => new FakeConnection() },
+      { provide: ClientConnection, useFactory: () => new FakeConnection() },
       // 投影读面随 `provideSessionsStore()` 一起装（它内含 `provideProjections()`）：这里不再重复列。
       ...provideSessionsStore(),
     ],

@@ -6,10 +6,16 @@
 import * as UiContextMenuPlugin from "@deepseek-ai/dsh-client-ui-context-menu/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { ContextMenus, Locale, Shortcuts, Slots } from "@morlay/zephyr-app/client";
+import {
+  ContextMenus,
+  fixedSyncedConfig,
+  Locale,
+  Shortcuts,
+  Slots,
+} from "@morlay/zephyr-app/client";
 
-// 适配行的令牌是**契约**（`extends fromCordis(...)` 的产物不是契约的子类，派生名会变成 `context-menu-slots`）。
-@Injectable({ token: ContextMenus })
+// 令牌是**契约**：`fromCordis(契约, 上游)` 的产物已经 `extends 契约`，`@Injectable()` 无参即复用它的令牌。
+@Injectable()
 export class ContextMenuSlots extends fromCordis(ContextMenus, UiContextMenuPlugin) {
   private readonly slots = inject(Slots);
 
@@ -19,7 +25,8 @@ export class ContextMenuSlots extends fromCordis(ContextMenus, UiContextMenuPlug
 
   override async onInit(ctx: Context): Promise<void> {
     // 上游 `inject = ['slots', 'locale', 'shortcuts']`。
-    await this.mount(ctx, undefined, {
+    // 上游 0.2.3 起这份 client 的 `Config` 由 Host 同步（`resolutionTimeoutMs`）：没通道时给"未配置"。
+    await this.mount(ctx, fixedSyncedConfig(["resolutionTimeoutMs"]), {
       slots: this.slots,
       locale: this.locale,
       shortcuts: this.shortcuts,

@@ -9,12 +9,23 @@
 // 但**协议实现换回上游的类**，分派点从它的构造参数注入：
 //   自研路由表的流式端点（`RemoteHandlers.stream`）→ 上游 gateway 的 `wireStream.open`
 import { RemoteStreamMuxServer } from "@deepseek-ai/dsh-api-gateway/src/stream-server.ts";
+import type { ConnectionTrustRequest } from "@deepseek-ai/dsh-client-connection";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import { inject, Injectable, Logger, type Context, type OnDispose } from "@morlay/zephyr";
+import { inject, Injectable, Logger, type OnDispose } from "@morlay/zephyr";
+import { Connection } from "../connection/contract.ts";
 import { RemoteHandlers } from "./remote-handlers.contract.ts";
 import { WebServer } from "../web/web-server.contract.ts";
 import { TypertGateway, type InvokeRemoteRequest } from "../typert/gateway.contract.ts";
+
+/**
+ * node 的 upgrade 请求 → 上游的信任请求面（`admit` 的入参）。字段就是载体原样：header 表、方法、目标、socket。
+ * @param req - upgrade 请求。
+ * @returns 上游 `ConnectionTrustRequest`。
+ */
+function trustRequestOf(req: IncomingMessage): ConnectionTrustRequest {
+  return { headers: req.headers, method: req.method, url: req.url, socket: req.socket };
+}
 
 /** mux 的路径（与客户端 `muxTransport` 一致）。 */
 const MUX_PATH = "/api/remote.mux";
@@ -22,26 +33,14 @@ const MUX_PATH = "/api/remote.mux";
 /** 上游分派要的 peer 面（`InvokeRemoteRequest` 的那一项）。 */
 type PeerScope = InvokeRemoteRequest["peer"];
 
-/**
- * 上游 `connection` 的**准入面**（宿主侧）：upgrade 由它判定并给出这次连接代表的 peer。
- *
- * 我们的 `Connection` 契约只有浏览器那一面，所以这里按运行期形状取（与 `ConnectionDefault`
- * 读 `admit` / `generation` 同一口径）。
- */
-interface HostAdmission {
-  readonly admitConnection: (
-    request: IncomingMessage,
-  ) =>
-    | { readonly rejection: number }
-    | { readonly peer: PeerScope; readonly release: () => Promise<void> };
-}
-
 /** 上游 mux 的连接参数（默认值与上游 `Config` 一致）。 */
 interface MuxOptions {
   /** WebSocket Ping 间隔（毫秒）。 */
   readonly heartbeatIntervalMs: number;
   /** 一条逻辑流允许缓冲的上行字节数。 */
   readonly streamInboxBytes: number;
+  /** 一条连接允许排队、尚未写出的下行字节数（超出就暂停各流读源）。 */
+  readonly streamOutboxBytes: number;
   /** 是否协商 `permessage-deflate`。 */
   readonly compression: boolean;
 }
@@ -50,6 +49,7 @@ interface MuxOptions {
 const DEFAULT_OPTIONS: MuxOptions = {
   heartbeatIntervalMs: 2_000,
   streamInboxBytes: 262_144,
+  streamOutboxBytes: 1_048_576,
   compression: true,
 };
 
@@ -62,6 +62,12 @@ export class MuxServer implements OnDispose {
   private readonly gateway = inject(TypertGateway);
 
   private readonly webServer = inject(WebServer);
+
+  /**
+   * 宿主连接面（显式依赖）：upgrade 的准入走它的 `admitConnection`。
+   * 契约声明的是浏览器消费面，宿主那半不在类型上，所以这里按结构化断言读一次。
+   */
+  private readonly connection = inject(Connection);
 
   private readonly logger = inject(Logger);
 
@@ -101,7 +107,7 @@ export class MuxServer implements OnDispose {
     return await this.gateway.wireStream.open(endpoint, payload, uplink, peer, control.signal);
   }
 
-  onInit(ctx: Context): void {
+  onInit(): void {
     this.mux = new RemoteStreamMuxServer(
       async (endpoint, payload, uplink, peer, control) => {
         this.liveStreams += 1;
@@ -119,7 +125,7 @@ export class MuxServer implements OnDispose {
     this.disposeRoute = this.webServer.registerUpgrade({
       path: MUX_PATH,
       handler: (req, socket, head) => {
-        this.accept(ctx, req, socket, head);
+        this.accept(req, socket, head);
       },
     });
   }
@@ -149,30 +155,17 @@ export class MuxServer implements OnDispose {
    * @param socket - 交接的 socket。
    * @param head - 已读字节。
    */
-  private accept(ctx: Context, req: IncomingMessage, socket: Duplex, head: Buffer): void {
-    const host = ctx.get("connection", false);
-    const admission = (host as HostAdmission | undefined)?.admitConnection;
-    if (typeof admission !== "function") {
-      // 没有准入面就不该接连接：放行等于把宿主暴露给任何页面。
-      this.logger.warn("[mux] 上游没有 admitConnection：这次的 upgrade 直接断开");
-      socket.destroy();
-      return;
-    }
-    const result = admission.call(host, req);
+  private accept(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    // 准入走契约（`ConnectionHost.admit`）：upgrade 与 `/api` 前缀是同一次判定、同一个 peer。
+    const result = this.connection.admit(trustRequestOf(req));
     if ("rejection" in result) {
       socket.destroy();
       return;
     }
-    const release = (): void => {
-      void result.release().catch((error: unknown) => {
-        this.logger.warn("[mux] peer 释放失败：%s", String(error));
-      });
-    };
-    socket.once("close", release);
     try {
+      // peer 的生命周期归上游：`handleUpgrade` 里 `bindPeer` 会在连接结束时释放它。
       this.mux?.handleUpgrade(req, socket, head, result.peer);
     } catch (error) {
-      release();
       socket.destroy();
       this.logger.warn("[mux] upgrade 失败：%s", String(error));
     }

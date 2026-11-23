@@ -4,7 +4,7 @@
 //   客户端 `{ type:'open', streamId, endpoint:'<ns>/<method>', payload }`
 //   宿主   `{ type:'item', streamId, value }`（结果）→ `{ type:'end' }`
 // 这里只抽象成 `invoke()`：实现可以是 mux（生产）、内存（测试）。
-import type { Connection } from "@morlay/zephyr-app/contract";
+import type { ClientConnection } from "@morlay/zephyr-app/contract";
 
 /** 一次 remote 调用。 */
 export interface RemoteTransport {
@@ -106,7 +106,7 @@ export type RemoteFetch = (input: string | URL, init: RequestInit) => Promise<Re
  * @returns 传输实现。
  */
 export function muxTransport(
-  connectionOf?: () => Connection,
+  connectionOf?: () => ClientConnection,
   fetchOf?: RemoteFetch,
 ): RemoteTransport {
   let socket: WebSocket | undefined;
@@ -425,9 +425,9 @@ export function muxTransport(
 
   return {
     subscribe(deliver) {
-      // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `Connection` 还是占位符。
+      // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `ClientConnection` 还是占位符。
       eventDeliver = deliver;
-      // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `Connection` 还是占位符，
+      // **不在这里建连**：`$on` 可能在 `onInit` 期被调用，那时 `ClientConnection` 还是占位符，
       // 建出的 socket 会连到错地址、随即断开（`failInFlight` 会把在途流全判死）。
       // 建连由**第一次流式调用**触发（`ensure()`），那条路在 open 后会补开 `$events`。
       connectEventsSafe();

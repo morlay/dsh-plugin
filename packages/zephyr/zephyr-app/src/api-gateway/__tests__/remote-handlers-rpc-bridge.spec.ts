@@ -45,8 +45,11 @@ function bridgeOf(handlers: RemoteHandlersDefault): {
       },
     },
   };
+  // 桥在 intercept 前后会记行日志（真 Logger 的 info）：替身也要给全——缺它不是"少一条日志"，
+  // 而是装配缺陷；夹具补齐，别在实现里对 logger 做可选宽容。
+  const logger = { info: (): void => {}, warn: (): void => {} };
   const bridge = new RemoteHandlersRpcBridge();
-  Object.assign(bridge, { connection, handlers });
+  Object.assign(bridge, { connection, handlers, logger });
   bridge.onInit();
   const interceptor = registered[0];
   if (interceptor === undefined) throw new Error("桥没有注册 `/api` 的拦截项");

@@ -2,7 +2,7 @@
 import * as UiSettingsModelsPlugin from "@deepseek-ai/dsh-client-ui-settings-models/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { ConfigForms, Locale, Remote, Slots } from "@morlay/zephyr-app/client";
+import { ConfigForms, fixedSyncedConfig, Locale, Remote, Slots } from "@morlay/zephyr-app/client";
 import { SettingsSchema } from "./ui-settings.token.ts";
 import { LLM_REMOTE } from "@morlay/dsh-agent/endpoint";
 import { SETTINGS_REMOTE } from "@morlay/dsh-setting/endpoint";
@@ -27,7 +27,8 @@ export class SettingsModelsSlots extends fromCordis(UiSettingsModelsPlugin) {
   override async onInit(ctx: Context): Promise<void> {
     await this.remote.$mount(SETTINGS_REMOTE);
     await this.remote.$mount(LLM_REMOTE);
-    await this.mount(ctx, undefined, {
+    // 上游 0.2.3 起这份 client 的 `Config` 由 Host 同步（`credentialOnboarding`）：没通道时给"未配置"。
+    await this.mount(ctx, fixedSyncedConfig(["credentialOnboarding"]), {
       slots: this.slots,
       locale: this.locale,
       remote: this.remote,

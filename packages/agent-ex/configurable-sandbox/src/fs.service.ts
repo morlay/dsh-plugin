@@ -42,22 +42,23 @@ type UpstreamFsContext = ConstructorParameters<typeof LocalFileSystem>[0];
 const RULES_DEP = "sandboxRules";
 const POLICY_DEP = "sandboxPolicy";
 
+@Injectable()
 export class ConfigurableFileSystem extends LocalFileSystem {
-  readonly #rules: SandboxRules;
+  private readonly rules: SandboxRules;
 
-  readonly #policy: SandboxPolicy;
+  private readonly policy: SandboxPolicy;
 
-  readonly #compiled = new Map<string, CompiledRules>();
+  private readonly compiled = new Map<string, CompiledRules>();
 
   constructor(ctx: UpstreamFsContext, config: UpstreamFsConfig) {
     super(ctx, config);
     const read = (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get.bind(ctx);
-    this.#rules = read(RULES_DEP) as SandboxRules;
-    this.#policy = read(POLICY_DEP) as SandboxPolicy;
+    this.rules = read(RULES_DEP) as SandboxRules;
+    this.policy = read(POLICY_DEP) as SandboxPolicy;
   }
 
   override get sandboxMode(): SandboxMode {
-    return this.#policy.defaultMode;
+    return this.policy.defaultMode;
   }
 
   override async resolve(
@@ -65,8 +66,8 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     opts?: { cwd?: string; signal?: AbortSignal },
   ): Promise<FsTarget> {
     const target = await super.resolve(path, opts);
-    this.#assertNotDenied(
-      this.#rulesFor(this.#policy.resolve().workspaceRoot),
+    this.assertNotDenied(
+      this.rulesFor(this.policy.resolve().workspaceRoot),
       target.targetKey,
       target.displayPath,
     );
@@ -81,7 +82,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsWriteOutcome> {
     return super.writeText(
-      await this.#checkedTarget(target, sandboxPolicy),
+      await this.checkedTarget(target, sandboxPolicy),
       content,
       expected,
       signal,
@@ -95,7 +96,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     signal?: AbortSignal,
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsEditOutcome> {
-    return super.editText(await this.#checkedTarget(target, sandboxPolicy), edit, expected, signal);
+    return super.editText(await this.checkedTarget(target, sandboxPolicy), edit, expected, signal);
   }
 
   override async patchText(
@@ -106,7 +107,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsEditOutcome> {
     return super.patchText(
-      await this.#checkedTarget(target, sandboxPolicy),
+      await this.checkedTarget(target, sandboxPolicy),
       hunks,
       expected,
       signal,
@@ -119,7 +120,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     signal?: AbortSignal,
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsDeleteOutcome> {
-    return super.deleteFile(await this.#checkedTarget(target, sandboxPolicy), expected, signal);
+    return super.deleteFile(await this.checkedTarget(target, sandboxPolicy), expected, signal);
   }
 
   override async moveFile(
@@ -129,12 +130,16 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     signal?: AbortSignal,
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsMoveOutcome> {
-    const checkedSource = await this.#checkedTarget(source, sandboxPolicy);
-    const checkedDestination = await this.#checkedTarget(destination, sandboxPolicy);
+    const checkedSource = await this.checkedTarget(source, sandboxPolicy);
+    const checkedDestination = await this.checkedTarget(destination, sandboxPolicy);
     return super.moveFile(checkedSource, checkedDestination, options, signal);
   }
 
-  #assertNotDenied(rules: CompiledRules, canonicalTarget: string, displayPath: string): void {
+  private assertNotDenied(
+    rules: CompiledRules,
+    canonicalTarget: string,
+    displayPath: string,
+  ): void {
     if (!isDenied(rules, canonicalTarget)) return;
     throw new FsError(
       `cannot access "${displayPath}": file access denied by the configured "--" rules`,
@@ -142,8 +147,8 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     );
   }
 
-  #assertWritable(rules: CompiledRules, canonicalTarget: string, displayPath: string): void {
-    this.#assertNotDenied(rules, canonicalTarget, displayPath);
+  private assertWritable(rules: CompiledRules, canonicalTarget: string, displayPath: string): void {
+    this.assertNotDenied(rules, canonicalTarget, displayPath);
     if (!isReadOnly(rules, canonicalTarget)) return;
     throw new FsError(
       `cannot write "${displayPath}": path is read-only by the configured "r-" rule`,
@@ -152,13 +157,13 @@ export class ConfigurableFileSystem extends LocalFileSystem {
   }
 
   // 先过本包规则，再过官方模式围栏：`r-` / `--` 优先于可写根，但不放松 `read-only`。
-  async #checkedTarget(
+  private async checkedTarget(
     target: FsTarget,
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsTarget> {
-    const policy = sandboxPolicy ?? this.#policy.resolve();
-    const rules = this.#rulesFor(policy.workspaceRoot);
-    this.#assertWritable(rules, target.targetKey, target.displayPath);
+    const policy = sandboxPolicy ?? this.policy.resolve();
+    const rules = this.rulesFor(policy.workspaceRoot);
+    this.assertWritable(rules, target.targetKey, target.displayPath);
     if (policy.mode === "danger-full-access") return target;
     if (policy.mode === "read-only") {
       throw new FsError(
@@ -168,7 +173,7 @@ export class ConfigurableFileSystem extends LocalFileSystem {
     }
 
     const fresh = await super.resolve(target.displayPath);
-    this.#assertWritable(rules, fresh.targetKey, fresh.displayPath);
+    this.assertWritable(rules, fresh.targetKey, fresh.displayPath);
     for (const root of writableRootsWith(rules, policy)) {
       if (await isPathUnder(fresh.targetKey, root)) return fresh;
     }
@@ -179,11 +184,11 @@ export class ConfigurableFileSystem extends LocalFileSystem {
   }
 
   // 规则源是启动时读一次的那份：按工作区缓存编译结果。
-  #rulesFor(workspaceRoot: string): CompiledRules {
-    const cached = this.#compiled.get(workspaceRoot);
+  private rulesFor(workspaceRoot: string): CompiledRules {
+    const cached = this.compiled.get(workspaceRoot);
     if (cached !== undefined) return cached;
-    const compiled = compileRules(this.#rules.source(), workspaceRoot);
-    this.#compiled.set(workspaceRoot, compiled);
+    const compiled = compileRules(this.rules.source(), workspaceRoot);
+    this.compiled.set(workspaceRoot, compiled);
     return compiled;
   }
 }

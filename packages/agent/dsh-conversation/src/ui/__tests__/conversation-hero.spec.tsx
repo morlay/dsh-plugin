@@ -12,17 +12,40 @@ import { ConversationContent } from "@deepseek-ai/dsh-client-ui-conversation/src
 import { ConversationMainPanel } from "@deepseek-ai/dsh-client-ui-conversation/src/client/skeleton/ConversationMainPanel.tsx";
 import { EMPTY_CONVERSATION_SNAPSHOT } from "@deepseek-ai/dsh-client-ui-conversation/src/client/contract/snapshot.ts";
 import type {
+  ConversationContentInputProps,
   ConversationContentProps,
   ConversationSlotProps,
 } from "@deepseek-ai/dsh-client-ui-conversation/src/client/contract/slots.ts";
+import type { ComposerBlock } from "@deepseek-ai/dsh-client-ui-conversation/src/client/contract/composer-blocks.ts";
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
+import type { SessionId } from "@morlay/dsh-session/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
+
+/**
+ * 把一份现成快照包成席位要的 selector hook：本用例的数据源不变，selector 立即求值。
+ * 席位是泛型签名（`<S>(sel: (s: T) => S, eq?) => S`），桩按席位类型断言一次（不是 `as unknown as` 双断言）。
+ * @param value - 该席位读的快照。
+ * @returns 符合该席位签名的 hook。
+ */
+function fixedHook<H>(value: unknown): H {
+  return ((selector: (snapshot: unknown) => unknown) => selector(value)) as H;
+}
+
+/**
+ * 把手写的席位桩收成完整席位：上游每版都在加全局席位，桩只提供本用例真的会读的那几个。
+ * 参数类型 `Partial<…>` 就是那道检查（写错名字 / 类型不对会红），缺的席位按"未提供"放过。
+ * @param props - 本用例提供的席位。
+ * @returns 同名的完整席位对象。
+ */
+function contentPropsOf(props: Partial<ConversationContentProps>): ConversationContentProps {
+  return props as ConversationContentProps;
+}
 
 /** 一行宿主的会话摘要（`session/list` 的 byId 形状）。 */
 function summaryOf(id: string, blank: boolean): Record<string, unknown> {
@@ -90,11 +113,14 @@ function renderPanel(sessions: SessionController, captured: Captured): ReturnTyp
 
   // 上游 `useSession` / `useSessions` / `useConversation` 都是 snapshot selector hook：
   // 数据源分别是 binding 的会话快照、目录快照与 Conversation 快照（没有 active target）。
-  const useSession = (selector: (snapshot: unknown) => unknown) =>
-    selector(session?.session?.getSnapshot());
-  const useSessions = (selector: (snapshot: unknown) => unknown) => selector(list);
-  const useConversation = (selector: (snapshot: unknown) => unknown) =>
-    selector(EMPTY_CONVERSATION_SNAPSHOT);
+  // 三个 selector hook 按席位给：数据源是现成的快照，selector 立即求值。
+  const useSession = fixedHook<ConversationContentProps["useSession"]>(
+    session?.session?.getSnapshot(),
+  );
+  const useSessions = fixedHook<ConversationContentProps["useSessions"]>(list);
+  const useConversation = fixedHook<ConversationContentProps["useConversation"]>(
+    EMPTY_CONVERSATION_SNAPSHOT,
+  );
 
   const renderSlot = (name: string, slotProps: unknown, options?: { fallback?: ReactNode }) => {
     if (name === "conversation.composer.bar")
@@ -109,28 +135,54 @@ function renderPanel(sessions: SessionController, captured: Captured): ReturnTyp
     options?: { fallback?: ReactNode; fallbackOnly?: boolean },
   ) => options?.fallback ?? null;
 
-  // `conversation.content` 的 standard props：只有 hero / active 两条布局分支用到的那几个。
-  const contentProps = {
-    sessionId,
+  // `conversation.content` 的 standard props：只给 hero / active 两条布局分支真的会读的那几个席位——
+  // 上游每版都在加全局席位（0.2.3 加了 `useResource` / `useRemoteAccess` / `SessionProvider` …），
+  // 桩不跟着列全（`contentPropsOf` 的 `Partial` 参数就是那道类型检查）。
+  // factory 的入参（`hero` / `phase` / `onWorkspaceSelected` …）由上游运行时给，见下面的 spread。
+  const contentProps = contentPropsOf({
+    // 席位要的是品牌化的会话 id（目录快照给的是裸字符串）。
+    sessionId: sessionId as SessionId | undefined,
     useSession,
     useSessions,
-    useSessionStatus: (selector: (snapshot: Map<string, unknown>) => unknown) =>
-      selector(new Map()),
-    useWorkspaces: (selector: (snapshot: unknown) => unknown) =>
-      selector({ phase: "ready", items: [] }),
-    useInput: (selector: (snapshot: unknown) => unknown) =>
-      selector({ text: "", attachmentIds: [] }),
-    useComposerBlock: (selector: (block: unknown) => unknown) => selector(undefined),
+    useConversation,
+    useSessionStatus: fixedHook<ConversationContentProps["useSessionStatus"]>(new Map()),
+    useWorkspaces: fixedHook<ConversationContentProps["useWorkspaces"]>({
+      phase: "ready",
+      items: [],
+    }),
+    useInput: fixedHook<ConversationContentProps["useInput"]>({ text: "", attachmentIds: [] }),
+    // 席位签名是 `SnapshotSelectorHook<ComposerBlock | undefined>`：本装配没有块来源，恒读 `undefined`。
+    useComposerBlock: <T,>(selector: (block: ComposerBlock | undefined) => T): T =>
+      selector(undefined),
+    // session-maybe 的标准席位：没有当前会话时它也是 `undefined`。
+    inputActions: undefined,
+    // 0.2.3 新增的 session 作用域席位（renderer 注入）：这里直接透传，等于继承外层 binding。
+    SessionProvider: ({ children }: { children: ReactNode }) => children,
+    // ui-session 合并进来的两个标准席位（0.2.3）：本用例不读投影、也不做端点授权判断。
+    useProjection: () => undefined,
+    useAccess: () => undefined,
+    // 0.2.3 新增的注入回调：把这一处的草稿移到另一个会话（本用例不切会话）。
+    moveDraft: () => {},
+    // 这条 content 自己没有 local 席位要选，Factory 槽位一律不渲染。
+    renderFactorySlot: () => null,
+    // 全局标准席位里本用例用不到的：给"没有值 / 一律允许"的桩。
+    useResource: fixedHook<ConversationContentProps["useResource"]>(undefined),
+    useRemoteAccess: fixedHook<ConversationContentProps["useRemoteAccess"]>(false),
+    useSessionRetainInfo: fixedHook<ConversationContentProps["useSessionRetainInfo"]>(undefined),
+    useSessionAccess: () => false,
+    usePanelInfo: fixedHook<ConversationContentProps["usePanelInfo"]>(undefined),
+    useWorkspaceAccess: () => false,
     renderSlot,
     renderSlotChain,
-    selectWorkspace: async () => {},
     t: (key: string) => key,
     // factory 的本地实现（views）由运行时注入 standard props；这里只补它用到的 `renderSlot`。
-    useFactorySlot:
-      (_slot: string, fallback: (localProps: Record<string, unknown>) => ReactNode) =>
+    useFactorySlot: ((
+      _slot: string,
+      fallback: (localProps: Record<string, unknown>) => ReactNode,
+    ) =>
       (localProps: Record<string, unknown>) =>
-        fallback({ renderSlot, ...localProps }),
-  };
+        fallback({ renderSlot, ...localProps })) as ConversationContentProps["useFactorySlot"],
+  });
 
   const props = {
     sessionId,
@@ -142,9 +194,10 @@ function renderPanel(sessions: SessionController, captured: Captured): ReturnTyp
     // factory 的那一次渲染要落到真 `ConversationContent`：`variant` 是它在 hero 分支上决定的。
     renderFactorySlot: (name: string, input: unknown) => {
       if (name !== "conversation.content") return null;
-      const content = input as { hero?: boolean; phase?: string };
+      // 上游给 factory 的入参就是 `ConversationContentInputProps`（0.2.3 起含 `onWorkspaceSelected`）。
+      const content = input as ConversationContentInputProps;
       captured.content.push(content);
-      const panelInput = { ...contentProps, ...content } as ConversationContentProps;
+      const panelInput: ConversationContentProps = { ...contentProps, ...content };
       return <ConversationContent {...panelInput} />;
     },
   } as unknown as ConversationSlotProps;

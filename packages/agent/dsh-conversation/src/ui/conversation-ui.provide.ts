@@ -2,11 +2,7 @@ import { type ProviderList } from "@morlay/zephyr";
 import { AgentScopesDefault } from "./agent-scopes.service.ts";
 import { provideSessionShellSlots } from "./shell/index.ts";
 import { SubagentsRemoteBinding } from "./subagents-remote.binding.ts";
-import {
-  provideSessionInputSlots,
-  provideSessionShell,
-  provideSessionSlots,
-} from "./session-ui.provide.ts";
+import { provideSessionInputSlots, provideSessionSlots } from "./session-ui.provide.ts";
 
 /**
  * 对话域的**浏览器半**：一份清单装完本包的界面面。
@@ -28,7 +24,6 @@ export function provideConversationUi(): ProviderList {
     AgentScopesDefault,
     // `remote.subagents` 的那份 descriptor 要有人挂：会话界面的子代理入口全读它。
     SubagentsRemoteBinding,
-    ...provideSessionShell(),
     ...provideSessionShellSlots(),
     ...provideSessionSlots(),
     ...provideSessionInputSlots(),

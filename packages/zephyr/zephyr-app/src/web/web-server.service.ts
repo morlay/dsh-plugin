@@ -6,6 +6,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from "node:stream";
 import { createGzip, type Gzip } from "node:zlib";
 import { inject, Injectable, Logger, type OnDispose, type OnInit } from "@morlay/zephyr";
+import { Connection } from "../connection/contract.ts";
+import { trustRequestOf } from "../connection/connection.service.ts";
 import type { WebRoute, WebUpgradeRoute } from "./route.types.ts";
 import { WebServer, type RegisteredRoute } from "./web-server.contract.ts";
 import { WebStartup } from "./web-startup.contract.ts";
@@ -15,6 +17,8 @@ type FallbackHandler = (req: IncomingMessage, res: ServerResponse) => void | Pro
 interface HandlerEntry {
   readonly kind: "exact" | "prefix";
   readonly path: string;
+  /** 上游 0.2.3 的准入档：`required` 的路由在派发前走 `Connection.admit`。 */
+  readonly auth: "required" | "none";
   readonly handler: WebRoute["handler"];
 }
 
@@ -26,6 +30,9 @@ export class WebServerDefault extends WebServer implements OnInit, OnDispose {
   private readonly startup = inject(WebStartup);
 
   private readonly logger = inject(Logger);
+
+  /** 宿主连接面：`auth: "required"` 的路由要靠它做准入。`optional` 是为了断开与 `connection` 行的环。 */
+  private readonly connection = inject.optional(Connection);
 
   private readonly entries: HandlerEntry[] = [];
 
@@ -56,8 +63,9 @@ export class WebServerDefault extends WebServer implements OnInit, OnDispose {
     this.entries.push({
       kind: route.kind,
       path: route.path,
+      auth: route.auth ?? "none",
       // 包一层而不是直接引用方法：`this` 留在 route 上（消费方按 `entry.handler(req, res)` 调）。
-      handler: (req, res) => route.handler(req, res),
+      handler: (req, res, peer) => route.handler(req, res, peer),
     });
     this.registered.push({ kind: route.kind, path: route.path });
     return () => {
@@ -151,6 +159,24 @@ export class WebServerDefault extends WebServer implements OnInit, OnDispose {
       candidate.kind === "exact" ? candidate.path === path : path.startsWith(candidate.path),
     );
     if (entry !== undefined) {
+      // 上游 0.2.3：`auth: "required"` 的路由要 owner Peer。准入走`Connection.admit`（与 upgrade 同一判定），
+      // 被拒就回 rejection；通过就把这次请求代表的 peer 交给 handler（上游据此判 `peer.principal.kind`）。
+      if (entry.auth === "required") {
+        const connection = this.connection;
+        if (connection === undefined) {
+          res.statusCode = 403;
+          res.end("Forbidden");
+          return;
+        }
+        const admission = connection.admit(trustRequestOf(req));
+        if ("rejection" in admission) {
+          res.statusCode = admission.rejection;
+          res.end("Forbidden");
+          return;
+        }
+        await entry.handler(req, res, admission.peer);
+        return;
+      }
       await entry.handler(req, res);
       return;
     }

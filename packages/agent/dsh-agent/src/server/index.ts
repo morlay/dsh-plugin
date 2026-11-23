@@ -4,7 +4,6 @@
 // 这样测试能分层：headless（root + 契约）→ headless + server → + ui。
 export { provideLlmRemote } from "./llm-remote.provide.ts";
 export { provideWorkingDirectory } from "./working-directory.provide.ts";
-export { provideEnvTools } from "./tools.provide.ts";
 
 // 端点实现（`../endpoint/` 契约的宿主半）。
 export { LlmEndpoint } from "./llm-endpoint.service.ts";

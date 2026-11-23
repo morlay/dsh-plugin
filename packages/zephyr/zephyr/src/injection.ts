@@ -41,11 +41,18 @@ export type ContextLogger = LoggerService;
  * 只声明我们真正用到的成员（见 `packages/zephyr/zephyr/src` 与各域的实际调用）；上游插件拿到的
  * 也是同一个对象，它们按 cordis 的完整面用——那是它们的类型，不是我们的。
  */
+/**
+ * 根上下文的键：上游 cordis 0.2.3 起 `ctx.root` 属性换成 `ctx[Context.root]`（`Symbol.for('cordis.root')`）。
+ * 直接取上游那个符号（不是自己 `Symbol.for` 造一个）：键必须是同一个，读到的才是根 ctx。
+ */
+export const rootContextKey: unique symbol = Symbol.for("cordis.root") as never;
+
 export interface Context extends CordisContext {
+  /** 根 ctx：上游 0.2.3 起用符号键（`ctx[rootContextKey]`），服务注册在它上面才跨行可见。 */
+  readonly [rootContextKey]: Context;
   /** 日志面：cordis 的 `logger` 靠模块增强挂上来，这里显式给出。 */
   readonly logger: LoggerService;
-  /** 根 ctx（服务注册在它上面才跨行可见）。 */
-  readonly root: Context;
+
   /** 反射层：`ctx.get` / `ctx.provide` 的底座（cordis 里是模块增强挂的）。 */
   readonly reflect: ReflectService;
   /**

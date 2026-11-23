@@ -11,12 +11,7 @@ import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  AgentDirectory,
-  provideAgent,
-  provideEnvTools,
-  provideWorkingDirectory,
-} from "@morlay/dsh-agent";
+import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { provideFsTools, provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { SessionId } from "@morlay/dsh-session/endpoint";
@@ -93,7 +88,6 @@ async function boot(): Promise<App> {
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
       ...provideFsTools(),
-      ...provideEnvTools(),
       ...providePermissionFor("workspace-write"),
       // 被考察的那一行：模型面向的 `ask_user_question`。
       ...provideAskUserTool(),
@@ -126,7 +120,6 @@ async function bootWithGateway(): Promise<App> {
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
       ...provideFsTools(),
-      ...provideEnvTools(),
       ...providePermissionFor("workspace-write"),
       ...provideAskUserTool(),
     ],

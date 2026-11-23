@@ -8,8 +8,8 @@ import {
   IconCloseOutlineRegular,
   Menu,
   MenuItemButton,
-  rankByName,
 } from "@deepseek-ai/dsh-client-ui-primitives";
+import { TextSearchIndex } from "@deepseek-ai/dsh-util-text-search";
 import { type SearchSelectOption } from "./SearchSelect.tsx";
 import { mergeTags, parseTagList } from "./tags.ts";
 import css from "./TagInput.module.css";
@@ -52,17 +52,16 @@ export function TagInput({
   };
   // 没加进去的那些才出现在候选里（加过的、以及手输过的自定义值都不再重复出现）。
   const remaining = useMemo(
-    () =>
-      (options ?? [])
-        .filter((option) => !value.includes(option.value))
-        .map((option) => ({
-          value: option.value,
-          name: option.label ?? option.value,
-          label: option.value,
-        })),
+    () => (options ?? []).filter((option) => !value.includes(option.value)),
     [options, value],
   );
-  const matches = useMemo(() => rankByName(remaining, draft), [remaining, draft]);
+  const matches = useMemo(
+    () =>
+      new TextSearchIndex(remaining, (option) => ({
+        fuzzy: [option.label ?? option.value, option.value],
+      })).search(draft),
+    [remaining, draft],
+  );
   return (
     <div className={css.row} data-role="tag-input" data-control="tags">
       <Menu
@@ -137,7 +136,7 @@ export function TagInput({
                 commit(candidate.value);
               }}
             >
-              {candidate.name}
+              {candidate.label ?? candidate.value}
             </MenuItemButton>
           </span>
         ))}

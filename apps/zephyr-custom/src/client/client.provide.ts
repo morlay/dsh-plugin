@@ -23,7 +23,12 @@ import {
 } from "@morlay/dsh-conversation/ui";
 import { provideCommandUi } from "@morlay/dsh-command/ui";
 import { provideSkillUi } from "@morlay/dsh-skill/ui";
-import { provideConversationUi, provideSessions } from "@morlay/dsh-conversation/ui";
+import {
+  provideConversationUi,
+  provideSessionShell,
+  provideSessionStatusUi,
+  provideSessions,
+} from "@morlay/dsh-conversation/ui";
 import { provideWorkspaceUi } from "@morlay/dsh-workspace/ui";
 import { provideDeliverablesUi } from "@morlay/dsh-conversation/ui";
 import { provideAgentTeamUi } from "@morlay/dsh-agent-team/ui";
@@ -82,6 +87,10 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
     //   `provideClientChain()` 提供——同名服务注册两次会直接抛，所以按实现类剔除它那份。
     // - `provideWorkspaceUi()` 出 `workspaces`（`WorkspaceController`）+ `WorkspaceRemoteBinding`。
     ...provideSessions(without(ProjectionsDefault)),
+    // **`uiSession` 与其子服务要先于工作区面**：上游 `ui-workspace` 的 inject 声明里有
+    // `uiSession` 与 `uiSession.sessionStatus`（未读标记），它读的是 `ctx.uiSession.sessionStatus`。
+    ...provideSessionShell(),
+    ...provideSessionStatusUi(),
     // 工作区面（含侧栏工作区列表与上下文菜单）：`uiWorkspace` 是会话侧栏骨架的前置。
     ...provideWorkspaceUi(),
 

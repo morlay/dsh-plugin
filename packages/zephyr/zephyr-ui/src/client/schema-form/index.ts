@@ -10,7 +10,7 @@
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 import type {} from "@deepseek-ai/dsh-client-ui-settings/client";
-import type { Context } from "@morlay/zephyr";
+import { rootContextKey, type Context } from "@morlay/zephyr";
 import { SchemaFormHintsDefault, SERVICE_NAME } from "./hints.ts";
 import { en, zh } from "./locales.ts";
 import { SchemaForm } from "./SchemaForm.tsx";
@@ -68,7 +68,7 @@ export type { SuggestedKeys } from "./schema-node.ts";
 // 都会调到这里，所以保证同一运行时只装一次（服务已在场就返回）。
 export function apply(ctx: Context): void {
   // 提示面已在场 = 另一份副本装过了：字典 / 槽都不再重复注册。
-  if (ctx.root.reflect.get(SERVICE_NAME, false) !== undefined) return;
+  if (ctx[rootContextKey].reflect.get(SERVICE_NAME, false) !== undefined) return;
   install(ctx);
 }
 
@@ -79,7 +79,7 @@ function install(ctx: Context): void {
   // 「另一份已经装过」。放在 `locale.register` 之前是必需的：否则两次调用都可能先通过检查、再各注册一次
   // `settings.schema-form` 字典，第二个抛 `locale namespace "settings.schema-form" already has locale "zh"`。
   const hints = new SchemaFormHintsDefault();
-  const offHints = ctx.root.reflect.provide(SERVICE_NAME, hints);
+  const offHints = ctx[rootContextKey].reflect.provide(SERVICE_NAME, hints);
   ctx.effect(() => offHints);
 
   // 字典。

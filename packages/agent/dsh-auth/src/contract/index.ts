@@ -2,3 +2,4 @@
 //
 // `Credentials` 不在这里：它的消费方包含装配层（`connection` 要交给上游），契约住 `@morlay/zephyr`。
 export * from "./authorization.contract.ts";
+export * from "./deepseek-auth.contract.ts";

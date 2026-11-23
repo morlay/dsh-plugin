@@ -287,6 +287,8 @@ export function zodOf(node: Node | undefined, context: EmitContext): string {
       const name =
         object["type"] === "TSTypeReference" ? nameOf(object["typeName"] as Node) : undefined;
       const declared = name === undefined ? undefined : context.index.get(name);
+      // 索引访问的类型名同样要进产物的 import（`AccountDetails['balance']` 这类签名会原样带着它）。
+      if (name !== undefined) context.referenced.add(name);
       const members = membersOf(declared, context);
       // 索引访问也能自引用（`T = T['k']`），所以和引用一样过一遍展开栈。
       const guard = `${String(name)}|${key["type"] === "TSTypeOperator" ? String(key["operator"]) : String(nameOf(key) ?? key["literal"]?.["value"])}`;

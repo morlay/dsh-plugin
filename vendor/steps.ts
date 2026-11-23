@@ -32,6 +32,14 @@ export const patch: Step[] = [
   { type: "rm", glob: "packages/context/harness-dev-context" },
   { type: "rm", glob: "packages/subagent/subagent-dsh-sdk" },
   { type: "rm", glob: "packages/subagent/subagent-codex" },
+  // 扫码登录 / 私有登录链接 / 配对：它把功能绑在 web-app 提供的 `webApp` 服务上
+  // （`inject: ['connection', …, 'webApp']`，且 `ctx.webApp.getAdvertisedUrl()` 是二维码的地址来源），
+  // 而 `packages/bundle/web-app` 已在上面整棵摘掉——本仓的 web 层是自己的 `apps/zephyr-custom`，
+  // 没有、也不需要这个 bundle 提供 `webApp`，该插件在本仓永远无法激活。
+  // 整包删掉，同时断开它 0.2.3 新增的对已删 `@deepseek-ai/dsh-web-app` 的 workspace 依赖
+  // （只删依赖声明会留下一个激活不了的空壳包）。上游 test-support/client-runtime 的装配清单里
+  // 只把它写成字符串映射，不 import，本仓也不跑上游 `tests/`。
+  { type: "rm", glob: "packages/client/remote-connection" },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },

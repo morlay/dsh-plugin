@@ -26,5 +26,7 @@ export { cleanupDataDirs, tempDataDir } from "./temp-data-dir.ts";
 export { LocalRemote } from "./local-remote.ts";
 export { provideLocalRemote } from "./provide.ts";
 export { CredentialsInMemory } from "./credentials-in-memory.ts";
+export { FakeConnectionHost, type RegisteredFetchRoute } from "./connection-host.fake.ts";
+export { PublishBrowserConnectionName } from "./browser-connection-name.ts";
 export { RemoteDefault } from "../client/remote/remote.service.ts";
 export { publishingTo } from "./publish-service-name.ts";

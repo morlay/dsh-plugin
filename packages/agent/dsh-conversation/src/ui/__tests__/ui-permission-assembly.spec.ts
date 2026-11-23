@@ -11,7 +11,7 @@
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import {
   ConfigForms,
-  Connection,
+  provideClientConnection,
   Locale,
   Remote,
   RemoteAccess,
@@ -20,7 +20,8 @@ import {
   Shortcuts,
   provideRenderer,
 } from "@morlay/zephyr-app/client";
-import { provideLocalRemote } from "@morlay/zephyr-app/testing";
+import { Connection } from "@morlay/zephyr-app";
+import { FakeConnectionHost, provideLocalRemote } from "@morlay/zephyr-app/testing";
 import { provideClientRemote } from "@morlay/zephyr-app/client";
 import { CommandUi } from "@morlay/dsh-command/ui";
 import { SessionController } from "@morlay/dsh-conversation/ui";
@@ -36,33 +37,6 @@ const opened: App[] = [];
 afterEach(async () => {
   for (const app of opened.splice(0)) await app.dispose().catch(() => {});
 }, 20_000);
-
-/** 传输接缝的最小连接面（`provideLocalRemote` 不需要真 socket，但 `RemoteDefault` 注入它）。 */
-@Injectable()
-class FakeConnection extends Connection {
-  readonly interactions = "none" as const;
-
-  readonly generation = {
-    getSnapshot: () => ({ id: 1, host: { home: "" } }),
-    subscribe: () => () => {},
-  };
-
-  readonly isLoopback = true;
-
-  readonly state = { getSnapshot: () => "connected" as const, subscribe: () => () => {} };
-
-  readonly openWebSocket = (): WebSocket => {
-    throw new Error("本 spec 用进程内传输，不建真 socket");
-  };
-
-  readonly registerGenerationSource = () => () => {};
-
-  readonly rpc = {};
-
-  reconnect(): void {}
-
-  readonly start = () => ({ stop: () => {} });
-}
 
 /** 会话目录面：`ui-permission` 只在 slot 注入里读它，装配期不看。 */
 @Injectable()
@@ -152,7 +126,10 @@ async function boot(): Promise<App> {
           subscribe: () => () => {},
         }),
       },
-      { provide: Connection, useFactory: () => new FakeConnection() },
+      ...provideClientConnection(),
+      // 上游浏览器行按 `ctx.connection` 严格读：把浏览器面按那个名字发布。
+      // 装了 upload 行：它构造期往**宿主**连接登记路由，所以宿主面也要有。
+      { provide: Connection, useFactory: () => new FakeConnectionHost() },
       { provide: SessionController, useFactory: () => new FakeSessions() },
       // 命令 UI：本 spec 的判据是权限行自己的装配与两条 face，命令面板不在被测面内。
       // 这里给一个**真契约**的空面（不是 `undefined`：上游分支会读 `decorate` / `dismiss`）。
@@ -240,7 +217,7 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
               subscribe: () => () => {},
             }),
           },
-          { provide: Connection, useFactory: () => new FakeConnection() },
+          ...provideClientConnection(),
         ],
         timeoutMs: 20_000,
       });
@@ -264,7 +241,7 @@ describe("remote 的 $mount（真 RemoteDefault）", () => {
           // 只装 Remote 的实现（`provideClientRemote()` 就是它那几行），不装 client chain：
           // 后者会拖 theme（构建期依赖，单测装不起来）。
           ...provideClientRemote(),
-          { provide: Connection, useFactory: () => new FakeConnection() },
+          ...provideClientConnection(),
         ],
         timeoutMs: 20_000,
       });

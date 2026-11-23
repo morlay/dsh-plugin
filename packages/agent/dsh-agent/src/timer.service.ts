@@ -7,7 +7,7 @@ import { Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 
 @Injectable()
-export class TimerDefault extends fromCordis(TimerService, TimerService) {
+export class TimerDefault extends fromCordis(TimerService) {
   override async onInit(ctx: Context): Promise<void> {
     await this.mount(ctx);
   }

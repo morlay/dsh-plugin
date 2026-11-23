@@ -52,6 +52,20 @@ const UNASSEMBLED_TOOLS: readonly string[] = [
   // 终端面板（`experimental/terminal-panel`）：本部署不装那条实验行。
   "user_terminal_list",
   "user_terminal_read",
+  // 0.2.3 新增：cordis 内省（`tool-cordis`）、worktree（`tool-worktree`）、会话与工作区列表
+  // （`tool-session-list`）、会话内推送（`tool-session-control`）、时间线（`tool-timeline`）。
+  // 这些行本部署不装，工具说明留上游原文。
+  "cordis_inspect",
+  "enter_worktree",
+  "exit_worktree",
+  "list_session",
+  "list_workspace",
+  "session_send_message",
+  "timeline_pull",
+  "timeline_read",
+  "timeline_reply",
+  "timeline_tasks",
+  "timeline_tree",
 ];
 
 // 不由任何组回收、也不被注入通道丢弃的说明 section：与工具用法无关的部署级提示
@@ -71,6 +85,10 @@ const UNGATED_SECTIONS: readonly string[] = [
   "computer-use:cua-driver-native",
   // 终端面板（`experimental/terminal-panel`）的说明：本部署不装那条实验行。
   "tool:pty-panel",
+  // 0.2.3 新增的部署级提示：plan 规则的状态行与时间线（`tool-plan` / `tool-timeline`）的规划说明。
+  // 这两条行的工具本部署不装，提示段归部署级、不归模式通道管。
+  "plan:status",
+  "timeline:planning",
 ];
 
 // 每个组声明丢弃自己那批上游说明；平台噪音与未装配工具的说明由通道的默认清单丢弃。

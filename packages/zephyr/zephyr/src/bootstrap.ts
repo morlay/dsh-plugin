@@ -412,6 +412,15 @@ function orderByDependencies<Row extends { readonly token: object; readonly inst
   };
 
   for (const row of rows) visit(row);
+  if (process.env["ZEPHYR_DEBUG_ORDER"] === "1") {
+    console.error(
+      "[order] " +
+        ordered
+          .map((row) => rowNameOf(row.instance.constructor as Function))
+          .filter((name) => /session|workspace|layout|status/i.test(name))
+          .join(" → "),
+    );
+  }
   return ordered;
 }
 

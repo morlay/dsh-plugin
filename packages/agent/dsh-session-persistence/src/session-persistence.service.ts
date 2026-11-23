@@ -6,7 +6,7 @@
 // 用行 ctx 挂，查询侧读不到持久化绑定，重启后 `observeSession` 直接 `session/not-found`。
 import * as JsonlPlugin from "@deepseek-ai/dsh-session-persistence-jsonl";
 import { join } from "node:path";
-import { inject, Injectable, type Context } from "@morlay/zephyr";
+import { inject, Injectable, rootContextKey, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { SessionPersistence } from "./contract/session-persistence.contract.ts";
@@ -16,7 +16,7 @@ export class SessionPersistenceDefault extends fromCordis(SessionPersistence, Js
   private readonly appEnv: { readonly values: AppEnvValues } = inject(AppEnv);
 
   override async onInit(ctx: Context): Promise<void> {
-    const root = (ctx as unknown as { root?: Context }).root ?? ctx;
+    const root = ctx[rootContextKey];
     // 上游 `Config.root` 必填：它不拿 `process.cwd()` 兜底（cwd 会随子进程变动，一份后端被劈成两个根）。
     await this.mount(root, { root: join(this.appEnv.values.dataDir, "sessions") });
   }

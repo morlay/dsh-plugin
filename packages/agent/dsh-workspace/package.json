@@ -70,6 +70,6 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
   }
 }

@@ -31,7 +31,6 @@ describe("按需工具分组", () => {
 describe("工具按用途分组", () => {
   it("按用途分组，MCP 仍按 server 分组", () => {
     expect(toolGroupOf("read")).toBe("fs");
-    expect(toolGroupOf("working_directory")).toBe("fs");
     expect(toolGroupOf("bash")).toBe("shell");
     expect(toolGroupOf("web_search")).toBe("web-access");
     expect(toolGroupOf("skill")).toBe("skill");

@@ -14,6 +14,7 @@ import {
   provideAppEnv,
   provideApiGateway,
   provideConnection,
+  provideRemoteAccess,
   provideTypert,
   provideWeb,
   type FullApp,
@@ -53,6 +54,8 @@ export async function mountConversationHost(
       ...provideConnection(),
       ...provideTypert(),
       ...provideApiGateway(),
+      // `sessionStatus` 的宿主行（在 `provideApiSession()` 里）要它。
+      ...provideRemoteAccess(),
       // 存储 hub 与后端必须**先于任何要落盘的行**：`SessionPersistence` 的 init 会 open 存储域，
       // 那时后端还没注册就是 `storage backend 'json' is not registered (registered: none)`。
       ...provideStorage(),

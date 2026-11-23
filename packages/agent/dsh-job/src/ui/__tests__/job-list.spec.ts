@@ -1,19 +1,27 @@
 /**
- * 用户故事：**会话里跑着后台任务时，会话头部有「后台任务」入口，能看见它们、也能 kill。**
+ * 用户故事：**会话里跑着后台任务时，会话面板里有「后台任务」一节，能看见它们、也能 kill。**
  *
  * 判据落在两个后果上：
  * 1. 模型起了一个后台任务（宿主侧 `job_list` / `job` 那族工具已经在跑），界面上出现入口——
- *    对应 `conversation.session.header.actions` 里 `id: 'job-list'` 的那一格；
+ *    上游 0.2.3 起它住在 `conversation.session.panel.section` 的 `id: 'background-jobs'` 一节
+ *    （0.2.2 的头部动作位 `conversation.session.header.actions` 已不再注册），运行中的指示点
+ *    在 `conversation.session.panel.indicator` 的 `id: 'background-jobs.running'`；
  * 2. 这条入口的数据来源真的挂上了：`job` 那组 remote 由本行 `$mount`（不挂则列表永远空）。
  *
- * 反向用例同样重要：只装数据面（`JobsClient`）而不装列表（`JobListSlots`）时，头部动作位是空的
+ * 反向用例同样重要：只装数据面（`JobsClient`）而不装列表（`JobListSlots`）时，两处都是空的
  * ——否则「装上了」这件事无从判断，用户看到的就是「后台在跑，界面上什么都没有」。
  *
  * 替身的边界：`FakeRemote` 复刻 `RemoteDefault` 的两处关键行为——`$mount` 按 descriptor 发布
  * `remote.<namespace>` 服务名，以及 `remote.<namespace>` 这个**属性读**（真实现是 Proxy 回落）；
  * 渲染不在本 spec 的判据里（任务行、输出面板由上游 `JobListAction` 负责，我们不重写组件）。
  */
-import { bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
+import {
+  bootstrapApplication,
+  Injectable,
+  rootContextKey,
+  type App,
+  type Context,
+} from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { JobsClient } from "../jobs-client.service.ts";
@@ -69,7 +77,7 @@ class FakeRemote extends Remote {
     const descriptors =
       (contribution as { descriptors?: readonly Descriptor[] } | undefined)?.descriptors ?? [];
     const disposed: Array<() => void> = [];
-    const root = this.ctx?.root ?? this.ctx;
+    const root = this.ctx === undefined ? undefined : this.ctx[rootContextKey];
     for (const descriptor of descriptors) {
       const namespace = String(descriptor.namespace);
       if (this.mounted.includes(namespace)) continue;
@@ -142,13 +150,14 @@ async function boot(
   });
   opened.push(app);
   const slots = app.get(Slots);
-  // 头部动作位由上游 `ui-conversation` 声明（`conversation.session.header.actions`，list/session）；
-  // 本 spec 只装 job 那两行，所以按同一形状声明一次，否则上游的注册会一直等位置。
+  // 两个位置由上游 `ui-session-panel` 声明（`conversation.session.panel.section` 与 `.indicator`，
+  // 都是 list/session）；本 spec 只装 job 那两行，所以按同一形状声明一次，否则上游的注册会一直等位置。
   slots.registerDynamic(
     {
       name: "root",
       children: {
-        "conversation.session.header.actions": { kind: "list", scope: "session" },
+        "conversation.session.panel.section": { kind: "list", scope: "session" },
+        "conversation.session.panel.indicator": { kind: "list", scope: "session", inline: true },
       },
     },
     () => null,
@@ -156,30 +165,35 @@ async function boot(
   return { slots, remote: app.get(FakeRemote) };
 }
 
-/** 头部动作位里的注册项（只取判据要的 `id`）。 */
-function jobActionIds(slots: Slots): readonly (string | undefined)[] {
-  const entries = slots.entries("conversation.session.header.actions" as never) as readonly {
+/** 某一位置上的注册项（只取判据要的 `id`）。 */
+function idsAt(slots: Slots, name: string): readonly (string | undefined)[] {
+  const entries = slots.entries(name as never) as readonly {
     readonly options?: { readonly id?: string };
   }[];
   return entries.map((entry) => entry.options?.id);
 }
 
 describe("用户故事：后台任务在界面上可见、可 kill", () => {
-  it("模型起了后台任务之后：头部有任务入口，且它的数据面已挂上", async () => {
+  it("模型起了后台任务之后：面板里有任务一节，且它的数据面已挂上", async () => {
     const { slots, remote } = await boot();
     expect(remote.mounted, "JobsClient 必须自己 `$mount` job 那组 descriptor").toContain("job");
-    await until(() => jobActionIds(slots).length > 0);
+    await until(() => idsAt(slots, "conversation.session.panel.section").length > 0);
     expect(
-      jobActionIds(slots),
-      "头部动作位里必须有 job-list（没有 = 后台任务在界面上看不见）",
-    ).toEqual(["job-list"]);
+      idsAt(slots, "conversation.session.panel.section"),
+      "会话面板里必须有 background-jobs 一节（没有 = 后台任务在界面上看不见）",
+    ).toEqual(["background-jobs"]);
+    expect(
+      idsAt(slots, "conversation.session.panel.indicator"),
+      "运行中的指示点必须在面板开关上",
+    ).toEqual(["background-jobs.running"]);
   });
 
   it("反向：只装数据面不装列表时，用户看不到任何入口", async () => {
     const { slots } = await boot([JobsClient]);
     // 等一轮异步装配，确认不是"还没跑到"。
     await until(() => false, 200);
-    expect(jobActionIds(slots)).toEqual([]);
-    expect(slots.keys(), "位置被碰过、但没人注册").toContain("conversation.session.header.actions");
+    expect(idsAt(slots, "conversation.session.panel.section")).toEqual([]);
+    expect(idsAt(slots, "conversation.session.panel.indicator")).toEqual([]);
+    expect(slots.keys(), "位置被碰过、但没人注册").toContain("conversation.session.panel.section");
   });
 });

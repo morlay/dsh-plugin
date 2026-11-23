@@ -158,6 +158,37 @@ async function run(
 
 describe("teammate（Agent Teams）端到端", () => {
   it(
+    "setEnabled 之后 agentTeam 投影跟着翻（浏览器开关读的就是这一份）",
+    { timeout: 60_000 },
+    async () => {
+      const { app, teams } = await boot();
+      try {
+        const loop = app.get(AgentLoop);
+        const lead = await loop.create(SessionId("team-projection"), {
+          provider: "mock",
+          model: "mock",
+        } as never);
+        // 投影挂在 `snapshot(session).values` 里（与 `session-stats.spec` 同一口径）；浏览器
+        // `useProjection('agentTeam')` 读的就是这一份 view。
+        const store = app.get(SessionProjectionStore);
+        const enabledOf = (): boolean => {
+          const values = store.snapshot(lead.session).values;
+          return values["agentTeam"]?.enabled === true;
+        };
+        const setEnabled = (enabled: boolean): Promise<void> => teams.setEnabled(lead, enabled);
+
+        expect(enabledOf(), "默认关").toBe(false);
+        await setEnabled(true);
+        expect(enabledOf(), "启用后投影跟着翻").toBe(true);
+        await setEnabled(false);
+        expect(enabledOf(), "关闭后投影跟着翻").toBe(false);
+      } finally {
+        await app.dispose();
+      }
+    },
+  );
+
+  it(
     "成员资格决定团队工具是否可见；任务板走完 create→list→claim→complete",
     { timeout: 120_000 },
     async () => {

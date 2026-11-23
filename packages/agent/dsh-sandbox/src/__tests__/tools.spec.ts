@@ -22,7 +22,6 @@ import {
   AgentScopedRows,
   AgentScopedRowsDefault,
   WorkingDirectoryDefault,
-  provideEnvTools,
   provideWorkingDirectory,
 } from "@morlay/dsh-agent";
 import { bootstrapApplication, type App, type Context, configure } from "@morlay/zephyr";
@@ -58,9 +57,8 @@ async function boot(): Promise<{ app: App; root: string }> {
       ...provideWorkingDirectory(configure(WorkingDirectoryDefault, { defaultDirectory: root })),
       // per-agent 行的装行能力：这四条工具行都声明了 `@AgentScoped()`（工具按 agent 注册）。
       AgentScopedRowsDefault,
-      // 工具行按能力域分装：`bash` / 文件 / 检索在 sandbox，`working_directory` 在 agent。
+      // 工具行按能力域分装：`bash` / 文件 / 检索都在 sandbox。
       ...provideFsTools(),
-      ...provideEnvTools(),
     ],
     timeoutMs: 30_000,
   } as never);
@@ -93,7 +91,6 @@ describe("env-tool 域", () => {
       expect(names).toContain("bash");
       expect(names).toContain("read");
       expect(names).toContain("glob");
-      expect(names).toContain("working_directory");
     },
   );
 

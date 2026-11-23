@@ -7,12 +7,7 @@ import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  AgentDirectory,
-  provideAgent,
-  provideEnvTools,
-  provideWorkingDirectory,
-} from "@morlay/dsh-agent";
+import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { provideFsTools, provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
@@ -86,7 +81,6 @@ async function boot(): Promise<App> {
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
       ...provideFsTools(),
-      ...provideEnvTools(),
       ...providePermissionFor("workspace-write"),
       ...provideAskUserTool(),
     ],

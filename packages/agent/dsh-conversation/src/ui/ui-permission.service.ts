@@ -9,7 +9,7 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import {
   ConfigForms,
-  Connection,
+  ClientConnection,
   Locale,
   Remote,
   SettingsSchema,
@@ -27,7 +27,7 @@ import { namespaceOf } from "./remote-namespace.ts";
 export class UiPermission extends fromCordis(UiPermissionPlugin) {
   private readonly remote = inject(Remote);
 
-  private readonly connection = inject(Connection);
+  private readonly connection = inject(ClientConnection);
 
   private readonly sessions = inject(SessionController);
 

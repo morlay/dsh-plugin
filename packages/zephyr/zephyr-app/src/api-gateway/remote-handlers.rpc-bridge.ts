@@ -7,7 +7,7 @@
 // 上游一条共享通道只容一个物理拦截器，多个贡献方怎么共存归 `Connection` 行（`shareRpcChannels`）：
 // 这里只管登记自己那一段认领范围。
 import type { ConnectionRpcHandlerResult, PeerScope } from "@deepseek-ai/dsh-client-connection";
-import { inject, Injectable, type OnDispose } from "@morlay/zephyr";
+import { inject, Injectable, Logger, type OnDispose } from "@morlay/zephyr";
 import { Connection } from "../connection/contract.ts";
 import { failureOf } from "../remote/remote-result.ts";
 import { RemoteHandlers } from "./remote-handlers.contract.ts";
@@ -37,6 +37,8 @@ export class RemoteHandlersRpcBridge implements OnDispose {
   // 缺了它就是「自研组的端点全是 404」，所以真装上载体时下面那段仍是 fail loud。
   private readonly connection = inject.optional(Connection);
 
+  private readonly logger = inject(Logger);
+
   private readonly handlers = inject(RemoteHandlers);
 
   /** 物理拦截项的注销函数（`onDispose` 里调）。 */
@@ -44,6 +46,8 @@ export class RemoteHandlersRpcBridge implements OnDispose {
 
   onInit(): void {
     if (this.connection === undefined) return;
+    // 契约面就是这个上游实例（`Connection` 行显式 `new HostConnectionService`），它的 `rpc` 上已经装好
+    // 共享通道层（见 `shareRpcChannels`）：物理拦截器一条通道只能有一个。
     const rpc = hostRpcOf(this.connection);
     if (rpc === undefined) {
       // 缺了这一面就是「自研组的端点全是 404」，而装配期一切正常——失败必须落在这里。

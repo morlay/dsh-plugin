@@ -7,6 +7,7 @@
 import { bootstrapApplication } from "@morlay/zephyr";
 import { afterEach, describe, expect, it } from "vitest";
 import { Web } from "@morlay/dsh-web-access";
+import { DeepSeekAuthToken } from "@morlay/dsh-auth";
 import { provideWebAccess } from "@morlay/dsh-web-access/server";
 
 const apps: { dispose(): Promise<void> }[] = [];
@@ -18,7 +19,20 @@ afterEach(async () => {
 /** 起真 web 栈。 */
 async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
-    providers: [...provideWebAccess()],
+    // 搜索后端（`web-search-deepseek`）从 `ctx.deepseekAuth` 取凭据（上游 0.2.3）：它的显式依赖。
+    // 这条 spec 只验 web 域，不需要真凭据链，给一个最小面。
+    providers: [
+      {
+        provide: DeepSeekAuthToken,
+        useFactory: () => ({
+          connect: () => () => {},
+          routeKind: () => undefined,
+          candidates: () => [],
+          authorize: async () => undefined,
+        }),
+      },
+      ...provideWebAccess(),
+    ],
     timeoutMs: 10_000,
   });
   apps.push(app);

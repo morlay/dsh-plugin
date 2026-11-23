@@ -69,8 +69,12 @@ export {
   type UiConversationFace,
   UiSession,
   type UiSessionFace,
+  UiSessionStatus,
+  type UiSessionStatusFace,
 } from "./cross-row.tokens.ts";
 export { SettingsSchema } from "./settings-schema.ts";
 // `localStorage` / `sessionStorage` 的代理（同步内存真源 + IndexedDB 异步落盘）。
 export { installStorageShim, type StorageShim, type StorageShimResult } from "./storage-shim.ts";
 export { ContextMenus } from "./context-menus.contract.ts";
+// 浏览器侧的「同步配置」桩：没有 Host 同步通道的装配给上游 client 行用它（见 `synced-config.ts`）。
+export { fixedSyncedConfig, fixedSyncedRef } from "./synced-config.ts";

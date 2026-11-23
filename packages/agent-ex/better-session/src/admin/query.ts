@@ -28,6 +28,7 @@ import type {
   SessionEventTraceObservation,
   SessionEventWindow,
   SessionLineageTrace,
+  SessionListMetadata,
   SessionLogSnapshot,
   SessionEventRecord,
   SessionObservation,
@@ -132,6 +133,10 @@ export class SessionQueryRdb extends SessionQuery implements OnInit {
       (a, b) => b.header.createdAt - a.header.createdAt || a.header.id.localeCompare(b.header.id),
     );
     // 归档是「收起来」的会话：完整语料走管理面 `sessionAdmin/rows`（那里读 `listRows`，不过这里）。
+    //
+    // **空白会话不过滤**：上游 0.2.3 的 `session/list` 也返回它们（界面上就出现没有名字的条目）。
+    // 本层保持「列出全部可见会话」的语义（`session-query.spec` 钉着 live + persisted 都在）；
+    // 要不要在展示层藏掉空白，是装配 / UI 的决定，不在这条查询上。
     const archived = await this.archivedSessionIds();
     if (archived.size === 0) return ordered;
     return ordered.filter((record) => !archived.has(String(record.header.id)));
@@ -408,11 +413,20 @@ export class SessionQueryRdb extends SessionQuery implements OnInit {
     return this.observe.observeSession(sessionId, options);
   }
 
-  inspectSession = async <T>(
-    sessionId: SessionId,
-    read: (session: Session) => T,
-    signal?: AbortSignal,
-  ): Promise<T> => this.observe.inspectSession(sessionId, read, signal);
+  /**
+   * 列表用的元数据：是否还没有 turn，以及最近一条人工提示词的时间（上游 0.2.3 新增的成员，
+   * 取代了已下线的 `inspectSession`）。
+   *
+   * 上游用 `sessionListMetadata` 投影折叠——那是 `session-query-sqlite` 在自己 init 里注册的；RDB 装配
+   * 不注册它，所以这里读投影缓存，没有缓存时给上游的 init 值。本仓不挂上游 `tool-session-list`
+   * （唯一消费方），因此没有"读到默认值"的消费路径；将来挂它时得在这里注册那份投影定义。
+   * @param session - 实时或已准备的 Session。
+   * @returns 空白标记与最近人工提示词时间（无则 `null`）。
+   */
+  getListMetadata(session: Session): SessionListMetadata {
+    const cached = this.projections?.cachedSnapshot(session)?.values["sessionListMetadata"];
+    return cached === undefined ? { blank: true, lastPromptAt: null } : cached;
+  }
 
   searchSessions(): Promise<SessionSearchPage<SessionSearchHit>> {
     return Promise.reject(searchDisabled());

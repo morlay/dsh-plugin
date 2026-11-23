@@ -2,7 +2,7 @@
 //
 // 读数必须同步（投影发生在渲染帧里）：异步来源由业务取好再注册，注册本身即一次变更通知。
 
-import { Injectable, type Context } from "@morlay/zephyr";
+import { Injectable, rootContextKey, type Context } from "@morlay/zephyr";
 import { DYNAMIC_SEGMENT } from "./schema-node.ts";
 
 // 一个 dict 字段的候选键读数。
@@ -91,7 +91,7 @@ export abstract class SchemaFormHints implements SchemaFormHintsFace {
 // 判据见 `__tests__/hints-injection.spec.ts`。
 export function schemaFormHintsOf(ctx: Context): SchemaFormHints | undefined {
   // 按名字读（例外见 `.agents/standards/how-to-write.md`「禁止按名字读服务」第 6 条：运行期自注册服务的探测）。
-  const found = ctx.root.reflect.get(SERVICE_NAME, false);
+  const found = ctx[rootContextKey].reflect.get(SERVICE_NAME, false);
   return typeof found === "object" && found !== null ? (found as SchemaFormHints) : undefined;
 }
 

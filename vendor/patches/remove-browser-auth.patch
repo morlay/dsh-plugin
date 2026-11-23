@@ -1,8 +1,8 @@
-diff --git a/packages/client/connection/src/browser-auth.ts b/packages/client/connection/src/browser-auth.ts
-index 5c8594df6f..72c32ba643 100644
---- a/packages/client/connection/src/browser-auth.ts
-+++ b/packages/client/connection/src/browser-auth.ts
-@@ -348,13 +348,13 @@ export class BrowserAuth {
+diff --git a/packages/host/authentication-token/src/browser-auth.ts b/packages/host/authentication-token/src/browser-auth.ts
+index 4182e07ff7..ee3b0486cf 100644
+--- a/packages/host/authentication-token/src/browser-auth.ts
++++ b/packages/host/authentication-token/src/browser-auth.ts
+@@ -409,13 +409,13 @@ export class BrowserAuth {
    }
  
    /**

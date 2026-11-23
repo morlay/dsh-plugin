@@ -79,7 +79,12 @@ export async function serveMux(): Promise<{
       };
     },
     () => ({ code: "gateway/invoke-failed", message: "x", details: {} }),
-    { heartbeatIntervalMs: 2_000, streamInboxBytes: 262_144, compression: false },
+    {
+      heartbeatIntervalMs: 2_000,
+      streamInboxBytes: 262_144,
+      streamOutboxBytes: 1_048_576,
+      compression: false,
+    },
   );
 
   // 两级 wire：unary 走 `/api/<endpoint>` 的 HTTP RPC（上游的 client-request 信封），

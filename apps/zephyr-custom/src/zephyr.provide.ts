@@ -40,10 +40,15 @@ import { type PermissionMode } from "@morlay/dsh-permission";
 import { provideAskUserTool, providePermissionFor } from "@morlay/dsh-permission/server";
 
 import { providePtc } from "@morlay/dsh-ptc";
-import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/dsh-sandbox";
+import { provideConfigurableSandbox } from "@morlay/configurable-sandbox";
+import {
+  FsSandbox,
+  SandboxDefault,
+  SandboxPolicyDefault,
+  provideFsTools,
+  provideSandbox,
+} from "@morlay/dsh-sandbox";
 import { provideWorkspaceFiles } from "@morlay/dsh-workspace/server";
-// 工具行（bash / 文件 / 检索 / 工作目录）归 agent：契约面是 ToolRegistry。
-import { provideEnvTools } from "@morlay/dsh-agent/server";
 import { provideTokenMeter } from "@morlay/dsh-session/server";
 // 会话端点那一面属对话域（随 ui 一起从 session 搬来）。
 import { provideConversationServer } from "@morlay/dsh-conversation/server";
@@ -338,9 +343,8 @@ function workspaceProviders(): ProviderEntry[] {
 /** 工具面：环境工具 / 工具策略 / web 访问 / 遥测 / `llm/*` 的 wire 行。 */
 function toolProviders(): ProviderEntry[] {
   return [
-    // 工具行按能力域分装：`bash` 在 shell 域，文件/检索/工作目录在 agent。
+    // 工具行按能力域分装：`bash` 在 shell 域，文件 / 检索在 sandbox 域。
     ...provideFsTools(),
-    ...provideEnvTools(),
     // 模型面向的 ask_user_question：它读 userQuestions 队列（下面 deploymentProviders() 里的
     // providePermissionFor() 装）。带 scope 的行不在应用根装配，所以这一行与那份队列在清单里的
     // 先后不影响它拿到队列。
@@ -361,12 +365,20 @@ function deploymentProviders(paths: CustomProvidersOptions): ProviderEntry[] {
   return [
     ...provideShell(),
     // 沙箱的根与「从哪开始」是同一件事的两个面：缺省都指向启动器给的起始目录。
+    // **执行面换成本部署的可配置实现**：`provideConfigurableSandbox()` 的两个实现（`Sandbox` /
+    // `FileSystem`）要顶掉官方那两行，否则 `{DSH_HOME}/sandbox.toml` 里的 access 规则根本不会被读
+    // （症状是 agent-browser 起不来、XDG 缓存写不进去）。策略行保留官方那份，只改它的部署值。
     ...provideSandbox(
+      without(SandboxDefault),
+      without(FsSandbox),
       configure(SandboxPolicyDefault, {
         mode: permissionMode,
         workspaceRoot: defaultWorkingDirectory,
       }),
     ),
+    // 规则面：`SandboxFileDefault`（读写 `{DSH_HOME}/sandbox.toml`，首次启动落默认 access）+
+    // 两个替换实现 + 运行时文本。缺了它，沙箱只有"工作区可写"。
+    ...provideConfigurableSandbox(),
     ...provideWorkingDirectory(
       configure(WorkingDirectoryDefault, {
         defaultDirectory: defaultWorkingDirectory,

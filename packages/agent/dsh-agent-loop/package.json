@@ -40,7 +40,6 @@
   "dependencies": {
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-loop": "workspace:^",
-    "@deepseek-ai/dsh-mcp-resources": "workspace:^",
     "@deepseek-ai/dsh-repeat-tool-reminder": "workspace:^",
     "@deepseek-ai/dsh-session-checkpoint-policy": "workspace:^",
     "@deepseek-ai/dsh-spill-local": "workspace:^",
@@ -64,6 +63,6 @@
     "@morlay/dsh-shell": "workspace:^"
   },
   "engines": {
-    "dsh": ">= 0.2.2-rc.3 < 0.2.3"
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
   }
 }

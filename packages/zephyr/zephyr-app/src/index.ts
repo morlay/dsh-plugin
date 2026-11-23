@@ -39,6 +39,7 @@ export { productionProviders, type ProductionOptions } from "./production.provid
 export { StaticClientAssets } from "./client-assets/static-client-assets.service.ts";
 export { ServeStatic } from "./web/serve-static.service.ts";
 export * from "./connection/contract.ts";
+export * from "./connection/client.contract.ts";
 export * from "./remote/remote.contract.ts";
 export * from "./api-remotes/remote-descriptor.contract.ts";
 // remote 的**装载机制**（按提供者登记的清单逐个 `$mount`）：它只认 `Remote` 的 `$mount`，

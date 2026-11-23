@@ -15,7 +15,7 @@
  */
 import { bootstrapApplication, inject, Injectable, type Context } from "@morlay/zephyr";
 import {
-  Connection,
+  ClientConnection,
   Locale,
   mockTransport,
   provideRenderer,
@@ -246,7 +246,7 @@ class PublishSessionNamespace {
 
 /** 连接替身：`generation` 可推进，用来验「换代后重开 `session/control`」。 */
 @Injectable()
-class FakeConnection extends Connection {
+class FakeConnection extends ClientConnection {
   readonly interactions = "none" as const;
 
   private id = 1;

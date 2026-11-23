@@ -4,7 +4,7 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import {
   ConfigForms,
-  Connection,
+  ClientConnection,
   Locale,
   Remote,
   RemoteAccess,
@@ -21,7 +21,7 @@ export class SettingsGeneralSlots extends fromCordis(UiSettingsGeneralPlugin) {
 
   private readonly locale = inject(Locale);
 
-  private readonly connection = inject(Connection);
+  private readonly connection = inject(ClientConnection);
 
   private readonly remote = inject(Remote);
 

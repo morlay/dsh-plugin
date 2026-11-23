@@ -3,8 +3,7 @@
 //
 // 四条行都是「挂在工具调用生命周期上的策略」，不登记工具、也不声明自己的契约：判据只能是
 // 「它们要的依赖真的都在、并且行装得上」——其中 `McpResources` 有自己的服务令牌，用它当证据。
-import McpResourceRuntime from "@deepseek-ai/dsh-mcp-resources";
-import { ToolRegistry } from "@morlay/dsh-agent";
+import { McpResources, ToolRegistry } from "@morlay/dsh-agent";
 import { AgentDirectoryDefault, SystemPromptDefault, ToolRegistryDefault } from "@morlay/dsh-agent";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { provideToolPolicy } from "../server/tool-policy.provide.ts";
@@ -40,7 +39,8 @@ describe("tool-policy 域", () => {
     { timeout: 20_000 },
     async () => {
       const app = await boot();
-      expect(app.get(McpResourceRuntime)).toBeInstanceOf(McpResourceRuntime);
+      // 令牌是**行**（`McpResources`）：上游类只是它包装的实现。
+      expect(app.get(McpResources)).toBeDefined();
       expect(app.get(ToolRegistry)).toBeDefined();
     },
   );

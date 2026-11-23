@@ -10,6 +10,7 @@ import {
   bootstrapApplication,
   inject,
   Injectable,
+  rootContextKey,
   type Context,
   type OnInit,
 } from "@morlay/zephyr";
@@ -20,7 +21,7 @@ import { SchemaFormHints, SERVICE_NAME, schemaFormHintsOf } from "../schema-form
 @Injectable()
 class RuntimeProvider implements OnInit {
   onInit(ctx: Context): void {
-    ctx.root.reflect.provide(SERVICE_NAME, { keysFor: () => ["mounted"] });
+    ctx[rootContextKey].reflect.provide(SERVICE_NAME, { keysFor: () => ["mounted"] });
   }
 }
 

@@ -105,36 +105,29 @@ class FakeAgentDirectory extends AgentDirectory {
   readonly turnBoundaryOf: AgentDirectory["turnBoundaryOf"] = unused;
 }
 
-/** 假连接面：上游构造期会往宿主登记一条流式上传路由。 */
+/** 假连接面（**宿主面**）：上游构造期会往宿主登记一条流式上传路由。 */
 @Injectable()
 class FakeConnection extends Connection {
-  readonly interactions = "none" as const;
+  readonly rpc: Connection["rpc"] = {
+    handle: () => async () => {},
+    intercept: () => async () => {},
+  } as Connection["rpc"];
 
-  readonly generation = {
-    getSnapshot: () => ({ id: 0, host: { home: "/tmp" } }),
-    subscribe: () => () => {},
+  readonly fetch: Connection["fetch"] = {
+    register:
+      (_route: Parameters<Connection["fetch"]["register"]>[0]): (() => Promise<void>) =>
+      async () => {},
   };
 
-  readonly isLoopback = true;
+  createSharedFetchHandler(): never {
+    throw new Error("spec: 不建共享分派器");
+  }
 
-  readonly state = {
-    getSnapshot: () => undefined,
-    subscribe: () => () => {},
-  };
+  admit(_request: never): never {
+    throw new Error("spec: 不接连接");
+  }
 
-  readonly rpc = {};
-
-  readonly fetch = { register: (): (() => void) => () => {} };
-
-  readonly openWebSocket = (): never => {
-    throw new Error("spec: 不建连");
-  };
-
-  reconnect(): void {}
-
-  readonly registerGenerationSource = (): (() => void) => () => {};
-
-  readonly start = (): { stop(): void } => ({ stop: () => {} });
+  readonly browserPeer = {} as Connection["browserPeer"];
 }
 
 const opened: App[] = [];

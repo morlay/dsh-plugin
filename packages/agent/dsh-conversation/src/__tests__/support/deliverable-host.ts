@@ -22,6 +22,7 @@ import { provideAttachment } from "@morlay/dsh-attachment";
 import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideApiSession, provideSessionRemote } from "@morlay/dsh-conversation/server";
 import { provideSandbox } from "@morlay/dsh-sandbox";
+import { provideRemoteAccess } from "@morlay/zephyr-app/testing";
 import { provideWorkspaceFiles } from "@morlay/dsh-workspace/server";
 import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
 import { provideSetting } from "@morlay/dsh-setting/server";
@@ -45,6 +46,8 @@ export async function mountDeliverablesHost(dataDir: string): Promise<FullApp> {
       ...provideWeb(),
       ...provideAppEnv(configure(AppEnvDefault, { profileDir: process.cwd(), dataDir })),
       ...provideConnection(),
+      // `sessionStatus` 的宿主行（`provideApiSession()` 里）要它：按会话发已读状态的准入。
+      ...provideRemoteAccess(),
       ...provideTypert(),
       ...provideApiGateway(),
       ...provideSessionPersistence(),

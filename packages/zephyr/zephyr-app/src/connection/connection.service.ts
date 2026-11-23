@@ -1,7 +1,11 @@
-// host 侧的连接面：我们的契约只有**传输**；上游实现内置了认证（`browser-auth`），
-// 它需要上层给的 `Credentials`——我们只**转交**，不定义认证契约、不实现认证。
+// host 侧的连接面：我们的契约只有**传输**。上游的实现（认证注册表 + 连接服务）由本行**显式** `new`：
+// 走它的 `apply` 会把服务注册推迟到上游自己的 `ctx.inject` 回调之后（0.2.3），本行就拿不到实例。
+import type { Context as CordisContext } from "@deepseek-ai/cordis";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import * as ConnectionPlugin from "@deepseek-ai/dsh-client-connection";
+import {
+  ConnectionAuthentication,
+  HostConnectionService,
+} from "@deepseek-ai/dsh-client-connection";
 import type {
   ConnectionRpcEndpointMatcher,
   ConnectionRpcHandler,
@@ -9,8 +13,15 @@ import type {
   PeerAdmission,
   PeerScope,
 } from "@deepseek-ai/dsh-client-connection";
-import { inject, Injectable, Logger, type Context } from "@morlay/zephyr";
-import { Credentials } from "../credentials/credentials.contract.ts";
+import {
+  inject,
+  Injectable,
+  kFace,
+  Logger,
+  type Context,
+  type OnDispose,
+  type OnInit,
+} from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { WebServer } from "../web/web-server.contract.ts";
 import { Connection } from "./contract.ts";
@@ -56,23 +67,29 @@ interface SharedRpcChannel {
  * 围栏只认**原始请求头**——`Request` 构造会把 `origin` / `sec-*` / `host` 这些 forbidden header
  * 丢掉，所以这一层必须在 node 的 `req` 上做，不能挪进 fetch 桥。
  */
-interface HostTrust {
-  readonly requestRejection: (request: unknown) => 401 | 403 | undefined;
-  /**
-   * 同一条围栏，但**带回这次请求代表的 peer**。
-   *
-   * `/api` 的 HTTP 请求必须与 WS 事件流用**同一个 Peer 实例**：上游 `$events/result` 会核
-   * `client.peer === peer`，两边各拿一个对象就是 `Remote event result belongs to another Peer`。
-   */
-  readonly admit: (
-    request: unknown,
-  ) => { readonly peer: unknown } | { readonly rejection: 401 | 403 };
+
+/**
+ * 上游 `HostConnectionService` 的子类：唯一目的是把 `trustedHosts` 固定成 `[]`。
+ *
+ * `fromCordis` 的 Service 分支按 `(ownerCtx, effectiveConfig)` 构造上游类，而 `HostConnectionService`
+ * 的第二参是 `trustedHosts` 而不是 config（传 config 进去它会 `undefined.some`）。这一层把签名收成
+ * 一个参数，`fromCordis` 传进来的第二参被忽略。
+ */
+class HostConnection extends HostConnectionService {
+  /** @param ctx - 装这一行的 ctx（`fromCordis` 的 deps 代理）。 */
+  constructor(ctx: CordisContext) {
+    // 上游构造里 `this.authentication = ctx['connection.authentication']`（严格读）：注册表要先在。
+    // `super` 之前建它不碰 `this`，是合法的。
+    new ConnectionAuthentication(ctx);
+    super(ctx, []);
+  }
 }
 
 @Injectable()
-export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) {
-  private readonly credentials = inject(Credentials);
-
+export class ConnectionDefault
+  extends fromCordis(Connection, HostConnection)
+  implements OnInit, OnDispose
+{
   private readonly logger = inject(Logger);
 
   private readonly webServer = inject(WebServer);
@@ -80,78 +97,24 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
   /** `/api` 前缀的注销函数（`onDispose` 里调）。 */
   private disposeApi: (() => void) | undefined;
 
-  override async onInit(ctx: Context): Promise<void> {
-    // 上游 `apply` 里用 `credentials.modifyRecord(...)` 维护浏览器 cookie；认证本身由上层提供。
-    await this.mount(ctx, undefined, { credentials: this.credentials });
-    // 上游是函数插件（`apply` 里 `new HostConnectionService` 再 `ctx.provide`）：没有 `providerInstance`，
-    // 行内发布的 `connection` 就是那个服务实例——`ctx.get` 是拿它的唯一入口（cordis store 是唯一注册表）。
-    // 按名字读（例外见 `.agents/standards/how-to-write.md`「禁止按名字读服务」第 4 条：晚绑定 + 要上游实例本身）。
-    const instance = ctx.get("connection", false);
-    shareRpcChannels(instance, this.logger);
-    admitLocalPeer(instance, this.logger);
-    // 上游 `ClientRemoteService.$host` 无条件读 `connection.generation.getSnapshot()`：
-    // 未连接时上游给的是 `undefined`，一渲染就炸。这里把 `generation` 收敛成**总是 observable**。
-    const real = (
-      instance as
-        | {
-            generation?: {
-              getSnapshot?: () => unknown;
-              subscribe?: (fn: () => void) => () => void;
-            };
-          }
-        | undefined
-    )?.generation;
-    const fallback = { getSnapshot: () => ({ id: 0, host: undefined }), subscribe: () => () => {} };
-    // 上游实例的 `generation` 是原型 getter：包一层自有属性，**未连接时**回落到兜底 observable。
+  /**
+   * `mount` 拿到上游实例后，把两条补丁与 `/api` 前缀显式装好。
+   *
+   * `webServer` 是我们的外部依赖：上游按 `webServer` 这个名字读 carrier（信任围栏拿 host / protocol），
+   * 所以作为 deps 交进去。
+   */
+  async onInit(ctx: Context): Promise<void> {
+    await this.mount(ctx, undefined, { webServer: this.webServer });
+    const connection = this[kFace] as HostConnectionService;
+    // 两条补丁**在任何 `rpc.intercept` 之前**装上：一条通道只容一个物理拦截器（上游对第二个直接抛）。
+    shareRpcChannels(connection, this.logger);
+    admitLocalPeer(connection, this.logger);
     // **fetch 表的 HTTP 面**：上游 `ui-deliverables` 之类的行把 HTTP 路由注册进 `connection.fetch`，
-    // 那条 rpc 面则由 `api-gateway` 的 `rpc.intercept('/api', …)` 接管（见 `api-gateway.service.ts`），
-    // 但两条都只是表——把 HTTP 请求喂进去的 `/api` 前缀归载体，就是下面这一段：
-    // 一条前缀，把请求原样交给上游的共享分派器（exact 路由优先，其次才是 rpc 拦截器；
-    // 两者都没有时它自己回 404）。少了这段，四条交付物路由（`/api/present.host` 等）在浏览器里
-    // **永远是 404**，而装配期一切正常。
-    //
-    // 前缀与信任围栏都要用**运行期那一个** `connection`，所以在 `ctx.inject` 里现取一次：
-    // 对已存在的服务它是立即回调，对稍后出现的会等到出现。
-    ctx.inject(["connection"], (scoped) => {
-      const live = scoped.get("connection", false);
-      const shared = (
-        live as { createSharedFetchHandler?: (channel: "/api") => HostFetchHandler } | undefined
-      )?.createSharedFetchHandler?.("/api");
-      if (shared === undefined) {
-        // 上游换了形状时要立刻看见：`connection.fetch` 的路由没有这层分派就是永远 404。
-        this.logger.warn(
-          "[connection] 上游没有 createSharedFetchHandler：connection.fetch 注册的路由在 HTTP 上会 404",
-        );
-        return undefined;
-      }
-      // 信任围栏与分派器同源：`requestRejection` 走的就是 `admit`（`403` 保留、缺认证那一档已放行）。
-      const liveFace = live as { requestRejection?: unknown; admit?: unknown } | undefined;
-      const trust =
-        typeof liveFace?.requestRejection === "function" && typeof liveFace?.admit === "function"
-          ? (live as HostTrust)
-          : undefined;
-      if (trust === undefined) {
-        this.logger.warn(
-          "[connection] 上游没有 requestRejection：/api 的 HTTP 面没有 Host / Origin 信任检查",
-        );
-      }
-      this.disposeApi = this.mountFetchRoutes(shared, trust);
-      return () => {
-        this.disposeApi?.();
-        this.disposeApi = undefined;
-      };
-    });
-    if (instance !== undefined) {
-      Object.defineProperty(instance, "generation", {
-        value: {
-          getSnapshot: () =>
-            typeof real?.getSnapshot === "function" ? real.getSnapshot() : fallback.getSnapshot(),
-          subscribe: (fn: () => void) =>
-            typeof real?.subscribe === "function" ? real.subscribe(fn) : fallback.subscribe(),
-        },
-        configurable: true,
-      });
-    }
+    // rpc 面则由 `api-gateway` 的 `rpc.intercept('/api', …)` 接管，但两条都只是表——把 HTTP 请求喂进去的
+    // `/api` 前缀归载体，就是这一段（exact 路由优先、其次 rpc 拦截器、都没有时上游自己回 404）。
+    // 少了这段，四条交付物路由在浏览器里永远是 404，而装配期一切正常。
+    const shared = connection.createSharedFetchHandler(API_PREFIX);
+    this.disposeApi = this.mountFetchRoutes(shared, connection);
   }
 
   /**
@@ -166,21 +129,21 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
    * @param trust - 上游的信任围栏（拿不到时只留 warn，不静默降级成"谁都放行"的假象）。
    * @returns 注销函数。
    */
-  private mountFetchRoutes(face: HostFetchHandler, trust: HostTrust | undefined): () => void {
+  private mountFetchRoutes(face: HostFetchHandler, connection: HostConnectionService): () => void {
     return this.webServer.register({
       kind: "prefix",
       path: API_PREFIX,
       handler: async (req, res) => {
         // 准入与取 peer 是同一次判定：HTTP 的 peer 必须与 WS 事件流用的是**同一个实例**，
         // 否则 `$events/result` 会被上游判成「另一个 Peer」的答复。
-        const admission = trust?.admit(req);
-        if (admission !== undefined && "rejection" in admission) {
+        const admission = connection.admit(trustRequestOf(req));
+        if ("rejection" in admission) {
           const rejection = admission.rejection;
           res.writeHead(rejection, { "content-type": "text/plain; charset=utf-8" });
           res.end(rejection === 401 ? "unauthorized" : "forbidden");
           return;
         }
-        const peer = admission === undefined ? undefined : admission.peer;
+        const peer = admission.peer;
         try {
           await bridgeFetch(req, res, face, peer);
         } catch (error) {
@@ -193,7 +156,7 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
     });
   }
 
-  override async onDispose(): Promise<void> {
+  async onDispose(): Promise<void> {
     this.disposeApi?.();
     this.disposeApi = undefined;
   }
@@ -208,6 +171,15 @@ export class ConnectionDefault extends fromCordis(Connection, ConnectionPlugin) 
  * @param res - node 响应。
  * @param face - 上游 fetch 面。
  */
+/**
+ * node 请求（HTTP 或 upgrade）→ 上游的信任请求面（`admit` 的入参）：载体原样，header 表 / 方法 / 目标 / socket。
+ * @param req - node 请求。
+ * @returns 上游 `ConnectionTrustRequest`。
+ */
+export function trustRequestOf(req: IncomingMessage): ConnectionTrustRequest {
+  return { headers: req.headers, method: req.method, url: req.url, socket: req.socket };
+}
+
 async function bridgeFetch(
   req: IncomingMessage,
   res: ServerResponse,
@@ -260,6 +232,11 @@ async function readAll(req: IncomingMessage): Promise<Buffer> {
  * @param logger - 行日志出口：缺面时留一条 warn（症状是浏览器连不上 wire，离装配点很远）。
  */
 export function admitLocalPeer(instance: unknown, logger: Logger): void {
+  if (typeof instance === "object" && instance !== null) {
+    // 幂等：重复包会把已经影子过的 `admit` 再包一层。
+    if (admitInstalled.has(instance)) return;
+    admitInstalled.add(instance);
+  }
   const upstream =
     typeof instance === "object" && instance !== null
       ? (instance as {
@@ -299,8 +276,17 @@ export function admitLocalPeer(instance: unknown, logger: Logger): void {
  * @param instance - 上游 `connection` 服务实例。
  * @param logger - 行日志出口（每次注册留一条登记）。
  */
+/** 已经装过共享层的实例（幂等守卫）。 */
+const sharedInstalled = new WeakSet<object>();
+
+/** 已经影子过 `admit` 的实例（幂等守卫）。 */
+const admitInstalled = new WeakSet<object>();
+
 export function shareRpcChannels(instance: unknown, logger: Logger): void {
   if (typeof instance !== "object" || instance === null) return;
+  // 幂等：重复装会把 entries 清空、再给上游装第二个物理拦截器（上游直接抛 already has an interceptor）。
+  if (sharedInstalled.has(instance)) return;
+  sharedInstalled.add(instance);
   const connection = instance as { readonly rpc: RpcRegistry | undefined };
   const rpc = connection.rpc;
   if (rpc === undefined) return;

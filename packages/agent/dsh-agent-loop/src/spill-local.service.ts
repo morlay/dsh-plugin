@@ -4,7 +4,7 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import LocalSpillStore from "@deepseek-ai/dsh-spill-local";
 
 @Injectable()
-export class SpillLocal extends fromCordis(LocalSpillStore, LocalSpillStore) {
+export class SpillLocal extends fromCordis(LocalSpillStore) {
   override async onInit(ctx: Context): Promise<void> {
     await this.mount(ctx);
   }

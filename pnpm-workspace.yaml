@@ -34,6 +34,11 @@ allowBuilds:
   "@deepseek-ai/dsh-subprocess-local": true
   "@deepseek-ai/dsh-subprocess-local@file:vendor/deepseek-harness/packages/subprocess/subprocess-local": true
   "@google/genai": true
+  # 上游 0.2.3 新增的 connector（feishu / tencent-meeting）带的 CLI：postinstall 取平台二进制
+  # （lark-cli 从 GitHub release 下载、tmeet 只清理临时文件）。本仓装配不挂这两个 connector，
+  # 但安装期它们仍要被批准，否则 pnpm 以 ERR_PNPM_IGNORED_BUILDS 拒装。
+  "@larksuite/cli": true
+  "@tencentcloud/tmeet": true
   electron: true
   electron-winstaller: true
   esbuild: true

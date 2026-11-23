@@ -88,8 +88,6 @@ export interface InjectPlaceholder {
 export interface InjectableOptions {
   /** 多值令牌：由多个实现注册，注入端用 `inject.all`。 */
   readonly multi?: boolean;
-  /** 显式指定令牌（适配行用：它的令牌是契约，不是生成出来的基类）。 */
-  readonly token?: Function;
   /**
    * 上游服务名（与派生名并存，作为**别名**在装配时再发布一份）。
    *
@@ -113,24 +111,8 @@ export interface InjectableOptions {
  */
 export function Injectable(options: InjectableOptions = {}): ClassDecorator {
   return (target) => {
-    if (options.token !== undefined) {
-      const owned = tokenMetaOf(options.token);
-      registered.set(
-        target,
-        withScope(
-          {
-            token: options.token,
-            name: owned.name,
-            label: owned.label,
-            multi: options.multi === true || owned.multi,
-            ...(owned.alias === undefined ? {} : { alias: owned.alias }),
-            ...(owned.value === true ? { value: true } : {}),
-          },
-          options.scope,
-        ),
-      );
-      return;
-    }
+    // 没有"显式令牌"这一档：令牌只有两个来源——**继承契约**（`extends 契约`，含 `InjectionToken` 造的类）
+    // 或本类自己（`@Injectable()` 声明一个契约）。适配行也是 `extends 契约`，不另立身份。
     const inherited = findRegistered(Object.getPrototypeOf(target));
     if (inherited !== undefined && !options.multi) {
       // 实现类继承契约：同一个令牌，不另立身份，也不重复登记名字。

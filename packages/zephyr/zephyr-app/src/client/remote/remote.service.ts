@@ -4,8 +4,8 @@
 // 伪装成 `remote.<ns>`；我们这层包装会丢掉那层 getter，导致 `remote.session` 永远 undefined。
 // 这里按契约直接实现：`$mount` 只登记 descriptor，`remote.<ns>` 由 Proxy 按 descriptor 组请求，
 // 请求走 `connection.rpc.open('/api', '<ns>/<method>', args)`（与上游同一条 wire 通道）。
-import { inject, Injectable, type Context } from "@morlay/zephyr";
-import { Connection } from "@morlay/zephyr-app/contract";
+import { inject, Injectable, rootContextKey, type Context } from "@morlay/zephyr";
+import { ClientConnection } from "@morlay/zephyr-app/contract";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { failureOf } from "@morlay/zephyr-app/contract";
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
@@ -51,7 +51,7 @@ type NamespaceFace = Record<string, (...args: never[]) => unknown>;
 @Injectable()
 export class RemoteDefault extends Remote {
   /** 传输层：socket 工厂归它（浏览器 / 非浏览器由它的 `origin` 决定）。 */
-  private readonly connection = inject(Connection);
+  private readonly connection = inject(ClientConnection);
 
   /**
    * agent 作用域解析：转发的请求只带 `agentId`，要换成客户端的 agent ctx 才能把
@@ -93,7 +93,7 @@ export class RemoteDefault extends Remote {
    * 注册到**根**：读它们的那些行在别的分支上，沿 fiber 链只能看到 root。
    */
   onInit(ctx: Context): void {
-    this.rootCtx = ctx.root;
+    this.rootCtx = ctx[rootContextKey];
     this.rowCtx = ctx;
     this.publishNamespace("session");
   }

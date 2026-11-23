@@ -9,6 +9,7 @@ import { TimerDefault } from "./timer.service.ts";
 import { ToolRegistryDefault } from "./tool-registry.service.ts";
 import { AgentIdleGuard } from "./agent-idle-guard.service.ts";
 import { AgentScopedRowsDefault } from "./agent-scope.ts";
+import { AgentPresetsStub } from "./agent-presets.stub.ts";
 
 // **agent 的骨架装配面**。
 //
@@ -33,6 +34,9 @@ export const provideAgent = provide(
     AgentIdleGuard,
     // per-agent 装配的装行能力：agent 创建处注入它，每个 agent 的 `agentCtx` 上调一次。
     AgentScopedRowsDefault,
+    // 部署级 preset roster：0.2.3 的会话创建在"带了 `agentPreset` 但没有 roster"时直接抛
+    // `agent-preset/conflict`。本部署只有一份行清单，这里登记那一个 id（见该文件的说明）。
+    AgentPresetsStub,
   ],
   [
     configure(SystemPromptDefault, { personaPrefix: "" }),

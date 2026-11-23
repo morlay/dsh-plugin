@@ -10,7 +10,7 @@
 - 浏览器半（`./ui`）：`provideJobUi()`——两行。
   - `JobsClient`：`ctx.jobs` 数据面（本会话可见的 roster、按 job 的观察流、人工 kill；上游
     `@deepseek-ai/dsh-api-job-controller/client`），自己 `$mount` `job` 那组 remote；
-  - `JobListSlots`：会话头部的任务列表（`conversation.session.header.actions` 的 `job-list`：状态、耗时、
+  - `JobListSlots`：会话面板里的后台任务一节（`conversation.session.panel.section` 的 `background-jobs`：状态、耗时、
     进度、展开后的实时输出面板、两次点击的 kill；上游 `@deepseek-ai/dsh-client-ui-jobs/client`）。
 
   **两半都要装**：只装宿主半时模型照样能起后台任务，界面上却没有入口、也没法 kill（跑着的东西看不见）。

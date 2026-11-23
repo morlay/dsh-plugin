@@ -13,6 +13,7 @@
   "dependencies": {
     "@morlay/agent-use": "workspace:^",
     "@morlay/better-session": "workspace:^",
+    "@morlay/configurable-sandbox": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-instruction": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",

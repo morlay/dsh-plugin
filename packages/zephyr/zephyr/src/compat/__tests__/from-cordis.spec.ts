@@ -3,6 +3,7 @@ import {
   bootstrapApplication,
   Injectable,
   inject,
+  rootContextKey,
   type Context,
   type TokenClass,
 } from "../../index.ts";
@@ -499,7 +500,9 @@ describe("fromCordis", () => {
       name: string | undefined;
 
       onInit(ctx: Context): void {
-        this.name = (ctx.root.get("root-visible", false) as { hi(): string } | undefined)?.hi();
+        this.name = (
+          ctx[rootContextKey].get("root-visible", false) as { hi(): string } | undefined
+        )?.hi();
       }
     }
 
@@ -778,6 +781,90 @@ describe("fromCordis", () => {
     }
 
     await expect(bootstrapApplication({ providers: [ForgotRow] })).rejects.toThrow(/mount/);
+  });
+
+  it("上游 inject 声明的名字既没交 deps、也不在 store 里：装配期就失败", async () => {
+    // 上游 0.2.3 起这种缺口会在运行期按名字严格读时抛 `cannot get property "x" without inject`
+    // （症状是浏览器白屏，离装配点很远）。判据要的是装配期的一条明确失败。
+    const upstream = {
+      name: "needs-missing",
+      inject: ["missing-service"],
+      apply: () => {},
+    };
+
+    /** 适配行：`mount` 不交任何 deps。 */
+    @Injectable()
+    class Row extends fromCordis(Greeter, upstream) {
+      async onInit(ctx: Context): Promise<void> {
+        await this.mount(ctx);
+      }
+    }
+
+    await expect(bootstrapApplication({ providers: [Row] })).rejects.toThrow(/missing-service/u);
+  });
+
+  it("上游 inject 声明的名字在 store 里已就位：装配通过（顺序保证，不算缺）", async () => {
+    // 一个以 `locale` 为名的行（`@Injectable({ name })` 会按上游名再发布一份）。
+    @Injectable({ name: "locale" })
+    class LocaleNameRow {}
+
+    const upstream = {
+      name: "needs-present",
+      inject: ["locale"],
+      apply: () => {},
+    };
+
+    /** 适配行：`mount` 不交 deps——`locale` 由别的行先发布。 */
+    @Injectable()
+    class Row extends fromCordis(Greeter, upstream) {
+      async onInit(ctx: Context): Promise<void> {
+        await this.mount(ctx);
+      }
+    }
+
+    const app = await bootstrapApplication({ providers: [LocaleNameRow, Row] });
+    await app.dispose();
+    expect(true).toBe(true);
+  });
+
+  it("上游 `Service` 构造里读**子服务**（`ctx.a.b`）：deps 交的名字要能命中", async () => {
+    // 上游 0.2.3 的子服务：提供行 `super(ctx, 'parent.child')` 注册，消费方读 `ctx.parent.child`。
+    // cordis 会把这次读翻译成 `Reflect.get(<parent 实例的 ctx>, 'parent.child')`——那个 ctx 必须是
+    // 带 deps 的代理，否则读方只能拿到 `cannot get property "parent.child" without inject`。
+    const parent = { child: { value: "from-deps" } };
+
+    /** 上游服务：构造里读 `ctx.parent.child`。 */
+    class Reader extends FakeService {
+      readonly seen: string;
+
+      constructor(ctx: never) {
+        const cordis = ctx as unknown as { parent: { child: { value: string } } };
+        super(ctx, "reader");
+        this.seen = cordis.parent.child.value;
+      }
+    }
+
+    /** 契约。 */
+    @Injectable()
+    abstract class ReaderFace {
+      abstract readonly seen: string;
+    }
+
+    /** 适配行：deps 把 `parent` 与 `parent.child` 都交给上游。 */
+    @Injectable()
+    class Row extends fromCordis(ReaderFace, Reader) {
+      async onInit(ctx: Context): Promise<void> {
+        await this.mount(ctx, undefined, {
+          parent: parent,
+          "parent.child": parent.child,
+        });
+      }
+    }
+
+    const app = await bootstrapApplication({ providers: [Row] });
+    const face = app.get<ReaderFace>(ReaderFace);
+    expect(face.seen).toBe("from-deps");
+    await app.dispose();
   });
 
   it("卸载时调用上游 apply 返回的 disposer", async () => {

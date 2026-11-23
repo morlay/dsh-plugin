@@ -7,7 +7,7 @@
 import * as UiConversationPlugin from "@deepseek-ai/dsh-client-ui-conversation/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { ConfigForms, Locale, Slots } from "@morlay/zephyr-app/client";
+import { ConfigForms, fixedSyncedConfig, Locale, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiSession } from "../ui-session.token.ts";
 import { UiConversation } from "./conversation.token.ts";
@@ -36,7 +36,8 @@ export class ConversationSlots extends fromCordis(
   private readonly fileUpload = inject(FileUpload);
 
   override async onInit(ctx: Context): Promise<void> {
-    await this.mount(ctx, undefined, {
+    // 上游 0.2.3 起这份 client 的 `Config` 由 Host 同步（`busyEnter` / `maxConcurrentFileUploads`）。
+    await this.mount(ctx, fixedSyncedConfig(["busyEnter", "maxConcurrentFileUploads"]), {
       slots: this.slots,
       sessions: this.sessions,
       fileUpload: this.fileUpload,

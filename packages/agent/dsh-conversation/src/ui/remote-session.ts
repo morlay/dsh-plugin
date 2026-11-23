@@ -10,14 +10,14 @@
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
 import type { SessionRemotes } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/remotes.ts";
 import type { CommandRunner } from "@morlay/dsh-command/contract";
-import type { Connection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import type { ClientConnection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
 import { namespaceOf } from "./remote-namespace.ts";
 
 /**
  * 没有连接面时的单代 generation：纯数据面测试按一代跑，重连等待永不触发。
  * @returns 恒定的一代。
  */
-function singleGeneration(): Pick<Connection["generation"], "getSnapshot" | "subscribe"> {
+function singleGeneration(): Pick<ClientConnection["generation"], "getSnapshot" | "subscribe"> {
   return {
     getSnapshot: () => ({ id: 0, host: { home: "" } }),
     subscribe: () => () => {},
@@ -52,7 +52,7 @@ export class LiveSessionRemotes implements SessionRemotes {
     private readonly sessionRemoteOf: () => SessionRemote,
     private readonly commandRunnerOf: () => CommandRunner,
     private readonly remoteOf: () => Remote,
-    private readonly connectionOf: () => Connection | undefined,
+    private readonly connectionOf: () => ClientConnection | undefined,
   ) {}
 
   /**

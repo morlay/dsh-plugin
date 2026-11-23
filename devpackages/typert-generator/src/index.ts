@@ -842,7 +842,7 @@ export function renderRemoteClient(
       namedSchemas.set(typeName, definition);
       lines.push(
         `let ${typeName}$schema$value`,
-        `const ${typeName}$schema = () => (${typeName}$schema$value ??= ${definition})`,
+        `const ${typeName}$schema = (): z.ZodTypeAny => (${typeName}$schema$value ??= ${definition})`,
       );
     }
   };
@@ -858,7 +858,7 @@ export function renderRemoteClient(
         });
         lines.push(
           `let ${symbol}$schema$value`,
-          `const ${symbol}$schema = () => (${symbol}$schema$value ??= ${schemaOfParameter(parameter, context)})`,
+          `const ${symbol}$schema = (): z.ZodTypeAny => (${symbol}$schema$value ??= ${schemaOfParameter(parameter, context)})`,
         );
         collectOwners(context.referenced, index, typeRefs);
         flushNamedRemote(context);
@@ -872,7 +872,7 @@ export function renderRemoteClient(
       });
       lines.push(
         `let ${resultSymbol}$schema$value`,
-        `const ${resultSymbol}$schema = () => (${resultSymbol}$schema$value ??= ${zodOf(method.result, resultContext)})`,
+        `const ${resultSymbol}$schema = (): z.ZodTypeAny => (${resultSymbol}$schema$value ??= ${zodOf(method.result, resultContext)})`,
       );
       collectOwners(resultContext.referenced, index, typeRefs);
       flushNamedRemote(resultContext);
@@ -1071,9 +1071,12 @@ function collectOwners(
   for (const name of names) {
     const owner = index.get(name)?.owner;
     if (owner === undefined) continue;
-    const parts = /^(.*?)(\/[^/]*)?$/u.exec(owner);
-    const pkg = parts?.[1] ?? owner;
-    const subpath = parts?.[2] ?? "";
+    // owner 形如 `@scope/name`，可带出口子路径（`@scope/name/types`）。按 scope 结构切两段：
+    // 用"非贪婪前缀 + 可选子路径"的正则会把它切成 `@scope` + `/name/types`，于是**所有**上游包
+    // 的类型被并进同一个 import 语句、指向第一个包（0.2.3 的 account 同时用到 brand 与 values 时暴露）。
+    const segments = owner.split("/");
+    const pkg = segments.length <= 2 ? owner : `${segments[0] ?? ""}/${segments[1] ?? ""}`;
+    const subpath = segments.length <= 2 ? "" : `/${segments.slice(2).join("/")}`;
     const bucket = into.get(pkg) ?? new Set<string>();
     bucket.add(`${name}${subpath === "" ? "" : `@${subpath}`}`);
     into.set(pkg, bucket);
@@ -1126,7 +1129,7 @@ export function renderHostArtifact(
       namedSchemas.set(typeName, definition);
       lines.push(
         `let ${typeName}$schema$value`,
-        `const ${typeName}$schema = () => (${typeName}$schema$value ??= ${definition})`,
+        `const ${typeName}$schema = (): z.ZodTypeAny => (${typeName}$schema$value ??= ${definition})`,
       );
     }
   };
@@ -1149,7 +1152,7 @@ export function renderHostArtifact(
         flushNamed(context);
         lines.push(
           `let ${symbol}$schema$value`,
-          `const ${symbol}$schema = () => (${symbol}$schema$value ??= ${zod})`,
+          `const ${symbol}$schema = (): z.ZodTypeAny => (${symbol}$schema$value ??= ${zod})`,
         );
         return { parameter, symbol };
       });
@@ -1164,7 +1167,7 @@ export function renderHostArtifact(
       flushNamed(resultContext);
       lines.push(
         `let ${resultSymbol}$schema$value`,
-        `const ${resultSymbol}$schema = () => (${resultSymbol}$schema$value ??= ${resultZod})`,
+        `const ${resultSymbol}$schema = (): z.ZodTypeAny => (${resultSymbol}$schema$value ??= ${resultZod})`,
       );
       typeNamesOf.set(method.node, referenced);
       const file = relative(upstreamRoot, service.file.path).split(sep).join("/");

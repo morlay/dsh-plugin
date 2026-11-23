@@ -14,9 +14,13 @@ import {
 } from "./conversation/index.ts";
 import { CommandUiSlot, InputTriggerSlot, ReferenceSlot } from "./input/index.ts";
 import { SessionLayout } from "./session-layout.ts";
+import { SessionStatusSlots } from "./session-status-slots.ts";
 
-/** 会话界面的**壳**：侧栏骨架与右侧面板（依赖 `slots`，与会话数据面分开）。 */
+/** 会话界面的**壳**：`ui-session` 行（产出 `uiSession`）。 */
 export const provideSessionShell = provide([SessionLayout]);
+
+/** 未读标记那一行（产出 `uiSession.sessionStatus`）：要 `uiSession` 与 `remote.sessionStatus`。 */
+export const provideSessionStatusUi = provide([SessionStatusSlots]);
 
 /** 会话界面：主视图、内容渲染、会话内各领域的卡片。 */
 export const provideSessionSlots = provide([

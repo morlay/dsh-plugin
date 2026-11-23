@@ -5,7 +5,7 @@ import ToolResultPrunerService from "@deepseek-ai/dsh-compaction-tool-result-pru
 import { TokenMeter } from "@morlay/dsh-session";
 
 @Injectable()
-export class ToolResultPruner extends fromCordis(ToolResultPrunerService, ToolResultPrunerService) {
+export class ToolResultPruner extends fromCordis(ToolResultPrunerService) {
   tokenMeter = inject(TokenMeter);
 
   override async onInit(ctx: Context): Promise<void> {

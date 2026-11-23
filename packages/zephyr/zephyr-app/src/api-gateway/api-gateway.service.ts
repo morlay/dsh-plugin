@@ -2,7 +2,7 @@
 // 依赖按我们的规范显式 `inject`，随 `mount` 传给上游（上游构造里读 `ctx.connection` 也能拿到）。
 import ApiGatewayPlugin from "@deepseek-ai/dsh-api-gateway";
 import type { ConnectionRpcResult } from "@deepseek-ai/dsh-client-connection";
-import { inject, Injectable, kFace, type Context } from "@morlay/zephyr";
+import { inject, Injectable, kFace, Logger, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Connection } from "../connection/contract.ts";
 import { RemoteAccess } from "../remote-access/remote-access.contract.ts";
@@ -22,7 +22,6 @@ interface UpstreamRpcDispatch {
   ): Promise<ConnectionRpcResult<unknown>>;
 }
 
-@Injectable()
 /**
  * 上游 `api/gateway` 的适配行。
  *
@@ -33,6 +32,8 @@ interface UpstreamRpcDispatch {
  * 它靠 `ctx.reflect.props` 发现服务，这条由 `fromCordis.mount` 的**双注册**满足
  * （上游 `provide`/`Service` 的名字同时落到本行 cordis ctx）。
  */
+const NO_UPGRADE = { registerUpgrade: (): (() => void) => () => {} };
+
 @Injectable()
 export class ApiGatewayDefault extends fromCordis(TypertGateway, ApiGatewayPlugin) {
   /**
@@ -50,18 +51,26 @@ export class ApiGatewayDefault extends fromCordis(TypertGateway, ApiGatewayPlugi
    */
   remoteAccess = inject.optional(RemoteAccess);
 
+  private readonly logger = inject(Logger);
+
+  /** 交给上游 gateway 的 `webServer` 面：upgrade 归自研 `MuxServer` 行，见 `onInit` 的注释。 */
+  private readonly noUpgrade = NO_UPGRADE;
+
   override async onInit(ctx: Context): Promise<void> {
     await this.mount(ctx, undefined, {
       // wire 载体交回上游：这两个名字齐了之后它自己注册 `/api` 的 rpc 拦截与
       // `/api/remote.mux` 的 upgrade（含它自己的 `RemoteStreamMuxServer`）。准入（缺认证那一档）
       // 由 `connection` 行放行，这里不重复判定。
-      // **只交存在的面**：`mount` 按"deps 里有没有这个键"喂上游的 `ctx.inject`，交一个
-      // `undefined` 它不会等，随即在 `connection.rpc` 上炸。
+      // 交**共享视图**：上游拿它注册 `/api` 的拦截器，我们自己的桥也用它——一条通道只容一个物理
+      // 拦截器（0.2.3 起 `HostConnectionService` 在上游自己的 `ctx.inject` 回调里才建，读 `rpc` 时
+      // 才装得上共享层，见 `sharedConnectionOf`）。
+      // **`/api/remote.mux` 的 upgrade 归自研 `MuxServer` 行**（它要接管分派点，见那个文件）：
+      // 上游 gateway 拿到真正的 `webServer` 就会自己注册同一条 upgrade，两家并存时先注册的先赢，
+      // 自研路由表的流式端点（`RemoteHandlers.registerStream`）就永远等不到 open。
+      // 所以这里交一个**只有空 `registerUpgrade`** 的面：装配显式决定 upgrade 的所有者。
+      webServer: this.noUpgrade,
+      // 交契约面：它就是上游实例（`Connection` 行显式 `new HostConnectionService`），`rpc` 上已装共享通道层。
       ...(this.connection === undefined ? {} : { connection: this.connection }),
-      // **不交 `webServer`**：上游拿到它就会自己注册 `/api/remote.mux` 的 upgrade，
-      // 而 `WebServer` 的 upgrade 分派先注册先赢——两份并存时上游那份赢，自研路由表的
-      // 流式端点（`RemoteHandlers.registerStream`）就永远等不到 open。
-      // 协议实现仍复用上游的 `RemoteStreamMuxServer`，见 `MuxServer`。
       typert: this.typert,
       // **显式声明不可用**（值是 `undefined`）：`mount` 的校验按"键是否存在"判断，
       // 这样"本装配没有 remoteAccess"是明确的决定，而不是漏写。

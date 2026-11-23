@@ -44,14 +44,17 @@ export function McpClient<T extends abstract new (...args: never[]) => object>(
   return (target) => {
     const Base = fromCordis(McpClientPlugin) as unknown as UpstreamCtor;
 
-    class McpClientRow extends Base {
+    // **组合**而不是继承：这一行的令牌是类**自身**（每个 `@McpClient(…)` 生成的类各是一个令牌），
+    // 继承 `fromCordis` 的产物会继承它的令牌（所有 MCP 行挤在同一个上）。`mount` 从那个实例借。
+    class McpClientRow {
+      private readonly row = new Base();
+
       private readonly tools = inject(ToolRegistry);
 
       /** 这一行的有效配置。 */
       declare readonly config: McpClientPlugin.Config;
 
       constructor(rowConfig?: unknown) {
-        super(rowConfig);
         const patch =
           typeof rowConfig === "object" && rowConfig !== null && !Array.isArray(rowConfig)
             ? (rowConfig as Record<string, unknown>)
@@ -71,13 +74,13 @@ export function McpClient<T extends abstract new (...args: never[]) => object>(
 
       async onInit(ctx: Context): Promise<void> {
         // 上游按名字读 `tools`（`ctx.tools.register`）：用 deps 给，不注册进 cordis。
-        await (this as unknown as UpstreamRow).mount(ctx, this.config, { tools: this.tools });
+        await (this.row as unknown as UpstreamRow).mount(ctx, this.config, { tools: this.tools });
       }
     }
 
+    // 名字先定再登记：`@Injectable()` 按类名派生服务名，动态类默认都叫 `McpClientRow`（会撞）。
     Object.defineProperty(McpClientRow, "name", { value: target.name });
-    // 令牌就是类自身：装配面 `configure(AgentDesktopUse, …)` 与 `app.get(AgentDesktopUse)` 都按它区分。
-    Injectable({ token: McpClientRow as unknown as Function })(McpClientRow);
+    Injectable()(McpClientRow);
     return McpClientRow as unknown as T &
       (new (...args: never[]) => { readonly config: McpClientPlugin.Config });
   };

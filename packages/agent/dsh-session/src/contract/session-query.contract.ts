@@ -24,6 +24,7 @@ export type {
   SessionSurfaceSnapshot,
   SessionTitleObservation,
   SessionTitleObservationResult,
+  SessionListMetadata,
 } from "@deepseek-ai/dsh-session-query";
 
 // 查询面的**纯函数与常量**：构建记录 / 搜索文档、过滤、物化分页窗口。
@@ -131,5 +132,8 @@ export abstract class SessionQuery {
     ...args: Parameters<SessionQueryEngine["readEvent"]>
   ): ReturnType<SessionQueryEngine["readEvent"]>;
 
-  abstract inspectSession: SessionQueryEngine["inspectSession"];
+  /** 列表用的元数据（空白状态与最近人工提示词时间）；上游 0.2.3 新增，`inspectSession` 随之下线。 */
+  abstract getListMetadata(
+    ...args: Parameters<SessionQueryEngine["getListMetadata"]>
+  ): ReturnType<SessionQueryEngine["getListMetadata"]>;
 }
