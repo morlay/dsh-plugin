@@ -18,7 +18,7 @@ import { PERSONA_PREFIX_SECTION, renderPrompt } from "@morlay/dsh-agent/contract
 import { TokenMeter } from "@morlay/dsh-session/server";
 
 import { latestReminderText, renderReminder, RULES_TEXT } from "@morlay/session-mode";
-import { truncateLiveSession } from "@morlay/better-session";
+import { truncateLiveSession } from "@morlay/session-rdb";
 import type { TestContext } from "./support/context.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { mountSessionModeApp } from "./support/mount-app.ts";

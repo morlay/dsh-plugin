@@ -1,0 +1,74 @@
+{
+  "name": "@morlay/session-rdb",
+  "version": "0.2.0-alpha.0",
+  "private": false,
+  "description": "会话的 RDB 持久化、分支数据面与就地编辑编排（宿主半）：替换官方 jsonl 落盘，提供 rewind / retry / fork 与编辑 / 撤回的编排面。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./contract": "./src/contract/index.ts",
+    "./endpoint": "./src/endpoint/index.ts",
+    "./server": "./src/server/index.ts",
+    "./ui": "./src/ui/index.ts"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./contract": {
+        "types": "./dist/contract.d.mts",
+        "default": "./dist/contract.mjs"
+      },
+      "./endpoint": {
+        "types": "./dist/endpoint.d.mts",
+        "default": "./dist/endpoint.mjs"
+      },
+      "./server": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/session-rdb"
+  },
+  "dependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-conversation": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-session-persistence": "workspace:^",
+    "@morlay/dsh-storage": "workspace:^",
+    "@morlay/dsh-workspace": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^",
+    "@morlay/zephyr-rdb": "workspace:^",
+    "@morlay/zephyr-ui": "workspace:^",
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-compaction": "workspace:^",
+    "@morlay/session-rdb": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
+    "react": "^18.3.1",
+    "zod": "^4.6.6"
+  },
+  "engines": {
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
+  }
+}

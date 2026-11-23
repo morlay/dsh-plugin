@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@morlay/agent-use": "workspace:^",
-    "@morlay/better-session": "workspace:^",
     "@morlay/configurable-sandbox": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-instruction": "workspace:^",
@@ -38,6 +37,7 @@
     "@morlay/dsh-web-access": "workspace:^",
     "@morlay/dsh-workspace": "workspace:^",
     "@morlay/session-mode": "workspace:^",
+    "@morlay/session-rdb": "workspace:^",
     "@morlay/zephyr": "workspace:*",
     "@morlay/zephyr-app": "workspace:^",
     "@morlay/zephyr-desktop-panel": "workspace:^",

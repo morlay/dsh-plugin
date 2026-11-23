@@ -284,9 +284,14 @@ export function tokenMetaOf(token: Function | object): TokenMeta {
 
 /**
  * 沿原型链找最近的已登记契约：实现类继承契约时，令牌仍是契约。
- * @param ctor - 起始原型。
+ *
+ * @param ctor - 起始原型（通常是实现类）。
  * @returns 已登记的元数据，或 `undefined`。
  */
+export function tokenMetaChainOf(ctor: unknown): TokenMeta | undefined {
+  return findRegistered(ctor);
+}
+
 function findRegistered(ctor: unknown): TokenMeta | undefined {
   let current = ctor;
   while (typeof current === "function" && current !== Function.prototype) {

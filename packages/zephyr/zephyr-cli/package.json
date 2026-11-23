@@ -45,6 +45,9 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr-cli"
+  },
   "dependencies": {
     "@morlay/dsh-oxc-node": "workspace:^",
     "@morlay/zephyr": "workspace:^",

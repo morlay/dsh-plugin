@@ -3,12 +3,20 @@
 //
 // 默认地址是**本地模拟 registry**（`tool/npr` 的 verdaccio），不带 `--registry` 时绝不会发到真 registry。
 import { spawn } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { workspacePackages } from "../workspace/packages.ts";
+import { coverageProblems, type CoverageManifest } from "./manifest-coverage.ts";
 
 /** 不带 `--registry` 时的默认地址：本地模拟 registry（`tool/npr` 的 verdaccio，宿主机 7677）。 */
 export const DEFAULT_REGISTRY = "http://127.0.0.1:7677/";
+
+/** GitHub Packages 的地址：这条通道只走 CI（本地没有发布者凭据，也没有人工卡点）。 */
+export const GITHUB_PACKAGES_REGISTRY = "https://npm.pkg.github.com/";
+
+/** 是不是 GitHub Packages 通道。 */
+export function requiresCi(registry: string): boolean {
+  return registry.startsWith(GITHUB_PACKAGES_REGISTRY);
+}
 
 /** 只认 loopback：覆盖发布（unpublish → publish）是本地演练用的，真 registry 上那是真删除。 */
 export function isLocalRegistry(registry: string): boolean {
@@ -28,35 +36,26 @@ export function distTagOf(version: string): "latest" | "alpha" | "next" {
   return prerelease.split(".")[0] === "alpha" ? "alpha" : "next";
 }
 
-/** 一个待发包：目录、包名、版本。 */
+/** 一个待发包：目录、包名、版本，以及清单（发布前校验读它）。 */
 export interface PublishTarget {
   readonly dir: string;
   readonly name: string;
   readonly version: string;
+  readonly manifest: CoverageManifest;
 }
 
-/** 发布集合：`packages/<family>/<pkg>` 里 `private` 不是 true 的包，按目录名排序。 */
+/** 发布集合：pnpm 递归给出的包里 `private` 不是 true 的那些（包列表不在这里自己找）。 */
 export async function publishTargets(root: string): Promise<PublishTarget[]> {
   const targets: PublishTarget[] = [];
-  for (const family of await readdir(join(root, "packages"), { withFileTypes: true })) {
-    if (!family.isDirectory()) continue;
-    for (const entry of await readdir(join(root, "packages", family.name), {
-      withFileTypes: true,
-    })) {
-      if (!entry.isDirectory()) continue;
-      const dir = join(root, "packages", family.name, entry.name);
-      const raw = await readFile(join(dir, "package.json"), "utf8").catch(() => undefined);
-      if (raw === undefined) continue;
-      const manifest = JSON.parse(raw) as {
-        name: string;
-        version: string;
-        private?: boolean;
-      };
-      if (manifest.private === true) continue;
-      targets.push({ dir, name: manifest.name, version: manifest.version });
-    }
+  for (const pkg of await workspacePackages(root)) {
+    const manifest = pkg.manifest as unknown as CoverageManifest & {
+      version: string;
+      private?: boolean;
+    };
+    if (manifest.private === true) continue;
+    targets.push({ dir: pkg.dir, name: manifest.name, version: manifest.version, manifest });
   }
-  return targets.sort((left, right) => left.name.localeCompare(right.name));
+  return targets;
 }
 
 function capture(
@@ -120,20 +119,40 @@ export function registryOverride(name: string, registry: string): string[] {
     : [];
 }
 
-function publishOne(target: PublishTarget, tag: string, registry: string): Promise<number> {
+/**
+ * 发布同一 dist-tag 的一组包：一条 `pnpm -r publish`。
+ *
+ * **顺序交给 pnpm**：递归发布按 workspace 的依赖图拓扑排序（被依赖的先发），`--workspace-concurrency=1`
+ * 保证串行。这里只按 tag 分组，不自己排包序。
+ */
+function publishGroup(
+  root: string,
+  targets: readonly PublishTarget[],
+  tag: string,
+  registry: string,
+): Promise<number> {
+  const filters = targets.flatMap((target) => ["--filter", target.name]);
+  // scoped 包的 registry 覆盖：`--registry` 打不过 scope 映射，逐 scope 一条 `--config.<scope>:registry`。
+  const overrides = [
+    ...new Set(targets.flatMap((target) => registryOverride(target.name, registry))),
+  ];
   return new Promise((resolve) => {
     const child = spawn(
       "pnpm",
       [
+        "-r",
+        ...filters,
         "publish",
-        "--access=public",
-        "--no-git-checks",
         `--tag=${tag}`,
+        "--access",
+        "public",
+        "--no-git-checks",
+        "--workspace-concurrency=1",
         "--registry",
         registry,
-        ...registryOverride(target.name, registry),
+        ...overrides,
       ],
-      { cwd: target.dir, stdio: "inherit" },
+      { cwd: root, stdio: "inherit" },
     );
     child.on("error", () => resolve(1));
     child.on("close", (code) => resolve(code ?? 1));
@@ -152,6 +171,12 @@ export function registryOf(args: readonly string[]): string {
  */
 export async function run(root: string, args: readonly string[]): Promise<number> {
   const registry = registryOf(args);
+  if (requiresCi(registry) && process.env["GITHUB_ACTIONS"] === undefined) {
+    process.stderr.write(
+      "publish: GitHub Packages 只走 CI（本机没有发布者凭据）；本地发布用 `just publish-npm`\n",
+    );
+    return 1;
+  }
   const dryRun = args.includes("--dry-run");
   const forceRepublish = args.includes("--force-republish");
   if (forceRepublish && !isLocalRegistry(registry)) {
@@ -165,28 +190,55 @@ export async function run(root: string, args: readonly string[]): Promise<number
     process.stderr.write("publish: 没有可发布的包\n");
     return 1;
   }
+  // 清单覆盖判据（与 `just verify-release` 的判据 2 同一份实现）：缺键或目标文件不在就不进发布子进程——
+  // 发出去再发现少面只能靠升版本补救。纯读，不碰 registry。
+  const problems: string[] = [];
+  for (const target of targets) problems.push(...(await coverageProblems(target)));
+  if (problems.length > 0) {
+    process.stderr.write(
+      "publish: 清单覆盖判据不通过（先修清单，或跑 `just build` 重写回）——" +
+        problems.length +
+        " 条\n",
+    );
+    for (const problem of problems) process.stderr.write("  " + problem + "\n");
+    return 1;
+  }
   // 走 stderr：stdout 上的 `to publish` / `skip` 行是给脚本与票据解析的，别插别的行。
   process.stderr.write(`registry ${registry}\n`);
+  const pending: PublishTarget[] = [];
   for (const target of targets) {
-    const tag = distTagOf(target.version);
     const covered =
       forceRepublish || !(await alreadyPublished(target.name, target.version, registry));
     if (!covered) {
       process.stdout.write(`skip ${target.name}@${target.version}（已发布）\n`);
       continue;
     }
-    const verb = forceRepublish ? "republish" : "publish";
-    if (dryRun) {
-      process.stdout.write(`to ${verb} ${target.name}@${target.version} (tag: ${tag})\n`);
-      continue;
+    pending.push(target);
+  }
+  const verb = forceRepublish ? "republish" : "publish";
+  if (dryRun) {
+    for (const target of pending) {
+      process.stdout.write(
+        `to ${verb} ${target.name}@${target.version} (tag: ${distTagOf(target.version)})\n`,
+      );
     }
-    if (forceRepublish) {
+    return 0;
+  }
+  if (forceRepublish) {
+    // 覆盖式重发：先把同名同版本撤掉（顺序无关），再按依赖图发。
+    for (const target of pending) {
       await unpublishOne(target, registry);
-      process.stdout.write(`${verb} ${target.name}@${target.version} (tag: ${tag})\n`);
-    } else {
-      process.stdout.write(`${verb} ${target.name}@${target.version} (tag: ${tag})\n`);
+      process.stdout.write(`unpublished ${target.name}@${target.version}\n`);
     }
-    const code = await publishOne(target, tag, registry);
+  }
+  // 同一 dist-tag 一条 `pnpm -r publish`：组内按依赖图拓扑、串行；组间按 tag 依次。
+  const groups = new Map<string, PublishTarget[]>();
+  for (const target of pending) {
+    const tag = distTagOf(target.version);
+    groups.set(tag, [...(groups.get(tag) ?? []), target]);
+  }
+  for (const [tag, group] of groups) {
+    const code = await publishGroup(root, group, tag, registry);
     if (code !== 0) return code;
   }
   return 0;

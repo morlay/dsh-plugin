@@ -1,6 +1,6 @@
 {
   "name": "@morlay/zephyr-desktop-bundle",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "zephyr 的桌面插件：给 CLI 追加 `desktop dev` 与 `desktop bundle`，把工作区打成静态、无签名的桌面应用。",
   "keywords": [
@@ -38,6 +38,9 @@
       },
       "./package.json": "./package.json"
     }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr-desktop-bundle"
   },
   "dependencies": {
     "@morlay/dsh-oxc-node": "workspace:^",

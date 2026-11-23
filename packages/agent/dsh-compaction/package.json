@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-compaction",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "上下文压缩：判定何时压、压成什么形状，并附 `/compact` 命令入口。",
   "files": [
@@ -22,12 +22,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-compaction"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-command-compact": "workspace:^",
-    "@deepseek-ai/dsh-compaction": "workspace:^",
-    "@deepseek-ai/dsh-compaction-basic": "workspace:^",
-    "@deepseek-ai/dsh-compaction-image-offload": "workspace:^",
-    "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-command": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
@@ -35,6 +33,13 @@
   },
   "devDependencies": {
     "@morlay/zephyr-app": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-command-compact": "workspace:^",
+    "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-compaction-basic": "workspace:^",
+    "@deepseek-ai/dsh-compaction-image-offload": "workspace:^",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

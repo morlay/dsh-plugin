@@ -1,0 +1,64 @@
+{
+  "name": "@morlay/better-session",
+  "version": "0.2.0-alpha.0",
+  "private": false,
+  "description": "dsh 行入口（bundle 层）：把会话的 RDB 持久化与编辑面装成 dsh 的 bundle 行，宿主行与 client 半都在这里。",
+  "files": [
+    "dist",
+    "src",
+    "!**/__tests__"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": "./dist/index.mjs",
+      "./package.json": "./package.json",
+      "./client": {
+        "default": "./dist/client.cjs"
+      },
+      "./cordis.patch.yml": "./dist/cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/better-session"
+  },
+  "dependencies": {
+    "@morlay/session-rdb": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/better-session": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
+    "react": "^18.3.1"
+  },
+  "engines": {
+    "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts",
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-directory-picker-native",
+        "@deepseek-ai/dsh-client-ui-file-drag",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar-files",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    },
+    "bundle": {
+      "patch": "./dist/cordis.patch.yml"
+    }
+  }
+}

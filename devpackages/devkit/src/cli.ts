@@ -1,19 +1,27 @@
 #!/usr/bin/env node
-// devkit 的命令面：`build` 用 rolldown 打 host 面并写回清单，`audit` 跑结构性判据。
-// 两条命令都从仓库根跑；build 的入口从各包 `exports` 推导，不依赖 tsdown。
+// devkit 的命令面：构建、审计，以及 npm 发布线（发布 / 验收 / 版本 / 清理）。
+// 这里只做参数翻译与转发；判据、包发现、子进程编排都在对应模块里，justfile 只是 trigger。
 import { spawn } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildPackage, planOf } from "./build/compile.ts";
-import { writeBuildManifest } from "./build/package-exports.ts";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { run as cleanRun } from "./build/clean.ts";
+import { run as acceptanceRun } from "./release/acceptance.ts";
+import { GITHUB_PACKAGES_REGISTRY, run as publishRun } from "./release/publish.ts";
+import { run as versionRun } from "./release/version.ts";
+import { PACKAGES_FILTER } from "./workspace/packages.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-const USAGE = `devkit <build|audit> [选项]
+const USAGE = `devkit <build|audit|publish|verify-release|version|clean> [选项]
 
-  devkit build [--filter <包>]   用 rolldown 打各包的 host 面并写回清单
-  devkit audit [--write]         逐包判据 + 根上汇总；--write 删未用依赖
+  devkit build [--filter <包>]        逐包构建并写回清单（包列表由 pnpm 的递归给出）
+  devkit audit [--write]              逐包判据 + 根上汇总；--write 删未用依赖
+  devkit publish [--github] [--dry-run] [--force-republish] [--registry <url>]
+                                      发布；--github 走 GitHub Packages（只许在 CI 里跑）
+  devkit verify-release [--filter <包>] [--keep]
+                                      发布前验收（判据 2 / 7 / 8 / 9 / 10）
+  devkit version <版本> [--dry-run]   只 bump 发布集合（dsh-oxc-node 走独立版本线）
+  devkit clean                        删 target/dts 与各包 dist
 `;
 
 /** 等一个子进程结束，返回退出码（信号中断按 1）。 */
@@ -33,73 +41,22 @@ function takeFilter(args: readonly string[]): { filter?: string; rest: string[] 
   return filter === undefined ? { rest } : { filter, rest };
 }
 
-/** 遍历 `packages/<family>/<pkg>`；给了 filter 时只留包名匹配的那个。 */
-async function findPackages(root: string, filter: string | undefined): Promise<string[]> {
-  const found: string[] = [];
-  for (const family of await readdir(join(root, "packages"), { withFileTypes: true })) {
-    if (!family.isDirectory()) continue;
-    for (const entry of await readdir(join(root, "packages", family.name), {
-      withFileTypes: true,
-    })) {
-      if (!entry.isDirectory()) continue;
-      const dir = join(root, "packages", family.name, entry.name);
-      const raw = await readFile(join(dir, "package.json"), "utf8").catch(() => undefined);
-      if (raw === undefined) continue;
-      const manifest = JSON.parse(raw) as { name?: string };
-      if (filter !== undefined && manifest.name !== filter) continue;
-      found.push(dir);
-    }
-  }
-  return found;
-}
-
+/** 逐包构建：每个包在自己的目录里跑一次 `build/one.ts`（包列表由 pnpm 的递归给出）。 */
 async function build(args: readonly string[]): Promise<number> {
   const { filter } = takeFilter(args);
-  const root = process.cwd();
-  const targets = await findPackages(root, filter);
-  if (targets.length === 0) {
-    process.stderr.write(`devkit build: 没有匹配的包（filter: ${filter ?? "全部"}）\n`);
-    return 1;
-  }
-  for (const dir of targets) {
-    const plan = await planOf(dir);
-    if (Object.keys(plan.entries).length === 0) continue;
-    const artifacts = await buildPackage(dir, plan);
-    // bundle 包的行声明在 `dsh-bundle.ts` 里（`rows`）；读不到就是空清单。
-    const bundleRows =
-      plan.bundle === true && plan.entries["dsh-bundle"] !== undefined
-        ? ((
-            (await import(pathToFileURL(join(dir, plan.entries["dsh-bundle"])).href)) as {
-              rows?: readonly {
-                id: string;
-                disabled?: boolean;
-                config?: Record<string, unknown>;
-              }[];
-            }
-          ).rows ?? [])
-        : [];
-    const entries =
-      plan.client === undefined ? plan.entries : { ...plan.entries, client: plan.client.source };
-    await writeBuildManifest(dir, {
-      entries,
-      artifacts,
-      ...(plan.client === undefined ? {} : { clientEntry: "client" }),
-      declarationFiles: (entry) => (entry === "client" ? [] : [entry + ".d.mts"]),
-      ...(plan.bundle === true ? { bundle: { rows: bundleRows } } : {}),
-      publishOnly: plan.publishOnly,
-      hidden: plan.hidden,
-      ...(plan.bin === undefined ? {} : { bin: plan.bin }),
-    });
-    process.stdout.write(`built ${relative(root, dir)}\n`);
-  }
-  return 0;
+  const child = spawn(
+    "pnpm",
+    ["-r", "--filter", filter ?? PACKAGES_FILTER, "exec", "node", join(here, "build/one.ts")],
+    { stdio: "inherit" },
+  );
+  return await wait(child);
 }
 
 async function audit(args: readonly string[]): Promise<number> {
   // 逐包扫描的输出经管道交给汇总器；两个进程的 stderr 都直接给终端。
   const scan = spawn(
     "pnpm",
-    ["-r", "--filter", "./packages/*/*", "exec", "node", join(here, "audit/package-audit.ts")],
+    ["-r", "--filter", PACKAGES_FILTER, "exec", "node", join(here, "audit/package-audit.ts")],
     {
       stdio: ["ignore", "pipe", "inherit"],
     },
@@ -112,6 +69,16 @@ async function audit(args: readonly string[]): Promise<number> {
   return reportCode === 0 ? scanCode : reportCode;
 }
 
+/** `--github` 翻译成 GitHub Packages 的地址；其余参数原样交给发布器。 */
+async function publish(args: readonly string[]): Promise<number> {
+  const github = args.includes("--github");
+  const rest = args.filter((arg) => arg !== "--github");
+  return await publishRun(
+    process.cwd(),
+    github ? [...rest, "--registry", GITHUB_PACKAGES_REGISTRY] : rest,
+  );
+}
+
 async function main(): Promise<number> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === undefined || command === "--help" || command === "-h") {
@@ -120,6 +87,10 @@ async function main(): Promise<number> {
   }
   if (command === "build") return await build(rest);
   if (command === "audit") return await audit(rest);
+  if (command === "publish") return await publish(rest);
+  if (command === "verify-release") return await acceptanceRun(rest);
+  if (command === "version") return await versionRun(process.cwd(), rest);
+  if (command === "clean") return await cleanRun(process.cwd());
   process.stderr.write(`devkit: 未知子命令 ${command}\n\n${USAGE}`);
   return 1;
 }

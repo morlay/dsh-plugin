@@ -60,6 +60,9 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr-dev"
+  },
   "dependencies": {
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^",

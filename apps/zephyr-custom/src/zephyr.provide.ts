@@ -57,8 +57,8 @@ import {
   SessionPersistenceDefault,
 } from "@morlay/dsh-session-persistence";
 import { SessionQuerySqlite } from "@morlay/dsh-session";
-import { SessionPersistenceRdb } from "@morlay/better-session";
-import { provideBetterSession } from "@morlay/better-session/server";
+import { SessionPersistenceRdb } from "@morlay/session-rdb";
+import { provideBetterSession } from "@morlay/session-rdb/server";
 import { provideSessionMode, provideSessionModeEndpoints } from "@morlay/session-mode";
 import { UiSettingsPreferences, UiThemeSchema } from "@morlay/zephyr-app";
 import { provideSessionTitle, provideSessionTitleLlm } from "@morlay/dsh-conversation/server";
@@ -165,7 +165,7 @@ function frameworkProviders(): ProviderEntry[] {
  */
 function sessionCoreProviders(dataDir: string): ProviderEntry[] {
   return [
-    // 落盘换成 RDB（`@morlay/better-session` 的实现）：官方 jsonl 那一行用 `without` 剔掉，
+    // 落盘换成 RDB（`@morlay/session-rdb` 的实现）：官方 jsonl 那一行用 `without` 剔掉，
     // 同名的 `SessionPersistence` 服务由 RDB 实现接管。替换的是**实现**，契约与消费方都不动。
     // 库路径显式给：默认值虽然也从 `AppEnv.dataDir` 派生，但装配面把它写死在这里，
     // 读的人一眼能看到"会话库在哪"（测试传 tmpdir 时也就自动跟着走）。
@@ -216,7 +216,7 @@ function instructionProviders(): ProviderEntry[] {
  */
 function storageProviders(_dataDir: string): ProviderEntry[] {
   return [
-    // KV 域路由到 **rdb**（`@morlay/better-session` 注册的那个后端）：会话落盘与 KV 域同一个库，
+    // KV 域路由到 **rdb**（`@morlay/session-rdb` 注册的那个后端）：会话落盘与 KV 域同一个库，
     // 事务能跨着用，`<dataDir>/storages/*.json` 也不会再被创建。
     // **不装 json 后端**（`provideStorageJson`）：装了会多一个没人路由的 `storages/` 目录。
     ...provideStorage(configure(StorageDomainDefault, { backend: "rdb" })),

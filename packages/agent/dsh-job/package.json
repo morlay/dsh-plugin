@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-job",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "后台任务注册表：长跑动作在此登记、查询与取消，工具调用之外也有统一出口。",
   "files": [
@@ -37,12 +37,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-job"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-api-job-controller": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
-    "@deepseek-ai/dsh-jobs": "workspace:^",
-    "@deepseek-ai/dsh-jobs-local": "workspace:^",
-    "@deepseek-ai/dsh-tool-jobs": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
@@ -50,6 +48,13 @@
   "devDependencies": {
     "@morlay/dsh-job": "workspace:^",
     "@morlay/dsh-session": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-api-job-controller": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
+    "@deepseek-ai/dsh-jobs": "workspace:^",
+    "@deepseek-ai/dsh-jobs-local": "workspace:^",
+    "@deepseek-ai/dsh-tool-jobs": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

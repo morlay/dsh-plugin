@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-conversation",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "对话域（BFF）：会话界面（ui 面）+ 端点聚合（会话端点 / 会话引用 / 文件引用 / 日程）。只依赖 dsh-* 能力包与 zephyr*。",
   "files": [
@@ -42,7 +42,42 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-conversation"
+  },
   "dependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-attachment": "workspace:^",
+    "@morlay/dsh-fs": "workspace:^",
+    "@morlay/dsh-permission": "workspace:^",
+    "@morlay/dsh-sandbox": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-setting": "workspace:^",
+    "@morlay/dsh-upload": "workspace:^",
+    "@morlay/dsh-workspace": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^",
+    "@testing-library/react": "*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-session-panel": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-session-status": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:^",
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-auth": "workspace:^",
+    "@morlay/dsh-command": "workspace:^",
+    "@morlay/dsh-permission": "workspace:^",
+    "@morlay/dsh-sandbox": "workspace:^",
+    "@morlay/dsh-session-persistence": "workspace:^",
+    "@morlay/dsh-shell": "workspace:^",
+    "@morlay/dsh-storage": "workspace:^",
+    "@morlay/dsh-upload": "workspace:^",
+    "@morlay/dsh-workspace": "workspace:^"
+  },
+  "peerDependencies": {
     "@deepseek-ai/dsh-api-gateway": "workspace:^",
     "@deepseek-ai/dsh-api-session-controller": "workspace:^",
     "@deepseek-ai/dsh-api-settings-controller": "*",
@@ -78,37 +113,7 @@
     "@deepseek-ai/dsh-session-title": "*",
     "@deepseek-ai/dsh-session-title-first-prompt-llm": "*",
     "@deepseek-ai/dsh-subagent": "workspace:^",
-    "@deepseek-ai/dsh-workspace-changes": "*",
-    "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-attachment": "workspace:^",
-    "@morlay/dsh-fs": "workspace:^",
-    "@morlay/dsh-permission": "workspace:^",
-    "@morlay/dsh-sandbox": "workspace:^",
-    "@morlay/dsh-session": "workspace:^",
-    "@morlay/dsh-setting": "workspace:^",
-    "@morlay/dsh-upload": "workspace:^",
-    "@morlay/dsh-workspace": "workspace:^",
-    "@morlay/zephyr": "workspace:^",
-    "@morlay/zephyr-app": "workspace:^",
-    "@testing-library/react": "*"
-  },
-  "devDependencies": {
-    "@deepseek-ai/dsh-client-ui-session-panel": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-session-status": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
-    "@deepseek-ai/dsh-tool-testkit": "workspace:^",
-    "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-agent-loop": "workspace:^",
-    "@morlay/dsh-auth": "workspace:^",
-    "@morlay/dsh-command": "workspace:^",
-    "@morlay/dsh-permission": "workspace:^",
-    "@morlay/dsh-sandbox": "workspace:^",
-    "@morlay/dsh-session-persistence": "workspace:^",
-    "@morlay/dsh-shell": "workspace:^",
-    "@morlay/dsh-storage": "workspace:^",
-    "@morlay/dsh-upload": "workspace:^",
-    "@morlay/dsh-workspace": "workspace:^"
+    "@deepseek-ai/dsh-workspace-changes": "*"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

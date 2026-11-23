@@ -1,0 +1,30 @@
+# dsh web 容器（compose 负责构建，别手动 docker build）。
+#
+#   just dsh up       全新构建后起（后台）
+#   just dsh debug    全新构建后前台跑，直接看启动日志
+#   just dsh build    只构建（--no-cache，保证拿到最新发布包）
+#   just dsh down     停
+#   just dsh logs     跟日志
+
+compose := "docker compose -f " + source_directory() + "/compose.yml"
+
+# 不用层缓存：包内容来自 registry，层缓存会让镜像停在旧产物上。
+build:
+    {{compose}} build --no-cache
+
+# 起之前先清掉旧容器（名字冲突时 compose down 不一定来得及），再重建。
+up *args: build
+    {{compose}} down --remove-orphans
+    -docker rm -f dsh-dsh-web-1
+    {{compose}} up -d --force-recreate {{args}}
+
+debug *args: build
+    {{compose}} down --remove-orphans
+    -docker rm -f dsh-dsh-web-1
+    {{compose}} up --force-recreate {{args}}
+
+down *args:
+    {{compose}} down --remove-orphans {{args}}
+
+logs:
+    {{compose}} logs -f dsh-web

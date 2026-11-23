@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-permission",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "权限三面：权限预设、用户批准、用户提问——决定一次调用能不能放行、要不要问人。",
   "files": [
@@ -37,12 +37,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-permission"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-cua": "workspace:^",
-    "@deepseek-ai/dsh-permission-presets": "workspace:^",
-    "@deepseek-ai/dsh-tool-ask-user": "workspace:^",
-    "@deepseek-ai/dsh-user-approval": "workspace:^",
-    "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-command": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
@@ -58,6 +56,13 @@
     "@morlay/dsh-permission": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-cua": "workspace:^",
+    "@deepseek-ai/dsh-permission-presets": "workspace:^",
+    "@deepseek-ai/dsh-tool-ask-user": "workspace:^",
+    "@deepseek-ai/dsh-user-approval": "workspace:^",
+    "@deepseek-ai/dsh-user-questions": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

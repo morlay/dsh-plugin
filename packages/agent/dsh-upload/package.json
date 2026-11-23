@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-upload",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "附件上传面：先给宿主一个只登记解析器的最小实现，真正的上传与解析另排期。",
   "files": [
@@ -37,8 +37,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-upload"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-client-file-upload": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-attachment": "workspace:^",
     "@morlay/dsh-command": "workspace:^",
@@ -48,6 +50,9 @@
   },
   "devDependencies": {
     "@morlay/dsh-upload": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-file-upload": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

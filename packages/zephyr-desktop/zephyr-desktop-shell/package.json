@@ -42,10 +42,9 @@
   },
   "scripts": {
     "build": "pnpm exec tsdown",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr-desktop-shell && pnpm exec tsdown"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-client-shortcuts": "workspace:^",
     "@morlay/dsh-oxc-node": "workspace:^",
     "@morlay/zephyr": "workspace:^"
   },
@@ -54,6 +53,7 @@
     "@types/node": "^26.5.0"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:^",
     "electron": ">=44"
   },
   "peerDependenciesMeta": {

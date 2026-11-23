@@ -14,8 +14,7 @@
     "./endpoint": "./src/endpoint/index.ts",
     "./server": "./src/server/index.ts",
     "./ui": "./src/ui/index.ts",
-    "./package.json": "./package.json",
-    "./dsh-bundle": "./src/dsh-bundle.ts"
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "exports": {
@@ -35,16 +34,11 @@
         "types": "./dist/ui.d.mts",
         "default": "./dist/ui.mjs"
       },
-      "./dsh-bundle": {
-        "types": "./dist/dsh-bundle.d.mts",
-        "default": "./dist/dsh-bundle.mjs"
-      },
-      "./package.json": "./package.json",
-      "./client": {
-        "default": "./dist/client.cjs"
-      },
-      "./cordis.patch.yml": "./dist/cordis.patch.yml"
+      "./package.json": "./package.json"
     }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/session-mode"
   },
   "dependencies": {
     "@morlay/dsh-agent": "workspace:^",
@@ -59,34 +53,19 @@
     "smol-toml": "^1.9.0"
   },
   "devDependencies": {
-    "@morlay/better-session": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
     "@morlay/dsh-compaction": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
+    "@morlay/session-rdb": "workspace:^",
     "@testing-library/react": "^16.3.0",
     "@types/react": "~18.3.1"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
     "react": "^18.3.1",
     "zod": "^4.6.6"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"
-  },
-  "dsh": {
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-shortcuts",
-        "@deepseek-ai/dsh-client-ui-file-drag",
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-theme"
-      ]
-    },
-    "bundle": {
-      "patch": "./dist/cordis.patch.yml"
-    }
   }
 }

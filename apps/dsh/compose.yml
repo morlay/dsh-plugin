@@ -1,0 +1,28 @@
+name: dsh
+
+# dsh web：镜像由本目录的 Dockerfile 构建（compose 负责，别手动 docker build）。
+#
+#   just dsh up       起（自动构建，后台）
+#   just dsh debug    前台跑，直接看启动日志
+#   just dsh down     停
+
+services:
+  dsh-web:
+    build:
+      context: .
+      args:
+        DEEPSEEK_HARNESS_VERSION: ${DEEPSEEK_HARNESS_VERSION:-0.2.3-alpha.2}
+        ZEPHYR_VERSION: ${ZEPHYR_VERSION:-0.2.0-alpha.0}
+        NPM_REGISTRY: ${NPM_REGISTRY:-http://host.docker.internal:7677/}
+    image: dsh-web
+    ports:
+      - "${DSH_WEB_PORT:-3000}:3000"
+    environment:
+      DSH_WEB_PORT: "3000"
+      NPM_REGISTRY: "${NPM_REGISTRY:-http://host.docker.internal:7677/}"
+      ZEPHYR_VERSION: "${ZEPHYR_VERSION:-0.2.0-alpha.0}"
+    volumes:
+      # DSH_HOME 落到宿主机：profile、storages、日志都能直接翻。
+      - ./target/.dsh:/dsh
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

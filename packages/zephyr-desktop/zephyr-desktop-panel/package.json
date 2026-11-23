@@ -1,6 +1,6 @@
 {
   "name": "@morlay/zephyr-desktop-panel",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "桌面形态的内嵌浏览器面板（浏览器半）：右栏 tab、地址栏与面板矩形上报；真正的网页容器由壳的主进程创建（WebContentsView），这里只经 __DSH_BROWSER_PANE__ 发意图。",
   "keywords": [
@@ -36,6 +36,9 @@
       },
       "./package.json": "./package.json"
     }
+  },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr-desktop-panel"
   },
   "dependencies": {
     "@morlay/zephyr": "workspace:^",

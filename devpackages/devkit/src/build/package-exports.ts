@@ -2,7 +2,8 @@
 // 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态只出一份 **CJS 工厂**——
 // 那是 `__ModuleLoader__.load` 的注册脚本，挂在该出口的 `default` 条件上（见 `pickFactory`）。
 // 分档：`private: true` 只写 `exports`（源码直连），不写 `publishConfig` / `engines.dsh`；发布包另写
-// 发布态清单与 `engines.dsh`，`./dsh-bundle` 这类只发布态入口不进顶层 `exports`。
+// 发布态清单与 `engines.dsh`。`./client` 与 `./cordis.patch.yml` 只进发布态；`./dsh-bundle` 相反——它在顶层
+// `exports` 里（`planOf` 靠这个键认出 bundle 包），构建不删已有键。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -201,7 +202,8 @@ async function writeManifest(
     if (runtime === undefined) continue;
     // host 面也带 `types`：产物里本来就有 `.d.mts`，出口不写它，消费方的类型解析就落到 `any`。
     const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
-    // 只发布态入口不进顶层 `exports`（workspace 误引即解析失败）。
+    // 只发布态入口不由构建写进顶层 `exports`；清单里已有的键原样保留（`./dsh-bundle` 就是靠清单里的键
+    // 让 `planOf` 认出 bundle 包）。
     if (!publishOnly.has(entry)) dev[exportKey(entry)] = entrySource;
     published[exportKey(entry)] =
       declarations === undefined

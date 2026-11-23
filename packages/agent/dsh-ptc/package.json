@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-ptc",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "PTC（programmatic tool calls，程序化工具调用）的运行时：「模型写一段程序、程序里调工具」这条路的执行面。",
   "files": [
@@ -27,9 +27,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-ptc"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:^",
-    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-fs": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
@@ -40,6 +41,10 @@
     "@morlay/dsh-ptc": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:^",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

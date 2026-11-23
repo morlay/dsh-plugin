@@ -153,6 +153,16 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
               "@deepseek-ai/cosmokit/src/misc.ts": [
                 under("vendor/deepseek-harness/vendor/cosmokit/src/misc.ts"),
               ],
+              // 同类问题：`ctx.uiSession.sessionStatus` 的面是上游 `ui-session-status` 的 `UiSessionStatus`，
+              // pnpm 布局下 client 半按嵌套那份解析，声明里就写不出具名引用（TS2883）。指回仓库里那一份。
+              "@deepseek-ai/dsh-client-ui-session-status": [
+                under("vendor/deepseek-harness/packages/client/ui-session-status/src/index.ts"),
+              ],
+              "@deepseek-ai/dsh-client-ui-session-status/client": [
+                under(
+                  "vendor/deepseek-harness/packages/client/ui-session-status/src/client/index.ts",
+                ),
+              ],
             },
           },
           include: FACES[face].include.map(under),

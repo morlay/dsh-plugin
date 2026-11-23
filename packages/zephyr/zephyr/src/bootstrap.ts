@@ -28,6 +28,13 @@ export interface BootstrapOptions {
   readonly providers: ProviderList;
   /** 启动预算；**当前 bootstrap 尚未消费**（保留字段，清理前不要依赖它）。 */
   readonly timeoutMs?: number;
+  /**
+   * 已有 ctx（宿主装配时传）：不新建、也不负责销毁它。
+   *
+   * 给「已经活在别人的 cordis 树里」的场景用（dsh 的行入口）：行挂到传入的 ctx 上，
+   * `dispose()` 只拆装配、不销毁宿主 ctx。
+   */
+  readonly ctx?: CordisContext;
 }
 
 /** 装配结果。 */
@@ -62,9 +69,23 @@ export interface App {
  * @returns 装配结果。
  */
 export async function bootstrapApplication<const L extends ProviderList>(
-  options: { readonly providers: L; readonly timeoutMs?: number } & ProvidersCoverage<L>,
+  options: {
+    readonly providers: L;
+    readonly timeoutMs?: number;
+    readonly ctx?: CordisContext;
+  } & ProvidersCoverage<L>,
 ): Promise<App> {
-  const ctx = new CordisContext();
+  const ownsCtx = options.ctx === undefined;
+  const ctx = options.ctx ?? new CordisContext();
+  // 宿主树（ctx 是调用方传进来的）里已经发布的服务：装配只补自己拥有的行，依赖可以来自宿主。
+  const reader = ctx.reflect as unknown as { get(name: string, strict?: boolean): unknown };
+  const hostedValue = (meta: { readonly name: string; readonly alias?: string }): unknown => {
+    if (options.ctx === undefined) return undefined;
+    const aliased = meta.alias === undefined ? undefined : reader.get(meta.alias, false);
+    return aliased ?? reader.get(meta.name, false);
+  };
+  const hosted = (meta: { readonly name: string; readonly alias?: string }): boolean =>
+    hostedValue(meta) !== undefined;
   // 诊断快照：装配过程一直在写，`app.get(Debugger).diagnostics()` 读到的就是最终结果。
   let snapshot: DebugSnapshot = { rows: [], names: [], tokens: [] };
   // 令牌表：单值 / 多值。per-agent 的装行能力要能在装每一行时读它（应用根的服务对它可见）。
@@ -120,6 +141,8 @@ export async function bootstrapApplication<const L extends ProviderList>(
       ? never
       : ReturnType<typeof entryOf>;
     const meta = tokenMetaOf(impl as unknown as object);
+    // 宿主已经提供了这一行（同一份服务已在 ctx 上）：不重复注册，直接用宿主那份。
+    if (!meta.multi && hosted(meta)) continue;
     const instance = instantiate(entry, impl);
     if (meta.multi) {
       const list = multi.get(meta.token) ?? [];
@@ -156,7 +179,7 @@ export async function bootstrapApplication<const L extends ProviderList>(
 
   // 一·五、预检：所有必需注入必须都有提供者。放在任何 onInit 之前——失败时不留半个应用。
   for (const instance of [...instances.values(), ...[...multi.values()].flat()]) {
-    assertResolvable(instance, instances);
+    assertResolvable(instance, instances, hosted);
   }
 
   // 二、按**依赖序**逐行装配：填充注入 → onInit → 绑定契约面。
@@ -185,7 +208,9 @@ export async function bootstrapApplication<const L extends ProviderList>(
         // 「装一行」：填充注入（查令牌表）→ 包 fiber → 事件字段绑本行 ctx → `onInit`。
         fibers.push(
           await mountInstance(ctx, row.name, instance, (meta, mode) =>
-            mode === "all" ? (multi.get(meta.token) ?? []) : instances.get(meta.token),
+            mode === "all"
+              ? (multi.get(meta.token) ?? [])
+              : (instances.get(meta.token) ?? hostedValue(meta)),
           ),
         );
       } catch (error) {
@@ -236,7 +261,8 @@ export async function bootstrapApplication<const L extends ProviderList>(
     async dispose(): Promise<void> {
       // 逆序卸载：cordis 按 fiber 的相反顺序收尾，onDispose 在依赖仍可读时执行。
       for (const fiber of [...fibers].reverse()) await fiber.dispose();
-      await ctx.fiber.dispose();
+      // 只拆自己建的根：ctx 是调用方传进来的（宿主树）就留给宿主。
+      if (ownsCtx) await ctx.fiber.dispose();
     },
   };
 }
@@ -264,8 +290,20 @@ export async function mountRow(
     instance,
     // 单行装配没有令牌表：依赖从**装它的那个 ctx** 上读（per-agent 时就是 agent 的 scope，
     // 读得到根上发布的服务，也读得到这个 agent 自己那层）。
-    (meta) =>
-      (ctx as unknown as { get(name: string, strict?: boolean): unknown }).get(meta.name, false),
+    // 先按**上游别名**取（上游行按驼峰发布，如 `tools`），没有再回落到我们的派生名。
+    (meta) => {
+      const reader = ctx as unknown as {
+        get(name: string, strict?: boolean): unknown;
+        logger: unknown;
+      };
+      // cordis 的 logger 是原生属性、不是服务：与多行装配一样，直接把 ctx.logger 接到契约上。
+      if (meta.name === "logger") return reader.logger;
+      if (meta.alias !== undefined) {
+        const aliased = reader.get(meta.alias, false);
+        if (aliased !== undefined) return aliased;
+      }
+      return reader.get(meta.name, false);
+    },
   );
   return { instance, dispose: () => mounted.dispose() };
 }
@@ -358,8 +396,12 @@ function fillRow(instance: unknown, resolve: RowResolver): void {
       // 报错要用**原始 label**（`ConfigForms` / Symbol 的 key），只打派生名（`config-forms`）会让人
       // 以为是字面量拼写、在源码里搜不到；注册名与上游别名不同才补打。
       const where = `${instance.constructor.name} 的 ${key}`;
-      const lines = [`没有提供者：${meta.label}（${where} 需要它）`];
-      if (meta.name !== meta.label) lines.push(`  注册名：${meta.name}`);
+      // 先打**注册名**（服务名，与上游行提供的一致），行名放后面：排查时要搜的是服务名。
+      const lines = [
+        meta.name === meta.label
+          ? `没有提供者：${meta.name}（${where} 需要它）`
+          : `没有提供者：${meta.name}（行名 ${meta.label}；${where} 需要它）`,
+      ];
       if (meta.alias !== undefined && meta.alias !== meta.name) {
         lines.push(`  上游别名：${meta.alias}`);
       }
@@ -576,7 +618,11 @@ function instantiate(entry: ProviderEntry, impl: Newable<unknown>): unknown {
  * @param instances - 单值服务表。
  * @param multi - 多值服务表。
  */
-function assertResolvable(instance: unknown, instances: ReadonlyMap<object, unknown>): void {
+function assertResolvable(
+  instance: unknown,
+  instances: ReadonlyMap<object, unknown>,
+  hosted: (meta: ReturnType<typeof tokenMetaOf>) => boolean = () => false,
+): void {
   if (typeof instance !== "object" || instance === null) return;
   for (const key of Object.keys(instance)) {
     const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
@@ -585,7 +631,7 @@ function assertResolvable(instance: unknown, instances: ReadonlyMap<object, unkn
     assertShape(meta, placeholder.mode, instance);
     // 值令牌可能由上游在 mount 期按名字发布：预检放行，留给该行激活时的填充检查。
     if (isValueToken(meta.token)) continue;
-    if (placeholder.mode === "one" && !instances.has(meta.token)) {
+    if (placeholder.mode === "one" && !instances.has(meta.token) && !hosted(meta)) {
       throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
     }
   }

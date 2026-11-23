@@ -12,19 +12,15 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { createRequire, registerHooks } from "node:module";
+import { createRequire, isBuiltin, registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { workspacePackages } from "../workspace/packages.ts";
+import { coverageProblems, targetFiles, type ExportsMap } from "./manifest-coverage.ts";
+import { DEFAULT_REGISTRY } from "./publish.ts";
 
 type Verdict = "pass" | "fail" | "blocked";
-
-/** 一个出口目标：`types` 与 `default` 都是包内相对路径。 */
-interface ExportTarget {
-  readonly types?: string;
-  readonly default?: string;
-}
-type ExportsMap = Readonly<Record<string, string | ExportTarget>>;
 
 /** 本工具读到的清单字段。 */
 interface Manifest {
@@ -83,7 +79,7 @@ interface RunResult {
   readonly stderr: string;
 }
 
-const run = (command: string, args: readonly string[], cwd: string): Promise<RunResult> =>
+const runCommand = (command: string, args: readonly string[], cwd: string): Promise<RunResult> =>
   new Promise((done) => {
     const child = spawn(command, [...args], { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -106,28 +102,10 @@ const walk = async (base: string, dir = base): Promise<string[]> => {
   return files.sort();
 };
 
-/** 读 `packages/<family>/<pkg>` 下每个包的清单。 */
+/** 工作区里每个包的目录与清单（包列表由 pnpm 的递归给出）。 */
 const loadPackages = async (root: string): Promise<Pkg[]> => {
-  const pkgs: Pkg[] = [];
-  for (const family of await readdir(join(root, "packages"), { withFileTypes: true })) {
-    if (!family.isDirectory()) continue;
-    for (const entry of await readdir(join(root, "packages", family.name), {
-      withFileTypes: true,
-    })) {
-      if (!entry.isDirectory()) continue;
-      const dir = join(root, "packages", family.name, entry.name);
-      const raw = await readFile(join(dir, "package.json"), "utf8").catch(() => undefined);
-      if (raw === undefined) continue;
-      pkgs.push({ dir, manifest: JSON.parse(raw) as Manifest });
-    }
-  }
-  return pkgs.sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
-};
-
-const targetFiles = (target: string | ExportTarget | undefined): string[] => {
-  if (target === undefined) return [];
-  if (typeof target === "string") return [target];
-  return [target.types, target.default].filter((each): each is string => each !== undefined);
+  const packages = await workspacePackages(root);
+  return packages.map((pkg) => ({ dir: pkg.dir, manifest: pkg.manifest as unknown as Manifest }));
 };
 
 /** 判据 2：发布包的 `publishConfig.exports` 覆盖顶层 `exports` 每个键，且目标文件存在。 */
@@ -139,19 +117,7 @@ const checkManifestCoverage = async (pkgs: readonly Pkg[]): Promise<Report> => {
     lines: [],
   };
   const publics = pkgs.filter((each) => each.manifest.private !== true);
-  for (const pkg of publics) {
-    const top = Object.keys(pkg.manifest.exports ?? {});
-    const published = pkg.manifest.publishConfig?.exports ?? {};
-    const missing = top.filter((key) => !(key in published));
-    if (missing.length > 0)
-      report.lines.push(pkg.manifest.name + ": publishConfig.exports 缺键 " + missing.join(", "));
-    for (const [key, target] of Object.entries(published)) {
-      for (const file of targetFiles(target)) {
-        if (!(await exists(join(pkg.dir, file))))
-          report.lines.push(pkg.manifest.name + ": " + key + " → " + file + " 不存在");
-      }
-    }
-  }
+  for (const pkg of publics) report.lines.push(...(await coverageProblems(pkg)));
   report.status = report.lines.length > 0 ? "fail" : "pass";
   write(
     "  " +
@@ -202,7 +168,7 @@ const checkDryRun = async (root: string, targets: readonly string[]): Promise<Re
     status: "pass",
     lines: [],
   };
-  const result = await run(
+  const result = await runCommand(
     "node",
     [
       "devpackages/devkit/src/release/publish.ts",
@@ -243,7 +209,7 @@ const checkDryRun = async (root: string, targets: readonly string[]): Promise<Re
 };
 
 const packOne = async (pkg: Pkg, into: string): Promise<string | undefined> => {
-  const result = await run("pnpm", ["pack", "--pack-destination", into], pkg.dir);
+  const result = await runCommand("pnpm", ["pack", "--pack-destination", into], pkg.dir);
   if (result.code !== 0) return undefined;
   return result.stdout
     .split("\n")
@@ -254,7 +220,7 @@ const packOne = async (pkg: Pkg, into: string): Promise<string | undefined> => {
 
 const unpack = async (tgz: string, into: string): Promise<string | undefined> => {
   await mkdir(into, { recursive: true });
-  const result = await run("tar", ["-xzf", tgz, "-C", into], into);
+  const result = await runCommand("tar", ["-xzf", tgz, "-C", into], into);
   return result.code === 0 ? join(into, "package") : undefined;
 };
 
@@ -582,7 +548,13 @@ const checkSmoke = async (
   }
 };
 
-/** 解包后的四个目标包里所有裸 specifier（去掉相对路径与 node: 内建）。 */
+/**
+ * 解包后的目标包里所有裸 specifier（去掉相对路径与 node 内建）。
+ *
+ * 内建用 node 自己的 `isBuiltin` 判，不拼名单：内联进产物的第三方代码（`tsx` 这类）写的是**裸名**
+ * `from "fs"` / `from "path"`，还带 `fs/promises` 这类子路径——名单拼不全，留着就被当成包名，
+ * 在「等价安装」里报成解析不到的依赖。
+ */
 const bareSpecifiers = async (dir: string): Promise<string[]> => {
   const found = new Set<string>();
   for (const file of await walk(dir)) {
@@ -602,6 +574,7 @@ const bareSpecifiers = async (dir: string): Promise<string[]> => {
     .filter(
       (each) => !each.startsWith(".") && !each.startsWith("node:") && !each.startsWith("data:"),
     )
+    .filter((each) => !isBuiltin(each))
     .filter((each) => packageShape.test(each))
     .sort();
 };
@@ -646,6 +619,7 @@ const checkRealInstall = async (
   work: string,
   tarballs: readonly string[],
   report: Report,
+  registry: string,
 ): Promise<void> => {
   const project = join(work, "install");
   await mkdir(project, { recursive: true });
@@ -656,7 +630,22 @@ const checkRealInstall = async (
     dependencies: {} as Record<string, string>,
   };
   await writeFile(join(project, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
-  const result = await run("pnpm", ["add", ...tarballs], project);
+  // tarball 的依赖从 registry 解析：--registry 打不过 scope 映射，所以 scoped 包另用
+  // --config.@scope:registry 覆盖（与发布命令同一套规则）。
+  const result = await runCommand(
+    "pnpm",
+    [
+      "add",
+      ...tarballs,
+      "--registry",
+      registry,
+      "--config.@morlay:registry=" + registry,
+      // 真装只验证出口能加载，不跑依赖的 native 构建脚本：pnpm 12 默认拒跑未批准的脚本
+      // （`ERR_PNPM_IGNORED_BUILDS`），那不是发布包的问题。
+      "--ignore-scripts",
+    ],
+    project,
+  );
   const tail = (result.code === 0 ? result.stdout : result.stderr)
     .trim()
     .split("\n")
@@ -667,18 +656,22 @@ const checkRealInstall = async (
     return;
   }
   report.status = "blocked";
-  report.lines.push("  - pnpm add 失败：依赖还没上 registry（首发顺序），安装目录 " + project);
+  report.lines.push(
+    "  - pnpm add 失败（依赖没上 registry，或被 pnpm 的脚本审批挡住），安装目录 " + project,
+  );
   for (const line of tail.split("\n")) report.lines.push("    " + line);
 };
 
 interface Options {
   readonly keep: boolean;
   readonly filters: readonly string[];
+  readonly registry: string;
 }
 
 const parseArgs = (argv: readonly string[]): Options => {
   const filters: string[] = [];
   let keep = false;
+  let registry = DEFAULT_REGISTRY;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--keep") keep = true;
@@ -688,15 +681,26 @@ const parseArgs = (argv: readonly string[]): Options => {
       index += 1;
     } else if (arg !== undefined && arg.startsWith("--filter="))
       filters.push(arg.slice("--filter=".length));
+    else if (arg === "--registry") {
+      const value = argv[index + 1];
+      if (value !== undefined) registry = value;
+      index += 1;
+    }
   }
-  return { keep, filters };
+  return { keep, filters, registry };
 };
 
 const statusLine = (verdict: Verdict): string =>
   verdict === "pass" ? "通过" : verdict === "blocked" ? "阻塞" : "不通过";
 
-const main = async (): Promise<number> => {
-  const options = parseArgs(process.argv.slice(2));
+/**
+ * 跑发布前验收。
+ *
+ * @param args - `--filter <包>`（默认取带 `dsh.bundle` 的包）与 `--keep`（保留临时工作目录）。
+ * @returns 0 = 全部通过；1 = 有未通过或阻塞。
+ */
+export async function run(args: readonly string[]): Promise<number> {
+  const options = parseArgs(args);
   const root = process.cwd();
   const pkgs = await loadPackages(root);
   const targets = pkgs.filter((pkg) =>
@@ -710,6 +714,7 @@ const main = async (): Promise<number> => {
   }
   const names = targets.map((each) => each.manifest.name);
   write("发布前验收：目标 " + names.join(", "));
+  write("  真装 registry " + options.registry);
   const reports: Report[] = [];
   reports.push(await checkManifestCoverage(pkgs));
   reports.push(checkPrivateManifests(pkgs));
@@ -779,7 +784,7 @@ const main = async (): Promise<number> => {
     for (const reason of unresolved.values()) write("    ! " + reason);
 
     reports.push(await checkDeclaredExternals(packed));
-    await checkRealInstall(work, tarballs, smokeReport);
+    await checkRealInstall(work, tarballs, smokeReport, options.registry);
     for (const one of packed) {
       smokeReport.lines.push(one.name + "（" + one.manifest.version + "）");
       await checkSmoke(one, unresolved, smokeReport);
@@ -807,6 +812,8 @@ const main = async (): Promise<number> => {
           bad.map((each) => each.id + "(" + statusLine(each.status) + ")").join(", "),
   );
   return bad.length === 0 ? 0 : 1;
-};
+}
 
-process.exitCode = await main();
+// 只在作为命令直接运行时执行；被 CLI 或测试 import 时不触发。
+const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) process.exitCode = await run(process.argv.slice(2));

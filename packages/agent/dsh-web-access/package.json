@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-web-access",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "联网访问：搜索与抓取两个后端、一个 `Web` 契约，以及给模型的 web 工具行。",
   "files": [
@@ -27,11 +27,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-web-access"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-tool-web": "workspace:^",
-    "@deepseek-ai/dsh-web": "workspace:^",
-    "@deepseek-ai/dsh-web-fetch-http": "workspace:^",
-    "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-auth": "workspace:^",
     "@morlay/zephyr": "workspace:^"
@@ -39,6 +38,12 @@
   "devDependencies": {
     "@morlay/dsh-web-access": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tool-web": "workspace:^",
+    "@deepseek-ai/dsh-web": "workspace:^",
+    "@deepseek-ai/dsh-web-fetch-http": "workspace:^",
+    "@deepseek-ai/dsh-web-search-deepseek": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

@@ -74,25 +74,31 @@
 
 - **发布形态**：有 TS 源码入口的包统一产物包（`dist` + `.d.mts`）；`@morlay/dsh-oxc-node` 保持手写
   `register.mjs` 单文件；`devpackages/**` 私有、只出源码。发布集合、版本与通道见[设计 npm 发布线](../designs/20261118-npm发布线.md)。
-- **清单由构建写回，不手写**：`exports` 与 `publishConfig.exports` 由 `devkit build` 在 `build:done`
-  里按入口与产物写回——顶层指源码（工作区内直连 `src/**`），发布态指 `dist` 产物；手改会被下一次
-  `just build` 覆盖。生成规则见[设计 构建与审计](../../devpackages/devkit/.agents/designs/20261118-构建与审计.md)。
+- **清单由构建写回，不手写**：`exports` 与 `publishConfig.exports` 由 `devkit build` 按入口与产物写回——
+  顶层指源码（工作区内直连 `src/**`），发布态指 `dist` 产物；手改会被下一次 `just build` 覆盖。生成规则见
+  [设计 构建与审计](../../devpackages/devkit/.agents/designs/20261118-构建与审计.md)。
   **package.json 出口每个包都有**（`import.meta.resolve("<包名>/package.json")` 靠它）。
 - **按面开出口，不凑数**：出口键写成 `"./<面>"`，面名是 contract / endpoint / server / ui / testing；
   谁有消费方谁开，没有消费方的面不开（多一条出口就是把同一份东西列两遍）。testing 面只给测试用。
 - **加面 = 加文件 + 清单**：`src/<面>.ts`（或 `src/<面>/index.ts`）与入口声明同笔改。入口由 `devkit build`
-  从 `exports` 推导——**没有第二份入口清单**（包内不再有 `tsdown.config.ts`，也不再挂 `build` 脚本）。
+  从 `exports` 推导——**没有第二份入口清单**（包内不挂 `tsdown.config.ts` 与 `build` 脚本）。
   清单由构建写回，手改无效。
   判据：`just build` 后产物目录里有同名文件，且包内测试按包名解析得到。
 - **浏览器半只有两种出口**：`./ui` 是**纯 ESM** 面（zephyr 前端装配用）；`./client` 只给 dsh 插件
   （`dsh.bundle` 且有前端的包），发布态按「库 + 工厂」两条条件。两者并存，不互相替代；node 专属实现
   与宿主 service 留在包根——包根只出宿主面时，浏览器半只引它的 `./contract` / `./endpoint`（见[面边界](#面边界)）。
-- **`./cordis-register` 只给 bundle 包，且只进 `publishConfig.exports`**：默认导出该包的一个 cordis 插件
-  （`toCordis` 组合多行）；顶层 `exports` 不含它，workspace 里误引即解析失败——开发态只走 `provideXxx()` 清单。
+- **`./dsh-bundle` 只给 bundle 包，且必须列在顶层 `exports`**：入口是 `src/dsh-bundle.ts`，默认导出该包的
+  一个 cordis 插件（`toCordis` 组合多行），另导出 `rows` 作为 patch 的行清单。**它同时在顶层与发布态**——
+  `devkit build` 靠顶层 `exports` 里的这个键认出 bundle 包（推出 patch、client 两件事），删掉键就没有产物。
+  开发态只走 `provideXxx()` 清单，不从 `./dsh-bundle` 装配。
 - **`dsh.bundle` 指产物里的 patch**：bundle 包写 `"dsh.bundle": { "patch": "./dist/cordis.patch.yml" }`——
   patch 是构建产物（实际发布物是 `dist/cordis.patch.yml`，发布态另有 `./cordis.patch.yml` 出口指同一文件），
   不是包根下的源文件；行清单声明在包的 `src/dsh-bundle.ts` 的 `rows`（首行「由 … 生成，请勿手工编辑」）。
   判据：`just build` 后 `dist/cordis.patch.yml` 存在，清单里的 `dsh.bundle.patch` 指向它。
+- **发布包带 `prepublishOnly`，内容调 `devkit build`**：写成 `"prepublishOnly": "pnpm exec devkit build --filter <包名>"`
+  （`zephyr-desktop-shell` 另接 `pnpm exec tsdown` 补 `preload.mjs`）。发布时忘了先构建，发出去的就是旧产物或
+  根本没有 `dist`；`devkit` 的 bin 在根上，包目录里 `pnpm exec devkit` 解析得到。判据：`just audit` 的
+  「发布包带 prepublishOnly 且调 devkit build」。
 - **`publishConfig.exports` 只在 `private: false` 的包上有意义**：它是**整体替换**，键集合必须覆盖顶层
   `exports` 每个键（外加 `./package.json` 与只发布态入口），漏一个键就是发布包少一个面；`private: true`
   的包只写 `exports`，不写 `publishConfig` / `engines.dsh`。
@@ -115,8 +121,8 @@
   （rolldown 的模块解析输入，不是编译）。
 - **声明树是产物，不进 git**：`target/dts` 由
   [`@local/dts-prepare`](../../devpackages/dts-prepare/src/dts.ts) 的 `ensureWorkspaceDts` 生成，是
-  [typert-generator](../../devpackages/typert-generator/src/index.ts) 的输入；tsdown 的 `.d.mts` 由
-  tsdown 自己出，不读这棵树。`tsc -b` 只在需要类型图时手动跑。
+  [typert-generator](../../devpackages/typert-generator/src/index.ts) 的输入；各包 `dist/*.d.mts` 由
+  `devkit build` 从这棵树按入口聚合（不再有第二个出声明的地方）。`tsc -b` 只在需要类型图时手动跑。
 - **跨边界 id 用 branded 类型，不做裸 `string`**；跨包契约由契约包显式导出，消费方只引用。
 
 ## 令牌与依赖注入

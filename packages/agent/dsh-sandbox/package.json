@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-sandbox",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "沙箱面：提供者与策略，加上 bash、文件两套受限执行与文件观察策略，给 shell 与 fs 一条共同边界。",
   "files": [
@@ -27,16 +27,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-sandbox"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-bash-sandbox": "workspace:^",
-    "@deepseek-ai/dsh-fs-observation-policy": "workspace:^",
-    "@deepseek-ai/dsh-fs-sandbox": "workspace:^",
-    "@deepseek-ai/dsh-sandbox": "workspace:^",
-    "@deepseek-ai/dsh-sandbox-local": "workspace:^",
-    "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
-    "@deepseek-ai/dsh-tool-bash": "workspace:^",
-    "@deepseek-ai/dsh-tool-fs": "workspace:^",
-    "@deepseek-ai/dsh-tool-fs-search": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-fs": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
@@ -48,6 +42,17 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-bash-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-fs-observation-policy": "workspace:^",
+    "@deepseek-ai/dsh-fs-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-local": "workspace:^",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
+    "@deepseek-ai/dsh-tool-bash": "workspace:^",
+    "@deepseek-ai/dsh-tool-fs": "workspace:^",
+    "@deepseek-ai/dsh-tool-fs-search": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

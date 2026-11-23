@@ -116,8 +116,8 @@ bootstrapApplication({
 
 ### 文件组织
 
-`src/<domain>/<type>.ts`，一个文件一个 Provider；入口只留 `src/index.ts`（具名导出）与能力包的
-`cordis-register.ts`（行入口）。判据见
+`src/<domain>/<type>.ts`，一个文件一个 Provider；入口只留 `src/index.ts`（具名导出）与 bundle 包的
+`src/dsh-bundle.ts`（行入口，另导出 `rows` 作 patch 行清单）。判据见
 [`zephyr 装配：怎么写`](./.agents/standards/how-to-write.md)。
 
 公开接口（契约与令牌、注入、装配清单、Provider 与行、上游适配、装配入口、事件、静态依赖检查）见

@@ -32,6 +32,8 @@ interface PackageReport {
   readonly remoteLiterals?: readonly string[];
   /** `publishConfig.exports` 漏掉的顶层出口键（整体替换语义，漏一个就是发布包少一个面）。 */
   readonly publishExportGaps?: readonly string[];
+  /** 发布包的 `prepublishOnly` 缺省或没调 `devkit build`（发布时忘了构建）。 */
+  readonly publishHookProblems?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -162,6 +164,10 @@ const testDoubleAssertions = reports.flatMap((entry) =>
 const subentryParentImports = reports.flatMap((entry) =>
   (entry.subentryParentImports ?? []).map((line) => `${entry.pkg}  ${line}`),
 );
+// 从 `reportsAll` 取：没有 `src/` 的发布包（`dsh-oxc-node`）也会被跳过源码判据，但它同样要带钩子。
+const publishHookProblems = reportsAll.flatMap((entry) =>
+  (entry.publishHookProblems ?? []).map((line) => `${entry.pkg}  ${line}`),
+);
 
 report("面边界（root→server/ui、ui→host、server→ui、contract/endpoint→server/ui）", faces);
 report("上游包唯一化（同一上游包的同一个面只该有一个本地 owner）", conflicts);
@@ -170,15 +176,16 @@ report("声明未用（依赖清单 vs 源码/scripts/清单其它字段）", un
 });
 report("扩展边界（agent-ex 只许 contract / testing / endpoint，且扩展之间零依赖）", exViolations);
 report(
+  "发布包带 prepublishOnly 且调 devkit build（发布前先构建，避免发出去的是旧产物）",
+  publishHookProblems,
+);
+report(
   'deps 键不写字面量（`"remote.xxx"` 一律由 `remoteNamespaceKey(组名)` 给出；只盯 `export const` 会漏掉字面量）',
   remoteLiterals,
 );
-// 存量 15 处：都是「清单由 `devkit build` 写回、但那个包还没跑过 build」的产物——
-// 跑一次 `just build` 会补上。在补上之前这条判据**只挡增量**（与其它基线判据同一套规矩）。
-reportAgainstBaseline(
+report(
   "`publishConfig.exports` 覆盖顶层 `exports` 的每个键（整体替换，漏一个就是发布包少一个面）",
   publishExportGaps,
-  { current: publishExportGaps.length, baseline: 15 },
 );
 
 reportAgainstBaseline(

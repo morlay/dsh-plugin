@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-agent-team",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "Agent Teams：接管上游 TeamService（服务名 agentTeams）与它那套团队工具（send_message / list_agents / wait_agent / interrupt_agent / team_task_*），让 Lead 能派发队友、共享任务板并等待结果。派生用上游的 subagent / subagent_fork（spawn_teammate 已在 v0.2.1-rc.2 移除）。",
   "files": [
@@ -32,10 +32,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-agent-team"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-tool-agent-team": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
@@ -52,6 +52,11 @@
     "@morlay/dsh-shell": "workspace:^",
     "@morlay/session-mode": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-agent-team": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-agent-team": "workspace:^",
+    "@deepseek-ai/dsh-tool-agent-team": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

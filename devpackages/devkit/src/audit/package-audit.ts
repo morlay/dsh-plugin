@@ -217,8 +217,20 @@ const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) a
 const hasSrc = await stat(join(cwd, "src"))
   .then((s) => s.isDirectory())
   .catch(() => false);
+
+// 发布包的发布前钩子：**必须**调 `devkit build`（根上有它的 bin，包目录里 `pnpm exec devkit …` 解析得到）。
+// 发布时忘了先构建，发出去的就是旧产物或根本没有 `dist`——这条判据把「记得构建」变成清单的一部分。
+const publishHookProblems: string[] = [];
+if (manifest.private !== true) {
+  const scripts = manifest.scripts as Record<string, string> | undefined;
+  const hook = scripts?.["prepublishOnly"] ?? "";
+  if (hook === "") publishHookProblems.push("缺 prepublishOnly");
+  else if (!hook.includes("devkit build"))
+    publishHookProblems.push("prepublishOnly 没调 devkit build：" + hook);
+}
+
 if (!hasSrc) {
-  console.log(JSON.stringify({ pkg: manifest.name, dir: cwd, skipped: true }));
+  console.log(JSON.stringify({ pkg: manifest.name, dir: cwd, skipped: true, publishHookProblems }));
   process.exit(0);
 }
 const files = await sourceFiles(join(cwd, "src"));
@@ -449,6 +461,7 @@ console.log(
     contractValueEdges,
     remoteLiterals,
     publishExportGaps,
+    publishHookProblems,
     doubleAssertions,
     // 测试域的同一判据（分开计数、分开报）：见 §7 的注释。
     testDoubleAssertions,

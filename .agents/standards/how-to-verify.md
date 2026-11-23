@@ -66,7 +66,7 @@
 ## 交付与发布
 
 - **发布线（集合、形态、版本、通道、验收）的 home 是[设计 npm 发布线](../designs/20261118-npm发布线.md)**；这里只写验证入口。
-- **两条通道**：GitHub Packages 只走 CI——[`.github/workflows/release.yml`](../../.github/workflows/release.yml) 在
+- **三条通道**：GitHub Packages 只走 CI——[`.github/workflows/release.yml`](../../.github/workflows/release.yml) 在
   `main` / `next` 推送时自动发未发布的新版本；npmjs 只经本地 `just publish-npm`（[ADR-npmjs 发布走本地命令](../adrs/20261118-npmjs发布走本地命令.md)）。其他形式的 `pnpm publish` 一律禁止。
 - **本地模拟 registry 是默认地址**：`just publish-npm` 不带 `--registry` 时发到
   [`tool/npr`](../../tool/npr/README.md) 的 verdaccio（`http://127.0.0.1:7677/`）——手滑跑一条只会发到本机。
@@ -77,8 +77,12 @@
 - **registry 由 scope 映射兜底**：[`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) 的 `registries` 把
   `@morlay` 指向本地；scope 级映射会盖掉命令行 `--registry`，所以 `publish.ts` 逐次用
   `--config.@morlay:registry=<url>` 覆盖。加通道或换地址时先确认这一条没被绕过。
-- **发布前先构建**：`just dts` → `just build`（清单与产物是发布的前提，不是发布命令的副作用）；
+- **发布前先构建**：`just build`（清单、产物与声明树都在这一步；声明树不由人工先跑 `just dts`）；
+  每个发布包的 `prepublishOnly` 也会在 `pnpm publish` 前再跑一次 `devkit build`，不会发出旧产物；
+  发布顺序由 pnpm 按 workspace 的依赖图排（串行），不用人工指定先后。
   `just publish-npm --dry-run` 先看包名、版本与 dist-tag。
+- **发布前验收的 registry**：`just verify-release` 的真装默认从本地模拟 registry 解析依赖（判据 9）；
+  真发 npmjs 前用 `just verify-release --registry https://registry.npmjs.org/` 再验一次。
 - **`check` job 是唯一的质量门**：`just prepare` → `just lint` → `just test`（注入 `TEST_PG_URL`）→
   `just build`。这四条与本地判据同一套命令。
 - **dist-tag 随版本号走**：稳定版 → `latest`；`-alpha.*` → `alpha`；其余预发布 → `next`；预发布绝不落 `latest`。

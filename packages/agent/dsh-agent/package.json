@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-agent",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "agent 的运行时骨架：会话与 agent 的注册表、LLM 调用、系统提示词、工具注册表和 agent loop。",
   "files": [
@@ -42,7 +42,22 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-agent"
+  },
   "dependencies": {
+    "@morlay/dsh-fs": "workspace:^",
+    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-setting": "workspace:^",
+    "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-app": "workspace:^"
+  },
+  "devDependencies": {
+    "@morlay/dsh-agent": "workspace:^",
+    "@morlay/dsh-auth": "workspace:^",
+    "@morlay/dsh-session": "workspace:^"
+  },
+  "peerDependencies": {
     "@deepseek-ai/cordis-plugin-timer": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-default-model": "workspace:^",
@@ -61,17 +76,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
-    "@deepseek-ai/dsh-working-directory": "workspace:^",
-    "@morlay/dsh-fs": "workspace:^",
-    "@morlay/dsh-session": "workspace:^",
-    "@morlay/dsh-setting": "workspace:^",
-    "@morlay/zephyr": "workspace:^",
-    "@morlay/zephyr-app": "workspace:^"
-  },
-  "devDependencies": {
-    "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-auth": "workspace:^",
-    "@morlay/dsh-session": "workspace:^"
+    "@deepseek-ai/dsh-working-directory": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

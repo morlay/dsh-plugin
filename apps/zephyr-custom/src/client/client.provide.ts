@@ -35,7 +35,7 @@ import { provideAgentTeamUi } from "@morlay/dsh-agent-team/ui";
 import { provideFileUploadUi } from "@morlay/dsh-upload/ui";
 import { provideJobUi } from "@morlay/dsh-job/ui";
 import { provideSessionModeUi } from "@morlay/session-mode/ui";
-import { provideBetterSessionUi } from "@morlay/better-session/ui";
+import { provideBetterSessionUi } from "@morlay/session-rdb/ui";
 import { provideDesktopPanelUi } from "@morlay/zephyr-desktop-panel/ui";
 
 /**

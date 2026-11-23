@@ -1,6 +1,6 @@
 {
   "name": "@morlay/dsh-agent-instruction",
-  "version": "0.0.1",
+  "version": "0.2.0-alpha.0",
   "private": false,
   "description": "把仓库里的 agent 指令按字节上限注入系统提示词。",
   "files": [
@@ -22,8 +22,10 @@
       "./package.json": "./package.json"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-agent-instruction"
+  },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-instructions": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
     "@morlay/zephyr": "workspace:^"
   },
@@ -32,6 +34,9 @@
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-instruction": "workspace:^",
     "@morlay/dsh-fs": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-agent-instructions": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

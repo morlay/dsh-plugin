@@ -261,9 +261,6 @@ importers:
       '@morlay/agent-use':
         specifier: workspace:^
         version: link:../../packages/agent-ex/agent-use
-      '@morlay/better-session':
-        specifier: workspace:^
-        version: link:../../packages/agent-ex/better-session
       '@morlay/configurable-sandbox':
         specifier: workspace:^
         version: link:../../packages/agent-ex/configurable-sandbox
@@ -339,6 +336,9 @@ importers:
       '@morlay/session-mode':
         specifier: workspace:^
         version: link:../../packages/agent-ex/session-mode
+      '@morlay/session-rdb':
+        specifier: workspace:^
+        version: link:../../packages/agent-ex/session-rdb
       '@morlay/zephyr':
         specifier: workspace:*
         version: link:../../packages/zephyr/zephyr
@@ -414,8 +414,99 @@ importers:
         specifier: workspace:^
         version: link:../../zephyr/zephyr
 
-  packages/agent-ex/better-session:
+  packages/agent-ex/configurable-sandbox:
     dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/dsh-agent':
+        specifier: workspace:^
+        version: link:../../agent/dsh-agent
+      '@morlay/dsh-fs':
+        specifier: workspace:^
+        version: link:../../agent/dsh-fs
+      '@morlay/dsh-permission':
+        specifier: workspace:^
+        version: link:../../agent/dsh-permission
+      '@morlay/dsh-sandbox':
+        specifier: workspace:^
+        version: link:../../agent/dsh-sandbox
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+      smol-toml:
+        specifier: ^1.9.0
+        version: 1.9.1
+
+  packages/agent-ex/session-mode:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/dsh-agent':
+        specifier: workspace:^
+        version: link:../../agent/dsh-agent
+      '@morlay/dsh-fs':
+        specifier: workspace:^
+        version: link:../../agent/dsh-fs
+      '@morlay/dsh-ptc':
+        specifier: workspace:^
+        version: link:../../agent/dsh-ptc
+      '@morlay/dsh-session':
+        specifier: workspace:^
+        version: link:../../agent/dsh-session
+      '@morlay/dsh-skill':
+        specifier: workspace:^
+        version: link:../../agent/dsh-skill
+      '@morlay/dsh-storage':
+        specifier: workspace:^
+        version: link:../../agent/dsh-storage
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+      '@morlay/zephyr-ui':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-ui
+      react:
+        specifier: 18.x
+        version: 18.3.1
+      smol-toml:
+        specifier: ^1.9.0
+        version: 1.9.1
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
+    devDependencies:
+      '@morlay/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../agent/dsh-agent-loop
+      '@morlay/dsh-compaction':
+        specifier: workspace:^
+        version: link:../../agent/dsh-compaction
+      '@morlay/dsh-session-persistence':
+        specifier: workspace:^
+        version: link:../../agent/dsh-session-persistence
+      '@morlay/session-rdb':
+        specifier: workspace:^
+        version: link:../session-rdb
+      '@testing-library/react':
+        specifier: ^16.3.0
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.1
+
+  packages/agent-ex/session-rdb:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
       '@morlay/dsh-agent':
         specifier: workspace:^
         version: link:../../agent/dsh-agent
@@ -456,97 +547,15 @@ importers:
         specifier: 4.6.6
         version: 4.6.6
     devDependencies:
-      '@morlay/better-session':
+      '@morlay/dsh-agent-loop':
+        specifier: workspace:^
+        version: link:../../agent/dsh-agent-loop
+      '@morlay/dsh-compaction':
+        specifier: workspace:^
+        version: link:../../agent/dsh-compaction
+      '@morlay/session-rdb':
         specifier: workspace:^
         version: 'link:'
-      '@morlay/dsh-agent-loop':
-        specifier: workspace:^
-        version: link:../../agent/dsh-agent-loop
-      '@morlay/dsh-compaction':
-        specifier: workspace:^
-        version: link:../../agent/dsh-compaction
-
-  packages/agent-ex/configurable-sandbox:
-    dependencies:
-      '@morlay/dsh-agent':
-        specifier: workspace:^
-        version: link:../../agent/dsh-agent
-      '@morlay/dsh-fs':
-        specifier: workspace:^
-        version: link:../../agent/dsh-fs
-      '@morlay/dsh-permission':
-        specifier: workspace:^
-        version: link:../../agent/dsh-permission
-      '@morlay/dsh-sandbox':
-        specifier: workspace:^
-        version: link:../../agent/dsh-sandbox
-      '@morlay/zephyr':
-        specifier: workspace:^
-        version: link:../../zephyr/zephyr
-      '@morlay/zephyr-app':
-        specifier: workspace:^
-        version: link:../../zephyr/zephyr-app
-      smol-toml:
-        specifier: ^1.9.0
-        version: 1.9.1
-
-  packages/agent-ex/session-mode:
-    dependencies:
-      '@morlay/dsh-agent':
-        specifier: workspace:^
-        version: link:../../agent/dsh-agent
-      '@morlay/dsh-fs':
-        specifier: workspace:^
-        version: link:../../agent/dsh-fs
-      '@morlay/dsh-ptc':
-        specifier: workspace:^
-        version: link:../../agent/dsh-ptc
-      '@morlay/dsh-session':
-        specifier: workspace:^
-        version: link:../../agent/dsh-session
-      '@morlay/dsh-skill':
-        specifier: workspace:^
-        version: link:../../agent/dsh-skill
-      '@morlay/dsh-storage':
-        specifier: workspace:^
-        version: link:../../agent/dsh-storage
-      '@morlay/zephyr':
-        specifier: workspace:^
-        version: link:../../zephyr/zephyr
-      '@morlay/zephyr-app':
-        specifier: workspace:^
-        version: link:../../zephyr/zephyr-app
-      '@morlay/zephyr-ui':
-        specifier: workspace:^
-        version: link:../../zephyr/zephyr-ui
-      react:
-        specifier: 18.x
-        version: 18.3.1
-      smol-toml:
-        specifier: ^1.9.0
-        version: 1.9.1
-      zod:
-        specifier: 4.6.6
-        version: 4.6.6
-    devDependencies:
-      '@morlay/better-session':
-        specifier: workspace:^
-        version: link:../better-session
-      '@morlay/dsh-agent-loop':
-        specifier: workspace:^
-        version: link:../../agent/dsh-agent-loop
-      '@morlay/dsh-compaction':
-        specifier: workspace:^
-        version: link:../../agent/dsh-compaction
-      '@morlay/dsh-session-persistence':
-        specifier: workspace:^
-        version: link:../../agent/dsh-session-persistence
-      '@testing-library/react':
-        specifier: ^16.3.0
-        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@types/react':
-        specifier: ~18.3.1
-        version: 18.3.1
 
   packages/agent/dsh-agent:
     dependencies:
@@ -1574,6 +1583,88 @@ importers:
       oxc-transform:
         specifier: ^0.154.0
         version: 0.154.0
+
+  packages/dsh-bundle/agent-use:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/agent-use':
+        specifier: workspace:^
+        version: link:../../agent-ex/agent-use
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+    devDependencies:
+      '@morlay/dsh-agent-use-profile':
+        specifier: workspace:^
+        version: 'link:'
+
+  packages/dsh-bundle/better-session:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/session-rdb':
+        specifier: workspace:^
+        version: link:../../agent-ex/session-rdb
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+      react:
+        specifier: 18.x
+        version: 18.3.1
+    devDependencies:
+      '@morlay/better-session':
+        specifier: workspace:^
+        version: 'link:'
+
+  packages/dsh-bundle/configurable-sandbox:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/configurable-sandbox':
+        specifier: workspace:^
+        version: link:../../agent-ex/configurable-sandbox
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+    devDependencies:
+      '@morlay/dsh-configurable-sandbox-profile':
+        specifier: workspace:^
+        version: 'link:'
+
+  packages/dsh-bundle/session-mode:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/util/home-paths
+      '@morlay/session-mode':
+        specifier: workspace:^
+        version: link:../../agent-ex/session-mode
+      '@morlay/zephyr':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr
+      '@morlay/zephyr-app':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-app
+      react:
+        specifier: 18.x
+        version: 18.3.1
+    devDependencies:
+      '@morlay/dsh-session-mode-profile':
+        specifier: workspace:^
+        version: 'link:'
 
   packages/zephyr-desktop/zephyr-desktop-bundle:
     dependencies:

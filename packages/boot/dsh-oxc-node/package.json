@@ -27,6 +27,9 @@
       ".": "./register.mjs"
     }
   },
+  "scripts": {
+    "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-oxc-node"
+  },
   "dependencies": {
     "@oxc-project/runtime": "^0.154.0",
     "oxc-transform": "^0.154.0"
