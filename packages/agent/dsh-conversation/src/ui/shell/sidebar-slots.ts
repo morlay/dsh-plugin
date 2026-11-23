@@ -1,8 +1,7 @@
 // 上游侧栏骨架（client 行）：品牌、新建会话、panellist、设置与折叠全部由 `ui-sidebar` 渲染。
 //
-// 为什么不再自己画侧栏：`SessionListView` 那份自写骨架与上游在同一个 `sidebar` 位置（single）上互斥，
-// 而且它只复制了视觉、没有 `panellist` / 快捷键 / 折叠这些交互。这一行装上去之后，
-// `sidebar.workspaces` 里的上游 `WorkspaceBrowser` 才真正挂在骨架里，而不是挂在自写的 `<section>` 里。
+// 骨架是 `sidebar` 那个 single 位置的声明方——`sidebar.workspaces` 里的上游 `WorkspaceBrowser`、
+// `sidebar.settings`、`sidebar.footer.action` 这些条目都挂在它下面。
 import * as UiSidebarPlugin from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";

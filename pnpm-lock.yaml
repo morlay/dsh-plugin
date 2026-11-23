@@ -1020,6 +1020,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session-status':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-session-status
+      '@deepseek-ai/dsh-client-ui-sidebar-browser':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-browser
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-workspace

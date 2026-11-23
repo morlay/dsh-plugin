@@ -5,6 +5,7 @@
 // 不放在应用里、也不进框架链。
 import { provide, type ProviderList } from "@morlay/zephyr";
 import { SessionPanelSlots } from "./session-panel-slots.ts";
+import { SidebarBrowserSlots } from "./sidebar-browser-slots.ts";
 import { SidebarDocumentPreviewSlots } from "./sidebar-document-preview-slots.ts";
 import { SidebarRightSlots } from "./sidebar-right-slots.ts";
 // 终端那四行的 home 是 shell 域（上游 ui-sidebar-terminal + terminal-controller 的 client 半）：
@@ -16,6 +17,7 @@ import { SidebarSlots } from "./sidebar-slots.ts";
 import { SidebarFilesSlots, WorkspaceFilesResource } from "@morlay/dsh-workspace/ui";
 
 export { SessionPanelSlots } from "./session-panel-slots.ts";
+export { SidebarBrowserSlots } from "./sidebar-browser-slots.ts";
 export { SidebarDocumentPreviewSlots } from "./sidebar-document-preview-slots.ts";
 export { SidebarRightSlots } from "./sidebar-right-slots.ts";
 export {
@@ -47,6 +49,8 @@ export function provideSessionShellSlots(): ProviderList {
     // 会话面板：`panel.section` / `panel.indicator` 等槽位的声明方（job / subagent 的条目挂在它下面）。
     SessionPanelSlots,
     ...provideShellUi(),
+    // 右栏的「浏览器」标签（上游 `ui-sidebar-browser`）：文件树与预览整块由它渲染。
+    SidebarBrowserSlots,
     SidebarFilesSlots,
     // `file` 资源 provider：排在 `files` 之后（它读那份 「工作区文件组」），
     // 又要排在预览之前（预览的 `useResource('file')` 靠它）。
