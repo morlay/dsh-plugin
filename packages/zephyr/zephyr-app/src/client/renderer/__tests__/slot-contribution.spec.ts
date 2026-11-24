@@ -95,8 +95,11 @@ describe("装配期依赖断言", { timeout: 10_000 }, () => {
     }
 
     // 手写 try/catch：`rejects.toThrow` 会去格式化错误里挂着的注入占位代理，读它的属性会抛。
+    // `@ts-expect-error`：这条用例要的就是「缺依赖」——`bootstrapApplication` 的编译期检查会拒绝它，
+    // 断言的正是运行期也拒绝（两处都得拦）。
     let message = "";
     try {
+      // @ts-expect-error 缺 RemoteFace 的提供者：这是用例的前提。
       await bootstrapApplication({
         providers: [SlotsDefault, NeedsRemoteDefault],
         timeoutMs: 5_000,

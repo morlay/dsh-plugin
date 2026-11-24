@@ -10,7 +10,6 @@ import { asRdbStore } from "@morlay/session-rdb";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { WorkspaceController } from "@morlay/dsh-workspace/ui";
 import type { WorkspaceDomainState } from "@morlay/dsh-workspace/contract";
-import { RemoteHandlers } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
 import { ToolCallId } from "@morlay/dsh-agent/contract";
@@ -151,8 +150,7 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
     { provide: WorkspaceController, useValue: workspaceListStub },
     {
       provide: LocalRemote,
-      useFactory: () =>
-        new LocalRemote((endpoint, payload) => host.handlers.invoke(endpoint, payload)),
+      useValue: new LocalRemote((endpoint, payload) => host.handlers.invoke(endpoint, payload)),
     },
     SessionAdminEndpointClient,
     ConversationManagerController,

@@ -19,7 +19,6 @@ import type { UserMessage } from "@morlay/dsh-agent";
 import { MessageId } from "@morlay/dsh-agent";
 import { FakeLlmAdapter } from "@morlay/dsh-agent/testing";
 import { bootstrapApplication, configure, Injectable, without } from "@morlay/zephyr";
-import { Events } from "@morlay/dsh-session";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
 import { Llm } from "@morlay/dsh-agent";
 import { AgentLoop } from "../contract/index.ts";

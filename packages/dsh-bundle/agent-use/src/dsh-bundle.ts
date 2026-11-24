@@ -1,10 +1,4 @@
-import {
-  bootstrapApplication,
-  providerOfPlugin,
-  type Context,
-  type Newable,
-  type ProviderEntry,
-} from "@morlay/zephyr";
+import { bootstrapApplication, type Context, type ProviderEntry } from "@morlay/zephyr";
 import { provideAgentUse } from "@morlay/agent-use";
 
 const providers = (): readonly ProviderEntry[] => [...provideAgentUse()];

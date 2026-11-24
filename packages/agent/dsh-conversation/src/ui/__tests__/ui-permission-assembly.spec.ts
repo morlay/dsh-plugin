@@ -139,7 +139,7 @@ async function boot(): Promise<App> {
   if (host.tryGet(RemoteHandlers) === undefined) {
     throw new Error(`host 装配缺少 RemoteHandlers：${String(host.tryGet(RemoteHandlersDefault))}`);
   }
-  const hostInvoker = async (endpoint: string, payload: unknown) =>
+  const hostInvoker = async (endpoint: string, payload: Readonly<Record<string, unknown>>) =>
     host.get(RemoteHandlers).invoke(endpoint, payload);
   const app = await bootstrapApplication({
     providers: [

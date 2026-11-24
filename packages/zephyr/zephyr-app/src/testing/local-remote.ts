@@ -20,7 +20,10 @@ interface LocalDescriptor {
 }
 
 /** 一条端点的执行面（`(endpoint, payload) => 结果`）：host 装配里的 `RemoteHandlers.invoke`。 */
-export type EndpointInvoker = (endpoint: string, payload: unknown) => Promise<unknown>;
+export type EndpointInvoker = (
+  endpoint: string,
+  payload: Readonly<Record<string, unknown>>,
+) => Promise<unknown>;
 
 @Injectable()
 export class LocalRemote extends Remote {

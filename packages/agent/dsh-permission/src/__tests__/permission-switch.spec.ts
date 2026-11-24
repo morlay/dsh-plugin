@@ -97,7 +97,7 @@ async function boot(): Promise<{
     timeoutMs: 20_000,
   });
   apps.push(host);
-  const hostInvoker = async (endpoint: string, payload: unknown) =>
+  const hostInvoker = async (endpoint: string, payload: Readonly<Record<string, unknown>>) =>
     host.get(RemoteHandlers).invoke(endpoint, payload);
   // client 装配：只持传输（`LocalRemote` 是两 ctx 之间唯一的桥）。
   const app = await bootstrapApplication({

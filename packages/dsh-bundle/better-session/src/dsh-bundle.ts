@@ -1,12 +1,5 @@
 import { dshHomePath } from "@deepseek-ai/dsh-home-paths";
-import {
-  bootstrapApplication,
-  configure,
-  providerOfPlugin,
-  type Context,
-  type Newable,
-  type ProviderEntry,
-} from "@morlay/zephyr";
+import { bootstrapApplication, configure, type Context, type ProviderEntry } from "@morlay/zephyr";
 import { provideBetterSession, provideSessionBalance } from "@morlay/session-rdb/server";
 import { AppEnvDefault, provideAppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 

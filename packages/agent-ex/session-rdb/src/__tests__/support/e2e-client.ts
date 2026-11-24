@@ -99,7 +99,7 @@ export async function startClient(handlers: RemoteHandlers): Promise<Client> {
     // 不把 host 的 `RemoteHandlers` 也塞进 client 装配——那是 host 的事，同 ctx 会抢服务名。
     {
       provide: LocalRemote,
-      useFactory: () => new LocalRemote((endpoint, payload) => handlers.invoke(endpoint, payload)),
+      useValue: new LocalRemote((endpoint, payload) => handlers.invoke(endpoint, payload)),
     },
     { provide: SessionController, useValue: composer },
     { provide: Locale, useValue: localeStub },

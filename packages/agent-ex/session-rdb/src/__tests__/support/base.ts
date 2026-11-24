@@ -17,9 +17,9 @@ import { SessionProjectionRegistry } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { bootstrapApplication, EventEmitter, Injectable } from "@morlay/zephyr";
+import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import type { Context, TokenClass } from "@morlay/zephyr";
-import { injectPlaceholderOf, kFace, tokenMetaOf } from "@morlay/zephyr/testing";
+import { tokenMetaOf } from "@morlay/zephyr/testing";
 import {
   SessionBranchRdb,
   SessionPersistenceRdb,
@@ -192,54 +192,6 @@ function instancesOf(ctx: MountedContext): Map<object, unknown> {
   const created = new Map<object, unknown>();
   holder[kInstances] = created;
   return created;
-}
-// 单行装配。顺序与 `bootstrapApplication` 一致：注入 → 事件字段 → 发布 → onInit。
-async function mountRow(
-  ctx: MountedContext,
-  entry: RowEntry,
-  config: unknown,
-): Promise<() => Promise<void>> {
-  if (typeof entry !== "function") {
-    // 值条目：没有生命周期，只有「按契约名注册」这一步。
-    publishToken(ctx, entry.provide, entry.useValue);
-    return async () => undefined;
-  }
-  const normalizer = (entry as { Config?: (input?: unknown) => unknown }).Config;
-  const normalized = typeof normalizer === "function" ? normalizer(config ?? {}) : config;
-  const instance = new entry(normalized as never);
-  fillInjects(ctx, instance);
-  for (const key of Object.keys(instance as object)) {
-    const value = (instance as Record<string, unknown>)[key];
-    if (value instanceof EventEmitter) value.onInit(ctx as never);
-  }
-  const lifecycle = instance as {
-    onInit?(ctx: unknown): Promise<void> | void;
-    onDispose?(): Promise<void> | void;
-  };
-  await lifecycle.onInit?.(ctx);
-  // 适配行（`fromCordis`）的契约面在上游插件里，`onInit` 之后才有：按契约名发布的是**面**，
-  // 不是包着它的那一行（`bootstrapApplication` 的 `bindFace` 同一口径）。发布因此排在 `onInit` 之后
-  // ——先发包装行的话，「已有就跳过」会让真面永远发不出去。
-  const face = (instance as Record<symbol, unknown>)[kFace];
-  publishToken(ctx, entry, face ?? instance);
-  return async () => {
-    await lifecycle.onDispose?.();
-  };
-}
-
-// 回填注入：字段上是 `inject(...)` 的占位，按令牌派生名从 ctx 取。
-function fillInjects(ctx: MountedContext, instance: unknown): void {
-  if (typeof instance !== "object" || instance === null) return;
-  for (const key of Object.keys(instance)) {
-    const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
-    if (placeholder === undefined) continue;
-    const meta = tokenMetaOf(placeholder.token);
-    const resolved = instancesOf(ctx).get(meta.token) ?? ctx.get(meta.name, false);
-    if (resolved === undefined && placeholder.mode === "one") {
-      throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
-    }
-    (instance as Record<string, unknown>)[key] = resolved;
-  }
 }
 
 /**
