@@ -5,7 +5,7 @@
 import type { Resources as UpstreamResources } from "@deepseek-ai/dsh-client-resources/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "resources" })
 export abstract class Resources {
   abstract register(provider: Parameters<UpstreamResources["register"]>[0]): () => void;
 

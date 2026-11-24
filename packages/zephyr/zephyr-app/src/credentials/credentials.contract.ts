@@ -31,7 +31,7 @@ type CredentialsFace = Pick<
 /** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
 export type CredentialsCovered = AssertTrue<AssertCovered<CredentialProvider, CredentialsFace>>;
 
-@Injectable()
+@Injectable({ name: "credentials" })
 export abstract class Credentials implements CredentialsFace {
   abstract readonly resolve: CredentialsFace["resolve"];
 

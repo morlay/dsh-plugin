@@ -17,7 +17,7 @@ import { SessionProjectionRegistry } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { EventEmitter, Injectable } from "@morlay/zephyr";
+import { bootstrapApplication, EventEmitter, Injectable } from "@morlay/zephyr";
 import type { Context, TokenClass } from "@morlay/zephyr";
 import { injectPlaceholderOf, kFace, tokenMetaOf } from "@morlay/zephyr/testing";
 import {
@@ -152,40 +152,47 @@ export async function mountRows(
 
   // 清单决定装什么：`sessions` 由清单里的会话存储行注册，这里不预先顶一份。
   const ctx = options.ctx ?? createCtx({ sessions: false });
-  // 运行环境与 logger：回填注入时按**上游注册名**读它们。
-  publish(ctx, "app-env", new FakeAppEnv());
+  // 运行环境与 logger：按**令牌**发布（名字由 `@Injectable` / 派生名决定，不在测试里写死）。
+  publishToken(ctx, AppEnv, new FakeAppEnv());
   publish(ctx, "logger", (ctx as unknown as { logger: unknown }).logger);
   options.before?.(ctx);
 
-  const undo: Array<() => Promise<void>> = [];
-  for (const entry of rows) {
-    const config = typeof entry === "function" ? options.config?.get(entry) : undefined;
-    undo.push(await mountRow(ctx, entry, config));
-  }
-
-  const tryGet = <T>(token: TokenClass<T>): T | undefined =>
-    ctx.get(tokenMetaOf(token as unknown as object).name, false) as T | undefined;
+  // 装配只有一处实现：`bootstrapApplication`（传入已有 ctx，不另起一棵树）。
+  // 测试曾经平行实现过一套「实例化 → 回填注入 → 发布 → onInit」，名字/令牌规则一变就要改两处。
+  const app = await bootstrapApplication({
+    providers: rows.map((entry) => {
+      const config = typeof entry === "function" ? options.config?.get(entry) : undefined;
+      return config === undefined ? entry : ({ provide: entry, config } as never);
+    }),
+    ctx: ctx as never,
+  });
 
   return {
     ctx,
     dataDir,
-    tryGet,
+    tryGet: <T>(token: TokenClass<T>): T | undefined => app.tryGet(token),
     get<T>(token: TokenClass<T>): T {
-      const found = tryGet<T>(token);
-      if (found === undefined) {
-        throw new Error(
-          `没有提供者：${tokenMetaOf(token as unknown as object).name}（清单里没有它）`,
-        );
-      }
-      return found;
+      return app.get(token);
     },
     dispose: async (): Promise<void> => {
-      for (const dispose of [...undo].reverse()) await dispose().catch(() => undefined);
+      await app.dispose();
       if (owned) await rm(dataDir, { recursive: true, force: true });
     },
   };
 }
 
+// 装配内的令牌表：按**令牌对象**索引。ctx 的 store 是名字索引，跨边界会退化；
+// 测试里的 `get(Class)` / 回填注入都先查这张表，查不到再回落 ctx 的名字（上游按名字读的场景）。
+const kInstances = Symbol.for("zephyr.test.instances");
+
+function instancesOf(ctx: MountedContext): Map<object, unknown> {
+  const holder = ctx as unknown as Record<symbol, Map<object, unknown> | undefined>;
+  const existing = holder[kInstances];
+  if (existing !== undefined) return existing;
+  const created = new Map<object, unknown>();
+  holder[kInstances] = created;
+  return created;
+}
 // 单行装配。顺序与 `bootstrapApplication` 一致：注入 → 事件字段 → 发布 → onInit。
 async function mountRow(
   ctx: MountedContext,
@@ -227,7 +234,7 @@ function fillInjects(ctx: MountedContext, instance: unknown): void {
     const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
     if (placeholder === undefined) continue;
     const meta = tokenMetaOf(placeholder.token);
-    const resolved = ctx.get(meta.name, false);
+    const resolved = instancesOf(ctx).get(meta.token) ?? ctx.get(meta.name, false);
     if (resolved === undefined && placeholder.mode === "one") {
       throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
     }
@@ -246,6 +253,7 @@ function fillInjects(ctx: MountedContext, instance: unknown): void {
  */
 export function publishToken(ctx: MountedContext, token: object, value: unknown): void {
   const meta = tokenMetaOf(token);
+  instancesOf(ctx).set(meta.token, value);
   publish(ctx, meta.name, value);
   if (meta.alias === undefined) return;
   publish(ctx, meta.alias, value);

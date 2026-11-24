@@ -54,6 +54,17 @@ export class AgentPresetsStub {
   }
 
   /**
+   * 按 preset 作用域解析一个服务（上游 `agentPresets` 契约的成员）。
+   *
+   * 本部署只有一份固定行清单，没有 per-preset 的作用域；上游 `skills/list` 等消费方按契约调用它，
+   * 这里明确回答「没有作用域覆盖」——返回 `undefined` 即表示用装配全局的那一份。
+   * @returns 永远 `undefined`。
+   */
+  serviceFor(): undefined {
+    return undefined;
+  }
+
+  /**
    * 某个会话跑的 preset（会话 header 里记的那一份，缺省是本部署的那一个）。
    * @param session - 目标会话。
    * @returns preset id。

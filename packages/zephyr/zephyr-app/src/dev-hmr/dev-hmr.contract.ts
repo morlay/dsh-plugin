@@ -16,7 +16,7 @@ export interface DevHmrHooks {
   readonly restart: (files: readonly string[]) => Promise<void>;
 }
 
-@Injectable()
+@Injectable({ name: "hmr" })
 export abstract class DevHmr {
   /**
    * 装上钩子，开始盯变更。

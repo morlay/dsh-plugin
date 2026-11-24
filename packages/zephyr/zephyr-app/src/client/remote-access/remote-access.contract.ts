@@ -16,7 +16,7 @@ export type AccessEffect = (() => void) | Iterable<() => void>;
 // 上游 `ui-*` 行按驼峰名 `remoteAccess` 严格读（`ui-session` 的 `inject` 声明里就是它）：派生名
 // `remote-access` 之外再发布一份别名——与 `WebServer` 的 `webServer` 同一口径。没有它，`ui-session`
 // 这类"不给 deps、靠 store 满足"的行起不来。
-@Injectable({ name: "remoteAccess" })
+@Injectable()
 export abstract class RemoteAccess {
   /**
    * 某个资源上是否允许某种操作。

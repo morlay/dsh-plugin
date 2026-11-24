@@ -5,7 +5,7 @@
 // `client/remote/remote.decorator.ts`）。这一层只给上游面本身与装载面。
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "remote" })
 export abstract class Remote {
   /**
    * 上游实例本身（`remote.<group>.<method>` 就在它上面）。

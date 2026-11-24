@@ -26,7 +26,9 @@ export class SessionLayout extends fromCordis(UiSession, UiSessionPlugin) {
       // 实例的 ctx 是**真 ctx**（deps 代理会让子服务名在代理之外解析，读它时抛
       // `cannot get property "uiSession.sessionStatus" without inject`）。它要的四个名字
       // （`sessions` / `slots` / `remote` / `remoteAccess`）都在 store 里，靠名字满足即可。
-      await this.mount(ctx);
+      // `remoteAccess` 由「宿主那份」提供（取舍表），浏览器进程里未必有这个名字；
+      // 用 `deps` 显式交进去即可——`mount` 只按名字解析注入，不改上游拿到的真 ctx。
+      await this.mount(ctx, undefined, { remoteAccess: this.remoteAccess });
     } catch (error) {
       // 带阶段的错误：不然上游 `apply` 里的失败会被错误边界吞成空白页。
       throw new Error(`SessionLayout.mount 失败：${(error as Error).message}`, { cause: error });

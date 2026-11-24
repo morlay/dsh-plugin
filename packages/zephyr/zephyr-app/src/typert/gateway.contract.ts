@@ -68,7 +68,7 @@ export interface TypertGatewayWireStream {
  * **实现不在这里**：上游 `api/gateway` 的 `TypertGatewayService` 就是它（`super(ctx, 'typertGateway')`），
  * 由 `ApiGatewayDefault` 装上并发布。这里只声明契约 + 服务名，`inject(TypertGateway)` 按名字接到那个实例上。
  */
-@Injectable()
+@Injectable({ name: "typertGateway" })
 export abstract class TypertGateway {
   /**
    * 上游注册名：`ctx.typertGateway`。

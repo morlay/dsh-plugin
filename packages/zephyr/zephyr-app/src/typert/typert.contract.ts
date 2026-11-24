@@ -6,7 +6,7 @@ import { Injectable } from "@morlay/zephyr";
 import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type TypertRegistry from "@deepseek-ai/dsh-typert-registry";
 
-@Injectable()
+@Injectable({ name: "typert" })
 export abstract class Typert {
   abstract readonly local: TypertRegistry["local"];
 

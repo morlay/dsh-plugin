@@ -15,7 +15,7 @@ import { Injectable } from "@morlay/zephyr";
 /** 上游其余成员（本仓只用到注册与打开，但契约必须列全：少一条，上游用到时读到 `undefined`）。 */
 type Upstream = UpstreamContextMenus;
 
-@Injectable()
+@Injectable({ name: "contextMenus" })
 export abstract class ContextMenus {
   /** 注册一个可被菜单展示的对象类型。 */
   abstract readonly register: Upstream["register"];

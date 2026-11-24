@@ -14,7 +14,7 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 export type FileUploadCovered = AssertTrue<AssertCovered<FileUploadService, FileUpload>>;
 
 /** `ctx.fileUpload`：按会话身份暂存上传的服务。 */
-@Injectable()
+@Injectable({ name: "fileUpload" })
 export abstract class FileUpload {
   abstract readonly upload: FileUploadService["upload"];
 

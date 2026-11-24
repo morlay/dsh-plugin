@@ -2,7 +2,7 @@
 import type { Shortcuts as ShortcutsFace } from "@deepseek-ai/dsh-client-shortcuts/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "shortcuts" })
 export abstract class Shortcuts {
   abstract readonly register: ShortcutsFace["register"];
 

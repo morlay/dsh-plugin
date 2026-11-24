@@ -7,7 +7,7 @@ import type { CommandFileReceiptResolver } from "@deepseek-ai/dsh-commands";
 import { Injectable } from "@morlay/zephyr";
 import type { CommandContribution } from "./command-contribution.ts";
 
-@Injectable()
+@Injectable({ name: "commands" })
 export abstract class CommandRegistry {
   /** 登记一条命令；返回**这一条**的撤销函数（`@Command()` 生成的登记在行卸载时调它）。 */
   abstract register(contribution: CommandContribution): () => void;

@@ -8,7 +8,7 @@
 import type { ILayout } from "@deepseek-ai/dsh-client-ui-layout/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "layout" })
 export abstract class Layout {
   abstract readonly panelInfo: ILayout["panelInfo"];
 

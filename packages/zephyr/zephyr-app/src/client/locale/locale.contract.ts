@@ -21,7 +21,7 @@ export interface LocaleSnapshot {
   readonly revision: number;
 }
 
-@Injectable()
+@Injectable({ name: "locale" })
 export abstract class Locale {
   /** 注册一份字典，返回注销函数。 */
   abstract register(ns: string, dicts: LocaleDicts): () => void;

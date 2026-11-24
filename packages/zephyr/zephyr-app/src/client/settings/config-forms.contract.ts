@@ -3,7 +3,7 @@
 import type { ConfigForm } from "@deepseek-ai/dsh-client-ui-settings/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "configForms" })
 export abstract class ConfigForms {
   abstract get<T>(entryId: string): ConfigForm<T>;
 

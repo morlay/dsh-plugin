@@ -82,7 +82,8 @@ describe("session-rdb session query replacement", () => {
     // 归档集合来自 workspace registry（这里最小替身：契约面只有 archivedSessionIds）。
     // 在建行**之前**发布：本包注入 `WorkspaceRegistry` 令牌，注入在装配期回填。
     const { ctx, dispose } = await harness({}, (row) => {
-      publish(row, "workspace-registry", { archivedSessionIds: [SessionId("archived")] });
+      // 按**上游名**发布：`WorkspaceRegistry` 的 alias 就是 `workspaceRegistry`（装配器优先按别名采纳）。
+      publish(row, "workspaceRegistry", { archivedSessionIds: [SessionId("archived")] });
     });
     disposals.push(dispose);
     const persistence = ctx.sessionPersistence as unknown as {

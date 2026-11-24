@@ -5,7 +5,7 @@ import { Injectable } from "@morlay/zephyr";
 
 type Key = Parameters<SlotRegistry["entries"]>[0];
 
-@Injectable()
+@Injectable({ name: "slots" })
 export abstract class Slots {
   /**
    * 台账：本进程里**出现过**的所有位置 key。

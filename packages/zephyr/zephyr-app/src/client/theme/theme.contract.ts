@@ -2,7 +2,7 @@
 import type { ThemeRuntime } from "@deepseek-ai/dsh-client-ui-theme/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "theme" })
 export abstract class Theme {
   abstract readonly getTheme: ThemeRuntime["getTheme"];
 

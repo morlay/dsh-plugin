@@ -12,7 +12,7 @@ import type {
 } from "@deepseek-ai/dsh-client-ui-commands/client";
 import { Injectable } from "@morlay/zephyr";
 
-@Injectable()
+@Injectable({ name: "commandUi" })
 export abstract class CommandUi {
   /**
    * 登记一条客户端命令贡献（`/model` 的弹层就是这个）。
