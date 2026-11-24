@@ -81,14 +81,29 @@ describe("装配期依赖断言", { timeout: 10_000 }, () => {
       abstract readonly face: unknown;
     }
 
+    // 另一个契约：本用例里没有提供者，注入它必须在装配期就报错。
+    @Injectable()
+    abstract class RemoteFace {
+      abstract readonly invoke: unknown;
+    }
+
     @Injectable()
     class NeedsRemoteDefault extends NeedsRemote {
-      private readonly remote = inject("Remote" as never);
+      // 注入**契约**，不是字符串：`inject` 收的是令牌，名字只是装配期的事。
+      private readonly remote = inject(RemoteFace);
       readonly face = this.remote;
     }
 
-    await expect(
-      bootstrapApplication({ providers: [SlotsDefault, NeedsRemoteDefault], timeoutMs: 5_000 }),
-    ).rejects.toThrow(/Remote|not ready/u);
+    // 手写 try/catch：`rejects.toThrow` 会去格式化错误里挂着的注入占位代理，读它的属性会抛。
+    let message = "";
+    try {
+      await bootstrapApplication({
+        providers: [SlotsDefault, NeedsRemoteDefault],
+        timeoutMs: 5_000,
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/没有提供者|Remote/u);
   });
 });

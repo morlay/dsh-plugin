@@ -52,7 +52,7 @@ export type SessionQueryCovered = AssertTrue<AssertCovered<SessionQueryEngine, S
 /**
  * 会话查询：浏览 / 搜索 / 列表 / 读取。
  *
- * `@Injectable({ name: "sessionQuery" })` 是**上游名别名**：装配期与派生名 `session-query` **并存**
+ * ：装配期与派生名 `session-query` **并存**
  * 发布同一个实例（`bootstrap.ts` 的别名发布），不是第二份实现。必须叫这个名字，是因为上游有六个读者
  * 按驼峰名读 `this.ctx.sessionQuery`（`SessionReferenceResolver`、`SessionController` 与它的
  * history / skill-catalog、`SubagentManager`、`ui-deliverables` …）；而经 wire（typert gateway）分派时，

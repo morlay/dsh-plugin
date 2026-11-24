@@ -23,7 +23,12 @@ import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
+import {
+  AppEnv,
+  RemoteHandlers,
+  RemoteHandlersDefault,
+  type AppEnvValues,
+} from "@morlay/zephyr-app";
 import { SessionRemote } from "@morlay/zephyr-app/client";
 import { provideLocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -99,10 +104,10 @@ async function boot(): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   sessionId: string;
 }> {
-  const app = await bootstrapApplication({
+  // 两套装配两个 ctx：host = 会话 / agent / 权限 / 命令；client = sessions + 命令执行器。
+  const host = await bootstrapApplication({
     providers: [
-      // 进程内传输：`remote.upstream.commands.*` 直接打到本进程的 handler 表。
-      ...provideLocalRemote(),
+      RemoteHandlersDefault,
       ...provideSession(),
       ...provideSessionProjection(),
       FakeAppEnv,
@@ -114,7 +119,15 @@ async function boot(): Promise<{
       BashSandbox,
       ...providePermissionFor("workspace-write"),
       ...provideCommand(),
-      // 客户端面：`sessions` 服务 + 走 remote 的命令执行器（就是 `binding.session.command` 的实现）。
+    ],
+    timeoutMs: 30_000,
+  });
+  apps.push(host);
+  const hostInvoker = async (endpoint: string, payload: unknown) =>
+    host.get(RemoteHandlers).invoke(endpoint, payload);
+  const app = await bootstrapApplication({
+    providers: [
+      ...provideLocalRemote(hostInvoker),
       { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
       CommandEndpointClient,
       RemoteCommandRunner,

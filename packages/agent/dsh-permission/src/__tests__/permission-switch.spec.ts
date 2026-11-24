@@ -22,9 +22,14 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
+import {
+  AppEnv,
+  RemoteHandlers,
+  RemoteHandlersDefault,
+  type AppEnvValues,
+} from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
-import { LocalRemote } from "@morlay/zephyr-app/testing";
+import { provideLocalRemote } from "@morlay/zephyr-app/testing";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
@@ -63,10 +68,14 @@ afterEach(async () => {
  * @returns handler 表、会话 id 与 app。
  */
 async function boot(): Promise<{
-  app: Awaited<ReturnType<typeof bootstrapApplication>>;
+  /** 后端装配（会话 / agent / 权限 / 命令都在这一侧）。 */
+  host: Awaited<ReturnType<typeof bootstrapApplication>>;
+  /** 前端装配（只持传输，`LocalRemote` 是两 ctx 之间唯一的桥）。 */
+  client: Awaited<ReturnType<typeof bootstrapApplication>>;
   sessionId: string;
 }> {
-  const app = await bootstrapApplication({
+  // 两套装配两个 ctx：host = 会话 / agent / 权限 / 命令；client 只有传输与客户端形态。
+  const host = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
@@ -84,18 +93,23 @@ async function boot(): Promise<{
       ToolExecutorNative,
       { provide: AgentLoopDefault, config: { agents: [] } },
       RemoteHandlersDefault,
-      // 客户端半：目录走契约的客户端形态（`client.catalog()`），命令的客户端实例按需现造
-      // （它与宿主实现同一个令牌，同装配里两份会撞）。
-      LocalRemote,
     ],
     timeoutMs: 20_000,
   });
+  apps.push(host);
+  const hostInvoker = async (endpoint: string, payload: unknown) =>
+    host.get(RemoteHandlers).invoke(endpoint, payload);
+  // client 装配：只持传输（`LocalRemote` 是两 ctx 之间唯一的桥）。
+  const app = await bootstrapApplication({
+    providers: [...provideLocalRemote(hostInvoker)],
+    timeoutMs: 20_000,
+  });
   apps.push(app);
-  const sessionId = app.get(SessionStore).prepare().id;
-  await app
+  const sessionId = host.get(SessionStore).prepare().id;
+  await host
     .get(AgentLoop)
     .create(sessionId, { provider: "deepseek-official", model: "deepseek-flash" }, { cwd: root });
-  return { app, sessionId };
+  return { host, client: app, sessionId };
 }
 
 /**
@@ -104,9 +118,9 @@ async function boot(): Promise<{
  * @returns 可以直接 `execute(…)` 的客户端。
  */
 function commandClientOf(
-  app: Awaited<ReturnType<typeof bootstrapApplication>>,
+  client: Awaited<ReturnType<typeof bootstrapApplication>>,
 ): CommandEndpointClient {
-  return Object.assign(new CommandEndpointClient(), { remote: app.get(Remote) });
+  return Object.assign(new CommandEndpointClient(), { remote: client.get(Remote) });
 }
 
 /** 会话的 `permissions` 投影（宿主侧注册表里的当前值）。 */
@@ -123,13 +137,13 @@ function permissionOf(
 
 describe("权限 chip 的宿主侧", () => {
   it("`/permission danger-full-access` 真的把会话档位切过去", { timeout: 30_000 }, async () => {
-    const { app, sessionId } = await boot();
+    const { host, client, sessionId } = await boot();
     // 起点：装配给的默认档位。
-    expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "workspace-write" });
+    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
 
     // chip 点确认后发的那一行（上游 `submit` 就是 `live.command('/permission <preset>')`）。
     // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
-    const executed = await commandClientOf(app).execute({
+    const executed = await commandClientOf(client).execute({
       sessionId,
       name: "permission",
       input: "danger-full-access",
@@ -137,21 +151,24 @@ describe("权限 chip 的宿主侧", () => {
     expect(executed.result.kind, "/permission 应成功结算").toBe("success");
 
     // 会话档位变了……
-    expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "danger-full-access" });
+    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "danger-full-access" });
     // ……而"新会话的默认档位"不受影响（它由设置文档管，不随当前会话切换）。
-    const catalog = await app.get(PermissionPresetsEndpointClient).catalog();
+    // 端点客户端是**前端形态**：只挂 `Remote`，不进装配（后端那份是同令牌的宿主实现）。
+    const catalog = await Object.assign(new PermissionPresetsEndpointClient(), {
+      remote: client.get(Remote),
+    }).catalog();
     if (!catalog.ok) throw new Error("permissionPresets/catalog 失败：" + catalog.error.message);
     expect(catalog.value.defaultPreset).toBe("workspace-write");
   });
 
   it("不带 preset 的 `/permission` 只回报当前档位，不改它", { timeout: 30_000 }, async () => {
-    const { app, sessionId } = await boot();
-    const executed = await commandClientOf(app).execute({
+    const { host, client, sessionId } = await boot();
+    const executed = await commandClientOf(client).execute({
       sessionId,
       name: "permission",
       input: " ",
     });
     expect(executed.result.kind).toBe("success");
-    expect(permissionOf(app, sessionId)).toMatchObject({ currentValue: "workspace-write" });
+    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
   });
 });

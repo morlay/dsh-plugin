@@ -19,6 +19,7 @@ import {
   kRowOwner,
   providerOfPlugin,
   rowNameOf,
+  hasTokenMeta,
   tokenMetaOf,
   tokenNamed,
 } from "./token.ts";
@@ -79,13 +80,11 @@ export async function bootstrapApplication<const L extends ProviderList>(
   const ctx = options.ctx ?? new CordisContext();
   // 宿主树（ctx 是调用方传进来的）里已经发布的服务：装配只补自己拥有的行，依赖可以来自宿主。
   const reader = ctx.reflect as unknown as { get(name: string, strict?: boolean): unknown };
-  const hostedValue = (meta: { readonly name: string; readonly alias?: string }): unknown => {
+  const hostedValue = (meta: { readonly name: string }): unknown => {
     if (options.ctx === undefined) return undefined;
-    const aliased = meta.alias === undefined ? undefined : reader.get(meta.alias, false);
-    return aliased ?? reader.get(meta.name, false);
+    return reader.get(meta.name, false);
   };
-  const hosted = (meta: { readonly name: string; readonly alias?: string }): boolean =>
-    hostedValue(meta) !== undefined;
+  const hosted = (meta: { readonly name: string }): boolean => hostedValue(meta) !== undefined;
   // 诊断快照：装配过程一直在写，`app.get(Debugger).diagnostics()` 读到的就是最终结果。
   let snapshot: DebugSnapshot = { rows: [], names: [], tokens: [] };
   // 令牌表：单值 / 多值。per-agent 的装行能力要能在装每一行时读它（应用根的服务对它可见）。
@@ -135,11 +134,26 @@ export async function bootstrapApplication<const L extends ProviderList>(
   }> = [];
 
   // 一、构造实例并登记。依赖此刻还是占位，不读。
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
+    // 空条目来自 `provide*()` 的返回值被展平时的空洞：这里点名位置，比在下游报「令牌没有声明」省一轮排查。
+    if (entry === undefined || entry === null) {
+      throw new Error(
+        `装配清单第 ${index} 项是空条目（${String(entry)}）：检查 ` +
+          `provide*() 的返回值里是否混进了 undefined`,
+      );
+    }
     assertDslEntry(entry);
     const impl = (providerOfPlugin(entry) ?? entryOf(entry)) as typeof entryOf extends never
       ? never
       : ReturnType<typeof entryOf>;
+    // 令牌为空：条目形态不完整（常见于 `{ provide: undefined }` 或 `configure(X)` 的 X 为空）。
+    if (impl === undefined || impl === null) {
+      const keys =
+        entry !== null && typeof entry === "object" ? Object.keys(entry).join(",") : typeof entry;
+      throw new Error(
+        `装配清单第 ${index} 项没有令牌（条目形态：${keys}）：检查 provide / configure 的目标是否为空`,
+      );
+    }
     const meta = tokenMetaOf(impl as unknown as object);
     // 宿主已经提供了这一行（同一份服务已在 ctx 上）：不重复注册，直接用宿主那份。
     if (!meta.multi && hosted(meta)) continue;
@@ -158,16 +172,9 @@ export async function bootstrapApplication<const L extends ProviderList>(
           provide(name: string, value: unknown): void;
           get(name: string, strict?: boolean): unknown;
         };
+        // 服务名就是 `meta.name`：契约写 `@Injectable({ name })` 时它是上游名，不写时是 `zephyr-*` 派生名。
+        // 上游按驼峰读（`ctx.sessionPersistence`）能拿到，是因为那些契约的 `name` 就是驼峰名——不再有第二份别名。
         store.provide(meta.name, instance);
-        // `@Injectable({ name })` 的别名：上游按驼峰名严格读（`ctx.sessionPersistence` / `ctx.settings`），
-        // 只发派生名时它们拿到 `undefined` 然后**静默降级**。已存在就跳过（适配行的名字由上游自己注册）。
-        if (
-          meta.alias !== undefined &&
-          meta.alias !== meta.name &&
-          store.get(meta.alias, false) === undefined
-        ) {
-          store.provide(meta.alias, instance);
-        }
       }
     }
     rows.push({
@@ -298,10 +305,6 @@ export async function mountRow(
       };
       // cordis 的 logger 是原生属性、不是服务：与多行装配一样，直接把 ctx.logger 接到契约上。
       if (meta.name === "logger") return reader.logger;
-      if (meta.alias !== undefined) {
-        const aliased = reader.get(meta.alias, false);
-        if (aliased !== undefined) return aliased;
-      }
       return reader.get(meta.name, false);
     },
   );
@@ -389,7 +392,15 @@ function fillRow(instance: unknown, resolve: RowResolver): void {
   for (const key of Object.keys(instance)) {
     const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
     if (placeholder === undefined) continue;
-    const meta = tokenMetaOf(placeholder.token);
+    // 令牌为空/未声明时点名**哪个字段**：否则只看到「令牌没有声明」，还得回去猜实例。
+    let meta: ReturnType<typeof tokenMetaOf>;
+    try {
+      meta = tokenMetaOf(placeholder.token);
+    } catch (error) {
+      throw new Error(`${(error as Error).message}\n  字段：${instance.constructor.name}.${key}`, {
+        cause: error,
+      });
+    }
     assertShape(meta, placeholder.mode, instance);
     const resolved = resolve(meta, placeholder.mode);
     if (resolved === undefined && placeholder.mode === "one") {
@@ -402,9 +413,6 @@ function fillRow(instance: unknown, resolve: RowResolver): void {
           ? `没有提供者：${meta.name}（${where} 需要它）`
           : `没有提供者：${meta.name}（行名 ${meta.label}；${where} 需要它）`,
       ];
-      if (meta.alias !== undefined && meta.alias !== meta.name) {
-        lines.push(`  上游别名：${meta.alias}`);
-      }
       throw new Error(lines.join("\n"));
     }
     (instance as Record<string, unknown>)[key] = resolved;
@@ -547,12 +555,18 @@ function adoptNamedServices(ctx: CordisContext, instances: Map<object, unknown>)
  * @returns 声明的 scope，或 `undefined`（应用根）。
  */
 function scopeOfEntry(entry: ProviderEntry): symbol | undefined {
-  if (typeof entry === "function") return tokenMetaOf(entry as object).scope;
+  // 不是令牌的条目（事件字段、值条目以外的对象）没有 scope 概念：不取元数据，交给 `assertDslEntry` 报。
+  if (typeof entry === "function") {
+    return hasTokenMeta(entry) ? tokenMetaOf(entry as object).scope : undefined;
+  }
   if (entry === null || typeof entry !== "object") return undefined;
-  if (providerOfPlugin(entry) !== undefined) return tokenMetaOf(entryOf(entry) as object).scope;
-  return "provide" in entry
-    ? tokenMetaOf((entry as { readonly provide: object }).provide).scope
-    : undefined;
+  if (providerOfPlugin(entry) !== undefined) {
+    const impl = entryOf(entry) as object;
+    return hasTokenMeta(impl) ? tokenMetaOf(impl).scope : undefined;
+  }
+  if (!("provide" in entry)) return undefined;
+  const provided = (entry as { readonly provide: object }).provide;
+  return hasTokenMeta(provided) ? tokenMetaOf(provided).scope : undefined;
 }
 
 /**
@@ -627,12 +641,23 @@ function assertResolvable(
   for (const key of Object.keys(instance)) {
     const placeholder = injectPlaceholderOf((instance as Record<string, unknown>)[key]);
     if (placeholder === undefined) continue;
-    const meta = tokenMetaOf(placeholder.token);
+    // 令牌为空/未声明时点名**哪个字段**：否则只看到「令牌没有声明」，还得回去猜实例。
+    let meta: ReturnType<typeof tokenMetaOf>;
+    try {
+      meta = tokenMetaOf(placeholder.token);
+    } catch (error) {
+      throw new Error(`${(error as Error).message}\n  字段：${instance.constructor.name}.${key}`, {
+        cause: error,
+      });
+    }
     assertShape(meta, placeholder.mode, instance);
     // 值令牌可能由上游在 mount 期按名字发布：预检放行，留给该行激活时的填充检查。
     if (isValueToken(meta.token)) continue;
     if (placeholder.mode === "one" && !instances.has(meta.token) && !hosted(meta)) {
-      throw new Error(`没有提供者：${meta.name}（${instance.constructor.name} 需要它）`);
+      const names = [...instances.keys()].map((token) => nameOf(token)).join(", ");
+      throw new Error(
+        `没有提供者：${meta.name}（${instance.constructor.name} 需要它）\n  装配里现有：${names}`,
+      );
     }
   }
 }

@@ -12,14 +12,6 @@ interface TokenMeta {
    */
   readonly label: string;
   readonly multi: boolean;
-  /**
-   * 上游服务名的别名（`@Injectable({ name })`）。
-   *
-   * 我们的派生名是连字符（`session-persistence`），而上游插件按**驼峰**读（`ctx.sessionPersistence`）。
-   * 别名就是给这种情况用的：装配时按它再发布一份，上游那条严格读/`inject` 才拿得到。
-   * 不写就只发派生名（与上游同名会撞的契约不要写）。
-   */
-  readonly alias?: string;
   /** 是不是 `InjectionToken`（没有实现类，只能由上游在 mount 期按名字发布）。 */
   readonly value?: boolean;
   /**
@@ -36,7 +28,8 @@ interface TokenMeta {
  * @param token - 类令牌或 Symbol 令牌。
  * @returns 原始名字。
  */
-function labelOf(token: Function | object | symbol): string {
+function labelOf(token: Function | object | symbol | undefined | null): string {
+  if (token === undefined || token === null) return "(空令牌)";
   if (typeof token === "symbol") {
     return Symbol.keyFor(token) ?? token.description ?? token.toString();
   }
@@ -46,8 +39,32 @@ function labelOf(token: Function | object | symbol): string {
 /** 注入占位：字段初始化时写入，装配阶段换成实例。 */
 const kInject = Symbol.for("morlay.zephyr.inject");
 
-/** 已登记的令牌：类 / InjectionToken 对象 → 元数据。 */
-const registered = new Map<Function | object, TokenMeta>();
+/**
+ * 元数据在类上的键：`@Injectable` 写一次，`extends` 的实现类沿原型链自动拿到。
+ *
+ * 只此一份：没有并行的登记表，消费方（装配器 / 适配行 / 测试）读这个键即可。
+ */
+const tokenSymbol = Symbol.for("morlay.zephyr.token-meta");
+
+/**
+ * 取类/对象上挂的元数据（含继承来的）。
+ * @param target - 类、对象或类原型。
+ * @returns 元数据，未声明时 `undefined`。
+ */
+function metaOfClass(target: object | undefined | null): TokenMeta | undefined {
+  if (target === undefined || target === null) return undefined;
+  return (target as { [tokenSymbol]?: TokenMeta })[tokenSymbol];
+}
+
+/**
+ * 把元数据挂到类上。
+ * @param target - 类或令牌对象。
+ * @param meta - 元数据。
+ */
+function attachMeta(target: object, meta: TokenMeta): void {
+  // `configurable` 让重复装饰（同一类被多次 `@Injectable`）不抛。
+  Object.defineProperty(target, tokenSymbol, { value: meta, configurable: true });
+}
 
 /** 名字 → 令牌。多值令牌不占单值名字。 */
 const byName = new Map<string, Function | object>();
@@ -113,32 +130,27 @@ export function Injectable(options: InjectableOptions = {}): ClassDecorator {
   return (target) => {
     // 没有"显式令牌"这一档：令牌只有两个来源——**继承契约**（`extends 契约`，含 `InjectionToken` 造的类）
     // 或本类自己（`@Injectable()` 声明一个契约）。适配行也是 `extends 契约`，不另立身份。
-    const inherited = findRegistered(Object.getPrototypeOf(target));
+    const inherited = metaOfClass(Object.getPrototypeOf(target) as object);
     if (inherited !== undefined && !options.multi) {
       // 实现类继承契约：同一个令牌，不另立身份，也不重复登记名字。
       // scope 是**实现类自己**的装配位置，不写就沿用契约的（契约通常是 root）：所以带 scope 时复制
       // 一份，绝不就地改共享的元数据——那会让契约的 scope 跟着变。
-      registered.set(target, withScope(inherited, options.scope));
+      attachMeta(target, withScope(inherited, options.scope));
       return;
     }
-    const alias = options.name ?? inherited?.alias;
     const meta: TokenMeta = withScope(
       {
         token: inherited?.token ?? target,
-        name: inherited?.name ?? hyphenate(target.name),
+        // 服务名只有一个来源：显式 `name`（上游名）> 继承契约的名字 > 派生名（类名连字符化）。
+        name: options.name ?? inherited?.name ?? hyphenate(target.name),
         label: inherited?.label ?? target.name,
         multi: options.multi === true,
-        ...(alias === undefined ? {} : { alias }),
       },
       options.scope ?? inherited?.scope,
     );
-    registered.set(target, meta);
+    attachMeta(target, meta);
     if (!meta.multi) {
       byName.set(meta.name, meta.token);
-      // **别名也要进 `byName`**：`@Injectable({ name })` 声明的「上游服务名」靠 `tokenNamed(名字)` 被
-      // `adoptNamedServices` 采纳（上游按名字发布的服务要在装配期映射成令牌）。只存 `meta.alias` 的话，
-      // 那条映射永远查不到——于是消费方只能退回按名字读，或者造一个 `InjectionToken(name)` 当名字载体。
-      if (meta.alias !== undefined) byName.set(meta.alias, meta.token);
     }
   };
 }
@@ -169,7 +181,7 @@ export const InjectionToken = function InjectionToken<T>(
 ): TokenClass<T> {
   const token = asContractFace<TokenClass<T>>(class {});
   const meta: TokenMeta = { token, name, label: name, multi: options.multi === true, value: true };
-  registered.set(token, meta);
+  attachMeta(token, meta);
   if (!meta.multi) byName.set(name, token);
   return token;
 } as {
@@ -249,7 +261,7 @@ export function injectPlaceholderOf(value: unknown): InjectPlaceholder[typeof kI
  * @returns 判断结果。
  */
 export function isValueToken(token: object): boolean {
-  return registered.get(token as Function | object)?.value === true;
+  return metaOfClass(token)?.value === true;
 }
 
 /**
@@ -259,7 +271,7 @@ export function isValueToken(token: object): boolean {
  */
 export function hasTokenMeta(token: unknown): boolean {
   return (typeof token === "function" || typeof token === "object") && token !== null
-    ? registered.has(token as Function | object)
+    ? metaOfClass(token as object) !== undefined
     : false;
 }
 
@@ -269,37 +281,15 @@ export function hasTokenMeta(token: unknown): boolean {
  * @returns 元数据。
  */
 export function tokenMetaOf(token: Function | object): TokenMeta {
-  const meta = registered.get(token);
+  const meta = metaOfClass(token);
   if (meta !== undefined) return meta;
-  const derived: TokenMeta = {
-    token,
-    name: hyphenate((token as { name?: string }).name ?? ""),
-    // Symbol 令牌没有 `name`：用 `Symbol.keyFor` / `description` 拿它的原始名字。
-    label: labelOf(token),
-    multi: false,
-  };
-  registered.set(token, derived);
-  return derived;
-}
-
-/**
- * 沿原型链找最近的已登记契约：实现类继承契约时，令牌仍是契约。
- *
- * @param ctor - 起始原型（通常是实现类）。
- * @returns 已登记的元数据，或 `undefined`。
- */
-export function tokenMetaChainOf(ctor: unknown): TokenMeta | undefined {
-  return findRegistered(ctor);
-}
-
-function findRegistered(ctor: unknown): TokenMeta | undefined {
-  let current = ctor;
-  while (typeof current === "function" && current !== Function.prototype) {
-    const meta = registered.get(current);
-    if (meta !== undefined) return meta;
-    current = Object.getPrototypeOf(current);
-  }
-  return undefined;
+  // 没有元数据就是没声明过令牌：实现类必须 `extends 契约`（元数据沿原型链继承），
+  // 契约本身必须有 `@Injectable`（或由 `InjectionToken` 造）。兜底派生会把这两类错误藏起来。
+  // 带调用栈：这类错误几乎总是「谁传了个匿名类/未装饰的类」造成的，只看消息定位不到源头。
+  const frames = (new Error().stack ?? "").split("\n").slice(1, 5).join("\n");
+  throw new Error(
+    `令牌没有声明：${labelOf(token)}——类上缺 \`@Injectable\`，或实现类没有 \`extends\` 它的契约\n${frames}`,
+  );
 }
 
 /** 适配行挂上的契约面（`fromCordis` 的产物）。 */

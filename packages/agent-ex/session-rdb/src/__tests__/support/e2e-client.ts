@@ -95,11 +95,14 @@ const localeStub = {
 export async function startClient(handlers: RemoteHandlers): Promise<Client> {
   const composer = new ComposerStub();
   const rows = [
-    // 传输与两个上游面的替身：值条目，没有生命周期。
-    { provide: RemoteHandlers, useValue: handlers },
+    // 传输：`LocalRemote` 只持「另一个装配」的执行面（host 的 `RemoteHandlers.invoke`），
+    // 不把 host 的 `RemoteHandlers` 也塞进 client 装配——那是 host 的事，同 ctx 会抢服务名。
+    {
+      provide: LocalRemote,
+      useFactory: () => new LocalRemote((endpoint, payload) => handlers.invoke(endpoint, payload)),
+    },
     { provide: SessionController, useValue: composer },
     { provide: Locale, useValue: localeStub },
-    LocalRemote,
     SessionEditorEndpointClient,
     SessionEditorStore,
   ] as readonly RowEntry[];

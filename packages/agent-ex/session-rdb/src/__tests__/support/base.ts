@@ -255,10 +255,6 @@ export function publishToken(ctx: MountedContext, token: object, value: unknown)
   const meta = tokenMetaOf(token);
   instancesOf(ctx).set(meta.token, value);
   publish(ctx, meta.name, value);
-  if (meta.alias === undefined) return;
-  publish(ctx, meta.alias, value);
-  // `ctx.<名字>` 的读法（源 spec 的 `ctx.sessionPersistence`）走属性面，不走 `get`。
-  Object.assign(ctx, { [meta.alias]: value });
 }
 
 /**

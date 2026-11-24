@@ -63,8 +63,9 @@ describe("PTC 装配：tools:sdk 换成稳定骨架", () => {
       {} as never,
     );
     // 收口（`applyTo`）要在 PTC 执行器装好之后再来一次：`describe_tool` 的注册与工具的可见面都按那一刻定。
+    // 契约的服务名是上游名 `sessionModes`（不是派生名 `session-mode`）。
     (
-      (ctx as unknown as Record<string, unknown>)["session-mode"] as {
+      (ctx as unknown as Record<string, unknown>)["sessionModes"] as {
         applyTo(a: unknown, m: string, o?: unknown): void;
       }
     ).applyTo(agent, "coding", { record: false });

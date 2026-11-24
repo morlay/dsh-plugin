@@ -20,7 +20,7 @@ import {
   Shortcuts,
   provideRenderer,
 } from "@morlay/zephyr-app/client";
-import { Connection } from "@morlay/zephyr-app";
+import { Connection, RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { FakeConnectionHost, provideLocalRemote } from "@morlay/zephyr-app/testing";
 import { provideClientRemote } from "@morlay/zephyr-app/client";
 import { CommandUi } from "@morlay/dsh-command/ui";
@@ -108,9 +108,42 @@ class FakeSessions extends SessionController {
  * @returns app。
  */
 async function boot(): Promise<App> {
+  // 两套装配两个 ctx：host 只有「端点 + 路由表」，client 只有 UI 链，LocalRemote 是唯一的桥。
+  const host = await bootstrapApplication({
+    providers: [
+      {
+        provide: Permission,
+        useFactory: () => ({
+          catalog: () => ({
+            options: [
+              { value: "read-only", name: "read-only" },
+              { value: "workspace-write", name: "workspace-write" },
+              { value: "danger-full-access", name: "danger-full-access" },
+            ],
+            defaultOptions: [
+              { value: "read-only", name: "read-only" },
+              { value: "workspace-write", name: "workspace-write" },
+              { value: "danger-full-access", name: "danger-full-access" },
+            ],
+            defaultPreset: "workspace-write",
+          }),
+        }),
+      },
+      RemoteHandlersDefault,
+      PermissionPresetsEndpointDefault,
+    ],
+    timeoutMs: 20_000,
+  });
+  opened.push(host);
+  // 诊断：host 装配里到底有没有路由表（拿不到说明装配把这一行跳过了）。
+  if (host.tryGet(RemoteHandlers) === undefined) {
+    throw new Error(`host 装配缺少 RemoteHandlers：${String(host.tryGet(RemoteHandlersDefault))}`);
+  }
+  const hostInvoker = async (endpoint: string, payload: unknown) =>
+    host.get(RemoteHandlers).invoke(endpoint, payload);
   const app = await bootstrapApplication({
     providers: [
-      ...provideLocalRemote(),
+      ...provideLocalRemote(hostInvoker),
       ...provideRenderer(),
       // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
       {
@@ -165,26 +198,6 @@ async function boot(): Promise<App> {
         provide: SettingsSchema,
         useFactory: () => ({ schemas: new Map(), register: () => {} }),
       },
-      // 宿主侧：`permissionPresets/catalog` 的实现 + 它要的 `Permission` 面（只给 catalog）。
-      {
-        provide: Permission,
-        useFactory: () => ({
-          catalog: () => ({
-            options: [
-              { value: "read-only", name: "read-only" },
-              { value: "workspace-write", name: "workspace-write" },
-              { value: "danger-full-access", name: "danger-full-access" },
-            ],
-            defaultOptions: [
-              { value: "read-only", name: "read-only" },
-              { value: "workspace-write", name: "workspace-write" },
-              { value: "danger-full-access", name: "danger-full-access" },
-            ],
-            defaultPreset: "workspace-write",
-          }),
-        }),
-      },
-      PermissionPresetsEndpointDefault,
       // 被测面：权限的浏览器半。
       ...providePermissionUi(),
     ],
@@ -201,7 +214,7 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
     async () => {
       const app = await bootstrapApplication({
         providers: [
-          ...provideLocalRemote(),
+          ...provideLocalRemote(() => Promise.reject(new Error("这条用例只验 $mount，不调端点"))),
           ...provideRenderer(),
           // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
           {

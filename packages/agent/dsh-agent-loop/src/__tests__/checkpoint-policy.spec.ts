@@ -78,7 +78,6 @@ async function runOneTurn(withPolicy: boolean): Promise<{ adapterCalls: number; 
       ? [
           ...provideSession(),
           ...provideSessionProjection(),
-          Events.SessionFlush,
           ...provideSessionPersistence(),
           RemoteHandlersDefault,
           FakeAppEnv,
@@ -94,7 +93,6 @@ async function runOneTurn(withPolicy: boolean): Promise<{ adapterCalls: number; 
       : [
           ...provideSession(),
           ...provideSessionProjection(),
-          Events.SessionFlush,
           ...provideSessionPersistence(),
           RemoteHandlersDefault,
           FakeAppEnv,
@@ -112,10 +110,13 @@ async function runOneTurn(withPolicy: boolean): Promise<{ adapterCalls: number; 
   apps.push(app);
 
   let flushes = 0;
-  // 事件走 `EventEmitter`：事件名与参数表都在 `SessionFlush` 类里，不裸写字符串。
-  app.get(Events.SessionFlush).on(() => {
-    flushes += 1;
-  });
+  // 事件是**与 cordis 的接缝**：派发走 `ctx.parallel("session/flush")`，监听也走 ctx，不占服务名。
+  (app.ctx as unknown as { on(name: string, fn: () => void): () => void }).on(
+    "session/flush",
+    () => {
+      flushes += 1;
+    },
+  );
 
   const adapter = new FakeLlmAdapter();
   app.get(Llm).registerAdapter(["deepseek-official"], adapter);

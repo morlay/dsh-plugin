@@ -21,7 +21,7 @@ import { tokenMetaOf, type Context } from "@morlay/zephyr";
 export function readWorkspaceRegistry(ctx: Context | undefined): WorkspaceRegistry | undefined {
   if (ctx === undefined) return undefined;
   const meta = tokenMetaOf(WorkspaceRegistry);
-  for (const name of [meta.name, meta.alias]) {
+  for (const name of [meta.name]) {
     if (name === undefined) continue;
     // `ctx.get` 是 `reflect.get` 的封装：语义相同但返回 `unknown`，收窄必须显式写在下面。
     const found = ctx.get(name, false);

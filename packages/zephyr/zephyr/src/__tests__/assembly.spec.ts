@@ -445,11 +445,11 @@ describe("装配的最小闭环", () => {
 // `Setting`（派生 `setting`，上游读 `settings`）。名字只发派生名时，上游那条严格读拿到 `undefined`
 // 然后**静默降级**——"没配置持久化"（盘上不写东西、重启后 `session/not-found`）、
 // "设置命名空间不注册"（开发工具偏好落回 false、轨迹视图被过滤）。
-describe("`@Injectable({ name })` 的别名", () => {
-  it("契约声明了别名，装配后按别名与派生名都读得到同一个实例", async () => {
+describe("`@Injectable({ name })` 是唯一的服务名", () => {
+  it("写了 name 就只发这个名字；没写才发派生名", async () => {
     @Injectable({ name: "upstreamName" })
-    class Aliased {
-      readonly marker = "aliased";
+    class Named {
+      readonly marker = "named";
     }
 
     @Injectable()
@@ -457,15 +457,14 @@ describe("`@Injectable({ name })` 的别名", () => {
       readonly marker = "plain";
     }
 
-    const app = await bootstrapApplication({ providers: [Aliased, Plain] });
+    const app = await bootstrapApplication({ providers: [Named, Plain] });
     try {
       const store = app.ctx;
-      // 派生名（类名连字符化）与别名都指向同一个实例。
-      expect(store.get("aliased")).toBe(app.get(Aliased));
-      expect(store.get("upstreamName"), "上游按这个名字严格读").toBe(app.get(Aliased));
-      // 没写 `name` 的契约只有派生名，不会凭空多出发一个驼峰名（那会覆盖上游已有的同名服务）。
+      // 一个契约一个名字：`name` 是上游名时它就是唯一注册名（不再额外发派生名）。
+      expect(store.get("upstreamName"), "上游按这个名字严格读").toBe(app.get(Named));
+      expect(store.get("named"), "派生名不再发布").toBeUndefined();
+      // 没写 `name` 的契约用派生名。
       expect(store.get("plain")).toBe(app.get(Plain));
-      expect(store.get("plain", false)).toBe(app.get(Plain));
     } finally {
       await app.dispose();
     }

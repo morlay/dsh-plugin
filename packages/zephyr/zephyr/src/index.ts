@@ -35,7 +35,6 @@ export {
   kRowOwner,
   providerOfPlugin,
   rowNameOf,
-  tokenMetaChainOf,
   tokenMetaOf,
 } from "./token.ts";
 export {

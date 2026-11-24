@@ -2,7 +2,7 @@
 //
 // 判据是**编译期**：事件名写错、参数个数不对、参数类型不符，都编不过；
 // 运行期只验"真的送达了""退订生效""未装配时明确报错"。
-import { bootstrapApplication, EventEmitter, type App } from "@morlay/zephyr";
+import { bootstrapApplication, EventEmitter, Injectable, type App } from "@morlay/zephyr";
 import { afterEach, describe, expect, it } from "vitest";
 
 /** 无参事件。 */
@@ -26,6 +26,7 @@ afterEach(async () => {
 });
 
 /** 事件的宿主：事件作为**字段**声明，`$` 后缀统一表示"这是个事件"。 */
+@Injectable()
 class Policy {
   readonly flush$ = new SessionFlush();
 
@@ -37,7 +38,8 @@ class Policy {
  * @returns 宿主实例（`flush$` / `status$` 已绑定本行 ctx）。
  */
 async function boot(): Promise<Policy> {
-  const app = await bootstrapApplication({ providers: [SessionFlush, SessionStatus, Policy] });
+  // 事件不是令牌：它们作为字段声明在宿主上（`flush$` / `status$`），不进 providers。
+  const app = await bootstrapApplication({ providers: [Policy] });
   opened.push(app);
   return app.get(Policy);
 }

@@ -143,12 +143,17 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
       subscribe: () => () => undefined,
     },
   };
+  // 前端装配：不持有 host 的 `RemoteHandlers`（那是另一个 ctx 的东西），
+  // `LocalRemote` 只拿它的执行面当传输。
   const rows: readonly RowEntry[] = [
-    { provide: RemoteHandlers, useValue: host.handlers },
     { provide: SessionController, useValue: sessionControllerStub },
     { provide: UiWorkspace, useValue: archiveFace(host) },
     { provide: WorkspaceController, useValue: workspaceListStub },
-    LocalRemote,
+    {
+      provide: LocalRemote,
+      useFactory: () =>
+        new LocalRemote((endpoint, payload) => host.handlers.invoke(endpoint, payload)),
+    },
     SessionAdminEndpointClient,
     ConversationManagerController,
   ];

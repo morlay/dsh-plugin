@@ -37,6 +37,7 @@ import { provideAttachment } from "@morlay/dsh-attachment";
 import { provideUpload } from "@morlay/dsh-upload";
 import { provideWorkingDirectory, WorkingDirectoryDefault } from "@morlay/dsh-agent";
 import { Connection, RemoteAccess } from "@morlay/zephyr-app";
+import { RemoteHandlers } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { LocalRemote, publishingTo } from "@morlay/zephyr-app/testing";
 
@@ -162,14 +163,15 @@ async function boot(root: string): Promise<App> {
       ...provideSandbox(),
       // 端点行 inject 了 agent 域与工作区的适配行契约：必须排在它们之后，否则拿到的是空壳。
       ...provideApiSession(),
-      // 客户端半：`LocalRemote` 是进程内传输——形状与线上一致，只把"怎么到达宿主"换成函数调用。
-      // 契约的客户端形态（`CommandEndpointClient`）不进清单：它与宿主实现同一个令牌
-      // （`command-endpoint`），同装配里两份会撞；测试按需 new 一个并挂上 `remote`。
-      LocalRemote,
     ],
     timeoutMs: 30_000,
   });
-  return app;
+  // 客户端半**不进这个装配**：两套体系两个 ctx。`LocalRemote` 只持有 host 的端点执行面，
+  // 相当于进程边界上的传输替身——它与 host 的服务名空间完全隔离。
+  const remote = new LocalRemote(async (endpoint, payload) =>
+    app.get(RemoteHandlers).invoke(endpoint, payload),
+  );
+  return Object.assign(app, { remote }) as typeof app & { readonly remote: Remote };
 }
 
 /**
@@ -181,7 +183,8 @@ async function boot(root: string): Promise<App> {
  * @returns 可以直接 `execute(…)` 的客户端。
  */
 function commandClientOf(app: App): CommandEndpointClient {
-  return Object.assign(new CommandEndpointClient(), { remote: app.get(Remote) });
+  const { remote } = app as App & { readonly remote: Remote };
+  return Object.assign(new CommandEndpointClient(), { remote });
 }
 
 /** 会话的某个投影当前值。 */
