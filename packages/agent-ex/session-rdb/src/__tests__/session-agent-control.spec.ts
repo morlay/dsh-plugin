@@ -8,16 +8,11 @@
 // 为什么留在根 `__tests__/`：e2e——真宿主上 editor 编排 × agent 目录 × 端点 wire，跨 editor / endpoint / server 三面。
 import { SessionId } from "@morlay/dsh-session/contract";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { waitFor } from "./support/wait.ts";
 import { startHost, type Host } from "./support/e2e-host.ts";
 import { meta, twoTurnLog } from "@morlay/dsh-session/testing";
-
-const opened: Host[] = [];
-
-afterEach(async () => {
-  for (const host of opened.splice(0).reverse()) await host.dispose();
-});
 
 interface EditorValue {
   readonly sessionId: string;
@@ -55,12 +50,12 @@ async function seed(host: Host, id: string): Promise<void> {
 }
 
 describe("SessionAgentControl：agent 目录面", () => {
-  it(
+  test(
     "有目录：retry 把用户输入排进队列（queuedTurns 非 0）并先停 agent",
     { timeout: 60_000 },
     async () => {
       const host = await startHost();
-      opened.push(host);
+      onTestFinished(() => host.dispose());
       await seed(host, "retry-live");
 
       const result = await host.handlers.invoke("sessionEditor/retry", {
@@ -90,27 +85,31 @@ describe("SessionAgentControl：agent 目录面", () => {
     },
   );
 
-  it("目录按契约令牌注入（令牌与上游名 `agents` 指向同一实例）", { timeout: 60_000 }, async () => {
-    const host = await startHost();
-    opened.push(host);
-    // 目录挂在契约令牌名下，并按 `@Injectable({ name: "agents" })` 的别名再挂一份上游名（`publishToken`
-    // 与 `bootstrap.ts` 同一机制）：两个名字是**同一个实例**，消费方仍按令牌注入。
-    expect(host.ctx.get("agents", false)).toBe(host.agentDirectory);
+  test(
+    "目录按契约令牌注入（令牌与上游名 `agents` 指向同一实例）",
+    { timeout: 60_000 },
+    async () => {
+      const host = await startHost();
+      onTestFinished(() => host.dispose());
+      // 目录按契约令牌进清单，装配器自己按 `@Injectable({ name: "agents" })` 的别名再挂一份上游名：
+      // 两个名字是**同一个实例**，消费方仍按令牌注入。
+      expect(host.ctx.get("agents", false)).toBe(host.agentDirectory);
 
-    const live = host.ctx.sessions.create(SessionId("token-injected"), {
-      meta: meta("token-injected", "/work"),
-      seed: twoTurnLog(),
-    });
-    await host.ctx.sessions.flush(live);
-    const agent = host.agentDirectory.attach(live);
+      const live = host.ctx.sessions.create(SessionId("token-injected"), {
+        meta: meta("token-injected", "/work"),
+        seed: twoTurnLog(),
+      });
+      await host.ctx.sessions.flush(live);
+      const agent = host.agentDirectory.attach(live);
 
-    expect(host.control.list().map((entry) => entry.id)).toEqual([agent.id]);
-    expect(host.control.get(agent.id)?.session).toBe(live);
-  });
+      expect(host.control.list().map((entry) => entry.id)).toEqual([agent.id]);
+      expect(host.control.get(agent.id)?.session).toBe(live);
+    },
+  );
 
-  it("没目录：retry 不截断日志、显式失败带码（没有重放入口）", { timeout: 60_000 }, async () => {
+  test("没目录：retry 不截断日志、显式失败带码（没有重放入口）", { timeout: 60_000 }, async () => {
     const host = await startHost({ withoutAgents: true });
-    opened.push(host);
+    onTestFinished(() => host.dispose());
     // 没有目录面就没有「正在跑的 agent」：重放的那条用户输入无处可去，动作整条失败。
     const live = host.ctx.sessions.create(SessionId("retry-cold"), {
       meta: meta("retry-cold", "/work"),

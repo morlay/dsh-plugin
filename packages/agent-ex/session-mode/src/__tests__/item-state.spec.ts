@@ -7,7 +7,8 @@ import { parse } from "smol-toml";
 import { SessionId } from "@morlay/dsh-session/contract";
 import { assembleContextFor, defineTool, type Agent } from "@morlay/dsh-agent/contract";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished, vi } from "vitest";
 import { asModeConfig, type ModeConfig } from "@morlay/session-mode";
 // 装配入口是 `bootstrapApplication` + `app.get(Token)`：一次 bootstrap 拿到真 cordis 根 ctx（`App.ctx`），
 // 卸载走 `app.dispose()`。为什么不再有「逐行挂」的第二套内核：它与 `bootstrapApplication` 里的装配重复，
@@ -17,15 +18,6 @@ import { mountSessionModeApp } from "./support/mount-app.ts";
 
 // 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
 pinDshHome();
-
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-const mounted: { dispose(): Promise<void> }[][] = [];
-
-afterEach(async () => {
-  for (const rows of mounted.splice(0))
-    await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
-  for (const app of apps.splice(0)) await app.dispose();
-});
 
 function modeOf(name: string, overrides: Partial<ModeConfig> = {}): ModeConfig {
   return {
@@ -66,7 +58,7 @@ async function mount(): Promise<{ ctx: TestContext; agent: Agent }> {
   const { app, ctx } = await mountSessionModeApp({
     systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   await ctx.plugin(
     Object.assign(
       (inner: TestContext) => {
@@ -90,7 +82,10 @@ function visibleTools(ctx: TestContext, agent: Agent): string[] {
 }
 
 describe("会话级三态改的是真实工具面", () => {
-  it("禁止一个工具后它立刻不可见，回到默认后恢复", async () => {
+  test("禁止一个工具后它立刻不可见，回到默认后恢复", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mount();
     expect(visibleTools(ctx, agent)).toEqual(["bash", "read"]);
 
@@ -110,7 +105,10 @@ describe("会话级三态改的是真实工具面", () => {
     expect(visibleTools(ctx, agent)).toEqual(["bash", "read"]);
   });
 
-  it("模式默认禁掉一组后，三态可以单独把它放回来", async () => {
+  test("模式默认禁掉一组后，三态可以单独把它放回来", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { app, ctx } = await mountSessionModeApp({
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
       modes: {
@@ -118,7 +116,7 @@ describe("会话级三态改的是真实工具面", () => {
         modes: { coding: modeOf("编码模式", { denyTools: ["group:fs"] }) },
       },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     await ctx.plugin(
       Object.assign(
         (inner: TestContext) => {
@@ -141,22 +139,10 @@ describe("会话级三态改的是真实工具面", () => {
 });
 
 describe("另存为写回的是完整定义（含系统提示词）", () => {
-  let home: string;
-  let previous: string | undefined;
-
-  beforeEach(async () => {
-    home = await mkdtemp(join(tmpdir(), "dsh-modes-save-"));
-    previous = process.env["DSH_HOME"];
-    process.env["DSH_HOME"] = home;
-  });
-
-  afterEach(async () => {
-    if (previous === undefined) Reflect.deleteProperty(process.env, "DSH_HOME");
-    else process.env["DSH_HOME"] = previous;
-    await rm(home, { recursive: true, force: true });
-  });
-
-  it("persona / 名单 / 开关都进 modes[code]", async () => {
+  test("persona / 名单 / 开关都进 modes[code]", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { app, ctx } = await mountSessionModeApp({
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
       modes: {
@@ -169,7 +155,7 @@ describe("另存为写回的是完整定义（含系统提示词）", () => {
         },
       },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     await ctx.plugin(
       Object.assign(
         (inner: TestContext) => {
@@ -194,7 +180,10 @@ describe("另存为写回的是完整定义（含系统提示词）", () => {
 });
 
 describe("自定义模式的系统提示词", () => {
-  it("切到另存为出来的模式后，persona 进入系统提示词", async () => {
+  test("切到另存为出来的模式后，persona 进入系统提示词", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { app, ctx } = await mountSessionModeApp({
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
       modes: {
@@ -207,7 +196,7 @@ describe("自定义模式的系统提示词", () => {
         },
       },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     const { agent } = await ctx.agents.create({ sessionId: SessionId("custom-persona") });
     ctx.sessionModes.applyTo(agent, "custom", { record: false });
 
@@ -220,21 +209,6 @@ describe("自定义模式的系统提示词", () => {
 });
 
 describe("保存为默认 / 删除（写 {dshHome}/modes/*.toml）", () => {
-  let home: string;
-  let previous: string | undefined;
-
-  beforeEach(async () => {
-    home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
-    previous = process.env["DSH_HOME"];
-    process.env["DSH_HOME"] = home;
-  });
-
-  afterEach(async () => {
-    if (previous === undefined) Reflect.deleteProperty(process.env, "DSH_HOME");
-    else process.env["DSH_HOME"] = previous;
-    await rm(home, { recursive: true, force: true });
-  });
-
   async function mountWith(
     modes: Record<string, ModeConfig>,
   ): Promise<{ ctx: TestContext; agent: Agent }> {
@@ -242,7 +216,7 @@ describe("保存为默认 / 删除（写 {dshHome}/modes/*.toml）", () => {
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
       modes: { default: "coding", modes },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     const { agent } = await ctx.agents.create({
       sessionId: SessionId(`save-${String(Math.random())}`),
     });
@@ -250,7 +224,10 @@ describe("保存为默认 / 删除（写 {dshHome}/modes/*.toml）", () => {
     return { ctx, agent };
   }
 
-  it("保存为默认写回当前生效配置，且当前会话的覆盖保留", async () => {
+  test("保存为默认写回当前生效配置，且当前会话的覆盖保留", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mountWith({
       coding: modeOf("编码模式", { persona: { prefix: "原提示词。", suffix: "" } }),
     });
@@ -268,7 +245,10 @@ describe("保存为默认 / 删除（写 {dshHome}/modes/*.toml）", () => {
     expect((state?.session ?? state?.config)?.instructions).toBe(false);
   });
 
-  it("删除一个模式后它会从 modes 目录移除，会话回到部署默认", async () => {
+  test("删除一个模式后它会从 modes 目录移除，会话回到部署默认", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mountWith({
       coding: modeOf("编码模式"),
       custom: modeOf("自定义"),
@@ -291,7 +271,10 @@ describe("保存为默认 / 删除（写 {dshHome}/modes/*.toml）", () => {
 });
 
 describe("会话覆盖的恢复（文件持久化）", () => {
-  it("写进 modes/sessions 的覆盖会在进入会话时读回来", async () => {
+  test("写进 modes/sessions 的覆盖会在进入会话时读回来", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mount();
     await ctx.sessionModes.applyConfig(agent.session.id, {
       ...asModeConfig(ctx.sessionModes.modeOfSession(agent.session), true),
@@ -305,11 +288,14 @@ describe("会话覆盖的恢复（文件持久化）", () => {
 });
 
 describe("组引用的会话覆盖与配置写入", () => {
-  it("applyConfig 传组引用 null 只清会话覆盖，配置里的组引用仍在", async () => {
+  test("applyConfig 传组引用 null 只清会话覆盖，配置里的组引用仍在", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { app, ctx } = await mountSessionModeApp({
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     await ctx.plugin(
       Object.assign(
         (inner: TestContext) => {
@@ -343,7 +329,7 @@ async function mountPtc(): Promise<{ ctx: TestContext; agent: Agent }> {
   const { app, ctx } = await mountSessionModeApp({
     systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   await ctx.plugin(
     Object.assign(
       (inner: TestContext) => {
@@ -360,7 +346,10 @@ async function mountPtc(): Promise<{ ctx: TestContext; agent: Agent }> {
 }
 
 describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
-  it("group=fs 时返回 tools 上的 fs 组成员声明", async () => {
+  test("group=fs 时返回 tools 上的 fs 组成员声明", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mountPtc();
     const batch = await ctx.tools.execute({
       calls: [
@@ -378,7 +367,10 @@ describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
     expect(text).toContain("read(args:");
   });
 
-  it("MCP 那种带 `-` 的工具名写成引号键，并提示用索引访问", async () => {
+  test("MCP 那种带 `-` 的工具名写成引号键，并提示用索引访问", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mountPtc();
     const batch = await ctx.tools.execute({
       calls: [
@@ -400,7 +392,10 @@ describe("tools_describe：PTC 程序里现取某组 d.ts", () => {
     expect(text).toContain('tools[\\"名字\\"](args)');
   });
 
-  it("不带 group 时返回分组清单", async () => {
+  test("不带 group 时返回分组清单", async () => {
+    const home = await mkdtemp(join(tmpdir(), "dsh-modes-"));
+    onTestFinished(() => rm(home, { recursive: true, force: true }));
+    vi.stubEnv("DSH_HOME", home);
     const { ctx, agent } = await mountPtc();
     const batch = await ctx.tools.execute({
       calls: [

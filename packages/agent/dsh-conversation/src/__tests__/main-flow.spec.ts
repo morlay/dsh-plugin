@@ -8,8 +8,8 @@
 //
 // 模型选择那一步的闭环需要 `SessionControllerRow` 全栈（它 inject 附件、上传、文件系统、远程访问等
 // 六七个面），不在本 spec 里重复搭建；它的**弱断言**已在 `session-endpoints.spec` 覆盖。
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { realpath } from "node:fs/promises";
-import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { provideAgent } from "@morlay/dsh-agent";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
@@ -24,9 +24,9 @@ import { provideStorageJson } from "@morlay/dsh-storage";
 import { provideStorage } from "@morlay/dsh-storage";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
-import { configure, bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues, provideApiGateway } from "@morlay/zephyr-app";
-import { describe } from "vitest";
+import { configure, bootstrapApplication, type App } from "@morlay/zephyr";
+import { AppEnv, provideApiGateway } from "@morlay/zephyr-app";
+import { describe } from "@morlay/dsh-conversation/testing";
 import { expect, test } from "./support/fixtures.ts";
 import { provideTypert, TypertGateway } from "@morlay/zephyr-app";
 import { provideApiSession } from "@morlay/dsh-conversation/server";
@@ -37,9 +37,8 @@ import { provideAttachment } from "@morlay/dsh-attachment";
 import { provideUpload } from "@morlay/dsh-upload";
 import { provideWorkingDirectory, WorkingDirectoryDefault } from "@morlay/dsh-agent";
 import { Connection, RemoteAccess } from "@morlay/zephyr-app";
-import { RemoteHandlers } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
-import { LocalRemote, publishingTo } from "@morlay/zephyr-app/testing";
+import { hostInvokerOf, LocalRemote, publishingTo } from "@morlay/zephyr-app/testing";
 
 /** 指向临时目录的运行环境（每个用例一份数据根）。 */
 /** working-directory 的默认目录：本 spec 只要求它存在（`SkillCatalog` 读它）。 */
@@ -95,28 +94,6 @@ function allowAllAccess() {
   };
 }
 
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues;
-
-  readonly cacheDir: string;
-
-  readonly packageRoot: string;
-
-  readonly appBootDir: string;
-
-  readonly profileManifest: string;
-
-  constructor(root: string) {
-    super();
-    this.values = { dataDir: root, profileDir: root };
-    this.cacheDir = join(root, "cache");
-    this.packageRoot = root;
-    this.appBootDir = join(root, "boot");
-    this.profileManifest = join(root, "package.json");
-  }
-}
-
 /**
  * 装宿主侧主流程需要的面。
  * @param root - 本用例的临时数据根（fixture 提供、自动回收）。
@@ -130,7 +107,7 @@ async function boot(root: string): Promise<App> {
       { provide: RemoteAccess, useFactory: () => allowAllAccess() },
       publishingTo(RemoteAccess, "remoteAccess"),
       { provide: Connection, useFactory: () => fakeConnection() },
-      { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       ...provideTypert(),
       // `provideApiGateway()` 已含 `RemoteHandlersDefault`：不能再并列一条（同名服务重复注册）。
       ...provideApiGateway(),
@@ -166,11 +143,9 @@ async function boot(root: string): Promise<App> {
     ],
     timeoutMs: 30_000,
   });
-  // 客户端半**不进这个装配**：两套体系两个 ctx。`LocalRemote` 只持有 host 的端点执行面，
-  // 相当于进程边界上的传输替身——它与 host 的服务名空间完全隔离。
-  const remote = new LocalRemote(async (endpoint, payload) =>
-    app.get(RemoteHandlers).invoke(endpoint, payload),
-  );
+  // 客户端半**不进这个装配**：两套体系两个 ctx。`LocalRemote` 只持有 host 的端点执行面
+  // （`hostInvokerOf` 就是那个执行面），相当于进程边界上的传输替身——它与 host 的服务名空间完全隔离。
+  const remote = new LocalRemote(hostInvokerOf(app));
   return Object.assign(app, { remote }) as typeof app & { readonly remote: Remote };
 }
 

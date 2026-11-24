@@ -14,17 +14,12 @@ import { CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { RemoteShell } from "./support/fake-remote.ts";
 import { ClientConnection } from "@morlay/zephyr-app/client";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-});
 
 /**
  * 一条目录行，**按上游 `session/list` 的真实形状**（`{ items: [...] }`，每项带 `id` / `displayTitle` /
@@ -199,12 +194,12 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, runner: app.get(CommandRunner) as RecordingCommandRunner };
 }
 
 describe("sessions 行的目录与 binding", () => {
-  it(
+  test(
     "`refresh()` 后目录有行，`binding(id).session.command` 能提交一行命令",
     { timeout: 20_000 },
     async () => {
@@ -231,7 +226,7 @@ describe("sessions 行的目录与 binding", () => {
     },
   );
 
-  it(
+  test(
     "命令结算为 error 时 `command()` 不能报成功（否则 chip 把失败当成了「切换好了」）",
     { timeout: 20_000 },
     async () => {
@@ -259,7 +254,7 @@ describe("sessions 行的目录与 binding", () => {
     },
   );
 
-  it(
+  test(
     "`session/follow` 推来的事件帧会进事件窗口（投影/内容因此能更新）",
     { timeout: 20_000 },
     async () => {
@@ -287,7 +282,7 @@ describe("sessions 行的目录与 binding", () => {
     },
   );
 
-  it("投影增量帧会更新 `faceOf`（chip 文案因此跟着变）", { timeout: 20_000 }, async () => {
+  test("投影增量帧会更新 `faceOf`（chip 文案因此跟着变）", { timeout: 20_000 }, async () => {
     const { app } = await boot();
     const service = app.get(SessionController);
     service.retain(SessionId("s1"), { source: "gateway" });
@@ -307,7 +302,7 @@ describe("sessions 行的目录与 binding", () => {
     });
   });
 
-  it("目录里没有的 id 不给 binding（主区因此能停在 hero）", { timeout: 20_000 }, async () => {
+  test("目录里没有的 id 不给 binding（主区因此能停在 hero）", { timeout: 20_000 }, async () => {
     const { app } = await boot();
     const service = app.get(SessionController);
     expect(service.binding("nope")).toBeUndefined();

@@ -10,17 +10,14 @@
  * 原来分居三个文件、各 bootstrap 一次；合起来只付一次装配成本。wire 载体（`/api/remote.mux`）
  * 在这一份里**只有上游那一条**：自研 mux 不进这份清单，否则同一路径两个 upgrade。
  */
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import { bootstrapApplication, type App } from "@morlay/zephyr";
 import type { InvokeRemoteRequest } from "../typert/gateway.contract.ts";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { describe, expect, test as base } from "@morlay/zephyr-app/testing";
 import {
-  AppEnvDefault,
   CredentialsInMemory,
   WebServer,
   provideApiGateway,
-  provideAppEnv,
   provideConnection,
   provideRemoteAccess,
   provideTypert,
@@ -32,30 +29,32 @@ import { TypertGateway } from "../typert/gateway.contract.ts";
 // 随机端口：`WebStartupDefault` 读 `process.env.PORT`（缺省 3080），并行跑的 web spec 会互相抢。
 process.env.PORT ??= "0";
 
-let app: App;
+/**
+ * 本文件的一份装配：`typert` + `remoteAccess` + `connection` + `api-gateway`（三条用例读同一份面）。
+ *
+ * 运行环境走 `appEnv` 夹具：数据根就是本用例的临时目录，用例结束随夹具删。
+ */
+interface GatewayFixtures {
+  readonly app: App;
+}
 
-beforeAll(async () => {
-  app = await bootstrapApplication({
-    providers: [
-      ...provideWeb(),
-      ...provideTypert(),
-      ...provideRemoteAccess(),
-      ...provideConnection(),
-      ...provideApiGateway(),
-      CredentialsInMemory,
-      ...provideAppEnv(
-        configure(AppEnvDefault, {
-          profileDir: process.cwd(),
-          dataDir: join(tmpdir(), "dsh-api-gateway-test"),
-        }),
-      ),
-    ],
-    timeoutMs: 15_000,
-  });
-});
-
-afterAll(async () => {
-  await app.dispose();
+const test = base.extend<GatewayFixtures>({
+  async app({ appEnv }, use) {
+    const app = await bootstrapApplication({
+      providers: [
+        ...provideWeb(),
+        ...provideTypert(),
+        ...provideRemoteAccess(),
+        ...provideConnection(),
+        ...provideApiGateway(),
+        CredentialsInMemory,
+        { provide: AppEnv, useValue: appEnv },
+      ],
+      timeoutMs: 15_000,
+    });
+    await use(app);
+    await app.dispose();
+  },
 });
 
 /**
@@ -76,7 +75,7 @@ function ownerPeer(app: App): InvokeRemoteRequest["peer"] {
 }
 
 describe("api-gateway 装配面", { timeout: 20_000 }, () => {
-  it("装上之后，`typertGateway` 按名字可解析且面齐", () => {
+  test("装上之后，`typertGateway` 按名字可解析且面齐", ({ app }) => {
     const gateway = app.get(TypertGateway);
     expect(gateway, "`typertGateway` 必须可解析").toBeDefined();
     expect(gateway.wireStream, "载体适配必须在").toBeDefined();
@@ -88,7 +87,7 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(app.get(Typert)).toBeDefined();
   });
 
-  it("不交 webServer：上游不再注册 /api/remote.mux（mux 由自研那一行接管）", () => {
+  test("不交 webServer：上游不再注册 /api/remote.mux（mux 由自研那一行接管）", ({ app }) => {
     expect(app.tryGet(WebServer), "WebServer 应由 provideWeb() 提供").toBeDefined();
     const upgrades = app
       .get(WebServer)
@@ -100,7 +99,7 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(upgrades, "upgrade 只该由自研的 mux 行注册（本最小栈不装它，所以是空的）").toEqual([]);
   });
 
-  it("invoke 走到上游分派（最小栈里以「服务不存在」失败，证明请求走通了）", async () => {
+  test("invoke 走到上游分派（最小栈里以「服务不存在」失败，证明请求走通了）", async ({ app }) => {
     const gateway = app.get(TypertGateway);
     const peer = ownerPeer(app);
     const outcome = await gateway
@@ -114,7 +113,7 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(outcome).toBeDefined();
     expect(outcome.ok, "最小栈里没有 SessionController：应当走通并如实失败").toBe(false);
   });
-  it("`/api` 的 HTTP 请求先过 Host / Origin 信任检查（跨站 Origin 回 403）", async () => {
+  test("`/api` 的 HTTP 请求先过 Host / Origin 信任检查（跨站 Origin 回 403）", async ({ app }) => {
     const webServer = app.get(WebServer);
     const url = `http://127.0.0.1:${String(webServer.port)}/api/session/list`;
     const body = JSON.stringify({
@@ -138,7 +137,7 @@ describe("api-gateway 装配面", { timeout: 20_000 }, () => {
     expect(sameOrigin.status, "本机页面的请求照常进分派").not.toBe(403);
   });
 
-  it("$events/result 走上游 wire 分派（不是 Remote 方法）", async () => {
+  test("$events/result 走上游 wire 分派（不是 Remote 方法）", async ({ app }) => {
     const gateway = app.get(TypertGateway);
     const outcome = await gateway.dispatchWire(
       "$events/result",

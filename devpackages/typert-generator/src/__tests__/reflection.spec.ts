@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { type Node, parseSource, walkAll } from "../ast.ts";
 import { reflectModel } from "../reflection.ts";
 
@@ -37,7 +37,7 @@ function classOf(source: string): {
 }
 
 describe("包反射", () => {
-  it("类注释给 description / summary / tags / jsDoc", () => {
+  test("类注释给 description / summary / tags / jsDoc", () => {
     const { file, klass, method } = classOf(SOURCE);
     const model = reflectModel(
       [
@@ -65,7 +65,7 @@ describe("包反射", () => {
     expect(model.events).toEqual([]);
   });
 
-  it("没有注释时留空而不是猜", () => {
+  test("没有注释时留空而不是猜", () => {
     const { file, klass, method } = classOf(
       "export class X extends TypertRemoteService { @Remote read(): void {} }\n",
     );

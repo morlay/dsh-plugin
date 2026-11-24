@@ -11,16 +11,11 @@ import { SandboxPolicyDefault, provideSandbox } from "@morlay/dsh-sandbox";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { provideSubagent } from "@morlay/dsh-agent-loop";
 import { WorkingDirectoryDefault, provideWorkingDirectory } from "@morlay/dsh-agent";
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { AppEnvDefault, RemoteHandlersDefault, provideAppEnv } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { TeamServiceDefault, ToolAgentTeam, provideAgentTeam } from "@morlay/dsh-agent-team/server";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 60_000);
 
 /** 团队两行要的**整条**依赖链（缺一环会在装配期点名报出来）。 */
 function providers(): readonly unknown[] {
@@ -49,9 +44,9 @@ function providers(): readonly unknown[] {
 }
 
 describe("Agent Teams 的装配", () => {
-  it("两行都装得上，服务面是上游 TeamService 的实例", async () => {
+  test("两行都装得上，服务面是上游 TeamService 的实例", async () => {
     const app = await bootstrapApplication({ providers: providers() as never, timeoutMs: 60_000 });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     // 适配行的契约面由上游实例兑现——不是空壳（`TeamService` 的成员名上游会动，
     // 所以判「它确实是我们契约的实现」，不锁具体成员）。
     // 上游 `TeamService` 是 cordis `Service` 子类：服务名就是它注册的名字（成员名上游会动，
@@ -61,9 +56,9 @@ describe("Agent Teams 的装配", () => {
     expect(app.get(ToolAgentTeam)).toBeDefined();
   });
 
-  it("依赖链上的每一环都在同一个装配里", async () => {
+  test("依赖链上的每一环都在同一个装配里", async () => {
     const app = await bootstrapApplication({ providers: providers() as never, timeoutMs: 60_000 });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     expect(app.get(AgentDirectory)).toBeDefined();
     expect(app.get(SessionStore)).toBeDefined();
     expect(app.get(SessionProjectionStore)).toBeDefined();

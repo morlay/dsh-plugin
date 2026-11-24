@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import {
   findReferences,
   formatReference,
@@ -21,7 +21,7 @@ function onlyReference(text: string): Reference | undefined {
 }
 
 describe("findReferences 的书写形态", () => {
-  it("recognizes a bare skill URI with and without the @ prefix", () => {
+  test("recognizes a bare skill URI with and without the @ prefix", () => {
     expect(referencesOf("@skill:xxx-skill")).toEqual([
       { slice: "@skill:xxx-skill", protocol: "skill", path: "xxx-skill" },
     ]);
@@ -30,7 +30,7 @@ describe("findReferences 的书写形态", () => {
     ]);
   });
 
-  it("reads @path:line:column as a file reference", () => {
+  test("reads @path:line:column as a file reference", () => {
     expect(referencesOf("@xxx:1:2")).toEqual([
       { slice: "@xxx:1:2", protocol: "file", path: "xxx", lineStart: 1, column: 2 },
     ]);
@@ -42,13 +42,13 @@ describe("findReferences 的书写形态", () => {
     });
   });
 
-  it("reads a markdown link with the default file protocol and the label as title", () => {
+  test("reads a markdown link with the default file protocol and the label as title", () => {
     expect(referencesOf("[label](src/a.ts)")).toEqual([
       { slice: "[label](src/a.ts)", protocol: "file", path: "src/a.ts", title: "label" },
     ]);
   });
 
-  it("reads the line range in a link fragment", () => {
+  test("reads the line range in a link fragment", () => {
     expect(referencesOf("[label](src/a.ts#L12-L40)")).toEqual([
       {
         slice: "[label](src/a.ts#L12-L40)",
@@ -61,7 +61,7 @@ describe("findReferences 的书写形态", () => {
     ]);
   });
 
-  it("keeps the official mention form's scheme and puts the label in the title", () => {
+  test("keeps the official mention form's scheme and puts the label in the title", () => {
     const spans = findReferences("@[label](dsh-session:abc)");
     expect(spans).toHaveLength(1);
 
@@ -78,7 +78,7 @@ describe("findReferences 的书写形态", () => {
 });
 
 describe("@path 的裸路径形态", () => {
-  it("reads a bare @path — extension, directory, absolute and quoted-ish forms — as a file reference", () => {
+  test("reads a bare @path — extension, directory, absolute and quoted-ish forms — as a file reference", () => {
     expect(referencesOf("@mise.toml")).toEqual([
       { slice: "@mise.toml", protocol: "file", path: "mise.toml" },
     ]);
@@ -88,7 +88,7 @@ describe("@path 的裸路径形态", () => {
     expect(onlyReference("@.env")).toEqual({ protocol: "file", path: ".env" });
   });
 
-  it("reads the line fragment that follows the path", () => {
+  test("reads the line fragment that follows the path", () => {
     expect(onlyReference("@mise.toml#L12")).toEqual({
       protocol: "file",
       path: "mise.toml",
@@ -109,14 +109,14 @@ describe("@path 的裸路径形态", () => {
     });
   });
 
-  it("treats every @handle as a path (this UI has no people to cue)", () => {
+  test("treats every @handle as a path (this UI has no people to cue)", () => {
     expect(referencesOf("@alice 你好")).toEqual([
       { slice: "@alice", protocol: "file", path: "alice" },
     ]);
     expect(onlyReference("@中文名")).toEqual({ protocol: "file", path: "中文名" });
   });
 
-  it("stops at prose punctuation and whitespace", () => {
+  test("stops at prose punctuation and whitespace", () => {
     expect(referencesOf("看 @mise.toml 的配置")).toEqual([
       { slice: "@mise.toml", protocol: "file", path: "mise.toml" },
     ]);
@@ -128,7 +128,7 @@ describe("@path 的裸路径形态", () => {
     ]);
   });
 
-  it("rejects a lone at sign and a non-path neighbour", () => {
+  test("rejects a lone at sign and a non-path neighbour", () => {
     expect(referencesOf("@")).toEqual([]);
     expect(referencesOf("@ 你好")).toEqual([]);
     expect(referencesOf("x@y")).toEqual([]);
@@ -138,13 +138,13 @@ describe("@path 的裸路径形态", () => {
 // 输入框的 @file 选择器对含空格的路径落引号 mention（见 @deepseek-ai/dsh-file-reference 的
 // formatFileMention），所以引号形态是解析器必须认领的书写。
 describe('@"..." 引号形态', () => {
-  it("reads a quoted path, spaces included", () => {
+  test("reads a quoted path, spaces included", () => {
     expect(referencesOf('看 @"my file.ts" 的实现')).toEqual([
       { slice: '@"my file.ts"', protocol: "file", path: "my file.ts" },
     ]);
   });
 
-  it("keeps the line fragment that follows the closing quote", () => {
+  test("keeps the line fragment that follows the closing quote", () => {
     expect(onlyReference('@"my file.ts"#L12-L40')).toEqual({
       protocol: "file",
       path: "my file.ts",
@@ -153,7 +153,7 @@ describe('@"..." 引号形态', () => {
     });
   });
 
-  it("rejects an unclosed or empty quoted path", () => {
+  test("rejects an unclosed or empty quoted path", () => {
     expect(referencesOf('@"my file.ts')).toEqual([]);
     expect(referencesOf('@""')).toEqual([]);
     expect(referencesOf('看@"my file.ts"')).toEqual([]);
@@ -161,7 +161,7 @@ describe('@"..." 引号形态', () => {
 });
 
 describe("裸 URI 的边界", () => {
-  it("stops at prose punctuation and whitespace", () => {
+  test("stops at prose punctuation and whitespace", () => {
     expect(referencesOf("看 file:mise.toml。这段")).toEqual([
       { slice: "file:mise.toml", protocol: "file", path: "mise.toml" },
     ]);
@@ -174,18 +174,18 @@ describe("裸 URI 的边界", () => {
     ]);
   });
 
-  it("requires a word boundary before the construct", () => {
+  test("requires a word boundary before the construct", () => {
     expect(referencesOf("xfile:y")).toEqual([]);
     expect(referencesOf("skill: 不是引用")).toEqual([]);
     expect(referencesOf("file:")).toEqual([]);
   });
 
-  it("is case insensitive on the scheme and keeps the path as written", () => {
+  test("is case insensitive on the scheme and keeps the path as written", () => {
     expect(onlyReference("FILE:src/A.ts")).toEqual({ protocol: "file", path: "src/A.ts" });
     expect(onlyReference("Skill:CodeReview")).toEqual({ protocol: "skill", path: "CodeReview" });
   });
 
-  it("reads line ranges, single lines and columns from the fragment", () => {
+  test("reads line ranges, single lines and columns from the fragment", () => {
     expect(onlyReference("file:src/a.ts#L12-L40")).toEqual({
       protocol: "file",
       path: "src/a.ts",
@@ -208,7 +208,7 @@ describe("裸 URI 的边界", () => {
 });
 
 describe("http(s) 与外部地址", () => {
-  it("parses a link into origin and path", () => {
+  test("parses a link into origin and path", () => {
     expect(referencesOf("[docs](https://example.com/a/b?x=1)")).toEqual([
       {
         slice: "[docs](https://example.com/a/b?x=1)",
@@ -220,7 +220,7 @@ describe("http(s) 与外部地址", () => {
     ]);
   });
 
-  it("recognizes a bare autolink URL and a bare email (GFM autolink literal)", () => {
+  test("recognizes a bare autolink URL and a bare email (GFM autolink literal)", () => {
     expect(onlyReference("https://example.com/a/b")).toEqual({
       protocol: "https",
       origin: "https://example.com",
@@ -230,7 +230,7 @@ describe("http(s) 与外部地址", () => {
     expect(onlyReference("a@b.com")?.protocol).toBe("mailto");
   });
 
-  it("keeps external addresses out of the link → chip conversion", () => {
+  test("keeps external addresses out of the link → chip conversion", () => {
     expect(isLocalReference({ protocol: "https", origin: "https://example.com" })).toBe(false);
     expect(isLocalReference({ protocol: "mailto", path: "a@b.com" })).toBe(false);
     expect(isLocalReference({ protocol: "file", path: "src/a.ts" })).toBe(true);
@@ -240,13 +240,13 @@ describe("http(s) 与外部地址", () => {
 });
 
 describe("代码块与 inline code", () => {
-  it("ignores references inside fenced and indented code blocks", () => {
+  test("ignores references inside fenced and indented code blocks", () => {
     expect(referencesOf("```\nfile:mise.toml\n```")).toEqual([]);
     expect(referencesOf("```md\n[a](b.md)\n```")).toEqual([]);
     expect(referencesOf("    file:mise.toml")).toEqual([]);
   });
 
-  it("ignores references inside inline code", () => {
+  test("ignores references inside inline code", () => {
     expect(referencesOf("`skill:x`")).toEqual([]);
     expect(referencesOf("`[a](b.md)`")).toEqual([]);
     expect(referencesOf("[`file:x`](file:y)")).toEqual([
@@ -254,7 +254,7 @@ describe("代码块与 inline code", () => {
     ]);
   });
 
-  it("ignores a reference written inside a link label", () => {
+  test("ignores a reference written inside a link label", () => {
     expect(referencesOf("[file:x](y)")).toEqual([
       { slice: "[file:x](y)", protocol: "file", path: "y", title: "file:x" },
     ]);
@@ -262,7 +262,7 @@ describe("代码块与 inline code", () => {
 });
 
 describe("多个引用", () => {
-  it("returns spans in document order with offsets into the original text", () => {
+  test("returns spans in document order with offsets into the original text", () => {
     const text = "先 file:mise.toml，再 @skill:code-review，最后 [文档](docs/a.md#L3)";
     const spans = findReferences(text);
     expect(spans.map((span) => text.slice(span.start, span.end))).toEqual([
@@ -280,14 +280,14 @@ describe("多个引用", () => {
     }
   });
 
-  it("returns nothing for plain prose", () => {
+  test("returns nothing for plain prose", () => {
     expect(findReferences("")).toEqual([]);
     expect(findReferences("普通的一段话，没有任何引用")).toEqual([]);
   });
 });
 
 describe("parseReference / formatReference", () => {
-  it("defaults to the file protocol without a scheme", () => {
+  test("defaults to the file protocol without a scheme", () => {
     expect(parseReference("src/a.ts")).toEqual({ protocol: "file", path: "src/a.ts" });
     expect(parseReference("src/a.ts#L12-L40")).toEqual({
       protocol: "file",
@@ -297,7 +297,7 @@ describe("parseReference / formatReference", () => {
     });
   });
 
-  it("round-trips the token forms", () => {
+  test("round-trips the token forms", () => {
     const tokens = [
       "file:src/a.ts",
       "file:src/a.ts#L12",
@@ -313,7 +313,7 @@ describe("parseReference / formatReference", () => {
     }
   });
 
-  it("spells the mention form, quoting only the paths that need it", () => {
+  test("spells the mention form, quoting only the paths that need it", () => {
     expect(formatReferenceMention({ protocol: "file", path: "src/a.ts" })).toBe("@src/a.ts");
     expect(formatReferenceMention({ protocol: "file", path: "/abs/a.ts" })).toBe("@/abs/a.ts");
     expect(formatReferenceMention({ protocol: "file", path: "src/dir/" })).toBe("@src/dir/");
@@ -322,7 +322,7 @@ describe("parseReference / formatReference", () => {
   });
 
   // 产出与认领必须是同一份规则：mention 写出去后解析回来还是同一个引用。
-  it("round-trips its own mention form through the parser", () => {
+  test("round-trips its own mention form through the parser", () => {
     for (const path of ["src/a.ts", "src/dir/", "my file.ts", "my dir/"]) {
       expect(onlyReference(formatReferenceMention({ protocol: "file", path }))).toEqual({
         protocol: "file",
@@ -331,7 +331,7 @@ describe("parseReference / formatReference", () => {
     }
   });
 
-  it("encodes what would break the token syntax", () => {
+  test("encodes what would break the token syntax", () => {
     expect(formatReference({ protocol: "file", path: "src/my file(1).ts" })).toBe(
       "file:src/my%20file%281%29.ts",
     );
@@ -341,7 +341,7 @@ describe("parseReference / formatReference", () => {
     });
   });
 
-  it("rejects values that carry no reference", () => {
+  test("rejects values that carry no reference", () => {
     expect(parseReference("")).toBeUndefined();
     expect(parseReference("file:")).toBeUndefined();
     expect(parseReference("skill:")).toBeUndefined();
@@ -351,7 +351,7 @@ describe("parseReference / formatReference", () => {
 });
 
 describe("parseReferenceToken", () => {
-  it("only accepts explicit scheme tokens (inline code 的判定)", () => {
+  test("only accepts explicit scheme tokens (inline code 的判定)", () => {
     expect(parseReferenceToken("file:mise.toml")).toEqual({ protocol: "file", path: "mise.toml" });
     expect(parseReferenceToken("skill:code-review")).toEqual({
       protocol: "skill",

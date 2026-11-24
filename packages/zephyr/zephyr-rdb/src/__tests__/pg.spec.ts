@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { createPostgresTestDatabase, type PostgresTestDatabase } from "@morlay/zephyr-rdb/testing";
 import {
   count,
@@ -37,7 +37,7 @@ const parts = defineTable({
 });
 
 describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () => {
-  it("建表 / 投影聚合 / join / 批量插入 / 事务回滚 / 迁移差异", async () => {
+  test("建表 / 投影聚合 / join / 批量插入 / 事务回滚 / 迁移差异", async () => {
     const testDatabase: PostgresTestDatabase = await createPostgresTestDatabase();
     const database = await openDatabase({
       dialect: "postgres",
@@ -115,7 +115,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("PostgreSQL 上同一套构建", () =>
     }
   });
 
-  it("自定义 schema：DDL / 读写 / 迁移账本 / 结构探测都在同一处，public 不留副本", async () => {
+  test("自定义 schema：DDL / 读写 / 迁移账本 / 结构探测都在同一处，public 不留副本", async () => {
     const testDatabase: PostgresTestDatabase = await createPostgresTestDatabase();
     const catalog = defineCatalog([items, parts]);
     const config = {

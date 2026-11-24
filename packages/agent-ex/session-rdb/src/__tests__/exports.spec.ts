@@ -3,13 +3,13 @@
 // 用**包名** import 就是把 `exports` 本身当接缝：出口写错、漏了一条、文件改名，这条立刻红。
 //
 // 为什么留在根 `__tests__/`：判据是包 `exports` 三条口径的解析，横跨整个包而不属于任何一面。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import * as root from "@morlay/session-rdb";
 import * as endpoint from "@morlay/session-rdb/endpoint";
 import * as server from "@morlay/session-rdb/server";
 
 describe("包出口", () => {
-  it("包根出契约 + 默认实现（装配函数在 ./server，root 不 import server/）", () => {
+  test("包根出契约 + 默认实现（装配函数在 ./server，root 不 import server/）", () => {
     // 契约面。
     expect(typeof root.SessionBranch).toBe("function");
     expect(typeof root.SessionEditor).toBe("function");
@@ -27,7 +27,7 @@ describe("包出口", () => {
     expect(root).not.toHaveProperty("Events");
   });
 
-  it("./endpoint 出两组 remote 契约与两端共用的值", () => {
+  test("./endpoint 出两组 remote 契约与两端共用的值", () => {
     expect(typeof endpoint.SessionEditorEndpoint).toBe("function");
     expect(typeof endpoint.SessionAdminEndpoint).toBe("function");
     // 配平算法是两端共用的纯函数。
@@ -36,7 +36,7 @@ describe("包出口", () => {
     expect(endpoint.SESSION_BRANCH_VERSION_SCHEMA).toBe(1);
   });
 
-  it("./server 出宿主面的装配函数与端点实现", () => {
+  test("./server 出宿主面的装配函数与端点实现", () => {
     // **一个面一个装配函数**：行清单在包里写全，装配面只写这一句。
     expect(typeof server.provideBetterSession).toBe("function");
     expect(typeof server.SessionEditorEndpointDefault).toBe("function");
@@ -52,7 +52,7 @@ describe("包出口", () => {
     expect(names).toContain("StorageTakeoverDefault");
   });
 
-  it("会话事件由域包提供（一份权威定义，订阅方从这里取）", async () => {
+  test("会话事件由域包提供（一份权威定义，订阅方从这里取）", async () => {
     const domain = await import("@morlay/dsh-session");
     // 四个会话生命周期事件都在域包的 `Events` 命名空间下，参数表对齐上游 `SessionEventMap`。
     for (const name of [

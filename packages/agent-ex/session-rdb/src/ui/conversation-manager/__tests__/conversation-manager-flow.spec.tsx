@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 // L3：真装配（宿主 wire + 真库 + mock 模型目录）+ 真端点客户端 + 真页面。
 // 只替换模型的输出；页面动作走真 remote 到真库，断言落在「库里的行 / 页面上的行」。
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished, vi } from "vitest";
 import { zh } from "../locales.ts";
 import {
   archiveSessionsInDb,
@@ -13,8 +14,6 @@ import {
   type ManagerFlow,
 } from "../../../__tests__/support/manager-flow.ts";
 import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
-
-afterEach(cleanup);
 
 // 浏览器下载面：happy-dom 没有对象 URL，把每次下载（文件名与 zip 字节）记下来。
 function captureDownloads(): { blobs: Blob[]; filenames: string[] } {
@@ -34,29 +33,16 @@ function captureDownloads(): { blobs: Blob[]; filenames: string[] } {
   return { blobs, filenames };
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  const target = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
-  delete target.createObjectURL;
-  delete target.revokeObjectURL;
-});
-
-const flows: ManagerFlow[] = [];
-
-afterEach(async () => {
-  for (const flow of flows.splice(0)) await flow.dispose();
-});
-
 async function start(): Promise<ManagerFlow> {
   const flow = await startManagerFlow();
-  flows.push(flow);
+  onTestFinished(() => flow.dispose());
   return flow;
 }
 
 const renderPage = renderManagerPage;
 
 describe("L3 对话管理页：多选批量删除", () => {
-  it("勾选两行后一次删除，两条都从库里消失、列表重拉为空", async () => {
+  test("勾选两行后一次删除，两条都从库里消失、列表重拉为空", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "bulk-a", "甲会话");
     await seedTitledSession(flow.host, "bulk-b", "乙会话");
@@ -87,7 +73,7 @@ describe("L3 对话管理页：多选批量删除", () => {
 });
 
 describe("L3 对话管理页：批量删除的逐条结算", () => {
-  it("一条已归档一条未归档：删掉能删的，提示里带出未删那条的会话与原因", async () => {
+  test("一条已归档一条未归档：删掉能删的，提示里带出未删那条的会话与原因", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "mix-archived", "能删的会话");
     await seedTitledSession(flow.host, "mix-unarchived", "不能删的会话");
@@ -116,7 +102,7 @@ describe("L3 对话管理页：批量删除的逐条结算", () => {
 });
 
 describe("L3 对话管理页：筛选 chip", () => {
-  it("点「已归档」只剩归档行，点「全部」恢复", async () => {
+  test("点「已归档」只剩归档行，点「全部」恢复", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "archived-one", "归档过的会话");
     await seedTitledSession(flow.host, "kept-one", "没归档的会话");
@@ -140,7 +126,7 @@ describe("L3 对话管理页：筛选 chip", () => {
 });
 
 describe("L3 对话管理页：搜索两段式", () => {
-  it("前缀搜不到时自动退全文，页面标出走的是全文", async () => {
+  test("前缀搜不到时自动退全文，页面标出走的是全文", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "deep-water", "深水区报告");
     const container = renderPage(flow);
@@ -158,7 +144,7 @@ describe("L3 对话管理页：搜索两段式", () => {
 });
 
 describe("L3 对话管理页：按筛选结果批量导出", () => {
-  it("搜索命中的会话逐个下载 zip（真库里的会话、文件名按会话）", async () => {
+  test("搜索命中的会话逐个下载 zip（真库里的会话、文件名按会话）", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "export-deep", "深水区报告");
     await seedTitledSession(flow.host, "export-kept", "另一份报告");
@@ -182,7 +168,7 @@ describe("L3 对话管理页：按筛选结果批量导出", () => {
 });
 
 describe("L3 对话管理页：跨工作区复制", () => {
-  it("确认并从列表里选目标工作区后，复制出的会话挂在那个工作区上", async () => {
+  test("确认并从列表里选目标工作区后，复制出的会话挂在那个工作区上", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "copy-source", "要复制的会话");
     const container = renderPage(flow);
@@ -222,7 +208,7 @@ describe("L3 对话管理页：跨工作区复制", () => {
 });
 
 describe("L3 对话管理页：体检与修复", () => {
-  it("体检把不一致项列在页面上（真库里的漂移，页面可见）", async () => {
+  test("体检把不一致项列在页面上（真库里的漂移，页面可见）", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "drifted", "账对不上的会话");
     // 一处真实的漂移：计数行的旁路累加漏了，体检要能读出来。
@@ -241,7 +227,7 @@ describe("L3 对话管理页：体检与修复", () => {
     expect(issue?.textContent).toContain("f_turns");
   });
 
-  it("行上的修复入口把读不出来的会话修好（真库、修完可读）", async () => {
+  test("行上的修复入口把读不出来的会话修好（真库、修完可读）", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "broken", "读不出来的会话");
     // 已提交区里的一行坏掉：这份会话从库里读不出来，但行还在列表上。

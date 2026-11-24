@@ -25,7 +25,8 @@ import {
   configure,
 } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 测试内的 fs：上游本地文件系统经 `fromCordis` 接管到本仓契约令牌。 */
 @Injectable()
@@ -35,17 +36,9 @@ class LocalFs extends fromCordis(FileSystem, LocalFileSystem) {
   }
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "dsh-agent-instruction-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSessionProjection(),
@@ -58,12 +51,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("agent 指令行", () => {
-  it("依赖都在同一装配里就位，行装得上", { timeout: 20_000 }, async () => {
+  test("依赖都在同一装配里就位，行装得上", { timeout: 20_000 }, async () => {
     const app = await boot();
     // 它 inject 的两个服务 + 上游要的系统提示。
     expect(app.get(FileSystem)).toBeDefined();

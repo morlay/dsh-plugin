@@ -47,10 +47,12 @@
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/zephyr"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "vitest": "5.x"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "vitest": "5.x"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

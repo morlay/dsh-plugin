@@ -6,11 +6,7 @@
 // 为什么拆成两行：wire 端点行要 `extends WorkspaceFilesEndpoint`（组名与方法名从契约的原型链上取），
 // 而 `fromCordis(...)` 也是继承，不能同时继承。所以「装上游」在这里，「接 wire」在
 // `server/workspace-files-endpoint.service.ts`。
-import {
-  WorkspaceFilesPlugin,
-  type WorkspaceByteRange,
-  type WorkspaceFileWatchFrame,
-} from "@morlay/dsh-workspace/server";
+import { WorkspaceFilesPlugin } from "./workspace-files.face.ts";
 import { SessionStore } from "@morlay/dsh-session";
 import { FileSystem } from "@morlay/dsh-fs";
 import { SandboxPolicy } from "@morlay/dsh-sandbox";
@@ -65,4 +61,4 @@ export class WorkspaceFilesDefault extends fromCordis(WorkspaceFilesPlugin) {
   }
 }
 
-export type { WorkspaceByteRange, WorkspaceFileWatchFrame };
+export type { WorkspaceByteRange, WorkspaceFileWatchFrame } from "./workspace-files.face.ts";

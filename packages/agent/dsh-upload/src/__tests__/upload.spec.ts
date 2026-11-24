@@ -11,7 +11,8 @@ import { FileUploadStore } from "@morlay/dsh-upload";
 import { provideUpload } from "@morlay/dsh-upload/server";
 import { Connection, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /**
  * 假 agent 目录：这条 spec 不解析会话，只要满足上游 `static inject` 的名字。
@@ -153,12 +154,6 @@ class FakeConnection extends Connection {
   readonly browserPeer = {} as Connection["browserPeer"];
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 10_000);
-
 async function boot(): Promise<{ app: App; connection: FakeConnection }> {
   const app = await bootstrapApplication({
     // 顺序即装配顺序：`CommandRegistryDefault` 的契约面在它 onInit 之后才就位，
@@ -173,19 +168,19 @@ async function boot(): Promise<{ app: App; connection: FakeConnection }> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   // 按**契约**取：`FakeConnection` 的令牌是它继承的 `ClientConnection`（`app.get` 认令牌、不认实现类）。
   return { app, connection: app.get(Connection) as FakeConnection };
 }
 
 describe("fileUploads：上游单槽 resolver 语义", () => {
-  it("装配期把上游的上传路由登记进连接面（这一行接的是上游实例）", async () => {
+  test("装配期把上游的上传路由登记进连接面（这一行接的是上游实例）", async () => {
     const { app, connection } = await boot();
     expect(typeof app.get(FileUploadStore).registerAgentResolver).toBe("function");
     expect(connection.routes.map((route) => route.path)).toEqual([FILE_UPLOAD_PATH]);
   });
 
-  it("已登记时再次登记直接抛错；注销后可重新登记", async () => {
+  test("已登记时再次登记直接抛错；注销后可重新登记", async () => {
     const { app } = await boot();
     const uploads = app.get(FileUploadStore);
     const resolve = async (): Promise<never> => {
@@ -199,7 +194,7 @@ describe("fileUploads：上游单槽 resolver 语义", () => {
     expect(() => uploads.registerAgentResolver(resolve)()).not.toThrow();
   });
 
-  it("disposer 只撤自己那次登记：别人已经接管时它不再动槽位", async () => {
+  test("disposer 只撤自己那次登记：别人已经接管时它不再动槽位", async () => {
     const { app } = await boot();
     const uploads = app.get(FileUploadStore);
     const first = async (): Promise<never> => {

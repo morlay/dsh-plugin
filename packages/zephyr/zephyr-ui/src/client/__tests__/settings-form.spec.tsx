@@ -4,10 +4,9 @@
 // The settings form frame: what it says in each state, and that leaving it discards.
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import { SettingsForm, type SettingsFormShell } from "../../client/index.ts";
-
-afterEach(cleanup);
 
 const labels = {
   unavailable: "Not loaded.",
@@ -42,14 +41,14 @@ function renderForm(state: Partial<SettingsFormShell> = {}) {
   return { onSave, onDiscard };
 }
 
-it("says the namespace is not served in place of the controls", () => {
+test("says the namespace is not served in place of the controls", () => {
   renderForm({ available: false });
 
   expect(screen.getByRole("status").textContent).toBe(labels.unavailable);
   expect(screen.queryByLabelText("Field")).toBeNull();
 });
 
-it("keeps the save inert until something is staged, then saves on click", () => {
+test("keeps the save inert until something is staged, then saves on click", () => {
   const { onSave } = renderForm();
   expect(screen.getByRole("button", { name: labels.save })).toHaveProperty("disabled", true);
   cleanup();
@@ -60,7 +59,7 @@ it("keeps the save inert until something is staged, then saves on click", () => 
   expect(onSave).not.toHaveBeenCalled();
 });
 
-it("blocks the save while a draft is invalid or one is in flight, and reports a refused save", () => {
+test("blocks the save while a draft is invalid or one is in flight, and reports a refused save", () => {
   renderForm({ dirty: true, invalid: true });
   expect(screen.getByRole("button", { name: labels.save })).toHaveProperty("disabled", true);
   cleanup();
@@ -73,14 +72,14 @@ it("blocks the save while a draft is invalid or one is in flight, and reports a 
   expect(screen.getByRole("status").textContent).toBe(labels.saveFailed);
 });
 
-it("says the document is read-only over the controls", () => {
+test("says the document is read-only over the controls", () => {
   renderForm({ writable: false });
 
   expect(screen.getByRole("status").textContent).toBe(labels.readOnly);
   expect(screen.getByLabelText("Field")).toBeTruthy();
 });
 
-it("discards when it leaves the page, calling the latest discard it was given", () => {
+test("discards when it leaves the page, calling the latest discard it was given", () => {
   const first = vi.fn();
   const second = vi.fn();
   const { rerender, unmount } = render(

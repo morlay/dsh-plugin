@@ -2,7 +2,7 @@
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import McpResourceRuntime from "@deepseek-ai/dsh-mcp-resources";
-import { ToolRegistry } from "./index.ts";
+import { ToolRegistry } from "./contract/tool-registry.contract.ts";
 
 @Injectable()
 export class McpResources extends fromCordis(McpResourceRuntime) {

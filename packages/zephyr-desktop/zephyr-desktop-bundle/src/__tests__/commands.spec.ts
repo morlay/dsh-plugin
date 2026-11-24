@@ -9,7 +9,7 @@ import {
   type CliModeValues,
 } from "@morlay/zephyr-cli";
 import { fakeBuildSteps, resolvedFor } from "@morlay/zephyr-cli/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { BundleCommand } from "../commands/bundle.ts";
 import { DesktopCommand } from "../commands/desktop.ts";
 import { DesktopDevCommand } from "../commands/dev.ts";
@@ -27,7 +27,7 @@ const MODE: CliModeValues = {
 };
 
 describe("桌面插件的命令面", () => {
-  it("清单里有父命令、dev 与 bundle（父命令不可省，否则算装配错误）", () => {
+  test("清单里有父命令、dev 与 bundle（父命令不可省，否则算装配错误）", () => {
     const entries = provideDesktopBundle();
     expect(entries).toContain(DesktopCommand);
     expect(entries).toContain(DesktopDevCommand);
@@ -35,7 +35,7 @@ describe("桌面插件的命令面", () => {
     expect(entries).toContain(PackagerDefault);
   });
 
-  it("path 声明成两段：desktop 是域，dev / bundle 是阶段", async () => {
+  test("path 声明成两段：desktop 是域，dev / bundle 是阶段", async () => {
     const app = await bootstrapApplication({
       providers: [
         { provide: Logger, useValue: new CliLogger("silent") },
@@ -53,7 +53,7 @@ describe("桌面插件的命令面", () => {
     }
   });
 
-  it("desktop dev 声明 --user-data-dir（并行工作区、端口冲突时的出口都指向它）", () => {
+  test("desktop dev 声明 --user-data-dir（并行工作区、端口冲突时的出口都指向它）", () => {
     const dev = desktopDevParamsOf();
     expect(flagOf("userDataDir")).toBe("user-data-dir");
     expect(dev["userDataDir"]).toMatchObject({ kind: "string" });

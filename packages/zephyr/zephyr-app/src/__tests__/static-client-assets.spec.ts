@@ -8,11 +8,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { StaticClientAssets } from "../client-assets/static-client-assets.service.ts";
 
 /** 本轮建的临时目录（用例结束统一删）。 */
-const created: string[] = [];
 
 /** 一次应答的结果。 */
 interface Reply {
@@ -27,7 +27,7 @@ interface Reply {
  */
 async function fixtureDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "zephyr-static-"));
-  created.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   await writeFile(join(dir, "index.html"), '<!doctype html><div id="root"></div>\n', "utf8");
   await mkdir(join(dir, "demo@1.2.3"), { recursive: true });
   await writeFile(join(dir, "demo@1.2.3", "client.js"), "export const ok = 1;\n", "utf8");
@@ -65,12 +65,8 @@ async function serve(assets: StaticClientAssets, url: string): Promise<Reply | u
   };
 }
 
-afterEach(async () => {
-  await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
 describe("StaticClientAssets（prod 的 ClientAssets）", () => {
-  it("按地址投文件：client.js 与 index.html 都 200，content-type 对", async () => {
+  test("按地址投文件：client.js 与 index.html 都 200，content-type 对", async () => {
     const dir = await fixtureDir();
     const assets = new StaticClientAssets({ dir });
     const js = await serve(assets, "/_zephyr/@modules/demo@1.2.3/client.js");
@@ -83,20 +79,20 @@ describe("StaticClientAssets（prod 的 ClientAssets）", () => {
     expect(page?.body).toContain('<div id="root">');
   });
 
-  it("不存在的路径不投（404 由调用方出：它返回 false）", async () => {
+  test("不存在的路径不投（404 由调用方出：它返回 false）", async () => {
     const assets = new StaticClientAssets({ dir: await fixtureDir() });
     await expect(serve(assets, "/_zephyr/@modules/demo@1.2.3/missing.js")).resolves.toBeUndefined();
     await expect(serve(assets, "/nope.js")).resolves.toBeUndefined();
   });
 
-  it("?v= 被忽略：带与不带是同一个文件", async () => {
+  test("?v= 被忽略：带与不带是同一个文件", async () => {
     const assets = new StaticClientAssets({ dir: await fixtureDir() });
     const plain = await serve(assets, "/_zephyr/@modules/demo@1.2.3/client.js");
     const versioned = await serve(assets, "/_zephyr/@modules/demo@1.2.3/client.js?v=abcd1234");
     expect(versioned).toEqual(plain);
   });
 
-  it("hmr 恒 false，onServerSourceChange 返回可调用的撤销函数", () => {
+  test("hmr 恒 false，onServerSourceChange 返回可调用的撤销函数", () => {
     const assets = new StaticClientAssets({ dir: "/tmp/never-read" });
     expect(assets.hmr).toBe(false);
     const undo = assets.onServerSourceChange(() => {});
@@ -104,7 +100,7 @@ describe("StaticClientAssets（prod 的 ClientAssets）", () => {
     expect(() => undo()).not.toThrow();
   });
 
-  it("URL ↔ 磁盘路径一一对应：目录里每个文件都能按同一套规则取到", async () => {
+  test("URL ↔ 磁盘路径一一对应：目录里每个文件都能按同一套规则取到", async () => {
     const dir = await fixtureDir();
     const assets = new StaticClientAssets({ dir });
     const { readdir } = await import("node:fs/promises");
@@ -119,7 +115,7 @@ describe("StaticClientAssets（prod 的 ClientAssets）", () => {
     }
   });
 
-  it("穿出目录的地址一律不认（../ 不许读静态目录之外的东西）", async () => {
+  test("穿出目录的地址一律不认（../ 不许读静态目录之外的东西）", async () => {
     const assets = new StaticClientAssets({ dir: await fixtureDir() });
     await expect(serve(assets, "/_zephyr/@modules/../../package.json")).resolves.toBeUndefined();
   });

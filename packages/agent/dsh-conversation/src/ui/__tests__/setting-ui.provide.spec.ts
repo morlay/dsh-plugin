@@ -7,7 +7,7 @@
  *
  * 这条判据曾经失守过：两条清单合成一个函数、被排在链之后，报 `没有提供者：config-forms`。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { ModelSelectionSlots } from "../model-selection-slots.ts";
 import { SettingsGeneralSlots } from "../settings-general-slots.ts";
 import { SettingsHost } from "../settings-host.ts";
@@ -15,7 +15,7 @@ import { SettingsModelsSlots } from "../settings-models-slots.ts";
 import { provideSettingHost, provideSettingUi } from "../setting-ui.provide.ts";
 
 describe("设置面的两条清单", () => {
-  it("`provideSettingHost()` 只装入口行（提供 `configForms` / `settingsSchema`）", () => {
+  test("`provideSettingHost()` 只装入口行（提供 `configForms` / `settingsSchema`）", () => {
     expect(provideSettingHost()).toEqual([SettingsHost]);
     // 页面位置不许混进入口行：混进去就会把"链前"那条约束传染给槽位行。
     expect(provideSettingHost()).not.toContain(SettingsGeneralSlots);
@@ -23,7 +23,7 @@ describe("设置面的两条清单", () => {
     expect(provideSettingHost()).not.toContain(ModelSelectionSlots);
   });
 
-  it("`provideSettingUi()` 只装页面位置与模型选择器（链后）", () => {
+  test("`provideSettingUi()` 只装页面位置与模型选择器（链后）", () => {
     expect(provideSettingUi()).toEqual([
       SettingsGeneralSlots,
       SettingsModelsSlots,

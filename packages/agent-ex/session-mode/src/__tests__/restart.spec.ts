@@ -10,17 +10,9 @@ import { LlmAdapter } from "@morlay/dsh-agent/server";
 import { SessionId, type Session } from "@morlay/dsh-session/contract";
 import { JsonlSessionPersistence } from "@morlay/dsh-session-persistence";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { mountSessionModeApp } from "./support/mount-app.ts";
-
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.allSettled(apps.splice(0).map((app) => app.dispose()));
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
 
 class RecordingAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = [];
@@ -50,7 +42,7 @@ async function mountRuntime(root: string): Promise<Runtime> {
     modes: false,
     guidance: false,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   await ctx.plugin(JsonlSessionPersistence as never, { root, compression: "none" } as never);
   const bus = ctx as unknown as {
     llm: { registerAdapter(providers: readonly string[], value: unknown): void };
@@ -107,9 +99,9 @@ function appendedReminders(session: Session): number {
 }
 
 describe("服务重启后的幂等", () => {
-  it("重启后 resume 同一会话：文本没变的规则块不再补发", async () => {
+  test("重启后 resume 同一会话：文本没变的规则块不再补发", async () => {
     const root = await mkdtemp(join(tmpdir(), "assembler-restart-"));
-    roots.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const sessionId = SessionId(`assembler-restart-${Date.now()}`);
 
     const first = await mountRuntime(root);

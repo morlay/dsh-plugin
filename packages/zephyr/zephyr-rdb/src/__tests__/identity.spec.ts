@@ -1,10 +1,10 @@
 import { rm } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { createPostgresTestDatabase } from "@morlay/zephyr-rdb/testing";
 import { fingerprintHex, IDENTITY_MISMATCH_CODE, openDatabase } from "@morlay/zephyr-rdb";
 
 describe("库身份（SQLite）", () => {
-  it("首次打开认领库身份，重开校验通过；版本或身份不符即拒绝", async () => {
+  test("首次打开认领库身份，重开校验通过；版本或身份不符即拒绝", async () => {
     const path = `/tmp/zephyr-rdb-identity-${String(Date.now())}.sqlite`;
     const identity = { name: "better-session", version: 3 };
     try {
@@ -36,7 +36,7 @@ describe("库身份（SQLite）", () => {
     }
   });
 
-  it("没有配置 identity 时不动库身份", async () => {
+  test("没有配置 identity 时不动库身份", async () => {
     const path = `/tmp/zephyr-rdb-identity-none-${String(Date.now())}.sqlite`;
     try {
       const database = await openDatabase({ dialect: "sqlite", path });
@@ -54,7 +54,7 @@ describe("库身份（SQLite）", () => {
 });
 
 describe.skipIf(!process.env.TEST_PG_URL)("库身份（PostgreSQL）", () => {
-  it("schema 注释存身份：重开校验通过，版本不符拒绝", async () => {
+  test("schema 注释存身份：重开校验通过，版本不符拒绝", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const config = {
       dialect: "postgres" as const,

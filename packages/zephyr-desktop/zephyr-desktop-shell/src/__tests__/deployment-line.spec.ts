@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import type { CliModeValues } from "@morlay/zephyr-cli";
 import { deploymentLineOf } from "../deployment-line.ts";
 
@@ -15,7 +15,7 @@ const mode: CliModeValues = {
 };
 
 describe("壳的启动路径行", () => {
-  it("一行打全七个字段，顺序固定（与 CLI 侧同一字段名）", () => {
+  test("一行打全七个字段，顺序固定（与 CLI 侧同一字段名）", () => {
     const line = deploymentLineOf({
       form: "packaged",
       mode,
@@ -32,7 +32,7 @@ describe("壳的启动路径行", () => {
     expect(line).not.toContain("\n");
   });
 
-  it("userData 拿不到时写问号，packaged 关掉时写 0", () => {
+  test("userData 拿不到时写问号，packaged 关掉时写 0", () => {
     const line = deploymentLineOf({ form: "dev", mode, userData: undefined, packaged: false });
     expect(line).toContain("userData=? packaged=0");
     expect(line.startsWith("[desktop-shell] mode=dev ")).toBe(true);
@@ -40,7 +40,7 @@ describe("壳的启动路径行", () => {
 });
 
 describe("壳的启动顺序", () => {
-  it("打这一行排在把 mode 交给应用之前（两个形态都在）", async () => {
+  test("打这一行排在把 mode 交给应用之前（两个形态都在）", async () => {
     const source = await readFile(join(import.meta.dirname, "..", "app.ts"), "utf8");
     // 唯一的发生点：`reportDeployment()` 里调 `deploymentLineOf`，两个形态各调它一次。
     expect(source).toContain("deploymentLineOf({");

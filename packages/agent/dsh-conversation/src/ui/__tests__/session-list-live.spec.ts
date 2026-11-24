@@ -3,6 +3,8 @@
 // 这条钉的是用户直接看见的那件事：点「新建会话」之后侧栏里有没有那一行。它靠的不是再拉一次
 // `session/list`，而是宿主发 `api-session/added`、经 `$events` 到浏览器、store 据此 upsert。
 // 之前只有 wire 层的通路用例（unary / stream / waterfall），这条推送链断在哪一段测不出来。
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +26,6 @@ import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { SubprocessDefault } from "@morlay/dsh-shell";
 import {
   CredentialsInMemory,
-  FakeAppEnv,
   provideApiGateway,
   provideConnection,
   provideMuxServer,
@@ -43,28 +44,20 @@ import {
 } from "@morlay/zephyr-app/client";
 import { provideSessionsStore, SessionController } from "@morlay/dsh-conversation/ui";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished, vi } from "vitest";
 import { provideApiSession } from "../../server/api-session.provide.ts";
 
-const apps: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 30_000);
-
-/** 临时数据根（`FakeAppEnv` 的根是静态的，装配前设好）。 */
+/** 临时数据根（本用例自己建、自己删）。 */
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "dsh-session-list-live-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   return root;
 }
 
 /** 起宿主栈（与 dev 同形的那些行）。 */
 async function bootHost(root: string): Promise<App> {
-  FakeAppEnv.root = root;
-  process.env.PORT = "0";
+  vi.stubEnv("PORT", "0");
   const app = await bootstrapApplication({
     providers: [
       ...provideWeb(),
@@ -76,7 +69,7 @@ async function bootHost(root: string): Promise<App> {
       ...provideSession(),
       ...provideSessionProjection(),
       ...provideSessionQuerySqlite(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       ...provideAgent(),
       // `AgentDirectory.create` 要一份创建工厂（用户点「新建会话」走的就是这一行）。
       ...provideAgentLoop(),
@@ -96,12 +89,12 @@ async function bootHost(root: string): Promise<App> {
     ],
     timeoutMs: 30_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("新建会话（真宿主 + 真浏览器半）", { timeout: 30_000 }, () => {
-  it("宿主建出会话后，浏览器的列表靠推送自己出现（不再拉 list）", async () => {
+  test("宿主建出会话后，浏览器的列表靠推送自己出现（不再拉 list）", async () => {
     const root = await temporaryRoot();
     const host = await bootHost(root);
     const origin = `http://127.0.0.1:${String(host.get(WebServer).port)}`;
@@ -114,7 +107,7 @@ describe("新建会话（真宿主 + 真浏览器半）", { timeout: 30_000 }, (
       ],
       timeoutMs: 20_000,
     });
-    apps.push(client);
+    onTestFinished(() => client.dispose().catch(() => {}));
     // **先换载体再取会话面**：会话面的 onInit 会 `$on` 订阅推送，订阅一发生就按当时的载体建连；
     // 反过来（先取会话面）会先建一条用默认载体的 socket，换掉之后那条连接没人收，宿主侧也就
     // 没有活跃的事件流可推。

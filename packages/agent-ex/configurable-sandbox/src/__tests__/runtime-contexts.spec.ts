@@ -13,18 +13,12 @@ import {
   SandboxRuntimeContexts,
 } from "@morlay/configurable-sandbox";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { FakeAppEnv } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { FakePolicy } from "./support/fake-policy.ts";
-import { FakeSandboxFile } from "./support/fake-sandbox-file.ts";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => undefined);
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
+import { fakeSandboxFileOf } from "./support/fake-sandbox-file.ts";
 
 interface RegisteredContext {
   readonly name: string;
@@ -60,27 +54,26 @@ function agentOf(prompt: FakePrompt) {
 
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "configurable-sandbox-rt-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   FakePolicy.root = join(root, "ws");
   // 规则层的缺省 cwd 来自 AppEnv（不读进程 cwd）：起始目录指到本用例的 workspace。
-  FakeAppEnv.root = FakePolicy.root;
-  FakeSandboxFile.text = `access = ["rw /tmp/extra"]`;
+  const rules = `access = ["rw /tmp/extra"]`;
   const app = await bootstrapApplication({
     providers: [
-      FakeAppEnv,
-      FakeSandboxFile,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: FakePolicy.root }) },
+      fakeSandboxFileOf(rules),
       SandboxRulesDefault,
       FakePolicy,
       SandboxRuntimeContexts,
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => undefined));
   return app;
 }
 
 describe("运行时策略文本的接管时机", () => {
-  it("agent 创建时注册同名 context：第一次装配就是本包文本", async () => {
+  test("agent 创建时注册同名 context：第一次装配就是本包文本", async () => {
     const app = await boot();
     const prompt = new FakePrompt();
     const agent = agentOf(prompt);
@@ -97,7 +90,7 @@ describe("运行时策略文本的接管时机", () => {
     expect(prompt.contexts.get(SANDBOX_POLICY_CONTEXT)!.text({ agent })).toBe(text);
   });
 
-  it("没有审批服务时 approval:policy 是空串（空串遮蔽不了任何东西）", async () => {
+  test("没有审批服务时 approval:policy 是空串（空串遮蔽不了任何东西）", async () => {
     const app = await boot();
     const prompt = new FakePrompt();
     const agent = agentOf(prompt);

@@ -2,8 +2,9 @@
 // L3：会话内定位事件——真宿主 + 真端点客户端 + 真页面，条件下推到宿主，只回 seq 窗口与命中片段。
 //
 // 判据是「命中哪几行、片段里有什么、窗口是哪一段」；定位是只读的，修法是另一条入口。
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { zh } from "../locales.ts";
 import {
   seedToolSession,
@@ -12,17 +13,9 @@ import {
 } from "../../../__tests__/support/manager-flow.ts";
 import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
 
-afterEach(cleanup);
-
-const flows: ManagerFlow[] = [];
-
-afterEach(async () => {
-  for (const flow of flows.splice(0)) await flow.dispose();
-});
-
 async function start(): Promise<ManagerFlow> {
   const flow = await startManagerFlow();
-  flows.push(flow);
+  onTestFinished(() => flow.dispose());
   return flow;
 }
 
@@ -34,7 +27,7 @@ async function seedLocated(flow: ManagerFlow): Promise<{ seq: number; last: numb
 }
 
 describe("L3 对话管理页：事件定位", () => {
-  it("按工具名定位：回命中那条的 seq 与片段，窗口是整段日志，列表只读", async () => {
+  test("按工具名定位：回命中那条的 seq 与片段，窗口是整段日志，列表只读", async () => {
     const flow = await start();
     const { seq, last } = await seedLocated(flow);
     const container = renderManagerPage(flow);

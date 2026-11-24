@@ -10,7 +10,7 @@
 import { bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { RemoteShell } from "./support/fake-remote.ts";
@@ -90,7 +90,7 @@ async function boot(): Promise<{ app: App; sessions: SessionController }> {
 }
 
 describe("会话 scope 的读面", () => {
-  it("兄弟行按名字发布的服务在 `scope(id).get()` 里读得到", { timeout: 20_000 }, async () => {
+  test("兄弟行按名字发布的服务在 `scope(id).get()` 里读得到", { timeout: 20_000 }, async () => {
     const { app, sessions } = await boot();
     try {
       const scope = (sessions.scope as (id: string) => ScopeFace | undefined)("s1");
@@ -104,7 +104,7 @@ describe("会话 scope 的读面", () => {
     }
   });
 
-  it(
+  test(
     "契约实例就是装配里那一个（`app.get` 与 scope 的持有者是同一份）",
     { timeout: 20_000 },
     async () => {
@@ -117,7 +117,7 @@ describe("会话 scope 的读面", () => {
     },
   );
 
-  it(
+  test(
     "补读面之后 scope 身份不丢（`scopeOf` 仍认得出这是哪个会话）",
     { timeout: 20_000 },
     async () => {

@@ -3,8 +3,9 @@
 //
 // 窗口的边界由日历定：近 7 天 = 今天本地零点往前 6 天。「滚动窗口」（此刻 - 7 × 24h）与它的差
 // 就落在今天已经过去的那几个小时里——用例把一行钉在那段差里：自然日口径看不到它，滚动口径会看到。
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { zh } from "../locales.ts";
 import {
   seedSessionAt,
@@ -13,22 +14,14 @@ import {
 } from "../../../__tests__/support/manager-flow.ts";
 import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
 
-afterEach(cleanup);
-
-const flows: ManagerFlow[] = [];
-
-afterEach(async () => {
-  for (const flow of flows.splice(0)) await flow.dispose();
-});
-
 async function start(): Promise<ManagerFlow> {
   const flow = await startManagerFlow();
-  flows.push(flow);
+  onTestFinished(() => flow.dispose());
   return flow;
 }
 
 describe("L3 对话管理页：时间筛选", () => {
-  it("近 7 天从本地零点算起：只有滚动窗口才会包含的那一行被排除", async () => {
+  test("近 7 天从本地零点算起：只有滚动窗口才会包含的那一行被排除", async () => {
     const flow = await start();
     // 近 7 天的下界：今天零点往前 6 天（本地时区）。
     const lower = new Date();

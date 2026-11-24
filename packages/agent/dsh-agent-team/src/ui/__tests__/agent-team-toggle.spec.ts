@@ -13,15 +13,10 @@
  * 替身的边界：`FakeRemote.$mount` 复刻 `RemoteDefault.publishNamespace` 的**唯一关键行为**——
  * 按 descriptor 把 `remote.<namespace>` 发布成服务名（不发布，上游的 `ctx.inject` 就等不到）。
  */
-import {
-  bootstrapApplication,
-  Injectable,
-  rootContextKey,
-  type App,
-  type Context,
-} from "@morlay/zephyr";
+import { bootstrapApplication, Injectable, rootContextKey, type Context } from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { AgentTeamUi } from "../agent-team.ui.ts";
 
 /** 一条 descriptor 的最小形状（`TYPERT_REMOTE.descriptors` 的子集）。 */
@@ -104,12 +99,6 @@ class FakeLocale extends Locale {
   readonly subscribe: Locale["subscribe"] = () => () => {};
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
-
 /**
  * 起这一行，并声明它要注册的那个菜单槽位。
  * @returns `Slots` 与 `Remote` 替身。
@@ -119,7 +108,7 @@ async function boot(): Promise<{ slots: Slots; remote: FakeRemote }> {
     providers: [...provideRenderer(), FakeRemote, FakeLocale, AgentTeamUi],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const slots = app.get(Slots);
   // 位置由上游 `ui-model-selection` 声明（`conversation.input.model.options`，list/session）；
   // 本 spec 只装 agent-team 这一行，所以按同一形状声明一次，否则上游的注册会一直等位置。
@@ -143,7 +132,7 @@ async function boot(): Promise<{ slots: Slots; remote: FakeRemote }> {
 }
 
 describe("模型菜单里的「启用智能体团队协作」开关", () => {
-  it("AgentTeamUi 挂上 agentTeams 那组 remote，开关才注册进菜单", async () => {
+  test("AgentTeamUi 挂上 agentTeams 那组 remote，开关才注册进菜单", async () => {
     const { slots, remote } = await boot();
     expect(remote.mounted, "AgentTeamUi 必须自己 `$mount` 这组 descriptor").toContain("agentTeams");
     await until(() => slots.entries("conversation.input.model.options" as never).length > 0);

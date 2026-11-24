@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { defineTable } from "../defs.ts";
 import { fragment } from "../fragment.ts";
 import { createDialect } from "../dialect.ts";
@@ -38,7 +38,7 @@ function scopedExecutor(label: string, seen: string[]): Executor {
 }
 
 describe("事务作用域", () => {
-  it("事务内的读与写都走事务给的执行面，事务外走基础执行面", async () => {
+  test("事务内的读与写都走事务给的执行面，事务外走基础执行面", async () => {
     const seen: string[] = [];
     const base = scopedExecutor("base", seen);
     const database: Database = createDatabase(createDialect("sqlite"), base, indexCatalog([users]));

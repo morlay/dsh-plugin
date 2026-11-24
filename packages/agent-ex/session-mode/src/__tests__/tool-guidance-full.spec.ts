@@ -16,7 +16,8 @@ import type { ToolExecutor } from "@morlay/dsh-agent/contract";
 
 import type { TestContext } from "./support/context.ts";
 import { dispatchPreStep } from "./support/pre-step.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { SHORT_TOOL_DESCRIPTIONS, TOOL_GROUPS } from "@morlay/session-mode";
 // 装配入口是 `bootstrapApplication` + `app.get(Token)`：一次 bootstrap 拿到真 cordis 根 ctx（`App.ctx`），
 // 卸载走 `app.dispose()`。为什么不再有「逐行挂」的第二套内核：它与 `bootstrapApplication` 里的装配重复，
@@ -30,15 +31,6 @@ function injectedNameOf(message: { readonly source: unknown }): string | undefin
   const { kind, name } = message.source as { readonly kind?: unknown; readonly name?: unknown };
   return kind === "skill-invocation" && typeof name === "string" ? name : undefined;
 }
-
-const apps: Awaited<ReturnType<typeof bootstrapApplication>>[] = [];
-const mounted: { dispose(): Promise<void> }[][] = [];
-
-afterEach(async () => {
-  for (const rows of mounted.splice(0))
-    await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
-  for (const app of apps.splice(0)) await app.dispose();
-});
 
 // 上游工具行的替身：描述刻意写长，用来验证本插件把它换成了短描述。
 function fixtureTool(toolName: string) {
@@ -195,7 +187,7 @@ async function mount(
     }),
     timeoutMs: 30_000,
   } as never);
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   const ctx = app.ctx as unknown as TestContext;
   await ctx.plugin(SkillRegistry);
   // 通道与收口由装配清单装（`provideSessionMode` 里的那两行）：它们已在 providers 里，这里不再手工挂。
@@ -300,7 +292,7 @@ async function modelSkills(ctx: TestContext, agent: Agent): Promise<string[]> {
 }
 
 describe("工具目录", () => {
-  it("全部工具都在目录里，分组不裁剪 schema", async () => {
+  test("全部工具都在目录里，分组不裁剪 schema", async () => {
     const { ctx, agent } = await mount();
     const names = visibleSchemas(ctx, agent).map((tool) => tool.name);
 
@@ -309,7 +301,7 @@ describe("工具目录", () => {
     }
   });
 
-  it("上游的长描述在请求投影里被换成中文短描述，执行不受影响", async () => {
+  test("上游的长描述在请求投影里被换成中文短描述，执行不受影响", async () => {
     const { ctx, agent } = await mount();
 
     expect(await toolDescription(ctx, agent, "read")).toBe(SHORT_TOOL_DESCRIPTIONS["read"]);
@@ -328,7 +320,7 @@ describe("工具目录", () => {
     expect(batch.results[0]?.result.error).toBeUndefined();
   });
 
-  it("参数描述整段丢弃（语义在组 skill 正文里），执行不受影响", async () => {
+  test("参数描述整段丢弃（语义在组 skill 正文里），执行不受影响", async () => {
     const { ctx, agent } = await mount();
     const projected = JSON.stringify(
       projectedTools(ctx, agent).find((tool) => tool.name === "read")?.parameters,
@@ -358,7 +350,7 @@ describe("工具目录", () => {
     expect(batch.results[0]?.result.error).toBeUndefined();
   });
 
-  it("就地改工具定义：注册表里那份描述与参数就是模型看到的那份", async () => {
+  test("就地改工具定义：注册表里那份描述与参数就是模型看到的那份", async () => {
     // 在 agent 作用域重新注册同名工具会同步触发 `tools/change`，而上游 tool-subagent 用该事件做
     // composition reconcile——两边互相触发会让装配风暴式重入（曾把 session 创建卡死）。
     // 现在改写直接落在定义对象上（`agent/created` 时按该会话的视图改），不注册新定义、不发事件。
@@ -371,21 +363,21 @@ describe("工具目录", () => {
 });
 
 describe("用法说明的分发（注册进官方 skill 注册表）", () => {
-  it("按需的三组各一个组 skill：官方注册表列得出来、拿得到正文", async () => {
+  test("按需的三组各一个组 skill：官方注册表列得出来、拿得到正文", async () => {
     const { ctx, agent } = await mount();
 
     // 组 skill 只在**对应工具真的注册**时出现：这个装配没有 plan/swarm/mcp 的工具，所以一个都没有。
     expect(await modelSkills(ctx, agent)).toEqual([]);
   });
 
-  it("base 不进官方目录：它的正文已经在手上，列出来只会让模型再加载一遍", async () => {
+  test("base 不进官方目录：它的正文已经在手上，列出来只会让模型再加载一遍", async () => {
     const { ctx, agent } = await mount();
 
     expect(await modelSkills(ctx, agent)).not.toContain(BASE_SKILL);
     expect(await ctx.skills.get(BASE_SKILL, { scope: agent })).toBeUndefined();
   });
 
-  it("上游逐工具说明不进系统提示词", async () => {
+  test("上游逐工具说明不进系统提示词", async () => {
     const { ctx, agent } = await mount();
     const rendered = renderPrompt(await assembly(ctx, agent));
 
@@ -394,7 +386,7 @@ describe("用法说明的分发（注册进官方 skill 注册表）", () => {
 });
 
 describe("base 组正文的常驻注入", () => {
-  it("首步注入一次：内容块信封、source 是上游 skill-invocation、正文是中文列表", async () => {
+  test("首步注入一次：内容块信封、source 是上游 skill-invocation、正文是中文列表", async () => {
     const { ctx, agent } = await mount();
     const messages = await preStep(ctx, agent, [prompt("任务")]);
 
@@ -415,7 +407,7 @@ describe("base 组正文的常驻注入", () => {
     expect(text).not.toContain("READ_GUIDE");
   });
 
-  it("落点在本步认领的用户消息之后，不是列表末尾", async () => {
+  test("落点在本步认领的用户消息之后，不是列表末尾", async () => {
     // 末尾那个位置归官方 `tool-skill` 的目录、上游的 runtime context：我们不动它们。
     const { ctx, agent } = await mount();
     const claimed = prompt("任务");
@@ -445,14 +437,14 @@ describe("base 组正文的常驻注入", () => {
     expect(kinds.slice(1, -1)).toContain("injected");
   });
 
-  it("第二步不重发（surface 上同键最近一条的正文逐字相等）", async () => {
+  test("第二步不重发（surface 上同键最近一条的正文逐字相等）", async () => {
     const { ctx, agent } = await mount();
 
     expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
     expect(await step(ctx, agent, "继续")).toEqual([]);
   });
 
-  it("压缩掉那条注入后补发（模型真的看不到了）", async () => {
+  test("压缩掉那条注入后补发（模型真的看不到了）", async () => {
     const { ctx, agent } = await mount();
     expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
 
@@ -477,7 +469,7 @@ describe("base 组正文的常驻注入", () => {
     expect(onSurface()).toBe(true);
   });
 
-  it("正文随装配目录变化重发：装了新工具就追加一条新的", async () => {
+  test("正文随装配目录变化重发：装了新工具就追加一条新的", async () => {
     const { ctx, agent } = await mount({ tools: ["read"] });
     expect((await step(ctx, agent, "任务")).length).toBeGreaterThan(0);
     expect(await step(ctx, agent, "继续")).toEqual([]);
@@ -488,7 +480,7 @@ describe("base 组正文的常驻注入", () => {
     expect(body).toContain("- bash：");
   });
 
-  it("PTC 会话：run_code 豁免，其余工具在程序内可用，用法照列", async () => {
+  test("PTC 会话：run_code 豁免，其余工具在程序内可用，用法照列", async () => {
     // 两层：模型面只有 `run_code`，但其余工具经 `run_code` 代理在程序内可调——所以注入判据用
     // 「注册表 ∩ 模式收窄」（`sessionModes.knownToolsOf`），`run_code` 单独豁免补上。
     const { ctx, agent } = await mount({ ptc: true });
@@ -500,7 +492,7 @@ describe("base 组正文的常驻注入", () => {
     expect(body).toContain("- bash：");
   });
 
-  it("不收窄的会话：基础动作那几行都在（上一条的成对另一半）", async () => {
+  test("不收窄的会话：基础动作那几行都在（上一条的成对另一半）", async () => {
     const { ctx, agent } = await mount();
 
     const body = (await step(ctx, agent, "任务")).join("\n");
@@ -510,7 +502,7 @@ describe("base 组正文的常驻注入", () => {
     expect(body).toContain("- bash：");
   });
 
-  it("groups: false 时既不注册组 skill 也不注入（工具预处理照旧）", async () => {
+  test("groups: false 时既不注册组 skill 也不注入（工具预处理照旧）", async () => {
     const { ctx, agent } = await mount({ config: { groups: false } });
 
     expect(await modelSkills(ctx, agent)).toEqual([]);

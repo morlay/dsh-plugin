@@ -5,7 +5,7 @@
 // 判据是**源码里的 import 语句**，不是运行时——这类错误必须在不跑起来的时候就红。
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 
 const SRC = join(import.meta.dirname, "..");
 
@@ -26,7 +26,7 @@ async function sourcesOf(dir: string): Promise<string[]> {
 }
 
 describe("面的边界", () => {
-  it("浏览器半不引宿主半（也不引包根）", async () => {
+  test("浏览器半不引宿主半（也不引包根）", async () => {
     const offenders: string[] = [];
     for (const file of await sourcesOf(join(SRC, "ui"))) {
       const source = await readFile(file, "utf8");
@@ -40,7 +40,7 @@ describe("面的边界", () => {
     expect(offenders, "浏览器半不许引宿主半：把要用的纯函数/值放 ./endpoint").toEqual([]);
   });
 
-  it("宿主半不引浏览器半", async () => {
+  test("宿主半不引浏览器半", async () => {
     const offenders: string[] = [];
     for (const file of await sourcesOf(join(SRC, "server"))) {
       const source = await readFile(file, "utf8");

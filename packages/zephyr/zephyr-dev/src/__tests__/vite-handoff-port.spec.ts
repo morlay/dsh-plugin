@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { bootstrapApplication, configure, Injectable } from "@morlay/zephyr";
 import { WebServer, WebStartup } from "@morlay/zephyr-app";
 import { AppEnvDefault, provideAppEnv, WebServerDefault } from "@morlay/zephyr-app/testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 import { Federation } from "../federation/federation.contract.ts";
 import { ViteHandoff } from "../vite-handoff/vite-handoff.contract.ts";
 import { provideViteHandoff } from "../vite-handoff/provide.ts";
@@ -58,11 +59,9 @@ class FakeFederation extends Federation {
 }
 
 describe("vite handoff 的 HMR 端口", () => {
-  beforeEach(() => {
+  test("`pagePort` 取**实际监听端口**（3081），不是期望端口（3080）", async () => {
+    // mock 记录是 `vi.hoisted` 的容器（工厂要用它）：每条用例开头显式清空。
     received.length = 0;
-  });
-
-  it("`pagePort` 取**实际监听端口**（3081），不是期望端口（3080）", async () => {
     const app = await bootstrapApplication({
       providers: [
         ...provideAppEnv(
@@ -90,7 +89,9 @@ describe("vite handoff 的 HMR 端口", () => {
     }
   });
 
-  it("关掉客户端 HMR：不透传 `hmr` 之外的接线，且契约面报 false", async () => {
+  test("关掉客户端 HMR：不透传 `hmr` 之外的接线，且契约面报 false", async () => {
+    // mock 记录是 `vi.hoisted` 的容器（工厂要用它）：每条用例开头显式清空。
+    received.length = 0;
     const app = await bootstrapApplication({
       providers: [
         ...provideAppEnv(

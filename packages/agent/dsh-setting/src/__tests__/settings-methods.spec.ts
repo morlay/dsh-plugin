@@ -7,7 +7,7 @@
  * 上游 `namespace === "settings"` 的 descriptor 方法集」，两头都不写死字符串。
  */
 import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { SettingsEndpoint } from "../endpoint/settings.group.ts";
 import { SETTINGS_REMOTE } from "../endpoint/index.ts";
 
@@ -37,14 +37,14 @@ function settingsEndpointMethods(): string[] {
 }
 
 describe("settings 组的方法名", () => {
-  it("契约类的方法集等于上游 descriptor 的 `settings` 方法集", () => {
+  test("契约类的方法集等于上游 descriptor 的 `settings` 方法集", () => {
     const upstream = settingsMethodsOf(SETTINGS_REMOTE);
     // 先钉住"解析确实拿到了这 5 个"（解析失手会得到空数组，那样下面的对齐会假绿）。
     expect(upstream).toEqual(["describe", "mutate", "openSettingsDocument", "replace", "update"]);
     expect(settingsEndpointMethods()).toEqual(upstream);
   });
 
-  it("不含 `set` / `unset`：它们是 `credentials` 组的方法", () => {
+  test("不含 `set` / `unset`：它们是 `credentials` 组的方法", () => {
     const methods = settingsEndpointMethods();
     expect(methods).not.toContain("set");
     expect(methods).not.toContain("unset");

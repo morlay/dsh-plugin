@@ -6,9 +6,6 @@
 //
 // 为什么值得单独测：实机上点确认"什么都不发"时，有两种可能——命令没注册（宿主侧），或 chip 早退（前端）。
 // 这条绿了，就说明宿主侧一直是好的，问题只能在 chip 拿到的那条会话身份上。
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideAgent } from "@morlay/dsh-agent";
@@ -21,65 +18,33 @@ import { SessionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import {
-  AppEnv,
-  RemoteHandlers,
-  RemoteHandlersDefault,
-  type AppEnvValues,
-} from "@morlay/zephyr-app";
+import { type App } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
-import { provideLocalRemote } from "@morlay/zephyr-app/testing";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-permission-switch-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 指向临时目录的运行环境。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
+/** 一份双端装配：host 断后端、client 断前端；生命周期由 `bootTwoSided` 自己收。 */
+interface Booted {
+  /** 后端装配（会话 / agent / 权限 / 命令都在这一侧）。 */
+  readonly host: App;
+  /** 前端装配（只持传输，`LocalRemote` 是两 ctx 之间唯一的桥）。 */
+  readonly client: App;
+  readonly sessionId: string;
 }
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 /**
  * 起完整的一行：会话 + agent + 权限（默认 `workspace-write`）+ 命令面。
- * @returns handler 表、会话 id 与 app。
+ * @returns 双端装配与建好的会话 id。
  */
-async function boot(): Promise<{
-  /** 后端装配（会话 / agent / 权限 / 命令都在这一侧）。 */
-  host: Awaited<ReturnType<typeof bootstrapApplication>>;
-  /** 前端装配（只持传输，`LocalRemote` 是两 ctx 之间唯一的桥）。 */
-  client: Awaited<ReturnType<typeof bootstrapApplication>>;
-  sessionId: string;
-}> {
-  // 两套装配两个 ctx：host = 会话 / agent / 权限 / 命令；client 只有传输与客户端形态。
-  const host = await bootstrapApplication({
-    providers: [
+async function boot(appEnv: TestingAppEnv): Promise<Booted> {
+  const two = await bootTwoSided({
+    createHost: () => [
       ...provideSession(),
       ...provideSessionProjection(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideAgent(),
       // 顺序即装配顺序：`shell` / `bash` 的适配面要先就位，权限行构造期就读 `ctx.shell.sandboxMode`。
       SubprocessDefault,
@@ -94,22 +59,19 @@ async function boot(): Promise<{
       { provide: AgentLoopDefault, config: { agents: [] } },
       RemoteHandlersDefault,
     ],
-    timeoutMs: 20_000,
+    // client 装配：只持传输（`LocalRemote` 是两 ctx 之间唯一的桥）。
+    createClient: (booted) => clientWithTransport(booted, []),
   });
-  apps.push(host);
-  const hostInvoker = async (endpoint: string, payload: Readonly<Record<string, unknown>>) =>
-    host.get(RemoteHandlers).invoke(endpoint, payload);
-  // client 装配：只持传输（`LocalRemote` 是两 ctx 之间唯一的桥）。
-  const app = await bootstrapApplication({
-    providers: [...provideLocalRemote(hostInvoker)],
-    timeoutMs: 20_000,
-  });
-  apps.push(app);
-  const sessionId = host.get(SessionStore).prepare().id;
-  await host
+  if (two.client === undefined) throw new Error("client 没装上");
+  const sessionId = two.host.get(SessionStore).prepare().id;
+  await two.host
     .get(AgentLoop)
-    .create(sessionId, { provider: "deepseek-official", model: "deepseek-flash" }, { cwd: root });
-  return { host, client: app, sessionId };
+    .create(
+      sessionId,
+      { provider: "deepseek-official", model: "deepseek-flash" },
+      { cwd: appEnv.values.dataDir },
+    );
+  return { host: two.host, client: two.client, sessionId };
 }
 
 /**
@@ -117,17 +79,12 @@ async function boot(): Promise<{
  * @param app - 装配结果（`remote` 走它的 `LocalRemote`）。
  * @returns 可以直接 `execute(…)` 的客户端。
  */
-function commandClientOf(
-  client: Awaited<ReturnType<typeof bootstrapApplication>>,
-): CommandEndpointClient {
+function commandClientOf(client: App): CommandEndpointClient {
   return Object.assign(new CommandEndpointClient(), { remote: client.get(Remote) });
 }
 
 /** 会话的 `permissions` 投影（宿主侧注册表里的当前值）。 */
-function permissionOf(
-  app: Awaited<ReturnType<typeof bootstrapApplication>>,
-  sessionId: string,
-): unknown {
+function permissionOf(app: App, sessionId: string): unknown {
   const projections = app.get(SessionProjectionStore);
   const session = app.get(SessionStore).get(SessionId(sessionId));
   if (session === undefined) throw new Error(`会话 "${sessionId}" 不在 store 里`);
@@ -136,39 +93,47 @@ function permissionOf(
 }
 
 describe("权限 chip 的宿主侧", () => {
-  it("`/permission danger-full-access` 真的把会话档位切过去", { timeout: 30_000 }, async () => {
-    const { host, client, sessionId } = await boot();
-    // 起点：装配给的默认档位。
-    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
+  test(
+    "`/permission danger-full-access` 真的把会话档位切过去",
+    { timeout: 30_000 },
+    async ({ appEnv }) => {
+      const { host, client, sessionId } = await boot(appEnv);
+      // 起点：装配给的默认档位。
+      expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
 
-    // chip 点确认后发的那一行（上游 `submit` 就是 `live.command('/permission <preset>')`）。
-    // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
-    const executed = await commandClientOf(client).execute({
-      sessionId,
-      name: "permission",
-      input: "danger-full-access",
-    });
-    expect(executed.result.kind, "/permission 应成功结算").toBe("success");
+      // chip 点确认后发的那一行（上游 `submit` 就是 `live.command('/permission <preset>')`）。
+      // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
+      const executed = await commandClientOf(client).execute({
+        sessionId,
+        name: "permission",
+        input: "danger-full-access",
+      });
+      expect(executed.result.kind, "/permission 应成功结算").toBe("success");
 
-    // 会话档位变了……
-    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "danger-full-access" });
-    // ……而"新会话的默认档位"不受影响（它由设置文档管，不随当前会话切换）。
-    // 端点客户端是**前端形态**：只挂 `Remote`，不进装配（后端那份是同令牌的宿主实现）。
-    const catalog = await Object.assign(new PermissionPresetsEndpointClient(), {
-      remote: client.get(Remote),
-    }).catalog();
-    if (!catalog.ok) throw new Error("permissionPresets/catalog 失败：" + catalog.error.message);
-    expect(catalog.value.defaultPreset).toBe("workspace-write");
-  });
+      // 会话档位变了……
+      expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "danger-full-access" });
+      // ……而"新会话的默认档位"不受影响（它由设置文档管，不随当前会话切换）。
+      // 端点客户端是**前端形态**：只挂 `Remote`，不进装配（后端那份是同令牌的宿主实现）。
+      const catalog = await Object.assign(new PermissionPresetsEndpointClient(), {
+        remote: client.get(Remote),
+      }).catalog();
+      if (!catalog.ok) throw new Error("permissionPresets/catalog 失败：" + catalog.error.message);
+      expect(catalog.value.defaultPreset).toBe("workspace-write");
+    },
+  );
 
-  it("不带 preset 的 `/permission` 只回报当前档位，不改它", { timeout: 30_000 }, async () => {
-    const { host, client, sessionId } = await boot();
-    const executed = await commandClientOf(client).execute({
-      sessionId,
-      name: "permission",
-      input: " ",
-    });
-    expect(executed.result.kind).toBe("success");
-    expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
-  });
+  test(
+    "不带 preset 的 `/permission` 只回报当前档位，不改它",
+    { timeout: 30_000 },
+    async ({ appEnv }) => {
+      const { host, client, sessionId } = await boot(appEnv);
+      const executed = await commandClientOf(client).execute({
+        sessionId,
+        name: "permission",
+        input: " ",
+      });
+      expect(executed.result.kind).toBe("success");
+      expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
+    },
+  );
 });

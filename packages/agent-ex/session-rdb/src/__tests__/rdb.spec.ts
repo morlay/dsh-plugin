@@ -9,7 +9,8 @@ import {
   createToolResultMessage,
   createUserMessage,
 } from "@morlay/dsh-agent/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 
 import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -51,11 +52,6 @@ import { runPersistenceContract } from "@morlay/dsh-session-persistence/testing"
 import { openInitializedSqlite } from "./support/sqlite.ts";
 import { createCtx, mountOnto, type MountedContext as Context } from "./support/base.ts";
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
-
 async function expectFlushError(promise: Promise<unknown>, message: RegExp): Promise<void> {
   try {
     await promise;
@@ -69,7 +65,7 @@ async function expectFlushError(promise: Promise<unknown>, message: RegExp): Pro
 
 async function freshDbPath(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dsh-sqlite-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return join(dir, "sessions.db");
 }
 
@@ -165,7 +161,7 @@ runCoordinatorContract("sqlite", async () => {
 });
 
 describe("eventDimensions", () => {
-  it("classifies boundary events as turn kind with empty role", () => {
+  test("classifies boundary events as turn kind with empty role", () => {
     const { kind, role, name, actionId } = eventDimensions({
       type: "turn/start",
       seq: SessionSeq(0),
@@ -175,7 +171,7 @@ describe("eventDimensions", () => {
     expect([kind, role, name, actionId]).toEqual(["turn", "", "", ""]);
   });
 
-  it("classifies messages as user/assistant roles", () => {
+  test("classifies messages as user/assistant roles", () => {
     expect(
       eventDimensions({
         type: "user/message",
@@ -208,7 +204,7 @@ describe("eventDimensions", () => {
     ).toBe("assistant");
   });
 
-  it("classifies assistant/message with reasoning blocks as thinking kind", () => {
+  test("classifies assistant/message with reasoning blocks as thinking kind", () => {
     const dims = eventDimensions({
       type: "assistant/message",
       seq: SessionSeq(2),
@@ -232,7 +228,7 @@ describe("eventDimensions", () => {
     expect(dims.role).toBe("assistant");
   });
 
-  it("extracts the function name and call id from tool/call", () => {
+  test("extracts the function name and call id from tool/call", () => {
     const dims = eventDimensions({
       type: "tool/call",
       seq: SessionSeq(4),
@@ -242,7 +238,7 @@ describe("eventDimensions", () => {
     expect(dims).toEqual({ kind: "tool", role: "", name: "read", actionId: "call-1" });
   });
 
-  it("extracts the call id from tool/result and classifies todo/write as todo kind", () => {
+  test("extracts the call id from tool/result and classifies todo/write as todo kind", () => {
     const callId = ToolCallId("call-2");
     const result = eventDimensions({
       type: "tool/result",
@@ -266,7 +262,7 @@ describe("eventDimensions", () => {
     });
   });
 
-  it("keeps empty defaults for unknown plugin-merged event types", () => {
+  test("keeps empty defaults for unknown plugin-merged event types", () => {
     expect(
       eventDimensions({
         type: "plugin/custom",
@@ -296,13 +292,13 @@ describe("scanRows", () => {
       };
     });
 
-  it("preserves the full log when it ends exactly on a turn/end (no torn tail)", () => {
+  test("preserves the full log when it ends exactly on a turn/end (no torn tail)", () => {
     const { preserved, tornFrom } = scanRows(rows(oneTurnLog()));
     expect(preserved).toEqual(oneTurnLog());
     expect(tornFrom).toBeUndefined();
   });
 
-  it("PRESERVES the real events of an interrupted turn after the last turn/end", () => {
+  test("PRESERVES the real events of an interrupted turn after the last turn/end", () => {
     const withOpenTurn: SessionEvent[] = [
       ...oneTurnLog(),
       {
@@ -318,7 +314,7 @@ describe("scanRows", () => {
     expect(tornFrom).toBeUndefined();
   });
 
-  it("preserves the contiguous prefix and flags a torn tail at a seq gap", () => {
+  test("preserves the contiguous prefix and flags a torn tail at a seq gap", () => {
     const gapped: SessionEvent[] = [
       {
         type: "turn/start",
@@ -333,11 +329,11 @@ describe("scanRows", () => {
     expect(tornFrom).toBe(1);
   });
 
-  it("an empty log preserves nothing and has no torn tail", () => {
+  test("an empty log preserves nothing and has no torn tail", () => {
     expect(scanRows([])).toEqual({ preserved: [] });
   });
 
-  it("throws on a seq gap inside the committed region (before the last turn/end)", () => {
+  test("throws on a seq gap inside the committed region (before the last turn/end)", () => {
     const gapped: SessionEvent[] = [
       {
         type: "turn/start",
@@ -356,7 +352,7 @@ describe("scanRows", () => {
     expect(() => scanRows(rows(gapped))).toThrow(/seq gap in committed region/);
   });
 
-  it("throws on an unparsable row inside the committed region", () => {
+  test("throws on an unparsable row inside the committed region", () => {
     const withCorruptCommitted: EventRow[] = [
       {
         fEventId: "evt-0",
@@ -386,7 +382,7 @@ describe("scanRows", () => {
     expect(() => scanRows(withCorruptCommitted)).toThrow(/unparsable committed event/);
   });
 
-  it("tolerates an unparsable torn-tail row after the last turn/end", () => {
+  test("tolerates an unparsable torn-tail row after the last turn/end", () => {
     const withCorruptTail: EventRow[] = [
       ...rows(oneTurnLog()),
       {
@@ -409,7 +405,7 @@ describe("scanRows", () => {
 });
 
 describe("rowToMeta", () => {
-  it("rejects fractional stored creation metadata", () => {
+  test("rejects fractional stored creation metadata", () => {
     expect(() =>
       rowToMeta({
         fSessionId: "fractional",
@@ -434,7 +430,7 @@ describe("rowToMeta", () => {
 });
 
 describe("rowToEvent", () => {
-  it("parses surface fields from EventRow columns", () => {
+  test("parses surface fields from EventRow columns", () => {
     const row: EventRow = {
       fEventId: "evt-0",
       fSequence: 0,
@@ -454,7 +450,7 @@ describe("rowToEvent", () => {
     expect((event as SurfaceEvent).sourceEventSeqs).toBeUndefined();
   });
 
-  it("keeps a compact shadowedRange verbatim with an identity map (no delta filtering)", () => {
+  test("keeps a compact shadowedRange verbatim with an identity map (no delta filtering)", () => {
     const row: EventRow = {
       fEventId: "evt-3",
       fSequence: 3,
@@ -506,7 +502,7 @@ describe("findSurfaceRepairs", () => {
     };
   }
 
-  it("degrades an invalid tool/result replace to append (the reported load failure)", () => {
+  test("degrades an invalid tool/result replace to append (the reported load failure)", () => {
     const events: SessionEvent[] = [
       { type: "turn/start", seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       {
@@ -554,7 +550,7 @@ describe("findSurfaceRepairs", () => {
     expect(repairs.clearSurfaceOp.size).toBe(0);
   });
 
-  it("keeps a valid tool/result content-only rewrite untouched", () => {
+  test("keeps a valid tool/result content-only rewrite untouched", () => {
     const original = toolResult(5, "full result", { surfaceOp: "append" }, "msg-1");
     const replacement = toolResult(
       6,
@@ -603,7 +599,7 @@ describe("findSurfaceRepairs", () => {
     expect(repairs.clearSurfaceOp.size).toBe(0);
   });
 
-  it("degrades a replace whose range is not in the current surface", () => {
+  test("degrades a replace whose range is not in the current surface", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -637,7 +633,7 @@ describe("findSurfaceRepairs", () => {
     expect([...repairs.degradeToAppend]).toEqual([1]);
   });
 
-  it("marks surface-eligible events missing surfaceOp and clears it on non-eligible events", () => {
+  test("marks surface-eligible events missing surfaceOp and clears it on non-eligible events", () => {
     const events: SessionEvent[] = [
       // 盘上存着的坏数据：表面事件缺 surfaceOp、非表面事件带着 surfaceOp。类型上都不成立，
       // 这两条正是修复器要处理的输入（判据见回报的「夹具坏数据」清单）。
@@ -665,7 +661,7 @@ describe("findSurfaceRepairs", () => {
     expect(repairs.degradeToAppend.size).toBe(0);
   });
 
-  it("degrades a malformed surfaceOp shape", () => {
+  test("degrades a malformed surfaceOp shape", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -700,7 +696,7 @@ describe("findSurfaceRepairs", () => {
     expect([...repairs.degradeToAppend]).toEqual([1]);
   });
 
-  it("clamps a replace end that fell into the old coordinate space onto the metering count", () => {
+  test("clamps a replace end that fell into the old coordinate space onto the metering count", () => {
     const events: SessionEvent[] = [
       { type: "turn/start", seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       {
@@ -767,7 +763,7 @@ describe("findSurfaceRepairs", () => {
     expect(repairs.degradeToAppend.size).toBe(0);
   });
 
-  it("degrades an out-of-range replace whose start is also off the current surface", () => {
+  test("degrades an out-of-range replace whose start is also off the current surface", () => {
     const events: SessionEvent[] = [
       {
         type: "compaction/summary",
@@ -801,7 +797,7 @@ describe("findSurfaceRepairs", () => {
 });
 
 describe("read-view repair", () => {
-  it("fills a missing assistant settlement stream with an empty array", () => {
+  test("fills a missing assistant settlement stream with an empty array", () => {
     const events = [
       {
         type: "assistant/message",
@@ -836,7 +832,7 @@ describe("read-view repair", () => {
     expect((events[1]!.data as unknown as { stream: unknown }).stream).toEqual([]);
   });
 
-  it("rewrites a stale metering range onto the adjacent replace's dense range", () => {
+  test("rewrites a stale metering range onto the adjacent replace's dense range", () => {
     const events = [
       {
         type: "compaction/summary",
@@ -900,7 +896,7 @@ describe("read-view repair", () => {
     ]);
   });
 
-  it("leaves an already-aligned metering event (and its extra concurrent seqs) untouched", () => {
+  test("leaves an already-aligned metering event (and its extra concurrent seqs) untouched", () => {
     const events = [
       {
         type: "compaction/summary",
@@ -935,7 +931,7 @@ describe("read-view repair", () => {
 });
 
 describe("recomputeReplaceProvenance", () => {
-  it("recomputes sourceEventSeqs as the range's surface nodes for every replace", () => {
+  test("recomputes sourceEventSeqs as the range's surface nodes for every replace", () => {
     const events: SessionEvent[] = [
       { type: "turn/start", seq: SessionSeq(7), time: 1, data: { turn: 1 } },
       {
@@ -976,7 +972,7 @@ describe("recomputeReplaceProvenance", () => {
     ).toBeUndefined();
   });
 
-  it("merges every surface node in the range (assistant/message included)", () => {
+  test("merges every surface node in the range (assistant/message included)", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -1027,7 +1023,7 @@ describe("recomputeReplaceProvenance", () => {
     expect(checkpoint.sourceEventSeqs).toEqual([10, 11]);
   });
 
-  it("prefers the adjacent metering event's shadowedSeqs over a range scan", () => {
+  test("prefers the adjacent metering event's shadowedSeqs over a range scan", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -1085,7 +1081,7 @@ describe("recomputeReplaceProvenance", () => {
     expect(checkpoint.sourceEventSeqs).toEqual([1, 2]);
   });
 
-  it("uses shadowedSeqs even when the range scan would miss a shadowed node", () => {
+  test("uses shadowedSeqs even when the range scan would miss a shadowed node", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -1147,7 +1143,7 @@ describe("recomputeReplaceProvenance", () => {
     expect(checkpoint.sourceEventSeqs).toEqual([1, 659, 2]);
   });
 
-  it("falls back to a range scan when the adjacent event is not a metering event", () => {
+  test("falls back to a range scan when the adjacent event is not a metering event", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -1202,7 +1198,7 @@ describe("recomputeReplaceProvenance", () => {
     expect(replacement.sourceEventSeqs).toEqual([1, 2]);
   });
 
-  it("satisfies the upstream surface fold across chained checkpoints with a straggler", () => {
+  test("satisfies the upstream surface fold across chained checkpoints with a straggler", () => {
     const events: SessionEvent[] = [
       {
         type: "user/message",
@@ -1318,7 +1314,7 @@ describe("recomputeReplaceProvenance", () => {
 });
 
 describe("SessionPersistenceSqlite: durability and crash semantics", () => {
-  it("rejects a stored v0 log containing a legacy request/header-delta event", async () => {
+  test("rejects a stored v0 log containing a legacy request/header-delta event", async () => {
     const path = await freshDbPath();
     const m = meta("legacy-header-delta", "/legacy");
     const db = await openInitializedSqlite(path, "wal");
@@ -1349,14 +1345,14 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await mounted.dispose();
   });
 
-  it("has no independent per-session log location", async () => {
+  test("has no independent per-session log location", async () => {
     const { ctx, dispose } = await backend();
 
     expect(await rdb(ctx).stat(meta("sqlite-location").id)).toBeUndefined();
     await dispose();
   });
 
-  it("an interrupted turn (rows after the last turn/end) is PRESERVED as stored", async () => {
+  test("an interrupted turn (rows after the last turn/end) is PRESERVED as stored", async () => {
     const path = await freshDbPath();
     const m = meta("crash");
 
@@ -1402,7 +1398,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await fiber2.dispose();
   });
 
-  it("load() durably closes the interrupted turn: the synthetic closers are on disk after load", async () => {
+  test("load() durably closes the interrupted turn: the synthetic closers are on disk after load", async () => {
     const path = await freshDbPath();
     const m = meta("load-closes");
     const b1 = await backend(path);
@@ -1436,7 +1432,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await b2.dispose();
   });
 
-  it("rejects opening a database whose schema version is not the current build (newer OR older)", async () => {
+  test("rejects opening a database whose schema version is not the current build (newer OR older)", async () => {
     const path = await freshDbPath();
     (await openInitializedSqlite(path, "wal")).close();
     const dbNewer = await openInitializedSqlite(path, "wal");
@@ -1456,7 +1452,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     );
   });
 
-  it("rejects a table-backed unversioned database before stamping or changing journal mode", async () => {
+  test("rejects a table-backed unversioned database before stamping or changing journal mode", async () => {
     const path = await freshDbPath();
     const legacy = new DatabaseSync(path);
     legacy.exec("CREATE TABLE t_sessions (id TEXT PRIMARY KEY)");
@@ -1477,7 +1473,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     unchanged.close();
   });
 
-  it("rejects view-only and foreign-application unversioned databases without mutation", async () => {
+  test("rejects view-only and foreign-application unversioned databases without mutation", async () => {
     const viewPath = await freshDbPath();
     const viewOnly = new DatabaseSync(viewPath);
     viewOnly.exec("CREATE VIEW foreign_view AS SELECT 1 AS value");
@@ -1512,7 +1508,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     unchangedApplication.close();
   });
 
-  it("rejects a current-version database with a foreign application identity", async () => {
+  test("rejects a current-version database with a foreign application identity", async () => {
     const path = await freshDbPath();
     const foreign = new DatabaseSync(path);
     foreign.exec("PRAGMA application_id = 12345");
@@ -1530,7 +1526,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     unchanged.close();
   });
 
-  it("rolls back schema objects and identity stamps when initialization fails", async () => {
+  test("rolls back schema objects and identity stamps when initialization fails", async () => {
     const path = await freshDbPath();
     const conflicting = new DatabaseSync(path);
     conflicting.exec(`PRAGMA application_id = ${SESSION_PERSISTENCE_SQLITE_APPLICATION_ID}`);
@@ -1565,7 +1561,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     unchanged.close();
   });
 
-  it("stamps the persistence application identity with the schema version", async () => {
+  test("stamps the persistence application identity with the schema version", async () => {
     const path = await freshDbPath();
     (await openInitializedSqlite(path, "wal")).close();
 
@@ -1577,7 +1573,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     db.close();
   });
 
-  it("a corrupt-JSON row in the uncommitted tail is discarded on load, not unloadable", async () => {
+  test("a corrupt-JSON row in the uncommitted tail is discarded on load, not unloadable", async () => {
     const path = await freshDbPath();
     const m = meta("corrupt-tail");
     const b1 = await backend(path);
@@ -1634,7 +1630,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await b2.dispose();
   });
 
-  it("append rolls back the whole batch on a mid-batch seq collision (transaction)", async () => {
+  test("append rolls back the whole batch on a mid-batch seq collision (transaction)", async () => {
     const ctx = createCtx();
     const fiber = await mountOnto(ctx, { config: { type: "sqlite", path: ":memory:" } });
     const m = meta("rollback");
@@ -1646,7 +1642,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await fiber.dispose();
   });
 
-  it("persists across separate backend instances over the same file", async () => {
+  test("persists across separate backend instances over the same file", async () => {
     const path = await freshDbPath();
     const m = meta("persist", "/proj");
     const ctx1 = createCtx();
@@ -1663,7 +1659,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await fiber2.dispose();
   });
 
-  it("source-qualifies revisions across stores while preserving same-file reopen identity", async () => {
+  test("source-qualifies revisions across stores while preserving same-file reopen identity", async () => {
     const pathA = await freshDbPath();
     const pathB = await freshDbPath();
     const m = meta("revision-source");
@@ -1703,7 +1699,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await b.dispose();
   });
 
-  it("changes revisions when a deleted session id is materialized again in the same database", async () => {
+  test("changes revisions when a deleted session id is materialized again in the same database", async () => {
     const path = await freshDbPath();
     const m = meta("recreated-revision");
     const first = await backend(path);
@@ -1724,7 +1720,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await second.dispose();
   });
 
-  it("keeps the revision stable for an empty repair hook", async () => {
+  test("keeps the revision stable for an empty repair hook", async () => {
     const b = await backend();
     const m = meta("empty-repair");
     await rdb(b.ctx).createAndAppend(m, oneTurnLog());
@@ -1737,7 +1733,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     await b.dispose();
   });
 
-  it("applies the configured busy timeout to every opened connection (default 5000ms)", async () => {
+  test("applies the configured busy timeout to every opened connection (default 5000ms)", async () => {
     const path = await freshDbPath();
 
     const immediate = await openInitializedSqlite(path, "wal", 0);
@@ -1753,7 +1749,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
     defaulted.close();
   });
 
-  it("busyTimeout config wires from the plugin into the database connection", async () => {
+  test("busyTimeout config wires from the plugin into the database connection", async () => {
     const path = await freshDbPath();
 
     const ctx = createCtx();
@@ -1770,7 +1766,7 @@ describe("SessionPersistenceSqlite: durability and crash semantics", () => {
 });
 
 describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
-  it("readRaw repairs invalid tool/result surface replacements so the artifact loads", async () => {
+  test("readRaw repairs invalid tool/result surface replacements so the artifact loads", async () => {
     const path = await freshDbPath();
     const b = await backend(path);
     const m = meta("export-tool-result");
@@ -1856,7 +1852,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
     await b.dispose();
   });
 
-  it("readRaw repairs without mutating storage (export-time repair is view-only)", async () => {
+  test("readRaw repairs without mutating storage (export-time repair is view-only)", async () => {
     const path = await freshDbPath();
     const b = await backend(path);
     const m = meta("export-view-only");
@@ -1926,7 +1922,7 @@ describe("SessionPersistenceSqlite: export-time repair (readRaw)", () => {
 });
 
 describe("SessionPersistenceSqlite: edge cases", () => {
-  it("rejects and closes a current-schema database with an invalid store identity", async () => {
+  test("rejects and closes a current-schema database with an invalid store identity", async () => {
     const path = await freshDbPath();
     const db = await openInitializedSqlite(path, "wal");
     db.exec("UPDATE t_persistence_state SET f_store_id = '' WHERE f_singleton = 1");
@@ -1937,7 +1933,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await expect(b.dispose()).resolves.toBeUndefined();
   });
 
-  it("creates a new database and WAL sidecars with owner-only modes without changing its parent mode", async () => {
+  test("creates a new database and WAL sidecars with owner-only modes without changing its parent mode", async () => {
     if (process.platform === "win32") return;
     const path = await freshDbPath();
     const dir = dirname(path);
@@ -1953,7 +1949,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await b.dispose();
   });
 
-  it("creates a persistent rollback journal with owner-only mode", async () => {
+  test("creates a persistent rollback journal with owner-only mode", async () => {
     if (process.platform === "win32") {
       return;
     }
@@ -1975,7 +1971,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await fiber.dispose();
   });
 
-  it("preserves the mode of an existing database file", async () => {
+  test("preserves the mode of an existing database file", async () => {
     if (process.platform === "win32") return;
     const path = await freshDbPath();
     await writeFile(path, "", { mode: 0o644 });
@@ -1995,7 +1991,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await fiber.dispose();
   });
 
-  it("journalMode config reaches the database (default wal, rollback modes selectable)", async () => {
+  test("journalMode config reaches the database (default wal, rollback modes selectable)", async () => {
     const walPath = await freshDbPath();
     const bWal = await backend(walPath);
     await rdb(bWal.ctx).create(meta("jm-wal"));
@@ -2025,7 +2021,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
     await fiber.dispose();
   });
 
-  it("HMR: a DIFFERENT session colliding with a materialized on-disk id is rejected", async () => {
+  test("HMR: a DIFFERENT session colliding with a materialized on-disk id is rejected", async () => {
     const path = await freshDbPath();
 
     const b1 = await backend(path);
@@ -2054,7 +2050,7 @@ describe("SessionPersistenceSqlite: edge cases", () => {
 });
 
 describe("surface field round-trip", () => {
-  it("scanRows with surface columns reconstructs events with surface fields", () => {
+  test("scanRows with surface columns reconstructs events with surface fields", () => {
     const rows: EventRow[] = [
       {
         fEventId: "evt-0",
@@ -2095,7 +2091,7 @@ describe("surface field round-trip", () => {
     expect((preserved[1] as SessionEvent<SurfaceEventType>).surfaceOp).toBeUndefined();
   });
 
-  it("append and load round-trips surface fields through SQLite", async () => {
+  test("append and load round-trips surface fields through SQLite", async () => {
     const ctx = createCtx();
     const fiber = await mountOnto(ctx, { config: { type: "sqlite", path: ":memory:" } });
     const session = ctx.sessions.create(SessionId("roundtrip-surface"));

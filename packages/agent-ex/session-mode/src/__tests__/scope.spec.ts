@@ -7,7 +7,8 @@ import { ToolCallId, assembleContextFor, type Agent } from "@morlay/dsh-agent/co
 import { SessionId } from "@morlay/dsh-session/contract";
 import { defineTool } from "@morlay/dsh-agent/contract";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import type { ModeConfig } from "@morlay/session-mode";
 import { Injectable } from "@morlay/zephyr";
 import { ContextAssembler, type AssemblerEntries } from "../contract/context-assembler.contract.ts";
@@ -19,15 +20,6 @@ import { mountSessionModeApp } from "./support/mount-app.ts";
 
 // 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
 pinDshHome();
-
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-const mounted: { dispose(): Promise<void> }[][] = [];
-
-afterEach(async () => {
-  for (const rows of mounted.splice(0))
-    await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
-  for (const app of apps.splice(0)) await app.dispose();
-});
 
 // 一个模式定义：只有收口要的那几项（两份名单、`instructions` / `runtimeContext`）在用例里写出来。
 // 源形状允许省略字段，本仓的 `ModeConfig` 是归一化之后的形状：这里按实现的默认补齐（spec 只提供输入）。
@@ -185,7 +177,7 @@ async function mount(options: MountOptions = {}) {
     guidance: false,
     ...(withModes ? { modes: CONFIG as unknown as Record<string, unknown> } : {}),
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
 
   // host 平面装的是全套工具（白名单里的三件 + 白名单之外的两件）：收口才是被测的那件事。
   await mountTools(
@@ -221,7 +213,7 @@ async function mount(options: MountOptions = {}) {
         guidance: false,
         modes: CONFIG as unknown as Record<string, unknown>,
       });
-      apps.push(lateApp);
+      onTestFinished(() => lateApp.dispose());
       lateCtx.sessionModes.applyTo(
         await lateCtx.agents
           .create({
@@ -274,7 +266,7 @@ async function callTool(
 }
 
 describe("按需组（describe 即放行）", () => {
-  it("无名单模式下按需组的工具默认不进目录，describe 取过之后才可见、可调", async () => {
+  test("无名单模式下按需组的工具默认不进目录，describe 取过之后才可见、可调", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("nothing");
     apply(ctx, session, "nothing");
@@ -294,7 +286,7 @@ describe("按需组（describe 即放行）", () => {
 });
 
 describe("工具白名单（按会话收口）", () => {
-  it("只留白名单里的工具，host 层多出来的进不了目录", async () => {
+  test("只留白名单里的工具，host 层多出来的进不了目录", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("wide");
     apply(ctx, session, "wide");
@@ -308,7 +300,7 @@ describe("工具白名单（按会话收口）", () => {
     ]);
   });
 
-  it("白名单之外的工具说明 section 不留在提示词里，聚合 section 照旧", async () => {
+  test("白名单之外的工具说明 section 不留在提示词里，聚合 section 照旧", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:ask_user_question", "问答说明");
     await mountSection(ctx, "tool:send_message", "发消息说明");
@@ -324,7 +316,7 @@ describe("工具白名单（按会话收口）", () => {
     expect(names).not.toContain("tool:send_message");
   });
 
-  it("没收过口的会话一律放行（装配里装着模式行，会话还没收口时按默认给）", async () => {
+  test("没收过口的会话一律放行（装配里装着模式行，会话还没收口时按默认给）", async () => {
     // zephyr 的装配是一次性的：不存在「行在会话之后才激活」，所以这里直接在有模式行的装配上
     // 建一个**还没收口**的会话——它读到的就是默认模式。
     const { ctx, agent } = await mount();
@@ -335,7 +327,7 @@ describe("工具白名单（按会话收口）", () => {
     expect((await visibleTools(ctx, session)).length).toBeGreaterThan(0);
   });
 
-  it("名单里含只在本 agent 注册的工具时不抛：收窄降级到全局那一层", async () => {
+  test("名单里含只在本 agent 注册的工具时不抛：收窄降级到全局那一层", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("local-deny");
     // preset 行注册的工具落在 agent scope（不是全局层）：面板上「禁止」它就是这种名单。
@@ -350,7 +342,7 @@ describe("工具白名单（按会话收口）", () => {
     expect(await visibleTools(ctx, session)).toContain("ask_user_question");
   });
 
-  it("白名单之外的工具调用不了：不在准入集里，直接是 UNKNOWN_TOOL", async () => {
+  test("白名单之外的工具调用不了：不在准入集里，直接是 UNKNOWN_TOOL", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("narrow");
     apply(ctx, session, "narrow");
@@ -365,7 +357,7 @@ describe("工具白名单（按会话收口）", () => {
     expect(allowed.error).toBeUndefined();
   });
 
-  it("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
+  test("换个模式就是换一份：新的白名单生效，旧收窄被收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch");
     apply(ctx, session, "wide");
@@ -385,7 +377,7 @@ describe("工具白名单（按会话收口）", () => {
 });
 
 describe("instructions 与动态快照开关", () => {
-  it("缺省为要：通道拿到 true", async () => {
+  test("缺省为要：通道拿到 true", async () => {
     const { ctx, calls, agent } = await mount();
     const session = await agent("wide");
     apply(ctx, session, "wide");
@@ -399,7 +391,7 @@ describe("instructions 与动态快照开关", () => {
     });
   });
 
-  it("instructions: false 时通道被关；runtimeContext: false 时只有这个会话看不到动态快照", async () => {
+  test("instructions: false 时通道被关；runtimeContext: false 时只有这个会话看不到动态快照", async () => {
     const { ctx, calls, agent } = await mount();
     const silent = await agent("silent");
     const wide = await agent("wide");
@@ -415,7 +407,7 @@ describe("instructions 与动态快照开关", () => {
 });
 
 describe("工具黑名单（与白名单合成）", () => {
-  it("只给黑名单：目录与工具说明 section 都扣掉那几件", async () => {
+  test("只给黑名单：目录与工具说明 section 都扣掉那几件", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     await mountSection(ctx, "tool:web_search", "搜索说明");
@@ -429,7 +421,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(await sectionNames(ctx, session)).not.toContain("tool:web_search");
   });
 
-  it("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
+  test("黑名单里的工具调用不了：同样不在准入集里（UNKNOWN_TOOL）", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("deny-call");
     apply(ctx, session, "denyOnly");
@@ -443,7 +435,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(allowed.error).toBeUndefined();
   });
 
-  it("两条名单同配时黑名单优先：白名单里的名字也能被拒", async () => {
+  test("两条名单同配时黑名单优先：白名单里的名字也能被拒", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("allow-and-deny");
     apply(ctx, session, "allowAndDeny");
@@ -457,7 +449,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(JSON.stringify(denied)).toContain("unknown tool");
   });
 
-  it("两条都空：全部工具照旧可见", async () => {
+  test("两条都空：全部工具照旧可见", async () => {
     const { ctx, agent } = await mount();
     await mountSection(ctx, "tool:send_message", "发消息说明");
     const session = await agent("no-lists");
@@ -467,7 +459,7 @@ describe("工具黑名单（与白名单合成）", () => {
     expect(await visibleTools(ctx, session)).toEqual(["ask_user_question"]);
   });
 
-  it("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {
+  test("从白名单换成白名单 + 黑名单：黑名单生效，旧收窄收回", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("switch-to-deny");
     apply(ctx, session, "wide");
@@ -492,22 +484,29 @@ describe("工具黑名单（与白名单合成）", () => {
 // 账必须挂在能被卸载的那一侧——本行（设置保存会让 Loader 重新配置这一行）与 agent 各一份。只记在当前实例里
 // （`applied` 那个 WeakMap）的话，行一旦重挂，新实例就没有上一份可收，`describe_tool` 一装就撞名。
 describe("收口的归属：行重挂之后重装不撞名", () => {
-  it("行卸载时把它在 agent 上的注册一起收掉；新实例重装不会撞上旧的那份", async () => {
+  test("行卸载时把它在 agent 上的注册一起收掉；新实例重装不会撞上旧的那份", async () => {
     // 这条用例要手工重挂行：装配里不装通道本体与模式行，由 `mountRows` 自己挂/卸。
     // 「行重挂」在 zephyr 里的等价物：**整份装配卸载再重建**（设置页保存就是重新配置这条装配）。
-    const mountOnce = async (): Promise<TestContext> => {
+    const mountOnce = async (): Promise<{ ctx: TestContext; dispose: () => Promise<void> }> => {
       const { app, ctx } = await mountSessionModeApp({
         systemPrompt: { includeHarnessIdentity: false },
         channel: false,
         guidance: false,
         modes: CONFIG as unknown as Record<string, unknown>,
       });
-      apps.push(app);
+      // 用例可能手工卸载（验"行重挂"）：重复只有第一次生效，自动清理不会再来一次。
+      let disposed = false;
+      const dispose = async (): Promise<void> => {
+        if (disposed) return;
+        disposed = true;
+        await app.dispose();
+      };
+      onTestFinished(dispose);
       await mountTools(ctx, ["ask_user_question", "web_search", "send_message"]);
-      return ctx;
+      return { ctx, dispose };
     };
 
-    const first = await mountOnce();
+    const { ctx: first, dispose: disposeFirst } = await mountOnce();
     const { agent: session } = await first.agents.create({
       sessionId: SessionId(`session-mode-reload-${String(Math.random())}`),
     });
@@ -516,10 +515,10 @@ describe("收口的归属：行重挂之后重装不撞名", () => {
     expect(first.tools.schemas(session).map((schema) => schema.name)).toContain("describe_tool");
 
     // 卸载整份装配：旧注册必须跟着装配一起收——收窄放开、`describe_tool` 撤掉。
-    await apps[0]?.dispose();
+    await disposeFirst();
 
     // 新装配重新收口：撞名的话这里是 `tool "describe_tool" is already registered in this scope`。
-    const second = await mountOnce();
+    const { ctx: second } = await mountOnce();
     const { agent: resumed } = await second.agents.create({
       sessionId: SessionId(`session-mode-reload-${String(Math.random())}`),
     });
@@ -532,7 +531,7 @@ describe("收口的归属：行重挂之后重装不撞名", () => {
 });
 
 describe("模式配置的 dropSections", () => {
-  it("精确名与 `*` 前缀都会从装配结果里丢弃", async () => {
+  test("精确名与 `*` 前缀都会从装配结果里丢弃", async () => {
     const { ctx, agent } = await mount();
     const session = await agent("wide");
     await mountSection(ctx, "team:policy", "TEAM_POLICY");

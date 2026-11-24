@@ -5,20 +5,22 @@
  * 运行期现场打包、真会 import 它们——所以要把**被用到的**挪进 `dependencies`，并**整段删掉**
  * `devDependencies`（我们的链不需要上游的测试与构建工具）。
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { rewriteExports } from "../exports.js";
 
-let work: string;
-let pkgDir: string;
-
+/** 空的重写结果（本 spec 只关心 deps 那一段）。 */
 const NONE = { generated: {}, explicit: {} };
 
-beforeAll(async () => {
-  work = await mkdtemp(join(tmpdir(), "dsh-upstream-sync-"));
-  pkgDir = join(work, "packages", "client", "ui-primitives");
+/**
+ * 建一份上游包 fixture（清单 + 两种被 import 的写法），每条用例一份、用完删。
+ * @returns fixture 根与包目录。
+ */
+async function fixtureOf(): Promise<{ work: string; pkgDir: string }> {
+  const work = await mkdtemp(join(tmpdir(), "dsh-upstream-sync-"));
+  const pkgDir = join(work, "packages", "client", "ui-primitives");
   await mkdir(join(pkgDir, "src", "markdown"), { recursive: true });
   await writeFile(join(pkgDir, "src", "index.ts"), "export const x = 1;\n", "utf8");
   // 运行期真的 import 的（`clsx` 在 devDeps、`katex` 也在 devDeps 且带子路径）——
@@ -53,13 +55,11 @@ beforeAll(async () => {
     )}\n`,
     "utf8",
   );
-});
-
-afterAll(async () => {
-  await rm(work, { recursive: true, force: true });
-});
+  return { work, pkgDir };
+}
 
 test("devDependencies 整段删掉，被源码 import 的挪进 dependencies（未用到的丢弃）", async () => {
+  const { work, pkgDir } = await fixtureOf();
   await rewriteExports(work, NONE);
   const manifest = JSON.parse(await readFile(join(pkgDir, "package.json"), "utf8")) as {
     dependencies?: Record<string, string>;

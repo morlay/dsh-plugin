@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { defineTable, ensureSchema, fragment, openDatabase } from "@morlay/zephyr-rdb";
 
 const readings = defineTable({
@@ -10,13 +10,13 @@ const readings = defineTable({
 });
 
 describe("生命周期", () => {
-  it("close 幂等：连关两次不抛", async () => {
+  test("close 幂等：连关两次不抛", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     await database.close();
     await expect(database.close()).resolves.toBeUndefined();
   });
 
-  it("关闭后的查询与事务抛带 code 的 DbError（kind 是 closed）", async () => {
+  test("关闭后的查询与事务抛带 code 的 DbError（kind 是 closed）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     await ensureSchema(database, [readings]);
     const table = database.table(readings);
@@ -35,7 +35,7 @@ describe("生命周期", () => {
     await expect(iterator.next()).rejects.toMatchObject({ kind: "closed" });
   });
 
-  it("iterate 未消费完时 close 在超时内返回，下一次 next 抛 closed", async () => {
+  test("iterate 未消费完时 close 在超时内返回，下一次 next 抛 closed", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     await ensureSchema(database, [readings]);
     const table = database.table(readings);

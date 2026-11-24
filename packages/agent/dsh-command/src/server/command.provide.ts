@@ -1,6 +1,6 @@
 import { provide } from "@morlay/zephyr";
 import { remoteDescriptor } from "@morlay/zephyr-app";
-import { CommandEndpointDefault } from "@morlay/dsh-command/server";
+import { CommandEndpointDefault } from "./command-endpoint.service.ts";
 import { CommandRegistryDefault } from "../command-registry.service.ts";
 
 export const provideCommand = provide([

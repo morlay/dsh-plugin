@@ -5,24 +5,19 @@ import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { SessionId } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { meta, oneTurnLogStepFirst, twoTurnLog } from "@morlay/dsh-session/testing";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
 describe("RDB 会话落盘", () => {
-  it("写进去的日志能原样读回来（含 seq 与 surfaceOp）", async () => {
+  test("写进去的日志能原样读回来（含 seq 与 surfaceOp）", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
     const log = oneTurnLogStepFirst();
@@ -39,7 +34,7 @@ describe("RDB 会话落盘", () => {
     expect(read.events).toEqual(log);
   });
 
-  it("落盘在数据根下的 sqlite 文件里（进程之外可恢复）", async () => {
+  test("落盘在数据根下的 sqlite 文件里（进程之外可恢复）", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
 
@@ -52,7 +47,7 @@ describe("RDB 会话落盘", () => {
     expect(files).toContain("sessions.sqlite");
   });
 
-  it("stat 只给 header 与 revision，list 把已落库的会话都列出来", async () => {
+  test("stat 只给 header 与 revision，list 把已落库的会话都列出来", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
 
@@ -71,7 +66,7 @@ describe("RDB 会话落盘", () => {
     expect(listed.map((entry) => entry.header.id).sort()).toEqual(["listed-1", "listed-2"]);
   });
 
-  it("同一 id 重复 create 被拒；关闭后仍被已落库的那条挡住", async () => {
+  test("同一 id 重复 create 被拒；关闭后仍被已落库的那条挡住", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
 
@@ -82,7 +77,7 @@ describe("RDB 会话落盘", () => {
     await expect(persistence.create(meta("dup"))).rejects.toThrow();
   });
 
-  it("删掉库文件后重启：会话不在了（落盘真在文件里，不是进程内状态）", async () => {
+  test("删掉库文件后重启：会话不在了（落盘真在文件里，不是进程内状态）", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
     const handle = await persistence.create(meta("gone"));
@@ -90,17 +85,16 @@ describe("RDB 会话落盘", () => {
     await handle.close();
 
     await harness.dispose();
-    harnesses.splice(harnesses.indexOf(harness), 1);
     await rm(join(harness.root, "sessions", "sessions.sqlite"), { force: true });
 
     const again = await startHarness();
-    harnesses.push(again);
+    onTestFinished(() => again.dispose());
     // 新的数据根：同一 id 现在可以重新建。
     const fresh = await again.app.get(SessionPersistence).create(meta("gone"));
     await fresh.close();
   });
 
-  it("空会话要 flush 之后才物化，物化后 stat 看得到", async () => {
+  test("空会话要 flush 之后才物化，物化后 stat 看得到", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
 

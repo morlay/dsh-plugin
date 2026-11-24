@@ -4,10 +4,11 @@
 //
 // 盯的接缝是**读数 → 行 → 动作**：一行画什么由字段树与草稿状态决定，一次交互只产生一个动作。
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
 import z from "@deepseek-ai/schemastery";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import {
   addableAt,
   fieldKey,
@@ -30,7 +31,6 @@ import type {
   SchemaFormComponentProps,
 } from "../schema-form/slot-contract.ts";
 
-afterEach(cleanup);
 // 官方 Tooltip 的气泡要 ResizeObserver 才可见；happy-dom 没有它（替身只让气泡进入可见态）。
 stubResizeObserver();
 // 官方 `Tooltip` 只认指针进入（`pointerType === "mouse"`），并且要求 `(any-hover: hover)` 匹配；happy-dom 两个都没有。
@@ -169,7 +169,7 @@ function valueOf(container: HTMLElement, path: string): HTMLElement {
 }
 
 describe("行式编辑器", () => {
-  it("按行画出对象：结构行 + `key: value` 行，行号连续", () => {
+  test("按行画出对象：结构行 + `key: value` 行，行号连续", () => {
     const { props } = bench(z.object({ retry: z.number(), note: z.string() }), {
       retry: 3,
       note: "hi",
@@ -182,7 +182,7 @@ describe("行式编辑器", () => {
     ).toEqual(["1", "2", "3", "4"]);
   });
 
-  it("schema 的说明画成注释行（在字段行上方）", () => {
+  test("schema 的说明画成注释行（在字段行上方）", () => {
     // `description()` 的类型签名只写 string，meta 实际接受字典（与源码同一处放行）。
     const localized = localizedDescription({ zh: "重试次数", en: "retries" });
     const schema = z.object({ retry: z.number().description(localized) });
@@ -192,14 +192,14 @@ describe("行式编辑器", () => {
     expect(rowText(container)).toEqual(["{", "// 重试次数", "retry: 1", "}"]);
   });
 
-  it("数组画成 `[ ... ]`，每项一行（下标淡显）", () => {
+  test("数组画成 `[ ... ]`，每项一行（下标淡显）", () => {
     const { props } = bench(z.object({ tags: z.array(z.string()) }), { tags: ["x", "y"] });
     const { container } = render(<SchemaForm {...props} />);
 
     expect(rowText(container)).toEqual(["{", "tags: [", '0 "x"', '1 "y"', "]", "}"]);
   });
 
-  it("折叠把子树收起来，再点一次展开", () => {
+  test("折叠把子树收起来，再点一次展开", () => {
     const { props } = bench(z.object({ limits: z.object({ depth: z.number() }) }), {
       limits: { depth: 1 },
     });
@@ -212,7 +212,7 @@ describe("行式编辑器", () => {
     expect(rowText(container)).toEqual(["{", "limits: {…}", "}"]);
   });
 
-  it("值点开就能改：编辑态是行内输入，提交把原文交给草稿", () => {
+  test("值点开就能改：编辑态是行内输入，提交把原文交给草稿", () => {
     const { props, calls } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -224,7 +224,7 @@ describe("行式编辑器", () => {
     expect(calls.setText).toHaveBeenCalledWith(["retry"], "12", expect.any(Function));
   });
 
-  it("Esc 撤销这一行的草稿，输入框收起", () => {
+  test("Esc 撤销这一行的草稿，输入框收起", () => {
     const { props, calls } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -235,7 +235,7 @@ describe("行式编辑器", () => {
     expect(container.querySelector('[data-line="field"] input')).toBeNull();
   });
 
-  it("只读字段点不开（不可编辑）", () => {
+  test("只读字段点不开（不可编辑）", () => {
     const { props } = bench(z.object({ kind: z.const("api") }), { kind: "api" });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -245,7 +245,7 @@ describe("行式编辑器", () => {
     expect(rowText(container)).toContain('kind: "api"');
   });
 
-  it("对象的添加入口只列还没配的声明字段，选中即加成", () => {
+  test("对象的添加入口只列还没配的声明字段，选中即加成", () => {
     const { props, calls } = bench(z.object({ models: z.dict(z.string()), note: z.string() }), {
       models: {},
     });
@@ -259,7 +259,7 @@ describe("行式编辑器", () => {
     expect(calls.addKey).toHaveBeenCalledWith([], "note");
   });
 
-  it("字典的添加输入：敲键名发 addKey，粘贴 JSON 整段赋值", () => {
+  test("字典的添加输入：敲键名发 addKey，粘贴 JSON 整段赋值", () => {
     const { props, calls } = bench(z.object({ models: z.dict(z.string()) }), { models: {} });
     render(<SchemaForm {...props} />);
 
@@ -273,7 +273,7 @@ describe("行式编辑器", () => {
     expect(calls.set).toHaveBeenCalledWith(["models"], { a: "b" });
   });
 
-  it("数组的添加入口追加空项，粘贴 JSON 则整段赋值", () => {
+  test("数组的添加入口追加空项，粘贴 JSON 则整段赋值", () => {
     const { props, calls } = bench(z.object({ tags: z.array(z.string()) }), { tags: [] });
     render(<SchemaForm {...props} />);
 
@@ -287,7 +287,7 @@ describe("行式编辑器", () => {
     expect(calls.set).toHaveBeenCalledWith(["tags"], ["a", "b"]);
   });
 
-  it("成员行能移除：数组项按索引、字典键按键名", () => {
+  test("成员行能移除：数组项按索引、字典键按键名", () => {
     const list = bench(z.object({ tags: z.array(z.string()) }), { tags: ["x"] });
     const first = render(<SchemaForm {...list.props} />);
     fireEvent.click(screen.getAllByRole("button", { name: zh.removeItem })[0]!);
@@ -300,7 +300,7 @@ describe("行式编辑器", () => {
     expect(map.calls.removeKey).toHaveBeenCalledWith(["models"], "chat");
   });
 
-  it("非法草稿在行内给出消息", () => {
+  test("非法草稿在行内给出消息", () => {
     const schema = z.object({ retry: z.number() });
     const root: FieldNode = projectNode(new z(schema.toJSON()));
     const walked = walkFields(root, { retry: 1 });
@@ -367,7 +367,7 @@ describe("行式编辑器", () => {
     ).toBe("true");
   });
 
-  it("字段槽命中时值位置换成注册方的节点", () => {
+  test("字段槽命中时值位置换成注册方的节点", () => {
     const { props } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const claimedProps = {
       ...props,
@@ -380,7 +380,7 @@ describe("行式编辑器", () => {
     expect(rowText(container)).toContain("retry: 自定义");
   });
 
-  it("保存按钮只在脏的时候可点，点它走控制器的保存", () => {
+  test("保存按钮只在脏的时候可点，点它走控制器的保存", () => {
     const clean = bench(z.object({ retry: z.number() }), { retry: 3 });
     const first = render(<SchemaForm {...clean.props} />);
     expect((screen.getByRole("button", { name: zh.save }) as HTMLButtonElement).disabled).toBe(
@@ -394,7 +394,7 @@ describe("行式编辑器", () => {
     expect(dirty.calls.save).toHaveBeenCalled();
   });
 
-  it("行没有被描述出来时只给一行说明", () => {
+  test("行没有被描述出来时只给一行说明", () => {
     const { props } = bench(
       z.object({ retry: z.number() }),
       { retry: 3 },
@@ -407,7 +407,7 @@ describe("行式编辑器", () => {
 });
 
 describe("选择器与只读字段", () => {
-  it("有候选的字段画成选择器，选中即写值", () => {
+  test("有候选的字段画成选择器，选中即写值", () => {
     const { props, calls } = bench(
       z.object({ journal: z.union(["wal", "delete"]) }),
       { journal: "wal" },
@@ -426,7 +426,7 @@ describe("选择器与只读字段", () => {
     expect(calls.set).toHaveBeenCalledWith(["journal"], "delete");
   });
 
-  it("disabled 字段（装配事实）画出值但点不开编辑，注释里标只读", () => {
+  test("disabled 字段（装配事实）画出值但点不开编辑，注释里标只读", () => {
     const schema = z.object({ cwd: z.string().default("/tmp").disabled().description("基准目录") });
     const { props } = bench(schema, { cwd: "/tmp" });
     const { container } = render(<SchemaForm {...props} />);
@@ -438,7 +438,7 @@ describe("选择器与只读字段", () => {
 });
 
 describe("union 与布局", () => {
-  it("按当前值的形状画：数组是 `[ ... ]`，字符串是值行，行尾给形状切换", () => {
+  test("按当前值的形状画：数组是 `[ ... ]`，字符串是值行，行尾给形状切换", () => {
     const schema = z.object({ access: z.union([z.array(z.string()), z.string()]) });
     const asList = bench(schema, { access: ["rw:/tmp"] });
     const first = render(<SchemaForm {...asList.props} />);
@@ -451,7 +451,7 @@ describe("union 与布局", () => {
     expect(rowText(second.container)).toEqual(["{", 'access: "rw:/tmp"', "}"]);
   });
 
-  it("切换形状：把目标变体的值交给草稿", () => {
+  test("切换形状：把目标变体的值交给草稿", () => {
     const { props, calls } = bench(
       z.object({ access: z.union([z.array(z.string()), z.string()]) }),
       {
@@ -466,7 +466,7 @@ describe("union 与布局", () => {
     expect(calls.set).toHaveBeenCalledWith(["access"], []);
   });
 
-  it("判别式 union 的切换画在标签行上，选中即写标签值", () => {
+  test("判别式 union 的切换画在标签行上，选中即写标签值", () => {
     const schema = z.union([
       z.object({ type: z.const("sqlite"), path: z.string() }),
       z.object({ type: z.const("postgres"), connectionString: z.string() }),
@@ -485,7 +485,7 @@ describe("union 与布局", () => {
     expect(calls.set).toHaveBeenCalledWith(["type"], "postgres");
   });
 
-  it("缩进只推行内容：行号列固定，添加输入与闭合括号同一行", () => {
+  test("缩进只推行内容：行号列固定，添加输入与闭合括号同一行", () => {
     const { props } = bench(z.object({ limits: z.object({ depth: z.number() }) }), {
       limits: { depth: 1 },
     });
@@ -519,7 +519,7 @@ describe("union 与布局", () => {
     expect(rootClose(second.container).querySelector("input")).toBeTruthy();
   });
 
-  it("带换行的值点开是多行输入：Enter 不提交，原文进草稿", () => {
+  test("带换行的值点开是多行输入：Enter 不提交，原文进草稿", () => {
     const { props, calls } = bench(z.object({ note: z.string() }), { note: "a\nb" });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -531,7 +531,7 @@ describe("union 与布局", () => {
     expect(calls.setText).toHaveBeenCalledWith(["note"], "a\nb\nc", expect.any(Function));
   });
 
-  it("有覆盖的字段：注释里不写「已覆盖」，行尾给「恢复默认」，点它发 clear", () => {
+  test("有覆盖的字段：注释里不写「已覆盖」，行尾给「恢复默认」，点它发 clear", () => {
     const { props, calls } = bench(
       z.object({ retry: z.number() }),
       { retry: 3 },
@@ -558,14 +558,14 @@ describe("union 与布局", () => {
     expect(calls.clear).toHaveBeenCalledWith(["retry"]);
   });
 
-  it("没有覆盖的字段不给「恢复默认」", () => {
+  test("没有覆盖的字段不给「恢复默认」", () => {
     const { props } = bench(z.object({ retry: z.number() }), { retry: 3 });
     render(<SchemaForm {...props} />);
 
     expect(screen.queryByRole("button", { name: zh.reset })).toBeNull();
   });
 
-  it("复制这一行的值：字符串带引号进剪贴板", () => {
+  test("复制这一行的值：字符串带引号进剪贴板", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
@@ -579,7 +579,7 @@ describe("union 与布局", () => {
     expect(writeText).toHaveBeenCalledWith('"hi"');
   });
 
-  it("点行号选中这一行", () => {
+  test("点行号选中这一行", () => {
     const { props } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const { container } = render(<SchemaForm {...props} />);
     const row = container.querySelector('[data-field-path="retry"]') as HTMLElement;
@@ -590,7 +590,7 @@ describe("union 与布局", () => {
     expect(row.getAttribute("data-selected")).toBe("true");
   });
 
-  it("不可写时：添加入口不给，写动作按钮禁用", () => {
+  test("不可写时：添加入口不给，写动作按钮禁用", () => {
     const { props } = bench(
       z.object({ tags: z.array(z.string()) }),
       { tags: ["x"] },
@@ -604,7 +604,7 @@ describe("union 与布局", () => {
     ).toBe(true);
   });
 
-  it("添加入口的候选跟着输入过滤", () => {
+  test("添加入口的候选跟着输入过滤", () => {
     const { props } = bench(
       z.object({ models: z.dict(z.string()), note: z.string(), name: z.string() }),
       { models: {} },
@@ -622,7 +622,7 @@ describe("union 与布局", () => {
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["name"]);
   });
 
-  it("编辑态只显示输入框：原值不再在它旁边画一遍", () => {
+  test("编辑态只显示输入框：原值不再在它旁边画一遍", () => {
     const { props } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -631,7 +631,7 @@ describe("union 与布局", () => {
     expect(container.querySelectorAll("[data-tone]")).toHaveLength(0);
   });
 
-  it("本页改过的字段：行上有高亮，hover 里是「撤回」，点它退回去", () => {
+  test("本页改过的字段：行上有高亮，hover 里是「撤回」，点它退回去", () => {
     const { props, calls } = bench(
       z.object({ retry: z.number() }),
       { retry: 3 },
@@ -658,7 +658,7 @@ describe("union 与布局", () => {
     expect(calls.revert).toHaveBeenCalledWith(["retry"]);
   });
 
-  it("已存进用户层（没有本页草稿）的字段：另一种高亮，给的是「恢复默认」", () => {
+  test("已存进用户层（没有本页草稿）的字段：另一种高亮，给的是「恢复默认」", () => {
     const { props } = bench(
       z.object({ retry: z.number() }),
       { retry: 3 },
@@ -679,7 +679,7 @@ describe("union 与布局", () => {
     expect(screen.getByRole("button", { name: zh.reset })).toBeTruthy();
   });
 
-  it("必填字段没值时也占一行，而且直接是一个等着输入的位子", () => {
+  test("必填字段没值时也占一行，而且直接是一个等着输入的位子", () => {
     const { props, calls } = bench(z.object({ host: z.string().required() }), {});
     const { container } = render(<SchemaForm {...props} />);
 
@@ -735,7 +735,7 @@ describe("与真控制器一起跑", () => {
     return { state, props, scope };
   }
 
-  it("从候选加成：新行出现，而且直接是一个能打字的输入位", () => {
+  test("从候选加成：新行出现，而且直接是一个能打字的输入位", () => {
     const { state, props } = live(z.object({ host: z.string().required(), note: z.string() }), {
       host: "h",
     });
@@ -754,7 +754,7 @@ describe("与真控制器一起跑", () => {
     expect(state().addable.get(fieldKey([]))).toBeUndefined();
   });
 
-  it("数组追加：新项出现且是输入位", () => {
+  test("数组追加：新项出现且是输入位", () => {
     const { state, props } = live(z.object({ tags: z.array(z.string()) }), { tags: [] });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -766,7 +766,7 @@ describe("与真控制器一起跑", () => {
     expect(container.querySelector('[data-field-path="tags.0"] input')).toBeTruthy();
   });
 
-  it("对象层敲了没声明的键名：不写，并说清这一层没有这个字段", () => {
+  test("对象层敲了没声明的键名：不写，并说清这一层没有这个字段", () => {
     const { props, calls } = bench(z.object({ host: z.string().required(), note: z.string() }), {
       host: "h",
     });
@@ -786,7 +786,7 @@ describe("与真控制器一起跑", () => {
     expect(screen.queryByText(zh.unknownProperty)).toBeNull();
   });
 
-  it("编辑态的确认与取消：确认收起（草稿留着），取消退回原值", () => {
+  test("编辑态的确认与取消：确认收起（草稿留着），取消退回原值", () => {
     const { props, calls } = bench(z.object({ retry: z.number() }), { retry: 3 });
     const { container } = render(<SchemaForm {...props} />);
 
@@ -805,7 +805,7 @@ describe("与真控制器一起跑", () => {
     expect(container.querySelector('[data-line="field"] input')).toBeNull();
   });
 
-  it("判别式 union：切到另一支后，标签行的那个触发显示新的一支", () => {
+  test("判别式 union：切到另一支后，标签行的那个触发显示新的一支", () => {
     const { state, props } = live(
       z.union([
         z.object({ type: z.const("sqlite"), path: z.string().required() }),
@@ -828,7 +828,7 @@ describe("与真控制器一起跑", () => {
     expect(container.querySelector('[data-field-path="connectionString"]')).toBeTruthy();
   });
 
-  it("还没值的必填格子：取消先收起输入框，点值又能进来接着填", () => {
+  test("还没值的必填格子：取消先收起输入框，点值又能进来接着填", () => {
     const { props } = live(z.object({ host: z.string().required() }), {});
     const { container } = render(<SchemaForm {...props} />);
     const row = (): HTMLElement =>
@@ -843,7 +843,7 @@ describe("与真控制器一起跑", () => {
     expect(row().querySelector("input")).toBeTruthy();
   });
 
-  it("加成还没保存的那一项：取消后整项退回候选", () => {
+  test("加成还没保存的那一项：取消后整项退回候选", () => {
     const { state, props } = live(z.object({ host: z.string().required(), note: z.string() }), {
       host: "h",
     });
@@ -862,7 +862,7 @@ describe("与真控制器一起跑", () => {
     ).toEqual(["note"]);
   });
 
-  it("点候选时输入框的失焦不该吞掉这次点击", () => {
+  test("点候选时输入框的失焦不该吞掉这次点击", () => {
     const { props, calls } = bench(z.object({ host: z.string().required(), note: z.string() }), {
       host: "h",
     });
@@ -877,7 +877,7 @@ describe("与真控制器一起跑", () => {
     expect(calls.addKey).toHaveBeenCalledWith([], "note");
   });
 
-  it("放得下的文本不挂浮层：hover 也不出气泡，也没有原生 title", () => {
+  test("放得下的文本不挂浮层：hover 也不出气泡，也没有原生 title", () => {
     const schema = z.object({ note: z.string().description("短说明") });
     const { props } = bench(schema, { note: "hi" });
     const { container } = render(<SchemaForm {...props} />);
@@ -895,7 +895,7 @@ describe("与真控制器一起跑", () => {
     expect(value.getAttribute("title")).toBeNull();
   });
 
-  it("被截断的行内文本 hover 出全文：注释与值都给官方提示气泡", () => {
+  test("被截断的行内文本 hover 出全文：注释与值都给官方提示气泡", () => {
     const localized = localizedDescription({ zh: "很长的一段说明", en: "long" });
     const schema = z.object({ note: z.string().description(localized) });
     const { props } = bench(schema, { note: "一个很长的值" });
@@ -925,7 +925,7 @@ describe("与真控制器一起跑", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("超长的值不会把这一行撑宽：值槽是可收缩的盒子，值自己截断", () => {
+  test("超长的值不会把这一行撑宽：值槽是可收缩的盒子，值自己截断", () => {
     const long = `postgres://user:pass@host:5432/db?sslmode=require&application_name=${"x".repeat(80)}`;
     const { props } = bench(z.object({ access: z.string() }), { access: long });
     const { container } = render(<SchemaForm {...props} />);
@@ -938,7 +938,7 @@ describe("与真控制器一起跑", () => {
     expect(token.className).toContain(css.lineValue);
   });
 
-  it("行内编辑按 schema 的类型解析：number 存下去是数字，不是字符串", () => {
+  test("行内编辑按 schema 的类型解析：number 存下去是数字，不是字符串", () => {
     const { state, props } = live(z.object({ busyTimeout: z.natural().default(5000) }), {
       busyTimeout: 5000,
     });
@@ -955,7 +955,7 @@ describe("与真控制器一起跑", () => {
     expect(state().fields.get(fieldKey(["busyTimeout"]))?.value).toBe(3000);
   });
 
-  it("整段校验挡下的保存：不发写，并在页面上说清楚", async () => {
+  test("整段校验挡下的保存：不发写，并在页面上说清楚", async () => {
     const { state, props, scope } = live(
       z.object({ busyTimeout: z.number().default(5000) }),
       { busyTimeout: 5000 },
@@ -987,7 +987,7 @@ describe("与真控制器一起跑", () => {
     ).toContain("只接受 2000");
   });
 
-  it("行内的校验消息再长也压在行里：注释位自己收缩并截断，hover 给全文", async () => {
+  test("行内的校验消息再长也压在行里：注释位自己收缩并截断，hover 给全文", async () => {
     const long =
       "busyTimeout 只接受 2000；这个值是装配期定下的探测超时，写别的数会让本地沙箱在建立连接池那一步反复重试，页面只能给到这里";
     const { props } = live(
@@ -1020,7 +1020,7 @@ describe("与真控制器一起跑", () => {
     expect(screen.getByRole("tooltip").textContent).toBe(long);
   });
 
-  it("成员的值本身是容器时也能移除（字典键删掉一整项、数组项同理）", () => {
+  test("成员的值本身是容器时也能移除（字典键删掉一整项、数组项同理）", () => {
     const map = bench(z.object({ models: z.dict(z.object({ provider: z.string() })) }), {
       models: { chat: { provider: "m" } },
     });
@@ -1038,7 +1038,7 @@ describe("与真控制器一起跑", () => {
     expect(list.calls.removeItem).toHaveBeenCalledWith(["items"], 0);
   });
 
-  it("移除字典的一整项：值从读数里消失，退回可添加项", () => {
+  test("移除字典的一整项：值从读数里消失，退回可添加项", () => {
     const { state, props, scope } = live(
       z.object({ models: z.dict(z.object({ provider: z.string() })) }),
       { models: { chat: { provider: "m" } } },
@@ -1051,7 +1051,7 @@ describe("与真控制器一起跑", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("加成对象后它的字段直接摆出来：每个字段都是能填的位子", () => {
+  test("加成对象后它的字段直接摆出来：每个字段都是能填的位子", () => {
     const { state, props } = live(
       z.object({
         host: z.string().required(),

@@ -12,13 +12,8 @@ import {
   provideTokenMeter,
 } from "@morlay/dsh-session/server";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
@@ -31,12 +26,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("compaction 域", () => {
-  it(
+  test(
     "`provideCompactionBasic` 装的是上游引擎，`Compaction` 令牌解析到它",
     { timeout: 20_000 },
     async () => {
@@ -45,7 +40,7 @@ describe("compaction 域", () => {
     },
   );
 
-  it("契约声明的两个入口都在（自动压缩 / 手动压缩）", { timeout: 20_000 }, async () => {
+  test("契约声明的两个入口都在（自动压缩 / 手动压缩）", { timeout: 20_000 }, async () => {
     const app = await boot();
     const engine = app.get(Compaction);
     expect(typeof engine.compactIfNeeded).toBe("function");

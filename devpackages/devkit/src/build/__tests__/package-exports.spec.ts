@@ -3,7 +3,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { writeBuildManifest, writePackageManifest } from "../package-exports.ts";
 
 const ENTRIES = {
@@ -18,11 +19,9 @@ const ARTIFACTS = {
   client: ["client.mjs", "client.cjs"],
 };
 
-const created: string[] = [];
-
 async function makePackage(extra: Record<string, unknown> = {}): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "devkit-package-exports-"));
-  created.push(directory);
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
   await writeFile(
     join(directory, "package.json"),
     `${JSON.stringify({ name: "@local/devkit-exports-fixture", private: false, type: "module", ...extra }, null, 2)}\n`,
@@ -46,14 +45,8 @@ async function withHarnessVersion(version: string | undefined, run: () => Promis
   }
 }
 
-afterEach(async () => {
-  await Promise.all(
-    created.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
-
 describe("client 出口", () => {
-  it("发布态只有 CJS 工厂（dsh 读字节的那份），顶层 exports 不含", async () => {
+  test("发布态只有 CJS 工厂（dsh 读字节的那份），顶层 exports 不含", async () => {
     const directory = await makePackage();
     await writeBuildManifest(directory, {
       entries: ENTRIES,
@@ -68,7 +61,7 @@ describe("client 出口", () => {
 });
 
 describe("private 分档", () => {
-  it("private 包只写 exports，不写 publishConfig / engines.dsh", async () => {
+  test("private 包只写 exports，不写 publishConfig / engines.dsh", async () => {
     const directory = await makePackage({ private: true });
     await withHarnessVersion("0.2.1-alpha.5", async () => {
       await writeBuildManifest(directory, { entries: ENTRIES, artifacts: ARTIFACTS });
@@ -79,7 +72,7 @@ describe("private 分档", () => {
     expect((manifest["exports"] as Record<string, unknown>)["."]).toBe("./src/index.ts");
   });
 
-  it("public 包写发布态清单与 engines.dsh", async () => {
+  test("public 包写发布态清单与 engines.dsh", async () => {
     const directory = await makePackage();
     await withHarnessVersion("0.2.1-alpha.5", async () => {
       await writeBuildManifest(directory, { entries: ENTRIES, artifacts: ARTIFACTS });
@@ -90,24 +83,30 @@ describe("private 分档", () => {
   });
 });
 
-describe("只发布态入口", () => {
-  it("publishOnly 入口只进 publishConfig，顶层 exports 不含", async () => {
+describe("bundle 包的出口形态", () => {
+  test("顶层 exports 是空对象；发布态只有 default（无 types）+ package.json + patch + client", async () => {
     const directory = await makePackage();
     await writeBuildManifest(directory, {
-      entries: ENTRIES,
-      artifacts: ARTIFACTS,
-      publishOnly: ["rows"],
+      entries: { index: "./src/dsh-bundle.ts", client: "./src/dsh-bundle.client.ts" },
+      artifacts: { index: ["index.mjs"], client: ["client.cjs"] },
+      clientEntry: "client",
+      // bundle 包不出声明（行入口没有类型消费面）。
+      declarationFiles: () => [],
+      bundle: { rows: [{ id: "session-store", disabled: true }] },
     });
     const manifest = await manifestOf(directory);
-    const dev = manifest["exports"] as Record<string, unknown>;
-    expect(dev["./rows"]).toBeUndefined();
+    expect(manifest["exports"]).toEqual({});
     const published = (manifest["publishConfig"] as { exports?: Record<string, unknown> }).exports;
-    expect(published?.["./rows"]).toBe("./dist/rows.mjs");
+    expect(published?.["."]).toEqual({ default: "./dist/index.mjs" });
+    expect(published?.["./package.json"]).toBe("./package.json");
+    expect(published?.["./client"]).toEqual({ default: "./dist/client.cjs" });
+    expect(published?.["./cordis.patch.yml"]).toBe("./dist/cordis.patch.yml");
+    expect(JSON.stringify(published)).not.toContain("types");
   });
 });
 
 describe("没有产物形态的出口", () => {
-  it("样式 / 资产出口原样进发布态，源码面的漏产物不被抄成源码路径", async () => {
+  test("样式 / 资产出口原样进发布态，源码面的漏产物不被抄成源码路径", async () => {
     const directory = await makePackage({
       exports: {
         ".": "./src/index.ts",
@@ -128,7 +127,7 @@ describe("没有产物形态的出口", () => {
 });
 
 describe("bundle patch", () => {
-  it("行声明的 id / disabled / config 落成 patch，清单写 dsh.bundle.patch", async () => {
+  test("行声明的 id / disabled / config 落成 patch，清单写 dsh.bundle.patch", async () => {
     const directory = await makePackage();
     await writeBuildManifest(directory, {
       entries: ENTRIES,
@@ -141,14 +140,15 @@ describe("bundle patch", () => {
     expect(patch).toContain('config: {"backend":"rdb"}');
     const manifest = await manifestOf(directory);
     expect(manifest["dsh"]).toEqual({ bundle: { patch: "./dist/cordis.patch.yml" } });
-    // patch 是发布产物：只在发布态清单里。
-    expect((manifest["exports"] as Record<string, unknown>)["."]).toBe("./src/index.ts");
-    expect((manifest["exports"] as Record<string, unknown>)["./cordis.patch.yml"]).toBeUndefined();
+    // bundle 包的顶层 `exports` 是空对象；patch 是发布产物，只在 `publishConfig.exports` 里。
+    expect(manifest["exports"]).toEqual({});
+    const published = (manifest["publishConfig"] as { exports?: Record<string, unknown> }).exports;
+    expect(published?.["./cordis.patch.yml"]).toBe("./dist/cordis.patch.yml");
   });
 });
 
 describe("writePackageManifest（数据包）", () => {
-  it("固定面按文件存在性补，engines.dsh 照写", async () => {
+  test("固定面按文件存在性补，engines.dsh 照写", async () => {
     const directory = await makePackage({ dsh: { bundle: { patch: "./cordis.patch.yml" } } });
     await writeFile(join(directory, "cordis.patch.yml"), "# patch\n");
     await mkdir(join(directory, "locale"), { recursive: true });

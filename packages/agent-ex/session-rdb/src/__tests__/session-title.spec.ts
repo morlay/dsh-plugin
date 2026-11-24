@@ -1,6 +1,7 @@
 // 为什么留在根 `__tests__/`：标题既由 data 面写路径维护（`t_sessions` 列 + rewind 收回），又经 storage 面投影检查点直取（`cachedSnapshot`），跨两面。
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,11 +17,6 @@ import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
 import { titleOfEventData } from "@morlay/session-rdb";
 import { createCtx, mountOnto } from "./support/base.ts";
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
-
 function titleEvent(title: string, seq: number): SessionEvent {
   return {
     type: "session/title",
@@ -32,7 +28,7 @@ function titleEvent(title: string, seq: number): SessionEvent {
 
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -47,7 +43,7 @@ async function waitFor<T>(read: () => T | undefined, timeoutMs = 3000): Promise<
 }
 
 describe("session title as session data", () => {
-  it("maintains the title column from title events and rewinds it", async () => {
+  test("maintains the title column from title events and rewinds it", async () => {
     const root = await tempDir("session-title-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = createCtx();
@@ -88,7 +84,7 @@ describe("session title as session data", () => {
     }
   });
 
-  it("serves the title straight from the session row when no checkpoint row exists", async () => {
+  test("serves the title straight from the session row when no checkpoint row exists", async () => {
     const root = await tempDir("session-title-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = createCtx();
@@ -123,7 +119,7 @@ describe("session title as session data", () => {
     }
   });
 
-  it("extracts titles from current and legacy event shapes", () => {
+  test("extracts titles from current and legacy event shapes", () => {
     expect(titleOfEventData('{"type":"session/title","data":{"title":"当前"}}')).toBe("当前");
 
     expect(titleOfEventData('{"title":"旧世代","messageSeqs":[1]}')).toBe("旧世代");

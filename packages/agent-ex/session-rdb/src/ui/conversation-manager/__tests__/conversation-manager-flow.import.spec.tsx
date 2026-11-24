@@ -3,9 +3,10 @@
 //
 // 好包是**真导出**的产物（与生产导出同一条路径），坏包是一个没有 artifact 行的真 zip；
 // 两条都经真 remote 到真库，断言落在「新会话真的在库里 / 提示里有没有那条失败的原因」。
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { strToU8 } from "fflate";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished, vi } from "vitest";
 import { zh } from "../locales.ts";
 import {
   seedTitledSession,
@@ -14,8 +15,6 @@ import {
 } from "../../../__tests__/support/manager-flow.ts";
 import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
 import { zipOf } from "../../../__tests__/support/zip.ts";
-
-afterEach(cleanup);
 
 // 浏览器下载面：happy-dom 没有对象 URL，把导出的 zip 字节接住（拿它当导入源）。
 function captureDownloads(): { blobs: Blob[]; filenames: string[] } {
@@ -35,24 +34,14 @@ function captureDownloads(): { blobs: Blob[]; filenames: string[] } {
   return { blobs, filenames };
 }
 
-const flows: ManagerFlow[] = [];
-
-afterEach(async () => {
-  vi.restoreAllMocks();
-  const target = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
-  delete target.createObjectURL;
-  delete target.revokeObjectURL;
-  for (const flow of flows.splice(0)) await flow.dispose();
-});
-
 async function start(): Promise<ManagerFlow> {
   const flow = await startManagerFlow();
-  flows.push(flow);
+  onTestFinished(() => flow.dispose());
   return flow;
 }
 
 describe("L3 对话管理页：批量导入", () => {
-  it("多选两个 zip 一次导入：好包落成新会话，坏包按文件名给出原因", async () => {
+  test("多选两个 zip 一次导入：好包落成新会话，坏包按文件名给出原因", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "import-source", "要导出的会话");
     const downloads = captureDownloads();

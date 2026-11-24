@@ -4,32 +4,26 @@
 // 判据全部**读库 / 读 agent 面**：该回合的用户输入被排进重放队列（`followup` 收到它）、旧回复从日志里消失、
 // 新回复落在同一回合。换掉的只有模型输出（`AgentDirectoryStub` 的固定回复）。
 import { SessionId } from "@morlay/dsh-session/contract";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, screen } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startClient, type Client } from "../../../__tests__/support/e2e-client.ts";
 import { MOCK_REPLY_PREFIX, startHost, type Host } from "../../../__tests__/support/e2e-host.ts";
 import { nodeOf, renderUserMessage } from "../../../__tests__/support/e2e-render.tsx";
 import { waitFor } from "../../../__tests__/support/wait.ts";
 import { meta, twoTurnLog } from "@morlay/dsh-session/testing";
 
-const opened: Array<{ dispose(): Promise<void> }> = [];
-
-afterEach(async () => {
-  cleanup();
-  for (const item of opened.splice(0).reverse()) await item.dispose();
-});
-
 async function boot(id: string): Promise<{ host: Host; client: Client }> {
   const host = await startHost();
-  opened.push(host);
+  onTestFinished(() => host.dispose());
   const live = host.ctx.sessions.create(SessionId(id), {
     meta: meta(id, "/work"),
     seed: twoTurnLog(),
   });
   await host.ctx.sessions.flush(live);
   host.agentDirectory.attach(live);
-  const client = await startClient(host.handlers);
-  opened.push(client);
+  const client = await startClient(host.app);
+  onTestFinished(() => client.dispose());
   return { host, client };
 }
 
@@ -55,7 +49,7 @@ function repliesOf(
 }
 
 describe("重试：点重试 → 该回合的用户输入进队列、旧回复消失", () => {
-  it(
+  test(
     "先停 agent、旧回复从日志消失、排队的那条输入被重放成新回复",
     { timeout: 60_000 },
     async () => {

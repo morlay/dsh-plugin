@@ -7,7 +7,7 @@ import { meta, turnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore, openRdbBackend } from "@morlay/session-rdb";
 import { createPostgresTestDatabase } from "@morlay/zephyr-rdb/testing";
 import { concat, E, fragment } from "@morlay/zephyr-rdb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { mount } from "../../__tests__/support/base.ts";
 import { sessionRowsCondition, type SessionRowsColumns } from "../../data/store/rows-query.ts";
 
@@ -37,7 +37,7 @@ function titledLog(title: string, id: string): SessionEvent[] {
 }
 
 describe.skipIf(!pgUrl)("L4 PostgreSQL：搜索、过滤与批量删除", () => {
-  it("前缀段两边都用不上原列索引：SQLite 整表扫，PG 的 like(lower(f_title)) 也拿不到索引条件（方言差异）", async () => {
+  test("前缀段两边都用不上原列索引：SQLite 整表扫，PG 的 like(lower(f_title)) 也拿不到索引条件（方言差异）", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const mounted = await mount({
       config: { type: "postgres", connectionString: testDatabase.connectionString },
@@ -85,7 +85,7 @@ describe.skipIf(!pgUrl)("L4 PostgreSQL：搜索、过滤与批量删除", () => 
     }
   });
 
-  it("rows 的两段式搜索与归档过滤在 PG 上给出同样的结果", async () => {
+  test("rows 的两段式搜索与归档过滤在 PG 上给出同样的结果", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const mounted = await mount({
       config: { type: "postgres", connectionString: testDatabase.connectionString },
@@ -125,7 +125,7 @@ describe.skipIf(!pgUrl)("L4 PostgreSQL：搜索、过滤与批量删除", () => 
     }
   });
 
-  it("bulkDelete 在 PG 上逐条结算，整批不回滚", async () => {
+  test("bulkDelete 在 PG 上逐条结算，整批不回滚", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const mounted = await mount({
       config: { type: "postgres", connectionString: testDatabase.connectionString },
@@ -168,7 +168,7 @@ describe.skipIf(!pgUrl)("L4 PostgreSQL：搜索、过滤与批量删除", () => 
     }
   });
 
-  it("locateEvents 的 LIKE 在 PG 上给出与 SQLite 同样的命中与片段", async () => {
+  test("locateEvents 的 LIKE 在 PG 上给出与 SQLite 同样的命中与片段", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const mounted = await mount({
       config: { type: "postgres", connectionString: testDatabase.connectionString },

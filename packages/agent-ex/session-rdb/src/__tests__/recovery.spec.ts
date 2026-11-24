@@ -9,19 +9,14 @@ import { SessionId } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { asRdbStore } from "@morlay/session-rdb";
 import { SessionPersistenceRdb, parseJsonlArtifact } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { makeRoot, removeRoot, startAt, type Instance } from "./support/host.ts";
 import { meta, oneTurnLogStepFirst, turnLog } from "@morlay/dsh-session/testing";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
-
 async function start(): Promise<{ root: string; instance: Instance }> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   return { root, instance: await startAt(root) };
 }
 
@@ -52,7 +47,7 @@ function tearTail(root: string, id: string, sequence: number): void {
 }
 
 describe("存储层自愈", () => {
-  it("撕裂的物理尾部不外泄给读，写路径能接着写", async () => {
+  test("撕裂的物理尾部不外泄给读，写路径能接着写", async () => {
     const { root, instance } = await start();
     try {
       const handle = await instance.persistence.create(meta("torn", "/work"));
@@ -82,7 +77,7 @@ describe("存储层自愈", () => {
     }
   });
 
-  it("导出件能原样导入回一个（新的）会话", async () => {
+  test("导出件能原样导入回一个（新的）会话", async () => {
     const { instance } = await start();
     try {
       const store = asRdbStore(instance.persistence);
@@ -100,7 +95,7 @@ describe("存储层自愈", () => {
     }
   });
 
-  it("整理数据之后会话仍然可读（VACUUM 不改内容）", async () => {
+  test("整理数据之后会话仍然可读（VACUUM 不改内容）", async () => {
     const { instance } = await start();
     try {
       const handle = await instance.persistence.create(meta("vacuum-me"));
@@ -118,9 +113,9 @@ describe("存储层自愈", () => {
     }
   });
 
-  it("库里的结构版本不认识时拒绝打开（fail-loud，不静默当成新库）", async () => {
+  test("库里的结构版本不认识时拒绝打开（fail-loud，不静默当成新库）", async () => {
     const root = await makeRoot();
-    roots.push(root);
+    onTestFinished(() => removeRoot(root));
     const first = await startAt(root);
     const handle = await first.persistence.create(meta("version-check"));
     await handle.append(oneTurnLogStepFirst());
@@ -145,7 +140,7 @@ describe("存储层自愈", () => {
     }
   });
 
-  it("默认配置落在 <数据根>/sessions/sessions.sqlite（配置门面的默认值）", async () => {
+  test("默认配置落在 <数据根>/sessions/sessions.sqlite（配置门面的默认值）", async () => {
     const { root, instance } = await start();
     try {
       expect(instance.app.get(SessionPersistence)).toBeInstanceOf(SessionPersistenceRdb);

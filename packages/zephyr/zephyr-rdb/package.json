@@ -46,6 +46,7 @@
     "pg-cursor": "^2.22.1"
   },
   "devDependencies": {
+    "@morlay/zephyr": "workspace:^",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@types/pg-cursor": "^2.7.2"

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   MigrationRegistry,
   defineTable,
@@ -17,7 +17,7 @@ const notes = defineTable({
 });
 
 describe("迁移注册表", () => {
-  it("按 id 顺序执行一次、记账、幂等；失败的迁移不记账", async () => {
+  test("按 id 顺序执行一次、记账、幂等；失败的迁移不记账", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const ran: string[] = [];
@@ -87,7 +87,7 @@ describe("迁移注册表", () => {
 // 结构漂移要能被「打开库的人」看见：`runMigrations` 除了「执行了哪些迁移」，还交回 `ensureSchema` 的
 // 漂移。判据是 orphan 这条——库里有、catalog 没有的表只报告，不进执行的语句（不删表）。
 describe("迁移打开时的结构漂移", () => {
-  it("结构对齐的漂移随结果一起返回：库里有、catalog 没有的表只报告不删", async () => {
+  test("结构对齐的漂移随结果一起返回：库里有、catalog 没有的表只报告不删", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const migration = { id: "20261121-drift-probe", up: async () => {} };

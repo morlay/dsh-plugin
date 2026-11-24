@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { CliError, layoutOf } from "@morlay/zephyr-cli";
 import type { ResolvedConfig } from "@morlay/zephyr-cli";
 import { electronBuilderConfigOf } from "../electron-builder.ts";
@@ -28,7 +28,7 @@ function resolvedFor(withDesktop = true): ResolvedConfig {
 }
 
 describe("electron-builder 配置推导", () => {
-  it("身份取 desktop 段，产物落在 node_modules/.zephyr/app", () => {
+  test("身份取 desktop 段，产物落在 node_modules/.zephyr/app", () => {
     const resolved = resolvedFor();
     const config = electronBuilderConfigOf({
       resolved,
@@ -40,7 +40,7 @@ describe("electron-builder 配置推导", () => {
     expect(config.directories.output).toBe("/w/target/Demo/app");
   });
 
-  it("asar 打开，native 拆出去；宿主那一份不在这里（PackagerDefault 复制到 Resources/runtime）", () => {
+  test("asar 打开，native 拆出去；宿主那一份不在这里（PackagerDefault 复制到 Resources/runtime）", () => {
     const resolved = resolvedFor();
     const config = electronBuilderConfigOf({
       resolved,
@@ -58,7 +58,7 @@ describe("electron-builder 配置推导", () => {
     ]);
   });
 
-  it("没有 desktop 段就报错，并说清缺哪一段", () => {
+  test("没有 desktop 段就报错，并说清缺哪一段", () => {
     const resolved = resolvedFor(false);
     expect(() =>
       electronBuilderConfigOf({ resolved, layout: resolved.layout, electronVersion: "45.2.3" }),

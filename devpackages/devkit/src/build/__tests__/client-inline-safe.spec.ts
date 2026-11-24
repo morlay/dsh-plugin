@@ -2,7 +2,7 @@
 // `missed the module table`（build-time externals drift），所以逐项比对上游那份正则，不靠人记得跟。
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { INLINE_SAFE } from "../cordis-client.ts";
 
 // 上游真源按**文件位置**取，不按 cwd：从包目录或仓库根跑测试都落在同一份上。
@@ -58,7 +58,7 @@ async function upstreamSpecifiers(): Promise<string[]> {
 }
 
 describe("client 内联名单与上游对齐", () => {
-  it("上游 INLINE_SAFE 里的每个 specifier 在我们这份里都内联", async () => {
+  test("上游 INLINE_SAFE 里的每个 specifier 在我们这份里都内联", async () => {
     const specifiers = await upstreamSpecifiers();
     expect(specifiers.length).toBeGreaterThan(8);
     expect(specifiers.filter((specifier) => !INLINE_SAFE.test(specifier))).toEqual([]);

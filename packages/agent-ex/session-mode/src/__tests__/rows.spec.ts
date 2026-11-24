@@ -5,11 +5,11 @@
 // `Config()` 的缺省不带任何 override。
 import { DEFAULT_KEEP, DEFAULT_REPLACE, DEFAULT_SUPPRESS } from "@morlay/session-mode";
 import { provideContextAssembler } from "@morlay/session-mode";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 import { ContextChannel } from "../context-assembler.provide.ts";
 
 describe("通道行", () => {
-  it("装的是通道本体，行不带 config（缺省就是本部署要的那一份转换）", () => {
+  test("装的是通道本体，行不带 config（缺省就是本部署要的那一份转换）", () => {
     const rows = provideContextAssembler();
 
     // 清单里就有通道本体：装配不会退化成「只装了服务、没挂两个接缝」。

@@ -13,21 +13,16 @@ import { SessionId } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, turnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "./support/host.ts";
 import { openInitializedSqlite } from "./support/sqlite.ts";
 
-const harnesses: Harness[] = [];
 const closers: Array<() => void> = [];
-
-afterEach(async () => {
-  for (const close of closers.splice(0)) close();
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
 
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -70,7 +65,7 @@ function storeOf(harness: Harness) {
 }
 
 describe("事件定位", () => {
-  it("只回命中片段：文本 LIKE 扫事件行，类型 / 角色 / 时间各一个条件", async () => {
+  test("只回命中片段：文本 LIKE 扫事件行，类型 / 角色 / 时间各一个条件", async () => {
     const harness = await start();
     await seed(harness, "loc-a", "深水区报告", 2);
     await seed(harness, "loc-b", "别的会话");
@@ -117,7 +112,7 @@ describe("事件定位", () => {
     expect((await store.locateEvents("loc-b", { text: "深水区" })).items).toEqual([]);
   });
 
-  it("窗口边界：fromSeq / toSeq 收窄取数，limit 只截条数不改总数", async () => {
+  test("窗口边界：fromSeq / toSeq 收窄取数，limit 只截条数不改总数", async () => {
     const harness = await start();
     await seed(harness, "loc-window", "窗口边界", 2);
     const store = storeOf(harness);
@@ -138,7 +133,7 @@ describe("事件定位", () => {
     expect(capped.total).toBe(12);
   });
 
-  it("越界报错码：窗口超出可读 seq 范围 / 两端颠倒都显式失败，缺会话给 NOT_FOUND", async () => {
+  test("越界报错码：窗口超出可读 seq 范围 / 两端颠倒都显式失败，缺会话给 NOT_FOUND", async () => {
     const harness = await start();
     await seed(harness, "loc-oob", "越界", 2);
     const store = storeOf(harness);
@@ -157,7 +152,7 @@ describe("事件定位", () => {
     });
   });
 
-  it("读不出来的会话照样定位：定位走行查询，不解析整段日志", async () => {
+  test("读不出来的会话照样定位：定位走行查询，不解析整段日志", async () => {
     const harness = await start();
     await seed(harness, "loc-broken", "坏会话里也有线索", 2);
     const sqlite = await openSqlite(harness);
@@ -172,7 +167,7 @@ describe("事件定位", () => {
 });
 
 describe("坏会话修复", () => {
-  it("drop-tail：只丢最后一个可读边界之后的尾部，修完读得出来，别的会话不动", async () => {
+  test("drop-tail：只丢最后一个可读边界之后的尾部，修完读得出来，别的会话不动", async () => {
     const harness = await start();
     await seed(harness, "tail-broken", "要丢尾部", 2);
     await seed(harness, "tail-kept", "完好的邻居");
@@ -207,7 +202,7 @@ describe("坏会话修复", () => {
     expect((await store.load("tail-kept")).events).toHaveLength(6);
   });
 
-  it("rewrite：整段重写（复用 replaceSessionLog），修完读得出来，seed 长度收在日志长度内", async () => {
+  test("rewrite：整段重写（复用 replaceSessionLog），修完读得出来，seed 长度收在日志长度内", async () => {
     const harness = await start();
     await seed(harness, "rewrite-broken", "整段重写", 2);
     await seed(harness, "rewrite-kept", "完好的邻居");
@@ -235,7 +230,7 @@ describe("坏会话修复", () => {
     expect((await store.load("rewrite-kept")).events).toHaveLength(6);
   });
 
-  it("运行中的会话不动日志：两个修法都带 SESSION_LIVE（与删除守卫同口径）", async () => {
+  test("运行中的会话不动日志：两个修法都带 SESSION_LIVE（与删除守卫同口径）", async () => {
     const harness = await start();
     const session = harness.sessionStore.create(SessionId("repair-live"), {
       meta: { cwd: "/work" },
@@ -253,7 +248,7 @@ describe("坏会话修复", () => {
     });
   });
 
-  it("delete：走现有删除守卫（未归档拒绝、归档后删掉），别的会话不动", async () => {
+  test("delete：走现有删除守卫（未归档拒绝、归档后删掉），别的会话不动", async () => {
     const harness = await start();
     await seed(harness, "delete-broken", "删掉坏的", 2);
     await seed(harness, "delete-kept", "完好的邻居");

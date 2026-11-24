@@ -7,7 +7,8 @@
  * 不是某个 app 的整装组合。
  */
 import { bootstrapApplication, provide } from "@morlay/zephyr";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 import { provideClientChain } from "../../provide.ts";
 import { provideTheme } from "../../theme/provide.ts";
 import { ConfigFormsInMemory } from "../../settings/config-forms.fake.ts";
@@ -68,7 +69,7 @@ const provideDemo = provide([
 ]);
 
 describe("位置族（@View + View.seat）", { timeout: 10_000 }, () => {
-  it("seat 字段既声明子位置、又能渲染它的贡献", async () => {
+  test("seat 字段既声明子位置、又能渲染它的贡献", async () => {
     const app = await bootstrapApplication({ providers: [...provideDemo()], timeoutMs: 8_000 });
     try {
       const slots = app.get(Slots);

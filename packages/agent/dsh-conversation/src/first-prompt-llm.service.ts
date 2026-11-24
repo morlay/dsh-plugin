@@ -4,7 +4,7 @@ import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Llm } from "@morlay/dsh-agent";
 import { SessionStore } from "@morlay/dsh-session";
-import { SessionTitle } from "./index.ts";
+import { SessionTitle } from "./contract/session-title.contract.ts";
 
 /** 默认配置：上游 Config 的几个执行控制都是必填（装配面用 `configure` 覆盖）。 */
 const DEFAULT_CONFIG: SessionTitleLlmConfig = {

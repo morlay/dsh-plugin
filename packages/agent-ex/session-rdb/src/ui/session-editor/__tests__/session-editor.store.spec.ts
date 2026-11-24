@@ -6,15 +6,14 @@ import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { Locale } from "@morlay/zephyr-app/client";
 import { Remote } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { vi } from "vitest";
 import { SessionEditorStore } from "../session-editor.store.ts";
 import { SessionEditorEndpointClient } from "../session-editor-endpoint.client.ts";
-
 interface Invocation {
   endpoint: string;
   args: Readonly<Record<string, unknown>>;
 }
-
 // 假 remote：只实现转发要用的 `invoke`，记录每一次端点调用。
 function fakeRemote(outcome: () => Promise<unknown>): { remote: unknown; calls: Invocation[] } {
   const calls: Invocation[] = [];
@@ -28,7 +27,6 @@ function fakeRemote(outcome: () => Promise<unknown>): { remote: unknown; calls: 
     },
   };
 }
-
 // 假会话目录：`binding` 给 resync 入口，`refresh` 记次数，`scope` 给输入面。
 function fakeSessions(options: { resync?: boolean } = {}): {
   sessions: unknown;
@@ -57,14 +55,12 @@ function fakeSessions(options: { resync?: boolean } = {}): {
   };
   return { sessions, drafts, counts };
 }
-
 const localeStub = {
   register: () => () => {},
   bind: () => () => "",
   getSnapshot: () => ({}),
   subscribe: () => () => {},
 };
-
 async function storeWith(
   outcome: () => Promise<unknown>,
   sessions: unknown,
@@ -82,7 +78,6 @@ async function storeWith(
   });
   return { store: app.get(SessionEditorStore), calls, dispose: () => app.dispose() };
 }
-
 const userBlock = {
   key: "4:0",
   turn: 1,
@@ -92,15 +87,9 @@ const userBlock = {
   text: "hello",
   time: 4,
 } as never;
-
 const applied = { ok: true, value: { sessionId: "s1", queuedTurns: 1, live: true } };
-
-afterEach(() => {
-  document.body.innerHTML = "";
-});
-
 describe("SessionEditorStore 的动作闭环", () => {
-  it("retry 打到 sessionEditor/retry 并带会话、轮次与级联；成功后重建窗口、不整页重载", async () => {
+  test("retry 打到 sessionEditor/retry 并带会话、轮次与级联；成功后重建窗口、不整页重载", async () => {
     const { sessions, counts } = fakeSessions();
     const { store, calls, dispose } = await storeWith(async () => applied, sessions);
     const reload = vi.fn();
@@ -118,11 +107,9 @@ describe("SessionEditorStore 的动作闭环", () => {
       expect(reload).not.toHaveBeenCalled();
     } finally {
       await dispose();
-      vi.unstubAllGlobals();
     }
   });
-
-  it("没有 resync 时退化为刷列表", async () => {
+  test("没有 resync 时退化为刷列表", async () => {
     const { sessions, counts } = fakeSessions({ resync: false });
     const { store, dispose } = await storeWith(async () => applied, sessions);
     try {
@@ -133,8 +120,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("recall 只带会话与事件位置，并回填该消息的全部文本块", async () => {
+  test("recall 只带会话与事件位置，并回填该消息的全部文本块", async () => {
     const { sessions, drafts } = fakeSessions();
     const { store, calls, dispose } = await storeWith(
       async () => ({ ok: true, value: { sessionId: "s1", queuedTurns: 0 } }),
@@ -150,8 +136,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("失败响应返回 false 且不阻塞下一次操作", async () => {
+  test("失败响应返回 false 且不阻塞下一次操作", async () => {
     let succeed = false;
     const { sessions } = fakeSessions();
     const { store, dispose } = await storeWith(
@@ -170,8 +155,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("上一次操作未落定时不重复提交", async () => {
+  test("上一次操作未落定时不重复提交", async () => {
     const gate = Promise.withResolvers<void>();
     const { sessions } = fakeSessions();
     const { store, calls, dispose } = await storeWith(async () => {
@@ -189,8 +173,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("fork 打到 sessionEditor/fork 并带会话与消息位置，成功后重建窗口", async () => {
+  test("fork 打到 sessionEditor/fork 并带会话与消息位置，成功后重建窗口", async () => {
     const { sessions, counts } = fakeSessions();
     const { store, calls, dispose } = await storeWith(
       async () => ({ ok: true, value: { sessionId: "child", queuedTurns: 0 } }),
@@ -206,8 +189,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("同一个会话复用同一个动作面", async () => {
+  test("同一个会话复用同一个动作面", async () => {
     const { sessions } = fakeSessions();
     const { store, dispose } = await storeWith(async () => applied, sessions);
     try {
@@ -217,8 +199,7 @@ describe("SessionEditorStore 的动作闭环", () => {
       await dispose();
     }
   });
-
-  it("recall 成功后把会话滚动容器送回底部", async () => {
+  test("recall 成功后把会话滚动容器送回底部", async () => {
     const { sessions } = fakeSessions();
     const { store, dispose } = await storeWith(
       async () => ({ ok: true, value: { sessionId: "s1", queuedTurns: 0 } }),

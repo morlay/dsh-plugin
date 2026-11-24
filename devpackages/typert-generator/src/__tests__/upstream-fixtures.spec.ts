@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { buildSchemaIndex, newContext, zodOf } from "../schema.ts";
 import { generateTypert, packageSurfaces } from "../index.ts";
 
@@ -47,7 +47,7 @@ describe("上游 fixtures", () => {
   // `type-model` 的 `SyntaxZoo` 是上游自己的"每个受支持 TypeNode 形态"语料（泛型、条件、映射、模板字面量、
   // 元组、unique symbol、import 类型、类型查询……），逐类型快照一遍：上游升级改了语料或我们改了规则，
   // 快照都会立刻挡住。
-  it("type-model：逐类型生成 zod 的形状（快照）", async () => {
+  test("type-model：逐类型生成 zod 的形状（快照）", async () => {
     const { upstreamRoot, dtsRoot } = await workspaceOf("type-model");
     const index = await buildSchemaIndex(dtsRoot, {});
     // 跨包引用要带出口表 / 别名表（`HostAgent`、`Host.Agent`、`import('@fixture/host').Agent`）。
@@ -88,7 +88,7 @@ describe("上游 fixtures", () => {
     expect(shapes).toMatchSnapshot();
   });
 
-  it("remote-model：@Remote / @RemoteScope / stream 三种方法都有各自的 descriptor", async () => {
+  test("remote-model：@Remote / @RemoteScope / stream 三种方法都有各自的 descriptor", async () => {
     const { upstreamRoot, dtsRoot } = await workspaceOf("remote-model");
     const artifacts = await generateTypert({ upstreamRoot, dtsRoot });
     const goals = artifacts.find((artifact) => artifact.package === "@fixture/remote");

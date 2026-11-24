@@ -8,7 +8,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { inject } from "@morlay/zephyr";
 import { SlotView } from "@morlay/zephyr-app/client";
-import { CommandPaletteStore } from "@morlay/dsh-command/ui";
+import { CommandPaletteStore } from "./command-palette.store.ts";
 import { ConversationInputOverlaySlot } from "./conversation-input-overlay.slot.ts";
 
 /** 命令弹层：把 store 的会话状态渲染成列表，选中项带标记。 */

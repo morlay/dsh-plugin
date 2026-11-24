@@ -20,12 +20,11 @@ import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { RemoteShell } from "./support/fake-remote.ts";
-
-afterEach(cleanup);
 
 const SESSION_ID = "s-ui";
 
@@ -82,12 +81,6 @@ class FakeCommandRunner extends CommandRunner {
   }
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
-
 /**
  * 起 client 侧的真 `sessions` 服务（wire 两个方法由替身承载）。
  * @returns app 与会话服务。
@@ -108,7 +101,7 @@ async function boot(): Promise<{
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const sessions = app.get(SessionController);
   // 物化 scope：上游 `binding(id)` 只给已 `retain` 过的会话（目录行还在装配期的首帧之前）。
   sessions.retain(SESSION_ID as never, { source: "gateway" });
@@ -123,14 +116,14 @@ function trigger(): HTMLButtonElement {
 }
 
 describe("权限 chip 的 UI（数据面是真实现）", () => {
-  it("初始显示宿主当前的档位", { timeout: 20_000 }, async () => {
+  test("初始显示宿主当前的档位", { timeout: 20_000 }, async () => {
     const { sessions } = await boot();
     await sessions.refresh();
     renderChip(sessions);
     expect(trigger().textContent ?? "").toMatch(/工作区内修改/);
   });
 
-  it("选「完全权限」→ 勾风险 → 确认：宿主状态与 chip 文案都变", { timeout: 20_000 }, async () => {
+  test("选「完全权限」→ 勾风险 → 确认：宿主状态与 chip 文案都变", { timeout: 20_000 }, async () => {
     const { sessions, runner } = await boot();
     await sessions.refresh();
     renderChip(sessions);
@@ -149,7 +142,7 @@ describe("权限 chip 的 UI（数据面是真实现）", () => {
     expect(trigger().textContent ?? "", "chip 文案必须跟着宿主状态变").toMatch(/完全权限/);
   });
 
-  it("选「仅可查看」直接生效（不需要风险确认）", { timeout: 20_000 }, async () => {
+  test("选「仅可查看」直接生效（不需要风险确认）", { timeout: 20_000 }, async () => {
     const { sessions, runner } = await boot();
     await sessions.refresh();
     renderChip(sessions);

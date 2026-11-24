@@ -6,11 +6,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AppEnv } from "@morlay/zephyr-app";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { vi } from "vitest";
 import { muxTransport, type RemoteFetch, type RemoteTransport } from "@morlay/zephyr-app/client";
 import {
   CredentialsInMemory,
-  FakeAppEnv,
+  createTestingAppEnv,
   WebServer,
   provideApiGateway,
   provideConnection,
@@ -36,15 +38,14 @@ export interface WireApp {
  */
 export async function mountWireApp(): Promise<WireApp> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-app-wire-"));
-  FakeAppEnv.root = root;
   // `WebStartupDefault` 读 `process.env.PORT`（缺省 3080）：并行 spec 会抢同一个端口。
-  process.env.PORT = "0";
+  vi.stubEnv("PORT", "0");
   let app: App | undefined;
   let disposed: Promise<void> | undefined;
   try {
     app = await bootstrapApplication({
       providers: [
-        FakeAppEnv,
+        { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
         CredentialsInMemory,
         ...provideWeb(),
         ...provideConnection(),

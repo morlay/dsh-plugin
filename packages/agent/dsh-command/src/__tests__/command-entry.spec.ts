@@ -4,11 +4,11 @@
 // （`ui-commands` 的 `builtinCommandName`：`Object.keys(BUILTINS).find(n => d.definitionId === BUILTINS[n])`），
 // 认出来才有 `builtinRowFace` 的本地化 label / description / icon。少这个字段不会报错，
 // 只是面板上那几行退回宿主给的英文说明、也没有图标。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { commandEntryOf } from "../server/command-entry-of.ts";
 
 describe("命令条目的对外形状", () => {
-  it("`definitionId` 原样带上（`/` 面板靠它认内置命令）", () => {
+  test("`definitionId` 原样带上（`/` 面板靠它认内置命令）", () => {
     const entry = commandEntryOf({
       name: "compact",
       definitionId: "@deepseek-ai/dsh-command-compact",
@@ -21,13 +21,13 @@ describe("命令条目的对外形状", () => {
     });
   });
 
-  it("没有 `definitionId` 时不写这个键（`exactOptionalPropertyTypes` 下 `undefined` 不是缺省）", () => {
+  test("没有 `definitionId` 时不写这个键（`exactOptionalPropertyTypes` 下 `undefined` 不是缺省）", () => {
     const entry = commandEntryOf({ name: "custom", description: "自定义" } as never);
     expect(Object.hasOwn(entry, "definitionId")).toBe(false);
     expect(Object.hasOwn(entry, "input")).toBe(false);
   });
 
-  it("有输入提示时带上 `input`", () => {
+  test("有输入提示时带上 `input`", () => {
     const entry = commandEntryOf({
       name: "permission",
       description: "Switch the permission preset",

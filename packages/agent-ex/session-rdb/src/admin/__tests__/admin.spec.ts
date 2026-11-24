@@ -5,19 +5,14 @@ import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, oneTurnLogStepFirst } from "@morlay/dsh-session/testing";
 import { asRdbStore, SessionPersistenceRdb } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { openInitializedSqlite } from "../../__tests__/support/sqlite.ts";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -67,7 +62,7 @@ function countRows(sqlite: { prepare(sql: string): { get(): unknown } }, table: 
 }
 
 describe("管理面", () => {
-  it("organize 回收孤儿并重算派生统计，返回三项计数", async () => {
+  test("organize 回收孤儿并重算派生统计，返回三项计数", async () => {
     const harness = await start();
     await seed(harness, "org-1");
     await seed(harness, "org-2");
@@ -79,7 +74,7 @@ describe("管理面", () => {
     expect(Number.isSafeInteger(report.orphanEvents)).toBe(true);
   });
 
-  it("organize 在还有写句柄的会话时拒绝清表（SESSION_ORGANIZE_LIVE），统计没被动过", async () => {
+  test("organize 在还有写句柄的会话时拒绝清表（SESSION_ORGANIZE_LIVE），统计没被动过", async () => {
     const harness = await start();
     const persistence = asRdbStore(harness.app.get(SessionPersistence));
     const session = harness.sessionStore.create(SessionId("busy"), { meta: { cwd: "/work" } });
@@ -101,7 +96,7 @@ describe("管理面", () => {
     }
   });
 
-  it("删除只允许已归档且不在运行中的会话，三条拒绝理由各自有码", async () => {
+  test("删除只允许已归档且不在运行中的会话，三条拒绝理由各自有码", async () => {
     const harness = await start();
     await seed(harness, "delete-me");
     const persistence = asRdbStore(harness.app.get(SessionPersistence));
@@ -116,7 +111,7 @@ describe("管理面", () => {
     });
   });
 
-  it("删除会话报出派生状态的重算结果（统计行与用量引用标记两步都完成）", async () => {
+  test("删除会话报出派生状态的重算结果（统计行与用量引用标记两步都完成）", async () => {
     const harness = await start();
     const store = harness.app.get(SessionPersistence) as unknown as SessionPersistenceRdb;
     await seedMeasured(harness, "deletable");
@@ -138,7 +133,7 @@ describe("管理面", () => {
     expect((await asRdbStore(store).usageReport()).totals["totalTokens"]).toBe(0);
   });
 
-  it("bulkDelete 逐条结算（已归档 / 运行中 / 未归档 / 不存在各自有码），并把成功删除的统计重算", async () => {
+  test("bulkDelete 逐条结算（已归档 / 运行中 / 未归档 / 不存在各自有码），并把成功删除的统计重算", async () => {
     const harness = await start();
     const store = harness.app.get(SessionPersistence) as unknown as SessionPersistenceRdb;
     await seedMeasured(harness, "bulk-a", 100);
@@ -192,7 +187,7 @@ describe("管理面", () => {
     }
   });
 
-  it("archivedSessionIds 读持久化里的归档标记（没有归档服务时给空集）", async () => {
+  test("archivedSessionIds 读持久化里的归档标记（没有归档服务时给空集）", async () => {
     const harness = await start();
     await seed(harness, "archive-1");
 
@@ -201,7 +196,7 @@ describe("管理面", () => {
     expect(archived.size).toBe(0);
   });
 
-  it("listRows 给完整语料（含 cwd / 时间 / 归档标记）并支持分页", async () => {
+  test("listRows 给完整语料（含 cwd / 时间 / 归档标记）并支持分页", async () => {
     const harness = await start();
     await seed(harness, "rows-1", "/work");
     await seed(harness, "rows-2", "/other");
@@ -216,7 +211,7 @@ describe("管理面", () => {
     expect(page.items[0]).toMatchObject({ cwd: expect.any(String), archived: false });
   });
 
-  it("flush 之后库里能看到 live 会话的全部事件（写句柄还没建好也不漏）", async () => {
+  test("flush 之后库里能看到 live 会话的全部事件（写句柄还没建好也不漏）", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
     const session = harness.sessionStore.create(SessionId("flush-live"), {
@@ -234,7 +229,7 @@ describe("管理面", () => {
     expect(events.map((event) => event.type)).toEqual(["turn/start", "turn/end"]);
   });
 
-  it("flush 把失败态会话的失败报出来（域码 + AggregateError 里的原因）", async () => {
+  test("flush 把失败态会话的失败报出来（域码 + AggregateError 里的原因）", async () => {
     const harness = await start();
     const persistence = harness.app.get(SessionPersistence);
     // 先按 cwd=/a 落一份，再用同名 cwd=/b 的 live 会话触发 id 冲突：这个会话的持久化是终态失败。

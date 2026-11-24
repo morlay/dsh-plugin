@@ -30,6 +30,11 @@ import {
   type SessionUsageRequest,
   type SessionUsageValue,
 } from "@morlay/session-rdb/endpoint";
+import {
+  SessionWorkspaceCopy,
+  SessionWorkspaceCopyFailure,
+  type SessionWorkspaceCopyFailureReason,
+} from "@morlay/dsh-session";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteGroup, asRemoteResult, registerRemoteGroup } from "@morlay/zephyr-app/remote";
@@ -37,7 +42,7 @@ import { asRdbStore } from "../contract/session-rdb-store.contract.ts";
 import { SessionAgentControl } from "../contract/session-agent-control.contract.ts";
 import { parseUsageRange, resolveUsageSince } from "../data/usage.ts";
 import { MAX_IMPORT_ZIP_BYTES } from "../admin/import-export/parse.ts";
-import { SessionStoreError } from "../data/errors.ts";
+import { SessionStoreError, type SessionStoreFailure } from "../data/errors.ts";
 
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_PAGE_SIZE = 20;
@@ -56,6 +61,13 @@ function fromBase64(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, "base64"));
 }
 
+// 复制失败的原因 → 本域的 wire 域码：原因由编排端口给，码是本域（session）的词汇，映射只在这里一处。
+function copyFailureCode(reason: SessionWorkspaceCopyFailureReason): SessionStoreFailure {
+  return reason === "workspace-not-found"
+    ? "SESSION_COPY_WORKSPACE_NOT_FOUND"
+    : "SESSION_COPY_ATTACH_FAILED";
+}
+
 @RemoteGroup()
 @Injectable()
 export class SessionAdminEndpointDefault extends SessionAdminEndpoint implements OnInit {
@@ -64,6 +76,12 @@ export class SessionAdminEndpointDefault extends SessionAdminEndpoint implements
   private readonly persistence = inject(SessionPersistence);
 
   private readonly agents = inject.optional(SessionAgentControl);
+
+  /**
+   * 跨工作区复制：**可选**。它是编排层的动作（要 workspace 域）；装配里没有 workspace 域时这条
+   * 动作明确失败，不在这里凑一份跨域实现。
+   */
+  private readonly workspaceCopy = inject.optional(SessionWorkspaceCopy);
 
   onInit(): void {
     registerRemoteGroup(this.handlers, this);
@@ -155,11 +173,23 @@ export class SessionAdminEndpointDefault extends SessionAdminEndpoint implements
 
   override async copyToWorkspace(request: SessionCopyWorkspaceRequest) {
     return await asRemoteResult(async (): Promise<SessionCopyWorkspaceValue> => {
-      // 组合动作（fork + workspace 的 attach）在存储面；端点只转形状。
-      return await asRdbStore(this.persistence).copyToWorkspace(
-        request.sessionId,
-        request.workspaceId,
-      );
+      const copy = this.workspaceCopy;
+      if (copy === undefined) {
+        throw new Error(
+          "session-rdb: 装配里没有 SessionWorkspaceCopy，跨工作区复制是编排层的动作（本包只转发）",
+        );
+      }
+      try {
+        // 组合动作（派生 + workspace 的 attach）在编排层；端点只转形状、把原因折成域码。
+        return await copy.copyToWorkspace(request.sessionId, request.workspaceId);
+      } catch (error: unknown) {
+        if (error instanceof SessionWorkspaceCopyFailure) {
+          throw new SessionStoreError(copyFailureCode(error.reason), error.message, {
+            cause: error.cause,
+          });
+        }
+        throw error;
+      }
     });
   }
 

@@ -12,7 +12,7 @@ import * as DeliverablesHostPlugin from "@deepseek-ai/dsh-client-ui-deliverables
 import { FileSystem } from "@morlay/dsh-fs";
 import { SandboxPolicy } from "@morlay/dsh-sandbox";
 import { SessionQuery } from "@morlay/dsh-session";
-import { SessionControllerService } from "@morlay/dsh-conversation";
+import { SessionControllerService } from "@morlay/dsh-conversation/contract";
 import { Subprocess } from "@morlay/dsh-shell";
 import { WorkspaceFilesDefault } from "@morlay/dsh-workspace/server";
 import { Connection } from "@morlay/zephyr-app";

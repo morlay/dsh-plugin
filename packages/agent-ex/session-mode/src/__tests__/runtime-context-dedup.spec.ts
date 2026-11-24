@@ -18,7 +18,8 @@ import {
 import { LlmAdapter } from "@morlay/dsh-agent/server";
 import { SessionId } from "@morlay/dsh-session/contract";
 import { JsonlSessionPersistence } from "@morlay/dsh-session-persistence";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import type { TestContext } from "./support/context.ts";
 import { mountSessionModeApp } from "./support/mount-app.ts";
 
@@ -72,21 +73,13 @@ function appended(runtime: Runtime): number {
     ).length;
 }
 
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.allSettled(apps.splice(0).map((app) => app.dispose()));
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
-
 /** 起一份两步对话的运行时（真 cordis 根 ctx + 真会话落盘 + 一条运行时上下文）。 */
 async function mountRuntime(): Promise<Runtime> {
   const root = await mkdtemp(join(tmpdir(), "runtime-context-dedup-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const adapter = new RecordingAdapter();
   const { app, ctx } = await mountSessionModeApp({ modes: false, guidance: false });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   await ctx.plugin(JsonlSessionPersistence as never, { root, compression: "none" } as never);
   const llm = ctx.get("llm") as {
     registerAdapter(providers: readonly string[], value: unknown): void;
@@ -126,7 +119,7 @@ async function submit(runtime: Runtime, text: string): Promise<void> {
 }
 
 describe("运行时上下文的注入幂等", () => {
-  it("没变就不重发：每步请求里只有一条，日志里也只落一条", async () => {
+  test("没变就不重发：每步请求里只有一条，日志里也只落一条", async () => {
     const runtime = await mountRuntime();
     await submit(runtime, "第一问");
     await submit(runtime, "第二问");
@@ -135,7 +128,7 @@ describe("运行时上下文的注入幂等", () => {
     expect(appended(runtime)).toBe(1);
   }, 60_000);
 
-  it("补发只到 agent scope：根上的监听器不会多收一遍（否则持久化会写两遍）", async () => {
+  test("补发只到 agent scope：根上的监听器不会多收一遍（否则持久化会写两遍）", async () => {
     const runtime = await mountRuntime();
     await submit(runtime, "第一问");
     let received = 0;
@@ -148,7 +141,7 @@ describe("运行时上下文的注入幂等", () => {
     expect(received).toBe(runtime.agent.session.seq - before);
   }, 60_000);
 
-  it("内容变了要发新的一条（不把变化也吃掉）", async () => {
+  test("内容变了要发新的一条（不把变化也吃掉）", async () => {
     const runtime = await mountRuntime();
     await submit(runtime, "第一问");
     runtime.setPolicy("Mode: read-only.");

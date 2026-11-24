@@ -10,7 +10,7 @@
  */
 import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionRemoteDefault } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote, type RemoteCall } from "./support/fake-remote.ts";
@@ -50,7 +50,7 @@ async function boot(createReply: () => unknown): Promise<{
 }
 
 describe("SessionController.create", { timeout: 10_000 }, () => {
-  it("把目录作为 request 命名参数发出去，返回宿主的 sessionId", async () => {
+  test("把目录作为 request 命名参数发出去，返回宿主的 sessionId", async () => {
     const { app, sessions, calls } = await boot(() => ({ sessionId: "s1" }));
     try {
       await expect(sessions.create({ cwd: "/tmp/w1" })).resolves.toBe("s1");
@@ -62,7 +62,7 @@ describe("SessionController.create", { timeout: 10_000 }, () => {
     }
   });
 
-  it("宿主响应缺 sessionId 时不编造身份（返回 undefined，目录里不出现垃圾行）", async () => {
+  test("宿主响应缺 sessionId 时不编造身份（返回 undefined，目录里不出现垃圾行）", async () => {
     // 上游 `ClientSessions.create` 只做 `result.value.sessionId`，**不校验**；编造身份会让
     // `undefined` 变成一行"会话"，后续 retain/prompt 全打在它身上——这里钉住"不编造"。
     const { app, sessions } = await boot(() => ({ id: "s1" }));

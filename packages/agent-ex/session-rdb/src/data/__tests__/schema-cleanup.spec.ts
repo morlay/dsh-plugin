@@ -2,19 +2,14 @@
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openRdbBackend } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { sqliteTableDefs } from "../entities/index.ts";
 import { makeRoot, removeRoot } from "../../__tests__/support/host.ts";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
-
 async function freshDatabase(): Promise<DatabaseSync> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   const path = join(root, "sessions.sqlite");
   const backend = await openRdbBackend({
     type: "sqlite",
@@ -34,7 +29,7 @@ function tableNamed(sqlite: DatabaseSync, name: string): unknown {
 }
 
 describe("数据模型清理", () => {
-  it("新建的库不含 t_schema_meta（空表从 catalog 移除，不写迁移）", async () => {
+  test("新建的库不含 t_schema_meta（空表从 catalog 移除，不写迁移）", async () => {
     const sqlite = await freshDatabase();
     try {
       expect(sqliteTableDefs.map((table) => table.name)).not.toContain("t_schema_meta");

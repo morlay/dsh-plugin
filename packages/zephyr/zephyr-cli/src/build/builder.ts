@@ -284,7 +284,8 @@ export function bootstrapSourceOf(): string {
     "// 由 zephyr build 生成，不是源码。",
     'import { dirname } from "node:path";',
     'import { fileURLToPath } from "node:url";',
-    'import providers from "./src/server.ts";',
+    // 具名 `providers`：应用入口不再有默认导出（`import/no-default-export`），见 `server-entry.ts`。
+    'import { providers } from "./src/server.ts";',
     "",
     "// 装配根：本文件所在的目录（**不带尾斜杠**：它会成为 `AppEnv.profileDir`，各处按它拼路径）。",
     "const PROFILE_DIR = dirname(fileURLToPath(import.meta.url));",

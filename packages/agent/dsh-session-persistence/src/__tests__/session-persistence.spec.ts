@@ -6,41 +6,17 @@
  *
  * 只假外部能力（`AppEnv` 给临时目录）。
  */
-import { mkdtemp, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SESSION_FORMAT_VERSION } from "@morlay/dsh-session/server";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
+import { describe, expect, test } from "@morlay/zephyr-app/testing";
 import { SessionPersistence } from "../contract/index.ts";
 import { provideSessionPersistence } from "../session-persistence.provide.ts";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-session-persistence-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 测试用的运行环境：数据根指向临时目录。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
 /**
  * 递归数一个目录下的文件数（目录不存在算 0）。
  * @param dir - 起始目录。
@@ -56,12 +32,12 @@ async function countFiles(dir: string): Promise<number> {
 }
 
 describe("会话持久化", () => {
-  it(
+  test(
     "create 之后 `stat` / `list` 读得回，`flush` 之后盘上真有文件",
     { timeout: 20_000 },
-    async () => {
+    async ({ appEnv }) => {
       const app = await bootstrapApplication({
-        providers: [FakeAppEnv, ...provideSessionPersistence()],
+        providers: [{ provide: AppEnv, useValue: appEnv }, ...provideSessionPersistence()],
       });
       try {
         const persistence = app.get(SessionPersistence);
@@ -82,7 +58,7 @@ describe("会话持久化", () => {
 
         // 真的落了盘：`flush` 之后 `root` 下至少有一个文件（布局由上游决定，这里只确认"写了东西"）。
         await persistence.flush();
-        expect(await countFiles(join(root, "sessions"))).toBeGreaterThan(0);
+        expect(await countFiles(join(appEnv.values.dataDir, "sessions"))).toBeGreaterThan(0);
       } finally {
         await app.dispose();
       }

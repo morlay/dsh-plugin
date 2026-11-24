@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { defineTable, ensureSchema, openDatabase } from "@morlay/zephyr-rdb";
 
 const rows = defineTable({
@@ -17,7 +17,7 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe("写队列按库身份共享", () => {
-  it("同进程两个 Database 指向同一 sqlite 文件：写与事务不交错", async () => {
+  test("同进程两个 Database 指向同一 sqlite 文件：写与事务不交错", async () => {
     const path = `/tmp/zephyr-rdb-queue-${String(Date.now())}.sqlite`;
     const first = await openDatabase({ dialect: "sqlite", path, busyTimeout: 2000 });
     const second = await openDatabase({ dialect: "sqlite", path, busyTimeout: 2000 });

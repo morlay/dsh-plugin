@@ -21,7 +21,7 @@ import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
 import type { SessionId } from "@morlay/dsh-session/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
@@ -206,7 +206,7 @@ function renderPanel(sessions: SessionController, captured: Captured): ReturnTyp
 }
 
 describe("空白会话的主区形态（hero vs 底部输入栏）", { timeout: 10_000 }, () => {
-  it("wire 行 blank=true 的会话渲染成 hero：居中输入（variant='hero'）", async () => {
+  test("wire 行 blank=true 的会话渲染成 hero：居中输入（variant='hero'）", async () => {
     const { app, sessions } = await boot(true);
     try {
       const captured: Captured = { composerBar: [], content: [] };
@@ -221,7 +221,7 @@ describe("空白会话的主区形态（hero vs 底部输入栏）", { timeout: 
     }
   });
 
-  it("有消息的会话（行 blank=false）仍是底部常驻输入栏（variant='composer'）", async () => {
+  test("有消息的会话（行 blank=false）仍是底部常驻输入栏（variant='composer'）", async () => {
     const { app, sessions } = await boot(false);
     try {
       const captured: Captured = { composerBar: [], content: [] };
@@ -235,7 +235,7 @@ describe("空白会话的主区形态（hero vs 底部输入栏）", { timeout: 
       await app.dispose().catch(() => {});
     }
   });
-  it("空白会话发出第一条 prompt 被收下后，立刻切到常驻输入栏（不再居中）", async () => {
+  test("空白会话发出第一条 prompt 被收下后，立刻切到常驻输入栏（不再居中）", async () => {
     const { app, sessions } = await boot(true);
     try {
       const binding = sessions.binding("s1") as

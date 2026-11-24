@@ -6,7 +6,7 @@ import * as StorageJsonPlugin from "@deepseek-ai/dsh-storage-json";
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { AppEnv } from "@morlay/zephyr-app";
-import { Storage } from "@morlay/dsh-storage";
+import { Storage } from "./contract/storage.contract.ts";
 
 /** 装配项：后端根目录。装配面不给时跟随 `AppEnv.dataDir`。 */
 export interface StorageJsonConfig {

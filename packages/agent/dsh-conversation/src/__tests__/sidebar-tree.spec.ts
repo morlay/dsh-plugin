@@ -9,14 +9,9 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { deriveGroups } from "@deepseek-ai/dsh-client-ui-workspace/src/client/tree.ts";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
 
 /** 一条会话在盘上的最小形态：`meta.json` + `events.jsonl`。 */
 async function writeSession(root: string, id: string, events: readonly unknown[]): Promise<void> {
@@ -47,12 +42,12 @@ interface ListValue {
 }
 
 describe("侧栏会话树的数据判据", () => {
-  it(
+  test(
     "有 `turn/start` 的会话不是 blank，且会出现在工作区的分组里",
     { timeout: 30_000 },
     async () => {
       const root = await mkdtemp(join(tmpdir(), "dsh-sidebar-tree-"));
-      roots.push(root);
+      onTestFinished(() => rm(root, { recursive: true, force: true }));
       // 一条有内容的会话 + 一条只有 seed 的空白会话：上游只隐藏后者。
       await writeSession(root, "s-engaged", [
         { type: "session/end-seed", seq: 0, time: 1, data: {} },

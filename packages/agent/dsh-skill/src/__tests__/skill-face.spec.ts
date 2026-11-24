@@ -5,23 +5,18 @@
 // **只装这条接缝要的那几行**：注册表本体 + 上游 `SessionSkillCatalog`（它
 // `super(ctx, 'sessionSkillCatalog', { namespace: 'skills' })`，同一个 namespace 会被挑面选中）。
 // 工具行与端点行不在判据里，装上只会拽进半套会话栈。
-import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { bootstrapApplication } from "@morlay/zephyr";
 import { Skill, SkillDefault } from "@morlay/dsh-skill";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 30_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 describe("技能注册表的契约面", () => {
-  it("注入到的 Skill 上 list / get / snapshot 都是函数", async () => {
+  test("注入到的 Skill 上 list / get / snapshot 都是函数", async () => {
     const app = await bootstrapApplication({
       providers: [SkillDefault],
       timeoutMs: 20_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const skill = app.get(Skill) as unknown as Record<string, unknown>;
     expect(typeof skill["list"]).toBe("function");
     expect(typeof skill["get"]).toBe("function");

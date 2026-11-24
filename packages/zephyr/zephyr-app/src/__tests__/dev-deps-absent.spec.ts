@@ -14,7 +14,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 /** 本包根（本文件在 `src/__tests__/` 下）。 */
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -42,7 +42,7 @@ async function manifest(): Promise<Manifest> {
 }
 
 describe("zephyr-app 的依赖清单里没有开发态的东西", () => {
-  it("dependencies 里没有构建链", async () => {
+  test("dependencies 里没有构建链", async () => {
     const { dependencies = {} } = await manifest();
     for (const name of [...BUILD_CHAIN, ...NODE_RUNTIME]) {
       expect(Object.keys(dependencies), `${name} 属于 @morlay/zephyr-dev 或 boot`).not.toContain(
@@ -51,14 +51,14 @@ describe("zephyr-app 的依赖清单里没有开发态的东西", () => {
     }
   });
 
-  it("peerDependencies 里没有 rolldown（它是 zephyr-dev 的普通依赖）", async () => {
+  test("peerDependencies 里没有 rolldown（它是 zephyr-dev 的普通依赖）", async () => {
     const { peerDependencies = {} } = await manifest();
     for (const name of [...BUILD_CHAIN, ...NODE_RUNTIME]) {
       expect(Object.keys(peerDependencies)).not.toContain(name);
     }
   });
 
-  it("devDependencies 里也没有（测试用不到构建器与 node 补强：那些用例随实现搬走了）", async () => {
+  test("devDependencies 里也没有（测试用不到构建器与 node 补强：那些用例随实现搬走了）", async () => {
     const { devDependencies = {} } = await manifest();
     for (const name of [...BUILD_CHAIN, ...NODE_RUNTIME]) {
       expect(Object.keys(devDependencies)).not.toContain(name);

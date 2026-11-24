@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { menuTemplateOf, type MenuActions, type MenuItemSpec } from "../menu.ts";
 
 const APP = "Zephyr Custom";
@@ -46,13 +46,13 @@ function devModeItemOf(template: readonly MenuItemSpec[]): MenuItemSpec | undefi
 }
 
 describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
-  it("mac：第一项是应用菜单，退出项在它下面", () => {
+  test("mac：第一项是应用菜单，退出项在它下面", () => {
     const template = menuTemplateOf({ platform: "darwin", appName: APP, debug: false });
     expect(template[0]?.label).toBe(APP);
     expect(rolesOf(template[0]?.submenu ?? [])).toContain("quit");
   });
 
-  it("win / linux：没有应用菜单，退出靠关窗", () => {
+  test("win / linux：没有应用菜单，退出靠关窗", () => {
     for (const platform of ["win32", "linux"] as const) {
       const template = menuTemplateOf({ platform, appName: APP, debug: false });
       expect(template.map((item) => item.label)).not.toContain(APP);
@@ -60,7 +60,7 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
     }
   });
 
-  it("开发者模式关（打包形态无参数启动）：没有 Reload / DevTools，也没有 Inspector 两项", () => {
+  test("开发者模式关（打包形态无参数启动）：没有 Reload / DevTools，也没有 Inspector 两项", () => {
     for (const platform of PLATFORMS) {
       const template = menuTemplateOf({ platform, appName: APP, debug: false });
       const roles = rolesOf(template);
@@ -73,13 +73,13 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
     }
   });
 
-  it("开发者模式开：才有 Reload 与 DevTools", () => {
+  test("开发者模式开：才有 Reload 与 DevTools", () => {
     const roles = rolesOf(menuTemplateOf({ platform: "darwin", appName: APP, debug: true }));
     expect(roles).toContain("reload");
     expect(roles).toContain("toggleDevTools");
   });
 
-  it("视图菜单底部是「开发者模式」勾选项：checked 跟随状态，点它调动作", () => {
+  test("视图菜单底部是「开发者模式」勾选项：checked 跟随状态，点它调动作", () => {
     const clicks: string[] = [];
     const on: MenuActions = {
       toggleDevMode: () => clicks.push("dev"),
@@ -100,7 +100,7 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
     expect(clicks).toEqual(["dev", "dev", "dev"]);
   });
 
-  it("产品自造项只有「开发者模式」与开发项里的那两条（其余交给 role：本地化与快捷键由 Electron 给）", () => {
+  test("产品自造项只有「开发者模式」与开发项里的那两条（其余交给 role：本地化与快捷键由 Electron 给）", () => {
     for (const platform of PLATFORMS) {
       expect(
         customItemsOf(menuTemplateOf({ platform, appName: APP, debug: false })).map((i) => i.label),
@@ -111,7 +111,7 @@ describe("产品菜单（裁剪 Electron 的默认菜单）", () => {
     }
   });
 
-  it("编辑项覆盖复制粘贴与全选，关窗项挂在窗口菜单下", () => {
+  test("编辑项覆盖复制粘贴与全选，关窗项挂在窗口菜单下", () => {
     const template = menuTemplateOf({ platform: "linux", appName: APP, debug: false });
     const roles = rolesOf(template);
     for (const role of ["copy", "paste", "cut", "selectAll", "close", "minimize"]) {

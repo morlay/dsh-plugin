@@ -1,15 +1,14 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { DEV_MODE_ARG, devModeOf } from "../dev-mode.ts";
-
-const dirs: string[] = [];
 
 /** 一个空的 userData（标记文件写在它下面）。 */
 async function tempUserData(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "zephyr-dev-mode-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -24,12 +23,8 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-afterEach(async () => {
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
 describe("开发者模式（三源合并 + 运行期切换 + 持久化 + 订阅）", () => {
-  it("三个来源任一成立就开（环境变量 / --zephyr-debug / 标记文件）", async () => {
+  test("三个来源任一成立就开（环境变量 / --zephyr-debug / 标记文件）", async () => {
     const userData = await tempUserData();
     expect((await devModeOf({ userData, env: {}, argv: ["Zephyr Custom"] })).enabled).toBe(false);
     expect(
@@ -47,7 +42,7 @@ describe("开发者模式（三源合并 + 运行期切换 + 持久化 + 订阅�
     expect((await devModeOf({ userData, env: {}, argv: [] })).enabled).toBe(true);
   });
 
-  it("启动参数那条来源叫 --zephyr-debug：只有这个名字能真跑通", async () => {
+  test("启动参数那条来源叫 --zephyr-debug：只有这个名字能真跑通", async () => {
     const userData = await tempUserData();
     expect(DEV_MODE_ARG).toBe("--zephyr-debug");
     expect(
@@ -59,7 +54,7 @@ describe("开发者模式（三源合并 + 运行期切换 + 持久化 + 订阅�
     ).toBe(false);
   });
 
-  it("切一次就写标记：重启后仍是开；再切关就删标记", async () => {
+  test("切一次就写标记：重启后仍是开；再切关就删标记", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: {}, argv: [] });
     await devMode.set(true);
@@ -73,7 +68,7 @@ describe("开发者模式（三源合并 + 运行期切换 + 持久化 + 订阅�
     expect((await devModeOf({ userData, env: {}, argv: [] })).enabled).toBe(false);
   });
 
-  it("每次切换都通知订阅者；退订后不再收到", async () => {
+  test("每次切换都通知订阅者；退订后不再收到", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: { ZEPHYR_DESKTOP_DEBUG: "1" }, argv: [] });
     const seen: boolean[] = [];
@@ -88,7 +83,7 @@ describe("开发者模式（三源合并 + 运行期切换 + 持久化 + 订阅�
     expect(devMode.enabled).toBe(false);
   });
 
-  it("标记文件的内容不重要（`touch` 出来的空文件就是开）", async () => {
+  test("标记文件的内容不重要（`touch` 出来的空文件就是开）", async () => {
     const userData = await tempUserData();
     await writeFile(join(userData, "debug"), "0", "utf8");
     expect((await devModeOf({ userData, env: {}, argv: [] })).enabled).toBe(true);

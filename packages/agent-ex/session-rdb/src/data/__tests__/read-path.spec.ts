@@ -10,16 +10,13 @@ import {
   type SessionEvent,
   type SurfaceOp,
 } from "@morlay/dsh-session/contract";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { SessionPersistenceRdb, repairReadView, type Backend } from "@morlay/session-rdb";
 import {
-  disposeAll,
   mount as mountHarness,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
 import { meta, oneTurnLog, userMessage } from "@morlay/dsh-session/testing";
-
-afterAll(disposeAll);
 
 async function mount(path = ":memory:"): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
   const { ctx, dispose } = await mountHarness({ config: { type: "sqlite", path } });
@@ -115,7 +112,7 @@ function replaceHeavyLog(): SessionEvent[] {
 }
 
 describe("session 行的写放大", () => {
-  it("header 没变时，append 不再 UPDATE 一次 session 行", async () => {
+  test("header 没变时，append 不再 UPDATE 一次 session 行", async () => {
     const dir = await mkdtemp(join(tmpdir(), "rdb-header-idem-"));
     const path = join(dir, "sessions.sqlite");
     const { ctx, dispose } = await mount(path);
@@ -160,7 +157,7 @@ describe("session 行的写放大", () => {
     }
   });
 
-  it("一批 append 只写一次 session 行（head 与 revision 合并成一次 UPDATE）", async () => {
+  test("一批 append 只写一次 session 行（head 与 revision 合并成一次 UPDATE）", async () => {
     const dir = await mkdtemp(join(tmpdir(), "rdb-row-writes-"));
     const path = join(dir, "sessions.sqlite");
     const { ctx, dispose } = await mount(path);
@@ -205,7 +202,7 @@ describe("session 行的写放大", () => {
 });
 
 describe("写即落库（flush 只是等上游排空）", () => {
-  it("append 返回后，另一个只读句柄不调 flush 也能读到全部事件", async () => {
+  test("append 返回后，另一个只读句柄不调 flush 也能读到全部事件", async () => {
     const { ctx, dispose } = await mount();
     try {
       const id = SessionId("write-through");
@@ -232,7 +229,7 @@ describe("写即落库（flush 只是等上游排空）", () => {
 
 describe("读路径", () => {
   // load 是会话打开（cold read）的入口：它自己再开一条读取路径就等于把最贵的读付两遍。
-  it("load 只读一遍事件", async () => {
+  test("load 只读一遍事件", async () => {
     const { ctx, dispose } = await mount();
     try {
       await persistOneTurn(ctx, "s1");
@@ -249,7 +246,7 @@ describe("读路径", () => {
 
   // 读视图修复的溯源要在一次扫描里建好索引：replace 的 sourceEventSeqs 与 metering 的
   // shadowedSeqs 从同一份 surface 序列里取（原先每个 replace 各扫一遍全量事件）。
-  it("repairReadView 折叠出 replace 的溯源与 metering 的阴影序列", () => {
+  test("repairReadView 折叠出 replace 的溯源与 metering 的阴影序列", () => {
     const events = replaceHeavyLog();
     repairReadView(events);
 
@@ -260,7 +257,7 @@ describe("读路径", () => {
 
   // replace 的溯源按当前 surface 节点算，而 `developer/message` 也是 surface 节点：漏掉它，覆盖到它的
   // replace 会被当成非法区间降级成 append，模型可见历史随之错位。
-  it("replace 的溯源包含 developer/message 节点", () => {
+  test("replace 的溯源包含 developer/message 节点", () => {
     const events = [
       developerRemoval(0, "append"),
       surfaceEvent(1, "hi", "append"),
@@ -280,7 +277,7 @@ describe("读路径", () => {
   });
 
   // rewind 的边界 / 窗口探测只要类型：查询不能连带把整个事件 JSON（f_data）拖回来。
-  it("rewind 的类型查询只取 fSequence / fType 两列", async () => {
+  test("rewind 的类型查询只取 fSequence / fType 两列", async () => {
     const { ctx, dispose } = await mount();
     try {
       await persistOneTurn(ctx, "s1");
@@ -302,7 +299,7 @@ describe("读路径", () => {
   // 工具清单变化的会话必须能读回：上游 agent-loop 在工具增删时写 `developer/message`（surface 事件），
   // 读视图曾按「非 surface 事件」清掉它的 `surfaceOp`，随后的 `validateStoredEvents` fail loud——
   // 一次 resume 后的工具变化就足以让整条历史会话打不开。
-  it("含工具清单变更事件的会话可加载", async () => {
+  test("含工具清单变更事件的会话可加载", async () => {
     const { ctx, dispose } = await mount();
     try {
       const base = oneTurnLog();

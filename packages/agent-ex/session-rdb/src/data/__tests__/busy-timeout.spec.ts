@@ -2,17 +2,13 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { openInitializedSqlite } from "../../__tests__/support/sqlite.ts";
-
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
 
 async function freshDbPath(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dsh-rdb-busy-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return join(dir, "sessions.db");
 }
 
@@ -61,7 +57,7 @@ function tryWriteLock(
 }
 
 describe("busyTimeout: cross-process write-lock contention", () => {
-  it("a zero timeout fails immediately while the lock is held (SQLite default would lose the append)", async () => {
+  test("a zero timeout fails immediately while the lock is held (SQLite default would lose the append)", async () => {
     const path = await freshDbPath();
     const holder = await openInitializedSqlite(path, "wal", 0);
     holder.exec("BEGIN IMMEDIATE");
@@ -75,7 +71,7 @@ describe("busyTimeout: cross-process write-lock contention", () => {
     }
   });
 
-  it("a nonzero timeout waits for the lock and commits (contention becomes a queue, not a loss)", async () => {
+  test("a nonzero timeout waits for the lock and commits (contention becomes a queue, not a loss)", async () => {
     const path = await freshDbPath();
     const holder = await openInitializedSqlite(path, "wal", 0);
     holder.exec("BEGIN IMMEDIATE");

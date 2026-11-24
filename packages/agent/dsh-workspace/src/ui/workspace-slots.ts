@@ -20,7 +20,7 @@ import {
 } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-session/endpoint";
 import { UiSession, UiSessionStatus } from "@morlay/zephyr-app/client";
-import { WorkspaceController } from "@morlay/dsh-workspace/ui";
+import { WorkspaceController } from "./workspace-controller.contract.ts";
 import { UiWorkspace } from "@morlay/dsh-workspace/contract";
 import { directoryPickerGroupName } from "../endpoint/index.ts";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";

@@ -10,44 +10,19 @@ import { SessionStore, SessionStoreDefault } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { SessionPersistenceDefault } from "@morlay/dsh-session-persistence";
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
+import { bootstrapApplication } from "@morlay/zephyr";
 import { RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
 import { provideTypert } from "@morlay/zephyr-app";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { WorkspaceFilesDefault } from "../server/workspace-files.service.ts";
 import { WorkspaceFilesEndpointRow } from "../server/workspace-files-endpoint.service.ts";
 
 const SESSION = "s1";
 
 /** `AppEnv` 替身：路径全部指向本用例的临时目录（持久化落在这里）。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  /** 本用例的临时根目录（测试在 `bootstrapApplication` 之前设置）。 */
-  static root = "";
-
-  readonly values: AppEnvValues = {
-    dataDir: FakeAppEnv.root,
-    profileDir: FakeAppEnv.root,
-  };
-
-  readonly cacheDir = join(FakeAppEnv.root, "cache");
-
-  readonly packageRoot = FakeAppEnv.root;
-
-  readonly appBootDir = join(FakeAppEnv.root, "boot");
-
-  readonly profileManifest = join(FakeAppEnv.root, "package.json");
-}
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** wire 回的 `RemoteResult`：按判别式收窄，不靠断言。 */
 /**
  * wire 结果是**裸值**（与上游 `@Remote` 同协议）；这里只做"是不是对象"的收窄。
@@ -62,8 +37,7 @@ function okValueOf(value: unknown): Record<string, unknown> | undefined {
 /** 起真文件系统栈 + `workspaceFiles` 行；返回 handler 表与临时根。 */
 async function boot(): Promise<{ handlers: RemoteHandlers; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-workspace-files-"));
-  roots.push(root);
-  FakeAppEnv.root = root;
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await writeFile(join(root, "a.txt"), "第一行\n第二行\n", "utf8");
   await writeFile(join(root, "b.md"), "# b\n", "utf8");
   const app = await bootstrapApplication({
@@ -73,7 +47,7 @@ async function boot(): Promise<{ handlers: RemoteHandlers; root: string }> {
       ...provideApiGateway(),
       ...provideSessionProjection(),
 
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       SessionPersistenceDefault,
       { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
       FsSandbox,
@@ -85,7 +59,7 @@ async function boot(): Promise<{ handlers: RemoteHandlers; root: string }> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   // 一条真会话：header.cwd 就是这次用例的临时根（`prepare` 不发布，`enter` + `announce` 才进表）。
   const sessions = app.get(SessionStore);
   const session = sessions.prepare(SessionId(SESSION), { meta: { cwd: root } });
@@ -95,7 +69,7 @@ async function boot(): Promise<{ handlers: RemoteHandlers; root: string }> {
 }
 
 describe("workspaceFiles 的宿主面", { timeout: 30_000 }, () => {
-  it("list 列出临时目录里的真文件名", async () => {
+  test("list 列出临时目录里的真文件名", async () => {
     const { handlers, root } = await boot();
     // 上游 `list` 要求**非空** path（`workspace-files/src/index.ts:391`）；列 workspace 根就传绝对根路径，
     // 响应里的 `path` 是 workspace 相对路径（根即空串）。
@@ -110,7 +84,7 @@ describe("workspaceFiles 的宿主面", { timeout: 30_000 }, () => {
     expect(root).not.toEqual("");
   });
 
-  it("read 读回文件真内容（带行窗口）", async () => {
+  test("read 读回文件真内容（带行窗口）", async () => {
     const { handlers } = await boot();
     const value = okValueOf(
       await handlers.invoke("workspaceFiles/read", {

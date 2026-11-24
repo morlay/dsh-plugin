@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,14 +20,9 @@ import {
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
-
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -41,7 +37,7 @@ async function waitFor<T>(read: () => T | undefined, timeoutMs = 3000): Promise<
 }
 
 describe("workspace domain on the rdb storage backend", () => {
-  it("persists records and registry state without a storages file tree", async () => {
+  test("persists records and registry state without a storages file tree", async () => {
     const root = await tempDir("storage-takeover-");
     const dbPath = join(root, "sessions.sqlite");
     const project = join(root, "project");
@@ -124,7 +120,7 @@ describe("workspace domain table on the rdb storage backend", () => {
     return ctx;
   }
 
-  it("stores a workspace record in the session database and reads it back after a reopen", async () => {
+  test("stores a workspace record in the session database and reads it back after a reopen", async () => {
     const root = await tempDir("workspace-domain-table-");
     const dbPath = join(root, "sessions.sqlite");
     const id = WorkspaceId("ws-domain-table");
@@ -214,7 +210,7 @@ describe("global-only domains on the rdb storage backend", () => {
     return ctx;
   }
 
-  it("按域名分行：一份域一行整值文档，重开后读回", async () => {
+  test("按域名分行：一份域一行整值文档，重开后读回", async () => {
     const root = await tempDir("storage-globals-");
     const dbPath = join(root, "sessions.sqlite");
 
@@ -265,7 +261,7 @@ describe("global-only domains on the rdb storage backend", () => {
     }
   });
 
-  it("写未声明的表、给没有 global 的域写 global 仍 fail loud", async () => {
+  test("写未声明的表、给没有 global 的域写 global 仍 fail loud", async () => {
     const root = await tempDir("storage-globals-shape-");
     const dbPath = join(root, "sessions.sqlite");
     const ctx = await mount(dbPath);
@@ -284,7 +280,7 @@ describe("global-only domains on the rdb storage backend", () => {
 
 // 上一版把每个域拆成自己的语义表；升级后启动时一次性搬进通用表（旧表保留可回退）。
 describe("旧语义表到通用域存储的一次性搬运", () => {
-  it("搬 workspace（含归属顺序 / 归档 / 钉住）、schedule 与 cua 授权域", async () => {
+  test("搬 workspace（含归属顺序 / 归档 / 钉住）、schedule 与 cua 授权域", async () => {
     const root = await tempDir("legacy-domain-migration-");
     const dbPath = join(root, "sessions.sqlite");
     // 先开一次建出全部表并记下这次迁移；关掉后删掉账本行，模拟「上一版的库」。
@@ -434,7 +430,7 @@ describe("rdb KV backend contract", () => {
     return { backend, dbPath, dispose: () => fiber.dispose() };
   }
 
-  it("rejects a concurrent double-open before the medium read", async () => {
+  test("rejects a concurrent double-open before the medium read", async () => {
     const { backend, dispose } = await harness();
     try {
       const first = backend.kv!.open({ ...descriptor });
@@ -450,7 +446,7 @@ describe("rdb KV backend contract", () => {
     }
   });
 
-  it("drains accepted writes before closing and refuses later writes", async () => {
+  test("drains accepted writes before closing and refuses later writes", async () => {
     const { backend, dbPath, dispose } = await harness();
     try {
       const unit = await backend.kv!.open({ ...descriptor });
@@ -484,7 +480,7 @@ describe("rdb KV backend contract", () => {
     }
   });
 
-  it("行存储对 per-record 布局同构：照样一条记录一行", async () => {
+  test("行存储对 per-record 布局同构：照样一条记录一行", async () => {
     const { backend, dispose } = await harness();
     try {
       const unit = await backend.kv!.open({ ...descriptor, layout: "per-record" });
@@ -504,7 +500,7 @@ describe("rdb KV backend contract", () => {
     }
   });
 
-  it("任何域都按 (域, 表, 键) 落行，不再按名字白名单拒收", async () => {
+  test("任何域都按 (域, 表, 键) 落行，不再按名字白名单拒收", async () => {
     const { backend, dispose } = await harness();
     try {
       const unit = await backend.kv!.open({
@@ -526,7 +522,7 @@ describe("rdb KV backend contract", () => {
 });
 
 describe("legacy storages import", () => {
-  it("writes workspace and projcache documents into the rdb tables", async () => {
+  test("writes workspace and projcache documents into the rdb tables", async () => {
     const dshHome = await tempDir("storages-import-");
     await mkdir(join(dshHome, "storages", "session_projcache", "sessions"), { recursive: true });
     await writeFile(

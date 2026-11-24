@@ -6,15 +6,11 @@ import { assembleContextFor, renderPrompt } from "@morlay/dsh-agent/contract";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { loopTestProviders } from "@morlay/dsh-agent-loop/testing";
 import { SystemPromptDefault } from "@morlay/dsh-agent";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { RULES_TEXT } from "@morlay/session-mode";
 import { provideSessionMode } from "@morlay/session-mode";
 import { ContextChannel } from "../context-assembler.provide.ts";
-
-const opened: Awaited<ReturnType<typeof bootstrapApplication>>[] = [];
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose();
-});
 
 async function mount(config: { readonly suppress?: readonly string[] } = {}) {
   const app = await bootstrapApplication({
@@ -28,7 +24,7 @@ async function mount(config: { readonly suppress?: readonly string[] } = {}) {
     ],
     timeoutMs: 30_000,
   } as never);
-  opened.push(app);
+  onTestFinished(() => app.dispose());
   const agent = await app
     .get(AgentLoop)
     .create(SessionId(`context-assembler-root-${String(Date.now())}`), {}, { cwd: "/tmp" });
@@ -38,7 +34,7 @@ async function mount(config: { readonly suppress?: readonly string[] } = {}) {
 }
 
 describe("包根（装配行那一行）", () => {
-  it("config 为空也装出通道本体：服务在、规则声明进系统提示词", async () => {
+  test("config 为空也装出通道本体：服务在、规则声明进系统提示词", async () => {
     const { app, agent } = await mount();
 
     expect(app.get(ContextChannel)).toBeDefined();
@@ -50,7 +46,7 @@ describe("包根（装配行那一行）", () => {
     expect(rendered).not.toContain("BASH_GUIDE");
   });
 
-  it("config 的 `suppress` 丢掉那条 section", async () => {
+  test("config 的 `suppress` 丢掉那条 section", async () => {
     const { app, agent } = await mount({ suppress: ["tool:bash"] });
 
     const assembly = await app.get(SystemPromptDefault).assemble(assembleContextFor(agent));

@@ -7,7 +7,8 @@ import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
 import { provideRemoteAccess, provideTypert } from "@morlay/zephyr-app";
 import { DirectoryPickerBackend, WorkspaceRegistry } from "@morlay/dsh-workspace";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { WorkspaceBroadcaster } from "../workspace-broadcaster.service.ts";
 import { WorkspaceControllerRow } from "../server/workspace-controller.host.ts";
 import { FakeWorkspaceRegistry, workspaceOf } from "@morlay/dsh-workspace/testing";
@@ -25,12 +26,6 @@ interface AppHandles {
   registry: FakeWorkspaceRegistry;
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
 }
-
-const opened: AppHandles[] = [];
-
-afterEach(async () => {
-  for (const handle of opened.splice(0)) await handle.app.dispose().catch(() => {});
-}, 10_000);
 
 async function boot(rows: string[]): Promise<AppHandles> {
   const app = await bootstrapApplication({
@@ -51,12 +46,12 @@ async function boot(rows: string[]): Promise<AppHandles> {
   const registry = app.get(WorkspaceRegistry) as FakeWorkspaceRegistry;
   for (const path of rows) registry.rows.push(workspaceOf(path));
   const handle = { handlers: app.get(RemoteHandlers), registry, app };
-  opened.push(handle);
+  onTestFinished(() => handle.app.dispose().catch(() => {}));
   return handle;
 }
 
 describe("host 侧 workspace 面", { timeout: 15_000 }, () => {
-  it("workspace/follow 的首帧是 registry 的 baseline", async () => {
+  test("workspace/follow 的首帧是 registry 的 baseline", async () => {
     const { handlers } = await boot(["/tmp/a", "/tmp/b"]);
     const controller = new AbortController();
     const source = handlers.stream("workspace/follow", {}, controller.signal);
@@ -75,7 +70,7 @@ describe("host 侧 workspace 面", { timeout: 15_000 }, () => {
     expect(first.value?.value?.items?.map((item) => item.path)).toEqual(["/tmp/a", "/tmp/b"]);
   });
 
-  it("workspace/create 落到 registry 上并回 WorkspaceValue", async () => {
+  test("workspace/create 落到 registry 上并回 WorkspaceValue", async () => {
     const { handlers, registry } = await boot([]);
     // unary 结果按上游 wire 包成 `RemoteResult`（客户端 `ClientWorkspaceModel` 按 `result.ok` 解）。
     const result = (await handlers.invoke("workspace/create", {
@@ -86,7 +81,7 @@ describe("host 侧 workspace 面", { timeout: 15_000 }, () => {
     expect(registry.rows.map((row) => row.path)).toEqual(["/tmp/new"]);
   });
 
-  it("create 之后，活跃的 follow 流收到 upsert 帧（列表才会出现新工作区）", async () => {
+  test("create 之后，活跃的 follow 流收到 upsert 帧（列表才会出现新工作区）", async () => {
     const { handlers } = await boot([]);
     const controller = new AbortController();
     const source = handlers.stream(
@@ -114,7 +109,7 @@ describe("host 侧 workspace 面", { timeout: 15_000 }, () => {
     controller.abort();
   });
 
-  it("取消信号让 follow 结束（读完 baseline 后 abort 即收尾）", async () => {
+  test("取消信号让 follow 结束（读完 baseline 后 abort 即收尾）", async () => {
     const { handlers } = await boot(["/tmp/a"]);
     const controller = new AbortController();
     const source = handlers.stream(

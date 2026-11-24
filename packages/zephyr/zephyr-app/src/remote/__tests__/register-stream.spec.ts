@@ -8,13 +8,8 @@ import { Remote, RemoteGroup } from "../decorators.ts";
 import { registerRemoteGroup } from "../register.ts";
 import { RemoteHandlers } from "../../api-gateway/remote-handlers.contract.ts";
 import { RemoteHandlersDefault } from "../../api-gateway/remote-handlers.service.ts";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-});
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 两种签名混合的一组端点（与 `session` 组同形）。 */
 @RemoteGroup({ name: "demo" })
@@ -49,12 +44,12 @@ function injectHandlers(): RemoteHandlers {
 }
 
 describe("registerRemoteGroup 的流式分派", () => {
-  it("`follow(request, signal)`：请求与取消信号各就各位", async () => {
+  test("`follow(request, signal)`：请求与取消信号各就各位", async () => {
     const app = await bootstrapApplication({
       providers: [RemoteHandlersDefault, DemoEndpointDefault],
       timeoutMs: 5_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const handlers = app.get(RemoteHandlers);
     const controller = new AbortController();
     const frames: unknown[] = [];
@@ -73,12 +68,12 @@ describe("registerRemoteGroup 的流式分派", () => {
     controller.abort();
   });
 
-  it("`control(signal)`：收到的是取消信号，不是请求对象", async () => {
+  test("`control(signal)`：收到的是取消信号，不是请求对象", async () => {
     const app = await bootstrapApplication({
       providers: [RemoteHandlersDefault, DemoEndpointDefault],
       timeoutMs: 5_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const handlers = app.get(RemoteHandlers);
     const controller = new AbortController();
     const frames: unknown[] = [];

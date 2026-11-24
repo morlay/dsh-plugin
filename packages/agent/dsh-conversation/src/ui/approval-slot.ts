@@ -6,8 +6,8 @@ import * as UiApprovalPlugin from "@deepseek-ai/dsh-client-ui-approval/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
-import { SessionController } from "@morlay/dsh-conversation/ui";
-import { UiSession } from "@morlay/dsh-conversation/ui";
+import { SessionController } from "@morlay/dsh-conversation/contract";
+import { UiSession } from "./ui-session.token.ts";
 
 @Injectable()
 export class ApprovalSlot extends fromCordis(UiApprovalPlugin) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   defineTable,
   ensureSchema,
@@ -24,7 +24,7 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe("keyset 分页", () => {
-  it("定位条件是行值比较，占位符按方言编号", () => {
+  test("定位条件是行值比较，占位符按方言编号", () => {
     expect(render(keysetAfter(["f_id"], [3]), "sqlite")).toEqual({
       text: '("f_id") > (?)',
       params: [3],
@@ -38,7 +38,7 @@ describe("keyset 分页", () => {
     expect(() => keysetAfter(["f_id"], [])).toThrow(/same number/u);
   });
 
-  it("实跑：逐页取完与 OFFSET 分页给同一批行（SQLite）", async () => {
+  test("实跑：逐页取完与 OFFSET 分页给同一批行（SQLite）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [rows]);
@@ -71,7 +71,7 @@ describe("keyset 分页", () => {
 });
 
 describe("递归 CTE", () => {
-  it("withCtes 的 recursive 渲染成 WITH RECURSIVE，两方言一致", () => {
+  test("withCtes 的 recursive 渲染成 WITH RECURSIVE，两方言一致", () => {
     const cte = {
       name: "counter",
       columns: ["i"],
@@ -85,7 +85,7 @@ describe("递归 CTE", () => {
     }
   });
 
-  it("实跑：递归序列 1..3（SQLite）", async () => {
+  test("实跑：递归序列 1..3（SQLite）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const cte = {

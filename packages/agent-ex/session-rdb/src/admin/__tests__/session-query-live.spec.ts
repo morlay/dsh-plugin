@@ -9,19 +9,14 @@ import { SessionQuery } from "@morlay/dsh-session";
 import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { asRdbStore } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { appendLog, meta, turnLog } from "@morlay/dsh-session/testing";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -45,7 +40,7 @@ async function storedEvents(harness: Harness, id: string): Promise<readonly Sess
 }
 
 describe("live 会话的读面", () => {
-  it("live 中断轮：readSession / observeSession 不补合成 closer，cursor 不超过库 head", async () => {
+  test("live 中断轮：readSession / observeSession 不补合成 closer，cursor 不超过库 head", async () => {
     const harness = await start();
     const id = SessionId("live-open-turn");
     const live = harness.sessionStore.create(id, { meta: meta("live-open-turn", "/work") });
@@ -68,7 +63,7 @@ describe("live 会话的读面", () => {
     expect(observation.cursor).toBe(stored.at(-1)?.seq ?? -1);
   });
 
-  it("冷会话的同一份日志仍然配平：合成 closer 进读结果，cursor 因此可以越过库 head", async () => {
+  test("冷会话的同一份日志仍然配平：合成 closer 进读结果，cursor 因此可以越过库 head", async () => {
     const harness = await start();
     const handle = await harness.app
       .get(SessionPersistence)
@@ -93,7 +88,7 @@ describe("live 会话的读面", () => {
 });
 
 describe("含消息投影事件的会话", () => {
-  it("observeSession 用注册表里的消息解释器建 detached 会话，不抛裸 Error", async () => {
+  test("observeSession 用注册表里的消息解释器建 detached 会话，不抛裸 Error", async () => {
     const harness = await start();
     // `image/offload` 是「必须有解释器」的事件类型：解释器由插件注册在会话存储上。
     // 这里只给投影的最小替身（纯函数、不改 surface 节点），判据是构造不再缺解释器。

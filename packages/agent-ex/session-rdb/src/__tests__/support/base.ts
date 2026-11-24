@@ -8,6 +8,7 @@
 // ctx 上挂自己的插件（`ctx.plugin(Storage)` / `SessionTurnOutline` / `new TokenMeter(ctx)`）
 // 再把本包的行挂上去。两套装配的差别只有这一点，别的一律走这里。
 import { mkdtemp, rm } from "node:fs/promises";
+import { onTestFinished } from "vitest";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionStore } from "@morlay/dsh-session/contract";
@@ -16,44 +17,19 @@ import { createSessionContext } from "@morlay/dsh-session/testing";
 import { SessionProjectionRegistry } from "@morlay/dsh-session/server";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import type { Context, TokenClass } from "@morlay/zephyr";
-import { tokenMetaOf } from "@morlay/zephyr/testing";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { bootstrapApplication } from "@morlay/zephyr";
+import type { App, Context, ProviderEntry, TokenClass } from "@morlay/zephyr";
 import {
   SessionBranchRdb,
+  SessionBranchingRdb,
   SessionPersistenceRdb,
   SessionProjectionCacheRdb,
   SessionQueryRdb,
   StorageTakeoverDefault,
   type RdbConfig,
 } from "@morlay/session-rdb";
-
-/**
- * 运行环境替身：`AppEnv` 契约的完整实现，路径全部指向**本用例的临时目录**。
- *
- * 不用 `configure(AppEnvDefault, …)`：它的 `values` 是类字段初值，配置进不去，于是 `dataDir` 会落在
- * 进程 cwd 上，测试互相污染（同一 session id 的 header 在多次运行之间残留）。
- * `root` 是静态的：`AppEnv` 的字段初值在构造时求值，装配方必须在建行**之前**设好它。
- */
-@Injectable()
-export class FakeAppEnv extends AppEnv {
-  // 本用例的临时根目录（`mountRows` 在建行之前设置）。
-  static root = "";
-
-  readonly values: AppEnvValues = {
-    dataDir: FakeAppEnv.root,
-    profileDir: FakeAppEnv.root,
-  };
-
-  readonly cacheDir = join(FakeAppEnv.root, "cache");
-
-  readonly packageRoot = FakeAppEnv.root;
-
-  readonly appBootDir = join(FakeAppEnv.root, "boot");
-
-  readonly profileManifest = join(FakeAppEnv.root, "package.json");
-}
 
 /**
  * 装配出来的 ctx：真 cordis `Context`，加上按上游名发布的那几个服务。
@@ -92,13 +68,30 @@ export interface MountRowsOptions {
   readonly ctx?: MountedContext;
   /** 每行的 config，按 Provider 类定位（省略的行拿 `undefined`，由它的 `Config` 补默认值）。 */
   readonly config?: ReadonlyMap<object, unknown>;
-  /** 建行**之前**发布的服务（按名字）：给「消费行要在装配期就读到它」的替身用例。 */
-  readonly before?: (ctx: MountedContext) => void;
+  /**
+   * 建行**之前**就发布的服务（值条目，排在清单最前）：给「消费行在装配期注入它」的替身用例。
+   *
+   * 写法就是装配清单本身的写法（`{ provide: 令牌, useValue }`）——测试不拼服务名、也不碰令牌表：
+   * 名字由装配器按令牌算，`@Injectable({ name })` 的别名也由它一并发布。
+   */
+  readonly services?: RowList;
 }
 
-/** 一份装配：ctx、数据根、按令牌取服务，以及持有句柄。 */
+/** `mountRows` 收的清单：本包的窄条目，或装配器自己的条目（`clientWithTransport` / `provide*` 的产物）。 */
+export type RowList = readonly (RowEntry | ProviderEntry)[];
+
+/** 一份装配：ctx、数据根、装配器本身，以及持有句柄。 */
 export interface MountedRows {
   readonly ctx: MountedContext;
+  /**
+   * 装配器本身（`get` / `tryGet` / `dispose`）。
+   *
+   * 给「要把这份装配当 `App` 交给双端工厂」的场景：`clientWithTransport(app, …)` /
+   * `hostInvokerOf(app)` 收的都是 `App`，测试支撑不该再造一个平行形状。
+   *
+   * 卸载仍走本接口的 `dispose`（它顺带删临时数据根），不要直接 `app.dispose()`。
+   */
+  readonly app: App;
   /** 数据根。`bootstrapApplication` 的 `App` 没有这个字段，所以是可选的（旧 `mountRows` 才有）。 */
   readonly dataDir?: string;
   /** 按令牌取服务；没装配过就是装配错误（这里抛，不返回 `undefined`）。 */
@@ -107,13 +100,6 @@ export interface MountedRows {
   tryGet<T>(token: TokenClass<T>): T | undefined;
   /** 逆序跑 `onDispose`，再删掉自己开的数据根。 */
   readonly dispose: () => Promise<void>;
-}
-
-const roots: string[] = [];
-
-/** 卸掉所有登记过的临时数据根（`afterAll(disposeAll)` 用）。 */
-export async function disposeAll(): Promise<void> {
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 }
 
 /**
@@ -141,34 +127,39 @@ export function createCtx(options: { readonly sessions?: boolean } = {}): Mounte
  * @returns 装配面；`dispose` 逆序跑 `onDispose` 并删掉自己开的数据根。
  */
 export async function mountRows(
-  rows: readonly RowEntry[],
+  rows: RowList,
   options: MountRowsOptions = {},
 ): Promise<MountedRows> {
   const owned = options.dataDir === undefined;
   const dataDir = options.dataDir ?? (await mkdtemp(join(tmpdir(), "better-session-spec-")));
-  if (owned) roots.push(dataDir);
-  // `AppEnv` 的字段初值在构造时求值：先设根，再建行。
-  FakeAppEnv.root = dataDir;
+  // 自己开的数据根绑到**本用例**：测试结束（含失败）就删，不留模块级清单等 afterAll 收。
+  if (owned) onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
+  // 运行环境实例在**建行之前**造好：`AppEnv` 的字段在构造时求值，值条目随清单一起进装配。
+  const appEnv = createTestingAppEnv({ root: dataDir });
 
   // 清单决定装什么：`sessions` 由清单里的会话存储行注册，这里不预先顶一份。
   const ctx = options.ctx ?? createCtx({ sessions: false });
-  // 运行环境与 logger：按**令牌**发布（名字由 `@Injectable` / 派生名决定，不在测试里写死）。
-  publishToken(ctx, AppEnv, new FakeAppEnv());
   publish(ctx, "logger", (ctx as unknown as { logger: unknown }).logger);
-  options.before?.(ctx);
 
   // 装配只有一处实现：`bootstrapApplication`（传入已有 ctx，不另起一棵树）。
   // 测试曾经平行实现过一套「实例化 → 回填注入 → 发布 → onInit」，名字/令牌规则一变就要改两处。
+  // 运行环境与调用方给的服务是**值条目**、排在最前：后面那些行在装配期注入它们时它们就在场。
+  // 名字（派生名与 `@Injectable({ name })` 的别名）由装配器按令牌算，测试不拼名字。
   const app = await bootstrapApplication({
-    providers: rows.map((entry) => {
-      const config = typeof entry === "function" ? options.config?.get(entry) : undefined;
-      return config === undefined ? entry : ({ provide: entry, config } as never);
-    }),
+    providers: [
+      { provide: AppEnv, useValue: appEnv },
+      ...(options.services ?? []),
+      ...rows.map((entry) => {
+        const config = typeof entry === "function" ? options.config?.get(entry) : undefined;
+        return config === undefined ? entry : ({ provide: entry, config } as never);
+      }),
+    ],
     ctx: ctx as never,
   });
 
   return {
     ctx,
+    app,
     dataDir,
     tryGet: <T>(token: TokenClass<T>): T | undefined => app.tryGet(token),
     get<T>(token: TokenClass<T>): T {
@@ -179,34 +170,6 @@ export async function mountRows(
       if (owned) await rm(dataDir, { recursive: true, force: true });
     },
   };
-}
-
-// 装配内的令牌表：按**令牌对象**索引。ctx 的 store 是名字索引，跨边界会退化；
-// 测试里的 `get(Class)` / 回填注入都先查这张表，查不到再回落 ctx 的名字（上游按名字读的场景）。
-const kInstances = Symbol.for("zephyr.test.instances");
-
-function instancesOf(ctx: MountedContext): Map<object, unknown> {
-  const holder = ctx as unknown as Record<symbol, Map<object, unknown> | undefined>;
-  const existing = holder[kInstances];
-  if (existing !== undefined) return existing;
-  const created = new Map<object, unknown>();
-  holder[kInstances] = created;
-  return created;
-}
-
-/**
- * 按**令牌派生名**发布一份服务，并按 `@Injectable({ name })` 的别名再发一份。
- *
- * 别名是给上游用的：上游按驼峰严格读（`ctx.sessionPersistence`），只发派生名时它拿到 `undefined`
- * 然后**静默降级**——「只发派生名」的 bug 在测试里就抓不到。与 `bootstrap.ts` 同一机制。
- * @param ctx - 装配用的 ctx。
- * @param token - 契约令牌（或 Provider 类 / 值条目里的令牌）。
- * @param value - 服务实例。
- */
-export function publishToken(ctx: MountedContext, token: object, value: unknown): void {
-  const meta = tokenMetaOf(token);
-  instancesOf(ctx).set(meta.token, value);
-  publish(ctx, meta.name, value);
 }
 
 /**
@@ -242,9 +205,9 @@ export interface MountOptions {
   readonly projections?: boolean;
   // 挂完之后往 ctx 上塞服务（源 spec 的 `ctx.provide(...)` 前置用法）。
   readonly provide?: (ctx: MountedContext) => void;
-  // 建行**之前**发布服务：本包的可选能力走 `inject.optional(契约令牌)`，回填注入发生在建行时，
-  // 所以"要在装配期就被拿到的替身"必须在这里发（`provide` 是挂完之后，喂不到注入）。
-  readonly before?: (ctx: MountedContext) => void;
+  // 建行**之前**就发布的服务（值条目）：本包的可选能力走 `inject.optional(契约令牌)`，回填注入
+  // 发生在建行时，所以"要在装配期就被拿到的替身"必须走这里（`provide` 是挂完之后，喂不到注入）。
+  readonly services?: readonly RowEntry[];
   // 是否挂投影检查点行：默认挂。多个实例共用一个库文件的并发写用例要关掉——它的自动写会把
   // 事件落库提前到每个 tick，跨实例抢 SQLite 写锁（那类用例量的是持久化本身，不是缓存）。
   readonly projectionCache?: boolean;
@@ -255,6 +218,8 @@ export interface MountedRow {
   readonly ctx: MountedContext;
   readonly root: string;
   readonly persistence: SessionPersistenceRdb;
+  /** 按契约令牌取本装配里的服务（新加的行不必一个个挂到本接口上）。 */
+  readonly get: <T>(token: TokenClass<T>) => T;
   readonly dispose: () => Promise<void>;
   // 与 cordis 的 `ctx.plugin(...)` 同形：源 spec 拿它只调 `fiber.dispose()`。
   readonly fiber: { dispose(): Promise<void> };
@@ -299,6 +264,7 @@ export async function mountOnto(
       ? []
       : [SessionProjectionCacheRdb as RowEntry]),
     SessionBranchRdb as RowEntry,
+    SessionBranchingRdb as RowEntry,
     SessionQueryRdb as RowEntry,
   ];
 
@@ -306,7 +272,7 @@ export async function mountOnto(
     ...(options.root === undefined ? {} : { dataDir: options.root }),
     ctx,
     config: new Map<object, unknown>([[SessionPersistenceRdb, options.config]]),
-    ...(options.before === undefined ? {} : { before: options.before }),
+    ...(options.services === undefined ? {} : { services: options.services }),
   });
 
   const persistence = mounted.tryGet(SessionPersistence) as SessionPersistenceRdb;
@@ -315,6 +281,7 @@ export async function mountOnto(
     ctx,
     root: mounted.dataDir ?? "",
     persistence,
+    get: <T>(token: TokenClass<T>): T => mounted.get(token),
     dispose: mounted.dispose,
     fiber: { dispose: mounted.dispose },
   };

@@ -10,16 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { rolldown } from "rolldown";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { hostBuildOptions, INJECTED_RUNTIME, isInlinedPackage } from "../compile.ts";
-
-const created: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    created.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
 
 // 装饰器的 legacy 开关只从 tsconfig 读；rolldown 按 `cwd` 往上找，所以 fixture 自带一份。
 const TSCONFIG = {
@@ -43,7 +36,7 @@ export class Decorated {}
 // fixture：一份用 legacy 装饰器的源码 + 它自己的 tsconfig。
 async function makeFixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "devkit-injected-runtime-"));
-  created.push(directory);
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, "tsconfig.json"), `${JSON.stringify(TSCONFIG, null, 2)}\n`);
   await writeFile(join(directory, "index.ts"), ENTRY);
   return directory;
@@ -119,7 +112,7 @@ async function importInNode(entry: string): Promise<string> {
 }
 
 describe("转译器注入的 helper 内联进产物", () => {
-  it("注入的包按包名与子路径都命中内联名单", () => {
+  test("注入的包按包名与子路径都命中内联名单", () => {
     expect(isInlinedPackage("@oxc-project/runtime/helpers/decorate", INJECTED_RUNTIME)).toBe(true);
     expect(isInlinedPackage("@oxc-project/runtime", INJECTED_RUNTIME)).toBe(true);
     expect(isInlinedPackage("@oxc-project/runtime-other/helpers/decorate", INJECTED_RUNTIME)).toBe(
@@ -127,7 +120,7 @@ describe("转译器注入的 helper 内联进产物", () => {
     );
   });
 
-  it("host 面产物里没有对 @oxc-project/runtime 的裸导入，装不到它也能加载", async () => {
+  test("host 面产物里没有对 @oxc-project/runtime 的裸导入，装不到它也能加载", async () => {
     // 走构建自己的那份规则（不另写一份 external），产物才代表 `devkit build` 的产物。
     const entry = await buildFixture(await makeFixture());
 
@@ -135,7 +128,7 @@ describe("转译器注入的 helper 内联进产物", () => {
     expect(await importInNode(entry)).toBe("");
   });
 
-  it("对照：同一条注入被外置时，加载直接 Cannot find package", async () => {
+  test("对照：同一条注入被外置时，加载直接 Cannot find package", async () => {
     const directory = await makeFixture();
     const entry = await buildFixture(directory, () => true);
 

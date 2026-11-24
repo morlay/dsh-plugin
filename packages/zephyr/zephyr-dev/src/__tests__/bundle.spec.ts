@@ -20,7 +20,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { onTestFinished } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   BUNDLER_REV,
   bundlePackage,
@@ -75,14 +76,15 @@ test("子路径引用保留子路径；末段是**产物文件名**（JS 产物�
 });
 
 describe("缓存语义（按请求触发、按包聚合）", () => {
-  let work: string;
-  let cacheRoot: string;
-  let packageRoot: string;
-
-  beforeAll(async () => {
-    work = await mkdtemp(join(tmpdir(), "dsh-bundle-"));
-    cacheRoot = join(work, ".cache");
-    packageRoot = join(work, "fixture");
+  /**
+   * 建一份「缓存语义」的 fixture（每条用例一份，用完随用例删）。
+   * @returns fixture 根、缓存根与包根。
+   */
+  async function fixtureOf(): Promise<{ work: string; cacheRoot: string; packageRoot: string }> {
+    const work = await mkdtemp(join(tmpdir(), "dsh-bundle-"));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
+    const cacheRoot = join(work, ".cache");
+    const packageRoot = join(work, "fixture");
     await mkdir(join(packageRoot, "src"), { recursive: true });
     await writeFile(
       join(packageRoot, "src", "a.ts"),
@@ -109,29 +111,37 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
       "utf8",
     );
     await writeFile(join(packageRoot, "src", "b.ts"), "export const b = 2;\n", "utf8");
-  });
+    return { work, cacheRoot, packageRoot };
+  }
 
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
+  type Fixture = { work: string; cacheRoot: string; packageRoot: string };
 
-  function options(exportName: string): Parameters<typeof bundlePackage>[0] {
+  /**
+   * 打包选项。
+   * @param fixture - 本用例的 fixture。
+   * @param exportName - 出口名。
+   * @returns `bundlePackage` 的选项。
+   */
+  function optionsOf(fixture: Fixture, exportName: string): Parameters<typeof bundlePackage>[0] {
     return {
       nodeStub: join(dirname(fileURLToPath(import.meta.url)), "..", "node-stub", "node-stub.cjs"),
-      cacheRoot,
-      repoRoot: work,
+      cacheRoot: fixture.cacheRoot,
+      repoRoot: fixture.work,
       alias: clientModulesAlias({
         repoRoot,
         nodeStub: join(repoRoot, "packages/zephyr/zephyr-app/src/node-stub/node-stub.cjs"),
       }),
       name: "fixture",
       version: "1.0.0",
-      input: { [exportName]: join(packageRoot, "src", `${exportName}.ts`) },
-      watch: [join(packageRoot, "src")],
+      input: { [exportName]: join(fixture.packageRoot, "src", `${exportName}.ts`) },
+      watch: [join(fixture.packageRoot, "src")],
     };
   }
 
   test("按出口命中：先请求 a、再请求 b，b 不该被当成命中，且 a 的产物要留下", async () => {
+    const fixture = await fixtureOf();
+    const { cacheRoot } = fixture;
+    const options = (exportName: string) => optionsOf(fixture, exportName);
     const first = await bundlePackage(options("a"));
     expect([...(first?.files.keys() ?? [])]).toEqual(["a"]);
     const second = await bundlePackage(options("b"));
@@ -142,6 +152,9 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
   });
 
   test("再请求同一出口：命中缓存（产物的 mtime 不变）", async () => {
+    const fixture = await fixtureOf();
+    const { cacheRoot } = fixture;
+    const options = (exportName: string) => optionsOf(fixture, exportName);
     const target = join(cacheRoot, "fixture@1.0.0", "a.js");
     await bundlePackage(options("a"));
     const before = await stat(target);
@@ -152,6 +165,9 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
   });
 
   test("源码变了：指纹变、重打；但地址不裂成两个（内容变了靠协商缓存）", async () => {
+    const fixture = await fixtureOf();
+    const { packageRoot } = fixture;
+    const options = (exportName: string) => optionsOf(fixture, exportName);
     const tables = { versions: new Map([["fixture", "1.0.0"]]) };
     const beforeUrl = urlOf("fixture", tables);
     const first = await bundlePackage(options("a"));
@@ -162,6 +178,9 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
   });
 
   test("装饰器在产物里必须已被转译，且**不依赖进程 cwd**", async () => {
+    const fixture = await fixtureOf();
+    const { cacheRoot } = fixture;
+    const options = (exportName: string) => optionsOf(fixture, exportName);
     // 这条是"不同工作目录要有一致行为"的守卫：vite build（rolldown 的 oxc）默认按 **cwd** 找 tsconfig，
     // 而这条链在打包形态下跑在宿主进程里（cwd 是宿主的，不是解析根）——少了这条，上游用 cordis 装饰器的包
     // 就会在产物里原样留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行。
@@ -180,6 +199,8 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
   });
 
   test("包住在没有 tsconfig 祖先的地方时，`resolve.tsconfigFilename` 也能让它转", async () => {
+    await fixtureOf();
+
     // 外置/官方的包就住在 `node_modules/.pnpm/…` 里——向上找不到任何 tsconfig。这条守着那个开关：
     // 只给 `transform.decorator`（实测 vite 不带进 rolldown）不行，`resolve.tsconfigFilename` 才行。
     const work2 = await mkdtemp(join(tmpdir(), "dsh-bundle-tsfn-"));
@@ -232,6 +253,7 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
   });
 
   test("清单里解析不到的依赖不算可外置候选，也不该让预编译失败", async () => {
+    const { work, cacheRoot } = await fixtureOf();
     // 真实里踩到的形状：`zustand` 的 `peerDependencies` 里有 `@types/react`（optional）——类型包不在运行时闭包
     // 里，于是解析它必然失败。它是**可选** peer、又解析不到，两条都不该让它进候选；若把异常抛出去，死的是
     // 整个包的预编译（表现为页面上"很多资源加载不了"）。
@@ -275,13 +297,17 @@ describe("缓存语义（按请求触发、按包聚合）", () => {
 // 四类入口共享**一个 fixture 包、一次构建、多个出口**：它们的判据互不重叠（各读自己的产物），
 // 共享的只是"写文件 + 跑一次 rolldown"的成本。
 describe("入口形态（一次构建、多出口）", () => {
-  let work: string;
-  let cacheRoot: string;
-  let files: Map<string, string>;
-
-  beforeAll(async () => {
-    work = await mkdtemp(join(tmpdir(), "dsh-bundle-entries-"));
-    cacheRoot = join(work, ".cache");
+  /**
+   * 一次构建、多个出口的 fixture（每条用例一份，用完随用例删）。
+   * @returns 「出口名 → 产物绝对路径」的查询函数与缓存根。
+   */
+  async function buildFixtureOf(): Promise<{
+    readonly fileOf: (exportName: string) => string;
+    readonly cacheRoot: string;
+  }> {
+    const work = await mkdtemp(join(tmpdir(), "dsh-bundle-entries-"));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
+    const cacheRoot = join(work, ".cache");
     const dir = join(work, "entry-kinds");
     const sources: Record<string, string> = {
       // CJS/UMD：运行期导出面（webpack 风格，局部名与导出名不同），外加 zod@4 那种保留字键。
@@ -337,19 +363,15 @@ describe("入口形态（一次构建、多出口）", () => {
       },
       watch: [join(dir, "src")],
     });
-    files = bundled?.files ?? new Map<string, string>();
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
-
-  /** 某出口的产物绝对路径。 */
-  function fileOf(exportName: string): string {
-    return join(cacheRoot, files.get(exportName) ?? "");
+    const files = bundled?.files ?? new Map<string, string>();
+    return {
+      fileOf: (exportName: string) => join(cacheRoot, files.get(exportName) ?? ""),
+      cacheRoot,
+    };
   }
 
   test("CJS/UMD 入口：具名导出与 default 同时产出，保留字不写进 `export const`", async () => {
+    const { fileOf, cacheRoot } = await buildFixtureOf();
     const file = fileOf("umd");
     const loaded = (await import(pathToFileURL(file).href)) as {
       readonly FitAddon?: unknown;
@@ -363,6 +385,7 @@ describe("入口形态（一次构建、多出口）", () => {
   });
 
   test("ESM 入口：交给 rolldown 的具名导出，不补任何 default", async () => {
+    const { fileOf } = await buildFixtureOf();
     const file = fileOf("esm");
     const code = await readFile(file, "utf8");
     expect(code, "ESM 不该被当成 CJS 补 default").not.toMatch(/export default/u);
@@ -371,12 +394,14 @@ describe("入口形态（一次构建、多出口）", () => {
   });
 
   test("`module` 字段指向的 `.js` 按 ESM 处理（`rrule` 的 `dist/esm/index.js` 就是这种）", async () => {
+    const { fileOf } = await buildFixtureOf();
     // 老包没有 `type`、同时给 `main`（CJS）与 `module`（ESM）——出口落点决定"哪个文件"，
     // 扩展名/type 决定"那个文件是什么模块"。选到 ESM 那份就**不能**再 shim。
     expect(await readFile(fileOf("legacy"), "utf8")).not.toMatch(/export default/u);
   });
 
   test("扩展名即模块类型：`.mjs` / `.ts` 入口都不进 CJS 那条求值路径", async () => {
+    const { fileOf } = await buildFixtureOf();
     expect(await readFile(fileOf("mjs"), "utf8")).not.toMatch(/export default/u);
     expect(await readFile(fileOf("ts"), "utf8")).not.toMatch(/export default/u);
   });
@@ -387,10 +412,9 @@ describe("入口形态（一次构建、多出口）", () => {
 // （来由见 `.agents/designs/20261117-浏览器产物的模块解析与清单.md` 决定 3）。这几条只读清单与盘上
 // 的文件、不跑打包：判的是"哪一支被选中"。
 describe("入口按浏览器条件解析", () => {
-  let work: string;
-
   /** 造一个包（清单 + 若干文件）：判据只看清单与文件存在性。 */
   async function putPackage(
+    work: string,
     manifest: { name: string } & Record<string, unknown>,
     files: readonly string[],
   ): Promise<void> {
@@ -403,12 +427,18 @@ describe("入口按浏览器条件解析", () => {
     }
   }
 
-  beforeAll(async () => {
+  /**
+   * 建一份「按浏览器条件解析」的包结构（每条用例一份，用完随用例删）。
+   * @returns fixture 根（canonical 路径）。
+   */
+  async function fixtureOf(): Promise<string> {
     // mkdtemp 给的可能是软链路径（macOS 的 /var → /private/var），而解析结果是 realpath——先对齐。
-    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-condition-")));
+    const work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-condition-")));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
     await writeFile(join(work, "importer.mjs"), "export {};\n", "utf8");
     // 双面入口：require 与 import 各一支。
     await putPackage(
+      work,
       {
         name: "dual",
         version: "1.2.3",
@@ -418,6 +448,7 @@ describe("入口按浏览器条件解析", () => {
     );
     // import 那支指向的文件**不在盘上**：回退到 `module`（老包同时给 main 与 module）。
     await putPackage(
+      work,
       {
         name: "fallback-module",
         version: "2.0.0",
@@ -429,6 +460,7 @@ describe("入口按浏览器条件解析", () => {
     );
     // 连 `module` 也没有：回退到 `main`（exports 里只有 import 一支，且目标不存在）。
     await putPackage(
+      work,
       {
         name: "fallback-main",
         version: "3.0.0",
@@ -437,32 +469,33 @@ describe("入口按浏览器条件解析", () => {
       },
       ["dist/index.cjs"],
     );
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
+    return work;
+  }
 
   /** 从夹具根（`work/importer.mjs`）解析一个说明符。 */
   async function entryOf(
+    work: string,
     specifier: string,
   ): Promise<{ entry: string; version: string } | undefined> {
     return await dependencyEntry(join(work, "importer.mjs"), specifier);
   }
 
   test("`exports` 同时给 require 与 import：取 **import** 那份（浏览器那份）", async () => {
-    const found = await entryOf("dual");
+    const work = await fixtureOf();
+    const found = await entryOf(work, "dual");
     expect(found?.entry).toBe(join(work, "node_modules", "dual", "dist", "index.mjs"));
     expect(found?.version).toBe("1.2.3");
   });
 
   test("import 条件指向的文件不存在：回退到 `module`", async () => {
-    const found = await entryOf("fallback-module");
+    const work = await fixtureOf();
+    const found = await entryOf(work, "fallback-module");
     expect(found?.entry).toBe(join(work, "node_modules", "fallback-module", "esm", "index.mjs"));
   });
 
   test("import 与 module 都不作数：回退到 `main`", async () => {
-    const found = await entryOf("fallback-main");
+    const work = await fixtureOf();
+    const found = await entryOf(work, "fallback-main");
     expect(found?.entry).toBe(join(work, "node_modules", "fallback-main", "dist", "index.cjs"));
   });
 });
@@ -472,10 +505,6 @@ describe("入口按浏览器条件解析", () => {
 // 来由见设计决定 4）。产物形态定名字：**JS 产物是 `<出口名>.js`**（含 CSS 入口），**资产原样保留
 // 扩展名**（图片 / 字体这类原字节复制的文件）。
 describe("地址末段 = 磁盘产物文件名", () => {
-  let work: string;
-  let cacheRoot: string;
-  let bundled: Map<string, string>;
-
   /** 说明符 → 它对应的**出口名**（枚举侧的口径：包根是 `index`，子路径原样）。 */
   const specifiers: readonly (readonly [string, string])[] = [
     ["address-file", "index"],
@@ -485,9 +514,17 @@ describe("地址末段 = 磁盘产物文件名", () => {
     ["address-file/assets/logo.png", "assets/logo.png"],
   ];
 
-  beforeAll(async () => {
-    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-address-")));
-    cacheRoot = join(work, ".cache");
+  /**
+   * 建一份「地址末段」的 fixture（每条用例一份，用完随用例删）。
+   * @returns 缓存根与构建产物表。
+   */
+  async function fixtureOf(): Promise<{
+    readonly cacheRoot: string;
+    readonly bundled: Map<string, string>;
+  }> {
+    const work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-address-")));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
+    const cacheRoot = join(work, ".cache");
     const dir = join(work, "address-file");
     const sources: Record<string, string> = {
       "src/index.ts": "export const index = 1;\n",
@@ -535,14 +572,11 @@ describe("地址末段 = 磁盘产物文件名", () => {
       },
       watch: [dir],
     });
-    bundled = result?.files ?? new Map<string, string>();
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
+    return { cacheRoot, bundled: result?.files ?? new Map<string, string>() };
+  }
 
   test("包根 / 子路径 / 带扩展名的子路径 / 资源：地址末段与磁盘上的文件名逐项相等", async () => {
+    const { cacheRoot, bundled } = await fixtureOf();
     const tables = { versions: new Map([["address-file", "4.5.6"]]) };
     for (const [specifier, exportName] of specifiers) {
       const address = urlOf(specifier, tables);
@@ -559,6 +593,7 @@ describe("地址末段 = 磁盘产物文件名", () => {
   });
 
   test("资产原样保留扩展名：字节与来源一致，不写进 `assets/<name>-<hash>`", async () => {
+    const { cacheRoot, bundled } = await fixtureOf();
     const relative = bundled.get("assets/logo.png") ?? "";
     expect(relative.split("/").pop()).toBe("logo.png");
     expect(await readFile(join(cacheRoot, relative), "utf8")).toBe("\u0089PNG\r\n\u001a\n");
@@ -570,13 +605,14 @@ describe("地址末段 = 磁盘产物文件名", () => {
 // 约束：只有解析得到入口的说明符才外置成地址（外置 = 浏览器会按这条地址再取一次）；解析不到的
 // `包名 + 源码路径`（`pkg/src/x.ts`）内联进当前产物（来由见设计决定 5）。
 describe("外置只认能解析到入口的说明符", () => {
-  let work: string;
-  let cacheRoot: string;
-  let code: string;
-
-  beforeAll(async () => {
-    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-external-")));
-    cacheRoot = join(work, ".cache");
+  /**
+   * 建一份「外置判定」的 fixture（每条用例一份，用完随用例删）。
+   * @returns 构建出来的产物正文。
+   */
+  async function codeOf(): Promise<string> {
+    const work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-external-")));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
+    const cacheRoot = join(work, ".cache");
     // 被引用的包：**没有 `exports`**，只有 `main`——`src/secret.ts` 不是出口，只是包内的一段源码。
     const plain = join(work, "node_modules", "plain-pkg");
     await mkdir(join(plain, "src"), { recursive: true });
@@ -620,18 +656,16 @@ describe("外置只认能解析到入口的说明符", () => {
       watch: [join(dependent, "src")],
       manifestOf: join(dependent, "package.json"),
     });
-    code = await readFile(join(cacheRoot, built?.files.get("index") ?? ""), "utf8");
-  });
+    return await readFile(join(cacheRoot, built?.files.get("index") ?? ""), "utf8");
+  }
 
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
-
-  test("包根引用仍外置成它的地址（能解析到入口的不受影响）", () => {
+  test("包根引用仍外置成它的地址（能解析到入口的不受影响）", async () => {
+    const code = await codeOf();
     expect(code).toContain("plain-pkg@1.0.0/index.js");
   });
 
-  test("「包名 + 源码路径」不外置成地址，且那段代码被内联进产物", () => {
+  test("「包名 + 源码路径」不外置成地址，且那段代码被内联进产物", async () => {
+    const code = await codeOf();
     expect(code).not.toContain("plain-pkg@1.0.0/src/");
     expect(code).toContain("INLINED_MARKER");
   });
@@ -641,8 +675,6 @@ describe("外置只认能解析到入口的说明符", () => {
 // 约束：`exports` 的条件展开与「文件存在才选中」的顺位只有**一份**实现——dev 服务面（`exportTargetOf`）
 // 与构建面（`dependencyEntry` → `browserEntryOf`）对同一个包给出同一入口（来由见设计决定 3）。
 describe("两条链的入口是同一份规则", () => {
-  let work: string;
-
   /** 一条案例：一个包的清单与文件、一个说明符，以及**该选中的入口**（相对包根）。 */
   interface Case {
     readonly pkg: string;
@@ -710,8 +742,13 @@ describe("两条链的入口是同一份规则", () => {
     },
   ];
 
-  beforeAll(async () => {
-    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-entry-rule-")));
+  /**
+   * 建一份「两条链入口规则」的包结构（每条用例一份，用完随用例删）。
+   * @returns fixture 根。
+   */
+  async function fixtureOf(): Promise<string> {
+    const work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-entry-rule-")));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
     await writeFile(join(work, "importer.mjs"), "export {};\n", "utf8");
     for (const item of cases) {
       const root = join(work, "node_modules", item.pkg);
@@ -726,13 +763,11 @@ describe("两条链的入口是同一份规则", () => {
         await writeFile(join(root, file), "export const x = 1;\n", "utf8");
       }
     }
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
+    return work;
+  }
 
   test("同一个包在两条链上得到同一入口，且是条件顺位该选的那一份", async () => {
+    const work = await fixtureOf();
     for (const item of cases) {
       const root = join(work, "node_modules", item.pkg);
       const expected = join(root, item.entry);
@@ -751,14 +786,14 @@ describe("两条链的入口是同一份规则", () => {
 // 约束：`@import "pkg/x.css"` 是包引用，展开成内容才会生效（指向地址 = 浏览器按样式表解析那份 JS 产物，
 // 规则被忽略）；展开进来的 `url(./x.woff2)` 按**那份 CSS 自己的目录**解析，走既有资产策略。
 describe("CSS 的 @import 在构建期展开", () => {
-  let work: string;
-  let cacheRoot: string;
-  /** 这次构建的**全部产物正文**：样式被拆成共享 chunk，注入的 `<style>` 文本不保证在入口产物里。 */
-  let products: string[];
-
-  beforeAll(async () => {
-    work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-css-import-")));
-    cacheRoot = join(work, ".cache");
+  /**
+   * 建一份「CSS @import 展开」的 fixture（每条用例一份，用完随用例删）。
+   * @returns 这次构建的**全部产物正文**（样式被拆成共享 chunk，注入的 `<style>` 文本不保证在入口产物里）。
+   */
+  async function productsOf(): Promise<string[]> {
+    const work = await realpath(await mkdtemp(join(tmpdir(), "dsh-bundle-css-import-")));
+    onTestFinished(() => rm(work, { recursive: true, force: true }));
+    const cacheRoot = join(work, ".cache");
     // 被引用的包：`@font-face` + 两种相对 `url()`（大的出资产、小的内联成 data URI）。
     const dep = join(work, "node_modules", "css-dep");
     await mkdir(join(dep, "fonts"), { recursive: true });
@@ -822,16 +857,12 @@ describe("CSS 的 @import 在构建期展开", () => {
       watch: [join(host, "src")],
       manifestOf: join(host, "package.json"),
     });
-    products = await Promise.all(
+    return await Promise.all(
       [...(built?.files.values() ?? [])].map(async (relative) =>
         readFile(join(cacheRoot, relative), "utf8"),
       ),
     );
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
+  }
 
   /** 注入的样式文本（`const css = "…";` 那一段；可能落在拆出来的 chunk 里）。 */
   function injectedCssOf(texts: readonly string[]): string {
@@ -842,7 +873,8 @@ describe("CSS 的 @import 在构建期展开", () => {
     return "";
   }
 
-  test("展开成内容：有 @font-face，且不再有 @import 形态的包引用（裸的或地址的都没有）", () => {
+  test("展开成内容：有 @font-face，且不再有 @import 形态的包引用（裸的或地址的都没有）", async () => {
+    const products = await productsOf();
     const css = injectedCssOf(products);
     expect(css, "样式文本不该是空的（否则这条断言恒真）").toContain("--host");
     expect(css).toContain("@font-face");
@@ -851,7 +883,8 @@ describe("CSS 的 @import 在构建期展开", () => {
     expect(css).not.toMatch(/@import[^;]*_zephyr/u);
   });
 
-  test("展开进来的相对 url() 按**那份 CSS 的目录**解析：大的出资产地址、小的内联成 data URI", () => {
+  test("展开进来的相对 url() 按**那份 CSS 的目录**解析：大的出资产地址、小的内联成 data URI", async () => {
+    const products = await productsOf();
     const css = injectedCssOf(products);
     expect(css, "大文件按 threshold 产出 assets/…").toMatch(
       /\/_zephyr\/@modules\/@morlay\+css-host@2\.0\.0\/assets\/big-font-[A-Za-z0-9_-]+\.woff2/u,

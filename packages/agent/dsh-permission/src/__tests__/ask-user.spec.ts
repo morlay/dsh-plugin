@@ -6,11 +6,9 @@
 // - 挂上应答者 → 结构化答案成为模型文本（GUI 与 headless 同一条路）；
 // - **完全**没有应答者（本 spec 的栈没装转发事件源）→ `ask` 立刻以 `NO_PROVIDER` 拒绝。
 //   「装了转发事件源、只是暂时没有客户端」是另一种拓扑：请求会被挂起、等客户端连上补发，见债务记录。
+import { onTestFinished } from "vitest";
 import { ToolCallId } from "@morlay/dsh-agent/server";
 import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { provideFsTools, provideSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
@@ -23,37 +21,12 @@ import {
   RemoteHandlersDefault,
   provideApiGateway,
   provideTypert,
-  type AppEnvValues,
 } from "@morlay/zephyr-app";
-import {
-  bootstrapApplication,
-  configure,
-  Injectable,
-  type App,
-  type Context,
-} from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { bootstrapApplication, configure, type App, type Context } from "@morlay/zephyr";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { provideAskUserTool, providePermissionFor } from "../server/permission.provide.ts";
 
-let root = "";
-
-const opened: App[] = [];
-
 const signal = new AbortController().signal;
-
-/** 运行环境替身：数据根指到临时目录。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
 
 /**
  * 上游类型面的 ctx 收窄成本仓的 `Context`：运行期同一个对象，只是 vendor 的事件增强不进本 program。
@@ -64,26 +37,23 @@ function asContext(ctx: unknown): Context {
   return ctx as Context;
 }
 
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  if (root !== "") await rm(root, { recursive: true, force: true });
-}, 30_000);
-
 /** 提问域 + 沙箱工具栈 + 一个真 agent（问题要路由到它的 scope）。 */
-async function boot(): Promise<App> {
-  root = await mkdtemp(join(tmpdir(), "dsh-ask-user-"));
+async function boot(appEnv: TestingAppEnv): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
       ...provideSessionPersistence(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       // 权限域的两个远端端点行要 `remote-handlers`（它们只注册组，不连 mux）。
       RemoteHandlersDefault,
       ...provideAgent(),
       ...provideShell(),
       ...provideSandbox(
-        configure(SandboxPolicyDefault, { mode: "workspace-write", workspaceRoot: root }),
+        configure(SandboxPolicyDefault, {
+          mode: "workspace-write",
+          workspaceRoot: appEnv.values.dataDir,
+        }),
       ),
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
@@ -94,28 +64,31 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 /**
  * 同一份栈 + 转发事件源（`RemoteEventsSource`）：这就是本部署的形态——没有人连客户端，但宿主侧有桥接。
+ * @param appEnv - 本用例的运行环境。
  * @returns 起好的应用。
  */
-async function bootWithGateway(): Promise<App> {
-  root = await mkdtemp(join(tmpdir(), "dsh-ask-user-pending-"));
+async function bootWithGateway(appEnv: TestingAppEnv): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
       ...provideSessionPersistence(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideTypert(),
       ...provideApiGateway(),
       ...provideAgent(),
       ...provideShell(),
       ...provideSandbox(
-        configure(SandboxPolicyDefault, { mode: "workspace-write", workspaceRoot: root }),
+        configure(SandboxPolicyDefault, {
+          mode: "workspace-write",
+          workspaceRoot: appEnv.values.dataDir,
+        }),
       ),
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
@@ -125,74 +98,82 @@ async function bootWithGateway(): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("ask_user_question 的提问闭环", () => {
-  it("waterfall 有应答者时：结构化答案被投影成模型文本", { timeout: 30_000 }, async () => {
-    const app = await boot();
-    const { agent } = await app.get(AgentDirectory).create({
-      sessionId: SessionId("ask-user"),
-      meta: { cwd: root },
-    });
+  test(
+    "waterfall 有应答者时：结构化答案被投影成模型文本",
+    { timeout: 30_000 },
+    async ({ appEnv }) => {
+      const app = await boot(appEnv);
+      const { agent } = await app.get(AgentDirectory).create({
+        sessionId: SessionId("ask-user"),
+        meta: { cwd: appEnv.values.dataDir },
+      });
 
-    // 浏览器的 `ui-user-questions` 就是这一行：接住 agent 的那条 waterfall，回一份结构化答案。
-    asContext(agent.ctx).on("user-questions/request", () => ({
-      answers: [{ id: "q1", selected: ["先别发"], custom: "再等一轮" }],
-    }));
+      // 浏览器的 `ui-user-questions` 就是这一行：接住 agent 的那条 waterfall，回一份结构化答案。
+      asContext(agent.ctx).on("user-questions/request", () => ({
+        answers: [{ id: "q1", selected: ["先别发"], custom: "再等一轮" }],
+      }));
 
-    const result = await executeToolFixture(agent.ctx, {
-      signal,
-      callId: ToolCallId("call-ask-user"),
-      name: "ask_user_question",
-      agent,
-      arguments: {
-        questions: [
-          {
-            id: "q1",
-            question: "要发布吗？",
-            header: "确认",
-            options: [{ label: "先别发" }, { label: "发" }],
-          },
-        ],
-      },
-    });
+      const result = await executeToolFixture(agent.ctx, {
+        signal,
+        callId: ToolCallId("call-ask-user"),
+        name: "ask_user_question",
+        agent,
+        arguments: {
+          questions: [
+            {
+              id: "q1",
+              question: "要发布吗？",
+              header: "确认",
+              options: [{ label: "先别发" }, { label: "发" }],
+            },
+          ],
+        },
+      });
 
-    expect(result.isError).toBe(false);
-    const text = JSON.stringify(result.content);
-    expect(text).toContain("先别发");
-    expect(text).toContain("再等一轮");
-  });
+      expect(result.isError).toBe(false);
+      const text = JSON.stringify(result.content);
+      expect(text).toContain("先别发");
+      expect(text).toContain("再等一轮");
+    },
+  );
 
-  it("没有应答者时：立刻以 NO_PROVIDER 失败，不是挂住等下一个人", { timeout: 30_000 }, async () => {
-    const app = await boot();
-    const { agent } = await app.get(AgentDirectory).create({
-      sessionId: SessionId("ask-user-unanswered"),
-      meta: { cwd: root },
-    });
+  test(
+    "没有应答者时：立刻以 NO_PROVIDER 失败，不是挂住等下一个人",
+    { timeout: 30_000 },
+    async ({ appEnv }) => {
+      const app = await boot(appEnv);
+      const { agent } = await app.get(AgentDirectory).create({
+        sessionId: SessionId("ask-user-unanswered"),
+        meta: { cwd: appEnv.values.dataDir },
+      });
 
-    const result = await executeToolFixture(agent.ctx, {
-      signal,
-      callId: ToolCallId("call-ask-user-unanswered"),
-      name: "ask_user_question",
-      agent,
-      arguments: { questions: [{ id: "q1", question: "要发布吗？" }] },
-    });
+      const result = await executeToolFixture(agent.ctx, {
+        signal,
+        callId: ToolCallId("call-ask-user-unanswered"),
+        name: "ask_user_question",
+        agent,
+        arguments: { questions: [{ id: "q1", question: "要发布吗？" }] },
+      });
 
-    expect(result.isError).toBe(true);
-    if (!result.isError) throw new Error("没有应答者时不该给出答案");
-    expect(result.error.message).toContain("no user-questions answerer accepted the request");
-  });
+      expect(result.isError).toBe(true);
+      if (!result.isError) throw new Error("没有应答者时不该给出答案");
+      expect(result.error.message).toContain("no user-questions answerer accepted the request");
+    },
+  );
 
-  it(
+  test(
     "装了转发事件源、暂时没有客户端时：请求挂起（不失败、也不超时）",
     { timeout: 30_000 },
-    async () => {
-      const app = await bootWithGateway();
+    async ({ appEnv }) => {
+      const app = await bootWithGateway(appEnv);
       const { agent } = await app.get(AgentDirectory).create({
         sessionId: SessionId("ask-user-pending"),
-        meta: { cwd: root },
+        meta: { cwd: appEnv.values.dataDir },
       });
 
       const call = executeToolFixture(agent.ctx, {
@@ -218,8 +199,7 @@ describe("ask_user_question 的提问闭环", () => {
       }
 
       // 挂起的调用随应用卸载结束：别把未处理的拒绝留给下一条用例。
-      const index = opened.indexOf(app);
-      if (index >= 0) opened.splice(index, 1);
+      // 提前 dispose 之后，用例结束时的自动清理（`onTestFinished`）再调一次也无害（`dispose` 幂等）。
       await app.dispose();
       await expect(call).resolves.toBeDefined();
     },

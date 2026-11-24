@@ -3,11 +3,10 @@
 // 两个入口都先弹确认再把操作交给注入的动作面。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { vi } from "vitest";
 import { UserMessageNodeView } from "../user-message.view.tsx";
 import { zh } from "../locales.ts";
-
-afterEach(cleanup);
 
 const t = ((key: string) => key) as never;
 
@@ -77,7 +76,7 @@ function renderNode(node: unknown, spies: Spies): void {
 }
 
 describe("UserMessageNodeView 的入口门控", () => {
-  it("动作失败时在消息行上给可读反馈，而不是什么都没发生", async () => {
+  test("动作失败时在消息行上给可读反馈，而不是什么都没发生", async () => {
     const spies = faces();
     spies.recall.mockResolvedValueOnce(false);
     renderNode(nodeOf({}), spies);
@@ -89,7 +88,7 @@ describe("UserMessageNodeView 的入口门控", () => {
     expect(alert.textContent).toBe(zh["action.failed"]);
   });
 
-  it("动作在途时确认按钮禁用并标 aria-busy，不可重复触发", async () => {
+  test("动作在途时确认按钮禁用并标 aria-busy，不可重复触发", async () => {
     const gate = Promise.withResolvers<boolean>();
     const spies = faces();
     spies.recall.mockReturnValue(gate.promise);
@@ -110,7 +109,7 @@ describe("UserMessageNodeView 的入口门控", () => {
     });
   });
 
-  it("有文本块的 user 消息：确认后把该块交给 recall", async () => {
+  test("有文本块的 user 消息：确认后把该块交给 recall", async () => {
     const spies = faces();
     renderNode(nodeOf({}), spies);
 
@@ -136,13 +135,13 @@ describe("UserMessageNodeView 的入口门控", () => {
     expect(screen.getAllByRole("button")).toHaveLength(3);
   });
 
-  it("无文本块（只有图片）的消息没有编辑入口", () => {
+  test("无文本块（只有图片）的消息没有编辑入口", () => {
     const spies = faces();
     renderNode(nodeOf({ content: [{ type: "image", attachment: { id: "a" } }] }), spies);
     expect(screen.queryByLabelText("编辑")).toBeNull();
   });
 
-  it("轮外消息（location 无轮次归属）同样可撤回，但不提供重试", () => {
+  test("轮外消息（location 无轮次归属）同样可撤回，但不提供重试", () => {
     const spies = faces();
     renderNode(nodeOf({ location: { kind: "session" } }), spies);
 
@@ -154,7 +153,7 @@ describe("UserMessageNodeView 的入口门控", () => {
     expect(spies.recall.mock.calls[0]?.[0]).not.toHaveProperty("turn");
   });
 
-  it("重试只对已闭合轮次开放，并带 truncate 级联", () => {
+  test("重试只对已闭合轮次开放，并带 truncate 级联", () => {
     const closed = faces();
     renderNode(nodeOf({}), closed);
     fireEvent.click(screen.getByLabelText("重试此回合"));
@@ -167,7 +166,7 @@ describe("UserMessageNodeView 的入口门控", () => {
     expect(screen.queryByLabelText("重试此回合")).toBeNull();
   });
 
-  it("撤回回填带上该消息的全部文本块", () => {
+  test("撤回回填带上该消息的全部文本块", () => {
     const spies = faces();
     renderNode(
       nodeOf({

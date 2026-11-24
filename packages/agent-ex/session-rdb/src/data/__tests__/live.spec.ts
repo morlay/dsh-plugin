@@ -3,23 +3,18 @@
 // 判据是「live 会话 → 存储」这一条链：`SessionStore.create` 建会话、事件追加、flush 屏障之后，持久化读得到。
 import { SessionId } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
-
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
 
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
 describe("live 会话的写路由", () => {
-  it("会话里追加的事件在 flush 之后落到库里", async () => {
+  test("会话里追加的事件在 flush 之后落到库里", async () => {
     const harness = await start();
     const session = harness.sessionStore.create(SessionId("live-1"), { meta: { cwd: "/work" } });
     session.append("turn/start", { turn: 1 } as never);
@@ -43,7 +38,7 @@ describe("live 会话的写路由", () => {
     expect(events.map((event) => event.type)).toEqual(["turn/start", "user/message", "turn/end"]);
   });
 
-  it("已落库的 live 会话在新实例里读得到（不是进程内状态）", async () => {
+  test("已落库的 live 会话在新实例里读得到（不是进程内状态）", async () => {
     const harness = await start();
     const session = harness.sessionStore.create(SessionId("live-2"), { meta: { cwd: "/work" } });
     session.append("turn/start", { turn: 1 } as never);
@@ -56,7 +51,7 @@ describe("live 会话的写路由", () => {
     expect(events.map((event) => event.type)).toEqual(["turn/start", "turn/end"]);
   });
 
-  it("多个 live 会话各自 flush 之后都能 stat 到（互不干扰）", async () => {
+  test("多个 live 会话各自 flush 之后都能 stat 到（互不干扰）", async () => {
     const harness = await start();
     const first = harness.sessionStore.create(SessionId("live-3"), { meta: { cwd: "/a" } });
     const second = harness.sessionStore.create(SessionId("live-4"), { meta: { cwd: "/b" } });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   DbError,
   defineTable,
@@ -19,7 +19,7 @@ const items = defineTable({
 });
 
 describe("查询观测", () => {
-  it("流式读在完成、提前 break、出错时各发一条事件（带实际消费行数）", async () => {
+  test("流式读在完成、提前 break、出错时各发一条事件（带实际消费行数）", async () => {
     const events: QueryEvent[] = [];
     const database = await openDatabase({
       dialect: "sqlite",
@@ -57,7 +57,7 @@ describe("查询观测", () => {
     }
   });
 
-  it("EXPLAIN 返回计划行数组（SQLite 取 detail）", async () => {
+  test("EXPLAIN 返回计划行数组（SQLite 取 detail）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -69,7 +69,7 @@ describe("查询观测", () => {
     }
   });
 
-  it("EXPLAIN 在 PostgreSQL 上取 QUERY PLAN 列并带方言前缀", async () => {
+  test("EXPLAIN 在 PostgreSQL 上取 QUERY PLAN 列并带方言前缀", async () => {
     const statements: string[] = [];
     let database!: Database;
     database = wrapDatabase("postgres", {

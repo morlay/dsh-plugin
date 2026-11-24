@@ -10,7 +10,7 @@ import { asRdbStore } from "@morlay/session-rdb";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { WorkspaceController } from "@morlay/dsh-workspace/ui";
 import type { WorkspaceDomainState } from "@morlay/dsh-workspace/contract";
-import { LocalRemote } from "@morlay/zephyr-app/testing";
+import { clientWithTransport } from "@morlay/zephyr-app/testing";
 import { UiWorkspace } from "@morlay/dsh-workspace/ui";
 import { ToolCallId } from "@morlay/dsh-agent/contract";
 import { SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
@@ -143,19 +143,15 @@ export async function startManagerFlow(): Promise<ManagerFlow> {
     },
   };
   // 前端装配：不持有 host 的 `RemoteHandlers`（那是另一个 ctx 的东西），
-  // `LocalRemote` 只拿它的执行面当传输。
+  // 传输由 `clientWithTransport(host.app, …)` 接到宿主的执行面上。
   const rows: readonly RowEntry[] = [
     { provide: SessionController, useValue: sessionControllerStub },
     { provide: UiWorkspace, useValue: archiveFace(host) },
     { provide: WorkspaceController, useValue: workspaceListStub },
-    {
-      provide: LocalRemote,
-      useValue: new LocalRemote((endpoint, payload) => host.handlers.invoke(endpoint, payload)),
-    },
     SessionAdminEndpointClient,
     ConversationManagerController,
   ];
-  const app: MountedRows = await mountRows(rows);
+  const app: MountedRows = await mountRows(clientWithTransport(host.app, rows));
   const controller = app.get(ConversationManagerController);
   return {
     host,

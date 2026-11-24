@@ -15,7 +15,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 // **按包出口取**（`@morlay/zephyr-dev/testing`），不写 `../build/compile.ts` 这类跨目录相对路径：
 // 子出口面里的相对 `../` 会让"面"退化成目录结构的一部分。
 import {
@@ -46,7 +46,7 @@ async function optionsOf(name: string): Promise<Parameters<typeof compile>[0]> {
 }
 
 describe("compile（判据）", () => {
-  it("空清单：点名报「清单为空」，并带上入口与产物落点", async () => {
+  test("空清单：点名报「清单为空」，并带上入口与产物落点", async () => {
     const options = await optionsOf("compile-empty");
     const error = await compile(options).then(
       () => undefined,
@@ -59,7 +59,7 @@ describe("compile（判据）", () => {
   });
 
   // 枚举要按引用方逐个解析包根（rc.3 的上游包更多），3s 的默认上限不够（不是断言失败，是规模）。
-  it("缺 REQUIRED 已知包：逐个点名，并在构建前就失败", { timeout: 20_000 }, async () => {
+  test("缺 REQUIRED 已知包：逐个点名，并在构建前就失败", { timeout: 20_000 }, async () => {
     const error = await compile(await optionsOf("compile-partial")).then(
       () => undefined,
       (rejected: unknown) => rejected as Error,
@@ -73,7 +73,7 @@ describe("compile（判据）", () => {
     }
   });
 
-  it("判据没放宽：REQUIRED 仍是那三个包（含只在别人 node_modules 里的 shiki）", () => {
+  test("判据没放宽：REQUIRED 仍是那三个包（含只在别人 node_modules 里的 shiki）", () => {
     expect([...REQUIRED_PREBUNDLE]).toEqual([
       "@morlay/zephyr-app",
       "@morlay/dsh-conversation",
@@ -94,7 +94,7 @@ function moduleUrlOf(pkg: string, version: string, file: string): string {
 }
 
 describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
-  it("可达的缺口：点名地址与引用方；不可达产物里的缺口不算", () => {
+  test("可达的缺口：点名地址与引用方；不可达产物里的缺口不算", () => {
     const direct = moduleUrlOf("pkg-a", "1.0.0", "index.js");
     const lazy = moduleUrlOf("pkg-b", "2.0.0", "index.js");
     // 可达链上引用、但盘上没有产物：这是会 404 的那种缺口。
@@ -123,7 +123,7 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
     expect(graph.reachable).not.toContain(hostOnly);
   });
 
-  it("同一条缺口被多处引用：只出一条，引用方按 BFS 顺序排", () => {
+  test("同一条缺口被多处引用：只出一条，引用方按 BFS 顺序排", () => {
     const first = moduleUrlOf("first", "1.0.0", "index.js");
     const second = moduleUrlOf("second", "1.0.0", "index.js");
     const missing = moduleUrlOf("same-gap", "0.0.0", "index.js");
@@ -140,7 +140,7 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
     expect(graph.gaps).toEqual([{ url: missing, importers: [first, second] }]);
   });
 
-  it("`?v=` 不参与地址身份：带查询的引用命中不带查询的产物", () => {
+  test("`?v=` 不参与地址身份：带查询的引用命中不带查询的产物", () => {
     const dep = moduleUrlOf("pkg-a", "1.0.0", "index.js");
 
     const graph = reachableModulesOf({
@@ -156,7 +156,7 @@ describe("reachableModulesOf（从页面入口 BFS 可达地址）", () => {
     expect(graph.gaps).toEqual([]);
   });
 
-  it("入口不进缺口：它是构建自身的前提，不是「页面会 404 的地址」", () => {
+  test("入口不进缺口：它是构建自身的前提，不是「页面会 404 的地址」", () => {
     const graph = reachableModulesOf({ entry: ENTRY, artifacts: new Map() });
 
     // 可达集合仍然从入口开始（它就是页面唯一引用的那一条）……
@@ -178,7 +178,7 @@ describe("assertEntryProduct（入口产物是构建自身的前提）", () => {
     };
   }
 
-  it("入口产物不在盘上：报「没落盘」并指到文件，而不是当成缺口", async () => {
+  test("入口产物不在盘上：报「没落盘」并指到文件，而不是当成缺口", async () => {
     const fixture = await fixtureOf({});
 
     const error = await assertEntryProduct({
@@ -198,7 +198,7 @@ describe("assertEntryProduct（入口产物是构建自身的前提）", () => {
     expect(error?.message).not.toContain("\n    打包器 ");
   });
 
-  it("入口产物在盘上：通过，并返回它的绝对路径", async () => {
+  test("入口产物在盘上：通过，并返回它的绝对路径", async () => {
     const fixture = await fixtureOf({
       "out/fx-app@0.0.0/.files.json": manifestOf({ client: "fx-app@0.0.0/client.js" }),
       "out/fx-app@0.0.0/client.js": "export const app = 1;\n",
@@ -211,7 +211,7 @@ describe("assertEntryProduct（入口产物是构建自身的前提）", () => {
 });
 
 describe("artifactsOf（清单是唯一真相：读不出就红）", () => {
-  it("清单不是 JSON：抛错并指到那份清单，不静默当成「这个包没产物」", async () => {
+  test("清单不是 JSON：抛错并指到那份清单，不静默当成「这个包没产物」", async () => {
     // 静默当空会把它的每条地址都算成缺口，报出来的却是一串「无副本、没经手过」的误导话。
     const fixture = await fixtureOf({
       "out/fx-app@0.0.0/.files.json": "{ 坏掉的 json",
@@ -290,7 +290,7 @@ function clientOf(code: string): Record<string, string> {
 const CLIENT = moduleUrlOf("fx-app", "0.0.0", "client.js");
 
 describe("fallbackToRuntime（共享运行时兜底）", () => {
-  it("产物引用没有出产物的地址：改写到聚合产物地址，聚合产物转发成员的具名导出", async () => {
+  test("产物引用没有出产物的地址：改写到聚合产物地址，聚合产物转发成员的具名导出", async () => {
     const missing = moduleUrlOf("fx-runtime", "1.0.0", "index.js");
     const fixture = await fixtureOf({
       ...appWorkspaceFiles(),
@@ -326,7 +326,7 @@ describe("fallbackToRuntime（共享运行时兜底）", () => {
     expect(runtime).not.toContain("export{default");
   });
 
-  it("共享运行时被 default 导入：构建失败，并给出引用方产物与成员的两个地址", async () => {
+  test("共享运行时被 default 导入：构建失败，并给出引用方产物与成员的两个地址", async () => {
     const member = moduleUrlOf("fx-runtime", "1.0.0", "index.js");
     const fixture = await fixtureOf({
       ...appWorkspaceFiles(),
@@ -351,7 +351,7 @@ describe("fallbackToRuntime（共享运行时兜底）", () => {
     expect(error?.message).toContain("React");
   });
 
-  it("版本对不上、或出口解析不到：不成为聚合产物成员（不吞多版本、不退化到包根）", async () => {
+  test("版本对不上、或出口解析不到：不成为聚合产物成员（不吞多版本、不退化到包根）", async () => {
     // 应用清单里是 katex 0.18.10，地址指的是 0.16.47 那一份副本：拿 0.18 的导出面顶上去就是吞多版本。
     const otherVersion = moduleUrlOf("katex", "0.16.47", "index.js");
     // 包根解析得到、但 `ui` 这个出口解析不到：退化成包根成员，平铺出来的导出名与引用方要的对不上。
@@ -400,7 +400,7 @@ describe("fallbackToRuntime（共享运行时兜底）", () => {
 });
 
 describe("supplementTargetsOf（有副本的一律按副本出独立产物）", () => {
-  it("多版本各按自己的副本补目标、不合并；连副本都解析不到的才留给兜底", async () => {
+  test("多版本各按自己的副本补目标、不合并；连副本都解析不到的才留给兜底", async () => {
     // pnpm 严格布局：`katex@0.16` 只挂在 `micromark-extension-math` 下面，`katex@0.18` 在图根那一份里。
     const nested = "node_modules/.pnpm/micromark-extension-math@3.1.0/node_modules";
     const rootCopy = "node_modules/.pnpm/katex@0.18.10/node_modules/katex";
@@ -488,7 +488,7 @@ describe("supplementTargetsOf（有副本的一律按副本出独立产物）", 
   });
 });
 describe("assertReachableComplete（兜底之后仍缺即红）", () => {
-  it("不可达的坏产物不参与判据；可达的坏地址报错，并点名地址与引用方", async () => {
+  test("不可达的坏产物不参与判据；可达的坏地址报错，并点名地址与引用方", async () => {
     const broken = moduleUrlOf("pkg-a", "1.0.0", "index.js");
     const missing = moduleUrlOf("pkg-c", "3.0.0", "index.js");
     // 宿主面产物：页面不加载它，它引用的东西缺了也不该让构建红（决定 12）。

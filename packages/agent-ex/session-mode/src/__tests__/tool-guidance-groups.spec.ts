@@ -22,16 +22,11 @@ import {
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { ToolGuidance } from "@morlay/session-mode";
 import { provideSessionMode } from "@morlay/session-mode";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { pinDshHome } from "./support/dsh-home.ts";
 
 pinDshHome();
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 /** 假注册表：只记 register 的名字，其余面给空实现。 */
 @Injectable()
@@ -99,7 +94,7 @@ async function boot(groups?: boolean): Promise<App> {
     ],
     timeoutMs: 30_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -108,12 +103,12 @@ function groupSkillNames(app: App): string[] {
 }
 
 describe("ToolGuidance 的 groups 开关", () => {
-  it("组说明不再进 skill 目录（改由 describe_tool 按组返回）", async () => {
+  test("组说明不再进 skill 目录（改由 describe_tool 按组返回）", async () => {
     const app = await boot();
     expect(groupSkillNames(app)).toEqual([]);
   });
 
-  it("groups: false：不注册组 skill，但汉化照做", async () => {
+  test("groups: false：不注册组 skill，但汉化照做", async () => {
     const app = await boot(false);
     expect(groupSkillNames(app)).toEqual([]);
     const definition = app
@@ -123,7 +118,7 @@ describe("ToolGuidance 的 groups 开关", () => {
     expect(definition?.description).toContain("联网搜索");
   });
 
-  it("晚注册的工具也一样：组说明走 describe_tool，不进 skill 目录", async () => {
+  test("晚注册的工具也一样：组说明走 describe_tool，不进 skill 目录", async () => {
     const app = await boot();
     app.get(ToolRegistry).register(
       defineTool({

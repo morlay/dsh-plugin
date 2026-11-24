@@ -2,8 +2,9 @@
 //
 // 判据是**编译期**：事件名写错、参数个数不对、参数类型不符，都编不过；
 // 运行期只验"真的送达了""退订生效""未装配时明确报错"。
-import { bootstrapApplication, EventEmitter, Injectable, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { bootstrapApplication, EventEmitter, Injectable } from "@morlay/zephyr";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 无参事件。 */
 class SessionFlush extends EventEmitter {
@@ -18,12 +19,6 @@ class SessionStatus extends EventEmitter<[string, number]> {
     super("test/session-status");
   }
 }
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose();
-});
 
 /** 事件的宿主：事件作为**字段**声明，`$` 后缀统一表示"这是个事件"。 */
 @Injectable()
@@ -40,12 +35,12 @@ class Policy {
 async function boot(): Promise<Policy> {
   // 事件不是令牌：它们作为字段声明在宿主上（`flush$` / `status$`），不进 providers。
   const app = await bootstrapApplication({ providers: [Policy] });
-  opened.push(app);
+  onTestFinished(() => app.dispose());
   return app.get(Policy);
 }
 
 describe("EventEmitter", () => {
-  it("参数表逐事件独立：多参事件按实参顺序送达", async () => {
+  test("参数表逐事件独立：多参事件按实参顺序送达", async () => {
     const { status$ } = await boot();
     const got: Array<[string, number]> = [];
     status$.on((id, running) => {
@@ -57,7 +52,7 @@ describe("EventEmitter", () => {
     expect(got).toEqual([["s1", 1]]);
   });
 
-  it("无参事件与多参事件互不干扰", async () => {
+  test("无参事件与多参事件互不干扰", async () => {
     const { flush$, status$ } = await boot();
     let flushed = 0;
     const seen: string[] = [];
@@ -74,7 +69,7 @@ describe("EventEmitter", () => {
     expect(seen, "多参事件按顺序收到").toEqual(["s1", "s2"]);
   });
 
-  it("退订之后不再送达", async () => {
+  test("退订之后不再送达", async () => {
     const { flush$ } = await boot();
     let count = 0;
     const off = flush$.on(() => {
@@ -86,7 +81,7 @@ describe("EventEmitter", () => {
     expect(count).toBe(1);
   });
 
-  it("没装进装配清单的事件：用的时候明确报错，不是静默丢弃", () => {
+  test("没装进装配清单的事件：用的时候明确报错，不是静默丢弃", () => {
     // 只有 Provider 实例才由 DI 填 `bus`；直接 `new` 出来的对象里它还是注入占位符。
     const orphan = new SessionFlush();
     expect(() => {
@@ -94,7 +89,7 @@ describe("EventEmitter", () => {
     }).toThrow();
   });
 
-  it("参数个数与类型编不过（`@ts-expect-error` 即判据）", async () => {
+  test("参数个数与类型编不过（`@ts-expect-error` 即判据）", async () => {
     const { flush$, status$ } = await boot();
 
     // @ts-expect-error 少传一个参数

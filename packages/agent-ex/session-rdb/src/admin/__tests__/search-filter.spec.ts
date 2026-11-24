@@ -5,7 +5,8 @@ import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, oneTurnLog, titleEvent, turnLog, twoTurnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/session-rdb";
 import { E, render } from "@morlay/zephyr-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import {
   pageWindow,
   sessionRowsCondition,
@@ -29,7 +30,7 @@ function rendered(condition: ReturnType<typeof sessionRowsCondition>) {
 }
 
 describe("L1 会话行查询的条件构造", () => {
-  it("两段式匹配顺序：先前缀（范围比较）再全文（LIKE），两段都折过大小写", () => {
+  test("两段式匹配顺序：先前缀（范围比较）再全文（LIKE），两段都折过大小写", () => {
     expect(sessionRowsSearchStages("报告")).toEqual(["prefix", "contains"]);
     expect(sessionRowsSearchStages("  ")).toEqual([]);
 
@@ -44,7 +45,7 @@ describe("L1 会话行查询的条件构造", () => {
     expect(contains.params).toEqual(["%报告%"]);
   });
 
-  it("时间 / 来源 / 归档三条件进同一个 WHERE", () => {
+  test("时间 / 来源 / 归档三条件进同一个 WHERE", () => {
     const sql = rendered(
       sessionRowsCondition(columns, {
         updatedAfter: 1_000,
@@ -63,7 +64,7 @@ describe("L1 会话行查询的条件构造", () => {
     expect(sql.params).toEqual([1_000, 2_000, "subagent"]);
   });
 
-  it("分页参数：默认一页、上限 200、页码从 0 起", () => {
+  test("分页参数：默认一页、上限 200、页码从 0 起", () => {
     expect(pageWindow({})).toEqual({ limit: 20, offset: 0 });
     expect(pageWindow({ limit: 0, offset: -5 })).toEqual({ limit: 20, offset: 0 });
     expect(pageWindow({ limit: 500, offset: 40 })).toEqual({ limit: 200, offset: 40 });
@@ -71,15 +72,9 @@ describe("L1 会话行查询的条件构造", () => {
   });
 });
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -103,7 +98,7 @@ async function openSqlite(harness: Harness) {
 }
 
 describe("L2 会话行查询（真装配 + 真库）", () => {
-  it("前缀段的索引代价：lower(f_title) 用不上原列索引，计划是整表扫（已接受的债）", async () => {
+  test("前缀段的索引代价：lower(f_title) 用不上原列索引，计划是整表扫（已接受的债）", async () => {
     const harness = await start();
     await seedTitled(harness, "indexed", "深水区报告");
     const sqlite = await openSqlite(harness);
@@ -123,7 +118,7 @@ describe("L2 会话行查询（真装配 + 真库）", () => {
     }
   });
 
-  it("前缀搜不到自动退全文：中段词命中且标出走的哪一段", async () => {
+  test("前缀搜不到自动退全文：中段词命中且标出走的哪一段", async () => {
     const harness = await start();
     await seedTitled(harness, "deep-water", "深水区报告");
     const store = asRdbStore(harness.app.get(SessionPersistence));
@@ -137,7 +132,7 @@ describe("L2 会话行查询（真装配 + 真库）", () => {
     expect(contains.searchStage).toBe("contains");
   });
 
-  it("rows 的时间 / 来源 / 归档过滤进 WHERE，三条件是 AND", async () => {
+  test("rows 的时间 / 来源 / 归档过滤进 WHERE，三条件是 AND", async () => {
     const harness = await start();
     await seedLog(harness, "newer", twoTurnLog());
     await seedLog(harness, "older", oneTurnLog());
@@ -174,7 +169,7 @@ describe("L2 会话行查询（真装配 + 真库）", () => {
     expect(combined.total).toBe(0);
   });
 
-  it("rows 的分页参数决定取哪一页，总数是过滤后的总数", async () => {
+  test("rows 的分页参数决定取哪一页，总数是过滤后的总数", async () => {
     const harness = await start();
     await seedLog(harness, "page-a", oneTurnLog());
     await seedLog(harness, "page-b", twoTurnLog());

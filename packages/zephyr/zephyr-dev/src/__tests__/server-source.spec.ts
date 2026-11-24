@@ -2,10 +2,10 @@
 //
 // 判据错一边都要命：漏了 → 改动不生效；多算了 → 改个浏览器组件就把整条注入链换掉。
 import { isServerSource } from "../vite-handoff/vite-handoff.service.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 describe("isServerSource", () => {
-  it("服务端源码：要重载", () => {
+  test("服务端源码：要重载", () => {
     for (const file of [
       "/repo/packages/agent/dsh-session/src/server/session.provide.ts",
       "/repo/packages/zephyr/zephyr/src/bootstrap.ts",
@@ -15,7 +15,7 @@ describe("isServerSource", () => {
     }
   });
 
-  it("客户端那半：不重载（vite 自己的 HMR 管）", () => {
+  test("客户端那半：不重载（vite 自己的 HMR 管）", () => {
     for (const file of [
       "/repo/packages/agent/dsh-session/src/client/index.ts",
       "/repo/packages/agent/dsh-session/src/ui/sessions-binding.ts",
@@ -25,7 +25,7 @@ describe("isServerSource", () => {
     }
   });
 
-  it("非源码 / 依赖 / 测试：不重载", () => {
+  test("非源码 / 依赖 / 测试：不重载", () => {
     for (const file of [
       "/repo/node_modules/foo/src/index.ts",
       "/repo/packages/agent/dsh-session/src/server/session.spec.ts",

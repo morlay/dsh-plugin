@@ -5,7 +5,8 @@ import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
 import { Remote } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { vi } from "vitest";
 import {
   ConversationManagerController,
   ConversationManagerRequestError,
@@ -98,13 +99,8 @@ const ROWS = {
   },
 };
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-});
-
 describe("对话管理动作面", () => {
-  it("列表打 sessionAdmin/rows 并带回分页与行", async () => {
+  test("列表打 sessionAdmin/rows 并带回分页与行", async () => {
     const { face, calls, dispose } = await controllerWith(async () => ROWS);
     try {
       const page = await face.listRows({ page: 1, pageSize: 20 });
@@ -118,7 +114,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("列表响应不可用时给出失败原因", async () => {
+  test("列表响应不可用时给出失败原因", async () => {
     const { face, dispose } = await controllerWith(async () => ({ ok: true, value: { total: 0 } }));
     try {
       await expect(face.listRows()).rejects.toThrow("会话列表响应不可用");
@@ -127,7 +123,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("归档与取消归档委托 uiWorkspace", async () => {
+  test("归档与取消归档委托 uiWorkspace", async () => {
     const archived: string[] = [];
     const unarchived: string[] = [];
     const { face, dispose } = await controllerWith(async () => ROWS, {
@@ -150,7 +146,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("归档失败时把 workspace 的未知会话折成会话不存在（页面据此给可读原因）", async () => {
+  test("归档失败时把 workspace 的未知会话折成会话不存在（页面据此给可读原因）", async () => {
     const { face, dispose } = await controllerWith(async () => ROWS, {
       workspace: {
         archiveSession: async () => {
@@ -172,7 +168,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("删除打 sessionAdmin/delete 并刷新会话列表", async () => {
+  test("删除打 sessionAdmin/delete 并刷新会话列表", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
       async () => ({ ok: true, value: { deleted: "s1" } }),
@@ -189,7 +185,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("删除失败时带出宿主错误码且不刷新", async () => {
+  test("删除失败时带出宿主错误码且不刷新", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, dispose } = await controllerWith(
       async () => ({ ok: false, error: { code: "SESSION_NOT_ARCHIVED", message: "not archived" } }),
@@ -204,7 +200,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("导入 zip 走 base64 载荷并在导入后刷新", async () => {
+  test("导入 zip 走 base64 载荷并在导入后刷新", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
       async () => ({ ok: true, value: { sessionId: "session-imported" } }),
@@ -226,7 +222,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("覆盖导入把目标会话带到 sessionAdmin/import", async () => {
+  test("覆盖导入把目标会话带到 sessionAdmin/import", async () => {
     const { face, calls, dispose } = await controllerWith(async () => ({
       ok: true,
       value: { sessionId: "target" },
@@ -243,7 +239,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("导入阶段按读取 → 写入回调", async () => {
+  test("导入阶段按读取 → 写入回调", async () => {
     const stages: string[] = [];
     const { face, dispose } = await controllerWith(async () => ({
       ok: true,
@@ -264,7 +260,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("导出落到浏览器下载：拿到 zip 后触发一次 anchor 点击", async () => {
+  test("导出落到浏览器下载：拿到 zip 后触发一次 anchor 点击", async () => {
     const created: string[] = [];
     const downloaded: string[] = [];
     const target = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
@@ -297,7 +293,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("按筛选结果批量导出：命中集逐页收全，再逐条落成下载", async () => {
+  test("按筛选结果批量导出：命中集逐页收全，再逐条落成下载", async () => {
     const created: string[] = [];
     const downloaded: string[] = [];
     const target = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
@@ -368,7 +364,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("批量导入：多个 zip 一次请求，逐条结果交回并刷新", async () => {
+  test("批量导入：多个 zip 一次请求，逐条结果交回并刷新", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
       async () => ({
@@ -400,7 +396,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("事件定位：会话与条件一次带到 sessionAdmin/locate，窗口与命中原样交回", async () => {
+  test("事件定位：会话与条件一次带到 sessionAdmin/locate，窗口与命中原样交回", async () => {
     const { face, calls, dispose } = await controllerWith(async () => ({
       ok: true,
       value: {
@@ -434,7 +430,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("复制到工作区：列表项来自 workspace 域的快照，复制打 sessionAdmin/copyToWorkspace 并刷新", async () => {
+  test("复制到工作区：列表项来自 workspace 域的快照，复制打 sessionAdmin/copyToWorkspace 并刷新", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
       async () => ({ ok: true, value: { sessionId: "copy-child", workspaceId: "w-target" } }),
@@ -461,7 +457,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("整理数据回报四段结果并刷新列表", async () => {
+  test("整理数据回报四段结果并刷新列表", async () => {
     const sessions = { refresh: vi.fn(async () => undefined) };
     const { face, calls, dispose } = await controllerWith(
       async () => ({
@@ -486,7 +482,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("用量统计打 usage 并把范围带上", async () => {
+  test("用量统计打 usage 并把范围带上", async () => {
     const totals = {
       turns: 2,
       steps: 2,
@@ -513,7 +509,7 @@ describe("对话管理动作面", () => {
     }
   });
 
-  it("用量统计响应不可用时给出失败原因", async () => {
+  test("用量统计响应不可用时给出失败原因", async () => {
     const { face, dispose } = await controllerWith(async () => ({
       ok: true,
       value: { totals: {} },

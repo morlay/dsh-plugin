@@ -5,9 +5,16 @@
  * 为什么在 dev 这一侧：改写函数（`addZephyrPrefix` / `rewriteUrls`）是 vite URL 空间的事，
  * 归构建链；`WebServer` 只是它们的挂载点，两条合起来才验证得到"接线是不是接对了"。
  */
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { WebServer, WebServerDefault, WebStartup } from "@morlay/zephyr-app/testing";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Injectable } from "@morlay/zephyr";
+import {
+  bootTwoSided,
+  describe,
+  expect,
+  test,
+  WebServer,
+  WebServerDefault,
+  WebStartup,
+} from "@morlay/zephyr-app/testing";
 import { attachUrlRewriting } from "../internal/hmr-path.ts";
 
 /** 固定回环端口 0（随机）：并行跑的 spec 不互相抢。 */
@@ -16,14 +23,15 @@ class Startup0 extends WebStartup {
   readonly values = { host: "127.0.0.1", port: 0, trustedHosts: [] };
 }
 
-let app: App;
-let webServer: WebServer;
-let base: string;
-
-beforeAll(async () => {
-  app = await bootstrapApplication({ providers: [Startup0, WebServerDefault], timeoutMs: 6_000 });
-  webServer = app.get(WebServer);
-  base = `http://127.0.0.1:${String(webServer.port)}`;
+/**
+ * 起一份带 `/mod` 路由的 host（路由把 `attachUrlRewriting` 接到响应流上）。
+ *
+ * `bootTwoSided` 负责收尾：host 装配随用例关，spec 里既没有 `beforeAll` 也没有 `afterAll`。
+ * @returns 访问地址。
+ */
+async function baseOf(): Promise<string> {
+  const { host } = await bootTwoSided({ createHost: () => [Startup0, WebServerDefault] });
+  const webServer = host.get(WebServer);
   webServer.register({
     kind: "exact",
     path: "/mod",
@@ -35,15 +43,12 @@ beforeAll(async () => {
       s.end('export default "/@vite/client";');
     },
   });
-});
-
-afterAll(async () => {
-  await app.dispose();
-});
+  return `http://127.0.0.1:${String(webServer.port)}`;
+}
 
 describe("出站 URL 重写的接线", { timeout: 10_000 }, () => {
-  it("流式 write 的分片与 end 的分片都改写", async () => {
-    const response = await fetch(`${base}/mod`);
+  test("流式 write 的分片与 end 的分片都改写", async () => {
+    const response = await fetch(`${await baseOf()}/mod`);
     expect(await response.text()).toBe(
       'import a from "/_zephyr/@fs/tmp/a.ts";import b from "/_zephyr/@id/__x00__rows";export default "/_zephyr/@vite/client";',
     );

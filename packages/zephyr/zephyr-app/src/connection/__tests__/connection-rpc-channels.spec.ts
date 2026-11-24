@@ -1,7 +1,7 @@
 // `shareRpcChannels`：上游一条共享通道只容一个物理拦截器，多个贡献方要按注册顺序共存。
 //
 // 这条判据只有运行期才看得见：装错了就是第二个注册当场抛（装配期），或者自研端点仍然 404。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { shareRpcChannels } from "../connection.service.ts";
 import type { Logger } from "@morlay/zephyr";
 
@@ -61,7 +61,7 @@ function connectionOf(): {
 }
 
 describe("shareRpcChannels", () => {
-  it("同一条通道上的第二、第三个注册不再抛，按注册顺序分发", async () => {
+  test("同一条通道上的第二、第三个注册不再抛，按注册顺序分发", async () => {
     const { instance, physical } = connectionOf();
     shareRpcChannels(instance, SILENT);
     const rpc = instance.rpc as {
@@ -107,7 +107,7 @@ describe("shareRpcChannels", () => {
     expect(calls, "各走各的处理器").toEqual(["自研:settings/describe", "上游:session/list"]);
   });
 
-  it("认领项全撤之后物理拦截器才注销", async () => {
+  test("认领项全撤之后物理拦截器才注销", async () => {
     const { instance, physical, disposals } = connectionOf();
     shareRpcChannels(instance, SILENT);
     const rpc = instance.rpc as {
@@ -135,7 +135,7 @@ describe("shareRpcChannels", () => {
     expect(disposals()).toBe(1);
   });
 
-  it("matcher 与 handler 之间认领项被撤：回 `gateway/bad-request` 失败面，不落到 undefined", async () => {
+  test("matcher 与 handler 之间认领项被撤：回 `gateway/bad-request` 失败面，不落到 undefined", async () => {
     const { instance, physical } = connectionOf();
     shareRpcChannels(instance, SILENT);
     const rpc = instance.rpc as {

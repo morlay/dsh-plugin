@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,11 +20,6 @@ import {
   mountOnto,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
-
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
 
 function threeTurnLog(): SessionEvent[] {
   const events: SessionEvent[] = [];
@@ -107,7 +103,7 @@ async function waitFor<T>(read: () => T | undefined, timeoutMs = 2000): Promise<
 
 async function harness(root?: string): Promise<Harness> {
   const dir = root ?? (await mkdtemp(join(tmpdir(), "projection-cache-")));
-  if (root === undefined) dirs.push(dir);
+  if (root === undefined) onTestFinished(() => rm(dir, { recursive: true, force: true }));
   const ctx = createCtx();
   await ctx.plugin(SessionTurnOutline);
   const dbPath = join(dir, "sessions.sqlite");
@@ -139,7 +135,7 @@ function cachedTurns(harness: Harness, id: string): number[] | undefined {
 }
 
 describe("投影检查点增量写回", () => {
-  it("只 upsert 变化的行、删掉消失的行，未变化的行原样不动", async () => {
+  test("只 upsert 变化的行、删掉消失的行，未变化的行原样不动", async () => {
     const { ctx, dbPath, dispose } = await harness();
     try {
       const storage = (
@@ -209,7 +205,7 @@ describe("session-rdb projection cache 写回时机", () => {
     }
   };
 
-  it("投影没有变化时不写库；有变化才有写回（不按事件条数攒批）", async () => {
+  test("投影没有变化时不写库；有变化才有写回（不按事件条数攒批）", async () => {
     const { ctx, dbPath, dispose } = await harness();
     try {
       const id = SessionId("no-change");
@@ -237,7 +233,7 @@ describe("session-rdb projection cache 写回时机", () => {
 });
 
 describe("session-rdb projection cache replacement", () => {
-  it("header-only 读接受 ReadonlySet 形态的 keys（会话列表用它取标题）", async () => {
+  test("header-only 读接受 ReadonlySet 形态的 keys（会话列表用它取标题）", async () => {
     // 上游 `session/list` 传给缓存的是 `sessionProjections.summaryKeys()`——一个 `ReadonlySet`。这里之前只按
     // 数组写了 `keys.includes()`，Set 上直接抛 TypeError；list 把那一行整列投影吞掉，侧边栏标题全变"未命名"。
     const { ctx, cache, dispose } = await harness();
@@ -270,7 +266,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("checkpoints a newly created session without an explicit write", async () => {
+  test("checkpoints a newly created session without an explicit write", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -295,7 +291,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("advances the checkpoint on turn/end without an explicit write", async () => {
+  test("advances the checkpoint on turn/end without an explicit write", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -312,7 +308,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("keeps the host list blank flag correct for a newly created session", async () => {
+  test("keeps the host list blank flag correct for a newly created session", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const passthrough = { parse: (value: unknown) => value } as never;
@@ -362,7 +358,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("serves the title column when the checkpoint rows carry no title", async () => {
+  test("serves the title column when the checkpoint rows carry no title", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -394,9 +390,9 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("prunes stale snapshots whose watermark predates the stored log", async () => {
+  test("prunes stale snapshots whose watermark predates the stored log", async () => {
     const root = await mkdtemp(join(tmpdir(), "projection-cache-stale-"));
-    dirs.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const staleCount = (dbPath: string): number => {
       const db = new DatabaseSync(dbPath);
       try {
@@ -437,7 +433,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("serves checkpoints written by the live write path", async () => {
+  test("serves checkpoints written by the live write path", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const id = SessionId("live");
@@ -451,7 +447,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("live rewind drops the pre-truncation rows from the cache", async () => {
+  test("live rewind drops the pre-truncation rows from the cache", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const id = SessionId("live");
@@ -472,7 +468,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("cold rewind invalidates the cache instead of folding the log again", async () => {
+  test("cold rewind invalidates the cache instead of folding the log again", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const id = SessionId("cold");
@@ -502,7 +498,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("forkFrom leaves the parent checkpoint and gives the child its own identity", async () => {
+  test("forkFrom leaves the parent checkpoint and gives the child its own identity", async () => {
     const { ctx, cache, dbPath, dispose } = await harness();
     try {
       const parentId = SessionId("parent");
@@ -550,7 +546,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("fork after a rewind seeds only the surviving prefix", async () => {
+  test("fork after a rewind seeds only the surviving prefix", async () => {
     const { ctx, cache, dispose } = await harness();
     try {
       const parentId = SessionId("parent");
@@ -579,7 +575,7 @@ describe("session-rdb projection cache replacement", () => {
     }
   });
 
-  it("读镜像而不是回库（删掉介质里的行，快照不变）", async () => {
+  test("读镜像而不是回库（删掉介质里的行，快照不变）", async () => {
     const { ctx, cache, dbPath, dispose } = await harness();
     try {
       const id = SessionId("live");
@@ -649,7 +645,7 @@ async function readStored(
 
 // 撤回写回失败的兜底：不能把撤回前的旧快照留在读路径上（否则要重启实例才正确）。
 describe("撤回后缓存写回失败的兜底", () => {
-  it("写回抛错时按新水位截断缓存，而不是保留撤回前的快照", async () => {
+  test("写回抛错时按新水位截断缓存，而不是保留撤回前的快照", async () => {
     const h = await harness();
     try {
       h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });
@@ -687,7 +683,7 @@ describe("撤回后缓存写回失败的兜底", () => {
 
 // flush 失败不该阻断检查点：检查点基于内存 log，落库失败只影响持久化，不影响撤回后页面显示的数据。
 describe("撤回后 flush 失败的兜底", () => {
-  it("flush 抛错时仍按内存 log 写回检查点", async () => {
+  test("flush 抛错时仍按内存 log 写回检查点", async () => {
     const h = await harness();
     try {
       h.ctx.sessions.create(SessionId("s1"), { meta: meta("s1"), seed: threeTurnLog() });

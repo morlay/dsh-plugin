@@ -12,24 +12,17 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Connection, WebServer } from "@morlay/zephyr-app";
-import { cleanupDataDirs, tempDataDir, type FullApp } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { DeliverablesHostDefault, WorkspaceChangesDefault } from "../index.ts";
 import { mountDeliverablesHost } from "./support/deliverable-host.ts";
 
-const opened: FullApp[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0).reverse()) await app.dispose();
-  await cleanupDataDirs();
-}, 120_000);
-
 // 整装要几秒；全仓并发时 `testTimeout: 3000` 会误判成超时（单跑必绿）。
 describe("交付物域", { timeout: 180_000 }, () => {
-  it("两条行都 mount 过，`/api` 上四条路由被分派", async () => {
-    const dataDir = await tempDataDir("deliverables-routes-");
+  test("两条行都 mount 过，`/api` 上四条路由被分派", async ({ appEnv }) => {
+    const dataDir = appEnv.values.dataDir;
     const host = await mountDeliverablesHost(join(dataDir, "data"));
-    opened.push(host);
+    onTestFinished(() => host.dispose());
     const app = host.app;
 
     // `fetch.register` 是那四条路由唯一的注册入口：它不在，`ui-deliverables` 的 `apply` 就炸。
@@ -74,7 +67,7 @@ describe("交付物域", { timeout: 180_000 }, () => {
     ]);
   });
 
-  it("浏览器半：一份实现、一处装配", async () => {
+  test("浏览器半：一份实现、一处装配", async () => {
     // 交付物**属会话域的一部分**（不是独立域）：实现包装上游 `ui-deliverables` 的 client 半，
     // 走 `fromCordis` 那条适配路径。
     const slots = await readFile(join(import.meta.dirname, "../ui/deliverable.slot.ts"), "utf8");

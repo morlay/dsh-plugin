@@ -4,11 +4,11 @@
  *
  * 这条用例守的是「没有手写 slot 字符串」：`slotViewOf(View)` 给出的名字必须来自它 extends 的抽象类。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { SlotProvider, SlotView, slotViewOf } from "../slot-view.tsx";
 
 describe("@SlotProvider / @SlotView", () => {
-  it("位置名来自 extends 的抽象类，视图自身不写字符串", () => {
+  test("位置名来自 extends 的抽象类，视图自身不写字符串", () => {
     @SlotProvider({ name: "sidebar.left", multi: true })
     abstract class SidebarSlot {}
 
@@ -25,7 +25,7 @@ describe("@SlotProvider / @SlotView", () => {
     expect(slotViewOf(SessionList)?.component).toBeTypeOf("function");
   });
 
-  it("视图没有 extends @SlotProvider 时明确报错", () => {
+  test("视图没有 extends @SlotProvider 时明确报错", () => {
     expect(() => {
       @SlotView()
       class Orphan {
@@ -39,7 +39,7 @@ describe("@SlotProvider / @SlotView", () => {
 });
 
 describe("@SlotView 的依赖", () => {
-  it("依赖走视图类属性上的 inject()（与其它 Provider 同一写法）", () => {
+  test("依赖走视图类属性上的 inject()（与其它 Provider 同一写法）", () => {
     @SlotProvider({ name: "sidebar.right" })
     abstract class RightSlot {}
 

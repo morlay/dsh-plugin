@@ -2,7 +2,7 @@
 //
 // 判据只有两类：取得到就替换（真值只进运行期 config），取不到就把这个头摘掉
 // （绝不把引用字符串发成请求头）；其余字段与输入对象一概不动。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { resolveHeaderReferences } from "../llm-pi-ai-headers.ts";
 
 /** 只回答一个变量的启动环境快照替身。 */
@@ -26,7 +26,7 @@ function configOf(headers: unknown): unknown {
 }
 
 describe("provider 头里的环境引用", () => {
-  it("取得到就替换；输入对象不被修改", () => {
+  test("取得到就替换；输入对象不被修改", () => {
     const config = configOf({ Authorization: "Bearer ${OLLAMA_API_KEY}" });
     const resolved = resolveHeaderReferences(config, lookupOf({ OLLAMA_API_KEY: "sk-test" }));
 
@@ -46,7 +46,7 @@ describe("provider 头里的环境引用", () => {
     ).toBe("Bearer ${OLLAMA_API_KEY}");
   });
 
-  it("取不到（或空值）就把这个头摘掉，不发明细量", () => {
+  test("取不到（或空值）就把这个头摘掉，不发明细量", () => {
     for (const lookup of [lookupOf({}), lookupOf({ OLLAMA_API_KEY: "" }), undefined]) {
       const resolved = resolveHeaderReferences(
         configOf({ Authorization: "Bearer ${OLLAMA_API_KEY}" }),
@@ -56,7 +56,7 @@ describe("provider 头里的环境引用", () => {
     }
   });
 
-  it("没有引用的头原样保留；非 headers 字段里的 ${…} 不动", () => {
+  test("没有引用的头原样保留；非 headers 字段里的 ${…} 不动", () => {
     const config = {
       providers: {
         ollama: {
@@ -68,7 +68,7 @@ describe("provider 头里的环境引用", () => {
     expect(resolveHeaderReferences(config, lookupOf({}))).toEqual(config);
   });
 
-  it("形状不认识时原样返回", () => {
+  test("形状不认识时原样返回", () => {
     expect(resolveHeaderReferences(undefined, undefined)).toBeUndefined();
     expect(resolveHeaderReferences({ providers: [] }, undefined)).toEqual({ providers: [] });
   });

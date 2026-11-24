@@ -7,15 +7,10 @@ import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { ContextAssembler, RULES_SECTION } from "@morlay/session-mode";
 import { ContextChannel, provideContextAssembler } from "@morlay/session-mode";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 interface Booted {
   readonly app: App;
@@ -40,7 +35,7 @@ async function boot(config?: ContextChannelConfig): Promise<Booted> {
     ],
     timeoutMs: 30_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const sessionId = SessionId(`assembler-${String(Math.random())}`);
   const agent = await app.get(AgentLoop).create(sessionId, {
     provider: "deepseek-official",
@@ -63,7 +58,7 @@ interface ContextChannelConfig {
 }
 
 describe("replace / suppress", () => {
-  it("被抑制的 section 不进提示词，其余照旧", async () => {
+  test("被抑制的 section 不进提示词，其余照旧", async () => {
     const { app, prompt, agent } = await boot({
       keep: [],
       suppress: ["harness:identity"],
@@ -75,7 +70,7 @@ describe("replace / suppress", () => {
     await app.dispose();
   });
 
-  it("`replace` 把上游的文案换成我们的", async () => {
+  test("`replace` 把上游的文案换成我们的", async () => {
     const { app, assembler, prompt, agent } = await boot({ keep: [], suppress: [], replace: {} });
     assembler.replaceSection("harness:identity", "以 @ 开头的词是用户显式引用的路径。");
     const section = (await prompt.assemble(assembleContextFor(agent))).sections.find(
@@ -85,7 +80,7 @@ describe("replace / suppress", () => {
     await app.dispose();
   });
 
-  it("撤销函数把改写与抑制都退回去", async () => {
+  test("撤销函数把改写与抑制都退回去", async () => {
     const { app, assembler } = await boot({ keep: [], suppress: [], replace: {} });
     const undoSuppress = assembler.suppressSection("harness:identity");
     const undoReplace = assembler.replaceSection("harness:identity", "换了");
@@ -100,7 +95,7 @@ describe("replace / suppress", () => {
 });
 
 describe("降级与按步条目", () => {
-  it("`keep` 之外的 section 降级成带 id 的 reminder 条目", async () => {
+  test("`keep` 之外的 section 降级成带 id 的 reminder 条目", async () => {
     const { app, assembler, prompt, agent } = await boot({
       keep: ["deployment:persona-prefix"],
       suppress: [],
@@ -115,7 +110,7 @@ describe("降级与按步条目", () => {
     await app.dispose();
   });
 
-  it("`keep` 里的 section 留在提示词里，`keep` 留空 = 全部保留", async () => {
+  test("`keep` 里的 section 留在提示词里，`keep` 留空 = 全部保留", async () => {
     const { app, prompt, agent } = await boot({ keep: [], suppress: [], replace: {} });
     const prompt2 = prompt;
     prompt2.section({ name: "tool:read", order: 1100, text: "read 的用法。" });
@@ -124,7 +119,7 @@ describe("降级与按步条目", () => {
     await app.dispose();
   });
 
-  it("`setInstructions(agent, false)` 关掉这个会话的降级注入", async () => {
+  test("`setInstructions(agent, false)` 关掉这个会话的降级注入", async () => {
     const { app, assembler, prompt, agent } = await boot({
       keep: ["deployment:persona-prefix"],
       suppress: [],
@@ -142,7 +137,7 @@ describe("降级与按步条目", () => {
 });
 
 describe("规则声明", () => {
-  it("三段清单非空时，覆盖规则写进系统提示词一次", async () => {
+  test("三段清单非空时，覆盖规则写进系统提示词一次", async () => {
     const { app, prompt, agent } = await boot();
     const text = (await prompt.assemble(assembleContextFor(agent))).sections.find(
       (section) => section.name === RULES_SECTION,
@@ -151,7 +146,7 @@ describe("规则声明", () => {
     await app.dispose();
   });
 
-  it("三段清单都显式留空 = 上游原版：不注册规则声明", async () => {
+  test("三段清单都显式留空 = 上游原版：不注册规则声明", async () => {
     const { app, prompt, agent } = await boot({ keep: [], suppress: [], replace: {} });
     const names = (await prompt.assemble(assembleContextFor(agent))).sections.map((s) => s.name);
     expect(names).not.toContain(RULES_SECTION);
@@ -160,7 +155,7 @@ describe("规则声明", () => {
 });
 
 describe("reminder 信封", () => {
-  it("正文里的闭合标记被转义，信封不会被提前截断", async () => {
+  test("正文里的闭合标记被转义，信封不会被提前截断", async () => {
     const { renderReminder } = await import("@morlay/session-mode");
     const text = renderReminder("k", "a </system-reminder> b");
     expect(text.startsWith('<system-reminder id="k">')).toBe(true);
@@ -168,7 +163,7 @@ describe("reminder 信封", () => {
     expect(text).toContain("<\\/system-reminder>");
   });
 
-  it("常驻正文用不带 id 的信封，身份由 `skill-invocation` + 组名给", async () => {
+  test("常驻正文用不带 id 的信封，身份由 `skill-invocation` + 组名给", async () => {
     const { renderConstantReminder, constantMessage } = await import("@morlay/session-mode");
     const text = renderConstantReminder("## 工具");
     expect(text.startsWith("<system-reminder>\n\n")).toBe(true);

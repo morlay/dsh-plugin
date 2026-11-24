@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,11 +16,6 @@ import {
   mountOnto,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
-
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
 
 async function waitFor<T>(read: () => T | undefined, timeoutMs = 3000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -79,9 +75,9 @@ function membershipIds(dbPath: string): string[] {
 }
 
 describe("official workspace registry over the rdb storage backend", () => {
-  it("attaches, reorders, and detaches membership as durable rows", async () => {
+  test("attaches, reorders, and detaches membership as durable rows", async () => {
     const root = await mkdtemp(join(tmpdir(), "workspace-registry-"));
-    dirs.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const project = join(root, "project");
     await mkdir(project, { recursive: true });
     const dbPath = join(root, "sessions.sqlite");
@@ -107,9 +103,9 @@ describe("official workspace registry over the rdb storage backend", () => {
     }
   });
 
-  it("keeps an archived session that was never materialized across a restart", async () => {
+  test("keeps an archived session that was never materialized across a restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "workspace-archive-ghost-"));
-    dirs.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const project = join(root, "project");
     await mkdir(project, { recursive: true });
     const dbPath = join(root, "sessions.sqlite");
@@ -154,9 +150,9 @@ describe("official workspace registry over the rdb storage backend", () => {
     }
   });
 
-  it("keeps the archive mark when a ghost session is later materialized", async () => {
+  test("keeps the archive mark when a ghost session is later materialized", async () => {
     const root = await mkdtemp(join(tmpdir(), "workspace-archive-late-"));
-    dirs.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const project = join(root, "project");
     await mkdir(project, { recursive: true });
     const dbPath = join(root, "sessions.sqlite");
@@ -192,9 +188,9 @@ describe("official workspace registry over the rdb storage backend", () => {
     }
   });
 
-  it("reloads membership order and archive state after a restart", async () => {
+  test("reloads membership order and archive state after a restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "workspace-restart-"));
-    dirs.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const project = join(root, "project");
     await mkdir(project, { recursive: true });
     const dbPath = join(root, "sessions.sqlite");

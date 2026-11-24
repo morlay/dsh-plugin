@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { SessionId } from "@morlay/dsh-session/contract";
 import { WriteGuard } from "@morlay/session-rdb";
 
@@ -14,12 +14,12 @@ function expectRejected(fn: () => void, pattern: RegExp): void {
 }
 
 describe("WriteGuard: concurrent-writer detection", () => {
-  it("a never-read session with no stored row passes (fresh log)", () => {
+  test("a never-read session with no stored row passes (fresh log)", () => {
     const guard = new WriteGuard();
     expect(() => guard.assertNoConcurrentWriter(SessionId("s1"), -1)).not.toThrow();
   });
 
-  it("a never-read session WITH a stored row is rejected (must load first)", () => {
+  test("a never-read session WITH a stored row is rejected (must load first)", () => {
     const guard = new WriteGuard();
     expectRejected(
       () => guard.assertNoConcurrentWriter(SessionId("s1"), 0),
@@ -27,7 +27,7 @@ describe("WriteGuard: concurrent-writer detection", () => {
     );
   });
 
-  it("a confirmed absence rejects a row that appeared behind this instance's back", () => {
+  test("a confirmed absence rejects a row that appeared behind this instance's back", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), -1);
     expectRejected(
@@ -36,13 +36,13 @@ describe("WriteGuard: concurrent-writer detection", () => {
     );
   });
 
-  it("a confirmed head matches the stored head (own writes / observed load)", () => {
+  test("a confirmed head matches the stored head (own writes / observed load)", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), 5);
     expect(() => guard.assertNoConcurrentWriter(SessionId("s1"), 5)).not.toThrow();
   });
 
-  it("a stored head advanced past the confirmed head is rejected (second writer committed)", () => {
+  test("a stored head advanced past the confirmed head is rejected (second writer committed)", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), 2);
     expectRejected(
@@ -51,7 +51,7 @@ describe("WriteGuard: concurrent-writer detection", () => {
     );
   });
 
-  it("a stored head behind the confirmed head is rejected too (rewind by another writer)", () => {
+  test("a stored head behind the confirmed head is rejected too (rewind by another writer)", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), 5);
     expectRejected(
@@ -60,14 +60,14 @@ describe("WriteGuard: concurrent-writer detection", () => {
     );
   });
 
-  it("confirm advances the accepted head (append after commit)", () => {
+  test("confirm advances the accepted head (append after commit)", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), 0);
     guard.confirmHead(SessionId("s1"), 3);
     expect(() => guard.assertNoConcurrentWriter(SessionId("s1"), 3)).not.toThrow();
   });
 
-  it("sessions are independent: one session's writer does not affect another's", () => {
+  test("sessions are independent: one session's writer does not affect another's", () => {
     const guard = new WriteGuard();
     guard.confirmHead(SessionId("s1"), 1);
     guard.confirmHead(SessionId("s2"), -1);

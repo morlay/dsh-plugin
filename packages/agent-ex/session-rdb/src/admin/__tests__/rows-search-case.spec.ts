@@ -7,7 +7,8 @@ import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, titleEvent, turnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/session-rdb";
 import { E, render } from "@morlay/zephyr-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { sessionRowsCondition, type SessionRowsColumns } from "../../data/store/rows-query.ts";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 
@@ -30,7 +31,7 @@ function rendered(
 }
 
 describe("L1 搜索词的大小写口径", () => {
-  it("前缀段按 lower(f_title) 范围比较，与全文段同一口径", () => {
+  test("前缀段按 lower(f_title) 范围比较，与全文段同一口径", () => {
     const prefix = rendered("report", "prefix");
 
     // 比的是折过大小写的列：库里的 Report A / report A 落在同一个区间里。
@@ -44,7 +45,7 @@ describe("L1 搜索词的大小写口径", () => {
     expect(contains.params).toEqual(["%report%"]);
   });
 
-  it("大写搜索词归一成小写：REPORT 与 report 渲染出同一份条件", () => {
+  test("大写搜索词归一成小写：REPORT 与 report 渲染出同一份条件", () => {
     const lower = rendered("report", "prefix");
     const upper = rendered("REPORT", "prefix");
 
@@ -52,14 +53,14 @@ describe("L1 搜索词的大小写口径", () => {
     expect(upper.params).toEqual(lower.params);
   });
 
-  it("PG 前缀段同样是折过大小写的 LIKE（不是原列的 LIKE）", () => {
+  test("PG 前缀段同样是折过大小写的 LIKE（不是原列的 LIKE）", () => {
     const prefix = rendered("report", "prefix", "postgres");
 
     expect(prefix.text).toContain('lower("f_title") LIKE');
     expect(prefix.params).toEqual(["report%"]);
   });
 
-  it("中文标题不受影响：折大小写对中文是恒等", () => {
+  test("中文标题不受影响：折大小写对中文是恒等", () => {
     const prefix = rendered("深水", "prefix");
 
     expect(prefix.params).toEqual(["深水", "深水\u{10ffff}"]);
@@ -67,15 +68,9 @@ describe("L1 搜索词的大小写口径", () => {
   });
 });
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -92,7 +87,7 @@ function idsOf(page: { readonly items: readonly { readonly sessionId: string }[]
 }
 
 describe("L2 大小写不敏感（真装配 + 真库）", () => {
-  it("搜 report 同时命中 report A 与大写的 Report B（前缀段有命中也不漏）", async () => {
+  test("搜 report 同时命中 report A 与大写的 Report B（前缀段有命中也不漏）", async () => {
     const harness = await start();
     await seedTitled(harness, "lower-report", "report A");
     await seedTitled(harness, "upper-report", "Report B");
@@ -105,7 +100,7 @@ describe("L2 大小写不敏感（真装配 + 真库）", () => {
     expect(page.searchStage).toBe("prefix");
   });
 
-  it("搜 REPORT 与搜 report 给出同一批会话", async () => {
+  test("搜 REPORT 与搜 report 给出同一批会话", async () => {
     const harness = await start();
     await seedTitled(harness, "lower-report", "report A");
     await seedTitled(harness, "upper-report", "Report B");
@@ -117,7 +112,7 @@ describe("L2 大小写不敏感（真装配 + 真库）", () => {
     expect(page.searchStage).toBe("prefix");
   });
 
-  it("中文标题不受影响：前缀仍走前缀段，中段词仍退全文段", async () => {
+  test("中文标题不受影响：前缀仍走前缀段，中段词仍退全文段", async () => {
     const harness = await start();
     await seedTitled(harness, "cjk-deep", "深水区报告");
     const store = asRdbStore(harness.app.get(SessionPersistence));

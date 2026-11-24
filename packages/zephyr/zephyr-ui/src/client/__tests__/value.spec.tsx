@@ -6,7 +6,8 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import z from "@deepseek-ai/schemastery";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import type { SchemaFormActions } from "../schema-form/controller.ts";
 import { parseFor } from "../schema-form/fields.tsx";
 import { isMultiline } from "../schema-form/value.tsx";
@@ -23,7 +24,6 @@ import {
   valueText,
 } from "../schema-form/value.tsx";
 
-afterEach(cleanup);
 // 值的显示态挂着「被截断才给全文」的那层包装：它要 ResizeObserver（happy-dom 没有这个 API）。
 stubResizeObserver();
 
@@ -78,7 +78,7 @@ function ownerOf(
 }
 
 describe("行内值", () => {
-  it("字符串带引号显示，编辑态文本是不带引号的原文", () => {
+  test("字符串带引号显示，编辑态文本是不带引号的原文", () => {
     const owner = ownerOf(z.string(), ["field"], { value: "hello" });
     render(<InlineValue owner={owner} />);
 
@@ -87,7 +87,7 @@ describe("行内值", () => {
     expect(tokenText("hello")).toBe('"hello"');
   });
 
-  it("数字与布尔各有语法色分组，空值显示 null", () => {
+  test("数字与布尔各有语法色分组，空值显示 null", () => {
     expect(tokenTone(1)).toBe("number");
     expect(tokenTone(true)).toBe("boolean");
     expect(tokenTone("s")).toBe("string");
@@ -95,7 +95,7 @@ describe("行内值", () => {
     expect(tokenText(undefined)).toBe("null");
   });
 
-  it("secret 不回显值：只显示已配置与否", () => {
+  test("secret 不回显值：只显示已配置与否", () => {
     const configured = ownerOf(z.string().role("secret"), ["field"], { secretConfigured: true });
     render(<InlineValue owner={configured} />);
     expect(screen.getByText("••••••")).toBeTruthy();
@@ -106,7 +106,7 @@ describe("行内值", () => {
     expect(screen.queryByText("••••••")).toBeNull();
   });
 
-  it("secret 位不弹气泡：显示的是「已配置」而不是被截断的文本，说明走原生 title", () => {
+  test("secret 位不弹气泡：显示的是「已配置」而不是被截断的文本，说明走原生 title", () => {
     // 说明再长也一样：这一格不会截断，`owner.hint` 也不是「被截断文本的全文」。
     const hint = "在 providers 里配的密钥，页面不回显；改了才会写下去".repeat(3);
     const owner = ownerOf(z.string().role("secret"), ["field"], {
@@ -121,7 +121,7 @@ describe("行内值", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("带换行的字符串原样进编辑、原样出草稿（多行输入里编辑）", () => {
+  test("带换行的字符串原样进编辑、原样出草稿（多行输入里编辑）", () => {
     expect(valueText("a\nb")).toBe("a\nb");
     expect(isMultiline("a\nb")).toBe(true);
     expect(isMultiline("a")).toBe(false);
@@ -131,7 +131,7 @@ describe("行内值", () => {
     });
   });
 
-  it("字段槽复用的默认值就是行内值", () => {
+  test("字段槽复用的默认值就是行内值", () => {
     const owner = ownerOf(z.number(), ["field"], { value: 3 });
     const { container } = render(<SchemaFieldDefault owner={owner} />);
 
@@ -140,7 +140,7 @@ describe("行内值", () => {
 });
 
 describe("文本解析规则", () => {
-  it("number：空与非法都挡保存，step=1 只收整数", () => {
+  test("number：空与非法都挡保存，step=1 只收整数", () => {
     const parse = parseFor(projectNode(new z(z.number().step(1).toJSON())), t);
 
     expect(parse("2")).toEqual({ kind: "value", value: 2 });
@@ -149,7 +149,7 @@ describe("文本解析规则", () => {
     expect(parse("")).toEqual({ kind: "invalid", message: zh.invalidNumber });
   });
 
-  it("boolean：只收 true / false", () => {
+  test("boolean：只收 true / false", () => {
     const parse = parseFor(projectNode(new z(z.boolean().toJSON())), t);
 
     expect(parse("true")).toEqual({ kind: "value", value: true });
@@ -157,14 +157,14 @@ describe("文本解析规则", () => {
     expect(parse("yes")).toEqual({ kind: "invalid", message: zh.invalidBoolean });
   });
 
-  it("any：合法 JSON 给值，非法 JSON 挡保存", () => {
+  test("any：合法 JSON 给值，非法 JSON 挡保存", () => {
     const parse = parseFor(projectNode(new z(z.any().toJSON())), t);
 
     expect(parse('{"a":1}')).toEqual({ kind: "value", value: { a: 1 } });
     expect(parse("{")).toEqual({ kind: "invalid", message: zh.invalidJson });
   });
 
-  it("string：原文即值", () => {
+  test("string：原文即值", () => {
     const parse = parseFor(projectNode(new z(z.string().toJSON())), t);
 
     expect(parse(" hi ")).toEqual({ kind: "value", value: " hi " });
@@ -174,7 +174,7 @@ describe("文本解析规则", () => {
 void ({} as FieldNode);
 
 describe("声明了界限的字段", () => {
-  it("min / max / pattern / 字面量集合都当场说话", () => {
+  test("min / max / pattern / 字面量集合都当场说话", () => {
     const ranged = parseFor(projectNode(new z(z.number().min(1).max(9).toJSON())), t);
     expect(ranged("5")).toEqual({ kind: "value", value: 5 });
     expect(ranged("0")).toEqual({

@@ -16,7 +16,6 @@ import type {
 import {
   inject,
   Injectable,
-  kFace,
   Logger,
   type Context,
   type OnDispose,
@@ -104,8 +103,9 @@ export class ConnectionDefault
    * 所以作为 deps 交进去。
    */
   async onInit(ctx: Context): Promise<void> {
-    await this.mount(ctx, undefined, { webServer: this.webServer });
-    const connection = this[kFace] as HostConnectionService;
+    const connection = (await this.mount(ctx, undefined, {
+      webServer: this.webServer,
+    })) as HostConnectionService;
     // 两条补丁**在任何 `rpc.intercept` 之前**装上：一条通道只容一个物理拦截器（上游对第二个直接抛）。
     shareRpcChannels(connection, this.logger);
     admitLocalPeer(connection, this.logger);

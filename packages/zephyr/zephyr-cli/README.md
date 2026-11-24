@@ -25,7 +25,8 @@ import { provideDesktopBundle } from "@morlay/zephyr-desktop-bundle";
 import type { ZephyrConfig } from "@morlay/zephyr-cli";
 
 export default {
-  // 服务端入口：这个文件默认导出一份 provider 清单（应用装全，CLI 只 bootstrap）
+  // 服务端入口：这个文件导出 `providers`（具名）——一份清单或 (mode) => 清单 的函数
+  // （应用装全，CLI 只 bootstrap；读出点见 server-entry.ts 的 `module.providers ?? module.default`）
   server: { entry: "./src/server.ts" },
   // 页面入口就是 index.html（vite 的 root 是它的目录、input 是它自己）；
   // `vite` 是**内联的配置片段**（框架导出的解析规则：alias / define / 装饰器），

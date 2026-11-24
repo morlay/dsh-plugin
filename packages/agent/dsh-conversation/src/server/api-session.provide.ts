@@ -22,7 +22,7 @@ import { FileUploadStore } from "@morlay/dsh-upload";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { WorkingDirectory } from "@morlay/dsh-agent";
 import { inject, Injectable, provide, type Context } from "@morlay/zephyr";
-import { fromCordis, kFace } from "@morlay/zephyr/compat";
+import { fromCordis } from "@morlay/zephyr/compat";
 import {
   Connection,
   RemoteAccess,
@@ -34,7 +34,6 @@ import {
   FileReferenceService,
   SessionControllerService,
 } from "../contract/api-session.contract.ts";
-
 /**
  * 上游 `SessionController`（`session` 组的全部端点）。
  *
@@ -48,65 +47,50 @@ export class ApiSessionControllerHost extends fromCordis(
 ) {
   /** 默认模型：新建 agent 时读它。 */
   private readonly depDefaultModel = inject(AgentDefaultModel);
-
   /** agent 注册表：会话与 agent 一起建。 */
   private readonly depAgents = inject(AgentDirectory);
-
   /** 附件：prompt 里的图片块经它准入与读取。 */
   private readonly depAttachments = inject(AttachmentStore);
-
   /** 上传：prompt 里引用的上传件经它解析。 */
   private readonly depUploads = inject(FileUploadStore);
-
   /** 文件系统：工作区路径解析与文件读取。 */
   private readonly depFs = inject(FileSystem);
-
   /** 模型运行时：模型目录与调用配置。 */
   private readonly depLlm = inject(Llm);
-
   /**
    * 准入：**可选**。上游 `@Remote` 方法在分派前按资源判定；只装数据面的装配（纯端点测试）
    * 没有它也能起来——准入是"加一道门"，不是这条行能否工作的前提。
    */
   private readonly depRemoteAccess = inject.optional(RemoteAccess);
-
   /** 会话存储（上游 `SessionStore` 的适配实例）。 */
   private readonly depSessions = inject(SessionStore);
-
   /** 投影注册表：会话状态（权限档位、模型选择…）在宿主侧算。 */
   private readonly depProjections = inject(SessionProjectionStore);
-
   /** 会话查询：列表、观测与轨迹。 */
   private readonly depQuery = inject(SessionQuery);
-
   /** 类型化 Remote 注册表：本行把自己登记进去。 */
   private readonly depTypert = inject(Typert);
-
   /** 类型化 Remote 分发者：`typertGateway` 服务（我们自己的 discovery 实现）。 */
   private readonly depGateway = inject(TypertGateway);
-
   /** 工作区注册表：会话按 cwd 归属工作区。 */
   private readonly depWorkspaces = inject(WorkspaceRegistry);
-
   /**
    * 连接面：上游没写进 `static inject`，但代码里读 `ctx.connection.fetch` / `.rpc`（上传下载的路由）。
    * 不给它，装上之后第一次用到就 `Cannot read properties of undefined (reading 'fetch')`。
    */
   private readonly depConnection = inject(Connection);
-
   /**
    * 工作区归属：**可选**。上游 `create` 只写 `header.cwd`，不 attach 工作区——那是 workspace 域的职责，
    * 而它自己没有可用的挂点（`api-session/added` 在上游只有类型声明、没有 emit）。
    * 所以在这里包一层 `create`：建完会话按 cwd 归属（这一层是适配面，不改上游源码）。
    */
   private readonly depWorkspace = inject.optional(SessionWorkspace);
-
   override async onInit(ctx: Context): Promise<void> {
     // 服务端也要登记**调用描述**：`MuxServer` 靠 `typert.remotes.get(endpoint)?.mode` 判断
     // 一个端点是不是流式（流必须走 gateway 的 stream 载具）。只在客户端 `$mount` 的话，
     // 服务端看到的 `mode` 永远是 `undefined`，流式端点会被当 unary 打开并被上游拒。
     this.depTypert.remotes.register(SESSION_CONTROLLER_REMOTE);
-    await this.mount(ctx, undefined, {
+    const mounted = await this.mount(ctx, undefined, {
       agentDefaultModel: this.depDefaultModel,
       agents: this.depAgents,
       attachments: this.depAttachments,
@@ -122,9 +106,8 @@ export class ApiSessionControllerHost extends fromCordis(
       workspaceRegistry: this.depWorkspaces,
       connection: this.depConnection,
     });
-    this.attachWorkspaceOnCreate();
+    this.attachWorkspaceOnCreate(mounted);
   }
-
   /**
    * 给上游的 `create` 包一层：建完会话后按 `header.cwd` 把它挂到对应工作区。
    *
@@ -140,9 +123,9 @@ export class ApiSessionControllerHost extends fromCordis(
    *
    * 失败只留痕、不抛：归属失败不该让"建会话"这个动作失败。
    */
-  private attachWorkspaceOnCreate(): void {
+  private attachWorkspaceOnCreate(mounted: unknown): void {
     const workspace = this.depWorkspace;
-    const upstream = this[kFace] as { create?: unknown } | undefined;
+    const upstream = mounted as { create?: unknown } | undefined;
     if (workspace === undefined || upstream === undefined || typeof upstream.create !== "function")
       return;
     const original = (upstream.create as (request: unknown) => Promise<unknown>).bind(upstream);
@@ -171,7 +154,6 @@ export class ApiSessionControllerHost extends fromCordis(
     };
   }
 }
-
 /**
  * 上游 `LocalFileReferenceService`（`fileReferences` 服务）：`@` 引用的候选来源。
  *
@@ -184,11 +166,8 @@ export class FileReferenceServiceRow extends fromCordis(
   FileReferenceServicePlugin,
 ) {
   private readonly depFs = inject(FileSystem);
-
   private readonly depAgents = inject(AgentDirectory);
-
   private readonly depWorkingDirectory = inject(WorkingDirectory);
-
   override async onInit(ctx: Context): Promise<void> {
     await this.mount(ctx, undefined, {
       fs: this.depFs,
@@ -197,7 +176,6 @@ export class FileReferenceServiceRow extends fromCordis(
     });
   }
 }
-
 /**
  * 上游会话端点面的装配清单。
  *

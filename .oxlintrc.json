@@ -1,6 +1,16 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "node"],
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "node",
+    "vitest",
+    "promise",
+    "react",
+    "react-perf",
+    "import"
+  ],
   "ignorePatterns": ["target/**", "vendor/**", "lib/**", "**/dist/**", "**/src/vendor/**"],
   "options": {
     "typeAware": true,
@@ -8,9 +18,41 @@
   },
   "rules": {
     "node/no-sync": "error",
-    "typescript/no-explicit-any": "error"
+    "typescript/no-explicit-any": "error",
+    "import/no-cycle": "error",
+    "import/no-default-export": "error",
+    // 测试生命周期归 fixture，不归 vitest 钩子（见 .agents/standards/how-to-verify.md）。
+    "vitest/no-hooks": "error",
+    // `vi.fn()` 的类型多数能从上下文推导（赋值给带签名的参数、`mockImplementation` 等），
+    // 强制写类型参数只是把同一件事写两遍；确实推导不出的地方由 `tsc` 报错，不需要 lint 兜。
+    "vitest/require-mock-type-parameters": "off"
   },
   "overrides": [
+    {
+      // 配置文件是**工具的约定**，不是我们的模块：`defineConfig(...)` / `satisfies ZephyrConfig` 这类
+      // 加载器只认默认导出（vite / vitest / tsdown / zephyr CLI 都是按 `module.default` 取），
+      // 所以这些文件必须 `export default`，不是可以改掉的写法。
+      "files": ["vitest.config.ts", "**/*.config.ts"],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    },
+    {
+      // 测试支撑的**生命周期**（不是 spec 级钩子）：整个文件共用一份环境，不可能写成 per-test fixture。
+      // - dsh-home.ts：在 spec 模块作用域调一次，给整个文件挂 DSH_HOME；
+      "files": ["packages/agent-ex/session-mode/src/__tests__/support/dsh-home.ts"],
+      "rules": {
+        "vitest/no-hooks": "off"
+      }
+    },
+    {
+      // fixture 的第一个参数是**依赖对象**：用不到依赖时就是 `async ({}, use) => …`（vitest 的标准写法）。
+      // 这里的空对象解构不是笔误，是接口形状，所以不按 no-empty-pattern 报。
+      "files": ["**/src/testing/**", "**/testing/index.ts", "**/fixtures.ts", "**/__tests__/**"],
+      "rules": {
+        "no-empty-pattern": "off"
+      }
+    },
     {
       "files": ["**/src/ui/**", "**/src/client/**"],
       "excludeFiles": ["**/__tests__/**"],

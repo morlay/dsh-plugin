@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { resolveDataDir } from "../data-dir.ts";
 
 describe("数据目录三态", () => {
-  it("workspace 落在装配根下的 .dsh-store", () => {
+  test("workspace 落在装配根下的 .dsh-store", () => {
     expect(resolveDataDir({ spec: "workspace", profileDir: "/w", appName: "App" })).toBe(
       "/w/.dsh-store",
     );
   });
 
-  it("xdg 跟着平台走", () => {
+  test("xdg 跟着平台走", () => {
     expect(
       resolveDataDir({
         spec: "xdg",
@@ -30,7 +30,7 @@ describe("数据目录三态", () => {
     ).toBe(true);
   });
 
-  it("绝对路径原样，相对路径按装配根解析", () => {
+  test("绝对路径原样，相对路径按装配根解析", () => {
     expect(resolveDataDir({ spec: "/tmp/store", profileDir: "/w", appName: "App" })).toBe(
       "/tmp/store",
     );

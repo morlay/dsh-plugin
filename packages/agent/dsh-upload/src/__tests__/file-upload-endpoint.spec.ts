@@ -15,7 +15,8 @@ import { provideUpload } from "@morlay/dsh-upload/server";
 import { bootstrapApplication, Injectable, type App, configure } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { Connection, RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 const SESSION = "s1";
 
@@ -130,18 +131,10 @@ class FakeConnection extends Connection {
   readonly browserPeer = {} as Connection["browserPeer"];
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** 起一套真附件存储（临时 `dshHome`）+ 真上传行 + 本包的 wire 端点。 */
 async function boot(): Promise<{ app: App; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-upload-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -158,7 +151,7 @@ async function boot(): Promise<{ app: App; root: string }> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   // 真会话：`Agent.session` 要的是 `Session` 类实例，替身造不出全形。
   currentAgent = agentOf(app.get(SessionStore).create(SessionId(SESSION)));
   return { app, root };
@@ -188,7 +181,7 @@ function uploadValueOf(value: unknown): UploadValueWire | undefined {
 }
 
 describe("fileUploads/upload 的 wire 端点", () => {
-  it(
+  test(
     "base64 上传落成内容寻址 id：与直接落盘同一个 id，两次上传也同一个",
     { timeout: 20_000 },
     async () => {
@@ -220,7 +213,7 @@ describe("fileUploads/upload 的 wire 端点", () => {
     },
   );
 
-  it("会话没有 agent 时**抛**带会话身份的异常（裸值协议）", { timeout: 20_000 }, async () => {
+  test("会话没有 agent 时**抛**带会话身份的异常（裸值协议）", { timeout: 20_000 }, async () => {
     const { app } = await boot();
     const handlers = app.get(RemoteHandlers);
     // 裸值协议下失败是异常（与上游 `@Remote` 一致），错误信息里要能看出是哪个会话。

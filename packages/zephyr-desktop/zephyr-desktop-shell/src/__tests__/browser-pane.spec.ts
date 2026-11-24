@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   browserPaneRoutesOf,
   type BrowserPanePort,
@@ -60,12 +60,12 @@ function fakePort(): BrowserPanePort & {
 }
 
 describe("面板能浏览什么（browserUrlAllowed）", () => {
-  it("只有 http / https 放行", () => {
+  test("只有 http / https 放行", () => {
     expect(browserUrlAllowed("https://example.com/a?b=1")).toBe(true);
     expect(browserUrlAllowed("http://127.0.0.1:3082/")).toBe(true);
   });
 
-  it("执行/本地/内联一律拒（面板不是「在应用里跑任意内容」）", () => {
+  test("执行/本地/内联一律拒（面板不是「在应用里跑任意内容」）", () => {
     for (const url of [
       "javascript:alert(1)",
       "file:///etc/passwd",
@@ -82,7 +82,7 @@ describe("面板能浏览什么（browserUrlAllowed）", () => {
 });
 
 describe("面板的 IPC 路由（假适配器）", () => {
-  it("开 → 报矩形 → 导航：调用按 id 落到同一个 pane", async () => {
+  test("开 → 报矩形 → 导航：调用按 id 落到同一个 pane", async () => {
     const port = fakePort();
     const routes = browserPaneRoutesOf({ port, partition: "persist:zephyr-browser" });
     expect(await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT })).toEqual(
@@ -95,7 +95,7 @@ describe("面板的 IPC 路由（假适配器）", () => {
     expect(routes.state("browser")?.url).toBe("https://example.org/");
   });
 
-  it("非法地址：拒并给出原因，当前页不变", async () => {
+  test("非法地址：拒并给出原因，当前页不变", async () => {
     const port = fakePort();
     const routes = browserPaneRoutesOf({ port, partition: "persist:zephyr-browser" });
     await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT });
@@ -114,7 +114,7 @@ describe("面板的 IPC 路由（假适配器）", () => {
     expect(other.opened).toEqual([]);
   });
 
-  it("重复 open 不叠实例；关一个没开的什么都不做；两个 pane 不串", async () => {
+  test("重复 open 不叠实例；关一个没开的什么都不做；两个 pane 不串", async () => {
     const port = fakePort();
     const routes = browserPaneRoutesOf({ port, partition: "persist:zephyr-browser" });
     await routes.open({ id: "browser", url: "https://example.com/", bounds: RECT });
@@ -128,7 +128,7 @@ describe("面板的 IPC 路由（假适配器）", () => {
     expect(port.boundsOf("second")?.x).toBe(0);
   });
 
-  it("导航一个没开的 pane 就是拒（不偷偷建一个）", async () => {
+  test("导航一个没开的 pane 就是拒（不偷偷建一个）", async () => {
     const port = fakePort();
     const routes = browserPaneRoutesOf({ port, partition: "persist:zephyr-browser" });
     expect((await routes.navigate("ghost", "https://example.com/")).ok).toBe(false);

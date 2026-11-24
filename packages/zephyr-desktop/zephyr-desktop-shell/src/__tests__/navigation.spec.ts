@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { navigationPlanOf } from "../navigation.ts";
 
 const ORIGIN = "http://127.0.0.1:3080";
 
 describe("导航判据（页面来自壳自己的 http 源）", () => {
-  it("本源放行：页面、资源、相对路径", () => {
+  test("本源放行：页面、资源、相对路径", () => {
     for (const target of [
       "http://127.0.0.1:3080/",
       "http://127.0.0.1:3080/index.html",
@@ -16,7 +16,7 @@ describe("导航判据（页面来自壳自己的 http 源）", () => {
     }
   });
 
-  it("http(s) 与 mailto 交系统浏览器", () => {
+  test("http(s) 与 mailto 交系统浏览器", () => {
     expect(navigationPlanOf("https://example.com/a?b=1", ORIGIN)).toEqual({
       kind: "external",
       url: "https://example.com/a?b=1",
@@ -31,7 +31,7 @@ describe("导航判据（页面来自壳自己的 http 源）", () => {
     });
   });
 
-  it("其它 scheme 一律拒：file / javascript / data / 陌生的自定义 scheme", () => {
+  test("其它 scheme 一律拒：file / javascript / data / 陌生的自定义 scheme", () => {
     for (const target of [
       "file:///etc/passwd",
       "javascript:alert(1)",
@@ -42,7 +42,7 @@ describe("导航判据（页面来自壳自己的 http 源）", () => {
     }
   });
 
-  it('解析不出来的目标也拒（不给 "什么都没发生" 留口子）', () => {
+  test('解析不出来的目标也拒（不给 "什么都没发生" 留口子）', () => {
     expect(navigationPlanOf("http://", ORIGIN)).toEqual({ kind: "deny" });
   });
 });

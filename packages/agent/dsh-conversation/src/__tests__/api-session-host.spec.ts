@@ -35,7 +35,8 @@ import {
 import { provideTypert } from "@morlay/zephyr-app";
 import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
 import { FakeConnectionHost, publishingTo } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { provideApiSession } from "../server/api-session.provide.ts";
 
 /** 连接替身：上传行要它（生成下载地址）；本 spec 不触发上传。 */
@@ -99,21 +100,13 @@ function allowAllAccess() {
   };
 }
 
-const apps: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /**
  * 装宿主栈（会话 + agent + 附件 + 上传 + 沙箱 + 工作区 + typert）+ 上游会话端点行。
  * @returns app。
  */
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "dsh-api-session-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -150,7 +143,7 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -178,7 +171,7 @@ class FakeEnv extends AppEnv {
 }
 
 describe("上游会话端点经自研 discovery", () => {
-  it("`session/list` 按上游协议返回 `{ items }`", { timeout: 20_000 }, async () => {
+  test("`session/list` 按上游协议返回 `{ items }`", { timeout: 20_000 }, async () => {
     const app = await boot();
     const gateway = app.get(TypertGateway);
     const listed = await gateway.invoke({

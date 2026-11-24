@@ -5,8 +5,9 @@
 // 不是会话域的 fixtures（`@morlay/dsh-session/testing` 的 `userMessage(seq, id, text)` 是造日志用的）。
 import type { Agent, ContentBlock, UserMessage } from "@morlay/dsh-agent/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { SubagentGuidance } from "@morlay/session-mode";
 import { provideSubagentGuidance } from "@morlay/session-mode";
 import { DELEGATION_CONTEXT_NAME, DELEGATION_CONTEXT_TEXT } from "@morlay/session-mode";
@@ -19,12 +20,6 @@ interface Bus {
   waterfall<R>(event: string, ...args: unknown[]): R;
   reflect: { provide(name: string, value: unknown): void };
 }
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 // 只被读会话头的 Agent 替身：两条瀑布只认 `agent.session.header.parentSession`。
 function agentStub(parentSession?: string): Agent {
@@ -77,7 +72,7 @@ async function boot(
         : provideSubagentGuidance(configure(SubagentGuidance as never, config as never)),
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { bus: app.ctx as unknown as Bus };
 }
 
@@ -111,7 +106,7 @@ function textsOf(messages: readonly UserMessage[]): string[] {
 }
 
 describe("continuable 子代理的回报指引", () => {
-  it("没配名单（默认）：任意会话都用中文指引，任务本身原样留着", async () => {
+  test("没配名单（默认）：任意会话都用中文指引，任务本身原样留着", async () => {
     const { bus } = await boot();
     const messages = [
       userMessage([{ type: "text", text: "写一份简报" }, upstreamGuidance("parent")]),
@@ -124,7 +119,7 @@ describe("continuable 子代理的回报指引", () => {
     expect(texts.some((text) => text.includes("写一份简报"))).toBe(true);
   });
 
-  it("配了名单：名单里的 preset 用中文", async () => {
+  test("配了名单：名单里的 preset 用中文", async () => {
     const { bus } = await boot({ presets: ["mode-switch"], preset: "mode-switch" });
     const texts = textsOf(
       await preStep(bus, agentStub("parent"), [userMessage([upstreamGuidance("parent")])]),
@@ -134,7 +129,7 @@ describe("continuable 子代理的回报指引", () => {
     expect(texts.some((text) => text.includes(ENGLISH))).toBe(false);
   });
 
-  it("配了名单时名单外的 preset 保持上游英文（限制是显式选择）", async () => {
+  test("配了名单时名单外的 preset 保持上游英文（限制是显式选择）", async () => {
     const { bus } = await boot({ presets: ["mode-switch"], preset: "standard" });
     const texts = textsOf(
       await preStep(bus, agentStub("parent"), [userMessage([upstreamGuidance("parent")])]),
@@ -144,7 +139,7 @@ describe("continuable 子代理的回报指引", () => {
     expect(texts.some((text) => text.includes(CHINESE))).toBe(false);
   });
 
-  it("判定跟派发方（父会话）的 preset 走，不看子代理自己那份", async () => {
+  test("判定跟派发方（父会话）的 preset 走，不看子代理自己那份", async () => {
     // 本部署的 preset 写死在 config 上（`preset`）：任何 agent 的 ctx 都不参与判定，
     // 判定只认部署那一个——所以这条用例的装配是「部署 preset 在名单里」。
     const { bus } = await boot({ presets: ["mode-switch"], preset: "mode-switch" });
@@ -156,7 +151,7 @@ describe("continuable 子代理的回报指引", () => {
     expect(texts.some((text) => text.includes(CHINESE))).toBe(true);
   });
 
-  it("不是回报指引的消息原样留着（同一个数组回来）", async () => {
+  test("不是回报指引的消息原样留着（同一个数组回来）", async () => {
     const { bus } = await boot();
     const messages = [userMessage([{ type: "text", text: "普通消息" }])];
 
@@ -168,7 +163,7 @@ describe("子代理的委派范围说明", () => {
   const UPSTREAM =
     "You are a delegated subagent: your permission scope was fixed when you were started.";
 
-  it("子代理的装配里换成中文那条，别的上下文原样", async () => {
+  test("子代理的装配里换成中文那条，别的上下文原样", async () => {
     const { bus } = await boot();
     const contexts = [
       { name: DELEGATION_CONTEXT_NAME, text: UPSTREAM },
@@ -182,7 +177,7 @@ describe("子代理的委派范围说明", () => {
     expect(result[1]).toBe(contexts[1]);
   });
 
-  it("父 agent 的装配不动（这条本来只对子代理注册）", async () => {
+  test("父 agent 的装配不动（这条本来只对子代理注册）", async () => {
     const { bus } = await boot();
     const contexts = [{ name: DELEGATION_CONTEXT_NAME, text: UPSTREAM }];
 

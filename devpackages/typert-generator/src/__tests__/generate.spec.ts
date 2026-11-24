@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { generateTypert } from "../index.ts";
 
 // 端到端：造一个最小上游包 + 一棵声明树，断言三件套产物都出来了。
@@ -50,7 +50,7 @@ function remoteTextOf(artifacts: Awaited<ReturnType<typeof generateTypert>>): st
 }
 
 describe("typert 产物生成", () => {
-  it("产出 host / client / remote-client 三件套，并带上 invocation 与反射", async () => {
+  test("产出 host / client / remote-client 三件套，并带上 invocation 与反射", async () => {
     const { upstreamRoot, dtsRoot } = await fixture({ client: true });
     const artifacts = await generateTypert({ upstreamRoot, dtsRoot });
     expect(artifacts).toHaveLength(1);
@@ -67,7 +67,7 @@ describe("typert 产物生成", () => {
     expect(remote).toContain("read: (payload: Payload) => Promise<RemoteResult<Payload>>");
   });
 
-  it("三件套的 wire 细节：可选参数、AbortSignal、stream、typeSymbol、declare module", async () => {
+  test("三件套的 wire 细节：可选参数、AbortSignal、stream、typeSymbol、declare module", async () => {
     const repo = await mkdtemp(join(tmpdir(), "typert-ws-"));
     const upstreamRoot = join(repo, "vendor", "demo-harness");
     const dtsRoot = join(repo, "target", "dts");
@@ -125,7 +125,7 @@ describe("typert 产物生成", () => {
     expect(remote).toContain("'demo': TypertRemoteNamespace$");
   });
 
-  it("`@Remote('wire')` 的第一个参数是 wire 名（方法名只是实现名）", async () => {
+  test("`@Remote('wire')` 的第一个参数是 wire 名（方法名只是实现名）", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     await writeFile(
       join(upstreamRoot, "packages", "demo", "demo", "src", "index.ts"),
@@ -147,7 +147,7 @@ describe("typert 产物生成", () => {
     expect(remoteTextOf(artifacts)).toContain("implementation: 'remoteExportList'");
   });
 
-  it("显式 `T | undefined` 的参数在 wire 上也能缺（判据是类型里的 undefined，不是签名里的 `?`）", async () => {
+  test("显式 `T | undefined` 的参数在 wire 上也能缺（判据是类型里的 undefined，不是签名里的 `?`）", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     await writeFile(
       join(upstreamRoot, "packages", "demo", "demo", "src", "index.ts"),
@@ -170,7 +170,7 @@ describe("typert 产物生成", () => {
     // “设为新任务默认” 就是这么坏的。
     expect(block.slice(0, 300)).toContain("acceptsUndefined: true,");
   });
-  it("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {
+  test("没有 client 半的包会删掉陈旧的 typert.client.ts", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     const lib = join(upstreamRoot, "packages", "demo", "demo", "lib");
     await mkdir(lib, { recursive: true });
@@ -180,7 +180,7 @@ describe("typert 产物生成", () => {
     await expect(stat(join(lib, "typert.client.ts"))).rejects.toThrow();
   });
 
-  it("没有 @Remote 方法的包不产物", async () => {
+  test("没有 @Remote 方法的包不产物", async () => {
     const { upstreamRoot, dtsRoot } = await fixture();
     const pkg = join(upstreamRoot, "packages", "demo", "demo", "src", "index.ts");
     await writeFile(pkg, "export class Nothing {}\n");

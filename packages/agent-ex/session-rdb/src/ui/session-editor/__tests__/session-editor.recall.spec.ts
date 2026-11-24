@@ -8,21 +8,15 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, screen } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { SessionProjectionCacheRdb } from "@morlay/session-rdb";
 import { startClient } from "../../../__tests__/support/e2e-client.ts";
 import { startHost, type Host } from "../../../__tests__/support/e2e-host.ts";
 import { nodeOf, renderUserMessage } from "../../../__tests__/support/e2e-render.tsx";
 import { waitFor } from "../../../__tests__/support/wait.ts";
 import { meta, turnLog } from "@morlay/dsh-session/testing";
-
-const opened: Array<{ dispose(): Promise<void> }> = [];
-
-afterEach(async () => {
-  cleanup();
-  for (const item of opened.splice(0).reverse()) await item.dispose();
-});
 
 // 三个闭合回合，每回合 6 条事件（turn/start … turn/end）。
 function threeTurnLog() {
@@ -57,15 +51,15 @@ function outlineOf(host: Host, id: string): number[] | undefined {
 }
 
 describe("撤回：点编辑 → 撤回并编辑", () => {
-  it(
+  test(
     "日志截到边界、检查点水位同步前进、重开实例后仍是撤回后的样子",
     { timeout: 90_000 },
     async () => {
       // 数据根由**用例**持有：撤回要验「重开实例」，第一次 dispose 不能把库删掉。
       const root = await mkdtemp(join(tmpdir(), "better-session-recall-"));
-      opened.push({ dispose: async () => rm(root, { recursive: true, force: true }) });
+      onTestFinished(() => rm(root, { recursive: true, force: true }));
       const host = await startHost({ root });
-      opened.push(host);
+      onTestFinished(() => host.dispose());
       const id = "recall-target";
       const live = host.ctx.sessions.create(SessionId(id), {
         meta: meta(id, "/work"),
@@ -73,8 +67,8 @@ describe("撤回：点编辑 → 撤回并编辑", () => {
       });
       await host.ctx.sessions.flush(live);
       host.agentDirectory.attach(live);
-      const client = await startClient(host.handlers);
-      opened.push(client);
+      const client = await startClient(host.app);
+      onTestFinished(() => client.dispose());
 
       // 撤回前：检查点把三轮都折进去了（水位在最后一条 turn/end 上）。
       const beforeWatermark = await waitFor(
@@ -109,9 +103,8 @@ describe("撤回：点编辑 → 撤回并编辑", () => {
 
       // ③ 重开实例（同一个库文件）：撤回是持久化事实。
       await host.dispose();
-      opened.splice(opened.indexOf(host), 1);
       const reopened = await startHost({ root });
-      opened.push(reopened);
+      onTestFinished(() => reopened.dispose());
       expect(seqsOf(await reopened.eventsOf(id))).toEqual([0, 1, 2, 3, 4, 5]);
       expect(outlineOf(reopened, id)).toEqual([1]);
       expect(watermarkOf(reopened.dbPath, id)).toBeLessThanOrEqual(5);

@@ -16,17 +16,12 @@ import {
   Remote,
   RemoteDefault,
 } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { RemoteMountsDefault } from "../remote-mounts.service.ts";
 import { provideShellUi } from "../shell.provide.ts";
 import { SidebarTerminalSlots, WebTerminalsDefault } from "../sidebar-terminal-slots.ts";
 import { TerminalEndpointClient } from "../terminal-endpoint-client.ts";
-
-const apps: App[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
 
 /** 一次 `terminal/environment` 的最小回执（形状按上游 schema）。 */
 const ENVIRONMENT = {
@@ -86,25 +81,29 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   app.get(RemoteDefault).useTransport(transport);
   return { app, seen, seenStreams };
 }
 
 describe("terminal 组的客户端面", () => {
-  it("挂载后 environment 真的到达传输层，wire 上是 { agentId }", { timeout: 20_000 }, async () => {
-    const { app, seen } = await boot([RemoteMountsDefault, TerminalEndpointClient]);
-    const client = app.get(TerminalEndpointClient);
-    expect(client.mounted, "RemoteMountsDefault 跑过之后这一组就有面了").toBe(true);
+  test(
+    "挂载后 environment 真的到达传输层，wire 上是 { agentId }",
+    { timeout: 20_000 },
+    async () => {
+      const { app, seen } = await boot([RemoteMountsDefault, TerminalEndpointClient]);
+      const client = app.get(TerminalEndpointClient);
+      expect(client.mounted, "RemoteMountsDefault 跑过之后这一组就有面了").toBe(true);
 
-    const result = await client.environment("session-1" as SessionArgument, undefined);
-    // 面的返回值与上游同形（`ClientTerminals` 按 `result.ok` / `result.value` 读）。
-    expect(result).toEqual({ ok: true, value: ENVIRONMENT });
-    // 命名参数来自 descriptor：转发若走 `invoke(…, { request })`，这里是 `{ request }`。
-    expect(seen).toEqual([{ endpoint: "terminal/environment", args: { agentId: "session-1" } }]);
-  });
+      const result = await client.environment("session-1" as SessionArgument, undefined);
+      // 面的返回值与上游同形（`ClientTerminals` 按 `result.ok` / `result.value` 读）。
+      expect(result).toEqual({ ok: true, value: ENVIRONMENT });
+      // 命名参数来自 descriptor：转发若走 `invoke(…, { request })`，这里是 `{ request }`。
+      expect(seen).toEqual([{ endpoint: "terminal/environment", args: { agentId: "session-1" } }]);
+    },
+  );
 
-  it("流式方法（attach）拿到逐帧面，wire 上是 { agentId, id }", { timeout: 20_000 }, async () => {
+  test("流式方法（attach）拿到逐帧面，wire 上是 { agentId, id }", { timeout: 20_000 }, async () => {
     const { app, seenStreams } = await boot([RemoteMountsDefault, TerminalEndpointClient], {
       "terminal/attach": async function* () {
         yield { type: "snapshot", sequence: 1, screen: "", info: {} };
@@ -121,7 +120,7 @@ describe("terminal 组的客户端面", () => {
     expect(typeof handle.send, "上行写入面在（终端要能输入）").toBe("function");
   });
 
-  it("没挂载时调用直接报出「还没挂载」，不静默成 undefined", { timeout: 20_000 }, async () => {
+  test("没挂载时调用直接报出「还没挂载」，不静默成 undefined", { timeout: 20_000 }, async () => {
     const { app } = await boot([TerminalEndpointClient]);
     const client = app.get(TerminalEndpointClient);
     expect(client.mounted).toBe(false);
@@ -134,21 +133,21 @@ describe("terminal 组的客户端面", () => {
 });
 
 describe("webTerminals 的装配", () => {
-  it("RemoteMountsDefault 在前时建出 webTerminals", { timeout: 20_000 }, async () => {
+  test("RemoteMountsDefault 在前时建出 webTerminals", { timeout: 20_000 }, async () => {
     const { app } = await boot([RemoteMountsDefault, TerminalEndpointClient, WebTerminalsDefault]);
     const terminals = app.get(WebTerminalsDefault).terminals;
     expect(typeof terminals.view, "上游 client 半的入口实例").toBe("function");
     expect(app.get(Remote)).toBeDefined();
   });
 
-  it("少了 RemoteMountsDefault 时装配就报顺序错", { timeout: 20_000 }, async () => {
+  test("少了 RemoteMountsDefault 时装配就报顺序错", { timeout: 20_000 }, async () => {
     await expect(boot([TerminalEndpointClient, WebTerminalsDefault])).rejects.toThrow(
       /RemoteMountsDefault 必须排在 WebTerminalsDefault 之前/,
     );
   });
 });
 describe("provideShellUi 的行清单", () => {
-  it("顺序 = 依赖序：客户端 → 挂载 → webTerminals → 标签", { timeout: 20_000 }, () => {
+  test("顺序 = 依赖序：客户端 → 挂载 → webTerminals → 标签", { timeout: 20_000 }, () => {
     // 跑真装配才发现的坑：少了 `TerminalEndpointClient` 这一行，浏览器里报
     // 「没有提供者：terminal-endpoint（WebTerminalsDefault 需要它）」，而 tsc 看不见 provider 清单。
     expect(provideShellUi()).toEqual([

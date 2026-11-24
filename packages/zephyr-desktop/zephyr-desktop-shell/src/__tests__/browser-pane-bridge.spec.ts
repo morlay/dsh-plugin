@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { DESKTOP_IPC } from "../ipc.ts";
 import { browserPaneBridgeOf, type BrowserPaneIpcLike } from "../browser-pane-bridge.ts";
 
@@ -28,7 +28,7 @@ function fakeIpc(): BrowserPaneIpcLike & {
 }
 
 describe("面板的 preload 桥（只转发，不做决策）", () => {
-  it("五个意图各自落到自己的通道，参数原样过去", async () => {
+  test("五个意图各自落到自己的通道，参数原样过去", async () => {
     const ipc = fakeIpc();
     const bridge = browserPaneBridgeOf(ipc);
     await bridge.open({ id: "browser", url: "https://example.com/", bounds: RECT });
@@ -45,14 +45,14 @@ describe("面板的 preload 桥（只转发，不做决策）", () => {
     ]);
   });
 
-  it("桥不判地址（非法地址也照样往主进程送：判据只有一处）", async () => {
+  test("桥不判地址（非法地址也照样往主进程送：判据只有一处）", async () => {
     const ipc = fakeIpc();
     const bridge = browserPaneBridgeOf(ipc);
     await bridge.navigate("browser", "javascript:alert(1)");
     expect(ipc.calls).toEqual([`${DESKTOP_IPC.browserNavigate}:["browser","javascript:alert(1)"]`]);
   });
 
-  it("state 订阅只有一条：主进程推 → 监听者收到；退订后不再收到", () => {
+  test("state 订阅只有一条：主进程推 → 监听者收到；退订后不再收到", () => {
     const ipc = fakeIpc();
     const bridge = browserPaneBridgeOf(ipc);
     const seen: unknown[] = [];

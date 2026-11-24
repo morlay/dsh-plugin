@@ -5,18 +5,16 @@
  * 断言只落在「循环跑完」这件事上（adapter 被调用 + agent 回到 idle + 会话里有 assistant 消息），
  * 具体内容由上游循环负责，不在这里重复测。
  */
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { UserMessage } from "@morlay/dsh-agent";
 import { MessageId } from "@morlay/dsh-agent";
 import { FakeLlmAdapter } from "@morlay/dsh-agent/testing";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { bootstrapApplication, configure, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { Llm } from "@morlay/dsh-agent";
 import { AgentLoop } from "../contract/index.ts";
 import { provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
@@ -25,35 +23,12 @@ import { provideShell } from "@morlay/dsh-shell/server";
 import { provideAgentLoop } from "../index.ts";
 import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-agent-loop-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 每个用例一个独立临时目录的运行环境。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
 /**
  * 装配 agent 域（会话 + 投影 + llm + agent 的一组 provider）。
  * @returns 应用与假 adapter。
  */
-async function agentApp(): Promise<{
+async function agentApp(appEnv: TestingAppEnv): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   adapter: FakeLlmAdapter;
 }> {
@@ -62,7 +37,7 @@ async function agentApp(): Promise<{
       ...provideSession(),
       ...provideSessionProjection(),
       ...provideSessionPersistence(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       RemoteHandlersDefault,
       ...provideAgent(),
       ...provideShell(),
@@ -80,18 +55,18 @@ async function agentApp(): Promise<{
 }
 
 describe("agent loop（假 LLM）", () => {
-  it(
+  test(
     "create → send → whenIdle：假模型被调用，会话里出现 assistant 回复",
     { timeout: 30_000 },
-    async () => {
-      const { app, adapter } = await agentApp();
+    async ({ appEnv }) => {
+      const { app, adapter } = await agentApp(appEnv);
       try {
         const agent = await app
           .get(AgentLoop)
           .create(
             SessionId("s1"),
             { provider: "deepseek-official", model: "deepseek-flash" },
-            { cwd: root },
+            { cwd: appEnv.values.dataDir },
           );
         agent.send(
           {

@@ -2,8 +2,11 @@
 // 顶层出口指源码（workspace 内直连 `src`），发布态指产物；client 半发布态只出一份 **CJS 工厂**——
 // 那是 `__ModuleLoader__.load` 的注册脚本，挂在该出口的 `default` 条件上（见 `pickFactory`）。
 // 分档：`private: true` 只写 `exports`（源码直连），不写 `publishConfig` / `engines.dsh`；发布包另写
-// 发布态清单与 `engines.dsh`。`./client` 与 `./cordis.patch.yml` 只进发布态；`./dsh-bundle` 相反——它在顶层
-// `exports` 里（`planOf` 靠这个键认出 bundle 包），构建不删已有键。
+// 发布态清单与 `engines.dsh`。`./client` 与 `./cordis.patch.yml` 只进发布态。
+//
+// **bundle 包（dsh 行入口）单独一档**：顶层 `exports` 是**空对象**（源码不被当库消费），发布态只写
+// `.` → `{ default: ./dist/index.mjs }`（没有 `types`：bundle 包不出 `.d.mts`）、`./package.json`、
+// `./cordis.patch.yml`，以及有浏览器半时的 `./client` → `{ default: ./dist/client.cjs }`。
 // 出口约定与理由见 `.agents/standards/how-to-write.md` 的「包出口」一节。
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -30,8 +33,7 @@ export interface PackageExportsOptions {
   readonly clientEntry?: string;
   // 只构建、不导出的入口名（产物要落位，但不该成为包的门面）。
   readonly hidden?: readonly string[];
-  // 只进发布态清单的入口名（如 `dsh-bundle`）：顶层 `exports` 不含，workspace 误引即解析失败。
-  readonly publishOnly?: readonly string[];
+
   // bundle 的行声明：非 private 时生成 `cordis.patch.yml` 并写 `dsh.bundle.patch`。
   readonly bundle?: { readonly rows: readonly BundleRow[] };
   // 命令名 → 入口名：`bin` 两侧一起写（顶层指源码、发布态指产物）。
@@ -156,7 +158,8 @@ async function writeManifest(
   const isPrivate = manifest["private"] === true;
   const name = typeof manifest["name"] === "string" ? manifest["name"] : "package";
   const hidden = new Set(options.hidden ?? []);
-  const publishOnly = new Set(options.publishOnly ?? []);
+  // bundle 包（dsh 行入口）：顶层 `exports` 保持空，发布态出口按固定形状写。
+  const bundleShape = options.bundle !== undefined;
   const { outDir } = run;
   // 清单里的产物路径一律带 `./` 前缀（`exports` 的写法约定）。
   const artifact = (file: string): string => `./${outDir}/${file}`;
@@ -202,9 +205,12 @@ async function writeManifest(
     if (runtime === undefined) continue;
     // host 面也带 `types`：产物里本来就有 `.d.mts`，出口不写它，消费方的类型解析就落到 `any`。
     const declarations = found.declarations.find((file) => file.endsWith(".d.mts"));
-    // 只发布态入口不由构建写进顶层 `exports`；清单里已有的键原样保留（`./dsh-bundle` 就是靠清单里的键
-    // 让 `planOf` 认出 bundle 包）。
-    if (!publishOnly.has(entry)) dev[exportKey(entry)] = entrySource;
+    if (bundleShape) {
+      // bundle 包的包根只出 `default`：行入口没有类型消费面（不出 `.d.mts`），顶层 `exports` 也不列。
+      published[exportKey(entry)] = { default: artifact(runtime) };
+      continue;
+    }
+    dev[exportKey(entry)] = entrySource;
     published[exportKey(entry)] =
       declarations === undefined
         ? artifact(runtime)
@@ -220,7 +226,7 @@ async function writeManifest(
     published[key] = value;
   }
 
-  dev[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
+  if (!bundleShape) dev[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   published[PACKAGE_JSON_EXPORT] = PACKAGE_JSON_EXPORT;
   if (clientDev !== undefined) {
     // client 只进发布态清单（顶层 exports 仍是纯源码面）。
@@ -249,7 +255,7 @@ async function writeManifest(
     if (!isPrivate) published[PATCH_EXPORT] = PATCH_EXPORT;
   }
   if (await exists(join(cwd, "locale", "en.json"))) {
-    dev[LOCALE_EXPORT] = LOCALE_EXPORT;
+    if (!bundleShape) dev[LOCALE_EXPORT] = LOCALE_EXPORT;
     if (!isPrivate) published[LOCALE_EXPORT] = LOCALE_EXPORT;
   }
 
@@ -285,7 +291,7 @@ async function writeManifest(
     manifest["main"] = rootEntry;
     manifest["module"] = rootEntry;
   }
-  manifest["exports"] = dev;
+  manifest["exports"] = bundleShape ? {} : dev;
 
   if (isPrivate) {
     // 私有包的发布态字段是死字段：不写 `publishConfig`，也不写 `engines.dsh`。
@@ -323,7 +329,6 @@ export function writeBuildManifest(
     readonly artifacts: Readonly<Record<string, readonly string[]>>;
     readonly clientEntry?: string;
     readonly declarationFiles?: (entry: string) => readonly string[];
-    readonly publishOnly?: readonly string[];
     readonly hidden?: readonly string[];
     readonly bin?: Record<string, string>;
     readonly bundle?: { readonly rows: readonly BundleRow[] };
@@ -344,7 +349,7 @@ export function writeBuildManifest(
       ...(options.declarationFiles === undefined
         ? {}
         : { declarationFiles: options.declarationFiles }),
-      ...(options.publishOnly === undefined ? {} : { publishOnly: options.publishOnly }),
+
       ...(options.hidden === undefined ? {} : { hidden: options.hidden }),
       ...(options.bin === undefined ? {} : { bin: options.bin }),
       ...(options.bundle === undefined ? {} : { bundle: options.bundle }),

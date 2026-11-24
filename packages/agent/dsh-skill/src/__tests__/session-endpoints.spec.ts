@@ -8,6 +8,7 @@
  *   断言上游的结构化失败码。要覆盖真行为还需要：`rename`/`selectModel` 装真 `AgentLoop.create`
  *   同一会话 id（活 agent）；`fork`/`search` 让会话进 `provideSessionQuerySqlite` 的索引。
  */
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +29,7 @@ import { provideSkill } from "@morlay/dsh-skill/server";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { bootstrapApplication, Injectable, type App, configure } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlers } from "@morlay/zephyr-app";
 import { provideApiSession } from "@morlay/dsh-conversation/server";
 import {
   provideApiGateway,
@@ -38,7 +39,8 @@ import {
   TypertGateway,
 } from "@morlay/zephyr-app";
 import { WebServerDefault, WebStartup, publishingTo } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { errorCodeOf, unwrap } from "./support/wire.ts";
 import { SessionQuery, SessionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
@@ -49,31 +51,7 @@ class Startup0 extends WebStartup {
   readonly values = { host: "127.0.0.1", port: 0, trustedHosts: [] };
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** 指向临时目录的运行环境。 */
-function fakeAppEnvOf(root: string): new () => AppEnv {
-  @Injectable()
-  class FakeAppEnv extends AppEnv {
-    readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-    readonly cacheDir = join(root, "cache");
-
-    readonly packageRoot = root;
-
-    readonly appBootDir = join(root, "boot");
-
-    readonly profileManifest = join(root, "package.json");
-  }
-  return FakeAppEnv;
-}
-
 /**
  * 起 `session` 组的宿主栈（真 controller 行 + 真依赖，无端口）。
  * @param reuseRoot - 复用已有的数据根（模拟「宿主重启、live store 空、盘上还有会话」）。
@@ -98,8 +76,7 @@ async function boot(
   reuseRoot?: string,
 ): Promise<{ app: App; handlers: RemoteHandlers; root: string }> {
   const root = reuseRoot ?? (await mkdtemp(join(tmpdir(), "dsh-session-endpoints-")));
-  if (reuseRoot === undefined) roots.push(root);
-  const FakeAppEnv = fakeAppEnvOf(root);
+  if (reuseRoot === undefined) onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       // 装配顺序 = 依赖顺序（适配行的契约面在它自己的 `onInit`/`mount` 之后才绑上，
@@ -125,7 +102,7 @@ async function boot(
       SessionPersistenceDefault,
       // 三份 root（store / 投影 / 查询）：agent 域要它们的面。
       ...provideSessionRemote(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
       SubprocessDefault,
       SandboxDefault,
       { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
@@ -148,7 +125,7 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   // 端点由**上游** `SessionController` 提供，分派走 `typertGateway`（不是我们的 handler 表）：
   // 这里给一个同形状的壳，让「按 `namespace/method` 调」的用例不必逐个改写。
   const gateway = app.get(TypertGateway);
@@ -187,7 +164,7 @@ async function boot(
 }
 
 describe("session 组的宿主端点", { timeout: 30_000 }, () => {
-  it("`sessionQuery` 观测带 projections 快照：agent 激活与 skill 目录的前提", async () => {
+  test("`sessionQuery` 观测带 projections 快照：agent 激活与 skill 目录的前提", async () => {
     const { app, handlers } = await boot();
     const created = (await handlers.invoke("session/create", { request: {} })) as {
       sessionId?: string;
@@ -208,7 +185,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     }
   });
 
-  it("真会话：`create` 起 agent，之后 `prompt` 被接受（不是 `session/not-found`，也不是 `gateway/internal`）", async () => {
+  test("真会话：`create` 起 agent，之后 `prompt` 被接受（不是 `session/not-found`，也不是 `gateway/internal`）", async () => {
     const { handlers } = await boot();
     const created = (await handlers.invoke("session/create", { request: {} })) as {
       sessionId?: string;
@@ -229,7 +206,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(unwrap<{ accepted?: boolean }>(result)).toEqual({ accepted: true });
   });
 
-  it("`create` 带 `workspaceId`：会话落进那个工作区，不被 cwd 推导覆盖", async () => {
+  test("`create` 带 `workspaceId`：会话落进那个工作区，不被 cwd 推导覆盖", async () => {
     const { app, handlers } = await boot();
     const root = await mkdtemp(join(tmpdir(), "dsh-workspace-target-"));
     // 真工作区：直接走宿主的 `WorkspaceRegistry`（`workspace/create` 那条 wire 属于 UI 行，
@@ -252,7 +229,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(cwd, "会话的 cwd 必须落在所选工作区的目录上").toBe(await realpath(root));
   });
 
-  it("宿主重启后（盘上有、live store 空）对一个已有会话 `prompt` 仍被接受", async () => {
+  test("宿主重启后（盘上有、live store 空）对一个已有会话 `prompt` 仍被接受", async () => {
     const first = await boot();
     const created = (await first.handlers.invoke("session/create", { request: {} })) as {
       sessionId?: string;
@@ -285,7 +262,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     }
   });
 
-  it("`session/list` 按上游协议给出 `{ items }`（目录来源是查询索引）", async () => {
+  test("`session/list` 按上游协议给出 `{ items }`（目录来源是查询索引）", async () => {
     const { handlers } = await boot();
     const created = (await handlers.invoke("session/create", { request: {} })) as {
       sessionId?: string;
@@ -301,7 +278,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(Array.isArray(listed?.items), "上游协议是 `{ items: [...] }`").toBe(true);
   });
 
-  it("`canOpenWorkspacePath` 回真能力（boolean）", async () => {
+  test("`canOpenWorkspacePath` 回真能力（boolean）", async () => {
     const { handlers } = await boot();
     const value = unwrap<boolean>(await handlers.invoke("session/canOpenWorkspacePath", {}));
     // 上游实现是 `return this.canOpenPath()`，而 `canOpenPath()` 读 **native 桌面能力**；
@@ -310,7 +287,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect([true, false, undefined]).toContain(value);
   });
 
-  it("`workspacePathApplications` 对不可用桌面回空数组（真结果）", async () => {
+  test("`workspacePathApplications` 对不可用桌面回空数组（真结果）", async () => {
     const { handlers } = await boot();
     const value = unwrap<readonly unknown[]>(
       await handlers.invoke("session/workspacePathApplications", { path: "/tmp/whatever" }),
@@ -319,7 +296,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(value === undefined || Array.isArray(value)).toBe(true);
   });
 
-  it("`modelCatalog` 回真目录结构（provider 分组 + 默认选择 + 失败面）", async () => {
+  test("`modelCatalog` 回真目录结构（provider 分组 + 默认选择 + 失败面）", async () => {
     const { handlers } = await boot();
     const value = unwrap<{
       default: { provider: string; model: string };
@@ -335,7 +312,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     });
   });
 
-  it("`initializeDefaultModel` 走真路径：成功或上游自己的结构化错误", async () => {
+  test("`initializeDefaultModel` 走真路径：成功或上游自己的结构化错误", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/initializeDefaultModel", {});
     expect(
@@ -345,7 +322,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
 
   // ---------- 以下四条是**弱断言**：只证明端点接上、转发路径通，没覆盖真行为 ----------
 
-  it("`rename`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需真 `AgentLoop.create` 同一 id", async () => {
+  test("`rename`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需真 `AgentLoop.create` 同一 id", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/rename", {
       request: { sessionId: "s-missing", title: "标题" },
@@ -353,7 +330,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(errorCodeOf(result)).toBe("session/not-found");
   });
 
-  it(
+  test(
     "`selectModel`（真行为）：真会话选模型后，会话自己的 agent 读回同一条选择",
     { timeout: 60_000 },
     async () => {
@@ -419,7 +396,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     },
   );
 
-  it("`selectModel`（失败面）：未知会话回 `session/not-found`", async () => {
+  test("`selectModel`（失败面）：未知会话回 `session/not-found`", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/selectModel", {
       request: { sessionId: "s-missing", provider: "deepseek-official", model: "deepseek-flash" },
@@ -427,13 +404,13 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(errorCodeOf(result)).toBe("session/not-found");
   });
 
-  it("`fork`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需会话进 sqlite 索引", async () => {
+  test("`fork`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需会话进 sqlite 索引", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/fork", { request: { sessionId: "s-missing" } });
     expect(errorCodeOf(result)).toBe("session/not-found");
   });
 
-  it("`prompt`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
+  test("`prompt`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/prompt", {
       request: {
@@ -448,13 +425,13 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(errorCodeOf(result)).toBe("session/not-found");
   });
 
-  it("`cancel`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
+  test("`cancel`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/cancel", { request: { sessionId: "s-missing" } });
     expect(errorCodeOf(result)).toBe("session/not-found");
   });
 
-  it("`updateQueue`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
+  test("`updateQueue`（弱断言）：转发到上游，未知会话回 `session/not-found`；真行为还需活 agent", async () => {
     const { handlers } = await boot();
     const result = await handlers.invoke("session/updateQueue", {
       request: { sessionId: "s-missing", itemId: "m1", action: { kind: "remove" } },
@@ -463,7 +440,7 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(errorCodeOf(result)).toBe("session/queue-item-not-found");
   });
 
-  it("`search`（弱断言）：转发到上游，空索引回空结果；真行为还需会话进 sqlite 索引", async () => {
+  test("`search`（弱断言）：转发到上游，空索引回空结果；真行为还需会话进 sqlite 索引", async () => {
     const { handlers } = await boot();
     const value = unwrap<{ items: readonly unknown[]; hasMore: boolean }>(
       await handlers.invoke("session/search", { request: { query: "不存在的内容" } }),

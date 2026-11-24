@@ -1,18 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 import { shellDebugOf } from "../debug.ts";
-
-const writes: string[] = [];
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  writes.length = 0;
-});
 
 /**
  * 拦 stderr，收集壳打出来的行。
- * @returns 收集函数。
+ *
+ * 收集容器是**调用方自己的数组**（不再是模块级变量）：每条用例一份，不需要 afterEach 清空。
+ * vi.spyOn 的还原交给包级 stubRestore auto fixture。
+ * @param writes - 收集容器的数组。
+ * @returns 读取函数。
  */
-function captureStderr(): () => string {
+function captureStderr(writes: string[]): () => string {
   vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
     writes.push(String(chunk));
     return true;
@@ -21,8 +19,9 @@ function captureStderr(): () => string {
 }
 
 describe("壳的调试面（开发者模式的只读投影）", () => {
-  it("关着时 log / renderer 静默，fail 照样输出（错误不该被开关吞掉）", () => {
-    const read = captureStderr();
+  test("关着时 log / renderer 静默，fail 照样输出（错误不该被开关吞掉）", () => {
+    const writes: string[] = [];
+    const read = captureStderr(writes);
     const debug = shellDebugOf({ enabled: false });
     expect(debug.enabled).toBe(false);
     debug.log("生命周期");
@@ -32,8 +31,9 @@ describe("壳的调试面（开发者模式的只读投影）", () => {
     expect(read()).toContain("启动失败");
   });
 
-  it("打开时三类都带各自前缀", () => {
-    const read = captureStderr();
+  test("打开时三类都带各自前缀", () => {
+    const writes: string[] = [];
+    const read = captureStderr(writes);
     const debug = shellDebugOf({ enabled: true });
     expect(debug.enabled).toBe(true);
     debug.log("已加载 http://127.0.0.1:3080/");
@@ -42,8 +42,9 @@ describe("壳的调试面（开发者模式的只读投影）", () => {
     expect(read()).toContain("[renderer] [vite] connected.");
   });
 
-  it("跟着来源走：来源一转，投影立刻改口（不重建就能生效）", () => {
-    const read = captureStderr();
+  test("跟着来源走：来源一转，投影立刻改口（不重建就能生效）", () => {
+    const writes: string[] = [];
+    const read = captureStderr(writes);
     const source = { enabled: false };
     const debug = shellDebugOf(source);
     debug.log("开之前");

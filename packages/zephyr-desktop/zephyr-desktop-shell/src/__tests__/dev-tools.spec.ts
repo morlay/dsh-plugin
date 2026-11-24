@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { devModeOf } from "../dev-mode.ts";
 import { devToolsOf } from "../dev-tools.ts";
 import type { InspectorPort, InspectorSession } from "../inspector.ts";
@@ -13,16 +14,10 @@ interface FakeInspector extends InspectorPort {
   readonly closes: number;
 }
 
-const dirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
 /** @returns 一个空的 userData。 */
 async function tempUserData(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "zephyr-dev-tools-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -85,7 +80,7 @@ function itemOf(template: readonly MenuItemSpec[], label: string): MenuItemSpec 
 }
 
 describe("开发面动作（DevMode + InspectorPort 的接线）", () => {
-  it("点开发者模式：状态翻转、重画一次菜单；关掉时收起开发项并关掉 Inspector", async () => {
+  test("点开发者模式：状态翻转、重画一次菜单；关掉时收起开发项并关掉 Inspector", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: {}, argv: [] });
     const inspector = fakeInspector();
@@ -132,7 +127,7 @@ describe("开发面动作（DevMode + InspectorPort 的接线）", () => {
     expect(devTools.inspector.address).toBeUndefined();
   });
 
-  it("点 Inspector：开着时勾选、地址进菜单与日志；再点关掉就清空", async () => {
+  test("点 Inspector：开着时勾选、地址进菜单与日志；再点关掉就清空", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: { ZEPHYR_DESKTOP_DEBUG: "1" }, argv: [] });
     const inspector = fakeInspector();
@@ -172,7 +167,7 @@ describe("开发面动作（DevMode + InspectorPort 的接线）", () => {
     expect(itemOf(after, "复制 Inspector 地址")?.enabled).toBe(false);
   });
 
-  it("打不开（端口全占）：记一行原因、菜单项标灰，点击不抛到外面", async () => {
+  test("打不开（端口全占）：记一行原因、菜单项标灰，点击不抛到外面", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: { ZEPHYR_DESKTOP_DEBUG: "1" }, argv: [] });
     const inspector = fakeInspector({ fail: true });
@@ -198,7 +193,7 @@ describe("开发面动作（DevMode + InspectorPort 的接线）", () => {
     expect(itemOf(template, "复制 Inspector 地址")?.enabled).toBe(false);
   });
 
-  it("退出：关掉 Inspector（不残留端口）；没开着也不报错", async () => {
+  test("退出：关掉 Inspector（不残留端口）；没开着也不报错", async () => {
     const userData = await tempUserData();
     const devMode = await devModeOf({ userData, env: { ZEPHYR_DESKTOP_DEBUG: "1" }, argv: [] });
     const inspector = fakeInspector();

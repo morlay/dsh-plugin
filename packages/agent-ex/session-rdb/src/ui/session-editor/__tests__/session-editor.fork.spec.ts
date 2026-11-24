@@ -10,19 +10,12 @@ import { Session, SessionId } from "@morlay/dsh-session/contract";
 import type { SessionEvent } from "@morlay/dsh-session/contract";
 import { TokenMeter } from "@morlay/dsh-session/server";
 import { balanceRewindPrefix } from "@morlay/session-rdb/endpoint";
-import { cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startClient } from "../../../__tests__/support/e2e-client.ts";
 import { startHost } from "../../../__tests__/support/e2e-host.ts";
 import { waitFor } from "../../../__tests__/support/wait.ts";
 import { meta, turnLog } from "@morlay/dsh-session/testing";
-
-const opened: Array<{ dispose(): Promise<void> }> = [];
-
-afterEach(async () => {
-  cleanup();
-  for (const item of opened.splice(0).reverse()) await item.dispose();
-});
 
 function threeTurnLog() {
   return [...turnLog(0, 1), ...turnLog(6, 2), ...turnLog(12, 3)];
@@ -43,17 +36,17 @@ function replays(meter: TokenMeter, id: string, events: readonly SessionEvent[])
 }
 
 describe("分叉：从某条消息 fork", () => {
-  it("子会话只继承存活前缀、父会话不动、两边日志 balanced", { timeout: 90_000 }, async () => {
+  test("子会话只继承存活前缀、父会话不动、两边日志 balanced", { timeout: 90_000 }, async () => {
     const host = await startHost();
-    opened.push(host);
+    onTestFinished(() => host.dispose());
     const id = "fork-parent";
     const live = host.ctx.sessions.create(SessionId(id), {
       meta: meta(id, "/work"),
       seed: threeTurnLog(),
     });
     await host.ctx.sessions.flush(live);
-    const client = await startClient(host.handlers);
-    opened.push(client);
+    const client = await startClient(host.app);
+    onTestFinished(() => client.dispose());
 
     const before = await host.eventsOf(id);
     // 三个闭合回合（seq 0..17）+ 上游在种子之后补的 `session/end-seed`（seq 18）。

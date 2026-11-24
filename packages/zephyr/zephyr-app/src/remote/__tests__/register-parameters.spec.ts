@@ -8,13 +8,8 @@ import { RemoteHandlers } from "../../api-gateway/remote-handlers.contract.ts";
 import { RemoteHandlersDefault } from "../../api-gateway/remote-handlers.service.ts";
 import { Remote, RemoteGroup } from "../decorators.ts";
 import { registerRemoteGroup } from "../register.ts";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-});
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 一个两个命名参数的端点（与 `fileUploads/upload` 同形）与一个单参数的对照片。 */
 @RemoteGroup({ name: "demo" })
@@ -48,19 +43,19 @@ async function boot(): Promise<RemoteHandlers> {
     providers: [RemoteHandlersDefault, DemoEndpointDefault],
     timeoutMs: 5_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app.get(RemoteHandlers);
 }
 
 describe("registerRemoteGroup 的命名参数分派", () => {
-  it("多个命名参数：按 `parameters` 的声明顺序逐个传参", async () => {
+  test("多个命名参数：按 `parameters` 的声明顺序逐个传参", async () => {
     const handlers = await boot();
     await expect(
       handlers.invoke("demo/upload", { agent: "s1", request: { data: "AA==" } }),
     ).resolves.toEqual({ agent: "s1", data: "AA==" });
   });
 
-  it("单参数：仍然拿到整个 args（`requestOf` 的剥层语义不变）", async () => {
+  test("单参数：仍然拿到整个 args（`requestOf` 的剥层语义不变）", async () => {
     const handlers = await boot();
     await expect(handlers.invoke("demo/stat", { path: "/tmp/a" })).resolves.toEqual({
       path: "/tmp/a",

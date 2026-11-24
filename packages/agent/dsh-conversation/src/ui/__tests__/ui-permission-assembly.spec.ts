@@ -21,22 +21,21 @@ import {
   provideRenderer,
 } from "@morlay/zephyr-app/client";
 import { Connection, RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { FakeConnectionHost, provideLocalRemote } from "@morlay/zephyr-app/testing";
+import {
+  bootTwoSided,
+  clientWithTransport,
+  FakeConnectionHost,
+  provideLocalRemote,
+} from "@morlay/zephyr-app/testing";
 import { provideClientRemote } from "@morlay/zephyr-app/client";
 import { CommandUi } from "@morlay/dsh-command/ui";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { PermissionPresetsEndpointDefault } from "@morlay/dsh-permission/server";
 import { Permission } from "@morlay/dsh-permission";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { providePermissionUi } from "../permission-ui.provide.ts";
 import { namespaceOf } from "../remote-namespace.ts";
 import { PERMISSION_PRESETS_REMOTE } from "@morlay/dsh-permission/endpoint";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 /** 会话目录面：`ui-permission` 只在 slot 注入里读它，装配期不看。 */
 @Injectable()
@@ -105,12 +104,13 @@ class FakeSessions extends SessionController {
 
 /**
  * 装 client 链 + 权限的浏览器半（宿主侧只给 `permissionPresets` 那条端点，够 `catalog` 用）。
- * @returns app。
+ * 生命周期由 `bootTwoSided` 自己收（`onTestFinished`）。
+ * @returns 前端 app（被测面）。
  */
 async function boot(): Promise<App> {
   // 两套装配两个 ctx：host 只有「端点 + 路由表」，client 只有 UI 链，LocalRemote 是唯一的桥。
-  const host = await bootstrapApplication({
-    providers: [
+  const two = await bootTwoSided({
+    createHost: () => [
       {
         provide: Permission,
         useFactory: () => ({
@@ -132,83 +132,76 @@ async function boot(): Promise<App> {
       RemoteHandlersDefault,
       PermissionPresetsEndpointDefault,
     ],
-    timeoutMs: 20_000,
-  });
-  opened.push(host);
-  // 诊断：host 装配里到底有没有路由表（拿不到说明装配把这一行跳过了）。
-  if (host.tryGet(RemoteHandlers) === undefined) {
-    throw new Error(`host 装配缺少 RemoteHandlers：${String(host.tryGet(RemoteHandlersDefault))}`);
-  }
-  const hostInvoker = async (endpoint: string, payload: Readonly<Record<string, unknown>>) =>
-    host.get(RemoteHandlers).invoke(endpoint, payload);
-  const app = await bootstrapApplication({
-    providers: [
-      ...provideLocalRemote(hostInvoker),
-      ...provideRenderer(),
-      // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
-      {
-        provide: ConfigForms,
-        useFactory: () => ({
-          describe: () => ({
-            getSnapshot: () => ({ view: undefined }),
+    createClient: (host) =>
+      clientWithTransport(host, [
+        ...provideRenderer(),
+        // `ui-settings` 的 mirror：上游权限行装配期读 `describe()`（订阅 + ensure + 读视图）。
+        {
+          provide: ConfigForms,
+          useFactory: () => ({
+            describe: () => ({
+              getSnapshot: () => ({ view: undefined }),
+              subscribe: () => () => {},
+              ensure: async () => {},
+              acceptView: () => {},
+            }),
+            getSnapshot: () => ({}),
             subscribe: () => () => {},
-            ensure: async () => {},
-            acceptView: () => {},
           }),
-          getSnapshot: () => ({}),
-          subscribe: () => () => {},
-        }),
-      },
-      ...provideClientConnection(),
-      // 上游浏览器行按 `ctx.connection` 严格读：把浏览器面按那个名字发布。
-      // 装了 upload 行：它构造期往**宿主**连接登记路由，所以宿主面也要有。
-      { provide: Connection, useFactory: () => new FakeConnectionHost() },
-      { provide: SessionController, useFactory: () => new FakeSessions() },
-      // 命令 UI：本 spec 的判据是权限行自己的装配与两条 face，命令面板不在被测面内。
-      // 这里给一个**真契约**的空面（不是 `undefined`：上游分支会读 `decorate` / `dismiss`）。
-      {
-        provide: CommandUi,
-        useFactory: () => ({
-          register: () => () => {},
-          decorate: () => () => {},
-          dismiss: () => {},
-        }),
-      },
-      {
-        provide: SessionRemoteBinding,
-        useFactory: () => ({ onInit: async () => {} }),
-      },
-      { provide: RemoteAccess, useFactory: () => ({ can: () => true }) },
-      {
-        provide: Locale,
-        useFactory: () => ({
-          register: () => () => {},
-          subscribe: () => () => {},
-          bind: () => (key: string) => key,
-        }),
-      },
-      {
-        provide: Shortcuts,
-        useFactory: () => ({
-          catalog: { getSnapshot: () => [], subscribe: () => () => {} },
-          register: () => () => {},
-        }),
-      },
-      {
-        provide: SettingsSchema,
-        useFactory: () => ({ schemas: new Map(), register: () => {} }),
-      },
-      // 被测面：权限的浏览器半。
-      ...providePermissionUi(),
-    ],
-    timeoutMs: 20_000,
+        },
+        ...provideClientConnection(),
+        // 上游浏览器行按 `ctx.connection` 严格读：把浏览器面按那个名字发布。
+        // 装了 upload 行：它构造期往**宿主**连接登记路由，所以宿主面也要有。
+        { provide: Connection, useFactory: () => new FakeConnectionHost() },
+        { provide: SessionController, useFactory: () => new FakeSessions() },
+        // 命令 UI：本 spec 的判据是权限行自己的装配与两条 face，命令面板不在被测面内。
+        // 这里给一个**真契约**的空面（不是 `undefined`：上游分支会读 `decorate` / `dismiss`）。
+        {
+          provide: CommandUi,
+          useFactory: () => ({
+            register: () => () => {},
+            decorate: () => () => {},
+            dismiss: () => {},
+          }),
+        },
+        {
+          provide: SessionRemoteBinding,
+          useFactory: () => ({ onInit: async () => {} }),
+        },
+        { provide: RemoteAccess, useFactory: () => ({ can: () => true }) },
+        {
+          provide: Locale,
+          useFactory: () => ({
+            register: () => () => {},
+            subscribe: () => () => {},
+            bind: () => (key: string) => key,
+          }),
+        },
+        {
+          provide: Shortcuts,
+          useFactory: () => ({
+            catalog: { getSnapshot: () => [], subscribe: () => () => {} },
+            register: () => () => {},
+          }),
+        },
+        {
+          provide: SettingsSchema,
+          useFactory: () => ({ schemas: new Map(), register: () => {} }),
+        },
+        // 被测面：权限的浏览器半。
+        ...providePermissionUi(),
+      ]),
   });
-  opened.push(app);
-  return app;
+  // 诊断：host 装配里到底有没有路由表（拿不到说明装配把这一行跳过了）。
+  if (two.host.tryGet(RemoteHandlers) === undefined) {
+    throw new Error("host 装配缺少 RemoteHandlers：清单里没有 RemoteHandlersDefault 这一行");
+  }
+  if (two.client === undefined) throw new Error("client 没装上");
+  return two.client;
 }
 
 describe("remote 的 $mount（ui-permission 的前提）", () => {
-  it(
+  test(
     "`$mount(PERMISSION_PRESETS_REMOTE)` 之后能读到 `remote.permissionPresets.catalog`",
     { timeout: 20_000 },
     async () => {
@@ -234,18 +227,21 @@ describe("remote 的 $mount（ui-permission 的前提）", () => {
         ],
         timeoutMs: 20_000,
       });
-      opened.push(app);
-      const remote = app.get(Remote);
-      await remote.$mount(PERMISSION_PRESETS_REMOTE);
-      const face = namespaceOf(remote, "permissionPresets");
-      expect(face, "`$mount` 之后 remote.permissionPresets 必须存在").toBeDefined();
-      expect(typeof face?.catalog, "`catalog` 必须是函数").toBe("function");
+      try {
+        const remote = app.get(Remote);
+        await remote.$mount(PERMISSION_PRESETS_REMOTE);
+        const face = namespaceOf(remote, "permissionPresets");
+        expect(face, "`$mount` 之后 remote.permissionPresets 必须存在").toBeDefined();
+        expect(typeof face?.catalog, "`catalog` 必须是函数").toBe("function");
+      } finally {
+        await app.dispose();
+      }
     },
   );
 });
 
 describe("remote 的 $mount（真 RemoteDefault）", () => {
-  it(
+  test(
     "换成生产用的 `RemoteDefault`，`$mount` 之后同样能读到这条 face",
     { timeout: 20_000 },
     async () => {
@@ -258,18 +254,21 @@ describe("remote 的 $mount（真 RemoteDefault）", () => {
         ],
         timeoutMs: 20_000,
       });
-      opened.push(app);
-      const remote = app.get(Remote);
-      await remote.$mount(PERMISSION_PRESETS_REMOTE);
-      const face = namespaceOf(remote, "permissionPresets");
-      expect(face, "`RemoteDefault.$mount` 之后必须有这条 face").toBeDefined();
-      expect(typeof face?.catalog).toBe("function");
+      try {
+        const remote = app.get(Remote);
+        await remote.$mount(PERMISSION_PRESETS_REMOTE);
+        const face = namespaceOf(remote, "permissionPresets");
+        expect(face, "`RemoteDefault.$mount` 之后必须有这条 face").toBeDefined();
+        expect(typeof face?.catalog).toBe("function");
+      } finally {
+        await app.dispose();
+      }
     },
   );
 });
 
 describe("UiPermission 的装配", () => {
-  it(
+  test(
     "装配成功能读到 `remote.permissionPresets.catalog`（上游 client 行构造期就调它）",
     { timeout: 20_000 },
     async () => {
@@ -294,7 +293,7 @@ describe("UiPermission 的装配", () => {
     },
   );
 
-  it("两条 face 都跟着 `$mount` 就位（摊平后不能丢任何一条）", { timeout: 20_000 }, async () => {
+  test("两条 face 都跟着 `$mount` 就位（摊平后不能丢任何一条）", { timeout: 20_000 }, async () => {
     const app = await boot();
     const remote = app.get(Remote);
     // 装配没抛错本身也是一条判据：`fromCordis` 会逐条核对 `'remote.permissionPresets'` /

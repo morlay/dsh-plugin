@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { count, defineTable, E, ensureSchema, openDatabase } from "@morlay/zephyr-rdb";
 
 const rows = defineTable({
@@ -23,7 +23,7 @@ async function countRows(database: Awaited<ReturnType<typeof openDatabase>>): Pr
 }
 
 describe("事务通道", () => {
-  it("并发事务各自完整：不出现「事务中再开事务」", async () => {
+  test("并发事务各自完整：不出现「事务中再开事务」", async () => {
     const database = await freshDatabase();
     try {
       const table = database.table(rows);
@@ -41,7 +41,7 @@ describe("事务通道", () => {
     }
   });
 
-  it("事务内再开事务走保存点：内层失败只回滚内层", async () => {
+  test("事务内再开事务走保存点：内层失败只回滚内层", async () => {
     const database = await freshDatabase();
     try {
       await database.transaction(async (tx) => {
@@ -67,7 +67,7 @@ describe("事务通道", () => {
     }
   });
 
-  it("事务内的写与事务同生共死", async () => {
+  test("事务内的写与事务同生共死", async () => {
     const database = await freshDatabase();
     try {
       await expect(

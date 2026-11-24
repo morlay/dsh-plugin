@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 // 引用渲染：本地引用成官方 chip（icon + token，点击走 actions），外部地址保持锚点，
 // 普通文本 / 代码不受影响。
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import { ReferenceMarkdown, referenceMentions } from "../client/reference-markdown.tsx";
 import type { Reference } from "../client/reference.ts";
 
 // vitest 未开 globals，@testing-library/react 的自动清理不会生效，这里显式收尾。
-afterEach(cleanup);
 
 const labels = { code: { copyLabel: "copy", copiedLabel: "copied" }, footnotes: "footnotes" };
 
@@ -19,7 +19,7 @@ function actions(): {
 }
 
 describe("ReferenceMarkdown", () => {
-  it("renders bare URIs as chips (protocol omitted) and clicks through to openFile / openSkill", () => {
+  test("renders bare URIs as chips (protocol omitted) and clicks through to openFile / openSkill", () => {
     const owner = actions();
     render(
       <ReferenceMarkdown
@@ -40,7 +40,7 @@ describe("ReferenceMarkdown", () => {
     expect(owner.openFile).toHaveBeenCalledTimes(1);
   });
 
-  it("turns a hand-typed @path into a chip", () => {
+  test("turns a hand-typed @path into a chip", () => {
     const owner = actions();
     const { container } = render(
       <ReferenceMarkdown text="看 @mise.toml 的配置" labels={labels} actions={owner} />,
@@ -52,7 +52,7 @@ describe("ReferenceMarkdown", () => {
     expect(container.textContent).toBe("看 mise.toml 的配置");
   });
 
-  it("keeps the line fragment of a hand-typed @path on the chip", () => {
+  test("keeps the line fragment of a hand-typed @path on the chip", () => {
     const owner = actions();
     render(<ReferenceMarkdown text="@mise.toml#L12-L40" labels={labels} actions={owner} />);
     const chip = screen.getByRole("button", { name: "mise.toml#L12-L40" });
@@ -61,7 +61,7 @@ describe("ReferenceMarkdown", () => {
     expect(owner.openFile).toHaveBeenCalledWith("mise.toml");
   });
 
-  it("turns a local markdown link into a chip showing its label and range", () => {
+  test("turns a local markdown link into a chip showing its label and range", () => {
     const owner = actions();
     const { container } = render(
       <ReferenceMarkdown text="[实现](src/a.ts#L12-L40)" labels={labels} actions={owner} />,
@@ -74,7 +74,7 @@ describe("ReferenceMarkdown", () => {
     expect(container.textContent).toBe("实现");
   });
 
-  it("turns the official mention form into a chip without leaving the @ behind", () => {
+  test("turns the official mention form into a chip without leaving the @ behind", () => {
     const owner = actions();
     const { container } = render(
       <ReferenceMarkdown text="@[label](dsh-session:abc)" labels={labels} actions={owner} />,
@@ -87,7 +87,7 @@ describe("ReferenceMarkdown", () => {
     expect(owner.openSkill).not.toHaveBeenCalled();
   });
 
-  it("turns a quoted @path mention into a chip without the quotes", () => {
+  test("turns a quoted @path mention into a chip without the quotes", () => {
     const owner = actions();
     const { container } = render(
       <ReferenceMarkdown text='看 @"my file.ts" 的配置' labels={labels} actions={owner} />,
@@ -100,20 +100,20 @@ describe("ReferenceMarkdown", () => {
     expect(container.textContent).toBe("看 my file.ts 的配置");
   });
 
-  it("still renders the chip without owner actions", () => {
+  test("still renders the chip without owner actions", () => {
     render(<ReferenceMarkdown text="file:mise.toml" labels={labels} />);
     const chip = screen.getByRole("button", { name: "mise.toml" });
     expect(() => fireEvent.click(chip)).not.toThrow();
   });
 
-  it("keeps http links as anchors", () => {
+  test("keeps http links as anchors", () => {
     render(<ReferenceMarkdown text="[文档](https://example.com/a)" labels={labels} />);
     const anchor = screen.getByRole("link");
     expect(anchor.getAttribute("href")).toBe("https://example.com/a");
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  it("leaves plain text, inline code and code blocks alone", () => {
+  test("leaves plain text, inline code and code blocks alone", () => {
     const { container } = render(
       <ReferenceMarkdown
         text={"普通文本 `Makefile`\n\n```\nfile:mise.toml\n```"}
@@ -130,7 +130,7 @@ describe("ReferenceMarkdown", () => {
 });
 
 describe("referenceMentions", () => {
-  it("resolves the display text of this render's references", () => {
+  test("resolves the display text of this render's references", () => {
     const owner = actions();
     const skill: Reference = { protocol: "skill", path: "code-review" };
     const mentions = referenceMentions(owner, new Map([["code-review", skill]]));
@@ -140,7 +140,7 @@ describe("referenceMentions", () => {
     expect(owner.openSkill).toHaveBeenCalledWith("code-review");
   });
 
-  it("resolves explicit scheme tokens and leaves ordinary inline code alone", () => {
+  test("resolves explicit scheme tokens and leaves ordinary inline code alone", () => {
     const owner = actions();
     const mentions = referenceMentions(owner);
     const mention = mentions.resolve("file:src/a.ts#L12-L40");

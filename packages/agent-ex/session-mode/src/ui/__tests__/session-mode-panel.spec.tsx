@@ -1,18 +1,13 @@
 // @vitest-environment happy-dom
 // 右栏面板：按会话拉生效态、按折叠组呈现全量目录、三态改动攒成草稿一次提交；
 // 逐字段「恢复默认」走 `setModePatch(id, null)`；工具段的「只看可调用」是纯展示层过滤。
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useEffect, useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 import type { ModeConfig } from "../../endpoint/mode-config.ts";
 import type { SessionModeActiveState } from "../../endpoint/session-mode-shapes.ts";
 import { SessionModePanelBody } from "../session-mode-panel.view.tsx";
 import type { SessionModeStore } from "../session-mode.store.ts";
-
-afterEach(() => {
-  cleanup();
-});
-
 function config(extra: Partial<ModeConfig> = {}): ModeConfig {
   return {
     presetsOnly: [],
@@ -33,7 +28,6 @@ function config(extra: Partial<ModeConfig> = {}): ModeConfig {
     ...extra,
   };
 }
-
 function state(overrides: Partial<SessionModeActiveState> = {}): SessionModeActiveState {
   const base = config();
   return {
@@ -70,7 +64,6 @@ function state(overrides: Partial<SessionModeActiveState> = {}): SessionModeActi
     ...overrides,
   };
 }
-
 function fakeStore(value: SessionModeActiveState, applied: string[] = []): SessionModeStore {
   return {
     loadActive: async () => value,
@@ -89,14 +82,12 @@ function fakeStore(value: SessionModeActiveState, applied: string[] = []): Sessi
     remove: async () => "coding",
   } as unknown as SessionModeStore;
 }
-
 // 展开某个折叠组：标题按钮的文本就是组名（后面跟着 +/− 的状态符号）。
 function openSection(title: string): void {
   fireEvent.click(screen.getByText(title));
 }
-
 describe("会话模式面板", () => {
-  it("没有会话时给一句空态，不发请求", () => {
+  test("没有会话时给一句空态，不发请求", () => {
     let loads = 0;
     const store = fakeStore(state());
     (
@@ -109,8 +100,7 @@ describe("会话模式面板", () => {
     expect(screen.getByText("当前没有会话")).toBeDefined();
     expect(loads).toBe(0);
   });
-
-  it("读出这个会话的生效态：模式名、说明与全量目录", async () => {
+  test("读出这个会话的生效态：模式名、说明与全量目录", async () => {
     render(<SessionModePanelBody sessionId="s1" store={fakeStore(state())} panelId="p" />);
     await waitFor(() => {
       expect(screen.getByText("编码模式")).toBeDefined();
@@ -119,8 +109,7 @@ describe("会话模式面板", () => {
     expect(screen.getByText(/技能 \(1\)/u)).toBeDefined();
     expect(screen.getByText(/政策规则 \(1\)/u)).toBeDefined();
   });
-
-  it("会话覆盖标出来源，没有覆盖的是模式默认", async () => {
+  test("会话覆盖标出来源，没有覆盖的是模式默认", async () => {
     render(
       <SessionModePanelBody
         sessionId="s1"
@@ -133,8 +122,7 @@ describe("会话模式面板", () => {
     });
     expect(screen.getAllByText("模式默认").length).toBeGreaterThan(0);
   });
-
-  it("被覆盖的字段标会话覆盖，其余标模式默认", async () => {
+  test("被覆盖的字段标会话覆盖，其余标模式默认", async () => {
     render(
       <SessionModePanelBody
         sessionId="s1"
@@ -162,8 +150,7 @@ describe("会话模式面板", () => {
     expect(screen.getAllByText("会话覆盖").length).toBe(2);
     expect(screen.queryByText("模式默认")).toBeNull();
   });
-
-  it("persona 段：改 prefix 与 suffix 进草稿", async () => {
+  test("persona 段：改 prefix 与 suffix 进草稿", async () => {
     const commits: ModeConfig[] = [];
     const value = state({ config: config({ persona: { prefix: "旧前缀", suffix: "旧后缀" } }) });
     const store = fakeStore(value);
@@ -195,8 +182,7 @@ describe("会话模式面板", () => {
     });
     expect(commits[0]?.persona).toEqual({ prefix: "先读后改。", suffix: "改完自测。" });
   });
-
-  it("persona 的「恢复默认」清的就是 persona 这一个字段", async () => {
+  test("persona 的「恢复默认」清的就是 persona 这一个字段", async () => {
     const patches: Readonly<Record<string, unknown>>[] = [];
     const value = state({
       config: config({ persona: { prefix: "你是审查者。", suffix: "" } }),
@@ -229,8 +215,7 @@ describe("会话模式面板", () => {
     });
     expect(patches[0]).toEqual({ persona: null });
   });
-
-  it("「应用到会话」把草稿一次提交", async () => {
+  test("「应用到会话」把草稿一次提交", async () => {
     const applied: string[] = [];
     render(<SessionModePanelBody sessionId="s1" store={fakeStore(state(), applied)} panelId="p" />);
     await waitFor(() => {
@@ -242,8 +227,7 @@ describe("会话模式面板", () => {
     });
     expect(screen.getByText("已应用到会话")).toBeDefined();
   });
-
-  it("应用到会话：一次提交整份草稿", async () => {
+  test("应用到会话：一次提交整份草稿", async () => {
     const commits: ModeConfig[] = [];
     const value = state();
     const store = fakeStore(value);
@@ -267,8 +251,7 @@ describe("会话模式面板", () => {
     });
     expect(commits[0]).toEqual({ ...config(), instructions: false });
   });
-
-  it("恢复默认：某个字段回到模式默认", async () => {
+  test("恢复默认：某个字段回到模式默认", async () => {
     const patches: { sessionId: string; patch: Readonly<Record<string, unknown>> }[] = [];
     // 这个会话把 instructions 覆盖成了"关"，模式默认是"开"。
     const value = state({
@@ -316,16 +299,14 @@ describe("会话模式面板", () => {
     // 清干净了：这一项不再给「恢复默认」。
     expect(screen.queryByRole("button", { name: "恢复默认" })).toBeNull();
   });
-
-  it("没有覆盖的字段不给「恢复默认」", async () => {
+  test("没有覆盖的字段不给「恢复默认」", async () => {
     render(<SessionModePanelBody sessionId="s1" store={fakeStore(state())} panelId="p" />);
     await waitFor(() => {
       expect(screen.getByText("编码模式")).toBeDefined();
     });
     expect(screen.queryByRole("button", { name: "恢复默认" })).toBeNull();
   });
-
-  it("过滤开关打开后列表只剩可用项", async () => {
+  test("过滤开关打开后列表只剩可用项", async () => {
     // bash 所在的工具组被这个会话 deny 掉了：它在目录里，但不可调用。
     const value = state({
       config: config({ denyTools: ["group:shell"] }),
@@ -346,8 +327,7 @@ describe("会话模式面板", () => {
     });
     expect(screen.getByText(/文件 \(1\)/u)).toBeDefined();
   });
-
-  it("读失败给整块错误态", async () => {
+  test("读失败给整块错误态", async () => {
     const store = fakeStore(state());
     (
       store as unknown as { loadActive: (id: string) => Promise<SessionModeActiveState> }
@@ -365,8 +345,7 @@ describe("会话模式面板", () => {
     expect(screen.queryByText("读取中…")).toBeNull();
     expect(screen.queryByText(/工具 \(/u)).toBeNull();
   });
-
-  it("写失败：notice 在、草稿还在", async () => {
+  test("写失败：notice 在、草稿还在", async () => {
     const store = fakeStore(state());
     (
       store as unknown as {
@@ -390,8 +369,7 @@ describe("会话模式面板", () => {
       "false",
     );
   });
-
-  it("「应用到会话」是分体按钮：右半段才开菜单，项顺序与截图一致，删除按 deletable 门控", async () => {
+  test("「应用到会话」是分体按钮：右半段才开菜单，项顺序与截图一致，删除按 deletable 门控", async () => {
     render(<SessionModePanelBody sessionId="s1" store={fakeStore(state())} panelId="p" />);
     await waitFor(() => {
       expect(screen.getByText("应用到会话")).toBeDefined();
@@ -415,8 +393,7 @@ describe("会话模式面板", () => {
       "true",
     );
   });
-
-  it("删除要二次确认：确认后才 remove，删完会话回落到内置默认", async () => {
+  test("删除要二次确认：确认后才 remove，删完会话回落到内置默认", async () => {
     const calls: string[] = [];
     let loads = 0;
     const custom = state({
@@ -455,8 +432,7 @@ describe("会话模式面板", () => {
       expect(screen.getByText("标准模式")).toBeDefined();
     });
   });
-
-  it("投影变化触发重拉", async () => {
+  test("投影变化触发重拉", async () => {
     // 别处切了模式（`sessionMode`）或换了 preset（`agentPreset`）：面板要跟着重拉。
     const loads: string[] = [];
     const value = state();
@@ -467,7 +443,6 @@ describe("会话模式面板", () => {
       loads.push(id);
       return value;
     };
-
     // 一个能推值的 `useSessions` 替身：投影值变了，selector 的结果就变。
     let projection: Record<string, unknown> = { sessionMode: "coding", agentPreset: "ptc" };
     const listeners = new Set<() => void>();
@@ -491,7 +466,6 @@ describe("会话模式面板", () => {
       }, []);
       return selector(snapshot());
     };
-
     render(
       <SessionModePanelBody
         sessionId="s1"
@@ -504,14 +478,12 @@ describe("会话模式面板", () => {
       expect(screen.getByText("编码模式")).toBeDefined();
     });
     expect(loads).toEqual(["s1"]);
-
     // 别处切了模式：投影变了，面板重拉一次。
     projection = { sessionMode: "chat", agentPreset: "ptc" };
     for (const listener of listeners) listener();
     await waitFor(() => {
       expect(loads).toEqual(["s1", "s1"]);
     });
-
     // 换了 preset：同样重拉。
     projection = { sessionMode: "chat", agentPreset: "minimal" };
     for (const listener of listeners) listener();
@@ -519,8 +491,7 @@ describe("会话模式面板", () => {
       expect(loads).toEqual(["s1", "s1", "s1"]);
     });
   });
-
-  it("换一个 sessionId 重拉", async () => {
+  test("换一个 sessionId 重拉", async () => {
     // 会话切换是重拉的另一个来源：`sessionId` 变了就要拉那个会话的生效态。
     const loads: string[] = [];
     const store = fakeStore(state());
@@ -532,15 +503,12 @@ describe("会话模式面板", () => {
         id === "s2" ? { mode: { id: "chat", name: "对话模式", description: "" } } : undefined,
       );
     };
-
     const { rerender } = render(<SessionModePanelBody sessionId="s1" store={store} panelId="p" />);
     await waitFor(() => {
       expect(screen.getByText("编码模式")).toBeDefined();
     });
     expect(loads).toEqual(["s1"]);
-
     rerender(<SessionModePanelBody sessionId="s2" store={store} panelId="p" />);
-
     // 拉了新会话的那一份，而且面板显示的是**它**的模式。
     await waitFor(() => {
       expect(screen.getByText("对话模式")).toBeDefined();

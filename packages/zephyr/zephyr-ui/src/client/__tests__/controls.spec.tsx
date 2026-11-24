@@ -5,8 +5,9 @@
 // 盯的接缝是**控件的输入输出**：粘贴与回车都折成"整段替换"的一次回调，候选菜单只列还没加进去的那些；
 // 图标按钮没有文字，名字走无障碍名。样式几何归各控件自己的样式对象，这里只钉住它的关键数值。
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import { Button } from "../controls/Button.tsx";
 import iconCss from "../controls/IconButton.module.css";
 import buttonCss from "../controls/Button.module.css";
@@ -17,23 +18,21 @@ import { SearchSelect } from "../controls/SearchSelect.tsx";
 import { TagInput } from "../controls/TagInput.tsx";
 import { mergeTags, parseTagList } from "../controls/tags.ts";
 
-afterEach(cleanup);
-
 describe("名单的文本解析", () => {
-  it("粘贴的一串按逗号（中英）/ 分号 / 换行拆开：去空白、去重、保序", () => {
+  test("粘贴的一串按逗号（中英）/ 分号 / 换行拆开：去空白、去重、保序", () => {
     expect(parseTagList("read, write；bash\nls")).toEqual(["read", "write", "bash", "ls"]);
     expect(parseTagList(" read ,,read ; read ")).toEqual(["read"]);
     expect(parseTagList("   ")).toEqual([]);
   });
 
-  it("并进现有名单：重复的不再进来，现有的保持在前", () => {
+  test("并进现有名单：重复的不再进来，现有的保持在前", () => {
     expect(mergeTags(["read"], ["write", "read"])).toEqual(["read", "write"]);
     expect(mergeTags([], ["bash"])).toEqual(["bash"]);
   });
 });
 
 describe("标签输入", () => {
-  it("回车确认一个：整段替换的回调带上去重后的名单", () => {
+  test("回车确认一个：整段替换的回调带上去重后的名单", () => {
     const onChange = vi.fn();
     render(
       <TagInput
@@ -52,7 +51,7 @@ describe("标签输入", () => {
     expect(onChange).toHaveBeenCalledWith(["read", "bash"]);
   });
 
-  it("粘贴一串拆成多个：中英逗号、分号、换行都是分隔符", () => {
+  test("粘贴一串拆成多个：中英逗号、分号、换行都是分隔符", () => {
     const onChange = vi.fn();
     render(
       <TagInput
@@ -71,7 +70,7 @@ describe("标签输入", () => {
     expect(onChange).toHaveBeenCalledWith(["write", "bash", "read", "ls"]);
   });
 
-  it("单个名字的粘贴不拦：照旧落进输入框，还能接着改", () => {
+  test("单个名字的粘贴不拦：照旧落进输入框，还能接着改", () => {
     const onChange = vi.fn();
     render(
       <TagInput
@@ -90,7 +89,7 @@ describe("标签输入", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("移除一个标签：回调给它去掉之后的那份", () => {
+  test("移除一个标签：回调给它去掉之后的那份", () => {
     const onChange = vi.fn();
     render(
       <TagInput
@@ -107,7 +106,7 @@ describe("标签输入", () => {
     expect(onChange).toHaveBeenCalledWith(["bash"]);
   });
 
-  it("聚焦即整体下拉：候选只列还没加进去的那些，输入跟着过滤", () => {
+  test("聚焦即整体下拉：候选只列还没加进去的那些，输入跟着过滤", () => {
     const options = [{ value: "read" }, { value: "bash" }, { value: "web_search" }];
     const { rerender } = render(
       <TagInput
@@ -149,7 +148,7 @@ describe("标签输入", () => {
     expect(screen.queryByRole("menuitem", { name: "read" })).toBeNull();
   });
 
-  it("点候选加一个：留在框里继续加下一个（输入框焦点不丢）", () => {
+  test("点候选加一个：留在框里继续加下一个（输入框焦点不丢）", () => {
     const onChange = vi.fn();
     render(
       <TagInput
@@ -173,7 +172,7 @@ describe("标签输入", () => {
 });
 
 describe("图标按钮", () => {
-  it("没有文字，名字走无障碍名；几何是侧边栏那种方形按钮", () => {
+  test("没有文字，名字走无障碍名；几何是侧边栏那种方形按钮", () => {
     render(
       <IconButton label="删除模式 编码模式">
         <span data-testid="glyph" />
@@ -196,7 +195,7 @@ describe("可搜索选择器", () => {
     { value: "openai", label: "OpenAI" },
   ];
 
-  it("触发按钮显示当前值；空值显示'没写'那一档", () => {
+  test("触发按钮显示当前值；空值显示'没写'那一档", () => {
     const { rerender } = render(
       <SearchSelect
         label="服务商"
@@ -224,7 +223,7 @@ describe("可搜索选择器", () => {
     expect(screen.getByRole("button", { name: "服务商" }).textContent).toBe("Ollama Cloud");
   });
 
-  it("打开后先给搜索框：输入即过滤，选中一项回调它的值", async () => {
+  test("打开后先给搜索框：输入即过滤，选中一项回调它的值", async () => {
     const onSelect = vi.fn();
     render(
       <SearchSelect
@@ -252,7 +251,7 @@ describe("可搜索选择器", () => {
     expect(onSelect).toHaveBeenCalledWith("deepseek");
   });
 
-  it("一个都没匹配上：说一句而不是给一张空菜单", () => {
+  test("一个都没匹配上：说一句而不是给一张空菜单", () => {
     render(
       <SearchSelect
         label="服务商"
@@ -291,7 +290,7 @@ describe("模型路由清单", () => {
     },
   ];
 
-  it("按 provider 分组铺开，选一条回调整条路由（服务商与模型一起）", () => {
+  test("按 provider 分组铺开，选一条回调整条路由（服务商与模型一起）", () => {
     const onSelect = vi.fn();
     render(
       <ModelRouteList
@@ -316,7 +315,7 @@ describe("模型路由清单", () => {
     expect(onSelect).toHaveBeenCalledWith(routes[1]);
   });
 
-  it("当前那条打勾", () => {
+  test("当前那条打勾", () => {
     render(
       <ModelRouteList
         label="用哪个模型"
@@ -337,7 +336,7 @@ describe("模型路由清单", () => {
     ).toBe("true");
   });
 
-  it("读模型中 / 读不出来 / 一条都没有：各说一句，不给空清单", () => {
+  test("读模型中 / 读不出来 / 一条都没有：各说一句，不给空清单", () => {
     const { rerender } = render(
       <ModelRouteList
         label="用哪个模型"
@@ -383,7 +382,7 @@ describe("模型路由清单", () => {
 });
 
 describe("内容组件的身份标记", () => {
-  it("每个控件都带稳定的 `data-role`（供样式 / 测试 / 自动化定位）", () => {
+  test("每个控件都带稳定的 `data-role`（供样式 / 测试 / 自动化定位）", () => {
     render(
       <>
         <Button variant="outline">添加</Button>
@@ -442,7 +441,7 @@ describe("内容组件的身份标记", () => {
 });
 
 describe("按钮", () => {
-  it("文字不换行：本包取到的按钮带那条修饰", () => {
+  test("文字不换行：本包取到的按钮带那条修饰", () => {
     render(<Button variant="outline">添加</Button>);
 
     const button = screen.getByRole("button", { name: "添加" });

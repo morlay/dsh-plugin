@@ -28,7 +28,8 @@ import {
   configure,
 } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 测试内的 fs：上游本地文件系统经 `fromCordis` 接管到本仓契约令牌。 */
 @Injectable()
@@ -38,17 +39,9 @@ class LocalFs extends fromCordis(FileSystem, LocalFileSystem) {
   }
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "dsh-skill-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       // 只装这条工具行自己要的两行：域装配函数 `provideSkill()` 还带 `skills` 端点，
@@ -69,12 +62,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("skill 域的技能工具行", () => {
-  it(
+  test(
     "这一行按 agent 装配：装进某个 scope 才登记 `skill`，应用根上没有它",
     { timeout: 20_000 },
     async () => {

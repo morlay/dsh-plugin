@@ -5,7 +5,8 @@
  * `$events` 分流，以及 unary 那条 HTTP RPC。真实浏览器里的问题只能在这里复现，
  * e2e 不该当第一层调试手段。
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 import { muxTransport, type RemoteFetch } from "../remote-transport.ts";
 import { FakeSocket } from "./fake-socket.ts";
 
@@ -52,12 +53,8 @@ function transportOf(socket: FakeSocket, fetchOf?: RemoteFetch) {
   return muxTransport(undefined, fetchOf);
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("muxTransport", { timeout: 5_000 }, () => {
-  it("unary 走 HTTP `/api/<endpoint>`：上游的请求信封与结果解码", async () => {
+  test("unary 走 HTTP `/api/<endpoint>`：上游的请求信封与结果解码", async () => {
     const { fetchOf, calls } = fakeFetch(() => ({ ok: true, value: { ids: [], byId: {} } }));
     const transport = transportOf(new FakeSocket(), fetchOf);
 
@@ -78,14 +75,14 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(typeof calls[0]?.body.rpcId, "rpcId 由发起方铸、宿主原样回").toBe("string");
   });
 
-  it("HTTP 失败信封（`result.ok === false`）抛带 code 的错误", async () => {
+  test("HTTP 失败信封（`result.ok === false`）抛带 code 的错误", async () => {
     const { fetchOf } = fakeFetch(() => ({ ok: false }));
     const transport = transportOf(new FakeSocket(), fetchOf);
     // 失败信封缺 error 字段时也要有可读的消息（不吞成 undefined）。
     await expect(transport.invoke("session/create", { args: {} })).rejects.toThrow(/调用失败/);
   });
 
-  it("socket 断开：在途**流**失败而不是挂着，下一次开流在新 socket 上照常发出", async () => {
+  test("socket 断开：在途**流**失败而不是挂着，下一次开流在新 socket 上照常发出", async () => {
     const sockets: FakeSocket[] = [];
     vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
       const created = new FakeSocket();
@@ -123,7 +120,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     await secondIterator.return?.(undefined);
   });
 
-  it("unary 不碰 socket：未建连也能成功，且 mux 上一条帧都没有", async () => {
+  test("unary 不碰 socket：未建连也能成功，且 mux 上一条帧都没有", async () => {
     const socket = new FakeSocket();
     const { fetchOf } = fakeFetch(() => ({ ok: true, value: { ids: [], byId: {} } }));
     const transport = transportOf(socket, fetchOf);
@@ -135,7 +132,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(socket.sent, "unary 走 HTTP：不该为它建连、也不该发 open 帧").toEqual([]);
   });
 
-  it("openStream：item 逐帧到达，end 结束迭代", async () => {
+  test("openStream：item 逐帧到达，end 结束迭代", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const controller = new AbortController();
@@ -160,7 +157,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     await expect(third).resolves.toEqual({ value: undefined, done: true });
   });
 
-  it("openStream：error 帧让迭代抛错（流的失败不是一个无声的 end）", async () => {
+  test("openStream：error 帧让迭代抛错（流的失败不是一个无声的 end）", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const stream = transport.openStream(
@@ -178,7 +175,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
   });
 
-  it("openStream：abort 时发 cancel 帧并结束迭代", async () => {
+  test("openStream：abort 时发 cancel 帧并结束迭代", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const controller = new AbortController();
@@ -193,7 +190,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(socket.framesSent()).toContainEqual({ type: "cancel", streamId: "s1" });
   });
 
-  it("`$events` 帧按 channel 分发给订阅者", async () => {
+  test("`$events` 帧按 channel 分发给订阅者", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const seen: [string, unknown[]][] = [];
@@ -221,7 +218,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(seen).toEqual([["api-session/added", [{ id: "s1" }]]]);
   });
 
-  it("**先开流、后 subscribe** 时也要补开 `$events`（否则推送永远收不到）", async () => {
+  test("**先开流、后 subscribe** 时也要补开 `$events`（否则推送永远收不到）", async () => {
     const socket = new FakeSocket();
     const transport = transportOf(socket);
     const controller = new AbortController();
@@ -246,7 +243,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     expect(seen).toEqual([["api-session/added", [{ id: "s9" }]]]);
   });
 
-  it("只有订阅、没有流时也要建连并补开 `$events`（unary 走 HTTP 之后没人建 socket）", async () => {
+  test("只有订阅、没有流时也要建连并补开 `$events`（unary 走 HTTP 之后没人建 socket）", async () => {
     const sockets: FakeSocket[] = [];
     vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
       const created = new FakeSocket();
@@ -263,7 +260,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     ]);
   });
 
-  it("只有要答复事件时也要建连并补开 `$events`", async () => {
+  test("只有要答复事件时也要建连并补开 `$events`", async () => {
     const sockets: FakeSocket[] = [];
     vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
       const created = new FakeSocket();
@@ -280,7 +277,7 @@ describe("muxTransport", { timeout: 5_000 }, () => {
     ]);
   });
 
-  it("socket 断开之后再订阅：重建连，并在新 socket 上补开 `$events`", async () => {
+  test("socket 断开之后再订阅：重建连，并在新 socket 上补开 `$events`", async () => {
     const sockets: FakeSocket[] = [];
     vi.stubGlobal("WebSocket", function FakeWebSocketCtor(): FakeSocket {
       const created = new FakeSocket();
@@ -321,7 +318,7 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
     }
   }
 
-  it("收到审批请求 → 处理者拿到已投影的请求 → 答复经 HTTP 回到宿主", async () => {
+  test("收到审批请求 → 处理者拿到已投影的请求 → 答复经 HTTP 回到宿主", async () => {
     const socket = new FakeSocket();
     const { fetchOf, calls } = fakeFetch(() => ({ ok: true, value: undefined }));
     const transport = transportOf(socket, fetchOf);
@@ -394,7 +391,7 @@ describe("可答复的转发事件（审批 / 提问）", { timeout: 5_000 }, ()
     });
   });
 
-  it("宿主撤回请求（`cancel` 帧）：处理者手里的信号被 abort", async () => {
+  test("宿主撤回请求（`cancel` 帧）：处理者手里的信号被 abort", async () => {
     const socket = new FakeSocket();
     const { fetchOf } = fakeFetch(() => ({ ok: true, value: undefined }));
     const transport = transportOf(socket, fetchOf);

@@ -1,26 +1,19 @@
 // @vitest-environment happy-dom
 // composer 里的模式 chip：点开是模式清单，选中后走一次切换；开过 turn 的会话只读。
 // 只读态与当前选中都读**会话投影**（`sessionModeEditable` / `sessionMode`），与宿主拒绝切换读同一份事实。
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 import { zh } from "../locales.ts";
 import { SessionModeSeatView } from "../session-mode-seat.view.tsx";
-
-afterEach(() => {
-  cleanup();
-});
-
 // 会话目录快照的形状（上游 `useSessions` 的 selector 入参）：本包只读 `projectionValues`。
 interface CatalogSnapshot {
   byId: Record<string, { projectionValues?: Record<string, unknown> }>;
 }
-
 /** 一个把投影值直接喂给 selector 的 `useSessions` 替身。 */
 function sessionsWith(values: Record<string, unknown>) {
   const snapshot: CatalogSnapshot = { byId: { s1: { projectionValues: values } } };
   return (selector: (state: CatalogSnapshot) => unknown): unknown => selector(snapshot);
 }
-
 // 清单一到就能渲染的两个模式。
 const ROSTER = {
   default: "coding",
@@ -29,7 +22,6 @@ const ROSTER = {
     { id: "chat", name: "对话模式", description: "只做对话。" },
   ],
 };
-
 /** 装配一个 chip 容器：store 与字典都换成替身（装配里那两样由装配提供）。 */
 function seatView(options: {
   readonly store: unknown;
@@ -43,9 +35,8 @@ function seatView(options: {
   (view as unknown as { viewProps: unknown }).viewProps = options.props ?? {};
   return view;
 }
-
 describe("composer 的模式 chip", () => {
-  it("清单读到之前不渲染", () => {
+  test("清单读到之前不渲染", () => {
     const view = seatView({
       // 永远不会 resolve 的清单：这一帧就该是空的。
       store: { loadRoster: () => new Promise(() => {}) },
@@ -55,8 +46,7 @@ describe("composer 的模式 chip", () => {
     const { container } = render(<>{tree}</>);
     expect(container.textContent).toBe("");
   });
-
-  it("清单到了就渲染成座位按钮", async () => {
+  test("清单到了就渲染成座位按钮", async () => {
     const view = seatView({
       store: {
         loadRoster: async () => ROSTER,
@@ -75,8 +65,7 @@ describe("composer 的模式 chip", () => {
       expect(screen.getAllByText("编码模式").length).toBeGreaterThan(0);
     });
   });
-
-  it("投影说不可改时渲染只读并给原因", async () => {
+  test("投影说不可改时渲染只读并给原因", async () => {
     // 会话已经开了 turn：投影 `sessionModeEditable` 是 false（不是本地 state 猜的）。
     const view = seatView({
       store: { loadRoster: async () => ROSTER, select: async () => "chat" },
@@ -99,8 +88,7 @@ describe("composer 的模式 chip", () => {
     // 原因是字典里的那一句，不是硬编码。
     expect(button.getAttribute("title")).toBe(zh.lockedHint);
   });
-
-  it("失败后错误条在 DOM 里", async () => {
+  test("失败后错误条在 DOM 里", async () => {
     const view = seatView({
       store: {
         loadRoster: async () => ROSTER,

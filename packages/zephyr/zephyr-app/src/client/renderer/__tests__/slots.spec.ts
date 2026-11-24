@@ -6,26 +6,31 @@
  *
  * 四个 describe 只读同一份 `SlotsDefault` 装配（各自写的是互不重叠的成员），装一次就够。
  */
-import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { onTestFinished } from "vitest";
 import { SlotsDefault } from "../slots.service.ts";
 import { Slot, applySlotDeclaration, slotDeclarationOf } from "../slot.decorator.ts";
 import { Slots } from "../slots.contract.ts";
 
-let app: App;
-let slots: Slots;
-
-beforeAll(async () => {
-  app = await bootstrapApplication({ providers: [SlotsDefault], timeoutMs: 8_000 });
-  slots = app.get(Slots);
-});
-
-afterAll(async () => {
-  await app.dispose();
-});
+/**
+ * 每个用例一份 `Slots` 装配（装配便宜，用完随用例卸）。
+ * @param appEnv - 本用例的运行环境（数据根就是它的临时目录）。
+ * @returns 契约面。
+ */
+async function slotsOf(appEnv: TestingAppEnv): Promise<Slots> {
+  const app = await bootstrapApplication({
+    providers: [{ provide: AppEnv, useValue: appEnv }, SlotsDefault],
+    timeoutMs: 8_000,
+  });
+  onTestFinished(() => app.dispose());
+  return app.get(Slots);
+}
 
 describe("Slots 契约面", { timeout: 10_000 }, () => {
-  it("九个成员都能读到，且方法可调用", () => {
+  test("九个成员都能读到，且方法可调用", async ({ appEnv }) => {
+    const slots = await slotsOf(appEnv);
     for (const key of [
       "entries",
       "inject",
@@ -41,7 +46,8 @@ describe("Slots 契约面", { timeout: 10_000 }, () => {
     }
   });
 
-  it("register 接受组件对象与声明 options（root 内建已声明）", () => {
+  test("register 接受组件对象与声明 options（root 内建已声明）", async ({ appEnv }) => {
+    const slots = await slotsOf(appEnv);
     const Component = (): null => null;
     const dispose = slots.register({ name: "root", id: "test" } as never, Component as never);
     expect(slots.entries("root" as never).length).toBe(1);
@@ -49,7 +55,8 @@ describe("Slots 契约面", { timeout: 10_000 }, () => {
     expect(slots.entries("root" as never).length).toBe(0);
   });
 
-  it("installLocale 装一次；重复装会按上游语义抛错（boot-once）", () => {
+  test("installLocale 装一次；重复装会按上游语义抛错（boot-once）", async ({ appEnv }) => {
+    const slots = await slotsOf(appEnv);
     const face = {
       bind: () => () => "",
       getSnapshot: () => ({ active: "zh" }),
@@ -61,7 +68,8 @@ describe("Slots 契约面", { timeout: 10_000 }, () => {
 });
 
 describe("@Slot 声明", { timeout: 10_000 }, () => {
-  it("声明写在类上，应用后 scope/root 都到位；撤销按逆序", () => {
+  test("声明写在类上，应用后 scope/root 都到位；撤销按逆序", async ({ appEnv }) => {
+    const slots = await slotsOf(appEnv);
     const adapter = {
       current: {
         getSnapshot: () => ({ key: undefined, hooks: {}, keyedHooks: {}, props: {} }),
@@ -79,7 +87,7 @@ describe("@Slot 声明", { timeout: 10_000 }, () => {
     expect(() => slots.installScope("session", adapter as never)).not.toThrow();
   });
 
-  it("`slotDeclarationOf` 读得到类上的声明", () => {
+  test("`slotDeclarationOf` 读得到类上的声明", () => {
     @Slot({ root: { props: { probe: 1 } } })
     class Declaring {
       static probe = 1;

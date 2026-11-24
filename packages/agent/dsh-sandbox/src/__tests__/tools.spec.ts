@@ -25,22 +25,15 @@ import {
   provideWorkingDirectory,
 } from "@morlay/dsh-agent";
 import { bootstrapApplication, type App, type Context, configure } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-const roots: string[] = [];
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 一次调用的取消面（升级判定在读参数时就发生，signal 不会被真正用到）。 */
 const signal = new AbortController().signal;
 
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 30_000);
-
 async function boot(): Promise<{ app: App; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-env-tool-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -62,7 +55,7 @@ async function boot(): Promise<{ app: App; root: string }> {
     ],
     timeoutMs: 30_000,
   } as never);
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, root };
 }
 
@@ -74,7 +67,7 @@ async function installAgentRows(app: App): Promise<Context> {
 }
 
 describe("env-tool 域", () => {
-  it(
+  test(
     "四条工具行都真的登记了工具（装进某个 agent 的 scope 之后）",
     { timeout: 30_000 },
     async () => {
@@ -94,7 +87,7 @@ describe("env-tool 域", () => {
     },
   );
 
-  it(
+  test(
     "受约束执行器在时 `bash` 广告 `sandbox_permissions`（策略行与执行器都到位）",
     { timeout: 30_000 },
     async () => {
@@ -115,7 +108,7 @@ describe("env-tool 域", () => {
     },
   );
 
-  it(
+  test(
     "升级请求先于执行判定：没有批准服务时以 `SANDBOX_ESCALATION_UNAVAILABLE` 拒绝，命令没跑",
     { timeout: 30_000 },
     async () => {

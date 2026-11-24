@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   column,
   defineTable,
@@ -25,7 +25,7 @@ const items = defineTable({
 });
 
 describe("P1：join 变体 / CTE / UNION / 行锁 / 查询观测", () => {
-  it("join 变体与别名、CTE、UNION 的 SQL 形状（两方言）", () => {
+  test("join 变体与别名、CTE、UNION 的 SQL 形状（两方言）", () => {
     const table = defineTable(items);
     const query = { table } as never;
     void query;
@@ -55,7 +55,7 @@ describe("P1：join 变体 / CTE / UNION / 行锁 / 查询观测", () => {
     expect(render(forUpdate({ skipLocked: true }), "postgres").text).toBe("FOR UPDATE SKIP LOCKED");
   });
 
-  it("实跑：join 别名、CTE、UNION、查询观测", async () => {
+  test("实跑：join 别名、CTE、UNION、查询观测", async () => {
     const events: QueryEvent[] = [];
     const database = await openDatabase({
       dialect: "sqlite",

@@ -4,76 +4,47 @@
  * 行为断言落在 `ask` 的**本地校验**上（不需要 UI 应答者，也不联网）：
  * 空问题清单被拒、声明的 approve 不属于本题选项被拒、已取消的请求立刻以取消结束。
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { provideAgent } from "@morlay/dsh-agent";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
+import { onTestFinished } from "vitest";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
 import { UserQuestionQueueDefault } from "../user-question-queue.service.ts";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-permission-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 指向临时目录的运行环境。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
-
 /** 起真 permission 栈（队列行要 `agents`，所以装真 agent 域，不造假件）。 */
-async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
+async function boot(
+  appEnv: TestingAppEnv,
+): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideAgent(),
       UserQuestionQueueDefault,
     ],
     timeoutMs: 20_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app };
 }
 
 describe("permission 域的用户提问", () => {
-  it("装配后 UserQuestionQueue 可解析", { timeout: 20_000 }, async () => {
-    const { app } = await boot();
+  test("装配后 UserQuestionQueue 可解析", { timeout: 20_000 }, async ({ appEnv }) => {
+    const { app } = await boot(appEnv);
 
     const questions = app.get(UserQuestionQueue);
     expect(typeof questions.ask).toBe("function");
   });
 
-  it(
+  test(
     "ask 的三条本地拒绝路径：空清单 / 意图标签不属于选项 / 已取消",
     { timeout: 20_000 },
-    async () => {
-      const { app } = await boot();
+    async ({ appEnv }) => {
+      const { app } = await boot(appEnv);
       const questions = app.get(UserQuestionQueue);
 
       await expect(questions.ask({ questions: [] })).rejects.toMatchObject({

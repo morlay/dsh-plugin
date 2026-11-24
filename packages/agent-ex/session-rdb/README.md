@@ -80,9 +80,12 @@
     批量导入的页面入口是同一个文件输入（`multiple`）：选一个文件仍走单条导入（「导入为会话」/ 覆盖导入，
     带 `reading` → `committing` 阶段提示），选多个 zip 一次走 `sessionAdmin/importMany`，好包各落成一条新会话、
     坏包按**选中的文件名**给原因（聚合提示「已导入 N 个会话，M 个失败」）——整批不回滚。
-  - `sessionAdmin/copyToWorkspace`：跨工作区复制 = 本包 `fork` + workspace 域的 `attach`。子会话的 `cwd`
-    换成目标工作区路径，源会话原样保留（复制不是移动）；工作区不在注册表给 `SESSION_COPY_WORKSPACE_NOT_FOUND`，
-    attach 失败撤掉刚派生的子会话并给 `SESSION_COPY_ATTACH_FAILED`。行上入口是「复制到工作区」
+  - `sessionAdmin/copyToWorkspace`：**编排层的动作，本包只转发**。复制 = `fork`（本包的分支原语
+    `SessionBranching`）+ workspace 域的 `attach`（`SessionWorkspace`），两件事的组合住在
+    `@morlay/dsh-workspace`（`SessionWorkspaceCopy`）：持久化行不认识 workspace，跨域动作不上数据面。
+    子会话的 `cwd` 换成目标工作区路径，源会话原样保留（复制不是移动）；工作区不在注册表给
+    `SESSION_COPY_WORKSPACE_NOT_FOUND`，attach 失败撤掉刚派生的子会话并给 `SESSION_COPY_ATTACH_FAILED`
+    （码由本包端点按端口给的原因映射，文案仍是本域词汇）。行上入口是「复制到工作区」
     （`data-action="copy"`）：先读工作区快照列表，确认弹窗里选目标工作区（`data-action="copy-confirm"`）再复制。
   - 失败文案只认码（`failure.ts` 的 `failureText`）：`SESSION_NOT_ARCHIVED` / `SESSION_LIVE` /
     `SESSION_CONCURRENT_WRITER` / `SESSION_NOT_FOUND` / `SESSION_IMPORT_*` 各有专属文案，其余码显示宿主原文。

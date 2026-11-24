@@ -82,12 +82,6 @@ export interface SessionImportBatchResult {
   readonly items: readonly SessionImportBatchItem[];
 }
 
-// 跨工作区复制的结果：新派生的子会话与它挂上的工作区（源会话原样保留）。
-export interface SessionCopyWorkspaceResult {
-  readonly sessionId: string;
-  readonly workspaceId: string;
-}
-
 // 事件定位的条件：与端点请求一一对应（会话身份由调用参数给）。
 export type SessionEventLocatorQuery = Omit<SessionLocateRequest, "sessionId">;
 
@@ -186,8 +180,9 @@ export interface SessionRdbStore {
   // 批量导入：逐条把 zip 落成新会话，逐条结算（坏包不影响其它包）。
   importMany(zips: readonly Uint8Array[]): Promise<SessionImportBatchResult>;
 
-  // 跨工作区复制：fork（子会话的 cwd 换成目标工作区的路径）再交给 workspace 域 attach；不新增移动动作。
-  copyToWorkspace(sessionId: string, workspaceId: string): Promise<SessionCopyWorkspaceResult>;
+  // 撤掉一条**派生出来**的会话（fork / 复制的补偿）：不走「已归档才能删」那条用户删除守卫，
+  // 派生账目（复用的事件行登记与派生统计）一起清。跨域编排在自己的失败路径上调它。
+  discardDerivedSession(id: string): Promise<void>;
 
   // 回收孤儿会话与事件行，重算派生统计，再 VACUUM。
   organize(): Promise<SessionOrganizeReport>;

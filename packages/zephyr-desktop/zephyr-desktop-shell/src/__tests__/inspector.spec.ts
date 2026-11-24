@@ -1,17 +1,7 @@
 import { createServer, type Server } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
-import {
-  DEFAULT_INSPECTOR_PORT,
-  devtoolsAddressOf,
-  nodeInspectorOf,
-  type InspectorPort,
-} from "../inspector.ts";
-
-const opened: InspectorPort[] = [];
-
-afterEach(async () => {
-  for (const inspector of opened.splice(0)) await inspector.close();
-});
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
+import { DEFAULT_INSPECTOR_PORT, devtoolsAddressOf, nodeInspectorOf } from "../inspector.ts";
 
 /**
  * @returns 此刻空闲的一个端口（先问内核要，再让出来）。
@@ -67,16 +57,16 @@ function reachable(port: number): Promise<boolean> {
 }
 
 describe("主进程 Inspector（接缝 + `node:inspector` 适配器）", () => {
-  it("地址是能粘进 Chrome DevTools 的那一条", () => {
+  test("地址是能粘进 Chrome DevTools 的那一条", () => {
     expect(devtoolsAddressOf("ws://127.0.0.1:9229/54ae6e25-5509-4bd9-ac69-bd78d0cadac7")).toBe(
       "devtools://devtools/bundled/inspector.html?ws=127.0.0.1:9229/54ae6e25-5509-4bd9-ac69-bd78d0cadac7",
     );
     expect(DEFAULT_INSPECTOR_PORT).toBe(9229);
   });
 
-  it("真适配器起得来：只绑 127.0.0.1，端口的 /json/list 拿得到", async () => {
+  test("真适配器起得来：只绑 127.0.0.1，端口的 /json/list 拿得到", async () => {
     const inspector = nodeInspectorOf();
-    opened.push(inspector);
+    onTestFinished(() => inspector.close());
     const start = await freePortOf();
     const session = await inspector.open({ port: start });
     expect(inspector.opened).toBe(true);
@@ -91,11 +81,11 @@ describe("主进程 Inspector（接缝 + `node:inspector` 适配器）", () => {
     expect(await reachable(session.port)).toBe(true);
   });
 
-  it("起始端口被占就顺延（端口冲突不该是错误）", async () => {
+  test("起始端口被占就顺延（端口冲突不该是错误）", async () => {
     const busy = await listen(0);
     const start = portOf(busy);
     const inspector = nodeInspectorOf();
-    opened.push(inspector);
+    onTestFinished(() => inspector.close());
     try {
       const session = await inspector.open({ port: start, attempts: 3 });
       expect(session.port).not.toBe(start);
@@ -106,9 +96,9 @@ describe("主进程 Inspector（接缝 + `node:inspector` 适配器）", () => {
     }
   });
 
-  it("关掉就释放端口；再关一次不报错", async () => {
+  test("关掉就释放端口；再关一次不报错", async () => {
     const inspector = nodeInspectorOf();
-    opened.push(inspector);
+    onTestFinished(() => inspector.close());
     const session = await inspector.open({ port: await freePortOf() });
     await inspector.close();
     expect(inspector.opened).toBe(false);
@@ -117,9 +107,9 @@ describe("主进程 Inspector（接缝 + `node:inspector` 适配器）", () => {
     expect(inspector.opened).toBe(false);
   });
 
-  it("连着开两次是同一个端口（不重复开）", async () => {
+  test("连着开两次是同一个端口（不重复开）", async () => {
     const inspector = nodeInspectorOf();
-    opened.push(inspector);
+    onTestFinished(() => inspector.close());
     const first = await inspector.open({ port: await freePortOf() });
     const second = await inspector.open({ port: await freePortOf() });
     expect(second.port).toBe(first.port);

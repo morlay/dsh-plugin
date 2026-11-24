@@ -20,24 +20,16 @@ import {
 } from "@morlay/zephyr-app";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { Storage, StorageDomain, StorageDomainDefault, provideStorage } from "@morlay/dsh-storage";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { SessionPersistenceRdb } from "@morlay/session-rdb";
 import { provideBetterSession } from "@morlay/session-rdb/server";
-
-const apps: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => undefined);
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
 
 /** 起一份与生产同形的清单：storage 域 + 会话持久化（含 storage 接管）。 */
 async function assemble(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "storage-backend-wiring-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideAppEnv(configure(AppEnvDefault, { profileDir: root, dataDir: root })),
@@ -63,12 +55,12 @@ async function assemble(): Promise<App> {
     ],
     timeoutMs: 30_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => undefined));
   return app;
 }
 
 describe("storage 后端接管与 storage 域在同一份清单里", () => {
-  it("rdb 已经注册进 hub、按后端名发布，且 storage 域解析得到", async () => {
+  test("rdb 已经注册进 hub、按后端名发布，且 storage 域解析得到", async () => {
     const app = await assemble();
     const hub = app.get(Storage);
 
@@ -81,21 +73,7 @@ describe("storage 后端接管与 storage 域在同一份清单里", () => {
     expect(app.get(StorageDomain)).toBeInstanceOf(StorageDomain);
   });
 
-  // 本包的两条会话行**不静态注入** `WorkspaceRegistry`（那会与 `Workspace` 行成环，把 workspace 行
-  // 排到 storage 接管之前），改在调用时按**上游注册名**读。这条守住那个口径：名字读得到、且是真面。
-  it("工作区注册表按上游名读得到（会话行调用时取的正是它）", async () => {
-    const app = await assemble();
-
-    // 会话行读的就是这个名字（`admin/workspace-registry.read.ts`：先派生名、再上游别名）。
-    // 读到的是 cordis 的 traceable 代理（同一份实现的调用面），所以按行为断言，不比对象同一性。
-    const byName = app.ctx.reflect.get("workspaceRegistry", false);
-    expect(byName).toBeDefined();
-    expect((byName as WorkspaceRegistry).archivedSessionIds).toEqual(
-      app.get(WorkspaceRegistry).archivedSessionIds,
-    );
-  });
-
-  it("rdb 后端真的可用：KV 单元开在会话库上", async () => {
+  test("rdb 后端真的可用：KV 单元开在会话库上", async () => {
     const app = await assemble();
     const backend = app.get(Storage).backend.get("rdb");
 

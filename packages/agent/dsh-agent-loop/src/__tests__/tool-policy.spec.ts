@@ -8,13 +8,8 @@ import { AgentDirectoryDefault, SystemPromptDefault, ToolRegistryDefault } from 
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { provideToolPolicy } from "../server/tool-policy.provide.ts";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
@@ -29,12 +24,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("tool-policy 域", () => {
-  it(
+  test(
     "四条策略行装得上：MCP 资源行的服务令牌能解析，工具注册表仍在",
     { timeout: 20_000 },
     async () => {

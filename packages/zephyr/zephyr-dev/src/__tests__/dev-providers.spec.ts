@@ -4,7 +4,7 @@
 // 形态只影响那一份名单：打包形态清空 = 全部预编译（页面仍是 vite 出的，只是没有逐文件包）；
 // 其余形态 `@morlay/*` 走 vite。两半开关只影响「装哪些行 / 带哪个 config」，不改名单。
 import type { ProviderEntry } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { devProviders } from "../dev/provide.ts";
 import { FederationDefault } from "../federation/federation.service.ts";
 import { ServerHmr } from "../internal/server-hmr.ts";
@@ -52,19 +52,19 @@ function includeOf(mode: Parameters<typeof devProviders>[0]): readonly string[] 
 }
 
 describe("devProviders", () => {
-  it("打包形态：名单清空（全部预编译）", () => {
+  test("打包形态：名单清空（全部预编译）", () => {
     expect(includeOf({ packaged: true })).toEqual([]);
   });
 
-  it("非打包形态：`@morlay/*` 当文件走 vite（改它们靠 HMR）", () => {
+  test("非打包形态：`@morlay/*` 当文件走 vite（改它们靠 HMR）", () => {
     expect(includeOf({ packaged: false })).toEqual(["@morlay/*"]);
   });
 
-  it("缺省等于非打包（调用方不必写 `{ packaged: false }`）", () => {
+  test("缺省等于非打包（调用方不必写 `{ packaged: false }`）", () => {
     expect(includeOf(undefined)).toEqual(["@morlay/*"]);
   });
 
-  it("服务端 HMR 关掉：清单里没有换树行（`DevHmr` 没人提供，CLI 的 `tryGet` 就是空）", () => {
+  test("服务端 HMR 关掉：清单里没有换树行（`DevHmr` 没人提供，CLI 的 `tryGet` 就是空）", () => {
     const classes = devProviders({ hmr: { server: false } }).map((item: ProviderEntry) =>
       implOf(item),
     );
@@ -73,22 +73,22 @@ describe("devProviders", () => {
     expect(classes).toContain(ViteClientAssets);
   });
 
-  it("客户端 HMR 关掉：vite 旁路带 `hmr: false`（不建 ws、页面不注入客户端）", () => {
+  test("客户端 HMR 关掉：vite 旁路带 `hmr: false`（不建 ws、页面不注入客户端）", () => {
     expect(hmrConfigOf(entryOf({ hmr: { client: false } }, ViteHandoffDefault))).toBe(false);
   });
 
-  it("两半都关：换树行不在，vite 旁路仍开着「`hmr: false`」", () => {
+  test("两半都关：换树行不在，vite 旁路仍开着「`hmr: false`」", () => {
     const mode = { hmr: { client: false, server: false } } as const;
     const classes = devProviders(mode).map((item: ProviderEntry) => implOf(item));
     expect(classes).not.toContain(ServerHmr);
     expect(hmrConfigOf(entryOf(mode, ViteHandoffDefault))).toBe(false);
   });
 
-  it("缺省：两半都开（vite 旁路不带 `hmr` 补丁，换树行在）", () => {
+  test("缺省：两半都开（vite 旁路不带 `hmr` 补丁，换树行在）", () => {
     expect(hmrConfigOf(entryOf(undefined, ViteHandoffDefault))).toBeUndefined();
   });
 
-  it("行清单：vite 旁路 + 联邦 + 页面兜底 + 换树时机，一条不少", () => {
+  test("行清单：vite 旁路 + 联邦 + 页面兜底 + 换树时机，一条不少", () => {
     const classes = devProviders().map((item: ProviderEntry) => implOf(item));
     // 页面兜底与其 dev 实现（`ClientAssets` 的必需前置）：顺序在 `assertOrder` 里另判。
     expect(classes).toContain(ViteClientAssets);

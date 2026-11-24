@@ -5,26 +5,21 @@ import { SessionId } from "@morlay/dsh-session/contract";
 import { meta, oneTurnLogStepFirst, turnLog } from "@morlay/dsh-session/testing";
 import { openRdbBackend } from "@morlay/session-rdb";
 import { DbError } from "@morlay/zephyr-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { dbErrorOf, failureCodeOf, sessionStoreError, SessionStoreError } from "../errors.ts";
 import { makeRoot, removeRoot, startAt, type Instance } from "../../__tests__/support/host.ts";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
-
 async function twoInstances(): Promise<{ first: Instance; second: Instance }> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   const first = await startAt(root);
   const second = await startAt(root);
   return { first, second };
 }
 
 describe("域错误", () => {
-  it("位点冲突给 SESSION_CONCURRENT_WRITER，且不自动重试（库保持原样）", async () => {
+  test("位点冲突给 SESSION_CONCURRENT_WRITER，且不自动重试（库保持原样）", async () => {
     const { first, second } = await twoInstances();
     try {
       const writer = await first.persistence.create(meta("conflict", "/work"));
@@ -55,9 +50,9 @@ describe("域错误", () => {
     }
   });
 
-  it("库的版本对不上时给 SESSION_STORAGE_INCOMPATIBLE，且不动那份库", async () => {
+  test("库的版本对不上时给 SESSION_STORAGE_INCOMPATIBLE，且不动那份库", async () => {
     const root = await makeRoot();
-    roots.push(root);
+    onTestFinished(() => removeRoot(root));
     const path = join(root, "sessions.sqlite");
     const seed = new DatabaseSync(path);
     seed.exec("PRAGMA user_version = 999");
@@ -77,7 +72,7 @@ describe("域错误", () => {
     after.close();
   });
 
-  it("cause 折成库层判定，域码可以从错误里读出来", () => {
+  test("cause 折成库层判定，域码可以从错误里读出来", () => {
     const sqliteBusy = Object.assign(new Error("SQLITE_BUSY: database is locked"), { code: "5" });
     const cause = dbErrorOf(sqliteBusy, "sqlite");
     expect(cause).toBeInstanceOf(DbError);

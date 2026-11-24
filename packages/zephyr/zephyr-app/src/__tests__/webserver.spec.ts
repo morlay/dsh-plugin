@@ -9,9 +9,12 @@
  */
 import { createServer } from "node:http";
 import { connect, type AddressInfo } from "node:net";
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import {
+  bootTwoSided,
+  describe,
+  expect,
+  test as base,
   WebServer,
   WebServerDefault,
   WebStartup,
@@ -33,61 +36,61 @@ class Startup0 extends WebStartup {
 /** gzip 用例的正文（大于阈值，才会被压）。 */
 const BODY = `payload-${"x".repeat(2048)}`;
 
-let app: App;
-let webServer: WebServer;
-let base: string;
+/** 本文件的一份 `WebServer` 装配：路由表随装配建一次，用例结束随之关闭。 */
+interface WebFixtures {
+  readonly web: { readonly webServer: WebServer; readonly base: string };
+}
 
-beforeAll(async () => {
-  app = await bootstrapApplication({ providers: [Startup0, WebServerDefault], timeoutMs: 6_000 });
-  webServer = app.get(WebServer);
-  base = `http://127.0.0.1:${String(webServer.port)}`;
+const test = base.extend<WebFixtures>({
+  async web({}, use) {
+    // 双端工厂负责收尾：host 侧装配 + `onTestFinished(dispose)`，spec 里没有 beforeAll/afterAll。
+    const { host } = await bootTwoSided({ createHost: () => [Startup0, WebServerDefault] });
+    const webServer = host.get(WebServer);
 
-  // 路由只在装配后注册一次：各用例读同一份路由表（「注册即记录」见第一条用例）。
-  webServer.register({
-    kind: "prefix",
-    path: PREFIX,
-    handler: (_q, s) => {
-      s.end("federation");
-    },
-  });
-  webServer.registerFallback((_q, s) => {
-    s.end("fallback");
-  });
-  webServer.registerUpgrade({ path: UPGRADE, handler: () => {} });
-  webServer.register({
-    kind: "exact",
-    path: "/text",
-    handler: (_q, s) => {
-      s.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
-      s.end(BODY);
-    },
-  });
-  webServer.register({
-    kind: "exact",
-    path: "/stream",
-    handler: (_q, s) => {
-      s.writeHead(200, { "content-type": "application/json" });
-      s.write('{"a":');
-      s.write("1}");
-      s.end();
-    },
-  });
-  webServer.register({
-    kind: "exact",
-    path: "/bin",
-    handler: (_q, s) => {
-      s.writeHead(200, { "content-type": "application/octet-stream" });
-      s.end("raw");
-    },
-  });
-});
-
-afterAll(async () => {
-  await app.dispose();
+    // 路由只在装配后注册一次：各用例读同一份路由表（「注册即记录」见第一条用例）。
+    webServer.register({
+      kind: "prefix",
+      path: PREFIX,
+      handler: (_q, s) => {
+        s.end("federation");
+      },
+    });
+    webServer.registerFallback((_q, s) => {
+      s.end("fallback");
+    });
+    webServer.registerUpgrade({ path: UPGRADE, handler: () => {} });
+    webServer.register({
+      kind: "exact",
+      path: "/text",
+      handler: (_q, s) => {
+        s.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+        s.end(BODY);
+      },
+    });
+    webServer.register({
+      kind: "exact",
+      path: "/stream",
+      handler: (_q, s) => {
+        s.writeHead(200, { "content-type": "application/json" });
+        s.write('{"a":');
+        s.write("1}");
+        s.end();
+      },
+    });
+    webServer.register({
+      kind: "exact",
+      path: "/bin",
+      handler: (_q, s) => {
+        s.writeHead(200, { "content-type": "application/octet-stream" });
+        s.end("raw");
+      },
+    });
+    await use({ webServer, base: `http://127.0.0.1:${String(webServer.port)}` });
+  },
 });
 
 describe("auth: required 的路由（上游 0.2.3 的 owner Peer 档）", { timeout: 10_000 }, () => {
-  it("没有连接面时拒绝（403），不会把 handler 当公开路由跑", async () => {
+  test("没有连接面时拒绝（403），不会把 handler 当公开路由跑", async () => {
     // 这条装配只有 WebServer：`Connection` 缺席 → 准入无从判定，必须拒绝而不是放行。
     const strict = await bootstrapApplication({
       providers: [Startup0, WebServerDefault],
@@ -115,7 +118,8 @@ describe("auth: required 的路由（上游 0.2.3 的 owner Peer 档）", { time
 });
 
 describe("路由表与 fallback / upgrade", { timeout: 10_000 }, () => {
-  it("注册即记录：prefix / fallback / upgrade 都出现在 routesOf()", () => {
+  test("注册即记录：prefix / fallback / upgrade 都出现在 routesOf()", ({ web }) => {
+    const { webServer } = web;
     expect(webServer.routesOf()).toEqual(
       expect.arrayContaining([
         { kind: "prefix", path: PREFIX },
@@ -125,17 +129,20 @@ describe("路由表与 fallback / upgrade", { timeout: 10_000 }, () => {
     );
   });
 
-  it("prefix 命中", async () => {
+  test("prefix 命中", async ({ web }) => {
+    const { base } = web;
     const response = await fetch(`${base}${PREFIX}/pkg@1/index.js`);
     expect(await response.text()).toBe("federation");
   });
 
-  it("未注册路径走 fallback", async () => {
+  test("未注册路径走 fallback", async ({ web }) => {
+    const { base } = web;
     const response = await fetch(`${base}/nowhere`);
     expect(await response.text()).toBe("fallback");
   });
 
-  it("未注册的 upgrade 被断开", async () => {
+  test("未注册的 upgrade 被断开", async ({ web }) => {
+    const { webServer } = web;
     // 未注册的升级：socket 被断开（`connect` 后立刻收到 close）。
     const closed = await new Promise<boolean>((resolve) => {
       const socket = connect(webServer.port, "127.0.0.1", () => {
@@ -151,7 +158,8 @@ describe("路由表与 fallback / upgrade", { timeout: 10_000 }, () => {
 });
 
 describe("gzip", { timeout: 10_000 }, () => {
-  it("文本响应带 gzip：能正常结束，且解压后内容一致", async () => {
+  test("文本响应带 gzip：能正常结束，且解压后内容一致", async ({ web }) => {
+    const { base } = web;
     const response = await fetch(`${base}/text`, { headers: { "accept-encoding": "gzip" } });
     expect(response.status).toBe(200);
     expect(response.headers.get("content-encoding")).toBe("gzip");
@@ -159,13 +167,15 @@ describe("gzip", { timeout: 10_000 }, () => {
     expect(await response.text()).toBe(BODY);
   });
 
-  it("流式写（多次 write）同样能正常结束", async () => {
+  test("流式写（多次 write）同样能正常结束", async ({ web }) => {
+    const { base } = web;
     const response = await fetch(`${base}/stream`, { headers: { "accept-encoding": "gzip" } });
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('{"a":1}');
   });
 
-  it("不可压缩类型不压（无 content-encoding）", async () => {
+  test("不可压缩类型不压（无 content-encoding）", async ({ web }) => {
+    const { base } = web;
     const response = await fetch(`${base}/bin`, { headers: { "accept-encoding": "gzip" } });
     expect(response.status).toBe(200);
     expect(response.headers.get("content-encoding")).toBeNull();
@@ -174,7 +184,7 @@ describe("gzip", { timeout: 10_000 }, () => {
 });
 
 describe("webserver listen（单 Provider 入口）", { timeout: 10_000 }, () => {
-  it("onInit 跑完端口可用", async () => {
+  test("onInit 跑完端口可用", async () => {
     const defaultApp = await bootstrapApplication({
       providers: [WebStartupDefault, WebServerDefault],
       timeoutMs: 10_000,
@@ -188,7 +198,7 @@ describe("webserver listen（单 Provider 入口）", { timeout: 10_000 }, () =>
 });
 
 describe("端口协商", () => {
-  it("期望端口被占用时顺延到下一个能用的端口，并报出实际地址", async () => {
+  test("期望端口被占用时顺延到下一个能用的端口，并报出实际地址", async () => {
     // 先占住一个随机端口（不指定具体值：并行跑的用例也在抢端口）。
     const blocker = createServer();
     await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));

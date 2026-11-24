@@ -10,7 +10,8 @@ import { provideFileUploadUi } from "../ui/file-upload.provide.ts";
 import { ClientConnection, Remote, RemoteDefault } from "@morlay/zephyr-app/client";
 import { Connection } from "@morlay/zephyr-app/contract";
 import { bootstrapApplication, inject, Injectable, type App, type Context } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 假连接面（**宿主面**）：上传行构造期会往宿主登记一条流式路由。 */
 @Injectable()
@@ -112,12 +113,6 @@ class FileUploadReader {
   }
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 10_000);
-
 /**
  * 装配「上传运行时 + 一个消费方行」。
  * @returns 应用、消费方行的实例与 remote 面。
@@ -137,7 +132,7 @@ async function boot(): Promise<{
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return {
     app,
     reader: app.get(FileUploadReader),
@@ -146,7 +141,7 @@ async function boot(): Promise<{
 }
 
 describe("ctx.fileUpload 的注册落点（深层 fiber 按名字读得到）", () => {
-  it("会话 scope 那种 ctx 上 fileUpload 严格读得到，且带着上传方法", async () => {
+  test("会话 scope 那种 ctx 上 fileUpload 严格读得到，且带着上传方法", async () => {
     const { reader } = await boot();
     expect(
       reader.strict,
@@ -156,14 +151,14 @@ describe("ctx.fileUpload 的注册落点（深层 fiber 按名字读得到）", 
     expect(typeof reader.strict?.upload).toBe("function");
   });
 
-  it("按名字读到的服务名就是 fileUpload，契约令牌那一份也带着两个上传方法", async () => {
+  test("按名字读到的服务名就是 fileUpload，契约令牌那一份也带着两个上传方法", async () => {
     const { reader } = await boot();
     expect(reader.strict?.name).toBe("fileUpload");
     expect(typeof reader.contract.upload).toBe("function");
     expect(typeof reader.contract.uploadImage).toBe("function");
   });
 
-  it("remote.fileUploads（字节上传的 remote 面）在行 mount 之后就位", async () => {
+  test("remote.fileUploads（字节上传的 remote 面）在行 mount 之后就位", async () => {
     const { remote } = await boot();
     expect(typeof remote.fileUploads?.upload).toBe("function");
   });

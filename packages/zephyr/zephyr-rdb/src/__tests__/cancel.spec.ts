@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { defineTable, ensureSchema, fragment, openDatabase } from "@morlay/zephyr-rdb";
 
 const items = defineTable({
@@ -10,7 +10,7 @@ const items = defineTable({
 });
 
 describe("取消", () => {
-  it("已取消的信号在语句执行前就抛 canceled（read / run / transaction）", async () => {
+  test("已取消的信号在语句执行前就抛 canceled（read / run / transaction）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const controller = new AbortController();
@@ -31,7 +31,7 @@ describe("取消", () => {
     }
   });
 
-  it("迭代中途取消：下一次 next 抛 canceled，事件记为出错（SQLite 在行之间检查）", async () => {
+  test("迭代中途取消：下一次 next 抛 canceled，事件记为出错（SQLite 在行之间检查）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -54,7 +54,7 @@ describe("取消", () => {
 });
 
 describe.skipIf(!process.env.TEST_PG_URL)("取消（PostgreSQL）", () => {
-  it("执行中的语句被真正取消：语句抛 canceled，连接随后仍可用", async () => {
+  test("执行中的语句被真正取消：语句抛 canceled，连接随后仍可用", async () => {
     const database = await openDatabase({
       dialect: "postgres",
       connectionString: process.env.TEST_PG_URL as string,

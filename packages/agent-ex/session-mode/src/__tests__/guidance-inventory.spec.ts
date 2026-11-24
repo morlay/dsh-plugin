@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 import { DEFAULT_SUPPRESS, TOOL_GROUPS } from "@morlay/session-mode";
 
 // patch 是 YAML 里的行清单：`entryListSchema` 只给 loader 做校验，这里读的是纯数据，不需要它。
@@ -199,7 +199,7 @@ async function scan(directories: readonly string[]): Promise<{
 
 describe("覆盖性：标准模式的工具与说明都必须归组", () => {
   // 扫全仓目录的装配级用例：rc.3 的上游包更多，3s 的默认上限不够（不是断言失败，是规模）。
-  it("standard 装配引用的每个工具都在组表或豁免表里", { timeout: 20_000 }, async () => {
+  test("standard 装配引用的每个工具都在组表或豁免表里", { timeout: 20_000 }, async () => {
     const { tools } = await inventory(await allDirectories());
     const known = new Set([
       ...TOOL_GROUPS.flatMap((group) => group.tools.map((entry) => entry.tool)),
@@ -210,7 +210,7 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
     expect([...tools].filter((tool) => !known.has(tool)).sort()).toEqual([]);
   });
 
-  it("宿主平面与 preset 平面的行清单合起来也只多出上游那批（同一个判据）", async () => {
+  test("宿主平面与 preset 平面的行清单合起来也只多出上游那批（同一个判据）", async () => {
     // 本仓没有那两份 patch：两次装配覆盖的正是同一份「全部上游包」的目录集，这条守的是**判据本身**，
     // 与新出现的工具名（第二条断言是它的哨兵）。
     const { tools } = await inventory(await allDirectories());
@@ -223,7 +223,7 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
     expect([...tools].filter((tool) => !known.has(tool)).sort()).toEqual([]);
   });
 
-  it("PTC 的专属 section 名与上游一致（`base` 正文靠它认出 PTC）", async () => {
+  test("PTC 的专属 section 名与上游一致（`base` 正文靠它认出 PTC）", async () => {
     // 判据的取值来自上游：PTC 执行器把模型面收窄成 `run_code` 一条，装配期唯一能看到的信号就是它注册的
     // 这条 section（`PTC_ONLY_SECTION`）。上游改名时这条会红，逼着判据跟着改。
     const upstream = await readFile(join(PACKAGES, "core/tool-executor-ptc/src/index.ts"), "utf8");
@@ -235,7 +235,7 @@ describe("覆盖性：标准模式的工具与说明都必须归组", () => {
     expect(ours).toContain(`PTC_ONLY_SECTION = "${name}"`);
   });
 
-  it("standard 装配引用的每个工具说明 section 都有归属（丢弃 / 保留）", async () => {
+  test("standard 装配引用的每个工具说明 section 都有归属（丢弃 / 保留）", async () => {
     const { sections } = await inventory(await allDirectories());
     const known = new Set([...droppedSections(), ...DEFAULT_SUPPRESS, ...UNGATED_SECTIONS]);
 

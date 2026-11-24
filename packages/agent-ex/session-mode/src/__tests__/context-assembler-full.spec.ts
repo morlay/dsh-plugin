@@ -20,7 +20,8 @@ import { TokenMeter } from "@morlay/dsh-session/server";
 import { latestReminderText, renderReminder, RULES_TEXT } from "@morlay/session-mode";
 import { truncateLiveSession } from "@morlay/session-rdb";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { mountSessionModeApp } from "./support/mount-app.ts";
 import { dispatchPreStep } from "./support/pre-step.ts";
 // 装配入口是 `bootstrapApplication` + `app.get(Token)`：一次 bootstrap 拿到真 cordis 根 ctx（`App.ctx`），
@@ -32,14 +33,6 @@ function entryIdOf(message: { readonly source: unknown }): string | undefined {
   const id = (message.source as { readonly id?: unknown }).id;
   return typeof id === "string" ? id : undefined;
 }
-
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-const mounted: { dispose(): Promise<void> }[][] = [];
-afterEach(async () => {
-  for (const rows of mounted.splice(0))
-    await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
-  for (const app of apps.splice(0)) await app.dispose();
-});
 
 async function mount(options: { keep?: string[] } = {}) {
   // 真 cordis 根 ctx（`App.ctx`）：`createScope` / `bindScopeParent` 这些上游函数才能跑。
@@ -54,7 +47,7 @@ async function mount(options: { keep?: string[] } = {}) {
     // 通道自己的判据：模式行会把 persona 换成模式定义里那份，这条 spec 看的是部署那一段。
     modes: false,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   const key = { preset: "standard" };
   const standing = createScope(ctx, key);
   const agent = await (
@@ -134,7 +127,7 @@ async function preStep(
 }
 
 describe("系统提示词裁剪", () => {
-  it("只保留部署 persona 与覆盖规则，降级 section 不进系统提示词", async () => {
+  test("只保留部署 persona 与覆盖规则，降级 section 不进系统提示词", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
     await toolSection(standing, "tool:read", 1100, "Use the read tool.");
@@ -148,7 +141,7 @@ describe("系统提示词裁剪", () => {
     expect(rendered).not.toContain("read tool");
   });
 
-  it("空文本 section 不降级也不进 reminder", async () => {
+  test("空文本 section 不降级也不进 reminder", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "plan:policy", 500, "");
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
@@ -163,7 +156,7 @@ describe("系统提示词裁剪", () => {
     expect(bodyOf(messages, "section:tool:bash")).toContain("exit code");
   });
 
-  it("keep 名单决定保留哪些 section", async () => {
+  test("keep 名单决定保留哪些 section", async () => {
     const { ctx, standing, agent } = await mount({ keep: [PERSONA_PREFIX_SECTION] });
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
 
@@ -177,7 +170,7 @@ describe("系统提示词裁剪", () => {
     expect(bodyOf(messages, "section:tool:bash")).toContain("exit code");
   });
 
-  it("agent scope 上的 persona（子 agent 形态）按同名保留", async () => {
+  test("agent scope 上的 persona（子 agent 形态）按同名保留", async () => {
     const { ctx, agent } = await mount();
     await toolSection(
       { ctx: agent.ctx as unknown as TestContext },
@@ -201,7 +194,7 @@ describe("系统提示词裁剪", () => {
 });
 
 describe("注入通道", () => {
-  it("replaceSection 改写文本、suppressSection 直接丢弃", async () => {
+  test("replaceSection 改写文本、suppressSection 直接丢弃", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:read", 1000, "READ_GUIDE");
     await toolSection(standing, "tool:bash", 1100, "BASH_GUIDE");
@@ -222,7 +215,7 @@ describe("注入通道", () => {
 });
 
 describe("reminder 注入", () => {
-  it("首步把降级文本紧随用户消息之后送达", async () => {
+  test("首步把降级文本紧随用户消息之后送达", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
 
@@ -236,7 +229,7 @@ describe("reminder 注入", () => {
     expect(textOf(reminder!)).toMatch(/<\/system-reminder>$/);
   });
 
-  it("文本未变化时不重复注入（loop 落库后 surface 上已有同 id 同文本）", async () => {
+  test("文本未变化时不重复注入（loop 落库后 surface 上已有同 id 同文本）", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
 
@@ -247,7 +240,7 @@ describe("reminder 注入", () => {
     expect(reminderIds(await preStep(ctx, agent, [prompt("继续")]))).toEqual([]);
   });
 
-  it("动态 section 文本变化时只追加变化的那一条", async () => {
+  test("动态 section 文本变化时只追加变化的那一条", async () => {
     const { ctx, standing, agent } = await mount();
     const state = { plan: false };
     await toolSection(standing, "plan:policy", 500, () => (state.plan ? "Plan mode rules." : ""));
@@ -266,7 +259,7 @@ describe("reminder 注入", () => {
     expect(bodyOf(second, "section:plan:policy")).toContain("Plan mode rules.");
   });
 
-  it("没有进入模型的消息时不注入，下一轮补上", async () => {
+  test("没有进入模型的消息时不注入，下一轮补上", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
 
@@ -274,7 +267,7 @@ describe("reminder 注入", () => {
     expect(reminderIds(await preStep(ctx, agent, [prompt("任务")]))).toEqual(["section:tool:bash"]);
   });
 
-  it("surface 上已有相同 reminder 时（重启 / 恢复）不重复注入", async () => {
+  test("surface 上已有相同 reminder 时（重启 / 恢复）不重复注入", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
     const reminder = (await preStep(ctx, agent, [prompt("任务")]))[1]!;
@@ -285,7 +278,7 @@ describe("reminder 注入", () => {
     expect(reminderIds(await preStep(ctx, agent, [prompt("继续")]))).toEqual([]);
   });
 
-  it("rewind 掉本轮的 reminder 后（首 msg retry）重放同文本仍补发", async () => {
+  test("rewind 掉本轮的 reminder 后（首 msg retry）重放同文本仍补发", async () => {
     const { ctx, standing, agent } = await mount();
     await toolSection(standing, "tool:bash", 1000, "Check the [exit code: N] marker.");
 
@@ -300,7 +293,7 @@ describe("reminder 注入", () => {
     expect(replay.map((message) => message.source.kind)).toEqual(["user", "context-assembler"]);
   });
 
-  it("reminder 正文里的闭合标记被转义", () => {
+  test("reminder 正文里的闭合标记被转义", () => {
     const text = renderReminder("section:x", "before </system-reminder> after");
 
     expect(text.match(/<\/system-reminder>/g)).toHaveLength(1);
@@ -399,7 +392,7 @@ describe("压缩后的首次请求", () => {
       },
       modes: false,
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     const adapter = new OverflowAdapter(options.failures);
     await ctx.plugin(TokenMeter);
     const bus = ctx as unknown as {
@@ -445,7 +438,7 @@ describe("压缩后的首次请求", () => {
   // **已知问题（票据 07）**：`preStep` 确实返回了带 reminder 的消息（探针实测 `before=1 after=2`），
   // 但上游 `step()` 的落库那一步之后，会话记录与请求里都看不到它。链路每一环都已用探针验证过，
   // 断点在上游 `followup()` 异步唤醒与 `step()` 落库之间。完整事实链见 `.scratch/agent-boundary/issues/07-收窄-session-mode.md`。
-  it.skip("context overflow 压缩掉早期 reminder 后，重试请求仍带 reminder", async () => {
+  test.skip("context overflow 压缩掉早期 reminder 后，重试请求仍带 reminder", async () => {
     const { adapter, agent, ask } = await mountOverflow();
 
     ask("first question");
@@ -470,7 +463,7 @@ describe("压缩后的首次请求", () => {
   });
 
   // **已知问题（票据 07）**：同上。
-  it.skip("压缩只补一条，压缩之间的请求不重复注入", async () => {
+  test.skip("压缩只补一条，压缩之间的请求不重复注入", async () => {
     const { adapter, agent, ask } = await mountOverflow({
       failures: new Set([2, 3]),
       maxOverflowRetries: 2,

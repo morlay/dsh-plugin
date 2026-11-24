@@ -1,7 +1,8 @@
 // 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-form-model.client.spec.ts 的用例逐条对应
 // （导入面换成我们的 client 出口），另加两条 revision 栅栏 / 版本冲突重试的用例；改这里之前先看上游。
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import {
   SettingsFormModel,
   settingsNumberField,
@@ -92,7 +93,7 @@ describe("SettingsFormModel", () => {
     return { host, subject };
   }
 
-  it("reports a failed credential write even when another credential succeeds", async () => {
+  test("reports a failed credential write even when another credential succeeds", async () => {
     const host = stubScope<Record<string, unknown>>();
     host.publish({ status: "ready", writable: true, value: {} });
     const first = vi.fn(() => Promise.resolve(false));
@@ -113,7 +114,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell()).toMatchObject({ failed: true, dirty: true });
   });
 
-  it("retains drafts after transport failure and allows a retry", async () => {
+  test("retains drafts after transport failure and allows a retry", async () => {
     const { host, subject } = form();
     subject.actions().edit("timeoutMs", "9000");
     host.mutate.mockRejectedValueOnce(new Error("disconnected"));
@@ -124,7 +125,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell()).toMatchObject({ dirty: false, failed: false, saving: false });
   });
 
-  it("shows the effective value and stays clean until something is staged", () => {
+  test("shows the effective value and stays clean until something is staged", () => {
     const { subject } = form();
 
     expect(subject.field("timeoutMs")).toEqual({
@@ -140,7 +141,7 @@ describe("SettingsFormModel", () => {
     });
   });
 
-  it("marks a field the user layer carries as overridden", () => {
+  test("marks a field the user layer carries as overridden", () => {
     const { host, subject } = form();
 
     host.publish({ value: { timeoutMs: 60_000 }, user: { timeoutMs: 60_000 } });
@@ -149,7 +150,7 @@ describe("SettingsFormModel", () => {
     expect(subject.field("timeoutMs").overridden).toBe(true);
   });
 
-  it("writes nothing until the form is saved", async () => {
+  test("writes nothing until the form is saved", async () => {
     const { host, subject } = form();
     acceptWrites(host);
 
@@ -167,7 +168,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell()).toMatchObject({ dirty: false, failed: false, saving: false });
   });
 
-  it("drops a draft that settles back on the value already shown", async () => {
+  test("drops a draft that settles back on the value already shown", async () => {
     const { host, subject } = form();
 
     subject.actions().edit("timeoutMs", "9000");
@@ -179,7 +180,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).not.toHaveBeenCalled();
   });
 
-  it("refuses to save while a draft is not a value the field accepts", async () => {
+  test("refuses to save while a draft is not a value the field accepts", async () => {
     const { host, subject } = form();
 
     subject.actions().edit("timeoutMs", "soon");
@@ -193,7 +194,7 @@ describe("SettingsFormModel", () => {
     expect(subject.field("timeoutMs").text).toBe("soon");
   });
 
-  it("stages a reset that clears the field only once saved", async () => {
+  test("stages a reset that clears the field only once saved", async () => {
     const { host, subject } = form();
     acceptWrites(host);
     host.publish({ value: { timeoutMs: 9_000 }, user: { timeoutMs: 9_000 } });
@@ -214,7 +215,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell()).toMatchObject({ dirty: false, failed: false });
   });
 
-  it("treats resetting an inherited field as no change at all", async () => {
+  test("treats resetting an inherited field as no change at all", async () => {
     const { host, subject } = form();
 
     subject.actions().resetField("timeoutMs");
@@ -225,7 +226,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).not.toHaveBeenCalled();
   });
 
-  it("clears a number field by emptying it", async () => {
+  test("clears a number field by emptying it", async () => {
     const { host, subject } = form();
     acceptWrites(host);
     host.publish({ user: { timeoutMs: 9_000 } });
@@ -238,7 +239,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).toHaveBeenCalledWith([{ op: "unset", path: ["timeoutMs"] }], undefined);
   });
 
-  it("clears a text field by emptying it", async () => {
+  test("clears a text field by emptying it", async () => {
     const { host, subject } = form();
     acceptWrites(host);
     host.publish({ user: { baseURL: "https://search.test/v1" } });
@@ -249,7 +250,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).toHaveBeenCalledWith([{ op: "unset", path: ["baseURL"] }], undefined);
   });
 
-  it("writes the trimmed text of a text field", async () => {
+  test("writes the trimmed text of a text field", async () => {
     const { host, subject } = form();
     acceptWrites(host);
 
@@ -265,7 +266,7 @@ describe("SettingsFormModel", () => {
     ]);
   });
 
-  it("keeps the drafts a save did not land, and reports the failure", async () => {
+  test("keeps the drafts a save did not land, and reports the failure", async () => {
     const { host, subject } = form();
     host.mutate.mockResolvedValue(false);
 
@@ -282,7 +283,7 @@ describe("SettingsFormModel", () => {
     expect(subject.field("timeoutMs").text).toBe("9000");
   });
 
-  it("reports a reset the Host did not apply as a failure", async () => {
+  test("reports a reset the Host did not apply as a failure", async () => {
     const { host, subject } = form();
     host.mutate.mockResolvedValue(false);
     host.publish({ user: { timeoutMs: 9_000 } });
@@ -294,7 +295,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell().failed).toBe(true);
   });
 
-  it("clears the failure as soon as the user edits again", async () => {
+  test("clears the failure as soon as the user edits again", async () => {
     const { host, subject } = form();
     host.mutate.mockResolvedValue(false);
 
@@ -307,7 +308,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell().failed).toBe(false);
   });
 
-  it("discards every staged edit", async () => {
+  test("discards every staged edit", async () => {
     const { host, subject } = form();
 
     subject.actions().edit("timeoutMs", "9000");
@@ -325,7 +326,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).not.toHaveBeenCalled();
   });
 
-  it("refuses a second save while one is in flight", async () => {
+  test("refuses a second save while one is in flight", async () => {
     const { host, subject } = form();
     acceptWrites(host);
 
@@ -338,7 +339,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).toHaveBeenCalledTimes(1);
   });
 
-  it("publishes a projection whenever the scope or a draft changes", () => {
+  test("publishes a projection whenever the scope or a draft changes", () => {
     const { host, subject } = form();
     const store = subject.bind(() => subject.field("timeoutMs").text);
     expect(store.getSnapshot()).toBe("60000");
@@ -350,13 +351,13 @@ describe("SettingsFormModel", () => {
     expect(store.getSnapshot()).toBe("2000");
   });
 
-  it("refuses to address a field the card never declared", () => {
+  test("refuses to address a field the card never declared", () => {
     const { subject } = form();
 
     expect(() => subject.field("nope")).toThrow("plugin card has no field nope");
   });
 
-  it("renders an absent section value as an empty draft", () => {
+  test("renders an absent section value as an empty draft", () => {
     const host = stubScope<Record<string, unknown>>();
     const subject = new SettingsFormModel(host.scope, [
       settingsNumberField("timeoutMs"),
@@ -370,7 +371,7 @@ describe("SettingsFormModel", () => {
     expect(subject.shell().available).toBe(true);
   });
 
-  it("stays unavailable while the namespace is not served", () => {
+  test("stays unavailable while the namespace is not served", () => {
     const host = stubScope<Record<string, unknown>>();
     const subject = new SettingsFormModel(host.scope, [settingsNumberField("timeoutMs")]);
 
@@ -380,7 +381,7 @@ describe("SettingsFormModel", () => {
   });
 
   // 以下两条按本仓库判据补：save 的写要栅在草稿开始时的 revision 上，Host 因版本冲突拒了也不丢草稿。
-  it("fences the write with the revision the drafts started from", async () => {
+  test("fences the write with the revision the drafts started from", async () => {
     const { host, subject } = form();
     acceptWrites(host);
     host.publish({ revision: 7 });
@@ -393,7 +394,7 @@ describe("SettingsFormModel", () => {
     expect(host.mutate).toHaveBeenCalledWith([{ op: "set", path: ["timeoutMs"], value: 9_000 }], 7);
   });
 
-  it("keeps the drafts and reports the failure when the Host refuses a revision conflict", async () => {
+  test("keeps the drafts and reports the failure when the Host refuses a revision conflict", async () => {
     const { host, subject } = form();
     host.publish({ revision: 7 });
     host.mutate.mockResolvedValueOnce(false);

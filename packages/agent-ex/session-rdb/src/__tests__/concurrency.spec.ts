@@ -4,19 +4,14 @@
 //
 // 为什么留在根 `__tests__/`：判据是两个实例在同一份库上争写（多实例接缝）；单实例的守卫在 `data/__tests__/write-guard.spec.ts`。
 import { SessionId } from "@morlay/dsh-session/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { makeRoot, removeRoot, startAt, type Instance } from "./support/host.ts";
 import { meta, oneTurnLogStepFirst, turnLog } from "@morlay/dsh-session/testing";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
-
 async function twoInstances(): Promise<{ first: Instance; second: Instance }> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   const first = await startAt(root);
   const second = await startAt(root);
   return { first, second };
@@ -28,7 +23,7 @@ function secondTurn(): ReturnType<typeof turnLog> {
 }
 
 describe("并发写", () => {
-  it("两个实例都 open 了写句柄，先写的那个提交之后，后写的被写者位点守卫拒绝", async () => {
+  test("两个实例都 open 了写句柄，先写的那个提交之后，后写的被写者位点守卫拒绝", async () => {
     const { first, second } = await twoInstances();
     try {
       const seed = await first.persistence.create(meta("shared", "/work"));
@@ -51,7 +46,7 @@ describe("并发写", () => {
     }
   });
 
-  it("第二个实例在 open 之后写：位点对齐，写入成功", async () => {
+  test("第二个实例在 open 之后写：位点对齐，写入成功", async () => {
     const { first, second } = await twoInstances();
     try {
       const writer = await first.persistence.create(meta("aligned", "/work"));
@@ -73,7 +68,7 @@ describe("并发写", () => {
     }
   });
 
-  it("另一个实例提交之后，rewind 被写者位点守卫拒绝（不是静默截掉那段）", async () => {
+  test("另一个实例提交之后，rewind 被写者位点守卫拒绝（不是静默截掉那段）", async () => {
     const { first, second } = await twoInstances();
     try {
       const seed = await first.persistence.create(meta("rewound", "/work"));
@@ -102,7 +97,7 @@ describe("并发写", () => {
     }
   });
 
-  it("同一实例内的写所有权是单持有者：重复 open write 被拒", async () => {
+  test("同一实例内的写所有权是单持有者：重复 open write 被拒", async () => {
     const { first } = await twoInstances();
     try {
       const writer = await first.persistence.create(meta("owner"));
@@ -113,7 +108,7 @@ describe("并发写", () => {
     }
   });
 
-  it("创建了两个句柄写不同会话：互不影响", async () => {
+  test("创建了两个句柄写不同会话：互不影响", async () => {
     const { first, second } = await twoInstances();
     try {
       const a = await first.persistence.create(meta("iso-a", "/a"));

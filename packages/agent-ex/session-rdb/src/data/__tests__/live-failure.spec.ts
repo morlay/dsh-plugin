@@ -1,6 +1,6 @@
 import { Events } from "@morlay/dsh-session";
 import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { meta, oneTurnLog } from "@morlay/dsh-session/testing";
 import {
   createCtx,
@@ -48,7 +48,7 @@ async function failingLiveSession(ctx: Context) {
 describe("live 会话的持久化失败态", () => {
   // 失败后 fail loud：记账一条 error（不再只 warn 一次就算了），事件不再进内存缓冲，
   // flush 把失败抛回上游——原先「聊了一整轮、重启后全丢，内存里还留一份无界副本」的形态消失。
-  it("初始化失败后丢弃后续事件并让 flush 报错", async () => {
+  test("初始化失败后丢弃后续事件并让 flush 报错", async () => {
     const { ctx, dispose } = await mount();
     try {
       const logs = captureLogs(ctx);

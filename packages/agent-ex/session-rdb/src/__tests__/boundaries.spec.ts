@@ -7,7 +7,7 @@
 // 为什么留在根 `__tests__/`：判据是 `src/` 全树的面边界（宿主半与浏览器半互不引用），不属于任何单个面。
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 
 const SRC = join(import.meta.dirname, "..");
 
@@ -27,7 +27,7 @@ async function sourcesOf(dir: string): Promise<string[]> {
 }
 
 describe("面的边界", () => {
-  it("浏览器半不引宿主半（也不引包根）", async () => {
+  test("浏览器半不引宿主半（也不引包根）", async () => {
     const offenders: string[] = [];
     for (const file of await sourcesOf(join(SRC, "ui"))) {
       const source = await readFile(file, "utf8");
@@ -41,7 +41,7 @@ describe("面的边界", () => {
     expect(offenders, "浏览器半不许引宿主半：要用的纯函数/值放 ./endpoint").toEqual([]);
   });
 
-  it("宿主半不引浏览器半", async () => {
+  test("宿主半不引浏览器半", async () => {
     const offenders: string[] = [];
     for (const file of await sourcesOf(join(SRC, "server"))) {
       const source = await readFile(file, "utf8");

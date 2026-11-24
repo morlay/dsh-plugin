@@ -3,7 +3,11 @@ import { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { inject, Injectable } from "@morlay/zephyr";
 import { AppEnv } from "@morlay/zephyr-app";
 import { WorkspaceRegistry } from "../contract/workspace.contract.ts";
-import { SessionWorkspace, type SessionWorkspaceTarget } from "@morlay/dsh-session";
+import {
+  SessionWorkspace,
+  SessionWorkspaceNotFoundError,
+  type SessionWorkspaceTarget,
+} from "@morlay/dsh-session";
 import { WorkspaceBroadcaster } from "../workspace-broadcaster.service.ts";
 
 @Injectable()
@@ -35,7 +39,7 @@ export class SessionWorkspaceHost extends SessionWorkspace {
       // 免得用户的工作区列表被一堆"跑过一遍的目录"塞满。
       const target = await this.registry.resolveByPath(cwd);
       if (target === undefined) {
-        throw new Error(
+        throw new SessionWorkspaceNotFoundError(
           `workspace: "${cwd}" 不是已注册的工作区（默认工作区是起始目录，不会按 cwd 自动创建）`,
         );
       }
@@ -51,7 +55,7 @@ export class SessionWorkspaceHost extends SessionWorkspace {
     // 品牌在工作区边界铸造一次：wire 上进来的是裸字符串，注册表按 `WorkspaceId` 索引。
     const workspace = this.registry.get(WorkspaceId(workspaceId));
     if (workspace === undefined) {
-      throw new Error(`workspace "${workspaceId}" not found`);
+      throw new SessionWorkspaceNotFoundError(`workspace "${workspaceId}" not found`);
     }
     return {
       cwd: workspace.path,

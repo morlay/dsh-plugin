@@ -9,13 +9,8 @@ import { SessionStore, SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection, provideTokenMeter } from "@morlay/dsh-session/server";
 import { provideToolOutput } from "../server/tool-output.provide.ts";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
@@ -30,12 +25,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("tool-output 域", () => {
-  it("落盘行把正文写成文件，并给出字节数与定位串", { timeout: 20_000 }, async () => {
+  test("落盘行把正文写成文件，并给出字节数与定位串", { timeout: 20_000 }, async () => {
     const app = await boot();
     // 令牌是**行**（`SpillLocal`）：上游类只是它包装的实现，不再是令牌。
     const spill = app.get(SpillLocal);

@@ -87,10 +87,14 @@
 - **浏览器半只有两种出口**：`./ui` 是**纯 ESM** 面（zephyr 前端装配用）；`./client` 只给 dsh 插件
   （`dsh.bundle` 且有前端的包），发布态按「库 + 工厂」两条条件。两者并存，不互相替代；node 专属实现
   与宿主 service 留在包根——包根只出宿主面时，浏览器半只引它的 `./contract` / `./endpoint`（见[面边界](#面边界)）。
-- **`./dsh-bundle` 只给 bundle 包，且必须列在顶层 `exports`**：入口是 `src/dsh-bundle.ts`，默认导出该包的
-  一个 cordis 插件（`toCordis` 组合多行），另导出 `rows` 作为 patch 的行清单。**它同时在顶层与发布态**——
-  `devkit build` 靠顶层 `exports` 里的这个键认出 bundle 包（推出 patch、client 两件事），删掉键就没有产物。
-  开发态只走 `provideXxx()` 清单，不从 `./dsh-bundle` 装配。
+- **bundle 包（dsh 行入口）是固定目录形态，不开源码出口**：`src/dsh-bundle.ts` 具名导出 `name` /
+  `inject` / `apply`（行插件本体，`unwrapExports` 取命名空间），另导出 `rows` 作为 patch 的行清单；
+  浏览器半是固定文件 `src/dsh-bundle.client.ts`（同名三件套）。没有 `src/index.ts`——包根就是
+  `dsh-bundle.ts` 的产物。清单里 **`exports` 是空对象**（源码不被当库消费），构建按固定文件认出 bundle
+  包并推导入口；发布态出口由 `devkit build` 写进 `publishConfig.exports`：`.` → `{ "default":
+  "./dist/index.mjs" }`（**没有 `types`**：bundle 包不出 `.d.mts`）、`./package.json`、
+  `./cordis.patch.yml`，有浏览器半时再加 `./client` → `{ "default": "./dist/client.cjs" }`。
+  开发态只走 `provideXxx()` 清单，不从 bundle 包的产物装配。
 - **`dsh.bundle` 指产物里的 patch**：bundle 包写 `"dsh.bundle": { "patch": "./dist/cordis.patch.yml" }`——
   patch 是构建产物（实际发布物是 `dist/cordis.patch.yml`，发布态另有 `./cordis.patch.yml` 出口指同一文件），
   不是包根下的源文件；行清单声明在包的 `src/dsh-bundle.ts` 的 `rows`（首行「由 … 生成，请勿手工编辑」）。

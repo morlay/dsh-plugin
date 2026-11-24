@@ -9,30 +9,13 @@
     "!**/__tests__"
   ],
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./package.json": "./package.json"
-  },
-  "publishConfig": {
-    "exports": {
-      ".": "./dist/index.mjs",
-      "./package.json": "./package.json",
-      "./cordis.patch.yml": "./dist/cordis.patch.yml"
-    }
-  },
+  "exports": {},
   "scripts": {
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-agent-use-profile"
   },
   "dependencies": {
     "@morlay/agent-use": "workspace:^",
-    "@morlay/zephyr": "workspace:^",
-    "@morlay/zephyr-app": "workspace:^"
-  },
-  "devDependencies": {
-    "@morlay/dsh-agent-use-profile": "workspace:^"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/dsh-home-paths": "workspace:^"
+    "@morlay/zephyr": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

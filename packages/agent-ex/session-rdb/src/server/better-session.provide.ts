@@ -1,5 +1,6 @@
 import { provide } from "@morlay/zephyr";
 import { SessionBranchRdb } from "../data/store/branch/index.ts";
+import { SessionBranchingRdb } from "./session-branching.service.ts";
 import { SessionProjectionCacheRdb } from "../storage/projection-cache.service.ts";
 import { StorageTakeoverDefault } from "../storage/storage-takeover.service.ts";
 import { SessionPersistenceRdb } from "../admin/store.ts";
@@ -18,13 +19,15 @@ import { SessionAgentControlDefault } from "./session-agent-control.service.ts";
  * 就是为这件事存在的）。
  *
  * 顺序即依赖：
- * - 持久化最前：storage 接管、投影检查点、分支、查询、编辑全都读它；
+ * - 持久化最前：storage 接管、投影检查点、查询、编辑全都读它。**分支行是例外**：它把派生状态失效钩子
+ *   交回持久化行，两条注入边成环，内核跳过回边后分支行排到持久化行之前——两边都只在调用时用对方
+ *   （分支行的端口是构造期就有的字面量，持久化行只在 rewind 之后读那个钩子），所以这个换位无害；
  * - storage 接管紧随：它按 `sessionPersistence.storageRepository()` 拿**同一个库**的句柄。它必须在
  *   **任何会 open storage 域的行**之前（目前是 `Workspace`：上游 workspace 插件在自己的 init 里就
  *   `storageDomain.open("workspace")`，那时 `rdb` 还没注册就是
  *   `storage backend 'rdb' is not registered (registered: none)`）。装配序由内核按注入边排，
- *   所以本包的会话行**不静态注入** `WorkspaceRegistry`——那会与 `Workspace` 成环、把 workspace 行
- *   插到这几行之前（见 `admin/workspace-registry.read.ts`）；
+ *   所以本包的会话行**不注入任何 workspace 域的东西**——跨域动作（复制到工作区）住编排层，
+ *   本包只提供它要的分支原语（`SessionBranchingRdb`）；
  * - 投影检查点排在接管之后：检查点行与 KV 域落同一个库（撤回按水位截断缓存要跨得起来）；
  * - 两组端点最后：它们只转发到上面那些实现。
  */
@@ -39,6 +42,9 @@ export const provideBetterSession = provide([
   // ——检查点必须与会话日志同库（KV 版是 json 后端时代的第二条写路径）。
   SessionProjectionCacheRdb,
   SessionBranchRdb,
+  // 分支原语对外的端口（`SessionBranching`）：跨域编排（复制到工作区）用它派生子会话、并在失败时
+  // 撤掉刚派生的那条。编排住在编排层，本包的持久化行不认识 workspace 域。
+  SessionBranchingRdb,
   SessionQueryRdb,
   // 列表元数据投影（`blank` / `lastPromptAt`）：查询实现换成本包之后，这份注册得由装配面补（见该文件）。
   SessionListMetadataProjection,

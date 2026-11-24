@@ -20,7 +20,8 @@ import {
 } from "@morlay/dsh-fs/contract";
 import { defineTool } from "@morlay/dsh-agent/contract";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { volatileForm } from "../../../../../vendor/deepseek-harness/packages/settings/settings/src/schema.ts";
 import {
   SESSION_MODE_TABLE,
@@ -35,23 +36,6 @@ import { pinDshHome } from "./support/dsh-home.ts";
 
 // 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
 pinDshHome();
-
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-const contexts: TestContext[] = [];
-const mounted: { dispose(): Promise<void> }[][] = [];
-
-// 真存储栈的临时目录（本文件末尾那组持久化用例建的）。
-const storageRoots: string[] = [];
-
-afterEach(async () => {
-  for (const rows of mounted.splice(0))
-    await Promise.all(rows.map((row: { dispose(): Promise<void> }) => row.dispose()));
-  for (const app of apps.splice(0)) await app.dispose();
-  for (const ctx of contexts.splice(0))
-    await (ctx as unknown as { dispose(): Promise<void> }).dispose();
-  // 装配先卸、目录后删：存储后端还开着的时候删目录会让它报错。
-  for (const root of storageRoots.splice(0)) await rm(root, { recursive: true, force: true });
-});
 
 // 归一化之后的形状（schema 填好了每个字段）——`apply` 收到的就是它。
 const CONFIG = {
@@ -137,7 +121,7 @@ async function mount(
     },
     modes: config as unknown as Record<string, unknown>,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   await mountHostPlane(ctx, ["read", "web_search", "send_message"]);
   const handle = await ctx.agents.create({ sessionId });
   return { ctx, agent: handle.agent };
@@ -148,7 +132,7 @@ async function mount(
 // 切模式 = 同一实例上的第二次 `apply`：旧的必须**同步**收干净，否则第二次注册会撞
 // `tool "describe_tool" is already registered in this scope`（线上 409 就是这条）。
 describe("同一实例重装", () => {
-  it("切模式（第二次 apply）不撞名", async () => {
+  test("切模式（第二次 apply）不撞名", async () => {
     const { ctx, agent } = await mount();
 
     expect(() => {
@@ -161,7 +145,7 @@ describe("同一实例重装", () => {
 });
 
 describe("行 config 不带 modes（生产形态）", () => {
-  it("内置默认 coding / chat / noop 就位，默认模式也是其中之一", async () => {
+  test("内置默认 coding / chat / noop 就位，默认模式也是其中之一", async () => {
     const { ctx } = await mount({ default: "coding", modes: {} });
 
     expect(
@@ -177,7 +161,7 @@ describe("行 config 不带 modes（生产形态）", () => {
 // 一个 config 想装载就必须被拒绝：装配期校验（`configProblem`）在构造函数里抛。
 async function expectRefused(config: SessionModeProviderConfig, reason: string): Promise<void> {
   const { app } = await mountSessionModeApp();
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   // 装配期校验：整份清单交给 `bootstrapApplication`，它拒绝就是"装载被拒"。
   await expect(
     bootstrapApplication({
@@ -209,7 +193,7 @@ function sectionText(
 }
 
 describe("会话模式的 persona", () => {
-  it("默认模式：新会话读到的 persona 是该模式的，遮蔽部署级那层", async () => {
+  test("默认模式：新会话读到的 persona 是该模式的，遮蔽部署级那层", async () => {
     const { ctx, agent } = await mount();
     const prompt = await assembled(ctx, agent);
 
@@ -217,7 +201,7 @@ describe("会话模式的 persona", () => {
     expect(sectionText(prompt, "deployment:persona-suffix")).toBe("最后一句。");
   });
 
-  it("切到 chat 之后：persona 换掉，工具收口与动态快照一起跟着换", async () => {
+  test("切到 chat 之后：persona 换掉，工具收口与动态快照一起跟着换", async () => {
     const { ctx, agent } = await mount();
     expect(visibleToolNames(ctx, agent)).toEqual(["read", "web_search"]);
 
@@ -234,7 +218,7 @@ describe("会话模式的 persona", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
-  it("allowTools 留空：这个会话用宿主平面的全部工具（不设收窄）", async () => {
+  test("allowTools 留空：这个会话用宿主平面的全部工具（不设收窄）", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
       modes: { ...CONFIG.modes, coding: { ...CONFIG.modes["coding"]!, allowTools: [] } },
@@ -244,7 +228,7 @@ describe("会话模式的 persona", () => {
     expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
   });
 
-  it("装配是幂等的：同一个模式反复装配不会重复注册", async () => {
+  test("装配是幂等的：同一个模式反复装配不会重复注册", async () => {
     const { ctx, agent } = await mount();
 
     await assembled(ctx, agent);
@@ -257,7 +241,7 @@ describe("会话模式的 persona", () => {
 });
 
 describe("模式的读取与切换", () => {
-  it("清单按 config 的插入序、默认模式来自 config", async () => {
+  test("清单按 config 的插入序、默认模式来自 config", async () => {
     const { ctx } = await mount();
 
     expect(ctx.sessionModes.defaultId).toBe("coding");
@@ -270,14 +254,14 @@ describe("模式的读取与切换", () => {
     });
   });
 
-  it("没选过模式的会话读投影拿到默认值", async () => {
+  test("没选过模式的会话读投影拿到默认值", async () => {
     const { ctx, agent } = await mount();
 
     expect(ctx.sessionModes.selectedOf(agent.session)).toBeNull();
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
   });
 
-  it("已开始的会话拒绝切换（历史是在旧模式的工具与提示词下产生的）", async () => {
+  test("已开始的会话拒绝切换（历史是在旧模式的工具与提示词下产生的）", async () => {
     const { ctx, agent } = await mount();
     agent.session.append("turn/start", { turn: 1 });
 
@@ -285,7 +269,7 @@ describe("模式的读取与切换", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
   });
 
-  it("可改与否是**客户端可见**的投影：空白会话为可改，开过 turn 之后为不可改", async () => {
+  test("可改与否是**客户端可见**的投影：空白会话为可改，开过 turn 之后为不可改", async () => {
     const { ctx, agent } = await mount();
 
     expect(ctx.sessionModes.editableOf(agent.session)).toBe(true);
@@ -297,7 +281,7 @@ describe("模式的读取与切换", () => {
     expect(sessionModeEditableProjection.wire?.view(false)).toBe(false);
   });
 
-  it("未知模式与未知会话都拒绝", async () => {
+  test("未知模式与未知会话都拒绝", async () => {
     const { ctx, agent } = await mount();
 
     await expect(ctx.sessionModes.select(agent.id, "nope")).rejects.toThrow("未知的模式");
@@ -306,7 +290,7 @@ describe("模式的读取与切换", () => {
     );
   });
 
-  it("选模式时把官方 preset 落到模式允许的那份，且只写一条 session-mode/selected", async () => {
+  test("选模式时把官方 preset 落到模式允许的那份，且只写一条 session-mode/selected", async () => {
     const { ctx, agent } = await mount();
 
     await ctx.sessionModes.select(agent.id, "chat");
@@ -323,7 +307,7 @@ describe("模式的读取与切换", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
-  it("模式不限 preset（空名单）时不碰官方 registry", async () => {
+  test("模式不限 preset（空名单）时不碰官方 registry", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
       modes: { ...CONFIG.modes, chat: { ...CONFIG.modes["chat"]!, presetsOnly: [] } },
@@ -334,7 +318,7 @@ describe("模式的读取与切换", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
-  it("registry 没装（headless）时只落我们的会话事实", async () => {
+  test("registry 没装（headless）时只落我们的会话事实", async () => {
     const { ctx, agent } = await mount();
 
     await ctx.sessionModes.select(agent.id, "chat");
@@ -342,7 +326,7 @@ describe("模式的读取与切换", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("chat");
   });
 
-  it("装配期校验：默认模式不在清单里直接拒绝装载", async () => {
+  test("装配期校验：默认模式不在清单里直接拒绝装载", async () => {
     // 装配期校验：整份清单交给 `bootstrapApplication`，它拒绝就是"装载被拒"。
     await expect(
       bootstrapApplication({
@@ -354,7 +338,7 @@ describe("模式的读取与切换", () => {
     ).rejects.toThrow("default");
   });
 
-  it("装配期校验：退役的 `preset` 还配着值就拒绝装载（指向 `presetsOnly`）", async () => {
+  test("装配期校验：退役的 `preset` 还配着值就拒绝装载（指向 `presetsOnly`）", async () => {
     await expectRefused(
       {
         default: "coding",
@@ -379,7 +363,7 @@ const SHARED: SessionModeProviderConfig = {
 };
 
 describe("两个模式共享一份 preset 白名单", () => {
-  it("共享是合法的：装配期校验不再要求 preset 一对一", async () => {
+  test("共享是合法的：装配期校验不再要求 preset 一对一", async () => {
     const { ctx } = await mount(SHARED);
 
     expect(ctx.sessionModes.defaultId).toBe("coding");
@@ -388,7 +372,7 @@ describe("两个模式共享一份 preset 白名单", () => {
     expect(shared["coding"]?.presetsOnly).toEqual(shared["chat"]?.presetsOnly);
   });
 
-  it("共享时 preset → 模式的反查不回答；一对一映射照旧回答", async () => {
+  test("共享时 preset → 模式的反查不回答；一对一映射照旧回答", async () => {
     const { ctx } = await mount(SHARED);
     expect(ctx.sessionModes.modeForPreset("mode-switch")).toBeUndefined();
     expect(ctx.sessionModes.modeForPreset("spare")).toBeUndefined();
@@ -399,7 +383,7 @@ describe("两个模式共享一份 preset 白名单", () => {
     expect(unique.ctx.sessionModes.modeForPreset("nope")).toBeUndefined();
   });
 
-  it("目标 preset 已经挂着就不换：切模式只换会话收口（不重挂行清单）", async () => {
+  test("目标 preset 已经挂着就不换：切模式只换会话收口（不重挂行清单）", async () => {
     const { ctx, agent } = await mount(SHARED);
 
     await ctx.sessionModes.select(agent.id, "chat");
@@ -411,7 +395,7 @@ describe("两个模式共享一份 preset 白名单", () => {
     );
   });
 
-  it("同一个模式重复选是幂等的：事实不重复写、preset 不重挂", async () => {
+  test("同一个模式重复选是幂等的：事实不重复写、preset 不重挂", async () => {
     const { ctx, agent } = await mount(SHARED);
 
     await ctx.sessionModes.select(agent.id, "coding");
@@ -471,7 +455,7 @@ async function requestRoute(agent: Agent): Promise<LlmCallConfig> {
 }
 
 describe("模式的角色与默认模型", () => {
-  it("选择器只列 main 的角色，subagent 角色单独取", async () => {
+  test("选择器只列 main 的角色，subagent 角色单独取", async () => {
     const { ctx } = await mount(EXTENDED);
 
     expect(ctx.sessionModes.idsFor("main")).toEqual(["coding", "chat"]);
@@ -482,13 +466,13 @@ describe("模式的角色与默认模型", () => {
     ]);
   });
 
-  it("不是 main 角色的模式不能当会话模式选", async () => {
+  test("不是 main 角色的模式不能当会话模式选", async () => {
     const { ctx, agent } = await mount(EXTENDED);
 
     await expect(ctx.sessionModes.select(agent.id, "reviewer")).rejects.toThrow("不是用户可选的");
   });
 
-  it("新会话用模式自己的默认模型兜底请求路由", async () => {
+  test("新会话用模式自己的默认模型兜底请求路由", async () => {
     const { ctx, agent } = await mount(EXTENDED);
 
     const route = await requestRoute(agent);
@@ -501,14 +485,14 @@ describe("模式的角色与默认模型", () => {
     expect(ctx.sessionModes.modeOf(agent.session)).toBe("coding");
   });
 
-  it("没配默认模型的模式不插手请求路由", async () => {
+  test("没配默认模型的模式不插手请求路由", async () => {
     const { ctx, agent } = await mount(EXTENDED);
     await ctx.sessionModes.select(agent.id, "chat");
 
     expect(await requestRoute(agent)).toEqual(SEED);
   });
 
-  it("会话落过请求头之后不再兜底（历史模型优先）", async () => {
+  test("会话落过请求头之后不再兜底（历史模型优先）", async () => {
     const { agent } = await mount(EXTENDED);
     agent.session.append("request/header", {
       header: { config: { provider: "global", model: "global-model" } },
@@ -518,7 +502,7 @@ describe("模式的角色与默认模型", () => {
     expect(await requestRoute(agent)).toEqual(SEED);
   });
 
-  it("用户选过模型（投影 pending）时不覆盖", async () => {
+  test("用户选过模型（投影 pending）时不覆盖", async () => {
     const { agent } = await mount(EXTENDED);
     // `modelSelection` 投影就是我们注册的上游那份：落一条选择事件，pending 立刻读得到。
     agent.session.append("model/selection", { provider: "vendor", model: "vendor-model" });
@@ -526,7 +510,7 @@ describe("模式的角色与默认模型", () => {
     expect(await requestRoute(agent)).toEqual(SEED);
   });
 
-  it("applyTo 是预留的指定接缝：按 id 应用并记账（不看空白会话）", async () => {
+  test("applyTo 是预留的指定接缝：按 id 应用并记账（不看空白会话）", async () => {
     const { ctx, agent } = await mount(EXTENDED);
 
     ctx.sessionModes.applyTo(agent, "reviewer");
@@ -537,7 +521,7 @@ describe("模式的角色与默认模型", () => {
     );
   });
 
-  it("装配期校验：role 为空、default 不是 main 都拒绝装载", async () => {
+  test("装配期校验：role 为空、default 不是 main 都拒绝装载", async () => {
     const extended = EXTENDED.modes as unknown as Record<string, ModeConfig>;
     const base = CONFIG.modes as unknown as Record<string, ModeConfig>;
     const cases: readonly (readonly [Record<string, ModeConfig>, string])[] = [
@@ -549,7 +533,7 @@ describe("模式的角色与默认模型", () => {
     }
   });
 
-  it("装配期校验：`defaultModel` 的 provider / model 缺一半就拒绝装载", async () => {
+  test("装配期校验：`defaultModel` 的 provider / model 缺一半就拒绝装载", async () => {
     await expectRefused(
       {
         default: "coding",
@@ -565,7 +549,7 @@ describe("模式的角色与默认模型", () => {
     );
   });
 
-  it("装配期校验：退役的顶层 `models` 还配着值就拒绝装载（提醒挪进模式）", async () => {
+  test("装配期校验：退役的顶层 `models` 还配着值就拒绝装载（提醒挪进模式）", async () => {
     await expectRefused(
       {
         default: "coding",
@@ -578,7 +562,7 @@ describe("模式的角色与默认模型", () => {
 });
 
 describe("默认模型住在模式定义里", () => {
-  it("模式清单与默认模式同属一条行的 config：`default` 与 `modes` 都在它上面", () => {
+  test("模式清单与默认模式同属一条行的 config：`default` 与 `modes` 都在它上面", () => {
     // 本仓这一行的 Config 是纯函数（`SessionModeDefault.Config`）：它把 `default` 与 `modes` 归一成完整形状。
     // schemastery 那层 volatile 声明随源包的 schema 一起退场——配置页读的是 remote 的 `sessionMode/roster`。
     // 行 config 只带 `default` 时，内置默认三模式就位（`modes` 留空不掺模板）。
@@ -643,7 +627,7 @@ describe("按模式的 policy 拦截", () => {
   // 本部署那条配置的形状：`coding` 禁 `fs/edit-intent`（免"先读后改"），写路径上的 CAS 安全网留着。
   const CODING_EDITS_FREE = withPolicies({ allowPolicies: [], denyPolicies: ["fs/edit-intent"] });
 
-  it("被禁的规则：上游的拒绝被绕过（这次调用按没有这条规则继续）", async () => {
+  test("被禁的规则：上游的拒绝被绕过（这次调用按没有这条规则继续）", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     const stub = installPolicyStub(ctx);
 
@@ -653,14 +637,14 @@ describe("按模式的 policy 拦截", () => {
     expect(stub.asked).toEqual(["edit"]);
   });
 
-  it("只禁一条时另一条照旧：写路径上的上游裁决原样出去", async () => {
+  test("只禁一条时另一条照旧：写路径上的上游裁决原样出去", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     installPolicyStub(ctx);
 
     await expect(writeIntent(ctx, { agent })).resolves.toEqual(UPSTREAM_WRITE_INTENT);
   });
 
-  it("没配 policy 名单的模式照旧吃上游的拒绝（成对判据）", async () => {
+  test("没配 policy 名单的模式照旧吃上游的拒绝（成对判据）", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     installPolicyStub(ctx);
     await ctx.sessionModes.select(agent.id, "chat");
@@ -668,7 +652,7 @@ describe("按模式的 policy 拦截", () => {
     await expect(editIntent(ctx, { agent })).rejects.toThrow("FS_NOT_OBSERVED");
   });
 
-  it("只给某个模式配：同一个 ctx 上另一个模式的会话不受影响", async () => {
+  test("只给某个模式配：同一个 ctx 上另一个模式的会话不受影响", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     installPolicyStub(ctx);
     const other = await ctx.agents.create({
@@ -681,7 +665,7 @@ describe("按模式的 policy 拦截", () => {
     await expect(editIntent(ctx, { agent: other.agent })).rejects.toThrow("FS_NOT_OBSERVED");
   });
 
-  it("模式切换后换一份判定（判据每次调用现算，监听器不换）", async () => {
+  test("模式切换后换一份判定（判据每次调用现算，监听器不换）", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     const stub = installPolicyStub(ctx);
 
@@ -693,14 +677,14 @@ describe("按模式的 policy 拦截", () => {
     expect(stub.asked).toEqual(["edit", "edit"]);
   });
 
-  it("认不出 agent 的调用照旧问上游（判据只认 `actor.agent`）", async () => {
+  test("认不出 agent 的调用照旧问上游（判据只认 `actor.agent`）", async () => {
     const { ctx } = await mount(CODING_EDITS_FREE);
     installPolicyStub(ctx);
 
     await expect(editIntent(ctx, {})).rejects.toThrow("FS_NOT_OBSERVED");
   });
 
-  it("重复应用同一个模式：一次监听器注册都不发生", async () => {
+  test("重复应用同一个模式：一次监听器注册都不发生", async () => {
     const { ctx, agent } = await mount(CODING_EDITS_FREE);
     installPolicyStub(ctx);
     // 数装配期的注册：那两条监听器是构造时注册的，`applyTo` / `select` / 子代理继承都不该再加一份。
@@ -721,7 +705,7 @@ describe("按模式的 policy 拦截", () => {
     await expect(editIntent(ctx, { agent })).resolves.toBeUndefined();
   });
 
-  it("生效集合 =（白名单留空 ? 全部 : 白名单）− 黑名单：deny 优先", async () => {
+  test("生效集合 =（白名单留空 ? 全部 : 白名单）− 黑名单：deny 优先", async () => {
     // 白名单只留写规则：改规则不在生效集合里，照样被绕过。
     const onlyWrite = await mount(
       withPolicies({ allowPolicies: ["fs/write-intent"], denyPolicies: [] }),
@@ -740,7 +724,7 @@ describe("按模式的 policy 拦截", () => {
     await expect(editIntent(both.ctx, { agent: both.agent })).resolves.toBeUndefined();
   });
 
-  it("装配期校验：policy 名字不在已知名单里就拒绝装载", async () => {
+  test("装配期校验：policy 名字不在已知名单里就拒绝装载", async () => {
     for (const policies of [
       { allowPolicies: ["fs/read-intent"], denyPolicies: [] },
       { allowPolicies: [], denyPolicies: ["fs/read-intent"] },
@@ -770,7 +754,7 @@ async function executeTool(ctx: TestContext, agent: Agent, name: string) {
 }
 
 describe("模式与收口（工具名单）", () => {
-  it("换模式就是换一份收口：各自的名单（白名单 − 黑名单）生效", async () => {
+  test("换模式就是换一份收口：各自的名单（白名单 − 黑名单）生效", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
       modes: {
@@ -789,7 +773,7 @@ describe("模式与收口（工具名单）", () => {
     expect(visibleToolNames(ctx, agent)).toEqual(["read"]);
   });
 
-  it("`denyTools` 的收窄：黑名单里的工具进不了目录、调用是 UNKNOWN_TOOL", async () => {
+  test("`denyTools` 的收窄：黑名单里的工具进不了目录、调用是 UNKNOWN_TOOL", async () => {
     const { ctx, agent } = await mount({
       default: CONFIG.default,
       modes: {
@@ -812,7 +796,7 @@ describe("模式与收口（工具名单）", () => {
 });
 
 describe("子代理继承父模式", () => {
-  it("继承父当前模式，并把继承写进子会话（恢复与 fork 能重建）", async () => {
+  test("继承父当前模式，并把继承写进子会话（恢复与 fork 能重建）", async () => {
     const { ctx, agent: parent } = await mount(EXTENDED);
     await ctx.sessionModes.select(parent.id, "chat");
 
@@ -828,7 +812,7 @@ describe("子代理继承父模式", () => {
     );
   });
 
-  it("父不在场时不继承，回落部署默认", async () => {
+  test("父不在场时不继承，回落部署默认", async () => {
     const { ctx } = await mount(EXTENDED);
 
     const orphan = await ctx.agents.create({
@@ -869,7 +853,8 @@ async function storageMount(
   } = {},
 ): Promise<StorageMount> {
   const root = options.root ?? (await mkdtemp(join(tmpdir(), "session-mode-spec-")));
-  if (options.root === undefined) storageRoots.push(root);
+  // 自己开的根绑本用例：装配先卸、目录后删（注册顺序即逆序执行）。
+  if (options.root === undefined) onTestFinished(() => rm(root, { recursive: true, force: true }));
   const sessionId =
     options.sessionId ??
     SessionId(`session-mode-store-${String(Date.now())}-${String(Math.random())}`);
@@ -881,15 +866,18 @@ async function storageMount(
   }
   // 真栈：真 hub + 真域行 + 真 json 后端，外面套一层只记 `get` 的计数。
   const { app, storage } = await bootStorage(root);
-  apps.push(app);
+  onTestFinished(() => app.dispose());
   const counter = counting(storage);
   const mounted = await mount(CONFIG, { storage: { domain: counter.domain } }, sessionId);
   return { ...mounted, reads: counter.reads, table: () => counter.tables.at(-1), memory };
 }
 
 describe("会话级覆盖的持久化", () => {
-  it("覆盖从存储读回；第二次 activeState 不再读盘", async () => {
-    const first = await storageMount();
+  test("覆盖从存储读回；第二次 activeState 不再读盘", async () => {
+    // 根由**用例**持有：两次装配要指同一份介质（「进程重启」）。
+    const root = await mkdtemp(join(tmpdir(), "session-mode-spec-"));
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
+    const first = await storageMount({ root });
     const sessionId = first.agent.session.id;
     await first.ctx.sessionModes.applyConfig(sessionId, {
       ...first.ctx.sessionModes.definition("coding"),
@@ -897,7 +885,6 @@ describe("会话级覆盖的持久化", () => {
     });
 
     // 换一套装配（同一份介质 + 同一个会话）= 进程重启：覆盖从存储读回来。
-    const root = storageRoots.at(-1) ?? "";
     const restarted = await storageMount({ root, sessionId });
     const reread = await restarted.ctx.sessionModes.activeState(sessionId);
 
@@ -911,7 +898,7 @@ describe("会话级覆盖的持久化", () => {
     expect(restarted.reads).toEqual([sessionId]);
   });
 
-  it("patch 传 null 只清这一个字段", async () => {
+  test("patch 传 null 只清这一个字段", async () => {
     const { ctx, agent } = await storageMount();
     const sessionId = agent.session.id;
     // 两条**字段级**覆盖（`applyConfig` 写的是整份，判"只清一个"看不出差别）。
@@ -931,7 +918,7 @@ describe("会话级覆盖的持久化", () => {
     expect(after?.config.denyTools).toEqual([]);
   });
 
-  it("清到空的字段删掉整条记录", async () => {
+  test("清到空的字段删掉整条记录", async () => {
     const { ctx, agent, table } = await storageMount();
     const sessionId = agent.session.id;
     await ctx.sessionModes.setModePatch(sessionId, { instructions: false });
@@ -945,10 +932,10 @@ describe("会话级覆盖的持久化", () => {
     expect(table()?.size).toBe(0);
   });
 
-  it("坏记录不阻断装配：按没有覆盖处理，行照常起", async () => {
+  test("坏记录不阻断装配：按没有覆盖处理，行照常起", async () => {
     // 先往介质里塞一条形状不合法的记录（模拟手改过 / 旧版本写下的）。
     const root = await mkdtemp(join(tmpdir(), "session-mode-spec-"));
-    storageRoots.push(root);
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     const corrupt = SessionId("session-mode-corrupt");
     const seeding = await bootStorage(root);
     const domain = await seeding.storage.open(sessionModeDomainSpec);
@@ -965,7 +952,7 @@ describe("会话级覆盖的持久化", () => {
     expect(state?.config.instructions).toBe(true);
   });
 
-  it("没有存储域时行照样起：覆盖只在内存里", async () => {
+  test("没有存储域时行照样起：覆盖只在内存里", async () => {
     // headless 形态（装配里没有 `StorageDomain`）：这一行靠 `inject.optional` 起来，写面照常工作。
     const { ctx, agent } = await mount();
 
@@ -975,7 +962,7 @@ describe("会话级覆盖的持久化", () => {
     expect(after?.config.instructions).toBe(false);
   });
 
-  it("存储写失败时 applyConfig 抛错且覆盖没变", async () => {
+  test("存储写失败时 applyConfig 抛错且覆盖没变", async () => {
     const { ctx, agent, memory } = await storageMount({ memory: true });
     const sessionId = agent.session.id;
     await ctx.sessionModes.setModePatch(sessionId, { instructions: false });
@@ -999,7 +986,7 @@ describe("会话级覆盖的持久化", () => {
 // 端点 `applyConfig` 的返回值只说明"这次写成功了"，**不说明工具面真的换了**：收口是另一条路
 // （`installFor` → `scope.apply` → `tools.restrict`）。这条钉的是两者一致。
 describe("应用覆盖后的工具面", () => {
-  it("应用覆盖后 agent 的可见工具变了", async () => {
+  test("应用覆盖后 agent 的可见工具变了", async () => {
     const { ctx, agent } = await storageMount();
     const sessionId = agent.session.id;
     // 起点：coding 的白名单是 read / web_search，目录里就是这两件。
@@ -1020,7 +1007,7 @@ describe("应用覆盖后的工具面", () => {
 });
 
 describe("哪些模式可删", () => {
-  it("noop 与部署默认都不可删", async () => {
+  test("noop 与部署默认都不可删", async () => {
     // 生产形态：行 config 只带 `default`，三个内置模式就位（coding 是部署默认）。
     const { ctx, agent } = await mount({ default: "coding", modes: {} });
     const sessionId = agent.session.id;

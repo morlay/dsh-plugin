@@ -12,7 +12,7 @@
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it, test } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { planPrebundle, specifiersOf } from "../prebundle-plan.ts";
 
 /** 写一个文件（父目录不存在就建）。 */
@@ -136,7 +136,7 @@ async function makeFixture(): Promise<{ root: string; upstream: string }> {
 }
 
 describe("planPrebundle（枚举规则）", () => {
-  it("按**引用方**解析包根：只装在子包 node_modules 里的 shiki 也要枚举到", async () => {
+  test("按**引用方**解析包根：只装在子包 node_modules 里的 shiki 也要枚举到", async () => {
     const { root, upstream } = await makeFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const shiki = plan.targets.filter((target) => target.name === "shiki");
@@ -193,7 +193,7 @@ describe("planPrebundle（枚举规则）", () => {
     );
   });
 
-  it("脏包名被丢弃：既不进 targets，也不进 failures", async () => {
+  test("脏包名被丢弃：既不进 targets，也不进 failures", async () => {
     const { root } = await makeFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const ghosts = ["@deepseek-ai/dsh-client-ghost", "@morlay/ghost-pkg"];
@@ -205,7 +205,7 @@ describe("planPrebundle（枚举规则）", () => {
     expect(plan.failures).toEqual([]);
   });
 
-  it("子路径按**实际说明符**出：@shikijs/langs 只出被引用的那两个", async () => {
+  test("子路径按**实际说明符**出：@shikijs/langs 只出被引用的那两个", async () => {
     const { root } = await makeFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const langs = plan.targets.filter((target) => target.name === "@shikijs/langs");
@@ -258,7 +258,7 @@ async function makeMultiVersionFixture(): Promise<string> {
 }
 
 describe("planPrebundle（多版本）", () => {
-  it("同名多版本各出一份：按副本而不是按包名去重", async () => {
+  test("同名多版本各出一份：按副本而不是按包名去重", async () => {
     const root = await makeMultiVersionFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const multi = plan.targets.filter((target) => target.name === "dep-multi");
@@ -325,7 +325,7 @@ async function makeDualEntryFixture(): Promise<string> {
 }
 
 describe("planPrebundle（入口按浏览器条件解析）", () => {
-  it("`exports['.']` 双面：target.entry 落在 **import** 那份", async () => {
+  test("`exports['.']` 双面：target.entry 落在 **import** 那份", async () => {
     const root = await makeDualEntryFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const target = plan.targets.find((item) => item.name === "@morlay/dual-root");
@@ -335,7 +335,7 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
     );
   });
 
-  it("下潜也读 import 那份：只有它引到的包才进清单", async () => {
+  test("下潜也读 import 那份：只有它引到的包才进清单", async () => {
     const root = await makeDualEntryFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const names = plan.targets.map((target) => target.name);
@@ -388,7 +388,7 @@ async function makeStyleGraphFixture(): Promise<string> {
 }
 
 describe("planPrebundle（样式在图上）", () => {
-  it("CSS 里的裸 @import 指向的包出口进清单（不然改写出来的地址是 404）", async () => {
+  test("CSS 里的裸 @import 指向的包出口进清单（不然改写出来的地址是 404）", async () => {
     const root = await makeStyleGraphFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const targets = plan.targets.map((target) => `${target.name}/${target.exportName}`);

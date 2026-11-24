@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import type { PaneRect } from "../browser-pane.ts";
 import {
   BROWSER_PANE_PARTITION,
@@ -94,7 +94,7 @@ function fakeElectron(): BrowserPaneElectronLike & {
 }
 
 describe("面板 view 的权限面", () => {
-  it("独立分区 + 沙箱 + 无 preload + 无 node 集成", async () => {
+  test("独立分区 + 沙箱 + 无 preload + 无 node 集成", async () => {
     const electron = fakeElectron();
     const port = webContentsPaneViewOf({
       electron,
@@ -111,7 +111,7 @@ describe("面板 view 的权限面", () => {
     expect("preload" in options).toBe(false);
   });
 
-  it("权限请求一律拒、权限检查一律假、下载一律取消", () => {
+  test("权限请求一律拒、权限检查一律假、下载一律取消", () => {
     const granted: boolean[] = [];
     panePermissionRequestHandlerOf()(undefined, "media", (value) => granted.push(value));
     panePermissionRequestHandlerOf()(undefined, "notifications", (value) => granted.push(value));
@@ -126,7 +126,7 @@ describe("面板 view 的权限面", () => {
 });
 
 describe("面板的 session 钩子", () => {
-  it("权限钩子与下载钩子装在面板**自己的分区**上（不是主窗口那个）", () => {
+  test("权限钩子与下载钩子装在面板**自己的分区**上（不是主窗口那个）", () => {
     const electron = fakeElectron();
     webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
     expect(electron.partitions).toEqual([BROWSER_PANE_PARTITION]);
@@ -135,7 +135,7 @@ describe("面板的 session 钩子", () => {
     expect(electron.handlers.download).toBeDefined();
   });
 
-  it("下载一律取消（will-download → preventDefault），落不了盘", () => {
+  test("下载一律取消（will-download → preventDefault），落不了盘", () => {
     const electron = fakeElectron();
     webContentsPaneViewOf({ electron, host: { add: () => undefined, remove: () => undefined } });
     const prevented: boolean[] = [];
@@ -146,7 +146,7 @@ describe("面板的 session 钩子", () => {
 });
 
 describe("面板适配器（假 electron）", () => {
-  it("open 建 view 并加载；重复 open 不叠实例；setBounds / navigate 落到同一个 view", async () => {
+  test("open 建 view 并加载；重复 open 不叠实例；setBounds / navigate 落到同一个 view", async () => {
     const electron = fakeElectron();
     const added: unknown[] = [];
     const port = webContentsPaneViewOf({
@@ -166,7 +166,7 @@ describe("面板适配器（假 electron）", () => {
     expect(port.state("browser")?.url).toBe("https://example.net/");
   });
 
-  it("页面要开新窗口一律拒（外链仍归系统浏览器）", async () => {
+  test("页面要开新窗口一律拒（外链仍归系统浏览器）", async () => {
     const electron = fakeElectron();
     const port = webContentsPaneViewOf({
       electron,
@@ -178,7 +178,7 @@ describe("面板适配器（假 electron）", () => {
     });
   });
 
-  it("状态变化只从主进程推（onChange），四条事件都接上", async () => {
+  test("状态变化只从主进程推（onChange），四条事件都接上", async () => {
     const electron = fakeElectron();
     const changed: string[] = [];
     const port = webContentsPaneViewOf({
@@ -199,7 +199,7 @@ describe("面板适配器（假 electron）", () => {
     expect(changed).toEqual(["browser", "browser"]);
   });
 
-  it("页面要开新窗口：http(s) 交系统浏览器，然后仍拒；非法协议不外抛", async () => {
+  test("页面要开新窗口：http(s) 交系统浏览器，然后仍拒；非法协议不外抛", async () => {
     const electron = fakeElectron();
     const opened: string[] = [];
     const port = webContentsPaneViewOf({
@@ -214,7 +214,7 @@ describe("面板适配器（假 electron）", () => {
     expect(opened).toEqual(["https://example.org/a"]);
   });
 
-  it("close 销毁 view 并从窗口摘掉；关一个没开的不报错", async () => {
+  test("close 销毁 view 并从窗口摘掉；关一个没开的不报错", async () => {
     const electron = fakeElectron();
     const removed: unknown[] = [];
     const port = webContentsPaneViewOf({

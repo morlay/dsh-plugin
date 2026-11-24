@@ -9,7 +9,8 @@
  */
 import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionScopeContribution } from "../renderer/session-scope.contribution.ts";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 import {
   ConfigFormsInMemory,
   Layout,
@@ -21,7 +22,7 @@ import {
 } from "@morlay/zephyr-app/client";
 
 describe("渲染冒烟（happy-dom）", () => {
-  it("官方链装配后 layout 注册 root slot，mount 出非空 #root", async () => {
+  test("官方链装配后 layout 注册 root slot，mount 出非空 #root", async () => {
     document.body.innerHTML = '<div id="root"></div>';
     const container = document.getElementById("root");
     if (container === null) throw new Error("测试夹具缺 #root");

@@ -11,19 +11,14 @@ import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, oneTurnLogStepFirst, twoTurnLog } from "@morlay/dsh-session/testing";
 import { asRdbStore } from "@morlay/session-rdb";
 import { strToU8 } from "fflate";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { zipOf } from "../../__tests__/support/zip.ts";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -36,7 +31,7 @@ async function seed(harness: Harness, id: string, log = twoTurnLog()): Promise<v
 const storeOf = (harness: Harness) => asRdbStore(harness.app.get(SessionPersistence));
 
 describe("L2 批量导出", () => {
-  it("逐条导出上游 format 的整段日志：不存在的会话带 SESSION_NOT_FOUND，别的条照常导出", async () => {
+  test("逐条导出上游 format 的整段日志：不存在的会话带 SESSION_NOT_FOUND，别的条照常导出", async () => {
     const harness = await start();
     await seed(harness, "export-a");
     await seed(harness, "export-b", oneTurnLogStepFirst());
@@ -60,7 +55,7 @@ describe("L2 批量导出", () => {
 });
 
 describe("L2 批量导入", () => {
-  it("逐条把 zip 落成新会话：好包照常导入，没有 artifact 的包带域码，整批不回滚", async () => {
+  test("逐条把 zip 落成新会话：好包照常导入，没有 artifact 的包带域码，整批不回滚", async () => {
     const harness = await start();
     await seed(harness, "import-source", oneTurnLogStepFirst());
     const store = storeOf(harness);

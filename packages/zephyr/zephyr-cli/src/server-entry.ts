@@ -1,9 +1,12 @@
 // 服务端入口：应用清单的**唯一**来源。
 //
-// 入口可以导出两种东西：
-//   - 一份清单：`export default [...provideXxx()]`；
+// 入口交出两种东西之一，名字是具名 `providers`（`export default` 仍然接住，见下面的读出点）：
+//   - 一份清单：`export const providers = [...provideXxx()]`；
 //   - 一个函数 `(mode) => 清单`：需要部署值（数据目录、工作区、端口）时用它——清单在装配前就要
 //     把这些值算进去，而注入是装配之后的事。这与 vite 的 `defineConfig(({ mode }) => …)` 同构。
+//
+// 为什么要具名：`import/no-default-export` 在本仓是 error（默认导出只给「工具按 `module.default` 取」
+// 的配置文件豁免），应用入口是**我们自己的模块**，所以走具名；默认导出留着是为了兼容旧工作区。
 import { pathToFileURL } from "node:url";
 import type { ProviderList } from "@morlay/zephyr";
 import { CliError } from "./errors.ts";

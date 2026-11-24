@@ -8,7 +8,8 @@ import { ServerHmr } from "../internal/server-hmr.ts";
 import { provideServerHmr } from "../dev-hmr/provide.ts";
 import { ClientAssets, DevHmr } from "@morlay/zephyr-app";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { vi } from "vitest";
 
 /** 调度器的轮询周期：等待"该发生的发生了 / 不该发生的没发生"都按它的倍数算，不写死毫秒。 */
 const POLL_MS = 5;
@@ -57,7 +58,7 @@ async function restartedTimes(restart: unknown, times: number): Promise<void> {
 }
 
 describe("ServerHmr", () => {
-  it("契约形态：`ServerHmr` 就是 `DevHmr`，`install` 后 `notify` 调到 `restart`", async () => {
+  test("契约形态：`ServerHmr` 就是 `DevHmr`，`install` 后 `notify` 调到 `restart`", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 0);
     expect(hmr, "`ServerHmr` 必须是 `DevHmr` 的实现").toBeInstanceOf(DevHmr);
@@ -69,7 +70,7 @@ describe("ServerHmr", () => {
     expect(restart.mock.calls[0]?.[0], "`restart` 拿到这一轮变化").toEqual(["a.ts"]);
   });
 
-  it("变更来源走 `ClientAssets`：订阅来的变化等于 `notify`（且遵守空闲判据）", async () => {
+  test("变更来源走 `ClientAssets`：订阅来的变化等于 `notify`（且遵守空闲判据）", async () => {
     let busy = 1;
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => busy);
@@ -89,7 +90,7 @@ describe("ServerHmr", () => {
     expect(restart, "撤销之后的变更不再触发重载").toHaveBeenCalledTimes(1);
   });
 
-  it("空闲时立刻重载", async () => {
+  test("空闲时立刻重载", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 0);
     hmr.install({ restart });
@@ -97,7 +98,7 @@ describe("ServerHmr", () => {
     await restartedTimes(restart, 1);
   });
 
-  it("有在途调用时等着，空了才换树", async () => {
+  test("有在途调用时等着，空了才换树", async () => {
     let busy = 2;
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => busy);
@@ -109,7 +110,7 @@ describe("ServerHmr", () => {
     await restartedTimes(restart, 1);
   });
 
-  it("域登记的 `IdleGuard` 说忙也要等", async () => {
+  test("域登记的 `IdleGuard` 说忙也要等", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 0);
     let idle = false;
@@ -122,7 +123,7 @@ describe("ServerHmr", () => {
     await restartedTimes(restart, 1);
   });
 
-  it("等空闲期间多次变化合并成一次重载", async () => {
+  test("等空闲期间多次变化合并成一次重载", async () => {
     let busy = 1;
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => busy);
@@ -136,7 +137,7 @@ describe("ServerHmr", () => {
     expect(restart, "三次变化只换一次树").toHaveBeenCalledTimes(1);
   });
 
-  it("等太久也重载（超时兜底：改动不能永远不生效）", async () => {
+  test("等太久也重载（超时兜底：改动不能永远不生效）", async () => {
     const restart = vi.fn(async (_files: readonly string[]) => {});
     const hmr = hmrWith(() => 1);
     Object.assign(hmr, {
@@ -147,7 +148,7 @@ describe("ServerHmr", () => {
     await restartedTimes(restart, 1);
   });
 
-  it(
+  test(
     "装配面不装 MuxServer 时换树行照样装得上，按各域 IdleGuard 判空闲",
     { timeout: 5_000 },
     async () => {
@@ -172,7 +173,7 @@ describe("ServerHmr", () => {
     },
   );
 
-  it("重载期间又变了：那批会再排一轮，不会丢", async () => {
+  test("重载期间又变了：那批会再排一轮，不会丢", async () => {
     const seen: string[][] = [];
     let release: (() => void) | undefined;
     const restart = vi.fn(async (files: readonly string[]) => {

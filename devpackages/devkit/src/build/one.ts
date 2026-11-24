@@ -31,7 +31,6 @@ if (Object.keys(plan.entries).length > 0) {
     declarationFiles: (entry) =>
       plan.bundle === true || entry === "client" ? [] : [entry + ".d.mts"],
     ...(plan.bundle === true ? { bundle: { rows: bundleRows } } : {}),
-    publishOnly: plan.publishOnly,
     hidden: plan.hidden,
     ...(plan.bin === undefined ? {} : { bin: plan.bin }),
   });

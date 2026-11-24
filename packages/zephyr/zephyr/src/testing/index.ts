@@ -1,5 +1,8 @@
-// 框架内部的**测试面**：业务包的测试要断言「装配清单里谁依赖谁」「令牌指向谁」。
+// 框架的**测试面**：业务包的测试只从这里拿测试入口。
 //
-// 这些是 DI 核心的内部表示（不是装配 API），所以不进包门面；测试要读它们就走这里。
-// 旧写法 `@morlay/zephyr/src/token.ts`（开发面深引）与此同源——新代码走这个出口。
-export { injectPlaceholderOf, kFace, stub, tokenMetaOf } from "@morlay/zephyr";
+// DI 的内部表示（令牌元数据、契约面、注入占位、局部替身）是装配器的实现细节，不进这个出口，
+// 也不该被业务测试读到：想知道「装配对不对」就按行为断言——`app.get(令牌)` 拿到实例，
+// 或它被注入到某处后表现正确；要替身就写 `{ provide: 令牌, useValue: ... }`。
+//
+// 临时目录不在这里：它是 `AppEnv` 的实现细节（`@morlay/zephyr-app/testing` 的 `appEnv` fixture）。
+export { describe, expect, test } from "vitest";

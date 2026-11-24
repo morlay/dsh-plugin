@@ -5,7 +5,7 @@
 // 为什么值得整批搬：这条线是自己按 AST 重写的一版（上游那份要类型检查器），**同一批类型语法必须给出同一套
 // 接受面**。丢过的那条就是实例——`interface X extends Y` 的继承成员没摊平，wire 参数被静默丢掉（详见
 // `schema.ts` 的 `membersOf`）。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { fixtureOf, fixtureOfSource } from "./schema-fixture.ts";
 
 interface Case {
@@ -155,7 +155,7 @@ const FALLBACKS: readonly { readonly name: string; readonly type: string }[] = [
 
 describe("schema emitter 的上游契约（schema-emitter.spec.ts）", () => {
   for (const item of SUPPORTED) {
-    it(item.name, async () => {
+    test(item.name, async () => {
       const fixture =
         item.source === undefined
           ? await fixtureOf(item.type ?? "")
@@ -169,7 +169,7 @@ describe("schema emitter 的上游契约（schema-emitter.spec.ts）", () => {
   }
 
   for (const item of FALLBACKS) {
-    it(`${item.name}（有意兜底）`, async () => {
+    test(`${item.name}（有意兜底）`, async () => {
       const fixture = await fixtureOf(item.type);
       expect(fixture.expression.startsWith("z.unknown()")).toBe(true);
       expect(fixture.accepts({ anything: true })).toBe(true);

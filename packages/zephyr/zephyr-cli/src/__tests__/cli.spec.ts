@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { runCli } from "../run.ts";
 import { memoryStream, tempWorkspace } from "../testing/index.ts";
 
@@ -24,7 +24,7 @@ async function workspaceWithEcho(): Promise<string> {
 }
 
 describe("CLI 内核", () => {
-  it("配置里的插件命令进树、能跑，退出码透传", async () => {
+  test("配置里的插件命令进树、能跑，退出码透传", async () => {
     const workspace = await workspaceWithEcho();
     const stdout = memoryStream();
     const stderr = memoryStream();
@@ -38,7 +38,7 @@ describe("CLI 内核", () => {
     expect(stdout.lines.join("\n")).toContain("echo echo hi!");
   });
 
-  it("裸调用打根帮助，列出核心命令与插件命令", async () => {
+  test("裸调用打根帮助，列出核心命令与插件命令", async () => {
     const workspace = await workspaceWithEcho();
     const stdout = memoryStream();
     const code = await runCli([], { cwd: workspace, stdout: stdout.write, stderr: () => {} });
@@ -47,7 +47,7 @@ describe("CLI 内核", () => {
     for (const name of ["dev", "build", "preview", "echo"]) expect(text).toContain(name);
   });
 
-  it("命令帮助由 schema 生成，含全局与命令自己的选项", async () => {
+  test("命令帮助由 schema 生成，含全局与命令自己的选项", async () => {
     const workspace = await workspaceWithEcho();
     const stdout = memoryStream();
     const code = await runCli(["echo", "--help"], {
@@ -62,7 +62,7 @@ describe("CLI 内核", () => {
     expect(text).toContain("--data-dir");
   });
 
-  it("未知命令是用法错误（退出码 2）", async () => {
+  test("未知命令是用法错误（退出码 2）", async () => {
     const workspace = await workspaceWithEcho();
     const stderr = memoryStream();
     const stdout = memoryStream();
@@ -75,7 +75,7 @@ describe("CLI 内核", () => {
     expect(stderr.lines.join("\n")).toContain("未知命令");
   });
 
-  it("没有配置就退出 1，并指出缺的是哪个文件", async () => {
+  test("没有配置就退出 1，并指出缺的是哪个文件", async () => {
     const workspace = await tempWorkspace({});
     const stderr = memoryStream();
     const code = await runCli(["dev"], { cwd: workspace, stdout: () => {}, stderr: stderr.write });
@@ -83,7 +83,7 @@ describe("CLI 内核", () => {
     expect(stderr.lines.join("\n")).toContain("zephyr.config.ts");
   });
 
-  it("preview 在缺产物时报错（只吃已有产物）", async () => {
+  test("preview 在缺产物时报错（只吃已有产物）", async () => {
     const workspace = await workspaceWithEcho();
     const stderr = memoryStream();
     const code = await runCli(["preview"], {

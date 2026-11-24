@@ -8,10 +8,11 @@
  * 两处位置分别由 `ui-chat` 与 `ui-conversation` 声明；本 spec 只装这一行，所以按同一形状声明一次。
  * 「不装这一行 → 两个槽位都空」是这条 spec 的反向判据（见 `withRow: false`）。
  */
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
+import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { Locale, provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { UiConversation } from "../conversation/conversation.token.ts";
 import { MessageQuotesSlot } from "../conversation/message-quotes-slot.ts";
 
@@ -39,12 +40,6 @@ class FakeLocale extends Locale {
   readonly subscribe: Locale["subscribe"] = () => () => {};
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
-
 /**
  * 起装配，并声明这一行要注册的两个槽位。
  * @param withRow - 是否装 `MessageQuotesSlot`（`false` 是反向判据：两个槽位都该空）。
@@ -67,7 +62,7 @@ async function boot(withRow: boolean): Promise<Slots> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const slots = app.get(Slots);
   // 两处位置的形状照抄声明方（`ui-chat` 的 chat 视图 children / `ui-conversation` 的 user.text.node）。
   slots.registerDynamic(
@@ -91,7 +86,7 @@ function keysOf(slots: Slots, name: string): (string | undefined)[] {
 }
 
 describe("选中引用的「引用文本」浮层", () => {
-  it("装上之后两个槽位都有 quote 注册项", async () => {
+  test("装上之后两个槽位都有 quote 注册项", async () => {
     const slots = await boot(true);
     await until(() => keysOf(slots, "conversation.chat.text-interaction").length > 0);
     expect(
@@ -104,7 +99,7 @@ describe("选中引用的「引用文本」浮层", () => {
     ]);
   });
 
-  it("不装这一行时两个槽位都是空的（反向判据）", async () => {
+  test("不装这一行时两个槽位都是空的（反向判据）", async () => {
     const slots = await boot(false);
     expect(keysOf(slots, "conversation.chat.text-interaction")).toEqual([]);
     expect(keysOf(slots, "conversation.user.text.node")).toEqual([]);

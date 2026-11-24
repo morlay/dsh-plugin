@@ -10,9 +10,6 @@
  * 不是端点自造的值；`catalog` 的三个档位来自 `providePermission` 的预设表。
  */
 import { ToolCallId } from "@morlay/dsh-agent/server";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideAgent } from "@morlay/dsh-agent";
@@ -23,18 +20,17 @@ import { SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { SubprocessDefault } from "@morlay/dsh-shell";
 import { SessionStore } from "@morlay/dsh-session";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { onTestFinished } from "vitest";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
 import { UserQuestionsEndpoint } from "../endpoint/user-questions-endpoint.ts";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 import { UserQuestionsEndpointClient } from "../ui/user-questions-endpoint-client.ts";
-
-let root = "";
 
 /**
  * `userQuestions/attachWait` 的 wire 端点名：**从契约编译出来**（`remoteDescriptorsOf` 读
@@ -51,40 +47,13 @@ function attachWaitEndpoint(): string {
   return `${stream.namespace}/${stream.method}`;
 }
 
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-permission-endpoints-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 指向临时目录的运行环境。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
-
 /**
  * 起真权限栈：`providePermission` 带来预设表、提问队列与两组端点；shell / sandbox 三行供
  * `PermissionPresetService` 声明的 `shell` 依赖。
  * @returns 应用、handler 表、活 agent 与会话 id。
  */
-async function boot(): Promise<{
+async function boot(appEnv: TestingAppEnv): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   handlers: RemoteHandlers;
   agent: Awaited<ReturnType<AgentLoop["create"]>>;
@@ -95,7 +64,7 @@ async function boot(): Promise<{
       ...provideSession(),
       ...provideSessionProjection(),
 
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideAgent(),
       // 顺序即装配顺序：`shell` / `bash` 的适配面要先就位，权限行构造期就读 `ctx.shell.sandboxMode`。
       SubprocessDefault,
@@ -113,20 +82,24 @@ async function boot(): Promise<{
     ],
     timeoutMs: 20_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const sessionId = app.get(SessionStore).prepare().id;
   const agent = await app
     .get(AgentLoop)
-    .create(sessionId, { provider: "deepseek-official", model: "deepseek-flash" }, { cwd: root });
+    .create(
+      sessionId,
+      { provider: "deepseek-official", model: "deepseek-flash" },
+      { cwd: appEnv.values.dataDir },
+    );
   return { app, handlers: app.get(RemoteHandlers), agent, sessionId };
 }
 
 describe("权限 / inbox 的宿主端点", () => {
-  it(
+  test(
     "`permissionPresets/catalog` 返回 providePermission 的真预设表",
     { timeout: 20_000 },
-    async () => {
-      const { app } = await boot();
+    async ({ appEnv }) => {
+      const { app } = await boot(appEnv);
       const result = await app.get(PermissionPresetsEndpointClient).catalog();
       expect(result).toMatchObject({
         ok: true,
@@ -143,22 +116,26 @@ describe("权限 / inbox 的宿主端点", () => {
     },
   );
 
-  it("`userQuestions/attachWait` 没有前台等待时立即结束（无帧）", { timeout: 20_000 }, async () => {
-    const { handlers, sessionId } = await boot();
-    const source = handlers.stream(
-      attachWaitEndpoint(),
-      { agent: sessionId, callId: "call-none" },
-      new AbortController().signal,
-    );
-    if (source === undefined) throw new Error("userQuestions/attachWait 没有注册成流式端点");
-    expect(await source[Symbol.asyncIterator]().next()).toMatchObject({ done: true });
-  });
+  test(
+    "`userQuestions/attachWait` 没有前台等待时立即结束（无帧）",
+    { timeout: 20_000 },
+    async ({ appEnv }) => {
+      const { handlers, sessionId } = await boot(appEnv);
+      const source = handlers.stream(
+        attachWaitEndpoint(),
+        { agent: sessionId, callId: "call-none" },
+        new AbortController().signal,
+      );
+      if (source === undefined) throw new Error("userQuestions/attachWait 没有注册成流式端点");
+      expect(await source[Symbol.asyncIterator]().next()).toMatchObject({ done: true });
+    },
+  );
 
-  it(
+  test(
     "`userQuestions/attachWait` 挂到真 `askTimed` 的前台等待上：首帧是 remainingMs",
     { timeout: 20_000 },
-    async () => {
-      const { app, handlers, agent, sessionId } = await boot();
+    async ({ appEnv }) => {
+      const { app, handlers, agent, sessionId } = await boot(appEnv);
       const questions = app.get(UserQuestionQueue);
       const callId = ToolCallId("call-1");
       const lifetime = new AbortController();
@@ -188,11 +165,11 @@ describe("权限 / inbox 的宿主端点", () => {
     },
   );
 
-  it(
+  test(
     "`userQuestions/answer` 的 false 来自上游队列判定（未知 call 不可作答）",
     { timeout: 20_000 },
-    async () => {
-      const { app, sessionId } = await boot();
+    async ({ appEnv }) => {
+      const { app, sessionId } = await boot(appEnv);
       const result = await app.get(UserQuestionsEndpointClient).answer({
         agent: sessionId,
         callId: "call-unknown",

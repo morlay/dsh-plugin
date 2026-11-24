@@ -9,20 +9,7 @@
     "!**/__tests__"
   ],
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./package.json": "./package.json"
-  },
-  "publishConfig": {
-    "exports": {
-      ".": "./dist/index.mjs",
-      "./package.json": "./package.json",
-      "./client": {
-        "default": "./dist/client.cjs"
-      },
-      "./cordis.patch.yml": "./dist/cordis.patch.yml"
-    }
-  },
+  "exports": {},
   "scripts": {
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/better-session"
   },
@@ -30,9 +17,6 @@
     "@morlay/session-rdb": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
-  },
-  "devDependencies": {
-    "@morlay/better-session": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-home-paths": "workspace:^",

@@ -8,9 +8,10 @@ import { ToolRegistry } from "@morlay/dsh-agent";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { defineTool } from "@morlay/dsh-agent/contract";
-import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { bootstrapApplication } from "@morlay/zephyr";
 import { sessionModeTestProviders } from "./support/session-mode-providers.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import type { UserMessage } from "@morlay/dsh-agent/contract";
 import { pinDshHome } from "./support/dsh-home.ts";
 
@@ -20,12 +21,6 @@ interface CordisBus {
 }
 
 pinDshHome();
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 /** 一条带英文描述与参数说明的工具：汉化之后这两处都不该留原样。 */
 function readTool() {
@@ -41,13 +36,13 @@ function readTool() {
 }
 
 describe("工具说明的汉化", () => {
-  it("会话里的工具描述换成一行中文，参数说明被剥掉", async () => {
+  test("会话里的工具描述换成一行中文，参数说明被剥掉", async () => {
     const app = await bootstrapApplication({
       // headless 装配清单（不装 wire：端点行要 remote-handlers）。
       providers: [...sessionModeTestProviders()],
       timeoutMs: 30_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const tools = app.get(ToolRegistry);
     tools.register(readTool());
     await app.get(AgentLoop).create(SessionId(`guidance-${String(Math.random())}`), {
@@ -69,13 +64,13 @@ describe("工具说明的汉化", () => {
     expect(filePath?.["title"]).toBeUndefined();
   });
 
-  it("`init` 组的用法正文随本步注入（一条 reminder，幂等键固定）", async () => {
+  test("`init` 组的用法正文随本步注入（一条 reminder，幂等键固定）", async () => {
     const app = await bootstrapApplication({
       // headless 装配清单（不装 wire：端点行要 remote-handlers）。
       providers: [...sessionModeTestProviders()],
       timeoutMs: 30_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const tools = app.get(ToolRegistry);
     tools.register(readTool());
     const agent = await app

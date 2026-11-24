@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { rm } from "node:fs/promises";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 
 import { SessionId, SessionSeq, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistenceRdb as SessionPersistenceSqlite } from "@morlay/session-rdb";
@@ -42,12 +41,12 @@ function splice(
 }
 
 describe("orphanInboxSpliceSeqs", () => {
-  it("accepts a self-consistent splice stream", () => {
+  test("accepts a self-consistent splice stream", () => {
     const events = [splice(0, "next-turn", 0, 0, [{ id: "a" }]), splice(1, "next-turn", 0, 1, [])];
     expect(orphanInboxSpliceSeqs(events).size).toBe(0);
   });
 
-  it("flags an insert beyond the empty queue (rewind dropped the prior queued message)", () => {
+  test("flags an insert beyond the empty queue (rewind dropped the prior queued message)", () => {
     const events = [
       splice(0, "next-turn", 0, 0, [{ id: "queued-before-rewind" }]),
       splice(1, "next-turn", 1, 0, [{ id: "b" }]),
@@ -61,7 +60,7 @@ describe("orphanInboxSpliceSeqs", () => {
     expect(orphan.has(1)).toBe(true);
   });
 
-  it("rewrites orphans to no-op so the stream replays from empty", () => {
+  test("rewrites orphans to no-op so the stream replays from empty", () => {
     const events = [
       splice(0, "next-turn", 1, 0, [{ id: "b" }]),
       splice(1, "next-turn", 0, 1, []),
@@ -89,18 +88,13 @@ describe("orphanInboxSpliceSeqs", () => {
     expect(kept.data.inserted).toHaveLength(1);
   });
 
-  it("flags a duplicate id across pending lists", () => {
+  test("flags a duplicate id across pending lists", () => {
     const events = [
       splice(0, "next-turn", 0, 0, [{ id: "x" }]),
       splice(1, "next-step", 0, 0, [{ id: "x" }]),
     ];
     expect(orphanInboxSpliceSeqs(events).has(1)).toBe(true);
   });
-});
-
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
 async function harness() {
@@ -111,7 +105,7 @@ async function harness() {
 }
 
 describe("loadStored repairs orphan inbox splices", () => {
-  it("returns a stream the upstream Inbox can replay after a rewind dropped the queued insert", async () => {
+  test("returns a stream the upstream Inbox can replay after a rewind dropped the queued insert", async () => {
     const { persistence, dispose } = await harness();
     try {
       const turn: SessionEvent[] = [

@@ -5,7 +5,7 @@
 // `mount` 之后才绑上），运行期 `skill.list is not a function`。
 //
 // `optional` 的语义是"可能没有提供者"，不是"可以不按依赖序"：有提供者就得排在它后面。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { bootstrapApplication, inject, Injectable, type App, type Context } from "@morlay/zephyr";
 import { fromCordis } from "../compat/index.ts";
 
@@ -52,7 +52,7 @@ class Consumer {
 }
 
 describe("可选注入的依赖序", () => {
-  it("消费者排在适配行之前时，它的可选注入也拿到上游面（不是空壳）", async () => {
+  test("消费者排在适配行之前时，它的可选注入也拿到上游面（不是空壳）", async () => {
     // 顺序故意反着写：消费者在前、提供者在后。
     const app: App = await bootstrapApplication({
       providers: [Consumer, RegistryRow],

@@ -4,20 +4,15 @@
 // 按注册顺序问拦截项。任一层装错，界面看到的是「点了没反应」或「编辑没生效」这类离原因很远的文案，
 // 所以判据走真请求：自研端点与上游贡献方的端点在同一宿主上都得调通。
 import { request as httpRequest } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { RemoteHandlers } from "../../api-gateway/remote-handlers.contract.ts";
 import { mountWireApp, type WireApp } from "../../__tests__/support/wire-app.ts";
-
-const opened: WireApp[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose();
-}, 30_000);
 
 /** 起一份真宿主并在用例后拆掉。 */
 async function boot(): Promise<WireApp> {
   const app = await mountWireApp();
-  opened.push(app);
+  onTestFinished(() => app.dispose());
   return app;
 }
 
@@ -49,7 +44,7 @@ function rpcOf(app: WireApp): RpcContributor["rpc"] {
 }
 
 describe("/api 的 HTTP 面（真宿主 + 真 fetch）", { timeout: 20_000 }, () => {
-  it("自研端点：客户端一次 unary 落到路由表，命名参数原样过去、结果原样回来", async () => {
+  test("自研端点：客户端一次 unary 落到路由表，命名参数原样过去、结果原样回来", async () => {
     const host = await boot();
     const seen: Readonly<Record<string, unknown>>[] = [];
     host.app.get(RemoteHandlers).register("settings/describe", async (args) => {
@@ -63,7 +58,7 @@ describe("/api 的 HTTP 面（真宿主 + 真 fetch）", { timeout: 20_000 }, ()
     expect(seen, "命名参数要原样进处理器").toEqual([{ scope: "ui" }]);
   });
 
-  it("处理器抛错：客户端拿到带 code / details 的失败，而不是一个 404", async () => {
+  test("处理器抛错：客户端拿到带 code / details 的失败，而不是一个 404", async () => {
     const host = await boot();
     host.app.get(RemoteHandlers).register("settings/write", async () => {
       throw Object.assign(new Error("设置项只读"), {
@@ -79,7 +74,7 @@ describe("/api 的 HTTP 面（真宿主 + 真 fetch）", { timeout: 20_000 }, ()
     });
   });
 
-  it("上游贡献方与自研组共存：各自认领的端点都调通（共享通道一条只容一个物理拦截器）", async () => {
+  test("上游贡献方与自研组共存：各自认领的端点都调通（共享通道一条只容一个物理拦截器）", async () => {
     const host = await boot();
     host.app.get(RemoteHandlers).register("settings/describe", async () => ({ from: "自研" }));
     // 上游风格的一个贡献方：直接往 `/api` 通道注册（上游的 api-gateway 就是这么做的）。
@@ -99,14 +94,14 @@ describe("/api 的 HTTP 面（真宿主 + 真 fetch）", { timeout: 20_000 }, ()
     });
   });
 
-  it("没人认领的端点：客户端拿到传输失败，不会挂住", async () => {
+  test("没人认领的端点：客户端拿到传输失败，不会挂住", async () => {
     const host = await boot();
     await expect(host.client().invoke("nobody/serves", { args: {} })).rejects.toThrow(
       /transport failure/u,
     );
   });
 
-  it("准入：本机的 unary 放行，跨站标记的请求挡在 403", async () => {
+  test("准入：本机的 unary 放行，跨站标记的请求挡在 403", async () => {
     const host = await boot();
     host.app.get(RemoteHandlers).register("settings/describe", async () => ({ ok: true }));
     const body = JSON.stringify({

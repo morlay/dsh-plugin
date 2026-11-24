@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { type Node, parseSource, walkAll } from "../ast.ts";
 import { buildSchemaIndex, newContext, zodOf, type SchemaIndex } from "../schema.ts";
 
@@ -31,7 +31,7 @@ async function indexOf(declarations: string): Promise<SchemaIndex> {
 }
 
 describe("ts 2 schema", () => {
-  it("关键字与字面量", () => {
+  test("关键字与字面量", () => {
     expect(zod("string")).toBe("z.string()");
     expect(zod("number")).toBe("z.number()");
     expect(zod("boolean")).toBe("z.boolean()");
@@ -44,7 +44,7 @@ describe("ts 2 schema", () => {
     expect(zod("1")).toBe("z.literal(1)");
   });
 
-  it("数组与 union（null 排最前，其余照源码顺序）", () => {
+  test("数组与 union（null 排最前，其余照源码顺序）", () => {
     expect(zod("string[]")).toBe("z.array(z.string())");
     expect(zod("string | null")).toBe("z.union([z.literal(null), z.string()])");
     expect(zod('"a" | "b" | null')).toBe(
@@ -52,7 +52,7 @@ describe("ts 2 schema", () => {
     );
   });
 
-  it("对象字面量：字段、optional、readonly", () => {
+  test("对象字面量：字段、optional、readonly", () => {
     expect(zod("{ a: string; b?: number; readonly c: boolean }")).toBe(
       "z.object({\n" +
         "  'a': z.string(),\n" +
@@ -62,18 +62,18 @@ describe("ts 2 schema", () => {
     );
   });
 
-  it("索引签名走 z.record", () => {
+  test("索引签名走 z.record", () => {
     expect(zod("{ [key: string]: number }")).toBe("z.record(z.string(), z.number())");
   });
 
-  it("内置泛型：Array / Record / Promise / ReadonlyArray", () => {
+  test("内置泛型：Array / Record / Promise / ReadonlyArray", () => {
     expect(zod("Array<string>")).toBe("z.array(z.string())");
     expect(zod("ReadonlyArray<string>")).toBe("z.array(z.string()).readonly()");
     expect(zod("Record<string, number>")).toBe("z.record(z.string(), z.number())");
     expect(zod("Promise<string>")).toBe("z.string()");
   });
 
-  it("工具类型：Partial / Readonly / Required / Omit / Pick 改的是对象字段面", async () => {
+  test("工具类型：Partial / Readonly / Required / Omit / Pick 改的是对象字段面", async () => {
     const index = await indexOf("export interface Config { readonly a: string; b?: number }");
     expect(zod("Partial<Config>", index)).toBe(
       "z.object({\n  'a': z.string().readonly().optional(),\n  'b': z.number().optional(),\n})",
@@ -89,7 +89,7 @@ describe("ts 2 schema", () => {
     );
   });
 
-  it("自定义类型就地展开（interface / type / enum）", async () => {
+  test("自定义类型就地展开（interface / type / enum）", async () => {
     const index = await indexOf(
       [
         "export interface Point { readonly x: number; y: number }",
@@ -104,14 +104,14 @@ describe("ts 2 schema", () => {
     expect(zod("Kind", index)).toBe('z.union([z.literal("a"), z.literal("b")])');
   });
 
-  it("递归类型走 z.lazy 自引用", async () => {
+  test("递归类型走 z.lazy 自引用", async () => {
     const index = await indexOf("export interface Node { next: Node | null; value: string }");
     expect(zod("Node", index)).toBe(
       "z.object({\n  'next': z.union([z.literal(null), z.lazy(() => NodeRemoteCodec$schema())]),\n  'value': z.string(),\n})",
     );
   });
 
-  it("brand 标记折叠、嵌套 union 展平、类型操作符忽略", () => {
+  test("brand 标记折叠、嵌套 union 展平、类型操作符忽略", () => {
     expect(zod("string & { readonly BRAND: unique symbol }")).toBe(
       "z.intersection(z.string(), z.unknown())",
     );
@@ -121,11 +121,11 @@ describe("ts 2 schema", () => {
     expect(zod("readonly string[]")).toBe("z.array(z.string())");
   });
 
-  it("AsyncIterable 解包（stream 方法的 wire 类型）", () => {
+  test("AsyncIterable 解包（stream 方法的 wire 类型）", () => {
     expect(zod("AsyncIterable<boolean>")).toBe("z.boolean()");
   });
 
-  it("解析不了就报错（与上游同规则：不静默降级成 unknown）", async () => {
+  test("解析不了就报错（与上游同规则：不静默降级成 unknown）", async () => {
     expect(() => zod("Missing")).toThrow(/引用解析失败：Missing/);
     expect(await indexOf("")).toEqual(emptyIndex());
   });

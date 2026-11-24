@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   and,
   between,
@@ -35,7 +35,7 @@ const orders = defineTable({
 });
 
 describe("关联 / 聚合 / 条件（两方言同一套构建）", () => {
-  it("join + group by + having、distinct、between、not、raw", async () => {
+  test("join + group by + having、distinct、between、not、raw", async () => {
     const database = await openDatabase({
       dialect: "sqlite",
       path: ":memory:",

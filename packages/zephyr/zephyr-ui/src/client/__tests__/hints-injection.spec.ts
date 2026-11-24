@@ -14,7 +14,7 @@ import {
   type Context,
   type OnInit,
 } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import { SchemaFormHints, SERVICE_NAME, schemaFormHintsOf } from "../schema-form/hints.ts";
 
 // 只在运行期挂服务的行（模拟内联本包的 client 行）。
@@ -44,7 +44,7 @@ class Read implements OnInit {
 }
 
 describe("提示面的读取面", () => {
-  it("按字面名读得到运行期挂的那一份", async () => {
+  test("按字面名读得到运行期挂的那一份", async () => {
     const app = await bootstrapApplication({ providers: [RuntimeProvider, Read] });
     try {
       expect(app.get(Read).keys).toEqual(["mounted"]);
@@ -53,7 +53,7 @@ describe("提示面的读取面", () => {
     }
   });
 
-  it("没人挂时读到 undefined（不抛）", async () => {
+  test("没人挂时读到 undefined（不抛）", async () => {
     const app = await bootstrapApplication({ providers: [Read] });
     try {
       expect(app.get(Read).keys).toEqual([]);
@@ -64,7 +64,7 @@ describe("提示面的读取面", () => {
 
   // 注入不是本包的路：装配清单里没有它的条目时，覆盖检查在**编译期**就拒绝（`__missingProviders`），
   // 运行期也不再有「拿到 undefined 后静默空态」这种可能。
-  it("注入方式在编译期被覆盖检查拒绝", () => {
+  test("注入方式在编译期被覆盖检查拒绝", () => {
     // @ts-expect-error 装配清单里没有 SchemaFormHints 的条目：覆盖检查要求有提供者
     const attempt = () => bootstrapApplication({ providers: [Injected], timeoutMs: 1000 });
     expect(typeof attempt).toBe("function");

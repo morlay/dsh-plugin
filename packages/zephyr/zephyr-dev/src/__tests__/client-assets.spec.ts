@@ -9,7 +9,7 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bootstrapApplication, configure } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { ClientAssets } from "@morlay/zephyr-app";
 import {
   AppEnvDefault,
@@ -25,7 +25,7 @@ import { ViteHandoffDefault } from "../vite-handoff/vite-handoff.service.ts";
 import { provideClientModules } from "../client-modules/provide.ts";
 
 describe("ClientAssets 是 ServeDefault 的必需前置", () => {
-  it("装配里没有实现：装配阶段就失败，报出 ServeDefault 需要 ClientAssets", async () => {
+  test("装配里没有实现：装配阶段就失败，报出 ServeDefault 需要 ClientAssets", async () => {
     // 装配**运行期**的判据：`ServeDefault` 的注入字段是 `private`，编译期的覆盖检查
     // （`ProvidersCoverage`）只看公开字段，抓不到这条——所以这里钉运行期那句「谁需要谁」。
     await expect(
@@ -50,7 +50,7 @@ describe("ClientAssets 是 ServeDefault 的必需前置", () => {
     ).rejects.toThrow(/client-assets.*ServeDefault|ServeDefault.*client-assets/u);
   });
 
-  it("`provideClientModules()` 自带 dev 实现：同批装起来不缺", async () => {
+  test("`provideClientModules()` 自带 dev 实现：同批装起来不缺", async () => {
     // 只验**清单层面**的覆盖：真起服务要 vite（另有用例守着），这里读的是装配函数给出的条目。
     const entries = provideClientModules();
     const classes: unknown[] = entries.map((entry) =>
@@ -64,7 +64,7 @@ describe("ClientAssets 是 ServeDefault 的必需前置", () => {
     ).toBe(true);
   });
 
-  it("契约面：`ViteClientAssets` 是 `ClientAssets` 的实现（令牌是契约，不另立身份）", () => {
+  test("契约面：`ViteClientAssets` 是 `ClientAssets` 的实现（令牌是契约，不另立身份）", () => {
     expect(ViteClientAssets.prototype).toBeInstanceOf(ClientAssets);
     for (const member of ["serve", "transformHtml", "onServerSourceChange"] as const) {
       expect(typeof ViteClientAssets.prototype[member], member).toBe("function");

@@ -5,7 +5,7 @@
 // 都在、清单里却只剩最后一个；60 次构建也把时间拖到不可接受。
 //
 // 判据：同包同版本同清单的出口并成一组，一次构建把全部出口作为多 entry 交给打包器。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { groupTargetsByPackage, type PrebundleTarget } from "../prebundle.ts";
 
 /** 造一条目标（只有分组用得上的字段有值）。 */
@@ -20,7 +20,7 @@ function targetOf(name: string, exportName: string, manifestOf?: string): Prebun
 }
 
 describe("groupTargetsByPackage", () => {
-  it("同包的多个出口并成一组（60 个语言包不是 60 次构建）", () => {
+  test("同包的多个出口并成一组（60 个语言包不是 60 次构建）", () => {
     const languages = ["typescript", "json", "python"].map((name) =>
       targetOf("@shikijs/langs", name),
     );
@@ -34,7 +34,7 @@ describe("groupTargetsByPackage", () => {
     ]);
   });
 
-  it("同名同版本但清单不同的**两份实体**不合并（pnpm 严格布局下会同时存在）", () => {
+  test("同名同版本但清单不同的**两份实体**不合并（pnpm 严格布局下会同时存在）", () => {
     const groups = groupTargetsByPackage([
       targetOf("react", "index", "/a/node_modules/react/package.json"),
       targetOf("react", "index", "/b/node_modules/react/package.json"),
@@ -42,7 +42,7 @@ describe("groupTargetsByPackage", () => {
     expect(groups).toHaveLength(2);
   });
 
-  it("组内保持清单顺序（同包内我的出口顺序不被重排）", () => {
+  test("组内保持清单顺序（同包内我的出口顺序不被重排）", () => {
     const groups = groupTargetsByPackage([targetOf("shiki", "core"), targetOf("shiki", "index")]);
     expect(groups[0]?.targets.map((target) => target.exportName)).toEqual(["core", "index"]);
   });

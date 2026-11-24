@@ -7,11 +7,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished, vi } from "vitest";
 import { muxTransport, type RemoteFetch } from "@morlay/zephyr-app/client";
+import { AppEnv } from "@morlay/zephyr-app";
 import {
   CredentialsInMemory,
-  FakeAppEnv,
+  createTestingAppEnv,
   WebServer,
   provideApiGateway,
   provideConnection,
@@ -21,29 +23,22 @@ import {
 } from "@morlay/zephyr-app/testing";
 import { TypertGateway } from "../../typert/gateway.contract.ts";
 import { RemoteQuestions } from "../remote-questions.contract.ts";
-
 /** 一条要答复的请求（本 spec 只用到这一样）。 */
 const QUESTION = { questions: [{ id: "q1", question: "继续吗？" }] };
-
 /** 起好的宿主。 */
 interface Host {
   readonly app: App;
   readonly port: number;
   dispose(): Promise<void>;
 }
-
-const opened: Host[] = [];
-const roots: string[] = [];
-
 /** 起一份带 wire 面的宿主（与 dev 同形的那些行）。 */
 async function boot(): Promise<Host> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-app-remote-events-"));
-  roots.push(root);
-  FakeAppEnv.root = root;
-  process.env.PORT = "0";
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
+  vi.stubEnv("PORT", "0");
   const app = await bootstrapApplication({
     providers: [
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
       CredentialsInMemory,
       ...provideWeb(),
       ...provideConnection(),
@@ -55,7 +50,6 @@ async function boot(): Promise<Host> {
   });
   return { app, port: app.get(WebServer).port, dispose: () => app.dispose() };
 }
-
 /**
  * 浏览器那一侧：真 WebSocket（流式与 `$events`）+ 真 HTTP（unary 与 `$events/result`）。
  * @param port - 宿主端口。
@@ -73,19 +67,10 @@ function clientOf(port: number) {
     fetchOf,
   );
 }
-
-afterEach(async () => {
-  // 答复的 HTTP 响应在宿主 resolve 之后才写出：先让这一轮 I/O 跑完再拆，否则日志里会留下
-  // 「转发事件答复失败：other side closed」这种收尾噪声（不是断言失败，但没人该去查它）。
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  for (const host of opened.splice(0)) await host.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 30_000);
-
 describe("转发事件源（真宿主 + 真客户端）", { timeout: 20_000 }, () => {
-  it("宿主发起请求 → 浏览器收到 waterfall 帧并作答 → 答复回到发起方", async () => {
+  test("宿主发起请求 → 浏览器收到 waterfall 帧并作答 → 答复回到发起方", async () => {
     const host = await boot();
-    opened.push(host);
+    onTestFinished(() => host.dispose().catch(() => {}));
     const transport = clientOf(host.port);
     const asked: string[] = [];
     transport.answer?.(async (invocation) => {
@@ -96,11 +81,9 @@ describe("转发事件源（真宿主 + 真客户端）", { timeout: 20_000 }, (
     await vi.waitFor(() => expect(host.app.get(TypertGateway).hasLiveClient()).toBe(true), {
       timeout: 10_000,
     });
-
     const answer = await host.app
       .get(RemoteQuestions)
       .ask("user-questions/request", QUESTION, { id: "a1", ctx: host.app.ctx });
-
     expect(asked, "同一条请求只该投一次（投两次就是界面上两张卡）").toEqual([
       "user-questions/request",
     ]);

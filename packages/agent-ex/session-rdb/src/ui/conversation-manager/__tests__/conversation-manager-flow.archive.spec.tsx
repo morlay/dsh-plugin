@@ -3,8 +3,9 @@
 // （与生产同一条 `syncSessionFlags`），页面接着按同一份标记过滤。
 //
 // 只替换模型的输出；归档、列表与筛选全走真 remote 到真库。
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { zh } from "../locales.ts";
 import {
   archiveSessionsInDb,
@@ -15,17 +16,9 @@ import {
 } from "../../../__tests__/support/manager-flow.ts";
 import { renderManagerPage } from "../../../__tests__/support/manager-render.tsx";
 
-afterEach(cleanup);
-
-const flows: ManagerFlow[] = [];
-
-afterEach(async () => {
-  for (const flow of flows.splice(0)) await flow.dispose();
-});
-
 async function start(): Promise<ManagerFlow> {
   const flow = await startManagerFlow();
-  flows.push(flow);
+  onTestFinished(() => flow.dispose());
   return flow;
 }
 
@@ -37,7 +30,7 @@ function archivedGroup(container: HTMLElement): HTMLElement {
 }
 
 describe("L3 对话管理页：归档", () => {
-  it("行上点归档 → 标记进库、归档 chip 的过滤立刻生效", async () => {
+  test("行上点归档 → 标记进库、归档 chip 的过滤立刻生效", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "archive-one", "要归档的会话");
     await seedTitledSession(flow.host, "keep-one", "留着的会话");
@@ -72,7 +65,7 @@ describe("L3 对话管理页：归档", () => {
   });
 });
 describe("L3 对话管理页：批量归档", () => {
-  it("多选两行批量归档：逐条结算，失败那条的会话与原因进聚合提示", async () => {
+  test("多选两行批量归档：逐条结算，失败那条的会话与原因进聚合提示", async () => {
     const flow = await start();
     await seedTitledSession(flow.host, "bulk-archive-a", "甲会话");
     await seedTitledSession(flow.host, "bulk-archive-b", "乙会话");

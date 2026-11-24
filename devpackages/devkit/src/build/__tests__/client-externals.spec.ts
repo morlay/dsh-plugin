@@ -5,7 +5,7 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { clientBundleSpec, clientRowExternals, isClientExternal } from "../cordis-client.ts";
 
 // 最小工作区：声明了一个要外置的行、一个只声明在 dependencies 的包（该内联）。
@@ -29,24 +29,24 @@ async function fixture(declared: string[] = []): Promise<string> {
 }
 
 describe("clientRowExternals", () => {
-  it("只返回 `dsh.client.external` 里点名的 specifier", async () => {
+  test("只返回 `dsh.client.external` 里点名的 specifier", async () => {
     const externals = await clientRowExternals(await fixture(["@fixture/row"]));
     expect(externals).toEqual(["@fixture/row"]);
     expect(isClientExternal("@fixture/row", externals)).toBe(true);
   });
 
-  it("`peerDependencies` 与 `dependencies` 都不构成外置理由", async () => {
+  test("`peerDependencies` 与 `dependencies` 都不构成外置理由", async () => {
     const externals = await clientRowExternals(await fixture(["@fixture/row"]));
     expect(isClientExternal("@fixture/peer", externals)).toBe(false);
     expect(isClientExternal("@fixture/bundled", externals)).toBe(false);
   });
 
-  it("没有声明时为空：全部内联", async () => {
+  test("没有声明时为空：全部内联", async () => {
     const externals = await clientRowExternals(await fixture());
     expect(externals).toEqual([]);
   });
 
-  it("client 打包规则把声明与平台 baseline 合并", async () => {
+  test("client 打包规则把声明与平台 baseline 合并", async () => {
     const spec = await clientBundleSpec({ cwd: await fixture(["@fixture/row"]) });
     expect(isClientExternal("@fixture/row", spec.externals)).toBe(true);
     // 平台 baseline（模块表种子）无论清单怎么写都外置。

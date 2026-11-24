@@ -3,7 +3,7 @@ import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import * as ToolWebPlugin from "@deepseek-ai/dsh-tool-web";
 import { ToolRegistry, SystemPrompt as SystemPromptContract } from "@morlay/dsh-agent";
-import { Web } from "@morlay/dsh-web-access";
+import { Web } from "../contract/web.contract.ts";
 
 @Injectable()
 export class ToolWeb extends fromCordis(ToolWebPlugin) {

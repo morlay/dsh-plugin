@@ -5,20 +5,15 @@ import { DatabaseSync } from "node:sqlite";
 import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { SessionQuery } from "@morlay/dsh-session";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { SessionPersistenceRdb } from "@morlay/session-rdb";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { meta, oneTurnLogStepFirst, turnLog } from "@morlay/dsh-session/testing";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -29,7 +24,7 @@ async function seed(harness: Harness, id: string): Promise<void> {
 }
 
 describe("会话查询", () => {
-  it("listSessions 列出已落库的会话", async () => {
+  test("listSessions 列出已落库的会话", async () => {
     const harness = await start();
     await seed(harness, "query-1");
     await seed(harness, "query-2");
@@ -42,7 +37,7 @@ describe("会话查询", () => {
     ]);
   });
 
-  it("搜索是显式失败：错误码带 SESSION_QUERY_SEARCH_DISABLED", async () => {
+  test("搜索是显式失败：错误码带 SESSION_QUERY_SEARCH_DISABLED", async () => {
     const harness = await start();
     await seed(harness, "query-search");
     const query = harness.app.get(SessionQuery);
@@ -55,7 +50,7 @@ describe("会话查询", () => {
     });
   });
 
-  it("readSession 读回完整日志（含 header）", async () => {
+  test("readSession 读回完整日志（含 header）", async () => {
     const harness = await start();
     await seed(harness, "query-read");
 
@@ -67,7 +62,7 @@ describe("会话查询", () => {
 
   // 这四条钉住「直接查我们自己的库」这件事：查询行走的是 SessionPersistenceRdb 的读面，
   // 不是上游引擎自带的语料层——所以同一个库里会话/事件/标题/表面都读得到，且 live 优先。
-  it("listEvents / readSurface 都从同一个库读出来", async () => {
+  test("listEvents / readSurface 都从同一个库读出来", async () => {
     const harness = await start();
     await seed(harness, "query-surfaces");
     const query = harness.app.get(SessionQuery);
@@ -82,7 +77,7 @@ describe("会话查询", () => {
     expect(surface.capturedThroughSeq).toBe(records.at(-1)?.seq ?? null);
   });
 
-  it("observeSession 给出不可变切面与可再租借的租约", async () => {
+  test("observeSession 给出不可变切面与可再租借的租约", async () => {
     const harness = await start();
     await seed(harness, "query-observe");
     const query = harness.app.get(SessionQuery);
@@ -96,7 +91,7 @@ describe("会话查询", () => {
     expect(second.events).toBe(observation.events);
   });
 
-  it("readEvent 给目标事件与前后窗口，越界显式报错", async () => {
+  test("readEvent 给目标事件与前后窗口，越界显式报错", async () => {
     const harness = await start();
     await seed(harness, "query-window");
     const query = harness.app.get(SessionQuery);
@@ -120,7 +115,7 @@ describe("会话查询", () => {
     ).rejects.toMatchObject({ code: "SESSION_QUERY_INVALID_WINDOW" });
   });
 
-  it("traceSession 在 lineage 上认出自己", async () => {
+  test("traceSession 在 lineage 上认出自己", async () => {
     const harness = await start();
     await seed(harness, "query-trace");
     const trace = await harness.app.get(SessionQuery).traceSession(SessionId("query-trace"));
@@ -141,7 +136,7 @@ function countLoads(harness: Harness): { loads: number } {
 }
 
 describe("观测缓存", () => {
-  it("同一 revision 两次 observeSession 只读一次日志", async () => {
+  test("同一 revision 两次 observeSession 只读一次日志", async () => {
     const harness = await start();
     await seed(harness, "query-cache");
     const counts = countLoads(harness);
@@ -158,7 +153,7 @@ describe("观测缓存", () => {
   });
 
   // revision 是缓存键的一半：日志前进之后不能再拿旧切面（否则页面永远停在旧水位）。
-  it("revision 变了就重读，不返回旧切面", async () => {
+  test("revision 变了就重读，不返回旧切面", async () => {
     const harness = await start();
     await seed(harness, "query-cache-rev");
     const counts = countLoads(harness);
@@ -178,7 +173,7 @@ describe("观测缓存", () => {
   });
 
   // 容量默认 1：条目满了按 LRU 淘汰，但**被租约 pin 住的切面不许被踢**——租约活着，切面就得一直有效。
-  it("租约 pin 住的条目不被淘汰，归还之后才腾位", async () => {
+  test("租约 pin 住的条目不被淘汰，归还之后才腾位", async () => {
     const harness = await start();
     await seed(harness, "query-pin-a");
     await seed(harness, "query-pin-b");
@@ -218,7 +213,7 @@ function bigLog(total: number): SessionEvent[] {
 
 describe("查询不下推就等于把整段日志读进内存", () => {
   // 判据两件：条件命中几行就只物化几行；事件列表只取四列坐标（不读 f_data）。
-  it("1 万条事件的会话：按 seq 区间筛选只物化命中那几行，事件列表不读 f_data", async () => {
+  test("1 万条事件的会话：按 seq 区间筛选只物化命中那几行，事件列表不读 f_data", async () => {
     const harness = await start();
     const total = 10_002;
     const handle = await harness.app.get(SessionPersistence).create(meta("query-big", "/work"));

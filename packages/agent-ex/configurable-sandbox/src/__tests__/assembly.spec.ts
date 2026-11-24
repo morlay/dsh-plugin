@@ -20,22 +20,16 @@ import {
   provideConfigurableSandbox,
 } from "@morlay/configurable-sandbox";
 import { bootstrapApplication, provide, without, type App } from "@morlay/zephyr";
-import { FakeAppEnv } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { FakePolicy } from "./support/fake-policy.ts";
-import { FakeSandboxFile } from "./support/fake-sandbox-file.ts";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => undefined);
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
+import { fakeSandboxFileOf } from "./support/fake-sandbox-file.ts";
 
 async function workspaceRoot(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "configurable-sandbox-asm-"));
-  roots.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -43,12 +37,12 @@ async function boot(
   providers: Parameters<typeof bootstrapApplication>[0]["providers"],
 ): Promise<App> {
   const app = await bootstrapApplication({ providers, timeoutMs: 15_000 });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => undefined));
   return app;
 }
 
 describe("装配面", () => {
-  it("对照组：官方两行在位时两个令牌是官方实现", async () => {
+  test("对照组：官方两行在位时两个令牌是官方实现", async () => {
     FakePolicy.root = await workspaceRoot();
     const app = await boot([FakePolicy, ...provide([SandboxDefault, FsSandbox])()]);
 
@@ -56,15 +50,14 @@ describe("装配面", () => {
     expect(app.get(FileSystem)).toBeInstanceOf(LocalFileSystem);
   });
 
-  it("剔除官方两行 + 装本包：两个令牌换成本包的实现", async () => {
+  test("剔除官方两行 + 装本包：两个令牌换成本包的实现", async () => {
     const root = await workspaceRoot();
     FakePolicy.root = root;
-    FakeAppEnv.root = root;
     const app = await boot([
       FakePolicy,
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
       ...provide([SandboxDefault, FsSandbox])(without(SandboxDefault), without(FsSandbox)),
-      FakeSandboxFile,
+      fakeSandboxFileOf(undefined),
       ...provideConfigurableSandbox(without(SandboxFileDefault)),
     ]);
 
@@ -72,15 +65,14 @@ describe("装配面", () => {
     expect(app.get(FileSystem)).toBeInstanceOf(ConfigurableFileSystem);
   });
 
-  it("只剔一个：另一个仍由官方兑现（without 按实现类定位）", async () => {
+  test("只剔一个：另一个仍由官方兑现（without 按实现类定位）", async () => {
     const root = await workspaceRoot();
     FakePolicy.root = root;
-    FakeAppEnv.root = root;
     const app = await boot([
       FakePolicy,
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
       ...provide([SandboxDefault, FsSandbox])(without(SandboxDefault)),
-      FakeSandboxFile,
+      fakeSandboxFileOf(undefined),
       ...provideConfigurableSandbox(without(SandboxFileDefault), without(ConfigurableFsSandbox)),
     ]);
 
@@ -88,17 +80,16 @@ describe("装配面", () => {
     expect(app.get(FileSystem)).toBeInstanceOf(LocalFileSystem);
   });
 
-  it("不带 feature 的 provideConfigurableSandbox() 也起得来（默认读面写 DSH_HOME）", async () => {
+  test("不带 feature 的 provideConfigurableSandbox() 也起得来（默认读面写 DSH_HOME）", async () => {
     const dir = await workspaceRoot();
     FakePolicy.root = dir;
-    FakeAppEnv.root = dir;
     // `SandboxFileDefault` 读 `{DSH_HOME}/sandbox.toml`：把这台机器的 home 指到临时目录，用例不依赖开发机配置。
     const previous = process.env["DSH_HOME"];
     process.env["DSH_HOME"] = dir;
     try {
       const app = await boot([
         FakePolicy,
-        FakeAppEnv,
+        { provide: AppEnv, useValue: createTestingAppEnv({ root: dir }) },
         ...provide([SandboxDefault, FsSandbox])(without(SandboxDefault), without(FsSandbox)),
         ...provideConfigurableSandbox(),
       ]);
@@ -111,7 +102,7 @@ describe("装配面", () => {
     }
   });
 
-  it("本包清单里每一行都能被 without 定位（装配面按需剔）", () => {
+  test("本包清单里每一行都能被 without 定位（装配面按需剔）", () => {
     for (const impl of [
       SandboxFileDefault,
       SandboxRulesDefault,

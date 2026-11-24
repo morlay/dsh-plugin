@@ -4,7 +4,7 @@
 // 引用怎么收口。这里不含任何渲染和值——值在草稿模型（`draft.spec.ts`）与渲染（`fields.spec.tsx`）。
 
 import z from "@deepseek-ai/schemastery";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import {
   mergeKeyConflict,
   projectNode,
@@ -20,7 +20,7 @@ function projected(schema: z, path: readonly string[] = []) {
 }
 
 describe("schema 投影", () => {
-  it("对象的字段按声明顺序出现，子路径从段根拼出", () => {
+  test("对象的字段按声明顺序出现，子路径从段根拼出", () => {
     const node = projected(z.object({ retry: z.number(), label: z.string() }), ["llm"]);
 
     expect(node.type).toBe("object");
@@ -29,14 +29,14 @@ describe("schema 投影", () => {
     expect(node.fields[1]?.path).toEqual(["llm", "label"]);
   });
 
-  it("隐藏字段不进入字段树", () => {
+  test("隐藏字段不进入字段树", () => {
     const node = projected(z.object({ shown: z.string(), hidden: z.string().hidden() }));
 
     if (node.type !== "object") throw new Error("expected object");
     expect(node.fields.map((field) => field.key)).toEqual(["shown"]);
   });
 
-  it("meta 归一化：默认值、必需、角色、界限、步长、校验、说明、徽标、链接", () => {
+  test("meta 归一化：默认值、必需、角色、界限、步长、校验、说明、徽标、链接", () => {
     const node = projected(
       z.object({
         key: z.string().role("secret").description("API key").comment("写入即生效"),
@@ -69,14 +69,14 @@ describe("schema 投影", () => {
     });
   });
 
-  it("没有默认值的字段不会被当成有默认值", () => {
+  test("没有默认值的字段不会被当成有默认值", () => {
     const node = projected(z.object({ a: z.string() }));
 
     if (node.type !== "object") throw new Error("expected object");
     expect(node.fields[0]?.meta.hasDefault).toBe(false);
   });
 
-  it("dict 给出键与值两个节点，占位段留给渲染层按真实键替换", () => {
+  test("dict 给出键与值两个节点，占位段留给渲染层按真实键替换", () => {
     const node = projected(z.dict(z.number(), z.string()), ["models"]);
 
     if (node.type !== "dict") throw new Error("expected dict");
@@ -85,7 +85,7 @@ describe("schema 投影", () => {
     expect(node.valueNode.path).toEqual(["models", "*"]);
   });
 
-  it("array 给出 item，tuple 给出定长 items", () => {
+  test("array 给出 item，tuple 给出定长 items", () => {
     const list = projected(z.array(z.string()), ["tags"]);
     const pair = projected(z.tuple([z.string(), z.number()]), ["pair"]);
 
@@ -96,7 +96,7 @@ describe("schema 投影", () => {
     expect(pair.items[0]?.path).toEqual(["pair", "0"]);
   });
 
-  it("成员全是字面量的 union 给出可选项，各成员仍是节点", () => {
+  test("成员全是字面量的 union 给出可选项，各成员仍是节点", () => {
     const node = projected(z.union(["a", "b"]));
 
     if (node.type !== "union") throw new Error("expected union");
@@ -104,7 +104,7 @@ describe("schema 投影", () => {
     expect(node.variants.map((variant) => variant.type)).toEqual(["const", "const"]);
   });
 
-  it("对象成员的 union 不给可选项，保留各变体供判别式选择", () => {
+  test("对象成员的 union 不给可选项，保留各变体供判别式选择", () => {
     const node = projected(
       z.union([
         z.object({ kind: z.const("api"), url: z.string() }),
@@ -117,7 +117,7 @@ describe("schema 投影", () => {
     expect(node.variants.map((variant) => variant.type)).toEqual(["object", "object"]);
   });
 
-  it("判别标签：显式声明优先，否则所有对象成员共有的那个唯一常量字段", () => {
+  test("判别标签：显式声明优先，否则所有对象成员共有的那个唯一常量字段", () => {
     const union = z.union([
       z.object({ kind: z.const("api"), url: z.string() }),
       z.object({ kind: z.const("cli"), command: z.string() }),
@@ -145,7 +145,7 @@ describe("schema 投影", () => {
     expect(none.tagKey).toBeUndefined();
   });
 
-  it("按值展开时用判别标签选中变体（不是靠成员顺序）", () => {
+  test("按值展开时用判别标签选中变体（不是靠成员顺序）", () => {
     const union = projected(
       z.union([
         z.object({ kind: z.const("api"), url: z.string() }),
@@ -160,7 +160,7 @@ describe("schema 投影", () => {
     expect(walked.map((item) => item.node.key)).toEqual(["kind", "command"]);
   });
 
-  it("共享判别字段 + const 分支的 intersect：同一路径只出现一次，分支按 tag 展开", () => {
+  test("共享判别字段 + const 分支的 intersect：同一路径只出现一次，分支按 tag 展开", () => {
     const schema = z.intersect([
       z.object({ shared: z.string(), type: z.union(["foo", "bar"]).required() }),
       z.union([
@@ -188,7 +188,7 @@ describe("schema 投影", () => {
     expect(empty.map((item) => item.path.join("."))).toEqual(["", "shared", "type"]);
   });
 
-  it("必填字段值里没有也占行；非必填的没值就不占行", () => {
+  test("必填字段值里没有也占行；非必填的没值就不占行", () => {
     const node = projected(z.object({ host: z.string().required(), note: z.string() }));
 
     expect(walkFields(node, {}).map((item) => item.path.join("."))).toEqual(["", "host"]);
@@ -199,14 +199,14 @@ describe("schema 投影", () => {
     ]);
   });
 
-  it("intersect 保留各成员", () => {
+  test("intersect 保留各成员", () => {
     const node = projected(z.intersect([z.object({ a: z.string() }), z.object({ b: z.number() })]));
 
     if (node.type !== "intersect") throw new Error("expected intersect");
     expect(node.members.map((member) => member.type)).toEqual(["object", "object"]);
   });
 
-  it("bitset 给出位名与位值", () => {
+  test("bitset 给出位名与位值", () => {
     const node = projected(z.bitset({ read: 1, write: 2 }));
 
     if (node.type !== "bitset") throw new Error("expected bitset");
@@ -216,19 +216,19 @@ describe("schema 投影", () => {
     ]);
   });
 
-  it("const 给出值", () => {
+  test("const 给出值", () => {
     const node = projected(z.const("fixed"));
 
     if (node.type !== "const") throw new Error("expected const");
     expect(node.value).toBe("fixed");
   });
 
-  it("any 与 never 是叶子", () => {
+  test("any 与 never 是叶子", () => {
     expect(projected(z.any()).type).toBe("any");
     expect(projected(z.never()).type).toBe("never");
   });
 
-  it("transform 按 inner 的类型呈现，并标记不可编辑的原因", () => {
+  test("transform 按 inner 的类型呈现，并标记不可编辑的原因", () => {
     const node = projected(z.transform(z.string().role("datetime"), (value) => new Date(value)));
 
     expect(node.type).toBe("string");
@@ -236,19 +236,19 @@ describe("schema 投影", () => {
     expect(node.meta.role).toBe("datetime");
   });
 
-  it("function 与 is 标记为不可编辑", () => {
+  test("function 与 is 标记为不可编辑", () => {
     expect(projected(z.function()).readOnly).toBe("function");
     expect(projected(z.is(Date)).readOnly).toBe("constructor");
   });
 
-  it("lazy 保留一层，inner 在里面", () => {
+  test("lazy 保留一层，inner 在里面", () => {
     const node = projected(z.lazy(() => z.string()));
 
     if (node.type !== "lazy") throw new Error("expected lazy");
     expect(node.inner.type).toBe("string");
   });
 
-  it("数组的项身份：显式声明优先，否则 item 上的 `id` 字段", () => {
+  test("数组的项身份：显式声明优先，否则 item 上的 `id` 字段", () => {
     const declared = projected(
       z.array(z.object({ key: z.string() })).role("items", { mergeKey: "key" }),
       ["rows"],
@@ -266,7 +266,7 @@ describe("schema 投影", () => {
     expect(none.mergeKey).toBeUndefined();
   });
 
-  it("按值展开时，数组成员的显示名取它自己的项身份", () => {
+  test("按值展开时，数组成员的显示名取它自己的项身份", () => {
     const node = projected(z.array(z.object({ id: z.string(), url: z.string() })), ["providers"]);
 
     const walked = walkFields(node, [
@@ -278,7 +278,7 @@ describe("schema 投影", () => {
     expect(rows.map((item) => item.node.label)).toEqual(["a", "b"]);
   });
 
-  it("项身份重复或为空时给出冲突（重复的报出后一项的位置）", () => {
+  test("项身份重复或为空时给出冲突（重复的报出后一项的位置）", () => {
     const node = projected(z.array(z.object({ id: z.string() })), ["providers"]);
 
     expect(mergeKeyConflict(node, [{ id: "a" }, { id: "b" }])).toBeUndefined();
@@ -296,7 +296,7 @@ describe("schema 投影", () => {
     });
   });
 
-  it("项身份的检查落在嵌套的数组上", () => {
+  test("项身份的检查落在嵌套的数组上", () => {
     const node = projected(z.object({ groups: z.array(z.object({ id: z.string() })) }));
 
     expect(mergeKeyConflict(node, { groups: [{ id: "a" }, { id: "a" }] })).toEqual({
@@ -307,7 +307,7 @@ describe("schema 投影", () => {
     });
   });
 
-  it("自引用的 schema 不会无限展开：回到祖先的分支收口成 recursive 节点", () => {
+  test("自引用的 schema 不会无限展开：回到祖先的分支收口成 recursive 节点", () => {
     const config: z = z.object({
       name: z.string(),
       children: z.array(z.lazy((): z => config)),
@@ -326,7 +326,7 @@ describe("schema 投影", () => {
 });
 
 describe("union 的变体", () => {
-  it("有判别标签：按标签值选支，切换选项写的是标签值", () => {
+  test("有判别标签：按标签值选支，切换选项写的是标签值", () => {
     const node = projected(
       z.union([
         z.object({ type: z.const("sqlite"), path: z.string() }),
@@ -355,7 +355,7 @@ describe("union 的变体", () => {
     ]);
   });
 
-  it("没有判别标签：按值的形状选支，切换选项写目标变体的空值", () => {
+  test("没有判别标签：按值的形状选支，切换选项写目标变体的空值", () => {
     const node = projected(z.object({ access: z.union([z.array(z.string()), z.string()]) }));
 
     const union = unionOf(node.type === "object" ? node.fields[0] : undefined);

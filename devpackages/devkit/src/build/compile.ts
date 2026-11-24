@@ -34,13 +34,11 @@ function upstreamSourceGuard(): Plugin {
 }
 
 /**
- * 一个包的构建计划：入口名 → 源码路径（相对包目录），以及 `publishOnly`（只由构建写进发布态清单的入口名；
- * `./dsh-bundle` 在清单的顶层 `exports` 里，它由清单自己保留，构建只按它出产物）。
+ * 一个包的构建计划：入口名 → 源码路径（相对包目录）。
  */
 export interface BuildPlan {
   readonly name: string;
   readonly entries: Record<string, string>;
-  readonly publishOnly: readonly string[];
   // 只构建、不进出口的入口名（命令行的 `bin` 目标：产物要落位，但不是包的门面）。
   readonly hidden: readonly string[];
   // 命令名 → 入口名：清单的 `bin` 两侧一起写（顶层指源码，发布态指产物）。
@@ -110,10 +108,9 @@ export function isInlinedPackage(id: string, inline: readonly string[] | undefin
 export const INJECTED_RUNTIME: readonly string[] = ["@oxc-project/runtime"];
 
 /**
- * 从 `package.json` 的 `exports` 推导入口；通配出口与没有产物形态的面（样式、资产）不在这里处理。
- *
- * `./client` 只在 bundle 包里另算（那是 dsh 读字节的 CJS 工厂）；非 bundle 包里它是普通的 ESM 面，
- * 与其它出口一样按入口打产物（`zephyr-app` 的浏览器面就是这条）。
+ * 推导入口：普通包从 `package.json` 的 `exports` 读（通配出口与没有产物形态的面——样式、资产——
+ * 不在这里处理）；**bundle 包**（dsh 行入口）不看 `exports`，按固定文件取——包根是
+ * `src/dsh-bundle.ts` 的产物，浏览器半是 `src/dsh-bundle.client.ts`（dsh 读字节的 CJS 工厂）。
  */
 export async function planOf(cwd: string): Promise<BuildPlan> {
   const manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as {
@@ -121,23 +118,23 @@ export async function planOf(cwd: string): Promise<BuildPlan> {
     exports?: Record<string, unknown>;
     bin?: Record<string, unknown>;
   };
-  // bundle 包按**约定文件**认：src/dsh-bundle.ts 存在就是 bundle 包（包根 index 的 default 从它转出）。
-  // client 半同样按约定：src/client/index.ts（或 src/client.ts）存在就出 CJS 工厂，不额外占一个公开出口。
+  // bundle 包按**固定文件**认：`src/dsh-bundle.ts` 存在就是 bundle 包。它的入口也按固定文件推导，
+  // 不看 `exports`——那里面是空对象（发布态出口由构建写回 `publishConfig`，源码不被当库消费）。
+  // 浏览器半同样是固定文件：`src/dsh-bundle.client.ts` 存在就出 CJS 工厂。
   const bundle = await exists(join(cwd, "src/dsh-bundle.ts"));
   const entries: Record<string, string> = {};
-  const publishOnly: string[] = [];
   const hidden: string[] = [];
-  for (const [key, value] of Object.entries(manifest.exports ?? {})) {
-    if (typeof value !== "string" || !value.startsWith("./src/") || !MODULE_SOURCE.test(value)) {
-      continue;
+  if (bundle) {
+    entries["index"] = "./src/dsh-bundle.ts";
+  } else {
+    for (const [key, value] of Object.entries(manifest.exports ?? {})) {
+      if (typeof value !== "string" || !value.startsWith("./src/") || !MODULE_SOURCE.test(value)) {
+        continue;
+      }
+      if (SKIP_EXPORTS.has(key) || key.includes("*")) continue;
+      const name = key === "." ? "index" : key.slice(2);
+      entries[name] = value;
     }
-    if (SKIP_EXPORTS.has(key) || key.includes("*")) continue;
-    const name = key === "." ? "index" : key.slice(2);
-    // bundle 包的 `./client` 走 CJS 工厂那条链，不当普通入口打包。
-    if (name === "client" && bundle) continue;
-    entries[name] = value;
-    // `./dsh-bundle` 由清单保留在顶层 `exports`（`bundle` 判定就靠它），构建只负责把它出成产物并写进发布态。
-    if (name === "dsh-bundle") publishOnly.push(name);
   }
   // 命令入口不进出口：按 `bin` 的源码文件名建入口，只构建、不写 `exports`。
   const bin: Record<string, string> = {};
@@ -152,14 +149,13 @@ export async function planOf(cwd: string): Promise<BuildPlan> {
     hidden.push(name);
     bin[command] = name;
   }
-  // dsh-bundle 不作为产物入口：包根 index 的 default 就是它（构建时内联），行名用包名即可。
+  // 浏览器半的固定文件：`src/dsh-bundle.client.ts`（同名三件套：name / inject / apply）。
   const clientSource = bundle
-    ? await firstExisting(cwd, ["src/client/index.ts", "src/client/index.tsx", "src/client.ts"])
+    ? await firstExisting(cwd, ["src/dsh-bundle.client.ts", "src/dsh-bundle.client.tsx"])
     : undefined;
   return {
     name: manifest.name ?? "package",
     entries,
-    publishOnly,
     hidden,
     ...(Object.keys(bin).length === 0 ? {} : { bin }),
     ...(clientSource === undefined ? {} : { client: { source: clientSource } }),

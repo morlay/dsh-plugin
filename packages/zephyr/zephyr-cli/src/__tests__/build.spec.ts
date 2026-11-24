@@ -1,5 +1,5 @@
 import { bootstrapApplication, Logger } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { BuildSteps } from "../build/builder.ts";
 import { BuildCommand } from "../commands/build.ts";
 import { Command } from "../command.ts";
@@ -9,7 +9,7 @@ import { CliMode, type CliModeValues } from "../mode.ts";
 import { fakeBuildSteps, resolvedFor, tempWorkspace } from "../testing/index.ts";
 
 describe("build 命令（装配级）", () => {
-  it("把三步交给步骤替身，并按步汇总", async () => {
+  test("把三步交给步骤替身，并按步汇总", async () => {
     const workspace = await tempWorkspace({});
     const resolved = resolvedFor({ workspace });
     const mode: CliModeValues = {

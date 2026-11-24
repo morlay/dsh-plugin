@@ -3,65 +3,36 @@
 //
 // 归本包：`SubagentRegistry` 的契约与适配行都在 `dsh-agent-loop`；装配里要的沙箱与工作目录是
 // **下游**（agent-loop → sandbox 是生产边），反方向不成立，所以 spec 住这边。
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { FsSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { WorkingDirectoryDefault, provideAgent, SubagentRegistry } from "@morlay/dsh-agent";
 import { SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { onTestFinished } from "vitest";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { provideSubagent } from "../index.ts";
 
 /**
  * 运行环境替身：`WorkingDirectoryDefault` 的起始目录与沙箱兜底根都取自它
  * （环境事实只有一个来源：不读进程 cwd）。
  */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = {
-    dataDir: root,
-    profileDir: root,
-    defaultWorkingDirectory: root,
-  };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-subagent-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
 
 /** 起一套带 working-directory 的真栈。 */
-async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
+async function boot(
+  appEnv: TestingAppEnv,
+): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSessionProjection(),
 
       SessionStoreDefault,
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideAgent(),
-      { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
+      {
+        provide: SandboxPolicyDefault,
+        config: { mode: "workspace-write", workspaceRoot: appEnv.values.dataDir },
+      },
       FsSandbox,
       WorkingDirectoryDefault,
       // `provideSubagent` 带 `remote.subagents` 的宿主面（要一张 wire handler 表）。
@@ -70,16 +41,16 @@ async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplica
     ],
     timeoutMs: 8_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app };
 }
 
 describe("subagent 域", () => {
-  it(
+  test(
     "装配后 SubagentRegistry 可解析，resolveMaxDepth 按三分支取值",
     { timeout: 20_000 },
-    async () => {
-      const { app } = await boot();
+    async ({ appEnv }) => {
+      const { app } = await boot(appEnv);
 
       const subagents = app.get(SubagentRegistry);
       expect(typeof subagents.resolveMaxDepth).toBe("function");

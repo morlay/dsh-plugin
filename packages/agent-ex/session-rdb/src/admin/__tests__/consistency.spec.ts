@@ -6,23 +6,18 @@ import { meta, oneTurnLogStepFirst } from "@morlay/dsh-session/testing";
 import { openDatabase, type Database } from "@morlay/zephyr-rdb";
 import type { DatabaseSync } from "node:sqlite";
 import type { SessionEvent } from "@morlay/dsh-session/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { asRdbStore } from "@morlay/session-rdb";
 import { checkConsistency, repairDerivations } from "../consistency.ts";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { openInitializedSqlite } from "../../__tests__/support/sqlite.ts";
 
-const harnesses: Harness[] = [];
 const closers: Array<() => Promise<void> | void> = [];
-
-afterEach(async () => {
-  for (const close of closers.splice(0)) await close();
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
 
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -88,7 +83,7 @@ function kindsOf(report: { issues: ReadonlyArray<{ kind: string }> }): string[] 
 }
 
 describe("一致性校验", () => {
-  it("干净的库：checkConsistency 报 ok，扫描计数与行数一致", async () => {
+  test("干净的库：checkConsistency 报 ok，扫描计数与行数一致", async () => {
     const harness = await start();
     await seedMeasured(harness, "clean");
     const { database } = await openBench(harness);
@@ -107,7 +102,7 @@ describe("一致性校验", () => {
     });
   });
 
-  it("派生统计与事件行对不上时逐类报出，且不自动修", async () => {
+  test("派生统计与事件行对不上时逐类报出，且不自动修", async () => {
     const harness = await start();
     await seedMeasured(harness, "drifted");
     await seedMeasured(harness, "seed-broken");
@@ -157,7 +152,7 @@ describe("一致性校验", () => {
     ).toBe(0);
   });
 
-  it("契约入口 checkConsistency 与直连执行面同口径", async () => {
+  test("契约入口 checkConsistency 与直连执行面同口径", async () => {
     const harness = await start();
     await seedMeasured(harness, "via-contract");
     const { database } = await openBench(harness);
@@ -169,7 +164,7 @@ describe("一致性校验", () => {
     expect(viaContract).toMatchObject({ ok: true, checked: { sessions: 1, events: 6 } });
   });
 
-  it("重算失败时把失败的步骤报出来，而不是抛出去", async () => {
+  test("重算失败时把失败的步骤报出来，而不是抛出去", async () => {
     const report = await repairDerivations([
       { step: "session-stats", run: async () => undefined },
       {

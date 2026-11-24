@@ -7,67 +7,41 @@
  * 写入路径（`rename()`）也覆盖：上游会先 `assertServiceActive()`（`ownerFiber.uid !== null &&
  * state === ACTIVE`），行作用域的 fiber 现在有非空 uid，所以这条链路是通的。
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { AppEnv } from "@morlay/zephyr-app";
 import { AgentDirectoryDefault } from "@morlay/dsh-agent";
 import { SessionStore } from "@morlay/dsh-session";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { onTestFinished } from "vitest";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/dsh-conversation/testing";
 import { SessionTitle } from "../index.ts";
 import { provideSessionTitle } from "../server/session-title.provide.ts";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-session-title-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
-/** 指向临时目录的运行环境（会话持久化要读它）。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
-
-/** 起真会话栈 + 标题服务。 */
-async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
+/**
+ * 起真会话栈 + 标题服务。
+ * @param appEnv - 本用例的运行环境（会话持久化要读它的 `dataDir`）。
+ * @returns 装配面。
+ */
+async function boot(
+  appEnv: TestingAppEnv,
+): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       AgentDirectoryDefault,
       ...provideSessionTitle(),
     ],
     timeoutMs: 10_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app };
 }
 
 describe("session-title 域", () => {
-  it("装配后 SessionTitle 可解析，rename 后 get 读回规范化标题", async () => {
-    const { app } = await boot();
+  test("装配后 SessionTitle 可解析，rename 后 get 读回规范化标题", async ({ appEnv }) => {
+    const { app } = await boot(appEnv);
 
     const titles = app.get(SessionTitle);
     expect(typeof titles.get).toBe("function");

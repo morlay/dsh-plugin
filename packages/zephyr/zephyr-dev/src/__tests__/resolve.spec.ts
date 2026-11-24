@@ -4,10 +4,9 @@
  * 这些都是**dev 形态的联邦寻址**直接依赖的判断——它们错了，浏览器侧表现为一串难归因的 404
  * 或"模块没有导出 X"。
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-app/testing";
 import { exportTargetOf, fileInPackage, packageRootOf } from "@morlay/zephyr-dev/testing";
 
 /** 造一个包（清单 + 文件），用来测"清单说了什么"这一类判断。 */
@@ -26,17 +25,10 @@ async function makePackage(
 }
 
 describe("exportTargetOf", () => {
-  let work: string;
-
-  beforeAll(async () => {
-    work = await mkdtemp(join(tmpdir(), "dsh-resolve-"));
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
-
-  test("条件**数组**取 `import` 那支（@oxc-project/runtime 的每个出口都是这形状）", async () => {
+  test("条件**数组**取 `import` 那支（@oxc-project/runtime 的每个出口都是这形状）", async ({
+    appEnv,
+  }) => {
+    const work = appEnv.values.dataDir;
     const root = join(work, "array-conditions");
     await makePackage(
       root,
@@ -64,7 +56,8 @@ describe("exportTargetOf", () => {
     );
   });
 
-  test("没有 `exports` 时退回 `module` → `main`", async () => {
+  test("没有 `exports` 时退回 `module` → `main`", async ({ appEnv }) => {
+    const work = appEnv.values.dataDir;
     const root = join(work, "legacy");
     await makePackage(
       root,
@@ -74,7 +67,8 @@ describe("exportTargetOf", () => {
     await expect(exportTargetOf(root, undefined)).resolves.toBe(join(root, "esm/index.mjs"));
   });
 
-  test("没有 `.` 出口时答不上来（交给物理回退）", async () => {
+  test("没有 `.` 出口时答不上来（交给物理回退）", async ({ appEnv }) => {
+    const work = appEnv.values.dataDir;
     const root = join(work, "no-root-export");
     await makePackage(
       root,
@@ -86,17 +80,10 @@ describe("exportTargetOf", () => {
 });
 
 describe("fileInPackage", () => {
-  let work: string;
-
-  beforeAll(async () => {
-    work = await mkdtemp(join(tmpdir(), "dsh-file-"));
-  });
-
-  afterAll(async () => {
-    await rm(work, { recursive: true, force: true });
-  });
-
-  test("清单没覆盖的子路径按物理路径找（`picomatch/posix` 就是 `posix.js`）", async () => {
+  test("清单没覆盖的子路径按物理路径找（`picomatch/posix` 就是 `posix.js`）", async ({
+    appEnv,
+  }) => {
+    const work = appEnv.values.dataDir;
     const root = join(work, "no-exports");
     await makePackage(
       root,
@@ -109,7 +96,8 @@ describe("fileInPackage", () => {
     await expect(fileInPackage(root, "posix")).resolves.toBe(join(root, "posix.js"));
   });
 
-  test("越出包根一律拒绝", async () => {
+  test("越出包根一律拒绝", async ({ appEnv }) => {
+    const work = appEnv.values.dataDir;
     const root = join(work, "bounded");
     await makePackage(root, { name: "bounded", version: "1.0.0" }, { "index.js": "export {};\n" });
     await expect(fileInPackage(root, "../escape")).resolves.toBeUndefined();
@@ -123,7 +111,7 @@ describe("fileInPackage", () => {
  * `packages/boot/dsh-oxc-node`——本仓库的 TS 运行时入口。框架包不声明它（那是 node 侧补强，
  * 不进运行时契约），所以这里按**那个包**的清单解析。
  */
-test("packageRootOf 认得没有 `.` 出口的包（@oxc-project/runtime 只有 ./helpers/*）", async () => {
+test("条件**数组**取 `import` 那支（@oxc-project/runtime 的每个出口都是这形状）", async () => {
   const found = await packageRootOf(
     join(process.cwd(), "packages", "boot", "dsh-oxc-node", "package.json"),
     "@oxc-project/runtime",

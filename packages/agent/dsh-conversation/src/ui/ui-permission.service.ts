@@ -4,7 +4,7 @@
 // （输入区的档位选择器与设置里的默认档位行都来自 client 行的 `apply`）。
 import * as UiPermissionPlugin from "@deepseek-ai/dsh-client-ui-permission-presets/client";
 import { CommandUi } from "@morlay/dsh-command/ui";
-import { SessionController } from "@morlay/dsh-conversation/ui";
+import { SessionController } from "@morlay/dsh-conversation/contract";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import {

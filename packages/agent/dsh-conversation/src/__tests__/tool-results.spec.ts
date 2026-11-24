@@ -7,6 +7,8 @@
 // `tool/result` 会话事件里把键**改写成 `event.seq`**（`client/ui-trajectory/src/index.ts:44-72`）。这里
 // 直接发一条 `tools/result`，把 `callId` 给成数字 `seq`——等价于「那条会话事件已经按 seq 记好账」，
 // 于是 `watch({ seq })` 就能取到它。真实流量里由工具执行与事件落库共同产生，这个 spec 不覆盖那半条链。
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,11 +19,11 @@ import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
 import { provideTypert } from "@morlay/zephyr-app";
 import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { ToolResultsEndpoint } from "../endpoint/tool-results.group.ts";
 import { ToolResultsDefault } from "../server/tool-results.service.ts";
 import { ToolResultsEndpointRow } from "../server/tool-results-endpoint.service.ts";
-import { FakeAppEnv } from "./support/fake-app-env.ts";
 
 const SESSION = "s1";
 const SEQ = 7;
@@ -40,19 +42,10 @@ function watchEndpoint(): string {
   return `${stream.namespace}/${stream.method}`;
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** 起真会话存储 + `toolResults` 行。 */
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "dsh-tool-results-"));
-  roots.push(root);
-  FakeAppEnv.root = root;
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideTypert(),
@@ -61,19 +54,19 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
       ...provideSession(),
       ...provideSessionProjection(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       // 两行：适配行装上游 `SessionToolResults`，端点行继承契约把它注册到 wire 上。
       ToolResultsDefault,
       ToolResultsEndpointRow,
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("toolResults/watch 的宿主面", { timeout: 30_000 }, () => {
-  it("订阅上了：没有工具结果时首帧是 available:false，取消后流安静结束", async () => {
+  test("订阅上了：没有工具结果时首帧是 available:false，取消后流安静结束", async () => {
     const app = await boot();
     const sessions = app.get(SessionStore);
     // 真会话（`create` 会把它 enter + announce 进注册表）：作用域解析要它在册。

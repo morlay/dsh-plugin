@@ -6,25 +6,19 @@
 //   - 传输：进程内 dispatch（`LocalRemote`）代替 mux socket；
 //   - composer 面（草稿与窗口重建）与模型输出：记录型替身（真 composer 的端到端在 apps 层覆盖）。
 import { SessionId } from "@morlay/dsh-session/contract";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startClient, type Client } from "../../../__tests__/support/e2e-client.ts";
 import { MOCK_REPLY_PREFIX, startHost, type Host } from "../../../__tests__/support/e2e-host.ts";
 import { nodeOf, renderUserMessage } from "../../../__tests__/support/e2e-render.tsx";
 import { waitFor } from "../../../__tests__/support/wait.ts";
 import { meta, twoTurnLog } from "@morlay/dsh-session/testing";
 
-const opened: Array<{ dispose(): Promise<void> }> = [];
-
-afterEach(async () => {
-  cleanup();
-  for (const item of opened.splice(0).reverse()) await item.dispose();
-});
-
 async function boot(id: string): Promise<{ host: Host; client: Client }> {
   const host = await startHost();
-  opened.push(host);
+  onTestFinished(() => host.dispose());
   // 种子走**真会话**（不是直接写库）：内存 log 与库同源，投影检查点也才有可折的单元。
   const live = host.ctx.sessions.create(SessionId(id), {
     meta: meta(id, "/work"),
@@ -32,8 +26,8 @@ async function boot(id: string): Promise<{ host: Host; client: Client }> {
   });
   await host.ctx.sessions.flush(live);
   host.agentDirectory.attach(live);
-  const client = await startClient(host.handlers);
-  opened.push(client);
+  const client = await startClient(host.app);
+  onTestFinished(() => client.dispose());
   return { host, client };
 }
 
@@ -47,7 +41,7 @@ function firstTextOf(content: readonly unknown[] | undefined): string | undefine
 }
 
 describe("编辑：点编辑 → 撤回 → 改文本 → 提交", () => {
-  it(
+  test(
     "真库截到目标回合之前、草稿收到原文本；提交后新文本成为该回合的用户输入",
     { timeout: 60_000 },
     async () => {

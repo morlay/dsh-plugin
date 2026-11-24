@@ -7,18 +7,13 @@
  */
 import type { SkillCandidate, SkillDefinition, SkillProvider } from "@deepseek-ai/dsh-skill";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { provideSkillFilesystem } from "../server/filesystem.provide.ts";
 // `SkillModule` 会把工具行（`tool-skill`）一并带上，而工具行要 agent 栈；这组用例只要注册表本身，
 // 所以显式列注册表这一行（装配面本来只认 Provider）。
 import { SkillDefault } from "../skill.service.ts";
 import { Skill } from "../contract/skill.contract.ts";
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
 
 /** 一个只报一条技能的 provider。 */
 const SKILL: SkillDefinition = {
@@ -47,12 +42,12 @@ async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplica
     providers: [SkillDefault, ...provideSkillFilesystem()],
     timeoutMs: 10_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app };
 }
 
 describe("skill 域", () => {
-  it("装配后契约令牌可解析，注册表拒绝同名 provider", async () => {
+  test("装配后契约令牌可解析，注册表拒绝同名 provider", async () => {
     const { app } = await boot();
 
     const contract = app.get(Skill);
@@ -64,7 +59,7 @@ describe("skill 域", () => {
     );
   });
 
-  it("撤销注册后名字被释放：同名 provider 可以重新登记", async () => {
+  test("撤销注册后名字被释放：同名 provider 可以重新登记", async () => {
     const { app } = await boot();
     const contract = app.get(Skill);
 

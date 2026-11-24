@@ -8,7 +8,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 /** 仓库根（本文件在 `packages/zephyr/zephyr-app/src/__tests__/` 下）。 */
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..");
@@ -75,7 +75,7 @@ async function provideText(files: readonly string[]): Promise<string> {
 }
 
 describe("装配完整性", () => {
-  it("每个 `*EndpointDefault` 都在某个 `provide([...])` 清单里（漏装 = 生产端点「没有实现」）", async () => {
+  test("每个 `*EndpointDefault` 都在某个 `provide([...])` 清单里（漏装 = 生产端点「没有实现」）", async () => {
     const files = await sourceFiles();
     const providers = await provideText(files);
     const missing: string[] = [];

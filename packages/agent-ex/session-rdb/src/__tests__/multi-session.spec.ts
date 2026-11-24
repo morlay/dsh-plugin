@@ -3,7 +3,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 
 import { SessionId } from "@morlay/dsh-session/contract";
 import type { Session } from "@morlay/dsh-session/contract";
@@ -15,14 +16,9 @@ function rdb(ctx: Context): SessionPersistenceRdb {
   return ctx.sessionPersistence as SessionPersistenceRdb;
 }
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true, maxRetries: 3 });
-});
-
 async function freshDbPath(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dsh-rdb-multi-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true, maxRetries: 3 }));
   return join(dir, "sessions.db");
 }
 
@@ -65,7 +61,7 @@ function appendTurn(s: Session, round: number): void {
 }
 
 describe("multi-session repro (cold-path verification)", () => {
-  it("many live sessions append concurrently, then each reloads dense-intact", async () => {
+  test("many live sessions append concurrently, then each reloads dense-intact", async () => {
     const path = await freshDbPath();
     const b = await mount(path);
     const N = 12;
@@ -89,7 +85,7 @@ describe("multi-session repro (cold-path verification)", () => {
   });
 
   // 两个实例共用一条串行队列 + 磁盘 fsync：默认 5s 在慢机器上会偶发超时。
-  it(
+  test(
     "two backend instances share one file and append different sessions concurrently",
     { timeout: 20_000 },
     async () => {
@@ -113,7 +109,7 @@ describe("multi-session repro (cold-path verification)", () => {
     },
   );
 
-  it("concurrent appends to MANY sessions on ONE live store never interleave parent chains", async () => {
+  test("concurrent appends to MANY sessions on ONE live store never interleave parent chains", async () => {
     const path = await freshDbPath();
     const b = await mount(path);
     const N = 20;
@@ -132,7 +128,7 @@ describe("multi-session repro (cold-path verification)", () => {
     await b2.dispose();
   });
 
-  it("append + load racing on one id stays consistent (cold path)", async () => {
+  test("append + load racing on one id stays consistent (cold path)", async () => {
     const path = await freshDbPath();
     const b = await mount(path);
     const s = b.ctx.sessions.create(SessionId("race"));
@@ -152,7 +148,7 @@ describe("multi-session repro (cold-path verification)", () => {
     await b2.dispose();
   });
 
-  it("subagent-style: MANY parallel fork children (seeded, delta-heavy) persist dense-intact", async () => {
+  test("subagent-style: MANY parallel fork children (seeded, delta-heavy) persist dense-intact", async () => {
     const path = await freshDbPath();
     const b = await mount(path);
 
@@ -180,7 +176,7 @@ describe("multi-session repro (cold-path verification)", () => {
     await b2.dispose();
   });
 
-  it("subagent-style: parallel children + parent all append interleaved, then all reload intact", async () => {
+  test("subagent-style: parallel children + parent all append interleaved, then all reload intact", async () => {
     const path = await freshDbPath();
     const b = await mount(path);
     const parent = b.ctx.sessions.create(SessionId("parent-2"));

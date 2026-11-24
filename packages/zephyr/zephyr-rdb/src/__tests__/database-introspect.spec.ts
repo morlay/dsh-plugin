@@ -1,17 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineTable, ensureSchema, openDatabase } from "@morlay/zephyr-rdb";
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
-});
-
 async function tempFile(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "zephyr-rdb-pragma-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return join(dir, "store.sqlite");
 }
 
@@ -21,7 +17,7 @@ const notes = defineTable({
 });
 
 describe("库级操作（业务侧不写 PRAGMA / VACUUM）", () => {
-  it("objectNames：返回现有的表与视图名", async () => {
+  test("objectNames：返回现有的表与视图名", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [notes]);
@@ -31,7 +27,7 @@ describe("库级操作（业务侧不写 PRAGMA / VACUUM）", () => {
     }
   });
 
-  it("sqlitePragma：读写库身份（user_version / application_id / journal_mode）", async () => {
+  test("sqlitePragma：读写库身份（user_version / application_id / journal_mode）", async () => {
     // journal_mode 在 `:memory:` 上只能是 `memory`，所以用文件库。
     const database = await openDatabase({ dialect: "sqlite", path: await tempFile() });
     try {
@@ -47,7 +43,7 @@ describe("库级操作（业务侧不写 PRAGMA / VACUUM）", () => {
     }
   });
 
-  it("setSqlitePragma 拒绝拼进 SQL 的值", async () => {
+  test("setSqlitePragma 拒绝拼进 SQL 的值", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await expect(database.setSqlitePragma("user_version", "0; DROP TABLE x")).rejects.toThrow(
@@ -58,7 +54,7 @@ describe("库级操作（业务侧不写 PRAGMA / VACUUM）", () => {
     }
   });
 
-  it("vacuum：两种方言各有自己的写法，业务侧只调方法", async () => {
+  test("vacuum：两种方言各有自己的写法，业务侧只调方法", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [notes]);

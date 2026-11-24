@@ -4,7 +4,8 @@
 // 不需要浏览器、不需要 happy-dom、不需要起应用。这一条把「建会话 → 事件 → store」串起来。
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { TYPERT_REMOTE } from "@deepseek-ai/dsh-api-session-controller/remote";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { muxTransport, RemoteDefault } from "@morlay/zephyr-app/client";
 import { Remote } from "@morlay/zephyr-app/client";
 import { provideClientRemote } from "@morlay/zephyr-app/client";
@@ -15,14 +16,8 @@ import { SessionController } from "@morlay/dsh-conversation/ui";
 import { closeMux, serveMux } from "./support/mux-serve.ts";
 import { namespaceOf } from "../remote-namespace.ts";
 
-const closers: (() => Promise<void>)[] = [];
-
-afterEach(async () => {
-  for (const close of closers.splice(0)) await close();
-}, 5_000);
-
 describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () => {
-  it("host 注册的 handler 能被客户端调用，事件也能推回来", async () => {
+  test("host 注册的 handler 能被客户端调用，事件也能推回来", async () => {
     const { url, handlers, server, push } = await serveMux();
     // host 侧：这是**mock server** 的两条实现（本用例只验 transport ↔ server ↔ store）。
     // 形状按上游 wire：`session/list` 是 `{ items: SessionSummary[] }`，标题经 `title` 投影下发。
@@ -44,7 +39,7 @@ describe("会话链路（纯 node：真 WebSocket）", { timeout: 15_000 }, () =
       push({ type: "emit", event: "api-session/added", args: [rowOf("s1", "会话一")] });
       return { sessionId: "s1" };
     });
-    closers.push(async () => await closeMux(server));
+    onTestFinished(() => closeMux(server));
 
     // client 半：`RemoteDefault` 是真的，只把 socket 工厂指向这个 server。
     // 客户端半用**真实的模块**装配；`origin` 是 `ConnectionDefault` 的**显式配置**

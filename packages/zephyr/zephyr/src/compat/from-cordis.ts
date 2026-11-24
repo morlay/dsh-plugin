@@ -427,7 +427,7 @@ export interface AdaptedRow {
    * @param config - 上游插件的 config。
    * @param deps - 上游 `inject` 声明要的依赖（名字 → 值）。
    */
-  mount(ctx: Context, config?: unknown, deps?: Record<string, unknown>): Promise<void>;
+  mount(ctx: Context, config?: unknown, deps?: Record<string, unknown>): Promise<unknown>;
 }
 
 /** 上游插件是类时取它的实例类型；函数 / 对象插件拿不到，给 `unknown`。 */
@@ -445,6 +445,15 @@ export type AdaptedClass<K extends TokenClass<unknown> = TokenClass<unknown>, U 
   UpstreamInstance<U> & {
     onInit(ctx: Context): Awaitable<void>;
     onDispose(): Awaitable<void>;
+    /**
+     * `mount` 的返回值就是上游实例：基类实现按 `unknown` 返回（它没有上游类型参数），
+     * 精度在这里补——适配行的具体类型带上 `U` 之后，调用点不必再 `as`。
+     */
+    mount(
+      ctx: Context,
+      config?: unknown,
+      deps?: Record<string, unknown>,
+    ): Promise<UpstreamInstance<U>>;
   } & object) & {
   /** 这一行的令牌：有契约时是契约，无契约时是从上游插件名派生的令牌。 */
   readonly token: K;
@@ -514,9 +523,9 @@ export function fromCordis(
       ctx: Context,
       config: unknown = this.rowConfig,
       deps?: Record<string, unknown>,
-    ): Promise<void> {
+    ): Promise<unknown> {
       this[kMounted] = true;
-      if (!adapted) return;
+      if (!adapted) return this[kFace];
       /** 本次 mount 交给上游的那层 deps 代理（探针用：比对上游实例的 `tracker.ctx` 是不是它）。 */
       let usedDeps: CordisContext | undefined;
       const cordis = ctx as unknown as CordisContext & {
@@ -582,7 +591,7 @@ export function fromCordis(
           const disposable = instance as { dispose?: () => unknown };
           void disposable.dispose?.();
         });
-        return;
+        return instance;
       }
       // 上游发布的服务名与我们契约的连字符名几乎从不相同（`SessionStore` vs `sessions`）：
       // 记下它 provide 的名字，按名字取面，而不是拿契约名去 store 里猜。
@@ -620,6 +629,8 @@ export function fromCordis(
           trackedCtx === (ctx as unknown as Record<symbol, unknown>)[rootContextKey],
         );
       }
+      // 适配行拿上游实例不要再读 `kFace`：`mount()` 的返回值就是它。
+      return this[kFace];
     }
   }
   // 令牌来自**继承**（`extends 契约`）：`@Injectable()` 无参时复用父类的元数据，不再手工指定 token。

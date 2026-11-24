@@ -9,7 +9,6 @@ export { ApiGatewayDefault } from "../api-gateway/api-gateway.service.ts";
 export { provideApiGateway } from "../api-gateway/provide.ts";
 export { provideMuxServer } from "../api-gateway/provide.ts";
 export { AppEnv, type AppEnvValues } from "../app-env/app-env.contract.ts";
-export { FakeAppEnv } from "./fake-app-env.ts";
 export { AppEnvDefault } from "../app-env/app-env.service.ts";
 export { provideAppEnv } from "../app-env/provide.ts";
 export { provideConnection } from "../connection/provide.ts";
@@ -22,7 +21,6 @@ export { WebStartup } from "../web/web-startup.contract.ts";
 export { WebStartupDefault } from "../web/web-startup.service.ts";
 export { WebRuntimeService } from "../web/web-runtime.service.ts";
 export { mountFullApp, type FullApp, type MountFullAppOptions } from "./full-app.ts";
-export { cleanupDataDirs, tempDataDir } from "./temp-data-dir.ts";
 export { LocalRemote } from "./local-remote.ts";
 export { provideLocalRemote } from "./provide.ts";
 export { CredentialsInMemory } from "./credentials-in-memory.ts";
@@ -30,3 +28,19 @@ export { FakeConnectionHost, type RegisteredFetchRoute } from "./connection-host
 export { PublishBrowserConnectionName } from "./browser-connection-name.ts";
 export { RemoteDefault } from "../client/remote/remote.service.ts";
 export { publishingTo } from "./publish-service-name.ts";
+export {
+  createTestingAppEnv,
+  describe,
+  expect,
+  test,
+  TestingAppEnv,
+  type AppEnvFixtures,
+  type TestingAppEnvOptions,
+} from "./fixtures.ts";
+export {
+  bootTwoSided,
+  clientWithTransport,
+  hostInvokerOf,
+  type TwoSided,
+  type TwoSidedBoot,
+} from "./two-sided.ts";

@@ -4,45 +4,39 @@
 // - 把 ESM 判成 CJS → 给它套 `import mod from …`，构建直接失败；
 // - 把 CJS 判成 ESM → 产物只剩 `export default …`，浏览器 `import { Fragment } from "react"` 时整条 import 挂掉。
 // 所以这里按"扩展名 + 最近的 package.json + Node 的语法检测"逐条钉住，不猜源码文本。
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-app/testing";
 import { moduleKindOf } from "../federation/bundle.ts";
-
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-module-kind-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
 
 /**
  * 在根下写一个文件。
+ * @param root - 本用例的临时目录（`appEnv.values.dataDir`）。
  * @param name - 相对路径。
  * @param content - 内容。
  * @returns 绝对路径。
  */
-async function write(name: string, content: string): Promise<string> {
+async function write(root: string, name: string, content: string): Promise<string> {
   const file = join(root, name);
   await writeFile(file, content, "utf8");
   return file;
 }
 
 describe("moduleKindOf", () => {
-  it("按扩展名直接判：`.mjs` / `.cjs` / `.ts` / `.css`", async () => {
-    expect(await moduleKindOf(await write("a.mjs", ""))).toBe("esm");
-    expect(await moduleKindOf(await write("b.cjs", ""))).toBe("cjs");
-    expect(await moduleKindOf(await write("c.ts", ""))).toBe("source");
-    expect(await moduleKindOf(await write("d.jsx", ""))).toBe("source");
-    expect(await moduleKindOf(await write("e.css", ""))).toBe("style");
-    expect(await moduleKindOf(await write("f.png", ""))).toBe("asset");
+  test("按扩展名直接判：`.mjs` / `.cjs` / `.ts` / `.css`", async ({ appEnv }) => {
+    const root = appEnv.values.dataDir;
+    expect(await moduleKindOf(await write(root, "a.mjs", ""))).toBe("esm");
+    expect(await moduleKindOf(await write(root, "b.cjs", ""))).toBe("cjs");
+    expect(await moduleKindOf(await write(root, "c.ts", ""))).toBe("source");
+    expect(await moduleKindOf(await write(root, "d.jsx", ""))).toBe("source");
+    expect(await moduleKindOf(await write(root, "e.css", ""))).toBe("style");
+    expect(await moduleKindOf(await write(root, "f.png", ""))).toBe("asset");
   });
 
-  it("`.js` 的判定看 `package.json` 的 `type`；没有 `type` 就按语法检测（Node 的 `--experimental-detect-module`）", async () => {
+  test("`.js` 的判定看 `package.json` 的 `type`；没有 `type` 就按语法检测（Node 的 `--experimental-detect-module`）", async ({
+    appEnv,
+  }) => {
+    const root = appEnv.values.dataDir;
     // 三个独立子目录，各自一份"最近的" package.json——`packageJsonNear` 找的就是它。
     const esm = join(root, "kind-esm");
     const forced = join(root, "kind-forced-cjs");

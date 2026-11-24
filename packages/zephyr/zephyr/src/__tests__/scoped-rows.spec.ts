@@ -15,10 +15,10 @@ import {
   Injectable,
   mountRow,
   ScopedRows,
-  type App,
   type Context,
 } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 声明方定的分类键（装配器只认 symbol，不解释它的含义）。 */
 const ScopeDemo = Symbol.for("test.scope.demo");
@@ -44,40 +44,42 @@ class PingRow {
   readonly ping$ = new Ping();
 }
 
-/** 落在 demo scope 里的行：订阅写在 `onInit` 里，落在**装它的那个 ctx** 上。 */
-const scopedSeen: string[] = [];
+/**
+ * 落在 demo scope 里的行：订阅写在 `onInit` 里，落在**装它的那个 ctx** 上。
+ * @param seen - 本用例自己的探针数组（谁收到了派发）。
+ * @returns 行类。
+ */
+function scopedPingRowOf(seen: string[]) {
+  @Injectable({ scope: ScopeDemo })
+  class ScopedPingRow {
+    readonly ping$ = new Ping();
 
-@Injectable({ scope: ScopeDemo })
-class ScopedPingRow {
-  readonly ping$ = new Ping();
-
-  onInit(): void {
-    // 字段事件在 `onInit` 之前已绑好本行 ctx，这里直接订阅即可。
-    this.ping$.on(() => scopedSeen.push("scoped"));
+    onInit(): void {
+      // 字段事件在 `onInit` 之前已绑好本行 ctx，这里直接订阅即可。
+      this.ping$.on(() => seen.push("scoped"));
+    }
   }
+  return ScopedPingRow;
 }
 
-/** 只记一次 `onInit`：判据是它**没有**出现在应用根上。 */
-const rootlessInstalled: string[] = [];
-
-@Injectable({ scope: ScopeDemo })
-class RootlessRow {
-  onInit(): void {
-    rootlessInstalled.push("scoped");
+/**
+ * 只记一次 `onInit`：判据是它**没有**出现在应用根上。
+ * @param installed - 本用例自己的探针数组（记录 `onInit` 跑过）。
+ * @returns 行类。
+ */
+function rootlessRowOf(installed: string[]) {
+  @Injectable({ scope: ScopeDemo })
+  class RootlessRow {
+    onInit(): void {
+      installed.push("scoped");
+    }
   }
+  return RootlessRow;
 }
 
 /** 普通行：用来占住应用根，证明清单里两类行可以并存。 */
 @Injectable()
 class RootRow {}
-
-const opened: App[] = [];
-const contexts: CordisContext[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose();
-  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose();
-});
 
 /**
  * 造一个裸 ctx（模拟"某个宿主 scope"，本包不依赖任何具体宿主）。
@@ -85,13 +87,13 @@ afterEach(async () => {
  */
 function freshContext(): Context {
   const ctx = new CordisContext();
-  contexts.push(ctx);
+  onTestFinished(() => ctx.fiber.dispose());
   // 单断言收窄：我们的 `Context` 是 cordis ctx 的子类型（只补了运行时本来就有的成员）。
   return ctx as unknown as Context;
 }
 
 describe("按 scope 装配", () => {
-  it("mountRow 装的行：事件字段绑传入的 ctx，订阅不抛、emit 能收到", async () => {
+  test("mountRow 装的行：事件字段绑传入的 ctx，订阅不抛、emit 能收到", async () => {
     const ctx = freshContext();
     const row = await mountRow(ctx, PingRow);
     const seen: string[] = [];
@@ -101,21 +103,25 @@ describe("按 scope 装配", () => {
     expect(seen).toEqual(["ping"]);
   });
 
-  it("带 scope 的行不装应用根：只能经 ScopedRows.install 装到指定 ctx", async () => {
-    const app = await bootstrapApplication({ providers: [RootlessRow, RootRow] });
-    opened.push(app);
+  test("带 scope 的行不装应用根：只能经 ScopedRows.install 装到指定 ctx", async () => {
+    const installed: string[] = [];
+    const app = await bootstrapApplication({
+      providers: [rootlessRowOf(installed), RootRow],
+    });
+    onTestFinished(() => app.dispose());
     const rows = app.get(ScopedRows);
     expect(rows.scopes, "清单里声明过的 scope").toEqual([ScopeDemo]);
-    expect(rootlessInstalled, "应用根上没有它").toEqual([]);
+    expect(installed, "应用根上没有它").toEqual([]);
 
     const scopedCtx = freshContext();
     await rows.install(ScopeDemo, scopedCtx);
-    expect(rootlessInstalled).toEqual(["scoped"]);
+    expect(installed).toEqual(["scoped"]);
   });
 
-  it("带 scope 的行：事件订阅落在传入的 ctx 上，根的派发收不到", async () => {
-    const app = await bootstrapApplication({ providers: [ScopedPingRow] });
-    opened.push(app);
+  test("带 scope 的行：事件订阅落在传入的 ctx 上，根的派发收不到", async () => {
+    const scopedSeen: string[] = [];
+    const app = await bootstrapApplication({ providers: [scopedPingRowOf(scopedSeen)] });
+    onTestFinished(() => app.dispose());
     const scopedCtx = freshContext();
     await app.get(ScopedRows).install(ScopeDemo, scopedCtx);
 

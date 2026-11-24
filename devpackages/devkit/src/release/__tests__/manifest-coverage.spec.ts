@@ -3,14 +3,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { coverageProblems, targetFiles, type CoverageManifest } from "../manifest-coverage.ts";
-
-const created: string[] = [];
 
 async function makePackage(manifest: CoverageManifest, files: readonly string[] = []) {
   const directory = await mkdtemp(join(tmpdir(), "devkit-coverage-"));
-  created.push(directory);
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
   for (const file of files) {
     await mkdir(join(directory, file, ".."), { recursive: true });
@@ -19,14 +18,8 @@ async function makePackage(manifest: CoverageManifest, files: readonly string[] 
   return directory;
 }
 
-afterEach(async () => {
-  await Promise.all(
-    created.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
-
 describe("targetFiles", () => {
-  it("字符串目标是它自己，对象目标取 types 与 default", () => {
+  test("字符串目标是它自己，对象目标取 types 与 default", () => {
     expect(targetFiles("./src/styles.css")).toEqual(["./src/styles.css"]);
     expect(targetFiles({ types: "./dist/index.d.mts", default: "./dist/index.mjs" })).toEqual([
       "./dist/index.d.mts",
@@ -37,7 +30,7 @@ describe("targetFiles", () => {
 });
 
 describe("coverageProblems", () => {
-  it("发布态覆盖每个键且目标都在时没有问题", async () => {
+  test("发布态覆盖每个键且目标都在时没有问题", async () => {
     const directory = await makePackage(
       {
         name: "@local/fixture",
@@ -64,7 +57,7 @@ describe("coverageProblems", () => {
     expect(await coverageProblems({ dir: directory, manifest })).toEqual([]);
   });
 
-  it("发布态少一个键就报缺键", async () => {
+  test("发布态少一个键就报缺键", async () => {
     const directory = await makePackage({ name: "@local/fixture" }, ["dist/index.mjs"]);
     const manifest = {
       name: "@local/fixture",
@@ -76,7 +69,7 @@ describe("coverageProblems", () => {
     ]);
   });
 
-  it("目标文件不在就报不存在", async () => {
+  test("目标文件不在就报不存在", async () => {
     const directory = await makePackage({ name: "@local/fixture" }, ["dist/index.mjs"]);
     const manifest = {
       name: "@local/fixture",

@@ -14,7 +14,7 @@
  */
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
@@ -126,7 +126,7 @@ async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
 }
 
 describe("会话数据面的投影读面（faceOf）", { timeout: 10_000 }, () => {
-  it("`session/follow` 首帧的 projections.values 能被 faceOf 读到（模型选择器据此进入 ready）", async () => {
+  test("`session/follow` 首帧的 projections.values 能被 faceOf 读到（模型选择器据此进入 ready）", async () => {
     const { app, sessions } = await boot(summaryOf("s1"), { modelSelection: MODEL_SELECTION });
     try {
       const projections = projectionsOf(sessions, "s1");
@@ -142,7 +142,7 @@ describe("会话数据面的投影读面（faceOf）", { timeout: 10_000 }, () =
     }
   });
 
-  it("目录行上的 projections 块也是初值（帧到达前就能读到）", async () => {
+  test("目录行上的 projections 块也是初值（帧到达前就能读到）", async () => {
     const { app, sessions } = await boot(summaryOf("s1", { modelSelection: MODEL_SELECTION }), {});
     try {
       const face = projectionsOf(sessions, "s1")?.faceOf("modelSelection");
@@ -152,7 +152,7 @@ describe("会话数据面的投影读面（faceOf）", { timeout: 10_000 }, () =
     }
   });
 
-  it("faceOf 是 identity-stable 的，且订阅者能收到帧带来的变化", async () => {
+  test("faceOf 是 identity-stable 的，且订阅者能收到帧带来的变化", async () => {
     const { app, sessions } = await boot(summaryOf("s1"), { modelSelection: MODEL_SELECTION });
     try {
       const projections = projectionsOf(sessions, "s1") as ProjectionsFace;

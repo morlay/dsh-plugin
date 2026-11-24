@@ -9,6 +9,9 @@
  * **两份形态、同一语义**：dev 形态逐文件服务，缺失的具名导入只是 undefined（运行期），这份 ESM 够用；
  * 联邦构建走 rolldown，它把"没有该具名导出"当**构建错误**（`MISSING_EXPORT`），那里得用 CJS 形态的
  * `node-stub.cjs`——CJS 的具名导入不校验存在性。
+ *
+ * 这里**只有具名导出**（`import/no-default-export`）：替身补的是具名成员，客户端图里没有
+ * `import x from "node:*"` 的默认导入；CJS 那份是 `module.exports` 形状，由各自的加载方式决定。
  */
 export class Readable {}
 export class Writable {}
@@ -20,4 +23,3 @@ export const pipeline = (...args: unknown[]): void => {
   if (typeof done === "function") (done as () => void)();
 };
 export const promises = {};
-export default { Readable, Writable, Duplex, Transform, PassThrough, pipeline, promises };

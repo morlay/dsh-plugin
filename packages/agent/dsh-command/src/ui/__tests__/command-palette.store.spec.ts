@@ -1,5 +1,5 @@
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
@@ -52,7 +52,7 @@ async function storeOf(): Promise<{
 }
 
 describe("命令弹层 store", () => {
-  it("打开后拿到目录，默认全可见、选中第一个", async () => {
+  test("打开后拿到目录，默认全可见、选中第一个", async () => {
     const { store, dispose } = await storeOf();
     try {
       await store.open("s1");
@@ -70,7 +70,7 @@ describe("命令弹层 store", () => {
     }
   });
 
-  it("按名字或说明过滤，过滤后选中项归零", async () => {
+  test("按名字或说明过滤，过滤后选中项归零", async () => {
     const { store, dispose } = await storeOf();
     try {
       await store.open("s1");
@@ -85,7 +85,7 @@ describe("命令弹层 store", () => {
     }
   });
 
-  it("选中项在可见列表里循环移动", async () => {
+  test("选中项在可见列表里循环移动", async () => {
     const { store, dispose } = await storeOf();
     try {
       await store.open("s1");
@@ -98,7 +98,7 @@ describe("命令弹层 store", () => {
     }
   });
 
-  it("执行选中项：交给 runner，并关闭弹层", async () => {
+  test("执行选中项：交给 runner，并关闭弹层", async () => {
     const { store, runner, dispose } = await storeOf();
     try {
       await store.open("s1");
@@ -111,7 +111,7 @@ describe("命令弹层 store", () => {
     }
   });
 
-  it("没有可见项时执行只是关闭，不调 runner", async () => {
+  test("没有可见项时执行只是关闭，不调 runner", async () => {
     const { store, runner, dispose } = await storeOf();
     try {
       await store.open("s1");
@@ -124,7 +124,7 @@ describe("命令弹层 store", () => {
     }
   });
 
-  it("订阅者在每次状态变化时被通知", async () => {
+  test("订阅者在每次状态变化时被通知", async () => {
     const { store, dispose } = await storeOf();
     try {
       let notified = 0;

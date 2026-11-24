@@ -4,6 +4,7 @@
 // 全走真的 `RemoteHandlers.invoke`：目录读 `permissionPresets/catalog`，默认档位的写走设置域的
 // `settings/mutate`（上游 client 行的设置行正是这条路径），落盘由真 `SettingLoader` 写到
 // `<dataDir>/settings.json`。
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,42 +15,14 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { provideSetting } from "@morlay/dsh-setting/server";
 import { SubprocessDefault } from "@morlay/dsh-shell";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
-const apps: App[] = [];
-const roots: string[] = [];
-
 /** 只给数据根的运行环境（设置文档落在 `<dataDir>/settings.json`）。 */
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues;
-
-  readonly cacheDir: string;
-
-  readonly packageRoot: string;
-
-  readonly appBootDir: string;
-
-  readonly profileManifest: string;
-
-  constructor(root: string) {
-    super();
-    this.values = { dataDir: root, profileDir: root };
-    this.cacheDir = join(root, "cache");
-    this.packageRoot = root;
-    this.appBootDir = join(root, "boot");
-    this.profileManifest = join(root, "package.json");
-  }
-}
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /**
  * 起真权限栈：`providePermission` 的装配值是 `workspace-write`；设置域用真模块（JSON 文档 + `settings/*`）。
  * @param existingRoot - 复用上一轮的数据根（模拟「刷新/重启」）；缺省新建临时目录。
@@ -59,14 +32,14 @@ async function boot(
   existingRoot?: string,
 ): Promise<{ app: App; handlers: RemoteHandlers; root: string }> {
   const root = existingRoot ?? (await mkdtemp(join(tmpdir(), "dsh-permission-default-")));
-  if (existingRoot === undefined) roots.push(root);
+  if (existingRoot === undefined) onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
 
       // 类令牌用 `useFactory` 给实例（`useValue` 只对 `InjectionToken` 生效）。
-      { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       ...provideAgent(),
       // 顺序即装配顺序：`shell` / `bash` 的适配面要先就位，权限行构造期就读 `ctx.shell.sandboxMode`。
       SubprocessDefault,
@@ -82,7 +55,7 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, handlers: app.get(RemoteHandlers), root };
 }
 
@@ -94,7 +67,7 @@ async function catalogDefaultOf(app: App): Promise<unknown> {
 }
 
 describe("默认权限档位的读写", () => {
-  it(
+  test(
     "读到的默认档位就是装配给的值，并已写进设置文档（设置行拿得到这一档）",
     { timeout: 20_000 },
     async () => {
@@ -118,7 +91,7 @@ describe("默认权限档位的读写", () => {
     },
   );
 
-  it("在设置里改写默认档位后落盘，下一次启动按新值建会话", { timeout: 30_000 }, async () => {
+  test("在设置里改写默认档位后落盘，下一次启动按新值建会话", { timeout: 30_000 }, async () => {
     const first = await boot();
     const written = (await first.handlers.invoke("settings/mutate", {
       ns: "permission",

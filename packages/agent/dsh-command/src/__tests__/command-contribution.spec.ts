@@ -19,7 +19,7 @@ import {
 import { RegistryCatalog, RegistryRunner } from "@morlay/dsh-command/server";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 /** 会话身份：agent 目录与命令目录都按它寻址。 */
 const SESSION = SessionId("s1");
@@ -70,7 +70,7 @@ async function commandApp(): Promise<App> {
 }
 
 describe("@Command：装配期登记、卸载期撤销", () => {
-  it("目录看得到它，执行走到它的 handler（`this` 是实例）", async () => {
+  test("目录看得到它，执行走到它的 handler（`this` 是实例）", async () => {
     const app = await commandApp();
     try {
       const catalog = app.get(CommandCatalog);
@@ -87,7 +87,7 @@ describe("@Command：装配期登记、卸载期撤销", () => {
     }
   });
 
-  it("卸载后 disposer 把它摘掉：目录回到空", async () => {
+  test("卸载后 disposer 把它摘掉：目录回到空", async () => {
     const app = await commandApp();
     const catalog = app.get(CommandCatalog);
     try {

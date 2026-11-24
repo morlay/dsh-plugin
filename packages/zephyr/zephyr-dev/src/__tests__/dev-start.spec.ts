@@ -6,21 +6,15 @@
 // 这里**不替身 vite**：要判的正是「真起得来、真关得掉」，替身会让用例退化成测自己写的桩。
 // 超时放宽到 20s：冷启动 vite 的首个用例会到 3s 上下，顶着全局 3s 上限会让它随机红。
 import { connect } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { startDev, type DevSession } from "../dev/start.ts";
 import { mountDev, type DevFixture } from "./support/dev-session.ts";
 
-let session: DevSession | undefined;
-
-afterEach(async () => {
-  await session?.close();
-  session = undefined;
-});
-
 describe("startDev", () => {
-  it("起来后首页 200，close() 之后端口释放（再连即失败）", async () => {
+  test("起来后首页 200，close() 之后端口释放（再连即失败）", async () => {
     const fixture = await mountDev();
-    session = await startDev({
+    const session = await startDev({
       app: fixture.app,
       repoRoot: fixture.repoRoot,
       cacheDir: fixture.cacheDir,
@@ -50,13 +44,12 @@ describe("startDev", () => {
     const port = session.port;
     expect(await probePort(port)).toBe("open");
     await session.close();
-    session = undefined;
     expect(await probePort(port)).toBe("ECONNREFUSED");
   });
 
-  it("close() 幂等：连调两次不抛", async () => {
+  test("close() 幂等：连调两次不抛", async () => {
     const fixture = await mountDev();
-    session = await startDev({
+    const session = await startDev({
       app: fixture.app,
       repoRoot: fixture.repoRoot,
       cacheDir: fixture.cacheDir,
@@ -66,12 +59,11 @@ describe("startDev", () => {
     });
     await session.close();
     await expect(session.close()).resolves.toBeUndefined();
-    session = undefined;
   });
 
-  it("devFiles 缺省从树里取（与 devProviders 的配置同一份，不另抄）", async () => {
+  test("devFiles 缺省从树里取（与 devProviders 的配置同一份，不另抄）", async () => {
     const fixture = await mountDev();
-    session = await startDev({
+    const session = await startDev({
       app: fixture.app,
       repoRoot: fixture.repoRoot,
       cacheDir: fixture.cacheDir,
@@ -82,7 +74,7 @@ describe("startDev", () => {
     expect(await pageOf(session)).toBe(200);
   }, 20_000);
 
-  it("客户端 HMR 关掉：页面不注入 /@vite/client（开着时才注入）", async () => {
+  test("客户端 HMR 关掉：页面不注入 /@vite/client（开着时才注入）", async () => {
     // 两半在同一夹具上对照：注入与否只能由「开关」解释，不能由夹具差异解释。
     const hmrOn = await mountDev();
     const onSession = await startOf(hmrOn);
@@ -90,7 +82,8 @@ describe("startDev", () => {
     await onSession.close();
 
     const hmrOff = await mountDev({ hmr: { client: false } });
-    session = await startOf(hmrOff);
+    const session = await startOf(hmrOff);
+    onTestFinished(() => session.close());
     const offHtml = await (await fetch(session.url)).text();
 
     expect(onHtml, "开着时页面带 HMR 客户端").toContain("/@vite/client");
@@ -98,7 +91,7 @@ describe("startDev", () => {
     expect(offHtml, "页面仍由 vite 出（只是不再自己热更）").toContain("/@fs/");
   }, 20_000);
 
-  it("部署事实对不上时当场报错（不把错配的根带到运行时）", async () => {
+  test("部署事实对不上时当场报错（不把错配的根带到运行时）", async () => {
     const fixture = await mountDev();
     await expect(
       startDev({

@@ -4,13 +4,11 @@
  *
  * 两条用例守住该包转发的两层能力：凭证引用按分层来源解析，与授权流的登记/撤销。
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { credentialKey } from "@deepseek-ai/dsh-credentials";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication } from "@morlay/zephyr";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { AppEnv } from "@morlay/zephyr-app";
+import { onTestFinished, vi } from "vitest";
 import { Credentials, RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { Authorization, credentialRef } from "../index.ts";
@@ -18,49 +16,27 @@ import { provideAuth } from "../server/index.ts";
 // `Authorization` 没有模块覆盖（本应用的授权消费方还没装）：装配面只能显式列这一行。
 import { AuthorizationDefault } from "../authorization.service.ts";
 
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-auth-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
 /** 指向临时目录的运行环境（凭证文件就在 `dataDir` 下）。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-});
-
 /** 起真 auth 栈。 */
-async function boot(): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
+async function boot(
+  appEnv: TestingAppEnv,
+): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
-    providers: [FakeAppEnv, ...provideAuth(), AuthorizationDefault, RemoteHandlersDefault],
+    providers: [
+      { provide: AppEnv, useValue: appEnv },
+      ...provideAuth(),
+      AuthorizationDefault,
+      RemoteHandlersDefault,
+    ],
     timeoutMs: 10_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app };
 }
 
 describe("auth 域", () => {
-  it("装配后两个契约令牌都可解析；凭证按来源分层解析", async () => {
-    const { app } = await boot();
+  test("装配后两个契约令牌都可解析；凭证按来源分层解析", async ({ appEnv }) => {
+    const { app } = await boot(appEnv);
 
     const credentials = app.get(Credentials);
     expect(typeof credentials.resolve).toBe("function");
@@ -70,7 +46,7 @@ describe("auth 域", () => {
     expect(await credentials.resolve(missing)).toBeUndefined();
 
     // 未提供 `launchEnvironment` 快照时，provider 回落到继承的进程环境。
-    process.env.DSH_TEST_PRESENT_KEY = "sk-env";
+    vi.stubEnv("DSH_TEST_PRESENT_KEY", "sk-env");
     try {
       expect(await credentials.resolve(credentialRef("DSH_TEST_PRESENT_KEY"))).toEqual({
         value: "sk-env",
@@ -81,8 +57,8 @@ describe("auth 域", () => {
     }
   });
 
-  it("授权流登记后能从 Authorization 列举出来，撤销后消失", async () => {
-    const { app } = await boot();
+  test("授权流登记后能从 Authorization 列举出来，撤销后消失", async ({ appEnv }) => {
+    const { app } = await boot(appEnv);
 
     const authorization = app.get(Authorization);
     const key = credentialKey("dsh-test", "flow");
@@ -102,11 +78,11 @@ describe("auth 域", () => {
 describe("credentials 组的宿主端点", () => {
   // 引用名用**测试专用的假名字**：`DEEPSEEK_API_KEY` 这类真实名字会被开发机/CI 的环境变量填成
   // `configured: true`，断言就随环境漂移。
-  it(
+  test(
     "`describe` 返回每个引用的视图，`set`/`unset` 往返改变 `configured`",
     { timeout: 20_000 },
-    async () => {
-      const { app } = await boot();
+    async ({ appEnv }) => {
+      const { app } = await boot(appEnv);
       const handlers = app.get(RemoteHandlers);
 
       const before = await handlers.invoke("credentials/describe", { refs: ["DSH_SPEC_FAKE_KEY"] });
@@ -139,11 +115,11 @@ describe("credentials 组的宿主端点", () => {
     },
   );
 
-  it(
+  test(
     "非法引用名走失败面：`{ ok:false, error:{ code, message } }`（不缺字段）",
     { timeout: 20_000 },
-    async () => {
-      const { app } = await boot();
+    async ({ appEnv }) => {
+      const { app } = await boot(appEnv);
       const result = await app
         .get(RemoteHandlers)
         .invoke("credentials/describe", { refs: ["not a ref!"] });

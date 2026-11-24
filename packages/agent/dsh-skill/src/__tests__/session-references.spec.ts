@@ -5,6 +5,7 @@
  * 判据是「候选非空且指向真实路径」——静默返回空数组不算接上：
  * 输入框里的 `@` 菜单拿空列表和拿「没有实现」在用户眼里都是「没生效」。
  */
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,7 +26,7 @@ import { provideUpload } from "@morlay/dsh-upload/server";
 import { WorkingDirectoryDefault, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideWorkspace } from "@morlay/dsh-workspace/server";
 import { bootstrapApplication, Injectable, type App, configure } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlers, type AppEnvValues } from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlers } from "@morlay/zephyr-app";
 import {
   provideApiGateway,
   provideConnection,
@@ -33,7 +34,8 @@ import {
   provideTypert,
 } from "@morlay/zephyr-app";
 import { WebServerDefault, WebStartup, publishingTo } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionQuery } from "@morlay/dsh-session";
 import { SessionStore } from "@morlay/dsh-session";
@@ -46,31 +48,7 @@ class Startup0 extends WebStartup {
   readonly values = { host: "127.0.0.1", port: 0, trustedHosts: [] };
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** 指向临时目录的运行环境。 */
-function fakeAppEnvOf(root: string): new () => AppEnv {
-  @Injectable()
-  class FakeAppEnv extends AppEnv {
-    readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-    readonly cacheDir = join(root, "cache");
-
-    readonly packageRoot = root;
-
-    readonly appBootDir = join(root, "boot");
-
-    readonly profileManifest = join(root, "package.json");
-  }
-  return FakeAppEnv;
-}
-
 /**
  * 起会话宿主栈（真模块；`provideSessionReference` 提供 `sessionReferenceResolver` 那一行）。
  * @param existingRoot - 传同一个 dataDir 起第二次（模拟宿主重启）；省略时新建临时目录。
@@ -80,8 +58,7 @@ async function boot(
   existingRoot?: string,
 ): Promise<{ app: App; handlers: RemoteHandlers; root: string }> {
   const root = existingRoot ?? (await mkdtemp(join(tmpdir(), "dsh-session-references-")));
-  roots.push(root);
-  const FakeAppEnv = fakeAppEnvOf(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       // 装配顺序 = 依赖顺序（适配行的契约面在它自己的 mount 之后才绑上）。
@@ -105,7 +82,7 @@ async function boot(
       // 三份 root（store / 投影 / 查询）由 `provideSessionRemote()` 自带（含 `provideSessionQuerySqlite()`），
       // 不能再并列一份——同名服务注册两次会直接抛。
       ...provideSessionRemote(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
       SubprocessDefault,
       SandboxDefault,
       { provide: SandboxPolicyDefault, config: { mode: "workspace-write", workspaceRoot: root } },
@@ -128,7 +105,7 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, handlers: gatewayHandlers(app), root };
 }
 
@@ -158,7 +135,7 @@ async function createSession(handlers: RemoteHandlers, cwd?: string): Promise<st
 }
 
 describe("@ 引用的候选端点", { timeout: 30_000 }, () => {
-  it("`fileReferences/list`：真实文件路径返回非空候选（不是没有实现，也不是空数组）", async () => {
+  test("`fileReferences/list`：真实文件路径返回非空候选（不是没有实现，也不是空数组）", async () => {
     const { handlers, root } = await boot();
     await mkdir(join(root, "docs"), { recursive: true });
     await writeFile(join(root, "docs", "hello-reference.md"), "# hello\n", "utf8");
@@ -180,7 +157,7 @@ describe("@ 引用的候选端点", { timeout: 30_000 }, () => {
     expect(Array.isArray(unwrap<readonly unknown[]>(bare)), "空查询也必须返回数组").toBe(true);
   });
 
-  it("恢复盘上会话：header 与盘上一致、`listSessions` 不冲突、`prompt` 被接受、文件候选非空", async () => {
+  test("恢复盘上会话：header 与盘上一致、`listSessions` 不冲突、`prompt` 被接受、文件候选非空", async () => {
     // 第一次启动：建会话并落盘（这一步的 agent 是 live 的）。
     const first = await boot();
     const sessionId = await createSession(first.handlers, first.root);
@@ -237,7 +214,7 @@ describe("@ 引用的候选端点", { timeout: 30_000 }, () => {
     expect((unwrap<readonly unknown[]>(files) ?? []).length).toBeGreaterThan(0);
   });
 
-  it("`session/page`（历史窗口）由上游提供：真实会话读得回一页", async () => {
+  test("`session/page`（历史窗口）由上游提供：真实会话读得回一页", async () => {
     const { handlers } = await boot();
     const sessionId = await createSession(handlers);
     // 上游 `SessionController.page(request)`：descriptor 的 wire 是 `{ request }`。
@@ -254,7 +231,7 @@ describe("@ 引用的候选端点", { timeout: 30_000 }, () => {
     expect(page.records).toEqual([]);
   });
 
-  it("`sessionReferenceResolver/candidates`：另一会话成为带 mention 的候选", async () => {
+  test("`sessionReferenceResolver/candidates`：另一会话成为带 mention 的候选", async () => {
     const { handlers } = await boot();
     const first = await createSession(handlers);
     const second = await createSession(handlers);

@@ -5,11 +5,11 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { contentRev } from "@morlay/zephyr-dev/testing";
 
 /** 本轮建的临时目录（用例结束统一删）。 */
-const created: string[] = [];
 
 /**
  * 造一个"源码包"目录（`src/index.ts`）。
@@ -18,17 +18,13 @@ const created: string[] = [];
  */
 async function sourcePackage(body: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "zephyr-rev-"));
-  created.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   await writeFile(join(dir, "index.ts"), body, "utf8");
   return dir;
 }
 
-afterEach(async () => {
-  await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
 describe("预编译缓存的内容指纹", () => {
-  it("内容变了，指纹就变（同版本源码改动必须失效）", async () => {
+  test("内容变了，指纹就变（同版本源码改动必须失效）", async () => {
     const dir = await sourcePackage("export const a = 1;\n");
     const before = await contentRev([dir]);
     await writeFile(join(dir, "index.ts"), "export const a = 2;\n", "utf8");
@@ -37,7 +33,7 @@ describe("预编译缓存的内容指纹", () => {
     expect(before).toContain(":");
   });
 
-  it("内容没变：指纹稳定（只是重新 stat 一遍）", async () => {
+  test("内容没变：指纹稳定（只是重新 stat 一遍）", async () => {
     const dir = await sourcePackage("export const a = 1;\n");
     expect(await contentRev([dir])).toBe(await contentRev([dir]));
   });

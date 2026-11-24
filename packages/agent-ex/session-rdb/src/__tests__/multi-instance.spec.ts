@@ -3,7 +3,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 
 import { SessionId, SessionSeq, SESSION_FORMAT_VERSION } from "@morlay/dsh-session/contract";
 import type { SessionEvent, SessionHeader } from "@morlay/dsh-session/contract";
@@ -15,14 +16,9 @@ function rdb(ctx: Context): SessionPersistenceRdb {
   return ctx.sessionPersistence as SessionPersistenceRdb;
 }
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true, maxRetries: 3 });
-});
-
 async function freshDbPath(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dsh-rdb-multiinst-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true, maxRetries: 3 }));
   return join(dir, "sessions.db");
 }
 
@@ -83,7 +79,7 @@ async function createAndAppend(
 }
 
 describe("multi-instance repro", () => {
-  it("two instances create the SAME id concurrently, then both append — log must not interleave", async () => {
+  test("two instances create the SAME id concurrently, then both append — log must not interleave", async () => {
     const path = await freshDbPath();
     const b1 = await mount(path);
     const b2 = await mount(path);
@@ -108,7 +104,7 @@ describe("multi-instance repro", () => {
     await b3.dispose();
   });
 
-  it("two instances append DIFFERENT ids concurrently — no cross contamination", async () => {
+  test("two instances append DIFFERENT ids concurrently — no cross contamination", async () => {
     const path = await freshDbPath();
     const b1 = await mount(path);
     const b2 = await mount(path);
@@ -122,7 +118,7 @@ describe("multi-instance repro", () => {
     await b3.dispose();
   });
 
-  it("SAME id, two instances, interleaved multi-batch appends stay consistent", async () => {
+  test("SAME id, two instances, interleaved multi-batch appends stay consistent", async () => {
     const path = await freshDbPath();
     const b1 = await mount(path);
     const b2 = await mount(path);
@@ -149,7 +145,7 @@ describe("multi-instance repro", () => {
     await b3.dispose();
   });
 
-  it("an instance that LOADED the session may append (authorized continuation); the stale writer is rejected", async () => {
+  test("an instance that LOADED the session may append (authorized continuation); the stale writer is rejected", async () => {
     const path = await freshDbPath();
     const b1 = await mount(path);
     await createAndAppend(b1.ctx, header(SessionId("auth")), oneTurn(0));
@@ -172,7 +168,7 @@ describe("multi-instance repro", () => {
     await b3.dispose();
   });
 
-  it("keeps the whole stored header across instances: the agent preset survives a restart", async () => {
+  test("keeps the whole stored header across instances: the agent preset survives a restart", async () => {
     // 列式 header 只存显式列出的字段，少一列字段就静默消失。`agentPreset` 有消费方：
     // 会话投影 `agentPreset` 的 `init` 只读 header（缺了就被算成 null 并缓存下来）。
     const path = await freshDbPath();

@@ -5,20 +5,16 @@ import { SessionId } from "@morlay/dsh-session/contract";
 import { assembleContextFor, defineTool } from "@morlay/dsh-agent/contract";
 import { apply as applyPtcExecutor } from "@morlay/dsh-ptc";
 import type { TestContext } from "./support/context.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
+import { onTestFinished } from "vitest";
 import { pinDshHome } from "./support/dsh-home.ts";
 import { mountSessionModeApp } from "./support/mount-app.ts";
 
 // 用例里的模式定义就是被测输入：把 `{dshHome}/modes/*.toml` 指到空目录，别让开发机上真用户的覆盖参与装配。
 pinDshHome();
 
-const apps: Awaited<ReturnType<typeof mountSessionModeApp>>["app"][] = [];
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose();
-});
-
 describe("PTC 装配：tools:sdk 换成稳定骨架", () => {
-  it("section 里是 describe_tool 骨架，没有全量 ToolArgsMap", async () => {
+  test("section 里是 describe_tool 骨架，没有全量 ToolArgsMap", async () => {
     // 真 cordis 根 ctx（`App.ctx`）：上游的 `ctx.plugin(scope)` / `fiber.ctx.extend` 才能跑。
     const { app, ctx } = await mountSessionModeApp({
       systemPrompt: { includeHarnessIdentity: false, personaPrefix: "部署级提示词。" },
@@ -44,7 +40,7 @@ describe("PTC 装配：tools:sdk 换成稳定骨架", () => {
         },
       },
     });
-    apps.push(app);
+    onTestFinished(() => app.dispose());
     await ctx.plugin(
       Object.assign(
         (inner: TestContext) => {

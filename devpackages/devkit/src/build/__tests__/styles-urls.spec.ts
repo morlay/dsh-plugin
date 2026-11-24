@@ -4,7 +4,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { rewriteCssUrls } from "../css.ts";
 
 const CSS = [
@@ -21,22 +22,23 @@ const CSS = [
   "",
 ].join("\n");
 
-let directory: string;
-
-beforeAll(async () => {
-  directory = await mkdtemp(join(tmpdir(), "dsh-css-urls-"));
+/**
+ * 建一份样式 fixture 目录（大图 + 小图 + 样式表），每条用例一份、用完删。
+ * @returns 目录路径。
+ */
+async function directoryOf(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "dsh-css-urls-"));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
   // 大图（≥ 4KB）与一个小图，分别验证两条分支。
   await writeFile(join(directory, "running-whale.png"), Buffer.alloc(5000, 7));
   await writeFile(join(directory, "dot.png"), Buffer.from([1, 2, 3]));
   await writeFile(join(directory, "styles.css"), CSS);
-});
-
-afterAll(async () => {
-  await rm(directory, { recursive: true, force: true });
-});
+  return directory;
+}
 
 describe("样式里的 url() 处理", () => {
-  it("`@supports` 内层与 `mask` 简写里的 url() 也会被内联", async () => {
+  test("`@supports` 内层与 `mask` 简写里的 url() 也会被内联", async () => {
+    const directory = await directoryOf();
     const out = await rewriteCssUrls(CSS, join(directory, "styles.css"));
 
     expect(out).toContain("data:image/png;base64,");
@@ -45,7 +47,8 @@ describe("样式里的 url() 处理", () => {
     expect(out).toContain("https://example.com/a.png");
   });
 
-  it("超过阈值的大图走 emit（落到资产），URL 换成给回来的那个", async () => {
+  test("超过阈值的大图走 emit（落到资产），URL 换成给回来的那个", async () => {
+    const directory = await directoryOf();
     const emitted: string[] = [];
     const out = await rewriteCssUrls(
       CSS,

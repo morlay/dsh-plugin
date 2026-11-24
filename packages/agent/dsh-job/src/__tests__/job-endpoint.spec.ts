@@ -9,13 +9,8 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { RemoteHandlers, provideApiGateway } from "@morlay/zephyr-app";
 import { provideTypert } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 起注册表 + `job/*` 端点。 */
 async function boot(): Promise<App> {
@@ -30,12 +25,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("job/* 的宿主面", { timeout: 30_000 }, () => {
-  it("list 是流：首帧就是这个会话的整份花名册（空）", async () => {
+  test("list 是流：首帧就是这个会话的整份花名册（空）", async () => {
     const app = await boot();
     const controller = new AbortController();
     const stream = app
@@ -50,7 +45,7 @@ describe("job/* 的宿主面", { timeout: 30_000 }, () => {
     expect(frame.value).toMatchObject({ jobs: [] });
   });
 
-  it("kill 对不认识的任务回上游的失败面（job/not-found），不是「没实现」", async () => {
+  test("kill 对不认识的任务回上游的失败面（job/not-found），不是「没实现」", async () => {
     const app = await boot();
     const result = await app.get(RemoteHandlers).invoke("job/kill", {
       request: { sessionId: SessionId("s1"), jobId: "nope" },

@@ -21,7 +21,7 @@ import {
   type Context,
 } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, test as base } from "@morlay/zephyr-app/testing";
 import { SettingsSchema, SidebarRightTabs } from "../index.ts";
 
 /** 行契约（真实里是 `SidebarRight` / `ConfigForms`；这里只借令牌身份，名字由上游 provide 决定）。 */
@@ -83,34 +83,42 @@ class SettingsRow extends fromCordis(ConfigForms, settingsPlugin) {
   }
 }
 
-let sidebarApp: App;
-let settingsApp: App;
+/** 两份装配各管两条用例：需要的测试自己声明，装配随用例起落。 */
+interface TokenFixtures {
+  readonly sidebarApp: App;
+  readonly settingsApp: App;
+}
 
-beforeAll(async () => {
-  sidebarApp = await bootstrapApplication({ providers: [SidebarRightRow], timeoutMs: 20_000 });
-  settingsApp = await bootstrapApplication({ providers: [SettingsRow], timeoutMs: 20_000 });
-});
-
-afterAll(async () => {
-  await sidebarApp.dispose().catch(() => {});
-  await settingsApp.dispose().catch(() => {});
+const test = base.extend<TokenFixtures>({
+  async sidebarApp({}, use) {
+    const app = await bootstrapApplication({ providers: [SidebarRightRow], timeoutMs: 20_000 });
+    await use(app);
+    await app.dispose().catch(() => {});
+  },
+  async settingsApp({}, use) {
+    const app = await bootstrapApplication({ providers: [SettingsRow], timeoutMs: 20_000 });
+    await use(app);
+    await app.dispose().catch(() => {});
+  },
 });
 
 describe("跨行共享注册表：一份实例、两个入口", () => {
-  it("`SidebarRightTabs` 令牌指向上游行 provide 的那份注册表", () => {
+  test("`SidebarRightTabs` 令牌指向上游行 provide 的那份注册表", ({ sidebarApp }) => {
     // 双注册：上游 provide 的名字也进根名字视图（上游插件之间要按名字互相找）。
     expect(named(sidebarApp, "sidebarRightTabs")).toBeDefined();
     const tabs = sidebarApp.get(SidebarRightTabs);
     expect(tabs).toMatchObject({ register: expect.any(Function), entries: expect.any(Function) });
   });
 
-  it("`SettingsSchema` 令牌指向上游行 provide 的 schema 服务", () => {
+  test("`SettingsSchema` 令牌指向上游行 provide 的 schema 服务", ({ settingsApp }) => {
     // 同上：名字进根名字视图（双注册）。
     expect(named(settingsApp, "settingsSchema")).toBeDefined();
     expect(settingsApp.get(SettingsSchema)).toMatchObject({ describe: expect.any(Function) });
   });
 
-  it("消费方按令牌拿到的是**注册表**而不是契约面控制器（`register`/`subscribe` 真的可调）", () => {
+  test("消费方按令牌拿到的是**注册表**而不是契约面控制器（`register`/`subscribe` 真的可调）", ({
+    sidebarApp,
+  }) => {
     const tabs = sidebarApp.get(SidebarRightTabs);
     expect(tabs).toMatchObject({
       register: expect.any(Function),

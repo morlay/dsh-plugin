@@ -9,7 +9,7 @@
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport, Remote, SessionRemoteDefault } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { FakeRemote } from "./support/fake-remote.ts";
@@ -85,7 +85,7 @@ function snapshotOf(sessions: SessionController): SessionCatalogState {
 }
 
 describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
-  it("宿主推 `api-session/added` 时把一行写回 list", async () => {
+  test("宿主推 `api-session/added` 时把一行写回 list", async () => {
     const { app, sessions, remote } = await boot();
     try {
       const summary = summaryOf("s1");
@@ -99,7 +99,7 @@ describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
     }
   });
 
-  it("宿主推 `api-session/removed` 时把那一行从 list 移除", async () => {
+  test("宿主推 `api-session/removed` 时把那一行从 list 移除", async () => {
     const { app, sessions, remote } = await boot();
     try {
       remote.emit("api-session/added", summaryOf("s1"));
@@ -115,7 +115,7 @@ describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
     }
   });
 
-  it("retain 返回上游 `SessionReference` 的形状，且没有子代理地址", async () => {
+  test("retain 返回上游 `SessionReference` 的形状，且没有子代理地址", async () => {
     const { app, sessions } = await boot(() => ({ items: [{ ...summaryOf("s1") }] }));
     try {
       const reference = sessions.retain(SessionId("s1"), { source: "gateway" });
@@ -131,7 +131,7 @@ describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
 });
 
 describe("retainInfo：行的保留计数", () => {
-  it(
+  test(
     "`retain` 后 mainView 为 1，`release` 后回 0，订阅者收到变化",
     { timeout: 10_000 },
     async () => {
@@ -164,7 +164,7 @@ describe("retainInfo：行的保留计数", () => {
 });
 
 describe("retainInfo：按 source 分开计数", () => {
-  it(
+  test(
     "`sidebarView` 的保留不记到 `mainView` 上（否则主区判断会被顶住）",
     { timeout: 10_000 },
     async () => {
@@ -190,7 +190,7 @@ describe("retainInfo：按 source 分开计数", () => {
 });
 
 describe("列表里没有的 id 不产生 binding", () => {
-  it(
+  test(
     "`byId` 残留了不在 `ids` 里的行时，`binding()` 仍返回 `undefined`（`ids` 是权威）",
     { timeout: 10_000 },
     async () => {
@@ -212,7 +212,7 @@ describe("列表里没有的 id 不产生 binding", () => {
 });
 
 describe("投影摘要摊平", () => {
-  it(
+  test(
     "宿主行的 `projections.values` 变成客户端行的 `projectionValues`（`restoreBlank` 读它）",
     { timeout: 10_000 },
     async () => {

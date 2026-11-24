@@ -12,7 +12,8 @@ import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 import { strToU8 } from "fflate";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness } from "../../__tests__/support/host.ts";
 import { openInitializedSqlite } from "../../__tests__/support/sqlite.ts";
 import { zipOf } from "../../__tests__/support/zip.ts";
@@ -32,12 +33,6 @@ interface Wired {
   dispose(): Promise<void>;
 }
 
-const wired: Wired[] = [];
-
-afterEach(async () => {
-  for (const entry of wired.splice(0)) await entry.dispose();
-});
-
 // 清单与装配都在 `support/host.ts`（整包的宿主半）：端点行已并入 `provideBetterSession()`。
 async function start(): Promise<Wired> {
   const harness = await startHarness();
@@ -47,7 +42,7 @@ async function start(): Promise<Wired> {
     root: harness.root,
     dispose: () => harness.dispose(),
   };
-  wired.push(entry);
+  onTestFinished(() => entry.dispose());
   return entry;
 }
 
@@ -94,7 +89,7 @@ function withModelConfig(log: readonly SessionEvent[]): SessionEvent[] {
 }
 
 describe("sessionEditor 组", () => {
-  it("没有重放入口时 edit 不截断日志：显式失败带码（不允许「截断了却没写回」）", async () => {
+  test("没有重放入口时 edit 不截断日志：显式失败带码（不允许「截断了却没写回」）", async () => {
     const entry = await start();
     await seed(entry, "edit-target", withModelConfig(twoTurnLog()));
 
@@ -118,7 +113,7 @@ describe("sessionEditor 组", () => {
     expect(events.some((event) => event.type === "turn/start" && event.data.turn === 2)).toBe(true);
   });
 
-  it("rewind 截断到指定边界，响应里没有排队条数", async () => {
+  test("rewind 截断到指定边界，响应里没有排队条数", async () => {
     const entry = await start();
     await seed(entry, "rewind-target");
 
@@ -133,7 +128,7 @@ describe("sessionEditor 组", () => {
     expect(events.map((event) => event.seq)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
-  it("fork 派生一个新会话，响应里给的是新会话 id", async () => {
+  test("fork 派生一个新会话，响应里给的是新会话 id", async () => {
     const entry = await start();
     await seed(entry, "fork-target", oneTurnLogStepFirst());
 
@@ -144,7 +139,7 @@ describe("sessionEditor 组", () => {
     expect(valueOf<{ sessionId: string }>(result).sessionId).toBe("fork-child");
   });
 
-  it("业务失败包成 `ok: false`，错误码带到 wire 上", async () => {
+  test("业务失败包成 `ok: false`，错误码带到 wire 上", async () => {
     const entry = await start();
 
     const result = await entry.handlers.invoke("sessionEditor/edit", {
@@ -160,7 +155,7 @@ describe("sessionEditor 组", () => {
     expect(errorCodeOf(result)).toBe("gateway/invoke-failed");
   });
 
-  it("recall 撤回一条用户消息（首轮退到 -1，日志清空）", async () => {
+  test("recall 撤回一条用户消息（首轮退到 -1，日志清空）", async () => {
     const entry = await start();
     await seed(entry, "recall-target", oneTurnLogStepFirst());
 
@@ -175,7 +170,7 @@ describe("sessionEditor 组", () => {
     expect(events).toEqual([]);
   });
 
-  it("没有重放入口时 retry 不截断日志：显式失败带码", async () => {
+  test("没有重放入口时 retry 不截断日志：显式失败带码", async () => {
     const entry = await start();
     await seed(entry, "retry-target", withModelConfig(twoTurnLog()));
 
@@ -195,7 +190,7 @@ describe("sessionEditor 组", () => {
 describe("sessionAdmin 组", () => {
   // 列表按「最近活动」倒序（`f_last_event_at`）：编辑动作只截断日志、不改这一列的话，被改动的会话会按
   // **创建时间**沉到列表后面——现场就是「重试过的会话掉进折叠的其余会话里」。
-  it("rewind 之后被改动的会话在 rows 里排到最前", async () => {
+  test("rewind 之后被改动的会话在 rows 里排到最前", async () => {
     const entry = await start();
     // older：事件时间 0..5；newer：事件时间 0..11（同一份 `meta.createdAt`，靠最后事件时间分先后）。
     await seed(entry, "row-older", withModelConfig(oneTurnLog()));
@@ -225,7 +220,7 @@ describe("sessionAdmin 组", () => {
     ]);
   });
 
-  it("rows 给出会话行（含标题与归档标记）并按页返回", async () => {
+  test("rows 给出会话行（含标题与归档标记）并按页返回", async () => {
     const entry = await start();
     await seed(entry, "row-1");
     await seed(entry, "row-2", oneTurnLogStepFirst());
@@ -245,7 +240,7 @@ describe("sessionAdmin 组", () => {
     expect(value).toMatchObject({ page: 1, pageSize: 10 });
   });
 
-  it("rows 的搜索与子代理过滤在后端做", async () => {
+  test("rows 的搜索与子代理过滤在后端做", async () => {
     const entry = await start();
     await seed(entry, "searchable");
 
@@ -255,7 +250,7 @@ describe("sessionAdmin 组", () => {
     expect(none.total).toBe(0);
   });
 
-  it("usage 回报总量、子代理拆分、按天桶与按会话行（形状与契约一致）", async () => {
+  test("usage 回报总量、子代理拆分、按天桶与按会话行（形状与契约一致）", async () => {
     const entry = await start();
     await seed(entry, "usage-1");
 
@@ -275,7 +270,7 @@ describe("sessionAdmin 组", () => {
     expect(Array.isArray(value.sessions)).toBe(true);
   });
 
-  it("usage 的 range 只影响统计窗口，不影响返回形状", async () => {
+  test("usage 的 range 只影响统计窗口，不影响返回形状", async () => {
     const entry = await start();
     await seed(entry, "usage-range");
 
@@ -290,7 +285,7 @@ describe("sessionAdmin 组", () => {
     expect(all.totals).toBeDefined();
   });
 
-  it("rows 的页码越界带 SESSION_ROWS_INVALID_PAGE（不是网关兜底码）", async () => {
+  test("rows 的页码越界带 SESSION_ROWS_INVALID_PAGE（不是网关兜底码）", async () => {
     const entry = await start();
     await seed(entry, "page-oob");
 
@@ -305,7 +300,7 @@ describe("sessionAdmin 组", () => {
     expect(sloppy.pageSize).toBeGreaterThan(0);
   });
 
-  it("usage 的未知 range 带 SESSION_USAGE_INVALID_RANGE（不静默降级成 all）", async () => {
+  test("usage 的未知 range 带 SESSION_USAGE_INVALID_RANGE（不静默降级成 all）", async () => {
     const entry = await start();
     await seed(entry, "usage-bad-range");
 
@@ -313,7 +308,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(bad)).toBe("SESSION_USAGE_INVALID_RANGE");
   });
 
-  it("export 给 base64 的 zip；import 能把它读回来", async () => {
+  test("export 给 base64 的 zip；import 能把它读回来", async () => {
     const entry = await start();
     await seed(entry, "roundtrip", oneTurnLogStepFirst());
 
@@ -331,7 +326,7 @@ describe("sessionAdmin 组", () => {
     expect(events).toHaveLength(6);
   });
 
-  it("exportMany 逐条给出 zip（每条一份，文件名按会话）与不存在那条的域码", async () => {
+  test("exportMany 逐条给出 zip（每条一份，文件名按会话）与不存在那条的域码", async () => {
     const entry = await start();
     await seed(entry, "batch-a", oneTurnLogStepFirst());
     await seed(entry, "batch-b");
@@ -353,7 +348,7 @@ describe("sessionAdmin 组", () => {
     expect(value.items[0]?.zip?.length).toBeGreaterThan(0);
   });
 
-  it("importMany 逐条导入：好包建成新会话，坏包带域码（整批不回滚）", async () => {
+  test("importMany 逐条导入：好包建成新会话，坏包带域码（整批不回滚）", async () => {
     const entry = await start();
     await seed(entry, "batch-source", oneTurnLogStepFirst());
     const exported = valueOf<{ items: { zip: string }[] }>(
@@ -385,7 +380,7 @@ describe("sessionAdmin 组", () => {
     expect(events).toHaveLength(6);
   });
 
-  it("delete 拒绝未归档的会话（码带到 wire 上）", async () => {
+  test("delete 拒绝未归档的会话（码带到 wire 上）", async () => {
     const entry = await start();
     await seed(entry, "not-archived");
 
@@ -396,7 +391,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(result)).toBe("SESSION_NOT_ARCHIVED");
   });
 
-  it("delete 拒绝不存在的会话", async () => {
+  test("delete 拒绝不存在的会话", async () => {
     const entry = await start();
 
     const result = await entry.handlers.invoke("sessionAdmin/delete", {
@@ -406,7 +401,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(result)).toBe("SESSION_NOT_FOUND");
   });
 
-  it("bulkDelete 逐条返回结果：可删的删掉，未归档的带 SESSION_NOT_ARCHIVED（整批不回滚）", async () => {
+  test("bulkDelete 逐条返回结果：可删的删掉，未归档的带 SESSION_NOT_ARCHIVED（整批不回滚）", async () => {
     const entry = await start();
     await seed(entry, "bulk-deletable", oneTurnLogStepFirst());
     await seed(entry, "bulk-kept", oneTurnLogStepFirst());
@@ -439,7 +434,7 @@ describe("sessionAdmin 组", () => {
     expect(rows.items.map((item) => item.sessionId)).toEqual(["bulk-kept"]);
   });
 
-  it("rows 的结构化过滤（归档 / 来源 / 时间）在宿主侧生效", async () => {
+  test("rows 的结构化过滤（归档 / 来源 / 时间）在宿主侧生效", async () => {
     const entry = await start();
     await seed(entry, "filter-archived", oneTurnLogStepFirst());
     await seed(entry, "filter-kept", twoTurnLog());
@@ -468,7 +463,7 @@ describe("sessionAdmin 组", () => {
     expect(unarchived.items.map((item) => item.sessionId)).toEqual(["filter-kept"]);
   });
 
-  it("organize 停掉运行中的 agent、回收孤儿并重算统计", async () => {
+  test("organize 停掉运行中的 agent、回收孤儿并重算统计", async () => {
     const entry = await start();
     await seed(entry, "organize-1");
 
@@ -482,7 +477,7 @@ describe("sessionAdmin 组", () => {
     expect(value.rebuiltSessions).toBe(1);
   });
 
-  it("locate 回命中片段与窗口（事件文本一律 LIKE，条件下推到宿主）", async () => {
+  test("locate 回命中片段与窗口（事件文本一律 LIKE，条件下推到宿主）", async () => {
     const entry = await start();
     await seed(
       entry,
@@ -506,7 +501,7 @@ describe("sessionAdmin 组", () => {
     expect(value.window).toEqual({ fromSeq: 0, toSeq: 5 });
   });
 
-  it("locate 的窗口越界把 SESSION_QUERY_INVALID_WINDOW 带到 wire 上", async () => {
+  test("locate 的窗口越界把 SESSION_QUERY_INVALID_WINDOW 带到 wire 上", async () => {
     const entry = await start();
     await seed(entry, "locate-oob");
 
@@ -517,7 +512,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(result)).toBe("SESSION_QUERY_INVALID_WINDOW");
   });
 
-  it("repair 修掉坏尾部并回报保留 / 丢弃条数", async () => {
+  test("repair 修掉坏尾部并回报保留 / 丢弃条数", async () => {
     const entry = await start();
     await seed(entry, "repair-tail", twoTurnLog());
     await corruptEvent(entry, "repair-tail", 4);
@@ -538,7 +533,7 @@ describe("sessionAdmin 组", () => {
     expect(events.map((event) => event.seq)).toEqual([0, 1, 2, 3]);
   });
 
-  it("repair 删除未归档的会话带 SESSION_NOT_ARCHIVED（删除守卫原样到 wire）", async () => {
+  test("repair 删除未归档的会话带 SESSION_NOT_ARCHIVED（删除守卫原样到 wire）", async () => {
     const entry = await start();
     await seed(entry, "repair-kept");
 
@@ -549,7 +544,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(result)).toBe("SESSION_NOT_ARCHIVED");
   });
 
-  it("repair 的非法 action 带自己的域码，不是网关兜底码", async () => {
+  test("repair 的非法 action 带自己的域码，不是网关兜底码", async () => {
     const entry = await start();
     await seed(entry, "repair-bogus");
 
@@ -561,7 +556,7 @@ describe("sessionAdmin 组", () => {
     expect(errorCodeOf(result)).toBe("SESSION_REPAIR_INVALID_ACTION");
   });
 
-  it("consistency 回报体检结果：干净库 ok，扫过的行数给出", async () => {
+  test("consistency 回报体检结果：干净库 ok，扫过的行数给出", async () => {
     const entry = await start();
     await seed(entry, "check-clean", oneTurnLogStepFirst());
 
@@ -577,7 +572,7 @@ describe("sessionAdmin 组", () => {
     expect(value.checked).toMatchObject({ sessions: 1, events: 6 });
   });
 
-  it("consistency 把派生统计的不一致项列出来（ok 为假）", async () => {
+  test("consistency 把派生统计的不一致项列出来（ok 为假）", async () => {
     const entry = await start();
     await seed(entry, "check-drifted", twoTurnLog());
     const sqlite = await openInitializedSqlite(

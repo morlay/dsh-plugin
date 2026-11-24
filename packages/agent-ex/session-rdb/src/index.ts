@@ -10,6 +10,7 @@ export { SessionPersistenceRdb, type RdbConfig } from "./admin/store.ts";
 export { SessionQueryRdb } from "./admin/query.ts";
 export { SessionEditorDefault } from "./editor/service.ts";
 export { SessionBranchRdb } from "./data/store/branch/index.ts";
+export { SessionBranchingRdb } from "./server/session-branching.service.ts";
 export { SessionProjectionCacheRdb } from "./storage/projection-cache.service.ts";
 
 // 实现细节与纯函数：编辑计划、日志编解码、读视图修复、KV 域接管。

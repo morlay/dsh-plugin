@@ -4,7 +4,7 @@
 //   - 高 seq 胜（重放帧与旧帧不能盖新值）；
 //   - cached 行（`session/list` 那一瞥）永远让位给 sequenced 行；
 //   - `seed(baseline)` 先丢 cached、再按 seq 落值、最后清掉基线没有的键（但不清更新的）。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { ProjectionValueStore } from "../projection-store.ts";
 
 /** 一次性读出某个键的值（同步，store 内部直接读行）。 */
@@ -13,7 +13,7 @@ function valueOf(store: ProjectionValueStore, key: string): unknown {
 }
 
 describe("ProjectionValueStore", () => {
-  it("sequenced：高 seq 胜，重放与旧帧都丢掉", () => {
+  test("sequenced：高 seq 胜，重放与旧帧都丢掉", () => {
     const store = new ProjectionValueStore();
     store.apply("permissions", { currentValue: "workspace-write" }, 5);
     expect(valueOf(store, "permissions")).toEqual({ currentValue: "workspace-write" });
@@ -30,7 +30,7 @@ describe("ProjectionValueStore", () => {
     expect(store.seqOf("permissions")).toBe(9);
   });
 
-  it("cached：只填没有 sequenced 行的键，且任何 sequenced 写入都能盖掉它", () => {
+  test("cached：只填没有 sequenced 行的键，且任何 sequenced 写入都能盖掉它", () => {
     const store = new ProjectionValueStore();
     store.applyCached({ permissions: { currentValue: "read-only" }, title: "会话" });
     expect(valueOf(store, "permissions")).toEqual({ currentValue: "read-only" });
@@ -46,7 +46,7 @@ describe("ProjectionValueStore", () => {
     expect(valueOf(store, "title")).toBe("旧标题");
   });
 
-  it("seed：先丢 cached、按 seq 落值、清掉基线没有的键（不清更新的）", () => {
+  test("seed：先丢 cached、按 seq 落值、清掉基线没有的键（不清更新的）", () => {
     const store = new ProjectionValueStore();
     store.applyCached({ title: "cached 标题", permissions: { currentValue: "read-only" } });
     store.apply("modelSelection", { provider: "p", model: "m" }, 20);
@@ -64,7 +64,7 @@ describe("ProjectionValueStore", () => {
     });
   });
 
-  it("face 是 identity-stable 的，订阅者在变化后收到通知", { timeout: 5_000 }, async () => {
+  test("face 是 identity-stable 的，订阅者在变化后收到通知", { timeout: 5_000 }, async () => {
     const store = new ProjectionValueStore();
     const first = store.faceOf("permissions");
     expect(store.faceOf("permissions"), "同一个键只给一个 face").toBe(first);
@@ -84,7 +84,7 @@ describe("ProjectionValueStore", () => {
     expect(notified, "退订后不再通知").toBe(1);
   });
 
-  it("values() 引用稳定；clear() 清值但保留 face", () => {
+  test("values() 引用稳定；clear() 清值但保留 face", () => {
     const store = new ProjectionValueStore();
     const face = store.faceOf("title");
     store.apply("title", "标题", 1);

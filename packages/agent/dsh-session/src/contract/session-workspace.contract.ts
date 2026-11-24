@@ -23,6 +23,19 @@ export interface SessionWorkspaceTarget {
   attach(sessionId: SessionId): Promise<void>;
 }
 
+/**
+ * 目标工作区不在注册表里：`resolve` 的**可判定失败**。
+ *
+ * 为什么要一个类：编排（复制到工作区）要按原因给不同的 wire 域码，「没这个工作区」与「解析失败」
+ * 不能混成一条；调用方按 `instanceof` 判，不解析文案。
+ */
+export class SessionWorkspaceNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SessionWorkspaceNotFoundError";
+  }
+}
+
 @Injectable()
 export abstract class SessionWorkspace {
   /**

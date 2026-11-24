@@ -4,6 +4,8 @@
 // 这条也守住装配面的一条硬要求：`WorkspaceRegistry` 读 `ctx.logger`，所以 `Workspace` 行必须显式把
 // `Logger` 交进去——缺了它 mount 就会失败（而不是在 `reportFilteredCandidates` 里变成
 // `Cannot read properties of undefined (reading 'warn')` 这种不可读的运行时错误）。
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, mkdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,11 +18,11 @@ import { SessionStoreDefault } from "@morlay/dsh-session";
 import { SessionPersistenceDefault } from "@morlay/dsh-session-persistence";
 import { provideStorage } from "@morlay/dsh-storage";
 import { provideStorageJson, StorageJsonDefault } from "@morlay/dsh-storage";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { WorkspaceBroadcaster } from "../workspace-broadcaster.service.ts";
 import { SessionWorkspaceHost } from "../server/session-workspace.host.ts";
 import { WorkspaceControllerRow } from "../server/workspace-controller.host.ts";
-import { FakeAppEnv } from "./support/fake-app-env.ts";
 
 /** 目录选择不参与这条用例，但要满足 controller 的依赖。 */
 @Injectable()
@@ -30,19 +32,10 @@ class NoopPicker extends DirectoryPickerBackend {
   }
 }
 
-const opened: { dispose(): Promise<void> }[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 /** 起真 host 栈（storage 落临时目录）。 */
 async function boot(): Promise<{ handlers: RemoteHandlers; dataDir: string }> {
   const dataDir = await mkdtemp(join(tmpdir(), "dsh-workspace-"));
-  roots.push(dataDir);
-  FakeAppEnv.root = dataDir;
+  onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideTypert(),
@@ -50,7 +43,7 @@ async function boot(): Promise<{ handlers: RemoteHandlers; dataDir: string }> {
       ...provideApiGateway(),
       ...provideRemoteAccess(),
 
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: dataDir }) },
       ...provideStorage(),
       ...provideStorageJson(configure(StorageJsonDefault, { root: join(dataDir, "storages") })),
       SessionPersistenceDefault,
@@ -63,12 +56,12 @@ async function boot(): Promise<{ handlers: RemoteHandlers; dataDir: string }> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { handlers: app.get(RemoteHandlers), dataDir };
 }
 
 describe("workspace/create 的真装配", { timeout: 30_000 }, () => {
-  it("落到持久化，并让活跃的 follow 流收到 upsert", async () => {
+  test("落到持久化，并让活跃的 follow 流收到 upsert", async () => {
     const { handlers, dataDir } = await boot();
     const workspacePath = join(dataDir, "项目");
     await mkdir(workspacePath);
@@ -107,7 +100,7 @@ describe("workspace/create 的真装配", { timeout: 30_000 }, () => {
     expect(stored).toContain(canonical);
   });
 
-  it("同一目录再建一次是幂等的（created=false）", async () => {
+  test("同一目录再建一次是幂等的（created=false）", async () => {
     const { handlers, dataDir } = await boot();
     const workspacePath = join(dataDir, "项目");
     await mkdir(workspacePath);

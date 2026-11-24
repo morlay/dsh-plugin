@@ -22,19 +22,12 @@ import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { Subprocess } from "@morlay/dsh-shell";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { bootstrapApplication, type App, configure, type Context } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 30_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const root = await mkdtemp(join(tmpdir(), "dsh-ptc-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSessionProjection(),
@@ -52,7 +45,7 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 30_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -66,7 +59,7 @@ function freshScope(app: App): Context {
 }
 
 describe("ptc 域", () => {
-  it("令牌由上游 `NodePtcRuntimeService` 兑现", { timeout: 30_000 }, async () => {
+  test("令牌由上游 `NodePtcRuntimeService` 兑现", { timeout: 30_000 }, async () => {
     const app = await boot();
     const scope = freshScope(app);
     await app.get(AgentScopedRows).install(scope);
@@ -75,7 +68,7 @@ describe("ptc 域", () => {
     expect(scope.get("ptcRuntime")).toBeInstanceOf(NodePtcRuntimeService);
   });
 
-  it(
+  test(
     "它要的四个依赖在同一个装配里就位（fs / subprocess / sandbox / sandboxPolicy）",
     { timeout: 30_000 },
     async () => {

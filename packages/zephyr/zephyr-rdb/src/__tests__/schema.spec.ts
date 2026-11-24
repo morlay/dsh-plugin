@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   aliasedTable,
   createDialect,
@@ -44,7 +44,7 @@ const catalog = defineCatalog([
 ]);
 
 describe("DDL 由表定义生成", () => {
-  it("SQLite 与 PostgreSQL 各自的类型 / 主键 / 引用", () => {
+  test("SQLite 与 PostgreSQL 各自的类型 / 主键 / 引用", () => {
     const sqlite = createDialect("sqlite");
     const item = catalog[0]!;
     const sqliteSql = createTableSql(sqlite, item);
@@ -67,7 +67,7 @@ describe("DDL 由表定义生成", () => {
 });
 
 describe("ensureSchema 只做增", () => {
-  it("建表、补列、补索引，并且重复执行是幂等的", async () => {
+  test("建表、补列、补索引，并且重复执行是幂等的", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const { statements: first } = await ensureSchema(database, catalog);
@@ -99,7 +99,7 @@ describe("ensureSchema 只做增", () => {
     }
   });
 
-  it("已有数据的表加 NOT NULL 列（无默认值）时 fail loud", async () => {
+  test("已有数据的表加 NOT NULL 列（无默认值）时 fail loud", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, catalog);
@@ -115,7 +115,7 @@ describe("ensureSchema 只做增", () => {
     }
   });
 
-  it("catalog 注入后按表名取表；允许破坏性变更时才删多余列", async () => {
+  test("catalog 注入后按表名取表；允许破坏性变更时才删多余列", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, catalog);
@@ -131,7 +131,7 @@ describe("ensureSchema 只做增", () => {
 });
 
 describe("SQLite 连接调优选项", () => {
-  it("cacheSizeKb / mmapSize 落到 PRAGMA（连接级，从同一连接读回）", async () => {
+  test("cacheSizeKb / mmapSize 落到 PRAGMA（连接级，从同一连接读回）", async () => {
     const { openDatabase } = await import("@morlay/zephyr-rdb");
     const { fragment } = await import("@morlay/zephyr-rdb");
     const path = `/tmp/zephyr-rdb-pragma-${Date.now()}.sqlite`;
@@ -162,7 +162,7 @@ describe("部分索引", () => {
     indexes: { idx_events_active: { columns: ["f_id"], where: '"f_active" = 1' } },
   });
 
-  it("DDL 带 WHERE：建表与补建索引都保留条件", async () => {
+  test("DDL 带 WHERE：建表与补建索引都保留条件", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       const result = await ensureSchema(database, [events]);
@@ -216,7 +216,7 @@ describe("PostgreSQL 自定义 schema", () => {
   const items = catalog[0]!;
   const links = catalog[1]!;
 
-  it("DDL 的建表 / 外键引用 / 补列 / 索引都带 schema", () => {
+  test("DDL 的建表 / 外键引用 / 补列 / 索引都带 schema", () => {
     const createLinks = createTableSql(postgres, links, "dsh_test");
     expect(createLinks).toContain('CREATE TABLE IF NOT EXISTS "dsh_test"."t_links"');
     expect(createLinks).toContain('REFERENCES "dsh_test"."t_items"("f_owner")');
@@ -239,7 +239,7 @@ describe("PostgreSQL 自定义 schema", () => {
     expect(statements.every((statement) => statement.includes('"dsh_test".'))).toBe(true);
   });
 
-  it("表句柄的读写与 join 都指向配置的 schema", async () => {
+  test("表句柄的读写与 join 都指向配置的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
     const table = database.table(items);
     await table.insert({ f_owner: "a", f_count: 1, f_active: true });
@@ -265,7 +265,7 @@ describe("PostgreSQL 自定义 schema", () => {
     ).toContain('JOIN "dsh_test"."t_links"');
   });
 
-  it("ensureSchema 与结构探测缺省用连接上的 schema", async () => {
+  test("ensureSchema 与结构探测缺省用连接上的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
     const { statements: applied } = await ensureSchema(database, [items]);
     expect(
@@ -279,7 +279,7 @@ describe("PostgreSQL 自定义 schema", () => {
     expect(statements[0]!.params).toEqual(["dsh_test", "t_items"]);
   });
 
-  it("迁移账本的建表 / 读 / 记账都在配置的 schema", async () => {
+  test("迁移账本的建表 / 读 / 记账都在配置的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
     const migrations = [{ id: "20261109-probe", up: async () => {} }];
     expect(await runMigrations(database, { catalog: [items], migrations })).toEqual({
@@ -298,7 +298,7 @@ describe("PostgreSQL 自定义 schema", () => {
     );
   });
 
-  it("objectNames 查配置的 schema", async () => {
+  test("objectNames 查配置的 schema", async () => {
     const { database, statements } = recordingPostgres("dsh_test");
     await database.objectNames();
     expect(statements).toHaveLength(1);
@@ -314,7 +314,7 @@ describe("schema 机制漏掉的两处也走方言", () => {
   const sqlite = createDialect("sqlite");
   const items = catalog[0]!;
 
-  it("dropIndexSql：SQLite 不带前缀，PostgreSQL 带 schema", () => {
+  test("dropIndexSql：SQLite 不带前缀，PostgreSQL 带 schema", () => {
     expect(dropIndexSql(sqlite, "idx_items_owner")).toBe('DROP INDEX IF EXISTS "idx_items_owner"');
     expect(dropIndexSql(postgres, "idx_items_owner")).toBe(
       'DROP INDEX IF EXISTS "public"."idx_items_owner"',
@@ -324,13 +324,13 @@ describe("schema 机制漏掉的两处也走方言", () => {
     );
   });
 
-  it("aliasedTable：带 schema 与不带 schema", () => {
+  test("aliasedTable：带 schema 与不带 schema", () => {
     expect(aliasedTable(sqlite, items, "i")).toBe('"t_items" AS "i"');
     expect(aliasedTable(postgres, items, "i")).toBe('"public"."t_items" AS "i"');
     expect(aliasedTable(postgres, items, "i", "dsh_test")).toBe('"dsh_test"."t_items" AS "i"');
   });
 
-  it("这两处的标识符校验没有因为加参数而放宽", () => {
+  test("这两处的标识符校验没有因为加参数而放宽", () => {
     expect(() => dropIndexSql(postgres, 'idx"; DROP TABLE x; --', "dsh_test")).toThrow(
       /invalid index/u,
     );
@@ -344,7 +344,7 @@ describe("schema 机制漏掉的两处也走方言", () => {
   });
 
   // 索引名不能走表名那条路：报错要说是索引，规则也不跟着表名的校验漂。
-  it("索引名自己的标识符校验（报错说 index，不冒充 table）", () => {
+  test("索引名自己的标识符校验（报错说 index，不冒充 table）", () => {
     expect(() => dropIndexSql(postgres, "bad-index", "dsh_test")).toThrow(
       /zephyr-rdb: invalid index 'bad-index'/u,
     );

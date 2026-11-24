@@ -4,7 +4,7 @@
 // `../../schema-form/testing/discriminated-config.ts`（原 `session-rdb` 那份的形状）。
 
 import z from "@deepseek-ai/schemastery";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import { discriminatedConfig } from "../schema-form/testing/discriminated-config.ts";
 import { addableAt, fieldKey } from "../schema-form/controller.ts";
 import type { SchemaFormState } from "../schema-form/controller.ts";
@@ -63,7 +63,7 @@ function fieldPaths(lines: readonly EditorLine[]): string[] {
 }
 
 describe("判别式配置排出的行", () => {
-  it("判别式配置的 type 是标签：那一行带切换，切到另一支就换一整套字段", () => {
+  test("判别式配置的 type 是标签：那一行带切换，切到另一支就换一整套字段", () => {
     const sqlite = linesOf(discriminatedConfig, { type: "sqlite", path: "/tmp/a.db" });
     const tag = lineAt(sqlite, "type");
 

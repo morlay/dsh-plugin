@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { column, E, operandSql, render } from "@morlay/zephyr-rdb";
 
 // 表达式 → 某方言的 SQL 文本（不需要连库）。
@@ -10,14 +10,14 @@ function sqlOf(
 }
 
 describe("业务表达式（方言相关的由本包渲染）", () => {
-  it("add：列自增与 upsert 里的 excluded 累加", () => {
+  test("add：列自增与 upsert 里的 excluded 累加", () => {
     expect(sqlOf(E.add(column("f_revision"), 1), "sqlite")).toBe('"f_revision" + ?');
     expect(sqlOf(E.add(column("f_count"), E.excluded("f_count")), "postgres")).toBe(
       '"f_count" + excluded."f_count"',
     );
   });
 
-  it("toInt / countIf：布尔条件当整数列与条件计数", () => {
+  test("toInt / countIf：布尔条件当整数列与条件计数", () => {
     expect(sqlOf(E.toInt(E.eq(column("f_origin", "t_sessions"), "subagent")), "sqlite")).toBe(
       'CASE WHEN "t_sessions"."f_origin" = ? THEN 1 ELSE 0 END',
     );
@@ -26,13 +26,13 @@ describe("业务表达式（方言相关的由本包渲染）", () => {
     );
   });
 
-  it("maxOf：只增不减（两方言同一份 CASE 表达式）", () => {
+  test("maxOf：只增不减（两方言同一份 CASE 表达式）", () => {
     expect(sqlOf(E.maxOf(column("f_last_event_at"), 42), "sqlite")).toBe(
       'CASE WHEN COALESCE("f_last_event_at", 0) < ? THEN ? ELSE COALESCE("f_last_event_at", 0) END',
     );
   });
 
-  it("localDay：按本地时区把毫秒时间戳渲染成 YYYY-MM-DD", () => {
+  test("localDay：按本地时区把毫秒时间戳渲染成 YYYY-MM-DD", () => {
     expect(sqlOf(E.localDay(column("f_created_at")), "sqlite")).toBe(
       "date(\"f_created_at\" / 1000, 'unixepoch', 'localtime')",
     );
@@ -41,7 +41,7 @@ describe("业务表达式（方言相关的由本包渲染）", () => {
     );
   });
 
-  it("jsonText / jsonInt：JSON 提取按方言渲染，路径不拼进 SQL 文本", () => {
+  test("jsonText / jsonInt：JSON 提取按方言渲染，路径不拼进 SQL 文本", () => {
     expect(sqlOf(E.jsonText(column("f_data"), "$.data.message.source.provider"), "sqlite")).toBe(
       'json_extract("f_data", ?)',
     );
@@ -56,7 +56,7 @@ describe("业务表达式（方言相关的由本包渲染）", () => {
     );
   });
 
-  it("方言分支只保留本方言的占位符（不产生多余绑定参数）", () => {
+  test("方言分支只保留本方言的占位符（不产生多余绑定参数）", () => {
     const expression = E.localDay(column("f_created_at"));
     expect(render(operandSql(expression), "sqlite").params).toEqual([]);
     expect(render(operandSql(expression), "postgres").params).toEqual([]);

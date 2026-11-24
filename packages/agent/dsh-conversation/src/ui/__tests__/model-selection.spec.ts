@@ -28,7 +28,7 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionController } from "../../contract/index.ts";
 import { provideSessionsStore } from "../sessions.provide.ts";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { ModelSelectionSlots } from "../model-selection-slots.ts";
 
 /** 宿主的目录帧：两个 provider 分组，`a/m1` 是当前选择。 */
@@ -442,7 +442,7 @@ async function seatOf(slots: Slots): Promise<{ injected: SeatInjected; undo: () 
 // `control` 是**广播**式的（与宿主 `SessionControlController` 同形：每个订阅者都收到每一帧），
 // 并且能被 `dropStreams()` 掐断——换代时旧 socket 上的流就是这么断的。
 describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
-  it("`conversation.input.model` 座位注册出来（输入框旁的选择器就靠它上屏）", async () => {
+  test("`conversation.input.model` 座位注册出来（输入框旁的选择器就靠它上屏）", async () => {
     const { slots, dispose } = await boot();
     try {
       const undo = slots.registerDynamic(
@@ -466,7 +466,7 @@ describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
     }
   });
 
-  it("目录来自 `session/modelCatalog`，选中走 `session/selectModel`", async () => {
+  test("目录来自 `session/modelCatalog`，选中走 `session/selectModel`", async () => {
     const { slots, dispose } = await boot();
     try {
       const { injected, undo } = await seatOf(slots);
@@ -500,7 +500,7 @@ describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
     }
   });
 
-  it("宿主推来 `modelSelection` 投影帧后，座位**立即**显示新模型（不许等刷新）", async () => {
+  test("宿主推来 `modelSelection` 投影帧后，座位**立即**显示新模型（不许等刷新）", async () => {
     const { app, slots, dispose } = await boot();
     try {
       const { injected, undo } = await seatOf(slots);
@@ -538,7 +538,7 @@ describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
     }
   });
 
-  it("座位先建、投影键后到：目录也要跟上（不是只认建目录那一刻的快照）", async () => {
+  test("座位先建、投影键后到：目录也要跟上（不是只认建目录那一刻的快照）", async () => {
     // 这一条钉的是候选 A 的机理：基线与帧都来得**晚于**目录构造时，
     // 目录持有的 `binding.session.projections.faceOf('modelSelection')` 会不会跟着更新。
     const { app, slots, dispose } = await boot({ baselineValues: {} });
@@ -574,7 +574,7 @@ describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
     }
   });
 
-  it("换连接代之后重开 `session/control`：重连过的界面也要跟着宿主更新", async () => {
+  test("换连接代之后重开 `session/control`：重连过的界面也要跟着宿主更新", async () => {
     const { app, slots, dispose } = await boot();
     try {
       const { injected, undo } = await seatOf(slots);
@@ -618,7 +618,7 @@ describe("模型选择器那一行接上了没有", { timeout: 15_000 }, () => {
     }
   });
 
-  it("选强度也走 `session/selectModel`，且把 `reasoningEffort` 带进载荷", async () => {
+  test("选强度也走 `session/selectModel`，且把 `reasoningEffort` 带进载荷", async () => {
     const { slots, dispose } = await boot();
     try {
       const { injected, undo } = await seatOf(slots);

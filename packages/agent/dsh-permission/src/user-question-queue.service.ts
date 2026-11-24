@@ -13,22 +13,19 @@ import { RemoteQuestions } from "@morlay/zephyr-app";
 import { AgentDirectory } from "@morlay/dsh-agent";
 import { scopeTarget } from "@morlay/dsh-agent/contract";
 import { SessionStore } from "@morlay/dsh-session";
-import { inject, Injectable, kFace, type Context } from "@morlay/zephyr";
+import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { UserQuestionQueue } from "./contract/user-question-queue.contract.ts";
-
 /** 上游实例上的 `ask`（注入方拿到的就是那个实例）。 */
 interface QuestionFace {
   ask: (request: QuestionRequest) => Promise<unknown>;
 }
-
 /** 一次提问请求里我们要读的字段（与上游 `AskUserQuestionRequest` 同形）。 */
 interface QuestionRequest {
   readonly questions: readonly QuestionItem[];
   readonly agent?: object;
   readonly signal?: AbortSignal;
 }
-
 /** 单条问题里参与校验的字段。 */
 interface QuestionItem {
   readonly id: string;
@@ -41,29 +38,26 @@ interface QuestionItem {
   readonly detail?: string;
   readonly options?: readonly { readonly label: string }[];
 }
-
 @Injectable()
 export class UserQuestionQueueDefault extends fromCordis(UserQuestionQueue, UserQuestionService) {
   private readonly sessions = inject(SessionStore);
-
   private readonly agents = inject(AgentDirectory);
-
   /**
    * 请求侧：把问题直接推到浏览器的帧队列（不经 cordis 的事件派发）。
    *
    * **可选**：只装权限域的装配（纯端点测试）没有 wire 面，那里提问本来就没人可问。
    */
   private readonly questions = inject.optional(RemoteQuestions);
-
   override async onInit(ctx: Context): Promise<void> {
-    await this.mount(ctx, undefined, { sessions: this.sessions, agents: this.agents });
-    // 契约面：适配行把上游发布的服务记在 kFace 上，注入方拿到的就是它。
-    const face = this[kFace] as QuestionFace | undefined;
+    // 契约面就是 `mount` 的返回值（适配行把它作为上游实例交回来），注入方拿到的也是它。
+    const face = (await this.mount(ctx, undefined, {
+      sessions: this.sessions,
+      agents: this.agents,
+    })) as QuestionFace | undefined;
     if (face === undefined || typeof face.ask !== "function") return;
     face.ask = async (request) => await askThrough(ctx, this.questions, request);
   }
 }
-
 /**
  * 把一次提问交给请求侧（直接推到浏览器的帧队列），本地校验按上游那几条口径。
  * @param questions - 请求侧（`RemoteQuestions`）。
@@ -101,7 +95,6 @@ async function askThrough(
     throw new UserQuestionError((error as Error).message, "NO_PROVIDER");
   }
 }
-
 /**
  * 上游那几条本地校验里我们真的会走到的部分：空清单、intent 的标签必须是本问题的选项。
  * @param questions - 模型给的提问清单。

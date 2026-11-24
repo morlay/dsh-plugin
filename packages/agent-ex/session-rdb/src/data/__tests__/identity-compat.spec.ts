@@ -13,17 +13,12 @@ import {
 } from "@morlay/session-rdb";
 import { identityFingerprint } from "@morlay/zephyr-rdb";
 import { openSqliteHandle } from "@morlay/zephyr-rdb/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { classifyStoredApplicationId } from "../store/identity.ts";
 
 // 本库更早版本用的身份魔数（ASCII "DSHP"）：用户库上读到的就是这个值。
 const LEGACY_APPLICATION_ID = 0x44534850; // 1146308688
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
 
 // 归一：有符号 int32 与无符号 32 位是同一个身份（比较前两侧都走这里）。
 function normalize(value: number): number {
@@ -37,7 +32,7 @@ function fingerprintNumber(fingerprint: string): number {
 
 async function tempDatabasePath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "dsh-identity-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   return join(root, "sessions.sqlite");
 }
 
@@ -48,7 +43,7 @@ function openBackend(path: string): Promise<Awaited<ReturnType<typeof openRdbBac
 const CURRENT_FINGERPRINT = normalize(identityFingerprint("dsh-session"));
 
 describe("库身份兼容（旧身份 / 32 位表示）", () => {
-  it("旧身份库（application_id = 1146308688）能打开，且打开后就地升级为新指纹", async () => {
+  test("旧身份库（application_id = 1146308688）能打开，且打开后就地升级为新指纹", async () => {
     const path = await tempDatabasePath();
     // 一份**本仓早先版本写下的库**：结构齐全（user_version = SCHEMA_VERSION），身份还是旧魔数。
     const original = await openBackend(path);
@@ -82,7 +77,7 @@ describe("库身份兼容（旧身份 / 32 位表示）", () => {
     await reopened.close();
   });
 
-  it("只有旧身份戳、还没有结构的旧库也能打开并升级", async () => {
+  test("只有旧身份戳、还没有结构的旧库也能打开并升级", async () => {
     const path = await tempDatabasePath();
     const legacy = openSqliteHandle(path);
     legacy.exec(`PRAGMA application_id = ${String(LEGACY_APPLICATION_ID)}`);
@@ -96,7 +91,7 @@ describe("库身份兼容（旧身份 / 32 位表示）", () => {
     expect(fingerprintNumber(stored?.fingerprint ?? "0")).toBe(CURRENT_FINGERPRINT);
   });
 
-  it("新指纹写入后重开不报错（有符号写入与无符号读回是同一表示）", async () => {
+  test("新指纹写入后重开不报错（有符号写入与无符号读回是同一表示）", async () => {
     const path = await tempDatabasePath();
     const first = await openBackend(path);
     const stored = await first.database.readIdentity();
@@ -115,7 +110,7 @@ describe("库身份兼容（旧身份 / 32 位表示）", () => {
     expect(fingerprintNumber(again?.fingerprint ?? "0")).toBe(CURRENT_FINGERPRINT);
   });
 
-  it("同一 32 位的两种表示是同一个身份：有符号写入 / 无符号读回都认成当前身份", () => {
+  test("同一 32 位的两种表示是同一个身份：有符号写入 / 无符号读回都认成当前身份", () => {
     // 写入值是 int32（-80036999），读回口径是无符号 32 位（4214930297）：比较前两侧都归一，
     // 否则新库每次启动都会被判成「别人的库」。
     expect(classifyStoredApplicationId(SESSION_PERSISTENCE_SQLITE_APPLICATION_ID)).toBe("current");
@@ -126,7 +121,7 @@ describe("库身份兼容（旧身份 / 32 位表示）", () => {
     expect(classifyStoredApplicationId(12345)).toBe("foreign");
   });
 
-  it("不认识的 application_id 仍拒绝（库原样不动）", async () => {
+  test("不认识的 application_id 仍拒绝（库原样不动）", async () => {
     const path = await tempDatabasePath();
     const foreign = openSqliteHandle(path);
     foreign.exec("PRAGMA application_id = 12345");
@@ -147,7 +142,7 @@ describe("库身份兼容（旧身份 / 32 位表示）", () => {
     unchanged.close();
   });
 
-  it("application_id 只按 int32 收：无符号值会被吞成 0，所以写入侧必须保持有符号", async () => {
+  test("application_id 只按 int32 收：无符号值会被吞成 0，所以写入侧必须保持有符号", async () => {
     const path = await tempDatabasePath();
     const sqlite = openSqliteHandle(path);
     // 归一后的无符号值（4214930297）超出 int32，SQLite 静默写成 0——身份就没了。

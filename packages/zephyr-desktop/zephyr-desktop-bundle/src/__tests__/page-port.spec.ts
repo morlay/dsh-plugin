@@ -1,7 +1,7 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   PAGE_PORT_FILE,
   parsePort,
@@ -21,7 +21,7 @@ async function rawPortOf(userData: string): Promise<string> {
 }
 
 describe("页面端口：解析", () => {
-  it("只认 1024–65535 的整数，坏内容当没有", () => {
+  test("只认 1024–65535 的整数，坏内容当没有", () => {
     expect(parsePort("50001")).toBe(50001);
     expect(parsePort(" 3080\n")).toBe(3080);
     for (const raw of ["80", "70000", "abc", "3080.5", "", "  ", undefined, "-1"]) {
@@ -31,14 +31,14 @@ describe("页面端口：解析", () => {
 });
 
 describe("页面端口：选哪个（origin 就是存储身份）", () => {
-  it("第一次（没有记录）：探一个并写回", async () => {
+  test("第一次（没有记录）：探一个并写回", async () => {
     const userData = await userDataOf();
     const choice = await portFor({ userData, pick: async () => 50001 });
     expect(choice).toEqual({ kind: "ok", port: 50001, source: "fresh" });
     expect((await rawPortOf(userData)).trim()).toBe("50001");
   });
 
-  it("记过且还空着：直接用那个，不再探新端口", async () => {
+  test("记过且还空着：直接用那个，不再探新端口", async () => {
     const userData = await userDataOf();
     await portFor({ userData, pick: async () => 50001 });
     let picked = false;
@@ -54,7 +54,7 @@ describe("页面端口：选哪个（origin 就是存储身份）", () => {
     expect(picked).toBe(false);
   });
 
-  it("记过但被外部进程占着：报冲突，**不换端口**（换了就是把页面存储另起一份）", async () => {
+  test("记过但被外部进程占着：报冲突，**不换端口**（换了就是把页面存储另起一份）", async () => {
     const userData = await userDataOf();
     await portFor({ userData, pick: async () => 50001 });
     let picked = false;
@@ -71,7 +71,7 @@ describe("页面端口：选哪个（origin 就是存储身份）", () => {
     expect((await rawPortOf(userData)).trim()).toBe("50001");
   });
 
-  it("记录损坏：重新选并写回（来源标 corrupt，好让日志提醒页面存储将另起）", async () => {
+  test("记录损坏：重新选并写回（来源标 corrupt，好让日志提醒页面存储将另起）", async () => {
     const userData = await userDataOf();
     await portFor({ userData, pick: async () => 50001 });
     const { writeFile } = await import("node:fs/promises");
@@ -81,7 +81,7 @@ describe("页面端口：选哪个（origin 就是存储身份）", () => {
     expect((await rawPortOf(userData)).trim()).toBe("50002");
   });
 
-  it("--port 显式值：优先并写回（用户显式选的 origin 就是新的归属）", async () => {
+  test("--port 显式值：优先并写回（用户显式选的 origin 就是新的归属）", async () => {
     const userData = await userDataOf();
     await portFor({ userData, pick: async () => 50001 });
     const choice = await portFor({
@@ -99,7 +99,7 @@ describe("页面端口：选哪个（origin 就是存储身份）", () => {
 describe("页面端口：冲突提示", () => {
   const hint = portConflictHint({ port: 50001, userData: "/home/x/profile" });
 
-  it("说清代价并给三条出口", () => {
+  test("说清代价并给三条出口", () => {
     expect(hint).toContain("50001");
     expect(hint).toContain("/home/x/profile/page-port");
     expect(hint).toContain("不自动换端口");

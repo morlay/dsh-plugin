@@ -5,19 +5,14 @@
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { SessionId, SessionLogOffset } from "@morlay/dsh-session/contract";
 import { asRdbStore } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
 import { meta, oneTurnLogStepFirst, turnLog, twoTurnLog } from "@morlay/dsh-session/testing";
 
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
-
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -39,7 +34,7 @@ async function seed(harness: Harness, id: string, rounds = 1): Promise<void> {
 }
 
 describe("导入覆盖（D1）", () => {
-  it("整段替换后日志与 seed 长度一致，坏包不动原会话，运行中拒绝覆盖", async () => {
+  test("整段替换后日志与 seed 长度一致，坏包不动原会话，运行中拒绝覆盖", async () => {
     const harness = await start();
     await seed(harness, "target");
     await seed(harness, "source", 2);
@@ -71,7 +66,7 @@ describe("导入覆盖（D1）", () => {
     expect((await store.load("target")).events).toHaveLength(12);
   });
 
-  it("覆盖导入把 f_seed_length 收到新 head 之内：未种子的导入件不留旧种子", async () => {
+  test("覆盖导入把 f_seed_length 收到新 head 之内：未种子的导入件不留旧种子", async () => {
     const harness = await start();
     const store = asRdbStore(harness.app.get(SessionPersistence));
     // 目标是一个种子会话：6 条继承前缀 + 两个回合（12 条），于是 f_seed_length = 6。
@@ -99,7 +94,7 @@ describe("导入覆盖（D1）", () => {
     expect((await store.load("seeded-target")).inheritedEventCount).toBe(0);
   });
 
-  it("子代理会话导入后是根会话：父引用与子代理标记都不落库，organize 不会当孤儿删掉它", async () => {
+  test("子代理会话导入后是根会话：父引用与子代理标记都不落库，organize 不会当孤儿删掉它", async () => {
     // 源库只用来造导入件：导入只带一条会话，父会话天然不在目标库里。
     const sourceHarness = await start();
     const sourceStore = asRdbStore(sourceHarness.app.get(SessionPersistence));
@@ -131,7 +126,7 @@ describe("导入覆盖（D1）", () => {
     expect((await store.load(imported)).events).toHaveLength(6);
   });
 
-  it("同一份 zip 重复新建导入产生两个独立会话（不复用 id、不留幽灵）", async () => {
+  test("同一份 zip 重复新建导入产生两个独立会话（不复用 id、不留幽灵）", async () => {
     const harness = await start();
     await seed(harness, "source", 2);
     const store = asRdbStore(harness.app.get(SessionPersistence));

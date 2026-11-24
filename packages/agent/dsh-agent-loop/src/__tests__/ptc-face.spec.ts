@@ -14,14 +14,14 @@
  */
 import { provideAgentLoop, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { without } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 describe("执行器的互斥选择", () => {
-  it("基础清单自带 native 执行器", () => {
+  test("基础清单自带 native 执行器", () => {
     expect(provideAgentLoop()).toContain(ToolExecutorNative);
   });
 
-  it("剔掉 native 后清单里没有它，其余条目一个不少", () => {
+  test("剔掉 native 后清单里没有它，其余条目一个不少", () => {
     const withNative = provideAgentLoop();
     const withoutNative = provideAgentLoop(without(ToolExecutorNative));
     expect(withoutNative).not.toContain(ToolExecutorNative);

@@ -5,7 +5,7 @@
 // 它读的是本包的 descriptor / transport 接缝，与业务行装没装无关。
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { TYPERT_REMOTE as WORKSPACE_REMOTE } from "@deepseek-ai/dsh-api-workspace-controller/remote";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   Remote,
   ClientConnectionDefault,
@@ -16,7 +16,7 @@ import {
 import { within } from "./support/within.ts";
 
 describe("workspace follow 流（假 transport）", { timeout: 15_000 }, () => {
-  it("descriptor 的流式面逐帧产出，abort 透传到传输层", async () => {
+  test("descriptor 的流式面逐帧产出，abort 透传到传输层", async () => {
     let hostAborted = false;
     const transport = mockTransport(
       {},

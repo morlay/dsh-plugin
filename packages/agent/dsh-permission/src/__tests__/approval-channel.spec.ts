@@ -3,10 +3,10 @@
 //
 // 这条用例不需要 UI 应答者，也不需要开 turn：`ApprovalService.request` 在 turn 之外**拒绝**（审计对
 // 必须落在 turn 内），所以执行以拒绝结束、命令一条没跑。这正是「有通道但此刻不能问」的 fail-closed。
+import { onTestFinished } from "vitest";
 import { ToolCallId } from "@morlay/dsh-agent/server";
 import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
-import { access, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
@@ -15,51 +15,30 @@ import { provideSession, provideSessionProjection } from "@morlay/dsh-session/se
 import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
 import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/dsh-sandbox";
 import { provideShell } from "@morlay/dsh-shell/server";
-import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
-import { bootstrapApplication, configure, Injectable, type App } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { providePermissionFor } from "../server/permission.provide.ts";
-
-let root = "";
-
-const opened: App[] = [];
 
 const signal = new AbortController().signal;
 
-/** 运行环境替身（与 agent-loop 的用例同形）：数据根指到临时目录。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  if (root !== "") await rm(root, { recursive: true, force: true });
-}, 30_000);
-
 /** 权限域 + 沙箱工具栈 + 一个真 agent（升级请求要 agent 才能路由到审批）。 */
-async function boot(): Promise<App> {
-  root = await mkdtemp(join(tmpdir(), "dsh-approval-channel-"));
+async function boot(appEnv: TestingAppEnv): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
       ...provideSessionPersistence(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       // 权限域的两个远端端点行要 `remote-handlers`（它们只注册组，不连 mux）。
       RemoteHandlersDefault,
       ...provideAgent(),
       ...provideShell(),
       ...provideSandbox(
-        configure(SandboxPolicyDefault, { mode: "workspace-write", workspaceRoot: root }),
+        configure(SandboxPolicyDefault, {
+          mode: "workspace-write",
+          workspaceRoot: appEnv.values.dataDir,
+        }),
       ),
       ...provideWorkingDirectory(),
       ...provideAgentLoop(),
@@ -69,21 +48,21 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("沙箱升级走的批准通道", () => {
-  it(
+  test(
     "升级请求真的进了本仓的批准服务：不再是「没有批准服务」，而是「此刻不能问」",
     { timeout: 30_000 },
-    async () => {
-      const app = await boot();
+    async ({ appEnv }) => {
+      const app = await boot(appEnv);
       const { agent } = await app.get(AgentDirectory).create({
         sessionId: SessionId("approval-channel"),
-        meta: { cwd: root },
+        meta: { cwd: appEnv.values.dataDir },
       });
-      const marker = join(root, "approval-marker");
+      const marker = join(appEnv.values.dataDir, "approval-marker");
 
       // 用 agent 自己的 scope 跑流水线：工具就登记在这一层。
       const result = await executeToolFixture(agent.ctx, {

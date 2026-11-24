@@ -46,8 +46,7 @@ import { rowToEvent, rowToMeta } from "../data/store/log/rows.ts";
 import { eventFilterCondition, sessionFilterCondition } from "./filters.ts";
 import { SessionProjectionStore, SessionQuery, SessionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
-import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
-import { readWorkspaceRegistry } from "./workspace-registry.read.ts";
+import { inject, Injectable } from "@morlay/zephyr";
 
 import { createObserveCache } from "./observe-cache.ts";
 
@@ -66,24 +65,17 @@ import { availabilityOf, currentSurfaceSeqs, searchDocumentOf } from "./filters.
  * 缺席时观测仍给出日志与游标，只是没有 `projections`——上游语义也是"注册表没装就没有快照"。
  * 代价与 `admin/store.ts` 同一个：提供者要排在会话行之前（zephyr 的 `optional` 参与装配排序）。
  *
- * **工作区注册表是这条规矩的例外**：它那一行（`Workspace`）反过来注入本行的持久化，静态
- * `inject.optional` 会成环并把 workspace 行排到本行之前（理由与后果见 `workspace-registry.read.ts`），
- * 所以它按名**在调用时读**。
+ * **归档集合不从 workspace 域读**：那一行反过来注入本行的持久化，注入边成环会把 workspace 行排到
+ * 本行之前（它在 init 里就 `storageDomain.open("workspace")`，那会儿 `rdb` 还没注册）。归档标记本来就
+ * 落在 workspace 域的同一份存储里，本行的 `archivedSessionIds()` 直接读它——**同一份数据**，少一条边。
  */
 @Injectable()
-export class SessionQueryRdb extends SessionQuery implements OnInit {
+export class SessionQueryRdb extends SessionQuery {
   private readonly sessions = inject(SessionStore);
 
   private readonly persistence = inject(SessionPersistence);
 
   private readonly projections = inject.optional(SessionProjectionStore);
-
-  // 工作区注册表（归档集合与页面上的归档动作同源）按名在调用时读：见文件头的例外说明。
-  private ctx: Context | undefined;
-
-  onInit(ctx: Context): void {
-    this.ctx = ctx;
-  }
 
   // 冷会话观察缓存：按 `(persistenceIdentity, revision)` 命中，容量来自落盘行。
 
@@ -142,12 +134,10 @@ export class SessionQueryRdb extends SessionQuery implements OnInit {
     return ordered.filter((record) => !archived.has(String(record.header.id)));
   }
 
-  // 归档集合：优先读 WorkspaceRegistry（它与页面上的归档动作同源）；注册表不在（headless / 启动早期 /
-  // 测试装配）就退回持久化里的归档标记——"官方列表不含已归档"是这一层的语义，不能因为一个可选服务没到
-  // 就把归档会话又列出来。
+  // 归档集合：**与页面上的归档动作同源**——归档动作写在 workspace 域的存储里，本行读的就是那份
+  // （`asRdbStore().archivedSessionIds()` 读的是同一个 `workspace` 域状态）。所以这里不注入 workspace 域，
+  // 免得注入边成环把 workspace 行排到本行之前（见文件头）。
   private async archivedSessionIds(): Promise<ReadonlySet<string>> {
-    const registry = readWorkspaceRegistry(this.ctx);
-    if (registry !== undefined) return new Set<string>(registry.archivedSessionIds);
     return await asRdbStore(this.persistence).archivedSessionIds();
   }
 

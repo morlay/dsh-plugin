@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   DbError,
   classifyError,
@@ -19,13 +19,13 @@ const readings = defineTable({
 });
 
 describe("健壮性", () => {
-  it("占位符与参数个数不一致时立刻失败（多给一个参数不会被静默丢掉）", () => {
+  test("占位符与参数个数不一致时立刻失败（多给一个参数不会被静默丢掉）", () => {
     expect(() => fragment("SELECT 1 WHERE 1 = ?", []).call(undefined)).toThrow();
     expect(() => fragment("SELECT 1", ["extra"]).call(undefined)).toThrow();
     expect(() => fragment("SELECT ? + ?", [1]).call(undefined)).toThrow();
   });
 
-  it("分页参数非法时 fail loud；单独 OFFSET 在 SQLite 上不是语法错误", async () => {
+  test("分页参数非法时 fail loud；单独 OFFSET 在 SQLite 上不是语法错误", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [readings]);
@@ -45,7 +45,7 @@ describe("健壮性", () => {
     }
   });
 
-  it("RETURNING 与投影给同一套值类型：bigint 是 BigInt、boolean 是 true/false", async () => {
+  test("RETURNING 与投影给同一套值类型：bigint 是 BigInt、boolean 是 true/false", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [readings]);
@@ -64,7 +64,7 @@ describe("健壮性", () => {
     }
   });
 
-  it("写不认识的列 fail loud，不静默丢数据", async () => {
+  test("写不认识的列 fail loud，不静默丢数据", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [readings]);
@@ -78,7 +78,7 @@ describe("健壮性", () => {
     }
   });
 
-  it("错误分类能分派重试：事务冲突、语句取消、连接断开各归一类", () => {
+  test("错误分类能分派重试：事务冲突、语句取消、连接断开各归一类", () => {
     expect(classifyError({ code: "40001", message: "could not serialize" }, "postgres").kind).toBe(
       "retryable",
     );

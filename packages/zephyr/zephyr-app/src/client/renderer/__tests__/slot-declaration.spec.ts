@@ -8,13 +8,8 @@
 import { Logger, bootstrapApplication, type App } from "@morlay/zephyr";
 import { Slots, provideRenderer } from "@morlay/zephyr-app/client";
 import { Injectable } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-});
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 一条空的占位组件（本 spec 只看账本，不渲染）。 */
 const Blank = (): null => null;
@@ -44,12 +39,12 @@ async function boot(): Promise<{ app: App; slots: Slots }> {
     providers: [...provideRenderer(), { provide: Logger, useFactory: () => new RecordingLogger() }],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, slots: app.get(Slots) };
 }
 
 describe("位置声明与 inject 注册", () => {
-  it("父行声明 children 后，子行的 `inject` 会就地注册", async () => {
+  test("父行声明 children 后，子行的 `inject` 会就地注册", async () => {
     const { slots } = await boot();
     const declared = slots.register(
       { name: "root", children: { sidebar: { kind: "single", scope: "root" } } } as never,
@@ -69,7 +64,7 @@ describe("位置声明与 inject 注册", () => {
     undo();
   });
 
-  it("位置没声明时 `inject` 不触发，但卸载时**必须**留下一条 warn（不静默）", async () => {
+  test("位置没声明时 `inject` 不触发，但卸载时**必须**留下一条 warn（不静默）", async () => {
     const { app, slots } = await boot();
     const logged = app.get(Logger);
     expect(logged).toBeInstanceOf(RecordingLogger);

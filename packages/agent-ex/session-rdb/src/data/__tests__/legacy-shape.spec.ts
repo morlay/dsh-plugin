@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,14 +24,9 @@ import { createCtx, mountOnto } from "../../__tests__/support/base.ts";
 //
 // 另一类更隐蔽：版本号不足以决定走哪条路——库里存在「v4 标记 + 旧代形状」的会话，读之前要按内容再判一次。
 
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
-});
-
 async function freshDbPath(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "dsh-legacy-shape-"));
-  dirs.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return join(dir, "sessions.sqlite");
 }
 
@@ -150,7 +146,7 @@ function rewriteToLegacyShapes(path: string, id: string): void {
 }
 
 describe("旧代消息形状的读取", () => {
-  it("normalizes the retired shapes in place", () => {
+  test("normalizes the retired shapes in place", () => {
     const events = [
       {
         type: "system/message",
@@ -198,7 +194,7 @@ describe("旧代消息形状的读取", () => {
     expect((events[3] as unknown as { ignorable?: true }).ignorable).toBeUndefined();
   });
 
-  it("marks our own event types ignorable, whoever wrote them (retired or current)", () => {
+  test("marks our own event types ignorable, whoever wrote them (retired or current)", () => {
     // 上游的已知类型表由上游仓库的声明生成，我们自造的类型按构造就在它之外——读路径因此统一补
     // `ignorable: true`（真回归：`session-mode/selected` 漏登记时整个会话打不开）。
     const events = [
@@ -218,7 +214,7 @@ describe("旧代消息形状的读取", () => {
     ).toBe(true);
   });
 
-  it("flags only the retired own event types and the old message shapes", () => {
+  test("flags only the retired own event types and the old message shapes", () => {
     expect(
       needsShapeAdoption([
         { type: "session-branch/version", seq: SessionSeq(0), time: 0, data: {} },
@@ -242,7 +238,7 @@ describe("旧代消息形状的读取", () => {
     ).toBe(false);
   });
 
-  it("loads a v3 session whose events carry the retired shapes", async () => {
+  test("loads a v3 session whose events carry the retired shapes", async () => {
     const path = await freshDbPath();
     const { persistence, load, dispose } = await openHarness(path);
     try {
@@ -259,7 +255,7 @@ describe("旧代消息形状的读取", () => {
     }
   });
 
-  it("loads a session carrying our own current event type (session-mode/selected)", async () => {
+  test("loads a session carrying our own current event type (session-mode/selected)", async () => {
     // 上游的持久化校验只放行「已知类型」或「带可忽略信封的未知类型」，而我们自造的类型按构造就在已知表之外：
     // 会话里一旦有它，读路径必须先把信封补上（真回归：漏登记时整个会话打不开）。
     const path = await freshDbPath();
@@ -285,7 +281,7 @@ describe("旧代消息形状的读取", () => {
     }
   });
 
-  it("loads a current-version session whose events are still the retired shapes", async () => {
+  test("loads a current-version session whose events are still the retired shapes", async () => {
     // 写路径曾把回退视图的结果以当前版本号落库——版本号不可信，按内容判。
     const path = await freshDbPath();
     const { persistence, load, dispose } = await openHarness(path);

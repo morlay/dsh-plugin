@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runInThisContext } from "node:vm";
 import { rolldown } from "rolldown";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { bundleClientFactory } from "../cordis-client.ts";
 import { cssInlinePlugins } from "../css.ts";
 
@@ -72,32 +73,38 @@ function injectedCss(fileName: string): string | undefined {
   );
 }
 
+/**
+ * 建一份 CSS fixture 目录（每条用例一份，用完删）。
+ * @returns 目录路径（canonical：rolldown 报出的 id / watch 路径都是真实路径）。
+ */
+async function fixtureOf(): Promise<string> {
+  // 取 realpath：rolldown 报出的 id / watch 路径都是真实路径（macOS 的 /var → /private/var）。
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "devkit-css-")));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  await mkdir(join(directory, "styles"));
+  await writeFile(join(directory, "styles", "Fixture.module.css"), MODULE_CSS);
+  await writeFile(join(directory, "styles", "global.css"), GLOBAL_CSS);
+  await writeFile(join(directory, "styles", "inline-only.css"), INLINE_CSS);
+  await writeFile(join(directory, "styles", "Whale.module.css"), WHALE_CSS);
+  await writeFile(join(directory, "styles", "big.png"), Buffer.alloc(5000, 7));
+  await writeFile(join(directory, "entry.ts"), FIXTURE_ENTRY);
+  return directory;
+}
+
+/**
+ * 打包 fixture 入口（每条用例一份产物）。
+ * @param directory - fixture 目录。
+ * @returns 打包出来的 CJS 文本。
+ */
+async function codeOf(directory: string): Promise<string> {
+  return await bundleClientFactory({ name: PLUGIN_ID, entry: join(directory, "entry.ts") });
+}
+
 describe("client bundle CSS", () => {
-  let directory: string;
-
-  beforeAll(async () => {
-    // 取 realpath：rolldown 报出的 id / watch 路径都是真实路径（macOS 的 /var → /private/var）。
-    directory = await realpath(await mkdtemp(join(tmpdir(), "devkit-css-")));
-    await mkdir(join(directory, "styles"));
-    await writeFile(join(directory, "styles", "Fixture.module.css"), MODULE_CSS);
-    await writeFile(join(directory, "styles", "global.css"), GLOBAL_CSS);
-    await writeFile(join(directory, "styles", "inline-only.css"), INLINE_CSS);
-    await writeFile(join(directory, "styles", "Whale.module.css"), WHALE_CSS);
-    await writeFile(join(directory, "styles", "big.png"), Buffer.alloc(5000, 7));
-    await writeFile(join(directory, "entry.ts"), FIXTURE_ENTRY);
-  });
-  afterAll(async () => {
-    await rm(directory, { recursive: true, force: true });
-  });
-
   describe("bundleClientFactory", () => {
-    let code: string;
-
-    beforeAll(async () => {
-      code = await bundleClientFactory({ name: PLUGIN_ID, entry: join(directory, "entry.ts") });
-    });
-
-    it("inlines CSS Modules as a hashed class map plus an injected style tag", () => {
+    test("inlines CSS Modules as a hashed class map plus an injected style tag", async () => {
+      const directory = await fixtureOf();
+      const code = await codeOf(directory);
       const classes = runFactory(code)["classes"] as Record<string, string>;
       // `[hash]_[local]`：同一个样式表的每个 local 共享同一段 hash，local 名作为后缀。
       expect(classes["root"]).toMatch(/^[A-Za-z0-9_-]+_root$/);
@@ -107,7 +114,10 @@ describe("client bundle CSS", () => {
       expect(injected).toContain(`.${classes["title"]}{font-weight:700}`);
     });
 
-    it("injects a CSS Modules stylesheet only once across factory runs", () => {
+    test("injects a CSS Modules stylesheet only once across factory runs", async () => {
+      const directory = await fixtureOf();
+      const code = await codeOf(directory);
+
       runFactory(code);
       runFactory(code);
       expect(
@@ -115,12 +125,17 @@ describe("client bundle CSS", () => {
       ).toHaveLength(1);
     });
 
-    it("inlines a global stylesheet into a style tag with no class map", () => {
+    test("inlines a global stylesheet into a style tag with no class map", async () => {
+      const directory = await fixtureOf();
+      const code = await codeOf(directory);
+
       runFactory(code);
       expect(injectedCss("global.css")).toBe("body{margin:0}");
     });
 
-    it("`@supports` 里的大图落成资产，产物引用文件名而不是 emitFile 的引用 id", async () => {
+    test("`@supports` 里的大图落成资产，产物引用文件名而不是 emitFile 的引用 id", async () => {
+      const directory = await fixtureOf();
+
       await writeFile(join(directory, "whale-entry.ts"), 'import "./styles/Whale.module.css";\n');
       const thresholdCode = await bundleClientFactory({
         name: PLUGIN_ID,
@@ -137,20 +152,27 @@ describe("client bundle CSS", () => {
       expect(thresholdCode).not.toContain("__DSH_ASSET_");
     });
 
-    it("exports the compiled text of a `?inline` stylesheet and injects nothing", () => {
+    test("exports the compiled text of a `?inline` stylesheet and injects nothing", async () => {
+      const directory = await fixtureOf();
+      const code = await codeOf(directory);
+
       const exports = runFactory(code);
       expect(exports["inlined"]).toBe(":root{--gap:4px}");
       expect(injectedCss("inline-only.css")).toBeUndefined();
     });
 
-    it("leaves no stylesheet import in the artifact", () => {
+    test("leaves no stylesheet import in the artifact", async () => {
+      const directory = await fixtureOf();
+      const code = await codeOf(directory);
+
       expect(styleImports(code)).toEqual([]);
       expect(code).not.toContain("inline-only.css?inline");
     });
   });
 
   describe("watch graph", () => {
-    it("registers every stylesheet the plugin loads", async () => {
+    test("registers every stylesheet the plugin loads", async () => {
+      const directory = await fixtureOf();
       const build = await rolldown({
         input: join(directory, "entry.ts"),
         platform: "node",
@@ -173,7 +195,8 @@ describe("client bundle CSS", () => {
 
   // 构建时的 host 面解析也必须认得样式 import：ui 面是纯 ESM，CSS 内联后才是可执行模块。
   describe("cssInlinePlugins", () => {
-    it("hands the build a working CSS inliner", async () => {
+    test("hands the build a working CSS inliner", async () => {
+      const directory = await fixtureOf();
       const cwd = process.cwd();
       await writeFile(
         join(directory, "package.json"),

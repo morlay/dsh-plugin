@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   defineTable,
   ensureSchema,
@@ -21,7 +21,7 @@ const counters = defineTable({
 const BIG = 9_007_199_254_740_993n; // 2^53 + 1
 
 describe("大整数读", () => {
-  it("写入 2^53+1 后 select / RETURNING / read 三条路径都读回 BigInt", async () => {
+  test("写入 2^53+1 后 select / RETURNING / read 三条路径都读回 BigInt", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [counters]);
@@ -59,7 +59,7 @@ describe("大整数读", () => {
     }
   });
 
-  it("语句级开关只由 bigint 列触发：没有 bigint 列的查询不开它", async () => {
+  test("语句级开关只由 bigint 列触发：没有 bigint 列的查询不开它", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [counters]);

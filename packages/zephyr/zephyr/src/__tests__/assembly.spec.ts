@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { fromCordis } from "../compat/index.ts";
 import type { OnDispose, OnInit } from "../index.ts";
 import {
@@ -35,7 +35,7 @@ class Consumer {
 }
 
 describe("装配的最小闭环", () => {
-  it("契约 + 实现 + 消费者：bootstrap 之后 inject 拿到同一个实例", async () => {
+  test("契约 + 实现 + 消费者：bootstrap 之后 inject 拿到同一个实例", async () => {
     const app = await bootstrapApplication({ providers: [GreeterDefault, Consumer] });
     try {
       const consumer = app.get(Consumer);
@@ -47,7 +47,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("`onInit(ctx)` 拿到的是 cordis ctx：行里 provide 的服务与装配是同一个 store", async () => {
+  test("`onInit(ctx)` 拿到的是 cordis ctx：行里 provide 的服务与装配是同一个 store", async () => {
     /** 行：在 onInit 里往自己的 ctx 注册服务。 */
     @Injectable()
     class Row implements OnInit {
@@ -65,7 +65,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("`configure` 深合并 config，`without` 剔除条目", async () => {
+  test("`configure` 深合并 config，`without` 剔除条目", async () => {
     /** 带 Config 的 Provider：config 由 `configure` 给，默认值由自己负责。 */
     @Injectable()
     class Configured {
@@ -94,7 +94,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("上游按名字发布的服务能按同名令牌取到（没有对应的行）", async () => {
+  test("上游按名字发布的服务能按同名令牌取到（没有对应的行）", async () => {
     /** 名字型令牌：与上游发布的名字一致。 */
     const SidebarTabs = InjectionTokenFromIndex<{ tabs: string[] }>("sidebar-tabs");
 
@@ -127,14 +127,14 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("裸 cordis 插件不能直接进装配：必须经 fromCordis / toCordis 转换", async () => {
+  test("裸 cordis 插件不能直接进装配：必须经 fromCordis / toCordis 转换", async () => {
     /** 没转换的上游插件。 */
     const raw = { name: "raw-upstream", apply: () => {} };
 
     await expect(bootstrapApplication({ providers: [raw as never] })).rejects.toThrow(/fromCordis/);
   });
 
-  it("`inject.optional` 缺失给 undefined，`inject.all` 按清单顺序聚合", async () => {
+  test("`inject.optional` 缺失给 undefined，`inject.all` 按清单顺序聚合", async () => {
     /** 多值契约。 */
     @Injectable({ multi: true })
     abstract class Step {
@@ -178,7 +178,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("`onInit` 抛错：应用不返回，已启动的逆序卸载", async () => {
+  test("`onInit` 抛错：应用不返回，已启动的逆序卸载", async () => {
     const calls: string[] = [];
 
     /** 先启动的行。 */
@@ -205,7 +205,7 @@ describe("装配的最小闭环", () => {
     expect(calls, "已启动的行要收尾").toContain("ok");
   });
 
-  it("`dispose`：onDispose 按装配的逆序执行", async () => {
+  test("`dispose`：onDispose 按装配的逆序执行", async () => {
     const calls: string[] = [];
 
     /** 第一行。 */
@@ -229,7 +229,7 @@ describe("装配的最小闭环", () => {
     expect(calls).toEqual(["second", "first"]);
   });
 
-  it("形态用错：`inject` 用在 multi 令牌上、`inject.all` 用在单值令牌上，都在装配前报错", async () => {
+  test("形态用错：`inject` 用在 multi 令牌上、`inject.all` 用在单值令牌上，都在装配前报错", async () => {
     /** 多值契约。 */
     @Injectable({ multi: true })
     abstract class Hook {
@@ -266,7 +266,7 @@ describe("装配的最小闭环", () => {
     await expect(bootstrapApplication({ providers: [Single, WrongAll] })).rejects.toThrow(/multi/i);
   });
 
-  it("`InjectionToken`：纯值配置按令牌注入", async () => {
+  test("`InjectionToken`：纯值配置按令牌注入", async () => {
     /** 用 `InjectionToken` 声明的配置。 */
     const Config = new InjectionTokenFromIndex<{ port: number }>("app-config");
 
@@ -286,7 +286,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("`Logger` 契约接的是 cordis 原生 logger", async () => {
+  test("`Logger` 契约接的是 cordis 原生 logger", async () => {
     /** 读日志的行。 */
     @Injectable()
     class Logged {
@@ -303,7 +303,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("`onDispose` 执行时依赖仍可读（使用方先于提供方卸载）", async () => {
+  test("`onDispose` 执行时依赖仍可读（使用方先于提供方卸载）", async () => {
     const seen: number[] = [];
 
     /** 提供方。 */
@@ -327,7 +327,7 @@ describe("装配的最小闭环", () => {
     expect(seen).toEqual([42]);
   });
 
-  it("`Debugger` 是普通契约：诊断给出每行结果、服务名与令牌名", async () => {
+  test("`Debugger` 是普通契约：诊断给出每行结果、服务名与令牌名", async () => {
     const app = await bootstrapApplication({ providers: [GreeterDefault, Consumer] });
     try {
       const snapshot = app.get(Debugger).diagnostics();
@@ -340,7 +340,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("缺依赖：在任何 onInit 之前就失败，报出谁需要谁", async () => {
+  test("缺依赖：在任何 onInit 之前就失败，报出谁需要谁", async () => {
     const started: string[] = [];
 
     /** 先启动的行：如果依赖检查晚于它，它就会被启动（那是错的）。 */
@@ -368,7 +368,7 @@ describe("装配的最小闭环", () => {
     expect(started, "装配失败时不能有任何行被启动").toEqual([]);
   });
 
-  it("`configure` 对非对象 config 整体替换（数组不会被拆成对象）", async () => {
+  test("`configure` 对非对象 config 整体替换（数组不会被拆成对象）", async () => {
     /** 配置是数组的 Provider（`ClientRows` 那种包名清单）。 */
     @Injectable()
     class ListConfig {
@@ -384,7 +384,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("装配按 `inject` 依赖排序：清单顺序颠倒也不影响", async () => {
+  test("装配按 `inject` 依赖排序：清单顺序颠倒也不影响", async () => {
     const order: string[] = [];
 
     /** 提供者。 */
@@ -414,7 +414,7 @@ describe("装配的最小闭环", () => {
     }
   });
 
-  it("每个 Provider 是一行：onInit 拿到的是子 ctx，且能读到同一棵树上的服务", async () => {
+  test("每个 Provider 是一行：onInit 拿到的是子 ctx，且能读到同一棵树上的服务", async () => {
     /** 行：记下自己的 ctx，并在行内注册一个服务。 */
     @Injectable()
     class Row implements OnInit {
@@ -446,7 +446,7 @@ describe("装配的最小闭环", () => {
 // 然后**静默降级**——"没配置持久化"（盘上不写东西、重启后 `session/not-found`）、
 // "设置命名空间不注册"（开发工具偏好落回 false、轨迹视图被过滤）。
 describe("`@Injectable({ name })` 是唯一的服务名", () => {
-  it("写了 name 就只发这个名字；没写才发派生名", async () => {
+  test("写了 name 就只发这个名字；没写才发派生名", async () => {
     @Injectable({ name: "upstreamName" })
     class Named {
       readonly marker = "named";

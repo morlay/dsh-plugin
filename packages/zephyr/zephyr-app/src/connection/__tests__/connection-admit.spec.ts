@@ -1,6 +1,6 @@
 // 本机部署不做认证：上游 `admit` 的三种结果里只有「缺认证」（401）这一档该被放行成 owner peer。
 // 403 是 Host / Origin 信任检查（它挡的是别的站点借道本机端口），与本机不设认证无关，必须原样保留。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import type { Logger } from "@morlay/zephyr";
 import { admitLocalPeer } from "../connection.service.ts";
 
@@ -24,21 +24,21 @@ function loggerOf(warnings: string[]): Logger {
 }
 
 describe("本机免认证", () => {
-  it("缺认证（401）放行成 owner peer", () => {
+  test("缺认证（401）放行成 owner peer", () => {
     const instance = instanceOf(() => ({ rejection: 401 }));
     admitLocalPeer(instance, loggerOf([]));
 
     expect(instance.admit({ headers: {} })).toEqual({ peer: BROWSER_PEER });
   });
 
-  it("Host / Origin 不信任（403）原样保留", () => {
+  test("Host / Origin 不信任（403）原样保留", () => {
     const instance = instanceOf(() => ({ rejection: 403 }));
     admitLocalPeer(instance, loggerOf([]));
 
     expect(instance.admit({ headers: {} })).toEqual({ rejection: 403 });
   });
 
-  it("已认证的凭据返回它自己的 peer，不被换掉", () => {
+  test("已认证的凭据返回它自己的 peer，不被换掉", () => {
     const apiPeer = { id: "api-peer" };
     const instance = instanceOf(() => ({ peer: apiPeer }));
     admitLocalPeer(instance, loggerOf([]));
@@ -46,7 +46,7 @@ describe("本机免认证", () => {
     expect(instance.admit({ headers: {} })).toEqual({ peer: apiPeer });
   });
 
-  it("上游没有 admit / browserPeer 时记一条 warn，不抛也不改实例", () => {
+  test("上游没有 admit / browserPeer 时记一条 warn，不抛也不改实例", () => {
     const warnings: string[] = [];
     const instance = { admit: undefined, browserPeer: undefined };
     admitLocalPeer(instance, loggerOf(warnings));

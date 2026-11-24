@@ -14,7 +14,8 @@ import { SessionStore } from "@morlay/dsh-session";
 import { SessionId, type SessionEvent } from "@morlay/dsh-session/contract";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { RemoteHandlers } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarnessWithAgent, type HarnessWithAgent } from "./support/host.ts";
 
 /** 假模型：一次性吐一句话，并报一次用量（token-meter 的折叠要真数据）。 */
@@ -33,21 +34,10 @@ class FakeAdapter extends LlmAdapter {
   }
 }
 
-const opened: HarnessWithAgent[] = [];
-const rejections: unknown[] = [];
-const onRejection = (reason: unknown): void => {
-  rejections.push(reason);
-};
-
-afterEach(async () => {
-  process.off("unhandledRejection", onRejection);
-  for (const harness of opened.splice(0).reverse()) await harness.dispose().catch(() => {});
-}, 60_000);
-
 /** 起一份带 agent 行的整包装配。 */
 async function boot(): Promise<HarnessWithAgent> {
   const harness = await startHarnessWithAgent();
-  opened.push(harness);
+  onTestFinished(() => harness.dispose().catch(() => {}));
   return harness;
 }
 
@@ -92,8 +82,16 @@ function send(agent: { send: (...args: never[]) => unknown }, id: string, text: 
 }
 
 describe("重试在真 agent 下", { timeout: 180_000 }, () => {
-  it("有存活 agent 时点 retry：进程不退、日志被截断、队列收到输入", async () => {
+  test("有存活 agent 时点 retry：进程不退、日志被截断、队列收到输入", async () => {
+    // 未捕获拒绝的收集是**本用例自己的**：监听与本用例同生共死，不用模块级数组攒着等 afterEach。
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason);
+    };
     process.on("unhandledRejection", onRejection);
+    onTestFinished(() => {
+      process.off("unhandledRejection", onRejection);
+    });
     const harness = await boot();
     // 假模型走 testkit 装好的上游 Llm（服务名 `llm`）：注册一个只在这里存在的 provider 名，不撞真实适配器。
     (
@@ -144,7 +142,7 @@ describe("重试在真 agent 下", { timeout: 180_000 }, () => {
     ).toEqual([]);
   });
 
-  it(
+  test(
     "重试同一条输入只拼接一次，且落库的 user/message 保住来源凭据",
     { timeout: 120_000 },
     async () => {

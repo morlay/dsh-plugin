@@ -6,30 +6,22 @@
 // 可选能力一律用**契约令牌** `inject.optional` 取（归档面 / 分支面），不按字符串名字取：
 // 名字是一层可以被拼错的间接引用，令牌有类型面、也参与装配排序（zephyr 的 `optional` 语义：
 // 「可能没有提供者」，不是「可以不按依赖序」）。代价是**提供者必须排在会话行之前**——手动
-// `ctx.plugin(...)` 晚挂载的宿主拿不到它，各调用点都有退化路径（见 archivedSessionIds 与 copyToWorkspace）。
+// `ctx.plugin(...)` 晚挂载的宿主拿不到它，各调用点都有退化路径（见 archivedSessionIds）。
 //
-// **工作区注册表是这条规矩的例外**：它那一行（`Workspace`）反过来注入本行，静态 `inject.optional`
-// 会成环并把 workspace 行排到本行之前（理由与后果见 `workspace-registry.read.ts`），所以它按名**在调用时读**。
+// **本行不认识 workspace 域**：跨域动作（把一条会话复制到目标工作区）不在持久化行上——它要同时用
+// `SessionBranching`（本域的分支原语）与 `SessionWorkspace`（workspace 域的 attach），那是编排职责，
+// 住在 `@morlay/dsh-workspace`（见 `SessionWorkspaceCopy` 端口）。本行只留本域能力：读写日志、
+// 建会话、派生原语与它的补偿删除。
 //
 // **装配期错误的约定**（本文件与 query.ts 一致）：清单里缺本包依赖的服务是装配错误，抛裸 `Error` 并以
 // `session-rdb: ` 开头（它不是域失败，不该占一个 wire 域码）；只有运行期失败才带 `SessionStoreError` 的域码。
 import { SessionId, SessionLogOffset } from "@morlay/dsh-session/contract";
 import type { SessionPersistenceCreateOptions } from "@morlay/dsh-session-persistence/contract";
-import {
-  inject,
-  Injectable,
-  tokenMetaOf,
-  type Context,
-  type OnInit,
-  type OnDispose,
-} from "@morlay/zephyr";
-import { WorkspaceId } from "@morlay/dsh-workspace";
-import { readWorkspaceRegistry } from "./workspace-registry.read.ts";
+import { inject, Injectable, type Context, type OnInit, type OnDispose } from "@morlay/zephyr";
 import { SessionAgentControl } from "../contract/session-agent-control.contract.ts";
 import type {
   SessionBulkDeleteItem,
   SessionBulkDeleteResult,
-  SessionCopyWorkspaceResult,
   SessionEventLocatorQuery,
   SessionExportBatchResult,
   SessionExportItem,
@@ -55,7 +47,7 @@ import { createMaintenance } from "./maintenance.ts";
 import { createBranchPort } from "./branch-port.ts";
 import { createImporter } from "./import-export/index.ts";
 import { DEFAULT_CONFIG, type RdbConfig } from "../data/store/persistence-core.ts";
-import { SessionStoreError, failureCodeOf } from "../data/errors.ts";
+import { failureCodeOf } from "../data/errors.ts";
 import { listSessionRows } from "./stats/index.ts";
 
 export type { RdbConfig };
@@ -69,8 +61,9 @@ export class SessionPersistenceRdb
 
   private readonly agents = inject.optional(SessionAgentControl);
 
-  // 本行的 ctx：分支行要**在调用时**读（见 branchOf）。
-  private ctx: Context | undefined;
+  // 分支行与本行**互相依赖**：本行把行级端口交给分支行（`admin/branch-port.ts`），分支行把派生状态
+  // 失效钩子交回本行。两条注入边成环，内核跳过回边、两边都在**调用时**才用对方，所以可选注入即可。
+  private readonly branchRow = inject.optional(SessionBranch);
 
   // 管理面端口：门面把这些入口交给运维动作 / 分支端口 / 导入（它们不认识本类）。
   private readonly ops = createMaintenance({
@@ -130,8 +123,7 @@ export class SessionPersistenceRdb
     stopLoop: (id) => this.stopAgent(id),
   });
 
-  async onInit(ctx: Context): Promise<void> {
-    this.ctx = ctx;
+  async onInit(_ctx: Context): Promise<void> {
     this.config = this.rowConfig;
     this.startPaths();
     this.installLiveRouting();
@@ -217,54 +209,6 @@ export class SessionPersistenceRdb
     return this.importer.importMany(zips);
   }
 
-  /**
-   * 跨工作区复制：本包只做 fork（子会话的 cwd 换成目标工作区的路径），成员归属交给 workspace 域的 attach。
-   *
-   * 不新增移动动作：源会话原样保留。attach 失败时撤掉刚派生的子会话——复制要么落在目标工作区，
-   * 要么库里不多一条谁也找不到的会话。
-   * @param sessionId - 源会话。
-   * @param workspaceId - 目标工作区（注册表里的 id）。
-   * @returns 子会话与目标工作区。
-   */
-  async copyToWorkspace(
-    sessionId: string,
-    workspaceId: string,
-  ): Promise<SessionCopyWorkspaceResult> {
-    await this.opened;
-    const registry = readWorkspaceRegistry(this.ctx);
-    if (registry === undefined) {
-      throw new Error(
-        "session-rdb: 装配里没有 WorkspaceRegistry，跨工作区复制要用它的 attach（工作区记录不归本包）",
-      );
-    }
-    const workspace = registry.get(WorkspaceId(workspaceId));
-    if (workspace === undefined) {
-      throw new SessionStoreError(
-        "SESSION_COPY_WORKSPACE_NOT_FOUND",
-        `workspace "${workspaceId}" not found`,
-      );
-    }
-    const branch = this.branchOf();
-    if (branch === undefined) {
-      throw new Error("session-rdb: 装配里没有 SessionBranch，跨工作区复制要它的 fork");
-    }
-    const child = await branch.forkFrom(SessionId(sessionId), { meta: { cwd: workspace.path } });
-    try {
-      await workspace.attachSession(child);
-    } catch (error: unknown) {
-      // 补偿删除自己也可能失败：两个失败都要进原因链，否则用户看到的是「撤不干净」而不是
-      // 「复制没成」（见 copyAttachFailedError）。
-      let compensation: unknown;
-      try {
-        await this.dropDerivedSession(child);
-      } catch (reason: unknown) {
-        compensation = reason;
-      }
-      throw copyAttachFailedError(workspaceId, error, compensation);
-    }
-    return { sessionId: String(child), workspaceId };
-  }
-
   // 批量导出：逐条复用单条导出（同一份上游 format），一条失败不影响其它条。
   async exportMany(ids: readonly string[]): Promise<SessionExportBatchResult> {
     await this.opened;
@@ -309,21 +253,14 @@ export class SessionPersistenceRdb
 
   // 覆盖导入等整段替换内存 log 的路径复用 rewind 的失效钩子；钩子的实现在分支行（它读投影与 token-meter）。
   resetLiveDerivedState(session: unknown): void {
-    derivedStateResetter(this.branchOf())?.(session);
-  }
-
-  // 分支行与本行是**互相依赖**的一对：本行把行级端口交给分支行（`admin/branch-port.ts`），分支行把
-  // 派生状态失效钩子交回本行。互相依赖的服务不能按装配序注入（谁先装配谁拿不到对方），所以这一条
-  // 只能**在调用时按令牌名读**；名字从令牌元数据取，不在调用点手抄字符串。
-  private branchOf(): SessionBranch | undefined {
-    // `ctx.get` 是 `reflect.get` 的封装：语义相同，但返回 `unknown`（不是 `any`），逼着这里保留那次收窄。
-    const found = this.ctx?.get(tokenMetaOf(SessionBranch).name, false);
-    return typeof found === "object" && found === null
-      ? undefined
-      : (found as SessionBranch | undefined);
+    derivedStateResetter(this.branchRow)?.(session);
   }
 
   // 补偿删除：fork 已经落库但 attach 失败时用（不是「已归档才能删」的用户删除，那条守卫不适用）。
+  async discardDerivedSession(id: string): Promise<void> {
+    return await this.dropDerivedSession(SessionId(id));
+  }
+
   private async dropDerivedSession(id: SessionId): Promise<void> {
     // fork 给子会话登记过「复用父会话的事件行」：删掉它时一并清掉，免得同 id 之后再落写去复用。
     this.reuseEventIds.delete(id);
@@ -337,50 +274,6 @@ export class SessionPersistenceRdb
     agent.cancel?.({ kind: "user" }, { keepInbox: true });
     await agent.whenIdle();
   }
-}
-
-// 一条失败的可读描述：Error 取 message，其余值显式 JSON 化（避免落到 `[object Object]`）。
-function describeFailure(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return JSON.stringify(error) ?? String(error);
-}
-
-/**
- * 一次「attach 被拒」的失败：域码是稳定面，**两个失败都留在原因链里**。
- *
- * 为什么不是简单地把 attach 的错误挂成 cause：补偿删除（撤掉刚 fork 出来的子会话）自己也可能失败，
- * 那时抛出去的原因只剩「撤不干净」，而用户真正要看的是「复制没成」。用 `AggregateError` 把两条都带上，
- * 排障时沿 cause 能看到 attach 为什么被拒、以及库里还留着哪条子会话。
- * @param workspaceId - 目标工作区。
- * @param attachError - workspace 域拒绝 attach 的原因。
- * @param compensationError - 补偿删除失败的原因（没有失败时省略）。
- * @returns 带域码的失败。
- */
-export function copyAttachFailedError(
-  workspaceId: string,
-  attachError: unknown,
-  compensationError?: unknown,
-): SessionStoreError {
-  const detail = describeFailure(attachError);
-  if (compensationError === undefined) {
-    return new SessionStoreError(
-      "SESSION_COPY_ATTACH_FAILED",
-      `workspace "${workspaceId}" refused the copied session: ${detail}`,
-      { cause: attachError },
-    );
-  }
-  const undo = describeFailure(compensationError);
-  return new SessionStoreError(
-    "SESSION_COPY_ATTACH_FAILED",
-    `workspace "${workspaceId}" refused the copied session: ${detail} (the derived session could not be dropped either: ${undo})`,
-    {
-      cause: new AggregateError(
-        [attachError, compensationError],
-        `workspace "${workspaceId}" refused the copied session, and the compensation delete failed too`,
-      ),
-    },
-  );
 }
 
 // 分支行上的派生状态失效钩子（契约只声明分支原语，这个钩子是数据面内部的协作口）。

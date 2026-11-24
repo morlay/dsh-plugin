@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   column,
   count,
@@ -31,7 +31,7 @@ const audit = defineTable({
 });
 
 describe("写入通道（RETURNING / 冲突表达式 / 子查询 / 错误分类）", () => {
-  it("insert / update 拿回行，冲突时按表达式自增", async () => {
+  test("insert / update 拿回行，冲突时按表达式自增", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items, audit]);
@@ -60,7 +60,7 @@ describe("写入通道（RETURNING / 冲突表达式 / 子查询 / 错误分类�
     }
   });
 
-  it("子查询：IN (SELECT) 与 EXISTS", async () => {
+  test("子查询：IN (SELECT) 与 EXISTS", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items, audit]);
@@ -100,7 +100,7 @@ describe("写入通道（RETURNING / 冲突表达式 / 子查询 / 错误分类�
     }
   });
 
-  it("错误分类：唯一冲突与非空约束", async () => {
+  test("错误分类：唯一冲突与非空约束", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -117,7 +117,7 @@ describe("写入通道（RETURNING / 冲突表达式 / 子查询 / 错误分类�
 });
 
 describe("批量写入", () => {
-  it("insertMany + ON CONFLICT 覆盖：一行不多、值被更新", async () => {
+  test("insertMany + ON CONFLICT 覆盖：一行不多、值被更新", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -150,7 +150,7 @@ describe("批量写入", () => {
 });
 
 describe("事务端口（宿主管事务，执行面按调用传入）", () => {
-  it("scoped Database 用同一事务执行，回滚后什么都不留", async () => {
+  test("scoped Database 用同一事务执行，回滚后什么都不留", async () => {
     const { DatabaseSync } = await import("node:sqlite");
     const { wrapDatabase } = await import("@morlay/zephyr-rdb");
     const client = new DatabaseSync(":memory:");
@@ -207,7 +207,7 @@ describe("事务端口（宿主管事务，执行面按调用传入）", () => {
 });
 
 describe("更新表达式", () => {
-  it("update 里可以写表达式（列自增 / 取大），普通值仍然绑定", async () => {
+  test("update 里可以写表达式（列自增 / 取大），普通值仍然绑定", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -224,7 +224,7 @@ describe("更新表达式", () => {
 });
 
 describe("删除", () => {
-  it("delete 可以拿回被删的行（RETURNING）", async () => {
+  test("delete 可以拿回被删的行（RETURNING）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -240,7 +240,7 @@ describe("删除", () => {
 });
 
 describe("INSERT … SELECT", () => {
-  it("按投影顺序把查询结果插进来（可带冲突子句）", async () => {
+  test("按投影顺序把查询结果插进来（可带冲突子句）", async () => {
     const archive = defineTable({
       name: "t_archive",
       columns: {
@@ -277,7 +277,7 @@ describe("INSERT … SELECT", () => {
 });
 
 describe("defineTable 即操作钩子", () => {
-  it("表定义直接拿句柄（与 database.table(def) 等价）", async () => {
+  test("表定义直接拿句柄（与 database.table(def) 等价）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);

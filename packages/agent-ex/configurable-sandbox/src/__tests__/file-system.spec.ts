@@ -6,18 +6,12 @@ import { join } from "node:path";
 import { FileSystem } from "@morlay/dsh-fs";
 import { ConfigurableFsSandbox, SandboxRulesDefault } from "@morlay/configurable-sandbox";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { FakeAppEnv } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { FakePolicy } from "./support/fake-policy.ts";
-import { FakeSandboxFile } from "./support/fake-sandbox-file.ts";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => undefined);
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
+import { fakeSandboxFileOf } from "./support/fake-sandbox-file.ts";
 
 interface Dirs {
   readonly workspace: string;
@@ -28,7 +22,7 @@ interface Dirs {
 
 async function dirs(): Promise<Dirs> {
   const root = await mkdtemp(join(tmpdir(), "configurable-sandbox-fs-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const workspace = join(root, "ws");
   const rw = join(root, "rw");
   const ro = join(root, "ro");
@@ -40,26 +34,25 @@ async function dirs(): Promise<Dirs> {
 async function boot(access: Dirs): Promise<App> {
   FakePolicy.root = access.workspace;
   // 规则层的缺省 cwd 来自 AppEnv（不读进程 cwd）：起始目录就指到本用例的 workspace。
-  FakeAppEnv.root = access.workspace;
-  FakeSandboxFile.text = `access = [${[`rw ${access.rw}`, `r- ${access.ro}`, `-- ${access.deny}`]
+  const rules = `access = [${[`rw ${access.rw}`, `r- ${access.ro}`, `-- ${access.deny}`]
     .map((entry) => JSON.stringify(entry))
     .join(", ")}]`;
   const app = await bootstrapApplication({
     providers: [
-      FakeAppEnv,
-      FakeSandboxFile,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: access.workspace }) },
+      fakeSandboxFileOf(rules),
       SandboxRulesDefault,
       FakePolicy,
       ConfigurableFsSandbox,
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => undefined));
   return app;
 }
 
 describe("FileSystem 的规则端到端", () => {
-  it("`--`：读入口就拒绝（resolve 抛 FS_SANDBOX_DENIED）", async () => {
+  test("`--`：读入口就拒绝（resolve 抛 FS_SANDBOX_DENIED）", async () => {
     const d = await dirs();
     const fs = (await boot(d)).get(FileSystem);
 
@@ -68,7 +61,7 @@ describe("FileSystem 的规则端到端", () => {
     });
   });
 
-  it("`r-`：读放行，写拒绝（磁盘上的内容不变）", async () => {
+  test("`r-`：读放行，写拒绝（磁盘上的内容不变）", async () => {
     const d = await dirs();
     const path = join(d.ro, "locked.txt");
     await writeFile(path, "original", "utf8");
@@ -82,7 +75,7 @@ describe("FileSystem 的规则端到端", () => {
     expect(await readFile(path, "utf8")).toBe("original");
   });
 
-  it("`rw`：额外可写根在 workspace-write 下可写", async () => {
+  test("`rw`：额外可写根在 workspace-write 下可写", async () => {
     const d = await dirs();
     const fs = (await boot(d)).get(FileSystem);
     const path = join(d.rw, "note.txt");
@@ -91,7 +84,7 @@ describe("FileSystem 的规则端到端", () => {
     expect(await readFile(path, "utf8")).toBe("hello");
   });
 
-  it("工作区基线：workspace-write 下工作区内可写", async () => {
+  test("工作区基线：workspace-write 下工作区内可写", async () => {
     const d = await dirs();
     const fs = (await boot(d)).get(FileSystem);
     const path = join(d.workspace, "inside.txt");

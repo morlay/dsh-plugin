@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { DIALECT_CAPABILITIES, dialectOf, extendConfinedArgv } from "@morlay/configurable-sandbox";
 import { compileRules, ruleSourceOf } from "@morlay/configurable-sandbox";
 
@@ -62,7 +62,7 @@ const WINDOWS_ARGV = [
 ];
 
 describe("dialectOf", () => {
-  it("按 runner 结构识别四种方言", () => {
+  test("按 runner 结构识别四种方言", () => {
     expect(dialectOf(SEATBELT_ARGV)).toBe("seatbelt");
     expect(dialectOf(BWRAP_ARGV)).toBe("bwrap");
     expect(dialectOf(LANDLOCK_ARGV)).toBe("landlock");
@@ -72,12 +72,12 @@ describe("dialectOf", () => {
 });
 
 describe("extendConfinedArgv", () => {
-  it("空规则原样返回", () => {
+  test("空规则原样返回", () => {
     const extended = extendConfinedArgv(SEATBELT_ARGV, rules({}));
     expect(extended).toEqual(SEATBELT_ARGV);
   });
 
-  it("Seatbelt：allow 与 deny 追加到 profile 末尾（后置规则覆盖先置 allow）", () => {
+  test("Seatbelt：allow 与 deny 追加到 profile 末尾（后置规则覆盖先置 allow）", () => {
     const extended = extendConfinedArgv(
       SEATBELT_ARGV,
       rules({ access: ["rw /cache", "-- mise.*.toml", "-- secrets"] }),
@@ -91,7 +91,7 @@ describe("extendConfinedArgv", () => {
     expect(profile).toContain('(deny file-read* file-write* (regex #"^/ws/mise\\.[^/]*\\.toml$"))');
   });
 
-  it("bwrap：allow 用 --bind-try，拒绝项退化为 --ro-bind-try（读仍放行）", () => {
+  test("bwrap：allow 用 --bind-try，拒绝项退化为 --ro-bind-try（读仍放行）", () => {
     const extended = extendConfinedArgv(
       BWRAP_ARGV,
       rules({ access: ["rw /cache", "-- mise.toml"] }),
@@ -113,7 +113,7 @@ describe("extendConfinedArgv", () => {
     expect(separator).toBe(BWRAP_ARGV.indexOf("--") + additions.length);
   });
 
-  it("Landlock：只追加可写授权（其 allow-list 无法表达子路径拒绝）", () => {
+  test("Landlock：只追加可写授权（其 allow-list 无法表达子路径拒绝）", () => {
     const extended = extendConfinedArgv(
       LANDLOCK_ARGV,
       rules({ access: ["rw /cache", "-- mise.toml"] }),
@@ -133,7 +133,7 @@ describe("extendConfinedArgv", () => {
     ]);
   });
 
-  it("windows-acl：无表达，保留原 argv", () => {
+  test("windows-acl：无表达，保留原 argv", () => {
     const extended = extendConfinedArgv(
       WINDOWS_ARGV,
       rules({ access: ["rw /cache", "-- mise.toml"] }),
@@ -141,7 +141,7 @@ describe("extendConfinedArgv", () => {
     expect(extended).toEqual(WINDOWS_ARGV);
   });
 
-  it("Seatbelt：r- 只 deny 写入，-- 才 deny 读", () => {
+  test("Seatbelt：r- 只 deny 写入，-- 才 deny 读", () => {
     const profile = extendConfinedArgv(
       SEATBELT_ARGV,
       rules({ access: ["r- /config", "-- mise.toml"] }),
@@ -150,7 +150,7 @@ describe("extendConfinedArgv", () => {
     expect(profile).toContain('(deny file-read* file-write* (subpath "/ws/mise.toml"))');
   });
 
-  it("bwrap：r- 与 -- 都表达为只读挂载（-- 退化为只拒写）", () => {
+  test("bwrap：r- 与 -- 都表达为只读挂载（-- 退化为只拒写）", () => {
     const extended = extendConfinedArgv(
       BWRAP_ARGV,
       rules({ access: ["r- /config", "-- mise.toml"] }),
@@ -159,7 +159,7 @@ describe("extendConfinedArgv", () => {
     expect(extended).toContain("--ro-bind-try /ws/mise.toml /ws/mise.toml");
   });
 
-  it("Landlock：r- 无表达，只追加 rw", () => {
+  test("Landlock：r- 无表达，只追加 rw", () => {
     const extended = extendConfinedArgv(
       LANDLOCK_ARGV,
       rules({ access: ["r- /config", "rw /cache"] }),
@@ -179,7 +179,7 @@ describe("extendConfinedArgv", () => {
     ]);
   });
 
-  it("无法识别的 runner 在有规则时抛错（规则不能静默失效）", () => {
+  test("无法识别的 runner 在有规则时抛错（规则不能静默失效）", () => {
     expect(() =>
       extendConfinedArgv(["/custom/runner", "--", "true"], rules({ access: ["-- x"] })),
     ).toThrow(/unrecognized sandbox runner argv/);
@@ -188,7 +188,7 @@ describe("extendConfinedArgv", () => {
     ).toThrow(/no `--` separator/);
   });
 
-  it("表达能力表与实现一致", () => {
+  test("表达能力表与实现一致", () => {
     expect(DIALECT_CAPABILITIES.seatbelt.readOnly).toBe(true);
     expect(DIALECT_CAPABILITIES.seatbelt.denyReadWrite).toBe(true);
     expect(DIALECT_CAPABILITIES.bwrap).toEqual({

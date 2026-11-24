@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   and,
   column,
@@ -23,7 +23,7 @@ const users = defineTable({
 });
 
 describe("投影查询（业务不写 SQL）", () => {
-  it("select 的投影决定结果类型，读是迭代器", async () => {
+  test("select 的投影决定结果类型，读是迭代器", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await database.run(
@@ -60,7 +60,7 @@ describe("投影查询（业务不写 SQL）", () => {
     }
   });
 
-  it("片段是惰性迭代器：可重复消费，占位符只由参数节点生成", () => {
+  test("片段是惰性迭代器：可重复消费，占位符只由参数节点生成", () => {
     const condition = eq(column("f_name"), value("ada"));
     expect(render(condition, "sqlite")).toEqual({
       text: '"f_name" = ?',

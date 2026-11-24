@@ -15,13 +15,8 @@ import { provideJob } from "@morlay/dsh-job/server";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication, type App, type Context } from "@morlay/zephyr";
 import { provideTypert, provideApiGateway } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 10_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
@@ -41,18 +36,18 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("job 域", () => {
-  it("令牌由上游注册表兑现，空装配下目录为空", async () => {
+  test("令牌由上游注册表兑现，空装配下目录为空", async () => {
     const app = await boot();
     const jobs = app.get(JobRegistry);
     expect(jobs.list()).toEqual([]);
   });
 
-  it("这个域的工具行按 agent 装：装进某个 scope 之后 `job_list` 才登记", async () => {
+  test("这个域的工具行按 agent 装：装进某个 scope 之后 `job_list` 才登记", async () => {
     const app = await boot();
     // `ToolJobs` 声明了 `@AgentScoped()`：装配期不装根，工具也就还没登记。
     expect(app.get(ToolRegistry).definitions()).toEqual([]);
@@ -67,7 +62,7 @@ describe("job 域", () => {
     ).toContain("job_list");
   });
 
-  it("查不到的 id 直接失败，不静默给空值", async () => {
+  test("查不到的 id 直接失败，不静默给空值", async () => {
     const app = await boot();
     expect(() => app.get(JobRegistry).get(JobId("no-such-job"))).toThrow(/unknown job/);
   });

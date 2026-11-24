@@ -1,15 +1,15 @@
 // 全链路用例的**浏览器半**装配（薄封装）：真 store + 真端点客户端 + 真「进程内传输」（`LocalRemote`）。
 //
 // 换掉的只有「怎么到达宿主」——线上是 mux socket，这里是同一进程里的 `RemoteHandlers.invoke`
-// （仓库认可的传输接缝，`@morlay/zephyr-app/testing` 的 `LocalRemote`）。业务侧全是真实现。
+// （仓库认可的传输接缝，`@morlay/zephyr-app/testing` 的 `clientWithTransport`）。业务侧全是真实现。
 // 装配本身与宿主半同一份（`base.ts` 的 `mountRows`）：清单在这里，机制在那里。
 //
 // `SessionController` 是**上游 composer 面**的最小记录型替身：草稿回填与窗口重建是上游
 // `ClientSessions` + 输入面的职责，不在本包（真 composer 的端到端在 apps 层覆盖）。
 import { SessionController } from "@morlay/dsh-conversation/contract";
+import type { App } from "@morlay/zephyr";
 import { Locale, Remote } from "@morlay/zephyr-app/client";
-import { RemoteHandlers } from "@morlay/zephyr-app";
-import { LocalRemote } from "@morlay/zephyr-app/testing";
+import { clientWithTransport } from "@morlay/zephyr-app/testing";
 import { SessionEditorStore } from "../../ui/session-editor/session-editor.store.ts";
 import { SessionEditorEndpointClient } from "../../ui/session-editor/session-editor-endpoint.client.ts";
 import { NS, zh } from "../../ui/session-editor/locales.ts";
@@ -89,24 +89,21 @@ const localeStub = {
 
 /**
  * 起一份浏览器半装配：它的 `remote.invoke` 直接打到宿主那份真 `RemoteHandlers`。
- * @param handlers - 宿主的 wire 路由表。
+ *
+ * 传输由 `clientWithTransport(host, …)` 接到宿主的执行面上——不把 host 的 `RemoteHandlers`
+ * 塞进 client 装配（那是 host 的事，同 ctx 会抢服务名）。
+ * @param host - 宿主的 `App`（`startHost()` 的 `app`）。
  * @returns 装配面（真 store + 记录型 composer 面）。
  */
-export async function startClient(handlers: RemoteHandlers): Promise<Client> {
+export async function startClient(host: App): Promise<Client> {
   const composer = new ComposerStub();
   const rows = [
-    // 传输：`LocalRemote` 只持「另一个装配」的执行面（host 的 `RemoteHandlers.invoke`），
-    // 不把 host 的 `RemoteHandlers` 也塞进 client 装配——那是 host 的事，同 ctx 会抢服务名。
-    {
-      provide: LocalRemote,
-      useValue: new LocalRemote((endpoint, payload) => handlers.invoke(endpoint, payload)),
-    },
     { provide: SessionController, useValue: composer },
     { provide: Locale, useValue: localeStub },
     SessionEditorEndpointClient,
     SessionEditorStore,
   ] as readonly RowEntry[];
-  const app = await mountRows(rows);
+  const app = await mountRows(clientWithTransport(host, rows));
   return {
     app,
     store: app.get(SessionEditorStore),
@@ -115,5 +112,5 @@ export async function startClient(handlers: RemoteHandlers): Promise<Client> {
   };
 }
 
-// `Remote` 只是为了让类型面显式：`LocalRemote` 已经按契约名发布，这里不额外提供。
+// `Remote` 只是为了让类型面显式：`clientWithTransport` 已经按契约名发布，这里不额外提供。
 export type { Remote };

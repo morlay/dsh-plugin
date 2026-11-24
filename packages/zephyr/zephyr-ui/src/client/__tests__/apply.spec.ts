@@ -4,7 +4,7 @@
 // 提示面的幂等（inline 后每个消费行的产物里各带一份这份代码，都会调 apply）。
 
 import { rootContextKey } from "@morlay/zephyr";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import { NS, apply, inject } from "../schema-form/index.ts";
 import { SchemaFormHintsDefault, SERVICE_NAME, schemaFormHintsOf } from "../schema-form/hints.ts";
 
@@ -76,11 +76,11 @@ function bench(options: { services?: readonly string[] } = {}) {
 }
 
 describe("装上本包的注册面", () => {
-  it("只声明用到的服务", () => {
+  test("只声明用到的服务", () => {
     expect(inject).toEqual(["slots", "locale", "configForms", "settingsSchema"]);
   });
 
-  it("注册提示面、自己的字典与表单 Factory，Factory 声明字段槽", () => {
+  test("注册提示面、自己的字典与表单 Factory，Factory 声明字段槽", () => {
     const b = bench();
 
     apply(b.ctx as never);
@@ -96,7 +96,7 @@ describe("装上本包的注册面", () => {
   });
 
   // inline 后每个消费行的产物里各带一份本包代码、都会调 apply：同一运行时只装配一次。
-  it("多份副本各自装上时只装配一次", () => {
+  test("多份副本各自装上时只装配一次", () => {
     const b = bench();
 
     apply(b.ctx as never);
@@ -106,7 +106,7 @@ describe("装上本包的注册面", () => {
     expect(b.factories).toHaveLength(1);
   });
 
-  it("服务已在场（另一份副本装过）就不再装配", () => {
+  test("服务已在场（另一份副本装过）就不再装配", () => {
     const b = bench({ services: [SERVICE_NAME] });
 
     apply(b.ctx as never);
@@ -116,7 +116,7 @@ describe("装上本包的注册面", () => {
   });
 
   // 挂上去的必须是真实现：业务从 schemaFormHintsOf 读到的就是它，空壳会让候选/文案/候选值全部静默失效。
-  it("挂上的是提示面的实现，并且按名读得到", () => {
+  test("挂上的是提示面的实现，并且按名读得到", () => {
     const b = bench();
 
     apply(b.ctx as never);
@@ -126,7 +126,7 @@ describe("装上本包的注册面", () => {
     expect(hints?.keysFor("row", [])).toEqual([]);
   });
 
-  it("一行入口都不注册（行配置入口不属于本包）", () => {
+  test("一行入口都不注册（行配置入口不属于本包）", () => {
     const b = bench();
 
     apply(b.ctx as never);

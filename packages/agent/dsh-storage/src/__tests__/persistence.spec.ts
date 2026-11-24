@@ -11,22 +11,15 @@ import { join } from "node:path";
 import { Storage, StorageDefault } from "@morlay/dsh-storage";
 import { provideStorageJson, StorageJsonDefault } from "@morlay/dsh-storage";
 import { bootstrapApplication, type App, configure } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 /** 一个最小 unit：一张表、没有 global 槽。 */
 const DEMO = { name: "demo", version: 1, tables: ["items"], hasGlobal: false } as const;
 
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
-
 async function freshRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "dsh-persistence-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   return root;
 }
 
@@ -39,7 +32,7 @@ async function boot(root: string): Promise<App> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -51,7 +44,7 @@ function kvOf(app: App): NonNullable<ReturnType<Storage["backend"]["get"]>["kv"]
 }
 
 describe("persistence：json 后端那一行", () => {
-  it("以 `json` 名字挂到 hub 上，写进去的记录落在装配面给的 root 里", async () => {
+  test("以 `json` 名字挂到 hub 上，写进去的记录落在装配面给的 root 里", async () => {
     const root = await freshRoot();
     const kv = kvOf(await boot(root));
     const unit = await kv.open(DEMO);
@@ -65,7 +58,7 @@ describe("persistence：json 后端那一行", () => {
     });
   });
 
-  it("换一个应用、同一个 root：记录读得回来", async () => {
+  test("换一个应用、同一个 root：记录读得回来", async () => {
     const root = await freshRoot();
     const first = await boot(root);
     await (await kvOf(first).open(DEMO)).putRecord("items", "a", { hello: "world" });

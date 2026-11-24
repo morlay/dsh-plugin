@@ -7,7 +7,7 @@
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { CommandCatalog, CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import type { CommandEntry } from "@morlay/dsh-command/contract";
@@ -34,7 +34,7 @@ class FakeRunner extends CommandRunner {
 }
 
 describe("命令弹层视图", () => {
-  it("注册到 conversation.input.overlay，并按打开状态渲染条目", async () => {
+  test("注册到 conversation.input.overlay，并按打开状态渲染条目", async () => {
     const app = await bootstrapApplication({
       // `Slots` 是视图注册的宿主面：装框架的渲染器模块（它是模块，不是 provider）。
       providers: [

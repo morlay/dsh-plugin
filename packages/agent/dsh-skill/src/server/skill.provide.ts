@@ -1,5 +1,6 @@
 import { provide } from "@morlay/zephyr";
-import { SkillCatalogRow, SkillEndpointDefault } from "@morlay/dsh-skill/server";
+import { SkillCatalogRow } from "../skill-catalog.service.ts";
+import { SkillEndpointDefault } from "./skill-endpoint.service.ts";
 import { SkillFilesystem } from "../filesystem.service.ts";
 import { ToolSkill } from "./tool-skill.service.ts";
 import { SkillDefault } from "../skill.service.ts";

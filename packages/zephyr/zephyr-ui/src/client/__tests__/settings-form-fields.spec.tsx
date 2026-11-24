@@ -2,11 +2,10 @@
 // 与 vendor/deepseek-harness/packages/client/ui-primitives/tests/settings-fields.client.spec.tsx 的用例逐条对应
 // （导入面换成我们的 client 出口），另加一条 help 折叠的用例；改这里之前先看上游。
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import { SettingsSecretField, SettingsValueField } from "../../client/index.ts";
-
-afterEach(cleanup);
 
 const frame = {
   id: "field",
@@ -21,7 +20,7 @@ const frame = {
 };
 
 describe("SettingsValueField", () => {
-  it("stages every keystroke without writing", () => {
+  test("stages every keystroke without writing", () => {
     const onEdit = vi.fn();
     render(<SettingsValueField {...frame} text="60000" onEdit={onEdit} onReset={vi.fn()} />);
 
@@ -30,7 +29,7 @@ describe("SettingsValueField", () => {
     expect(onEdit).toHaveBeenCalledWith("9000");
   });
 
-  it("renders the staged text it is given rather than a draft of its own", () => {
+  test("renders the staged text it is given rather than a draft of its own", () => {
     const { rerender } = render(
       <SettingsValueField {...frame} text="60000" onEdit={vi.fn()} onReset={vi.fn()} />,
     );
@@ -41,7 +40,7 @@ describe("SettingsValueField", () => {
     expect(screen.getByLabelText("Command timeout")).toHaveProperty("value", "9000");
   });
 
-  it("offers the reset only while an override would stand", () => {
+  test("offers the reset only while an override would stand", () => {
     const onReset = vi.fn();
     const { rerender } = render(
       <SettingsValueField {...frame} text="9000" onEdit={vi.fn()} onReset={onReset} />,
@@ -57,7 +56,7 @@ describe("SettingsValueField", () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
-  it("replaces the hint with the reason an invalid draft cannot be saved", () => {
+  test("replaces the hint with the reason an invalid draft cannot be saved", () => {
     render(
       <SettingsValueField {...frame} invalid text="soon" onEdit={vi.fn()} onReset={vi.fn()} />,
     );
@@ -67,7 +66,7 @@ describe("SettingsValueField", () => {
     expect(screen.getByLabelText("Command timeout").getAttribute("aria-invalid")).toBe("true");
   });
 
-  it("hints a numeric keypad and renders a placeholder when asked", () => {
+  test("hints a numeric keypad and renders a placeholder when asked", () => {
     render(
       <SettingsValueField
         {...frame}
@@ -84,7 +83,7 @@ describe("SettingsValueField", () => {
     expect(input).toHaveProperty("placeholder", "https://api.deepseek.com");
   });
 
-  it("disables the control and its reset while the document is read-only", () => {
+  test("disables the control and its reset while the document is read-only", () => {
     render(
       <SettingsValueField
         {...frame}
@@ -104,7 +103,7 @@ describe("SettingsValueField", () => {
   });
 
   // 本仓库补：我们重写过 help 折叠（按钮的 aria 关系 + 面板的 region 语义），守它。
-  it("discloses the help region beside the label and points the input at it", () => {
+  test("discloses the help region beside the label and points the input at it", () => {
     render(
       <SettingsValueField
         {...frame}
@@ -138,7 +137,7 @@ describe("SettingsSecretField", () => {
     disabled: false,
   };
 
-  it("stages the draft and never renders it", () => {
+  test("stages the draft and never renders it", () => {
     const onEdit = vi.fn();
     render(
       <SettingsSecretField
@@ -158,7 +157,7 @@ describe("SettingsSecretField", () => {
   });
 
   // 本仓库补：口令框声明不参与「已存登录密码」的自动填充（上游 11c0511271 的修复）。
-  it("asks the browser not to autofill a saved login password", () => {
+  test("asks the browser not to autofill a saved login password", () => {
     render(
       <SettingsSecretField
         {...secret}
@@ -172,7 +171,7 @@ describe("SettingsSecretField", () => {
     expect(screen.getByLabelText("API key").getAttribute("autocomplete")).toBe("new-password");
   });
 
-  it("reports the configured state the Host holds", () => {
+  test("reports the configured state the Host holds", () => {
     const { rerender } = render(
       <SettingsSecretField
         {...secret}
@@ -198,7 +197,7 @@ describe("SettingsSecretField", () => {
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "ds-secret");
   });
 
-  it("disables the control when it is told to", () => {
+  test("disables the control when it is told to", () => {
     render(
       <SettingsSecretField
         {...secret}

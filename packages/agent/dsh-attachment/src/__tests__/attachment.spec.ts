@@ -5,30 +5,23 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { provideAttachment, AttachmentStore, AttachmentStoreDefault } from "@morlay/dsh-attachment";
-import { bootstrapApplication, type App, configure } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
+import { bootstrapApplication, configure } from "@morlay/zephyr";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<{ store: AttachmentStore; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-attachment-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [...provideAttachment(configure(AttachmentStoreDefault, { dshHome: root }))],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { store: app.get(AttachmentStore), root };
 }
 
 describe("attachment 域", () => {
-  it(
+  test(
     "文件按内容寻址落盘：同样的字节两次得到同一个 id，读回来逐字节相同",
     { timeout: 20_000 },
     async () => {

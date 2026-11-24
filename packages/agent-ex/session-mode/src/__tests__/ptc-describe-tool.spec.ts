@@ -3,11 +3,11 @@
 //
 // 所以 `describe_tool` **必须由我们注册成真工具**——骨架里承诺了它，没注册的话模型在程序里
 // 调它会得到 `unknown tool`（真机上表现为"取不到签名，只能瞎猜参数"）。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-mode/testing";
 import { describeTools, groupDescriptorOf, groupEntries } from "@morlay/session-mode";
 
 describe("describe_tool 的契约", () => {
-  it("按组归并（MCP 一个 server 一组）", () => {
+  test("按组归并（MCP 一个 server 一组）", () => {
     const groups = groupEntries([
       { name: "read", description: "读文件" },
       { name: "bash", description: "执行命令" },
@@ -16,7 +16,7 @@ describe("describe_tool 的契约", () => {
     expect([...groups.keys()].sort()).toEqual(["fs", "mcp:agent-browser", "shell"]);
   });
 
-  it("不带 group 给分组清单，带 group 给该组签名", () => {
+  test("不带 group 给分组清单，带 group 给该组签名", () => {
     const entries = [
       { name: "read", description: "读文件" },
       { name: "write", description: "写文件" },
@@ -28,11 +28,11 @@ describe("describe_tool 的契约", () => {
     expect(text).toContain("write(args:");
   });
 
-  it("未知 group 给空串（不是抛错）", () => {
+  test("未知 group 给空串（不是抛错）", () => {
     expect(describeTools([{ name: "read", description: "读" }], "nope")).toBe("");
   });
 
-  it("组正文只注入这个会话可见的工具的行", () => {
+  test("组正文只注入这个会话可见的工具的行", () => {
     const body = groupDescriptorOf("swarm", (tool) => tool === "subagent")?.body ?? "";
     expect(body).toContain("subagent：");
     // 这些工具不在可见集里：它们的用法行不许出现（否则模型会照着说明去调不存在的工具）。
@@ -40,7 +40,7 @@ describe("describe_tool 的契约", () => {
     expect(body).not.toContain("team_task_list");
   });
 
-  it("不传可见判据时按全量渲染（清单页与静态文档用得到）", () => {
+  test("不传可见判据时按全量渲染（清单页与静态文档用得到）", () => {
     const body = groupDescriptorOf("swarm")?.body ?? "";
     expect(body).toContain("wait_agent");
   });

@@ -8,51 +8,21 @@
 //
 // 这两条端点归本包（`server/subagents-endpoint.ts` 是它们的宿主实现），所以 spec 也住这里：
 // 依赖方向是 agent-loop → sandbox（生产边），反向不成立。
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { FsSandbox, SandboxPolicyDefault } from "@morlay/dsh-sandbox";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionStoreDefault } from "@morlay/dsh-session";
 import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { provideAgent, WorkingDirectoryDefault } from "@morlay/dsh-agent";
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import {
-  AppEnv,
-  RemoteHandlers,
-  provideApiGateway,
-  provideTypert,
-  type AppEnvValues,
-} from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { bootstrapApplication, type App } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlers, provideApiGateway, provideTypert } from "@morlay/zephyr-app";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { AgentLoopDefault, ToolExecutorNative } from "../index.ts";
 import { provideSubagentEndpoints } from "../server/index.ts";
 
 /** 起始目录与沙箱兜底根的来源（环境事实只有一个来源：不读进程 cwd）。 */
 const ROOT = "/dsh-subagents-endpoint";
-
-/**
- * 运行环境替身：这几条用例不落盘，目录只用来满足 `AppEnv` 契约。
- */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = {
-    dataDir: ROOT,
-    profileDir: ROOT,
-    defaultWorkingDirectory: ROOT,
-  };
-
-  readonly cacheDir = `${ROOT}/cache`;
-
-  readonly packageRoot = ROOT;
-
-  readonly appBootDir = `${ROOT}/boot`;
-
-  readonly profileManifest = `${ROOT}/package.json`;
-}
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
 
 /** 起带 `remote.subagents` 的真栈（沙箱根用固定目录：这几条用例不落盘）。 */
 async function boot(): Promise<App> {
@@ -64,7 +34,7 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
 
       SessionStoreDefault,
-      FakeAppEnv,
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: ROOT }) },
       ...provideAgent(),
       // 循环期：要真 agent 工厂。
       ToolExecutorNative,
@@ -76,12 +46,12 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("subagents/* 的宿主面", { timeout: 30_000 }, () => {
-  it("interruptByUser 对没有活子代理的地址是接受的 no-op（回回执，不抛）", async () => {
+  test("interruptByUser 对没有活子代理的地址是接受的 no-op（回回执，不抛）", async () => {
     const app = await boot();
     const result = await app.get(RemoteHandlers).invoke("subagents/interruptByUser", {
       childSessionId: SessionId("child-none"),
@@ -91,7 +61,7 @@ describe("subagents/* 的宿主面", { timeout: 30_000 }, () => {
     expect(JSON.stringify(result)).toContain("accepted");
   });
 
-  it("空的子会话地址由上游拒绝（`gateway/bad-request`，不是静默成功）", async () => {
+  test("空的子会话地址由上游拒绝（`gateway/bad-request`，不是静默成功）", async () => {
     const app = await boot();
     const result = await app.get(RemoteHandlers).invoke("subagents/interruptByUser", {
       childSessionId: "",
@@ -100,7 +70,7 @@ describe("subagents/* 的宿主面", { timeout: 30_000 }, () => {
     expect((result as { error?: { code?: string } }).error?.code).toBe("gateway/bad-request");
   });
 
-  it("prompt 在没有 provider 的装配里由上游报错，而不是「没实现」", async () => {
+  test("prompt 在没有 provider 的装配里由上游报错，而不是「没实现」", async () => {
     const app = await boot();
     const result = await app.get(RemoteHandlers).invoke("subagents/prompt", {
       request: { sessionId: SessionId("s1"), prompt: "hi", provider: "missing" },

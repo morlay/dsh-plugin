@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { createPostgresTestDatabase } from "@morlay/zephyr-rdb/testing";
 import {
   defineCatalog,
@@ -26,7 +26,7 @@ async function ledgerIds(database: Awaited<ReturnType<typeof openDatabase>>): Pr
 }
 
 describe("迁移并发锁（SQLite）", () => {
-  it("同进程两个 Database 指向同一文件：迁移只执行一次", async () => {
+  test("同进程两个 Database 指向同一文件：迁移只执行一次", async () => {
     const path = `/tmp/zephyr-rdb-migration-lock-${String(Date.now())}.sqlite`;
     let runs = 0;
     const migrations = [
@@ -57,7 +57,7 @@ describe("迁移并发锁（SQLite）", () => {
 });
 
 describe.skipIf(!process.env.TEST_PG_URL)("迁移并发锁（PostgreSQL）", () => {
-  it("两个 Database 同时跑：advisory lock 让迁移只执行一次", async () => {
+  test("两个 Database 同时跑：advisory lock 让迁移只执行一次", async () => {
     const testDatabase = await createPostgresTestDatabase();
     let runs = 0;
     const migrations = [

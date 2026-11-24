@@ -8,7 +8,7 @@
  */
 import { bootstrapApplication } from "@morlay/zephyr";
 import { mockTransport } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { WorkspaceController } from "../workspace-controller.contract.ts";
 import { WorkspaceControllerDefault } from "../workspace-controller.service.ts";
 import { WorkspaceEndpointClient } from "../workspace-endpoint-client.ts";
@@ -48,7 +48,7 @@ async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
 }
 
 describe("WorkspaceController", { timeout: 15_000 }, () => {
-  it("follow 的首帧 baseline 写进 store（items / phase）", async () => {
+  test("follow 的首帧 baseline 写进 store（items / phase）", async () => {
     const { app, workspaces } = await boot({
       "workspace/follow": async function* () {
         yield {
@@ -81,7 +81,7 @@ describe("WorkspaceController", { timeout: 15_000 }, () => {
     }
   });
 
-  it("增量帧（upsert）合并进 store", async () => {
+  test("增量帧（upsert）合并进 store", async () => {
     const { app, workspaces } = await boot({
       "workspace/follow": async function* () {
         yield {
@@ -110,7 +110,7 @@ describe("WorkspaceController", { timeout: 15_000 }, () => {
     }
   });
 
-  it("create 走 remote.workspace.create，并把 RemoteResult 解成 WorkspaceView", async () => {
+  test("create 走 remote.workspace.create，并把 RemoteResult 解成 WorkspaceView", async () => {
     const created = {
       workspaceId: "w3",
       path: "/tmp/w3",

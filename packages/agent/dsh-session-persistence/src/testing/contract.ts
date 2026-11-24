@@ -222,14 +222,16 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         await backend.persistence.flush();
         await closing;
 
-        if (backend.reopen !== undefined) {
-          const reopened = await backend.reopen();
-          try {
-            expect(await reopened.persistence.stat(SessionId("flush-all"))).toBeDefined();
-            expect(await reopened.persistence.stat(SessionId("flush-all-closing"))).toBeUndefined();
-          } finally {
-            await reopened.dispose();
-          }
+        // 重启语义是可选的 contract 子项：后端没提供 `reopen` 就跳过这一段（不是不合规）。
+        if (backend.reopen === undefined) return;
+        const reopenedFlush = await backend.reopen();
+        try {
+          expect(await reopenedFlush.persistence.stat(SessionId("flush-all"))).toBeDefined();
+          expect(
+            await reopenedFlush.persistence.stat(SessionId("flush-all-closing")),
+          ).toBeUndefined();
+        } finally {
+          await reopenedFlush.dispose();
         }
         await materialized.close();
       } finally {
@@ -250,17 +252,19 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         expect((await reader.read()).events).toEqual([]);
         await reader.close();
 
-        if (backend.reopen !== undefined) {
-          const reopened = await backend.reopen();
-          try {
-            expect(await reopened.persistence.stat(m.id)).toBeUndefined();
-            expect((await reopened.persistence.list()).map((s) => s.header.id)).not.toContain(m.id);
-            await expect(reopened.persistence.open(m.id, "read")).rejects.toBeInstanceOf(
-              SessionPersistenceNotFoundError,
-            );
-          } finally {
-            await reopened.dispose();
-          }
+        // 同上：没有 `reopen` 的后端跳过重启语义这一段。
+        if (backend.reopen === undefined) return;
+        const reopenedPending = await backend.reopen();
+        try {
+          expect(await reopenedPending.persistence.stat(m.id)).toBeUndefined();
+          expect(
+            (await reopenedPending.persistence.list()).map((row) => row.header.id),
+          ).not.toContain(m.id);
+          await expect(reopenedPending.persistence.open(m.id, "read")).rejects.toBeInstanceOf(
+            SessionPersistenceNotFoundError,
+          );
+        } finally {
+          await reopenedPending.dispose();
         }
         await handle.close();
       } finally {

@@ -12,7 +12,7 @@ import {
   type ResolvedConfig,
 } from "@morlay/zephyr-cli";
 import { fakeBuildSteps, resolvedFor, tempWorkspace } from "@morlay/zephyr-cli/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { BundleCommand } from "../commands/bundle.ts";
 import { Packager } from "../packager.ts";
 import { FakePackager } from "../testing/index.ts";
@@ -104,7 +104,7 @@ async function mount(resolved: ResolvedConfig, packager: ProviderEntry = FakePac
 }
 
 describe("desktop bundle（装配级）", () => {
-  it("没有产物时先构建一次，再交出配置与身份文件", async () => {
+  test("没有产物时先构建一次，再交出配置与身份文件", async () => {
     const workspace = await tempWorkspace({});
     const resolved = demoResolved(workspace);
     await seedClosure(resolved);
@@ -123,7 +123,7 @@ describe("desktop bundle（装配级）", () => {
     }
   });
 
-  it("每次 bundle 都先重建（包里的产物必须与源码一致）", async () => {
+  test("每次 bundle 都先重建（包里的产物必须与源码一致）", async () => {
     const workspace = await tempWorkspace({});
     const resolved = demoResolved(workspace);
     // 已经有旧产物也照样重建：旧产物可能对应已经改掉的源码。
@@ -138,7 +138,7 @@ describe("desktop bundle（装配级）", () => {
     }
   });
 
-  it("--install 才装进系统应用目录", async () => {
+  test("--install 才装进系统应用目录", async () => {
     const workspace = await tempWorkspace({});
     const resolved = demoResolved(workspace);
     await seedClosure(resolved);
@@ -152,7 +152,7 @@ describe("desktop bundle（装配级）", () => {
     }
   });
 
-  it("打包失败必须冒到调用方（CLI 才会非 0）", async () => {
+  test("打包失败必须冒到调用方（CLI 才会非 0）", async () => {
     const workspace = await tempWorkspace({});
     const resolved = demoResolved(workspace);
     await seedClosure(resolved);

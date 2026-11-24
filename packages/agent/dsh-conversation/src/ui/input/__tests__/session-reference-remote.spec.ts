@@ -6,7 +6,7 @@
  * `TypeError: Cannot read properties of undefined (reading 'candidates')`。
  * 本用例只替传输层（`mockTransport`），`RemoteDefault` 与绑定行都是真实现。
  */
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
 import {
   ClientConnectionDefault,
   provideClientConnection,
@@ -15,15 +15,10 @@ import {
   Remote,
   RemoteDefault,
 } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { SessionReferenceRemoteBinding } from "../session-reference-remote.ts";
 import { namespaceOf } from "../../remote-namespace.ts";
-
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-});
 
 /** `remote.sessionReferenceResolver` 的调用面（namespace 在契约上是动态面：按运行期形状收窄一次）。 */
 interface SessionReferenceFace {
@@ -35,7 +30,7 @@ interface SessionReferenceFace {
 }
 
 describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () => {
-  it("装配后 `remote.sessionReferenceResolver.candidates` 可用，并按命名参数走 wire", async () => {
+  test("装配后 `remote.sessionReferenceResolver.candidates` 可用，并按命名参数走 wire", async () => {
     const app = await bootstrapApplication({
       providers: [
         // 传输全替身（`mockTransport`）：连接只做 `RemoteDefault` 的依赖占位，不真连。
@@ -48,7 +43,7 @@ describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () =>
       ],
       timeoutMs: 8_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
     const remote = app.get(Remote);
     // `session-controller` 的那份 descriptor 由 `ClientRemoteModule` 自己挂；这里只替传输。
     const calls: { endpoint: string; args: unknown }[] = [];

@@ -8,11 +8,11 @@
  *
  * 这里不碰 IndexedDB：后端是注入的假 writer（真链路里是 `createWriter(db, store)`）。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { createShim, drainNative, installStorageShim, type PendingWrite } from "../storage-shim.ts";
 
 describe("createShim", () => {
-  it("写入立刻读得到：getItem / length / key / removeItem / clear", () => {
+  test("写入立刻读得到：getItem / length / key / removeItem / clear", () => {
     const shim = createShim(new Map([["a", "1"]]), () => {});
     expect(shim.length).toBe(1);
     expect(shim.key(0)).toBe("a");
@@ -33,7 +33,7 @@ describe("createShim", () => {
     expect(shim.key(0)).toBeNull();
   });
 
-  it("每次写都按顺序刷给注入的 writer，删除与清空发 value: null", () => {
+  test("每次写都按顺序刷给注入的 writer，删除与清空发 value: null", () => {
     const writes: PendingWrite[] = [];
     const shim = createShim(
       new Map([
@@ -56,7 +56,7 @@ describe("createShim", () => {
     ]);
   });
 
-  it("初值是快照：shim 的写入不会回流到入参那张表", () => {
+  test("初值是快照：shim 的写入不会回流到入参那张表", () => {
     const initial = new Map([["a", "1"]]);
     const shim = createShim(initial, () => {});
     shim.setItem("b", "2");
@@ -85,7 +85,7 @@ function fakeNativeStorage(
 }
 
 describe("drainNative（把原生 storage 的键搬进内存表）", () => {
-  it("搬全部可读键，跳过 `getItem` 为 null 的项", () => {
+  test("搬全部可读键，跳过 `getItem` 为 null 的项", () => {
     // `b` 的 key 还在、值读不到：模拟「值被清掉」的边界。
     expect(
       drainNative(
@@ -100,13 +100,13 @@ describe("drainNative（把原生 storage 的键搬进内存表）", () => {
     ).toEqual(new Map([["a", "1"]]));
   });
 
-  it("原生为空时是空表", () => {
+  test("原生为空时是空表", () => {
     expect(drainNative(fakeNativeStorage([])).size).toBe(0);
   });
 });
 
 describe("installStorageShim 的兜底", () => {
-  it(
+  test(
     "没有 `indexedDB` 时不装、如实返回原因（调用方保留原生 storage）",
     { timeout: 10_000 },
     async () => {

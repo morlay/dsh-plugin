@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   defineTable,
   ensureSchema,
@@ -40,7 +40,7 @@ function recordingPostgres(): Database {
 }
 
 describe("窗口函数", () => {
-  it("同一份写法在两方言渲染成同一份 OVER 子句，占位符各自编号", () => {
+  test("同一份写法在两方言渲染成同一份 OVER 子句，占位符各自编号", () => {
     const database = recordingPostgres();
     const table = database.table(scores);
     const query = table.select({
@@ -66,7 +66,7 @@ describe("窗口函数", () => {
     expect(sqlite.params).toEqual([2, 0]);
   });
 
-  it("实跑：分区行号 / 名次 / 上一行（SQLite）", async () => {
+  test("实跑：分区行号 / 名次 / 上一行（SQLite）", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [scores]);

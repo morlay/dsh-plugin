@@ -6,7 +6,7 @@
  * 拒掉 `missing "sessionId"`）。
  */
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test } from "@morlay/zephyr/testing";
 import { watchOf } from "@morlay/zephyr-dev/testing";
 
 test("上游包（非 node_modules）：指纹看 src 与 lib", () => {

@@ -6,7 +6,7 @@
 import type { SettingsNamespaceView } from "@deepseek-ai/dsh-api-remotes/client";
 import type { SchemaNode } from "@deepseek-ai/dsh-client-ui-settings/client";
 import z from "@deepseek-ai/schemastery";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
 import { SchemaFormController, fieldKey } from "../schema-form/controller.ts";
 import { failureOf } from "../schema-form/draft.ts";
 import { SchemaFormHintsDefault } from "../schema-form/hints.ts";
@@ -76,14 +76,14 @@ function mounted(
 }
 
 describe("行配置控制器", () => {
-  it("行没有被 describe 出来时不给页面（configured=false）", () => {
+  test("行没有被 describe 出来时不给页面（configured=false）", () => {
     const { state } = mounted("missing", new FakeScope());
 
     expect(state()).toMatchObject({ configured: false });
     expect(state().fields.size).toBe(0);
   });
 
-  it("schema 是对象时给出按具体键与索引展开的字段表", () => {
+  test("schema 是对象时给出按具体键与索引展开的字段表", () => {
     const describeFace = fakeDescribe([
       view(
         "row",
@@ -114,7 +114,7 @@ describe("行配置控制器", () => {
     ]);
   });
 
-  it("编辑只落在草稿上，投影立刻反映", () => {
+  test("编辑只落在草稿上，投影立刻反映", () => {
     const describeFace = fakeDescribe([view("row", z.object({ retry: z.number() }))]);
     const scope = new FakeScope({ value: { retry: 1 } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -127,7 +127,7 @@ describe("行配置控制器", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("保存走共享配置表单的一次写", async () => {
+  test("保存走共享配置表单的一次写", async () => {
     const describeFace = fakeDescribe([view("row", z.object({ retry: z.number() }))]);
     const scope = new FakeScope({ value: { retry: 1 } });
     const face = mounted("row", scope, describeFace).controller.face();
@@ -140,7 +140,7 @@ describe("行配置控制器", () => {
     expect(scope.writes).toEqual([[{ op: "set", path: ["retry"], value: 5 }]]);
   });
 
-  it("schema 变了只换字段树，草稿不丢", () => {
+  test("schema 变了只换字段树，草稿不丢", () => {
     const describeFace = fakeDescribe([view("row", z.object({ retry: z.number() }))]);
     const scope = new FakeScope({ value: { retry: 1 } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -158,7 +158,7 @@ describe("行配置控制器", () => {
     expect(state().fields.get(fieldKey(["retry"]))).toMatchObject({ value: 5, overridden: true });
   });
 
-  it("数组的项身份重复时不发写，并把消息报到整段校验上", async () => {
+  test("数组的项身份重复时不发写，并把消息报到整段校验上", async () => {
     const describeFace = fakeDescribe([
       view(
         "row",
@@ -184,7 +184,7 @@ describe("行配置控制器", () => {
     expect(state().invalidAt.get(fieldKey(["providers", "1"]))).toContain("a");
   });
 
-  it("数组的项身份不重复时照常保存", async () => {
+  test("数组的项身份不重复时照常保存", async () => {
     const describeFace = fakeDescribe([
       view(
         "row",
@@ -206,7 +206,7 @@ describe("行配置控制器", () => {
     ]);
   });
 
-  it("共享判别字段 + const 分支的 intersect 顶层也能出页面", () => {
+  test("共享判别字段 + const 分支的 intersect 顶层也能出页面", () => {
     const describeFace = fakeDescribe([
       view(
         "row",
@@ -231,7 +231,7 @@ describe("行配置控制器", () => {
     ]);
   });
 
-  it("schema rehydrate 不了或段根不是对象时不给页面", () => {
+  test("schema rehydrate 不了或段根不是对象时不给页面", () => {
     const broken = fakeDescribe([{ ...view("row", z.object({})), schema: "nonsense" as never }]);
     expect(mounted("row", new FakeScope(), broken).state()).toMatchObject({ configured: false });
 
@@ -239,7 +239,7 @@ describe("行配置控制器", () => {
     expect(mounted("row", new FakeScope(), notObject).state()).toMatchObject({ configured: false });
   });
 
-  it("secret 槽按路径标出来（值本身不回传）", () => {
+  test("secret 槽按路径标出来（值本身不回传）", () => {
     const describeFace = fakeDescribe([
       view("row", z.object({ key: z.string().role("secret") }), {
         secrets: [{ path: ["key"], set: true }],
@@ -250,7 +250,7 @@ describe("行配置控制器", () => {
     expect(state().secrets.get(fieldKey(["key"]))).toBe(true);
   });
 
-  it("收掉之后不再跟着 describe 变化", () => {
+  test("收掉之后不再跟着 describe 变化", () => {
     const describeFace = fakeDescribe([view("row", z.object({ retry: z.number() }))]);
     const { controller, state } = mounted(
       "row",
@@ -266,7 +266,7 @@ describe("行配置控制器", () => {
 });
 
 describe("字段的候选值", () => {
-  it("提示面注册的候选出现在读数里，依赖的兄弟字段一改就重算", () => {
+  test("提示面注册的候选出现在读数里，依赖的兄弟字段一改就重算", () => {
     const schema = z.object({
       models: z.dict(
         z.object({
@@ -303,7 +303,7 @@ describe("字段的候选值", () => {
     ]);
   });
 
-  it("字面量集合的 union 自带候选，不用业务注册", () => {
+  test("字面量集合的 union 自带候选，不用业务注册", () => {
     const describeFace = fakeDescribe([
       view("row", z.object({ journalMode: z.union(["wal", "delete"]) })),
     ]);
@@ -316,7 +316,7 @@ describe("字段的候选值", () => {
     ]);
   });
 
-  it("没注册候选的字段没有 options（仍旧是文本编辑）", () => {
+  test("没注册候选的字段没有 options（仍旧是文本编辑）", () => {
     const describeFace = fakeDescribe([view("row", z.object({ note: z.string() }))]);
     const scope = new FakeScope({ value: { note: "x" } });
     const { state } = mounted("row", scope, describeFace);
@@ -331,7 +331,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
     tags: z.array(z.number().default(7)),
   });
 
-  it("字典加键：立刻出现在投影里，值取该节点的默认值，保存写出这一项", async () => {
+  test("字典加键：立刻出现在投影里，值取该节点的默认值，保存写出这一项", async () => {
     const describeFace = fakeDescribe([view("row", schema)]);
     const scope = new FakeScope({ value: { models: {}, tags: [] } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -351,7 +351,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
     expect(scope.writes).toEqual([[{ op: "set", path: ["models", "chat"], value: "x" }]]);
   });
 
-  it("数组追加项：新项出现，值取 item 的默认值", () => {
+  test("数组追加项：新项出现，值取 item 的默认值", () => {
     const describeFace = fakeDescribe([view("row", schema)]);
     const scope = new FakeScope({ value: { models: {}, tags: [] } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -362,7 +362,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
     expect(state().fields.get(fieldKey(["tags", "0"]))).toMatchObject({ value: 7 });
   });
 
-  it("行 schema 换了之后，加进来的项跟着新 schema 取默认值", () => {
+  test("行 schema 换了之后，加进来的项跟着新 schema 取默认值", () => {
     const describeFace = fakeDescribe([view("row", z.object({ models: z.dict(z.string()) }))]);
     const scope = new FakeScope({ value: { models: {} } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -373,7 +373,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
     expect(state().fields.get(fieldKey(["models", "chat"]))).toMatchObject({ value: "new" });
   });
 
-  it("草稿标记：本页改过的字段 staged=true，撤回后回到 false", () => {
+  test("草稿标记：本页改过的字段 staged=true，撤回后回到 false", () => {
     const describeFace = fakeDescribe([view("row", schema)]);
     const scope = new FakeScope({ value: { models: {}, tags: [] } });
     const { controller, state } = mounted("row", scope, describeFace);
@@ -392,7 +392,7 @@ describe("增删项走完整条路（投影 → 草稿 → 写）", () => {
 describe("判别式行 Config 的切换与补字段", () => {
   const value = { type: "sqlite", path: "/tmp/a.db" };
 
-  it("切到另一支：type 行显示新值，那一支的字段跟着出现", () => {
+  test("切到另一支：type 行显示新值，那一支的字段跟着出现", () => {
     const describeFace = fakeDescribe([view("session-rdb", discriminatedConfig)]);
     const scope = new FakeScope({ value: { ...value } });
     const { controller, state } = mounted("session-rdb", scope, describeFace);
@@ -410,7 +410,7 @@ describe("判别式行 Config 的切换与补字段", () => {
     ).toEqual(["schema", "preparedSessionCacheSize"]);
   });
 
-  it("从候选补一个带默认值的字段：行出现，值取默认值", () => {
+  test("从候选补一个带默认值的字段：行出现，值取默认值", () => {
     const describeFace = fakeDescribe([view("session-rdb", discriminatedConfig)]);
     const scope = new FakeScope({ value: { ...value } });
     const { controller, state } = mounted("session-rdb", scope, describeFace);
@@ -429,7 +429,7 @@ describe("判别式行 Config 的切换与补字段", () => {
 });
 
 describe("按 role 认领的候选源", () => {
-  it("`role('select', { source })` 用那个具名源，并随依赖的兄弟字段重算", () => {
+  test("`role('select', { source })` 用那个具名源，并随依赖的兄弟字段重算", () => {
     const schema = z.object({
       models: z.dict(
         z.object({
@@ -463,7 +463,7 @@ describe("按 role 认领的候选源", () => {
     expect(state().options.get(fieldKey(["models", "coding", "model"]))).toEqual([{ value: "m2" }]);
   });
 
-  it("没注册那个源：字段退回文本编辑", () => {
+  test("没注册那个源：字段退回文本编辑", () => {
     const schema = z.object({ provider: z.string().role("select", { source: "missing" }) });
     const describeFace = fakeDescribe([view("row", schema)]);
     const scope = new FakeScope({ value: { provider: "a" } });
@@ -474,7 +474,7 @@ describe("按 role 认领的候选源", () => {
 });
 
 describe("role 的 extra 一路到候选（真提示面）", () => {
-  it("`role('select', { source })` 认领真实注册的源", () => {
+  test("`role('select', { source })` 认领真实注册的源", () => {
     const hints = new SchemaFormHintsDefault();
     hints.source("llm-providers", {
       options: () => [

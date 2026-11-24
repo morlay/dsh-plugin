@@ -8,9 +8,7 @@
 // 任何一环失败都被吞成静默。这条 spec 把每一环都换成真实现（`sessions` 服务、`RemoteCommandRunner`
 // → 契约转发 → `CommandEndpointDefault` → `CommandRegistryDefault` → 上游 `CommandRuntime`），
 // 唯一替身是目录读取（`FakeSessionRemote`），于是"是宿主没实现，还是前端没发出去"一眼可分。
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { provideAgent } from "@morlay/dsh-agent";
 import { CommandEndpointClient, RemoteCommandRunner } from "@morlay/dsh-command/ui";
@@ -22,42 +20,13 @@ import { SessionStore } from "@morlay/dsh-session";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { bootstrapApplication, Injectable } from "@morlay/zephyr";
-import {
-  AppEnv,
-  RemoteHandlers,
-  RemoteHandlersDefault,
-  type AppEnvValues,
-} from "@morlay/zephyr-app";
+import { Injectable, type App } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionRemote } from "@morlay/zephyr-app/client";
-import { provideLocalRemote } from "@morlay/zephyr-app/testing";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
-
-let root = "";
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-permission-chip-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
-/** 指向临时目录的运行环境。 */
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = { dataDir: root, profileDir: root };
-
-  readonly cacheDir = join(root, "cache");
-
-  readonly packageRoot = root;
-
-  readonly appBootDir = join(root, "boot");
-
-  readonly profileManifest = join(root, "package.json");
-}
 
 /** 目录读取的替身：本 spec 的被测面是"那一行命令"，不是列表拉取。 */
 @Injectable()
@@ -90,27 +59,25 @@ class FakeSessionRemote extends SessionRemote {
   }
 }
 
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-}, 30_000);
-
 /**
  * 装配整条链：宿主（会话 + agent + 权限 + 命令面）+ 客户端（`sessions` 服务 + 走进程内传输的命令执行器）。
- * @returns app 与建好的会话 id。
+ * 生命周期由 `bootTwoSided` 自己收（`onTestFinished`），这里不返回卸载函数。
+ * @param appEnv - 本用例的运行环境（数据根是它的临时目录）。
+ * @returns 前端 app（被测面）、后端 app 与建好的会话 id。
  */
-async function boot(): Promise<{
-  app: Awaited<ReturnType<typeof bootstrapApplication>>;
+async function boot(appEnv: TestingAppEnv): Promise<{
+  /** 前端装配：chip 的调用面在这一侧。 */
+  app: App;
+  /** 后端装配：宿主档位在这一侧的投影里。 */
+  host: App;
   sessionId: string;
 }> {
-  // 两套装配两个 ctx：host = 会话 / agent / 权限 / 命令；client = sessions + 命令执行器。
-  const host = await bootstrapApplication({
-    providers: [
+  const two = await bootTwoSided({
+    createHost: () => [
       RemoteHandlersDefault,
       ...provideSession(),
       ...provideSessionProjection(),
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideAgent(),
       // 顺序即装配顺序：`shell` / `bash` 的适配面要先就位，权限行构造期就读 `ctx.shell.sandboxMode`。
       SubprocessDefault,
@@ -119,37 +86,36 @@ async function boot(): Promise<{
       BashSandbox,
       ...providePermissionFor("workspace-write"),
       ...provideCommand(),
+      // 循环期：要真 `AgentLoop` 建会话、真命令运行时派发这一行（与宿主侧同一份行清单）。
+      ToolExecutorNative,
+      { provide: AgentLoopDefault, config: { agents: [] } },
     ],
-    timeoutMs: 30_000,
+    // client = sessions + 命令执行器；传输由 `clientWithTransport` 接到 host 的执行面上。
+    createClient: (booted) =>
+      clientWithTransport(booted, [
+        { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
+        CommandEndpointClient,
+        RemoteCommandRunner,
+        ...provideSessionsStore(),
+      ]),
   });
-  apps.push(host);
-  const hostInvoker = async (endpoint: string, payload: Readonly<Record<string, unknown>>) =>
-    host.get(RemoteHandlers).invoke(endpoint, payload);
-  const app = await bootstrapApplication({
-    providers: [
-      ...provideLocalRemote(hostInvoker),
-      { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
-      CommandEndpointClient,
-      RemoteCommandRunner,
-      ...provideSessionsStore(),
-    ],
-    timeoutMs: 30_000,
-  });
-  apps.push(app);
-  const sessionId = app.get(SessionStore).prepare().id;
-  await app
+  if (two.client === undefined) throw new Error("client 没装上");
+  // 会话建在**后端**：`SessionStore` / `AgentLoop` 是宿主那侧的行。
+  const sessionId = two.host.get(SessionStore).prepare().id;
+  await two.host
     .get(AgentLoop)
-    .create(sessionId, { provider: "deepseek-official", model: "deepseek-flash" }, { cwd: root });
+    .create(
+      sessionId,
+      { provider: "deepseek-official", model: "deepseek-flash" },
+      { cwd: appEnv.values.dataDir },
+    );
   // 目录里要有这条会话：`binding()` 的判据是 `ids.includes(id)`。
-  (app.get(SessionRemote) as FakeSessionRemote).setRows([String(sessionId)]);
-  return { app, sessionId: String(sessionId) };
+  (two.client.get(SessionRemote) as FakeSessionRemote).setRows([String(sessionId)]);
+  return { app: two.client, host: two.host, sessionId: String(sessionId) };
 }
 
 /** 会话的 `permissions` 投影当前值。 */
-function permissionOf(
-  app: Awaited<ReturnType<typeof bootstrapApplication>>,
-  sessionId: string,
-): string | undefined {
+function permissionOf(app: App, sessionId: string): string | undefined {
   const projections = app.get(SessionProjectionStore);
   const session = app.get(SessionStore).get(SessionId(sessionId));
   if (session === undefined) throw new Error(`会话 "${sessionId}" 不在 store 里`);
@@ -182,22 +148,20 @@ function bindingOf(sessions: SessionController, id: string): ChipBinding {
   return sessions.binding(id) as ChipBinding;
 }
 
-// 已知阻塞（第一版不支持）：这条用例在**同一个 `bootstrapApplication`** 里同时装
-// `CommandEndpointDefault`（宿主行）与 `CommandEndpointClient`（客户端行）——两者都 `extends CommandEndpoint`，
-// 令牌名相同，cordis 的扁平 store 只允许注册一次（`service "command-endpoint" has been registered`）。
-// 真实部署里前端在浏览器、后端在宿主，各自一个 bootstrap；旧 zephyr 的"行作用域"在新模型里已删除。
-// 要验它需要：两个 app + 假 transport，或拆成 wire 层 + ui 层两段各自装配。
-describe.skip("权限 chip 从 ui 走到底", () => {
-  it(
+// 这条曾经是 skip：那时宿主的 `CommandEndpointDefault` 与客户端的 `CommandEndpointClient` 装在同一份清单里，
+// 两者都 `extends CommandEndpoint`、令牌同名，cordis 的扁平 store 只许注册一次。双端装配（`bootTwoSided`，
+// 前端行在后端行之外的那个 app 里）之后令牌不再撞名，宿主再补上循环期那两行就能真跑通。
+describe("权限 chip 从 ui 走到底", () => {
+  test(
     "`binding().session.command('/permission danger-full-access')` 真的切了宿主档位",
     { timeout: 30_000 },
-    async () => {
-      const { app, sessionId } = await boot();
+    async ({ appEnv }) => {
+      const { app, host, sessionId } = await boot(appEnv);
       const sessions = app.get(SessionController);
       // 先拉一次目录，`binding()` 才有行可查（装配期的 `onInit` 早于我们塞 rows）。
       await sessions.refresh();
 
-      expect(permissionOf(app, sessionId), "装配给的默认档位").toBe("workspace-write");
+      expect(permissionOf(host, sessionId), "装配给的默认档位").toBe("workspace-write");
       const binding = bindingOf(sessions, sessionId);
       // 只判类型、不持有引用：`command` 是绑定在 session 上的方法，取出来单独断言会丢 `this`。
       expect(typeof binding?.session?.command, "chip 依赖的 `session.command` 必须是函数").toBe(
@@ -210,20 +174,20 @@ describe.skip("权限 chip 从 ui 走到底", () => {
         ok: true,
         value: { matched: true },
       });
-      expect(permissionOf(app, sessionId), "宿主档位必须真的变了").toBe("danger-full-access");
+      expect(permissionOf(host, sessionId), "宿主档位必须真的变了").toBe("danger-full-access");
     },
   );
 
-  it(
+  test(
     "宿主没有这条命令时回 `matched: false` 之外的结构化失败（不静默）",
     { timeout: 30_000 },
-    async () => {
-      const { app, sessionId } = await boot();
+    async ({ appEnv }) => {
+      const { app, host, sessionId } = await boot(appEnv);
       const sessions = app.get(SessionController);
       await sessions.refresh();
       const result = await bindingOf(sessions, sessionId)?.session?.command("/no-such-command arg");
       expect(result?.ok).toBe(false);
-      expect(permissionOf(app, sessionId), "失败的调用不该改档位").toBe("workspace-write");
+      expect(permissionOf(host, sessionId), "失败的调用不该改档位").toBe("workspace-write");
     },
   );
 });

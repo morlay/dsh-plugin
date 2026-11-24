@@ -6,16 +6,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootstrapApplication, without } from "@morlay/zephyr";
+import { onTestFinished } from "vitest";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { loopTestProviders } from "@morlay/dsh-agent-loop/testing";
 import { SessionStore } from "@morlay/dsh-session";
 import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { SessionBranch } from "@morlay/session-rdb/contract";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { StorageTakeoverDefault } from "@morlay/session-rdb";
 import { provideBetterSession } from "@morlay/session-rdb/server";
-import { FakeAppEnv, mountRows, type MountedRows, type RowEntry } from "./base.ts";
+import { mountRows, type MountedRows, type RowEntry } from "./base.ts";
 
 const rows = [
   ...provideSession(),
@@ -63,7 +65,7 @@ export async function startHarness(): Promise<Harness> {
   const app = await mountRows(rows);
   return {
     app,
-    root: FakeAppEnv.root,
+    root: app.dataDir ?? "",
     sessionStore: app.get(SessionStore),
     dispose: () => app.dispose(),
   };
@@ -125,10 +127,15 @@ const rowsWithAgent = [
 export async function startHarnessWithAgent(): Promise<HarnessWithAgent> {
   // 一次 `bootstrapApplication`：agent 那一串（Llm → 会话存储 → 投影 → system-prompt → 工具 → agent 目录）
   // 由 testkit 的清单装，本包的行也在同一份清单里——不再"手工挂行"。
-  // 数据根：`FakeAppEnv.root` 是静态的，必须先设好再建行（`SessionPersistenceRdb` 要 `app-env`）。
-  FakeAppEnv.root = await mkdtemp(join(tmpdir(), "better-session-agent-"));
+  // 数据根由**本函数**持有：运行环境实例带着它一起进清单（`SessionPersistenceRdb` 要 `app-env`）。
+  const root = await mkdtemp(join(tmpdir(), "better-session-agent-"));
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
-    providers: [FakeAppEnv, ...loopTestProviders(), ...rowsWithAgent],
+    providers: [
+      { provide: AppEnv, useValue: createTestingAppEnv({ root }) },
+      ...loopTestProviders(),
+      ...rowsWithAgent,
+    ],
     timeoutMs: 30_000,
   } as never);
   const agent = {
@@ -142,7 +149,7 @@ export async function startHarnessWithAgent(): Promise<HarnessWithAgent> {
   };
   return {
     app,
-    root: FakeAppEnv.root,
+    root,
     sessionStore: app.get(SessionStore),
     agent,
     dispose: () => app.dispose(),

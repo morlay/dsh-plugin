@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { loadConfig } from "../config/load.ts";
 import { CliError } from "../errors.ts";
 import { tempWorkspace } from "../testing/index.ts";
@@ -12,7 +12,7 @@ const CONFIG = `export default {
 `;
 
 describe("工作区配置", () => {
-  it("把入口与产物路径绝对化", async () => {
+  test("把入口与产物路径绝对化", async () => {
     const workspace = await tempWorkspace({ "zephyr.config.ts": CONFIG });
     const resolved = await loadConfig({ cwd: workspace });
     expect(resolved.configFile).toBe(`${workspace}/zephyr.config.ts`);
@@ -22,7 +22,7 @@ describe("工作区配置", () => {
     expect(resolved.appName).toBe("Zephyr Custom");
   });
 
-  it("没写 server.outputDir 就落 target/<应用名>", async () => {
+  test("没写 server.outputDir 就落 target/<应用名>", async () => {
     const workspace = await tempWorkspace({
       "zephyr.config.ts": `export default {
   server: { entry: './src/server.ts' },
@@ -35,13 +35,13 @@ describe("工作区配置", () => {
     expect(resolved.layout.root).toBe(`${workspace}/target/Demo`);
   });
 
-  it("没有配置就是错误，不回落（清单是唯一装配面）", async () => {
+  test("没有配置就是错误，不回落（清单是唯一装配面）", async () => {
     const workspace = await tempWorkspace({});
     await expect(loadConfig({ cwd: workspace })).rejects.toThrowError(/没有找到 zephyr.config.ts/u);
     await expect(loadConfig({ cwd: workspace })).rejects.toBeInstanceOf(CliError);
   });
 
-  it("缺 server.entry / client.entry 时指出缺哪个", async () => {
+  test("缺 server.entry / client.entry 时指出缺哪个", async () => {
     const workspace = await tempWorkspace({
       "zephyr.config.ts": `export default { server: { entry: './s.ts' } };`,
     });
@@ -58,19 +58,19 @@ describe("dev.hmr 的两半开关", () => {
 };
 `;
 
-  it("缺省两半都开（不写 dev 段也一样）", async () => {
+  test("缺省两半都开（不写 dev 段也一样）", async () => {
     const workspace = await tempWorkspace({ "zephyr.config.ts": CONFIG });
     const resolved = await loadConfig({ cwd: workspace, env: {} });
     expect(resolved.hmr).toEqual({ client: true, server: true });
   });
 
-  it("配置里关掉一半，另一半不受影响", async () => {
+  test("配置里关掉一半，另一半不受影响", async () => {
     const workspace = await tempWorkspace({ "zephyr.config.ts": withHmr("{ server: false }") });
     const resolved = await loadConfig({ cwd: workspace, env: {} });
     expect(resolved.hmr).toEqual({ client: true, server: false });
   });
 
-  it("环境变量覆盖配置：关掉的能临时打开，打开的能临时关掉", async () => {
+  test("环境变量覆盖配置：关掉的能临时打开，打开的能临时关掉", async () => {
     const workspace = await tempWorkspace({
       "zephyr.config.ts": withHmr("{ client: false, server: true }"),
     });
@@ -81,7 +81,7 @@ describe("dev.hmr 的两半开关", () => {
     expect(resolved.hmr).toEqual({ client: true, server: false });
   });
 
-  it("环境变量与配置一致时不必写配置文件", async () => {
+  test("环境变量与配置一致时不必写配置文件", async () => {
     const workspace = await tempWorkspace({ "zephyr.config.ts": CONFIG });
     const resolved = await loadConfig({
       cwd: workspace,
@@ -90,7 +90,7 @@ describe("dev.hmr 的两半开关", () => {
     expect(resolved.hmr).toEqual({ client: true, server: false });
   });
 
-  it("环境变量取值非法：当场报错并指出是哪个变量（拼错不该静默）", async () => {
+  test("环境变量取值非法：当场报错并指出是哪个变量（拼错不该静默）", async () => {
     const workspace = await tempWorkspace({ "zephyr.config.ts": CONFIG });
     await expect(
       loadConfig({ cwd: workspace, env: { ZEPHYR_HMR_CLIENT: "maybe" } }),

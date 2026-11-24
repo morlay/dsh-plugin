@@ -5,7 +5,7 @@
 // 上游把失败记进日志并进入重连循环（定时器 unref，不影响退出）——那正是要验的「缺 bin 不失败」。
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { ToolRegistry } from "@morlay/dsh-agent";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { AgentBrowserUse, AgentDesktopUse } from "@morlay/agent-use";
 import { provideAgentUse } from "@morlay/agent-use";
 
@@ -18,7 +18,7 @@ const toolRegistryStub = {
 };
 
 describe("agent-use 的两条 MCP 客户端行", () => {
-  it("两条同装：都能取到，且不是同一个实例", async () => {
+  test("两条同装：都能取到，且不是同一个实例", async () => {
     const app = await bootstrapApplication({
       providers: [{ provide: ToolRegistry, useValue: toolRegistryStub }, ...provideAgentUse()],
       timeoutMs: 8_000,
@@ -47,7 +47,7 @@ describe("agent-use 的两条 MCP 客户端行", () => {
     }
   });
 
-  it("configure 改 args：装出来的配置真的变了，没改的字段仍是默认值", async () => {
+  test("configure 改 args：装出来的配置真的变了，没改的字段仍是默认值", async () => {
     const app = await bootstrapApplication({
       providers: [
         { provide: ToolRegistry, useValue: toolRegistryStub },
@@ -82,7 +82,7 @@ describe("agent-use 的两条 MCP 客户端行", () => {
     }
   });
 
-  it("缺 bin 不失败：装配照常完成，两行都在", async () => {
+  test("缺 bin 不失败：装配照常完成，两行都在", async () => {
     // 命令指向必然不存在的可执行文件：ENOENT 由上游按 failOnStartupError: false 吞掉。
     const app = await bootstrapApplication({
       providers: [

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { defineTable, ensureSchema, openDatabase } from "@morlay/zephyr-rdb";
 
 const readings = defineTable({
@@ -16,7 +16,7 @@ async function collect<T>(rows: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe("写通道", () => {
-  it("事务外的 insert … RETURNING 排在写队列之后，不落进未提交的事务", async () => {
+  test("事务外的 insert … RETURNING 排在写队列之后，不落进未提交的事务", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [readings]);
@@ -46,7 +46,7 @@ describe("写通道", () => {
     }
   });
 
-  it("事务内的 insert … RETURNING 与事务同生共死", async () => {
+  test("事务内的 insert … RETURNING 与事务同生共死", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [readings]);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { createPostgresTestDatabase } from "@morlay/zephyr-rdb/testing";
 import {
   createDialect,
@@ -43,7 +43,7 @@ async function indexColumns(database: Database, index: string): Promise<string[]
 }
 
 describe("结构漂移", () => {
-  it("同名索引的列变了：报告可自动修的漂移并重建索引", async () => {
+  test("同名索引的列变了：报告可自动修的漂移并重建索引", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -72,7 +72,7 @@ describe("结构漂移", () => {
     }
   });
 
-  it("同名索引的唯一性变了：报告并重建为定义的样子", async () => {
+  test("同名索引的唯一性变了：报告并重建为定义的样子", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -95,7 +95,7 @@ describe("结构漂移", () => {
     }
   });
 
-  it("列类型 / 可空 / 默认值不同形时只报告，不改表", () => {
+  test("列类型 / 可空 / 默认值不同形时只报告，不改表", () => {
     const dialect = createDialect("sqlite");
     const shape: TableShape = {
       columns: new Set(["f_id", "f_owner", "f_count"]),
@@ -123,7 +123,7 @@ describe("结构漂移", () => {
 
   // P1-9：删掉一张表的定义（或不走迁移直接删账本）时，库里多出来的表必须被看见；
   // 只报告、不删——这是「表定义被删」的唯一安全网。
-  it("库里有、catalog 没有的表列为 orphan：只报告不删，视图与迁移账本不算", async () => {
+  test("库里有、catalog 没有的表列为 orphan：只报告不删，视图与迁移账本不算", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [items]);
@@ -153,7 +153,7 @@ describe("结构漂移", () => {
     }
   });
 
-  it("orphan 的差集只认 catalog 之外的表，迁移账本自管不算", () => {
+  test("orphan 的差集只认 catalog 之外的表，迁移账本自管不算", () => {
     const dialect = createDialect("sqlite");
     const shape: TableShape = {
       columns: new Set(["f_id", "f_owner", "f_count"]),
@@ -172,7 +172,7 @@ describe("结构漂移", () => {
     expect(plan.changes).toEqual([]);
   });
 
-  it("唯一约束缺失被报告并补唯一索引，补齐后不再报", async () => {
+  test("唯一约束缺失被报告并补唯一索引，补齐后不再报", async () => {
     const database = await openDatabase({ dialect: "sqlite", path: ":memory:" });
     try {
       await ensureSchema(database, [links]);
@@ -193,7 +193,7 @@ describe("结构漂移", () => {
   });
 });
 describe.skipIf(!process.env.TEST_PG_URL)("结构漂移（PostgreSQL）", () => {
-  it("索引列与默认值的变化从 information_schema / pg_index 读出来", async () => {
+  test("索引列与默认值的变化从 information_schema / pg_index 读出来", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const database = await openDatabase({
       dialect: "postgres",
@@ -230,7 +230,7 @@ describe.skipIf(!process.env.TEST_PG_URL)("结构漂移（PostgreSQL）", () => 
     }
   });
 
-  it("库里有、catalog 没有的表列为 orphan：只报告不删，视图不算", async () => {
+  test("库里有、catalog 没有的表列为 orphan：只报告不删，视图不算", async () => {
     const testDatabase = await createPostgresTestDatabase();
     const database = await openDatabase({
       dialect: "postgres",

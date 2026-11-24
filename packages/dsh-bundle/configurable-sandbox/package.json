@@ -9,17 +9,7 @@
     "!**/__tests__"
   ],
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./package.json": "./package.json"
-  },
-  "publishConfig": {
-    "exports": {
-      ".": "./dist/index.mjs",
-      "./package.json": "./package.json",
-      "./cordis.patch.yml": "./dist/cordis.patch.yml"
-    }
-  },
+  "exports": {},
   "scripts": {
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-configurable-sandbox-profile"
   },
@@ -27,9 +17,6 @@
     "@morlay/configurable-sandbox": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
-  },
-  "devDependencies": {
-    "@morlay/dsh-configurable-sandbox-profile": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-home-paths": "workspace:^"

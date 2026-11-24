@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   bootstrapApplication,
   Injectable,
@@ -34,7 +34,7 @@ class FakeService {
 }
 
 describe("fromCordis", () => {
-  it("契约 + 上游：上游发布的服务成为契约面，deps 只在读取时替换", async () => {
+  test("契约 + 上游：上游发布的服务成为契约面，deps 只在读取时替换", async () => {
     /** 上游插件：读一个依赖，发布一个服务。 */
     const upstream = {
       name: "upstream-greeter",
@@ -70,7 +70,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游用 `ctx.inject` 等 deps 时也走替换（不会一直等 cordis store）", async () => {
+  test("上游用 `ctx.inject` 等 deps 时也走替换（不会一直等 cordis store）", async () => {
     /** 上游插件：用 inject 回调消费依赖。 */
     const upstream = {
       name: "upstream-injecting",
@@ -106,7 +106,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("契约名与上游注册名不同时，按上游实际发布的名字取面", async () => {
+  test("契约名与上游注册名不同时，按上游实际发布的名字取面", async () => {
     /** 上游插件：注册名与契约的连字符名不一致（真实场景就是这样）。 */
     const upstream = {
       name: "session-store-upstream",
@@ -139,7 +139,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("单入参（无契约）：令牌从上游插件名派生，`Adapted.token` 就是它", async () => {
+  test("单入参（无契约）：令牌从上游插件名派生，`Adapted.token` 就是它", async () => {
     /** 上游插件：发布服务。 */
     const upstream = {
       name: "plain-upstream",
@@ -170,7 +170,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("只有契约（纯实现）：没有上游可装，子类自己实现契约方法", async () => {
+  test("只有契约（纯实现）：没有上游可装，子类自己实现契约方法", async () => {
     /** 纯实现行：`mount` 什么都不做。 */
     @Injectable()
     class GreeterRow extends fromCordis(Greeter) {
@@ -191,7 +191,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游是 cordis `Service` 子类：要 `new`（走 `ctx.plugin`），不能当函数调用", async () => {
+  test("上游是 cordis `Service` 子类：要 `new`（走 `ctx.plugin`），不能当函数调用", async () => {
     /** 上游 Service：`super(ctx, name)` 自己注册。 */
     class UpstreamService extends FakeService {
       constructor(ctx: never) {
@@ -225,7 +225,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("适配行的契约算作已提供：别的行 inject 契约不会被判缺依赖", async () => {
+  test("适配行的契约算作已提供：别的行 inject 契约不会被判缺依赖", async () => {
     /** 上游插件：注册 `foo`。 */
     const upstream = {
       name: "foo-upstream",
@@ -263,7 +263,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游的 `static Config` 默认值会被规范化：行不给 config 也能装", async () => {
+  test("上游的 `static Config` 默认值会被规范化：行不给 config 也能装", async () => {
     /** 上游 Service：配置默认值在 `static Config` 里，构造里直接读。 */
     class SizedService extends FakeService {
       static Config = (input: { size?: number } = {}) => ({ size: input.size ?? 4 });
@@ -298,7 +298,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游用 `ctx.reflect.provide` 发布时也能取到契约面", async () => {
+  test("上游用 `ctx.reflect.provide` 发布时也能取到契约面", async () => {
     /** 上游插件：走 `ctx.reflect.provide`（真实上游常见写法）。 */
     const upstream = {
       name: "reflect-publishing",
@@ -331,7 +331,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游用 `ctx.extend` 建子 ctx 时，子 ctx 也能读到 deps", async () => {
+  test("上游用 `ctx.extend` 建子 ctx 时，子 ctx 也能读到 deps", async () => {
     /** 上游 Service：建子 ctx 并在子 ctx 上读依赖（真实上游的 `agent.ctx` 就是这样）。 */
     class ExtendingService extends FakeService {
       static inject = ["locale"];
@@ -373,7 +373,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游用 `ctx.plugin` 拿 fiber、再从 `fiber.ctx` 建 scope 时，也能读到 deps", async () => {
+  test("上游用 `ctx.plugin` 拿 fiber、再从 `fiber.ctx` 建 scope 时，也能读到 deps", async () => {
     /** 上游 Service：走 `ctx.plugin(...)` → `fiber.ctx.extend(...)` 两跳。 */
     class ScopingService extends FakeService {
       seen: string | undefined;
@@ -421,7 +421,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游把服务放在子插件里（`ctx.plugin`）：mount 等它落定后再取面", async () => {
+  test("上游把服务放在子插件里（`ctx.plugin`）：mount 等它落定后再取面", async () => {
     /** 上游插件：服务由子插件注册，apply 返回时还没构造。 */
     const upstream = {
       name: "child-provider",
@@ -468,7 +468,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("适配行的上游服务注册到根：兄弟行按名字读得到", async () => {
+  test("适配行的上游服务注册到根：兄弟行按名字读得到", async () => {
     /** 上游 Service：`super(ctx, name)` 注册自己。 */
     class RootVisibleService extends FakeService {
       constructor(ctx: never) {
@@ -514,7 +514,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("`ctx.inject` 短路给 deps 时，回调拿到的是派生 ctx 而不是行代理", async () => {
+  test("`ctx.inject` 短路给 deps 时，回调拿到的是派生 ctx 而不是行代理", async () => {
     let fromInject: unknown;
     /** 上游插件：`ctx.inject` 的回调里读依赖（`file-reference-local` 就是在这个回调里注册段落）。 */
     const upstream = {
@@ -559,7 +559,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游 `Service` 的 `[FakeService.init]` 会被等完再返回", async () => {
+  test("上游 `Service` 的 `[FakeService.init]` 会被等完再返回", async () => {
     /** 上游 Service：异步注册放在 `[FakeService.init]`。 */
     class LazyService extends FakeService {
       ready = false;
@@ -596,7 +596,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("上游 `Service` 子类在构造里读依赖时也走 deps 替换", async () => {
+  test("上游 `Service` 子类在构造里读依赖时也走 deps 替换", async () => {
     /** 上游 Service：构造里就读依赖（cordis 对 `static inject` 的名字有访问检查）。 */
     class GreetingService extends FakeService {
       static inject = ["locale"];
@@ -635,7 +635,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("注入实现类时，类型上带上游成员（宿主侧行不用 `as` 断言）", async () => {
+  test("注入实现类时，类型上带上游成员（宿主侧行不用 `as` 断言）", async () => {
     /** 上游 Service：有契约没声明的成员 `list`。 */
     class UpstreamRegistry extends FakeService {
       constructor(ctx: never) {
@@ -676,7 +676,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("行配置从清单给：适配行不必自己存构造参数", async () => {
+  test("行配置从清单给：适配行不必自己存构造参数", async () => {
     /** 上游 Service：配置由上游 schema 给默认值。 */
     class ConfigurableService extends FakeService {
       static Config = (input: { size?: number } = {}) => ({ size: input.size ?? 1 });
@@ -713,7 +713,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("适配行的 `static defaultConfig` 与行配置深合并后再交给上游 schema", async () => {
+  test("适配行的 `static defaultConfig` 与行配置深合并后再交给上游 schema", async () => {
     /** 上游 Service：schema 只补第三层默认值。 */
     class LayeredService extends FakeService {
       static Config = (input: { size?: number; tag?: string; extra?: number } = {}) => ({
@@ -763,7 +763,7 @@ describe("fromCordis", () => {
     }
   });
 
-  it("适配行忘了 mount：装配期就报错，不把空壳留给消费方", async () => {
+  test("适配行忘了 mount：装配期就报错，不把空壳留给消费方", async () => {
     /** 上游插件。 */
     const upstream = {
       name: "unmounted-upstream",
@@ -783,7 +783,7 @@ describe("fromCordis", () => {
     await expect(bootstrapApplication({ providers: [ForgotRow] })).rejects.toThrow(/mount/);
   });
 
-  it("上游 inject 声明的名字既没交 deps、也不在 store 里：装配期就失败", async () => {
+  test("上游 inject 声明的名字既没交 deps、也不在 store 里：装配期就失败", async () => {
     // 上游 0.2.3 起这种缺口会在运行期按名字严格读时抛 `cannot get property "x" without inject`
     // （症状是浏览器白屏，离装配点很远）。判据要的是装配期的一条明确失败。
     const upstream = {
@@ -803,7 +803,7 @@ describe("fromCordis", () => {
     await expect(bootstrapApplication({ providers: [Row] })).rejects.toThrow(/missing-service/u);
   });
 
-  it("上游 inject 声明的名字在 store 里已就位：装配通过（顺序保证，不算缺）", async () => {
+  test("上游 inject 声明的名字在 store 里已就位：装配通过（顺序保证，不算缺）", async () => {
     // 一个以 `locale` 为名的行（`@Injectable({ name })` 会按上游名再发布一份）。
     @Injectable({ name: "locale" })
     class LocaleNameRow {}
@@ -827,7 +827,7 @@ describe("fromCordis", () => {
     expect(true).toBe(true);
   });
 
-  it("上游 `Service` 构造里读**子服务**（`ctx.a.b`）：deps 交的名字要能命中", async () => {
+  test("上游 `Service` 构造里读**子服务**（`ctx.a.b`）：deps 交的名字要能命中", async () => {
     // 上游 0.2.3 的子服务：提供行 `super(ctx, 'parent.child')` 注册，消费方读 `ctx.parent.child`。
     // cordis 会把这次读翻译成 `Reflect.get(<parent 实例的 ctx>, 'parent.child')`——那个 ctx 必须是
     // 带 deps 的代理，否则读方只能拿到 `cannot get property "parent.child" without inject`。
@@ -867,7 +867,7 @@ describe("fromCordis", () => {
     await app.dispose();
   });
 
-  it("卸载时调用上游 apply 返回的 disposer", async () => {
+  test("卸载时调用上游 apply 返回的 disposer", async () => {
     const calls: string[] = [];
 
     /** 上游插件：返回 disposer。 */

@@ -15,15 +15,10 @@
  * `remote.<namespace>` 服务名，以及 `remote.<namespace>` 这个**属性读**（真实现是 Proxy 回落）；
  * 渲染不在本 spec 的判据里（任务行、输出面板由上游 `JobListAction` 负责，我们不重写组件）。
  */
-import {
-  bootstrapApplication,
-  Injectable,
-  rootContextKey,
-  type App,
-  type Context,
-} from "@morlay/zephyr";
+import { bootstrapApplication, Injectable, rootContextKey, type Context } from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { JobsClient } from "../jobs-client.service.ts";
 import { provideJobUi } from "../job.provide.ts";
 
@@ -128,12 +123,6 @@ class FakeLocale extends Locale {
   readonly subscribe: Locale["subscribe"] = () => () => {};
 }
 
-const opened: App[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-}, 20_000);
-
 /**
  * 起一行（可指定清单），并声明它要注册的那个头部动作位。
  * @param providers - 要装的行。
@@ -148,7 +137,7 @@ async function boot(
     providers: [...provideRenderer(), FakeRemote, FakeLocale, ...providers],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const slots = app.get(Slots);
   // 两个位置由上游 `ui-session-panel` 声明（`conversation.session.panel.section` 与 `.indicator`，
   // 都是 list/session）；本 spec 只装 job 那两行，所以按同一形状声明一次，否则上游的注册会一直等位置。
@@ -174,7 +163,7 @@ function idsAt(slots: Slots, name: string): readonly (string | undefined)[] {
 }
 
 describe("用户故事：后台任务在界面上可见、可 kill", () => {
-  it("模型起了后台任务之后：面板里有任务一节，且它的数据面已挂上", async () => {
+  test("模型起了后台任务之后：面板里有任务一节，且它的数据面已挂上", async () => {
     const { slots, remote } = await boot();
     expect(remote.mounted, "JobsClient 必须自己 `$mount` job 那组 descriptor").toContain("job");
     await until(() => idsAt(slots, "conversation.session.panel.section").length > 0);
@@ -188,7 +177,7 @@ describe("用户故事：后台任务在界面上可见、可 kill", () => {
     ).toEqual(["background-jobs.running"]);
   });
 
-  it("反向：只装数据面不装列表时，用户看不到任何入口", async () => {
+  test("反向：只装数据面不装列表时，用户看不到任何入口", async () => {
     const { slots } = await boot([JobsClient]);
     // 等一轮异步装配，确认不是"还没跑到"。
     await until(() => false, 200);

@@ -33,12 +33,23 @@
 - **等条件，不等时间**：渲染 / 装配类断言用 `vi.waitFor(条件, { timeout })`，不写
   `await new Promise((r) => setTimeout(r, 50))` 等状态。唯一允许的定时器是 `dispose` 的兜底
   （`Promise.race` 里 10s 收尾），它不是断言。
-- **浏览器半用例加文件头** `// @vitest-environment happy-dom`，并在 `afterEach` 里 `cleanup`（vitest 未开
-  globals，`@testing-library/react` 不自动清理）。
-- **测试辅助跟着域走**：跨包复用的替身放该包的 testing 面——框架侧是
-  [`@morlay/zephyr-app/testing`](../../packages/zephyr/zephyr-app/src/testing/index.ts)（`FakeAppEnv` /
-  `tempDataDir` / `cleanupDataDirs` / `mountFullApp`）与
-  [`@morlay/zephyr/testing`](../../packages/zephyr/zephyr/src/testing/index.ts)；下游从这里取，不再造第二份。
+- **浏览器半用例加文件头** `// @vitest-environment happy-dom`，`cleanup` 由该包 `test` 的 auto fixture 负责（见下一节）。
+- **严禁 vitest 的老旧钩子**：`beforeAll` / `afterAll` / `beforeEach` / `afterEach` 一律不许出现在 spec 里，
+  也不许模块级可变状态（`let root`、`const apps = []`）。环境准备与清理一律做成 fixture：
+  - 每个测试都要的那份 → 包级 `test` 上 `test.extend` 一个 `{ auto: true }` 的 fixture（`cleanup`、
+    `vi.unstubAllEnvs`、关 server 都是这一类），**import 哪份 `test` 就带哪份清理**，从 import 行读得出来；
+  - 每个测试配置不同的那份 → 普通 fixture，spec 签名里 `async ({ appEnv }) =>` 显式取；
+  - 文件级共享装配 → 测试内 `await bootTwoSided(...)`（自动 `dispose`），不再 `beforeAll` 起一次。
+    **不用全局 `setupFiles`**：那与 `beforeAll` 是同一类隐式状态。也不用配置项替代（`unstubEnvs` 等），
+    恢复逻辑归 fixture。
+- **测试入口只有一个**：spec 从 `@morlay/zephyr/testing`（或包级扩展的那份 `test`）取 `describe` / `test` / `expect`，
+  不直接 `import ... from "vitest"`。
+- **测试辅助只有两种形态，都在 testing 面**：
+  - **fixture**：`@morlay/zephyr-app/testing` 的 `appEnv`（指向临时目录的 `AppEnv` 替身，结束自动删）；
+    包级 `test` 上的 `auto: true` fixture（清理类）；
+  - **装配函数**：`bootTwoSided({ createHost, createClient? })`（自动 `dispose`）、`clientWithTransport`、
+    `hostInvokerOf`、`LocalRemote`。
+    跨包复用的替身跟着域走，不造第二份。
 - **判「域行为」的进包，「组合」不靠 `apps` 用例**：端点的入参/返回值、域内装配用本包的最小清单；
   「这份清单组合起来对不对」（替换面唯一、模型面、位置台账）由 `just custom build` 加清单评审看，
   不再要求 `apps` 里写用例。

@@ -5,7 +5,8 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { bootstrapApplication, Logger } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { Command } from "../command.ts";
 import { PreviewCommand } from "../commands/preview.ts";
 import { Workspace } from "../config/contract.ts";
@@ -15,11 +16,6 @@ import { CliMode, type CliModeValues } from "../mode.ts";
 import { resolvedFor, tempWorkspace } from "../testing/index.ts";
 
 /** 本轮建的临时目录（用例结束统一删）。 */
-const created: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
 
 /**
  * 造一份产物（按需建 `bootstrap.mjs` 与 `client_modules/`）。
@@ -28,7 +24,7 @@ afterEach(async () => {
  */
 async function mount(shape: { readonly bootstrap: boolean; readonly clientModules: boolean }) {
   const workspace = await tempWorkspace({});
-  created.push(workspace);
+  onTestFinished(() => rm(workspace, { recursive: true, force: true }));
   const resolved = resolvedFor({ workspace, appName: "Demo" });
   if (shape.bootstrap) {
     await mkdir(resolved.layout.root, { recursive: true });
@@ -59,7 +55,7 @@ async function mount(shape: { readonly bootstrap: boolean; readonly clientModule
 }
 
 describe("preview（判据 7：缺产物就报错）", () => {
-  it("缺 bootstrap.mjs：CliError，指出缺哪个与怎么补", async () => {
+  test("缺 bootstrap.mjs：CliError，指出缺哪个与怎么补", async () => {
     const { app, command, mode } = await mount({ bootstrap: false, clientModules: true });
     try {
       const error = await command?.run({ params: {}, rest: [], mode }).then(
@@ -76,7 +72,7 @@ describe("preview（判据 7：缺产物就报错）", () => {
     }
   });
 
-  it("缺 client_modules/：同样当场报错（不回退到现场编译）", async () => {
+  test("缺 client_modules/：同样当场报错（不回退到现场编译）", async () => {
     const { app, command, mode } = await mount({ bootstrap: true, clientModules: false });
     try {
       await expect(command?.run({ params: {}, rest: [], mode })).rejects.toThrowError(
@@ -87,7 +83,7 @@ describe("preview（判据 7：缺产物就报错）", () => {
     }
   });
 
-  it("两样都在：进到装配那一步（不报产物缺失）", async () => {
+  test("两样都在：进到装配那一步（不报产物缺失）", async () => {
     const { app, command, mode } = await mount({ bootstrap: true, clientModules: true });
     try {
       // 装配文件是替身（`export default []`，不是函数）：报错必然来自它，而不是产物校验。

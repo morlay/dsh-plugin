@@ -10,19 +10,14 @@ import {
   type ContractBackend,
   type ContractBackendInstance,
 } from "@morlay/dsh-session-persistence/testing";
-import { afterEach } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { makeRoot, removeRoot, startAt, type Instance } from "./support/host.ts";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
 
 // 一份后端：`reopen` 在同一数据根上起新实例（新连接 + 新进程内状态）。
 async function makeBackend(): Promise<ContractBackend> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   const instance: Instance = await startAt(root);
   const opened: Instance[] = [instance];
   return {
@@ -44,13 +39,12 @@ async function makeBackend(): Promise<ContractBackend> {
 runPersistenceContract("RDB（SQLite）", makeBackend);
 
 // 契约测试没覆盖的那一条：`load` 之外的读取入口在同一份存储上给同一份日志。
-import { describe, expect, it } from "vitest";
 import { oneTurnLogStepFirst } from "@morlay/dsh-session/testing";
 
 describe("RDB 落盘的补充判据", () => {
-  it("readFrom 从指定 seq 起读，读视图与整段读一致", async () => {
+  test("readFrom 从指定 seq 起读，读视图与整段读一致", async () => {
     const root = await makeRoot();
-    roots.push(root);
+    onTestFinished(() => removeRoot(root));
     const instance = await startAt(root);
     try {
       const header = {

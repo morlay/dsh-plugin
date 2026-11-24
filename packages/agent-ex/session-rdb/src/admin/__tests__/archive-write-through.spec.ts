@@ -7,18 +7,13 @@ import { SessionPersistence } from "@morlay/dsh-session-persistence";
 import { meta, turnLog } from "@morlay/dsh-session/testing";
 import type { WorkspaceDomainState } from "@morlay/dsh-workspace/contract";
 import { asRdbStore } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished } from "vitest";
 import { startHarness, type Harness } from "../../__tests__/support/host.ts";
-
-const harnesses: Harness[] = [];
-
-afterEach(async () => {
-  for (const harness of harnesses.splice(0)) await harness.dispose();
-});
 
 async function start(): Promise<Harness> {
   const harness = await startHarness();
-  harnesses.push(harness);
+  onTestFinished(() => harness.dispose());
   return harness;
 }
 
@@ -29,7 +24,7 @@ async function seed(harness: Harness, id: string): Promise<void> {
 }
 
 describe("L2 归档写穿", () => {
-  it("归档集合一写：行的归档标记、列表过滤与删除守卫同时生效", async () => {
+  test("归档集合一写：行的归档标记、列表过滤与删除守卫同时生效", async () => {
     const harness = await start();
     await seed(harness, "arch-a");
     await seed(harness, "arch-b");

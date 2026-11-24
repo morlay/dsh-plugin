@@ -9,30 +9,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SandboxFile, SandboxRules, SandboxRulesDefault } from "@morlay/configurable-sandbox";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { FakeAppEnv } from "@morlay/zephyr-app/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { SandboxFileDefault } from "../sandbox-file.service.ts";
-
-const homes: string[] = [];
-
-afterEach(async () => {
-  for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
-}, 20_000);
 
 /** 把 `DSH_HOME` 指到一个空目录（用例不依赖开发机上的配置）。 */
 async function emptyHome(): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), "sandbox-home-"));
-  homes.push(home);
+  onTestFinished(() => rm(home, { recursive: true, force: true }));
   process.env["DSH_HOME"] = home;
   return home;
 }
 
 describe("默认 sandbox.toml", () => {
-  it("文件不存在时创建，内容能解析出源部署那八条规则", async () => {
+  test("文件不存在时创建，内容能解析出源部署那八条规则", async () => {
     const home = await emptyHome();
-    FakeAppEnv.root = home;
     const app = await bootstrapApplication({
-      providers: [FakeAppEnv, SandboxFileDefault, SandboxRulesDefault],
+      providers: [
+        { provide: AppEnv, useValue: createTestingAppEnv({ root: home }) },
+        SandboxFileDefault,
+        SandboxRulesDefault,
+      ],
       timeoutMs: 5_000,
     });
     try {
@@ -52,15 +51,17 @@ describe("默认 sandbox.toml", () => {
     }
   });
 
-  it("文件已存在时不动它（用户改过的不覆盖）", async () => {
+  test("文件已存在时不动它（用户改过的不覆盖）", async () => {
     const home = await emptyHome();
     const path = join(home, "sandbox.toml");
     const mine = 'access = """\nrw /only-this\n"""\n';
     await (await import("node:fs/promises")).writeFile(path, mine, "utf8");
-
-    FakeAppEnv.root = home;
     const app = await bootstrapApplication({
-      providers: [FakeAppEnv, SandboxFileDefault, SandboxRulesDefault],
+      providers: [
+        { provide: AppEnv, useValue: createTestingAppEnv({ root: home }) },
+        SandboxFileDefault,
+        SandboxRulesDefault,
+      ],
       timeoutMs: 5_000,
     });
     try {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { Command, type CommandInput } from "../command.ts";
 import { CliError } from "../errors.ts";
 import { buildCommandTree, childNamesOf, resolveCommand } from "../tree.ts";
@@ -18,7 +18,7 @@ class FakeCommand extends Command {
 }
 
 describe("命令树", () => {
-  it("按 path 摆成树，父子都看得见", () => {
+  test("按 path 摆成树，父子都看得见", () => {
     const tree = buildCommandTree([
       new FakeCommand(["dev"]),
       new FakeCommand(["desktop"]),
@@ -28,19 +28,19 @@ describe("命令树", () => {
     expect(childNamesOf(tree.children[1]!)).toEqual(["bundle"]);
   });
 
-  it("父命令没注册就算装配错误：分组在 help 里没有自己的说明", () => {
+  test("父命令没注册就算装配错误：分组在 help 里没有自己的说明", () => {
     expect(() => buildCommandTree([new FakeCommand(["desktop", "bundle"])])).toThrowError(
       /先注册父命令/u,
     );
   });
 
-  it("同一路径注册两次是装配错误", () => {
+  test("同一路径注册两次是装配错误", () => {
     expect(() =>
       buildCommandTree([new FakeCommand(["dev"]), new FakeCommand(["dev"])]),
     ).toThrowError(/重复注册/u);
   });
 
-  it("解析时尽量多吃命令段，剩下的交回命令", () => {
+  test("解析时尽量多吃命令段，剩下的交回命令", () => {
     const tree = buildCommandTree([
       new FakeCommand(["desktop"]),
       new FakeCommand(["desktop", "bundle"]),
@@ -51,7 +51,7 @@ describe("命令树", () => {
     expect(resolveCommand(tree, ["nope"])).toBeUndefined();
   });
 
-  it("没有命令的裸调用不是错误，只是没有匹配", () => {
+  test("没有命令的裸调用不是错误，只是没有匹配", () => {
     const tree = buildCommandTree([new FakeCommand(["dev"])]);
     expect(resolveCommand(tree, [])).toBeUndefined();
     expect(CliError.prototype.isPrototypeOf(new CliError("x"))).toBe(true);

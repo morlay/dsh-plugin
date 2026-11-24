@@ -1,7 +1,7 @@
 // 自研组的 wire 入口：`has` 的三种状态，以及桥把 `payload.args` 交给路由表后包成 Connection 的结果面。
 //
 // 不起服务、不装 DI：桥只读 `connection.rpc.intercept` 与 `handlers` 两个面，替身就这两个。
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { RemoteHandlersRpcBridge } from "../remote-handlers.rpc-bridge.ts";
 import { RemoteHandlersDefault } from "../remote-handlers.service.ts";
 
@@ -57,7 +57,7 @@ function bridgeOf(handlers: RemoteHandlersDefault): {
 }
 
 describe("`RemoteHandlersDefault.has`", () => {
-  it("unary / 流式 / 没注册 三种状态", () => {
+  test("unary / 流式 / 没注册 三种状态", () => {
     const handlers = new RemoteHandlersDefault();
     handlers.register("settings/describe", async () => ({ items: [] }));
     handlers.registerStream("userQuestions/attachWait", async function* () {
@@ -74,7 +74,7 @@ describe("`RemoteHandlersDefault.has`", () => {
 });
 
 describe("RemoteHandlersRpcBridge", () => {
-  it("认领 `/api` 上已注册为 unary 的端点，流式与没注册的不认领", () => {
+  test("认领 `/api` 上已注册为 unary 的端点，流式与没注册的不认领", () => {
     const handlers = new RemoteHandlersDefault();
     handlers.register("sessionMode/roster", async () => ({ modes: [] }));
     handlers.registerStream("userQuestions/attachWait", async function* () {
@@ -88,7 +88,7 @@ describe("RemoteHandlersRpcBridge", () => {
     expect(interceptor.matches("workspace/follow")).toBe(false);
   });
 
-  it("`payload.args` 交给路由表，结果包成 `{ ok: true, value }`", async () => {
+  test("`payload.args` 交给路由表，结果包成 `{ ok: true, value }`", async () => {
     const handlers = new RemoteHandlersDefault();
     const seen: Readonly<Record<string, unknown>>[] = [];
     handlers.register("settings/describe", async (args) => {
@@ -103,7 +103,7 @@ describe("RemoteHandlersRpcBridge", () => {
     expect(outcome).toEqual({ ok: true, value: { items: [{ key: "ui.theme" }] } });
   });
 
-  it("处理器抛错时回失败面：`code` 取异常上的 code，没有就 `gateway/invoke-failed`", async () => {
+  test("处理器抛错时回失败面：`code` 取异常上的 code，没有就 `gateway/invoke-failed`", async () => {
     const handlers = new RemoteHandlersDefault();
     handlers.register("settings/write", async () => {
       throw Object.assign(new Error("设置项只读"), {
@@ -126,7 +126,7 @@ describe("RemoteHandlersRpcBridge", () => {
     });
   });
 
-  it("卸载时注销拦截项", async () => {
+  test("卸载时注销拦截项", async () => {
     const { bridge, disposals } = bridgeOf(new RemoteHandlersDefault());
 
     await bridge.onDispose();

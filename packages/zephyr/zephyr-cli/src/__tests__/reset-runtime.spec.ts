@@ -2,21 +2,17 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { resetClosure } from "../build/builder.ts";
 import { layoutOf } from "../layout.ts";
 
 /** 本轮建的临时工作区（用例结束统一删）。 */
-const created: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
 
 describe("运行时闭包目录", () => {
-  it("构建前清空：上一次的 node_modules 不会让 deploy 报 DIR_NOT_EMPTY", async () => {
+  test("构建前清空：上一次的 node_modules 不会让 deploy 报 DIR_NOT_EMPTY", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "zephyr-reset-"));
-    created.push(workspace);
+    onTestFinished(() => rm(workspace, { recursive: true, force: true }));
     const layout = layoutOf(workspace, undefined, "Demo");
     const stale = join(layout.nodeModules, "@morlay", "zephyr");
     await mkdir(stale, { recursive: true });

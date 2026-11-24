@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   createDialect,
   createTableSql,
@@ -27,7 +27,7 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe("枚举与 JSON 列", () => {
-  it("枚举列在 DDL 上是 CHECK，写入非枚举值构造期抛错", async () => {
+  test("枚举列在 DDL 上是 CHECK，写入非枚举值构造期抛错", async () => {
     const sqlite = createTableSql(createDialect("sqlite"), events);
     expect(sqlite).toContain("CHECK (\"f_state\" IN ('pending', 'done'))");
     const postgres = createTableSql(createDialect("postgres"), events);
@@ -61,7 +61,7 @@ describe("枚举与 JSON 列", () => {
     }
   });
 
-  it("JSON 列读写是结构化值，DDL 按方言映射（SQLite TEXT / PostgreSQL JSONB）", async () => {
+  test("JSON 列读写是结构化值，DDL 按方言映射（SQLite TEXT / PostgreSQL JSONB）", async () => {
     expect(createTableSql(createDialect("sqlite"), events)).toContain('"f_data" TEXT NOT NULL');
     expect(createTableSql(createDialect("postgres"), events)).toContain('"f_data" JSONB NOT NULL');
 

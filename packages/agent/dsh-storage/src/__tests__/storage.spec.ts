@@ -18,7 +18,8 @@ import { defineDomain, domainTable } from "@deepseek-ai/dsh-storage-domain";
 import * as StorageJsonPlugin from "@deepseek-ai/dsh-storage-json";
 import { bootstrapApplication, inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { z } from "zod";
 import { Storage, StorageDomain, provideStorage } from "../index.ts";
 
@@ -48,21 +49,13 @@ class JsonBackend extends fromCordis(JsonBackendContract, StorageJsonPlugin) {
   }
 }
 
-const roots: string[] = [];
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
-
 /** 起一套真 storage 栈，根目录在临时目录下。 */
 async function boot(): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   root: string;
 }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-storage-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideStorage(),
@@ -70,12 +63,12 @@ async function boot(): Promise<{
     ],
     timeoutMs: 10_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, root };
 }
 
 describe("storage 域", () => {
-  it("装配后 Storage 与 StorageDomain 都可解析，json 后端已注册", async () => {
+  test("装配后 Storage 与 StorageDomain 都可解析，json 后端已注册", async () => {
     const { app } = await boot();
 
     const hub = app.get(Storage);
@@ -85,7 +78,7 @@ describe("storage 域", () => {
     expect(app.get(StorageDomain)).toBeInstanceOf(StorageDomain);
   });
 
-  it("open 一个域并写入：关掉再开，记录仍在且落在 json 后端目录里", async () => {
+  test("open 一个域并写入：关掉再开，记录仍在且落在 json 后端目录里", async () => {
     const { app, root } = await boot();
     const storageDomain = app.get(StorageDomain);
 

@@ -3,20 +3,14 @@
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { openRdbBackend } from "@morlay/session-rdb";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
+import { onTestFinished, vi } from "vitest";
 import { makeRoot, removeRoot } from "../../__tests__/support/host.ts";
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  vi.restoreAllMocks();
-  for (const root of roots.splice(0)) await removeRoot(root);
-});
 
 // 一份已初始化的库（建表 / 迁移 / 身份都已落库），返回库文件路径。
 async function freshDatabase(): Promise<string> {
   const root = await makeRoot();
-  roots.push(root);
+  onTestFinished(() => removeRoot(root));
   const path = join(root, "sessions.sqlite");
   const backend = await openRdbBackend({
     type: "sqlite",
@@ -52,7 +46,7 @@ function indexColumns(sqlite: DatabaseSync, index: string): string[] {
 }
 
 describe("打开库时的结构漂移", () => {
-  it("库里有、catalog 没有的表：打开后一条汇总 warn（列出表名、只报告不自动修），表与结构原样还在", async () => {
+  test("库里有、catalog 没有的表：打开后一条汇总 warn（列出表名、只报告不自动修），表与结构原样还在", async () => {
     const path = await freshDatabase();
     // 库里有、catalog 没有的表：删掉表定义（或绕过迁移直接删账本）之后就会这样。
     const writer = new DatabaseSync(path);
@@ -89,7 +83,7 @@ describe("打开库时的结构漂移", () => {
     }
   });
 
-  it("可自动修的漂移不进 warn：同名索引被改过，打开时重建回定义的样子", async () => {
+  test("可自动修的漂移不进 warn：同名索引被改过，打开时重建回定义的样子", async () => {
     const path = await freshDatabase();
     const writer = new DatabaseSync(path);
     writer.exec('DROP INDEX "idx_sessions_title"');

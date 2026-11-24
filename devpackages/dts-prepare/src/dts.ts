@@ -91,11 +91,14 @@ const UPSTREAM_SRC = [
 const FACES = {
   host: {
     include: ["packages/*/*/src/**/*", "devpackages/*/src/**/*", ...UPSTREAM_SRC],
-    exclude: ["**/src/client/**", "**/__tests__/**"],
+    // bundle 包的浏览器半是固定文件 `src/dsh-bundle.client.ts`（不在 `src/client/` 下），
+    // 按同一套面划分放给 client：宿主 face 不扫浏览器代码。
+    exclude: ["**/src/client/**", "**/src/dsh-bundle.client.ts", "**/__tests__/**"],
   },
   client: {
     include: [
       "packages/*/*/src/client/**/*",
+      "packages/*/*/src/dsh-bundle.client.ts",
       "vendor/deepseek-harness/packages/*/*/src/client/**/*",
       "vendor/deepseek-harness/vendor/*/src/client/**/*",
     ],

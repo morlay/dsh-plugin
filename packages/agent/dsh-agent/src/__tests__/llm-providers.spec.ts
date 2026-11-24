@@ -5,53 +5,16 @@
 // 缺了这一层，装配里配好的第三方 provider 在设置里永远是「未配置」。
 //
 // 不起浏览器、不走 wire：`settings/describe` 的 handler 打进真装配（`SettingSchema` + provider 行）。
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
-import {
-  AppEnv,
-  type AppEnvValues,
-  RemoteHandlers,
-  RemoteHandlersDefault,
-} from "@morlay/zephyr-app";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { expect, test } from "@morlay/zephyr-app/testing";
 import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideSetting } from "@morlay/dsh-setting/server";
+import { onTestFinished } from "vitest";
 import { LaunchEnvironment } from "../contract/launch-environment.contract.ts";
-import { afterAll, expect, it } from "vitest";
 import { LlmDefault } from "../llm.service.ts";
 import { LlmPiAi } from "../llm-pi-ai.service.ts";
 import { provideLlmProviders } from "../llm-providers.provide.ts";
-
-/** 只给数据根的运行环境（配置文档落在 `<dataDir>/settings.json`）。 */
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues;
-
-  readonly cacheDir: string;
-
-  readonly packageRoot: string;
-
-  readonly appBootDir: string;
-
-  readonly profileManifest: string;
-
-  constructor(root: string) {
-    super();
-    this.values = { dataDir: root, profileDir: root, dev: true } as AppEnvValues;
-    this.cacheDir = join(root, "cache");
-    this.packageRoot = root;
-    this.appBootDir = join(root, "boot");
-    this.profileManifest = join(root, "package.json");
-  }
-}
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterAll(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
 
 /** `settings/describe` 的一个命名空间视图（只取用例读的字段）。 */
 interface DescribeView {
@@ -62,15 +25,14 @@ interface DescribeView {
   readonly secrets?: readonly unknown[];
 }
 
-it(
+test(
   "装配层配的 ollama route 出现在 `llm-pi-ai` 的 base 与生效值里",
   { timeout: 20_000 },
-  async () => {
-    const root = await mkdtemp(join(tmpdir(), "dsh-agent-llm-"));
-    roots.push(root);
+  async ({ appEnv }) => {
     const app = await bootstrapApplication({
       providers: [
-        { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+        // 配置文档落在 `<dataDir>/settings.json`：数据根就是本用例的临时目录。
+        { provide: AppEnv, useValue: appEnv },
         // 启动环境快照：provider 头里的 `${OLLAMA_API_KEY}` 引用按它解析。
         {
           provide: LaunchEnvironment,
@@ -104,7 +66,7 @@ it(
       ],
       timeoutMs: 20_000,
     });
-    opened.push(app);
+    onTestFinished(() => app.dispose().catch(() => {}));
 
     const result = (await app.get(RemoteHandlers).invoke("settings/describe", {})) as {
       ok?: boolean;

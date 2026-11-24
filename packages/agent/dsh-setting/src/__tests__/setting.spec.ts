@@ -2,6 +2,7 @@
 //
 // 不起浏览器：`SettingEndpointDefault` 只是把文档投影成 UI 要的形状，用 `RemoteHandlers.invoke`
 // 打进去就能验。落盘那份单独验「格式化」（2 空格缩进、末尾换行）——它是人能直接改的文件。
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,9 +17,10 @@ import {
   Injectable,
   type ProviderEntry,
 } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
+import { AppEnv } from "@morlay/zephyr-app";
 import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { Setting, SettingSchema, UiSettingsPreferences, UiThemeSchema } from "@morlay/zephyr-app";
 import { provideSetting } from "../server/setting.provide.ts";
 
@@ -36,47 +38,18 @@ class FakeRegisteredSetting {
   }
 }
 
-const opened: App[] = [];
-const roots: string[] = [];
-
 /** 只给数据根的运行环境（配置文档落在 `<dataDir>/settings.json`）。 */
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues;
-
-  readonly cacheDir: string;
-
-  readonly packageRoot: string;
-
-  readonly appBootDir: string;
-
-  readonly profileManifest: string;
-
-  constructor(root: string) {
-    super();
-    this.values = { dataDir: root, profileDir: root, dev: true } as AppEnvValues;
-    this.cacheDir = join(root, "cache");
-    this.packageRoot = root;
-    this.appBootDir = join(root, "boot");
-    this.profileManifest = join(root, "package.json");
-  }
-}
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
-
 async function boot(
   existing?: string,
   extra: readonly ProviderEntry[] = [],
 ): Promise<{ app: App; root: string }> {
   const root = existing ?? (await mkdtemp(join(tmpdir(), "dsh-setting-")));
-  if (existing === undefined) roots.push(root);
+  if (existing === undefined) onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...extra,
       // 类令牌用 `useFactory` 给实例（`useValue` 只对 `InjectionToken` 生效）。
-      { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       // 只装设置模块自己的东西：`describe` 的枚举源头是 **schema 注册表**，
       // 别的域（LLM provider / session / agent）不在这里出现——那是它们各自的用例该管的。
       ...provideSetting(),
@@ -90,7 +63,7 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, root };
 }
 
@@ -139,7 +112,7 @@ function isDescribeValue(value: unknown): value is DescribeValue {
 }
 
 describe("配置面", () => {
-  it("`update` 深合并（保留其余键），`replace` 整段覆盖（不留旧键）", async () => {
+  test("`update` 深合并（保留其余键），`replace` 整段覆盖（不留旧键）", async () => {
     const { app } = await boot();
     const setting = app.get(Setting);
     setting.update("llm-deepseek", { a: { b: 1 } });
@@ -150,7 +123,7 @@ describe("配置面", () => {
     expect(setting.snapshot()["llm-deepseek"]).toEqual({ a: { c: 2 } });
   });
 
-  it("`expectedRevision` 不匹配时抛 `settings/conflict`，`undefined` 表示不校验", async () => {
+  test("`expectedRevision` 不匹配时抛 `settings/conflict`，`undefined` 表示不校验", async () => {
     const { app } = await boot();
     const setting = app.get(Setting);
     const first = setting.update("llm-deepseek", { a: 1 });
@@ -161,7 +134,7 @@ describe("配置面", () => {
     expect(setting.update("llm-deepseek", { a: 4 }).value).toEqual({ a: 4 });
   });
 
-  it("`replace` 后 `snapshot` 读得回，落盘是格式化的 JSON", async () => {
+  test("`replace` 后 `snapshot` 读得回，落盘是格式化的 JSON", async () => {
     const { app, root } = await boot();
     app.get(Setting).replace("llm-deepseek", { apiKey: "sk-1", model: "deepseek-flash" });
 
@@ -176,7 +149,7 @@ describe("配置面", () => {
     expect(text.endsWith("\n")).toBe(true);
   });
 
-  it(
+  test(
     "`settings/describe` 按 provider 目录枚举（空文档也必须有每一条），`mutate` 之后能看到改动",
     { timeout: 20_000 },
     async () => {
@@ -214,7 +187,7 @@ describe("配置面", () => {
     },
   );
 
-  it("`settings/openSettingsDocument` 只回打开标记，不暴露宿主路径", async () => {
+  test("`settings/openSettingsDocument` 只回打开标记，不暴露宿主路径", async () => {
     const { app } = await boot();
     await expect(
       app.get(RemoteHandlers).invoke("settings/openSettingsDocument", {}),
@@ -223,7 +196,7 @@ describe("配置面", () => {
 });
 
 describe("配置文档的落盘与重建", () => {
-  it(
+  test(
     "视图的 `schema` 是序列化后的 schemastery（不是 `null`，UI 要 `new Schema(json)`）",
     { timeout: 20_000 },
     async () => {
@@ -240,7 +213,7 @@ describe("配置文档的落盘与重建", () => {
     },
   );
 
-  it("`replace` 落盘；重建整套实例后仍读得回（重启不丢）", { timeout: 20_000 }, async () => {
+  test("`replace` 落盘；重建整套实例后仍读得回（重启不丢）", { timeout: 20_000 }, async () => {
     const first = await boot();
     first.app.get(Setting).replace("fake-provider", { apiKey: "sk-persist" });
     // `SettingLoader.onDispose` 会 await 写盘队列；先卸载，模拟进程结束。
@@ -255,7 +228,7 @@ describe("配置文档的落盘与重建", () => {
 });
 
 describe("命名空间视图的用户层", () => {
-  it(
+  test(
     "`ui-theme` 的 `value` 与 `user` 都带上写进去的 `preference`",
     { timeout: 20_000 },
     async () => {
@@ -292,7 +265,7 @@ describe("`ui-theme` 视图的默认层", () => {
     terminalFontFamily: "",
   };
 
-  it(
+  test(
     "`describe` 的 `value` 是 schema 默认值 ⊕ 用户值（没写过的字段回落到 schema 默认）",
     { timeout: 20_000 },
     async () => {
@@ -316,7 +289,7 @@ describe("`ui-theme` 视图的默认层", () => {
     },
   );
 
-  it(
+  test(
     "写一次 `mutate` 后重新 `describe` 读得回新值，其余字段仍是 schema 默认",
     { timeout: 20_000 },
     async () => {
@@ -346,7 +319,7 @@ describe("`ui-theme` 视图的默认层", () => {
 });
 
 describe("上游按 `ctx.settings` 取配置面", () => {
-  it("`settings` 发布到根，`configure` 可声明呈现并可撤销", { timeout: 20_000 }, async () => {
+  test("`settings` 发布到根，`configure` 可声明呈现并可撤销", { timeout: 20_000 }, async () => {
     const { app } = await boot();
     const settings = app.ctx.get("settings", false) as Setting | undefined;
     expect(settings, "上游按这个名字 inject，没有它那些行永远不激活").toBeDefined();
@@ -360,7 +333,7 @@ describe("上游按 `ctx.settings` 取配置面", () => {
     dispose?.();
   });
 
-  it(
+  test(
     "`ui-settings` 命名空间在 `describe` 里（`developerTools.enabled` 的来源）",
     { timeout: 20_000 },
     async () => {
@@ -420,7 +393,7 @@ class FakeLayeredSetting {
 }
 
 describe("视图的三层（schema 默认 → 装配层 → 用户层）", () => {
-  it("装配层进 `value` 与 `base`，密钥只写不读", { timeout: 20_000 }, async () => {
+  test("装配层进 `value` 与 `base`，密钥只写不读", { timeout: 20_000 }, async () => {
     const { app } = await boot(undefined, [FakeLayeredSetting]);
     const described = unwrap<unknown>(
       await app.get(RemoteHandlers).invoke("settings/describe", {}),
@@ -439,7 +412,7 @@ describe("视图的三层（schema 默认 → 装配层 → 用户层）", () =>
     expect(view.secrets).toEqual([{ path: ["apiKey"], set: true }]);
   });
 
-  it(
+  test(
     "用户层与装配层并存：`user` 只放用户写的那份，`value` 三层合并",
     { timeout: 20_000 },
     async () => {

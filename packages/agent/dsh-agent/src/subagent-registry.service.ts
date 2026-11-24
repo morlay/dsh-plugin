@@ -3,7 +3,7 @@ import SubagentRuntime from "@deepseek-ai/dsh-subagent";
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { SessionProjectionStore } from "@morlay/dsh-session";
-import { WorkingDirectory } from "@morlay/dsh-agent";
+import { WorkingDirectory } from "./contract/working-directory.contract.ts";
 import { SubagentRegistry } from "./contract/subagent-registry.contract.ts";
 
 @Injectable()

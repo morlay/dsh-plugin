@@ -6,10 +6,12 @@
 //
 // 宿主栈用本包自己那套（`team.spec.ts` 的清单 + wire 四行），不借别的域的端点行：
 // 团队开关的 remote 只需要会话数据面，不需要对话域的端点面。
+import { AppEnv } from "@morlay/zephyr-app";
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { provideAgentLoop } from "@morlay/dsh-agent-loop";
 import { SessionProjectionStore } from "@morlay/dsh-session";
@@ -23,7 +25,6 @@ import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { SandboxPolicyDefault, provideSandbox } from "@morlay/dsh-sandbox";
 import {
-  FakeAppEnv,
   provideApiGateway,
   provideConnection,
   provideMuxServer,
@@ -42,26 +43,18 @@ import {
   provideRenderer,
   RemoteDefault,
 } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished, vi } from "vitest";
 import { provideAgentTeam } from "../../server/agent-team.provide.ts";
 import { provideAgentTeamUi } from "../agent-team.provide.ts";
 
 const SESSION_ID = SessionId("team-live");
 
-const apps: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 120_000);
-
 describe("智能体团队开关（真宿主 + 真浏览器半）", { timeout: 120_000 }, () => {
-  it("浏览器调 remote.agentTeams.setEnabled 之后，宿主的 agentTeam 投影翻过来", async () => {
+  test("浏览器调 remote.agentTeams.setEnabled 之后，宿主的 agentTeam 投影翻过来", async () => {
     const root = await mkdtemp(join(tmpdir(), "dsh-agent-team-live-"));
-    roots.push(root);
-    process.env.PORT = "0";
-    FakeAppEnv.root = root;
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
+    vi.stubEnv("PORT", "0");
 
     const host = await bootstrapApplication({
       providers: [
@@ -77,7 +70,7 @@ describe("智能体团队开关（真宿主 + 真浏览器半）", { timeout: 12
         ...provideSession(),
         ...provideSessionProjection(),
         ...provideSessionQuerySqlite(),
-        FakeAppEnv,
+        { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
         ...provideAgent(),
         ...provideAgentLoop(),
         ...provideShell(),
@@ -90,7 +83,7 @@ describe("智能体团队开关（真宿主 + 真浏览器半）", { timeout: 12
       ],
       timeoutMs: 60_000,
     } as never);
-    apps.push(host);
+    onTestFinished(() => host.dispose().catch(() => {}));
     const origin = `http://127.0.0.1:${String(host.get(WebServer).port)}`;
 
     const handle = await host.get(AgentDirectory).create({
@@ -117,7 +110,7 @@ describe("智能体团队开关（真宿主 + 真浏览器半）", { timeout: 12
       ],
       timeoutMs: 30_000,
     });
-    apps.push(client);
+    onTestFinished(() => client.dispose().catch(() => {}));
     client.get(RemoteDefault).useTransport(
       muxTransport(
         () =>

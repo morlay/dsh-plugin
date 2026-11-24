@@ -21,7 +21,7 @@ import {
   provideClientConnection,
   provideClientRemote,
 } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 /** 一份两端共用的组契约：一个带请求的方法、一个无参方法。 */
 @RemoteGroup({ name: "demo" })
@@ -44,7 +44,7 @@ class DemoEndpointClient extends DemoEndpoint {
 }
 
 describe("`@RemoteClient()` 的转发（假 transport）", { timeout: 15_000 }, () => {
-  it("契约方法的调用真的到达传输层，返回值原样透传", async () => {
+  test("契约方法的调用真的到达传输层，返回值原样透传", async () => {
     // 宿主侧：与 `registerRemoteGroup` 同一条路（这里手写 handler，只为不引业务包）。
     const seen: unknown[] = [];
     const transport = mockTransport({

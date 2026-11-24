@@ -11,6 +11,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
     "./contract": "./src/contract/index.ts",
     "./endpoint": "./src/endpoint/index.ts",
     "./package.json": "./package.json",
@@ -75,7 +76,8 @@
     "@morlay/dsh-shell": "workspace:^",
     "@morlay/dsh-storage": "workspace:^",
     "@morlay/dsh-upload": "workspace:^",
-    "@morlay/dsh-workspace": "workspace:^"
+    "@morlay/dsh-workspace": "workspace:^",
+    "@testing-library/react": "^16.3.3"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-api-gateway": "workspace:^",

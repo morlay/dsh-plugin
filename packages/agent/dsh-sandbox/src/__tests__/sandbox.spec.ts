@@ -17,19 +17,12 @@ import { provideSessionProjection } from "@morlay/dsh-session/server";
 import { ShellExecutor } from "@morlay/dsh-shell";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { bootstrapApplication, type App, configure } from "@morlay/zephyr";
-import { afterEach, describe, expect, it } from "vitest";
-
-const opened: App[] = [];
-const roots: string[] = [];
-
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-}, 20_000);
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 
 async function boot(): Promise<{ app: App; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-sandbox-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSessionProjection(),
@@ -40,12 +33,12 @@ async function boot(): Promise<{ app: App; root: string }> {
     ],
     timeoutMs: 10_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   return { app, root };
 }
 
 describe("sandbox 域", () => {
-  it("四个行各归其契约令牌：沙箱提供者 / 策略 / 文件系统 / shell 执行器", async () => {
+  test("四个行各归其契约令牌：沙箱提供者 / 策略 / 文件系统 / shell 执行器", async () => {
     const { app } = await boot();
     // Service 类的适配行由上游实例自己兑现令牌（`fromCordis` 只做接管与转发）。
     expect(app.get(Sandbox)).toBeInstanceOf(LocalSandboxProvider);
@@ -54,7 +47,7 @@ describe("sandbox 域", () => {
     expect(app.get(ShellExecutor)).toBeInstanceOf(SandboxBashExecutor);
   });
 
-  it("`resolve` 无会话时给出部署默认模式与装配面给的兜底根", async () => {
+  test("`resolve` 无会话时给出部署默认模式与装配面给的兜底根", async () => {
     const { app, root } = await boot();
     expect(app.get(SandboxPolicy).resolve()).toMatchObject({
       mode: "workspace-write",
@@ -62,13 +55,17 @@ describe("sandbox 域", () => {
     });
   });
 
-  it("沙箱文件系统读得到工作区内的文件，路径按规范绝对路径给出", { timeout: 20_000 }, async () => {
-    const { app, root } = await boot();
-    const file = join(root, "note.txt");
-    await writeFile(file, "hello\n", "utf8");
+  test(
+    "沙箱文件系统读得到工作区内的文件，路径按规范绝对路径给出",
+    { timeout: 20_000 },
+    async () => {
+      const { app, root } = await boot();
+      const file = join(root, "note.txt");
+      await writeFile(file, "hello\n", "utf8");
 
-    const fs = app.get(FileSystem);
-    const target = await fs.resolve(file);
-    expect(fs.processPath(target)).toBe(await realpath(file));
-  });
+      const fs = app.get(FileSystem);
+      const target = await fs.resolve(file);
+      expect(fs.processPath(target)).toBe(await realpath(file));
+    },
+  );
 });

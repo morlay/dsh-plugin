@@ -7,6 +7,7 @@
 //
 // 只伪造 cordis 的上下文与 slot 登记表（`ctx.effect/on/emit/provide/inject` 与 `slots.inject/register`）：
 // 它们不是被测面，被测面是「行的 `setTheme` → 运行时 → `ConfigForms` → wire → 宿主文档」。
+import { createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,43 +15,20 @@ import { THEME_SETTINGS_NAMESPACE } from "@deepseek-ai/dsh-client-ui-theme/src/t
 import { provideAgent } from "@morlay/dsh-agent";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
-import { AppEnv, type AppEnvValues } from "@morlay/zephyr-app";
+import { AppEnv } from "@morlay/zephyr-app";
 import { RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { ConfigForms, ClientConnection, Remote, mockTransport } from "@morlay/zephyr-app/client";
 // `RemoteDefault` 只有模块入口导出（`@morlay/zephyr-app/client` 的 barrel 不带实现类）。
 import { RemoteDefault } from "@morlay/zephyr-app/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/dsh-conversation/testing";
+import { onTestFinished } from "vitest";
 import { Setting } from "@morlay/dsh-setting";
 import { provideSetting } from "@morlay/dsh-setting/server";
 import { SettingsHost } from "../settings-host.ts";
 import { TYPERT_REMOTE as SETTINGS_REMOTE } from "@deepseek-ai/dsh-api-settings-controller/remote";
 import { apply as themeApply } from "@deepseek-ai/dsh-client-ui-theme/client";
 
-const opened: App[] = [];
-const roots: string[] = [];
-
 /** 只给数据根的运行环境（配置文档落在 `<dataDir>/settings.json`）。 */
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues;
-
-  readonly cacheDir: string;
-
-  readonly packageRoot: string;
-
-  readonly appBootDir: string;
-
-  readonly profileManifest: string;
-
-  constructor(root: string) {
-    super();
-    this.values = { dataDir: root, profileDir: root, dev: true } as AppEnvValues;
-    this.cacheDir = join(root, "cache");
-    this.packageRoot = root;
-    this.appBootDir = join(root, "boot");
-    this.profileManifest = join(root, "package.json");
-  }
-}
-
 /**
  * 传输接缝的最小连接面：本 spec 的 wire 走 `mockTransport`，连接只用来满足 `RemoteDefault` 的注入
  * （真实现要浏览器 WebSocket）。
@@ -80,11 +58,6 @@ class FakeConnection extends ClientConnection {
   readonly start = () => ({ stop: () => {} });
 }
 
-afterEach(async () => {
-  for (const app of opened.splice(0)) await app.dispose().catch(() => {});
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
-});
-
 /** 一条发出的 wire 调用（打点来自 mock transport）。 */
 interface WireCall {
   readonly endpoint: string;
@@ -97,13 +70,13 @@ interface WireCall {
  */
 async function boot(): Promise<{ app: App; wire: WireCall[]; configForms: ConfigForms }> {
   const root = await mkdtemp(join(tmpdir(), "dsh-theme-row-"));
-  roots.push(root);
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
       ...provideSessionProjection(),
 
-      { provide: AppEnv, useFactory: () => new FakeAppEnv(root) },
+      { provide: AppEnv, useValue: createTestingAppEnv({ root: root }) },
       // `settings/describe` 的枚举源头是 provider 目录：真 `Llm` + 两条 provider 行。
       ...provideAgent(),
       ...provideSetting(),
@@ -114,7 +87,7 @@ async function boot(): Promise<{ app: App; wire: WireCall[]; configForms: Config
     ],
     timeoutMs: 20_000,
   });
-  opened.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   const handlers = app.get(RemoteHandlers);
   // 按**契约**取（`app.get` 认令牌）：`RemoteDefault` 的令牌是 `Remote`。
   const remote = app.get(Remote) as RemoteDefault;
@@ -206,7 +179,7 @@ function themeContextOf(configForms: ConfigForms): {
 }
 
 describe("外观行的写路径", () => {
-  it(
+  test(
     "行上的 `setTheme` 一调用：preference 变、发出 `settings/mutate`、宿主文档落值",
     {
       timeout: 20_000,

@@ -9,7 +9,7 @@ import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
 import { Locale, Remote } from "@morlay/zephyr-app/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { provideBetterSessionUi } from "../better-session.provide.ts";
 
 const remoteStub = {
@@ -45,7 +45,7 @@ const localeStub = {
 };
 
 describe("浏览器半的装配面", () => {
-  it("装出两条 chat-node 注册与一对 main / sidebar.panellist 注册", async () => {
+  test("装出两条 chat-node 注册与一对 main / sidebar.panellist 注册", async () => {
     const app = await bootstrapApplication({
       providers: [
         ...provideRenderer(),

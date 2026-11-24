@@ -23,6 +23,11 @@ import {
 import { SessionTurnOutline } from "@morlay/dsh-session";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { FakeWorkspaceRegistry } from "@morlay/dsh-workspace/testing";
+import {
+  SessionWorkspaceCopyHost,
+  SessionWorkspaceHost,
+  WorkspaceBroadcaster,
+} from "@morlay/dsh-workspace/server";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionPersistenceRdb } from "@morlay/session-rdb";
@@ -32,7 +37,8 @@ import {
   SessionEditorEndpointDefault,
 } from "@morlay/session-rdb/server";
 import { SessionAgentControl, SessionEditor, SessionEditorDefault } from "@morlay/session-rdb";
-import { createCtx, mountRows, publishToken, type MountedContext, type RowEntry } from "./base.ts";
+import type { App } from "@morlay/zephyr";
+import { createCtx, mountRows, type MountedContext, type RowEntry } from "./base.ts";
 import { mountOnto } from "./base.ts";
 
 /** 替身目录里那个「活着的 agent」：真会话 + 记录 followup / cancel。 */
@@ -130,6 +136,8 @@ function lastTurnOf(events: readonly SessionEvent[]): number {
 /** 一份宿主装配。 */
 export interface Host {
   readonly ctx: MountedContext;
+  /** 宿主那份装配器（`clientWithTransport(app, …)` / `hostInvokerOf(app)` 都收 `App`）。 */
+  readonly app: App;
   readonly root: string;
   readonly dbPath: string;
   readonly persistence: SessionPersistenceRdb;
@@ -178,21 +186,32 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
   const ctx = createCtx();
   // 真 turnOutline 投影：撤回 / 分叉用例要看检查点水位，没有注册的投影就没有可折的单元。
   await ctx.plugin(SessionTurnOutline);
-  // 工作区域：本包注入 `WorkspaceRegistry` 令牌（跨工作区复制 = fork + 它的 attach）。工作区记录不在这里
-  // 造，用例要哪几个目录就在注册表上 `create` 哪几个。发布在建行之前：注入在装配期回填。
+  // 工作区域：注册表是**值条目**（工作区记录不在这里造，用例要哪几个目录就在注册表上 `create` 哪几个），
+  // 上面三行是 workspace 域的宿主行——跨工作区复制现在走编排层（`SessionWorkspaceCopy`：先 `SessionWorkspace`
+  // 认目标与 attach，再让数据面 fork），端点只转发。所以这条链路在用例里也是真的。
   const workspaces = new FakeWorkspaceRegistry();
-  publishToken(ctx, WorkspaceRegistry, workspaces);
-  const fiber = await mountOnto(ctx, { root, config: { type: "sqlite", path: dbPath } });
+  const fiber = await mountOnto(ctx, {
+    root,
+    config: { type: "sqlite", path: dbPath },
+    services: [{ provide: WorkspaceRegistry, useValue: workspaces }],
+  });
+  const workspaceRows = await mountRows(
+    [
+      WorkspaceBroadcaster as RowEntry,
+      SessionWorkspaceHost as RowEntry,
+      SessionWorkspaceCopyHost as RowEntry,
+    ],
+    { dataDir: root, ctx },
+  );
 
   const agentDirectory = new AgentDirectoryStub();
   // 顺序 = 依赖：目录面 → agent 目录适配行 → 编辑编排（装配期注入适配行）→ wire 端点。
-  // 目录面在 `before` 里按**契约令牌**发布：消费它的行在装配期注入的就是这一份（`inject.optional`）。
+  // 目录面按**契约令牌**作为值条目发布：消费它的行在装配期注入的就是这一份（`inject.optional`）。
   const wired = await mountRows(endpointRows, {
     dataDir: root,
     ctx,
-    before: (row) => {
-      if (options.withoutAgents !== true) publishToken(row, AgentDirectory, agentDirectory);
-    },
+    services:
+      options.withoutAgents === true ? [] : [{ provide: AgentDirectory, useValue: agentDirectory }],
   });
   // 面的取法与消费方一致：按契约令牌拿，不按行的构造面拿。
   const handlers = wired.get(RemoteHandlers);
@@ -202,6 +221,7 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
   const persistence = fiber.persistence;
   return {
     ctx,
+    app: wired.app,
     root,
     dbPath,
     persistence,
@@ -229,6 +249,7 @@ export async function startHost(options: HostOptions = {}): Promise<Host> {
     },
     async dispose() {
       await wired.dispose().catch(() => undefined);
+      await workspaceRows.dispose().catch(() => undefined);
       await fiber.dispose();
       if (options.root === undefined) {
         await rm(root, { recursive: true, force: true });

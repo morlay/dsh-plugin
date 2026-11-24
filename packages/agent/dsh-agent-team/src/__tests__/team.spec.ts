@@ -1,8 +1,5 @@
 // 临时探针：teammate（Agent Teams）的端到端面——成员资格决定工具可见性、任务板全流程、
 // 以及 spawn 一个队友之后按名字分配任务。用假 LLM，不联网。
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   Llm,
   SubagentRegistry,
@@ -25,35 +22,12 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
 import { provideShell } from "@morlay/dsh-shell/server";
 import { agentPresetProjection } from "@morlay/session-mode";
-import { bootstrapApplication, configure, Injectable } from "@morlay/zephyr";
-import { AppEnv, RemoteHandlersDefault, type AppEnvValues } from "@morlay/zephyr-app";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { bootstrapApplication, configure } from "@morlay/zephyr";
+import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
+import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
 import { TeamServiceDefault, provideAgentTeam } from "../server/index.ts";
 
-let root = "";
-
-@Injectable()
-class FakeAppEnv extends AppEnv {
-  readonly values: AppEnvValues = {
-    dataDir: root,
-    profileDir: root,
-    defaultWorkingDirectory: root,
-  };
-
-  readonly cacheDir = join(root, "cache");
-  readonly packageRoot = root;
-  readonly appBootDir = join(root, "boot");
-  readonly profileManifest = join(root, "package.json");
-}
-
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "dsh-team-e2e-"));
-});
-
-afterAll(async () => {
-  await rm(root, { recursive: true, force: true });
-});
-
+/** 运行环境替身：数据根就是本文件的临时目录。 */
 let callNumber = 0;
 const signal = new AbortController().signal;
 
@@ -61,10 +35,10 @@ const signal = new AbortController().signal;
  * 起一套带团队两行的真栈（假 LLM）。
  * @returns 应用、团队服务与循环服务。
  */
-async function boot(adapter: LlmAdapter = new FakeLlmAdapter("队友收到。")) {
+async function boot(appEnv: TestingAppEnv, adapter: LlmAdapter = new FakeLlmAdapter("队友收到。")) {
   const app = await bootstrapApplication({
     providers: [
-      FakeAppEnv,
+      { provide: AppEnv, useValue: appEnv },
       ...provideSessionPersistence(),
       ...provideSession(),
       ...provideSessionProjection(),
@@ -72,7 +46,10 @@ async function boot(adapter: LlmAdapter = new FakeLlmAdapter("队友收到。"))
       ...provideAgent(),
       ...provideShell(),
       ...provideSandbox(
-        configure(SandboxPolicyDefault, { mode: "workspace-write", workspaceRoot: root }),
+        configure(SandboxPolicyDefault, {
+          mode: "workspace-write",
+          workspaceRoot: appEnv.values.dataDir,
+        }),
       ),
       ...provideWorkingDirectory(),
       RemoteHandlersDefault,
@@ -157,11 +134,11 @@ async function run(
 }
 
 describe("teammate（Agent Teams）端到端", () => {
-  it(
+  test(
     "setEnabled 之后 agentTeam 投影跟着翻（浏览器开关读的就是这一份）",
     { timeout: 60_000 },
-    async () => {
-      const { app, teams } = await boot();
+    async ({ appEnv }) => {
+      const { app, teams } = await boot(appEnv);
       try {
         const loop = app.get(AgentLoop);
         const lead = await loop.create(SessionId("team-projection"), {
@@ -188,11 +165,11 @@ describe("teammate（Agent Teams）端到端", () => {
     },
   );
 
-  it(
+  test(
     "成员资格决定团队工具是否可见；任务板走完 create→list→claim→complete",
     { timeout: 120_000 },
-    async () => {
-      const { app, teams } = await boot();
+    async ({ appEnv }) => {
+      const { app, teams } = await boot(appEnv);
       try {
         const loop = app.get(AgentLoop);
         const lead = await loop.create(SessionId("team-e2e-lead"), {
@@ -315,56 +292,60 @@ describe("teammate（Agent Teams）端到端", () => {
     },
   );
 
-  it("idle 的队友能被消息唤醒（续跑不需要 preset roster）", { timeout: 120_000 }, async () => {
-    const { app, teams } = await boot();
-    try {
-      const lead = await app
-        .get(AgentLoop)
-        .create(SessionId("team-e2e-resume"), { provider: "mock", model: "mock" } as never);
-      await (
-        teams as unknown as { setEnabled(agent: unknown, enabled: boolean): Promise<void> }
-      ).setEnabled(lead, true);
+  test(
+    "idle 的队友能被消息唤醒（续跑不需要 preset roster）",
+    { timeout: 120_000 },
+    async ({ appEnv }) => {
+      const { app, teams } = await boot(appEnv);
+      try {
+        const lead = await app
+          .get(AgentLoop)
+          .create(SessionId("team-e2e-resume"), { provider: "mock", model: "mock" } as never);
+        await (
+          teams as unknown as { setEnabled(agent: unknown, enabled: boolean): Promise<void> }
+        ).setEnabled(lead, true);
 
-      const subagents = app.get(SubagentRegistry) as unknown as {
-        startActivation(input: unknown): Promise<{
-          name: string;
-          childId: unknown;
-          dispose(): Promise<void>;
-        }>;
-        sendMessage(
-          from: unknown,
-          to: unknown,
-          content: unknown,
-          options: unknown,
-        ): Promise<unknown>;
-      };
-      const child = await subagents.startActivation({
-        provider: "spawn",
-        label: "worker",
-        prompt: [{ type: "text", text: "第一轮" }],
-        parent: lead,
-        signal,
-        delivery: "parent",
-      });
-      // 假 LLM 一轮就结束：等它转 idle 再发消息——投影兜底时这一步会抛
-      // "selecting a child agent preset requires the agent-presets service"。
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const messageId = await subagents.sendMessage(
-        lead,
-        child.childId,
-        [{ type: "text", text: "第二轮" }],
-        { signal },
-      );
-      console.log("续跑送达 →", String(messageId));
-      expect(typeof messageId).toBe("string");
-      await child.dispose();
-    } finally {
-      await app.dispose().catch(() => {});
-    }
-  });
+        const subagents = app.get(SubagentRegistry) as unknown as {
+          startActivation(input: unknown): Promise<{
+            name: string;
+            childId: unknown;
+            dispose(): Promise<void>;
+          }>;
+          sendMessage(
+            from: unknown,
+            to: unknown,
+            content: unknown,
+            options: unknown,
+          ): Promise<unknown>;
+        };
+        const child = await subagents.startActivation({
+          provider: "spawn",
+          label: "worker",
+          prompt: [{ type: "text", text: "第一轮" }],
+          parent: lead,
+          signal,
+          delivery: "parent",
+        });
+        // 假 LLM 一轮就结束：等它转 idle 再发消息——投影兜底时这一步会抛
+        // "selecting a child agent preset requires the agent-presets service"。
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const messageId = await subagents.sendMessage(
+          lead,
+          child.childId,
+          [{ type: "text", text: "第二轮" }],
+          { signal },
+        );
+        console.log("续跑送达 →", String(messageId));
+        expect(typeof messageId).toBe("string");
+        await child.dispose();
+      } finally {
+        await app.dispose().catch(() => {});
+      }
+    },
+  );
 
-  it("任务板的依赖与 revision CAS", { timeout: 120_000 }, async () => {
-    const { app, teams } = await boot();
+  test("任务板的依赖与 revision CAS", { timeout: 120_000 }, async ({ appEnv }) => {
+    const { app, teams } = await boot(appEnv);
     try {
       const lead = await app
         .get(AgentLoop)
@@ -416,8 +397,8 @@ describe("teammate（Agent Teams）端到端", () => {
     }
   });
 
-  it("运行中的队友能被 interrupt_agent 打断", { timeout: 120_000 }, async () => {
-    const { app, teams } = await boot(new HangLlmAdapter());
+  test("运行中的队友能被 interrupt_agent 打断", { timeout: 120_000 }, async ({ appEnv }) => {
+    const { app, teams } = await boot(appEnv, new HangLlmAdapter());
     try {
       const lead = await app
         .get(AgentLoop)

@@ -7,7 +7,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 import { BUNDLER_REV } from "../federation/bundle.ts";
 import { writePage } from "../build/compile.ts";
 
@@ -42,7 +42,7 @@ async function fixture(html: string): Promise<{ pageEntry: string; outDir: strin
 }
 
 describe("页面骨架落盘", () => {
-  it("入口 script 改写成应用入口的联邦地址（带 ?v= 构建世代）", async () => {
+  test("入口 script 改写成应用入口的联邦地址（带 ?v= 构建世代）", async () => {
     const { pageEntry, outDir } = await fixture(PAGE);
     const page = await writePage({ pageEntry, outDir, app: APP });
     const html = await readFile(page, "utf8");
@@ -54,7 +54,7 @@ describe("页面骨架落盘", () => {
     expect(page).toBe(join(outDir, "index.html"));
   });
 
-  it("页面里没有本地入口 script：抛错（静默通过会产出一个永远白屏的目录）", async () => {
+  test("页面里没有本地入口 script：抛错（静默通过会产出一个永远白屏的目录）", async () => {
     const { pageEntry, outDir } = await fixture("<html><body>没有入口</body></html>");
     await expect(writePage({ pageEntry, outDir, app: APP })).rejects.toThrowError(/入口 script/u);
   });

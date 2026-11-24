@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +22,6 @@ import {
   truncateLiveSession,
 } from "@morlay/session-rdb";
 import {
-  disposeAll,
   mount as mountHarness,
   type MountedContext as Context,
 } from "../../__tests__/support/base.ts";
@@ -34,13 +33,6 @@ import {
   oneTurnLog,
   userMessage,
 } from "@morlay/dsh-session/testing";
-
-afterAll(disposeAll);
-
-const dirs: string[] = [];
-afterEach(async () => {
-  for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
-});
 
 async function harness(path = ":memory:"): Promise<{
   ctx: Context;
@@ -127,23 +119,23 @@ async function createPersisted(
 }
 
 describe("locateTurnEnd", () => {
-  it("returns the last closed turn end without an anchor", () => {
+  test("returns the last closed turn end without an anchor", () => {
     expect(locateTurnEnd(twoTurnLog())).toBe(11);
   });
 
-  it("after mode: anchors to the first turn/end at or past the anchor", () => {
+  test("after mode: anchors to the first turn/end at or past the anchor", () => {
     const log = twoTurnLog();
     expect(locateTurnEnd(log, 1, "after")).toBe(5);
     expect(locateTurnEnd(log, 6, "after")).toBe(11);
   });
 
-  it("before mode: anchors to the last turn/end before the anchor", () => {
+  test("before mode: anchors to the last turn/end before the anchor", () => {
     const log = twoTurnLog();
     expect(locateTurnEnd(log, 6, "before")).toBe(5);
     expect(locateTurnEnd(log, 0, "before")).toBe(-1);
   });
 
-  it("rejects an anchor inside an open turn (after mode)", () => {
+  test("rejects an anchor inside an open turn (after mode)", () => {
     const log: SessionEvent[] = [
       ...twoTurnLog(),
       { type: "turn/start", seq: SessionSeq(12), time: 1, data: { turn: 3 } },
@@ -151,13 +143,13 @@ describe("locateTurnEnd", () => {
     expect(() => locateTurnEnd(log, 13, "after")).toThrow(SessionBranchError);
   });
 
-  it("rejects a session with no closed turn", () => {
+  test("rejects a session with no closed turn", () => {
     expect(() => locateTurnEnd([], undefined, "after")).toThrow(/no closed turn/);
   });
 });
 
 describe("readBranchPrefix", () => {
-  it("returns the closed prefix anchored after the given seq", async () => {
+  test("returns the closed prefix anchored after the given seq", async () => {
     const { ctx, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -169,7 +161,7 @@ describe("readBranchPrefix", () => {
     }
   });
 
-  it("returns the prefix before the given seq (exclusive mode)", async () => {
+  test("returns the prefix before the given seq (exclusive mode)", async () => {
     const { ctx, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -181,7 +173,7 @@ describe("readBranchPrefix", () => {
     }
   });
 
-  it("rejects an unknown session", async () => {
+  test("rejects an unknown session", async () => {
     const { provider, dispose } = await harness();
     try {
       await expect(provider.readBranchPrefix(SessionId("missing"))).rejects.toThrow();
@@ -192,7 +184,7 @@ describe("readBranchPrefix", () => {
 });
 
 describe("forkFrom", () => {
-  it("derives a child session with parent lineage and renumbered seed", async () => {
+  test("derives a child session with parent lineage and renumbered seed", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -219,7 +211,7 @@ describe("forkFrom", () => {
     }
   });
 
-  it("drops ignorable version events from the canonical log (ignorable semantics)", async () => {
+  test("drops ignorable version events from the canonical log (ignorable semantics)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -257,7 +249,7 @@ describe("forkFrom", () => {
     }
   });
 
-  it("reuses parent event rows (no event-row copy; bridge rows only)", async () => {
+  test("reuses parent event rows (no event-row copy; bridge rows only)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -288,7 +280,7 @@ describe("forkFrom", () => {
     }
   });
 
-  it("fork 失败时不留下复用映射：同一个 childId 之后落写不会挂到父会话的事件行", async () => {
+  test("fork 失败时不留下复用映射：同一个 childId 之后落写不会挂到父会话的事件行", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -323,7 +315,7 @@ describe("forkFrom", () => {
     }
   });
 
-  it("append 失败后复用映射还在：重试仍复用父会话的事件行，不会多插一份", async () => {
+  test("append 失败后复用映射还在：重试仍复用父会话的事件行，不会多插一份", async () => {
     const { ctx, persistence, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -366,7 +358,7 @@ describe("forkFrom", () => {
 });
 
 describe("rewind", () => {
-  it("truncates to a closed turn/end boundary and bumps revision", async () => {
+  test("truncates to a closed turn/end boundary and bumps revision", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -388,7 +380,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rejects a non-turn/end boundary", async () => {
+  test("rejects a non-turn/end boundary", async () => {
     const { ctx, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -398,7 +390,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rejects a boundary beyond the stored head", async () => {
+  test("rejects a boundary beyond the stored head", async () => {
     const { ctx, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -408,7 +400,7 @@ describe("rewind", () => {
     }
   });
 
-  it("invalidates live projection cells on rewind so replayed events fold again", async () => {
+  test("invalidates live projection cells on rewind so replayed events fold again", async () => {
     const { ctx, dispose } = await harness();
     try {
       const projections = ctx.sessionProjections as unknown as {
@@ -439,7 +431,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewind flushes the durable inbox cancellation of the live agent", async () => {
+  test("rewind flushes the durable inbox cancellation of the live agent", async () => {
     const { ctx, persistence, dispose } = await harness();
     try {
       ctx.sessions.create(SessionId("pending"), {
@@ -484,7 +476,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewinds a live session in place (memory log, RDB head, and coordinator resynced)", async () => {
+  test("rewinds a live session in place (memory log, RDB head, and coordinator resynced)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const events = twoTurnLog();
@@ -519,7 +511,7 @@ describe("rewind", () => {
     }
   });
 
-  it("allows appending after rewind (coordinator state resynchronized)", async () => {
+  test("allows appending after rewind (coordinator state resynchronized)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -544,7 +536,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewinds to the empty prefix when boundary is -1", async () => {
+  test("rewinds to the empty prefix when boundary is -1", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -557,7 +549,7 @@ describe("rewind", () => {
     }
   });
 
-  it("shrinks the inherited prefix length when rewind cuts into the seed", async () => {
+  test("shrinks the inherited prefix length when rewind cuts into the seed", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -598,7 +590,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewinds to a user/message boundary (exclusive: drops the message and its tail)", async () => {
+  test("rewinds to a user/message boundary (exclusive: drops the message and its tail)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const openTail: SessionEvent[] = [
@@ -642,7 +634,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rejects a boundary that is neither turn/end nor user/message", async () => {
+  test("rejects a boundary that is neither turn/end nor user/message", async () => {
     const { ctx, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", twoTurnLog());
@@ -655,7 +647,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewinds to a user/message boundary in real agent-loop order (orphan step/start dropped)", async () => {
+  test("rewinds to a user/message boundary in real agent-loop order (orphan step/start dropped)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const openTail: SessionEvent[] = [
@@ -732,7 +724,7 @@ describe("rewind", () => {
     }
   });
 
-  it("loads a rewind-to-user-message session without an orphan step/start (token-meter replay safe)", async () => {
+  test("loads a rewind-to-user-message session without an orphan step/start (token-meter replay safe)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const openTail: SessionEvent[] = [
@@ -757,7 +749,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewind keeps a surviving replace loadable (range intact, provenance recomputed)", async () => {
+  test("rewind keeps a surviving replace loadable (range intact, provenance recomputed)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const compacted: SessionEvent[] = [
@@ -788,7 +780,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewind to a boundary before a surviving replace keeps the replace loadable", async () => {
+  test("rewind to a boundary before a surviving replace keeps the replace loadable", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const compacted: SessionEvent[] = [
@@ -829,7 +821,7 @@ describe("rewind", () => {
     }
   });
 
-  it("rewinds to a mid-turn followup of a CLOSED turn, then agent-style continuation keeps the session loadable", async () => {
+  test("rewinds to a mid-turn followup of a CLOSED turn, then agent-style continuation keeps the session loadable", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       const turn2: SessionEvent[] = [
@@ -890,7 +882,7 @@ describe("rewind", () => {
     }
   });
 
-  it("invalidates the token meter fold so a rewound live session stays measurable", async () => {
+  test("invalidates the token meter fold so a rewound live session stays measurable", async () => {
     const { ctx, dispose } = await harness();
     try {
       const meter = new TokenMeter(ctx);
@@ -983,7 +975,7 @@ function orphanStepEndLog(): SessionEvent[] {
 }
 
 describe("rewind step balance self-heal", () => {
-  it("balances only the tail window (an inner orphan step/end stays; the log is not read in full)", async () => {
+  test("balances only the tail window (an inner orphan step/end stays; the log is not read in full)", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", orphanStepEndLog());
@@ -1019,7 +1011,7 @@ describe("rewind step balance self-heal", () => {
     }
   });
 
-  it("live rewind follows the same tail-window rule (no full log read)", async () => {
+  test("live rewind follows the same tail-window rule (no full log read)", async () => {
     const { ctx, persistence, dispose } = await harness();
     try {
       await createPersisted(ctx, "s1", orphanStepEndLog());
@@ -1051,7 +1043,7 @@ describe("rewind step balance self-heal", () => {
     }
   });
 
-  it("drops the tail from an orphan step/end in a forked seed", async () => {
+  test("drops the tail from an orphan step/end in a forked seed", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", orphanStepEndLog());
@@ -1071,7 +1063,7 @@ describe("rewind step balance self-heal", () => {
     }
   });
 
-  it("keeps a forked seed whose steps are already paired untouched", async () => {
+  test("keeps a forked seed whose steps are already paired untouched", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       await createPersisted(ctx, "src", twoTurnLog());
@@ -1094,7 +1086,7 @@ describe("rewind step balance self-heal", () => {
 });
 
 describe("rewind 的行写放大", () => {
-  it("rewind 只写一次 session 行（head 回退与 revision 合并）", async () => {
+  test("rewind 只写一次 session 行（head 回退与 revision 合并）", async () => {
     const dir = await mkdtemp(join(tmpdir(), "rdb-rewind-row-writes-"));
     const path = join(dir, "sessions.sqlite");
     const { ctx, provider, dispose } = await harness(path);
@@ -1136,7 +1128,7 @@ describe("rewind 的行写放大", () => {
 });
 
 describe("rewind 之后的 memory log 镜像", () => {
-  it("内存 log 落后于存储时按存储前缀重建，而不是在内存上做长度运算", async () => {
+  test("内存 log 落后于存储时按存储前缀重建，而不是在内存上做长度运算", async () => {
     const { ctx, persistence, provider, dispose } = await harness();
     try {
       ctx.sessions.create(SessionId("live"), { meta: meta("live"), seed: [...twoTurnLog()] });
@@ -1170,7 +1162,7 @@ describe("rewind 之后的 memory log 镜像", () => {
 });
 
 describe("rewind derived-state invalidation", () => {
-  it("warns once per plugin instance when the token meter service is missing", async () => {
+  test("warns once per plugin instance when the token meter service is missing", async () => {
     const { ctx, dispose } = await harness();
     try {
       const warnings = captureWarnings(ctx);
@@ -1191,7 +1183,7 @@ describe("rewind derived-state invalidation", () => {
     }
   });
 
-  it("warns once when the token meter and projection registry shapes change", async () => {
+  test("warns once when the token meter and projection registry shapes change", async () => {
     // 装配面同形，只把两个服务的形状换成"上游字段改名"的样子。
     const { ctx, dispose } = await mountHarness({
       config: { type: "sqlite", path: ":memory:" },

@@ -9,17 +9,12 @@ import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionWorkspace } from "@morlay/dsh-session";
 import { WorkspaceRegistry } from "@morlay/dsh-workspace";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
+import { onTestFinished } from "vitest";
 import { SessionWorkspaceHost } from "../server/session-workspace.host.ts";
 import { WorkspaceBroadcaster } from "../workspace-broadcaster.service.ts";
 import { WorkspaceControllerRow } from "../server/workspace-controller.host.ts";
 import { FakeWorkspaceRegistry, workspaceOf } from "@morlay/dsh-workspace/testing";
-
-const apps: { dispose(): Promise<void> }[] = [];
-
-afterEach(async () => {
-  for (const app of apps.splice(0)) await app.dispose().catch(() => {});
-}, 10_000);
 
 /** 一条 follow 帧：本文件只读 `type` 与 `workspace.workspaceId`。 */
 interface FollowFrame {
@@ -77,7 +72,7 @@ async function boot(paths: string[]): Promise<{
     ],
     timeoutMs: 8_000,
   });
-  apps.push(app);
+  onTestFinished(() => app.dispose().catch(() => {}));
   // 按**契约**取（`app.get` 认令牌）：替身的令牌是它继承的那个契约。
   const registry = app.get(WorkspaceRegistry) as FakeWorkspaceRegistry;
   for (const path of paths) {
@@ -95,7 +90,7 @@ async function boot(paths: string[]): Promise<{
 }
 
 describe("SessionWorkspaceHost", { timeout: 10_000 }, () => {
-  it("workspaceId：cwd 取 workspace 的路径，attach 落到 attachSession，并广播 upsert", async () => {
+  test("workspaceId：cwd 取 workspace 的路径，attach 落到 attachSession，并广播 upsert", async () => {
     const { target, registry } = await boot(["/tmp/w1"]);
     const [workspace] = registry.rows;
     const workspaceId = workspace?.id ?? "";
@@ -105,7 +100,7 @@ describe("SessionWorkspaceHost", { timeout: 10_000 }, () => {
     expect(registry.attached).toEqual([{ workspaceId, sessionId: "s1" }]);
   });
 
-  it("attach 之后活跃的 follow 流收到这个 workspace 的 upsert", async () => {
+  test("attach 之后活跃的 follow 流收到这个 workspace 的 upsert", async () => {
     const { target, registry, stream } = await boot(["/tmp/w2"]);
     const [workspace] = registry.rows;
     const workspaceId = workspace?.id ?? "";
@@ -120,7 +115,7 @@ describe("SessionWorkspaceHost", { timeout: 10_000 }, () => {
     stream.stop();
   });
 
-  it("cwd：解析到已注册的工作区，attach 落到它的 sessionIds 并广播", async () => {
+  test("cwd：解析到已注册的工作区，attach 落到它的 sessionIds 并广播", async () => {
     // 目录已注册（默认工作区就是这么来的——启动目录登记一次）；解析**不再**按 cwd 懒创建。
     const { target, registry, stream } = await boot(["/tmp/custom"]);
     const resolved = await target.resolve({ cwd: "/tmp/custom" });
@@ -139,14 +134,14 @@ describe("SessionWorkspaceHost", { timeout: 10_000 }, () => {
     expect(stream.upserts.length, "attach 之后必须广播 upsert").toBe(1);
   });
 
-  it("workspaceId 与 cwd 同时给：拒绝（与上游同序）", async () => {
+  test("workspaceId 与 cwd 同时给：拒绝（与上游同序）", async () => {
     const { target } = await boot(["/tmp/w1"]);
     await expect(target.resolve({ workspaceId: "w1", cwd: "/tmp/x" })).rejects.toThrow(
       "accepts workspaceId or cwd, not both",
     );
   });
 
-  it("workspace 不存在：报错", async () => {
+  test("workspace 不存在：报错", async () => {
     const { target } = await boot(["/tmp/w1"]);
     await expect(target.resolve({ workspaceId: "w-missing" })).rejects.toThrow(
       'workspace "w-missing" not found',

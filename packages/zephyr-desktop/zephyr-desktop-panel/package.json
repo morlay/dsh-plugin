@@ -21,6 +21,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts",
     "./ui": "./src/ui/index.ts",
     "./package.json": "./package.json"
   },
@@ -45,8 +46,7 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.0",
-    "@types/react": "~18.3.1"
+    "@testing-library/react": "^16.3.3"
   },
   "peerDependencies": {
     "react": "^18.3.1"

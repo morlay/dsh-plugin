@@ -7,12 +7,12 @@ import {
   APPROVAL_POLICY_CONTEXT,
   SANDBOX_POLICY_CONTEXT,
 } from "@morlay/configurable-sandbox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr/testing";
 
 const WORKSPACE = "/work";
 
 describe("sandbox:policy 文本", () => {
-  it("三种 mode 各自的中文语义", () => {
+  test("三种 mode 各自的中文语义", () => {
     expect(
       renderPolicyContext({ mode: "read-only", workspaceRoot: WORKSPACE }, emptyRules()),
     ).toContain("只读");
@@ -24,7 +24,7 @@ describe("sandbox:policy 文本", () => {
     ).toContain("全权");
   });
 
-  it("空的规则不加尾巴（与官方那段同语义）", () => {
+  test("空的规则不加尾巴（与官方那段同语义）", () => {
     const text = renderPolicyContext(
       { mode: "workspace-write", workspaceRoot: WORKSPACE },
       emptyRules(),
@@ -35,7 +35,7 @@ describe("sandbox:policy 文本", () => {
     expect(text).not.toContain("拒绝（读写都拒）");
   });
 
-  it("三类条目各追加一句，按 rw / r- / -- 的顺序", () => {
+  test("三类条目各追加一句，按 rw / r- / -- 的顺序", () => {
     const text = renderPolicyContext(
       { mode: "workspace-write", workspaceRoot: WORKSPACE },
       {
@@ -53,14 +53,14 @@ describe("sandbox:policy 文本", () => {
     expect(denied).toBeGreaterThan(readOnly);
   });
 
-  it("两条上下文名与上游同名（同名才叫接管）", () => {
+  test("两条上下文名与上游同名（同名才叫接管）", () => {
     expect(SANDBOX_POLICY_CONTEXT).toBe("sandbox:policy");
     expect(APPROVAL_POLICY_CONTEXT).toBe("approval:policy");
   });
 });
 
 describe("approval:policy 文本", () => {
-  it("ask 与 never 是两段不同的话", () => {
+  test("ask 与 never 是两段不同的话", () => {
     const ask = renderApprovalContext("ask");
     const never = renderApprovalContext("never");
 

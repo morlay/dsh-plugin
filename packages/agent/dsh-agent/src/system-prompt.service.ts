@@ -2,7 +2,7 @@
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { SessionProjectionStore } from "@morlay/dsh-session";
-import { SystemPrompt } from "@morlay/dsh-agent";
+import { SystemPrompt } from "./contract/system-prompt.contract.ts";
 import { SystemPrompt as SystemPromptService } from "@deepseek-ai/dsh-system-prompt";
 
 @Injectable()

@@ -5,7 +5,8 @@
 // 值从生效层读（用户层 presence 决定「已覆盖」），与渲染无关。
 
 import z from "@deepseek-ai/schemastery";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "@morlay/zephyr-ui/testing";
+import { vi } from "vitest";
 import { SchemaDraftModel, type ValidationFailure } from "../schema-form/draft.ts";
 import { projectNode } from "../schema-form/schema-node.ts";
 import { FakeScope } from "../schema-form/testing/fake-scope.ts";
@@ -29,7 +30,7 @@ function model(
 }
 
 describe("草稿模型", () => {
-  it("初值来自生效层：不脏、无覆盖", () => {
+  test("初值来自生效层：不脏、无覆盖", () => {
     const scope = new FakeScope({ value: { retry: 3 }, user: { retry: 3 } });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
 
@@ -47,14 +48,14 @@ describe("草稿模型", () => {
     });
   });
 
-  it("用户层没有这个字段时不算覆盖", () => {
+  test("用户层没有这个字段时不算覆盖", () => {
     const scope = new FakeScope({ value: { retry: 3 }, user: {} });
     const { instance } = model(scope, z.object({ retry: z.number() }));
 
     expect(instance.field(["retry"]).overridden).toBe(false);
   });
 
-  it("编辑只落在草稿上：保存前 host 一个写都没收到", () => {
+  test("编辑只落在草稿上：保存前 host 一个写都没收到", () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
 
@@ -65,7 +66,7 @@ describe("草稿模型", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("把字段改回生效值即不再脏（保存不会发写）", async () => {
+  test("把字段改回生效值即不再脏（保存不会发写）", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
 
@@ -78,7 +79,7 @@ describe("草稿模型", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("保存把草稿按 staged 顺序变成 path op，并带读回时的 revision 栅栏", async () => {
+  test("保存把草稿按 staged 顺序变成 path op，并带读回时的 revision 栅栏", async () => {
     const scope = new FakeScope({ value: { retry: 1, label: "a" } });
     const { instance, shell } = model(scope, z.object({ retry: z.number(), label: z.string() }));
 
@@ -99,7 +100,7 @@ describe("草稿模型", () => {
     });
   });
 
-  it("文本草稿保存前不解析：无效的文本挡住保存且不发写", async () => {
+  test("文本草稿保存前不解析：无效的文本挡住保存且不发写", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
     const parse = (text: string) =>
@@ -120,7 +121,7 @@ describe("草稿模型", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("整段校验失败时不发写，并把消息报到 invalid", async () => {
+  test("整段校验失败时不发写，并把消息报到 invalid", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance } = model(scope, z.object({ retry: z.number() }), (value) =>
       value["retry"] === 99 ? { message: "retry 不接受 99", path: ["retry"] } : undefined,
@@ -135,7 +136,7 @@ describe("草稿模型", () => {
     expect(instance.violation()).toEqual({ message: "retry 不接受 99", path: ["retry"] });
   });
 
-  it("host 拒绝时保留草稿并报失败", async () => {
+  test("host 拒绝时保留草稿并报失败", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     scope.accepted = false;
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
@@ -150,7 +151,7 @@ describe("草稿模型", () => {
     expect(instance.field(["retry"]).value).toBe(5);
   });
 
-  it("恢复默认：发 unset，把字段交回组成层；用户层本来没有值时一个写都不发", async () => {
+  test("恢复默认：发 unset，把字段交回组成层；用户层本来没有值时一个写都不发", async () => {
     const overridden = new FakeScope({
       value: { retry: 9 },
       user: { retry: 9 },
@@ -175,7 +176,7 @@ describe("草稿模型", () => {
     expect(fresh.writes).toEqual([]);
   });
 
-  it("丢弃草稿：回到生效值，host 一个写都没收到", () => {
+  test("丢弃草稿：回到生效值，host 一个写都没收到", () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
 
@@ -187,7 +188,7 @@ describe("草稿模型", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("数组追加按索引写、追加值取 item 的默认值；删除发 unset", async () => {
+  test("数组追加按索引写、追加值取 item 的默认值；删除发 unset", async () => {
     const scope = new FakeScope({ value: { tags: ["a"] } });
     const { instance } = model(scope, z.object({ tags: z.array(z.string().default("new")) }));
 
@@ -205,7 +206,7 @@ describe("草稿模型", () => {
     ]);
   });
 
-  it("dict 增键用值节点的默认值，删键发 unset", async () => {
+  test("dict 增键用值节点的默认值，删键发 unset", async () => {
     const scope = new FakeScope({ value: { models: { chat: "x" } } });
     const { instance } = model(scope, z.object({ models: z.dict(z.string().default("m")) }));
 
@@ -223,7 +224,7 @@ describe("草稿模型", () => {
     ]);
   });
 
-  it("只读文档：保存不发写", async () => {
+  test("只读文档：保存不发写", async () => {
     const scope = new FakeScope({ value: { retry: 1 }, writable: false });
     const { instance, shell } = model(scope, z.object({ retry: z.number() }));
 
@@ -235,14 +236,14 @@ describe("草稿模型", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("host 不服务这个 namespace 时 available=false", () => {
+  test("host 不服务这个 namespace 时 available=false", () => {
     const scope = new FakeScope({ status: "unavailable", value: undefined, revision: undefined });
     const { shell } = model(scope, z.object({ retry: z.number() }));
 
     expect(shell()).toMatchObject({ available: false, dirty: false, invalid: false });
   });
 
-  it("深路径编辑落在嵌套字段上", async () => {
+  test("深路径编辑落在嵌套字段上", async () => {
     const scope = new FakeScope({ value: { limits: { depth: 1 } } });
     const { instance } = model(scope, z.object({ limits: z.object({ depth: z.number() }) }));
 
@@ -256,7 +257,7 @@ describe("草稿模型", () => {
 });
 
 describe("给一层加项", () => {
-  it("对象加声明过的字段：值取该字段的默认值", async () => {
+  test("对象加声明过的字段：值取该字段的默认值", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance } = model(
       scope,
@@ -269,7 +270,7 @@ describe("给一层加项", () => {
     expect(scope.writes).toEqual([[{ op: "set", path: ["note"], value: "hi" }]]);
   });
 
-  it("对象加没声明的字段：不写（写进去也会被 host 挡下）", async () => {
+  test("对象加没声明的字段：不写（写进去也会被 host 挡下）", async () => {
     const scope = new FakeScope({ value: { retry: 1 } });
     const { instance } = model(scope, z.object({ retry: z.number() }));
 
@@ -279,7 +280,7 @@ describe("给一层加项", () => {
     expect(scope.writes).toEqual([]);
   });
 
-  it("字典加任意键：值是「还没有值」的判断位（标量给 null，容器给空的容器）", async () => {
+  test("字典加任意键：值是「还没有值」的判断位（标量给 null，容器给空的容器）", async () => {
     const scope = new FakeScope({ value: { models: {} } });
     const { instance } = model(
       scope,
@@ -299,7 +300,7 @@ describe("给一层加项", () => {
   });
 });
 
-it("加成对象：它的字段一次摆出来（有默认值给默认值、标量给 null、容器给空的容器）", async () => {
+test("加成对象：它的字段一次摆出来（有默认值给默认值、标量给 null、容器给空的容器）", async () => {
   const scope = new FakeScope({ value: {} });
   const { instance } = model(
     scope,
@@ -320,7 +321,7 @@ it("加成对象：它的字段一次摆出来（有默认值给默认值、标�
   ]);
 });
 
-it("字段的默认值是 `null`（会话模式的 `defaultModel` 那种写法）时，加成仍把它的字段摆出来", async () => {
+test("字段的默认值是 `null`（会话模式的 `defaultModel` 那种写法）时，加成仍把它的字段摆出来", async () => {
   const scope = new FakeScope({ value: {} });
   const { instance } = model(
     scope,

@@ -3,9 +3,9 @@ import * as UiUserQuestionsPlugin from "@deepseek-ai/dsh-client-ui-user-question
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
-import { SessionController } from "@morlay/dsh-conversation/ui";
-import { UiConversation } from "@morlay/dsh-conversation/ui";
-import { UiSession } from "@morlay/dsh-conversation/ui";
+import { SessionController } from "@morlay/dsh-conversation/contract";
+import { UiConversation } from "./conversation/conversation.token.ts";
+import { UiSession } from "./ui-session.token.ts";
 // 远端身份只从 `./endpoint`（client-safe）取：包根带三个宿主 service，浏览器半引不得。
 import { USER_QUESTIONS_REMOTE, userQuestionsGroupName } from "@morlay/dsh-permission/endpoint";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";

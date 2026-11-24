@@ -3,10 +3,10 @@ import { WorkingDirectoryService } from "@deepseek-ai/dsh-working-directory";
 import { Injectable, inject, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { AppEnv } from "@morlay/zephyr-app";
-import { SystemPrompt } from "@morlay/dsh-agent";
+import { SystemPrompt } from "./contract/system-prompt.contract.ts";
 import { FileSystem } from "@morlay/dsh-fs";
 import { SessionProjectionStore } from "@morlay/dsh-session";
-import { WorkingDirectory } from "@morlay/dsh-agent";
+import { WorkingDirectory } from "./contract/working-directory.contract.ts";
 
 /** 部署默认目录：没有会话记录时 shell / 工具落在这里（必须是绝对路径，上游在构造期校验）。 */
 export interface WorkingDirectoryConfig {
