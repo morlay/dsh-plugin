@@ -17,7 +17,7 @@ import {
 } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { onTestFinished } from "vitest";
-import { SessionReferenceRemoteBinding } from "../session-reference-remote.ts";
+import { SessionReferenceEndpointClient } from "../../session-reference-endpoint.client.ts";
 import { namespaceOf } from "../../remote-namespace.ts";
 
 /** `remote.sessionReferenceResolver` 的调用面（namespace 在契约上是动态面：按运行期形状收窄一次）。 */
@@ -39,7 +39,7 @@ describe("客户端 @ 会话候选的 remote 绑定", { timeout: 15_000 }, () =>
           configure(ClientConnectionDefault, { origin: "http://127.0.0.1:1" }),
         ),
         ...provideClientRemote(),
-        SessionReferenceRemoteBinding,
+        SessionReferenceEndpointClient,
       ],
       timeoutMs: 8_000,
     });

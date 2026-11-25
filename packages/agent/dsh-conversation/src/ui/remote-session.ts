@@ -1,4 +1,4 @@
-// 上游 `SessionManager` 要的三组面：`session` 以**我们的 `SessionRemote` 契约服务**为主，
+// 上游 `SessionManager` 要的三组面：`session` 以**会话域的 `SessionEndpointClient`** 为主，
 // `commands` / `subagents` 接 `Remote` 的 namespace。
 //
 // 为什么一元方法不走 namespace：`Remote.session` 要 `$mount` 之后才存在，而 `SessionRemote`
@@ -10,7 +10,8 @@
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
 import type { SessionRemotes } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/remotes.ts";
 import type { CommandRunner } from "@morlay/dsh-command/contract";
-import type { ClientConnection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import type { ClientConnection, Remote } from "@morlay/zephyr-app/client";
+import type { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { namespaceOf } from "./remote-namespace.ts";
 
 /**
@@ -40,16 +41,29 @@ function forwarded(outcome: unknown): unknown {
   return asRemoteResult(outcome);
 }
 
+/**
+ * 逐帧句柄（`follow` / `control`）：这类返回值是 async iterable，不能包成 `RemoteResult`。
+ * @param value - 服务方法或 namespace 方法的返回值。
+ * @returns 是不是逐帧面。
+ */
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
+  );
+}
+
 /** 上游 `SessionRemotes` 的活实现。 */
 export class LiveSessionRemotes implements SessionRemotes {
   /**
-   * @param sessionRemoteOf - 取我们的 `SessionRemote` 契约服务（装配期就有）。
+   * @param sessionRemoteOf - 取 `session` 组的客户端形态（装配期就有）。
    * @param commandRunnerOf - 取我们的 `CommandRunner` 契约服务（上游 `commands.execute` 映射到它）。
    * @param remoteOf - 取 `Remote` 面（`subagents` 这个 namespace 从这里来）。
    * @param connectionOf - 取连接面：上游 `RemoteStream` 用它跟连接代换代（没装就给单代）。
    */
   constructor(
-    private readonly sessionRemoteOf: () => SessionRemote,
+    private readonly sessionRemoteOf: () => SessionEndpointClient,
     private readonly commandRunnerOf: () => CommandRunner,
     private readonly remoteOf: () => Remote,
     private readonly connectionOf: () => ClientConnection | undefined,
@@ -73,7 +87,10 @@ export class LiveSessionRemotes implements SessionRemotes {
 
   /**
    * `session` 面：契约服务有的方法走契约服务（一元结果包成上游要的 `RemoteResult`），
-   * 没有的（`follow` / `control` 这类长流）回落到 `Remote.session` namespace。
+   * 没有的回落到 `Remote.session` namespace。
+   *
+   * **流式方法原样转发**：契约的客户端形态也有 `follow` / `control`（逐帧句柄），包成 `RemoteResult`
+   * 会把流拍平成 `{ ok, value }`——消费方随后拿到 `stream is not async iterable`。
    */
   get session(): SessionRemotes["session"] {
     const service = this.sessionRemoteOf();
@@ -82,7 +99,10 @@ export class LiveSessionRemotes implements SessionRemotes {
       get: (_target, property) => {
         const value: unknown = Reflect.get(service, property);
         if (typeof value === "function") {
-          return (...args: never[]): unknown => forwarded(value.apply(service, args));
+          return (...args: never[]): unknown => {
+            const result: unknown = value.apply(service, args);
+            return isAsyncIterable(result) ? result : forwarded(result);
+          };
         }
         const face = this.rawOf("session") ?? {};
         const streamed: unknown = Reflect.get(face, property);

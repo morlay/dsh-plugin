@@ -6,7 +6,7 @@ import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { SessionEvent } from "@morlay/dsh-session/contract";
 import { UserMessageNodeView } from "../../ui/session-editor/user-message.view.tsx";
-import type { SessionEditorFace } from "../../ui/session-editor/session-editor.contract.ts";
+import type { SessionEditorFace } from "../../ui/session-editor/session-editor.face.ts";
 
 // 聊天行自己的文案座（上游 `chat` 字典）：本用例不断言它的内容。
 const t = ((key: string) => key) as never;

@@ -12,8 +12,9 @@
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import { without, bootstrapApplication, inject, Injectable, type App } from "@morlay/zephyr";
+import { Remote } from "@morlay/zephyr-app/client";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { onTestFinished } from "vitest";
 import { SessionController } from "@morlay/dsh-conversation/contract";
@@ -57,7 +58,17 @@ const ROWS = {
 
 /** 目录面的替身：只实现被测代码真正调的那几个方法。 */
 @Injectable()
-class FakeSessionRemote extends SessionRemote {
+class FakeSessionRemote {
+  /** 流面归传输层替身（`Remote` 上的 `session` 面）驱动：客户端形态只转发，不自己出帧。 */
+  private readonly remote = inject(Remote);
+
+  control(signal: AbortSignal): AsyncIterable<unknown> {
+    const face = this.remote.session as
+      | { control(signal: AbortSignal): AsyncIterable<unknown> }
+      | undefined;
+    if (face === undefined) throw new Error("替身没有挂 remote.session：control 取不到面");
+    return face.control(signal);
+  }
   async list(): Promise<unknown> {
     return ROWS;
   }
@@ -160,7 +171,7 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
   const sessionRemote = new FakeSessionRemote();
   const app = await bootstrapApplication({
     providers: [
-      { provide: SessionRemote, useFactory: () => sessionRemote },
+      { provide: SessionEndpointClient, useFactory: () => sessionRemote },
       // `sessions` 行还 inject 了 `Remote`（转发面）；本 spec 不走 wire，只给 `session` 这一条 face。
       {
         provide: Remote,
@@ -190,7 +201,8 @@ async function boot(): Promise<{ app: App; runner: RecordingCommandRunner }> {
       // 投影读面由框架提供：它自己订阅 `remote.session.control`（本 spec 的 fake 已给）。
       { provide: ClientConnection, useFactory: () => new FakeConnection() },
       // 投影读面随 `provideSessionsStore()` 一起装（它内含 `provideProjections()`）：这里不再重复列。
-      ...provideSessionsStore(),
+      // 上面那份替身占了 `session-endpoint` 令牌：清单里那份真客户端要剔掉，否则注册两次。
+      ...provideSessionsStore(without(SessionEndpointClient)),
     ],
     timeoutMs: 20_000,
   });

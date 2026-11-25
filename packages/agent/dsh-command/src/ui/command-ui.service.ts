@@ -7,7 +7,7 @@
 // 的端口）。上游的 import 只留在本包：别的域不再直连 @deepseek-ai/dsh-client-ui-commands。
 import * as UiCommandsPlugin from "@deepseek-ai/dsh-client-ui-commands/client";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { CommandUi } from "./command-ui.contract.ts";
+import { CommandUi } from "../contract/index.ts";
 
 /** 命令 UI 行的基类：mount 由基类给出，子类只补注入与 onInit。 */
 export class CommandUiRow extends fromCordis(CommandUi, UiCommandsPlugin) {}

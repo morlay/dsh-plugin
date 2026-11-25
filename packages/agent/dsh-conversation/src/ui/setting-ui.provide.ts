@@ -1,4 +1,5 @@
 import { provide } from "@morlay/zephyr";
+import { SettingsSchemaDefault } from "@morlay/zephyr-app/client";
 import { ModelSelectionSlots } from "./model-selection-slots.ts";
 import { SettingsGeneralSlots } from "./settings-general-slots.ts";
 import { SettingsHost } from "./settings-host.ts";
@@ -7,13 +8,17 @@ import { SettingsModelsSlots } from "./settings-models-slots.ts";
 /**
  * 设置的**入口行**（`configForms` / `settingsSchema` 的真实现，上游 `ui-settings` 的 client 行）。
  *
+ * 两半各一行：`SettingsHost` 是上游行本身（`configForms` 的契约面），`SettingsSchemaDefault` 是
+ * `settingsSchema` 的令牌拥有者（上游 apply 会顺手注册它，但装配预检早于任何 onInit，令牌条目只能由
+ * 清单给）。
+ *
  * 装配顺序**不需要**调用方安排：内核按每行的 `inject` 声明做拓扑排序（提供者在消费者前，同层沿用
  * 清单顺序），所以 `Locale` / `Theme` 对 `ConfigForms` 的依赖会自动把本行排到它们前面。
  *
  * 与 `provideSettingUi()` 分成两条清单的理由是**职责与生命周期**：入口行装的是上游 client 行的服务面，
  * 页面位置装的是槽位（后者依赖 `commandUi` 等链内服务）。这是契约清晰化，不是顺序约束。
  */
-export const provideSettingHost = provide([SettingsHost]);
+export const provideSettingHost = provide([SettingsHost, SettingsSchemaDefault]);
 
 /**
  * 设置的**页面位置与模型选择器**：通用页 / 模型页的槽位，以及输入区的模型选择器。

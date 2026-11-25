@@ -28,8 +28,8 @@ import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
 import { UserQuestionsEndpoint } from "../endpoint/user-questions-endpoint.ts";
-import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
-import { UserQuestionsEndpointClient } from "../ui/user-questions-endpoint-client.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint.client.ts";
+import { UserQuestionsEndpointClient } from "../ui/user-questions-endpoint.client.ts";
 
 /**
  * `userQuestions/attachWait` 的 wire 端点名：**从契约编译出来**（`remoteDescriptorsOf` 读

@@ -23,7 +23,7 @@ import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
 import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
-import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint.client.ts";
 
 /** 指向临时目录的运行环境。 */
 /** 一份双端装配：host 断后端、client 断前端；生命周期由 `bootTwoSided` 自己收。 */

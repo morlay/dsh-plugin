@@ -29,7 +29,7 @@ const EMPTY_HANDLERS: MockHandlers = {
  * @param signal - 调用方给的取消信号。
  * @returns 空流。
  */
-function emptyStream(signal: AbortSignal): AsyncIterable<never> {
+export function emptyStream(signal: AbortSignal): AsyncIterable<never> {
   return {
     [Symbol.asyncIterator]: () => ({
       next: async (): Promise<IteratorResult<never>> => {

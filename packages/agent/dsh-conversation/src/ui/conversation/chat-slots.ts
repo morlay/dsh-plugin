@@ -18,7 +18,7 @@ import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiConversation } from "./conversation.token.ts";
 import { SidebarRight } from "../ports.ts";
 import { UiSession } from "../ui-session.token.ts";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 import { sessionGroupName } from "@morlay/dsh-session/endpoint";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 

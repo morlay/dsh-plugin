@@ -7,5 +7,6 @@ export * from "./command-contribution.ts";
 export * from "./command-registry.contract.ts";
 export * from "./command-catalog.contract.ts";
 export * from "./command-runner.contract.ts";
+export * from "./command-ui.contract.ts";
 // `@Command()`：命令贡献的登记写法，属契约面。
 export * from "./command.decorator.ts";

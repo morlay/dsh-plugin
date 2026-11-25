@@ -15,6 +15,7 @@
     "./package.json": "./package.json",
     "./contract": "./src/contract/index.ts",
     "./endpoint": "./src/endpoint/index.ts",
+    "./ui": "./src/ui/index.ts",
     "./testing": "./src/testing/index.ts"
   },
   "publishConfig": {
@@ -34,6 +35,10 @@
       "./endpoint": {
         "types": "./dist/endpoint.d.mts",
         "default": "./dist/endpoint.mjs"
+      },
+      "./ui": {
+        "types": "./dist/ui.d.mts",
+        "default": "./dist/ui.mjs"
       },
       "./testing": {
         "types": "./dist/testing.d.mts",

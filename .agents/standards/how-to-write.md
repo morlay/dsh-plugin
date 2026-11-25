@@ -34,6 +34,28 @@
   第二个适配器。判据：`just audit` 的「上游包唯一化」——同一上游包的同一个面（`pkg#host` /
   `pkg#client` / `pkg#remote`）只该有一个本地 owner（`zephyr` 组豁免）。
 
+### 域包的三层（`endpoint` / `server` / `ui`）
+
+一个域包按**职责**分三层，文件放哪一层由「它是什么」决定，不由「谁用得多」决定：
+
+| 层 | 放什么 | 不该有 |
+| --- | --- | --- |
+| `endpoint/` | **接口定义**：`@RemoteGroup({ name })` 契约类、请求/应答类型、组名函数 | 实现、`$mount`、UI |
+| `server/` | **host 侧实现**：`extends <Endpoint>` 的实现 + `registerRemoteGroup(实现)` + 端点服务（`*EndpointDefault`）、host 能力服务 | client 形态、UI |
+| `ui/` | ① **客户端形态**：`@RemoteClient() class <Xxx>EndpointClient extends <Endpoint>`——消费端点、转成 client，**在 `onInit` 里 `$mount(remoteDescriptorsOf(<Endpoint>))`**；② **本组 UI 组件/槽位**，只消费① | 契约（`*.contract.ts` 归 `endpoint`）、只做挂载的 binding 类 |
+
+**上层（对话域）二次组装**：把各组的 `ui/` 拼起来，定义它自己的组装层契约（`ui-session` / `ui-conversation` …）；
+它不定义别组的端点契约、不实现别组的 host。
+
+判据：
+
+- **没有 `*.binding.ts` / `*mount.ts` 这种「只做 `$mount`」的类**——挂载是客户端形态自己的 `onInit`；
+- **`ui/` 里没有 `*.contract.ts`**——契约在 `endpoint/`；
+- **`endpoint/` 里没有实现**（`extends` 别的类、`registerRemoteGroup`、`inject` 业务服务都不该出现）；
+- **`server/` 里没有 `@RemoteClient()`**——那是客户端形态；
+- 判据可查：`rg -l 'RemoteClient' <pkg>/src/server`、`rg -l 'extends .*Endpoint' <pkg>/src/ui | xargs rg -L 'RemoteClient'`、
+  `rg -l 'binding\.ts|mount\.ts' <pkg>/src/ui`。
+
 ## 面边界
 
 包内四个面：`root`（包根的 `index.ts` 与同目录的一文件一类型）、`server`、`ui`、共享面
@@ -128,13 +150,21 @@
   [typert-generator](../../devpackages/typert-generator/src/index.ts) 的输入；各包 `dist/*.d.mts` 由
   `devkit build` 从这棵树按入口聚合（不再有第二个出声明的地方）。`tsc -b` 只在需要类型图时手动跑。
 - **跨边界 id 用 branded 类型，不做裸 `string`**；跨包契约由契约包显式导出，消费方只引用。
+- **`import type {} from "<上游包>"` 只用于把上游的 `declare module` 扩展带进 program**；用的时候必须在
+  同一行上方写明这一点（`// 空导入只为把上游的 declare module 扩展带进 program（上游没导出该面类型）；运行期零边。`）。
+  面类型优先具名导入；只有上游没导出时，才用 `Context["<服务名>"]`（或该面成员的索引类型）+ 空导入。
 
 ## 令牌与依赖注入
 
 - **有实现类的服务就用契约类当令牌**：`@Injectable() abstract class`，名字是类名的连字符化形（同时是
   cordis 服务名与 dsh 行 id，见 [`token.ts`](../../packages/zephyr/zephyr/src/token.ts)）。
-- **`InjectionToken<T>` 只用于「没有实现类、由上游行在 mount 期按名字发布」的服务**——若有实现类，用 `@Injectable({ name })` 抽象类（`uiWorkspace` 已从令牌改成抽象类，见 `dsh-workspace/src/ui/ui-workspace.token.ts`）
-  与纯值配置；类型参数写真实类型，不写 `unknown`。
+- **不自己 `new InjectionToken`**：即使「没有实现类、由上游行在 mount 期按名字发布」，令牌也用
+  `@Injectable({ name })` 抽象类（`name` 显式对齐上游服务名，不靠派生）。判据：
+  `rg 'new InjectionToken' packages --glob '!**/__tests__/**' --glob '!**/dist/**'` 应为 0。
+  理由（与 `InjectionToken` 的差别）：实现只能 `extends` 契约 → 编译期有约束；成员可以逐个声明，
+  配 `AssertCovered<上游面, 契约>` 做完整性守卫；`fromCordis(契约, 上游插件)` 直接可用。
+  面类型优先具名导入；上游没导出时用 `Context["<服务名>"]`（配下面「类型」一节那条空导入注释），
+  成员签名写 `abstract readonly x: Face["x"]` 直接取上游那一面，不手抄、也不写 `unknown`。
 - **依赖写成字段注入**：`inject(Token)` / `inject.optional()` / `inject.all()`；不写 `static inject`
   数组、不按字符串 `ctx.get("名字")` 取服务。装配语法（`provide` / `without` / `configure` /
   `fromCordis` / `toCordis`）的唯一 home 是

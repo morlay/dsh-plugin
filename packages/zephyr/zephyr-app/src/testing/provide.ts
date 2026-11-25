@@ -6,16 +6,22 @@
 // 不要在这里顺手把 host 的 `RemoteHandlersDefault` 也装进来——那是 host 装配的事；
 // 同 ctx 装两份，`sessions` 这类同名不同义的服务就会互相抢。
 import type { ProviderEntry } from "@morlay/zephyr";
-// 用**公开出口**取契约：调用方也是从 `@morlay/zephyr-app/contract` 拿 `Remote`，
-// 相对路径与包名解析在测试环境里可能落成两个模块实例（令牌就对不上了）。
-import { Remote } from "@morlay/zephyr-app/contract";
-import { LocalRemote, type EndpointInvoker } from "./local-remote.ts";
+import { LocalRemote, type EndpointInvoker, type StreamOpener } from "./local-remote.ts";
 
 /**
- * client 侧的传输替身：只提供 `Remote`，调用落到 `call`（host 装配的 `RemoteHandlers.invoke`）。
- * @param call - host 装配的端点执行面。
+ * client 侧的进程内传输：`Remote` 的实现是 `LocalRemote`，调用落到 host 的两个执行面。
+ *
+ * 按**类行**装（不是 `useValue`）：`LocalRemote` 的 `onInit` 要拿行 ctx 才能把 `remote.<namespace>`
+ * 发布成嵌套服务名——上游好几行的 `static inject` 里写着它（`remote.job` / `remote.commands`），
+ * 名字不在 store 里它们的 fiber 永远停在待激活。
+ * @param call - host 装配的 unary 执行面（`RemoteHandlers.invoke`）。
+ * @param openStream - host 装配的流式执行面（`RemoteHandlers.stream`）；不传就只有 unary 可用。
  * @returns providers 清单（直接展开即可）。
  */
-export function provideLocalRemote(call: EndpointInvoker): readonly ProviderEntry[] {
-  return [{ provide: Remote, useValue: new LocalRemote(call) }] as readonly ProviderEntry[];
+export function provideLocalRemote(
+  call: EndpointInvoker,
+  openStream?: StreamOpener,
+): readonly ProviderEntry[] {
+  // `config` 就是构造函数那**一个**实参：两个执行面装在一个对象里（类行的造法只有一种）。
+  return [{ provide: LocalRemote, config: { call, ...(openStream === undefined ? {} : { openStream }) } }] as readonly ProviderEntry[];
 }

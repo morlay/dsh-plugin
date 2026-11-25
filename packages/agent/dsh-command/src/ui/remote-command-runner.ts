@@ -3,7 +3,7 @@ import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { CommandRunner } from "@morlay/dsh-command/contract";
 import { inject, Injectable } from "@morlay/zephyr";
-import { CommandEndpointClient } from "./command-endpoint-client.ts";
+import { CommandEndpointClient } from "./command-endpoint.client.ts";
 
 /** 走 remote 的命令执行器。 */
 @Injectable()

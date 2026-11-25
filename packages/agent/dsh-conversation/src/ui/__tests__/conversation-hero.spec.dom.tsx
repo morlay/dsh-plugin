@@ -17,7 +17,7 @@ import type {
 } from "@deepseek-ai/dsh-client-ui-conversation/src/client/contract/slots.ts";
 import type { ComposerBlock } from "@deepseek-ai/dsh-client-ui-conversation/src/client/contract/composer-blocks.ts";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
+import { mockTransport } from "@morlay/zephyr-app/client";
 import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
@@ -79,7 +79,7 @@ async function boot(
     streams: { "session/follow": async function* () {} } as Parameters<typeof mockTransport>[1],
   };
   const app = await bootstrapApplication({
-    providers: [...provideSessionsStore(), FakeRemote, SessionRemoteDefault],
+    providers: [...provideSessionsStore(), FakeRemote],
     timeoutMs: 8_000,
   });
   const sessions = app.get(SessionController);

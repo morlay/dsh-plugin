@@ -11,6 +11,5 @@ export { Remote as RemoteMethod } from "@morlay/zephyr-app/remote/decorators";
 export type { RemoteFailureWire, RemoteResultWire } from "@morlay/zephyr-app/contract";
 // 上游 `remote` 动态面的读法与名字（`remote.<group>` 的服务名只从 `remoteNamespaceKey` 算）。
 export * from "./dynamic-face.ts";
-export * from "./session-remote.ts";
 export * from "./remote.service.ts";
 export * from "./provide.ts";

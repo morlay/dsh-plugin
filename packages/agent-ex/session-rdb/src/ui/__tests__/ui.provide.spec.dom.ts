@@ -6,7 +6,8 @@
 import { bootstrapApplication } from "@morlay/zephyr";
 import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
-import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
+import { WorkspaceController } from "@morlay/dsh-workspace/endpoint";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 import { Locale, Remote } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { provideBetterSessionUi } from "../better-session.provide.ts";

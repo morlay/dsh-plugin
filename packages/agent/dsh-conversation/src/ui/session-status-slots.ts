@@ -8,7 +8,8 @@ import SessionStatusRemote from "@deepseek-ai/dsh-client-ui-session-status/remot
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
-import { Remote, RemoteAccess, Slots, UiSession, UiSessionStatus } from "@morlay/zephyr-app/client";
+import { Remote, RemoteAccess, Slots } from "@morlay/zephyr-app/client";
+import { UiSession, UiSessionStatus } from "@morlay/dsh-conversation/contract";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { namespaceOf } from "./remote-namespace.ts";
 

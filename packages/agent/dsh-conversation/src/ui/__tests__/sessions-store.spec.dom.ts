@@ -7,7 +7,7 @@
  */
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { mockTransport, Remote, SessionRemoteDefault } from "@morlay/zephyr-app/client";
+import { mockTransport, Remote } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController, type SessionCatalogState } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
@@ -72,7 +72,7 @@ async function boot(
     ...(mounted === undefined ? {} : { mounted }),
   };
   const app = await bootstrapApplication({
-    providers: [...provideSessionsStore(), FakeRemote, SessionRemoteDefault],
+    providers: [...provideSessionsStore(), FakeRemote],
     timeoutMs: 8_000,
   });
   const sessions = app.get(SessionController);

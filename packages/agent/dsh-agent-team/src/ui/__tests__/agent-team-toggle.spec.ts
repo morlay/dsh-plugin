@@ -7,78 +7,24 @@
  * 「菜单里没有开关，也没有报错」。
  *
  * 所以这条 spec 同时钉两件事：
- * 1. `AgentTeamUi.onInit` 真的把 `agentTeams` 那组 `TYPERT_REMOTE` 挂上了；
+ * 1. `AgentTeamUi.onInit` 真的把 `agentTeams` 那组 remote 挂上了；
  * 2. 挂上之后，开关确实注册进了菜单槽位。
  *
- * 替身的边界：`FakeRemote.$mount` 复刻 `RemoteDefault.publishNamespace` 的**唯一关键行为**——
- * 按 descriptor 把 `remote.<namespace>` 发布成服务名（不发布，上游的 `ctx.inject` 就等不到）。
+ * **全链路，只替外部世界**：host 侧是真 `provideAgentTeam()`（上游 `TeamService` 适配行 + 工具行 +
+ * 那份 descriptor 的提供者登记），client 侧是真 `Remote`（`LocalRemote` 接 host 的执行面）。
  */
-import { bootstrapApplication, Injectable, rootContextKey, type Context } from "@morlay/zephyr";
+import { Injectable, type App } from "@morlay/zephyr";
 import { Locale, provideRenderer, Remote, Slots } from "@morlay/zephyr-app/client";
+import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
+import { provideApiGateway, provideRemoteAccess, provideTypert } from "@morlay/zephyr-app";
+import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
 import { describe, expect, test } from "@morlay/zephyr/testing";
-import { onTestFinished } from "vitest";
 import { AgentTeamUi } from "../agent-team.ui.ts";
 
-/** 一条 descriptor 的最小形状（`TYPERT_REMOTE.descriptors` 的子集）。 */
-interface Descriptor {
-  readonly namespace?: string;
-  readonly method?: string;
-}
-
 /** 等条件成立（槽位注册与上游 `ctx.inject` 都是异步的）。 */
-async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
+async function until(check: () => boolean, timeoutMs = 5_000): Promise<void> {
   for (let waited = 0; !check() && waited < timeoutMs; waited += 10) {
     await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
-/** `Remote` 的替身：`$mount` 时按 descriptor 发布 `remote.<namespace>`（与 `RemoteDefault` 同形）。 */
-@Injectable()
-class FakeRemote extends Remote {
-  /** 挂过的 namespace（判"有没有挂"）。 */
-  readonly mounted: string[] = [];
-
-  readonly upstream: Record<string, unknown> = {};
-
-  private ctx: Context | undefined;
-
-  onInit(ctx: Context): void {
-    this.ctx = ctx;
-  }
-
-  async $mount(contribution: unknown): Promise<() => Promise<void>> {
-    const descriptors =
-      (contribution as { descriptors?: readonly Descriptor[] } | undefined)?.descriptors ?? [];
-    const disposed: Array<() => void> = [];
-    const root = this.ctx === undefined ? undefined : this.ctx[rootContextKey];
-    for (const descriptor of descriptors) {
-      const namespace = String(descriptor.namespace);
-      if (this.mounted.includes(namespace)) continue;
-      this.mounted.push(namespace);
-      // 这一组的方法面（本 spec 只关心"名字在不在"）：`setEnabled` 是它唯一的方法。
-      const face = { setEnabled: async () => ({ ok: true, value: undefined }) };
-      const dispose = root?.reflect.provide(`remote.${namespace}`, face);
-      if (typeof dispose === "function") disposed.push(dispose);
-    }
-    return async () => {
-      for (const dispose of disposed) dispose();
-    };
-  }
-
-  async invoke(): Promise<unknown> {
-    throw new Error("本 spec 不走 wire");
-  }
-
-  async whenMounted(): Promise<void> {}
-
-  async whenNamespace(): Promise<void> {}
-
-  $on(): () => void {
-    return () => {};
-  }
-
-  $stream(): AsyncIterable<unknown> & { dispose(): Promise<void> } {
-    throw new Error("本 spec 不走流");
   }
 }
 
@@ -100,16 +46,19 @@ class FakeLocale extends Locale {
 }
 
 /**
- * 起这一行，并声明它要注册的那个菜单槽位。
- * @returns `Slots` 与 `Remote` 替身。
+ * 起一双端：host = 真团队两行（含那份 descriptor 的提供者登记），client = 本包的界面行。
+ * @returns client app。
  */
-async function boot(): Promise<{ slots: Slots; remote: FakeRemote }> {
-  const app = await bootstrapApplication({
-    providers: [...provideRenderer(), FakeRemote, FakeLocale, AgentTeamUi],
-    timeoutMs: 10_000,
+async function boot(): Promise<App> {
+  const two = await bootTwoSided({
+    // host 只要有**端点执行面**（`RemoteHandlers` + 网关）：本 spec 判的是「client 有没有把这一组
+    // descriptor 挂上」，不调那一组的端点（端点的真行为在 `agent-team-live.spec.ts` 里判）。
+    createHost: () => [...provideTypert(), ...provideApiGateway(), ...provideRemoteAccess()],
+    createClient: (host) =>
+      clientWithTransport(host, [...provideRenderer(), FakeLocale, AgentTeamUi]),
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
-  const slots = app.get(Slots);
+  if (two.client === undefined) throw new Error("client 没装上");
+  const slots = two.client.get(Slots);
   // 位置由上游 `ui-model-selection` 声明（`conversation.input.model.options`，list/session）；
   // 本 spec 只装 agent-team 这一行，所以按同一形状声明一次，否则上游的注册会一直等位置。
   // 三处位置（形状照抄声明方）：
@@ -128,13 +77,20 @@ async function boot(): Promise<{ slots: Slots; remote: FakeRemote }> {
     },
     () => null,
   );
-  return { slots, remote: app.get(FakeRemote) };
+  return two.client;
 }
 
 describe("模型菜单里的「启用智能体团队协作」开关", () => {
   test("AgentTeamUi 挂上 agentTeams 那组 remote，开关才注册进菜单", async () => {
-    const { slots, remote } = await boot();
-    expect(remote.mounted, "AgentTeamUi 必须自己 `$mount` 这组 descriptor").toContain("agentTeams");
+    const app = await boot();
+    const remote = app.get(Remote);
+    // 上游那份 descriptor 由 `AgentTeamUi` 自己 `$mount`：真 `Remote` 上那一面必须读得到。
+    await remote.whenNamespace("agentTeams");
+    expect(
+      remoteNamespaceOf(remote, "agentTeams"),
+      "AgentTeamUi 必须自己 `$mount` 这组 descriptor（否则上游的 ctx.inject 永不触发）",
+    ).toBeDefined();
+    const slots = app.get(Slots);
     await until(() => slots.entries("conversation.input.model.options" as never).length > 0);
     const entries = slots.entries("conversation.input.model.options" as never) as readonly {
       readonly options?: { readonly id?: string };

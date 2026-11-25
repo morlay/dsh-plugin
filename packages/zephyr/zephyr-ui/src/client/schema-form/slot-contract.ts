@@ -6,7 +6,6 @@
 //
 // 字段槽声明在 Factory 上（`children`）：slots 的 children 声明 per key 只能一次，本包各处经
 // `renderFactorySlot` 渲染同一个 Factory，于是字段槽只需声明一次，所有调用方共用。
-import type {} from "@deepseek-ai/dsh-client-ui-slots";
 import type {
   FactoryComponentPropsOf,
   PropsRuntime,

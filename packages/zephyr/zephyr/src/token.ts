@@ -105,6 +105,7 @@ export interface InjectPlaceholder {
 export interface InjectableOptions {
   /** 多值令牌：由多个实现注册，注入端用 `inject.all`。 */
   readonly multi?: boolean;
+
   /**
    * 上游服务名（与派生名并存，作为**别名**在装配时再发布一份）。
    *
@@ -263,6 +264,7 @@ export function injectPlaceholderOf(value: unknown): InjectPlaceholder[typeof kI
 export function isValueToken(token: object): boolean {
   return metaOfClass(token)?.value === true;
 }
+
 
 /**
  * 这个类/对象是否已登记为令牌（`@Injectable` 或 `InjectionToken`）。

@@ -4,7 +4,7 @@
 import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { CommandCatalog, type CommandEntry } from "@morlay/dsh-command/contract";
 import { inject, Injectable } from "@morlay/zephyr";
-import { CommandEndpointClient } from "./command-endpoint-client.ts";
+import { CommandEndpointClient } from "./command-endpoint.client.ts";
 
 /** 走 remote 的命令目录。 */
 @Injectable()

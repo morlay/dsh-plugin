@@ -21,7 +21,7 @@ export { WebStartup } from "../web/web-startup.contract.ts";
 export { WebStartupDefault } from "../web/web-startup.service.ts";
 export { WebRuntimeService } from "../web/web-runtime.service.ts";
 export { mountFullApp, type FullApp, type MountFullAppOptions } from "./full-app.ts";
-export { LocalRemote } from "./local-remote.ts";
+export { LocalRemote, type LocalRemoteFaces, type StreamOpener } from "./local-remote.ts";
 export { provideLocalRemote } from "./provide.ts";
 export { CredentialsInMemory } from "./credentials-in-memory.ts";
 export { FakeConnectionHost, type RegisteredFetchRoute } from "./connection-host.fake.ts";
@@ -43,6 +43,7 @@ export {
   bootTwoSided,
   clientWithTransport,
   hostInvokerOf,
+  hostStreamOpenerOf,
   type TwoSided,
   type TwoSidedBoot,
   type TwoSidedHooks,

@@ -29,23 +29,6 @@ export function sessionGroupName(): string {
   return groupNameOf(SessionEndpoint);
 }
 
-/** wire 上的端点名（与上游 descriptor 一致）。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名。 */
-/** wire 上的端点名（Host 级投影状态流）。 */
-
 /** 一个模型选择（上游 `ModelSelection`）。 */
 export interface SessionModelSelection {
   readonly provider: string;
@@ -404,7 +387,7 @@ export class SessionEndpoint {
    * @param _signal - wire 的取消信号。
    * @returns baseline 与后续增量帧。
    */
-  @RemoteMethod({ mode: "stream" })
+  @RemoteMethod({ mode: "stream", parameters: [] })
   control(_signal: AbortSignal): AsyncIterable<SessionControlFrame> {
     throw new Error("session/control：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -455,7 +438,7 @@ export class SessionEndpoint {
    * 读当前可路由的全部模型（选择器用）。
    * @returns 按 provider 分组的目录、默认选择与失败面。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async modelCatalog(): Promise<RemoteResultWire<SessionModelCatalogValue>> {
     throw new Error("session/modelCatalog：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -464,7 +447,7 @@ export class SessionEndpoint {
    * 登录后在没有 API key 时选第一个可用模型。
    * @returns 无返回值（默认值已保存）。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async initializeDefaultModel(): Promise<RemoteResultWire<void>> {
     throw new Error("session/initializeDefaultModel：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -473,7 +456,7 @@ export class SessionEndpoint {
    * 报告这个部署能不能把会话工作区路径交给桌面打开。
    * @returns `true` 表示可打开。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async canOpenWorkspacePath(): Promise<RemoteResultWire<boolean>> {
     throw new Error("session/canOpenWorkspacePath：契约类未实现（宿主侧要在子类里实现它）");
   }

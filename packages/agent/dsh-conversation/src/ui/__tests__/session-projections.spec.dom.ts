@@ -12,7 +12,7 @@
  * 只替传输层（`FakeRemote` 给固定帧），store 与投影读面都是真实现。
  */
 import { bootstrapApplication } from "@morlay/zephyr";
-import { mockTransport, SessionRemoteDefault } from "@morlay/zephyr-app/client";
+import { mockTransport } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
@@ -87,7 +87,9 @@ async function boot(
     } as Parameters<typeof mockTransport>[1],
   };
   const app = await bootstrapApplication({
-    providers: [...provideSessionsStore(), FakeRemote, SessionRemoteDefault],
+    // 客户端形态（`SessionEndpointClient`）随 store 清单一起装：它自己在 `onInit` 里挂 `session` 组，
+    // 转发照常落在 `FakeRemote` 的 handler 表上。
+    providers: [...provideSessionsStore(), FakeRemote],
     timeoutMs: 8_000,
   });
   const sessions = app.get(SessionController);

@@ -5,7 +5,7 @@ import { inject, Injectable, Logger } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { Locale } from "@morlay/zephyr-app/client";
-import type { EditableMessageBlock, SessionEditorFace } from "./session-editor.contract.ts";
+import type { EditableMessageBlock, SessionEditorFace } from "./session-editor.face.ts";
 import { SessionEditorEndpointClient } from "./session-editor-endpoint.client.ts";
 import { NS, type SessionEditorTranslate } from "./locales.ts";
 

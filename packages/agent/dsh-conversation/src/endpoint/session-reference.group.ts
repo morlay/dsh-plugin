@@ -3,7 +3,7 @@
 // `@` 菜单的会话候选：上游是 `@deepseek-ai/dsh-session-reference`，归对话域（会话引用是对话界面的一部分）。
 //
 // 组名与方法名的家是下面契约类上的 `@RemoteGroup({ name })` / `@RemoteMethod()`：宿主侧的端点行继承它
-// 实现方法。客户端形态不在本仓：这一组的客户端面由上游 `#sessionReferenceResolver` 的 `$mount` 面提供。
+// 实现方法；浏览器侧的客户端形态是 `ui/session-reference-endpoint.client.ts`（挂载在它的 `onInit` 里）。
 //
 // 方法签名从上游宿主面（`SessionReferenceResolver`）推（`Parameters<…>` / `ReturnType<…>`）：wire 上的方法名
 // 是 `candidates`，上游的公开实现叫 `remoteExportCandidates`（`@Remote("candidates")`）——名字的 home 在
@@ -32,7 +32,7 @@ export class SessionReferenceEndpoint {
    * @param _signal - 可选的取消边界。
    * @returns 带规范 mention 标签与展示标题的候选。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["agentId", "query"] })
   async candidates(
     _agent: Parameters<SessionReferenceResolver["remoteExportCandidates"]>[0],
     _query: Parameters<SessionReferenceResolver["remoteExportCandidates"]>[1],

@@ -9,7 +9,7 @@
  * 这里不碰 IndexedDB：后端是注入的假 writer（真链路里是 `createWriter(db, store)`）。
  */
 import { describe, expect, test } from "@morlay/zephyr/testing";
-import { createShim, drainNative, installStorageShim, type PendingWrite } from "../storage-shim.ts";
+import { createShim, drainNative, installStorageShim, type PendingWrite } from "../storage-shim/storage-shim.service.ts";
 
 describe("createShim", () => {
   test("写入立刻读得到：getItem / length / key / removeItem / clear", () => {

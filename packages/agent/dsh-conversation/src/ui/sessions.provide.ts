@@ -2,8 +2,8 @@
 import { provide } from "@morlay/zephyr";
 import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { provideProjections } from "@morlay/zephyr-app/client";
-import { SessionReferenceRemoteBinding } from "./input/session-reference-remote.ts";
 import { SessionControllerDefault } from "./session-controller.service.ts";
+import { SessionReferenceEndpointClient } from "./session-reference-endpoint.client.ts";
 
 /**
  * 会话目录的**数据面**：只有服务本身。
@@ -14,13 +14,14 @@ import { SessionControllerDefault } from "./session-controller.service.ts";
  * 投影读面（`Projections`）随它一起装：`binding().session.projections.faceOf()` 的语义在那一层，
  * 分开装会出现「目录能读、投影永远空」的半装配（`session/control` 没人订阅）。
  *
- * **同时发布框架层的 `Sessions` 令牌**（同一个实例）：技能、模型选择这些域的 UI 行要读会话目录，
- * 它们只认框架令牌，不反向依赖对话聚合层。
+ * 会话目录的令牌是会话域的 `SessionController`（面 = 上游 `ISessions`）：技能、模型选择这些域的 UI 行
+ * 按它注入，不反向依赖对话聚合层。
  */
 export const provideSessionsStore = provide([
   ...provideProjections(),
   // `session` 组的客户端面：`SessionControllerDefault` 的 `control` 流走它。
-  // 排在它前面——少这一行，装配期就报「没有提供者：session-endpoint」。
+  // 排在它前面——少这一行，装配期就报「没有提供者：session-endpoint」；
+  // 那一组的 wire 描述符由它自己的 `onInit` 挂上（客户端形态自己挂自己那一组，没有额外的 binding 行）。
   SessionEndpointClient,
   SessionControllerDefault,
 ]);
@@ -35,8 +36,8 @@ export const provideSessionsStore = provide([
  *
  * **不提供 root 标准源**：上游 `ui-session` 行自己 `provideRoot(...)`；同名空字段会盖掉真实状态。
  *
- * providers 里是 「会话引用组」 的 descriptor 绑定：`@` 菜单的会话候选要它，
- * 而它不属于 `session-controller` 那包 descriptor（由 `provideClientRemote()` 挂）。绑定住在这里，
+ * providers 里是「会话引用组」的客户端形态：`@` 菜单的会话候选要它，而它的 descriptor 不属于
+ * `session-controller` 那包（那份由 `provideClientRemote()` 挂）。挂载由它自己的 `onInit` 做，
  * 装配面只装 `provideSessions()` 就够，不必再记一条 client 行。
  */
-export const provideSessions = provide([...provideSessionsStore(), SessionReferenceRemoteBinding]);
+export const provideSessions = provide([...provideSessionsStore(), SessionReferenceEndpointClient]);

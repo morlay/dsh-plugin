@@ -2,7 +2,7 @@
 //
 // 上游 `ui-sidebar-terminal` 与 `api/terminal-controller` 的 client 半归本域；会话界面的右栏从这里取
 // 这几行装配（行注册进会话界面已声明的位置，但 home 在 shell）。
-export { RemoteMountsDefault } from "./remote-mounts.service.ts";
+// `terminal` 组的 descriptor 由 `TerminalEndpointClient` 自己的 `onInit` 挂上——没有单独的挂载行。
 export { SidebarTerminalSlots, WebTerminalsDefault } from "./sidebar-terminal-slots.ts";
-export { TerminalEndpointClient } from "./terminal-endpoint-client.ts";
+export { TerminalEndpointClient } from "./terminal-endpoint.client.ts";
 export { provideShellUi } from "./shell.provide.ts";

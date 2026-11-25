@@ -123,8 +123,13 @@ export class CommandPaletteView extends ConversationInputOverlaySlot {
 ## 测试
 
 - **落点**：ui 面各目录下的 `__tests__/*.spec.tsx`，文件头 `// @vitest-environment happy-dom`，`afterEach(cleanup)`。
-- **判据是「这条 spec 单独跑就能证明这个模块是对的」**：`bootstrapApplication` + 本包的 `provideXxx()` +
-  最小替身（`ConfigFormsInMemory`、`LocalRemote` 这类框架替身，或本包自己的 fake），断言注册到哪个位置
-  （`slots.entries(name)`）、服务返回什么、视图渲染出什么。
+- **ui 的测试走全链路，不 mock 自己的东西**：`bootTwoSided({ createHost, createClient })`（真 host + 真 client，
+  `clientWithTransport` 把 `LocalRemote` 接上）——被测对象是「视图 → client → wire → host」这条链，
+  把 `Remote` 或自己的服务换成 fake 等于把被测对象换掉，装配与 wire 的问题一律测不出来。
+  断言注册到哪个位置（`slots.entries(name)`）、服务返回什么、视图渲染出什么。
+- **只替外部资源**：要钱的 token（LLM 调用）、真网络、真时钟、真文件系统——这些是「链外的世界」，可以替；
+  替身要写在 testing 面（`@morlay/zephyr-app/testing`）并注明替的是哪个外部。
+- **判据是「这条 spec 单独跑就能证明这个模块是对的」**：`bootstrapApplication`（或 `bootTwoSided`）+ 本包的
+  `provideXxx()` 就够，不需要别的域的行，也不需要在 spec 里手摆别人的行。
 - **跑不起来说明它还在偷偷依赖装配顺序或别的域**：补齐该域 testing 面的最小清单，而不是在 spec 里手摆
   别人的行。

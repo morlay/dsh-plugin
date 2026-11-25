@@ -46,5 +46,5 @@ export { SessionAdminEndpointClient } from "./conversation-manager/session-admin
 export type {
   EditableMessageBlock,
   SessionEditorFace,
-} from "./session-editor/session-editor.contract.ts";
+} from "./session-editor/session-editor.face.ts";
 export { UserMessageNodeView } from "./session-editor/user-message.view.tsx";

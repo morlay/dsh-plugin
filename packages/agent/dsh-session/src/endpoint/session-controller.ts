@@ -3,7 +3,10 @@
 // home 在会话域的端点面：它引用上游 api 层的 `ISessions`，而端点面依赖 api 层是正当的。
 // 从对话域搬来的原因：`dsh-workspace` 的 UI 要 `inject` 它，而对话域反向依赖 workspace，
 // 直接 import 就是包级环；本文件自包含（引用类型都在文件内或中立面），整文件搬过来最省。
-// 会话目录契约：令牌按服务语义命名（上游注册名 `sessions`）。
+// 令牌名是派生名 `session-controller`，**不能**写成 `sessions`：浏览器树的 `sessions` 由上游
+// `ClientSessions` 自己在构造里 `rootCtx.reflect.provide('sessions', this)` 占住（`service.ts`），
+// 本行的契约名若也占 `sessions`，cordis 会拒绝（`service "sessions" has been registered at <root>`）。
+// 「对齐上游面」在这里靠**令牌身份**：别的域 `inject(SessionController)` 拿到的就是上游那份面收窄后的实例。
 //
 // 成员从上游 `ISessions` 接口推导（`list` / `retain` / `using` / …），实现由 `SessionControllerDefault`
 // 组合 `ClientSessions` 提供。

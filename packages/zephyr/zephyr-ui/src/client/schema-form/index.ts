@@ -7,9 +7,6 @@
 //
 // 数据面是 host 的 settings 投影与共享配置表单（`ctx.configForms` / `ctx.settingsSchema`）。
 
-import type {} from "@deepseek-ai/dsh-client-locale/client";
-import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
-import type {} from "@deepseek-ai/dsh-client-ui-settings/client";
 import { rootContextKey, type Context } from "@morlay/zephyr";
 import { SchemaFormHintsDefault, SERVICE_NAME } from "./hints.ts";
 import { en, zh } from "./locales.ts";

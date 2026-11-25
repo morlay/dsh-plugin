@@ -2,7 +2,9 @@
 //
 // 宿主半（注册表 + `job_list` 一族工具行 + `remote.job` 的宿主面）在 `./server`；这一面只服务浏览器树，
 // 上游对应 `@deepseek-ai/dsh-api-job-controller/client` 与 `@deepseek-ai/dsh-client-ui-jobs/client`。
-export { Jobs } from "./jobs.contract.ts";
+// `ctx.jobs` 契约在 `./contract`（`@Injectable` 的服务面，不放 UI 层）。
+export { Jobs } from "../contract/index.ts";
+export { JobEndpointClient } from "./job-endpoint.client.ts";
 export { JobsClient } from "./jobs-client.service.ts";
 export { JobListSlots } from "./job-list.slots.ts";
 export { provideJobUi } from "./job.provide.ts";

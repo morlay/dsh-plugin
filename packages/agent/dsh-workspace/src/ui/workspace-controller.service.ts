@@ -10,8 +10,8 @@ import {
 } from "@deepseek-ai/dsh-api-workspace-controller/client";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
-import { WorkspaceController } from "./workspace-controller.contract.ts";
-import { WorkspaceEndpointClient } from "./workspace-endpoint-client.ts";
+import { WorkspaceController } from "@morlay/dsh-workspace/endpoint";
+import { WorkspaceEndpointClient } from "./workspace-endpoint.client.ts";
 
 /** 一条 follow 帧（上游 `WorkspaceFollowFrame` 的判别式联合）。 */
 type FollowFrame =

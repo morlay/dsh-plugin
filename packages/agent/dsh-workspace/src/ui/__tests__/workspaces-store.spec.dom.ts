@@ -1,148 +1,87 @@
 /**
- * `WorkspaceController` 的局部闭环：**客户端用 mock 宿主**（`FakeRemote` 提供 `workspace/follow` 帧与命令应答）。
+ * `WorkspaceController` 的**全链路**闭环：视图 → client → wire → host（`WorkspaceControllerRow` → 注册表）。
  *
- * 守两件事：首帧 baseline 写进 store（`ui-workspace` 的 `useWorkspaces` 就是读它），
- * 以及 `create` 走 `remote.workspace.create` 并把 `RemoteResult` 解成 `WorkspaceView`。
- * 断言全部经 `WorkspaceController` 契约（`list` 快照 / `create` 返回值）。
+ * 守三件事：宿主注册表里已有的工作区出现在 client 的列表里（`ui-workspace` 的 `useWorkspaces` 就读它）、
+ * `create` 真的落到宿主并回一个 `WorkspaceView`、以及宿主广播的增量让列表跟得上。
+ *
+ * **只替外部世界**：注册表用 `@morlay/dsh-workspace/testing` 的内存实现（那是存储面，不是传输），
+ * 传输是真 `LocalRemote`（`clientWithTransport` 接 host 的执行面）；不替换自己的传输层。
  */
-import { bootstrapApplication } from "@morlay/zephyr";
-import { mockTransport } from "@morlay/zephyr-app/client";
+import type { DirectoryPickerCapability } from "@deepseek-ai/dsh-host-directory-picker";
+import { Injectable, type App } from "@morlay/zephyr";
+import { RemoteHandlers, provideApiGateway, provideRemoteAccess, provideTypert } from "@morlay/zephyr-app";
+import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
 import { describe, expect, test } from "@morlay/zephyr/testing";
-import { WorkspaceController } from "../workspace-controller.contract.ts";
+import { DirectoryPickerBackend, WorkspaceRegistry } from "@morlay/dsh-workspace";
+import { FakeWorkspaceRegistry, workspaceOf } from "@morlay/dsh-workspace/testing";
+import { WorkspaceController } from "../../endpoint/index.ts";
+import { WorkspaceBroadcaster } from "../../workspace-broadcaster.service.ts";
+import { WorkspaceControllerRow } from "../../server/workspace-controller.host.ts";
 import { WorkspaceControllerDefault } from "../workspace-controller.service.ts";
-import { WorkspaceEndpointClient } from "../workspace-endpoint-client.ts";
-import { FakeRemote } from "./support/fake-remote.ts";
+import { WorkspaceEndpointClient } from "../workspace-endpoint.client.ts";
 
-type MockHandlers = Parameters<typeof mockTransport>[0];
-type MockStreams = Parameters<typeof mockTransport>[1];
+/** 假 native backend：workspace 行只要求 `ctx.directoryPicker` 有实现可读。 */
+@Injectable()
+class FakeNativePicker extends DirectoryPickerBackend {
+  capability(): DirectoryPickerCapability {
+    return { kind: "native", pick: async (): Promise<null> => null };
+  }
+}
 
 /**
- * 建好 client 半：真 `WorkspaceController` + 假传输。
- * @param streams - `workspace/follow` 的帧序列提供者。
- * @param handlers - 命令（`workspace/create`）的应答表。
- * @returns 应用与契约实例。
+ * 起一双端：host = 真 `WorkspaceControllerRow` + 内存注册表，client = 契约的客户端形态 + `WorkspaceControllerDefault`。
+ * @param seed - client 连上**之前**要塞进宿主注册表的路径（follow 的 baseline 就是它们）。
+ * @returns client app 与它的 `WorkspaceController` 契约。
  */
-async function boot(
-  streams: MockStreams,
-  handlers: MockHandlers = {},
-): Promise<{
-  app: Awaited<ReturnType<typeof bootstrapApplication>>;
+async function boot(seed: readonly string[] = []): Promise<{
+  app: App;
   workspaces: WorkspaceController;
 }> {
-  FakeRemote.next = { handlers, streams };
-  const app = await bootstrapApplication({
-    // 顺序即依赖：`WorkspaceControllerDefault` 注入契约的客户端形态（少了那一行装配期就报
-    // 「没有提供者：workspace-endpoint」）。
-    providers: [FakeRemote, WorkspaceEndpointClient, WorkspaceControllerDefault],
-    timeoutMs: 15_000,
+  const two = await bootTwoSided({
+    createHost: () => [
+      ...provideTypert(),
+      // `typertGateway` 的实现是上游 `api/gateway` 的 `TypertGatewayService`（我们不再自己写）。
+      ...provideApiGateway(),
+      ...provideRemoteAccess(),
+      FakeWorkspaceRegistry,
+      WorkspaceBroadcaster,
+      FakeNativePicker,
+      WorkspaceControllerRow,
+    ],
+    createClient: (host) => {
+      // 播种在 client 起来之前：`workspace/follow` 的首帧 baseline 就是注册表的当前全量。
+      const registry = host.get(WorkspaceRegistry) as FakeWorkspaceRegistry;
+      for (const path of seed) registry.rows.push(workspaceOf(path));
+      return clientWithTransport(host, [WorkspaceEndpointClient, WorkspaceControllerDefault]);
+    },
   });
-  return { app, workspaces: app.get(WorkspaceController) };
+  if (two.client === undefined) throw new Error("client 没装上");
+  expect(two.host.get(RemoteHandlers), "宿主没有端点执行面就跑不了链路").toBeDefined();
+  return { app: two.client, workspaces: two.client.get(WorkspaceController) };
 }
 
 /** 等 store 满足条件（follow 是异步接上的，别用固定时长猜）。 */
-async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
+async function until(check: () => boolean, timeoutMs = 5_000): Promise<void> {
   for (let waited = 0; !check() && waited < timeoutMs; waited += 10) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
-describe("WorkspaceController", { timeout: 15_000 }, () => {
-  test("follow 的首帧 baseline 写进 store（items / phase）", async () => {
-    const { app, workspaces } = await boot({
-      "workspace/follow": async function* () {
-        yield {
-          type: "baseline",
-          value: {
-            items: [
-              {
-                workspaceId: "w1",
-                path: "/tmp/w",
-                title: "工作区一",
-                sessionIds: ["s1"],
-                createdAt: "2026-01-01T00:00:00.000Z",
-                updatedAt: "2026-01-01T00:00:00.000Z",
-              },
-            ],
-            archivedSessionIds: [],
-            pinnedSessionIds: [],
-          },
-        };
-        // 保持流打开：真实的 follow 是长连接，客户端不该把「暂时没有增量」当成结束。
-        await new Promise(() => {});
-      },
-    });
-    try {
-      await until(() => workspaces.list.getSnapshot().items.length > 0);
-      expect(workspaces.list.getSnapshot().items.map((item) => item.workspaceId)).toEqual(["w1"]);
-      expect(workspaces.list.getSnapshot().phase).toBe("ready");
-    } finally {
-      await app.dispose().catch(() => {});
-    }
+describe("WorkspaceController", { timeout: 20_000 }, () => {
+  test("宿主注册表里已有的工作区经 baseline 进 client 的列表（items / phase）", async () => {
+    const { workspaces } = await boot(["/tmp/w"]);
+    await until(() => workspaces.list.getSnapshot().items.length > 0);
+    expect(workspaces.list.getSnapshot().items.map((item) => item.path)).toEqual(["/tmp/w"]);
+    expect(workspaces.list.getSnapshot().phase).toBe("ready");
   });
 
-  test("增量帧（upsert）合并进 store", async () => {
-    const { app, workspaces } = await boot({
-      "workspace/follow": async function* () {
-        yield {
-          type: "baseline",
-          value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] },
-        };
-        yield {
-          type: "upsert",
-          workspace: {
-            workspaceId: "w2",
-            path: "/tmp/w2",
-            title: "后加的",
-            sessionIds: [],
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-        };
-        await new Promise(() => {});
-      },
-    });
-    try {
-      await until(() => workspaces.list.getSnapshot().items.length > 0);
-      expect(workspaces.list.getSnapshot().items.map((item) => item.workspaceId)).toEqual(["w2"]);
-    } finally {
-      await app.dispose().catch(() => {});
-    }
-  });
-
-  test("create 走 remote.workspace.create，并把 RemoteResult 解成 WorkspaceView", async () => {
-    const created = {
-      workspaceId: "w3",
-      path: "/tmp/w3",
-      title: "新工作区",
-      sessionIds: [],
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    };
-    let payload: unknown;
-    const { app, workspaces } = await boot(
-      {
-        "workspace/follow": async function* () {
-          yield {
-            type: "baseline",
-            value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] },
-          };
-          await new Promise(() => {});
-        },
-      },
-      {
-        "workspace/create": (args) => {
-          payload = args;
-          return { ok: true, value: { workspace: created, created: true } };
-        },
-      },
-    );
-    try {
-      await expect(workspaces.create({ path: "/tmp/w3" })).resolves.toEqual(created);
-      // 本行的职责是「把输入交给 `remote.workspace.create`」；命名参数包装在真 `RemoteDefault` 的
-      // Proxy 里（替身按传输契约原样透传实参）。
-      expect(payload).toEqual({ args: { path: "/tmp/w3" } });
-    } finally {
-      await app.dispose().catch(() => {});
-    }
+  test("create 走 workspace/create 落到宿主注册表，并回一个 WorkspaceView", async () => {
+    const { workspaces } = await boot();
+    await until(() => workspaces.list.getSnapshot().phase === "ready");
+    const created = await workspaces.create({ path: "/tmp/w3" });
+    expect(created, "create 的返回值就是宿主给的那一行").toMatchObject({ path: "/tmp/w3" });
+    // 宿主广播的 upsert 帧让列表跟上（不重拉目录）。
+    await until(() => workspaces.list.getSnapshot().items.some((item) => item.path === "/tmp/w3"));
+    expect(workspaces.list.getSnapshot().items.map((item) => item.path)).toContain("/tmp/w3");
   });
 });

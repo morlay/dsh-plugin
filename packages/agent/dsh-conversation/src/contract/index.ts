@@ -17,3 +17,10 @@ export {
   type SessionScope,
   type SessionView,
 } from "./session-controller.contract.ts";
+// 会话界面的四个跨行端口：令牌（契约类）+ 上游面，行与契约同在本包；别的域只按令牌注入。
+export * from "./ui-session.contract.ts";
+export * from "./ui-session-status.contract.ts";
+export * from "./input-triggers.contract.ts";
+export * from "./ui-conversation.contract.ts";
+// 上游 `ui-workspace` 行（会话界面的工作区/会话树）的契约：UI 行的契约归对话域，数据面归 workspace 域。
+export * from "./ui-workspace.contract.ts";

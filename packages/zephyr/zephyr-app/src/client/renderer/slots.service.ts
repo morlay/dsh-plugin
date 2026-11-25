@@ -138,7 +138,7 @@ export class SlotsDefault extends Slots implements OnInit {
       // scope 要问**声明**，不能只看注册项自己的 `options.scope`：`session` 作用域常常写在
       // **父 slot 的 `children`** 里（`rightbar` 声明 `{ 'rightbar.session': { scope: 'session' } }`，
       // 而 `rightbar.session` 自己注册时不写 scope）。按 root 建 store 的后果是 `create()` 拿不到
-      // sessionId——上游 `ui-sidebar-right` 的 `adopt` 因此不跑，tab 的 occurrence 永远不建，
+      // sessionId——上游右栏行的 `adopt` 因此不跑，tab 的 occurrence 永远不建，
       // 渲染时抛 `tab "…" has no committed occurrence`，被 error boundary 吞成"点了没反应"。
       this.acquire(
         store,

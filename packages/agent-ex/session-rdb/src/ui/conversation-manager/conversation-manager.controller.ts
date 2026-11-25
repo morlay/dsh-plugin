@@ -5,7 +5,8 @@
 import { inject, Injectable } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
+import { WorkspaceController } from "@morlay/dsh-workspace/endpoint";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 import type {
   SessionBulkDeleteValue,
   SessionConsistencyValue,

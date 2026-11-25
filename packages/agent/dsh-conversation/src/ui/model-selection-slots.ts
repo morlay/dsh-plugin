@@ -11,7 +11,8 @@
 import * as UiModelSelectionPlugin from "@deepseek-ai/dsh-client-ui-model-selection/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Locale, Remote, Sessions, Slots } from "@morlay/zephyr-app/client";
+import { Locale, Remote, Slots } from "@morlay/zephyr-app/client";
+import { SessionController } from "@morlay/dsh-session/endpoint";
 import { CommandUi } from "@morlay/dsh-command/ui";
 
 import { sessionGroupName } from "@morlay/dsh-session/endpoint";
@@ -19,7 +20,7 @@ import { remoteNamespaceKey } from "@morlay/zephyr-app/client/remote";
 
 @Injectable()
 export class ModelSelectionSlots extends fromCordis(UiModelSelectionPlugin) {
-  private readonly sessions = inject(Sessions);
+  private readonly sessions = inject(SessionController);
 
   private readonly slots = inject(Slots);
 

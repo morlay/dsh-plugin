@@ -8,7 +8,6 @@
  * 断言全部经 `SessionController` 契约方法与 wire 载荷。
  */
 import { bootstrapApplication } from "@morlay/zephyr";
-import { SessionRemoteDefault } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
@@ -41,7 +40,6 @@ async function boot(createReply: () => unknown): Promise<{
       ...provideSessionsStore(),
       // `SessionRemote` 的默认实现（本仓 client 半的装配面；断言不经它）。
       FakeRemote,
-      SessionRemoteDefault,
     ],
     timeoutMs: 10_000,
   });

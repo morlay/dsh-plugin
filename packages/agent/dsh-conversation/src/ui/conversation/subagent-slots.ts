@@ -4,7 +4,7 @@ import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Slots } from "@morlay/zephyr-app/client";
 import { SessionController } from "@morlay/dsh-conversation/contract";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 import { SidebarRight } from "../ports.ts";
 
 @Injectable()

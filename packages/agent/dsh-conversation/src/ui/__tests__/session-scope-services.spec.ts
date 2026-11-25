@@ -7,13 +7,15 @@
 //
 // 这个 ctx 是上游 `createScope()` 建的**真 cordis ctx**（`fiber.ctx.extend(…)`），而兄弟行的服务名
 // 在我们的名字表里——所以 `scope()` 是唯一能补齐的地方，本 spec 就钉这一条。
-import { bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
+import { without, bootstrapApplication, Injectable, type App, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import { Remote } from "@morlay/zephyr-app/client";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/contract";
 import { provideSessionsStore } from "../sessions.provide.ts";
 import { RemoteShell } from "./support/fake-remote.ts";
+import { emptyStream } from "./support/fake-remote.ts";
 
 /** 一行目录（上游 `session/list` 的 `{ items }`，必需字段齐全）。 */
 const ROWS = {
@@ -31,7 +33,12 @@ const ROWS = {
 
 /** 目录面替身：本 spec 的被测面是 scope 读面，不是列表拉取。 */
 @Injectable()
-class FakeSessionRemote extends SessionRemote {
+class FakeSessionRemote {
+
+  /** `session/control`：本 spec 断的不是这条流，给一条只随 abort 收尾的空流。 */
+  control(signal: AbortSignal): AsyncIterable<never> {
+    return emptyStream(signal);
+  }
   async list(): Promise<unknown> {
     return ROWS;
   }
@@ -73,12 +80,12 @@ interface ScopeFace {
 async function boot(): Promise<{ app: App; sessions: SessionController }> {
   const app = await bootstrapApplication({
     providers: [
-      { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
+      { provide: SessionEndpointClient, useFactory: () => new FakeSessionRemote() },
       // `sessions` 行要 `Remote`（转发面与 `$on`）；本 spec 不走 wire，给个只带订阅面的壳。
       // `session` 面显式给 `undefined`：钉住"会话组没挂上"时上游那一路不炸（`?` / 存在性判断）。
       { provide: Remote, useFactory: () => new RemoteShell({ session: undefined }) },
       ConversationRow,
-      ...provideSessionsStore(),
+      ...provideSessionsStore(without(SessionEndpointClient)),
     ],
     timeoutMs: 20_000,
   });

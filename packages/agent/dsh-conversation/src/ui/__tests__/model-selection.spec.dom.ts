@@ -12,16 +12,16 @@
  * 替身只有两处：`Remote`（传输层，mock server 给固定帧）与 `sessions` / `locale`（兄弟域的端口）。
  * 上游那一行、它建的 `ctx.modelDirectories`、`ModelDirectory` 都是真实现。
  */
-import { bootstrapApplication, inject, Injectable, type Context } from "@morlay/zephyr";
+import { without, bootstrapApplication, inject, Injectable, type Context } from "@morlay/zephyr";
 import {
   ClientConnection,
   Locale,
   mockTransport,
   provideRenderer,
   Remote,
-  SessionRemote,
   Slots,
 } from "@morlay/zephyr-app/client";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { CommandUi } from "@morlay/dsh-command/ui";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionController } from "../../contract/index.ts";
@@ -286,9 +286,19 @@ class FakeConnection extends ClientConnection {
   readonly start = () => ({ stop: () => {} });
 }
 
-/** 目录读的替身（`SessionRemote` 契约）：客户端会话行拉目录走它。 */
+/** 目录读的替身（`session` 组的客户端形态）：客户端会话行拉目录走它；流面回落到传输层的真面。 */
 @Injectable()
-class FakeSessionRemote extends SessionRemote {
+class FakeSessionRemote {
+  /** 流面归传输层替身（`Remote` 上的 `session` 面）驱动：客户端形态只转发，不自己出帧。 */
+  private readonly remote = inject(Remote);
+
+  control(signal: AbortSignal): AsyncIterable<unknown> {
+    const face = this.remote.session as
+      | { control(signal: AbortSignal): AsyncIterable<unknown> }
+      | undefined;
+    if (face === undefined) throw new Error("替身没有挂 remote.session：control 取不到面");
+    return face.control(signal);
+  }
   async list(): Promise<unknown> {
     return {
       items: [
@@ -356,8 +366,9 @@ async function boot(options: { baselineValues?: Record<string, unknown> } = {}):
       ...provideRenderer(),
       FakeRemote,
       // 真客户端会话行：`control` 流由它消费、投影面由它维护——本用例判的就是这一层。
-      { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
-      ...provideSessionsStore(),
+      { provide: SessionEndpointClient, useFactory: () => new FakeSessionRemote() },
+      // 替身占了 `session-endpoint` 这个令牌：store 清单里那份真客户端要剔掉，否则注册两次。
+      ...provideSessionsStore(without(SessionEndpointClient)),
       PublishSessionNamespace,
       FakeConnection,
       FakeLocale,

@@ -5,7 +5,7 @@
 // `ConversationController` 里 `this.ctx` 是会话 scope ctx（`ClientSessions.createScope` 建的），沿链只到根，
 // 于是抛 `cannot get property "fileUpload" without inject`——真机现象是「粘贴图片 → chip 变红、没有上传请求」。
 // 这个 spec 用**同一形状**的 ctx 复现那条读法（no-op 子插件 + `fiber.ctx.extend`，与 `createScope` 一致）。
-import { FileUpload } from "../ui/file-upload.contract.ts";
+import { FileUpload } from "../contract/file-upload.contract.ts";
 import { provideFileUploadUi } from "../ui/file-upload.provide.ts";
 import { ClientConnection, Remote, RemoteDefault } from "@morlay/zephyr-app/client";
 import { Connection } from "@morlay/zephyr-app/contract";

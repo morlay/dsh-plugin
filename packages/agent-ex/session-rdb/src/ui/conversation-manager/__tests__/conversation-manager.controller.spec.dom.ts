@@ -2,7 +2,8 @@
 // 归档与取消归档仍委托 `uiWorkspace`；成功路径刷新会话列表，失败路径带出宿主错误码。
 import { bootstrapApplication } from "@morlay/zephyr";
 import { SessionController } from "@morlay/dsh-conversation/contract";
-import { UiWorkspace, WorkspaceController } from "@morlay/dsh-workspace/ui";
+import { WorkspaceController } from "@morlay/dsh-workspace/endpoint";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 import { Remote } from "@morlay/zephyr-app/client";
 import { describe, expect, test } from "@morlay/session-rdb/testing";
 import { vi } from "vitest";

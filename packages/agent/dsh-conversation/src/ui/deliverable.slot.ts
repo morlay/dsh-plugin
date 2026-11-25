@@ -1,7 +1,7 @@
 // 交付物卡片 + 右侧「交付物」标签类型（上游 `ui-deliverables`）。
 //
 // 它要 `sidebarRightTabs`（标签类型注册表）与 `sidebarRight`（面板动作面）：
-// 前者由应用侧的侧栏行提供独立实例，后者由 `ui-sidebar-right` 提供。
+// 前者由应用侧的侧栏行提供独立实例，后者由右栏这一行提供。
 // 标签类型注册到独立实例上，因此**不会出现在右侧面板的标签条里**（面板读的是它自己那一份），
 // 交付物卡片本身照常渲染。
 import * as UiDeliverablesPlugin from "@deepseek-ai/dsh-client-ui-deliverables/client";

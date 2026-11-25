@@ -6,7 +6,7 @@ import * as UiSidebarPlugin from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Layout, Locale, Shortcuts, Slots } from "@morlay/zephyr-app/client";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 
 @Injectable()
 export class SidebarSlots extends fromCordis(UiSidebarPlugin) {

@@ -7,7 +7,7 @@
 // 它按名字读 `locale` / `slots` / `remote`（+ `remote.agentTeams`）。
 //
 // **`remote.agentTeams` 要自己挂**：浏览器里没有全局的 remotes 装载，每个域各自 `$mount` 自己那份
-// `TYPERT_REMOTE`（同 `dsh-workspace` 的「工作区文件组」、本包 `session-reference-remote`）。
+// `TYPERT_REMOTE`（同 `dsh-workspace` 的「工作区文件组」、`dsh-conversation` 的「会话引用组」）。
 // 少了这一步，上游的 `ctx.inject(['remote','remote.agentTeams'], …)` 永远停在待激活——开关静默不出现，
 // 且没有任何报错（那整块注册都在那个 scope 里）。
 import { TYPERT_REMOTE as AGENT_TEAM_REMOTE } from "@deepseek-ai/dsh-agent-team/remote";

@@ -12,7 +12,7 @@ import * as ClientUiJobs from "@deepseek-ai/dsh-client-ui-jobs/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
 import { Locale, Slots } from "@morlay/zephyr-app/client";
-import { Jobs } from "./jobs.contract.ts";
+import { Jobs } from "../contract/index.ts";
 
 /** 会话头部的后台任务列表（浏览器半）。 */
 @Injectable()

@@ -12,7 +12,7 @@ import { SessionController } from "@morlay/dsh-conversation/contract";
 import { UiSession } from "../ui-session.token.ts";
 import { UiConversation } from "./conversation.token.ts";
 import { FileUpload } from "./conversation.token.ts";
-import { UiWorkspace } from "@morlay/dsh-workspace/ui";
+import { UiWorkspace } from "@morlay/dsh-conversation/contract";
 
 @Injectable()
 export class ConversationSlots extends fromCordis(

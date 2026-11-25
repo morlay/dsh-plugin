@@ -20,17 +20,23 @@ import { SessionStore } from "@morlay/dsh-session";
 import { SessionProjectionStore } from "@morlay/dsh-session";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { Injectable, type App } from "@morlay/zephyr";
+import { without, Injectable, type App } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
-import { SessionRemote } from "@morlay/zephyr-app/client";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
 import { describe, expect, test, type AppEnvFixture } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
+import { emptyStream } from "./support/fake-remote.ts";
 
 /** 目录读取的替身：本 spec 的被测面是"那一行命令"，不是列表拉取。 */
 @Injectable()
-class FakeSessionRemote extends SessionRemote {
+class FakeSessionRemote {
+
+  /** `session/control`：本 spec 断的不是这条流，给一条只随 abort 收尾的空流。 */
+  control(signal: AbortSignal): AsyncIterable<never> {
+    return emptyStream(signal);
+  }
   private rows: readonly string[] = [];
 
   setRows(ids: readonly string[]): void {
@@ -63,7 +69,7 @@ class FakeSessionRemote extends SessionRemote {
  * 装配整条链：宿主（会话 + agent + 权限 + 命令面）+ 客户端（`sessions` 服务 + 走进程内传输的命令执行器）。
  * 生命周期由 `bootTwoSided` 跟着 `appEnv` 的清理链收，这里不返回卸载函数。
  * @param appEnv - 本用例的运行环境（数据根是它的临时目录）。
- * @returns 前端 app（被测面）、后端 app 与建好的会话 id。
+ * @returns 前端 app（被测面）、后端 app、建好的会话 id 与目录替身（用例直接往它上面放行）。
  */
 async function boot(appEnv: AppEnvFixture): Promise<{
   /** 前端装配：chip 的调用面在这一侧。 */
@@ -71,7 +77,10 @@ async function boot(appEnv: AppEnvFixture): Promise<{
   /** 后端装配：宿主档位在这一侧的投影里。 */
   host: App;
   sessionId: string;
+  directory: FakeSessionRemote;
 }> {
+  // 目录替身：用例用它改「宿主目录里有哪些行」（装配里交给 `SessionEndpointClient` 令牌）。
+  const directoryFake = new FakeSessionRemote();
   const two = await bootTwoSided({
     createHost: () => [
       RemoteHandlersDefault,
@@ -93,10 +102,10 @@ async function boot(appEnv: AppEnvFixture): Promise<{
     // client = sessions + 命令执行器；传输由 `clientWithTransport` 接到 host 的执行面上。
     createClient: (booted) =>
       clientWithTransport(booted, [
-        { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
+        { provide: SessionEndpointClient, useFactory: () => directoryFake },
         CommandEndpointClient,
         RemoteCommandRunner,
-        ...provideSessionsStore(),
+        ...provideSessionsStore(without(SessionEndpointClient)),
       ]),
     // 卸载跟着 fixture 的清理链走：它跑在「删临时目录」之前（`onTestFinished` 更晚，见 `fixtures.ts`）。
   }, appEnv);
@@ -111,8 +120,8 @@ async function boot(appEnv: AppEnvFixture): Promise<{
       { cwd: appEnv.values.dataDir },
     );
   // 目录里要有这条会话：`binding()` 的判据是 `ids.includes(id)`。
-  (two.client.get(SessionRemote) as FakeSessionRemote).setRows([String(sessionId)]);
-  return { app: two.client, host: two.host, sessionId: String(sessionId) };
+  directoryFake.setRows([String(sessionId)]);
+  return { app: two.client, host: two.host, sessionId: String(sessionId), directory: directoryFake };
 }
 
 /** 会话的 `permissions` 投影当前值。 */

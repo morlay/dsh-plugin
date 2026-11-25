@@ -1,0 +1,64 @@
+// 右侧面板的对外动作面（上游右栏行发布的服务：`ctx.sidebarRight`）。
+//
+// 为什么在框架 app：右侧栏是**应用框架的位**（与 `Layout` / `Theme` / `Slots` 同层），不是某个业务域的
+// 概念——会话、工作区、技能、终端几个域的 UI 行都要装进去。
+//
+// 令牌是**抽象类**（不是 `InjectionToken`）：`name` 显式对齐上游服务名（`sidebarRight`），
+// 实现只能 `extends` 这份契约，成员缺一个就编译不过。
+//
+// 面取上游**控制器**（`ctx.sidebarRight` 的运行期类型），不是窄接口 `ISidebarRight`：上游行实际按控制器面
+// 用（`openTabIn` / `tabDomain` / `menuTabs` …），契约只列窄接口会让那些读法落空。
+// 只声明我们实现与消费的那部分，全量覆盖由下面的守卫与上游面比对。
+import { Injectable } from "@morlay/zephyr";
+import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { SidebarRightController } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
+
+/** `ctx.sidebarRight` 的面：上游控制器。 */
+export type SidebarRightFace = SidebarRightController;
+
+/** `ctx.sidebarRight`：面见 {@link SidebarRightFace}。 */
+@Injectable({ name: "sidebarRight" })
+export abstract class SidebarRight {
+  /** 当前在屏的会话（没有会话在屏时是 `undefined`）。 */
+  abstract readonly mounted: SidebarRightFace["mounted"];
+
+  /** 打开一个资源：占位、放置、露出右栏、记录导航。 */
+  abstract readonly openResource: SidebarRightFace["openResource"];
+
+  /** 按已注册的 tab 类型打开临时内容。 */
+  abstract readonly openContent: SidebarRightFace["openContent"];
+
+  /** 按页面类型打开。 */
+  abstract readonly openTab: SidebarRightFace["openTab"];
+
+  /** 关掉在屏会话的一个 tab。 */
+  abstract readonly close: SidebarRightFace["close"];
+
+  /** 藏一个 tab（收起浮动或折叠停靠列）。 */
+  abstract readonly hide: SidebarRightFace["hide"];
+
+  /** 当前面板的活动 tab。 */
+  abstract readonly active: SidebarRightFace["active"];
+
+  /** 面板是否展开。 */
+  abstract readonly isExpanded: SidebarRightFace["isExpanded"];
+
+  /** 折叠 / 展开（并聚焦活动停靠页）。 */
+  abstract readonly toggleExpanded: SidebarRightFace["toggleExpanded"];
+
+  /** 聚焦一个 tab 与它所在的页。 */
+  abstract readonly focus: SidebarRightFace["focus"];
+
+  /** 一个 tab 的「全部 / 右侧 / 能否关」（右键菜单按它算）。 */
+  abstract readonly menuTabs: SidebarRightFace["menuTabs"];
+
+  /** 按会话关一个 tab（右键菜单的关闭动作走它）。 */
+  abstract readonly closeIn: SidebarRightFace["closeIn"];
+}
+
+/**
+ * 形状守卫：契约声明的每个成员都必须在上游面上（签名一致）。
+ *
+ * **不要求覆盖全量**：契约只声明我们实现/消费的能力（拆分/浮动/停靠那套 pane 体系没有消费方，不进来）。
+ */
+export type SidebarRightCovered = AssertTrue<AssertCovered<SidebarRight, SidebarRightFace>>;

@@ -19,6 +19,7 @@ import { provideProjections } from "./projections/provide.ts";
 import { provideLocale } from "./locale/index.ts";
 import { provideFileDrag } from "./file-drag/provide.ts";
 import { provideShortcuts } from "./shortcuts/index.ts";
+import { ContextMenuSlots } from "./context-menus/context-menus.slots.ts";
 import { Theme } from "./theme/index.ts";
 
 /**
@@ -50,5 +51,7 @@ export const provideClientChain = provide([
   // `fileDrag` 依赖 `locale`（文案）与 `slots`（失败提示的 overlay）：排在 Locale 之后。
   ...provideFileDrag(),
   ...provideShortcuts(),
+  // 右键菜单：与 `Locale` / `Shortcuts` 同层的通用界面能力，默认就在（各域的行按 `contextMenus` 读它）。
+  ContextMenuSlots,
   ClientChainRequiresTheme,
 ]);

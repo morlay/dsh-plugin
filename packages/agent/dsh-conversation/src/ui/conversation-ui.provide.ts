@@ -1,7 +1,7 @@
 import { type ProviderList } from "@morlay/zephyr";
+import { SubagentsEndpointClient } from "@morlay/dsh-agent/ui";
 import { AgentScopesDefault } from "./agent-scopes.service.ts";
 import { provideSessionShellSlots } from "./shell/index.ts";
-import { SubagentsRemoteBinding } from "./subagents-remote.binding.ts";
 import { provideSessionInputSlots, provideSessionSlots } from "./session-ui.provide.ts";
 
 /**
@@ -22,8 +22,9 @@ export function provideConversationUi(): ProviderList {
     // 转发请求（审批、用户提问）到浏览器只剩 `agentId`：这张表把它解析回会话作用域，
     // 否则 listener 认不出会话、直接 `next()`——界面上是一张卡都不弹。
     AgentScopesDefault,
-    // `remote.subagents` 的那份 descriptor 要有人挂：会话界面的子代理入口全读它。
-    SubagentsRemoteBinding,
+    // `remote.subagents` 的那份 descriptor 由 agent 域的客户端形态自己挂（它的 `onInit`）：
+    // 会话界面的子代理入口全读那一面，所以它要排在下面那些界面行之前。
+    SubagentsEndpointClient,
     ...provideSessionShellSlots(),
     ...provideSessionSlots(),
     ...provideSessionInputSlots(),

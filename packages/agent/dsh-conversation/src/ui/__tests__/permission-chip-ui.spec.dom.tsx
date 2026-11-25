@@ -17,13 +17,15 @@ import { CommandRunner } from "@morlay/dsh-command/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
-import { bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
-import { Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import { without, bootstrapApplication, Injectable, type App } from "@morlay/zephyr";
+import { Remote } from "@morlay/zephyr-app/client";
+import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useSyncExternalStore } from "react";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { onTestFinished } from "vitest";
 import { RemoteShell } from "./support/fake-remote.ts";
+import { emptyStream } from "./support/fake-remote.ts";
 
 const SESSION_ID = "s-ui";
 
@@ -53,7 +55,12 @@ function rowOf(state: HostState): Record<string, unknown> {
 
 /** 目录面替身：每次 `list` 都读宿主当前状态（等价于宿主推送后的一次读取）。 */
 @Injectable()
-class FakeSessionRemote extends SessionRemote {
+class FakeSessionRemote {
+
+  /** `session/control`：本 spec 断的不是这条流，给一条只随 abort 收尾的空流。 */
+  control(signal: AbortSignal): AsyncIterable<never> {
+    return emptyStream(signal);
+  }
   async list(): Promise<unknown> {
     return { items: [rowOf(host)] };
   }
@@ -93,10 +100,10 @@ async function boot(): Promise<{
   const runner = new FakeCommandRunner();
   const app = await bootstrapApplication({
     providers: [
-      { provide: SessionRemote, useFactory: () => new FakeSessionRemote() },
+      { provide: SessionEndpointClient, useFactory: () => new FakeSessionRemote() },
       { provide: CommandRunner, useFactory: () => runner },
       { provide: Remote, useFactory: () => new RemoteShell({ session: undefined }) },
-      ...provideSessionsStore(),
+      ...provideSessionsStore(without(SessionEndpointClient)),
     ],
     timeoutMs: 20_000,
   });

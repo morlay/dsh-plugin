@@ -7,15 +7,8 @@ import * as UiSidebarTerminalPlugin from "@deepseek-ai/dsh-client-ui-sidebar-ter
 import { ClientTerminals } from "@deepseek-ai/dsh-api-terminal-controller/client";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";
-import {
-  Locale,
-  Shortcuts,
-  SidebarRight,
-  SidebarRightTabs,
-  Slots,
-  Theme,
-} from "@morlay/zephyr-app/client";
-import { TerminalEndpointClient } from "./terminal-endpoint-client.ts";
+import { Locale, Shortcuts, SidebarRight, SidebarRightTabs, Slots, Theme } from "@morlay/zephyr-app/client";
+import { TerminalEndpointClient } from "./terminal-endpoint.client.ts";
 
 /** `ctx.webTerminals`：浏览器侧的终端视图与进程清理面。 */
 @Injectable()
@@ -30,7 +23,7 @@ export class WebTerminalsDefault implements OnInit {
   /**
    * 建好的 `webTerminals`。
    *
-   * `onInit` 之后才有：装配顺序（`RemoteMountsDefault` → 本行 → `SidebarTerminalSlots`）保证消费方
+   * `onInit` 之后才有：装配顺序（`TerminalEndpointClient` → 本行 → `SidebarTerminalSlots`）保证消费方
    * 读到时它已经在了；不在就抛，不让 `undefined` 漂到上游去。
    * @returns 终端视图与进程清理面。
    */
@@ -47,11 +40,11 @@ export class WebTerminalsDefault implements OnInit {
    * @returns 装配完成。
    */
   async onInit(ctx: Context): Promise<void> {
-    // 时序守卫：`terminal` 那一面由 `RemoteMountsDefault.onInit` 的 `$mount` 登记，它必须排在本行之前。
-    // 排到后面时在这里就报，别等到打开终端 tab 才在调用处炸成
-    // `Cannot read properties of undefined (reading 'environment')`。
+    // 时序守卫：`terminal` 那一面由 `TerminalEndpointClient.onInit` 的 `$mount` 登记，而本行注入它
+    // （注入就是排序边）。这一面缺了说明有人把客户端形态换成了不挂载的替身：在这里就报，
+    // 别等到打开终端 tab 才在调用处炸成 `Cannot read properties of undefined (reading 'environment')`。
     if (!this.terminal.mounted) {
-      throw new Error("RemoteMountsDefault 必须排在 WebTerminalsDefault 之前");
+      throw new Error("terminal 那组 remote 没挂上：提供 TerminalEndpointClient（它的 onInit 负责挂载）");
     }
     // 传**本行 ctx**（不是 `ctx.root`）：子能读父，而服务生命周期随本行卸载（挂根上就漏了）。
     // 跨行的读取（`SidebarTerminalSlots` 装上游终端标签）由它显式取实例传给 deps，不按名字读 store。

@@ -2,5 +2,5 @@
 export * from "./directory-picker.contract.ts";
 export * from "./workspace.contract.ts";
 export * from "./workspace-id.ts";
-// 浏览器半也要被别的 ui 消费的契约：住契约面，ui 面从这里（或 `./ui`）引用。
-export * from "./ui-workspace.contract.ts";
+// 上游 UI 行的契约不在这里：`UiWorkspace`（`ui-workspace` 那一行）归对话域的契约面
+// （`@morlay/dsh-conversation/contract`）——本包只留数据面（注册表 / 存储 / 查询）。

@@ -20,7 +20,7 @@ import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { onTestFinished } from "vitest";
-import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
+import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint.client.ts";
 
 /** 只给数据根的运行环境（设置文档落在 `<dataDir>/settings.json`）。 */
 /**

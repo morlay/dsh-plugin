@@ -2,8 +2,8 @@
 // （与上游 `api/workspace-files` 的描述符一致）。
 //
 // 组名与方法名的家是下面契约类上的 `@RemoteGroup({ name })` / `@RemoteMethod()`：宿主侧
-// （`server/workspace-files-endpoint.service.ts`）继承它实现方法。客户端形态不在本仓：这一组的
-// 客户端面由上游 `@deepseek-ai/dsh-api-workspace-files#workspaceFiles` 的 `$mount` 面提供。
+// （`server/workspace-files-endpoint.service.ts`）继承它实现方法；浏览器侧的客户端形态是
+// `ui/workspace-files-endpoint.client.ts`（挂载在它的 `onInit` 里）。
 //
 // 类型从上游包取（`import type`，运行期零边）：请求/应答的 wire 形状本来就在那里定义，
 // 抄一遍只会多一份会漂的声明。

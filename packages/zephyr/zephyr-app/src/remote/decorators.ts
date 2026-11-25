@@ -1,9 +1,9 @@
 // remote 的两层语法糖（与上游 `remote.<group>.<method>` 的形态一一对应）：
 //
-//   @RemoteGroup({ name: "session" })       abstract class SessionRemote {     // 组（契约）
+//   @RemoteGroup({ name: "<组名>" })        abstract class GreeterEndpoint {   // 组（契约）
 //     @Remote() abstract list(): …;                                          // 组里的方法
 //   }
-//   @RemoteGroup()                          class SessionRemoteDefault extends SessionRemote {  // 组（实现）
+//   @RemoteGroup()                          class GreeterEndpointDefault extends GreeterEndpoint {  // 组（实现）
 //     @Remote() list() { … }                                                 // 方法实现
 //   }
 //

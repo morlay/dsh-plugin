@@ -1,4 +1,4 @@
-// 右栏面板的**tab 类型**注册：上游 `ui-sidebar-right` 的面板标签条读的是它自己那一份注册表
+// 右栏面板的**tab 类型**注册：上游右栏行的面板标签条读的是它自己那一份注册表
 // （`ctx.sidebarRightTabs`），没有这一条，面板正文即使注册在 `sidebar.right.pane.tab` 上也不会出现。
 //
 // 两段式是上游的固定形状：类型（这里是） + 正文（`SessionModePanelView`），两者用同一个 `id`/key 配对。
@@ -22,15 +22,6 @@ export class SessionModePanelTab implements OnInit {
       // `extension`：外部类型默认档，与上游各 tab 同档（同档不同 kind 可以共存）。
       priority: "extension",
       title: () => t("panel"),
-      // guide 页上的一条入口：没有它，用户只能在面板里翻到这一页。
-      guide: [
-        {
-          id: "open",
-          order: 20,
-          title: () => t("panel"),
-          description: () => t("panelDescription"),
-        },
-      ],
     });
   }
 }

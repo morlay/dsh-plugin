@@ -30,11 +30,11 @@ const SidebarRight = new InjectionToken<unknown>("sidebarRight");
 const ConfigForms = new InjectionToken<unknown>("configForms");
 
 /**
- * 上游 `ui-sidebar-right` 的最小 apply：**同一次** apply 里 provide 两个名字——导航面 `sidebarRight`
+ * 上游右栏行的最小 apply：**同一次** apply 里 provide 两个名字——导航面 `sidebarRight`
  * 与标签类型注册表 `sidebarRightTabs`。两者是不同的对象，所以「绑错成契约面」会被下面第 3 条抓住。
  */
 const sidebarRightPlugin = {
-  name: "spec-ui-sidebar-right",
+  name: "spec-rightbar",
   inject: [],
   apply(ctx: CordisContext): void {
     ctx.reflect.provide("sidebarRight", { open: () => {} });

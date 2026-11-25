@@ -16,7 +16,7 @@ import { fromCordis } from "@morlay/zephyr/compat";
 import { Remote } from "@morlay/zephyr-app/client";
 // 附件的行住在 upload 域（上游 `file-upload` 归这里）；契约的消费方是会话界面的输入区，
 // 令牌由本包的 ui 面导出（upload 域不反向依赖它）。
-import { FileUpload } from "./file-upload.contract.ts";
+import { FileUpload } from "../contract/index.ts";
 
 @Injectable()
 export class FileUploadRuntime extends fromCordis(FileUpload, UpstreamFileUploadRuntime) {

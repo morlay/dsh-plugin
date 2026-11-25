@@ -3,7 +3,7 @@
 // **面要够上游用**：各 client 行拿到的 `ctx.layout` 是这一行的实例（`fromCordis` 只绑契约上声明的
 // 成员），少一个方法，调用点就是 `undefined is not a function`——而它常发生在 `useLayoutEffect` /
 // 事件回调里，错误会被 React 或 `void …catch()` 吞掉，症状是"点了没反应"。
-// 右侧栏就是这样：`ui-sidebar-right` 的 `syncPresentation` 调 `layout.openRightbar`，契约里没有它，
+// 右侧栏就是这样：上游右栏行的 `syncPresentation` 调 `layout.openRightbar`，契约里没有它，
 // 于是 `expanded` 变成 true、面板 seat 也渲染了，列宽却一直是 0。
 import type { ILayout } from "@deepseek-ai/dsh-client-ui-layout/client";
 import { Injectable } from "@morlay/zephyr";

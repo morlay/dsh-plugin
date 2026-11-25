@@ -1,5 +1,5 @@
 // 设置面板的服务层（上游 `ui-settings`）：本行只声明 `configForms` 契约；apply 顺手 `provide` 的
-// `settingsSchema` 由 mount 按它自己的注册名发布（同名令牌 `SettingsSchema` 与它指向同一份实例）。
+// `settingsSchema` 由 mount 按它自己的注册名发布（同名令牌 `SettingsSchema` 在装配末尾被按名字采纳）。
 import * as UiSettingsPlugin from "@deepseek-ai/dsh-client-ui-settings/client";
 import { inject, Injectable, type Context } from "@morlay/zephyr";
 import { fromCordis } from "@morlay/zephyr/compat";

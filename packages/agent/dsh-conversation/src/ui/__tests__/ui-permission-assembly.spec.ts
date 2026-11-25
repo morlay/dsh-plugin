@@ -15,7 +15,6 @@ import {
   Locale,
   Remote,
   RemoteAccess,
-  SessionRemoteBinding,
   SettingsSchema,
   Shortcuts,
   provideRenderer,
@@ -163,10 +162,6 @@ async function boot(): Promise<App> {
             decorate: () => () => {},
             dismiss: () => {},
           }),
-        },
-        {
-          provide: SessionRemoteBinding,
-          useFactory: () => ({ onInit: async () => {} }),
         },
         { provide: RemoteAccess, useFactory: () => ({ can: () => true }) },
         {

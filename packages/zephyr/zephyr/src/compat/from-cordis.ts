@@ -469,6 +469,7 @@ export type AdaptedClass<K extends TokenClass<unknown> = TokenClass<unknown>, U 
  * @param maybeUpstream - 上游插件（函数或 `{ apply }` 对象）。
  * @returns 可以 `extends` 的基类。
  */
+
 export function fromCordis<K extends TokenClass<unknown>, U>(
   contract: K,
   upstream: U,

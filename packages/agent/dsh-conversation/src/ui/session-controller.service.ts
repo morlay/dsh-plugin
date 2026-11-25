@@ -9,7 +9,7 @@
 import { ClientSessions } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/service.ts";
 import { inject, Injectable, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { CommandRunner } from "@morlay/dsh-command/contract";
-import { ClientConnection, Remote, SessionRemote } from "@morlay/zephyr-app/client";
+import { ClientConnection, Remote } from "@morlay/zephyr-app/client";
 import {
   SessionController,
   type SessionCatalogState,
@@ -67,10 +67,7 @@ function retainHandleOf(reference: ReturnType<ClientSessions["retain"]>): Sessio
 export class SessionControllerDefault extends SessionController implements OnInit, OnDispose {
   private readonly remote = inject(Remote);
 
-  /** `session` 面的真身：契约服务（装配期就有，不等 `$mount`）。 */
-  private readonly sessionRemote = inject(SessionRemote);
-
-  /** `session` 组的远端端点：`control` 这一条流走它（组名与帧形状的 home 在契约类上）。 */
+  /** `session` 组的客户端形态：一元方法与 `control` 流都走它（组名与帧形状的 home 在契约类上）。 */
   private readonly sessionEndpoint = inject(SessionEndpointClient);
 
   /** `commands.execute` 的真身：我们的命令执行器。 */
@@ -92,7 +89,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
     this.inner = new ClientSessions(
       asUpstreamContext(ctx),
       new LiveSessionRemotes(
-        () => this.sessionRemote,
+        () => this.sessionEndpoint,
         () => {
           const runner = this.commandRunner;
           if (runner === undefined)

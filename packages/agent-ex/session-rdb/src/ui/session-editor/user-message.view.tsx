@@ -25,7 +25,7 @@ import { memo, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Feedback } from "../shared/feedback.tsx";
 import { MessageIconActions } from "../vendor/dsh-client-ui-chat/client/chat/MessageIconActions.tsx";
-import type { EditableMessageBlock, SessionEditorFace } from "./session-editor.contract.ts";
+import type { EditableMessageBlock, SessionEditorFace } from "./session-editor.face.ts";
 
 type UserImage = Extract<UserMessageNode["content"][number], { type: "image" }>;
 

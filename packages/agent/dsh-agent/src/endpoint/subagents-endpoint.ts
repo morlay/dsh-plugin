@@ -6,7 +6,7 @@
 //
 // **它不继承 `RemoteClientBase`**：那个基类带一个 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
 // 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务（`service "remote" is not available`）。
-// 浏览器侧那份自己显式声明 `remote = inject(Remote)`（照 `dsh-command` 的 `command-endpoint-client.ts`）。
+// 浏览器侧那份自己显式声明 `remote = inject(Remote)`（照 `dsh-command` 的 `command-endpoint.client.ts`）。
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 

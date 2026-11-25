@@ -10,13 +10,16 @@
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
 import { ModelSelectionSlots } from "../model-selection-slots.ts";
 import { SettingsGeneralSlots } from "../settings-general-slots.ts";
+import { SettingsSchemaDefault } from "@morlay/zephyr-app/client";
 import { SettingsHost } from "../settings-host.ts";
 import { SettingsModelsSlots } from "../settings-models-slots.ts";
 import { provideSettingHost, provideSettingUi } from "../setting-ui.provide.ts";
 
 describe("设置面的两条清单", () => {
   test("`provideSettingHost()` 只装入口行（提供 `configForms` / `settingsSchema`）", () => {
-    expect(provideSettingHost()).toEqual([SettingsHost]);
+    // 入口面两行：上游行本身（`configForms`）+ `settingsSchema` 的令牌拥有者（上游 apply 顺手注册它，
+    // 但装配预检早于 onInit，令牌条目只能由清单给）。
+    expect(provideSettingHost()).toEqual([SettingsHost, SettingsSchemaDefault]);
     // 页面位置不许混进入口行：混进去就会把"链前"那条约束传染给槽位行。
     expect(provideSettingHost()).not.toContain(SettingsGeneralSlots);
     expect(provideSettingHost()).not.toContain(SettingsModelsSlots);

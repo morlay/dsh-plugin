@@ -12,8 +12,6 @@ import {
   provideTheme,
   ProjectionsDefault,
   RemoteDefault,
-  SessionRemoteBinding,
-  SessionRemoteDefault,
 } from "@morlay/zephyr-app/client";
 import { provideSettingHost, provideSettingUi } from "@morlay/dsh-conversation/ui";
 import {
@@ -70,8 +68,6 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
       // `without()` 一次只剔一个实现类。
       without(ClientConnectionDefault),
       without(RemoteDefault),
-      without(SessionRemoteDefault),
-      without(SessionRemoteBinding),
     ),
 
     // 渲染面（`Theme` 注入 `configForms`、`Layout` 注入 `theme`：同一条边，由排序保证提供者在消费者前）：
@@ -85,7 +81,7 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
     // - `provideSessions()` 出 `sessions`（`SessionController`：目录 / 绑定 / 命令转发）；
     //   它自带 `provideProjections()`（为了非浏览器宿主也能单独装），但这条链里 `projections` 已由
     //   `provideClientChain()` 提供——同名服务注册两次会直接抛，所以按实现类剔除它那份。
-    // - `provideWorkspaceUi()` 出 `workspaces`（`WorkspaceController`）+ `WorkspaceRemoteBinding`。
+    // - `provideWorkspaceUi()` 出 `workspaces`（`WorkspaceController`）+ 两组端点的客户端形态（各自 `onInit` 挂载）。
     ...provideSessions(without(ProjectionsDefault)),
     // **`uiSession` 与其子服务要先于工作区面**：上游 `ui-workspace` 的 inject 声明里有
     // `uiSession` 与 `uiSession.sessionStatus`（未读标记），它读的是 `ctx.uiSession.sessionStatus`。
