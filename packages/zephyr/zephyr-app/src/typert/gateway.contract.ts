@@ -8,7 +8,6 @@
 // 不实现的东西（上游 `api/gateway` 里另外几块）：`/api` 的 HTTP 路由与 `admitConnection` 的准入。
 // 那条路要 `BrowserAuth`（launch token + 签名 cookie），而我们的载体是自研 mux，准入由它自己做。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
 import type { TypertGateway as UpstreamGateway } from "@deepseek-ai/dsh-api-gateway";
 import type { ConnectionRpcResult } from "@deepseek-ai/dsh-client-connection";
 
@@ -20,13 +19,15 @@ import type { ConnectionRpcResult } from "@deepseek-ai/dsh-client-connection";
  */
 export type InvokeRemoteRequest = Parameters<UpstreamGateway["invoke"]>[0];
 
-/** 一帧推给客户端的事件（上游 `PendingRemoteEventInfo` 的宿主视角）。 */
-export interface PendingRemoteEventInfo {
-  /** Event name. */
-  readonly event: string;
-  /** Agent the event belongs to. */
-  readonly agentId: string;
-}
+/**
+ * 一帧推给客户端的事件：**上游那份** `PendingRemoteEventInfo`。
+ *
+ * 手抄过一次（`agentId: string`），而上游是 branded 的 `RemoteEventAgentId`——同名不同型，
+ * 只核键的守卫看不见（严格守卫一开就报 `getPendingRemoteEvents`）。
+ */
+export type PendingRemoteEventInfo = ReturnType<
+  UpstreamGateway["getPendingRemoteEvents"]
+>[number];
 
 /** 一段流：逐帧给出、带取消。 */
 export type RemoteStream = AsyncIterable<unknown>;
@@ -69,7 +70,7 @@ export interface TypertGatewayWireStream {
  * 由 `ApiGatewayDefault` 装上并发布。这里只声明契约 + 服务名，`inject(TypertGateway)` 按名字接到那个实例上。
  */
 @Injectable({ name: "typertGateway" })
-export abstract class TypertGateway {
+export abstract class TypertGateway implements UpstreamGateway {
   /**
    * 上游注册名：`ctx.typertGateway`。
    *
@@ -132,6 +133,3 @@ export abstract class TypertGateway {
     peer: InvokeRemoteRequest["peer"],
   ): Promise<ConnectionRpcResult<unknown>>;
 }
-
-/** 覆盖守卫：上游 `TypertGateway` 有而本契约没列出的成员，编译期必须为空。 */
-export type TypertGatewayCovered = AssertTrue<AssertCovered<UpstreamGateway, TypertGateway>>;

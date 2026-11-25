@@ -10,7 +10,7 @@
 // 用（`openTabIn` / `tabDomain` / `menuTabs` …），契约只列窄接口会让那些读法落空。
 // 只声明我们实现与消费的那部分，全量覆盖由下面的守卫与上游面比对。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app";
 import type { SidebarRightController } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 
 /** `ctx.sidebarRight` 的面：上游控制器。 */
@@ -59,6 +59,12 @@ export abstract class SidebarRight {
 /**
  * 形状守卫：契约声明的每个成员都必须在上游面上（签名一致）。
  *
- * **不要求覆盖全量**：契约只声明我们实现/消费的能力（拆分/浮动/停靠那套 pane 体系没有消费方，不进来）。
+ * **为什么不 `implements`**：契约**只覆盖一部分**——它声明的是我们实现/消费的 12 个成员；上游控制器还有
+ * 一整套 pane 体系（`split` / `float` / `dock` / `tabsIn` / `canCloseTarget` / `flashOf` …）没有消费方，
+ * 不进契约。`implements` 会因为这些缺口报一堆"缺属性"，掩盖真正的问题。
+ * 注意方向：这里把**契约**当上游传（`AssertCoveredStrict<SidebarRight, SidebarRightFace>`）——判的是
+ * 「契约声明的每个成员都在上游面上」。
  */
-export type SidebarRightCovered = AssertTrue<AssertCovered<SidebarRight, SidebarRightFace>>;
+export type SidebarRightCovered = AssertTrue<
+  AssertCoveredStrict<SidebarRight, SidebarRightFace>
+>;

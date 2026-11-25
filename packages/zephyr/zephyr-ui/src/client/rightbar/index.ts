@@ -11,8 +11,3 @@ export {
 } from "./rightbar.tsx";
 export { RightbarPaneTab, type RightbarPaneTabProps } from "./rightbar-pane-tab.tsx";
 export { RightbarTabTitle, type RightbarTabTitleProps } from "./rightbar-tab-title.tsx";
-export {
-  RightbarExpand,
-  type RightbarExpandProps,
-  type RightbarExpandView,
-} from "./rightbar-expand.tsx";

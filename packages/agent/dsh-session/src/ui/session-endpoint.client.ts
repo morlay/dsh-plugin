@@ -1,10 +1,12 @@
 // `SessionEndpoint` 的**客户端形态**：只消费、不实现。
 //
-// 只有两个方法自己写（`follow` / `control`）：`@RemoteClient()` 生成的转发走
-// `remote.invoke('<组>/<方法>', { request: 第一个实参 })`（`zephyr-app/src/remote/decorators.ts`
-// 的 `defineForwarder`）——这一组的其余方法都是**零参或单参 unary**，那个形状与 wire 一致；
-// 两个流式方法不成立：`invoke` 只带第一个实参，也没有逐帧通道。它们走 `$mount` 之后的
-// `remote.session` 调用面（按 descriptor 拼命名参数、直接给逐帧句柄）。
+// 只有两个方法自己写（`follow` / `control`）：`@RemoteClient()` 生成的转发走 `face()`——即 `$mount`
+// 之后的 `remote.session` 调用面（按 descriptor 拼命名参数、直接给逐帧句柄）。两个流式方法在
+// `@RemoteClient()` 的 unary 兜底里不成立（`invoke` 只带第一个实参、没有逐帧通道），所以显式转发。
+//
+// **这一组的 wire 描述符用上游那份**（`SESSION_CONTROLLER_REMOTE`，宿主侧实现就是上游控制器）：
+// 契约只管组名、方法名与类型，不再编译第二份 descriptor——两份对不上时只在运行时炸，
+// `session/list` 的 `_request` vs `request` 就是这么来的（见 `endpoint/session-controller.remote.ts`）。
 //
 // 组名的 home 是契约上的 `@RemoteGroup({ name })`：这里从契约读（`remoteGroupNameOf`），不另写一份字符串。
 //
@@ -13,8 +15,8 @@
 import { inject, type Context, type OnInit } from "@morlay/zephyr";
 import { Remote } from "@morlay/zephyr-app/client";
 import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
-import { RemoteClient, groupNameOf, remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
-import { SessionEndpoint } from "@morlay/dsh-session/endpoint";
+import { RemoteClient, groupNameOf } from "@morlay/zephyr-app/remote";
+import { SESSION_CONTROLLER_REMOTE, SessionEndpoint } from "@morlay/dsh-session/endpoint";
 import type {
   SessionControlFrame,
   SessionFollowFrame,
@@ -30,19 +32,20 @@ interface SessionStreamFace {
 /** `session` 组的客户端契约实例。 */
 @RemoteClient()
 export class SessionEndpointClient extends SessionEndpoint implements OnInit {
-  /** 转发目标：unary 走 `remote.invoke('<组>/<方法>', { request })`，流式走 `remote.session` 面。 */
+  /** 转发目标：`@RemoteClient()` 生成的方法都走 `remote.<组名>` 面（`face()`）；流式方法自己转发同一面。 */
   protected readonly remote = inject(Remote);
 
   /**
    * 挂上这一组的 descriptor：客户端形态**自己挂自己那一组**，不另开 binding / mount 行。
    *
-   * 描述符从契约编译（`remoteDescriptorsOf(SessionEndpoint)`，与宿主侧 `registerRemoteGroup` 同一份
-   * 声明）：不 `$mount` 上游的 `TYPERT_REMOTE`——那是**上游控制器**的声明，不是我们的 wire 契约。
+   * 挂的是**上游那份**（`SESSION_CONTROLLER_REMOTE`）：宿主侧实现就是上游控制器，wire 描述符只有它
+   * 一份。这里不编译我们的组契约——那会造出第二份声明，`session/list` 的 `_request` / `request`
+   * 分叉就是这么来的。
    * @param ctx - 本行 ctx：disposer 挂在它上面，卸载随行 fiber。
    */
   async onInit(ctx: Context): Promise<void> {
     try {
-      const dispose = await this.remote.$mount(remoteDescriptorsOf(SessionEndpoint));
+      const dispose = await this.remote.$mount(SESSION_CONTROLLER_REMOTE);
       ctx.effect(() => dispose);
     } catch (error) {
       throw new Error(`挂载 remote.${this.groupName()} 失败：${(error as Error).message}`, {
@@ -52,7 +55,7 @@ export class SessionEndpointClient extends SessionEndpoint implements OnInit {
   }
 
   /**
-   * 这一组的面挂上没有（`RemoteMountsDefault` 的 `$mount` 在它的 `onInit` 里跑）。
+   * 这一组的面挂上没有（`$mount` 在 {@link onInit} 里跑，装配完成前读它就是 `false`）。
    * @returns 有面时 `true`。
    */
   get mounted(): boolean {

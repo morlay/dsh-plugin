@@ -161,6 +161,11 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
               "@deepseek-ai/dsh-client-ui-session-status": [
                 under("vendor/deepseek-harness/packages/client/ui-session-status/src/index.ts"),
               ],
+              // 同一类问题：`dsh-permission` 的装配函数推断类型里含 `PresetSpec["sandbox"]`（上游 `SandboxMode`），
+              // 而 `@morlay/dsh-sandbox` 从 dependencies 移进 devDependencies 之后，声明里就写不出具名引用（TS2883）。
+              "@deepseek-ai/dsh-sandbox": [
+                under("vendor/deepseek-harness/packages/sandbox/sandbox/src/index.ts"),
+              ],
               "@deepseek-ai/dsh-client-ui-session-status/client": [
                 under(
                   "vendor/deepseek-harness/packages/client/ui-session-status/src/client/index.ts",

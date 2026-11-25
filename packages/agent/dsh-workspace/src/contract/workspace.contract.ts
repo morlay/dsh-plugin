@@ -5,26 +5,11 @@
 // 那条插件在运行时读到的就是 `undefined`。
 import type WorkspaceRegistryService from "@deepseek-ai/dsh-workspace";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 /** 一份工作区记录：路径、标题、挂上的会话与置顶/归档标记。 */
 export type { WorkspaceRecord } from "@deepseek-ai/dsh-workspace";
 /** 工作区存储域的整体状态（注册表整份落盘的那一坨）。 */
 export type { WorkspaceDomainState } from "@deepseek-ai/dsh-workspace";
-
-/**
- * 契约面：上游 `WorkspaceRegistry` 的全部公开成员，与上游同名同签名。
- *
- * `@Injectable({ name: "workspaceRegistry" })` 是**上游名别名**（上游 `WorkspaceRegistry` 是 cordis
- * `Service`，构造里 `super(ctx, 'workspaceRegistry')` 把自己注册在根 store 上）：它记下"这个名字就是
- * 上游的注册名"，让**调用时按名读**的消费方从令牌元数据取名，不必在调用点手抄字符串。
- * 装配期不按别名发第二份（`Workspace` 是适配行，面由上游自己发布），所以与上游不撞名。
- *
- * 下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type WorkspaceRegistryCovered = AssertTrue<
-  AssertCovered<WorkspaceRegistryService, WorkspaceRegistry>
->;
 
 @Injectable({ name: "workspaceRegistry" })
 export abstract class WorkspaceRegistry {
@@ -54,3 +39,12 @@ export abstract class WorkspaceRegistry {
 
   abstract readonly unpinSession: WorkspaceRegistryService["unpinSession"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `WorkspaceRegistryService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type WorkspaceRegistryCovered = AssertTrue<AssertCoveredStrict<WorkspaceRegistryService, WorkspaceRegistry>>;

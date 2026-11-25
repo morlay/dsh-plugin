@@ -1,7 +1,7 @@
 // LLM 运行时契约：令牌按服务语义命名（上游注册名 `llm`）。
 import type { LlmRuntime } from "../index.ts";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：一次模型调用进出的消息、内容块与它们的身份。上游把它们散在 `@deepseek-ai/dsh-llm` 的
 // message / types / brand 三个模块里，这里按「LLM 消息」归成一处。
@@ -19,14 +19,6 @@ export { MessageId } from "@deepseek-ai/dsh-llm";
 export { createUserMessage } from "@deepseek-ai/dsh-llm";
 /** 深冻结一条消息：进会话日志的事件此后不可变（纯函数）。 */
 export { freezeMessage } from "@deepseek-ai/dsh-llm";
-
-/**
- * 契约面：上游 `LlmRuntime` 的**全部**公开成员。
- *
- * 成员一个都不能少——上游插件按 `ctx.llm.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type LlmCovered = AssertTrue<AssertCovered<LlmRuntime, Llm>>;
 
 @Injectable({ name: "llm" })
 export abstract class Llm {
@@ -64,3 +56,12 @@ export abstract class Llm {
 
   abstract readonly stream: LlmRuntime["stream"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `LlmRuntime` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type LlmCovered = AssertTrue<AssertCoveredStrict<LlmRuntime, Llm>>;

@@ -280,6 +280,22 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
     expect(Array.isArray(listed?.items), "上游协议是 `{ items: [...] }`").toBe(true);
   });
 
+  test("`session/list` 的 wire 参数名是 `_request`（整组里唯一带下划线的那条）：发 `request` 会被 gateway 拒", async () => {
+    const { handlers } = await boot();
+    // 宿主描述符来自上游 `SessionController.list(_request, signal)` 的形参名（SRC 回退；上游只把
+    // 资源登记进 typert，没有严格调用描述符）。客户端按 `request` 发就是用户报的那条错——
+    // 这条用例把宿主那一侧的真相钉住：谁再"顺手"按 `{ request }` 调一次，这里先红。
+    const rejected = await handlers.invoke("session/list", { request: {} });
+    expect(errorCodeOf(rejected), JSON.stringify(rejected)).toBe("gateway/arguments-invalid");
+    expect((rejected as { error?: { message?: string } }).error?.message).toContain(
+      'unexpected "request"',
+    );
+
+    const accepted = await handlers.invoke("session/list", { _request: {} });
+    expect(errorCodeOf(accepted), JSON.stringify(accepted)).toBeUndefined();
+    expect(Array.isArray((accepted as { items?: unknown }).items)).toBe(true);
+  });
+
   test("`canOpenWorkspacePath` 回真能力（boolean）", async () => {
     const { handlers } = await boot();
     const value = unwrap<boolean>(await handlers.invoke("session/canOpenWorkspacePath", {}));

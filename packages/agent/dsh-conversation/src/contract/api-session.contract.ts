@@ -1,11 +1,12 @@
 // 上游会话端点面的**契约**（抽象类），与实现（`server/api-session.provide.ts`）分开。
 //
 // 写法：每个抽象类的成员类型**直接取上游实例的同名成员**（`Upstream["list"]` 这种），
-// 再配一条 `AssertCovered<上游实例, 本契约>` 守卫——**上游有而契约没列的成员，编译期就报错**。
+// 再配一条 `AssertCoveredStrict<上游实例, 本契约>` 守卫——**上游有而契约没列的成员、签名对不上的成员，
+// 编译期就报错**。（这里不用 `implements`：上游那四个都是 cordis `Service` 类，`implements` 会报 TS2720。）
 // 这样"契约漏了成员"不靠记忆、不靠人眼，也就不用担心 `fromCordis` 装上一个面不全的契约。
 //
 // `fromCordis(契约类, 上游实现类)` 双参是硬要求：装任何上游实现之前，先说清它的面。
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 import { Injectable } from "@morlay/zephyr";
 // 四个上游行只用来取**实例类型**（`InstanceType<typeof ...>`，全是类型位置）：
 // 写成 `import type` 才是真的"只取类型"——值导入会被打包图收边，把上游宿主行拖进浏览器 bundle。
@@ -111,7 +112,7 @@ export abstract class SessionControllerService {
 
 /** 覆盖守卫：上游有而契约没列的成员，编译期必须为空。 */
 export type SessionControllerCovered = AssertTrue<
-  AssertCovered<SessionControllerUpstream, SessionControllerService>
+  AssertCoveredStrict<SessionControllerUpstream, SessionControllerService>
 >;
 
 /** 上游 `LocalFileReferenceService` 的实例面。 */
@@ -131,7 +132,7 @@ export abstract class FileReferenceService {
 
 /** 覆盖守卫：上游有而契约没列的成员，编译期必须为空。 */
 export type FileReferenceCovered = AssertTrue<
-  AssertCovered<FileReferenceUpstream, FileReferenceService>
+  AssertCoveredStrict<FileReferenceUpstream, FileReferenceService>
 >;
 
 /** 上游 `SessionFileReferences` 的实例面。 */
@@ -149,7 +150,7 @@ export abstract class SessionFileReferencesService {
 
 /** 覆盖守卫：上游有而契约没列的成员，编译期必须为空。 */
 export type SessionFileReferencesCovered = AssertTrue<
-  AssertCovered<SessionFileReferencesUpstream, SessionFileReferencesService>
+  AssertCoveredStrict<SessionFileReferencesUpstream, SessionFileReferencesService>
 >;
 
 /** 上游 `SessionSkillCatalog` 的实例面。 */
@@ -167,7 +168,7 @@ export abstract class SessionSkillCatalogService {
 
 /** 覆盖守卫：上游有而契约没列的成员，编译期必须为空。 */
 export type SessionSkillCatalogCovered = AssertTrue<
-  AssertCovered<SessionSkillCatalogUpstream, SessionSkillCatalogService>
+  AssertCoveredStrict<SessionSkillCatalogUpstream, SessionSkillCatalogService>
 >;
 
 /**

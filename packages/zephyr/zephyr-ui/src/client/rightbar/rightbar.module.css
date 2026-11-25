@@ -1,6 +1,9 @@
-/* 右栏容器：与上游同一套 token 引用（宽度、边框、滚动）。
-   宽度取帧给的那一列（`--dsh-sidebar-right-width`），没有就撑满自己的列。 */
+/* 右栏容器与外壳：**样式对齐上游**（token、间距、字号都取同一套 `--dsw-*` / `--ds-*`）。
+   上游的容器是 absolute + dockkit 子树；我们的外壳是「标签条 + 正文」两层，结构不同，
+   但每一档的视觉参数都照上游（`SidebarRight.module.css` 的面板底/边框，dockkit strip 的 chip，
+   `GuideBody.module.css` 的空态）。 */
 
+/* 面板底：底色与左分隔线取上游同义 token。 */
 .panel {
   display: flex;
   flex-direction: column;
@@ -9,47 +12,57 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
   border-left: 1px solid var(--dsw-alias-border-l1);
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
 }
 
-/* 标签条：横向滚动的 chip 排，贴顶不参与正文滚动。 */
+/* 标签条：dockkit 的 strip 高度与内距（36px 行、左右 8px），chip 之间 2px。 */
 .strip {
   display: flex;
   flex: none;
   align-items: center;
   gap: 2px;
-  padding: 6px 8px;
+  min-height: 36px;
+  padding: 0 8px;
   overflow-x: auto;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 
-/* 正文：吃掉剩下的高度，内容长了它自己滚。 */
+/* 正文：吃掉剩下的高度，内容长了它自己滚（上游 pane 也是这一条）。 */
 .body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
 
-/* 一个标签：标题座位 + 关闭按钮；选中档只换底色与文字色。 */
+/* 一个 chip：高度 24、内距 0 8、圆角 6、13px 字（dockkit strip 的档）。 */
 .tab {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 4px;
   max-width: 200px;
-  padding: 2px 4px 2px 8px;
+  height: 24px;
+  padding: 0 4px 0 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
 }
 
-.tabActive {
+.tab:hover {
+  background: var(--dsw-alias-bg-l2);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 选中档：上游用 surface 档的底色 + 主文本色。 */
+.tabActive,
+.tabActive:hover {
   background: var(--dsw-alias-bg-l2);
   color: var(--dsw-alias-label-primary);
 }
@@ -60,11 +73,7 @@
   white-space: nowrap;
 }
 
-/* 空态与认领不到类型的提示：居中、次要色。 */
-.expandIcon {
-  transform: scaleX(-1);
-}
-
+/* 空态：与 guide 的说明同一档（次要色、12px、居中）。 */
 .notice {
   margin: 0;
   padding: 24px 16px;
@@ -72,4 +81,9 @@
   font-size: 12px;
   line-height: 18px;
   text-align: center;
+}
+
+/* 角位按钮的镜像（上游 ExpandButton 用左栏折叠图标的镜像）。 */
+.expandIcon {
+  transform: scaleX(-1);
 }

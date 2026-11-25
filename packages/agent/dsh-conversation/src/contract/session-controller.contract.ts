@@ -8,5 +8,4 @@ export type {
   SessionCatalogState,
   SessionCatalog,
   SessionRetainHandle,
-  SessionControllerCovered,
 } from "@morlay/dsh-session/endpoint";

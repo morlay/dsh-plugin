@@ -1,16 +1,7 @@
 // deepseekAuth 契约：令牌按服务语义命名（上游注册名 `deepseekAuth`）。
 import type { DeepSeekAuth } from "@deepseek-ai/dsh-deepseek-auth";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/**
- * 契约面：上游 `DeepSeekAuth` 的**全部**公开成员。
- *
- * 上游的 DeepSeek 路由（`llm-deepseek-api-key` / `llm-deepseek-account` / `web-deepseek-api`）都按
- * `ctx.deepseekAuth.<member>` 取用，缺一个那条插件在运行期读到的就是 `undefined`。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type DeepSeekAuthCovered = AssertTrue<AssertCovered<DeepSeekAuth, DeepSeekAuthToken>>;
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable({ name: "deepseekAuth" })
 export abstract class DeepSeekAuthToken {
@@ -22,3 +13,12 @@ export abstract class DeepSeekAuthToken {
 
   abstract readonly authorize: DeepSeekAuth["authorize"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `DeepSeekAuth` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type DeepSeekAuthTokenCovered = AssertTrue<AssertCoveredStrict<DeepSeekAuth, DeepSeekAuthToken>>;

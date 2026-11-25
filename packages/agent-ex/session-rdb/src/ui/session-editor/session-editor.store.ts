@@ -20,6 +20,21 @@ interface Dictionaries {
   bind(ns: string): SessionEditorTranslate;
 }
 
+/**
+ * 从会话作用域按名字读一个服务。
+ *
+ * `ctx.sessions.scope(id)` 的类型是上游 `AgentContext`（cordis 那份面），声明里没有 `get`——`get(name)` 是
+ * 本仓 `zephyr` 给 cordis `Context` 补的口径（`packages/zephyr/zephyr/src/injection.ts`），运行期那个 ctx
+ * 上有（它就是 `ClientSessions` 造的真 ctx）。这里按同一个口径收窄一次，与 `compat/from-cordis` 的读法一致。
+ * @param scope - 会话作用域（上游 `AgentContext`）。
+ * @param name - 服务名（如 `conversation`）。
+ * @returns 该服务；没有这个口径或服务未就绪时 `undefined`。
+ */
+function serviceOf(scope: object, name: string): unknown {
+  const get = Reflect.get(scope, "get") as ((key: string) => unknown) | undefined;
+  return get?.call(scope, name);
+}
+
 @Injectable()
 export class SessionEditorStore {
   private readonly endpoint = inject(SessionEditorEndpointClient);
@@ -129,7 +144,7 @@ class SessionEditorController {
     if (this.sessions.binding(this.sessionId) === undefined) return;
     const scoped = this.sessions.scope(this.sessionId);
     if (scoped === undefined) return;
-    const conversation = scoped.get("conversation") as
+    const conversation = serviceOf(scoped, "conversation") as
       | { input?: { for(scope: unknown): { setDraft(draft: string): void } } }
       | undefined;
     conversation?.input?.for(scoped).setDraft(text);

@@ -4,16 +4,7 @@
 // 宿主侧实现拖进依赖图。
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/**
- * 契约面：上游 `SubagentRuntime` 的**全部**公开成员。
- *
- * 上游插件按 `ctx.subagents.<member>` 取用（`tool-subagent` 的 `spawn` / `fork` 都读它），
- * 缺一个那条插件在运行期读到的就是 `undefined`；下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SubagentsCovered = AssertTrue<AssertCovered<SubagentRuntime, SubagentRegistry>>;
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable({ name: "subagents" })
 export abstract class SubagentRegistry {
@@ -58,3 +49,12 @@ export abstract class SubagentRegistry {
 
   abstract readonly typertRemote: SubagentRuntime["typertRemote"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `SubagentRuntime` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type SubagentRegistryCovered = AssertTrue<AssertCoveredStrict<SubagentRuntime, SubagentRegistry>>;

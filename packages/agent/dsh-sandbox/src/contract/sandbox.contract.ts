@@ -7,17 +7,8 @@ import { SandboxProvider } from "@deepseek-ai/dsh-sandbox";
 /** 能力词汇：一次受限执行要的 argv（程序 + 参数 + cwd），是 `confine` 的入参。 */
 export type { ConfinedArgv } from "@deepseek-ai/dsh-sandbox";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/**
- * 契约面：上游 `SandboxProvider` 的全部公开成员，与上游同名同签名。
- *
- * 下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SandboxCovered = AssertTrue<AssertCovered<SandboxProvider, Sandbox>>;
 
 @Injectable({ name: "sandbox" })
-export abstract class Sandbox {
+export abstract class Sandbox implements SandboxProvider {
   abstract readonly confine: SandboxProvider["confine"];
 }

@@ -8,7 +8,6 @@ export {
   SessionController,
   type SessionCatalog,
   type SessionCatalogState,
-  type SessionControllerCovered,
   type SessionRetainHandle,
   type SessionScope,
   type SessionView,

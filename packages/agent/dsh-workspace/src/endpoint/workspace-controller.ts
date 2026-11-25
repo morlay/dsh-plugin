@@ -9,12 +9,6 @@ import type { IWorkspaces } from "@deepseek-ai/dsh-api-workspace-controller/clie
 import { Injectable } from "@morlay/zephyr";
 // 覆盖守卫是**纯类型**，从 client 出口取：`@morlay/zephyr-app` 包根是宿主面（链到 node 侧），
 // 浏览器半（`src/ui`）从包根取会把宿主模块拖进前端 bundle。
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type WorkspaceControllerCovered = AssertTrue<
-  AssertCovered<IWorkspaces, WorkspaceController>
->;
 
 /**
  * 服务名令牌：上游 `ui-workspace` 按 `ctx.workspaces` 读这一面。
@@ -22,7 +16,7 @@ export type WorkspaceControllerCovered = AssertTrue<
  */
 
 @Injectable({ name: "workspaces" })
-export abstract class WorkspaceController {
+export abstract class WorkspaceController implements IWorkspaces {
   /**
    * 上游注册名：`ctx.workspaces`。
    *

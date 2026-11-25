@@ -21,7 +21,10 @@ import {
   type SidebarRightSurfaceStore,
 } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
-import { Rightbar, RightbarExpand, type RightbarView } from "@morlay/zephyr-ui";
+import { de, en, es, fr, ja, pt, ru, zh } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/locales.ts";
+import { ExpandButton } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/shell/ExpandButton.tsx";
+import { Rightbar, type RightbarView } from "@morlay/zephyr-ui";
+import { Shortcuts } from "../shortcuts/shortcuts.contract.ts";
 import { ContextMenus } from "../context-menus/context-menus.contract.ts";
 import { Layout } from "../layout/layout.contract.ts";
 import { Locale } from "../locale/locale.contract.ts";
@@ -49,6 +52,8 @@ const DICTS = {
     expand: "展开右侧面板",
     closeOthers: "关闭其它标签",
     closeRight: "关闭右侧标签",
+    "guide.title": "右侧面板",
+    "guide.empty": "还没有可用的标签：从左栏打开文件、终端或浏览器",
   },
   en: {
     panel: "Right panel",
@@ -58,6 +63,8 @@ const DICTS = {
     expand: "Expand right panel",
     closeOthers: "Close other tabs",
     closeRight: "Close tabs to the right",
+    "guide.title": "Right panel",
+    "guide.empty": "No tabs yet — open a file, terminal, or browser from the left column",
   },
 };
 
@@ -82,11 +89,29 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
   /** 右键菜单：右栏 tab 的关 / 关其它 / 关右侧（同层能力，框架链默认就有）。 */
   private readonly contextMenus = inject(ContextMenus);
 
+  /** 快捷键目录：角位展开按钮的 tooltip 与 aria 读它。 */
+  private readonly shortcuts = inject(Shortcuts);
+
   /** 控制器工厂：`onInit` 才能建（它要往上游注册表登记、并持有会话 map）。 */
   private factory: ReturnType<typeof createSidebarRightController> | undefined;
 
   /** 每个会话的 store 句柄（上游那份：布局、历史、动作都在它上面）。 */
   private readonly store = createSidebarRightStore(() => defaultSeed(this.tabs.face));
+
+  /**
+   * 交给渲染器的 store 句柄：按 session 作用域 `create` 时顺手 adopt。
+   *
+   * 上游 apply 也是这么包一层；不 adopt 的话，座位里的 `actions`（展开/关闭）写进的 store
+   * 不是控制器认的那一份，命令就没有落点。
+   */
+  private readonly rightbarStore = {
+    ...this.store,
+    create: (scopeKey?: string) => {
+      const instance = this.store.create(scopeKey);
+      if (scopeKey !== undefined) this.attach(scopeKey, instance as SidebarRightSurfaceStore);
+      return instance;
+    },
+  };
 
   /** 已建出来的会话 surface（`adopt` 过的实例）。 */
   private readonly surfaces = new Map<string, SidebarRightSurfaceStore>();
@@ -130,6 +155,8 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
   onInit(): void {
     this.factory = createSidebarRightController(this.tabs.face, this.pin, this.host);
     this.disposers.push(this.locale.register(NS, DICTS));
+    // 上游那几个座位组件（`ExpandButton` / guide）读的是 `sidebarRight` 命名空间：整份搬过来。
+    this.disposers.push(this.locale.register("sidebarRight", { zh, en, ja, es, fr, de, ru, pt }));
     this.registerSeats();
     this.registerContextMenu();
   }
@@ -175,9 +202,19 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
     const existing = this.surfaces.get(sessionId);
     if (existing !== undefined) return existing;
     const instance = this.store.create(sessionId) as SidebarRightSurfaceStore;
-    this.releases.set(sessionId, this.adopt(sessionId, instance));
-    this.surfaces.set(sessionId, instance);
+    this.attach(sessionId, instance);
     return instance;
+  }
+
+  /**
+   * 记下一个会话的 surface 并交给控制器 adopt（幂等：渲染器与视图源可能都来建一次）。
+   * @param sessionId - 会话 id。
+   * @param instance - 该会话的 store 实例。
+   */
+  private attach(sessionId: string, instance: SidebarRightSurfaceStore): void {
+    if (this.surfaces.has(sessionId)) return;
+    this.surfaces.set(sessionId, instance);
+    this.releases.set(sessionId, this.adopt(sessionId, instance));
   }
 
   /**
@@ -298,15 +335,12 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
         this.slots.register(
           {
             name: "conversation.session.header.corner",
-            inject: () => ({
-              hooks: { rightbar: this.state },
-              label: this.t("expand"),
-              onExpand: () => {
-                this.core.toggleExpanded();
-              },
-            }),
+            locale: "sidebarRight",
+            // store 按 session 作用域建：按钮读同一份 surface 的 `expanded`，点它就是 `actions.setExpanded`。
+            store: this.rightbarStore,
+            inject: () => ({ hooks: { shortcuts: this.shortcuts.catalog } }),
           } as never,
-          RightbarExpand as never,
+          ExpandButton as never,
         ),
       ),
     );

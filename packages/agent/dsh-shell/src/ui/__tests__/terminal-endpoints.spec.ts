@@ -21,9 +21,7 @@ import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
 import { onTestFinished } from "vitest";
 import { configure, type App } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlers, provideApiGateway, provideRemoteAccess, provideTypert } from "@morlay/zephyr-app";
-import { WorkingDirectoryDefault, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
-import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { SandboxPolicyDefault, provideSandbox } from "@morlay/dsh-sandbox";
+import { inject, Injectable, rootContextKey, type Context, type OnInit } from "@morlay/zephyr";
 import { ClientConnectionDefault, provideClientConnection } from "@morlay/zephyr-app/client";
 import { bootTwoSided, clientWithTransport, createTestingAppEnv } from "@morlay/zephyr-app/testing";
 import { describe, expect, test } from "@morlay/zephyr/testing";
@@ -34,6 +32,46 @@ import { TerminalEndpointClient } from "../terminal-endpoint.client.ts";
 
 /** 终端环境那个方法的第一个实参（会话 id）。 */
 type SessionArgument = Parameters<TerminalRemote["environment"]>[0];
+
+/**
+ * `sandboxPolicy` 的**最小替身令牌**：本 spec 只需要那个面在场。
+ *
+ * 上游 `TerminalController.execution()` 对它只做存在性检查（`agent.ctx.get('sandboxPolicy')` 为
+ * `undefined` 就抛，见 `api/terminal-controller/src/index.ts:526`），**不读任何成员**；而本 spec 不开
+ * 终端（`attach` 才会起真进程），所以不需要 `dsh-sandbox` 的真行——装了它反而让本包多一条
+ * workspace 依赖边（那条边与「sandbox → shell」构成环，pnpm 的递归执行会被判环拒跑）。
+ */
+@Injectable()
+class FakeSandboxPolicy {}
+
+/**
+ * `workingDirectory` 的最小替身令牌：同上，上游 `execution()` 只按名字取它（`agent.ctx.get('workingDirectory')`，
+ * 见 `api/terminal-controller/src/index.ts:535`），本 spec 的断言路径走不到读成员的那一步。
+ */
+@Injectable()
+class FakeWorkingDirectory {}
+
+/** 两个替身的值：面在场即可，成员不会被读到。 */
+const FAKE_FACE = {};
+
+/**
+ * 把两个替身**按上游服务名**发布到根 store。
+ *
+ * 上游 `TerminalController.execution()` 是按名字取的（`agent.ctx.get('sandboxPolicy')` /
+ * `('workingDirectory')`，见 `api/terminal-controller/src/index.ts:526-537`），而替身不走上游
+ * 插件的 `super(ctx, name)`，名字不会自己出现在 store 里。
+ */
+@Injectable()
+class PublishExecutionFaces implements OnInit {
+  private readonly sandbox = inject(FakeSandboxPolicy);
+
+  private readonly workingDirectory = inject(FakeWorkingDirectory);
+
+  onInit(ctx: Context): void {
+    ctx[rootContextKey].provide("sandboxPolicy", this.sandbox);
+    ctx[rootContextKey].provide("workingDirectory", this.workingDirectory);
+  }
+}
 
 /**
  * 起一双端：host = 真 `provideTerminal()`（上游 `TerminalController` + 它要的四条依赖），
@@ -51,16 +89,12 @@ async function boot(): Promise<App> {
       ...provideApiGateway(),
       ...provideRemoteAccess(),
       { provide: AppEnv, useValue: appEnv },
-      // 起进程要 `subprocess`，查 agent 的工作目录要 `workingDirectory`，登记端点要 `typert`。
+      // 起进程要 `subprocess`（本包的真行）；`sandboxPolicy` / `workingDirectory` 只要求**面在场**
+      // （见两个替身令牌的注释）——不装别的域的真行，本包因此没有「sandbox ↔ shell」那条环。
       ...provideShell(),
-      // `WorkingDirectoryDefault` 读会话投影与 systemPrompt（按会话解析工作目录），这两组行不能缺。
-      ...provideSession(),
-      ...provideSessionProjection(),
-      ...provideAgent(),
-      ...provideWorkingDirectory(
-        configure(WorkingDirectoryDefault, { defaultDirectory: appEnv.values.dataDir }),
-      ),
-      ...provideSandbox(configure(SandboxPolicyDefault, { mode: "workspace-write" })),
+      { provide: FakeSandboxPolicy, useValue: FAKE_FACE },
+      { provide: FakeWorkingDirectory, useValue: FAKE_FACE },
+      PublishExecutionFaces,
       ...provideTerminal(),
     ],
     createClient: (host) =>

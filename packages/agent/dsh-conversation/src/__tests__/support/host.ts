@@ -7,7 +7,7 @@
 //    就是 `service "sessions" has been registered`；feature 只作用于第 1 段。
 // 2. `provideConversationUi()` 有两个前置：`provideWorkspaceUi()`（侧栏骨架要 `uiWorkspace`）与
 //    `provideCommandUi()`（输入区的 `CommandUiSlot` 要 `remote.commands`）都要排在它之前。
-import { configure } from "@morlay/zephyr";
+import { configure, type ProviderEntry } from "@morlay/zephyr";
 import {
   AppEnvDefault,
   mountFullApp,
@@ -40,11 +40,14 @@ import { provideWorkspace } from "@morlay/dsh-workspace/server";
  * 起一棵「对话域宿主面够用」的行树。
  * @param dataDir - 数据根（tmpdir）。
  * @param mode - 权限档位（`main-flow` 要它；缺省 `workspace-write`）。
+ * @param endpointRows - **端点面**那一段（缺省 `provideConversationServer()`）。
+ *   给它是为了让判据剔掉其中一行（缺行 ⇒ 404 的反方向），其余装配不变。
  * @returns 起好的整装行树。
  */
 export async function mountConversationHost(
   dataDir: string,
   mode: "read-only" | "workspace-write" | "danger-full-access" = "workspace-write",
+  endpointRows?: readonly ProviderEntry[],
 ): Promise<FullApp> {
   return await mountFullApp({
     providers: [
@@ -62,7 +65,7 @@ export async function mountConversationHost(
       ...provideStorageJson(),
       ...provideSessionPersistence(),
       // 端点面：数据面 + 会话引用 + 会话端点（自带三份 root，别再单列 `provideSession()`）。
-      ...provideConversationServer(),
+      ...(endpointRows ?? provideConversationServer()),
       ...provideAgent(),
       // 循环期：本装配要 `AgentLoop.create` 建会话（骨架只给契约）。
       ToolExecutorNative,

@@ -1,11 +1,7 @@
 // token-meter seam 的契约：令牌按服务语义命名（上游注册名 `tokenMeter`）。
 import type TokenMeterService from "@deepseek-ai/dsh-token-meter";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/** 契约面：上游 `TokenMeter` 的**全部**公开成员（用量折叠与消息估算）。 */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type TokenMeterCovered = AssertTrue<AssertCovered<TokenMeterService, TokenMeter>>;
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable({ name: "tokenMeter" })
 export abstract class TokenMeter {
@@ -15,3 +11,12 @@ export abstract class TokenMeter {
 
   abstract readonly contextPressure: TokenMeterService["contextPressure"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `TokenMeterService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type TokenMeterCovered = AssertTrue<AssertCoveredStrict<TokenMeterService, TokenMeter>>;

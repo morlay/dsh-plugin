@@ -5,7 +5,7 @@
 import type { DirectoryPickerCapability } from "@deepseek-ai/dsh-host-directory-picker";
 import type NativeDirectoryPicker from "@deepseek-ai/dsh-host-directory-picker-native";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `NativeDirectoryPicker` 的全部公开成员。
@@ -15,9 +15,14 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
  */
 type DirectoryPickerBackendFace = Pick<NativeDirectoryPicker, "capability">;
 
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
+/**
+ * 覆盖守卫：`DirectoryPickerBackendFace` 的 `Pick` 就是上游**全量**（上游 backend 只有 `capability` 一个公开成员）。
+ *
+ * 为什么不是 `implements NativeDirectoryPicker`：上游是 cordis `Service` **类**（带私有成员），`implements`
+ * 会报 TS2720。
+ */
 export type DirectoryPickerBackendCovered = AssertTrue<
-  AssertCovered<NativeDirectoryPicker, DirectoryPickerBackendFace>
+  AssertCoveredStrict<NativeDirectoryPicker, DirectoryPickerBackendFace>
 >;
 
 @Injectable({ name: "directoryPicker" })

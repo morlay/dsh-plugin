@@ -26,13 +26,13 @@
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-agent-instruction"
   },
   "dependencies": {
-    "@morlay/dsh-session": "workspace:^",
     "@morlay/zephyr": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-fs": "workspace:^"
+    "@morlay/dsh-fs": "workspace:^",
+    "@morlay/dsh-session": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-agent-instructions": "workspace:^"

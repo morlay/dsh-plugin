@@ -1,7 +1,7 @@
 // 沙箱策略契约：令牌按服务语义命名（上游注册名 `sandboxPolicy`）。
 import type { SandboxPolicyService } from "@deepseek-ai/dsh-sandbox-policy";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：策略本身（模式与可写根）、它的求值结果与路径规范化。上游 `@deepseek-ai/dsh-sandbox`
 // 既出端口也出这些值，这里只取「策略」那半边——消费方按策略判放行，不必自己引上游。
@@ -21,14 +21,6 @@ export { canonicalPath } from "@deepseek-ai/dsh-sandbox";
 /** 策略允许写的根目录列表（纯函数）。 */
 export { writableRoots } from "@deepseek-ai/dsh-sandbox";
 
-/**
- * 契约面：上游 `SandboxPolicyService` 的全部公开成员，与上游同名同签名。
- *
- * 下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SandboxPolicyCovered = AssertTrue<AssertCovered<SandboxPolicyService, SandboxPolicy>>;
-
 @Injectable({ name: "sandboxPolicy" })
 export abstract class SandboxPolicy {
   abstract readonly defaultMode: SandboxPolicyService["defaultMode"];
@@ -44,3 +36,12 @@ export abstract class SandboxPolicy {
   /** 运行期追加一个可写根（返回撤销它自己的 disposer）。 */
   abstract readonly registerWritableRoot: SandboxPolicyService["registerWritableRoot"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `SandboxPolicyService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type SandboxPolicyCovered = AssertTrue<AssertCoveredStrict<SandboxPolicyService, SandboxPolicy>>;

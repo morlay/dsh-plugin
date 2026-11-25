@@ -14,24 +14,27 @@ import {
   SessionController,
   type SessionCatalogState,
   type SessionRetainHandle,
-  type SessionScope,
-  type SessionView,
 } from "@morlay/dsh-conversation/contract";
 import { sessionGroupName } from "@morlay/dsh-session/endpoint";
 import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { LiveSessionRemotes } from "./remote-session.ts";
 import { asUpstreamContext } from "./upstream-context.ts";
 
-/** `onInit` 之前的目录快照：空且 `loading`（"还没拉"与"真没有会话"要分得开）。 */
+/**
+ * `onInit` 之前的目录快照：空且 `pending`（"还没拉"与"真没有会话"要分得开）。
+ *
+ * 相位取**上游的** `SessionListPhase`：这里曾经映射成自造的 `'loading'`，那是契约手抄上游形状留下的
+ * 第二种取值——同一个快照两种语义，读的人得先知道是"哪个契约的 phase"。
+ */
 const EMPTY_CATALOG_STATE: SessionCatalogState = {
   ids: [],
   byId: {},
-  phase: "loading",
+  phase: "pending",
   projectionsBySession: {},
 };
 
 /**
- * `onInit` 之前的目录读面：空且 `loading`。
+ * `onInit` 之前的目录读面：空且 `pending`。
  *
  * 身份**模块级稳定**（`useSyncExternalStore` 的依赖要比得下去重），并且不缓存到实例上。
  */
@@ -42,26 +45,6 @@ const EMPTY_CATALOG: SessionController["list"] = {
 
 /** 上游 `session/control` 的帧形状（本行只把它转交给 `ClientSessions.handleControlFrame`）。 */
 type ControlFrame = Parameters<ClientSessions["handleControlFrame"]>[0];
-
-/**
- * 上游保留句柄 → 契约句柄。
- *
- * 差别只有一条：上游用 `[Symbol.dispose]()` 释放，契约面声明的是 `dispose()`（两者都幂等）。
- * `binding` 保持**惰性**（上游是 getter，释放后抛）——提前求值会把"释放后读"变成"保留时就炸"。
- * @param reference - 上游 `ClientSessions.retain` 给的句柄。
- * @returns 契约面的句柄。
- */
-function retainHandleOf(reference: ReturnType<ClientSessions["retain"]>): SessionRetainHandle {
-  return {
-    sessionId: reference.sessionId,
-    get binding(): unknown {
-      return reference.binding;
-    },
-    ready: reference.ready,
-    release: () => reference.release(),
-    dispose: () => reference.release(),
-  };
-}
 
 @Injectable()
 export class SessionControllerDefault extends SessionController implements OnInit, OnDispose {
@@ -159,7 +142,6 @@ export class SessionControllerDefault extends SessionController implements OnIni
     this.stopGeneration?.();
     this.stopGeneration = undefined;
     this.inner = undefined;
-    this.catalog = undefined;
   }
 
   /** 停掉当前这条 `session/control` 流（换代重开与卸载共用）。 */
@@ -214,49 +196,17 @@ export class SessionControllerDefault extends SessionController implements OnIni
   }
 
   /**
-   * 目录读面：上游 `SnapshotStore<SessionListState>` → 契约的 `SessionCatalog`。
+   * 目录读面：**上游那份** `ObservableSnapshot<SessionListState>`，原样交出。
    *
-   * 两处差别都在**取值**上，不在数据上：上游 `phase` 是 `'pending' | 'ready'`（`SessionListPhase`，
-   * 拉取失败走 `state`/`error` 那条轴，没有 `failed` 相位），契约面用 `'loading'` 表达"还没拉完"。
-   * 行（`ids` / `byId` / `projectionsBySession`）是同一份快照，不复制。
+   * 不重映射相位、不重打字行：那是契约手抄上游形状的年代留下的第二层（`pending` → `loading`、
+   * 行 `unknown`），而快照本来就是上游 `ClientSessions.list` 造的——转一层只会多出一份要同步的形状。
+   * 上游 store 的身份自身稳定（`useSyncExternalStore` 的依赖比得下去重），所以这里也不需要缓存包装。
    */
   get list(): SessionController["list"] {
     // 装配期就可能被别的行的订阅读到（上游 `ui-session-status` 在 status 快照变化时读 `sessions.list`）：
-    // 那时本行还没 `onInit`，上游 `ClientSessions` 不存在。给「空且 loading」的读面而不是抛——
+    // 那时本行还没 `onInit`，上游 `ClientSessions` 不存在。给「空且 pending」的读面而不是抛——
     // 抛出去只会被第三方 store 的订阅器吞成一条 `subscriber failed`，读的人还是什么都没拿到。
-    // 空读面**不缓存**到实例上：`onInit` 之后这里要换成真读面。
-    if (this.inner === undefined) return EMPTY_CATALOG;
-    // 读面本身也**只造一次**：`subscribe` / `getSnapshot` 的身份得稳定（`useSyncExternalStore` 的依赖）。
-    this.catalog ??= this.catalogView();
-    return this.catalog;
-  }
-
-  /** 契约面的目录读面（`get list` 造一次就存在这里）。 */
-  private catalog: SessionController["list"] | undefined;
-
-  /**
-   * 造一次目录读面，快照按**来源身份**缓存。
-   * @returns 契约面的 `SessionCatalog`。
-   */
-  private catalogView(): SessionController["list"] {
-    const store = this.sessions.list;
-    let source: ReturnType<typeof store.getSnapshot> | undefined;
-    let view: SessionCatalogState | undefined;
-    return {
-      getSnapshot: () => {
-        const state = store.getSnapshot();
-        if (state === source && view !== undefined) return view;
-        source = state;
-        view = {
-          ids: state.ids,
-          byId: state.byId,
-          phase: state.phase === "pending" ? "loading" : state.phase,
-          projectionsBySession: state.projectionsBySession,
-        };
-        return view;
-      },
-      subscribe: (listener) => store.subscribe(listener),
-    };
+    return this.inner === undefined ? EMPTY_CATALOG : this.inner.list;
   }
 
   get searchResultLimit(): SessionController["searchResultLimit"] {
@@ -295,29 +245,27 @@ export class SessionControllerDefault extends SessionController implements OnIni
     return this.sessions.subagentAddress(sessionId);
   }
 
-  scopeOf(ctx: Context): ReturnType<SessionController["scopeOf"]> {
-    return this.sessions.scopeOf(asUpstreamContext(ctx));
+  scopeOf(ctx: Parameters<SessionController["scopeOf"]>[0]): ReturnType<SessionController["scopeOf"]> {
+    // 入参已经是上游要的 cordis `Context`：契约照上游声明，边界转换只剩 `onInit` 那一处（行 ctx 是本仓的）。
+    return this.sessions.scopeOf(ctx);
   }
 
   scope(id: Parameters<SessionController["scope"]>[0]): ReturnType<SessionController["scope"]> {
-    // 收窄断言：契约的 `SessionScope` 是"本装配真正给出的成员"子集（见契约注释），运行时对象就是
-    // 上游的 `AgentContext`——**不换对象**：`sessionOf` 靠 ctx 上的标签反查会话，包一层就断链。
-    return this.sessions.scope(id) as unknown as SessionScope | undefined;
+    // **不换对象**：`sessionOf` 靠 ctx 上的标签反查会话，包一层就断链；类型也已经是上游 `AgentContext`。
+    return this.sessions.scope(id);
   }
 
   sessionOf(
     ctx: Parameters<SessionController["sessionOf"]>[0],
   ): ReturnType<SessionController["sessionOf"]> {
-    // 同上：`SessionView` 是上游 `SessionFace` 的读面子集，成员签名不同（`projections.faceOf` 上游要 key），
-    // 但对象是同一个——消费方拿它读快照、订阅，不认身份差异。
-    return this.sessions.sessionOf(asUpstreamContext(ctx)) as unknown as SessionView | undefined;
+    return this.sessions.sessionOf(ctx);
   }
 
-  get(id: string): unknown {
+  get(id: string): ReturnType<SessionController["get"]> {
     return this.sessions.binding(id as Parameters<ClientSessions["binding"]>[0]);
   }
 
-  binding(id: string): unknown {
+  binding(id: string): ReturnType<SessionController["binding"]> {
     return this.sessions.binding(id as Parameters<ClientSessions["binding"]>[0]);
   }
 
@@ -329,7 +277,8 @@ export class SessionControllerDefault extends SessionController implements OnIni
     target: Parameters<SessionController["retain"]>[0],
     options: Parameters<SessionController["retain"]>[1],
   ): ReturnType<SessionController["retain"]> {
-    return retainHandleOf(this.sessions.retain(target, options));
+    // **原样交上游那份引用**：包一层会让上游的 `using` / `[Symbol.dispose]` 语义落空（包装对象不是 Disposable）。
+    return this.sessions.retain(target, options);
   }
 
   using<T>(
@@ -337,9 +286,6 @@ export class SessionControllerDefault extends SessionController implements OnIni
     options: Parameters<SessionController["using"]>[1],
     operation: (reference: SessionRetainHandle) => T | Promise<T>,
   ): Promise<T> {
-    // 句柄面按契约转一次：上游只有 `release()` 与 `[Symbol.dispose]`，契约面声明的是 `release()` / `dispose()`。
-    return this.sessions.using(target, options, (reference) =>
-      operation(retainHandleOf(reference)),
-    );
+    return this.sessions.using(target, options, operation);
   }
 }

@@ -5,4 +5,7 @@
 // `stream Remote methods must be opened through the stream carrier`。
 //
 // 依赖面说明：这是**业务包**引用它自己领域的 codegen，不是框架层依赖业务。
-export { TYPERT_REMOTE as SESSION_CONTROLLER_REMOTE } from "@deepseek-ai/dsh-api-session-controller/remote";
+//
+// home 在**会话域**（`@morlay/dsh-session/endpoint`）：组契约与它的 wire 描述符同属那个域，
+// 客户端形态也在那里（对话域依赖会话域，反向 import 会成环）。这里只做转发，宿主侧读法不变。
+export { SESSION_CONTROLLER_REMOTE } from "@morlay/dsh-session/endpoint";

@@ -1,21 +1,10 @@
 // sessionProjectionCache 契约：列表页的投影快照读面（只有读面与写穿，没有构造与生命周期钩子）。
 import type { SessionProjectionCache as SessionProjectionCacheService } from "@deepseek-ai/dsh-session-projection-cache";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：检查点的身份（会话 + 水位 + 继承事件数），缓存行按它对齐。 */
 export type { CheckpointIdentity } from "@deepseek-ai/dsh-session-projection-cache";
-
-/**
- * 契约面：上游 `SessionProjectionCache` 的**全部**公开成员。
- *
- * 成员一个都不能少——上游插件按 `ctx.sessionProjectionCache.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。
- * `config` 是上游服务自己存的已解析配置（公开字段），一并投影，避免消费方按名字去读时拿到 `undefined`。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SessionProjectionCacheCovered = AssertTrue<
-  AssertCovered<SessionProjectionCacheService, SessionProjectionCache>
->;
 
 @Injectable({ name: "sessionProjectionCache" })
 export abstract class SessionProjectionCache {
@@ -31,3 +20,12 @@ export abstract class SessionProjectionCache {
 
   abstract readonly coldSnapshot: SessionProjectionCacheService["coldSnapshot"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `SessionProjectionCacheService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type SessionProjectionCacheCovered = AssertTrue<AssertCoveredStrict<SessionProjectionCacheService, SessionProjectionCache>>;

@@ -1,7 +1,7 @@
 // session seam 的契约：令牌就是我们自己的抽象类，按服务语义命名（不做 `XxxContract` 后缀）。
 import type { SessionStore as SessionStoreService } from "@deepseek-ai/dsh-session";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：会话日志本身（会话对象、事件与 header、它们的身份与坐标）。上游按 `@deepseek-ai/dsh-session`
 // 的包根与 `/types` 两个入口散着出，这里按「一份会话日志」归成一处：扩展/替换实现只引它，不引上游。
@@ -29,14 +29,6 @@ export { SessionLogOffset } from "@deepseek-ai/dsh-session";
 /** 会话格式版本号：读出旧日志时按它判断要不要迁移。 */
 export { SESSION_FORMAT_VERSION } from "@deepseek-ai/dsh-session";
 
-/**
- * 契约面：上游 `SessionStore` 的**全部**公开成员（建立 / 读取 / 分叉 / 落盘 / 投影登记）。
- *
- * 成员一个都不能少——上游插件按 `ctx.sessions.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SessionStoreCovered = AssertTrue<AssertCovered<SessionStoreService, SessionStore>>;
-
 /** 会话存储：建立 / 读取 / 分叉 / 落盘。 */
 @Injectable({ name: "sessions" })
 export abstract class SessionStore {
@@ -60,3 +52,12 @@ export abstract class SessionStore {
 
   abstract readonly announce: SessionStoreService["announce"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `SessionStoreService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type SessionStoreCovered = AssertTrue<AssertCoveredStrict<SessionStoreService, SessionStore>>;

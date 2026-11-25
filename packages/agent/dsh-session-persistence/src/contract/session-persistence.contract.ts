@@ -4,7 +4,6 @@
 // 实现由适配行或本包的手写实现提供。
 import type { SessionPersistence as UpstreamPersistence } from "@deepseek-ai/dsh-session-persistence";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 
 // 能力词汇：句柄的读写面、落盘快照与它们的坐标。上游把契约与默认实现（jsonl）放在一个包里，
 // 这里只转出**词汇**——替换实现（RDB / 别的后端）要实现的就是这些形状。
@@ -26,7 +25,7 @@ export { validateStoredEvents } from "@deepseek-ai/dsh-session-persistence";
  * 其余五个是读写入口。下面的覆盖守卫在编译期核对，漏一个就报出成员名。
  */
 @Injectable({ name: "sessionPersistence" })
-export abstract class SessionPersistence {
+export abstract class SessionPersistence implements UpstreamPersistence {
   /** 实例身份：进程内稳定、服务被替换后不同（上游按它判断「同一份后端」）。 */
   abstract readonly identity: UpstreamPersistence["identity"];
 
@@ -52,8 +51,3 @@ export abstract class SessionPersistence {
     options?: Parameters<UpstreamPersistence["list"]>[0],
   ): ReturnType<UpstreamPersistence["list"]>;
 }
-
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SessionPersistenceCovered = AssertTrue<
-  AssertCovered<UpstreamPersistence, SessionPersistence>
->;

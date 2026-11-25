@@ -20,6 +20,7 @@ import {
   keepReason,
   subentryFaceOf,
 } from "./rules.ts";
+import { remoteFactsOf } from "./remote-claims.ts";
 
 /** AST 节点（ESTree 形态）。 */
 interface AstNode {
@@ -235,6 +236,23 @@ if (!hasSrc) {
 }
 const files = await sourceFiles(join(cwd, "src"));
 const imports = await Promise.all(files.map(importsOf));
+
+// 端点认领差集的三份原料（判据在 `remote-claims.ts`，规则与豁免在 `rules.ts`）。
+// 只看生产代码：测试里装别的域是正当的，不算认领、也不算需求。
+const productionFiles = files.filter((file) => !file.includes(sep + "__tests__" + sep));
+// 类表是**同包跨文件**共享的：`@RemoteGroup()` 无名的那批端点行，组名写在另一个文件的契约类上。
+const remoteClassTable = new Map<string, { group: string; base: string }>();
+const remoteFacts: Awaited<ReturnType<typeof remoteFactsOf>>[] = [];
+for (const file of productionFiles.filter((entry) => /\.(ts|tsx|mts)$/u.test(entry))) {
+  remoteFacts.push(await remoteFactsOf(relative(cwd, file), await readFile(file, "utf8"), remoteClassTable));
+}
+const remoteClaims = remoteFacts.flatMap((facts) => facts.claims);
+const remoteDemands = remoteFacts.flatMap((facts) => facts.demands);
+const remoteEdges = remoteFacts.flatMap((facts) => facts.edges);
+const remoteLists = remoteFacts.flatMap((facts) => facts.lists);
+const remoteRemovals = remoteFacts.flatMap((facts) => facts.removals);
+const remoteClasses = remoteFacts.flatMap((facts) => facts.classes);
+const remoteUnknown = remoteFacts.flatMap((facts) => facts.unknown);
 
 // 1) 面边界（本包相对 import）
 const faces: string[] = [];
@@ -463,6 +481,14 @@ console.log(
     publishExportGaps,
     publishHookProblems,
     doubleAssertions,
+    // 端点认领差集的原料（判据与规则在 `remote-claims.ts` / `rules.ts`，差集在 `summarize.ts` 里算）。
+    remoteClaims,
+    remoteDemands,
+    remoteEdges,
+    remoteLists,
+    remoteRemovals,
+    remoteClasses,
+    remoteUnknown,
     // 测试域的同一判据（分开计数、分开报）：见 §7 的注释。
     testDoubleAssertions,
     subentryParentImports,

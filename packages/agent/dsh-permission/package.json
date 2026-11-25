@@ -42,9 +42,8 @@
   },
   "dependencies": {
     "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-command": "workspace:^",
-    "@morlay/dsh-sandbox": "workspace:^",
-    "@morlay/dsh-session": "workspace:^",
+    "@morlay/dsh-session": "workspace:^"
+,
     "@morlay/dsh-setting": "workspace:^",
     "@morlay/dsh-shell": "workspace:^",
     "@morlay/zephyr": "workspace:^",
@@ -53,6 +52,7 @@
   "devDependencies": {
     "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
+    "@morlay/dsh-command": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^"
   },

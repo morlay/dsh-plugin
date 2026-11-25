@@ -1,7 +1,7 @@
 // 权限预设契约：令牌按服务语义命名（上游注册名 `permissionPresets`）。
 import type PermissionPresetService from "@deepseek-ai/dsh-permission-presets";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 契约面：上游 `PermissionPresetService` 的全部公开成员，与上游同名同签名。
@@ -13,9 +13,12 @@ import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
  *
  * `typertRemote` 不进契约：它是 `TypertRemoteService` 的网关绑定（给 gateway 做发现用），
  * 不是服务面——上游插件从不按 `ctx.<service>.typertRemote` 取用。
+ *
+ * 为什么不是 `implements`：上游 `PermissionPresetService` 是 cordis `Service` 类（带私有成员），
+ * `implements` 会报 TS2720；签名守卫在这里等价。
  */
 export type PermissionCovered = AssertTrue<
-  AssertCovered<Omit<PermissionPresetService, "typertRemote">, Permission>
+  AssertCoveredStrict<Omit<PermissionPresetService, "typertRemote">, Permission>
 >;
 
 @Injectable({ name: "permissionPresets" })

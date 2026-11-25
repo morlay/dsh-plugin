@@ -14,10 +14,6 @@ import type { UiWorkspace as UiWorkspaceFace } from "@deepseek-ai/dsh-client-ui-
 import { Injectable } from "@morlay/zephyr";
 // 覆盖守卫是**纯类型**，从 client 出口取：`@morlay/zephyr-app` 包根是宿主面（链到 node 侧），
 // 浏览器半（`src/ui`）从包根取会把宿主模块拖进前端 bundle。
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type UiWorkspaceCovered = AssertTrue<AssertCovered<UiWorkspaceFace, UiWorkspace>>;
 
 /**
  * `ctx.uiWorkspace` 的服务契约（服务名与上游一致：`uiWorkspace`）。
@@ -25,7 +21,7 @@ export type UiWorkspaceCovered = AssertTrue<AssertCovered<UiWorkspaceFace, UiWor
  * 成员按**方法**声明——实现类是上游 `UiWorkspaceService`，属性形态会撞 TS2425。
  */
 @Injectable({ name: "uiWorkspace" })
-export abstract class UiWorkspace {
+export abstract class UiWorkspace implements UiWorkspaceFace {
   abstract openSession(target: Parameters<UiWorkspaceFace["openSession"]>[0]): void;
 
   abstract openWorkspace(

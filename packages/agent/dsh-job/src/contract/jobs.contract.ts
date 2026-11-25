@@ -8,14 +8,10 @@
 // （注册表 + `job_list` 一族工具行）；这条只存在于浏览器树，两者不会出现在同一个 ctx 上。
 import type { IJobs } from "@deepseek-ai/dsh-api-job-controller/client";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/** 覆盖守卫：上游 `IJobs` 有而契约没列出的成员，编译期必须为空（`JobsClientCovered` 与宿主侧 `JobsCovered` 分开）。 */
-export type JobsClientCovered = AssertTrue<AssertCovered<IJobs, Jobs>>;
 
 /** `ctx.jobs`：本会话可见的后台任务与它们的观察流。 */
 @Injectable({ name: "jobs" })
-export abstract class Jobs {
+export abstract class Jobs implements IJobs {
   abstract readonly state: IJobs["state"];
 
   abstract readonly watchRows: IJobs["watchRows"];

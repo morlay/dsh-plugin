@@ -3,7 +3,7 @@
 // **覆盖守卫**：上游服务面有而本契约没列出的成员，编译期必须为空——契约少一条，
 // 上游 `ApiSessionController` 会在用到它的那一刻读到 `undefined`（装的时候什么都看不出来）。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app";
 import type TypertRegistry from "@deepseek-ai/dsh-typert-registry";
 
 @Injectable({ name: "typert" })
@@ -76,5 +76,11 @@ export abstract class Typert {
   ): ReturnType<TypertRegistry["toJSONSchema"]>;
 }
 
-/** 覆盖守卫：上游 `TypertRegistry` 有而本契约没列出的成员，编译期必须为空。 */
-export type TypertCovered = AssertTrue<AssertCovered<TypertRegistry, Typert>>;
+/**
+ * 覆盖守卫（严格）：上游 `TypertRegistry` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type TypertCovered = AssertTrue<AssertCoveredStrict<TypertRegistry, Typert>>;

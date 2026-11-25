@@ -39,15 +39,7 @@ export {
   materializeSessionResultFilters,
 } from "@deepseek-ai/dsh-session-query";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/**
- * 契约面：上游 `SessionQueryEngine` 的**全部**公开成员（浏览 / 搜索 / 列表 / 读取）。
- *
- * 成员一个都不能少——上游插件按 `ctx.sessionQuery.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type SessionQueryCovered = AssertTrue<AssertCovered<SessionQueryEngine, SessionQuery>>;
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 /**
  * 会话查询：浏览 / 搜索 / 列表 / 读取。
@@ -137,3 +129,12 @@ export abstract class SessionQuery {
     ...args: Parameters<SessionQueryEngine["getListMetadata"]>
   ): ReturnType<SessionQueryEngine["getListMetadata"]>;
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `SessionQueryEngine` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type SessionQueryCovered = AssertTrue<AssertCoveredStrict<SessionQueryEngine, SessionQuery>>;

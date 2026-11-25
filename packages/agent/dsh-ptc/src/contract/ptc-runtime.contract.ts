@@ -1,20 +1,10 @@
 // PTC 运行时契约：令牌按服务语义命名（上游注册名 `ptcRuntime`）。
 import type NodePtcRuntimeService from "@deepseek-ai/dsh-ptc-runtime-node";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 /** 能力词汇：把 JSON Schema 转成 TypeScript 类型字面量（PTC 的程序里给模型看的那种，纯函数）。 */
 export { jsonSchemaToTs } from "@deepseek-ai/dsh-tool-executor-ptc";
-
-/**
- * 契约面：上游 `NodePtcRuntime`（`PtcRuntime` 的 node 实现）的**全部**公开成员，
- * 含基类声明的那些——上游插件按 `ctx.ptcRuntime.<member>` 取用，缺一个就是运行期 `undefined`。
- *
- * `PtcRuntime` 之前是空令牌（只有名字、没有面）：上游是真类，消费方按成员取用，
- * 空面等于「谁用谁崩」。下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type PtcRuntimeCovered = AssertTrue<AssertCovered<NodePtcRuntimeService, PtcRuntime>>;
 
 @Injectable({ name: "ptcRuntime" })
 export abstract class PtcRuntime {
@@ -41,3 +31,12 @@ export abstract class PtcRuntime {
   /** 注册每个新环境执行一次的初始化源码（上游 0.2.3 新增；返回注销函数）。 */
   abstract readonly registerEnvironmentInitializer: NodePtcRuntimeService["registerEnvironmentInitializer"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `NodePtcRuntimeService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type PtcRuntimeCovered = AssertTrue<AssertCoveredStrict<NodePtcRuntimeService, PtcRuntime>>;

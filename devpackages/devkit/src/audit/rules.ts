@@ -348,3 +348,35 @@ export const SUBENTRY_BASELINE = {
   /** 子入口面里**跨出面**的相对导入（`__tests__` 豁免；面内 `../` 不算）。 */
   "parent-import": 127,
 } as const;
+// ── 端点认领差集（`remote-claims.ts` 的规则面）
+//
+// 判据：客户端会调的每个 remote 组，宿主侧必须有认领者，且该认领者所在的行必须出现在应用的装配清单里。
+// 组名级——只抓「整个组没认领」（浏览器侧 404 的形态）；「组在但某方法没实现」由各包的闭环判据守。
+
+/**
+ * 档位：`report` 只打印差集、不计失败；`gate` 计入退出码。
+ *
+ * 上线两档：先 `report` 跑一轮、把差集逐条归档（真缺 → 修装配；假阳性 → 进下面的豁免并写清解析缺口），
+ * 归档完把这里改成 `"gate"`。**不用数值基线**：这条判据的正确值是 0，基线会把「一直差 3 个」合法化。
+ */
+export const REMOTE_CLAIM_MODE: "report" | "gate" = "gate";
+
+/**
+ * 豁免清单：**确认不归静态判据管**的组，每条必须写理由（`组名 → 理由`）。
+ *
+ * 只有两类该进这里：① 上游内部频道，不是可调的 remote 方法；② 挂载点只在运行期（按 scope 装配、
+ * 上游插件在自己的 `ctx.plugin(...)` 里挂的行），静态看不到。**解析缺口不算豁免理由**——
+ * 那要补解析，或者进 `remoteUnknownSources` 告警。
+ */
+export const REMOTE_CLAIM_EXEMPT: ReadonlyMap<string, string> = new Map([
+  ["$events", "上游内部频道（`$events/result` 是转发事件的结算口，不是可调方法）"],
+  ["remote.mux", "`/api/remote.mux` 是 WebSocket upgrade 载体，不是 unary 端点"],
+  [
+    "sessionReferenceResolver",
+    "认领者是上游 `dsh-session-reference` 插件自带的 `@Remote('candidates')`：我们的行只 `fromCordis` 挂它，源码里没有 `registerRemoteGroup` 行（设计如此，不是解析缺口）",
+  ],
+  [
+    "sessionStatus",
+    "认领者是上游 `SessionStatusService` 自带的 `sessionStatus/*`：我们的行只做准入与转发（同上）",
+  ],
+]);

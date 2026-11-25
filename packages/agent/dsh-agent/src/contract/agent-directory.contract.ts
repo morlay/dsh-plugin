@@ -3,20 +3,11 @@
 // 签名面向**使用方**，但标识用 `SessionId` 品牌而不是裸 `string`：品牌在**边界**转换一次
 // （`endpoint/` 收 wire 上的字符串，转成 `SessionId` 后进入内部），里面就都是同一个类型。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 import { AgentRegistry as AgentRegistryService } from "@deepseek-ai/dsh-agent";
 
 /** 能力词汇：一个活着的 agent 本身（会话 + inbox + 模型选择），注册表里存的就是它。 */
 export type { Agent } from "@deepseek-ai/dsh-agent";
-
-/**
- * 契约面：上游 `AgentRegistry` 的**全部**公开成员。
- *
- * 成员一个都不能少——上游插件按 `ctx.agents.<member>` 取用，缺一个那条插件在运行期就是 `undefined`。
- * `get` / `list` 用**方法**声明：子类（含测试替身）按方法实现，属性与方法的声明形式不同就不能互相覆盖。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type AgentDirectoryCovered = AssertTrue<AssertCovered<AgentRegistryService, AgentDirectory>>;
 
 @Injectable({ name: "agents" })
 export abstract class AgentDirectory {
@@ -48,3 +39,12 @@ export abstract class AgentDirectory {
 
   abstract readonly turnBoundaryOf: AgentRegistryService["turnBoundaryOf"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `AgentRegistryService` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type AgentDirectoryCovered = AssertTrue<AssertCoveredStrict<AgentRegistryService, AgentDirectory>>;

@@ -7,7 +7,7 @@
 import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
 import type { DomainSpec } from "@deepseek-ai/dsh-storage-domain";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable({ name: "storageDomain" })
 export abstract class StorageDomain {
@@ -25,5 +25,11 @@ export abstract class StorageDomain {
   abstract closeAll(): ReturnType<DomainFacility["closeAll"]>;
 }
 
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type StorageDomainCovered = AssertTrue<AssertCovered<DomainFacility, StorageDomain>>;
+/**
+ * 覆盖守卫（严格）：上游 `DomainFacility` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type StorageDomainCovered = AssertTrue<AssertCoveredStrict<DomainFacility, StorageDomain>>;

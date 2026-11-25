@@ -1,17 +1,7 @@
 // `fileUploads`：浏览器上传的宿主服务面（上游 `FileUploads` 经 `fromCordis` 接管）。
 import type { FileUploads } from "@deepseek-ai/dsh-client-file-upload";
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
-
-/**
- * 契约面：上游 `FileUploads` 的**全部**公开成员。
- *
- * 上游 `session-controller` 的 `inject` 里就叫 `fileUploads`，装配面把我们这一行的实例交给它；
- * 上传入口（`upload` / `uploadStream`）与 `typertRemote` 同样是上游真面的一部分，一并投影，
- * 否则按名字取用的插件拿到的是 `undefined`。下面的覆盖守卫在编译期核对，漏一个就报出成员名。
- */
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type FileUploadStoreCovered = AssertTrue<AssertCovered<FileUploads, FileUploadStore>>;
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app/client";
 
 @Injectable({ name: "fileUploads" })
 export abstract class FileUploadStore {
@@ -31,3 +21,12 @@ export abstract class FileUploadStore {
 
   abstract readonly uploadImageStream: FileUploads["uploadImageStream"];
 }
+
+/**
+ * 覆盖守卫（严格）：上游 `FileUploads` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type FileUploadStoreCovered = AssertTrue<AssertCoveredStrict<FileUploads, FileUploadStore>>;

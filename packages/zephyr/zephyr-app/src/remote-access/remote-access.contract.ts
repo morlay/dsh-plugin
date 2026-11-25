@@ -1,6 +1,6 @@
 // 远端访问决策契约（上游 `RemoteAccessService` 的服务面）。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app";
+import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app";
 import type RemoteAccessService from "@deepseek-ai/dsh-api-remote-access";
 
 @Injectable()
@@ -32,7 +32,11 @@ export abstract class RemoteAccess {
 /** 上游实现类的实例形状（契约成员的类型都从它取）。 */
 type Upstream = InstanceType<typeof RemoteAccessService>;
 
-/** 覆盖守卫：上游 `RemoteAccess` 有而本契约没列出的成员，编译期必须为空。 */
-export type RemoteAccessCovered = AssertTrue<
-  AssertCovered<InstanceType<typeof RemoteAccessService>, RemoteAccess>
->;
+/**
+ * 覆盖守卫（严格）：上游 `InstanceType<typeof RemoteAccessService>` 的每个成员都要有同名、同签名的对应项。
+ *
+ * 为什么不是 `implements`：上游那份是 cordis `Service` **类**（带私有成员），`implements` 会报
+ * TS2720（"Did you mean to extend … and inherit its members as a subclass?"）。签名守卫在这里等价：
+ * 漏成员或签名对不上，编译期都会报出成员名（诊断的第二行）。
+ */
+export type RemoteAccessCovered = AssertTrue<AssertCoveredStrict<InstanceType<typeof RemoteAccessService>, RemoteAccess>>;

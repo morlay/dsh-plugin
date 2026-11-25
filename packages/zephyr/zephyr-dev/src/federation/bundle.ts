@@ -17,7 +17,12 @@ import { pathToFileURL } from "node:url";
 import { clientAssetPlugin, NODE_BUILTIN } from "../cordis-assets/assets.ts";
 import { cssInlinePlugins } from "../cordis-assets/styles.ts";
 import { rolldown, type Plugin } from "rolldown";
-import { esmExternalRequirePlugin, type PluginOption } from "vite";
+// **builtin 插件必须来自正在用的那个 bundler 的拷贝**（`rolldown/plugins`），不能从 `vite` 转手：
+// builtin 绑在它自己那份原生实例上，跨拷贝组合**静默不生效**（不报错、不警告），症状是外置名单整个失效、
+// 全部依赖被内联进引用方的产物。实测：`vite@8.3.8` 内嵌 `rolldown@1.2.19`、根是 `1.3.3` 时，
+// 从 vite 取的插件对象交给根 bundler 就是一次空转（`bundle.spec.isolate.ts` 抓的正是这个）。
+import { esmExternalRequirePlugin } from "rolldown/plugins";
+import type { PluginOption } from "vite";
 import {
   encodePackageName,
   entryFileNameOf,

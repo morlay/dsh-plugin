@@ -101,7 +101,7 @@ describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
       // `handleSessionAdded` 之后目录是**异步**投影的（manager 的 notifier），同步断言会读到旧快照。
       await until(() => snapshotOf(sessions).ids.length === 1);
       expect(snapshotOf(sessions).ids).toEqual(["s1"]);
-      expect(snapshotOf(sessions).byId["s1"]).toMatchObject({ title: "会话 s1" });
+      expect(snapshotOf(sessions).byId[SessionId("s1")]).toMatchObject({ title: "会话 s1" });
     } finally {
       await app.dispose().catch(() => {});
     }
@@ -116,7 +116,7 @@ describe("SessionController.list 的 store", { timeout: 10_000 }, () => {
       remote.emit("api-session/removed", "s1");
       await until(() => snapshotOf(sessions).ids.length === 0);
       expect(snapshotOf(sessions).ids).toEqual([]);
-      expect(snapshotOf(sessions).byId["s1"]).toBeUndefined();
+      expect(snapshotOf(sessions).byId[SessionId("s1")]).toBeUndefined();
     } finally {
       await app.dispose().catch(() => {});
     }
@@ -210,7 +210,7 @@ describe("列表里没有的 id 不产生 binding", () => {
       await until(() => snapshotOf(sessions).ids.length === 2);
 
       // 前提要真：byId 里确实有 s2 那一行——否则「不产生 binding」是白断。
-      expect(snapshotOf(sessions).byId["s2"], "byId 里应当有 s2 的行").toBeDefined();
+      expect(snapshotOf(sessions).byId[SessionId("s2")], "byId 里应当有 s2 的行").toBeDefined();
       // 上游 `binding` 只认**已物化的 scope**（`scopes.get(id)?.binding`）：没 retain 过就是 undefined。
       // 这条钉的是「不编造 binding」——编造会让 `ui-session` 把不存在的会话当 main。
       expect(sessions.binding("s2")).toBeUndefined();
@@ -239,7 +239,7 @@ describe("投影摘要摊平", () => {
         { "session/follow": async function* () {} },
       );
       await until(() => snapshotOf(sessions).ids.length === 1);
-      expect(snapshotOf(sessions).byId["s1"]).toMatchObject({
+      expect(snapshotOf(sessions).byId[SessionId("s1")]).toMatchObject({
         projectionValues: { agentPreset: "cordis" },
       });
     },

@@ -6,107 +6,58 @@
 // 令牌名是派生名 `session-controller`，**不能**写成 `sessions`：浏览器树的 `sessions` 由上游
 // `ClientSessions` 自己在构造里 `rootCtx.reflect.provide('sessions', this)` 占住（`service.ts`），
 // 本行的契约名若也占 `sessions`，cordis 会拒绝（`service "sessions" has been registered at <root>`）。
-// 「对齐上游面」在这里靠**令牌身份**：别的域 `inject(SessionController)` 拿到的就是上游那份面收窄后的实例。
+// 「对齐上游面」在这里靠**令牌身份**：别的域 `inject(SessionController)` 拿到的就是上游 `ClientSessions` 的实例。
 //
-// 成员从上游 `ISessions` 接口推导（`list` / `retain` / `using` / …），实现由 `SessionControllerDefault`
-// 组合 `ClientSessions` 提供。
-import type { Context } from "@morlay/zephyr";
+// 每个成员的**签名**都取上游 `ISessions`（`Parameters` / `ReturnType` / 直接别名），不手抄形状：手抄过的
+// `list`（`{ ids, byId }` 对上游 `{ items }`）就是这么漂开的（wire 契约那侧同源的问题见
+// `session-endpoint.ts` 的 `SessionPageRequest`）。实现由 `SessionControllerDefault` 组合 `ClientSessions` 提供。
 import { Injectable } from "@morlay/zephyr";
-import type { AssertCovered, AssertTrue } from "@morlay/zephyr-app/client";
 import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
-import type { SessionId } from "@morlay/dsh-session/endpoint";
 
 /**
- * 会话作用域：本装配**实际给出**的成员子集。
+ * 会话作用域：上游 `AgentContext`（= `ISessions["scope"]` 的返回）。
  *
- * 不冒充上游 `AgentContext`（那是 `Omit<Context, "remote"> & { remote: ClientRemote & … }` 的完整 cordis 面）：
- * 我们的会话作用域是就地造的对象，只有下面这几个成员；冒充上游完整面只能靠一次类型断言，那是谎报。
+ * 这里曾经声明成"本装配实供的成员子集"——那是**谎报**：`scope(id)` 交出去的就是上游那个对象
+ * （不复制、不包装，否则 `sessionOf` 靠 ctx 上的标签反查会断链）。收窄只会让读 `ctx.sessions.scope(id)`
+ * 的消费方看不见成员，所以形状以上游为准。
  */
-export interface SessionScope {
-  readonly sessionId: SessionId;
-
-  effect(fn: () => unknown): () => void;
-
-  get(name?: string): unknown;
-
-  on(): () => void;
-
-  emit(): void;
-
-  off(): void;
-
-  inject(names: readonly string[], callback?: (scope: unknown) => unknown): unknown;
-}
+export type SessionScope = NonNullable<ReturnType<ISessions["scope"]>>;
 
 /**
- * 会话视图：本装配给出的最小 `ISession` 子集（其余成员由 Proxy 兜成「明确失败」）。
+ * 会话视图：上游 `SessionFace`（= `ISessions["sessionOf"]` 的返回）。
  *
- * 同上：不冒充上游 `ISession`，只声明真正给出的读面。
+ * 同 {@link SessionScope}：交出去的就是上游那个对象，收窄是谎报。
  */
-export interface SessionView {
-  readonly sessionId: string;
-
-  getSnapshot(): unknown;
-
-  subscribe(fn: () => void): () => void;
-
-  readonly projections: { faceOf(): unknown };
-
-  readonly queue: { getSnapshot(): readonly unknown[]; subscribe(fn: () => void): () => void };
-}
+export type SessionView = NonNullable<ReturnType<ISessions["sessionOf"]>>;
 
 /**
- * 会话目录快照：本装配**实际给出**的成员子集。
+ * 会话目录快照：上游 `SessionListState`（= `ISessions["list"]` 的快照类型）。
  *
- * 行是 Host 推送/响应原样透传的对象，不冒充上游 `SessionSummary`（必填 `displayTitle` / `blank` /
- * `retainedBy` 等由上游 manager 计算，本装配没有那一层）。`ids` 顺序即 Host 列表顺序；
- * 同一拍快照里每个 id 都有对应的 `byId` 行。
+ * 这里曾经手抄成 `{ ids, byId, phase: 'loading'|'ready'|'failed' }`（行是 `unknown`）——上游实际是
+ * `{ ids: SessionId[], byId: Record<SessionId, SessionSummary>, phase: 'pending'|'ready', projectionsBySession }`。
+ * 键齐、形状不同，正是"覆盖守卫只核键"时看不见的那类错。
  */
-export interface SessionCatalogState {
-  readonly ids: readonly string[];
-
-  readonly byId: Readonly<Record<string, unknown>>;
-
-  /** 到达生命周期：`ready` 且 `ids` 为空才是「真的没有会话」。 */
-  readonly phase: "loading" | "ready" | "failed";
-
-  /** 投影值与显式读状态（本装配恒为空表：宿主不挂投影面）。 */
-  readonly projectionsBySession: Readonly<Record<string, unknown>>;
-}
+export type SessionCatalogState = ReturnType<ISessions["list"]["getSnapshot"]>;
 
 /**
- * 会话目录的只读 observable：`getSnapshot()` 给出不可变快照，`subscribe()` 在每次写回后**同步**回调。
+ * 会话目录的只读 observable：上游 `ObservableSnapshot<SessionListState>`。
  *
- * 与上游 `ObservableSnapshot` 同形；差别只在快照行的类型（见 `SessionCatalogState`）。
+ * 本装配**原样**交出上游那份快照（`ClientSessions.list`），不重映射相位、不重打字行。
  */
-export interface SessionCatalog {
-  getSnapshot(): SessionCatalogState;
-
-  subscribe(listener: () => void): () => void;
-}
+export type SessionCatalog = ISessions["list"];
 
 /**
- * 保留句柄：本装配只保证「会话身份 + 释放」。
+ * 保留句柄：上游 `SessionReference`（= `ISessions["retain"]` 的返回）。
  *
- * `release()` / `dispose()` 幂等（重复调用只有第一次生效）；调用后本装配不再把这一行算作「被主视图保留」。
- * `binding` / `ready` 是上游 `SessionReference` 的成员，这里如实标成不保证：本装配没有异步打开过程，
- * `ready` 恒已兑现，`binding` 是最小 `SessionView` 那一侧的对象。
+ * 交出去的就是上游那个对象：`release()` 幂等，`binding` 是惰性 getter（释放后抛）。曾经另造过一个
+ * `{ release, dispose, binding: unknown }` 的包装——包装让上游的 `using` 语义（`[Symbol.dispose]`）落空，
+ * 也把 `binding` 的类型抹成 `unknown`。
  */
-export interface SessionRetainHandle {
-  readonly sessionId: SessionId;
-
-  readonly binding: unknown;
-
-  readonly ready: Promise<unknown>;
-
-  release(): void;
-
-  dispose(): void;
-}
+export type SessionRetainHandle = ReturnType<ISessions["retain"]>;
 
 @Injectable()
-export abstract class SessionController {
-  abstract readonly list: SessionCatalog;
+export abstract class SessionController implements ISessions {
+  abstract readonly list: ISessions["list"];
 
   /** 建一个新会话（`ui-workspace` 的「在某工作区新建会话」走它）。 */
   abstract create(opts?: Parameters<ISessions["create"]>[0]): ReturnType<ISessions["create"]>;
@@ -131,12 +82,8 @@ export abstract class SessionController {
   /** 重新拉一次 Host 的会话目录。 */
   abstract refresh(): ReturnType<ISessions["refresh"]>;
 
-  /**
-   * 从一个 cordis 上下文反查它所属会话。
-   *
-   * 本装配不铸造 `AgentContext`（会话作用域用 `SessionScope` 那个显式子集），所以恒为 `undefined`。
-   */
-  abstract scopeOf(ctx: Context): ReturnType<ISessions["scopeOf"]>;
+  /** 从一个 cordis 上下文反查它所属会话（入参就是上游要的 cordis `Context`）。 */
+  abstract scopeOf(ctx: Parameters<ISessions["scopeOf"]>[0]): ReturnType<ISessions["scopeOf"]>;
 
   /** 重新读一个会话的投影（宿主拒绝复用 blank 时，UI 会刷新那一行）。 */
   abstract refreshProjections(
@@ -144,27 +91,26 @@ export abstract class SessionController {
   ): ReturnType<ISessions["refreshProjections"]>;
 
   /** 一个会话的作用域（`ui-input-trigger` 用它把 sessionId 换成 controller 的 ctx）。 */
-  abstract scope(id: Parameters<ISessions["scope"]>[0]): SessionScope | undefined;
+  abstract scope(id: Parameters<ISessions["scope"]>[0]): ReturnType<ISessions["scope"]>;
 
   /** 从一个作用域反查会话面（输入区触发器用它）。 */
-  abstract sessionOf(ctx: SessionScope): SessionView | undefined;
+  abstract sessionOf(
+    ctx: Parameters<ISessions["sessionOf"]>[0],
+  ): ReturnType<ISessions["sessionOf"]>;
 
   /** 取一个会话实例（宿主侧的 `ctx.sessions.get(id)`；客户端侧给空）。 */
-  abstract get(id: string): unknown;
+  abstract get(id: string): ReturnType<ISessions["binding"]>;
 
   /** 一行的当前 binding（上游 `ui-session` 用它比对保留者）。 */
-  abstract binding(id: string): unknown;
+  abstract binding(id: string): ReturnType<ISessions["binding"]>;
 
   /** 某一行的保留信息（上游 `ui-session` 的 `watchMainRetention` 订阅它）。 */
-  abstract retainInfo(id: string): {
-    getSnapshot(): unknown;
-    subscribe(fn: () => void): () => void;
-  };
+  abstract retainInfo(id: string): ReturnType<ISessions["retainInfo"]>;
 
   abstract retain(
     target: Parameters<ISessions["retain"]>[0],
     options: Parameters<ISessions["retain"]>[1],
-  ): SessionRetainHandle;
+  ): ReturnType<ISessions["retain"]>;
 
   abstract using<T>(
     target: Parameters<ISessions["using"]>[0],
@@ -172,12 +118,3 @@ export abstract class SessionController {
     operation: (reference: SessionRetainHandle) => T | Promise<T>,
   ): Promise<T>;
 }
-
-/**
- * 覆盖守卫：上游 `ISessions` 的每个成员都必须在契约里有对应项，漏一个编译失败。
- *
- * **注意**：守卫按**键**核对，管不到「同名但更窄」——`list` / `retain` / `scope` / `sessionOf` / `binding`
- * 五处仍按本装配实供收窄（`SessionCatalog` / `SessionRetainHandle` / `SessionScope` / `SessionView`），
- * 放宽到上游真类型需要先造出 `SessionSummary` 行、`SessionBinding` 与 `AgentContext`，见审计记录。
- */
-export type SessionControllerCovered = AssertTrue<AssertCovered<ISessions, SessionController>>;

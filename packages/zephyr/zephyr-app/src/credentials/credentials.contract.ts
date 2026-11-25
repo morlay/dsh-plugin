@@ -6,7 +6,7 @@
 //
 // 对 `@deepseek-ai/dsh-credentials` 只有 **type-only** 依赖（仅为推导签名），无运行时耦合。
 import type { CredentialProvider } from "@deepseek-ai/dsh-credentials";
-import type { AssertCovered, AssertTrue } from "../contract-coverage.ts";
+import type { AssertCoveredStrict, AssertTrue } from "../contract-coverage.ts";
 import { Injectable } from "@morlay/zephyr";
 
 /**
@@ -28,8 +28,14 @@ type CredentialsFace = Pick<
   | "deleteRecord"
 >;
 
-/** 覆盖守卫：上游有而契约没列出的成员，编译期必须为空。 */
-export type CredentialsCovered = AssertTrue<AssertCovered<CredentialProvider, CredentialsFace>>;
+/**
+ * 覆盖守卫：`CredentialsFace` 的 `Pick` 就是上游**全量**（漏一个键这里就红）。
+ *
+ * 为什么不是 `implements CredentialProvider`：上游是 cordis `Service` **类**（带私有成员），`implements`
+ * 会报 TS2720。类本身已经 `implements CredentialsFace`（`Pick` 出来的全量面），所以这条守卫只需要钉住
+ * 「`Pick` 的键集合 = 上游的键集合」。
+ */
+export type CredentialsCovered = AssertTrue<AssertCoveredStrict<CredentialProvider, CredentialsFace>>;
 
 @Injectable({ name: "credentials" })
 export abstract class Credentials implements CredentialsFace {

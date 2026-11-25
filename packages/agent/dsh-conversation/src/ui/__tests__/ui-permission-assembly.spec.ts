@@ -51,7 +51,11 @@ class FakeSessions extends SessionController {
   }
 
   retainInfo() {
-    return { getSnapshot: () => ({ retainedBy: {} }), subscribe: () => () => {} };
+    // 形状取上游 `SessionRetainInfo`（`referenceCount` 是必填）：契约不再收窄它。
+    return {
+      getSnapshot: () => ({ referenceCount: 0, retainedBy: {} }),
+      subscribe: () => () => {},
+    };
   }
 
   /** 装配期不给作用域（本 spec 不看它）。 */

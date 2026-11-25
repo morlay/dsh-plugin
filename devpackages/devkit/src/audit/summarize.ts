@@ -1,9 +1,26 @@
 #!/usr/bin/env node
 // **汇总器**：读 `pnpm -r exec dsh-audit-package` 打出来的逐包 JSON，输出三条判据的结果；
 // `--write` 时把「声明未用」的依赖直接从各包 `package.json` 删掉（原 `trim-deps` 的职责，已收敛进来）。
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { baselineVerdict, SUBENTRY_BASELINE, TYPE_DISCIPLINE_BASELINE } from "./rules.ts";
+import {
+  baselineVerdict,
+  REMOTE_CLAIM_EXEMPT,
+  REMOTE_CLAIM_MODE,
+  SUBENTRY_BASELINE,
+  TYPE_DISCIPLINE_BASELINE,
+} from "./rules.ts";
+import {
+  assemblyFactsOf,
+  installedOf,
+  missingClaimsOf,
+  type ProvideEdge,
+  type ProvideList,
+  type ProvideRemoval,
+  type RemoteClaim,
+  type RemoteClassFact,
+  type RemoteDemand,
+} from "./remote-claims.ts";
 
 /** 一条未用依赖。 */
 interface UnusedDep {
@@ -34,6 +51,17 @@ interface PackageReport {
   readonly publishExportGaps?: readonly string[];
   /** 发布包的 `prepublishOnly` 缺省或没调 `devkit build`（发布时忘了构建）。 */
   readonly publishHookProblems?: readonly string[];
+  /** 端点认领差集的原料：认领者（自研端点行 / descriptor 行 / HTTP 路由行）。 */
+  readonly remoteClaims?: readonly RemoteClaim[];
+  /** 浏览器半会调的组（契约面的 `@RemoteGroup`，以及上游 remote 出口的说明符）。 */
+  readonly remoteDemands?: readonly RemoteDemand[];
+  readonly remoteEdges?: readonly ProvideEdge[];
+  readonly remoteLists?: readonly ProvideList[];
+  readonly remoteRemovals?: readonly ProvideRemoval[];
+  /** 类表：解析「`@RemoteGroup()` 无名」那些行的组名（组名常写在另一个包的契约类上）。 */
+  readonly remoteClasses?: readonly RemoteClassFact[];
+  /** 解析不出来的（组名、基类、清单名）：**不能当通过**。 */
+  readonly remoteUnknown?: readonly string[];
   /** 没有 `src/` 的配置/壳包：不参与源码类判据。 */
   readonly skipped?: boolean;
 }
@@ -231,5 +259,189 @@ reportAgainstBaseline(
     hint: "（" + String(testDoubleAssertions.length) + " 个文件）",
   },
 );
+
+
+// ── 端点认领差集 ─────────────────────────────────────────────────────────────
+// 判据：客户端会调的每个 remote 组，宿主侧必须有认领者，且该认领者所在的行必须在应用的装配清单里。
+// 组名级：只抓「整个组没认领」（浏览器 404 的形态）；方法级由各包的闭环判据守。
+const workspace = process.cwd();
+
+/** 上游包名 → 包目录（`@deepseek-ai/x/remote` 的组名要从那个包的源码里读）。 */
+const vendorPackages = new Map<string, string>();
+/**
+ * 递归索引 `vendor/` 下的包目录（跳过 node_modules / target / dist 这类产物目录）。
+ * @param dir 目录。
+ */
+async function indexVendor(dir: string): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (["node_modules", "target", "dist", "lib"].includes(entry.name)) continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await indexVendor(path);
+      continue;
+    }
+    if (entry.name !== "package.json") continue;
+    const manifest = JSON.parse(await readFile(path, "utf8")) as { readonly name?: unknown };
+    if (typeof manifest.name === "string") vendorPackages.set(manifest.name, dir);
+  }
+}
+await indexVendor(join(workspace, "vendor"));
+
+/** 已解析过的上游说明符 → 组名（`remote` 出口的组名由上游源码的 `namespace: '…'` 给出）。 */
+const upstreamGroups = new Map<string, readonly string[]>();
+/**
+ * 解析一个上游 remote 出口说明符声明的组名。
+ * @param specifier 说明符。
+ * @returns 组名列表；解析不出来时为空（汇总器会把它当「未知」报出来，不当通过）。
+ */
+async function resolveUpstreamGroups(specifier: string): Promise<readonly string[]> {
+  const cached = upstreamGroups.get(specifier);
+  if (cached !== undefined) return cached;
+  const parts = specifier.split("/");
+  const dir = vendorPackages.get(parts.slice(0, 2).join("/"));
+  const found = new Set<string>();
+  if (dir !== undefined) {
+    const walkSrc = async (target: string): Promise<void> => {
+      for (const entry of await readdir(target, { withFileTypes: true }).catch(() => [])) {
+        const path = join(target, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "node_modules") await walkSrc(path);
+          continue;
+        }
+        if (!/\.(ts|tsx|mts)$/u.test(entry.name)) continue;
+        const text = await readFile(path, "utf8").catch(() => "");
+        for (const match of text.matchAll(/namespace:\s*['"]([\w.$-]+)['"]/gu)) {
+          if (match[1] !== undefined) found.add(match[1]);
+        }
+      }
+    };
+    await walkSrc(join(dir, "src"));
+  }
+  const groups = [...found].sort();
+  upstreamGroups.set(specifier, groups);
+  return groups;
+}
+
+/** 认领行的组名解析不出来（合并类表也没找到）：**不能当通过**。 */
+const remoteClaimUnresolved: string[] = [];
+const classTable = new Map<string, { group: string; base: string }>();
+for (const fact of reports.flatMap((entry) => entry.remoteClasses ?? [])) {
+  classTable.set(fact.name, { group: fact.group, base: fact.base });
+}
+/**
+ * 沿合并后的类表解析组名（`@RemoteGroup()` 无名的那批行靠它）。
+ * @param row 行身份（`class:<类名>`）。
+ * @returns 组名；解析不出来为空串。
+ */
+function resolveGroupOfRow(row: string): string {
+  let current = classTable.get(row.slice("class:".length));
+  for (let hop = 0; hop < 8 && current !== undefined; hop += 1) {
+    if (current.group !== "") return current.group;
+    current = current.base === "" ? undefined : classTable.get(current.base);
+  }
+  return "";
+}
+const allClaims = reports
+  .flatMap((entry) => entry.remoteClaims ?? [])
+  .map((claim) =>
+    claim.kind === "handler" && claim.group === ""
+      ? { ...claim, group: resolveGroupOfRow(claim.row) }
+      : claim,
+  )
+  .filter((claim) => {
+    if (claim.kind !== "handler" || claim.group !== "") return true;
+    remoteClaimUnresolved.push(claim.row + "  " + claim.file);
+    return false;
+  });
+const allDemands = reports.flatMap((entry) => entry.remoteDemands ?? []);
+const allEdges = reports.flatMap((entry) => entry.remoteEdges ?? []);
+const allLists = reports.flatMap((entry) => entry.remoteLists ?? []);
+const allRemovals = reports.flatMap((entry) => entry.remoteRemovals ?? []);
+const remoteUnknowns = reports.flatMap((entry) =>
+  (entry.remoteUnknown ?? []).map((line) => entry.pkg + "  " + line),
+);
+
+if (allClaims.length > 0 && allDemands.length > 0) {
+  const demandGroups = new Set(allDemands.map((demand) => demand.group));
+  const claimGroups = new Set(allClaims.map((claim) => claim.group).filter((group) => group !== ""));
+  console.log(
+    "· 端点认领差集原料：需求 " +
+      String(demandGroups.size) +
+      " 组，认领 " +
+      String(claimGroups.size) +
+      " 组，provide 清单 " +
+      String(allLists.length) +
+      " 份",
+  );
+}
+
+if (allClaims.length === 0 && allDemands.length === 0) {
+  console.error("✗ 端点认领差集：一个组都没解析出来（判据没跑起来，别当通过）");
+  failed += 1;
+} else {
+  // 先把两类 `spec:` 都解析成组名，再算差集（`missingClaimsOf` 是同步的）。
+  const specifiers = new Set<string>();
+  for (const claim of allClaims) if (claim.row.startsWith("spec:")) specifiers.add(claim.row.slice(5));
+  for (const demand of allDemands) if (demand.group.startsWith("spec:")) specifiers.add(demand.group.slice(5));
+  for (const specifier of specifiers) await resolveUpstreamGroups(specifier);
+  const groupsOf = (specifier: string): readonly string[] => upstreamGroups.get(specifier) ?? [];
+
+  const appNames = (await readdir(join(workspace, "apps"), { withFileTypes: true }).catch(() => []))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  for (const app of appNames) {
+    const file = join(workspace, "apps", app, "src", "zephyr.provide.ts");
+    const source = await readFile(file, "utf8").catch(() => undefined);
+    if (source === undefined) {
+      // 不是静默跳过：没有清单的应用也要出现在报告里，否则「新应用漏判据」没人知道。
+      console.log("· 端点认领差集（应用 " + app + "）：跳过（无清单 apps/" + app + "/src/zephyr.provide.ts）");
+      continue;
+    }
+    const assembly = await assemblyFactsOf(source);
+    const installed = installedOf({
+      calls: assembly.calls,
+      edges: [...allEdges, ...assembly.edges],
+      lists: allLists,
+      removals: allRemovals,
+      withouts: assembly.withouts,
+    });
+    const { missing, unknown } = missingClaimsOf({
+      demands: allDemands,
+      claims: allClaims,
+      installedRows: installed.rows,
+      upstreamGroupsOf: groupsOf,
+      exempt: new Set(REMOTE_CLAIM_EXEMPT.keys()),
+    });
+    const lines = missing.map((item) => {
+      const why = item.claimedSomewhere ? "有行但没装上（被 without 剔了 / 清单没装）" : "没有认领者";
+      const demandsText = [...new Set(item.demands)].slice(0, 3).join(", ");
+      return item.group + "  " + why + "  需求方：" + demandsText;
+    });
+    const label =
+      "端点认领差集（应用 " +
+      app +
+      "：每个浏览器会调的组，宿主侧都要有装上清单的认领者）";
+    if (REMOTE_CLAIM_MODE === "gate") {
+      report(label, lines);
+    } else if (lines.length === 0) {
+      console.log("✓ " + label + "（report 档）");
+    } else {
+      console.log("· " + label + "：" + String(lines.length) + " 处（report 档：只打印、不计失败）");
+      for (const line of lines) console.log("    " + line);
+    }
+    for (const line of unknown) console.log("    ⚠ " + line);
+  }
+}
+
+// 解析不出来的东西单独打印：**不能当通过**，但也不静默——它要变成补解析或一条写明理由的豁免。
+if (remoteUnknowns.length > 0) {
+  console.log("· 端点认领差集：解析不出 " + String(remoteUnknowns.length) + " 处（补解析或写豁免理由）");
+  for (const line of remoteUnknowns.slice(0, 20)) console.log("    " + line);
+}
+if (remoteClaimUnresolved.length > 0) {
+  console.log("· 端点认领差集：认领行的组名解析不出 " + String(remoteClaimUnresolved.length) + " 处（补解析）");
+  for (const line of remoteClaimUnresolved.slice(0, 20)) console.log("    " + line);
+}
 
 process.exit(failed === 0 || write ? 0 : 1);
