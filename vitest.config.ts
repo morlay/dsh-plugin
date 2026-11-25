@@ -1,5 +1,4 @@
 import { mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig } from "vitest/config";
 
@@ -16,52 +15,61 @@ import { defineConfig } from "vitest/config";
 // **不要在 project 里设 `maxWorkers`**：那是**每层各自**的上限，两个 project 各设 100% 会变成「16 worker 抢
 // 8 核」（实测全量 204s），设 50% 则把每层砍到半核（168s）。worker 数交给 vitest 按机器核数统一分配
 // （默认 72.7s）；要更快用**全局**上限 `vitest run --maxWorkers=100%`（实测 53.5s，与分层前单层 51s 持平）。
-const EXCLUDE = ["**/node_modules/**", "target/**", ".scratch/**"];
+//
+// `.tmp/**` 也在排除里：测试的临时目录就落在 `.tmp/`（见下），那里会出现 `*.spec.ts` 的副本
+// （federation / bundle 这类用例会复制一整个包树），不能被当成测试收进来。
+const EXCLUDE = ["**/node_modules/**", "target/**", ".scratch/**", ".tmp/**"];
 
-// 用例的临时目录落在自己的子目录里，而不是机器共享的 tmp 根。
+// 用例的临时目录落在**项目本地**的 `.tmp/<层>/`，而不是机器共享的 tmp 根。
 //
-// tmp 根是**跨进程共享**的，各种工具的产物堆在里面（本机实测 58.8 万条）：一次 `readdir(os.tmpdir())`
-// 要 760ms，而每个用例至少一次 `mkdtemp`，上游 spill 的启动清扫还要把 tmp 根整列一遍并把结果 `await`
-// 到 dispose——慢的不是用例，是这层目录列举。指到自己的子目录之后，同样两条命令（`dsh-agent-loop` +
-// `dsh-agent-team`）从 35.8s 降到 13.3s。
+// `os.tmpdir()` 读的就是 `TMPDIR`：worker 里改这个变量，**所有** `mkdtemp(join(tmpdir(), …))` 都跟着走，
+// 不只是某一条路径。为什么必须换：机器 tmp 根是跨进程共享的，各种工具的产物堆在里面（本机实测 58.8 万条），
+// 一次 `readdir(os.tmpdir())` 要 760ms；而每个用例至少一次 `mkdtemp`，上游 spill 的启动清扫还要把 tmp 根
+// 整列一遍并把结果 `await` 到 dispose——慢的不是用例，是这层目录列举。换到本地之后：`dsh-agent-loop` +
+// `dsh-agent-team` 从 35.8s 降到 13.3s，全量热跑 62.3s → 56.8s。
 //
-// 放子目录而不是仓库内：tmp 里的东西是运行期状态，不该出现在工作树里（否则会被 include 或 lint 扫到）。
+// **按层再分一级**（`.tmp/node` / `.tmp/ui`）：两层是并行跑的，混在一层里既难看条目数，也没法说「哪一层
+// 留下了多少残留」。目录名与 project 名同源（`LAYERS`），不写两份。
+//
+// 落在仓库里是**有意的**：`.tmp/` 已在 `.gitignore` 里（可随时整删），并且被上面的 `EXCLUDE` 挡住不被
+// include 收进测试。它与 `.scratch/` 不是一回事：`.scratch/` 放人工的交接 / 票据 / 探针（要能留），
+// `.tmp/` 只放测试运行期产物（可随时删、不需要留）。
+//
 // 目录在配置加载时建（早于任何 worker），不用 globalSetup。
-const TEST_TMPDIR_BASE = tmpdir();
-const TEST_TMPDIR = TEST_TMPDIR_BASE.endsWith("dsh-plugin-vitest-tmp")
-  ? TEST_TMPDIR_BASE
-  : join(TEST_TMPDIR_BASE, "dsh-plugin-vitest-tmp");
-const ENV = { TMPDIR: TEST_TMPDIR, TMP: TEST_TMPDIR, TEMP: TEST_TMPDIR };
+const TEST_TMPDIR = join(import.meta.dirname, ".tmp");
+
+/** 两层各自的文件形状；`name` 同时是 project 名与 `.tmp/` 下的子目录名。 */
+const LAYERS = [
+  { name: "node", environment: "node", include: ["**/__tests__/**/*.spec.ts"] },
+  {
+    name: "ui",
+    environment: "happy-dom",
+    include: ["**/__tests__/**/*.spec.dom.ts", "**/__tests__/**/*.spec.dom.tsx"],
+  },
+] as const;
+
+/** 一层的临时目录：`.tmp/<project 名>`。 */
+function tmpdirOf(name: string): string {
+  return join(TEST_TMPDIR, name);
+}
 
 export default defineConfig(async () => {
-  await mkdir(TEST_TMPDIR, { recursive: true });
+  await Promise.all(LAYERS.map(async (layer) => await mkdir(tmpdirOf(layer.name), { recursive: true })));
   return {
     oxc: { decorator: { legacy: true } },
     test: {
-      projects: [
-        {
-          test: {
-            name: "node",
-            env: { ...ENV },
-            environment: "node",
-            include: ["**/__tests__/**/*.spec.ts"],
-            exclude: [...EXCLUDE],
-            testTimeout: 3000,
-            isolate: true,
-          },
+      projects: LAYERS.map((layer) => ({
+        test: {
+          name: layer.name,
+          // worker 里的 `os.tmpdir()` 指向本层目录：夹具的 `mkdtemp`、上游 spill 的启动清扫都跟着走。
+          env: { TMPDIR: tmpdirOf(layer.name), TMP: tmpdirOf(layer.name), TEMP: tmpdirOf(layer.name) },
+          environment: layer.environment,
+          include: [...layer.include],
+          exclude: [...EXCLUDE],
+          testTimeout: 3000,
+          isolate: true,
         },
-        {
-          test: {
-            name: "ui",
-            env: { ...ENV },
-            environment: "happy-dom",
-            include: ["**/__tests__/**/*.spec.dom.ts", "**/__tests__/**/*.spec.dom.tsx"],
-            exclude: [...EXCLUDE],
-            testTimeout: 3000,
-            isolate: true,
-          },
-        },
-      ],
+      })),
     },
   };
 });
