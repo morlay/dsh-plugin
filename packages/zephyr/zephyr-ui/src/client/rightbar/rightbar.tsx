@@ -1,144 +1,54 @@
-// 右栏容器座位：占据帧的右列，画标签条与正文。
+// 右栏的**外壳**（root 座位 `rightbar`）：`<aside>` + 会话作用域入口。
 //
-// 槽位名沿用上游（`sidebar.right.pane.tab` / `.title`）：上游那几个行把正文硬编码注册在这两个名字上。
-//
-// 子槽是 session 作用域，本座位挂在 root 位置（`rightbar`）。正文与标题都由这里套 `ScopeBindingProvider`：
-// 会话由 `binding`（session 作用域源）给定，不需要 SessionReference。
-//
-// **注意**：`renderSlot` 的形状是上游 `RenderSlotFn`——`(key, owner, opts?: RenderOpts)`，
-// `RenderOpts = { entryKey?, only?, fallback?, hookContext? }`；不要自己发明两参或必填 `entryKey` 的窄形状。
-import { useEffect, type ReactNode } from "react";
-import { ScopeBindingProvider } from "@deepseek-ai/dsh-client-ui-renderer/src/client/bindings.tsx";
-import type { RenderOpts, StandardSourceBinding } from "@deepseek-ai/dsh-client-ui-slots";
-import { RightbarPaneTab } from "./rightbar-pane-tab.tsx";
-import { RightbarTabTitle } from "./rightbar-tab-title.tsx";
+// **props 只来自两处**（这是硬判据，前三次 bug 都是「第三类」props 造成的）：
+// ① 注册行 `inject` 给的：`session` / `labels`；
+// ② 渲染器／父在 `renderSlot` 时给的：`renderSlot` / `SessionProvider` / `canShow`（AppFrame 的 owner props）。
+// 不出现「旧实现自己发明的」字段（`useRightbar` / `viewportWidth` / `expanded`）——它们没有提供者。
+import type { ReactNode } from "react";
+import type { RenderOpts } from "@deepseek-ai/dsh-client-ui-slots";
 import css from "./rightbar.module.css";
 
-/** 标签条上的一个标签。 */
-export interface RightbarTab {
-  /** 记录的 id。 */
-  readonly id: string;
-  /** 记录里开 tab 时抓到的标题（标题座位的兜底）。 */
-  readonly title: string;
-  /** 类型注册表里这个 kind 的类型 id（keyed 座位的 key）；没登记就是 `undefined`。 */
-  readonly typeId: string | undefined;
-}
+/** 渲染 `rightbar.session` 的回调（形状 = 上游 `RenderSlotFn`）。 */
+export type RightbarRenderSlot = (key: "rightbar.session", owner: object, opts?: RenderOpts) => ReactNode;
 
-/** 右栏的视图快照（座位行给，组件只读）。 */
-export interface RightbarView {
-  /** 面板是否展开。 */
-  readonly expanded: boolean;
-  /** 当前会话的 scope 绑定；没有会话时 `undefined`。 */
-  readonly binding: StandardSourceBinding | undefined;
-  /** 当前会话的标签（按记录顺序）。 */
-  readonly tabs: readonly RightbarTab[];
-  /** 当前活动标签的记录 id。 */
-  readonly activeTabId: string | undefined;
-}
+/** 会话区域组件（渲染器给：children 里声明了 session 作用域）。 */
+export type RightbarSessionProvider = (props: { readonly session?: unknown; readonly children: ReactNode }) => ReactNode;
 
-/** 渲染右栏子座位的回调（形状 = 上游 `RenderSlotFn`：`opts` 可选）。 */
-export type RightbarRenderSlot = (
-  key: "sidebar.right.pane.tab" | "sidebar.right.pane.tab.title",
-  owner: object,
-  opts?: RenderOpts,
-) => ReactNode;
-
-/** 容器文案。 */
+/** 外壳文案（注册行 `inject` 给）。 */
 export interface RightbarLabels {
   /** 面板的无障碍名。 */
   readonly title: string;
-  /** 关闭一个标签。 */
-  readonly close: string;
-  /** 一个标签都没有。 */
+  /** 没有会话在屏时的说明。 */
   readonly empty: string;
-  /** 类型没注册正文。 */
-  readonly unavailable: string;
 }
 
-/** 容器座位的 props（都由座位行给）。 */
+/** 外壳的 props。 */
 export interface RightbarProps {
-  /** 读右栏视图（框架绑定的 selector hook）。 */
-  readonly useRightbar: <T>(select: (view: RightbarView) => T) => T;
-  /** 文案。 */
+  /** ① 当前会话的作用域目标（`SessionReference`）；没有会话时 `undefined`。 */
+  readonly session: unknown;
+  /** ① 文案。 */
   readonly labels: RightbarLabels;
-  /** 选中一个标签。 */
-  readonly select: (tabId: string) => void;
-  /** 关掉一个标签。 */
-  readonly close: (tabId: string) => void;
-  /** 把展开状态报给帧。 */
-  readonly syncPresentation: (track: boolean) => void;
-  /** 帧给的视口宽度。 */
-  readonly viewportWidth: number;
-  /** 渲染两个子座位（框架给）。 */
+  /** ② 帧是否还留着这一列的轨道（AppFrame 的 owner props：`normal.rightbar > 0`）。 */
+  readonly canShow: boolean;
+  /** ② 渲染 session 座位（渲染器给）。 */
   readonly renderSlot: RightbarRenderSlot;
+  /** ② 包会话作用域（渲染器给）。 */
+  readonly SessionProvider: RightbarSessionProvider;
 }
-
-/** 窄帧阈值：与上游一致。 */
-const NARROW_VIEWPORT = 768;
 
 /**
- * 右栏容器。
- * @param props - 视图 hook、文案、三个动作与子座位渲染。
+ * 右栏外壳。
+ * @param props - 会话目标、文案、帧的可见性，以及两个渲染器座位。
  * @returns 右列元素。
  */
-export function Rightbar({
-  useRightbar,
-  labels,
-  select,
-  close,
-  syncPresentation,
-  viewportWidth,
-  renderSlot,
-}: RightbarProps): ReactNode {
-  const { expanded, binding, tabs, activeTabId } = useRightbar(view => view);
-  const track = expanded && viewportWidth >= NARROW_VIEWPORT;
-  useEffect(() => {
-    syncPresentation(track);
-  }, [syncPresentation, track]);
-
-  const active = tabs.find(tab => tab.id === activeTabId);
-  const strip = tabs.map(tab => (
-    <RightbarTabTitle
-      key={tab.id}
-      title={tab.title}
-      titleSlot={
-        tab.typeId === undefined
-          ? undefined
-          : renderSlot("sidebar.right.pane.tab.title", {}, { entryKey: tab.typeId, fallback: null })
-      }
-      active={tab.id === activeTabId}
-      closeLabel={labels.close}
-      onSelect={() => {
-        select(tab.id);
-      }}
-      onClose={() => {
-        close(tab.id);
-      }}
-    />
-  ));
-
-  if (binding === undefined) {
-    return (
-      <aside className={css.panel} aria-label={labels.title} data-role="rightbar" hidden={!expanded}>
-        <div className={css.strip}>{strip}</div>
-        <RightbarPaneTab content={undefined} unavailable={labels.empty} />
-      </aside>
-    );
-  }
-
+export function Rightbar({ session, labels, canShow, renderSlot, SessionProvider }: RightbarProps): ReactNode {
   return (
-    <aside className={css.panel} aria-label={labels.title} data-role="rightbar" hidden={!expanded}>
-      <ScopeBindingProvider binding={binding}>
-        <div className={css.strip}>{strip}</div>
-        <RightbarPaneTab
-          content={
-            active?.typeId === undefined
-              ? undefined
-              : renderSlot("sidebar.right.pane.tab", {}, { entryKey: active.typeId, fallback: null })
-          }
-          unavailable={active === undefined ? labels.empty : labels.unavailable}
-        />
-      </ScopeBindingProvider>
+    <aside className={css.panel} aria-label={labels.title} data-role="rightbar" hidden={!canShow}>
+      {session === undefined ? (
+        <p className={css.notice}>{labels.empty}</p>
+      ) : (
+        <SessionProvider session={session}>{renderSlot("rightbar.session", {})}</SessionProvider>
+      )}
     </aside>
   );
 }

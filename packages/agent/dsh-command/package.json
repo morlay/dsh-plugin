@@ -56,7 +56,8 @@
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-ui-commands": "workspace:^",
-    "@deepseek-ai/dsh-commands": "workspace:^"
+    "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^"
   },
   "engines": {
     "dsh": ">= 0.2.3-alpha.2 < 0.2.4"

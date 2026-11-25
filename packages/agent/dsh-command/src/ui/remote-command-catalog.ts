@@ -12,6 +12,6 @@ export class RemoteCommandCatalog extends CommandCatalog {
   private readonly endpoint = inject(CommandEndpointClient);
 
   async list(sessionId: SessionId): Promise<readonly CommandEntry[]> {
-    return this.endpoint.list({ sessionId });
+    return this.endpoint.list(sessionId);
   }
 }

@@ -10,6 +10,7 @@
 import { RemoteStream, type RemoteStreamOptions } from "@deepseek-ai/dsh-api-gateway/client";
 import type { SessionRemotes } from "@deepseek-ai/dsh-api-session-controller/src/client/sessions/remotes.ts";
 import type { CommandRunner } from "@morlay/dsh-command/contract";
+import { splitCommandLine } from "@morlay/dsh-command/endpoint";
 import type { ClientConnection, Remote } from "@morlay/zephyr-app/client";
 import type { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { namespaceOf } from "./remote-namespace.ts";
@@ -117,7 +118,7 @@ export class LiveSessionRemotes implements SessionRemotes {
 
   /**
    * `commands` 面：上游传**整行** `/permission danger-full-access`，我们的 `CommandRunner`
-   * 要 `(sessionId, name, input)` 三段——在这一层拆开（首个空格为界）。
+   * 要 `(sessionId, name, input)` 三段——在这一层用 `splitCommandLine` 拆开（规则与 `commandLineOf` 成对）。
    *
    * 结算值必须往下传：上游 `ui-permission-presets` 的 `submit` 只按 `ok` / `matched` 判断，
    * 把处理器的 `{ kind: 'error' }` 吞掉就等于"点了切换、什么都没变"。
@@ -127,10 +128,9 @@ export class LiveSessionRemotes implements SessionRemotes {
       agentId: Parameters<SessionRemotes["commands"]["execute"]>[0],
       line: string,
     ): Promise<CommandsWireResult> => {
-      const text = line.startsWith("/") ? line.slice(1) : line;
-      const separator = text.indexOf(" ");
-      const name = separator === -1 ? text : text.slice(0, separator);
-      const input = separator === -1 ? undefined : text.slice(separator + 1);
+      // 拆名与拼回同一份规则（`splitCommandLine` / `commandLineOf`）：上游传整行，`CommandRunner`
+      // 要「名字 + 输入」两段；wire 上又回到整行。规则漂了就是「名字里带斜杠」这类静默错。
+      const { name, input } = splitCommandLine(line);
       try {
         const executed = await this.commandRunnerOf().run(agentId, name, input);
         // 命令被路由到了（注册表认得这个名字）就是 `matched`——处理器自己的失败走 `ok: false`。

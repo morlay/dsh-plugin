@@ -3,6 +3,7 @@
  *
  * 只装配这一个模块 + 假端口 + 一个最小的 `Slots`/渲染宿主；不碰别的域。
  */
+import { CommandId } from "@morlay/dsh-command/endpoint";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { provideRenderer, Slots } from "@morlay/zephyr-app/client";
 import { act } from "react";
@@ -28,7 +29,7 @@ class FakeCatalog extends CommandCatalog {
 @Injectable()
 class FakeRunner extends CommandRunner {
   async run(): Promise<CommandExecuteValue> {
-    return { commandId: "", result: { kind: "success" } };
+    return { commandId: CommandId(""), result: { kind: "success" } };
   }
 }
 

@@ -1,79 +1,53 @@
-// 右栏容器的真渲染用例：`render()` 走真 React（这条 bug 就是「测试绿但没真渲染」漏掉的）。
+// 右栏外壳的真渲染用例：`render()` 走真 React。
 //
-// 覆盖：① keyed 座位的 key 通过 `opts.entryKey` 交出去；② 没有会话绑定时只出说明、不碰 session 子座位；
-// ③ 正文位拿到 ReactNode 时正常渲染；④ 空值出说明。
+// **props 来源判据**：外壳只认「注册行 inject 给的」（`session`/`labels`）与「渲染器/父给的」
+// （`canShow`/`renderSlot`/`SessionProvider`）；不出现旧实现自己发明的字段。
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import type { StandardSourceBinding } from "@deepseek-ai/dsh-client-ui-slots";
-import { Rightbar, type RightbarLabels, type RightbarView } from "../rightbar.tsx";
+import { Rightbar, type RightbarLabels } from "../rightbar.tsx";
 import { RightbarPaneTab } from "../rightbar-pane-tab.tsx";
 
-const labels: RightbarLabels = {
-  title: "右侧面板",
-  close: "关闭标签",
-  empty: "没有打开的标签",
-  unavailable: "这个标签的正文还没有注册",
-};
+const labels: RightbarLabels = { title: "右侧面板", empty: "没有会话在屏" };
 
-/** 一个能当 session 绑定用的最小值（组件只透传给 ScopeBindingProvider）。 */
-const binding = { key: "s1", hooks: {}, keyedHooks: {}, props: {} } as unknown as StandardSourceBinding;
-
-/**
- * 造一个 view hook（真 selector 语义，不订阅外部源）。
- * @param view - 要返回的快照。
- * @returns `useRightbar`。
- */
-function viewOf(view: RightbarView) {
-  return <T,>(select: (value: RightbarView) => T): T => select(view);
-}
-
-describe("右栏容器（真渲染）", () => {
-  test("keyed 座位按类型 id 传 entryKey，正文渲染出座位内容", () => {
-    const renderSlot = vi.fn((key: string, _owner: object, opts?: { entryKey?: string }) =>
-      key === "sidebar.right.pane.tab"
-        ? <p data-role="slot-body">正文:{opts?.entryKey}</p>
-        : <span data-role="slot-title">标题:{opts?.entryKey}</span>);
+describe("右栏外壳（真渲染）", () => {
+  test("没有会话时只出说明，且不渲染 session 子座位", () => {
+    const renderSlot = vi.fn(() => { throw new Error("没有会话时不该渲染 session 子座位"); });
+    const SessionProvider = vi.fn(({ children }: { children: unknown }) => children as never);
     render(
       <Rightbar
-        useRightbar={viewOf({
-          expanded: true,
-          binding,
-          tabs: [{ id: "t1", title: "浏览器", typeId: "browser-type" }],
-          activeTabId: "t1",
-        })}
+        session={undefined}
         labels={labels}
-        select={() => {}}
-        close={() => {}}
-        syncPresentation={() => {}}
-        viewportWidth={1280}
+        canShow={false}
         renderSlot={renderSlot}
-      />,
-    );
-    expect(screen.getByRole("complementary")).toBeTruthy();
-    expect(screen.getByText("正文:browser-type")).toBeTruthy();
-    expect(screen.getByText("标题:browser-type")).toBeTruthy();
-    expect(renderSlot).toHaveBeenCalledWith("sidebar.right.pane.tab", {}, expect.objectContaining({ entryKey: "browser-type" }));
-    cleanup();
-  });
-
-  test("没有会话绑定时只画标签条与说明，不碰 session 子座位", () => {
-    const renderSlot = vi.fn(() => {
-      throw new Error("没有绑定时不该渲染 session 子座位");
-    });
-    render(
-      <Rightbar
-        useRightbar={viewOf({ expanded: false, binding: undefined, tabs: [], activeTabId: undefined })}
-        labels={labels}
-        select={() => {}}
-        close={() => {}}
-        syncPresentation={() => {}}
-        viewportWidth={1280}
-        renderSlot={renderSlot}
+        SessionProvider={SessionProvider as never}
       />,
     );
     expect(screen.getByText(labels.empty)).toBeTruthy();
     expect(renderSlot).not.toHaveBeenCalled();
+    expect(SessionProvider).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  test("有会话时 SessionProvider 包住子座位，renderSlot 只带 key 与 owner", () => {
+    const reference = { sessionId: "s1" };
+    const renderSlot = vi.fn(() => <p data-role="seat">session 座位</p>);
+    const SessionProvider = vi.fn(({ session, children }: { session?: unknown; children: unknown }) => (
+      <div data-role="session-area" data-session={JSON.stringify(session)}>{children as never}</div>
+    ));
+    render(
+      <Rightbar
+        session={reference}
+        labels={labels}
+        canShow
+        renderSlot={renderSlot}
+        SessionProvider={SessionProvider as never}
+      />,
+    );
+    expect(screen.getByRole("complementary")).toBeTruthy();
+    expect(screen.getByRole("complementary").firstElementChild?.getAttribute("data-role")).toBe("session-area");
+    expect(screen.getByText("session 座位")).toBeTruthy();
+    expect(renderSlot).toHaveBeenCalledWith("rightbar.session", {});
     cleanup();
   });
 });

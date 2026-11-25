@@ -36,12 +36,14 @@ export function registerRemoteGroup(handlers: RemoteHandlers, instance: object):
     if (typeof handler !== "function") {
       throw new Error(`${instance.constructor.name}.${method} 标了 @Remote 但没有实现`);
     }
-    // 方法实参：契约上按 `parameters` 声明了**多个**命名参数的方法（`upload(agent, request)`）按声明顺序
-    // 逐个取——descriptor 的位置语义，只有这样它才拿得到整份 args 里的每一项；单参数 / 未声明的走
-    // `requestOf`（`{ request }` 剥一层，没有那一层就整个 args 当请求）。
+    // 方法实参：契约上按 `parameters` 声明了命名参数的方法（`upload(agent, request)`、`execute(sessionId, line, …)`）
+    // 按声明顺序**逐个取**——descriptor 的位置语义，只有这样它才拿得到整份 args 里的每一项。
+    // **声明了就是位置语义，不管几个**：少一处就变成「单参方法收到 args 对象、双参方法收到两个值」这种
+    // 两种形状并存（`commands/list` 与 `subagents/interruptByUser` 都踩过）。
+    // 没声明 / 声明为空的走 `requestOf`（`{ request }` 剥一层，没有那一层就整个 args 当请求）。
     const names = declaredParameters[method];
     const argsOf = (args: Readonly<Record<string, unknown>>): readonly unknown[] =>
-      names !== undefined && names.length > 1 ? names.map((name) => args[name]) : [requestOf(args)];
+      names !== undefined && names.length > 0 ? names.map((name) => args[name]) : [requestOf(args)];
     const endpoint = `${group}/${method}`;
     if (streamMethods.has(method)) {
       // 流式方法的签名有两种（与上游一致）：`follow(request, signal)` 与 `control(signal)`。

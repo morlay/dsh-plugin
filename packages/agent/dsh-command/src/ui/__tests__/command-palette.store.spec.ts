@@ -1,3 +1,4 @@
+import { CommandId } from "@morlay/dsh-command/endpoint";
 import { bootstrapApplication, Injectable } from "@morlay/zephyr";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
@@ -27,7 +28,7 @@ class FakeRunner extends CommandRunner {
 
   async run(_sessionId: SessionId, name: string): Promise<CommandExecuteValue> {
     this.ran.push(name);
-    return { commandId: `command-${this.ran.length}`, result: { kind: "success" } };
+    return { commandId: CommandId(`command-${this.ran.length}`), result: { kind: "success" } };
   }
 }
 

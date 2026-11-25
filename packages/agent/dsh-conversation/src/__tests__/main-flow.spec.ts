@@ -246,11 +246,12 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
       expect(workspace, "工作区必须收到这条会话（否则侧栏只显示工作区、没有会话行）").toBeDefined();
 
       // ④ 改权限：走上游 chip 唯一的那一行命令（经契约的客户端形态，不拼 wire 名）。
-      const executed = await commandClientOf(app).execute({
-        sessionId: String(sessionId),
-        name: "permission",
-        input: "danger-full-access",
-      });
+      // `execute` 的 wire 是位置参数（会话 / **整行** / 附件）——与上游 `ctx.remote.commands.execute` 同形。
+      const executed = await commandClientOf(app).execute(
+        String(sessionId),
+        "/permission danger-full-access",
+        [],
+      );
       expect(executed.result.kind, "/permission 应成功结算").toBe("success");
       expect(
         projectionOf(app, String(sessionId), "permissions"),

@@ -38,3 +38,19 @@
   照抄，不改参数个数与可选性）。
 - **判据靠真渲染，不靠类型**：容器/外壳每加一个分支，补一条 `render(<X {...props} />)` 的用例（happy-dom +
   `@testing-library/react`），断言关键节点与 `renderSlot` 的调用形状；纯类型/桩函数测不出参数错位。
+
+## 写座位组件前，先列 props 来源表
+
+组件的每个 prop 必须能追溯到**两类来源之一**，第三类一律不准出现：
+
+| 来源 | 例子 | 备注 |
+| --- | --- | --- |
+| ① 注册行 `inject` 给的 | `session` / `labels` / `syncPresentation` | 我们的装配行显式提供 |
+| ② 渲染器／父在 `renderSlot` 时给的 | `renderSlot` / `SessionProvider` / `useStore` / `t` / `canShow` | 平台注入，不归我们造 |
+
+反例（真发生过三次，同一个错误）：`renderSlot` 自己发明成两参或必填 `entryKey`；正文把 slot 的 opts 当内容塞进 JSX；容器要 `useRightbar` 而注册行只给 `session`。
+三者都只在**真跑**时炸（`xxx is not a function` / `Objects are not valid as a React child`），测试与类型都拦不住。
+
+- **写之前**把表列出来（每个 prop 一行：名字 / 谁给 / 缺了会怎样），贴进 PR 或注释；
+- **写完**补一条精确相等的断言：允许清单外的 key 出现就红（`__tests__/*props*.spec.dom.tsx` 的写法）；
+- 需要 `expanded` 这类「只存在于 store」的状态时，放到有 `useStore` 的那一层（session 座位）用 `useEffect` 报给宿主，别塞进外壳。

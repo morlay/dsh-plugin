@@ -29,6 +29,26 @@ export type Uncovered<Upstream, Contract> = Exclude<
  */
 export type AssertTrue<T extends true> = T;
 
+/** 一次 unary 调用的**裸值视图**：`Promise<{ ok: true; value: V } | …>` 还原成 `Promise<V>`。 */
+type PlainResult<Method> =
+  Method extends (...args: infer Args) => Promise<infer Result>
+    ? (...args: Args) => Promise<Result extends { readonly ok: true; readonly value: infer Value } ? Value : never>
+    : Method;
+
+/**
+ * 一条 **wire 命名空间面**的裸值视图（逐成员）。
+ *
+ * 上游生成的客户端面（`ClientRemote['<ns>']`）把每个方法包成 `RemoteResult<T>`：那是**客户端**的结算协议。
+ * 本仓的端点契约是**宿主侧**那一面（回裸值，`RemoteResult` 由客户端面在 `faceOf` 里统一包），所以要守卫它
+ * 得先把这个包装剥掉——否则每条 wire 契约都会在返回类型上假红一次。
+ *
+ * @example
+ * ```ts
+ * export type XxxCovered = AssertTrue<AssertCoveredStrict<PlainWireFace<ClientRemote['xxx']>, XxxEndpoint>>;
+ * ```
+ */
+export type PlainWireFace<Face> = { readonly [K in keyof Face]: PlainResult<Face[K]> };
+
 /** 上游成员里，契约同名成员**赋值不过去**的那些（契约的值放不进上游要求的位置）；`never` 表示全可赋值。 */
 export type Unassignable<Upstream, Contract> = {
   [K in keyof Upstream & keyof Contract]: [Contract[K]] extends [Upstream[K]] ? never : K;

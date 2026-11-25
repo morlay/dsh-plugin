@@ -1,21 +1,13 @@
-// 上游 descriptor → 我们的 `CommandEntry`：`commands/list` 的响应项与 `CommandCatalog` 的返回项是同一个
-// 形状，映射只写这一份（wire 实现与同进程实现都用它）。
+// 上游 descriptor → 我们对外暴露的 `CommandEntry`：**两者现在是同一个类型**（`CommandEntry` 是
+// `CommandDescriptor` 的别名），所以这里只留一层直通——调用点在，将来要投影字段时改这一处。
 import type { CommandDescriptor } from "@morlay/dsh-command/server";
 import type { CommandEntry } from "@morlay/dsh-command/contract";
 
 /**
  * 一条命令的对外形状。
  * @param descriptor - 上游 `CommandRuntime.list(agent)` 的返回项。
- * @returns 名字、说明与可选输入提示。
+ * @returns 同一份（类型是别名，不再手抄字段）。
  */
 export function commandEntryOf(descriptor: CommandDescriptor): CommandEntry {
-  return {
-    name: descriptor.name,
-    description: descriptor.description,
-    // `exactOptionalPropertyTypes`：没有的键不写，而不是塞一个 `undefined`。
-    ...(descriptor.definitionId === undefined
-      ? {}
-      : { definitionId: String(descriptor.definitionId) }),
-    ...(descriptor.input === undefined ? {} : { input: descriptor.input }),
-  };
+  return descriptor;
 }

@@ -11,7 +11,6 @@ import { asRemoteResult } from "@morlay/zephyr-app";
 import { SubagentRegistry } from "@morlay/dsh-agent";
 import {
   SubagentsEndpoint,
-  type SubagentInterruptByUserRequest,
   type SubagentInterruptByUserValue,
   type SubagentPromptRequest,
   type SubagentPromptValue,
@@ -65,11 +64,11 @@ export class SubagentsEndpointDefault extends SubagentsEndpoint implements OnIni
   }
 
   override async interruptByUser(
-    request: SubagentInterruptByUserRequest,
+    childSessionId: string,
   ): Promise<RemoteResultWire<SubagentInterruptByUserValue>> {
     return await asRemoteResult(async () => {
       // 上游只收一个品牌化的子会话身份；权限判定（user 侧）在它内部做。
-      return this.subagents.interruptByUser(SessionId(request.childSessionId));
+      return this.subagents.interruptByUser(SessionId(childSessionId));
     });
   }
 }

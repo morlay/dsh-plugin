@@ -12,7 +12,7 @@
 import { PermissionSelect } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/PermissionSelect.tsx";
 import type { PermissionSelectProps } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/PermissionSelect.tsx";
 import { accessZh } from "@deepseek-ai/dsh-client-ui-permission-presets/src/client/locales.ts";
-import { type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { CommandId, type CommandExecuteValue  } from "@morlay/dsh-command/endpoint";
 import { CommandRunner } from "@morlay/dsh-command/contract";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { SessionController } from "@morlay/dsh-conversation/ui";
@@ -83,7 +83,10 @@ class FakeCommandRunner extends CommandRunner {
     if (name !== "permission" || input === undefined) throw new Error(`没有命令 "${name}"`);
     this.submitted.push(input);
     host.currentValue = input;
-    return { commandId: `command-${this.submitted.length}`, result: { kind: "success" } };
+    return {
+      commandId: CommandId(`command-${this.submitted.length}`),
+      result: { kind: "success" },
+    };
   }
 }
 

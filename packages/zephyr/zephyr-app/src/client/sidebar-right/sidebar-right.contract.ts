@@ -60,6 +60,9 @@ export abstract class SidebarRight {
 
   /** 按会话关一个 tab（右键菜单的关闭动作走它）。 */
   abstract readonly closeIn: SidebarRightFace["closeIn"];
+
+  /** tab 域：每个 tab 记录的导航与生命周期（容器绑 `keyedHooks.tabNavigation` 读它）。 */
+  abstract readonly tabDomain: SidebarRightFace["tabDomain"];
 }
 
 /**

@@ -5,7 +5,7 @@
 import { inject, Injectable } from "@morlay/zephyr";
 import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { AgentDirectory } from "@morlay/dsh-agent";
-import { type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
+import { commandLineOf, type CommandExecuteValue } from "@morlay/dsh-command/endpoint";
 import { CommandRunner } from "@morlay/dsh-command/contract";
 // 相对引用：本包根出口会带进 `./server` 的装配模块，走包名会把依赖绕成环。
 import { CommandRegistryDefault } from "../command-registry.service.ts";
@@ -21,6 +21,6 @@ export class RegistryRunner extends CommandRunner {
   async run(sessionId: SessionId, name: string, input?: string): Promise<CommandExecuteValue> {
     const agent = this.agents.get(sessionId);
     if (agent === undefined) throw new Error(`commands: 会话 "${sessionId}" 没有 agent`);
-    return runCommand({ registry: this.registry, agent, name, input, where: "commands" });
+    return runCommand({ registry: this.registry, agent, line: commandLineOf(name, input), where: "commands" });
   }
 }

@@ -7,3 +7,5 @@
 // 它们本来就是契约面的东西，走 `@morlay/dsh-command/contract`——在这里 re-export 等于给同一批符号造
 // 第二个 home，也让「跨面 `export * from "../contract/*"`」这条判据失效。
 export * from "./command-endpoint.ts";
+// 命令行的拼装 / 拆分：客户端与宿主共用同一份规则（`/name input`）。
+export * from "./command-line.ts";

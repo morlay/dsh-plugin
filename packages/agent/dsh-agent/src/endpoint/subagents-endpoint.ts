@@ -63,12 +63,13 @@ export class SubagentsEndpoint {
 
   /**
    * 用户侧中断一个活着的子代理。
-   * @param _request - 目标子会话。
+   * @param _childSessionId - 目标子会话（wire 上是**一个位置参数**，与上游
+   * `remote.subagents.interruptByUser(childSessionId)` 同形）。
    * @returns 取消信号已受理（不代表目标已静止）。
    */
   @RemoteMethod({ parameters: ["childSessionId"] })
   async interruptByUser(
-    _request: SubagentInterruptByUserRequest,
+    _childSessionId: string,
   ): Promise<RemoteResultWire<SubagentInterruptByUserValue>> {
     throw new Error("subagents/interruptByUser：契约类未实现（宿主侧要在子类里实现它）");
   }

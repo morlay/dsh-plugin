@@ -5,6 +5,7 @@
 // 本域数据面的**独立**行（上下文菜单、右栏「文件夹」标签）留在各自域（`dsh-workspace/ui`）。
 import { provide, type ProviderList } from "@morlay/zephyr";
 import { provideSidebarRight } from "@morlay/zephyr-app/client";
+import { RightbarSeats } from "./rightbar-seats.ts";
 import { DirectoryPickerNativeSlots } from "./directory-picker-native-slots.ts";
 import { SessionPanelSlots } from "./session-panel-slots.ts";
 import { SidebarBrowserSlots } from "./sidebar-browser-slots.ts";
@@ -49,6 +50,8 @@ export function provideSessionShellSlots(): ProviderList {
     // 右栏：我们自己的服务 + 座位（不再装上游右栏行）。类型注册表要排在所有往
     // `sidebarRightTabs` 注册 tab 类型的行之前。
     ...provideSidebarRight(),
+    // 右栏的两层座位与角位按钮：它们绑 `sessions`（SessionReference），所以装配在本域。
+    RightbarSeats,
 
     // 会话面板：`panel.section` / `panel.indicator` 等槽位的声明方（job / subagent 的条目挂在它下面）。
     SessionPanelSlots,

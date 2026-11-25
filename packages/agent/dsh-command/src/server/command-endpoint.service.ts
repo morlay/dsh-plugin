@@ -5,10 +5,10 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { AgentDirectory } from "@morlay/dsh-agent";
 import {
   CommandEndpoint,
-  type CommandExecuteRequest,
+  CommandId,
   type CommandExecuteValue,
-  type CommandListRequest,
   type CommandListValue,
+  splitCommandLine,
 } from "@morlay/dsh-command/endpoint";
 import { inject, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
@@ -31,26 +31,31 @@ export class CommandEndpointDefault extends CommandEndpoint implements OnInit {
     registerRemoteGroup(this.handlers, this);
   }
 
-  override async list(request: CommandListRequest): Promise<CommandListValue> {
-    const agent = this.agents.get(SessionId(request.sessionId));
+  override async list(sessionId: string): Promise<CommandListValue> {
+    const agent = this.agents.get(SessionId(sessionId));
     if (agent === undefined) return [];
     return this.registry.list(agent).map(commandEntryOf);
   }
 
-  override async execute(request: CommandExecuteRequest): Promise<CommandExecuteValue> {
-    const agent = this.agents.get(SessionId(request.sessionId));
-    if (agent === undefined) throw new Error("commands/execute: 缺少会话或命令名");
+  override async execute(
+    sessionId: string,
+    line: string,
+    _submittedAttachments: readonly unknown[],
+  ): Promise<CommandExecuteValue> {
+    const agent = this.agents.get(SessionId(sessionId));
+    if (agent === undefined) throw new Error(`commands/execute: 会话 "${sessionId}" 没有 agent`);
+    // wire 上是整行（上游协议）：拆名在宿主侧做，规则只有 `splitCommandLine` 一份。
+    const { name } = splitCommandLine(line);
     const execution = await runCommand({
       registry: this.registry,
       agent,
-      name: request.name,
-      input: request.input,
+      line,
       where: "commands/execute",
     });
     // `runCommand` 的 `undefined` 是「注册表里没这条命令」——按 wire 契约回一个结构化失败，
     // 而不是让调用方收到 `undefined` 再去猜。
     if (execution === undefined) {
-      return { commandId: "", result: { kind: "error", text: `没有命令 "${request.name}"` } };
+      return { commandId: CommandId(""), result: { kind: "error", text: `没有命令 "${name}"` } };
     }
     return execution;
   }

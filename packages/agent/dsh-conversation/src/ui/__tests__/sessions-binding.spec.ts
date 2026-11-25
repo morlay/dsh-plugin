@@ -9,6 +9,7 @@
 //
 // 不需要浏览器：`SessionRemote` 与 `CommandRunner` 都是契约类，用假实现替掉即可（本 spec 的被测面是
 // `SessionControllerDefault` 自己的目录/binding 逻辑，不是 wire）。
+import { CommandId } from "@morlay/dsh-command/endpoint";
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { CommandRunner } from "@morlay/dsh-command/contract";
 import type { CommandExecuteValue } from "@morlay/dsh-command/endpoint";
@@ -129,7 +130,7 @@ class RecordingCommandRunner extends CommandRunner {
 
   async run(sessionId: SessionId, name: string, input?: string): Promise<CommandExecuteValue> {
     this.calls.push({ sessionId, name, ...(input === undefined ? {} : { input }) });
-    return { commandId: `command-${this.calls.length}`, result: this.outcome };
+    return { commandId: CommandId(`command-${this.calls.length}`), result: this.outcome };
   }
 }
 
