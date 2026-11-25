@@ -23,6 +23,9 @@
     "import/no-default-export": "error",
     // 测试生命周期归 fixture，不归 vitest 钩子（见 .agents/standards/how-to-verify.md）。
     "vitest/no-hooks": "error",
+    // tsrs 后端（`tsrs-lint`）把这条报得比 tsgolint 宽：测试里 `void promise` 是**故意的**丢弃写法
+    // （`onTestFinished(() => void app.dispose())` 这类），按语义它确实"丢弃返回值"，不构成本仓的缺陷。
+    "typescript/no-meaningless-void-operator": "off",
     // `vi.fn()` 的类型多数能从上下文推导（赋值给带签名的参数、`mockImplementation` 等），
     // 强制写类型参数只是把同一件事写两遍；确实推导不出的地方由 `tsc` 报错，不需要 lint 兜。
     "vitest/require-mock-type-parameters": "off"

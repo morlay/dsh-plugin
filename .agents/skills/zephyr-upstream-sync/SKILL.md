@@ -48,12 +48,19 @@ just vendor vendor-check  # CI：只比对 vendored 快照与上游，不写
 
 `patch`（改上游工作树）：
 
-| 类型      | 做什么                                   | 失败意味着什么                                               |
-| --------- | ---------------------------------------- | ------------------------------------------------------------ |
-| `rm`      | 整包裁剪（`glob` 形态按模式批量删）      | 目标不存在：上游挪走 / 改名了，裁剪清单该跟着改              |
-| `text`    | 对文件做正则替换                         | 不匹配 / 无变化：上游改到这行，评估更新或删除                |
-| `git`     | 打 `vendor/patches/*.patch`              | `git apply` 失败：上游改到这些行，是同步信号                 |
-| `exports` | 生成式改写出口（指到源码面、补 `files`） | 找不到源码的出口会打印清单后保持原样——那是上游新增出口的信号 |
+| 类型      | 做什么                                    | 失败意味着什么                                               |
+| --------- | ----------------------------------------- | ------------------------------------------------------------ |
+| `rm`      | 整包裁剪（`glob` 形态按模式批量删）       | 目标不存在：上游挪走 / 改名了，裁剪清单该跟着改              |
+| `json`    | 按 glob 删清单的顶层字段（结构化改 JSON） | 文件不是合法 JSON：上游改坏了这份清单，先看它                |
+| `text`    | 对文件做正则替换                          | 不匹配 / 无变化：上游改到这行，评估更新或删除                |
+| `git`     | 打 `vendor/patches/*.patch`               | `git apply` 失败：上游改到这些行，是同步信号                 |
+| `exports` | 生成式改写出口（指到源码面、补 `files`）  | 找不到源码的出口会打印清单后保持原样——那是上游新增出口的信号 |
+
+`json` 目前只用来删上游各包 `package.json` 的 `devDependencies`（`{ type: "json", glob: "**/package.json",
+drop: ["devDependencies"] }`）：上游包被纳进 workspace，它们自带的 devDeps 会参与 install（循环 / peer 警告
+的主源），而我们**从不跑上游的 lint / test**。删之前先把**源码 import 到**的条目并进 `dependencies`（上游把
+client 半的运行期依赖写在 devDeps 里，靠自己的打包内联），`peerDependencies` 一字不动。幂等：字段不存在即跳过、
+不写盘。
 
 `prebuild`（生成物与 native）：
 
@@ -85,6 +92,9 @@ just vendor vendor-check  # CI：只比对 vendored 快照与上游，不写
 ## 六、本地 patch 纪律
 
 - **最小必要**：能走配置 / 插件层 / settings 解决的不打 patch；整包裁剪写成 `rm` 步骤。
+- **同步期裁剪**：上游清单的 `devDependencies` 由 `json` 步骤整段删（只留 `dependencies` / `peerDependencies` /
+  `optionalDependencies` / `scripts`）——用户明确批准的同步期裁剪，与 `rm` / `text` 同类；不手工改上游清单，
+  否则下次同步就丢了。
 - **集中登记**：步骤清单在 `vendor/steps.ts`，补丁文件在 `vendor/patches/`；每一步为什么存在就地写在步骤旁边。
 - **升级时评估失效**：`git apply` 失败、`text` 不匹配、`rm` 目标不存在即信号。
 - **不进上游 git**：patch 只改工作树，`sync` 的 `reset --hard` 负责抹掉——任何「改完要留下」的东西都得写进 `steps.ts`。

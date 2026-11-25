@@ -34,7 +34,6 @@
     "@morlay/zephyr": "workspace:^"
   },
   "devDependencies": {
-    "@morlay/dsh-storage": "workspace:^",
     "@morlay/zephyr-app": "workspace:^",
     "zod": "4.6.6"
   },

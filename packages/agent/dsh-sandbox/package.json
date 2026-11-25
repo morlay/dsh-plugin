@@ -40,8 +40,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-tool-testkit": "workspace:^",
-    "@morlay/dsh-sandbox": "workspace:^"
+    "@deepseek-ai/dsh-tool-testkit": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-bash-sandbox": "workspace:^",

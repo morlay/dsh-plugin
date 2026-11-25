@@ -176,7 +176,9 @@ export async function generateWorkspaceDts(root: string): Promise<void> {
       )}\n`,
     );
     console.log(`[dts] ${face} face -> ${outDir}`);
-    await run("pnpm", ["exec", "tsc", "-p", config], root);
+    // `tsrs` 是 tsc 的 Rust 移植（同版本线：`7.1.0-beta` ↔ `tsrs 7.1.0-beta.tsrs5`），CLI 与 `tsc` 同形。
+    // 声明生成是纯产物步骤（`noCheck`），不需要 JS 版 tsc 的诊断能力。
+    await run("pnpm", ["exec", "tsrs", "-p", config], root);
   }
 }
 

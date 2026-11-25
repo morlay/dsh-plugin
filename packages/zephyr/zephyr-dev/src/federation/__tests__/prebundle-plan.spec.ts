@@ -351,7 +351,8 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
  *                                                 @import "css-dep/brand-font.css"（只有一行）
  *   <root>/node_modules/css-dep/brand-font.css    被 `@import` 的那个包出口
  *
- * `css-dep` 只被**样式**提到：不读 `.css` 的枚举看不见它，清单里就没有它的产物，改写完地址照样 404。
+ * `css-dep` 只被**样式**提到：枚举仍要读它（不读就发现不了它自己的 `@import` / `url()`），
+ * 但它自己**不出产物**——那份 `@import` 在构建期被闪电就地展开，地址从头到尾没人取。
  * @returns 工作区根。
  */
 async function makeStyleGraphFixture(): Promise<string> {
@@ -388,12 +389,15 @@ async function makeStyleGraphFixture(): Promise<string> {
 }
 
 describe("planPrebundle（样式在图上）", () => {
-  test("CSS 里的裸 @import 指向的包出口进清单（不然改写出来的地址是 404）", async () => {
+  test("CSS 里的裸 @import：进下潜、不出产物（构建期被展开，那条地址没人取）", async () => {
     const root = await makeStyleGraphFixture();
     const plan = await planPrebundle({ entry: join(root, "src", "client", "app-boot.ts") });
     const targets = plan.targets.map((target) => `${target.name}/${target.exportName}`);
+    // 脚本 import 的那条出口是页面会去取的地址（`…/brand-font.css.js`）：必须出产物。
     expect(targets).toContain("@morlay/css-host/brand-font.css");
-    expect(targets).toContain("css-dep/brand-font.css");
+    // `@import` 指向的那条不是：`bundleCssFile` 在构建期把它展开成文本（`resolveCssImport`），
+    // 产物照它出只是一份「盘上有、无人 import」的死产物，连带它引用的字体/图片各落一份。
+    expect(targets).not.toContain("css-dep/brand-font.css");
   });
 });
 // ── 说明符来自 AST（不扫文本） ──────────────────────────────────────────────────────────────────

@@ -40,6 +40,22 @@ export const patch: Step[] = [
   // （只删依赖声明会留下一个激活不了的空壳包）。上游 test-support/client-runtime 的装配清单里
   // 只把它写成字符串映射，不 import，本仓也不跑上游 `tests/`。
   { type: "rm", glob: "packages/client/remote-connection" },
+  // **上游各包清单的 `devDependencies` 一律不留**：结构化地删 JSON 字段，不做正则切文本（上游清单的空格
+  // 写法并不统一，少一个逗号就是整棵树解析失败）。
+  //
+  // 为什么删：`pnpm-workspace.yaml` 把上游包纳进 workspace，它们自带的 devDeps 就会参与 install——循环 /
+  // peer 警告的主要来源；而我们**从不跑上游的 lint / test**（`just lint` / `just test` 都带
+  // `--filter='!./vendor/**'`，见 AGENTS.md 的上游只读红线），那些工具对我们没有用途。用户已批准：同步时
+  // 一并删掉上游的 devDeps，不影响我们的使用。
+  //
+  // 删之前先**认领**：上游把 client 半的运行期依赖（`clsx`、`shiki`、`katex` 这类浏览器依赖）写在
+  // `devDependencies` 里，由它自己的打包内联；本仓库这条链是运行期现场打包、真会 import 它们——所以源码
+  // import 到的条目先并进 `dependencies`，再整段删。`peerDependencies` / `optionalDependencies` / `scripts`
+  // 一个字不动（前两个是运行期契约）。
+  //
+  // glob 覆盖**全部** `package.json`（当前 409 份）：上游根与 `native/system` 这两份不在 `packages/*/*`
+  // 之下，漏掉它们就漏掉两个会参与 install 的成员清单。幂等：字段不存在即跳过，不写盘、不重排缩进。
+  { type: "json", glob: "**/package.json", drop: ["devDependencies"] },
   // 写端双协议：让 typert 的 `Remote`/`RemoteScope` 与 cordis 的 `Inject` 同时接受 TC39 与 legacy
   // 两种调用约定（类型面也一样）——本仓库根 tsconfig 开着 `experimentalDecorators`。
   { type: "git", patch: "decorator-dual-protocol.patch" },

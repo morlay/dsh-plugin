@@ -53,7 +53,6 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
-    "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-auth": "workspace:^",
     "@morlay/dsh-session": "workspace:^"
   },

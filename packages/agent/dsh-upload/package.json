@@ -48,9 +48,6 @@
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
   },
-  "devDependencies": {
-    "@morlay/dsh-upload": "workspace:^"
-  },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-file-upload": "workspace:^"
   },

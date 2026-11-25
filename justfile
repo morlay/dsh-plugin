@@ -38,10 +38,10 @@ clean-dist:
 fmt:
     pnpm exec oxfmt .
 
-# 静态检查：oxlint（含 type-aware 规则）+ oxfmt --check（格式与文件结尾换行）。
+# 静态检查：oxlint 单进程扫全仓（含 type-aware 规则；`.oxlintrc.json` 的 ignorePatterns 已排除 `vendor/**`）。
+# 格式（`oxfmt --check`）不进这道门：它是提交前的本地习惯。
 lint:
     pnpm exec oxlint .
-    pnpm exec oxfmt --check .
 
 # 结构性判据（面边界 / 唯一化 / 声明未用 / 扩展边界 / 类型纪律）：有违规退出 1。
 # 逐包跑、根上汇总；包列表由 pnpm 的递归给出，不在这里另找一份。
@@ -76,6 +76,9 @@ verify-release *args:
 version *args:
     pnpm exec devkit version {{ args }}
 
+# 测试：两层（`node` / `ui`）由 `vitest.config.ts` 的 projects 决定；环境靠文件名——
+# `*.spec.dom.ts` / `*.spec.dom.tsx` → happy-dom，其余 `*.spec.ts` → node。
+# 单跑一层：`just test --project ui`；按路径过滤：`just test packages/zephyr/zephyr-ui`。
 test *args:
     pnpm exec vitest run {{ args }}
 

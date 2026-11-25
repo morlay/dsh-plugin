@@ -57,7 +57,6 @@
     "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",
     "@morlay/dsh-shell": "workspace:^",
-    "@morlay/dsh-skill": "workspace:^",
     "@morlay/dsh-storage": "workspace:^",
     "@morlay/dsh-upload": "workspace:^",
     "@morlay/dsh-workspace": "workspace:^"

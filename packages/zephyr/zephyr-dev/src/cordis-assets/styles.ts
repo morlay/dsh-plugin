@@ -358,6 +358,13 @@ export function cssInlinePlugins(options: {
    * 不给就是纯样式链（dev / tsdown 的产物自包含，`@import` 由闪电按相对路径处理）。
    */
   importTargetOf?: (specifier: string, from: string) => Promise<string | undefined>;
+  /**
+   * **跨包样式出口**的判据：真时这条 `.css` 说明符不进内联，而是标成外置（见 `dsh-css-global-inline`）。
+   *
+   * 由调用方给：外置名单是**联邦构建**的事实（它按每份副本的 `exports` 算出来），样式插件不认识它。
+   * 判据落在这一处而不是每个调用方各写一遍，是为了让「内联」与「外置」永远二选一。
+   */
+  isFederatedStylesheet?: (specifier: string, importer: string | undefined) => boolean;
 }): Plugin[] {
   // **资产占位**：`this.emitFile` 返回的是**引用 id**（rollup 的内部串，形如 `VRAku6fjghkApIISiBWPzg`），
   // 不是文件名——文件名要到 `generateBundle` 才拿得到。以前把这个 id 直接当 URL 写进 CSS，于是资产在盘上、
@@ -493,6 +500,17 @@ export function cssInlinePlugins(options: {
         order: "pre",
         handler(source: string, importer: string | undefined) {
           if (!source.endsWith(".css")) return null;
+          // **跨包的样式出口不外置就内联二选一**：它自己就是一条产物（`…/brand-font.css.js`），
+          // 内联进来会有两个后果——那份产物变成「盘上有、无人 import」的死产物，资产（字体/图片）
+          // 也跟着各落一份；注入位次从「按 import 顺序」挪到「本产物末尾」，两条链的级联因此分叉
+          // （同一条规则在 dev 排最前、在产物里排最后）。
+          //
+          // 这里**显式**声明外置，而不是 `return null` 交给内置的外置插件：那个插件（`esmExternalRequirePlugin`）
+          // 是为 `require` 写的内置项，"静态 import 是否同样外置"没有契约可依；显式返回 `external: true`
+          // 之后，地址由产物侧的 `paths` 按同一条规则（`productFileNameOf`）算，不会出现地址与产物不同形。
+          if (options.isFederatedStylesheet?.(source, importer) === true) {
+            return { id: source, external: true };
+          }
           return GLOBAL_PREFIX + resolveFileSpecifier(source, importer) + VIRTUAL_SUFFIX;
         },
       },

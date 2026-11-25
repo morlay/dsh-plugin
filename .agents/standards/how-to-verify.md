@@ -26,14 +26,16 @@
 - **位置**：判据住在被测包——`packages/<family>/<pkg>/src/__tests__/`；浏览器半的用例住 ui 面各目录的
   `__tests__/`（框架 zephyr-app 的 client 面另有自己的 `__tests__`）。**判据只下沉到能力层与扩展包**：
   `apps/*` 里没有必须绿的用例，那里的 spec 是自检（`just test` 会按收集规则收到，但它不是门禁）。
-  收集规则在 [`vitest.config.ts`](../../vitest.config.ts)：`**/__tests__/**/*.spec.ts(x)`，
-  排除 `node_modules` / `target` / `_packages`。
+  收集规则在 [`vitest.config.ts`](../../vitest.config.ts)：两层 project——`*.spec.dom.ts` / `*.spec.dom.tsx`
+  走 `ui`（`happy-dom`），其余 `*.spec.ts` 走 `node`；排除 `node_modules` / `target` / `.scratch`。
 - **单测等待上限 3s**：`testTimeout: 3000`（同上）。要更长预算的用例显式给 `{ timeout }`——那是承认成本，
   不是放宽断言（跨域装配的包内用例给 180s 一类的显式预算，见能力层规范）。
 - **等条件，不等时间**：渲染 / 装配类断言用 `vi.waitFor(条件, { timeout })`，不写
   `await new Promise((r) => setTimeout(r, 50))` 等状态。唯一允许的定时器是 `dispose` 的兜底
   （`Promise.race` 里 10s 收尾），它不是断言。
-- **浏览器半用例加文件头** `// @vitest-environment happy-dom`，`cleanup` 由该包 `test` 的 auto fixture 负责（见下一节）。
+- **测试分两层，环境由文件名声明**：需要 DOM 的用 `*.spec.dom.ts`（渲 React 组件的用 `*.spec.dom.tsx`），
+  其余 `*.spec.ts` 走 node。**不写 `// @vitest-environment` 文件头**，也不靠目录或裸 `.tsx` 推断——
+  环境由 `vitest.config.ts` 的 project 按文件名给。`cleanup` 由该包 `test` 的 auto fixture 负责（见下一节）。
 - **严禁 vitest 的老旧钩子**：`beforeAll` / `afterAll` / `beforeEach` / `afterEach` 一律不许出现在 spec 里，
   也不许模块级可变状态（`let root`、`const apps = []`）。环境准备与清理一律做成 fixture：
   - 每个测试都要的那份 → 包级 `test` 上 `test.extend` 一个 `{ auto: true }` 的 fixture（`cleanup`、

@@ -32,7 +32,6 @@
   "devDependencies": {
     "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@morlay/dsh-agent": "workspace:^",
-    "@morlay/dsh-agent-instruction": "workspace:^",
     "@morlay/dsh-fs": "workspace:^"
   },
   "peerDependencies": {

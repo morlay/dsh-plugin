@@ -45,7 +45,6 @@
   "devDependencies": {
     "@morlay/dsh-agent": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
-    "@morlay/dsh-agent-team": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^",

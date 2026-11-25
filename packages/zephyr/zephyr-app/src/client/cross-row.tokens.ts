@@ -7,7 +7,7 @@
 // 上游 `ctx.<服务名>` 写的是什么面，令牌就是什么面——不多一个成员、也不少一个，上游加成员时自动跟上。
 // 空 `import type {}` 只为把那份声明带进 program（type-only，运行期不留边）。
 import type { Context as ZephyrContext } from "@morlay/zephyr";
-import { InjectionToken } from "@morlay/zephyr";
+import { InjectionToken, type TokenClass } from "@morlay/zephyr";
 import type {} from "@deepseek-ai/dsh-api-session-controller/client";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-ui-input-trigger/client";
@@ -20,7 +20,7 @@ export { SidebarRightTabs } from "./sidebar-right-tabs.ts";
 export type SessionsFace = ZephyrContext["sessions"];
 
 /** `ctx.sessions`（会话目录；`ui-skill` / `ui-model-selection` 这类上游插件要的面）。 */
-export const Sessions = new InjectionToken<SessionsFace>("sessions");
+export const Sessions: TokenClass<SessionsFace> = new InjectionToken<SessionsFace>("sessions");
 
 /** `ctx.inputTriggers` 的面（上游 `InputTriggerServiceContract`：输入区 `/`、`@` 的触发源注册面）。 */
 export type InputTriggersFace = ZephyrContext["inputTriggers"];
@@ -43,7 +43,9 @@ export type UiSessionStatusFace = ZephyrContext["uiSession"]["sessionStatus"];
  * 令牌名就是上游的子服务名：`fromCordis` 按它从 store 取面；消费方 `inject(UiSessionStatus)` 后
  * 由 `mount` 的 deps **替换**上游那次按名读——不靠全局名字，也不靠装配顺序里的隐式约定。
  */
-export const UiSessionStatus = new InjectionToken<UiSessionStatusFace>("uiSession.sessionStatus");
+export const UiSessionStatus: TokenClass<UiSessionStatusFace> = new InjectionToken<UiSessionStatusFace>(
+  "uiSession.sessionStatus",
+);
 
 /** `ctx.sidebarRight` 的面（上游 `SidebarRightController` 实例：右侧面板的对外动作面）。 */
 export type SidebarRightFace = ZephyrContext["sidebarRight"];

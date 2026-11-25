@@ -3,11 +3,12 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pathExists, runInherited, type UpstreamPaths } from "./common.ts";
 import { rewriteExports } from "./exports.ts";
+import { dropJsonFields } from "./manifests.ts";
 
 // `<vendor>/steps.ts` 的两阶段清单（`export const patch` / `export const prebuild`）与执行器；任一步骤
 // 失败即失败——上游已变化，评估更新 / 删除 / 新增，不跳过。清单用 TS 写：每条步骤就地注释「为什么」。
 //
-// - `patch`：改上游工作树（裁剪、打补丁、exports 改写），**从 sync 的干净基线跑一次**；不是所有步骤都
+// - `patch`：改上游工作树（裁剪、清单字段、打补丁、exports 改写），**从 sync 的干净基线跑一次**；不是所有步骤都
 //   幂等（`text` 第二次跑就"未匹配"），重复执行请先 sync。
 // - `prebuild`：生成源码面消费的产物（typert 生成物）、编译不得不编译的 native addon、删上游 tsconfig
 //   （口径收口）。顺序有依赖：typert 分析靠上游根的 face tsconfig（`tsconfig.host.json` /
@@ -17,6 +18,13 @@ export type Step =
   | { type: "rm"; path: string }
   | { type: "rm"; glob: string }
   | { type: "text"; file: string; pattern: string; flags?: string; to?: string }
+  | {
+      type: "json";
+      /** 相对上游根的 glob（`node_modules` 永不进范围）。 */
+      glob: string;
+      /** 要整块删掉的顶层字段（结构化改动，不切文本）；字段不存在即跳过，重复跑不改一个字节。 */
+      drop: string[];
+    }
   | { type: "git"; patch: string }
   | {
       type: "exports";
@@ -102,6 +110,10 @@ async function runStep(step: Step, paths: UpstreamPaths): Promise<void> {
     if (next === content) throw new Error(`patch 未产生变化: ${step.file}`);
     console.log(`[steps] text ${step.file}`);
     await writeFile(file, next);
+    return;
+  }
+  if (step.type === "json") {
+    await dropJsonFields(dir, { glob: step.glob, drop: step.drop });
     return;
   }
   if (step.type === "git") {

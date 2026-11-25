@@ -10,7 +10,6 @@ import { provideSessionProjection, provideTokenMeter } from "@morlay/dsh-session
 import { provideToolOutput } from "../server/tool-output.provide.ts";
 import { bootstrapApplication, type App } from "@morlay/zephyr";
 import { describe, expect, test } from "@morlay/zephyr/testing";
-import { onTestFinished } from "vitest";
 
 async function boot(): Promise<App> {
   const app = await bootstrapApplication({
@@ -25,27 +24,34 @@ async function boot(): Promise<App> {
     ],
     timeoutMs: 20_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
   return app;
 }
 
 describe("tool-output 域", () => {
   test("落盘行把正文写成文件，并给出字节数与定位串", { timeout: 20_000 }, async () => {
     const app = await boot();
-    // 令牌是**行**（`SpillLocal`）：上游类只是它包装的实现，不再是令牌。
-    const spill = app.get(SpillLocal);
+    try {
+      // 令牌是**行**（`SpillLocal`）：上游类只是它包装的实现，不再是令牌。
+      const spill = app.get(SpillLocal);
 
-    // 会话身份由真存储铸出来（本包不依赖 `@deepseek-ai/dsh-session` 的品牌工厂）。
-    const session = app.get(SessionStore).create();
-    const ref = await spill.saveText({
-      owner: { sessionId: session.id },
-      source: { kind: "session-reference", sessionId: session.id, label: "result" },
-      suggestedName: "demo.txt",
-      content: "长输出的正文",
-    });
+      // 会话身份由真存储铸出来（本包不依赖 `@deepseek-ai/dsh-session` 的品牌工厂）。
+      const session = app.get(SessionStore).create();
+      const ref = await spill.saveText({
+        owner: { sessionId: session.id },
+        source: { kind: "session-reference", sessionId: session.id, label: "result" },
+        suggestedName: "demo.txt",
+        content: "长输出的正文",
+      });
 
-    expect(ref.bytes).toBe(new TextEncoder().encode("长输出的正文").byteLength);
-    expect(ref.locator).toContain("demo");
-    expect(ref.retrievalHint.length).toBeGreaterThan(0);
+      expect(ref.bytes).toBe(new TextEncoder().encode("长输出的正文").byteLength);
+      expect(ref.locator).toContain("demo");
+      expect(ref.retrievalHint.length).toBeGreaterThan(0);
+    } finally {
+      // 收尾放在测试体里而不是 `onTestFinished`：`dispose` 要等上游 spill / registry 的在途写盘收尾，
+      // 并行构建机上会超过 vitest 默认的 10s `hookTimeout`（钩子超时没有 per-call 的 timeout 可给，
+      // `onTestFinished` 也不支持）。放进测试体后按本用例的 `testTimeout`（上面 20s）计，
+      // 且断言失败时 `finally` 照样释放装配。
+      await app.dispose();
+    }
   });
 });

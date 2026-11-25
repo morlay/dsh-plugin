@@ -52,8 +52,7 @@
     "@morlay/zephyr-app": "workspace:^"
   },
   "devDependencies": {
-    "@morlay/dsh-agent-loop": "workspace:^",
-    "@morlay/dsh-command": "workspace:^"
+    "@morlay/dsh-agent-loop": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-ui-commands": "workspace:^",

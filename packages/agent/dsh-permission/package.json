@@ -53,7 +53,6 @@
   "devDependencies": {
     "@deepseek-ai/dsh-tool-testkit": "workspace:^",
     "@morlay/dsh-agent-loop": "workspace:^",
-    "@morlay/dsh-permission": "workspace:^",
     "@morlay/dsh-sandbox": "workspace:^",
     "@morlay/dsh-session-persistence": "workspace:^"
   },

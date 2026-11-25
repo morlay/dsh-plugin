@@ -327,7 +327,16 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
       /** 这份副本的包根清单（键就是它，读出来省得再解析一次）。 */
       readonly manifestOf: string;
       readonly importers: string[];
+      /** 这份副本被引用的全部说明符（脚本 + 样式，下潜与"该有却没有"的判据都看它）。 */
       readonly specifiers: Set<string>;
+      /**
+       * **脚本**里引用的说明符（= 页面会去取的那条地址）。
+       *
+       * 只有它们出产物：样式里的 `@import "pkg/x.css"` 在构建期就被闪电就地展开了
+       * （`bundleCssFile` + `resolveCssImport`），那条地址从头到尾没人取——照它出产物，
+       * 盘上就多一份「有文件、无人 import」的死产物（连带它引用的字体/图片各落一份）。
+       */
+      readonly scriptSpecifiers: Set<string>;
     }
   >();
   /** `包名::引用方目录` → 解析结果（同一目录的解析结果相同，别对每个说明符都走一遍查找）。 */
@@ -340,10 +349,10 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
     seenFiles.add(file);
     const text = await readFile(file, "utf8").catch(() => "");
     // 说明符来自**解析器**：脚本走 AST（`parseAst`），样式走闪电（`@import` 由它读）。
-    // 两者的裸说明符同一个去处：样式里的 `@import` 也是「页面会去取的那份产物」。
-    const found = file.endsWith(".css")
-      ? cssImportSpecifiersOf(text, file)
-      : specifiersOf(text, file);
+    // 两者都要**下潜**（`@import` 指向的包出口只在这份 CSS 里看得见，不读就漏掉它的依赖），
+    // 但只有脚本引用会变成产物——`@import` 在构建期被展开，它的地址没人取（见 `scriptSpecifiers`）。
+    const fromStyle = file.endsWith(".css");
+    const found = fromStyle ? cssImportSpecifiersOf(text, file) : specifiersOf(text, file);
     const specifiers = found.bare.filter((specifier) => !specifier.startsWith("node:"));
     for (const specifier of specifiers) {
       const name = packageNameOfSpecifier(specifier);
@@ -358,12 +367,15 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
         manifestOf: root.manifest,
         importers: [],
         specifiers: new Set<string>(),
+        scriptSpecifiers: new Set<string>(),
       };
       record.specifiers.add(specifier);
+      if (!fromStyle) record.scriptSpecifiers.add(specifier);
       if (record.importers.length < MAX_IMPORTERS) record.importers.push(file);
       records.set(root.manifest, record);
       // **样式出口本身也要读**：`@import` 指向的包出口只在这份 CSS 里看得见（脚本的 import 里没有
-      // 它），不读就漏出清单——改写出来的地址于是 404。
+      // 它），不读就漏掉它自己的依赖（那份 CSS 里的 `@import`、`url()` 都无从发现）。
+      // 读它**只为下潜**：`@import` 会被闪电就地展开，那条地址不出产物。
       if (specifier.endsWith(".css")) {
         const entry = await entryOf(root.manifest, specifier);
         if (entry !== undefined) pending.push(entry);
@@ -402,7 +414,8 @@ export async function planPrebundle(options: PrebundlePlanOptions): Promise<Preb
     const { name, version } = record;
     const manifestOf = record.manifestOf;
     const planned = new Set<string>();
-    for (const specifier of record.specifiers) {
+    // 只按**脚本**引用出产物：`@import` 的目标在构建期就被展开了（见 `scriptSpecifiers`）。
+    for (const specifier of record.scriptSpecifiers) {
       const subpath = specifier.slice(name.length).replace(/^\//u, "");
       // 出口名就是引用里那一段：包级引用是 `index`（地址 `…/index.js`），
       // `shiki/core` 是 `core`、`@morlay/zephyr-app/client/base.css` 是 `client/base.css`

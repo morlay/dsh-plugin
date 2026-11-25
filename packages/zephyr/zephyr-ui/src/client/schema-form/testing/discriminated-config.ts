@@ -6,7 +6,10 @@ import z from "@deepseek-ai/schemastery";
 
 const preparedSessionCacheSize = z.number().step(1).min(1).default(1);
 
-export const discriminatedConfig = z.union([
+// 显式注解到 `z.Schema` 宽面：不注解时推断类型会穿透到上游 `@deepseek-ai/cosmokit` 的 `Dict`（不可移植，
+// `tsrs` 后端的 TS2883 会报）。这是 fixture——它要的是「行投影认这个形状」，不是把 union 的整棵类型
+// 再抄一遍；形状本身由下面两条 `z.object` 守着。
+export const discriminatedConfig: z = z.union([
   z.object({
     type: z.const("sqlite"),
     path: z.string().required(),

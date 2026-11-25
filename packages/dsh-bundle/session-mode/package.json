@@ -10,6 +10,18 @@
   ],
   "type": "module",
   "exports": {},
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./client": {
+        "default": "./dist/client.cjs"
+      },
+      "./cordis.patch.yml": "./dist/cordis.patch.yml"
+    }
+  },
   "scripts": {
     "prepublishOnly": "pnpm exec devkit build --filter @morlay/dsh-session-mode-profile"
   },
@@ -39,18 +51,6 @@
     },
     "bundle": {
       "patch": "./dist/cordis.patch.yml"
-    }
-  },
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "default": "./dist/index.mjs"
-      },
-      "./package.json": "./package.json",
-      "./client": {
-        "default": "./dist/client.cjs"
-      },
-      "./cordis.patch.yml": "./dist/cordis.patch.yml"
     }
   }
 }

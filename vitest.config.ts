@@ -1,14 +1,44 @@
 import { defineConfig } from "vitest/config";
 
+// 测试分两层，**环境由文件名声明**（不写 `// @vitest-environment` 文件头，也不靠目录 / 裸 `.tsx` 推断）：
+//   `*.spec.dom.ts` / `*.spec.dom.tsx` → `ui` 层（`happy-dom`）；
+//   `*.spec.ts` → `node` 层。
+//
+// 渲 React 组件的测试用 `.spec.dom.tsx`，只碰 DOM（`document.querySelector`、断言注入的 `<style>`）的用
+// `.spec.dom.ts`——两者都在 ui 层，扩展名只表达「它渲不渲组件」。
+//
+// 两层不重叠：`.dom` 夹在 `.spec` 与 `.ts` 之间，`*.spec.ts` 匹配不到 `*.spec.dom.ts`，所以不需要靠
+// `exclude` 拆。
+//
+// **不要在 project 里设 `maxWorkers`**：那是**每层各自**的上限，两个 project 各设 100% 会变成「16 worker 抢
+// 8 核」（实测全量 204s），设 50% 则把每层砍到半核（168s）。worker 数交给 vitest 按机器核数统一分配
+// （默认 72.7s）；要更快用**全局**上限 `vitest run --maxWorkers=100%`（实测 53.5s，与分层前单层 51s 持平）。
+const EXCLUDE = ["**/node_modules/**", "target/**", ".scratch/**"];
+
 export default defineConfig({
   oxc: { decorator: { legacy: true } },
   test: {
-    include: ["**/__tests__/**/*.spec.tsx", "**/__tests__/**/*.spec.ts"],
-    // `.scratch/**`：临时产物目录（交接、票据、探针，还有别人放的备份）——它不是仓库的一部分，
-    // 里面出现的 `*.spec.ts` 也不该被当成测试跑（否则别人一份备份就能让全库红）。
-    exclude: ["**/node_modules/**", "target/**", ".scratch/**"],
-    // 单测里的等待不应该超过 3s：超时即失败，暴露真实原因，而不是把失败拖成 5s 的 vitest 默认超时。
-    testTimeout: 3000,
-    isolate: true,
+    projects: [
+      {
+        test: {
+          name: "node",
+          environment: "node",
+          include: ["**/__tests__/**/*.spec.ts"],
+          exclude: [...EXCLUDE],
+          testTimeout: 3000,
+          isolate: true,
+        },
+      },
+      {
+        test: {
+          name: "ui",
+          environment: "happy-dom",
+          include: ["**/__tests__/**/*.spec.dom.ts", "**/__tests__/**/*.spec.dom.tsx"],
+          exclude: [...EXCLUDE],
+          testTimeout: 3000,
+          isolate: true,
+        },
+      },
+    ],
   },
 });

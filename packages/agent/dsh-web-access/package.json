@@ -36,7 +36,6 @@
     "@morlay/zephyr": "workspace:^"
   },
   "devDependencies": {
-    "@morlay/dsh-web-access": "workspace:^",
     "@morlay/zephyr-app": "workspace:^"
   },
   "peerDependencies": {

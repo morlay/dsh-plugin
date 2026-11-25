@@ -59,6 +59,10 @@ async function externalizableSpecifiersOf(
   const out: Array<string | RegExp> = [];
   if (!isSubpathMap) {
     if ((await browserEntryOf(root)) !== undefined) out.push(name);
+    // **没有 `exports` 表的老包**：Node 的解析对任意子路径都成立（`@xterm/xterm/css/xterm.css`），
+    // 而清单没给出可枚举的键。样式子路径按模式放行——它们本来就各是一条产物（`<pkg>@<ver>/<subpath>.js`），
+    // 不放行就会退化成"内联进引用方"，那条产物变成死产物。脚本子路径不放行：清单里没有它，放行等于凭空造地址。
+    out.push(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/.+\\.css$`, "u"));
     return out;
   }
   for (const key of Object.keys(table as Record<string, unknown>)) {
@@ -125,7 +129,7 @@ export function clientModulesAlias(options: {
  * 规则变了、源码没变时，旧产物必须作废，否则会继续复用带着老 URL 的字节。
  */
 /** 构建器**规则**版本：改解析 / 改写规则就 bump（见 {@link BUNDLER_REV}）。 */
-const BUNDLER_RULES = "30";
+const BUNDLER_RULES = "31";
 
 /**
  * 地址里的 `?v=`（与 vite 同一个写法）：构建器**规则指纹**（`BUNDLER_RULES` 的哈希，形如 vite 的 `?v=`）。
@@ -600,6 +604,25 @@ async function hasModuleSyntax(entry: string): Promise<boolean> {
   }
 }
 
+/**
+ * 外置名单的成员判定（样式钩子与 `paths` 之外唯一的一处读者）。
+ *
+ * 名单里两种条目：精确说明符（`exports` 的键）与通配模式（`./src/*` 这类，见
+ * {@link externalizableSpecifiersOf}）。判定必须两种都认——否则通配出口上的样式（`katex/dist/katex.min.css`）
+ * 会被判成"不外置"，又落回内联。
+ * @param specifier - 说明符（`pkg/subpath` 形态，与 `external` 同一套写法）。
+ * @param external - 外置名单。
+ * @returns 是否外置。
+ */
+function isExternalSpecifier(
+  specifier: string,
+  external: readonly (string | RegExp)[],
+): boolean {
+  return external.some((entry) =>
+    typeof entry === "string" ? entry === specifier : entry.test(specifier),
+  );
+}
+
 /** 一个入口的模块类型。 */
 export type ModuleKind = "esm" | "cjs" | "source" | "style" | "asset";
 
@@ -941,6 +964,10 @@ async function bundlePackageOnce(
       // 跨包 `@import` 是**包引用**：交给闪电在构建期就地展开（指向地址只会让浏览器按样式表解析那份
       // JS 产物，规则被忽略）。解析按引用方走，资产按各自的目录归位。
       importTargetOf: async (specifier, from) => await resolveCssImport(specifier, from),
+      // 跨包的**样式出口**（`@morlay/zephyr-app/client/base.css`、`katex/dist/katex.min.css` 这类）不进内联：
+      // 外置名单里本来就有它（{@link externalizableSpecifiersOf} 按 `exports` 算的），产物也早就产出——内联进来
+      // 会让那条产物变成「盘上有、无人引用」，并把样式的注入位次从"按 import 顺序"挪到"本产物末尾"。
+      isFederatedStylesheet: (specifier: string) => isExternalSpecifier(specifier, external),
     }),
     clientAssetPlugin({ assets: "threshold", nodeStub: options.nodeStub }),
     // **外置名单 = 逐条说明符**（`node:*` 除外——它走 `clientAssetPlugin` 的浏览器替身）。
