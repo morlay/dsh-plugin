@@ -22,7 +22,7 @@ import { type App } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { Remote } from "@morlay/zephyr-app/contract";
 import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
 
 /** 指向临时目录的运行环境。 */
@@ -39,7 +39,7 @@ interface Booted {
  * 起完整的一行：会话 + agent + 权限（默认 `workspace-write`）+ 命令面。
  * @returns 双端装配与建好的会话 id。
  */
-async function boot(appEnv: TestingAppEnv): Promise<Booted> {
+async function boot(appEnv: AppEnvFixture): Promise<Booted> {
   const two = await bootTwoSided({
     createHost: () => [
       ...provideSession(),
@@ -61,7 +61,8 @@ async function boot(appEnv: TestingAppEnv): Promise<Booted> {
     ],
     // client 装配：只持传输（`LocalRemote` 是两 ctx 之间唯一的桥）。
     createClient: (booted) => clientWithTransport(booted, []),
-  });
+    // 卸载跟着 fixture 的清理链走：它跑在「删临时目录」之前（`onTestFinished` 更晚，见 `fixtures.ts`）。
+  }, appEnv);
   if (two.client === undefined) throw new Error("client 没装上");
   const sessionId = two.host.get(SessionStore).prepare().id;
   await two.host

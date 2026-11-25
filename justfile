@@ -41,7 +41,7 @@ fmt:
 # 静态检查：oxlint 单进程扫全仓（含 type-aware 规则；`.oxlintrc.json` 的 ignorePatterns 已排除 `vendor/**`）。
 # 格式（`oxfmt --check`）不进这道门：它是提交前的本地习惯。
 lint:
-    pnpm exec oxlint .
+    TSRS_FAST=1 pnpm exec oxlint .
 
 # 结构性判据（面边界 / 唯一化 / 声明未用 / 扩展边界 / 类型纪律）：有违规退出 1。
 # 逐包跑、根上汇总；包列表由 pnpm 的递归给出，不在这里另找一份。

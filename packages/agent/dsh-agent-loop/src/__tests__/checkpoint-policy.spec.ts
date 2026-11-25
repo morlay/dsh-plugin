@@ -18,7 +18,7 @@ import { MessageId } from "@morlay/dsh-agent";
 import { FakeLlmAdapter } from "@morlay/dsh-agent/testing";
 import { bootstrapApplication, configure, without } from "@morlay/zephyr";
 import { AppEnv } from "@morlay/zephyr-app";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { Llm } from "@morlay/dsh-agent";
 import { AgentLoop } from "../contract/index.ts";
 import { provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
@@ -38,7 +38,7 @@ import { SessionCheckpointPolicy } from "../checkpoint-policy.service.ts";
  */
 async function runOneTurn(
   withPolicy: boolean,
-  appEnv: TestingAppEnv,
+  appEnv: AppEnvFixture,
 ): Promise<{ adapterCalls: number; flushes: number }> {
   // 两个分支各自**完整内联**：装配清单的类型是字面量元组（断言器要它），抽成变量会退化成数组。
   const app = await bootstrapApplication({
@@ -76,47 +76,44 @@ async function runOneTurn(
     timeoutMs: 20_000,
   } as never);
 
-  // 应用**在函数里收口**：临时根由 `appEnv` fixture 管，而 fixture 的清理跑在 `onTestFinished`
-  // 之前（实测：进 `onTestFinished` 时根已被删）。dispose 若留到那时，会话落盘会把 `sessions/`
-  // 又写回已删除的根里——每轮全量就是几个 `zephyr-spec-*` 残骸。
-  try {
-    let flushes = 0;
-    // 事件是**与 cordis 的接缝**：派发走 `ctx.parallel("session/flush")`，监听也走 ctx，不占服务名。
-    (app.ctx as unknown as { on(name: string, fn: () => void): () => void }).on(
-      "session/flush",
-      () => {
-        flushes += 1;
-      },
+  // 卸载登记到 fixture 的清理链：它跑在「删临时目录」**之前**。写成 `onTestFinished(() => app.dispose())`
+  // 会晚于删目录（实测），dispose 的会话落盘就把 `sessions/` 写回已删除的根，留下 `zephyr-spec-*` 残骸。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
+
+  let flushes = 0;
+  // 事件是**与 cordis 的接缝**：派发走 `ctx.parallel("session/flush")`，监听也走 ctx，不占服务名。
+  (app.ctx as unknown as { on(name: string, fn: () => void): () => void }).on(
+    "session/flush",
+    () => {
+      flushes += 1;
+    },
+  );
+
+  const adapter = new FakeLlmAdapter();
+  app.get(Llm).registerAdapter(["deepseek-official"], adapter);
+
+  // 会话标识用存储铸出来的真值（`prepare()` 不注册进目录，正好交给下一行去建）。
+  const sessionId = app.get(SessionStore).prepare().id;
+  const agent = await app
+    .get(AgentLoop)
+    .create(
+      sessionId,
+      { provider: "deepseek-official", model: "deepseek-flash" },
+      { cwd: appEnv.values.dataDir },
     );
+  agent.send(
+    {
+      id: MessageId("m1"),
+      role: "user",
+      content: [{ type: "text", text: "你好" }],
+      source: { kind: "user" },
+    } satisfies UserMessage,
+    "next-turn",
+    true,
+  );
+  await agent.whenIdle();
 
-    const adapter = new FakeLlmAdapter();
-    app.get(Llm).registerAdapter(["deepseek-official"], adapter);
-
-    // 会话标识用存储铸出来的真值（`prepare()` 不注册进目录，正好交给下一行去建）。
-    const sessionId = app.get(SessionStore).prepare().id;
-    const agent = await app
-      .get(AgentLoop)
-      .create(
-        sessionId,
-        { provider: "deepseek-official", model: "deepseek-flash" },
-        { cwd: appEnv.values.dataDir },
-      );
-    agent.send(
-      {
-        id: MessageId("m1"),
-        role: "user",
-        content: [{ type: "text", text: "你好" }],
-        source: { kind: "user" },
-      } satisfies UserMessage,
-      "next-turn",
-      true,
-    );
-    await agent.whenIdle();
-
-    return { adapterCalls: adapter.calls, flushes };
-  } finally {
-    await app.dispose().catch(() => {});
-  }
+  return { adapterCalls: adapter.calls, flushes };
 }
 
 describe("checkpoint 策略", () => {

@@ -7,7 +7,7 @@ import { test as base } from "@morlay/zephyr-app/testing";
 import { vi } from "vitest";
 
 export { describe, expect } from "@morlay/zephyr/testing";
-export type { AppEnvFixtures, TestingAppEnv } from "@morlay/zephyr-app/testing";
+export type { AppEnvFixture, AppEnvFixtures, TestingAppEnv } from "@morlay/zephyr-app/testing";
 
 /**
  * 挂了本包 `test` 的 spec 自动得到：

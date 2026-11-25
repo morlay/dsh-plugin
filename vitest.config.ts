@@ -35,6 +35,10 @@ const EXCLUDE = ["**/node_modules/**", "target/**", ".scratch/**", ".tmp/**"];
 // include 收进测试。它与 `.scratch/` 不是一回事：`.scratch/` 放人工的交接 / 票据 / 探针（要能留），
 // `.tmp/` 只放测试运行期产物（可随时删、不需要留）。
 //
+// **卸载顺序（踩过）**：fixture 的清理跑在 `onTestFinished` **之前**。用了 `appEnv` 临时目录的装配，
+// 卸载必须登记到 `appEnv.onCleanup(...)`（`packages/zephyr/zephyr-app/src/testing/fixtures.ts` 的清理链），
+// 否则会在目录被删之后又写回 `sessions/…`，`.tmp/<层>/` 每轮留残骸。
+//
 // 目录在配置加载时建（早于任何 worker），不用 globalSetup。
 const TEST_TMPDIR = join(import.meta.dirname, ".tmp");
 

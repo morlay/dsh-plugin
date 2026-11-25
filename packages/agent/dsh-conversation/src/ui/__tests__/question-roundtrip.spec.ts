@@ -25,8 +25,8 @@ import { CredentialsInMemory } from "@morlay/zephyr-app/testing";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
 import { ToolCallId } from "@morlay/dsh-agent/server";
 import { SessionId } from "@morlay/dsh-session/endpoint";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/dsh-conversation/testing";
-import { onTestFinished, vi } from "vitest";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/dsh-conversation/testing";
+import { vi } from "vitest";
 import { provideAskUserTool, providePermissionFor } from "@morlay/dsh-permission/server";
 
 const signal = new AbortController().signal;
@@ -36,7 +36,7 @@ const signal = new AbortController().signal;
  * @param appEnv - 本用例的运行环境（数据根是它的临时目录）。
  * @returns 装配面。
  */
-async function boot(appEnv: TestingAppEnv): Promise<App> {
+async function boot(appEnv: AppEnvFixture): Promise<App> {
   vi.stubEnv("PORT", "0");
   const app = await bootstrapApplication({
     providers: [
@@ -66,7 +66,8 @@ async function boot(appEnv: TestingAppEnv): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它早于 `onTestFinished`，见 `fixtures.ts` 文件头）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return app;
 }
 

@@ -6,7 +6,6 @@
 // - 挂上应答者 → 结构化答案成为模型文本（GUI 与 headless 同一条路）；
 // - **完全**没有应答者（本 spec 的栈没装转发事件源）→ `ask` 立刻以 `NO_PROVIDER` 拒绝。
 //   「装了转发事件源、只是暂时没有客户端」是另一种拓扑：请求会被挂起、等客户端连上补发，见债务记录。
-import { onTestFinished } from "vitest";
 import { ToolCallId } from "@morlay/dsh-agent/server";
 import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
 import { AgentDirectory, provideAgent, provideWorkingDirectory } from "@morlay/dsh-agent";
@@ -23,7 +22,7 @@ import {
   provideTypert,
 } from "@morlay/zephyr-app";
 import { bootstrapApplication, configure, type App, type Context } from "@morlay/zephyr";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { provideAskUserTool, providePermissionFor } from "../server/permission.provide.ts";
 
 const signal = new AbortController().signal;
@@ -38,7 +37,7 @@ function asContext(ctx: unknown): Context {
 }
 
 /** 提问域 + 沙箱工具栈 + 一个真 agent（问题要路由到它的 scope）。 */
-async function boot(appEnv: TestingAppEnv): Promise<App> {
+async function boot(appEnv: AppEnvFixture): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -64,7 +63,8 @@ async function boot(appEnv: TestingAppEnv): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -73,7 +73,7 @@ async function boot(appEnv: TestingAppEnv): Promise<App> {
  * @param appEnv - 本用例的运行环境。
  * @returns 起好的应用。
  */
-async function bootWithGateway(appEnv: TestingAppEnv): Promise<App> {
+async function bootWithGateway(appEnv: AppEnvFixture): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -98,7 +98,8 @@ async function bootWithGateway(appEnv: TestingAppEnv): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return app;
 }
 
@@ -199,7 +200,7 @@ describe("ask_user_question 的提问闭环", () => {
       }
 
       // 挂起的调用随应用卸载结束：别把未处理的拒绝留给下一条用例。
-      // 提前 dispose 之后，用例结束时的自动清理（`onTestFinished`）再调一次也无害（`dispose` 幂等）。
+      // 提前 dispose 之后，用例结束时的清理链再调一次也无害（`dispose` 幂等）。
       await app.dispose();
       await expect(call).resolves.toBeDefined();
     },

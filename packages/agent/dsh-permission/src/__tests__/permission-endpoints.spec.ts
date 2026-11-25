@@ -25,8 +25,7 @@ import { AppEnv, RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import { LocalRemote } from "@morlay/zephyr-app/testing";
-import { onTestFinished } from "vitest";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
 import { UserQuestionsEndpoint } from "../endpoint/user-questions-endpoint.ts";
 import { PermissionPresetsEndpointClient } from "../ui/permission-presets-endpoint-client.ts";
@@ -53,7 +52,7 @@ function attachWaitEndpoint(): string {
  * `PermissionPresetService` 声明的 `shell` 依赖。
  * @returns 应用、handler 表、活 agent 与会话 id。
  */
-async function boot(appEnv: TestingAppEnv): Promise<{
+async function boot(appEnv: AppEnvFixture): Promise<{
   app: Awaited<ReturnType<typeof bootstrapApplication>>;
   handlers: RemoteHandlers;
   agent: Awaited<ReturnType<AgentLoop["create"]>>;
@@ -82,7 +81,8 @@ async function boot(appEnv: TestingAppEnv): Promise<{
     ],
     timeoutMs: 20_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   const sessionId = app.get(SessionStore).prepare().id;
   const agent = await app
     .get(AgentLoop)

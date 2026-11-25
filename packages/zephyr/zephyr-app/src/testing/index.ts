@@ -34,6 +34,8 @@ export {
   expect,
   test,
   TestingAppEnv,
+  type AppEnvCleanup,
+  type AppEnvFixture,
   type AppEnvFixtures,
   type TestingAppEnvOptions,
 } from "./fixtures.ts";
@@ -43,4 +45,5 @@ export {
   hostInvokerOf,
   type TwoSided,
   type TwoSidedBoot,
+  type TwoSidedHooks,
 } from "./two-sided.ts";

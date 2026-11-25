@@ -8,15 +8,14 @@ import { provideAgent } from "@morlay/dsh-agent";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { bootstrapApplication } from "@morlay/zephyr";
 import { AppEnv } from "@morlay/zephyr-app";
-import { onTestFinished } from "vitest";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { UserQuestionQueue } from "../contract/user-question-queue.contract.ts";
 import { UserQuestionQueueDefault } from "../user-question-queue.service.ts";
 
 /** 指向临时目录的运行环境。 */
 /** 起真 permission 栈（队列行要 `agents`，所以装真 agent 域，不造假件）。 */
 async function boot(
-  appEnv: TestingAppEnv,
+  appEnv: AppEnvFixture,
 ): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
@@ -28,7 +27,8 @@ async function boot(
     ],
     timeoutMs: 20_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return { app };
 }
 

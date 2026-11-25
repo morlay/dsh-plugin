@@ -3,7 +3,6 @@
 //
 // 这条用例不需要 UI 应答者，也不需要开 turn：`ApprovalService.request` 在 turn 之外**拒绝**（审计对
 // 必须落在 turn 内），所以执行以拒绝结束、命令一条没跑。这正是「有通道但此刻不能问」的 fail-closed。
-import { onTestFinished } from "vitest";
 import { ToolCallId } from "@morlay/dsh-agent/server";
 import { executeToolFixture } from "@deepseek-ai/dsh-tool-testkit";
 import { access } from "node:fs/promises";
@@ -17,13 +16,13 @@ import { SandboxPolicyDefault, provideFsTools, provideSandbox } from "@morlay/ds
 import { provideShell } from "@morlay/dsh-shell/server";
 import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { bootstrapApplication, configure, type App } from "@morlay/zephyr";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { providePermissionFor } from "../server/permission.provide.ts";
 
 const signal = new AbortController().signal;
 
 /** 权限域 + 沙箱工具栈 + 一个真 agent（升级请求要 agent 才能路由到审批）。 */
-async function boot(appEnv: TestingAppEnv): Promise<App> {
+async function boot(appEnv: AppEnvFixture): Promise<App> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -48,7 +47,8 @@ async function boot(appEnv: TestingAppEnv): Promise<App> {
     ],
     timeoutMs: 30_000,
   } as never);
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return app;
 }
 

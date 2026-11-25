@@ -10,7 +10,6 @@ import { AppEnv, RemoteHandlers, RemoteHandlersDefault } from "@morlay/zephyr-ap
 import { expect, test } from "@morlay/zephyr-app/testing";
 import { provideAuth } from "@morlay/dsh-auth/server";
 import { provideSetting } from "@morlay/dsh-setting/server";
-import { onTestFinished } from "vitest";
 import { LaunchEnvironment } from "../contract/launch-environment.contract.ts";
 import { LlmDefault } from "../llm.service.ts";
 import { LlmPiAi } from "../llm-pi-ai.service.ts";
@@ -66,7 +65,8 @@ test(
       ],
       timeoutMs: 20_000,
     });
-    onTestFinished(() => app.dispose().catch(() => {}));
+    // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+    appEnv.onCleanup(() => app.dispose().catch(() => {}));
 
     const result = (await app.get(RemoteHandlers).invoke("settings/describe", {})) as {
       ok?: boolean;

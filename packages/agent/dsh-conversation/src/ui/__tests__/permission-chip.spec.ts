@@ -24,7 +24,7 @@ import { Injectable, type App } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionRemote } from "@morlay/zephyr-app/client";
 import { bootTwoSided, clientWithTransport } from "@morlay/zephyr-app/testing";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/dsh-conversation/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/dsh-conversation/testing";
 import { SessionController } from "@morlay/dsh-conversation/ui";
 import { provideSessionsStore } from "@morlay/dsh-conversation/ui";
 
@@ -61,11 +61,11 @@ class FakeSessionRemote extends SessionRemote {
 
 /**
  * 装配整条链：宿主（会话 + agent + 权限 + 命令面）+ 客户端（`sessions` 服务 + 走进程内传输的命令执行器）。
- * 生命周期由 `bootTwoSided` 自己收（`onTestFinished`），这里不返回卸载函数。
+ * 生命周期由 `bootTwoSided` 跟着 `appEnv` 的清理链收，这里不返回卸载函数。
  * @param appEnv - 本用例的运行环境（数据根是它的临时目录）。
  * @returns 前端 app（被测面）、后端 app 与建好的会话 id。
  */
-async function boot(appEnv: TestingAppEnv): Promise<{
+async function boot(appEnv: AppEnvFixture): Promise<{
   /** 前端装配：chip 的调用面在这一侧。 */
   app: App;
   /** 后端装配：宿主档位在这一侧的投影里。 */
@@ -98,7 +98,8 @@ async function boot(appEnv: TestingAppEnv): Promise<{
         RemoteCommandRunner,
         ...provideSessionsStore(),
       ]),
-  });
+    // 卸载跟着 fixture 的清理链走：它跑在「删临时目录」之前（`onTestFinished` 更晚，见 `fixtures.ts`）。
+  }, appEnv);
   if (two.client === undefined) throw new Error("client 没装上");
   // 会话建在**后端**：`SessionStore` / `AgentLoop` 是宿主那侧的行。
   const sessionId = two.host.get(SessionStore).prepare().id;

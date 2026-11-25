@@ -12,8 +12,7 @@ import { AppEnv } from "@morlay/zephyr-app";
 import { AgentDirectoryDefault } from "@morlay/dsh-agent";
 import { SessionStore } from "@morlay/dsh-session";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
-import { onTestFinished } from "vitest";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/dsh-conversation/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/dsh-conversation/testing";
 import { SessionTitle } from "../index.ts";
 import { provideSessionTitle } from "../server/session-title.provide.ts";
 
@@ -23,7 +22,7 @@ import { provideSessionTitle } from "../server/session-title.provide.ts";
  * @returns 装配面。
  */
 async function boot(
-  appEnv: TestingAppEnv,
+  appEnv: AppEnvFixture,
 ): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
@@ -35,7 +34,8 @@ async function boot(
     ],
     timeoutMs: 10_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它早于 `onTestFinished`，见 `fixtures.ts` 文件头）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return { app };
 }
 

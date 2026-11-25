@@ -6,9 +6,9 @@
  */
 import { credentialKey } from "@deepseek-ai/dsh-credentials";
 import { bootstrapApplication } from "@morlay/zephyr";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { AppEnv } from "@morlay/zephyr-app";
-import { onTestFinished, vi } from "vitest";
+import { vi } from "vitest";
 import { Credentials, RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { Authorization, credentialRef } from "../index.ts";
@@ -19,7 +19,7 @@ import { AuthorizationDefault } from "../authorization.service.ts";
 /** 指向临时目录的运行环境（凭证文件就在 `dataDir` 下）。 */
 /** 起真 auth 栈。 */
 async function boot(
-  appEnv: TestingAppEnv,
+  appEnv: AppEnvFixture,
 ): Promise<{ app: Awaited<ReturnType<typeof bootstrapApplication>> }> {
   const app = await bootstrapApplication({
     providers: [
@@ -30,7 +30,8 @@ async function boot(
     ],
     timeoutMs: 10_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return { app };
 }
 

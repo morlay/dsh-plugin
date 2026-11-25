@@ -11,8 +11,7 @@ import { SubprocessDefault } from "@morlay/dsh-shell";
 import { WorkingDirectoryDefault, provideWorkingDirectory } from "@morlay/dsh-agent";
 import { bootstrapApplication, configure } from "@morlay/zephyr";
 import { AppEnv, RemoteHandlers, provideApiGateway, provideTypert } from "@morlay/zephyr-app";
-import { onTestFinished } from "vitest";
-import { describe, expect, test, type TestingAppEnv } from "@morlay/zephyr-app/testing";
+import { describe, expect, test, type AppEnvFixture } from "@morlay/zephyr-app/testing";
 import { provideSessionQuerySqlite } from "@morlay/dsh-session/server";
 import { provideSkill } from "@morlay/dsh-skill/server";
 
@@ -21,7 +20,7 @@ import { provideSkill } from "@morlay/dsh-skill/server";
  * 起 `skills/list` 的宿主栈。
  * @returns handler 表。
  */
-async function boot(appEnv: TestingAppEnv): Promise<RemoteHandlers> {
+async function boot(appEnv: AppEnvFixture): Promise<RemoteHandlers> {
   const app = await bootstrapApplication({
     providers: [
       ...provideSession(),
@@ -45,7 +44,8 @@ async function boot(appEnv: TestingAppEnv): Promise<RemoteHandlers> {
     ],
     timeoutMs: 20_000,
   });
-  onTestFinished(() => app.dispose().catch(() => {}));
+  // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+  appEnv.onCleanup(() => app.dispose().catch(() => {}));
   return app.get(RemoteHandlers);
 }
 

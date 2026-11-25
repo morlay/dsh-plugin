@@ -13,7 +13,6 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Connection, WebServer } from "@morlay/zephyr-app";
 import { describe, expect, test } from "@morlay/dsh-conversation/testing";
-import { onTestFinished } from "vitest";
 import { DeliverablesHostDefault, WorkspaceChangesDefault } from "../index.ts";
 import { mountDeliverablesHost } from "./support/deliverable-host.ts";
 
@@ -22,7 +21,8 @@ describe("交付物域", { timeout: 180_000 }, () => {
   test("两条行都 mount 过，`/api` 上四条路由被分派", async ({ appEnv }) => {
     const dataDir = appEnv.values.dataDir;
     const host = await mountDeliverablesHost(join(dataDir, "data"));
-    onTestFinished(() => host.dispose());
+    // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
+    appEnv.onCleanup(() => host.dispose());
     const app = host.app;
 
     // `fetch.register` 是那四条路由唯一的注册入口：它不在，`ui-deliverables` 的 `apply` 就炸。

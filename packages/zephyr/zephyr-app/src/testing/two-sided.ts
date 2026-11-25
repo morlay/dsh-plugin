@@ -44,11 +44,27 @@ export function hostInvokerOf(host: App) {
 }
 
 /**
+ * `bootTwoSided` 的收尾钩子。
+ *
+ * 传 `appEnv` 的 spec 直接把它当第二参数给（`bootTwoSided({…}, appEnv)`）：它的 `onCleanup` 就是清理链。
+ */
+export interface TwoSidedHooks {
+  /**
+   * 清理链登记口（`appEnv.onCleanup`）。
+   *
+   * 有它时**不**用 `onTestFinished`：vitest 里 fixture 的清理跑在 `onTestFinished` 之前（实测）。
+   * 那样卸载发生在临时目录被删之后，dispose 期间的落盘会把 `sessions/` 写回已删除的根。
+   */
+  readonly onCleanup?: (fn: () => Promise<void>) => void;
+}
+
+/**
  * 起 host（可选再起 client），返回可 `dispose` 的两端。
  * @param boot - 两边的 providers。
+ * @param hooks - 收尾钩子（带 `appEnv` 的 spec 直接传它）。
  * @returns 装配结果。
  */
-export async function bootTwoSided(boot: TwoSidedBoot): Promise<TwoSided> {
+export async function bootTwoSided(boot: TwoSidedBoot, hooks?: TwoSidedHooks): Promise<TwoSided> {
   const host = await bootstrapApplication({ providers: boot.createHost() });
   let client: App | undefined;
   if (boot.createClient !== undefined) {
@@ -58,8 +74,13 @@ export async function bootTwoSided(boot: TwoSidedBoot): Promise<TwoSided> {
     await client?.dispose();
     await host.dispose();
   };
-  // 测试结束自动收：spec 里不用写 try/finally，也不会漏。
-  onTestFinished(dispose);
+  // 自动收：spec 里不用写 try/finally，也不会漏。
+  //
+  // **有清理链就走清理链**：`appEnv.onCleanup` 在「删临时目录」之前跑，而 `onTestFinished` 在之后
+  // （fixture 清理早于它，实测）。顺序反了的话，dispose 的落盘会写回已删除的根，留下
+  // `zephyr-spec-*/sessions/…` 残骸。没带 `appEnv` 的 spec（自造根）退回 `onTestFinished`。
+  if (hooks?.onCleanup !== undefined) hooks.onCleanup(dispose);
+  else onTestFinished(dispose);
   return { host, client, dispose };
 }
 
