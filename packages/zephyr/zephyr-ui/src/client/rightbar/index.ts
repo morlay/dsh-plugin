@@ -1,6 +1,6 @@
-// 右栏：容器座位、正文座位、标签座位与角位展开按钮。
+// 右栏的展示件：外壳、正文位、标签 chip、guide 空态。
 //
-// 组件只吃 props（数据与动作都由座位行给）；样式只在本包。
+// 只吃 props（数据与动作由容器装配行给）；样式只在本包。
 export {
   Rightbar,
   type RightbarLabels,
@@ -10,4 +10,5 @@ export {
   type RightbarView,
 } from "./rightbar.tsx";
 export { RightbarPaneTab, type RightbarPaneTabProps } from "./rightbar-pane-tab.tsx";
+export { RightbarGuide, type RightbarGuideProps } from "./rightbar-guide.tsx";
 export { RightbarTabTitle, type RightbarTabTitleProps } from "./rightbar-tab-title.tsx";

@@ -30,7 +30,7 @@ import { Layout } from "../layout/layout.contract.ts";
 import { Locale } from "../locale/locale.contract.ts";
 import { Resources } from "../resources/resources.contract.ts";
 import { Slots } from "../renderer/slots.contract.ts";
-import { SidebarRight } from "./sidebar-right.contract.ts";
+import { SidebarRight, SidebarRightRow } from "./sidebar-right.contract.ts";
 import { SidebarRightTabs } from "./sidebar-right-tabs.contract.ts";
 
 /** 会话 id（类型来自上游控制器自己的读面，不再引第二处 branded 类型）。 */
@@ -70,7 +70,7 @@ const DICTS = {
 
 /** `ctx.sidebarRight` 的实现：上游控制器的转发面 + 每会话 surface + 三个座位。 */
 @Injectable()
-export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispose {
+export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDispose {
   /** 类型注册表：与它共享同一个上游注册表实例（控制器的第一个参数）。 */
   private readonly tabs = inject(SidebarRightTabs);
 
@@ -198,7 +198,7 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
    * @param sessionId - 会话 id。
    * @returns 该会话的 store 实例（同一会话永远是同一个）。
    */
-  surfaceOf(sessionId: string): SidebarRightSurfaceStore {
+  surfaceOf(sessionId: string): SidebarRightSurfaceStore | undefined {
     const existing = this.surfaces.get(sessionId);
     if (existing !== undefined) return existing;
     const instance = this.store.create(sessionId) as SidebarRightSurfaceStore;
@@ -255,7 +255,7 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
     const sessionId = binding?.key;
     if (sessionId !== undefined) {
       const surface = this.surfaceOf(sessionId);
-      if (this.surfaceSubscription?.sessionId !== sessionId) {
+      if (surface !== undefined && this.surfaceSubscription?.sessionId !== sessionId) {
         this.surfaceSubscription?.unsubscribe();
         this.surfaceSubscription = {
           sessionId,
@@ -519,6 +519,11 @@ export class SidebarRightDefault extends SidebarRight implements OnInit, OnDispo
   /** 右键菜单用：一个 tab 的「全部 / 右侧 / 能否关」。 */
   get menuTabs(): SidebarRightController["menuTabs"] {
     return this.core.menuTabs.bind(this.core);
+  }
+
+  /** 会话的发光源（上游座位的 `hooks.flash` 读它）。 */
+  get flashOf(): SidebarRightController["flashOf"] {
+    return this.core.flashOf.bind(this.core);
   }
 
   /** 卸载：撤座位与订阅，撤销每个会话的 adopt，并让控制器忘掉它们。 */

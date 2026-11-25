@@ -25,3 +25,16 @@
 - 渲染用例用文件头 `// @vitest-environment happy-dom`，并在 `afterEach(cleanup)`。
 - 共享替身放 `src/client/schema-form/testing/`（`FakeScope` / `fakeDescribe` / `discriminatedConfig` / `stubResizeObserver` + `notifyResize`）。
 - **不写样式断言**：断言「元素带上了哪个 `data-role` / 哪个类」，几何只在浏览器里看。
+
+## 照抄上游组件时，props 契约也一起 deep import
+
+- **deep import 上游组件（`.../src/client/**/*.tsx`）时，必须连它的 props 契约一起拿**：`PropsRenderSlots` /
+  `RenderSlotFn` / `RenderOpts` / `StyleProps` 这些派生类型来自上游，不是我们自己发明的形状。
+  - 反例：容器里写 `renderSlot(key, owner, { entryKey }: { entryKey: string })`——多一个必填字段、少一个可选
+    字段，都**不会**编译报错（函数参数双变），但渲染器在别处按上游签名给值时，第三参会被静默丢掉，
+    症状是 keyed 座位拿不到 key、正文渲染出对象，React 报 `Objects are not valid as a React child`。
+- **容器组件与上游座位组件的 props 必须同形**：我们照上游某个座位组件写外壳时，外壳的 props 就按那个
+  组件的 `PropsRuntime<'…'> & PropsRenderSlots<…> & InjectFace<…>` 对齐（可以只取用得到的成员，但类型形状
+  照抄，不改参数个数与可选性）。
+- **判据靠真渲染，不靠类型**：容器/外壳每加一个分支，补一条 `render(<X {...props} />)` 的用例（happy-dom +
+  `@testing-library/react`），断言关键节点与 `renderSlot` 的调用形状；纯类型/桩函数测不出参数错位。

@@ -33,6 +33,11 @@
 - **等条件，不等时间**：渲染 / 装配类断言用 `vi.waitFor(条件, { timeout })`，不写
   `await new Promise((r) => setTimeout(r, 50))` 等状态。唯一允许的定时器是 `dispose` 的兜底
   （`Promise.race` 里 10s 收尾），它不是断言。
+- **fake timers 只伪造得了 JS 的时间**：`setTimeout` 重试 / 防抖 / 轮询可以用 `vi.useFakeTimers()` + `advanceTimersByTime`；
+  **真 IO、内核锁等待（sqlite 的 `SQLITE_BUSY` / `busy_timeout`）、跨进程等待一律不能**——`advanceTimersByTime`
+  与内核的重试毫无关系，用了只会让用例「看起来在等、其实什么都没测」。这类判据的形态是**「等到结果 + 证明等过」**：
+  `expect(result.ok).toBe(true)` + `expect(result.waitedMs).toBeGreaterThan(0)`，**不写具体时长**——
+  `>= 400` 那种数把「holder 持锁 800ms 减抖动」写成了契约，负载一抖就红（实测 391 vs 400）。
 - **测试分两层，环境由文件名声明**：需要 DOM 的用 `*.spec.dom.ts`（渲 React 组件的用 `*.spec.dom.tsx`），
   其余 `*.spec.ts` 走 node。**不写 `// @vitest-environment` 文件头**，也不靠目录或裸 `.tsx` 推断——
   环境由 `vitest.config.ts` 的 project 按文件名给。`cleanup` 由该包 `test` 的 auto fixture 负责（见下一节）。

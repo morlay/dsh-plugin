@@ -937,6 +937,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-sidebar-documentpreview':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-documentpreview
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-right
       '@deepseek-ai/dsh-client-ui-subagent':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-subagent
@@ -1009,10 +1012,16 @@ importers:
       '@morlay/zephyr-app':
         specifier: workspace:^
         version: link:../../zephyr/zephyr-app
+      '@morlay/zephyr-ui':
+        specifier: workspace:^
+        version: link:../../zephyr/zephyr-ui
       '@testing-library/react':
         specifier: '*'
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.1)(@types/react@18.3.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
+      '@deepseek-ai/dsh-client-shortcuts':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/shortcuts
       '@deepseek-ai/dsh-client-ui-directory-picker-native':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-directory-picker-native
@@ -1025,6 +1034,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-sidebar-browser':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-sidebar-browser
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-slots
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-workspace

@@ -1,13 +1,15 @@
 // 右栏容器座位：占据帧的右列，画标签条与正文。
 //
-// 槽位名沿用上游（`sidebar.right.pane.tab` / `.title`）：上游那几个行（浏览器、终端、文件、预览、
-// 交付物、子代理聊天）把正文硬编码注册在这两个名字上，改名就等于让它们的正文静默消失。
+// 槽位名沿用上游（`sidebar.right.pane.tab` / `.title`）：上游那几个行把正文硬编码注册在这两个名字上。
 //
-// 子槽是 session 作用域，而本座位挂在 root 位置（`rightbar`）。所以正文与标题都由这里自己套
-// `ScopeBindingProvider`：会话由 `binding`（session 作用域源）给定，不需要 SessionReference。
+// 子槽是 session 作用域，本座位挂在 root 位置（`rightbar`）。正文与标题都由这里套 `ScopeBindingProvider`：
+// 会话由 `binding`（session 作用域源）给定，不需要 SessionReference。
+//
+// **注意**：`renderSlot` 的形状是上游 `RenderSlotFn`——`(key, owner, opts?: RenderOpts)`，
+// `RenderOpts = { entryKey?, only?, fallback?, hookContext? }`；不要自己发明两参或必填 `entryKey` 的窄形状。
 import { useEffect, type ReactNode } from "react";
 import { ScopeBindingProvider } from "@deepseek-ai/dsh-client-ui-renderer/src/client/bindings.tsx";
-import type { StandardSourceBinding } from "@deepseek-ai/dsh-client-ui-slots";
+import type { RenderOpts, StandardSourceBinding } from "@deepseek-ai/dsh-client-ui-slots";
 import { RightbarPaneTab } from "./rightbar-pane-tab.tsx";
 import { RightbarTabTitle } from "./rightbar-tab-title.tsx";
 import css from "./rightbar.module.css";
@@ -34,11 +36,11 @@ export interface RightbarView {
   readonly activeTabId: string | undefined;
 }
 
-/** 渲染右栏子座位的回调（类型 id 就是 keyed 座位的 key）。 */
+/** 渲染右栏子座位的回调（形状 = 上游 `RenderSlotFn`：`opts` 可选）。 */
 export type RightbarRenderSlot = (
   key: "sidebar.right.pane.tab" | "sidebar.right.pane.tab.title",
   owner: object,
-  opts: { entryKey: string },
+  opts?: RenderOpts,
 ) => ReactNode;
 
 /** 容器文案。 */
@@ -63,15 +65,15 @@ export interface RightbarProps {
   readonly select: (tabId: string) => void;
   /** 关掉一个标签。 */
   readonly close: (tabId: string) => void;
-  /** 把展开状态报给帧（`openRightbar` / `closeRightbar`）。 */
+  /** 把展开状态报给帧。 */
   readonly syncPresentation: (track: boolean) => void;
-  /** 帧给的视口宽度（窄帧不占列宽）。 */
+  /** 帧给的视口宽度。 */
   readonly viewportWidth: number;
-  /** 渲染两个子座位（框架给：本 entry 在自己注册里声明了它们）。 */
+  /** 渲染两个子座位（框架给）。 */
   readonly renderSlot: RightbarRenderSlot;
 }
 
-/** 窄帧阈值：与上游一致，窄于此宽度时展开的面板覆盖主区而不占列宽。 */
+/** 窄帧阈值：与上游一致。 */
 const NARROW_VIEWPORT = 768;
 
 /**
@@ -89,7 +91,6 @@ export function Rightbar({
   renderSlot,
 }: RightbarProps): ReactNode {
   const { expanded, binding, tabs, activeTabId } = useRightbar(view => view);
-  // 帧的列宽只认它自己的 store：展开且不窄，才占一条轨道。
   const track = expanded && viewportWidth >= NARROW_VIEWPORT;
   useEffect(() => {
     syncPresentation(track);
@@ -103,7 +104,7 @@ export function Rightbar({
       titleSlot={
         tab.typeId === undefined
           ? undefined
-          : renderSlot("sidebar.right.pane.tab.title", {}, { entryKey: tab.typeId })
+          : renderSlot("sidebar.right.pane.tab.title", {}, { entryKey: tab.typeId, fallback: null })
       }
       active={tab.id === activeTabId}
       closeLabel={labels.close}
@@ -133,7 +134,7 @@ export function Rightbar({
           content={
             active?.typeId === undefined
               ? undefined
-              : renderSlot("sidebar.right.pane.tab", {}, { entryKey: active.typeId })
+              : renderSlot("sidebar.right.pane.tab", {}, { entryKey: active.typeId, fallback: null })
           }
           unavailable={active === undefined ? labels.empty : labels.unavailable}
         />

@@ -28,4 +28,7 @@ export abstract class ContextMenus {
 
   /** 提示条（菜单里的轻量反馈）。 */
   abstract readonly notify: Upstream["notify"];
+
+  /** 当前打开菜单的目标（上游座位用它判断「菜单开着」）。 */
+  abstract readonly active: Upstream["active"];
 }

@@ -84,6 +84,16 @@
 }
 
 /* 角位按钮的镜像（上游 ExpandButton 用左栏折叠图标的镜像）。 */
+/* 默认页标题档（与 guide 说明同一处）。 */
+.guideTitle {
+  margin: 0;
+  padding: 16px 16px 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
 .expandIcon {
   transform: scaleX(-1);
 }

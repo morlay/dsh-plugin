@@ -61,11 +61,15 @@
     "@morlay/dsh-upload": "workspace:^",
     "@morlay/dsh-workspace": "workspace:^",
     "@morlay/zephyr": "workspace:^",
+    "@morlay/zephyr-ui": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:^",
     "@morlay/zephyr-app": "workspace:^",
     "@testing-library/react": "*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-shortcuts": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-client-ui-session-panel": "workspace:^",
     "@deepseek-ai/dsh-client-ui-session-status": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:^",

@@ -6,7 +6,7 @@ import css from "./rightbar.module.css";
 
 /** 正文座位的 props。 */
 export interface RightbarPaneTabProps {
-  /** 已渲染的正文；`undefined` 表示这个类型没注册正文。 */
+  /** 已渲染的正文（座位渲染结果）；没有就是 `null` / `undefined`。 */
   readonly content: ReactNode;
   /** 没有正文时的说明文案。 */
   readonly unavailable: string;

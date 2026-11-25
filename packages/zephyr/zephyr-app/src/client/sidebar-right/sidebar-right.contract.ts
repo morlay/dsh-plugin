@@ -11,7 +11,10 @@
 // 只声明我们实现与消费的那部分，全量覆盖由下面的守卫与上游面比对。
 import { Injectable } from "@morlay/zephyr";
 import type { AssertCoveredStrict, AssertTrue } from "@morlay/zephyr-app";
-import type { SidebarRightController } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
+import type {
+  SidebarRightController,
+  SidebarRightSurfaceStore,
+} from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 
 /** `ctx.sidebarRight` 的面：上游控制器。 */
 export type SidebarRightFace = SidebarRightController;
@@ -52,6 +55,9 @@ export abstract class SidebarRight {
   /** 一个 tab 的「全部 / 右侧 / 能否关」（右键菜单按它算）。 */
   abstract readonly menuTabs: SidebarRightFace["menuTabs"];
 
+  /** 某个会话最近一次「让 pane 发光」的请求（上游座位把它当动画源）。 */
+  abstract readonly flashOf: SidebarRightFace["flashOf"];
+
   /** 按会话关一个 tab（右键菜单的关闭动作走它）。 */
   abstract readonly closeIn: SidebarRightFace["closeIn"];
 }
@@ -68,3 +74,28 @@ export abstract class SidebarRight {
 export type SidebarRightCovered = AssertTrue<
   AssertCoveredStrict<SidebarRight, SidebarRightFace>
 >;
+
+/**
+ * **我们这层**的扩展面（不伪装成上游成员，所以不参与上面的守卫）。
+ *
+ * 容器要给 `rightbar.session` 声明 `store`，而那份实例必须是控制器 `adopt` 过的那一份；「按会话懒建并
+ * 交给控制器 adopt」是本层的能力，上游控制器面里没有它。
+ */
+export interface SidebarRightSurfaces {
+  /**
+   * 某个会话的 surface（控制器 adopt 的那一份 store；第一次要就建出来并 adopt）。
+   * @param sessionId - 会话 id。
+   * @returns 该会话的 store 实例。
+   */
+  surfaceOf(sessionId: string): SidebarRightSurfaceStore | undefined;
+}
+
+/**
+ * 装配行注入的**完整契约**：上游段（`SidebarRight`）+ 本层段（`SidebarRightSurfaces`）。
+ *
+ * 两段分开写，让「哪些成员来自上游、哪些是本层新增」在类型上直接可读；实现类只能 `extends` 它。
+ */
+export abstract class SidebarRightRow extends SidebarRight implements SidebarRightSurfaces {
+  /** 某个会话的 surface（见 {@link SidebarRightSurfaces.surfaceOf}）。 */
+  abstract surfaceOf(sessionId: string): SidebarRightSurfaceStore | undefined;
+}
