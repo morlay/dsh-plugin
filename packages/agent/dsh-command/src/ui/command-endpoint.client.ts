@@ -12,6 +12,8 @@
 //
 // `remote` 字段在这里显式声明：契约类**不**继承 `RemoteClientBase`（那个基类带 `inject(Remote)`，
 // 而契约被宿主侧共用，宿主没有 `Remote` 这个服务）。
+import type { CommandSubmitAttachment } from "@deepseek-ai/dsh-commands/types";
+import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { CommandEndpoint, type CommandExecuteValue, type CommandListValue } from "@morlay/dsh-command/endpoint";
 import { RemoteClient, groupNameOf, remoteDescriptorsOf } from "@morlay/zephyr-app/remote";
 import { inject, type Context, type OnInit } from "@morlay/zephyr";
@@ -40,7 +42,7 @@ export class CommandEndpointClient extends CommandEndpoint implements OnInit {
    * @param sessionId - 目标会话。
    * @returns 目录（未知会话给空数组）。
    */
-  override async list(sessionId: string): Promise<CommandListValue> {
+  override async list(sessionId: SessionId): Promise<CommandListValue> {
     return (await this.invoke("list", { sessionId })) as CommandListValue;
   }
 
@@ -52,9 +54,9 @@ export class CommandEndpointClient extends CommandEndpoint implements OnInit {
    * @returns 注册表给出的执行结果。
    */
   override async execute(
-    sessionId: string,
+    sessionId: SessionId,
     line: string,
-    submittedAttachments: readonly unknown[],
+    submittedAttachments: readonly CommandSubmitAttachment[],
   ): Promise<CommandExecuteValue> {
     return (await this.invoke("execute", { sessionId, line, submittedAttachments })) as CommandExecuteValue;
   }

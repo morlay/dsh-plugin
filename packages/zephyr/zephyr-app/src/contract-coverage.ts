@@ -29,25 +29,6 @@ export type Uncovered<Upstream, Contract> = Exclude<
  */
 export type AssertTrue<T extends true> = T;
 
-/** 一次 unary 调用的**裸值视图**：`Promise<{ ok: true; value: V } | …>` 还原成 `Promise<V>`。 */
-type PlainResult<Method> =
-  Method extends (...args: infer Args) => Promise<infer Result>
-    ? (...args: Args) => Promise<Result extends { readonly ok: true; readonly value: infer Value } ? Value : never>
-    : Method;
-
-/**
- * 一条 **wire 命名空间面**的裸值视图（逐成员）。
- *
- * 上游生成的客户端面（`ClientRemote['<ns>']`）把每个方法包成 `RemoteResult<T>`：那是**客户端**的结算协议。
- * 本仓的端点契约是**宿主侧**那一面（回裸值，`RemoteResult` 由客户端面在 `faceOf` 里统一包），所以要守卫它
- * 得先把这个包装剥掉——否则每条 wire 契约都会在返回类型上假红一次。
- *
- * @example
- * ```ts
- * export type XxxCovered = AssertTrue<AssertCoveredStrict<PlainWireFace<ClientRemote['xxx']>, XxxEndpoint>>;
- * ```
- */
-export type PlainWireFace<Face> = { readonly [K in keyof Face]: PlainResult<Face[K]> };
 
 /** 上游成员里，契约同名成员**赋值不过去**的那些（契约的值放不进上游要求的位置）；`never` 表示全可赋值。 */
 export type Unassignable<Upstream, Contract> = {
@@ -69,3 +50,50 @@ export type AssertCoveredStrict<Upstream, Contract> =
       ? true
       : Unassignable<Upstream, Contract>
     : Uncovered<Upstream, Contract>;
+/** 一个方法的形参元组 / 返回类型。 */
+type ParamsOf<Method> = Method extends (...args: infer Args) => unknown ? Args : never;
+type ReturnOf<Method> = Method extends (...args: never[]) => infer Result ? Result : never;
+
+/**
+ * 一个成员对上 wire 面了吗：**形参双向**、返回单向。
+ *
+ * **为什么不能用 `implements`**：`implements` 与 `AssertCoveredStrict` 是**同一个关系**（「我的成员能放进面里」），
+ * 而形参在参数位置是**逆变**的——放宽永远合法。实测：
+ * ```ts
+ * interface Face { execute(atts: readonly Attachment[]): void }
+ * class Widened implements Face { execute(_atts: readonly unknown[]): void {} }   // 不报错
+ * ```
+ * 所以 `_submittedAttachments: readonly unknown[]` 在 `implements` 下是绿的，双向判据才红。
+ *
+ * **形参与返回都双向**：`AssertCoveredStrict` 只判「契约能放进上游那个位置」，于是**宽化**看不见——
+ * `_submittedAttachments: readonly unknown[]` 收得下 wire 的 `readonly CommandSubmitAttachment[]`，
+ * 单向比较一路绿灯，而契约这时已经不再描述协议（`commands` 就这么漏过一次）。wire 的形参是协议，
+ * 宽一点都不行；返回同样双向（wire 的响应形状是**协议**，说窄了就是撒谎：消费方会按契约少判一次
+ * `undefined`）。要表达「我们不返回 undefined」就改契约，或者让实现在类型上就是那个窄类型——不要靠守卫放水。
+ */
+type WireMemberOk<Face, Contract> = [ParamsOf<Face>] extends [ParamsOf<Contract>]
+  ? [ParamsOf<Contract>] extends [ParamsOf<Face>]
+    ? [ReturnOf<Contract>] extends [ReturnOf<Face>]
+      ? [ReturnOf<Face>] extends [ReturnOf<Contract>]
+        ? true
+        : false
+      : false
+    : false
+  : false;
+
+/** 形参宽窄不等 / 返回放不进去的成员（诊断用）。 */
+export type MismatchedWireMembers<Face, Contract> = {
+  [Key in keyof Face & keyof Contract]: WireMemberOk<Face[Key], Contract[Key]> extends true
+    ? never
+    : Key;
+}[keyof Face & keyof Contract];
+
+/**
+ * **wire 面守卫**：键要覆盖（同 {@link AssertCoveredStrict}），且每个同名成员的**形参双向相等**、
+ * 返回可比上游更窄。用于「契约就是 wire」的端点契约（上游宿主类的投影见 `typert/params.ts`）。
+ */
+export type AssertWireFace<Face, Contract> = Uncovered<Face, Contract> extends never
+  ? MismatchedWireMembers<Face, Contract> extends never
+    ? true
+    : MismatchedWireMembers<Face, Contract>
+  : Uncovered<Face, Contract>;

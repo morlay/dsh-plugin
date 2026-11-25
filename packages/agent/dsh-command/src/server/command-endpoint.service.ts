@@ -3,6 +3,7 @@
 // 组名与方法名都来自契约（`@RemoteGroup` / `@RemoteMethod`），这里只写业务转发。
 import { SessionId } from "@morlay/dsh-session/endpoint";
 import { AgentDirectory } from "@morlay/dsh-agent";
+import type { CommandSubmitAttachment } from "@deepseek-ai/dsh-commands/types";
 import {
   CommandEndpoint,
   CommandId,
@@ -31,18 +32,19 @@ export class CommandEndpointDefault extends CommandEndpoint implements OnInit {
     registerRemoteGroup(this.handlers, this);
   }
 
-  override async list(sessionId: string): Promise<CommandListValue> {
-    const agent = this.agents.get(SessionId(sessionId));
+  override async list(sessionId: SessionId): Promise<CommandListValue> {
+    const agent = this.agents.get(sessionId);
     if (agent === undefined) return [];
     return this.registry.list(agent).map(commandEntryOf);
   }
 
   override async execute(
-    sessionId: string,
+    sessionId: SessionId,
     line: string,
-    _submittedAttachments: readonly unknown[],
+    // 附件按协议收下但本装配不消费（见债：命令附件未接线）；类型与契约一致，不宽化。
+    _submittedAttachments: readonly CommandSubmitAttachment[],
   ): Promise<CommandExecuteValue> {
-    const agent = this.agents.get(SessionId(sessionId));
+    const agent = this.agents.get(sessionId);
     if (agent === undefined) throw new Error(`commands/execute: 会话 "${sessionId}" 没有 agent`);
     // wire 上是整行（上游协议）：拆名在宿主侧做，规则只有 `splitCommandLine` 一份。
     const { name } = splitCommandLine(line);

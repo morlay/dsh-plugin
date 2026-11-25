@@ -19,7 +19,8 @@ export * from "./credentials/credentials.contract.ts";
 export type {
   AssertCoveredStrict,
   AssertTrue,
-  PlainWireFace,
+  AssertWireFace,
+  MismatchedWireMembers,
   Unassignable,
   Uncovered,
 } from "./contract-coverage.ts";

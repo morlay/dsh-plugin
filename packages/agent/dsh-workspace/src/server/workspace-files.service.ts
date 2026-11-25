@@ -29,7 +29,7 @@ export function isWorkspaceFilesFace(value: unknown): value is WorkspaceFilesFac
   return (
     value !== null &&
     typeof value === "object" &&
-    ["read", "readBytes", "stat", "list", "changes"].every(
+    ["read", "readBytes", "stat", "list", "search", "changes"].every(
       (name) => name in value && typeof (value as Record<string, unknown>)[name] === "function",
     )
   );

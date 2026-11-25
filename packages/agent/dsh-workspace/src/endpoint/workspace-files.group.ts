@@ -12,11 +12,18 @@ import type {
   WorkspaceDirectoryListing,
   WorkspaceFileBytes,
   WorkspaceFileRange,
+  WorkspaceFileScope,
+  WorkspaceFileSearchRequest,
+  WorkspaceFileSearchResult,
   WorkspaceFileStat,
   WorkspaceFileText,
   WorkspaceFileWatchFrame,
 } from "@deepseek-ai/dsh-api-workspace-files";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam, MapParam } from "@morlay/zephyr-app/typert";
+import type { SessionId } from "@morlay/dsh-session/endpoint";
 import { groupNameOf, RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import type WorkspaceFilesHost from "@deepseek-ai/dsh-api-workspace-files";
 
 /**
  * 组名（`workspaceFiles`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
@@ -28,98 +35,118 @@ export function workspaceFilesGroupName(): string {
 }
 
 /**
- * 作用域参数：会话身份。
+ * `workspaceFiles` 组：读 / 列 / 搜索 / 观察工作区里的文件。
  *
- * 上游 descriptor 的 `name: workspaceFileScope` / `wire: workspaceFileScopeId` 是两个不同的键，
- * 我们的客户端按 `name` 发、上游生成面按 `wire` 发，旧客户端还发过 `sessionId`——三个都认，
- * 免得换客户端就崩（口径见 `server/workspace-files-endpoint.service.ts` 的 `scopeOf`）。
- */
-export interface WorkspaceFilesScopeRequest {
-  /** 上游生成面发的 wire 名。 */
-  readonly workspaceFileScopeId?: string;
-  /** 本地客户端按 descriptor 的 `name` 发出来的那份。 */
-  readonly workspaceFileScope?: string;
-  /** 会话身份的直白名（早期客户端）。 */
-  readonly sessionId?: string;
-}
-
-/** 一个路径操作的请求（列 / 读 / 读字节 / stat 共用作用域 + 路径）。 */
-export interface WorkspaceFilesPathRequest extends WorkspaceFilesScopeRequest {
-  /** 目标路径：绝对路径或 workspace 相对路径；省略即 workspace 根。 */
-  readonly path?: string;
-}
-
-/** `workspaceFiles/read` 的请求：多一个行窗口。 */
-export interface WorkspaceFilesReadRequest extends WorkspaceFilesPathRequest {
-  /** 行窗口；省略字段取上游的默认分页。 */
-  readonly range?: WorkspaceFileRange;
-}
-
-/** `workspaceFiles/readBytes` 的请求：多一个字节窗口。 */
-export interface WorkspaceFilesReadBytesRequest extends WorkspaceFilesPathRequest {
-  /** 字节窗口与基准文件；省略即整文件（受上游上限约束）。 */
-  readonly options?: WorkspaceByteReadOptions;
-}
-
-/**
- * `workspaceFiles` 组：读 / 列 / 观察工作区里的文件。
+ * **形参就是上游协议的形参**（位置参数）：上游消费方（`ui-sidebar-files` 等）按
+ * `remote.workspaceFiles.list(sessionId, path, signal)` 调，descriptor 的第一个形参是 lookup
+ * （wire 传 id、网关解析成 `WorkspaceFileScope`）。曾经这里是一个 `{ request }` 对象，于是那些调用
+ * 全部落到"宿主只收到一个字符串"——与 `commands/execute` 同一类事故。
  *
- * 应答是**裸值**（与上游 `@Remote` 同协议，失败即异常，不包 `{ ok, value }`）；流式那条的帧也不包
- * `RemoteResult`（客户端按帧解，与 `workspace/follow` 同口径）。
+ * 应答是**裸值**（与上游 `@Remote` 同协议，失败即异常，不包 `{ ok, value }`）。
  */
 @RemoteGroup({ name: "workspaceFiles" })
 export class WorkspaceFilesEndpoint {
   /**
    * 列一个目录。
-   * @param _request - 会话作用域与路径。
+   * @param _sessionId - 会话身份（wire 上是 lookup id，上游称 `workspaceFileScopeId`）。
+   * @param _path - 目标路径（绝对或 workspace 相对；空串＝workspace 根）。
    * @returns 目录清单（条目 + 是否截断）。
    */
-  @RemoteMethod()
-  async list(_request: WorkspaceFilesPathRequest): Promise<WorkspaceDirectoryListing> {
+  @RemoteMethod({ parameters: ["sessionId", "path"] })
+  async list(_sessionId: SessionId, _path: string): Promise<WorkspaceDirectoryListing> {
     throw new Error("workspaceFiles/list：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 读一段文本（按行窗口）。
-   * @param _request - 会话作用域、路径与行窗口。
+   * @param _sessionId - 会话身份。
+   * @param _path - 目标路径。
+   * @param _range - 行窗口（空对象＝上游默认分页）。
    * @returns 这一页的文本与「是不是读到最后一行」。
    */
-  @RemoteMethod()
-  async read(_request: WorkspaceFilesReadRequest): Promise<WorkspaceFileText> {
+  @RemoteMethod({ parameters: ["sessionId", "path", "range"] })
+  async read(
+    _sessionId: SessionId,
+    _path: string,
+    _range: WorkspaceFileRange,
+  ): Promise<WorkspaceFileText> {
     throw new Error("workspaceFiles/read：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 读字节（不按文本解码）。
-   * @param _request - 会话作用域、路径与字节窗口。
+   * @param _sessionId - 会话身份。
+   * @param _path - 目标路径。
+   * @param _options - 字节窗口与基准文件（空对象＝整文件）。
    * @returns 原生字节与读取窗口的终点。
    */
-  @RemoteMethod()
-  async readBytes(_request: WorkspaceFilesReadBytesRequest): Promise<WorkspaceFileBytes> {
+  @RemoteMethod({ parameters: ["sessionId", "path", "options"] })
+  async readBytes(
+    _sessionId: SessionId,
+    _path: string,
+    _options: WorkspaceByteReadOptions,
+  ): Promise<WorkspaceFileBytes> {
     throw new Error("workspaceFiles/readBytes：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 报告一个文件的身份、版本与大小（不读内容）。
-   * @param _request - 会话作用域与路径。
+   * @param _sessionId - 会话身份。
+   * @param _path - 目标路径。
    * @returns 文件元信息。
    */
-  @RemoteMethod()
-  async stat(_request: WorkspaceFilesPathRequest): Promise<WorkspaceFileStat> {
+  @RemoteMethod({ parameters: ["sessionId", "path"] })
+  async stat(_sessionId: SessionId, _path: string): Promise<WorkspaceFileStat> {
     throw new Error("workspaceFiles/stat：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
+   * 在工作区里搜索文件名/内容（上游 `WorkspaceFiles.search`）。
+   * @param _sessionId - 会话身份。
+   * @param _request - 查询与范围。
+   * @returns 命中结果。
+   */
+  @RemoteMethod({ parameters: ["sessionId", "request"] })
+  async search(
+    _sessionId: SessionId,
+    _request: WorkspaceFileSearchRequest,
+  ): Promise<WorkspaceFileSearchResult> {
+    throw new Error("workspaceFiles/search：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
    * 观察一个目录（或 workspace 根）的变更。
-   * @param _request - 会话作用域与路径。
+   * @param _sessionId - 会话身份。
+   * @param _path - 目标路径。
    * @param _signal - wire 的取消信号（流承载关闭时 abort）。
    * @returns 逐帧的变更。
    */
-  @RemoteMethod({ mode: "stream" })
+  @RemoteMethod({ mode: "stream", parameters: ["sessionId", "path"] })
   changes(
-    _request: WorkspaceFilesPathRequest,
+    _sessionId: SessionId,
+    _path: string,
     _signal: AbortSignal,
   ): AsyncIterable<WorkspaceFileWatchFrame> {
     throw new Error("workspaceFiles/changes：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
+
+/**
+ * **上游 `workspaceFiles` 的 wire 面**：宿主类 `WorkspaceFiles` 的三步投影（规则与出处见
+ * `@morlay/zephyr-app/typert` 的 `params.ts`）：去末尾 `signal` → lookup 把 `WorkspaceFileScope`
+ * 换成 wire 上的 id → 异步化。
+ */
+type WorkspaceFilesWire = AsyncReturn<
+  MapParam<DropParam<WorkspaceFilesHost, AbortSignal>, WorkspaceFileScope, SessionId>
+>;
+
+/**
+ * 覆盖守卫：契约对上**宿主类**的 wire 面（形参与返回双向，见 `AssertWireFace`）。
+ *
+ * **`changes` 不在这一档**：上游那条是 `RemoteStreamHandle<帧, never>`，我们的契约面是裸
+ * `AsyncIterable<帧>`——流载具的语义不在这条类型关系里，判据是 `workspace-files.spec.ts` 的流用例。
+ * 覆盖范围显式列出（不按 `keyof` 取：那会放过「契约掉了一个端点」）。
+ */
+export type WorkspaceFilesEndpointCovered = AssertTrue<
+  AssertWireFace<Pick<WorkspaceFilesWire, "list" | "read" | "readBytes" | "stat" | "search">, WorkspaceFilesEndpoint>
+>;

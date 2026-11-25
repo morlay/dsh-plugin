@@ -11,7 +11,8 @@ export * from "./bootstrap-client.ts";
 export type {
   AssertCoveredStrict,
   AssertTrue,
-  PlainWireFace,
+  AssertWireFace,
+  MismatchedWireMembers,
   Unassignable,
   Uncovered,
 } from "@morlay/zephyr-app/contract";

@@ -248,7 +248,7 @@ describe("主流程（宿主侧）：新建 → 选工作区 → 改权限", () 
       // ④ 改权限：走上游 chip 唯一的那一行命令（经契约的客户端形态，不拼 wire 名）。
       // `execute` 的 wire 是位置参数（会话 / **整行** / 附件）——与上游 `ctx.remote.commands.execute` 同形。
       const executed = await commandClientOf(app).execute(
-        String(sessionId),
+        SessionId(String(sessionId)),
         "/permission danger-full-access",
         [],
       );

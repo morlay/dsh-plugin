@@ -821,9 +821,6 @@ importers:
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/interaction/commands
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:^
-        version: link:../../../vendor/deepseek-harness/packages/typert/protocol
       '@morlay/dsh-agent':
         specifier: workspace:^
         version: link:../dsh-agent

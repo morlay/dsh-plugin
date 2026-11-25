@@ -106,7 +106,7 @@ describe("权限 chip 的宿主侧", () => {
       // `commands/execute` 回的是命令自己的结算值（裸值，不包 `RemoteResult`）：`{ kind, text }`。
       // `execute` 的 wire 是位置参数（会话 / **整行** / 附件），与上游 `ctx.remote.commands.execute` 同形。
       const executed = await commandClientOf(client).execute(
-        sessionId,
+        SessionId(sessionId),
         "/permission danger-full-access",
         [],
       );
@@ -129,7 +129,7 @@ describe("权限 chip 的宿主侧", () => {
     { timeout: 30_000 },
     async ({ appEnv }) => {
       const { host, client, sessionId } = await boot(appEnv);
-      const executed = await commandClientOf(client).execute(sessionId, "/permission ", []);
+      const executed = await commandClientOf(client).execute(SessionId(sessionId), "/permission ", []);
       expect(executed.result.kind).toBe("success");
       expect(permissionOf(host, sessionId)).toMatchObject({ currentValue: "workspace-write" });
     },

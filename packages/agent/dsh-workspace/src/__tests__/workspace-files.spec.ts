@@ -74,7 +74,9 @@ describe("workspaceFiles 的宿主面", { timeout: 30_000 }, () => {
     // 上游 `list` 要求**非空** path（`workspace-files/src/index.ts:391`）；列 workspace 根就传绝对根路径，
     // 响应里的 `path` 是 workspace 相对路径（根即空串）。
     const value = okValueOf(
-      await handlers.invoke("workspaceFiles/list", { workspaceFileScope: SESSION, path: root }),
+      // wire 的名字就是契约的 `parameters` 声明（`sessionId` / `path`）：上游那条 descriptor 叫
+      // `workspaceFileScopeId`，但两端都是我们自己，名字以契约为准。
+      await handlers.invoke("workspaceFiles/list", { sessionId: SESSION, path: root }),
     );
     expect(value, `list 失败：${JSON.stringify(value)}`).toBeDefined();
     const entries = value?.entries as readonly { name?: string; type?: string }[] | undefined;
@@ -88,7 +90,7 @@ describe("workspaceFiles 的宿主面", { timeout: 30_000 }, () => {
     const { handlers } = await boot();
     const value = okValueOf(
       await handlers.invoke("workspaceFiles/read", {
-        workspaceFileScope: SESSION,
+        sessionId: SESSION,
         path: "a.txt",
         range: {},
       }),

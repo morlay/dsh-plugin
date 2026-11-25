@@ -13,6 +13,7 @@
     ".": "./src/index.ts",
     "./package.json": "./package.json",
     "./contract": "./src/contract/index.ts",
+    "./typert": "./src/typert/index.ts",
     "./remote": "./src/remote/index.ts",
     "./remote/decorators": "./src/remote/decorators.ts",
     "./testing": "./src/testing/index.ts",

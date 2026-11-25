@@ -12,14 +12,12 @@
 // `CommandEndpointCovered` 对上游 `commands` 那条 wire 面的裸值视图；descriptor 的参数名与宿主入参映射
 // 另由 `__tests__/command-endpoint-wire.spec.ts` 钉住。
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
-import type { AssertCoveredStrict, AssertTrue, PlainWireFace } from "@morlay/zephyr-app/client";
-// 上游 wire 面的**类型**：协议包的 `TypertRemoteMap`（键是 `<组>/<方法>`），条目由
-// `@deepseek-ai/dsh-commands/remote` 的生成物声明合并进来——生成物的**原文**是上游宿主服务
-// （`CommandRuntime` 的 `@Remote` 方法）：参数按 `lookup`/`json` 投影（`agent` → `agentId`）、结果包成
-// `RemoteResult`。所以这里取的是"协议的类型化投影"，不引 `@deepseek-ai/dsh-api-gateway/client`
-// （传输客户端；`ClientRemote['commands']` 与它同源，`extends` 链最终落到同一张表）。
-import type { TypertRemoteMap } from "@deepseek-ai/dsh-typert-protocol";
-import type { CommandExecution } from "@deepseek-ai/dsh-commands/types";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam, MapParam } from "@morlay/zephyr-app/typert";
+import type { Agent } from "@morlay/dsh-agent";
+import type { SessionId } from "@morlay/dsh-session/endpoint";
+import type CommandRuntime from "@deepseek-ai/dsh-commands";
+import type { CommandExecution, CommandSubmitAttachment } from "@deepseek-ai/dsh-commands/types";
 import type { CommandEntry } from "@morlay/dsh-command/contract";
 
 /** `commands/list` 的请求。 */
@@ -64,7 +62,7 @@ export class CommandEndpoint {
    * @returns 目录（未知会话给空数组）。
    */
   @RemoteMethod({ parameters: ["sessionId"] })
-  async list(_sessionId: string): Promise<CommandListValue> {
+  async list(_sessionId: SessionId): Promise<CommandListValue> {
     throw new Error("commands/list：契约类未实现（宿主侧要在子类里实现它）");
   }
 
@@ -83,32 +81,33 @@ export class CommandEndpoint {
    */
   @RemoteMethod({ parameters: ["sessionId", "line", "submittedAttachments"] })
   async execute(
-    _sessionId: string,
+    _sessionId: SessionId,
     _line: string,
-    _submittedAttachments: readonly unknown[],
-  ): Promise<CommandExecuteValue> {
+    _submittedAttachments: readonly CommandSubmitAttachment[],
+  ): Promise<CommandExecuteValue | undefined> {
     throw new Error("commands/execute：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
 
 /**
- * 覆盖守卫：上游 `ctx.remote.commands` 的**那条 wire 面**（`CommandsWireFace` 的裸值视图；
- * 它与上游调用方看到的 `ClientRemote['commands']` 是同一个类型）。
+ * **上游 `commands` 的 wire 面**：从宿主类 `CommandRuntime` 投影出来，三步（规则与出处见
+ * `@morlay/zephyr-app/typert` 的 `params.ts`）：`DropParam`（末尾 `signal` 走 cancellation）→
+ * `MapParam`（lookup：`Agent` → `SessionId`）→ `AsyncReturn`（wire 上每次调用都是异步的）。
  *
- * 这一组是自研 wire（不挂上游 descriptor：它的端点带 `scope`/`lookup`，本装配的载具不解析），
- * 但**调用形状**是上游的协议：`execute(sessionId, line, submittedAttachments)`、`list(sessionId)`。
- * 守卫把两侧钉在一起——签名漂了（像 `execute` 曾经漏掉 `parameters`、只收一个 `request`）编译期就红。
+ * 业务类型只出现在这一行组合里——框架那三个工具不认识 `Agent` / `SessionId` / `AbortSignal`。
  */
-/** 上游 `commands` 这条 wire 面：从逐方法表里挑出我们覆盖的那两个端点。 */
-type CommandsWireFace = {
-  execute: TypertRemoteMap["commands/execute"];
-  list: TypertRemoteMap["commands/list"];
-};
+type CommandsWire = AsyncReturn<MapParam<DropParam<CommandRuntime, AbortSignal>, Agent, SessionId>>;
 
+/**
+ * 覆盖守卫：契约对上**宿主类**的 wire 面（见 {@link CommandsWire}）。
+ *
+ * 这一组是自研 wire（不挂上游 descriptor：它的端点带 `scope`/`lookup`，本装配的载具不解析），但
+ * **调用形状**是上游的协议——签名漂了（像 `execute` 曾经漏掉 `parameters`、只收一个 `request`）就红。
+ *
+ * 部分覆盖：宿主类还有 `register` / `find` / `registerFileReceiptResolver` 这些**不进 wire** 的方法，所以
+ * 覆盖范围**显式列在下面的 `Pick` 里**（按 `keyof CommandEndpoint` 取会放过「契约掉了一个端点」这种退化）。
+ * `Pick` 还守住另一半：契约声明了宿主类没有的端点，它自己会报。
+ */
 export type CommandEndpointCovered = AssertTrue<
-  AssertCoveredStrict<PlainWireFace<CommandsWireFace>, CommandEndpoint>
+  AssertWireFace<Pick<CommandsWire, "list" | "execute">, CommandEndpoint>
 >;
-
-// wire 名**没有**第二个 home：方法名的唯一来源是上面的 `@RemoteMethod(...)` 实参，wire 名由
-// `remoteDescriptorsOf(CommandEndpoint)` 在客户端形态（`@RemoteClient()`）里派生。调用点因此
-// 只写契约方法（`client.execute(…)`），不写字符串、也不需要「把方法名翻成 wire 名」的辅助函数。
