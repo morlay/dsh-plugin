@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { generateTypert } from "../index.ts";
 
@@ -50,6 +51,8 @@ interface Generated {
  */
 async function generate(fixture: Fixture): Promise<Generated> {
   const repo = await mkdtemp(join(tmpdir(), "typert-upstream-context-"));
+  // 紧跟着就登记清理：用例中途失败也不会把这次造的整棵上游树留在 `.tmp` 里。
+  onTestFinished(() => rm(repo, { recursive: true, force: true }));
   const upstreamRoot = join(repo, "vendor", "demo-harness");
   const dtsRoot = join(repo, "target", "dts");
   const pkg = join(upstreamRoot, "packages", "demo", "demo");

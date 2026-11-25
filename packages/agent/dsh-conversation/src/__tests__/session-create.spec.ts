@@ -17,7 +17,6 @@ import { join } from "node:path";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { SessionStore } from "@morlay/dsh-session";
 import { describe, test } from "@morlay/dsh-conversation/testing";
-import { onTestFinished } from "vitest";
 import { mountConversationHost } from "./support/host.ts";
 
 describe("整包装配下建会话", { timeout: 180_000 }, () => {
@@ -28,24 +27,30 @@ describe("整包装配下建会话", { timeout: 180_000 }, () => {
     const workdir = join(dataDir, "cwd");
     await mkdir(workdir, { recursive: true });
     const host = await mountConversationHost(join(dataDir, "data"));
-    onTestFinished(() => host.dispose());
-    const app = host.app;
+    // 卸载**必须发生在用例内**：临时根由 `appEnv` fixture 管，而 fixture 的清理跑在 `onTestFinished`
+    // 之前（实测：进 `onTestFinished` 时根已被删）。dispose 若留到那时，会话落盘会把 `data/sessions/`
+    // 又写回已删除的根里——每轮全量都留一个 `zephyr-spec-*` 残骸。
+    try {
+      const app = host.app;
 
-    // 直接走 `AgentLoop.create`：撞名发生在**建 agent** 那一步（上游 `file-reference-local` 在
-    // `agent.ctx.inject(...)` 里注册 prompt 段落），与 wire 上的准入策略无关。
-    const store = app.get(SessionStore);
-    const loop = app.get(AgentLoop);
-    const spawn = async (): Promise<void> => {
-      const id = store.prepare().id;
-      await loop.create(
-        id,
-        { provider: "deepseek-official", model: "deepseek-flash" },
-        { cwd: workdir },
-      );
-    };
+      // 直接走 `AgentLoop.create`：撞名发生在**建 agent** 那一步（上游 `file-reference-local` 在
+      // `agent.ctx.inject(...)` 里注册 prompt 段落），与 wire 上的准入策略无关。
+      const store = app.get(SessionStore);
+      const loop = app.get(AgentLoop);
+      const spawn = async (): Promise<void> => {
+        const id = store.prepare().id;
+        await loop.create(
+          id,
+          { provider: "deepseek-official", model: "deepseek-flash" },
+          { cwd: workdir },
+        );
+      };
 
-    await spawn();
-    // 第二个 agent 注册同名段落时撞：报错落在 `PromptLayer` 的 **global 层**分支。
-    await spawn();
+      await spawn();
+      // 第二个 agent 注册同名段落时撞：报错落在 `PromptLayer` 的 **global 层**分支。
+      await spawn();
+    } finally {
+      await host.dispose().catch(() => {});
+    }
   });
 });

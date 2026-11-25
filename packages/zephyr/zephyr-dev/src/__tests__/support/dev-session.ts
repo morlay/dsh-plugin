@@ -2,9 +2,10 @@
 //
 // 为什么用真 vite 起（而不是替身 `ViteHandoff`）：`startDev` 的判据是「首页 200、close 后端口释放」——
 // 那两条只有在**真的**有 http 服务与 vite 时才成立；替身会让用例变成「测自己写的替身」。
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { bootstrapApplication, Injectable, type App, without } from "@morlay/zephyr";
 import { AppEnv, type AppEnvValues, WebStartup } from "@morlay/zephyr-app";
 import {
@@ -37,6 +38,8 @@ export async function mountDev(
   mode: Omit<Parameters<typeof devProviders>[0], "packaged"> = {},
 ): Promise<DevFixture> {
   const dataDir = await mkdtemp(join(tmpdir(), "zephyr-dev-start-"));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
   const repoRoot = DEV_FIXTURE;
   const cacheDir = join(dataDir, "cache", "vite");
   @Injectable()

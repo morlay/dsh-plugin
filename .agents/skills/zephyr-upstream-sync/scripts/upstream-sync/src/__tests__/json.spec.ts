@@ -6,10 +6,10 @@
  * `devDependencies`（构建时由它自己的打包内联），而本仓库这条链是运行期现场打包、真会 import 它们——
  * 所以源码 import 到的条目先并进 `dependencies`，再整段删。`peerDependencies` 是运行期契约，一个字不动。
  */
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, onTestFinished, test } from "vitest";
 import { dropJsonFields } from "../manifests.js";
 
 // 同步链里用的那份 glob：`**` + `/package.json`（`node_modules` 由执行器排除）。
@@ -21,6 +21,8 @@ const ALL_MANIFESTS = { glob: "**/package.json", drop: ["devDependencies"] };
  */
 async function fixtureOf(): Promise<{ work: string; pkgDir: string }> {
   const work = await mkdtemp(join(tmpdir(), "dsh-upstream-sync-"));
+  // 紧跟着就登记清理：注释里写了「用完删」，之前没人删。
+  onTestFinished(() => rm(work, { recursive: true, force: true }));
   const pkgDir = join(work, "packages", "client", "ui-primitives");
   await mkdir(join(pkgDir, "src", "markdown"), { recursive: true });
   await writeFile(join(pkgDir, "src", "index.ts"), "export const x = 1;\n", "utf8");
@@ -102,6 +104,8 @@ test("重复跑不报错，也不产生空对象残留（第二次一个字节�
 
 test("没有 devDependencies 的清单不被重写（不重排缩进、不补结尾换行）", async () => {
   const work = await mkdtemp(join(tmpdir(), "dsh-upstream-sync-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(work, { recursive: true, force: true }));
   const pkgDir = join(work, "packages", "boot", "cmdline");
   await mkdir(pkgDir, { recursive: true });
   const file = join(pkgDir, "package.json");
@@ -113,6 +117,8 @@ test("没有 devDependencies 的清单不被重写（不重排缩进、不补结
 
 test("`node_modules` 里的清单不进范围", async () => {
   const work = await mkdtemp(join(tmpdir(), "dsh-upstream-sync-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(work, { recursive: true, force: true }));
   const depDir = join(work, "node_modules", "some-dep");
   await mkdir(depDir, { recursive: true });
   const file = join(depDir, "package.json");

@@ -2,15 +2,18 @@
 // 没点名的一律内联，包括我们自己的 `@morlay/*`（模块表没有它们的条目，内联才自包含）。
 //
 // 这套规则**只管 CJS 产物**：那是模块表（`__ModuleLoader__.load` 工厂）的形态。
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { clientBundleSpec, clientRowExternals, isClientExternal } from "../cordis-client.ts";
 
 // 最小工作区：声明了一个要外置的行、一个只声明在 dependencies 的包（该内联）。
 async function fixture(declared: string[] = []): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "devkit-client-externals-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await writeFile(
     join(root, "package.json"),
     `${JSON.stringify({

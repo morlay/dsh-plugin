@@ -1,9 +1,10 @@
 // 测试辅助：让「命令编排」在没有真构建、没有真端口的地方也能判。
 //
 // 这里的替身只替**外部动作**（vite / pnpm / rolldown），不替内核自己的解析与装配。
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { onTestFinished } from "vitest";
 import type { BuildInput, BuildSteps } from "../build/builder.ts";
 import type { ResolvedConfig } from "../config/contract.ts";
 import { layoutOf } from "../layout.ts";
@@ -15,6 +16,8 @@ import { layoutOf } from "../layout.ts";
  */
 export async function tempWorkspace(files: Readonly<Record<string, string>>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-cli-"));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   for (const [relative, content] of Object.entries(files)) {
     const target = join(root, relative);
     await mkdir(dirname(target), { recursive: true });

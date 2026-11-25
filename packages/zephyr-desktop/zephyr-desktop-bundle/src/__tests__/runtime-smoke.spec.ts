@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   assertRuntimeSmoke,
@@ -16,6 +17,8 @@ async function runtimeFixture(input: {
   readonly symlinked?: readonly string[];
 }): Promise<string> {
   const runtimeDir = await mkdtemp(join(tmpdir(), "dsh-runtime-smoke-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(runtimeDir, { recursive: true, force: true }));
   await writeFile(
     join(runtimeDir, "package.json"),
     JSON.stringify({
@@ -84,6 +87,8 @@ describe("打包期冒烟：三条判据", () => {
   test("指回源码的绝对链接：算逃逸，抛 CliError 并写出链与落点", async () => {
     const runtimeDir = await runtimeFixture({ deps: ["@morlay/zephyr"], packages: ["zephyr"] });
     const source = await mkdtemp(join(tmpdir(), "dsh-source-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(source, { recursive: true, force: true }));
     await symlink(source, join(runtimeDir, "node_modules", "@morlay", "escaped"));
     const report = await runtimeSmokeOf(runtimeDir, HEALTHY);
     const escaped = report.links.find((link) => link.name === "escaped");
@@ -96,6 +101,8 @@ describe("打包期冒烟：三条判据", () => {
   test("相对但出闭包的链接：一样算逃逸（相对不豁免）", async () => {
     const runtimeDir = await runtimeFixture({ deps: ["@morlay/zephyr"], packages: ["zephyr"] });
     const outside = await mkdtemp(join(tmpdir(), "dsh-outside-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(outside, { recursive: true, force: true }));
     await mkdir(join(outside, "pkg"), { recursive: true });
     const scope = join(runtimeDir, "node_modules", "@morlay");
     await symlink(relative(scope, join(outside, "pkg")), join(scope, "sneaky"));
@@ -166,6 +173,8 @@ describe("打包期冒烟：找到产物里的闭包", () => {
   test("mac 的 Contents/Resources 与其它平台的 resources 两种布局都认", async () => {
     for (const layout of [join("Contents", "Resources"), "resources"]) {
       const appDir = await mkdtemp(join(tmpdir(), "dsh-app-"));
+      // 紧跟着就登记清理：用例中途失败也不留。
+      onTestFinished(() => rm(appDir, { recursive: true, force: true }));
       await mkdir(join(appDir, layout, "runtime"), { recursive: true });
       await writeFile(
         join(appDir, layout, "runtime", "bootstrap.mjs"),
@@ -178,12 +187,16 @@ describe("打包期冒烟：找到产物里的闭包", () => {
 
   test("有 Resources 但没有装配文件：抛 CliError 指向缺 bootstrap.mjs 的目录", async () => {
     const appDir = await mkdtemp(join(tmpdir(), "dsh-app-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(appDir, { recursive: true, force: true }));
     await mkdir(join(appDir, "Contents", "Resources", "runtime"), { recursive: true });
     await expect(runtimeDirInAppOf(appDir)).rejects.toThrow(/bootstrap\.mjs/u);
   });
 
   test("两种布局都没有：抛 CliError 说清试过哪两个 Resources", async () => {
     const appDir = await mkdtemp(join(tmpdir(), "dsh-app-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(appDir, { recursive: true, force: true }));
     await expect(runtimeDirInAppOf(appDir)).rejects.toThrow(/Resources 目录/u);
     await expect(resourcesDirOf(appDir)).rejects.toThrow(/Contents\/Resources/u);
   });

@@ -4,9 +4,10 @@
 // 规则与 dev 期同一条（`ServeDefault.replyPage` 那条「本地入口 → 交付地址」），所以这里不分文件名：
 // 页面里那个 `type="module"` + 相对 src 的 script 就是入口。唯一变量是文件名（`index.html` /
 // `index.ts`），改文件名等于造第二条规则。
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { BUNDLER_REV } from "../federation/bundle.ts";
 import { writePage } from "../build/compile.ts";
@@ -33,6 +34,8 @@ const APP = { name: "demo-app", version: "1.2.3", exportName: "client", entry: "
  */
 async function fixture(html: string): Promise<{ pageEntry: string; outDir: string }> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-page-"));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const outDir = join(root, "client_modules");
   const { mkdir } = await import("node:fs/promises");
   await mkdir(outDir, { recursive: true });

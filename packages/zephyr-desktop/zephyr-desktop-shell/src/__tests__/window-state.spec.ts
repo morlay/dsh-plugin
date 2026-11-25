@@ -1,6 +1,7 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { loadWindowState, saveWindowState, windowStateOf } from "../window-state.ts";
 
@@ -58,6 +59,8 @@ describe("窗口状态（用户数据，不进配置）", () => {
 
   test("存盘再读回：形状一致（state 文件只有这一个真源）", async () => {
     const userData = await mkdtemp(join(tmpdir(), "dsh-window-state-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(userData, { recursive: true, force: true }));
     const state = { bounds: { x: 10, y: 30, width: 900, height: 700 }, maximized: true };
     await saveWindowState(userData, state);
     expect(windowStateOf(await loadWindowState(userData), AREA, FALLBACK)).toEqual(state);

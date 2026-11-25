@@ -1,3 +1,4 @@
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { type Node, parseSource, walkAll } from "../ast.ts";
 import { buildSchemaIndex, newContext, zodOf, type SchemaIndex } from "../schema.ts";
@@ -22,10 +23,12 @@ function emptyIndex(): SchemaIndex {
 }
 
 async function indexOf(declarations: string): Promise<SchemaIndex> {
-  const { mkdtemp, writeFile } = await import("node:fs/promises");
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
   const { join } = await import("node:path");
   const { tmpdir } = await import("node:os");
   const dir = await mkdtemp(join(tmpdir(), "typert-schema-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   await writeFile(join(dir, "x.d.ts"), declarations);
   return buildSchemaIndex(dir);
 }

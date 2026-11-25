@@ -1,6 +1,7 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import {
   PAGE_PORT_FILE,
@@ -12,7 +13,10 @@ import {
 
 /** 造一个空的 userData。 */
 async function userDataOf(): Promise<string> {
-  return mkdtemp(join(tmpdir(), "dsh-page-port-"));
+  const userData = await mkdtemp(join(tmpdir(), "dsh-page-port-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(userData, { recursive: true, force: true }));
+  return userData;
 }
 
 /** 读端口文件原文。 */

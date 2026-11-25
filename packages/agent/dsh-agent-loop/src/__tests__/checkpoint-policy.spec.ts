@@ -28,7 +28,6 @@ import { RemoteHandlersDefault } from "@morlay/zephyr-app";
 import { SessionStore } from "@morlay/dsh-session";
 import { provideSession, provideSessionProjection } from "@morlay/dsh-session/server";
 import { provideSessionPersistence } from "@morlay/dsh-session-persistence";
-import { onTestFinished } from "vitest";
 import { provideAgentLoop } from "../index.ts";
 import { SessionCheckpointPolicy } from "../checkpoint-policy.service.ts";
 
@@ -76,42 +75,48 @@ async function runOneTurn(
         ],
     timeoutMs: 20_000,
   } as never);
-  onTestFinished(() => app.dispose().catch(() => {}));
 
-  let flushes = 0;
-  // 事件是**与 cordis 的接缝**：派发走 `ctx.parallel("session/flush")`，监听也走 ctx，不占服务名。
-  (app.ctx as unknown as { on(name: string, fn: () => void): () => void }).on(
-    "session/flush",
-    () => {
-      flushes += 1;
-    },
-  );
-
-  const adapter = new FakeLlmAdapter();
-  app.get(Llm).registerAdapter(["deepseek-official"], adapter);
-
-  // 会话标识用存储铸出来的真值（`prepare()` 不注册进目录，正好交给下一行去建）。
-  const sessionId = app.get(SessionStore).prepare().id;
-  const agent = await app
-    .get(AgentLoop)
-    .create(
-      sessionId,
-      { provider: "deepseek-official", model: "deepseek-flash" },
-      { cwd: appEnv.values.dataDir },
+  // 应用**在函数里收口**：临时根由 `appEnv` fixture 管，而 fixture 的清理跑在 `onTestFinished`
+  // 之前（实测：进 `onTestFinished` 时根已被删）。dispose 若留到那时，会话落盘会把 `sessions/`
+  // 又写回已删除的根里——每轮全量就是几个 `zephyr-spec-*` 残骸。
+  try {
+    let flushes = 0;
+    // 事件是**与 cordis 的接缝**：派发走 `ctx.parallel("session/flush")`，监听也走 ctx，不占服务名。
+    (app.ctx as unknown as { on(name: string, fn: () => void): () => void }).on(
+      "session/flush",
+      () => {
+        flushes += 1;
+      },
     );
-  agent.send(
-    {
-      id: MessageId("m1"),
-      role: "user",
-      content: [{ type: "text", text: "你好" }],
-      source: { kind: "user" },
-    } satisfies UserMessage,
-    "next-turn",
-    true,
-  );
-  await agent.whenIdle();
 
-  return { adapterCalls: adapter.calls, flushes };
+    const adapter = new FakeLlmAdapter();
+    app.get(Llm).registerAdapter(["deepseek-official"], adapter);
+
+    // 会话标识用存储铸出来的真值（`prepare()` 不注册进目录，正好交给下一行去建）。
+    const sessionId = app.get(SessionStore).prepare().id;
+    const agent = await app
+      .get(AgentLoop)
+      .create(
+        sessionId,
+        { provider: "deepseek-official", model: "deepseek-flash" },
+        { cwd: appEnv.values.dataDir },
+      );
+    agent.send(
+      {
+        id: MessageId("m1"),
+        role: "user",
+        content: [{ type: "text", text: "你好" }],
+        source: { kind: "user" },
+      } satisfies UserMessage,
+      "next-turn",
+      true,
+    );
+    await agent.whenIdle();
+
+    return { adapterCalls: adapter.calls, flushes };
+  } finally {
+    await app.dispose().catch(() => {});
+  }
 }
 
 describe("checkpoint 策略", () => {

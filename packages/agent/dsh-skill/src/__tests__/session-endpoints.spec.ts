@@ -209,6 +209,8 @@ describe("session 组的宿主端点", { timeout: 30_000 }, () => {
   test("`create` 带 `workspaceId`：会话落进那个工作区，不被 cwd 推导覆盖", async () => {
     const { app, handlers } = await boot();
     const root = await mkdtemp(join(tmpdir(), "dsh-workspace-target-"));
+    // 紧跟着就登记清理：用例中途失败也不留。
+    onTestFinished(() => rm(root, { recursive: true, force: true }));
     // 真工作区：直接走宿主的 `WorkspaceRegistry`（`workspace/create` 那条 wire 属于 UI 行，
     // 本 spec 装的是宿主面）。先建出来，才有 workspaceId 可用。
     const registry = app.get(WorkspaceRegistry);

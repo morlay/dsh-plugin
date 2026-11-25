@@ -12,9 +12,10 @@
 // 1. **不可达的坏产物不算缺口**：宿主面产物留在目录里是取舍（设计决定 12），页面永远不加载它，
 //    它缺东西不该让构建红——判据只看可达子集。
 // 2. **缺口要点名到「地址 + 引用方」**：只报一条地址，排查的人还得自己去 grep 谁引的。
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 // **按包出口取**（`@morlay/zephyr-dev/testing`），不写 `../build/compile.ts` 这类跨目录相对路径：
 // 子出口面里的相对 `../` 会让"面"退化成目录结构的一部分。
@@ -42,6 +43,8 @@ const FIXTURES = new URL("./fixtures/", import.meta.url).pathname;
 async function optionsOf(name: string): Promise<Parameters<typeof compile>[0]> {
   const workspace = join(FIXTURES, name);
   const outDir = await mkdtemp(join(tmpdir(), "zephyr-compile-"));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(outDir, { recursive: true, force: true }));
   return { workspace, appName: "compile-fixture", outDir };
 }
 
@@ -239,6 +242,8 @@ async function fixtureOf(
   files: Record<string, string>,
 ): Promise<{ workspace: string; outDir: string; nodeStub: string }> {
   const root = await mkdtemp(join(tmpdir(), "zephyr-fallback-"));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   const nodeStub = join(root, "node-stub.cjs");
   await writeFile(nodeStub, "module.exports = {};\n", "utf8");
   for (const [relative, content] of Object.entries(files)) {

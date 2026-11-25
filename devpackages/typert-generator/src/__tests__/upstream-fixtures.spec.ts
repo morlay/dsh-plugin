@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { buildSchemaIndex, newContext, zodOf } from "../schema.ts";
 import { generateTypert, packageSurfaces } from "../index.ts";
@@ -16,6 +17,8 @@ const FIXTURES = join(
 
 async function workspaceOf(fixture: string): Promise<{ upstreamRoot: string; dtsRoot: string }> {
   const repo = await mkdtemp(join(tmpdir(), "typert-fixture-"));
+  // 紧跟着就登记清理：用例中途失败也不留。
+  onTestFinished(() => rm(repo, { recursive: true, force: true }));
   const upstreamRoot = join(repo, "vendor", "upstream");
   const dtsRoot = join(repo, "target", "dts");
   const copy = async (from: string, to: string): Promise<void> => {

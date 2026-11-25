@@ -9,9 +9,10 @@
 //
 // 夹具用 mkdtemp 现造：node_modules 被 .gitignore 挡住、进不了仓库；而且「只装在子包 node_modules 里」
 // 这条事实本身要求一层嵌套，动态造更直白。
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { planPrebundle, specifiersOf } from "../prebundle-plan.ts";
 
@@ -49,6 +50,8 @@ async function makeFixture(): Promise<{ root: string; upstream: string }> {
   // mkdtemp 给的可能是软链路径（macOS 的 /var → /private/var），而包根是 **realpath**
   // （软链要解开才能让紧随其后的解析按真实位置向上找）——两边先对齐，断言才比得了。
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-plan-")));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await putManifest(root, { name: "plan-fixture", version: "0.0.0", exports: {} });
   await put(
     join(root, "src", "client", "app-boot.ts"),
@@ -229,6 +232,8 @@ describe("planPrebundle（枚举规则）", () => {
  */
 async function makeMultiVersionFixture(): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-multi-")));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await putManifest(root, { name: "multi-fixture", version: "0.0.0", exports: {} });
   await put(
     join(root, "src", "client", "app-boot.ts"),
@@ -280,6 +285,8 @@ describe("planPrebundle（多版本）", () => {
  */
 async function makeDualEntryFixture(): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-dual-")));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await put(
     join(root, "package.json"),
     `${JSON.stringify({ name: "dual-fixture", version: "0.0.0", exports: {} })}\n`,
@@ -357,6 +364,8 @@ describe("planPrebundle（入口按浏览器条件解析）", () => {
  */
 async function makeStyleGraphFixture(): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), "zephyr-prebundle-css-")));
+  // 紧跟着就登记清理：用例中途失败也不留（测试根目录在项目的 `.tmp/` 下）。
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
   await put(
     join(root, "package.json"),
     `${JSON.stringify({ name: "css-fixture", version: "0.0.0", exports: {} })}\n`,

@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { onTestFinished } from "vitest";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { generateTypert } from "../index.ts";
 
@@ -11,6 +12,8 @@ async function fixture(
 ): Promise<{ upstreamRoot: string; dtsRoot: string }> {
   // 真实布局：`<repo>/vendor/<name>` 与 `<repo>/target/dts`——owner 推导靠这两者的相对位置。
   const repo = await mkdtemp(join(tmpdir(), "typert-ws-"));
+  // 紧跟着就登记清理：用例中途失败也不会把这次造的整棵上游树留在 `.tmp` 里。
+  onTestFinished(() => rm(repo, { recursive: true, force: true }));
   const upstreamRoot = join(repo, "vendor", "demo-harness");
   const dtsRoot = join(repo, "target", "dts");
   const pkg = join(upstreamRoot, "packages", "demo", "demo");
@@ -69,6 +72,8 @@ describe("typert 产物生成", () => {
 
   test("三件套的 wire 细节：可选参数、AbortSignal、stream、typeSymbol、declare module", async () => {
     const repo = await mkdtemp(join(tmpdir(), "typert-ws-"));
+    // 紧跟着就登记清理（用例中途失败也不留）。
+    onTestFinished(() => rm(repo, { recursive: true, force: true }));
     const upstreamRoot = join(repo, "vendor", "demo-harness");
     const dtsRoot = join(repo, "target", "dts");
     const pkg = join(upstreamRoot, "packages", "demo", "demo");
