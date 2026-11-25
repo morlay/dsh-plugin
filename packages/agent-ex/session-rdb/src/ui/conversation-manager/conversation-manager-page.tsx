@@ -160,7 +160,7 @@ export function ConversationManagerPage({
   const [bulkConfirming, setBulkConfirming] = useState(false);
   const [bulkArchiving, setBulkArchiving] = useState(false);
   // 多选的 id 集：行重拉后只保留仍在当前页里的那些（已删的行不该继续被选中）。
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set<string>());
+  const [selectedRaw, setSelected] = useState<ReadonlySet<string>>(new Set<string>());
   const [replacing, setReplacing] = useState<PendingReplace | null>(null);
   const [organizePhase, setOrganizePhase] = useState<OrganizePhase>("idle");
   const [consistency, setConsistency] = useState<SessionConsistencyValue | null>(null);
@@ -183,7 +183,10 @@ export function ConversationManagerPage({
   // 动作成功后焦点的落点：行会被重拉，按钮不是稳定的位置。
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [focusToken, setFocusToken] = useState(0);
-  const now = Date.now();
+  // 相对时间的分母：**这次取数的取样时刻**（`useRowsQuery` 在发请求那一拍取的），不是渲染时读的时钟。
+  // 渲染期读 `Date.now()` 会让同一屏的行文案每次渲染都变，规则也直接拒（`react/purity`）；
+  // 钉在取数上之后，「3 分钟前」是相对**这份列表**说的，行重拉（翻页 / 搜索 / 动作）时一起刷新。
+  const now = rowsQuery.sampledAt;
 
   useEffect(() => {
     if (focusToken === 0) return;
@@ -195,14 +198,15 @@ export function ConversationManagerPage({
   }, []);
 
   // 当前页的行 id：行被删掉后从选择里剔除（否则批量条上的计数与动作指向不存在的行）。
+  // 这是**派生状态**：有效选择集 = 原始选择 ∩ 当前页的行，不 setState，也不需要 effect。
   const rowIds = useMemo(() => new Set(rowsQuery.rows.map((row) => row.id)), [rowsQuery.rows]);
-  useEffect(() => {
-    setSelected((previous) => {
-      if (previous.size === 0) return previous;
-      const next = new Set([...previous].filter((id) => rowIds.has(id)));
-      return next.size === previous.size ? previous : next;
-    });
-  }, [rowIds]);
+  const selected = useMemo(
+    () =>
+      selectedRaw.size === 0
+        ? selectedRaw
+        : new Set([...selectedRaw].filter((id) => rowIds.has(id))),
+    [selectedRaw, rowIds],
+  );
 
   const toggleSelect = (id: string): void => {
     setSelected((previous) => {

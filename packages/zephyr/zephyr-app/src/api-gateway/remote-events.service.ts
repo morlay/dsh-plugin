@@ -186,8 +186,16 @@ export class RemoteEventsSource extends RemoteQuestions {
           throw new TypeError(`forwarded scoped event ${event} must carry its Agent directly`);
         }
         const settled = Promise.withResolvers<unknown>();
-        const delegate = (): void => {
-          void Promise.resolve().then(next).then(settled.resolve, settled.reject);
+        // 兜底：没有浏览器接这一条时按上游语义走 `next()`（它的返回值 / 抛出的错原样落到 settled）。
+        // 先让出一拍再调它：此刻还在派发路径里，同步调下一个监听器会重入（原来靠 `Promise.resolve().then(next)`
+        // 拿到这一拍，改成 `await` 后同样是「一个微任务之后」，时序不变）。
+        const delegate = async (): Promise<void> => {
+          await Promise.resolve();
+          try {
+            settled.resolve(await next());
+          } catch (error: unknown) {
+            settled.reject(error);
+          }
         };
         const dispatch: InvocationDispatch = {
           event,
@@ -200,11 +208,11 @@ export class RemoteEventsSource extends RemoteQuestions {
               settled.resolve(outcome.value);
               return;
             }
-            delegate();
+            void delegate();
           },
           reject: settled.reject,
         };
-        if (!queue.push(dispatch)) delegate();
+        if (!queue.push(dispatch)) void delegate();
         return settled.promise;
       } as never);
     });

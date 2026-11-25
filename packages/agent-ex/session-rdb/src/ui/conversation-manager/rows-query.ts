@@ -40,6 +40,18 @@ export function localDayWindowStart(now: number, days: number): number {
   return start.getTime();
 }
 
+/**
+ * 时间筛选 → 查询下界（`updatedAfter`）。
+ *
+ * 只该在**事件里**调用（筛选变化）：它读时钟，结果是那一刻钉住的窗口起点。
+ * @param filter - 时间筛选值。
+ * @returns 窗口起点（毫秒）；`all` 无下界。
+ */
+function windowStartFor(filter: ConversationTimeFilter): number | undefined {
+  const days = filter === "7d" ? 7 : filter === "30d" ? 30 : 0;
+  return days === 0 ? undefined : localDayWindowStart(Date.now(), days);
+}
+
 // 归档筛选：全部 / 只看已归档 / 只看未归档。
 export type ConversationArchivedFilter = "all" | "only" | "unarchived";
 
@@ -89,6 +101,8 @@ export interface RowsQuery {
   readonly pageCount: number;
   // 取数落地后的播报（翻页、搜索、筛选变化都算）。
   readonly announcement: string | null;
+  // 这次取数的取样时刻（相对时间文案的分母）。
+  readonly sampledAt: number;
   setQuery: (value: string) => void;
   clearQuery: () => void;
   toggleSubagents: () => void;
@@ -118,16 +132,16 @@ export function useRowsQuery(
   const [archivedFilter, setArchivedFilterState] = useState<ConversationArchivedFilter>("all");
   const [page, setPage] = useState(1);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  // 时间窗：**在筛选变化那一刻**钉住（渲染期不读时钟）。切到 7d/30d 时算一次本地自然日下界存进 state，
+  // 切回「全部」清空；渲染只读这份 state，所以同一份筛选在整个停留期间是同一个窗口——
+  // 列表与批量导出（`filters`）用的也正是它。
+  // 下界是**本地自然日的零点**（近 7 天 = 今天零点往前 6 天），不是此刻往前 N × 24h。
+  const [updatedAfter, setUpdatedAfter] = useState<number | undefined>(undefined);
+  // 取样时刻：相对时间文案的分母（页面用它把 `updatedAt` 折成「多久以前」）。取在**发请求那一拍**，
+  // 于是「多久以前」是相对这次取数说的，不是相对每次渲染——同一次取数的所有行共用同一个分母。
+  const [sampledAt, setSampledAt] = useState(() => Date.now());
   const requestId = useRef(0);
   const copy = useMemo(() => failureCopy(t), [t]);
-
-  const days = timeFilter === "7d" ? 7 : timeFilter === "30d" ? 30 : 0;
-  // 时间窗在筛选变化时钉住（不是在每次请求时重算）：列表与批量导出用的是同一个窗口。
-  // 下界是**本地自然日的零点**（近 7 天 = 今天零点往前 6 天），不是此刻往前 N × 24h。
-  const updatedAfter = useMemo(
-    () => (days === 0 ? undefined : localDayWindowStart(Date.now(), days)),
-    [days],
-  );
   const filters = useMemo<SessionRowsRequest>(
     () => ({
       ...(settledQuery === "" ? {} : { query: settledQuery }),
@@ -141,6 +155,7 @@ export function useRowsQuery(
   const reload = useCallback(async (): Promise<void> => {
     const current = ++requestId.current;
     const requestedPage = page;
+    setSampledAt(Date.now());
     setLoading(true);
     const request: SessionRowsRequest = { ...filters, page: requestedPage, pageSize: PAGE_SIZE };
     try {
@@ -161,7 +176,14 @@ export function useRowsQuery(
   }, [listRows, copy, t, filters, page]);
 
   useEffect(() => {
-    void reload();
+    // 只**触发**加载：加载态（`setLoading(true)`）是 `reload` 自己的产物，它的 setState 发生在
+    // 这次请求的异步阶段；effect 的同步阶段不碰状态（否则一次筛选变化会在同一次渲染里再排一次）。
+    const timer = setTimeout(() => {
+      void reload();
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [reload]);
 
   // 搜索下推到宿主：输入停一下再请求（每次按键都打宿主没必要）。
@@ -193,6 +215,7 @@ export function useRowsQuery(
 
   const setTimeFilter = useCallback((next: ConversationTimeFilter) => {
     setTimeFilterState(next);
+    setUpdatedAfter(windowStartFor(next));
     setPage(1);
   }, []);
 
@@ -237,6 +260,7 @@ export function useRowsQuery(
     currentPage,
     pageCount,
     announcement,
+    sampledAt,
     setQuery,
     clearQuery,
     toggleSubagents,

@@ -124,7 +124,10 @@ export function SessionModePanelBody({
   t = fallbackTranslate,
 }: PanelProps): ReactNode {
   const [active, setActive] = useState<SessionModeActiveState | undefined>(undefined);
-  const [error, setError] = useState<string | undefined>(undefined);
+  // 错误与它对应的会话绑在一起：换会话时旧错误自动失效（不用在 effect 里同步清）。
+  const [errorOf, setErrorOf] = useState<{ sessionId: string; message: string } | undefined>(
+    undefined,
+  );
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [notice, setNotice] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<SectionKey | null>("general");
@@ -162,13 +165,15 @@ export function SessionModePanelBody({
       setActive(undefined);
       setDraft(EMPTY_DRAFT);
     }
-    setError(undefined);
     store.loadActive(sessionId).then(
       (value) => {
-        if (alive) setActive(value);
+        if (!alive) return;
+        // 读到就是没失败：错误的重置是**加载的产物**，不在 effect 的同步阶段做。
+        setErrorOf(undefined);
+        setActive(value);
       },
       (cause: unknown) => {
-        if (alive) setError(messageOf(cause));
+        if (alive) setErrorOf({ sessionId, message: messageOf(cause) });
       },
     );
     return () => {
@@ -186,6 +191,8 @@ export function SessionModePanelBody({
       </div>
     );
   }
+  // 只显示属于**当前会话**的错误。
+  const error = errorOf?.sessionId === sessionId ? errorOf.message : undefined;
   if (error !== undefined) {
     return (
       <div data-role="session-mode-panel" data-panel={panelId} style={PANEL_STYLE}>

@@ -24,5 +24,14 @@
     "bundle": {
       "patch": "./dist/cordis.patch.yml"
     }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "default": "./dist/index.mjs"
+      },
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./dist/cordis.patch.yml"
+    }
   }
 }
