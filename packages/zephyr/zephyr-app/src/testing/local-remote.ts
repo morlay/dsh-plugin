@@ -70,9 +70,17 @@ export class LocalRemote extends Remote {
         this.call(`${namespace}/${method}`, { request });
       Reflect.set(this, namespace, face);
       added.push(namespace);
+      this.namespaceLive.add(namespace);
+      // 按名字等的一方在这里被唤醒（与 `RemoteDefault` 同一个时机）。
+      const waiters = this.namespaceWaiters.get(namespace);
+      this.namespaceWaiters.delete(namespace);
+      for (const resolve of waiters ?? []) resolve();
     }
     return async () => {
-      for (const namespace of added) Reflect.deleteProperty(this, namespace);
+      for (const namespace of added) {
+        Reflect.deleteProperty(this, namespace);
+        this.namespaceLive.delete(namespace);
+      }
     };
   }
 
@@ -89,7 +97,28 @@ export class LocalRemote extends Remote {
 
   async whenMounted(): Promise<void> {}
 
-  async whenNamespace(): Promise<void> {}
+  /**
+   * 等某个 namespace 被某个 `$mount` 登记（契约语义：至少注册了一个方法）。
+   *
+   * **不能一律兑现**：没挂的那一组兑现了，消费方就会读到 `undefined` 的面并打出
+   * 「组挂上了、端点却不在」那类告警——那是"服务端版本不配对"的信号，替身不该伪造它。
+   * @param namespace - 上游 namespace 名（`session`）。
+   * @returns 该 namespace 登记过方法时兑现。
+   */
+  whenNamespace(namespace: string): Promise<void> {
+    if (this.namespaceLive.has(namespace)) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const waiters = this.namespaceWaiters.get(namespace) ?? new Set<() => void>();
+      waiters.add(resolve);
+      this.namespaceWaiters.set(namespace, waiters);
+    });
+  }
+
+  /** 已 `$mount` 登记过方法的 namespace（`whenNamespace` 的判据）。 */
+  private readonly namespaceLive = new Set<string>();
+
+  /** 按 namespace 等的调用方（下一次 `$mount` 登记它时唤醒）。 */
+  private readonly namespaceWaiters = new Map<string, Set<() => void>>();
 
   $on(): () => void {
     return () => {};

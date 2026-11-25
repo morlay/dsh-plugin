@@ -148,7 +148,11 @@ export class ApiSessionControllerHost extends fromCordis(
         // wire 上是裸字符串，边界处铸一次品牌（契约按 `SessionId` 索引）。
         await target.attach(SessionId(sessionId));
       } catch (error) {
-        console.warn("[session-api] 会话归属工作区失败（会话本身已建好）：", error);
+        // 生产诊断（会话建好了但没挂在任何工作区上）：保留 warn，但**只打一行摘要**——
+        // 栈由这条用例的断言 / 调用方负责，打全栈只会把一次 run 的 stderr 埋掉。
+        console.warn(
+          `[session-api] 会话归属工作区失败（会话本身已建好）：${error instanceof Error ? error.message : String(error)}`,
+        );
       }
       return created;
     };

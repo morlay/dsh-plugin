@@ -759,18 +759,18 @@ async function cssShimOf(options: {
  * **同一个包的构建排队串行**：产物目录是包级共享的（还会被重建时清理），并发跑会互相删掉对方的产物——
  * 首屏那几十个请求是同时在飞的，`zustand/vanilla` 与 `zustand/shallow` 撞在一起就丢产物、页面 404。
  *
+ * **不切进程 cwd**（这里曾经 `process.chdir(options.repoRoot)` 再恢复）：`process.chdir` 是**进程级全局**，
+ * 而 `zephyr dev` 是长驻服务——两个并发的构建请求会互相踩 cwd，谁后 chdir 谁就决定了别人的解析根；
+ * 在 worker 线程里它更是直接抛 `process.chdir() is not supported in workers`。
+ *
+ * 解析根改成**逐项显式**给，三件事都不读 cwd：入口是绝对路径（`options.input` 的值）、
+ * 模块解析用 `resolve.tsconfigFilename`（{@link resolveTsconfigPath}，绝对路径）、
+ * 装饰器由 `transform.decorator.legacy` 打开。`bundle.spec` 的「装饰器在产物里必须已被转译，
+ * 且**不依赖进程 cwd**」那条守着这个性质——它会把进程 cwd 切到别处再构建。
+ *
  * @param options - 见 {@link BundleOptions}。
  * @returns 产物映射；`input` 为空时 undefined。
  */
-/**
- * 摆正 **cwd** 之后再进构建。
- *
- * rolldown 的 oxc 转译是**按 cwd 往上找 tsconfig** 拿 `experimentalDecorators` 的，而这条链跑在宿主
- * 进程里——cwd 是宿主的（dev 是工作区、打包是 profile）。不摆正，上游用 cordis 装饰器的包就会在产物里
- * 留着 `@Remote(...)`，浏览器报 `SyntaxError`、入口整条不执行（这是"不同工作目录行为不一致"里最隐蔽的一处）。
- * 跑完恢复，别把进程的 cwd 改坏了。
- */
-
 /**
  * rolldown 的模块解析输入（外置/官方包祖先链里没有 tsconfig）。**不含装饰器开关**：
  * 那份开关的 home 是项目 tsconfig，这里再写一次只会让 rolldown 报字段冲突。
@@ -784,16 +784,6 @@ function resolveTsconfigPath(): string {
 }
 
 export async function bundlePackage(options: BundleOptions): Promise<Bundled | undefined> {
-  const previousCwd = process.cwd();
-  if (previousCwd !== options.repoRoot) process.chdir(options.repoRoot);
-  try {
-    return await bundlePackageInRoot(options);
-  } finally {
-    if (process.cwd() !== previousCwd) process.chdir(previousCwd);
-  }
-}
-
-async function bundlePackageInRoot(options: BundleOptions): Promise<Bundled | undefined> {
   const key = cacheKeyOf(options.name, options.version);
   // 同一个包**排队**：产物目录包级共享，而"这次要的出口"可能已经在上一轮里产出（第二个请求跑到
   // `bundlePackageOnce` 开头就会命中缓存，不会重建）。

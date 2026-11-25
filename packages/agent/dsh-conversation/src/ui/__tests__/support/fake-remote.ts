@@ -21,6 +21,29 @@ const EMPTY_HANDLERS: MockHandlers = {
   "session/list": () => ({ ids: [], byId: {} }),
 };
 
+/**
+ * 一条**不出帧**、只按 `signal` 收尾的空流（替身里的 `session/control`）。
+ *
+ * 收尾跟着 signal 走：消费方 `dispose()` 会 abort，这条流才结束；不跟的话用例结束时
+ * 会留一条悬着的迭代。
+ * @param signal - 调用方给的取消信号。
+ * @returns 空流。
+ */
+function emptyStream(signal: AbortSignal): AsyncIterable<never> {
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next: async (): Promise<IteratorResult<never>> => {
+        if (!signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        return { done: true, value: undefined };
+      },
+    }),
+  };
+}
+
 @Injectable()
 export class FakeRemote extends Remote {
   /**
@@ -42,6 +65,8 @@ export class FakeRemote extends Remote {
     list(request: unknown): Promise<unknown>;
     create(request: unknown): Promise<unknown>;
     follow(request: unknown, signal: AbortSignal): AsyncIterable<unknown>;
+    /** `session/control`：投影与会话生命周期读的那条流（真 face 上必然有）。 */
+    control(signal: AbortSignal): AsyncIterable<unknown>;
   };
 
   private transport = mockTransport(FakeRemote.next.handlers, FakeRemote.next.streams);
@@ -58,6 +83,10 @@ export class FakeRemote extends Remote {
       create: (request: unknown) => call("session/create", { request }),
       follow: (request: unknown, signal: AbortSignal) =>
         this.transport.openStream("session/follow", { args: { request } }, signal),
+      // `session/control`：投影与会话生命周期都读这条流，**真 face 上必然有**。
+      // 替身给一条"不出帧、按 signal 收尾"的空流：装配型 spec 的被测面不是它，但不能缺——
+      // 缺了消费方会走到「组挂上了、端点却不在」那条告警上，而那是"版本不配对"的信号。
+      control: (signal: AbortSignal) => emptyStream(signal),
       // 会话语义方法（与真 `remote.session` 同形）：替身里同样经过 transport。
       prompt: (request) =>
         call("session/prompt", { request }) as ReturnType<SessionRemoteFace["prompt"]>,
@@ -94,7 +123,18 @@ export class FakeRemote extends Remote {
     await this.mounted;
   }
 
-  async whenNamespace(_namespace: string): Promise<void> {}
+  /**
+   * 等某个 namespace 挂上。**替身没有后续 `$mount`**（面在构造时就定了）：
+   * 挂上的立即兑现，没挂的永不兑现——照实建模。谎报"已挂载"会让消费方走到
+   * 「组挂上了、端点却不在」那条告警上，而那是"服务端版本不配对"的信号。
+   * @param namespace - 上游 namespace 名（`session`）。
+   * @returns 挂上时立即兑现。
+   */
+  whenNamespace(namespace: string): Promise<void> {
+    return Reflect.get(this, namespace) === undefined
+      ? new Promise<void>(() => {})
+      : Promise.resolve();
+  }
 
   $on(channel: string, listener: (...args: never[]) => void): () => void {
     const unsubscribe = this.transport.subscribe?.((delivered, ...args) => {
@@ -147,7 +187,17 @@ export class RemoteShell extends Remote {
 
   async whenMounted(): Promise<void> {}
 
-  async whenNamespace(_namespace: string): Promise<void> {}
+  /**
+   * 等某个 namespace 挂上：同 {@link FakeRemote.whenNamespace}——本替身没有后续 `$mount`，
+   * 没挂的那一组（用例里的 `session: undefined`）永不兑现。
+   * @param namespace - 上游 namespace 名（`session`）。
+   * @returns 挂上时立即兑现。
+   */
+  whenNamespace(namespace: string): Promise<void> {
+    return Reflect.get(this, namespace) === undefined
+      ? new Promise<void>(() => {})
+      : Promise.resolve();
+  }
 
   $on(): () => void {
     return () => {};

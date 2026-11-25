@@ -1,5 +1,10 @@
 // vite 的 HMR 端口：页面在哪个端口上，WebSocket 就必须连哪个端口。
 //
+// **为什么是 `.isolate`**：这条把整个模块替换掉（`vi.mock("../internal/serve-vite.ts")`）并靠
+// `vi.hoisted` 的模块级容器收集调用参数。`isolate: false` 下同一个 worker 共享**同一份模块注册表**，
+// 一次整模块替换会漏到随后跑的其它文件（实测：同 worker 的别的 spec 拿到的是替身）。
+// 另外它真起 HTTP 服务（`WebServerDefault` 监听真端口），属于「真进程资源」。
+//
 // 约束：`startViteDev` 的 `pagePort` 只能取**实际监听端口**（`WebServer.port`）。期望端口
 // （`WebStartup.values.port`，来自 `--port` / `PORT`）在被占用时会被宿主顺延——顺延后两者不等，
 // HMR 客户端就会去连一个没人监听的端口（页面 console 满屏 `WebSocket connection to 'ws://…' failed`）。

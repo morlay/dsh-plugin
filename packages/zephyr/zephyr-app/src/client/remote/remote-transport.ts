@@ -67,6 +67,18 @@ export type RemoteOutcome =
     };
 
 /**
+ * 日志里给的一行错误摘要：**不带栈**。
+ *
+ * 这一层每条流 / 每一帧都可能打一次，带上栈只会把 `vitest doctor` 的失败摘要（最后 15 行）埋掉；
+ * 需要栈的地方由调用方的断言或上一层负责。
+ * @param error - 任意抛出物。
+ * @returns 一行文本。
+ */
+function summaryOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * 一条逻辑流的客户端面：下行逐帧 + **上行**（`send` / `end`）。
  *
  * 上行不是所有流都要（`workspace/follow` 只下行），但双向流（终端的 `terminal/attach`）靠它把键入
@@ -290,7 +302,9 @@ export function muxTransport(
                 },
               });
             } catch (error) {
-              console.error("[remote] 转发事件答复失败：", error);
+              // 生产诊断（宿主会一直等这条答复）：保留 error，但**只打一行摘要**——
+              // 栈由测试断言 / 上层负责，带上栈会把一次 run 的 stderr 埋掉。
+              console.error("[remote] 转发事件答复失败：%s", summaryOf(error));
             }
           })();
           return;
@@ -313,11 +327,16 @@ export function muxTransport(
           }
         }
       } catch (error) {
-        console.error("[remote] mux 处理帧失败：", error);
+        // 真异常（一帧坏了 = 协议/实现不配对）：保留 error 级别，但只打一行摘要——
+        // 这一帧的错误没有调用方接得住，栈只会重复几十行同一个位置。
+        console.error("[remote] mux 处理帧失败：%s", summaryOf(error));
       }
     });
-    socket.addEventListener("error", (event) => {
-      console.error("[remote] mux socket error：", event);
+    socket.addEventListener("error", () => {
+      // 预期路径：socket 的错误事件里**没有可诊断的信息**（浏览器的 `ErrorEvent` 只给 type/timeStamp，
+      // 原因按安全策略不给），后果由 `close` 那句"在途调用失败"交给调用方，宿主侧也有自己的日志。
+      // 所以这里只在调试级别留一行，不打整个事件对象（打出来是 4 行无用字段）。
+      console.debug("[remote] mux socket error（连接断了，在途调用由 close 收尾）");
     });
     // 连上之后补开 events 流（只开一次）。
     if (eventDeliver !== undefined || answerHandler !== undefined) openEvents();

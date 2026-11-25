@@ -22,6 +22,24 @@ import { SessionEndpointClient } from "@morlay/dsh-session/ui";
 import { LiveSessionRemotes } from "./remote-session.ts";
 import { asUpstreamContext } from "./upstream-context.ts";
 
+/** `onInit` 之前的目录快照：空且 `loading`（"还没拉"与"真没有会话"要分得开）。 */
+const EMPTY_CATALOG_STATE: SessionCatalogState = {
+  ids: [],
+  byId: {},
+  phase: "loading",
+  projectionsBySession: {},
+};
+
+/**
+ * `onInit` 之前的目录读面：空且 `loading`。
+ *
+ * 身份**模块级稳定**（`useSyncExternalStore` 的依赖要比得下去重），并且不缓存到实例上。
+ */
+const EMPTY_CATALOG: SessionController["list"] = {
+  getSnapshot: () => EMPTY_CATALOG_STATE,
+  subscribe: () => () => {},
+};
+
 /** 上游 `session/control` 的帧形状（本行只把它转交给 `ClientSessions.handleControlFrame`）。 */
 type ControlFrame = Parameters<ClientSessions["handleControlFrame"]>[0];
 
@@ -206,6 +224,11 @@ export class SessionControllerDefault extends SessionController implements OnIni
    * 行（`ids` / `byId` / `projectionsBySession`）是同一份快照，不复制。
    */
   get list(): SessionController["list"] {
+    // 装配期就可能被别的行的订阅读到（上游 `ui-session-status` 在 status 快照变化时读 `sessions.list`）：
+    // 那时本行还没 `onInit`，上游 `ClientSessions` 不存在。给「空且 loading」的读面而不是抛——
+    // 抛出去只会被第三方 store 的订阅器吞成一条 `subscriber failed`，读的人还是什么都没拿到。
+    // 空读面**不缓存**到实例上：`onInit` 之后这里要换成真读面。
+    if (this.inner === undefined) return EMPTY_CATALOG;
     // 读面本身也**只造一次**：`subscribe` / `getSnapshot` 的身份得稳定（`useSyncExternalStore` 的依赖）。
     this.catalog ??= this.catalogView();
     return this.catalog;

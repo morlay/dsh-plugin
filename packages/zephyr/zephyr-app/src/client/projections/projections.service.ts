@@ -12,6 +12,9 @@ import { ClientConnection } from "@morlay/zephyr-app/contract";
 import { remoteNamespaceOf } from "../remote/dynamic-face.ts";
 import { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";
 
+/** 本层读的那一组 namespace（`session/control` 那条流）：等挂载与读方法都按它来，不各写一次字面量。 */
+const SESSION_NAMESPACE = "session";
+
 /** 一帧控制流（`session/control` 的 `SessionControlFrame`）。 */
 interface ControlFrame {
   readonly type?: string;
@@ -93,9 +96,10 @@ export class ProjectionsDefault extends Projections implements OnInit, OnDispose
         this.open();
       });
     }
-    // 等 `session` namespace 挂上再开流：装配期 `remote.session` 还不在（或挂到未就绪的
-    // typert gateway 上），那时开会以一条错误结束，而这条流之后没有别的时机再被重开。
-    void this.remote.whenMounted().then(() => {
+    // 等**这一组**挂上再开流：`whenMounted()` 只等第一个 contribution，先到的是别的组时
+    // `remote.session` 还不存在，`open()` 会打一条告警，而这条流之后没有别的时机再被重开
+    // （症状：界面上所有"宿主算出来的值"停在旧值）。
+    void this.remote.whenNamespace(SESSION_NAMESPACE).then(() => {
       if (this.disposed) return;
       this.open();
     });
@@ -146,12 +150,14 @@ export class ProjectionsDefault extends Projections implements OnInit, OnDispose
   /** 开一条 `session/control` 流（幂等：先停旧的）。 */
   private open(): void {
     this.stopStream?.();
-    const namespace = remoteNamespaceOf(this.remote, "session");
+    const namespace = remoteNamespaceOf(this.remote, SESSION_NAMESPACE);
     const control = namespace?.control;
     if (typeof control !== "function") {
-      // 不静默：没有这条流，界面上所有"宿主算出来的值"都不会更新。
+      // 走到这里说明**组挂上了、端点却不在**（服务端版本不配对），是真装配问题：
+      // 没有这条流，界面上所有"宿主算出来的值"都不会更新，不静默。
+      // 一行摘要，不带栈——这不是可恢复的异常，栈只会在每次装配时重复一遍。
       console.warn(
-        "[projections] remote.session.control 不存在：投影不会随宿主更新（界面会停在旧值）",
+        `[projections] remote.${SESSION_NAMESPACE}.control 不存在：投影不会随宿主更新（界面会停在旧值）`,
       );
       return;
     }

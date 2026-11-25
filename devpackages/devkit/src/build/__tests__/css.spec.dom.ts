@@ -196,7 +196,6 @@ describe("client bundle CSS", () => {
   describe("cssInlinePlugins", () => {
     test("hands the build a working CSS inliner", async () => {
       const directory = await fixtureOf();
-      const cwd = process.cwd();
       await writeFile(
         join(directory, "package.json"),
         JSON.stringify({ name: PLUGIN_ID, private: true, type: "module" }),
@@ -206,25 +205,23 @@ describe("client bundle CSS", () => {
         join(directory, "src", "client", "index.ts"),
         'import classes from "../../styles/Fixture.module.css";\nexport { classes };\n',
       );
-      process.chdir(directory);
+      // 入口给**绝对路径**：解析基准是入口自己所在的位置，不是进程 cwd。
+      // 这里原来靠 `process.chdir(directory)` 表达「相对哪儿解析」——那既是拿全局状态说一件局部的事
+      // （同进程并行的用例会被波及），也在 worker 池下直接不可用（`process.chdir() is not supported in workers`）。
+      const build = await rolldown({
+        input: join(directory, "src", "client", "index.ts"),
+        platform: "node",
+        plugins: [cssInlinePlugins({ name: PLUGIN_ID, assets: "inline" })],
+      });
       try {
-        const build = await rolldown({
-          input: "./src/client/index.ts",
-          platform: "node",
-          plugins: [cssInlinePlugins({ name: PLUGIN_ID, assets: "inline" })],
-        });
-        try {
-          const { output } = await build.generate({ format: "cjs", codeSplitting: false });
-          const chunk = output.find((item) => item.type === "chunk");
-          if (chunk === undefined || chunk.type !== "chunk") throw new Error("no client chunk");
-          expect(styleImports(chunk.code)).toEqual([]);
-          expect(chunk.code).toContain(`data-plugin-css=\\"${PLUGIN_ID}/Fixture.module.css\\"`);
-          expect(chunk.code).toMatch(/"[A-Za-z0-9_-]+_root"/);
-        } finally {
-          await build.close();
-        }
+        const { output } = await build.generate({ format: "cjs", codeSplitting: false });
+        const chunk = output.find((item) => item.type === "chunk");
+        if (chunk === undefined || chunk.type !== "chunk") throw new Error("no client chunk");
+        expect(styleImports(chunk.code)).toEqual([]);
+        expect(chunk.code).toContain(`data-plugin-css=\\"${PLUGIN_ID}/Fixture.module.css\\"`);
+        expect(chunk.code).toMatch(/"[A-Za-z0-9_-]+_root"/);
       } finally {
-        process.chdir(cwd);
+        await build.close();
       }
     });
   });
