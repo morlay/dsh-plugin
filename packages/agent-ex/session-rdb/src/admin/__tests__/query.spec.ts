@@ -213,7 +213,13 @@ function bigLog(total: number): SessionEvent[] {
 
 describe("查询不下推就等于把整段日志读进内存", () => {
   // 判据两件：条件命中几行就只物化几行；事件列表只取四列坐标（不读 f_data）。
-  test("1 万条事件的会话：按 seq 区间筛选只物化命中那几行，事件列表不读 f_data", async () => {
+  test(
+    "1 万条事件的会话：按 seq 区间筛选只物化命中那几行，事件列表不读 f_data",
+    // 这条**真往 sqlite 写 1 万条事件**（真库、真 WAL、还要再扫两遍）：是 IO 成本，不是用例慢。
+    // 判据本身就建立在「1 万行里只物化命中那 11 行」上，减量就等于减判据；3s 的全局上限在并行
+    // 机器上撑不住（实测冷跑 3.5s+ 直接红）。所以显式给上限，不给「把等待调小」这条捷径。
+    { timeout: 15_000 },
+    async () => {
     const harness = await start();
     const total = 10_002;
     const handle = await harness.app.get(SessionPersistence).create(meta("query-big", "/work"));

@@ -1,6 +1,7 @@
 // 临时探针：teammate（Agent Teams）的端到端面——成员资格决定工具可见性、任务板全流程、
 // 以及 spawn 一个队友之后按名字分配任务。用假 LLM，不联网。
 import {
+  AgentDirectory,
   Llm,
   SubagentRegistry,
   ToolRegistry,
@@ -279,12 +280,8 @@ describe("teammate（Agent Teams）端到端", () => {
         console.log("send_message →", sent.text);
         expect(sent.isError).toBeFalsy();
 
-        const waited = await run(app, lead, "wait_agent", {
-          agent: teammate.name,
-          timeout_ms: 10_000,
-        });
-        console.log("wait_agent →", waited.text);
-
+        // 不在这里调 `wait_agent`：上游只收 timeout_ms 10000..3600000，跑一次就是固定 10s 墙钟；
+        // 而这条用例对它没有任何判据（「消息送达」「任务分派」上面已经断完了），等出来的结果只进了 log。
         await teammate.dispose();
       } finally {
         await app.dispose().catch(() => {});
@@ -328,7 +325,10 @@ describe("teammate（Agent Teams）端到端", () => {
         });
         // 假 LLM 一轮就结束：等它转 idle 再发消息——投影兜底时这一步会抛
         // "selecting a child agent preset requires the agent-presets service"。
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // 等**条件**而不是等 2s：`whenIdle` 说的就是「这一轮连同它释放的唤醒工作都跑完了」。
+        const spawned = app.get(AgentDirectory).get(child.childId as never);
+        if (spawned === undefined) throw new Error("队友没进 AgentDirectory：无从等它转 idle");
+        await spawned.whenIdle();
         const messageId = await subagents.sendMessage(
           lead,
           child.childId,
