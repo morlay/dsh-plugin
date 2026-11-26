@@ -22,6 +22,18 @@ export class SessionModePanelTab implements OnInit {
       // `extension`：外部类型默认档，与上游各 tab 同档（同档不同 kind 可以共存）。
       priority: "extension",
       title: () => t("panel"),
+      // **guide 入口**：省略 `guide` 就等于「不上 guide 页」（上游 `tab-registry.ts:409-411` 的
+      // `guideEntries` 只来自 `definition.guide`），而本页**没有别的入口**——右栏那一页只由用户
+      // 自己从这里打开，漏了它这一页就永远打不开（类型注册上了、正文也注册了，但用户没有按钮）。
+      // `order` 接在上游那几档之后（files 10 / terminal 20 / browser 30）。
+      guide: [
+        {
+          id: "panel",
+          order: 40,
+          title: () => t("panel"),
+          description: () => t("panelDescription"),
+        },
+      ],
     });
   }
 }

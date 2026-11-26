@@ -81,6 +81,8 @@ export {
   SidebarRightTabs,
   type SidebarRightTabsFace,
 } from "./sidebar-right/sidebar-right-tabs.contract.ts";
+// 装配面要按实现类定位这一行（configure / without），所以实现类也出。
+export { SidebarRightTabsDefault } from "./sidebar-right/tabs.service.ts";
 export { SettingsSchema } from "./settings/settings-schema.contract.ts";
 export { SettingsSchemaDefault } from "./settings/settings-schema.service.ts";
 // `localStorage` / `sessionStorage` 的代理（同步内存真源 + IndexedDB 异步落盘）。
