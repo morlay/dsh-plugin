@@ -51,32 +51,38 @@ async function boot(): Promise<App> {
 }
 
 describe("subagents/* 的宿主面", { timeout: 30_000 }, () => {
+  // 三条判据都是**裸值口径**：宿主回裸值（`RemoteResult` 归桥/客户端面），失败是**抛异常**。
+  // 包过一层的话第 1 条会拿到 `{ ok: true, value: { accepted: true } }`，第 2/3 条不会抛。
   test("interruptByUser 对没有活子代理的地址是接受的 no-op（回回执，不抛）", async () => {
     const app = await boot();
     const result = await app.get(RemoteHandlers).invoke("subagents/interruptByUser", {
       childSessionId: SessionId("child-none"),
     });
-    expect(result).toMatchObject({ ok: true });
+    expect(result).not.toHaveProperty("ok");
     // 回执形状（上游 `SubagentInterruptReceipt`：是否受理了这次取消信号）。
-    expect(JSON.stringify(result)).toContain("accepted");
+    expect(result).toEqual({ accepted: true });
   });
 
-  test("空的子会话地址由上游拒绝（`gateway/bad-request`，不是静默成功）", async () => {
+  test("空的子会话地址由上游拒绝（抛 `RemoteError`，不是静默成功）", async () => {
     const app = await boot();
-    const result = await app.get(RemoteHandlers).invoke("subagents/interruptByUser", {
-      childSessionId: "",
-    });
-    expect(result).toMatchObject({ ok: false });
-    expect((result as { error?: { code?: string } }).error?.code).toBe("gateway/bad-request");
+    await expect(app.get(RemoteHandlers).invoke("subagents/interruptByUser", { childSessionId: "" })).rejects.toThrow(
+      /invalid payload/,
+    );
   });
 
   test("prompt 在没有 provider 的装配里由上游报错，而不是「没实现」", async () => {
     const app = await boot();
-    const result = await app.get(RemoteHandlers).invoke("subagents/prompt", {
-      request: { sessionId: SessionId("s1"), prompt: "hi", provider: "missing" },
-    });
-    expect(result).toMatchObject({ ok: false });
-    const message = (result as { error?: { message?: string } }).error?.message ?? "";
+    const error = await app
+      .get(RemoteHandlers)
+      .invoke("subagents/prompt", {
+        request: { sessionId: SessionId("s1"), prompt: "hi", provider: "missing" },
+      })
+      .then(
+        () => new Error("应当抛错"),
+        (thrown: unknown) => thrown,
+      );
+    expect(error).not.toHaveProperty("ok");
+    const message = (error as Error).message ?? "";
     expect(message).not.toContain("没有实现");
   });
 });

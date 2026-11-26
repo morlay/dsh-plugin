@@ -9,44 +9,25 @@
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import {
-  asRemoteResult,
-  RemoteGroup,
-  RemoteMethod,
   registerRemoteGroup,
-  type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 import { Setting, type SettingDocument } from "@morlay/zephyr-app";
 import { SettingSchema, type ConfigSchema } from "@morlay/zephyr-app";
 import { redactSecrets, type RedactedSecret } from "@deepseek-ai/dsh-settings";
+import type { SettingsNamespaceView, SettingsPathOpView } from "@deepseek-ai/dsh-settings/types";
 import { mergeTree } from "../setting.service.ts";
+import { SettingsEndpoint } from "../endpoint/index.ts";
 
-/** 一条路径操作（UI 的 `mutate` 载荷）。 */
-type PathOp =
-  | { readonly op: "set"; readonly path: readonly string[]; readonly value: unknown }
-  | { readonly op: "unset"; readonly path: readonly string[] };
+// 视图与路径操作**就是上游那两个类型**（`@deepseek-ai/dsh-settings/types`）：手写一份只会多一处会漂的声明，
+// 而且上游 `ui-settings` 的 `config-form` 用 `'base' in view` 判「是不是装配层给的」——两处声明迟早漂在那里。
+type PathOp = SettingsPathOpView;
+type NamespaceView = SettingsNamespaceView;
+// 可序列化值：从上游视图字段派生，不为一处引新依赖。
+type JsonValue = SettingsNamespaceView["schema"];
 
-/** 一个命名空间的视图（UI 按它渲染表单）。 */
-interface NamespaceView {
-  readonly autoGenerate: boolean;
-  readonly ns: string;
-  /** 序列化后的 schemastery（UI `new Schema(json)` 重建表单）；**不能是 `null`**。 */
-  readonly schema: unknown;
-  /** 生效值：schema 默认 ⊕ base ⊕ 用户层（密钥字段已抹掉）。 */
-  readonly value: unknown;
-  /** 装配层（行 config）：`configure(实现类, …)` 给的那一份，没有就是 `{}`。 */
-  readonly base: unknown;
-  /** 用户自己写的那一份（`settings.json` 里的原值，密钥已抹掉）；没有就是缺省。 */
-  readonly user?: unknown;
-  readonly applies: "live";
-  /** 每个 schema 声明的密钥位与「有没有值」（只有 `set`，没有值本身）。 */
-  readonly secrets: readonly RedactedSecret[];
-  readonly revision: number;
-}
-
-/** `settings` 组的宿主实现。 */
-@RemoteGroup({ name: "settings" })
+/** `settings` 组的宿主实现（继承契约：方法名 / wire 名 / 形参只有契约一处声明）。 */
 @Injectable()
-export class SettingEndpointDefault implements OnInit {
+export class SettingEndpointDefault extends SettingsEndpoint implements OnInit {
   private readonly handlers = inject(RemoteHandlers);
 
   private readonly setting = inject(Setting);
@@ -70,14 +51,14 @@ export class SettingEndpointDefault implements OnInit {
    * `ui-settings-models/src/client/store.ts:250`），文件为空时也必须给出每一条（`value` 只有默认层）。
    * 与文件里多出来的键取并集，用户手写过的配置不会因为目录里没有 provider 而消失。
    */
-  @RemoteMethod()
-  describe(): Promise<
-    RemoteResultWire<{ writable: boolean; hasDocument: boolean; namespaces: NamespaceView[] }>
-  > {
-    // **必须包成 wire 的 `RemoteResult`**：客户端（`ui-settings` 的 `SettingsDescribeMirror.run`）
-    // 读 `response.ok` / `response.error.message`，返回裸对象会让 `response.ok` 是 `undefined`，
-    // 于是 `response.error.message` 抛 `Cannot read properties of undefined (reading 'message')`。
-    return asRemoteResult(async () => {
+  override async describe(): Promise<{
+    writable: boolean;
+    hasDocument: boolean;
+    namespaces: NamespaceView[];
+  }> {
+    // 回**裸值**：上游客户端读的 `response.ok` 那一层是**桥与客户端面**包的（`faceOf` / `RemoteHandlersRpcBridge`）。
+    // 宿主再包一层就是双包——客户端会读到 `{ ok, value: { ok, value } }`，`response.error.message` 直接炸。
+    {
       const document = this.setting.snapshot();
       // 命名空间既可能以嵌套对象出现（`{"ui-theme": {"preference": "dark"}}`），也可能以**点号扁平键**
       // 出现（`{"ui-theme.preference": "dark"}`，上游 `SettingsForms` 的写法）。两种都归到同一个 ns。
@@ -87,7 +68,7 @@ export class SettingEndpointDefault implements OnInit {
       ]);
       const namespaces = [...names].map((ns) => this.viewOf(ns, namespaceOf(document, ns)));
       return { writable: true, hasDocument: true, namespaces };
-    });
+    }
   }
 
   /**
@@ -98,13 +79,8 @@ export class SettingEndpointDefault implements OnInit {
    * @param input - 命名空间键与 `set` / `unset` 序列。
    * @returns 改写后的视图。
    */
-  @RemoteMethod()
-  mutate(input: {
-    readonly ns: string;
-    readonly ops: readonly PathOp[];
-  }): Promise<RemoteResultWire<NamespaceView>> {
-    return asRemoteResult(async () => {
-      const { ns, ops } = input;
+  override async mutate(ns: string, ops: readonly PathOp[]): Promise<NamespaceView> {
+    {
       const document = this.setting.snapshot();
       const current = document[ns];
       const value: SettingDocument =
@@ -118,13 +94,12 @@ export class SettingEndpointDefault implements OnInit {
       this.setting.replace(ns, value);
       this.revisions.set(ns, (this.revisions.get(ns) ?? 0) + 1);
       return this.viewOf(ns, value);
-    });
+    }
   }
 
   /** 打开本地文档：只回 `{ opened: true }`，不暴露宿主路径。 */
-  @RemoteMethod()
-  openSettingsDocument(): Promise<RemoteResultWire<{ opened: true }>> {
-    return asRemoteResult(async () => ({ opened: true }));
+  override async openSettingsDocument(): Promise<{ opened: true }> {
+    return { opened: true };
   }
 
   /**
@@ -132,17 +107,14 @@ export class SettingEndpointDefault implements OnInit {
    * @param input - 命名空间、要合并进去的键树、期望 revision（`undefined` 表示不校验）。
    * @returns 写后的视图。
    */
-  @RemoteMethod()
-  update(input: {
-    readonly ns: string;
-    readonly patch: Record<string, unknown>;
-    readonly expectedRevision?: number;
-  }): Promise<RemoteResultWire<NamespaceView>> {
-    return asRemoteResult(async () => {
-      const written = this.setting.update(input.ns, input.patch, input.expectedRevision);
-      this.revisions.set(input.ns, written.revision);
-      return this.viewOf(input.ns, written.user);
-    });
+  override async update(
+    ns: string,
+    patch: Record<string, unknown>,
+    expectedRevision?: number,
+  ): Promise<NamespaceView> {
+    const written = this.setting.update(ns, patch, expectedRevision);
+    this.revisions.set(ns, written.revision);
+    return this.viewOf(ns, written.user);
   }
 
   /**
@@ -150,17 +122,14 @@ export class SettingEndpointDefault implements OnInit {
    * @param input - 命名空间、新值、期望 revision（`undefined` 表示不校验）。
    * @returns 写后的视图。
    */
-  @RemoteMethod()
-  replace(input: {
-    readonly ns: string;
-    readonly section: Record<string, unknown>;
-    readonly expectedRevision?: number;
-  }): Promise<RemoteResultWire<NamespaceView>> {
-    return asRemoteResult(async () => {
-      const written = this.setting.replace(input.ns, input.section, input.expectedRevision);
-      this.revisions.set(input.ns, written.revision);
-      return this.viewOf(input.ns, written.user);
-    });
+  override async replace(
+    ns: string,
+    section: Record<string, unknown>,
+    expectedRevision?: number,
+  ): Promise<NamespaceView> {
+    const written = this.setting.replace(ns, section, expectedRevision);
+    this.revisions.set(ns, written.revision);
+    return this.viewOf(ns, written.user);
   }
 
   /**
@@ -183,17 +152,19 @@ export class SettingEndpointDefault implements OnInit {
         : undefined;
     const schema = this.schemas.liveOf(ns);
     const base = this.schemas.baseOf(ns);
-    const value = effectiveValueOf(this.schemas.defaultsOf(ns), base, userLayer);
+    // 计算时按「空层」（`base ?? {}`）；视图层按「有没有装配层」分派（见下）。两个语义分开处理。
+    const value = effectiveValueOf(this.schemas.defaultsOf(ns), base ?? {}, userLayer);
     const redacted = redactOf(schema, value);
     return {
       autoGenerate: false,
       ns,
-      schema: this.schemas.get(ns) ?? { type: "object", dict: {} },
+      schema: (this.schemas.get(ns) ?? { type: "object", dict: {} }) as JsonValue,
       value: redacted.value,
-      base: redactOf(schema, base).value,
+      ...(base === undefined ? {} : { base: redactOf(schema, base).value }),
       ...(userLayer === undefined ? {} : { user: redactOf(schema, userLayer).value }),
       applies: "live",
-      secrets: redacted.secrets,
+      // 上游字段是可变数组：拷一份（我们内部按 readonly 传，别把可变引用漏出去）。
+      secrets: [...redacted.secrets],
       revision: this.revisions.get(ns) ?? 0,
     };
   }
@@ -211,9 +182,10 @@ export class SettingEndpointDefault implements OnInit {
 function redactOf(
   schema: ConfigSchema | undefined,
   value: unknown,
-): { value: unknown; secrets: readonly RedactedSecret[] } {
-  if (schema === undefined) return { value, secrets: [] };
-  return redactSecrets(schema as never, value);
+): { value: JsonValue; secrets: readonly RedactedSecret[] } {
+  // 视图字段要求可序列化值（`JsonValue`）；抹密钥不改变可序列化性，所以在边界收口一次。
+  if (schema === undefined) return { value: value as JsonValue, secrets: [] };
+  return redactSecrets(schema as never, value) as { value: JsonValue; secrets: readonly RedactedSecret[] };
 }
 
 /**

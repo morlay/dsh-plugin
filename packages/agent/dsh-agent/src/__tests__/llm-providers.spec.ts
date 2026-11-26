@@ -68,12 +68,13 @@ test(
     // 卸载跟着 fixture 的清理链走（它跑在「删临时目录」之前；`onTestFinished` 更晚，见 `fixtures.ts`）。
     appEnv.onCleanup(() => app.dispose().catch(() => {}));
 
-    const result = (await app.get(RemoteHandlers).invoke("settings/describe", {})) as {
-      ok?: boolean;
-      value?: { namespaces: readonly DescribeView[] };
+    // 裸值口径：端点直接回视图（`RemoteResult` 由桥/客户端面包）。双包时这里会是 `{ ok, value }`，
+    // 于是下面 `result?.ok` 是 `undefined`、`namespaces` 也读不到。
+    const described = (await app.get(RemoteHandlers).invoke("settings/describe", {})) as {
+      namespaces: readonly DescribeView[];
     };
-    expect(result.ok).toBe(true);
-    const view = result.value?.namespaces.find((entry) => entry.ns === "llm-pi-ai");
+    expect(described).not.toHaveProperty("ok");
+    const view = described.namespaces.find((entry) => entry.ns === "llm-pi-ai");
     if (view === undefined) throw new Error("settings/describe 里没有 llm-pi-ai 的视图");
 
     const ollama = { baseURL: "https://ollama.com", displayName: "Ollama Cloud" };
@@ -86,7 +87,7 @@ test(
     expect(view.base).toMatchObject({
       providers: { ollama: { headers: { Authorization: "Bearer ${OLLAMA_API_KEY}" } } },
     });
-    expect(JSON.stringify(result)).not.toContain("sk-deployment-secret");
+    expect(JSON.stringify(described)).not.toContain("sk-deployment-secret");
     expect(view.secrets).toEqual([]);
   },
 );

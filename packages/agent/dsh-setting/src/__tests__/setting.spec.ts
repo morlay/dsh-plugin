@@ -92,9 +92,22 @@ interface DescribeValue {
  * @returns 是否是可用的 describe 值。
  */
 /** 把 wire 的 `RemoteResult` 解成值（三个端点都包了这层，客户端正是读 `.ok` 再取 `.value`）。 */
+/**
+ * 从 `handlers.invoke(...)` 的返回值取业务值。**两种口径都认**：
+ *
+ * - 我们的端点回**裸值**（`describe` / `mutate` …；`RemoteResult` 由桥与客户端面各包一层）；
+ * - 上游 `typertGateway` 分派的 `@Remote` 方法同样是裸值，但如果某个端点在测试装配里走了桥，
+ *   拿到的是 `{ ok: true, value }`。
+ *
+ * 只认包装的话，我们这一侧的断言会一律读到 `undefined`（本文件 8 处用例就这么红过）。
+ * @param result - `handlers.invoke(...)` 的返回值。
+ * @returns 业务值；`ok: false` 回 `undefined`。
+ */
 function unwrap<T>(result: unknown): T | undefined {
-  const wire = result as { ok?: unknown; value?: unknown } | null | undefined;
-  return wire?.ok === true ? (wire.value as T) : undefined;
+  if (typeof result !== "object" || result === null) return undefined;
+  if (!("ok" in result)) return result as T;
+  const wire = result as { ok?: unknown; value?: unknown };
+  return wire.ok === true ? (wire.value as T) : undefined;
 }
 
 function isDescribeView(entry: unknown): entry is DescribeView {
@@ -191,7 +204,8 @@ describe("配置面", () => {
     const { app } = await boot();
     await expect(
       app.get(RemoteHandlers).invoke("settings/openSettingsDocument", {}),
-    ).resolves.toEqual({ ok: true, value: { opened: true } });
+      // 裸值口径；退化成包装时这里会拿到 `{ ok: true, value: { opened: true } }`（双包）。
+    ).resolves.toEqual({ opened: true });
   });
 });
 

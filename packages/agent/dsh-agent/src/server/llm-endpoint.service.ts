@@ -7,11 +7,8 @@ import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import {
   RemoteGroup,
   RemoteMethod,
-  asRemoteResult,
   registerRemoteGroup,
-  type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
-import { RemoteError } from "@deepseek-ai/dsh-typert-protocol/src/remote-error.ts";
 
 import { Llm } from "../contract/llm.contract.ts";
 import type {
@@ -33,54 +30,37 @@ export class LlmEndpoint implements OnInit {
     registerRemoteGroup(this.handlers, this);
   }
 
-  /** 全部已注册适配器的路由元数据。 */
-  @RemoteMethod()
-  listProviders(): Promise<RemoteResultWire<LlmListProvidersValue>> {
-    return asRemoteResult(async () => this.llm.listProviders());
+  /** 全部已注册适配器的路由元数据（裸值；失败是异常）。 */
+  @RemoteMethod({ parameters: [] })
+  async listProviders(): Promise<LlmListProvidersValue> {
+    return this.llm.listProviders();
   }
 
   /** 可在设置页配置的 provider 目录（含各自的设置命名空间）。 */
-  @RemoteMethod()
-  listConfigurableProviders(): Promise<RemoteResultWire<LlmListConfigurableProvidersValue>> {
-    return asRemoteResult(async () => this.llm.listConfigurableProviders());
+  @RemoteMethod({ parameters: [] })
+  async listConfigurableProviders(): Promise<LlmListConfigurableProvidersValue> {
+    return this.llm.listConfigurableProviders();
   }
 
   /**
    * 为一个设置命名空间发现模型。
    *
-   * 逐字段判据（上游请求体字段全可选）：只把「确实是字符串」的字段交给上游；
-   * `settingsNs` 必须非空字符串、`request` 必须是非 null 对象，否则 `gateway/arguments-invalid`。
-   * @param input - wire 实参（整个 args 当一个对象）。
+   * wire 是**两个位置形参**（`settingsNs` / `request`，见上游 `llm/lib/typert.host.ts:49`）——曾经这里
+   * 收一个对象且没声明 `parameters`，descriptor 编出 `{ request }`，网关按上游 descriptor 校验必炸
+   * （与 `commands/execute` / `terminal/environment` 同一类）。
+   *
+   * 逐字段判据（上游请求体字段全可选）：只把「确实是字符串」的字段交给上游；`settingsNs` 必须非空字符串、
+   * `request` 必须是非 null 对象，否则 `gateway/bad-request`。
+   * @param settingsNs - 设置命名空间（wire 名 `settingsNs`）。
+   * @param request - 发现请求体（wire 名 `request`）。
    * @returns 发现到的模型列表。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["settingsNs", "request"] })
   async discoverModels(
-    input: LlmDiscoverModelsRequest,
-  ): Promise<RemoteResultWire<LlmDiscoverModelsValue>> {
-    return asRemoteResult(async () => {
-      const settingsNs = input?.settingsNs;
-      if (typeof settingsNs !== "string" || settingsNs.length === 0) {
-        throw new RemoteError(
-          "gateway/bad-request",
-          "llm/discoverModels 需要字符串 settingsNs",
-          // `gateway/bad-request` 的 details 是 `{ issues?: readonly object[] }`：
-          // 上游把"哪条校验没过"放在 `issues` 里，这里照它的形状写。
-          { issues: [{ endpoint: "llm/discoverModels", field: "settingsNs" }] },
-        );
-      }
-      const raw = input?.request;
-      if (typeof raw !== "object" || raw === null) {
-        throw new RemoteError("gateway/bad-request", "llm/discoverModels 需要对象 request", {
-          issues: [{ endpoint: "llm/discoverModels", field: "request" }],
-        });
-      }
-      const source = raw as Readonly<Record<string, unknown>>;
-      const request: { -readonly [K in keyof typeof source]: unknown } = {};
-      for (const key of ["provider", "baseURL", "api", "apiKey"] as const) {
-        const value = source[key];
-        if (typeof value === "string") request[key] = value;
-      }
-      return this.llm.discoverModels(settingsNs, request);
-    });
+    settingsNs: string,
+    request: LlmDiscoverModelsRequest["request"],
+  ): Promise<LlmDiscoverModelsValue> {
+    // wire 的形状由网关按 descriptor 校验（strict codec）；到这里就是上游那份请求类型，直接转发。
+    return this.llm.discoverModels(settingsNs, request);
   }
 }

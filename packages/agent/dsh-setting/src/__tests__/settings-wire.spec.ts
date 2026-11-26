@@ -18,16 +18,13 @@ import { describe, expect, mountFullApp, provideAppEnv, test } from "@morlay/zep
 import { provideSetting } from "../server/index.ts";
 import { SettingEndpointDefault } from "../server/setting-endpoint.service.ts";
 
-/** `settings/describe` 的应答里本 spec 读到的两层（拦截器的结果面 ⊕ 端点的 `RemoteResultWire`）。 */
+/** `settings/describe` 的应答里本 spec 读到的那一层（**单层**：端点回裸值，拦截器包一层 `{ ok, value }`）。 */
 interface DescribeEnvelope {
   readonly result?: {
     readonly ok?: boolean;
     readonly value?: {
-      readonly ok?: boolean;
-      readonly value?: {
-        readonly writable?: boolean;
-        readonly namespaces?: readonly { readonly ns?: string }[];
-      };
+      readonly writable?: boolean;
+      readonly namespaces?: readonly { readonly ns?: string }[];
     };
   };
 }
@@ -90,9 +87,10 @@ describe("settings 组的 wire 载体", { timeout: 180_000 }, () => {
     expect(status, "`/api/settings/describe` 必须被认领（404 就是没认领）").toBe(200);
     const body = JSON.parse(text) as DescribeEnvelope;
     expect(body.result?.ok, "拦截器的结果面").toBe(true);
-    expect(body.result?.value?.ok, "端点的 `RemoteResultWire`").toBe(true);
+    // **单层**：端点回裸值。双包时这里是 `{ ok: true, value: {…} }`，所以直接断言「不带 `ok`」。
+    expect(body.result?.value, "端点直接回视图（不再自带 `ok`）").not.toHaveProperty("ok");
 
-    const view = body.result?.value?.value;
+    const view = body.result?.value;
     expect(typeof view?.writable, "视图里的 `writable`").toBe("boolean");
     expect(Array.isArray(view?.namespaces), "视图里的 `namespaces`").toBe(true);
   });

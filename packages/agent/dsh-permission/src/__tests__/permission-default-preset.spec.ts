@@ -74,12 +74,12 @@ describe("默认权限档位的读写", () => {
 
       expect(await catalogDefaultOf(app)).toBe("workspace-write");
 
+      // 裸值口径：`settings/describe` 直接回视图。双包时这里会是 `{ ok, value }`（`described.ok` 才存在）。
       const described = (await handlers.invoke("settings/describe", {})) as {
-        ok?: unknown;
-        value?: { namespaces?: readonly { ns: string; value?: unknown }[] };
+        namespaces?: readonly { ns: string; value?: unknown }[];
       };
-      expect(described.ok).toBe(true);
-      expect(described.value?.namespaces).toEqual(
+      expect(described).not.toHaveProperty("ok");
+      expect(described.namespaces).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             ns: "permission",
@@ -95,8 +95,10 @@ describe("默认权限档位的读写", () => {
     const written = (await first.handlers.invoke("settings/mutate", {
       ns: "permission",
       ops: [{ op: "set", path: ["defaultPreset"], value: "danger-full-access" }],
-    })) as { ok?: unknown };
-    expect(written.ok).toBe(true);
+    })) as { ns?: string };
+    // 裸值口径：`settings/mutate` 直接回该命名空间的视图。双包时这里会是 `{ ok, value }`（`written.ok` 才存在）。
+    expect(written).not.toHaveProperty("ok");
+    expect(written.ns).toBe("permission");
 
     // 卸载时 `SettingLoader` 等写盘队列清空：此时文件里应已是新值。
     await first.app.dispose();

@@ -8,6 +8,8 @@
 // 方法签名从上游宿主面（`SettingsController`）推（`Parameters<…>` / `ReturnType<…>`）：形状本来就在
 // 那里定义，抄一遍只会多一份会漂的声明。
 import type { SettingsController } from "@deepseek-ai/dsh-api-settings-controller";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam } from "@morlay/zephyr-app/typert";
 import { groupNameOf, RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
 
 /**
@@ -34,7 +36,7 @@ export class SettingsEndpoint {
    * 配置页的一次读：可写性、文档存在与否、每个 namespace 的红acted 视图。
    * @returns 配置页要的那一份快照。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async describe(): Promise<ReturnType<SettingsController["describe"]>> {
     throw new Error("settings/describe：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -46,7 +48,7 @@ export class SettingsEndpoint {
    * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
    * @returns 写完之后该 namespace 的红acted 视图。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["ns", "patch", "expectedRevision"] })
   async update(
     _ns: Parameters<SettingsController["update"]>[0],
     _patch: Parameters<SettingsController["update"]>[1],
@@ -62,7 +64,7 @@ export class SettingsEndpoint {
    * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
    * @returns 写完之后该 namespace 的红acted 视图。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["ns", "section", "expectedRevision"] })
   async replace(
     _ns: Parameters<SettingsController["replace"]>[0],
     _section: Parameters<SettingsController["replace"]>[1],
@@ -78,7 +80,7 @@ export class SettingsEndpoint {
    * @param _expectedRevision - 调用方读到的 revision（`undefined` 表示无条件写）。
    * @returns 写完之后该 namespace 的红acted 视图。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["ns", "ops", "expectedRevision"] })
   async mutate(
     _ns: Parameters<SettingsController["mutate"]>[0],
     _ops: Parameters<SettingsController["mutate"]>[1],
@@ -92,10 +94,32 @@ export class SettingsEndpoint {
    * @param _signal - 调用方生命周期；abort 终止准备或原生命令。
    * @returns 原生打开器接受文档后的确认。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async openSettingsDocument(
     _signal: Parameters<SettingsController["openSettingsDocument"]>[0],
   ): ReturnType<SettingsController["openSettingsDocument"]> {
     throw new Error("settings/openSettingsDocument：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
+/**
+ * 覆盖守卫：契约对上**宿主类** `SettingsController` 的 wire 面（形参与返回双向）。
+ *
+ * `describe` 是**同步**返回（上游 `describe(): SettingsDescribeValue`）——`AsyncReturn` 会提升成 `Promise<…>`，
+ * 与我们的 wire 面一致（实测不红：这一处不是「提升得不对」）。
+ * `openSettingsDocument` 的 `signal` 是宿主侧取消通道（不是 wire 参数），两侧各摘一次再比。
+ */
+type SettingsWire = AsyncReturn<DropParam<SettingsController, AbortSignal>>;
+
+export type SettingsEndpointCovered = AssertTrue<
+  AssertWireFace<
+    Pick<SettingsWire, "describe" | "update" | "replace" | "mutate">,
+    Pick<SettingsEndpoint, "describe" | "update" | "replace" | "mutate">
+  >
+>;
+
+export type SettingsSignalCovered = AssertTrue<
+  AssertWireFace<
+    Pick<SettingsWire, "openSettingsDocument">,
+    Pick<DropParam<SettingsEndpoint, AbortSignal>, "openSettingsDocument">
+  >
+>;

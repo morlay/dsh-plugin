@@ -30,7 +30,8 @@ interface SchemaEntry {
   readonly json: unknown;
   readonly live: ConfigSchema;
   readonly defaults: Readonly<Record<string, unknown>>;
-  readonly base: Readonly<Record<string, unknown>>;
+  /** 装配层 patch；**省略表示这一行没有装配层**（与空 patch 不同）。 */
+  readonly base?: Readonly<Record<string, unknown>>;
 }
 
 /** 配置 schema 注册表：命名空间 → schemastery 的 JSON。 */
@@ -50,7 +51,9 @@ export class SettingSchema {
       json,
       live: schema,
       defaults: defaultsOf(json),
-      base: base === undefined ? {} : structuredClone(base),
+      // **保留「没有装配层」这个状态**：`undefined` 与 `{}` 不是一回事——上游 `ui-settings` 用
+      // `'base' in view` 判「这个字段是不是装配层给的」，把它折成 `{}` 会让那个判断恒真。
+      ...(base === undefined ? {} : { base: structuredClone(base) }),
     });
   }
 
@@ -75,10 +78,10 @@ export class SettingSchema {
   /**
    * 取一个命名空间的装配层（行 config）。
    * @param ns - 上游命名空间。
-   * @returns 装配层；没注册或没有 patch 时是 `{}`。
+   * @returns 装配层；没注册或**没有 patch** 时是 `undefined`（与「空 patch」不是一回事，见 `register`）。
    */
-  baseOf(ns: string): Readonly<Record<string, unknown>> {
-    return this.schemas.get(ns)?.base ?? {};
+  baseOf(ns: string): Readonly<Record<string, unknown>> | undefined {
+    return this.schemas.get(ns)?.base;
   }
 
   /**
