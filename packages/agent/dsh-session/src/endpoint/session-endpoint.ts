@@ -21,7 +21,14 @@ import type {
   SessionControlFrame,
   SessionCreateRequest,
   SessionCreateValue,
+  SessionEventFrame,
   SessionEventsPage,
+  SessionObserveEventRequest,
+  SessionProjectionFrame,
+  SessionState,
+  SessionStateRequest,
+  SessionWaitRequest,
+  SessionWaitValue,
   SessionFollowFrame,
   SessionFollowRequest,
   SessionForkRequest,
@@ -64,7 +71,14 @@ export type {
   SessionControlFrame,
   SessionCreateRequest,
   SessionCreateValue,
+  SessionEventFrame,
   SessionEventsPage,
+  SessionObserveEventRequest,
+  SessionProjectionFrame,
+  SessionState,
+  SessionStateRequest,
+  SessionWaitRequest,
+  SessionWaitValue,
   SessionFollowFrame,
   SessionFollowRequest,
   SessionForkRequest,
@@ -314,7 +328,68 @@ export class SessionEndpoint {
   async projections(_request: SessionProjectionsRequest): Promise<SessionProjectionsValue> {
     throw new Error("session/projections：契约类未实现（宿主侧要在子类里实现它）");
   }
-}
+
+  /**
+   * 观察一个会话的事件流（上游 `SessionEventFrame`）。
+   * @param _request - 目标会话地址。
+   * @param _signal - 宿主侧的取消通道（载具注入，不是 wire 参数）。
+   * @returns 逐帧的事件。
+   */
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
+  observeEvent(
+    _request: SessionObserveEventRequest,
+    _signal: AbortSignal,
+  ): AsyncIterable<SessionEventFrame> {
+    throw new Error("session/observeEvent：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 观察一个会话的投影变化流。
+   * @param _request - 目标会话地址。
+   * @param _signal - 宿主侧的取消通道。
+   * @returns 逐帧的投影变化。
+   */
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
+  observeProjections(
+    _request: SessionProjectionsRequest,
+    _signal: AbortSignal,
+  ): AsyncIterable<SessionProjectionFrame> {
+    throw new Error("session/observeProjections：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 读一次会话状态（运行中 / 队列 / 待处理输入）。
+   * @param _request - 目标会话地址。
+   * @returns 这一拍的状态。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async state(_request: SessionStateRequest): Promise<SessionState> {
+    throw new Error("session/state：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 观察会话状态的帧流。
+   * @param _request - 目标会话地址。
+   * @param _signal - 宿主侧的取消通道。
+   * @returns 逐帧的状态。
+   */
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
+  observeState(
+    _request: SessionStateRequest,
+    _signal: AbortSignal,
+  ): AsyncIterable<SessionState> {
+    throw new Error("session/observeState：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 等这一轮结算（上游 `SessionWaitValue`）。
+   * @param _request - 目标会话与等待条件。
+   * @returns 等待结果。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async wait(_request: SessionWaitRequest): Promise<SessionWaitValue> {
+    throw new Error("session/wait：契约类未实现（宿主侧要在子类里实现它）");
+  }}
 /** 本组覆盖的 **unary** 端点（显式列出：按 `keyof` 取会放过「契约掉了一个端点」）。 */
 type UnaryEndpoints =
   | "list"
@@ -334,10 +409,12 @@ type UnaryEndpoints =
   | "attachment"
   | "events"
   | "openWorkspacePath"
-  | "projections";
+  | "projections"
+  | "state"
+  | "wait";
 
 /** 本组覆盖的**流式**端点。 */
-type StreamEndpoints = "follow" | "control";
+type StreamEndpoints = "follow" | "control" | "observeEvent" | "observeProjections" | "observeState";
 
 /**
  * 上游 `session` 的 **wire 面**：宿主类 `SessionController` 的三步投影（规则与出处见

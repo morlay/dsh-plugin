@@ -62,6 +62,7 @@
     "@morlay/dsh-workspace": "workspace:^",
     "@morlay/zephyr": "workspace:^",
     "@morlay/zephyr-ui": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-dockkit": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:^",
     "@morlay/zephyr-app": "workspace:^",
     "@testing-library/react": "*"

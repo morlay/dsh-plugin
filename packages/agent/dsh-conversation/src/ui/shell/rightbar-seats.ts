@@ -53,7 +53,7 @@ export class RightbarSeats implements OnInit, OnDispose {
   private readonly layout = inject(Layout);
 
   /** 当前会话的绑定（retain/release 配对逻辑在 `SessionBinding` 里，可单测）。 */
-  private readonly binding = new SessionBinding(this.sessions);
+  private readonly binding = new SessionBinding(() => this.sessions);
 
   /** 本行注册的撤销函数。 */
   private readonly disposers: (() => void)[] = [];

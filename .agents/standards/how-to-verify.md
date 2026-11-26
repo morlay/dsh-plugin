@@ -30,6 +30,13 @@
   走 `ui`（`happy-dom`），其余 `*.spec.ts` 走 `node`；排除 `node_modules` / `target` / `.scratch`。
 - **单测等待上限 3s**：`testTimeout: 3000`（同上）。要更长预算的用例显式给 `{ timeout }`——那是承认成本，
   不是放宽断言（跨域装配的包内用例给 180s 一类的显式预算，见能力层规范）。
+- **弱证据不能替代强判据**：两次教训都出在这里，写法记一下——
+  - 「`rg` 零命中」**不是**「没有消费方」：上游内部调用链靠类型与运行时连接，静态文本搜不到。
+    `session` 组就据此漏掉过 5 个端点（`observeEvent` / `observeProjections` / `observeState` / `state` / `wait`）。
+    判据是「**上游 wire 面里有的端点，我们全都要有**」，不是「我们搜到的调用点都要有」。
+  - 「`implements` 通过」**不是**「对齐了」：形参在参数位置是逆变的，放宽永远合法（`readonly unknown[]`
+    收得下 `readonly Attachment[]`）。wire 面的判据是形参与返回**双向**可赋值（`AssertWireFace`）。
+  两条都是同一类错误：用一个更容易过的东西冒充真正的判据。
 - **等条件，不等时间**：渲染 / 装配类断言用 `vi.waitFor(条件, { timeout })`，不写
   `await new Promise((r) => setTimeout(r, 50))` 等状态。唯一允许的定时器是 `dispose` 的兜底
   （`Promise.race` 里 10s 收尾），它不是断言。

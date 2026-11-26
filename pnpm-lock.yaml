@@ -898,6 +898,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-deliverables':
         specifier: '*'
         version: link:../../../vendor/deepseek-harness/packages/client/ui-deliverables
+      '@deepseek-ai/dsh-client-ui-dockkit':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/client/ui-dockkit
       '@deepseek-ai/dsh-client-ui-file-actions':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/client/ui-file-actions

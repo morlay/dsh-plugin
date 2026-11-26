@@ -54,3 +54,18 @@
 - **写之前**把表列出来（每个 prop 一行：名字 / 谁给 / 缺了会怎样），贴进 PR 或注释；
 - **写完**补一条精确相等的断言：允许清单外的 key 出现就红（`__tests__/*props*.spec.dom.tsx` 的写法）；
 - 需要 `expanded` 这类「只存在于 store」的状态时，放到有 `useStore` 的那一层（session 座位）用 `useEffect` 报给宿主，别塞进外壳。
+
+## 构造期不能把 `inject` 的值存起来用
+
+`inject(Svc)` 是**登记式**的：字段初始化时拿到的是占位符，`onInit` 之后才换成真实例。所以：
+
+```ts
+// ❌ 构造期把占位符存进了构造参数
+private readonly binding = new SessionBinding(this.sessions);
+// ✅ 传取实例的 thunk，调用时才解析
+private readonly binding = new SessionBinding(() => this.sessions);
+```
+
+- 症状：运行期 `xxx is not a function` / `undefined is not an object`，而**类型检查与单测全绿**（单测直接 `new` 时注入的是真对象，永远复现不到）；
+- 安全形态：thunk（`() => this.svc`）、箭头函数字段（`pin = (a, s) => this.resources.pin(a, s)`）、getter、或在 `onInit` 里再构造；
+- 判据：**审代码时对每个「字段初始化里 `new X(this.svc)`」都问一句「这里拿到的是不是占位符」**。

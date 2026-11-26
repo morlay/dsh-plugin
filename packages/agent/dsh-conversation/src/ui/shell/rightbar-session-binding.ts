@@ -16,9 +16,9 @@ export class SessionBinding {
   private current: { readonly sessionId: string; readonly reference: Retained } | undefined;
 
   /**
-   * @param sessions - 会话目录（只用到 `retain`）。
+   * @param sessions - 会话目录的**取法**（用 thunk 而不是实例：字段初始化时 `inject` 还是占位符，直接存实例会拿到空壳）。
    */
-  constructor(private readonly sessions: Pick<SessionController, "retain">) {}
+  constructor(private readonly sessions: () => Pick<SessionController, "retain">) {}
 
   /** 当前在屏会话 id（没有会话时 `undefined`）。 */
   get sessionId(): string | undefined {
@@ -40,7 +40,10 @@ export class SessionBinding {
     this.current = undefined;
     previous?.reference.release();
     if (sessionId === undefined) return;
-    const reference = this.sessions.retain(sessionId as Parameters<SessionController["retain"]>[0], RETAIN_OPTIONS);
+    const reference = this.sessions().retain(
+      sessionId as Parameters<SessionController["retain"]>[0],
+      RETAIN_OPTIONS,
+    );
     this.current = { sessionId, reference };
   }
 

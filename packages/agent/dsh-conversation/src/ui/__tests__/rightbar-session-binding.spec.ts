@@ -1,6 +1,6 @@
 // `SessionBinding` 的配对判据：retain / release 的次数与顺序（切换时先释放再 retain）。
 //
-// 这是 `mounted` 那个 bug 的直接回归线：它漏的是「唯一的写入口」，这里守的是「写进去之后配对不泄漏」。
+// 也守「字段初始化时 inject 还是占位符」那个 bug：构造入参是**取实例的 thunk**，不是在构造期存实例。
 import { describe, expect, test, vi } from "vitest";
 import { SessionBinding } from "../shell/rightbar-session-binding.ts";
 
@@ -21,7 +21,7 @@ function sessionsOf() {
       };
     }),
   };
-  return { sessions, calls };
+  return { sessions: () => sessions, calls };
 }
 
 describe("SessionBinding（retain / release 配对）", () => {
