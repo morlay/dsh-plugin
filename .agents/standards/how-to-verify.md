@@ -30,6 +30,10 @@
   走 `ui`（`happy-dom`），其余 `*.spec.ts` 走 `node`；排除 `node_modules` / `target` / `.scratch`。
 - **单测等待上限 3s**：`testTimeout: 3000`（同上）。要更长预算的用例显式给 `{ timeout }`——那是承认成本，
   不是放宽断言（跨域装配的包内用例给 180s 一类的显式预算，见能力层规范）。
+- **契约面不允许「两种形态并存」**（`T | Wrapped<T>`，如本仓出现过的 `Reply<T> = T | RemoteResultWire<T>`）：
+  消费方被迫运行时判别（`if ('ok' in x)`），而**类型层不再保护任何一侧**——它把「不确定」写进了类型。
+  这比「宿主多包一层」（字段读 `undefined`）与「漏声明 `parameters`」（真机 `arguments-invalid`）更难查：
+  前两种是**错的实现**，这一种是**把错误编码成了合法**。要么裸值、要么包装，一处定死。
 - **判据旁边写明「退化形态」**：把失败时会断言到什么写进注释（例：整份 args 当请求时这里会是
   `sessionId: { sessionId, path }`、`path: <signal>`）——比「此处勿改」有用，它让下一个人**看见**失败长什么样。
 - **删/改断言必须写清为什么**：「测试替 bug 背书」的另一半。删掉一条断言要说明它固化的旧口径是什么、为什么不再成立；
@@ -147,3 +151,20 @@
   判据：`git diff` 里没有「只为这一次验证」的代码。
 - **日常验证不起真服务**：`just custom dev` / `preview` 绑端口、装依赖，卡住的是验证本身。装配链回归用
   `just custom build` 的产物与各包行为用例覆盖。
+
+## mock 的边界：该层用真实现，只 mock 它外面的 I/O
+
+| 该 mock | 不该 mock |
+| --- | --- |
+| 外部 I/O：网络帧（`mockTransport`）、文件系统、时钟、付费端点 | **内部协议**：上游组件入参、渲染器契约、scope 适配器语义、组件的 hook context |
+
+**mock 内部协议的代价**：每漏一个隐含要求就换一种崩法，而崩法会越来越离奇。
+真实案例（2026-11-26 右栏端到端夹具）：为了不启真 `sessions`，手写了 fake adapter 的 `retain` / `binding` / `bindingSource` / `renderArea` / `current`；
+连改三版，崩法从 `useSessions is not a function` → `useTabInfo is not a function` → `Invalid value used as weak map key`——
+每一版都在补上一个隐含要求，第三次就该止损：**改用真实现（`provideSessionShell()`）+ 只 mock wire 帧**。
+
+判据：
+
+- 夹具里出现「手写的协议对象」（adapter / registry / reference 的替身）时，先问「能不能用真实现 + mock 它外面的 I/O」；
+- 判据要落在**出问题的那一层**：测「切会话后 UI 更新」，就装配真 session 行，而不是伪造 adapter；
+- 同一个夹具为了不红而改 **两次以上**，说明问题不在夹具。
