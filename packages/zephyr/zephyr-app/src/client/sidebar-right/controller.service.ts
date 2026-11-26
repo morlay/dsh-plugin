@@ -3,8 +3,12 @@
 // 内核用上游工厂造（`SidebarRightTabRegistry` + `createSidebarRightController` + 上游 store）；
 // 座位（`rightbar` / `rightbar.session` / 角位按钮）归会话域——它们要绑 `sessions` 的 SessionReference。
 //
-// 命令要落到某个会话的 surface 上才有意义，所以「在屏会话」的 store 实例由这里懒建并交给控制器 `adopt`；
+// 命令要落到某个资源的 surface 上才有意义，所以「在屏资源」的 store 实例由这里懒建并交给控制器 `adopt`；
 // 会话域通过契约的第二段（`SidebarRightSurfaces.surfaceOf`）拿到同一份实例。
+//
+// 「哪个槽位作用域决定在屏资源」是**行配置**（`configure(SidebarRightDefault, { onScreenScope })`）：
+// 框架不认识具体域，装会话域的一方给 `session`。缺配置在构造期就抛——退化成「不绑在屏」的症状
+// 是「右栏空着却不报错」，那正是排查了八轮的那个坑。
 import type { SidebarRightController } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 import { defaultSeed } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/contract/seed.ts";
 import { createSidebarRightStore } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/stores.ts";
@@ -14,7 +18,16 @@ import {
   type SidebarRightHost,
   type SidebarRightSurfaceStore,
 } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
-import { de, en, es, fr, ja, pt, ru, zh } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/locales.ts";
+import {
+  de,
+  en,
+  es,
+  fr,
+  ja,
+  pt,
+  ru,
+  zh,
+} from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/locales.ts";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Slots } from "../renderer/slots.contract.ts";
 import { ContextMenus } from "../context-menus/context-menus.contract.ts";
@@ -23,7 +36,12 @@ import { Resources } from "../resources/resources.contract.ts";
 import { SidebarRight, SidebarRightRow } from "./sidebar-right.contract.ts";
 import { SidebarRightTabs } from "./sidebar-right-tabs.contract.ts";
 
-/** 会话 id（类型来自上游控制器自己的读面）。 */
+/**
+ * surface 的 owner 键（**转发上游 `SessionKey` 语义**）。
+ *
+ * 名字里的「Session」属于上游控制器的面（`adopt` / `show` / `forget` / `tabsIn` 全收它），
+ * 框架只是照抄这个键的类型；本层不解释它是哪种资源。
+ */
 export type SessionKey = Parameters<SidebarRightController["tabsIn"]>[0];
 
 /** 一个 tab 的 id（同上）。 */
@@ -58,9 +76,44 @@ const DICTS = {
   },
 };
 
-/** `ctx.sidebarRight` 的实现：上游控制器的转发面 + 每会话 surface。 */
+/** 右栏的行配置（装配面用 `configure(SidebarRightDefault, { onScreenScope })` 给）。 */
+export interface SidebarRightConfig {
+  /** 决定「哪个资源在屏」的槽位作用域名（装会话域的一方给 `session`）。 */
+  readonly onScreenScope?: string;
+}
+
+/** `ctx.sidebarRight` 的实现：上游控制器的转发面 + 每资源 surface。 */
 @Injectable()
 export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDispose {
+  /**
+   * 行配置的归一化：`configure(...)` 的 patch 要靠它落地（没有 `static Config` 时 feature 不生效）。
+   *
+   * **fail loud**：`onScreenScope` 是必填语义——缺它就只能「不绑在屏」，而那种降级在界面上的
+   * 症状是「右栏空着、控制台干净」，所以这里直接抛，不带默认值。
+   * @param input - 装配面给的补丁。
+   * @returns 归一化后的配置。
+   * @throws 没给 `onScreenScope`。
+   */
+  static Config(input?: SidebarRightConfig): { readonly onScreenScope: string } {
+    const scope = input?.onScreenScope;
+    if (scope === undefined || scope === "")
+      throw new Error(
+        "sidebarRight 缺 onScreenScope：装配面要写 configure(SidebarRightDefault, { onScreenScope })" +
+          "（它决定哪个槽位作用域报「在屏」；不给就没有在屏资源，右栏会空着且不报错）",
+      );
+    return { onScreenScope: scope };
+  }
+
+  /**
+   * @param rowConfig - 行配置（`static Config` 归一化后传进来）。
+   */
+  constructor(rowConfig?: SidebarRightConfig) {
+    super();
+    this.onScreenScope = SidebarRightDefault.Config(rowConfig).onScreenScope;
+  }
+
+  /** 决定「哪个资源在屏」的槽位作用域名（行配置给）。 */
+  private readonly onScreenScope: string;
   /** 类型注册表：与它共享同一个上游注册表实例（控制器的第一个参数）。 */
   private readonly tabs = inject(SidebarRightTabs);
 
@@ -117,16 +170,16 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
   private bindOnScreen(): void {
     // 两个都要：订阅（adapter 晚到 / 切换时生效）+ 立刻同步一次（adapter 已在时不能漏）。
     // 只做一个的后果都踩过：只订阅 → 早装的 adapter 永不绑定；只同步 → 晚到的不生效。
-    this.scopeSubscription = this.slots.subscribeScope("session", () => {
+    this.scopeSubscription = this.slots.subscribeScope(this.onScreenScope, () => {
       this.attachOnScreen();
     });
     this.attachOnScreen();
   }
 
-  /** 拿当前 session adapter 并（重新）绑定它的 `current`，然后报一次在屏会话。 */
+  /** 拿当前在屏作用域的 adapter 并（重新）绑定它的 `current`，然后报一次在屏资源。 */
   private attachOnScreen(): void {
-    // 类型已由 `Slots.scope()` 给出（不再需要 `as` 断言）：`session` 是「可能没有」。
-    const adapter = this.slots.scope("session");
+    // 类型已由 `Slots.scope()` 给出（不再需要 `as` 断言）：作用域名是 string。
+    const adapter = this.slots.scope(this.onScreenScope);
     if (adapter === undefined) return;
     this.adapterSubscription?.();
     this.adapterSubscription = adapter.current.subscribe(() => {
@@ -137,13 +190,14 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
 
   /** 把 adapter 当前的 key 报给控制器（`mounted` 的唯一写入口）。 */
   private showOnScreen(): void {
-    const adapter = this.slots.scope("session");
+    const adapter = this.slots.scope(this.onScreenScope);
     this.factory?.show(adapter?.current.getSnapshot().key as SessionKey | undefined);
   }
 
   /** 上游控制器（`onInit` 之前读到就是装配顺序错误）。 */
   private get core(): SidebarRightController {
-    if (this.factory === undefined) throw new Error("sidebarRight 未初始化：装配顺序错误（onInit 之前被调用）");
+    if (this.factory === undefined)
+      throw new Error("sidebarRight 未初始化：装配顺序错误（onInit 之前被调用）");
     return this.factory.controller;
   }
 
@@ -174,9 +228,11 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
   };
 
   /**
-   * 某个会话的 surface：第一次要就建出来、交给控制器 adopt（命令才有落点）。
-   * @param sessionId - 会话 id。
-   * @returns 该会话的 store 实例（同一会话永远是同一个）。
+   * 某个资源的 surface：第一次要就建出来、交给控制器 adopt（命令才有落点）。
+   *
+   * 参数名沿用上游 `SessionKey` 的语义（见 {@link SessionKey}）：框架只把它当 owner 键透传。
+   * @param sessionId - owner 键。
+   * @returns 该资源的 store 实例（同一 owner 永远是同一个）。
    */
   surfaceOf(sessionId: string): SidebarRightSurfaceStore | undefined {
     const existing = this.surfaces.get(sessionId);
@@ -221,7 +277,8 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
           if (!scope.close && scope.all.length === 0) return [];
           const closeMany = (ids: readonly TabKey[]): void => {
             for (const id of ids) {
-              if (this.core.menuTabs(sessionId, paneId, tab.id).all.includes(id)) this.core.closeIn(sessionId, id);
+              if (this.core.menuTabs(sessionId, paneId, tab.id).all.includes(id))
+                this.core.closeIn(sessionId, id);
             }
           };
           return [
@@ -230,7 +287,8 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
               label: this.t("close"),
               disabled: !scope.close,
               run: () => {
-                if (this.core.menuTabs(sessionId, paneId, tab.id).close) this.core.closeIn(sessionId, tab.id);
+                if (this.core.menuTabs(sessionId, paneId, tab.id).close)
+                  this.core.closeIn(sessionId, tab.id);
               },
             },
             {

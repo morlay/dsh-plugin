@@ -118,7 +118,7 @@ export class SessionControllerDefault extends SessionController implements OnIni
       ),
     ];
     // 会话内的事件帧交给 `ClientSessions.handleControlFrame`（它管会话的生命周期面）。
-    // **与 `Projections` 那条流并存**：`Projections.open()` 只把帧折进**它自己**的投影 store，
+    // **与同域的 `ProjectionsDefault` 那条流并存**：它的 `open()` 只把帧折进**它自己**的投影 store，
     // 而 `binding().session.projections`（模型选择、权限 chip 读的都是它）只吃这一条线。
     //
     // 换代必须**重开**：连接一换，旧 socket 上的流就断了，而这条流之后没有别的时机再开
@@ -245,7 +245,9 @@ export class SessionControllerDefault extends SessionController implements OnIni
     return this.sessions.subagentAddress(sessionId);
   }
 
-  scopeOf(ctx: Parameters<SessionController["scopeOf"]>[0]): ReturnType<SessionController["scopeOf"]> {
+  scopeOf(
+    ctx: Parameters<SessionController["scopeOf"]>[0],
+  ): ReturnType<SessionController["scopeOf"]> {
     // 入参已经是上游要的 cordis `Context`：契约照上游声明，边界转换只剩 `onInit` 那一处（行 ctx 是本仓的）。
     return this.sessions.scopeOf(ctx);
   }

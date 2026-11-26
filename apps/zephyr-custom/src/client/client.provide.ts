@@ -10,7 +10,6 @@ import {
   provideClientRemote,
   provideLayout,
   provideTheme,
-  ProjectionsDefault,
   RemoteDefault,
 } from "@morlay/zephyr-app/client";
 import { provideSettingHost, provideSettingUi } from "@morlay/dsh-conversation/ui";
@@ -79,10 +78,10 @@ export function appClientProviders(...features: ProviderFeature[]): ProviderEntr
 
     // 数据面（两者互不依赖，可并列）：
     // - `provideSessions()` 出 `sessions`（`SessionController`：目录 / 绑定 / 命令转发）；
-    //   它自带 `provideProjections()`（为了非浏览器宿主也能单独装），但这条链里 `projections` 已由
-    //   `provideClientChain()` 提供——同名服务注册两次会直接抛，所以按实现类剔除它那份。
+    //   投影读面（`Projections`）也随它装——中继读的是本域的 `session/control` 流，
+    //   框架链里不再有它，所以这里不剔任何东西。
     // - `provideWorkspaceUi()` 出 `workspaces`（`WorkspaceController`）+ 两组端点的客户端形态（各自 `onInit` 挂载）。
-    ...provideSessions(without(ProjectionsDefault)),
+    ...provideSessions(),
     // **`uiSession` 与其子服务要先于工作区面**：上游 `ui-workspace` 的 inject 声明里有
     // `uiSession` 与 `uiSession.sessionStatus`（未读标记），它读的是 `ctx.uiSession.sessionStatus`。
     ...provideSessionShell(),

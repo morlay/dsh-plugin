@@ -27,9 +27,8 @@ export * from "./remote/scope-resolver.contract.ts";
 export * from "./remote/provide.ts";
 // 装配面要在清单里按实现类定位/剔除这两行（`configure` / `without`），所以实现类也要出。
 export { RemoteDefault } from "./remote/remote.service.ts";
-// 投影读面（宿主算、界面读的通用容器）：领域只读 `faceOf(sessionId, key)`，不碰流与 seq。
-export * from "./projections/provide.ts";
-export { Projections, ProjectionsDefault } from "./projections/projections.service.ts";
+// 投影的**通用容器**（键 → 值 + seq 语义）：框架只给这个，不解释任何命名空间。
+// 「哪条流喂它」属于各域（本仓的 `session/control` 中继在 `@morlay/dsh-conversation/ui`）。
 export { ProjectionValueStore, type ProjectionFace } from "./projections/projection-store.ts";
 // `@Remote`（方法装饰器）**不在这里导出**：`Remote` 这个名字是上游装载面契约。
 // 需要它的业务包从子路径拿：`@morlay/zephyr-app/client/remote`。
@@ -51,10 +50,7 @@ export {
 export * from "./renderer/slots.contract.ts";
 // 兜底**通用** root 标准源（名字来自上游 `AppFrame` 的硬编码）：最小装配装上它，AppFrame 就能渲染。
 // 业务兜底（`session` scope 与 root 源的真实实现）归业务域，框架不再导出。
-export {
-  RootStandardFallback,
-  absentRootStandard,
-} from "./renderer/root-standard-fallback.ts";
+export { RootStandardFallback, absentRootStandard } from "./renderer/root-standard-fallback.ts";
 export * from "./renderer/provide.ts";
 export * from "./renderer/ui-renderer.contract.ts";
 export * from "./resources/resources.contract.ts";
@@ -67,6 +63,11 @@ export * from "./theme/theme.contract.ts";
 export { provideTheme } from "./theme/provide.ts";
 export { provideLayout } from "./layout/provide.ts";
 export { provideSidebarRight } from "./sidebar-right/sidebar-right.provide.ts";
+// 装配面要 `configure(SidebarRightDefault, { onScreenScope })`：实现类与配置类型都要出。
+export {
+  SidebarRightDefault,
+  type SidebarRightConfig,
+} from "./sidebar-right/controller.service.ts";
 export { ConfigFormsInMemory } from "./settings/config-forms.fake.ts";
 export * from "./layout/layout.contract.ts";
 // 右侧栏是应用框架的位：导航面与 tab 类型注册表都由框架 app 出令牌，各域的 UI 行只认它们。
@@ -76,11 +77,18 @@ export {
   type SidebarRightFace,
   type SidebarRightSurfaces,
 } from "./sidebar-right/sidebar-right.contract.ts";
-export { SidebarRightTabs, type SidebarRightTabsFace } from "./sidebar-right/sidebar-right-tabs.contract.ts";
+export {
+  SidebarRightTabs,
+  type SidebarRightTabsFace,
+} from "./sidebar-right/sidebar-right-tabs.contract.ts";
 export { SettingsSchema } from "./settings/settings-schema.contract.ts";
 export { SettingsSchemaDefault } from "./settings/settings-schema.service.ts";
 // `localStorage` / `sessionStorage` 的代理（同步内存真源 + IndexedDB 异步落盘）。
-export { installStorageShim, type StorageShim, type StorageShimResult } from "./storage-shim/storage-shim.service.ts";
+export {
+  installStorageShim,
+  type StorageShim,
+  type StorageShimResult,
+} from "./storage-shim/storage-shim.service.ts";
 export { ContextMenus } from "./context-menus/context-menus.contract.ts";
 // 浏览器侧的「同步配置」桩：没有 Host 同步通道的装配给上游 client 行用它（见 `synced-config.ts`）。
 export { fixedSyncedConfig, fixedSyncedRef } from "./synced-config/synced-config.ts";

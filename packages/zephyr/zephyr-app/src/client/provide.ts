@@ -1,5 +1,8 @@
 // client 链的装配顺序：提供方在前（Connection → Typert → Remote → Slots → Resources → Access →
-// ConfigForms → Locale → Projections → FileDrag → Shortcuts）。
+// ConfigForms → Locale → FileDrag → Shortcuts）。
+//
+// **投影读面不在链里**：「哪条宿主流喂投影」是域的事实（本仓的 `session/control` 中继在
+// `@morlay/dsh-conversation/ui` 的 `provideProjections()`）；框架只提供通用的 `ProjectionValueStore`。
 //
 // `Slots` 必须排在 `Resources` / `Access` 之前：`SlotContribution.onInit` 里就要往注册表里写
 // （`slots.effect`），那要求 `SlotsDefault` 的行 ctx 已经就位——清单顺序就是激活顺序，写反了是启动期报错。
@@ -15,7 +18,6 @@ import { provideClientRemote } from "./remote/index.ts";
 import { provideResources } from "./resources/index.ts";
 import { provideAccess } from "./remote-access/index.ts";
 import { provideRenderer } from "./renderer/provide.ts";
-import { provideProjections } from "./projections/provide.ts";
 import { provideLocale } from "./locale/index.ts";
 import { provideFileDrag } from "./file-drag/provide.ts";
 import { provideShortcuts } from "./shortcuts/index.ts";
@@ -45,8 +47,6 @@ export const provideClientChain = provide([
   // `configForms` **不在这里**：cordis store 里一个名字只能有一个提供者，链里塞空实现就等于
   // 让装配面再也装不进真实现（`SettingsHost`）。缺它是编译期错误（`Locale` / `Theme` 的必需注入），
   // 所以「忘了给配置面」在启动前就暴露，不靠运行期兜底。
-  // 投影读面：排在 `remote` 与 `connection` 之后（它订阅 `session/control`、跟连接代换代）。
-  ...provideProjections(),
   ...provideLocale(),
   // `fileDrag` 依赖 `locale`（文案）与 `slots`（失败提示的 overlay）：排在 Locale 之后。
   ...provideFileDrag(),

@@ -30,6 +30,17 @@ export abstract class Remote {
   abstract invoke(endpoint: string, args: Readonly<Record<string, unknown>>): Promise<unknown>;
 
   /**
+   * 把某个 namespace 的调用面发布成嵌套服务名（`remote.<namespace>`）。
+   *
+   * 上游若干行把自己的依赖写成 `static inject: ['remote.<ns>']`：名字不在 store 里它们的 fiber
+   * 永远停在待激活，症状是「对应目录不注册、整个装配卡住」。`$mount` 之后框架会自动发布已登记的
+   * namespace；需要**更早**可读的装配（例如本组还要被别人按名字注入）由**该组自己的 client 行**
+   * 主动调这里——框架不认识任何具体 namespace。
+   * @param namespace - 已 `$mount` 的 namespace。
+   */
+  abstract publishNamespace(namespace: string): void;
+
+  /**
    * 等「第一次 `$mount` 完成」。
    *
    * 读数据的一方要等 descriptor 就位——否则 `remote.<ns>` 还不存在，调用会被 `?.` 静默吞掉。

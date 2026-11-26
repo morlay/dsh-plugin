@@ -121,6 +121,10 @@ export class SlotsDefault extends Slots implements OnInit {
     return [...this.seenKeys].sort();
   }
 
+  declared(name: string): boolean {
+    return this.core.specDynamic(name as never) !== undefined;
+  }
+
   entries(key: AnyKey): readonly StoredEntry[] {
     this.seenKeys.add(String(key));
     return this.core.entries(key as never);
@@ -271,7 +275,7 @@ export class SlotsDefault extends Slots implements OnInit {
       // 位置声明可能晚于调用方（父行注册 children 的时机不由我们定）：订阅声明变化、就绪即装。
       const reconcile = (): void => {
         if (dispose !== undefined) return;
-        if (this.core.specDynamic(key as never) === undefined) return;
+        if (!this.declared(key)) return;
         dispose = this.effect(callback);
       };
       const unsubscribe = this.core.subscribeDeclaration(key as never, reconcile);
@@ -285,7 +289,7 @@ export class SlotsDefault extends Slots implements OnInit {
       undo();
       // **不静默**：这一行到死都没等到位置声明 → 它的贡献一次都没装上（表现只有"渲染空"）。
       // 上游的 `ui-sidebar` / `ui-workspace` 全走这条路径，静默就等于"侧栏少一半还查不出原因"。
-      if (this.core.specDynamic(key as never) === undefined) {
+      if (!this.declared(key)) {
         this.logger.warn(
           `[slots] 位置 "${String(key)}" 从未被声明：等它的注册没有发生（检查父行 register 的 children 里有没有这一条）`,
         );

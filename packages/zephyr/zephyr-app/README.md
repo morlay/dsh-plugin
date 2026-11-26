@@ -50,12 +50,13 @@ await bootstrapClient({ providers: [...provideClientChain(), ...provideSessions(
 ```text
 ConfigForms（必需前置：SettingsHost 或 ConfigFormsInMemory）
   → provideClientChain()            // Connection → Typert → Remote → Slots → Resources → Access
-                                    //   → Projections → Locale → FileDrag → Shortcuts
+                                    //   → Locale → FileDrag → Shortcuts
   → provideTheme()                  // apply 期同步读 ctx.configForms
   → provideLayout()                 // apply 期同步读 ctx.theme
 ```
 
 - **链的硬约束**：`provideClientChain()` 激活时 `configForms` 必须已发布（`SettingsHost` 或 `ConfigFormsInMemory` 在前提供），否则 `Locale` / `Theme` 的必需注入不成立。
+- **投影读面不在链里**：「哪条宿主流喂投影」是域的事实（`session/control` 的中继在 `@morlay/dsh-conversation/ui` 的 `provideProjections()`）；框架只给通用的 `ProjectionValueStore`。
 - **链之后必须紧跟** `provideTheme()` 再 `provideLayout()`；两者都不在链里，漏了会缺渲染面（`Layout` 契约）。
 - **`configForms` 不在链里**：cordis store 里一个名字只能有一个提供者，链里塞空实现等于让装配面再也装不进真实现。缺它是编译期错误（`Locale` / `Theme` 的必需注入）。
 - **`Slots` 在 `Resources` / `Access` 之前**：`SlotContribution.onInit` 里就要 `slots.effect`。

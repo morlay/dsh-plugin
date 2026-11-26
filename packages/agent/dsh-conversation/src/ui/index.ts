@@ -14,6 +14,9 @@ export {
 } from "@morlay/dsh-conversation/contract";
 export * from "./session-controller.service.ts";
 export * from "./sessions.provide.ts";
+// 投影中继（本域的 `session/control` 流 → 通用 `ProjectionValueStore`）：契约与实现都在本域。
+export { Projections, ProjectionsDefault } from "./projections/projections.service.ts";
+export { provideProjections } from "./projections/provide.ts";
 export { SessionLayout } from "./session-layout.ts";
 export { UiSession } from "./ui-session.token.ts";
 export { SidebarRight, SidebarRightTabs } from "./ports.ts";

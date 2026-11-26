@@ -1,7 +1,7 @@
 // 会话目录的装配清单：数据面与 client 半分开导出。
 import { provide } from "@morlay/zephyr";
 import { SessionEndpointClient } from "@morlay/dsh-session/ui";
-import { provideProjections } from "@morlay/zephyr-app/client";
+import { provideProjections } from "./projections/provide.ts";
 import { SessionControllerDefault } from "./session-controller.service.ts";
 import { SessionReferenceEndpointClient } from "./session-reference-endpoint.client.ts";
 
@@ -11,8 +11,8 @@ import { SessionReferenceEndpointClient } from "./session-reference-endpoint.cli
  * 与视图分开，是因为数据面不依赖渲染栈（`slots` / React）——非浏览器宿主（测试、CLI）
  * 只装这一层就能拿到「活目录」。
  *
- * 投影读面（`Projections`）随它一起装：`binding().session.projections.faceOf()` 的语义在那一层，
- * 分开装会出现「目录能读、投影永远空」的半装配（`session/control` 没人订阅）。
+ * 投影读面（`Projections`，本域的 `session/control` 中继）随它一起装：
+ * `binding().session.projections.faceOf()` 的语义在那一层，分开装会出现「目录能读、投影永远空」的半装配。
  *
  * 会话目录的令牌是会话域的 `SessionController`（面 = 上游 `ISessions`）：技能、模型选择这些域的 UI 行
  * 按它注入，不反向依赖对话聚合层。

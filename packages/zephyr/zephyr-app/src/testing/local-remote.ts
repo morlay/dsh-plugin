@@ -58,7 +58,8 @@ export class LocalRemote extends Remote implements OnInit {
    */
   constructor(faces?: LocalRemoteFaces | EndpointInvoker) {
     super();
-    const both = faces === undefined ? undefined : typeof faces === "function" ? { call: faces } : faces;
+    const both =
+      faces === undefined ? undefined : typeof faces === "function" ? { call: faces } : faces;
     // 不给执行面时**不静默**：这类装配只借 `$mount` 的登记能力（同 ctx 的用例直接调 handler 表），
     // 真发起调用就该在调用处报「没有执行面」，而不是 `undefined is not a function`。
     this.call =
@@ -154,7 +155,7 @@ export class LocalRemote extends Remote implements OnInit {
    * 把某个 namespace 发布成嵌套服务名（`remote.<namespace>`），发布的是**稳定的代理**。
    * @param namespace - 已 `$mount` 的 namespace。
    */
-  private publishNamespace(namespace: string): void {
+  publishNamespace(namespace: string): void {
     const root = this.rootCtx;
     if (root === undefined || this.published.has(namespace)) return;
     this.published.add(namespace);
@@ -284,11 +285,9 @@ export class LocalRemote extends Remote implements OnInit {
       );
     }
     const controller = new AbortController();
-    callerSignal?.addEventListener(
-      "abort",
-      () => controller.abort(callerSignal.reason),
-      { once: true },
-    );
+    callerSignal?.addEventListener("abort", () => controller.abort(callerSignal.reason), {
+      once: true,
+    });
     const source = opener(endpoint, payload, controller.signal);
     return {
       [Symbol.asyncIterator]: () => source[Symbol.asyncIterator](),

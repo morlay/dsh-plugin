@@ -3,7 +3,7 @@
 // - `@SlotProvider({ name, multi, scope })` 声明**一个位置**（抽象类，`name` 兼容上游的 slot 名）；
 // - `@SlotView()` 标记 `extends <位置>` 的视图类，实现 `render()`；
 // - **位置由类型决定**（`extends XSlot`），没有手写 slot 字符串；视图只实现 `render()`，不碰 `slots` 服务。
-import type { SlotScope } from "@deepseek-ai/dsh-client-ui-slots";
+import type { SlotMap, SlotScope } from "@deepseek-ai/dsh-client-ui-slots";
 import type { ComponentType, ReactNode } from "react";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { Slots } from "./slots.contract.ts";
@@ -14,8 +14,13 @@ export type SlotProviderClass = abstract new (...args: never[]) => unknown;
 
 /** 一个视图位置：`name` 是上游 slot 名，`multi` 决定同位置能否有多个，`scope` 是它的作用域名。 */
 export interface SlotProviderOptions {
-  /** 上游 slot 名（`"sidebar.left"`、`"conversation.chat.flow"`…）。 */
-  readonly name: string;
+  /**
+   * 位置名，按上游 `SlotMap` 收窄（拼错编不过）。
+   *
+   * `@SlotProvider` **不声明位置**（声明由 `children` 的占据方做），它只是「用这个位置的名字 + 类型」
+   * ——所以这里必须能与上游声明的 key 对上。
+   */
+  readonly name: keyof SlotMap;
   /** 同位置是否允许多个视图（对应上游 `kind: "list"`）。 */
   readonly multi?: boolean;
   /** 这个位置声明的作用域（对应上游 `SlotSpec.scope`）；省略是 `root`。 */
@@ -163,9 +168,7 @@ export function SlotProvider(options: SlotProviderOptions): ClassDecorator {
  */
 function childrenOf(
   target: unknown,
-):
-  | Record<string, { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }>
-  | undefined {
+): Record<string, { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }> | undefined {
   // `seats` 是视图**实例**上的字段（类字段在构造时赋值，原型上没有）。
   const seats = (target as { seats?: readonly SlotProviderClass[] }).seats;
   if (seats === undefined || seats.length === 0) return undefined;
@@ -237,10 +240,7 @@ export function slotViewOf(cls: unknown):
       key?: string;
       id?: string;
       component: ComponentType;
-      children?: Record<
-        string,
-        { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }
-      >;
+      children?: Record<string, { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }>;
     }
   | undefined {
   const view = (cls as { [kSlotView]?: { provider: SlotProviderOptions } })[kSlotView];

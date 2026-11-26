@@ -100,6 +100,18 @@ export class FakeRemote extends Remote {
     this.upstream = { session: this.session };
   }
 
+  /**
+   * 嵌套服务名的发布：替身没有 cordis store，记下调用即可
+   * （真实现的语义见 `Remote.publishNamespace`；用例断言"该组自己发布过"时读它）。
+   * @param namespace - 已挂载的 namespace。
+   */
+  publishNamespace(namespace: string): void {
+    this.published.add(namespace);
+  }
+
+  /** 被本替身"发布"过的 namespace（只记名字，不造服务）。 */
+  readonly published = new Set<string>();
+
   /** 换掉宿主应答（用例里在建会话 / 列目录之前调用）。 */
   useMock(handlers: MockHandlers, streams: MockStreams = {}): void {
     this.transport = mockTransport(handlers, streams);
@@ -180,6 +192,14 @@ export class RemoteShell extends Remote {
   async $mount(): Promise<() => Promise<void>> {
     return async () => {};
   }
+
+  /** 嵌套服务名的发布：本替身不造服务，只记名字（见 `Remote.publishNamespace`）。 */
+  publishNamespace(namespace: string): void {
+    this.published.add(namespace);
+  }
+
+  /** 被本替身"发布"过的 namespace。 */
+  readonly published = new Set<string>();
 
   async invoke(): Promise<unknown> {
     throw new Error("RemoteShell 没有实现 invoke：本 spec 不走 wire");

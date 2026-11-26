@@ -8,7 +8,7 @@ import { SlotProvider, SlotView, slotViewOf } from "../slot-view.tsx";
 
 describe("@SlotProvider / @SlotView", () => {
   test("位置名来自 extends 的抽象类，视图自身不写字符串", () => {
-    @SlotProvider({ name: "sidebar.left", multi: true })
+    @SlotProvider({ name: "sidebar.panellist", multi: true })
     abstract class SidebarSlot {}
 
     @SlotView()
@@ -20,7 +20,7 @@ describe("@SlotProvider / @SlotView", () => {
       }
     }
 
-    expect(slotViewOf(SessionList)?.name).toBe("sidebar.left");
+    expect(slotViewOf(SessionList)?.name).toBe("sidebar.panellist");
     expect(slotViewOf(SessionList)?.component).toBeTypeOf("function");
   });
 
@@ -39,7 +39,7 @@ describe("@SlotProvider / @SlotView", () => {
 
 describe("@SlotView 的依赖", () => {
   test("依赖走视图类属性上的 inject()（与其它 Provider 同一写法）", () => {
-    @SlotProvider({ name: "sidebar.right" })
+    @SlotProvider({ name: "sidebar.settings" })
     abstract class RightSlot {}
 
     @SlotView()
@@ -51,6 +51,6 @@ describe("@SlotView 的依赖", () => {
       }
     }
 
-    expect(slotViewOf(Detail)?.name).toBe("sidebar.right");
+    expect(slotViewOf(Detail)?.name).toBe("sidebar.settings");
   });
 });

@@ -62,12 +62,18 @@ export class RemoteDefault extends Remote {
   /**
    * 行 ctx（`onInit` 记下）。
    *
-   * 答复请求时要用它**按名字晚绑定**读域的「id → 作用域」解析面：写成 `inject` 会成环——该域的
-   * 适配行依赖本行（`Remote`），环上的 fiber 永远停在 pending，症状是客户端一个端点都不发。
-   * 晚绑定读不进依赖图。
+   * 答复请求时要用它**按名字晚绑定**读域的「id → 作用域」解析面（契约 `ClientScopeResolver`，
+   * 派生名 `client-scope-resolver`）。这是 `.agents/standards/how-to-write.md` 依赖注入一节允许的
+   * 唯一例外，成环已证明：
    *
-   * 注：这条"按名字读服务"的例外**尚未写进** `.agents/standards/how-to-write.md` 的依赖注入一节，
-   * 属于待补的债（见审计结论 M8）。
+   * - 边 ①：`RemoteDefault` → `ClientScopeResolver`（本文件若写成 `inject`）；
+   * - 边 ②：`ClientScopeResolver` 的实现 `AgentScopesDefault`
+   *   （`dsh-conversation/src/ui/agent-scopes.service.ts:15`）→ `inject(SessionController)`；
+   * - 边 ③：`SessionControllerDefault`（`dsh-conversation/src/ui/session-controller.service.ts:51`）
+   *   → `inject(Remote)`，回到本行。
+   *
+   * 三元环上的 fiber 永远停在 pending，症状是客户端一个端点都不发。晚绑定读不进依赖图，所以这里
+   * 按名字取；读到的面按 `{ resolve?(id) }` 收窄（见 `clientScopeOf`）。
    */
   private rowCtx: Context | undefined;
 
@@ -88,29 +94,29 @@ export class RemoteDefault extends Remote {
   private transport: RemoteTransport = muxTransport(() => this.connection);
 
   /**
-   * cordis 的**嵌套服务名**要显式发布：上游好几行的 `static inject` 里写着 `'remote.session'`
-   * / `'remote.commands'`（`ModelDirectoryResolver`、`CommandUiRuntime` 都是），名字不在 store 里
-   * 它们的 fiber 永远停在待激活，于是对应的目录不注册、整个装配也跟着卡住。
+   * 记住根 ctx 与行 ctx。**不预发布任何 namespace**：那是各域自己的事实。
    *
-   * 注册到**根**：读它们的那些行在别的分支上，沿 fiber 链只能看到 root。
+   * 上游好几行把依赖写成 `static inject: ['remote.<ns>']`（`ModelDirectoryResolver` /
+   * `CommandUiRuntime` 这类），名字不在 store 里它们的 fiber 就停在待激活。但「哪个 ns 需要提前可读」
+   * 由**装那个组的域**知道：该组的 client 行 `$mount` 之后调 {@link publishNamespace} 即可，
+   * `$mount` 本身也会自动发布已登记的 namespace。框架里写死某个 ns 就是业务概念越界。
    */
   onInit(ctx: Context): void {
     this.rootCtx = ctx[rootContextKey];
     this.rowCtx = ctx;
-    this.publishNamespace("session");
   }
 
   /** 根 ctx（`onInit` 时记下；`$mount` 之后要往它上面发布嵌套名）。 */
   private rootCtx: Context | undefined;
 
   /**
-   * 把某个 namespace 的调用面发布成嵌套服务名（`remote.<namespace>`）。
+   * 把某个 namespace 的调用面发布成嵌套服务名（`remote.<namespace>`），见 {@link Remote.publishNamespace}。
    *
    * 发布的是**稳定的代理**而不是当时那张 face：`$mount` 可以来多次（多个 contribution、重连后重挂），
    * 每次都 `provide` 同名会直接抛 `service "remote.<ns>" has been registered`。
    * @param namespace - 已 `$mount` 的 namespace。
    */
-  private publishNamespace(namespace: string): void {
+  publishNamespace(namespace: string): void {
     const root = this.rootCtx;
     if (root === undefined || this.published.has(namespace)) return;
     const face = new Proxy(

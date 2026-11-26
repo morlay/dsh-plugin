@@ -7,12 +7,11 @@
 // （`ui-session` 的 adapter 因此拿不到 selected）。补它 = 为一条夹具给契约开洞（产品侧无消费方，
 // 真机已确认 panel 出现）。触发条件与不补的理由见 `zephyr/.agents/debts/20261126-SessionController缺当前会话读面.md`。
 // @vitest-environment happy-dom
-import { bootstrapApplication, without } from "@morlay/zephyr";
+import { bootstrapApplication, configure, without } from "@morlay/zephyr";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { vi } from "vitest";
 import {
   ConfigFormsInMemory,
-  ProjectionsDefault,
   RemoteDefault,
   Slots,
   UiRenderer,
@@ -21,8 +20,14 @@ import {
   provideLayout,
   provideSidebarRight,
   provideTheme,
+  SidebarRightDefault,
 } from "@morlay/zephyr-app/client";
-import { provideSessionShell, provideSessionStatusUi, provideSessions } from "@morlay/dsh-conversation/ui";
+import {
+  ProjectionsDefault,
+  provideSessionShell,
+  provideSessionStatusUi,
+  provideSessions,
+} from "@morlay/dsh-conversation/ui";
 import { RightbarSeats } from "../shell/rightbar-seats.ts";
 
 /** 右栏需要的唯一一帧：`session/control` 的基线（空投影）。 */
@@ -55,7 +60,7 @@ async function mountRightbar(sessionShellFirst: boolean) {
       ...provideSessions(without(ProjectionsDefault)),
       ...(sessionShellFirst ? shell : []),
       ...(sessionShellFirst ? [] : shell),
-      ...provideSidebarRight(),
+      ...provideSidebarRight(configure(SidebarRightDefault, { onScreenScope: "session" })),
       RightbarSeats,
     ],
     timeoutMs: 30_000,

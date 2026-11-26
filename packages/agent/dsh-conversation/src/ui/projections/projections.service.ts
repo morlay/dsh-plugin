@@ -1,16 +1,19 @@
-// 投影 hub：**把 `session/control` 这条宿主流接到每个会话的 `ProjectionValueStore` 上**。
+// 会话域的**投影中继**：把 `session/control` 这条宿主流接到每个会话的 `ProjectionValueStore` 上。
 //
-// 分工（与上游一致）：
-//   - 宿主：`SessionControlController` 算投影、推 `baseline` + `projection` 帧；
-//   - 框架（这里）：维护"会话 → 投影 store"，消费那条流，按 `seq` 语义写入；
-//   - 领域：只读 `faceOf(sessionId, key)`，不碰流、不碰 seq。
+// 为什么在会话域而不是框架：`session` 这个命名空间与 `SessionControlFrame` 的形状都是**本域的 wire 事实**
+// （宿主 `SessionControlController` 算投影、推 `baseline` + `projection` 帧）。框架只留通用的
+// `ProjectionValueStore`（键 → 值 + seq 语义），不解释任何一个命名空间。
 //
-// 少了这一层，每个领域都要自己 for-await 一条流、自己写 seq 比较——就会各自写出"偶尔回退"的时序 bug。
+// 分工：
+//   - 宿主：算投影、推帧；
+//   - 本域（这里）：维护"会话 → 投影 store"，消费那条流，按 `seq` 语义写入；
+//   - 消费方：只读 `faceOf(sessionId, key)`，不碰流、不碰 seq。
+//
+// 少了这一层，每个消费方都要自己 for-await 一条流、自己写 seq 比较——就会各自写出"偶尔回退"的时序 bug。
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
-import { Remote } from "@morlay/zephyr-app/contract";
-import { ClientConnection } from "@morlay/zephyr-app/contract";
-import { remoteNamespaceOf } from "../remote/dynamic-face.ts";
-import { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";
+import { ClientConnection, Remote } from "@morlay/zephyr-app/contract";
+import { ProjectionValueStore, type ProjectionFace } from "@morlay/zephyr-app/client";
+import { remoteNamespaceOf } from "@morlay/zephyr-app/client/remote";
 
 /** 本层读的那一组 namespace（`session/control` 那条流）：等挂载与读方法都按它来，不各写一次字面量。 */
 const SESSION_NAMESPACE = "session";
@@ -201,5 +204,3 @@ export class ProjectionsDefault extends Projections implements OnInit, OnDispose
     }
   }
 }
-
-export { ProjectionValueStore, type ProjectionFace } from "./projection-store.ts";

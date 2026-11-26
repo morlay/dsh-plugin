@@ -209,6 +209,14 @@ class FakeRemote extends Remote {
     return async () => {};
   }
 
+  /** 嵌套服务名的发布：替身没有 cordis store，记名字即可（见 `Remote.publishNamespace`）。 */
+  publishNamespace(namespace: string): void {
+    this.published.add(namespace);
+  }
+
+  /** 被本替身"发布"过的 namespace。 */
+  readonly published = new Set<string>();
+
   /** `@RemoteClient()` 生成的转发走这里：与 wire 同形（命名参数进、原样结果出）。 */
   async invoke(endpoint: string, args: Readonly<Record<string, unknown>>): Promise<unknown> {
     return this.transport.invoke(endpoint, { args });

@@ -3,8 +3,8 @@
 // 收进来的判据是「**要跨域 UI 上下文才装得起来**」（`uiSession` / `uiWorkspace` / `uiConversation`）：
 // `ui-workspace` 行要 `uiSession`，`ui-directory-picker-native` 行要 `uiWorkspace`。只依赖框架通用令牌与
 // 本域数据面的**独立**行（上下文菜单、右栏「文件夹」标签）留在各自域（`dsh-workspace/ui`）。
-import { provide, type ProviderList } from "@morlay/zephyr";
-import { provideSidebarRight } from "@morlay/zephyr-app/client";
+import { configure, provide, type ProviderList } from "@morlay/zephyr";
+import { provideSidebarRight, SidebarRightDefault } from "@morlay/zephyr-app/client";
 import { RightbarSeats } from "./rightbar-seats.ts";
 import { DirectoryPickerNativeSlots } from "./directory-picker-native-slots.ts";
 import { SessionPanelSlots } from "./session-panel-slots.ts";
@@ -49,7 +49,8 @@ export function provideSessionShellSlots(): ProviderList {
     SidebarSlots,
     // 右栏：我们自己的服务 + 座位（不再装上游右栏行）。类型注册表要排在所有往
     // `sidebarRightTabs` 注册 tab 类型的行之前。
-    ...provideSidebarRight(),
+    // `onScreenScope` 是右栏行唯一的必填配置：它决定哪个槽位作用域报「在屏资源」（本域是 `session`）。
+    ...provideSidebarRight(configure(SidebarRightDefault, { onScreenScope: "session" })),
     // 右栏的两层座位与角位按钮：它们绑 `sessions`（SessionReference），所以装配在本域。
     RightbarSeats,
 

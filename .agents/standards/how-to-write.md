@@ -38,11 +38,11 @@
 
 一个域包按**职责**分三层，文件放哪一层由「它是什么」决定，不由「谁用得多」决定：
 
-| 层 | 放什么 | 不该有 |
-| --- | --- | --- |
-| `endpoint/` | **接口定义**：`@RemoteGroup({ name })` 契约类、请求/应答类型、组名函数 | 实现、`$mount`、UI |
-| `server/` | **host 侧实现**：`extends <Endpoint>` 的实现 + `registerRemoteGroup(实现)` + 端点服务（`*EndpointDefault`）、host 能力服务 | client 形态、UI |
-| `ui/` | ① **客户端形态**：`@RemoteClient() class <Xxx>EndpointClient extends <Endpoint>`——消费端点、转成 client，**在 `onInit` 里 `$mount(remoteDescriptorsOf(<Endpoint>))`**；② **本组 UI 组件/槽位**，只消费① | 契约（`*.contract.ts` 归 `endpoint`）、只做挂载的 binding 类 |
+| 层          | 放什么                                                                                                                                                                                                  | 不该有                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `endpoint/` | **接口定义**：`@RemoteGroup({ name })` 契约类、请求/应答类型、组名函数                                                                                                                                  | 实现、`$mount`、UI                                           |
+| `server/`   | **host 侧实现**：`extends <Endpoint>` 的实现 + `registerRemoteGroup(实现)` + 端点服务（`*EndpointDefault`）、host 能力服务                                                                              | client 形态、UI                                              |
+| `ui/`       | ① **客户端形态**：`@RemoteClient() class <Xxx>EndpointClient extends <Endpoint>`——消费端点、转成 client，**在 `onInit` 里 `$mount(remoteDescriptorsOf(<Endpoint>))`**；② **本组 UI 组件/槽位**，只消费① | 契约（`*.contract.ts` 归 `endpoint`）、只做挂载的 binding 类 |
 
 **上层（对话域）二次组装**：把各组的 `ui/` 拼起来，定义它自己的组装层契约（`ui-session` / `ui-conversation` …）；
 它不定义别组的端点契约、不实现别组的 host。
@@ -169,6 +169,14 @@
   数组、不按字符串 `ctx.get("名字")` 取服务。装配语法（`provide` / `without` / `configure` /
   `fromCordis` / `toCordis`）的唯一 home 是
   [`how-to-write.md`](../../packages/zephyr/zephyr/.agents/standards/how-to-write.md)。
+- **按名字读服务只有一个例外，且必须先证明成环**：只有「`inject` 表达不了」时才可以
+  `rowCtx.get("<契约派生名>", false)` 晚绑定读。**成环要证明，不能当借口**——三条判据缺一不可：
+  ① **给出具体环**：`A → B → A` 的**每一条边**都要指名（谁 `inject(谁)`、在哪个文件哪一行），
+  不是「感觉会成环」；② 名字必须等于某个 `@Injectable()` 契约类的派生名（`rg` 能对上那个类）；
+  ③ 读到的面按**契约接口**收窄（`{ resolve?(id: string): T | undefined }` 这种），不写 `unknown`。
+  三条都写在同文件注释里；现状唯一实例是
+  [`remote.service.ts`](../../packages/zephyr/zephyr-app/src/client/remote/remote.service.ts) 读
+  `client-scope-resolver`。
 
 ## 代码约定
 

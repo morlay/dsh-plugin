@@ -41,12 +41,18 @@ export class SessionEndpointClient extends SessionEndpoint implements OnInit {
    * 挂的是**上游那份**（`SESSION_CONTROLLER_REMOTE`）：宿主侧实现就是上游控制器，wire 描述符只有它
    * 一份。这里不编译我们的组契约——那会造出第二份声明，`session/list` 的 `_request` / `request`
    * 分叉就是这么来的。
+   *
+   * 挂完**立即发布** `remote.<组名>` 这个嵌套服务名：把它写成 `static inject` 的行（上游 `ui-session`
+   * 等）在它出现之前停在待激活，而「哪个 ns 要提前可读」是本域知道的事（框架不认识任何 ns）。
    * @param ctx - 本行 ctx：disposer 挂在它上面，卸载随行 fiber。
    */
   async onInit(ctx: Context): Promise<void> {
     try {
       const dispose = await this.remote.$mount(SESSION_CONTROLLER_REMOTE);
       ctx.effect(() => dispose);
+      // 这一组要能被 `static inject: ['remote.session']` 的行**按名字**读到（上游若干行这么写）：
+      // 「哪个 ns 要提前可读」只有本域知道，所以由本行发布，不放在框架的 `onInit` 里。
+      this.remote.publishNamespace(this.groupName());
     } catch (error) {
       throw new Error(`挂载 remote.${this.groupName()} 失败：${(error as Error).message}`, {
         cause: error,

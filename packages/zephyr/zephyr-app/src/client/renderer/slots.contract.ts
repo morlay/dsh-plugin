@@ -21,6 +21,17 @@ export abstract class Slots {
    */
   abstract keys(): readonly string[];
 
+  /**
+   * 某个位置**是否被声明过**（占据者的 `register({ children })` 里写了它）。
+   *
+   * 与 {@link keys}、`snapshot()` 的区别：`keys()` 只记「被注册或查询碰过的 key」，`snapshot()` 只列
+   * **有 occupant** 的位置——声明了但还没有条目的位置在两边都看不见，而装配排查最常问的正是这一句
+   * （「上游那段 `register` 到底跑了没」）。
+   * @param name - 位置 key。
+   * @returns 声明过为 `true`。
+   */
+  abstract declared(name: string): boolean;
+
   abstract entries(key: Key): ReturnType<SlotRegistry["entries"]>;
 
   abstract entriesOfSlot(key: Key): ReturnType<SlotRegistry["entriesOfSlot"]>;
