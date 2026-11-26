@@ -24,6 +24,15 @@ import { Slots } from "./slots.contract.ts";
 type AnyKey = string;
 
 /**
+ * 兜底 adapter 装在哪个作用域名下。
+ *
+ * 名字来自**上游约束**（`renderRoot` 无条件包 `<ScopeProvider scope="session-maybe">`，
+ * 而 `session-maybe` 与 `session` 解析同一个 adapter），不是框架的词汇——框架只借这个
+ * 名字让最小装配渲染得起来，adapter 本身是通用 absent（见 `absentScopeAdapter`）。
+ */
+const ROOT_SCOPE_NAME = "session";
+
+/**
  * 框架自己的**通用 absent adapter**：空绑定（`key: undefined` + 空 hooks/props）。
  *
  * 它回答的是「这个 scope 没有绑定」，**不代表任何业务语义**（不是「没有会话」）。
@@ -81,9 +90,9 @@ export class SlotsDefault extends Slots implements OnInit {
     // 自写的那份一直在补这些漏（`main` 永远渲染第一个条目、`useSession is not a function`），
     // 补一漏三——直接用上游的 `SlotRenderer`，`SlotsDefault` 只提供宿主面。
     this.install(createSlotRenderer());
-    // 装配期就把「上游 `renderRoot` 硬编码的 scope」兜底装上：
+    // 装配期就把「上游 `renderRoot` 硬编码的那个 scope」兜底装上：
     // `render.smoke` 这类最小装配在 mount 之前就会读 `scope('session')`，懒到 `renderSlot` 太晚。
-    this.ensureSessionScope();
+    this.ensureRootScopeFallback();
   }
 
   /**
@@ -215,11 +224,12 @@ export class SlotsDefault extends Slots implements OnInit {
     scope: Exclude<SlotScope, "root" | "session-maybe">,
     adapter: SlotScopeAdapter,
   ): () => void {
-    // 兜底 adapter（见 `ensureSessionScope`）可以被真实装配替换：只让「真实的第二份」抛。
+    // 兜底 adapter（见 `ensureRootScopeFallback`）可以被真实装配替换：只让「真实的第二份」抛。
     if (this.scopes.has(scope)) {
-      if (scope === "session" && this.fallbackScope !== undefined) {
+      if (scope === this.fallbackScopeName && this.fallbackScope !== undefined) {
         this.fallbackScope();
         this.fallbackScope = undefined;
+        this.fallbackScopeName = undefined;
       } else {
         throw new Error(`slot scope '${scope}' already has an adapter`);
       }
@@ -296,28 +306,30 @@ export class SlotsDefault extends Slots implements OnInit {
     return adapter;
   }
 
-  /** 兜底 session adapter 的撤销函数（没有真实装配装 `session` 时才存在）。 */
+  /** 兜底 adapter 的撤销函数（没有真实装配时才存在）。 */
   private fallbackScope: (() => void) | undefined;
 
+  /** 兜底 adapter 装在哪个作用域名下（只有 `fallbackScope` 存在时才有值）。 */
+  private fallbackScopeName: string | undefined;
+
   /**
-   * 保证 `session` 作用域有 adapter。
+   * 保证 root 渲染所需的作用域有 adapter。
    *
    * `renderSlot('root')` 的渲染器无条件包 `<ScopeProvider scope="session-maybe">`，没有 adapter 会抛
    * `SlotAssemblyError` 并把 root 树换成空占位——症状却是第一轮渲染的 `useXxx is not a function`。
    * 所以这里用**空投影**兜底（不是「假装有会话」），真实装配来了由 `installScope` 替换。
    */
-  private ensureSessionScope(): void {
-    if (this.scopes.has("session") || this.fallbackScope !== undefined) return;
-    // 名字 "session" 来自**上游约束**（`renderRoot` 硬编码 `<ScopeProvider scope="session-maybe">`），
-    // 不是我们的业务概念；adapter 用框架自己的**通用 absent**（空绑定），不引任何业务实现。
-    this.fallbackScope = this.installScope("session", absentScopeAdapter());
+  private ensureRootScopeFallback(): void {
+    if (this.scopes.has(ROOT_SCOPE_NAME) || this.fallbackScope !== undefined) return;
+    this.fallbackScopeName = ROOT_SCOPE_NAME;
+    this.fallbackScope = this.installScope(ROOT_SCOPE_NAME, absentScopeAdapter());
   }
 
   renderSlot(key: AnyKey, owner: unknown): ReturnType<Slots["renderSlot"]> {
     if (key !== "root") {
       throw new Error(`ctx-level renderSlot only renders 'root' (got "${key}")`);
     }
-    this.ensureSessionScope();
+    this.ensureRootScopeFallback();
     if (this.renderer === undefined) {
       throw new Error(
         "slot renderer not installed — boot must call ctx.slots.install(createSlotRenderer()) before rendering 'root'",
@@ -440,7 +452,7 @@ export class SlotsDefault extends Slots implements OnInit {
     if (record.scope === "root") key = "root";
     else {
       if (binding?.key === undefined)
-        throw new Error(`${record.scope} store resolution requires a session id`);
+        throw new Error(`${record.scope} store resolution requires a scope key`);
       key = binding.key;
       this.bindStoreScope(binding as never);
     }
@@ -572,6 +584,6 @@ function requireKey(
   binding: { key?: string } | undefined,
 ): string {
   if (binding?.key === undefined)
-    throw new Error(`${definition.scope} factory store resolution requires a session id`);
+    throw new Error(`${definition.scope} factory store resolution requires a scope key`);
   return binding.key;
 }

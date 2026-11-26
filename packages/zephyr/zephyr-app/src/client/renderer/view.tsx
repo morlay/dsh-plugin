@@ -1,16 +1,17 @@
 // `@View`：位置（契约）与视图（实现）的唯一写法——它就是 `@Injectable` 的语法糖。
 //
-//   @View({ name: "main" })                abstract class MainView {}     // 位置（可带 locale/scoped/many）
+//   @View({ name: "main" })                abstract class MainView {}     // 位置（可带 locale/id/order）
 //   @View({ name: "main", root: true })    class LayoutView {             // 根位置（占据者）
 //     main = View.seat(MainView);                                         // 声明 + 渲染，同一份
 //     contents = View.seat.all(ContentView);
-//     private readonly sessions = inject(SessionController);                       // 依赖就是 @Injectable 的字段注入
+//     private readonly slots = inject(Slots);                                       // 依赖就是 @Injectable 的字段注入
 //   }
 //   @View({ order: 200, id: "pin" })       class PinItem extends MainView {}   // list 位置的贡献元数据
 //   @View()                                class DemoView extends MainView {}  // 贡献：位置由 extends 决定
 //
 // 语义边界：`provideRoot` / `installScope` / 上游注册项的 `inject` **不在这里**——
 // 那是服务与上游插件的事（`@View` 管位置与视图，不管数据面）。
+import type { SlotScope } from "@deepseek-ai/dsh-client-ui-slots";
 import type { ComponentType, ReactElement, ReactNode } from "react";
 import { createContext, createElement, useContext } from "react";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
@@ -22,8 +23,6 @@ export interface ViewOptions {
   readonly name?: string;
   /** 根位置：由装配层挂到渲染树根（`layout` 那一层）。 */
   readonly root?: boolean;
-  /** 位置属于 session scope。 */
-  readonly scoped?: boolean;
   /** 贡献在这条 list 位置上的身份（上游 `register({ id })`）。 */
   readonly id?: string;
   /** 贡献在这条 list 位置上的顺序（数值小的先渲染）。 */
@@ -266,18 +265,16 @@ export function instanceOf(ctor: new () => object): object {
 /** 扫一个视图实例上的 seat 字段 → 上游 `register({ children })` 的表。 */
 export function childrenOfView(
   instance: object,
-): Record<string, { kind: "single" | "list"; scope?: "root" | "session" }> | undefined {
-  const table: Record<string, { kind: "single" | "list"; scope?: "root" | "session" }> = {};
+): Record<string, { kind: "single" | "list"; scope?: SlotScope }> | undefined {
+  const table: Record<string, { kind: "single" | "list"; scope?: SlotScope }> = {};
   for (const value of Object.values(instance as Record<string, unknown>)) {
     const seatRef = seatRegistry.get(value as object);
     if (seatRef === undefined) continue;
-    const meta = metaOf(seatRef.position);
     table[positionNameOf(seatRef.position)] = {
       // `View.seat.all` 就是 list——位置类上不用再写 `many`。
       kind: seatRef.many ? "list" : "single",
-      ...(meta?.options.scoped === true
-        ? { scope: "session" as const }
-        : { scope: "root" as const }),
+      // seat 只有 root 作用域：要别的作用域就换成 `@SlotProvider({ scope })` 声明位置。
+      scope: "root",
     };
   }
   return Object.keys(table).length === 0 ? undefined : table;

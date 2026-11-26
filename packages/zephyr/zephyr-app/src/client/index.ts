@@ -23,7 +23,7 @@ export * from "@morlay/zephyr-app/contract";
 // unary 的结果封装（纯类型）：界面拿远程方法的返回形状时用它，不必经宿主面 `@morlay/zephyr-app/remote`。
 export type { RemoteFailureWire, RemoteResultWire } from "@morlay/zephyr-app/contract";
 export * from "./remote/remote-transport.ts";
-export * from "./remote/agent-scopes.contract.ts";
+export * from "./remote/scope-resolver.contract.ts";
 export * from "./remote/provide.ts";
 // 装配面要在清单里按实现类定位/剔除这两行（`configure` / `without`），所以实现类也要出。
 export { RemoteDefault } from "./remote/remote.service.ts";

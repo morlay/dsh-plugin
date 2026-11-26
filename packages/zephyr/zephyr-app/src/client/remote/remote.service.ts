@@ -62,10 +62,12 @@ export class RemoteDefault extends Remote {
   /**
    * 行 ctx（`onInit` 记下）。
    *
-   * 答复请求时要用它**按名字晚绑定**读会话域的「id → 作用域」适配面（见写作规范里"禁止按名字读
-   * 服务"的例外条款）：写成 `inject` 会成环——会话域的适配行依赖 `SessionController`，而
-   * `SessionController` 又依赖本行；环上的 fiber 永远停在 pending，症状是客户端连 `session/list`
-   * 都不发。晚绑定读不进依赖图。
+   * 答复请求时要用它**按名字晚绑定**读域的「id → 作用域」解析面：写成 `inject` 会成环——该域的
+   * 适配行依赖本行（`Remote`），环上的 fiber 永远停在 pending，症状是客户端一个端点都不发。
+   * 晚绑定读不进依赖图。
+   *
+   * 注：这条"按名字读服务"的例外**尚未写进** `.agents/standards/how-to-write.md` 的依赖注入一节，
+   * 属于待补的债（见审计结论 M8）。
    */
   private rowCtx: Context | undefined;
 
@@ -282,7 +284,7 @@ export class RemoteDefault extends Remote {
   private async answerInvocation(invocation: RemoteInvocation): Promise<RemoteOutcome> {
     const listeners = [...(this.listeners.get(invocation.event) ?? [])];
     if (listeners.length === 0 || invocation.signal.aborted) return { kind: "next" };
-    // 先问会话域（它知道 id ↔ 作用域），再退回上游的 client context 适配面。
+    // 先问域自己的解析面（它知道 id ↔ 作用域），再退回上游的 client context 适配面。
     const target = this.clientScopeOf(invocation.agentId) ?? this.scopeFromTypert(invocation);
     if (target === undefined) return { kind: "next" };
     const request = { ...invocation.request, agent: target, signal: invocation.signal };
@@ -307,17 +309,17 @@ export class RemoteDefault extends Remote {
   }
 
   /**
-   * 会话域给的解析面：`agentId` → 客户端作用域。
+   * 域给的解析面：转发请求的作用域 id → 客户端作用域（契约见 `ClientScopeResolver`）。
    *
-   * 读不到（没装会话域、或它还没激活）就返回 `undefined`，调用方按"没人认这条请求"处理。
-   * @param agentId - 宿主给的 agent id。
+   * 读不到（域没装该行、或它还没激活）就返回 `undefined`，调用方按"没人认这条请求"处理。
+   * @param id - 宿主随请求给出的作用域 id。
    * @returns 客户端作用域，或 `undefined`。
    */
-  private clientScopeOf(agentId: string): object | undefined {
-    const scopes = this.rowCtx?.get("client-agent-scopes", false) as
-      | { scopeOf?(id: string): object | undefined }
+  private clientScopeOf(id: string): object | undefined {
+    const resolver = this.rowCtx?.get("client-scope-resolver", false) as
+      | { resolve?(id: string): object | undefined }
       | undefined;
-    return scopes?.scopeOf?.(agentId);
+    return resolver?.resolve?.(id);
   }
 
   /**

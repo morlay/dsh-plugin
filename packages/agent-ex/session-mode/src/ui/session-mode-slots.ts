@@ -6,8 +6,8 @@ import { SlotProvider, SlotViewBase } from "@morlay/zephyr-app/client";
 // 右栏面板那一页的 id（keyed 位置的 key）：包名是天然的唯一值。
 export const PANEL_ID = "@morlay/session-mode";
 
-@SlotProvider({ name: "conversation.input.left", multi: true, scoped: true })
+@SlotProvider({ name: "conversation.input.left", multi: true, scope: "session" })
 export abstract class ConversationInputLeftSlot extends SlotViewBase {}
 
-@SlotProvider({ name: "sidebar.right.pane.tab", multi: true, scoped: true, key: PANEL_ID })
+@SlotProvider({ name: "sidebar.right.pane.tab", multi: true, scope: "session", key: PANEL_ID })
 export abstract class SidebarRightPaneTabSlot extends SlotViewBase {}

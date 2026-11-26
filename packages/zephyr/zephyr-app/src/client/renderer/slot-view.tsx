@@ -1,8 +1,9 @@
 // `@SlotProvider` / `@SlotView`：按 Angular 的组件模型组织 slot 贡献。
 //
-// - `@SlotProvider({ name, multi, scoped })` 声明**一个位置**（抽象类，`name` 兼容上游的 slot 名）；
+// - `@SlotProvider({ name, multi, scope })` 声明**一个位置**（抽象类，`name` 兼容上游的 slot 名）；
 // - `@SlotView()` 标记 `extends <位置>` 的视图类，实现 `render()`；
 // - **位置由类型决定**（`extends XSlot`），没有手写 slot 字符串；视图只实现 `render()`，不碰 `slots` 服务。
+import type { SlotScope } from "@deepseek-ai/dsh-client-ui-slots";
 import type { ComponentType, ReactNode } from "react";
 import { inject, Injectable, type Context, type OnInit } from "@morlay/zephyr";
 import { Slots } from "./slots.contract.ts";
@@ -11,14 +12,14 @@ import { applySlotDeclaration, Slot } from "./slot.decorator.ts";
 /** 一个位置类（`@SlotProvider` 装饰过的抽象类）：视图用它做**类型**关联。 */
 export type SlotProviderClass = abstract new (...args: never[]) => unknown;
 
-/** 一个视图位置：`name` 是上游 slot 名，`multi` 决定同位置能否有多个，`scoped` 表示它属于 session scope。 */
+/** 一个视图位置：`name` 是上游 slot 名，`multi` 决定同位置能否有多个，`scope` 是它的作用域名。 */
 export interface SlotProviderOptions {
   /** 上游 slot 名（`"sidebar.left"`、`"conversation.chat.flow"`…）。 */
   readonly name: string;
   /** 同位置是否允许多个视图（对应上游 `kind: "list"`）。 */
   readonly multi?: boolean;
-  /** 是否属于 session scope（对应上游 `scope: "session"`）。 */
-  readonly scoped?: boolean;
+  /** 这个位置声明的作用域（对应上游 `SlotSpec.scope`）；省略是 `root`。 */
+  readonly scope?: SlotScope;
   /** keyed 位置必填：这个视图占哪个 key（对应上游 `register({ name, key })`）。 */
   readonly key?: string;
   /**
@@ -163,18 +164,13 @@ export function SlotProvider(options: SlotProviderOptions): ClassDecorator {
 function childrenOf(
   target: unknown,
 ):
-  | Record<
-      string,
-      { kind: "single" | "keyed" | "list" | "chain"; scope?: "root" | "session" | "session-maybe" }
-    >
+  | Record<string, { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }>
   | undefined {
   // `seats` 是视图**实例**上的字段（类字段在构造时赋值，原型上没有）。
   const seats = (target as { seats?: readonly SlotProviderClass[] }).seats;
   if (seats === undefined || seats.length === 0) return undefined;
-  const table: Record<
-    string,
-    { kind: "single" | "keyed" | "list" | "chain"; scope?: "root" | "session" | "session-maybe" }
-  > = {};
+  const table: Record<string, { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }> =
+    {};
   for (const seat of seats) {
     const options = providerOf(seat);
     if (options === undefined) {
@@ -184,7 +180,7 @@ function childrenOf(
     }
     table[options.name] = {
       kind: options.multi === true ? "list" : "single",
-      scope: options.scoped === true ? "session" : "root",
+      scope: options.scope ?? "root",
     };
   }
   return table;
@@ -243,10 +239,7 @@ export function slotViewOf(cls: unknown):
       component: ComponentType;
       children?: Record<
         string,
-        {
-          kind: "single" | "keyed" | "list" | "chain";
-          scope?: "root" | "session" | "session-maybe";
-        }
+        { kind: "single" | "keyed" | "list" | "chain"; scope?: SlotScope }
       >;
     }
   | undefined {

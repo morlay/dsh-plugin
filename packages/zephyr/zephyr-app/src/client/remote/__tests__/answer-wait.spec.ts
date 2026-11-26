@@ -9,8 +9,8 @@ import { bootstrapApplication, configure, Injectable } from "@morlay/zephyr";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { onTestFinished, vi } from "vitest";
 import {
-  ClientAgentScopes,
   ClientConnectionDefault,
+  ClientScopeResolver,
   provideClientConnection,
   provideClientRemote,
   RemoteDefault,
@@ -21,10 +21,10 @@ import { RemoteQuestions } from "../../../api-gateway/remote-questions.contract.
 import { mountWireApp, type WireApp } from "../../../__tests__/support/wire-app.ts";
 /** 客户端作用域的最小实现：本用例只验等待语义（真实现见会话域的 `AgentScopesDefault`）。 */
 @Injectable()
-class ScopesStub extends ClientAgentScopes {
+class ScopesStub extends ClientScopeResolver {
   readonly scope = { kind: "client-scope" };
-  scopeOf(agentId: string): object | undefined {
-    return agentId === "a1" ? this.scope : undefined;
+  resolve(id: string): object | undefined {
+    return id === "a1" ? this.scope : undefined;
   }
 }
 describe("转发请求的**等待**（真宿主 + 真客户端）", { timeout: 20_000 }, () => {
