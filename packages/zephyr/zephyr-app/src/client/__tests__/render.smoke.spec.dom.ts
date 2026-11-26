@@ -7,7 +7,7 @@
  * 它是 **slots 骨架的装配冒烟**（链装配 → root 注册 → mount），不是 apps 的整装组合——骨架能力归本包。
  */
 import { bootstrapApplication } from "@morlay/zephyr";
-import { SessionScopeContribution } from "../renderer/session-scope.contribution.ts";
+import { RootStandardFallback } from "../renderer/root-standard-fallback.ts";
 import { describe, expect, test } from "@morlay/zephyr/testing";
 import { vi } from "vitest";
 import {
@@ -34,7 +34,7 @@ describe("渲染冒烟（happy-dom）", () => {
         ...provideClientChain(),
         ...provideTheme(),
         ...provideLayout(),
-        SessionScopeContribution,
+        RootStandardFallback,
       ],
       timeoutMs: 20_000,
     });

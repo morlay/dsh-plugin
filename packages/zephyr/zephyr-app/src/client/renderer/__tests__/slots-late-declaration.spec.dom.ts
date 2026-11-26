@@ -13,7 +13,7 @@ import {
   provideLayout,
   provideTheme,
 } from "@morlay/zephyr-app/client";
-import { SessionScopeContribution } from "../session-scope.contribution.ts";
+import { RootStandardFallback } from "../root-standard-fallback.ts";
 
 describe("位置声明晚于注册", { timeout: 20_000 }, () => {
   test("先 inject 等声明、后注册声明方 → 等的那次注册会装上", async () => {
@@ -23,7 +23,7 @@ describe("位置声明晚于注册", { timeout: 20_000 }, () => {
         ...provideClientChain(),
         ...provideTheme(),
         ...provideLayout(),
-        SessionScopeContribution,
+        RootStandardFallback,
       ],
       timeoutMs: 15_000,
     });

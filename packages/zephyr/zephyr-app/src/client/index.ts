@@ -49,12 +49,12 @@ export {
   viewRegistrationOf,
 } from "./renderer/view.tsx";
 export * from "./renderer/slots.contract.ts";
-// 兜底 session scope 与 root 标准源：测试夹具与「没有业务 UI 的最小装配」都用它。
+// 兜底**通用** root 标准源（名字来自上游 `AppFrame` 的硬编码）：最小装配装上它，AppFrame 就能渲染。
+// 业务兜底（`session` scope 与 root 源的真实实现）归业务域，框架不再导出。
 export {
-  SessionScopeContribution,
-  absentSessionAdapter,
-  absentSessions,
-} from "./renderer/session-scope.contribution.ts";
+  RootStandardFallback,
+  absentRootStandard,
+} from "./renderer/root-standard-fallback.ts";
 export * from "./renderer/provide.ts";
 export * from "./renderer/ui-renderer.contract.ts";
 export * from "./resources/resources.contract.ts";

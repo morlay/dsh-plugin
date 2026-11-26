@@ -6,7 +6,7 @@ import type {
   SlotScopeAdapter,
   StandardSourceBinding,
 } from "@deepseek-ai/dsh-client-ui-slots";
-import { Slot, SlotContribution } from "./slot.decorator.ts";
+import { Slot, SlotContribution } from "@morlay/zephyr-app/client";
 
 /** 无会话：标准源全空，绑定不带 scope key。 */
 export function absentSessionAdapter(): SlotScopeAdapter {

@@ -20,13 +20,22 @@ export class SessionLayout extends fromCordis(UiSession, UiSessionPlugin) {
     // 上游 `apply` 读 `ctx.sessions` / `ctx.remoteAccess` / `ctx.slots`（+ `inject` 声明的 `remote`）：
     // 全部按 deps 交进去（`fromCordis` 的读面替换）。
     try {
-      // **不交 deps**：上游 `ui-session` 会把子服务 `uiSession.sessionStatus` 挂到实例上，那一步要求
-      // 实例的 ctx 是**真 ctx**（deps 代理会让子服务名在代理之外解析，读它时抛
-      // `cannot get property "uiSession.sessionStatus" without inject`）。它要的四个名字
-      // （`sessions` / `slots` / `remote` / `remoteAccess`）都在 store 里，靠名字满足即可。
-      // `remoteAccess` 由「宿主那份」提供（取舍表），浏览器进程里未必有这个名字；
-      // 用 `deps` 显式交进去即可——`mount` 只按名字解析注入，不改上游拿到的真 ctx。
-      await this.mount(ctx, undefined, { remoteAccess: this.remoteAccess });
+      // **显式全给**：上游 `inject = ['sessions', 'slots', 'remoteAccess']`（`ui-session/src/client/index.ts:620`），
+      // 它的 `apply` 第一行就是 `new UiSession(ctx, ctx.sessions)`，随后 `ctx.slots.installScope('session', …)`。
+      //
+      // 以前这里只交 `remoteAccess`，其余「靠 store 名字满足」——但我们的令牌名是 `session-controller`，
+      // 上游要的是 `sessions`：**名字对不上 → `ctx.sessions` 是 undefined → `apply` 第一行就抛 →**
+      // **整段不执行（含 `installScope`），且静默**。症状是 `scope('session')` 空、右栏永远没有 panel。
+      //
+      // 「不交 deps 是为了让子服务拿到真 ctx」这条旧理由不成立：`mount` 内部本来就用 `withDeps` 包了
+      // `upstreamCtx`（真 ctx），交 deps 只替换**按名字读**的那一层。同目录的 `SessionStatusSlots`
+      // 早就把 `remote` / `sessions` / `remoteAccess` 显式交了，工作正常。
+      await this.mount(ctx, undefined, {
+        remoteAccess: this.remoteAccess,
+        sessions: this.sessions,
+        slots: this.slots,
+        remote: this.remote,
+      });
     } catch (error) {
       // 带阶段的错误：不然上游 `apply` 里的失败会被错误边界吞成空白页。
       throw new Error(`SessionLayout.mount 失败：${(error as Error).message}`, { cause: error });

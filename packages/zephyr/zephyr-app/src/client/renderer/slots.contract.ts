@@ -1,10 +1,14 @@
 // Slot 注册表契约：成员按上游 `SlotRegistry` 的公开面裁；实现由 `SlotsDefault` 组合 `SlotCore` 提供。
-import type { SlotComponent, SlotMap } from "@deepseek-ai/dsh-client-ui-slots";
+import type { SlotComponent, SlotMap, SlotScopeAdapter } from "@deepseek-ai/dsh-client-ui-slots";
 import type { SlotRegistry } from "@deepseek-ai/dsh-client-ui-renderer/client";
 import { Injectable } from "@morlay/zephyr";
 
 type Key = Parameters<SlotRegistry["entries"]>[0];
 
+/**
+ * 作用域名是 **string**：框架不认识任何具体名字（`session` / `workspace` 都是业务概念）。
+ * 名字与它的语义由安装方（业务行）定义，框架只承诺「装了就有、没装给 absent」。
+ */
 @Injectable({ name: "slots" })
 export abstract class Slots {
   /**
@@ -83,6 +87,21 @@ export abstract class Slots {
 
   abstract subscribe(key: Key, fn: () => void): () => void;
 
-  /** 读当前装着的 scope adapter（没有就是 `undefined`）：装配期用它决定要不要装兜底实现。 */
-  abstract scope(scope: string): unknown;
+  /**
+   * 读 scope 的 adapter；**没装返回 `undefined`**（调用方自己决定降级）。
+   * @param name - 作用域名（`session` / `session-maybe`）。
+   * @returns adapter 或 `undefined`。
+   */
+  abstract scope(name: string): SlotScopeAdapter | undefined;
+
+  /**
+   * 读 scope 的 adapter；**没装就抛**。
+   *
+   * 「必须要有」的消费方（如在屏会话绑定）用它：装配错误应早暴露，而不是静默降级——
+   * 今天九轮排查的正是「静默降级」的代价。
+   * @param name - 作用域名。
+   * @returns adapter。
+   * @throws 该作用域没有 adapter。
+   */
+  abstract requireScope(name: string): SlotScopeAdapter;
 }

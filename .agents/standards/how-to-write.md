@@ -202,3 +202,11 @@
 - **键名用 `.` 分层、不带空格**（`seed.bundles`）；**值走参数不拼文本**：cordis 的 `meta` 是 logger
   实例级的，结构化字段只能作 `%o` 参数传（[`trace.ts`](../../packages/zephyr/zephyr-dev/src/internal/trace.ts)）。
 - 判据：`grep -rn 'ctx.logger(' packages` 与 `grep -rn 'traceOf(' packages` 对得上；新增日志不新开出口。
+
+## 可测试性接缝：装配期注入，且有真实消费方
+
+- **注释里写「测试可以替换」，就必须留出口**——`private` 字段 + 注释是假出口。
+  反例与正例都在 `RemoteDefault`：`transport` 是 `private`，但旁边留了 `useTransport(transport)`（5 个测试用它），所以那个「测试可替换」是真的。
+- **出口要按「消费方」决定形态**：装配期决定（一次性）用注入；确有运行期替换需求（如测试中途换传输模拟断线）才保留可变方法。
+  先有消费方再开口；没有消费方的能力不要开口（见 `sessionAdmin.observeState` 被否的先例）。
+- **加新接缝前先 grep 现有出口**：`rg -n 'useTransport|inject.optional'` —— 同一能力两套入口比没有入口更坏（今天差点给已存在的 `useTransport` 再加一个 `RemoteTransportSource` 契约）。

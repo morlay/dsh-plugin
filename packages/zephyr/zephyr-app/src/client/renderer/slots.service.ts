@@ -20,9 +20,22 @@ import {
 import { createSlotRenderer } from "@deepseek-ai/dsh-client-ui-renderer/src/client/scoped-slots.tsx";
 import { Injectable, Logger, inject, type Context, type OnInit } from "@morlay/zephyr";
 import { Slots } from "./slots.contract.ts";
-import { absentSessionAdapter } from "./session-scope.contribution.ts";
 
 type AnyKey = string;
+
+/**
+ * 框架自己的**通用 absent adapter**：空绑定（`key: undefined` + 空 hooks/props）。
+ *
+ * 它回答的是「这个 scope 没有绑定」，**不代表任何业务语义**（不是「没有会话」）。
+ * 上游 `renderRoot` 无条件包 `<ScopeProvider scope="session-maybe">`，没有 adapter 会抛——
+ * 用这个兜底让最小装配也能渲染。
+ * @returns 空绑定的 scope adapter。
+ */
+function absentScopeAdapter(): SlotScopeAdapter {
+  const binding: StandardSourceBinding = { key: undefined, hooks: {}, keyedHooks: {}, props: {} };
+  const source = { getSnapshot: () => binding, subscribe: () => () => {} };
+  return { current: source, bindingSource: () => source };
+}
 
 @Injectable()
 export class SlotsDefault extends Slots implements OnInit {
@@ -68,6 +81,9 @@ export class SlotsDefault extends Slots implements OnInit {
     // 自写的那份一直在补这些漏（`main` 永远渲染第一个条目、`useSession is not a function`），
     // 补一漏三——直接用上游的 `SlotRenderer`，`SlotsDefault` 只提供宿主面。
     this.install(createSlotRenderer());
+    // 装配期就把「上游 `renderRoot` 硬编码的 scope」兜底装上：
+    // `render.smoke` 这类最小装配在 mount 之前就会读 `scope('session')`，懒到 `renderSlot` 太晚。
+    this.ensureSessionScope();
   }
 
   /**
@@ -208,18 +224,20 @@ export class SlotsDefault extends Slots implements OnInit {
         throw new Error(`slot scope '${scope}' already has an adapter`);
       }
     }
-    const undo = this.effect(() => {
-      this.scopes.set(scope, adapter);
-      this.bumpScopeRevision(scope);
-      return () => {
-        if (this.scopes.get(scope) === adapter) {
-          this.scopes.delete(scope);
-          this.bumpScopeRevision(scope);
-        }
-      };
-    });
+    if (adapter === undefined) {
+      // 装「空的 adapter」永远是调用方的 bug：静默装进去会让 `scope(scope)` 与「没装」不可区分。
+      throw new Error(`slot scope '${scope}' cannot be installed with an undefined adapter`);
+    }
+    // **同步落库**（不经 `this.effect`）：
+    // - 语义上，scope 是「谁装谁撤」——撤销函数返回给调用方（`ui-session` 的 `apply` 自己管生命周期）；
+    // - 实践上，`this.effect` 归 `SlotsDefault` 自己的 fiber，而调用方是别的 fiber：body 被推迟执行时
+    //   会让 `scope()` 长时间读不到（右栏 `mounted` 永远空、panel 不出现，且不报错）。
+    this.scopes.set(scope, adapter);
+    this.bumpScopeRevision(scope);
     return () => {
-      undo();
+      if (this.scopes.get(scope) !== adapter) return;
+      this.scopes.delete(scope);
+      this.bumpScopeRevision(scope);
     };
   }
 
@@ -265,8 +283,17 @@ export class SlotsDefault extends Slots implements OnInit {
     };
   }
 
-  scope(scope: string): unknown {
-    return this.scopes.get(scope === "session-maybe" ? "session" : scope);
+  scope(name: string): SlotScopeAdapter | undefined {
+    // `session-maybe` 与 `session` 指同一个 adapter：区别只在消费方怎么处理「没有」（上游约定）。
+    return this.scopes.get(name === "session-maybe" ? "session" : name);
+  }
+
+  requireScope(name: string): SlotScopeAdapter {
+    const adapter = this.scope(name);
+    if (adapter === undefined) {
+      throw new Error(`slot scope '${name}' has no installed adapter`);
+    }
+    return adapter;
   }
 
   /** 兜底 session adapter 的撤销函数（没有真实装配装 `session` 时才存在）。 */
@@ -281,7 +308,9 @@ export class SlotsDefault extends Slots implements OnInit {
    */
   private ensureSessionScope(): void {
     if (this.scopes.has("session") || this.fallbackScope !== undefined) return;
-    this.fallbackScope = this.installScope("session", absentSessionAdapter());
+    // 名字 "session" 来自**上游约束**（`renderRoot` 硬编码 `<ScopeProvider scope="session-maybe">`），
+    // 不是我们的业务概念；adapter 用框架自己的**通用 absent**（空绑定），不引任何业务实现。
+    this.fallbackScope = this.installScope("session", absentScopeAdapter());
   }
 
   renderSlot(key: AnyKey, owner: unknown): ReturnType<Slots["renderSlot"]> {

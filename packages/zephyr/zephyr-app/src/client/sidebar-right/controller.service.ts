@@ -15,7 +15,6 @@ import {
   type SidebarRightSurfaceStore,
 } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 import { de, en, es, fr, ja, pt, ru, zh } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/locales.ts";
-import type { SlotScopeAdapter } from "@deepseek-ai/dsh-client-ui-slots";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { Slots } from "../renderer/slots.contract.ts";
 import { ContextMenus } from "../context-menus/context-menus.contract.ts";
@@ -126,7 +125,8 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
 
   /** 拿当前 session adapter 并（重新）绑定它的 `current`，然后报一次在屏会话。 */
   private attachOnScreen(): void {
-    const adapter = this.slots.scope("session") as SlotScopeAdapter | undefined;
+    // 类型已由 `Slots.scope()` 给出（不再需要 `as` 断言）：`session` 是「可能没有」。
+    const adapter = this.slots.scope("session");
     if (adapter === undefined) return;
     this.adapterSubscription?.();
     this.adapterSubscription = adapter.current.subscribe(() => {
@@ -137,7 +137,7 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
 
   /** 把 adapter 当前的 key 报给控制器（`mounted` 的唯一写入口）。 */
   private showOnScreen(): void {
-    const adapter = this.slots.scope("session") as SlotScopeAdapter | undefined;
+    const adapter = this.slots.scope("session");
     this.factory?.show(adapter?.current.getSnapshot().key as SessionKey | undefined);
   }
 

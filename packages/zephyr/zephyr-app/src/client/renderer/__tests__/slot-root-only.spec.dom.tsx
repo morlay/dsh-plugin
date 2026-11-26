@@ -12,8 +12,7 @@ import {
   SlotContribution,
   Slots,
   UiRenderer,
-  absentSessionAdapter,
-  absentSessions,
+  absentRootStandard,
   provideClientChain,
   provideLayout,
   provideTheme,
@@ -24,11 +23,22 @@ import {
  * 没有 adapter 它会抛 `SlotAssemblyError`、把 root 树换成空占位——这正是前几轮误判成
  * 「`@Slot({root})` 不支持」的原因。先装 adapter，才验得到 root 标准源能不能单独声明。
  */
-@Slot({ scope: { session: absentSessionAdapter() } })
+/**
+ * 本地最小 scope adapter：**框架测试的替身，故意不引业务实现**——
+ * 这条验的是「框架能不能在没有业务的情况下渲染」，引了业务就成了验业务。
+ * @returns 空绑定的 adapter。
+ */
+function scopeAdapter() {
+  const binding = { key: undefined, hooks: {}, keyedHooks: {}, props: {} };
+  const source = { getSnapshot: () => binding, subscribe: () => () => {} };
+  return { current: source, bindingSource: () => source };
+}
+
+@Slot({ scope: { session: scopeAdapter() } })
 class SessionOnly extends SlotContribution {}
 
 /** 只声明 root 标准源（不声明 scope）的贡献行。 */
-@Slot({ root: absentSessions })
+@Slot({ root: absentRootStandard })
 class RootOnly extends SlotContribution {}
 
 describe("root 标准源可以单独声明", { timeout: 30_000 }, () => {
