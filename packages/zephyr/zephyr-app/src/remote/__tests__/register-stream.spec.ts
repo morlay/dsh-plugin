@@ -86,3 +86,75 @@ describe("registerRemoteGroup 的流式分派", () => {
     controller.abort();
   });
 });
+
+/** 声明了 `parameters` 的流式端点（多形参）：`changes(sessionId, path, signal)` 的形状。 */
+@RemoteGroup({ name: "demo-params" })
+class DemoParamsEndpoint {
+  /** 多形参流：wire 传 `{ sessionId, path }`，宿主必须收到**两个位置实参** + 信号。 */
+  @Remote({ mode: "stream", parameters: ["sessionId", "path"] })
+  async *changes(
+    sessionId: string,
+    path: string,
+    signal: AbortSignal,
+  ): AsyncGenerator<unknown> {
+    yield { got: "positional", sessionId, path, isSignal: typeof signal.addEventListener === "function" };
+  }
+
+  /** 显式 `parameters: []` 的零参流（`session/control` 的形状）：只吃信号。 */
+  @Remote({ mode: "stream", parameters: [] })
+  async *watch(signal: AbortSignal): AsyncGenerator<unknown> {
+    yield { got: "signal-only", isSignal: typeof signal.addEventListener === "function" };
+  }
+}
+
+/** 上面那组的宿主实现。 */
+@Injectable()
+class DemoParamsEndpointDefault extends DemoParamsEndpoint {
+  private readonly handlers = injectHandlers();
+
+  onInit(): void {
+    registerRemoteGroup(this.handlers, this);
+  }
+}
+
+describe("registerRemoteGroup 的流式 `parameters`", () => {
+  test("声明 `parameters` 的流式端点按**位置**展开（不是把整份 args 当请求）", async () => {
+    const app = await bootstrapApplication({
+      providers: [RemoteHandlersDefault, DemoParamsEndpointDefault],
+      timeoutMs: 5_000,
+    });
+    onTestFinished(() => app.dispose().catch(() => {}));
+    const handlers = app.get(RemoteHandlers);
+    const controller = new AbortController();
+    const frames: unknown[] = [];
+    for await (const frame of handlers.stream(
+      "demo-params/changes",
+      { sessionId: "s1", path: "/tmp" },
+      controller.signal,
+    ) ?? []) {
+      frames.push(frame);
+    }
+    // 回归判据：`(sessionId, path, signal)` 三个位置实参。整份 args 当请求时这里会是
+    // `sessionId: { sessionId, path }`、`path: <signal>` —— `attachWait` 就这么炸过。
+    expect(frames).toEqual([
+      { got: "positional", sessionId: "s1", path: "/tmp", isSignal: true },
+    ]);
+    controller.abort();
+  });
+
+  test("显式 `parameters: []` 的零参流只吃信号（边界：空声明不等于「没声明」）", async () => {
+    const app = await bootstrapApplication({
+      providers: [RemoteHandlersDefault, DemoParamsEndpointDefault],
+      timeoutMs: 5_000,
+    });
+    onTestFinished(() => app.dispose().catch(() => {}));
+    const handlers = app.get(RemoteHandlers);
+    const controller = new AbortController();
+    const frames: unknown[] = [];
+    for await (const frame of handlers.stream("demo-params/watch", {}, controller.signal) ?? []) {
+      frames.push(frame);
+    }
+    expect(frames).toEqual([{ got: "signal-only", isSignal: true }]);
+    controller.abort();
+  });
+});

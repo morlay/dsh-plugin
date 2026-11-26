@@ -77,6 +77,9 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
   /** session 作用域源的订阅（`mounted` 的唯一来源）。 */
   private adapterSubscription: (() => void) | undefined;
 
+  /** `scope('session')` 变化的订阅（adapter 晚到 / 替换）。 */
+  private scopeSubscription: (() => void) | undefined;
+
   /** 右键菜单：右栏 tab 的关 / 关其它 / 关右侧（同层能力，框架链默认就有）。 */
   private readonly contextMenus = inject(ContextMenus);
 
@@ -113,13 +116,29 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
    * session 作用域源可能晚于本行就位，所以装配期先试一次、之后跟着它变化。
    */
   private bindOnScreen(): void {
+    // 两个都要：订阅（adapter 晚到 / 切换时生效）+ 立刻同步一次（adapter 已在时不能漏）。
+    // 只做一个的后果都踩过：只订阅 → 早装的 adapter 永不绑定；只同步 → 晚到的不生效。
+    this.scopeSubscription = this.slots.subscribeScope("session", () => {
+      this.attachOnScreen();
+    });
+    this.attachOnScreen();
+  }
+
+  /** 拿当前 session adapter 并（重新）绑定它的 `current`，然后报一次在屏会话。 */
+  private attachOnScreen(): void {
     const adapter = this.slots.scope("session") as SlotScopeAdapter | undefined;
     if (adapter === undefined) return;
-    const sync = (): void => {
-      this.factory?.show(adapter.current.getSnapshot().key as SessionKey | undefined);
-    };
-    this.adapterSubscription = adapter.current.subscribe(sync);
-    sync();
+    this.adapterSubscription?.();
+    this.adapterSubscription = adapter.current.subscribe(() => {
+      this.showOnScreen();
+    });
+    this.showOnScreen();
+  }
+
+  /** 把 adapter 当前的 key 报给控制器（`mounted` 的唯一写入口）。 */
+  private showOnScreen(): void {
+    const adapter = this.slots.scope("session") as SlotScopeAdapter | undefined;
+    this.factory?.show(adapter?.current.getSnapshot().key as SessionKey | undefined);
   }
 
   /** 上游控制器（`onInit` 之前读到就是装配顺序错误）。 */
@@ -326,6 +345,8 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
 
   /** 卸载：撤菜单与字典，撤销 adopt，让控制器忘掉会话。 */
   onDispose(): void {
+    this.scopeSubscription?.();
+    this.scopeSubscription = undefined;
     this.adapterSubscription?.();
     this.adapterSubscription = undefined;
     this.factory?.show(undefined);

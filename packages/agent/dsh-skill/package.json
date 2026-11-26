@@ -62,6 +62,7 @@
     "@morlay/dsh-workspace": "workspace:^"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-api-session-controller": "workspace:^",
     "@deepseek-ai/dsh-client-ui-skill": "workspace:^",
     "@deepseek-ai/dsh-skill": "workspace:^",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:^",

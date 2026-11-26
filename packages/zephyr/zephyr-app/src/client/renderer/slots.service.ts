@@ -20,6 +20,7 @@ import {
 import { createSlotRenderer } from "@deepseek-ai/dsh-client-ui-renderer/src/client/scoped-slots.tsx";
 import { Injectable, Logger, inject, type Context, type OnInit } from "@morlay/zephyr";
 import { Slots } from "./slots.contract.ts";
+import { absentSessionAdapter } from "./session-scope.contribution.ts";
 
 type AnyKey = string;
 
@@ -198,11 +199,23 @@ export class SlotsDefault extends Slots implements OnInit {
     scope: Exclude<SlotScope, "root" | "session-maybe">,
     adapter: SlotScopeAdapter,
   ): () => void {
-    if (this.scopes.has(scope)) throw new Error(`slot scope '${scope}' already has an adapter`);
+    // 兜底 adapter（见 `ensureSessionScope`）可以被真实装配替换：只让「真实的第二份」抛。
+    if (this.scopes.has(scope)) {
+      if (scope === "session" && this.fallbackScope !== undefined) {
+        this.fallbackScope();
+        this.fallbackScope = undefined;
+      } else {
+        throw new Error(`slot scope '${scope}' already has an adapter`);
+      }
+    }
     const undo = this.effect(() => {
       this.scopes.set(scope, adapter);
+      this.bumpScopeRevision(scope);
       return () => {
-        if (this.scopes.get(scope) === adapter) this.scopes.delete(scope);
+        if (this.scopes.get(scope) === adapter) {
+          this.scopes.delete(scope);
+          this.bumpScopeRevision(scope);
+        }
       };
     });
     return () => {
@@ -256,10 +269,26 @@ export class SlotsDefault extends Slots implements OnInit {
     return this.scopes.get(scope === "session-maybe" ? "session" : scope);
   }
 
+  /** 兜底 session adapter 的撤销函数（没有真实装配装 `session` 时才存在）。 */
+  private fallbackScope: (() => void) | undefined;
+
+  /**
+   * 保证 `session` 作用域有 adapter。
+   *
+   * `renderSlot('root')` 的渲染器无条件包 `<ScopeProvider scope="session-maybe">`，没有 adapter 会抛
+   * `SlotAssemblyError` 并把 root 树换成空占位——症状却是第一轮渲染的 `useXxx is not a function`。
+   * 所以这里用**空投影**兜底（不是「假装有会话」），真实装配来了由 `installScope` 替换。
+   */
+  private ensureSessionScope(): void {
+    if (this.scopes.has("session") || this.fallbackScope !== undefined) return;
+    this.fallbackScope = this.installScope("session", absentSessionAdapter());
+  }
+
   renderSlot(key: AnyKey, owner: unknown): ReturnType<Slots["renderSlot"]> {
     if (key !== "root") {
       throw new Error(`ctx-level renderSlot only renders 'root' (got "${key}")`);
     }
+    this.ensureSessionScope();
     if (this.renderer === undefined) {
       throw new Error(
         "slot renderer not installed — boot must call ctx.slots.install(createSlotRenderer()) before rendering 'root'",
@@ -303,9 +332,23 @@ export class SlotsDefault extends Slots implements OnInit {
     };
     rebuildRoot();
 
+    // `observableHook` 按 **source 对象身份**缓存，而 React 的 `useSyncExternalStore` 要求 `subscribe` /
+    // `getSnapshot` 的身份稳定：getter 每次新建对象会让缓存失效，并让 React 用上一次提交的闭包——
+    // 读到的就是更早的 `rootSnapshot`（那时 `rootContributions` 还没收齐，`hooks` 里没有 `sessions`）。
+    // 所以**包装对象只建一次**；`rootSnapshot` 仍是 `let`，每次 `rebuildRoot()` 换新对象供缓存失效。
+    const rootObservable: HostObservable<StandardSourceBinding> = {
+      getSnapshot: () => rootSnapshot,
+      subscribe: (fn: () => void) => {
+        rootListeners.add(fn);
+        return () => rootListeners.delete(fn);
+      },
+    };
+
     return {
       subscribe: (key: string, fn: () => void) => core.subscribe(key as never, fn),
-      getVersion: () => 0,
+      // 上游渲染器用「位置的版本号」判断注册集合变没变：恒 0 = 永远告诉它「没变」→ 用旧 binding。
+      // 必须接真实的 `SlotCore.getVersion`（它随注册/声明的变化递增）。
+      getVersion: (key: string) => core.getVersion(key as never),
       entriesOf: (key: string) => core.entries(key as never),
       entriesOfSlot: (key: string) => core.entriesOfSlot(key as never),
       reportEntryError: (key: string, entry: never, error: unknown, info: { abdicate: boolean }) =>
@@ -331,13 +374,7 @@ export class SlotsDefault extends Slots implements OnInit {
       // 被它挡住的直接后果是主区不渲染输入框）。
       isFactoryLive: (definition: never) => core.isFactoryLive(definition),
       get root(): HostObservable<StandardSourceBinding> {
-        return {
-          getSnapshot: () => rootSnapshot,
-          subscribe: (fn: () => void) => {
-            rootListeners.add(fn);
-            return () => rootListeners.delete(fn);
-          },
-        };
+        return rootObservable;
       },
       scopeRevision: {
         getSnapshot: () => this.scopeRevision,
@@ -472,6 +509,31 @@ export class SlotsDefault extends Slots implements OnInit {
   private scopeRevision = 0;
 
   private readonly scopeRevisionListeners = new Set<() => void>();
+
+  /**
+   * 递增 scope 版本并通知订阅者。
+   *
+   * 上游渲染器（`ScopeProvider` 的 `observableHook(host.scopeRevision)`）靠它判断「scope 集合变没变」；
+   * 恒 0 会让 adapter 晚到或替换时**不触发重渲染**——症状是切会话后 UI 停在旧值。
+   */
+  private bumpScopeRevision(scope?: string): void {
+    this.scopeRevision += 1;
+    for (const listener of Array.from(this.scopeRevisionListeners)) listener();
+    if (scope === undefined) return;
+    for (const listener of Array.from(this.scopeListeners.get(scope) ?? [])) listener();
+  }
+
+  /** 按 scope 的订阅者（`subscribeScope`）；与渲染器用的全局版本号分开。 */
+  private readonly scopeListeners = new Map<string, Set<() => void>>();
+
+  subscribeScope(scope: string, listener: () => void): () => void {
+    const set = this.scopeListeners.get(scope) ?? new Set<() => void>();
+    set.add(listener);
+    this.scopeListeners.set(scope, set);
+    return () => {
+      set.delete(listener);
+    };
+  }
 }
 
 export type { StoredEntry, StoredFactory };

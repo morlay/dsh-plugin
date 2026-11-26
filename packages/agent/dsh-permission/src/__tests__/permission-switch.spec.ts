@@ -119,8 +119,8 @@ describe("权限 chip 的宿主侧", () => {
       const catalog = await Object.assign(new PermissionPresetsEndpointClient(), {
         remote: client.get(Remote),
       }).catalog();
-      if (!catalog.ok) throw new Error("permissionPresets/catalog 失败：" + catalog.error.message);
-      expect(catalog.value.defaultPreset).toBe("workspace-write");
+      // 裸值口径：失败会抛异常（包过一层就成了 `{ ok, value }`，这里会是 undefined）。
+      expect(catalog.defaultPreset).toBe("workspace-write");
     },
   );
 

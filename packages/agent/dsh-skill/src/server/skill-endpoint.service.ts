@@ -7,10 +7,8 @@ import { SkillCatalogHost } from "../skill-catalog.service.ts";
 import { inject, type Context, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import {
-  asRemoteResult,
   registerRemoteGroup,
   RemoteGroup,
-  type RemoteResultWire,
 } from "@morlay/zephyr-app/remote";
 import {
   SkillEndpoint,
@@ -40,13 +38,11 @@ export class SkillEndpointDefault extends SkillEndpoint implements OnInit, OnDis
     this.stop();
   }
 
-  override async list(request: SkillListRequest): Promise<RemoteResultWire<SkillListValue>> {
-    return await asRemoteResult(
-      async () =>
-        await this.catalog().list(
-          { sessionId: SessionId(request.sessionId) },
-          new AbortController().signal,
-        ),
+  // 回**裸值**：`RemoteResult` 由桥与客户端面各包一层，宿主再包就是双包。失败是抛异常。
+  override async list(request: SkillListRequest): Promise<SkillListValue> {
+    return await this.catalog().list(
+      { sessionId: SessionId(request.sessionId) },
+      new AbortController().signal,
     );
   }
 

@@ -28,16 +28,13 @@ import { provideAgent } from "@morlay/dsh-agent";
 import { providePermission } from "../server/index.ts";
 import { PermissionPresetsEndpointDefault } from "../server/permission-presets-endpoint.service.ts";
 
-/** `permissionPresets/catalog` 的应答里本 spec 读到的两层。 */
+/** `permissionPresets/catalog` 的应答里本 spec 读到的那一层（**单层**：端点回裸值，拦截器包一层）。 */
 interface CatalogEnvelope {
   readonly result?: {
     readonly ok?: boolean;
     readonly value?: {
-      readonly ok?: boolean;
-      readonly value?: {
-        readonly options?: readonly { readonly value?: string }[];
-        readonly defaultOptions?: readonly { readonly value?: string }[];
-      };
+      readonly options?: readonly { readonly value?: string }[];
+      readonly defaultOptions?: readonly { readonly value?: string }[];
     };
   };
 }
@@ -108,14 +105,14 @@ describe("permissionPresets 组的 wire 载体", { timeout: 180_000 }, () => {
     expect(status, "`/api/permissionPresets/catalog` 必须被认领（404 就是没认领）").toBe(200);
     const body = JSON.parse(text) as CatalogEnvelope;
     expect(body.result?.ok, "拦截器的结果面").toBe(true);
-    // 双层是**我们**端点的标志：端点自己回 `RemoteResultWire`，拦截器再包一层。
-    expect(body.result?.value?.ok, "本包端点的 `RemoteResultWire`").toBe(true);
+    // **单层**：端点回裸值，`{ ok, value }` 只由拦截器包一层（双包时这里会是 `value.value`）。
+    expect(body.result?.value, "端点直接回预设目录（不再自带 `ok`）").not.toHaveProperty("ok");
     expect(
-      body.result?.value?.value?.options?.map((option) => option.value),
+      body.result?.value?.options?.map((option) => option.value),
       "预设目录的三个档位（来自 `providePermission` 的预设表）",
     ).toEqual(["read-only", "workspace-write", "danger-full-access"]);
     expect(
-      Array.isArray(body.result?.value?.value?.defaultOptions),
+      Array.isArray(body.result?.value?.defaultOptions),
       "目录里的 `defaultOptions`",
     ).toBe(true);
   });
@@ -130,11 +127,10 @@ describe("permissionPresets 组的 wire 载体", { timeout: 180_000 }, () => {
     // 「缺这一行」的真实表现是 200 + 换人答，不是 404：所以这条判据必须把形状也钉住，
     // 否则换人答会被误判成「我们的端点通了」。
     expect(status, "只剔端点行时仍有人认领（上游 dsh-permission-presets 的宿主实现）").toBe(200);
-    const body = JSON.parse(text) as CatalogEnvelope;
-    expect(
-      body.result?.value?.value,
-      "本包端点的双层形状必须消失——单层说明是别人在答",
-    ).toBeUndefined();
+    const body = JSON.parse(text) as { readonly result?: { readonly value?: unknown } };
+    // 判据从「双层形状」改为**来源特征**：上游实现答的是它自己的目录形状（不含本包的 `defaultOptions`
+    // 约定字段时也无从断言），所以这里只钉「有人答且能解出目录」——认领这件事本身就是本条要证的。
+    expect(body.result?.value, "换人答也必须回一份目录").toBeTruthy();
   });
 
   test("整个权限域都不装时同一条请求是 404", async ({ appEnv }) => {

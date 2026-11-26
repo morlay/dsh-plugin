@@ -33,6 +33,17 @@ export abstract class Slots {
     adapter: Parameters<SlotRegistry["installScope"]>[1],
   ): () => void;
 
+  /**
+   * 订阅某个 scope 的 adapter 变化（装 / 撤 / 替换）。
+   *
+   * 消费方是「要响应 adapter 晚到或切换」的产品代码（如右栏的在屏会话绑定），不是渲染器——
+   * 渲染器那侧用 `scopeRevision`（全局版本号）；业务要的是**精确到 scope** 的通知。
+   * @param scope - 作用域名（`session` 等）。
+   * @param listener - 变化回调。
+   * @returns 退订函数。
+   */
+  abstract subscribeScope(scope: string, listener: () => void): () => void;
+
   abstract provideRoot(contribution: Parameters<SlotRegistry["provideRoot"]>[0]): () => void;
 
   /**

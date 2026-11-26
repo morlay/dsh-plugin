@@ -49,11 +49,15 @@ export function registerRemoteGroup(handlers: RemoteHandlers, instance: object):
       // 流式方法的签名有两种（与上游一致）：`follow(request, signal)` 与 `control(signal)`。
       // 按**实参个数**分派，别一律塞 `(request, signal)`——后者会让 `control` 把请求对象当取消信号，
       // 报 `signal.addEventListener is not a function`。
-      const takesRequest = handler.length >= 2;
+      // 声明了 `parameters` 的走**位置语义**（与 unary 同一套 `argsOf`）：流式端点也可能是多形参
+      // （`workspaceFiles/changes` 的 `(sessionId, path, signal)`、`userQuestions/attachWait` 的
+      // `(agentId, callId, signal)`）。只按 `handler.length >= 2` 判会把整份 args 当请求塞进去。
+      const declared = names !== undefined && names.length > 0;
+      const takesSignalOnly = handler.length <= 1 && !declared;
       return handlers.registerStream(endpoint, (args, signal) =>
         (handler as (...params: unknown[]) => AsyncIterable<unknown>).call(
           instance,
-          ...(takesRequest ? [requestOf(args), signal] : [signal]),
+          ...(takesSignalOnly ? [signal] : [...argsOf(args), signal]),
         ),
       );
     }

@@ -59,11 +59,10 @@ async function boot(
   return { app, handlers: app.get(RemoteHandlers), root };
 }
 
-/** `permissionPresets` 目录的 `defaultPreset`（契约客户端：`client.catalog()`，wire 回来是 `{ ok, value }`）。 */
+/** `permissionPresets` 目录的 `defaultPreset`（契约客户端：`client.catalog()` 回**裸值**；失败是异常）。 */
 async function catalogDefaultOf(app: App): Promise<unknown> {
-  const result = await app.get(PermissionPresetsEndpointClient).catalog();
-  if (!result.ok) throw new Error("permissionPresets/catalog 失败：" + result.error.message);
-  return result.value.defaultPreset;
+  const catalog = await app.get(PermissionPresetsEndpointClient).catalog();
+  return catalog.defaultPreset;
 }
 
 describe("默认权限档位的读写", () => {

@@ -30,6 +30,12 @@
   走 `ui`（`happy-dom`），其余 `*.spec.ts` 走 `node`；排除 `node_modules` / `target` / `.scratch`。
 - **单测等待上限 3s**：`testTimeout: 3000`（同上）。要更长预算的用例显式给 `{ timeout }`——那是承认成本，
   不是放宽断言（跨域装配的包内用例给 180s 一类的显式预算，见能力层规范）。
+- **删/改断言必须写清为什么**：「测试替 bug 背书」的另一半。删掉一条断言要说明它固化的旧口径是什么、为什么不再成立；
+  改一条断言要说明新判据守的是什么。例：`permission-presets-wire` 删掉 `body.result.value.ok === true`（它钉的是双包），
+  另一条「换人答」原判据「双层形状必须消失」在双包消失后失去意义，改为「有人认领且回一份目录」。
+- **剥包装后必须补**运行时**判据**：失败路径断言**抛异常** + `expect(result).not.toHaveProperty("ok")`。
+  只断言返回值的判据抓不到双包——`{ ok, value }` 一样满足 `expect(value).toBeDefined()`；而包一层之后
+  失败**不再抛异常**，`not.toHaveProperty("ok")` 当场红。这是双包的克星（`skills` / `job` 都用这条）。
 - **端点契约的判据是两层**：类型形状 + **wire 名字**，两者抓的不是一类东西。
   - 类型形状：`AssertWireFace`（形参与返回**双向**）——抓宽化、收窄、缺端点；**抓不到参数名字**
     （`agentId` 与 `request` 在类型层都是 `string`）；

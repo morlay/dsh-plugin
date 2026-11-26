@@ -2,14 +2,13 @@
 import type { PermissionCatalog } from "@deepseek-ai/dsh-permission-presets";
 import { inject, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
-import {
-  asRemoteResult,
-  RemoteGroup,
-  registerRemoteGroup,
-  type RemoteResultWire,
-} from "@morlay/zephyr-app/remote";
+import { RemoteGroup, registerRemoteGroup } from "@morlay/zephyr-app/remote";
 import { Permission } from "../contract/permission.contract.ts";
-import { PermissionPresetsEndpoint } from "../endpoint/permission-presets-endpoint.ts";
+import {
+  PermissionPresetsEndpoint,
+  type PermissionPresetsSetRequest,
+  type PermissionPresetsSetValue,
+} from "../endpoint/permission-presets-endpoint.ts";
 
 /** `permissionPresets` 组的宿主实现。 */
 @RemoteGroup()
@@ -31,7 +30,14 @@ export class PermissionPresetsEndpointDefault
     this.stop();
   }
 
-  override async catalog(): Promise<RemoteResultWire<PermissionCatalog>> {
-    return await asRemoteResult(async () => this.permission.catalog());
+  // 裸值：`RemoteResult` 由桥与客户端面各包一层，宿主再包就是双包。
+  override async catalog(): Promise<PermissionCatalog> {
+    return this.permission.catalog();
+  }
+
+  override async setPreset(
+    request: PermissionPresetsSetRequest,
+  ): Promise<PermissionPresetsSetValue> {
+    return this.permission.setPreset(request);
   }
 }

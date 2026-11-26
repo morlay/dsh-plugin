@@ -55,11 +55,16 @@ describe("skills/list 的宿主端点", () => {
     { timeout: 20_000 },
     async ({ appEnv }) => {
       const handlers = await boot(appEnv);
-      const result = await handlers.invoke("skills/list", { request: { sessionId: "s-unknown" } });
-      expect(result).toMatchObject({
-        ok: false,
-        error: { code: "session/not-found" },
-      });
+      // 裸值口径：宿主**抛**上游的 `RemoteError`（不是回 `{ ok:false, error }`）。
+      // 包过一层的话这里会是 `{ ok:false, error:{…} }` 而不抛。
+      const error = await handlers
+        .invoke("skills/list", { request: { sessionId: "s-unknown" } })
+        .then(
+          () => new Error("应当抛错"),
+          (thrown: unknown) => thrown,
+        );
+      expect(error).not.toHaveProperty("ok");
+      expect((error as { code?: string }).code).toBe("session/not-found");
     },
   );
 });

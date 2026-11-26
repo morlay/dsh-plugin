@@ -10,6 +10,7 @@
  * 不是端点自造的值；`catalog` 的三个档位来自 `providePermission` 的预设表。
  */
 import { ToolCallId } from "@morlay/dsh-agent/server";
+import { SessionId } from "@morlay/dsh-session/endpoint";
 import { AgentLoop } from "@morlay/dsh-agent-loop/contract";
 import { AgentLoopDefault, ToolExecutorNative } from "@morlay/dsh-agent-loop";
 import { provideAgent } from "@morlay/dsh-agent";
@@ -100,18 +101,17 @@ describe("权限 / inbox 的宿主端点", () => {
     { timeout: 20_000 },
     async ({ appEnv }) => {
       const { app } = await boot(appEnv);
-      const result = await app.get(PermissionPresetsEndpointClient).catalog();
-      expect(result).toMatchObject({
-        ok: true,
-        value: {
-          options: [
-            { value: "read-only" },
-            { value: "workspace-write" },
-            { value: "danger-full-access" },
-          ],
-          // 默认档位是装配给 `providePermission.withConfig(...)` 的那一档（不再从 shell/approval 的默认值反推）。
-          defaultPreset: "workspace-write",
-        },
+      const catalog = await app.get(PermissionPresetsEndpointClient).catalog();
+      // 裸值口径（RemoteResult 归桥/客户端面）；包过一层这里会是 { ok, value }。
+      expect(catalog).not.toHaveProperty("ok");
+      expect(catalog).toMatchObject({
+        options: [
+          { value: "read-only" },
+          { value: "workspace-write" },
+          { value: "danger-full-access" },
+        ],
+        // 默认档位是装配给 `providePermission.withConfig(...)` 的那一档。
+        defaultPreset: "workspace-write",
       });
     },
   );
@@ -123,7 +123,7 @@ describe("权限 / inbox 的宿主端点", () => {
       const { handlers, sessionId } = await boot(appEnv);
       const source = handlers.stream(
         attachWaitEndpoint(),
-        { agent: sessionId, callId: "call-none" },
+        { agentId: SessionId(sessionId), callId: ToolCallId("call-none") },
         new AbortController().signal,
       );
       if (source === undefined) throw new Error("userQuestions/attachWait 没有注册成流式端点");
@@ -152,7 +152,7 @@ describe("权限 / inbox 的宿主端点", () => {
 
       const source = handlers.stream(
         attachWaitEndpoint(),
-        { agent: sessionId, callId },
+        { agentId: SessionId(sessionId), callId },
         new AbortController().signal,
       );
       if (source === undefined) throw new Error("userQuestions/attachWait 没有注册成流式端点");
@@ -170,12 +170,13 @@ describe("权限 / inbox 的宿主端点", () => {
     { timeout: 20_000 },
     async ({ appEnv }) => {
       const { app, sessionId } = await boot(appEnv);
-      const result = await app.get(UserQuestionsEndpointClient).answer({
-        agent: sessionId,
-        callId: "call-unknown",
-        answer: { answers: [{ id: "q1", selected: ["ok"] }] },
-      });
-      expect(result).toEqual({ ok: true, value: false });
+      const result = await app.get(UserQuestionsEndpointClient).answer(
+        SessionId(sessionId),
+        ToolCallId("call-unknown"),
+        { answers: [{ id: "q1", selected: ["ok"] }] },
+      );
+      // 裸值口径：`false` 是上游队列的判定（未知 call 不可作答），不再是 `{ ok, value }`。
+      expect(result).toBe(false);
     },
   );
 });
