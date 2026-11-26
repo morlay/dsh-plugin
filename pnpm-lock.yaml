@@ -794,6 +794,9 @@ importers:
 
   packages/agent/dsh-auth:
     dependencies:
+      '@deepseek-ai/dsh-api-settings-controller':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/api/settings-controller
       '@deepseek-ai/dsh-authorization':
         specifier: workspace:^
         version: link:../../../vendor/deepseek-harness/packages/credentials/authorization

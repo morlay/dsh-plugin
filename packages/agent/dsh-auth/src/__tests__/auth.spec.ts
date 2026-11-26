@@ -79,6 +79,9 @@ describe("auth 域", () => {
 describe("credentials 组的宿主端点", () => {
   // 引用名用**测试专用的假名字**：`DEEPSEEK_API_KEY` 这类真实名字会被开发机/CI 的环境变量填成
   // `configured: true`，断言就随环境漂移。
+  //
+  // 判据口径：宿主回**裸值**（`RemoteResult` 是客户端面 `faceOf` 与 wire 桥那一层的包装，不进契约）；
+  // 失败是**抛异常**（桥会把它折成 `{ ok:false, error:{ code, message } }`）。
   test(
     "`describe` 返回每个引用的视图，`set`/`unset` 往返改变 `configured`",
     { timeout: 20_000 },
@@ -88,46 +91,37 @@ describe("credentials 组的宿主端点", () => {
 
       const before = await handlers.invoke("credentials/describe", { refs: ["DSH_SPEC_FAKE_KEY"] });
       expect(before).toMatchObject({
-        ok: true,
-        value: { DSH_SPEC_FAKE_KEY: { configured: false, writable: expect.any(Boolean) } },
+        DSH_SPEC_FAKE_KEY: { configured: false, writable: expect.any(Boolean) },
       });
 
-      expect(
-        await handlers.invoke("credentials/set", { ref: "DSH_SPEC_FAKE_KEY", value: "sk-spec" }),
-      ).toMatchObject({
-        ok: true,
-      });
+      await expect(
+        handlers.invoke("credentials/set", { ref: "DSH_SPEC_FAKE_KEY", value: "sk-spec" }),
+      ).resolves.toBeUndefined();
       expect(
         await handlers.invoke("credentials/describe", { refs: ["DSH_SPEC_FAKE_KEY"] }),
       ).toMatchObject({
-        ok: true,
-        value: { DSH_SPEC_FAKE_KEY: { configured: true } },
+        DSH_SPEC_FAKE_KEY: { configured: true },
       });
 
-      expect(
-        await handlers.invoke("credentials/unset", { ref: "DSH_SPEC_FAKE_KEY" }),
-      ).toMatchObject({ ok: true });
+      await expect(
+        handlers.invoke("credentials/unset", { ref: "DSH_SPEC_FAKE_KEY" }),
+      ).resolves.toBeUndefined();
       expect(
         await handlers.invoke("credentials/describe", { refs: ["DSH_SPEC_FAKE_KEY"] }),
       ).toMatchObject({
-        ok: true,
-        value: { DSH_SPEC_FAKE_KEY: { configured: false } },
+        DSH_SPEC_FAKE_KEY: { configured: false },
       });
     },
   );
 
   test(
-    "非法引用名走失败面：`{ ok:false, error:{ code, message } }`（不缺字段）",
+    "非法引用名走失败面：抛出可读错误（桥折成 `{ ok:false, error:{ code, message } }`）",
     { timeout: 20_000 },
     async ({ appEnv }) => {
       const { app } = await boot(appEnv);
-      const result = await app
-        .get(RemoteHandlers)
-        .invoke("credentials/describe", { refs: ["not a ref!"] });
-      expect(result).toMatchObject({
-        ok: false,
-        error: { code: expect.any(String), message: expect.stringContaining("引用名") },
-      });
+      await expect(
+        app.get(RemoteHandlers).invoke("credentials/describe", { refs: ["not a ref!"] }),
+      ).rejects.toThrow(/引用名/);
     },
   );
 });

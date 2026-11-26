@@ -7,84 +7,34 @@
 // **它不继承 `RemoteClientBase`**：那个基类带 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
 // 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务。
 import { RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
-import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam } from "@morlay/zephyr-app/typert";
+import type { JobController as JobControllerHost } from "@deepseek-ai/dsh-api-job-controller";
 
 /** 组名（上游 descriptor：`namespace: 'job'`）。 */
 
 /** wire 上的端点名（上游 descriptor 的 `namespace/method`）。 */
 
-/** 一条后台任务的投影（上游 `JobView`）。 */
-export interface JobViewWire {
-  /** 注册表发的 id（`<kind>-<short-uuid>`）。 */
-  readonly id: string;
-  /** 生产方注册时的种类（宿主侧的 `JobKind`，wire 上开放成字符串）。 */
-  readonly kind: string;
-  readonly label: string;
-  /** 所属会话；无主任务没有这个字段（任何调用方都看得见）。 */
-  readonly owner?: string;
-  readonly outputLimitBytes?: number;
-  readonly status: string;
-  readonly progress?: string;
-  readonly detail?: string;
-  readonly startedAt: number;
-  readonly finishedAt?: number;
-  readonly output: {
-    readonly total: number;
-    readonly earliest: number;
-    readonly spillPaths?: readonly string[];
-  };
-}
-
-/** `job/list` 的请求：镜像哪个会话能看见的那份花名册。 */
-export interface JobListRequest {
-  readonly sessionId: string;
-}
-
-/** `job/list` 的一帧：整份替换（重连后的首帧就是真值）。 */
-export interface JobListFrame {
-  readonly type: "rows";
-  readonly jobs: readonly JobViewWire[];
-}
-
-/** `job/follow` 的请求：目标任务、所属会话与可选的续读偏移。 */
-export interface JobFollowRequest {
-  /** 围栏读的所属会话；无主任务省略。 */
-  readonly sessionId?: string;
-  readonly jobId: string;
-  /** 续读的绝对字节偏移（上一帧的 `next`）；省略从最老保留字节开始。 */
-  readonly from?: number;
-}
-
-/** 一段保留输出（上游 `JobChunk`）：写入时刻、文本，以及通道与「前面有洞」的标记。 */
-export interface JobChunkWire {
-  readonly at: number;
-  readonly text: string;
-  readonly channel?: string;
-  /** 这一批之前有字节已被回收（读到的不是连续流）。 */
-  readonly gapBefore?: true;
-}
-
-/** `job/follow` 的帧：`opened` 锚点 → 若干 `output` 批 → 一条终态 `status`。 */
-export type JobFollowFrame =
-  | { readonly type: "opened"; readonly job: JobViewWire; readonly from: number }
-  | {
-      readonly type: "output";
-      readonly chunks: readonly JobChunkWire[];
-      readonly next: number;
-      readonly lossy?: true;
-    }
-  | { readonly type: "status"; readonly job: JobViewWire };
-
-/** `job/kill` 的请求：会话与任务。 */
-export interface JobKillRequest {
-  readonly sessionId: string;
-  readonly jobId: string;
-}
-
-/** `job/kill` 的回执：注册表是否受理了这次人工取消。 */
-export interface JobKillValue {
-  readonly outcome: "requested" | "already-finished";
-}
+import type {
+  JobFollowFrame,
+  JobFollowRequest,
+  JobKillRequest,
+  JobKillValue,
+  JobListFrame,
+  JobListRequest,
+} from "@deepseek-ai/dsh-api-job-controller/types";
+// 类型**全部取上游**（`@deepseek-ai/dsh-api-job-controller/types`，wire 安全的 view 类型由它转出）：
+// 手抄过一次（`JobViewWire` / `JobChunkWire` / 四个帧），只会多一份会漂的声明。
+export type {
+  JobChunk as JobChunkWire,
+  JobFollowFrame,
+  JobFollowRequest,
+  JobKillRequest,
+  JobKillValue,
+  JobListFrame,
+  JobListRequest,
+  JobView as JobViewWire,
+} from "@deepseek-ai/dsh-api-job-controller/types";
 
 /** `job` 组：花名册流、单任务输出流、人工取消。 */
 @RemoteGroup({ name: "job" })
@@ -95,7 +45,7 @@ export class JobEndpoint {
    * @param _signal - wire 的取消信号（流承载关闭时 abort）。
    * @returns 逐帧的花名册。
    */
-  @RemoteMethod({ mode: "stream" })
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
   list(_request: JobListRequest, _signal: AbortSignal): AsyncIterable<JobListFrame> {
     throw new Error("job/list：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -106,7 +56,7 @@ export class JobEndpoint {
    * @param _signal - wire 的取消信号。
    * @returns 逐帧的输出与终态。
    */
-  @RemoteMethod({ mode: "stream" })
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
   follow(_request: JobFollowRequest, _signal: AbortSignal): AsyncIterable<JobFollowFrame> {
     throw new Error("job/follow：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -116,8 +66,26 @@ export class JobEndpoint {
    * @param _request - 会话与任务。
    * @returns 注册表的受理结果。
    */
-  @RemoteMethod()
-  async kill(_request: JobKillRequest): Promise<RemoteResultWire<JobKillValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async kill(_request: JobKillRequest): Promise<JobKillValue> {
     throw new Error("job/kill：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
+/**
+ * 覆盖守卫：契约对上**宿主类** `JobController` 的 wire 面（形参与返回**双向**，见 `AssertWireFace`）。
+ *
+ * 两条判据分开：unary（`kill`）一条；流式（`list` / `follow`）一条，**两侧各摘一次取消信号**
+ * （契约方法带 `signal` 是宿主侧取消通道，wire 上没有它）。
+ */
+type JobWire = AsyncReturn<DropParam<JobControllerHost, AbortSignal>>;
+
+export type JobEndpointCovered = AssertTrue<
+  AssertWireFace<Pick<JobWire, "kill">, Pick<JobEndpoint, "kill">>
+>;
+
+export type JobEndpointStreamCovered = AssertTrue<
+  AssertWireFace<
+    Pick<JobWire, "list" | "follow">,
+    Pick<DropParam<JobEndpoint, AbortSignal>, "list" | "follow">
+  >
+>;

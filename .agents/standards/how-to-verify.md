@@ -30,6 +30,21 @@
   走 `ui`（`happy-dom`），其余 `*.spec.ts` 走 `node`；排除 `node_modules` / `target` / `.scratch`。
 - **单测等待上限 3s**：`testTimeout: 3000`（同上）。要更长预算的用例显式给 `{ timeout }`——那是承认成本，
   不是放宽断言（跨域装配的包内用例给 180s 一类的显式预算，见能力层规范）。
+- **端点契约的判据是两层**：类型形状 + **wire 名字**，两者抓的不是一类东西。
+  - 类型形状：`AssertWireFace`（形参与返回**双向**）——抓宽化、收窄、缺端点；**抓不到参数名字**
+    （`agentId` 与 `request` 在类型层都是 `string`）；
+  - wire 名字：descriptor 与网关校验的那张表**逐字比**（本仓 `terminal-endpoint-wire.spec.ts` 对上游
+    `TYPERT.invocations`）——`terminal/environment` 真机那条 `missing "agentId"; unexpected "request"`、
+    `commands` 那轮的 `_request` vs `request`，都是**名字**问题，只有这一层能抓。
+  两层都要写；只写一层就会留下今天反复踩的那个角。
+- **判据的装配必须包含出问题的那一层**：用 fake 替换掉被测层，测试就只证明 fake 的行为。
+  `session-rdb` 的 44 个会话管理页用例全绿，而它的 `unwrap()` 只解一层 `RemoteResult`——因为那些用例
+  的装配里没有真桥（fake 传输顶替），**双包在用例里根本不会发生**。判据要问自己一句：
+  「这层如果坏了，我会红吗？」会不红，就得把真那一层装进来（真桥 / 真实例 / 真传输）。
+- **改口径必须同时改固化旧口径的判据**：否则**测试会替 bug 背书**——`auth.spec.ts` 曾断言
+  `{ ok: true, value: … }`，而宿主改回裸值后那条断言恰恰把双包 bug（`{ok, value:{ok, value}}`）钉住。
+  做法：口径（裸值 / 包装 / 形参形状）一动，先 `rg` 旧口径的字面量（`{ ok: true`、`RemoteResultWire`、
+  旧形参名…），有命中就是漏改的判据；再跑该包测试。
 - **弱证据不能替代强判据**：两次教训都出在这里，写法记一下——
   - 「`rg` 零命中」**不是**「没有消费方」：上游内部调用链靠类型与运行时连接，静态文本搜不到。
     `session` 组就据此漏掉过 5 个端点（`observeEvent` / `observeProjections` / `observeState` / `state` / `wait`）。

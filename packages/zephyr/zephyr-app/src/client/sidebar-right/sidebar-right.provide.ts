@@ -5,11 +5,10 @@
 // 座位由自己的 `zephyr-ui` 组件顶（槽位名沿用上游，上游行的正文才进得来）。
 import { provide } from "@morlay/zephyr";
 import { SidebarRightDefault } from "./controller.service.ts";
-import { GuideType } from "./guide.service.ts";
 import { SidebarRightTabsDefault } from "./tabs.service.ts";
 
 /**
  * 右栏的行清单。
  * @returns provider 清单（类型注册表在前：控制器要拿它的 `face`）。
  */
-export const provideSidebarRight = provide([SidebarRightTabsDefault, SidebarRightDefault, GuideType]);
+export const provideSidebarRight = provide([SidebarRightTabsDefault, SidebarRightDefault]);

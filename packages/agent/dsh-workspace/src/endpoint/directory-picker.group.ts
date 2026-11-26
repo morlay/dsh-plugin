@@ -1,11 +1,13 @@
-// `directoryPicker` 组的**两端共用面**：组名、deps 键、方法名与每个方法的请求/应答形状。
+// `directoryPicker` 组的**两端共用面**：组名、方法名与 wire 形参 / 应答类型。
 //
-// 组名与方法名的家是下面契约类上的 `@RemoteGroup({ name })` / `@RemoteMethod()`：宿主侧
-// （`server/directory-picker-endpoint.service.ts`）继承它实现方法，wire 上叫什么不在别处再写一份。
-// 客户端形态不在本仓：这一组的客户端面由上游 `@deepseek-ai/dsh-api-workspace-controller#directoryPicker`
-// 的 `$mount` 面提供（`ui/` 按 `remote.<组>` 调），所以这里只有宿主侧要实现的声明。
+// 上游真源：`vendor/deepseek-harness/packages/api/workspace-controller/src/directory-picker.ts:41`
+// （`DirectoryPickerController`）：`pick(signal)` / `list(path, signal)` / `createDirectory(path, name)`——
+// **位置形参、裸值**。客户端面由上游那份 remote 挂，所以宿主必须按同一形状收参数、回裸值。
 import type { DirectoryListing } from "@deepseek-ai/dsh-api-workspace-controller/types";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam } from "@morlay/zephyr-app/typert";
 import { groupNameOf, RemoteGroup, RemoteMethod } from "@morlay/zephyr-app/remote";
+import type { DirectoryPickerController as DirectoryPickerHost } from "@deepseek-ai/dsh-api-workspace-controller";
 
 /**
  * 组名（`directoryPicker`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
@@ -16,44 +18,47 @@ export function directoryPickerGroupName(): string {
   return groupNameOf(DirectoryPickerEndpoint);
 }
 
-/**
- * `directoryPicker` 组：列目录 / 建目录 / 原生选择器。
- *
- * wire 上的参数名就是 descriptor 的命名参数（`list` 收 `path`，`createDirectory` 收 `path` + `name`，
- * `pick` 不收），与 `registerRemoteGroup` 的「整个 args 就是请求」同一约定。应答是**裸值**
- * （与上游 `@Remote` 同协议，失败即异常）；客户端的 `remote.<组>` 面再包成 `RemoteResult`。
- */
+/** `directoryPicker` 组：列目录 / 建目录 / 原生选择器。 */
 @RemoteGroup({ name: "directoryPicker" })
 export class DirectoryPickerEndpoint {
   /**
    * 列一个目录。
-   * @param _request - 目标目录；省略取 backend 的默认落点。
+   * @param _path - 目标目录（`undefined` 取 backend 的默认落点；wire 名 `path`）。
    * @returns 目录清单（面包屑 + 条目 + 是否截断）。
    */
-  @RemoteMethod()
-  async list(_request: { readonly path?: string }): Promise<DirectoryListing> {
+  @RemoteMethod({ parameters: ["path"] })
+  async list(_path: string | undefined): Promise<DirectoryListing> {
     throw new Error("directoryPicker/list：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 在父目录下建一个子目录。
-   * @param _request - 父目录与目录名。
+   * @param _path - 父目录（wire 名 `path`）。
+   * @param _name - 目录名（wire 名 `name`）。
    * @returns 新目录的绝对路径。
    */
-  @RemoteMethod()
-  async createDirectory(_request: {
-    readonly path: string;
-    readonly name: string;
-  }): Promise<string> {
+  @RemoteMethod({ parameters: ["path", "name"] })
+  async createDirectory(_path: string, _name: string): Promise<string> {
     throw new Error("directoryPicker/createDirectory：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 打开原生选择器。
+   * 打开原生选择器（无可选参数：`signal` 走 cancellation）。
    * @returns 选中的路径；用户关掉对话框是 `null`（也是成功）。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: [] })
   async pick(): Promise<string | null> {
     throw new Error("directoryPicker/pick：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
+
+/**
+ * 覆盖守卫：契约对上**宿主类** `DirectoryPickerController` 的 wire 面。
+ *
+ * 投影两步：`DropParam`（末尾 `signal` 走 cancellation）→ `AsyncReturn`（异步化；本组无 lookup 形参）。
+ */
+type DirectoryPickerWire = AsyncReturn<DropParam<DirectoryPickerHost, AbortSignal>>;
+
+export type DirectoryPickerEndpointCovered = AssertTrue<
+  AssertWireFace<Pick<DirectoryPickerWire, "list" | "createDirectory" | "pick">, DirectoryPickerEndpoint>
+>;

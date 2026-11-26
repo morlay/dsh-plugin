@@ -12,7 +12,6 @@ export * from "./markdown-labels.ts";
 export * from "./layout/index.ts";
 export * from "./settings-form/index.ts";
 export * from "./controls/index.ts";
-export * from "./rightbar/index.ts";
 // `Button` 与 `DisclosureRow` 是本包包装版（官方那份 + 文字不换行 / 危险档 / 两条固定的布局类）：
 // 两个星号导出之间必须显式点名，否则判成歧义。
 export {

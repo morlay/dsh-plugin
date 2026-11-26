@@ -49,6 +49,12 @@ export {
   viewRegistrationOf,
 } from "./renderer/view.tsx";
 export * from "./renderer/slots.contract.ts";
+// 兜底 session scope 与 root 标准源：测试夹具与「没有业务 UI 的最小装配」都用它。
+export {
+  SessionScopeContribution,
+  absentSessionAdapter,
+  absentSessions,
+} from "./renderer/session-scope.contribution.ts";
 export * from "./renderer/provide.ts";
 export * from "./renderer/ui-renderer.contract.ts";
 export * from "./resources/resources.contract.ts";
@@ -61,11 +67,6 @@ export * from "./theme/theme.contract.ts";
 export { provideTheme } from "./theme/provide.ts";
 export { provideLayout } from "./layout/provide.ts";
 export { provideSidebarRight } from "./sidebar-right/sidebar-right.provide.ts";
-export {
-  tabHookContextOf,
-  type TabHookContext,
-  type TabHookInput,
-} from "./sidebar-right/tab-context.ts";
 export { ConfigFormsInMemory } from "./settings/config-forms.fake.ts";
 export * from "./layout/layout.contract.ts";
 // 右侧栏是应用框架的位：导航面与 tab 类型注册表都由框架 app 出令牌，各域的 UI 行只认它们。

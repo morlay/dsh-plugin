@@ -13,8 +13,6 @@ import { SessionId } from "@morlay/dsh-session/endpoint";
 import { inject, Injectable, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
 import { RemoteGroup, registerRemoteGroup } from "@morlay/zephyr-app/remote";
-import { asRemoteResult } from "@morlay/zephyr-app";
-import type { RemoteResultWire } from "@morlay/zephyr-app/remote";
 import { JobControllerRow } from "../job-controller.service.ts";
 import {
   JobEndpoint,
@@ -56,12 +54,12 @@ export class JobEndpointDefault extends JobEndpoint implements OnInit {
     return this.controller.follow(upstream, signal);
   }
 
-  override async kill(request: JobKillRequest): Promise<RemoteResultWire<JobKillValue>> {
-    return await asRemoteResult(async () =>
-      this.controller.kill({
-        sessionId: SessionId(request.sessionId),
-        jobId: request.jobId,
-      } as UpstreamKillRequest),
-    );
+  // 回**裸值**：`RemoteResult` 由桥（`RemoteHandlersRpcBridge`）与客户端面（`faceOf`）各包一层，
+  // 宿主再包就是双包（消费方读 `value` 会拿到 `{ok, value}`）。失败是抛异常。
+  override async kill(request: JobKillRequest): Promise<JobKillValue> {
+    return this.controller.kill({
+      sessionId: SessionId(request.sessionId),
+      jobId: request.jobId,
+    } as UpstreamKillRequest);
   }
 }

@@ -37,18 +37,14 @@ export class DirectoryPickerEndpointRow extends DirectoryPickerEndpoint implemen
     this.disposers.push(registerRemoteGroup(this.handlers, this));
   }
 
-  override async list(request: { readonly path?: string }): Promise<DirectoryListing> {
+  override async list(path: string | undefined): Promise<DirectoryListing> {
     // unary 的 wire 不带信号；上游 `list` 要一个（它按 `signal.aborted` 区分「取消」与「失败」），
     // 给一个不会 abort 的 controller——与下面 `pick` 同一口径。
-    const path = typeof request.path === "string" ? request.path : undefined;
     return await this.controller.list(path, new AbortController().signal);
   }
 
-  override async createDirectory(request: {
-    readonly path: string;
-    readonly name: string;
-  }): Promise<string> {
-    return await this.controller.createDirectory(request.path, request.name);
+  override async createDirectory(path: string, name: string): Promise<string> {
+    return await this.controller.createDirectory(path, name);
   }
 
   override async pick(): Promise<string | null> {

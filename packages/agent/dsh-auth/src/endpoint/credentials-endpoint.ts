@@ -1,17 +1,21 @@
-// `credentials` 这一组的跨端契约（与上游 descriptor 同形）。
+// `credentials` 这一组的跨端契约：组名、方法名，与 wire 的形参 / 应答类型。
 //
-// 上游真源：`vendor/deepseek-harness/packages/api/settings-controller/src/credentials.ts:70`
-// （`CredentialsController`，namespace `credentials`；`describe(refs)` / `set(ref, value)` / `unset(ref)`）。
-// 浏览器侧调用：`ui-settings-models` 的 store（describe/set/unset）与 `ui-settings-web-search`。
-// 只取类型：走上游的 `types` 子路径 + `import type`（值导入会给端点面收一条到宿主根的边，
-// 而 `./endpoint` 被浏览器半引用，必须 client-safe）。
+// 上游真源：`vendor/deepseek-harness/packages/api/settings-controller/src/credentials.ts:71`
+// （`CredentialsController`，namespace `credentials`）：`describe(refs)` / `set(ref, value)` / `unset(ref)`，
+// **位置形参、裸值**（`RemoteResult` 是客户端面 `faceOf` 的包装，不进契约）。
+//
+// 本组的宿主实现是**我们自己的**（`server/credentials-endpoint.service.ts`）：它接上游 `CredentialProvider`，
+// 补上 wire 那三条义务（批量扇出上限、字段投影、引用名语法）。
+//
+// 浏览器侧的 `remote.credentials` 面由上游那份 remote 挂（`dsh-setting` 的 `remoteDescriptor`），所以
+// 上游消费方（`ui-settings-models` / `ui-settings-web-search`）读到的就是上游的 wire 形状——我们的宿主
+// 必须按同一形状收参数、回**裸值**，否则会被包第二层（`{ok,value:{ok,value}}`）。
 import type { CredentialInfo } from "@deepseek-ai/dsh-credentials/types";
-import {
-  RemoteGroup,
-  RemoteMethod,
-  groupNameOf,
-  type RemoteResultWire,
-} from "@morlay/zephyr-app/remote";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn } from "@morlay/zephyr-app/typert";
+import { RemoteGroup, RemoteMethod, groupNameOf } from "@morlay/zephyr-app/remote";
+// 上游宿主类从**包根**取（它在包根的导出里；`import type` 运行期零边，浏览器半安全）。
+import type { CredentialsController as CredentialsControllerHost } from "@deepseek-ai/dsh-api-settings-controller";
 
 /**
  * 组名（`credentials`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
@@ -22,58 +26,48 @@ export function credentialsGroupName(): string {
   return groupNameOf(CredentialsEndpoint);
 }
 
-/** wire 端点名。 */
-
-/** wire 端点名。 */
-
-/** wire 端点名。 */
-
-/** `credentials/describe` 的命名参数（descriptor 的参数名是 `refs`）。 */
-export interface CredentialsDescribeRequest {
-  readonly refs: readonly string[];
-}
-
-/** `credentials/set` 的命名参数。 */
-export interface CredentialsSetRequest {
-  readonly ref: string;
-  readonly value: string;
-}
-
-/** `credentials/unset` 的命名参数。 */
-export interface CredentialsUnsetRequest {
-  readonly ref: string;
-}
-
 /** `credentials` 组：批量读引用视图、写一个、删一个（任何方法都不回传密钥值）。 */
 @RemoteGroup({ name: "credentials" })
 export class CredentialsEndpoint {
   /**
    * 批量描述若干引用（一次调用把设置页每行的状态取齐）。
-   * @param request - 引用名列表。
+   * @param _refs - 引用名列表（wire 名 `refs`）。
    * @returns 按引用名归并的视图。
    */
-  @RemoteMethod()
-  async describe(
-    _request: CredentialsDescribeRequest,
-  ): Promise<RemoteResultWire<Record<string, CredentialInfo>>> {
+  @RemoteMethod({ parameters: ["refs"] })
+  async describe(_refs: string[]): Promise<Record<string, CredentialInfo>> {
     throw new Error("credentials/describe：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 存一个引用值（只写不读）。
-   * @param request - 引用名与非空值。
+   * @param _ref - 引用名（wire 名 `ref`）。
+   * @param _value - 非空密钥值（wire 名 `value`）。
    */
-  @RemoteMethod()
-  async set(_request: CredentialsSetRequest): Promise<RemoteResultWire<void>> {
+  @RemoteMethod({ parameters: ["ref", "value"] })
+  async set(_ref: string, _value: string): Promise<void> {
     throw new Error("credentials/set：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 删除一个引用。
-   * @param request - 引用名。
+   * @param _ref - 引用名（wire 名 `ref`）。
    */
-  @RemoteMethod()
-  async unset(_request: CredentialsUnsetRequest): Promise<RemoteResultWire<void>> {
+  @RemoteMethod({ parameters: ["ref"] })
+  async unset(_ref: string): Promise<void> {
     throw new Error("credentials/unset：契约类未实现（宿主侧要在子类里实现它）");
   }
 }
+
+/**
+ * 覆盖守卫：契约对上**宿主类** `CredentialsController` 的 wire 面。
+ *
+ * 本组没有 `signal`（三个方法都没有取消参数）也没有 lookup 形参，所以投影只有一步 `AsyncReturn`
+ * （`set` / `unset` 回 `Promise<void>`，`describe` 回 `Promise<Record<…>>`）。
+ */
+export type CredentialsEndpointCovered = AssertTrue<
+  AssertWireFace<
+    Pick<AsyncReturn<CredentialsControllerHost>, "describe" | "set" | "unset">,
+    CredentialsEndpoint
+  >
+>;

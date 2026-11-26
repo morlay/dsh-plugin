@@ -7,18 +7,8 @@ import type { CredentialInfo } from "@deepseek-ai/dsh-credentials";
 import { Credentials } from "@morlay/zephyr-app";
 import { inject, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { RemoteHandlers } from "@morlay/zephyr-app";
-import {
-  asRemoteResult,
-  RemoteGroup,
-  registerRemoteGroup,
-  type RemoteResultWire,
-} from "@morlay/zephyr-app/remote";
-import {
-  CredentialsEndpoint,
-  type CredentialsDescribeRequest,
-  type CredentialsSetRequest,
-  type CredentialsUnsetRequest,
-} from "../endpoint/credentials-endpoint.ts";
+import { RemoteGroup, registerRemoteGroup } from "@morlay/zephyr-app/remote";
+import { CredentialsEndpoint } from "../endpoint/credentials-endpoint.ts";
 
 /** 一次 `describe` 的扇出上限（上游同值：`credentials.ts:36`）。 */
 const MAX_DESCRIBE_REFS = 64;
@@ -73,33 +63,25 @@ export class CredentialsEndpointDefault extends CredentialsEndpoint implements O
     this.stop();
   }
 
-  override async describe(
-    request: CredentialsDescribeRequest,
-  ): Promise<RemoteResultWire<Record<string, CredentialInfo>>> {
-    return await asRemoteResult(async () => {
-      const refs = checkedRefs(request.refs);
-      const entries = await Promise.all(
-        refs.map(
-          async (ref) =>
-            [
-              ref,
-              projectCredentialInfo(await this.credentials.describe(credentialRef(ref))),
-            ] as const,
-        ),
-      );
-      return Object.fromEntries(entries);
-    });
+  override async describe(refs: string[]): Promise<Record<string, CredentialInfo>> {
+    const checked = checkedRefs(refs);
+    const entries = await Promise.all(
+      checked.map(
+        async (ref) =>
+          [
+            ref,
+            projectCredentialInfo(await this.credentials.describe(credentialRef(ref))),
+          ] as const,
+      ),
+    );
+    return Object.fromEntries(entries);
   }
 
-  override async set(request: CredentialsSetRequest): Promise<RemoteResultWire<void>> {
-    return await asRemoteResult(async () => {
-      await this.credentials.set(credentialRef(request.ref), request.value);
-    });
+  override async set(ref: string, value: string): Promise<void> {
+    await this.credentials.set(credentialRef(ref), value);
   }
 
-  override async unset(request: CredentialsUnsetRequest): Promise<RemoteResultWire<void>> {
-    return await asRemoteResult(async () => {
-      await this.credentials.unset(credentialRef(request.ref));
-    });
+  override async unset(ref: string): Promise<void> {
+    await this.credentials.unset(credentialRef(ref));
   }
 }

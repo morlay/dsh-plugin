@@ -45,12 +45,18 @@ describe("job/* 的宿主面", { timeout: 30_000 }, () => {
     expect(frame.value).toMatchObject({ jobs: [] });
   });
 
-  test("kill 对不认识的任务回上游的失败面（job/not-found），不是「没实现」", async () => {
+  test("kill 失败是**抛异常**（裸值口径：失败不是 `{ ok:false, error }`）", async () => {
     const app = await boot();
-    const result = await app.get(RemoteHandlers).invoke("job/kill", {
-      request: { sessionId: SessionId("s1"), jobId: "nope" },
-    });
-    expect(result).toMatchObject({ ok: false });
-    expect(JSON.stringify(result)).toContain("job/not-found");
+    const error = await app
+      .get(RemoteHandlers)
+      .invoke("job/kill", { request: { sessionId: SessionId("s1"), jobId: "nope" } })
+      .then(
+        () => new Error("应当抛错"),
+        (thrown: unknown) => thrown,
+      );
+    // 上游 `JobError` 原样抛出来（`jobs/error.ts:28`）；包过一层的话这里会是 `{ ok:false, error:{…} }`。
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/unknown job/);
+    expect(error).not.toHaveProperty("ok");
   });
 });
