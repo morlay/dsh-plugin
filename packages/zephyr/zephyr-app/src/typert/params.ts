@@ -90,6 +90,7 @@ export type AsyncReturn<T> = {
   [Key in keyof T as T[Key] extends (...args: never[]) => unknown ? Key : never]: T[Key] extends (
     ...args: infer Args
   ) => infer Result
-    ? (...args: Args) => Promise<Awaited<Result>>
+    ? (...args: Args) =>
+        [Result] extends [AsyncIterable<unknown>] ? Result : Promise<Awaited<Result>>
     : never;
 };

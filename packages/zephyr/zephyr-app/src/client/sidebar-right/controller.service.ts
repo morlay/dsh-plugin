@@ -15,7 +15,9 @@ import {
   type SidebarRightSurfaceStore,
 } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/service.ts";
 import { de, en, es, fr, ja, pt, ru, zh } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/locales.ts";
+import type { SlotScopeAdapter } from "@deepseek-ai/dsh-client-ui-slots";
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
+import { Slots } from "../renderer/slots.contract.ts";
 import { ContextMenus } from "../context-menus/context-menus.contract.ts";
 import { Locale } from "../locale/locale.contract.ts";
 import { Resources } from "../resources/resources.contract.ts";
@@ -69,6 +71,12 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
   /** 文案。 */
   private readonly locale = inject(Locale);
 
+  /** 槽位注册表：读 session 作用域源，决定「哪个会话在屏」。 */
+  private readonly slots = inject(Slots);
+
+  /** session 作用域源的订阅（`mounted` 的唯一来源）。 */
+  private adapterSubscription: (() => void) | undefined;
+
   /** 右键菜单：右栏 tab 的关 / 关其它 / 关右侧（同层能力，框架链默认就有）。 */
   private readonly contextMenus = inject(ContextMenus);
 
@@ -90,10 +98,28 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
   /** 建控制器、注册字典与右键菜单（**不注册任何座位**：座位归会话域）。 */
   onInit(): void {
     this.factory = createSidebarRightController(this.tabs.face, this.pin, this.host);
+    // `mounted` 的唯一来源：session 作用域源的当前绑定（上游由座位/控制器自己驱动，我们由这里驱动）。
+    this.bindOnScreen();
     this.disposers.push(this.locale.register(NS, DICTS));
     // 上游那几个座位组件（`ExpandButton` / guide）读的是 `sidebarRight` 命名空间：整份搬过来。
     this.disposers.push(this.locale.register("sidebarRight", { zh, en, ja, es, fr, de, ru, pt }));
     this.registerContextMenu();
+  }
+
+  /**
+   * 把「哪个会话在屏」报给控制器（`mounted` 从这里来）。
+   *
+   * 这是 `mounted` 的**唯一来源**：`3+4+2` 删掉旧视图源时它被一起删了，`ui-subagent` 的拖拽判空因此恒走空分支。
+   * session 作用域源可能晚于本行就位，所以装配期先试一次、之后跟着它变化。
+   */
+  private bindOnScreen(): void {
+    const adapter = this.slots.scope("session") as SlotScopeAdapter | undefined;
+    if (adapter === undefined) return;
+    const sync = (): void => {
+      this.factory?.show(adapter.current.getSnapshot().key as SessionKey | undefined);
+    };
+    this.adapterSubscription = adapter.current.subscribe(sync);
+    sync();
   }
 
   /** 上游控制器（`onInit` 之前读到就是装配顺序错误）。 */
@@ -300,6 +326,9 @@ export class SidebarRightDefault extends SidebarRightRow implements OnInit, OnDi
 
   /** 卸载：撤菜单与字典，撤销 adopt，让控制器忘掉会话。 */
   onDispose(): void {
+    this.adapterSubscription?.();
+    this.adapterSubscription = undefined;
+    this.factory?.show(undefined);
     for (const dispose of this.disposers.splice(0)) dispose();
     for (const release of this.releases.values()) release();
     this.releases.clear();

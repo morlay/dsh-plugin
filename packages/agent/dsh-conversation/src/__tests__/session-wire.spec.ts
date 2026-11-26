@@ -59,7 +59,7 @@ describe("session 组的 wire 载体", { timeout: 180_000 }, () => {
     expect(status, "`/api/session/list` 必须被认领（404 就是没认领）").toBe(200);
     const body = JSON.parse(text) as ListEnvelope;
     expect(body.result?.ok, "拦截器的结果面").toBe(true);
-    // 上游 `session/list` 回裸值（不套 `RemoteResultWire`，见包内 20261030 的债），所以只钉到 `items`。
+    // 上游 `session/list` 回裸值（`RemoteResult` 只出现在客户端面 `faceOf` 那一层），所以只钉到 `items`。
     expect(Array.isArray(body.result?.value?.items), "会话列表里的 `items`").toBe(true);
   });
 

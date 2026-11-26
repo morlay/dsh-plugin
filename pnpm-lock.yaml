@@ -976,6 +976,9 @@ importers:
       '@deepseek-ai/dsh-session-title-first-prompt-llm':
         specifier: '*'
         version: link:../../../vendor/deepseek-harness/packages/session/session-title-first-prompt-llm
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:^
+        version: link:../../../vendor/deepseek-harness/packages/typert/protocol
       '@deepseek-ai/dsh-workspace-changes':
         specifier: '*'
         version: link:../../../vendor/deepseek-harness/packages/deliverables/workspace-changes

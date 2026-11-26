@@ -1,360 +1,137 @@
-// `session` 这一组的**跨端契约**：组名、组内每个方法的名字与请求/响应形状。
+// `session` 组的**跨端契约**：组名、方法名，与每个端点的 wire 形参 / 应答类型。
 //
-// 两端共用同一份声明：宿主侧实现它（`server/`），浏览器侧按它消费（`ui/` 的 `@RemoteClient()`）。
-// 契约是普通类：客户端形态与宿主形态各自继承它。
-// **它不继承 `RemoteClientBase`**：那个基类带一个 `inject(Remote)` 字段，而 `Remote` 只有浏览器侧有；
-// 契约被两端共用，继承它会让宿主装配去解析一个不存在的服务。
+// **类型全部取上游**（`@deepseek-ai/dsh-api-session-controller/types`）：wire 形状在那里定义，抄一遍只会
+// 多一份会漂的声明（历史债：`SessionListValue` 曾写成 `{ ids, byId }`，上游是 `{ items }`）。
 //
-// 形状照上游 descriptor 抄（`namespace: 'session'`），但**声明在我们这里**：`endpoint/` 是两端共用的面，
-// 引宿主包（`@deepseek-ai/*`）会把宿主半拖进浏览器打包图。字段一个不少，名字归我们。
-import {
-  RemoteGroup,
-  RemoteMethod,
-  groupNameOf,
-  type RemoteResultWire,
-} from "@morlay/zephyr-app/remote";
+// **应答是裸值**：宿主是真相（上游 `SessionController` 的 `@Remote` 方法回裸值），`RemoteResult` 是
+// 客户端面 `faceOf` 的包装，不进契约。
+//
+// **wire 形参名以宿主那一侧为准**（`@RemoteMethod({ parameters })`）：本组的宿主是上游控制器，
+// 网关按**它**的 descriptor 校验参数——`list` 的形参名是 `_request`（整组里唯一带下划线的），
+// 其余是 `request`；写错就是真机上的 `unexpected "request"` / `missing "_request"`。
+import type {
+  ModelCatalog,
+  ModelSelection,
+  PromptContentPart,
+  QueueAction,
+  SessionAttachmentRequest,
+  SessionAttachmentValue,
+  SessionCancelRequest,
+  SessionCancelValue,
+  SessionControlFrame,
+  SessionCreateRequest,
+  SessionCreateValue,
+  SessionEventsPage,
+  SessionFollowFrame,
+  SessionFollowRequest,
+  SessionForkRequest,
+  SessionForkValue,
+  SessionListRequest,
+  SessionListValue,
+  SessionOpenWorkspacePathRequest,
+  SessionOpenWorkspacePathValue,
+  SessionPageRequest,
+  SessionProjectionsRequest,
+  SessionProjectionsValue,
+  SessionPromptRequest,
+  SessionPromptValue,
+  SessionRenameRequest,
+  SessionRenameValue,
+  SessionSearchRequest,
+  SessionSearchValue,
+  SessionSelectModelRequest,
+  SessionSelectModelValue,
+  SessionSummary,
+  SessionUpdateQueueRequest,
+  SessionUpdateQueueValue,
+  SessionWorkspacePathApplication,
+} from "@deepseek-ai/dsh-api-session-controller/types";
+import type { AssertTrue, AssertWireFace } from "@morlay/zephyr-app/client";
+import type { AsyncReturn, DropParam } from "@morlay/zephyr-app/typert";
+import { RemoteGroup, RemoteMethod, groupNameOf } from "@morlay/zephyr-app/remote";
+import type SessionControllerHost from "@deepseek-ai/dsh-api-session-controller";
 
-// 组名只有一个 home：下面契约类上的 `@RemoteGroup({ name: "session" })`。消费方从契约读
-// （`remoteGroupNameOf`）或直接调客户端形态的方法，不另存一份字符串。
-//
-// ui 侧给上游插件传 deps 时用 `[remoteNamespaceKey(sessionGroupName())]: remote`：键从组名派生，
-// 组名从契约类上的 `@RemoteGroup` 读，调用点不写字符串、也不存一份常量。
+// 上游同名的那些直接转出（消费方零改动）：wire 的请求 / 应答就是它们。
+export type {
+  ModelCatalog,
+  ModelSelection,
+  PromptContentPart,
+  QueueAction,
+  SessionAttachmentRequest,
+  SessionAttachmentValue,
+  SessionCancelRequest,
+  SessionCancelValue,
+  SessionControlFrame,
+  SessionCreateRequest,
+  SessionCreateValue,
+  SessionEventsPage,
+  SessionFollowFrame,
+  SessionFollowRequest,
+  SessionForkRequest,
+  SessionForkValue,
+  SessionListRequest,
+  SessionListValue,
+  SessionOpenWorkspacePathRequest,
+  SessionOpenWorkspacePathValue,
+  SessionPageRequest,
+  SessionProjectionsRequest,
+  SessionProjectionsValue,
+  SessionPromptRequest,
+  SessionPromptValue,
+  SessionRenameRequest,
+  SessionRenameValue,
+  SessionSearchRequest,
+  SessionSearchValue,
+  SessionSelectModelRequest,
+  SessionSelectModelValue,
+  SessionSummary,
+  SessionUpdateQueueRequest,
+  SessionUpdateQueueValue,
+  SessionWorkspacePathApplication,
+};
+
+/** 模型目录的应答（上游 `ModelCatalog`；旧名保留给消费方）。 */
+export type SessionModelCatalogValue = ModelCatalog;
+
+/** 目录里的一行（上游 `SessionSummary`；旧名保留给消费方）。 */
+export type SessionSummaryRow = SessionSummary;
+
+/** `session/page` 的应答（上游 `SessionEventsPage`；旧名保留给消费方）。 */
+export type SessionPageValue = SessionEventsPage;
+
+/** `session/follow` 的首帧（上游 `SessionFollowFrame` 的 `snapshot` 分支）。 */
+export type SessionFollowSnapshot = Extract<SessionFollowFrame, { readonly type: "snapshot" }>;
+
+/** 一个模型选择（上游 `ModelSelection`）。 */
+export type SessionModelSelection = ModelSelection;
 
 /**
- * 组名（`session`）：唯一 home 是契约类上的 `@RemoteGroup({ name })`。
+ * 组名（`session`）：唯一 home 是下面契约类上的 `@RemoteGroup({ name })`。
  * @returns wire 组名。
  * @throws 契约类漏了装饰器（装配期就该发现，而不是把空组名塞进 deps）。
  */
 export function sessionGroupName(): string {
   return groupNameOf(SessionEndpoint);
 }
-
-/** 一个模型选择（上游 `ModelSelection`）。 */
-export interface SessionModelSelection {
-  readonly provider: string;
-  readonly model: string;
-  readonly reasoningEffort?: string;
-}
-
-/** 一个可选的推理档位（上游 `ModelReasoningEffort`）。 */
-export interface SessionModelReasoningEffort {
-  readonly id: string;
-  readonly name: string;
-  readonly description?: string;
-}
-
-/** 一个模型的可选推理档位集合（上游 `ModelReasoning`）。 */
-export interface SessionModelReasoning {
-  readonly efforts: readonly SessionModelReasoningEffort[];
-  readonly defaultEffort?: string;
-}
-
-/** provider 给的短标签（上游 `LlmModelBadge`）：字面量或按语言 id 的译文表。 */
-export interface SessionModelBadge {
-  readonly text: string | Readonly<Record<string, string>>;
-  readonly tone: "neutral" | "info" | "success" | "warning";
-}
-
-/** 目录里的一条模型（上游 `ModelCatalogModel`）。 */
-export interface SessionModelCatalogModel {
-  readonly id: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly reasoning?: SessionModelReasoning;
-  readonly badge?: SessionModelBadge;
-}
-
-/** 一个 provider 与它成功加载的模型（上游 `ModelProviderGroup`）。 */
-export interface SessionModelProviderGroup {
-  readonly id: string;
-  readonly name: string;
-  readonly models: readonly SessionModelCatalogModel[];
-}
-
-/** 一个目录查询失败的 provider（上游 `ModelCatalogFailure`）。 */
-export interface SessionModelCatalogFailure {
-  readonly id: string;
-  readonly name: string;
-  readonly message: string;
-}
-
-/** 模型目录（上游 `ModelCatalog`）。 */
-export interface SessionModelCatalogValue {
-  readonly default: SessionModelSelection;
-  readonly routableProviders: readonly string[];
-  readonly groups: readonly SessionModelProviderGroup[];
-  readonly failures: readonly SessionModelCatalogFailure[];
-}
-
-/** `session/rename` 的请求。 */
-export interface SessionRenameRequest {
-  readonly sessionId: string;
-  readonly title: string;
-}
-
-/** `session/rename` 的响应：被接受的标题与提交它的持久事件位置。 */
-export interface SessionRenameValue {
-  readonly title: string;
-  readonly seq: number;
-}
-
-/** `session/selectModel` 的请求。 */
-export interface SessionSelectModelRequest extends SessionModelSelection {
-  readonly sessionId: string;
-}
-
-/** `session/selectModel` 的响应。 */
-export interface SessionSelectModelValue {
-  readonly selected: SessionModelSelection;
-}
-
-/** `session/fork` 的请求：源会话、可选的包含式事件边界、迁移预检开关。 */
-export interface SessionForkRequest {
-  readonly sessionId: string;
-  readonly atSeq?: number;
-  readonly allowMigration?: boolean;
-}
-
-/** `session/fork` 的响应：新会话身份。 */
-export interface SessionForkValue {
-  readonly sessionId: string;
-}
-
-/** `session/search` 的请求：字面量内容查询。 */
-export interface SessionSearchRequest {
-  readonly query: string;
-}
-
-/** 一条搜索结果（上游 `SessionSearchItem`）。 */
-export interface SessionSearchItem {
-  readonly sessionId: string;
-  readonly snippet: string;
-}
-
-/** `session/search` 的响应。 */
-export interface SessionSearchValue {
-  readonly items: readonly SessionSearchItem[];
-  readonly hasMore: boolean;
-}
-
-/** `session/workspacePathApplications` 的请求。 */
-export interface SessionWorkspacePathApplicationsRequest {
-  /** Host 文件系统语法下的路径。 */
-  readonly path: string;
-}
-
-/** 桌面上的一个文件处理程序（上游 `SessionWorkspacePathApplication`）。 */
-export interface SessionWorkspacePathApplication {
-  readonly id: string;
-  readonly name: string;
-  readonly default: boolean;
-  /** PNG/SVG data URL，或 `null`（桌面不给图标）。 */
-  readonly icon: string | null;
-}
-
-/** 一条 prompt 内容（上游 `PromptContentPart`）。 */
-export type SessionPromptContentPart =
-  | { readonly type: "text"; readonly text: string }
-  | {
-      readonly type: "image";
-      readonly mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
-      readonly data: string;
-      readonly name?: string;
-    }
-  | { readonly type: "file"; readonly receiptId: string };
-
-/** 一条队列操作（上游 `QueueAction`）。 */
-export type SessionQueueAction =
-  | {
-      readonly kind: "edit";
-      readonly content: readonly { readonly type: "text"; readonly text: string }[];
-    }
-  | { readonly kind: "remove" }
-  | { readonly kind: "steer" };
-
-/** `session/prompt` 的请求。 */
-export interface SessionPromptRequest {
-  /** 客户端铸的请求身份（与 `beginSubmission` 的 echo 对账）。 */
-  readonly requestId: string;
-  readonly sessionId: string;
-  readonly mode: "queue" | "steer";
-  /** 至少一段非空白文本或一个附件。 */
-  readonly content: readonly SessionPromptContentPart[];
-  readonly clientTimeZone?: string;
-}
-
-/** `session/prompt` 的响应。 */
-export interface SessionPromptValue {
-  readonly accepted: true;
-}
-
-/** `session/cancel` 的请求。 */
-export interface SessionCancelRequest {
-  readonly sessionId: string;
-}
-
-/** `session/updateQueue` 的请求。 */
-export interface SessionUpdateQueueRequest {
-  readonly sessionId: string;
-  /** agent 侧 inbox 出现项身份。 */
-  readonly itemId: string;
-  readonly action: SessionQueueAction;
-}
-
-/** `cancel` / `updateQueue` 的响应。 */
-export interface SessionAcceptedValue {
-  readonly accepted: true;
-}
-
-/** 一条会话行（上游 `SessionSummary` 的装配内形态；客户端在边界摊平 `projections.values`）。 */
-export interface SessionSummaryRow {
-  readonly id: string;
-  readonly sessionId: string;
-  readonly title: string;
-  readonly cwd: string;
-  readonly blank: boolean;
-  readonly running: boolean;
-  readonly agentAvailable: boolean;
-  readonly updatedAt: number;
-  readonly retainedBy: Readonly<Record<string, number>>;
-  /**
-   * 投影摘要（`kind` + 水位 + 值）。`agentPreset` 由 `session.header.agentPreset` 提供：
-   * **不能省成一个空对象**，`ui-workspace` 的 `restoreBlank` 读它，拿不到字符串就会走「新建会话」分支。
-   */
-  readonly projections?: {
-    readonly kind: "sequenced";
-    readonly asOfSeq: number;
-    /** 客户端的 `projectionValues`：键是投影名（`agentPreset` / `modelSelection` / `title` …）。 */
-    readonly values: Readonly<Record<string, unknown>>;
-  };
-}
-
-/** `session/list` 的响应：目录身份表与逐行快照。 */
-export interface SessionListValue {
-  readonly ids: readonly string[];
-  readonly byId: Readonly<Record<string, SessionSummaryRow>>;
-}
-
-/** `session/create` 的请求：位置（workspace 或 cwd，二选一）、可复用的空白会话身份、agent preset。 */
-export interface SessionCreateRequest {
-  readonly workspaceId?: string;
-  readonly cwd?: string;
-  /** 复用一个已有的空白会话（`ui-workspace` 的 `restoreBlank` 每次 reload 都会带它）。 */
-  readonly sessionId?: string;
-  readonly agentPreset?: string;
-}
-
-/** `session/create` 的响应：会话身份。会话行本身由 `api-session/added` 推送，不在响应里回。 */
-export interface SessionCreateValue {
-  readonly sessionId: string;
-}
-
-/** wire 上的一条会话事件（上游 `SessionWireEvent`）：`data` 是不透明 JSON 载荷。 */
-export interface SessionWireEvent {
-  readonly type: string;
-  readonly seq: number;
-  readonly time: number;
-  readonly data: unknown;
-  readonly ignorable?: true;
-}
-
-/** 历史窗口里的一条记录（上游 `SessionHistoryRecord`）：本装配只投事件记录。 */
-export interface SessionHistoryRecord {
-  readonly type: "event";
-  readonly event: SessionWireEvent;
-}
-
-/** `session/page` 的请求：目标会话与续读位置。 */
-export interface SessionPageRequest {
-  readonly sessionId: string;
-  /** 从哪条事件之后读（缺省 = 最新一页）。 */
-  readonly throughSeq?: number;
-}
-
-/** `session/page` 的响应（上游 `SessionPage`）。 */
-export interface SessionPageValue {
-  readonly records: readonly SessionHistoryRecord[];
-  readonly hasMore: boolean;
-}
-
-/** `session/follow` 的请求：打开哪个会话的窗口。 */
-export interface SessionFollowRequest {
-  readonly address: { readonly sessionId: string };
-}
-
-/** `session/follow` 的首帧（上游 `SessionFollowFrame` 的 `snapshot` 分支）：打开窗口的基线。 */
-export interface SessionFollowSnapshot {
-  readonly type: "snapshot";
-  readonly header: {
-    readonly version: number;
-    readonly id: string;
-    readonly createdAt: number;
-    readonly isSeeded: boolean;
-    readonly cwd?: string;
-  };
-  readonly cursor: number;
-  readonly records: readonly SessionHistoryRecord[];
-  readonly hasMore: boolean;
-  readonly projections: {
-    readonly asOfSeq: number;
-    readonly values: Readonly<Record<string, unknown>>;
-  };
-}
-
-/** `session/follow` 的一帧：基线快照或后续事件记录（与上游同形）。 */
-export type SessionFollowFrame = SessionFollowSnapshot | SessionHistoryRecord;
-
-/** 一个会话的投影块（上游 `SessionProjectionBaseline`）：值加上它们所属的日志位置。 */
-export interface SessionProjectionBaseline {
-  readonly asOfSeq: number;
-  readonly values: Readonly<Record<string, unknown>>;
-}
-
-/** `session/control` 的首帧：Host 级的完整投影状态（上游 `SessionControlBaseline`）。 */
-export interface SessionControlBaseline {
-  readonly projections: Readonly<Record<string, SessionProjectionBaseline>>;
-}
-
-/** 一个已结算的投影值与它的水位（上游 `SessionProjectionUpdate`）。 */
-export interface SessionProjectionUpdate {
-  readonly sessionId: string;
-  readonly key: string;
-  readonly value: unknown;
-  readonly seq: number;
-}
-
-/**
- * `session/control` 的一帧（上游 `SessionControlFrame`）：一帧 baseline + 之后逐条增量。
- *
- * 这条流**独立于** `session/follow`：follow 走会话内容（事件窗口），control 走 Host 级的投影状态。
- * 客户端的状态（权限档位 chip、模型选择器）读投影，所以少了这条流界面永远不会跟着变。
- */
-export type SessionControlFrame =
-  | { readonly type: "baseline"; readonly value: SessionControlBaseline }
-  | ({ readonly type: "projection" } & SessionProjectionUpdate);
-
-/** `session` 组：目录（建档 / 列表 / 翻页 / 跟随）、改名、选模型、分叉、搜索、目录与桌面能力；
- * `prompt` / `cancel` / `updateQueue` 是会话语义。 */
+/** `session` 组：目录（建档 / 列表 / 翻页 / 跟随）、改名、选模型、分叉、搜索、投影与会话控制。 */
 @RemoteGroup({ name: "session" })
 export class SessionEndpoint {
   /**
-   * 列出一条目录：会话身份表与逐行快照。
-   * @returns 目录身份表与逐行快照。
+   * 列出一条目录（上游 `{ items }`）。
+   * @param _request - 预留的空请求（wire 名 `_request`：整组里唯一带下划线的形参）。
+   * @returns 目录行。
    */
-  @RemoteMethod()
-  async list(): Promise<SessionListValue> {
+  @RemoteMethod({ parameters: ["_request"] })
+  async list(_request: SessionListRequest): Promise<SessionListValue> {
     throw new Error("session/list：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 建一个会话（可复用已有的空白会话）。
-   *
-   * 上游语义是**会话与 agent 一起建**（`agents.createSession` → `AgentLoop.create`）：只把会话塞进
-   * store 而不起 agent，后续 `prompt` 的 resume 会撞 `session "<id>" already exists`。
    * @param _request - 位置、可复用身份与 agent preset。
    * @returns 会话身份。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["request"] })
   async create(_request: SessionCreateRequest): Promise<SessionCreateValue> {
     throw new Error("session/create：契约类未实现（宿主侧要在子类里实现它）");
   }
@@ -362,29 +139,30 @@ export class SessionEndpoint {
   /**
    * 读一页历史。
    * @param _request - 目标会话与续读位置。
-   * @returns 这一页的记录与是否还有更多。
+   * @returns 这一页与是否还有更多。
    */
-  @RemoteMethod()
-  async page(_request: SessionPageRequest): Promise<SessionPageValue> {
+  @RemoteMethod({ parameters: ["request"] })
+  async page(_request: SessionPageRequest): Promise<SessionEventsPage> {
     throw new Error("session/page：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
    * 打开一个会话窗口：先给基线快照，之后逐帧推事件，直到取消。
    * @param _request - 目标会话。
-   * @param _signal - wire 的取消信号（流承载关闭时 abort）。
+   * @param _signal - 宿主侧的取消通道（载具注入，不是 wire 参数）。
    * @returns 基线快照与后续事件帧。
    */
-  @RemoteMethod({ mode: "stream" })
-  follow(_request: SessionFollowRequest, _signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
+  @RemoteMethod({ mode: "stream", parameters: ["request"] })
+  follow(
+    _request: SessionFollowRequest,
+    _signal: AbortSignal,
+  ): AsyncIterable<SessionFollowFrame> {
     throw new Error("session/follow：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * Host 级的投影状态流：一帧 baseline，之后逐条投影增量，直到取消。
-   *
-   * 与 `follow` 分工：follow 给会话内容（事件窗口），这条给**投影**（权限档位、模型选择、标题…）。
-   * @param _signal - wire 的取消信号。
+   * Host 级的投影状态流：一帧基线，之后逐条投影增量，直到取消。
+   * @param _signal - 宿主侧的取消通道（载波注入，不是 wire 参数）。
    * @returns baseline 与后续增量帧。
    */
   @RemoteMethod({ mode: "stream", parameters: [] })
@@ -393,115 +171,196 @@ export class SessionEndpoint {
   }
 
   /**
-   * 改一个会话的标题（会往会话日志写事件）。
+   * 改一个会话的标题。
    * @param _request - 会话与提议的标题。
    * @returns 被接受的标题与事件位置。
    */
-  @RemoteMethod()
-  async rename(_request: SessionRenameRequest): Promise<RemoteResultWire<SessionRenameValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async rename(_request: SessionRenameRequest): Promise<SessionRenameValue> {
     throw new Error("session/rename：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 为一个会话选模型（Host 侧随后后台保存为默认）。
-   * @param _request - 会话与目标选择。
-   * @returns 归一化后的选择。
+   * 选模型。
+   * @param _request - 会话与模型选择。
+   * @returns 结算后的选择。
    */
-  @RemoteMethod()
-  async selectModel(
-    _request: SessionSelectModelRequest,
-  ): Promise<RemoteResultWire<SessionSelectModelValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async selectModel(_request: SessionSelectModelRequest): Promise<SessionSelectModelValue> {
     throw new Error("session/selectModel：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 从一个会话的精确事件前缀分叉出新会话。
-   * @param _request - 源会话、可选边界与迁移预检开关。
-   * @returns 新会话身份。
+   * 从某个前缀分叉。
+   * @param _request - 源会话与分叉位置。
+   * @returns 子会话身份。
    */
-  @RemoteMethod()
-  async fork(_request: SessionForkRequest): Promise<RemoteResultWire<SessionForkValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async fork(_request: SessionForkRequest): Promise<SessionForkValue> {
     throw new Error("session/fork：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 搜索可见会话内容（不恢复 agent）。
-   * @param _request - 查询文本。
-   * @returns 有界结果。
+   * 全文搜索。
+   * @param _request - 查询。
+   * @returns 命中与是否有更多。
    */
-  @RemoteMethod()
-  async search(_request: SessionSearchRequest): Promise<RemoteResultWire<SessionSearchValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async search(_request: SessionSearchRequest): Promise<SessionSearchValue> {
     throw new Error("session/search：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 读当前可路由的全部模型（选择器用）。
-   * @returns 按 provider 分组的目录、默认选择与失败面。
+   * 模型目录。
+   * @returns provider 分组与失败项。
    */
   @RemoteMethod({ parameters: [] })
-  async modelCatalog(): Promise<RemoteResultWire<SessionModelCatalogValue>> {
+  async modelCatalog(): Promise<ModelCatalog> {
     throw new Error("session/modelCatalog：契约类未实现（宿主侧要在子类里实现它）");
   }
 
-  /**
-   * 登录后在没有 API key 时选第一个可用模型。
-   * @returns 无返回值（默认值已保存）。
-   */
+  /** 初始化默认模型选择（首轮前调一次）。 */
   @RemoteMethod({ parameters: [] })
-  async initializeDefaultModel(): Promise<RemoteResultWire<void>> {
+  async initializeDefaultModel(): Promise<void> {
     throw new Error("session/initializeDefaultModel：契约类未实现（宿主侧要在子类里实现它）");
   }
 
-  /**
-   * 报告这个部署能不能把会话工作区路径交给桌面打开。
-   * @returns `true` 表示可打开。
-   */
+  /** 宿主能不能「在文件管理器里打开」某个工作区路径。 */
   @RemoteMethod({ parameters: [] })
-  async canOpenWorkspacePath(): Promise<RemoteResultWire<boolean>> {
+  async canOpenWorkspacePath(): Promise<boolean> {
     throw new Error("session/canOpenWorkspacePath：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 发一条 prompt（Host 可能挂起到 admit 阶段）。
-   * @param _request - 会话、内容、投递模式与请求身份。
-   * @returns 已接受的回执。
+   * 给会话投递一段输入。
+   * @param _request - 输入与投递模式。
+   * @returns 受理回执。
    */
-  @RemoteMethod()
-  async prompt(_request: SessionPromptRequest): Promise<RemoteResultWire<SessionPromptValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async prompt(_request: SessionPromptRequest): Promise<SessionPromptValue> {
     throw new Error("session/prompt：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 取消正在跑的 turn（队列里的工作保留）。
-   * @param _request - 会话。
-   * @returns 已接受的回执。
+   * 取消当前这一轮。
+   * @param _request - 目标会话。
+   * @returns 受理回执。
    */
-  @RemoteMethod()
-  async cancel(_request: SessionCancelRequest): Promise<RemoteResultWire<SessionAcceptedValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async cancel(_request: SessionCancelRequest): Promise<SessionCancelValue> {
     throw new Error("session/cancel：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 对仍 pending 的队列项做一次 edit / remove / steer。
-   * @param _request - 会话、队列项与动作。
-   * @returns 已接受的回执。
+   * 改一条排队中的输入。
+   * @param _request - 目标条目与动作。
+   * @returns 受理回执。
    */
-  @RemoteMethod()
-  async updateQueue(
-    _request: SessionUpdateQueueRequest,
-  ): Promise<RemoteResultWire<SessionAcceptedValue>> {
+  @RemoteMethod({ parameters: ["request"] })
+  async updateQueue(_request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue> {
     throw new Error("session/updateQueue：契约类未实现（宿主侧要在子类里实现它）");
   }
 
   /**
-   * 列出一个路径当前的桌面文件处理程序。
-   * @param _request - Host 文件系统语法下的路径。
-   * @returns 应用列表；桌面打开不可用时为空数组。
+   * 某个路径可用的「打开方式」列表。
+   * @param _request - 目标路径。
+   * @returns 应用列表。
    */
-  @RemoteMethod()
+  @RemoteMethod({ parameters: ["request"] })
   async workspacePathApplications(
-    _request: SessionWorkspacePathApplicationsRequest,
-  ): Promise<RemoteResultWire<readonly SessionWorkspacePathApplication[]>> {
+    _request: SessionOpenWorkspacePathRequest,
+  ): Promise<readonly SessionWorkspacePathApplication[]> {
     throw new Error("session/workspacePathApplications：契约类未实现（宿主侧要在子类里实现它）");
   }
+
+  /**
+   * 读一条会话里的图片附件。
+   * @param _request - 会话与附件引用。
+   * @returns 校验过的引用与数据。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async attachment(_request: SessionAttachmentRequest): Promise<SessionAttachmentValue> {
+    throw new Error("session/attachment：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 读一页事件（`session/page` 的旧别名）。
+   * @param _request - 目标会话与位置。
+   * @returns 这一页。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async events(_request: SessionPageRequest): Promise<SessionEventsPage> {
+    throw new Error("session/events：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 在宿主的文件管理器里打开一个工作区路径。
+   * @param _request - 路径与打开方式。
+   * @returns 打开结果。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async openWorkspacePath(
+    _request: SessionOpenWorkspacePathRequest,
+  ): Promise<SessionOpenWorkspacePathValue> {
+    throw new Error("session/openWorkspacePath：契约类未实现（宿主侧要在子类里实现它）");
+  }
+
+  /**
+   * 读一份投影快照。
+   * @param _request - 会话与投影键。
+   * @returns 投影值。
+   */
+  @RemoteMethod({ parameters: ["request"] })
+  async projections(_request: SessionProjectionsRequest): Promise<SessionProjectionsValue> {
+    throw new Error("session/projections：契约类未实现（宿主侧要在子类里实现它）");
+  }
 }
+/** 本组覆盖的 **unary** 端点（显式列出：按 `keyof` 取会放过「契约掉了一个端点」）。 */
+type UnaryEndpoints =
+  | "list"
+  | "create"
+  | "page"
+  | "rename"
+  | "selectModel"
+  | "fork"
+  | "search"
+  | "modelCatalog"
+  | "initializeDefaultModel"
+  | "canOpenWorkspacePath"
+  | "prompt"
+  | "cancel"
+  | "updateQueue"
+  | "workspacePathApplications"
+  | "attachment"
+  | "events"
+  | "openWorkspacePath"
+  | "projections";
+
+/** 本组覆盖的**流式**端点。 */
+type StreamEndpoints = "follow" | "control";
+
+/**
+ * 上游 `session` 的 **wire 面**：宿主类 `SessionController` 的三步投影（规则与出处见
+ * `@morlay/zephyr-app/typert` 的 `params.ts`）：去末尾 `signal`（走 cancellation）→ `AsyncReturn`
+ * （unary 异步化；`AsyncIterable` 不包 `Promise`）。本组没有 lookup 形参（`sessionId` 在请求体里）。
+ */
+type SessionWire = AsyncReturn<DropParam<SessionControllerHost, AbortSignal>>;
+
+/**
+ * 覆盖守卫（unary）：契约对上宿主类的 wire 面（形参与返回**双向**，见 `AssertWireFace`）。
+ */
+export type SessionEndpointCovered = AssertTrue<
+  AssertWireFace<Pick<SessionWire, UnaryEndpoints>, Pick<SessionEndpoint, UnaryEndpoints>>
+>;
+
+/**
+ * 覆盖守卫（流式）：**契约侧也要把末尾那个取消信号摘掉再比**——那个 `signal` 是宿主侧的取消通道
+ * （载具注入，`registerRemoteGroup` 按 `handler.length >= 2` 传），不是 wire 参数；宿主类的原文同样带它。
+ * 这套做法在 `workspaceFiles` 的 `changes` 上验过。
+ */
+export type SessionEndpointStreamCovered = AssertTrue<
+  AssertWireFace<
+    Pick<SessionWire, StreamEndpoints>,
+    Pick<DropParam<SessionEndpoint, AbortSignal>, StreamEndpoints>
+  >
+>;

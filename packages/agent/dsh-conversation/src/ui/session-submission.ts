@@ -1,6 +1,19 @@
 // 提交路径上的两个**形状转换**：上游组件给的是它自己的 `PromptContentPart[]` / `QueueAction`，
 // 我们的端点契约是自声明的同形类型。这里逐字段校验并复制，不用断言。
-import type { SessionPromptContentPart, SessionQueueAction } from "@morlay/dsh-session/endpoint";
+import type { PromptContentPart, QueueAction } from "@morlay/dsh-session/endpoint";
+
+/** 上游 `PromptContentPart` 里 `file` 那一支的 receipt id（品牌类型）。 */
+type FileReceiptId = Extract<PromptContentPart, { readonly type: "file" }>["receiptId"];
+
+/**
+ * 裸字符串 → 上游 `FileUploadReceiptId`。
+ *
+ * 上游没有给这个品牌导出工厂（`client/file-upload/src/types.ts:39` 只有类型），品牌又只在编译期
+ * （与上游 `brandString` 同一步：`value as T`）——所以在这一处边界铸造一次，值原样不动。
+ * @param raw - 上游组件传来的裸字符串。
+ * @returns 品牌化的 receipt id。
+ */
+const receiptIdOf = (raw: string): FileReceiptId => raw as FileReceiptId;
 
 /** 一段文本（`QueueAction` 的 `edit` 内容）。 */
 interface TextBlockLike {
@@ -21,12 +34,12 @@ function textBlockOf(value: unknown): TextBlockLike | undefined {
 }
 
 /**
- * 把上游的内容段收窄成契约里的 `SessionPromptContentPart`。
+ * 把上游的内容段收窄成契约里的 `PromptContentPart`（上游同名类型）。
  * @param content - 上游组件传入的内容段。
  * @returns 契约形状的内容段。
  * @throws 遇到无法识别的段时（不静默丢弃内容）。
  */
-export function promptContentOf(content: readonly unknown[]): readonly SessionPromptContentPart[] {
+export function promptContentOf(content: readonly unknown[]): readonly PromptContentPart[] {
   return content.map((part) => {
     const text = textBlockOf(part);
     if (text !== undefined) return text;
@@ -57,19 +70,19 @@ export function promptContentOf(content: readonly unknown[]): readonly SessionPr
       };
     }
     if (part.type === "file" && "receiptId" in part && typeof part.receiptId === "string") {
-      return { type: "file", receiptId: part.receiptId };
+      return { type: "file", receiptId: receiptIdOf(part.receiptId) };
     }
     throw new Error("[sessions] 无法识别的 prompt 内容段");
   });
 }
 
 /**
- * 把上游的队列动作收窄成契约里的 `SessionQueueAction`。
+ * 把上游的队列动作收窄成契约里的 `QueueAction`（上游同名类型）。
  * @param action - 上游组件传入的动作。
  * @returns 契约形状的动作。
  * @throws 遇到无法识别的动作时。
  */
-export function queueActionOf(action: unknown): SessionQueueAction {
+export function queueActionOf(action: unknown): QueueAction {
   if (typeof action !== "object" || action === null || !("kind" in action)) {
     throw new Error("[sessions] 队列动作缺少 kind");
   }

@@ -67,6 +67,26 @@ describe("宿主面 → wire 面的投影", () => {
     expect(keys).toBe(true);
   });
 
+  test("AsyncReturn：`boolean` 返回不能被分配成 `Promise<false> | Promise<true>`（非分配式）", () => {
+    interface BoolFace {
+      can(): boolean;
+    }
+    type Wire = AsyncReturn<BoolFace>;
+    type Check = AssertTrue<Equal<Wire["can"], () => Promise<boolean>>>;
+    const check: Check = true;
+    expect(check).toBe(true);
+  });
+
+  test("AsyncReturn：流返回（AsyncIterable）不包 Promise——流不是被 await 的值", () => {
+    interface StreamFace {
+      watch(request: string): AsyncIterable<number>;
+    }
+    type Wire = AsyncReturn<StreamFace>;
+    type Check = AssertTrue<Equal<Wire["watch"], (request: string) => AsyncIterable<number>>>;
+    const check: Check = true;
+    expect(check).toBe(true);
+  });
+
   test("AsyncReturn：同步返回提升成 Promise，已是 Promise 的不叠两层", () => {
     type Wire = AsyncReturn<RequiredFace>;
     type SyncCheck = AssertTrue<Equal<Wire["sync"], () => Promise<string>>>;

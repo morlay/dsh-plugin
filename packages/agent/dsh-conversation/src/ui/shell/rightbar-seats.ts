@@ -9,27 +9,24 @@
 // 不接 dockkit：拆分 / 浮动 / 停靠 / 拖拽重排 / 房间测量都不支持（差异见 `.agents/debts/`）。
 import { inject, Injectable, type OnDispose, type OnInit } from "@morlay/zephyr";
 import { ExpandButton } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/shell/ExpandButton.tsx";
+import { GuideTitle } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tabs/guide/GuideTitle.tsx";
+import { tabInfoFactory } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tab-info.ts";
 import {
   Layout,
   Locale,
   Shortcuts,
   Slots,
   SidebarRightRow,
+  SidebarRightTabs,
 } from "@morlay/zephyr-app/client";
 import { GUIDE_KIND } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/contract/seed.ts";
-import { Rightbar, RightbarGuide } from "@morlay/zephyr-ui";
+import { Rightbar } from "@morlay/zephyr-ui";
+import { GuideBody } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tabs/guide/GuideBody.tsx";
+import { createGuidePins } from "@deepseek-ai/dsh-client-ui-sidebar-right/src/client/tabs/guide/guide-pins.ts";
+import { guideInjectOf } from "./rightbar-guide-inject.ts";
 import { SessionController } from "../../contract/index.ts";
+import { SessionBinding } from "./rightbar-session-binding.ts";
 import { RightbarSession } from "./rightbar-session.view.tsx";
-
-/** `sessions.retain(...)` 的返回值（会话作用域 reference，自带 `release`）。 */
-type SessionReference = ReturnType<SessionController["retain"]>;
-
-/** 当前会话的绑定。 */
-interface CurrentSession {
-  readonly sessionId: string;
-  readonly reference: SessionReference;
-  readonly release: () => void;
-}
 
 /** 右栏的两层座位与它的会话绑定。 */
 @Injectable()
@@ -39,6 +36,9 @@ export class RightbarSeats implements OnInit, OnDispose {
 
   /** 右栏动作面 + 本层 surface 面（P1 的两段契约）。 */
   private readonly row = inject(SidebarRightRow);
+
+  /** 类型注册表（guide 条目从这里读）。 */
+  private readonly tabs = inject(SidebarRightTabs);
 
   /** 会话目录：`retain` 出容器要绑的 reference。 */
   private readonly sessions = inject(SessionController);
@@ -52,8 +52,8 @@ export class RightbarSeats implements OnInit, OnDispose {
   /** 帧：展开状态要报给它。 */
   private readonly layout = inject(Layout);
 
-  /** 当前绑定的会话。 */
-  private current: CurrentSession | undefined;
+  /** 当前会话的绑定（retain/release 配对逻辑在 `SessionBinding` 里，可单测）。 */
+  private readonly binding = new SessionBinding(this.sessions);
 
   /** 本行注册的撤销函数。 */
   private readonly disposers: (() => void)[] = [];
@@ -72,6 +72,14 @@ export class RightbarSeats implements OnInit, OnDispose {
     this.disposers.push(this.slots.inject("rightbar", () => this.registerRow()));
     this.disposers.push(this.slots.inject("rightbar.session", () => this.registerSession()));
     this.disposers.push(this.slots.inject("sidebar.right.pane.tab", () => this.registerGuide()));
+    this.disposers.push(
+      this.slots.inject("sidebar.right.pane.tab.title", () =>
+        this.slots.register(
+          { name: "sidebar.right.pane.tab.title", key: GUIDE_KIND, locale: "sidebarRight" } as never,
+          GuideTitle as never,
+        ),
+      ),
+    );
     this.disposers.push(this.slots.inject("conversation.session.header.corner", () => this.slots.register(
       {
         name: "conversation.session.header.corner",
@@ -90,7 +98,7 @@ export class RightbarSeats implements OnInit, OnDispose {
         name: "rightbar",
         children: { "rightbar.session": { kind: "single", scope: "session" } },
         inject: () => ({
-          session: this.current?.reference,
+          session: this.binding.reference,
           labels: { title: this.t("guide.title"), empty: this.t("empty") },
         }),
       } as never,
@@ -107,11 +115,17 @@ export class RightbarSeats implements OnInit, OnDispose {
         store: this.store,
         keyedHooks: {
           tabNavigation: (key: string) =>
-            this.row.tabDomain.occurrence(this.current?.sessionId as never, { id: key as never }).navigation,
+            this.row.tabDomain.occurrence(this.binding.sessionId as never, { id: key as never }).navigation,
         },
         children: {
           "sidebar.right.pane.tab": { kind: "keyed", scope: "session" },
-          "sidebar.right.pane.tab.title": { kind: "keyed", scope: "session" },
+          // 标题槽要 `tabInfo`：上游 `GuideTitle` 的 `useTabInfo()` 由渲染器按这条声明绑定；
+          // 它的输入是我们渲染 title 时传的 `hookContext`（见 `rightbar-session.view.tsx`）。
+          "sidebar.right.pane.tab.title": {
+            kind: "keyed",
+            scope: "session",
+            inject: { hooks: { tabInfo: tabInfoFactory } },
+          },
         },
         inject: (sessionId: string) => ({
           sessionId,
@@ -147,10 +161,37 @@ export class RightbarSeats implements OnInit, OnDispose {
       {
         name: "sidebar.right.pane.tab",
         key: GUIDE_KIND,
-        inject: () => ({ title: this.t("guide.title"), empty: this.t("guide.empty") }),
+        // `GuideBody` 一旦接上就会 `renderSlot` / `renderSlotChain` 这三个 key；缺一个就是 `SlotOwnershipError`。
+        children: {
+          "sidebar.right.tab.guide.actions": { kind: "list", scope: "root" },
+          "sidebar.right.tab.guide.entry": { kind: "keyed", scope: "session" },
+          "sidebar.right.tab.guide": { kind: "chain", scope: "session" },
+        },
+        locale: "sidebarRight",
+        inject: () => this.guideInject(),
       } as never,
-      RightbarGuide as never,
+      GuideBody as never,
     );
+  }
+
+  /** guide 卡片的钉住状态（内存里，插件重载即清）。 */
+  private readonly pins = createGuidePins();
+
+  /** `GuideBody` 的注入面：四个 observable + `setPinned`。 */
+  private guideInject() {
+    return guideInjectOf({
+      shortcuts: this.shortcuts.catalog,
+      guideEntries: {
+        getSnapshot: () => this.tabs.face.guide(),
+        subscribe: (listener: () => void) => this.tabs.subscribe(listener),
+      },
+      entryPins: this.pins.unpinned,
+      entryActions: {
+        getSnapshot: () => this.slots.entriesOfSlot("sidebar.right.tab.guide.actions").length > 0,
+        subscribe: (listener: () => void) => this.slots.subscribe("sidebar.right.tab.guide.actions", listener),
+      },
+      setPinned: this.pins.setPinned,
+    });
   }
 
   /** 文案函数（`rightbar` 命名空间，与上游组件的 `sidebarRight` 分开）。 */
@@ -158,21 +199,14 @@ export class RightbarSeats implements OnInit, OnDispose {
     return this.locale.bind("rightbar")(key);
   }
 
-  /** 在屏会话变化：释放旧 reference、retain 新的。 */
+  /** 在屏会话变化：交给 `SessionBinding`（先释放旧、再 retain 新）。 */
   private sync(): void {
-    const sessionId = this.row.mounted.getSnapshot();
-    if (sessionId === this.current?.sessionId) return;
-    this.current?.release();
-    this.current = undefined;
-    if (sessionId === undefined) return;
-    const retained = this.sessions.retain(sessionId, { source: "sidebarView", facets: { conversation: true } });
-    this.current = { sessionId, reference: retained, release: () => { retained.release(); } };
+    this.binding.select(this.row.mounted.getSnapshot());
   }
 
   /** 卸载：撤注册并释放 reference。 */
   onDispose(): void {
     for (const dispose of this.disposers.splice(0)) dispose();
-    this.current?.release();
-    this.current = undefined;
+    this.binding.dispose();
   }
 }

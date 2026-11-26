@@ -143,10 +143,26 @@ type WorkspaceFilesWire = AsyncReturn<
 /**
  * 覆盖守卫：契约对上**宿主类**的 wire 面（形参与返回双向，见 `AssertWireFace`）。
  *
- * **`changes` 不在这一档**：上游那条是 `RemoteStreamHandle<帧, never>`，我们的契约面是裸
- * `AsyncIterable<帧>`——流载具的语义不在这条类型关系里，判据是 `workspace-files.spec.ts` 的流用例。
  * 覆盖范围显式列出（不按 `keyof` 取：那会放过「契约掉了一个端点」）。
  */
 export type WorkspaceFilesEndpointCovered = AssertTrue<
-  AssertWireFace<Pick<WorkspaceFilesWire, "list" | "read" | "readBytes" | "stat" | "search">, WorkspaceFilesEndpoint>
+  AssertWireFace<
+    Pick<WorkspaceFilesWire, "list" | "read" | "readBytes" | "stat" | "search">,
+    WorkspaceFilesEndpoint
+  >
+>;
+
+/**
+ * 流式端点单独比：**契约侧也要把末尾那个取消信号摘掉再比**。
+ *
+ * 我们的契约方法写成 `changes(sessionId, path, signal)`——那个 signal 是**宿主侧**的取消通道
+ * （载具注入：`registerRemoteGroup` 按 `handler.length >= 2` 传），**不是 wire 参数**；宿主类的原文
+ * 同样带它，而 wire 面没有它。所以两侧各摘一次，剩下的形参与返回直接可比
+ * （`AsyncReturn` 对 `AsyncIterable` 不做 `Promise` 包装）。
+ */
+export type WorkspaceFilesStreamCovered = AssertTrue<
+  AssertWireFace<
+    Pick<WorkspaceFilesWire, "changes">,
+    Pick<DropParam<WorkspaceFilesEndpoint, AbortSignal>, "changes">
+  >
 >;
